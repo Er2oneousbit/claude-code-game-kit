@@ -1,0 +1,9 @@
+{
+  "name": "Game.Core",
+  "rootNamespace": "graveyard_shift.Core",
+  "references": [],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "autoReferenced": true
+}

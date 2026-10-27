@@ -1,0 +1,8 @@
+# ---- Godot 4 ----
+.godot/
+*.translation
+export_credentials.cfg
+/build/
+/android/
+.mono/
+mono_crash.*.json

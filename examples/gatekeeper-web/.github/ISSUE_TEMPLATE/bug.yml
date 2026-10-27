@@ -1,0 +1,68 @@
+name: Bug report
+description: "Something is broken: a crash, a freeze, a wrong result, something that should not happen."
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for playing and for reporting. One problem per report, please.
+        Do not paste passwords, keys or personal details: this text may be public.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: "What you saw, in plain words. Paste any error text exactly as it appeared."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can we make it happen again?
+      description: "The steps from starting the game. 'No idea' is fine too."
+      placeholder: |
+        1. Start a new run
+        2. Jump at the second ledge while holding left
+        3. The player falls through the floor
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+  - type: dropdown
+    id: often
+    attributes:
+      label: How often does it happen?
+      options:
+        - Every time
+        - Sometimes
+        - Once so far
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or build
+      description: "On the title screen or in the download's file name. Write 'latest' if you are not sure."
+      placeholder: v0.2.0
+  - type: input
+    id: seed
+    attributes:
+      label: Seed or level
+      description: "If the game shows a seed, level or room number, it lets us replay exactly what you played."
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Where did you play?
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Web browser (say which below)
+        - Other (say which below)
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots, video, anything else
+      description: "Drag files in here. A short video of the moment helps most."

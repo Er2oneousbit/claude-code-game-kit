@@ -1,0 +1,26 @@
+# EXAMPLE PROJECT IN THE KIT REPO: no Git LFS here, on purpose.
+# Unreal games normally route .uasset/.umap and source art through Git LFS (see docs/sop/SOP-05-git.md), and your own
+# game should. This example commits no Content/ at all (tools/unreal/build_content.py makes it from assets_src/), and
+# its source assets are small, so plain git keeps "Download ZIP" working for beginners.
+
+* text=auto eol=lf
+*.bat text eol=crlf
+
+*.png  binary
+*.gif  binary
+*.ogg  binary
+*.wav  binary
+*.fbx  binary
+*.uasset binary
+*.umap   binary
+
+# Kept in step with the kit's core .gitattributes (the overlay replaces it, so these would otherwise be lost)
+*.jpeg     filter=lfs diff=lfs merge=lfs -text
+*.tif      filter=lfs diff=lfs merge=lfs -text
+*.hdr      filter=lfs diff=lfs merge=lfs -text
+*.aseprite filter=lfs diff=lfs merge=lfs -text
+*.flac     filter=lfs diff=lfs merge=lfs -text
+*.glb      filter=lfs diff=lfs merge=lfs -text
+*.obj      filter=lfs diff=lfs merge=lfs -text
+*.ttf      filter=lfs diff=lfs merge=lfs -text
+*.otf      filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,20 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "dark haunted house interior ambience, low eerie drone, faint distant wind, occasional soft wooden creak, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 10.0,
+    "loop": true,
+    "output_format": "pcm_44100"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "4035bd9d9b8f751b48ab3f6f97780ed17e996b497abe46407a549dea138f72f0",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "7d4208e2df10a0d2de7e7d750e6c2812",
+  "credits": "100"
+}

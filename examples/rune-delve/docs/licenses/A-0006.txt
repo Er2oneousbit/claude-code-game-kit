@@ -1,0 +1,9 @@
+A-0006  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "magical shield snapping up, quick resonant shimmering hum, fantasy ward, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 0.8, "output_format": "pcm_44100"}
+File     : assets_src/audio/ward-raise.wav  SHA-256 5b97c4f169932cfa9006ff4076bb4bb19fe7c6f7d228e4cd07864940d8a4eb08
+Modified : peak-normalized to -3 dBFS (was -11.8) (the .gen.json next to it keeps the SHA-256 as generated)

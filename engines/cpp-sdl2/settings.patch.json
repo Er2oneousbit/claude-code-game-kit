@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmake --preset:*)",
+      "Bash(cmake --build:*)",
+      "Bash(ctest:*)",
+      "PowerShell(cmake --preset *)",
+      "PowerShell(cmake --build *)",
+      "PowerShell(ctest *)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

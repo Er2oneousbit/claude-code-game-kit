@@ -1,0 +1,6 @@
+A-0015  voice  generated 2026-10-22 with tools/audio/fish_tts.py
+Service  : Fish Audio text to speech (/v1/tts), model s2.1-pro-free
+Voice    : 7afba46fb5d949559c91e1fbc83197ab (Creepy Whisper); check it is not an imitation of a real person
+License  : Fish Audio API terms, read before release (verify)
+File     : Assets/Audio/ghost_caught_1.wav  "That soul is mine."  SHA-256 37f75e8351ee99dbc0184dc0c781566f17236ada6b64d7ef822c5ad4f6f3ec5b
+File     : Assets/Audio/ghost_caught_2.wav  "Gotcha..."  SHA-256 075eaddcbef3916fa2e46a0bc9bd0288ba5a590e06845db41df85543774c8b86

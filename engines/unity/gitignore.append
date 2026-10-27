@@ -1,0 +1,30 @@
+# ---- Unity ----
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emory[Cc]aptures/
+*.csproj
+*.sln
+*.slnx
+*.suo
+*.user
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+.vs/
+.idea/
+.gradle/
+*.apk
+*.aab
+sysinfo.txt
+# Left behind when a PlayMode run (dev.py smoke) is killed
+/[Aa]ssets/InitTestScene*.unity*
+crashlytics-build.properties

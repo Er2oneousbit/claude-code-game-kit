@@ -1,0 +1,11 @@
+{
+  "id": "unreal",
+  "label": "Unreal Engine 5 (C++ and Blueprints)",
+  "summary": "Unreal Engine 5.x, C++ first with data-driven content, automation tests, Git LFS, optional Unreal MCP plugin",
+  "skeleton_dir": "skeleton",
+  "gitignore_append": "gitignore.append",
+  "settings_patch": "settings.patch.json",
+  "engine_md": "ENGINE.md",
+  "flow_md": "FLOW.md",
+  "assets_dir": "Content"
+}

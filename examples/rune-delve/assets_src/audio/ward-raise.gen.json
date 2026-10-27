@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "magical shield snapping up, quick resonant shimmering hum, fantasy ward, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 0.8,
+    "output_format": "pcm_44100"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "2de1b808ebb7f6c1d2207da0e40e0e0498bfa00e756f296ecba5465666d536b2",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "f8c621b41639c3a78ce79c751f22be59",
+  "credits": "8"
+}

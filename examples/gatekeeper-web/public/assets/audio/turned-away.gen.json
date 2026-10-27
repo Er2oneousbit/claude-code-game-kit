@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "armored guard stamps a spear butt on cobblestones, firm wooden thud and a chainmail clink, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 1.0,
+    "output_format": "mp3_44100_128"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "956e7d0cb593cfb2898d130d7f2f0664afaec51c91c6df65557d310c5d91ba2a",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "e83efe53723637ba6706c76095cabc67",
+  "credits": "10"
+}

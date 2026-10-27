@@ -1,0 +1,9 @@
+A-0009  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "small toy robot alarm buzz and a short descending electronic boop, playful, caught, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 1.2, "output_format": "mp3_44100_128"}
+File     : public/assets/audio/robot-caught.mp3  SHA-256 fd9f0983a98fb34acc69efdafe8ae8e2659b8c1dfe44cf89c0aea1656eb2aaa4
+Modified : peak-normalized to -3 dBFS (was -5.1) (the .gen.json next to it keeps the SHA-256 as generated)

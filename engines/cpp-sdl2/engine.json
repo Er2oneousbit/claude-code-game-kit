@@ -1,0 +1,16 @@
+{
+  "id": "cpp-sdl2",
+  "label": "C++17 + SDL2 (CMake, vcpkg)",
+  "summary": "C++17, SDL2, CMake presets, vcpkg manifest, doctest for unit tests, headless smoke via SDL dummy drivers",
+  "skeleton_dir": "skeleton",
+  "gitignore_append": "gitignore.append",
+  "settings_patch": "settings.patch.json",
+  "engine_md": "ENGINE.md",
+  "flow_md": "FLOW.md",
+  "assets_dir": "assets",
+  "setup_step": "set VCPKG_ROOT and put CMake on PATH (docs/ENGINE.md), then: python tools/dev.py check   # first build fetches SDL2 via vcpkg (versions pinned by the baseline)",
+  "adopt_hints": {
+    "CMakePresets.json": "dev.py needs configure/build/test presets named debug and release with binaryDir build/<preset>.",
+    "CMakeLists.txt": "dev.py looks for the game exe in build/<preset>/bin/ (set CMAKE_RUNTIME_OUTPUT_DIRECTORY), and smoke runs it with --smoke N and expects BOOT_OK in its output."
+  }
+}

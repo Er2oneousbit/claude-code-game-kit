@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "huge two-handed iron maul swung hard, deep heavy whoosh with armor plates clanking, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 1.0,
+    "output_format": "pcm_44100"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "62c68896a2b82c1fcb7c252ee859fae7cd10222dcb85d3498c773c83cbabc901",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "18e1c9166010c1e43f260dfc8d8bc4d1",
+  "credits": "10"
+}

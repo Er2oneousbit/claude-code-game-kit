@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "magic bolt hits an orc, meaty thud and a short guttural grunt of pain, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 0.8,
+    "output_format": "pcm_44100"
+  },
+  "date": "2026-10-23",
+  "plan": null,
+  "sha256": "deefb7dc33a08afce2d1d21291602330cdcb3260d9fcb58da662c8fba5a9a563",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "89367e197ad68043218019907662e44e",
+  "credits": "8"
+}

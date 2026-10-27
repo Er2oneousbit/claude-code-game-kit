@@ -1,0 +1,9 @@
+A-0008  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "dull heavy blow on a robed body and a short pained grunt, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 0.8, "output_format": "pcm_44100"}
+File     : assets_src/audio/mage-hurt.wav  SHA-256 f70de86d302163d89c3a58a96d316e9265c76293ab586a05db2183c46f8f042d
+Modified : peak-normalized to -3 dBFS (was -0) (the .gen.json next to it keeps the SHA-256 as generated)

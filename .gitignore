@@ -1,0 +1,33 @@
+# Personal and local files (never published)
+CLAUDE.local.md
+.claude/settings.local.json
+WebAppConvo.md
+*.zip
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Editors and OS
+.vscode/*
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Example game build output and engine caches
+examples/**/.godot/
+examples/**/build/
+examples/**/addons/gut/
+examples/**/node_modules/
+examples/**/dist/
+examples/**/.asset_cache/
+
+# RPG Maker MZ's own files are licensed to its buyers, not for redistribution: the MZ example gets them from your MZ
+# install (python tools/dev.py setup --from), and only its own plugins live in this repo
+examples/lockpick-mz/game/**
+!examples/lockpick-mz/game/**/
+!examples/lockpick-mz/game/js/plugins/GameCore.js
+!examples/lockpick-mz/game/js/plugins/GameMain.js
+!examples/lockpick-mz/game/img/.gitkeep

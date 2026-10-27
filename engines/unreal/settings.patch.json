@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [],
+    "ask": [
+      "Bash(python tools/dev.py *clean*)",
+      "Bash(python tools/dev.py *package*)",
+      "Bash(python3 tools/dev.py *clean*)",
+      "Bash(python3 tools/dev.py *package*)",
+      "PowerShell(python tools/dev.py *clean*)",
+      "PowerShell(python tools/dev.py *package*)"
+    ],
+    "deny": [
+      "Read(./Config/DefaultCrypto.ini)",
+      "Edit(./Config/DefaultCrypto.ini)",
+      "Edit(./Content/**/*.uasset)",
+      "Edit(./Content/**/*.umap)",
+      "Edit(./Intermediate/**)",
+      "Edit(./Binaries/**)"
+    ]
+  }
+}

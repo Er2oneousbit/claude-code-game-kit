@@ -1,0 +1,9 @@
+A-0006  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "small cannon firing close by, a sharp loud crack and a short metallic ring, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 0.8, "output_format": "pcm_44100"}
+File     : assets/audio/raider-fire.wav  SHA-256 bfbf7d0e4ec62442222295d6e19d9f48020918054bbb362df7984600abbdb746
+Modified : peak-normalized to -3 dBFS (was -22.3) (the .gen.json next to it keeps the SHA-256 as generated)

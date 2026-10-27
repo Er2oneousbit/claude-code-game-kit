@@ -1,0 +1,32 @@
+A-0003  sfx  fetched 2026-10-21 with tools/fetch_asset.py
+Download : https://kenney.nl/media/pages/assets/interface-sounds/fa43c1dd4d-1677589452/kenney_interface-sounds.zip
+Page     : https://kenney.nl/assets/interface-sounds
+Author   : Kenney
+License  : CC0
+SHA-256  : f2193d072726d6758a5f7871b2dcc54dcce0d5c35c6f0a62f92549b327c81232
+Files    : Audio/glass_002.ogg, Audio/confirmation_002.ogg, Audio/open_001.ogg, Audio/glitch_003.ogg
+
+---- License.txt (from the pack) ----
+	
+
+	Interface Sounds (1.0)
+
+	Created/distributed by Kenney (www.kenney.nl)
+	Creation date: 11-02-2020
+
+			------------------------------
+
+	License: (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	This content is free to use in personal, educational and commercial projects.
+
+	Support us by crediting Kenney or www.kenney.nl (this is not mandatory)
+
+			------------------------------
+
+	Donate:   http://support.kenney.nl
+	Patreon:  http://patreon.com/kenney/
+
+	Follow on Twitter for updates:
+	http://twitter.com/KenneyNL

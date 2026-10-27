@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "ghost noticing someone, a short eerie startled whisper gasp",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 1.0,
+    "output_format": "pcm_32000"
+  },
+  "date": "2026-10-22",
+  "plan": "free (free)",
+  "sha256": "925339d6b8a43d9bf5a4f497bd935258c8a18389c7e70bab80b9bcd352c87a2f",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "223ede7c604024f02af78069355bb89f",
+  "credits": "10"
+}

@@ -1,0 +1,33 @@
+A-0003  sfx  fetched 2026-10-22 with tools/fetch_asset.py
+Download : https://kenney.nl/media/pages/assets/impact-sounds/87b4ddecda-1677589768/kenney_impact-sounds.zip
+Page     : https://kenney.nl/assets/impact-sounds
+Author   : Kenney
+License  : CC0
+SHA-256  : 029d734af1582474edf3a694d1b0cebc97c1c152f2f39fa34d4c2bafc5de77f8
+Files    : Audio/impactMetal_heavy_000.ogg, Audio/impactPunch_medium_000.ogg, Audio/impactPunch_heavy_000.ogg, Audio/impactPlate_heavy_000.ogg
+
+---- License.txt (from the pack) ----
+	
+
+	Impact Sounds (1.0)
+
+	Created/distributed by Kenney (www.kenney.nl)
+	Creation date: 19-12-2019
+
+			------------------------------
+
+	License: (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	This content is free to use in personal, educational and commercial projects.
+
+	Support us by crediting Kenney or www.kenney.nl (this is not mandatory)
+
+			------------------------------
+
+	Donate:   http://support.kenney.nl
+	Request:  http://request.kenney.nl
+	Patreon:  http://patreon.com/kenney/
+
+	Follow on Twitter for updates:
+	http://twitter.com/KenneyNL

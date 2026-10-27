@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "pieces of scrap metal collected with a satisfying metallic clink and a short rising ratchet, a repair, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 1.0,
+    "output_format": "pcm_44100"
+  },
+  "date": "2026-10-23",
+  "plan": null,
+  "sha256": "095ac6454708d2cf85190d2890e820f36bec6ff4c62f16c76af714e6fd0d359b",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "4233bad253f8b6d5bbe1ae25cbd8aee4",
+  "credits": "10"
+}

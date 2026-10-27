@@ -1,0 +1,9 @@
+A-0007  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "cardboard parcel picked up, quick soft thump and a bright cheerful two-note toy chime, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 0.8, "output_format": "mp3_44100_128"}
+File     : public/assets/audio/parcel-pickup.mp3  SHA-256 7d5aa8ea9bdf29a5d4a736c86f991834bb1ba6fff4a526a36a613d6b88d3bb45
+Modified : peak-normalized to -3 dBFS (was -15.3) (the .gen.json next to it keeps the SHA-256 as generated)

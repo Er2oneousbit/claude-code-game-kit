@@ -1,0 +1,9 @@
+# ---- Web 3D (Three.js + Vite) ----
+node_modules/
+/dist/
+/build/
+.vite/
+*.tsbuildinfo
+playwright-report/
+test-results/
+npm-debug.log*

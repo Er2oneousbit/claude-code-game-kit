@@ -1,0 +1,15 @@
+A-0009  music  generated 2026-10-22 in Suno's web app (Advanced mode), by the project owner
+Service  : Suno (suno.com), web app; no API (none is official)
+Plan     : paid subscription at the time of generation
+License  : Suno paid plans grant commercial use for songs made while subscribed (verify Suno's current terms
+           before release; ownership wording changed in 2026 and is disputed)
+Settings : title "Graveyard Shift - Night Theme", instrumental, duration 2:00, Max Mode off, weirdness about 25-30%,
+           style influence about 70%, variety normal, personalize off; one generation gave two takes, A and B
+Style    : video game background music, cozy-spooky night level for a stealth game, music box and celesta lead, soft pizzicato strings, low cello drone, light glockenspiel, playful and a little eerie, never scary, 80 BPM, low energy, sparse, instrumental, steady loopable groove, no fade-out
+Exclude  : vocals, choir, spoken word, drums, epic orchestral, cinematic trailer, horror stingers, rock, EDM
+Download : Graveyard Shift - Night Theme -A.wav (119.2 s, 48 kHz stereo)  SHA-256 89c85fee1edc9c087a832833665ce6de314beaff1cfe9f7c356d0c00a113eb63
+           Graveyard Shift - Night Theme -B.wav (118.8 s, 48 kHz stereo)  SHA-256 25e823c74ec7a9746db7c09a5c13b9c8bd55f2c572e36e916156f31db2e282ab
+Changes  : loop point found by spectral similarity to the opening (A 76.95 s, B 92.17 s), cut there plus a 3 s
+           crossfade with tools/audio/wavfile.py loop, encoded to OGG Vorbis q6 with ffmpeg 9.0.2
+Files    : Assets/Audio/night_music_a.ogg  SHA-256 614055e69c26e783cd4ed02aeb188ef005d8c9557709da5d61847d96ffc09e2f
+           Assets/Audio/night_music_b.ogg  SHA-256 5232eb087b9f80173f22956da0e53ce2fe05be0874809ecc7ab01e590e25479b

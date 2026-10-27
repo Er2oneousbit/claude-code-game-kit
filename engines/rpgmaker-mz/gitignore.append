@@ -1,0 +1,12 @@
+# ---- RPG Maker MZ ----
+node_modules/
+/build/
+playwright-report/
+test-results/
+npm-debug.log*
+game/save/
+# A PUBLIC repo must not carry RPG Maker MZ's own files (licensed to you for your games, not for redistribution):
+# uncomment these before you publish, and keep only your own plugins, data and art (docs/ENGINE.md gotcha 7).
+# game/js/rmmz_*.js
+# game/js/main.js
+# game/js/libs/

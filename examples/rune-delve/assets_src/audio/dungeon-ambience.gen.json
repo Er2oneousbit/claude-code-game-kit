@@ -1,0 +1,20 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "underground stone dungeon ambience, slow water drips echoing, low distant rumble, faint torch crackle, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 10.0,
+    "loop": true,
+    "output_format": "pcm_44100"
+  },
+  "date": "2026-10-23",
+  "plan": null,
+  "sha256": "463e5b5aca1a21c9d001baf024973b71d4db2141d247d01f702117425740d761",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "0b09b0847db1792e329036aeda094958",
+  "credits": "100"
+}

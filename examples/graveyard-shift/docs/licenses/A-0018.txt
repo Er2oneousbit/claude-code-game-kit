@@ -1,0 +1,6 @@
+A-0018  voice  generated 2026-10-22 with tools/audio/fish_tts.py
+Service  : Fish Audio text to speech (/v1/tts), model s2.1-pro-free
+Voice    : 5c8dc6a69c0b4edfb32634db6384bf34 (Warm Storyteller); check it is not an imitation of a real person
+License  : Fish Audio API terms, read before release (verify)
+File     : Assets/Audio/narrator_escape_1.wav  "Six souls, safe at last. Well done, keeper. The graveyard sleeps easy tonight."  SHA-256 bc4231760959d1fcf749bceb715737769d694387515286791945067ab025b5cc
+File     : Assets/Audio/narrator_escape_2.wav  "Out the gate with every soul. Not bad at all. The ghosts will sulk until tomorrow."  SHA-256 2a8b8a6267d966b5834fbf6a9cf52ca7df400c355de49e627bc3308e3521ccbb

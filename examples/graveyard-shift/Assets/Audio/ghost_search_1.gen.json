@@ -1,0 +1,16 @@
+{
+  "tool": "fish_tts",
+  "service": "Fish Audio",
+  "endpoint": "/v1/tts",
+  "model": "s2.1-pro-free",
+  "request": {
+    "text": "Where did you go...?",
+    "reference_id": "7afba46fb5d949559c91e1fbc83197ab",
+    "format": "wav",
+    "latency": "balanced"
+  },
+  "date": "2026-10-22",
+  "sha256": "d69dd84b1436446d6cff0d9b7c4e3bf8ea0d138e6c7173cd18bd8872f05a1b4e",
+  "text_bytes": 20,
+  "license": "Fish Audio API terms (verify before shipping)"
+}

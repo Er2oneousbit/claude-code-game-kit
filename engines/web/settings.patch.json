@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [],
+    "ask": [
+      "Bash(npm install*)",
+      "Bash(npm i *)",
+      "Bash(npm add*)",
+      "Bash(npm update*)",
+      "Bash(npx *)",
+      "Bash(python tools/dev.py *setup*)",
+      "Bash(python3 tools/dev.py *setup*)",
+      "Bash(python tools/dev.py *clean*--deep*)",
+      "Bash(python3 tools/dev.py *clean*--deep*)",
+      "PowerShell(npm install*)",
+      "PowerShell(npm i *)",
+      "PowerShell(npm add*)",
+      "PowerShell(npm update*)",
+      "PowerShell(npx *)",
+      "PowerShell(python tools/dev.py *setup*)",
+      "PowerShell(python tools/dev.py *clean*--deep*)"
+    ],
+    "deny": [
+      "Bash(npm publish*)",
+      "PowerShell(npm publish*)",
+      "Edit(./node_modules/**)",
+      "Edit(./dist/**)",
+      "Read(./.npmrc)",
+      "Edit(./.npmrc)"
+    ]
+  }
+}

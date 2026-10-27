@@ -1,0 +1,75 @@
+name: Feel or balance
+description: "Nothing is broken, but something feels off: too hard, too easy, slow, confusing, unfair, or not fun."
+title: "[Feel] "
+labels: ["feel"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the most useful report you can send: how the game feels to you. Short is fine.
+        Do not paste passwords, keys or personal details: this text may be public.
+  - type: input
+    id: where
+    attributes:
+      label: Which part of the game?
+      placeholder: "the first boss, jumping, the shop, the second level"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What did you do, and what did the game do?
+      description: "What happened on screen, not yet what you think of it. 'I died to the boss's second attack five times in a row.'"
+    validations:
+      required: true
+  - type: dropdown
+    id: felt
+    attributes:
+      label: How did it feel?
+      multiple: true
+      options:
+        - Too hard
+        - Too easy
+        - Too slow
+        - Too fast
+        - Confusing
+        - Unfair
+        - Boring
+        - Floaty or sluggish controls
+        - Great, keep it
+        - Something else (say below)
+    validations:
+      required: true
+  - type: textarea
+    id: words
+    attributes:
+      label: In your own words
+      description: "Anything you said out loud while playing counts."
+  - type: dropdown
+    id: again
+    attributes:
+      label: Did you want to keep playing?
+      options:
+        - Yes, I played again
+        - Maybe
+        - No, I stopped here
+  - type: input
+    id: time
+    attributes:
+      label: How long had you played, and how far did you get?
+      placeholder: "20 minutes, reached level 3"
+  - type: input
+    id: version
+    attributes:
+      label: Version or build
+      description: "On the title screen or in the download's file name. Write 'latest' if you are not sure."
+  - type: input
+    id: seed
+    attributes:
+      label: Seed or level
+      description: "If the game shows a seed, level or room number."
+  - type: textarea
+    id: idea
+    attributes:
+      label: An idea for a fix (optional)
+      description: "We read every idea. We fix the problem behind it, which is not always the way it was suggested."

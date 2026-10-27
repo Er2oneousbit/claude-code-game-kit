@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [],
+    "deny": [
+      "Read(./.godot/export_credentials.cfg)",
+      "Edit(./.godot/export_credentials.cfg)",
+      "Read(./export_credentials.cfg)",
+      "Edit(./export_credentials.cfg)"
+    ],
+    "ask": []
+  }
+}

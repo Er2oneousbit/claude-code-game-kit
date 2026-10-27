@@ -1,0 +1,9 @@
+A-0008  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "cheerful toy doorbell ding-dong with a small coin jingle, parcel delivered, cartoon, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 1.2, "output_format": "mp3_44100_128"}
+File     : public/assets/audio/parcel-delivered.mp3  SHA-256 c4bf41d543f21b84108637c4630bfc528e4295020b21da70ab2b2304aaa29a37
+Modified : peak-normalized to -3 dBFS (was -5.5) (the .gen.json next to it keeps the SHA-256 as generated)

@@ -1,0 +1,16 @@
+{
+  "tool": "fish_tts",
+  "service": "Fish Audio",
+  "endpoint": "/v1/tts",
+  "model": "s2.1-pro-free",
+  "request": {
+    "text": "...gone again.",
+    "reference_id": "7afba46fb5d949559c91e1fbc83197ab",
+    "format": "wav",
+    "latency": "balanced"
+  },
+  "date": "2026-10-22",
+  "sha256": "9b1845c2e584fb3eea57259f82107461ae9d8364373a00fe466c4faf95c1f865",
+  "text_bytes": 14,
+  "license": "Fish Audio API terms (verify before shipping)"
+}

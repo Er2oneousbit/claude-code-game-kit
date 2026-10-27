@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gatekeeper</title>
+    <link rel="icon" href="data:," />
+    <style>
+      :root { --bg: #0b0b14; --panel: #161626; --ink: #f4ecd8; --dim: #9a94a8; --amber: #ffd27a; --red: #e06060; }
+      html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.4 system-ui, sans-serif; }
+      main { max-width: 960px; margin: 0 auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+      #game { width: 100%; aspect-ratio: 16 / 9; }
+      canvas { image-rendering: pixelated; }
+      .panel { background: var(--panel); border-radius: 8px; padding: 12px 14px; }
+      #start p { margin: 0 0 10px; }
+      #start .note { color: var(--dim); font-size: 13px; }
+      button { font: inherit; padding: 8px 14px; border-radius: 6px; border: 0; cursor: pointer; margin-right: 8px; }
+      button.primary { background: var(--amber); color: #1a1408; }
+      button:disabled { opacity: 0.5; cursor: default; }
+      #progress { height: 6px; background: #2a2a40; border-radius: 3px; margin-top: 10px; display: none; }
+      #progress > div { height: 100%; width: 0; background: var(--amber); border-radius: 3px; }
+      #status { color: var(--dim); font-size: 13px; margin-top: 6px; min-height: 1.2em; }
+      #chat { display: none; }
+      #log { height: 150px; overflow-y: auto; margin-bottom: 8px; }
+      #log .you { color: var(--dim); }
+      #log .guard b { color: var(--amber); }
+      #log .sys { color: var(--dim); font-style: italic; }
+      #say { display: flex; gap: 8px; }
+      #say input { flex: 1; font: inherit; padding: 8px; border-radius: 6px; border: 1px solid #3a3a55; background: #0f0f1c; color: var(--ink); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div id="game"></div>
+      <section id="start" class="panel">
+        <p>The gate is shut for the night, and a guard stands in your way. Type what you would say to him.</p>
+        <p class="note">The talking guard uses a small AI language model that runs on your own computer (Qwen2.5 1.5B,
+          about 880 MB downloaded once, needs a browser with WebGPU such as current Chrome or Edge). Nothing you type is
+          sent anywhere. Without it, a scripted guard plays the same game.</p>
+        <button id="useModel" class="primary">Talk to the AI guard</button>
+        <button id="useScript">Play with the scripted guard</button>
+        <div id="progress"><div></div></div>
+        <div id="status"></div>
+      </section>
+      <section id="chat" class="panel">
+        <div id="log" aria-live="polite"></div>
+        <form id="say" autocomplete="off">
+          <input id="line" maxlength="200" placeholder="Say something to the guard..." />
+          <button class="primary">Say</button>
+          <button type="button" id="again">Start over</button>
+        </form>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

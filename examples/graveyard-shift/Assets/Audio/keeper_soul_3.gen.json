@@ -1,0 +1,16 @@
+{
+  "tool": "fish_tts",
+  "service": "Fish Audio",
+  "endpoint": "/v1/tts",
+  "model": "s2.1-pro-free",
+  "request": {
+    "text": "There you are.",
+    "reference_id": "3d40669a01e045329ab4d6d7e25ce10e",
+    "format": "wav",
+    "latency": "balanced"
+  },
+  "date": "2026-10-22",
+  "sha256": "6632f39e61ac0a2b4c7100a90ef3863ec1f601983ae7d81abfb330dae2b55e62",
+  "text_bytes": 14,
+  "license": "Fish Audio API terms (verify before shipping)"
+}

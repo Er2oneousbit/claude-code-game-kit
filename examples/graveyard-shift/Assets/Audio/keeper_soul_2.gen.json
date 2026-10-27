@@ -1,0 +1,16 @@
+{
+  "tool": "fish_tts",
+  "service": "Fish Audio",
+  "endpoint": "/v1/tts",
+  "model": "s2.1-pro-free",
+  "request": {
+    "text": "Got you, little one.",
+    "reference_id": "3d40669a01e045329ab4d6d7e25ce10e",
+    "format": "wav",
+    "latency": "balanced"
+  },
+  "date": "2026-10-22",
+  "sha256": "69ac4ad444fc3b7c36848b162adfe2220bd09690d761e5e172a4bb35ff00cf5e",
+  "text_bytes": 20,
+  "license": "Fish Audio API terms (verify before shipping)"
+}

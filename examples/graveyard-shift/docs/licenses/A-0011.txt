@@ -1,0 +1,8 @@
+A-0011  sfx  generated 2026-10-22 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "low ghostly moaning breath, distant and hollow, slow airy wail, spooky but soft", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 8.0, "loop": true, "output_format": "pcm_32000"}
+File     : Assets/Audio/ghost_presence.wav  SHA-256 08a1431762e27bb3ff40146049796ebc01093e524e4ff610fb9d01e7502463d2

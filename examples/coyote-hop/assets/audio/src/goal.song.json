@@ -1,0 +1,22 @@
+{
+  "title": "Coyote Hop goal jingle",
+  "bpm": 150,
+  "steps_per_beat": 4,
+  "loop": false,
+  "rate": 22050,
+  "channels": {
+    "lead":  {"wave": "square", "duty": 0.5, "volume": 0.32, "attack": 0.004, "decay": 0.10, "sustain": 0.6,
+              "release": 0.25, "vibrato": [0.15, 6.0, 0.2]},
+    "arp":   {"wave": "square", "duty": 0.25, "volume": 0.14, "attack": 0.002, "decay": 0.08, "sustain": 0.4,
+              "release": 0.2},
+    "bass":  {"wave": "triangle", "volume": 0.45, "attack": 0.002, "decay": 0.05, "sustain": 0.9, "release": 0.1},
+    "drums": {"wave": "drums", "volume": 0.30}
+  },
+  "patterns": {
+    "fanfare": {"lead":  "G4 C5 E5 G5 | - . E5 . | G5 - - - | C6 - - - | - - - - | - - - - | . . . . | . . . .",
+                "arp":   "E4 . . . | . . C4 . | D4 - - - | E4 - - - | - - - - | - - - - | . . . . | . . . .",
+                "bass":  "C3 . . . | . . . . | G2 - - - | C3 - - - | - - - - | - - - - | . . . . | . . . .",
+                "drums": "k . . . | s . . . | k . s . | c . . . | . . . . | . . . . | . . . . | . . . ."}
+  },
+  "order": ["fanfare"]
+}

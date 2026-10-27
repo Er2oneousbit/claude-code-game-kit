@@ -1,0 +1,20 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "low ghostly moaning breath, distant and hollow, slow airy wail, spooky but soft",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 8.0,
+    "loop": true,
+    "output_format": "pcm_32000"
+  },
+  "date": "2026-10-22",
+  "plan": "free (free)",
+  "sha256": "08a1431762e27bb3ff40146049796ebc01093e524e4ff610fb9d01e7502463d2",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "c4b9805f4ffaedc22b409e2867e00692",
+  "credits": "80"
+}

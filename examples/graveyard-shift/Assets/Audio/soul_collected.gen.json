@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "soft glassy magical chime with a gentle shimmer, a lost soul set free",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 1.2,
+    "output_format": "pcm_32000"
+  },
+  "date": "2026-10-22",
+  "plan": "free (free)",
+  "sha256": "7eccfff3ccce750f85a7d70d5197b1e9ef121e3587039da12b8a2c18bbef20cb",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "c6f6ef99dbf347ed624ed9ea8e5ae9f0",
+  "credits": "12"
+}

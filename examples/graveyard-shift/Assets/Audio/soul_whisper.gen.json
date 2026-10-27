@@ -1,0 +1,20 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "soft ethereal humming whisper of a lost spirit, gentle airy tone with faint shimmering chimes, calm and magical",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 6.0,
+    "loop": true,
+    "output_format": "pcm_32000"
+  },
+  "date": "2026-10-22",
+  "plan": "free (free)",
+  "sha256": "eeee99666b9b075068130a6d94e798f9bea3128efc732516d9f912b017f6fee7",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "4cb5967ea0549cdbff59d2e902c74c00",
+  "credits": "60"
+}

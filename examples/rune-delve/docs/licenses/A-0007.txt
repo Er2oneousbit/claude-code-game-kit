@@ -1,0 +1,9 @@
+A-0007  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "quick heavy cloak whoosh, fast swish of fabric, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 0.6, "output_format": "pcm_44100"}
+File     : assets_src/audio/mage-dash.wav  SHA-256 e483cfd541089275ad7d328b5848a848f46a48208d3632b623b0416da8d7e0f2
+Modified : peak-normalized to -3 dBFS (was -1.9) (the .gen.json next to it keeps the SHA-256 as generated)

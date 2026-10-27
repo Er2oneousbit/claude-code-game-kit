@@ -1,0 +1,16 @@
+{
+  "tool": "fish_tts",
+  "service": "Fish Audio",
+  "endpoint": "/v1/tts",
+  "model": "s2.1-pro-free",
+  "request": {
+    "text": "Morning already. The ghosts fade, and the souls are lost for another day. Try again, keeper.",
+    "reference_id": "5c8dc6a69c0b4edfb32634db6384bf34",
+    "format": "wav",
+    "latency": "balanced"
+  },
+  "date": "2026-10-22",
+  "sha256": "e50cf9a4c2a9b54744ee0f6836dddc74a66830d3aa18f4c176f26168b78151e5",
+  "text_bytes": 92,
+  "license": "Fish Audio API terms (verify before shipping)"
+}

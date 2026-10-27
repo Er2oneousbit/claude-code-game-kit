@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "single crisp wooden clock tick, short and dry, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 0.5,
+    "output_format": "mp3_44100_128"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "a0410263c471a50215db2ea04a70fb4ed678fa1aa0272f7e2739818cac1bb6e8",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "f81953acf32fb911ee0c26e1c7c28f0a",
+  "credits": "5"
+}

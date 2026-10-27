@@ -1,0 +1,37 @@
+A-0001  3d  fetched 2026-10-21 with tools/fetch_asset.py
+Download : https://kenney.nl/media/pages/assets/mini-characters/bfc7e272b4-1774770718/kenney_mini-characters.zip
+Page     : https://kenney.nl/assets/mini-characters
+Author   : Kenney
+License  : CC0
+SHA-256  : 9e1d48e6d7b8479ebbe84df71eb5bd8e1b3f0da546dea641890dccc8a02d0999
+Files    : Models/GLB format/character-female-c.glb, Models/GLB format/Textures/colormap.png
+
+---- License.txt (from the pack) ----
+	
+
+	Mini Characters (1.0)
+
+	Created/distributed by Kenney (www.kenney.nl)
+	Creation date: 17-07-2024 11:31
+	
+			------------------------------
+
+	License: (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	You can use this content for personal, educational, and commercial purposes.
+
+	Support by crediting 'Kenney' or 'www.kenney.nl' (this is not a requirement)
+
+			------------------------------
+
+	• Website : www.kenney.nl
+	• Donate  : www.kenney.nl/donate
+
+	• Patreon : patreon.com/kenney
+	
+	Follow on social media for updates:
+
+	• Twitter:   twitter.com/KenneyNL
+	• Instagram: instagram.com/kenney_nl
+	• Mastodon:  mastodon.gamedev.place/@kenney

@@ -1,0 +1,37 @@
+A-0001  3d  fetched 2026-10-21 with tools/fetch_asset.py
+Download : https://kenney.nl/media/pages/assets/graveyard-kit/ba8d4b4517-1760691807/kenney_graveyard-kit_5.0.zip
+Page     : https://kenney.nl/assets/graveyard-kit
+Author   : Kenney
+License  : CC0
+SHA-256  : 1a93613f2e5675f3310acf49ec9ef13ae7adeb756ac3b205bfb6cc9311a81062
+Files    : Models/FBX format/character-keeper.fbx, Models/FBX format/character-ghost.fbx, Models/FBX format/gravestone-round.fbx, Models/FBX format/gravestone-cross.fbx, Models/FBX format/gravestone-wide.fbx, Models/FBX format/gravestone-bevel.fbx, Models/FBX format/gravestone-broken.fbx, Models/FBX format/grave.fbx, Models/FBX format/crypt.fbx, Models/FBX format/crypt-small.fbx, Models/FBX format/crypt-large.fbx, Models/FBX format/crypt-large-roof.fbx, Models/FBX format/iron-fence.fbx, Models/FBX format/iron-fence-border-column.fbx, Models/FBX format/stone-wall.fbx, Models/FBX format/stone-wall-column.fbx, Models/FBX format/pine.fbx, Models/FBX format/pine-crooked.fbx, Models/FBX format/rocks.fbx, Models/FBX format/rocks-tall.fbx, Models/FBX format/lantern-candle.fbx, Models/FBX format/lightpost-single.fbx, Models/FBX format/pumpkin-carved.fbx, Models/FBX format/road.fbx, Models/FBX format/candle-multiple.fbx, Models/FBX format/Textures/colormap.png
+
+---- License.txt (from the pack) ----
+	
+
+	Graveyard Kit (5.0)
+
+	Created/distributed by Kenney (www.kenney.nl)
+	Creation date: 17-10-2025 11:00
+	
+			------------------------------
+
+	License: (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	You can use this content for personal, educational, and commercial purposes.
+
+	Support by crediting 'Kenney' or 'www.kenney.nl' (this is not a requirement)
+
+			------------------------------
+
+	• Website : www.kenney.nl
+	• Donate  : www.kenney.nl/donate
+
+	• Patreon : patreon.com/kenney
+	
+	Follow on social media for updates:
+
+	• Twitter:	 twitter.com/KenneyNL
+	• BlueSky:	 kenney.bsky.social
+	• Instagram: instagram.com/kenney_nl

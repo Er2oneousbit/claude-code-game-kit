@@ -1,0 +1,32 @@
+A-0003  sfx  fetched 2026-10-21 with tools/fetch_asset.py
+Download : https://kenney.nl/media/pages/assets/sci-fi-sounds/6b296f9ecf-1677589334/kenney_sci-fi-sounds.zip
+Page     : https://kenney.nl/assets/sci-fi-sounds
+Author   : Kenney
+License  : CC0
+SHA-256  : 119340f351a5098ad814f78719438c0da355a9ce8a4c8a3af6a8d48aa3d49e04
+Files    : Audio/laserLarge_000.ogg, Audio/laserSmall_000.ogg, Audio/impactMetal_002.ogg, Audio/explosionCrunch_000.ogg, Audio/forceField_000.ogg
+
+---- License.txt (from the pack) ----
+	
+
+	Sci-Fi Sounds (1.0)
+
+	Created/distributed by Kenney (www.kenney.nl)
+	Creation date: 11-10-2020
+
+			------------------------------
+
+	License: (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	This content is free to use in personal, educational and commercial projects.
+
+	Support us by crediting Kenney or www.kenney.nl (this is not mandatory)
+
+			------------------------------
+
+	Donate:   http://support.kenney.nl
+	Patreon:  http://patreon.com/kenney/
+
+	Follow on Twitter for updates:
+	http://twitter.com/KenneyNL

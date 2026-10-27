@@ -1,0 +1,29 @@
+{
+  "image": "scrap_plate.png",
+  "cell_width": 112,
+  "cell_height": 112,
+  "rows": "directions",
+  "columns": "frames",
+  "directions": [
+    {
+      "row": 0,
+      "angle_deg": 0.0
+    }
+  ],
+  "frames": [
+    1
+  ],
+  "action": null,
+  "elevation_deg": 55.0,
+  "source": "debris-plate-a.glb",
+  "note": "row 0 = front (camera on -Y); angles turn counter-clockwise seen from above",
+  "world_size_m": 2.7,
+  "pixels_per_meter": 41.481481,
+  "pivot": "origin",
+  "pivot_px": [
+    56.0,
+    56.0
+  ],
+  "ground_depth_scale": 0.819152,
+  "note_scale": "a ground offset (dx, dy) in meters is (dx, dy * ground_depth_scale) * pixels_per_meter on screen"
+}

@@ -1,0 +1,6 @@
+A-0024  voice  generated 2026-10-22 with tools/audio/fish_tts.py
+Service  : Fish Audio text to speech (/v1/tts), model s2.1-pro-free
+Voice    : 7afba46fb5d949559c91e1fbc83197ab (Creepy Whisper); check it is not an imitation of a real person
+License  : Fish Audio API terms, read before release (verify)
+File     : Assets/Audio/ghost_search_1.wav  "Where did you go...?"  SHA-256 d69dd84b1436446d6cff0d9b7c4e3bf8ea0d138e6c7173cd18bd8872f05a1b4e
+File     : Assets/Audio/ghost_search_2.wav  "I know you're still here..."  SHA-256 91b850565ce0cb99a454aa6bbc5726c96790915166c4d97330556666ff0ac07c

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Courier Dash</title>
+    <link rel="icon" href="data:," /><!-- no favicon request (a 404 would fail smoke); swap in your icon -->
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #9fd3f0; }
+      #game { position: fixed; inset: 0; }
+      #game canvas { display: block; width: 100%; height: 100%; }
+      .loading { position: absolute; inset: 0; display: grid; place-items: center; color: #fbf7ee; font: 600 20px system-ui, sans-serif; }
+      #hud { position: absolute; inset: 0; pointer-events: none; color: #fbf7ee; font: 16px/1.4 system-ui, sans-serif; }
+      #hud .panel { position: absolute; background: rgba(29, 36, 51, 0.78); border-radius: 10px; padding: 10px 14px; }
+      #hud .stats { top: 12px; left: 12px; min-width: 190px; }
+      #hud .time { font: 700 34px/1 system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+      #hud .time.low { color: #ff3b3b; }
+      #hud .bar { margin-top: 6px; height: 8px; background: rgba(255, 255, 255, 0.18); border-radius: 4px; overflow: hidden; }
+      #hud .fill { height: 100%; background: #f2c14e; }
+      #hud .fill.tired { background: #8a8f99; }
+      #hud .best { margin-top: 4px; font-size: 13px; opacity: 0.85; }
+      #hud .version { position: absolute; top: 10px; right: 14px; font-size: 13px; opacity: 0.8; text-shadow: 0 1px 2px #1d2433; }
+      #hud .msg { left: 50%; bottom: 28px; transform: translateX(-50%); max-width: min(780px, calc(100% - 32px)); text-align: center; }
+      #hud .msg .c { color: #59d8ff; } #hud .msg .a { color: #ffb020; } #hud .msg .r { color: #ff3b3b; }
+      #hud .debug { position: absolute; left: 12px; bottom: 8px; font: 12px ui-monospace, monospace; text-shadow: 0 1px 2px #000; }
+    </style>
+  </head>
+  <body>
+    <div id="game"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "small metal oil lantern shutter click",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 0.6,
+    "output_format": "pcm_32000"
+  },
+  "date": "2026-10-22",
+  "plan": "free (free)",
+  "sha256": "08361ef5ad326cf865bb1c241f87ef12175c6a293372f935f4d1b8579763234c",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "0889202762fdd95fc9cb8c9f562f1bc5",
+  "credits": "6"
+}

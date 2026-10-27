@@ -1,0 +1,30 @@
+A-0004  sfx  fetched 2026-10-22 with tools/fetch_asset.py
+Download : https://kenney.nl/media/pages/assets/rpg-audio/8e99002d76-1677590336/kenney_rpg-audio.zip
+Page     : https://kenney.nl/assets/rpg-audio
+Author   : Kenney
+License  : CC0
+SHA-256  : 6dbeaf8544da958d8f2adcb4a4a4b76c1ade34a05f8ab9edccd327da7375f38b
+Files    : Audio/doorOpen_1.ogg, Audio/cloth1.ogg, Audio/dropLeather.ogg
+
+---- License.txt (from the pack) ----
+	
+
+	RPG Audio
+
+	by  Kenney Vleugels (Kenney.nl)
+
+			------------------------------
+
+	License (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	You may use these assets in personal and commercial projects.
+	Credit (Kenney or www.kenney.nl) would be nice but is not mandatory.
+
+			------------------------------
+
+	Donate:   http://support.kenney.nl
+	Request:  http://request.kenney.nl
+
+	Follow on Twitter for updates:
+	@KenneyNL

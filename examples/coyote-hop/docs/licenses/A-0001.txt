@@ -1,0 +1,10 @@
+A-0001  tileset  fetched 2026-10-21 with tools/fetch_asset.py
+Download : https://kenney.nl/media/pages/assets/pixel-platformer/33bb4921eb-1696667883/kenney_pixel-platformer.zip
+Page     : https://kenney.nl/assets/pixel-platformer
+Author   : Kenney
+License  : CC0
+SHA-256  : d01a196dbe3cc964e00d83ba3b987df62f332dc9260c9f941b4fbcc9047130f4
+Files    : Tilemap/tilemap_packed.png, Tilemap/tilemap-characters_packed.png, Tilemap/tilemap-backgrounds_packed.png
+
+---- Construct 3/Readme.txt (from the pack) ----
+This project file can be opened using Construct 3 (free edition), https://editor.construct.net/

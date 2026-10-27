@@ -1,0 +1,6 @@
+A-0021  voice  generated 2026-10-22 with tools/audio/fish_tts.py
+Service  : Fish Audio text to speech (/v1/tts), model s2.1-pro-free
+Voice    : 3d40669a01e045329ab4d6d7e25ce10e (Old man); check it is not an imitation of a real person
+License  : Fish Audio API terms, read before release (verify)
+File     : Assets/Audio/keeper_gate_1.wav  "The gate's open. Time to go!"  SHA-256 8872731ed1f098f853fe2dc39fcf20512fe3fc70b3db75d09c3fbef8b9ebb3ae
+File     : Assets/Audio/keeper_gate_2.wav  "That's all of them. Now, the gate."  SHA-256 a7bb697df026641f97f8c6e8aa1e8adb7cfd62aa90a63cb3743ecb66b32e809f

@@ -1,0 +1,22 @@
+{
+  "name": "Game.Tests.EditMode",
+  "rootNamespace": "graveyard_shift.Tests",
+  "references": [
+    "Game.Core",
+    "Game.Runtime",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "autoReferenced": false
+}

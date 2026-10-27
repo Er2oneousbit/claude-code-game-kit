@@ -1,0 +1,78 @@
+# ---- Claude Code Game Kit ----
+# ---- Universal ignores (engine-specific ones are appended below by the scaffolder) ----
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# Secrets and local config (never commit)
+.env
+.env.*
+secrets/
+*.pem
+*.key
+*.keystore
+*.pfx
+*.p12
+*.jks
+*.p8
+
+# Python tooling
+__pycache__/
+*.pyc
+
+# Downloaded asset packs (tools/fetch_asset.py keeps them here; only picked files enter assets/)
+.asset_cache/
+.venv/
+
+# Claude Code local-only files
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Scratch
+scratch/
+*.log
+*.tmp
+
+# ---- Unity ----
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emory[Cc]aptures/
+*.csproj
+*.sln
+*.slnx
+*.suo
+*.user
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+.vs/
+.idea/
+.gradle/
+*.apk
+*.aab
+sysinfo.txt
+# Left behind when a PlayMode run (dev.py smoke) is killed
+/[Aa]ssets/InitTestScene*.unity*
+crashlytics-build.properties
+
+# ---- Claude Code Game Kit 0.3.1: rules added by --upgrade ----
+captures/

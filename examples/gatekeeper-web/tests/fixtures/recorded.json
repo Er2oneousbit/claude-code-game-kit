@@ -1,0 +1,87 @@
+{
+  "note": "Model outputs in the shapes small models produce, good and broken. Shared by the web and Godot versions; add real ones when you meet them (SOP-15 step 6).",
+  "labels": [
+    {
+      "name": "exact label",
+      "raw": "greeting",
+      "expect": "greeting"
+    },
+    {
+      "name": "label with whitespace",
+      "raw": " threat\n",
+      "expect": "threat"
+    },
+    {
+      "name": "label in capitals",
+      "raw": "Mentions_Captain",
+      "expect": "mentions_captain"
+    },
+    {
+      "name": "label with punctuation",
+      "raw": "bribe.",
+      "expect": null
+    },
+    {
+      "name": "not a label",
+      "raw": "open_gate",
+      "expect": null
+    },
+    {
+      "name": "a sentence instead of a label",
+      "raw": "The traveler is greeting you.",
+      "expect": null
+    },
+    {
+      "name": "empty",
+      "raw": "",
+      "expect": null
+    }
+  ],
+  "lines": [
+    {
+      "name": "plain sentence",
+      "raw": "Evening, traveler.",
+      "expect": "Evening, traveler."
+    },
+    {
+      "name": "speaker prefix",
+      "raw": "Bram: Keep your coin.",
+      "expect": "Keep your coin."
+    },
+    {
+      "name": "quoted",
+      "raw": "\"Read the notice.\"",
+      "expect": "Read the notice."
+    },
+    {
+      "name": "second line dropped",
+      "raw": "Off with you.\nAnd stay off.",
+      "expect": "Off with you."
+    },
+    {
+      "name": "copied annotation is stripped",
+      "raw": "Thank you. [intent: flattery; Bram feels wary]",
+      "expect": "Thank you."
+    },
+    {
+      "name": "annotation in the middle is stripped",
+      "raw": "Evening. [I am not for sale.] Move along.",
+      "expect": "Evening. Move along."
+    },
+    {
+      "name": "JSON leaked into the line",
+      "raw": "{\"intent\": \"greeting\"}",
+      "expect": null
+    },
+    {
+      "name": "breaks character",
+      "raw": "As an AI language model, I cannot open gates.",
+      "expect": null
+    },
+    {
+      "name": "only whitespace",
+      "raw": "   ",
+      "expect": null
+    }
+  ]
+}

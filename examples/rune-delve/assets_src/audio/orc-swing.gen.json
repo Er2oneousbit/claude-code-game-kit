@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "heavy axe swung hard through the air, a single whoosh, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 0.7,
+    "output_format": "pcm_44100"
+  },
+  "date": "2026-10-23",
+  "plan": null,
+  "sha256": "661d5ed31871b418cc7ce8dc5777859646c623b417e35fa5d89c7b6b0d5ff4f2",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "bdd5ab635eb4770254aa6188b72257d0",
+  "credits": "7"
+}

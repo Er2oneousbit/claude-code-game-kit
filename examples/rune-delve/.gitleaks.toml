@@ -1,0 +1,12 @@
+# Gitleaks settings for this project (SOP-13 step 3: `gitleaks git .` scans every commit; `gitleaks dir .` the files).
+# Gitleaks reads this file from the folder it scans. It keeps all of gitleaks' default rules and skips one file:
+# .game-kit.json, which the Claude Code Game Kit writes with a SHA-256 hash per kit file. Kit files with "key" in
+# their name (tools/art/chroma_key.py) make those hashes look like API keys to the generic-api-key rule.
+# Needs gitleaks 8.25 or newer for [[allowlists]] (tested with 8.30.1).
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Claude Code Game Kit file hashes, not secrets"
+paths = ['''(^|/)\.game-kit\.json$''']

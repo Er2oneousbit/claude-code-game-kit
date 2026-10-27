@@ -1,0 +1,37 @@
+A-0001  3d  fetched 2026-10-22 with tools/fetch_asset.py
+Download : https://kenney.nl/media/pages/assets/mini-dungeon/6cd72dc849-1785314274/kenney_mini-dungeon.zip
+Page     : https://kenney.nl/assets/mini-dungeon
+Author   : Kenney
+License  : CC0
+SHA-256  : 19c4648680cb1d2e8836cade96cbf9781c0c1f45fbc6d2ce41cee8239a3ec4d8
+Files    : Models/FBX format/banner.fbx, Models/FBX format/barrel.fbx, Models/FBX format/chair.fbx, Models/FBX format/character-human.fbx, Models/FBX format/character-orc.fbx, Models/FBX format/chest.fbx, Models/FBX format/coin.fbx, Models/FBX format/column.fbx, Models/FBX format/dirt.fbx, Models/FBX format/floor-detail.fbx, Models/FBX format/floor.fbx, Models/FBX format/gate.fbx, Models/FBX format/key.fbx, Models/FBX format/pot.fbx, Models/FBX format/potion.fbx, Models/FBX format/rocks.fbx, Models/FBX format/shield-rectangle.fbx, Models/FBX format/shield-round.fbx, Models/FBX format/stairs.fbx, Models/FBX format/stones.fbx, Models/FBX format/table.fbx, Models/FBX format/trap.fbx, Models/FBX format/wall-half.fbx, Models/FBX format/wall-narrow.fbx, Models/FBX format/wall-opening.fbx, Models/FBX format/wall.fbx, Models/FBX format/weapon-spear.fbx, Models/FBX format/weapon-sword.fbx, Models/FBX format/wood-structure.fbx, Models/FBX format/wood-support.fbx, Models/FBX format/Textures/colormap.png
+
+---- License.txt (from the pack) ----
+	
+
+	Mini Dungeon (2.0)
+
+	Created/distributed by Kenney (www.kenney.nl)
+	Creation date: 29-07-2026 10:35
+	
+			------------------------------
+
+	License: (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	You can use this content for personal, educational, and commercial purposes.
+
+	Support by crediting 'Kenney' or 'www.kenney.nl' (this is not a requirement)
+
+			------------------------------
+
+	• Website : www.kenney.nl
+	• Donate  : www.kenney.nl/donate
+
+	• Patreon : patreon.com/kenney
+	
+	Follow on social media for updates:
+
+	• Twitter:	 twitter.com/KenneyNL
+	• BlueSky:	 kenney.bsky.social
+	• Instagram: instagram.com/kenney_nl

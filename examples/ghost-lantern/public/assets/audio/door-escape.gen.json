@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "old wooden door unlocked with a key and swinging open, then an airy whoosh of night air, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 2.0,
+    "output_format": "mp3_44100_128"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "30b8a1d6787b59ba4bcaac803f87f9e212fd57f8c89818c68b92153442e56b6d",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "eba7a35eaf2602c448c45668d2cdd4c5",
+  "credits": "20"
+}

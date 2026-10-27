@@ -1,0 +1,9 @@
+{
+  "name": "Game.Runtime",
+  "rootNamespace": "graveyard_shift.Game",
+  "references": ["Game.Core", "Unity.AI.Navigation"],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "autoReferenced": true
+}

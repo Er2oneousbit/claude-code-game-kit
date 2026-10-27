@@ -1,0 +1,16 @@
+{
+  "tool": "fish_tts",
+  "service": "Fish Audio",
+  "endpoint": "/v1/tts",
+  "model": "s2.1-pro-free",
+  "request": {
+    "text": "One more...",
+    "reference_id": "3d40669a01e045329ab4d6d7e25ce10e",
+    "format": "wav",
+    "latency": "balanced"
+  },
+  "date": "2026-10-22",
+  "sha256": "1450b9183107928ccdf2d4b444f222dcae3c4adb161c4f9214cb4e827c15defe",
+  "text_bytes": 11,
+  "license": "Fish Audio API terms (verify before shipping)"
+}

@@ -1,0 +1,29 @@
+{
+  "preset": "jump",
+  "vary": 0.12,
+  "seed": null,
+  "tool": "sfx_synth",
+  "rate": 44100,
+  "render_seed": 0,
+  "params": {
+    "wave": "square",
+    "freq": 300,
+    "freq_min": 20.0,
+    "slide": 2.4,
+    "slide_accel": 0.0,
+    "duty": 0.42,
+    "duty_sweep": 0.0,
+    "vibrato_depth": 0.0,
+    "vibrato_rate": 0.0,
+    "arp_mult": 1.0,
+    "arp_time": 0.0,
+    "repeat": 0.0,
+    "attack": 0.0,
+    "sustain": 0.05,
+    "decay": 0.17,
+    "punch": 0.0,
+    "lowpass": 7000,
+    "highpass": 0.0,
+    "volume": 0.3
+  }
+}

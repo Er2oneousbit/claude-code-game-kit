@@ -1,0 +1,9 @@
+A-0005  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "old wooden chest creaking open and an iron key picked up with a bright jingle, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 1.2, "output_format": "mp3_44100_128"}
+File     : public/assets/audio/key-found.mp3  SHA-256 d125b88381a1e341242a8e26eb306506ea7a8f93fa6cbe7a7642c450e5a17256
+Modified : peak-normalized to -3 dBFS (was 0) (the .gen.json next to it keeps the SHA-256 as generated)

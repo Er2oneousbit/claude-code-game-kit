@@ -1,0 +1,16 @@
+{
+  "tool": "fish_tts",
+  "service": "Fish Audio",
+  "endpoint": "/v1/tts",
+  "model": "s2.1-pro-free",
+  "request": {
+    "text": "That's all of them. Now, the gate.",
+    "reference_id": "3d40669a01e045329ab4d6d7e25ce10e",
+    "format": "wav",
+    "latency": "balanced"
+  },
+  "date": "2026-10-22",
+  "sha256": "a7bb697df026641f97f8c6e8aa1e8adb7cfd62aa90a63cb3743ecb66b32e809f",
+  "text_bytes": 34,
+  "license": "Fish Audio API terms (verify before shipping)"
+}

@@ -1,0 +1,16 @@
+{
+  "tool": "fish_tts",
+  "service": "Fish Audio",
+  "endpoint": "/v1/tts",
+  "model": "s2.1-pro-free",
+  "request": {
+    "text": "Who's there?",
+    "reference_id": "7afba46fb5d949559c91e1fbc83197ab",
+    "format": "wav",
+    "latency": "balanced"
+  },
+  "date": "2026-10-22",
+  "sha256": "4d6f6984ed4c8dd688af4bbbbc90c7288d4a1278d08cc451a54556b118c45a46",
+  "text_bytes": 12,
+  "license": "Fish Audio API terms (verify before shipping)"
+}

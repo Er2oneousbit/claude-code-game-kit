@@ -1,0 +1,9 @@
+A-0006  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "medieval town gate at dusk, light wind, distant crowd murmur, a torch crackling nearby, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 10.0, "loop": true, "output_format": "pcm_44100"}
+File     : public/assets/audio/gate-ambience.wav  SHA-256 e4c66341d61fd3ecdb9d7d2f9a372c5362275c6454ab9e67b6c1d7661795b244
+Modified : peak-normalized to -6 dBFS (was -2) (the .gen.json next to it keeps the SHA-256 as generated)

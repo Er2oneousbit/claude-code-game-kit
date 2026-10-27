@@ -1,0 +1,20 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "medieval town gate at dusk, light wind, distant crowd murmur, a torch crackling nearby, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 10.0,
+    "loop": true,
+    "output_format": "pcm_44100"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "dc2ab6bdbf5216524fd180c7418c13f5d079401a2d2041b1a3bff99d85841362",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "3935293bb30084929c4b4cabef08e96e",
+  "credits": "100"
+}

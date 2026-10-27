@@ -1,0 +1,6 @@
+{
+  "_about": "Neutral defaults used when new_game.py gets no --profile. Copy this file to make your own (see README.md here).",
+  "author": "",
+  "footer": "",
+  "style": []
+}

@@ -1,0 +1,183 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 74c131bfa1516934fbecda9ba081496d, type: 3}
+  m_Name: SO_GraveyardSetup
+  m_EditorClassIdentifier: Game.Runtime::graveyard_shift.Game.GraveyardSetup
+  tuning:
+    NightSeconds: 300
+    LowTimeSeconds: 40
+    LitSpeed: 4.2
+    DarkSpeed: 2.4
+    SoulPickupRadius: 1.4
+    GateRadius: 1.2
+    SightLit: 9
+    SightDark: 4
+    SenseLit: 3.5
+    SenseDark: 1.5
+    ConeHalfAngle: 60
+    PatrolSpeed: 2
+    HuntSpeed: 4.6
+    SuspiciousSeconds: 1.2
+    HuntMaxSeconds: 6
+    TiredSeconds: 5
+    LoseSightSeconds: 1.4
+    SearchSeconds: 3.5
+    SearchMaxSeconds: 12
+    CatchRadius: 1
+    CatchGraceSeconds: 1.5
+  models:
+  - name: candle-multiple
+    prefab: {fileID: 919132149155446097, guid: a33b0f4cb32d0ee488a7d6d933606d56, type: 3}
+  - name: character-ghost
+    prefab: {fileID: 919132149155446097, guid: 38b5caf547c3d80429564158ebf7e5b3, type: 3}
+  - name: character-keeper
+    prefab: {fileID: 919132149155446097, guid: 727a34736b99ef3449a5c537918c7484, type: 3}
+  - name: crypt-a
+    prefab: {fileID: 919132149155446097, guid: 3f151f80320d59344a9817c12db008c3, type: 3}
+  - name: crypt-b
+    prefab: {fileID: 919132149155446097, guid: 7613b43d12244fb4d82ac7d241dffa16, type: 3}
+  - name: crypt-door
+    prefab: {fileID: 919132149155446097, guid: 8f70aaf11f0005c46825a6bb62f4cc0e, type: 3}
+  - name: crypt-large-door
+    prefab: {fileID: 919132149155446097, guid: d0fac69ed13545640acaa9c4ae602376, type: 3}
+  - name: crypt-large-roof
+    prefab: {fileID: 919132149155446097, guid: 8ecd132a0725f93489c5309333f9eeb3, type: 3}
+  - name: crypt-large
+    prefab: {fileID: 919132149155446097, guid: 4bc9101ced47a2a4bbdbb61215d04ad3, type: 3}
+  - name: crypt-small-roof
+    prefab: {fileID: 919132149155446097, guid: 74ae217f5cc40aa4399b2ffb189bae90, type: 3}
+  - name: crypt-small
+    prefab: {fileID: 919132149155446097, guid: 1b8d8beeb76351c41bc87e76966b39fc, type: 3}
+  - name: crypt
+    prefab: {fileID: 919132149155446097, guid: 1e8638dd1c8138c4f9b59c8d94c8712f, type: 3}
+  - name: fence-gate
+    prefab: {fileID: 919132149155446097, guid: 7a5e05e5a2c901842a1099653f47e686, type: 3}
+  - name: grave
+    prefab: {fileID: 919132149155446097, guid: e419ec538c600de4686c33f63eeb3e40, type: 3}
+  - name: gravestone-bevel
+    prefab: {fileID: 919132149155446097, guid: 78a74bedc24bdf14ebe97485d1698b3a, type: 3}
+  - name: gravestone-broken
+    prefab: {fileID: 919132149155446097, guid: 90935bbf79bf2494bb71666dcd2711d8, type: 3}
+  - name: gravestone-cross
+    prefab: {fileID: 919132149155446097, guid: f2a20980426c63542b3b490fe2418e89, type: 3}
+  - name: gravestone-round
+    prefab: {fileID: 919132149155446097, guid: faac1f2090d90a74c91b2a14f46b4829, type: 3}
+  - name: gravestone-wide
+    prefab: {fileID: 919132149155446097, guid: ae65a879b6b224e4da707bab7f072453, type: 3}
+  - name: iron-fence-border-column
+    prefab: {fileID: 919132149155446097, guid: d7936e4f6fb18744990db928d2340c12, type: 3}
+  - name: iron-fence-border-gate
+    prefab: {fileID: 919132149155446097, guid: 8302ada2acc7e6849a0a3170221f7e37, type: 3}
+  - name: iron-fence-border
+    prefab: {fileID: 919132149155446097, guid: 07fa2dc68805adf4189a94dc6b97bc23, type: 3}
+  - name: iron-fence
+    prefab: {fileID: 919132149155446097, guid: 9aa5312a105f9f844b3860921f2993ca, type: 3}
+  - name: lantern-candle
+    prefab: {fileID: 919132149155446097, guid: 80d86fe1777b3cb4ba02b8700ebb0db0, type: 3}
+  - name: lightpost-single
+    prefab: {fileID: 919132149155446097, guid: 34171d95d93c60c4989fa461c0324591, type: 3}
+  - name: pine-crooked
+    prefab: {fileID: 919132149155446097, guid: 74acc5830f0c77245b4f999a0316081d, type: 3}
+  - name: pine
+    prefab: {fileID: 919132149155446097, guid: 9c3eb9550dc592946842020f0714f503, type: 3}
+  - name: pumpkin-carved
+    prefab: {fileID: 919132149155446097, guid: 7f0a40778ea211e48a2a45090612df22, type: 3}
+  - name: road
+    prefab: {fileID: 919132149155446097, guid: 8d532f5f7dc2fd742b8be3cf6068e02e, type: 3}
+  - name: rocks-tall
+    prefab: {fileID: 919132149155446097, guid: 8b7ff0cf4c4e2a5409d6fca6d1d494e9, type: 3}
+  - name: rocks
+    prefab: {fileID: 919132149155446097, guid: 7e933c100436a4449bedd6707292f183, type: 3}
+  - name: stone-wall-column
+    prefab: {fileID: 919132149155446097, guid: 2050be4d37e228646a703b6ecb2c9f78, type: 3}
+  - name: stone-wall
+    prefab: {fileID: 919132149155446097, guid: db82e503b9554494e9bd2b2fc2202ce4, type: 3}
+  - name: grass
+    prefab: {fileID: 919132149155446097, guid: 6cdfb464e7524e14487e61ff81343da6, type: 3}
+  - name: grass_large
+    prefab: {fileID: 919132149155446097, guid: 0c19bda36e4dbb84a8e9ce4eb2f0c164, type: 3}
+  - name: plant_bush
+    prefab: {fileID: 919132149155446097, guid: bb3c2342551283f4895cfb0f6272028e, type: 3}
+  - name: plant_bushDetailed
+    prefab: {fileID: 919132149155446097, guid: ffd6c3d662982894bb1d8c86e5262ff9, type: 3}
+  - name: plant_bushLarge
+    prefab: {fileID: 919132149155446097, guid: 3e344e4c637bacb42802edd5e3b56a06, type: 3}
+  - name: plant_bushSmall
+    prefab: {fileID: 919132149155446097, guid: 039f521995b4bd943bcdddc2663aa3f2, type: 3}
+  - name: tree_default_dark
+    prefab: {fileID: 919132149155446097, guid: 2ef6c597dd7d7dc469ffa7349f2cb0f6, type: 3}
+  - name: tree_fat_darkh
+    prefab: {fileID: 919132149155446097, guid: 3f20bc1b7a810f14880bd7b35851f331, type: 3}
+  - name: tree_oak_dark
+    prefab: {fileID: 919132149155446097, guid: 6c04a0a26629ce247b8849b1c80aff2e, type: 3}
+  - name: tree_pineRoundC
+    prefab: {fileID: 919132149155446097, guid: 32a46ee4b5e9279468aa2f464d650269, type: 3}
+  - name: tree_pineSmallB
+    prefab: {fileID: 919132149155446097, guid: 0bf964131fd582c4a9f00cf767c53b3d, type: 3}
+  - name: tree_pineTallA
+    prefab: {fileID: 919132149155446097, guid: fca9b699bf3611c40a58cd7670416e24, type: 3}
+  soulCollected: {fileID: 8300000, guid: f78312e2e9350f144bdc3229fb7c20af, type: 3}
+  gateOpens: {fileID: 8300000, guid: 03bacfec721d633489831c860fd2b498, type: 3}
+  ghostAlert: {fileID: 8300000, guid: 431a5143e21841a4397a796f1441ff7e, type: 3}
+  caught: {fileID: 8300000, guid: f750379b25f00b245b9f0c43fd46985e, type: 3}
+  lanternToggle: {fileID: 8300000, guid: 236645c30f4829b429f75bad4eacce3a, type: 3}
+  soulWhisper: {fileID: 8300000, guid: 886d480e278477147bc1698697317082, type: 3}
+  ghostPresence: {fileID: 8300000, guid: d1ad66c78f47a354098f72009002745e, type: 3}
+  footsteps:
+  - {fileID: 8300000, guid: cb9716c19b39bb549a8b32c07f4f36d4, type: 3}
+  - {fileID: 8300000, guid: 7f675c31cc278004086ce59c60a67750, type: 3}
+  - {fileID: 8300000, guid: 6dbe35e57a3ece647803a12de959ee61, type: 3}
+  lanternFlame: {fileID: 8300000, guid: 307ad037cd0a21f499b2becd59f254b0, type: 3}
+  ghostNotice:
+  - {fileID: 8300000, guid: ed2596107447b3145a594664da0bc266, type: 3}
+  - {fileID: 8300000, guid: a1018867db568bd4ebeab0490738581b, type: 3}
+  - {fileID: 8300000, guid: 1e4b1074ba551864d97c092e1764c792, type: 3}
+  ghostCaught:
+  - {fileID: 8300000, guid: 3ad81aead19864540aa3a6e41ac9abc9, type: 3}
+  - {fileID: 8300000, guid: 4df3f47f6a540ad4f8d4bdf2b0b90eda, type: 3}
+  ghostSearch:
+  - {fileID: 8300000, guid: 58270cc32b58f4c4c912e47e9de45672, type: 3}
+  - {fileID: 8300000, guid: 46fc992f2ee7ba949a05d62aad8c2089, type: 3}
+  ghostGiveUp:
+  - {fileID: 8300000, guid: 3782a0b3675d6104782797d76b796f97, type: 3}
+  - {fileID: 8300000, guid: c5213f1f09198134f9e1060dae15dd76, type: 3}
+  keeperSoul:
+  - {fileID: 8300000, guid: ff96e93e0954d1947a35735e83b30f79, type: 3}
+  - {fileID: 8300000, guid: 409289cd843eec34da18ee964c8f6e17, type: 3}
+  - {fileID: 8300000, guid: 0c4fd6796dbb7d441bb4bcd93cd46079, type: 3}
+  keeperGate:
+  - {fileID: 8300000, guid: 4699bae80adf99f4b82f85a86d9abb2e, type: 3}
+  - {fileID: 8300000, guid: d7f50c436078ceb42939d9efa2b0fd1e, type: 3}
+  keeperLowTime:
+  - {fileID: 8300000, guid: e7c16cd8c2ad1bf4aa6e78524a0993ba, type: 3}
+  - {fileID: 8300000, guid: 0b88c70ac1c5cb94792f0f3ec5f31c67, type: 3}
+  keeperCaught:
+  - {fileID: 8300000, guid: d09d94a0dd8c8d14f9e4e7a460c48c62, type: 3}
+  - {fileID: 8300000, guid: 06a8626c672e47048b4b95bbd71e4c2b, type: 3}
+  narratorIntro:
+  - {fileID: 8300000, guid: c16ffb651153e734b9fb2753a20c9bbb, type: 3}
+  - {fileID: 8300000, guid: 9bd63a925ef77184c868f1e35a78517e, type: 3}
+  narratorEscape:
+  - {fileID: 8300000, guid: dfa5b63600eba5e40bffcddda888926f, type: 3}
+  - {fileID: 8300000, guid: a2a5b4c79df6d28418880847d3eee1dc, type: 3}
+  narratorDawn:
+  - {fileID: 8300000, guid: 702d384dcbd77434693c7e942773f5f2, type: 3}
+  - {fileID: 8300000, guid: 14124baed6f1d7242b3eb550db4abed8, type: 3}
+  dawnChorus: {fileID: 8300000, guid: c8458bbc77337954bab31912522a695c, type: 3}
+  winTracks: []
+  lossStings: []
+  ambience: {fileID: 8300000, guid: 55f32bc2c26c27d4cbd59f713ca9b0ab, type: 3}
+  musicTracks:
+  - {fileID: 8300000, guid: 16daed997c3dc524c95b2811628ee0b4, type: 3}
+  - {fileID: 8300000, guid: d6d68a720bf2bc240b7c59635d585400, type: 3}
+  ambienceVolume: 0.35
+  musicVolume: 0.45

@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug game (cppvsdbg, Windows)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${command:cmake.launchTargetPath}",
+      "args": ["--debug"],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "dev: check"
+    },
+    {
+      "name": "Debug game (cppdbg, Linux/Mac)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${command:cmake.launchTargetPath}",
+      "args": ["--debug"],
+      "cwd": "${workspaceFolder}",
+      "MIMode": "gdb",
+      "osx": { "MIMode": "lldb" },
+      "preLaunchTask": "dev: check"
+    }
+  ]
+}

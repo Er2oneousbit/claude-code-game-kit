@@ -1,0 +1,16 @@
+{
+  "tool": "fish_tts",
+  "service": "Fish Audio",
+  "endpoint": "/v1/tts",
+  "model": "s2.1-pro-free",
+  "request": {
+    "text": "Out the gate with every soul. Not bad at all. The ghosts will sulk until tomorrow.",
+    "reference_id": "5c8dc6a69c0b4edfb32634db6384bf34",
+    "format": "wav",
+    "latency": "balanced"
+  },
+  "date": "2026-10-22",
+  "sha256": "2a8b8a6267d966b5834fbf6a9cf52ca7df400c355de49e627bc3308e3521ccbb",
+  "text_bytes": 82,
+  "license": "Fish Audio API terms (verify before shipping)"
+}

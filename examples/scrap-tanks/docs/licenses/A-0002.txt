@@ -1,0 +1,37 @@
+A-0002  3d  fetched 2026-10-21 with tools/fetch_asset.py
+Download : https://kenney.nl/media/pages/assets/tower-defense-kit/a402493eaa-1726471567/kenney_tower-defense-kit.zip
+Page     : https://kenney.nl/assets/tower-defense-kit
+Author   : Kenney
+License  : CC0
+SHA-256  : d4c887680b709218315e4e1c17ae18c160635dcdfc4199763eeba97c02c77f00
+Files    : Models/GLB format/weapon-cannon.glb, Models/GLB format/weapon-turret.glb, Models/GLB format/detail-rocks-large.glb, Models/GLB format/detail-tree-large.glb, Models/GLB format/tile.glb, Models/GLB format/weapon-ammo-cannonball.glb, Models/GLB format/Textures/colormap.png
+
+---- License.txt (from the pack) ----
+	
+
+	Tower Defense Kit (2.1)
+
+	Created/distributed by Kenney (www.kenney.nl)
+	Creation date: 16-09-2024 09:24
+	
+			------------------------------
+
+	License: (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	You can use this content for personal, educational, and commercial purposes.
+
+	Support by crediting 'Kenney' or 'www.kenney.nl' (this is not a requirement)
+
+			------------------------------
+
+	• Website : www.kenney.nl
+	• Donate  : www.kenney.nl/donate
+
+	• Patreon : patreon.com/kenney
+	
+	Follow on social media for updates:
+
+	• Twitter:   twitter.com/KenneyNL
+	• Instagram: instagram.com/kenney_nl
+	• Mastodon:  mastodon.gamedev.place/@kenney

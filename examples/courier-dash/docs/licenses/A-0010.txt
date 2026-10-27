@@ -1,0 +1,9 @@
+A-0010  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "single crisp wooden clock tick, short and dry, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 0.5, "output_format": "mp3_44100_128"}
+File     : public/assets/audio/clock-tick.mp3  SHA-256 a68f6d06147613c8c0c742c2e3f3095054b0d08684576640d4f1a589e5346685
+Modified : peak-normalized to -3 dBFS (was -3.9) (the .gen.json next to it keeps the SHA-256 as generated)

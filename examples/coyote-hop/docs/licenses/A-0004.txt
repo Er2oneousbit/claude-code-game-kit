@@ -1,0 +1,30 @@
+A-0004  music  fetched 2026-10-21 with tools/fetch_asset.py
+Download : https://kenney.nl/media/pages/assets/music-jingles/f37e530b9e-1677590399/kenney_music-jingles.zip
+Page     : https://kenney.nl/assets/music-jingles
+Author   : Kenney
+License  : CC0
+SHA-256  : b729ba57959bd58793d2c5cafa348aaf2655d354f3da35ec4729e03ec77197b8
+Files    : Audio/8-Bit jingles/jingles_NES00.ogg
+
+---- License.txt (from the pack) ----
+	
+
+	Music Jingles
+
+	by  Kenney Vleugels (Kenney.nl)
+
+			------------------------------
+
+	License (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	You may use these assets in personal and commercial projects.
+	Credit (Kenney or www.kenney.nl) would be nice but is not mandatory.
+
+			------------------------------
+
+	Donate:   http://support.kenney.nl
+	Request:  http://request.kenney.nl
+
+	Follow on Twitter for updates:
+	@KenneyNL

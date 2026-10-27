@@ -1,0 +1,27 @@
+{
+  "name": "{{GAME_SLUG}}",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "{{GAME_NAME}}: a 3D browser game (Three.js, TypeScript, Vite). Use python tools/dev.py for every command.",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@types/three": "0.186.0",
+    "playwright": "1.64.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  }
+}

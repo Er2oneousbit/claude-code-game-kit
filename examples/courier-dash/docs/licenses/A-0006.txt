@@ -1,0 +1,33 @@
+A-0006  3d  fetched 2026-10-21 with tools/fetch_asset.py
+Download : https://kenney.nl/media/pages/assets/space-kit/20874c75ac-1677698978/kenney_space-kit.zip
+Page     : https://kenney.nl/assets/space-kit
+Author   : Kenney
+License  : CC0
+SHA-256  : d5d7cdf2635ed5a43a9187deaf409b6f47484e402321128341d3c3698e9ef4d9
+Files    : Models/GLTF format/rover.glb
+
+---- License.txt (from the pack) ----
+	
+
+	Space Kit (2.0)
+
+	Created/distributed by Kenney (www.kenney.nl)
+	Creation date: 27-08-2020 14:20
+
+			------------------------------
+
+	License: (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	This content is free to use in personal, educational and commercial projects.
+
+	Support us by crediting Kenney or www.kenney.nl (this is not mandatory)
+
+			------------------------------
+
+	Donate:   http://support.kenney.nl
+	Request:  http://request.kenney.nl
+	Patreon:  http://patreon.com/kenney/
+
+	Follow on Twitter for updates:
+	http://twitter.com/KenneyNL

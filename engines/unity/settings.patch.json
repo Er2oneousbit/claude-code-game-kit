@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [],
+    "ask": [
+      "Bash(python tools/dev.py *clean*)",
+      "Bash(python3 tools/dev.py *clean*)",
+      "PowerShell(python tools/dev.py *clean*)"
+    ],
+    "deny": [
+      "Edit(./Library/**)",
+      "Edit(./Temp/**)",
+      "Edit(./Logs/**)"
+    ]
+  }
+}

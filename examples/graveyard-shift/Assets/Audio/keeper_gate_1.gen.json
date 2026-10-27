@@ -1,0 +1,16 @@
+{
+  "tool": "fish_tts",
+  "service": "Fish Audio",
+  "endpoint": "/v1/tts",
+  "model": "s2.1-pro-free",
+  "request": {
+    "text": "The gate's open. Time to go!",
+    "reference_id": "3d40669a01e045329ab4d6d7e25ce10e",
+    "format": "wav",
+    "latency": "balanced"
+  },
+  "date": "2026-10-22",
+  "sha256": "8872731ed1f098f853fe2dc39fcf20512fe3fc70b3db75d09c3fbef8b9ebb3ae",
+  "text_bytes": 28,
+  "license": "Fish Audio API terms (verify before shipping)"
+}

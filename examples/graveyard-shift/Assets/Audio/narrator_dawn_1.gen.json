@@ -1,0 +1,16 @@
+{
+  "tool": "fish_tts",
+  "service": "Fish Audio",
+  "endpoint": "/v1/tts",
+  "model": "s2.1-pro-free",
+  "request": {
+    "text": "The sun came up, and the souls slipped back into the earth. Tomorrow night, then.",
+    "reference_id": "5c8dc6a69c0b4edfb32634db6384bf34",
+    "format": "wav",
+    "latency": "balanced"
+  },
+  "date": "2026-10-22",
+  "sha256": "ca81227c054887517146bc2b823e45007acdede332ca9a8a4cc078efc74014ce",
+  "text_bytes": 81,
+  "license": "Fish Audio API terms (verify before shipping)"
+}

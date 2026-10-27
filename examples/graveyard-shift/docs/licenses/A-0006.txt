@@ -1,0 +1,8 @@
+A-0006  sfx  generated 2026-10-22 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "ghost catches you, short ghostly shriek with a cold rushing whoosh", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 1.5, "output_format": "pcm_32000"}
+File     : Assets/Audio/caught.wav  SHA-256 a15c4b0b2ecafb1310c1db37f14e4bbb992e5d6bac5d3068e78576a07bf56976

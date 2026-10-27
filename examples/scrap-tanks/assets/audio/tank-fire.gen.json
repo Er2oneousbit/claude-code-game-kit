@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "small armored tank cannon firing, punchy boom with a metallic clank of the breech, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 1.0,
+    "output_format": "pcm_44100"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "bfa28d0120723c5873620133e7fb0da87dd0f6e670476ee5668bc985bcc61bb2",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "1c5bb230e6bf9a90c24062ee510a804e",
+  "credits": "10"
+}

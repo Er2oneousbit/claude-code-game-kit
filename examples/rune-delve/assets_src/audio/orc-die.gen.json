@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "an orc's dying groan fading out, then a body in leather armor slumping onto a stone floor, not distorted, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 1.5,
+    "output_format": "pcm_44100"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "5d457daa7b5da11031a3d2b6fdd18834eb38d19cee6c815700d430c42b672160",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "fecbabffc0599fc8c0441e00d228d8ad",
+  "credits": "15"
+}

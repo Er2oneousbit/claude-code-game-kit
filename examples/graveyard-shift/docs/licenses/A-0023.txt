@@ -1,0 +1,6 @@
+A-0023  voice  generated 2026-10-22 with tools/audio/fish_tts.py
+Service  : Fish Audio text to speech (/v1/tts), model s2.1-pro-free
+Voice    : 3d40669a01e045329ab4d6d7e25ce10e (Old man); check it is not an imitation of a real person
+License  : Fish Audio API terms, read before release (verify)
+File     : Assets/Audio/keeper_caught_1.wav  "Ugh... back to the gate."  SHA-256 7330e75f484b5c0e70071f905c74811444eafeeff0604e72ba32873bff7868e3
+File     : Assets/Audio/keeper_caught_2.wav  "My old bones..."  SHA-256 204272600ecf526b73f808fbb7a0bc8b72f84ef9e8bc3818880105277dbaa3b7

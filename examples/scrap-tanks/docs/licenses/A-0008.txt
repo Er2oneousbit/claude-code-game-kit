@@ -1,0 +1,9 @@
+A-0008  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "small vehicle exploding, crunchy blast with scrap metal debris clattering down, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 1.8, "output_format": "pcm_44100"}
+File     : assets/audio/tank-explode.wav  SHA-256 b3e0140bd290fbc49bdc7006cad6aec21dc0975558fc244eea7fbe5e77657453
+Modified : peak-normalized to -3 dBFS (was -0) (the .gen.json next to it keeps the SHA-256 as generated)

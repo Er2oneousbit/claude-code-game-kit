@@ -1,0 +1,29 @@
+{
+  "image": "scrap_tire.png",
+  "cell_width": 112,
+  "cell_height": 112,
+  "rows": "directions",
+  "columns": "frames",
+  "directions": [
+    {
+      "row": 0,
+      "angle_deg": 0.0
+    }
+  ],
+  "frames": [
+    1
+  ],
+  "action": null,
+  "elevation_deg": 55.0,
+  "source": "debris-tire.glb",
+  "note": "row 0 = front (camera on -Y); angles turn counter-clockwise seen from above",
+  "world_size_m": 2.2,
+  "pixels_per_meter": 50.909091,
+  "pivot": "origin",
+  "pivot_px": [
+    56.0,
+    56.0
+  ],
+  "ground_depth_scale": 0.819152,
+  "note_scale": "a ground offset (dx, dy) in meters is (dx, dy * ground_depth_scale) * pixels_per_meter on screen"
+}

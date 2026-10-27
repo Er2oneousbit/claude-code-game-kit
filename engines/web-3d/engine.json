@@ -1,0 +1,16 @@
+{
+  "id": "web-3d",
+  "label": "Web 3D (Three.js + TypeScript + Vite)",
+  "summary": "Browser 3D: Three.js renderer, TypeScript, Vite dev server and build, Vitest unit tests, Playwright headless smoke",
+  "skeleton_dir": "skeleton",
+  "gitignore_append": "gitignore.append",
+  "settings_patch": "settings.patch.json",
+  "engine_md": "ENGINE.md",
+  "flow_md": "FLOW.md",
+  "assets_dir": "public/assets",
+  "setup_step": "python tools/dev.py setup        # npm install + the headless browser smoke uses (versions are pinned in package.json)",
+  "adopt_hints": {
+    "package.json": "merge the scripts and devDependencies from package.json.gold into yours (vite, vitest, typescript, playwright, @types/three), then run python tools/dev.py setup. Your game must log BOOT_OK to the console after its first rendered frame (see docs/ENGINE_FLOW.md > Adopting an existing project).",
+    "index.html": "keep yours; it must load the module entry (src/main.ts) the way index.html.gold does."
+  }
+}

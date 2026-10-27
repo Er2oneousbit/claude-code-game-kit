@@ -1,0 +1,18 @@
+A-0005  music  fetched 2026-10-21 with tools/fetch_asset.py
+Download : https://opengameart.org/sites/default/files/5%20Action%20Chiptunes%20By%20Juhani%20Junkala.zip
+Page     : https://opengameart.org/content/5-chiptunes-action
+Author   : Juhani Junkala (SubspaceAudio)
+License  : CC0
+SHA-256  : ea189990c0fb9a700187ccc740eda72400341a082305a163867467d96346460d
+Modified : re-encoded to assets/audio/music/level1.ogg (OGG Vorbis, 44.1 kHz stereo)
+Files    : Juhani Junkala [Retro Game Music Pack] Level 1.wav
+
+---- INFO.txt (from the pack) ----
+
+Hi, I'm Juhani Junkala, the author of this music collection. I'm a classically trained composer, producer and a sound designer with over 20 years of experience.
+
+These music tracks have been released under CC0 creative commons license. You can do anything you want with these tunes.
+
+Check out my game music portfolio: https://www.youtube.com/watch?v=dbACpSy9FWY
+
+If you need music or sound effects for your game, contact me: juhani.junkala@musician.org

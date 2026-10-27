@@ -1,0 +1,6 @@
+A-0022  voice  generated 2026-10-22 with tools/audio/fish_tts.py
+Service  : Fish Audio text to speech (/v1/tts), model s2.1-pro-free
+Voice    : 3d40669a01e045329ab4d6d7e25ce10e (Old man); check it is not an imitation of a real person
+License  : Fish Audio API terms, read before release (verify)
+File     : Assets/Audio/keeper_lowtime_1.wav  "Dawn's coming... hurry, old man."  SHA-256 1731926c3eb6e0d50490758684ed82105fabbfe9408bbebb200da39ffd3ba0fd
+File     : Assets/Audio/keeper_lowtime_2.wav  "Not much night left..."  SHA-256 dd866980f3338c19645156e883182452888b908350d7c3e52b9eda1d7c5cfd64

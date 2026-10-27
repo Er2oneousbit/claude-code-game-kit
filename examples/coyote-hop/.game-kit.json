@@ -1,0 +1,1008 @@
+{
+  "kit_version": "0.4.0",
+  "author": "the owner",
+  "profile": {
+    "author": "",
+    "footer": "",
+    "style": []
+  },
+  "engine": "godot",
+  "game_name": "Coyote Hop",
+  "scaffolded": "2026-10-21",
+  "adopted": false,
+  "history": [
+    {
+      "version": "0.3.0",
+      "date": "2026-10-21",
+      "mode": "new",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.0",
+      "date": "2026-10-21",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.0",
+      "date": "2026-10-21",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-21",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-21",
+      "mode": "upgrade",
+      "unmerged": [
+        "docs/ROADMAP.md"
+      ]
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-21",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-21",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-21",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-21",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-21",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-21",
+      "mode": "upgrade",
+      "unmerged": [
+        "docs/STYLE.md",
+        "scripts/core/coyote_timer.gd",
+        "scripts/core/log.gd",
+        "scripts/game/main.gd",
+        "tests/test_coyote_timer.gd",
+        "tools/art/chroma_key.py",
+        "tools/art/frames_to_gif.py",
+        "tools/art/gimp_batch.py",
+        "tools/art/svg_export.py",
+        "tools/art/test_chroma_key.py",
+        "tools/art/test_gimp_batch.py",
+        "tools/art/test_svg_export.py",
+        "tools/blender/prep_export.py",
+        "tools/blender/render_sprites.py",
+        "tools/blender/test_prep_export.py",
+        "tools/blender/test_render_sprites.py",
+        "tools/blender/test_validate_asset.py",
+        "tools/blender/validate_asset.py",
+        "tools/check_links.py",
+        "tools/check_scripts.gd",
+        "tools/dev.py",
+        "tools/fetch_asset.py",
+        "tools/publish_check.py",
+        "tools/test_check_links.py",
+        "tools/test_fetch_asset.py",
+        "tools/test_publish_check.py",
+        "tools/yt_transcript.py"
+      ]
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-21",
+      "mode": "upgrade",
+      "unmerged": [
+        "scripts/game/main.gd"
+      ]
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-21",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-21",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": [
+        "README.md"
+      ]
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-22",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-23",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-24",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-24",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-24",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-24",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-24",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-24",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-24",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-24",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-25",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": [
+        "docs/ENGINE.md",
+        "project.godot"
+      ]
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-26",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-27",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-27",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-27",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-27",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-27",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-27",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-27",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-27",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-27",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-27",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-27",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-27",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-27",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.3.1",
+      "date": "2026-10-27",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.4.0",
+      "date": "2026-10-27",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.4.0",
+      "date": "2026-10-27",
+      "mode": "upgrade",
+      "unmerged": []
+    }
+  ],
+  "files": {
+    ".claude/agents/build-doctor.md": "cb988791731bb2557e9ce1fc56cc5b3a5ac064d99b62389d6bcad88a60715832",
+    ".claude/agents/code-reviewer.md": "a0d45c151a064a485d25988d7e5f681e57899264a409e9cdda38aa455f2c94c9",
+    ".claude/agents/design-critic.md": "1a1b1532d57087bb17db3496d68ef70a7461850385ed88dc9535369b401a0d1d",
+    ".claude/agents/playtest-analyst.md": "a08d7508bf73ead452aca2a9064939e8092357620fda97900eab1fecdb393c9e",
+    ".claude/agents/researcher.md": "968499c48e4f712ab133a63cfdb8cbbb1df437aedb709dab336e76c578248717",
+    ".claude/skills/adr/SKILL.md": "9818145a803852e50d0914259603266a09cb372e4e2cde373c89f4a7087e5929",
+    ".claude/skills/asset-intake/SKILL.md": "f5fac45417c42f09f8faa3e7de853eea536d791aabedba9828fa7e6fe53e42b9",
+    ".claude/skills/bug-hunt/SKILL.md": "32eb54a040e066c1a94efdf2a2bdd026490f2800d2dd4fa24af63c7b74f4508d",
+    ".claude/skills/end-session/SKILL.md": "4c8a0279cf9b72f89dbf79f3e3206b63cea7d341743f29a4844327013140f47a",
+    ".claude/skills/game-ai/SKILL.md": "fb9191e3d4cc04e5390e8f5e35fb5fd6421c4b468fef0e0f35ae4f875eb009ba",
+    ".claude/skills/gdd-sync/SKILL.md": "345608c0ae4c278f6fe09b0f60d0c5d8447f12b1e2f59df05ee308b3fb81fead",
+    ".claude/skills/gen-brief/SKILL.md": "2364c4fdf3ca8f44b7fc812c5f659b566a3d7c5bc82b884c2c49b0f01e43e79d",
+    ".claude/skills/model-pipeline/SKILL.md": "28d299ddd7507f82f6ea19b03408b8f120144133b1b1237aa5fde04b55bc0da2",
+    ".claude/skills/new-feature/SKILL.md": "48b9c49016184e1cd55b8697bce4cb44bed830b5147ab102754505bc7a2ce265",
+    ".claude/skills/perf-pass/SKILL.md": "8e15de6cc9e3c84a0d9755c381b1f431681e684830c6b0eeeea945128789da66",
+    ".claude/skills/playtest-report/SKILL.md": "5104ea2b08ed0063f654d85937b5d94150d5cdcbb451efd98367eb98e1dad25d",
+    ".claude/skills/procgen/SKILL.md": "6635ea611509784d582efa7c518c487cb0dcecffac31ed02ed4dd6821bd1a43d",
+    ".claude/skills/publish-repo/SKILL.md": "19f9aef67a52894132c2559bcec1a20a764949fc2c4abd4d0c866dbb10dbf52e",
+    ".claude/skills/release-check/SKILL.md": "f037d30dc876114f869ff3eba8017d052ee245f0cd030b937de15022a4b2ae47",
+    ".claude/skills/start-session/SKILL.md": "5f23d8301428184ec75d7d877b24b24147c6ffc7b11c8f9c00daf2e2d8f1f7b5",
+    ".claude/skills/stuck/SKILL.md": "fe59d6e17f913b66be950d0094d98d08a04da0013c53c0a81a1eb4905adb5304",
+    ".claude/skills/triage-issues/SKILL.md": "3a08031606bea28e8b574e6b11dda20f549b1a4f86e19cf908362fd890b69458",
+    ".gitattributes": "9d1b5d1d4f62eec768dc04ae73855ce1b69bc88c402a4f46c547ec43c3dd7900",
+    ".github/ISSUE_TEMPLATE/bug.yml": "77c14acd5f36443147629f97d958413c8ac90c987e10f04f4f4a2ba4a69cadec",
+    ".github/ISSUE_TEMPLATE/feel.yml": "ea314059d21e4787e862afa98eaf5217528c8e54d0a4618d11c8abfc7d83ce5c",
+    ".gitleaks.toml": "d8f6978ff742ff6d0cbf93e64cbab0a2d607cbae5029d1c34619451bf1521670",
+    "CLAUDE.md": "6b29ffd7e029a7da6ae3124745857eb417f6d8f2865df1b4b2981988922740c7",
+    "README.md": "fcf5bf2210cd8fdc5cf6301b8e7af8190107593d0b4505230e3a5a06234b3cb8",
+    "assets/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "docs/ARCHITECTURE.md": "dfe365910ead2e1087bb70242081907e10f5bda8ab401ccf446c2799b97e731e",
+    "docs/ASSET_LOG.md": "88351348aca95381f08d8f6ef45f5fbdaf0e8521ec61c1d63a190426245e0bf6",
+    "docs/BRIEFS.md": "3269b8f2f38d0e203be671e2cd96ca6f31a02700fa9c9a652fd9d4424a7335ee",
+    "docs/CONCEPTS.md": "d58ca9426877811564a704ca240d797d22877e8ee5aadd3d052c652bcc188e9a",
+    "docs/ENGINE.md": "6fb3bd1ca32fc7b9b3afbd3a3e5ceba04cc6868e12680a93b815437d8bf15f54",
+    "docs/ENGINE_FLOW.md": "baa2000221f66b8621ae534c94406f111fc40285d7290d06ce4e7e628d6ada1b",
+    "docs/EVIDENCE.md": "2a790b3a8eeda3e79af0f82e50002c66e6c358bbd56d96ff690e4080f2636880",
+    "docs/FIRST_HOUR.md": "3d0cf94ac60a094fb0cf48c8ea5f8b3695be2d6341580b88489f72e55f1ca423",
+    "docs/GDD.md": "8521623136e1a31fff1827bb3a85c03d08fe5978e76de08bc66e366c077bd8a5",
+    "docs/HANDOFF.md": "3124d0370759299ac022f9a08c1ddccfc85291b52be010fcffe1582dd4aa1945",
+    "docs/PLAYTEST_LOG.md": "98a4d24a1202736904b70a05cfecdd8f1389315b3483bf08a3539302ec8ece5d",
+    "docs/RESOURCES.md": "10e2e50759574d7c5bff12ddff163c0d57e99192acddba4b8bd6d2eceb68b421",
+    "docs/ROADMAP.md": "a4cd3359d21b82e61821f4592d3ae5d356cb06ee1453cf2f43fa7cf5ae7c9b35",
+    "docs/STYLE.md": "99837df92b6777b954a5cbaa72b54fce1161bddf771077dc9f4e9aff0f555074",
+    "docs/TROUBLESHOOTING.md": "4f411c51becd864b41bfd9dde1790c497412f4db8f87a6cec423970520beac9d",
+    "docs/VERTICAL_SLICE.md": "5b7a41d5b2d758e836917f2c1ad71f88114481f304737b9862c906e518434eaf",
+    "docs/adr/0000-template.md": "9dcc503b68b8ff7fbdefdd454b208bcbe944fe730dba9d7e23b8a0aaf8ad7b50",
+    "docs/evidence/field-reports.md": "33ed0df3707b8589efb99a714924565e7fe65aaf58d1be07a6e4a18cf1302995",
+    "docs/evidence/video-notes.md": "c1e5b04b398c5e74c1a0fe2a72ff0d5631643c28b1eeb16e552e56c1388527db",
+    "docs/resources/ai-tools.md": "c6cedc698a4869d13c825dbd5237e729961c384502663a8f33d0f0ffddbc4ba1",
+    "docs/resources/art.md": "5ba95cf99d83f4139c2f4b949796ee772c3962b559780bac938b3f83746dca67",
+    "docs/resources/audio.md": "a719a47d9e937d2d8b7c6cadf5169710376ff15ebfcfad1e094d89d8ef7cfbc4",
+    "docs/resources/learning-and-release.md": "9a2076b6a4ddf07a2cd795b4a8e58cb3c16c43d4006194891b1f9e1a613ca988",
+    "docs/resources/licenses.md": "6584c21e9e295cbbdd2f338911963cde92bdc56aed8a691bce079533d39ca90e",
+    "docs/resources/pipelines.md": "c36f860a00743f20eeff0b068ceefbb4f2a2134b36da9393a3a2ca19b8cfdc35",
+    "docs/resources/world-and-levels.md": "f7b16c7cc08284e7f12eb11b0541362e89d180a16f471405294b8ad4d257ca92",
+    "docs/sop/README.md": "f3774170798a3e44edba8d1fe954cc94c30fdd40e3b8ac95b62b58251763b790",
+    "docs/sop/SOP-01-feature-workflow.md": "75ce26746c7a0e9222cd5b057bbd2294db11252225c3c3cd8c98ad14c26c26e8",
+    "docs/sop/SOP-02-bug-workflow.md": "e93338913b5b539f777261c5a1199d0e376e9f716eeb72e35e9d4dd238cb99f3",
+    "docs/sop/SOP-03-playtest-and-tuning.md": "22967fd021af3ce873af4c4bfccc76f71f38c4263accfaad8b8bdc1f1c0e45db",
+    "docs/sop/SOP-04-assets-and-licensing.md": "43f387385aa0bff213a3eefa1f06f7a8d95e61b9a4037d19fd363088e3ebd685",
+    "docs/sop/SOP-05-git.md": "50562626921658fe100438b49650cc405c8df6cb279787754de2d693a5bd86f0",
+    "docs/sop/SOP-06-build-and-release.md": "2a9f007b24ffb944bc84c0d0c47f66a2841e4479504e7e5f411f798b93d4253d",
+    "docs/sop/SOP-07-claude-code-hygiene.md": "26afd287af1604993481e758070c2da331c48de793271bfa98489b5bac30bf18",
+    "docs/sop/SOP-08-scope-control.md": "d01488a30f76c06dcb127384f7fae4a540721dc1131bb6f1d8fd1b91b86490f5",
+    "docs/sop/SOP-09-testing.md": "6b261c975c9f602dc38c2d6a5d50b5355b3c28af688cb259d51022ddfabad120",
+    "docs/sop/SOP-10-performance.md": "4ed22383e9c56b3e30e65d3046b27f626252e701d1420c70ef08af9b36f6d60d",
+    "docs/sop/SOP-11-3d-pipeline.md": "509fa2b38d2fcd0edf70b8e4be4f26813669357041a2fd5febb038233eb68e67",
+    "docs/sop/SOP-12-job-plan-and-model-roles.md": "d67b349a7ff5351db6cddbf970dfd8d16fb05a03fc3dfac500be60567bacc4e7",
+    "docs/sop/SOP-13-publish-to-github.md": "0b3c430b934db860e96d1bbcc43edf6ed72ac93bb95ae39bb4e8e1f3508d5a56",
+    "docs/sop/SOP-14-game-ai.md": "aed75003de01a336d2b9de850490322623f495749d87f1dc8c9fa1c4281ea319",
+    "docs/sop/SOP-15-ai-features.md": "d17cb35edaa0de3e42b9a5195d6538f9e9617b37dcdfd9c8c8d53682756ab817",
+    "docs/sop/SOP-16-2d-art-pipeline.md": "0f04fe8388b88e82479df174279af0d3544d60cb7eb666052d9479442d74194b",
+    "docs/sop/SOP-17-procedural-generation.md": "9a03e1860b92694e6aea165ffe8625ee267bb99cc13c1139db85b978404ab8de",
+    "export_presets.cfg": "11a3d3f0fb6bbfc8776d3ef1839abc628acf2b8ece4e0804331a6c19d06dd56f",
+    "project.godot": "38a4119046d57b981700ac7b4ec51b2b59822490a694a7b5b25d45fd13571fdb",
+    "scenes/main.tscn": "8ce80130755dcee6c2cf203f837aae414628ef3f70ee8553b796c38f951b925b",
+    "scripts/core/coyote_timer.gd": "f87c5bb7ad150ce9ea4260f852c8738f58eeeafd0cb85a227676a3d08715b9c8",
+    "scripts/core/log.gd": "d119c14ecb360c8eb771d41197360c3892fe1403fb4b50995df1698090fec350",
+    "scripts/game/main.gd": "50e73b46a6acb8b5a6c8e0e6638e90c49eb374acc2efb827d79bc0bfad1fd8e7",
+    "tests/test_coyote_timer.gd": "a04062c770223290afdc690b8e94d0ac57b9fc29253117876fb9913980efa4a4",
+    "tools/art/chroma_key.py": "1586d6918743890fb7a977b3020a8d99828c63153827904273114aef1cac8aa7",
+    "tools/art/frames_to_gif.py": "e1e59b9882f6b2532954631f28bb2d634a8dff3ac368481b3e0b678a9e1c9233",
+    "tools/art/gimp_batch.py": "bb725c97b95d163d1986e0e303e0a97cbf5ca4281efe7d39fa2078c6910558e9",
+    "tools/art/pixel_sprite.py": "378481476114c7a841d16d0098116eb773f46c560b25a8536d067fdfa19740d9",
+    "tools/art/pixellab.py": "18529878d3698e2ac627ac2839403c48cec1ee7cac9a3da9bca5297de5427304",
+    "tools/art/sprites/example_hero.py": "7f07e174b490fa2bf4b81ad9e28dca6090d79c6d4efbb60715cc73125dfd72e8",
+    "tools/art/svg_export.py": "252d09631414dc160e29bb46007af7a8a8f0e830dcc06bf613bc0cc8660b3ae0",
+    "tools/art/test_chroma_key.py": "29aab6598ebe56866e4fe9365fff9b52749bbf1f6666b64a6612e2b2d4420cfc",
+    "tools/art/test_gimp_batch.py": "013e7976ccd1652a52e8c850f6c5877a9ad0fbd5553650e8eec8e17dbe76c3cc",
+    "tools/art/test_pixel_sprite.py": "62a3067adaf0544886abb99b5e62ed20b0692e577f4675d0abf13cfaae69baae",
+    "tools/art/test_pixellab.py": "c46a9453ca1dd79deccdabf808970b5b07288f7b49ed5cbf52eb0ae5b6e71e0a",
+    "tools/art/test_svg_export.py": "712eb560f66503bfb41ba8a40715d5544f9fdb6463e2c5941c9432aa89bd00d6",
+    "tools/audio/chiptune.py": "a7bb0c4e0a551c50e706fd1e09bc5d041cd6cdf011d6374dc27197dbc518ca6b",
+    "tools/audio/eleven_audio.py": "e98a03a1743a7ec34ca099ee74cb5003996f6c42d9c47ee863455dbeaccc1c06",
+    "tools/audio/fish_tts.py": "d15a20197344b84b30f70a27da2b4164062b4fe9e9237bf581c1171bcb24166b",
+    "tools/audio/sfx_synth.py": "9e489dd9629496b138da7aab4a6c90313e14e71035e0d0944d3af264e494efa5",
+    "tools/audio/test_chiptune.py": "b627a3af098ae98b32ea76b14f39f1010da125e9aabaaecdc6f9d02faf1dcfe2",
+    "tools/audio/test_eleven_audio.py": "4cd2b6d72cf12268c4682bf1551c72b703b16f3778403400ef76ce0e38e629df",
+    "tools/audio/test_fish_tts.py": "893b4d65bb3b75d8396fdadc995f4b34050caa30e1afebb7949568ecfdd20f8a",
+    "tools/audio/test_sfx_synth.py": "34773ec7b5b973cd53c3d85fced8b48d70b47e00fce4f5fdffde93a5e541e0bb",
+    "tools/audio/test_wavfile.py": "e99470234b4d08cd662aeacadaf2a2f7b03a2282bfa34eb6474bc64ad0b05829",
+    "tools/audio/wavfile.py": "0db5157ba8f15525767f0769f8af8b6a7384eeec6fc1d4dc3ffb1561691da7be",
+    "tools/blender/prep_export.py": "31aae8c6ee39c998e2eb9bc1715dabc8813041ad40a981516eab22397ea3f915",
+    "tools/blender/render_sprites.py": "834eddeb55c2d12f541d3fe0ac6976fb2baa365963e106db2f4294172ad2bfd0",
+    "tools/blender/test_prep_export.py": "e07b096945c22fa1b4f73a892018f035274a49ca2bdc8413e25aafb6888070de",
+    "tools/blender/test_render_sprites.py": "a88cf02ff25a47858a1c3f86319f8ab535db9dfc088e3b2d61aeae8e89c80f1b",
+    "tools/blender/test_validate_asset.py": "bba9994de9138a7e51d1ed6f48f9bf1eea96b22da087116b06c911ed14397387",
+    "tools/blender/validate_asset.py": "0e775dbdfc1d66eea178dda181b889366afcd4ae47ef68c829244c74a9bc7eb0",
+    "tools/capture.gd": "6f9cbdcb2187b5ff97458a764bf84c726c1eaeb54c94f085e63bf2364d084340",
+    "tools/check_links.py": "6216a5cbbafd6647ae46d9510e8bec712ed73e866c1c39fd695ea6df66ced89b",
+    "tools/check_scripts.gd": "6f2923361ac70766d165e52b86f65aff2cb96868a1a7516a3bb312cb5eda497a",
+    "tools/dev.py": "a9bf90d67a155353923fff44239fb82760786c2a646acca86eb63f2858f3ce10",
+    "tools/doctor.py": "f10acb9b56c9db37ce9ec73e4083ad65eb2566bafedb0427885e81eb075692c3",
+    "tools/fetch_asset.py": "b6a5f87a32caff80fa38c47ac4398ba63a0006d50ac665327af78e1e7982eea5",
+    "tools/hooks/session_context.py": "20817ec484097dcf9d2dda4f487b6ada77fe6eff4fd6e328f1a4f90b4227876c",
+    "tools/issues.py": "fa149423638bae3b7bb436c78034576f6380f7c052245fbd12ef6873a121c07e",
+    "tools/publish_check.py": "974ac633340971073a5803d33dd97996c7e0392b40e7b373c40e3c5124ecab5e",
+    "tools/second_opinion.py": "2bd53915d2a20a5fc03e4fb9c6fa6e1008ec0250759fe9bcb139c4425013d041",
+    "tools/second_opinion/kimi-agent.md": "972813c8257a14c102575088e5e96243e049656609105098a341169798416aec",
+    "tools/test_check_links.py": "76983d99e60063782fe7d0e6bf2e789461fe67d4a6d940e5e07d90a84d9fc633",
+    "tools/test_fetch_asset.py": "c11b55e7b0c28b83dee6a382b3fb1c42bbe2016438bb14044a68cca716bf0426",
+    "tools/test_issues.py": "f2bfb1dbef0eba8f0a6d5949dd09b7651444958a71bd768a3c2b018aa7c9507c",
+    "tools/test_publish_check.py": "39fae7ecfd8266afd321db2aff27316f821cbbdc6da6dd1d546d80e02d9ab9ee",
+    "tools/test_second_opinion.py": "dbc30d77b670bfdf90251e902137bafde9606c2ac60ca4e5b41f43ccc2a42644",
+    "tools/yt_transcript.py": "fca9119c6d1c7f692d1bbb07929fc97da5d612a4f376129c453afa38a7b885c3"
+  },
+  "last_upgrade": "2026-10-27"
+}

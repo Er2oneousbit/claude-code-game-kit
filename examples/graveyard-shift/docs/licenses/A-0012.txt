@@ -1,0 +1,10 @@
+A-0012  sfx  generated 2026-10-22 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "single footstep on soft grass and dirt, light boot, short and dry", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 0.5, "output_format": "pcm_32000"}
+File     : Assets/Audio/footstep_1.wav  SHA-256 c352b010182c186bcfa3d9305e0d9945ed6c6ab37b7a58782b845254a937c9c7
+File     : Assets/Audio/footstep_2.wav  SHA-256 8f9359a9ff37e8f863f5d9b180a71891b0f4fde38df5ea1d763330690ef425eb
+File     : Assets/Audio/footstep_3.wav  SHA-256 fe23fc9a8eeddeb323d9cf9f4054d72949d7fd0a1fe8a7f3f3ec00be15bf74e0

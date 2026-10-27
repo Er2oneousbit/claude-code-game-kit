@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "quick heavy cloak whoosh, fast swish of fabric, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 0.6,
+    "output_format": "pcm_44100"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "327e27d417069129a07f61fc2ab3d4cdfc9a7fcebecafd8cbf1f888610e885e4",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "01b31d6bca2e72351c782d17a229e678",
+  "credits": "6"
+}

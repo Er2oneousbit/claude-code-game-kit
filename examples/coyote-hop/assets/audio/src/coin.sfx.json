@@ -1,0 +1,29 @@
+{
+  "preset": "coin",
+  "vary": 0.12,
+  "seed": null,
+  "tool": "sfx_synth",
+  "rate": 44100,
+  "render_seed": 0,
+  "params": {
+    "wave": "square",
+    "freq": 988,
+    "freq_min": 20.0,
+    "slide": 0.0,
+    "slide_accel": 0.0,
+    "duty": 0.5,
+    "duty_sweep": 0.0,
+    "vibrato_depth": 0.0,
+    "vibrato_rate": 0.0,
+    "arp_mult": 1.3348,
+    "arp_time": 0.07,
+    "repeat": 0.0,
+    "attack": 0.0,
+    "sustain": 0.09,
+    "decay": 0.26,
+    "punch": 0.35,
+    "lowpass": 9000,
+    "highpass": 0.0,
+    "volume": 0.32
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "old wooden chest creaking open and an iron key picked up with a bright jingle, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 1.2,
+    "output_format": "mp3_44100_128"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "028b49e87980f621a51afe1c8c9219ce383d36c7c8626b451dc4fee7e2870a85",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "7a22cee5d65b655e896ff921081380cb",
+  "credits": "12"
+}

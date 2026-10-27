@@ -1,0 +1,7 @@
+A-0020  voice  generated 2026-10-22 with tools/audio/fish_tts.py
+Service  : Fish Audio text to speech (/v1/tts), model s2.1-pro-free
+Voice    : 3d40669a01e045329ab4d6d7e25ce10e (Old man); check it is not an imitation of a real person
+License  : Fish Audio API terms, read before release (verify)
+File     : Assets/Audio/keeper_soul_1.wav  "One more..."  SHA-256 1450b9183107928ccdf2d4b444f222dcae3c4adb161c4f9214cb4e827c15defe
+File     : Assets/Audio/keeper_soul_2.wav  "Got you, little one."  SHA-256 69ac4ad444fc3b7c36848b162adfe2220bd09690d761e5e172a4bb35ff00cf5e
+File     : Assets/Audio/keeper_soul_3.wav  "There you are."  SHA-256 6632f39e61ac0a2b4c7100a90ef3863ec1f601983ae7d81abfb330dae2b55e62

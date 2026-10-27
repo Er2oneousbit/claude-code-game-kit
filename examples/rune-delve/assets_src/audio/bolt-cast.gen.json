@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "arcane magic bolt cast, crackling energy zap with a fast whoosh, fantasy spell, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 1.0,
+    "output_format": "pcm_44100"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "a382aac7b2e8f0951caad9ea291654a611c4869c9d3907826c89816a3770f376",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "441ccf420762c76f4f444baf7588f56a",
+  "credits": "10"
+}

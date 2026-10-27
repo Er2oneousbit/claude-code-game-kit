@@ -1,0 +1,16 @@
+{
+  "tool": "fish_tts",
+  "service": "Fish Audio",
+  "endpoint": "/v1/tts",
+  "model": "s2.1-pro-free",
+  "request": {
+    "text": "That soul is mine.",
+    "reference_id": "7afba46fb5d949559c91e1fbc83197ab",
+    "format": "wav",
+    "latency": "balanced"
+  },
+  "date": "2026-10-22",
+  "sha256": "37f75e8351ee99dbc0184dc0c781566f17236ada6b64d7ef822c5ad4f6f3ec5b",
+  "text_bytes": 18,
+  "license": "Fish Audio API terms (verify before shipping)"
+}

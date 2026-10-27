@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "single footstep on soft grass and dirt, light boot, short and dry",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 0.5,
+    "output_format": "pcm_32000"
+  },
+  "date": "2026-10-22",
+  "plan": "free (free)",
+  "sha256": "c352b010182c186bcfa3d9305e0d9945ed6c6ab37b7a58782b845254a937c9c7",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "6372820454cc3d5e26fb3a26196b1821",
+  "credits": "5"
+}

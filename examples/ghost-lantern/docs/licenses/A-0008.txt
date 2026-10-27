@@ -1,0 +1,9 @@
+A-0008  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "dark haunted house interior ambience, low eerie drone, faint distant wind, occasional soft wooden creak, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 10.0, "loop": true, "output_format": "pcm_44100"}
+File     : public/assets/audio/haunted-ambience.wav  SHA-256 0fb5235a7a89446d26d5011c93c20608ce72b948dbec39333912780f5c91eb85
+Modified : peak-normalized to -6 dBFS (was -21) (the .gen.json next to it keeps the SHA-256 as generated)

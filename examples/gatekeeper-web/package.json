@@ -1,0 +1,27 @@
+{
+  "name": "gatekeeper",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Gatekeeper: a browser game (Phaser 4, TypeScript, Vite). Use python tools/dev.py for every command.",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mlc-ai/web-llm": "0.2.86",
+    "phaser": "4.2.1"
+  },
+  "devDependencies": {
+    "playwright": "1.64.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  }
+}

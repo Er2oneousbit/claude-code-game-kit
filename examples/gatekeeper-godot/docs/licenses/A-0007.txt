@@ -1,0 +1,10 @@
+A-0007  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "armored guard stamps a spear butt on cobblestones, firm wooden thud and a chainmail clink, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 1.0, "output_format": "mp3_44100_128"}
+File     : assets/audio/turned-away.mp3  SHA-256 c1e6c95e150bfad11316f401bdb4847c5125c5ca71b4a3aeb2a6034762a9fed3
+Modified : peak-normalized to -3 dBFS (was -10.9) (the .gen.json next to it keeps the SHA-256 as generated)
+Copy     : the same file as ../gatekeeper-web A-0004 (one generation, both twins)

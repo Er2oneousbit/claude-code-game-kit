@@ -1,0 +1,7 @@
+A-0014  voice  generated 2026-10-22 with tools/audio/fish_tts.py
+Service  : Fish Audio text to speech (/v1/tts), model s2.1-pro-free
+Voice    : 7afba46fb5d949559c91e1fbc83197ab (Creepy Whisper); check it is not an imitation of a real person
+License  : Fish Audio API terms, read before release (verify)
+File     : Assets/Audio/ghost_notice_1.wav  "Who's there?"  SHA-256 4d6f6984ed4c8dd688af4bbbbc90c7288d4a1278d08cc451a54556b118c45a46
+File     : Assets/Audio/ghost_notice_2.wav  "I see a light..."  SHA-256 c3d8cf95c3b6802bb51888ea617cbc99837c8e02ca9ee3003bbbe1a15d692ab9
+File     : Assets/Audio/ghost_notice_3.wav  "Someone's here..."  SHA-256 9e881c1bc2491bbcaee070e9f0797ad034631d5fddcf58cbf21a3e82260bdaa1

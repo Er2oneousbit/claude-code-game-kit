@@ -1,0 +1,6 @@
+A-0025  voice  generated 2026-10-22 with tools/audio/fish_tts.py
+Service  : Fish Audio text to speech (/v1/tts), model s2.1-pro-free
+Voice    : 7afba46fb5d949559c91e1fbc83197ab (Creepy Whisper); check it is not an imitation of a real person
+License  : Fish Audio API terms, read before release (verify)
+File     : Assets/Audio/ghost_giveup_1.wav  "...gone again."  SHA-256 9b1845c2e584fb3eea57259f82107461ae9d8364373a00fe466c4faf95c1f865
+File     : Assets/Audio/ghost_giveup_2.wav  "Hmm... nothing."  SHA-256 77e32d6af2b7a7ab242d0e25163bf70e918984e44870ef94347de3987b9b6d3b

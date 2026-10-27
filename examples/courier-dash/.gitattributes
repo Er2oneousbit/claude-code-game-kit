@@ -1,0 +1,18 @@
+# EXAMPLE PROJECT IN THE KIT REPO: no Git LFS here, on purpose.
+# The kit's games normally route images, audio, 3D and fonts through Git LFS (see docs/sop/SOP-05-git.md), and your own
+# game should. This example's assets are small, and GitHub's "Download ZIP" does not include LFS files by default, so a
+# beginner downloading the kit would get pointer files instead of art. Plain git keeps the example working everywhere.
+
+# Text: normalize line endings so Windows and macOS/Linux clones agree
+* text=auto eol=lf
+
+# Binary files: never touch line endings, never diff as text
+*.png  binary
+*.jpg  binary
+*.gif  binary
+*.ogg  binary
+*.wav  binary
+*.mp3  binary
+*.ttf  binary
+*.glb  binary
+*.blend binary

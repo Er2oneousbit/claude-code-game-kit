@@ -1,0 +1,8 @@
+A-0004  sfx  generated 2026-10-22 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "old rusty iron cemetery gate creaking open slowly", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 2.0, "output_format": "pcm_32000"}
+File     : Assets/Audio/gate_opens.wav  SHA-256 d089c898e823825db19208f22a25a50059ff6d0e1e3476465b0be6f6bddf4794

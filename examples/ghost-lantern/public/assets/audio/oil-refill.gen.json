@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "lantern oil poured from a small glass flask, a clear liquid glug glug, then a soft whoomp as a lantern flame flares brighter, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 1.2,
+    "output_format": "mp3_44100_128"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "ab3479290b44a6efd8899122998e5e9f6e4f4c633db7db35a3538ec6142a8302",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "9683f9cb312275b8f76c9e426c14b544",
+  "credits": "12"
+}

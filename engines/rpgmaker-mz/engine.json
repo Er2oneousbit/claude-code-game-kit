@@ -1,0 +1,15 @@
+{
+  "id": "rpgmaker-mz",
+  "label": "RPG Maker MZ (JavaScript plugins)",
+  "summary": "RPG Maker MZ: your rules in an engine-free plugin tested with Node, MZ glue in a second plugin, headless Chromium smoke. Bring your own MZ (adopt-first: dev.py setup --from)",
+  "skeleton_dir": "skeleton",
+  "gitignore_append": "gitignore.append",
+  "settings_patch": "settings.patch.json",
+  "engine_md": "ENGINE.md",
+  "flow_md": "FLOW.md",
+  "assets_dir": "game/img",
+  "setup_step": "Make a new project in RPG Maker MZ (anywhere), then: python tools/dev.py setup --from <that project folder>   # copies MZ's files into game/ and registers the game's plugins",
+  "adopt_hints": {
+    "package.json": "merge the devDependencies (playwright) and the test script from package.json.gold into yours, then run python tools/dev.py setup. If this package.json is the MZ project's own (NW.js window settings), move the MZ project into game/ first: docs/ENGINE_FLOW.md > Adopting an existing project."
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "old rusty iron cemetery gate creaking open slowly",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 2.0,
+    "output_format": "pcm_32000"
+  },
+  "date": "2026-10-22",
+  "plan": "free (free)",
+  "sha256": "d089c898e823825db19208f22a25a50059ff6d0e1e3476465b0be6f6bddf4794",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "99d4da57ac141bc061453311cfbb7aaa",
+  "credits": "20"
+}

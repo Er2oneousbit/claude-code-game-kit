@@ -1,0 +1,16 @@
+{
+  "tool": "fish_tts",
+  "service": "Fish Audio",
+  "endpoint": "/v1/tts",
+  "model": "s2.1-pro-free",
+  "request": {
+    "text": "Not much night left...",
+    "reference_id": "3d40669a01e045329ab4d6d7e25ce10e",
+    "format": "wav",
+    "latency": "balanced"
+  },
+  "date": "2026-10-22",
+  "sha256": "dd866980f3338c19645156e883182452888b908350d7c3e52b9eda1d7c5cfd64",
+  "text_bytes": 22,
+  "license": "Fish Audio API terms (verify before shipping)"
+}

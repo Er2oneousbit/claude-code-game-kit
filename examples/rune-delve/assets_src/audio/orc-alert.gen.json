@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "an orc growls in surprise, a short low guttural snarl, medium volume, not distorted, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 1.0,
+    "output_format": "pcm_44100"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "739bd4e757b2a3ea02ae863bcf58db695f11bbc7412997a844f2d3b908c804f5",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "8f85e8a078edeb25a536e13a7afcd29d",
+  "credits": "10"
+}

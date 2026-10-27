@@ -1,0 +1,9 @@
+A-0010  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "windy scrapyard ambience, gusting wind through rusty metal, distant creaking sheet metal, faint far-off engine, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 10.0, "loop": true, "output_format": "pcm_44100"}
+File     : assets/audio/scrapyard-ambience.wav  SHA-256 dc52c32726102ccb0f7584a53d6e4805d6e8fcc8d9e0beeecba2239092847f04
+Modified : peak-normalized to -6 dBFS (was -9.4) (the .gen.json next to it keeps the SHA-256 as generated)

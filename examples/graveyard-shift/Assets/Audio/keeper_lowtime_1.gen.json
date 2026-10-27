@@ -1,0 +1,16 @@
+{
+  "tool": "fish_tts",
+  "service": "Fish Audio",
+  "endpoint": "/v1/tts",
+  "model": "s2.1-pro-free",
+  "request": {
+    "text": "Dawn's coming... hurry, old man.",
+    "reference_id": "3d40669a01e045329ab4d6d7e25ce10e",
+    "format": "wav",
+    "latency": "balanced"
+  },
+  "date": "2026-10-22",
+  "sha256": "1731926c3eb6e0d50490758684ed82105fabbfe9408bbebb200da39ffd3ba0fd",
+  "text_bytes": 32,
+  "license": "Fish Audio API terms (verify before shipping)"
+}

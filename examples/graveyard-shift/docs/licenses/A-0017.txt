@@ -1,0 +1,6 @@
+A-0017  voice  generated 2026-10-22 with tools/audio/fish_tts.py
+Service  : Fish Audio text to speech (/v1/tts), model s2.1-pro-free
+Voice    : 5c8dc6a69c0b4edfb32634db6384bf34 (Warm Storyteller); check it is not an imitation of a real person
+License  : Fish Audio API terms, read before release (verify)
+File     : Assets/Audio/narrator_intro_1.wav  "The souls are restless tonight. Gather all six, and slip out the gate before the sun comes up."  SHA-256 69d9fbc635a3321aa93515970493475b73480c3d048a1676831eb754736a8a5a
+File     : Assets/Audio/narrator_intro_2.wav  "Another night in the old graveyard. Six lost souls are waiting. Mind the ghosts, keeper."  SHA-256 34d9867418d4f64a57f19704ad1386173217c2476e01e64cd0de38fd06ffb2ba

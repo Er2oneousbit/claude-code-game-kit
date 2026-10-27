@@ -1,0 +1,9 @@
+A-0011  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : given with --plan
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "heavy axe swung hard through the air, a single whoosh, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 0.7, "output_format": "pcm_44100"}
+File     : assets_src/audio/orc-swing.wav  SHA-256 0195c017260278dc3c1601082b42d45c6851d6cfd4914040116e2b2c23d57eb3
+Modified : peak-normalized to -3 dBFS (was -8.2) (the .gen.json next to it keeps the SHA-256 as generated)

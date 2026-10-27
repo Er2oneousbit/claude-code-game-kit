@@ -1,0 +1,9 @@
+A-0013  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : given with --plan
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "magic bolt hits an orc, meaty thud and a short guttural grunt of pain, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 0.8, "output_format": "pcm_44100"}
+File     : assets_src/audio/orc-hurt.wav  SHA-256 f9a08829dc19a3a36f173f3689e7cba38e5d5e5555a69b41404b7454950cc1b4
+Modified : peak-normalized to -3 dBFS (was -3.2) (the .gen.json next to it keeps the SHA-256 as generated)

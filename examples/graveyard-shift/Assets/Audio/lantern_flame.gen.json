@@ -1,0 +1,20 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "small candle lantern flame flickering, soft gentle fire crackle, quiet and cozy",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 6.0,
+    "loop": true,
+    "output_format": "pcm_32000"
+  },
+  "date": "2026-10-22",
+  "plan": "free (free)",
+  "sha256": "1258af3852d33a2ad27bfdbd602a6af019674d96e965266dade610dc8ba682bb",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "cad52658876c6aab134e386e2a548566",
+  "credits": "60"
+}

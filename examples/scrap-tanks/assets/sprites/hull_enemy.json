@@ -1,0 +1,153 @@
+{
+  "image": "hull_enemy.png",
+  "cell_width": 112,
+  "cell_height": 112,
+  "rows": "directions",
+  "columns": "frames",
+  "directions": [
+    {
+      "row": 0,
+      "angle_deg": 0.0
+    },
+    {
+      "row": 1,
+      "angle_deg": 11.25
+    },
+    {
+      "row": 2,
+      "angle_deg": 22.5
+    },
+    {
+      "row": 3,
+      "angle_deg": 33.75
+    },
+    {
+      "row": 4,
+      "angle_deg": 45.0
+    },
+    {
+      "row": 5,
+      "angle_deg": 56.25
+    },
+    {
+      "row": 6,
+      "angle_deg": 67.5
+    },
+    {
+      "row": 7,
+      "angle_deg": 78.75
+    },
+    {
+      "row": 8,
+      "angle_deg": 90.0
+    },
+    {
+      "row": 9,
+      "angle_deg": 101.25
+    },
+    {
+      "row": 10,
+      "angle_deg": 112.5
+    },
+    {
+      "row": 11,
+      "angle_deg": 123.75
+    },
+    {
+      "row": 12,
+      "angle_deg": 135.0
+    },
+    {
+      "row": 13,
+      "angle_deg": 146.25
+    },
+    {
+      "row": 14,
+      "angle_deg": 157.5
+    },
+    {
+      "row": 15,
+      "angle_deg": 168.75
+    },
+    {
+      "row": 16,
+      "angle_deg": 180.0
+    },
+    {
+      "row": 17,
+      "angle_deg": 191.25
+    },
+    {
+      "row": 18,
+      "angle_deg": 202.5
+    },
+    {
+      "row": 19,
+      "angle_deg": 213.75
+    },
+    {
+      "row": 20,
+      "angle_deg": 225.0
+    },
+    {
+      "row": 21,
+      "angle_deg": 236.25
+    },
+    {
+      "row": 22,
+      "angle_deg": 247.5
+    },
+    {
+      "row": 23,
+      "angle_deg": 258.75
+    },
+    {
+      "row": 24,
+      "angle_deg": 270.0
+    },
+    {
+      "row": 25,
+      "angle_deg": 281.25
+    },
+    {
+      "row": 26,
+      "angle_deg": 292.5
+    },
+    {
+      "row": 27,
+      "angle_deg": 303.75
+    },
+    {
+      "row": 28,
+      "angle_deg": 315.0
+    },
+    {
+      "row": 29,
+      "angle_deg": 326.25
+    },
+    {
+      "row": 30,
+      "angle_deg": 337.5
+    },
+    {
+      "row": 31,
+      "angle_deg": 348.75
+    }
+  ],
+  "frames": [
+    1
+  ],
+  "action": null,
+  "elevation_deg": 55.0,
+  "source": "tractor-police.glb",
+  "note": "row 0 = front (camera on -Y); angles turn counter-clockwise seen from above",
+  "world_size_m": 3.6,
+  "pixels_per_meter": 31.111111,
+  "pivot": "origin",
+  "pivot_px": [
+    56.0,
+    56.0
+  ],
+  "ground_depth_scale": 0.819152,
+  "note_scale": "a ground offset (dx, dy) in meters is (dx, dy * ground_depth_scale) * pixels_per_meter on screen"
+}

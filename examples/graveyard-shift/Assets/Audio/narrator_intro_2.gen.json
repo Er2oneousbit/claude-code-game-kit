@@ -1,0 +1,16 @@
+{
+  "tool": "fish_tts",
+  "service": "Fish Audio",
+  "endpoint": "/v1/tts",
+  "model": "s2.1-pro-free",
+  "request": {
+    "text": "Another night in the old graveyard. Twelve lost souls are waiting. Mind the ghosts, keeper.",
+    "reference_id": "5c8dc6a69c0b4edfb32634db6384bf34",
+    "format": "wav",
+    "latency": "balanced"
+  },
+  "date": "2026-10-23",
+  "sha256": "511d3e9da67d45d5e055810bfcd2c1a3482b54ee941dfbee32a0397917bbfeac",
+  "text_bytes": 91,
+  "license": "Fish Audio API terms (verify before shipping)"
+}

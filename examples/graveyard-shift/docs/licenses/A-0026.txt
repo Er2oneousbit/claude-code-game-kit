@@ -1,0 +1,37 @@
+A-0026  3d  fetched 2026-10-23 with tools/fetch_asset.py
+Download : https://kenney.nl/media/pages/assets/graveyard-kit/ba8d4b4517-1760691807/kenney_graveyard-kit_5.0.zip
+Page     : https://kenney.nl/assets/graveyard-kit
+Author   : Kenney
+License  : CC0
+SHA-256  : 1a93613f2e5675f3310acf49ec9ef13ae7adeb756ac3b205bfb6cc9311a81062
+Files    : Models/FBX format/crypt-small-roof.fbx, Models/FBX format/crypt-door.fbx, Models/FBX format/crypt-large-door.fbx, Models/FBX format/crypt-a.fbx, Models/FBX format/crypt-b.fbx, Models/FBX format/iron-fence-border-gate.fbx, Models/FBX format/fence-gate.fbx, Models/FBX format/iron-fence-border.fbx
+
+---- License.txt (from the pack) ----
+	
+
+	Graveyard Kit (5.0)
+
+	Created/distributed by Kenney (www.kenney.nl)
+	Creation date: 17-10-2025 11:00
+	
+			------------------------------
+
+	License: (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	You can use this content for personal, educational, and commercial purposes.
+
+	Support by crediting 'Kenney' or 'www.kenney.nl' (this is not a requirement)
+
+			------------------------------
+
+	• Website : www.kenney.nl
+	• Donate  : www.kenney.nl/donate
+
+	• Patreon : patreon.com/kenney
+	
+	Follow on social media for updates:
+
+	• Twitter:	 twitter.com/KenneyNL
+	• BlueSky:	 kenney.bsky.social
+	• Instagram: instagram.com/kenney_nl

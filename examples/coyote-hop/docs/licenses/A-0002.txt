@@ -1,0 +1,30 @@
+A-0002  sfx  fetched 2026-10-21 with tools/fetch_asset.py
+Download : https://kenney.nl/media/pages/assets/digital-audio/216eac4753-1677590265/kenney_digital-audio.zip
+Page     : https://kenney.nl/assets/digital-audio
+Author   : Kenney
+License  : CC0
+SHA-256  : 24e6ce28b76a6d8c89cff4d331e0965ff5c3de8a73c612028e9d363cc64e4f06
+Files    : Audio/phaseJump1.ogg, Audio/pepSound1.ogg, Audio/lowDown.ogg
+
+---- License.txt (from the pack) ----
+	
+
+	Digital Audio
+
+	by  Kenney Vleugels (Kenney.nl)
+
+			------------------------------
+
+	License (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	You may use these assets in personal and commercial projects.
+	Credit (Kenney or www.kenney.nl) would be nice but is not mandatory.
+
+			------------------------------
+
+	Donate:   http://support.kenney.nl
+	Request:  http://request.kenney.nl
+
+	Follow on Twitter for updates:
+	@KenneyNL

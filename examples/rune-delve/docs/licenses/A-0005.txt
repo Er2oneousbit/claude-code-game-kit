@@ -1,0 +1,9 @@
+A-0005  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "arcane magic bolt cast, crackling energy zap with a fast whoosh, fantasy spell, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 1.0, "output_format": "pcm_44100"}
+File     : assets_src/audio/bolt-cast.wav  SHA-256 0a00419156e5c3c1932e6935d52f96a9a64050a49cc8ed98cdca6ec4c541265e
+Modified : peak-normalized to -3 dBFS (was -0) (the .gen.json next to it keeps the SHA-256 as generated)

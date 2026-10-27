@@ -1,0 +1,9 @@
+A-0009  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : given with --plan
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "pieces of scrap metal collected with a satisfying metallic clink and a short rising ratchet, a repair, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 1.0, "output_format": "pcm_44100"}
+File     : assets/audio/scrap-pickup.wav  SHA-256 d69f18ddf6662c75855c0ecb0afc94da3ea819b2faaaca93c554690b1ba95d69
+Modified : peak-normalized to -3 dBFS (was -2.3) (the .gen.json next to it keeps the SHA-256 as generated)

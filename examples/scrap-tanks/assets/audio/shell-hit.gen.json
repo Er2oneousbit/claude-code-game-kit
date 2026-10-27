@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "shell hitting armored scrap metal, loud metallic clang and rattle, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 0.8,
+    "output_format": "pcm_44100"
+  },
+  "date": "2026-10-23",
+  "plan": null,
+  "sha256": "74af623d729bdf8281ff25de95e2a022b2634ce3dabec8120b1e1cc23d3fcc17",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "590142302cb55a419be401bee1683764",
+  "credits": "8"
+}

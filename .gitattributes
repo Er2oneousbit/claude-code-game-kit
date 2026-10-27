@@ -1,0 +1,5 @@
+# Keep the kit LF everywhere, whatever core.autocrlf says (generated files are LF too)
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.zip binary

@@ -1,0 +1,16 @@
+{
+  "tool": "fish_tts",
+  "service": "Fish Audio",
+  "endpoint": "/v1/tts",
+  "model": "s2.1-pro-free",
+  "request": {
+    "text": "I see a light...",
+    "reference_id": "7afba46fb5d949559c91e1fbc83197ab",
+    "format": "wav",
+    "latency": "balanced"
+  },
+  "date": "2026-10-22",
+  "sha256": "c3d8cf95c3b6802bb51888ea617cbc99837c8e02ca9ee3003bbbe1a15d692ab9",
+  "text_bytes": 16,
+  "license": "Fish Audio API terms (verify before shipping)"
+}

@@ -1,0 +1,28 @@
+A-0006  sprite  fetched 2026-10-22 with tools/fetch_asset.py
+Download : https://opengameart.org/sites/default/files/sunny-land-files.zip
+Page     : https://opengameart.org/content/sunny-land-2d-pixel-art-pack
+Author   : Luis Zuno (ansimuz)
+License  : CC0
+SHA-256  : 17b8b3d9313c747e189b4bf84a4f6e1187b098841a01cb285fdb15be44266ec0
+Files    : Sunny-land-assets-files/PNG/sprites/player/idle/player-idle-1.png, Sunny-land-assets-files/PNG/sprites/player/idle/player-idle-2.png, Sunny-land-assets-files/PNG/sprites/player/idle/player-idle-3.png, Sunny-land-assets-files/PNG/sprites/player/idle/player-idle-4.png, Sunny-land-assets-files/PNG/sprites/player/run/player-run-1.png, Sunny-land-assets-files/PNG/sprites/player/run/player-run-2.png, Sunny-land-assets-files/PNG/sprites/player/run/player-run-3.png, Sunny-land-assets-files/PNG/sprites/player/run/player-run-4.png, Sunny-land-assets-files/PNG/sprites/player/run/player-run-5.png, Sunny-land-assets-files/PNG/sprites/player/run/player-run-6.png, Sunny-land-assets-files/PNG/sprites/player/jump/player-jump-1.png, Sunny-land-assets-files/PNG/sprites/player/jump/player-jump-2.png
+
+---- Sunny-land-assets-files/public-license.txt (from the pack) ----
+Artwork created by Luis Zuno @ansimuz
+
+License for Everyone. 
+
+Public domain and free to use on whatever you want, personal or commercial. Credit is not required but appreciated.
+
+Feeling Grateful?
+You can support my work at https://www.patreon.com/ansimuz
+
+Get more Free Assetslike these at: http://www.pixelgameart.org
+
+Music by Pascal Belisle
+
+www.patreon.com/thetoadz
+www.soundcloud.com/thetoadz
+
+Music License
+You are free to use the music in your projects as long as you give appropriate credit.
+ 

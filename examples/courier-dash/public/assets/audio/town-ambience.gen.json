@@ -1,0 +1,20 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "calm toy town street ambience in daytime, distant birds, soft breeze, faint far-off traffic hum, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 10.0,
+    "loop": true,
+    "output_format": "pcm_44100"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "520fb59acb596ccdcdb98e2abfedccd1b080192429053a744c54ca4af17bc490",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "d37b27b87e52039fe52912ab72d2d673",
+  "credits": "100"
+}

@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "short soft rustle of leather and chainmail, a guard shifting his weight, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 0.5,
+    "output_format": "mp3_44100_128"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "8c5211e5a04c7fefe96dc0bd19768037f425390289982d715bf2576e89bc61f9",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "5b94008de9942a8eae1935b3266e746c",
+  "credits": "5"
+}

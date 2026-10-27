@@ -1,0 +1,16 @@
+{
+  "tool": "fish_tts",
+  "service": "Fish Audio",
+  "endpoint": "/v1/tts",
+  "model": "s2.1-pro-free",
+  "request": {
+    "text": "I know you're still here...",
+    "reference_id": "7afba46fb5d949559c91e1fbc83197ab",
+    "format": "wav",
+    "latency": "balanced"
+  },
+  "date": "2026-10-22",
+  "sha256": "91b850565ce0cb99a454aa6bbc5726c96790915166c4d97330556666ff0ac07c",
+  "text_bytes": 27,
+  "license": "Fish Audio API terms (verify before shipping)"
+}

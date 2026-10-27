@@ -1,0 +1,37 @@
+A-0004  3d  fetched 2026-10-21 with tools/fetch_asset.py
+Download : https://kenney.nl/media/pages/assets/city-kit-roads/74288c9459-1791628607/kenney_city-kit-roads.zip
+Page     : https://kenney.nl/assets/city-kit-roads
+Author   : Kenney
+License  : CC0
+SHA-256  : 374a4552115cbd11b4ec5c930ee31a533562dc78a09af249a655d03f7ea3b959
+Files    : Models/GLB format/road-straight.glb, Models/GLB format/road-crossroad.glb, Models/GLB format/road-end.glb, Models/GLB format/Textures/colormap.png
+
+---- License.txt (from the pack) ----
+	
+
+	City Kit Roads (2.2)
+
+	Created/distributed by Kenney (www.kenney.nl)
+	Creation date: 10-10-2026 12:35
+	
+			------------------------------
+
+	License: (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	You can use this content for personal, educational, and commercial purposes.
+
+	Support by crediting 'Kenney' or 'www.kenney.nl' (this is not a requirement)
+
+			------------------------------
+
+	• Website : www.kenney.nl
+	• Donate  : www.kenney.nl/donate
+
+	• Patreon : patreon.com/kenney
+	
+	Follow on social media for updates:
+
+	• Twitter:	 twitter.com/KenneyNL
+	• BlueSky:	 kenney.bsky.social
+	• Instagram: instagram.com/kenney_nl

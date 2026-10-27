@@ -1,0 +1,9 @@
+A-0007  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : given with --plan
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "shell hitting armored scrap metal, loud metallic clang and rattle, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 0.8, "output_format": "pcm_44100"}
+File     : assets/audio/shell-hit.wav  SHA-256 826635e6b89995506361094ee26ccfa831bb80258e31e6ec1558280d9895dce4
+Modified : peak-normalized to -3 dBFS (was -2.9) (the .gen.json next to it keeps the SHA-256 as generated)

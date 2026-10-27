@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "small cannon firing close by, a sharp loud crack and a short metallic ring, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 0.8,
+    "output_format": "pcm_44100"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "eb1f2f3cc201d695ff5121c1caadd4e47f758ce2d259f43fc3b87c6bf15d3b52",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "c8ced080da2c2e17808ba09233d4b5e0",
+  "credits": "8"
+}

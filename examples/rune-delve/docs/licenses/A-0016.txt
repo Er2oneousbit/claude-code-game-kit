@@ -1,0 +1,9 @@
+A-0016  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : given with --plan
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "underground stone dungeon ambience, slow water drips echoing, low distant rumble, faint torch crackle, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 10.0, "loop": true, "output_format": "pcm_44100"}
+File     : assets_src/audio/dungeon-ambience.wav  SHA-256 0d7a7498cf260561b645038f61f579fcdcf11bea5aa1afd19ef9db91a9e2fee6
+Modified : peak-normalized to -6 dBFS (was -20.9) (the .gen.json next to it keeps the SHA-256 as generated)

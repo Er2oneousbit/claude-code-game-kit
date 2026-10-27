@@ -1,0 +1,9 @@
+A-0003  sfx  generated 2026-10-23 with tools/audio/eleven_audio.py
+Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
+Plan     : free (free)
+License  : ElevenLabs free plan: non-commercial only
+Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
+Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
+Request  : {"text": "heavy wooden town gate creaking open, iron hinges groaning, a chain rattling, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 2.5, "output_format": "mp3_44100_128"}
+File     : public/assets/audio/gate-open.mp3  SHA-256 d3a18e14f0fdcc1840ea98340e383f6a00df36400187fa0e44ab6f91aceb7305
+Modified : peak-normalized to -3 dBFS (was -0.1) (the .gen.json next to it keeps the SHA-256 as generated)

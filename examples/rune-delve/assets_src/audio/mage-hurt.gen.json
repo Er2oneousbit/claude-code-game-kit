@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "dull heavy blow on a robed body and a short pained grunt, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 0.8,
+    "output_format": "pcm_44100"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "ea59771bdbd819a2af8c1a4c6110c5d25061602b4b98dfe14ab53c47a4748dba",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "afe9b5abd77a480ab02b1d3df5b20e42",
+  "credits": "8"
+}

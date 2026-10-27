@@ -1,0 +1,23 @@
+# ---- C++ / CMake / vcpkg ----
+/build/
+/out/
+/cmake-build-*/
+CMakeUserPresets.json
+vcpkg_installed/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+*.o
+*.obj
+*.exe
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.a
+*.so
+*.dll
+*.dylib
+.cache/
+.vs/

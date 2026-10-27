@@ -1,0 +1,11 @@
+{
+  "id": "unity",
+  "label": "Unity (C#)",
+  "summary": "Unity 6 / 2022 LTS style C# project, EditMode tests via batchmode CLI, adopt-first (create the project in Unity Hub, then adopt)",
+  "skeleton_dir": "skeleton",
+  "gitignore_append": "gitignore.append",
+  "settings_patch": "settings.patch.json",
+  "engine_md": "ENGINE.md",
+  "flow_md": "FLOW.md",
+  "assets_dir": "Assets"
+}

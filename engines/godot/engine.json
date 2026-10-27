@@ -1,0 +1,14 @@
+{
+  "id": "godot",
+  "label": "Godot 4 (GDScript)",
+  "summary": "Godot 4.3+ (tested on 4.7.2), GDScript, GUT for unit tests, headless smoke via CLI",
+  "skeleton_dir": "skeleton",
+  "gitignore_append": "gitignore.append",
+  "settings_patch": "settings.patch.json",
+  "engine_md": "ENGINE.md",
+  "flow_md": "FLOW.md",
+  "assets_dir": "assets",
+  "adopt_hints": {
+    "project.godot": "copy the [autoload] line Log=\"*res://scripts/core/log.gd\" into your project.godot, and print Log.info(\"core\", \"BOOT_OK <Game>\") from your main scene's _ready(). See docs/ENGINE_FLOW.md > Adopting an existing project."
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "ghostly wail swooping close, cold spectral whoosh, a lantern flame snuffed out, no music",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 1.5,
+    "output_format": "mp3_44100_128"
+  },
+  "date": "2026-10-23",
+  "plan": "free (free)",
+  "sha256": "0d9bdd2d58317c01944359d22ca203a62431666e7d03ea75c7ad08a6dff65800",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "968e97dfdbab837d1e2c6a9d2616f523",
+  "credits": "15"
+}
