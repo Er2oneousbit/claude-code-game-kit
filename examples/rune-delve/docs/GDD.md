@@ -45,6 +45,8 @@ Loop at three time scales (if you cannot fill all three, the game's structure is
 
 Current tier: **Toy**
 
+Claude scopes work by this line (SOP-08 "Tiers"). Move it with `/next-tier` when the tier's "Done means" is met.
+
 ## Content list (MVP)
 | Item | Count | Status |
 |---|---|---|

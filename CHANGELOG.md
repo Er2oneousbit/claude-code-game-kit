@@ -3,6 +3,29 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.6.0 (2026-10-28): tiers that move, and a production phase
+The owner's report: in a game past its toy, Claude kept answering "that is not part of the vertical slice". Cause: the
+GDD's `Current tier:` line drives every scope check (SOP-08, SOP-01, `/new-feature`), and nothing ever moved it.
+- **New skill `/next-tier` (18 skills):** checks the current tier's evidence (MET, NOT MET or UNKNOWN with the file or
+  command: checks pass, a human playtest in PLAYTEST_LOG, the slice's "Done when", the GDD assumptions tested), then
+  moves the GDD tier line, marks the ROADMAP milestone, and pulls Parking lot items that now fit into Next. The owner
+  can move on without some evidence; the skill records what and why. One tier per run; going back is allowed.
+- **The greenlight (vertical slice to MVP / Release) starts production:** new `docs/PRODUCTION.md` (a template until
+  then) with milestones Alpha, Beta and Release candidate by exit criteria, a backlog sized S, M or L with a pillar per
+  item, content progress (greybox, playable, final), a definition of done for content, risks and a cut list. Every
+  milestone still ends with a playtest; a system that stops being fun goes "back to prototyping".
+- **Scope follows the tier:** SOP-08 gets a "Tiers" table (where scope comes from and where a new idea goes, per
+  tier). In production, an idea that serves a pillar goes to the backlog with a size, never "not part of the slice";
+  only ideas outside the pillars or in GDD "Out of scope" are pushed back. SOP-01, `/new-feature`, `/gdd-sync`,
+  `/start-session`, `/end-session` and the game's CLAUDE.md follow it, and offer `/next-tier` when the owner keeps
+  asking for work past the current tier.
+- **No deadlines:** the ROADMAP milestone table loses its Target column (milestones M2 Alpha, M3 Beta, M4 Release
+  candidate added); progress is counted in items and content, never dates.
+- **SessionStart hook:** prints the current tier, and after the greenlight "Production backlog: N of M done" (cut items
+  do not count). Fails soft like the rest of the hook.
+- Existing games: `--upgrade` brings the skill, PRODUCTION.md and the unedited SOPs and skills. GDD.md and ROADMAP.md
+  are yours, so they get a `.gold` copy: the new GDD line and milestone rows are optional.
+
 ## 0.5.0 (2026-10-28): Bevy overlay
 ### New engine overlay: `bevy` (Bevy 0.20, Rust), asked for by a player after the first release
 - **`engines/bevy/`:** `dev.py` with the full contract on cargo: `check` (rustfmt `--check`, then clippy on every

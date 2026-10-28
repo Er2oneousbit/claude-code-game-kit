@@ -16,12 +16,15 @@
 - 
 
 ## Milestones
-| Milestone | Definition of done | Target | Status |
-|---|---|---|---|
-| M0 Toy (v0.1.0) | Core mechanic playable | 2026-10-22 | Done |
-| M1 Vertical slice (v0.2.0) | One polished loop with art, audio, UI | 2026-10-22 | Built and bot-verified; human playtest pending |
-| M2 Content complete | MVP content list done | | |
-| M3 Release candidate (v1.0.0-rc.N, then v1.0.0) | `/release-check` green | | |
+Scope, not dates. `/next-tier` moves the game from one tier to the next; after the slice, `docs/PRODUCTION.md` holds the
+detail.
+| Milestone | Definition of done | Status |
+|---|---|---|
+| M0 Toy (v0.1.0) | Core mechanic playable | Done (2026-10-22) |
+| M1 Vertical slice (v0.2.0) | One polished loop with art, audio, UI | Built and bot-verified; human playtest pending (2026-10-22) |
+| M2 Alpha | Every MVP system in and playable | |
+| M3 Beta (content complete) | All MVP content in, no known crash | |
+| M4 Release candidate (v1.0.0-rc.N, then v1.0.0) | `/release-check` green | |
 
 ## Done (recent, newest first)
 - 2026-10-26: review fixes (a ward stops one swing, a hit always wakes an orc, swing clip timed to the hit, warden off grunt tiles, dash length and dodge, own-bolt collision, bot room filter); 3 smoke tests; pair now weaver 65, masher 55 of 80, clears 3/8 against 0/8

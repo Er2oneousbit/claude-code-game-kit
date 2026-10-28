@@ -16,6 +16,7 @@ The GDD plus this brief gives it the context to build the one thing you want to 
 - **Debug tools in scope:** game options after `--`: `--god`, `--seed N`, `--debug-ai` (paths, cover spots, sight lines), `--autoplay skilled|reckless` bots for smoke runs (F7).
 - **Done when (observable):** a player can clear three waves or be destroyed, and restart; `check`, `test`, `smoke` pass
 - **How we judge it:** does the hook come through, is it fun, does the art and tone work, does the new mechanic work
+- **When it is done:** run `/next-tier`. It checks the evidence and, on a yes, starts production (`docs/PRODUCTION.md`).
 
 ## Prompt to paste (adapt the brackets)
 ```

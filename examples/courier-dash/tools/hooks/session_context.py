@@ -12,12 +12,22 @@
 #           pipes default to cp1252). The hook input JSON on stdin says why
 #           the session started; after compact/resume the /start-session
 #           reminder is skipped so Claude does not stop mid-task.
+#           The GDD's "Current tier:" line is printed because every scope check
+#           reads it (SOP-08 "Tiers"); after the greenlight, the PRODUCTION.md
+#           backlog count too (items, never dates).
 #           Needs Python 3.8+. Uses only the standard library.
 # Authored: Written with Claude (Sonnet 5.5, claude-sonnet-5-5)
 # Updated : 2026-10-20 with Claude (Opus 5.5, claude-opus-5-5): UTF-8 output, "unknown"
 #           instead of "0" when git fails, real untracked file count, source-aware reminder
+# Updated : 2026-10-28 with Claude (Opus 5.5, claude-opus-5-5): current tier and production backlog count
+#
+# Pseudocode (tier and backlog)
+#   GDD: first line starting "Current tier:" -> text after it, first **bold** part if any
+#   PRODUCTION.md: rows of the table under "## Backlog" with any text -> status = last cell
+#   print "done of total" (cut items do not count) when the backlog has rows
 # ---------------------------------------------------------------------------
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -26,6 +36,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 NOW_LINES = 8                               # ROADMAP "Now" lines to show
 QUIET_SOURCES = {"compact", "resume"}       # mid-task restarts: no /start-session nudge
+TIER_MAX = 80                               # longest tier text to show
 
 
 def run_git(*args):
@@ -70,6 +81,45 @@ def roadmap_now():
     return section
 
 
+def read_doc(name):
+    """Return the lines of docs/<name>, or [] when it is missing or unreadable."""
+    try:
+        return (ROOT / "docs" / name).read_text(encoding="utf-8", errors="replace").splitlines()
+    except Exception:
+        return []
+
+
+def current_tier():
+    """Return the GDD's current tier ('Toy', 'Vertical slice', ...) or '' when there is no tier line."""
+    for line in read_doc("GDD.md"):
+        if line.startswith("Current tier:"):
+            text = line[len("Current tier:"):].strip()
+            bold = re.search(r"\*\*(.+?)\*\*", text)
+            return (bold.group(1) if bold else text)[:TIER_MAX]
+    return ""
+
+
+def backlog_progress():
+    """Return (done, total) from the PRODUCTION.md Backlog table, or None when it has no rows yet."""
+    done = total = 0
+    active = False
+    for line in read_doc("PRODUCTION.md"):
+        if line.startswith("## "):
+            active = line.strip().lower().startswith("## backlog")
+            continue
+        if not active or not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if not any(cells) or set("".join(cells)) <= set("-: ") or cells[0].lower() == "item":
+            continue                        # empty template row, separator, header
+        status = cells[-1].lower()
+        if status == "cut":
+            continue
+        total += 1
+        done += status == "done"
+    return (done, total) if total else None
+
+
 def main():
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -86,6 +136,12 @@ def main():
             print("Uncommitted changes: unknown (git status failed or timed out)")
         else:
             print(f"Uncommitted changes: {len(dirty.splitlines())} file(s)")
+    tier = current_tier()
+    if tier:
+        print(f"Tier: {tier} (docs/GDD.md; scope rules in SOP-08 \"Tiers\")")
+    progress = backlog_progress()
+    if progress:
+        print(f"Production backlog: {progress[0]} of {progress[1]} done (docs/PRODUCTION.md)")
     now = roadmap_now()
     if now:
         print("ROADMAP Now:")

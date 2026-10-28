@@ -45,6 +45,8 @@ Loop at three time scales (if you cannot fill all three, the game's structure is
 
 Current tier: **Toy, finished on purpose**. Art, audio and a HUD are in, but it stays a one-level kit example: no vertical slice is planned.
 
+Claude scopes work by this line (SOP-08 "Tiers"). Move it with `/next-tier` when the tier's "Done means" is met.
+
 ## Content list (MVP)
 | Item | Count | Status |
 |---|---|---|

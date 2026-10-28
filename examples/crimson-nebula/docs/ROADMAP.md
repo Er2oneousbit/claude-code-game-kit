@@ -19,12 +19,15 @@
 - Sound: engine hum, zap, boost whoosh (`tools/audio/sfx_synth.py`)
 
 ## Milestones
-| Milestone | Definition of done | Target | Status |
-|---|---|---|---|
-| M0 Toy (v0.1.0) | Core mechanic playable | 2026-10-28 | built, awaiting playtest |
-| M1 Vertical slice (v0.2.0) | One polished loop with art, audio, UI | | |
-| M2 Content complete | MVP content list done | | |
-| M3 Release candidate (v1.0.0-rc.N, then v1.0.0) | `/release-check` green | | |
+Scope, not dates. `/next-tier` moves the game from one tier to the next; after the slice, `docs/PRODUCTION.md` holds the
+detail.
+| Milestone | Definition of done | Status |
+|---|---|---|
+| M0 Toy (v0.1.0) | Core mechanic playable | built, awaiting playtest (2026-10-28) |
+| M1 Vertical slice (v0.2.0) | One polished loop with art, audio, UI | |
+| M2 Alpha | Every MVP system in and playable | |
+| M3 Beta (content complete) | All MVP content in, no known crash | |
+| M4 Release candidate (v1.0.0-rc.N, then v1.0.0) | `/release-check` green | |
 
 ## Done (recent, newest first)
 - 2026-10-28: Added to the kit as its Bevy example (`examples/crimson-nebula`), with HOW_IT_WAS_MADE.md and a GIF

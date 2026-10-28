@@ -8,6 +8,9 @@ description: Wrap up a work session. Use when the user says they are done, wants
 1. Run `python tools/dev.py check` and `python tools/dev.py test`. Run `smoke` too if boot or scenes/levels changed. Record results honestly, including failures. Exit 2 "nothing ran" (no tests yet) is a gap to note in HANDOFF, not a pass.
 2. `git status --short` and `git diff --stat`. List uncommitted work. Do not commit unless asked.
 3. Update `docs/ROADMAP.md`: tick finished items, move new ideas into the Parking lot, add a line to Done (newest first).
+   In production (GDD tier MVP / Release), also update the `docs/PRODUCTION.md` Backlog statuses and Content progress,
+   and put new pillar-serving ideas in its Backlog with a size. If the current tier's "Done means" now looks met, say so
+   and suggest `/next-tier`.
 4. Rewrite `docs/HANDOFF.md` (keep it under ~60 lines). Update `**Last updated:**` (today) and `**Branch / commit:**`, then keep
    these exact headings, filling each:
    - `## Where we are`

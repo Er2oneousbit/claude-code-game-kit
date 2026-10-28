@@ -69,7 +69,7 @@ Want to see results first? See **Made with the kit** above; every example has it
 ## What you get in every project
 - **One command contract**, the same on every engine: `python tools/dev.py check | test | smoke | build | run | clean | doctor`. Claude runs these instead of guessing flags, and a change is not done until `check` and `test` pass.
 - **A lean `CLAUDE.md`** (project memory) plus docs Claude keeps up to date: game design doc, roadmap, handoff notes between sessions, architecture, asset log.
-- **17 skills (slash commands):** `/start-session` `/end-session` `/new-feature` `/bug-hunt` `/stuck` `/playtest-report` `/asset-intake` `/gen-brief` `/model-pipeline` `/adr` `/gdd-sync` `/perf-pass` `/release-check` `/publish-repo` `/triage-issues` `/game-ai` `/procgen`.
+- **18 skills (slash commands):** `/start-session` `/end-session` `/new-feature` `/bug-hunt` `/stuck` `/playtest-report` `/asset-intake` `/gen-brief` `/model-pipeline` `/adr` `/gdd-sync` `/next-tier` `/perf-pass` `/release-check` `/publish-repo` `/triage-issues` `/game-ai` `/procgen`.
 - **5 subagents:** `code-reviewer` `build-doctor` `design-critic` `playtest-analyst` `researcher`.
 - **17 short SOPs:** features, bugs, playtests, assets and licenses, git, releases, Claude Code hygiene, scope control, testing, performance, 3D, job plans and budgets, publishing to GitHub, game AI (enemies and NPCs), language models in games (cloud vs local small models, with a reality check on training your own), the 2D art pipeline, and procedural generation (levels made at runtime that are proven fair).
 - **Guardrails:** permission rules that block reading secrets and ask before destructive commands; a session hook that loads the handoff notes.

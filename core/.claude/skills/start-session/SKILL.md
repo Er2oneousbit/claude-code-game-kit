@@ -12,7 +12,9 @@ Goal: get oriented in under a minute without reading the whole repo.
    `git log --oneline -5`; note the branch and any uncommitted work. Otherwise say "no Git history yet" and go on.
 3. Run `python tools/dev.py check`. If it fails, report the failure first, before any new work.
 4. Report back in this shape, tight:
-   - **State:** one or two sentences (what works, what is in flight)
+   - **State:** one or two sentences (what works, what is in flight), and the GDD's current tier. In production
+     (MVP / Release), add progress from `docs/PRODUCTION.md`: the current milestone and backlog items done of total,
+     content final of target. Counts only, never dates.
    - **Health:** check result, uncommitted files
    - **Proposed first task:** from HANDOFF "Next step" or ROADMAP Now, with a one-line "done when"
    - **Questions:** only if something is genuinely ambiguous or missing

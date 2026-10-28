@@ -7,7 +7,7 @@ description: Build a new gameplay feature or system following the prototype-firs
 
 Follow `docs/sop/SOP-01-feature-workflow.md`. Condensed:
 
-1. **Frame:** restate the feature in one sentence and a "done when". Check ROADMAP Now. Not there? Offer to park it, ask if they want to swap.
+1. **Frame:** restate the feature in one sentence and a "done when". Check ROADMAP Now. Not there? Offer to park it, ask if they want to swap. Scope follows the GDD's `Current tier:` (SOP-08 "Tiers"): in production (MVP / Release) a pillar-serving idea goes to the `docs/PRODUCTION.md` Backlog with a size, never "not part of the slice". If the owner keeps asking for work beyond the current tier, ask whether the tier is done and offer `/next-tier`.
 2. **Pillar check:** name the GDD pillar it serves. If none, it goes to the ROADMAP Parking lot (SOP-01, SOP-08) unless the owner explicitly overrides; record the override in ROADMAP.
 3. **Pseudocode and plan:** high-level pseudocode, modules and files touched, data needed, risks, and a short why. Wait for a nod unless the request was already precise. Architecture-level change: also draft an ADR (`/adr`).
 4. **Engine facts:** read `docs/ENGINE.md` for conventions and gotchas. Verify any engine API you plan to use against the installed version or docs, label unverified items.
@@ -20,4 +20,4 @@ Follow `docs/sop/SOP-01-feature-workflow.md`. Condensed:
 11. **Report:** what was built, how to see it in the game, what is tunable where, what is left. Suggest `/end-session` if the session is wrapping up.
 
 Style: file headers and footers per `docs/STYLE.md`. Comments for 6-months-later you.
-New ideas that pop up mid-task go to the Parking lot, not into this feature.
+New ideas that pop up mid-task go to the Parking lot (in production: the Backlog), not into this feature.

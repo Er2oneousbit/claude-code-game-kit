@@ -16,12 +16,15 @@
 - 
 
 ## Milestones
-| Milestone | Definition of done | Target | Status |
-|---|---|---|---|
-| M0 Toy | Core mechanic playable | 2026-10-21 | Done |
-| M1 Vertical slice | One polished loop with art, audio, UI | | |
-| M2 Content complete | MVP content list done | | |
-| M3 Release candidate | `/release-check` green | | |
+Scope, not dates. `/next-tier` moves the game from one tier to the next; after the slice, `docs/PRODUCTION.md` holds the
+detail.
+| Milestone | Definition of done | Status |
+|---|---|---|
+| M0 Toy | Core mechanic playable | Done (2026-10-21) |
+| M1 Vertical slice | One polished loop with art, audio, UI | |
+| M2 Alpha | Every MVP system in and playable | |
+| M3 Beta (content complete) | All MVP content in, no known crash | |
+| M4 Release candidate | `/release-check` green | |
 
 ## Done (recent, newest first)
 - 2026-10-26: Review fixes (flag, jump cut, camera, clock, restart, jump math), 38 tests

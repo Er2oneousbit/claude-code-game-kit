@@ -42,6 +42,9 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 - Do not add a dependency, plugin, or asset without logging it (`docs/ASSET_LOG.md` for content, `docs/adr/` for tech).
 - Do not edit generated or binary files by hand (see `docs/ENGINE.md` for the list).
 - Stay inside the scope of the current ROADMAP item. New ideas go to the **Parking lot** in `docs/ROADMAP.md`, not into the code.
+  What is in scope follows the GDD's `Current tier:` (SOP-08 "Tiers"): after the greenlight (MVP / Release), ideas that
+  serve a pillar go to the `docs/PRODUCTION.md` Backlog with a size; never push back with "not part of the toy/slice"
+  then. If the owner keeps asking for work past the current tier, offer `/next-tier`. No deadlines: progress is counts.
 - Tuning numbers live in data files or one constants module, never scattered literals. Expose tunables, hot reload where possible.
 - AI-built 3D breaks in predictable places: run the `SOP-09` interaction smoke checklist before calling a build done.
 
@@ -50,6 +53,7 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 |---|---|
 | New game, first hour | `docs/FIRST_HOUR.md` |
 | Design pillars, scope, MVP | `docs/GDD.md`, slice brief in `docs/VERTICAL_SLICE.md` |
+| Next tier, production backlog and milestones | `/next-tier`, `docs/PRODUCTION.md` (live after the greenlight) |
 | Code organization, budgets | `docs/ARCHITECTURE.md` |
 | What to do next | `docs/ROADMAP.md`, `docs/HANDOFF.md` |
 | Engine flow and gotchas | `docs/ENGINE.md`, `docs/ENGINE_FLOW.md` |
@@ -70,7 +74,7 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 
 ## Skills and subagents
 Skills: `/start-session` `/end-session` `/new-feature` `/bug-hunt` `/stuck` `/playtest-report` `/asset-intake` `/gen-brief`
-`/model-pipeline` `/adr` `/gdd-sync` `/perf-pass` `/release-check` `/publish-repo` `/triage-issues` `/game-ai` `/procgen`. They encode the SOPs, use them.
+`/model-pipeline` `/adr` `/gdd-sync` `/next-tier` `/perf-pass` `/release-check` `/publish-repo` `/triage-issues` `/game-ai` `/procgen`. They encode the SOPs, use them.
 Subagents: `code-reviewer` `build-doctor` `design-critic` `playtest-analyst` `researcher`. Delegate wide searches and reviews to keep context clean.
 Never import an asset with an unknown license.
 

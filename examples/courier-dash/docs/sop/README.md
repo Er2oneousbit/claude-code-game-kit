@@ -11,7 +11,7 @@ Short, followable, engine-agnostic. Engine specifics are in `docs/ENGINE_FLOW.md
 | SOP-05 Git | Branching, commits, LFS | (manual) |
 | SOP-06 Build and release | Shipping a build | `/release-check` |
 | SOP-07 Claude Code hygiene | Every session | `/start-session`, `/end-session` |
-| SOP-08 Scope control | Planning, new ideas, feeling the creep | `/gdd-sync` |
+| SOP-08 Scope control | Planning, new ideas, feeling the creep, moving to the next tier | `/gdd-sync`, `/next-tier` |
 | SOP-09 Testing | Writing or reviewing tests | `code-reviewer` subagent |
 | SOP-10 Performance | Frame time or memory trouble | `/perf-pass` |
 | SOP-11 3D pipeline | Models, rigs, animation | `/model-pipeline` |

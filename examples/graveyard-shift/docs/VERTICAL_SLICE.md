@@ -16,6 +16,7 @@ The GDD plus this brief gives it the context to build the one thing you want to 
 - **Debug tools in scope:** command line `--god`, `--debug-ai` (ghost state names, bot reason), `--seed N`, `--fixed-fps`, `--autoplay careful|lit|dark` (F7).
 - **Done when (observable):** a player can start, collect souls, escape or meet dawn, and restart; check, test and smoke pass; the built player runs a night
 - **How we judge it:** does the hook come through, is it fun, does the art and tone work, does the new mechanic work
+- **When it is done:** run `/next-tier`. It checks the evidence and, on a yes, starts production (`docs/PRODUCTION.md`).
 
 ## Prompt to paste (adapt the brackets)
 ```

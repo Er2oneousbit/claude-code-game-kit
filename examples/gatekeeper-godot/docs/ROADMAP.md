@@ -16,12 +16,15 @@
 - 
 
 ## Milestones
-| Milestone | Definition of done | Target | Status |
-|---|---|---|---|
-| M0 Toy (v0.1.0) | Core mechanic playable | | |
-| M1 Vertical slice (v0.2.0) | One polished loop with art, audio, UI | | |
-| M2 Content complete | MVP content list done | | |
-| M3 Release candidate (v1.0.0-rc.N, then v1.0.0) | `/release-check` green | | |
+Scope, not dates. `/next-tier` moves the game from one tier to the next; after the slice, `docs/PRODUCTION.md` holds the
+detail.
+| Milestone | Definition of done | Status |
+|---|---|---|
+| M0 Toy (v0.1.0) | Core mechanic playable; someone wants to keep playing | |
+| M1 Vertical slice (v0.2.0) | One polished loop with art, audio, UI; the greenlight (`/next-tier`) | |
+| M2 Alpha | Every MVP system in and playable | |
+| M3 Beta (content complete) | All MVP content in, no known crash | |
+| M4 Release candidate (v1.0.0-rc.N, then v1.0.0) | `/release-check` green | |
 
 ## Done (recent, newest first)
 - 2026-10-21: Project scaffolded

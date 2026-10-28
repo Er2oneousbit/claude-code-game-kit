@@ -14,8 +14,8 @@ Follow `docs/sop/SOP-08-scope-control.md`.
    - GDD statements now contradicted by the game
    - ARCHITECTURE rows that are stale
 3. Pillar audit: for each Now/Next item and each built system, which pillar does it serve? List the orphans.
-4. Scope audit: current tier, content counts vs MVP list, Now column size (cap 3), timeboxes blown.
+4. Scope audit: current tier, content counts vs MVP list, Now column size (cap 3), timeboxes blown. Does the GDD's `Current tier:` match the game? If the tier's "Done means" looks met, suggest `/next-tier`; in production, compare `docs/PRODUCTION.md` (backlog, content progress) with what exists.
 5. Propose edits as a short list. Apply them only after the user agrees (or if they asked you to just do it). After applying, set `> Last reviewed:` in `docs/GDD.md` and `docs/ARCHITECTURE.md` to today.
-6. Move cut features to GDD "Out of scope" with a one-line reason. Move loose ideas to the ROADMAP Parking lot.
+6. Move cut features to GDD "Out of scope" with a one-line reason. Move loose ideas to the ROADMAP Parking lot (in production, pillar-serving ideas go to the PRODUCTION.md Backlog with a size).
 
 Tone: honest, not harsh. Point out creep plainly.

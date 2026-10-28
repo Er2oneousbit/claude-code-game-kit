@@ -16,6 +16,7 @@ The GDD plus this brief gives it the context to build the one thing you want to 
 - **Debug tools in scope:** god mode, speed multiplier, teleport to named spots, time of day (F7). Behind a debug flag.
 - **Done when (observable):** a player can start, play through X, win or lose, and restart
 - **How we judge it:** does the hook come through, is it fun, does the art and tone work, does the new mechanic work
+- **When it is done:** run `/next-tier`. It checks the evidence and, on a yes, starts production (`docs/PRODUCTION.md`).
 
 ## Prompt to paste (adapt the brackets)
 ```

@@ -51,6 +51,8 @@ Loop at three time scales:
 
 Current tier: **Toy**
 
+Claude scopes work by this line (SOP-08 "Tiers"). Move it with `/next-tier` when the tier's "Done means" is met.
+
 ## Content list (MVP)
 | Item | Count | Status |
 |---|---|---|

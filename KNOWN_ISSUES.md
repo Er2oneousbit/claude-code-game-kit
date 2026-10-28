@@ -17,7 +17,8 @@ examples were built and tested on one Windows 11 machine.
 - **Bevy:** Windows only (Linux needs ALSA and udev dev packages, named in the docs but not tried); a web (WASM)
   build is not wired into `dev.py`; the starter moves in fixed 1/60 s ticks with no render interpolation, so motion
   can look uneven on high refresh rate screens; `--features dev` (dynamic linking) was not tried.
-- **Skills no new user has run yet:** `/procgen` on a fresh game, `/triage-issues` on a real game's issues. The Bug
+- **Skills no new user has run yet:** `/next-tier` (dry run on Crimson Nebula stopped at the toy as it should: no human playtest; not yet run on a real game
+  at a tier change), `/procgen` on a fresh game, `/triage-issues` on a real game's issues. The Bug
   and Feel issue forms parse, but nobody has looked at them rendered on GitHub.
 - **Web and web-3d overlays:** run only in Chromium (headless and headed). Firefox, Safari and mobile browsers are
   untested, and their audio formats differ.

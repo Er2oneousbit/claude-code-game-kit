@@ -5,7 +5,8 @@ Ship small, working slices of the game with a trail a stranger can follow.
 
 ## Steps
 1. **Frame it.** Write the feature in one sentence plus "done when" (observable behavior). Confirm it is in ROADMAP Now.
-   If it is not, add it to the Parking lot and stop. See SOP-08.
+   If it is not, add it to the Parking lot (in production: the `docs/PRODUCTION.md` Backlog, with a size) and stop.
+   What counts as in scope depends on the GDD's `Current tier:` (SOP-08 "Tiers").
 2. **Pillar check.** Which GDD pillar does it serve? None means Parking lot.
 3. **Pseudocode and plan.** High-level pseudocode, modules touched, data needed, risks. Short why. For anything that changes
    architecture, write an ADR (`/adr`).

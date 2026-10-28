@@ -16,6 +16,7 @@ The GDD plus this brief gives it the context to build the one thing you want to 
 - **Debug tools in scope:** command line `-autoplay=weaver|masher`, `-seed=N`, `-god`, `-debugai` (orc states over heads); console variable `rd.DebugAI`
 - **Done when (observable):** a player can clear three rooms and the warden or die, and restart; check, test and smoke pass; a packaged build runs a delve
 - **How we judge it:** does the hook come through, is it fun, does the art and tone work, does the new mechanic work
+- **When it is done:** run `/next-tier`. It checks the evidence and, on a yes, starts production (`docs/PRODUCTION.md`).
 
 ## Prompt to paste (adapt the brackets)
 ```
