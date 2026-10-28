@@ -1,0 +1,53 @@
+# ---- Claude Code Game Kit ----
+# ---- Universal ignores (engine-specific ones are appended below by the scaffolder) ----
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# Secrets and local config (never commit)
+.env
+.env.*
+secrets/
+*.pem
+*.key
+*.keystore
+*.pfx
+*.p12
+*.jks
+*.p8
+
+# Progress screenshots and GIF frames taken while building (CLAUDE.md "While building")
+captures/
+
+# Python tooling
+__pycache__/
+*.pyc
+
+# Downloaded asset packs (tools/fetch_asset.py keeps them here; only picked files enter assets/)
+.asset_cache/
+.venv/
+
+# Claude Code local-only files
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Scratch
+scratch/
+*.log
+*.tmp
+
+# ---- Bevy / Rust ----
+/target/
+**/*.rs.bk
+*.pdb
+# Cargo.lock stays committed: this is a game (a binary), and the lock file pins every crate version

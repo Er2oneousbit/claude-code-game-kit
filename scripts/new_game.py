@@ -44,7 +44,7 @@ import traceback
 import unicodedata
 from pathlib import Path
 
-KIT_VERSION = "0.4.0"  # bump with CHANGELOG.md entries
+KIT_VERSION = "0.5.0"  # bump with CHANGELOG.md entries
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CORE_DIR = REPO_ROOT / "core"
 ENGINES_DIR = REPO_ROOT / "engines"
@@ -73,6 +73,10 @@ RESERVED_SLUGS = {
     "params", "private", "protected", "public", "readonly", "ref", "return", "sbyte", "sealed", "short",
     "sizeof", "stackalloc", "static", "string", "struct", "switch", "this", "throw", "true", "try", "typeof",
     "uint", "ulong", "unchecked", "unsafe", "ushort", "using", "virtual", "void", "volatile", "while",
+    # Rust keywords (cargo refuses them as package names) and crate names a Bevy game's package would clash with
+    "async", "await", "become", "box", "crate", "dyn", "final", "fn", "gen", "impl", "let", "loop", "macro",
+    "match", "mod", "move", "mut", "priv", "pub", "self", "super", "trait", "type", "unsized", "use", "where",
+    "yield", "std", "alloc", "proc_macro", "bevy",
 }
 SKIP_SUFFIXES = {".pyc"}
 
@@ -115,7 +119,7 @@ def make_slug(name, override=None):
         if not re.fullmatch(r"[a-z][a-z0-9_]*", override):
             raise ScaffoldError("--slug must be lowercase letters, digits and _, starting with a letter (e.g. my_game)")
         if override in RESERVED_SLUGS:
-            raise ScaffoldError(f"--slug {override!r} is a reserved CMake target or C# keyword; try {override}_game")
+            raise ScaffoldError(f"--slug {override!r} is reserved (a CMake target, C# or Rust keyword, or crate name); try {override}_game")
         return override
     # Fold accents to ASCII first so letters are kept, not dropped (é -> e, Ō -> O)
     folded = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
@@ -126,7 +130,7 @@ def make_slug(name, override=None):
     if not slug[0].isalpha():
         slug = "game_" + slug
     if slug in RESERVED_SLUGS:
-        print(f"[info] '{slug}' is a reserved CMake target or C# keyword; using slug '{slug}_game' "
+        print(f"[info] '{slug}' is reserved (a CMake target, C# or Rust keyword, or crate name); using slug '{slug}_game' "
               f"(pass --slug to choose another)")
         slug += "_game"
     return slug

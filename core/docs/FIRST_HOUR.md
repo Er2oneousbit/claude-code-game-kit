@@ -9,7 +9,8 @@ First game, or you want to feel the idea before planning it? Do this first, then
 the first test of your idea, and nothing here is wasted.
 1. **Health check.** Say: "Run doctor and fix what it finds." Wait for green.
 2. **Ask for a toy, not a game.** Say: "Make <your idea in one line> playable as a tiny toy: one screen, the main
-   action, placeholder pixel-art characters drawn for this game with tools/art/pixel_sprite.py (no dots or shapes), no menus. Put the numbers I might tweak in one place." Claude plans in pseudocode,
+   action, placeholder characters made for this game (2D: pixel art drawn with tools/art/pixel_sprite.py; 3D: simple
+   modeled figures from a few shapes, such as a kart with wheels and a driver; never dots or bare boxes), no menus. Put the numbers I might tweak in one place." Claude plans in pseudocode,
    builds it, and runs `check` and `test`.
 3. **Play it and take notes.** Say "run the game" (or run `python tools/dev.py run`; Unity and Unreal open the editor: press Play there). Play for a few minutes and write
    down what you like and what you don't, in plain words: "the jump is floaty", "too easy", "I can't see the enemies",
@@ -34,7 +35,7 @@ Still true in the fast lane: mechanics before art, and never "make the whole gam
 - **No whole-game prompts.** The slice first. Rework after a vague one-shot cost one creator 1.5 hours (E26).
 - **Show, do not describe.** References and mockups beat paragraphs (F3).
 - **Mechanics before art.** Placeholders until the loop is fun (F4): plain tiles for levels, placeholder pixel-art sprites
-  for characters and key objects (`tools/art/pixel_sprite.py`, never dots). If it is not fun with crude figures, polished art will not save it.
+  for characters and key objects (`tools/art/pixel_sprite.py`, never dots; 3D: figures built from simple shapes). If it is not fun with crude figures, polished art will not save it.
 - **Grow one toy at a time.** Add one mechanic, play until it is fun again, then the next. Combine new toys with old ones so
   they play off each other. Never add three at once (tip, E49).
 - **Tell Claude your machine.** GPU, RAM, target platform. It sizes the graphics to fit (E27).

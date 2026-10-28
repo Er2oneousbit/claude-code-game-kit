@@ -1,12 +1,12 @@
 # Claude Code Game Kit
 
-Make games with Claude Code that hold together. Every project gets the same commands, tests and habits on any of seven
-engines (six tested against their real toolchains; RPG Maker MZ is an untested proof of concept), so Claude builds, tests and checks your game instead of guessing. Free and open source (MIT).
+Make games with Claude Code that hold together. Every project gets the same commands, tests and habits on any of eight
+engines (seven tested against their real toolchains; RPG Maker MZ is an untested proof of concept), so Claude builds, tests and checks your game instead of guessing. Free and open source (MIT).
 
 **New to this?** Read **[START_HERE.md](START_HERE.md)**: install Claude Code and Python, open this folder in VS Code (or the Claude desktop app), open Claude Code and type **Start**. Claude interviews you about your game, writes a one-page game plan with you, then sets everything up. The steps below are the same thing done by hand.
 
 ## Made with the kit
-One small game per engine, plus a local-AI pair. Five were built using only what is in the kit, with bots that test their
+One small game per engine, plus a local-AI pair. Six were built using only what is in the kit, with bots that test their
 main idea; every one comes with a step-by-step HOW_IT_WAS_MADE, including what went wrong. Click one.
 
 <table>
@@ -27,7 +27,8 @@ main idea; every one comes with a step-by-step HOW_IT_WAS_MADE, including what w
 <td width="50%"><b><a href="examples/lockpick-mz/">Lockpick MZ</a></b>, RPG Maker MZ<br>A lockpicking minigame plugin: timing beats mashing.<br><i>Untested proof of concept: built without MZ, tested in Node and a browser, never run in the engine.</i></td>
 </tr>
 <tr>
-<td width="50%" align="center" colspan="2"><b>Your game next</b><br><br>Open this folder in VS Code, open Claude Code and type <b>Start</b>. <a href="START_HERE.md">START_HERE.md</a> walks you through it.</td>
+<td width="50%"><a href="examples/crimson-nebula/"><img src="media/gallery/crimson-nebula.png" width="400" alt="Crimson Nebula"></a><br><b><a href="examples/crimson-nebula/">Crimson Nebula</a></b>, Bevy (Rust)<br>Neon kart racing on a track that rewrites itself every lap.</td>
+<td width="50%" align="center"><b>Your game next</b><br><br>Open this folder in VS Code, open Claude Code and type <b>Start</b>. <a href="START_HERE.md">START_HERE.md</a> walks you through it.</td>
 </tr>
 </table>
 
@@ -47,7 +48,7 @@ main idea; every one comes with a step-by-step HOW_IT_WAS_MADE, including what w
 ```
 python scripts/new_game.py --name "My Game" --engine godot --dest ../my-game --git-init
 ```
-Engines: `godot`, `web` (2D browser games: Phaser + TypeScript), `web-3d` (3D browser games: Three.js + TypeScript), `cpp-sdl2`, `unreal`, `unity`, `rpgmaker-mz` (RPG Maker MZ plugins; an untested proof of concept, never run against MZ) (`--list-engines` shows them). Web projects: run `python tools/dev.py setup` once after scaffolding, from inside the new game folder. On macOS and Linux, type `python3` wherever these steps say `python` if `python` is not found. Engines without an overlay yet, and what one would take: `CHOOSING_AN_ENGINE.md`. Unity and Unreal: create the project in the engine first, then add `--adopt` (see "Already have a project?" below). RPG Maker MZ: scaffold, then, inside the game folder, `python tools/dev.py setup --from <a new MZ project>`.
+Engines: `godot`, `web` (2D browser games: Phaser + TypeScript), `web-3d` (3D browser games: Three.js + TypeScript), `cpp-sdl2`, `unreal`, `unity`, `bevy` (Rust, Bevy 0.20; the first build compiles Bevy, 5 to 15 minutes), `rpgmaker-mz` (RPG Maker MZ plugins; an untested proof of concept, never run against MZ) (`--list-engines` shows them). Web projects: run `python tools/dev.py setup` once after scaffolding, from inside the new game folder. On macOS and Linux, type `python3` wherever these steps say `python` if `python` is not found. Engines without an overlay yet, and what one would take: `CHOOSING_AN_ENGINE.md`. Unity and Unreal: create the project in the engine first, then add `--adopt` (see "Already have a project?" below). RPG Maker MZ: scaffold, then, inside the game folder, `python tools/dev.py setup --from <a new MZ project>`.
 
 **4. Check your setup:**
 ```
@@ -107,7 +108,7 @@ core/                     copied into every game
   tools/                  doctor.py, check_links.py, publish_check.py, yt_transcript.py, art/chroma_key.py,
                           blender/validate_asset.py, hooks/session_context.py (each with its exam where testable)
 engines/<id>/             engine.json, ENGINE.md, FLOW.md, gitignore.append, settings.patch.json, skeleton/
-engines/_template/        copy this to add GameMaker, Bevy, Roblox, Love2D, etc.
+engines/_template/        copy this to add GameMaker, Roblox, Love2D, etc.
 profiles/                 author, footer and working-style presets for new_game.py --profile
 scripts/new_game.py       the scaffolder (new, --adopt, --upgrade, --dry-run)
 scripts/codename.py       a random placeholder name for a new game (Project_Cobalt_Wyvern)
@@ -124,7 +125,7 @@ Being straight about it, because it matters for trust. Everything below was run 
 
 | Piece | Status |
 |---|---|
-| Scaffolder: all 7 engines, dry-run, `--adopt`, `--upgrade` (hash-based), idempotent re-run, profiles, error paths, placeholder resolution | Tested (Windows, and Linux for the earlier version) |
+| Scaffolder: all 8 engines, dry-run, `--adopt`, `--upgrade` (hash-based), idempotent re-run, profiles, error paths, placeholder resolution | Tested (Windows, and Linux for the earlier version) |
 | `tools/doctor.py`, session hook, settings JSON merge | Tested |
 | Godot `dev.py` (`import`, `check`, `test`, `smoke`, `clean`, `doctor`) | Real Godot 4.7.2 with GUT 9.7.1, including planted failures. `build` exports Windows, Linux and Web from the shipped `export_presets.cfg` (the exported exe boots); `run` opens the game (`BOOT_OK` in Godot's log); `smoke --screenshot` and `--record` capture from a real window (a moving test node: 30 frames, the box advanced about 64 px per 6 frames, GIF made) |
 | C++/SDL2 overlay (CMake presets, vcpkg, doctest, `dev.py`) | VS 2022 Build Tools (MSVC 14.44), bundled CMake and vcpkg, SDL2 2.32.10: `check`, `test`, `smoke` (including `--until`, `--fail-on`, `--screenshot`, `--record` and game options after `--`), release `build`, `clean`, with planted failures. Example game `examples/scrap-tanks` (SDL2_image, SDL2_ttf, SDL2_mixer via vcpkg). `run` (Scrap Tanks booted in a window). Linux/macOS **not** tested |
@@ -132,9 +133,10 @@ Being straight about it, because it matters for trust. Everything below was run 
 | Web overlay (Phaser 4.2, TypeScript 7, Vite 8, Vitest 5, Playwright 1.64) | Node 26 on Windows: `setup`, `check`, `test`, `build`, `smoke` in headless Chromium, `clean`, `doctor`, with planted failures (type error, failing test, no tests, boot exception, `Log.error`, missing asset as HTTP 404). `run` (the dev server serves a game that logs `BOOT_OK`) |
 | Web 3D overlay (Three.js r186, same tooling as web) | Node 26 on Windows: `setup`, `check`, `test`, `build`, `smoke` (renders real frames in headless software WebGL), `doctor`, with planted failures (frame-loop exception, renderer failure); re-adopt and upgrade clean. Example game `examples/courier-dash`: its scenario pair passes in headless Chromium and in Vitest. `run` (dev server; the game renders and logs `BOOT_OK`) |
 | Unreal `dev.py` | UE 5.8: `check`, `test`, `smoke` (including `--until`, `--fail-on`), `package`, `exec` (editor Python), `clean` on a C++ project with planted failures; example game `examples/rune-delve` (GAS, AI Perception, content from a headless script); `check` and `test` on a Blueprint-only project. `run` (opens the editor) and `genproj` on Rune Delve; Blueprint-only `package` **not** verified |
+| Bevy overlay (Bevy 0.20, Rust 1.99.1, cargo, `dev.py`) | Windows 11 with VS 2022 Build Tools (MSVC): `doctor`, `check` (rustfmt, clippy), `test` (12 unit and 4 headless App tests), `smoke` (headless, `--until`, `--fail-on`, game options after `--`, `--screenshot` and `--record` in a window), release `build` (the exe ran from a clean folder), `run` (window on Vulkan), `clean`, with planted failures (compile error, failing test, unformatted code, `error!` at boot, panic, bad game option). Example game `examples/crimson-nebula` (a full headless race to `RACE_OVER`, `--record-from` for its GIF, `run` in a window). Linux/macOS **not** tested; web (WASM) builds not wired |
 | RPG Maker MZ overlay (`dev.py`, `smoke.mjs`, `serve.mjs`, the plugin pair, `mzFake.js`) | **Not run against RPG Maker MZ** (not installed when it was built, 2026-10-23). Node 26 on Windows: `check` (five planted faults caught), `test`, `doctor`, `clean`, adopt; `setup --from`, `smoke` (headless Chromium) and `build` against a fake MZ project made of stand-in core scripts. The editor's side (annotations as the Plugin Manager reads them, `js/plugins.js` format, Deployment, `run --editor`) is marked (verify) |
 | `examples/lockpick-mz` | 16 Node tests (rules, the bot pair over 40 seeds with sloppy copies, the glue against MZ stand-ins); `smoke --query autoplay --until LOCK_OPEN` and the masher's `LOCK_JAMMED` against the fake MZ. Untested proof of concept: never run in real MZ |
-| `tools/check_links.py`, `tools/publish_check.py` | Exams 11/11 and 11/11 (gitleaks 8.30.1 clean on a fresh game with the shipped `.gitleaks.toml`), and zero broken references in all 7 scaffolded engines |
+| `tools/check_links.py`, `tools/publish_check.py` | Exams 11/11 and 11/11 (gitleaks 8.30.1 clean on a fresh game with the shipped `.gitleaks.toml`), and zero broken references in all 8 scaffolded engines |
 | `tools/art/chroma_key.py` | Exam 14/14 on synthetic images, not yet on real AI sprites |
 | `tools/art/pixel_sprite.py` (first art drawn in code) | Exam 13/13 (standard library only): the reference hero's atlas, malformed PNGs refused cleanly, mirrored rows, the JSON layout, the PNG round trip; the first-art floor passes the hero and fails a dot, a flat circle and a one-color box. The ported hero matches the original Pillow script pixel for pixel (32 frames, 0 differences). Not yet run inside a game build by an engine |
 | `tools/second_opinion.py` | Exam 24/24 offline (canned CLI results, plus real processes for the timeout); live with Kimi Code 2.3.0 on K3: a read-only review of the kit's Godot export change found a real stale claim, and a request to write a file failed for lack of a tool. Other vendors' CLIs not supported yet |

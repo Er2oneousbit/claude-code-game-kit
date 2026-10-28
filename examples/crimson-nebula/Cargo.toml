@@ -1,0 +1,38 @@
+# ---------------------------------------------------------------------------
+# Cargo.toml
+# Purpose : The project manifest: name, version (the one version source, SOP-06), Bevy pin, build profiles.
+# Usage   : python tools/dev.py check | test | smoke | build | run   (cargo underneath)
+# Notes   : bevy = "0.20" takes 0.20.x patch releases; Cargo.lock (committed) pins the exact versions.
+#           Moving to a new Bevy minor is a migration, not an update: docs/ENGINE.md gotcha 1.
+#           The dev profile optimizes dependencies but not the game: debug builds stay quick to rebuild and
+#           Bevy still runs at full speed (Bevy's own recommendation).
+# Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# ---------------------------------------------------------------------------
+[package]
+name = "project_crimson_nebula"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97.1"
+publish = false
+
+[dependencies]
+bevy = "0.20"
+
+[features]
+# Faster rebuilds while developing: cargo run --features dev. Never ship it (docs/ENGINE.md gotcha 6).
+dev = ["bevy/dynamic_linking"]
+
+[lints.clippy]
+# Bevy systems take many parameters and spell out long query types by design
+too_many_arguments = "allow"
+type_complexity = "allow"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+codegen-units = 1
+lto = "thin"

@@ -29,6 +29,7 @@ Rules:
   M3 release candidate `1.0.0-rc.N`, launch `1.0.0`.
 - **One source of truth:** the version lives in one place and the game reads it from there (title screen, crash logs, save
   files). Godot: Project Settings `application/config/version`; web: the version field of package.json; C++: CMake `project(... VERSION x.y.z)`;
+  Bevy: `version` in `Cargo.toml` (code reads `env!("CARGO_PKG_VERSION")`);
   Unity: Player Settings version; Unreal: `ProjectVersion` in the project settings **(verify the field for your engine version)**.
 - The git tag matches it exactly: `v0.4.1`. Record it in `docs/HANDOFF.md` and in the save file's version field.
 - Bump the version in the same commit as the change log entry, and only when a build goes to someone (testers, players).

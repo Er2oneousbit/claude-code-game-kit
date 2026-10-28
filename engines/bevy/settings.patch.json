@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo check:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo tree:*)",
+      "PowerShell(cargo check *)",
+      "PowerShell(cargo build *)",
+      "PowerShell(cargo test *)",
+      "PowerShell(cargo clippy *)",
+      "PowerShell(cargo fmt *)",
+      "PowerShell(cargo tree *)"
+    ],
+    "ask": [
+      "Bash(cargo add:*)",
+      "Bash(cargo remove:*)",
+      "Bash(cargo update:*)",
+      "Bash(cargo install:*)",
+      "Bash(rustup:*)",
+      "PowerShell(cargo add *)",
+      "PowerShell(cargo remove *)",
+      "PowerShell(cargo update *)",
+      "PowerShell(cargo install *)",
+      "PowerShell(rustup *)"
+    ],
+    "deny": [
+      "Bash(cargo publish:*)",
+      "Bash(cargo login:*)",
+      "Bash(cargo owner:*)",
+      "Bash(cargo yank:*)",
+      "PowerShell(cargo publish *)",
+      "PowerShell(cargo login *)",
+      "PowerShell(cargo owner *)",
+      "PowerShell(cargo yank *)",
+      "Edit(./target/**)",
+      "Read(~/.cargo/credentials*)",
+      "Edit(~/.cargo/credentials*)"
+    ]
+  }
+}

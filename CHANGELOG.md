@@ -3,6 +3,47 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.5.0 (2026-10-28): Bevy overlay
+### New engine overlay: `bevy` (Bevy 0.20, Rust), asked for by a player after the first release
+- **`engines/bevy/`:** `dev.py` with the full contract on cargo: `check` (rustfmt `--check`, then clippy on every
+  target, or `cargo check` without clippy), `test` (`cargo test`, counts the `test result` lines; none ran is exit 2),
+  `smoke` (headless, `--until`, `--fail-on`, `--timeout`, game options after `--`, `--screenshot` and `--record` as PNG
+  in a window), `build` (release exe), `run`, `clean` (asks before deleting a `CARGO_TARGET_DIR` outside the project;
+  never hangs), `doctor` (cargo, rustc against Bevy's `rust-version`, clippy, rustfmt, git, MSVC through vswhere,
+  ALSA and udev on Linux). Builds run uncaptured so the long first compile shows progress; the game then runs
+  captured with a timeout. A game that refuses its command line is exit 2, not a failed test.
+- **Starter game, split for headless runs:** `engines/bevy/skeleton/src/game/mod.rs` is the simulation (`FixedUpdate` at 60 Hz, input only
+  through an `Intent` resource, bots as `Autoplay` modes); `present.rs` next to it holds the camera, sprites and keyboard and
+  is added only with a window; `app.rs` builds the App per mode. Smoke and capture runs step time by exactly one
+  1/60 s tick per frame (`TimeUpdateStrategy::ManualDuration`, built from the same `Duration` as the fixed step), so N
+  frames are N ticks on any machine. `logic/` is engine-free (math helpers, a seeded xorshift `Rng` whose sequence a
+  test pins). Tests: 12 unit tests and 4 headless App tests (`engines/bevy/skeleton/tests/headless.rs`).
+- **Gotcha 1 in its ENGINE.md:** Claude's Bevy knowledge lags the pinned version, so it checks APIs in the 0.20
+  source under `~/.cargo/registry`. Writing the overlay hit three such changes (`On<Add<T>>` instead of
+  `On<Add, T>`, `Replace` renamed `Discard`, events now `Message`s).
+- Tested on Windows 11 (Rust 1.99.1, MSVC 14.44): every command, with six planted failures; the release exe ran from a
+  clean folder with its console hidden (`windows_subsystem`) and `dev.py` still read its output; a missing asset fails
+  a windowed smoke run but not a headless one, as gotcha 8 says. First build 14.5 minutes. Linux, macOS and web
+  (WASM) untested (`KNOWN_ISSUES.md`).
+- Bevy rows in SOP-06 (version source), SOP-14 (navigation and decisions), SOP-17 (seeded generation),
+  `resources/audio.md` and `resources/learning-and-release.md`; Bevy in `CHOOSING_AN_ENGINE.md`, the README and the
+  `make-a-game` engine table (Rust install check). `engines/_template/README.md` points code-only engines at it too.
+- **Scaffolder:** Rust keywords and crate names (`fn`, `type`, `std`, `bevy`...) are reserved slugs, so a game named
+  "Type" or "Bevy" gets `type_game`, a package name cargo accepts.
+
+### New example: `examples/crimson-nebula` (Bevy)
+- A neon kart racer made through the `make-a-game` interview: one loop, you against three bots over three laps, a lane
+  closes on lap 2 behind a 2 s warning, a random change on lap 3, boost items. The race is engine-free Rust, so the bot
+  pair runs in `cargo test`: the bot that reads the changes beats the one that ignores them on 20 of 20 seeds. 40
+  tests, a full headless race in `smoke --until RACE_OVER`. No human playtest yet. Gallery and tested-table rows added.
+
+### Kit gaps found while building the Bevy racing example (Project_Crimson_Nebula)
+- **`smoke --record-from N` (Bevy):** `--record` always started at frame 1, so filming a moment 70 s into a race
+  meant hundreds of frames nobody wanted. Other overlays still record from the first frame.
+- **3D games got 2D art instructions:** FIRST_HOUR's fast lane and the make-a-game "crude on purpose" warning named
+  only pixel-art sprites drawn with `pixel_sprite.py`. Both now give the 3D floor too (figures built from a few
+  shapes, never bare boxes). Synced into the examples.
+
 ## 0.4.0 (2026-10-27): first public release
 ### `KNOWN_ISSUES.md`: every open bug and untested part in one place
 - The kit's untested parts (macOS and Linux, real RPG Maker MZ, Unity `run` past the Hub sign-in, Blueprint-only

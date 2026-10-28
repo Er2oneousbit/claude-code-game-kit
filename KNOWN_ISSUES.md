@@ -14,6 +14,9 @@ examples were built and tested on one Windows 11 machine.
 - **Unity:** `run` opens the editor, but on the test machine it stopped at Unity's Hub sign-in, so a loaded editor is
   not confirmed. Batchmode commands are unaffected.
 - **Unreal:** `package` on a Blueprint-only project is not verified (C++ projects are).
+- **Bevy:** Windows only (Linux needs ALSA and udev dev packages, named in the docs but not tried); a web (WASM)
+  build is not wired into `dev.py`; the starter moves in fixed 1/60 s ticks with no render interpolation, so motion
+  can look uneven on high refresh rate screens; `--features dev` (dynamic linking) was not tried.
 - **Skills no new user has run yet:** `/procgen` on a fresh game, `/triage-issues` on a real game's issues. The Bug
   and Feel issue forms parse, but nobody has looked at them rendered on GitHub.
 - **Web and web-3d overlays:** run only in Chromium (headless and headed). Firefox, Safari and mobile browsers are

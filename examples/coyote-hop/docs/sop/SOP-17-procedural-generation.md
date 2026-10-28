@@ -96,6 +96,7 @@ list of problems, so the generator, the tests and the debug view share one defin
 | Web (Phaser), Web 3D | A seeded PRNG in `src/core` (`Math.random()` takes no seed) **(verify)** | Grid A* in `src/core` is both the model and the engine: test it directly (SOP-14) | Keep generation in `src/core` so Vitest runs hundreds of seeds |
 | Unreal 5 | `FRandomStream` with a seed **(verify)** | Recast navmesh; `UNavigationSystemV1::FindPathToLocationSynchronously` **(verify)** | Generate in C++ or Python editor scripts first; runtime spawning needs the navmesh to rebuild **(verify)** |
 | C++ / SDL2 | Your own PRNG (the standard library's distributions are not portable across implementations **(verify)**) | Your own grid or Recast/Detour | Same float rule as Unity: lattice positions |
+| Bevy | The skeleton's `logic::rng::Rng` (seeded, sequence pinned by a test), one instance per generator | Grid A* in `src/logic`, run over hundreds of seeds in `cargo test` | Keep generation in `src/logic`, out of systems, so tests need no App; spawn the result in a system |
 | RPG Maker MZ | Your own PRNG in the engine-free plugin (`Math.random()` takes no seed) | Tile passability from the map's tileset flags; check it in your own grid in Node **(verify)** | Maps are JSON files (Map001.json and up) the editor overwrites if it is open; a generated map needs valid tile ids for its tileset **(verify)** |
 
 ## Worked example: Graveyard Shift's nights (K01)

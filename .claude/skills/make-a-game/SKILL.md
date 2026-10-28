@@ -69,8 +69,8 @@ each a short phrase plus what it rules out), Core loop (`action -> feedback -> r
 and audience, Art and audio direction, Controls, Toy scope (question 11), Out of scope (question 12), two or three
 **Assumptions to test** with how you will know, and the Author (question 13). Mark every *(Claude's pick)*.
 Right under the plan, before asking for the yes, show this warning in a box of its own (your words, same points):
-> ⚠️ **The first version will look crude, on purpose.** Simple placeholder pixel-art characters drawn in code (real figures with a walk and an action, never dots or
-> boxes) on plain backgrounds, maybe no sound. The first
+> ⚠️ **The first version will look crude, on purpose.** Simple placeholder characters made in code (2D: pixel-art figures with a walk and an action; 3D: figures
+> built from a few shapes, a kart with wheels and a driver; never dots or bare boxes) on plain backgrounds, maybe no sound. The first
 > goal is to find out whether the game is *fun*, and that only takes the mechanics. Art, animation and music come once
 > the fun is proven: polishing art for a game that turns out not to work wastes time, usage and money. Judge the
 > first build by how it plays, not how it looks.
@@ -87,6 +87,7 @@ sentence. Point to `CHOOSING_AN_ENGINE.md` only if they want to compare.
 | Same, but 3D | `web-3d` | Same, with Three.js for 3D |
 | "A real engine with an editor", or desktop builds | `godot` | Free and small, but needs a download, an environment variable and a test add-on (you do those for them) |
 | Unity or Unreal already installed, and they want it | `unity` / `unreal` | Heavy installs; the engine must create the project first (README "Already have a project?") |
+| Wants to write Rust, or code-only with no editor | `bevy` | Needs Rust (rustup) and, on Windows, Visual Studio Build Tools; the first build takes 5 to 15 minutes, later ones seconds |
 | Wants to learn C++ | `cpp-sdl2` | Needs Visual Studio Build Tools or a compiler, CMake and vcpkg; the slowest start |
 | A classic RPG and they own RPG Maker MZ | `rpgmaker-mz` | They build maps and events in the editor; you write and test the plugins. Tell them this overlay is an untested proof of concept: never run against MZ itself |
 
@@ -99,6 +100,9 @@ Run these and report in plain words what is there and what is missing:
 - Godot: Godot 4.3 or newer (tested on 4.7.2), standard (not .NET) build, from https://godotengine.org/download . It is a zip, not an
   installer: suggest unzipping to a simple folder (for example `C:\Godot` or `~/Applications`). Later, inside the game
   folder, set `GODOT_BIN` to that exe for them (ask first) and install GUT per `docs/ENGINE_FLOW.md`.
+- Bevy: `cargo --version` (Rust 1.97.1 or newer). Missing: https://rustup.rs (Windows: `rustup-init.exe`, defaults are
+  fine; it should offer the Visual Studio Build Tools if they are missing (verify)). Warn them the first `check` compiles Bevy for
+  5 to 15 minutes, once.
 - Unity, Unreal, C++: follow that engine's `engines/<id>/ENGINE.md` "Version and setup"; walk them through it step by step.
 Missing pieces: give the link and the one setting that matters, offer to install with the system package manager
 (`winget`, `brew`) if they prefer, and wait. After an install, terminals opened before it do not see it: tell them to

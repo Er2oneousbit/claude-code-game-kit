@@ -1,0 +1,16 @@
+{
+  "id": "bevy",
+  "label": "Bevy (Rust)",
+  "summary": "Bevy 0.20 (Rust 1.97.1+), ECS, cargo test with headless Apps, headless smoke via MinimalPlugins",
+  "skeleton_dir": "skeleton",
+  "gitignore_append": "gitignore.append",
+  "settings_patch": "settings.patch.json",
+  "engine_md": "ENGINE.md",
+  "flow_md": "FLOW.md",
+  "assets_dir": "assets",
+  "setup_step": "install Rust with rustup (https://rustup.rs; Windows also needs Visual Studio Build Tools, C++ workload), then: python tools/dev.py check   # the first build compiles Bevy, about 5 to 15 minutes",
+  "adopt_hints": {
+    "Cargo.toml": "dev.py needs a [[bin]] (or the package name) that accepts --smoke N and prints BOOT_OK; keep the [profile.dev] opt-level lines for usable debug builds.",
+    "src/main.rs": "dev.py smoke runs `cargo run -- --smoke N [-- game options]` and expects BOOT_OK in the output. See docs/ENGINE_FLOW.md > Adopting an existing project."
+  }
+}

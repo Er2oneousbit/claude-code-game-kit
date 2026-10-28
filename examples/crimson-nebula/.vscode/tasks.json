@@ -1,0 +1,9 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "dev: check", "type": "shell", "command": "python tools/dev.py check", "linux": { "command": "python3 tools/dev.py check" }, "osx": { "command": "python3 tools/dev.py check" }, "group": "build", "problemMatcher": ["$rustc"] },
+    { "label": "dev: test", "type": "shell", "command": "python tools/dev.py test", "linux": { "command": "python3 tools/dev.py test" }, "osx": { "command": "python3 tools/dev.py test" }, "group": "test", "problemMatcher": ["$rustc"] },
+    { "label": "dev: smoke", "type": "shell", "command": "python tools/dev.py smoke", "linux": { "command": "python3 tools/dev.py smoke" }, "osx": { "command": "python3 tools/dev.py smoke" }, "problemMatcher": [] },
+    { "label": "dev: run", "type": "shell", "command": "python tools/dev.py run", "linux": { "command": "python3 tools/dev.py run" }, "osx": { "command": "python3 tools/dev.py run" }, "problemMatcher": [] }
+  ]
+}

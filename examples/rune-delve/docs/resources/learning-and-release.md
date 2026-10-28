@@ -11,6 +11,9 @@ Books, docs, talks, and where to show the game.
 - *Game Feel* (Steve Swink) and the talk "Juice it or Lose it". For making things feel good.
 - Godot docs (`docs.godotengine.org`), Unreal docs (`dev.epicgames.com/documentation`), Lazy Foo SDL2 tutorials,
   SDL wiki (`wiki.libsdl.org`), Learn OpenGL, Handmade Hero for low-level inspiration.
+- Bevy: the official examples (`bevy.org/examples`, each one matches a release), docs.rs for the exact version,
+  the migration guides on `bevy.org/learn/migration-guides` (one per release), and the Bevy Cheat Book (community; check
+  which version a page covers).
 - GDC Vault and GDC YouTube channel for postmortems.
 - Design: *The Art of Game Design: A Book of Lenses*, Mark Brown's Game Maker's Toolkit videos.
 

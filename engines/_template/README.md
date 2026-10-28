@@ -1,9 +1,9 @@
-# Adding a new engine (GameMaker, Bevy, Love2D, Defold, Raylib, Roblox...)
+# Adding a new engine (GameMaker, Love2D, Defold, Raylib, Roblox...)
 
 Candidates and what each overlay would need: the "Not in the kit yet" table in `CHOOSING_AN_ENGINE.md`.
 
 Copy this folder to `engines/<your-id>/` and fill it in. For files to start from, copy the closest shipped overlay instead
-(`engines/godot` for a CLI-driven engine, `engines/cpp-sdl2` for a code-only one) and adapt its `tools/dev.py`, which already
+(`engines/godot` for a CLI-driven engine, `engines/cpp-sdl2` or `engines/bevy` for a code-only one) and adapt its `tools/dev.py`, which already
 implements every rule below (including `hoist_global_options`, so options work before or after the command). The scaffolder picks it up automatically (`new_game.py --list-engines`).
 
 ## Required files

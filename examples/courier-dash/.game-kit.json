@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.4.0",
+  "kit_version": "0.5.0",
   "author": "the owner",
   "profile": {
     "author": "",
@@ -906,6 +906,42 @@
       "date": "2026-10-27",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.5.0",
+      "date": "2026-10-28",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.5.0",
+      "date": "2026-10-28",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.5.0",
+      "date": "2026-10-28",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.5.0",
+      "date": "2026-10-28",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.5.0",
+      "date": "2026-10-28",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.5.0",
+      "date": "2026-10-28",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -944,7 +980,7 @@
     "docs/ENGINE.md": "a27d76756364f5a019958ce0a243a7145badff1ec2652017b99fdaedda825aad",
     "docs/ENGINE_FLOW.md": "ddb084c4b9e045ff5f8c31c9c06cf86764629607e2818540e0d04a41adf5d8af",
     "docs/EVIDENCE.md": "2a790b3a8eeda3e79af0f82e50002c66e6c358bbd56d96ff690e4080f2636880",
-    "docs/FIRST_HOUR.md": "3d0cf94ac60a094fb0cf48c8ea5f8b3695be2d6341580b88489f72e55f1ca423",
+    "docs/FIRST_HOUR.md": "86acd90ae162e46bede9b2e49d97eb210946c9de9bd9f314d26da2a0f526a14b",
     "docs/GDD.md": "11991facc2efd2adc27081080897c998169959ca9deb4651918a9ac8297a1434",
     "docs/HANDOFF.md": "3124d0370759299ac022f9a08c1ddccfc85291b52be010fcffe1582dd4aa1945",
     "docs/PLAYTEST_LOG.md": "98a4d24a1202736904b70a05cfecdd8f1389315b3483bf08a3539302ec8ece5d",
@@ -958,8 +994,8 @@
     "docs/evidence/video-notes.md": "c1e5b04b398c5e74c1a0fe2a72ff0d5631643c28b1eeb16e552e56c1388527db",
     "docs/resources/ai-tools.md": "c6cedc698a4869d13c825dbd5237e729961c384502663a8f33d0f0ffddbc4ba1",
     "docs/resources/art.md": "5ba95cf99d83f4139c2f4b949796ee772c3962b559780bac938b3f83746dca67",
-    "docs/resources/audio.md": "a719a47d9e937d2d8b7c6cadf5169710376ff15ebfcfad1e094d89d8ef7cfbc4",
-    "docs/resources/learning-and-release.md": "9a2076b6a4ddf07a2cd795b4a8e58cb3c16c43d4006194891b1f9e1a613ca988",
+    "docs/resources/audio.md": "18c7300e990be2fe8904c92ccc4c1998b5d66cbd77bf8e836442abac72acfb38",
+    "docs/resources/learning-and-release.md": "8e08ccf6f94762135717225f46113807154511de562cffc87b209aa6908a8057",
     "docs/resources/licenses.md": "6584c21e9e295cbbdd2f338911963cde92bdc56aed8a691bce079533d39ca90e",
     "docs/resources/pipelines.md": "c36f860a00743f20eeff0b068ceefbb4f2a2134b36da9393a3a2ca19b8cfdc35",
     "docs/resources/world-and-levels.md": "f7b16c7cc08284e7f12eb11b0541362e89d180a16f471405294b8ad4d257ca92",
@@ -969,7 +1005,7 @@
     "docs/sop/SOP-03-playtest-and-tuning.md": "22967fd021af3ce873af4c4bfccc76f71f38c4263accfaad8b8bdc1f1c0e45db",
     "docs/sop/SOP-04-assets-and-licensing.md": "43f387385aa0bff213a3eefa1f06f7a8d95e61b9a4037d19fd363088e3ebd685",
     "docs/sop/SOP-05-git.md": "50562626921658fe100438b49650cc405c8df6cb279787754de2d693a5bd86f0",
-    "docs/sop/SOP-06-build-and-release.md": "2a9f007b24ffb944bc84c0d0c47f66a2841e4479504e7e5f411f798b93d4253d",
+    "docs/sop/SOP-06-build-and-release.md": "928a0e7a2f94ea453a7e9a71bb509dd6e9a82cf8533405aeaa0f97aca6764e11",
     "docs/sop/SOP-07-claude-code-hygiene.md": "26afd287af1604993481e758070c2da331c48de793271bfa98489b5bac30bf18",
     "docs/sop/SOP-08-scope-control.md": "d01488a30f76c06dcb127384f7fae4a540721dc1131bb6f1d8fd1b91b86490f5",
     "docs/sop/SOP-09-testing.md": "6b261c975c9f602dc38c2d6a5d50b5355b3c28af688cb259d51022ddfabad120",
@@ -977,10 +1013,10 @@
     "docs/sop/SOP-11-3d-pipeline.md": "509fa2b38d2fcd0edf70b8e4be4f26813669357041a2fd5febb038233eb68e67",
     "docs/sop/SOP-12-job-plan-and-model-roles.md": "d67b349a7ff5351db6cddbf970dfd8d16fb05a03fc3dfac500be60567bacc4e7",
     "docs/sop/SOP-13-publish-to-github.md": "0b3c430b934db860e96d1bbcc43edf6ed72ac93bb95ae39bb4e8e1f3508d5a56",
-    "docs/sop/SOP-14-game-ai.md": "aed75003de01a336d2b9de850490322623f495749d87f1dc8c9fa1c4281ea319",
+    "docs/sop/SOP-14-game-ai.md": "3ebe3c69c88fd758d97558d51d534a7a0b9a2f3dbff1892c805d748c3f0aac86",
     "docs/sop/SOP-15-ai-features.md": "d17cb35edaa0de3e42b9a5195d6538f9e9617b37dcdfd9c8c8d53682756ab817",
     "docs/sop/SOP-16-2d-art-pipeline.md": "0f04fe8388b88e82479df174279af0d3544d60cb7eb666052d9479442d74194b",
-    "docs/sop/SOP-17-procedural-generation.md": "9a03e1860b92694e6aea165ffe8625ee267bb99cc13c1139db85b978404ab8de",
+    "docs/sop/SOP-17-procedural-generation.md": "87d219e5ea42ccfd21917b7e31f538cd621d6c705a6cf38e881022588ef3a2d7",
     "index.html": "a03c2f4d5bb4e002dec286c0f399bf52dcc6e9228478aea8ec97e3b8f81d919e",
     "package.json": "1c640ca3ccc63759269b70b43b422fa0a8717079f62e36c6521ba62d9094184d",
     "public/assets/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -1037,5 +1073,5 @@
     "vite.config.ts": "72acee7629b7349c87f6bba02eabba214863520b35d7b6cbd15051ae698e0b92",
     "vitest.config.ts": "a5e0a6c56562671e37906a9d6edaf5932582719bb0b21b699c88eb0523efdbc1"
   },
-  "last_upgrade": "2026-10-27"
+  "last_upgrade": "2026-10-28"
 }

@@ -1,0 +1,5 @@
+# ---- Bevy / Rust ----
+/target/
+**/*.rs.bk
+*.pdb
+# Cargo.lock stays committed: this is a game (a binary), and the lock file pins every crate version

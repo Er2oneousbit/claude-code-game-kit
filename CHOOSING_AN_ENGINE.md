@@ -12,6 +12,9 @@ Should people play it in a browser with no install (itch.io, a link you share, g
 Is it a classic JRPG (maps, menus, turn-based battles) and do you own RPG Maker MZ (or want to buy it)?
   yes -> rpgmaker-mz  (the editor makes maps, events and the database; Claude writes JavaScript plugins and tests their
                        rules in Node. An untested proof of concept: never run against MZ in this kit, its engine steps say (verify))
+Do you want the whole game as Rust code, no editor (an ECS engine)?
+  yes -> bevy  (Bevy 0.20: everything is text, tests and smoke runs need no GPU; the first build takes 5 to 15 minutes,
+                and Bevy changes its API every few months, so Claude checks the pinned version's source)
 Is the main goal to learn low-level programming (C++, memory, loops)?
   yes -> cpp-sdl2  (you write the engine layer; slowest path to content, best for learning)
   no  -> Is the game 2D, or stylized 3D that runs on modest hardware?
@@ -25,13 +28,13 @@ Shipping on Roblox, or one of the engines in "Not in the kit yet" below?
 ```
 
 ## At a glance
-| | Godot 4 | C++ / SDL2 | Unreal 5 | Unity | Web (Phaser 4) | Web 3D (Three.js) | RPG Maker MZ |
-|---|---|---|---|---|---|---|---|
-| Overlay status | Tested against real Godot 4.7.2 + GUT 9.7.1 on Windows, including export and `run` | Built, tested and smoke-run on Windows (MSVC 14.44, vcpkg); example game: `examples/scrap-tanks` | UE 5.8: C++ compile, tests, smoke and packaging verified (Blueprint-only packaging not yet); example game: `examples/rune-delve` | Tested against Unity 6000.6.6f1 (all but `run`); example game: `examples/graveyard-shift` | Tested on Windows with Node 26: setup, check, test, build, smoke (headless Chromium), clean, `run`, with planted failures | Same tooling as Web, tested the same way except `clean`; starter scene renders in headless smoke; example game: `examples/courier-dash` | **Not run against MZ yet** (built without it): `check`, `test`, `setup --from`, `smoke` and `build` tested against a fake MZ project; example: `examples/lockpick-mz` |
-| What Claude can edit | Almost everything (text resources) | Everything | C++, config, data assets via import; not Blueprints or maps | C#, asmdefs, ScriptableObject code; scenes and prefabs with care | Everything (TypeScript, JSON maps, HTML) | Everything (TypeScript); models come from Blender as .glb | Plugins (JavaScript) and the data JSON with the editor closed; maps and events are easier in the editor |
-| License cost **(verify current terms)** | Free (MIT) | Free (your code; SDL2 is zlib) | Free until a revenue threshold, then a royalty; submit Epic's Release Form before launch | Plan tiers depend on revenue and funding (Personal has a cap) | Free (Phaser is MIT) | Free (Three.js is MIT) | Paid editor; games you make may be sold, MZ's own files only inside them (read the EULA) |
-| Hardware | Light | Light | Heavy (strong GPU, about 50 GB install, E27) | Medium | Light (any machine with Node.js and a browser) | Light to medium (players need decent WebGL) | Light (Windows or macOS editor; games run in a browser or NW.js) |
-| Agent tooling seen | No MCP needed (E04); Godot MCPs exist (E06, unread) | Plain CLI | Unreal MCP plugins, CLI | Several Unity MCPs (E17, E20) | Plain CLI; Phaser ships its own agent skills in the npm package | Plain CLI; no bundled skills, use threejs.org docs and the installed examples | Plain CLI (Node, a browser); community MCP servers exist (unread) |
+| | Godot 4 | C++ / SDL2 | Unreal 5 | Unity | Web (Phaser 4) | Web 3D (Three.js) | RPG Maker MZ | Bevy (Rust) |
+|---|---|---|---|---|---|---|---|---|
+| Overlay status | Tested against real Godot 4.7.2 + GUT 9.7.1 on Windows, including export and `run` | Built, tested and smoke-run on Windows (MSVC 14.44, vcpkg); example game: `examples/scrap-tanks` | UE 5.8: C++ compile, tests, smoke and packaging verified (Blueprint-only packaging not yet); example game: `examples/rune-delve` | Tested against Unity 6000.6.6f1 (all but `run`); example game: `examples/graveyard-shift` | Tested on Windows with Node 26: setup, check, test, build, smoke (headless Chromium), clean, `run`, with planted failures | Same tooling as Web, tested the same way except `clean`; starter scene renders in headless smoke; example game: `examples/courier-dash` | **Not run against MZ yet** (built without it): `check`, `test`, `setup --from`, `smoke` and `build` tested against a fake MZ project; example: `examples/lockpick-mz` | Bevy 0.20 on Windows (Rust 1.99.1, MSVC): `doctor`, `check` (rustfmt, clippy), `test`, `smoke` (headless, `--until`, `--fail-on`, `--screenshot`, `--record`), release `build`, `run`, `clean`, with planted failures; example game: `examples/crimson-nebula` |
+| What Claude can edit | Almost everything (text resources) | Everything | C++, config, data assets via import; not Blueprints or maps | C#, asmdefs, ScriptableObject code; scenes and prefabs with care | Everything (TypeScript, JSON maps, HTML) | Everything (TypeScript); models come from Blender as .glb | Plugins (JavaScript) and the data JSON with the editor closed; maps and events are easier in the editor | Everything (Rust, RON or JSON data, assets come from other tools) |
+| License cost **(verify current terms)** | Free (MIT) | Free (your code; SDL2 is zlib) | Free until a revenue threshold, then a royalty; submit Epic's Release Form before launch | Plan tiers depend on revenue and funding (Personal has a cap) | Free (Phaser is MIT) | Free (Three.js is MIT) | Paid editor; games you make may be sold, MZ's own files only inside them (read the EULA) | Free (Bevy is MIT or Apache-2.0) |
+| Hardware | Light | Light | Heavy (strong GPU, about 50 GB install, E27) | Medium | Light (any machine with Node.js and a browser) | Light to medium (players need decent WebGL) | Light (Windows or macOS editor; games run in a browser or NW.js) | Light to run; building needs several GB of disk and a few minutes of CPU the first time |
+| Agent tooling seen | No MCP needed (E04); Godot MCPs exist (E06, unread) | Plain CLI | Unreal MCP plugins, CLI | Several Unity MCPs (E17, E20) | Plain CLI; Phaser ships its own agent skills in the npm package | Plain CLI; no bundled skills, use threejs.org docs and the installed examples | Plain CLI (Node, a browser); community MCP servers exist (unread) | Plain CLI (cargo); rust-analyzer in VS Code |
 
 ## Not in the kit yet
 Popular engines without an overlay. None needs changes to the kit itself: an overlay is `engine.json`, docs, starter files and a
@@ -46,7 +49,6 @@ knowledge, not live-checked: **verify licenses and command-line tools before bui
 | Pygame (pygame-ce) | Python | Learning games with Python | pytest; SDL dummy video driver for smoke | Packaging for players needs PyInstaller or similar |
 | Ren'Py | Ren'Py script, Python | Visual novels | `lint` as check; a scripted launch for smoke | Logic lives in scripts, so unit tests are thin |
 | MonoGame / FNA | C# | Code-first 2D and 3D (Stardew Valley, Celeste) | `dotnet build`, xunit | Content pipeline tool |
-| Bevy | Rust | Code-only ECS games | `cargo check`, `cargo test` | Long first compiles |
 | raylib | C, C++ | Simpler than SDL2 | Same shape as the C++/SDL2 overlay | Could be a variant of it |
 | Babylon.js, PlayCanvas | TypeScript | Browser 3D with more built in than Three.js | Same as `web-3d` | PlayCanvas editor hosting terms (verify) |
 | Roblox | Luau | The largest young audience | Rojo syncs code as text files | No local headless run: `smoke` and `run` through Studio or cloud tools, or exit 2 "not available" |
