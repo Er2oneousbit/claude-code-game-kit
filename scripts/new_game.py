@@ -44,7 +44,7 @@ import traceback
 import unicodedata
 from pathlib import Path
 
-KIT_VERSION = "0.6.0"  # bump with CHANGELOG.md entries
+KIT_VERSION = "0.6.1"  # bump with CHANGELOG.md entries
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CORE_DIR = REPO_ROOT / "core"
 ENGINES_DIR = REPO_ROOT / "engines"

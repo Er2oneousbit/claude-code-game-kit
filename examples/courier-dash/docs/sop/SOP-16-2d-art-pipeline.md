@@ -22,6 +22,7 @@ The tools refuse to replace an existing output: add `--overwrite` when you re-ex
 | 3D model or animation to a sprite sheet | Blender | `blender -b --python-exit-code 1 -P tools/blender/render_sprites.py -- <model> --out <sheet.png> --directions 8 --action walk` (or the `bpy` module, SOP-11) |
 | A recording to a README or store GIF | Pillow | `python tools/art/frames_to_gif.py <frames> <out.gif>` |
 | AI pixel art: sprites, characters in 4 or 8 directions, animations, tilesets (paid, your token) | PixelLab API | `python tools/art/pixellab.py character --text "..." --size 64 --out <assets>/art/hero --log` (below) |
+| AI pixel art on your own GPU: concepts, style-matched NPCs, edits, rotations (free per image, big setup) | ComfyUI + SpriteKiln | Its own UI or HTTP API (below, "Generating pixel art locally") |
 | Third-party packs into the project, logged | stdlib | `python tools/fetch_asset.py --url <zip> --page <license page> ...` (SOP-04) |
 
 ## Rules
@@ -112,6 +113,50 @@ tilesets, effects, UI panels, fonts and props, and fixes existing pixel art. It 
   do not train AI models on the output. Stores ask about
   AI assets (SOP-04). Keep each prompt: `--log` does, and `docs/BRIEFS.md` holds the style fragments that keep a set
   consistent (E61 kept one running document of every art, sound and music prompt).
+
+## Generating pixel art locally (ComfyUI, opt-in, free per image)
+ComfyUI runs image models on your own NVIDIA GPU through a node graph; the SpriteKiln node pack adds about 30 pixel-art
+workflows (text, image or a style reference to pixel art, edit, inpaint, 4 or 8 direction rotation, walk sheets,
+animation, seamless tiles, wang16 and blob47 autotiles). No account and no per-image cost; you pay in setup time, disk
+and GPU minutes. One owner's setup and test (tip, E68):
+- **Hardware it ran on:** RTX 5060 Ti 16 GB, 64 GB RAM, Windows 11. RTX 50 cards need PyTorch built for CUDA 12.8 or
+  newer. Give ComfyUI its own Python environment (3.12 at the time; the newest Python was too new for PyTorch).
+- **Download only the tier you need** (sizes from that setup): core 38 GB (Z-Image Turbo, FLUX.2 klein 4B, BiRefNet
+  background removal, pixel-art LoRAs); best rotations 31 GB (Qwen-Image-Edit 2511 GGUF with a multi-angle LoRA);
+  animation 36 GB (Wan 2.2 image-to-video 14B GGUF); SDXL 8 GB (not worth it there). About 108 GB for everything.
+- **Results on that machine:**
+
+  | Job | Result |
+  |---|---|
+  | NPC or prop in the game's style (FLUX.2 klein 4B + pixel LoRA + an existing sprite as the style reference) | Best lane: about 14 s each at 72 px |
+  | 4 or 8 direction rotation, Qwen multi-angle | Keeps lopsided details (a fist on one arm): about 3 min for 4, 5 min for 8 |
+  | Rotation, klein | Fast, drops details |
+  | Walk sheet (klein + a 4-walk LoRA) | 32 px only, generic |
+  | Wan animation, seamless tile, autotile | Not yet run (the test was stopped by memory pressure) **(verify)** |
+
+  The owner judged the results below PixelLab's, so the split is: **local for concepts, variants and style references,
+  PixelLab for final sprites and animation** (the same cheapest-path-first idea as E61).
+- **One palette for both:** build a palette from the game's existing sprites and apply it in every local workflow
+  (SpriteKiln's palette node), so local and PixelLab art read as one game. Keep the palette in `docs/CONCEPTS.md`. Use
+  the 1x outputs; the enlarged previews are for looking.
+- **Treat custom nodes as untrusted code.** A node pack is Python that runs with your rights, often plus JavaScript in
+  the UI. Clone it into a separate quarantine folder with git hooks off, read it (network calls, `subprocess`, `eval`,
+  `torch.load` without `weights_only=True`, code that runs on import, auto `pip install`), then copy it in without
+  `.git` and write its commit and any local patches in a note beside it (PINNED.txt). Update by repeating the review, not with the
+  Manager's update button or the pack's own install script. That review found and patched a path escape in SpriteKiln's
+  part saver, and its bundled web UI server (webui/serve.py) strips the Origin header that ComfyUI's CSRF check needs: never run it (E68).
+- **Models: `.safetensors` or `.gguf` only** (pickle formats such as `.ckpt`, `.pt`, `.bin` can run code when loaded),
+  each pinned to a Hugging Face commit with its SHA-256 recorded.
+- **ComfyUI has no login.** Keep it on `127.0.0.1` (the default); `--listen` lets anyone who reaches the port run
+  workflows and install nodes.
+- **Licenses are per model; check each model card.** At the time: FLUX.2 klein 4B Apache-2.0; klein 9B non-commercial
+  (skip it for a game you might sell); SDXL base OpenRAIL++; Pixel Art XL CreativeML OpenRAIL-M; small LoRAs from
+  single uploaders vary **(verify each card)**. ComfyUI and SpriteKiln are GPL-3.0, ComfyUI-GGUF Apache-2.0,
+  ComfyUI_essentials and PixelArt-Detector MIT: licenses for the tools, not your images.
+- **Log every kept image** in `ASSET_LOG.md` (`/asset-intake`): "ComfyUI (local)", the workflow, base model, LoRAs with
+  their commits, seed and prompt, so it can be made again. Stores ask about AI assets (SOP-04).
+- **Scripting:** ComfyUI's HTTP API (`POST /prompt` with a workflow saved in API format, then `GET /history/<id>`). The
+  kit has no wrapper for it yet. Ask the owner before Claude starts a multi-gigabyte download or installs a node pack.
 
 ## Done when
 - Every shipped 2D asset has a source and a one-line command that recreates it.

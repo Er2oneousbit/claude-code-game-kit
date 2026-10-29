@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.6.0",
+  "kit_version": "0.6.1",
   "author": "the owner",
   "profile": {
     "author": "",
@@ -963,6 +963,18 @@
       "date": "2026-10-28",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.6.1",
+      "date": "2026-10-29",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.6.1",
+      "date": "2026-10-29",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -977,7 +989,7 @@
     ".claude/skills/end-session/SKILL.md": "1140a97cbba9b4372141ab11ad01fb04a58e763af924b627244f7f7de0724ad8",
     ".claude/skills/game-ai/SKILL.md": "fb9191e3d4cc04e5390e8f5e35fb5fd6421c4b468fef0e0f35ae4f875eb009ba",
     ".claude/skills/gdd-sync/SKILL.md": "9845e986afcbac5f4ea4083159c2a0d98ea6c93282218d6c1b80b584feb37892",
-    ".claude/skills/gen-brief/SKILL.md": "2364c4fdf3ca8f44b7fc812c5f659b566a3d7c5bc82b884c2c49b0f01e43e79d",
+    ".claude/skills/gen-brief/SKILL.md": "615b0d73b7ac1ea4f0bcf33260723b60395048e4af2e5e628d4688e4e26f2291",
     ".claude/skills/model-pipeline/SKILL.md": "28d299ddd7507f82f6ea19b03408b8f120144133b1b1237aa5fde04b55bc0da2",
     ".claude/skills/new-feature/SKILL.md": "0d47ce388eff6e435c2312533fee86a704896c78bd481b7bdcba27091f92f0d4",
     ".claude/skills/next-tier/SKILL.md": "ec1c103b73e9790a9a48735f1c88e2c2182c91e1fa73ac4771ae0d45e7da3d03",
@@ -1001,7 +1013,7 @@
     "docs/CONCEPTS.md": "d58ca9426877811564a704ca240d797d22877e8ee5aadd3d052c652bcc188e9a",
     "docs/ENGINE.md": "f69d8178030984d350bf8d92b1ff1e6e4305b0a273a6d07b2cca77d466d7a4df",
     "docs/ENGINE_FLOW.md": "0083e47711ec7ceb04f7ff822b44203afbd7e4f221365ca91d13260a091845a7",
-    "docs/EVIDENCE.md": "2a790b3a8eeda3e79af0f82e50002c66e6c358bbd56d96ff690e4080f2636880",
+    "docs/EVIDENCE.md": "f94867523cad7f13140c29d20f53d1a00748c2d5c7e520f9509d845990c231ce",
     "docs/FIRST_HOUR.md": "86acd90ae162e46bede9b2e49d97eb210946c9de9bd9f314d26da2a0f526a14b",
     "docs/GDD.md": "a9947bbe979f7e4e6d9971de4e6a893d3607e2fb9e0c97e2765f63e60edb3fd6",
     "docs/HANDOFF.md": "3124d0370759299ac022f9a08c1ddccfc85291b52be010fcffe1582dd4aa1945",
@@ -1015,7 +1027,7 @@
     "docs/adr/0000-template.md": "9dcc503b68b8ff7fbdefdd454b208bcbe944fe730dba9d7e23b8a0aaf8ad7b50",
     "docs/evidence/field-reports.md": "33ed0df3707b8589efb99a714924565e7fe65aaf58d1be07a6e4a18cf1302995",
     "docs/evidence/video-notes.md": "c1e5b04b398c5e74c1a0fe2a72ff0d5631643c28b1eeb16e552e56c1388527db",
-    "docs/resources/ai-tools.md": "c6cedc698a4869d13c825dbd5237e729961c384502663a8f33d0f0ffddbc4ba1",
+    "docs/resources/ai-tools.md": "8eea878a5de1917e06498f9a10d5160aad03d9067a507a06a5b67f6353a808f2",
     "docs/resources/art.md": "5ba95cf99d83f4139c2f4b949796ee772c3962b559780bac938b3f83746dca67",
     "docs/resources/audio.md": "18c7300e990be2fe8904c92ccc4c1998b5d66cbd77bf8e836442abac72acfb38",
     "docs/resources/learning-and-release.md": "8e08ccf6f94762135717225f46113807154511de562cffc87b209aa6908a8057",
@@ -1038,7 +1050,7 @@
     "docs/sop/SOP-13-publish-to-github.md": "0b3c430b934db860e96d1bbcc43edf6ed72ac93bb95ae39bb4e8e1f3508d5a56",
     "docs/sop/SOP-14-game-ai.md": "3ebe3c69c88fd758d97558d51d534a7a0b9a2f3dbff1892c805d748c3f0aac86",
     "docs/sop/SOP-15-ai-features.md": "d17cb35edaa0de3e42b9a5195d6538f9e9617b37dcdfd9c8c8d53682756ab817",
-    "docs/sop/SOP-16-2d-art-pipeline.md": "0f04fe8388b88e82479df174279af0d3544d60cb7eb666052d9479442d74194b",
+    "docs/sop/SOP-16-2d-art-pipeline.md": "a3b3daaba5a52122a22cf4d37944c16b6c2d7ae80fbb16434087117019b34248",
     "docs/sop/SOP-17-procedural-generation.md": "87d219e5ea42ccfd21917b7e31f538cd621d6c705a6cf38e881022588ef3a2d7",
     "index.html": "9c8f89c50bfa85ddf296bd10c51ef5957e4b7a27af45b86721e3d563a19845bf",
     "package.json": "87b6c333d0edaaa4c5d1c7a9202622b632875827eeac2f7bc0a28a8e017cf1a3",
@@ -1096,5 +1108,5 @@
     "vite.config.ts": "e6f8c2ba56f04abb7e31eb0eb3e3e0b8e320cb050f3f358b2038eb74dfa48d35",
     "vitest.config.ts": "221ab6b0aa6ba1232bf861799552dea0ae4536538004d72f4eb6a2f28d507634"
   },
-  "last_upgrade": "2026-10-28"
+  "last_upgrade": "2026-10-29"
 }

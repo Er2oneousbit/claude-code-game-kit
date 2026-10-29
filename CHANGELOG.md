@@ -3,6 +3,18 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.6.1 (2026-10-29): local pixel art with ComfyUI
+A documented second route for AI pixel art next to PixelLab: ComfyUI and the SpriteKiln node pack on your own GPU,
+free per image. Docs only; no new tool.
+- **SOP-16 "Generating pixel art locally":** hardware it ran on, model tiers and their sizes (core 38 GB, about 108 GB
+  for all), measured results per job, the split (local for concepts, variants and style references, PixelLab for final
+  sprites), one palette for both, the review routine for node packs (quarantine, pin, patch, no auto-update), models
+  only as `.safetensors`/`.gguf` pinned by hash, no `--listen`, per-model licenses, and what to log. New row in its tool
+  table.
+- **`resources/ai-tools.md`:** a ComfyUI + SpriteKiln row.
+- **`/gen-brief`:** offers a local ComfyUI first for concepts and variants when the owner runs one.
+- **Evidence:** E68, the owner's local setup and test (grade C: one machine; its timings and lessons are tips).
+
 ## 0.6.0 (2026-10-28): tiers that move, and a production phase
 The owner's report: in a game past its toy, Claude kept answering "that is not part of the vertical slice". Cause: the
 GDD's `Current tier:` line drives every scope check (SOP-08, SOP-01, `/new-feature`), and nothing ever moved it.
