@@ -27,10 +27,9 @@ examples were built and tested on one Windows 11 machine.
 - **`tools/art/chroma_key.py`:** tested on synthetic images, not on real AI sprites.
 
 - **`tools/art/dotwork/`:** model lanes ran on one machine only (RTX 5060 Ti 16 GB, 64 GB RAM, Windows 11), and only
-  Godot gets engine resources (`--engine none` gives PNGs, sheets and the manifest). Art flaws open until re-rendered:
-  character clips with white background slabs ([#22](../../issues/22)), the 8-direction vehicle set rotated one step
-  ([#23](../../issues/23)), direction drift in some clips ([#24](../../issues/24)), shadow flicker ([#25](../../issues/25)), light-grey contact
-  shadows ([#26](../../issues/26)), chest states drawn independently ([#27](../../issues/27)), enemy shadow slabs ([#28](../../issues/28)).
+  Godot gets engine resources (`--engine none` gives PNGs, sheets and the manifest). The model's in-between rotation
+  views stay approximate; back views and faceless designs cannot be checked for facing (`rot_swap` fixes a pair by
+  hand). The art flaws found in 0.7.0 review (#22 to #28) are fixed in 0.7.1.
 - **Godot builds include `assets_src/`** review sheets and sources ([#29](../../issues/29)).
 
 ### Low-severity audit findings left for 0.7.x
