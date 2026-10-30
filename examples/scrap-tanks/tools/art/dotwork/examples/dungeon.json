@@ -1,6 +1,9 @@
 {
  "name": "dungeon",
  "_comment": "Mine dungeon: gravel floor, rock wall face (cliff style), dark rock tops (walltop), mine-cart rails (connector drawn in code) and props placed by the map. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "design": {
+  "setting": "steampunk"
+ },
  "props": [
   {
    "name": "mine_cart",

@@ -66,7 +66,7 @@ def run(settings, a):
         print(row)
         print("\n".join(ev[:12]) + (f"\n... {len(ev) - 12} more lines" if len(ev) > 12 else ""))
         return 0
-    with open(log_path, "w", encoding="utf-8", newline="\n") as f:
+    with open(fcore.safe_dest(log_path), "w", encoding="utf-8", newline="\n") as f:
         f.write(text.replace(existing[0], row, 1) if existing else fetch_asset.add_log_row(text, row, fill))
     lic = os.path.join(settings.project, fetch_asset.LICENSE_DIR)
     os.makedirs(lic, exist_ok=True)

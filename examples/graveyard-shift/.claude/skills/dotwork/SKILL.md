@@ -1,6 +1,6 @@
 ---
 name: dotwork
-description: Make the game's pixel art on the owner's own GPU with Dotwork (tools/art/dotwork/, local AI through ComfyUI): characters with 4-direction animations, props with collision, terrain and maps from text, effects, enemies, battle backgrounds, icons, portraits, fonts and UI. Use when the GDD's art source is Dotwork, or the user says "Dotwork", "make pixel art locally", "generate sprites/tiles/effects on my GPU", or wants AI art without a paid service. Godot gets ready-made resources; other engines get PNGs, sheets and a manifest. Not for 3D (/model-pipeline) or paid services (/gen-brief).
+description: Make the game's pixel art on the user's own GPU with Dotwork (tools/art/dotwork/, local AI through ComfyUI): characters with 4-direction animations, props with collision, terrain and maps from text, effects, enemies, battle backgrounds, icons, portraits, fonts and UI. Use when the GDD's art source is Dotwork, or the user says "Dotwork", "make pixel art locally", "generate sprites/tiles/effects on my GPU", or wants AI art without a paid service. Godot gets ready-made resources; other engines get PNGs, sheets and a manifest. Not for 3D (/model-pipeline) or paid services (/gen-brief).
 ---
 
 # Dotwork: local pixel art
@@ -24,14 +24,15 @@ and its keys, limits) and SOP-16 "Generating pixel art locally" before the first
    save the game's spec as `assets_src/specs/<pack>.json`. Start small: one prop, one character, one tile set, then grow.
    Prompts describe the subject only; Dotwork adds the pixel-art wording. No named artists, franchises or real people.
 5. **Style references (optional).** For a set that reads as one game, list 3 or 4 of the game's own finished sprites
-   in `style_refs` (in dotwork.config.json under `art_src/dotwork/`, copied from `tools/art/dotwork/config.example.json`). Only sprites the owner has the rights to. A reference can
+   in `style_refs` (in dotwork.config.json under `art_src/dotwork/`, copied from `tools/art/dotwork/config.example.json`). Only sprites the user has the rights to. A reference can
    change the subject as well as the style: check every sprite made with one.
 6. **Say the cost in time before a long run.** About 16 s per sprite, 2 min per rotation, 2 min per animation clip,
    about 20 min for a character with three actions (one tested machine). Run big packs in the background.
 7. **Review before anything ships.** Open the review sheets under `assets_src/` and look at them yourself, then show
-   the owner. Typical faults: a character turning toward the camera, faces on back views, background left around a
+   the user. Typical faults: a character turning toward the camera, faces on back views, background left around a
    sprite, a tile edge repeating, a cropped figure. Fix one clip at a time (`character --fix CLIP:seed=N`), or render
-   takes side by side and pick one (`audition`, then `--promote`). Hand polish goes through `dotwork.py aseprite`.
+   takes side by side and pick one (`audition`, then `--promote`). Hand polish goes through `dotwork.py aseprite`; `dotwork.py clean` tidies pixel art from elsewhere (grid, palette,
+   stray pixels), and `recolor` makes palette-swapped variants without a render.
 8. **Prove it in the game.** `pack` ends with `verify` (every asset loads, then the game's smoke). On other engines,
    import the PNGs and sheets as `docs/ENGINE.md` says and run `python tools/dev.py smoke`.
 9. **Log it.** `python tools/art/dotwork/dotwork.py log --pack NAME --dry-run`, check the row, then run it without

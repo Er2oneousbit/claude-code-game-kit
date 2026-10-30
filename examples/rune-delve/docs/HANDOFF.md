@@ -18,7 +18,7 @@ Not yet played by a human.
 - 
 
 ## Current task
-- None. Next decision is the owner's: playtest by hand.
+- None. Next decision is the user's: playtest by hand.
 
 ## Next step (specific, first action)
 - `python tools/dev.py run`, press Play, three delves, then `/playtest-report`: is the 0.45 s ward window fair by eye?

@@ -26,8 +26,8 @@ not, how far they got). Asking for what happened before what they think keeps ob
    usernames). Rank by how many reports and +1s hit a pain point, then steps 5 and 6 above.
 4. **Guard the pillars while tuning.** If the game has automated play checks (bot runs, balance scenarios, pillar
    tests), run them before and after each change: a fix for one report must not break what the game is about. One
-   report is one player: a change from a single report is a proposal to the owner, not a done deal.
-5. **Close the loop.** Reply on the issue with what changed and what to try next (each reply needs the owner's yes:
+   report is one player: a change from a single report is a proposal to you, not a done deal.
+5. **Close the loop.** Reply on the issue with what changed and what to try next (each reply needs your yes:
    it is public). A commit that says `Fixes #12` closes the issue when it reaches the default branch.
 
 ## Telemetry (cheap version)

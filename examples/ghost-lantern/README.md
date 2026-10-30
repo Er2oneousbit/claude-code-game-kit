@@ -44,4 +44,4 @@ python tools/dev.py smoke --query autoplay=dark --until CAUGHT                 #
 - Game: copyright er2oneousbit, all rights reserved, free to read, run, study and reference (`../LICENSE.md`).
   Kit-provided files (`tools/`, `.claude/`, the docs templates) stay MIT (`../../LICENSE`).
 - Art: [Kenney](https://kenney.nl) (Tiny Dungeon), CC0. Details: `docs/ASSET_LOG.md`, `docs/licenses/`.
-- Sound effects and the haunted-house ambience: Created in collaboration with ElevenLabs (elevenlabs.io) (generated with the kit's `tools/audio/eleven_audio.py` on a free plan, so **non-commercial**: marked PLACEHOLDER in `docs/ASSET_LOG.md`, replace or regenerate on a paid plan before any commercial use). Earlier builds used Kenney Interface Sounds (CC0).
+- Sound effects and the haunted-house ambience: Created in collaboration with ElevenLabs (elevenlabs.io) (generated with the kit's `tools/audio/eleven_audio.py` under non-commercial terms, so **non-commercial**: marked PLACEHOLDER in `docs/ASSET_LOG.md`, replace or regenerate under a license that allows commercial use before any commercial use). Earlier builds used Kenney Interface Sounds (CC0).

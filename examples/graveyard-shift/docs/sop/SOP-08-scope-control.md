@@ -21,7 +21,7 @@ A tier line that never moves makes Claude reject work that is already in scope, 
 |---|---|---|---|
 | Toy | The toy row of the GDD | Parking lot | Anything beyond the core mechanic |
 | Vertical slice | `docs/VERTICAL_SLICE.md` | Parking lot | Anything the slice brief leaves out |
-| MVP / Release (production) | `docs/PRODUCTION.md` Backlog and milestones, the GDD Content list | Backlog, with a size (S, M, L); the owner decides which milestone, or Stretch | Only ideas outside the pillars, or in GDD "Out of scope" |
+| MVP / Release (production) | `docs/PRODUCTION.md` Backlog and milestones, the GDD Content list | Backlog, with a size (S, M, L); you decide which milestone, or Stretch | Only ideas outside the pillars, or in GDD "Out of scope" |
 
 Production keeps the fun loop: every milestone ends with a playtest, and a system that stops being fun goes "back to
 prototyping" (a toy again) while the rest of the game carries on.

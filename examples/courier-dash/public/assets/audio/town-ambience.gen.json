@@ -12,9 +12,7 @@
     "output_format": "pcm_44100"
   },
   "date": "2026-10-23",
-  "plan": "free (free)",
   "sha256": "520fb59acb596ccdcdb98e2abfedccd1b080192429053a744c54ca4af17bc490",
-  "license": "ElevenLabs free plan: non-commercial only",
-  "request_id": "d37b27b87e52039fe52912ab72d2d673",
-  "credits": "100"
+  "license": "ElevenLabs non-commercial terms: PLACEHOLDER",
+  "request_id": "d37b27b87e52039fe52912ab72d2d673"
 }

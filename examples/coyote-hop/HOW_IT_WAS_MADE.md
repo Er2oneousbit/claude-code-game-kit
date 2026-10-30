@@ -1,6 +1,6 @@
 # How Coyote Hop was made
 
-One Claude Code session (Claude Opus 5.5) on Windows 11, Godot 4.7.2, 2026-10-21, with the kit owner steering.
+One Claude Code session (Claude Opus 5.5) on Windows 11, Godot 4.7.2, 2026-10-21, with the user steering.
 This page is the honest log: the commands, the order, what the kit caught, and what came from outside the kit.
 
 ## Iteration timeline: how the game changed after it first worked
@@ -9,8 +9,8 @@ This page is the honest log: the commands, the order, what the kit caught, and w
 | 1 | 10-21 | Gray box first (sections 2 and 3) | Rectangles, then Kenney Pixel Platformer art and Kenney and SubspaceAudio sound, fetched with `fetch_asset.py` | Reachability test, autoplay bot 11/11 coins |
 | 2 | 10-21 | Hand-placed coins the bot could never reach | Coins moved onto the measured jump arc (section 5) | Bot collects 11/11 |
 | 3 | 10-22 | Exporting was untested in the kit | A shipped `export_presets.cfg`; `dev.py build` exports Windows, Linux and Web | The exported exe boots and the bot finishes in it |
-| 4 | 10-22 | Owner playtest: "the player icon is horrible, looks like an alien" (every hero on the Kenney sheet wears a space helmet) | Two CC0 candidates mocked up on the real tiles; the Sunny Land fox won (idle, run and jump frames) | Same 8.52 s run, 11/11 coins; new GIF and gallery image |
-| 5 | 10-22 | Owner: make audio, do not just fetch it | All effects and the music made with the kit's synth tools (`sfx_synth.py`, `chiptune.py`); the fetched audio left the project | FFT check of every sampled note against the song file; loops picked up by Godot; 24 GUT tests |
+| 4 | 10-22 | User playtest: "the player icon is horrible, looks like an alien" (every hero on the Kenney sheet wears a space helmet) | Two CC0 candidates mocked up on the real tiles; the Sunny Land fox won (idle, run and jump frames) | Same 8.52 s run, 11/11 coins; new GIF and gallery image |
+| 5 | 10-22 | User: make audio, do not just fetch it | All effects and the music made with the kit's synth tools (`sfx_synth.py`, `chiptune.py`); the fetched audio left the project | FFT check of every sampled note against the song file; loops picked up by Godot; 24 GUT tests |
 | 6 | 10-26 | A review that drove the real game tick by tick | Seven feel and flow bugs fixed (below, "Later: review fixes") | 14 new GUT tests (10 scene tests fail on the old code); 38 tests; bot unchanged at 8.52 s |
 
 The kit gained things from this game too: the fox swap became the "Later: a new hero" story, and the audio work became
@@ -20,7 +20,7 @@ The kit gained things from this game too: the fox swap became the "Later: a new 
 ```
 python scripts/new_game.py --name "Coyote Hop" --engine godot --dest ../coyote-hop
 ```
-It was first scaffolded with the kit owner's profile; the kit has since gone neutral, so the example now carries the default profile (no author footer). GUT 9.7.1 was copied into
+It was first scaffolded with an earlier profile; it now uses the neutral default (no author footer). GUT 9.7.1 was copied into
 `addons/gut/` (not committed, see `docs/ENGINE.md`) and `GODOT_BIN` pointed at the console build.
 
 ## 2. Design first (kit: `docs/GDD.md`, `docs/FIRST_HOUR.md`)

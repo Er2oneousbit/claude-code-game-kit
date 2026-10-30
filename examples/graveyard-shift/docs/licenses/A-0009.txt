@@ -1,8 +1,7 @@
-A-0009  music  generated 2026-10-22 in Suno's web app (Advanced mode), by the project owner
+A-0009  music  generated 2026-10-22 in Suno's web app (Advanced mode), by the user, by hand
 Service  : Suno (suno.com), web app; no API (none is official)
-Plan     : paid subscription at the time of generation
-License  : Suno paid plans grant commercial use for songs made while subscribed (verify Suno's current terms
-           before release; ownership wording changed in 2026 and is disputed)
+License  : Suno's terms (verify Suno's current terms before release; ownership wording changed in 2026 and is
+           disputed)
 Settings : title "Graveyard Shift - Night Theme", instrumental, duration 2:00, Max Mode off, weirdness about 25-30%,
            style influence about 70%, variety normal, personalize off; one generation gave two takes, A and B
 Style    : video game background music, cozy-spooky night level for a stealth game, music box and celesta lead, soft pizzicato strings, low cello drone, light glockenspiel, playful and a little eerie, never scary, 80 BPM, low energy, sparse, instrumental, steady loopable groove, no fade-out

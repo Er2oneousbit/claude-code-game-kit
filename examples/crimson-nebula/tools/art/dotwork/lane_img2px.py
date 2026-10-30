@@ -16,8 +16,8 @@ from PIL import Image
 import fcore as core
 import engine as lib  # noqa: E402
 
-PROMPT = ("pixel art sprite, detailed 16-bit era pixel art scene, crisp pixels, clean dark outlines, limited "
-          "palette, steampunk")
+PROMPT = ("pixel art sprite, detailed {style} pixel art scene, crisp pixels, clean dark outlines, limited "
+          "palette, {setting}")
 
 
 def run(entries, pack, man, conf):
@@ -32,7 +32,7 @@ def run(entries, pack, man, conf):
         dst = os.path.join(art, f"spr_{name}.png")
         # resume: the source image's content plus every setting that shapes the result
         req = core.key(core.sha256_file(sp)[:12] if os.path.exists(sp) else sp, e.get("box"), e.get("width", 96),
-                       e.get("prompt", PROMPT), seed, e.get("denoise", 0.3), core.palette_key(pal),
+                       (e.get("prompt") or core.prompt(PROMPT)), seed, e.get("denoise", 0.3), core.palette_key(pal),
                        e.get("max_colors", 48))
         if man.current(dst, req):
             core.log(f"img2px {name}: up to date")
@@ -51,13 +51,13 @@ def run(entries, pack, man, conf):
         fn = f"dotwork_img2px_{name}.png"
         core.ensure_comfy()
         fn = lib.put(init, fn)
-        out, sec = lib.run(lib.klein(e.get("prompt", PROMPT), seed, cw, ch, f"dotwork_work/img2px/{name}", init_fn=fn,
+        out, sec = lib.run(lib.klein((e.get("prompt") or core.prompt(PROMPT)), seed, cw, ch, f"dotwork_work/img2px/{name}", init_fn=fn,
                                      denoise=float(e.get("denoise", 0.3))))
         rgb = np.array(Image.open(out).convert("RGB"))
         arr = lib.sample(rgb, np.ones(rgb.shape[:2], bool), 8, 0, 8, 0, 0.5)[:h, :w]
         arr = lib.finish(arr, palette=pal, outline="", max_colors=int(e.get("max_colors", 48)))
         core.save_clean(Image.fromarray(arr).convert("RGB"), dst)
-        man.add(dst, "scene", prompt=e.get("prompt", PROMPT), seed=seed, routes=("klein",), request=req,
+        man.add(dst, "scene", prompt=(e.get("prompt") or core.prompt(PROMPT)), seed=seed, routes=("klein",), request=req,
                 workflow="Dotwork img2px (box down, 8x grid, klein img2img, grid sample)", size=[w, h],
                 denoise=float(e.get("denoise", 0.3)), source=f"assets_src/art/scenes/{name}_source.png")
         core.log(f"img2px {name}: {w}x{h} in {sec:.0f}s")

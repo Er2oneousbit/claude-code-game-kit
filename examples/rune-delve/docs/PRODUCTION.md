@@ -16,7 +16,7 @@ Each milestone ends with a playtest (`/playtest-report`). If a system stops bein
 
 ## Backlog
 Sizes: **S** (a session or less), **M** (a few sessions), **L** (split it before starting). Status: `todo`, `doing`,
-`done`, `cut`, `back to prototyping`. New ideas that serve a pillar land here with a size; the owner decides if they go
+`done`, `cut`, `back to prototyping`. New ideas that serve a pillar land here with a size; you decide if they go
 into a milestone. Ideas outside the pillars go to the ROADMAP Parking lot.
 | Item | Pillar | Size | Milestone | Status |
 |---|---|---|---|---|

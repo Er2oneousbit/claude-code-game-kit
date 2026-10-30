@@ -1,6 +1,9 @@
 {
  "name": "spells",
  "_comment": "Battle effects for additive blending: two one-shot spells and a big summon blast. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "design": {
+  "setting": "steampunk"
+ },
  "effects": [
   {
    "name": "fire",

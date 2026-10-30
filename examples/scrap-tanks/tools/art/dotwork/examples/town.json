@@ -1,6 +1,9 @@
 {
  "name": "town",
  "_comment": "Town street: grass base, dirt and raised cobble overlays, brick / timber / stone facades and clay / slate / copper roofs (blob structure styles), doors, windows, a chimney and a bracket sign as fixtures, all painted into one map. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "design": {
+  "setting": "steampunk"
+ },
  "ground": {
   "name": "street",
   "base": [

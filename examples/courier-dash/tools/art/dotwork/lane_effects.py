@@ -24,7 +24,7 @@ import spritekiln
 import engine as lib  # noqa: E402
 
 VFX_TPL = ("pixel art sprite, pixel art game visual effect: {s}, bright glowing energy, crisp pixel clusters, "
-           "16-bit era style, centered")
+           "{style} style, centered")
 NEG = "face, eyes, mouth, smile, character, creature, person, cartoon mascot, text, letters, blurry, watermark"
 BAYER = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]) / 16
 
@@ -60,13 +60,13 @@ def make(e, work, conf):
     name = core.snake(e["name"])
     # cache key = name + seed: packs that share an effect name but want a different take must not reuse a clip
     d = os.path.join(work, f"{name}_s{int(e.get('seed', 777))}" + (f"_{e['size']}" if e.get("size") else "")
-                     + "_" + core.key(e.get("subject"), e.get("motion")))
+                     + "_" + core.key(core.prompt(VFX_TPL, s=e.get("subject")), e.get("motion")))
     os.makedirs(d, exist_ok=True)
     first = os.path.join(d, "first.png")
     size = int(e.get("size", conf["design"]["effect"]["size"]))  # per effect: big summon blasts, small sparks
     if not os.path.exists(first):
         core.ensure_comfy()
-        o = lib.sprite(VFX_TPL.format(s=e["subject"]), int(e.get("seed", 777)), f"dotwork/fx/{name}", fig=size - 4,
+        o = lib.sprite(core.prompt(VFX_TPL, s=e["subject"]), int(e.get("seed", 777)), f"dotwork/fx/{name}", fig=size - 4,
                        canvas=size, baseline=size - 2, fit="longest", bg="black", palette=None, colors=16,
                        outline="", max_colors=0)
         shutil.copyfile(o["path"], first)

@@ -18,11 +18,19 @@ PEERS8 = ("top_side", "top_right_corner", "right_side", "bottom_right_corner", "
 ENABLED = True   # dotwork.py sets False for --engine none: PNGs, sheets and JSON still ship
 
 
+def q(s):
+    """A Godot text-resource string literal: quotes, backslashes and line breaks escaped, so a spec value (a terrain
+    name, a surface tag) cannot break or inject into the .tres (2026-10-30 Kimi audit)."""
+    s = str(s).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
+    return f'"{s}"'
+
+
 def _write(path, text):
     if not ENABLED:
         return None
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
+    import fcore
+    with open(fcore.safe_dest(path), "w", encoding="utf-8", newline="\n") as f:
         f.write(text)
     return path
 
@@ -79,14 +87,14 @@ def tileset(path, atlas_res, tile_px, cols, tiles, terrains, mode="match_corners
         for bit, tid in zip(CORNERS, t["corners"]):
             lines.append(f"{k}/terrains_peering_bit/{bit} = {tid}")
         if custom and t.get("custom") is not None:
-            lines.append(f'{k}/custom_data_0 = "{t["custom"]}"')
+            lines.append(f'{k}/custom_data_0 = {q(t["custom"])}')
     lines += ["", "[resource]", f"tile_size = Vector2i({tile_px}, {tile_px})",
               f"terrain_set_0/mode = {MODE[mode]}"]
     for i, (name, (r, g, b)) in enumerate(terrains):
-        lines.append(f'terrain_set_0/terrain_{i}/name = "{name}"')
+        lines.append(f'terrain_set_0/terrain_{i}/name = {q(name)}')
         lines.append(f"terrain_set_0/terrain_{i}/color = Color({r / 255:.3f}, {g / 255:.3f}, {b / 255:.3f}, 1)")
     if custom:
-        lines += [f'custom_data_layer_0/name = "{custom}"', "custom_data_layer_0/type = 4"]  # TYPE_STRING
+        lines += [f'custom_data_layer_0/name = {q(custom)}', "custom_data_layer_0/type = 4"]  # TYPE_STRING
     lines.append('sources/0 = SubResource("TileSetAtlasSource_1")')
     return _write(path, "\n".join(lines) + "\n")
 
@@ -170,7 +178,7 @@ def tileset_layers(path, tile_px, sources, terrains, custom=None, physics=False,
                 for bit, tid in bits:
                     lines.append(f"{k}/terrains_peering_bit/{bit} = {tid}")
             if custom and t.get("custom") is not None:
-                lines.append(f'{k}/custom_data_0 = "{t["custom"]}"')
+                lines.append(f'{k}/custom_data_0 = {q(t["custom"])}')
             if physics:
                 polys = [_quad(h, ci) for ci in t.get("solid") or []]
                 polys += [f"PackedVector2Array({x0}, {y0}, {x1}, {y0}, {x1}, {y1}, {x0}, {y1})"
@@ -183,10 +191,10 @@ def tileset_layers(path, tile_px, sources, terrains, custom=None, physics=False,
         lines += ["physics_layer_0/collision_layer = 1", "physics_layer_0/collision_mask = 1"]
     lines.append(f"terrain_set_0/mode = {MODE[mode]}")
     for i, (name, (r, g, b)) in enumerate(terrains):
-        lines.append(f'terrain_set_0/terrain_{i}/name = "{name}"')
+        lines.append(f'terrain_set_0/terrain_{i}/name = {q(name)}')
         lines.append(f"terrain_set_0/terrain_{i}/color = Color({r / 255:.3f}, {g / 255:.3f}, {b / 255:.3f}, 1)")
     if custom:
-        lines += [f'custom_data_layer_0/name = "{custom}"', "custom_data_layer_0/type = 4"]  # TYPE_STRING
+        lines += [f'custom_data_layer_0/name = {q(custom)}', "custom_data_layer_0/type = 4"]  # TYPE_STRING
     for i in range(n):
         lines.append(f'sources/{i} = SubResource("TileSetAtlasSource_{i + 1}")')
     if overlays:  # verify paints these terrain ids on an empty layer (overlay test) instead of the pair test

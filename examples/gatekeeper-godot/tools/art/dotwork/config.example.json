@@ -23,6 +23,10 @@
  "style_refs": [],
  "min_free_ram_gb": 18,
  "design": {
+  "_comment_style": "art direction for every built-in prompt: style = the art era, genre = the game type, setting = the world (empty: none assumed). Set them per game, e.g. \"setting\": \"steampunk\" or \"cozy farm village\" or \"neon cyberpunk city\"",
+  "style": "16-bit era",
+  "genre": "RPG",
+  "setting": "",
   "character": {
    "directions": [
     "s",

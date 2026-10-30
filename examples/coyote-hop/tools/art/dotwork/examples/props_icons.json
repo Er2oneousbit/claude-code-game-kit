@@ -1,6 +1,9 @@
 {
  "name": "props_icons",
  "_comment": "Single sprites: props with collision scenes, icons at 16 and 32 px, a menu portrait. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "design": {
+  "setting": "steampunk"
+ },
  "props": [
   {
    "name": "gas_lamp",

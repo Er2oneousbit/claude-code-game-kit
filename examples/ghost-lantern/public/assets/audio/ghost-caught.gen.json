@@ -11,9 +11,7 @@
     "output_format": "mp3_44100_128"
   },
   "date": "2026-10-23",
-  "plan": "free (free)",
   "sha256": "0d9bdd2d58317c01944359d22ca203a62431666e7d03ea75c7ad08a6dff65800",
-  "license": "ElevenLabs free plan: non-commercial only",
-  "request_id": "968e97dfdbab837d1e2c6a9d2616f523",
-  "credits": "15"
+  "license": "ElevenLabs non-commercial terms: PLACEHOLDER",
+  "request_id": "968e97dfdbab837d1e2c6a9d2616f523"
 }

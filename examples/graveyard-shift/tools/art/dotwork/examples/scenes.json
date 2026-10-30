@@ -1,6 +1,9 @@
 {
  "name": "scenes",
  "_comment": "Full-screen backdrops: title, game over and a cutscene still (320x180 shown at 2x). Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "design": {
+  "setting": "steampunk"
+ },
  "scenes": [
   {
    "name": "title",

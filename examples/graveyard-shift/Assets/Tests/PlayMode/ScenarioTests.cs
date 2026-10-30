@@ -8,7 +8,7 @@
 //           to darkness, and the always-lit keeper must be caught far more (pillar 1). The trio plays at Easy (the
 //           loops' ghosts, no extras): the bots see in meters, not pixels, so the darkness that Normal and up add costs
 //           them nothing, while their extra ghosts cost the lantern-user most. Smoke_N logs the careful and dark bots at
-//           Normal without judging them (owner's call, 2026-10-23, after a Kimi audit fix moved the extras apart).
+//           Normal without judging them (the user's call, 2026-10-23, after a Kimi audit fix moved the extras apart).
 //           Smoke_E checks the generator's walk grid against the real NavMesh; Smoke_J shows a yard from above.
 // Usage   : python tools/dev.py smoke                                      (all Smoke tests, headless)
 //           GRAVEYARD_SEEDS=6 python tools/dev.py smoke --filter Smoke_C --record Logs/frames   (a GIF)
@@ -129,7 +129,7 @@ namespace graveyard_shift.Tests
         // litCaughtMost: also assert the always-lit keeper is caught far more than the others (true on the hand-made
         // yard; on generated nights it fails by stalling instead, so there it is logged, not asserted).
         // darkAsserted: careful must not lose to always-dark. The bots see ghosts in the dark, so this is the comparison
-        // they are blind to: asserted on the hand-made yard, logged on generated nights (owner's call, 2026-10-23).
+        // they are blind to: asserted on the hand-made yard, logged on generated nights (the user's call, 2026-10-23).
         private static void TheLanternIsAChoice(bool generated, int minGap, bool litCaughtMost, bool darkAsserted)
         {
             string lk = Key(generated, BotMode.AlwaysLit), dk = Key(generated, BotMode.AlwaysDark), ck = Key(generated, BotMode.Careful);

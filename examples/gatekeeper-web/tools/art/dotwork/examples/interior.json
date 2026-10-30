@@ -1,6 +1,9 @@
 {
  "name": "interior",
  "_comment": "House interior: floor base, wall tops (walltop style), the north wall face (wallface style), black void outside the room (legend 'none'), furniture fixtures seen from the top and wall pieces seen from the front. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "design": {
+  "setting": "steampunk"
+ },
  "ground": {
   "name": "inn",
   "base": [

@@ -1,6 +1,9 @@
 {
  "name": "cliffs",
  "_comment": "Elevation: a plateau = a raised grass overlay on top of a cliff-face overlay, with stairs as a fixture. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "design": {
+  "setting": "steampunk"
+ },
  "ground": {
   "name": "highland",
   "base": [

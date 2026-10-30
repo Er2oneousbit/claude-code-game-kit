@@ -2,7 +2,7 @@
 
 The kit's Bevy example, built the same day the Bevy overlay was, to put the overlay through a real game. One Claude Code
 session (Claude Opus 5.5) on Windows 11 with Rust 1.99.1 and Bevy 0.20.0, 2026-10-28. A player asked for Bevy support
-after the kit's first public release; the owner asked for a racing game with it, and answered the kit's `make-a-game`
+after the kit's first public release; the user asked for a racing game with it, and answered the kit's `make-a-game`
 interview one question at a time. Claude did the rest by following the kit's documents and tools, and recorded every
 place the kit fell short. Each gap was fixed **in the kit** during the run and pulled into the game with
 `new_game.py --upgrade`, the same way any kit user gets updates.
@@ -12,15 +12,15 @@ Allowed: what a kit user has after scaffolding (docs, SOPs, skills, `tools/`, th
 sources the kit's resource lists name. Not allowed: outside scripts or tools. Exceptions are listed at the end.
 
 ## 1. Interview and plan (`make-a-game`)
-The owner's answers, one prompt each: a kart racer with items, feels most like Mario Kart, the twist is that **the track
+The user's answers, one prompt each: a kart racer with items, feels most like Mario Kart, the twist is that **the track
 changes each lap**, the core action is reading the track, the hook is unlocks, only 1st place unlocks, a 3D chase
 camera, neon night, "me and friends; frantic", solo against AI first, the first toy is "track changes plus one item
 (boost)", split-screen and online out of scope. Claude drafted the plan (three pillars: read the change, close and loud,
-neon tells you everything), the owner said "Looks good, build it", and chose to make it kit example #10.
+neon tells you everything), the user said "Looks good, build it", and chose to make it kit example #10.
 
 ## 2. Scaffold and health check (FIRST_HOUR 0 to 5 min)
 ```
-python scripts/new_game.py --name "Project_Crimson_Nebula" --engine bevy --dest D:/kt/crimson --git-init
+python scripts/new_game.py --name "Project_Crimson_Nebula" --engine bevy --dest ../crimson-nebula --git-init
 python tools/dev.py doctor
 ```
 A short path on purpose (cargo and MSVC are happier there), and `CARGO_TARGET_DIR` shared with the overlay's own test

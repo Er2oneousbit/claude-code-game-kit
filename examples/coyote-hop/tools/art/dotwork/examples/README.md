@@ -13,21 +13,26 @@ change a seed to get a different take.
 
 | Example | Shows | Model tiers |
 |---|---|---|
-| `ui.json` | glyph-tool fonts (dialogue, damage numbers, brass and steel titles, symbols), window skins, emote balloons, hit spark / slash / damage-flash shader | none |
+| `ui.json` | glyph-tool fonts (dialogue, damage numbers, brass and steel titles, symbols), window skins, HUD widgets (gauges, button states, panel, a Theme), emote balloons, hit spark / slash / damage-flash shader | none |
+| `status.json` | status-effect loops: poison, sleep, haste, slow, stop, blind, regen, berserk, confuse, silence, doom, burn, freeze, protect, shell, petrify | none |
+| `screen.json` | screen transitions (battle swirl, fade, iris, diamond, wipe, blinds, dither, clock, blocks, mosaic) and weather (rain, snow, fog, ash, embers, leaves, sandstorm) | none |
 | `town.json` | grass, dirt, raised cobble; brick / timber / stone facades; clay / slate / copper roofs; doors, windows, chimney, sign; one painted street map | sprites |
 | `interior.json` | floor, wall tops, north wall face, black void, furniture fixtures | sprites |
 | `dungeon.json` | mine floor, rock walls (cliff style), rock tops, rails, props placed by the map | sprites |
 | `cliffs.json` | a raised plateau over a cliff face, stairs, hedges | sprites |
 | `connectors.json` | fences, iron railings, steam pipes, rail tracks (drawn in code) | sprites |
+| `platformer.json` | side-view platformer tiles (grass over dirt, a mine set), one-way ledges, a parallax background | sprites |
+| `iso.json` | isometric floors (3 materials) and a wall block, projected from the ground textures | sprites |
 | `water.json` | animated shallow / deep water and sludge, sand shore, a prebuilt building | sprites |
 | `overworld.json` | world-map terrains and location icons | sprites |
 | `props_icons.json` | props with collision scenes, icons at 16 and 32 px, a portrait | sprites |
-| `battle.json` | a battle background, a regular enemy and a boss | sprites |
+| `battle.json` | a battle background, a regular enemy, two palette swaps of it and a boss | sprites |
 | `scenes.json` | title, game over and cutscene backdrops | sprites |
-| `interactables.json` | chest, door, lever, save point; an 8-direction airship | sprites, rotate |
+| `interactables.json` | chest, door, lever, save point; ambient loops (torch, banner, smokestack, gear, fern); an 8-direction airship | sprites, rotate |
 | `spells.json` | two spells and a summon blast (additive) | sprites, animate |
 | `mount.json` | a rideable walker, idle + walk in 4 directions | sprites, rotate, animate |
-| `party_member.json` | a party member: 4-direction idle and walk, attack, the battle pose set, a portrait | sprites, rotate, animate |
+| `npcs.json` | two townsfolk (walk clips, code-drawn idles) and three palette variants of them (no render) | sprites, rotate, animate |
+| `party_member.json` | a party member: 4-direction idle and walk, attack, the battle pose set, a portrait with five expressions and talking frames | sprites, rotate, animate |
 | `tools.json` | instruction edits, an inpaint and a normal map on one of your sprites | sprites |
 | `img2px.json` | concept art or a photo to pixel art at a set width | sprites |
 

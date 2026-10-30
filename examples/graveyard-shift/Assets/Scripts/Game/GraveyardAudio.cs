@@ -44,7 +44,7 @@ namespace graveyard_shift.Game
         private const float GhostFade = 1.5f;         // volume per second when a ghost changes state
         private const float StrideLit = 1.4f;         // m between footsteps, lantern lit (fast, long strides)
         private const float StrideDark = 0.9f;        // m between footsteps in the dark (creeping)
-        private const float StepLit = 0.22f;          // footstep volume (halved after the owner's mix check: "too loud")
+        private const float StepLit = 0.22f;          // footstep volume (halved after the user's mix check: "too loud")
         private const float StepDark = 0.1f;
         private const float StepPitch = 0.06f;        // +- pitch per step, so steps do not sound like a loop
         private const float Teleport = 2f;            // m in one frame: a respawn, not a walk (no burst of steps)

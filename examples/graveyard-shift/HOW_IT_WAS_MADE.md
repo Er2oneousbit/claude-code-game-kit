@@ -1,37 +1,37 @@
 # How Graveyard Shift was made
 
 The kit's Unity 3D example, and its fourth "only what is in the kit" run (after ghost-lantern, courier-dash and
-scrap-tanks). One Claude Code session (Claude Opus 5.5) on Windows 11 with Unity 6000.6.6f1, 2026-10-21. The owner picked
+scrap-tanks). One Claude Code session (Claude Opus 5.5) on Windows 11 with Unity 6000.6.6f1, 2026-10-21. The user picked
 the concept; Claude did the rest by following the kit's documents and tools, without opening the Unity editor's UI, and
 recorded every place the kit fell short. Each gap was fixed **in the kit** and pulled in with `new_game.py --upgrade`.
 
 ## Iteration timeline: how the game changed after it first worked
 The first build (sections 1 to 8) ended with a playable night and silent-ish Kenney interface sounds. Everything after
-that came from the owner listening, playing and reacting, one change at a time. Each row: what prompted it (the owner's
+that came from the user listening, playing and reacting, one change at a time. Each row: what prompted it (the user's
 words, or a check that failed), what changed, and what proved it. Details in the "Later" sections further down.
 
 | # | Day | Prompted by | What changed | Proof |
 |---|---|---|---|---|
 | 1 | 10-21 | The bot trio refuted the lantern pillar | Ghost sight and speeds redesigned until careful play beats always-dark and always-lit (section 6) | Trio over 8 seeds, 34 EditMode tests |
-| 2 | 10-22 | Owner: try generated audio, each example a different way | 5 Kenney effects replaced and a night ambience added with ElevenLabs (free plan, so non-commercial: PLACEHOLDER) | 275 credits; the ambience came back at -60 dBFS and was normalized; 3 bugs in the new tool found live and fixed |
-| 3 | 10-22 | No music at all | A Suno brief written; the owner made the music in Suno's web app | First try: "not very video gamey" (the generic template had been pasted); the fixed brief got "cute creepy" |
-| 4 | 10-22 | Suno does not make loops | Both takes kept and looped where each best matches its opening (spectral similarity), crossfaded, OGG, alternating per night, streamed | Exact length after encoding, seam smaller than an ordinary sample step; owner on the phone: "I can't even tell there is a loop" |
-| 5 | 10-22 | Owner: use the free credits on the game | Soul whispers (find souls by ear), ghost moans by state, footsteps by stride, lantern crackle; the listener moved from the camera to the keeper | 40 EditMode tests; 3 sounds too quiet, normalized |
-| 6 | 10-22 | Owner: voice for the game | Ghost whispers (Fish Audio) when they notice and catch you; a dawn chorus | 41 tests |
-| 7 | 10-22 | Owner: "what is the dawn chorus for if we have the Suno music?" | It got a job instead of being cut: the owner's design of the ending, dawn first, then a screen fade to the end card with its music (`EndSequence`) | The timeline is a pure function with EditMode tests (42) |
-| 8 | 10-22 | Owner: narrator, keeper and more ghost lines | A cast of 29 lines on one shared voice channel that queues instead of talking over | 43 tests; a voice reel sent to the phone |
-| 9 | 10-22 | Owner after the reel: "voices are no good, but keep them for now" | Kept as scaffolding, every voice row marked PLACEHOLDER so the release check flags them | Asset log |
-| 10 | 10-22 | A 30 s mix rendered at the game's real volumes, on the phone | Owner: "walking is too loud": footsteps halved (about 6 dB) | Re-rendered mix: "better" |
-| 11 | 10-22 to 23 | Owner: "is each night a new graveyard?" (it was not) | Generated nights: night 0 is the hand-made yard, every later night a new yard from a seed on the HUD; the kit gained `/procgen` and SOP-17 from it | 250 seeds pass every invariant; 8 generated nights with the bot trio: careful escapes 7, always lit 0; eight things caught on the way ("Later: a new graveyard every night") |
-| 12 | 10-23 | Owner, playing the build: "lol if you go out the gate you fall forever" | Invisible blockers on the wall line at the gate and the south corners (holes since the first build), a fall safety net, and `Smoke_K` that walks the keeper into every gap | Reproduced first (6 of 6 pushes fell), then 10 of 10 stay inside; the trio's escapes unchanged |
-| 13 | 10-23 | Owner: "4 times the size, it's too easy", roofs and doors, an actual gate; then: not square, grass and trees outside, a title screen with Easy to Insane, two more ghosts a step | Irregular 4x yards, buildings with roofs and doors, a swinging iron gate, the world outside the wall, difficulties, 12 souls and a 300 s night ("Later: four times the yard") | 87 tests; the trio at Normal: careful escapes 5 of 8 generated nights, always lit 0; eight things caught on the way |
-| 14 | 10-23 | The owner's first playtest of the build: the title text was clipped and the window small; the narrator spoke over the title; the difficulties all looked the same; lantern out, the legs froze; the lantern was not in his hands; caught with every soul, the gate stayed open, and outside it he fell | Six fixes, each found in the code or the player's own log before changing anything ("Later: the first playtest of the big yards") | 89 tests, 14 smoke; brightness away from the lantern measured from the built player at each difficulty: 53 to 0.9 instead of 60 to 46 |
-| 15 | 10-23 | The owner: "anything we can have Kimi do?" (Kimi K3.1 had just shipped) | A read-only Kimi audit of this game: 10 findings, 9 confirmed, all fixed ("Later: a second opinion"); the trio's lantern tests moved to Easy | 101 tests, 15 smoke; careful 104 = dark 104 on the hand-made yard at Easy |
+| 2 | 10-22 | User: try generated audio, each example a different way | 5 Kenney effects replaced and a night ambience added with ElevenLabs (non-commercial terms: PLACEHOLDER) | The ambience came back at -60 dBFS and was normalized; 3 bugs in the new tool found live and fixed |
+| 3 | 10-22 | No music at all | A Suno brief written; the user made the music in Suno's web app | First try: "not very video gamey" (the generic template had been pasted); the fixed brief got "cute creepy" |
+| 4 | 10-22 | Suno does not make loops | Both takes kept and looped where each best matches its opening (spectral similarity), crossfaded, OGG, alternating per night, streamed | Exact length after encoding, seam smaller than an ordinary sample step; the user on the phone: "I can't even tell there is a loop" |
+| 5 | 10-22 | User: use the free credits on the game | Soul whispers (find souls by ear), ghost moans by state, footsteps by stride, lantern crackle; the listener moved from the camera to the keeper | 40 EditMode tests; 3 sounds too quiet, normalized |
+| 6 | 10-22 | User: voice for the game | Ghost whispers (Fish Audio) when they notice and catch you; a dawn chorus | 41 tests |
+| 7 | 10-22 | User: "what is the dawn chorus for if we have the Suno music?" | It got a job instead of being cut: the user's design of the ending, dawn first, then a screen fade to the end card with its music (`EndSequence`) | The timeline is a pure function with EditMode tests (42) |
+| 8 | 10-22 | User: narrator, keeper and more ghost lines | A cast of 29 lines on one shared voice channel that queues instead of talking over | 43 tests; a voice reel sent to the user for a listen |
+| 9 | 10-22 | User after the reel: "voices are no good, but keep them for now" | Kept as scaffolding, every voice row marked PLACEHOLDER so the release check flags them | Asset log |
+| 10 | 10-22 | A 30 s mix rendered at the game's real volumes, for a listen | User: "walking is too loud": footsteps halved (about 6 dB) | Re-rendered mix: "better" |
+| 11 | 10-22 to 23 | User: "is each night a new graveyard?" (it was not) | Generated nights: night 0 is the hand-made yard, every later night a new yard from a seed on the HUD; the kit gained `/procgen` and SOP-17 from it | 250 seeds pass every invariant; 8 generated nights with the bot trio: careful escapes 7, always lit 0; eight things caught on the way ("Later: a new graveyard every night") |
+| 12 | 10-23 | User, playing the build: "lol if you go out the gate you fall forever" | Invisible blockers on the wall line at the gate and the south corners (holes since the first build), a fall safety net, and `Smoke_K` that walks the keeper into every gap | Reproduced first (6 of 6 pushes fell), then 10 of 10 stay inside; the trio's escapes unchanged |
+| 13 | 10-23 | User: "4 times the size, it's too easy", roofs and doors, an actual gate; then: not square, grass and trees outside, a title screen with Easy to Insane, two more ghosts a step | Irregular 4x yards, buildings with roofs and doors, a swinging iron gate, the world outside the wall, difficulties, 12 souls and a 300 s night ("Later: four times the yard") | 87 tests; the trio at Normal: careful escapes 5 of 8 generated nights, always lit 0; eight things caught on the way |
+| 14 | 10-23 | The user's first playtest of the build: the title text was clipped and the window small; the narrator spoke over the title; the difficulties all looked the same; lantern out, the legs froze; the lantern was not in his hands; caught with every soul, the gate stayed open, and outside it he fell | Six fixes, each found in the code or the player's own log before changing anything ("Later: the first playtest of the big yards") | 89 tests, 14 smoke; brightness away from the lantern measured from the built player at each difficulty: 53 to 0.9 instead of 60 to 46 |
+| 15 | 10-23 | The user: "anything we can have Kimi do?" (Kimi K3.1 had just shipped) | A read-only Kimi audit of this game: 10 findings, 9 confirmed, all fixed ("Later: a second opinion"); the trio's lantern tests moved to Easy | 101 tests, 15 smoke; careful 104 = dark 104 on the hand-made yard at Easy |
 | 16 | 10-26 | A review (Fable) that proved ten bugs with tests in a scratch copy | All ten fixed, plus one the fixes exposed ("Later: review fixes") | 112 tests, 20 smoke; careful still escapes far more than always-lit on both kinds of night |
 | next | | The Suno win music and loss stings | Slots ready (`win_music_a/b`, `loss_sting_a/b`), silent until the files arrive | |
 
 What the timeline shows: the plan never said "add a narrator" or "the dawn chorus opens the ending". Those came from a
-person hearing the game and saying what was wrong. Rendering audio to the owner's phone made that loop minutes long
+person hearing the game and saying what was wrong. Rendering audio files for the user to play made that loop minutes long
 instead of "open Unity, play a night".
 
 ## The rule
@@ -42,8 +42,8 @@ Exceptions are listed at the end.
 ## 1. Create, adopt, verify (FIRST_HOUR)
 Unity is adopt-first (`docs/ENGINE.md`): make the Unity project, then lay the kit over it.
 ```
-"<Unity.exe>" -batchmode -nographics -createProject D:/kt/gy -quit
-python scripts/new_game.py --name "Graveyard Shift" --engine unity --dest D:/kt/gy --adopt
+"<Unity.exe>" -batchmode -nographics -createProject ../graveyard-shift -quit
+python scripts/new_game.py --name "Graveyard Shift" --engine unity --dest ../graveyard-shift --adopt
 python tools/dev.py doctor && python tools/dev.py check && python tools/dev.py test
 ```
 The skeleton's boot smoke test said, correctly, that there was no scene yet. Making one meant the editor UI, which this
@@ -53,7 +53,7 @@ method in batchmode, and the skeleton's `Assets/Editor/GameKitScenes.cs` has `Cr
 `AddToBuildSettings`, so scenes can come from code. This game's `SceneBuilder.Build` uses both.
 
 ## 2. Concept and GDD
-Claude offered three Unity concepts, each built on Unity parts no example had used; the owner picked "Graveyard Shift"
+Claude offered three Unity concepts, each built on Unity parts no example had used; the user picked "Graveyard Shift"
 (NavMesh agents, 3D third person, a versioned save). The GDD got three pillars: **light is a choice**, **read the
 ghosts**, **one more night**.
 
@@ -150,8 +150,7 @@ python tools/audio/eleven_audio.py sfx --text "quiet graveyard at night, soft wi
 python tools/audio/wavfile.py normalize Assets/Audio/night_ambience.wav --peak -3
 python tools/dev.py exec SceneBuilder.Build
 ```
-- Cost: about 10 credits per second of sound, 275 credits in all (the tool prints each request's cost).
-- `--log` wrote six ASSET_LOG rows and evidence files with the prompt, model, plan and SHA-256. On a free plan the
+- `--log` wrote six ASSET_LOG rows and evidence files with the prompt, model and SHA-256. Under non-commercial terms the
   output is non-commercial and needs credit, so every row says PLACEHOLDER: `/release-check` will flag them.
 - Nobody on the AI side can hear, so the files were measured: the effects peak between 0 and -9 dBFS, but the
   ambience came back at -60 dBFS RMS (inaudible in game), so it was normalized (+39 dB, logged as Modified). Its
@@ -164,7 +163,7 @@ python tools/dev.py exec SceneBuilder.Build
   `AudioSetupTests` checks the wiring.
 
 ### Later: sounds that follow the game (more ElevenLabs credits)
-Four more generated sounds, 215 free-plan credits, wired by `Assets/Scripts/Game/GraveyardAudio.cs`:
+Four more generated sounds, wired by `Assets/Scripts/Game/GraveyardAudio.cs`:
 - **Soul whisper** (6 s loop, 3D): every uncollected soul hums where it floats, full volume within 1.5 m, silent past
   11 m, so a soul in the dark can be found by ear. Collecting a soul switches it off, which silences it.
 - **Ghost presence** (8 s loop, 3D): each ghost moans, fading between three volumes by state (patrol, wary, hunting),
@@ -187,12 +186,12 @@ Four more generated sounds, 215 free-plan credits, wired by `Assets/Scripts/Game
   moon, fog and sky blend to sunrise for 3.5 s; then the screen darkens and the end card shows with the loss sting.
   An escape holds 0.8 s on the gate instead. The timeline is a pure function of time, tested in EditMode (42 tests);
   the Suno win and loss tracks plug in by name (`win_music_a/b`, `loss_sting_a/b`) and stay silent until added.
-- The design came from the owner mid-build ("start with the dawn for a few seconds... then fade to the win or loss");
+- The design came from the user mid-build ("start with the dawn for a few seconds... then fade to the win or loss");
   the dawn chorus had been added before asking, and nearly went: the question "what is it for, if we have the Suno
   music?" was fair, and the answer was to give it a job (showing it is dawn) instead of doubling the sting.
 
 ### Later: a voice cast (Fish Audio)
-The owner wanted more voice than the ghost whispers, so the night got a cast, 29 lines in all, on the free model:
+The user wanted more voice than the ghost whispers, so the night got a cast, 29 lines in all, on the free model:
 - **Narrator** ("Warm Storyteller"): an intro over the start screen on the first night of a launch (not on every
   R), and an outro on the end card, one set for escaping and one for dawn, with the end music ducked under the words.
 - **The keeper** ("Old man"): barks when a soul is picked up, when the gate opens, when dawn is close, and after
@@ -206,13 +205,13 @@ The owner wanted more voice than the ghost whispers, so the night got a cast, 29
 - Keeper and narrator share one voice channel in `GraveyardAudio`: a line waits up to 2.5 s for the one playing,
   then is dropped, so nobody talks over anybody; a set never plays the same take twice in a row. `SceneBuilder`
   loads each numbered set (`keeper_soul_1`, `_2`...) by prefix. 43 EditMode tests.
-- The owner's verdict after the voice reel: "voices are no good, but keep them for now". The system (who speaks when,
+- The user's verdict after the voice reel: "voices are no good, but keep them for now". The system (who speaks when,
   queueing, cooldowns) stays; every voice row in `docs/ASSET_LOG.md` is marked PLACEHOLDER so `/release-check` flags
   them. Free-model library voices are a fast way to prove the timing, not the final cast.
 
 ### Later: music from Suno (made by a person in a web app)
 The third way to get audio in these examples: a person makes it in a web tool from a brief Claude wrote. Suno has no
-official API, so the owner pasted the brief from `docs/BRIEFS.md` into Suno's Advanced mode (paid plan, 2:00,
+official API, so the user pasted the brief from `docs/BRIEFS.md` into Suno's Advanced mode (2:00,
 instrumental, weirdness about 25-30%, style influence about 70%) and downloaded the two takes it made. Both were kept.
 - The first try came back "not very video gamey": the generic template, `[brackets]` and all, had been pasted. The
   brief is now one block per Suno box, the style starts with "video game background music", and the kit's template
@@ -224,14 +223,14 @@ instrumental, weirdness about 25-30%, style influence about 70%) and downloaded 
 - 23 MB WAVs became 1.5 and 1.8 MB OGG files (ffmpeg, Vorbis q6, outside the kit). Decoded, each is exactly as long
   as the cut WAV and the seam step is smaller than an ordinary sample step, so the loop has no gap or click.
 - Then the human check the numbers cannot do: 30 s MP3s with each wrap point at 0:15, plus both full loops, went to
-  the owner's phone through the Claude Code session. Verdict: "I can't even tell there is a loop, it sounds like one
+  the user through the Claude Code session. Verdict: "I can't even tell there is a loop, it sounds like one
   song", for both takes, including A, the weaker spectral match.
 - `GraveyardImport` streams `night_music_*` (no 30 MB of decompressed audio in memory); the game picks the track by
   nights finished (`GraveyardGame.PickMusic`), so a replay sounds different. `AudioSetupTests` checks both tracks,
   streaming and the alternation (38 EditMode tests).
 
 ### Later: a new graveyard every night (procedural generation, SOP-17)
-The owner asked whether each night was a new graveyard. It was not: the seed only moved the ghosts' starting corners.
+The user asked whether each night was a new graveyard. It was not: the seed only moved the ghosts' starting corners.
 Now night 0 is the hand-made yard and every later night is generated, built for the kit's procgen skill (`/procgen`,
 SOP-17) and proven here. One session (Claude Opus 5.5), 2026-10-22 and 23, from the brief in `../../PROCGEN_PROMPT.md`;
 the game was backed up first, and Unity ran in batch mode only.
@@ -262,12 +261,12 @@ back to the hand-made yard (logged; a test fails if a tested night ever falls ba
 | 3 | The rejection tally | Every rejected attempt was "no room for a tree" | Trees became optional: 9,994 of 10,000 seeds pass on the first attempt |
 | 4 | `PinnedYards_OnlyChangeOnPurpose` | The same code and seed built **different yards** in Unity's Mono and in .NET 8. A trace showed the PRNG and `Math.Cos` identical bit for bit, but `min + (max - min) * r` rounded differently, and one borderline comparison changed everything after it. Likely Mono keeping float intermediates at double precision **(verify)** | Every generated coordinate and every constant added to one is a multiple of 1/16 m, so sums are exact; prop boxes are computed in double and snapped outward. Traces then matched line for line, and the pinned prints (made in .NET 8) pass in Unity |
 | 5 | `Smoke_E` (walk grid against the real NavMesh) | Yard 55875: a 1.0 m gap between a pine and the wall that the grid passed and the bake closed | A 0.125 m bake margin. Now 17 yards and 323 checks: the grid is never looser than the NavMesh, stricter twice (both in the hand-made yard) |
-| 6 | The bot trio | The always-dark bot pushed into a low rock for 104 s: the NavMesh agent climbs 0.75 m (logged from Unity), the keeper's CharacterController 0.3 m, and the "rocks" model is 0.75 m tall | Tried in the game: every blocker marked Not Walkable on the NavMesh. Correct, but it moved the hand-made balance (careful 36 against dark 43, 0 escapes) and failed its test, so it was reverted; the generator no longer uses the low rock. The engine mismatch stays for the owner to decide after a playtest |
+| 6 | The bot trio | The always-dark bot pushed into a low rock for 104 s: the NavMesh agent climbs 0.75 m (logged from Unity), the keeper's CharacterController 0.3 m, and the "rocks" model is 0.75 m tall | Tried in the game: every blocker marked Not Walkable on the NavMesh. Correct, but it moved the hand-made balance (careful 36 against dark 43, 0 escapes) and failed its test, so it was reverted; the generator no longer uses the low rock. The engine mismatch stays for the user to decide after a playtest |
 | 7 | The bot trio on generated nights | Random rectangle ghost loops: the careful bot was caught 18 times in 8 nights (0 on the hand-made yard) and lost to always-dark | The hand-made yard's skeleton copied into the generator (corridors, loops along them): careful 56, dark 56, lit 24 |
 | 8 | The same trio | Now too easy in the dark: always-dark escaped 8 of 8 (2 of 8 on the hand-made yard), so the lantern stopped being a choice | Souls 10 m apart and 10 m from the start: careful 54, dark 48, lit 19 |
 | 9 | An independent review (a Sonnet subagent that had not seen the work) | The soul reachability check had been swallowed by a comment during an edit, so it could never fail; good yards never tripped it and every test passed. Also: the 10 m start rule lived only in the generator, magic numbers outside the constants block, a test named "sight" that checked a different distance, the local-retry idea graded B though only one source backs it | Fixed; every invariant now has a test that feeds it a broken yard (`EveryInvariant_CatchesABrokenYard`); the repaired check also flags the hand-made soul above. The generated yards did not change (same pinned prints) |
 | 10 | The goal's judge | "The HUD shows the seed" had no proof: batch mode never runs OnGUI, and camera captures leave the IMGUI HUD out | `--shot FILE` saves a real frame (ScreenCapture) in a windowed player, and the HUD logs `SEED_SHOWN` when it first draws the label: `docs/procgen/hud_seed_48947.png` shows "SEED 48947". In batch mode, the HUD keeps the label in `Hud.SeedLabel` every frame and `Smoke_J` reads it from the live scene through `dev.py smoke` |
-| 11 | The owner, playing: "if you go out the gate you fall forever" | The gate was a 4 m gap in the wall with nothing behind it but the edge of the ground, and the wall model's off-center pivot left 1.6 m holes in both south corners. `Smoke_K` (written first) pushed the keeper at the gate and all four corners on two yards: 6 of 6 south pushes ended 40 m below the ground. On the hand-made yard too: the bug was there from the first build | Invisible blockers on the wall line (gate and south corners) in `LevelBuilder`, left out of the NavMesh bake; a fall below 3 m puts the keeper back at the start. Baking the blockers into the NavMesh first moved the hand-made trio (careful 39 against dark 40), so they stop bodies only. Now 10 of 10 pushes stay inside |
+| 11 | The user, playing: "if you go out the gate you fall forever" | The gate was a 4 m gap in the wall with nothing behind it but the edge of the ground, and the wall model's off-center pivot left 1.6 m holes in both south corners. `Smoke_K` (written first) pushed the keeper at the gate and all four corners on two yards: 6 of 6 south pushes ended 40 m below the ground. On the hand-made yard too: the bug was there from the first build | Invisible blockers on the wall line (gate and south corners) in `LevelBuilder`, left out of the NavMesh bake; a fall below 3 m puts the keeper back at the start. Baking the blockers into the NavMesh first moved the hand-made trio (careful 39 against dark 40), so they stop bodies only. Now 10 of 10 pushes stay inside |
 
 **Final numbers** (2026-10-23, after the gate fix, `dev.py test` and `smoke` in the scratch copy):
 | Over 8 nights (progress: souls, an escape counts 7, of 56) | Progress | Escapes | Catches |
@@ -312,11 +311,11 @@ script that drew `yards_top_down.png`. A temporary editor script measured the me
 trace; both were deleted (the footprint test and the pinned prints replace them).
 
 ### Later: four times the yard, a real gate, and difficulties
-The owner, after playing: "graveyard needs to be 4 times the size, it's too easy. Buildings need roofs and doors. The
+The user, after playing: "graveyard needs to be 4 times the size, it's too easy. Buildings need roofs and doors. The
 graveyard should have an actual gate." Then, while it was being built: yards need not be square ("rectangle, or
 irregular sections jutting out"); the outside should be grass with trees and bushes, "so it doesn't look like a floating
 graveyard"; a title screen with Easy, Normal, Hard and Insane, where Easy is today's light, Normal darker, and Insane
-"pitch black except the small area of the lantern"; and two more ghosts each step. Choices made with the owner: 4x the
+"pitch black except the small area of the lantern"; and two more ghosts each step. Choices made with the user: 4x the
 area (not each side), more ghosts and souls and a night that grows less than the walk, decorative closed doors, and a
 new hand-made yard at the new size.
 
@@ -369,7 +368,7 @@ fixes: 89 and 14, and the trio within one or two points of these)
 - No human had played the big yards yet: the next section is what the first playtest found.
 
 ### Later: the first playtest of the big yards
-The owner played the built game and reported, in one message: the title screen's letters were covered and the window
+The user played the built game and reported, in one message: the title screen's letters were covered and the window
 small; "narrator plays before game starts, diff levels dont actually change the global light, they are all the same, all
 of them are only 12 ghosts, lantern off the legs are stuck no animation, outside the gate you fall and reset, if you get
 caught on the way to an open gate you lose a soul but the gate remains open"; then "the lantern is not in his hands".
@@ -391,7 +390,7 @@ The lesson for the kit: a check that reads back what the code set proves the cod
 render was measured from frames of the built player, and that is what caught it.
 
 ### Later: a second opinion from another vendor's model (Kimi K3.1 Pro)
-The owner asked what Kimi could do; Moonshot had just shipped K3.1. The kit's `tools/second_opinion.py` ran Kimi Code
+The user asked what Kimi could do; Moonshot had just shipped K3.1. The kit's `tools/second_opinion.py` ran Kimi Code
 read-only over this game's code, tests and docs (`--model kimi-code/k3.1-pro`; the bare names in the tool's own help did
 not work, which the kit then fixed). Two Sonnet agents reproduced every finding from the code before anything changed:
 10 findings, 9 confirmed, 1 partly right, none wrong.
@@ -407,11 +406,11 @@ not work, which the kit then fixed). Two Sonnet agents reproduced every finding 
 | 7 | The broken-yard test reached only half the checks: matching the "routes:" or "reach:" prefix hid eight | confirmed | One broken yard per check (16), each matched on its own message |
 | 8 | Insane kept a 4 m gate light under "pitch black outside your lantern" | confirmed | Off on Insane; `Smoke_L` asserts no light but the keeper's |
 | 9 | README's "a night replays exactly" was stronger than the evidence | partly | Worded as what was checked (two seeds) |
-| 10 | "No human playtest yet" stood below the owner's playtest | confirmed | Updated, with the first `docs/PLAYTEST_LOG.md` entry |
+| 10 | "No human playtest yet" stood below the user's playtest | confirmed | Updated, with the first `docs/PLAYTEST_LOG.md` entry |
 
 **What the fixes did to the balance.** With the extra ghosts really on the far side of their loops, Normal got harder,
 most for the bot that uses the lantern: careful fell behind always-dark (hand-made 101 against 104, generated 89 against
-90). The bots see ghosts in the dark, so darkness, most of what Normal adds, costs them nothing. The owner chose: the
+90). The bots see ghosts in the dark, so darkness, most of what Normal adds, costs them nothing. The user chose: the
 trio's lantern tests run at Easy (the loops' ghosts, where the pillar was tuned), careful against always-dark is asserted
 on the hand-made yard and only logged on generated nights, and `Smoke_N` logs both bots at Normal.
 
@@ -468,7 +467,7 @@ more (23) and always-dark edges it (103 against 96, logged, not asserted, as bef
 - `Smoke_D` asserts careful >= always-dark on the hand-made yard, where both sit at the 104 cap. In one full smoke run
   careful made 103: night 4 ended at dawn with all twelve souls after four catches. The same code then escaped night 4
   at 177.2 s with one catch (as before the fixes) and passed. So `Smoke_D` can fail on run-to-run variance, which
-  the procgen section's "Honest limits" already noted for the trio **(verify the cause)**. Not re-tuned: that is the owner's call.
+  the procgen section's "Honest limits" already noted for the trio **(verify the cause)**. Not re-tuned: that is the user's call.
 - Careful's 23 catches on the new generated nights were not investigated beyond the totals.
 - The built player was not rebuilt or replayed after these fixes, so the "replays a test night" claim (seeds 6 and 6258)
   is from before them **(verify)**.
@@ -477,5 +476,5 @@ more (23) and always-dark edges it (103 against 96, logged, not asserted, as bef
 - The Behavior package was installed only to read its source (gap U3), then removed.
 - `GRAVEYARD_TRACE=1` logs (the bot's position, decision and the nearest ghost twice a second) did the tuning; they
   stayed in the test as an option.
-- One human playtest so far, the owner's ("Later: the first playtest of the big yards"); nobody else has played it,
+- One human playtest so far, the user's ("Later: the first playtest of the big yards"); nobody else has played it,
   so pillars 2 and 3 stay open in `docs/VERTICAL_SLICE.md`.

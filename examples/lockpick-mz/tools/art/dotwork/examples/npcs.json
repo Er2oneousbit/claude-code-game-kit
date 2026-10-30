@@ -1,0 +1,35 @@
+{
+ "name": "npcs",
+ "_comment": "Townsfolk the cheap way: one symmetric NPC is a rotation plus three walk clips (idles are the code-drawn breathing bob), and its palette variants cost no render. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "design": {
+  "setting": "steampunk"
+ },
+ "npcs": [
+  {
+   "name": "baker",
+   "prompt": "a plump town baker in a white apron, a green vest and a brown flat cap",
+   "seed": 3700,
+   "variants": [
+    {
+     "name": "baker_red",
+     "hue": 130
+    },
+    {
+     "name": "baker_blue",
+     "to": "#3a6ea5"
+    }
+   ]
+  },
+  {
+   "name": "miner",
+   "prompt": "a soot-covered miner with a brass helmet lamp and a pickaxe on his shoulder",
+   "seed": 3710,
+   "variants": [
+    {
+     "name": "miner_teal",
+     "hue": 160
+    }
+   ]
+  }
+ ]
+}

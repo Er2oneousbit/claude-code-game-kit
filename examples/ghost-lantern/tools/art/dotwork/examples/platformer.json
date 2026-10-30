@@ -1,0 +1,32 @@
+{
+ "name": "platformer",
+ "_comment": "A side-view platformer set: grass over dirt, one-way ledges, a parallax background. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "design": {
+  "setting": "steampunk"
+ },
+ "platforms": [
+  {
+   "name": "meadow",
+   "fill": {
+    "material": "dirt"
+   },
+   "surface": {
+    "material": "grass_lush"
+   },
+   "background": {
+    "prompt": "rolling green hills and a far brass city under a blue sky",
+    "seed": 8810
+   }
+  },
+  {
+   "name": "mine",
+   "fill": {
+    "material": "cliff_rock"
+   },
+   "surface": {
+    "material": "cave_rock_top"
+   },
+   "lip": 0.25
+  }
+ ]
+}

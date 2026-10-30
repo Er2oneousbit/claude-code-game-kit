@@ -1,6 +1,6 @@
 {
  "name": "ui",
- "_comment": "UI without a model: glyph-tool fonts (text bitmaps -> BMFont .fnt), code-drawn window skins, emote balloons and hit feedback (spark, slash, damage-flash shader). Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "_comment": "UI without a model: glyph-tool fonts (text bitmaps -> BMFont .fnt), code-drawn window skins, HUD widgets (gauges, button states, a Theme), emote balloons and hit feedback (spark, slash, damage-flash shader). Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
  "fonts": [
   {
    "name": "dialogue",
@@ -129,6 +129,30 @@
   {
    "name": "flash",
    "kind": "flash"
+  }
+ ],
+ "widgets": [
+  {
+   "name": "brass_hud",
+   "style": "brass",
+   "gauges": [
+    "hp",
+    "mp",
+    "atb",
+    {
+     "name": "limit",
+     "ticks": 4
+    }
+   ]
+  },
+  {
+   "name": "classic_hud",
+   "style": "classic",
+   "gauges": [
+    "hp",
+    "mp",
+    "atb"
+   ]
   }
  ]
 }

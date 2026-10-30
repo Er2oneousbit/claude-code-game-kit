@@ -20,7 +20,7 @@ import engine as lib  # noqa: E402
 import autotile  # noqa: E402  (corner coverage for the pair lane)
 
 KTEX_TPL = ("pixel art sprite, top-down view straight from above of {s}, a flat ground texture that fills the entire "
-            "image edge to edge, 16-bit era top-down adventure style, clean readable clusters, simple shading, "
+            "image edge to edge, {style} top-down {genre} style, clean readable clusters, simple shading, "
             "limited palette, no objects, no characters, no border, no perspective")
 
 
@@ -38,7 +38,7 @@ def seamless(name, prompt, N, palette, work, seed=800):
     m[N // 2 - band:N // 2 + band, :] = 255
     mf = f"dotwork_cross_{N}.png"
     mf = lib.put(Image.fromarray(m).resize((R, R), Image.NEAREST), mf)
-    pr = KTEX_TPL.format(s=prompt)
+    pr = core.prompt(KTEX_TPL, s=prompt)
     raw, _ = lib.run(lib.klein(pr, seed, R, R, f"dotwork_work/tiles/{name}_raw", lora=0.6))
     fn = f"dotwork_t_{name}_{N}.png"
     fn = lib.put(Image.open(raw).convert("RGB").resize((N, N), Image.BOX).resize((R, R), Image.NEAREST), fn)

@@ -1,6 +1,9 @@
 {
  "name": "tools",
  "_comment": "Edits on an existing sprite: instruction edits, a region inpaint and a normal map. The source is the duelist's first south idle frame from party_member.json; run that example first, or point source at any south-facing sprite of your own. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "design": {
+  "setting": "steampunk"
+ },
  "tools": [
   {
    "name": "duelist_edit",

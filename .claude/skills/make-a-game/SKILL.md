@@ -70,7 +70,7 @@ D. **Size and setup**
    11. What is the smallest version that would already be fun to play for two minutes? (that is the first goal)
    12. What should stay out for now, even if it is cool? (online play, a story mode, a level editor...)
    13. What name should I use as the author? It goes in the game's docs and file credits. Offer their Git name
-       (`git config user.name`, if set) as the default, plus "the owner" for no name at all; a handle is fine.
+       (`git config user.name`, if set) as the default, plus "the user" for no name at all; a handle is fine.
 Keyboard, gamepad or touch comes from their answers; ask only if it is unclear.
 
 ## 3. Write the plan and get a yes

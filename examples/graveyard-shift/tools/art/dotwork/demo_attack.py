@@ -71,7 +71,7 @@ def add_fx(base, fx, x, y):
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="dotwork.py preview attack", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--char", default="wizard")
+    ap.add_argument("--char", required=True, help="the character to animate (a name from the characters lane)")
     ap.add_argument("--anim", default="cast_e")
     ap.add_argument("--projectile", default="fireball")
     ap.add_argument("--impact", default="explosion")

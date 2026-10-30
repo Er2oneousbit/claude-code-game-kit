@@ -138,6 +138,13 @@ def free_models():
         fcore.log(f"[warn] /free failed: {exc}")
 
 
+def missing_models(names, loader="UnetLoaderGGUF", field="unet_name"):
+    """The model files of names that ComfyUI's loader does not list (not downloaded yet)."""
+    info = cl.get_json(base_url(), f"/object_info/{loader}")
+    have = info.get(loader, {}).get("input", {}).get("required", {}).get(field, [[]])[0]
+    return [n for n in names if n not in have]
+
+
 def missing_nodes(graph):
     base = base_url()
     info = cl.get_json(base, "/object_info")

@@ -5,7 +5,7 @@
 
 ## What this is
 One paragraph pitch lives in `docs/GDD.md`. Read that before any design-affecting work.
-Owner: {{AUTHOR}}. Solo dev, Claude is the pair programmer.
+Developer: {{AUTHOR}}. Solo dev, Claude is the pair programmer.
 
 ## Read first, every session
 @docs/HANDOFF.md
@@ -32,7 +32,7 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 - **Troubleshoot systematically.** One change at a time. State the hypothesis, make the change, test, record the result. Follow `docs/sop/SOP-02-bug-workflow.md`.
 - **When stuck, change the angle.** After 3 failed attempts follow the `stuck` skill. Do not loop on the same idea.
 - **Truth over winging it.** If you do not know, say so and say what you can find out. Engine APIs change between versions: check the version in `docs/ENGINE.md` and verify against docs or the installed engine, not memory.
-- **Correct mistakes directly.** If the owner's assumption is wrong, say so plainly and show the fix.
+- **Correct mistakes directly.** If the user's assumption is wrong, say so plainly and show the fix.
 - **Explain the why.** Short, direct answers. Give the high-level reason for a choice; skip basics unless asked.
 {{PROFILE_STYLE}}
 
@@ -44,7 +44,7 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 - Stay inside the scope of the current ROADMAP item. New ideas go to the **Parking lot** in `docs/ROADMAP.md`, not into the code.
   What is in scope follows the GDD's `Current tier:` (SOP-08 "Tiers"): after the greenlight (MVP / Release), ideas that
   serve a pillar go to the `docs/PRODUCTION.md` Backlog with a size; never push back with "not part of the toy/slice"
-  then. If the owner keeps asking for work past the current tier, offer `/next-tier`. No deadlines: progress is counts.
+  then. If the user keeps asking for work past the current tier, offer `/next-tier`. No deadlines: progress is counts.
 - Tuning numbers live in data files or one constants module, never scattered literals. Expose tunables, hot reload where possible.
 - AI-built 3D breaks in predictable places: run the `SOP-09` interaction smoke checklist before calling a build done.
 

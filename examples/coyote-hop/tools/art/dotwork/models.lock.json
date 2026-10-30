@@ -1,5 +1,5 @@
 {
- "_comment": "Dotwork model lock (Claude Opus 5.5): every model file Dotwork's lanes load, pinned to a repo commit + SHA-256. `dotwork.py setup --check` compares this with your ComfyUI; nothing is ever downloaded without you. Tiers: sprites (every klein lane), rotate (4/8-direction characters, vehicles), animate (Wan clips: walk, attacks, effects).",
+ "_comment": "Dotwork model lock (Claude Opus 5.5): every model file Dotwork's lanes load, pinned to a repo commit + SHA-256. `dotwork.py setup --check` compares this with your ComfyUI; nothing is ever downloaded without you. Tiers: sprites (every klein lane), rotate (4/8-direction characters, vehicles), animate (Wan clips: walk, attacks, effects), pose (optional: skeleton-driven clips).",
  "tiers": {
   "sprites": {
    "vram_gb": 8,
@@ -16,6 +16,12 @@
    "ram_gb": 32,
    "free_ram_gb": 18,
    "for": "Wan 2.2 animation: walk / attack clips, spell effects"
+  },
+  "pose": {
+   "vram_gb": 16,
+   "ram_gb": 32,
+   "free_ram_gb": 18,
+   "for": "pose-driven clips: character actions listed in \"skeleton\" (optional; setup --check --tier pose)"
   }
  },
  "models": [
@@ -290,6 +296,40 @@
    "loader": "LoraLoaderModelOnly",
    "input": "lora_name",
    "url": "https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/18bccf8884ec0a078eed79785eb4ef13ea16ce1e/Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/low_noise_model.safetensors"
+  },
+  {
+   "tier": "pose",
+   "file": "wan2.2_fun_control_high_noise_14B_Q4_K_M.gguf",
+   "folder": "unet",
+   "repo": "QuantStack/Wan2.2-Fun-A14B-Control-GGUF",
+   "path": "HighNoise/Wan2.2-Fun-A14B-Control_HighNoise-Q4_K_M.gguf",
+   "commit": "26d412a4bec09e1324fc80654dcee0d58218db52",
+   "sha256": "bb95cc5edbc8ef9fef070212bfbcb6d95268b02a2d635f89ab6344e535e11ff0",
+   "size": 9663556352,
+   "license": "apache-2.0",
+   "routes": [
+    "wan_pose"
+   ],
+   "loader": "UnetLoaderGGUF",
+   "input": "unet_name",
+   "url": "https://huggingface.co/QuantStack/Wan2.2-Fun-A14B-Control-GGUF/resolve/26d412a4bec09e1324fc80654dcee0d58218db52/HighNoise/Wan2.2-Fun-A14B-Control_HighNoise-Q4_K_M.gguf"
+  },
+  {
+   "tier": "pose",
+   "file": "wan2.2_fun_control_low_noise_14B_Q4_K_M.gguf",
+   "folder": "unet",
+   "repo": "QuantStack/Wan2.2-Fun-A14B-Control-GGUF",
+   "path": "LowNoise/Wan2.2-Fun-A14B-Control_LowNoise-Q4_K_M.gguf",
+   "commit": "26d412a4bec09e1324fc80654dcee0d58218db52",
+   "sha256": "2cc00a7ecb5ea4d9e2bb574ec28d8a6676d6022d3c45140ffd48d819fd3f6894",
+   "size": 9663556352,
+   "license": "apache-2.0",
+   "routes": [
+    "wan_pose"
+   ],
+   "loader": "UnetLoaderGGUF",
+   "input": "unet_name",
+   "url": "https://huggingface.co/QuantStack/Wan2.2-Fun-A14B-Control-GGUF/resolve/26d412a4bec09e1324fc80654dcee0d58218db52/LowNoise/Wan2.2-Fun-A14B-Control_LowNoise-Q4_K_M.gguf"
   }
  ]
 }

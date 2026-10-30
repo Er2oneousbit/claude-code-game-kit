@@ -30,7 +30,7 @@ python scripts/new_game.py --name "Test" --engine godot --dest <existing-dir> --
 Exit codes: 0 ok, 1 unresolved placeholders in output, 2 usage or environment error.
 
 After changing anything that ships into games, bring the examples up to date (copies outside the repo, content-based):
-`python scripts/sync_examples.py D:/kt/<fresh>` then again into another fresh folder, which must report "0 synced"
+`python scripts/sync_examples.py <scratch>/<fresh>` then again into another fresh folder, which must report "0 synced"
 everywhere. A `[warn] ... .gold` line means the game edited that file: merge the kit's version in by hand.
 
 Verify a change by scaffolding every affected engine into a scratch dir outside this repo, then inside each output run `python tools/doctor.py` (also runs the link check) and `python tools/dev.py -h` (paths relative to the generated project). A second `--adopt` run on the same output must produce no conflicts.

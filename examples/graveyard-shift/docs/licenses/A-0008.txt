@@ -1,7 +1,6 @@
 A-0008  sfx  generated 2026-10-22 with tools/audio/eleven_audio.py
 Service  : ElevenLabs /v1/sound-generation, model eleven_text_to_sound_v2
-Plan     : free (free)
-License  : ElevenLabs free plan: non-commercial only
+License  : ElevenLabs non-commercial terms: PLACEHOLDER
 Credit   : Created in collaboration with ElevenLabs (elevenlabs.io)
 Terms    : https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform (read and save a screenshot when you ship)
 Request  : {"text": "quiet graveyard at night, soft wind through pine trees, distant crickets, an owl far away, no music", "model_id": "eleven_text_to_sound_v2", "prompt_influence": 0.3, "duration_seconds": 20.0, "loop": true, "output_format": "pcm_32000"}

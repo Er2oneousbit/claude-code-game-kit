@@ -37,7 +37,7 @@
 #           Interactive use through Claude Code: PixelLab's MCP server (docs/sop/SOP-16-2d-art-pipeline.md).
 #           Run live 2026-10-24: `check`, and one `character --size 16 --legacy` (1 generation): 24x24 frames (the
 #           canvas is about 40% bigger than the size asked), files under <out>/Idle/rotations/<direction>.png.
-#           Run live 2026-10-26 on a Pixel Apprentice plan: prop (1), vfx lite (1: a GIF, spritesheet and JSON from
+#           Run live 2026-10-26: prop (1), vfx lite (1: a GIF, spritesheet and JSON from
 #           storage links), iso-tile (1), tileset --kind sidescroller (2, 16 tiles), edit (1), fix reduce-colors (0.1).
 #           Learned live: GET /map-objects/{id} answers 423 while it is generating (handled as "still working").
 #           Not yet live: ui, font, object, tiles-pro, outfit, pixelate, animate-character (verify).
@@ -905,12 +905,19 @@ def check_outputs(args, kind, variants):
     for out in outputs(args, kind, variants):
         if kind not in FILE_KINDS and out.exists() and not out.is_dir():
             raise ToolError(f"{out} is a file; `{kind}` writes a folder there")
+        if kind in FILE_KINDS and out.is_dir():   # --overwrite cannot turn a folder into a PNG
+            raise ToolError(f"{out} is a folder; `{kind}` writes one file there")
         if out.exists() and not args.overwrite and (kind in FILE_KINDS or any(out.iterdir())):
             raise ToolError(f"{out} already exists (--overwrite to replace it)")
         if args.log:
             root = Path(args.root).resolve()
             if not (root / fetch_asset.ASSET_LOG).is_file():
                 raise ToolError(f"{fetch_asset.ASSET_LOG.as_posix()} not found under {root} (pass --root)")
+            try:   # a log without a table would reject the row only after the paid call
+                fetch_asset.add_log_row((root / fetch_asset.ASSET_LOG).read_text(encoding="utf-8", errors="replace"),
+                                        "", False)
+            except fetch_asset.UsageError as exc:
+                raise ToolError(str(exc))
             try:
                 out.resolve().relative_to(root)
             except ValueError:

@@ -16,7 +16,7 @@ from lane_battle_bgs import render_raw
 
 import engine as lib  # noqa: E402
 
-TPL = ("pixel art, 16-bit era RPG full-screen illustration of {s}, dramatic sky, rich detailed pixel art, wide "
+TPL = ("pixel art, {style} {genre} full-screen illustration of {s}, dramatic sky, rich detailed pixel art, wide "
        "cinematic composition, no characters in the foreground, no text, no letters, no border, limited palette")
 
 
@@ -26,7 +26,7 @@ def run(entries, pack, man, conf):
     res = f'{conf["fixed"]["res_root"]}/{conf["fixed"]["art_dir"]}/scenes'
     work = os.path.join(core.WORK, "scenes")
     os.makedirs(work, exist_ok=True)
-    man.drop_dir(art)
+    man.drop_owned(art, ("spr_scene_", "scene_"))   # shared with img2px and other packs
     for k, e in enumerate(entries):
         name = core.snake(e["name"])
         seed = core.seed_of(e, 8700)

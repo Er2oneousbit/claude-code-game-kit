@@ -1,6 +1,9 @@
 {
  "name": "interactables",
- "_comment": "State props (chest, door, lever, save point glow) and an 8-direction airship with a ground shadow. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "_comment": "State props (chest, door, lever, save point, ambient loops (torch, banner, smokestack, gear, fern) glow) and an 8-direction airship with a ground shadow. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "design": {
+  "setting": "steampunk"
+ },
  "animprops": [
   {
    "name": "chest",
@@ -32,6 +35,42 @@
    "kind": "glow",
    "prompt": "a floating glowing blue crystal on a small stone base",
    "size": 48
+  },
+  {
+   "name": "wall_torch",
+   "kind": "flame",
+   "prompt": "a wall torch: a short wooden handle with a bright lit orange flame",
+   "size": 32,
+   "seed": 9520
+  },
+  {
+   "name": "guild_banner",
+   "kind": "flag",
+   "prompt": "a red cloth banner hanging from a short horizontal pole on a post",
+   "size": 40,
+   "seed": 9521
+  },
+  {
+   "name": "smokestack",
+   "kind": "smoke",
+   "prompt": "a short brick smokestack with a soot-black rim",
+   "size": 40,
+   "seed": 9522
+  },
+  {
+   "name": "brass_gear",
+   "kind": "spin",
+   "prompt": "a single round brass cog gear with eight teeth, seen straight on",
+   "size": 24,
+   "seed": 9523,
+   "sym": 8
+  },
+  {
+   "name": "potted_fern",
+   "kind": "sway",
+   "prompt": "a green fern in a small clay pot",
+   "size": 32,
+   "seed": 9524
   }
  ],
  "vehicles": [

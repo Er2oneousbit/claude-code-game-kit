@@ -15,14 +15,14 @@ every night"). 112 EditMode tests (a 250-seed property test among them); 20 Play
 the hand-made yard and on 8 generated nights, the NavMesh check, a yard from above, five review-fix regressions).
 Review fixes 2026-10-26 (HOW_IT_WAS_MADE "Later: review fixes"): `Smoke_D`'s careful >= always-dark sits at the 104
 cap and failed once in two runs on an unchanged yard (trio run-to-run variance). The built player replays a test
-night. Played once by the owner (docs/PLAYTEST_LOG.md).
+night. Played once by the user (docs/PLAYTEST_LOG.md).
 
 ## What changed last session
 - Built the slice; the bot trio refuted pillar 1 several times before it held, weakly (`docs/VERTICAL_SLICE.md`).
 
 ## Current task
-- None. Next: the owner plays the fixed build (difficulty light, lantern in hand, gate shutting on a catch),
-  then someone who is not the owner plays it (pillars 2 and 3).
+- None. Next: the user plays the fixed build (difficulty light, lantern in hand, gate shutting on a catch),
+  then someone who is not the user plays it (pillars 2 and 3).
 
 ## Next step (specific, first action)
 - `python tools/dev.py run` (opens the editor; press Play), three nights, then `/playtest-report`: is lighting up ever worth it?

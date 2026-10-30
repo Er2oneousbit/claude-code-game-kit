@@ -1,7 +1,8 @@
 # Dotwork licence register
 
 Every model Dotwork loads, with its licence, pinned in `models.lock.json` (repo, commit, path, SHA-256). Checked
-2026-10-29 against each repo's model card. Re-check the cards before you ship: licences can change upstream.
+2026-10-29 against each repo's model card (the pose tier 2026-10-30). Re-check the cards before you ship:
+licences can change upstream.
 
 | Role | File | Repo | Licence | Commercial use |
 |---|---|---|---|---|
@@ -18,6 +19,7 @@ Every model Dotwork loads, with its licence, pinned in `models.lock.json` (repo,
 | Pixel-animate LoRA | spritekiln_wan22_pixel_animate.safetensors | styly-agents/Wan2-2-pixel-animate | apache-2.0 | yes |
 | Animation text encoder | umt5_xxl_fp16.safetensors | Comfy-Org/Wan_2.1_ComfyUI_repackaged | apache-2.0 | yes |
 | Animation VAE | wan_2.1_vae.safetensors | Comfy-Org/Wan_2.2_ComfyUI_Repackaged | apache-2.0 | yes |
+| Pose-driven animation (optional `pose` tier) | wan2.2_fun_control_{high,low}_noise_14B_Q4_K_M.gguf | QuantStack/Wan2.2-Fun-A14B-Control-GGUF (base: alibaba-pai/Wan2.2-Fun-A14B-Control, itself from Wan-AI/Wan2.2-I2V-A14B) | apache-2.0 | yes |
 
 ## Do not use
 | File | Why |

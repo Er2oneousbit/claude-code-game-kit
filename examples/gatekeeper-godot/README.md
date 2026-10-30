@@ -58,5 +58,5 @@ godot --headless --path . --script res://tools/eval_guard.gd
   [github.com/nobodywho-ooo/nobodywho](https://github.com/nobodywho-ooo/nobodywho).
 - Model: Qwen2.5 1.5B Instruct (official Qwen GGUF), Apache-2.0.
 - Art: [Kenney](https://kenney.nl) (Tiny Dungeon), CC0. Details: `docs/ASSET_LOG.md`.
-- Sound effects and the night ambience at the wall: Created in collaboration with ElevenLabs (elevenlabs.io) (generated with the kit's `tools/audio/eleven_audio.py` on a free plan, so **non-commercial**: marked PLACEHOLDER in `docs/ASSET_LOG.md`, replace or regenerate on a paid plan before any commercial use). Earlier builds used Kenney Interface Sounds (CC0). The same files as the web twin.
+- Sound effects and the night ambience at the wall: Created in collaboration with ElevenLabs (elevenlabs.io) (generated with the kit's `tools/audio/eleven_audio.py` under non-commercial terms, so **non-commercial**: marked PLACEHOLDER in `docs/ASSET_LOG.md`, replace or regenerate under a license that allows commercial use before any commercial use). Earlier builds used Kenney Interface Sounds (CC0). The same files as the web twin.
 - Optional live voice: generated at runtime by Fish Audio with the player's own key (nothing generated ships).

@@ -43,7 +43,7 @@ Loop at three time scales (if you cannot fill all three, the game's structure is
 | **MVP / Release** | Minimum content that makes a shippable product | Passes `/release-check` |
 | **Stretch** | Everything else | Only after release scope is locked |
 
-Current tier: **Vertical slice** (built, bot-verified; one owner playtest, 2026-10-23; outside playtests pending)
+Current tier: **Vertical slice** (built, bot-verified; one user playtest, 2026-10-23; outside playtests pending)
 
 Claude scopes work by this line (SOP-08 "Tiers"). Move it with `/next-tier` when the tier's "Done means" is met.
 

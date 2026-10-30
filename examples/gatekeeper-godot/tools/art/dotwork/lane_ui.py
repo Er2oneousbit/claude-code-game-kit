@@ -16,7 +16,7 @@ import engine as lib  # noqa: E402
 
 UI_TPL = ("pixel art sprite, pixel art game UI element: {s}, a rectangular frame seen straight on, perfectly "
           "symmetric border of even thickness on all four sides, plain flat single-color interior fill, crisp "
-          "edges, front view, centered, steampunk")
+          "edges, front view, centered, {setting}")
 
 
 def margins(img):
@@ -62,7 +62,7 @@ def run(entries, pack, man, conf):
     for k, e in enumerate(entries):
         name, size, seed = core.snake(e["name"]), int(e.get("size", 48)), core.seed_of(e, 9200)
         dst = os.path.join(art, f"ui_{name}.png")
-        prompt = UI_TPL.format(s=e["prompt"])
+        prompt = core.prompt(UI_TPL, s=e["prompt"])
         req = core.key(prompt, seed, size)   # resume: an unchanged entry is not re-rendered
         if man.current(dst, req) and (os.path.exists(os.path.join(art, f"ui_{name}.tscn")) or not godot.ENABLED):
             core.log(f"ui {name}: up to date")

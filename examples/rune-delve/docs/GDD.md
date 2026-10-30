@@ -84,7 +84,7 @@ These live in data, not code. File: `Config/DefaultGame.ini`, section /Script/Ru
 - Style, tone, and the kinds of enemies/NPCs the player sees: chunky low-poly Kenney Mini Dungeon: stone rooms, torches, barrels; orc grunts and one big orc warden
 - Palette / resolution / camera: `docs/CONCEPTS.md`; warm torchlight on grey stone, blue rune-light for spells, red for danger; top-down camera
 - Music mood and references (see `RESOURCES.md`): none in the slice
-- SFX style: dark-fantasy sounds generated with ElevenLabs (placeholder, free plan): an arcane zap per bolt, a shimmer
+- SFX style: dark-fantasy sounds generated with ElevenLabs (placeholder, non-commercial terms): an arcane zap per bolt, a shimmer
   for the ward, a clang when a ward blocks, orc grunts and swings, a dungeon drip-and-rumble loop
 - Fill the style fragments in `BRIEFS.md` from this section.
 

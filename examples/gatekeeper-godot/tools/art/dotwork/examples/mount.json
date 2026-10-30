@@ -1,6 +1,9 @@
 {
  "name": "mount",
  "_comment": "A rideable walker through the character lane (idle + walk in 4 directions). Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "design": {
+  "setting": "steampunk"
+ },
  "characters": [
   {
    "name": "steam_walker",

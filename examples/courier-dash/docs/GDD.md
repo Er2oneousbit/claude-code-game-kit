@@ -81,7 +81,7 @@ These live in data, not code. File: `src/core/tuning.ts` (walk and sprint speed,
 - Style, tone, and the kinds of enemies/NPCs the player sees: bright toy-town, Kenney mini characters and suburban kit; one patrol rover with a colored state light
 - Palette / resolution / camera: `docs/CONCEPTS.md` color bible; full window; fixed high chase camera
 - Music mood and references (see `RESOURCES.md`): none in the slice
-- SFX style: toy-town sounds generated with ElevenLabs (placeholder, free plan): a cardboard thump and chime for pickup, a
+- SFX style: toy-town sounds generated with ElevenLabs (placeholder, non-commercial terms): a cardboard thump and chime for pickup, a
   doorbell for delivery, a toy-robot buzz when caught, a wooden clock tick in the last 10 s, a calm town ambience loop
 - Fill the style fragments in `BRIEFS.md` from this section.
 

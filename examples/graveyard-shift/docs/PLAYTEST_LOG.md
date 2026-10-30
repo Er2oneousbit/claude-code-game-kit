@@ -24,7 +24,7 @@ Tasks created (ROADMAP):
 ```
 
 ## Entries
-### 2026-10-23  Build 0.2.0 (the 4x yards, before the playtest fixes)  Tester: the owner  Duration: not recorded
+### 2026-10-23  Build 0.2.0 (the 4x yards, before the playtest fixes)  Tester: the user  Duration: not recorded
 Question being tested: do the big yards, the gate and the difficulties work as built?
 What happened (observations, not opinions):
 - The title text was clipped and the window small (a saved 1280x720 window from screenshot runs).
@@ -44,6 +44,6 @@ Metrics (deaths per section, time to first success, quits):
 - Player.log: one generated night (seed 93922, Easy) with three catches, the gate opened, then two falls outside it.
 Decisions / tuning changes:
 - Nine fixes, one at a time with a test each: HOW_IT_WAS_MADE "Later: the first playtest of the big yards". Then the
-  lantern 10% brighter (owner's ask).
+  lantern 10% brighter (the user's ask).
 Tasks created (ROADMAP):
-- The owner replays the fixed build; then an outside playtest.
+- The user replays the fixed build; then an outside playtest.

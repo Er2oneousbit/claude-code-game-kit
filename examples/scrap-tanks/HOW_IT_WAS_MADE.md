@@ -2,7 +2,7 @@
 
 The kit's C++ / SDL2 example, and its third "only what is in the kit" run (after ghost-lantern and courier-dash). One
 Claude Code session (Claude Opus 5.5) on Windows 11 with Visual Studio 2022 Build Tools (MSVC 14.44, bundled CMake and
-vcpkg), 2026-10-21. The owner picked the concept; Claude did the rest by following the kit's documents and tools, and
+vcpkg), 2026-10-21. The user picked the concept; Claude did the rest by following the kit's documents and tools, and
 recorded every place the kit fell short. Each gap was fixed **in the kit** and pulled in with `new_game.py --upgrade`.
 
 ## The rule
@@ -11,7 +11,7 @@ sources the kit's resource lists name. Not allowed: outside scripts or tools. Ex
 
 ## 1. Scaffold and toolchain (FIRST_HOUR 0 to 5 min)
 ```
-python scripts/new_game.py --name "Scrap Tanks" --engine cpp-sdl2 --dest D:/kt/tanks --git-init
+python scripts/new_game.py --name "Scrap Tanks" --engine cpp-sdl2 --dest ../scrap-tanks --git-init
 python tools/dev.py doctor && python tools/dev.py check && python tools/dev.py test && python tools/dev.py smoke
 ```
 A short path on purpose (vcpkg breaks on deep Windows paths, `docs/ENGINE.md`). The untouched skeleton built, tested and
@@ -20,7 +20,7 @@ smoked before any game code existed.
 baseline pins the libraries). Fixed: the overlay's `setup_step` names `VCPKG_ROOT`, CMake and the first build.
 
 ## 2. Concept and GDD (5 to 25 min)
-Claude offered three C++ concepts, each built around kit parts no example had used yet; the owner picked "Scrap Tanks"
+Claude offered three C++ concepts, each built around kit parts no example had used yet; the user picked "Scrap Tanks"
 (3D models rendered to sprites, a behavior tree). The GDD got three pillars: **cover is life**, **read the raiders**,
 **short and replayable**.
 
@@ -103,9 +103,9 @@ these lessons from all three AI examples.
 | `python tools/doctor.py`, `tools/check_links.py`, `tools/publish_check.py` | healthy, no broken references; the only FAIL is the license file, which lives one level up for examples |
 
 ### Later: generated sound (ElevenLabs)
-The owner asked for API audio in the other example games (2026-10-23), after Graveyard Shift had it. The Kenney sounds
+The user asked for API audio in the other example games (2026-10-23), after Graveyard Shift had it. The Kenney sounds
 were replaced by sound effects generated with the kit's `tools/audio/eleven_audio.py`, plus an ambience loop the game
-never had. Free plan: every file is PLACEHOLDER in `docs/ASSET_LOG.md` (non-commercial, credit in the README); the old
+never had. Every file is a PLACEHOLDER (non-commercial terms) in `docs/ASSET_LOG.md` (credit in the README); the old
 Kenney rows stay, marked removed. Every file was measured before use (peak, loudness, silence at the start, the jump at
 a loop's seam, flat-topped samples), then peak-normalized: one-shots to -3 dBFS, loops to -6 (the log says Modified, the
 evidence file keeps the shipped file's SHA-256, the `.gen.json` next to it the generated one).
@@ -121,7 +121,7 @@ evidence file keeps the shipped file's SHA-256, the `.gen.json` next to it the g
   and normalized.
 - The smoke runs with SDL's dummy audio driver, so a passing smoke does not prove the files load. A run with one file
   hidden printed `cannot load assets/audio/tank-fire.wav`; with all of them present it prints nothing.
-- Cost: 162 credits with the retake. Verified: `check`, `test`, `smoke`.
+- Verified: `check`, `test`, `smoke`.
 
 ### Later: review fixes (2026-10-26)
 A review by Claude (Fable 5.1) wrote failing proof tests for each suspect; the fixed ones are now in

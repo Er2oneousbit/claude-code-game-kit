@@ -253,10 +253,15 @@ def run_tee(cmd):
               file=sys.stderr)
         return 126, ""
     lines = []
-    for line in proc.stdout:
-        print(line, end="", flush=True)    # live, even when piped
-        lines.append(line)
-    return proc.wait(), "".join(lines)
+    try:
+        for line in proc.stdout:
+            print(line, end="", flush=True)    # live, even when piped
+            lines.append(line)
+        return proc.wait(), "".join(lines)
+    except KeyboardInterrupt:              # Ctrl+C: stop UBT and its compilers too, then let main() report it
+        kill_tree(proc)
+        reap(proc)
+        raise
 
 
 def preflight(need_uproject=True):

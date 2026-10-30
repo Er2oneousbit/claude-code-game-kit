@@ -157,12 +157,20 @@ class FishTtsExam(unittest.TestCase):
         self.assertFalse((self.dir / "a.wav").exists())
         project = self.dir / "game"
         (project / "docs").mkdir(parents=True)
-        (project / "docs" / "ASSET_LOG.md").write_text("# Asset Log\n", encoding="utf-8")
+        (project / "docs" / "ASSET_LOG.md").write_text("# Asset Log\n\n| ID | Type |\n|---|---|\n", encoding="utf-8")
         fake = Fake()
         rc, text = self.run_tool(fake, "say", "--voice", "v", "--text", "x", "--out", self.dir / "outside.wav",
                                  "--log", "--root", project)
         self.assertEqual(rc, 2, text)
         self.assertIn("inside the project", text)
+        self.assertEqual([c for c in fake.calls if c[0] == "POST"], [], "nothing spent")
+        # A log with no table would refuse the row only after the request
+        (project / "docs" / "ASSET_LOG.md").write_text("# Asset Log\n", encoding="utf-8")
+        fake = Fake()
+        rc, text = self.run_tool(fake, "say", "--voice", "v", "--text", "x", "--out", project / "a.wav",
+                                 "--log", "--root", project)
+        self.assertEqual(rc, 2, text)
+        self.assertIn("no table", text)
         self.assertEqual([c for c in fake.calls if c[0] == "POST"], [], "nothing spent")
 
     def test_a_redirect_to_another_port_does_not_carry_the_key(self):

@@ -256,6 +256,22 @@ class PixelLabExam(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertIn("--overwrite", out)
 
+    def test_output_problems_stop_before_spending(self):
+        # A folder where one PNG goes, even with --overwrite, and a log without a table: both used to fail after
+        # the paid request
+        (self.root / "shots.png").mkdir()
+        fake = Fake()
+        rc, out = self.run_tool("image", "--text", "x", "--out", "shots.png", "--overwrite", fake=fake)
+        self.assertEqual(rc, 2, out)
+        self.assertIn("is a folder", out)
+        self.assertEqual([c for c in fake.calls if c[0] == "POST"], [], "nothing spent")
+        (self.root / "docs/ASSET_LOG.md").write_text("# Asset Log\n", encoding="utf-8")
+        fake = Fake()
+        rc, out = self.run_tool("image", "--text", "x", "--out", "b.png", "--log", fake=fake)
+        self.assertEqual(rc, 2, out)
+        self.assertIn("no table", out)
+        self.assertEqual([c for c in fake.calls if c[0] == "POST"], [], "nothing spent")
+
     def test_character_polls_then_extracts_the_zip(self):
         fake = Fake(polls=2)
         rc, out = self.run_tool("character", "--text", "old gravekeeper", "--size", "64", "--directions", "4",

@@ -1,7 +1,7 @@
 # How Lockpick MZ was made
 
 The kit's RPG Maker MZ example, made in one session (2026-10-23) right after the `rpgmaker-mz` overlay, on a machine
-**without RPG Maker MZ**. The owner asked to "add in rpg maker" and chose: MZ (not MV, VX Ace or Unite), build it
+**without RPG Maker MZ**. The user asked to "add in rpg maker" and chose: MZ (not MV, VX Ace or Unite), build it
 unverified for now, and an overlay plus a small example.
 
 ## 1. What could and could not be checked

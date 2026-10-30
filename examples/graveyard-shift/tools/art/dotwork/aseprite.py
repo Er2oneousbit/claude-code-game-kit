@@ -88,7 +88,7 @@ def _bin(conf):
 def _run(conf, lua_text, lua_name, params):
     lua = os.path.join(core.WORK, lua_name)
     os.makedirs(os.path.dirname(lua), exist_ok=True)
-    with open(lua, "w", encoding="utf-8", newline="\n") as f:
+    with open(core.safe_dest(lua), "w", encoding="utf-8", newline="\n") as f:
         f.write(lua_text)
     cmd = [_bin(conf), "-b"]
     for k, v in params.items():
@@ -109,7 +109,7 @@ def _palette_file(pngs, path):
     cols = sorted(cols)
     lines = ["GIMP Palette", "Name: Dotwork", "Columns: 16", "#", "255   0 255\ttransparent"]
     lines += [f"{r:3d} {g:3d} {b:3d}\tc" for r, g, b in cols]
-    with open(path, "w", encoding="ascii") as f:
+    with open(core.safe_dest(path), "w", encoding="ascii") as f:
         f.write("\n".join(lines) + "\n")
     return len(cols)
 
@@ -200,7 +200,7 @@ def build(pack, conf):
     for out, items in jobs:
         os.makedirs(os.path.dirname(out), exist_ok=True)
         lst = out[:-9] + ".list.txt"
-        with open(lst, "w", encoding="utf-8") as fh:
+        with open(core.safe_dest(lst), "w", encoding="utf-8") as fh:
             fh.write("\n".join(f"{t}|{d:.4f}|{p}" for t, d, p in items) + "\n")
         pal = out[:-9] + ".gpl"
         n = _palette_file([p for _, _, p in items], pal)
@@ -252,7 +252,7 @@ def reexport(pack, conf):
                 man.add(os.path.join(out, "frames", fn), "frame", animation=anim, canvas=[W, H],
                         anchor="feet_bottom_center", note="hand-polished in Aseprite", routes=("qwen_rotate", "wan"))
             sp = core.save_clean(sheet, os.path.join(out, f"{name}_{anim}_sheet.png"))
-            with open(sp[:-4] + ".json", "w", encoding="utf-8") as fh:
+            with open(core.safe_dest(sp[:-4] + ".json"), "w", encoding="utf-8") as fh:
                 json.dump({"frame_w": W, "frame_h": H, "frames": len(files), "fps": f, "loop": loop,
                            "anchor": "bottom_center"}, fh, indent=1)
             man.add(sp, "sheet", animation=anim, frames=len(files), fps=f, loop=loop, canvas=[W, H],

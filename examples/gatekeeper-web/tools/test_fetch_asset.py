@@ -292,6 +292,18 @@ class FetchAssetExam(unittest.TestCase):
         self.assertNotIn("evil", self.log())
         self.assertFalse((self.root / "assets").exists())
 
+    def test_device_names_and_trailing_dots_refused(self):
+        # Legal in a zip, but Windows cannot create them (the extract used to fail with an OS error)
+        self.evil_pack([("License.txt", "CC0"), ("CON", b"x"), ("Tiles/nul.png", b"x"), ("dir./a.png", b"x"),
+                        ("Tiles/ok.png", b"x")])
+        for name in ("CON", "Tiles/nul.png", "dir./a.png"):
+            rc, out = self.good("--take", name)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("device names", out)
+        rc, out = self.good("--take", "Tiles/ok.png")
+        self.assertEqual(rc, 0, out)
+        self.assertFalse(fetch_asset.windows_unsafe("console.png"))
+
     def test_row_cells_escaped(self):
         rc, out = self.good("--take", "Tiles/tile_0001.png", "--notes", "a | b")
         self.assertEqual(rc, 0, out)

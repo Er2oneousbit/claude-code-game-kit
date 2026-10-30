@@ -271,6 +271,13 @@ class ElevenAudioExam(unittest.TestCase):
         self.assertEqual(rc, 2, out)
         self.assertIn("outside the project", out)
         self.assertEqual([c for c in fake.calls if c[0] == "POST"], [], "no credits spent")
+        # A log with no table would reject the row only after the request
+        (self.root / "docs" / "ASSET_LOG.md").write_text("# Asset Log\n", encoding="utf-8")
+        fake = Fake()
+        rc, out = self.run_tool(fake, "sfx", "--text", "x", "--out", "assets/x.mp3", "--log", "--plan", "paid")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("no table", out)
+        self.assertEqual([c for c in fake.calls if c[0] == "POST"], [], "no credits spent")
 
     def test_a_redirect_to_another_port_does_not_carry_the_key(self):
         # The real http() against two stand-in servers on 127.0.0.1: the API answers 302 to the second one

@@ -44,7 +44,7 @@ def run(entries, pack, man, conf):
     res = f'{conf["fixed"]["res_root"]}/{conf["fixed"]["art_dir"]}/ui/balloons'
     meta, glyphs = lane_fonts.parse(os.path.join(core.HERE, "glyphs", "symbols.txt"))
     _, dia = lane_fonts.parse(os.path.join(core.HERE, "glyphs", "dialogue.txt"))
-    man.drop_dir(art)
+    man.drop_owned(art, ("ui_balloon_", "balloon_"))   # a shared folder
     for e in entries:
         name = core.snake(e["name"])
         g = glyphs.get(e["symbol"]) if e["symbol"] in glyphs else dia[e["symbol"]]

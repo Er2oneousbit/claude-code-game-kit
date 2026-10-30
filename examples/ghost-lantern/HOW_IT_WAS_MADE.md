@@ -1,7 +1,7 @@
 # How Ghost Lantern was made
 
 The kit's "only what is in the kit" example. One Claude Code session (Claude Opus 5.5) on Windows 11 with Node 26,
-2026-10-21. The owner picked the concept; Claude did the rest by following the kit's documents and tools, and recorded
+2026-10-21. The user picked the concept; Claude did the rest by following the kit's documents and tools, and recorded
 every place the kit fell short. Those gaps were fixed **in the kit** during the run and pulled into the game with
 `new_game.py --upgrade`, the same way any kit user gets updates.
 
@@ -20,7 +20,7 @@ python tools/dev.py doctor
 (versions are pinned in `package.json`). Fixed: engines can set a `setup_step` in their engine.json.
 
 ## 2. Brainstorm and GDD (5 to 25 min)
-Claude offered four concepts, each built on a different classic game-AI technique; the owner picked "Ghost Lantern"
+Claude offered four concepts, each built on a different classic game-AI technique; the user picked "Ghost Lantern"
 (utility AI plus A*). The GDD identity block got the pitch, three pillars (readable ghosts, light is the resource, one more
 run) and the core loop.
 
@@ -90,9 +90,9 @@ missing (124 files after the fix).
 | `python tools/doctor.py`, `python tools/check_links.py` | healthy, no broken references |
 
 ### Later: generated sound (ElevenLabs)
-The owner asked for API audio in the other example games (2026-10-23), after Graveyard Shift had it. The Kenney sounds
+The user asked for API audio in the other example games (2026-10-23), after Graveyard Shift had it. The Kenney sounds
 were replaced by sound effects generated with the kit's `tools/audio/eleven_audio.py`, plus an ambience loop the game
-never had. Free plan: every file is PLACEHOLDER in `docs/ASSET_LOG.md` (non-commercial, credit in the README); the old
+never had. Every file is a PLACEHOLDER (non-commercial terms) in `docs/ASSET_LOG.md` (credit in the README); the old
 Kenney rows stay, marked removed. Every file was measured before use (peak, loudness, silence at the start, the jump at
 a loop's seam, flat-topped samples), then peak-normalized: one-shots to -3 dBFS, loops to -6 (the log says Modified, the
 evidence file keeps the shipped file's SHA-256, the `.gen.json` next to it the generated one).
@@ -107,7 +107,7 @@ evidence file keeps the shipped file's SHA-256, the `.gen.json` next to it the g
 
 - What the measurements caught: the oil pour came back nearly silent (-29.5 dBFS peak); a retake with a louder prompt
   ("a clear liquid glug glug, then a soft whoomp as the flame flares") reached -16.8 and was normalized.
-- Cost: 169 credits with the retake. Verified: `check`, 40 tests, `smoke`, and every file decoded in headless Chromium.
+- Verified: `check`, 40 tests, `smoke`, and every file decoded in headless Chromium.
 
 ## 9. Outside the kit (be honest)
 - Before writing `src/game/level.ts`, the map was sanity-checked once with a few lines of throwaway Python (row lengths,

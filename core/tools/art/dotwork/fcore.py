@@ -229,12 +229,35 @@ def ignore_work(path):
     scripts from here by res:// path; .gdignore only stops the editor scan and import."""
     gi = os.path.join(path, ".gitignore")
     if not os.path.exists(gi):
-        with open(gi, "w", encoding="utf-8", newline="\n") as f:
+        with open(safe_dest(gi), "w", encoding="utf-8", newline="\n") as f:
             f.write("# Dotwork work folder: regenerated caches, renders fetched from ComfyUI, the log. Only your config is tracked.\n"
                     "*\n!.gitignore\n!dotwork.config.json\n")
     gd = os.path.join(path, ".gdignore")
     if not os.path.exists(gd):
-        open(gd, "w").close()
+        open(safe_dest(gd), "w").close()
+
+
+def _inside_or_refuse(p, project):
+    """Deletes stay inside the game, resolved, and never go through a link."""
+    full = os.path.abspath(p)
+    if not _within(full, project) or not _within(os.path.realpath(full), os.path.realpath(project)) or is_link(full):
+        raise ToolError(f"refusing to delete {p}: it is a link, or resolves outside the game folder")
+
+
+def _rmtree_no_links(top):
+    """shutil.rmtree, but a link inside the tree is removed as a link, never followed (older Pythons descend into
+    Windows junctions)."""
+    for entry in list(os.scandir(top)):
+        if is_link(entry.path):
+            try:
+                os.unlink(entry.path)
+            except OSError:   # a junction is a directory link
+                os.rmdir(entry.path)
+        elif entry.is_dir(follow_symlinks=False):
+            _rmtree_no_links(entry.path)
+        else:
+            os.remove(entry.path)
+    os.rmdir(top)
 
 
 def work(*parts):
@@ -312,16 +335,52 @@ def palette_key(path):
     return sha256_file(path)[:8] if path and os.path.exists(path) else "none"
 
 
+def prompt(template, conf=None, **kw):
+    """A built-in prompt template filled with the game's art direction from design (the spec's or the config's):
+    style (the art era, default "16-bit era"), genre (default "RPG") and setting (empty by default). Nothing about a
+    setting is assumed any more: the templates used to say "steampunk", so a sci-fi or a farm game got steampunk
+    props (2026-10-30). An empty setting leaves no stray comma."""
+    d = (conf or SETTINGS.conf)["design"]
+    text = template.format(style=d.get("style") or "16-bit era", genre=d.get("genre") or "RPG",
+                           setting=d.get("setting") or "", **kw)
+    text = re.sub(r"\s*,(\s*,)+", ",", text)   # ", ," where the setting was empty
+    return re.sub(r"\s+", " ", text).strip(" ,")
+
+
+def is_link(p):
+    """True for a symlink or a Windows junction (Python < 3.12 has no os.path.isjunction, so compare the resolved
+    path with the resolved parent + name: they differ only when p itself redirects)."""
+    if os.path.islink(p) or getattr(os.path, "isjunction", lambda _: False)(p):
+        return True
+    if not os.path.exists(p):
+        return False
+    parent = os.path.dirname(os.path.abspath(p))
+    return (os.path.normcase(os.path.realpath(p))
+            != os.path.normcase(os.path.join(os.path.realpath(parent), os.path.basename(os.path.abspath(p)))))
+
+
+def safe_dest(path):
+    """A file Dotwork is about to write inside the game must not be a link, and must resolve inside the game: a
+    planted assets/x.png -> ../../outside.png was written through (2026-10-30 Kimi audit). Paths outside the game
+    (a palette file the user names) are theirs and pass."""
+    full = os.path.abspath(path)
+    if not _within(full, PROJECT):
+        return path
+    if is_link(full) or not _within(os.path.realpath(full), os.path.realpath(PROJECT)):
+        raise ToolError(f"refusing to write {path}: it is a link, or resolves outside the game folder")
+    return path
+
+
 def save_clean(img, path):
     """PNG with no text chunks: PIL writes none unless pnginfo is passed, so ComfyUI metadata never ships."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    img.save(path, format="PNG", optimize=True)
+    img.save(safe_dest(path), format="PNG", optimize=True)
     return path
 
 
 def write_text(path, text):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
+    with open(safe_dest(path), "w", encoding="utf-8", newline="\n") as f:
         f.write(text)
     return path
 
@@ -383,12 +442,34 @@ class Manifest:
         return n
 
     def drop_dir(self, dir_abs):
-        """Forget rows under dir_abs and delete that folder (clean re-export: no stale frames or rows)."""
-        import shutil
+        """Forget rows under dir_abs and delete that folder (clean re-export: no stale frames or rows). Only for a
+        folder one entry owns (characters/<name>, fx/status/<name> ...); a folder several packs share uses
+        drop_owned. Never deletes through a link: a junction under assets/ pointing out of the game used to pass the
+        lexical check and take the target with it (2026-10-30 Kimi audit)."""
         rel = self._rel(dir_abs).rstrip("/") + "/"
         self.data["assets"] = [a for a in self.data["assets"] if not a["file"].startswith(rel)]
-        if os.path.commonpath([os.path.abspath(dir_abs), self.s.project]) == self.s.project:
-            shutil.rmtree(dir_abs, ignore_errors=True)   # never outside the game project
+        if os.path.exists(dir_abs):
+            _inside_or_refuse(dir_abs, self.s.project)
+            _rmtree_no_links(dir_abs)
+        self.save()
+
+    def drop_owned(self, dir_abs, prefixes=()):
+        """Clean re-export of a folder several packs (or lanes) share: delete only the files this manifest lists
+        under dir_abs (and whose names start with one of prefixes, when given), and their rows. Another pack's
+        enemies, or img2px's scenes next to the scenes lane's, stay (2026-10-30 Kimi audit: pack B deleted pack A's
+        enemies while A's manifest still listed them)."""
+        rel = self._rel(dir_abs).rstrip("/") + "/"
+        keep = []
+        for a in self.data["assets"]:
+            name = a["file"].rsplit("/", 1)[-1]
+            if a["file"].startswith(rel) and (not prefixes or name.startswith(tuple(prefixes))):
+                f = os.path.join(self.s.project, *a["file"].split("/"))
+                if os.path.lexists(f):
+                    _inside_or_refuse(f, self.s.project)
+                    os.remove(f)
+            else:
+                keep.append(a)
+        self.data["assets"] = keep
         self.save()
 
     def save(self):

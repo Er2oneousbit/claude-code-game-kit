@@ -44,7 +44,10 @@ func _init():
 			print("DOTWORK_OK ", p, " TileSet sources=", r.get_source_count(), " terrain_sets=", r.get_terrain_sets_count())
 			# layered ground TileSets (lane_ground) carry metadata/dotwork_overlays: test each overlay terrain on an
 			# empty layer; pair TileSets (lane_tiles) get the two-terrain test
-			var t = _overlay_test(r, r.get_meta("dotwork_overlays")) if r.has_meta("dotwork_overlays") else _terrain_test(r)
+			# a TileSet without terrains (iso floors and blocks are placed tile by tile) has nothing to paint
+			var t = 0 if r.get_terrain_sets_count() == 0 else (
+				_overlay_test(r, r.get_meta("dotwork_overlays")) if r.has_meta("dotwork_overlays") else (
+				_overlay_test(r, r.get_meta("dotwork_sides"), true) if r.has_meta("dotwork_sides") else _terrain_test(r)))
 			if t > 0:
 				bad += 1
 			print("DOTWORK_TERRAIN ", p, " mismatched_corners=", t)
@@ -80,7 +83,8 @@ func _canon(m):
 			m &= ~(1 << c)
 	return m
 
-func _overlay_test(ts, ids):
+# sides_only: a Match Sides set (lane_platforms) is judged on its four sides; its corners carry no terrain
+func _overlay_test(ts, ids, sides_only = false):
 	var rect = []
 	for y in range(3, 7):
 		for x in range(4, 10):
@@ -105,11 +109,13 @@ func _overlay_test(ts, ids):
 				var want = 0
 				var got = 0
 				for b in range(8):
+					if sides_only and b % 2 == 1:
+						continue
 					if s.has(c + OFF[b]):
 						want |= 1 << b
 					if td.get_terrain_peering_bit(NB[b]) == int(tid):
 						got |= 1 << b
-				if got != _canon(want):
+				if got != (want if sides_only else _canon(want)):
 					total += 1
 			total += layer.get_used_cells().size() - s.size()
 			layer.free()

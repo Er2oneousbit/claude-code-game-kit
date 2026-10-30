@@ -51,9 +51,9 @@ during this example).
 | Same with `--headed` and `&llm=1` (the real model in Chromium on WebGPU), now with `--fail-on "FALLBACK,(fallback),model failed to load"` | passed 2026-10-21, every intent from the model per the log; not re-run with `--fail-on` yet (it needs the GPU and the model download) |
 
 ### Later: generated sound (ElevenLabs)
-The owner asked for API audio in the other example games (2026-10-23), after Graveyard Shift had it. The Kenney sounds
+The user asked for API audio in the other example games (2026-10-23), after Graveyard Shift had it. The Kenney sounds
 were replaced by sound effects generated with the kit's `tools/audio/eleven_audio.py`, plus an ambience loop the game
-never had. Free plan: every file is PLACEHOLDER in `docs/ASSET_LOG.md` (non-commercial, credit in the README); the old
+never had. Every file is a PLACEHOLDER (non-commercial terms) in `docs/ASSET_LOG.md` (credit in the README); the old
 Kenney rows stay, marked removed. Every file was measured before use (peak, loudness, silence at the start, the jump at
 a loop's seam, flat-topped samples), then peak-normalized: one-shots to -3 dBFS, loops to -6 (the log says Modified, the
 evidence file keeps the shipped file's SHA-256, the `.gen.json` next to it the generated one).
@@ -65,7 +65,7 @@ evidence file keeps the shipped file's SHA-256, the `.gen.json` next to it the g
 | always (Phaser starts it when the browser unlocks audio) | `gate-ambience.wav` (10 s loop) |
 
 - One generation for both twins: `../gatekeeper-godot` plays the same files, logged there as copies.
-- Cost: 140 credits. Verified: `check`, 42 tests, `smoke`, and every file decoded in headless Chromium.
+- Verified: `check`, 42 tests, `smoke`, and every file decoded in headless Chromium.
 
 ### Later: review fixes (2026-10-26)
 A review with Claude (Fable 5.1) found nine problems and proved the code ones with failing tests; those now live in `tests/` as regression tests

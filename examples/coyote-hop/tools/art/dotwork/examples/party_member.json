@@ -1,6 +1,9 @@
 {
  "name": "party_member",
- "_comment": "One party member end to end: 4-direction idle and walk, an attack clip, the battle pose set facing left (poses: battle) and a menu portrait. The longest example (rotation + one Wan clip per action and direction). Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "_comment": "One party member end to end: 4-direction idle and walk, an attack clip, the battle pose set facing left (poses: battle) and a menu portrait with five expressions and talking frames. The longest example (rotation + one Wan clip per action and direction). Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "design": {
+  "setting": "steampunk"
+ },
  "characters": [
   {
    "name": "duelist",
@@ -26,7 +29,9 @@
   {
    "name": "duelist",
    "prompt": "a dashing young swordsman with a red long coat and a black tricorn hat with a feather",
-   "seed": 6100
+   "seed": 6100,
+   "expressions": true,
+   "talking": true
   }
  ]
 }

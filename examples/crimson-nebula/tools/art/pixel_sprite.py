@@ -28,7 +28,7 @@
 #           Phaser: this.load.spritesheet(key, png, {frameWidth: cell, frameHeight: cell}); a row's frames are
 #           row * columns + 0..frames-1. Godot: an AtlasTexture or SpriteFrames region per cell.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5), generalizing a sprite script written with Claude
-#           (Sonnet 5.5) and iterated by the kit owner
+#           (Sonnet 5.5) and iterated by hand
 # ---------------------------------------------------------------------------
 #
 # Pseudocode

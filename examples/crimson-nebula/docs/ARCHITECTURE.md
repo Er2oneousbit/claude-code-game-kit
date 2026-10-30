@@ -51,7 +51,7 @@ ticks per frame never lose anything.
 ## Budgets
 | Budget | Target | Measured on | Last measured |
 |---|---|---|---|
-| Frame time | 16.6 ms (60 FPS) | owner's PC, release build | not yet |
+| Frame time | 16.6 ms (60 FPS) | the dev PC, release build | not yet |
 | Min-spec hardware | any GPU with Vulkan or DX12 | | |
 
 ## Debug tooling

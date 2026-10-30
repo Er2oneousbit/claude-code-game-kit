@@ -2,7 +2,7 @@
 
 The kit's Unreal Engine 5 example, and its fifth "only what is in the kit" run (after ghost-lantern, courier-dash,
 scrap-tanks and graveyard-shift). One Claude Code session (Claude Opus 5.5) on Windows 11 with Unreal Engine 5.8.4 and
-Visual Studio 2022 Build Tools, 2026-10-22. The owner picked the concept; Claude did the rest by following the kit's
+Visual Studio 2022 Build Tools, 2026-10-22. The user picked the concept; Claude did the rest by following the kit's
 documents and tools, without opening the Unreal editor's UI, and recorded every place the kit fell short. Each gap was
 fixed **in the kit** and pulled in with `new_game.py --upgrade`.
 
@@ -17,12 +17,12 @@ GameplayAbilities, EnhancedInput and PythonScriptPlugin plugins), two target fil
 at a short path because UnrealBuildTool breaks on long Windows paths. **Kit gap R5:** the generated README called it
 "a Unreal Engine 5 game"; the template now reads "a game made with <engine>".
 ```
-python scripts/new_game.py --name "Rune Delve" --engine unreal --dest D:/kt/rd --adopt --git-init
+python scripts/new_game.py --name "Rune Delve" --engine unreal --dest ../rune-delve --adopt --git-init
 python tools/dev.py doctor && python tools/dev.py check        # compiled in 95 s
 ```
 
 ## 2. Concept, the spike that decided it, and the GDD
-Claude offered three Unreal concepts built on parts no example had used; the owner picked "Rune Delve" (the Gameplay
+Claude offered three Unreal concepts built on parts no example had used; the user picked "Rune Delve" (the Gameplay
 Ability System, AI Perception, the NavMesh, Enhanced Input). Before designing, a 50-second spike answered the one
 question that could sink a code-only Unreal game: can a headless editor import FBX and make a map? It could: Interchange
 turned a Kenney FBX into a static mesh, an animated one into a skeletal mesh with 34 animations, and a map saved.
@@ -98,9 +98,9 @@ The masher loses for the reason the pillar names: bolting every 0.4 s drains the
 | The README steps in a fresh copy inside the kit repo | found three more gaps, all fixed: content before compiling cannot work (**R6**: `dev.py` now says "run check first", exit 2); a space in the path turned the script path's backslashes into escape characters (**R7**: forward slashes); the characters loaded their meshes in C++ constructors, which run before a fresh clone has content, so every editor command logged errors (**R8**: load in `BeginPlay`, Unreal gotcha 12). The smoke tests now stop at once when the map is missing |
 
 ### Later: generated sound (ElevenLabs)
-The owner asked for API audio in the other example games (2026-10-23), after Graveyard Shift had it. The Kenney sounds
+The user asked for API audio in the other example games (2026-10-23), after Graveyard Shift had it. The Kenney sounds
 were replaced by sound effects generated with the kit's `tools/audio/eleven_audio.py`, plus an ambience loop the game
-never had. Free plan: every file is PLACEHOLDER in `docs/ASSET_LOG.md` (non-commercial, credit in the README); the old
+never had. Every file is a PLACEHOLDER (non-commercial terms) in `docs/ASSET_LOG.md` (credit in the README); the old
 Kenney rows stay, marked removed. Every file was measured before use (peak, loudness, silence at the start, the jump at
 a loop's seam, flat-topped samples), then peak-normalized: one-shots to -3 dBFS, loops to -6 (the log says Modified, the
 evidence file keeps the shipped file's SHA-256, the `.gen.json` next to it the generated one).
@@ -113,7 +113,7 @@ at a location) and `dungeon-ambience` (a 2D loop the dungeon starts when it buil
   from `assets_src/audio` (it removed the nine Kenney assets). Hyphens in names survive the import.
 - What the measurements caught: the first orc alert had 4% of its samples flattened at full scale (audible distortion),
   the orc death 1%; both retaken ("not distorted" in the prompt) and clean.
-- Cost: 237 credits with the retakes. Verified: the content script logged every sound and the loop, `check`, 7 tests,
+- Verified: the content script logged every sound and the loop, `check`, 7 tests,
   2 smoke tests.
 
 ### Later: review fixes (2026-10-26)

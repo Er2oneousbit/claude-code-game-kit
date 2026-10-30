@@ -9,8 +9,15 @@
 #           ["idle", "walk"], "poses": "battle", "clip_fix": {"walk_n": {"seed": 4247}}}] or dotwork.py character
 #           --name guard --prompt ...
 # Notes   : Keys: prompt | source, seeds, asymmetric (generate west instead of mirroring), actions, directions, east_edit,
-#           subject, motions {action: wording}, clip_fix {clip: {seed, keep, motion}}, poses (battle | field | {name: wording}),
-#           pose_dirs, pose_text. Back-view idles are a procedural 1 px bob (Wan paints faces on the back of heads).
+#           subject, motions {action: wording}, clip_fix {clip: {seed, keep, motion, allow_drift}}, poses (battle | field | {name: wording}),
+#           pose_dirs, pose_text, variants, skeleton (actions driven by pose.py). Back-view idles are a procedural 1 px bob (Wan paints faces on the back of
+#           heads). directions may add the diagonals se, ne, nw, sw: any diagonal switches to the 8-way rotation (the
+#           west-facing views are mirrors of their east twins unless asymmetric; the back diagonals idle in code).
+#           After the rotation each east / west pair is checked by where the face sits and swapped when the east view
+#           faces left; rot_swap ["ne"] swaps a pair by hand (back views show no face to check).
+#           variants: [{"name": "guard_winter", "edit": "a fur-lined winter coat"}] renders an outfit as a whole
+#           character from the edited south sprite; [{"name": "guard_red", "hue": 130}] is a palette swap of every frame
+#           (no render; recolor.py keys, keep_skin on).
 #           Renders resume from <work>/<name>/ (south, rot/, clips/, poses/). Review sheet: <src>/art/characters/<name>/.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
@@ -24,14 +31,27 @@ from PIL import Image, ImageOps
 
 import fcore as core
 import godot
+import pose
 import qa
 import spritekiln
 
 import engine as lib  # noqa: E402
 
 COMFY_WORK = lib.comfy_out("dotwork_work")  # where ComfyUI writes Dotwork temp outputs
-ROT_ORDER = ["s", "w", "n", "e"]  # rotation workflow output, screen-clockwise from south (verified)
-VIEW = {"s": "front view", "e": "side view", "w": "side view", "n": "keep facing direction"}
+ROT_ORDER = ["s", "w", "n", "e"]  # rotation workflow output, screen-clockwise from south (the usual case)
+# the 8-way outputs for a front-view source, as most characters come out (2026-10-30): the model's front quarter views
+# come out the other way round from its side and back ones, so this is not a plain clockwise ring. Neither order is
+# fixed: the model reads "right side view" either way round from one character to the next, so orient() checks each
+# east / west pair after the rotation and swaps the ones that face the wrong way
+ROT_ORDER8 = ["s", "se", "w", "nw", "n", "ne", "e", "sw"]
+DIRS8 = ("s", "se", "e", "ne", "n", "nw", "w", "sw")
+MIRRORED = {"w": "e", "sw": "se", "nw": "ne"}   # west-facing views flipped from their east twins (symmetric characters)
+# Wan view wording per direction; the animation node accepts only VIEWS (SpriteKiln SK_AnimationPreset): a value
+# outside it is refused with "Value not in list" (2026-10-30, a diagonal said "three-quarter front view")
+VIEWS = ("side view", "front view", "three-quarter view", "top-down view", "isometric view", "keep facing direction")
+VIEW = {"s": "front view", "e": "side view", "w": "side view", "n": "keep facing direction",
+        "se": "three-quarter view", "sw": "three-quarter view", "ne": "keep facing direction",
+        "nw": "keep facing direction"}
 # Wan negative prompt, Dotwork's own wording. NOTE: wf10 samples at cfg 1.0 (4-step lightning LoRAs), and at cfg 1.0
 # the negative prompt has NO effect. Kept for the day cfg > 1 is used; shadows are handled by rendering unlocked +
 # qa.deshadow_blob, faces on back views by the procedural idle.
@@ -41,7 +61,7 @@ WAN_NEG = ("still image, frozen frame, blurry, smeared detail, oversaturated, wa
            "ground shadow, drop shadow, cast shadow, shadow under the feet, floor, ground plane, dark ellipse")
 # "poses": "battle" -> side-view battle stills (the party faces left in 16-bit RPG battles: pose_dirs ["w"]);
 # attack / walk come from the animated clips (punch_w, walk_w ...)
-BATTLE_POSES = {  # wordings auditioned 2026-10-29 on the Tinkerer (vague wording = klein returns the idle pose)
+BATTLE_POSES = {  # wordings auditioned 2026-10-29 on a test character (vague wording = klein returns the idle pose)
     "ready": "the character takes a wide boxing stance: feet apart, knees bent, both fists raised in front of the "
              "chest, the body and head still in side profile facing left",
     "weak": "the character has collapsed down onto one knee: the body is much lower, crouched near the ground, head "
@@ -75,9 +95,9 @@ FIELD_POSES = {
     "arms_crossed": "the character stands with both arms crossed over the chest, confident smirk, facing the viewer",
     "thinking": "the character holds his chin in one hand thinking, looking up, facing the viewer",
 }
-NPC_TPL = ("pixel art sprite, high top-down RPG character sprite of {s}, full body, standing, front view facing the "
+NPC_TPL = ("pixel art sprite, high top-down {genre} character sprite of {s}, full body, standing, front view facing the "
            "viewer, face clearly visible, chibi proportions, drawn in the exact pixel art style, palette, outline "
-           "and shading of image 1, steampunk, crisp dark outline")
+           "and shading of image 1, {setting}, crisp dark outline")
 
 
 def _wf(name):
@@ -126,9 +146,22 @@ class Character:
         # 2026-10-30 Kimi audit)
         self.actions = [core.snake(a) for a in (entry.get("actions") or list(self.d["actions"]))]
         self.dirs = list(entry.get("directions") or self.d["directions"])
-        bad = [d for d in self.dirs if d not in ("s", "e", "n", "w")]
+        bad = [d for d in self.dirs if d not in DIRS8]
         if bad:
-            raise core.ToolError(f"character {self.name}: directions {bad}: use s, e, n and w")
+            raise core.ToolError(f"character {self.name}: directions {bad}: use s, e, n, w and the diagonals se, ne, "
+                                 "nw, sw")
+        self.eight = any(d not in ("s", "e", "n", "w") for d in self.dirs)   # any diagonal: the 8-way rotation
+        self.rot_swap = sorted({str(d).lower() for d in entry.get("rot_swap") or []})
+        bad = [d for d in self.rot_swap if d not in (MIRRORED.values() if self.eight else ("e",))]
+        if bad:
+            raise core.ToolError(f"character {self.name}: rot_swap {bad}: name each pair by its east view (e, and se, "
+                                 "ne for 8 directions)")
+        # actions driven by a procedural skeleton (pose.py) instead of a free image-to-video clip
+        self.skeleton = [core.snake(a) for a in entry.get("skeleton") or []]
+        bad = [a for a in self.skeleton if a not in pose.ACTIONS or a not in self.actions]
+        if bad:
+            raise core.ToolError(f"character {self.name}: skeleton {bad}: each must be one of {', '.join(pose.ACTIONS)} "
+                                 "and one of the character's actions")
         self.work = os.path.join(core.WORK, self.name)           # resumable working files
         self.src = core.src(conf, "art", "characters", self.name)
         self.out = core.art(conf, "characters", self.name)   # the configured assets_dir (public/assets for web games)
@@ -141,7 +174,7 @@ class Character:
             man.assume(f"{self.name}: west generated, not mirrored (asymmetric character)")
 
     # -------------------------------------------------- 0. design stamp
-    STAMPED = ("south.png", "candidates.png", "candidates.json", "rot", "clips", "poses", "audition")
+    STAMPED = ("south.png", "candidates.png", "candidates.json", "rot", "rot8", "clips", "poses", "audition")
 
     def stamp_check(self):
         """Everything after the south sprite builds on it, so a new design (prompt or source, seeds, height, symmetry,
@@ -157,7 +190,8 @@ class Character:
         src = core.sha256_file(sp)[:12] if sp and os.path.exists(sp) else e.get("source")
         inputs = {"prompt": e.get("prompt"), "source": src, "seed": e.get("seed", 3000), "seeds": e.get("seeds", 3),
                   "fig_height": self.d["fig_height"], "asymmetric": self.asym, "east_edit": e.get("east_edit"),
-                  "ref": lib.ref_key(self.conf)}
+                  "ref": lib.ref_key(self.conf),
+                  "template": core.prompt(NPC_TPL, self.conf, s=e.get("prompt") or "")}   # a new setting = a new design
         stamp = core.key(*[f"{k}={inputs[k]}" for k in sorted(inputs)])
         path = os.path.join(self.work, "stamp.json")
         old = None
@@ -171,7 +205,7 @@ class Character:
             for n in stale:
                 shutil.move(os.path.join(self.work, n), os.path.join(keep, n))
             core.log(f"{self.name}: design changed, earlier renders moved to {keep}")
-        with open(path, "w", encoding="utf-8") as f:
+        with open(core.safe_dest(path), "w", encoding="utf-8") as f:
             json.dump({"stamp": stamp, "inputs": inputs}, f, indent=1)
 
     # -------------------------------------------------- 1. south sprite
@@ -188,7 +222,7 @@ class Character:
         cands = []
         for k in range(int(self.e.get("seeds", 3))):
             seed = int(self.e.get("seed", 3000)) + k
-            o = lib.sprite(NPC_TPL.format(s=self.e["prompt"]), seed, f"dotwork/{self.name}", ref_fn=ref,
+            o = lib.sprite(core.prompt(NPC_TPL, s=self.e["prompt"]), seed, f"dotwork/{self.name}", ref_fn=ref,
                            fig=self.d["fig_height"], canvas=max(self.d["canvas_min"]), baseline=self.d["canvas_min"][1] - 3)
             cands.append((_score(o["path"]), seed, o["path"]))
             core.log(f"{self.name}: candidate seed {seed} score {cands[-1][0]:.1f}")
@@ -196,35 +230,98 @@ class Character:
         lib.sheet([("candidates", [c[2] for c in cands])], os.path.join(self.work, "candidates.png"), scale=3)
         shutil.copyfile(cands[0][2], p)
         json.dump([{"score": c[0], "seed": c[1], "file": c[2]} for c in cands],
-                  open(os.path.join(self.work, "candidates.json"), "w"), indent=1)
+                  open(core.safe_dest(os.path.join(self.work, "candidates.json")), "w"), indent=1)
         self.e["_picked_seed"] = cands[0][1]
         core.log(f"{self.name}: picked seed {cands[0][1]}")
         return p
 
     # -------------------------------------------------- 2-3. rotation (+ optional east edit)
     def rotate(self, south):
-        d = os.path.join(self.work, "rot")
-        have = {k: os.path.join(d, f"{k}.png") for k in ROT_ORDER}
+        order = ROT_ORDER8 if self.eight else ROT_ORDER
+        d = os.path.join(self.work, "rot8" if self.eight else "rot")   # 4-way renders stay valid beside 8-way ones
+        have = {k: os.path.join(d, f"{k}.png") for k in order}
         if all(os.path.exists(v) for v in have.values()):
+            if "e" in self.orient(have) and self.e.get("east_edit"):   # a cached rotation checked for the first time
+                self.edit(have["e"], self.e["east_edit"])
             return have
         core.ensure_comfy()
         core.require_ram()   # Qwen-Image-Edit + its 7B text encoder load next
         os.makedirs(d, exist_ok=True)
         fn = f"dotwork_{self.name}_south.png"
         fn = lib.put(Image.open(south), fn)
-        g = _saves(_wf("07_rotate_hq_qwen_multiangle"), f"dotwork_work/{self.name}/rot/r")
+        g = _saves(_wf("07_rotate_hq_qwen_multiangle"), f"dotwork_work/{self.name}/{os.path.basename(d)}/r")
         g["2"]["inputs"]["image"] = fn
-        g["5"]["inputs"].update(directions="4", mirror_west=self.mirror)
-        r = lib.run_job(g, timeout=2400)
+        g["5"]["inputs"].update(directions="8" if self.eight else "4", mirror_west=self.mirror)
+        r = lib.run_job(g, timeout=3600 if self.eight else 2400)
         files = lib.job_files(r, "r_*.png")
-        if len(files) < len(ROT_ORDER):
-            raise core.JobError(f"{self.name}: rotation saved {len(files)} views, expected {len(ROT_ORDER)}")
-        for k, f in zip(ROT_ORDER, files):
+        if len(files) < len(order):
+            raise core.JobError(f"{self.name}: rotation saved {len(files)} views, expected {len(order)}")
+        for k, f in zip(order, files):
             shutil.copyfile(f, have[k])
         core.log(f"{self.name}: rotation {r['seconds']:.0f}s (mirror_west={self.mirror})")
+        mark = os.path.join(d, "orient.json")
+        if os.path.exists(mark):
+            os.remove(mark)   # a new rotation is judged afresh
+        self.orient(have)
         if self.e.get("east_edit"):
             self.edit(have["e"], self.e["east_edit"])
         return have
+
+    def orient(self, have):
+        """Label each east / west pair by what it shows. The rotation model reads its "right side view" (and the
+        quarter views) either way round from one character to the next: on 2026-10-30 one test character's east
+        output faced left and another's faced right, and a front quarter view flipped on a third, so fixed labels
+        put some characters' east walk on the west. A pair whose east view faces left (qa.face_side: where the face
+        sits in the head) is swapped. Back views show no face: those pairs keep their labels and the manifest asks
+        for a look; rot_swap swaps a pair by hand, on top of the check. Clips and still poses made from a swapped
+        view move to <work>/_old_facing/. The verdict is kept in orient.json, so it runs once per rotation (a
+        rotation cached before this check gets it on its next run). Returns the east labels swapped this time."""
+        mark = os.path.join(os.path.dirname(have["s"]), "orient.json")
+        state = None
+        if os.path.exists(mark):
+            with open(mark, encoding="utf-8") as f:
+                state = json.load(f)
+        flips = []
+        if state is None:
+            state = {"auto": [], "unsure": [], "manual": []}
+            for west, east in MIRRORED.items():
+                if east not in have:
+                    continue
+                e_side, w_side = (qa.face_side(Image.open(have[k]))[0] for k in (east, west))
+                if e_side == "left" and w_side != "left":
+                    state["auto"].append(east)
+                elif e_side != "right" or w_side == "right":   # no face, or both views face one way
+                    state["unsure"].append(east)
+            flips += state["auto"]
+        flips += sorted(set(self.rot_swap) ^ set(state["manual"]))   # a rot_swap added or removed since the last run
+        state["manual"] = self.rot_swap
+        for east in flips:
+            west = next(w for w, e in MIRRORED.items() if e == east)
+            tmp = have[east] + ".swap"
+            os.replace(have[east], tmp)
+            os.replace(have[west], have[east])
+            os.replace(tmp, have[west])
+            core.log(f"{self.name}: rotation {east} faced the other way: {east} / {west} swapped")
+            self.retire_views((east, west))
+        with open(core.safe_dest(mark), "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=1)
+        unsure = [k for k in state["unsure"] if k not in self.rot_swap]
+        if unsure:
+            self.man.assume(f"{self.name}: could not tell which way the {', '.join(unsure)} views face (no face "
+                            "showing); check them on the review sheet and list any that face the wrong way in rot_swap")
+        return flips
+
+    def retire_views(self, dirs):
+        """Clips and still poses rendered from these rotation views, moved to <work>/_old_facing/<n>/ (never deleted)."""
+        stale = [p for d in dirs for p in glob.glob(os.path.join(self.work, "clips", f"*_{d}"))
+                 + glob.glob(os.path.join(self.work, "poses", f"*_{d}.*"))]
+        if not stale:
+            return
+        keep = os.path.join(self.work, "_old_facing", str(len(glob.glob(os.path.join(self.work, "_old_facing", "*")))))
+        os.makedirs(keep, exist_ok=True)
+        for p in stale:
+            shutil.move(p, os.path.join(keep, os.path.basename(p)))
+        core.log(f"{self.name}: {len(stale)} clips / poses from the swapped views moved to {keep}")
 
     def edit(self, path, instr):
         core.ensure_comfy()
@@ -240,7 +337,7 @@ class Character:
         if not out:
             raise core.JobError(f"{self.name}: the east edit saved no image")
         shutil.copyfile(out[0], path)
-        core.log(f"{self.name}: east edit applied ({instr[:50]}...)")
+        core.log(f"{self.name}: edit applied to {os.path.basename(path)} ({instr[:50]}...)")
 
     # -------------------------------------------------- 4. clips
     def fix(self, action, direction):
@@ -269,7 +366,8 @@ class Character:
         """What shapes a clip besides its seed: the action_map entry, the character's motion text and subject. Editing
         any of them in the spec re-renders that action's clips (they were ignored before the 2026-10-30 audit)."""
         am = self.conf["action_map"].get(action, {"wan_action": action})
-        return core.key(json.dumps(am, sort_keys=True), (self.e.get("motions") or {}).get(action), self.e.get("subject"))
+        return core.key(json.dumps(am, sort_keys=True), (self.e.get("motions") or {}).get(action), self.e.get("subject"),
+                        f"skeleton {pose.VERSION}" if action in self.skeleton else None)   # a skeleton or a new one re-renders
 
     def render(self, action, direction, sprite, seed, d, motion=None):
         """One Wan clip into d (wiped first). Shared by clip() and audition.py. motion overrides the action_map and
@@ -282,7 +380,7 @@ class Character:
         core.require_ram()
         os.makedirs(d, exist_ok=True)
         am = dict(self.conf["action_map"].get(action, {"wan_action": action}))
-        if (self.e.get("motions") or {}).get(action):  # per-character motion text, e.g. "punch with the mech fist"
+        if (self.e.get("motions") or {}).get(action):  # per-character motion text, e.g. "swing the wrench overhead"
             am.update(wan_action="custom", motion=self.e["motions"][action])
         if motion:
             am.update(wan_action="custom", motion=motion)
@@ -299,6 +397,14 @@ class Character:
                                 action=am["wan_action"], view=VIEW[direction], custom_motion=am.get("motion", ""))
         neg = WAN_NEG + (", " + am["negative"] if am.get("negative") else "")
         g["18"]["inputs"]["text"] = neg
+        if action in self.skeleton:   # pose-driven: the clip follows a procedural skeleton fitted to this sprite
+            miss = lib.missing_models(pose.MODELS)
+            if miss:
+                raise core.ToolError(f"{self.name}: skeleton actions need the pose models ({', '.join(miss)}): "
+                                     "README, Setup, tier pose")
+            names = [lib.put(f, f"dotwork_{self.name}_pose_{action}_{direction}_{i:02d}.png")
+                     for i, f in enumerate(pose.frames(action, direction, Image.open(sprite)))]
+            g = pose.control_graph(g, names, *pose.MODELS)
         # v2: skip SpriteKiln's palette lock (node 28). Locked frames paint Wan's ground shadow in the sprite's own
         # darkest colors, so no rule can tell shadow from boots. Unlocked, the shadow stays a neutral grey-blue;
         # frames() removes it and then locks to the sprite palette itself.
@@ -307,10 +413,10 @@ class Character:
         for f in glob.glob(os.path.join(comfy_dir, "f_*.png")):
             shutil.copyfile(f, os.path.join(d, os.path.basename(f)))
         meta = {"seed": seed, "action": action, "direction": direction, "palette_lock": "dotwork",
-                "motion_key": self.motion_key(action)}
+                "motion_key": self.motion_key(action), "skeleton": action in self.skeleton}
         if motion:
             meta["motion_fix"] = motion
-        with open(os.path.join(d, "meta.json"), "w", encoding="utf-8") as f:
+        with open(core.safe_dest(os.path.join(d, "meta.json")), "w", encoding="utf-8") as f:
             json.dump(meta, f)
         core.free_models()
         core.log(f"{self.name}: clip {action}_{direction} {r['seconds']:.0f}s (seed {seed})"
@@ -319,8 +425,10 @@ class Character:
 
     # -------------------------------------------------- procedural back-view idle
     def procedural(self, action, direction):
-        return (action == "idle" and direction in self.d.get("procedural_idle", ["n"])
-                and not self.fix(action, direction).get("wan"))
+        dirs = list(self.d.get("procedural_idle", ["n"]))
+        if "n" in dirs:   # the back diagonals show the back of the head too
+            dirs += ["ne", "nw"]
+        return action == "idle" and direction in dirs and not self.fix(action, direction).get("wan")
 
     @staticmethod
     def bob_idle(sprite_path, n=6):
@@ -345,8 +453,9 @@ class Character:
     def frames(self, action, direction, rot, clip_dir=None):
         """QA'd frames for one clip. clip_dir: read a different render (audition take) instead of the shipped clip."""
         if self.procedural(action, direction) and not clip_dir:
-            return self.bob_idle(rot[direction]), ["procedural 1 px breathing idle (back view)"]
-        src_dir = "e" if (direction == "w" and self.mirror) else direction
+            return self.bob_idle(rot[direction]), ["procedural 1 px breathing idle"
+                                                   + (" (back view)" if direction == "n" else "")]
+        src_dir = MIRRORED[direction] if (direction in MIRRORED and self.mirror) else direction
         d = clip_dir or os.path.join(self.work, "clips", f"{action}_{src_dir}")
         fr = [Image.open(p).convert("RGBA") for p in sorted(glob.glob(os.path.join(d, "f_*.png")))]
         if not fr:
@@ -358,7 +467,13 @@ class Character:
             with open(meta, encoding="utf-8") as f:
                 dotwork_lock = json.load(f).get("palette_lock") == "dotwork"
         pal = qa.palette_of(Image.open(rot[src_dir]))
+        fx = self.fix(action, direction)
+        refs = {k: Image.open(v) for k, v in rot.items()}
+        drift = None if fx.get("allow_drift") else qa.drifted(fr, src_dir, refs)   # unlocked frames: see drifted()
+        raw = list(fr) if dotwork_lock else None   # unlocked frames for the matte test (#22)
         clean, removed = [], 0
+        if dotwork_lock:   # one shadow decision for the whole clip, so it cannot blink (#25)
+            fr, removed = qa.clip_deshadow(fr)
         for f in fr:
             if dotwork_lock:  # unlocked clip: drop off-palette neutral pixels near the feet, then lock ourselves
                 f, n0 = qa.deshadow_blob(f)
@@ -367,14 +482,31 @@ class Character:
             f, n1 = qa.deshadow(f)
             f, n2 = qa.deblue(f)
             clean.append(qa.drop_islands(f))
-        fr = clean
+        fr, matte, note = qa.dematte(clean, refs[src_dir], raw=raw)   # the light matte between the limbs (#22)
+        if note:
+            notes.append(note)
         if removed:
             notes.append(f"ground shadow removed: {removed} px")
-        if direction == "w" and self.mirror:
+        if drift is not None and (clip_dir or fx.get("keep")):   # an audition take, or a clip the user trimmed
+            notes.append(f"drifts from frame {drift + 1} (colours its {src_dir} sprite does not have)")
+        elif drift is not None:   # #24: a drifting clip no longer ships whole
+            clip = f"{action}_{src_dir}"
+            if drift < 3:
+                raise core.JobError(
+                    f"{self.name}: clip {clip} drifts into another direction's design from frame {drift + 1} (colours "
+                    f"its {src_dir} sprite does not have). Audition other seeds (dotwork.py audition --name {self.name} "
+                    f"--clip {clip} --seeds 8101 8102 8103) and ship one with clip_fix, or set clip_fix "
+                    f"{{\"{clip}\": {{\"allow_drift\": true}}}} to keep it")
+            fr = qa.ping_pong_trim(fr, drift)
+            notes.append(f"drifts from frame {drift + 1}: trimmed to the first {drift} frames, played back and forth "
+                         "(clip_fix allow_drift keeps the whole clip; audition finds a seed that holds)")
+        if direction in MIRRORED and self.mirror:
             fr = [ImageOps.mirror(f) for f in fr]
-        refs = {k: Image.open(v) for k, v in rot.items()}
-        if self.mirror:  # mirrored west: compare against the mirror of east, as the clip itself is mirrored
-            refs["w"] = ImageOps.mirror(refs["e"])
+        refs = dict(refs)
+        if self.mirror:  # mirrored views: compare against the mirror of their east twin, as the clip itself is mirrored
+            for wv, ev in MIRRORED.items():
+                if ev in refs:
+                    refs[wv] = ImageOps.mirror(refs[ev])
         bad = qa.turned_any(fr[1:], direction, refs)
         if bad is not None:  # heuristic only (false positives seen): note for review, never auto-trim
             notes.append(f"possible turn-around from frame {bad + 1}: review the contact sheet")
@@ -392,7 +524,8 @@ class Character:
     def export(self, clips, rot):
         self.man.drop_dir(self.out)  # clean re-export (stale frames from an earlier, longer clip)
         # provenance: klein drew the south sprite (unless it came from --source) and every still pose
-        routes = (("klein",) if not self.e.get("source") or self.e.get("poses") else ()) + ("qwen_rotate", "wan")
+        routes = (("klein",) if not self.e.get("source") or self.e.get("poses") else ()) + ("qwen_rotate", "wan") + \
+            (("wan_pose",) if self.skeleton else ())
         allf = [f for fr, _ in clips.values() for f in fr]
         W = max(f.getbbox()[2] - f.getbbox()[0] for f in allf if f.getbbox())
         H = max(f.getbbox()[3] - f.getbbox()[1] for f in allf if f.getbbox())
@@ -417,7 +550,7 @@ class Character:
             loop = acts.get(action, {}).get("loop", action in ("idle", "walk", "run"))
             anims[name] = (files, fps, loop)
             sp = core.save_clean(sheet, os.path.join(self.out, f"{self.name}_{name}_sheet.png"))
-            with open(sp[:-4] + ".json", "w", encoding="utf-8") as fh:
+            with open(core.safe_dest(sp[:-4] + ".json"), "w", encoding="utf-8") as fh:
                 json.dump({"frame_w": W, "frame_h": H, "frames": len(fr), "fps": fps, "loop": loop,
                            "anchor": "bottom_center"}, fh, indent=1)
             self.man.add(sp, "sheet", animation=name, frames=len(fr), fps=fps, loop=loop, canvas=[W, H],
@@ -470,7 +603,7 @@ class Character:
         if not outs:
             raise core.JobError(f"pose {name}_{direction}: no output in {tag}")
         shutil.copyfile(outs[0], p)
-        with open(p[:-4] + ".json", "w", encoding="utf-8") as fh:
+        with open(core.safe_dest(p[:-4] + ".json"), "w", encoding="utf-8") as fh:
             json.dump(want, fh)
         core.log(f"{self.name}: pose {name}_{direction} {r['seconds']:.0f}s (seed {seed})")
         return p
@@ -483,12 +616,59 @@ class Character:
                                                                      if n1 + n2 else []))
 
     def run(self):
+        clips, rot = self.build()
+        out = self.export(clips, rot)
+        self.variants(clips, rot)
+        return out
+
+    def variants(self, clips, rot):
+        """The entry's "variants": {"name", "edit"} is an outfit (outfit()); {"name", hue / to / ...} a palette swap
+        of every frame with one colour map (the NPC lane's variant(), no render)."""
+        if not self.e.get("variants"):
+            return []
+        import lane_npcs   # shared with the NPC lane; imported here, it imports this module
+        pal = lib.load_hex(self.conf["fixed"]["palette"])
+        return [self.outfit(v) if v.get("edit") else lane_npcs.variant(self, clips, rot, v, None, self.man, self.conf,
+                                                                       pal)
+                for v in self.e["variants"]]
+
+    def outfit(self, v):
+        """An outfit variant (a winter coat, a uniform, armour): the south sprite is edited once (klein, palette locked
+        to the sprite), then a whole character is made from it, rotation and every clip, so the outfit holds in every
+        frame. Editing each finished frame instead flickers: every frame gets its own coat. Costs a full character."""
+        vname = core.snake(v["name"])
+        d = os.path.join(self.work, "outfits")
+        os.makedirs(d, exist_ok=True)
+        src = os.path.join(d, f"{vname}_south.png")
+        south = os.path.join(self.work, "south.png")
+        want = {"edit": v["edit"], "south": core.sha256_file(south)[:12]}
+        meta = src[:-4] + ".json"
+        old = None
+        if os.path.exists(meta):
+            with open(meta, encoding="utf-8") as f:
+                old = json.load(f)
+        if not (os.path.exists(src) and old == want):
+            shutil.copyfile(south, src)
+            self.edit(src, v["edit"])
+            with open(core.safe_dest(meta), "w", encoding="utf-8") as f:
+                json.dump(want, f)
+        keep = ("prompt", "source", "seed", "seeds", "variants", "east_edit", "_picked_seed")
+        entry = {k: val for k, val in self.e.items() if k not in keep}
+        entry.update({k: val for k, val in v.items() if k != "edit"})   # per-variant overrides: clip_fix, actions ...
+        entry.update(name=vname, source=os.path.relpath(src, core.PROJECT).replace(os.sep, "/"))
+        self.man.assume(f"{vname}: outfit variant of {self.name} ({v['edit'][:60]})")
+        return Character(entry, None, self.man, self.conf).run()
+
+    def build(self):
+        """(clips, rot): every clip and still pose, QA'd, ready for export(). run() exports them as they are; the NPC
+        lane also recolours them into palette variants first."""
         core.log(f"=== character {self.name} (asymmetric={self.asym}, actions={self.actions})")
         south = self.south()
         rot = self.rotate(south)
-        need = [d for d in self.dirs if not (d == "w" and self.mirror)]
-        if "w" in self.dirs and self.mirror and "e" not in need:
-            need.append("e")   # mirrored west clips are flipped east ones (--directions s w used to crash)
+        need = [d for d in self.dirs if not (d in MIRRORED and self.mirror)]
+        for wv, ev in MIRRORED.items():   # mirrored west clips are flipped east ones (--directions s w used to crash)
+            if wv in self.dirs and self.mirror and ev not in need:
+                need.append(ev)
         for action in self.actions:
             for d in need:
                 if not self.procedural(action, d):
@@ -506,4 +686,4 @@ class Character:
         for (a, d), (fr, notes) in clips.items():
             if notes:
                 core.log(f"{self.name}: QA {a}_{d}: {'; '.join(notes)}")
-        return self.export(clips, rot)
+        return clips, rot

@@ -66,6 +66,7 @@ LICENSE_FILE_GLOBS = ("license*", "licence*", "copying*", "info.txt", "readme*",
 LICENSE_TEXT_SUFFIXES = ("", ".txt", ".md", ".rst", ".html", ".htm")   # not license_plate.png
 TYPES = ("art", "sprite", "tileset", "ui", "font", "music", "sfx", "voice", "3d", "vfx", "tool", "plugin", "model", "other")
 WINDOWS_BAD_CHARS = re.compile(r'[<>:"|?*\x00-\x1f]')   # cannot be stored on Windows (":" also opens an NTFS stream)
+WINDOWS_DEVICES = {"con", "prn", "aux", "nul"} | {f"{p}{i}" for p in ("com", "lpt") for i in range(1, 10)}
 URL_LOGIN = re.compile(r"^(\s*[A-Za-z][A-Za-z0-9+.-]*://)[^/?#]*@")   # scheme:// then user:password@ (last @ wins)
 ROW_ID = re.compile(r"^\|\s*A-(\d{4})\s*\|", re.M)
 EMPTY_TEMPLATE_ROW = re.compile(r"^\|\s*A-0001\s*\|\s*\|\s*\|.*$", re.M)
@@ -172,7 +173,7 @@ def unpack(archive, cache):
                 raise FetchError(f"zip entry escapes the cache folder, refusing the pack: {n}")
         if not root.is_dir():
             # names Windows cannot store would crash the extract there; they are refused at --take anyway
-            zf.extractall(root, members=[n for n in names if not WINDOWS_BAD_CHARS.search(n)])
+            zf.extractall(root, members=[n for n in names if not windows_unsafe(n)])
     return root, sorted(names)
 
 
@@ -199,6 +200,17 @@ def next_asset_id(log_text):
 
 def md_cell(text):
     return text.replace("|", "\\|").replace("\n", " ").strip()
+
+
+def windows_unsafe(name):
+    """True for a zip entry Windows cannot create: a forbidden character, a device name (CON, nul.txt, COM1)
+    as any folder or file, or a folder or file name ending in a space or a dot."""
+    if WINDOWS_BAD_CHARS.search(name):
+        return True
+    for part in name.replace("\\", "/").split("/"):
+        if part and (part.split(".")[0].strip().lower() in WINDOWS_DEVICES or part[-1] in " ."):
+            return True
+    return False
 
 
 def add_log_row(log_text, row, fill_template):
@@ -243,10 +255,10 @@ def run(args):
         if not matches:
             raise FetchError(f"--take '{pattern}' matches nothing in the pack (run with --list)")
         taken += [m for m in matches if m not in taken]
-    bad = [f for f in taken if WINDOWS_BAD_CHARS.search(f)]
+    bad = [f for f in taken if windows_unsafe(f)]
     if bad:
-        raise FetchError("picked file names Windows cannot store (<>:\"|?* or control characters): "
-                         + ", ".join(repr(f) for f in bad))
+        raise FetchError("picked file names Windows cannot store (<>:\"|?*, control characters, device names such as "
+                         "CON or NUL, or a trailing space or dot): " + ", ".join(repr(f) for f in bad))
     to_dir = (root_dir / args.to).resolve()
     if root_dir not in to_dir.parents:
         raise UsageError(f"--to {args.to!r} is not a folder inside the project ({root_dir})")

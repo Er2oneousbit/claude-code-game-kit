@@ -1,6 +1,9 @@
 {
  "name": "connectors",
  "_comment": "Fences, iron railings, steam pipes and rail tracks drawn in code from each tile's connections, with collision bands. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "design": {
+  "setting": "steampunk"
+ },
  "ground": {
   "name": "yard",
   "base": [

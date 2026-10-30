@@ -173,7 +173,7 @@ Starter set (swap the palette, keep the shape):
   tracks are non-commercial. Ownership wording changed after Suno's Warner deal. Log the plan in `ASSET_LOG.md`; AI bucket is "pre-generated" (`SOP-04`).
 
 ## Graveyard Shift: the night theme (Suno, Advanced mode)
-Made in Suno's web app on a paid plan (there is no official Suno API; third-party "Suno API" sites resell their own
+Made in Suno's web app (there is no official Suno API; third-party "Suno API" sites resell their own
 credits and do not carry your plan's rights). **This is the filled-in brief: paste each block into its own Suno box**
 (Advanced mode, not Simple). The template further up has `[brackets]` to fill; pasting it as is gives random, non-game music
 (it happened). Say "video game" in the style, or Suno may write a pop or film piece.

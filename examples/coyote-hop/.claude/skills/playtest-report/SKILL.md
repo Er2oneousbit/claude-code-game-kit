@@ -8,7 +8,7 @@ description: Turn playtest notes, quotes, or telemetry into a structured log ent
 Follow `docs/sop/SOP-03-playtest-and-tuning.md`.
 
 1. Ask for anything missing: build or commit, tester, duration, the question being tested. Do not invent it.
-   The owner's own notes after playing ("I like X, Y bugs me") need no interview: the tester is the owner, the build is
+   The user's own notes after playing ("I like X, Y bugs me") need no interview: the tester is the user, the build is
    the current commit, the question is "is it fun yet?". Log them and go straight to the ranked list.
 2. Add an entry to the top of `docs/PLAYTEST_LOG.md` using its template. Keep **observations** (what happened) apart from **opinions** (what they said they felt). Keep exact quotes verbatim.
 3. Rank pain points by severity and by how many testers hit them. Blockers first.

@@ -38,7 +38,7 @@ Loop at three time scales:
 
 ## Player fantasy and target audience
 - Fantasy: the sharp-eyed racer who sees the shortcut before anyone else.
-- Audience: the owner and friends; races should feel frantic.
+- Audience: the developer and friends; races should feel frantic.
 - Comparable games (2 to 3) and what we do differently: Mario Kart (fixed tracks; here they change every lap).
 
 ## Scope tiers

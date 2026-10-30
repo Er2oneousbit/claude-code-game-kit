@@ -84,7 +84,7 @@ def main(argv=None):
         scr.alpha_composite(im, (x, y))
         spots.append((n, x, y, im.width))
         x += im.width + 18
-    # party: the Tinkerer's battle pose on the right, facing left
+    # party: the party member's battle pose on the right, facing left
     P = core.art(conf, "characters", a.char, "frames")
     pose = Image.open(os.path.join(P, f"spr_{a.char}_{a.pose}_w_00.png")).convert("RGBA")
     pose = pose.crop(pose.getbbox())

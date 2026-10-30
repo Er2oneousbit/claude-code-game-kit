@@ -247,6 +247,10 @@ def log_targets(args, files):
     log_path = root / fetch_asset.ASSET_LOG
     if not log_path.is_file():
         raise ToolError(f"{fetch_asset.ASSET_LOG.as_posix()} not found under {root} (pass --root)")
+    try:   # a log without a table would reject the row only after the paid call
+        fetch_asset.add_log_row(log_path.read_text(encoding="utf-8", errors="replace"), "", False)
+    except fetch_asset.UsageError as exc:
+        raise ToolError(str(exc))
     try:
         rels = [f"`{f.resolve().relative_to(root).as_posix()}`" for f in files]
     except ValueError:

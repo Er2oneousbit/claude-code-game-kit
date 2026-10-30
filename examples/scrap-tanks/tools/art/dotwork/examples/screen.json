@@ -1,0 +1,77 @@
+{
+ "name": "screen",
+ "_comment": "Screen transitions and weather, drawn in code: rule-image wipes played by one threshold shader, a screen mosaic, and layered weather tiles scrolled by a shader. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "transitions": [
+  {
+   "name": "battle_swirl",
+   "kind": "spiral"
+  },
+  {
+   "name": "fade",
+   "kind": "fade"
+  },
+  {
+   "name": "iris",
+   "kind": "iris"
+  },
+  {
+   "name": "diamond",
+   "kind": "diamond"
+  },
+  {
+   "name": "wipe",
+   "kind": "wipe_left"
+  },
+  {
+   "name": "blinds",
+   "kind": "blinds"
+  },
+  {
+   "name": "dither",
+   "kind": "dither"
+  },
+  {
+   "name": "clock",
+   "kind": "clock"
+  },
+  {
+   "name": "blocks",
+   "kind": "blocks"
+  },
+  {
+   "name": "mosaic",
+   "kind": "mosaic"
+  }
+ ],
+ "weather": [
+  {
+   "name": "rain",
+   "kind": "rain",
+   "intensity": 0.8
+  },
+  {
+   "name": "snow",
+   "kind": "snow"
+  },
+  {
+   "name": "fog",
+   "kind": "fog"
+  },
+  {
+   "name": "ash",
+   "kind": "ash"
+  },
+  {
+   "name": "embers",
+   "kind": "embers"
+  },
+  {
+   "name": "leaves",
+   "kind": "leaves"
+  },
+  {
+   "name": "sandstorm",
+   "kind": "sand"
+  }
+ ]
+}

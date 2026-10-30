@@ -4,11 +4,15 @@ Dotwork makes a game's 2D pixel art on your own GPU, with local models through C
 a small JSON spec; Dotwork writes Godot-ready assets straight into the game (`assets/`), editable sources and review
 sheets (`assets_src/`), and a manifest for `docs/ASSET_LOG.md`. Claude (or you) orchestrates; the models only draw.
 
-What it makes (each is a **lane**): animated characters (4 directions, idle / walk / attack, battle and emote poses),
-props with collision scenes, layered terrain with buildings, interiors and cliffs, maps painted from text, fences /
-pipes / rails, animated water, effects and spells, enemies and bosses, battle backgrounds, title screens, icons,
-portraits, pixel fonts, window skins, emote balloons, 8-direction vehicles, treasure chests / doors / switches /
-save points, sprite edits and normal maps, and image-to-pixel-art.
+What it makes (each is a **lane**): animated characters (4 or 8 directions, idle / walk / attack, battle and emote
+poses), townsfolk in bulk (walk clips plus palette variants), props with collision scenes, layered terrain with
+buildings, interiors and cliffs, side-view platformer tilesets with parallax backgrounds, isometric floors and blocks,
+maps painted from text, fences / pipes / rails, animated water, effects and spells, enemies and bosses, battle
+backgrounds, title screens, icons, portraits with expressions and talking frames, pixel fonts, window skins, HUD
+widgets (gauges, button states, a Theme), screen transitions, weather, status-effect loops, emote balloons, 8-direction
+vehicles, treasure chests / doors / switches / save points, sprite edits and normal maps, and image-to-pixel-art.
+Model-free tools: palette swaps (`recolor`, and `recolor_of` in the enemies lane) and `clean` (any image to clean pixel
+art on the game palette).
 
 Tested on Windows 11, RTX 5060 Ti 16 GB, 64 GB RAM, ComfyUI 0.43.0, Godot 4.7.2. Other GPUs and operating systems
 should work (Dotwork itself is plain Python + HTTP); the numbers below are what this setup needed, not promises.
@@ -25,15 +29,16 @@ should work (Dotwork itself is plain Python + HTTP); the numbers below are what 
 8. [Tests](#tests) and [troubleshooting](#troubleshooting)
 
 ## First run (no GPU, about 10 s)
-The model-free lanes (pixel fonts, window skins, emote balloons, hit effects) need no ComfyUI and no models, so you
-can see Dotwork work before installing anything. From your Godot game's root folder:
+The model-free lanes (pixel fonts, window skins, HUD widgets, emote balloons, hit effects; `examples/screen.json` and
+`examples/status.json` add transitions, weather and status loops) need no ComfyUI and no models, so you can see Dotwork
+work before installing anything. From your Godot game's root folder:
 ```
-GODOT_BIN=/path/to/godot python tools/art/dotwork/dotwork.py pack --spec tools/art/dotwork/examples/ui.json   # 60 files, verified in Godot
+GODOT_BIN=/path/to/godot python tools/art/dotwork/dotwork.py pack --spec tools/art/dotwork/examples/ui.json   # 102 files, verified in Godot
 python tools/art/dotwork/dotwork.py verify            # every Dotwork asset of this game loads in Godot
 python tools/art/dotwork/dotwork.py log --pack ui     # a docs/ASSET_LOG.md row + evidence file (run again: it updates)
 ```
 On Windows set the variable first (PowerShell `$env:GODOT_BIN = "C:\path\godot.exe"`). A game without Godot: add
-`--engine none` to `pack` (43 files: PNGs, `.fnt` fonts, the manifest; there is nothing to `verify`).
+`--engine none` to `pack` (76 files: PNGs, `.fnt` fonts, the manifest; there is nothing to `verify`).
 
 ## Setup
 You need an NVIDIA GPU (tested; see the tiers in step 3 for VRAM and RAM) and about 78 GB of disk for all models.
@@ -76,7 +81,7 @@ that node.
 and prints the pinned URL and the `ComfyUI/models/<folder>/` for each missing file (with ComfyUI not running yet, it
 prints the whole list from `models.lock.json`, marked not checked). **Dotwork never downloads
 anything**; fetch them yourself (browser, `curl -L -o NAME URL`, or the Hugging Face CLI) and re-run the check.
-Save each file under the name the check prints: seven of them differ from the upstream file name (for example the
+Save each file under the name the check prints: nine of them differ from the upstream file name (for example the
 Wan GGUFs and the LoRAs), and ComfyUI finds them by that name.
 `--hash` also compares SHA-256 against `models.lock.json` (needs `COMFYUI_ROOT`; reads tens of GB).
 
@@ -85,6 +90,7 @@ Wan GGUFs and the LoRAs), and ComfyUI finds them by that name.
 | `sprites` | 15.3 GB | every klein lane: sprites, props, icons, enemies, textures, tiles, buildings, battle backgrounds, edits, poses | 8 GB VRAM, 16 GB RAM | 16 GB VRAM |
 | `rotate` | 29.1 GB | 4- and 8-direction rotation (characters, vehicles) | 12 GB VRAM, 24 GB RAM | 16 GB VRAM, 64 GB RAM |
 | `animate` | 33.4 GB | Wan 2.2 clips: walks, attacks, spell effects | 16 GB VRAM, 32 GB RAM (18 GB free per clip) | 16 GB VRAM, 64 GB RAM |
+| `pose` (optional) | 19.3 GB | skeleton-driven clips (the `skeleton` key): Wan 2.2 Fun-Control A14B, GGUF Q4_K_M, Apache-2.0; uses the animate tier's VAE, text encoder and LoRAs | 16 GB VRAM, 32 GB RAM | 16 GB VRAM, 64 GB RAM |
 | all three | 77.8 GB | everything | as `animate` | |
 
 The minimums are the lock's (`models.lock.json`, `tiers`); only the right-hand column was measured.
@@ -125,6 +131,8 @@ or usage (the `[error]` line says what to fix). `preview KIND --help` lists each
 | `audition --name N --clip walk_e --seeds ...` | extra takes of one clip on one sheet; `--promote TAG` ships one |
 | `materials [--only ...] [--extend-palette]` | render the material catalog for review; grow the environment palette |
 | `palette extract\|extend ...` | build a palette from your own art |
+| `recolor --source GLOB --hue DEG\|--to #RRGGBB --out DIR` | palette swap, no model: turns the coloured ramps, keeps outline and greys, snaps to the palette; every file shares one colour map, so an animation stays consistent |
+| `clean --source GLOB --out DIR [--cell N\|--width W]` | any image to clean pixel art, no model: measures the pixel grid of upscaled or generated art (or shrinks to `--width`), keys a plain background, snaps to the palette (`--palette none --colors N` reduces instead), drops specks; `--outline #RRGGBB` adds one |
 | `verify` | load every Dotwork asset of this game in Godot (and run its smoke test) |
 | `aseprite [--reexport]` | editable `.aseprite` sources; push hand-polished files back |
 | `preview battle\|title\|attack ...` | mock screens composed from the game's art (review only) |
@@ -146,7 +154,9 @@ pixel-art wording. Ready-to-run specs for every capability are in `examples/` (s
 {
  "name": "town",
  "characters": [{"name": "guard", "prompt": "a town guard in a brass helmet", "actions": ["idle", "walk", "attack"],
-                 "poses": "battle", "clip_fix": {"walk_n": {"seed": 4247}}}],
+                 "poses": "battle", "clip_fix": {"walk_n": {"seed": 4247}},
+                 "variants": [{"name": "guard_winter", "edit": "a fur-lined winter coat"}, {"name": "guard_red", "hue": 130}]}],
+ "npcs": [{"name": "baker", "prompt": "a plump baker in a white apron", "variants": [{"name": "baker_green", "hue": 120}]}],
  "props": [{"name": "gas_lamp", "prompt": "a cast iron gas street lamp", "size": 56, "footprint": "trunk"}],
  "ground": {"name": "town", "base": [{"material": "grass_lush", "variants": 4}],
             "overlays": [{"material": "dirt", "relief": "flat"}, {"material": "cobble", "relief": "raised"},
@@ -156,21 +166,36 @@ pixel-art wording. Ready-to-run specs for every capability are in `examples/` (s
             "map": {"name": "square", "rows": ["ggdd", "gccd"], "legend": {"g": [], "d": ["dirt"], "c": ["dirt", "cobble"]},
                     "objects": [{"fixture": "door", "at": [1, 0]}], "props": [{"prop": "gas_lamp", "at": [0, 1]}]}},
  "effects": [{"name": "fire", "subject": "a burst of flames", "motion": "the flames burst up and die down", "keep": 6}],
- "enemies": [{"name": "hound", "prompt": "a brass guard hound", "size": 80}],
+ "enemies": [{"name": "hound", "prompt": "a brass guard hound", "size": 80},
+             {"name": "frost_hound", "recolor_of": "hound", "hue": 150}],
  "battle_bgs": [{"name": "mine", "prompt": "an underground mine with lanterns"}],
  "scenes": [{"name": "title", "prompt": "a brass city at dusk under airships"}],
- "icons": [{"name": "potion", "prompt": "a red potion bottle"}], "portraits": [{"name": "guard", "prompt": "..."}],
+ "icons": [{"name": "potion", "prompt": "a red potion bottle"}], "portraits": [{"name": "guard", "prompt": "...", "expressions": true, "talking": true}],
  "fonts": [{"name": "dialogue", "glyphs": "glyphs/dialogue.txt", "effect": "shadow"}],
  "windows": [{"name": "classic", "style": "classic"}], "balloons": [{"name": "exclaim", "symbol": "!", "color": "d83a3a"}],
+ "widgets": [{"name": "hud", "style": "brass", "gauges": ["hp", "mp", "atb"]}],
+ "transitions": [{"name": "battle_swirl", "kind": "spiral"}, {"name": "mosaic", "kind": "mosaic"}],
+ "weather": [{"name": "storm", "kind": "rain", "intensity": 0.8}],
+ "status": [{"name": "poison"}, {"name": "zzz", "kind": "sleep"}],
  "hitfx": [{"name": "spark", "kind": "spark"}, {"name": "flash", "kind": "flash"}],
- "animprops": [{"name": "chest", "kind": "chest", "prompt": "a wooden treasure chest"}],
+ "animprops": [{"name": "chest", "kind": "chest", "prompt": "a wooden treasure chest"},
+               {"name": "torch", "kind": "flame", "prompt": "a wall torch with a lit flame"}],
  "vehicles": [{"name": "airship", "prompt": "a steampunk airship", "size": 72}],
  "tools": [{"name": "guard_edit", "source": "assets/art/characters/guard/frames/spr_guard_idle_s_00.png",
             "edits": ["give him a red scarf"], "normal": true}],
  "img2px": [{"name": "tower", "source": "assets_src/concept/tower.png", "width": 96}],
- "design": {"character": {"fig_height": 66}, "tile_px": 32}
+ "platforms": [{"name": "meadow", "fill": {"material": "dirt"}, "surface": {"material": "grass_lush"},
+                "background": {"prompt": "rolling green hills under a blue sky"}}],
+ "iso": [{"name": "village", "floors": [{"material": "grass_lush", "variants": 2}, {"material": "cobble"}],
+          "blocks": [{"name": "wall", "top": {"material": "stone_floor"}, "side": {"material": "brick_wall"}}]}],
+ "design": {"setting": "steampunk", "character": {"fig_height": 66}, "tile_px": 32}
 }
 ```
+**Art direction.** No built-in prompt assumes a world. `design.style` (the art era, default `"16-bit era"`),
+`design.genre` (default `"RPG"`) and `design.setting` (default empty) fill every template, from the spec's `design`
+or from `dotwork.config.json`: `"setting": "steampunk"`, `"cozy farm village"` or `"neon cyberpunk city"`. The
+examples set `"steampunk"` because that is their sample content. Changing them re-renders what they shape (the cache
+keys and a character's design stamp include the filled-in prompt).
 Each lane module's header documents its keys in full (`lane_<name>.py`). A key no lane reads (a typo such as
 `"styl"`) is reported as a `[warn]` line; an entry without a `"name"`, or without a key its lane needs, stops the run
 with an `[error]` naming it.
@@ -188,13 +213,30 @@ Honest list: these are the failure modes seen in testing and what Dotwork does a
 | Lane | Limit | What Dotwork does / you do |
 |---|---|---|
 | characters (Wan clips) | Attacks sometimes turn the character toward the camera; back views sometimes grow a face | `keep=N` ping-pongs the good frames; back idles are a procedural 1 px bob; `audition` renders takes side by side; the turn warning misses some turns, so judge the sheet |
+| characters (Wan clips: drift, matte, shadow) | A clip can drift into another view's design (a staff the side view does not have, a turned body); the generator's white could stay between the limbs as a matte; the ground shadow could blink because each frame was judged alone (#24, #22, #25) | Drift: colours another direction's sprite has and this one lacks, over 4 % of the figure two frames running, trim the clip to the frames before it (played back and forth) when 3 or more remain, and otherwise stop the character with an audition command to run; `clip_fix: {"<clip>": {"allow_drift": true}}` keeps it. A small feature (a beak, about 1 %) is not caught: the head-signature note still asks for review. Matte: flat generator white touching the outside in the unlocked frames is removed with its rim; skipped when the sprite itself is 5 % or more white (clothing and matte look alike) or has white at its own edge. Shadow: the clip learns its shadow colours from the frames where the per-frame pass worked and removes them under the feet in every frame |
+| npcs | Each NPC is still a rotation and a Wan clip per walk direction (about 8 minutes for a symmetric one) | Idles are the code-drawn breathing bob in every direction (`idle: "clip"` renders them), so walk is the only clip; `variants` recolour the finished NPC into more townsfolk with one colour map across every frame, no render |
+| characters (skeleton) | A free image-to-video clip decides the motion itself: strides vary, limbs drift, loops do not close | `"skeleton": ["walk", "run"]` drives those actions with a procedural OpenPose skeleton (walk, run, idle, attack, jump; side, three-quarter and front / back views, chibi proportions) fitted to exactly where the sprite sits on the model canvas; Wan 2.2 Fun-Control follows it. Needs the optional `pose` tier (`setup --check --tier pose`). The skeleton fixes the motion, not the drawing: judge the sheet as usual |
+| characters (8 directions) | Each generated direction is another set of clips (a symmetric 8-way character renders s, se, e, ne and n; w, sw and nw are mirrors) | Add the diagonals to `directions`; the rotation runs 8-way (about 200 s) and the back diagonals idle in code like n. The animation node knows one diagonal view wording ("three-quarter view"), so diagonal clips drift toward front or side more often than cardinal ones: judge the review sheet |
+| character variants | Editing each finished frame for a new outfit flickers (every frame gets its own coat) | `variants` with `edit` render a whole character from the once-edited south sprite (a full character's cost); with `hue` / `to` they recolour every frame with one map and cost nothing |
 | characters (asymmetric) | A mirrored west view swaps which arm holds the signature item | `"asymmetric": true` generates west instead of mirroring |
+| characters (which way a view faces) | The rotation model reads "right side view" either way round from one character to the next (one test character's east view faced left, another's faced right; a front quarter view flipped on a third), so a fixed output order put some characters' east walk on the west | After the rotation, each east / west pair is judged by where the face sits in the head and swapped when the east view faces left (the log says so; clips and poses made from it move to `_old_facing/` and re-render). Back views and faceless characters (helmets, machines) cannot be judged: the manifest asks you to check them on the review sheet, and `"rot_swap": ["ne"]` swaps a pair by hand |
 | battle / emote poses (klein edits) | Vague wording returns the idle pose; some poses drop a signature prop | Wordings that name body positions (`BATTLE_POSES`, `FIELD_POSES`), `pose_text` per character, a per-pose seed fix |
 | effects (Wan) | Motion can turn particles into a face or a little figure | Effect-only prompt wording, `keep`, a new seed; review every effect |
 | sprites / props / icons | The refine pass can grow a figure past its canvas | Re-rendered smaller automatically (never rescaled); an icon prompt that fills the frame (a spiral) can still fail: reword it |
 | sprites | White background trapped inside a figure | Removed automatically; skipped for white subjects (`keep_white` / `holes` override) |
+| enemies (ground slabs) | The model bakes a soft ground shadow under a figure, and the palette has no dark neutral, so it came out as a light-grey slab (#28, #26) | Removed automatically (wide, flat, light, under the feet, with the outline ring that framed it; `keep_shadow: true` keeps it) and replaced by a dark dithered contact shadow drawn in code: `spr_enemy_<name>_shadow.png`, a `Shadow` child drawn behind the sprite (`shadow: false` skips it). Props: `"slab": "remove"` opts in (an iso plinth looks like a slab, so it is not the default) |
+| props (white pockets) | Trapped white background and flat white glass, paper or a dial look the same | Not removed by default; each candidate pocket is named in the log and the manifest QA with its box, and `holes: true` clears them |
 | without `style_refs` | New art matches itself less closely (no reference to copy) | Bring 3-4 of your own finished sprites as `style_refs` |
-| 8-direction vehicles | The rotation model's output order was assumed from the 4-direction run (east / west swapped) | Check `assets_src/art/vehicles/<name>_review.png`; `rot_order` fixes it |
+| 8-direction vehicles | The rotation model treats its source as the front: a three-quarter source shifted every view one step, and a straight front view comes back as a flat cutout | The source stays three-quarter, all 8 views are generated, and `source_facing: "auto"` labels them by which views mirror each other (the log prints the scores). The review sheet runs s, sw, w ... clockwise, so a wrong view breaks the turn; `source_facing: "se"` (or `rot_order`) fixes it |
+| palette swaps (`recolor`) | A swap turns hues; it cannot add a colour the palette lacks (a blue variant on a palette with few blues comes out greyer) | `--palette env` or your own palette; `--hues LO HI` limits the swap to one part (the red cloak only); `--min-chroma 0.04` (`min_chroma` in a spec) keeps dark browns and muted tones, so only the trim turns |
+| `clean` | Generated "pixel art" often has no true grid (cells drift), so `--cell auto` cannot measure one | It refuses with the x / y sizes it saw; give `--cell N` or `--width W` |
+| talking portraits | Mouth flaps drawn as whole new portraits would shift the hair and collar every frame | `"talking": true` adds the talk and blink frames; only the mouth band (0.52-0.82 of the bust height) and the eye band (0.26-0.50) of their edits are kept, so nothing else moves. SpriteFrames idle / talk (an uneven 6-frame flap at 10 fps, looping while text prints) / blink (once), a scene, and a sheet + JSON. No audio lip sync |
+| icons at 16 px | A 14 px render came back as a blob for 5 of 39 icons, and a crashed run left items in one size only | Only the largest size is rendered; smaller sizes are reduced from it (same design, 1 px margin, fresh outline) and the run fails if any size is missing. `"small": "render"` renders every size instead |
+| portrait expressions (klein edits) | An edit can redraw more than the face (hair, collar) or barely change it | `face_only` (default) keeps only the face box of the edit, so the rest stays pixel-identical, and logs a QA line when most of the edit fell outside it; `expression_fix: {"angry": {"seed": N}}` for another take |
+| treasure chests / doors (states) | Each state was drawn on its own, so the chest morphed instead of opening (#27) | States are edits of the closed render, and only the moving part is kept: the chest's lid (its upper half and anything above), the door's panel inside its frame; the rest stays pixel-identical. Door edits skip the background flood (a door fills its cell, and the flood ate light planks). A QA line names a state whose edit mostly fell outside the moving part (it may look unchanged: another seed, or `whole_edit: true`) |
+| ambient props (`flame`, `flag`, `smoke`, `spin`, `sway`) | Animation models drift and do not loop exactly | The motion is code on one render, so every loop is exact: fire flickers in its own colours, a banner waves pinned at its pole, smoke puffs rise from the top (the canvas grows 28 px), a gear turns one symmetry step (render the turning part on its own), a plant sways at the top. `flame` stops the run if the render has no fire colours |
+| platforms (side view) | A platformer needs edges, a top surface and one-way ledges that join in every combination | 16 tiles indexed by which sides are exposed (fill inside, the surface lip on top, shaded rims and an outline on open sides, rounded outer corners) plus 3 one-way pieces; a Match Sides TileSet with full-tile collision that `verify` paints and checks side by side; the background is made seamless left to right and ships with a ParallaxBackground scene |
+| iso (2:1 isometric) | Iso tiles drawn one by one do not continue each other | Floors and blocks are projected from the ground lane's seamless textures, so neighbouring diamonds continue one texture; blocks are taller tiles with a texture origin. Not generated: terrain transitions between iso materials (place them by hand or along a block row) |
 | fonts | Models cannot draw consistent letters | Glyphs are text bitmaps (`glyphs/*.txt`), built into BMFont `.fnt`; edit a letter by editing its rows |
 | battle backgrounds / scenes | 320x128 / 320x180 art shown at 2x (chunkier than 1x sprites) | Same exact-2x scale everywhere it is used |
 | `--engine none` | Maps, TileSets, scenes, SpriteFrames and the damage-flash shader are Godot resources | PNGs, sprite sheets + their JSON, BMFont `.fnt` fonts, 9-slice margins (in the manifest) and the manifest still ship; maps and the flash are skipped with a log line |

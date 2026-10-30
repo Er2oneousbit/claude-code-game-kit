@@ -5,7 +5,8 @@
 #           comfy_local.py, a ComfyUI server (version, GPU), every node class Dotwork's graphs and the SpriteKiln
 #           workflows use, every model in models.lock.json (asked from the server's own loader lists, so it works for
 #           any ComfyUI install), the SpriteKiln clone and its pinned commit, Godot, Aseprite (optional), palettes.
-# Usage   : python dotwork.py setup --check [--tier sprites|rotate|animate|all] [--hash]
+# Usage   : python dotwork.py setup --check [--tier sprites|rotate|animate|pose|all] [--hash]   (all = the first three;
+#           pose is optional, for skeleton-driven clips)
 # Notes   : Never downloads anything: missing models are listed with their pinned URL and the ComfyUI models/
 #           folder they belong in. --hash also checks SHA-256 (needs COMFYUI_ROOT; reads tens of GB).
 #           Exit 0 when every check for the chosen tier passes (warnings allowed), 2 when something must be set up.
@@ -23,7 +24,9 @@ CORE_NODES = ["UNETLoader", "LoraLoaderModelOnly", "CLIPLoader", "VAELoader", "C
               "SetLatentNoiseMask", "Flux2Scheduler", "SplitSigmasDenoise", "EmptyFlux2LatentImage", "RandomNoise",
               "CFGGuider", "KSamplerSelect", "SamplerCustomAdvanced", "VAEDecode", "SaveImage"]
 TIER_WORKFLOWS = {"sprites": ["04_edit_pixel_art", "05_inpaint_pixel_art", "28_sprite_normal_maps"],
-                  "rotate": ["07_rotate_hq_qwen_multiangle"], "animate": ["10_animate_sprite"]}
+                  "rotate": ["07_rotate_hq_qwen_multiangle"], "animate": ["10_animate_sprite"],
+                  "pose": ["10_animate_sprite"]}   # pose.control_graph builds on the animate graph
+TIER_NODES = {"pose": ["Wan22FunControlToVideo", "ImageBatch"]}   # ComfyUI's own nodes the pose graph adds
 
 
 def say(level, msg, results):
@@ -92,6 +95,7 @@ def run(settings, a):
     if info is not None:
         need = set(CORE_NODES)
         for t in tiers:
+            need |= set(TIER_NODES.get(t, []))
             for wf in TIER_WORKFLOWS[t]:
                 try:
                     need |= {n["class_type"] for n in spritekiln.load(wf).values()}

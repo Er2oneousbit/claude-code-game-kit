@@ -1,0 +1,54 @@
+{
+ "name": "status",
+ "_comment": "Status-effect loops drawn in code (no model): one per kind, 8 frames at 8 fps, 32 px, centred on the head. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "status": [
+  {
+   "name": "poison"
+  },
+  {
+   "name": "sleep"
+  },
+  {
+   "name": "haste"
+  },
+  {
+   "name": "slow"
+  },
+  {
+   "name": "stop"
+  },
+  {
+   "name": "blind"
+  },
+  {
+   "name": "regen"
+  },
+  {
+   "name": "berserk"
+  },
+  {
+   "name": "confuse"
+  },
+  {
+   "name": "silence"
+  },
+  {
+   "name": "doom"
+  },
+  {
+   "name": "burn"
+  },
+  {
+   "name": "freeze"
+  },
+  {
+   "name": "protect"
+  },
+  {
+   "name": "shell"
+  },
+  {
+   "name": "petrify"
+  }
+ ]
+}

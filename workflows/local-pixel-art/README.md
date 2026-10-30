@@ -1,7 +1,7 @@
 # Local pixel art with ComfyUI (experimental)
 
 An experiment in making a game's pixel art on your own GPU instead of a paid service: ComfyUI plus the SpriteKiln node
-pack, with a few scripts around it. It ran on one machine for one game in progress, so treat every number here as a
+pack, with a few scripts around it. It ran on one test machine, so treat every number here as a
 data point, not a promise. It is a proof of concept that local generation is viable for a game's art, not a
 showcase of finished art: some outputs still need a human pass. The rules for using it in a game are in the game's `docs/sop/SOP-16-2d-art-pipeline.md`
 ("Generating pixel art locally"); the evidence entry is E68 in `core/docs/EVIDENCE.md`.
@@ -18,7 +18,7 @@ showcase of finished art: some outputs still need a human pass. The rules for us
 | 32 px tiles, whole-scene maps | Not good enough |
 | Effects (fireball, explosion, muzzle flash, heal, steam) and casting or firing poses | Good to excellent, about 2 min per clip |
 | 8-direction objects; sidescroller tiles | Not run yet |
-| **Dotwork:** a whole pack from one JSON spec, as Godot resources, proven by an import into a kit project | Works: a hero pack and a sample pack of every asset type passed; an Aseprite round trip for hand polish keeps it verified |
+| **Dotwork:** a whole pack from one JSON spec, as Godot resources, proven by an import into a kit project | Works: a character pack and a sample pack of every asset type passed; an Aseprite round trip for hand polish keeps it verified |
 
 Final art still gets a human pass.
 
@@ -63,12 +63,11 @@ with it; several LoRAs come from single uploaders.
 The later scripts were folded into one tool, Dotwork, built to the kit's asset rules (SOP-16, the Godot overlay's
 conventions). It starts ComfyUI on `127.0.0.1`, renders a whole pack from a JSON spec, stops ComfyUI when done and
 proves the result imports. It now ships in every game made with the kit as `tools/art/dotwork/` (setup, models and
-every lane: `core/tools/art/dotwork/README.md` in the kit). It was called forge while it was built.
+every lane: `core/tools/art/dotwork/README.md` in the kit).
 
-**About the pictures in this write-up.** The packs below were first made with a style reference built from the owner's
-game in progress, or with a palette taken from that game's art. Those images are not published here. Every picture
-now comes from the shipped Dotwork alone: no style reference unless a caption says so, the shipped palettes, the
-Apache-2.0 VAE. The text still describes the original runs and what they taught.
+**About the pictures in this write-up.** Every picture comes from the shipped Dotwork alone: no style reference
+unless a caption says so, the shipped palettes, the Apache-2.0 VAE. The text describes the test runs and what they
+taught.
 
 Run from the game's folder:
 ```
@@ -97,7 +96,7 @@ dotwork.py verify                                 # load every Dotwork asset in 
 - **Licenses:** every model Dotwork uses is Apache-2.0 or MIT per its model card (read 2026-10-29).
 
 ### What two packs produced
-- **A hero pack:** the Tinkerer from the game in progress, asymmetric (a mech fist on one arm). idle, walk and punch
+- **A character pack:** an asymmetric test character (a mechanical fist on one arm). idle, walk and punch
   in 4 directions, 12 animations; verify passed.
 - **A sample pack**, one of each asset type: a new NPC (12 animations), 3 props, 2 icons at 16 and 32 px, a portrait,
   a fireball loop, an explosion, a grass and cobble TileSet, and a dialog panel and button; 141 manifest rows,
@@ -110,7 +109,7 @@ dotwork.py verify                                 # load every Dotwork asset in 
 ![Props, 32 px icons, three window skins and two portraits from the kit samples, at 2x](media/dotwork_stills.png)
 
 What a review still catches (this is why every character run writes a review sheet with every frame):
-- **The Tinkerer's punch, after one round of fixes:**
+- **The test character's punch, after one round of fixes:**
   - South now swings the brass fist; the fix was naming it in the motion text (Dotwork's `--motion "punch=..."`).
   - North was re-seeded, then trimmed to 5 frames once a grin appeared on the back of the head.
   - East holds the side view.
@@ -128,7 +127,7 @@ What a review still catches (this is why every character run writes a review she
     in frames 5 to 7; a faint grey ground shadow remains under the south frames.
 
   The fix for any of these is a hand-polish pass or another audition.
-- **The lamplighter** came out younger than the prompt. The south sprite is picked by a technical score, not by how
+- **The sample NPC** came out younger than the prompt. The south sprite is picked by a technical score, not by how
   well it matches the prompt; the candidate sheet is there to swap it.
 - **The cobble's repeat** is obvious at 640x360, and the grass is nearly flat.
 - **The dialog panel** has a grey smear in its center.
@@ -150,17 +149,17 @@ where it stopped.
 ### More packs: attacks, sprite tools, image to pixel art, isometric
 Four smaller packs, each verified the same way:
 - **Attack with effects:**
-  - The wizard is rotated, then animated from his east view, so the cast reads sideways.
+  - The caster is rotated, then animated from its east view, so the cast reads sideways.
   - The fireball loop keeps 4 frames played back and forth, so its trail no longer smears into a cloud.
   - The explosion keeps 3 frames, then gets a dithered dissolve inside a round vignette.
   - A compositing script spawns the fireball at the staff tip on the peak frame (the one with the furthest
     reach), holds the pose while it travels, and keeps the impact inside the frame.
-- **Sprite tools** on the lamplighter's south view: three edits by instruction (red scarf, dark blue coat, goggles),
+- **Sprite tools** on the sample NPC's south view: three edits by instruction (red scarf, dark blue coat, goggles),
   a top hat inpainted over the head, and a normal map with two lit previews.
 - **Image to pixel art:**
-  - Two crops of the game's concept board become 96 px sprites: shrink, enlarge 8x by nearest neighbor, a light
+  - Two crops of a concept board become 96 px sprites: shrink, enlarge 8x by nearest neighbor, a light
     image-to-image pass at 0.3, grid sample, then lock to the environment palette.
-  - The redraw gives clean pixel clusters on the game's palette, but loses detail and cools the smoke. The plain
+  - The redraw gives clean pixel clusters on the test palette, but loses detail and cools the smoke. The plain
     shrink in the middle column keeps more. Judge per image.
 - **Isometric props:**
   - Four pieces: a brick pillar, a grass path block, a pier and a workshop.
@@ -227,7 +226,7 @@ light-to-dark shingle band per tile with a lighter ridge and a darker eave, but 
 - **Enemies:** six regulars at 64 to 104 px and a 192 px boss, all facing right with feet at the scene origin.
   - A new check removes white background trapped inside a sprite (between legs, inside a curled tail). It skips
     white subjects: a frost bear was left alone.
-- **Party battle set:** the Tinkerer facing left with idle, walk and attack, plus 7 still poses (ready, weak, KO,
+- **Party battle set:** the asymmetric test character facing left with idle, walk and attack, plus 7 still poses (ready, weak, KO,
   victory, hurt, defend, cast) made by instruction edits.
   - Vague pose wording made the edit model return the idle pose; the wordings that worked were found by audition.
 - **Window skins drawn in code:** 9-slice plus NinePatchRect in classic blue, brass with rivets, and iron.
@@ -287,7 +286,7 @@ What a review still catches:
 
 ### Auditions: pick a take from a sheet
 ```
-dotwork.py audition --name tinkerer --clip punch_w --seeds 8101 8102 8103 8104 --motion "" "keeps his head and body in side profile..."
+dotwork.py audition --name guard --clip punch_w --seeds 8101 8102 8103 8104 --motion "" "keeps his head and body in side profile..."
 dotwork.py audition ... --promote <take>      # ship that take without re-rendering
 ```
 Renders every take to a side folder, scores them and lays them out on one sheet; the shipped clip is untouched until
@@ -358,16 +357,15 @@ every referenced sprite, not just the set's look. SOP-16 says to bring 3 or 4 of
 What review still finds in these samples: the mine wall face and rock tops repeat visibly across a room, and floor
 tile edges show as a grid; the mount's side-view walk smears mid-stride; the golem keeps a light-grey shadow slab;
 image to pixel art bands the sky. The samples exposed two bugs, fixed before these renders: a fixed refine canvas
-cropped 192 px bosses, and the palettes had no sky colours, so backdrops banded. The first scenes snapped to a palette
-built from the owner's game, so they were made again with the shipped one. The image-to-pixel-art sources are concept
-images Dotwork painted itself (the model added fake signature marks, cropped off first). Left out on purpose: the
+cropped 192 px bosses, and the palettes had no sky colours, so backdrops banded. The scenes were made with the shipped palette.
+The image-to-pixel-art sources are concept images Dotwork painted itself (the model added fake signature marks, cropped off first). Left out on purpose: the
 8-direction vehicle set (rotated one step) and sprite edits (no source sprite the kit may publish yet).
 
 ![The title scene at 2x, made from scenes.json](media/dotwork_scene_title.png)
 
 The shipped palettes were checked, not assumed: every prop's cache key matches the shipped palette file, and the
 112 environment colours (extracted from Dotwork's own material renders) share 2 colours with the earlier palette built
-from the game.
+from the test art.
 
 ### What Dotwork taught
 - **Godot's corner solver needs a tile whose center matches the painted terrain.** With one copy of each of the 16
@@ -401,15 +399,15 @@ numbers and lessons stand; the images shown above are Dotwork output, made with 
 ### The core sprite lane
 Most rows below use one recipe:
 1. FLUX.2 klein 4B plus SpriteKiln's klein pixel LoRA (strength 0.8). The style reference is a 2x2 collage of four
-   existing game sprites. It renders at 1008x1008 on white.
+   existing test sprites. It renders at 1008x1008 on white.
 2. Key out the white, crop, and box-downscale to the target height (66 px for characters).
 3. Enlarge 8x by nearest neighbor, then run klein image-to-image at strength 0.45 with the same prompt and reference.
 4. Take the dominant color of each 8 px cell, defringe, and drop stray islands.
-5. Lock to the game's 64-color palette in OKLab, cap each sprite at 40 colors, and add a 1 px near-black outline.
+5. Lock to a 64-color palette (built from the test sprites) in OKLab, cap each sprite at 40 colors, and add a 1 px near-black outline.
 
-About 16 s per asset. Compared with the game's hand-picked sprites, refined props came out at:
+About 16 s per asset. Compared with the hand-picked test sprites, refined props came out at:
 
-| Measure | Refined props | Game sprites |
+| Measure | Refined props | Test sprites |
 |---|---|---|
 | Colors per sprite | 37.5 | 40.5 |
 | Isolated pixels | 18.9% | 18.5% |
@@ -511,7 +509,7 @@ matches. West is east mirrored, so 9 clips are generated and 12 come out.
 | Heal ring | Excellent, with the prompt fix below |
 | Explosion, muzzle flash | Good after keeping the good frames (5 and 4) and adding a 4-step Bayer-dither fade |
 | Soldier firing, side view (a custom motion; see the demos) | Good: shoulders, aims, small recoil, lowers |
-| Wizard casting, side view (a custom staff thrust) | Good; the staff head reads as a pale knob instead of a flame |
+| Caster, side view (a custom staff thrust) | Good; the staff head reads as a pale knob instead of a flame |
 
 **Key finding: effects grow faces.**
 - **The symptom:** with SpriteKiln's animation preset prompt, one-shot effects turned into cartoon creatures as they
@@ -527,9 +525,9 @@ matches. West is east mirrored, so 9 clips are generated and 12 come out.
   > faces, no eyes, no characters, no creatures.
 
 **Combat demos** (effects added over a street built from the seamless cobble texture). The first version had the
-wizard facing the camera while his fireball flew sideways, launched after the cast had ended; this is the redo.
+caster facing the camera while its fireball flew sideways, launched after the cast had ended; this is the redo.
 
-- **Wizard:** rotated to 4 directions first (Qwen, about 132 s), then animated from the east view with "side view" and
+- **Caster:** rotated to 4 directions first (Qwen, about 132 s), then animated from the east view with "side view" and
   a custom motion ("thrusts the glowing brass staff straight forward toward the right... holds it fully extended, then
   lowers it"). The "cast spell" preset made a messy white swirl. The fireball spawns at the staff tip on the peak
   frame, the pose holds 6 frames while it leaves, then the explosion.
@@ -537,7 +535,7 @@ wizard facing the camera while his fireball flew sideways, launched after the ca
   firing a pink beam. Fixed by a reference edit on the east sprite ("long wooden musket... pointing to the right",
   20 s), a custom motion (shoulder, aim right, small recoil, lower) and the negatives "laser, beam, light streak,
   projectile trail, bullet tracer, pistol, handgun". The pose holds through the flash and smoke.
-- **Heal:** over the hero's idle loop, trimmed to 7 frames and a dither fade.
+- **Heal:** over a test character's idle loop, trimmed to 7 frames and a dither fade.
 
 **What the redo taught:**
 - **Turn the character to face the direction of travel first,** then animate the side view. Check facing on the pixels
@@ -554,7 +552,7 @@ wizard facing the camera while his fireball flew sideways, launched after the ca
 | Tool | Time | Verdict |
 |---|---|---|
 | Rotate to 4 directions (Qwen-Image-Edit + Multiple-Angles LoRA, SpriteKiln workflow 07) | 138 s | Good: identity, proportions and palette hold and the back view is coherent; side views are stiff |
-| Edit by instruction (klein): add a scarf, a blue coat, goggles | 16 s | Good, 3 of 3. Lock to the game palette, not the sprite's own, or the new colors collapse |
+| Edit by instruction (klein): add a scarf, a blue coat, goggles | 16 s | Good, 3 of 3. Lock to the full palette, not the sprite's own, or the new colors collapse |
 | Masked inpaint (klein + SK_MaskedMerge): add a top hat | 13 s | Good: everything outside the mask is untouched |
 | Normal map (SK_SpriteNormalMap) | 3 s | Good; the lit preview is correct |
 | Grid recovery ("unzoom") | | Recovered the exact size from a sprite enlarged 5x, blurred and saved as JPEG |
@@ -581,8 +579,7 @@ For image to pixel art, this model's schedule starts near full noise, so strengt
 - **Done in Dotwork:** battle backgrounds, enemies, party battle poses, window skins, title fonts.
 - **Done in Dotwork:** a spell library, 61 props with collision scenes, a symbols font, emote balloons.
 - **Done in Dotwork:** cliffs, a world map, fences, pipes and rails, and every blob tile per texture variant.
-- **Next in Dotwork:** status-effect icons, mounts and vehicles, field emote poses and a title screen, for the
-  owner's 16-bit RPG.
+- **Next in Dotwork:** status-effect icons, mounts and vehicles, field emote poses and a title screen.
 - **Not run yet:** 8-direction objects, sidescroller tiles.
 
 ## Early tests (the first night)
@@ -590,14 +587,14 @@ These came before the core lane above. Kept for the numbers and the lessons. All
 including ComfyUI's cache, so it reads near 16 GB even when a job needs less.
 
 ### Style test: one prompt set, six lanes
-Ten NPC prompts, same seeds on every lane, each output cut out, put on a 66 px grid, locked to the hero's palette and
-padded to 72x72. The reference is the game's hero sprite.
+Ten NPC prompts, same seeds on every lane, each output cut out, put on a 66 px grid, locked to a test character's palette and
+padded to 72x72. The reference is that test character's sprite.
 
 Rows top to bottom: A, E, B, B2, C, D.
 
 | Lane | Model path | Usable | Warm s/img | Cold s | Verdict |
 |---|---|---|---|---|---|
-| E | FLUX.2 klein 4B + pixel LoRA + the hero as style reference | 10/10 | 14.1 | 15.4 | **Use this.** Closest to the hero; some NPCs borrow the hero's coat |
+| E | FLUX.2 klein 4B + pixel LoRA + the test character as style reference | 10/10 | 14.1 | 15.4 | **Use this.** Closest to the reference; some NPCs borrow its coat |
 | A | klein, text only | 10/10 | 10.3 | 13.1 | Concepts: consistent, muddier |
 | B2 | Z-Image Turbo + PixelArtRedmond | 10/10 | 17.1 | 18.2 | Appealing, but a different game's look |
 | B | Z-Image Turbo + SpriteKiln LoRA | 9/10 | 18.1 | 20.4 | Weak outlines |
@@ -612,18 +609,18 @@ detail away. The refine step: shrink to the target size, enlarge 8x by nearest n
 image-to-image at strength 0.45 with the same style reference, sample the grid, then clean up (defringe, 40 colors per
 sprite, a near-black outline). About 20 s per NPC (10 s render, 11 s refine).
 
-A 2x2 collage of four of the game's cast sprites worked better as the style reference than one sprite: a single reference
+A 2x2 collage of four test sprites worked better as the style reference than one sprite: a single reference
 also hands over its outfit and props.
 
-### Rotation (the hero, 8 directions, nothing mirrored)
+### Rotation (the asymmetric test character, 8 directions, nothing mirrored)
 | Path | 4 directions | 8 directions | Peak GPU | Result |
 |---|---|---|---|---|
 | Qwen-Image-Edit + Multiple-Angles LoRA | 172 s | 317 s | 15.4 GB | Pass: fist, backpack, goggles and scarf kept, the fist stays on the left arm |
-| klein 4B edit | 45 s | 83 s | 14.9 GB | Fails for the hero (drops the fist and backpack); fine for plain NPCs |
+| klein 4B edit | 45 s | 83 s | 14.9 GB | Fails for that character (drops the fist and backpack); fine for plain NPCs |
 
 ### Palette lock and the Aseprite finishing step
-Palettes are built from the game's own sprites (k-means in OKLab, snapped to colors the art uses). Mean error at 32, 48
-and 64 colors from the hero alone: 0.0122, 0.0084, 0.0062 (about 0.02 is just noticeable); from all 126 game sprites
+Palettes are built from existing sprites (k-means in OKLab, snapped to colors the art uses). Mean error at 32, 48
+and 64 colors from one character alone: 0.0122, 0.0084, 0.0062 (about 0.02 is just noticeable); from all 126 test sprites
 at 48 or 64 colors: about 0.009. The finishing script locks each PNG to the palette in Aseprite (indexed, no
 dithering), saves an editable `.aseprite`, exports the PNG and an optional sheet, then checks every pixel is on the
 palette with hard alpha: 10 of 10 NPCs passed.
@@ -637,7 +634,7 @@ wait for it to get a real exit code (PowerShell's `&` does neither).
 | Job | Time | Result |
 |---|---|---|
 | Seamless 32 px tile (SpriteKiln workflow 12, Z-Image), 13 textures x 3 seeds | 4 to 8 s each | Wraps seamlessly, but the content is noise: **unusable at 32 px** |
-| 32 px walk sheet (klein base + 4-walk LoRA) | about 30 s | Clean cycles, but the LoRA's 32 px characters lose the hero's identity |
+| 32 px walk sheet (klein base + 4-walk LoRA) | about 30 s | Clean cycles, but the LoRA's 32 px characters lose the test character's identity |
 | Whole-scene map draft, klein 1920x1088 | about 13 s, 15.5 GB peak | Looks good as a thumbnail; angle, scale and proportions drift. Backdrop or title art at most |
 | Refine of that draft at 2560x1440 (to a true 640x360) | 19 s | Same drift |
 | Map drawn in code (80x45 tiles of 32 px) | under 1 s, no GPU | Coherent, generic |
@@ -667,6 +664,6 @@ jobs one at a time with other apps closed.
 - ComfyUI's saved PNGs embed the full prompt and workflow: re-save them before publishing.
 
 ## Credits
-The setup, scripts and tests were done by a Claude Code session (Claude Opus 5.5) on the kit owner's machine,
-2026-10-28/30. The early scripts stay on that machine; Dotwork, built from them, ships in the kit (`core/tools/art/dotwork/`). Images: the owner's game in
-progress; all rights reserved, shown for reference.
+The setup, scripts and tests were done by a Claude Code session (Claude Opus 5.5) on one test machine,
+2026-10-28/30. The early scripts stay on that machine; Dotwork, built from them, ships in the kit (`core/tools/art/dotwork/`). Images: made with Dotwork for
+this write-up; all rights reserved, shown for reference.

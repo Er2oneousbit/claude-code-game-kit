@@ -65,11 +65,11 @@ Close the Unity editor before running any of these.
 - 3D models: [Kenney](https://kenney.nl) (Graveyard Kit and, for the trees and bushes outside the wall, Nature Kit), CC0. Details and license copies: `docs/ASSET_LOG.md`,
   `docs/licenses/`.
 - Sound effects, night ambience and the world sounds (soul whispers, ghost moans, footsteps, lantern flame): Created in collaboration with ElevenLabs (elevenlabs.io) (generated with the kit's
-  `tools/audio/eleven_audio.py` on a free plan, so **non-commercial**: marked PLACEHOLDER in `docs/ASSET_LOG.md`,
-  replace or regenerate on a paid plan before any commercial use). Earlier builds used Kenney Interface Sounds (CC0).
+  `tools/audio/eleven_audio.py` under non-commercial terms, so **non-commercial**: marked PLACEHOLDER in `docs/ASSET_LOG.md`,
+  replace or regenerate under a license that allows commercial use before any commercial use). Earlier builds used Kenney Interface Sounds (CC0).
 - Voices: generated with Fish Audio text to speech (free model): the ghosts ("Creepy Whisper"), the keeper ("Old man")
   and the narrator ("Warm Storyteller"), all library voices; `docs/ASSET_LOG.md` A-0014, A-0015 and A-0017 to A-0025.
   Fish Audio's terms apply (verify before any release).
-- Music: two takes of a night theme made with Suno (paid plan) from the brief in `docs/BRIEFS.md`, looped with the
+- Music: two takes of a night theme made with Suno from the brief in `docs/BRIEFS.md`, looped with the
   kit's `tools/audio/wavfile.py`; the game plays them in turn, one per finished night. Details: `docs/ASSET_LOG.md` A-0009.
 - Unity packages: AI Navigation 2.0.16 (Unity Companion License), Unity Test Framework.

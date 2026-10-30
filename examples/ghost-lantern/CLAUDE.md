@@ -5,7 +5,7 @@
 
 ## What this is
 One paragraph pitch lives in `docs/GDD.md`. Read that before any design-affecting work.
-Owner: the owner. Solo dev, Claude is the pair programmer.
+Developer: the user. Solo dev, Claude is the pair programmer.
 
 ## Read first, every session
 @docs/HANDOFF.md
@@ -24,7 +24,7 @@ A change is not done until `check` and `test` pass,
 and `smoke` passes if you touched startup, scenes/levels, or anything loaded at boot. A project with no tests yet
 gets "nothing ran" from `test`: write the first test, or record the gap in `docs/HANDOFF.md` (`SOP-09`).
 
-## Working style (how the owner wants Claude to behave)
+## Working style (how the user wants Claude to behave)
 - **Pseudocode first.** For anything non-trivial: high-level pseudocode plus a short why, then wait for a nod or just proceed if the task was clearly specified.
 - **Prototype first, refine later.** Get the ugly version running, then iterate. Say which phase you are in.
 - **Modular.** Small functions and small files over monoliths. One responsibility each.
@@ -32,7 +32,7 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 - **Troubleshoot systematically.** One change at a time. State the hypothesis, make the change, test, record the result. Follow `docs/sop/SOP-02-bug-workflow.md`.
 - **When stuck, change the angle.** After 3 failed attempts follow the `stuck` skill. Do not loop on the same idea.
 - **Truth over winging it.** If you do not know, say so and say what you can find out. Engine APIs change between versions: check the version in `docs/ENGINE.md` and verify against docs or the installed engine, not memory.
-- **Correct mistakes directly.** If the owner's assumption is wrong, say so plainly and show the fix.
+- **Correct mistakes directly.** If the user's assumption is wrong, say so plainly and show the fix.
 - **Explain the why.** Short, direct answers. Give the high-level reason for a choice; skip basics unless asked.
 
 ## Guardrails
@@ -43,7 +43,7 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 - Stay inside the scope of the current ROADMAP item. New ideas go to the **Parking lot** in `docs/ROADMAP.md`, not into the code.
   What is in scope follows the GDD's `Current tier:` (SOP-08 "Tiers"): after the greenlight (MVP / Release), ideas that
   serve a pillar go to the `docs/PRODUCTION.md` Backlog with a size; never push back with "not part of the toy/slice"
-  then. If the owner keeps asking for work past the current tier, offer `/next-tier`. No deadlines: progress is counts.
+  then. If the user keeps asking for work past the current tier, offer `/next-tier`. No deadlines: progress is counts.
 - Tuning numbers live in data files or one constants module, never scattered literals. Expose tunables, hot reload where possible.
 - AI-built 3D breaks in predictable places: run the `SOP-09` interaction smoke checklist before calling a build done.
 
@@ -79,11 +79,11 @@ Subagents: `code-reviewer` `build-doctor` `design-critic` `playtest-analyst` `re
 Never import an asset with an unknown license.
 
 ## Before the first build: crude on purpose
-Before you start building the toy (and again before a vertical slice), tell the owner in a warning of its own: the first
+Before you start building the toy (and again before a vertical slice), tell the user in a warning of its own: the first
 version uses crude placeholder art on purpose, because the first question is whether the mechanics are fun;
 art, animation and audio come after the game proves itself, since polishing art for a game that does not work wastes
 time, usage and money (mechanics before art: F4 in `docs/EVIDENCE.md`). Then build with placeholders, and do not
-generate or buy art or audio for the toy unless the owner asks after hearing this.
+generate or buy art or audio for the toy unless the user asks after hearing this.
 **The first-art floor (2D):** characters and key objects are real pixel-art sprites drawn in code with
 `tools/art/pixel_sprite.py`, never dots, circles or plain boxes: a 32x32 figure with head, body, arms and legs, 2 or 3
 shades per material, an outline, and frames for its walk and its main action. **Every character is this game's own,
@@ -97,7 +97,7 @@ this game's character. `pixel_sprite.py check` must pass on every character and 
 
 ## While building: short updates, screenshots at milestones
 Watching a wall of text is no fun. While you build, give one short line per step of your plan; details only when
-something went wrong or the owner asks. After each step that changes what is on screen, and before the hand-off below:
+something went wrong or the user asks. After each step that changes what is on screen, and before the hand-off below:
 1. Capture it: `python tools/dev.py smoke --screenshot captures/progress/<NN>-<what>.png` (numbered, e.g.
    `03-costume-picker.png`; use the file type `smoke -h` names: C++/SDL2 saves `.bmp`). If `python tools/dev.py smoke -h` lists no `--screenshot`, this engine cannot capture
    yet: say so once and skip the pictures.
@@ -117,7 +117,7 @@ engine can (`python tools/dev.py smoke --record captures/frames-<NN>` into a new
 are not cleared, with a query that plays it if the game has one; then
 `python tools/art/frames_to_gif.py captures/frames-<NN> captures/progress/<NN>-playable.gif`; it needs Pillow: ask before
 installing it, skip the GIF if the answer is no), post its link, and end your
-message by handing the game to the owner, in your own words, roughly:
+message by handing the game to the user, in your own words, roughly:
 "It's playable. Now the most important part is yours: play it for a few minutes (say 'run the game'; on Unity and Unreal that opens the editor: press Play there). Write down what
 you like and what you don't, in plain words ('the jump is floaty', 'I love the sound'). Paste your notes back here and
 we start iterating: fix what bugs you, keep what works, play again, until it's fun."

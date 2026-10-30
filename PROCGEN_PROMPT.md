@@ -4,7 +4,7 @@ Run with the `/goal` line in `PROCGEN_GOAL.txt`. This file is the brief; the goa
 
 ## Why
 Graveyard Shift plays the same hand-made yard every night (`Level.Graveyard()` in
-`examples/graveyard-shift/Assets/Scripts/Core/Level.cs`; the seed only moves the ghosts' start). The owner wants each
+`examples/graveyard-shift/Assets/Scripts/Core/Level.cs`; the seed only moves the ghosts' start). The user wants each
 night to be a new graveyard, and the kit has no guidance for procedural generation. Build the guidance as a skill
 backed by a SOP, the way `/game-ai` is backed by SOP-14, and prove it on Graveyard Shift the way SOP-14 was proven
 there. The hard part of procedural levels is not making them, it is proving every one is fair: that is the center of
@@ -59,18 +59,17 @@ both deliverables.
    under the unreleased version, README tested table row for the skill's worked example.
 
 ## Constraints
-- Do not commit or push: the owner commits. Before changing Graveyard Shift, back it up:
-  `robocopy` or a Python copy of `examples/graveyard-shift` to `D:\kt\graveyard-backup` without `Library`.
+- Do not commit or push: the user commits. Before changing Graveyard Shift, back it up:
+  `robocopy` or a Python copy of `examples/graveyard-shift` to `<scratch>/graveyard-backup` without `Library`.
 - Unity runs in batch mode only, through the example's tools/dev.py (`check`, `test`, `smoke`, `exec SceneBuilder.Build`), never the
-  GUI. Work in the scratch copy `D:\kt\gs` (it has a Library; refresh its Assets from the example first), then copy
+  GUI. Work in the scratch copy `<scratch>/gs` (it has a Library; refresh its Assets from the example first), then copy
   changed files back, `.meta` files included, and confirm with a recursive diff of `Assets`.
-- After kit changes: `python scripts/sync_examples.py D:/kt/<fresh>` twice; the second run must say "0 synced" for every
+- After kit changes: `python scripts/sync_examples.py <scratch>/<fresh>` twice; the second run must say "0 synced" for every
   example. Merge any `.gold` by hand.
 - Kit rules: no em dashes; every new source file gets the header block (Purpose, Usage, Notes, pseudocode, Authored with
   the model); tunables in a constants block; the dev.py contract unchanged.
 - Truth: never mark a claim verified unless this run verified it; every source fact needs the URL read this run;
   anything unverified is marked **(verify)**.
-- Models: Sonnet subagents for wide reading and for independent review; do not use Fable (the owner approves Fable case
-  by case). Optional cheap second opinion: `python core/tools/second_opinion.py` with a narrow brief (the owner's Kimi
-  plan runs out fast).
+- Models: Sonnet subagents for wide reading and for independent review. Optional second opinion:
+  `python core/tools/second_opinion.py` with a narrow brief.
 - Budget: stop and report if blocked, or after 80 turns.

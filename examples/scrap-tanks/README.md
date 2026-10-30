@@ -46,5 +46,5 @@ python tools/dev.py smoke --frames 30000 --timeout 900 --until PLAYER_DESTROYED 
   Kit-provided files stay MIT (`../../LICENSE`).
 - 3D models (rendered to sprites) and font: [Kenney](https://kenney.nl) (Car Kit, Tower Defense Kit, Kenney Fonts), CC0.
   Details and license copies: `docs/ASSET_LOG.md`, `docs/licenses/`.
-- Sound effects and the scrapyard wind: Created in collaboration with ElevenLabs (elevenlabs.io) (generated with the kit's `tools/audio/eleven_audio.py` on a free plan, so **non-commercial**: marked PLACEHOLDER in `docs/ASSET_LOG.md`, replace or regenerate on a paid plan before any commercial use). Earlier builds used Kenney Sci-fi Sounds (CC0).
+- Sound effects and the scrapyard wind: Created in collaboration with ElevenLabs (elevenlabs.io) (generated with the kit's `tools/audio/eleven_audio.py` under non-commercial terms, so **non-commercial**: marked PLACEHOLDER in `docs/ASSET_LOG.md`, replace or regenerate under a license that allows commercial use before any commercial use). Earlier builds used Kenney Sci-fi Sounds (CC0).
 - Libraries: SDL2, SDL2_image, SDL2_ttf, SDL2_mixer (zlib), doctest (MIT), via vcpkg.

@@ -21,7 +21,7 @@ detail.
 | Milestone | Definition of done | Status |
 |---|---|---|
 | M0 Toy (v0.1.0) | Core mechanic playable | Done (2026-10-21) |
-| M1 Vertical slice (v0.2.0) | One polished loop with art, audio, UI | Built and bot-verified; one owner playtest (2026-10-23, nine fixes); outside playtests pending (2026-10-21) |
+| M1 Vertical slice (v0.2.0) | One polished loop with art, audio, UI | Built and bot-verified; one user playtest (2026-10-23, nine fixes); outside playtests pending (2026-10-21) |
 | M2 Alpha | Every MVP system in and playable | |
 | M3 Beta (content complete) | All MVP content in, no known crash | |
 | M4 Release candidate (v1.0.0-rc.N, then v1.0.0) | `/release-check` green | |

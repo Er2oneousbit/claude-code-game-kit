@@ -19,7 +19,7 @@ namespace graveyard_shift.Game
     {
         private const float TurnSpeed = 720f;           // degrees per second
         private const float LanternRange = 9f;
-        private const float LanternIntensity = 2.64f;   // 2.4 until the owner asked for 10% brighter (10-23)
+        private const float LanternIntensity = 2.64f;   // 2.4 until the user asked for 10% brighter (10-23)
         private const float DarkGlowRange = 1.6f;       // a faint glow, so the player still sees the keeper
         private const float DarkGlowIntensity = 0.5f;
         private static readonly Color LanternColor = new Color(1f, 0.78f, 0.45f);

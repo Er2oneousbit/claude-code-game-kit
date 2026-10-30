@@ -19,7 +19,7 @@ Bot-verified: fighting from cover wins 25 of 40 seeds, charging 11 of 40. Not ye
   path drives straight at its goal, cover hit first stops a shell, `--seed` rejects negatives. Smoke seed is now 7.
 
 ## Current task
-- None. Next decision is the owner's: playtest by hand.
+- None. Next decision is the user's: playtest by hand.
 
 ## Next step (specific, first action)
 - `python tools/dev.py run`, play three runs, then `/playtest-report`: can you tell what each raider will do (pillar 2), does cover feel like it matters (pillar 1).

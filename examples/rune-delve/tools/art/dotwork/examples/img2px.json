@@ -1,6 +1,9 @@
 {
  "name": "img2px",
  "_comment": "Concept art or a photo to pixel art at a chosen width. Put your image at the source path; box crops a region first (x0, y0, x1, y1), omit it to use the whole image. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "design": {
+  "setting": "steampunk"
+ },
  "img2px": [
   {
    "name": "tower",

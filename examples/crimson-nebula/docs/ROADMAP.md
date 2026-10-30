@@ -4,7 +4,7 @@
 > Claude reads the **Now** section at session start.
 
 ## Now (max 3 items)
-- [ ] **First playtest of the toy**  | Done when: the owner has played a few races and the notes are in PLAYTEST_LOG.md (`/playtest-report`)  | Timebox: 1 session
+- [ ] **First playtest of the toy**  | Done when: the user has played a few races and the notes are in PLAYTEST_LOG.md (`/playtest-report`)  | Timebox: 1 session
 
 ## Next
 - [ ] Fix the top playtest item, one change at a time

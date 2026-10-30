@@ -1,6 +1,9 @@
 {
  "name": "overworld",
  "_comment": "World map: terrains as layered blob overlays (shallows, plains, desert, snowfield, swamp, forest, mountains) over a sea base, and location icons (town, castle, cave, tower, factory) as props. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "design": {
+  "setting": "steampunk"
+ },
  "ground": {
   "name": "world",
   "base": [

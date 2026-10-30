@@ -27,16 +27,16 @@ from lane_tiles import KTEX_TPL, wrap_error
 import engine as lib  # noqa: E402
 
 DECAL_TPL = ("pixel art sprite, top-down view from above, a small {s} lying on the ground, single small object, "
-             "centered, 16-bit era top-down adventure style, crisp pixels, simple shading")
+             "centered, {style} top-down {genre} style, crisp pixels, simple shading")
 SHADOW_A = 90  # drop/inner shadow alpha (0-255) over whatever layer is below
-FIXTURE_TOP_TPL = ("pixel art sprite, high three-quarter top-down view of {s}, furniture or object for a 16-bit era "
-                   "JRPG interior, drawn in the exact pixel art style, palette, outline and shading of "
-                   "image 1, steampunk, crisp dark outline, centered")
+FIXTURE_TOP_TPL = ("pixel art sprite, high three-quarter top-down view of {s}, furniture or object for a {style} "
+                   "{genre} interior, drawn in the exact pixel art style, palette, outline and shading of "
+                   "image 1, {setting}, crisp dark outline, centered")
 FIXTURE_FLAT_TPL = ("pixel art sprite, seen from directly above, a flat axis-aligned {s} lying on the floor, square to "
-                    "the image edges, no perspective, 16-bit era JRPG interior, drawn in the exact pixel "
+                    "the image edges, no perspective, {style} {genre} interior, drawn in the exact pixel "
                     "art style, palette and shading of image 1, crisp dark outline, centered")
-FIXTURE_TPL = ("pixel art sprite, straight-on front view of {s}, a building part for a 16-bit era JRPG "
-               "town, drawn in the exact pixel art style, palette, outline and shading of image 1, steampunk, crisp "
+FIXTURE_TPL = ("pixel art sprite, straight-on front view of {s}, a building part for a {style} {genre} "
+               "town, drawn in the exact pixel art style, palette, outline and shading of image 1, {setting}, crisp "
                "dark outline, centered")
 
 
@@ -61,7 +61,7 @@ def _ctx_inpaint(tile, keep, prompt, seed, tag, denoise, tpl="ground"):
     fn, mf = f"dotwork_g_{tag}.png", f"dotwork_gm_{tag}.png"
     fn = lib.put(Image.fromarray(ctx).resize((CANVAS, CANVAS), Image.NEAREST), fn)
     mf = lib.put(Image.fromarray(m).resize((CANVAS, CANVAS), Image.NEAREST), mf)
-    out, _ = lib.run(lib.klein(TPL[tpl].format(s=prompt), seed, CANVAS, CANVAS, f"dotwork_work/ground/{tag}",
+    out, _ = lib.run(lib.klein(core.prompt(TPL[tpl], s=prompt), seed, CANVAS, CANVAS, f"dotwork_work/ground/{tag}",
                                init_fn=fn, denoise=denoise, lora=0.6, mask_fn=mf))
     big = _sample(out)
     cands = []
@@ -75,19 +75,19 @@ def _ctx_inpaint(tile, keep, prompt, seed, tag, denoise, tpl="ground"):
 
 TPL = {"ground": KTEX_TPL,
        "facade": ("pixel art sprite, straight-on front view of {s}, a flat wall texture that fills the entire image "
-                  "edge to edge, 16-bit era JRPG town style, clean readable clusters, simple shading, "
+                  "edge to edge, {style} {genre} town style, clean readable clusters, simple shading, "
                   "limited palette, no windows, no doors, no border, no perspective"),
        "roof": ("pixel art sprite, view from above of a roof covered in {s}, a flat roof texture that fills the "
-                "entire image edge to edge, 16-bit era JRPG town style, clean readable clusters, "
+                "entire image edge to edge, {style} {genre} town style, clean readable clusters, "
                 "simple shading, limited palette, no chimneys, no border, no perspective")}
 
 
 def render_raw(name, prompt, work, seed=800, tpl="ground"):
     """The material's native-scale 128 px render, unpaletted (cached). Also feeds the palette extension."""
-    raw_p = os.path.join(work, f"{name}_{core.key(prompt, seed, tpl)}_raw128.png")
+    raw_p = os.path.join(work, f"{name}_{core.key(core.prompt(TPL[tpl], s=prompt), seed, tpl)}_raw128.png")
     if not os.path.exists(raw_p):
         core.ensure_comfy()
-        out, _ = lib.run(lib.klein(TPL[tpl].format(s=prompt), seed, CANVAS, CANVAS, f"dotwork_work/ground/{name}_raw",
+        out, _ = lib.run(lib.klein(core.prompt(TPL[tpl], s=prompt), seed, CANVAS, CANVAS, f"dotwork_work/ground/{name}_raw",
                                    lora=0.6))
         os.makedirs(work, exist_ok=True)
         Image.fromarray(_sample(out)).save(raw_p)
@@ -546,7 +546,7 @@ def run(spec, pack, man, conf):
             cp = os.path.join(work, f"decal_{dn}_s{seed}_{T}_{core.key(e['prompt'], e.get('size'), core.palette_key(pal))}.png")
             if not os.path.exists(cp):
                 core.ensure_comfy()
-                o = fit_sprite(DECAL_TPL.format(s=e["prompt"]), seed, f"dotwork/ground/{dn}",
+                o = fit_sprite(core.prompt(DECAL_TPL, s=e["prompt"]), seed, f"dotwork/ground/{dn}",
                                int(e.get("size", T * 5 // 8)), T, baseline=T - T // 8, fit="longest",
                                palette=pal, outline="", max_colors=12)  # fits its cell: no rescaling of pixels
                 Image.open(o["path"]).convert("RGBA").save(cp)
@@ -576,7 +576,7 @@ def run(spec, pack, man, conf):
                 # width (fill the width, crop top/bottom)
                 fm = e.get("fit", "box")
                 box = {"box": (w * T - 2, h * T - 2), "height": (10 ** 4, h * T - 2), "width": (w * T - 2, 10 ** 4)}[fm]
-                o = fit_sprite(tpl.format(s=e["prompt"]), seed, f"dotwork/ground/fx_{fname}", big - 2, big,
+                o = fit_sprite(core.prompt(tpl, s=e["prompt"]), seed, f"dotwork/ground/fx_{fname}", big - 2, big,
                                baseline=big - 1, ref_fn=ref, fit=box, palette=pal, max_colors=24)
                 im = Image.open(o["path"]).convert("RGBA")
                 x0 = (big - w * T) // 2

@@ -1,6 +1,6 @@
 ---
 name: next-tier
-description: Move the game to its next scope tier (Toy -> Vertical slice -> MVP / Release) once the current tier is done. Use when the user says the toy or slice is done, "it's fun, let's develop it", "greenlight", "next tier", "move on to production", or when Claude keeps pushing back with "that is not part of the toy/slice" on work the owner wants. Checks the tier's evidence, then updates the GDD tier line, ROADMAP and, at the greenlight, writes docs/PRODUCTION.md.
+description: Move the game to its next scope tier (Toy -> Vertical slice -> MVP / Release) once the current tier is done. Use when the user says the toy or slice is done, "it's fun, let's develop it", "greenlight", "next tier", "move on to production", or when Claude keeps pushing back with "that is not part of the toy/slice" on work the user wants. Checks the tier's evidence, then updates the GDD tier line, ROADMAP and, at the greenlight, writes docs/PRODUCTION.md.
 ---
 
 # Next tier
@@ -18,7 +18,7 @@ check in this project reads, so it must move when the game does. No dates anywhe
    | Vertical slice | VERTICAL_SLICE.md "Done when" holds in the running game; a PLAYTEST_LOG entry on the slice; every GDD "Assumptions to test" row has a result (held, failed, changed); the pillar's bot or scenario check passes if the game has one; the GDD Content list has target counts |
    | MVP / Release | Not this skill: run `/release-check` |
 3. **Report** the table, then one line: ready, or what is missing. A missing playtest is the usual gap: offer
-   `/playtest-report` once the owner has played. The owner may move on anyway: then record "Moved on without: <items>,
+   `/playtest-report` once the user has played. The user may move on anyway: then record "Moved on without: <items>,
    reason: <their words>" in the ROADMAP Done line. It is their game; the gate advises, it does not lock.
 4. **On a yes, update the docs:**
    - `docs/GDD.md`: set `Current tier: **<next tier>**`, and `> Last reviewed:` to today.
@@ -35,7 +35,7 @@ check in this project reads, so it must move when the game does. No dates anywhe
    back; each milestone still ends with a playtest.
 
 Rules:
-- One tier per run. Never skip a tier without the owner saying so (some games stay a toy on purpose: record that in
+- One tier per run. Never skip a tier without the user saying so (some games stay a toy on purpose: record that in
   the GDD tier line instead).
 - Going back is allowed: if a system is not fun in production, mark it "back to prototyping" in PRODUCTION.md and
   treat that one system as a toy until it is.

@@ -3,11 +3,74 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.7.1 (2026-10-30): Dotwork lanes, audit fixes and neutral wording
+- **Dotwork vehicles:** the 8-direction set is labelled from the views themselves (a mirror-pair test picks the
+  source's facing), so each file shows its direction (fixes #23). The model's in-between views stay approximate.
+- **Palette swaps** (`recolor.py`): an enemy entry `{"recolor_of": "guard_hound", "hue": 150}` makes a recoloured
+  copy with no render, keeping its ramps and the palette; a `recolor` command does the same for any PNGs.
+- **`clean` command** (`pxclean.py`): finds the pixel grid of upscaled or generated pixel art, keys the background,
+  snaps to the palette and drops stray pixels, with no model; refuses when the two axes disagree.
+- **Widgets lane:** HP/MP-style gauges (TextureProgressBar), buttons in five states and a panel, one Godot Theme per
+  window style, drawn in code; Dotwork's `ui` example gains a HUD.
+- **Transitions and weather lanes:** fades, iris, wipes, blinds, a battle swirl and a mosaic as rule images played by
+  one shader; rain, snow, fog, ash, embers, leaves and sand as seamless scrolling layers (Dotwork's `screen` example).
+- **Status lane:** 16 status-effect loops drawn in code (poison, sleep, haste and more), each as frames, a sheet and
+  an autoplaying scene (Dotwork's `status` example).
+- **Portrait expressions:** `"expressions": true` (or a list, or your own wordings) makes happy, angry, sad, surprised
+  and hurt portraits from the neutral one by a palette-locked edit; `face_only` keeps hair, clothes and framing
+  identical. A beard that hides the mouth makes a faint expression.
+- **Icons:** only the largest size renders and 16 px is reduced from it, so both sizes are one design; a missing size
+  fails the run. Props, icons and portraits no longer start ComfyUI when everything is cached.
+- **Enemy shadows:** the light-grey baked ground slab is removed and a dark dithered contact shadow is drawn in code as
+  a Shadow child of the scene (fixes #28, #26). Props opt in with `"slab": "remove"`; white pockets in props are
+  flagged with their box.
+- **NPCs lane:** townspeople the cheap way (code-drawn idles, a rotation and three walk clips, about 8 minutes), and
+  `variants` that recolour a finished NPC across every frame into new characters with no render, keeping skin tones.
+  Palette swaps now keep an animation's near-identical shades together, so a variant's colours match from every side.
+- **Dotwork fixes from a Kimi K3.1 Pro pass** over the new lanes: deletes and writes never go through a symlink or
+  junction; each pack cleans only the files its own manifest lists (enemy, balloon, battle-background and scene packs
+  used to wipe each other's output); spec text is escaped in Godot files; enemies stand with their feet on the shadow;
+  a corrected vehicle `rot_order` re-renders; white pockets must be enclosed; font paths, case-only name clashes,
+  the expression cache and transition sizes fixed.
+- **Character clip cleanup:** leftover white render background is found in the raw frames and removed with its rim,
+  skipped on designs that wear white (fixes #22); the ground shadow is removed with one decision per clip, so it no
+  longer blinks (fixes #25); a clip that turns toward the camera is trimmed to its good frames, or stops with an
+  `audition` command to run, unless `allow_drift` is set (fixes #24).
+- **State props from one base:** chest and door states keep only the moving part of each edit (the lid, the door
+  panel) and stay pixel-identical elsewhere, so a chest opens instead of changing shape (fixes #27).
+- **Ambient props:** new animprops kinds `flame`, `flag`, `smoke`, `spin` and `sway`, animated in code from one render
+  so they loop exactly; an unknown kind now stops the run.
+- **Neutral wording:** sample text and comments no longer refer to any particular project.
+- **Character variants and 8 directions:** an outfit variant edits the south sprite once and builds a whole
+  character from it; a hue variant is a palette swap with no render; characters can have 8 directions.
+- **Facing fix for every character:** the rotation model sometimes swaps a character's east and west views, so an
+  east walk faced west. Dotwork now checks each east/west pair by where the face sits and swaps a wrong pair (cached
+  rotations too, re-rendering the clips made from them); back views and faceless designs are flagged, and
+  `rot_swap` fixes a pair by hand. A new design also retires an old 8-direction rotation.
+- **Genre-neutral prompts:** no built-in template assumes a setting any more; `design.style`, `design.genre` and
+  `design.setting` in the spec or config set it. The example specs keep their own subjects.
+- **Talking portraits:** talk and blink frames limited to the mouth and eye bands, as a SpriteFrames (idle, talk,
+  blink) and a scene.
+- **Side-view and isometric tiles:** platformer tilesets (Match Sides terrain, one-way platform caps, a seamless
+  parallax background) and 2:1 isometric floors and blocks (`platformer` and `iso` examples).
+- **Pose-driven clips:** `"skeleton": ["walk"]` fits a skeleton to the sprite and animates it with Wan 2.2
+  Fun-Control, which keeps motion and facing steady. Needs the new optional `pose` model tier (19.3 GB, Apache-2.0,
+  pinned with hashes).
+- Every example spec is now checked for keys Dotwork does not read (one lane read a key the checker missed).
+- Exam 54/54; in a fresh Godot game the `ui`, `screen` and `status` examples load 79 resources.
+- **Fixes from a second Kimi K3.1 Pro pass** over the 0.7.0 security fixes: ElevenLabs, Fish Audio and PixelLab check
+  that the asset log has a table before a paid call (one without a table failed only after spending), PixelLab refuses
+  a folder as a one-file output even with `--overwrite`, the Unreal wrapper stops UnrealBuildTool and its compilers on
+  Ctrl+C, and `tools/fetch_asset.py` refuses Windows device names (`CON`, `NUL`, `COM1`) and names ending in a space
+  or dot.
+- **Neutral wording:** the kit, its docs and the examples speak of "the user" (or "you") and never describe the
+  person who maintains the kit. A game's `CLAUDE.md` says `Developer: <author>`; with no author given, the
+  scaffolder writes "the user".
+
 ## 0.7.0 (2026-10-30): Dotwork, local pixel art on your own GPU
 Pixelorama follows as 0.7.x.
-- **New tool `tools/art/dotwork/`, Dotwork** (opt-in; Pillow + numpy; Godot first; called forge while it was built,
-  renamed to avoid a clash with another local image tool): local pixel art for a whole game from a JSON
-  spec, through ComfyUI on 127.0.0.1. Lanes: characters (4 directions; idle, walk, attack, battle and emote poses;
+- **New tool `tools/art/dotwork/`, Dotwork** (opt-in; Pillow + numpy; Godot first): local pixel art for a whole game from
+  a JSON spec, through ComfyUI on 127.0.0.1. Lanes: characters (4 directions; idle, walk, attack, battle and emote poses;
   auditions), props with collision scenes, layered terrain and maps painted from text (buildings, interiors, cliffs,
   animated water, fences, pipes and rails), effects and spells, enemies, battle backgrounds, scenes, icons, portraits,
   8-direction vehicles, state props (chest, door, switch, save point), sprite edits and normal maps, image to pixel
@@ -18,14 +81,14 @@ Pixelorama follows as 0.7.x.
   Apache-2.0) and never downloads; SpriteKiln (GPL-3.0) is read from the user's own clone at run time, never bundled;
   `style_refs` is empty by default. `--engine none` writes PNGs, sheets and the manifest for other engines. Exam
   `tools/art/dotwork/tests/test_dotwork.py` 34/34 offline; in a freshly made Godot 4.7.2 game the `ui` example packs and verifies. Built
-  in the owner's ComfyUI session and reviewed there (correctness, security, kit readiness, art QA) before the port.
+  in a ComfyUI test session and reviewed there (correctness, security, kit readiness, art QA) before the port.
   Fixed while rendering the kit samples: big sprites (a 192 px boss) are no longer cropped by a fixed refine
   canvas, and the default palettes gained 24 sky and backdrop colours (env 136, objects 168; every old colour kept),
   so backdrops no longer collapse into flat bands.
   SOP-16 (a Dotwork tip and "bring 3 or 4 of your own sprites"), `/gen-brief`, `/asset-intake` and `resources/art.md`
   point at it.
 - **New skill `/dotwork` (19 skills)** and an art-source question in the interview: for a 2D game, `make-a-game`
-  asks where the finished art comes from (drawn in code plus free packs, the owner's own art, a paid AI service such
+  asks where the finished art comes from (drawn in code plus free packs, their own art, a paid AI service such
   as PixelLab, or Dotwork on their own GPU). The answer goes into the GDD's new "Art source" line, picks Godot when
   Dotwork is chosen and no engine is named, and adds a graphics card check (nothing is installed for it during setup).
   `/dotwork` runs the tool end to end: tier check, `setup --check` with a yes per download, a first run with no
@@ -93,7 +156,7 @@ Pixelorama follows as 0.7.x.
   marked (verify) where they disagree. SOP-16's tool table gets a hand-polish row.
 - **SOP-16:** the local results table covers every asset type now; new tips: the refine step, a style collage,
   klein's non-linear strength, extending the palette first, stripping ComfyUI's embedded workflow before sharing.
-- **Dotwork, the owner's local asset tool, in the write-up:** a JSON spec in; Godot SpriteFrames (4 directions, west
+- **Dotwork, a local asset tool, in the write-up:** a JSON spec in; Godot SpriteFrames (4 directions, west
   generated for asymmetric characters), a match-corners TileSet, additive effect scenes, 9-slice NinePatchRect scenes and
   a manifest out, proven by an import into a kit-scaffolded project. GIFs of two characters in 4 directions, effects,
   stills and a painted terrain demo, plus timing and what a review still catches.
@@ -119,7 +182,7 @@ Pixelorama follows as 0.7.x.
   painted from text, code-drawn fences, pipes and rails, and every blob tile per texture variant so long edges stop
   repeating. All 12 spells now clean. SOP-16: variants need every edge tile; paint the bank under water.
 - **Auditions in the write-up and SOP-16:** render several seeds and motion wordings of one clip onto a sheet and
-  pick by eye; the Tinkerer's west punch now swings the brass fist in profile (1 clean take of 8).
+  pick by eye; the asymmetric test character's west punch now swings the brass fist in profile (1 clean take of 8).
 - **Clean redos in the write-up:** an attack demo (the effect spawned on the peak frame), sprite tools (edit,
   inpaint, normal map), image to pixel art beside a plain shrink, and isometric props, all from Dotwork.
 - **Licensing catch:** the first image VAE in that setup was the FLUX.2 [dev] non-commercial file. Every image made
@@ -140,15 +203,16 @@ free per image. Docs only; no new tool.
   only as `.safetensors`/`.gguf` pinned by hash, no `--listen`, per-model licenses, and what to log. New row in its tool
   table.
 - **`resources/ai-tools.md`:** a ComfyUI + SpriteKiln row.
-- **`/gen-brief`:** offers a local ComfyUI first for concepts and variants when the owner runs one.
-- **Evidence:** E68, the owner's local setup and test (grade C: one machine; its timings and lessons are tips).
+- **`/gen-brief`:** offers a local ComfyUI first for concepts and variants when the user runs one.
+- **Evidence:** E68, a local setup and test (grade C: one machine; its timings and lessons are tips).
 
 ## 0.6.0 (2026-10-28): tiers that move, and a production phase
-The owner's report: in a game past its toy, Claude kept answering "that is not part of the vertical slice". Cause: the
-GDD's `Current tier:` line drives every scope check (SOP-08, SOP-01, `/new-feature`), and nothing ever moved it.
+From field testing: past its toy, Claude kept answering "that is not part of the vertical slice".
+Cause: the GDD's `Current tier:` line drives every scope check (SOP-08, SOP-01, `/new-feature`), and nothing ever
+moved it.
 - **New skill `/next-tier` (18 skills):** checks the current tier's evidence (MET, NOT MET or UNKNOWN with the file or
   command: checks pass, a human playtest in PLAYTEST_LOG, the slice's "Done when", the GDD assumptions tested), then
-  moves the GDD tier line, marks the ROADMAP milestone, and pulls Parking lot items that now fit into Next. The owner
+  moves the GDD tier line, marks the ROADMAP milestone, and pulls Parking lot items that now fit into Next. The user
   can move on without some evidence; the skill records what and why. One tier per run; going back is allowed.
 - **The greenlight (vertical slice to MVP / Release) starts production:** new `docs/PRODUCTION.md` (a template until
   then) with milestones Alpha, Beta and Release candidate by exit criteria, a backlog sized S, M or L with a pillar per
@@ -157,7 +221,7 @@ GDD's `Current tier:` line drives every scope check (SOP-08, SOP-01, `/new-featu
 - **Scope follows the tier:** SOP-08 gets a "Tiers" table (where scope comes from and where a new idea goes, per
   tier). In production, an idea that serves a pillar goes to the backlog with a size, never "not part of the slice";
   only ideas outside the pillars or in GDD "Out of scope" are pushed back. SOP-01, `/new-feature`, `/gdd-sync`,
-  `/start-session`, `/end-session` and the game's CLAUDE.md follow it, and offer `/next-tier` when the owner keeps
+  `/start-session`, `/end-session` and the game's CLAUDE.md follow it, and offer `/next-tier` when the user keeps
   asking for work past the current tier.
 - **No deadlines:** the ROADMAP milestone table loses its Target column (milestones M2 Alpha, M3 Beta, M4 Release
   candidate added); progress is counted in items and content, never dates.
@@ -242,7 +306,7 @@ GDD's `Current tier:` line drives every scope check (SOP-08, SOP-01, `/new-featu
   opening them. Exam 14/14 offline; live and read-only against a public repo.
 - **`/triage-issues`** sorts reports (bug, feel, needs info, duplicate, out of scope, suspicious), runs bugs through
   `/bug-hunt` from the repro step, logs feel reports by issue number (not username) and tunes one value at a time with
-  the game's bot or pillar checks before and after; a change from a single report is a proposal to the owner. Every
+  the game's bot or pillar checks before and after; a change from a single report is a proposal to the user. Every
   reply, label or close is shown and needs a yes; `Fixes #N` in the commit closes the issue.
 - SOP-03 "Reports from GitHub Issues", SOP-13 (Issues in the lock-down table; a public repo means anyone's text
   reaches Claude), the game's CLAUDE.md and the SOP index point to it.
@@ -282,7 +346,7 @@ GDD's `Current tier:` line drives every scope check (SOP-08, SOP-01, `/new-featu
   (tile PNGs plus a tileset.json with each tile's corners for autotiling) from PixelLab's API; the token from
   `PIXELLAB_API_KEY`, never printed; prints each request's cost, polls background jobs, checks every PNG, extracts
   zips only inside `--out`; `--log` writes the ASSET_LOG row and evidence (prompt, plan, cost, SHA-256). Exam 17/17
-  offline against the published spec. Live on the owner's trial: `check` and one 16 px `character --legacy` (1
+  offline against the published spec. Live: `check` and one 16 px `character --legacy` (1
   generation: 4 directions, 24x24 frames under `<out>/Idle/rotations/`); the other commands not yet run live.
 - **SOP-16:** a PixelLab section: the tool, the official MCP server (`claude mcp add` run by you, not pasted into a
   chat; never allow-list its tools), and the cheapest-path-first rule (tip, E61). `gen-brief` runs an API tool the user
@@ -304,8 +368,8 @@ GDD's `Current tier:` line drives every scope check (SOP-08, SOP-01, `/new-featu
   asks for the author name, passed to `new_game.py --author`, Git's user.name offered as the default), and drafts a one-page plan under the GDD
   template's headings (three proposed pillars, core loop, toy scope, out of scope, assumptions to test). Only after
   a yes does it pick the engine and create the folder; the approved plan goes into the game's `docs/GDD.md`.
-- **The examples' license line said all their assets are CC0.** The art is; most sound effects were generated on an
-  ElevenLabs free plan (non-commercial), and Graveyard Shift's voices and music carry Fish Audio's and Suno's terms.
+- **The examples' license line said all their assets are CC0.** The art is; most sound effects were generated under
+  ElevenLabs' non-commercial terms (placeholders), and Graveyard Shift's voices and music carry Fish Audio's and Suno's terms.
   `examples/LICENSE.md` and the README say so now.
 - **Fix: the ElevenLabs free-plan credit lacked the required "elevenlabs.io".** ElevenLabs' help page: free-plan
   content you publish must carry "elevenlabs.io" or "11.ai"; Eleven Music is credited by name. `eleven_audio.py`
@@ -315,16 +379,16 @@ GDD's `Current tier:` line drives every scope check (SOP-08, SOP-01, `/new-featu
   skill and FIRST_HOUR. Nine examples, not eight, most with a GIF; `examples/README.md` lists lockpick-mz.
 - CHOOSING_AN_ENGINE no longer says Godot export and Web `run` were untested; DISTILL_REPORT.md is labeled a
   2026-10-19 snapshot; the PROCGEN brief files are listed in the README; Godot's floor names the tested 4.7.2; the
-  web examples ask for Node 22.12+; Lockpick MZ's files say "the owner" like the others.
+  web examples ask for Node 22.12+; Lockpick MZ's files use the neutral default author like the others.
 
 ### After the first build: play, take notes, paste them back
 - The game's CLAUDE.md has a "When it first becomes playable" section: when the toy first runs (and after the slice or
   a big feature), Claude hands the game over: play it, write down what you like and what you don't, paste the notes
-  back, and iterate from there. FIRST_HOUR's fast lane says the same; `/playtest-report` takes the owner's own notes
+  back, and iterate from there. FIRST_HOUR's fast lane says the same; `/playtest-report` takes the user's own notes
   without the tester interview; `make-a-game` previews the loop at the hand-over.
 
 ### "Crude on purpose" warning before the first build
-- **Crude, not abstract** (the owner's first real game drew its characters as dots): characters and key objects get
+- **Crude, not abstract** (a test project drew its characters as dots): characters and key objects get
   a recognizable figure (head, body, arms, legs, drawn in code or a CC0 placeholder via `fetch_asset.py`), never a dot
   or a bare shape; only floors, walls and level blocks stay boxes. Said in the game's CLAUDE.md, FIRST_HOUR,
   VERTICAL_SLICE, SOP-01, SOP-12, START_HERE and `make-a-game`.
@@ -341,8 +405,8 @@ GDD's `Current tier:` line drives every scope check (SOP-08, SOP-01, `/new-featu
   Godot and Unreal have no `smoke --screenshot` yet: Claude says so and skips the pictures.
 
 ### First art drawn in code: `tools/art/pixel_sprite.py` (no more dots)
-The owner's first real game was built from dots and shapes, and its first playtest verdict was "unplayable". A sprite
-script written in another session (a 32x32 steampunk hero, walk and punch in four directions) fixed it at no cost.
+A test project was built from dots and shapes, and its first playtest verdict was "unplayable". A sprite
+script (a 32x32 steampunk hero, walk and punch in four directions) fixed it at no cost.
 - **`tools/art/pixel_sprite.py`** (standard library only): a sprite is a Python file that paints rectangles on a 32x32
   grid; the tool adds the outline and ground shadow, mirrors left to right, packs an atlas PNG with a JSON layout and a
   preview. `check` grades any atlas against the **first-art floor** (figure height, colors, fill, outline): dots, flat
@@ -430,19 +494,20 @@ script written in another session (a 32x32 steampunk hero, walk and punch in fou
   `fix` (reduce colors, correct, unzoom, remove background, normal map), `iso-tile`, `tileset --kind sidescroller`, and
   `tiles-pro` and `outfit`, marked **[paid plan only]** as PixelLab rules it. Results that come as storage links are
   downloaded without the token (it goes only to the API host) and checked to be the file type they claim.
-- Exam 17/17 -> 30/30. Live on the owner's new Pixel Apprentice plan (6.1 generations): prop, vfx, iso-tile, sidescroller
+- Exam 17/17 -> 30/30. Live: prop, vfx, iso-tile, sidescroller
   tileset, edit and fix work; the live run found that `GET /map-objects/{id}` answers 423 while generating (now polled
   as "still working") and that a sidescroller tileset costs 2, not 1. SOP-16 lists every command with its cost and the
-  owner's game's lessons (fix the base sprite first; template animation drops big props, skeleton-v3 keeps them).
+  lessons from field testing (fix the base sprite first; template animation drops big props, skeleton-v3 keeps
+  them).
 
-### Screenshots and bursts on Godot (from the owner's game's kit feedback)
+### Screenshots and bursts on Godot (from field testing)
 - Godot's `smoke` gains `--screenshot FILE`, `--record DIR` and `--record-every MS`, like web: after the headless smoke
   passes, the new `tools/capture.gd` runs the main scene in a real window (headless Godot renders nothing) and saves
   the last frame and/or a frame every N. Verified on Godot 4.7.2 with a moving test node (30 frames, real motion, GIF).
 - The game's CLAUDE.md: anything that moves (an attack, a jump, a walk) is shown as a burst and GIF, not a still.
   Unreal still has no capture option.
 
-### Fix: Godot pixel scaling (from the owner's game's kit feedback)
+### Fix: Godot pixel scaling (from field testing)
 - The Godot template left `canvas_items` stretch with Godot's default aspect and fractional scale, though ENGINE.md
   promised integer scaling: on a 3440x1440 screen, wide black bars and uneven pixels. It now sets `viewport`,
   `expand`, `integer` on the 640x360 base (divides 720p, 1080p, 1440p, 4K) and a 1920x1080 window; ENGINE.md says a
@@ -537,7 +602,7 @@ script written in another session (a 32x32 steampunk hero, walk and punch in fou
   not were left out). E63 corrected: Motion2MixamoRig, Charakuru, Prompt2Rig as its own row with repo links.
 
 ### New engine overlay: `rpgmaker-mz` (RPG Maker MZ), an untested proof of concept
-Asked for by the owner ("add in rpg maker"); built on a machine without RPG Maker MZ, so every step that needs the
+Asked for in a kit session ("add in rpg maker"); built on a machine without RPG Maker MZ, so every step that needs the
 editor or the engine is marked (verify) and the README, the engine chooser, the make-a-game skill and the example label it an untested proof of concept.
 - **Layout:** the MZ project lives in `game/` (the editor's Deployment then exports the game, not the kit). The kit
   ships none of MZ: `rmmz_core.js` carries no license (unlike MV's MIT core), so `dev.py setup --from <a new MZ project>`
@@ -583,12 +648,12 @@ editor or the engine is marked (verify) and the README, the engine chooser, the 
 - An independent Sonnet review found the soul reachability check disabled by a comment (good yards never tripped it);
   fixed, and every invariant now has a test that feeds it a broken yard. The example has 86 EditMode tests and 12
   smoke tests, all passing (2026-10-23).
-- Graveyard Shift: the owner walked out of the open gate and fell forever. The gate and both south corners (the wall
+- Graveyard Shift: a playtester walked out of the open gate and fell forever. The gate and both south corners (the wall
   model's off-center pivot) had been open since the first build. A test that walks the keeper into every gap reproduced
   it (6 of 6 south pushes fell), then invisible blockers on the wall line, left out of the NavMesh bake, and a fall
   safety net fixed it; the trio's escapes are unchanged. Lesson for SOP-17 users: also test that the player cannot
   leave the level, on the hand-made level as well as generated ones.
-- Graveyard Shift grew from the owner's playtest ("4 times the size, it's too easy"): irregular yards (a main body plus
+- Graveyard Shift grew from a playtest ("4 times the size, it's too easy"): irregular yards (a main body plus
   wings, a union of rectangles on the wall grid, about 4x the area), crypts with roofs and doors, a hinged iron gate
   that opens on the last soul, grass and Nature Kit trees and bushes outside the wall (CC0, A-0027), 12 souls, a 300 s
   night, and a title screen with Easy, Normal, Hard and Insane (each darker, two more ghosts; Insane lights only the
@@ -615,7 +680,7 @@ editor or the engine is marked (verify) and the README, the engine chooser, the 
   review (seen once live: now it counts only when no answer came back); a timeout waited for any child process holding
   the pipes (measured 20 s past a 2 s timeout; now the whole process tree is stopped); and a quoted, indented "To resume
   this session" line was stripped from the answer. Six regression tests, two with real processes.
-- A usage or rate limit (met for real: a 429 "5-hour usage limit" after a day of reviews) is now exit 2 with the CLI's
+- A usage or rate limit (met for real: a 429 "5-hour usage limit") is now exit 2 with the CLI's
   own message, not "no answer, rerun with --debug"; any other CLI `error:` line is shown too.
 - A limit hit mid-review (met for real: the engines audit wrote progress notes, then ran out) is exit 2 too, and the
   partial notes are saved to `--out` marked INCOMPLETE instead of being thrown away.
@@ -641,7 +706,7 @@ each finding. Of 10: 9 confirmed, 1 partly right, none refuted (the best slice s
 - **Tests:** a bot night that never ends fails; the gate-reach check means something (it was met by the start); one broken
   yard per LevelCheck problem (16, matched on the message: eight had none); the yard print covers models, outline, gate
   and start (re-pinned, .NET 8 and Mono agree); no light but the keeper's on Insane.
-- **Balance, the owner's call:** the trio's lantern tests run at Easy; careful against always-dark is asserted on the
+- **Balance, a judgment call:** the trio's lantern tests run at Easy; careful against always-dark is asserted on the
   hand-made yard and logged on generated nights (bots see in the dark); `Smoke_N` logs Normal. SOP-14 step 6 now says
   to assert only gaps the bots can perceive (K01).
 
@@ -671,10 +736,11 @@ the hook, and noticed the audit brief named a hook folder that does not exist.
 - **`scripts/sync_examples.py`:** brings every example up to the current kit through copies outside the repo, syncing by
   file content (the recorded kit hash), never overwriting a file a game edited (those come back as `.gold` to merge).
   Names and engines come from each example's `.game-kit.json`. Documented in the root CLAUDE.md.
-- **Owner branding:** Rune Delve's `.game-kit.json` author and two lines of its `CLAUDE.md` named the owner (it was
-  adopted without an explicit author, so the scaffolder took the git user name); now "the owner" like the others.
+- **Personal branding:** Rune Delve's `.game-kit.json` author and two lines of its `CLAUDE.md` carried a personal name
+  (it was adopted without an explicit author, so the scaffolder took the git user name); now the neutral default like
+  the others.
 - **Iteration timelines:** Graveyard Shift, Coyote Hop and Gatekeeper (Godot) open their HOW_IT_WAS_MADE.md with a table
-  of every change after the game first worked: what prompted it (the owner's words or a failed check), what changed,
+  of every change after the game first worked: what prompted it (the user's words or a failed check), what changed,
   and what proved it. The examples' rules now ask for one; the examples index describes the iterated games.
 - **`PROCGEN_PROMPT.md` and `PROCGEN_GOAL.txt`:** a brief and a `/goal` line for the next piece of work, a procedural
   generation skill (SOP-17) proven on Graveyard Shift's nights.
@@ -701,7 +767,7 @@ markers and engine.json keys checked clean.
   Checked live: web and web-3d smoke pass, `--record-every 0` is refused, Godot passes a 3000-frame smoke.
 
 ### A live voice, bring your own key (`tools/audio/fish_tts.py`, Gatekeeper)
-- **`fish_tts.py`:** Fish Audio text to speech: `check` (developer API balance, billed apart from a subscription),
+- **`fish_tts.py`:** Fish Audio text to speech: `check` (developer API balance),
   `voices` (library search, `--licensed`), `say` (one line to mp3, wav or opus, with a `.gen.json`). Key in
   `FISH_API_KEY`, never printed or saved. Exam 8/8 offline; live on the user's account.
 - **Gatekeeper (Godot) speaks:** `examples/gatekeeper-godot/scripts/game/guard_voice.gd` voices every guard line, including the ones the local model
@@ -719,18 +785,17 @@ markers and engine.json keys checked clean.
   and evidence (prompt, model, plan, SHA-256) and marks free-plan output PLACEHOLDER (non-commercial, needs credit);
   `--dry-run` spends nothing; usage mistakes are refused before a request is sent; the key is never printed or
   saved (an exam test checks every output). Exam 18/18 offline.
-- **Live on a free plan** it found three bugs, all fixed with regression tests: the API's raw PCM is stereo (read as
-  mono a 1 s sound came out 2 s long), "music is not available for free users" (402) was reported as a rate limit,
+- **Live** it found three bugs, all fixed with regression tests: the API's raw PCM is stereo (read as
+  mono a 1 s sound came out 2 s long), "music is not available" (402) was reported as a rate limit,
   and the request ID and per-request cost are in `x-trace-id` and `character-cost`.
 - **`wavfile.py` commands:** `stats`, `normalize` (generated audio came back at -60 dBFS) and `loop` (crossfade any
   download into a seamless loop with loop points; closes the "Suno does not loop" gap in BRIEFS). Exam 6/6 (with
   32-bit reading, below).
-- **Graveyard Shift has generated sound:** five effects and a night ambience loop from ElevenLabs (275 credits), the
+- **Graveyard Shift has generated sound:** five effects and a night ambience loop from ElevenLabs, the
   Unity setup gained ambience and music loops, `SceneBuilder` finds sounds in any format, `AudioSetupTests` checks the
   wiring (36 EditMode tests, smoke 5/5).
 - **Graveyard Shift's world sounds:** souls whisper where they float (find them by ear), ghosts moan louder as they grow
-  wary or hunt, footsteps follow the distance walked (lit or dark), the lantern crackles while lit (`examples/graveyard-shift/Assets/Scripts/Game/GraveyardAudio.cs`,
-  215 more free credits). The listener moved from the camera to the keeper. Three sounds came back too quiet and were
+  wary or hunt, footsteps follow the distance walked (lit or dark), the lantern crackles while lit (`examples/graveyard-shift/Assets/Scripts/Game/GraveyardAudio.cs`). The listener moved from the camera to the keeper. Three sounds came back too quiet and were
   normalized; positional sounds are mono (40 EditMode tests).
 - **Graveyard Shift's ghosts whisper and the night has an ending:** Fish Audio voice lines from the ghost's position
   when it notices you, and when it catches you; at dawn the yard warms to sunrise with birdsong (ElevenLabs), then the
@@ -739,10 +804,10 @@ markers and engine.json keys checked clean.
   `--log` (one ASSET_LOG row and evidence for the set). Exam 10/10.
 - **Graveyard Shift's voice cast** (Fish Audio, free model): a narrator (intro on the first night of a launch, escape and
   dawn outros over ducked end music), the keeper's barks (souls, gate, low time, caught) and more ghost lines (lost you,
-  gave up), 29 lines on one shared voice channel that queues instead of talking over. The owner's verdict was "voices are
+  gave up), 29 lines on one shared voice channel that queues instead of talking over. The verdict was "voices are
   no good, keep them for now": every voice row is PLACEHOLDER in the asset log. A 30 s mix rendered at the game's real
   volumes peaks at -1.5 dBFS (43 EditMode tests).
-- **Graveyard Shift's music came from Suno** (the owner's paid plan, web app, from the brief in its `BRIEFS.md`): two takes,
+- **Graveyard Shift's music came from Suno** (web app, from the brief in its `BRIEFS.md`): two takes,
   looped where each track best matches its opening (found by spectral similarity, not tempo), crossfaded with
   `wavfile.py loop`, encoded to OGG (23 MB to under 2 MB each, exact length, clean seam). They alternate per finished
   night and stream instead of sitting in memory (38 EditMode tests). A first try pasted the generic template and got
@@ -787,7 +852,7 @@ markers and engine.json keys checked clean.
 
 ### Neutral kit, renumbered
 - **No author branding in the kit.** Kit tools end without a footer; file headers credit Claude and the model only (the
-  `for {{AUTHOR}}` part of template headers is gone, the owner is named once in the game's `CLAUDE.md`). The owner's
+  `for {{AUTHOR}}` part of template headers is gone, the author is named once in the game's `CLAUDE.md`). The personal
   profile was replaced by a neutral `profiles/example.json`; profiles still add a footer and style to *your* games.
   The example games were re-rendered with the default profile and re-baselined so `--upgrade` stays quiet. Copyright
   lines are unchanged.
@@ -946,7 +1011,7 @@ markers and engine.json keys checked clean.
   on the first headless import of a fresh gatekeeper-godot copy; rerun `dev.py check` if it happens.
 
 ## 0.3.0 (2026-10-21): Claude Code Game Kit, ready to share
-Publish prep: the kit is now meant for anyone, not one owner's machine. New name, a fill-in profile instead of hard-coded
+Publish prep: the kit is now meant for anyone, not one machine. New name, a fill-in profile instead of hard-coded
 preferences, a fifth engine (browser games), two AI SOPs, two example games, and the tools those examples showed were missing.
 
 ### Renamed and made neutral
@@ -954,7 +1019,7 @@ preferences, a fifth engine (browser games), two AI SOPs, two example games, and
   `.game-kit.json` (`kit_version` replaces `gold_standard_version`); the old file and the old `.gitignore` marker are still
   read, and the old file is replaced on the next `--adopt` or `--upgrade`. `GOLD_VERSION` is now `KIT_VERSION`.
 - **Profiles** (`profiles/`, `--profile FILE`): author, an optional file footer and extra working-style lines for the game's
-  `CLAUDE.md`. The default is neutral: no footer, author from the profile, else `git config user.name`. The owner's
+  `CLAUDE.md`. The default is neutral: no footer, author from the profile, else `git config user.name`. The old
   preferences ship as a labelled example profile. The profile is stored in `.game-kit.json` and reused on upgrade. Starter
   code ends with a `{{FOOTER}}` line that becomes the footer or disappears; `{{PROFILE_STYLE}}` and `{{FOOTER_RULE}}` fill
   `CLAUDE.md` and `docs/STYLE.md`. The kit's own tools keep the kit's credit.
@@ -1150,7 +1215,7 @@ On a 0.2.1-or-older project, expect `.gold` copies for every changed kit file th
   Unity and C++ projects; Unreal keeps its own. SOP-05 says so and asks for `git lfs install` before the first commit.
 - **Concept art no longer ships:** CONCEPTS.md keeps FINAL boards in `docs/concepts/final/`, outside the engine content tree.
 - **Skills match their SOPs and the docs they edit:** `/end-session` quotes HANDOFF's real headings and updates Last updated and Branch;
-  `/perf-pass` and SOP-10 fill the ARCHITECTURE Budgets table; `/new-feature` parks pillar orphans (owner override recorded) and gains
+  `/perf-pass` and SOP-10 fill the ARCHITECTURE Budgets table; `/new-feature` parks pillar orphans (overrides recorded) and gains
   a close-out step; `/gdd-sync` bumps "Last reviewed"; `/adr` says where an ADR reference goes; `/asset-intake` and SOP-04 point at
   the file that actually holds naming conventions.
 - **Done-when criteria that can be met:** SOP-09 allows "nothing ran" (exit 2) on a project with no tests yet, recorded in HANDOFF;

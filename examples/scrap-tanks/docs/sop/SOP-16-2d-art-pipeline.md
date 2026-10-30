@@ -71,7 +71,7 @@ tilesets, effects, UI panels, fonts and props, and fixes existing pixel art. It 
   | `tiles-pro` **[paid plan only]** | pro tile variations, a terrain set, road autotiles, a building kit | 10 to 25 |
   | `outfit` **[paid plan only]** | one outfit onto every frame of an animation | 10 to 25 |
 
-  Lessons from a real game (tip, the owner's Obsidian Wyvern, 2026-10): fix the **base sprite** before animating
+  Lessons from field testing (tip, 2026-10): fix the **base sprite** before animating
   (`edit`: "change ONLY the hand into a fist"); `--mode template` redraws the character and can drop big props, while
   `skeleton-v3` keeps them; animate the direction where the prop is on the near side, then mirror. Free in the MCP
   (no generations for subscribers): `vfx_workbench` effects and the `pixelart_workbench` editor.
@@ -109,7 +109,7 @@ tilesets, effects, UI panels, fonts and props, and fixes existing pixel art. It 
   - PixMiniMax takes 4 to 40 frames (multiples of 4) and is priced by the canvas it upscales to: 40 frames cost 6
     generations at 128x128 and 2 at 132x132 **(verify)**. The vendor now recommends the `skeleton-v3` templates.
 - **Every paid generation gets a yes first.** Claude shows the exact request (`--dry-run`), what it makes and its
-  expected cost, and waits for the owner's yes for that request; an earlier plan is not a yes. A trial's few dozen
+  expected cost, and waits for your yes for that request; an earlier plan is not a yes. A trial's few dozen
   generations go fast.
 - **License** (PixelLab's FAQ, read 2026-10) **(verify the current terms before shipping)**: commercial use allowed;
   do not train AI models on the output. Stores ask about
@@ -120,7 +120,7 @@ tilesets, effects, UI panels, fonts and props, and fixes existing pixel art. It 
 ComfyUI runs image models on your own NVIDIA GPU through a node graph; the SpriteKiln node pack adds about 30 pixel-art
 workflows (text, image or a style reference to pixel art, edit, inpaint, 4 or 8 direction rotation, walk sheets,
 animation, seamless tiles, wang16 and blob47 autotiles). No account and no per-image cost; you pay in setup time, disk
-and GPU minutes. One owner's setup and test (tip, E68):
+and GPU minutes. One test machine's setup and test (tip, E68):
 - **Hardware it ran on:** RTX 5060 Ti 16 GB, 64 GB RAM, Windows 11. RTX 50 cards need PyTorch built for CUDA 12.8 or
   newer. Give ComfyUI its own Python environment (3.12 at the time; the newest Python was too new for PyTorch).
 - **Download only the tier you need** (sizes from that first experiment; Dotwork's own tiers are smaller, 15.3, 29.1
@@ -176,8 +176,8 @@ and GPU minutes. One owner's setup and test (tip, E68):
     idle): use a 1 px breathing bob of the back sprite instead.
   - **Ground shadows:** render the clip without the palette lock, remove the flat neutral blob at the feet, then
     lock. Locked first, the shadow is painted in the sprite's own dark colors and cannot be told apart.
-  - **Picking the base sprite:** an automatic pick by image quality can miss the prompt (an "old" lamplighter came
-    out young). Look at the candidates.
+  - **Picking the base sprite:** an automatic pick by image quality can miss the prompt (an NPC prompted as "old"
+    came out young). Look at the candidates.
 - **Hand polish as a round trip** (tip, E68): generated frames go into one `.aseprite` per character with a frame tag
   per animation, indexed on the asset's own colors. After the artist's pass, a script exports each tag back to the
   shipped paths and rebuilds the engine resources, then the import check runs again. Prove the trip is lossless first:
@@ -244,7 +244,7 @@ and GPU minutes. One owner's setup and test (tip, E68):
   images without ComfyUI's embedded workflow, a `comfy_local.gen.json` record, and the `ASSET_LOG.md` row with the
   models to license-check); `strip <png...> --out <folder>` for images saved by hand. It talks only to a server on
   this machine. `--dry-run` prints the edited workflow. Tested offline (K01) and `check` live on ComfyUI 0.43.0; a
-  live `run` **(verify)**. Ask the owner before Claude starts a multi-gigabyte download or installs a node pack.
+  live `run` **(verify)**. Claude asks you before it starts a multi-gigabyte download or installs a node pack.
 - **The whole pipeline: `tools/art/dotwork/`.** One JSON spec in (ready-made ones in `tools/art/dotwork/examples/`); out,
   straight into the game: characters in 4 directions with idle, walk, attack and pose clips as SpriteFrames, props as
   collision scenes, layered terrain and maps painted from text, effects, enemies, battle backgrounds, icons,

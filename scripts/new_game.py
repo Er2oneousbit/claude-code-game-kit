@@ -47,7 +47,7 @@ import traceback
 import unicodedata
 from pathlib import Path
 
-KIT_VERSION = "0.7.0"  # bump with CHANGELOG.md entries
+KIT_VERSION = "0.7.1"  # bump with CHANGELOG.md entries
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CORE_DIR = REPO_ROOT / "core"
 ENGINES_DIR = REPO_ROOT / "engines"
@@ -530,7 +530,7 @@ def scaffold(args):
                    "style": old["profile"].get("style", [])}
     else:
         profile = load_profile(PROFILES_DIR / "default.json")
-    author = args.author or profile["author"] or old.get("author") or git_user_name() or "the owner"
+    author = args.author or profile["author"] or old.get("author") or git_user_name() or "the user"
     today = datetime.date.today().isoformat()
     mapping = {
         "GAME_NAME": args.name.strip(),
@@ -686,7 +686,7 @@ def build_parser():
     ap.add_argument("--slug", help="code-safe identifier (CMake target, C# namespace); default: derived from --name. "
                     "Needed when the name has no Latin letters, e.g. --slug touhou_quest")
     ap.add_argument("--author", default=None,
-                    help="owner name for docs and file headers (default: the profile's author, else git config user.name)")
+                    help="author name for docs and file headers (default: the profile's author, else git config user.name)")
     ap.add_argument("--profile", metavar="FILE",
                     help="profile JSON with author, footer and extra working-style lines (see profiles/README.md; "
                          "default: profiles/default.json, or the profile recorded in the project on --adopt/--upgrade)")

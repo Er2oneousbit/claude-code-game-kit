@@ -9,7 +9,7 @@
 
 ## Where we are
 The toy is playable (M0): one neon loop, you vs Vex (reader), Nova (late) and Rook (ignorer), 3 laps, a lane closes on
-lap 2, any change on lap 3, item boxes give a boost. Waiting for the owner's first playtest.
+lap 2, any change on lap 3, item boxes give a boost. Waiting for the user's first playtest.
 
 ## What changed last session
 - Race logic in `src/logic/` (track, kart, race, bots, tuning) with 36 unit tests and 4 headless race tests.
@@ -23,7 +23,7 @@ lap 2, any change on lap 3, item boxes give a boost. Waiting for the owner's fir
 - First playtest of the toy (ROADMAP Now).
 
 ## Next step (specific, first action)
-- Owner plays (`python tools/dev.py run`), writes notes; then `/playtest-report` and fix the top item first.
+- The user plays (`python tools/dev.py run`), writes notes; then `/playtest-report` and fix the top item first.
 
 ## Open questions / decisions pending
 - Is a zap (speed x0.45) the right sting for missing a closure, or should it hurt more?

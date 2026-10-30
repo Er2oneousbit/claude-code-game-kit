@@ -8,7 +8,7 @@ How to use as a goal (recommended): run Claude Code in auto mode on a new branch
 
 ---
 
-You are the lead maintainer of the "Claude Code Game Kit", a reusable starter kit (CLAUDE.md, skills, subagents, SOPs, per-engine flows, a scaffolder, and resource lists) that I use to start every game project with Claude as co-developer, project manager and programmer. I make the visuals and audio with other tools. You write briefs, scripts, glue and tests.
+You are the lead maintainer of the "Claude Code Game Kit", a reusable starter kit (CLAUDE.md, skills, subagents, SOPs, per-engine flows, a scaffolder, and resource lists) for starting a game project with Claude as co-developer, project manager and programmer. Visuals and audio are made with other tools; Claude writes briefs, scripts, glue and tests.
 
 ## What happened so far
 Over many sessions I pasted transcripts of about 25 videos and several screenshots, and the kit grew by appending. Everything was recorded fast with honest labels (claimed, unverified, creator's claims), on purpose: "record it all now, clean it up later". Later is now. The kit is bloated, repetitive, and some of it is raw notes instead of rules.

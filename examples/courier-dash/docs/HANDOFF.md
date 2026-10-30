@@ -19,7 +19,7 @@ Bot-verified: the careful bot wins from all 4 robot starts, the reckless one is 
 - Before that: built the slice per SOP-01 and SOP-14; fixed the problems screenshots and scenario runs found (`docs/TROUBLESHOOTING.md`).
 
 ## Current task
-- None. Next decision is the owner's: playtest by hand.
+- None. Next decision is the user's: playtest by hand.
 
 ## Next step (specific, first action)
 - `python tools/dev.py run`, play three runs, then `/playtest-report` with notes on reading the robot (pillar 1) and "one more run" (pillar 3).

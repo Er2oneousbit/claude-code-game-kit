@@ -17,7 +17,7 @@ import godot
 
 import engine as lib  # noqa: E402
 
-TPL = ("pixel art, 16-bit era JRPG battle background, wide side view landscape of {s}, horizon in the "
+TPL = ("pixel art, {style} {genre} battle background, wide side view landscape of {s}, horizon in the "
        "upper third, open flat ground across the lower half for the battle, no characters, no monsters, no text, "
        "no border, rich detailed pixel art, limited palette")
 W, H, GRID = 2560, 1024, 8
@@ -26,11 +26,11 @@ W, H, GRID = 2560, 1024, 8
 def render_raw(name, prompt, seed, work, tpl=TPL, w=W, h=H, lora=0.7):
     """Cached raw grid sample (name + seed + a key of the full prompt, size and LoRA strength): palette / color-count
     changes need no re-render. Shared with lane_scenes (title / cutscene backdrops at 2560x1440)."""
-    tag = core.key(tpl.format(s=prompt), w, h, lora)
+    tag = core.key(core.prompt(tpl, s=prompt), w, h, lora)
     cp = os.path.join(work, f"{name}_s{seed}_{tag}_raw.png")
     if not os.path.exists(cp):
         core.ensure_comfy()
-        out, sec = lib.run(lib.klein(tpl.format(s=prompt), seed, w, h, f"dotwork_work/{os.path.basename(work)}/{name}",
+        out, sec = lib.run(lib.klein(core.prompt(tpl, s=prompt), seed, w, h, f"dotwork_work/{os.path.basename(work)}/{name}",
                                      lora=lora))
         rgb = np.array(Image.open(out).convert("RGB"))
         t = lib.sample(rgb, np.ones(rgb.shape[:2], bool), GRID, 0, GRID, 0, 0.5)[:h // GRID, :w // GRID, :3]
@@ -45,8 +45,7 @@ def run(entries, pack, man, conf):
     res = f'{conf["fixed"]["res_root"]}/{conf["fixed"]["art_dir"]}/battle/bg'
     work = os.path.join(core.WORK, "battle_bg")
     os.makedirs(work, exist_ok=True)
-    man.drop_dir(art)  # clean re-export
-    man.drop_dir(src)
+    man.drop_owned(art, ("spr_bg_", "bg_"))   # a shared folder: this pack's files only
     pal = conf["fixed"]["env_palette"]
     for k, e in enumerate(entries):
         name = core.snake(e["name"])

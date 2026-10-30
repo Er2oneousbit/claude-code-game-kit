@@ -29,7 +29,8 @@ sys.path.insert(0, HERE)
 import fcore  # noqa: E402
 
 LANES = ("props", "effects", "tiles", "ui", "icons", "portraits", "tools", "img2px", "fonts", "battle_bgs", "enemies",
-         "windows", "balloons", "scenes", "hitfx", "animprops", "vehicles")
+         "windows", "balloons", "scenes", "hitfx", "animprops", "vehicles", "widgets", "transitions", "weather", "status",
+         "npcs", "platforms", "iso")
 
 
 # ---- binding -------------------------------------------------------------------------
@@ -81,6 +82,7 @@ def load_spec(path):
 
 
 ENTRY_VARS = ("e", "self.e", "entry")   # the names lane code gives a spec entry
+ENTRY_HELPERS = ("recolor",)            # non-lane modules that read spec entry keys for a lane (palette swaps)
 
 
 def _dotted(node):
@@ -116,6 +118,8 @@ def entry_keys(lane):
         for n in ast.walk(tree):
             if isinstance(n, ast.ImportFrom) and (n.module or "").startswith("lane_"):
                 files.append(n.module + ".py")
+            elif isinstance(n, ast.Import):
+                files += [a.name + ".py" for a in n.names if a.name in ENTRY_HELPERS]
             elif isinstance(n, ast.Subscript) and _dotted(n.value) in ENTRY_VARS and _subscript_key(n):
                 keys.add(_subscript_key(n))
             elif (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "get" and n.args
@@ -328,6 +332,18 @@ def cmd_preview(a, rest):
                               f"(dotwork.py preview {a.kind} --help)")
 
 
+def cmd_clean(a):
+    s = setup_run(a)
+    import pxclean
+    return pxclean.cmd(a, s)
+
+
+def cmd_recolor(a):
+    s = setup_run(a)
+    import recolor
+    return recolor.cmd(a, s)
+
+
 def cmd_setup(a):
     s = setup_run(a, game=False)   # reports a wrong folder instead of refusing
     import setup_check
@@ -365,8 +381,9 @@ def build_parser():
 
     p = sub.add_parser("setup", parents=[common], help="check ComfyUI, node packs, models, SpriteKiln and Godot")
     p.add_argument("--check", action="store_true", help="check only (the default; Dotwork never downloads models)")
-    p.add_argument("--tier", choices=["sprites", "rotate", "animate", "all"], default="all",
-                   help="check only the models one tier needs (sprites 15 GB, rotate 29 GB, animate 33 GB)")
+    p.add_argument("--tier", choices=["sprites", "rotate", "animate", "pose", "all"], default="all",
+                   help="check only the models one tier needs (sprites 15 GB, rotate 29 GB, animate 33 GB, pose 19 GB "
+                        "more: skeleton-driven clips, optional)")
     p.add_argument("--hash", action="store_true", help="also SHA-256 every model file (slow: tens of GB)")
     p.set_defaults(fn=cmd_setup)
 
@@ -381,7 +398,8 @@ def build_parser():
     p.add_argument("--source", help="an existing south-facing sprite PNG instead")
     p.add_argument("--asymmetric", action="store_true", help="generate west instead of mirroring east")
     p.add_argument("--actions", nargs="+", help="default: design.character.actions (idle walk attack)")
-    p.add_argument("--directions", nargs="+", choices=["s", "e", "n", "w"], help="default: all four")
+    p.add_argument("--directions", nargs="+", choices=["s", "e", "n", "w", "se", "ne", "nw", "sw"],
+                   help="default: all four; any diagonal makes an 8-way rotation")
     p.add_argument("--seeds", type=int, default=3, help="south-sprite candidates when generating")
     p.add_argument("--east-edit", help="edit instruction applied to the east sprite before animating")
     p.add_argument("--subject", help='animation subject wording, e.g. "the pixel art guard with a halberd"')
@@ -422,6 +440,33 @@ def build_parser():
     p.add_argument("--gap", type=float, default=0.04, help="extend: OKLab distance that counts as missing")
     p.add_argument("--out", required=True, help=".hex file to write")
     p.set_defaults(fn=cmd_palette)
+
+    p = sub.add_parser("clean", parents=[common], help="any image to clean pixel art, no model: grid, palette, specks")
+    p.add_argument("--source", nargs="+", required=True, help="image globs inside the game (PNG, JPG, WebP, BMP)")
+    p.add_argument("--out", required=True, help="folder inside the game for the cleaned PNGs (same names)")
+    p.add_argument("--cell", default="auto", help="screen pixels per art pixel: auto (measured) or a number")
+    p.add_argument("--width", type=int, help="shrink a smooth image to this many pixels wide instead of a grid")
+    p.add_argument("--bg", choices=["auto", "white", "black", "none"], default="auto",
+                   help="plain background to key out (auto: the border colour, if the border is plain)")
+    p.add_argument("--palette", default="obj", help="obj (default), env, none, or a .hex file in the game")
+    p.add_argument("--colors", type=int, default=0, help="with --palette none: reduce to this many colours")
+    p.add_argument("--max-colors", type=int, default=0, help="cap the colours used from the palette (0 = no cap)")
+    p.add_argument("--outline", default="none", help="#RRGGBB 1 px outline, or none (default)")
+    p.add_argument("--islands", type=int, default=4, help="drop specks smaller than this many pixels (0 keeps all)")
+    p.set_defaults(fn=cmd_clean)
+
+    p = sub.add_parser("recolor", parents=[common], help="palette swap: recolour PNGs (a frame set shares one map)")
+    p.add_argument("--source", nargs="+", required=True, help="PNG globs inside the game, e.g. \"assets/art/props/barrel/*.png\"")
+    p.add_argument("--out", required=True, help="folder inside the game for the recoloured copies (same file names)")
+    p.add_argument("--hue", type=float, default=0, help="turn coloured ramps by this many degrees (OKLCh)")
+    p.add_argument("--to", help="#RRGGBB: turn the sprite's main hue to this colour's instead of --hue")
+    p.add_argument("--saturation", type=float, default=1.0, help="chroma multiplier (0.5 duller, 1.4 more vivid)")
+    p.add_argument("--lightness", type=float, default=0.0, help="add to OKLab lightness (-0.2 darker .. 0.2 lighter)")
+    p.add_argument("--hues", type=float, nargs=2, metavar=("LO", "HI"), help="only source hues in this range "
+                   "(degrees; 330 30 wraps through red)")
+    p.add_argument("--min-chroma", type=float, default=0.02, help="colours greyer than this stay (outline, steel)")
+    p.add_argument("--palette", default="obj", help="obj (default), env or a .hex file: the palette results snap to")
+    p.set_defaults(fn=cmd_recolor)
 
     p = sub.add_parser("verify", parents=[common], help="prove this game's Dotwork assets load (Godot)")
     p.set_defaults(fn=cmd_verify)

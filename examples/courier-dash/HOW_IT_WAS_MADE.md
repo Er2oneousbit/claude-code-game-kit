@@ -1,7 +1,7 @@
 # How Courier Dash was made
 
 The kit's Web 3D example, and its second "only what is in the kit" run (after ghost-lantern). One Claude Code session
-(Claude Opus 5.5) on Windows 11 with Node 26, 2026-10-21. The owner picked the concept; Claude did the rest by following the
+(Claude Opus 5.5) on Windows 11 with Node 26, 2026-10-21. The user picked the concept; Claude did the rest by following the
 kit's documents and tools, and recorded every place the kit fell short. Each gap was fixed **in the kit** during the run and
 pulled into the game with `new_game.py --upgrade`, the same way any kit user gets updates.
 
@@ -17,7 +17,7 @@ python tools/dev.py doctor
 ```
 
 ## 2. Concept and GDD (5 to 25 min)
-Claude offered four 3D concepts that each exercise a different part of the kit; the owner picked "Courier Dash" (animated
+Claude offered four 3D concepts that each exercise a different part of the kit; the user picked "Courier Dash" (animated
 character, glTF pipeline, follow camera, SOP-14 robot). The GDD got the pitch, three pillars (read the robot, every second
 counts, one more run), the core loop, controls and the tunables file.
 
@@ -106,9 +106,9 @@ The browser run ended with 24.7 s left, the same as the unit test for that start
 | `python tools/doctor.py`, `python tools/check_links.py`, `python tools/publish_check.py` | healthy, no broken references, nothing that should not be published |
 
 ### Later: generated sound (ElevenLabs)
-The owner asked for API audio in the other example games (2026-10-23), after Graveyard Shift had it. The Kenney sounds
+The user asked for API audio in the other example games (2026-10-23), after Graveyard Shift had it. The Kenney sounds
 were replaced by sound effects generated with the kit's `tools/audio/eleven_audio.py`, plus an ambience loop the game
-never had. Free plan: every file is PLACEHOLDER in `docs/ASSET_LOG.md` (non-commercial, credit in the README); the old
+never had. Every file is a PLACEHOLDER (non-commercial terms) in `docs/ASSET_LOG.md` (credit in the README); the old
 Kenney rows stay, marked removed. Every file was measured before use (peak, loudness, silence at the start, the jump at
 a loop's seam, flat-topped samples), then peak-normalized: one-shots to -3 dBFS, loops to -6 (the log says Modified, the
 evidence file keeps the shipped file's SHA-256, the `.gen.json` next to it the generated one).
@@ -122,7 +122,7 @@ evidence file keeps the shipped file's SHA-256, the `.gen.json` next to it the g
 
 - What the measurements caught: the town ambience came back at -34 dBFS peak, too quiet to hear under anything;
   normalized. MP3 for one-shots (small), WAV for the loop (MP3 padding clicks at the seam).
-- Cost: 137 credits. Verified: `check`, 53 tests, `smoke` (boot, no errors), and every file decoded in the smoke's own
+- Verified: `check`, 53 tests, `smoke` (boot, no errors), and every file decoded in the smoke's own
   headless Chromium.
 
 ### Later: review fixes (2026-10-26)

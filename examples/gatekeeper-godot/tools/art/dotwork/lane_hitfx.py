@@ -109,7 +109,7 @@ def run(entries, pack, man, conf):
                 continue
             sp = os.path.join(art, "shaders", "damage_flash.gdshader")
             os.makedirs(os.path.dirname(sp), exist_ok=True)
-            with open(sp, "w", encoding="utf-8", newline="\n") as f:
+            with open(core.safe_dest(sp), "w", encoding="utf-8", newline="\n") as f:
                 f.write(FLASH_SHADER)
             mp = godot._write(os.path.join(art, "shaders", "mat_damage_flash.tres"), "\n".join([
                 '[gd_resource type="ShaderMaterial" load_steps=2 format=3]', "",

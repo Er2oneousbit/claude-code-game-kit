@@ -116,5 +116,5 @@ def run(entries, pack, man, conf):
             for i, o in enumerate(o for o in outs if o != normal_png):
                 core.save_clean(Image.open(o).convert("RGBA"), os.path.join(src_dir, f"lit_preview_{i:02d}.png"))
             core.log(f"tools {name}: normal map {r['seconds']:.0f}s")
-        with open(stamp, "w", encoding="utf-8") as f:   # written last: a failed job leaves no stamp, so it re-runs
+        with open(core.safe_dest(stamp), "w", encoding="utf-8") as f:   # written last: a failed job leaves no stamp, so it re-runs
             f.write(req)

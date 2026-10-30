@@ -146,7 +146,7 @@ def build(name, glyph_path, out_dir, scale=2, effect="shadow", gradient=None, ca
                      f"xoffset={-lead * scale} yoffset={-lead * scale} "
                      f"xadvance={(gw + meta['spacing']) * scale} page=0 chnl=15")
     fnt = os.path.join(out_dir, f"font_{name}.fnt")
-    with open(fnt, "w", encoding="utf-8", newline="\n") as f:
+    with open(core.safe_dest(fnt), "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
     return fnt, os.path.join(out_dir, png), meta, rendered, line_h, glyphs
 

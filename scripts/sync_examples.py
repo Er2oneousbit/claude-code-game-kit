@@ -4,8 +4,8 @@
 # Purpose : Kit maintenance: bring every game in examples/ up to the current kit. Each example is copied to a work
 #           folder outside the repo (the scaffolder refuses a destination inside the kit), upgraded there with
 #           new_game.py --upgrade, and every kit file whose upgraded copy is the pristine kit version is copied back.
-# Usage   : python scripts/sync_examples.py D:/kt/sync1                    # all examples
-#           python scripts/sync_examples.py D:/kt/sync2 --only coyote-hop ghost-lantern
+# Usage   : python scripts/sync_examples.py <scratch>/sync1                  # all examples
+#           python scripts/sync_examples.py <scratch>/sync2 --only coyote-hop ghost-lantern
 #           Run it twice (two fresh folders): the second run must report "0 synced" everywhere.
 # Exit    : 0 ok, 1 an upgrade failed (any nonzero scaffolder exit, including 1 = unresolved placeholders) or a
 #           conflict (.gold) needs a hand merge, 2 usage or the work folder cannot be created

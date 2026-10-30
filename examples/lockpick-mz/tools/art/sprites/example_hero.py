@@ -10,7 +10,7 @@
 #           head, arm) with rect() on a 32x32 grid; the tool adds the dark outline and the ground shadow. Animation
 #           is a few numbers per frame (leg lift, swing, body bob, piston extension). Right-facing frames are the
 #           left-facing ones mirrored (MIRROR). Atlas rows: ROWS, 4 frames each.
-# Authored: Written with Claude (Sonnet 5.5), iterated by the kit owner; ported to the sprite-file format with
+# Authored: Written with Claude (Sonnet 5.5), iterated by hand; ported to the sprite-file format with
 #           Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 from pixel_sprite import Sprite

@@ -82,7 +82,7 @@ These live in data, not code. File: `src/core/Tuning.hpp` (speeds, turn rates, r
 - Style, tone, and the kinds of enemies/NPCs the player sees: toy scrapyard: Kenney tractors with cannons, police-tractor raiders, one shovel-tractor heavy
 - Palette / resolution / camera: `docs/CONCEPTS.md`; 1280x720 logical; fixed camera, 55 degrees
 - Music mood and references (see `RESOURCES.md`): none in the slice
-- SFX style: scrapyard sounds generated with ElevenLabs (placeholder, free plan): cannon booms (yours heavier), metal
+- SFX style: scrapyard sounds generated with ElevenLabs (placeholder, non-commercial terms): cannon booms (yours heavier), metal
   clangs, a crunchy explosion, a ratchet-and-clink pickup, a windy scrapyard loop
 - Fill the style fragments in `BRIEFS.md` from this section.
 

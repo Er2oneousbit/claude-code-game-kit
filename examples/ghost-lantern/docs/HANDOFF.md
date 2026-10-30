@@ -17,10 +17,10 @@ Bot-verified: escapes on 6/6 seeds with the lantern, caught on 6/6 without it. N
 - 2026-10-23: the Kenney sounds became ElevenLabs sounds plus a haunted-house ambience loop (HOW_IT_WAS_MADE).
 - 2026-10-24: planned, not started: the wizard and ghosts as animated PixelLab sprites (`tools/art/pixellab.py`). One 16 px
   test wizard exists outside the repo: clean, but its black outline and palette do not match the Kenney tiles. Next: a `--palette` option (the Kenney sheet as color
-  reference, no outline), then a retake. **Every generation waits for the owner's yes.**
+  reference, no outline), then a retake. **Every generation waits for the user's yes.**
 
 ## Current task
-- None. Next decision is the owner's: playtest by hand.
+- None. Next decision is the user's: playtest by hand.
 
 ## Next step (specific, first action)
 - `python tools/dev.py run`, play three runs, then `/playtest-report` with notes on readability (pillar 1) and "one more run" (pillar 3).

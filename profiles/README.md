@@ -5,7 +5,7 @@ A profile is a small JSON file that `new_game.py --profile <file>` applies to a 
 
 | Field | Goes into | Example |
 |---|---|---|
-| `author` | `CLAUDE.md` ("Owner: ...", "how <author> wants Claude to behave"); file headers credit Claude and the model only | `"Ada"` (empty: your `git config user.name`, else "the owner") |
+| `author` | `CLAUDE.md` ("Developer: ...", "how <author> wants Claude to behave"); file headers credit Claude and the model only | `"Ada"` (empty: your `git config user.name`, else "the user") |
 | `footer` | last line of every starter source file, as a comment; `docs/STYLE.md` asks Claude to keep adding it | `"Made by Ada Studio"` (empty: no footer) |
 | `style` | extra bullets under "Working style" in the game's `CLAUDE.md` | `["**Tone:** formal, no jokes."]` |
 
