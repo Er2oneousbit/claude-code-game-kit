@@ -9,7 +9,7 @@
 // ---------------------------------------------------------------------------
 use bevy::prelude::*;
 
-use project_crimson_nebula::app::test_app;
+use project_crimson_nebula::app::{smoke_test_app, test_app};
 use project_crimson_nebula::game::{GameConfig, PlayerInput, RaceRes, SimTick};
 use project_crimson_nebula::logic::bots::Style;
 use project_crimson_nebula::logic::kart::KartInput;
@@ -87,4 +87,18 @@ fn player_input_drives_the_players_kart_after_the_countdown() {
         app.update();
     }
     assert!(race(&app).racers[0].kart.pos.distance(start) > 5.0);
+}
+
+#[test]
+fn a_smoke_budget_of_n_frames_runs_n_ticks() {
+    // dev.py smoke --frames N promises N fixed ticks: the clock-priming first update must not count
+    const N: u32 = 120;
+    let mut app = smoke_test_app(GameConfig::default(), N);
+    let mut updates = 0;
+    while app.should_exit().is_none() {
+        app.update();
+        updates += 1;
+        assert!(updates <= N + 10, "the smoke budget never exited");
+    }
+    assert_eq!(app.world().resource::<SimTick>().0, u64::from(N));
 }

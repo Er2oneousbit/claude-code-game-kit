@@ -6,10 +6,11 @@
 // Notes   : Count SimTick, never frames: one frame runs one 1/60 s tick here, but rules are written per tick.
 //           Each test names the behavior it guards. No window or GPU needed.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a smoke budget of N frames runs N ticks
 // ---------------------------------------------------------------------------
 use bevy::prelude::*;
 
-use {{GAME_SLUG}}::app::{TICK_HZ, test_app};
+use {{GAME_SLUG}}::app::{TICK_HZ, smoke_test_app, test_app};
 use {{GAME_SLUG}}::game::{Autoplay, GameConfig, Intent, PLAYER_SPEED, Player, SimTick};
 
 fn player_x(app: &mut App) -> f32 {
@@ -70,6 +71,20 @@ fn diagonal_input_is_not_faster() {
     let moved = q.single(app.world()).unwrap().translation.truncate().length();
     let max = PLAYER_SPEED * ticks(&app) as f32 / TICK_HZ as f32;
     assert!(moved <= max + 0.01, "moved {moved} > {max}");
+}
+
+#[test]
+fn a_smoke_budget_of_n_frames_runs_n_ticks() {
+    // dev.py smoke --frames N promises N fixed ticks: the clock-priming first update must not count
+    const N: u32 = 120;
+    let mut app = smoke_test_app(GameConfig::default(), N);
+    let mut updates = 0;
+    while app.should_exit().is_none() {
+        app.update();
+        updates += 1;
+        assert!(updates <= N + 10, "the smoke budget never exited");
+    }
+    assert_eq!(ticks(&app), u64::from(N));
 }
 
 // {{FOOTER}}

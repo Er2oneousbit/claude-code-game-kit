@@ -77,6 +77,8 @@ These live in data, not code. File: `<path to tuning data>`
 
 ## Art and audio direction
 - Style, tone, and the kinds of enemies/NPCs the player sees: 
+- Art source (who or what makes the finished art; the toy uses art drawn in code): code-drawn / free packs / own art /
+  paid AI service (which) / Dotwork (local AI, `/dotwork`): 
 - Palette / resolution / camera: 
 - Music mood and references (see `RESOURCES.md`): 
 - SFX style: 

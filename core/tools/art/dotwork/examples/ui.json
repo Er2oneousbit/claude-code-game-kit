@@ -1,0 +1,134 @@
+{
+ "name": "ui",
+ "_comment": "UI without a model: glyph-tool fonts (text bitmaps -> BMFont .fnt), code-drawn window skins, emote balloons and hit feedback (spark, slash, damage-flash shader). Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "fonts": [
+  {
+   "name": "dialogue",
+   "glyphs": "glyphs/dialogue.txt",
+   "scale": 2,
+   "effect": "shadow"
+  },
+  {
+   "name": "damage",
+   "glyphs": "glyphs/damage.txt",
+   "scale": 2,
+   "effect": "outline",
+   "sample": [
+    "1234  9999",
+    "+250  -30",
+    "MISS"
+   ]
+  },
+  {
+   "name": "title_brass",
+   "glyphs": "glyphs/title_brass.txt",
+   "scale": 2,
+   "effect": "outline",
+   "gradient": "brass",
+   "caps_only": true,
+   "sample": [
+    "THE MINING TOWN",
+    "Steam & Iron, Act 1",
+    "LEVEL 42  GOLD 9,750",
+    "Continue?  New Game!"
+   ]
+  },
+  {
+   "name": "title_steel",
+   "glyphs": "glyphs/title_brass.txt",
+   "scale": 2,
+   "effect": "outline",
+   "gradient": "steel",
+   "caps_only": true,
+   "sample": [
+    "IMPERIAL FACTORY",
+    "Restricted Area - B3"
+   ]
+  },
+  {
+   "name": "symbols",
+   "glyphs": "glyphs/symbols.txt",
+   "scale": 2,
+   "effect": "outline",
+   "sample": [
+    "☞ Fight   ► Item   ▼ ▲ ◄",
+    "♥ ♪ ★ ✓ ✗ … • ! ?"
+   ],
+   "export": {
+    "☞": "ui_cursor_hand",
+    "►": "ui_arrow_right",
+    "▼": "ui_arrow_down",
+    "▲": "ui_arrow_up",
+    "◄": "ui_arrow_left"
+   }
+  }
+ ],
+ "windows": [
+  {
+   "name": "classic",
+   "style": "classic"
+  },
+  {
+   "name": "brass",
+   "style": "brass"
+  },
+  {
+   "name": "iron",
+   "style": "iron"
+  }
+ ],
+ "balloons": [
+  {
+   "name": "exclaim",
+   "symbol": "!",
+   "color": "d83a3a"
+  },
+  {
+   "name": "question",
+   "symbol": "?",
+   "color": "3a6ad8"
+  },
+  {
+   "name": "dots",
+   "symbol": "…"
+  },
+  {
+   "name": "love",
+   "symbol": "♥",
+   "color": "e8487a"
+  },
+  {
+   "name": "music",
+   "symbol": "♪",
+   "color": "2e9a52"
+  },
+  {
+   "name": "sweat",
+   "symbol": "•",
+   "color": "4aa0e8"
+  },
+  {
+   "name": "star",
+   "symbol": "★",
+   "color": "e8b030"
+  }
+ ],
+ "hitfx": [
+  {
+   "name": "hit_spark",
+   "kind": "spark",
+   "size": 48,
+   "color": "fff2b8"
+  },
+  {
+   "name": "slash",
+   "kind": "slash",
+   "size": 64,
+   "color": "e8f4ff"
+  },
+  {
+   "name": "flash",
+   "kind": "flash"
+  }
+ ]
+}

@@ -14,6 +14,7 @@
 #           The CLI exits 0 even when its login has expired, so this script reads the output to tell.
 #           Models are named provider/model (kimi-code/k3, kimi-code/k3.1-pro); a bare name such as k3 works only if
 #           your Kimi config defines it, and an unknown one is a usage error (exit 2), not "no answer".
+#           --files and --out must name paths inside the project root; anything else (absolute, "..") is exit 2.
 #
 # Pseudocode:
 #   find the CLI (--cli, then PATH, then ~/.kimi-code/bin) -> build the prompt (question + files to read)
@@ -61,6 +62,17 @@ def find_cli(explicit):
             if (d / name).is_file():
                 return d / name
     return None
+
+
+def inside(root, rel):
+    """rel resolved against the project root, or None when it lands outside it (absolute paths and ".." included).
+    root must already be resolved."""
+    target = (root / rel).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError:
+        return None
+    return target
 
 
 def build_prompt(ask, files):
@@ -189,6 +201,13 @@ def main(argv=None):
         if not AGENT_FILE.is_file():
             print(f"[error] reviewer definition missing: {AGENT_FILE}", file=sys.stderr)
             return 2
+        # the reviewer reads the project only, and --out writes into it only
+        outside = [f for f in args.files + ([args.out] if args.out else []) if inside(root, f) is None]
+        if outside:
+            print(f"[error] outside the project ({root}): {', '.join(outside)}. --files and --out take paths "
+                  "inside it.", file=sys.stderr)
+            return 2
+        out_path = inside(root, args.out) if args.out else None
         missing = [f for f in args.files if not (root / f).is_file()]
         if missing:
             print(f"[error] not found in {root}: {', '.join(missing)}", file=sys.stderr)
@@ -206,14 +225,14 @@ def main(argv=None):
             if answer:
                 print(answer)
                 if args.out and not args.check:   # keep what was done before the stop, clearly marked
-                    save(root / args.out, args.ask, answer, f"INCOMPLETE: {message}")
+                    save(out_path, args.ask, answer, f"INCOMPLETE: {message}")
             return code
         if args.check:
             print(f"[ OK ] {cli} answers ({answer[:40]})")
             return 0
         print(answer)
         if args.out:
-            save(root / args.out, args.ask, answer)
+            save(out_path, args.ask, answer)
         return 0
     except KeyboardInterrupt:
         print("\n[error] interrupted", file=sys.stderr)

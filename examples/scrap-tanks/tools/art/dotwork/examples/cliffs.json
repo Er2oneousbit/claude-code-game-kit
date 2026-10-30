@@ -1,0 +1,97 @@
+{
+ "name": "cliffs",
+ "_comment": "Elevation: a plateau = a raised grass overlay on top of a cliff-face overlay, with stairs as a fixture. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "ground": {
+  "name": "highland",
+  "base": [
+   {
+    "material": "grass_lush",
+    "variants": 4,
+    "surface": "grass"
+   }
+  ],
+  "overlays": [
+   {
+    "material": "dirt",
+    "relief": "flat",
+    "surface": "dirt"
+   },
+   {
+    "material": "cliff_rock",
+    "style": "cliff",
+    "solid": true,
+    "variants": 4
+   },
+   {
+    "material": "grass_lush",
+    "name": "plateau",
+    "relief": "raised",
+    "surface": "grass",
+    "tint": [
+     1.1,
+     1.16,
+     0.95
+    ]
+   },
+   {
+    "material": "hedge",
+    "relief": "raised",
+    "solid": true,
+    "surface": "hedge"
+   }
+  ],
+  "fixtures": [
+   {
+    "name": "stone_stairs",
+    "seed": 950,
+    "cells": [
+     2,
+     2
+    ],
+    "view": "front",
+    "fit": "box",
+    "prompt": "short grey stone stairs climbing up a cliff, seen from the front"
+   }
+  ],
+  "map": {
+   "name": "plateau",
+   "seed": 4,
+   "legend": {
+    "g": [],
+    "d": [
+     "dirt"
+    ],
+    "P": [
+     "plateau"
+    ],
+    "K": [
+     "cliff_rock"
+    ],
+    "H": [
+     "hedge"
+    ]
+   },
+   "rows": [
+    "PPPPPPPPPPPPPPPPgggggggg",
+    "PPPPPPPPPPPPPPPPgggggggg",
+    "PPPPPPPPPPPPPPPPgggHHHHg",
+    "PPPPPPPPPPPPPPPPgggHgggg",
+    "KKKKKKKKKKKKKKKKgggHgggg",
+    "KKKKKKKKKKKKKKKKgggggggg",
+    "ggggggggdddggggggggggggg",
+    "ggggggggdddggggggggggggg",
+    "gggggggggggggggggHHHHHgg",
+    "gggggggggggggggggggggggg"
+   ],
+   "objects": [
+    {
+     "fixture": "stone_stairs",
+     "at": [
+      8,
+      4
+     ]
+    }
+   ]
+  }
+ }
+}

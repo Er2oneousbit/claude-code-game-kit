@@ -4,7 +4,8 @@
 # Purpose : Exam for pixellab.py, offline: the HTTP call is replaced by canned responses shaped like PixelLab's
 #           OpenAPI spec (v2, read 2026-10-24), so no account, token or generations are used. Checks requests,
 #           job polling, saving (PNG check, safe zip extraction), tileset layout, ASSET_LOG rows, error mapping,
-#           and that the token never lands in any output.
+#           and that the token never lands in any output. The redirect cases run the real HTTP call against
+#           stand-in servers on 127.0.0.1 (still offline); the https -> http case tests the handler directly.
 # Usage   : python tools/art/test_pixellab.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -20,6 +21,7 @@ import sys
 import tempfile
 import threading
 import unittest
+import urllib.request
 import zipfile
 import zlib
 from pathlib import Path
@@ -111,6 +113,8 @@ class Fake:
                      "/map-objects/m1": {"status": "completed", "object_id": "m1", "download_url": f"{CDN}/m/pie.png"},
                      "/objects/o1": {"id": "o1", "status": "completed", "frame_urls": [f"{CDN}/o/a.png", f"{CDN}/o/b.png"]},
                      "/objects/o-review": {"id": "o-review", "status": "review", "frame_urls": []},
+                     "/objects/o-evil": {"id": "o-evil", "status": "completed",
+                                         "rotation_urls": {"south": f"{CDN}/o/s.png", "../escaped": f"{CDN}/o/e.png"}},
                      "/objects/o8": {"id": "o8", "status": "completed",
                                      "rotation_urls": {"south": f"{CDN}/o/s.png", "east": f"{CDN}/o/e.png", "north": None}},
                      "/tiles-pro/tp1": {"kind": "roads", "tile_rules": {"pieces": 18},
@@ -531,6 +535,59 @@ class PixelLabExam(unittest.TestCase):
                 srv.server_close()
         self.assertEqual((status, data), (200, b"zipdata"))
         self.assertIsNone(seen.get("auth"), "the token must not follow a redirect to another host")
+
+    def test_a_redirect_to_another_port_on_the_same_host_drops_the_token(self):
+        seen = {}
+
+        class Other(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                seen["auth"] = self.headers.get("Authorization")
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"zipdata")
+
+            def log_message(self, *a):
+                pass
+
+        other = http.server.HTTPServer(("127.0.0.1", 0), Other)
+
+        class Api(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(302)
+                self.send_header("Location", f"http://127.0.0.1:{other.server_port}/blob")   # same host, other port
+                self.end_headers()
+
+            def log_message(self, *a):
+                pass
+
+        api = http.server.HTTPServer(("127.0.0.1", 0), Api)
+        for srv in (other, api):
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            status, _, data = pl.http("GET", f"http://127.0.0.1:{api.server_port}/characters/x/zip", KEY)
+        finally:
+            for srv in (api, other):
+                srv.shutdown()
+                srv.server_close()
+        self.assertEqual((status, data), (200, b"zipdata"))
+        self.assertIsNone(seen.get("auth"), "the token must not follow a redirect to another port")
+
+    def test_a_redirect_from_https_to_http_on_the_same_host_is_refused(self):
+        # Met in review: the host-only check kept the token on https -> http (plaintext) to api.pixellab.ai
+        for new, rule in ((f"{pl.API}/other", "keep"), ("https://api.pixellab.ai:443/v2/x", "keep"),
+                          ("https://api.pixellab.ai:8443/v2/x", "strip"), (f"{CDN}/blob.zip", "strip"),
+                          ("http://api.pixellab.ai/v2/x", "refuse"), ("http://api.pixellab.ai:443/v2/x", "refuse")):
+            self.assertEqual(pl.redirect_rule(f"{pl.API}/characters/x/zip", new), rule, new)
+        req = urllib.request.Request(f"{pl.API}/characters/x/zip", headers={"Authorization": f"Bearer {KEY}"})
+        with self.assertRaises(pl.ServiceError):
+            pl.KeepKeyOnHost().redirect_request(req, io.BytesIO(), 302, "Found", {}, "http://api.pixellab.ai/v2/y")
+
+    def test_object_direction_names_cannot_leave_the_out_folder(self):
+        rc, out = self.run_tool("object", "--text", "x", "--out", "obj/evil", fake=Fake(object_id="o-evil"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("not a plain name", out)
+        self.assertFalse((self.root / "obj/escaped.png").exists(), "nothing written outside --out")
+        self.assertEqual(list((self.root / "obj/evil").glob("*.png")), [], "refused before any download")
 
     def test_zip_size_and_member_names_are_limited(self):
         bomb = zip_bytes({"rotations/south.png": PNG})

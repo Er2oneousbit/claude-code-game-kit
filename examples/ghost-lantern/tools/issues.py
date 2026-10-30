@@ -14,8 +14,9 @@
 # Notes   : Standard library only; needs the GitHub CLI (`gh`, cli.github.com) logged in. Runs only `gh auth status`,
 #           `gh repo view`, `gh issue list` and `gh issue view`: it never comments, labels or closes (those stay
 #           behind the ask rules in .claude/settings.json). Removes characters a person cannot see but a model reads
-#           (ANSI escapes, control and bidi characters, zero-width, Unicode tag and variation-selector smuggling) and
-#           reports how many: a report with hidden characters is a red flag. Text from reporters sits between
+#           (ANSI escapes, control characters, every Unicode format character such as bidi, zero-width and soft
+#           hyphen, blank fillers, tag characters, and variation selectors except one directly after an emoji or
+#           symbol) and reports how many: a report with hidden characters is a red flag. Text from reporters sits between
 #           <<<ISSUE_TEXT nonce>>> lines whose nonce is random per run, so a report cannot fake the end marker.
 #           Links in the text are listed, never opened. Comments GitHub hid (spam, abuse) are skipped unless --hidden.
 #
@@ -34,6 +35,7 @@ import shutil
 import subprocess
 import sys
 import traceback
+import unicodedata
 
 GH_TIMEOUT_S = 60
 MAX_TEXT = 12000        # characters kept per body or comment; a longer report is cut, with a note
@@ -46,12 +48,21 @@ KIND_LABELS = {"bug": "bug", "feel": "feel", "balance": "feel"}
 KIND_PREFIX = re.compile(r"^\s*\[(bug|feel)\]", re.I)
 
 ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-_]")
-# Control characters except tab and newline; zero-width and direction marks; bidi embeddings, overrides and isolates;
-# word joiner and invisible operators; BOM; Unicode tag characters (U+E0000 block, the "ASCII smuggling" trick);
-# variation selectors 17-256 (data hidden behind an emoji).
-HIDDEN = re.compile("[\u0000-\u0008\u000b-\u001f\u007f-\u009f​-‏‪-‮⁠-⁤"
-                    "⁦-⁩﻿\U000e0000-\U000e007f\U000e0100-\U000e01ef]")
-VS_RUN = re.compile("[︀-️]{2,}")   # one selector after an emoji is normal; a run of them carries data
+# Control characters except tab and newline; Unicode tag characters (U+E0000 block, the "ASCII smuggling" trick);
+# variation selectors 17-256 (data hidden behind an emoji). Format characters (category Cf: soft hyphen, zero-width
+# and direction marks, bidi embeddings, overrides and isolates, word joiner, invisible operators, BOM) are removed by
+# category in is_hidden(), so new ones in later Unicode versions are covered too.
+HIDDEN = re.compile("[\u0000-\u0008\u000b-\u001f\u007f-\u009f\U000e0000-\U000e007f\U000e0100-\U000e01ef]")
+# Letters and marks by category that still show nothing: combining grapheme joiner, Hangul fillers, Mongolian vowel
+# separator (Cf only in newer Unicode versions)
+BLANK = frozenset("\u034f\u115f\u1160\u180e\u3164\uffa0")
+VS_FIRST, VS_LAST = 0xFE00, 0xFE0F    # variation selectors 1-16
+VS_KEEP = ("\ufe0e", "\ufe0f")        # text or emoji style: one right after an emoji or symbol is normal text
+SYMBOL_CATEGORIES = ("So", "Sk", "Sm")
+EMOJI_RANGES = ((0x2190, 0x21FF), (0x2300, 0x23FF), (0x2460, 0x24FF), (0x25A0, 0x27BF), (0x2900, 0x297F),
+                (0x2B00, 0x2BFF), (0x3030, 0x3030), (0x303D, 0x303D), (0x3297, 0x3299), (0x1F000, 0x1FAFF))
+EMOJI_EXTRA = frozenset("\u203c\u2049\u2122\u2139")   # emoji that are punctuation or letters by category
+KEYCAP, KEYCAP_BASES = "\u20e3", frozenset("0123456789#*")   # 1 + FE0F + U+20E3 is the keycap emoji
 URL = re.compile(r"https?://[^\s<>()\"'\]]+")
 DEBUG = False
 
@@ -109,13 +120,42 @@ def gh_json(binary, args, repo=None):
 
 
 # ---- cleaning reporter text ------------------------------------------------------------------------------------------
+def is_symbol(ch):
+    """An emoji or symbol, after which one FE0E/FE0F selector is ordinary text (the heart in "I <3 it")."""
+    if not ch:
+        return False
+    o = ord(ch)
+    return (unicodedata.category(ch) in SYMBOL_CATEGORIES or ch in EMOJI_EXTRA
+            or any(lo <= o <= hi for lo, hi in EMOJI_RANGES))
+
+
+def is_hidden(ch, prev, nxt):
+    """True when ch shows nothing to a person and goes. prev and nxt are its neighbours in the original text."""
+    if VS_FIRST <= ord(ch) <= VS_LAST:
+        # one FE0E/FE0F directly after an emoji or symbol (or a keycap base followed by U+20E3) stays;
+        # any other selector, a second one in a row included, carries nothing a reader sees
+        return not (ch in VS_KEEP and (is_symbol(prev) or (prev in KEYCAP_BASES and nxt == KEYCAP)))
+    # U+200D (zero-width joiner) is Cf and goes too: emoji joined by it fall apart into their parts, still readable
+    return bool(HIDDEN.match(ch)) or ch in BLANK or unicodedata.category(ch) == "Cf"
+
+
+def strip_hidden(text):
+    """Return (text without the characters a person cannot see, how many were removed)."""
+    kept, removed = [], 0
+    for i, ch in enumerate(text):
+        if is_hidden(ch, text[i - 1] if i else "", text[i + 1:i + 2]):
+            removed += 1
+        else:
+            kept.append(ch)
+    return "".join(kept), removed
+
+
 def clean(text, limit=MAX_TEXT):
     """Return (cleaned text, hidden characters removed, was cut). Reporter text only, never trusted."""
     text = (text or "").replace("\r\n", "\n").replace("\r", "\n")
-    removed = 0
-    for pattern in (ANSI, VS_RUN, HIDDEN):
-        text, n = pattern.subn("", text)
-        removed += n
+    text, removed = ANSI.subn("", text)
+    text, n = strip_hidden(text)
+    removed += n
     cut = len(text) > limit
     if cut:
         text = text[:limit]

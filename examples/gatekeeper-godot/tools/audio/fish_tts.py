@@ -18,13 +18,15 @@
 #           costs nothing). Commercial-use terms for API output are not in the API docs: read Fish Audio's
 #           terms before shipping (verify). Some library voices imitate real people: pick an original or
 #           "licensed" voice, never one that sounds like a real person. Output is mono (wav, mp3 or opus).
-#           The key is never printed or saved.
+#           The key is never printed or saved, and a redirect carries it only to the same https host and
+#           port (anywhere else it is dropped; a redirect from https to http is refused). say --log checks
+#           ASSET_LOG and --root before any request.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
 #   key from the environment -> check: GET /wallet/self/api-credit | voices: GET /model?title=&language=
-#   | say: POST /v1/tts {text, reference_id, format} with the model header -> save + <out>.gen.json
+#   | say: --log? ASSET_LOG exists, outputs inside --root -> POST /v1/tts {text, reference_id, format} with the model header -> save + <out>.gen.json
 import argparse
 import datetime
 import hashlib
@@ -41,6 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tools/: fetch_a
 
 API = "https://api.fish.audio"
 KEY_ENV = "FISH_API_KEY"
+KEY_HEADER = "authorization"          # the request header that carries the key (lower case: how it is matched)
 MODEL = "s2.1-pro"
 FORMATS = {".mp3": "mp3", ".wav": "wav", ".opus": "opus"}
 TIMEOUT_S = 120
@@ -73,6 +76,42 @@ def get_key():
         return None
 
 
+def redirect_rule(old_url, new_url):
+    """'keep', 'strip' or 'refuse' for a redirect. The key may follow only to the same https origin (scheme, host
+    and port); anywhere else it is dropped, and a step down from https to plain http is refused outright."""
+    old, new = urllib.parse.urlsplit(old_url), urllib.parse.urlsplit(new_url)
+    if old.scheme == "https" and new.scheme != "https":
+        return "refuse"
+    try:
+        same = (new.scheme == "https" == old.scheme and old.hostname == new.hostname
+                and (old.port or 443) == (new.port or 443))
+    except ValueError:                    # a port that is not a number
+        return "refuse"
+    return "keep" if same else "strip"
+
+
+class KeepKeyOnHost(urllib.request.HTTPRedirectHandler):
+    """Follow redirects, but never carry the key off its origin: urllib copies every header (Authorization too)
+    onto the redirected request, so a redirect to another host, port or scheme would otherwise send it there."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        rule = redirect_rule(req.full_url, newurl)
+        if rule == "refuse":
+            fp.close()
+            target = urllib.parse.urlsplit(newurl)
+            raise ServiceError(f"Fish Audio redirected to a non-https address ({target.scheme}://{target.hostname}); "
+                               "refusing it")
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and rule == "strip":
+            for store in (new.headers, new.unredirected_hdrs):
+                for name in [h for h in store if h.lower() == KEY_HEADER]:
+                    del store[name]
+        return new
+
+
+OPENER = urllib.request.build_opener(KeepKeyOnHost)
+
+
 def http(method, url, key, body=None, extra_headers=None):
     """(status, headers, bytes). Kept small so the exam can replace it."""
     headers = {"Authorization": f"Bearer {key}", "User-Agent": USER_AGENT}
@@ -82,7 +121,7 @@ def http(method, url, key, body=None, extra_headers=None):
     req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8") if body is not None else None,
                                  method=method, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
+        with OPENER.open(req, timeout=TIMEOUT_S) as resp:
             return resp.status, dict(resp.headers), resp.read()
     except urllib.error.HTTPError as exc:
         return exc.code, dict(exc.headers or {}), exc.read() or b""
@@ -169,6 +208,8 @@ def cmd_say(args):
         for f, text in zip(files, texts):
             print(f"[dry-run] {f}: {json.dumps(text, ensure_ascii=False)} ({len(text.encode('utf-8'))} bytes of text)")
         return 0
+    if args.log:
+        log_targets(args, files)          # a missing ASSET_LOG or a file outside --root stops here, before spending
     key = need_key()
     done = []
     for f, text in zip(files, texts):
@@ -198,20 +239,28 @@ def voice_title(key, voice_id):
         return ""
 
 
-def write_log(args, key, done):
-    """ASSET_LOG row + docs/licenses/A-NNNN.txt for a set of lines, using fetch_asset's helpers."""
+def log_targets(args, files):
+    """(root, ASSET_LOG path, `project/relative` names) for --log. Called before the first request too, so a
+    missing log or a file outside --root stops the run before any balance is spent."""
     import fetch_asset   # tools/fetch_asset.py, one folder up (path added at the top)
     root = Path(args.root).resolve()
     log_path = root / fetch_asset.ASSET_LOG
     if not log_path.is_file():
         raise ToolError(f"{fetch_asset.ASSET_LOG.as_posix()} not found under {root} (pass --root)")
+    try:
+        rels = [f"`{f.resolve().relative_to(root).as_posix()}`" for f in files]
+    except ValueError:
+        raise ToolError("--log is for files inside the project (--root)")
+    return root, log_path, rels
+
+
+def write_log(args, key, done):
+    """ASSET_LOG row + docs/licenses/A-NNNN.txt for a set of lines, using fetch_asset's helpers."""
+    import fetch_asset   # tools/fetch_asset.py, one folder up (path added at the top)
+    root, log_path, rels = log_targets(args, [f for f, _, _ in done])
     log_text = log_path.read_text(encoding="utf-8")
     num, fill = fetch_asset.next_asset_id(log_text)
     asset_id = f"A-{num:04d}"
-    try:
-        rels = [f"`{f.resolve().relative_to(root).as_posix()}`" for f, _, _ in done]
-    except ValueError:
-        raise ToolError("--log is for files inside the project (--root)")
     title = voice_title(key, args.voice)
     today = datetime.date.today().isoformat()
     lines = "; ".join(f'"{t}"' for _, t, _ in done)

@@ -37,12 +37,15 @@
 # Updated : 2026-10-21 (audit pass 4): timeouts on import/check/test/smoke (the tail of a hung run is
 #           printed), --frames bounded, folder/.app/non-executable GODOT_BIN caught, clean verifies
 #           deletion, --debug keeps exit 2
+# Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
+#           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
 # ---------------------------------------------------------------------------
 import argparse
 import os
 import platform
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import traceback
@@ -75,6 +78,7 @@ SMOKE_MIN_FPS = 60                       # headless frames are uncapped; --frame
 TEST_TIMEOUT_S = 900
 CHECK_TIMEOUT_S = 600                    # per batch of CHECK_BATCH files
 IMPORT_TIMEOUT_S = 1800                  # first import of a big project is slow
+KILL_TIMEOUT_S = 10                      # after a timeout: seconds to wait for the killed tree's pipe
 NO_EXEC = (126, 127)                     # run() codes: not executable / not found -> exit 2
 
 DEBUG = False
@@ -116,6 +120,40 @@ def find_godot(cli_path=None):
     return None
 
 
+# A child run with a timeout leads its own process group on Linux/macOS, so a timeout can kill its whole tree
+NEW_SESSION = sys.platform != "win32"
+
+
+def kill_tree(proc):
+    """Kill proc and everything it started. A grandchild still holding our stdout pipe (a test exe, a
+    worker, an editor helper) would otherwise keep communicate() waiting after proc itself is dead."""
+    if sys.platform == "win32":
+        try:                               # /T: the whole tree under proc; Popen holds the handle, so the PID is still ours
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], stdin=subprocess.DEVNULL,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8", errors="replace",
+                           timeout=KILL_TIMEOUT_S)
+        except (OSError, subprocess.SubprocessError) as exc:
+            dbg(f"taskkill: {exc}")
+    else:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+        except OSError as exc:
+            dbg(f"killpg: {exc}")
+    try:
+        proc.kill()
+    except OSError:
+        pass
+
+
+def reap(proc):
+    """After kill_tree: the output so far, waiting at most KILL_TIMEOUT_S for the pipe to close."""
+    try:
+        out, _ = proc.communicate(timeout=KILL_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        out = None                         # something outside the tree still holds the pipe: give up on the tail
+    return out
+
+
 def run(cmd, capture=True, echo="fail", timeout=None):
     """Run a command in the project root. Returns (returncode, combined_output).
 
@@ -132,6 +170,7 @@ def run(cmd, capture=True, echo="fail", timeout=None):
             stdin=subprocess.DEVNULL if capture else None,
             stdout=subprocess.PIPE if capture else None,
             stderr=subprocess.STDOUT if capture else None,
+            start_new_session=NEW_SESSION and timeout is not None,
         )
     except FileNotFoundError as exc:
         print(f"[error] cannot execute {cmd[0]}: {exc}", file=sys.stderr)
@@ -144,8 +183,8 @@ def run(cmd, capture=True, echo="fail", timeout=None):
         raw, _ = proc.communicate(timeout=timeout)
     except (subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
         # Kill, then collect what the engine printed so far: its last lines show where it hung
-        proc.kill()
-        raw, _ = proc.communicate()
+        kill_tree(proc)
+        raw = reap(proc)
         out = ANSI.sub("", raw or "")
         print("\n".join(out.splitlines()[-20:]))
         if isinstance(exc, KeyboardInterrupt):
@@ -441,7 +480,7 @@ def cmd_doctor(args, godot):
         print("[FAIL] godot not found. Set GODOT_BIN or add godot to PATH.")
         problems += 1
     for rel, hint in [("project.godot", "wrong directory?"),
-                      (GUT_CMDLN, "GUT not installed (tests will not run); check/test/smoke import automatically"),
+                      (GUT_CMDLN, "GUT not installed, tests will not run: docs/ENGINE_FLOW.md 'Setting up tests'"),
                       (".godot", "import cache missing; check/test/smoke run `dev.py import` automatically")]:
         ok = (ROOT / rel).exists()
         print(f"[{' OK ' if ok else 'WARN'}] {rel}" + ("" if ok else f"  ({hint})"))

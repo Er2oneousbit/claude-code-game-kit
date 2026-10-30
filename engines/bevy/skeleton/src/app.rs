@@ -4,16 +4,22 @@
 //           windowed capture run (screenshots, recordings) and the test app. One place decides the plugins,
 //           the tick rate and the smoke frame budget, so main.rs and the tests share it.
 // Usage   : app::build(&cli, cfg).run()   |   tests: let mut app = app::test_app(cfg); app.update();
+//           (app::smoke_test_app(cfg, n) adds the smoke frame budget, for tests of the smoke run itself)
 // Notes   : Headless = MinimalPlugins + LogPlugin + StatesPlugin + TransformPlugin + GamePlugin: no window,
 //           no renderer, no GPU. Smoke and capture runs advance time by exactly one 1/60 s tick per frame
 //           (TimeUpdateStrategy::ManualDuration), so N frames = N fixed ticks on any machine, as fast as it
-//           can go. Normal play uses real time.
+//           can go. The very first update only starts the clock (zero delta, no tick), so the smoke budget
+//           does not count it: frame n is tick n, and --record names frames the same way. Normal play uses
+//           real time.
 //
 // Pseudocode:
 //   build(cli): plugins for the mode -> fixed tick 60 Hz -> GameConfig -> GamePlugin (+ PresentPlugin with
-//   a window) -> boot marker on the first frame -> (smoke) count frames in Last; capture screenshots on
-//   the frames asked for; after N frames pause the game, wait for pending screenshots, print SMOKE_DONE, exit
+//   a window) -> boot marker on the first frame -> (smoke) skip the clock-priming update, then count
+//   frames in Last; capture screenshots on the frames asked for; after N frames pause the game, wait for
+//   pending screenshots, print SMOKE_DONE, exit
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): the smoke budget skips the clock-priming
+//           update (--smoke 120 ran 119 ticks); smoke_test_app for the headless test of that
 // ---------------------------------------------------------------------------
 use std::path::PathBuf;
 use std::time::Duration;
@@ -45,6 +51,8 @@ pub fn tick() -> Duration {
 #[derive(Resource, Debug)]
 struct Smoke {
     frames: u32,
+    /// The first update only starts the clock (zero delta, no fixed tick): it is not a smoke frame.
+    primed: bool,
     done: u32,
     screenshot: Option<PathBuf>,
     record: Option<PathBuf>,
@@ -89,18 +97,17 @@ pub fn build(cli: &Cli, cfg: GameConfig) -> App {
     }
     add_game(&mut app, cfg);
     if let Some(frames) = cli.smoke {
-        app.insert_resource(TimeUpdateStrategy::ManualDuration(tick()))
-            .insert_resource(Smoke {
-                frames,
-                done: 0,
+        app.insert_resource(TimeUpdateStrategy::ManualDuration(tick()));
+        add_smoke(
+            &mut app,
+            Smoke {
                 screenshot: cli.screenshot.clone(),
                 record: cli.record.clone(),
                 record_every: cli.record_every,
                 record_from: cli.record_from,
-                pending: 0,
-                grace: 0,
-            })
-            .add_systems(Last, smoke_budget);
+                ..Smoke::budget(frames)
+            },
+        );
     }
     app.add_systems(Update, boot_marker.run_if(run_once));
     app
@@ -113,6 +120,33 @@ pub fn test_app(cfg: GameConfig) -> App {
         .insert_resource(TimeUpdateStrategy::ManualDuration(tick()));
     add_game(&mut app, cfg);
     app
+}
+
+/// test_app plus the smoke frame budget (no captures): it exits after `frames` frames, as `--smoke` does.
+pub fn smoke_test_app(cfg: GameConfig, frames: u32) -> App {
+    let mut app = test_app(cfg);
+    add_smoke(&mut app, Smoke::budget(frames));
+    app
+}
+
+impl Smoke {
+    fn budget(frames: u32) -> Self {
+        Smoke {
+            frames,
+            primed: false,
+            done: 0,
+            screenshot: None,
+            record: None,
+            record_every: 1,
+            record_from: 1,
+            pending: 0,
+            grace: 0,
+        }
+    }
+}
+
+fn add_smoke(app: &mut App, smoke: Smoke) {
+    app.insert_resource(smoke).add_systems(Last, smoke_budget);
 }
 
 fn add_game(app: &mut App, cfg: GameConfig) {
@@ -132,6 +166,10 @@ fn smoke_budget(
     mut commands: Commands,
     mut exit: MessageWriter<AppExit>,
 ) {
+    if !smoke.primed {
+        smoke.primed = true; // the clock-priming update ran no tick: frame 1 is the next one
+        return;
+    }
     if smoke.done < smoke.frames {
         smoke.done += 1;
         let n = smoke.done;

@@ -10,15 +10,18 @@
 # Exit    : 0 no FAIL items (WARN items may remain), 1 FAIL items found, 2 not a git repo / git missing
 # Notes   : Scans the working tree, not old commits. A secret that was committed and then
 #           deleted is still in history: run a history scanner (gitleaks) before going public,
-#           and rotate any key it finds. Pattern matching is a net, not a guarantee.
-#           Standard library only, Python 3.8+.
+#           and rotate any key it finds. Pattern matching is a net, not a guarantee. Text with a byte
+#           order mark (UTF-8, UTF-16, UTF-32) is decoded and scanned; other files with NUL bytes count as binary.
+#           Files over 2 MB are not content-scanned; one that looks like text (no media extension, no NUL near the
+#           start) is listed as a WARN so it gets a look by hand. Standard library only, Python 3.8+.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
 #   list files git would publish (ls-files tracked + others --exclude-standard)
 #   FAIL: no LICENSE; secret-named files; token-shaped strings in text files; files > 100 MB not routed to LFS
-#   WARN: files > 50 MB not in LFS; home-folder paths in text; non-noreply emails in history;
+#   WARN: files > 50 MB not in LFS; text files > 2 MB (not content-scanned); home-folder paths in text;
+#         non-noreply emails in history;
 #         PLACEHOLDER rows in docs/ASSET_LOG.md; Unreal's Android File Server token with network connections on
 #   print grouped results and the reminders that cannot be automated, return exit code
 import argparse
@@ -45,15 +48,36 @@ TOKEN_PATTERNS = [
     ("Slack token", re.compile(r"\bxox[abpors]-[A-Za-z0-9-]{10,}")),
     ("Stripe live key", re.compile(r"\b[rs]k_live_[A-Za-z0-9]{20,}")),
     ("Discord webhook", re.compile(r"https://(?:\w+\.)?discord(?:app)?\.com/api/webhooks/\d+/[\w-]{20,}")),
-    ("hard-coded secret", re.compile(r"(?i)\b(?:api[_-]?key|secret|token|passw(?:or)?d)\b\s*[:=]\s*[\"'][^\"'\s<>{}]{16,}[\"']")),
+    # The keyword may be one part of a longer name (client_secret, AWS_SECRET_ACCESS_KEY, db-password): \b never
+    # matches next to "_". The name must start where no identifier character precedes it (keeps the scan linear),
+    # and the 16-character value guard keeps labels like password_field_label = "Password" out. Values that start
+    # with a scheme (token_url = "https://...", secret_door = "res://...") are addresses, not secrets.
+    ("hard-coded secret", re.compile(r"(?i)(?<![A-Za-z0-9_-])(?:[A-Za-z0-9]*[_-])*"
+                                     r"(?:api[_-]?key|secret|token|passw(?:or)?d)(?:[_-][A-Za-z0-9]*)*"
+                                     r"\s*(?::=|[:=])\s*[\"'](?![A-Za-z][A-Za-z0-9+.-]*://)[^\"'\s<>{}]{16,}[\"']")),
 ]
 # A real user's home folder (not a <name> placeholder or a generic example)
 HOME_PATH = re.compile(r"(?i)\b[A-Z]:[\\/]+Users[\\/]+(?!<|\{|Public\b|Default\b|you\b|name\b|USERNAME\b)[^\\/\s\"'`<>]+"
-                       r"|/(?:Users|home)/(?!<|\{|you\b|name\b|runner\b|user\b)[A-Za-z0-9._-]+/")
+                       r"|/(?:Users|home)/(?!<|\{|you\b|name\b|runner\b|user\b)[A-Za-z0-9._-]+(?=[/\s\"'`]|$)")
 NOREPLY = re.compile(r"(?i)@users\.noreply\.github\.com$|^noreply@|@noreply\.")
 GITHUB_HARD_LIMIT = 100 * 1024 * 1024   # GitHub rejects pushes with a file over 100 MB
 GITHUB_WARN_LIMIT = 50 * 1024 * 1024    # and warns over 50 MB
 MAX_TEXT_SCAN = 2 * 1024 * 1024         # skip content scans of larger files (assets, not config)
+SNIFF_BYTES = 8192                      # a NUL in this much of the start marks a file as binary
+# Media and other binary formats: an unscanned big one is expected, a big text file (a log, a dump) is reported
+MEDIA_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tga", ".tif", ".tiff", ".webp", ".psd", ".kra", ".aseprite",
+              ".ase", ".exr", ".hdr", ".dds", ".ktx", ".ktx2", ".basis", ".ico", ".icns", ".svgz",
+              ".wav", ".ogg", ".mp3", ".flac", ".opus", ".m4a", ".aiff", ".aif", ".mid", ".midi", ".bank", ".wem",
+              ".mp4", ".webm", ".mov", ".avi", ".mkv", ".ogv",
+              ".glb", ".gltf", ".fbx", ".obj", ".blend", ".blend1", ".dae", ".3ds", ".usd", ".usdz", ".vox", ".ply",
+              ".stl", ".abc", ".uasset", ".umap", ".pck", ".res", ".scn", ".ttf", ".otf", ".woff", ".woff2",
+              ".zip", ".7z", ".rar", ".gz", ".tgz", ".xz", ".bz2", ".tar", ".pdf",
+              ".exe", ".dll", ".so", ".dylib", ".lib", ".a", ".o", ".pdb", ".wasm", ".bin", ".dat", ".pak",
+              ".safetensors", ".gguf", ".onnx", ".pt", ".pth", ".ckpt"}
+# Byte order marks, checked before the NUL test: UTF-16 text is full of NULs (Windows PowerShell 5 writes UTF-16LE
+# with "> file" and Out-File by default). UTF-32 LE before UTF-16 LE, its BOM starts with the same two bytes.
+BOMS = ((b"\xff\xfe\x00\x00", "utf-32"), (b"\x00\x00\xfe\xff", "utf-32"), (b"\xef\xbb\xbf", "utf-8-sig"),
+        (b"\xff\xfe", "utf-16"), (b"\xfe\xff", "utf-16"))
 AFS_SECTION = "[/Script/AndroidFileServerEditor.AndroidFileServerRuntimeSettings]"   # Unreal, from Epic's template
 
 
@@ -94,9 +118,13 @@ def scan_text(path):
         data = path.read_bytes()
     except OSError:
         return [], []
-    if b"\0" in data[:8192]:
+    codec = next((c for bom, c in BOMS if data.startswith(bom)), None)
+    if codec:
+        text = data.decode(codec, "replace")
+    elif b"\0" in data[:SNIFF_BYTES]:
         return [], []
-    text = data.decode("utf-8", "replace")
+    else:
+        text = data.decode("utf-8", "replace")
     tokens, homes = [], []
     for lineno, line in enumerate(text.splitlines(), 1):
         for label, pat in TOKEN_PATTERNS:
@@ -106,6 +134,21 @@ def scan_text(path):
         if m:
             homes.append(f"line {lineno}: {m.group(0)}")
     return tokens, homes
+
+
+def unscanned_text(path):
+    """True for a file over the scan cap that looks like text: no media extension, and a byte order mark or no NUL
+    in its first SNIFF_BYTES. Such a file can hold a token or a path nobody looked at."""
+    if path.suffix.lower() in MEDIA_EXTS:
+        return False
+    try:
+        if path.stat().st_size <= MAX_TEXT_SCAN:
+            return False
+        with open(path, "rb") as fh:
+            head = fh.read(SNIFF_BYTES)
+    except OSError:
+        return False
+    return any(head.startswith(bom) for bom, _ in BOMS) or b"\0" not in head
 
 
 def history_emails(root):
@@ -166,6 +209,8 @@ def run(root):
             fails.append(f"{rel}: {size // 2**20} MB and not in LFS; GitHub rejects files over 100 MB")
         elif rel not in lfs and size > GITHUB_WARN_LIMIT:
             warns.append(f"{rel}: {size // 2**20} MB and not in LFS; GitHub warns over 50 MB")
+        if unscanned_text(path):                      # check it by hand for tokens and personal paths
+            warns.append(f"not content-scanned (over {MAX_TEXT_SCAN // 2**20} MB): {rel}")
         tokens, homes = scan_text(path)
         fails += [f"{rel} {t}" for t in tokens]
         warns += [f"{rel} {h} (a personal path; it names your account)" for h in homes]

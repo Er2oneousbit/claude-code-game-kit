@@ -1,0 +1,118 @@
+# Dotwork glyph font "symbols" - authored by Claude (Claude Opus 5.5) for Dotwork's glyph tool (lane_fonts.py).
+# UI symbols as real Unicode characters, so they also work inline in dialogue text: hand cursor, menu arrows,
+# emote-balloon marks. Same 9-row metrics as "dialogue" (baseline 7). Build with effect outline: gaps carved
+# inside the ink become dark lines (the glove's finger creases).
+height 9
+baseline 7
+spacing 1
+space 3
+
+char ☞
+...####.....
+..##########
+#.##########
+#.#######...
+#.#########.
+#.#######...
+#.########..
+#.######....
+..#####.....
+char ►
+#...
+##..
+###.
+####
+###.
+##..
+#...
+char ◄
+...#
+..##
+.###
+####
+.###
+..##
+...#
+char ▼
+.......
+.......
+#######
+.#####.
+..###..
+...#...
+char ▲
+.......
+.......
+...#...
+..###..
+.#####.
+#######
+char ♥
+.......
+.##.##.
+#######
+#######
+.#####.
+..###..
+...#...
+char ♪
+..###
+..#.#
+..#..
+..#..
+..#..
+###..
+###..
+char ★
+...#...
+..###..
+#######
+.#####.
+..###..
+.##.##.
+.#...#.
+char ✓
+......#
+.....##
+#...##.
+##.##..
+.###...
+..#....
+char ✗
+.....
+#...#
+.#.#.
+..#..
+.#.#.
+#...#
+char …
+.....
+.....
+.....
+.....
+.....
+.....
+#.#.#
+char •
+..#..
+.###.
+.###.
+#####
+#####
+.###.
+char !
+##
+##
+##
+##
+##
+..
+##
+char ?
+.####.
+##..##
+....##
+...##.
+..##..
+......
+..##..

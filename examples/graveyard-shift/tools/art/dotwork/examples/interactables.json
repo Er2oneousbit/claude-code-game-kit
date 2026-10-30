@@ -1,0 +1,46 @@
+{
+ "name": "interactables",
+ "_comment": "State props (chest, door, lever, save point glow) and an 8-direction airship with a ground shadow. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "animprops": [
+  {
+   "name": "chest",
+   "seed": 9500,
+   "kind": "chest",
+   "prompt": "a wooden treasure chest with gold trim",
+   "size": 32
+  },
+  {
+   "name": "door",
+   "seed": 9501,
+   "kind": "door",
+   "prompt": "a sturdy wooden door with iron bands in a stone frame",
+   "cells": [
+    1,
+    2
+   ]
+  },
+  {
+   "name": "lever",
+   "seed": 9502,
+   "kind": "lever",
+   "prompt": "an iron lever switch on a stone base",
+   "size": 28
+  },
+  {
+   "name": "save_point",
+   "seed": 9503,
+   "kind": "glow",
+   "prompt": "a floating glowing blue crystal on a small stone base",
+   "size": 48
+  }
+ ],
+ "vehicles": [
+  {
+   "name": "airship",
+   "prompt": "a steampunk airship with a wooden hull, brass propellers and a striped balloon",
+   "size": 72,
+   "seed": 9600,
+   "altitude": 24
+  }
+ ]
+}

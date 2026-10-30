@@ -31,12 +31,15 @@
 # Updated : 2026-10-21 (kit 0.4.0): `exec` for editor methods (scenes from code), smoke scenario options like the
 #           other overlays; capture needs a graphics device, so --graphics drops -nographics; captures refused
 #           inside Build/; a Package Manager server that never started is exit 2, not "compile failed"
+# Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
+#           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
 # ---------------------------------------------------------------------------
 import argparse
 import os
 import platform
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import traceback
@@ -46,6 +49,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEBUG = False
 LOG_FILE = ROOT / "Logs" / "dev_unity.log"
 UNITY_TIMEOUT_S = 3600                   # first import of a big project is slow; a hang still ends
+KILL_TIMEOUT_S = 10                      # after a timeout: seconds to wait for the killed tree's pipe
 NO_EXEC = (126, 127)                     # run_unity codes: not executable / not found -> exit 2
 EDITOR_OPEN = re.compile(r"another Unity instance is running with this project open|"
                          r"Multiple Unity instances cannot open the same project", re.I)
@@ -130,6 +134,40 @@ def env_problem(rc, log):
     return None
 
 
+# A child run with a timeout leads its own process group on Linux/macOS, so a timeout can kill its whole tree
+NEW_SESSION = sys.platform != "win32"
+
+
+def kill_tree(proc):
+    """Kill proc and everything it started. A grandchild still holding our stdout pipe (a test exe, a
+    worker, an editor helper) would otherwise keep communicate() waiting after proc itself is dead."""
+    if sys.platform == "win32":
+        try:                               # /T: the whole tree under proc; Popen holds the handle, so the PID is still ours
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], stdin=subprocess.DEVNULL,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8", errors="replace",
+                           timeout=KILL_TIMEOUT_S)
+        except (OSError, subprocess.SubprocessError) as exc:
+            dbg(f"taskkill: {exc}")
+    else:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+        except OSError as exc:
+            dbg(f"killpg: {exc}")
+    try:
+        proc.kill()
+    except OSError:
+        pass
+
+
+def reap(proc):
+    """After kill_tree: the output so far, waiting at most KILL_TIMEOUT_S for the pipe to close."""
+    try:
+        out, _ = proc.communicate(timeout=KILL_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        out = None                         # something outside the tree still holds the pipe: give up on the tail
+    return out
+
+
 def run_unity(extra, label, graphics=False, env=None):
     """Run the editor in batchmode with a log file. Returns (rc, log_text).
     graphics=True keeps a graphics device (no -nographics), so cameras can render for screenshots."""
@@ -139,15 +177,22 @@ def run_unity(extra, label, graphics=False, env=None):
     dbg("run: " + " ".join(cmd))
     sys.stdout.flush()
     try:
-        rc = subprocess.run(cmd, cwd=ROOT, stdin=subprocess.DEVNULL, timeout=UNITY_TIMEOUT_S,
-                            env=dict(os.environ, **(env or {}))).returncode
+        proc = subprocess.Popen(cmd, cwd=ROOT, stdin=subprocess.DEVNULL, env=dict(os.environ, **(env or {})),
+                                start_new_session=NEW_SESSION)
     except FileNotFoundError as exc:
         print(f"[error] cannot execute Unity: {exc}", file=sys.stderr)
         return 127, ""
     except OSError as exc:
         print(f"[error] cannot execute Unity: {exc.strerror or exc} (not a file, or not executable)", file=sys.stderr)
         return 126, ""
-    except subprocess.TimeoutExpired:
+    try:
+        rc = proc.wait(timeout=UNITY_TIMEOUT_S)
+    except (subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
+        # The editor's helpers (shader compiler, package manager) would keep the project locked: kill the tree
+        kill_tree(proc)
+        reap(proc)
+        if isinstance(exc, KeyboardInterrupt):
+            raise
         print(f"[FAIL] Unity did not exit within {UNITY_TIMEOUT_S} s ({label}); see {LOG_FILE}")
         rc = 124
     log = LOG_FILE.read_text(encoding="utf-8", errors="ignore") if LOG_FILE.exists() else ""

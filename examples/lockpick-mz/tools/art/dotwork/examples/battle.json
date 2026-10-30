@@ -1,0 +1,26 @@
+{
+ "name": "battle",
+ "_comment": "Battle art: a background (320x128 shown at 2x), a regular enemy and a boss, both facing right. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "battle_bgs": [
+  {
+   "name": "grassland",
+   "prompt": "rolling green grassland with distant mountains and a few trees under a blue sky",
+   "seed": 8100
+  }
+ ],
+ "enemies": [
+  {
+   "name": "guard_hound",
+   "prompt": "a lean mechanical guard hound with brass plating and glowing red eyes",
+   "size": 80,
+   "seed": 8300
+  },
+  {
+   "name": "steam_golem",
+   "prompt": "a towering steam golem with pistons, a glowing furnace chest and cannon arms",
+   "size": 192,
+   "boss": true,
+   "seed": 8306
+  }
+ ]
+}

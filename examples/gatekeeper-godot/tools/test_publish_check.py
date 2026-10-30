@@ -3,8 +3,10 @@
 # test_publish_check.py
 # Purpose : Exam for publish_check.py: a clean repo passes, a missing LICENSE,
 #           a secret file, a token, a personal path and a non-noreply email are caught,
-#           ignored files and doc mentions of token prefixes are not. Unreal's Android File Server token warns
-#           only while network connections are on.
+#           ignored files and doc mentions of token prefixes are not. snake_case secret names (client_secret)
+#           and UTF-16 text with a BOM are caught. Unreal's Android File Server token warns
+#           only while network connections are on. POSIX home paths warn with or without a
+#           trailing slash; text files over the scan cap are listed, media and binaries are not.
 # Usage   : python tools/test_publish_check.py
 # Exit    : 0 all pass, 1 a case failed (skips when git is not installed)
 # Notes   : Fake secrets are built by concatenation so this file never matches itself.
@@ -80,6 +82,35 @@ class PublishCheckExam(unittest.TestCase):
         self.assertIn("a.py line 1", fails)
         self.assertNotIn("b.py", fails)
 
+    def test_snake_case_secret_names_caught(self):
+        value = '"' + "Zq9" * 8 + '"'
+        lines = {"c.py": "client_secret = " + value, "d.py": "AWS_SECRET_ACCESS_KEY = " + value,
+                 "e.py": "access_token = " + value, "f.py": "db_password = " + value,
+                 "g.gd": "const API_KEY_PROD := " + value}
+        for name, line in lines.items():
+            (self.root / name).write_text(line + "\n", encoding="utf-8")
+        fails = self.results()[0]
+        for name in lines:
+            self.assertIn(f"{name} line 1: looks like a hard-coded secret", fails)
+
+    def test_secret_word_in_ordinary_code_not_caught(self):
+        (self.root / "ui.gd").write_text('var password_field_label = "Password"\n'
+                                         'var secretary_name = "' + "Q" * 20 + '"\n'
+                                         'const TOKEN_URL = "https://auth.example.com/oauth/token"\n'
+                                         'var secret_door = "res://scenes/secret_door.tscn"\n', encoding="utf-8")
+        self.assertNotIn("ui.gd", self.results()[0])
+
+    def test_utf16_text_is_scanned(self):
+        # Windows PowerShell 5 writes UTF-16LE with a BOM; the NUL bytes must not make it look binary
+        (self.root / "key16.txt").write_bytes(b"\xff\xfe" + (FAKE_KEY_BLOCK + "\r\n").encode("utf-16-le"))
+        (self.root / "key16be.txt").write_bytes(b"\xfe\xff" + (FAKE_KEY_BLOCK + "\n").encode("utf-16-be"))
+        (self.root / "key8.txt").write_bytes(b"\xef\xbb\xbf" + (FAKE_KEY_BLOCK + "\n").encode("utf-8"))
+        (self.root / "blob.bin").write_bytes(b"\x00\x01" + FAKE_KEY_BLOCK.encode("utf-8"))   # no BOM: still binary
+        fails = self.results()[0]
+        for name in ("key16.txt", "key16be.txt", "key8.txt"):
+            self.assertIn(f"{name} line 1: looks like a private key block", fails)
+        self.assertNotIn("blob.bin", fails)
+
     def test_home_path_warns(self):
         home = "C:" + "\\Users\\alex"
         (self.root / "notes.md").write_text(f"built in {home}\\proj, see C:\\Users\\<you>\\x\n", encoding="utf-8")
@@ -87,6 +118,30 @@ class PublishCheckExam(unittest.TestCase):
         self.assertIn("notes.md line 1", warns)
         self.assertIn("alex", warns)
         self.assertNotIn("<you>", warns)
+
+    def test_posix_home_path_warns_without_a_trailing_slash(self):
+        lines = {"a.sh": "cd /home/" + "alice", "b.md": "see `/Users/" + "alice` here", "c.txt": "x='/home/" + "alice'",
+                 "d.sh": "cd /home/" + "alice/proj", "e.txt": "/Users/" + "alice and more"}
+        for name, line in lines.items():
+            (self.root / name).write_text(line + "\n", encoding="utf-8")
+        (self.root / "f.txt").write_text("homes live under /home/ and /Users/<you>/ or /home/{name}\n", encoding="utf-8")
+        warns = self.results()[1]
+        for name in lines:
+            self.assertIn(f"{name} line 1", warns)
+        self.assertNotIn("f.txt", warns)
+
+    def test_large_text_file_reported_as_not_scanned(self):
+        big = publish_check.MAX_TEXT_SCAN + 10
+        (self.root / "dump.log").write_bytes(b"a" * big)
+        (self.root / "big16.txt").write_bytes(b"\xff\xfe" + b"a\x00" * (big // 2))     # UTF-16 text: NULs, a BOM
+        (self.root / "hero.png").write_bytes(b"b" * big)                              # media: expected to be big
+        (self.root / "blob.data").write_bytes(b"\x00\x01" * (big // 2))               # binary: NUL near the start
+        (self.root / "small.log").write_bytes(b"a" * 100)
+        warns = self.results()[1]
+        self.assertIn("not content-scanned (over 2 MB): dump.log", warns)
+        self.assertIn("not content-scanned (over 2 MB): big16.txt", warns)
+        for name in ("hero.png", "blob.data", "small.log"):
+            self.assertNotIn(name, warns)
 
     def test_personal_email_in_history_warns(self):
         self.git("add", "-A")

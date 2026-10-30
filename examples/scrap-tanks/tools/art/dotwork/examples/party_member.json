@@ -1,0 +1,32 @@
+{
+ "name": "party_member",
+ "_comment": "One party member end to end: 4-direction idle and walk, an attack clip, the battle pose set facing left (poses: battle) and a menu portrait. The longest example (rotation + one Wan clip per action and direction). Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "characters": [
+  {
+   "name": "duelist",
+   "prompt": "a dashing young swordsman with a red long coat, a black tricorn hat with a feather and a slim rapier in his right hand",
+   "seeds": 3,
+   "seed": 3600,
+   "asymmetric": true,
+   "actions": [
+    "idle",
+    "walk",
+    "attack"
+   ],
+   "motions": {
+    "attack": "lunges forward and thrusts the rapier straight ahead in a fencing strike, then steps back to the guard stance"
+   },
+   "poses": "battle",
+   "pose_dirs": [
+    "w"
+   ]
+  }
+ ],
+ "portraits": [
+  {
+   "name": "duelist",
+   "prompt": "a dashing young swordsman with a red long coat and a black tricorn hat with a feather",
+   "seed": 6100
+  }
+ ]
+}

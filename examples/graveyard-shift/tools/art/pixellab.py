@@ -15,7 +15,8 @@
 #               --action "walking" --frames 8 --out assets/art/keeper/walk_south --log
 #           python tools/art/pixellab.py tileset --lower "dark grass" --upper "cobblestone path" \
 #               --tile-size 16 --out assets/art/tiles/path --log
-#           python tools/art/pixellab.py animate-character --from assets/art/keeper --mode skeleton-v3 \n#               --template cross-punch --directions south,east --out assets/art/keeper_punch
+#           python tools/art/pixellab.py animate-character --from assets/art/keeper --mode skeleton-v3 \
+#               --template cross-punch --directions south,east --out assets/art/keeper_punch
 #           python tools/art/pixellab.py vfx --text "brass punch impact sparks" --out assets/fx/punch
 #           python tools/art/pixellab.py prop --text "cream pie on a plate" --out assets/art/pie.png
 #           python tools/art/pixellab.py edit --image hero.png --text "make ONLY the right hand a fist" --out hero2.png
@@ -41,7 +42,9 @@
 #           Learned live: GET /map-objects/{id} answers 423 while it is generating (handled as "still working").
 #           Not yet live: ui, font, object, tiles-pro, outfit, pixelate, animate-character (verify).
 #           [paid plan only] in -h (tiles-pro, outfit) is PixelLab's rule; a trial account gets a 402, explained.
-#           Download links on PixelLab's storage get no token: it is sent only to the API host.
+#           Download links on PixelLab's storage get no token: it is sent only to the API host, and a redirect
+#           keeps it only on the same https host and port (anywhere else it is dropped; https to http is refused).
+#           Names from a response (object directions) must be plain names, so nothing is written outside --out.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
@@ -80,6 +83,7 @@ import fetch_asset  # noqa: E402  (shared ASSET_LOG helpers)
 
 API = "https://api.pixellab.ai/v2"
 KEY_ENV = "PIXELLAB_API_KEY"
+KEY_HEADER = "authorization"          # the request header that carries the token (lower case: how it is matched)
 TIMEOUT_S = 120                       # one HTTP request
 POLL_EVERY_S = 3                      # the API docs ask for 2 to 5 s between job polls
 WAIT_S = 600                          # how long to wait for a job (--wait)
@@ -127,16 +131,37 @@ def missing_key_help():
             "Use --dry-run to see a request without one.")
 
 
+def redirect_rule(old_url, new_url):
+    """'keep', 'strip' or 'refuse' for a redirect. The token may follow only to the same https origin (scheme,
+    host and port); anywhere else it is dropped, and a step down from https to plain http is refused outright
+    (comparing the host alone kept the token on an https -> http redirect to the same host)."""
+    old, new = urllib.parse.urlsplit(old_url), urllib.parse.urlsplit(new_url)
+    if old.scheme == "https" and new.scheme != "https":
+        return "refuse"
+    try:
+        same = (new.scheme == "https" == old.scheme and old.hostname == new.hostname
+                and (old.port or 443) == (new.port or 443))
+    except ValueError:                    # a port that is not a number
+        return "refuse"
+    return "keep" if same else "strip"
+
+
 class KeepKeyOnHost(urllib.request.HTTPRedirectHandler):
-    """Follow redirects, but never carry the token to another host: urllib copies every header (Authorization
+    """Follow redirects, but never carry the token off its origin: urllib copies every header (Authorization
     too) onto the redirected request, so a redirect to storage would otherwise send it there."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        rule = redirect_rule(req.full_url, newurl)
+        if rule == "refuse":
+            fp.close()
+            target = urllib.parse.urlsplit(newurl)
+            raise ServiceError(f"PixelLab redirected to a non-https address ({target.scheme}://{target.hostname}); "
+                               "refusing it")
         new = super().redirect_request(req, fp, code, msg, headers, newurl)
-        if new is not None and urllib.parse.urlparse(newurl).netloc != urllib.parse.urlparse(req.full_url).netloc:
-            for name in [h for h in new.headers if h.lower() == "authorization"]:
-                del new.headers[name]
-            new.unredirected_hdrs.pop("Authorization", None)
+        if new is not None and rule == "strip":
+            for store in (new.headers, new.unredirected_hdrs):
+                for name in [h for h in store if h.lower() == KEY_HEADER]:
+                    del store[name]
         return new
 
 
@@ -308,6 +333,13 @@ def allowed_name(name):
     """A result file name the tool will write: an expected type, no stream (':'), not hidden, not too long."""
     return (Path(name).suffix.lower() in SAFE_EXTENSIONS and ":" not in name and not name.startswith(".")
             and len(name) <= MAX_NAME)
+
+
+def plain_name(text):
+    """True for a short name of ASCII letters, digits, '-' and '_' (a direction like 'south' or 'north-east'):
+    nothing that could be a folder, a parent ('..'), a drive or a stream."""
+    return (isinstance(text, str) and 0 < len(text) <= 40
+            and all(c.isascii() and (c.isalnum() or c in "-_") for c in text))
 
 
 def printable(body):
@@ -715,6 +747,9 @@ def run_job(kind, key, endpoint, body, out, args):
                             "(or the MCP's select_object_frames), then download them; a different --size gives one")
         out.mkdir(parents=True, exist_ok=True)
         rot = {d: u for d, u in (res.get("rotation_urls") or {}).items() if u}
+        for d in rot:                     # the API's keys become file names: a plain name only, never a path
+            if not plain_name(d):
+                raise ServiceError(f"refusing direction {str(d)[:40]!r} from PixelLab: not a plain name")
         links = [(f"{d}.png", u) for d, u in rot.items()] or \
                 [(f"frame_{i:02d}.png", u) for i, u in enumerate(res.get("frame_urls") or [])] or \
                 [(f"image_{i:02d}.png", u) for i, u in enumerate(url_values(res.get("storage_urls")))]

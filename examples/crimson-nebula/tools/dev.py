@@ -11,7 +11,8 @@
 #                      (after `--`: options for the game; --screenshot / --record open a window and capture PNGs)
 #             build    release build (cargo build --release), prints where the exe is
 #             run      launch the game in a window (cargo run)
-#             clean    remove the cargo target folder (asks first if it lies outside the project)
+#             clean    remove the cargo target folder (asks first if it lies outside the project; refuses
+#                      the project folder itself, its parents and folders without cargo's CACHEDIR.TAG)
 #             doctor   verify the local environment
 # Env     : CARGO_TARGET_DIR  optional shared build folder (cargo's own variable; dev.py follows it)
 #           RUSTUP_TOOLCHAIN  optional, pick a toolchain for one run (rustup's own variable)
@@ -25,12 +26,17 @@
 #   count "test result" lines | (smoke) cargo build, then cargo run -- --smoke N, scan the output for
 #   BOOT_OK, SMOKE_DONE, error lines and scenario markers
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
+#           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
+#           clean refuses a target folder that is the project or above it, or that cargo did not make
+#           (no CACHEDIR.TAG), since .cargo/config.toml or CARGO_TARGET_DIR can point it anywhere
 # ---------------------------------------------------------------------------
 import argparse
 import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import traceback
@@ -46,6 +52,7 @@ ERROR_MARKERS = [" ERROR ", "panicked at", "error: process didn't exit successfu
 SMOKE_TIMEOUT_S = 120                      # a game that hangs must fail, not block forever (build time not included)
 TEST_TIMEOUT_S = 600
 BUILD_TIMEOUT_S = 3600                     # first Bevy build: 5 to 15 minutes on a fast machine, far more on a slow one
+KILL_TIMEOUT_S = 10                        # after a timeout: seconds to wait for the killed tree's pipe
 NO_EXEC = (126, 127)                       # run() codes: not executable / not found -> environment problem (exit 2)
 MIN_RUST = (1, 97, 1)                      # Bevy 0.20's rust-version (Cargo.toml); keep in step when Bevy moves
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
@@ -63,6 +70,40 @@ def quiet_env():
     return dict(os.environ, CARGO_TERM_COLOR="never", NO_COLOR="1")
 
 
+# A child run with a timeout leads its own process group on Linux/macOS, so a timeout can kill its whole tree
+NEW_SESSION = sys.platform != "win32"
+
+
+def kill_tree(proc):
+    """Kill proc and everything it started. A grandchild still holding our stdout pipe (a test exe, a
+    worker, an editor helper) would otherwise keep communicate() waiting after proc itself is dead."""
+    if sys.platform == "win32":
+        try:                               # /T: the whole tree under proc; Popen holds the handle, so the PID is still ours
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], stdin=subprocess.DEVNULL,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8", errors="replace",
+                           timeout=KILL_TIMEOUT_S)
+        except (OSError, subprocess.SubprocessError) as exc:
+            dbg(f"taskkill: {exc}")
+    else:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+        except OSError as exc:
+            dbg(f"killpg: {exc}")
+    try:
+        proc.kill()
+    except OSError:
+        pass
+
+
+def reap(proc):
+    """After kill_tree: the output so far, waiting at most KILL_TIMEOUT_S for the pipe to close."""
+    try:
+        out, _ = proc.communicate(timeout=KILL_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        out = None                         # something outside the tree still holds the pipe: give up on the tail
+    return out
+
+
 def run(cmd, env=None, capture=False, timeout=None):
     """Run a command in the project root. Returns (returncode, output_or_empty).
 
@@ -76,6 +117,7 @@ def run(cmd, env=None, capture=False, timeout=None):
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE if capture else None,
             stderr=subprocess.STDOUT if capture else None,
+            start_new_session=NEW_SESSION and timeout is not None,
         )
     except FileNotFoundError as exc:
         print(f"[error] cannot execute {cmd[0]}: {exc}", file=sys.stderr)
@@ -87,8 +129,8 @@ def run(cmd, env=None, capture=False, timeout=None):
         out, _ = proc.communicate(timeout=timeout)
     except (subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
         # Kill, then keep what the game printed so far: its last lines show where it hung
-        proc.kill()
-        out, _ = proc.communicate()
+        kill_tree(proc)
+        out = reap(proc)
         if isinstance(exc, KeyboardInterrupt):
             print("\n".join((out or "").splitlines()[-20:]))
             raise
@@ -146,6 +188,23 @@ def target_dir():
         except (ValueError, KeyError):
             pass
     return ROOT / "target"
+
+
+def unsafe_target(target):
+    """Why `clean` must not delete target, or None. A repo-controlled .cargo/config.toml (target-dir = ".")
+    or CARGO_TARGET_DIR can point cargo at the project itself, or at a folder above it."""
+    resolved = target.resolve()
+    key = os.path.normcase(str(resolved))  # Windows paths compare case-insensitively
+    root = ROOT.resolve()
+    if key in (os.path.normcase(str(p)) for p in [root, *root.parents]):
+        return ("it is the project folder or contains it (check target-dir in .cargo/config.toml and "
+                "CARGO_TARGET_DIR; give the build a folder of its own)")
+    if not resolved.is_dir():
+        return "not a folder"
+    # cargo writes CACHEDIR.TAG into every target folder it builds in; an empty folder is safe too
+    if not (resolved / "CACHEDIR.TAG").is_file() and any(resolved.iterdir()):
+        return "it has no CACHEDIR.TAG, so cargo did not make it (delete it by hand if you are sure)"
+    return None
 
 
 def bin_name():
@@ -333,6 +392,10 @@ def cmd_clean(args):
     if not target.exists():
         print("[info] nothing to clean")
         return 0
+    why = unsafe_target(target)
+    if why:
+        print(f"[error] refusing to delete {target}: {why}", file=sys.stderr)
+        return 2
     inside = ROOT in target.resolve().parents
     if not inside and not args.yes:
         # A shared CARGO_TARGET_DIR holds other projects' builds too: ask, and never hang waiting for an answer

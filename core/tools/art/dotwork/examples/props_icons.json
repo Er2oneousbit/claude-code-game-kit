@@ -1,0 +1,58 @@
+{
+ "name": "props_icons",
+ "_comment": "Single sprites: props with collision scenes, icons at 16 and 32 px, a menu portrait. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "props": [
+  {
+   "name": "gas_lamp",
+   "prompt": "a cast iron gas street lamp with a glowing lantern",
+   "size": 56,
+   "seed": 4100,
+   "footprint": "trunk"
+  },
+  {
+   "name": "bench",
+   "prompt": "a wooden park bench with iron legs",
+   "size": 40,
+   "seed": 4101,
+   "footprint": "base"
+  },
+  {
+   "name": "barrel",
+   "prompt": "a wooden barrel with iron bands",
+   "size": 28,
+   "seed": 4102,
+   "footprint": "base"
+  },
+  {
+   "name": "crate",
+   "prompt": "a wooden shipping crate",
+   "size": 28,
+   "seed": 4103,
+   "footprint": "base"
+  }
+ ],
+ "icons": [
+  {
+   "name": "status_poison",
+   "prompt": "a purple skull inside a green bubble",
+   "seed": 5300
+  },
+  {
+   "name": "status_sleep",
+   "prompt": "a small crescent moon with the letter-free Zz curls",
+   "seed": 5301
+  },
+  {
+   "name": "item_potion",
+   "prompt": "a round glass bottle of red potion with a cork",
+   "seed": 5400
+  }
+ ],
+ "portraits": [
+  {
+   "name": "guard",
+   "prompt": "a stern town guard with a brass helmet and a grey moustache",
+   "seed": 6000
+  }
+ ]
+}

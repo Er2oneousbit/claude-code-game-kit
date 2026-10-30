@@ -1,0 +1,229 @@
+{
+ "_comment": "Dotwork material catalog (Claude Code, Claude Opus 5.5): every texture material the world packs draw from. tpl: ground (seen from above), facade (wall seen from the front), roof (roof seen from above). Feeds lane_ground textures and the one-time environment palette extension (palette_extend in README). Seeds are fixed so renders are reproducible.",
+ "ground": {
+  "grass_lush": {
+   "prompt": "lush green grass with small tufts and a few tiny flowers",
+   "seed": 7100
+  },
+  "grass_dry": {
+   "prompt": "dry yellow-green grass with sparse tufts",
+   "seed": 7110
+  },
+  "dirt": {
+   "prompt": "packed brown dirt path with small pebbles",
+   "seed": 7102
+  },
+  "mud": {
+   "prompt": "an even surface of wet dark brown mud with small shiny wet patches, uniform all over",
+   "seed": 7121
+  },
+  "sand": {
+   "prompt": "fine pale beach sand with tiny wind ripples",
+   "seed": 7130
+  },
+  "gravel": {
+   "prompt": "coarse gravel road made of distinct small grey and brown pebbles, uniform all over",
+   "seed": 7141
+  },
+  "cobble": {
+   "prompt": "grey cobblestone street, rounded stones with dark gaps",
+   "seed": 7101
+  },
+  "brick_paving": {
+   "prompt": "red brick paving laid in a herringbone pattern",
+   "seed": 7150
+  },
+  "flagstone": {
+   "prompt": "large flat cream flagstone plaza slabs with thin dark gaps",
+   "seed": 7160
+  },
+  "tall_grass": {
+   "prompt": "tall dense green grass blades",
+   "seed": 7170
+  },
+  "flower_bed": {
+   "prompt": "a dense flower bed with red and yellow flowers and green leaves",
+   "seed": 7180
+  },
+  "farmland": {
+   "prompt": "tilled brown farmland soil in straight horizontal furrows, uniform all over",
+   "seed": 7191
+  },
+  "moss": {
+   "prompt": "a uniform carpet of soft green moss with tiny lighter tufts",
+   "seed": 7201
+  },
+  "leaf_litter": {
+   "prompt": "forest floor with fallen brown and orange leaves and twigs",
+   "seed": 7210
+  },
+  "ash": {
+   "prompt": "dark grey ash and coal dust ground with small glowing cinders",
+   "seed": 7220
+  },
+  "grating": {
+   "prompt": "dark riveted iron floor grating with square holes",
+   "seed": 7230
+  },
+  "water_shallow": {
+   "prompt": "clear shallow turquoise water surface with a bright caustic light ripple pattern, uniform all over",
+   "seed": 7241
+  },
+  "water_deep": {
+   "prompt": "deep dark blue water with small white ripples",
+   "seed": 7103
+  },
+  "sludge": {
+   "prompt": "a uniform surface of bubbling glowing green toxic sludge with many small bubbles",
+   "seed": 7251
+  },
+  "wood_planks": {
+   "prompt": "warm brown wooden floor planks",
+   "seed": 7260
+  },
+  "checker_tile": {
+   "prompt": "a clean checkerboard floor of large black and white square tiles",
+   "seed": 7271
+  },
+  "stone_floor": {
+   "prompt": "grey stone block dungeon floor",
+   "seed": 7280
+  },
+  "carpet": {
+   "prompt": "dark red carpet with a small repeating gold diamond pattern, uniform all over",
+   "seed": 7291
+  },
+  "metal_plate": {
+   "prompt": "small square riveted brass floor plates in a repeating grid",
+   "seed": 7301
+  },
+  "snow": {
+   "prompt": "fresh white snow with soft blue shadows and small footprint dents, uniform all over",
+   "seed": 7310
+  },
+  "ice": {
+   "prompt": "pale blue frozen ice surface with white cracks, uniform all over",
+   "seed": 7320
+  },
+  "snow_path": {
+   "prompt": "trampled grey-brown slush and snow path, uniform all over",
+   "seed": 7330
+  },
+  "wall_top": {
+   "prompt": "dark brown wooden beams and boards seen from directly above",
+   "seed": 7340
+  },
+  "hedge": {
+   "prompt": "a dense green hedge of small leaves seen from above, uniform all over",
+   "seed": 7350
+  },
+  "ow_plains": {
+   "prompt": "overworld map grassland seen from very high above, tiny tufts, uniform all over",
+   "seed": 7600
+  },
+  "ow_forest": {
+   "prompt": "overworld map dense forest canopy of many small round tree tops seen from very high above, uniform all over",
+   "seed": 7610
+  },
+  "ow_mountains": {
+   "prompt": "overworld map rocky brown mountain range of many small peaks seen from very high above, uniform all over",
+   "seed": 7620
+  },
+  "ow_desert": {
+   "prompt": "overworld map sandy desert with tiny dunes seen from very high above, uniform all over",
+   "seed": 7630
+  },
+  "ow_snowfield": {
+   "prompt": "overworld map snowfield with tiny drifts seen from very high above, uniform all over",
+   "seed": 7640
+  },
+  "ow_sea": {
+   "prompt": "overworld map deep blue ocean with tiny white wave marks seen from very high above, uniform all over",
+   "seed": 7650
+  },
+  "ow_shallows": {
+   "prompt": "overworld map light turquoise shallow coastal water seen from very high above, uniform all over",
+   "seed": 7660
+  },
+  "ow_swamp": {
+   "prompt": "overworld map murky green swamp with tiny reeds and pools seen from very high above, uniform all over",
+   "seed": 7670
+  },
+  "mine_floor": {
+   "prompt": "a rocky brown mine tunnel floor with gravel and small stones, uniform all over",
+   "seed": 7360
+  },
+  "cave_rock_top": {
+   "prompt": "dark brown solid cave rock mass seen from directly above, uniform all over",
+   "seed": 7370
+  }
+ },
+ "facade": {
+  "brick_wall": {
+   "prompt": "a red brick wall",
+   "seed": 7400
+  },
+  "stone_wall": {
+   "prompt": "a grey stone block wall",
+   "seed": 7410
+  },
+  "timber_plaster": {
+   "prompt": "a timber-framed wall: many small white plaster panels between dark wooden beams, repeating",
+   "seed": 7421
+  },
+  "wood_siding": {
+   "prompt": "horizontal brown wooden siding boards",
+   "seed": 7430
+  },
+  "iron_wall": {
+   "prompt": "a riveted dark iron plate wall",
+   "seed": 7440
+  },
+  "corrugated": {
+   "prompt": "a rusty corrugated metal wall",
+   "seed": 7450
+  },
+  "wallpaper_green": {
+   "prompt": "dark green striped wallpaper above a dark wooden wainscot",
+   "seed": 7460
+  },
+  "wood_panel": {
+   "prompt": "dark polished wooden wall panels with thin brass trim",
+   "seed": 7470
+  },
+  "plaster_cream": {
+   "prompt": "plain cream plaster interior wall with faint cracks",
+   "seed": 7480
+  },
+  "cliff_rock": {
+   "prompt": "a craggy brown rock cliff face with small ledges and cracks",
+   "seed": 7490
+  },
+  "cliff_snow": {
+   "prompt": "an icy grey rock cliff face with snow on the small ledges",
+   "seed": 7495
+  }
+ },
+ "roof": {
+  "roof_slate": {
+   "prompt": "dark blue-grey slate shingles",
+   "seed": 7500
+  },
+  "roof_clay": {
+   "prompt": "red clay roof tiles",
+   "seed": 7510
+  },
+  "roof_copper": {
+   "prompt": "green copper patina roof panels",
+   "seed": 7520
+  },
+  "roof_tin": {
+   "prompt": "grey tin sheets with standing seams",
+   "seed": 7530
+  },
+  "roof_thatch": {
+   "prompt": "golden straw thatch",
+   "seed": 7540
+  }
+ }
+}

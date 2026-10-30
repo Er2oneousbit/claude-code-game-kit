@@ -11,7 +11,7 @@ If the person in this session is not maintaining the kit but wants a game ("make
 The **Claude Code Game Kit**, not a game. `scripts/new_game.py` stitches the universal `core/` plus one engine overlay from `engines/<id>/` into a new game project, or adopts an existing one. MIT licensed. Version lives in `KIT_VERSION` in `scripts/new_game.py`; bump it together with a `CHANGELOG.md` entry, by the same semver rules the kit gives games (`core/docs/sop/SOP-06-build-and-release.md` "Versioning": MINOR for new features, PATCH for fixes, MAJOR when existing projects need manual changes).
 
 Most of the tree is **template content that ships into generated games**:
-- `core/CLAUDE.md` and `core/.claude/` (settings, SessionStart hook, 18 skills, 5 subagents, Bug and Feel issue forms in `.github/`) configure the *generated* game. Claude Code surfaces the `core/.claude/skills` as directory-scoped skills when you touch files under `core/`. Do not invoke them for kit work: they assume a game's layout (HANDOFF and ROADMAP under docs/ at the root, a dev.py under tools/, and so on).
+- `core/CLAUDE.md` and `core/.claude/` (settings, SessionStart hook, 19 skills, 5 subagents, Bug and Feel issue forms in `.github/`) configure the *generated* game. Claude Code surfaces the `core/.claude/skills` as directory-scoped skills when you touch files under `core/`. Do not invoke them for kit work: they assume a game's layout (HANDOFF and ROADMAP under docs/ at the root, a dev.py under tools/, and so on).
 - Paths inside `core/` docs are written as they will be after scaffolding (core/docs/GDD.md becomes docs/GDD.md), and each engine's ENGINE.md becomes docs/ENGINE.md. That is why `check_links.py` at the kit root reports about 80 hits that are fine in a generated project (the kit-root `make-a-game` skill also names game-folder paths).
 - `{{GAME_NAME}}` `{{GAME_SLUG}}` `{{ENGINE}}` `{{ENGINE_LABEL}}` `{{DATE}}` `{{AUTHOR}}` in any UTF-8 file are substituted at scaffold time. Keep them intact in templates.
 - Profile placeholders come from `profiles/*.json` (`--profile`): a line that is only `# {{FOOTER}}` or `// {{FOOTER}}` becomes the footer comment or disappears, a `{{PROFILE_STYLE}}` line becomes the profile's style bullets, `{{FOOTER_RULE}}` becomes the STYLE.md footer rule. Starter code uses `{{FOOTER}}`; kit tools (`core/tools/`, every `dev.py`, the hook, `check_scripts.gd`, `GameKitBuild.cs`, `GameKitScenes.cs`, `GameKitCapture.cs`) carry no footer and name no author.
@@ -47,6 +47,8 @@ python core/tools/audio/test_chiptune.py
 python core/tools/audio/test_wavfile.py
 python core/tools/audio/test_eleven_audio.py             # offline (canned API responses)
 python core/tools/art/test_pixellab.py                   # offline (canned API responses)
+python core/tools/art/test_comfy_local.py                # offline (a stand-in ComfyUI server on 127.0.0.1)
+python core/tools/art/dotwork/tests/test_dotwork.py          # offline, needs Pillow + numpy (the ComfyUI venv has both)
 python core/tools/audio/test_fish_tts.py                 # offline (canned API responses)
 python core/tools/art/test_chroma_key.py                 # needs Pillow
 python core/tools/art/test_pixel_sprite.py               # standard library only

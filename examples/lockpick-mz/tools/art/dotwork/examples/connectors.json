@@ -1,0 +1,97 @@
+{
+ "name": "connectors",
+ "_comment": "Fences, iron railings, steam pipes and rail tracks drawn in code from each tile's connections, with collision bands. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "ground": {
+  "name": "yard",
+  "base": [
+   {
+    "material": "grass_lush",
+    "variants": 4,
+    "surface": "grass"
+   }
+  ],
+  "overlays": [
+   {
+    "material": "dirt",
+    "relief": "flat",
+    "surface": "dirt"
+   },
+   {
+    "material": "cobble",
+    "relief": "raised",
+    "surface": "stone"
+   },
+   {
+    "material": "water_deep",
+    "relief": "sunken",
+    "solid": true,
+    "surface": "deep_water"
+   },
+   {
+    "name": "rail",
+    "style": "rail",
+    "surface": "rail"
+   },
+   {
+    "name": "fence_wood",
+    "style": "fence_wood"
+   },
+   {
+    "name": "fence_iron",
+    "style": "fence_iron"
+   },
+   {
+    "name": "pipe",
+    "style": "pipe"
+   }
+  ],
+  "map": {
+   "name": "yard_demo",
+   "seed": 7,
+   "legend": {
+    "g": [],
+    "d": [
+     "dirt"
+    ],
+    "c": [
+     "dirt",
+     "cobble"
+    ],
+    "F": [
+     "fence_wood"
+    ],
+    "P": [
+     "pipe"
+    ],
+    "I": [
+     "dirt",
+     "cobble",
+     "fence_iron"
+    ],
+    "W": [
+     "water_deep"
+    ],
+    "r": [
+     "dirt",
+     "rail"
+    ]
+   },
+   "rows": [
+    "gggggggggggggggggggggggg",
+    "gFFFFFFFgggggPPPPPPPPPgg",
+    "gFgggggFgggggPgggggggPgg",
+    "gFgFFFgFgggggPgggPPPPPgg",
+    "gFgggggFgggggPgggPgggggg",
+    "gFFFgFFFgggggPPPPPgggggg",
+    "ggggdggggggggggggggggggg",
+    "cccccccccccccccccccccccc",
+    "IIIIIIIIIIIIIIIIIIIIIIII",
+    "WWWWWWWWWWWWWWWWWWWWWWWW",
+    "WWWWWWWWWWWWWWWWWWWWWWWW",
+    "gggggggggggggggggggggrgg",
+    "rrrrrrrrrrrrrrrrrrrrrrgg",
+    "gggggggggggggggggggggggg"
+   ]
+  }
+ }
+}

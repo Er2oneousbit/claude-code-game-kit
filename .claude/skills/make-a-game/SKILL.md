@@ -36,7 +36,7 @@ The plan has the shape of the game's `docs/GDD.md` template (read `core/docs/GDD
 the order below, **one question at a time**. If your tools include a multiple-choice question prompt
 (AskUserQuestion in Claude Code), use it: 3 or 4 short options fitted to what they said so far (each a label plus a
 one-line description; a "You decide" option where it helps; mark one "(Recommended)" when you have a reason), and say
-"Q4 of 13" in the question. The prompt always offers a free-text "Other", so they can answer in their own words.
+"Q4 of 13" in the question (14 when question 8b applies). The prompt always offers a free-text "Other", so they can answer in their own words.
 Without the prompt, ask one question per message with two or three examples. Reflect back in one line after every
 three or so answers ("So: a top-down stealth game about a lighthouse keeper.").
 "You decide" means: pick something that fits, say what you picked, and mark it *(Claude's pick)* in the plan.
@@ -52,6 +52,17 @@ B. **The play**
 C. **Look and feel**
    7.* 2D or 3D, and seen from where (side, top-down, angled, first or third person)? (Default: 2D.)
    8. What should it look and sound like? (pixel art, cartoon, low-poly, dark, cozy, retro chiptune...)
+   8b. *Only for a 2D game* (ask right after 8; it adds one to the question count): where should the finished art
+       come from? Say first that the first build always uses simple art drawn in code, so this is about later. Options:
+       - **Drawn in code plus free packs** *(Recommended for a first game)*: no cost, no setup; Claude draws simple
+         sprites in code, and free packs (Kenney and others) fill in, each license checked.
+       - **My own art**: they draw it (Aseprite, Pixelorama, Krita...) or already have sprites; Claude wires it in.
+       - **A paid AI service**: for example PixelLab for pixel art. Their account and API token, a cost per image;
+         Claude runs it only with their go-ahead per job.
+       - **Dotwork, AI on this computer**: free per image, but needs an NVIDIA graphics card (8 GB of video memory for
+         sprites, 16 GB for animation), 15 to 78 GB of downloads and an hour of setup. Makes ready-to-use assets for
+         Godot; other engines get image files.
+       Several at once is fine ("Dotwork for characters, packs for tiles"). Record the answer as the plan's Art source.
    9. Who is it for, and how should the player feel? ("me and my kids; clever", "horror fans; tense")
 D. **Size and setup**
    10.* Where should it run: in a web browser (easy to share a link) or as a downloadable program? Any engine
@@ -66,7 +77,7 @@ Keyboard, gamepad or touch comes from their answers; ask only if it is unclear.
 From the answers, draft and show the plan in the chat, one short screen, under the GDD's headings: Working title,
 One-line pitch, Genre, Perspective, Reference games, The twist, **three Pillars** (you propose them from the answers:
 each a short phrase plus what it rules out), Core loop (`action -> feedback -> reward -> new decision`), Player fantasy
-and audience, Art and audio direction, Controls, Toy scope (question 11), Out of scope (question 12), two or three
+and audience, Art and audio direction (with the Art source from 8b), Controls, Toy scope (question 11), Out of scope (question 12), two or three
 **Assumptions to test** with how you will know, and the Author (question 13). Mark every *(Claude's pick)*.
 Right under the plan, before asking for the yes, show this warning in a box of its own (your words, same points):
 > ⚠️ **The first version will look crude, on purpose.** Simple placeholder characters made in code (2D: pixel-art figures with a walk and an action; 3D: figures
@@ -89,6 +100,7 @@ sentence. Point to `CHOOSING_AN_ENGINE.md` only if they want to compare.
 | Unity or Unreal already installed, and they want it | `unity` / `unreal` | Heavy installs; the engine must create the project first (README "Already have a project?") |
 | Wants to write Rust, or code-only with no editor | `bevy` | Needs Rust (rustup) and, on Windows, Visual Studio Build Tools; the first build takes 5 to 15 minutes, later ones seconds |
 | Wants to learn C++ | `cpp-sdl2` | Needs Visual Studio Build Tools or a compiler, CMake and vcpkg; the slowest start |
+| Art source is Dotwork, and no engine named | `godot` | Dotwork writes Godot-ready art (animations, tile sets, scenes); other engines get only image files to wire in by hand |
 | A classic RPG and they own RPG Maker MZ | `rpgmaker-mz` | They build maps and events in the editor; you write and test the plugins. Tell them this overlay is an untested proof of concept: never run against MZ itself |
 
 ## 5. Check the installs (you run the checks)
@@ -103,6 +115,10 @@ Run these and report in plain words what is there and what is missing:
 - Bevy: `cargo --version` (Rust 1.97.1 or newer). Missing: https://rustup.rs (Windows: `rustup-init.exe`, defaults are
   fine; it should offer the Visual Studio Build Tools if they are missing (verify)). Warn them the first `check` compiles Bevy for
   5 to 15 minutes, once.
+- Art source Dotwork: check the graphics card only, install nothing for it now (Dotwork waits until the toy is fun).
+  Windows and Linux: `nvidia-smi --query-gpu=name,memory.total --format=csv,noheader`. Report the card and its memory
+  in plain words; no NVIDIA card or under 8 GB means Dotwork will not run there, so offer to switch the art source.
+  Also say how much free disk the models will need (15 GB for sprites, about 78 GB for everything).
 - Unity, Unreal, C++: follow that engine's `engines/<id>/ENGINE.md` "Version and setup"; walk them through it step by step.
 Missing pieces: give the link and the one setting that matters, offer to install with the system package manager
 (`winget`, `brew`) if they prefer, and wait. After an install, terminals opened before it do not see it: tell them to
@@ -136,7 +152,8 @@ In the new folder, fill `docs/GDD.md` with the approved plan from step 3 (its he
 interview did not cover as the template has them, and keep the *(Claude's pick)* marks so the game's Claude knows what
 to confirm). Set "Current tier" to Toy, and copy the toy scope into the Toy row. Then set `docs/HANDOFF.md` "Next step"
 to: "Fast lane in docs/FIRST_HOUR.md: make the toy in docs/GDD.md playable (<the toy, one line>)." The game's own
-Claude reads both on its first session.
+Claude reads both on its first session. The Art source line tells it which route to take once the toy is fun:
+`/dotwork` for Dotwork, `/gen-brief` for a paid service, `/asset-intake` for packs and their own art.
 
 ## 9. Hand over (the part people miss)
 Explain in two sentences: Claude Code works in one folder at a time, and the game folder has its own Claude setup

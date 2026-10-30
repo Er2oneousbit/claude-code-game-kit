@@ -3,12 +3,15 @@
 # test_eleven_audio.py
 # Purpose : Exam for eleven_audio.py, offline: the HTTP call is replaced by canned responses, so no
 #           account, key or credits are used. Checks requests, saving, loops, plan-based licensing,
-#           ASSET_LOG rows, error mapping, and that the API key never lands in any output.
+#           ASSET_LOG rows (checked before anything is spent), error mapping, and that the API key never
+#           lands in any output. The redirect cases run the real HTTP call against stand-in servers on
+#           127.0.0.1, still offline: the key must not follow a redirect off its https origin.
 # Usage   : python tools/audio/test_eleven_audio.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 import contextlib
+import http.server
 import io
 import json
 import math
@@ -16,7 +19,9 @@ import os
 import struct
 import sys
 import tempfile
+import threading
 import unittest
+import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -250,6 +255,73 @@ class ElevenAudioExam(unittest.TestCase):
         self.assertEqual(rc, 0, out)
         self.assertNotIn(KEY, out)
         self.assertNotIn(KEY, self.everything_written())
+
+    def test_log_problems_stop_before_spending(self):
+        # Met in review: a missing ASSET_LOG was only noticed after the paid request
+        (self.root / "docs" / "ASSET_LOG.md").unlink()
+        fake = Fake()
+        rc, out = self.run_tool(fake, "sfx", "--text", "x", "--out", "assets/x.mp3", "--log", "--plan", "paid")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("ASSET_LOG.md not found", out)
+        self.assertEqual([c for c in fake.calls if c[0] == "POST"], [], "no credits spent")
+        self.assertFalse((self.root / "assets/x.mp3").exists())
+        (self.root / "docs" / "ASSET_LOG.md").write_text(LOG, encoding="utf-8")
+        fake = Fake()
+        rc, out = self.run_tool(fake, "sfx", "--text", "x", "--out", "../outside.mp3", "--log", "--plan", "paid")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("outside the project", out)
+        self.assertEqual([c for c in fake.calls if c[0] == "POST"], [], "no credits spent")
+
+    def test_a_redirect_to_another_port_does_not_carry_the_key(self):
+        # The real http() against two stand-in servers on 127.0.0.1: the API answers 302 to the second one
+        seen = {}
+
+        class Elsewhere(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                seen["key"] = self.headers.get(ea.KEY_HEADER)
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"audio")
+
+            def log_message(self, *a):
+                pass
+
+        other = http.server.HTTPServer(("127.0.0.1", 0), Elsewhere)
+
+        class Api(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                seen["api_key"] = self.headers.get(ea.KEY_HEADER)
+                self.send_response(302)
+                self.send_header("Location", f"http://127.0.0.1:{other.server_port}/blob")
+                self.end_headers()
+
+            def log_message(self, *a):
+                pass
+
+        api = http.server.HTTPServer(("127.0.0.1", 0), Api)
+        for srv in (other, api):
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            status, _, data = self.real_http("GET", f"http://127.0.0.1:{api.server_port}/v1/x", KEY)
+        finally:
+            for srv in (api, other):
+                srv.shutdown()
+                srv.server_close()
+        self.assertEqual((status, data), (200, b"audio"))
+        self.assertEqual(seen.get("api_key"), KEY, "the API itself gets the key")
+        self.assertIsNone(seen.get("key"), "the key must not follow a redirect to another port")
+
+    def test_redirect_rule_keeps_the_key_on_its_https_origin_only(self):
+        api = "https://api.elevenlabs.io/v1/music"
+        for new, rule in (("https://api.elevenlabs.io/v1/other", "keep"), ("https://api.elevenlabs.io:443/x", "keep"),
+                          ("https://api.elevenlabs.io:8443/x", "strip"), ("https://storage.example/x", "strip"),
+                          ("http://api.elevenlabs.io/v1/other", "refuse"), ("ftp://api.elevenlabs.io/x", "refuse")):
+            self.assertEqual(ea.redirect_rule(api, new), rule, new)
+        req = urllib.request.Request(api, headers={ea.KEY_HEADER: KEY})
+        with self.assertRaises(ea.ServiceError):
+            ea.KeepKeyOnHost().redirect_request(req, io.BytesIO(), 302, "Found", {}, "http://api.elevenlabs.io/x")
+        new = ea.KeepKeyOnHost().redirect_request(req, io.BytesIO(), 302, "Found", {}, "https://storage.example/x")
+        self.assertNotIn(ea.KEY_HEADER, {h.lower() for h, _ in new.header_items()})
 
     def test_out_of_range_lengths_are_usage_errors(self):
         for args in (("sfx", "--text", "x", "--seconds", 31, "--out", "a.mp3"),

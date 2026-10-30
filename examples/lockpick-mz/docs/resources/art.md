@@ -10,9 +10,27 @@ Asset libraries and tools. AI generators are in `ai-tools.md`, prompt patterns i
 - `kenney.nl`. CC0, huge, consistent style. Best prototyping source.
 - `opengameart.org`, `itch.io/game-assets` (filter free, check license per pack).
 - `lospec.com` palettes (palette lists are free to use) plus pixel art tutorials.
-- Tools: `Aseprite` (paid, worth it, or build from source), `LibreSprite`, `Pixelorama` (free, Godot-made),
-  `Krita`, `GIMP`, `Inkscape` (vector: UI, icons, clean characters), `Tiled` (maps), `LDtk` (levels), `TexturePacker`, `Shoebox`.
-  Kit tools drive GIMP and Inkscape headless: `tools/art/gimp_batch.py`, `tools/art/svg_export.py` (`docs/sop/SOP-16-2d-art-pipeline.md`).
+- Pixel art editors (for drawing, animating and hand-polishing sprites, including AI output). What you make with any of
+  them is yours; the license is about the program. Searched 2026-10-29 through secondary pages, so check each
+  project's own page **(verify)**:
+
+  | Editor | Cost and license | Platforms | Good for | Notes |
+  |---|---|---|---|---|
+  | **Aseprite** | Paid once (about $20; Steam, itch.io or its site); source-available under its own EULA, not open source | Windows, macOS, Linux | The standard: layers, animation timeline, onion skin, tilemaps, palettes, sprite sheet + JSON export, Lua scripting, a command line for batch export | You may build it from source for yourself but not hand the build to others. On Windows it is a GUI program: a script must start it as a process and wait for it to get a real exit code (`&` in PowerShell does neither) |
+  | **Pixelorama** | Free, MIT | Windows, macOS, Linux, browser | Layers, animation, onion skin, tilemaps, palettes, sprite sheet export; open-source alternative to Aseprite | Made with Godot by Orama Interactive. Version 1.2 or newer at the time **(verify)** |
+  | **LibreSprite** | Free, GPL (a fork of Aseprite's last GPLv2 code; one listing says GPLv3) | Windows, macOS, Linux | An Aseprite-like workflow at no cost | Older feature set than today's Aseprite |
+  | **Piskel** | Free, open source (Apache-2.0 **(verify)**) | Browser, desktop builds | Quick small sprites and animations, GIF and sheet export | Simple; good for a first sprite |
+  | **Lospec Pixel Editor** | Free, in the browser | Browser | Quick edits with `lospec.com` palettes | Very basic |
+  | **GrafX2** | Free, open source (GPL **(verify)**) | Windows, macOS, Linux | Palette-based (indexed) art, retro platforms | Deluxe Paint style; steep for newcomers |
+  | **Pyxel Edit** | Paid, proprietary | Windows, macOS | Tilesets: draw tiles and paint levels with them | Updates have been slow **(verify)** |
+  | **Krita** | Free, GPL | Windows, macOS, Linux | Painting with pixel brushes and an animation timeline; its AI Diffusion plugin can drive a local ComfyUI | A general painting program, not pixel-first |
+  | **GIMP** | Free, GPL | Windows, macOS, Linux | Batch export, indexed palettes, pixel-safe resizing (`tools/art/gimp_batch.py`) | Not made for animation |
+- Other 2D tools: `Inkscape` (vector: UI, icons, clean characters), `Tiled` (maps), `LDtk` (levels), `TexturePacker`,
+  `Shoebox`. Kit tools drive GIMP and Inkscape headless: `tools/art/gimp_batch.py`, `tools/art/svg_export.py`
+  (`docs/sop/SOP-16-2d-art-pipeline.md`).
+- Local AI pixel art for Godot: `tools/art/dotwork/` turns a JSON spec into characters, props, terrain, maps, effects,
+  UI and fonts on your own GPU through ComfyUI (opt-in, 15 to 33 GB of models; the code-drawn UI lanes need no GPU).
+  Setup and licenses in its README.
 - Backgrounds and parallax: itch.io packs, or paint your own with a limited palette.
 
 ## Art (3D)

@@ -3,12 +3,140 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.7.0 (2026-10-30): Dotwork, local pixel art on your own GPU
+Pixelorama follows as 0.7.x.
+- **New tool `tools/art/dotwork/`, Dotwork** (opt-in; Pillow + numpy; Godot first; called forge while it was built,
+  renamed to avoid a clash with another local image tool): local pixel art for a whole game from a JSON
+  spec, through ComfyUI on 127.0.0.1. Lanes: characters (4 directions; idle, walk, attack, battle and emote poses;
+  auditions), props with collision scenes, layered terrain and maps painted from text (buildings, interiors, cliffs,
+  animated water, fences, pipes and rails), effects and spells, enemies, battle backgrounds, scenes, icons, portraits,
+  8-direction vehicles, state props (chest, door, switch, save point), sprite edits and normal maps, image to pixel
+  art, and code-drawn pixel fonts, window skins, balloons and hit effects. Outputs go into `assets/` (SpriteFrames,
+  TileSets, scenes, `.fnt` fonts), `assets_src/` (sources, review sheets, `.aseprite` round trip) and a manifest that
+  `dotwork.py log` turns into the ASSET_LOG row (`pre-generated` or `no`, with every model's license); `verify` loads
+  every asset in the game and runs its smoke. `setup --check` lists the pinned models per tier (15 to 33 GB, all
+  Apache-2.0) and never downloads; SpriteKiln (GPL-3.0) is read from the user's own clone at run time, never bundled;
+  `style_refs` is empty by default. `--engine none` writes PNGs, sheets and the manifest for other engines. Exam
+  `tools/art/dotwork/tests/test_dotwork.py` 34/34 offline; in a freshly made Godot 4.7.2 game the `ui` example packs and verifies. Built
+  in the owner's ComfyUI session and reviewed there (correctness, security, kit readiness, art QA) before the port.
+  Fixed while rendering the kit samples: big sprites (a 192 px boss) are no longer cropped by a fixed refine
+  canvas, and the default palettes gained 24 sky and backdrop colours (env 136, objects 168; every old colour kept),
+  so backdrops no longer collapse into flat bands.
+  SOP-16 (a Dotwork tip and "bring 3 or 4 of your own sprites"), `/gen-brief`, `/asset-intake` and `resources/art.md`
+  point at it.
+- **New skill `/dotwork` (19 skills)** and an art-source question in the interview: for a 2D game, `make-a-game`
+  asks where the finished art comes from (drawn in code plus free packs, the owner's own art, a paid AI service such
+  as PixelLab, or Dotwork on their own GPU). The answer goes into the GDD's new "Art source" line, picks Godot when
+  Dotwork is chosen and no engine is named, and adds a graphics card check (nothing is installed for it during setup).
+  `/dotwork` runs the tool end to end: tier check, `setup --check` with a yes per download, a first run with no
+  GPU, specs from the GDD and BRIEFS, review of every sheet, the in-game proof and the asset log row.
+- **Godot `export_presets.cfg`:** each preset's options section now holds the two template keys, so imports and
+  exports no longer log `Cannot get keys from nonexistent section` three times. Windows, Linux and Web exports
+  rechecked.
+- **From a stranger run-through of 0.7.0** (a fresh agent following only the newcomer docs): doctor points a game
+  with Dotwork packs at `dotwork.py log` instead of only `/asset-intake`; the Godot GUT warning names the docs section, and
+  that section gives the release URL and the copy step for installing without the editor; SOP-16 says its 108 GB
+  list is the first experiment's (Dotwork's tiers: about 78 GB for all three), marks 8-direction objects as made in
+  Dotwork, notes that Dotwork renames SpriteKiln's rotation files, and says the first Dotwork run needs `GODOT_BIN` or
+  `--engine none`. Dotwork's own findings were fixed in the tool: a wrong folder is refused (exit 2), `setup --check`
+  lists every model offline with its save-as name and VRAM/RAM per tier, `log` updates a pack's existing row, a
+  first-run box in its README, Python 3.8, and help on every command. A Kimi K3.1 Pro audit then found, among smaller
+  items: `audition --promote` discarding every cached render of the character, spec names reaching file paths raw
+  (font export names, character actions, directions; one reached a folder delete), and the ground lane crashing with
+  `--engine none`; all fixed with tests (exam 34/34).
+- **Security and reliability fixes from a Kimi K3.1 Pro audit of the whole kit** (83 findings, each checked against
+  the code; 6 were not real, the high and medium ones are fixed with a test or reproduction each; the lows are listed
+  in KNOWN_ISSUES):
+  - `tools/fetch_asset.py`: a malicious zip could write outside `--to` with `--take`/`--base` (it planted
+    `.claude/settings.local.json`, whose hooks Claude Code runs). Unsafe entries (`..`, absolute, drive) refuse the
+    whole pack with exit 2 (was 1), every copy and `--to` stay inside the project, `--license-file` must be a pack
+    entry, file names Windows cannot store and case-only duplicates are refused, and download URLs are recorded
+    without user, password, query or fragment (signed URLs were written into the evidence file and asset log).
+  - `tools/publish_check.py` catches snake_case secret names (`client_secret`, `AWS_SECRET_ACCESS_KEY`, GDScript
+    `:=`) and scans UTF-16 and UTF-32 files with a BOM (Windows PowerShell 5 writes UTF-16 by default).
+  - ElevenLabs, Fish Audio and PixelLab clients send the API key only to a redirect on the same https host and port,
+    and refuse a redirect to plain http (ElevenLabs and Fish forwarded the key to any host). PixelLab refuses
+    direction names from a response that could leave `--out`. ElevenLabs and Fish check the asset log and output
+    paths before spending credits.
+  - Bevy `clean --yes` refuses to delete the project or a folder above it (a repo's cargo config file with
+    `target-dir = "."` made it delete the game) and deletes only folders cargo marked with `CACHEDIR.TAG`. Bevy
+    smoke runs exactly N fixed ticks for `--smoke N` (it ran N-1), with a test.
+  - Every engine's `dev.py` kills the whole process tree on a timeout or Ctrl+C and never waits forever for a
+    grandchild holding the output pipe; Unreal reports a hung editor as exit 1, not 2.
+  - `scripts/new_game.py` fills profile footers in templates with Windows line endings, checks every kit file it
+    plans (not only the ones written this run) for unresolved placeholders, compares binary `.gold` copies byte for
+    byte, refuses a backtick or `*/` in names and authors (they broke the RPG Maker MZ plugins), and reserves CMake's
+    Visual Studio targets and Windows device names. `scripts/sync_examples.py` treats any failed upgrade as a
+    failure and copies nothing back for it.
+  - 45 text files in the maintainer's checkout had Windows line endings on disk (git stored them as LF); converted.
+  - Smaller hardening from the same audit: `tools/issues.py` removes more invisible characters from issue text
+    (without flagging ordinary emoji), `tools/publish_check.py` warns about large text files it does not scan and
+    catches more home-folder paths, `tools/second_opinion.py` keeps `--files` and `--out` inside the project,
+    `tools/fetch_asset.py` records `--page` without a login, the RPG Maker MZ test server stays inside `game/` and
+    answers only local host names, and the Unreal wrapper checks project and target names before batch files.
+- **`scripts/sync_examples.py`** hashes binary files raw, like the scaffolder. It folded CRLF in every file, and a
+  PNG's signature holds one, so binary kit files (Dotwork's palette swatches, the first in the kit) never synced.
+- **README "Experimental: local pixel art (ComfyUI)"** and **`workflows/local-pixel-art/README.md`**: the test host
+  (RTX 5060 Ti 16 GB, Ryzen 7 5700G, 64 GB RAM, Windows 11), what was installed and on what licenses, benchmarks per
+  asset type: characters, props, icons, portraits, UI, isometric pieces, seamless 128 px terrain, corner autotiles, a
+  4-direction idle/walk/kick set exported to Godot 4, effects with casting and firing poses, rotate, edit, inpaint,
+  normal maps, image to pixel art, scenes and maps; the first night's tests; what has not run yet; and the lessons.
+- **New tool `tools/art/comfy_local.py`** (standard library only) drives a ComfyUI server on this machine: `check` (server, GPU, free VRAM; `--workflow` lists missing node types and the models a workflow
+  names), `run` (an API-format workflow with `--set NODE.INPUT=VALUE`, `--seed`, `--image NODE=png`, `--dry-run`; saves
+  the outputs without ComfyUI's embedded prompt and workflow, never overwrites without `--overwrite`, writes
+  `comfy_local.gen.json`, and `--log` adds the ASSET_LOG row with the models to license-check), and `strip` for PNGs
+  saved by hand. Talks only to a server on this machine unless `--allow-remote` (ComfyUI has no login). Exam
+  `test_comfy_local.py` 25/25 against a stand-in server; `check --workflow` live on ComfyUI 0.43.0 with five
+  SpriteKiln workflows; a live `run` is still to do (KNOWN_ISSUES). `/gen-brief` and SOP-16 point at it.
+- **`resources/art.md`: a pixel art editor table** (Aseprite, Pixelorama, LibreSprite, Piskel, Lospec Pixel Editor,
+  GrafX2, Pyxel Edit, Krita, GIMP): cost and license, platforms, what each is good for; licenses from secondary pages,
+  marked (verify) where they disagree. SOP-16's tool table gets a hand-polish row.
+- **SOP-16:** the local results table covers every asset type now; new tips: the refine step, a style collage,
+  klein's non-linear strength, extending the palette first, stripping ComfyUI's embedded workflow before sharing.
+- **Dotwork, the owner's local asset tool, in the write-up:** a JSON spec in; Godot SpriteFrames (4 directions, west
+  generated for asymmetric characters), a match-corners TileSet, additive effect scenes, 9-slice NinePatchRect scenes and
+  a manifest out, proven by an import into a kit-scaffolded project. GIFs of two characters in 4 directions, effects,
+  stills and a painted terrain demo, plus timing and what a review still catches.
+- **Aseprite round trip in the write-up:** Dotwork writes one `.aseprite` per character (a tag per animation), effect
+  and still, then re-exports after hand polish and re-runs the Godot proof; lossless with no edits (0 of 120 PNGs
+  changed). A before/after of a scripted cleanup, the Windows and Lua quirks, and SOP-16's "Hand polish as a round
+  trip" tip.
+- **Ground layers and maps from text in the write-up:** one TileSet for a stack of layers (base variants, a blob
+  overlay layer per terrain, decals, relief, collision, a surface tag), a text-map-to-Godot-scene builder, 38
+  reviewed materials, a 112-color environment palette, and a verified 24x15 town square. SOP-16 now prefers blob
+  overlays over corner tiles in Godot.
+- **Buildings, interiors and fonts in the write-up:** roof and facade structure tiles with trim on every open side,
+  fixtures placed from the map, an inn room in three furniture views, and a glyph tool that builds BMFont `.fnt`
+  fonts from text bitmaps (a dialogue font and a damage-number font, both loaded by Godot). SOP-16: fonts are not a
+  generation job.
+- **Battle art in the write-up:** battle backgrounds at an exact 2x, enemies with trapped-white cleanup, a party
+  battle set with 7 still poses, code-drawn window skins, title fonts, and a mock battle screen composed from the
+  packs. SOP-16: judge a set together on a mock screen before game code.
+- **Spells, props, symbols and balloons in the write-up:** a 12-spell effect library, 61 props each with a collision
+  scene (a trunk footprint for walk-behind tops), a symbols font mapped to Unicode, and emote balloons. SOP-16: ship
+  props as scenes with a footprint.
+- **Cliffs, a world map and connectors in the write-up:** plateaus with a cliff-face strip and stairs, a world map
+  painted from text, code-drawn fences, pipes and rails, and every blob tile per texture variant so long edges stop
+  repeating. All 12 spells now clean. SOP-16: variants need every edge tile; paint the bank under water.
+- **Auditions in the write-up and SOP-16:** render several seeds and motion wordings of one clip onto a sheet and
+  pick by eye; the Tinkerer's west punch now swings the brass fist in profile (1 clean take of 8).
+- **Clean redos in the write-up:** an attack demo (the effect spawned on the peak frame), sprite tools (edit,
+  inpaint, normal map), image to pixel art beside a plain shrink, and isometric props, all from Dotwork.
+- **Licensing catch:** the first image VAE in that setup was the FLUX.2 [dev] non-commercial file. Every image made
+  with it (and everything rotated or animated from one) is withdrawn from the write-up; the numbers and lessons
+  stay. SOP-16 now says to check each model file's repository, license and hash, not the model's name.
+- **SOP-16 tips from Dotwork:** Godot terrain needs every wang16 tile twice for narrow shapes, fill the base terrain
+  first, Wan at cfg 1.0 ignores negatives, remove ground shadows before the palette lock, back views grow faces, a
+  review sheet with per-clip trims and re-seeds, decor overlays for a repeating 32 px tile.
+- **SOP-16, E68, `resources/ai-tools.md`:** the local pipeline's results are described on their own terms, without
+  comparisons to other services. Examples synced.
+
 ## 0.6.1 (2026-10-29): local pixel art with ComfyUI
-A documented second route for AI pixel art next to PixelLab: ComfyUI and the SpriteKiln node pack on your own GPU,
+A documented local route for AI pixel art: ComfyUI and the SpriteKiln node pack on your own GPU,
 free per image. Docs only; no new tool.
 - **SOP-16 "Generating pixel art locally":** hardware it ran on, model tiers and their sizes (core 38 GB, about 108 GB
-  for all), measured results per job, the split (local for concepts, variants and style references, PixelLab for final
-  sprites), one palette for both, the review routine for node packs (quarantine, pin, patch, no auto-update), models
+  for all), measured results per job, where it fits (concepts, variants and style references; final sprites still need
+  polish), one palette for both, the review routine for node packs (quarantine, pin, patch, no auto-update), models
   only as `.safetensors`/`.gguf` pinned by hash, no `--listen`, per-model licenses, and what to log. New row in its tool
   table.
 - **`resources/ai-tools.md`:** a ComfyUI + SpriteKiln row.
@@ -110,7 +238,7 @@ GDD's `Current tier:` line drives every scope check (SOP-08, SOP-01, `/new-featu
   status`, `repo view`, `issue list`, `issue view`, `label list`). Reporter text is untrusted input, so it strips what
   a person cannot see but a model reads (ANSI escapes, control and bidi characters, zero-width, Unicode tag characters
   and variation-selector runs), warns when it removed any, fences every body and comment between markers with a random
-  per-run nonce (a report cannot forge the end marker), skips comments GitHub hid as spam, and lists links without
+  per-run nonce (a report cannot Dotwork the end marker), skips comments GitHub hid as spam, and lists links without
   opening them. Exam 14/14 offline; live and read-only against a public repo.
 - **`/triage-issues`** sorts reports (bug, feel, needs info, duplicate, out of scope, suspicious), runs bugs through
   `/bug-hunt` from the repro step, logs feel reports by issue number (not username) and tunes one value at a time with

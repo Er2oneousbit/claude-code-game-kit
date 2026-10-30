@@ -35,6 +35,7 @@
 #           blocks the build; clean survives a closed stdin
 # Updated : 2026-10-20 (audit pass 1): --platform limited to known values, --filter validated so it
 #           cannot add -ExecCmds commands, paths with cmd.exe metacharacters refused before .bat calls
+#           (the .uproject and Target.cs file names too, since 2026-10-30)
 # Updated : 2026-10-21 (audit pass 3): stdout/stderr and captured tool output are UTF-8 (Windows
 #           pipes defaulted to cp1252 and crashed on non-Latin paths, names and log lines)
 # Updated : 2026-10-21 (audit pass 4): Linux/macOS script paths, genproj via UBT -projectfiles (+ --vscode),
@@ -44,12 +45,16 @@
 #           the log decides pass/fail as for `test`; smoke --until/--fail-on/--filter like the other overlays;
 #           exec/test/smoke exit 2 with "run check first" when the game module is not compiled yet
 #           exec passes the script path with forward slashes (backslash escapes in quoted arguments)
+# Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
+#           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe; a hung
+#           test/smoke/exec exits 1 (was 2), git lfs output decoded as UTF-8
 # ---------------------------------------------------------------------------
 import argparse
 import os
 import platform
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import traceback
@@ -66,6 +71,7 @@ OK_PATTERN = r"Result=\{Success\}"
 AUTOMATION_LOG = ROOT / "Saved" / "Logs" / "dev_automation.log"  # UnrealEditor-Cmd does not log to stdout
 EXEC_LOG = ROOT / "Saved" / "Logs" / "dev_exec.log"
 EXEC_TIMEOUT_S = 3600                         # a first import of many assets is slow; a hang still ends
+KILL_TIMEOUT_S = 10                           # after a timeout: seconds to wait for the killed tree's pipe
 PYTHON_ERROR_PATTERN = r"\]LogPython: Error"
 # Engine plugins' own Python start-up chatter, not the script's output
 PYTHON_STARTUP_NOISE = r"Display: |Python enabled|Using Python|registering <class"
@@ -165,16 +171,52 @@ def game_name():
     return up.stem if up else "Game"
 
 
+# A child run with a timeout leads its own process group on Linux/macOS, so a timeout can kill its whole tree
+NEW_SESSION = sys.platform != "win32"
+
+
+def kill_tree(proc):
+    """Kill proc and everything it started. A grandchild still holding our stdout pipe (a test exe, a
+    worker, an editor helper) would otherwise keep communicate() waiting after proc itself is dead."""
+    if sys.platform == "win32":
+        try:                               # /T: the whole tree under proc; Popen holds the handle, so the PID is still ours
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], stdin=subprocess.DEVNULL,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8", errors="replace",
+                           timeout=KILL_TIMEOUT_S)
+        except (OSError, subprocess.SubprocessError) as exc:
+            dbg(f"taskkill: {exc}")
+    else:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+        except OSError as exc:
+            dbg(f"killpg: {exc}")
+    try:
+        proc.kill()
+    except OSError:
+        pass
+
+
+def reap(proc):
+    """After kill_tree: the output so far, waiting at most KILL_TIMEOUT_S for the pipe to close."""
+    try:
+        out, _ = proc.communicate(timeout=KILL_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        out = None                         # something outside the tree still holds the pipe: give up on the tail
+    return out
+
+
 def run(cmd, capture=False, timeout=None):
-    """Run a command in the project root. 124 = timed out, 126 = not executable, 127 = not found."""
+    """Run a command in the project root. 124 = timed out (output so far is returned), 126 = not executable,
+    127 = not found."""
     dbg("run: " + " ".join(str(c) for c in cmd))
     sys.stdout.flush()                     # keep our lines ahead of the child's when piped
     try:
-        proc = subprocess.run(
-            [str(c) for c in cmd], cwd=ROOT, text=True, encoding="utf-8", errors="replace", timeout=timeout,
+        proc = subprocess.Popen(
+            [str(c) for c in cmd], cwd=ROOT, text=True, encoding="utf-8", errors="replace",
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE if capture else None,
             stderr=subprocess.STDOUT if capture else None,
+            start_new_session=NEW_SESSION and timeout is not None,
         )
     except FileNotFoundError as exc:
         print(f"[error] cannot execute {cmd[0]}: {exc}", file=sys.stderr)
@@ -183,10 +225,17 @@ def run(cmd, capture=False, timeout=None):
         print(f"[error] cannot execute {cmd[0]}: {exc.strerror or exc} (not a file, or not executable: chmod +x)",
               file=sys.stderr)
         return 126, ""
-    except subprocess.TimeoutExpired:
-        print(f"[error] timed out after {timeout}s", file=sys.stderr)
-        return 124, ""
-    return proc.returncode, (proc.stdout or "")
+    try:
+        out, _ = proc.communicate(timeout=timeout)
+    except (subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
+        # The editor's children (shader workers, crash reporter) hold the pipe too: kill the tree
+        kill_tree(proc)
+        out = reap(proc)
+        if isinstance(exc, KeyboardInterrupt):
+            raise
+        print(f"[FAIL] no exit after {timeout} s (a hang): {' '.join(str(c) for c in cmd[:1])} ...")
+        return 124, out or ""
+    return proc.returncode, (out or "")
 
 
 def run_tee(cmd):
@@ -223,6 +272,28 @@ def preflight(need_uproject=True):
         if bad:
             return (f"the project or engine path contains {' '.join(bad)}, which cmd.exe treats as syntax "
                     "(Build.bat/RunUAT.bat would split or run it). Move it to a path without these characters.")
+        err = unsafe_bat_names()
+        if err:
+            return err
+    return None
+
+
+def unsafe_bat_names(uproject=None, target=None):
+    """Exit-2 message when the .uproject file name or the editor target name holds a cmd.exe metacharacter,
+    else None. Both go on the Build.bat/RunUAT.bat command line next to ROOT, so they need the same check.
+    The arguments default to what find_uproject() and target_name() report (tests pass names directly)."""
+    up = uproject if uproject is not None else find_uproject()
+    tgt = target if target is not None else target_name()
+    checks = []
+    if up:
+        checks.append(("project file", Path(up).name))
+    if tgt:
+        checks.append(("build target file", f"Source/{tgt}.Target.cs"))   # the target name comes from this file name
+    for label, name in checks:
+        bad = sorted(set(CMD_METACHARS) & set(Path(name).name))
+        if bad:
+            return (f"the {label} {name} contains {' '.join(bad)}, which cmd.exe treats as syntax "
+                    "(Build.bat/RunUAT.bat would split or run it). Rename it to use only letters, digits and _.")
     return None
 
 
@@ -310,7 +381,10 @@ def run_automation(filter_, args, until=None, fail_on=None):
         print(out)
     fails = [l for l in out.splitlines() if any(re.search(p, l) for p in FAIL_PATTERNS)]
     oks = len(re.findall(OK_PATTERN, out))
-    if rc in (124,) + NO_EXEC:
+    if rc == 124:
+        print(f"[FAIL] the editor hung; the log so far is in {AUTOMATION_LOG}")
+        return 1
+    if rc in NO_EXEC:
         return 2
     why = module_missing(out)
     if why:
@@ -375,7 +449,10 @@ def cmd_exec(args):
            "-unattended", "-nopause", "-nosplash", f"-abslog={EXEC_LOG}"]
     rc, out = run(cmd, capture=True, timeout=EXEC_TIMEOUT_S)
     log = EXEC_LOG.read_text(encoding="utf-8", errors="ignore") if EXEC_LOG.exists() else ""
-    if rc in (124,) + NO_EXEC:
+    if rc == 124:
+        print(f"[FAIL] the editor hung; the log so far is in {EXEC_LOG}")
+        return 1
+    if rc in NO_EXEC:
         return 2
     why = module_missing(log + out)
     if why:
@@ -510,7 +587,8 @@ def cmd_doctor(args):
         problems += 1
     print(f"[{' OK ' if shutil.which('git') else 'FAIL'}] git")
     problems += 0 if shutil.which("git") else 1
-    lfs = subprocess.run(["git", "lfs", "version"], capture_output=True, text=True).returncode == 0 if shutil.which("git") else False
+    lfs = subprocess.run(["git", "lfs", "version"], capture_output=True, encoding="utf-8",
+                         errors="replace").returncode == 0 if shutil.which("git") else False
     print(f"[{' OK ' if lfs else 'WARN'}] git-lfs {'installed' if lfs else 'NOT installed (needed for Content/)'}")
     print(f"[{' OK ' if (ROOT / '.gitattributes').exists() else 'WARN'}] .gitattributes (LFS rules)")
     doctor = ROOT / "tools" / "doctor.py"

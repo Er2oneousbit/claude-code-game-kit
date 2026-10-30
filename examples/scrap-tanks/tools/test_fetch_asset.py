@@ -4,6 +4,10 @@
 # Purpose : Exam for fetch_asset.py, offline: a local zip served by file:// URL is
 #           listed, picked files are copied, license evidence and the ASSET_LOG row
 #           are written; NC licenses, overwrites and zip path escapes are refused.
+#           Security regressions: ".." / absolute / drive entries refuse the pack, --to and
+#           --license-file stay inside the project and the pack, URL credentials and query
+#           strings are not recorded (--page keeps its query, loses its login), names Windows cannot
+#           store and case-only duplicates are refused.
 # Usage   : python tools/test_fetch_asset.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -197,9 +201,110 @@ class FetchAssetExam(unittest.TestCase):
             zf.writestr("../../escaped.txt", "x")
         self.url = evil.as_uri()
         rc, out = self.fetch("--list")
-        self.assertEqual(rc, 1)
-        self.assertIn("escapes", out)
+        self.assertEqual(rc, 2)
+        self.assertIn("unsafe path", out)
         self.assertFalse((Path(self.tmp.name) / "escaped.txt").exists())
+
+    # Regressions from the 2026-10-30 security pass
+    def evil_pack(self, entries):
+        evil = Path(self.tmp.name) / "evil.zip"
+        with zipfile.ZipFile(evil, "w") as zf:
+            for name, data in entries:
+                zf.writestr(name, data)
+        self.url = evil.as_uri()
+
+    def test_dotdot_inside_base_cannot_plant_project_files(self):
+        # zipfile drops the ".." on extract (source = the root-level file) while --base kept it (dest = project root)
+        self.evil_pack([("License.txt", "CC0"), ("Models/GLB format/crate.glb", b"glb"),
+                        (".claude/settings.local.json", b'{"hooks": "PWNED"}'),
+                        ("Models/GLB format/../../.claude/settings.local.json", b"x")])
+        rc, out = self.good("--take", "Models/GLB format/*", "--base", "Models/GLB format", "--to", "assets/models")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("unsafe path", out)
+        self.assertFalse((self.root / ".claude").exists(), "nothing planted in the project")
+        self.assertFalse((self.root / "assets").exists())
+        self.assertNotIn("A-0001 | tileset", self.log())
+
+    def test_absolute_drive_and_backslash_entries_refused(self):
+        for name in ("/etc/x.txt", "C:/Windows/x.txt", "c:x.txt", "\\x.txt", "a\\..\\..\\x.txt"):
+            self.evil_pack([(name, b"x")])
+            rc, out = self.fetch("--list")
+            self.assertEqual(rc, 2, f"{name}: {out}")
+            self.assertIn("unsafe path", out, name)
+
+    def test_to_outside_project_is_usage_error(self):
+        for to in ("../outside", str(Path(self.tmp.name) / "elsewhere"), "assets/../..", "."):
+            rc, out = self.fetch("--page", "p", "--author", "K", "--license", "CC0", "--to", to,
+                                 "--take", "Tiles/tile_0001.png")
+            self.assertEqual(rc, 2, f"{to}: {out}")
+            self.assertIn("not a folder inside the project", out, to)
+        self.assertFalse((Path(self.tmp.name) / "outside").exists())
+        self.assertFalse((Path(self.tmp.name) / "elsewhere").exists())
+
+    def test_license_file_must_be_a_pack_entry(self):
+        local = Path(self.tmp.name) / "local_secret.txt"
+        local.write_text("CC0 but really a local file", encoding="utf-8")
+        for name in (str(local), "../../local_secret.txt"):
+            rc, out = self.good("--take", "Tiles/tile_0001.png", "--license-file", name)
+            self.assertEqual(rc, 2, out)
+            self.assertIn("is not in the pack", out)
+        self.assertFalse((self.root / "docs/licenses").exists())
+        rc, out = self.good("--take", "Tiles/tile_0001.png", "--license-file", "License.txt")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("Creative Commons Zero", (self.root / "docs/licenses/A-0001.txt").read_text(encoding="utf-8"))
+
+    def test_url_credentials_and_query_not_recorded(self):
+        real = fetch_asset.download
+        fetch_asset.download = lambda url, cache: real(self.zip.as_uri(), cache)   # stand-in host, offline
+        try:
+            self.url = "https://user:hunter2@cdn.example/dl/pack.zip?X-Amz-Signature=SECRETSIG#frag"
+            rc, out = self.fetch("--author", "K", "--license", "CC0", "--to", "assets/art",
+                                 "--take", "Tiles/tile_0001.png")   # no --page: the URL goes into the row
+        finally:
+            fetch_asset.download = real
+        self.assertEqual(rc, 0, out)
+        evidence = (self.root / "docs/licenses/A-0001.txt").read_text(encoding="utf-8")
+        for text in (evidence, self.log(), out):
+            for secret in ("hunter2", "user:", "SECRETSIG", "X-Amz", "frag"):
+                self.assertNotIn(secret, text)
+        self.assertIn("Download : https://cdn.example/dl/pack.zip\n", evidence)
+        self.assertIn("| https://cdn.example/dl/pack.zip |", self.log())
+
+    def test_page_recorded_without_login_but_with_query(self):
+        page = "https://me:hunter2@store.example/asset?id=42&lang=en#license"
+        rc, out = self.fetch("--page", page, "--author", "K", "--license", "CC0", "--to", "assets/art",
+                             "--take", "Tiles/tile_0001.png")
+        self.assertEqual(rc, 0, out)
+        evidence = (self.root / "docs/licenses/A-0001.txt").read_text(encoding="utf-8")
+        for text in (evidence, self.log(), out):
+            self.assertNotIn("hunter2", text)
+            self.assertNotIn("me:", text)
+        self.assertIn("Page     : https://store.example/asset?id=42&lang=en#license\n", evidence)
+        self.assertIn("| https://store.example/asset?id=42&lang=en#license |", self.log())
+        self.assertEqual(fetch_asset.redact_page("the itch.io page, see notes"), "the itch.io page, see notes")
+
+    def test_names_windows_cannot_store_refused(self):
+        self.evil_pack([("License.txt", "CC0"), ("evil|x.png", b"x"), ("a\nb.png", b"x"), ("ads.png:stream", b"x")])
+        for name in ("evil|x.png", "a\nb.png", "ads.png:stream"):
+            rc, out = self.good("--take", name)
+            self.assertEqual(rc, 1, out)
+            self.assertIn("Windows cannot store", out)
+        self.assertNotIn("evil", self.log())
+        self.assertFalse((self.root / "assets").exists())
+
+    def test_row_cells_escaped(self):
+        rc, out = self.good("--take", "Tiles/tile_0001.png", "--notes", "a | b")
+        self.assertEqual(rc, 0, out)
+        row = next(l for l in self.log().splitlines() if l.startswith("| A-0001"))
+        self.assertEqual(row.replace("\\|", "").count("|"), 12, row)
+        self.assertEqual(fetch_asset.md_cell("x|y\nz"), "x\\|y z")
+
+    def test_case_folded_duplicate_destinations_refused(self):
+        self.evil_pack([("License.txt", "CC0"), ("Tiles/A.png", b"FIRST"), ("tiles2/a.png", b"SECOND")])
+        rc, out = self.good("--take", "Tiles/A.png", "--take", "tiles2/a.png")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("share a name (ignoring case)", out)
+        self.assertFalse((self.root / "assets").exists(), "refused before copying")
 
 
 if __name__ == "__main__":

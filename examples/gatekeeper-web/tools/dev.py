@@ -25,11 +25,14 @@
 #   verify node (>= MIN_NODE) -> ensure node_modules -> run the tool -> parse its output
 #   for proof (TS error count, Vitest test count, smoke marker) -> exit code
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
+#           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
 # ---------------------------------------------------------------------------
 import argparse
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import traceback
@@ -45,6 +48,7 @@ SMOKE_TIMEOUT_S = 180                     # whole smoke run, including browser s
 SMOKE_MIN_FPS = 20                        # slowest headless software rendering we allow for: --frames adds frames/20 s
 TEST_TIMEOUT_S = 600
 INSTALL_TIMEOUT_S = 900
+KILL_TIMEOUT_S = 10                       # after a timeout: seconds to wait for the killed tree's pipe
 TOOLS = {                                 # project-local entry points, run with node
     "tsc": "node_modules/typescript/bin/tsc",
     "vite": "node_modules/vite/bin/vite.js",
@@ -61,6 +65,40 @@ def dbg(msg):
         print(f"[debug] {msg}")
 
 
+# A child run with a timeout leads its own process group on Linux/macOS, so a timeout can kill its whole tree
+NEW_SESSION = sys.platform != "win32"
+
+
+def kill_tree(proc):
+    """Kill proc and everything it started. A grandchild still holding our stdout pipe (a test exe, a
+    worker, an editor helper) would otherwise keep communicate() waiting after proc itself is dead."""
+    if sys.platform == "win32":
+        try:                               # /T: the whole tree under proc; Popen holds the handle, so the PID is still ours
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], stdin=subprocess.DEVNULL,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8", errors="replace",
+                           timeout=KILL_TIMEOUT_S)
+        except (OSError, subprocess.SubprocessError) as exc:
+            dbg(f"taskkill: {exc}")
+    else:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+        except OSError as exc:
+            dbg(f"killpg: {exc}")
+    try:
+        proc.kill()
+    except OSError:
+        pass
+
+
+def reap(proc):
+    """After kill_tree: the output so far, waiting at most KILL_TIMEOUT_S for the pipe to close."""
+    try:
+        out, _ = proc.communicate(timeout=KILL_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        out = None                         # something outside the tree still holds the pipe: give up on the tail
+    return out
+
+
 def run(cmd, capture=False, timeout=None):
     """Run a command in the project root. Returns (returncode, output_or_empty).
 
@@ -74,6 +112,7 @@ def run(cmd, capture=False, timeout=None):
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE if capture else None,
             stderr=subprocess.STDOUT if capture else None,
+            start_new_session=NEW_SESSION and timeout is not None,
         )
     except FileNotFoundError as exc:
         print(f"[error] cannot execute {cmd[0]}: {exc}", file=sys.stderr)
@@ -84,8 +123,8 @@ def run(cmd, capture=False, timeout=None):
     try:
         out, _ = proc.communicate(timeout=timeout)
     except (subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
-        proc.kill()
-        out, _ = proc.communicate()
+        kill_tree(proc)
+        out = reap(proc)
         if isinstance(exc, KeyboardInterrupt):
             print("\n".join((out or "").splitlines()[-20:]))
             raise

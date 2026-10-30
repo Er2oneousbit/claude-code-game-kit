@@ -142,7 +142,10 @@ def check_assets(warnings, assets_dir, debug):
     filled = [r for r in rows if len(r.split("|")) > 3 and r.split("|")[3].strip()]
     log(debug, f"{len(files)} media files, {len(filled)} filled asset log rows")
     if files and not filled:
-        warnings.append(f"{len(files)} media file(s) under {assets_dir}/ but ASSET_LOG.md has no real entries (run /asset-intake)")
+        # Dotwork packs log themselves from their manifest; point there instead of the hand-written route
+        hint = ("run `python tools/art/dotwork/dotwork.py log --pack NAME` for each Dotwork pack, /asset-intake for the rest"
+                if list((ROOT / "assets_src" / "dotwork").glob("manifest_*.json")) else "run /asset-intake")
+        warnings.append(f"{len(files)} media file(s) under {assets_dir}/ but ASSET_LOG.md has no real entries ({hint})")
 
 
 def check_doc_links(warnings, debug, ignore):

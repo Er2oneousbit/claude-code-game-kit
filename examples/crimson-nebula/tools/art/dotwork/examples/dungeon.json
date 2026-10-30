@@ -1,0 +1,137 @@
+{
+ "name": "dungeon",
+ "_comment": "Mine dungeon: gravel floor, rock wall face (cliff style), dark rock tops (walltop), mine-cart rails (connector drawn in code) and props placed by the map. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "props": [
+  {
+   "name": "mine_cart",
+   "prompt": "a rusty iron mine cart full of ore on rail wheels",
+   "size": 40,
+   "seed": 4600
+  },
+  {
+   "name": "mine_lantern",
+   "prompt": "an iron lantern hanging from a wooden post",
+   "size": 48,
+   "seed": 4601,
+   "footprint": "trunk"
+  },
+  {
+   "name": "ore_pile",
+   "prompt": "a pile of glittering blue ore rocks",
+   "size": 32,
+   "seed": 4602
+  },
+  {
+   "name": "support_beam",
+   "prompt": "a wooden mine support beam frame",
+   "size": 56,
+   "seed": 4603,
+   "footprint": "trunk",
+   "holes": true
+  }
+ ],
+ "ground": {
+  "name": "mine",
+  "base": [
+   {
+    "material": "mine_floor",
+    "variants": 4,
+    "surface": "gravel"
+   }
+  ],
+  "overlays": [
+   {
+    "material": "cliff_rock",
+    "name": "mine_wall",
+    "style": "cliff",
+    "solid": true,
+    "variants": 3
+   },
+   {
+    "material": "cave_rock_top",
+    "name": "rock_top",
+    "style": "walltop",
+    "solid": true,
+    "variants": 2
+   },
+   {
+    "name": "rail",
+    "style": "rail",
+    "surface": "rail"
+   }
+  ],
+  "map": {
+   "name": "mine_tunnel",
+   "seed": 11,
+   "legend": {
+    " ": [
+     "none"
+    ],
+    "T": [
+     "none",
+     "rock_top"
+    ],
+    "K": [
+     "none",
+     "mine_wall"
+    ],
+    "f": [
+     "mine_floor"
+    ],
+    "r": [
+     "mine_floor",
+     "rail"
+    ]
+   },
+   "rows": [
+    "TTTTTTTTTTTTTTTTTTTT",
+    "TKKKKKKKKKKKKKKKKKKT",
+    "TKKKKKKKKKKKKKKKKKKT",
+    "TffffffffffffffffffT",
+    "TfrrrrrrrrrrrrrrrrfT",
+    "TffffffffffffffffrfT",
+    "TffffffffffffffffrfT",
+    "TTTTTTTTffffTTTTTrTT",
+    "       TffffT    r  ",
+    "       TTTTTT       "
+   ],
+   "props": [
+    {
+     "prop": "mine_cart",
+     "at": [
+      6,
+      4
+     ]
+    },
+    {
+     "prop": "mine_lantern",
+     "at": [
+      3,
+      3
+     ]
+    },
+    {
+     "prop": "mine_lantern",
+     "at": [
+      14,
+      3
+     ]
+    },
+    {
+     "prop": "ore_pile",
+     "at": [
+      10,
+      6
+     ]
+    },
+    {
+     "prop": "support_beam",
+     "at": [
+      9,
+      3
+     ]
+    }
+   ]
+  }
+ }
+}

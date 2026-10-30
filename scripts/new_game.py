@@ -25,12 +25,15 @@
 #   -> for each: new -> write; same -> skip; upgrade + untouched hash -> replace;
 #      adopt/upgrade + differs -> <file>.gold; else --force or error (all writes atomic)
 #   -> merge .gitignore and .claude/settings.json, write metadata
-#   -> verify no unresolved placeholders in written files -> print next steps
+#   -> verify no unresolved placeholders in the rendered kit content -> print next steps
 # Authored: Written with Claude (Sonnet 5.5, claude-sonnet-5-5)
 # Updated : 2026-10-21 with Claude (Opus 5.5, claude-opus-5-5): UTF-8 output, accent-folding slugs
 #           and --slug, control-character checks on --name/--author, adopt appends to .gitignore
 #           without rewriting it, engine adopt_hints. Audit pass 5: .gold suffix engines ignore,
 #           --upgrade with content hashes, atomic writes, stable DATE on re-adopt, dest outside the kit
+#           2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): CRLF folded before profile substitution,
+#           placeholder check on the rendered plan (also on re-runs), .gold reuse folds CRLF only for text,
+#           backtick and */ rejected in names and authors, more reserved slugs (CMake targets, Windows devices)
 # ---------------------------------------------------------------------------
 import argparse
 import datetime
@@ -44,7 +47,7 @@ import traceback
 import unicodedata
 from pathlib import Path
 
-KIT_VERSION = "0.6.1"  # bump with CHANGELOG.md entries
+KIT_VERSION = "0.7.0"  # bump with CHANGELOG.md entries
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CORE_DIR = REPO_ROOT / "core"
 ENGINES_DIR = REPO_ROOT / "engines"
@@ -77,6 +80,11 @@ RESERVED_SLUGS = {
     "async", "await", "become", "box", "crate", "dyn", "final", "fn", "gen", "impl", "let", "loop", "macro",
     "match", "mod", "move", "mut", "priv", "pub", "self", "super", "trait", "type", "unsized", "use", "where",
     "yield", "std", "alloc", "proc_macro", "bevy",
+    # More CMake utility targets (Visual Studio and Ninja generators) a game target must not shadow
+    "all_build", "zero_check", "run_tests", "edit_cache", "rebuild_cache",
+    # Windows device names: a file or folder named after the slug (con.exe, nul/) cannot be created
+    "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
+    "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
 }
 SKIP_SUFFIXES = {".pyc"}
 
@@ -119,7 +127,8 @@ def make_slug(name, override=None):
         if not re.fullmatch(r"[a-z][a-z0-9_]*", override):
             raise ScaffoldError("--slug must be lowercase letters, digits and _, starting with a letter (e.g. my_game)")
         if override in RESERVED_SLUGS:
-            raise ScaffoldError(f"--slug {override!r} is reserved (a CMake target, C# or Rust keyword, or crate name); try {override}_game")
+            raise ScaffoldError(f"--slug {override!r} is reserved (a CMake target, C# or Rust keyword, crate name, or "
+                                f"Windows device name); try {override}_game")
         return override
     # Fold accents to ASCII first so letters are kept, not dropped (é -> e, Ō -> O)
     folded = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
@@ -130,7 +139,8 @@ def make_slug(name, override=None):
     if not slug[0].isalpha():
         slug = "game_" + slug
     if slug in RESERVED_SLUGS:
-        print(f"[info] '{slug}' is reserved (a CMake target, C# or Rust keyword, or crate name); using slug '{slug}_game' "
+        print(f"[info] '{slug}' is reserved (a CMake target, C# or Rust keyword, crate name, or Windows device name); "
+              f"using slug '{slug}_game' "
               f"(pass --slug to choose another)")
         slug += "_game"
     return slug
@@ -147,12 +157,23 @@ def validate_text_arg(flag, value):
         raise ScaffoldError(f"{flag} must not contain control characters (newlines, tabs, escapes)")
 
 
+def validate_comment_safe(flag, value):
+    """Reject `*/`: names and authors land inside /* */ plugin headers (rpgmaker-mz), where it ends the comment early."""
+    if "*/" in value:
+        raise ScaffoldError(f"{flag} must not contain '*/' (it ends the /* */ comment the value is written into, "
+                            "e.g. the RPG Maker MZ plugin header, and breaks the code)")
+
+
 def validate_name(name):
     if not name or not name.strip():
         raise ScaffoldError("--name must not be empty")
     validate_text_arg("--name", name)
     if any(ch in name for ch in '"\\{}'):
         raise ScaffoldError('--name must not contain quotes, backslashes, or braces (they break generated config files)')
+    if "`" in name:
+        raise ScaffoldError("--name must not contain a backtick (the name lands inside JavaScript template literals, "
+                            "e.g. the RPG Maker MZ boot log line, where a backtick ends the string)")
+    validate_comment_safe("--name", name)
 
 
 def substitute(text, mapping):
@@ -190,6 +211,7 @@ def load_profile(path):
     for flag, val in [("profile author", prof["author"]), ("profile footer", prof["footer"])] + \
             [("profile style line", s) for s in prof["style"]]:
         validate_text_arg(flag, val)
+    validate_comment_safe("profile author", prof["author"])
     return prof
 
 
@@ -247,19 +269,24 @@ def atomic_write(path, data):
             tmp.unlink()
 
 
-def gold_name(rel, dest, data):
+def gold_name(rel, dest, data, is_text):
     """Conflict copy name the engines ignore: x.gd -> x.gd.gold, then x.gd.gold2, ...
 
     Returns (alt, already_there). An existing .gold with the same content is reused; one the user
-    edited (mid-merge) is never overwritten: the next free number is used instead.
+    edited (mid-merge) is never overwritten: the next free number is used instead. CRLF is folded
+    only for text (a PNG's signature holds a CRLF, so folding binary data never matched an identical copy).
     """
     for n in range(1, 100):
         alt = rel.with_name(rel.name + GOLD_SUFFIX + ("" if n == 1 else str(n)))
         p = dest / alt
         if not p.exists():
             return alt, False
-        if p.is_file() and p.read_bytes().replace(b"\r\n", b"\n") == data:
-            return alt, True
+        if p.is_file():
+            existing = p.read_bytes()
+            if is_text:
+                existing = existing.replace(b"\r\n", b"\n")
+            if existing == data:
+                return alt, True
     raise ScaffoldError(f"too many .gold copies of {rel}; merge or delete them first")
 
 
@@ -278,7 +305,7 @@ class Writer:
         self.hashes = {}            # rel -> hash of the kit version now in place (feeds the next --upgrade)
         self.created, self.skipped, self.conflicts, self.overridden, self.upgraded = [], [], [], [], []
         self.kept_deleted = []      # --upgrade: kit files the project deleted on purpose, left out
-        self.written = []           # every path this run wrote (placeholder check scans only these)
+        self.written = []           # every path this run wrote (listed by --debug)
 
     def _write(self, rel, data):
         dbg(f"write {rel}")
@@ -322,7 +349,7 @@ class Writer:
             self.hashes[key] = prev
             return
         if self.mode in ("adopt", "upgrade"):
-            alt, already_there = gold_name(rel, self.dest, data)
+            alt, already_there = gold_name(rel, self.dest, data, is_text)
             if not already_there:
                 self._write(alt, data)
             self.conflicts.append((key, alt.as_posix(), not already_there))
@@ -351,8 +378,9 @@ def plan_tree(plan, base, mapping, label):
             continue
         if key in plan:
             dbg(f"{label} overrides {key}")
-        # Generated text is always LF, whatever line endings the kit checkout has
-        plan[key] = (substitute(text, mapping).replace("\r\n", "\n").encode("utf-8"), True)
+        # Generated text is always LF, whatever line endings the kit checkout has. Fold BEFORE substituting: the
+        # profile-line patterns ({{FOOTER}}, {{FOOTER_RULE}}, ...) match LF line ends only
+        plan[key] = (substitute(text.replace("\r\n", "\n"), mapping).encode("utf-8"), True)
 
 
 def merge_gitignore(writer, core_text, engine_text):
@@ -408,17 +436,18 @@ def merge_settings(writer, core_settings, patch):
     writer.created.append(".claude/settings.json")
 
 
-def verify_no_placeholders(dest, written):
-    """Return 'relpath: [tokens]' for unresolved {{PLACEHOLDERS}} in files this run wrote (never the user's own files)."""
+def verify_no_placeholders(plan):
+    """Return 'relpath: [tokens]' for unresolved {{PLACEHOLDERS}} in the kit content this run rendered.
+
+    Scans the in-memory plan {rel: (bytes, is_text)}, not the files on disk: a second --adopt or --upgrade writes
+    nothing for files already in place, and a broken kit placeholder must still be reported. Never reads the
+    user's own files.
+    """
     problems = []
-    for rel in written:
-        if Path(rel).name.startswith("doctor.py"):
-            continue  # doctor.py contains the placeholder pattern on purpose (and so does its .gold copy)
-        try:
-            text = (dest / rel).read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
-            continue
-        hits = sorted(set(PLACEHOLDER_RE.findall(text)))
+    for rel, (data, is_text) in sorted(plan.items()):
+        if not is_text or Path(rel).name == "doctor.py":
+            continue  # doctor.py contains the placeholder pattern on purpose
+        hits = sorted(set(PLACEHOLDER_RE.findall(data.decode("utf-8", "replace"))))
         if hits:
             problems.append(f"{rel}: {hits}")
     return problems
@@ -466,6 +495,7 @@ def scaffold(args):
     validate_name(args.name)
     if args.author is not None:
         validate_text_arg("--author", args.author)
+        validate_comment_safe("--author", args.author)
     if args.engine not in engines:
         raise ScaffoldError(f"unknown engine {args.engine!r}. Available: {', '.join(engines)}")
     if not CORE_DIR.exists():
@@ -528,7 +558,8 @@ def scaffold(args):
         src = edir / meta.get(key, "")
         if not src.is_file():
             raise ScaffoldError(f"engine {args.engine}: missing {meta.get(key)!r}")
-        plan[out_name] = (substitute(src.read_text(encoding="utf-8"), mapping).replace("\r\n", "\n").encode("utf-8"), True)
+        # LF first, then substitute (same reason as plan_tree)
+        plan[out_name] = (substitute(src.read_text(encoding="utf-8").replace("\r\n", "\n"), mapping).encode("utf-8"), True)
     skel = edir / meta.get("skeleton_dir", "skeleton")
     if skel.is_dir():
         plan_tree(plan, skel, mapping, "engine")
@@ -543,7 +574,8 @@ def scaffold(args):
     # 5) Merged files
     core_ignore = (CORE_DIR / ".gitignore").read_text(encoding="utf-8")
     ignore_extra = edir / meta.get("gitignore_append", "gitignore.append")
-    merge_gitignore(writer, core_ignore, ignore_extra.read_text(encoding="utf-8") if ignore_extra.is_file() else "")
+    engine_ignore = ignore_extra.read_text(encoding="utf-8") if ignore_extra.is_file() else ""
+    merge_gitignore(writer, core_ignore, engine_ignore)
     core_settings = json.loads((CORE_DIR / ".claude" / "settings.json").read_text(encoding="utf-8"))
     patch_file = edir / meta.get("settings_patch", "settings.patch.json")
     patch = json.loads(patch_file.read_text(encoding="utf-8")) if patch_file.is_file() else {}
@@ -579,7 +611,9 @@ def scaffold(args):
         git_init(dest)
 
     # 8) Verify + report
-    unresolved = [] if args.dry_run else verify_no_placeholders(dest, writer.written)
+    # Kit content only: the plan, plus the kit's .gitignore text (settings JSON is never substituted)
+    plan[".gitignore"] = ((core_ignore + "\n" + engine_ignore).encode("utf-8"), True)
+    unresolved = verify_no_placeholders(plan)
     report(args, dest, writer, unresolved, meta.get("adopt_hints", {}), meta.get("setup_step"))
     return 1 if unresolved else 0
 

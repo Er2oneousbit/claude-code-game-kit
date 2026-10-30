@@ -1,0 +1,21 @@
+{
+ "name": "scenes",
+ "_comment": "Full-screen backdrops: title, game over and a cutscene still (320x180 shown at 2x). Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "scenes": [
+  {
+   "name": "title",
+   "prompt": "a steampunk city of brass towers and smokestacks at dusk under a sky full of airships",
+   "seed": 8700
+  },
+  {
+   "name": "game_over",
+   "prompt": "a dark stormy sky over ruined brass gears, broken pipes and rubble, gloomy and quiet",
+   "seed": 8701
+  },
+  {
+   "name": "train_bridge",
+   "prompt": "a steam train crossing a tall stone bridge over a snowy mountain gorge at night under the stars",
+   "seed": 8702
+  }
+ ]
+}

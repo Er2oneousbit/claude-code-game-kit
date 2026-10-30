@@ -1,0 +1,28 @@
+{
+ "name": "spells",
+ "_comment": "Battle effects for additive blending: two one-shot spells and a big summon blast. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "effects": [
+  {
+   "name": "fire",
+   "subject": "a burst of orange and yellow flames erupting upward",
+   "motion": "the flames burst upward and flicker, embers fly off, then the fire dies down",
+   "keep": 6,
+   "seed": 9101
+  },
+  {
+   "name": "ice",
+   "subject": "a cluster of sharp pale blue ice crystals forming",
+   "motion": "sharp ice crystals grow outward from the center and sparkle, frost mist swirls",
+   "keep": 6,
+   "seed": 9102
+  },
+  {
+   "name": "summon_magma_burst",
+   "subject": "a huge eruption of molten orange magma and bright brass sparks",
+   "motion": "molten magma erupts upward and outward in a wide blast, brass sparks fly, then it settles",
+   "keep": 6,
+   "seed": 9301,
+   "size": 112
+  }
+ ]
+}

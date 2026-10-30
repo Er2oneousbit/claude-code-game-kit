@@ -3,18 +3,23 @@
 # test_fish_tts.py
 # Purpose : Exam for fish_tts.py, offline: the HTTP call is replaced by canned responses, so no key or
 #           balance is used. Checks the balance check, voice search, the TTS request (model header, body),
-#           saving, error mapping, and that the API key never lands in any output.
+#           saving, --log checks before anything is spent, error mapping, and that the API key never lands
+#           in any output. The redirect cases run the real HTTP call against stand-in servers on 127.0.0.1,
+#           still offline: the key must not follow a redirect off its https origin.
 # Usage   : python tools/audio/test_fish_tts.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 import contextlib
+import http.server
 import io
 import json
 import os
 import sys
 import tempfile
+import threading
 import unittest
+import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -140,6 +145,76 @@ class FishTtsExam(unittest.TestCase):
                                  "--log", "--root", self.dir)
         self.assertEqual(rc, 2)
         self.assertIn("ASSET_LOG.md not found", text)
+
+    def test_log_problems_stop_before_spending(self):
+        # Met in review: a missing ASSET_LOG was only noticed after the paid request
+        fake = Fake()
+        rc, text = self.run_tool(fake, "say", "--voice", "v", "--text", "x", "--out", self.dir / "a.wav",
+                                 "--log", "--root", self.dir)
+        self.assertEqual(rc, 2, text)
+        self.assertIn("ASSET_LOG.md not found", text)
+        self.assertEqual([c for c in fake.calls if c[0] == "POST"], [], "nothing spent")
+        self.assertFalse((self.dir / "a.wav").exists())
+        project = self.dir / "game"
+        (project / "docs").mkdir(parents=True)
+        (project / "docs" / "ASSET_LOG.md").write_text("# Asset Log\n", encoding="utf-8")
+        fake = Fake()
+        rc, text = self.run_tool(fake, "say", "--voice", "v", "--text", "x", "--out", self.dir / "outside.wav",
+                                 "--log", "--root", project)
+        self.assertEqual(rc, 2, text)
+        self.assertIn("inside the project", text)
+        self.assertEqual([c for c in fake.calls if c[0] == "POST"], [], "nothing spent")
+
+    def test_a_redirect_to_another_port_does_not_carry_the_key(self):
+        # The real http() against two stand-in servers on 127.0.0.1: the API answers 302 to the second one
+        seen = {}
+
+        class Elsewhere(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                seen["key"] = self.headers.get("Authorization")
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"voice")
+
+            def log_message(self, *a):
+                pass
+
+        other = http.server.HTTPServer(("127.0.0.1", 0), Elsewhere)
+
+        class Api(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                seen["api_key"] = self.headers.get("Authorization")
+                self.send_response(302)
+                self.send_header("Location", f"http://127.0.0.1:{other.server_port}/blob")
+                self.end_headers()
+
+            def log_message(self, *a):
+                pass
+
+        api = http.server.HTTPServer(("127.0.0.1", 0), Api)
+        for srv in (other, api):
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            status, _, data = self.real_http("GET", f"http://127.0.0.1:{api.server_port}/model", KEY)
+        finally:
+            for srv in (api, other):
+                srv.shutdown()
+                srv.server_close()
+        self.assertEqual((status, data), (200, b"voice"))
+        self.assertEqual(seen.get("api_key"), f"Bearer {KEY}", "the API itself gets the key")
+        self.assertIsNone(seen.get("key"), "the key must not follow a redirect to another port")
+
+    def test_redirect_rule_keeps_the_key_on_its_https_origin_only(self):
+        api = "https://api.fish.audio/v1/tts"
+        for new, rule in (("https://api.fish.audio/v1/other", "keep"), ("https://api.fish.audio:443/x", "keep"),
+                          ("https://api.fish.audio:8443/x", "strip"), ("https://storage.example/x", "strip"),
+                          ("http://api.fish.audio/v1/other", "refuse")):
+            self.assertEqual(ft.redirect_rule(api, new), rule, new)
+        req = urllib.request.Request(api, headers={"Authorization": f"Bearer {KEY}"})
+        with self.assertRaises(ft.ServiceError):
+            ft.KeepKeyOnHost().redirect_request(req, io.BytesIO(), 302, "Found", {}, "http://api.fish.audio/x")
+        new = ft.KeepKeyOnHost().redirect_request(req, io.BytesIO(), 302, "Found", {}, "https://storage.example/x")
+        self.assertNotIn("authorization", {h.lower() for h, _ in new.header_items()})
 
     def test_key_never_written_or_printed(self):
         out_path = self.dir / "a.mp3"

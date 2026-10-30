@@ -1,0 +1,16 @@
+{
+ "name": "mount",
+ "_comment": "A rideable walker through the character lane (idle + walk in 4 directions). Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "characters": [
+  {
+   "name": "steam_walker",
+   "prompt": "a small boxy two-legged steam walker vehicle with a riveted copper cabin, a round porthole window, a tall smokestack and chunky piston legs",
+   "seeds": 3,
+   "seed": 3400,
+   "actions": [
+    "idle",
+    "walk"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,236 @@
+{
+ "name": "interior",
+ "_comment": "House interior: floor base, wall tops (walltop style), the north wall face (wallface style), black void outside the room (legend 'none'), furniture fixtures seen from the top and wall pieces seen from the front. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "ground": {
+  "name": "inn",
+  "base": [
+   {
+    "material": "wood_planks",
+    "variants": 4,
+    "surface": "wood"
+   }
+  ],
+  "overlays": [
+   {
+    "material": "wallpaper_green",
+    "style": "wallface",
+    "solid": true,
+    "variants": 2
+   },
+   {
+    "material": "wall_top",
+    "style": "walltop",
+    "solid": true,
+    "variants": 1
+   }
+  ],
+  "fixtures": [
+   {
+    "name": "bookshelf",
+    "seed": 950,
+    "cells": [
+     2,
+     2
+    ],
+    "prompt": "a tall wooden bookshelf full of colorful books",
+    "solid": true
+   },
+   {
+    "name": "fireplace",
+    "seed": 951,
+    "cells": [
+     2,
+     2
+    ],
+    "prompt": "a stone fireplace with a crackling orange fire",
+    "solid": true
+   },
+   {
+    "name": "wall_clock",
+    "seed": 952,
+    "cells": [
+     1,
+     1
+    ],
+    "prompt": "a round brass wall clock with visible gears"
+   },
+   {
+    "name": "bed",
+    "seed": 953,
+    "cells": [
+     1,
+     2
+    ],
+    "view": "flat",
+    "prompt": "a long narrow single bed, tall vertical rectangle, white pillow at the top end, green blanket covering the rest, wooden frame",
+    "solid": true
+   },
+   {
+    "name": "rug",
+    "seed": 954,
+    "cells": [
+     3,
+     2
+    ],
+    "view": "flat",
+    "prompt": "a rectangular red rug with a gold border pattern"
+   },
+   {
+    "name": "table",
+    "cells": [
+     2,
+     1
+    ],
+    "view": "flat",
+    "prompt": "a short wide wooden table seen from directly above, wider than it is tall, a lit candle in the middle",
+    "solid": true,
+    "seed": 962
+   },
+   {
+    "name": "chair",
+    "cells": [
+     1,
+     1
+    ],
+    "view": "top",
+    "prompt": "a small wooden chair seen from above, its backrest at the bottom edge so the seat faces up toward a table above it",
+    "solid": true,
+    "seed": 961
+   },
+   {
+    "name": "barrel",
+    "seed": 957,
+    "cells": [
+     1,
+     1
+    ],
+    "view": "top",
+    "prompt": "a wooden barrel with iron bands",
+    "solid": true
+   },
+   {
+    "name": "plant",
+    "seed": 958,
+    "cells": [
+     1,
+     1
+    ],
+    "view": "top",
+    "prompt": "a green leafy potted plant in a clay pot",
+    "solid": true
+   }
+  ],
+  "map": {
+   "name": "inn_room",
+   "seed": 3,
+   "legend": {
+    " ": [
+     "none"
+    ],
+    "T": [
+     "none",
+     "wall_top"
+    ],
+    "w": [
+     "none",
+     "wallpaper_green"
+    ],
+    "f": [
+     "wood_planks"
+    ]
+   },
+   "rows": [
+    " TTTTTTTTTTTTTT ",
+    " TwwwwwwwwwwwwT ",
+    " TwwwwwwwwwwwwT ",
+    " TffffffffffffT ",
+    " TffffffffffffT ",
+    " TffffffffffffT ",
+    " TffffffffffffT ",
+    " TffffffffffffT ",
+    " TTTTTTffTTTTTT ",
+    "       ff       ",
+    "                "
+   ],
+   "objects": [
+    {
+     "fixture": "bookshelf",
+     "at": [
+      2,
+      1
+     ]
+    },
+    {
+     "fixture": "fireplace",
+     "at": [
+      6,
+      1
+     ]
+    },
+    {
+     "fixture": "wall_clock",
+     "at": [
+      10,
+      1
+     ]
+    },
+    {
+     "fixture": "bed",
+     "at": [
+      12,
+      3
+     ]
+    },
+    {
+     "fixture": "bed",
+     "at": [
+      10,
+      3
+     ]
+    },
+    {
+     "fixture": "rug",
+     "at": [
+      6,
+      4
+     ]
+    },
+    {
+     "fixture": "table",
+     "at": [
+      2,
+      5
+     ]
+    },
+    {
+     "fixture": "chair",
+     "at": [
+      2,
+      6
+     ]
+    },
+    {
+     "fixture": "chair",
+     "at": [
+      3,
+      6
+     ]
+    },
+    {
+     "fixture": "barrel",
+     "at": [
+      2,
+      3
+     ]
+    },
+    {
+     "fixture": "plant",
+     "at": [
+      13,
+      7
+     ]
+    }
+   ]
+  }
+ }
+}

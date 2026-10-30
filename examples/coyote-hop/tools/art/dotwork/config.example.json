@@ -1,0 +1,109 @@
+{
+ "_comment": "Dotwork defaults (Claude Code, Claude Opus 5.5). Copy the keys you want to change into <game>/art_src/dotwork/dotwork.config.json; never edit this file for one machine. Environment overrides: COMFYUI_URL, COMFYUI_ROOT, COMFYUI_PYTHON, SPRITEKILN_ROOT, GODOT_BIN, ASEPRITE_BIN, DOTWORK_WORK.",
+ "engine": "godot",
+ "project": {
+  "assets_dir": "assets",
+  "art_dir": "art",
+  "src_dir": "assets_src",
+  "work_dir": "art_src/dotwork",
+  "res_root": "res://assets"
+ },
+ "comfyui": {
+  "url": "http://127.0.0.1:8188",
+  "root": null,
+  "python": null,
+  "allow_remote": false,
+  "start_timeout_s": 240
+ },
+ "spritekiln_root": null,
+ "godot_bin": null,
+ "aseprite_bin": null,
+ "palette": null,
+ "env_palette": null,
+ "style_refs": [],
+ "min_free_ram_gb": 18,
+ "design": {
+  "character": {
+   "directions": [
+    "s",
+    "e",
+    "n",
+    "w"
+   ],
+   "mirror_west": true,
+   "actions": {
+    "idle": {
+     "fps": 8,
+     "loop": true
+    },
+    "walk": {
+     "fps": 8,
+     "loop": true
+    },
+    "attack": {
+     "fps": 10,
+     "loop": false
+    }
+   },
+   "fig_height": 66,
+   "canvas_min": [
+    72,
+    72
+   ],
+   "anchor": "feet_bottom_center",
+   "procedural_idle": [
+    "n"
+   ],
+   "style_ref": "style_refs"
+  },
+  "tile_px": 32,
+  "terrain_mode": "match_corners",
+  "prop": {
+   "longest_side": 48,
+   "canvas": 64
+  },
+  "effect": {
+   "size": 48,
+   "blend": "add",
+   "fps": 12
+  },
+  "icon_sizes": [
+   16,
+   32
+  ],
+  "portrait": 96
+ },
+ "action_map": {
+  "_comment": "design action name -> SpriteKiln/Wan action (wan_action) or a custom motion; 'attack' defaults to a kick for unarmed NPCs",
+  "idle": {
+   "wan_action": "idle"
+  },
+  "walk": {
+   "wan_action": "walk"
+  },
+  "run": {
+   "wan_action": "run"
+  },
+  "attack": {
+   "wan_action": "kick"
+  },
+  "punch": {
+   "wan_action": "custom",
+   "motion": "throws a strong straight punch forward with the leading arm, then pulls back to the fighting stance"
+  },
+  "hurt": {
+   "wan_action": "hurt"
+  },
+  "death": {
+   "wan_action": "death"
+  },
+  "cast": {
+   "wan_action": "custom",
+   "motion": "thrusts the staff straight forward as if casting a spell, holds it fully extended, then lowers it"
+  },
+  "shoot": {
+   "wan_action": "custom",
+   "motion": "raises the weapon to the shoulder and aims straight ahead, fires with a small recoil kick, then lowers it"
+  }
+ }
+}

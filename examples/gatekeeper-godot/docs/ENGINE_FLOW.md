@@ -31,8 +31,10 @@ Hot reload: the editor reloads changed scripts on focus. Running games started b
 Godot only learns class names on import, so without it valid code fails `check` and new test files are skipped.
 
 ## Setting up tests (GUT)
-1. Install GUT into `addons/gut/` (Asset Library or the GUT GitHub release for your Godot version; 9.7.1 works with Godot 4.7.2).
-   The folder must be `addons/gut/`, not the GUT files loose in `addons/`. The next `check`/`test` re-imports automatically.
+1. Install GUT into `addons/gut/`. Without the editor: download the release zip for your Godot version from
+   https://github.com/bitwes/Gut/releases (9.7.1 works with Godot 4.7.2) and copy the zip's `addons/gut/` folder into
+   the game's `addons/`. With the editor open: AssetLib tab, search "GUT", Download, Install. The folder must be
+   `addons/gut/`, not the GUT files loose in `addons/`. The next `check`/`test` re-imports automatically.
 2. Enable it under Project Settings > Plugins for the editor panel. The headless `dev.py test` works without enabling it.
 3. Tests live in `tests/`, files `test_*.gd`, extend `GutTest`, functions `test_*`. Example in `tests/test_coyote_timer.gd`.
 4. `python tools/dev.py test` runs them headless. Add `--filter <name>` to run one file.

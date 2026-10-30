@@ -26,7 +26,23 @@ examples were built and tested on one Windows 11 machine.
 - **Graphics drawn in code** (`tools/art/pixel_sprite.py`): exam passes, not yet used inside a game build.
 - **`tools/art/chroma_key.py`:** tested on synthetic images, not on real AI sprites.
 
+- **`tools/art/dotwork/`:** model lanes ran on one machine only (RTX 5060 Ti 16 GB, 64 GB RAM, Windows 11), and only
+  Godot gets engine resources (`--engine none` gives PNGs, sheets and the manifest). Art flaws open until re-rendered:
+  character clips with white background slabs ([#22](https://github.com/Er2oneousbit/claude-code-game-kit/issues/22)), the 8-direction vehicle set rotated one step
+  ([#23](https://github.com/Er2oneousbit/claude-code-game-kit/issues/23)), direction drift in some clips ([#24](https://github.com/Er2oneousbit/claude-code-game-kit/issues/24)), shadow flicker ([#25](https://github.com/Er2oneousbit/claude-code-game-kit/issues/25)), light-grey contact
+  shadows ([#26](https://github.com/Er2oneousbit/claude-code-game-kit/issues/26)), chest states drawn independently ([#27](https://github.com/Er2oneousbit/claude-code-game-kit/issues/27)), enemy shadow slabs ([#28](https://github.com/Er2oneousbit/claude-code-game-kit/issues/28)).
+- **Godot builds include `assets_src/`** review sheets and sources ([#29](https://github.com/Er2oneousbit/claude-code-game-kit/issues/29)).
+
+### Low-severity audit findings left for 0.7.x
+From the 2026-10-30 audit; each needs unusual input or a broken local file:
+side files overwritten without `--overwrite` ([#30](https://github.com/Er2oneousbit/claude-code-game-kit/issues/30)), tracebacks on malformed input ([#31](https://github.com/Er2oneousbit/claude-code-game-kit/issues/31)), small
+tool correctness bugs ([#32](https://github.com/Er2oneousbit/claude-code-game-kit/issues/32)), smoke and capture reporting success after a failed capture ([#33](https://github.com/Er2oneousbit/claude-code-game-kit/issues/33)),
+`yt_transcript.py` caption fallback and WebVTT cleanup ([#34](https://github.com/Er2oneousbit/claude-code-game-kit/issues/34)), web-3d `smoothDamp` overshoot
+([#35](https://github.com/Er2oneousbit/claude-code-game-kit/issues/35)), and an orphaned grandchild on a Windows timeout ([#36](https://github.com/Er2oneousbit/claude-code-game-kit/issues/36)).
+
 ### Tools with commands not yet run live
+- **`tools/art/comfy_local.py`:** `check` (with `--workflow`) ran live against ComfyUI 0.43.0; `run` and `strip`
+  only against the exam's stand-in server. A real `run` of a SpriteKiln workflow is the next step.
 - **`tools/art/pixellab.py`:** `image`, v3 `character`, `animate`, `animate-character`, top-down `tileset`, `ui`,
   `font`, `object`, `pixelate`, `tiles-pro`, `outfit`. It also lacks PixelLab's newer Pro Flash models, style images
   and pinned last frames (the MCP server has them; SOP-16 says which tool to use).

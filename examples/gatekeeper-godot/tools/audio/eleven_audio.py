@@ -16,7 +16,9 @@
 # Exit    : 0 ok, 1 the service failed (try again later), 2 usage, key, plan or quota problem
 # Notes   : Every request spends credits from your plan. --dry-run prints the request and sends nothing.
 #           Use a dedicated API key restricted to "Sound Effects" and "Music" (plus "User" read for
-#           `check`) with a credit limit, so a leaked key cannot do much. The key is never printed or saved.
+#           `check`) with a credit limit, so a leaked key cannot do much. The key is never printed or saved,
+#           and a redirect carries it only to the same https host and port (anywhere else it is dropped; a
+#           redirect from https to http is refused). --log checks ASSET_LOG and --root before any request.
 #           Licensing depends on YOUR plan (as of 2026-10, verify on elevenlabs.io): paid plans include a
 #           commercial license; free plans are non-commercial and need attribution, so --log marks those
 #           files PLACEHOLDER (replace them before release, SOP-04). The music API needs a paid plan
@@ -29,7 +31,7 @@
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
-#   parse command -> dry run? print request, stop
+#   parse command -> dry run? print request, stop -> --log? ASSET_LOG exists, outputs inside --root
 #   key from the environment (Windows: also the saved user variable) -> plan from /v1/user/subscription
 #   -> POST /v1/sound-generation or /v1/music -> save (mp3 as is; pcm -> WAV, optional crossfade loop)
 #   -> <out>.gen.json (prompt, model, date, plan, license, SHA-256) -> --log: ASSET_LOG row + evidence file
@@ -55,6 +57,7 @@ import fetch_asset  # noqa: E402  (shared ASSET_LOG helpers)
 
 API = "https://api.elevenlabs.io"
 KEY_ENV = "ELEVENLABS_API_KEY"
+KEY_HEADER = "xi-api-key"             # the request header that carries the key (lower case: how it is matched)
 TIMEOUT_S = 300                       # long music takes a while
 SFX_MODEL = "eleven_text_to_sound_v2"
 MUSIC_MODEL = "music_v1"
@@ -95,14 +98,50 @@ def get_key():
         return None
 
 
+def redirect_rule(old_url, new_url):
+    """'keep', 'strip' or 'refuse' for a redirect. The key may follow only to the same https origin (scheme, host
+    and port); anywhere else it is dropped, and a step down from https to plain http is refused outright."""
+    old, new = urllib.parse.urlsplit(old_url), urllib.parse.urlsplit(new_url)
+    if old.scheme == "https" and new.scheme != "https":
+        return "refuse"
+    try:
+        same = (new.scheme == "https" == old.scheme and old.hostname == new.hostname
+                and (old.port or 443) == (new.port or 443))
+    except ValueError:                    # a port that is not a number
+        return "refuse"
+    return "keep" if same else "strip"
+
+
+class KeepKeyOnHost(urllib.request.HTTPRedirectHandler):
+    """Follow redirects, but never carry the key off its origin: urllib copies every header (xi-api-key too) onto
+    the redirected request, so a redirect to another host, port or scheme would otherwise send it there."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        rule = redirect_rule(req.full_url, newurl)
+        if rule == "refuse":
+            fp.close()
+            target = urllib.parse.urlsplit(newurl)
+            raise ServiceError(f"ElevenLabs redirected to a non-https address ({target.scheme}://{target.hostname}); "
+                               "refusing it")
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and rule == "strip":
+            for store in (new.headers, new.unredirected_hdrs):
+                for name in [h for h in store if h.lower() == KEY_HEADER]:
+                    del store[name]
+        return new
+
+
+OPENER = urllib.request.build_opener(KeepKeyOnHost)
+
+
 def http(method, url, key, body=None):
     """(status, headers, bytes). Network errors raise ToolError. Kept small so the exam can replace it."""
     data = json.dumps(body).encode("utf-8") if body is not None else None
     req = urllib.request.Request(url, data=data, method=method,
-                                 headers={"xi-api-key": key, "Content-Type": "application/json",
+                                 headers={KEY_HEADER: key, "Content-Type": "application/json",
                                           "User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
+        with OPENER.open(req, timeout=TIMEOUT_S) as resp:
             return resp.status, dict(resp.headers), resp.read()
     except urllib.error.HTTPError as exc:
         return exc.code, dict(exc.headers or {}), exc.read() or b""
@@ -249,22 +288,29 @@ def outputs(args):
     return [out]
 
 
-def write_log(args, kind, files, meta, lic):
-    """ASSET_LOG row + docs/licenses/A-NNNN.txt evidence, using fetch_asset's helpers."""
+def log_targets(args, files):
+    """(root, ASSET_LOG path, `project/relative` names) for --log. Called before the first request too, so a
+    missing log or a file outside --root stops the run before any credits are spent."""
     root = Path(args.root).resolve()
     log_path = root / fetch_asset.ASSET_LOG
     if not log_path.is_file():
         raise ToolError(f"{fetch_asset.ASSET_LOG.as_posix()} not found under {root} (pass --root)")
-    log_text = log_path.read_text(encoding="utf-8")
-    num, fill = fetch_asset.next_asset_id(log_text)
-    asset_id = f"A-{num:04d}"
-    paid, license_text, attribution, placeholder = lic
     rels = []
     for f in files:
         try:
             rels.append(f"`{f.resolve().relative_to(root).as_posix()}`")
         except ValueError:
             raise ToolError(f"{f} is outside the project {root}; --log is for files that ship in the project")
+    return root, log_path, rels
+
+
+def write_log(args, kind, files, meta, lic):
+    """ASSET_LOG row + docs/licenses/A-NNNN.txt evidence, using fetch_asset's helpers."""
+    root, log_path, rels = log_targets(args, files)
+    log_text = log_path.read_text(encoding="utf-8")
+    num, fill = fetch_asset.next_asset_id(log_text)
+    asset_id = f"A-{num:04d}"
+    paid, license_text, attribution, placeholder = lic
     what = meta["text"] if kind == "sfx" else meta["prompt"]
     notes = "; ".join(x for x in ["PLACEHOLDER" if placeholder else "",
                                   f"prompt: {what}", f"model {meta['model_id']}", args.notes or ""] if x)
@@ -324,6 +370,8 @@ def cmd_generate(args, kind):
         print(f"[dry-run] body {json.dumps(body, ensure_ascii=False)}")
         print(f"[dry-run] would write {', '.join(str(f) for f in files)} ({len(files)} request(s), each spends credits)")
         return 0
+    if args.log:
+        log_targets(args, files)          # a missing ASSET_LOG or a file outside --root stops here, before spending
     key = get_key()
     if not key:
         raise ToolError(missing_key_help())

@@ -1,0 +1,248 @@
+{
+ "name": "town",
+ "_comment": "Town street: grass base, dirt and raised cobble overlays, brick / timber / stone facades and clay / slate / copper roofs (blob structure styles), doors, windows, a chimney and a bracket sign as fixtures, all painted into one map. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "ground": {
+  "name": "street",
+  "base": [
+   {
+    "material": "grass_lush",
+    "variants": 4,
+    "surface": "grass"
+   }
+  ],
+  "overlays": [
+   {
+    "material": "dirt",
+    "relief": "flat",
+    "surface": "dirt"
+   },
+   {
+    "material": "cobble",
+    "relief": "raised",
+    "surface": "stone"
+   },
+   {
+    "material": "brick_wall",
+    "style": "facade",
+    "solid": true,
+    "variants": 1
+   },
+   {
+    "material": "timber_plaster",
+    "style": "facade",
+    "solid": true,
+    "variants": 1
+   },
+   {
+    "material": "stone_wall",
+    "style": "facade",
+    "solid": true,
+    "variants": 1
+   },
+   {
+    "material": "roof_clay",
+    "style": "roof",
+    "solid": true,
+    "variants": 3
+   },
+   {
+    "material": "roof_slate",
+    "style": "roof",
+    "solid": true,
+    "variants": 3
+   },
+   {
+    "material": "roof_copper",
+    "style": "roof",
+    "solid": true,
+    "variants": 3
+   }
+  ],
+  "fixtures": [
+   {
+    "name": "door_wood",
+    "seed": 950,
+    "cells": [
+     1,
+     2
+    ],
+    "prompt": "a sturdy wooden house door with iron hinges and a small round window, in a stone frame",
+    "solid": true,
+    "fit": "height"
+   },
+   {
+    "name": "door_iron",
+    "seed": 951,
+    "cells": [
+     1,
+     2
+    ],
+    "prompt": "a riveted dark iron workshop door with brass handles",
+    "solid": true,
+    "fit": "height"
+   },
+   {
+    "name": "window",
+    "seed": 952,
+    "cells": [
+     1,
+     1
+    ],
+    "prompt": "a small square house window with a wooden frame and four glass panes"
+   },
+   {
+    "name": "window_lit",
+    "seed": 953,
+    "cells": [
+     1,
+     1
+    ],
+    "prompt": "a small square house window glowing warm yellow from inside, wooden frame"
+   },
+   {
+    "name": "chimney",
+    "seed": 954,
+    "cells": [
+     1,
+     1
+    ],
+    "prompt": "a short red brick chimney with a puff of grey smoke",
+    "solid": true
+   },
+   {
+    "name": "sign_bracket",
+    "seed": 955,
+    "cells": [
+     1,
+     1
+    ],
+    "prompt": "a small hanging shop sign on an iron wall bracket, painted with a golden gear symbol, no letters"
+   }
+  ],
+  "map": {
+   "name": "street_demo",
+   "seed": 2,
+   "legend": {
+    "g": [],
+    "d": [
+     "dirt"
+    ],
+    "c": [
+     "dirt",
+     "cobble"
+    ],
+    "A": [
+     "roof_clay"
+    ],
+    "a": [
+     "brick_wall"
+    ],
+    "B": [
+     "roof_slate"
+    ],
+    "b": [
+     "timber_plaster"
+    ],
+    "C": [
+     "roof_copper"
+    ],
+    "k": [
+     "stone_wall"
+    ]
+   },
+   "rows": [
+    "gggggggggggggggggggggggg",
+    "ggAAAAAAAgBBBBBBBBgggggg",
+    "ggAAAAAAAgBBBBBBBBgCCCCC",
+    "ggAAAAAAAgBBBBBBBBgCCCCC",
+    "ggaaaaaaagBBBBBBBBgkkkkk",
+    "ggaaaaaaagbbbbbbbbgkkkkk",
+    "gggggdggggbbbbbbbbggdggg",
+    "cccccccccccccccccccccccc",
+    "cccccccccccccccccccccccc",
+    "gggggggggggggggggggggggg",
+    "ggggggggdddddggggggggggg",
+    "gggggggggggggggggggggggg"
+   ],
+   "objects": [
+    {
+     "fixture": "door_wood",
+     "at": [
+      5,
+      4
+     ]
+    },
+    {
+     "fixture": "window",
+     "at": [
+      3,
+      4
+     ]
+    },
+    {
+     "fixture": "window_lit",
+     "at": [
+      7,
+      4
+     ]
+    },
+    {
+     "fixture": "chimney",
+     "at": [
+      3,
+      1
+     ]
+    },
+    {
+     "fixture": "door_wood",
+     "at": [
+      13,
+      5
+     ]
+    },
+    {
+     "fixture": "sign_bracket",
+     "at": [
+      14,
+      5
+     ]
+    },
+    {
+     "fixture": "window",
+     "at": [
+      11,
+      5
+     ]
+    },
+    {
+     "fixture": "window",
+     "at": [
+      16,
+      5
+     ]
+    },
+    {
+     "fixture": "chimney",
+     "at": [
+      16,
+      1
+     ]
+    },
+    {
+     "fixture": "door_iron",
+     "at": [
+      20,
+      4
+     ]
+    },
+    {
+     "fixture": "window_lit",
+     "at": [
+      22,
+      4
+     ]
+    }
+   ]
+  }
+ }
+}

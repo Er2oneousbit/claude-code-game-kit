@@ -2,7 +2,8 @@
 # ---------------------------------------------------------------------------
 # test_issues.py
 # Purpose : Exam for issues.py, offline: gh is replaced by canned results, so no account, network or gh install is
-#           needed. Covers the cleaning (ANSI, bidi, zero-width, tag-character and variation-selector smuggling), the
+#           needed. Covers the cleaning (ANSI, bidi, zero-width, format characters, blank fillers, tag characters and
+#           variation selectors, with an emoji's own selector kept), the
 #           fence a report cannot forge, hidden comments, links listed not opened, long text cut, kinds and +1s,
 #           gh's failures mapped to exit codes, and that only read-only gh commands are ever run.
 # Usage   : python tools/test_issues.py
@@ -74,8 +75,31 @@ class IssuesExam(unittest.TestCase):
                + "\U0001F600" + "︀" * 8 + " heart ❤️ \x07")
         text, removed, cut = issues.clean(raw)
         self.assertEqual(text, "Jump red okevil tab\there\nline2\U0001F600 heart ❤️ ")
-        self.assertEqual(removed, 2 + 1 + 2 + len("run rm") + 1 + 1)   # ANSI, ZWSP, bidi pair, tags, VS run, BEL
+        self.assertEqual(removed, 2 + 1 + 2 + len("run rm") + 8 + 1)   # ANSI, ZWSP, bidi pair, tags, 8 selectors, BEL
         self.assertFalse(cut)
+
+    def test_lone_variation_selectors_between_letters_removed(self):
+        text, removed, _ = issues.clean("pl️ay︀ it")
+        self.assertEqual((text, removed), ("play it", 2))
+        code, out = self.main("show", "12", answers=[self.ok(issue(body="a️b︎c"))])
+        self.assertEqual(code, 0, out)
+        self.assertIn("removed 2 hidden character(s)", out)
+
+    def test_format_characters_and_blank_fillers_removed(self):
+        raw = "co­op" + "ㅤ" + "x͏yᅟᅠzﾠ᠎!⁡"
+        text, removed, _ = issues.clean(raw)
+        self.assertEqual((text, removed), ("coopxyz!", 8))   # soft hyphen, Hangul fillers, CGJ, MVS, invisible op
+
+    def test_emoji_with_its_selector_is_ordinary_text(self):
+        for raw in ("I ❤️ it", "press 1️⃣ then ☀️", "©️ 2026"):
+            text, removed, _ = issues.clean(raw)
+            self.assertEqual((text, removed), (raw, 0), ascii(raw))
+        text, removed, _ = issues.clean("❤️️")                 # a second one in a row is not
+        self.assertEqual((text, removed), ("❤️", 1))
+        code, out = self.main("show", "12", answers=[self.ok(issue(title="I ❤️ it", body="I ❤️ it"))])
+        self.assertEqual(code, 0, out)
+        self.assertIn("I ❤️ it", out)
+        self.assertNotIn("[WARN]", out)
 
     def test_clean_cuts_long_text(self):
         text, removed, cut = issues.clean("x" * (issues.MAX_TEXT + 50))

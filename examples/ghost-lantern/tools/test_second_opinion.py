@@ -6,7 +6,7 @@
 # Usage   : python tools/test_second_opinion.py
 # Notes   : Covers the cases met for real: a login error that exits 0, error text quoted in a review or on stderr,
 #           the "resume this session" line, a CLI that cannot start, a timeout with a lingering child, an empty
-#           answer, a missing CLI, missing files, and --out.
+#           answer, a missing CLI, missing files, and --out; --files and --out outside the project are refused.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 import contextlib
@@ -111,6 +111,31 @@ class SecondOpinionExam(unittest.TestCase):
         rc, out = self.main((0, "fine", ""), "--ask", "x", "--files", "missing.py")
         self.assertEqual(rc, 2)
         self.assertIn("missing.py", out)
+
+    def test_files_outside_the_project_are_refused(self):
+        with tempfile.TemporaryDirectory() as other:
+            elsewhere = Path(other) / "notes.txt"
+            elsewhere.write_text("not part of the project\n", encoding="utf-8")
+            calls, name = [], Path(other).name
+            for path in (str(elsewhere), f"../{name}/notes.txt", f"sub/../../{name}/notes.txt"):
+                so.run = lambda cmd, cwd, timeout: calls.append(cmd) or (0, "fine", "")
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                    rc = so.main(["--cli", str(self.cli), "--root", str(self.root), "--ask", "x", "--files", "a.py", path])
+                self.assertEqual(rc, 2, path)
+                self.assertIn("[error] outside the project", out.getvalue())
+            self.assertEqual(calls, [], "the reviewer must not be started")
+
+    def test_out_outside_the_project_is_refused(self):
+        with tempfile.TemporaryDirectory() as other:
+            for path in (str(Path(other) / "r.md"), "../" + Path(other).name + "/r2.md"):
+                rc, out = self.main((0, "Found one thing.", ""), "--ask", "x", "--out", path)
+                self.assertEqual(rc, 2, out)
+                self.assertIn("[error] outside the project", out)
+            self.assertEqual(list(Path(other).iterdir()), [])
+        rc, out = self.main((0, "Found one thing.", ""), "--ask", "x", "--out", "docs/../docs/r.md")   # still inside
+        self.assertEqual(rc, 0, out)
+        self.assertTrue((self.root / "docs/r.md").is_file())
 
     def test_out_saves_the_answer(self):
         rc, out = self.main((0, "Found one thing.", ""), "--ask", "Check a.py", "--out", "docs/reviews/r.md")

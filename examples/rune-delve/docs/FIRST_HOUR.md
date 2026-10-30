@@ -45,4 +45,4 @@ Still true in the fast lane: mechanics before art, and never "make the whole gam
 ## After the first hour
 - Play the slice, `/playtest-report`, iterate (`VERTICAL_SLICE.md`, "The loop after the slice").
 - Plan the rest as jobs with tests (`SOP-12`), one fresh session each.
-- Art and audio prompts: `/gen-brief`. Sources: `docs/RESOURCES.md`.
+- Art and audio prompts: `/gen-brief`. Pixel art on your own GPU: `/dotwork` (GDD "Art source"). Sources: `docs/RESOURCES.md`.

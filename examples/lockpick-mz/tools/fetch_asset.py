@@ -11,7 +11,8 @@
 #             --url https://kenney.nl/media/pages/assets/<...>/kenney_pixel-platformer.zip
 #             --page https://kenney.nl/assets/pixel-platformer --author Kenney --license CC0
 # Exit    : 0 done, 1 download/pack problem or refused license, 2 usage problem (missing options, no
-#           docs/ASSET_LOG.md under --root, a log without its table)
+#           docs/ASSET_LOG.md under --root, a log without its table, --to outside the project, a --license-file
+#           the pack does not list) or an unsafe pack (an entry with a ".." part or an absolute or drive path)
 # Notes   : --page is the asset's own page where YOU read the license (SOP-04 step 2); this tool
 #           records what you tell it, it cannot judge a license. NC/ND and unknown licenses are
 #           refused unless --placeholder (logged as PLACEHOLDER, replace before release). Weak copyleft
@@ -20,8 +21,13 @@
 #           --take accepts globs relative to the pack root and may repeat. Files land flat in --to, unless
 #           --base DIR is given: then each file keeps its path relative to DIR (models that reference
 #           Textures/colormap.png next to them keep working).
-#           Downloads are cached in .asset_cache/ (gitignored). Zip entries that would escape
-#           the cache folder are refused. Standard library only, Python 3.8+.
+#           Downloads are cached in .asset_cache/ (gitignored). A pack with an entry that has a ".." part, an
+#           absolute path or a drive letter is refused whole, before anything is extracted. Every destination must
+#           stay inside --to, and --to inside the project. Picked names that Windows cannot store (<>:"|?* or control
+#           characters) and picks that differ only in case are refused. The URL is recorded and printed without
+#           user:password@ and without its query string or fragment (signed links carry keys there); the full URL
+#           is used only to download and to name the cache folder. --page is recorded without user:password@ but with
+#           its query string (a license page may need it). Standard library only, Python 3.8+.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
@@ -59,6 +65,8 @@ REFUSED = ("NC", "ND", "NONCOMMERCIAL", "NON-COMMERCIAL", "NODERIVATIVES", "UNKN
 LICENSE_FILE_GLOBS = ("license*", "licence*", "copying*", "info.txt", "readme*", "credits*")
 LICENSE_TEXT_SUFFIXES = ("", ".txt", ".md", ".rst", ".html", ".htm")   # not license_plate.png
 TYPES = ("art", "sprite", "tileset", "ui", "font", "music", "sfx", "voice", "3d", "vfx", "tool", "plugin", "model", "other")
+WINDOWS_BAD_CHARS = re.compile(r'[<>:"|?*\x00-\x1f]')   # cannot be stored on Windows (":" also opens an NTFS stream)
+URL_LOGIN = re.compile(r"^(\s*[A-Za-z][A-Za-z0-9+.-]*://)[^/?#]*@")   # scheme:// then user:password@ (last @ wins)
 ROW_ID = re.compile(r"^\|\s*A-(\d{4})\s*\|", re.M)
 EMPTY_TEMPLATE_ROW = re.compile(r"^\|\s*A-0001\s*\|\s*\|\s*\|.*$", re.M)
 
@@ -91,6 +99,19 @@ def judge_license(text, placeholder):
                      "Check it by hand, then pass the plain name, or --placeholder.")
 
 
+def redact_url(url):
+    """url as it may be written down: no user:password@, no query string, no fragment (signed links put keys there)."""
+    parts = urllib.parse.urlsplit(url)
+    netloc = parts.netloc.rpartition("@")[2]
+    return urllib.parse.urlunsplit((parts.scheme, netloc, parts.path, "", ""))
+
+
+def redact_page(page):
+    """--page as it may be written down: no user:password@, query string and fragment kept (a license page may need
+    them to show the right license). Everything else stays exactly as typed, text that is not a URL included."""
+    return URL_LOGIN.sub(r"\1", page or "")
+
+
 def download(url, cache):
     """Fetch url into cache/<file name> (reused if present). Returns the path."""
     name = Path(urllib.parse.unquote(urllib.parse.urlparse(url).path)).name or "download"
@@ -117,7 +138,20 @@ def download(url, cache):
             last = exc
             if attempt < RETRIES:
                 time.sleep(2 * attempt)
-    raise FetchError(f"download failed after {RETRIES} tries: {url} ({last})")
+    raise FetchError(f"download failed after {RETRIES} tries: {redact_url(url)} ({last})")
+
+
+def unsafe_entry(name):
+    """Why a zip entry name is unsafe to extract or pick, or '' when it is fine. Backslashes count as separators
+    (Windows extraction treats them as such), so "a\\..\\x" and "\\x" are caught too."""
+    norm = name.replace("\\", "/")
+    if norm.startswith("/"):
+        return "absolute path"
+    if re.match(r"^[A-Za-z]:", norm):
+        return "drive letter"
+    if ".." in norm.split("/"):
+        return "'..' part"
+    return ""
 
 
 def unpack(archive, cache):
@@ -128,11 +162,17 @@ def unpack(archive, cache):
     with zipfile.ZipFile(archive) as zf:
         names = [n for n in zf.namelist() if not n.endswith("/")]
         for n in names:
+            # zipfile drops ".." while extracting, so "x/../../a" would land at "a" while --base keeps the "..":
+            # refuse the pack before anything is written instead of trying to line the two up
+            why = unsafe_entry(n)
+            if why:
+                raise UsageError(f"zip entry has an unsafe path ({why}), refusing the pack: {n!r}")
             target = (root / n).resolve()
             if root.resolve() not in target.parents:
                 raise FetchError(f"zip entry escapes the cache folder, refusing the pack: {n}")
         if not root.is_dir():
-            zf.extractall(root)
+            # names Windows cannot store would crash the extract there; they are refused at --take anyway
+            zf.extractall(root, members=[n for n in names if not WINDOWS_BAD_CHARS.search(n)])
     return root, sorted(names)
 
 
@@ -195,27 +235,41 @@ def run(args):
         print(f"{len(files)} file(s). Pick with --take \"<path or glob>\".")
         return 0
 
+    if args.license_file and args.license_file not in files:
+        raise UsageError(f"--license-file {args.license_file!r} is not in the pack (run with --list for its entries)")
     taken = []
     for pattern in args.take:
         matches = [f for f in files if fnmatch.fnmatch(f, pattern)]
         if not matches:
             raise FetchError(f"--take '{pattern}' matches nothing in the pack (run with --list)")
         taken += [m for m in matches if m not in taken]
-    to_dir = root_dir / args.to
+    bad = [f for f in taken if WINDOWS_BAD_CHARS.search(f)]
+    if bad:
+        raise FetchError("picked file names Windows cannot store (<>:\"|?* or control characters): "
+                         + ", ".join(repr(f) for f in bad))
+    to_dir = (root_dir / args.to).resolve()
+    if root_dir not in to_dir.parents:
+        raise UsageError(f"--to {args.to!r} is not a folder inside the project ({root_dir})")
     def dest(f):
         if not args.base:
-            return to_dir / Path(f).name
-        base = args.base.strip("/") + "/"
-        if not f.startswith(base):
-            raise FetchError(f"{f} is not inside --base {args.base!r}")
-        return to_dir / f[len(base):]
+            target = to_dir / Path(f).name
+        else:
+            base = args.base.strip("/") + "/"
+            if not f.startswith(base):
+                raise FetchError(f"{f} is not inside --base {args.base!r}")
+            target = to_dir / f[len(base):]
+        # second line of defence behind unsafe_entry(): whatever the name, the copy stays inside --to
+        if to_dir not in target.resolve().parents:
+            raise FetchError(f"{f} would land outside --to {args.to!r}, refusing")
+        return target
     plans = [(pack_root / f, dest(f)) for f in taken]
     clashes = [d for _, d in plans if d.exists()]
     names = [d.relative_to(to_dir).as_posix() for _, d in plans]
     if clashes:
         raise FetchError("already in the project, not overwriting: " + ", ".join(d.relative_to(root_dir).as_posix() for d in clashes))
-    if len(set(names)) != len(names):
-        raise FetchError("two picked files share a name; pick fewer or fetch them into different --to folders")
+    # casefold: on Windows and macOS A.png and a.png are one file, the second copy would overwrite the first
+    if len({n.casefold() for n in names}) != len(names):
+        raise FetchError("two picked files share a name (ignoring case); pick fewer or fetch them into different --to folders")
 
     log_text = log_path.read_text(encoding="utf-8")
     if not log_text.strip():
@@ -225,15 +279,19 @@ def run(args):
     today = datetime.date.today().isoformat()
     lic_rel, lic_text = find_license_text(pack_root, files, args.license_file)
     sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+    page = redact_page(args.page)
     evidence = (f"{asset_id}  {args.type}  fetched {today} with tools/fetch_asset.py\n"
-                f"Download : {args.url}\nPage     : {args.page}\nAuthor   : {args.author}\nLicense  : {args.license}\n"
+                f"Download : {redact_url(args.url)}\nPage     : {page}\nAuthor   : {args.author}\nLicense  : {args.license}\n"
                 f"SHA-256  : {sha}\nFiles    : {', '.join(taken)}\n\n"
                 + (f"---- {lic_rel} (from the pack) ----\n{lic_text}" if lic_text else
                    "No license file in the pack: the license above was read on the asset page. Save a screenshot too.\n"))
-    rel_files = ", ".join(f"`{(Path(args.to) / n).as_posix()}`" for n in names) if len(names) <= 3 else \
-        f"`{Path(args.to).as_posix()}/` ({len(names)} files)"
+    # names come from the pack: escape them so a "|" or a newline cannot break the table, a backtick the code span
+    def code(text):
+        return "`" + md_cell(text).replace("`", "'") + "`"
+    rel_files = ", ".join(code((Path(args.to) / n).as_posix()) for n in names) if len(names) <= 3 else \
+        f"{code(Path(args.to).as_posix() + '/')} ({len(names)} files)"
     notes = "; ".join(x for x in ["PLACEHOLDER" if status == "placeholder" else "", args.notes] if x)
-    row = (f"| {asset_id} | {md_cell(args.type)} | {rel_files} | {md_cell(args.page or args.url)} | {md_cell(args.author)} | "
+    row = (f"| {asset_id} | {md_cell(args.type)} | {rel_files} | {md_cell(page or redact_url(args.url))} | {md_cell(args.author)} | "
            f"{md_cell(args.license)} | {md_cell(args.attribution)} | {args.ai} | {args.modified} | {today} | {md_cell(notes)} |")
 
     if args.dry_run:

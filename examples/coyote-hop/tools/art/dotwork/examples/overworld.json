@@ -1,0 +1,184 @@
+{
+ "name": "overworld",
+ "_comment": "World map: terrains as layered blob overlays (shallows, plains, desert, snowfield, swamp, forest, mountains) over a sea base, and location icons (town, castle, cave, tower, factory) as props. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "ground": {
+  "name": "world",
+  "base": [
+   {
+    "material": "ow_sea",
+    "variants": 4,
+    "surface": "sea"
+   }
+  ],
+  "overlays": [
+   {
+    "material": "ow_shallows",
+    "relief": "sunken",
+    "surface": "shallows"
+   },
+   {
+    "material": "ow_plains",
+    "relief": "flat",
+    "surface": "plains"
+   },
+   {
+    "material": "ow_desert",
+    "relief": "flat",
+    "surface": "desert"
+   },
+   {
+    "material": "ow_snowfield",
+    "relief": "flat",
+    "surface": "snow"
+   },
+   {
+    "material": "ow_swamp",
+    "relief": "flat",
+    "surface": "swamp"
+   },
+   {
+    "material": "ow_forest",
+    "relief": "raised",
+    "surface": "forest"
+   },
+   {
+    "material": "ow_mountains",
+    "relief": "raised",
+    "solid": true,
+    "surface": "mountain"
+   }
+  ],
+  "map": {
+   "name": "world_map",
+   "seed": 6,
+   "legend": {
+    "~": [],
+    "s": [
+     "ow_shallows"
+    ],
+    "p": [
+     "ow_shallows",
+     "ow_plains"
+    ],
+    "f": [
+     "ow_shallows",
+     "ow_plains",
+     "ow_forest"
+    ],
+    "m": [
+     "ow_shallows",
+     "ow_plains",
+     "ow_mountains"
+    ],
+    "d": [
+     "ow_shallows",
+     "ow_desert"
+    ],
+    "n": [
+     "ow_shallows",
+     "ow_snowfield"
+    ],
+    "w": [
+     "ow_shallows",
+     "ow_plains",
+     "ow_swamp"
+    ]
+   },
+   "rows": [
+    "~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+    "~~~sssss~~~~~~~~~~~ssssss~~~",
+    "~~snnnnnss~~~~~~~~sppppfss~~",
+    "~snnnnmnnss~~~~~~spppfffps~~",
+    "~snnmmmmnnps~~~~sppmmfffps~~",
+    "~sspppmpppps~~~~spmmmmppps~~",
+    "~~spppppfffs~~~~sppmmppww~~~",
+    "~~spppffffps~~~~~spppwwws~~~",
+    "~~~sppppppps~~~~~~sppwwss~~~",
+    "~~~~sddddds~~~~~~~~ssss~~~~~",
+    "~~~~sdddddds~~~~~~~~~~~~~~~~",
+    "~~~~~ssssss~~~~~~~~~~~~~~~~~"
+   ],
+   "props": [
+    {
+     "prop": "ow_town",
+     "at": [
+      4,
+      6
+     ]
+    },
+    {
+     "prop": "ow_castle",
+     "at": [
+      3,
+      7
+     ]
+    },
+    {
+     "prop": "ow_cave",
+     "at": [
+      8,
+      5
+     ]
+    },
+    {
+     "prop": "ow_tower",
+     "at": [
+      2,
+      3
+     ]
+    },
+    {
+     "prop": "ow_factory",
+     "at": [
+      22,
+      6
+     ]
+    },
+    {
+     "prop": "ow_town",
+     "at": [
+      18,
+      3
+     ]
+    }
+   ]
+  }
+ },
+ "props": [
+  {
+   "name": "ow_town",
+   "seed": 4000,
+   "prompt": "a tiny overworld map town icon: a cluster of small houses with red roofs",
+   "size": 30,
+   "solid": false
+  },
+  {
+   "name": "ow_castle",
+   "seed": 4001,
+   "prompt": "a tiny overworld map castle icon with towers and flags",
+   "size": 32,
+   "solid": false
+  },
+  {
+   "name": "ow_cave",
+   "seed": 4002,
+   "prompt": "a tiny overworld map cave entrance icon in a rock",
+   "size": 26,
+   "solid": false
+  },
+  {
+   "name": "ow_tower",
+   "seed": 4003,
+   "prompt": "a tiny overworld map tall stone tower icon",
+   "size": 32,
+   "solid": false
+  },
+  {
+   "name": "ow_factory",
+   "seed": 4004,
+   "prompt": "a tiny overworld map steam factory icon with smokestacks",
+   "size": 32,
+   "solid": false
+  }
+ ]
+}

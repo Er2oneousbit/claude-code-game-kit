@@ -1,0 +1,107 @@
+{
+ "name": "water",
+ "_comment": "Animated ground: shallow and deep water and sludge overlays scroll over N frames (Godot tile animation), sand shore, a prebuilt building prop on the map. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "props": [
+  {
+   "name": "inn",
+   "prompt": "a two-story steampunk inn with a tiled roof, a lantern over the door and a hanging sign with no letters",
+   "size": 160,
+   "seed": 4300
+  }
+ ],
+ "ground": {
+  "name": "water_anim",
+  "base": [
+   {
+    "material": "grass_lush",
+    "variants": 4,
+    "surface": "grass"
+   }
+  ],
+  "overlays": [
+   {
+    "material": "sand",
+    "relief": "flat",
+    "surface": "sand"
+   },
+   {
+    "material": "water_shallow",
+    "name": "water_shallow_anim",
+    "relief": "sunken",
+    "surface": "shallow_water",
+    "animate": {
+     "frames": 4,
+     "fps": 4,
+     "dx": 1
+    }
+   },
+   {
+    "material": "water_deep",
+    "name": "water_deep_anim",
+    "relief": "sunken",
+    "solid": true,
+    "surface": "deep_water",
+    "animate": {
+     "frames": 4,
+     "fps": 3,
+     "dx": 1,
+     "dy": 1
+    }
+   },
+   {
+    "material": "sludge",
+    "name": "sludge_anim",
+    "relief": "sunken",
+    "solid": true,
+    "surface": "sludge",
+    "animate": {
+     "frames": 4,
+     "fps": 5,
+     "dy": -1,
+     "pulse": 0.08
+    }
+   }
+  ],
+  "map": {
+   "name": "pond",
+   "seed": 9,
+   "legend": {
+    "g": [],
+    "s": [
+     "sand"
+    ],
+    "w": [
+     "sand",
+     "water_shallow_anim"
+    ],
+    "W": [
+     "sand",
+     "water_shallow_anim",
+     "water_deep_anim"
+    ],
+    "x": [
+     "sludge_anim"
+    ]
+   },
+   "rows": [
+    "gggggggggggggggg",
+    "ggssssssgggggggg",
+    "gsswwwwssggxxxgg",
+    "gswwWWwwsgxxxxxg",
+    "gswWWWWwsggxxxgg",
+    "gsswwwwssggggggg",
+    "ggssssssgggggggg",
+    "gggggggggggggggg"
+   ],
+   "props": [
+    {
+     "prop": "inn",
+     "at": [
+      13,
+      7
+     ]
+    }
+   ]
+  }
+ }
+}
