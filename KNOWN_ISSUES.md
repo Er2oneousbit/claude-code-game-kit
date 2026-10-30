@@ -29,7 +29,9 @@ examples were built and tested on one Windows 11 machine.
 - **`tools/art/dotwork/`:** model lanes ran on one machine only (RTX 5060 Ti 16 GB, 64 GB RAM, Windows 11), and only
   Godot gets engine resources (`--engine none` gives PNGs, sheets and the manifest). The model's in-between rotation
   views stay approximate; back views and faceless designs cannot be checked for facing (`rot_swap` fixes a pair by
-  hand). The art flaws found in 0.7.0 review (#22 to #28) are fixed in 0.7.1.
+  hand). The art flaws found in 0.7.0 review (#22 to #28) are fixed in 0.7.1. Open: a cancelled ComfyUI job reads
+  as "failed: no message" ([#38](../../issues/38)); skeleton clips other than walk are not rendered live yet
+  ([#39](../../issues/39)).
 - **Godot builds include `assets_src/`** review sheets and sources ([#29](../../issues/29)).
 
 ### Low-severity audit findings left for 0.7.x

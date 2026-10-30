@@ -18,7 +18,7 @@
 #           python tools/art/pixellab.py animate-character --from assets/art/keeper --mode skeleton-v3 \
 #               --template cross-punch --directions south,east --out assets/art/keeper_punch
 #           python tools/art/pixellab.py vfx --text "brass punch impact sparks" --out assets/fx/punch
-#           python tools/art/pixellab.py prop --text "cream pie on a plate" --out assets/art/pie.png
+#           python tools/art/pixellab.py prop --text "a loaf of bread on a plate" --out assets/art/bread.png
 #           python tools/art/pixellab.py edit --image hero.png --text "make ONLY the right hand a fist" --out hero2.png
 #           python tools/art/pixellab.py tiles-pro --text "dirt road" --feature roads --out assets/art/roads   [paid plan]
 #           Also: tileset --kind sidescroller, iso-tile, object (1 or 8 directions), ui, font, pixelate, fix
@@ -1094,19 +1094,19 @@ def build_parser():
     p.add_argument("--name", default="", help="a name in your PixelLab library")
     p.set_defaults(fn=lambda a: cmd_generate(a, "ui"))
     p = sub.add_parser("font", parents=[common, gen], help="a pixel font: .ttf + glyph atlas PNG (15)")
-    p.add_argument("--text", required=True, help="the look, e.g. 'chunky circus poster letters'")
+    p.add_argument("--text", required=True, help="the look, e.g. 'chunky wooden sign letters'")
     p.add_argument("--weight", choices=("Regular", "Bold"), default="Regular")
     p.add_argument("--glyph", type=int, choices=(8, 16, 32, 64), default=16, help="glyph size in pixels (default 16)")
     p.add_argument("--name", default="", help="the font's name (also the file name)")
     p.set_defaults(fn=lambda a: cmd_generate(a, "font"))
     p = sub.add_parser("object", parents=[common, gen], help="a prop seen from 1 or 8 directions (10 to 25)")
-    p.add_argument("--text", required=True, help="e.g. 'circus cannon on wheels'")
+    p.add_argument("--text", required=True, help="e.g. 'iron cannon on wheels'")
     p.add_argument("--directions", type=int, choices=(1, 8), default=1)
     p.add_argument("--size", type=int, default=64, help="1 direction: 16 to 256; 8 directions: 24 to 168 (default 64)")
     p.add_argument("--view", help="1 direction: top-down or sidescroller; 8: low top-down, high top-down or side")
     p.set_defaults(fn=lambda a: cmd_generate(a, "object"))
     p = sub.add_parser("prop", parents=[common, gen, look2], help="a single map prop with a transparent background (about 1)")
-    p.add_argument("--text", required=True, help="e.g. 'cream pie on a plate'")
+    p.add_argument("--text", required=True, help="e.g. 'a loaf of bread on a plate'")
     p.add_argument("--size", type=size_arg, default=size_arg("64"), help="32 to 400, e.g. 64 or 96x64 (default 64)")
     p.add_argument("--view", choices=("low top-down", "high top-down", "side"), default="high top-down")
     p.set_defaults(fn=lambda a: cmd_generate(a, "prop"))

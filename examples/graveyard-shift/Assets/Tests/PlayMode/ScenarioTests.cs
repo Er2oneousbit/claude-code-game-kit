@@ -8,7 +8,7 @@
 //           to darkness, and the always-lit keeper must be caught far more (pillar 1). The trio plays at Easy (the
 //           loops' ghosts, no extras): the bots see in meters, not pixels, so the darkness that Normal and up add costs
 //           them nothing, while their extra ghosts cost the lantern-user most. Smoke_N logs the careful and dark bots at
-//           Normal without judging them (the user's call, 2026-10-23, after a Kimi audit fix moved the extras apart).
+//           Normal without judging them (a design decision after an audit fix moved the extras apart).
 //           Smoke_E checks the generator's walk grid against the real NavMesh; Smoke_J shows a yard from above.
 // Usage   : python tools/dev.py smoke                                      (all Smoke tests, headless)
 //           GRAVEYARD_SEEDS=6 python tools/dev.py smoke --filter Smoke_C --record Logs/frames   (a GIF)

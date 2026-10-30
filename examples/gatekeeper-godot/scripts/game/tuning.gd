@@ -22,7 +22,7 @@ const REPLY_TIMEOUT_S: float = 12.0   # a model reply slower than this falls bac
 const SEED: int = 7
 
 # Live voice (proof of concept, scripts/game/guard_voice.gd): your own Fish Audio key in FISH_API_KEY
-const VOICE_MODEL: String = "s2.1-pro-free"   # costs nothing; "s2.1-pro" bills the developer API wallet
+const VOICE_MODEL: String = "s2.1-pro-free"   # costs nothing; "s2.1-pro" is billed per use on a Fish Audio developer account
 const VOICE_ID: String = "afe69eaecd7b49d1b564b06421ce3706"   # "Calm Reflective Male", a Fish Audio licensed voice
 const VOICE_TIMEOUT_S: float = 20.0   # a line slower than this is skipped (the text is already on screen)
 const VOICE_DB: float = 0.0

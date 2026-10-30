@@ -3,6 +3,16 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.7.2 (2026-10-30): neutral wording
+- Help examples and test fixtures in `tools/art/pixellab.py` use neutral sample subjects; a Dotwork title default is
+  now "MY GAME".
+- The game `CLAUDE.md` template words its comment rule for any reader; the examples' write-ups, handoffs and the
+  local pixel-art write-up describe tests and services without account, device or schedule details.
+- `scripts/codename.py`: one colour word changed.
+- Known issues: a cancelled ComfyUI job reads as "failed: no message" in Dotwork (#38); skeleton clips other than
+  walk are not rendered live yet (#39).
+- All 10 examples synced.
+
 ## 0.7.1 (2026-10-30): Dotwork lanes, audit fixes and neutral wording
 - **Dotwork vehicles:** the 8-direction set is labelled from the views themselves (a mirror-pair test picks the
   source's facing), so each file shows its direction (fixes #23). The model's in-between views stay approximate.

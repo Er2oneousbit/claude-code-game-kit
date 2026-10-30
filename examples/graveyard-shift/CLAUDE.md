@@ -28,7 +28,7 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 - **Pseudocode first.** For anything non-trivial: high-level pseudocode plus a short why, then wait for a nod or just proceed if the task was clearly specified.
 - **Prototype first, refine later.** Get the ugly version running, then iterate. Say which phase you are in.
 - **Modular.** Small functions and small files over monoliths. One responsibility each.
-- **Comments for 6-months-later me** (why, not what; headers and footers in `docs/STYLE.md`). **Robust errors plus debug hooks**: fail loudly, every system gets a debug toggle or log channel.
+- **Comments for whoever reads this in six months** (why, not what; headers and footers in `docs/STYLE.md`). **Robust errors plus debug hooks**: fail loudly, every system gets a debug toggle or log channel.
 - **Troubleshoot systematically.** One change at a time. State the hypothesis, make the change, test, record the result. Follow `docs/sop/SOP-02-bug-workflow.md`.
 - **When stuck, change the angle.** After 3 failed attempts follow the `stuck` skill. Do not loop on the same idea.
 - **Truth over winging it.** If you do not know, say so and say what you can find out. Engine APIs change between versions: check the version in `docs/ENGINE.md` and verify against docs or the installed engine, not memory.

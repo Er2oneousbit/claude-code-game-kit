@@ -15,9 +15,8 @@ Bot-verified: escapes on 6/6 seeds with the lantern, caught on 6/6 without it. N
 ## What changed last session
 - Built the slice per SOP-01 and SOP-14; fixed four AI and tuning problems the scenario runs and screenshots found (`docs/TROUBLESHOOTING.md`).
 - 2026-10-23: the Kenney sounds became ElevenLabs sounds plus a haunted-house ambience loop (HOW_IT_WAS_MADE).
-- 2026-10-24: planned, not started: the wizard and ghosts as animated PixelLab sprites (`tools/art/pixellab.py`). One 16 px
-  test wizard exists outside the repo: clean, but its black outline and palette do not match the Kenney tiles. Next: a `--palette` option (the Kenney sheet as color
-  reference, no outline), then a retake. **Every generation waits for the user's yes.**
+- Possible next step: animated sprites for the wizard and ghosts from a generation service (`tools/art/pixellab.py`),
+  palette-matched to the Kenney tiles; a paid generation needs the user's go-ahead.
 
 ## Current task
 - None. Next decision is the user's: playtest by hand.

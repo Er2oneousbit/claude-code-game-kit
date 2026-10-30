@@ -402,13 +402,13 @@ class PixelLabExam(unittest.TestCase):
         self.assertIn("must be a .png file", out)
 
     def test_font_writes_a_ttf_and_its_atlas(self):
-        rc, out = self.run_tool("font", "--text", "circus poster", "--name", "circus", "--out", "fonts/circus", fake=Fake())
+        rc, out = self.run_tool("font", "--text", "wooden sign", "--name", "sign", "--out", "fonts/sign", fake=Fake())
         self.assertEqual(rc, 0, out)
-        self.assertEqual((self.root / "fonts/circus/circus.ttf").read_bytes(), TTF)
-        self.assertTrue((self.root / "fonts/circus/circus.png").exists())
+        self.assertEqual((self.root / "fonts/sign/sign.ttf").read_bytes(), TTF)
+        self.assertTrue((self.root / "fonts/sign/sign.png").exists())
 
     def test_objects_one_and_eight_directions_and_review(self):
-        rc, out = self.run_tool("object", "--text", "circus cannon", "--out", "obj/cannon", fake=Fake())
+        rc, out = self.run_tool("object", "--text", "iron cannon", "--out", "obj/cannon", fake=Fake())
         self.assertEqual(rc, 0, out)
         self.assertEqual(sorted(p.name for p in (self.root / "obj/cannon").glob("*.png")), ["frame_00.png", "frame_01.png"])
         rc, out = self.run_tool("object", "--text", "barrel", "--directions", "8", "--size", "48", "--out", "obj/barrel", fake=Fake())
@@ -422,7 +422,7 @@ class PixelLabExam(unittest.TestCase):
 
     def test_prop_downloads_the_map_object(self):
         fake = Fake()
-        rc, out = self.run_tool("prop", "--text", "cream pie", "--out", "props/pie.png", fake=fake)
+        rc, out = self.run_tool("prop", "--text", "apple pie", "--out", "props/pie.png", fake=fake)
         self.assertEqual(rc, 0, out)
         self.assertEqual((self.root / "props/pie.png").read_bytes(), PNG)
         sent = [c for c in fake.calls if c[1].endswith("/map-objects")][0][3]
@@ -494,22 +494,22 @@ class PixelLabExam(unittest.TestCase):
         self.assertEqual(rc, 2)
 
     def test_animate_character_finds_the_id_and_waits_for_every_direction(self):
-        rc, out = self.run_tool("character", "--text", "clown", "--out", "clown", fake=Fake())
+        rc, out = self.run_tool("character", "--text", "knight", "--out", "knight", fake=Fake())
         self.assertEqual(rc, 0, out)
-        self.assertEqual(json.loads((self.root / "clown/pixellab.gen.json").read_text(encoding="utf-8"))["character_id"], "char-1")
-        rc, out = self.run_tool("animate-character", "--from", "clown", "--mode", "skeleton-v3", "--out", "x", fake=Fake())
+        self.assertEqual(json.loads((self.root / "knight/pixellab.gen.json").read_text(encoding="utf-8"))["character_id"], "char-1")
+        rc, out = self.run_tool("animate-character", "--from", "knight", "--mode", "skeleton-v3", "--out", "x", fake=Fake())
         self.assertEqual(rc, 2)
         self.assertIn("--template", out)
         fake = Fake()
-        rc, out = self.run_tool("animate-character", "--from", "clown", "--mode", "skeleton-v3", "--template", "cross-punch",
-                                "--directions", "south,east", "--out", "clown_punch", fake=fake)
+        rc, out = self.run_tool("animate-character", "--from", "knight", "--mode", "skeleton-v3", "--template", "cross-punch",
+                                "--directions", "south,east", "--out", "knight_punch", fake=fake)
         self.assertEqual(rc, 0, out)
         sent = [c for c in fake.calls if c[1].endswith("/characters/animations")][0][3]
         self.assertEqual((sent["character_id"], sent["template_animation_id"], sent["directions"]),
                          ("char-1", "cross-punch", ["south", "east"]))
         polled = {c[1].rsplit("/", 1)[-1] for c in fake.calls if "/background-jobs/" in c[1]}
         self.assertEqual(polled, {"job-a1", "job-a2"})
-        self.assertTrue((self.root / "clown_punch/rotations/south.png").exists())
+        self.assertTrue((self.root / "knight_punch/rotations/south.png").exists())
         rc, out = self.run_tool("animate-character", "--from", "nowhere", "--template", "walk", "--out", "y", fake=Fake())
         self.assertEqual(rc, 2)
         self.assertIn("--character-id", out)
@@ -642,10 +642,10 @@ class PixelLabExam(unittest.TestCase):
                     return 423, {}, b'{"detail": "Character or animations still being generated"}'
                 return super().__call__(method, url, key, body)
 
-        rc, out = self.run_tool("character", "--text", "clown", "--out", "c1", fake=Busy(2))
+        rc, out = self.run_tool("character", "--text", "knight", "--out", "c1", fake=Busy(2))
         self.assertEqual(rc, 0, out)
         self.assertTrue((self.root / "c1/rotations/south.png").exists())
-        rc, out = self.run_tool("character", "--text", "clown", "--out", "c2", "--wait", "0", fake=Busy(99, polls=0))
+        rc, out = self.run_tool("character", "--text", "knight", "--out", "c2", "--wait", "0", fake=Busy(99, polls=0))
         self.assertEqual(rc, 1)
         self.assertIn("fetch --character-id char-1", out)
         rc, out = self.run_tool("fetch", "--character-id", "char-1", "--out", "c2", fake=Fake())
@@ -653,8 +653,8 @@ class PixelLabExam(unittest.TestCase):
         self.assertTrue((self.root / "c2/rotations/south.png").exists())
 
     def test_several_direction_jobs_add_up_their_cost(self):
-        self.run_tool("character", "--text", "clown", "--out", "clown", fake=Fake())
-        rc, out = self.run_tool("animate-character", "--from", "clown", "--template", "walk", "--out", "walk", fake=Fake())
+        self.run_tool("character", "--text", "knight", "--out", "knight", fake=Fake())
+        rc, out = self.run_tool("animate-character", "--from", "knight", "--template", "walk", "--out", "walk", fake=Fake())
         self.assertEqual(rc, 0, out)
         side = json.loads((self.root / "walk/pixellab.gen.json").read_text(encoding="utf-8"))
         self.assertEqual(side["cost"], "4 generations (2 jobs)")

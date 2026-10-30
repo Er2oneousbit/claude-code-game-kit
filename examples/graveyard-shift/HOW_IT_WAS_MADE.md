@@ -15,8 +15,8 @@ words, or a check that failed), what changed, and what proved it. Details in the
 | 1 | 10-21 | The bot trio refuted the lantern pillar | Ghost sight and speeds redesigned until careful play beats always-dark and always-lit (section 6) | Trio over 8 seeds, 34 EditMode tests |
 | 2 | 10-22 | User: try generated audio, each example a different way | 5 Kenney effects replaced and a night ambience added with ElevenLabs (non-commercial terms: PLACEHOLDER) | The ambience came back at -60 dBFS and was normalized; 3 bugs in the new tool found live and fixed |
 | 3 | 10-22 | No music at all | A Suno brief written; the user made the music in Suno's web app | First try: "not very video gamey" (the generic template had been pasted); the fixed brief got "cute creepy" |
-| 4 | 10-22 | Suno does not make loops | Both takes kept and looped where each best matches its opening (spectral similarity), crossfaded, OGG, alternating per night, streamed | Exact length after encoding, seam smaller than an ordinary sample step; the user on the phone: "I can't even tell there is a loop" |
-| 5 | 10-22 | User: use the free credits on the game | Soul whispers (find souls by ear), ghost moans by state, footsteps by stride, lantern crackle; the listener moved from the camera to the keeper | 40 EditMode tests; 3 sounds too quiet, normalized |
+| 4 | 10-22 | Suno does not make loops | Both takes kept and looped where each best matches its opening (spectral similarity), crossfaded, OGG, alternating per night, streamed | Exact length after encoding, seam smaller than an ordinary sample step; the user, listening: "I can't even tell there is a loop" |
+| 5 | 10-22 | User: more generated sound for the game | Soul whispers (find souls by ear), ghost moans by state, footsteps by stride, lantern crackle; the listener moved from the camera to the keeper | 40 EditMode tests; 3 sounds too quiet, normalized |
 | 6 | 10-22 | User: voice for the game | Ghost whispers (Fish Audio) when they notice and catch you; a dawn chorus | 41 tests |
 | 7 | 10-22 | User: "what is the dawn chorus for if we have the Suno music?" | It got a job instead of being cut: the user's design of the ending, dawn first, then a screen fade to the end card with its music (`EndSequence`) | The timeline is a pure function with EditMode tests (42) |
 | 8 | 10-22 | User: narrator, keeper and more ghost lines | A cast of 29 lines on one shared voice channel that queues instead of talking over | 43 tests; a voice reel sent to the user for a listen |
@@ -26,7 +26,7 @@ words, or a check that failed), what changed, and what proved it. Details in the
 | 12 | 10-23 | User, playing the build: "lol if you go out the gate you fall forever" | Invisible blockers on the wall line at the gate and the south corners (holes since the first build), a fall safety net, and `Smoke_K` that walks the keeper into every gap | Reproduced first (6 of 6 pushes fell), then 10 of 10 stay inside; the trio's escapes unchanged |
 | 13 | 10-23 | User: "4 times the size, it's too easy", roofs and doors, an actual gate; then: not square, grass and trees outside, a title screen with Easy to Insane, two more ghosts a step | Irregular 4x yards, buildings with roofs and doors, a swinging iron gate, the world outside the wall, difficulties, 12 souls and a 300 s night ("Later: four times the yard") | 87 tests; the trio at Normal: careful escapes 5 of 8 generated nights, always lit 0; eight things caught on the way |
 | 14 | 10-23 | The user's first playtest of the build: the title text was clipped and the window small; the narrator spoke over the title; the difficulties all looked the same; lantern out, the legs froze; the lantern was not in his hands; caught with every soul, the gate stayed open, and outside it he fell | Six fixes, each found in the code or the player's own log before changing anything ("Later: the first playtest of the big yards") | 89 tests, 14 smoke; brightness away from the lantern measured from the built player at each difficulty: 53 to 0.9 instead of 60 to 46 |
-| 15 | 10-23 | The user: "anything we can have Kimi do?" (Kimi K3.1 had just shipped) | A read-only Kimi audit of this game: 10 findings, 9 confirmed, all fixed ("Later: a second opinion"); the trio's lantern tests moved to Easy | 101 tests, 15 smoke; careful 104 = dark 104 on the hand-made yard at Easy |
+| 15 | 10-23 | A second opinion from another vendor's model (Kimi K3.1 Pro) | A read-only Kimi audit of this game: 10 findings, 9 confirmed, all fixed ("Later: a second opinion"); the trio's lantern tests moved to Easy | 101 tests, 15 smoke; careful 104 = dark 104 on the hand-made yard at Easy |
 | 16 | 10-26 | A review (Fable) that proved ten bugs with tests in a scratch copy | All ten fixed, plus one the fixes exposed ("Later: review fixes") | 112 tests, 20 smoke; careful still escapes far more than always-lit on both kinds of night |
 | next | | The Suno win music and loss stings | Slots ready (`win_music_a/b`, `loss_sting_a/b`), silent until the files arrive | |
 
@@ -143,7 +143,7 @@ the game into the kit). **Kit gap U8:** once, Unity's Package Manager server did
 Each kit example gets its audio a different way: Coyote Hop synthesizes it with code, this one generates it with
 ElevenLabs through `tools/audio/eleven_audio.py`, and its music comes from Suno's web app.
 ```
-python tools/audio/eleven_audio.py check          # plan free: sound effects yes, music no (HTTP 402)
+python tools/audio/eleven_audio.py check          # a plan without music access: sound effects yes, music no (HTTP 402)
 python tools/audio/eleven_audio.py sfx --text "soft glassy magical chime with a gentle shimmer, a lost soul set free"   --seconds 1.2 --format pcm_32000 --mono --out Assets/Audio/soul_collected.wav --log
 (four more effects the same way, prompts in docs/BRIEFS.md)
 python tools/audio/eleven_audio.py sfx --text "quiet graveyard at night, soft wind through pine trees, distant crickets, an owl far away, no music"   --seconds 20 --loop --format pcm_32000 --out Assets/Audio/night_ambience.wav --log
@@ -162,7 +162,7 @@ python tools/dev.py exec SceneBuilder.Build
   `AudioSource`s (a missing clip is skipped), and `SceneBuilder` finds a sound by name in wav, ogg or mp3.
   `AudioSetupTests` checks the wiring.
 
-### Later: sounds that follow the game (more ElevenLabs credits)
+### Later: sounds that follow the game (ElevenLabs)
 Four more generated sounds, wired by `Assets/Scripts/Game/GraveyardAudio.cs`:
 - **Soul whisper** (6 s loop, 3D): every uncollected soul hums where it floats, full volume within 1.5 m, silent past
   11 m, so a soul in the dark can be found by ear. Collecting a soul switches it off, which silences it.
@@ -211,8 +211,8 @@ The user wanted more voice than the ghost whispers, so the night got a cast, 29 
 
 ### Later: music from Suno (made by a person in a web app)
 The third way to get audio in these examples: a person makes it in a web tool from a brief Claude wrote. Suno has no
-official API, so the user pasted the brief from `docs/BRIEFS.md` into Suno's Advanced mode (2:00,
-instrumental, weirdness about 25-30%, style influence about 70%) and downloaded the two takes it made. Both were kept.
+official API, so the brief from `docs/BRIEFS.md` went into Suno's web app, Advanced mode (2:00,
+instrumental, weirdness about 25-30%, style influence about 70%) and the two takes it made were downloaded. Both were kept.
 - The first try came back "not very video gamey": the generic template, `[brackets]` and all, had been pasted. The
   brief is now one block per Suno box, the style starts with "video game background music", and the kit's template
   says it is a template.
@@ -220,7 +220,7 @@ instrumental, weirdness about 25-30%, style influence about 70%) and downloaded 
   whose spectrum best matches the first 8 s (A at 76.95 s; B at 92.17 s, a clear match). The tempo guess (76 to 78
   BPM) was too rough to cut by bar count. Then:
   `python tools/audio/wavfile.py loop "<download>.wav" --end 95.17 --crossfade 3 --out night_music_b_loop.wav`
-- 23 MB WAVs became 1.5 and 1.8 MB OGG files (ffmpeg, Vorbis q6, outside the kit). Decoded, each is exactly as long
+- The downloads became 1.5 and 1.8 MB OGG files (ffmpeg, Vorbis q6, outside the kit). Decoded, each is exactly as long
   as the cut WAV and the seam step is smaller than an ordinary sample step, so the loop has no gap or click.
 - Then the human check the numbers cannot do: 30 s MP3s with each wrap point at 0:15, plus both full loops, went to
   the user through the Claude Code session. Verdict: "I can't even tell there is a loop, it sounds like one
@@ -377,7 +377,7 @@ Every cause was found before a fix, most of them in the player's own log (`Playe
 | # | Report | Cause | Fix and proof |
 |---|---|---|---|
 | 1 | Small window | Not the build: screenshot runs (`-screen-width 1280 -screen-fullscreen 0`) had saved a 1280x720 window in the registry, and Unity reuses the last window over the build's default (borderless, native) | Those saved values deleted; the window is resizable and Alt+Enter switches. Capture scripts now clear what they save |
-| 2 | Title letters covered | Insane's line wrapped into a one-line box; and the HUD scaled by width only, so on a 21:9 screen the menu would have run into the help text | The layout scales to fit both sides and widens instead; two-line rows. Captured at 16:9 and 21:9 |
+| 2 | Title letters covered | Insane's line wrapped into a one-line box; and the HUD scaled by width only, so on an ultrawide screen the menu would have run into the help text | The layout scales to fit both sides and widens instead; two-line rows. Captured at 16:9 and 21:9 |
 | 3 | Narrator before the game starts | The intro was scheduled when the scene loaded, and the title screen is the same scene | Scheduled only for a real night (`GraveyardAudio.Init(..., intro)`) |
 | 4 | Every difficulty looks the same | The scene's ambient mode was Skybox: Unity lit the yard from its default sky and ignored the ambient colors the difficulty set. `Smoke_L` passed because it read back the number the code had just written. Measured from the built player away from the lantern (0 to 255): 60, 51, 48, 46 | Trilight ambient set by the difficulty, sky reflections scaled with it, Easy matched to the old night by eye. Now 55, 25, 8.5, 0.9. `Smoke_L` asserts the ambient mode, not only the numbers |
 | 5 | "Only 12 ghosts" | Not a bug: the log shows 8, 10, 12 and 14 on one yard. In that light, though, nobody could tell | Fixed by 4 |
@@ -390,7 +390,7 @@ The lesson for the kit: a check that reads back what the code set proves the cod
 render was measured from frames of the built player, and that is what caught it.
 
 ### Later: a second opinion from another vendor's model (Kimi K3.1 Pro)
-The user asked what Kimi could do; Moonshot had just shipped K3.1. The kit's `tools/second_opinion.py` ran Kimi Code
+A second opinion from another vendor's model (Kimi K3.1 Pro). The kit's `tools/second_opinion.py` ran Kimi Code
 read-only over this game's code, tests and docs (`--model kimi-code/k3.1-pro`; the bare names in the tool's own help did
 not work, which the kit then fixed). Two Sonnet agents reproduced every finding from the code before anything changed:
 10 findings, 9 confirmed, 1 partly right, none wrong.

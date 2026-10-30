@@ -30,10 +30,10 @@ Final art still gets a human pass.
 | RAM | 64 GB |
 | Storage | ComfyUI and its models on an NVMe SSD (WD_BLACK SN850X) |
 | OS | Windows 11 Pro |
-| Software | ComfyUI 0.43.0 (git clone), Python 3.12.12 in its own venv, PyTorch 2.14.1 for CUDA 13.0, Aseprite 1.3.18 (Steam) for the finishing step |
+| Software | ComfyUI 0.43.0 (git clone), Python 3.12.12 in its own venv, PyTorch 2.14.1 for CUDA 13.0, Aseprite 1.3.18 for the finishing step |
 
 RTX 50 cards need PyTorch built for CUDA 12.8 or newer. 64 GB of RAM mattered: weights stay cached between jobs (cold
-starts were only a second or two slower), and the one crash of the test night was system RAM running out, not VRAM.
+starts were only a second or two slower), and the one crash in the first test run was system RAM running out, not VRAM.
 
 ## What was installed
 | Piece | License | Role |
@@ -96,7 +96,7 @@ dotwork.py verify                                 # load every Dotwork asset in 
 - **Licenses:** every model Dotwork uses is Apache-2.0 or MIT per its model card (read 2026-10-29).
 
 ### What two packs produced
-- **A character pack:** an asymmetric test character (a mechanical fist on one arm). idle, walk and punch
+- **A character pack:** an asymmetric reference character made for the test (a heavy gauntlet on one arm). idle, walk and punch
   in 4 directions, 12 animations; verify passed.
 - **A sample pack**, one of each asset type: a new NPC (12 animations), 3 props, 2 icons at 16 and 32 px, a portrait,
   a fireball loop, an explosion, a grass and cobble TileSet, and a dialog panel and button; 141 manifest rows,
@@ -157,7 +157,7 @@ Four smaller packs, each verified the same way:
 - **Sprite tools** on the sample NPC's south view: three edits by instruction (red scarf, dark blue coat, goggles),
   a top hat inpainted over the head, and a normal map with two lit previews.
 - **Image to pixel art:**
-  - Two crops of a concept board become 96 px sprites: shrink, enlarge 8x by nearest neighbor, a light
+  - Two crops of a concept image become 96 px sprites: shrink, enlarge 8x by nearest neighbor, a light
     image-to-image pass at 0.3, grid sample, then lock to the environment palette.
   - The redraw gives clean pixel clusters on the test palette, but loses detail and cools the smoke. The plain
     shrink in the middle column keeps more. Judge per image.
@@ -331,7 +331,7 @@ Windows and Lua quirks found on the way:
 - **Lua `io` works in batch mode** (`-b`) without a permission prompt.
 - **`--script-param` takes `key=value`** with no spaces around the `=`. Pass paths with forward slashes or quoted.
 
-Versions: Aseprite 1.3.18.6 (Steam), Godot 4.7.2, Python 3.12, ComfyUI 0.43.0.
+Versions: Aseprite 1.3.18.6, Godot 4.7.2, Python 3.12, ComfyUI 0.43.0.
 
 ### Kit samples: one per lane, from the Dotwork that ships
 After Dotwork moved into the kit (2026-10-30), a Claude Code session re-made one sample per lane with the shipped Dotwork: no style
@@ -359,13 +359,12 @@ tile edges show as a grid; the mount's side-view walk smears mid-stride; the gol
 image to pixel art bands the sky. The samples exposed two bugs, fixed before these renders: a fixed refine canvas
 cropped 192 px bosses, and the palettes had no sky colours, so backdrops banded. The scenes were made with the shipped palette.
 The image-to-pixel-art sources are concept images Dotwork painted itself (the model added fake signature marks, cropped off first). Left out on purpose: the
-8-direction vehicle set (rotated one step) and sprite edits (no source sprite the kit may publish yet).
+8-direction vehicle set (rotated one step) and sprite edits (their source sprites are not published).
 
 ![The title scene at 2x, made from scenes.json](media/dotwork_scene_title.png)
 
 The shipped palettes were checked, not assumed: every prop's cache key matches the shipped palette file, and the
-112 environment colours (extracted from Dotwork's own material renders) share 2 colours with the earlier palette built
-from the test art.
+112 environment colours were extracted from Dotwork's own material renders.
 
 ### What Dotwork taught
 - **Godot's corner solver needs a tile whose center matches the painted terrain.** With one copy of each of the 16
@@ -399,13 +398,13 @@ numbers and lessons stand; the images shown above are Dotwork output, made with 
 ### The core sprite lane
 Most rows below use one recipe:
 1. FLUX.2 klein 4B plus SpriteKiln's klein pixel LoRA (strength 0.8). The style reference is a 2x2 collage of four
-   existing test sprites. It renders at 1008x1008 on white.
+   reference sprites made for the test (not published). It renders at 1008x1008 on white.
 2. Key out the white, crop, and box-downscale to the target height (66 px for characters).
 3. Enlarge 8x by nearest neighbor, then run klein image-to-image at strength 0.45 with the same prompt and reference.
 4. Take the dominant color of each 8 px cell, defringe, and drop stray islands.
-5. Lock to a 64-color palette (built from the test sprites) in OKLab, cap each sprite at 40 colors, and add a 1 px near-black outline.
+5. Lock to a 64-color palette (built from the reference sprites) in OKLab, cap each sprite at 40 colors, and add a 1 px near-black outline.
 
-About 16 s per asset. Compared with the hand-picked test sprites, refined props came out at:
+About 16 s per asset. Compared with the hand-picked reference sprites, refined props came out at:
 
 | Measure | Refined props | Test sprites |
 |---|---|---|
@@ -457,7 +456,7 @@ detailed and continuous.
 
 - **The action has to be one of the node's 36 fixed values** (walk, idle, run, attack (ranged), hurt, fire or torch
   flicker, and so on). Free text fails validation.
-- **It needs about 20 GB of free system RAM.** Closing other heavy apps (a virtual machine) was enough.
+- **It needs about 20 GB of free system RAM.** Closing other heavy apps was enough.
 
 #### A full set: 4 directions x idle, walk, kick, into Godot 4
 **Input:** one NPC rotated to 4 directions (Qwen, above).
@@ -582,7 +581,7 @@ For image to pixel art, this model's schedule starts near full noise, so strengt
 - **Next in Dotwork:** status-effect icons, mounts and vehicles, field emote poses and a title screen.
 - **Not run yet:** 8-direction objects, sidescroller tiles.
 
-## Early tests (the first night)
+## Early tests (the first run)
 These came before the core lane above. Kept for the numbers and the lessons. All on the host above, warm (models already loaded) unless noted. "Peak GPU" is the whole card from `nvidia-smi`,
 including ComfyUI's cache, so it reads near 16 GB even when a job needs less.
 
@@ -620,12 +619,12 @@ also hands over its outfit and props.
 
 ### Palette lock and the Aseprite finishing step
 Palettes are built from existing sprites (k-means in OKLab, snapped to colors the art uses). Mean error at 32, 48
-and 64 colors from one character alone: 0.0122, 0.0084, 0.0062 (about 0.02 is just noticeable); from all 126 test sprites
+and 64 colors from one character alone: 0.0122, 0.0084, 0.0062 (about 0.02 is just noticeable); from all the reference sprites
 at 48 or 64 colors: about 0.009. The finishing script locks each PNG to the palette in Aseprite (indexed, no
 dithering), saves an editable `.aseprite`, exports the PNG and an optional sheet, then checks every pixel is on the
 palette with hard alpha: 10 of 10 NPCs passed.
 
-A palette built only from existing sprites cannot show new hues: with a mostly brown, brass and navy cast, the purple
+A palette built only from existing sprites cannot show new hues: with a mostly brown, brass and navy reference cast, the purple
 dress went maroon and a face went orange (middle row). Add the missing hues (purples, olives, teals, a second skin
 ramp) before locking new characters. Aseprite is a GUI program on Windows: a script must start it as a process and
 wait for it to get a real exit code (PowerShell's `&` does neither).
@@ -643,7 +642,7 @@ wait for it to get a real exit code (PowerShell's `&` does neither).
 Repaint strength: 0.3 changes almost nothing, 0.45 adds detail and mostly keeps the layout, 0.6 is nicer art but moves
 buildings and breaks the canal. Above 0.5 the input's layout is gone. The style reference made little difference here.
 
-The first night's Wan and autotile jobs were stopped when the PC ran low on memory; both ran later (above). Run heavy
+The first run's Wan and autotile jobs were stopped when the PC ran low on memory; both ran later (above). Run heavy
 jobs one at a time with other apps closed.
 
 ## Lessons for the kit

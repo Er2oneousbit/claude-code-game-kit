@@ -185,7 +185,7 @@ class SecondOpinionExam(unittest.TestCase):
         self.assertEqual(rc, 127)
 
     def test_usage_limit_is_environment_and_shows_the_cli_message(self):
-        # Met for real: the Kimi CLI's 5-hour usage window ran out
+        # A 429 from the CLI's usage window (the Kimi Code 2.3 message)
         err = ("kimi version 2.3.0\nerror: failed to run prompt: provider.api_error: 429 You've reached your 5-hour "
                "usage limit. Your quota will reset when the current 5-hour window ends.\n")
         rc, out = self.main((1, "", err), "--ask", "x")

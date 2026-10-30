@@ -26,7 +26,7 @@ def width(font, text):
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="dotwork.py preview title", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--title", default="STEAM & IRON")
+    ap.add_argument("--title", default="MY GAME")
     ap.add_argument("--subtitle", default="An Age of Brass")
     ap.add_argument("--scene", default="title")
     ap.add_argument("--out", help="PNG to write (default <src_dir>/preview/title_mock.png)")

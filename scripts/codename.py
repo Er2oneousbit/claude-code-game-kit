@@ -24,7 +24,7 @@ import re
 import sys
 from pathlib import Path
 
-COLORS = ("Amber", "Azure", "Cobalt", "Coral", "Crimson", "Cyan", "Ember", "Emerald", "Gilded", "Indigo", "Ivory",
+COLORS = ("Amber", "Azure", "Cobalt", "Copper", "Crimson", "Cyan", "Ember", "Emerald", "Gilded", "Indigo", "Ivory",
           "Jade", "Lilac", "Magenta", "Obsidian", "Ochre", "Onyx", "Saffron", "Scarlet", "Silver", "Teal", "Umber",
           "Verdant", "Violet")
 WORDS = ("Aether", "Basilisk", "Comet", "Drake", "Golem", "Griffin", "Hydra", "Kraken", "Lantern", "Nebula", "Nova",
