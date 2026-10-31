@@ -88,6 +88,9 @@ class CheckLinksExam(unittest.TestCase):
         text = "`node_modules/phaser/skills/tilemaps/SKILL.md` and `build/debug/bin/game.exe` but `docs/NOPE.md`"
         broken = self.scan_text(text)
         self.assertEqual(broken, {"README.md": ["path: docs/NOPE.md"]})
+        # a leading dot belongs to the folder name: ".godot/" is a generated folder, "./x" is just a prefix
+        broken = self.scan_text("`.godot/imported/x.ctex` and `./build/x.exe` but `./docs/NOPE.md`")
+        self.assertEqual(broken, {"README.md": ["path: ./docs/NOPE.md"]})
 
 
 if __name__ == "__main__":

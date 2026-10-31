@@ -221,8 +221,7 @@ def cmd_say(args):
                 "request": body, "date": datetime.date.today().isoformat(),
                 "sha256": hashlib.sha256(raw).hexdigest(), "text_bytes": len(text.encode("utf-8")),
                 "license": "Fish Audio API terms (verify before shipping)"}
-        f.with_suffix(".gen.json").write_text(json.dumps(side, indent=2, ensure_ascii=False) + "\n",
-                                              encoding="utf-8", newline="\n")
+        f.with_suffix(".gen.json").write_bytes((json.dumps(side, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
         print(f"[ OK ] {f}: {len(raw) // 1024} KB {fmt}, {side['text_bytes']} bytes of text on {args.model}")
         done.append((f, text, side["sha256"]))
     if args.log:
@@ -252,7 +251,7 @@ def log_targets(args, files):
     except fetch_asset.UsageError as exc:
         raise ToolError(str(exc))
     try:
-        rels = [f"`{f.resolve().relative_to(root).as_posix()}`" for f in files]
+        rels = [f"`{(Path.cwd() / f).resolve().relative_to(root).as_posix()}`" for f in files]
     except ValueError:
         raise ToolError("--log is for files inside the project (--root)")
     return root, log_path, rels
@@ -281,9 +280,9 @@ def write_log(args, key, done):
         new_log = fetch_asset.add_log_row(log_text, row, fill)
     except fetch_asset.FetchError as exc:   # a log without its table
         raise ToolError(str(exc))
-    log_path.write_text(new_log, encoding="utf-8", newline="\n")
+    log_path.write_bytes((new_log).encode("utf-8"))
     (root / fetch_asset.LICENSE_DIR).mkdir(parents=True, exist_ok=True)
-    (root / fetch_asset.LICENSE_DIR / f"{asset_id}.txt").write_text(evidence, encoding="utf-8", newline="\n")
+    (root / fetch_asset.LICENSE_DIR / f"{asset_id}.txt").write_bytes((evidence).encode("utf-8"))
     print(f"[ OK ] {asset_id} added to {fetch_asset.ASSET_LOG.as_posix()}, evidence in "
           f"{(fetch_asset.LICENSE_DIR / (asset_id + '.txt')).as_posix()}")
 

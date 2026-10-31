@@ -42,6 +42,7 @@ import argparse
 import datetime
 import fnmatch
 import hashlib
+import os
 import re
 import shutil
 import sys
@@ -168,8 +169,10 @@ def unpack(archive, cache):
             why = unsafe_entry(n)
             if why:
                 raise UsageError(f"zip entry has an unsafe path ({why}), refusing the pack: {n!r}")
-            target = (root / n).resolve()
-            if root.resolve() not in target.parents:
+            # lexical, not resolve(): Python 3.8 raises on names Windows cannot store (they are refused at --take)
+            base = os.path.normpath(os.path.abspath(str(root)))
+            target = os.path.normpath(os.path.join(base, n))
+            if not target.startswith(base + os.sep):
                 raise FetchError(f"zip entry escapes the cache folder, refusing the pack: {n}")
         if not root.is_dir():
             # names Windows cannot store would crash the extract there; they are refused at --take anyway
@@ -317,8 +320,8 @@ def run(args):
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
     (root_dir / LICENSE_DIR).mkdir(parents=True, exist_ok=True)
-    (root_dir / LICENSE_DIR / f"{asset_id}.txt").write_text(evidence, encoding="utf-8", newline="\n")
-    log_path.write_text(log_text, encoding="utf-8", newline="\n")
+    (root_dir / LICENSE_DIR / f"{asset_id}.txt").write_bytes((evidence).encode("utf-8"))
+    log_path.write_bytes((log_text).encode("utf-8"))
     print(f"[ OK ] {asset_id}: {len(plans)} file(s) into {Path(args.to).as_posix()}, license evidence in "
           f"{(LICENSE_DIR / (asset_id + '.txt')).as_posix()}, row added to {ASSET_LOG.as_posix()}")
     if status == "placeholder":

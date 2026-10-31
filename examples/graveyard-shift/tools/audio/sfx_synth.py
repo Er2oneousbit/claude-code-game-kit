@@ -208,7 +208,7 @@ def make(params, seed, out_path, recipe_path, meta, overwrite):
     if recipe_path:
         recipe_path.parent.mkdir(parents=True, exist_ok=True)
         recipe = dict(meta, tool="sfx_synth", rate=RATE, render_seed=seed, params=params)
-        recipe_path.write_text(json.dumps(recipe, indent=2) + "\n", encoding="utf-8", newline="\n")
+        recipe_path.write_bytes((json.dumps(recipe, indent=2) + "\n").encode("utf-8"))
     st = stats(samples, RATE)
     msg = f"{out_path}: {st['seconds']} s, peak {st['peak_dbfs']} dBFS, loudness {st['rms_dbfs']} dBFS RMS"
     if clipped:

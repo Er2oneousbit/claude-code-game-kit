@@ -382,7 +382,7 @@ def write_log(args, files, meta):
     rels = []
     for f in files:
         try:
-            rels.append(f.resolve().relative_to(root).as_posix())
+            rels.append((Path.cwd() / f).resolve().relative_to(root).as_posix())
         except ValueError:
             raise ToolError(f"{f} is outside the project {root}; --log is for files that ship in the project")
     log_text = log_path.read_text(encoding="utf-8")
@@ -406,10 +406,10 @@ def write_log(args, files, meta):
                 f"Models   : {', '.join(meta['models']) or 'none named'}\n"
                 f"License  : {LICENSE}\n"
                 + "".join(f"File     : {r}  SHA-256 {h}\n" for r, h in zip(rels, meta["sha256"])))
-    log_path.write_text(fetch_asset.add_log_row(log_text, row, fill), encoding="utf-8", newline="\n")
+    log_path.write_bytes((fetch_asset.add_log_row(log_text, row, fill)).encode("utf-8"))
     lic_dir = root / fetch_asset.LICENSE_DIR
     lic_dir.mkdir(parents=True, exist_ok=True)
-    (lic_dir / f"{asset_id}.txt").write_text(evidence, encoding="utf-8", newline="\n")
+    (lic_dir / f"{asset_id}.txt").write_bytes((evidence).encode("utf-8"))
     print(f"[ OK ] {asset_id} added to {fetch_asset.ASSET_LOG.as_posix()}, evidence in "
           f"{(fetch_asset.LICENSE_DIR / (asset_id + '.txt')).as_posix()}")
     print("[note] check the license of every model listed above before shipping these files")

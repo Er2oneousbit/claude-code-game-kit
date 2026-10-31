@@ -3,6 +3,20 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.7.3 (2026-10-30): Python 3.8 and 3.9 work again
+- **Fix: seven tools crashed on Python 3.8 and 3.9** (the kit's floor is 3.8). `Path.write_text(newline=)` only
+  exists from 3.10, so `--log` and `--out` in `fetch_asset.py`, `comfy_local.py`, `pixellab.py`, `eleven_audio.py`,
+  `fish_tts.py`, `sfx_synth.py` and `second_opinion.py` raised a TypeError; they now write the same bytes with
+  `write_bytes`. On Windows before 3.10, `Path.resolve()` leaves a relative path that does not exist yet relative,
+  so the 0.7.0 "inside the project" checks refused valid outputs; those paths are made absolute first.
+  `fetch_asset.py`'s zip containment check is now lexical, so a name Windows cannot store is refused cleanly on 3.8
+  instead of crashing. All 13 standard-library exams pass on 3.8.20, 3.9.25 and 3.14.7; every engine scaffolds and
+  runs `dev.py -h`, doctor and the session hook on 3.8. Reported by a review of the coming local second-opinion work.
+- **Fix: `tools/check_links.py`** stripped a leading `.` from folder names (`lstrip("./")`), so references into
+  generated folders like `.godot/` were checked instead of skipped. Test added.
+- Maintainer note in `CLAUDE.md`: run the exams on the oldest supported Python before a release.
+- All 10 examples synced.
+
 ## 0.7.2 (2026-10-30): neutral wording
 - Help examples and test fixtures in `tools/art/pixellab.py` use neutral sample subjects; a Dotwork title default is
   now "MY GAME".

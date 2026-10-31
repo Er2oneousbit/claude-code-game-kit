@@ -204,7 +204,10 @@ def scan(root, also, ignore, skip_dirs=()):
             name = target.rsplit("/", 1)[-1]
             if name in ignore or target in ignore or any(fnmatch.fnmatch(target, g) for g in file_globs):
                 continue
-            if target.lstrip("./").split("/", 1)[0] in SKIP_DIRS:
+            head = target
+            while head.startswith("./"):        # a "./" prefix only: lstrip("./") also ate the dot of ".godot/"
+                head = head[2:]
+            if head.split("/", 1)[0] in SKIP_DIRS:
                 continue                    # inside a generated folder (node_modules/, build/, ...): exists only after setup
             if not resolves(kind, target, md, bases, all_names):
                 broken.setdefault(rel, []).append(f"{kind}: {target}")

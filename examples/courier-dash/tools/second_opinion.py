@@ -129,7 +129,7 @@ def save(out_path, ask, answer, note=""):
     """Write the answer as Markdown; a note marks a partial answer (the review stopped early)."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     head = f"# Second opinion\n\n> {note}\n\nAsked: {ask}\n\n" if note else f"# Second opinion\n\nAsked: {ask}\n\n"
-    out_path.write_text(head + answer + "\n", encoding="utf-8", newline="\n")
+    out_path.write_bytes((head + answer + "\n").encode("utf-8"))
     print(f"[ OK ] saved to {out_path}" + (" (incomplete)" if note else ""))
 
 

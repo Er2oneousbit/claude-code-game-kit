@@ -35,7 +35,9 @@ everywhere. A `[warn] ... .gold` line means the game edited that file: merge the
 
 Verify a change by scaffolding every affected engine into a scratch dir outside this repo, then inside each output run `python tools/doctor.py` (also runs the link check) and `python tools/dev.py -h` (paths relative to the generated project). A second `--adopt` run on the same output must produce no conflicts.
 
-Tool exams (run from the repo root):
+Tool exams (run from the repo root). Before a release, run the standard-library ones again on the oldest supported
+Python (`uv run --python 3.8 python core/tools/test_<name>.py`): `Path.write_text(newline=)` and `Path.resolve()` on
+missing relative paths behave differently there, and 0.7.2 shipped broken on 3.8 and 3.9 because only 3.14 was run.
 ```
 python core/tools/test_check_links.py
 python core/tools/test_publish_check.py              # needs git

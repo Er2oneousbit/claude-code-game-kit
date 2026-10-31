@@ -302,7 +302,7 @@ def log_targets(args, files):
     rels = []
     for f in files:
         try:
-            rels.append(f"`{f.resolve().relative_to(root).as_posix()}`")
+            rels.append(f"`{(Path.cwd() / f).resolve().relative_to(root).as_posix()}`")
         except ValueError:
             raise ToolError(f"{f} is outside the project {root}; --log is for files that ship in the project")
     return root, log_path, rels
@@ -329,10 +329,10 @@ def write_log(args, kind, files, meta, lic):
                 + f"Terms    : {TERMS_URL} (read and save a screenshot when you ship)\n"
                 f"Request  : {json.dumps(meta['request'], ensure_ascii=False)}\n"
                 + "".join(f"File     : {r.strip('`')}  SHA-256 {h}\n" for r, h in zip(rels, meta["sha256"])))
-    log_path.write_text(fetch_asset.add_log_row(log_text, row, fill), encoding="utf-8", newline="\n")
+    log_path.write_bytes((fetch_asset.add_log_row(log_text, row, fill)).encode("utf-8"))
     lic_dir = root / fetch_asset.LICENSE_DIR
     lic_dir.mkdir(parents=True, exist_ok=True)
-    (lic_dir / f"{asset_id}.txt").write_text(evidence, encoding="utf-8", newline="\n")
+    (lic_dir / f"{asset_id}.txt").write_bytes((evidence).encode("utf-8"))
     print(f"[ OK ] {asset_id} added to {fetch_asset.ASSET_LOG.as_posix()}, evidence in "
           f"{(fetch_asset.LICENSE_DIR / (asset_id + '.txt')).as_posix()}")
     if placeholder:
@@ -396,8 +396,7 @@ def cmd_generate(args, kind):
         cost = h.get("character-cost")                 # credits this request spent (seen 2026-10-22)
         side = dict(meta, sha256=sha, request_id=h.get("x-trace-id") or h.get("request-id"), credits=cost)
         side.pop("text"), side.pop("prompt")
-        f.with_suffix(".gen.json").write_text(json.dumps(side, indent=2, ensure_ascii=False) + "\n",
-                                              encoding="utf-8", newline="\n")
+        f.with_suffix(".gen.json").write_bytes((json.dumps(side, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
         print(f"[ OK ] {f}: {what}" + (f", cost {cost} credits" if cost else ""))
     if args.log:
         write_log(args, kind, files, meta, lic)

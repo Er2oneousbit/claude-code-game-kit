@@ -307,7 +307,7 @@ def b64_image(path):
 
 def extract_zip(data, out_dir):
     """Unpack a zip from PixelLab into out_dir, refusing any member that would land outside it. Returns the files."""
-    out_dir = out_dir.resolve()
+    out_dir = (Path.cwd() / out_dir).resolve()
     files = []
     try:
         zf = zipfile.ZipFile(io.BytesIO(data))
@@ -660,7 +660,7 @@ def write_log(args, kind, files, meta):
     rels = []
     for f in files:
         try:
-            rels.append(f.resolve().relative_to(root).as_posix())
+            rels.append((Path.cwd() / f).resolve().relative_to(root).as_posix())
         except ValueError:
             raise ToolError(f"{f} is outside the project {root}; --log is for files that ship in the project")
     log_text = log_path.read_text(encoding="utf-8")
@@ -685,10 +685,10 @@ def write_log(args, kind, files, meta):
                 f"Terms    : {TERMS_URL} (read the terms of service and save a screenshot when you ship)\n"
                 f"Request  : {json.dumps(meta['request'], ensure_ascii=False)}\n"
                 + "".join(f"File     : {r}  SHA-256 {h}\n" for r, h in zip(rels, meta["sha256"])))
-    log_path.write_text(fetch_asset.add_log_row(log_text, row, fill), encoding="utf-8", newline="\n")
+    log_path.write_bytes((fetch_asset.add_log_row(log_text, row, fill)).encode("utf-8"))
     lic_dir = root / fetch_asset.LICENSE_DIR
     lic_dir.mkdir(parents=True, exist_ok=True)
-    (lic_dir / f"{asset_id}.txt").write_text(evidence, encoding="utf-8", newline="\n")
+    (lic_dir / f"{asset_id}.txt").write_bytes((evidence).encode("utf-8"))
     print(f"[ OK ] {asset_id} added to {fetch_asset.ASSET_LOG.as_posix()}, evidence in "
           f"{(fetch_asset.LICENSE_DIR / (asset_id + '.txt')).as_posix()}")
 
@@ -919,7 +919,7 @@ def check_outputs(args, kind, variants):
             except fetch_asset.UsageError as exc:
                 raise ToolError(str(exc))
             try:
-                out.resolve().relative_to(root)
+                (Path.cwd() / out).resolve().relative_to(root)
             except ValueError:
                 raise ToolError(f"{out} is outside the project {root}; --log is for files that ship in the project")
 
@@ -931,7 +931,7 @@ def clear_previous(out):
         old = json.loads(side.read_text(encoding="utf-8")).get("files", [])
     except (OSError, ValueError):
         return
-    root = out.resolve()
+    root = (Path.cwd() / out).resolve()
     for rel in old + ["pixellab.gen.json"]:
         target = (out / rel).resolve()
         if root in target.parents and target.is_file():
