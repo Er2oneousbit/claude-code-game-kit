@@ -7,7 +7,7 @@
 #           (output constrained by regex to a valid label), then speak one in-character sentence
 #           (constrained to a single short sentence). Game rules never see the model's text.
 # Usage   : var brain := GuardBrain.new(rng)
-#           var err := await brain.load_model()                 # "" when ready, else the reason
+#           var err := await brain.load_model(tree)             # "" when ready, else the reason (times out)
 #           var r := await brain.reply(tree, text, mood)        # {intent, line, source, ms, why}
 # Notes   : The plugin is reached through ClassDB.class_call_static, never by class name, so this
 #           script parses and the game runs without the plugin (scripted guard only).
@@ -85,23 +85,45 @@ static func _sampler(regex: String) -> Variant:
 
 
 ## Load the model once, make both chats from it. Returns "" on success, else the reason.
-func load_model() -> String:
+## Gives up after Tuning.LOAD_TIMEOUT_S, so a stuck load or warm-up never leaves the start screen hanging.
+func load_model(tree: SceneTree) -> String:
 	var problem := model_problem()
 	if problem != "":
 		return problem
+	var box := {"done": false, "err": "", "abandoned": false}
+	_load(box)
+	var t0 := Time.get_ticks_msec()
+	while not box.done and (Time.get_ticks_msec() - t0) < Tuning.LOAD_TIMEOUT_S * 1000.0:
+		await tree.process_frame
+	if not box.done:
+		box.abandoned = true   # a late finish must not switch the guard to the model mid-game
+		classifier = null
+		speaker = null
+		return "the model took longer than %d s to load" % int(Tuning.LOAD_TIMEOUT_S)
+	return box.err
+
+
+func _load(box: Dictionary) -> void:
 	var model: Variant = await ClassDB.class_call_static("NobodyWhoModel", "create", Tuning.MODEL_PATH, {})
 	if model == null:
-		return "the model failed to load (see the console)"
-	classifier = await ClassDB.class_call_static("NobodyWhoChat", "create", model,
+		box.err = "the model failed to load (see the console)"
+		box.done = true
+		return
+	var c: Variant = await ClassDB.class_call_static("NobodyWhoChat", "create", model,
 		{"system_prompt": CLASSIFY_SYSTEM, "n_ctx": 1024, "sampler": _sampler(INTENT_REGEX)})
-	speaker = await ClassDB.class_call_static("NobodyWhoChat", "create", model,
+	var s: Variant = await ClassDB.class_call_static("NobodyWhoChat", "create", model,
 		{"system_prompt": SPEAK_SYSTEM, "n_ctx": Tuning.N_CTX, "sampler": _sampler(LINE_REGEX)})
-	if classifier == null or speaker == null:
-		return "the chats failed to start (see the console)"
+	if c == null or s == null:
+		box.err = "the chats failed to start (see the console)"
+		box.done = true
+		return
+	await c.ask("Hello").completed()   # first generation warms up the GPU: do it now, not on turn one
+	if box.abandoned:
+		return
+	classifier = c
+	speaker = s
 	await reset()
-	await classifier.ask("Hello").completed()   # first generation warms up the GPU: do it now, not on turn one
-	await reset()
-	return ""
+	box.done = true
 
 
 ## Fresh conversation: both chats start from their examples.

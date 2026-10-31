@@ -3,7 +3,7 @@
 > Imported into CLAUDE.md. Keep it short. Long-form flow is in `docs/ENGINE_FLOW.md`.
 
 ## Version and setup
-- **Godot version:** 4.3 or later (SET EXACT VERSION HERE, e.g. 4.7.2). Standard build, not .NET. Older 4.x lack `--import` or exit 1 after a clean quit, so `dev.py` cannot judge them; `doctor` fails below 4.3.
+- **Godot version:** SET EXACT VERSION HERE. Use the latest 4.x stable (the kit is tested on 4.7.2), standard build, not .NET. 4.3 is the floor, not the target: older 4.x lack `--import` or exit 1 after a clean quit, so `dev.py` cannot judge them, and `doctor` fails below 4.3.
 - **Binary:** set env var `GODOT_BIN` to the Godot executable, or put `godot` on PATH. `python tools/dev.py doctor` verifies.
 - **Language:** typed GDScript. No C# in this project unless an ADR says so.
 - **Unit tests:** GUT addon in `addons/gut/` (install from the Godot Asset Library or GitHub). Version recorded in the ADR when chosen.

@@ -26,7 +26,7 @@ const CASES: Array = [
 func _init() -> void:
 	var rng := RandomNumberGenerator.new()
 	var brain := GuardBrain.new(rng)
-	var err: String = await brain.load_model()
+	var err: String = await brain.load_model(self)
 	if err != "":
 		print("[ENV ] ", err)
 		quit(2)

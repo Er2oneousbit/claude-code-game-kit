@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.7.3",
+  "kit_version": "0.7.4",
   "author": "the user",
   "profile": {
     "author": "",
@@ -1134,6 +1134,18 @@
       "date": "2026-10-30",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.7.4",
+      "date": "2026-10-31",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.7.4",
+      "date": "2026-10-31",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1357,5 +1369,5 @@
     "vite.config.ts": "72acee7629b7349c87f6bba02eabba214863520b35d7b6cbd15051ae698e0b92",
     "vitest.config.ts": "a5e0a6c56562671e37906a9d6edaf5932582719bb0b21b699c88eb0523efdbc1"
   },
-  "last_upgrade": "2026-10-30"
+  "last_upgrade": "2026-10-31"
 }

@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.7.3",
+  "kit_version": "0.7.4",
   "author": "the user",
   "profile": {
     "author": "",
@@ -1091,6 +1091,18 @@
       "date": "2026-10-30",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.7.4",
+      "date": "2026-10-31",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.7.4",
+      "date": "2026-10-31",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1318,5 +1330,5 @@
     "tools/yt_transcript.py": "fca9119c6d1c7f692d1bbb07929fc97da5d612a4f376129c453afa38a7b885c3",
     "vcpkg.json": "06cfea340e4684045ed3d9841491347badef8c8f55fc75c9702f0b96ca71ea60"
   },
-  "last_upgrade": "2026-10-30"
+  "last_upgrade": "2026-10-31"
 }

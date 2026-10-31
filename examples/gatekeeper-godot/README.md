@@ -12,7 +12,9 @@ Godot 4.6+ (tested on 4.7.2, Windows). The scripted guard works right away. For 
 ```
 python tools/setup_ai.py      # once: NobodyWho plugin + Qwen2.5 1.5B model, about 1.5 GB, checksums verified
 ```
-then open the project in Godot (it imports the plugin) and pick "Talk to the AI guard". Hint: read the notice on the wall.
+then open the project in Godot (it imports the plugin) and pick "Talk to the AI guard". Or skip the terminal: run the
+game from the Godot project on Windows and press "Download the AI guard" on the start screen (it runs the same script
+in the background; run the game again when it says so). Hint: read the notice on the wall.
 
 User args after `--`: `--debug`, `--autoplay` / `--autoplay=rude` (scripted runs), `--llm` (load the model at once),
 `--voice` / `--no-voice` (live voice in headless runs / off).

@@ -3,7 +3,7 @@
 > Imported into CLAUDE.md. Keep it short. Long-form flow is in `docs/ENGINE_FLOW.md`.
 
 ## Version and setup
-- **Godot version:** 4.3 or later (SET EXACT VERSION HERE, e.g. 4.7.2). Standard build, not .NET. Older 4.x lack `--import` or exit 1 after a clean quit, so `dev.py` cannot judge them; `doctor` fails below 4.3.
+- **Godot version:** 4.7.2 (latest stable when built), standard build, not .NET. The AI guard's NobodyWho plugin needs 4.5 or later; the scripted guard runs on 4.3+. Older 4.x lack `--import` or exit 1 after a clean quit, so `dev.py` cannot judge them, and `doctor` fails below 4.3.
 - **Binary:** set env var `GODOT_BIN` to the Godot executable, or put `godot` on PATH. `python tools/dev.py doctor` verifies.
 - **Language:** typed GDScript. No C# in this project unless an ADR says so.
 - **Unit tests:** GUT addon in `addons/gut/` (install from the Godot Asset Library or GitHub). Version recorded in the ADR when chosen.

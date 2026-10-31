@@ -109,7 +109,7 @@ Run these and report in plain words what is there and what is missing:
   Store or says "not found": install from https://www.python.org/downloads/ and tick **"Add python.exe to PATH"**.
 - `git --version`. Recommended (saves history, lets them undo). https://git-scm.com/downloads (defaults are fine).
 - Web, web-3d or RPG Maker MZ: `node --version`, needs 22.12 or newer. https://nodejs.org (the LTS button).
-- Godot: Godot 4.3 or newer (tested on 4.7.2), standard (not .NET) build, from https://godotengine.org/download . It is a zip, not an
+- Godot: the latest Godot 4 stable (the kit is tested on 4.7.2; 4.3 is the oldest that works), standard (not .NET) build, from https://godotengine.org/download . It is a zip, not an
   installer: suggest unzipping to a simple folder (for example `C:\Godot` or `~/Applications`). Later, inside the game
   folder, set `GODOT_BIN` to that exe for them (ask first) and install GUT per `docs/ENGINE_FLOW.md`.
 - Bevy: `cargo --version` (Rust 1.97.1 or newer). Missing: https://rustup.rs (Windows: `rustup-init.exe`, defaults are

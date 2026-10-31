@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.7.3",
+  "kit_version": "0.7.4",
   "author": "the user",
   "profile": {
     "author": "",
@@ -1090,6 +1090,18 @@
       "date": "2026-10-30",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.7.4",
+      "date": "2026-10-31",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.7.4",
+      "date": "2026-10-31",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1128,7 +1140,7 @@
     "docs/ASSET_LOG.md": "88351348aca95381f08d8f6ef45f5fbdaf0e8521ec61c1d63a190426245e0bf6",
     "docs/BRIEFS.md": "3269b8f2f38d0e203be671e2cd96ca6f31a02700fa9c9a652fd9d4424a7335ee",
     "docs/CONCEPTS.md": "d58ca9426877811564a704ca240d797d22877e8ee5aadd3d052c652bcc188e9a",
-    "docs/ENGINE.md": "6fb3bd1ca32fc7b9b3afbd3a3e5ceba04cc6868e12680a93b815437d8bf15f54",
+    "docs/ENGINE.md": "161b142e7c552329b56afef2666fafbbe3bce319848ae38047098f744116d1b6",
     "docs/ENGINE_FLOW.md": "6c11fe631c0d10270608e412138089dd4962abc44569d92933abe4bd4cec88c0",
     "docs/EVIDENCE.md": "c5f243bf7505346d7f28b4d029b39a580f4eb96bb8f59934c0cb683a431d6712",
     "docs/FIRST_HOUR.md": "3c632eb026ec7a3efcbec4d9b3a927698dd56941284c3bb1988aad2d48dcbca8",
@@ -1311,5 +1323,5 @@
     "tools/test_second_opinion.py": "3a3dada4f6c3032d61ef535663d350d23c13963c1a49eed7368dbf4de03bb72a",
     "tools/yt_transcript.py": "fca9119c6d1c7f692d1bbb07929fc97da5d612a4f376129c453afa38a7b885c3"
   },
-  "last_upgrade": "2026-10-30"
+  "last_upgrade": "2026-10-31"
 }

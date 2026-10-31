@@ -8,6 +8,7 @@
 #           --voice / --no-voice (live voice in headless runs / off; needs FISH_API_KEY, see guard_voice.gd).
 # Notes   : Markers for dev.py smoke and scenario runs: BOOT_OK, MODEL_READY, INTENT, GATE_OPEN,
 #           TURNED_AWAY. The model is optional at every step; the scripted guard plays the same game.
+#           Without the model, a run from the project on Windows offers "Download the AI guard" (tools/setup_ai.py).
 #           Tiles from Kenney Tiny Dungeon (A-0003): 40 wall, 48 floor, 45 door, 97 guard, 84 traveler.
 #           Sounds: ElevenLabs (A-0006 to A-0009, the web twin's files), with an ambience loop at the wall.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -22,6 +23,11 @@ const SND_AMBIENCE: AudioStreamWAV = preload("res://assets/audio/gate-ambience.w
 const AMBIENCE_DB: float = -10.0   # under the guard and the gate
 const SCALE: int = 3
 const T: int = 16 * SCALE
+const UI_FONT: int = 13   # start panel text and buttons: the 640x360 window fits about four lines plus a button row
+# In-game download of the AI guard: runs tools/setup_ai.py (checksummed downloads) in the background
+const SETUP_AI: String = "res://tools/setup_ai.py"
+const SETUP_AI_SIZE: String = "about 1.5 GB"   # matches tools/setup_ai.py and the README
+const PYTHONS: Array[String] = ["python", "py", "python3"]   # first one that starts and finishes with exit 0 wins
 const WIN_SCRIPT: Array[String] = ["Good evening, guard.", "That armor looks well kept.", "Captain Wren asked me to come tonight."]
 const RUDE_SCRIPT: Array[String] = ["Open the gate.", "Open it or I will break your nose.", "Last chance before I hurt you."]
 
@@ -39,6 +45,7 @@ var chat_panel: PanelContainer
 var log_box: RichTextLabel
 var input: LineEdit
 var ai_button: Button
+var get_button: Button   # "Download the AI guard": only when it is missing and this is a run from the project
 var status: Label
 var sfx: AudioStreamPlayer
 var voice: GuardVoice
@@ -110,12 +117,12 @@ func _build_world() -> void:
 	var notice := ColorRect.new()
 	notice.color = Color("e9dcb8")
 	notice.position = Vector2(gate_x - T * 3.4, T * 0.6)
-	notice.size = Vector2(T * 2.6, T * 1.5)
+	notice.size = Vector2(T * 3.0, T * 1.5)
 	add_child(notice)
 	var text := Label.new()
 	text.text = "NOTICE\nGate closed by order\nof Captain Wren."
 	text.add_theme_color_override("font_color", Color("3a2a10"))
-	text.add_theme_font_size_override("font_size", 14)
+	text.add_theme_font_size_override("font_size", 12)
 	text.position = notice.position + Vector2(8, 6)
 	add_child(text)
 	var night := ColorRect.new()
@@ -149,6 +156,7 @@ func _build_ui() -> void:
 	var intro := Label.new()
 	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	intro.custom_minimum_size = Vector2(580, 0)
+	intro.add_theme_font_size_override("font_size", UI_FONT)
 	intro.text = ("The gate is shut and a guard stands in your way. Type what you would say to him.\n"
 		+ "The AI guard is a small language model (%s) running on THIS computer through the NobodyWho plugin. "
 		+ "Nothing you type leaves your machine. The scripted guard plays the same game without it.") % Tuning.MODEL_NAME
@@ -157,10 +165,12 @@ func _build_ui() -> void:
 	box.add_child(row)
 	ai_button = Button.new()
 	ai_button.text = "Talk to the AI guard"
+	ai_button.add_theme_font_size_override("font_size", UI_FONT)
 	ai_button.pressed.connect(func() -> void: _use_model())
 	row.add_child(ai_button)
 	var plain := Button.new()
 	plain.text = "Play with the scripted guard"
+	plain.add_theme_font_size_override("font_size", UI_FONT)
 	plain.pressed.connect(_begin)
 	row.add_child(plain)
 	status = Label.new()
@@ -170,6 +180,13 @@ func _build_ui() -> void:
 	if problem != "":
 		ai_button.disabled = true
 		status.text = "AI guard unavailable: " + problem
+		if _can_download_ai():
+			get_button = Button.new()
+			get_button.text = "Download the AI guard (%s)" % SETUP_AI_SIZE
+			get_button.add_theme_font_size_override("font_size", UI_FONT)
+			get_button.pressed.connect(func() -> void: _download_ai())
+			row.add_child(get_button)
+			status.text = "AI guard not installed yet. Download it here, or play the scripted guard."
 
 	chat_panel = _panel(layer)
 	chat_panel.visible = false
@@ -195,9 +212,15 @@ func _build_ui() -> void:
 
 
 func _panel(layer: CanvasLayer) -> PanelContainer:
+	# Pinned to the bottom edge and growing upward: text taller than planned (a bigger default font,
+	# a longer model name) used to push the buttons below the window, leaving nothing to click.
 	var p := PanelContainer.new()
-	p.position = Vector2(12, 222)
-	p.size = Vector2(616, 130)
+	p.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	p.offset_left = 12
+	p.offset_right = -12
+	p.offset_top = -138
+	p.offset_bottom = -8
+	p.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	layer.add_child(p)
 	return p
 
@@ -206,13 +229,54 @@ func _panel(layer: CanvasLayer) -> PanelContainer:
 func _use_model() -> void:
 	ai_button.disabled = true
 	status.text = "Loading %s..." % Tuning.MODEL_NAME
-	var err: String = await brain.load_model()
+	var err: String = await brain.load_model(get_tree())
 	if err != "":
 		Log.warn("ai", "model unavailable: " + err)
 		status.text = "AI guard unavailable (%s): the scripted guard takes over." % err
 	else:
 		Log.info("ai", "MODEL_READY")
 	_begin()
+
+
+## Only from the project folder (tools/ and Python are there; an exported game has neither), and only on Windows,
+## the one plugin binary tools/setup_ai.py installs. Headless runs (smoke, autoplay) never download.
+func _can_download_ai() -> bool:
+	return (OS.has_feature("editor") and OS.get_name() == "Windows" and DisplayServer.get_name() != "headless"
+		and FileAccess.file_exists(SETUP_AI))
+
+
+## Run tools/setup_ai.py without blocking the game. The plugin is a GDExtension, which Godot loads only at
+## startup, so success ends with "run the game again", not with the AI guard switching on mid-session.
+func _download_ai() -> void:
+	get_button.disabled = true
+	var script := ProjectSettings.globalize_path(SETUP_AI)
+	var code := -1
+	for py in PYTHONS:
+		_ai_note("Downloading the AI guard (%s, a few minutes). You can play the scripted guard meanwhile." % SETUP_AI_SIZE)
+		var pid := OS.create_process(py, [script])
+		if pid <= 0:
+			continue
+		Log.info("ai", "SETUP_AI started with %s (pid %d)" % [py, pid])
+		while OS.is_process_running(pid):
+			await get_tree().create_timer(0.5).timeout
+		code = OS.get_process_exit_code(pid)
+		if code == 0 or code == 1:   # 1 is setup_ai.py's own "a download or checksum failed": no other Python will help
+			break
+	if code == 0:
+		Log.info("ai", "SETUP_AI done")
+		_ai_note("AI guard installed. Close the game and run it again (F5) to talk to him.")
+	else:
+		Log.warn("ai", "SETUP_AI failed, exit %d" % code)
+		_ai_note("Download failed (exit %d). Run python tools/setup_ai.py in a terminal to see why." % code)
+		get_button.disabled = false
+
+
+## Download progress goes to the start screen, or to the chat log once the player has started.
+func _ai_note(text: String) -> void:
+	if start_panel.visible:
+		status.text = text
+	else:
+		_add("sys", text)
 
 
 func _begin() -> void:

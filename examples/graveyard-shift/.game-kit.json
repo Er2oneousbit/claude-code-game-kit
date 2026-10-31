@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.7.3",
+  "kit_version": "0.7.4",
   "author": "the user",
   "profile": {
     "author": "",
@@ -1080,6 +1080,18 @@
       "date": "2026-10-30",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.7.4",
+      "date": "2026-10-31",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.7.4",
+      "date": "2026-10-31",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1301,5 +1313,5 @@
     "tools/test_second_opinion.py": "3a3dada4f6c3032d61ef535663d350d23c13963c1a49eed7368dbf4de03bb72a",
     "tools/yt_transcript.py": "fca9119c6d1c7f692d1bbb07929fc97da5d612a4f376129c453afa38a7b885c3"
   },
-  "last_upgrade": "2026-10-30"
+  "last_upgrade": "2026-10-31"
 }

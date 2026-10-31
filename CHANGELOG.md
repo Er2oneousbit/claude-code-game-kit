@@ -3,6 +3,19 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.7.4 (2026-10-31): Gatekeeper starts again, in-game AI download
+- **Fix: Gatekeeper (Godot) could not be started.** The start panel's text grew past the 640x360 window and pushed
+  both buttons off the bottom, so the game sat on its opening message with nothing to click. Panels now pin to the
+  bottom edge and grow upward, the start text and buttons use a smaller font, and the wall notice no longer overflows.
+- **Gatekeeper: "Download the AI guard" on the start screen.** Run from the Godot project on Windows without the
+  model, the game offers to run `examples/gatekeeper-godot/tools/setup_ai.py` in the background (the scripted guard stays playable) and says
+  when to run the game again.
+- **Gatekeeper: the model load times out.** Loading plus the warm-up reply had no limit, so a stuck load hung the
+  start screen; after `LOAD_TIMEOUT_S` (90 s) the scripted guard takes over, and a late finish is ignored.
+- **Docs: Godot version wording.** The Godot ENGINE.md template and the `make-a-game` install step recommended
+  "4.3 or newer", which read as the target. They now say to use the latest 4.x stable (tested on 4.7.2) and call
+  4.3 the floor. Gatekeeper's ENGINE.md had the template's placeholder unfilled; it now says 4.7.2.
+
 ## 0.7.3 (2026-10-30): Python 3.8 and 3.9 work again
 - **Fix: seven tools crashed on Python 3.8 and 3.9** (the kit's floor is 3.8). `Path.write_text(newline=)` only
   exists from 3.10, so `--log` and `--out` in `fetch_asset.py`, `comfy_local.py`, `pixellab.py`, `eleven_audio.py`,
