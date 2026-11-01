@@ -12,12 +12,13 @@ clips, or drawn in code: fire, ice, lightning, heal, wind, explosions, projectil
 battle backgrounds (optionally with drifting cloud layers), title screens, icons, portraits with expressions and
 talking frames, pixel fonts, window skins, HUD widgets (gauges, button states, a Theme), a menu UI kit (one Theme for
 every settings / pause menu control in every state, input prompt glyphs, cursors), screen transitions, weather,
-status-effect loops, emote balloons, 8-direction vehicles, treasure chests / doors / switches / save points, props
-animated by any motion (Wan clips), sprite edits and normal maps, image-to-pixel-art, store and platform art (every
-Steam capsule and library size, a logo from a glyph font, the game icon and `.ico`, achievement icons, a boot splash)
-title / loading / credits screens, 2.5D dioramas (tiles as 3D blocks, props and characters as billboards), and
-bitmap fonts you bring (a BDF such as an OFL CJK pixel font) cut down to
-the characters your game's text uses.
+small effects drawn in code (arrows, bolts and orbs with trails, dust puffs, pickup twinkles, level-up bursts, and
+GPUParticles2D dust / sparkle / ember emitters), status-effect loops, emote balloons, 8-direction vehicles, treasure
+chests / doors / switches / save points, props animated by any motion (Wan clips), sprite edits and normal maps,
+image-to-pixel-art, store and platform art (every Steam capsule and library size, a logo from a glyph font, the game
+icon and `.ico`, achievement icons, a boot splash), title / loading / credits screens, 2.5D dioramas (tiles as 3D
+blocks, props and characters as billboards), and bitmap fonts you bring (a BDF such as an OFL CJK pixel font) cut
+down to the characters your game's text uses.
 Model-free tools: palette swaps (`recolor`, and `recolor_of` in the enemies lane) and `clean` (any image to clean pixel
 art on the game palette).
 
@@ -38,8 +39,9 @@ should work (Dotwork itself is plain Python + HTTP); the numbers below are what 
 
 ## First run (no GPU, about 10 s)
 The model-free lanes (pixel fonts, window skins, HUD widgets, emote balloons, hit effects; `examples/screen.json` and
-`examples/status.json` add transitions, weather and status loops) need no ComfyUI and no models, so you can see Dotwork
-work before installing anything. From your Godot game's root folder:
+`examples/status.json` add transitions, weather and status loops, `examples/vfx.json` projectiles, puffs and
+particles) need no ComfyUI and no models, so you can see Dotwork work before installing anything. From your Godot
+game's root folder:
 ```
 GODOT_BIN=/path/to/godot python tools/art/dotwork/dotwork.py pack --spec tools/art/dotwork/examples/ui.json   # 102 files, verified in Godot
 python tools/art/dotwork/dotwork.py verify            # every Dotwork asset of this game loads in Godot
@@ -190,6 +192,8 @@ pixel-art wording. Ready-to-run specs for every capability are in `examples/` (s
  "status": [{"name": "poison"}, {"name": "zzz", "kind": "sleep"}],
  "hitfx": [{"name": "spark", "kind": "spark"}, {"name": "flash", "kind": "flash"}],
  "spells": [{"name": "fire"}, {"name": "frost", "kind": "ice"}, {"name": "zap", "kind": "bolt", "color": "#ffe070"}],
+ "vfx": [{"name": "arrow"}, {"name": "spark_bolt", "kind": "bolt", "trail": "line"}, {"name": "step", "kind": "footstep"},
+         {"name": "forge_embers", "kind": "ember_particles", "amount": 24}],
  "animprops": [{"name": "chest", "kind": "chest", "prompt": "a wooden treasure chest"},
                {"name": "torch", "kind": "flame", "prompt": "a wall torch with a lit flame"},
                {"name": "pot", "kind": "clip", "prompt": "a clay pot", "motion": "it bursts into pieces"}],
@@ -253,6 +257,7 @@ Honest list: these are the failure modes seen in testing and what Dotwork does a
 | screens | A title screen's buttons only show: what New Game does is the game's | The kit's shell wires its own menus; use the screen as the backdrop and logo layer, or wire the buttons' `pressed` signals. The credits roll scrolls for a length worked out from the line count (24 px a line), so a theme with a much larger font needs `seconds` raised |
 | bdf (fonts you bring) | Hand-drawn glyph text cannot cover Chinese or Japanese (thousands of characters); a complete CJK pixel font is a download, and every glyph of it would make a big font | Point `source` at a BDF (Ark Pixel Font, OFL-1.1: github.com/TakWolf/ark-pixel-font, the 12 px proportional BDF set has ja, ko, zh_hans, zh_hant, zh_hk and zh_tw variants of 26,179 glyphs each; pick the variant of the language, since shared characters are drawn differently) and `strings` at the game's text: the `.fnt` keeps only the characters used plus ASCII (a menu and a story line came to about 120 glyphs on one 256 px page). A character the strings use that the font lacks stops the run naming it, the file and the key. Not checked: right-to-left scripts and shaping (Arabic, Hebrew), which BMFont cannot lay out |
 | diorama (2.5D) | Flat sprites in 3D are cards: a side-view prop shows its one face from every angle, and a character's 4 directions do not turn with the camera | Billboards turn around their vertical axis to face the camera (fixed-Y), so keep the camera's yaw fixed (the lane's camera looks from the south) and pick the animation that faces it (`walk_s`); blocks put the same side tile on all four faces. Image-to-3D models are not part of Dotwork (see Godot notes) |
+| vfx (drawn in code) | Particles are a Godot node, so their exact motion cannot ship as frames; a projectile's Line2D trail is a fixed streak behind the body, not a record of its path | Projectiles (arrow, bolt, orb: flight loops pointing right) carry a trail that fades along its length: a sprite strip (frames, works in any engine), a Line2D with a stepped gradient, or a world-space GPUParticles2D that lags behind as the node moves (`trail`; use particles for curving shots). Puffs (dust, footstep, landing) and bursts (pickup_sparkle, level_up) are one-shots that end on an empty frame. `dust_particles`, `sparkle_particles` and `ember_particles` are GPUParticles2D scenes with a white mask texture and colour steps from the ramp over each particle's life (`amount`, `one_shot`); `vfx_<name>_particles.json` lists the same settings for other engines, and the review sheet shows a simulated preview, not Godot's run |
 | sprites / props / icons | The refine pass can grow a figure past its canvas | Re-rendered smaller automatically (never rescaled); an icon prompt that fills the frame (a spiral) can still fail: reword it |
 | sprites | White background trapped inside a figure | Removed automatically; skipped for white subjects (`keep_white` / `holes` override) |
 | enemies (ground slabs) | The model bakes a soft ground shadow under a figure, and the palette has no dark neutral, so it came out as a light-grey slab (#28, #26) | Removed automatically (wide, flat, light, under the feet, with the outline ring that framed it; `keep_shadow: true` keeps it) and replaced by a dark dithered contact shadow drawn in code: `spr_enemy_<name>_shadow.png`, a `Shadow` child drawn behind the sprite (`shadow: false` skips it). Props: `"slab": "remove"` opts in (an iso plinth looks like a slab, so it is not the default) |
@@ -294,6 +299,11 @@ Timing on the tested GPU: a sprite about 18 s, a texture tile with variants abou
   plus `assets_src/maps/<name>_preview.png` from the cells Godot chose.
 - Effects: `fx_<name>.tscn` (additive material, autoplay). Damage flash: `mat_damage_flash.tres`, tween its
   `shader_parameter/flash` from 1 to 0 on hit.
+- VFX: `fx/vfx/<name>/vfx_<name>.tscn`. A projectile is a `Node2D` pointing right (a `Trail` behind a `Body`):
+  set `rotation` to the flight direction and move it. Puffs and bursts autoplay once and stop on an empty frame
+  (free them on `animation_finished`); ground kinds have the origin on the ground line. Particle kinds are a
+  `GPUParticles2D`; a one-shot bursts on spawn (a small `Start` AnimationPlayer arms it, because Godot 4.7 stops a
+  one-shot that starts emitting from the scene file) and sends `finished`; `restart()` replays it.
 - Fonts: load the `.fnt` as a `FontFile`; white ink is tinted by `font_color`; gradient title fonts are coloured.
 - UI kit: `assets/ui/theme_<name>.tres` (the kit's shell loads the first `assets/ui/theme_*.tres`, sorted by name); textures in
   `assets/art/ui/uikit/<name>/`; set the project's default texture filter to Nearest. Prompt glyphs: `assets/ui/glyphs/<name>.png`,
@@ -346,6 +356,7 @@ together with a palette lock; where a lane uses no palette it has no effect.
 | tools (edits, inpaint) | the source sprite's own colours plus `palette` (untouched pixels map back exactly) | source count + 12 | none |
 | hit sparks / slashes (drawn in code) | a 4-step ramp of the entry's `color` | about 4 per frame | `color` |
 | uikit (drawn in code) | the style's fill / frame colours plus a focus colour; glyphs and cursors one fixed neutral set | about 12 per theme, 12 for glyphs | `style`, `fill`, `frame`, `focus` |
+| vfx (drawn in code) | the kind's ramp (bolt, orb, level-up and embers share the spells ramps), or one built around `color`, or `colors` as given; particle textures are white masks tinted by the same steps | the ramp's 2-6 colours | `color`, `colors` |
 | characters | none of the files: every animation frame is locked to the colours of the direction sprite it was animated from | per character | none |
 
 So props, enemies, terrain and backdrops read as one set because they share the two files; characters, icons,
@@ -410,7 +421,8 @@ outputs; covers settings, spec parsing and exit codes (entry-level errors and wa
 the manifest and its model provenance, naming, cache keys and seeds, metadata stripping, spec path containment, grid
 sampling, connected components, blob atlas layout and seams, the .tres/.tscn writers (multi-source animated
 TileSets), mapbuild's text-to-cells, glyphs, connectors, tool timeouts (the whole process tree is stopped) and
-verify's error markers.
+verify's error markers. `python -I -B tools/art/dotwork/tests/test_vfx.py` covers the vfx lane: frame counts and sizes,
+one-shots that end empty, loops that wrap, ramp-only colours, trails that fade, the particle scenes and spec errors.
 
 ## Troubleshooting
 | Symptom | Fix |

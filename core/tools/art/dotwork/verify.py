@@ -3,8 +3,9 @@
 # verify.py
 # Purpose : prove what Dotwork just made works in the game itself: import the project (its own tools/dev.py import
 #           when it has one), load every .tres / .tscn / .fnt the run wrote with a headless loader (SpriteFrames
-#           animations, TileSet terrains painted shape by shape and checked cell by cell, scenes instantiated, fonts
-#           measured), then the game's smoke test (tools/dev.py smoke) when it exists.
+#           animations, TileSet terrains painted shape by shape and checked cell by cell, scenes instantiated with
+#           their particle emitters and line trails checked, fonts measured), then the game's smoke test
+#           (tools/dev.py smoke) when it exists.
 # Usage   : python dotwork.py verify [--project GAME]     (also runs at the end of `dotwork.py pack` unless --no-verify)
 # Notes   : Overlay TileSets (lane_ground, metadata dotwork_overlays) get the blob check: painting a shape on an empty
 #           layer must give exactly the painted cells with the right tiles. Pair TileSets get the corner check.
@@ -63,11 +64,34 @@ func _init():
 		elif r is PackedScene:
 			var n = r.instantiate()
 			print("DOTWORK_OK ", p, " scene root=", n.get_class())
+			bad += _fx_check(p, n)
 			n.free()
 		else:
 			print("DOTWORK_OK ", p, " ", r.get_class())
 	print("DOTWORK_DONE bad=", bad)
 	quit(1 if bad > 0 else 0)
+
+# Particle and trail nodes in a scene (lane_vfx): a GPUParticles2D needs a ParticleProcessMaterial, a texture and at
+# least one particle; a Line2D trail needs two points and a gradient. Each is printed with what a game tunes. Returns
+# the number of broken nodes.
+func _fx_check(p, node):
+	var bad = 0
+	if node is GPUParticles2D:
+		var pm = node.process_material
+		var ok = pm is ParticleProcessMaterial and node.texture != null and node.amount > 0
+		print("DOTWORK_PARTICLES ", p, " node=", node.name, " amount=", node.amount, " one_shot=", node.one_shot,
+			" explosiveness=", node.explosiveness, " lifetime=", node.lifetime, " texture=", node.texture != null,
+			" material=", pm.get_class() if pm else "none",
+			" color_ramp=", pm is ParticleProcessMaterial and pm.color_ramp != null)
+		if not ok:
+			bad += 1
+	elif node is Line2D:
+		print("DOTWORK_LINE ", p, " node=", node.name, " points=", node.points.size(), " gradient=", node.gradient != null)
+		if node.points.size() < 2 or node.gradient == null:
+			bad += 1
+	for c in node.get_children():
+		bad += _fx_check(p, c)
+	return bad
 
 # Overlay terrains (lane_ground: 47-tile blob, Match Corners and Sides): paint each shape on an EMPTY layer with the
 # editor's default settings; every painted cell must get the tile whose 8 bits are its painted neighbours, and no

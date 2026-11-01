@@ -16,6 +16,7 @@ change a seed to get a different take.
 | `ui.json` | glyph-tool fonts (dialogue, damage numbers, brass and steel titles, symbols), window skins, HUD widgets (gauges, button states, panel, a Theme), emote balloons, hit spark / slash / damage-flash shader | none |
 | `uikit.json` | a menu UI kit: one Theme for every settings / pause menu control in every state (iron, with the dialogue font), prompt glyphs for keyboard, mouse and generic pads, pointer and hand cursors, a preview scene whose focus chain verify walks | none |
 | `status.json` | status-effect loops: poison, sleep, haste, slow, stop, blind, regen, berserk, confuse, silence, doom, burn, freeze, protect, shell, petrify | none |
+| `vfx.json` | small effects drawn in code: arrows, energy bolts and orbs with sprite-strip, Line2D and particle trails; dust, flour, footstep and landing puffs; a pickup twinkle; a level-up burst; dust, sparkle and ember emitters (GPUParticles2D) | none |
 | `screen.json` | screen transitions (battle swirl, fade, iris, diamond, wipe, blinds, dither, clock, blocks, mosaic) and weather (rain, snow, fog, ash, embers, leaves, sandstorm) | none |
 | `town.json` | grass, dirt, raised cobble; brick / timber / stone facades; clay / slate / copper roofs; doors, windows, chimney, sign; one painted street map | sprites |
 | `interior.json` | floor, wall tops, north wall face, black void, furniture fixtures | sprites |

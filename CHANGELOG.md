@@ -31,6 +31,14 @@
 - Dotwork: new `diorama` lane (2.5D): tiles as 3D floors and blocks, props and characters as pixel-crisp billboards,
   lit, under a tilted camera.
 - Dotwork: the exam checks that no shipped file holds an unresolved placeholder token or an em dash.
+- Dotwork: new `vfx` lane drawn in code: arrow, energy bolt and orb projectiles with a looping flight animation and a
+  trail that fades along its length (sprite strip, Line2D with a stepped ramp gradient, or world-space
+  GPUParticles2D); ground puffs (dust, footstep, landing ring), a pickup twinkle and a level-up burst, as one-shots
+  that end on an empty frame; particle kinds (dust, sparkle, ember) as a GPUParticles2D scene with a mask texture, a
+  ParticleProcessMaterial stepping through the colour ramp, and a JSON of the emitter for other engines.
+- Dotwork: one-shot particle scenes arm themselves with a small Start AnimationPlayer, because Godot 4.7.2 stops a
+  one-shot GPUParticles2D that starts emitting from the scene file without bursting or sending `finished`; verify
+  checks every particle emitter and Line2D trail it instantiates. An example spec and an exam come with the lane.
 - `tools/audio/loudness.py`: measure integrated loudness (ITU-R BS.1770-5), loudness range (EBU Tech 3342) and true
   peak; check a whole-game capture against Sony's ASWG-R001 targets (home -24, portable -18 LKFS, true peak -1 dBTP,
   at least 30 minutes); normalize single assets to labeled house levels with a true-peak ceiling. No installs.

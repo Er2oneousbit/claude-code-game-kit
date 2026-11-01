@@ -1,0 +1,80 @@
+{
+ "name": "vfx",
+ "_comment": "Small effects drawn in code (no GPU): arrows, energy bolts and orbs with a flight loop and a trail (sprite strip, Line2D or particles), ground puffs, a pickup twinkle, a level-up burst, and GPUParticles2D emitters for dust, sparkles and embers. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "vfx": [
+  {
+   "name": "arrow",
+   "kind": "arrow"
+  },
+  {
+   "name": "iron_arrow",
+   "kind": "arrow",
+   "size": 24,
+   "trail": "line"
+  },
+  {
+   "name": "spark_bolt",
+   "kind": "bolt"
+  },
+  {
+   "name": "knight_bolt",
+   "kind": "bolt",
+   "color": "#ffd860",
+   "trail": "particles"
+  },
+  {
+   "name": "orb",
+   "kind": "orb"
+  },
+  {
+   "name": "frost_orb",
+   "kind": "orb",
+   "colors": ["#18306a", "#2e6cc0", "#7ab8ee", "#c8ecff", "#ffffff"],
+   "trail": "line"
+  },
+  {
+   "name": "dust",
+   "kind": "dust"
+  },
+  {
+   "name": "flour_puff",
+   "kind": "dust",
+   "colors": ["#8a8478", "#c8c2b4", "#f0ece2"]
+  },
+  {
+   "name": "footstep",
+   "kind": "footstep"
+  },
+  {
+   "name": "landing",
+   "kind": "landing"
+  },
+  {
+   "name": "pickup",
+   "kind": "pickup_sparkle"
+  },
+  {
+   "name": "level_up",
+   "kind": "level_up"
+  },
+  {
+   "name": "road_dust",
+   "kind": "dust_particles"
+  },
+  {
+   "name": "treasure_glint",
+   "kind": "sparkle_particles"
+  },
+  {
+   "name": "forge_embers",
+   "kind": "ember_particles",
+   "amount": 24
+  },
+  {
+   "name": "anvil_sparks",
+   "kind": "ember_particles",
+   "size": 12,
+   "one_shot": true
+  }
+ ]
+}
