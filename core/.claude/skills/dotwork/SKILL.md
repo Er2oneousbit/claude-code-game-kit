@@ -32,7 +32,7 @@ and its keys, limits) and SOP-16 "Generating pixel art locally" before the first
 7. **Review before anything ships.** Open the review sheets under `assets_src/` and look at them yourself, then show
    the user. Typical faults: a character turning toward the camera, faces on back views, background left around a
    sprite, a tile edge repeating, a cropped figure. Fix one clip at a time (`character --fix CLIP:seed=N`), or render
-   takes side by side and pick one (`audition`, then `--promote`). Hand polish goes through `dotwork.py aseprite`; `dotwork.py clean` tidies pixel art from elsewhere (grid, palette,
+   takes side by side and pick one (`audition`, then `--promote`). Hand polish goes through `dotwork.py aseprite` or `dotwork.py pixelorama` (Pixelorama `.pxo` files, no install needed); `dotwork.py clean` tidies pixel art from elsewhere (grid, palette,
    stray pixels), and `recolor` makes palette-swapped variants without a render.
 8. **Prove it in the game.** `pack` ends with `verify` (every asset loads, then the game's smoke). On other engines,
    import the PNGs and sheets as `docs/ENGINE.md` says and run `python tools/dev.py smoke`.

@@ -85,6 +85,22 @@
   16 GB card (it needed changes to load offline and on that GPU, and its shapes on pixel art were wrong), TRELLIS.2
   needs 24 GB, and Hunyuan3D 2.0's licence excludes the EU, UK and South Korea, so no image-to-3D model is
   recommended; the 2.5D path is the `diorama` lane. E107-E112 join EVIDENCE.md (E112, the trial itself, graded X).
+- Dotwork: `dotwork.py pixelorama` and `pixelorama --reexport`, the hand-polish round trip with Pixelorama `.pxo` files.
+  Dotwork reads and writes them itself (no install needed), writing `pxo_version` 7 (Pixelorama 1.2.x) and reading
+  7 and 8. Each project has one tag per animation, frames timed by their holds and the asset's own colours as the
+  palette. Visible pixel layers and groups are composited; any layer feature that cannot be reproduced exactly stops
+  the re-export with its name. A `.pxo` that may hold polish is never overwritten without `--overwrite`.
+- Dotwork: the Aseprite and Pixelorama round trips share `handpolish.py`, which fixes both:
+  - frames are timed by their holds, and holds survive the trip (they were dropped);
+  - no crash on games with status-mark, spell or talking-portrait sheets;
+  - spells and VFX are no longer grouped into one effect and renamed;
+  - each effect keeps its own speed, and SpriteFrames keep their animation order;
+  - a file listed by two packs counts once;
+  - only what changed is written: an untouched frame keeps its file byte for byte, an untouched round trip rewrites
+    no manifest, and a changed file keeps its row's provenance (a frame drawn in code never gains a model list);
+  - a tag name that could leave the export folder is refused.
+- Kit: `.pxo` joins `.aseprite` in `.gitattributes` (LFS), doctor's media list and publish_check's; SOP-16 and
+  `docs/resources/art.md` name the Pixelorama round trip.
 - `tools/audio/wavesmith/loudness.py`: measure integrated loudness (ITU-R BS.1770-5), loudness range (EBU Tech 3342) and true
   peak; check a whole-game capture against Sony's ASWG-R001 targets (home -24, portable -18 LKFS, true peak -1 dBTP,
   at least 30 minutes); normalize single assets to labeled house levels with a true-peak ceiling. No installs.

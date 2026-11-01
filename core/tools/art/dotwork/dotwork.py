@@ -11,6 +11,7 @@
 #           python tools/art/dotwork/dotwork.py audition --name guard --clip walk_e --seeds 8101 8102 8103
 #           python tools/art/dotwork/dotwork.py materials [--only cobble sand] | palette extract "assets_src/*.png" ...
 #           python tools/art/dotwork/dotwork.py verify | aseprite [--reexport] | preview battle|title|attack ... | log
+#           python tools/art/dotwork/dotwork.py pixelorama [--overwrite] | pixelorama --reexport   # hand polish
 #           python tools/art/dotwork/dotwork.py qa pack [--json OUT] [--lineup OUT.png]   # style check, read only
 #           Global: --project GAME (default: current folder), --config FILE, --engine godot|none, --debug
 # Notes   : Needs ComfyUI (local, http://127.0.0.1:8188 by default) with the SpriteKiln and GGUF node packs and the
@@ -326,6 +327,24 @@ def cmd_aseprite(a):
     return 0
 
 
+def cmd_pixelorama(a):
+    s = setup_run(a)
+    import pixelorama
+    if a.reexport:
+        r = pixelorama.reexport(s.project, s.conf)
+        if r and not r["ok"]:
+            raise fcore.JobError("re-exported files failed verify")
+        print("[ OK ] re-exported and verified")
+        return 0
+    done = pixelorama.build(s.project, s.conf, overwrite=a.overwrite)
+    where = os.path.join(s.src, "pixelorama")
+    print(f"[ OK ] {len(done['written'])} .pxo files written, {len(done['unchanged'])} unchanged, under {where}")
+    for p in done["kept"]:
+        print(f"[warn] kept {os.path.relpath(p, s.project)}: it differs from the game's frames (hand polish not "
+              "re-exported yet, or newer art in the game); --overwrite replaces it with the game's frames")
+    return 0
+
+
 PREVIEWS = {"battle": ("battle_mock", "a battle screen from a party character, enemies and a background"),
             "title": ("title_mock", "the title screen over a scene"),
             "attack": ("demo_attack", "an animated attack: character, projectile, impact")}
@@ -517,6 +536,13 @@ def build_parser():
     p = sub.add_parser("aseprite", parents=[common], help="editable .aseprite sources / re-export after hand polish")
     p.add_argument("--reexport", action="store_true", help="push hand-polished .aseprite files back into the game")
     p.set_defaults(fn=cmd_aseprite)
+
+    p = sub.add_parser("pixelorama", parents=[common],
+                       help="editable Pixelorama .pxo sources / re-export after hand polish (no Pixelorama install needed)")
+    p.add_argument("--reexport", action="store_true", help="push hand-polished .pxo files back into the game")
+    p.add_argument("--overwrite", action="store_true",
+                   help="replace a .pxo that differs from the game's frames (it may hold hand polish)")
+    p.set_defaults(fn=cmd_pixelorama)
 
     # add_help=False: "preview battle --help" reaches the battle module, which lists its own flags (--char, --bg ...)
     p = sub.add_parser("preview", parents=[common], add_help=False,

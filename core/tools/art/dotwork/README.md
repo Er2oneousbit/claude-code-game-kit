@@ -34,6 +34,7 @@ should work (Dotwork itself is plain Python + HTTP); the numbers below are what 
 4. [Lanes and their limits](#lanes-and-their-limits)
 5. [Godot notes](#godot-notes)
 6. [Palettes and style references](#palettes-and-style-references)
+   - [Hand polish (Aseprite or Pixelorama)](#hand-polish-aseprite-or-pixelorama)
    - [Store art (Steam sizes)](#store-art-steam-sizes)
    - [Image to 3D (tested, not part of Dotwork)](#image-to-3d-tested-not-part-of-dotwork)
 7. [Licences](#licences)
@@ -113,7 +114,8 @@ workflow it loads.
 
 ### 4. Godot and Dotwork's config
 - `GODOT_BIN`: your Godot 4 binary (maps are painted and every asset is verified inside the game).
-- `ASEPRITE_BIN` (optional): the hand-polish round trip.
+- `ASEPRITE_BIN` (optional): the Aseprite hand-polish round trip. The Pixelorama one needs nothing set: Dotwork reads
+  and writes `.pxo` files itself ([Hand polish](#hand-polish-aseprite-or-pixelorama)).
 - Python for Dotwork: 3.8 or newer with Pillow + numpy (the ComfyUI venv has both, and works fine to run Dotwork).
 - Settings: copy what you want to change from `config.example.json` into `<game>/art_src/dotwork/dotwork.config.json`.
   That file is tracked in git and can name programs Dotwork runs (`godot_bin`, `aseprite_bin`, `comfyui.python`,
@@ -147,7 +149,8 @@ or usage (the `[error]` line says what to fix). `preview KIND --help` lists each
 | `clean --source GLOB --out DIR [--cell N\|--width W]` | any image to clean pixel art, no model: measures the pixel grid of upscaled or generated art (or shrinks to `--width`), keys a plain background, snaps to the palette (`--palette none --colors N` reduces instead), drops specks; `--outline #RRGGBB` adds one |
 | `verify` | load every Dotwork asset of this game in Godot (shader materials compiled, held frames counted) and run its smoke test |
 | `qa pack [--json OUT] [--lineup OUT.png]` | style check over every PNG the game's manifests list, read only: pixel scale, each lane's palette lock (the table under Palettes), outline colour and thickness, light side, figure height in tiles, contrast on the ground tiles, colour-blind separation of gauge fills, status marks, button states and palette swaps (Machado 2009 simulation); `--lineup` draws every character and prop at game scale on a ground tile; exit 1 on findings |
-| `aseprite [--reexport]` | editable `.aseprite` sources; push hand-polished files back |
+| `aseprite [--reexport]` | editable `.aseprite` sources (frames timed by their holds); push hand-polished files back |
+| `pixelorama [--reexport] [--overwrite]` | the same round trip with Pixelorama `.pxo` files, no install needed ([Hand polish](#hand-polish-aseprite-or-pixelorama)) |
 | `preview battle\|title\|attack ...` | mock screens composed from the game's art (review only) |
 | `capture --scene S [--frames N] [--fps F] [--size WxH] [--gif]` | record any scene with Godot's Movie Maker: a fixed frame rate, every frame written as PNG (trailer cuts, side-by-side reviews), a contact strip and an optional GIF; a window opens for the capture |
 | `log --pack NAME [--dry-run]` | `docs/ASSET_LOG.md` row + evidence file for a pack |
@@ -406,6 +409,33 @@ finished sprites (paths relative to the game) and Dotwork uploads them once per 
 copies for style, outline and shading; changing the list re-renders what used it. A spec can switch the reference off
 for one pack with `"design": {"character": {"style_ref": ""}}`.
 
+## Hand polish (Aseprite or Pixelorama)
+Both editors get the same round trip. `dotwork.py aseprite` or `dotwork.py pixelorama` writes one editable file per
+character (one tag per animation, named like the animation, such as `walk_s`), per effect and per single image (props,
+icons, portraits, window skins) under `<src_dir>/aseprite/` or `<src_dir>/pixelorama/`. Each frame shows for as long as
+it does in the game: its hold divided by the clip's frame rate. Polish there and save, then `--reexport` writes the
+frames back to the shipped PNGs, sheets, sheet data and SpriteFrames, keeps each clip's holds (a frame you retime
+becomes a hold), removes frames you deleted and runs `verify`. A frame that still looks the same keeps its shipped
+file byte for byte (editors drop the colour stored under fully clear pixels; that alone is not a change), and an
+untouched hold keeps its exact value. Manifest rows change only for files that changed: such a file keeps its row
+(models, workflow, canvas, anchor, position) and gains its new hash and a polish note, so an untouched round trip
+rewrites no manifest and a frame drawn in code never gains a model. Tag names use letters, digits and `_` only (they
+become file names). Effects in the effects lane's layout (`fx/<name>/spr_fx_<name>_NN.png`, which hit effects share)
+are included. Spells, VFX, status marks, animated props, balloons and vehicles keep their lanes' own files and are
+drawn from their specs, so neither editor gets them.
+
+| | Aseprite | Pixelorama |
+|---|---|---|
+| Needs | `ASEPRITE_BIN`: Aseprite runs headless for both directions | nothing: Dotwork reads and writes `.pxo` in Python |
+| Versions | Lua scripting (`--script`); run with Aseprite 1.3.18 on Windows | writes `pxo_version` 7 (Pixelorama 1.2.0 to 1.2.3; 1.2.3 opened, exported and saved Dotwork's files); reads 7 and 8 (the 1.2.4 release candidates, where a cel keeps its own size and offset; (verify) against a released 1.2.4) |
+| The file | indexed on the asset's own colours | RGBA in one layer `art`, the asset's own colours as the project palette; the project's frame rate is the one most of the character's frames play at, and other clips carry per-frame durations |
+| Layers you add | flattened by Aseprite on export | visible pixel layers and groups are composited (Normal blending, cel and layer opacity); a visible layer with another blend mode, a clipping mask, layer effects, animated opacity, a 3D or tilemap layer, or a group below 100 % stops the re-export with its name (merge it down or hide it); hidden layers are ignored |
+| A file that exists | rebuilt by `aseprite` | kept when it differs from the game's frames (it may hold your polish); `--overwrite` replaces it |
+
+Pixelorama stores the folder you last exported to, a full path on your machine, in every `.pxo` it saves: in a public
+repository, that path is public too. Aseprite 1.3.18 on Windows built the sources and re-exported them untouched
+with every file unchanged; an edit made in Aseprite's window is not tested yet.
+
 ## Store art (Steam sizes)
 What the `store` lane writes to `assets_src/store/<name>/steam/`, checked against the Steamworks documentation on
 2026-11-01 (pages: store/assets/standard, store/assets/libraryassets, store/assets/rules, store/assets,
@@ -482,6 +512,11 @@ outliers (a 2x upscale, an off-palette prop, a mirrored prop, a red / green gaug
 `python tools/art/dotwork/tests/test_fonts.py` - offline, seconds: the Latin glyph fonts (height, baseline, coverage,
 accents drawn over unchanged base letters), the coverage check (JSON, CSV, PO, text; command line and pack) and the
 old fonts' output against golden hashes.
+`python tools/art/dotwork/tests/test_pixelorama.py` - offline, seconds: both hand-polish round trips. `.pxo` files
+(tags, frame durations from holds, palette, the same bytes on every build, polish never overwritten), an untouched
+re-export that changes no file, an edit and a new hold reaching the game, layers composited, every refused layer
+feature stopping before a file is written, `pxo_version` 8 cels and the fields Pixelorama 1.2.3 saves; Aseprite's
+frame times in the build list and through a re-export rounded to milliseconds (its script runs stubbed).
 
 ## Troubleshooting
 | Symptom | Fix |
