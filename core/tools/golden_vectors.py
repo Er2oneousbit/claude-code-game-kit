@@ -801,7 +801,7 @@ def build_shell():
     for loc in ("en", "fr", "ja", "pt-BR"):
         for n in (0, 1, 2, 5):
             pts.append([loc, n, plural(loc, n), tr_plural(TABLES, loc, "apples", n)])
-    cases.append({"type": "plural", "name": "one and other", "tables": TABLES, "points": pts})
+    cases.append({"type": "plural", "name": "one and other", "key": "apples", "tables": TABLES, "points": pts})
     cases.append({"type": "pseudo", "name": "pseudo-locale", "points": [
         [t, pseudo(t)] for t in ("Play", "Hello, {name}!", "Score: %d%%", "", "OK", "A long settings label",
                                  "{a}{b}", "50% off")]})
