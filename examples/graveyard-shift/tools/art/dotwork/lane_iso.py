@@ -9,8 +9,13 @@
 #           "side": {"material": "brick_red"}, "height": 16}]}]
 #           tile: diamond width in px (default 2 x design.tile_px: 64 x 32); floors / blocks: catalog materials or
 #           {"prompt": ...}; variants per floor (default 1); height per block in px (default tile / 4).
-# Notes   : Floors and blocks are tiles to place; terrain transitions between iso materials are not generated (paint
-#           edges by hand, or lay a block row along them). Single iso objects stay in the props lane (template "iso").
+#           transitions: [{"upper": {"material": "cobble"}, "lower": {"material": "grass_lush"}, "wobble": 3}]: the
+#           16 corner tiles between two materials (the pair lane's wang16 tiles: a wobbling edge, a dark rim on the
+#           upper material, a shadow on the lower), each projected to a diamond, painted with Godot's terrain tool.
+# Notes   : Floors and blocks are tiles to place; a transition pair is a Match Corners terrain set (lower = terrain 0,
+#           upper = terrain 1) on its own atlas source, so a path or a pond is painted, not placed. A top-down corner
+#           maps to an iso corner: north-west -> top, north-east -> right, south-east -> bottom, south-west -> left
+#           (the projection below). Single iso objects stay in the props lane (template "iso").
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 import os
@@ -18,11 +23,14 @@ import os
 import numpy as np
 from PIL import Image
 
+import autotile
 import fcore as core
 import godot
 from lane_ground import _from_catalog, texture
 
 OUTLINE = np.array([5, 4, 7], np.uint8)
+# wang16 bits (autotile: 1 nw, 2 ne, 4 sw, 8 se; set = the upper material) -> isometric corner peering bits
+ISO_CORNERS = (("top_corner", 1), ("right_corner", 2), ("bottom_corner", 8), ("left_corner", 4))
 
 
 def _mat(e, key, who):
@@ -88,15 +96,26 @@ def _atlas(tiles):
     return at
 
 
-def tileset(path, floors_res, n_floor, blocks_res, n_block, W, bh):
+def transition_tiles(A, B, W, wobble, seed):
+    """The 16 corner tiles between upper material A and lower material B (N x N seamless textures), as diamonds:
+    autotile's wang16 tile (bit set = A at that corner) projected like a floor, so both materials continue the
+    textures of their plain floors."""
+    cols = autotile.edge_colors(A, B)
+    return [project(autotile.build_tile(b, A, B, A.shape[0], wobble, 1, 1, seed + b, cols), W) for b in range(16)]
+
+
+def tileset(path, floors_res, n_floor, blocks_res, n_block, W, bh, trans_res=None, trans=()):
     """Isometric TileSet: source 0 the floor diamonds (W x W/2), source 1 the blocks (W x W/2 + bh, the texture origin
-    lifted so the block's base sits on its cell)."""
+    lifted so the block's base sits on its cell), then the transitions (row r = pair r, column = its wang16 bits) with
+    one Match Corners terrain set per pair. trans: [(lower name, upper name)]."""
     H = W // 2
-    n_src = 1 + bool(n_block)
+    n_src = 1 + bool(n_block) + bool(trans)
     lines = [f'[gd_resource type="TileSet" load_steps={2 * n_src + 1} format=3]', "",
              f'[ext_resource type="Texture2D" path="{floors_res}" id="1_floor"]']
     if n_block:
         lines.append(f'[ext_resource type="Texture2D" path="{blocks_res}" id="2_block"]')
+    if trans:
+        lines.append(f'[ext_resource type="Texture2D" path="{trans_res}" id="3_trans"]')
     lines += ["", '[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_1"]', 'texture = ExtResource("1_floor")',
               f"texture_region_size = Vector2i({W}, {H})"]
     lines += [f"{i}:0/0 = 0" for i in range(n_floor)]
@@ -105,15 +124,40 @@ def tileset(path, floors_res, n_floor, blocks_res, n_block, W, bh):
                   'texture = ExtResource("2_block")', f"texture_region_size = Vector2i({W}, {H + bh})"]
         for i in range(n_block):
             lines += [f"{i}:0/0 = 0", f"{i}:0/0/texture_origin = Vector2i(0, {bh // 2})"]
-    lines += ["", "[resource]", "tile_shape = 1", "tile_layout = 5", f"tile_size = Vector2i({W}, {H})",
-              'sources/0 = SubResource("TileSetAtlasSource_1")']
+    if trans:
+        lines += ["", '[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_3"]',
+                  'texture = ExtResource("3_trans")', f"texture_region_size = Vector2i({W}, {H})"]
+        # every mixed tile twice, centre upper (columns 0-15) and centre lower (16-31), as in the pair lane: with one
+        # centre per tile, Godot's painter settled for tiles whose corners disagreed with their neighbours (28 in
+        # verify, 2026-10-31)
+        for r in range(len(trans)):
+            for copy in (0, 1):
+                for b in range(16):
+                    k = f"{b + 16 * copy}:{r}/0"
+                    centre = (0 if b == 0 else 1) if copy == 0 else (1 if b == 15 else 0)
+                    lines += [f"{k} = 0", f"{k}/terrain_set = {r}", f"{k}/terrain = {centre}"]
+                    lines += [f"{k}/terrains_peering_bit/{bit} = {1 if b & m else 0}" for bit, m in ISO_CORNERS]
+    lines += ["", "[resource]", "tile_shape = 1", "tile_layout = 5", f"tile_size = Vector2i({W}, {H})"]
+    for r, (lower, upper) in enumerate(trans):
+        lines += [f"terrain_set_{r}/mode = 1",   # Match Corners
+                  f'terrain_set_{r}/terrain_0/name = "{lower}"', f"terrain_set_{r}/terrain_0/color = Color(0.2, 0.6, 0.2, 1)",
+                  f'terrain_set_{r}/terrain_1/name = "{upper}"', f"terrain_set_{r}/terrain_1/color = Color(0.7, 0.6, 0.4, 1)"]
+    if trans:
+        lines.append("metadata/dotwork_iso = true")   # verify: judge corners across the diamond's sides
+    lines.append('sources/0 = SubResource("TileSetAtlasSource_1")')
     if n_block:
         lines.append('sources/1 = SubResource("TileSetAtlasSource_2")')
+    if trans:
+        lines.append(f'sources/{1 + bool(n_block)} = SubResource("TileSetAtlasSource_3")')
     return godot._write(path, "\n".join(lines) + "\n")
 
 
-def preview(floors, blocks, W, out):
-    """A 6 x 6 iso patch: floors in stripes, a wall of blocks across the back."""
+PATCH = ["0000000", "0011100", "0111110", "0111100", "0011000", "0000000", "0000000"]   # corner grid of the demo
+
+
+def preview(floors, blocks, W, out, trans=None):
+    """A 6 x 6 iso patch: floors in stripes, a wall of blocks across the back; with transitions, the first pair's
+    upper material as a blob on the lower one, each cell's tile picked from its four corners (as Godot paints it)."""
     H = W // 2
     bh = blocks[0].shape[0] - H if blocks else 0
     n = 6
@@ -123,6 +167,9 @@ def preview(floors, blocks, W, out):
         for gx in range(n):
             sx, sy = ox + (gx - gy) * W // 2, oy + (gx + gy) * H // 2
             f = floors[(gx // 2 + gy) % len(floors)]
+            if trans:
+                c = [[int(v) for v in row] for row in PATCH]
+                f = trans[c[gy][gx] * 1 + c[gy][gx + 1] * 2 + c[gy + 1][gx] * 4 + c[gy + 1][gx + 1] * 8]
             can.alpha_composite(Image.fromarray(f), (sx, sy))
     for gx in range(n) if blocks else []:
         sx, sy = ox + (gx - 0) * W // 2, oy + gx * H // 2
@@ -160,6 +207,15 @@ def run(entries, pack, man, conf):
             raise core.ToolError(f"iso {name}: at least one floor material")
         if len({bl.shape for bl in blocks}) > 1:
             raise core.ToolError(f"iso {name}: every block in one set shares one height (make another iso entry)")
+        trans, trans_names = [], []
+        for i, tr in enumerate(e.get("transitions") or []):
+            un, up_, us, ut = _mat(tr, "upper", f"{name} transition {i}")
+            ln, lp, ls, lt = _mat(tr, "lower", f"{name} transition {i}")
+            A = texture(un, up_, N, pal, gw, us, 1, ut)[0]
+            B = texture(ln, lp, N, pal, gw, ls, 1, lt)[0]
+            seed = core.seed_of(dict(tr, name=f"{ln}_{un}"), 8900)   # a pair is named by its materials
+            trans.append(transition_tiles(A, B, W, float(tr.get("wobble", 3)), seed))
+            trans_names.append((ln, un))
         art = core.art(conf, "tiles", "iso", name)
         res = f'{conf["fixed"]["res_root"]}/{conf["fixed"]["art_dir"]}/tiles/iso/{name}'
         man.drop_dir(art)
@@ -171,8 +227,19 @@ def run(entries, pack, man, conf):
             bp = core.save_clean(Image.fromarray(_atlas(blocks)), os.path.join(art, f"iso_{name}_blocks.png"))
             man.add(bp, "tileset_atlas", tile=[W, W // 2 + bh], tiles=len(blocks), routes=("klein",),
                     origin_lift=bh // 2, workflow="Dotwork iso (ground textures, projected in code)")
+        if trans:
+            at = np.concatenate([_atlas(row + row) for row in trans], axis=0)
+            tp = core.save_clean(Image.fromarray(at), os.path.join(art, f"iso_{name}_transitions.png"))
+            man.add(tp, "tileset_atlas", tile=[W, W // 2], tiles=32 * len(trans), routes=("klein",),
+                    layout="row = pair (lower, upper): " + "; ".join(f"{lo} / {up}" for lo, up in trans_names)
+                    + "; column = wang16 bits (1 nw / top, 2 ne / right, 4 sw / left, 8 se / bottom), columns 16-31"
+                    " repeat 0-15 with the other centre terrain",
+                    workflow="Dotwork iso transitions (wang16 corner tiles, projected in code)")
         ts_ = tileset(os.path.join(art, f"iso_{name}_tileset.tres"), f"{res}/iso_{name}_floors.png", len(floors),
-                      f"{res}/iso_{name}_blocks.png", len(blocks), W, bh)
-        man.add(ts_, "tileset", tile_shape="isometric", tile_size=[W, W // 2])
-        pv = preview(floors, blocks, W, core.src(conf, "art", "tiles", f"iso_{name}_preview.png"))
-        core.log(f"iso {name}: {len(floors)} floors, {len(blocks)} blocks, {W}x{W // 2}; preview {pv}")
+                      f"{res}/iso_{name}_blocks.png", len(blocks), W, bh, f"{res}/iso_{name}_transitions.png",
+                      trans_names)
+        man.add(ts_, "tileset", tile_shape="isometric", tile_size=[W, W // 2], terrain_sets=len(trans))
+        pv = preview(floors, blocks, W, core.src(conf, "art", "tiles", f"iso_{name}_preview.png"),
+                     trans[0] if trans else None)
+        core.log(f"iso {name}: {len(floors)} floors, {len(blocks)} blocks, {len(trans)} transitions, {W}x{W // 2}; "
+                 f"preview {pv}")

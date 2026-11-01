@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # ---------------------------------------------------------------------------
 # pose.py
-# Purpose : pose-driven animation: a procedural skeleton (walk, run, idle, attack, jump; side view and front / back
-#           view) drawn as OpenPose-style frames over exactly where the sprite sits on the model canvas, and the Wan 2.2
-#           Fun-Control graph that animates the sprite to follow it. The motion comes from the skeleton, so a clip does
-#           what it is told: no drift into another view, the same stride every time, a loop that closes.
+# Purpose : pose-driven animation: a procedural skeleton (walk, run, idle, attack, jump, hurt, cast, shoot, death;
+#           side view and front / back view) drawn as OpenPose-style frames over exactly where the sprite sits on the
+#           model canvas, and the Wan 2.2 Fun-Control graph that animates the sprite to follow it. The motion comes from
+#           the skeleton, so a clip does what it is told: no drift into another view, the same stride every time, a
+#           loop that closes (death is the one-shot: it ends lying down).
 # Usage   : character entry "skeleton": ["walk", "run"] (lane_character renders those actions with control_graph);
 #           python pose.py ACTION DIRECTION OUT_DIR  writes the skeleton frames for a look.
 # Notes   : Needs the "pose" model tier (Get-Models / models.lock.json): wan2.2_fun_control_{high,low}_noise_14B_Q4_K_M
@@ -19,7 +20,8 @@ import sys
 import numpy as np
 from PIL import Image, ImageDraw
 
-ACTIONS = ("walk", "run", "idle", "attack", "jump")
+ACTIONS = ("walk", "run", "idle", "attack", "jump", "hurt", "cast", "shoot", "death")
+ONE_SHOT = ("death",)   # ends in another pose than it starts: frames() runs t 0 -> 1 instead of wrapping to frame 0
 VERSION = 2   # in the clip cache key: a new skeleton re-renders the clips made from the old one
 MODELS = ("wan2.2_fun_control_high_noise_14B_Q4_K_M.gguf", "wan2.2_fun_control_low_noise_14B_Q4_K_M.gguf")
 # OpenPose 18: 0 nose, 1 neck, 2 r_shoulder, 3 r_elbow, 4 r_wrist, 5 l_shoulder, 6 l_elbow, 7 l_wrist, 8 r_hip,
@@ -57,6 +59,111 @@ def _arm(sh, angle, bend, side_view, out=0.0):
         e = (sh[0] + out, sh[1] - ARM + max(0.0, math.sin(angle)) * 0.03)
         w = (e[0] + out * 0.6, e[1] - FORE + max(0.0, math.sin(angle)) * 0.05)
     return e, w
+
+
+# hurt, cast, shoot, death: keyframed poses (t, changes from REST), eased between keys. Angles in degrees; side-view
+# arms are (shoulder angle from hanging, + forward; elbow bend), front-view arms are (elbow dx, dy, wrist dx, dy) from
+# the shoulder with + dx toward the body's middle. fall: degrees the body has toppled around the feet (death)
+REST = {"lean": 0.0, "drop": 0.0, "duck": 0.0, "fall": 0.0, "ra": -8.0, "rb": 15.0, "la": -8.0, "lb": 15.0,
+        "rf": (-0.06, -0.07, -0.096, -0.13), "lf": (-0.06, -0.07, -0.096, -0.13)}
+_GUARD = {"lean": -0.06, "drop": 0.04, "duck": 0.025, "ra": 30.0, "rb": 120.0, "la": 25.0, "lb": 125.0,
+          "rf": (-0.03, -0.04, 0.04, 0.06), "lf": (-0.03, -0.04, 0.04, 0.05)}      # flinch: lean back, guard the face
+_THRUST = {"lean": 0.035, "ra": 88.0, "rb": 0.0, "la": 80.0, "lb": 8.0,
+           "rf": (-0.02, -0.04, 0.10, -0.01), "lf": (-0.02, -0.04, 0.10, -0.01)}  # both hands out toward the target
+_AIM = {"ra": 85.0, "rb": 5.0, "la": 70.0, "lb": 40.0,
+        "rf": (-0.01, -0.03, 0.08, 0.01), "lf": (0.0, -0.05, 0.09, -0.03)}        # weapon up at the shoulder
+KEYS = {
+    "hurt": [(0.0, {}), (0.12, _GUARD), (0.45, _GUARD), (0.9, {}), (1.0, {})],
+    "cast": [(0.0, {}), (0.22, {"lean": -0.02, "ra": -35.0, "rb": 70.0, "la": -30.0, "lb": 75.0,
+                                "rf": (-0.05, -0.06, 0.02, -0.09), "lf": (-0.05, -0.06, 0.02, -0.09)}),
+             (0.38, _THRUST), (0.7, _THRUST), (0.95, {}), (1.0, {})],
+    "shoot": [(0.0, {}), (0.25, _AIM), (0.45, _AIM),
+              (0.52, dict(_AIM, lean=-0.03, ra=100.0, rb=0.0, la=82.0, lb=35.0,
+                          rf=(-0.01, -0.02, 0.08, 0.03), lf=(0.0, -0.04, 0.09, -0.01))),   # recoil
+              (0.62, _AIM), (0.8, _AIM), (0.97, {}), (1.0, {})],
+    "death": [(0.0, {}), (0.15, dict(_GUARD, drop=0.03, duck=0.03)),
+              (0.45, {"lean": 0.04, "drop": 0.12, "duck": 0.02, "ra": 15.0, "rb": 20.0, "la": 10.0, "lb": 20.0}),
+              (0.8, {"drop": 0.04, "fall": 90.0, "ra": -10.0, "rb": 10.0, "la": -10.0, "lb": 10.0}),
+              (1.0, {"drop": 0.04, "fall": 90.0, "ra": -10.0, "rb": 10.0, "la": -10.0, "lb": 10.0})],
+}
+
+
+def _ease(x):
+    x = min(1.0, max(0.0, x))
+    return x * x * (3 - 2 * x)
+
+
+def _at(action, t):
+    """The keyframed parameters of action at t (REST filled in), eased between the two keys around t."""
+    keys = [(k, dict(REST, **ch)) for k, ch in KEYS[action]]
+    for (t0, a), (t1, b) in zip(keys, keys[1:]):
+        if t <= t1:
+            u = _ease((t - t0) / (t1 - t0)) if t1 > t0 else 1.0
+            return {k: tuple(p + (q - p) * u for p, q in zip(a[k], b[k])) if isinstance(a[k], tuple)
+                    else a[k] + (b[k] - a[k]) * u for k in a}
+    return keys[-1][1]
+
+
+def _knee(hip, ankle, toward, spread=1.0):
+    """Knee of a leg whose ankle stays planted (two bones, THIGH and SHIN): it bends toward the + or - x side
+    (toward), by spread of its full sideways reach (front view: 0.5, the knee comes at the camera)."""
+    dx, dy = ankle[0] - hip[0], ankle[1] - hip[1]
+    d = math.hypot(dx, dy) or 1e-6
+    if d >= THIGH + SHIN:
+        return hip[0] + dx * THIGH / d, hip[1] + dy * THIGH / d
+    a = (THIGH ** 2 - SHIN ** 2 + d ** 2) / (2 * d)
+    h = math.sqrt(max(0.0, THIGH ** 2 - a ** 2)) * spread
+    px, py = -dy / d, dx / d
+    if px * toward < 0:
+        px, py = -px, -py
+    return hip[0] + dx / d * a + px * h, hip[1] + dy / d * a + py * h
+
+
+def _keyed(action, t, view, hh, ear):
+    """keypoints() for the keyframed actions: feet planted (the legs bend at the knee when the body drops), the upper
+    body leans and ducks, then death topples the whole figure 90 degrees around its feet onto the ground."""
+    p = _at(action, t)
+    side, quarter = view in ("side", "quarter"), view == "quarter"
+    half_hip, half_sh = (0.05, 0.09) if quarter else (0.02, 0.03) if side else (0.08, 0.15)
+    xh, xs = 0.4 * p["lean"], p["lean"]          # the hips move less than the shoulders
+    hip_h, sh_h = hh["hip"] - p["drop"], hh["shoulder"] - p["drop"]
+    neck = (xs, hh["neck"] - p["drop"] - p["duck"] * 0.5)
+    face = hh["face"] - p["drop"] - p["duck"]
+    r_hip, l_hip = (xh - half_hip, hip_h), (xh + half_hip, hip_h)
+    r_sh, l_sh = (xs - half_sh, sh_h), (xs + half_sh, sh_h)
+    foot = 0.02 if side else half_hip
+    ra_, la_ = (-foot, H["ankle"]), (foot, H["ankle"])
+    if side:
+        rk, lk = _knee(r_hip, ra_, 1), _knee(l_hip, la_, 1)
+        re_, rw = _arm(r_sh, math.radians(p["ra"]), math.radians(p["rb"]), True)
+        le, lw = _arm(l_sh, math.radians(p["la"]), math.radians(p["lb"]), True)
+        nose = (xs + 0.12, face)
+        r_eye = l_eye = (xs + 0.09, face + 0.04)
+        r_ear = l_ear = (xs - 0.04, face + 0.02)
+    else:
+        rk, lk = _knee(r_hip, ra_, -1, 0.5), _knee(l_hip, la_, 1, 0.5)
+        rf, lf = p["rf"], p["lf"]
+        re_, rw = (r_sh[0] + rf[0], r_sh[1] + rf[1]), (r_sh[0] + rf[2], r_sh[1] + rf[3])
+        le, lw = (l_sh[0] - lf[0], l_sh[1] + lf[1]), (l_sh[0] - lf[2], l_sh[1] + lf[3])
+        nose = (xs, face)
+        r_eye, l_eye = (xs - 0.05, face + 0.04), (xs + 0.05, face + 0.04)
+        r_ear, l_ear = (xs - ear, face + 0.02), (xs + ear, face + 0.02)
+    pts = [nose, neck, r_sh, re_, rw, l_sh, le, lw, r_hip, rk, ra_, l_hip, lk, la_, r_eye, l_eye, r_ear, l_ear]
+    if quarter:
+        pts = [(x * 0.7, y) for x, y in pts]
+    if p["fall"]:
+        # side views fall backward (away from the facing side), front / back views sideways; the body slides the
+        # other way so it lies centred where the character stood, and rests on the ground line, not under it
+        s = p["fall"] / 90.0
+        if not side:   # seen from above, a body on its side stacks its shoulders into the screen, not up it
+            pts = [(x * (1 - 0.75 * s), y) for x, y in pts]
+        th = math.radians(p["fall"]) * (1 if side else -1)
+        c, sn = math.cos(th), math.sin(th)
+        pts = [(x * c - (y - H["ankle"]) * sn, x * sn + (y - H["ankle"]) * c + H["ankle"]) for x, y in pts]
+        shift = 0.45 * s * (1 if side else -1)
+        lift = max(0.0, H["ankle"] + 0.05 * s - min(y for _, y in pts))
+        pts = [(x + shift, y + lift) for x, y in pts]
+    return pts
 
 
 def fit(sprite):
@@ -102,6 +209,8 @@ def keypoints(action, t, view, fitted=None):
     heights and ear spread)."""
     hh = dict(H, **{k: v for k, v in (fitted or {}).items() if k in H})
     ear = (fitted or {}).get("ear", 0.12)
+    if action in KEYS:
+        return _keyed(action, t, view, hh, ear)
     side = view in ("side", "quarter")
     quarter = view == "quarter"
     ph = 2 * math.pi * t
@@ -176,7 +285,8 @@ def canvas_map(sprite_w, sprite_h, pad=8, target=640):
 
 def frames(action, direction, sprite, n=33, size=640, pad=8, face=True):
     """n control frames (PIL RGB, size x size) for one clip: the skeleton fitted to the sprite's figure (its height,
-    feet line and centre), facing direction (e / w side, s front, n back). One loop over the clip, last = first."""
+    feet line and centre), facing direction (e / w side, s front, n back). One loop over the clip, last = first;
+    a ONE_SHOT action runs once instead and ends on its last pose (death lies on the ground)."""
     im = sprite.convert("RGBA")
     bb = im.getbbox()
     s, ox, oy = canvas_map(im.width, im.height, pad, size)
@@ -189,7 +299,7 @@ def frames(action, direction, sprite, n=33, size=640, pad=8, face=True):
     out = []
     stick = max(4, round(size / 110))
     for i in range(n):
-        t = (i % (n - 1)) / (n - 1)
+        t = i / (n - 1) if action in ONE_SHOT else (i % (n - 1)) / (n - 1)
         kp = keypoints(action, t, view, fitted)
         if direction in ("n", "ne", "nw"):   # seen from behind: the character's right is on the screen's right
             kp = [(-x, y) for x, y in kp]
@@ -256,7 +366,8 @@ def control_graph(g, control_names, high, low, drop_loras=()):
 
 if __name__ == "__main__":
     if len(sys.argv) != 4 or sys.argv[1] not in ACTIONS:
-        print("usage: python pose.py ACTION DIRECTION OUT_DIR   (ACTION: " + ", ".join(ACTIONS) + "; DIRECTION: s e n w)")
+        print("usage: python pose.py ACTION DIRECTION OUT_DIR   (ACTION: " + ", ".join(ACTIONS) + "; DIRECTION: s e n w "
+              "or a diagonal)")
         sys.exit(2)
     os.makedirs(sys.argv[3], exist_ok=True)
     dummy = Image.new("RGBA", (72, 72), (0, 0, 0, 0))

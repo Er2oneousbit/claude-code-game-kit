@@ -2,10 +2,10 @@
 # ---------------------------------------------------------------------------
 # test_comfy_local.py
 # Purpose : Exam for comfy_local.py, offline: a stand-in ComfyUI server on 127.0.0.1 (a random port) answers the
-#           endpoints the tool uses (/system_stats, /object_info, /upload/image, /prompt, /history, /view), so no
-#           GPU, models or ComfyUI install are needed. Checks the local-only rule, workflow formats, --set / --seed /
-#           --image, missing nodes, rejected and failed jobs, PNG text-chunk stripping, no overwrite, ASSET_LOG rows,
-#           and a non-ASCII prompt end to end.
+#           endpoints the tool uses (/system_stats, /object_info, /upload/image, /prompt, /history, /queue,
+#           /view), so no GPU, models or ComfyUI install are needed. Checks the local-only rule, workflow formats,
+#           --set / --seed / --image, missing nodes, rejected, failed, interrupted and cancelled jobs, PNG
+#           text-chunk stripping, no overwrite, ASSET_LOG rows, and a non-ASCII prompt end to end.
 # Usage   : python tools/art/test_comfy_local.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -67,7 +67,10 @@ class State:
         self.prompts, self.uploads = [], []
         self.reject = False          # /prompt answers 400 with node errors
         self.fail = None             # history status error with this exception message
+        self.interrupted = False     # history status error with only an execution_interrupted message
         self.polls_pending = 1       # history polls that return {} before the result
+        self.dropped = False         # the job left the queue without a result (cancelled before it ran)
+        self.queue_polls = 0
         self.nodes = {n["class_type"] for n in WORKFLOW.values()}
         self.files = [{"filename": "kit_00001_.png", "subfolder": "", "type": "output"},
                       {"filename": "kit_preview.png", "subfolder": "", "type": "temp"}]
@@ -98,15 +101,24 @@ class FakeComfy(http.server.BaseHTTPRequestHandler):
             return self.send(200, {n: {} for n in STATE.nodes})
         if url.path.startswith("/history/"):
             pid = url.path.rsplit("/", 1)[-1]
-            if STATE.polls_pending > 0:
+            if STATE.polls_pending > 0 or STATE.dropped:
                 STATE.polls_pending -= 1
                 return self.send(200, {})
+            if STATE.interrupted:
+                return self.send(200, {pid: {"outputs": {}, "status": {"status_str": "error", "completed": False,
+                                       "messages": [["execution_start", {"prompt_id": pid}],
+                                                    ["execution_interrupted", {"node_id": "3",
+                                                                               "node_type": "KSampler"}]]}}})
             if STATE.fail:
                 return self.send(200, {pid: {"outputs": {}, "status": {"status_str": "error", "completed": False,
                                        "messages": [["execution_error", {"node_id": "3", "node_type": "KSampler",
                                                                          "exception_message": STATE.fail}]]}}})
             return self.send(200, {pid: {"outputs": {"9": {"images": STATE.files}},
                                          "status": {"status_str": "success", "completed": True, "messages": []}}})
+        if url.path == "/queue":
+            STATE.queue_polls += 1
+            running = [] if STATE.dropped else [[1, "p-1", {}, {}, []]]
+            return self.send(200, {"queue_running": running, "queue_pending": []})
         if url.path == "/view":
             q = urllib.parse.parse_qs(url.query)
             name = q["filename"][0]
@@ -287,6 +299,25 @@ class ComfyLocalExam(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("node 3 (KSampler)", out)
         self.assertIn("--lowvram", out)
+
+    def test_interrupted_job_says_so(self):
+        STATE.interrupted = True
+        rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o")
+        self.assertEqual(rc, 1)
+        self.assertIn("interrupted at node 3 (KSampler)", out)
+        self.assertNotIn("no message", out)
+
+    def test_job_cancelled_before_it_ran_stops_the_wait(self):
+        STATE.polls_pending = 12     # still running for 12 polls: two /queue checks see it and keep waiting
+        rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(STATE.queue_polls, 2)
+        STATE.reset()
+        STATE.dropped = True
+        rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o2", "--wait", "60")
+        self.assertEqual(rc, 1)
+        self.assertIn("left ComfyUI's queue without a result", out)
+        self.assertEqual(STATE.queue_polls, 1)        # stopped at the first check, not after --wait
 
     def test_non_png_output_saved_with_warning(self):
         STATE.files = [{"filename": "walk.gif", "subfolder": "", "type": "output"}]

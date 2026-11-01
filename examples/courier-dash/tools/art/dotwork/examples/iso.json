@@ -1,6 +1,6 @@
 {
  "name": "iso",
- "_comment": "Isometric floors and blocks projected from the ground textures. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "_comment": "Isometric floors and blocks projected from the ground textures, and a cobble path that paints onto grass. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
  "design": {
   "setting": "steampunk"
  },
@@ -29,6 +29,16 @@
       "material": "brick_wall"
      },
      "height": 16
+    }
+   ],
+   "transitions": [
+    {
+     "upper": {
+      "material": "cobble"
+     },
+     "lower": {
+      "material": "grass_lush"
+     }
     }
    ]
   }

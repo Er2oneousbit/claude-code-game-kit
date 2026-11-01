@@ -7,11 +7,18 @@
 #           ambient loops: {"name": "torch", "kind": "flame", "prompt": "a wall torch with a lit flame"}; kinds flame,
 #           flag (pole "left" / "right"), smoke (emit [x, y] in the sprite, default its top), spin (sym: the part's
 #           rotational symmetry, default 8; render the turning part on its own), sway; frames / fps override.
+#           any motion: {"name": "pot", "kind": "clip", "prompt": "a round clay pot", "motion": "the clay pot cracks
+#           and bursts apart into pieces that scatter across the ground"}; keys motion (required),
+#           loop (default false: animations start / play / end / back; true: idle), frames (2-16, default 8), fps,
+#           anchor (center_x default: sideways only; bottom_center, center, none: how SpriteKiln aligns the
+#           frames), solid. Wan's ground shadow is removed (drop_ground_shadow).
 # Notes   : Chest / door states are klein edits of the closed render, and only the moving part of each edit is kept
 #           (moving_part): the chest's lid (the upper half and anything above it), the door's panel inside its frame.
 #           The rest stays pixel-identical to the closed render, so the chest opens instead of morphing into another
 #           drawing (2026-10-30 art audit D8, issue #27); whole_edit true keeps the full edit. The lever's on state
-#           is its mirror; the glow is code.
+#           is its mirror; the glow is code. A clip is Wan 2.2 on the base render (SpriteKiln's animate workflow, the
+#           palette locked to the base render's colours): it can change the object's shape, which the code loops
+#           cannot, but like every model clip it can drift: review the sheet, and a new seed gives another take.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 import glob
@@ -24,7 +31,8 @@ from PIL import Image, ImageOps
 
 import fcore as core
 import godot
-from lane_character import COMFY_WORK, _wf
+import qa
+from lane_character import COMFY_WORK, _saves, _wf
 from lane_props import PROP_TPL, fit_sprite
 
 import engine as lib  # noqa: E402
@@ -276,6 +284,118 @@ def sway_frames(src, n=6, amp=1.5):
 
 AMBIENT_FN = {"flame": flame_frames, "flag": flag_frames, "smoke": smoke_frames, "spin": spin_frames,
               "sway": sway_frames}
+CLIP_NEG = ("still image, frozen frame, blurry, smeared detail, low quality, compression artifacts, morphing, camera "
+            "movement, camera pan, zoom, background change, text, watermark, person, character, face, eyes, hands, "
+            "creature, ground shadow, drop shadow, floor")
+ANCHORS = ("center_x", "bottom_center", "center", "none")
+
+
+def drop_ground_shadow(frames, band_frac=0.35, grow=2):
+    """Wan's ground shadow under a prop, removed from every frame: dark neutral pixels (saturation under 0.35, luma
+    under 0.6) in the bottom band that lie outside the prop's frame-0 silhouette (grown by `grow` px). Frame 0 is the
+    render itself, so it has no shadow. Run on frames NOT yet palette-locked: SpriteKiln's palette node painted the
+    shadow in the prop's own colours (grey under an iron cauldron, terracotta under a clay pot, 2026-10-31), where no
+    rule tells it from the prop; unlocked it stays Wan's grey-blue, as in the character lane. Coloured parts that grow
+    outside the silhouette stay. Returns (frames, removed_px)."""
+    ref = np.array(frames[0])[..., 3] == 255
+    for _ in range(grow):
+        ref = ref | np.roll(ref, 1, 0) | np.roll(ref, -1, 0) | np.roll(ref, 1, 1) | np.roll(ref, -1, 1)
+    out, total = [], 0
+    for f in frames:
+        a = np.array(f)
+        op = a[..., 3] == 255
+        ys = np.nonzero(op.any(1))[0]
+        if not len(ys):
+            out.append(f)
+            continue
+        rgb = a[..., :3].astype(np.float32)
+        mx, mn = rgb.max(-1), rgb.min(-1)
+        sat = (mx - mn) / np.maximum(mx, 1)
+        luma = (rgb @ np.array([0.299, 0.587, 0.114], np.float32)) / 255
+        band = np.zeros_like(op)
+        band[ys.max() - int((ys.max() - ys.min() + 1) * band_frac) + 1:] = True
+        kill = op & ~ref & band & (sat < 0.35) & (luma < 0.6)
+        a[kill, 3] = 0
+        total += int(kill.sum())
+        out.append(Image.fromarray(a))
+    return out, total
+
+
+def clip_frames(base, e, seed, stem):
+    """A shape-changing animation of the base render by Wan 2.2 (SpriteKiln's animate workflow): the object follows
+    the entry's motion text; frames put on one canvas (centred, bottoms on the bottom edge), Wan's ground shadow
+    removed, then locked to the base render's colours (Dotwork locks them itself: see drop_ground_shadow). Cached by the motion, frame count,
+    loop flag, anchor and seed. The default anchor aligns sideways only: with the camera locked, the height Wan draws
+    is the real one, and bottom_center pinned the shadow's bottom edge, so the prop rose as its shadow grew."""
+    motion, n, loop = e["motion"].strip(), int(e.get("frames", 8)), bool(e.get("loop", False))
+    anchor = e.get("anchor", "center_x")
+    d = f"{stem}_clip_{core.key(motion, n, loop, anchor, seed, None if loop else 'one-shot prompt')}"
+    raw = sorted(glob.glob(os.path.join(d, "raw_*.png")))
+    if len(raw) != n:
+        raw = _render_clip(base, e, seed, d, motion, n, loop, anchor)
+    # the clean-up runs on every pack from the cached raw frames, so a better shadow rule needs no re-render
+    placed, removed = drop_ground_shadow([Image.open(p).convert("RGBA") for p in raw])
+    pal = qa.palette_of(Image.open(base))
+    paths = []
+    for i, can in enumerate(placed):
+        p = os.path.join(d, f"f_{i:02d}.png")
+        qa.drop_islands(qa.lock_palette(can, pal)).save(p)
+        paths.append(p)
+    if removed:
+        core.log(f"animprops clip {os.path.basename(stem)}: ground shadow removed: {removed} px")
+    return paths
+
+
+def _render_clip(base, e, seed, d, motion, n, loop, anchor):
+    """Run the animate workflow for clip_frames and save its unlocked frames as d/raw_NN.png on one canvas."""
+    core.ensure_comfy()
+    core.require_ram()
+    rel = f"animprops/{os.path.basename(d)}"
+    comfy_dir = os.path.join(COMFY_WORK, *rel.split("/"))
+    shutil.rmtree(comfy_dir, ignore_errors=True)
+    g = _saves(_wf("10_animate_sprite"), f"dotwork_work/{rel}/f")
+    if g["24"]["class_type"] != "SK_FrameSelect" or g["29"]["class_type"] != "SK_Stabilize":
+        raise core.ToolError("animate workflow nodes 24 / 29 are not SK_FrameSelect / SK_Stabilize: check the "
+                             "SpriteKiln pin (README, Setup 2)")
+    for nd in g.values():
+        if nd["class_type"] == "KSamplerAdvanced":
+            nd["inputs"]["noise_seed"] = seed
+    g["2"]["inputs"]["image"] = lib.put(Image.open(base), f"dotwork_anim_{os.path.basename(d)}.png")
+    g["5"]["inputs"].update(subject=f"the pixel art {e['prompt']}", action="custom", view="keep facing direction",
+                            custom_motion=motion)
+    g["18"]["inputs"]["text"] = CLIP_NEG
+    # the preset's "custom" action always asks for a loop, in its prompt ("smooth looping game animation": a pot burst
+    # and put itself back together, 2026-10-31) and in its frame pick. A one-shot gets its own prompt (the preset's
+    # wording, ending on the final state) and keeps its first and last frames
+    if not loop:
+        if g["17"]["class_type"] != "CLIPTextEncode" or g["17"]["inputs"].get("text") != ["5", 0]:
+            raise core.ToolError("animate workflow node 17 is not the preset's positive prompt: check the SpriteKiln "
+                                 "pin (README, Setup 2)")
+        g["17"]["inputs"]["text"] = (
+            f"2D pixel art sprite animation, the object keeps facing exactly the same direction as in the first frame, "
+            f"the pixel art {e['prompt']} {motion}. Static locked camera, no zoom, no panning, plain solid flat gray "
+            "background, no ground shadow, the background stays unchanged, crisp pixel art, consistent object design, "
+            "one-shot game animation that ends on its final state and does not return to the start.")
+    g["24"]["inputs"].update(mode="loop_best" if loop else "even_inclusive", count=n)
+    g["29"]["inputs"]["anchor"] = anchor
+    g["29"]["inputs"]["frames"] = ["27", 0]   # skip the palette node (28): the shadow must stay grey to be found
+    r = lib.run_job(g, timeout=3600)
+    outs = sorted(glob.glob(os.path.join(comfy_dir, "f_*.png")))
+    core.free_models()
+    if len(outs) < 2:
+        raise core.JobError(f"animprops clip {os.path.basename(d)}: {len(outs)} frames came back; run it again")
+    ims = [Image.open(p).convert("RGBA") for p in outs]
+    W, H = max(im.width for im in ims), max(im.height for im in ims)
+    os.makedirs(d, exist_ok=True)
+    paths = []
+    for i, im in enumerate(ims):
+        can = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        can.alpha_composite(im, ((W - im.width) // 2, H - im.height))
+        p = os.path.join(d, f"raw_{i:02d}.png")
+        can.save(p)
+        paths.append(p)
+    core.log(f"animprops clip {os.path.basename(d)}: {len(paths)} frames, {r.get('seconds', 0):.0f}s (seed {seed})")
+    return paths
 
 
 def _scene(path, frames_res, anim, name, solid, size, bb):
@@ -304,10 +424,15 @@ def run(entries, pack, man, conf):
     os.makedirs(work, exist_ok=True)
     pal = conf["fixed"]["palette"]
     ref = None
-    known = set(EDITS) | {"lever", "glow"} | set(AMBIENT)
+    known = set(EDITS) | {"lever", "glow", "clip"} | set(AMBIENT)
     for e in entries:   # spec errors before any render
         if e.get("kind") not in known:
             raise core.ToolError(f"animprops {e.get('name')}: kind {e.get('kind')!r} is not one of {', '.join(sorted(known))}")
+        if e["kind"] == "clip":
+            if not isinstance(e.get("motion"), str) or not e["motion"].strip():
+                raise core.ToolError(f"animprops {e['name']}: a clip needs \"motion\", the movement in words")
+            if not 2 <= int(e.get("frames", 8)) <= 16 or e.get("anchor", "center_x") not in ANCHORS:
+                raise core.ToolError(f"animprops {e['name']}: frames 2 .. 16, anchor one of {', '.join(ANCHORS)}")
     for k, e in enumerate(entries):
         name, kind = core.snake(e["name"]), e["kind"]
         seed = core.seed_of(e, 9500)
@@ -374,6 +499,14 @@ def run(entries, pack, man, conf):
             states, default = {"idle": paths}, "idle"
             if kind == "smoke":   # the smoke canvas is taller: the base keeps the feet anchor, so use frame 0's box
                 base = paths[0]
+        elif kind == "clip":
+            paths = clip_frames(base, e, seed, stem)
+            fps, solid = int(e.get("fps", 8)), bool(e.get("solid", False))
+            if e.get("loop"):
+                states, default = {"idle": paths}, "idle"
+            else:
+                states, default = {"start": [paths[0]], "play": paths, "end": [paths[-1]], "back": paths[::-1]}, "start"
+            base = paths[0]   # the clip's canvas, not the base render's, places the scene's feet
         else:  # glow
             gl = glow_frames(base)
             paths = []
@@ -394,9 +527,10 @@ def run(entries, pack, man, conf):
                 bb = Image.open(base).getbbox()
                 fn = f"spr_{name}_{st}_{i:02d}.png"
                 dst = core.save_clean(im, os.path.join(out, fn))
-                man.add(dst, "frame", animation=st, routes=("klein",), canvas=list(im.size), anchor="feet_bottom_center")
+                man.add(dst, "frame", animation=st, routes=("klein", "wan") if kind == "clip" else ("klein",),
+                        canvas=list(im.size), anchor="feet_bottom_center")
                 files.append(fn)
-            anims[st] = (files, fps, kind == "glow" or kind in AMBIENT)
+            anims[st] = (files, fps, kind == "glow" or kind in AMBIENT or (kind == "clip" and st == "idle"))
         tres = godot.sprite_frames(os.path.join(out, f"{name}_frames.tres"), f"{res}/{name}", anims)
         man.add(tres, "sprite_frames", animations=list(anims), node="AnimatedSprite2D")
         scn = _scene(os.path.join(out, f"{name}.tscn"), f"{res}/{name}/{name}_frames.tres", default,

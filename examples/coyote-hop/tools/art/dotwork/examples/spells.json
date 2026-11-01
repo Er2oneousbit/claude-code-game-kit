@@ -1,6 +1,6 @@
 {
  "name": "spells",
- "_comment": "Battle effects for additive blending: two one-shot spells and a big summon blast. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "_comment": "Battle effects for additive blending: two one-shot spells and a big summon blast from Wan clips, and the same kinds of spell drawn in code (exact, no GPU) plus a projectile and an aura. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
  "design": {
   "setting": "steampunk"
  },
@@ -26,6 +26,41 @@
    "keep": 6,
    "seed": 9301,
    "size": 112
+  }
+ ],
+ "spells": [
+  {
+   "name": "fire_code",
+   "kind": "fire"
+  },
+  {
+   "name": "ice_code",
+   "kind": "ice"
+  },
+  {
+   "name": "thunder",
+   "kind": "bolt",
+   "color": "#ffe070"
+  },
+  {
+   "name": "cure",
+   "kind": "heal"
+  },
+  {
+   "name": "gust",
+   "kind": "wind"
+  },
+  {
+   "name": "blast",
+   "kind": "burst"
+  },
+  {
+   "name": "shadow_orb",
+   "kind": "orb"
+  },
+  {
+   "name": "power_up",
+   "kind": "aura"
   }
  ]
 }

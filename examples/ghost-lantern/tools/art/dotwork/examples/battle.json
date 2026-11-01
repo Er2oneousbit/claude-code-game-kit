@@ -8,7 +8,8 @@
   {
    "name": "grassland",
    "prompt": "rolling green grassland with distant mountains and a few trees under a blue sky",
-   "seed": 8100
+   "seed": 8100,
+   "scroll": -4
   }
  ],
  "enemies": [

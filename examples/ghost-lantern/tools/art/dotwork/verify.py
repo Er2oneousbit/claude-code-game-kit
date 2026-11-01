@@ -47,7 +47,8 @@ func _init():
 			# a TileSet without terrains (iso floors and blocks are placed tile by tile) has nothing to paint
 			var t = 0 if r.get_terrain_sets_count() == 0 else (
 				_overlay_test(r, r.get_meta("dotwork_overlays")) if r.has_meta("dotwork_overlays") else (
-				_overlay_test(r, r.get_meta("dotwork_sides"), true) if r.has_meta("dotwork_sides") else _terrain_test(r)))
+				_overlay_test(r, r.get_meta("dotwork_sides"), true) if r.has_meta("dotwork_sides") else (
+				_iso_test(r) if r.has_meta("dotwork_iso") else _terrain_test(r))))
 			if t > 0:
 				bad += 1
 			print("DOTWORK_TERRAIN ", p, " mismatched_corners=", t)
@@ -163,6 +164,59 @@ func _paint_check(ts, base, paint, shape):
 			if a.get_terrain_peering_bit(TileSet.CELL_NEIGHBOR_BOTTOM_RIGHT_CORNER) != r.get_terrain_peering_bit(TileSet.CELL_NEIGHBOR_BOTTOM_LEFT_CORNER):
 				bad += 1
 			if a.get_terrain_peering_bit(TileSet.CELL_NEIGHBOR_BOTTOM_LEFT_CORNER) != d.get_terrain_peering_bit(TileSet.CELL_NEIGHBOR_TOP_LEFT_CORNER):
+				bad += 1
+	layer.free()
+	return bad
+
+# Isometric transitions (lane_iso, metadata dotwork_iso): one Match Corners set per material pair. Same shapes and
+# both directions as the square test, but neighbours come from Godot's own layout (get_neighbor_cell): a diamond
+# shares a side with the cell below-right (my right / bottom corners = its top / left) and below-left (my left /
+# bottom corners = its top / right). A neighbour outside the painted area is skipped.
+func _iso_test(ts):
+	var rect = []
+	for y in range(3, 7):
+		for x in range(4, 10):
+			rect.append(Vector2i(x, y))
+	var bump = rect.duplicate()
+	bump.append(Vector2i(10, 4))
+	var shapes = [rect, bump, [Vector2i(3, 3), Vector2i(4, 4), Vector2i(5, 5)], [Vector2i(6, 5)],
+		[Vector2i(2, 5), Vector2i(3, 5), Vector2i(4, 5), Vector2i(5, 5), Vector2i(6, 5)]]
+	var total = 0
+	for tset in range(ts.get_terrain_sets_count()):
+		for s in shapes:
+			total += _iso_check(ts, tset, 1, 0, s) + _iso_check(ts, tset, 0, 1, s)
+	return total
+
+func _iso_check(ts, tset, base, paint, shape):
+	var layer = TileMapLayer.new()
+	layer.tile_set = ts
+	var all = {}
+	for y in range(10):
+		for x in range(14):
+			all[Vector2i(x, y)] = true
+	layer.set_cells_terrain_connect(all.keys(), tset, base, false)
+	layer.set_cells_terrain_connect(shape, tset, paint)
+	var bad = 0
+	var pairs = [[TileSet.CELL_NEIGHBOR_BOTTOM_RIGHT_SIDE, TileSet.CELL_NEIGHBOR_RIGHT_CORNER, TileSet.CELL_NEIGHBOR_TOP_CORNER,
+			TileSet.CELL_NEIGHBOR_BOTTOM_CORNER, TileSet.CELL_NEIGHBOR_LEFT_CORNER],
+		[TileSet.CELL_NEIGHBOR_BOTTOM_LEFT_SIDE, TileSet.CELL_NEIGHBOR_LEFT_CORNER, TileSet.CELL_NEIGHBOR_TOP_CORNER,
+			TileSet.CELL_NEIGHBOR_BOTTOM_CORNER, TileSet.CELL_NEIGHBOR_RIGHT_CORNER]]
+	for c in all.keys():
+		var a = layer.get_cell_tile_data(c)
+		if a == null:
+			bad += 1
+			continue
+		for p in pairs:
+			var n = layer.get_neighbor_cell(c, p[0])
+			if not all.has(n):
+				continue
+			var d = layer.get_cell_tile_data(n)
+			if d == null:
+				bad += 1
+				continue
+			if a.get_terrain_peering_bit(p[1]) != d.get_terrain_peering_bit(p[2]):
+				bad += 1
+			if a.get_terrain_peering_bit(p[3]) != d.get_terrain_peering_bit(p[4]):
 				bad += 1
 	layer.free()
 	return bad

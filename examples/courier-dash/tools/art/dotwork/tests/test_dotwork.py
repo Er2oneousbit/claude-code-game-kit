@@ -990,6 +990,101 @@ class DotworkExam(unittest.TestCase):
         code, out = self.run_dotwork("pack", "--spec", spec, "--project", self.tmp, "--no-verify")
         self.assertEqual(code, 2, out)
 
+    def test_spells_drawn_in_code(self):
+        # every kind draws, moves and uses only its ramp; the same seed gives the same frames; loops close (the frame
+        # after the last is the first); one-shots fade out; the lane writes frames, a sheet + JSON, SpriteFrames with
+        # the additive material and a scene; a bad kind or colour list stops the run before anything is written
+        self.bind()
+        import lane_spells as sp
+        for kind, (draw, size, n, loop) in sp.KINDS.items():
+            ramp = sp.ramp_of({"name": kind}, kind)
+            fr = sp.frames(kind, size, n, 7001, ramp)
+            self.assertEqual(len(fr), n, kind)
+            self.assertTrue(all((f[..., 3] == 255).any() for f in fr[:-1]), kind)
+            self.assertGreater(len({f.tobytes() for f in fr}), n // 2, kind)                    # it moves
+            ok = {tuple(int(v) for v in c) for c in ramp}
+            for f in fr:
+                self.assertTrue({tuple(int(v) for v in c) for c in f[f[..., 3] == 255][:, :3]} <= ok, kind)
+            self.assertEqual([f.tobytes() for f in fr], [f.tobytes() for f in sp.frames(kind, size, n, 7001, ramp)])
+            if loop:
+                self.assertTrue(np.array_equal(sp.paint(draw(1.0, size, 7001), ramp), fr[0]), kind)
+            else:
+                self.assertLess((fr[-1][..., 3] > 0).sum(), max((f[..., 3] > 0).sum() for f in fr) / 3, kind)
+        tops = [np.nonzero(sp.fire(t, 48, 1) > 0.2)[0].min() for t in (0.1, 0.45)]
+        self.assertLess(tops[1], tops[0])                                                       # the fire rises
+        self.assertEqual(len(sp.ramp_of({"name": "z", "color": "#3080ff"}, "bolt")), 5)
+        for bad in ({"name": "z", "colors": ["#ffffff"]}, {"name": "z", "colors": ["#zzzzzz", "#ffffff"]}):
+            with self.assertRaises(fcore.ToolError):
+                sp.ramp_of(bad, "fire")
+        make_project(self.tmp, {"comfyui": {"url": self.url}})
+        spec = os.path.join(self.tmp, "sp.json")
+        with open(spec, "w", encoding="utf-8") as fh:
+            json.dump({"name": "sp", "spells": [{"name": "zap", "kind": "bolt", "color": "#ffe070"},
+                                                {"name": "orb", "fps": 8}]}, fh)
+        code, out = self.run_dotwork("pack", "--spec", spec, "--project", self.tmp, "--no-verify")
+        self.assertEqual(code, 0, out)
+        d = os.path.join(self.tmp, "assets", "art", "fx", "spells")
+        self.assertEqual(len([f for f in os.listdir(os.path.join(d, "zap")) if f.startswith("spr_spell_zap_")]), 6)
+        meta = json.loads(read(os.path.join(d, "orb", "spell_orb_sheet.json")))
+        self.assertEqual((meta["fps"], meta["loop"], meta["blend"]), (8, True, "add"))
+        self.assertIn("blend_mode = 1", read(os.path.join(d, "mat_additive.tres")))
+        self.assertIn("mat_additive.tres", read(os.path.join(d, "zap", "spell_zap.tscn")))
+        self.assertIn('"loop": false', read(os.path.join(d, "zap", "spell_zap_frames.tres")))
+        with open(spec, "w", encoding="utf-8") as fh:
+            json.dump({"name": "sp", "spells": [{"name": "ok", "kind": "fire"}, {"name": "x", "kind": "meteor"}]}, fh)
+        code, out = self.run_dotwork("pack", "--spec", spec, "--project", self.tmp, "--no-verify")
+        self.assertEqual(code, 2, out)
+        self.assertIn("meteor", out)
+
+    def test_battle_bg_moving_sky(self):
+        # scroll adds two cloud layers drawn in the background's own light colours, which tile sideways (a cloud over
+        # the edge shows on both sides) and stay in the sky band, and a scene whose CloudsFar / CloudsNear children
+        # scroll at half / full speed; without scroll the scene stays one Sprite2D; bad options stop the run first
+        from unittest import mock
+        s = self.bind()
+        import lane_battle_bgs as lb
+        img = np.zeros((128, 320, 3), np.uint8)
+        img[:, :] = (70, 120, 40)                                               # ground
+        for y in range(48):
+            img[y, :] = (90 + y, 140 + y, 220)                                  # sky gradient
+        img[10:14, 30:60] = (240, 240, 245)                                     # a painted cloud
+        cols = lb.cloud_colours(img, 42)
+        self.assertEqual(tuple(cols[0]), (240, 240, 245))                       # the lightest sky colour leads
+        lay = lb.cloud_layer(320, 42, cols, 5, 6, 1.0)
+        op = lay[..., 3] == 255
+        self.assertTrue(op.any() and op.mean() < 0.5)
+        self.assertTrue({tuple(int(v) for v in c) for c in lay[op][:, :3]} <= {tuple(int(v) for v in c) for c in cols})
+        self.assertEqual(lay.shape, (42, 320, 4))
+        # it tiles: a cloud centred on the left edge (found by replaying the layer's first draws) shows on both sides
+        seed = next(k for k in range(500) if (lambda r: (r.uniform(22, 42), r.uniform(0, 320))[1])(
+            np.random.default_rng(k)) < 2)
+        e_op = lb.cloud_layer(320, 42, cols, seed, 1, 1.0)[..., 3] == 255
+        self.assertTrue(e_op[:, :4].any() and e_op[:, -4:].any())
+        self.assertFalse(e_op[:, 100:220].any())                                # and nowhere near the middle
+        man = fcore.Manifest(s, "bb")
+        with mock.patch.object(lb, "render_raw", lambda *a, **k: img.copy()), \
+                mock.patch.object(lb.lib, "finish", lambda arr, **k: arr):
+            lb.run([{"name": "plains", "prompt": "p", "scroll": -4}, {"name": "cave", "prompt": "c"}], s.project,
+                   man, s.conf)
+            art = fcore.art(s.conf, "battle", "bg")
+            for tag in ("far", "near"):
+                with Image.open(os.path.join(art, f"spr_bg_plains_clouds_{tag}.png")) as im:
+                    self.assertEqual(im.size, (320, 42))                        # 0.33 of 128 rows
+            scn = read(os.path.join(art, "bg_plains.tscn"))
+            self.assertIn('[node name="CloudsNear" type="Sprite2D" parent="."]', scn)
+            self.assertIn("shader_parameter/speed = 0.006250", scn)              # far: 2 px/s on 320 px
+            self.assertIn("shader_parameter/speed = 0.012500", scn)              # near: 4 px/s left
+            self.assertIn("fract(UV.x + TIME * speed)", read(os.path.join(art, "shaders", "bg_scroll.gdshader")))
+            self.assertNotIn("Clouds", read(os.path.join(art, "bg_cave.tscn")))
+            self.assertFalse(os.path.exists(os.path.join(art, "spr_bg_cave_clouds_near.png")))
+            called = []
+            with mock.patch.object(lb, "render_raw", lambda *a, **k: called.append(1)):
+                for bad in ({"horizon": 0.9}, {"scroll": "fast"}):
+                    with self.assertRaises(fcore.ToolError):
+                        lb.run([{"name": "ok", "prompt": "p"}, dict({"name": "x", "prompt": "p"}, **bad)], s.project,
+                               man, s.conf)
+            self.assertEqual(called, [])
+
     def test_portrait_expressions(self):
         # which expressions an entry asks for; the face-only merge keeps hair / clothes / framing pixel-identical and
         # reports edits that moved more than the face; a typo'd expression stops the run before anything renders
@@ -1460,6 +1555,81 @@ class DotworkExam(unittest.TestCase):
         code, out = self.run_dotwork("pack", "--spec", spec, "--project", self.tmp, "--no-verify")
         self.assertEqual(code, 2, out)                                            # a typo'd kind stops the run
 
+    def test_animprops_clip_any_motion(self):
+        # kind "clip": Wan on the base render with the entry's motion; a one-shot keeps first and last frames
+        # (even_inclusive), a loop finds its loop point; frames land on one canvas, bottoms on the bottom edge; the
+        # clip is cached; a clip without motion stops the run before any render
+        import copy
+        from unittest import mock
+        s = self.bind()
+        import lane_animprops as ap
+        base = os.path.join(self.tmp, "bridge.png")
+        b = np.zeros((40, 32, 4), np.uint8)
+        b[4:38, 8:24] = (110, 80, 50, 255)
+        Image.fromarray(b).save(base)
+        graph = {"2": {"class_type": "LoadImage", "inputs": {"image": "x"}},
+                 "5": {"class_type": "SK_AnimationPreset", "inputs": {"subject": "", "action": "walk", "view": "side view",
+                                                                      "custom_motion": ""}},
+                 "17": {"class_type": "CLIPTextEncode", "inputs": {"text": ["5", 0]}},
+                 "18": {"class_type": "CLIPTextEncode", "inputs": {"text": ""}},
+                 "20": {"class_type": "KSamplerAdvanced", "inputs": {"noise_seed": 0}},
+                 "24": {"class_type": "SK_FrameSelect", "inputs": {"count": ["5", 2], "mode": "auto"}},
+                 "29": {"class_type": "SK_Stabilize", "inputs": {"anchor": "bottom_center"}},
+                 "33": {"class_type": "SK_SavePixelArt", "inputs": {"filename_prefix": "x"}}}
+        sent = []
+
+        def run_job(g, timeout=0):
+            sent.append(g)
+            d = os.path.join(ap.COMFY_WORK, *g["33"]["inputs"]["filename_prefix"].split("/")[1:-1])
+            os.makedirs(d, exist_ok=True)
+            for i in range(g["24"]["inputs"]["count"]):   # a bridge lowering: frames get wider and shorter
+                f = np.zeros((40 - 3 * i, 16 + 4 * i, 4), np.uint8)
+                f[..., :3], f[..., 3] = (110, 80, 50), 255
+                if i:
+                    f[-3:, :, :3] = (60, 60, 66)               # Wan's grey ground shadow, from frame 1 on
+                Image.fromarray(f).save(os.path.join(d, f"f_{i:05d}_.png"))
+            return {"seconds": 1.0}
+        with mock.patch.object(ap, "_wf", lambda name: copy.deepcopy(graph)), \
+                mock.patch.object(ap.lib, "put", lambda img, name: (img.close(), name)[1]), \
+                mock.patch.object(ap.lib, "run_job", run_job), \
+                mock.patch.object(fcore, "ensure_comfy", lambda: None), \
+                mock.patch.object(fcore, "require_ram", lambda *a, **k: None), \
+                mock.patch.object(fcore, "free_models", lambda *a, **k: None):
+            e = {"name": "bridge", "kind": "clip", "prompt": "a drawbridge", "motion": "the bridge lowers", "frames": 6}
+            stem = os.path.join(self.tmp, "bridge_s1_k")
+            paths = ap.clip_frames(base, e, 77, stem)
+            g = sent[-1]
+            self.assertEqual((g["24"]["inputs"]["mode"], g["24"]["inputs"]["count"]), ("even_inclusive", 6))
+            self.assertEqual(g["5"]["inputs"]["custom_motion"], "the bridge lowers")
+            self.assertEqual((g["5"]["inputs"]["action"], g["5"]["inputs"]["view"]), ("custom", "keep facing direction"))
+            self.assertEqual(g["20"]["inputs"]["noise_seed"], 77)
+            self.assertIn("person", g["18"]["inputs"]["text"])                    # objects do not grow faces
+            self.assertIn("one-shot game animation that ends on its final state", g["17"]["inputs"]["text"])
+            ims = [Image.open(p) for p in paths]
+            self.assertEqual({im.size for im in ims}, {(36, 40)})                  # one canvas: widest x tallest
+            self.assertTrue(all(np.array(im)[-1, :, 3].any() for im in ims))       # every frame stands on the bottom
+            for i, im in enumerate(ims[1:], 1):   # the shadow outside frame 0's silhouette (columns 10-25, grown
+                a = np.array(im)                   # 2 px) is gone; the wider brown body stays whole; every pixel is
+                op = a[..., 3] == 255              # locked to the base render's colours
+                w, x0 = 16 + 4 * i, (36 - 16 - 4 * i) // 2
+                self.assertTrue(op[40 - (40 - 3 * i):37, x0:x0 + w].all())
+                self.assertFalse(op[37:, :8].any() or op[37:, 28:].any())
+                self.assertEqual({tuple(int(v) for v in c) for c in a[op][:, :3]}, {(110, 80, 50)})
+            self.assertEqual(sent[-1]["29"]["inputs"]["anchor"], "center_x")      # sideways only by default
+            self.assertEqual(sent[-1]["29"]["inputs"]["frames"], ["27", 0])      # unlocked: Dotwork locks
+            [im.close() for im in ims]
+            self.assertEqual(ap.clip_frames(base, e, 77, stem), paths)
+            self.assertEqual(len(sent), 1)                                         # cached
+            ap.clip_frames(base, dict(e, loop=True, anchor="none"), 77, stem)
+            self.assertEqual((sent[-1]["24"]["inputs"]["mode"], sent[-1]["29"]["inputs"]["anchor"]), ("loop_best", "none"))
+            self.assertEqual(sent[-1]["17"]["inputs"]["text"], ["5", 0])           # a loop keeps the preset's prompt
+        spec = os.path.join(self.tmp, "c.json")
+        for bad in ({"motion": ""}, {"motion": "x", "anchor": "top"}, {"motion": "x", "frames": 40}):
+            with open(spec, "w", encoding="utf-8") as fh:
+                json.dump({"name": "c", "animprops": [dict({"name": "x", "kind": "clip", "prompt": "a bridge"}, **bad)]}, fh)
+            code, out = self.run_dotwork("pack", "--spec", spec, "--project", self.tmp, "--no-verify")
+            self.assertEqual(code, 2, out)
+
     def test_eight_directions_and_variants(self):
         s = self.bind()
         import lane_character as lc
@@ -1728,6 +1898,27 @@ class DotworkExam(unittest.TestCase):
         self.assertIn("tile_shape = 1", text)
         self.assertIn("texture_origin = Vector2i(0, 4)", text)
         self.assertIn('[gd_resource type="TileSet" load_steps=5 format=3]', text)
+        # iso transitions: wang16 tiles projected; all-upper / all-lower are the plain floors; a north-west-only tile
+        # shows the upper material at the diamond's top corner; each pair is a Match Corners terrain set with every
+        # mixed tile under both centre terrains, and the iso corner names follow the projection
+        A, B = tex((150, 150, 150), W // 2), tex((60, 140, 60), W // 2)
+        tr = li.transition_tiles(A, B, W, 3, 1)
+        self.assertEqual(len(tr), 16)
+        self.assertTrue(np.array_equal(tr[15], li.project(A, W)) and np.array_equal(tr[0], li.project(B, W)))
+        top, bottom = tr[1][1, 15:17, :3].astype(int), tr[1][14, 15:17, :3].astype(int)
+        self.assertLess(np.abs(top - A[0, :2]).sum(), np.abs(top - B[0, :2]).sum())     # upper at the top corner
+        self.assertLess(np.abs(bottom - B[-1, -2:]).sum(), np.abs(bottom - A[-1, -2:]).sum())
+        li.tileset(ts2, "res://f.png", 3, "", 0, W, 0, "res://t.png", [("grass", "cobble"), ("grass", "dirt")])
+        text = read(ts2)
+        self.assertIn("sources/1 = SubResource(\"TileSetAtlasSource_3\")", text)            # no blocks: next index
+        self.assertIn("terrain_set_1/mode = 1", text)
+        self.assertIn("metadata/dotwork_iso = true", text)
+        self.assertIn("1:0/0/terrains_peering_bit/top_corner = 1", text)                   # bit 1 = north-west
+        self.assertIn("8:0/0/terrains_peering_bit/bottom_corner = 1", text)                # bit 8 = south-east
+        self.assertIn("4:1/0/terrains_peering_bit/left_corner = 1", text)                  # bit 4 = south-west
+        self.assertIn("5:0/0/terrain = 1", text)
+        self.assertIn("21:0/0/terrain = 0", text)                                          # the same tile, centre lower
+        self.assertEqual(text.count("/terrain_set = "), 64)
         spec = os.path.join(self.tmp, "iso.json")
         with open(spec, "w", encoding="utf-8") as fh:
             json.dump({"name": "iso", "iso": [{"name": "x", "tile": 30, "floors": [{"material": "dirt"}]}]}, fh)
@@ -1808,6 +1999,113 @@ class DotworkExam(unittest.TestCase):
                                      fcore.Manifest(s, "x"), s.conf)
         self.assertNotEqual(c.motion_key("walk"), lane_character.Character(
             {"name": "y", "actions": ["walk"]}, s.project, fcore.Manifest(s, "y"), s.conf).motion_key("walk"))
+
+    def test_pose_hurt_cast_shoot_death(self):
+        # the free clips that drift most (hurt, cast, shoot, death) get skeletons too: feet planted, hurt / cast /
+        # shoot come back to rest, death ends lying on the ground (a one-shot, not a loop)
+        s = self.bind()
+        import lane_character
+        import pose
+        sprite = Image.new("RGBA", (72, 72), (0, 0, 0, 0))
+        sprite.paste((200, 100, 60, 255), (24, 6, 48, 70))
+        sc, ox, oy = pose.canvas_map(72, 72)
+        feet = 70 * sc + oy
+        for a in ("hurt", "cast", "shoot"):
+            for view in ("side", "quarter", "front"):
+                for t in (0.0, 0.3, 0.5, 0.75):
+                    kp = pose.keypoints(a, t, view)
+                    self.assertEqual((kp[10][1], kp[13][1]), (pose.H["ankle"], pose.H["ankle"]), (a, view, t))
+                self.assertEqual(pose.keypoints(a, 0.0, view), pose.keypoints(a, 1.0, view), (a, view))
+            fr = pose.frames(a, "e", sprite, n=9)
+            self.assertTrue(np.array_equal(np.array(fr[0]), np.array(fr[-1])), a)          # back to rest
+            self.assertFalse(np.array_equal(np.array(fr[0]), np.array(fr[4])), a)
+        rest, flinch = pose.keypoints("hurt", 0.0, "side"), pose.keypoints("hurt", 0.3, "side")
+        self.assertLess(flinch[1][0], rest[1][0] - 0.04)                                     # the body leans back
+        self.assertLess(flinch[0][1], rest[0][1] - 0.04)                                     # and the head ducks
+        for a in ("cast", "shoot"):
+            sh, w = pose.keypoints(a, 0.5, "side")[2], pose.keypoints(a, 0.5, "side")[4]
+            self.assertGreater(w[0] - sh[0], 0.09, a)                                       # the hands go out front
+            self.assertLess(abs(w[1] - sh[1]), 0.05, a)                                     # at shoulder height
+        # death: a one-shot that ends on the ground, lying across the canvas, centred where the character stood
+        self.assertIn("death", pose.ONE_SHOT)
+        for d in ("e", "s", "n", "se"):
+            fr = pose.frames("death", d, sprite, n=9)
+            self.assertFalse(np.array_equal(np.array(fr[0]), np.array(fr[-1])), d)
+            self.assertTrue(np.array_equal(np.array(fr[-1]), np.array(fr[-2])), d)          # and lies still
+            a = np.array(fr[-1]).any(-1)
+            ys, xs = np.nonzero(a.any(1))[0], np.nonzero(a.any(0))[0]
+            self.assertGreater(xs.max() - xs.min(), 2 * (ys.max() - ys.min()), d)          # lying, not standing
+            self.assertTrue(0 <= feet - int(ys.max()) <= 0.1 * 64 * sc, d)     # on the ground: the body's middle line
+            #                                                                    rests half a body's depth above it
+            self.assertTrue(0 <= xs.min() and xs.max() < 640, d)                           # still on the canvas
+        last = pose.keypoints("death", 1.0, "side")
+        self.assertLess(last[0][0], 0)                                   # fell backward, away from the facing side
+        self.assertLess(max(y for _, y in last), 0.3)
+        self.assertLess(max(y for _, y in pose.keypoints("death", 1.0, "front")), 0.3)     # front: lies low too
+        c = lane_character.Character({"name": "x", "actions": ["walk", "death"], "skeleton": ["death"]}, s.project,
+                                     fcore.Manifest(s, "x"), s.conf)
+        self.assertEqual(c.skeleton, ["death"])
+
+    def test_airborne_jump_keeps_its_height(self):
+        # a skeleton jump lifts the feet 18 % of the figure and Wan follows, but every frame was pinned to the feet
+        # line twice (SpriteKiln's SK_Stabilize, then the export's crop): a front jump shipped as standing frames
+        import copy
+        from unittest import mock
+        s = self.bind()
+        import lane_character
+        entry = {"name": "hop", "actions": ["walk", "jump"], "directions": ["s"]}
+        c = lane_character.Character(entry, s.project, fcore.Manifest(s, "hop"), s.conf)
+        self.assertEqual((c.airborne("jump"), c.airborne("walk")), (True, False))
+        # only the airborne action's cache key changes, so an upgrade re-renders jumps and nothing else
+        old = {a: fcore.key(json.dumps(s.conf["action_map"].get(a, {"wan_action": a}), sort_keys=True), None, None, None)
+               for a in ("walk", "jump")}
+        self.assertEqual(c.motion_key("walk"), old["walk"])
+        self.assertNotEqual(c.motion_key("jump"), old["jump"])
+        conf = copy.deepcopy(s.conf)
+        conf["design"]["character"].setdefault("actions", {})["jump"] = {"airborne": False}   # a platformer
+        flat = lane_character.Character(entry, s.project, fcore.Manifest(s, "hop"), conf)
+        self.assertEqual((flat.airborne("jump"), flat.motion_key("jump")), (False, old["jump"]))
+        # the render keeps the height: SK_Stabilize aligns sideways only for an airborne action
+        sent = []
+
+        class Sent(Exception):
+            pass
+
+        def run_job(g, timeout=0):
+            sent.append(g)
+            raise Sent()
+        graph = {"2": {"class_type": "LoadImage", "inputs": {}}, "5": {"class_type": "SK_AnimationPreset", "inputs": {}},
+                 "18": {"class_type": "CLIPTextEncode", "inputs": {}},
+                 "29": {"class_type": "SK_Stabilize", "inputs": {"frames": ["28", 0], "anchor": "bottom_center"}}}
+        sprite = os.path.join(self.tmp, "hop_s.png")
+        Image.new("RGBA", (72, 72), (0, 0, 0, 0)).save(sprite)
+        with mock.patch.object(lane_character, "_wf", lambda name: copy.deepcopy(graph)), \
+                mock.patch.object(lane_character.lib, "put", lambda img, name: (img.close(), name)[1]), \
+                mock.patch.object(lane_character.lib, "run_job", run_job), \
+                mock.patch.object(fcore, "ensure_comfy", lambda *a: None), \
+                mock.patch.object(fcore, "require_ram", lambda *a, **k: None):
+            for action in ("walk", "jump"):
+                with self.assertRaises(Sent):
+                    c.render(action, "s", sprite, 4242, os.path.join(self.tmp, "clips", f"{action}_s"))
+        self.assertEqual([g["29"]["inputs"]["anchor"] for g in sent], ["bottom_center", "center_x"])
+        self.assertEqual(sent[1]["29"]["inputs"]["frames"], ["27", 0])
+
+        # the export: walk frames stand on the canvas floor; jump frames rise by how far their feet left the first
+        # frame's line, and a crouch that sinks the whole figure (bottom 94) still stands on the floor
+        def fig(bottom, h=66):   # a full-height figure, so the peak frame must grow the canvas
+            im = Image.new("RGBA", (40, 100), (0, 0, 0, 0))
+            im.paste((180, 90, 40, 255), (15, bottom - h, 25, bottom))
+            return im
+        self.assertEqual(c.lifts("jump", [fig(90), fig(94), fig(78), fig(90)]), [0, 0, 12, 0])
+        self.assertEqual(c.lifts("walk", [fig(90), fig(84)]), [0, 0])
+        tres, (W, H) = c.export({("walk", "s"): ([fig(90), fig(86)], []),
+                                 ("jump", "s"): ([fig(90), fig(94), fig(78), fig(90)], [])}, {"s": sprite})
+        self.assertEqual(H, 66 + 12)                                              # taller than the 72 px minimum
+        frames = os.path.join(c.out, "frames")
+        bottom = {n[8:-4]: Image.open(os.path.join(frames, n)).getbbox()[3] for n in os.listdir(frames)
+                  if n.startswith("spr_hop_")}
+        self.assertEqual(bottom, {"walk_s_00": H, "walk_s_01": H, "jump_s_00": H, "jump_s_01": H,
+                                  "jump_s_02": H - 12, "jump_s_03": H})
 
     def test_setup_lists_models_offline(self):
         nogame = os.path.join(self.tmp, "nogame")

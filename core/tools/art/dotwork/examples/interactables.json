@@ -1,6 +1,6 @@
 {
  "name": "interactables",
- "_comment": "State props (chest, door, lever, save point, ambient loops (torch, banner, smokestack, gear, fern) glow) and an 8-direction airship with a ground shadow. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "_comment": "State props (chest, door, lever, save point, ambient loops (torch, banner, smokestack, gear, fern) glow), two props animated by Wan clips (a cauldron that bubbles in a loop, a flower bud that blooms once) and an 8-direction airship with a ground shadow. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
  "design": {
   "setting": "steampunk"
  },
@@ -71,6 +71,23 @@
    "prompt": "a green fern in a small clay pot",
    "size": 32,
    "seed": 9524
+  },
+  {
+   "name": "cauldron",
+   "kind": "clip",
+   "prompt": "a black iron cauldron full of bubbling green liquid",
+   "size": 32,
+   "motion": "the green liquid bubbles and churns, round bubbles rise and pop at the surface",
+   "loop": true,
+   "seed": 9530
+  },
+  {
+   "name": "flower_bud",
+   "kind": "clip",
+   "prompt": "a closed pink flower bud on a short green stem in a small clay pot",
+   "size": 32,
+   "motion": "the pink flower bud slowly opens its petals into a full bloom and stays open",
+   "seed": 9531
   }
  ],
  "vehicles": [

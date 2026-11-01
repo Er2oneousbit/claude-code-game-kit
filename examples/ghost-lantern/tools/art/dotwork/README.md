@@ -6,11 +6,13 @@ sheets (`assets_src/`), and a manifest for `docs/ASSET_LOG.md`. Claude (or you) 
 
 What it makes (each is a **lane**): animated characters (4 or 8 directions, idle / walk / attack, battle and emote
 poses), townsfolk in bulk (walk clips plus palette variants), props with collision scenes, layered terrain with
-buildings, interiors and cliffs, side-view platformer tilesets with parallax backgrounds, isometric floors and blocks,
-maps painted from text, fences / pipes / rails, animated water, effects and spells, enemies and bosses, battle
-backgrounds, title screens, icons, portraits with expressions and talking frames, pixel fonts, window skins, HUD
-widgets (gauges, button states, a Theme), screen transitions, weather, status-effect loops, emote balloons, 8-direction
-vehicles, treasure chests / doors / switches / save points, sprite edits and normal maps, and image-to-pixel-art.
+buildings, interiors and cliffs, side-view platformer tilesets with parallax backgrounds, isometric floors, blocks
+and terrain transitions, maps painted from text, fences / pipes / rails, animated water, effects and spells (Wan
+clips, or drawn in code: fire, ice, lightning, heal, wind, explosions, projectile orbs, auras), enemies and bosses,
+battle backgrounds (optionally with drifting cloud layers), title screens, icons, portraits with expressions and
+talking frames, pixel fonts, window skins, HUD widgets (gauges, button states, a Theme), screen transitions, weather,
+status-effect loops, emote balloons, 8-direction vehicles, treasure chests / doors / switches / save points, props
+animated by any motion (Wan clips), sprite edits and normal maps, and image-to-pixel-art.
 Model-free tools: palette swaps (`recolor`, and `recolor_of` in the enemies lane) and `clean` (any image to clean pixel
 art on the game palette).
 
@@ -168,7 +170,8 @@ pixel-art wording. Ready-to-run specs for every capability are in `examples/` (s
  "effects": [{"name": "fire", "subject": "a burst of flames", "motion": "the flames burst up and die down", "keep": 6}],
  "enemies": [{"name": "hound", "prompt": "a brass guard hound", "size": 80},
              {"name": "frost_hound", "recolor_of": "hound", "hue": 150}],
- "battle_bgs": [{"name": "mine", "prompt": "an underground mine with lanterns"}],
+ "battle_bgs": [{"name": "mine", "prompt": "an underground mine with lanterns"},
+                {"name": "plains", "prompt": "grassy plains under a big cloudy sky", "scroll": -4}],
  "scenes": [{"name": "title", "prompt": "a brass city at dusk under airships"}],
  "icons": [{"name": "potion", "prompt": "a red potion bottle"}], "portraits": [{"name": "guard", "prompt": "...", "expressions": true, "talking": true}],
  "fonts": [{"name": "dialogue", "glyphs": "glyphs/dialogue.txt", "effect": "shadow"}],
@@ -178,8 +181,10 @@ pixel-art wording. Ready-to-run specs for every capability are in `examples/` (s
  "weather": [{"name": "storm", "kind": "rain", "intensity": 0.8}],
  "status": [{"name": "poison"}, {"name": "zzz", "kind": "sleep"}],
  "hitfx": [{"name": "spark", "kind": "spark"}, {"name": "flash", "kind": "flash"}],
+ "spells": [{"name": "fire"}, {"name": "frost", "kind": "ice"}, {"name": "zap", "kind": "bolt", "color": "#ffe070"}],
  "animprops": [{"name": "chest", "kind": "chest", "prompt": "a wooden treasure chest"},
-               {"name": "torch", "kind": "flame", "prompt": "a wall torch with a lit flame"}],
+               {"name": "torch", "kind": "flame", "prompt": "a wall torch with a lit flame"},
+               {"name": "pot", "kind": "clip", "prompt": "a clay pot", "motion": "it bursts into pieces"}],
  "vehicles": [{"name": "airship", "prompt": "a steampunk airship", "size": 72}],
  "tools": [{"name": "guard_edit", "source": "assets/art/characters/guard/frames/spr_guard_idle_s_00.png",
             "edits": ["give him a red scarf"], "normal": true}],
@@ -187,7 +192,8 @@ pixel-art wording. Ready-to-run specs for every capability are in `examples/` (s
  "platforms": [{"name": "meadow", "fill": {"material": "dirt"}, "surface": {"material": "grass_lush"},
                 "background": {"prompt": "rolling green hills under a blue sky"}}],
  "iso": [{"name": "village", "floors": [{"material": "grass_lush", "variants": 2}, {"material": "cobble"}],
-          "blocks": [{"name": "wall", "top": {"material": "stone_floor"}, "side": {"material": "brick_wall"}}]}],
+          "blocks": [{"name": "wall", "top": {"material": "stone_floor"}, "side": {"material": "brick_wall"}}],
+          "transitions": [{"upper": {"material": "cobble"}, "lower": {"material": "grass_lush"}}]}],
  "design": {"setting": "steampunk", "character": {"fig_height": 66}, "tile_px": 32}
 }
 ```
@@ -205,7 +211,7 @@ escapes, absolute paths and network paths in a spec, because specs get shared. A
 the command line (`character --source`) is fine. `glyphs` files are looked up in Dotwork's own `glyphs/` folder first,
 then in the game. Every other name a spec gives (entry names, character actions and pose names, font `export` file
 names, map props) becomes a snake_case file name, so none of them can point outside the game either; character
-`directions` accept only `s`, `e`, `n` and `w`.
+`directions` accept only `s`, `e`, `n`, `w` and the diagonals `se`, `ne`, `nw`, `sw`.
 
 ## Lanes and their limits
 Honest list: these are the failure modes seen in testing and what Dotwork does about them.
@@ -215,13 +221,13 @@ Honest list: these are the failure modes seen in testing and what Dotwork does a
 | characters (Wan clips) | Attacks sometimes turn the character toward the camera; back views sometimes grow a face | `keep=N` ping-pongs the good frames; back idles are a procedural 1 px bob; `audition` renders takes side by side; the turn warning misses some turns, so judge the sheet |
 | characters (Wan clips: drift, matte, shadow) | A clip can drift into another view's design (a staff the side view does not have, a turned body); the generator's white could stay between the limbs as a matte; the ground shadow could blink because each frame was judged alone (#24, #22, #25) | Drift: colours another direction's sprite has and this one lacks, over 4 % of the figure two frames running, trim the clip to the frames before it (played back and forth) when 3 or more remain, and otherwise stop the character with an audition command to run; `clip_fix: {"<clip>": {"allow_drift": true}}` keeps it. A small feature (a beak, about 1 %) is not caught: the head-signature note still asks for review. Matte: flat generator white touching the outside in the unlocked frames is removed with its rim; skipped when the sprite itself is 5 % or more white (clothing and matte look alike) or has white at its own edge. Shadow: the clip learns its shadow colours from the frames where the per-frame pass worked and removes them under the feet in every frame |
 | npcs | Each NPC is still a rotation and a Wan clip per walk direction (about 8 minutes for a symmetric one) | Idles are the code-drawn breathing bob in every direction (`idle: "clip"` renders them), so walk is the only clip; `variants` recolour the finished NPC into more townsfolk with one colour map across every frame, no render |
-| characters (skeleton) | A free image-to-video clip decides the motion itself: strides vary, limbs drift, loops do not close | `"skeleton": ["walk", "run"]` drives those actions with a procedural OpenPose skeleton (walk, run, idle, attack, jump; side, three-quarter and front / back views, chibi proportions) fitted to exactly where the sprite sits on the model canvas; Wan 2.2 Fun-Control follows it. Needs the optional `pose` tier (`setup --check --tier pose`). The skeleton fixes the motion, not the drawing: judge the sheet as usual |
+| characters (skeleton) | A free image-to-video clip decides the motion itself: strides vary, limbs drift, loops do not close | `"skeleton": ["walk", "run"]` drives those actions with a procedural OpenPose skeleton (walk, run, idle, attack, jump, hurt, cast, shoot, death; side, three-quarter and front / back views, chibi proportions) fitted to exactly where the sprite sits on the model canvas; Wan 2.2 Fun-Control follows it. Needs the optional `pose` tier (`setup --check --tier pose`). The skeleton fixes the motion, not the drawing: judge the sheet as usual. Every clip used to be pinned to the feet line frame by frame, which flattened a jump into standing frames (the skeleton lifts the feet 18 % of the figure and Wan follows): a jump now keeps its height (Godot notes). Hurt, cast and shoot plant the feet and come back to rest (hurt: lean back and guard the face; cast: draw the hands in, thrust them out, hold; shoot: raise the weapon, aim, recoil). Death is the one clip that does not loop: stagger, drop to the knees, fall backward (side views) or sideways (front and back), and lie still, centred where the character stood. The lying frames are wider than a standing figure, and every animation of a character shares one canvas, so `death` widens all of them; the feet stay on the same line. Back-view idles stay the code-drawn bob even when `idle` is in `skeleton`; `"clip_fix": {"idle_n": {"wan": true}}` renders one from the skeleton instead (the back view has no face points, and the live check drew a gentle breathing back with no face on the head, one take out of one) |
 | characters (8 directions) | Each generated direction is another set of clips (a symmetric 8-way character renders s, se, e, ne and n; w, sw and nw are mirrors) | Add the diagonals to `directions`; the rotation runs 8-way (about 200 s) and the back diagonals idle in code like n. The animation node knows one diagonal view wording ("three-quarter view"), so diagonal clips drift toward front or side more often than cardinal ones: judge the review sheet |
 | character variants | Editing each finished frame for a new outfit flickers (every frame gets its own coat) | `variants` with `edit` render a whole character from the once-edited south sprite (a full character's cost); with `hue` / `to` they recolour every frame with one map and cost nothing |
 | characters (asymmetric) | A mirrored west view swaps which arm holds the signature item | `"asymmetric": true` generates west instead of mirroring |
 | characters (which way a view faces) | The rotation model reads "right side view" either way round from one character to the next (one test character's east view faced left, another's faced right; a front quarter view flipped on a third), so a fixed output order put some characters' east walk on the west | After the rotation, each east / west pair is judged by where the face sits in the head and swapped when the east view faces left (the log says so; clips and poses made from it move to `_old_facing/` and re-render). Back views and faceless characters (helmets, machines) cannot be judged: the manifest asks you to check them on the review sheet, and `"rot_swap": ["ne"]` swaps a pair by hand |
 | battle / emote poses (klein edits) | Vague wording returns the idle pose; some poses drop a signature prop | Wordings that name body positions (`BATTLE_POSES`, `FIELD_POSES`), `pose_text` per character, a per-pose seed fix |
-| effects (Wan) | Motion can turn particles into a face or a little figure | Effect-only prompt wording, `keep`, a new seed; review every effect |
+| effects (Wan) | Motion can turn particles into a face or a little figure | Effect-only prompt wording, `keep`, a new seed; review every effect. Or use the `spells` lane: fire, ice, bolt, heal, wind, burst (one-shots), orb and aura (loops), drawn in code with the kind's colour ramp or your own (`color`, `colors`), so every frame is exact, free and repeatable; it cannot draw a one-off subject (a summon's creature), which stays a Wan effect |
 | sprites / props / icons | The refine pass can grow a figure past its canvas | Re-rendered smaller automatically (never rescaled); an icon prompt that fills the frame (a spiral) can still fail: reword it |
 | sprites | White background trapped inside a figure | Removed automatically; skipped for white subjects (`keep_white` / `holes` override) |
 | enemies (ground slabs) | The model bakes a soft ground shadow under a figure, and the palette has no dark neutral, so it came out as a light-grey slab (#28, #26) | Removed automatically (wide, flat, light, under the feet, with the outline ring that framed it; `keep_shadow: true` keeps it) and replaced by a dark dithered contact shadow drawn in code: `spr_enemy_<name>_shadow.png`, a `Shadow` child drawn behind the sprite (`shadow: false` skips it). Props: `"slab": "remove"` opts in (an iso plinth looks like a slab, so it is not the default) |
@@ -235,10 +241,12 @@ Honest list: these are the failure modes seen in testing and what Dotwork does a
 | portrait expressions (klein edits) | An edit can redraw more than the face (hair, collar) or barely change it | `face_only` (default) keeps only the face box of the edit, so the rest stays pixel-identical, and logs a QA line when most of the edit fell outside it; `expression_fix: {"angry": {"seed": N}}` for another take |
 | treasure chests / doors (states) | Each state was drawn on its own, so the chest morphed instead of opening (#27) | States are edits of the closed render, and only the moving part is kept: the chest's lid (its upper half and anything above), the door's panel inside its frame; the rest stays pixel-identical. Door edits skip the background flood (a door fills its cell, and the flood ate light planks). A QA line names a state whose edit mostly fell outside the moving part (it may look unchanged: another seed, or `whole_edit: true`) |
 | ambient props (`flame`, `flag`, `smoke`, `spin`, `sway`) | Animation models drift and do not loop exactly | The motion is code on one render, so every loop is exact: fire flickers in its own colours, a banner waves pinned at its pole, smoke puffs rise from the top (the canvas grows 28 px), a gear turns one symmetry step (render the turning part on its own), a plant sways at the top. `flame` stops the run if the render has no fire colours |
+| animated props (`clip`) | The code loops move pixels; they cannot change an object's shape (a pot breaking, liquid churning) | `"kind": "clip"` with a `motion` runs Wan 2.2 on the prop's render, palette locked to its colours; a one-shot keeps its first and last frames (`start` / `play` / `end` / `back`), `"loop": true` finds a loop point (`idle`). Wan keeps its subject in frame, so a change that removes the object (a pot bursting) comes back whole: use an effect over the prop for that. Like every model clip it can drift or redraw the object: review the sheet, a new `seed` gives another take, `anchor` changes how frames are aligned (default sideways only); Wan's ground shadow is removed |
 | platforms (side view) | A platformer needs edges, a top surface and one-way ledges that join in every combination | 16 tiles indexed by which sides are exposed (fill inside, the surface lip on top, shaded rims and an outline on open sides, rounded outer corners) plus 3 one-way pieces; a Match Sides TileSet with full-tile collision that `verify` paints and checks side by side; the background is made seamless left to right and ships with a ParallaxBackground scene |
-| iso (2:1 isometric) | Iso tiles drawn one by one do not continue each other | Floors and blocks are projected from the ground lane's seamless textures, so neighbouring diamonds continue one texture; blocks are taller tiles with a texture origin. Not generated: terrain transitions between iso materials (place them by hand or along a block row) |
+| iso (2:1 isometric) | Iso tiles drawn one by one do not continue each other | Floors and blocks are projected from the ground lane's seamless textures, so neighbouring diamonds continue one texture; blocks are taller tiles with a texture origin. `transitions` add the 16 corner tiles between two materials (the pair lane's wang16 tiles, projected the same way), a Match Corners terrain set per pair that Godot's terrain tool paints; `verify` paints shapes in both directions and checks every shared corner across the diamond's sides |
 | fonts | Models cannot draw consistent letters | Glyphs are text bitmaps (`glyphs/*.txt`), built into BMFont `.fnt`; edit a letter by editing its rows |
 | battle backgrounds / scenes | 320x128 / 320x180 art shown at 2x (chunkier than 1x sprites) | Same exact-2x scale everywhere it is used |
+| battle backgrounds (moving sky) | Cutting the painted sky off at the horizon and scrolling it split mountain peaks (the tip drifted away from its base) | `"scroll": -4` keeps the picture whole and adds two cloud layers drawn in code in its own lightest sky colours (far: small, half speed; near: bigger, full speed) that tile sideways; `horizon` sets how far down they reach, `clouds` how many. They drift over far mountains, which reads as nearer clouds; leave `scroll` off for caves and interiors |
 | `--engine none` | Maps, TileSets, scenes, SpriteFrames and the damage-flash shader are Godot resources | PNGs, sprite sheets + their JSON, BMFont `.fnt` fonts, 9-slice margins (in the manifest) and the manifest still ship; maps and the flash are skipped with a log line |
 
 Timing on the tested GPU: a sprite about 18 s, a texture tile with variants about 25 s, a Wan clip about 110 s, a
@@ -246,6 +254,9 @@ Timing on the tested GPU: a sprite about 18 s, a texture tile with variants abou
 
 ## Godot notes
 - Characters: `AnimatedSprite2D` with `<name>_frames.tres`; the node offset puts the feet on the origin (y-sort).
+  A jump keeps its rise and fall in the frames (the canvas bottom is the ground, so the sprite leaves it without
+  code). A game whose physics already lifts the body (a platformer) sets `"design": {"character": {"actions":
+  {"jump": {"airborne": false}}}}` and gets jump frames that stand on the feet line like every other action.
 - Props: `prop_<name>.tscn` is a `StaticBody2D` with the origin at the feet and a footprint box; put props under a
   `Node2D` with `y_sort_enabled` and characters walk behind tree canopies and lamp posts by their feet.
 - Ground: one TileSet for stacked `TileMapLayer`s: Base (plain tiles, random paint), one layer per overlay terrain,

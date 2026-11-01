@@ -15,6 +15,9 @@
 #           west-facing views are mirrors of their east twins unless asymmetric; the back diagonals idle in code).
 #           After the rotation each east / west pair is checked by where the face sits and swapped when the east view
 #           faces left; rot_swap ["ne"] swaps a pair by hand (back views show no face to check).
+#           Every clip stands on the feet line, except airborne actions (jump by default; design.character.actions
+#           {"jump": {"airborne": false}} turns it off for a game whose physics moves the body): they keep the rise
+#           and fall the clip drew, and the frame's bottom edge is the ground.
 #           variants: [{"name": "guard_winter", "edit": "a fur-lined winter coat"}] renders an outfit as a whole
 #           character from the edited south sprite; [{"name": "guard_red", "hue": 130}] is a palette swap of every frame
 #           (no render; recolor.py keys, keep_skin on).
@@ -142,8 +145,8 @@ class Character:
         self.asym = bool(entry.get("asymmetric", False))
         self.mirror = self.d["mirror_west"] and not self.asym
         # actions and directions become folder and file names (clips/<action>_<dir>, wiped before each render):
-        # snake the actions and allow only the four directions ("../.." in a spec action reached shutil.rmtree,
-        # 2026-10-30 Kimi audit)
+        # snake the actions and allow only the eight compass directions ("../.." in a spec action reached
+        # shutil.rmtree, 2026-10-30 Kimi audit)
         self.actions = [core.snake(a) for a in (entry.get("actions") or list(self.d["actions"]))]
         self.dirs = list(entry.get("directions") or self.d["directions"])
         bad = [d for d in self.dirs if d not in DIRS8]
@@ -366,8 +369,16 @@ class Character:
         """What shapes a clip besides its seed: the action_map entry, the character's motion text and subject. Editing
         any of them in the spec re-renders that action's clips (they were ignored before the 2026-10-30 audit)."""
         am = self.conf["action_map"].get(action, {"wan_action": action})
-        return core.key(json.dumps(am, sort_keys=True), (self.e.get("motions") or {}).get(action), self.e.get("subject"),
-                        f"skeleton {pose.VERSION}" if action in self.skeleton else None)   # a skeleton or a new one re-renders
+        parts = [json.dumps(am, sort_keys=True), (self.e.get("motions") or {}).get(action), self.e.get("subject"),
+                 f"skeleton {pose.VERSION}" if action in self.skeleton else None]   # a skeleton or a new one re-renders
+        if self.airborne(action):   # appended only here, so every other clip keeps its key (and its cache)
+            parts.append("airborne")
+        return core.key(*parts)
+
+    def airborne(self, action):
+        """True for an action whose clip keeps its vertical motion (a jump leaves the ground). Default: jump only;
+        design.character.actions {"<action>": {"airborne": true | false}} decides per action."""
+        return bool((self.d.get("actions") or {}).get(action, {}).get("airborne", action == "jump"))
 
     def render(self, action, direction, sprite, seed, d, motion=None):
         """One Wan clip into d (wiped first). Shared by clip() and audition.py. motion overrides the action_map and
@@ -409,6 +420,14 @@ class Character:
         # darkest colors, so no rule can tell shadow from boots. Unlocked, the shadow stays a neutral grey-blue;
         # frames() removes it and then locks to the sprite palette itself.
         g["29"]["inputs"]["frames"] = ["27", 0]
+        if self.airborne(action):
+            # SK_Stabilize pins every frame's feet to the first frame's, which flattened a jump into eight standing
+            # frames (2026-10-30: the skeleton lifted the feet 18 % of the figure and Wan followed). center_x keeps
+            # the sideways alignment and the height; SK_CropToContent's union crop keeps the frames' offsets
+            if g["29"]["class_type"] != "SK_Stabilize":
+                raise core.ToolError(f"animate workflow node 29 is {g['29']['class_type']}, not SK_Stabilize: check "
+                                     "the SpriteKiln pin (README, Setup 2)")
+            g["29"]["inputs"]["anchor"] = "center_x"
         r = lib.run_job(g, timeout=3600)
         for f in glob.glob(os.path.join(comfy_dir, "f_*.png")):
             shutil.copyfile(f, os.path.join(d, os.path.basename(f)))
@@ -521,14 +540,26 @@ class Character:
         return fr, notes
 
     # -------------------------------------------------- 6. export
+    def lifts(self, action, fr):
+        """Pixels each frame stands above the ground. 0 for every frame of an action on its feet. For an airborne one:
+        how far its feet rose above the first frame's (a jump starts standing: Wan's first frame is the sprite), never
+        below it: Wan sinks the whole figure into a front-view crouch (the feet went 46 of 640 px below the line), and
+        that frame stands on the line as before."""
+        if not self.airborne(action):
+            return [0] * len(fr)
+        bottoms = [b[3] if b else None for b in (f.getbbox() for f in fr)]
+        ground = next((b for b in bottoms if b is not None), None)
+        return [max(0, ground - b) if b is not None else 0 for b in bottoms]
+
     def export(self, clips, rot):
         self.man.drop_dir(self.out)  # clean re-export (stale frames from an earlier, longer clip)
         # provenance: klein drew the south sprite (unless it came from --source) and every still pose
         routes = (("klein",) if not self.e.get("source") or self.e.get("poses") else ()) + ("qwen_rotate", "wan") + \
             (("wan_pose",) if self.skeleton else ())
-        allf = [f for fr, _ in clips.values() for f in fr]
-        W = max(f.getbbox()[2] - f.getbbox()[0] for f in allf if f.getbbox())
-        H = max(f.getbbox()[3] - f.getbbox()[1] for f in allf if f.getbbox())
+        lifts = {k: self.lifts(k[0], fr) for k, (fr, _) in clips.items()}
+        sized = [(f.getbbox(), up) for k, (fr, _) in clips.items() for f, up in zip(fr, lifts[k]) if f.getbbox()]
+        W = max(b[2] - b[0] for b, _ in sized)
+        H = max(b[3] - b[1] + up for b, up in sized)   # a jump's peak frame needs its height above the ground too
         W = max(W + W % 2, self.d["canvas_min"][0])
         H = max(H, self.d["canvas_min"][1])
         anims = {}
@@ -541,7 +572,7 @@ class Character:
                 bb = f.getbbox()
                 f = f.crop(bb)
                 can = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-                can.alpha_composite(f, ((W - f.width) // 2, H - f.height))
+                can.alpha_composite(f, ((W - f.width) // 2, H - f.height - lifts[(action, direction)][i]))
                 fn = f"spr_{self.name}_{name}_{i:02d}.png"
                 p = core.save_clean(can, os.path.join(self.out, "frames", fn))
                 files.append(fn)

@@ -3,6 +3,24 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.7.5 (2026-10-31): Dotwork jumps, four more motions, spells drawn in code
+- **Fix: Dotwork skeleton jumps stayed on the ground.** Every frame was pinned back to the feet line twice, so front
+  and back jumps shipped as standing frames. Airborne actions (jump by default) now keep the clip's height; a
+  platformer, whose physics already lifts the body, turns it off per action (`airborne: false`). Only jump clips
+  re-render after an upgrade.
+- **Dotwork: skeleton motions for hurt, cast, shoot and death** (death is a one-shot that ends lying down). The
+  existing walk, run, idle, attack and jump skeletons are unchanged, so no cached clip re-renders.
+- **Dotwork: new `spells` lane,** spells drawn in code for additive blending: fire, ice, bolt, heal, wind, burst
+  (one-shots), orb and aura (loops). Exact, repeatable, no GPU.
+- **Dotwork: battle backgrounds can drift two cloud layers** (`scroll`), drawn in the picture's own sky colours.
+- **Dotwork: animated props take any motion** (`"kind": "clip"`, Wan 2.2), one-shot or loop, with the ground shadow
+  removed and the palette locked.
+- **Dotwork: isometric terrain transitions** between two materials, painted with Godot's terrain tool and checked by
+  `verify` (every shared corner must agree).
+- **Fix: `comfy_local.py` on a cancelled job.** A job stopped with Cancel or `/interrupt` now says "interrupted at
+  node N (type)" instead of "failed: no message", and a job taken off ComfyUI's queue before it ran stops the wait
+  within about 10 s instead of waiting out `--wait`.
+
 ## 0.7.4 (2026-10-31): Gatekeeper starts again, in-game AI download
 - **Fix: Gatekeeper (Godot) could not be started.** The start panel's text grew past the 640x360 window and pushed
   both buttons off the bottom, so the game sat on its opening message with nothing to click. Panels now pin to the

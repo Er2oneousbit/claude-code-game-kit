@@ -16,8 +16,8 @@
 # Needs   : Python 3.8+ only. ComfyUI running (default http://127.0.0.1:8188, or COMFYUI_URL / --url), with the
 #           node packs and models the workflow names. A workflow saved in API format (ComfyUI's "Export (API)";
 #           the normal save format is refused with that hint).
-# Exit    : 0 ok, 1 ComfyUI ran the job and it failed (out of memory, a node error), 2 usage, server not running,
-#           missing nodes, or a workflow ComfyUI rejected
+# Exit    : 0 ok, 1 ComfyUI ran the job and it failed (out of memory, a node error), or the job was interrupted or
+#           taken off the queue, 2 usage, server not running, missing nodes, or a workflow ComfyUI rejected
 # Notes   : ComfyUI has no login, so this tool talks only to a server on this machine (127.0.0.1, localhost, ::1)
 #           unless --allow-remote. Free per image; the cost is GPU time (each run prints it).
 #           ComfyUI writes the full prompt and workflow (local paths included) into every PNG it saves; this tool
@@ -64,6 +64,8 @@ DEFAULT_URL = "http://127.0.0.1:8188"   # ComfyUI's default; it listens on this 
 URL_ENV = "COMFYUI_URL"
 TIMEOUT_S = 60                          # one HTTP request
 POLL_EVERY_S = 2
+QUEUE_CHECK_EVERY = 5                   # empty /history polls between /queue checks (a job cancelled before it
+                                        # ran never reaches the history)
 WAIT_S = 1800                           # how long to wait for a job (--wait); a Wan animation took about 2 min
 MAX_DOWNLOAD = 500_000_000              # bytes: one output file
 LOCAL_HOSTS = {"localhost"}
@@ -306,14 +308,31 @@ def queue(base, wf):
     return json.loads(data.decode("utf-8"))["prompt_id"]
 
 
+def in_queue(base, prompt_id):
+    """True while ComfyUI still holds the job, running or waiting. A /queue error counts as yes: keep waiting."""
+    try:
+        q = get_json(base, "/queue")
+    except ToolError:
+        return True
+    return any(isinstance(item, list) and len(item) > 1 and item[1] == prompt_id
+               for key in ("queue_running", "queue_pending") for item in q.get(key) or [])
+
+
 def wait_history(base, prompt_id, limit):
     start = time.monotonic()
+    polls = 0
     while True:
         hist = get_json(base, f"/history/{prompt_id}")
         entry = hist.get(prompt_id)
         status = (entry or {}).get("status") or {}
         if entry and (status.get("completed") or status.get("status_str") in ("success", "error")):
             if status.get("status_str") == "error":
+                stops = [m[1] for m in status.get("messages", []) if m and m[0] == "execution_interrupted"]
+                if stops:
+                    # Cancel in ComfyUI's page, or POST /interrupt: ComfyUI files it as an error with no message
+                    raise JobError(f"the ComfyUI job was interrupted at node {stops[0].get('node_id')} "
+                                   f"({stops[0].get('node_type')}), by Cancel in ComfyUI or /interrupt; "
+                                   "nothing was saved, run it again")
                 msgs = [m[1] for m in status.get("messages", []) if m and m[0] == "execution_error"]
                 detail = "; ".join(f"node {m.get('node_id')} ({m.get('node_type')}): {m.get('exception_message', '').strip()}"
                                    for m in msgs) or "no message"
@@ -321,6 +340,13 @@ def wait_history(base, prompt_id, limit):
                                + (" (out of memory: close other GPU apps, lower the size, or start ComfyUI with "
                                   "--lowvram)" if "out of memory" in detail.lower() else ""))
             return entry, time.monotonic() - start
+        polls += 1
+        # ComfyUI moves a job from the queue to the history in one step, so look at the history again after
+        # the queue says it is gone: it may have finished in between
+        if entry is None and polls % QUEUE_CHECK_EVERY == 0 and not in_queue(base, prompt_id) \
+                and prompt_id not in get_json(base, f"/history/{prompt_id}"):
+            raise JobError(f"job {prompt_id} left ComfyUI's queue without a result (cancelled before it ran, or "
+                           "ComfyUI restarted); nothing was saved, run it again")
         if time.monotonic() - start > limit:
             raise JobError(f"no result after {limit} s (job {prompt_id} may still be running in ComfyUI; raise --wait)")
         SLEEP(POLL_EVERY_S)
@@ -519,7 +545,8 @@ def build_parser():
     ap = argparse.ArgumentParser(
         description="Run saved ComfyUI workflows on this machine's GPU, save clean images, log them (SOP-16).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Exit: 0 ok, 1 the job failed in ComfyUI, 2 usage, server, missing nodes or a rejected workflow.\n"
+        epilog="Exit: 0 ok, 1 the job failed in ComfyUI, was interrupted, or left its queue unrun, 2 usage, server, "
+               "missing nodes or a rejected workflow.\n"
                f"Env: {URL_ENV} (default {DEFAULT_URL}).")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--url", help=f"ComfyUI address (default {URL_ENV} or {DEFAULT_URL})")
