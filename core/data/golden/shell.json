@@ -1,0 +1,2648 @@
+{
+ "cases": [
+  {
+   "expect": {
+    "access": {
+     "captions_sfx": false,
+     "colorblind": "none",
+     "difficulty": "normal",
+     "flash_limit": true,
+     "game_speed": 1.0,
+     "hold_to_toggle": false,
+     "reduce_motion": false,
+     "shake_scale": 1.0,
+     "speaker_names": true,
+     "subtitle_background": 0.6,
+     "subtitle_barks": false,
+     "subtitle_size": "medium",
+     "subtitles": true,
+     "text_scale": 1.0
+    },
+    "audio": {
+     "master": 1.0,
+     "mono": false,
+     "music": 0.8,
+     "sfx": 1.0,
+     "ui": 1.0,
+     "voice": 1.0
+    },
+    "display": {
+     "frame_cap": 0,
+     "mode": "windowed",
+     "resolution": [
+      1920,
+      1080
+     ],
+     "ui_scale": 1.0,
+     "vsync": true
+    },
+    "input": {
+     "bindings": {
+      "attack": [
+       "key:j",
+       "pad:west"
+      ],
+      "interact": [
+       "key:e",
+       "pad:north"
+      ],
+      "jump": [
+       "key:space",
+       "pad:south"
+      ],
+      "move_down": [
+       "key:s",
+       "pad:dpad_down"
+      ],
+      "move_left": [
+       "key:a",
+       "pad:dpad_left"
+      ],
+      "move_right": [
+       "key:d",
+       "pad:dpad_right"
+      ],
+      "move_up": [
+       "key:w",
+       "pad:dpad_up"
+      ],
+      "pause": [
+       "key:escape",
+       "pad:start"
+      ],
+      "ui_accept": [
+       "key:enter",
+       "pad:south"
+      ],
+      "ui_cancel": [
+       "key:escape",
+       "pad:east"
+      ],
+      "ui_down": [
+       "key:down",
+       "pad:dpad_down"
+      ],
+      "ui_left": [
+       "key:left",
+       "pad:dpad_left"
+      ],
+      "ui_right": [
+       "key:right",
+       "pad:dpad_right"
+      ],
+      "ui_up": [
+       "key:up",
+       "pad:dpad_up"
+      ]
+     },
+     "deadzone": 0.2,
+     "glyphs": "auto",
+     "invert_y": false
+    },
+    "language": "en",
+    "telemetry": {
+     "consent": "unset"
+    },
+    "version": 1
+   },
+   "name": "built-in defaults",
+   "type": "defaults"
+  },
+  {
+   "effective_shake": 1.0,
+   "expect": {
+    "access": {
+     "captions_sfx": false,
+     "colorblind": "none",
+     "difficulty": "normal",
+     "flash_limit": true,
+     "game_speed": 1.0,
+     "hold_to_toggle": false,
+     "reduce_motion": false,
+     "shake_scale": 1.0,
+     "speaker_names": true,
+     "subtitle_background": 0.6,
+     "subtitle_barks": false,
+     "subtitle_size": "medium",
+     "subtitles": true,
+     "text_scale": 1.0
+    },
+    "audio": {
+     "master": 1.0,
+     "mono": false,
+     "music": 0.8,
+     "sfx": 1.0,
+     "ui": 1.0,
+     "voice": 1.0
+    },
+    "display": {
+     "frame_cap": 0,
+     "mode": "windowed",
+     "resolution": [
+      1920,
+      1080
+     ],
+     "ui_scale": 1.0,
+     "vsync": true
+    },
+    "input": {
+     "bindings": {
+      "attack": [
+       "key:j",
+       "pad:west"
+      ],
+      "interact": [
+       "key:e",
+       "pad:north"
+      ],
+      "jump": [
+       "key:space",
+       "pad:south"
+      ],
+      "move_down": [
+       "key:s",
+       "pad:dpad_down"
+      ],
+      "move_left": [
+       "key:a",
+       "pad:dpad_left"
+      ],
+      "move_right": [
+       "key:d",
+       "pad:dpad_right"
+      ],
+      "move_up": [
+       "key:w",
+       "pad:dpad_up"
+      ],
+      "pause": [
+       "key:escape",
+       "pad:start"
+      ],
+      "ui_accept": [
+       "key:enter",
+       "pad:south"
+      ],
+      "ui_cancel": [
+       "key:escape",
+       "pad:east"
+      ],
+      "ui_down": [
+       "key:down",
+       "pad:dpad_down"
+      ],
+      "ui_left": [
+       "key:left",
+       "pad:dpad_left"
+      ],
+      "ui_right": [
+       "key:right",
+       "pad:dpad_right"
+      ],
+      "ui_up": [
+       "key:up",
+       "pad:dpad_up"
+      ]
+     },
+     "deadzone": 0.2,
+     "glyphs": "auto",
+     "invert_y": false
+    },
+    "language": "en",
+    "telemetry": {
+     "consent": "unset"
+    },
+    "version": 1
+   },
+   "input": "",
+   "name": "empty file",
+   "problems": 1,
+   "telemetry_allowed": false,
+   "type": "settings_load"
+  },
+  {
+   "effective_shake": 1.0,
+   "expect": {
+    "access": {
+     "captions_sfx": false,
+     "colorblind": "none",
+     "difficulty": "normal",
+     "flash_limit": true,
+     "game_speed": 1.0,
+     "hold_to_toggle": false,
+     "reduce_motion": false,
+     "shake_scale": 1.0,
+     "speaker_names": true,
+     "subtitle_background": 0.6,
+     "subtitle_barks": false,
+     "subtitle_size": "medium",
+     "subtitles": true,
+     "text_scale": 1.0
+    },
+    "audio": {
+     "master": 1.0,
+     "mono": false,
+     "music": 0.8,
+     "sfx": 1.0,
+     "ui": 1.0,
+     "voice": 1.0
+    },
+    "display": {
+     "frame_cap": 0,
+     "mode": "windowed",
+     "resolution": [
+      1920,
+      1080
+     ],
+     "ui_scale": 1.0,
+     "vsync": true
+    },
+    "input": {
+     "bindings": {
+      "attack": [
+       "key:j",
+       "pad:west"
+      ],
+      "interact": [
+       "key:e",
+       "pad:north"
+      ],
+      "jump": [
+       "key:space",
+       "pad:south"
+      ],
+      "move_down": [
+       "key:s",
+       "pad:dpad_down"
+      ],
+      "move_left": [
+       "key:a",
+       "pad:dpad_left"
+      ],
+      "move_right": [
+       "key:d",
+       "pad:dpad_right"
+      ],
+      "move_up": [
+       "key:w",
+       "pad:dpad_up"
+      ],
+      "pause": [
+       "key:escape",
+       "pad:start"
+      ],
+      "ui_accept": [
+       "key:enter",
+       "pad:south"
+      ],
+      "ui_cancel": [
+       "key:escape",
+       "pad:east"
+      ],
+      "ui_down": [
+       "key:down",
+       "pad:dpad_down"
+      ],
+      "ui_left": [
+       "key:left",
+       "pad:dpad_left"
+      ],
+      "ui_right": [
+       "key:right",
+       "pad:dpad_right"
+      ],
+      "ui_up": [
+       "key:up",
+       "pad:dpad_up"
+      ]
+     },
+     "deadzone": 0.2,
+     "glyphs": "auto",
+     "invert_y": false
+    },
+    "language": "en",
+    "telemetry": {
+     "consent": "unset"
+    },
+    "version": 1
+   },
+   "input": "{volume: loud",
+   "name": "not json",
+   "problems": 1,
+   "telemetry_allowed": false,
+   "type": "settings_load"
+  },
+  {
+   "effective_shake": 1.0,
+   "expect": {
+    "access": {
+     "captions_sfx": false,
+     "colorblind": "none",
+     "difficulty": "normal",
+     "flash_limit": true,
+     "game_speed": 1.0,
+     "hold_to_toggle": false,
+     "reduce_motion": false,
+     "shake_scale": 1.0,
+     "speaker_names": true,
+     "subtitle_background": 0.6,
+     "subtitle_barks": false,
+     "subtitle_size": "medium",
+     "subtitles": true,
+     "text_scale": 1.0
+    },
+    "audio": {
+     "master": 1.0,
+     "mono": false,
+     "music": 0.8,
+     "sfx": 1.0,
+     "ui": 1.0,
+     "voice": 1.0
+    },
+    "display": {
+     "frame_cap": 0,
+     "mode": "windowed",
+     "resolution": [
+      1920,
+      1080
+     ],
+     "ui_scale": 1.0,
+     "vsync": true
+    },
+    "input": {
+     "bindings": {
+      "attack": [
+       "key:j",
+       "pad:west"
+      ],
+      "interact": [
+       "key:e",
+       "pad:north"
+      ],
+      "jump": [
+       "key:space",
+       "pad:south"
+      ],
+      "move_down": [
+       "key:s",
+       "pad:dpad_down"
+      ],
+      "move_left": [
+       "key:a",
+       "pad:dpad_left"
+      ],
+      "move_right": [
+       "key:d",
+       "pad:dpad_right"
+      ],
+      "move_up": [
+       "key:w",
+       "pad:dpad_up"
+      ],
+      "pause": [
+       "key:escape",
+       "pad:start"
+      ],
+      "ui_accept": [
+       "key:enter",
+       "pad:south"
+      ],
+      "ui_cancel": [
+       "key:escape",
+       "pad:east"
+      ],
+      "ui_down": [
+       "key:down",
+       "pad:dpad_down"
+      ],
+      "ui_left": [
+       "key:left",
+       "pad:dpad_left"
+      ],
+      "ui_right": [
+       "key:right",
+       "pad:dpad_right"
+      ],
+      "ui_up": [
+       "key:up",
+       "pad:dpad_up"
+      ]
+     },
+     "deadzone": 0.2,
+     "glyphs": "auto",
+     "invert_y": false
+    },
+    "language": "en",
+    "telemetry": {
+     "consent": "unset"
+    },
+    "version": 1
+   },
+   "input": "[1, 2]",
+   "name": "an array",
+   "problems": 1,
+   "telemetry_allowed": false,
+   "type": "settings_load"
+  },
+  {
+   "effective_shake": 1.0,
+   "expect": {
+    "access": {
+     "captions_sfx": false,
+     "colorblind": "none",
+     "difficulty": "normal",
+     "flash_limit": true,
+     "game_speed": 1.0,
+     "hold_to_toggle": false,
+     "reduce_motion": false,
+     "shake_scale": 1.0,
+     "speaker_names": true,
+     "subtitle_background": 0.6,
+     "subtitle_barks": false,
+     "subtitle_size": "medium",
+     "subtitles": true,
+     "text_scale": 1.0
+    },
+    "audio": {
+     "master": 1.0,
+     "mono": false,
+     "music": 0.8,
+     "sfx": 1.0,
+     "ui": 1.0,
+     "voice": 1.0
+    },
+    "display": {
+     "frame_cap": 0,
+     "mode": "windowed",
+     "resolution": [
+      1920,
+      1080
+     ],
+     "ui_scale": 1.0,
+     "vsync": true
+    },
+    "input": {
+     "bindings": {
+      "attack": [
+       "key:j",
+       "pad:west"
+      ],
+      "interact": [
+       "key:e",
+       "pad:north"
+      ],
+      "jump": [
+       "key:space",
+       "pad:south"
+      ],
+      "move_down": [
+       "key:s",
+       "pad:dpad_down"
+      ],
+      "move_left": [
+       "key:a",
+       "pad:dpad_left"
+      ],
+      "move_right": [
+       "key:d",
+       "pad:dpad_right"
+      ],
+      "move_up": [
+       "key:w",
+       "pad:dpad_up"
+      ],
+      "pause": [
+       "key:escape",
+       "pad:start"
+      ],
+      "ui_accept": [
+       "key:enter",
+       "pad:south"
+      ],
+      "ui_cancel": [
+       "key:escape",
+       "pad:east"
+      ],
+      "ui_down": [
+       "key:down",
+       "pad:dpad_down"
+      ],
+      "ui_left": [
+       "key:left",
+       "pad:dpad_left"
+      ],
+      "ui_right": [
+       "key:right",
+       "pad:dpad_right"
+      ],
+      "ui_up": [
+       "key:up",
+       "pad:dpad_up"
+      ]
+     },
+     "deadzone": 0.2,
+     "glyphs": "auto",
+     "invert_y": false
+    },
+    "language": "en",
+    "telemetry": {
+     "consent": "unset"
+    },
+    "version": 1
+   },
+   "input": "{\"version\": 1, \"display\": {\"mode\": \"windowed\", \"vsync\": true, \"frame_cap\": 0, \"resolution\": [1920, 1080], \"ui_scale\": 1.0}, \"audio\": {\"master\": 1.0, \"music\": 0.8, \"sfx\": 1.0, \"ui\": 1.0, \"voice\": 1.0, \"mono\": false}, \"language\": \"en\", \"access\": {\"text_scale\": 1.0, \"subtitles\": true, \"subtitle_size\": \"medium\", \"subtitle_background\": 0.6, \"speaker_names\": true, \"subtitle_barks\": false, \"captions_sfx\": false, \"colorblind\": \"none\", \"reduce_motion\": false, \"shake_scale\": 1.0, \"flash_limit\": true, \"hold_to_toggle\": false, \"difficulty\": \"normal\", \"game_speed\": 1.0}, \"input\": {\"bindings\": {\"ui_up\": [\"key:up\", \"pad:dpad_up\"], \"ui_down\": [\"key:down\", \"pad:dpad_down\"], \"ui_left\": [\"key:left\", \"pad:dpad_left\"], \"ui_right\": [\"key:right\", \"pad:dpad_right\"], \"ui_accept\": [\"key:enter\", \"pad:south\"], \"ui_cancel\": [\"key:escape\", \"pad:east\"], \"move_left\": [\"key:a\", \"pad:dpad_left\"], \"move_right\": [\"key:d\", \"pad:dpad_right\"], \"move_up\": [\"key:w\", \"pad:dpad_up\"], \"move_down\": [\"key:s\", \"pad:dpad_down\"], \"jump\": [\"key:space\", \"pad:south\"], \"attack\": [\"key:j\", \"pad:west\"], \"interact\": [\"key:e\", \"pad:north\"], \"pause\": [\"key:escape\", \"pad:start\"]}, \"deadzone\": 0.2, \"invert_y\": false, \"glyphs\": \"auto\"}, \"telemetry\": {\"consent\": \"unset\"}}",
+   "name": "all defaults",
+   "problems": 0,
+   "telemetry_allowed": false,
+   "type": "settings_load"
+  },
+  {
+   "effective_shake": 0.0,
+   "expect": {
+    "access": {
+     "captions_sfx": false,
+     "colorblind": "none",
+     "difficulty": "normal",
+     "flash_limit": true,
+     "game_speed": 1.0,
+     "hold_to_toggle": false,
+     "reduce_motion": true,
+     "shake_scale": 0.25,
+     "speaker_names": true,
+     "subtitle_background": 0.6,
+     "subtitle_barks": false,
+     "subtitle_size": "medium",
+     "subtitles": true,
+     "text_scale": 2.0
+    },
+    "audio": {
+     "master": 1.0,
+     "mono": false,
+     "music": 0.0,
+     "sfx": 1.0,
+     "ui": 1.0,
+     "voice": 1.0
+    },
+    "display": {
+     "frame_cap": 0,
+     "mode": "fullscreen",
+     "resolution": [
+      1280,
+      720
+     ],
+     "ui_scale": 1.0,
+     "vsync": true
+    },
+    "input": {
+     "bindings": {
+      "attack": [
+       "key:j",
+       "pad:west"
+      ],
+      "interact": [
+       "key:e",
+       "pad:north"
+      ],
+      "jump": [
+       "key:space",
+       "pad:south"
+      ],
+      "move_down": [
+       "key:s",
+       "pad:dpad_down"
+      ],
+      "move_left": [
+       "key:a",
+       "pad:dpad_left"
+      ],
+      "move_right": [
+       "key:d",
+       "pad:dpad_right"
+      ],
+      "move_up": [
+       "key:w",
+       "pad:dpad_up"
+      ],
+      "pause": [
+       "key:escape",
+       "pad:start"
+      ],
+      "ui_accept": [
+       "key:enter",
+       "pad:south"
+      ],
+      "ui_cancel": [
+       "key:escape",
+       "pad:east"
+      ],
+      "ui_down": [
+       "key:down",
+       "pad:dpad_down"
+      ],
+      "ui_left": [
+       "key:left",
+       "pad:dpad_left"
+      ],
+      "ui_right": [
+       "key:right",
+       "pad:dpad_right"
+      ],
+      "ui_up": [
+       "key:up",
+       "pad:dpad_up"
+      ]
+     },
+     "deadzone": 0.2,
+     "glyphs": "auto",
+     "invert_y": false
+    },
+    "language": "en",
+    "telemetry": {
+     "consent": "unset"
+    },
+    "version": 1
+   },
+   "input": "{\"audio\": {\"master\": 1.5, \"music\": -0.2, \"sfx\": \"loud\", \"mono\": 1}, \"access\": {\"text_scale\": 3, \"difficulty\": \"nightmare\", \"shake_scale\": 0.25, \"reduce_motion\": true}, \"display\": {\"frame_cap\": 75, \"resolution\": [1280.0, 720], \"mode\": \"fullscreen\"}}",
+   "name": "clamps and types",
+   "problems": 7,
+   "telemetry_allowed": false,
+   "type": "settings_load"
+  },
+  {
+   "effective_shake": 1.0,
+   "expect": {
+    "access": {
+     "captions_sfx": false,
+     "colorblind": "none",
+     "difficulty": "normal",
+     "flash_limit": true,
+     "game_speed": 1.0,
+     "hold_to_toggle": false,
+     "reduce_motion": false,
+     "shake_scale": 1.0,
+     "speaker_names": true,
+     "subtitle_background": 0.6,
+     "subtitle_barks": false,
+     "subtitle_size": "medium",
+     "subtitles": true,
+     "text_scale": 1.0
+    },
+    "audio": {
+     "master": 0.5,
+     "mono": false,
+     "music": 0.8,
+     "reverb": "hall",
+     "sfx": 1.0,
+     "ui": 1.0,
+     "voice": 1.0
+    },
+    "display": {
+     "frame_cap": 0,
+     "mode": "windowed",
+     "resolution": [
+      1920,
+      1080
+     ],
+     "ui_scale": 1.0,
+     "vsync": true
+    },
+    "future_section": {
+     "x": 1
+    },
+    "input": {
+     "bindings": {
+      "attack": [
+       "key:j",
+       "pad:west"
+      ],
+      "interact": [
+       "key:e",
+       "pad:north"
+      ],
+      "jump": [
+       "key:space",
+       "pad:south"
+      ],
+      "move_down": [
+       "key:s",
+       "pad:dpad_down"
+      ],
+      "move_left": [
+       "key:a",
+       "pad:dpad_left"
+      ],
+      "move_right": [
+       "key:d",
+       "pad:dpad_right"
+      ],
+      "move_up": [
+       "key:w",
+       "pad:dpad_up"
+      ],
+      "pause": [
+       "key:escape",
+       "pad:start"
+      ],
+      "ui_accept": [
+       "key:enter",
+       "pad:south"
+      ],
+      "ui_cancel": [
+       "key:escape",
+       "pad:east"
+      ],
+      "ui_down": [
+       "key:down",
+       "pad:dpad_down"
+      ],
+      "ui_left": [
+       "key:left",
+       "pad:dpad_left"
+      ],
+      "ui_right": [
+       "key:right",
+       "pad:dpad_right"
+      ],
+      "ui_up": [
+       "key:up",
+       "pad:dpad_up"
+      ]
+     },
+     "deadzone": 0.2,
+     "glyphs": "auto",
+     "invert_y": false
+    },
+    "language": "fr-CA",
+    "telemetry": {
+     "consent": "unset"
+    },
+    "version": 1
+   },
+   "input": "{\"future_section\": {\"x\": 1}, \"audio\": {\"master\": 0.5, \"reverb\": \"hall\"}, \"language\": \"fr-CA\"}",
+   "name": "unknown keys kept",
+   "problems": 0,
+   "telemetry_allowed": false,
+   "type": "settings_load"
+  },
+  {
+   "effective_shake": 1.0,
+   "expect": {
+    "access": {
+     "captions_sfx": false,
+     "colorblind": "none",
+     "difficulty": "normal",
+     "flash_limit": true,
+     "game_speed": 1.0,
+     "hold_to_toggle": false,
+     "reduce_motion": false,
+     "shake_scale": 1.0,
+     "speaker_names": true,
+     "subtitle_background": 0.6,
+     "subtitle_barks": false,
+     "subtitle_size": "medium",
+     "subtitles": true,
+     "text_scale": 1.0
+    },
+    "audio": {
+     "master": 1.0,
+     "mono": false,
+     "music": 0.8,
+     "sfx": 1.0,
+     "ui": 1.0,
+     "voice": 1.0
+    },
+    "display": {
+     "frame_cap": 0,
+     "mode": "windowed",
+     "resolution": [
+      1920,
+      1080
+     ],
+     "ui_scale": 1.0,
+     "vsync": true
+    },
+    "input": {
+     "bindings": {
+      "attack": [
+       "key:j",
+       "pad:west"
+      ],
+      "dash": [
+       "key:shift",
+       "pad:r1"
+      ],
+      "interact": [
+       "key:e",
+       "pad:north"
+      ],
+      "jump": [
+       "key:k"
+      ],
+      "move_down": [
+       "key:s",
+       "pad:dpad_down"
+      ],
+      "move_left": [
+       "key:a",
+       "pad:dpad_left"
+      ],
+      "move_right": [
+       "key:d",
+       "pad:dpad_right"
+      ],
+      "move_up": [
+       "key:w",
+       "pad:dpad_up"
+      ],
+      "pause": [
+       "key:escape",
+       "pad:start"
+      ],
+      "ui_accept": [
+       "key:enter",
+       "pad:south"
+      ],
+      "ui_cancel": [
+       "key:escape",
+       "pad:east"
+      ],
+      "ui_down": [
+       "key:down",
+       "pad:dpad_down"
+      ],
+      "ui_left": [
+       "key:left",
+       "pad:dpad_left"
+      ],
+      "ui_right": [
+       "key:right",
+       "pad:dpad_right"
+      ],
+      "ui_up": [
+       "key:up",
+       "pad:dpad_up"
+      ]
+     },
+     "deadzone": 0.9,
+     "glyphs": "playstation",
+     "invert_y": false
+    },
+    "language": "en",
+    "telemetry": {
+     "consent": "unset"
+    },
+    "version": 1
+   },
+   "input": "{\"display\": 5, \"language\": 7, \"input\": {\"bindings\": {\"jump\": [\"key:k\", 5], \"dash\": [\"key:shift\", \"pad:r1\"], \"attack\": \"key:j\"}, \"glyphs\": \"playstation\", \"deadzone\": 0.95}}",
+   "name": "bad sections and bindings",
+   "problems": 5,
+   "telemetry_allowed": false,
+   "type": "settings_load"
+  },
+  {
+   "effective_shake": 1.0,
+   "expect": {
+    "access": {
+     "captions_sfx": false,
+     "colorblind": "none",
+     "difficulty": "normal",
+     "flash_limit": true,
+     "game_speed": 1.0,
+     "hold_to_toggle": false,
+     "reduce_motion": false,
+     "shake_scale": 1.0,
+     "speaker_names": true,
+     "subtitle_background": 0.6,
+     "subtitle_barks": false,
+     "subtitle_size": "medium",
+     "subtitles": true,
+     "text_scale": 1.0
+    },
+    "audio": {
+     "master": 1.0,
+     "mono": false,
+     "music": 0.8,
+     "sfx": 1.0,
+     "ui": 1.0,
+     "voice": 1.0
+    },
+    "display": {
+     "frame_cap": 0,
+     "mode": "windowed",
+     "resolution": [
+      1920,
+      1080
+     ],
+     "ui_scale": 1.0,
+     "vsync": true
+    },
+    "input": {
+     "bindings": {
+      "attack": [
+       "key:j",
+       "pad:west"
+      ],
+      "interact": [
+       "key:e",
+       "pad:north"
+      ],
+      "jump": [
+       "key:space",
+       "pad:south"
+      ],
+      "move_down": [
+       "key:s",
+       "pad:dpad_down"
+      ],
+      "move_left": [
+       "key:a",
+       "pad:dpad_left"
+      ],
+      "move_right": [
+       "key:d",
+       "pad:dpad_right"
+      ],
+      "move_up": [
+       "key:w",
+       "pad:dpad_up"
+      ],
+      "pause": [
+       "key:escape",
+       "pad:start"
+      ],
+      "ui_accept": [
+       "key:enter",
+       "pad:south"
+      ],
+      "ui_cancel": [
+       "key:escape",
+       "pad:east"
+      ],
+      "ui_down": [
+       "key:down",
+       "pad:dpad_down"
+      ],
+      "ui_left": [
+       "key:left",
+       "pad:dpad_left"
+      ],
+      "ui_right": [
+       "key:right",
+       "pad:dpad_right"
+      ],
+      "ui_up": [
+       "key:up",
+       "pad:dpad_up"
+      ]
+     },
+     "deadzone": 0.2,
+     "glyphs": "auto",
+     "invert_y": false
+    },
+    "language": "en",
+    "telemetry": {
+     "consent": "yes"
+    },
+    "version": 1
+   },
+   "input": "{\"telemetry\": {\"consent\": \"yes\"}}",
+   "name": "consent given",
+   "problems": 0,
+   "telemetry_allowed": true,
+   "type": "settings_load"
+  },
+  {
+   "action": "jump",
+   "binding": "key:k",
+   "bindings": {
+    "attack": [
+     "key:j",
+     "pad:west"
+    ],
+    "interact": [
+     "key:e",
+     "pad:north"
+    ],
+    "jump": [
+     "key:space",
+     "pad:south"
+    ],
+    "move_down": [
+     "key:s",
+     "pad:dpad_down"
+    ],
+    "move_left": [
+     "key:a",
+     "pad:dpad_left"
+    ],
+    "move_right": [
+     "key:d",
+     "pad:dpad_right"
+    ],
+    "move_up": [
+     "key:w",
+     "pad:dpad_up"
+    ],
+    "pause": [
+     "key:escape",
+     "pad:start"
+    ],
+    "ui_accept": [
+     "key:enter",
+     "pad:south"
+    ],
+    "ui_cancel": [
+     "key:escape",
+     "pad:east"
+    ],
+    "ui_down": [
+     "key:down",
+     "pad:dpad_down"
+    ],
+    "ui_left": [
+     "key:left",
+     "pad:dpad_left"
+    ],
+    "ui_right": [
+     "key:right",
+     "pad:dpad_right"
+    ],
+    "ui_up": [
+     "key:up",
+     "pad:dpad_up"
+    ]
+   },
+   "expect": {
+    "bindings": {
+     "attack": [
+      "key:j",
+      "pad:west"
+     ],
+     "interact": [
+      "key:e",
+      "pad:north"
+     ],
+     "jump": [
+      "key:k",
+      "pad:south"
+     ],
+     "move_down": [
+      "key:s",
+      "pad:dpad_down"
+     ],
+     "move_left": [
+      "key:a",
+      "pad:dpad_left"
+     ],
+     "move_right": [
+      "key:d",
+      "pad:dpad_right"
+     ],
+     "move_up": [
+      "key:w",
+      "pad:dpad_up"
+     ],
+     "pause": [
+      "key:escape",
+      "pad:start"
+     ],
+     "ui_accept": [
+      "key:enter",
+      "pad:south"
+     ],
+     "ui_cancel": [
+      "key:escape",
+      "pad:east"
+     ],
+     "ui_down": [
+      "key:down",
+      "pad:dpad_down"
+     ],
+     "ui_left": [
+      "key:left",
+      "pad:dpad_left"
+     ],
+     "ui_right": [
+      "key:right",
+      "pad:dpad_right"
+     ],
+     "ui_up": [
+      "key:up",
+      "pad:dpad_up"
+     ]
+    },
+    "conflicts": []
+   },
+   "name": "free key",
+   "slot": 0,
+   "type": "rebind"
+  },
+  {
+   "action": "jump",
+   "binding": "key:j",
+   "bindings": {
+    "attack": [
+     "key:j",
+     "pad:west"
+    ],
+    "interact": [
+     "key:e",
+     "pad:north"
+    ],
+    "jump": [
+     "key:space",
+     "pad:south"
+    ],
+    "move_down": [
+     "key:s",
+     "pad:dpad_down"
+    ],
+    "move_left": [
+     "key:a",
+     "pad:dpad_left"
+    ],
+    "move_right": [
+     "key:d",
+     "pad:dpad_right"
+    ],
+    "move_up": [
+     "key:w",
+     "pad:dpad_up"
+    ],
+    "pause": [
+     "key:escape",
+     "pad:start"
+    ],
+    "ui_accept": [
+     "key:enter",
+     "pad:south"
+    ],
+    "ui_cancel": [
+     "key:escape",
+     "pad:east"
+    ],
+    "ui_down": [
+     "key:down",
+     "pad:dpad_down"
+    ],
+    "ui_left": [
+     "key:left",
+     "pad:dpad_left"
+    ],
+    "ui_right": [
+     "key:right",
+     "pad:dpad_right"
+    ],
+    "ui_up": [
+     "key:up",
+     "pad:dpad_up"
+    ]
+   },
+   "expect": {
+    "bindings": {
+     "attack": [
+      "key:space",
+      "pad:west"
+     ],
+     "interact": [
+      "key:e",
+      "pad:north"
+     ],
+     "jump": [
+      "key:j",
+      "pad:south"
+     ],
+     "move_down": [
+      "key:s",
+      "pad:dpad_down"
+     ],
+     "move_left": [
+      "key:a",
+      "pad:dpad_left"
+     ],
+     "move_right": [
+      "key:d",
+      "pad:dpad_right"
+     ],
+     "move_up": [
+      "key:w",
+      "pad:dpad_up"
+     ],
+     "pause": [
+      "key:escape",
+      "pad:start"
+     ],
+     "ui_accept": [
+      "key:enter",
+      "pad:south"
+     ],
+     "ui_cancel": [
+      "key:escape",
+      "pad:east"
+     ],
+     "ui_down": [
+      "key:down",
+      "pad:dpad_down"
+     ],
+     "ui_left": [
+      "key:left",
+      "pad:dpad_left"
+     ],
+     "ui_right": [
+      "key:right",
+      "pad:dpad_right"
+     ],
+     "ui_up": [
+      "key:up",
+      "pad:dpad_up"
+     ]
+    },
+    "conflicts": [
+     [
+      "attack",
+      0
+     ]
+    ]
+   },
+   "name": "swap in group",
+   "slot": 0,
+   "type": "rebind"
+  },
+  {
+   "action": "ui_accept",
+   "binding": "key:space",
+   "bindings": {
+    "attack": [
+     "key:j",
+     "pad:west"
+    ],
+    "interact": [
+     "key:e",
+     "pad:north"
+    ],
+    "jump": [
+     "key:space",
+     "pad:south"
+    ],
+    "move_down": [
+     "key:s",
+     "pad:dpad_down"
+    ],
+    "move_left": [
+     "key:a",
+     "pad:dpad_left"
+    ],
+    "move_right": [
+     "key:d",
+     "pad:dpad_right"
+    ],
+    "move_up": [
+     "key:w",
+     "pad:dpad_up"
+    ],
+    "pause": [
+     "key:escape",
+     "pad:start"
+    ],
+    "ui_accept": [
+     "key:enter",
+     "pad:south"
+    ],
+    "ui_cancel": [
+     "key:escape",
+     "pad:east"
+    ],
+    "ui_down": [
+     "key:down",
+     "pad:dpad_down"
+    ],
+    "ui_left": [
+     "key:left",
+     "pad:dpad_left"
+    ],
+    "ui_right": [
+     "key:right",
+     "pad:dpad_right"
+    ],
+    "ui_up": [
+     "key:up",
+     "pad:dpad_up"
+    ]
+   },
+   "expect": {
+    "bindings": {
+     "attack": [
+      "key:j",
+      "pad:west"
+     ],
+     "interact": [
+      "key:e",
+      "pad:north"
+     ],
+     "jump": [
+      "key:space",
+      "pad:south"
+     ],
+     "move_down": [
+      "key:s",
+      "pad:dpad_down"
+     ],
+     "move_left": [
+      "key:a",
+      "pad:dpad_left"
+     ],
+     "move_right": [
+      "key:d",
+      "pad:dpad_right"
+     ],
+     "move_up": [
+      "key:w",
+      "pad:dpad_up"
+     ],
+     "pause": [
+      "key:escape",
+      "pad:start"
+     ],
+     "ui_accept": [
+      "key:space",
+      "pad:south"
+     ],
+     "ui_cancel": [
+      "key:escape",
+      "pad:east"
+     ],
+     "ui_down": [
+      "key:down",
+      "pad:dpad_down"
+     ],
+     "ui_left": [
+      "key:left",
+      "pad:dpad_left"
+     ],
+     "ui_right": [
+      "key:right",
+      "pad:dpad_right"
+     ],
+     "ui_up": [
+      "key:up",
+      "pad:dpad_up"
+     ]
+    },
+    "conflicts": []
+   },
+   "name": "other group is fine",
+   "slot": 0,
+   "type": "rebind"
+  },
+  {
+   "action": "attack",
+   "binding": "pad:south",
+   "bindings": {
+    "attack": [
+     "key:j",
+     "pad:west"
+    ],
+    "interact": [
+     "key:e",
+     "pad:north"
+    ],
+    "jump": [
+     "key:space",
+     "pad:south"
+    ],
+    "move_down": [
+     "key:s",
+     "pad:dpad_down"
+    ],
+    "move_left": [
+     "key:a",
+     "pad:dpad_left"
+    ],
+    "move_right": [
+     "key:d",
+     "pad:dpad_right"
+    ],
+    "move_up": [
+     "key:w",
+     "pad:dpad_up"
+    ],
+    "pause": [
+     "key:escape",
+     "pad:start"
+    ],
+    "ui_accept": [
+     "key:enter",
+     "pad:south"
+    ],
+    "ui_cancel": [
+     "key:escape",
+     "pad:east"
+    ],
+    "ui_down": [
+     "key:down",
+     "pad:dpad_down"
+    ],
+    "ui_left": [
+     "key:left",
+     "pad:dpad_left"
+    ],
+    "ui_right": [
+     "key:right",
+     "pad:dpad_right"
+    ],
+    "ui_up": [
+     "key:up",
+     "pad:dpad_up"
+    ]
+   },
+   "expect": {
+    "bindings": {
+     "attack": [
+      "key:j",
+      "pad:south"
+     ],
+     "interact": [
+      "key:e",
+      "pad:north"
+     ],
+     "jump": [
+      "key:space",
+      "pad:west"
+     ],
+     "move_down": [
+      "key:s",
+      "pad:dpad_down"
+     ],
+     "move_left": [
+      "key:a",
+      "pad:dpad_left"
+     ],
+     "move_right": [
+      "key:d",
+      "pad:dpad_right"
+     ],
+     "move_up": [
+      "key:w",
+      "pad:dpad_up"
+     ],
+     "pause": [
+      "key:escape",
+      "pad:start"
+     ],
+     "ui_accept": [
+      "key:enter",
+      "pad:south"
+     ],
+     "ui_cancel": [
+      "key:escape",
+      "pad:east"
+     ],
+     "ui_down": [
+      "key:down",
+      "pad:dpad_down"
+     ],
+     "ui_left": [
+      "key:left",
+      "pad:dpad_left"
+     ],
+     "ui_right": [
+      "key:right",
+      "pad:dpad_right"
+     ],
+     "ui_up": [
+      "key:up",
+      "pad:dpad_up"
+     ]
+    },
+    "conflicts": [
+     [
+      "jump",
+      1
+     ]
+    ]
+   },
+   "name": "pad swap",
+   "slot": 1,
+   "type": "rebind"
+  },
+  {
+   "action": "interact",
+   "binding": "key:f",
+   "bindings": {
+    "attack": [
+     "key:j",
+     "pad:west"
+    ],
+    "interact": [
+     "key:e",
+     "pad:north"
+    ],
+    "jump": [
+     "key:space",
+     "pad:south"
+    ],
+    "move_down": [
+     "key:s",
+     "pad:dpad_down"
+    ],
+    "move_left": [
+     "key:a",
+     "pad:dpad_left"
+    ],
+    "move_right": [
+     "key:d",
+     "pad:dpad_right"
+    ],
+    "move_up": [
+     "key:w",
+     "pad:dpad_up"
+    ],
+    "pause": [
+     "key:escape",
+     "pad:start"
+    ],
+    "ui_accept": [
+     "key:enter",
+     "pad:south"
+    ],
+    "ui_cancel": [
+     "key:escape",
+     "pad:east"
+    ],
+    "ui_down": [
+     "key:down",
+     "pad:dpad_down"
+    ],
+    "ui_left": [
+     "key:left",
+     "pad:dpad_left"
+    ],
+    "ui_right": [
+     "key:right",
+     "pad:dpad_right"
+    ],
+    "ui_up": [
+     "key:up",
+     "pad:dpad_up"
+    ]
+   },
+   "expect": {
+    "bindings": {
+     "attack": [
+      "key:j",
+      "pad:west"
+     ],
+     "interact": [
+      "key:e",
+      "pad:north",
+      "key:f"
+     ],
+     "jump": [
+      "key:space",
+      "pad:south"
+     ],
+     "move_down": [
+      "key:s",
+      "pad:dpad_down"
+     ],
+     "move_left": [
+      "key:a",
+      "pad:dpad_left"
+     ],
+     "move_right": [
+      "key:d",
+      "pad:dpad_right"
+     ],
+     "move_up": [
+      "key:w",
+      "pad:dpad_up"
+     ],
+     "pause": [
+      "key:escape",
+      "pad:start"
+     ],
+     "ui_accept": [
+      "key:enter",
+      "pad:south"
+     ],
+     "ui_cancel": [
+      "key:escape",
+      "pad:east"
+     ],
+     "ui_down": [
+      "key:down",
+      "pad:dpad_down"
+     ],
+     "ui_left": [
+      "key:left",
+      "pad:dpad_left"
+     ],
+     "ui_right": [
+      "key:right",
+      "pad:dpad_right"
+     ],
+     "ui_up": [
+      "key:up",
+      "pad:dpad_up"
+     ]
+    },
+    "conflicts": []
+   },
+   "name": "new slot",
+   "slot": 2,
+   "type": "rebind"
+  },
+  {
+   "action": "pause",
+   "binding": "key:a",
+   "bindings": {
+    "attack": [
+     "key:j",
+     "pad:west"
+    ],
+    "interact": [
+     "key:e",
+     "pad:north"
+    ],
+    "jump": [
+     "key:space",
+     "pad:south"
+    ],
+    "move_down": [
+     "key:s",
+     "pad:dpad_down"
+    ],
+    "move_left": [
+     "key:a",
+     "pad:dpad_left"
+    ],
+    "move_right": [
+     "key:d",
+     "pad:dpad_right"
+    ],
+    "move_up": [
+     "key:w",
+     "pad:dpad_up"
+    ],
+    "pause": [
+     "key:escape",
+     "pad:start"
+    ],
+    "ui_accept": [
+     "key:enter",
+     "pad:south"
+    ],
+    "ui_cancel": [
+     "key:escape",
+     "pad:east"
+    ],
+    "ui_down": [
+     "key:down",
+     "pad:dpad_down"
+    ],
+    "ui_left": [
+     "key:left",
+     "pad:dpad_left"
+    ],
+    "ui_right": [
+     "key:right",
+     "pad:dpad_right"
+    ],
+    "ui_up": [
+     "key:up",
+     "pad:dpad_up"
+    ]
+   },
+   "expect": {
+    "bindings": {
+     "attack": [
+      "key:j",
+      "pad:west"
+     ],
+     "interact": [
+      "key:e",
+      "pad:north"
+     ],
+     "jump": [
+      "key:space",
+      "pad:south"
+     ],
+     "move_down": [
+      "key:s",
+      "pad:dpad_down"
+     ],
+     "move_left": [
+      "",
+      "pad:dpad_left"
+     ],
+     "move_right": [
+      "key:d",
+      "pad:dpad_right"
+     ],
+     "move_up": [
+      "key:w",
+      "pad:dpad_up"
+     ],
+     "pause": [
+      "key:escape",
+      "pad:start",
+      "key:a"
+     ],
+     "ui_accept": [
+      "key:enter",
+      "pad:south"
+     ],
+     "ui_cancel": [
+      "key:escape",
+      "pad:east"
+     ],
+     "ui_down": [
+      "key:down",
+      "pad:dpad_down"
+     ],
+     "ui_left": [
+      "key:left",
+      "pad:dpad_left"
+     ],
+     "ui_right": [
+      "key:right",
+      "pad:dpad_right"
+     ],
+     "ui_up": [
+      "key:up",
+      "pad:dpad_up"
+     ]
+    },
+    "conflicts": [
+     [
+      "move_left",
+      0
+     ]
+    ]
+   },
+   "name": "swap with an empty slot",
+   "slot": 2,
+   "type": "rebind"
+  },
+  {
+   "name": "auto follows the device",
+   "points": [
+    [
+     "auto",
+     "keyboard",
+     "keyboard"
+    ],
+    [
+     "auto",
+     "mouse",
+     "keyboard"
+    ],
+    [
+     "auto",
+     "pad_xbox",
+     "xbox"
+    ],
+    [
+     "auto",
+     "pad_playstation",
+     "playstation"
+    ],
+    [
+     "auto",
+     "pad_other",
+     "generic"
+    ],
+    [
+     "keyboard",
+     "keyboard",
+     "keyboard"
+    ],
+    [
+     "keyboard",
+     "mouse",
+     "keyboard"
+    ],
+    [
+     "keyboard",
+     "pad_xbox",
+     "keyboard"
+    ],
+    [
+     "keyboard",
+     "pad_playstation",
+     "keyboard"
+    ],
+    [
+     "keyboard",
+     "pad_other",
+     "keyboard"
+    ],
+    [
+     "xbox",
+     "keyboard",
+     "xbox"
+    ],
+    [
+     "xbox",
+     "mouse",
+     "xbox"
+    ],
+    [
+     "xbox",
+     "pad_xbox",
+     "xbox"
+    ],
+    [
+     "xbox",
+     "pad_playstation",
+     "xbox"
+    ],
+    [
+     "xbox",
+     "pad_other",
+     "xbox"
+    ],
+    [
+     "playstation",
+     "keyboard",
+     "playstation"
+    ],
+    [
+     "playstation",
+     "mouse",
+     "playstation"
+    ],
+    [
+     "playstation",
+     "pad_xbox",
+     "playstation"
+    ],
+    [
+     "playstation",
+     "pad_playstation",
+     "playstation"
+    ],
+    [
+     "playstation",
+     "pad_other",
+     "playstation"
+    ],
+    [
+     "generic",
+     "keyboard",
+     "generic"
+    ],
+    [
+     "generic",
+     "mouse",
+     "generic"
+    ],
+    [
+     "generic",
+     "pad_xbox",
+     "generic"
+    ],
+    [
+     "generic",
+     "pad_playstation",
+     "generic"
+    ],
+    [
+     "generic",
+     "pad_other",
+     "generic"
+    ]
+   ],
+   "type": "glyph_set"
+  },
+  {
+   "name": "prompt art names",
+   "points": [
+    [
+     "keyboard",
+     "key:space",
+     "key_space"
+    ],
+    [
+     "keyboard",
+     "key:escape",
+     "key_escape"
+    ],
+    [
+     "keyboard",
+     "mouse:left",
+     "mouse_left"
+    ],
+    [
+     "keyboard",
+     "pad:south",
+     "pad_south"
+    ],
+    [
+     "keyboard",
+     "pad:east",
+     "pad_east"
+    ],
+    [
+     "keyboard",
+     "pad:start",
+     "pad_start"
+    ],
+    [
+     "keyboard",
+     "pad:l2",
+     "pad_l2"
+    ],
+    [
+     "keyboard",
+     "pad:dpad_up",
+     "pad_dpad_up"
+    ],
+    [
+     "keyboard",
+     "pad_axis:leftx-",
+     "pad_lstick"
+    ],
+    [
+     "keyboard",
+     "pad_axis:righty+",
+     "pad_rstick"
+    ],
+    [
+     "keyboard",
+     "weird",
+     "unknown"
+    ],
+    [
+     "xbox",
+     "key:space",
+     "key_space"
+    ],
+    [
+     "xbox",
+     "key:escape",
+     "key_escape"
+    ],
+    [
+     "xbox",
+     "mouse:left",
+     "mouse_left"
+    ],
+    [
+     "xbox",
+     "pad:south",
+     "xbox_a"
+    ],
+    [
+     "xbox",
+     "pad:east",
+     "xbox_b"
+    ],
+    [
+     "xbox",
+     "pad:start",
+     "xbox_menu"
+    ],
+    [
+     "xbox",
+     "pad:l2",
+     "xbox_lt"
+    ],
+    [
+     "xbox",
+     "pad:dpad_up",
+     "xbox_dpad_up"
+    ],
+    [
+     "xbox",
+     "pad_axis:leftx-",
+     "xbox_lstick"
+    ],
+    [
+     "xbox",
+     "pad_axis:righty+",
+     "xbox_rstick"
+    ],
+    [
+     "xbox",
+     "weird",
+     "unknown"
+    ],
+    [
+     "playstation",
+     "key:space",
+     "key_space"
+    ],
+    [
+     "playstation",
+     "key:escape",
+     "key_escape"
+    ],
+    [
+     "playstation",
+     "mouse:left",
+     "mouse_left"
+    ],
+    [
+     "playstation",
+     "pad:south",
+     "ps_cross"
+    ],
+    [
+     "playstation",
+     "pad:east",
+     "ps_circle"
+    ],
+    [
+     "playstation",
+     "pad:start",
+     "ps_options"
+    ],
+    [
+     "playstation",
+     "pad:l2",
+     "ps_l2"
+    ],
+    [
+     "playstation",
+     "pad:dpad_up",
+     "ps_dpad_up"
+    ],
+    [
+     "playstation",
+     "pad_axis:leftx-",
+     "ps_lstick"
+    ],
+    [
+     "playstation",
+     "pad_axis:righty+",
+     "ps_rstick"
+    ],
+    [
+     "playstation",
+     "weird",
+     "unknown"
+    ],
+    [
+     "generic",
+     "key:space",
+     "key_space"
+    ],
+    [
+     "generic",
+     "key:escape",
+     "key_escape"
+    ],
+    [
+     "generic",
+     "mouse:left",
+     "mouse_left"
+    ],
+    [
+     "generic",
+     "pad:south",
+     "pad_south"
+    ],
+    [
+     "generic",
+     "pad:east",
+     "pad_east"
+    ],
+    [
+     "generic",
+     "pad:start",
+     "pad_start"
+    ],
+    [
+     "generic",
+     "pad:l2",
+     "pad_l2"
+    ],
+    [
+     "generic",
+     "pad:dpad_up",
+     "pad_dpad_up"
+    ],
+    [
+     "generic",
+     "pad_axis:leftx-",
+     "pad_lstick"
+    ],
+    [
+     "generic",
+     "pad_axis:righty+",
+     "pad_rstick"
+    ],
+    [
+     "generic",
+     "weird",
+     "unknown"
+    ]
+   ],
+   "type": "glyph_name"
+  },
+  {
+   "bindings": {
+    "attack": [
+     "key:j",
+     "pad:west"
+    ],
+    "interact": [
+     "key:e",
+     "pad:north"
+    ],
+    "jump": [
+     "key:space",
+     "pad:south"
+    ],
+    "move_down": [
+     "key:s",
+     "pad:dpad_down"
+    ],
+    "move_left": [
+     "key:a",
+     "pad:dpad_left"
+    ],
+    "move_right": [
+     "key:d",
+     "pad:dpad_right"
+    ],
+    "move_up": [
+     "key:w",
+     "pad:dpad_up"
+    ],
+    "pause": [
+     "key:escape",
+     "pad:start"
+    ],
+    "ui_accept": [
+     "key:enter",
+     "pad:south"
+    ],
+    "ui_cancel": [
+     "key:escape",
+     "pad:east"
+    ],
+    "ui_down": [
+     "key:down",
+     "pad:dpad_down"
+    ],
+    "ui_left": [
+     "key:left",
+     "pad:dpad_left"
+    ],
+    "ui_right": [
+     "key:right",
+     "pad:dpad_right"
+    ],
+    "ui_up": [
+     "key:up",
+     "pad:dpad_up"
+    ]
+   },
+   "name": "slot per device",
+   "points": [
+    [
+     "jump",
+     "keyboard",
+     "key:space"
+    ],
+    [
+     "jump",
+     "xbox",
+     "pad:south"
+    ],
+    [
+     "jump",
+     "generic",
+     "pad:south"
+    ],
+    [
+     "pause",
+     "keyboard",
+     "key:escape"
+    ],
+    [
+     "pause",
+     "xbox",
+     "pad:start"
+    ],
+    [
+     "pause",
+     "generic",
+     "pad:start"
+    ],
+    [
+     "missing",
+     "keyboard",
+     ""
+    ],
+    [
+     "missing",
+     "xbox",
+     ""
+    ],
+    [
+     "missing",
+     "generic",
+     ""
+    ]
+   ],
+   "type": "prompt_binding"
+  },
+  {
+   "backup": null,
+   "current_version": 3,
+   "expect": {
+    "envelope": {
+     "data": {
+      "difficulty": "hard",
+      "health": 5
+     },
+     "format": "save",
+     "version": 3
+    },
+    "problems": 0,
+    "source": "primary"
+   },
+   "name": "current",
+   "primary": "{\"format\": \"save\", \"version\": 3, \"data\": {\"health\": 5, \"difficulty\": \"hard\"}}",
+   "type": "save_load"
+  },
+  {
+   "backup": null,
+   "current_version": 3,
+   "expect": {
+    "envelope": {
+     "data": {
+      "difficulty": "normal",
+      "health": 7,
+      "level": 2
+     },
+     "format": "save",
+     "version": 3
+    },
+    "problems": 0,
+    "source": "primary"
+   },
+   "name": "migrate from 1",
+   "primary": "{\"format\": \"save\", \"version\": 1, \"data\": {\"hp\": 7, \"level\": 2}}",
+   "type": "save_load"
+  },
+  {
+   "backup": "{\"format\": \"save\", \"version\": 1, \"data\": {\"hp\": 7, \"level\": 2}}",
+   "current_version": 3,
+   "expect": {
+    "envelope": {
+     "data": {
+      "difficulty": "normal",
+      "health": 9,
+      "level": 3
+     },
+     "format": "save",
+     "version": 3
+    },
+    "problems": 0,
+    "source": "primary"
+   },
+   "name": "migrate from 2",
+   "primary": "{\"format\": \"save\", \"version\": 2, \"data\": {\"health\": 9, \"level\": 3}}",
+   "type": "save_load"
+  },
+  {
+   "backup": "{\"format\": \"save\", \"version\": 2, \"data\": {\"health\": 9, \"level\": 3}}",
+   "current_version": 3,
+   "expect": {
+    "envelope": {
+     "data": {
+      "difficulty": "normal",
+      "health": 9,
+      "level": 3
+     },
+     "format": "save",
+     "version": 3
+    },
+    "problems": 1,
+    "source": "backup"
+   },
+   "name": "corrupt falls back",
+   "primary": "{\"format\": \"save\", \"version\": 3, \"data\": {\"health\": 5",
+   "type": "save_load"
+  },
+  {
+   "backup": "{\"format\": \"settings\", \"version\": 1, \"data\": {}}",
+   "current_version": 3,
+   "expect": {
+    "envelope": null,
+    "problems": 2,
+    "source": "none"
+   },
+   "name": "both bad",
+   "primary": "{\"format\": \"save\", \"version\": 3, \"data\": {\"health\": 5",
+   "type": "save_load"
+  },
+  {
+   "backup": "{\"format\": \"save\", \"version\": 3, \"data\": {\"health\": 5, \"difficulty\": \"hard\"}}",
+   "current_version": 3,
+   "expect": {
+    "envelope": {
+     "data": {
+      "difficulty": "hard",
+      "health": 5
+     },
+     "format": "save",
+     "version": 3
+    },
+    "problems": 1,
+    "source": "backup"
+   },
+   "name": "newer is refused",
+   "primary": "{\"format\": \"save\", \"version\": 4, \"data\": {}}",
+   "type": "save_load"
+  },
+  {
+   "backup": null,
+   "current_version": 3,
+   "expect": {
+    "envelope": null,
+    "problems": 2,
+    "source": "none"
+   },
+   "name": "bad version type",
+   "primary": "{\"format\": \"save\", \"version\": \"2\", \"data\": {}}",
+   "type": "save_load"
+  },
+  {
+   "backup": null,
+   "current_version": 3,
+   "expect": {
+    "envelope": null,
+    "problems": 2,
+    "source": "none"
+   },
+   "name": "nothing saved",
+   "primary": null,
+   "type": "save_load"
+  },
+  {
+   "name": "fallback chain and placeholders",
+   "points": [
+    [
+     "en",
+     "menu.play",
+     {},
+     "Play"
+    ],
+    [
+     "fr",
+     "menu.play",
+     {},
+     "Jouer"
+    ],
+    [
+     "fr-CA",
+     "menu.play",
+     {},
+     "Jouer!"
+    ],
+    [
+     "fr-CA",
+     "greet",
+     {
+      "name": "Ana"
+     },
+     "Bonjour, Ana !"
+    ],
+    [
+     "fr_FR",
+     "menu.settings",
+     {},
+     "Settings"
+    ],
+    [
+     "ja",
+     "menu.play",
+     {},
+     "プレイ"
+    ],
+    [
+     "de",
+     "greet",
+     {
+      "name": "Max"
+     },
+     "Hello, Max!"
+    ],
+    [
+     "en",
+     "missing.key",
+     {},
+     "missing.key"
+    ],
+    [
+     "en",
+     "greet",
+     {},
+     "Hello, {name}!"
+    ],
+    [
+     "fr",
+     "only.en",
+     {},
+     "English only"
+    ]
+   ],
+   "tables": {
+    "en": {
+     "apples.one": "{n} apple",
+     "apples.other": "{n} apples",
+     "greet": "Hello, {name}!",
+     "menu.play": "Play",
+     "menu.settings": "Settings",
+     "only.en": "English only"
+    },
+    "fr": {
+     "apples.one": "{n} pomme",
+     "apples.other": "{n} pommes",
+     "greet": "Bonjour, {name} !",
+     "menu.play": "Jouer"
+    },
+    "fr-CA": {
+     "menu.play": "Jouer!"
+    },
+    "ja": {
+     "apples.other": "りんご{n}個",
+     "menu.play": "プレイ"
+    }
+   },
+   "type": "tr"
+  },
+  {
+   "name": "one and other",
+   "points": [
+    [
+     "en",
+     0,
+     "other",
+     "0 apples"
+    ],
+    [
+     "en",
+     1,
+     "one",
+     "1 apple"
+    ],
+    [
+     "en",
+     2,
+     "other",
+     "2 apples"
+    ],
+    [
+     "en",
+     5,
+     "other",
+     "5 apples"
+    ],
+    [
+     "fr",
+     0,
+     "one",
+     "0 pomme"
+    ],
+    [
+     "fr",
+     1,
+     "one",
+     "1 pomme"
+    ],
+    [
+     "fr",
+     2,
+     "other",
+     "2 pommes"
+    ],
+    [
+     "fr",
+     5,
+     "other",
+     "5 pommes"
+    ],
+    [
+     "ja",
+     0,
+     "other",
+     "りんご0個"
+    ],
+    [
+     "ja",
+     1,
+     "other",
+     "りんご1個"
+    ],
+    [
+     "ja",
+     2,
+     "other",
+     "りんご2個"
+    ],
+    [
+     "ja",
+     5,
+     "other",
+     "りんご5個"
+    ],
+    [
+     "pt-BR",
+     0,
+     "other",
+     "0 apples"
+    ],
+    [
+     "pt-BR",
+     1,
+     "one",
+     "1 apple"
+    ],
+    [
+     "pt-BR",
+     2,
+     "other",
+     "2 apples"
+    ],
+    [
+     "pt-BR",
+     5,
+     "other",
+     "5 apples"
+    ]
+   ],
+   "tables": {
+    "en": {
+     "apples.one": "{n} apple",
+     "apples.other": "{n} apples",
+     "greet": "Hello, {name}!",
+     "menu.play": "Play",
+     "menu.settings": "Settings",
+     "only.en": "English only"
+    },
+    "fr": {
+     "apples.one": "{n} pomme",
+     "apples.other": "{n} pommes",
+     "greet": "Bonjour, {name} !",
+     "menu.play": "Jouer"
+    },
+    "fr-CA": {
+     "menu.play": "Jouer!"
+    },
+    "ja": {
+     "apples.other": "りんご{n}個",
+     "menu.play": "プレイ"
+    }
+   },
+   "type": "plural"
+  },
+  {
+   "name": "pseudo-locale",
+   "points": [
+    [
+     "Play",
+     "[Pláý~~]"
+    ],
+    [
+     "Hello, {name}!",
+     "[Hélló, {name}!~~~]"
+    ],
+    [
+     "Score: %d%%",
+     "[Sçóré: %d%%~~~]"
+    ],
+    [
+     "",
+     "[]"
+    ],
+    [
+     "OK",
+     "[ÓK~]"
+    ],
+    [
+     "A long settings label",
+     "[Á lóñg séttíñgs lábél~~~~~~~~]"
+    ],
+    [
+     "{a}{b}",
+     "[{a}{b}]"
+    ],
+    [
+     "50% off",
+     "[50% óff~~~]"
+    ]
+   ],
+   "type": "pseudo"
+  }
+ ],
+ "generator": "tools/golden_vectors.py",
+ "save_version": 3,
+ "tolerance": 1e-06,
+ "version": 1
+}
