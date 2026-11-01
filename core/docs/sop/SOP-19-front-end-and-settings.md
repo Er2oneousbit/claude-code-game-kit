@@ -75,7 +75,7 @@ values in `data/golden/shell.json` that every port's tests check (K01).
   on-screen keyboard for text entry, no launcher, 30 fps at 800p (E75).
 
 ## 7. Logs, crashes and bug reports (standard practice)
-- `logs/game.log`, first line the game version and the date; keep the last five.
+- A log file per run (logs/game.log in the user-data folder), first line the game version and the date; keep the last five.
 - An unhandled error writes `crashes/crash_<time>.txt` (version, seed if any, the error, the log tail) before the
   engine's own handler runs; in automated runs it exits non-zero so `dev.py smoke` fails.
 - In debug builds a key (F8) bundles the log tail, settings and a screenshot into a folder the player can attach to

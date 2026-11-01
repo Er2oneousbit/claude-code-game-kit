@@ -8,7 +8,7 @@ SOP is how to choose them on evidence instead of by feel alone.
 ## 1. Put every number where you can see it (standard practice)
 - All balance numbers in data files (`data/`) or one constants module, never in logic (`docs/STYLE.md`). One table per
   system: units, weapons, enemies, shop prices, drop rates, XP curve.
-- A balance sheet next to the data (`docs/balance.csv` or a spreadsheet): one row per item with its inputs and the
+- A balance sheet next to the data (docs/balance.csv or a spreadsheet): one row per item with its inputs and the
   derived numbers (damage per second, cost per damage, time to kill, gold per minute). The sheet is where you compare;
   the data file is what the game reads. Generate one from the other so they cannot drift.
 

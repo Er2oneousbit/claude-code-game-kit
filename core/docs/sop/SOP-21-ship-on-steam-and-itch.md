@@ -63,7 +63,7 @@ are from Valve's own documentation read on 2026-11-01 (F39); check the linked pa
 
 ## 6. Legal checklist (not legal advice)
 Fill in, with a lawyer for anything commercial at scale:
-- **Licenses and credits:** `python tools/credits.py` builds `CREDITS.md` and `THIRD_PARTY_LICENSES.md` from
+- **Licenses and credits:** `python tools/credits.py` builds CREDITS.md and THIRD_PARTY_LICENSES.md from
   `docs/ASSET_LOG.md` and `docs/licenses/`; ship both with the build. An asset without a known license does not ship
   (`SOP-04`).
 - **Privacy policy:** needed as soon as anything about players leaves their machine (telemetry upload, crash upload,

@@ -18,8 +18,8 @@ Follow `docs/sop/SOP-19-front-end-and-settings.md` (and `docs/sop/SOP-20-accessi
    file from the old version (SOP-19 step 3).
 5. **Input:** actions, not keys; full gamepad navigation with a visible focus; prompts follow the last device; new
    actions get defaults for keyboard and gamepad and appear in the rebinding screen.
-6. **Text:** every new visible string goes through `tr()` with a key in `data/i18n/en.json`; placeholders, not
-   concatenation; plurals per category.
+6. **Text:** every new visible string goes through `tr()` with a key in the English string table (data/i18n/en.json
+   where the overlay ships the shell); placeholders, not concatenation; plurals per category.
 7. **Prove it:** `check`, `test`, `smoke`, and the scenario runs from `docs/ENGINE_FLOW.md`: `--drive menus` (settings
    file changes), `--drive pseudo --locale pseudo` (nothing clipped), `--drive crash` (a crash file); screenshots of the
    changed screens with `--drive show:<screen> --screenshot`.

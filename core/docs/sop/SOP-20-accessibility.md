@@ -29,7 +29,7 @@ The shell (`SOP-19`) has the settings; this SOP is what they must do.
 2. **Use the shell's settings from the first menu**, not after the vertical slice. Every new mechanic asks: does it
    rely on hearing, colour, timing, holding, reading speed or motion? If so, add the alternative with it.
 3. **Write captions as you add sounds**: an important sound gets an entry in the captions table when it is created
-   (the audio tools' `dialogue.json` captions, `docs/resources/audio.md`).
+   (the captions table in the audio tools' dialogue.json, `docs/resources/audio.md`).
 4. **Check flashes and motion** on every effect: route flashes through the flash limiter (`SOP-18`), test the effect with
    reduce motion on. Record a burst (`dev.py smoke --record`) and count flashes per second for anything bright.
 5. **Test with the settings at their extremes:** text 200 %, subtitles largest with full background, colour-blind modes,
