@@ -47,6 +47,12 @@
   inherit holds and smear.
 - Dotwork: verify compiles every ShaderMaterial it loads and counts held SpriteFrames frames. The exam ran its last
   extra lane exam twice, so its printed totals since the uikit lane were one class too high; it counts each test once.
+- Dotwork: new `lighting` lane (no model): normal maps for every SpriteFrames frame with a lit SpriteFrames copy,
+  lit TileSet copies whose per-tile normals stay seamless, prop normal maps with a LightOccluder2D traced from the
+  alpha, and a lit demo scene (CanvasModulate, PointLight2D with shadows). Normal maps are OpenGL style (green up), as
+  Godot 4 expects; verify checks that each normal map decodes to unit normals facing the camera, that occluders have
+  a polygon and that lights have a texture. Lanes listed as late (lighting) run after every other lane, so one pack
+  can light what it just made.
 - `tools/audio/loudness.py`: measure integrated loudness (ITU-R BS.1770-5), loudness range (EBU Tech 3342) and true
   peak; check a whole-game capture against Sony's ASWG-R001 targets (home -24, portable -18 LKFS, true peak -1 dBTP,
   at least 30 minutes); normalize single assets to labeled house levels with a true-peak ceiling. No installs.

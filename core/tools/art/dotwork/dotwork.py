@@ -30,7 +30,8 @@ import fcore  # noqa: E402
 
 LANES = ("props", "effects", "tiles", "ui", "icons", "portraits", "tools", "img2px", "fonts", "battle_bgs", "enemies",
          "windows", "balloons", "scenes", "hitfx", "spells", "animprops", "vehicles", "widgets", "transitions", "weather",
-         "status", "npcs", "platforms", "iso", "uikit", "store", "screens", "bdf", "diorama", "vfx")
+         "status", "npcs", "platforms", "iso", "uikit", "store", "screens", "bdf", "diorama", "vfx", "lighting")
+LATE = ("lighting",)   # lanes that read what the others made: they run after every other lane, ground included
 
 
 # ---- binding -------------------------------------------------------------------------
@@ -166,7 +167,7 @@ def cmd_pack(a):
             for e in spec["characters"]:
                 lane_character.Character(e, s.project, man, conf).run()
         for lane in LANES:
-            if spec.get(lane):
+            if spec.get(lane) and lane not in LATE:
                 where = lane
                 mod = __import__(f"lane_{lane}")
                 mod.run(spec[lane], s.project, man, conf)
@@ -180,6 +181,10 @@ def cmd_pack(a):
                 scene, summary = mapbuild.build(m, built, s.project, conf)
                 man.add(scene, "scene", node="Node2D + TileMapLayers", layers=summary, tileset=built["res"],
                         note="painted by Godot's terrain solver from an ASCII map (mapbuild)")
+        for lane in LATE:
+            if spec.get(lane):
+                where = lane
+                __import__(f"lane_{lane}").run(spec[lane], s.project, man, conf)
     except KeyError as exc:   # a key a lane needs is not in the entry: say so instead of "unexpected failure"
         if fcore.DEBUG:
             raise

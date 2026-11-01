@@ -19,8 +19,9 @@ image-to-pixel-art, store and platform art (every Steam capsule and library size
 icon and `.ico`, achievement icons, a boot splash), title / loading / credits screens, 2.5D dioramas (tiles as 3D
 blocks, props and characters as billboards), and bitmap fonts you bring (a BDF such as an OFL CJK pixel font) cut
 down to the characters your game's text uses.
-Model-free tools: palette swaps (`recolor`, and `recolor_of` in the enemies lane) and `clean` (any image to clean pixel
-art on the game palette).
+Model-free tools: palette swaps (`recolor`, and `recolor_of` in the enemies lane), `clean` (any image to clean pixel
+art on the game palette) and `lighting` (normal maps, CanvasTextures, light occluders and a lit demo scene for art
+already in the game, computed in numpy).
 
 Tested on Windows 11, RTX 5060 Ti 16 GB, 64 GB RAM, ComfyUI 0.43.0, Godot 4.7.2. Other GPUs and operating systems
 should work (Dotwork itself is plain Python + HTTP); the numbers below are what this setup needed, not promises.
@@ -218,6 +219,9 @@ pixel-art wording. Ready-to-run specs for every capability are in `examples/` (s
  "iso": [{"name": "village", "floors": [{"material": "grass_lush", "variants": 2}, {"material": "cobble"}],
           "blocks": [{"name": "wall", "top": {"material": "stone_floor"}, "side": {"material": "brick_wall"}}],
           "transitions": [{"upper": {"material": "cobble"}, "lower": {"material": "grass_lush"}}]}],
+ "lighting": [{"name": "town_lit", "frames": ["assets/art/characters/*/*_frames.tres"],
+               "tilesets": ["res://assets/art/tiles/street/ground_street_tileset.tres"],
+               "props": ["assets/art/props/spr_*.png"], "bevel": 3, "light_color": "#ffd8a0", "light_energy": 1.2}],
  "design": {"setting": "steampunk", "character": {"fig_height": 66}, "tile_px": 32}
 }
 ```
@@ -280,6 +284,7 @@ Honest list: these are the failure modes seen in testing and what Dotwork does a
 | fonts | Models cannot draw consistent letters | Glyphs are text bitmaps (`glyphs/*.txt`), built into BMFont `.fnt`; edit a letter by editing its rows |
 | battle backgrounds / scenes | 320x128 / 320x180 art shown at 2x (chunkier than 1x sprites) | Same exact-2x scale everywhere it is used |
 | battle backgrounds (moving sky) | Cutting the painted sky off at the horizon and scrolling it split mountain peaks (the tip drifted away from its base) | `"scroll": -4` keeps the picture whole and adds two cloud layers drawn in code in its own lightest sky colours (far: small, half speed; near: bigger, full speed) that tile sideways; `horizon` sets how far down they reach, `clouds` how many. They drift over far mountains, which reads as nearer clouds; leave `scroll` off for caves and interiors |
+| lighting (normal maps, no model) | A normal map guessed from one picture cannot know the real shape: it reads a rounded rim from the alpha edge (`bevel` px) and small relief from brightness (`detail` px), so dark paint reads as a dent and a flat-coloured cloak reads flat; an atlas tile cannot see its neighbours | Opaque tiles get no rim at their borders and the brightness relief wraps inside each tile, so Dotwork's seamless tiles stay seamless (a tile whose opposite edge is clear repeats its own edge instead). Occluders are the largest opaque region only, `base` (default) spans the feet of the bottom quarter, `full` the whole outline, at most `occluder_points` corners, never self-crossing (a crossing outline falls back to its convex hull). A sprite node that is scaled, flipped or nested in its own scene gets a fresh lit scene instead of a copy. Headless Godot renders nothing: `verify` proves the lit resources are wired (both textures, same size, normals that decode with z > 0, occluder polygons, cells on lit tiles), not how the light looks; judge `assets_src/art/lit/<name>/<name>_review.png` and the demo scene in the editor |
 | `--engine none` | Maps, TileSets, scenes, SpriteFrames and the damage-flash and dissolve shaders are Godot resources | PNGs, sprite sheets + their JSON (with any hold `durations`), BMFont `.fnt` fonts, 9-slice margins (in the manifest) and the manifest still ship; maps and the shaders are skipped with a log line |
 
 Timing on the tested GPU: a sprite about 18 s, a texture tile with variants about 25 s, a Wan clip about 110 s, a
@@ -331,6 +336,15 @@ Timing on the tested GPU: a sprite about 18 s, a texture tile with variants abou
 - Screens: `screen_<name>.tscn` is a full-rect `Control` over the backdrop (`TextureRect`, keep aspect covered,
   nearest filter), using the first `assets/ui/theme_*.tres` when the game has one; the loading screen's
   `Progress` is a `TextureProgressBar` (set `value`), the credits `Player` autoplays the roll.
+- Lighting (`lighting` lane): `assets/art/lit/<name>/` holds lit copies that point at the original PNGs, which stay
+  untouched: `<frames>_lit.tres` (every frame a CanvasTexture: diffuse + normal map), `<tileset>_lit.tres` (every atlas
+  a CanvasTexture; terrains and collision copied, so Godot's terrain tool paints it as before), `props/<png>_lit.tscn`
+  (the prop's own scene with the CanvasTexture and a LightOccluder2D under the root; collision kept) and
+  `<name>_demo.tscn`. Normal maps are OpenGL style (green up), what Godot 4 expects; Godot flips green into its
+  y-down canvas itself. A normal map changes nothing until a light shines: add a `PointLight2D` with a texture, a
+  `height` above 0 (the demo uses 48 px; at 0 a flat surface gets no light) and `shadow_enabled` for the occluders,
+  and a `CanvasModulate` to darken the rest. An occluder shadows everything behind it, its own sprite included,
+  which is why `base` keeps it to the feet.
 
 ## Palettes and style references
 Dotwork ships two palettes, both built from dotwork's own renders (no third-party art):
@@ -426,6 +440,8 @@ stays in), so no pixel is ever resampled. The game itself gets `assets/art/brand
   in `docs/ASSET_LOG.md`.
 
 ## Tests
+`python tools/art/dotwork/tests/test_lighting.py` - offline, seconds: normal maps (unit length, facing the camera,
+rims pointing outward, seamless tiles), occluder outlines and the lighting lane end to end on a throwaway game.
 `python tools/art/dotwork/tests/test_dotwork.py` - offline, under a minute: a stand-in ComfyUI on 127.0.0.1 with canned
 outputs; covers settings, spec parsing and exit codes (entry-level errors and warnings, options before the command),
 the manifest and its model provenance, naming, cache keys and seeds, metadata stripping, spec path containment, grid

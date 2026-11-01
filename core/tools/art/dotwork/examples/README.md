@@ -37,6 +37,7 @@ change a seed to get a different take.
 | `party_member.json` | a party member: 4-direction idle and walk, attack, the battle pose set, a portrait with five expressions and talking frames | sprites, rotate, animate |
 | `tools.json` | instruction edits, an inpaint and a normal map on one of your sprites | sprites |
 | `img2px.json` | concept art or a photo to pixel art at a set width | sprites |
+| `lighting.json` | normal maps, CanvasTextures and light occluders for the party member, the street TileSet and the props; a lit demo scene (CanvasModulate + PointLight2D with shadows) | none (needs the art of `party_member.json`, `town.json` and `props_icons.json` in the game) |
 
 Measured per-render costs on an RTX 5060 Ti 16 GB (from dotwork's own logs), to size a pack before you run it:
 

@@ -9,6 +9,10 @@
 # Usage   : python dotwork.py verify [--project GAME]     (also runs at the end of `dotwork.py pack` unless --no-verify)
 # Notes   : Overlay TileSets (lane_ground, metadata dotwork_overlays) get the blob check: painting a shape on an empty
 #           layer must give exactly the painted cells with the right tiles. Pair TileSets get the corner check.
+#           Lit resources (lane_lighting): every CanvasTexture needs a diffuse and a same-size normal map whose pixels,
+#           as Godot imported them, decode to unit normals facing the camera (z > 0); occluders need a polygon, point
+#           lights a texture, a TileMapLayer on a lit TileSet a tile in every cell. Headless Godot renders nothing,
+#           so the lit look itself is not checked here (the lighting lane's review sheet shows a numpy preview).
 #           Writes <work>/verify_report.json. The pack command exits 1 when ok is false.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
@@ -47,7 +51,10 @@ func _init():
 					if not is_equal_approx(r.get_frame_duration(a, i), 1.0):
 						held += 1
 			var extra = (" held=" + str(held)) if held > 0 else ""
-			print("DOTWORK_OK ", p, " SpriteFrames anims=", r.get_animation_names().size(), extra)
+			# lit copies (lane_lighting): every CanvasTexture frame needs its diffuse and a same-size normal map
+			var lf = _lit_frames(r)
+			print("DOTWORK_OK ", p, " SpriteFrames anims=", r.get_animation_names().size(), extra, "" if lf[0] == 0 else str(" lit_frames=", lf[0]))
+			bad += lf[1]
 		elif r is ShaderMaterial:
 			# the headless (dummy) renderer compiles the shader: one that fails still loads, but lists no uniforms
 			var u = r.shader.get_shader_uniform_list().size() if r.shader != null else -1
@@ -68,6 +75,10 @@ func _init():
 			if t > 0:
 				bad += 1
 			print("DOTWORK_TERRAIN ", p, " mismatched_corners=", t)
+			var ls = _lit_sources(r)
+			if ls[0] > 0:
+				print("DOTWORK_LIT ", p, " lit_sources=", ls[0])
+			bad += ls[1]
 		elif r is FontFile:
 			# Dotwork glyph fonts (BMFont): must report a height and lay out a sample string
 			var fs = r.fixed_size if r.fixed_size > 0 else 16
@@ -76,10 +87,17 @@ func _init():
 			print("DOTWORK_OK ", p, " FontFile size=", fs, " height=", h, " sample_w=", w)
 			if h <= 0 or w <= 0:
 				bad += 1
+		elif r is CanvasTexture:
+			print("DOTWORK_OK ", p, " CanvasTexture size=", r.get_size())
+			bad += _canvas_bad(r)
 		elif r is PackedScene:
 			var n = r.instantiate()
 			print("DOTWORK_OK ", p, " scene root=", n.get_class())
 			bad += _fx_check(p, n)
+			var lit = _lit_scene(n)
+			if lit[0] != "":
+				print("DOTWORK_LIT ", p, lit[0])
+			bad += lit[1]
 			n.free()
 		else:
 			print("DOTWORK_OK ", p, " ", r.get_class())
@@ -107,6 +125,106 @@ func _fx_check(p, node):
 	for c in node.get_children():
 		bad += _fx_check(p, c)
 	return bad
+# Lit resources (lane_lighting). A CanvasTexture needs a diffuse and a normal texture of the same size; headless Godot
+# draws nothing, so this proves the resources are wired, not what the light looks like. Returns 1 when broken.
+func _canvas_bad(t):
+	if t.diffuse_texture == null or t.normal_texture == null:
+		print("DOTWORK_LIT_FAIL CanvasTexture without a diffuse or a normal texture")
+		return 1
+	if t.diffuse_texture.get_size() != t.normal_texture.get_size():
+		print("DOTWORK_LIT_FAIL ", t.normal_texture.resource_path, " is ", t.normal_texture.get_size(), ", its diffuse ", t.diffuse_texture.get_size())
+		return 1
+	return _normal_bad(t.normal_texture)
+
+# A normal map as Godot imported it: sampled pixels (about 4096 per texture) must decode to unit normals (8-bit
+# rounding allowed) with z > 0. A diffuse PNG in the normal slot, or a lossy import, fails this.
+func _normal_bad(tex):
+	var img = tex.get_image()
+	if img == null:
+		return 0
+	if img.is_compressed():
+		img.decompress()
+	var w = img.get_width()
+	var h = img.get_height()
+	var step = max(1, int(sqrt(w * h / 4096.0)))
+	for y in range(0, h, step):
+		for x in range(0, w, step):
+			var c = img.get_pixel(x, y)
+			var n = Vector3(c.r * 2.0 - 1.0, c.g * 2.0 - 1.0, c.b * 2.0 - 1.0)
+			if n.z <= 0.0 or abs(n.length() - 1.0) > 0.06:
+				print("DOTWORK_LIT_FAIL ", tex.resource_path, " pixel ", x, ",", y, " = ", c, " is not a unit normal facing the camera")
+				return 1
+	return 0
+
+# [CanvasTexture frames, broken ones] of a SpriteFrames
+func _lit_frames(sf):
+	var n = 0
+	var b = 0
+	for a in sf.get_animation_names():
+		for i in range(sf.get_frame_count(a)):
+			var t = sf.get_frame_texture(a, i)
+			if t is CanvasTexture:
+				n += 1
+				b += _canvas_bad(t)
+	return [n, b]
+
+# [atlas sources with a CanvasTexture, broken ones] of a TileSet; a lit atlas must still hold its tiles
+func _lit_sources(ts):
+	var n = 0
+	var b = 0
+	for i in range(ts.get_source_count()):
+		var s = ts.get_source(ts.get_source_id(i))
+		if s is TileSetAtlasSource and s.texture is CanvasTexture:
+			n += 1
+			b += _canvas_bad(s.texture)
+			if s.get_tiles_count() == 0:
+				print("DOTWORK_LIT_FAIL lit atlas source ", ts.get_source_id(i), " has no tiles")
+				b += 1
+	return [n, b]
+
+# [summary or "", broken count] of an instantiated scene: occluders need a polygon, point lights a texture, lit
+# sprites need sound CanvasTextures, and a TileMapLayer on a lit TileSet must find a tile in every painted cell. Scenes
+# without lighting nodes print nothing extra.
+func _lit_scene(root):
+	var occ = 0
+	var lights = 0
+	var mods = 0
+	var lit = 0
+	var cells = 0
+	var b = 0
+	var nodes = [root]
+	nodes.append_array(root.find_children("*", "", true, false))
+	for c in nodes:
+		if c is LightOccluder2D:
+			occ += 1
+			if c.occluder == null or c.occluder.polygon.size() < 3:
+				print("DOTWORK_LIT_FAIL ", c.name, ": LightOccluder2D without a polygon")
+				b += 1
+		elif c is PointLight2D:
+			lights += 1
+			if c.texture == null:
+				print("DOTWORK_LIT_FAIL ", c.name, ": PointLight2D without a texture lights nothing")
+				b += 1
+		elif c is CanvasModulate:
+			mods += 1
+		elif c is Sprite2D and c.texture is CanvasTexture:
+			lit += 1
+			b += _canvas_bad(c.texture)
+		elif c is AnimatedSprite2D and c.sprite_frames != null and _lit_frames(c.sprite_frames)[0] > 0:
+			lit += 1
+			b += _lit_frames(c.sprite_frames)[1]
+		elif c is TileMapLayer and c.tile_set != null and _lit_sources(c.tile_set)[0] > 0:
+			lit += 1
+			for cell in c.get_used_cells():
+				cells += 1
+				if c.get_cell_tile_data(cell) == null:
+					b += 1
+			if cells == 0:
+				print("DOTWORK_LIT_FAIL ", c.name, ": a lit TileMapLayer with no cells")
+				b += 1
+	if occ + lights + mods + lit == 0:
+		return ["", b]
+	return [str(" occluders=", occ, " lights=", lights, " canvas_modulate=", mods, " lit_nodes=", lit, " lit_cells=", cells), b]
 
 # Overlay terrains (lane_ground: 47-tile blob, Match Corners and Sides): paint each shape on an EMPTY layer with the
 # editor's default settings; every painted cell must get the tile whose 8 bits are its painted neighbours, and no
