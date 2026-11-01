@@ -16,12 +16,17 @@
 ## Layout
 ```
 conf.lua            window, identity, the command line (KIT) and the error handler (read before main.lua)
-main.lua            boot only: run modes (smoke, capture, test) around src/game/game.lua
-src/core/           engine-free helpers (Log, CoyoteTimer, ...): no love.graphics, so tests load them
-src/game/           gameplay; game.lua is the entry main.lua calls
-assets/             art, audio, fonts (see docs/ASSET_LOG.md)
-data/               tunables and tables (JSON or Lua); data/golden/ is test data, not packaged
-tests/              runner.lua, assert.lua, test_*.lua
+main.lua            boot only: run modes (smoke, capture, test) around the shell
+src/version.lua     the game's name and version (title screen, log, crash files read it)
+src/core/           engine-free logic (juice, settings, saves, i18n, JSON, atomic files, ...): no love.graphics,
+                    so tests load them; checked against data/golden/*.json
+src/shell/          the runtime front end: app.lua (screen stack, settings applied, user data), screens/, drive.lua
+                    (smoke scenarios), ui.lua + widgets.lua (menus, focus, the pseudo-locale layout check)
+src/game/           gameplay; game.lua is what the play screen runs
+assets/             art, audio, fonts (see docs/ASSET_LOG.md); assets/ui/glyphs/<name>.png = button prompts
+data/               tunables and tables; i18n/<locale>.json strings, dialogue/*.built.json subtitles;
+                    data/golden/ is test data, not packaged
+tests/              runner.lua, assert.lua, helpers/, test_*.lua
 tools/              dev.py, lovecheck/ (the syntax checker)
 build/              .love and the fused Windows exe (git-ignored)
 ```
@@ -32,8 +37,13 @@ build/              .love and the fused Windows exe (git-ignored)
 - `local` everything. Tunables in a constants block at the top of the file. No magic numbers in logic.
 - Gameplay timing in `love.update(dt)`, drawing in `love.draw()`. Multiply by `dt`. For physics that must not drift
   with frame rate, step a fixed timestep (accumulate `dt`, step 1/60 at a time).
-- Logging through `src/core/log.lua` (`Log.info("physics", "msg")`), never bare `print` in game code.
+- Logging through `src/core/log.lua` (`Log.info("physics", "msg")`), never bare `print` in game code. The shell
+  copies every line into game.log in the user-data folder's logs folder.
 - Engine-free logic in `src/core/` or `src/game/logic/` with no `love.*` calls, so tests run it without a window.
+- Input as actions, not keys: the game gets `Game.action("jump")` and asks `app.input:is_down("move_left")`, so
+  rebinding in Settings just works. Every visible string goes through `app:t("key")` (`data/i18n/en.json`).
+- User data (settings, saves, logs, crashes, telemetry) only through `src/core/text_store.lua` and
+  `atomic_file.lua`, never `love.filesystem.write` directly: `--data-dir` and crash safety depend on it.
 
 ## Gotchas (Claude: read before editing)
 1. **LÖVE's error screen waits for a key, even with no window.** conf.lua replaces `love.errorhandler` so automated
@@ -53,7 +63,10 @@ build/              .love and the fused Windows exe (git-ignored)
    game folder (or the .love) and case-sensitive inside a .love, even on Windows.
 6. **Pixel art:** call `love.graphics.setDefaultFilter("nearest", "nearest")` before loading images, and scale by
    whole numbers from the 640x360 base.
-7. **API verification:** LÖVE 11 and 12 differ (for example `love.graphics.setColor` takes 0..1 since 11.0, not
+7. **No rename in love.filesystem.** Atomic saves in the save folder write `<file>.tmp`, verify it, then write
+   `<file>.bak` and `<file>`; with `--data-dir` (io.open) they rename for real, removing the target first because
+   a Windows rename does not replace. Keep `--data-dir` paths ASCII on Windows (io.open uses the code page).
+8. **API verification:** LÖVE 11 and 12 differ (for example `love.graphics.setColor` takes 0..1 since 11.0, not
    0..255). Check `lovec --version` and the matching wiki page (love2d.org/wiki) before using an unfamiliar API.
 
 ## Generated or binary (do not hand-edit)

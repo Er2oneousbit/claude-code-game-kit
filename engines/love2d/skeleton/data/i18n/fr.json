@@ -1,0 +1,38 @@
+{
+  "language.name": "Français",
+
+  "title.press_any": "Appuyez sur une touche ou un bouton",
+  "title.version": "Version {version}",
+
+  "consent.title": "Partager les statistiques de jeu ?",
+  "consent.yes": "Oui",
+  "consent.no": "Non",
+  "consent.later": "Plus tard",
+
+  "menu.play": "Jouer",
+  "menu.settings": "Paramètres",
+  "menu.credits": "Crédits",
+  "menu.quit": "Quitter",
+
+  "settings.title": "Paramètres",
+  "settings.back": "Retour",
+  "settings.tab.display": "Affichage",
+  "settings.tab.audio": "Audio",
+  "settings.tab.controls": "Commandes",
+  "settings.tab.access": "Accessibilité",
+  "settings.tab.language": "Langue",
+  "settings.audio.master": "Volume général",
+  "settings.audio.music": "Musique",
+  "settings.language.language": "Langue",
+
+  "value.on": "Oui",
+  "value.off": "Non",
+  "value.percent": "{n} %",
+
+  "pause.title": "Pause",
+  "pause.resume": "Reprendre",
+  "pause.quit": "Retour au titre",
+
+  "apples.one": "{n} pomme",
+  "apples.other": "{n} pommes"
+}

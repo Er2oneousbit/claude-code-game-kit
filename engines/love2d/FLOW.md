@@ -20,9 +20,9 @@ Support" extension for completions. LÖVE has no editor: assets come from Asepri
 |---|---|
 | `check` | `lovec tools/lovecheck <every .lua>`: a separate tiny LÖVE program compiles each file with `loadstring` (the game's own LuaJIT) and prints `CHECK_FAIL <file> <message>` |
 | `test` | `lovec . --test [--filter name]`: `tests/runner.lua` runs every `test_*` function and prints `TESTS <run> passed <p> failed <f> files <n>`; 0 tests is exit 2 |
-| `smoke` | compiles conf.lua and main.lua first, then `lovec . --smoke N`: passes on `BOOT_OK` and `SMOKE_DONE` with no `[ERROR]` / `[error]` lines and exit 0. `--headless` runs with no window. `--screenshot`, `--record`, `--compare`, `--drive`, `--data-dir`, `--locale` as in `dev.py smoke -h` |
+| `smoke` | compiles conf.lua and main.lua first, then `lovec . --smoke N`: walks title > menu > play, passes on `BOOT_OK` and `SMOKE_DONE` (or `DRIVE_DONE` with `--drive`) with no `[ERROR]` / `[error]` lines and exit 0. `--headless` runs with no window. `--screenshot`, `--record`, `--compare`, `--drive`, `--data-dir`, `--locale`: see "Smoke scenarios" below |
 | `run` | `love .` (the GUI build) |
-| `build` | zips `main.lua`, `conf.lua`, `src/`, `assets/`, `data/` (not `data/golden/`) into `build/<game>.love`; on Windows fuses `love.exe` + the .love into `build/windows/<game>.exe` and copies LÖVE's DLLs and its license file (license.txt) next to it |
+| `build` | zips `main.lua`, `conf.lua`, `CREDITS.md`, `src/`, `assets/`, `data/` (not `data/golden/`) into `build/<game>.love`; on Windows fuses `love.exe` + the .love into `build/windows/<game>.exe` and copies LÖVE's DLLs and its license file (license.txt) next to it |
 | `clean` | removes `build/` (`--yes` accepted, never asks) |
 | `doctor` | LÖVE found, 11.4 or newer (warns on 12), the boot files present, then `tools/doctor.py` |
 
@@ -39,6 +39,62 @@ return T
 ```
 `A.eq`, `A.near(got, want, tol)`, `A.truthy`, `A.falsy`, `A.same(got, want, tol)` (deep, numbers within tol),
 `A.raises(fn)`. Tests run with no window: keep `love.graphics` out of the code under test.
+
+The juice and shell logic in `src/core/` is checked against the kit's golden vectors: `tests/test_juice_golden.lua`
+and `tests/test_shell_golden.lua` load `data/golden/*.json` at test time and make one test per case (a case type
+with no handler fails). Change behaviour in `tools/golden_vectors.py` first, `--write`, then fix the Lua until the
+tests pass. JSON comes from `src/core/json.lua` (LÖVE has none): `null` is `Json.null`, and `Json.array({})` marks
+a list that may be empty so it writes back as `[]`.
+
+## The runtime shell (src/shell/)
+boot > title (press any key; asks for telemetry consent once per run while it is unset) > main menu (Play, Settings,
+Credits, Quit, and Juice demo in a debug build = a run from the source folder) > loading (progress bar) > play
+(`src/game/game.lua`) > pause (Resume, Settings, Quit to title; on the `pause` action and on focus loss).
+- **Input:** keyboard and gamepad everywhere (`ui_up/down/left/right/accept/cancel`; cancel goes back one screen;
+  the left stick works as the d-pad). The focused item has an outline and a `>` marker, not just a colour.
+- **Settings** (tabs Display, Audio, Controls, Accessibility, Language): every field of the schema in
+  `src/core/settings.lua`, applied as it changes, saved on Back. Controls lists the game actions with their prompt
+  glyph (`assets/ui/glyphs/<glyph_name>.png` at 1x, else a text key-cap), rebinds with "press a key" (a binding
+  taken from another action swaps onto it), marks clashes, resets to defaults; `glyph_set` follows the last device.
+  Applied: text_scale and ui_scale (font size), subtitles (on, size, background, speaker names, barks),
+  captions_sfx, reduce_motion and shake_scale (the shake intensity), flash_limit (gentler flashes; the 3-per-second
+  limiter itself is always on), hold_to_toggle (the demo's guard), game_speed (the game's dt), difficulty (stored for
+  the game), window mode, size, vsync, frame cap (never in automated runs), master volume and the sfx / ui buses.
+  Stored only: `audio.mono` (LÖVE cannot downmix a stereo source; ship mono sources if you need it), `music` and
+  `voice` until the game plays music or voice. `colorblind` swaps the juice demo's palette only
+  (`src/shell/style.lua`), not a full-screen filter.
+- **User data** in one folder: the save folder (`love.filesystem.getSaveDirectory()`), or `--data-dir <dir>`:
+  `settings.json` (+ `.bak`), `save_<slot>.json` (+ `.bak`; the play screen saves slot 1 when you leave),
+  logs/game.log (name, version and UTC time on line 1; 5 older logs as `game.1.log`..`game.5.log`),
+  `crashes/crash_<timestamp>.txt` (version, seed from `-- --seed N`, the error, traceback and log tail; written by
+  conf.lua's error handler), `telemetry.csv` (only after a Yes), `bug_<timestamp>/` (F8 in a debug build: screenshot,
+  log tail, settings, info).
+- **Telemetry** is local only: events go to `telemetry.csv` while `telemetry.consent` is `yes`, nothing is sent. To
+  add an endpoint a game needs a privacy policy that says what is collected, why, how long it is kept and who
+  receives it, a way to withdraw consent (the Language tab has the switch), and no sending before a Yes.
+- **Localization:** `data/i18n/<locale>.json` (en complete, fr partial: missing keys fall back to English). Every
+  visible string goes through `app:t(key, args)`; values a game makes up use `app:tv(value)`. Locale `pseudo` shows
+  every string through `pseudo()`: accented, 40 % longer, in brackets.
+- **Subtitles:** `data/dialogue/sample.built.json` (the dialogue.built.json v0 shape: lines with speaker, text, kind,
+  priority, interrupt, cooldown, reveal times and cues; captions by sound event; unknown fields ignored).
+  `app:say("guide.welcome")` shows a line; barks only with subtitle barks on. The typewriter reveals by the file's
+  reveal times (`Subtitles.TYPEWRITER = false` shows the cue chunks instead).
+
+## Smoke scenarios (`python tools/dev.py smoke --drive <scenario>`)
+| Scenario | What it proves |
+|---|---|
+| (none) | title > menu > play, then the game runs for `--frames` (default 120) |
+| `menus` | title > Settings > master volume 0.5, reduce motion on > Back (saves) > Quit; prints `SETTINGS_WRITTEN <path>` once the file holds both values. With consent unset it leaves no `telemetry.csv` |
+| `crash` | raises an error in a frame: prints `CRASH_WRITTEN <path>`, exits 1 (expected) |
+| `pseudo` | with `--locale pseudo`: visits every screen (each settings tab, top and scrolled), checks every visible label (wider than its box, past the screen edge, or not through `t()` = no leading `[`): `PSEUDO_FAIL` lines and exit 1, or `PSEUDO_PASS` |
+| `pseudo-plant` | the same with one planted label too small for its text: must exit 1 naming `plant.too_small` |
+| `bug` | presses F8 on the menu and checks the `bug_<timestamp>/` files: `DRIVE_BUG <path>` |
+| `show:<screen>` | `title`, `settings` (a slider focused), `pause`, `subtitle`, `juice`: opens it and ends; add `--screenshot captures/<screen>.png` |
+
+Add `--data-dir captures/run1` to keep a run's files out of the real save folder, and
+`--compare <baseline.png> [--tolerance N] [--max-pixels N]` after `--screenshot` for a visual regression check
+(`tools/image_diff.py`; exit 1 on a difference, a `_diff.png` next to the screenshot shows where). A scenario is a
+coroutine in `src/shell/drive.lua`: add one there and list it here.
 
 ## Assets and audio
 - Images: `love.graphics.newImage("assets/art/hero.png")` after `love.graphics.setDefaultFilter("nearest",

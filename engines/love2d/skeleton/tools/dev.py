@@ -7,7 +7,9 @@
 #             check    compile every .lua file with LÖVE's LuaJIT (tools/lovecheck), without running it
 #             test     run the unit tests in tests/ inside LÖVE (tests/runner.lua), no window
 #             smoke    boot the game for N frames in a small off-screen window, fail on errors; --headless runs
-#                      without a window; --screenshot FILE / --record DIR capture it; --compare BASELINE diffs
+#                      without a window; --screenshot FILE / --record DIR capture it; --compare BASELINE diffs;
+#                      --drive SCENARIO runs a scripted path through the menus (menus, crash, pseudo,
+#                      pseudo-plant, bug, show:<screen>) with --data-dir DIR and --locale LANG
 #             run      launch the game window
 #             build    package build/<game>.love, and on Windows a fused build/windows/<game>.exe with LÖVE's DLLs
 #             clean    remove build output (--yes is accepted; LÖVE clean never asks)
@@ -54,7 +56,7 @@ MIN_LOVE = (11, 4)                       # 11.4 and 11.5 tested by the community
 TESTED_MAJOR = 11                        # LÖVE 12 changes APIs (verify before moving)
 NO_EXEC = (126, 127)
 # build: what goes into the .love (everything else stays out: tools, tests, docs, sources, captures)
-LOVE_INCLUDE = ["main.lua", "conf.lua", "src", "assets", "data", "lib"]
+LOVE_INCLUDE = ["main.lua", "conf.lua", "src", "assets", "data", "lib", "CREDITS.md"]
 LOVE_EXCLUDE_PARTS = {"golden"}          # data/golden/ is test data
 WINDOWS_RUNTIME = ["love.dll", "lua51.dll", "mpg123.dll", "msvcp120.dll", "msvcr120.dll", "OpenAL32.dll",
                    "SDL2.dll", "license.txt"]
@@ -275,16 +277,21 @@ def cmd_smoke(args, love):
     if rc != 0 or errors or not booted or not done:
         if errors:
             print("[FAIL] errors during the run:\n  " + "\n  ".join(errors[:10]))
+        crash = re.search(r"^CRASH_WRITTEN (.+)$", out, re.M)
         if not booted:
             print(f"[FAIL] marker {BOOT_MARKER!r} not seen (did love.load run?)")
+        elif crash:
+            print(f"[FAIL] the game crashed; crash report: {crash.group(1).strip()}")
         elif not done:
-            print(f"[FAIL] the run ended before {frames} frames")
+            print(f"[FAIL] the drive {args.drive!r} did not finish (no DRIVE_DONE)" if args.drive
+                  else f"[FAIL] the run ended before {frames} frames")
         if rc not in (0, 124):
             print(f"[FAIL] exit code {rc}")
         if DEBUG:
             print(out[-3000:])
         return 1
-    print(f"[ OK ] smoke passed ({frames} frames{', headless' if args.headless else ''})")
+    what = f"drive {args.drive}" if args.drive else f"{frames} frames"
+    print(f"[ OK ] smoke passed ({what}{', headless' if args.headless else ''})")
     if shot:
         if not shot.is_file():
             print(f"[FAIL] no screenshot was written to {shot}")
@@ -466,8 +473,14 @@ def build_parser():
                    "(tools/image_diff.py); a difference fails the run")
     p.add_argument("--tolerance", type=int, default=0, help="--compare: per-channel difference allowed (0-255)")
     p.add_argument("--max-pixels", type=int, default=0, help="--compare: differing pixels allowed")
-    p.add_argument("--drive", default="", help="a scripted scenario the game runs (menus, crash, pseudo, ...)")
-    p.add_argument("--data-dir", default="", help="keep settings, saves, logs and crashes in this folder")
+    p.add_argument("--drive", default="", metavar="SCENARIO",
+                   help="a scripted path through the shell: menus (change two settings, save, quit; prints "
+                        "SETTINGS_WRITTEN), crash (a planted error: CRASH_WRITTEN, exit 1), pseudo (with --locale "
+                        "pseudo: checks every label on every screen), pseudo-plant (the same plus a label too small: "
+                        "must fail), bug (F8 bug report), show:<title|settings|pause|subtitle|juice> (opens that "
+                        "screen; add --screenshot)")
+    p.add_argument("--data-dir", default="", help="keep settings, saves, logs, crashes, telemetry and bug reports "
+                   "in this folder instead of the save folder (relative to the project)")
     p.add_argument("--locale", default="", help="language for the run (pseudo = the pseudo-locale)")
     p.set_defaults(fn=cmd_smoke)
 
