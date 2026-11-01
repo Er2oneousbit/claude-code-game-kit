@@ -1476,6 +1476,23 @@ class DotworkExam(unittest.TestCase):
             f[2:30, 26:29] = gold + (255,)
         self.assertEqual(qa.drifted([Image.fromarray(f) for f in clip], "e", refs), 3)
         self.assertIsNone(qa.drifted([Image.fromarray(body()) for _ in range(6)], "e", refs))
+        # a shade across a 16-level bin edge is not drift (2026-10-31 rehearsal: a clean side walk was stopped):
+        # the front view's apron is (100, 60, 48), the side view's (100, 60, 47); the clip draws it (100, 60, 49)
+        e2, s2 = body(), body()
+        e2[20:40, 6:26] = (100, 60, 47, 255)
+        s2[20:40, 6:26] = (100, 60, 48, 255)
+        refs2 = {"e": Image.fromarray(e2), "w": Image.fromarray(e2[:, ::-1].copy()), "s": Image.fromarray(s2),
+                 "n": Image.fromarray(body())}
+        shaded = [e2.copy() for _ in range(6)]
+        for f in shaded[1:]:
+            f[20:40, 6:26] = (100, 60, 49, 255)
+        self.assertIsNone(qa.drifted([Image.fromarray(f) for f in shaded], "e", refs2))
+        staffed = [e2.copy() for _ in range(6)]
+        for f in staffed[2:]:
+            f[2:30, 26:29] = gold + (255,)
+        s2[2:30, 26:29] = gold + (255,)                                           # the front view shows the staff
+        refs2["s"] = Image.fromarray(s2)
+        self.assertEqual(qa.drifted([Image.fromarray(f) for f in staffed], "e", refs2), 2)   # a real staff still is
         # the lane: drift from frame 4 trims to 3 frames played back and forth; from frame 2 it stops the character
         man = fcore.Manifest(s, "drift")
         rot = {}
@@ -1504,6 +1521,16 @@ class DotworkExam(unittest.TestCase):
             c.frames("cast", "e", rot)
         c.e["clip_fix"] = {"cast_e": {"allow_drift": True}}
         self.assertEqual(len(c.frames("cast", "e", rot)[0]), 6)                   # the user's call: kept whole
+        # a possible turn-around names the fix when the action has a skeleton and does not use it yet (2026-10-31
+        # rehearsal: a free walk_n ended on the face and the note said only "review")
+        from unittest import mock
+        with mock.patch.object(lane_character.qa, "turned_any", lambda *a, **k: 2):
+            notes = c.frames("cast", "e", rot)[1]
+            self.assertTrue(any('possible turn-around from frame 3' in n and '"skeleton": ["cast"]' in n
+                                for n in notes), notes)
+            c.skeleton = ["cast"]
+            notes = c.frames("cast", "e", rot)[1]
+            self.assertTrue(any("possible turn-around" in n and "skeleton" not in n for n in notes), notes)
 
     def test_state_props_and_ambient_loops(self):
         s = self.bind()
@@ -1629,6 +1656,36 @@ class DotworkExam(unittest.TestCase):
                 json.dump({"name": "c", "animprops": [dict({"name": "x", "kind": "clip", "prompt": "a bridge"}, **bad)]}, fh)
             code, out = self.run_dotwork("pack", "--spec", spec, "--project", self.tmp, "--no-verify")
             self.assertEqual(code, 2, out)
+
+    def test_animprops_slab_remove(self):
+        # slab "remove" strips a baked light-grey ground slab from the base render before any state, loop or clip
+        # is made from it (2026-10-31 rehearsal: a cauldron carried one into every clip frame); without it the base
+        # is left alone, and only an entry with the flag gets a new cache key
+        from unittest import mock
+        s = self.bind()
+        import lane_animprops as ap
+        grey = (200, 200, 205)
+        img = np.zeros((48, 48, 4), np.uint8)
+        img[6:43, 12:36] = (5, 4, 7, 255)                                          # outline
+        img[7:42, 13:35] = (120, 80, 50, 255)                                      # body
+        img[43:46, 4:44] = grey + (255,)                                           # the slab: wider, under the body
+        src = os.path.join(self.tmp, "render.png")
+        Image.fromarray(img).save(src)
+        man = fcore.Manifest(s, "ap")
+        with mock.patch.object(ap, "fit_sprite", lambda *a, **k: {"path": src}), \
+                mock.patch.object(ap.lib, "ref", lambda *a, **k: None), \
+                mock.patch.object(fcore, "ensure_comfy", lambda: None):
+            ap.run([{"name": "plant", "kind": "sway", "prompt": "a plant", "slab": "remove"},
+                    {"name": "shrub", "kind": "sway", "prompt": "a plant"}], s.project, man, s.conf)
+        out = fcore.art(s.conf, "props", "anim")
+        for name, slab_left in (("plant", False), ("shrub", True)):
+            a = np.array(Image.open(os.path.join(out, name, f"spr_{name}_idle_00.png")).convert("RGBA"))
+            left = ((a[..., :3] == grey).all(-1) & (a[..., 3] == 255)).any()
+            self.assertEqual(bool(left), slab_left, name)
+            self.assertTrue(((a[..., :3] == (120, 80, 50)).all(-1) & (a[..., 3] == 255)).any(), name)   # body kept
+        work = os.path.join(fcore.WORK, "animprops")
+        keys = {f.split("_")[0]: f.split("_")[2] for f in os.listdir(work) if f.endswith("_closed.png")}
+        self.assertNotEqual(keys["plant"], keys["shrub"])                          # same prompt: only the flag differs
 
     def test_eight_directions_and_variants(self):
         s = self.bind()

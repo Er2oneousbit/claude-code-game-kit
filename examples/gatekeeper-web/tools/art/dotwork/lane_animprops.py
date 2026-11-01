@@ -7,11 +7,13 @@
 #           ambient loops: {"name": "torch", "kind": "flame", "prompt": "a wall torch with a lit flame"}; kinds flame,
 #           flag (pole "left" / "right"), smoke (emit [x, y] in the sprite, default its top), spin (sym: the part's
 #           rotational symmetry, default 8; render the turning part on its own), sway; frames / fps override.
-#           any motion: {"name": "pot", "kind": "clip", "prompt": "a round clay pot", "motion": "the clay pot cracks
-#           and bursts apart into pieces that scatter across the ground"}; keys motion (required),
+#           any motion: {"name": "bud", "kind": "clip", "prompt": "a closed flower bud in a small pot", "motion": "the
+#           bud slowly opens into a full bloom and stays open"}; keys motion (required),
 #           loop (default false: animations start / play / end / back; true: idle), frames (2-16, default 8), fps,
 #           anchor (center_x default: sideways only; bottom_center, center, none: how SpriteKiln aligns the
 #           frames), solid. Wan's ground shadow is removed (drop_ground_shadow).
+#           Every kind: slab "remove" strips a light-grey ground slab baked into the base render (qa.deslab, opt-in
+#           as in the props lane) before any state, loop or clip is made from it.
 # Notes   : Chest / door states are klein edits of the closed render, and only the moving part of each edit is kept
 #           (moving_part): the chest's lid (the upper half and anything above it), the door's panel inside its frame.
 #           The rest stays pixel-identical to the closed render, so the chest opens instead of morphing into another
@@ -447,8 +449,10 @@ def run(entries, pack, man, conf):
             fig, tpl, fit = size, PROP_TPL, "longest"
         # every state builds on the base render, so one key covers all of them: a new prompt, size or palette
         # re-renders the base and its states (the base used to be cached by name + seed only)
-        ck = core.key(core.prompt(tpl, s=e['prompt']), kind, canvas, e.get('cells'), core.palette_key(pal),
-                      lib.ref_key(conf))
+        parts = [core.prompt(tpl, s=e['prompt']), kind, canvas, e.get('cells'), core.palette_key(pal), lib.ref_key(conf)]
+        if e.get("slab") == "remove":   # appended only here, so every other entry keeps its key (and its renders)
+            parts.append("slab removed")
+        ck = core.key(*parts)
         stem = os.path.join(work, f"{name}_s{seed}_{ck}")
         base = stem + "_closed.png"
         if not os.path.exists(base):
@@ -460,6 +464,12 @@ def run(entries, pack, man, conf):
             if kind == "door":  # bottom-aligned, centred door-sized crop
                 x0 = (canvas - W_) // 2
                 im = im.crop((x0, canvas - H_, x0 + W_, canvas))
+            if e.get("slab") == "remove":
+                # the base is what every state, loop and clip is made from: strip a baked light-grey ground slab here
+                # (2026-10-31 rehearsal: a cauldron carried one into every clip frame), as the props lane does
+                im, _, note = qa.deslab(im)
+                if note:
+                    core.log(f"animprops {name}: {note}")
             im.save(base)
         if Image.open(base).getbbox() is None:
             raise core.JobError(f"animprops {name}: the base render came out empty; give the entry another seed")

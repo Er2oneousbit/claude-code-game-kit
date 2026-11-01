@@ -9,7 +9,17 @@ Asset libraries and tools. AI generators are in `ai-tools.md`, prompt patterns i
 ## Art (2D)
 - `kenney.nl`. CC0, huge, consistent style. Best prototyping source.
 - `opengameart.org`, `itch.io/game-assets` (filter free, check license per pack).
-- `lospec.com` palettes (palette lists are free to use) plus pixel art tutorials.
+- `lospec.com`: the pixel art palette list (thousands of limited palettes, searchable by colour count and tag), plus
+  pixel art tutorials and a browser editor (below). Checked live 2026-10-31 (K01):
+  - Every palette page downloads as `.hex` (one `RRGGBB` per line, no `#`), GIMP `.gpl`, JASC `.pal`, Photoshop
+    `.ase`, Paint.NET `.txt` and PNG swatches (1x, 8x, 32x). The URL is the page plus the extension
+    (`https://lospec.com/palette-list/endesga-32.hex`).
+  - The `.hex` file is Dotwork's palette format: put it in the game (for example `art_src/palettes/`) and point
+    `palette` / `env_palette` in `dotwork.config.json` at it, or pass `--palette <file>` to `clean` and `recolor`. A
+    kit tilemap snapped to ENDESGA 32 with `dotwork.py clean` kept 20 colours, none off the palette. The `.gpl` loads
+    in GIMP, Aseprite and Pixelorama **(verify)**.
+  - A palette page names its creator but shows no license. Credit the creator in `docs/ASSET_LOG.md` and keep the
+    page URL; tutorial images and art on the site are their authors', not free to reuse **(verify)**.
 - Pixel art editors (for drawing, animating and hand-polishing sprites, including AI output). What you make with any of
   them is yours; the license is about the program. Searched 2026-10-29 through secondary pages, so check each
   project's own page **(verify)**:

@@ -254,18 +254,36 @@ def _colour_counts(img):
     return dict(zip(v.tolist(), c.tolist())), len(k)
 
 
-def foreign_px(frames, own, refs, own_max=0.001, other_min=0.004):
+def foreign_px(frames, own, refs, own_max=0.001, other_min=0.004, own_dist=16):
     """Per frame: pixels in colours another direction's sprite has (>= other_min of it) and this direction's sprite
     lacks (<= own_max): a staff that is not in the side view, a beak in a back view. The mirror twin (e for w) has the
-    same colours and is left out."""
+    same colours and is left out. Such a pixel still counts as this direction's own when it lies within own_dist (RGB)
+    of an exact colour of its sprite: an unlocked frame shifts a shade across a 16-level bin edge, and a baker's
+    shirt, hands and trousers came out 10 % "foreign" on a clean side walk, which stopped the run (2026-10-31
+    rehearsal; those pixels sat a median 5 from the sprite's own colours). A new object sits far from all of them
+    (the staff of #24: 25-34), and a one-level tolerance on the bins instead missed that staff entirely."""
     ho, no = _colour_counts(refs[own])
+    a_own = np.array(refs[own].convert("RGBA"))
+    own_cols = np.unique(a_own[a_own[..., 3] == 255][:, :3], axis=0).astype(np.float32)
     fset = set()
     for d, im in refs.items():
         if d in (own, MIRROR_DIR.get(own)):
             continue
         h, n = _colour_counts(im)
         fset |= {k for k, c in h.items() if c / n >= other_min and ho.get(k, 0) / no <= own_max}
-    return [sum(c for k, c in _colour_counts(f)[0].items() if k in fset) for f in frames]
+    keys = np.array(sorted(fset), np.int64)
+    out = []
+    for f in frames:
+        a = np.array(f.convert("RGBA"))
+        px = a[a[..., 3] == 255][:, :3]
+        q = (px >> 4).astype(np.int64)
+        sel = px[np.isin((q[:, 0] << 8) | (q[:, 1] << 4) | q[:, 2], keys)].astype(np.float32)
+        if len(sel) and len(own_cols):
+            near = np.sqrt(((sel[:, None, :] - own_cols[None]) ** 2).sum(-1)).min(1)
+            out.append(int((near > own_dist).sum()))
+        else:
+            out.append(int(len(sel)))
+    return out
 
 
 def drifted(frames, own, refs, share=0.04, floor=8):

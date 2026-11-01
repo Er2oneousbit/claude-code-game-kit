@@ -528,7 +528,11 @@ class Character:
                     refs[wv] = ImageOps.mirror(refs[ev])
         bad = qa.turned_any(fr[1:], direction, refs)
         if bad is not None:  # heuristic only (false positives seen): note for review, never auto-trim
-            notes.append(f"possible turn-around from frame {bad + 1}: review the contact sheet")
+            # name the fix when there is one: a skeleton-driven clip cannot turn (2026-10-31 rehearsal: a free walk_n
+            # ended on the face; the note said only "review")
+            hint = (f'; "skeleton": ["{action}"] keeps the view (README, characters (skeleton))'
+                    if action in pose.ACTIONS and action not in self.skeleton else "")
+            notes.append(f"possible turn-around from frame {bad + 1}: review the contact sheet{hint}")
         keep = self.fix(action, direction).get("keep")
         if keep:
             fr = qa.ping_pong_trim(fr, int(keep))

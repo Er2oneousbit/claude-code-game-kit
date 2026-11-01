@@ -81,6 +81,22 @@ python tools/second_opinion.py --check                                     # ins
 python tools/second_opinion.py --ask "Review this change for real bugs" --files tools/dev.py docs/ENGINE_FLOW.md
 ```
 
+A local model as the second opinion (tested, not shipped; K01, 2026-10-31): any OpenAI-compatible server on your machine
+(LM Studio, llama.cpp's `llama-server`, Ollama) can give a private, offline, quota-free extra read, but on one test
+machine (RTX 5060 Ti 16 GB) it was not good enough to be the second opinion:
+- **Recall:** on a 246-line tool with five planted bugs, Qwen3.6-35B-A3B (Q4_K_M, a 21 GB mixture-of-experts model with
+  part of it on the CPU) found 2 or 3 per run, a different set each run, one bug never, and once proposed a wrong fix. A
+  Claude subagent found all five in about 20 s, plus a real bug nobody had planted. A clean local review proves nothing.
+- **Time:** about 5 minutes per review. Thinking models also spend their whole token budget reasoning if it is small
+  (8192 tokens: no answer at all); give them the context left after the prompt, or turn thinking off in the model's
+  settings (per request it was ignored).
+- **Speed tuning:** prompt reading, not generation, is the bottleneck when experts sit on the CPU. `llama-server -ngl 99
+  --n-cpu-moe 16 -fa on -ub 2048 -b 4096` read prompts 3.5 times faster than LM Studio's defaults on the same file (1216
+  against 352 tokens/s); generation stayed at about 45 tokens/s, set by system RAM speed.
+- **Rules if you try it anyway:** paste the files in with line numbers (no tools, so it cannot change anything), check
+  every `file:line` it cites against those files, keep the server on 127.0.0.1, unload the model before an image or video
+  generator needs the GPU, and treat it as a supplement, never a gate.
+
 ## Long autonomous runs (`/goal` or an overnight run)
 Use only when the job has a verifiable end state. Claude Code's `/goal` keeps working until a small model judges the condition met, and that judge
 reads only the transcript, so the condition must demand printed proof (F19, E28). Recipe (E25, E28):

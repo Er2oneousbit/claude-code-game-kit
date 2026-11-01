@@ -2,6 +2,7 @@
 CLAUDE.local.md
 .claude/settings.local.json
 WebAppConvo.md
+OVERNIGHT_*
 *.zip
 
 # Python

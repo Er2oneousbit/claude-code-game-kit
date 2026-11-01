@@ -3,6 +3,23 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.7.6 (2026-10-31): Dotwork rehearsal fixes
+- **Fix: Dotwork's clip drift check stopped clean clips.** A clip whose colours were a shade off the sprite's (a
+  shirt or hands across a colour-bin edge) counted as drift, which stopped the townsfolk and party-member examples in
+  a fresh game. Such a pixel now counts as the sprite's own when it is within 16 RGB of one of its colours; real drift
+  (an object another view has) is still caught.
+- **Dotwork:** a possible turn-around note names the fix (`"skeleton": [action]`) when the action has a skeleton.
+- **Dotwork: animated props take `"slab": "remove"`,** like props: a flat ground slab baked into the base render is
+  stripped before anything is animated from it. Only entries with the flag re-render.
+- **Dotwork README:** four-legged mounts are not walking characters yet (use a two-legged mount, or a `vehicles` entry
+  that turns but does not walk).
+- **Lospec palettes in the art resources and the Dotwork README:** the download formats, how a `.hex` palette plugs
+  into Dotwork as is (checked with `clean`: every pixel on the palette), and crediting the palette's creator (palette
+  pages show no license; the old line said "free to use").
+- **SOP-12:** what a local model did as a second opinion (tested, not shipped): 2 or 3 of 5 planted bugs per run
+  against 5 of 5 for a Claude subagent, about 5 minutes a review, the `llama-server` settings that read prompts 3.5 times
+  faster, and the rules if you try it anyway. Kimi stays the second opinion.
+
 ## 0.7.5 (2026-10-31): Dotwork jumps, four more motions, spells drawn in code
 - **Fix: Dotwork skeleton jumps stayed on the ground.** Every frame was pinned back to the feet line twice, so front
   and back jumps shipped as standing frames. Airborne actions (jump by default) now keep the clip's height; a
