@@ -80,9 +80,9 @@ Prompt patterns: `docs/BRIEFS.md` > Music with Suno. Log prompts and outputs in 
   python tools/audio/local_tts.py check        # names what is missing: the env, torch, qwen-tts, or CUDA
   ```
   Weights download on first use into the Hugging Face cache (`HF_HOME`, default `~/.cache/huggingface`):
-  `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign` (design) and `Qwen/Qwen3-TTS-12Hz-1.7B-Base` (say), about 4.3 GB each;
+  Qwen3-TTS-12Hz-1.7B-VoiceDesign (design) and Qwen3-TTS-12Hz-1.7B-Base (say), about 4.3 GB each;
   `--model 0.6b` uses `Qwen3-TTS-12Hz-0.6B-Base` (2.4 GB). All Apache-2.0 per their model cards
-  (`huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base`, checked 2026-10-31). Outputs: 24 kHz mono WAV, -3 dBFS peak.
+  (https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base, checked 2026-10-31). Outputs: 24 kHz mono WAV, -3 dBFS peak.
 - Setup gotchas seen on an RTX 50-series (Blackwell) PC, 2026-10-31:
   - Install torch with `--torch-backend cu130` (or your CUDA). `--extra-index-url` with
     `--index-strategy unsafe-best-match` silently picks PyPI's newer CPU-only torch; `check` then reports no CUDA.
@@ -127,7 +127,7 @@ Prompt patterns: `docs/BRIEFS.md` > Music with Suno. Log prompts and outputs in 
   ComfyUI, trims and normalizes them, and keeps the best 3 (`door_1.wav` is the top-ranked) with a `.gen.json` each.
   `--loop` makes ambience beds loop seamlessly, `--mono` suits positional one-shots, `--model small-sfx` gives a
   second opinion. `local_sfx.py check` says what is missing. Setup: ComfyUI 0.43.0 or newer, plus
-  `checkpoints/stable_audio_3_medium.safetensors` and `text_encoders/t5gemma_b_b_ul2.safetensors` from
+  stable_audio_3_medium.safetensors (ComfyUI's checkpoints folder) and t5gemma_b_b_ul2.safetensors (its text_encoders folder) from
   `huggingface.co/Comfy-Org/stable-audio-3`. About 2 s per take on a 16 GB RTX 5060 Ti once the model is loaded.
   - **You pick by ear.** The ranking is technical only (clipping, silence, length, loop seam): it cannot hear
     whether a take matches the prompt. A meaning-based score did not fix that either: in the K01 bake-off the

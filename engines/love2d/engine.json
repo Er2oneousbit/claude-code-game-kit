@@ -1,0 +1,16 @@
+{
+  "id": "love2d",
+  "label": "LÖVE (Lua)",
+  "summary": "LÖVE 11.5 (LuaJIT), 2D, its own test runner inside LÖVE, smoke in an off-screen window or headless",
+  "skeleton_dir": "skeleton",
+  "gitignore_append": "gitignore.append",
+  "settings_patch": "settings.patch.json",
+  "engine_md": "ENGINE.md",
+  "flow_md": "FLOW.md",
+  "assets_dir": "assets",
+  "setup_step": "install LÖVE 11.5 (https://love2d.org; on Windows the zip is enough), set LOVE_BIN to its love.exe, then: python tools/dev.py doctor",
+  "adopt_hints": {
+    "conf.lua": "keep your love.conf settings, and copy the kit's command-line parsing (the KIT table) and its love.errorhandler into your conf.lua: without them an error in a smoke or test run waits for a key forever. See docs/ENGINE_FLOW.md > Adopting an existing project.",
+    "main.lua": "dev.py smoke runs `lovec . --smoke N` and expects BOOT_OK and SMOKE_DONE in the output; copy the frame counting from the kit's main.lua into your love.update, or move your game into src/game/game.lua and keep the kit's main.lua."
+  }
+}

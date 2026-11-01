@@ -1,0 +1,557 @@
+#!/usr/bin/env python3
+# ---------------------------------------------------------------------------
+# dev.py  (LÖVE edition)
+# Purpose : The ONE command wrapper for this project. Same subcommands on every engine in the Claude Code Game Kit,
+#           so humans and Claude never guess flags.
+# Usage   : python tools/dev.py <command> [options]      (add -h for help)
+#             check    compile every .lua file with LÖVE's LuaJIT (tools/lovecheck), without running it
+#             test     run the unit tests in tests/ inside LÖVE (tests/runner.lua), no window
+#             smoke    boot the game for N frames in a small off-screen window, fail on errors; --headless runs
+#                      without a window; --screenshot FILE / --record DIR capture it; --compare BASELINE diffs
+#             run      launch the game window
+#             build    package build/<game>.love, and on Windows a fused build/windows/<game>.exe with LÖVE's DLLs
+#             clean    remove build output (--yes is accepted; LÖVE clean never asks)
+#             doctor   verify the local environment
+# Env     : LOVE_BIN   path to love.exe or lovec.exe (else lovec / love on PATH). On Windows the console build
+#                      lovec.exe next to it is used for check, test and smoke (love.exe prints nothing).
+# Exit    : 0 ok, 1 task failed, 2 environment/usage problem
+# Notes   : Run against LÖVE 11.5 on Windows (2026-11-01). LÖVE's own error screen waits for a key even without a
+#           window, so conf.lua replaces it with one that exits 1 in automated runs; every run here also has a
+#           timeout. Game options after `--` go to the game (KIT.rest in conf.lua). Python 3.8+, standard library.
+#
+# Pseudocode:
+#   parse args -> locate lovec -> build the command -> run with a timeout, stream or capture output
+#   -> demand proof (BOOT_OK + SMOKE_DONE, the TESTS line, CHECK_DONE) and scan for error lines -> 0/1/2
+# Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# ---------------------------------------------------------------------------
+import argparse
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import traceback
+import zipfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+# ---- Tunables / constants -----------------------------------------------------
+SMOKE_FRAMES = 120                       # frames to run in `smoke`
+BOOT_MARKER = "BOOT_OK"                  # printed by main.lua through the Log module
+SMOKE_DONE = "SMOKE_DONE"                # printed by main.lua when the frame count is reached
+ERROR_PATTERNS = [r"^\[ERROR\]", r"^\[error\]", r"^Error: ", r"^Error\b.*\.lua:\d+"]
+SKIP_DIRS = {".git", "build", "captures", "node_modules", ".claude"}
+CHECKER = "tools/lovecheck"              # a separate LÖVE program: a broken conf.lua cannot stop it
+CHECK_BATCH = 150                        # files per launch (Windows command line limit)
+SMOKE_TIMEOUT_S = 90
+SMOKE_MIN_FPS = 30                       # --frames adds frames/30 s to the limit
+TEST_TIMEOUT_S = 600
+CHECK_TIMEOUT_S = 120
+KILL_TIMEOUT_S = 10
+MIN_LOVE = (11, 4)                       # 11.4 and 11.5 tested by the community; the kit ran 11.5
+TESTED_MAJOR = 11                        # LÖVE 12 changes APIs (verify before moving)
+NO_EXEC = (126, 127)
+# build: what goes into the .love (everything else stays out: tools, tests, docs, sources, captures)
+LOVE_INCLUDE = ["main.lua", "conf.lua", "src", "assets", "data", "lib"]
+LOVE_EXCLUDE_PARTS = {"golden"}          # data/golden/ is test data
+WINDOWS_RUNTIME = ["love.dll", "lua51.dll", "mpg123.dll", "msvcp120.dll", "msvcr120.dll", "OpenAL32.dll",
+                   "SDL2.dll", "license.txt"]
+GAME_SLUG = "{{GAME_SLUG}}"
+
+DEBUG = False
+
+
+def dbg(msg):
+    """Verbose output, only with --debug."""
+    if DEBUG:
+        print(f"[debug] {msg}")
+
+
+def find_love(cli_path=None, console=True):
+    """Locate LÖVE. Order: --love flag, LOVE_BIN, PATH. console=True prefers lovec.exe (prints to the pipe)."""
+    found = None
+    for c in (cli_path, os.environ.get("LOVE_BIN")):
+        if not c:
+            continue
+        p = Path(c)
+        if p.is_dir():
+            print(f"[warn] {c!r} is a folder: point at love.exe / lovec.exe (or the love binary) inside it",
+                  file=sys.stderr)
+            continue
+        hit = shutil.which(c) or (str(p) if p.is_file() else None)
+        if hit:
+            found = Path(hit)
+            break
+        print(f"[warn] {c!r} was not found", file=sys.stderr)
+    if found is None:
+        for name in (("lovec", "love") if console else ("love", "lovec")):
+            hit = shutil.which(name)
+            if hit:
+                found = Path(hit)
+                break
+    if found is None:
+        return None
+    if sys.platform == "win32":
+        want = "lovec.exe" if console else "love.exe"
+        sibling = found.with_name(want)
+        if sibling.is_file():
+            return str(sibling)
+    return str(found)
+
+
+NEW_SESSION = sys.platform != "win32"
+
+
+def kill_tree(proc):
+    """Kill proc and everything it started (a hung LÖVE window must not survive the timeout)."""
+    if sys.platform == "win32":
+        try:
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], stdin=subprocess.DEVNULL,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8", errors="replace",
+                           timeout=KILL_TIMEOUT_S)
+        except (OSError, subprocess.SubprocessError) as exc:
+            dbg(f"taskkill: {exc}")
+    else:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except OSError as exc:
+            dbg(f"killpg: {exc}")
+    try:
+        proc.kill()
+    except OSError:
+        pass
+
+
+def run(cmd, capture=True, echo="fail", timeout=None):
+    """Run a command in the project root. Returns (returncode, combined_output).
+    124 = timed out (the output so far is returned and its tail printed), 126 = not executable, 127 = not found."""
+    dbg("run: " + " ".join(str(c) for c in cmd))
+    sys.stdout.flush()
+    try:
+        proc = subprocess.Popen([str(c) for c in cmd], cwd=ROOT, text=True, encoding="utf-8", errors="replace",
+                                stdin=subprocess.DEVNULL if capture else None,
+                                stdout=subprocess.PIPE if capture else None,
+                                stderr=subprocess.STDOUT if capture else None,
+                                start_new_session=NEW_SESSION and timeout is not None)
+    except FileNotFoundError as exc:
+        print(f"[error] cannot execute {cmd[0]}: {exc}", file=sys.stderr)
+        return 127, ""
+    except OSError as exc:
+        print(f"[error] cannot execute {cmd[0]}: {exc.strerror or exc}", file=sys.stderr)
+        return 126, ""
+    try:
+        out, _ = proc.communicate(timeout=timeout)
+    except (subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
+        kill_tree(proc)
+        try:
+            out, _ = proc.communicate(timeout=KILL_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            out = ""
+        print("\n".join((out or "").splitlines()[-20:]))
+        if isinstance(exc, KeyboardInterrupt):
+            raise
+        print(f"[FAIL] no exit after {timeout} s (an error screen waiting for a key? conf.lua must keep its "
+              "love.errorhandler)")
+        return 124, out or ""
+    out = out or ""
+    if capture and (DEBUG or echo == "always" or (echo == "fail" and proc.returncode != 0)):
+        print(out)
+    return proc.returncode, out
+
+
+def scan_errors(output):
+    return [l for l in output.splitlines() if any(re.search(p, l) for p in ERROR_PATTERNS)]
+
+
+def lua_files(paths=None):
+    if paths:
+        return [Path(p).resolve() for p in paths]
+    return sorted(p for p in ROOT.rglob("*.lua") if not (set(p.relative_to(ROOT).parts) & SKIP_DIRS))
+
+
+def compile_check(love, files):
+    """(failed paths, ok?) for files, through tools/lovecheck. ok is False when the checker itself broke."""
+    failed = []
+    for i in range(0, len(files), CHECK_BATCH):
+        batch = files[i:i + CHECK_BATCH]
+        rc, out = run([love, ROOT / CHECKER] + [str(f) for f in batch], echo="never", timeout=CHECK_TIMEOUT_S)
+        if rc in NO_EXEC:
+            return failed, None
+        if "CHECK_DONE" not in out:
+            print(out)
+            print(f"[FAIL] the checker did not finish (exit {rc}). Is {CHECKER}/ present?")
+            return failed, False
+        for line in out.splitlines():
+            if line.startswith("CHECK_FAIL "):
+                print("  " + line[len("CHECK_FAIL "):])
+                failed.append(line.split(" ", 2)[1])
+    return failed, True
+
+
+# ---- Commands -----------------------------------------------------------------
+def cmd_check(args, love):
+    files = lua_files(args.files)
+    if not files:
+        print("[warn] no .lua files found")
+        return 0
+    failed, ok = compile_check(love, files)
+    if ok is None:
+        return 2
+    if ok is False:
+        return 1
+    print(f"[{'FAIL' if failed else ' OK '}] checked {len(files)} file(s), {len(failed)} failed")
+    return 1 if failed else 0
+
+
+def cmd_test(args, love):
+    if not (ROOT / "tests" / "runner.lua").is_file():
+        print("[error] tests/runner.lua is missing (restore it from a fresh scaffold)", file=sys.stderr)
+        return 2
+    cmd = [love, ".", "--test"] + (["--filter", args.filter] if args.filter else [])
+    rc, out = run(cmd, echo="always", timeout=TEST_TIMEOUT_S)
+    if rc in NO_EXEC:
+        return 2
+    m = re.search(r"^TESTS (\d+) passed (\d+) failed (\d+) files (\d+)", out, re.M)
+    if not m:
+        print(f"[FAIL] the test run printed no summary (exit {rc}); see the output above")
+        return 1
+    run_n, passed, failed, files = (int(g) for g in m.groups())
+    if failed or rc == 1:
+        print(f"[FAIL] {failed} test(s) failed of {run_n}")
+        return 1
+    if run_n == 0:
+        print(f"[FAIL] no tests ran ({files} file(s)" + (f", filter {args.filter!r})" if args.filter else ")"))
+        return 2
+    print(f"[ OK ] {passed} test(s) passed in {files} file(s)")
+    return 0
+
+
+def cmd_smoke(args, love):
+    # a syntax error in conf.lua happens before any handler exists: catch it here, fast and clearly
+    boot = [p for p in (ROOT / "conf.lua", ROOT / "main.lua") if p.is_file()]
+    failed, ok = compile_check(love, boot)
+    if ok is None:
+        return 2
+    if failed or ok is False:
+        print("[FAIL] the game does not compile (python tools/dev.py check)")
+        return 1
+    frames = args.frames
+    cmd = [love, ".", "--smoke", str(frames)]
+    if args.headless:
+        if args.screenshot or args.record:
+            print("[error] --headless has no window to capture; drop --screenshot / --record", file=sys.stderr)
+            return 2
+        cmd.append("--headless")
+    shot = (ROOT / args.screenshot).resolve() if args.screenshot else None
+    rec = (ROOT / args.record).resolve() if args.record else None
+    if shot:
+        shot.parent.mkdir(parents=True, exist_ok=True)
+        cmd += ["--shot", shot.as_posix()]
+    if rec:
+        rec.mkdir(parents=True, exist_ok=True)
+        for old in rec.glob("f*.png"):
+            old.unlink()
+        cmd += ["--record", rec.as_posix(), "--every-ms", str(args.record_every)]
+    for flag, value in (("--drive", args.drive), ("--locale", args.locale)):
+        if value:
+            cmd += [flag, value]
+    if args.data_dir:
+        data = (ROOT / args.data_dir).resolve()
+        data.mkdir(parents=True, exist_ok=True)
+        cmd += ["--data-dir", data.as_posix()]
+    if args.debug:
+        cmd.append("--debug")
+    cmd += args.game_args
+    rc, out = run(cmd, echo="never", timeout=SMOKE_TIMEOUT_S + frames // SMOKE_MIN_FPS)
+    if rc in NO_EXEC:
+        return 2
+    for line in out.splitlines():                    # the proof lines the shell scenarios print
+        if line.startswith(("SETTINGS_WRITTEN", "CRASH_WRITTEN", "PSEUDO_", "DRIVE_")):
+            print(line)
+    errors = scan_errors(out)
+    booted, done = BOOT_MARKER in out, SMOKE_DONE in out or "DRIVE_DONE" in out
+    if rc != 0 or errors or not booted or not done:
+        if errors:
+            print("[FAIL] errors during the run:\n  " + "\n  ".join(errors[:10]))
+        if not booted:
+            print(f"[FAIL] marker {BOOT_MARKER!r} not seen (did love.load run?)")
+        elif not done:
+            print(f"[FAIL] the run ended before {frames} frames")
+        if rc not in (0, 124):
+            print(f"[FAIL] exit code {rc}")
+        if DEBUG:
+            print(out[-3000:])
+        return 1
+    print(f"[ OK ] smoke passed ({frames} frames{', headless' if args.headless else ''})")
+    if shot:
+        if not shot.is_file():
+            print(f"[FAIL] no screenshot was written to {shot}")
+            return 1
+        print(f"[ OK ] screenshot: {shot} ({shot.stat().st_size} bytes)")
+    if rec:
+        count = len(list(rec.glob("f*.png")))
+        print(f"[ OK ] {count} frame(s) in {rec} (GIF: python tools/art/frames_to_gif.py {args.record} out.gif)")
+    if args.compare:
+        return compare(args, shot)
+    return 0
+
+
+def compare(args, shot):
+    """Visual regression: the screenshot against a baseline through tools/image_diff.py."""
+    if not shot:
+        print("[error] --compare needs --screenshot", file=sys.stderr)
+        return 2
+    base = (ROOT / args.compare).resolve()
+    if not base.is_file():
+        print(f"[error] baseline {base} does not exist; review the screenshot, then copy it there to make it the "
+              "baseline", file=sys.stderr)
+        return 2
+    cmd = [sys.executable, ROOT / "tools" / "image_diff.py", shot, base, "--tolerance", str(args.tolerance),
+           "--max-pixels", str(args.max_pixels), "--diff", shot.with_name(shot.stem + "_diff.png")]
+    rc, out = run(cmd, echo="always", timeout=120)
+    return rc if rc in (0, 1, 2) else 2
+
+
+def cmd_run(args, love):
+    gui = find_love(args.love, console=False) or love
+    cmd = [gui, "."] + (["--debug"] if args.debug else []) + args.game_args
+    rc, _ = run(cmd, capture=False)
+    return 2 if rc in NO_EXEC else 0 if rc == 0 else 1
+
+
+def love_members():
+    """Relative paths of the files that go into the .love."""
+    files = []
+    for name in LOVE_INCLUDE:
+        p = ROOT / name
+        if p.is_file():
+            files.append(p)
+        elif p.is_dir():
+            files += [f for f in p.rglob("*") if f.is_file() and not (set(f.relative_to(ROOT).parts)
+                                                                      & (LOVE_EXCLUDE_PARTS | SKIP_DIRS))]
+    return sorted(files)
+
+
+def cmd_build(args, love):
+    out_dir = ROOT / "build"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    package = out_dir / f"{GAME_SLUG}.love"
+    members = love_members()
+    if not any(f.name == "main.lua" for f in members):
+        print("[error] main.lua is missing: nothing to package", file=sys.stderr)
+        return 2
+    with zipfile.ZipFile(package, "w", zipfile.ZIP_DEFLATED) as z:      # main.lua must sit at the zip's root
+        for f in members:
+            z.write(f, f.relative_to(ROOT).as_posix())
+    print(f"[ OK ] {package.relative_to(ROOT).as_posix()} ({len(members)} files, {package.stat().st_size} bytes)")
+    if sys.platform != "win32" or args.love_only:
+        if sys.platform != "win32":
+            print("[info] fused builds for macOS and Linux: docs/ENGINE_FLOW.md 'Packaging' (verify)")
+        return 0
+    gui = find_love(args.love, console=False)
+    runtime = Path(gui).parent if gui else None
+    if not runtime or not (runtime / "love.exe").is_file():
+        print("[FAIL] love.exe not found next to LOVE_BIN: only the .love was built")
+        return 1
+    win = out_dir / "windows"
+    win.mkdir(parents=True, exist_ok=True)
+    exe = win / f"{GAME_SLUG}.exe"
+    exe.write_bytes((runtime / "love.exe").read_bytes() + package.read_bytes())   # LÖVE's fusing: exe + zip
+    missing = []
+    for dll in WINDOWS_RUNTIME:
+        src = runtime / dll
+        if src.is_file():
+            shutil.copy2(src, win / dll)
+        else:
+            missing.append(dll)
+    for f in sorted(win.iterdir()):
+        print(f"  {f.relative_to(ROOT).as_posix()}  {f.stat().st_size} bytes")
+    if missing:
+        print(f"[FAIL] not next to love.exe: {', '.join(missing)} (the fused exe will not start without them)")
+        return 1
+    print(f"[ OK ] fused Windows build: {exe.relative_to(ROOT).as_posix()} (ship the whole build/windows/ folder; "
+          "license.txt is LÖVE's zlib license and must go with it)")
+    return 0
+
+
+def remove_tree(path):
+    if path.is_symlink() or (hasattr(path, "is_junction") and path.is_junction()):
+        return "it is a link/junction; remove the link by hand if that is what you want"
+    shutil.rmtree(path, ignore_errors=True)
+    if path.exists():
+        return f"{sum(1 for _ in path.rglob('*'))} item(s) could not be deleted (close the game holding them)"
+    return None
+
+
+def cmd_clean(args, love):
+    target = ROOT / "build"
+    if not target.exists():
+        print("[ OK ] nothing to clean")
+        return 0
+    why = remove_tree(target)
+    if why:
+        print(f"[FAIL] build not removed: {why}")
+        return 1
+    print("[ OK ] removed build")
+    return 0
+
+
+def cmd_doctor(args, love):
+    problems = 0
+    print(f"[info] python {sys.version.split()[0]}")
+    if love:
+        rc, out = run([love, "--version"], echo="never", timeout=60)
+        m = re.search(r"LOVE (\d+)\.(\d+)", out)
+        ver = (int(m.group(1)), int(m.group(2))) if m else None
+        if ver and ver < MIN_LOVE:
+            print(f"[FAIL] {out.strip()} is older than {MIN_LOVE[0]}.{MIN_LOVE[1]}")
+            problems += 1
+        elif ver and ver[0] > TESTED_MAJOR:
+            print(f"[WARN] {out.strip()}: the kit is tested on LÖVE 11.5; 12.x changes APIs (verify)")
+        else:
+            print(f"[ OK ] love: {love} ({out.strip() or 'version unknown'})")
+    else:
+        print("[FAIL] LÖVE not found. Set LOVE_BIN to love.exe / lovec.exe, or add love to PATH.")
+        problems += 1
+    for rel, hint in [("main.lua", "wrong directory?"), ("conf.lua", "keeps the automated runs from hanging"),
+                      (CHECKER + "/main.lua", "dev.py check needs it"), ("tests/runner.lua", "dev.py test needs it")]:
+        ok = (ROOT / rel).exists()
+        print(f"[{' OK ' if ok else 'WARN'}] {rel}" + ("" if ok else f"  ({hint})"))
+    doctor = ROOT / "tools" / "doctor.py"
+    if doctor.exists():
+        rc, _ = run([sys.executable, doctor], capture=False)
+        problems += 1 if rc else 0
+    return 1 if problems else 0
+
+
+def positive_int(text):
+    try:
+        n = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a whole number")
+    if not 1 <= n <= 100000:
+        raise argparse.ArgumentTypeError("must be between 1 and 100000")
+    return n
+
+
+def build_parser():
+    ap = argparse.ArgumentParser(
+        prog="dev.py",
+        description="Project command wrapper (LÖVE 11). Same commands on every engine in the Claude Code Game Kit.",
+        epilog="Set LOVE_BIN to love.exe or lovec.exe. Game options go after `--`. Exit codes: 0 ok, 1 failed, "
+               "2 environment/usage problem.",
+    )
+    ap.add_argument("--debug", action="store_true", help="verbose output; the game also gets --debug")
+    ap.add_argument("--love", metavar="PATH", help="path to love.exe / lovec.exe (overrides LOVE_BIN)")
+    sub = ap.add_subparsers(dest="command", metavar="<command>")
+    sub.required = True
+
+    p = sub.add_parser("check", help="compile every .lua file with LÖVE's LuaJIT (nothing runs)")
+    p.add_argument("files", nargs="*", help="limit to these .lua files")
+    p.set_defaults(fn=cmd_check)
+
+    p = sub.add_parser("test", help="run the unit tests in tests/ inside LÖVE, no window")
+    p.add_argument("--filter", help="only test files whose name contains this, e.g. coyote")
+    p.set_defaults(fn=cmd_test)
+
+    p = sub.add_parser("smoke", help="boot for N frames in a small off-screen window; fail on errors")
+    p.add_argument("--frames", type=positive_int, default=SMOKE_FRAMES, help=f"frames to run (default {SMOKE_FRAMES})")
+    p.add_argument("--headless", action="store_true", help="no window at all (logic only; graphics calls fail)")
+    p.add_argument("--screenshot", default="", help="save a PNG of the last frame (path relative to the project)")
+    p.add_argument("--record", default="", help="save PNG frames to this folder (GIF: tools/art/frames_to_gif.py)")
+    p.add_argument("--record-every", type=positive_int, default=66, help="milliseconds between frames (default 66)")
+    p.add_argument("--compare", default="", metavar="BASELINE", help="after --screenshot, diff it against this PNG "
+                   "(tools/image_diff.py); a difference fails the run")
+    p.add_argument("--tolerance", type=int, default=0, help="--compare: per-channel difference allowed (0-255)")
+    p.add_argument("--max-pixels", type=int, default=0, help="--compare: differing pixels allowed")
+    p.add_argument("--drive", default="", help="a scripted scenario the game runs (menus, crash, pseudo, ...)")
+    p.add_argument("--data-dir", default="", help="keep settings, saves, logs and crashes in this folder")
+    p.add_argument("--locale", default="", help="language for the run (pseudo = the pseudo-locale)")
+    p.set_defaults(fn=cmd_smoke)
+
+    sub.add_parser("run", help="launch the game window").set_defaults(fn=cmd_run)
+
+    p = sub.add_parser("build", help="package build/<game>.love (+ a fused Windows exe on Windows)")
+    p.add_argument("--love-only", action="store_true", help="only the .love, no fused exe")
+    p.set_defaults(fn=cmd_build)
+
+    p = sub.add_parser("clean", help="remove build output")
+    p.add_argument("--yes", action="store_true", help="accepted on every engine; LÖVE clean never asks anyway")
+    p.set_defaults(fn=cmd_clean)
+
+    sub.add_parser("doctor", help="verify the local environment").set_defaults(fn=cmd_doctor)
+    return ap
+
+
+def hoist_global_options(parser, argv):
+    """Let global options sit anywhere: `dev.py smoke --debug` works like `dev.py --debug smoke`. Moves every
+    top-level option (and its value) to the front; game options after `--` are left alone."""
+    try:
+        takes_value = {}
+        for action in parser._actions:
+            if isinstance(action, (argparse._HelpAction, argparse._SubParsersAction)):
+                continue
+            for opt in action.option_strings:
+                takes_value[opt] = action.nargs != 0
+    except AttributeError:
+        return argv
+    front, rest, i = [], [], 0
+    while i < len(argv):
+        tok = argv[i]
+        if tok == "--":
+            rest += argv[i:]
+            break
+        name = tok.split("=", 1)[0]
+        if name in takes_value:
+            front.append(tok)
+            if takes_value[name] and "=" not in tok and i + 1 < len(argv):
+                front.append(argv[i + 1])
+                i += 1
+        else:
+            rest.append(tok)
+        i += 1
+    return front + rest
+
+
+def main(argv=None):
+    global DEBUG
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
+        except (AttributeError, ValueError):
+            pass
+    parser = build_parser()
+    argv = sys.argv[1:] if argv is None else list(argv)
+    game_args = []
+    if "--" in argv:
+        cut = argv.index("--")
+        argv, game_args = argv[:cut], argv[cut + 1:]
+    args = parser.parse_args(hoist_global_options(parser, argv))
+    args.game_args = game_args
+    DEBUG = args.debug
+    love = find_love(args.love)
+    if not love and args.command not in ("clean", "doctor"):
+        print("[error] LÖVE not found. Set LOVE_BIN to love.exe / lovec.exe or use --love PATH.", file=sys.stderr)
+        return 2
+    try:
+        return args.fn(args, love)
+    except KeyboardInterrupt:
+        print("\n[abort] interrupted")
+        return 1
+    except OSError as exc:
+        where = f" {exc.filename}" if exc.filename else ""
+        print(f"[error] {exc.strerror or exc}{where} (close any program holding it and retry)", file=sys.stderr)
+        if DEBUG:
+            traceback.print_exc()
+        return 2
+    except Exception as exc:
+        print(f"[error] unexpected failure in '{args.command}': {exc!r}. Re-run with --debug.", file=sys.stderr)
+        if DEBUG:
+            traceback.print_exc()
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

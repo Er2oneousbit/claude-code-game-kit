@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(lovec --version)",
+      "Bash(love --version)",
+      "PowerShell(lovec --version)",
+      "PowerShell(love --version)"
+    ],
+    "ask": [],
+    "deny": [
+      "Edit(./build/**)"
+    ]
+  }
+}
