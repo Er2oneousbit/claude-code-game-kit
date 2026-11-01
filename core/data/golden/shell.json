@@ -2611,7 +2611,7 @@
     ],
     [
      "Hello, {name}!",
-     "[Hélló, {name}!~~~]"
+     "[Hélló, {name}!~~~~]"
     ],
     [
      "Score: %d%%",
@@ -2627,7 +2627,7 @@
     ],
     [
      "A long settings label",
-     "[Á lóñg séttíñgs lábél~~~~~~~~]"
+     "[Á lóñg séttíñgs lábél~~~~~~~~~]"
     ],
     [
      "{a}{b}",

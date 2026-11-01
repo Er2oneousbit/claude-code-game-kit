@@ -131,7 +131,7 @@ class Shell(unittest.TestCase):
         out = gv.pseudo("Hello {name}, you have %d coins")
         self.assertIn("{name}", out)
         self.assertIn("%d", out)
-        self.assertGreater(len(out), len("Hello {name}, you have %d coins") * 1.3)
+        self.assertGreater(len(out), len("Hello {name}, you have %d coins") * 1.35)
 
     def test_tr_falls_back_and_shows_missing_keys(self):
         self.assertEqual(gv.tr(gv.TABLES, "fr-CA", "greet", {"name": "Ana"}), "Bonjour, Ana !")

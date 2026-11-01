@@ -575,12 +575,14 @@ def tr_plural(tables, locale, key, n, args=None):
     return tr(tables, locale, key + "." + plural(locale, n), a)
 
 
+PSEUDO_GROWTH = 0.40                                 # translated English runs about 40 % longer (SOP-19)
 PSEUDO = {"a": "á", "e": "é", "i": "í", "o": "ó", "u": "ú", "c": "ç", "n": "ñ", "y": "ý",
           "A": "Á", "E": "É", "I": "Í", "O": "Ó", "U": "Ú", "C": "Ç", "N": "Ñ", "Y": "Ý"}
 
 
 def pseudo(text):
-    """The pseudo-locale: accented look-alikes (catches missing glyphs), about 35 % longer (catches truncation), in
+    """The pseudo-locale: accented look-alikes (catches missing glyphs), 40 % longer (catches truncation; Microsoft's
+    heuristic for English source text, docs/sop/SOP-19), in
     brackets (catches strings cut at either end and text that is not translatable). Placeholders {name}, %s, %d,
     %i, %f and %% pass through unchanged and do not count toward the length."""
     out, visible, i = [], 0, 0
@@ -599,7 +601,7 @@ def pseudo(text):
         out.append(PSEUDO.get(c, c))
         visible += 1
         i += 1
-    return "[" + "".join(out) + "~" * math.ceil(visible * 0.35) + "]"
+    return "[" + "".join(out) + "~" * math.ceil(visible * PSEUDO_GROWTH) + "]"
 
 
 # ----------------------------------------------------------------------------------------------- vectors
