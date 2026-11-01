@@ -7,11 +7,13 @@
 //           Each test names the behavior it guards. No window or GPU needed.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a smoke budget of N frames runs N ticks
+//           2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): the goal adds screen shake trauma
 // ---------------------------------------------------------------------------
 use bevy::prelude::*;
 
 use {{GAME_SLUG}}::app::{TICK_HZ, smoke_test_app, test_app};
 use {{GAME_SLUG}}::game::{Autoplay, GameConfig, Intent, PLAYER_SPEED, Player, SimTick};
+use {{GAME_SLUG}}::game::{GOAL_TRAUMA, ScreenShake};
 
 fn player_x(app: &mut App) -> f32 {
     let mut q = app.world_mut().query_filtered::<&Transform, With<Player>>();
@@ -71,6 +73,18 @@ fn diagonal_input_is_not_faster() {
     let moved = q.single(app.world()).unwrap().translation.truncate().length();
     let max = PLAYER_SPEED * ticks(&app) as f32 / TICK_HZ as f32;
     assert!(moved <= max + 0.01, "moved {moved} > {max}");
+}
+
+#[test]
+fn reaching_the_goal_shakes_the_screen() {
+    let mut app = test_app(GameConfig {
+        autoplay: Some(Autoplay::Right),
+    });
+    for _ in 0..61 {
+        app.update(); // 60 ticks at PLAYER_SPEED pass GOAL_X
+    }
+    // Headless there is no camera to shake, so the trauma is still all there
+    assert_eq!(app.world().resource::<ScreenShake>().shake.trauma, GOAL_TRAUMA);
 }
 
 #[test]

@@ -9,11 +9,15 @@
 //           - state changes run in FixedUpdate (one tick = 1/60 s, frame-rate independent, repeatable);
 //           - input arrives only through the Intent resource (keyboard in present.rs, bots in autoplay);
 //           - visuals live in present.rs; this file never spawns sprites, meshes or cameras.
+//           Juice: systems add trauma to the ScreenShake resource; present.rs moves the camera by it.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): ScreenShake (logic::shake), the goal shakes it
 // ---------------------------------------------------------------------------
 pub mod present;
 
 use bevy::prelude::*;
+
+use crate::logic::shake::Shake;
 
 pub use present::PresentPlugin;
 
@@ -25,6 +29,8 @@ pub const TITLE: &str = "{{GAME_NAME}}";
 pub const PLAYER_SPEED: f32 = 240.0;
 /// The prototype's scenario: reaching this x prints GOAL_REACHED.
 pub const GOAL_X: f32 = 200.0;
+/// Screen shake trauma (0 to 1) when the goal is reached.
+pub const GOAL_TRAUMA: f64 = 0.5;
 
 /// Game options from the command line (everything after `--`). Add bot modes, seeds and cheats here.
 #[derive(Resource, Debug, Clone, Default, PartialEq)]
@@ -76,6 +82,23 @@ pub struct Player;
 #[derive(Resource, Debug, Default)]
 pub struct SimTick(pub u64);
 
+/// Screen shake: add trauma here on hits (`shake.shake.add_trauma(0.4)`); present.rs applies it to the camera.
+/// Set `intensity` from logic::settings::effective_shake (0 with reduce motion) when the game loads settings.
+#[derive(Resource, Debug)]
+pub struct ScreenShake {
+    pub shake: Shake,
+    pub intensity: f64,
+}
+
+impl Default for ScreenShake {
+    fn default() -> Self {
+        ScreenShake {
+            shake: Shake::default(),
+            intensity: 1.0,
+        }
+    }
+}
+
 pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
@@ -83,6 +106,7 @@ impl Plugin for GamePlugin {
         app.init_resource::<GameConfig>()
             .init_resource::<Intent>()
             .init_resource::<SimTick>()
+            .init_resource::<ScreenShake>()
             .add_systems(Startup, spawn_player)
             .add_systems(FixedUpdate, (autoplay, move_player, check_goal).chain());
     }
@@ -111,12 +135,18 @@ fn move_player(
     }
 }
 
-fn check_goal(mut reached: Local<bool>, tick: Res<SimTick>, players: Query<&Transform, With<Player>>) {
+fn check_goal(
+    mut reached: Local<bool>,
+    tick: Res<SimTick>,
+    mut shake: ResMut<ScreenShake>,
+    players: Query<&Transform, With<Player>>,
+) {
     if *reached {
         return;
     }
     if let Some(t) = players.iter().find(|t| t.translation.x >= GOAL_X) {
         *reached = true;
+        shake.shake.add_trauma(GOAL_TRAUMA);
         info!("GOAL_REACHED tick={} x={:.1}", tick.0, t.translation.x);
     }
 }

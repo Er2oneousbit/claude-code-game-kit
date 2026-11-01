@@ -7,11 +7,14 @@
 //           spawns plain data and stays headless. Bevy 0.20 spelling: On<Add<T>>, not the older On<Add, T>.
 //           Simulation moves in fixed 1/60 s ticks; on a 120 Hz screen motion can look slightly uneven
 //           until you add interpolation (an ADR: a crate such as bevy_transform_interpolation (verify)).
+//           shake_camera undoes last frame's shake before adding this frame's, so it composes with any camera
+//           movement (a follow camera from logic::follow) that runs before it.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): shake_camera applies ScreenShake
 // ---------------------------------------------------------------------------
 use bevy::prelude::*;
 
-use super::{GOAL_X, GameConfig, Intent, Player};
+use super::{GOAL_X, GameConfig, Intent, Player, ScreenShake};
 
 pub struct PresentPlugin;
 
@@ -22,7 +25,7 @@ impl Plugin for PresentPlugin {
                 RunFixedMainLoop,
                 keyboard_intent.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
             )
-            .add_systems(Update, quit_on_escape)
+            .add_systems(Update, (quit_on_escape, shake_camera))
             .add_observer(dress_player);
     }
 }
@@ -62,6 +65,23 @@ fn keyboard_intent(keys: Res<ButtonInput<KeyCode>>, cfg: Res<GameConfig>, mut in
         dir.y += 1.0;
     }
     intent.dir = dir.normalize_or_zero();
+}
+
+/// Moves the camera by this frame's screen shake. `last` holds the offset and roll applied last frame.
+fn shake_camera(
+    time: Res<Time>,
+    mut shake: ResMut<ScreenShake>,
+    mut last: Local<(Vec3, f32)>,
+    mut cameras: Query<&mut Transform, With<Camera2d>>,
+) {
+    let intensity = shake.intensity;
+    let (x, y, angle) = shake.shake.update(time.delta_secs_f64(), intensity);
+    let (offset, roll) = (Vec3::new(x as f32, y as f32, 0.0), angle as f32);
+    for mut transform in &mut cameras {
+        transform.translation += offset - last.0;
+        transform.rotate_z(roll - last.1);
+    }
+    *last = (offset, roll);
 }
 
 fn quit_on_escape(keys: Res<ButtonInput<KeyCode>>, mut exit: MessageWriter<AppExit>) {
