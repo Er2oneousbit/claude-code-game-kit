@@ -37,6 +37,9 @@
   Checked against pyloudnorm and ffmpeg on 815 files; its true peak reads clipped audio up to 0.84 dB closer to an
   ideal reconstruction than the standard's 4x example filter.
 - SOP-19 and `/dotwork` point to the `uikit` lane for prompt glyphs and a menu Theme with a visible focus ring.
+- SOP-04 measures loudness instead of normalizing peaks, pointing at `tools/audio/loudness.py`. EVIDENCE.md: the 0.8.0
+  rows (E69-E92) had one cell more than the table's header, so GitHub showed each finding in the Grade column; every
+  row has seven cells again. New rows E100-E106 (Steam store pages, a CJK pixel font) and E120-E125 (loudness).
 - `scripts/sync_examples.py`: a run with nothing to sync leaves the examples untouched (it added a history entry to
   every example on each run). The kit's em dash check reads tracked and new files only.
 
