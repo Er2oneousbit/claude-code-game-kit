@@ -16,6 +16,7 @@
   labelled review sheet of every state and glyph.
 - Dotwork: verify checks each UI kit Theme's items inside Godot and walks the preview's focus chain with ui_down /
   ui_up (`UIKIT_FOCUS_RESULT PASS`); the exam (`tests/test_dotwork.py`) also runs the lane exams in `EXTRA_EXAMS`.
+- SOP-19 and `/dotwork` point to the `uikit` lane for prompt glyphs and a menu Theme with a visible focus ring.
 - `scripts/sync_examples.py`: a run with nothing to sync leaves the examples untouched (it added a history entry to
   every example on each run). The kit's em dash check reads tracked and new files only.
 

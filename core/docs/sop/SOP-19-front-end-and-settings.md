@@ -50,7 +50,8 @@ values in `data/golden/shell.json` that every port's tests check (K01).
 - Prompts show the device in use: keyboard keys after a key press, the gamepad's buttons after a button press
   (`glyph_set`); on Steam Deck, keyboard glyphs while a controller is active fail the review (E75). The kit's prompt
   names (`glyph_name`): `key_space`, `mouse_left`, `xbox_a`, `ps_cross`, `pad_south`; art in `assets/ui/glyphs/`.
-  Use generic shapes for button art, never platform logos.
+  Use generic shapes for button art, never platform logos. In Godot, Dotwork's `uikit` lane (drawn in code, no GPU)
+  makes that whole set plus a Theme for every menu control in every state, focus a ring of its own colour (K01).
 - Platform holders' certification may require their own button art from their SDKs; the generic set is for PC.
 
 ## 5. Localization (A)

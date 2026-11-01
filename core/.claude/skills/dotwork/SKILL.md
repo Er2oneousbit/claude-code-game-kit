@@ -18,7 +18,7 @@ and its keys, limits) and SOP-16 "Generating pixel art locally" before the first
    stays on 127.0.0.1. No GPU or too little memory: say so and offer the other art routes (GDD "Art source").
 3. **First run, no GPU:** `python tools/art/dotwork/dotwork.py pack --spec tools/art/dotwork/examples/ui.json`
    (needs `GODOT_BIN`, or add `--engine none` on another engine). It proves the folder layout, the Godot import and the
-   asset log in seconds.
+   asset log in seconds. `examples/uikit.json` is the same kind of run: the menu Theme, prompt glyphs and cursors.
 4. **Write a spec from the plan.** Read GDD "Art and audio direction" and the style fragments in `docs/BRIEFS.md`
    (fill them first if blank, as `/gen-brief` does). Start from the closest file in `tools/art/dotwork/examples/` and
    save the game's spec as `assets_src/specs/<pack>.json`. Start small: one prop, one character, one tile set, then grow.
