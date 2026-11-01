@@ -273,6 +273,18 @@ def validate(data, root=None):
     return p
 
 
+def is_loop(path):
+    """True when the file is a WAV with a loop point (smpl chunk): an ambience bed or music loop."""
+    if not path.is_file() or path.suffix.lower() != ".wav":
+        return False
+    sys.path.insert(0, str(HERE))
+    from wavfile import read_wav_channels
+    try:
+        return read_wav_channels(path)[2] is not None
+    except ValueError:
+        return False
+
+
 def audit(data, root=None):
     """List of warnings: things that work but will sound cheap or shut players out."""
     w = []
@@ -282,6 +294,8 @@ def audit(data, root=None):
         vol = ev.get("volume_db", [0, 0])
         # UI sounds should sound the same every time (players learn them), so only game-world buses are checked
         repeats = ev.get("cooldown_ms", 0) < 500 and ev.get("bus") not in ("ui", "music")
+        if repeats and root and n and all(is_loop(Path(root) / f) for f in ev["files"]):
+            repeats = False         # a bed with a loop point plays on and on: there is no "next play" to vary
         if n < 3 and pitch[0] == pitch[1] and repeats:
             w.append(f"{name}: {n} file(s) and no pitch range: repeated plays will sound identical "
                      "(rotate 3 to 5 variants or add pitch_semitones like [-1, 1])")

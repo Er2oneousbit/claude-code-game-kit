@@ -92,6 +92,11 @@
   lines, 5/6 s to 7 s, 20 characters a second, 17 for children), SFX captions from audio_events.json, lint, and SRT /
   WebVTT export with the speaker named on every change. The built format gains two optional fields (`max_cue_s`,
   `directional` on captions); the shells' readers load it unchanged.
+- Sound sets: `tools/audio/sound_sets.py` makes and checks whole families of sounds (footsteps per surface and
+  ambience beds through local_sfx, takes leveled to their bus; a twelve-sound UI set made from code, ship-safe) and
+  fails a set on missing or extra takes, double attacks in one-shots, takes more than 3 LU apart, loops without a
+  clean loop point, or files with no licence record (`check --ship` also fails Stable Audio output until its licence
+  is cleared); it writes their audio_events.json entries.
 - SOP-04 measures loudness instead of normalizing peaks, pointing at `tools/audio/loudness.py`. EVIDENCE.md: the 0.8.0
   rows (E69-E92) had one cell more than the table's header, so GitHub showed each finding in the Grade column; every
   row has seven cells again. New rows E100-E106 (Steam store pages, a CJK pixel font) and E120-E125 (loudness).

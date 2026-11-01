@@ -194,7 +194,8 @@ many copies may sound at once, a minimum gap between plays, and how far dialogue
 - `python tools/audio/audio_events.py validate data/audio_events.json --root assets/audio` checks the file and that
   every take exists. `audit --root assets/audio` warns about sounds that will repeat identically (fewer than 3 takes
   and no pitch range), `random` picks, takes that differ by more than 3 LU (fix with `loudness.py normalize`), and
-  missing captions (deaf and hard-of-hearing players miss uncaptioned sounds; UI and music are exempt).
+  missing captions (deaf and hard-of-hearing players miss uncaptioned sounds; UI and music are exempt). With
+  `--root`, a bed whose files all have a loop point may be a single file.
 - The engines (each game has only its own): src/core/audioDirector.ts with src/shell/audioPlayer.ts (web; Web
   Audio, works offline too), scripts/core/audio_director.gd (Godot), Assets/Scripts/Core/AudioDirector.cs (Unity,
   no UnityEngine dependency), src/core/audio_director.lua (LÖVE). Each is tested against `data/golden/audio.json`, written by
@@ -202,6 +203,49 @@ many copies may sound at once, a minimum gap between plays, and how far dialogue
   same choices from the same seed. Proven 2026-11-01: TypeScript in Vitest and in headless Chromium (an offline
   render showed the duck envelope within 0.001 dB, pitches exact, the voice cap held), GDScript headless with GUT,
   C# under dotnet test (plus 400 random scenarios), Lua headless in LÖVE 11.5, all with zero difference.
+
+## Sound sets: footsteps per surface, ambience beds, a UI set
+Sounds come in families, and a family fails in ways one file never shows: footsteps for four surfaces out of five, a
+"footstep" that is two steps, one take much louder than its siblings. `tools/audio/sound_sets.py` makes a family in
+one go and checks it as one. Describe the sets in data/sound_sets.json (you create it):
+```json
+{
+  "version": 1, "out_dir": "assets/audio", "target": "home",
+  "sets": {
+    "footsteps": {"generator": "local_sfx", "bus": "sfx", "kind": "oneshot", "seconds": 0.6, "takes": 4, "onsets": 1,
+                  "mono": true, "prompt": "one single footstep on {}, close up, dry, isolated, one step only",
+                  "variants": {"stone": "a stone floor", "wood": "old wooden floorboards", "grass": "soft grass"},
+                  "event": {"pitch_semitones": [-1, 1], "volume_db": [-2, 0], "max_voices": 4, "cooldown_ms": 80,
+                            "caption": "[footsteps]"}},
+    "ambience": {"generator": "local_sfx", "bus": "ambience", "kind": "loop", "seconds": 12, "takes": 1,
+                 "prompt": "{}, ambience, steady background, no music, no voices",
+                 "variants": {"cave": "a cave, water drips and low wind", "rain_roof": "steady rain on a roof"},
+                 "event": {"caption": "[{variant}]"}},
+    "chimes": {"generator": "sfx_synth", "bus": "ui", "takes": 2, "onsets": 1,
+               "variants": {"bright": {"wave": "sine", "freq": 1320, "sustain": 0.05, "decay": 0.2, "volume": 0.4}}}
+  }
+}
+```
+- `python tools/audio/sound_sets.py ui --out assets/audio/ui` writes the built-in UI set from code: click, hover,
+  confirm, back, error, toggle on and off, open, close, notify, a slider tick and a typewriter tick (`type`, for
+  dialogue). Each file's `.sfx.json` says `"ship_safe": true`: no model and no samples, so no license question.
+- `plan` lists what `make` would render; `make` renders every variant (local_sfx sets need ComfyUI with Stable Audio
+  3, see the SFX section) and sets each file to its bus's house level (see Loudness below: the loudest 400 ms for
+  one-shots, integrated loudness for loops, true peak never over -1 dBTP; loop points are kept). Files are named
+  `<set>_<variant>_<n>.wav` in `<out_dir>/<set>/`, without `_<n>` when `takes` is 1.
+- `check` fails a set when a take is missing or extra, a one-shot has a different number of attacks than `onsets`
+  (Stable Audio often answers "a footstep" with two or three), takes of one variant are more than 3 LU apart, a file
+  is more than 2 LU from its bus level, a loop has no loop point or clicks at the seam, or a file has no sidecar
+  naming where it came from. `check --ship` also fails every file that is not ship-safe: Stable Audio output is
+  under the Stability AI Community License, so clear that first (see the SFX section).
+- `events data/sound_sets.json --root assets/audio --merge data/audio_events.json` adds one event per variant
+  (`footsteps_stone`, ...: its takes, `random_no_repeat`, plus the set's `event` fields; `{variant}` in a caption
+  becomes the variant's name) and refuses to write a file that would not pass `audio_events.py validate`.
+- The attack counter is a 5 ms envelope: an attack is a rise above -18 dB of the file's loudest moment after at
+  least 40 ms below -24 dB, and attacks less than `attack_gap_s` apart (default 0.2 s; walking puts steps 0.25 s or
+  more apart) count as one, so the heel and toe of one step stay one step. It flags takes to listen to; it does not
+  hear. Crunchy surfaces (snow, gravel) can flag a single step: listen, and if the step is single, raise that set's
+  `attack_gap_s` rather than deleting good takes.
 
 ## Loudness: measure, check the mix, normalize
 How loud a game sounds is measured, not guessed. `tools/audio/loudness.py` (no installs) gives the numbers the

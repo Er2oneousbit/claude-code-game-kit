@@ -207,6 +207,16 @@ class AudioEventsExam(unittest.TestCase):
         self.assertTrue(any("hit: no caption" in w for w in warnings), warnings)
         self.assertFalse(any(w.startswith("click:") for w in warnings), "UI sounds need no caption or variants")
 
+    def test_audit_lets_looped_beds_be_one_file(self):
+        data = copy.deepcopy(GOOD)
+        data["events"]["rain"] = {"bus": "ambience", "files": ["rain.wav"], "max_voices": 1, "caption": "[rain]"}
+        tone = [0.2 * math.sin(2 * math.pi * 220 * i / 48000) for i in range(48000)]
+        write_wav(self.dir / "rain.wav", tone, 48000)                        # no loop point: a one-shot
+        self.assertTrue(any(w.startswith("rain: 1 file(s)") for w in AE.audit(data, self.dir)))
+        write_wav(self.dir / "rain.wav", tone, 48000, loop=(0, 47999))       # a bed that loops
+        self.assertFalse(any(w.startswith("rain:") for w in AE.audit(data, self.dir)))
+        self.assertTrue(any(w.startswith("rain: 1 file(s)") for w in AE.audit(data)), "without --root it cannot know")
+
     def test_audit_measures_loudness_spread_between_takes(self):
         data = copy.deepcopy(GOOD)
         rate = 48000
