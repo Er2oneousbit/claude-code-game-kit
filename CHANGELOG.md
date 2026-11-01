@@ -3,7 +3,7 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## 0.8.0 (unreleased)
+## 0.8.0 (2026-11-01): the polish release (LÖVE, game feel, the shell, accessibility, shipping)
 - **New engine: LÖVE (`love2d`, LÖVE 11.5, Lua).** `check` compiles every .lua with LÖVE's own LuaJIT in a separate
   checker, `test` runs the project's own runner inside LÖVE with no window, `smoke` boots a small off-screen window (or
   `--headless`) with `--screenshot` / `--record` through a canvas, `build` packages a .love and a fused Windows exe.
@@ -34,6 +34,9 @@
   notes, mods) in `SOP-06`; the release check gains the accessibility baseline and the credits check.
 - **`tools/image_diff.py`:** visual regression for `smoke --compare` (a standard-library PNG reader).
 - **Evidence:** E69 to E92 and findings F33 to F39.
+- **Examples:** all ten carry the new files and pass check, test and smoke; the Godot examples keep their own window
+  and controls (the Shell applies display and input only after the player saves settings or the kit's front end
+  starts). Follow-ups are issues #40 to #47 (`KNOWN_ISSUES.md`).
 - **Local audio tools** (no account, no per-use cost):
   - `tools/audio/babble.py`: gibberish character voices for speech bubbles, made from code (no model). Five voices,
     `--variants` takes, `--lines` for a whole script, and a `.timeline.json` per line with the time each character
