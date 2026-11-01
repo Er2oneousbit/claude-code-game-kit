@@ -30,7 +30,7 @@ import fcore  # noqa: E402
 
 LANES = ("props", "effects", "tiles", "ui", "icons", "portraits", "tools", "img2px", "fonts", "battle_bgs", "enemies",
          "windows", "balloons", "scenes", "hitfx", "spells", "animprops", "vehicles", "widgets", "transitions", "weather",
-         "status", "npcs", "platforms", "iso")
+         "status", "npcs", "platforms", "iso", "uikit")
 
 
 # ---- binding -------------------------------------------------------------------------

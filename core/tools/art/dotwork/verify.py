@@ -240,10 +240,18 @@ def verify(settings, files):
     code, out = godotrun.run_script(settings, "dotwork_verify_loader", LOADER, (lst,))
     report["load_exit"] = code
     report["load_lines"] = [l for l in out.splitlines() if l.startswith("DOTWORK_")]
+    # UI kit previews (lane_uikit): walk the focus chain with ui_down / ui_up in a running SceneTree
+    focus_ok = True
+    for r in [r for r in res if re.search(r"/uikit_preview_[^/]+\.tscn$", r)]:
+        import lane_uikit
+        ok, lines = lane_uikit.focus_check(settings, r)
+        focus_ok = focus_ok and ok
+        report.setdefault("focus_lines", []).extend([f"{r}: {l}" for l in lines] or [f"{r}: no output"])
+        core.log(f"verify focus walk {r}: {lines[-1] if lines else 'no output'}")
     code, out = godotrun.smoke(settings)
     report["smoke_exit"], report["smoke_tail"] = code, (out or "")[-800:]
     report["ok"] = (report["import_exit"] == 0 and not report["import_errors"] and report["load_exit"] == 0
-                    and report["smoke_exit"] in (0, None))
+                    and report["smoke_exit"] in (0, None) and focus_ok)
     core.write_text(core.work("verify_report.json"), json.dumps(report, indent=1))
     core.log(f"verify: ok={report['ok']} import={report['import_exit']} errors={len(report['import_errors'])} "
              f"load={report['load_exit']} smoke={report['smoke_exit']} ({len(res)} resources)")

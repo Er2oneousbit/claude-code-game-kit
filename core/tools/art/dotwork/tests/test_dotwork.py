@@ -2182,6 +2182,14 @@ class DotworkExam(unittest.TestCase):
         self.assertEqual(os.listdir(nogame), [])           # setup --check creates nothing
 
 
+# lane exams kept in their own files run with this one (the kit runs only this file)
+EXTRA_EXAMS = ("test_uikit",)
+
 if __name__ == "__main__":
+    sys.path.insert(0, HERE)
+    for _mod in EXTRA_EXAMS:
+        for _k, _v in vars(__import__(_mod)).items():
+            if isinstance(_v, type) and issubclass(_v, unittest.TestCase) and _v.__module__ == _mod:
+                globals()[_k] = _v
     result = unittest.main(exit=False, verbosity=1).result
     sys.exit(0 if result.wasSuccessful() else 1)

@@ -3,6 +3,22 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.8.1 (unreleased)
+- Dotwork: new `uikit` lane: one Godot Theme (`assets/ui/theme_<name>.tres`) for every settings / pause menu control
+  in every state (buttons, check boxes, switches, sliders, option buttons, popup menus, scroll bars, tabs, line edits,
+  spin boxes, tooltips, item lists, progress bars, labels, panels, separators), drawn in code in the window styles.
+- Dotwork: focus is a ring in its own colour drawn outside each control, never a brighter hover; tests compare focus
+  and hover pixel by pixel for every focusable control (Godot's sliders draw one highlight for both: a known limit).
+- Dotwork: input prompt glyphs for the kit's shell (`assets/ui/glyphs/<glyph_name>.png`, 16 px tall, plus
+  `glyphs.json`): keycaps labelled from the glyph font, mouse buttons, and generic gamepad shapes for the xbox_, ps_
+  and pad_ names, with no maker logos; `keys` adds any rebound key.
+- Dotwork: `uikit` also ships a pointer and a pointing-hand cursor, a preview scene with every control, and a
+  labelled review sheet of every state and glyph.
+- Dotwork: verify checks each UI kit Theme's items inside Godot and walks the preview's focus chain with ui_down /
+  ui_up (`UIKIT_FOCUS_RESULT PASS`); the exam (`tests/test_dotwork.py`) also runs the lane exams in `EXTRA_EXAMS`.
+- `scripts/sync_examples.py`: a run with nothing to sync leaves the examples untouched (it added a history entry to
+  every example on each run). The kit's em dash check reads tracked and new files only.
+
 ## 0.8.0 (2026-11-01): the polish release (LÖVE, game feel, the shell, accessibility, shipping)
 - **New engine: LÖVE (`love2d`, LÖVE 11.5, Lua).** `check` compiles every .lua with LÖVE's own LuaJIT in a separate
   checker, `test` runs the project's own runner inside LÖVE with no window, `smoke` boots a small off-screen window (or

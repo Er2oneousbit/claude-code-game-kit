@@ -10,7 +10,8 @@ buildings, interiors and cliffs, side-view platformer tilesets with parallax bac
 and terrain transitions, maps painted from text, fences / pipes / rails, animated water, effects and spells (Wan
 clips, or drawn in code: fire, ice, lightning, heal, wind, explosions, projectile orbs, auras), enemies and bosses,
 battle backgrounds (optionally with drifting cloud layers), title screens, icons, portraits with expressions and
-talking frames, pixel fonts, window skins, HUD widgets (gauges, button states, a Theme), screen transitions, weather,
+talking frames, pixel fonts, window skins, HUD widgets (gauges, button states, a Theme), a menu UI kit (one Theme for
+every settings / pause menu control in every state, input prompt glyphs, cursors), screen transitions, weather,
 status-effect loops, emote balloons, 8-direction vehicles, treasure chests / doors / switches / save points, props
 animated by any motion (Wan clips), sprite edits and normal maps, and image-to-pixel-art.
 Model-free tools: palette swaps (`recolor`, and `recolor_of` in the enemies lane) and `clean` (any image to clean pixel
@@ -177,6 +178,7 @@ pixel-art wording. Ready-to-run specs for every capability are in `examples/` (s
  "fonts": [{"name": "dialogue", "glyphs": "glyphs/dialogue.txt", "effect": "shadow"}],
  "windows": [{"name": "classic", "style": "classic"}], "balloons": [{"name": "exclaim", "symbol": "!", "color": "d83a3a"}],
  "widgets": [{"name": "hud", "style": "brass", "gauges": ["hp", "mp", "atb"]}],
+ "uikit": [{"name": "menu", "style": "iron", "font": "assets/art/ui/fonts/font_dialogue.fnt", "keys": ["minus"]}],
  "transitions": [{"name": "battle_swirl", "kind": "spiral"}, {"name": "mosaic", "kind": "mosaic"}],
  "weather": [{"name": "storm", "kind": "rain", "intensity": 0.8}],
  "status": [{"name": "poison"}, {"name": "zzz", "kind": "sleep"}],
@@ -245,6 +247,8 @@ Honest list: these are the failure modes seen in testing and what Dotwork does a
 | animated props (`clip`) | The code loops move pixels; they cannot change an object's shape (a pot breaking, liquid churning) | `"kind": "clip"` with a `motion` runs Wan 2.2 on the prop's render, palette locked to its colours; a one-shot keeps its first and last frames (`start` / `play` / `end` / `back`), `"loop": true` finds a loop point (`idle`). Wan keeps its subject in frame, so a change that removes the object (a pot bursting) comes back whole: use an effect over the prop for that. Like every model clip it can drift or redraw the object: review the sheet, a new `seed` gives another take, `anchor` changes how frames are aligned (default sideways only); Wan's grey ground shadow is removed (a faint shadow tinted by the prop's colours, right against it, can remain: judge the sheet); `"slab": "remove"` (any animprops kind, opt-in as for props) strips a flat light-grey ground slab under the base render before anything is animated from it; a light shadow cast diagonally beside the prop is not a slab and stays (a new `seed` or an edit of the base) |
 | platforms (side view) | A platformer needs edges, a top surface and one-way ledges that join in every combination | 16 tiles indexed by which sides are exposed (fill inside, the surface lip on top, shaded rims and an outline on open sides, rounded outer corners) plus 3 one-way pieces; a Match Sides TileSet with full-tile collision that `verify` paints and checks side by side; the background is made seamless left to right and ships with a ParallaxBackground scene |
 | iso (2:1 isometric) | Iso tiles drawn one by one do not continue each other | Floors and blocks are projected from the ground lane's seamless textures, so neighbouring diamonds continue one texture; blocks are taller tiles with a texture origin. `transitions` add the 16 corner tiles between two materials (the pair lane's wang16 tiles, projected the same way), a Match Corners terrain set per pair that Godot's terrain tool paints; `verify` paints shapes in both directions and checks every shared corner across the diamond's sides |
+| uikit (focus on sliders) | Godot's `Slider` draws one highlight for hover and for focus (`grabber_highlight`, `grabber_area_highlight`), so no Theme can tell a hovered slider from a focused one | Every other control gets a focus ring in its own colour drawn outside the control (never a brighter hover); the slider highlight uses the focus colour, and the kit's settings screen outlines the focused row. The test suite composites focus and hover of every control from the shipped textures and compares them pixel by pixel |
+| uikit (glyphs) | Prompt glyphs are generic drawn shapes: letters in neutral circles, outline cross / circle / square / triangle, a four-dot diamond, labelled shoulders and triggers, a lit d-pad arm; no maker's logos or colours | One neutral set per game (`assets/ui/glyphs/`), shared by every uikit entry; a rebound key with no glyph yet: add it to `keys` (the label comes from the glyph font), or the shell shows its text label |
 | fonts | Models cannot draw consistent letters | Glyphs are text bitmaps (`glyphs/*.txt`), built into BMFont `.fnt`; edit a letter by editing its rows |
 | battle backgrounds / scenes | 320x128 / 320x180 art shown at 2x (chunkier than 1x sprites) | Same exact-2x scale everywhere it is used |
 | battle backgrounds (moving sky) | Cutting the painted sky off at the horizon and scrolling it split mountain peaks (the tip drifted away from its base) | `"scroll": -4` keeps the picture whole and adds two cloud layers drawn in code in its own lightest sky colours (far: small, half speed; near: bigger, full speed) that tile sideways; `horizon` sets how far down they reach, `clouds` how many. They drift over far mountains, which reads as nearer clouds; leave `scroll` off for caves and interiors |
@@ -269,6 +273,12 @@ Timing on the tested GPU: a sprite about 18 s, a texture tile with variants abou
 - Effects: `fx_<name>.tscn` (additive material, autoplay). Damage flash: `mat_damage_flash.tres`, tween its
   `shader_parameter/flash` from 1 to 0 on hit.
 - Fonts: load the `.fnt` as a `FontFile`; white ink is tinted by `font_color`; gradient title fonts are coloured.
+- UI kit: `assets/ui/theme_<name>.tres` (the kit's shell loads the first `assets/ui/theme_*.tres`, sorted by name); textures in
+  `assets/art/ui/uikit/<name>/`; set the project's default texture filter to Nearest. Prompt glyphs: `assets/ui/glyphs/<name>.png`,
+  1x and 16 px tall (draw them at whole multiples), `glyphs.json` gives each width. `cursor_pointer.png` / `cursor_select.png`
+  (hotspots in the manifest). `uikit_preview_<name>.tscn` shows every control; `verify` checks its Theme items in Godot and walks
+  its focus chain with ui_down / ui_up (`UIKIT_FOCUS_RESULT PASS` in the log). Vertical sliders, vertical scroll bars and item lists
+  use ui_up / ui_down themselves, so they sit last in a focus chain (or are reached with ui_left / ui_right).
 - Animated water: TileSet atlas animation (4 frames by default); the editor previews it.
 
 ## Palettes and style references
@@ -304,6 +314,7 @@ together with a palette lock; where a lane uses no palette it has no effect.
 | effects | none: each effect is reduced to 16 colours of its own, no outline | 16 | none |
 | tools (edits, inpaint) | the source sprite's own colours plus `palette` (untouched pixels map back exactly) | source count + 12 | none |
 | hit sparks / slashes (drawn in code) | a 4-step ramp of the entry's `color` | about 4 per frame | `color` |
+| uikit (drawn in code) | the style's fill / frame colours plus a focus colour; glyphs and cursors one fixed neutral set | about 12 per theme, 12 for glyphs | `style`, `fill`, `frame`, `focus` |
 | characters | none of the files: every animation frame is locked to the colours of the direction sprite it was animated from | per character | none |
 
 So props, enemies, terrain and backdrops read as one set because they share the two files; characters, icons,
