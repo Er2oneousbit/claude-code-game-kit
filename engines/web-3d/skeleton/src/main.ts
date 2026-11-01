@@ -6,6 +6,8 @@
 // Notes   : BOOT_OK is logged after the FIRST RENDERED FRAME, so smoke proves the renderer
 //           really works, not just that the script loaded. Uncaught errors go through Log.error,
 //           which smoke fails on. dt is clamped so a background tab does not teleport the world.
+//           The engine-free juice and shell logic is in src/core/ (settings, saves, i18n, shake, ...); this
+//           skeleton has no menu screens, so `dev.py smoke --drive` stops at once with DRIVE_ABORT.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 import * as THREE from "three";
@@ -48,6 +50,8 @@ renderer.setAnimationLoop((timestamp) => {
   if (!booted) {
     booted = true;
     Log.info("core", "BOOT_OK {{GAME_NAME}}");
+    const drive = new URLSearchParams(location.search).get("drive");
+    if (drive) Log.error("drive", `DRIVE_ABORT ${drive}: no scripted runs here (web-3d ships the shell logic in src/core, not its screens)`);
   }
 });
 

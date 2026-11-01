@@ -9,7 +9,9 @@
 #             test     unit tests (Vitest)
 #             smoke    production build, then boot it in headless Chromium; fail on errors
 #                      (--query autoplay --until ESCAPED --fail-on CAUGHT for scenario runs,
-#                       --screenshot FILE, --record DIR for a GIF)
+#                       --screenshot FILE, --record DIR for a GIF;
+#                       --drive menus|crash|pseudo|pseudo-plant|show:<screen> for the shell's scripted runs,
+#                       --data-dir DIR, --locale ID, --compare BASELINE.png [--tolerance N])
 #             build    production build into dist/ (relative paths: upload dist/ anywhere)
 #             run      Vite dev server with hot reload (opens the browser)
 #             clean    remove dist/ and Vite caches (--deep also removes node_modules/)
@@ -27,6 +29,7 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
+#           2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive, --data-dir, --locale, --compare
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -275,9 +278,13 @@ def cmd_smoke(args):
            "--marker", BOOT_MARKER, "--timeout-ms", str(args.timeout * 1000)] + (["--verbose"] if DEBUG else [])
     for flag, value in (("--query", args.query), ("--until", args.until), ("--fail-on", args.fail_on),
                         ("--screenshot", args.screenshot), ("--record", args.record),
-                        ("--record-every", str(args.record_every) if args.record else "")):
+                        ("--record-every", str(args.record_every) if args.record else ""),
+                        ("--drive", args.drive), ("--data-dir", args.data_dir), ("--locale", args.locale),
+                        ("--compare", args.compare), ("--tolerance", str(args.tolerance) if args.compare else "")):
         if value:
             cmd += [flag, value]
+    if args.compare:
+        cmd += ["--python", sys.executable]           # tools/image_diff.py runs on this same Python
     cmd += (["--headed"] if args.headed else []) + (["--gpu"] if args.gpu else [])
     limit = SMOKE_TIMEOUT_S + args.timeout + args.frames // SMOKE_MIN_FPS   # a long --frames gets the time it needs
     rc, out = run(cmd, capture=True, timeout=limit)
@@ -387,6 +394,17 @@ def positive_int(text):
     return n
 
 
+def channel_delta(text):
+    """argparse type: 0..255, a per-channel color difference."""
+    try:
+        n = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a whole number")
+    if not 0 <= n <= 255:
+        raise argparse.ArgumentTypeError("must be between 0 and 255")
+    return n
+
+
 def build_parser():
     ap = argparse.ArgumentParser(
         prog="dev.py",
@@ -409,6 +427,15 @@ def build_parser():
     p.add_argument("--screenshot", default="", help="save a PNG of the final frame (path relative to the project)")
     p.add_argument("--record", default="", help="save PNG frames to this folder (GIF: tools/art/frames_to_gif.py)")
     p.add_argument("--record-every", type=positive_int, default=66, help="milliseconds between recorded frames (default 66)")
+    p.add_argument("--drive", default="", metavar="SCENARIO",
+                   help="the game plays a scripted run (shell games): menus, crash (exits 1 on purpose), pseudo, "
+                        "pseudo-plant, show:title|settings|pause|subtitle|juice (with --screenshot); waits for DRIVE_DONE")
+    p.add_argument("--data-dir", default="", metavar="DIR",
+                   help="user-data folder for this run (?data-dir=): loaded before, written back after "
+                        "(default build/smoke-data with --drive)")
+    p.add_argument("--locale", default="", metavar="ID", help="language for this run, e.g. fr or pseudo (?locale=)")
+    p.add_argument("--compare", default="", metavar="PNG", help="compare the --screenshot with this baseline (tools/image_diff.py); exit 1 when it differs")
+    p.add_argument("--tolerance", type=channel_delta, default=0, help="--compare: per-channel difference allowed, 0-255 (default 0)")
     p.add_argument("--headed", action="store_true", help="visible browser window (real GPU: WebGPU, local AI models)")
     p.add_argument("--gpu", action="store_true", help="headless with Chrome's WebGPU flags (may not work on every machine)")
     p.set_defaults(fn=cmd_smoke)
