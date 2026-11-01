@@ -7,7 +7,8 @@
 #           the skeleton, so a clip does what it is told: no drift into another view, the same stride every time, a
 #           loop that closes (death is the one-shot: it ends lying down).
 # Usage   : character entry "skeleton": ["walk", "run"] (lane_character renders those actions with control_graph);
-#           python pose.py ACTION DIRECTION OUT_DIR  writes the skeleton frames for a look.
+#           python pose.py ACTION DIRECTION OUT_DIR [ANTICIPATION]  writes the skeleton frames for a look
+#           (ANTICIPATION 0 .. 1: the opt-in wind-up of attack, cast and shoot; the entry key "anticipation").
 # Notes   : Needs the "pose" model tier (Get-Models / models.lock.json): wan2.2_fun_control_{high,low}_noise_14B_Q4_K_M
 #           .gguf (Apache-2.0), with the same VAE and text encoder as the animate tier. Proportions are chibi (a big
 #           head, hips at two thirds of the height), like the characters the sprite lane draws.
@@ -86,6 +87,45 @@ KEYS = {
               (0.8, {"drop": 0.04, "fall": 90.0, "ra": -10.0, "rb": 10.0, "la": -10.0, "lb": 10.0}),
               (1.0, {"drop": 0.04, "fall": 90.0, "ra": -10.0, "rb": 10.0, "la": -10.0, "lb": 10.0})],
 }
+# Anticipation (opt-in: keypoints() / frames() anticipation=a, a in (0, 1]; the character key "anticipation"): an
+# extra wind-up just before the strike of attack, cast and shoot. The body leans away from the target and sinks a
+# little, the striking arm draws further back, then the strike snaps through. At a = 0 (the default) nothing here is
+# used: every action keeps its keys exactly, so VERSION and the clip cache keys stay as they are.
+# WIND: the pull-back at a = 1, added to the pose at that moment (lean / drop in figure units, side-view arm angles in
+# degrees, front-view arms (elbow dx, dy, wrist dx, dy): the hands go out from the body's middle and down, gathering)
+WIND = {"lean": -0.05, "drop": 0.025, "ra": -30.0, "la": -25.0,
+        "rf": (-0.02, -0.01, -0.05, -0.03), "lf": (-0.02, -0.01, -0.05, -0.03)}
+WIND_ATTACK = (0.04, 0.25, 0.38)   # attack (not keyframed): the pull-back starts, is deepest, is gone (loop phase t)
+ANTICIPATE = ("attack", "cast", "shoot")
+
+
+def _deeper(key, a):
+    """A key's changes with the wind-up added at amount a (REST fills what the key leaves out)."""
+    out = dict(key)
+    for k, v in WIND.items():
+        base = key.get(k, REST[k])
+        out[k] = tuple(p + q * a for p, q in zip(base, v)) if isinstance(v, tuple) else base + v * a
+    return out
+
+
+def _wind_keys(action, a):
+    """KEYS[action] with the wind-up key at amount a. cast: the draw goes deeper and holds to 0.26 (was 0.22), the
+    thrust lands at 0.4 (was 0.38). shoot: a pull-back from rest at 0.14 before the weapon comes up, the aim settles at
+    0.3 (was 0.25). Timing is the same for every a > 0, only the depth scales; the later keys are untouched, so the
+    loop still closes on rest."""
+    k = KEYS[action]
+    if action == "cast":
+        return [k[0], (0.26, _deeper(k[1][1], a)), (0.4, k[2][1])] + k[3:]
+    if action == "shoot":
+        return [k[0], (0.14, _deeper({}, a)), (0.3, k[1][1])] + k[2:]
+    return k
+
+
+def _bump(t, t0, tp, t1):
+    """0 before t0 and after t1, rising (eased) to 1 at tp and falling back: the wind-up envelope."""
+    if t <= t0 or t >= t1:
+        return 0.0
+    return _ease((t - t0) / (tp - t0)) if t < tp else 1.0 - _ease((t - tp) / (t1 - tp))
 
 
 def _ease(x):
@@ -93,9 +133,10 @@ def _ease(x):
     return x * x * (3 - 2 * x)
 
 
-def _at(action, t):
-    """The keyframed parameters of action at t (REST filled in), eased between the two keys around t."""
-    keys = [(k, dict(REST, **ch)) for k, ch in KEYS[action]]
+def _at(action, t, wind=0.0):
+    """The keyframed parameters of action at t (REST filled in), eased between the two keys around t. wind: the
+    anticipation amount (0: the action's own keys)."""
+    keys = [(k, dict(REST, **ch)) for k, ch in (_wind_keys(action, wind) if wind else KEYS[action])]
     for (t0, a), (t1, b) in zip(keys, keys[1:]):
         if t <= t1:
             u = _ease((t - t0) / (t1 - t0)) if t1 > t0 else 1.0
@@ -119,10 +160,10 @@ def _knee(hip, ankle, toward, spread=1.0):
     return hip[0] + dx / d * a + px * h, hip[1] + dy / d * a + py * h
 
 
-def _keyed(action, t, view, hh, ear):
+def _keyed(action, t, view, hh, ear, wind=0.0):
     """keypoints() for the keyframed actions: feet planted (the legs bend at the knee when the body drops), the upper
     body leans and ducks, then death topples the whole figure 90 degrees around its feet onto the ground."""
-    p = _at(action, t)
+    p = _at(action, t, wind)
     side, quarter = view in ("side", "quarter"), view == "quarter"
     half_hip, half_sh = (0.05, 0.09) if quarter else (0.02, 0.03) if side else (0.08, 0.15)
     xh, xs = 0.4 * p["lean"], p["lean"]          # the hips move less than the shoulders
@@ -202,15 +243,17 @@ def fit(sprite):
     return out
 
 
-def keypoints(action, t, view, fitted=None):
+def keypoints(action, t, view, fitted=None, anticipation=0.0):
     """18 (x, y) points in figure units (feet at y = 0, up is +y, x + is the facing side in side view) for loop phase
     t in [0, 1); view "side", "quarter" (three-quarter: the side motion foreshortened, half-width shoulders and hips)
     or "front" ("back" = front or quarter mirrored by the caller); fitted: fit() of the sprite (face, neck, shoulder
-    heights and ear spread)."""
+    heights and ear spread). anticipation: the wind-up amount (0 .. 1) for attack, cast and shoot (WIND); other
+    actions ignore it."""
     hh = dict(H, **{k: v for k, v in (fitted or {}).items() if k in H})
     ear = (fitted or {}).get("ear", 0.12)
+    wind = float(anticipation or 0.0) if action in ANTICIPATE else 0.0
     if action in KEYS:
-        return _keyed(action, t, view, hh, ear)
+        return _keyed(action, t, view, hh, ear, wind)
     side = view in ("side", "quarter")
     quarter = view == "quarter"
     ph = 2 * math.pi * t
@@ -232,6 +275,11 @@ def keypoints(action, t, view, fitted=None):
             a = a + (math.radians(-20) - a) * ((t - 0.75) / 0.25)
         attack_arm = a
         lean = 0.05 * math.sin(math.pi * min(1.0, t / 0.75))
+        if wind:   # the arm goes further over and behind the head, the body leans away and sinks, then the swing
+            b = wind * _bump(t, *WIND_ATTACK)   # snaps through. Lean counts twice at the shoulders here: 0.7 of WIND
+            attack_arm = a + math.radians(WIND["ra"]) * b
+            lean += b * (WIND["lean"] * 0.7 - max(0.0, lean))   # the forward lean of the wind-up is replaced
+            bob -= WIND["drop"] * b
     elif action == "jump":   # crouch, rise, tuck, land
         crouch = math.sin(math.pi * min(1.0, t / 0.2)) if t < 0.2 else 0.0
         air = math.sin(math.pi * (t - 0.2) / 0.6) if 0.2 <= t <= 0.8 else 0.0
@@ -283,10 +331,11 @@ def canvas_map(sprite_w, sprite_h, pad=8, target=640):
     return s, (pad + px) * s, (pad + py) * s
 
 
-def frames(action, direction, sprite, n=33, size=640, pad=8, face=True):
+def frames(action, direction, sprite, n=33, size=640, pad=8, face=True, anticipation=0.0):
     """n control frames (PIL RGB, size x size) for one clip: the skeleton fitted to the sprite's figure (its height,
     feet line and centre), facing direction (e / w side, s front, n back). One loop over the clip, last = first;
-    a ONE_SHOT action runs once instead and ends on its last pose (death lies on the ground)."""
+    a ONE_SHOT action runs once instead and ends on its last pose (death lies on the ground). anticipation: the
+    wind-up amount for attack, cast and shoot (keypoints())."""
     im = sprite.convert("RGBA")
     bb = im.getbbox()
     s, ox, oy = canvas_map(im.width, im.height, pad, size)
@@ -300,7 +349,7 @@ def frames(action, direction, sprite, n=33, size=640, pad=8, face=True):
     stick = max(4, round(size / 110))
     for i in range(n):
         t = i / (n - 1) if action in ONE_SHOT else (i % (n - 1)) / (n - 1)
-        kp = keypoints(action, t, view, fitted)
+        kp = keypoints(action, t, view, fitted, anticipation)
         if direction in ("n", "ne", "nw"):   # seen from behind: the character's right is on the screen's right
             kp = [(-x, y) for x, y in kp]
         pts = [(cx + flip * x * fh, feet - y * fh) for x, y in kp]
@@ -365,13 +414,14 @@ def control_graph(g, control_names, high, low, drop_loras=()):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4 or sys.argv[1] not in ACTIONS:
-        print("usage: python pose.py ACTION DIRECTION OUT_DIR   (ACTION: " + ", ".join(ACTIONS) + "; DIRECTION: s e n w "
-              "or a diagonal)")
+    if len(sys.argv) not in (4, 5) or sys.argv[1] not in ACTIONS:
+        print("usage: python pose.py ACTION DIRECTION OUT_DIR [ANTICIPATION]   (ACTION: " + ", ".join(ACTIONS) + "; "
+              "DIRECTION: s e n w or a diagonal; ANTICIPATION: 0 .. 1, the wind-up of attack, cast and shoot)")
         sys.exit(2)
     os.makedirs(sys.argv[3], exist_ok=True)
     dummy = Image.new("RGBA", (72, 72), (0, 0, 0, 0))
     dummy.paste((200, 100, 60, 255), (24, 6, 48, 70))
-    for i, f in enumerate(frames(sys.argv[1], sys.argv[2], dummy)):
+    wind = float(sys.argv[4]) if len(sys.argv) > 4 else 0.0
+    for i, f in enumerate(frames(sys.argv[1], sys.argv[2], dummy, anticipation=wind)):
         f.save(os.path.join(sys.argv[3], f"pose_{i:02d}.png"))
     print(f"[ OK ] {sys.argv[3]}")

@@ -39,6 +39,14 @@
 - Dotwork: one-shot particle scenes arm themselves with a small Start AnimationPlayer, because Godot 4.7.2 stops a
   one-shot GPUParticles2D that starts emitting from the scene file without bursting or sending `finished`; verify
   checks every particle emitter and Line2D trail it instantiates. An example spec and an exam come with the lane.
+- Dotwork animation polish, all opt-in (an old spec gives byte-identical files): frame holds (`"holds"`: per-frame
+  SpriteFrames durations, by default a held wind-up and a hit-stop around the peak frame of attack, cast and shoot; the
+  sheet JSON carries them for other engines), smear frames (`"smear"`: the peak-motion frame redrawn with the moving
+  part dragged back, in its own colours), anticipation for skeleton attacks (`"anticipation"`: lean away, sink, draw
+  back, then strike), and `"shaders": true` for a damage flash and a pixel-grid dissolve material. Palette variants
+  inherit holds and smear.
+- Dotwork: verify compiles every ShaderMaterial it loads and counts held SpriteFrames frames. The exam ran its last
+  extra lane exam twice, so its printed totals since the uikit lane were one class too high; it counts each test once.
 - `tools/audio/loudness.py`: measure integrated loudness (ITU-R BS.1770-5), loudness range (EBU Tech 3342) and true
   peak; check a whole-game capture against Sony's ASWG-R001 targets (home -24, portable -18 LKFS, true peak -1 dBTP,
   at least 30 minutes); normalize single assets to labeled house levels with a true-peak ceiling. No installs.

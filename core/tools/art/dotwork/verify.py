@@ -3,9 +3,9 @@
 # verify.py
 # Purpose : prove what Dotwork just made works in the game itself: import the project (its own tools/dev.py import
 #           when it has one), load every .tres / .tscn / .fnt the run wrote with a headless loader (SpriteFrames
-#           animations, TileSet terrains painted shape by shape and checked cell by cell, scenes instantiated with
-#           their particle emitters and line trails checked, fonts measured), then the game's smoke test
-#           (tools/dev.py smoke) when it exists.
+#           animations and held frames, TileSet terrains painted shape by shape and checked cell by cell, scenes
+#           instantiated with their particle emitters and line trails checked, fonts measured, ShaderMaterials
+#           compiled), then the game's smoke test (tools/dev.py smoke) when it exists.
 # Usage   : python dotwork.py verify [--project GAME]     (also runs at the end of `dotwork.py pack` unless --no-verify)
 # Notes   : Overlay TileSets (lane_ground, metadata dotwork_overlays) get the blob check: painting a shape on an empty
 #           layer must give exactly the painted cells with the right tiles. Pair TileSets get the corner check.
@@ -40,7 +40,22 @@ func _init():
 			print("DOTWORK_FAIL ", p)
 			bad += 1
 		elif r is SpriteFrames:
-			print("DOTWORK_OK ", p, " SpriteFrames anims=", r.get_animation_names().size())
+			# frames whose duration is not 1.0 (holds) are counted; the line is unchanged when there are none
+			var held = 0
+			for a in r.get_animation_names():
+				for i in r.get_frame_count(a):
+					if not is_equal_approx(r.get_frame_duration(a, i), 1.0):
+						held += 1
+			var extra = (" held=" + str(held)) if held > 0 else ""
+			print("DOTWORK_OK ", p, " SpriteFrames anims=", r.get_animation_names().size(), extra)
+		elif r is ShaderMaterial:
+			# the headless (dummy) renderer compiles the shader: one that fails still loads, but lists no uniforms
+			var u = r.shader.get_shader_uniform_list().size() if r.shader != null else -1
+			if u < 0 or (u == 0 and r.shader.code.contains("uniform ")):
+				print("DOTWORK_FAIL ", p, " ShaderMaterial: its shader does not compile")
+				bad += 1
+			else:
+				print("DOTWORK_OK ", p, " ShaderMaterial uniforms=", u)
 		elif r is TileSet:
 			print("DOTWORK_OK ", p, " TileSet sources=", r.get_source_count(), " terrain_sets=", r.get_terrain_sets_count())
 			# layered ground TileSets (lane_ground) carry metadata/dotwork_overlays: test each overlay terrain on an
