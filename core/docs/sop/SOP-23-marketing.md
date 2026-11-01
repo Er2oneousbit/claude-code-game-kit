@@ -5,12 +5,12 @@ The people who would love the game hear about it, can see in five seconds what i
 launch. Steam facts here come from Valve's documentation (F39); the rest is labeled practice or tips.
 
 ## 1. Start early (A)
-- Put up the Steam Coming Soon page as soon as the game has a hook you can show (E82): every wishlist is an email at
-  launch and at qualifying discounts, and wishlists affect where Steam shows the game. There is no minimum count before
-  Steam starts showing it.
+- Put up the Steam Coming Soon page as soon as the game has a hook you can show (E82): wishlisters are notified at
+  launch and at qualifying discounts (subject to Valve's cooldowns and their own email settings), and wishlists affect
+  where Steam shows the game. There is no minimum count before Steam starts showing it.
 - Plan the big moments: a demo (one wishlist notification within 14 days of its first release, E80), Steam Next Fest
-  (once per game, unreleased, demo required, E81), the launch, the first discount (at least 20 % triggers wishlist
-  emails, at most one such email per two weeks, E82). Space them so the notifications do not collide.
+  (once per game, unreleased, demo required, E81), the launch, the first discount (wishlist emails go out for a discount
+  of at least 20 % on the lowest-priced package lasting over 8 hours, at most one such email per two weeks, E82). Space them so the notifications do not collide.
 
 ## 2. The hook and the store page
 1. One sentence that says what the player does and why it is different (the GDD's pitch and twist). Test it on people
@@ -20,7 +20,8 @@ launch. Steam facts here come from Valve's documentation (F39); the rest is labe
 3. Screenshots: real gameplay only (E77), the most readable moments, UI visible. The first screenshot and the first
    seconds of the trailer do most of the work (tip).
 4. Description: the hook first, then three to five short bullets of what you do, then features (including accessibility
-   options, `SOP-20`), then the AI disclosure (`SOP-04`).
+   options, `SOP-20`). The AI disclosure itself goes in Steam's Content Survey (`SOP-04`, F11); a line about it in the
+   description is optional.
 
 ## 3. Trailer (practice)
 1. Record real gameplay at the target resolution: `dev.py smoke --record` gives frame bursts; the art session's capture

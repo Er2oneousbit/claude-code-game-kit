@@ -16,13 +16,15 @@ are from Valve's own documentation read on 2026-11-01 (F39); check the linked pa
 
 ## 2. Steam store page (A)
 1. Put up the **Coming Soon page as early as you can**: players can wishlist it, wishlisters are emailed at launch and
-   on discounts of at least 20 % (at most one wishlist email every two weeks), and wishlists are "an important factor"
+   on discounts of at least 20 % on the lowest-priced package lasting over 8 hours (at most one wishlist email every
+   two weeks), and wishlists are "an important factor"
    in where Steam shows a game (E82).
 2. **Graphical assets** (E77): header capsule 920x430, small capsule 462x174, main capsule 1232x706, vertical capsule
    748x896, at least five screenshots of 1920x1080 or more (16:9), optional page background 1438x810. Library assets have
    their own page on Steamworks. Capsules carry only the logo or title (no quotes, awards or other text), and the logo
    must stay readable on the small capsule. Screenshots show real gameplay only; mark at least four as suitable for all
-   ages. Pixel art scales by whole numbers into these sizes; pad with the background colour instead of resampling.
+   ages. Pixel art: scale the artwork by a whole number to the largest size that fits each canvas, then place it on
+   that canvas and fill the rest with the background colour or more scene; never resample by a fraction.
 3. **AI disclosure:** fill the Content Survey's generative AI section as `SOP-04` says (F11).
 4. **Accessibility:** list the options from `SOP-20` in the description.
 
@@ -41,9 +43,9 @@ are from Valve's own documentation read on 2026-11-01 (F39); check the linked pa
 
 ## 4. Steam features (A)
 - **Achievements** (E78): defined on the App Admin page; unlock with `SetAchievement` then `StoreStats`; reset for
-  testing with `ResetAllStats(true)` or the Steam console. 100 at first. All-ages names and icons. Before release they do
-  not show in the Community, so the game should show what was earned. Design them as goals that point at the game's
-  pillars, not chores ("kill 10,000 rats").
+  testing with `ResetAllStats(true)` or the Steam console. Up to 100 at first. All-ages names and icons. Before release
+  they do not show in the Community, so the game should show what was earned. Tip: design them as goals that point at
+  the game's pillars, not chores ("kill 10,000 rats").
 - **Steam Cloud** (E79): Auto-Cloud (folders set on Steamworks, no code) suits the shell's save folder; keep settings
   that depend on the machine (resolution, vsync) out of the cloud. Test with `testappcloudpaths` on every OS.
 - **Steam Input and Deck:** the Deck review wants full controller support by default and glyphs that match (E75); the

@@ -30,7 +30,8 @@ SOP is how to choose them on evidence instead of by feel alone.
 
 ## 4. Measure, do not guess
 1. **Bots** (`SOP-14` step 6): run the game's bots over many seeds and difficulty settings and log time to clear, deaths,
-   resources at each checkpoint. A change that should help one strategy must not help all of them (F32).
+   resources at each checkpoint, with bots that also try the cheap ways through (F32). Tip: a change meant to help one
+   strategy should not lift all of them; if it does, it changed the baseline instead.
 2. **Playtests** (`SOP-03`): one question per session; write down the numbers players hit (wave reached, gold at the
    shop, time to the boss).
 3. **Telemetry with consent** (`SOP-19` step 8): the same counters from real players, local CSV first.
@@ -39,8 +40,8 @@ SOP is how to choose them on evidence instead of by feel alone.
    a missing counter), and a nerf to the symptom moves the problem.
 
 ## 5. Difficulty and assist
-Difficulty settings scale numbers, not rules (enemy damage, health, timers), and the player can change them during play
-(`SOP-20`, E69). Story or assist modes are part of balance, not a cheat: test them with the bots too.
+Difficulty levels usually scale numbers (enemy damage, health, timers); assist options may also change rules (skip a
+section, no fail states). The player can change them during play (`SOP-20`, E69). Story or assist modes are part of balance, not a cheat: test them with the bots too.
 
 ## Done when
 - Every balance number is in data, mirrored in the balance sheet with derived values.

@@ -88,7 +88,8 @@ class Shake:
 
 
 class Hitstop:
-    """Freezes game time for a moment on impact. Overlapping hits keep the longest, capped at max_s."""
+    """Freezes game time for a moment on impact. Overlapping hits keep the longest, capped at max_s. Feed it the real
+    frame delta; everything else uses the delta it returns."""
 
     def __init__(self, max_s=0.25):
         self.max_s = max_s
@@ -246,7 +247,8 @@ def squash(amount):
 
 
 class FlashLimiter:
-    """Photosensitivity guard: at most max_flashes full-screen flashes in any window_s (three per second)."""
+    """Photosensitivity guard: at most max_flashes full-screen flashes in any window_s (three per second). Always on (no
+    setting disables it); pass real, unscaled time, not game time."""
 
     def __init__(self, max_flashes=3, window_s=1.0):
         self.max, self.window = max_flashes, window_s

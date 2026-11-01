@@ -60,7 +60,8 @@ values in `data/golden/shell.json` that every port's tests check (K01).
    0 in `one`) (E86). The kit's plural helper covers English-like, French and CJK rules; add a language's rule from
    the CLDR chart before shipping it.
 3. Placeholders are named (`{name}`), never concatenated strings.
-4. Run the pseudo-locale before any translation: accented look-alikes, 40 % longer, wrapped in brackets (F38). The
+4. Run the pseudo-locale before any translation: accented look-alikes, padded by 40 % of the visible characters rounded up (placeholders
+   such as `{name}` and `%d` neither change nor count, so short strings grow more), wrapped in brackets (F38). The
    pseudo smoke run (`dev.py smoke --drive pseudo --locale pseudo`) visits every screen and fails on a clipped or
    untranslated label. Use the reserved name only on the command line, never as a real locale code (E87).
 5. Fonts must cover every character of every shipped language (E70); check before adding a language.

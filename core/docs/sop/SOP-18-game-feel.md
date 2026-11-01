@@ -28,16 +28,21 @@ first, then the port; K01).
 | Spring and squash | A damped spring for recovery; a volume-keeping squash/stretch scale | 4 Hz, damping 0.5 | Landing squash, UI pop, wobble |
 | Flash limiter | Refuses a full-screen flash past three in any one second (F34) | 3 per 1.0 s | Hit flashes, lightning, explosions |
 
-All of it runs on game time you pass in (`dt`), so it obeys hitstop and the game-speed setting, and it never reads
-the clock or a global random number generator: the same inputs give the same frames, in tests and in replays.
+Shake, easing, the follow camera, the input buffer, coyote time and the spring run on game time you pass in (`dt`
+after hitstop and the game-speed setting). Hitstop and the flash limiter take real, unscaled time (the frame's own
+delta), or a slowed game could let more than three flashes through in a real second. None of it reads a global
+clock or random number generator: the same inputs give the same frames, in tests and in replays.
 
 ## 3. Rules that protect players (A)
 - **Every shake, camera bob and full-screen effect has an intensity setting and an off switch** (F33). The shell's
   settings give `shake_scale` (0 to 100 %) and `reduce_motion`; pass `effective_shake(settings)` as the shake's
   intensity, and turn camera bob, screen-wide pulses and parallax wobble off with reduce motion.
 - **No more than three full-screen flashes in any one second, and prefer removing a trigger to warning about it**
-  (F34). Route every flash through the flash limiter; a strobe that the design needs is drawn small (well under a
-  fifth of the screen) or at low contrast. A red flash needs an even smaller change (E73).
+  (F34). The flash limiter is always on: no setting turns it off. The player's `flash_limit` setting (on by default)
+  also tones full-screen flashes down. Counting flashes is the minimum, not proof of safety: luminance, red flashes,
+  long low-intensity flicker and high-contrast stripes also fail (E73, E74). For anything bright the design needs,
+  remove or soften it first; if it stays, check a recording with a flash analysis tool (E73 lists the Harding FPA
+  test) before release.
 - **Effects never hide information.** A shake or flash must not cover the HUD or a telegraph the player needs to read.
 
 ## 4. Tuning (standard practice)

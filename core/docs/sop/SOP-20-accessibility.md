@@ -19,7 +19,7 @@ The shell (`SOP-19`) has the settings; this SOP is what they must do.
 | Colour | No information by colour alone (add a shape, icon or label); high contrast for text and UI; a colour-blind option where colour carries meaning | `colorblind` | E69 |
 | Controls | Every action remappable; the whole UI reachable with the gameplay input; no required button holds (toggle option); separate volume per bus and a mono switch | `input.bindings`, `hold_to_toggle`, `audio.*`, `audio.mono` | F37, E69 |
 | Motion | Shake, bob and full-screen effects have an intensity and an off switch; reduce motion turns them off; nothing auto-scrolls without a way to pause it | `shake_scale`, `reduce_motion` | F33 |
-| Flashes | At most three full-screen flashes in any one second, or below the thresholds; remove triggers rather than warn | `flash_limit` (on by default) | F34 |
+| Flashes | At most three full-screen flashes in any one second, or below the thresholds; remove triggers rather than warn. The limiter is always on; the setting only makes flashes gentler | `flash_limit` (on by default: tones flashes down) | F34 |
 | Difficulty | A wide choice of difficulty, changeable during play; assist options where the game allows (slower game speed, more health, skip a section) | `difficulty`, `game_speed` | E69 |
 | Saving | Settings always saved; autosave plus manual save | (shell) | E69 |
 
@@ -31,7 +31,9 @@ The shell (`SOP-19`) has the settings; this SOP is what they must do.
 3. **Write captions as you add sounds**: an important sound gets an entry in the captions table when it is created
    (the captions table in the audio tools' dialogue.json, `docs/resources/audio.md`).
 4. **Check flashes and motion** on every effect: route flashes through the flash limiter (`SOP-18`), test the effect with
-   reduce motion on. Record a burst (`dev.py smoke --record`) and count flashes per second for anything bright.
+   reduce motion on. Record a burst (`dev.py smoke --record`) and count flashes per second for anything bright; that is
+   the first check, not proof. Bright, red or striped effects that stay in the game get a flash analysis tool run on a
+   recording before release (E73, E74), or are softened until they need none.
 5. **Test with the settings at their extremes:** text 200 %, subtitles largest with full background, colour-blind modes,
    gamepad only, keyboard only, mono, reduce motion. Run the pseudo-locale smoke at text 200 % too: it catches clipping.
 6. **Playtest with the players it is for** when you can, and ask one question (SOP-03): could you finish it?
