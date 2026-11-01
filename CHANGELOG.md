@@ -66,6 +66,10 @@
 - Dotwork: font coverage check (`dotwork.py fonts-check --font F --strings FILE`, or `"check"` on a font entry) lists
   every character the game's strings (JSON, CSV, PO, text) use that the font lacks, with language and string id, and
   exits 1. Glyph files can reserve accent rows and name invisible characters (`char U+00A0`).
+- Dotwork: built-in colours are colour-blind safe: the exp and limit gauge fills and the burn status mark are darker,
+  so no two built-in gauges or status marks collapse for a player with protanopia, deuteranopia or tritanopia (checked
+  as drawn on the palette). The save-point glow and chimney smoke of animated props stay on the palette, as the README
+  always said. **Old specs get the new exp, limit and burn colours and the snapped frames.** A new exam keeps both.
 - `tools/audio/loudness.py`: measure integrated loudness (ITU-R BS.1770-5), loudness range (EBU Tech 3342) and true
   peak; check a whole-game capture against Sony's ASWG-R001 targets (home -24, portable -18 LKFS, true peak -1 dBTP,
   at least 30 minutes); normalize single assets to labeled house levels with a true-peak ceiling. No installs.

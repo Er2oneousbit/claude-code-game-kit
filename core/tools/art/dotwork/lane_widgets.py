@@ -23,12 +23,12 @@ import fcore as core
 import godot
 from lane_windows import STYLES, _rgb, draw
 
-GAUGES = {   # light, base, shade
+GAUGES = {   # light, base, shade; no two built-in fills collapse for a colour-blind player (qa pack's rule)
     "hp": ["8ef07a", "3cc03c", "1e7a2a"],
     "mp": ["8ad0ff", "3a8ae8", "1e4aa0"],
     "atb": ["fff2a0", "f0c830", "a07a10"],
-    "exp": ["e0a8ff", "a060e0", "5a2a90"],
-    "limit": ["ffb080", "f05a30", "a02010"],
+    "exp": ["c38ce1", "8543c2", "420874"],
+    "limit": ["f5a677", "e55025", "961202"],
     "danger": ["ff8a8a", "e03a3a", "8a1010"],
 }
 STATES = ("normal", "hover", "pressed", "disabled", "focus")
