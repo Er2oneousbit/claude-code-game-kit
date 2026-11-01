@@ -82,6 +82,12 @@
   by `tools/audio/audio_events.py vectors --write / --check`, which CI also runs); the web overlay plays them
   through Web Audio. audio_events.py validates and audits the file (repetition, loudness spread between takes,
   missing captions). Only the web overlay wires the director to a player so far.
+- Dialogue: `tools/audio/dialogue.py` builds a game's dialogue source and its voice files into the dialogue.built.json
+  the shells read (per-character typewriter reveal, exact from babble timelines and estimated from other voice files),
+  subtitle cues that follow Xbox Accessibility Guideline 104 and the Netflix timed text guides (40 characters, two
+  lines, 5/6 s to 7 s, 20 characters a second, 17 for children), SFX captions from audio_events.json, lint, and SRT /
+  WebVTT export with the speaker named on every change. The built format gains two optional fields (`max_cue_s`,
+  `directional` on captions); the shells' readers load it unchanged.
 - SOP-04 measures loudness instead of normalizing peaks, pointing at `tools/audio/loudness.py`. EVIDENCE.md: the 0.8.0
   rows (E69-E92) had one cell more than the table's header, so GitHub showed each finding in the Grade column; every
   row has seven cells again. New rows E100-E106 (Steam store pages, a CJK pixel font) and E120-E125 (loudness).

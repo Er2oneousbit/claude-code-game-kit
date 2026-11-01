@@ -233,4 +233,47 @@ Tech 3342) and true peak in dBTP.
   heavily clipped full-band clips, 0.27 and 0.38 dB off, where ffmpeg is off by 0.38 and 0.46). The exam reproduces
   EBU Tech 3341 cases 1-5 and 15-23 and Tech 3342 cases 1-4.
 
+## Dialogue and subtitles: typewriter, cues, captions
+Write the lines once in data/dialogue.json (you create it); `tools/audio/dialogue.py` turns them and their voice
+files into data/dialogue/en.built.json, the file each engine's dialogue reader loads (format v0: optional fields are
+only ever added), and into SRT or WebVTT files for trailers and video captures.
+```json
+{
+  "version": 1, "locale": "en",
+  "speakers": {"guard": {"name": "Guard", "color": "#7FA7D9"}, "merchant": {"name": "Merchant"}},
+  "lines": [
+    {"id": "guard.halt", "speaker": "guard", "text": "Halt! The gate stays shut until dawn.",
+     "audio": "voice/guard_halt.wav", "timeline": "voice/guard_halt.timeline.json"},
+    {"id": "merchant.offer", "speaker": "merchant", "text": "Rope, lanterns, bread. Fair prices, friend.",
+     "audio": "voice/merchant_offer.wav"},
+    {"id": "guard.bark_alert", "speaker": "guard", "text": "Over there!", "kind": "bark",
+     "priority": 80, "interrupt": "always", "cooldown_s": 8}
+  ],
+  "sequences": {"gate": [{"line": "guard.halt", "at": 0.5},
+                         {"line": "merchant.offer", "after": "guard.halt", "gap_s": 0.4}]}
+}
+```
+- Typewriter reveal, one time per character: exact from a babble.py `.timeline.json`; estimated from any other
+  voice file (spread over its voiced part with pauses at punctuation: right for a typewriter, not for lip sync); at
+  the speaker's `cps` when a line has no audio yet.
+- Subtitle cues follow the published guidelines (checked 2026-11-01): at most 40 characters a line (Xbox
+  Accessibility Guideline 104 calls longer lines long; Netflix allows 42), at most 2 lines, line breaks at
+  punctuation and bottom-heavy, at least 5/6 s and at most 7 s on screen, and a reading speed of at most 20
+  characters a second (Netflix, adults; `--audience children` uses 17). Exports name the speaker whenever it changes
+  and again after a minute of silence (XAG 104).
+- `kind: "bark"` lines are short reactions the game fires itself: `priority`, `interrupt` (`never`, `lower`,
+  `always`) and `cooldown_s` say what may cut in; lint warns about a bark without a cooldown.
+- SFX captions: build with `--events data/audio_events.json` and every event with a `caption` becomes one (with
+  `caption_priority` and `caption_min_s`; `"directional": true` on sounds whose side of the screen matters, so the
+  game draws an arrow, as XAG 104 asks). Subtitles and SFX captions should have separate settings toggles.
+- `python tools/audio/dialogue.py build data/dialogue.json --root assets/audio --events data/audio_events.json --out
+  data/dialogue/en.built.json`; `lint` reports reading speed, short and long cues, words too long to break, unknown
+  speakers and missing files (`--strict` makes warnings fail); `export data/dialogue/en.built.json --sequence gate
+  --format vtt --out gate.vtt` writes a sequence at absolute times.
+- Proven 2026-11-01: the exam, and the web reader in headless Chromium with three babble lines: all 25 blips found in
+  the rendered audio, each blip's character shown on the first 60 fps frame at or after the sound starts (0.4 ms of
+  sample rounding at most, so never more than one frame late), and the exported SRT cues shown with the same text
+  from start to end and gone after it (16 checks). The same check fails when the reveal is moved 20 ms either way or
+  a cue is held 0.1 s too long.
+
 Back to the index: `docs/RESOURCES.md`.
