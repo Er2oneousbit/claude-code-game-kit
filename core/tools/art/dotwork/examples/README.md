@@ -15,6 +15,7 @@ change a seed to get a different take.
 |---|---|---|
 | `ui.json` | glyph-tool fonts (dialogue, damage numbers, brass and steel titles, symbols), window skins, HUD widgets (gauges, button states, panel, a Theme), emote balloons, hit spark / slash / damage-flash shader | none |
 | `uikit.json` | a menu UI kit: one Theme for every settings / pause menu control in every state (iron, with the dialogue font), prompt glyphs for keyboard, mouse and generic pads, pointer and hand cursors, a preview scene whose focus chain verify walks | none |
+| `fonts_latin.json` | accented glyph fonts (Latin-1 + Latin Extended-A: dialogue and a brass title) and the coverage check against `strings_latin.csv` (a Godot translation CSV: one sentence per language, nine languages) | none |
 | `status.json` | status-effect loops: poison, sleep, haste, slow, stop, blind, regen, berserk, confuse, silence, doom, burn, freeze, protect, shell, petrify | none |
 | `vfx.json` | small effects drawn in code: arrows, energy bolts and orbs with sprite-strip, Line2D and particle trails; dust, flour, footstep and landing puffs; a pickup twinkle; a level-up burst; dust, sparkle and ember emitters (GPUParticles2D) | none |
 | `screen.json` | screen transitions (battle swirl, fade, iris, diamond, wipe, blinds, dither, clock, blocks, mosaic) and weather (rain, snow, fog, ash, embers, leaves, sandstorm) | none |

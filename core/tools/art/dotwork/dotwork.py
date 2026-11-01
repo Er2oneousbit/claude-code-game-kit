@@ -382,6 +382,13 @@ def cmd_qa(a):
     return qa_pack.run(s, a)
 
 
+def cmd_fonts_check(a):
+    """Font coverage (fontcheck.py): every character of the strings files must be in the font. Writes nothing and
+    needs no Dotwork config: the font is a glyph file or a built .fnt, the strings any UTF-8 JSON, CSV, PO or text."""
+    import fontcheck
+    return fontcheck.cmd(a, os.path.abspath(a.project), HERE)
+
+
 def cmd_config(a):
     s = setup_run(a, game=False)
     print(json.dumps({k: v for k, v in s.conf.items() if k != "fixed"}, indent=1, ensure_ascii=False))
@@ -532,6 +539,17 @@ def build_parser():
     p.add_argument("--lineup", metavar="OUT.png", help="also write a lineup PNG: every character and prop at game "
                    "scale on a ground tile, labelled, for a by-eye check")
     p.set_defaults(fn=cmd_qa)
+
+    p = sub.add_parser("fonts-check", parents=[common], help="list characters a game's strings use that a font lacks "
+                                                             "(exit 1 when one is missing)")
+    p.add_argument("--font", required=True, help="a glyph file (glyphs/dialogue_latin.txt: as typed, Dotwork's "
+                   "folder, then the game) or a built .fnt")
+    p.add_argument("--strings", nargs="+", required=True, metavar="FILE",
+                   help="strings files: JSON (string values at any depth), CSV (Godot translation CSV: keys,en,fr), "
+                        "PO / POT, or text (one string per line)")
+    p.add_argument("--caps-only", action="store_true", help="as the spec key: lowercase is drawn with the capitals "
+                   "(title fonts)")
+    p.set_defaults(fn=cmd_fonts_check)
 
     p = sub.add_parser("config", parents=[common], help="print the merged settings")
     p.set_defaults(fn=cmd_config)

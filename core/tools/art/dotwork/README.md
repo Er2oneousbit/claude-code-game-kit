@@ -150,6 +150,7 @@ or usage (the `[error]` line says what to fix). `preview KIND --help` lists each
 | `preview battle\|title\|attack ...` | mock screens composed from the game's art (review only) |
 | `capture --scene S [--frames N] [--fps F] [--size WxH] [--gif]` | record any scene with Godot's Movie Maker: a fixed frame rate, every frame written as PNG (trailer cuts, side-by-side reviews), a contact strip and an optional GIF; a window opens for the capture |
 | `log --pack NAME [--dry-run]` | `docs/ASSET_LOG.md` row + evidence file for a pack |
+| `fonts-check --font F --strings FILE... [--caps-only]` | font coverage, no model, writes nothing: every character the strings use (JSON string values at any depth, CSV / Godot translation CSV, PO / POT, plain text) must be in the font (a glyph file or a built `.fnt`); lists each missing one with its language and string ids, exit 1 when one is missing |
 | `config` | print the merged settings |
 
 A run resumes: renders are cached in the work folder under a key of everything that shapes them (prompt, seed, size,
@@ -283,6 +284,7 @@ Honest list: these are the failure modes seen in testing and what Dotwork does a
 | uikit (focus on sliders) | Godot's `Slider` draws one highlight for hover and for focus (`grabber_highlight`, `grabber_area_highlight`), so no Theme can tell a hovered slider from a focused one | Every other control gets a focus ring in its own colour drawn outside the control (never a brighter hover); the slider highlight uses the focus colour, and the kit's settings screen outlines the focused row. The test suite composites focus and hover of every control from the shipped textures and compares them pixel by pixel |
 | uikit (glyphs) | Prompt glyphs are generic drawn shapes: letters in neutral circles, outline cross / circle / square / triangle, a four-dot diamond, labelled shoulders and triggers, a lit d-pad arm; no maker's logos or colours | One neutral set per game (`assets/ui/glyphs/`), shared by every uikit entry; a rebound key with no glyph yet: add it to `keys` (the label comes from the glyph font), or the shell shows its text label |
 | fonts | Models cannot draw consistent letters | Glyphs are text bitmaps (`glyphs/*.txt`), built into BMFont `.fnt`; edit a letter by editing its rows |
+| fonts (accents) | A 9-row font has no room above a capital for an accent, and a missing glyph shows as a gap in game | `glyphs/dialogue_latin.txt` and `glyphs/title_brass_latin.txt` add Latin-1 Supplement and Latin Extended-A (French, Italian, German, Spanish, Portuguese, Polish, Czech, Hungarian, Turkish) with 2 (title: 3) rows above the capitals for accents, so their line is taller; their ASCII glyphs are the old ones, unchanged. The title font is capitals only: with `caps_only` accented lowercase uses its capital, but ß and ı have none. `"check": ["assets/i18n/strings.csv"]` on a font entry (paths in the game, like `glyphs`; or `dotwork.py fonts-check`) lists every character the game's strings use that the font lacks, with its language and string ids, and fails the pack (exit 1) after building every font |
 | battle backgrounds / scenes | 320x128 / 320x180 art shown at 2x (chunkier than 1x sprites) | Same exact-2x scale everywhere it is used |
 | battle backgrounds (moving sky) | Cutting the painted sky off at the horizon and scrolling it split mountain peaks (the tip drifted away from its base) | `"scroll": -4` keeps the picture whole and adds two cloud layers drawn in code in its own lightest sky colours (far: small, half speed; near: bigger, full speed) that tile sideways; `horizon` sets how far down they reach, `clouds` how many. They drift over far mountains, which reads as nearer clouds; leave `scroll` off for caves and interiors |
 | lighting (normal maps, no model) | A normal map guessed from one picture cannot know the real shape: it reads a rounded rim from the alpha edge (`bevel` px) and small relief from brightness (`detail` px), so dark paint reads as a dent and a flat-coloured cloak reads flat; an atlas tile cannot see its neighbours | Opaque tiles get no rim at their borders and the brightness relief wraps inside each tile, so Dotwork's seamless tiles stay seamless (a tile whose opposite edge is clear repeats its own edge instead). Occluders are the largest opaque region only, `base` (default) spans the feet of the bottom quarter, `full` the whole outline, at most `occluder_points` corners, never self-crossing (a crossing outline falls back to its convex hull). A sprite node that is scaled, flipped or nested in its own scene gets a fresh lit scene instead of a copy. Headless Godot renders nothing: `verify` proves the lit resources are wired (both textures, same size, normals that decode with z > 0, occluder polygons, cells on lit tiles), not how the light looks; judge `assets_src/art/lit/<name>/<name>_review.png` and the demo scene in the editor |
@@ -321,6 +323,9 @@ Timing on the tested GPU: a sprite about 18 s, a texture tile with variants abou
   `GPUParticles2D`; a one-shot bursts on spawn (a small `Start` AnimationPlayer arms it, because Godot 4.7 stops a
   one-shot that starts emitting from the scene file) and sends `finished`; `restart()` replays it.
 - Fonts: load the `.fnt` as a `FontFile`; white ink is tinted by `font_color`; gradient title fonts are coloured.
+  The Latin fonts are taller than the ASCII ones they extend (at 2x: dialogue_latin 26 px lines instead of 22,
+  title_brass_latin 34 instead of 24) and their baseline sits lower in the line (the accent rows come first), so a
+  Label that switches to one shows its text a few pixels lower.
 - UI kit: `assets/ui/theme_<name>.tres` (the kit's shell loads the first `assets/ui/theme_*.tres`, sorted by name); textures in
   `assets/art/ui/uikit/<name>/`; set the project's default texture filter to Nearest. Prompt glyphs: `assets/ui/glyphs/<name>.png`,
   1x and 16 px tall (draw them at whole multiples), glyphs.json gives each width. `cursor_pointer.png` / `cursor_select.png`
@@ -456,6 +461,9 @@ in that frame's colours; holds reach the SpriteFrames; the wind-up moves against
 well-formed and the flash is the hitfx lane's byte for byte.
 `tests/test_qapack.py` (seconds): `qa pack` on a synthetic game, clean and with planted
 outliers (a 2x upscale, an off-palette prop, a mirrored prop, a red / green gauge pair).
+`python tools/art/dotwork/tests/test_fonts.py` - offline, seconds: the Latin glyph fonts (height, baseline, coverage,
+accents drawn over unchanged base letters), the coverage check (JSON, CSV, PO, text; command line and pack) and the
+old fonts' output against golden hashes.
 
 ## Troubleshooting
 | Symptom | Fix |

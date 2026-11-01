@@ -59,6 +59,13 @@
   marks, button states and palette swaps; `--lineup` draws every character and prop at game scale on a ground tile
   for a by-eye check. It catches a planted 2x upscale, an off-palette prop, a mirrored prop and a red / green gauge
   pair, and found 9 real problems (no false alarms) in a 1,435-file test game.
+- Dotwork: Latin glyph fonts (`tools/art/dotwork/glyphs/dialogue_latin.txt`: all of Latin-1 Supplement and Latin
+  Extended-A, curly quotes, en dash, ellipsis, euro; `tools/art/dotwork/glyphs/title_brass_latin.txt`: every accented
+  capital plus title punctuation). French, Italian, German, Spanish, Portuguese, Polish, Czech, Hungarian and Turkish
+  render; ASCII glyphs and old fonts are unchanged.
+- Dotwork: font coverage check (`dotwork.py fonts-check --font F --strings FILE`, or `"check"` on a font entry) lists
+  every character the game's strings (JSON, CSV, PO, text) use that the font lacks, with language and string id, and
+  exits 1. Glyph files can reserve accent rows and name invisible characters (`char U+00A0`).
 - `tools/audio/loudness.py`: measure integrated loudness (ITU-R BS.1770-5), loudness range (EBU Tech 3342) and true
   peak; check a whole-game capture against Sony's ASWG-R001 targets (home -24, portable -18 LKFS, true peak -1 dBTP,
   at least 30 minutes); normalize single assets to labeled house levels with a true-peak ceiling. No installs.

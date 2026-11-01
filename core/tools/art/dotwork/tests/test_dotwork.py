@@ -2183,7 +2183,7 @@ class DotworkExam(unittest.TestCase):
 
 
 # lane exams kept in their own files run with this one (the kit runs only this file)
-EXTRA_EXAMS = ("test_uikit", "test_store", "test_screens", "test_bdf", "test_diorama", "test_shipped", "test_vfx", "test_animpolish", "test_lighting", "test_qapack")
+EXTRA_EXAMS = ("test_uikit", "test_store", "test_screens", "test_bdf", "test_diorama", "test_shipped", "test_vfx", "test_animpolish", "test_lighting", "test_qapack", "test_fonts")
 
 def load_extra_exams():
     """Put each extra module's TestCase classes into this module (in a function, so no loop variable is left behind

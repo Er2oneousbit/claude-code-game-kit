@@ -1,0 +1,29 @@
+{
+ "name": "fonts_latin",
+ "_comment": "Accented glyph fonts without a model: Latin-1 Supplement + Latin Extended-A for French, Italian, German, Spanish, Portuguese, Polish, Czech, Hungarian and Turkish (dialogue, and a brass title in capitals), with the coverage check against strings_latin.csv (a Godot translation CSV): the pack fails, naming language and string id, if a string uses a character the font lacks. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "fonts": [
+  {
+   "name": "dialogue_latin",
+   "glyphs": "glyphs/dialogue_latin.txt",
+   "scale": 2,
+   "effect": "shadow",
+   "check": [
+    "tools/art/dotwork/examples/strings_latin.csv"
+   ]
+  },
+  {
+   "name": "title_latin",
+   "glyphs": "glyphs/title_brass_latin.txt",
+   "scale": 2,
+   "effect": "outline",
+   "gradient": "brass",
+   "caps_only": true,
+   "sample": [
+    "LE CHÂTEAU DU BOULANGER",
+    "¿Qué tal, señor? ¡Más pan!",
+    "Żółć gęślą jaźń · Řekl rytíř",
+    "Árvíztűrő tükörfúrógép – « Çağ »"
+   ]
+  }
+ ]
+}
