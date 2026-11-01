@@ -19,6 +19,22 @@ examples were built and tested on one Windows 11 machine.
 - **Shell screens** ship for Godot, LÖVE and web only; Unity, Unreal, Bevy and C++/SDL2 ship the tested logic and
   the screens are built in the engine. Display settings the browser cannot apply (vsync, resolution) are stored only.
 
+### 0.8.1 follow-ups (Dotwork)
+- **The new lanes not yet run together on one full game** (each was proven in a small test game; qa pack ran on a
+  1,435-file test game): [#48](https://github.com/Er2oneousbit/claude-code-game-kit/issues/48).
+- **Anticipation** proven on keypoints and a mocked render, not yet on a rendered sprite:
+  [#49](https://github.com/Er2oneousbit/claude-code-game-kit/issues/49).
+- **Image to 3D:** TRELLIS shapes come out wrong on pixel art and the cause is not found (needs a 24 GB Linux GPU):
+  [#50](https://github.com/Er2oneousbit/claude-code-game-kit/issues/50).
+- **Cyrillic glyph font** not made (the `bdf` lane may already cover it with an OFL font, untried):
+  [#51](https://github.com/Er2oneousbit/claude-code-game-kit/issues/51).
+- **Store art** not yet checked by a real Steamworks upload:
+  [#52](https://github.com/Er2oneousbit/claude-code-game-kit/issues/52).
+- **UI kit prompt glyphs** are generic; swapping in official console glyphs is not documented or tested:
+  [#53](https://github.com/Er2oneousbit/claude-code-game-kit/issues/53).
+- **Godot sliders** draw one highlight for hover and focus, so a focused slider looks hovered (the kit's settings
+  screen outlines the focused row instead); a Godot limit, noted in the Dotwork README.
+
 ### Never run or not run end to end
 - **macOS and Linux:** untested throughout (the scaffolder ran on Linux in an earlier version only). Tool and binary
   names for GIMP and Inkscape on those systems are unverified.
