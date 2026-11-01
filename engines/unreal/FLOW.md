@@ -107,6 +107,9 @@ exits 2 to say so):
    `PublicDependencyModuleNames`, then `#include "GameKitShake.h"` and so on.
 3. `python tools/dev.py check`, then `python tools/dev.py test`: it runs your `<Game>` tests and the plugin's `GameKit.*`
    tests and prints how many of those passed. `test --filter GameKit` runs only the plugin's.
+   If you only turned the plugin on in the `.uproject` (step 1 without step 2), UnrealBuildTool may say "Target is up
+   to date" and skip it, and `test --filter GameKit` then finds no tests: delete
+   `Intermediate/Build/Win64/x64/<Game>Editor/Development/Makefile.bin` (seen on UE 5.8) and run `check` again.
 
 The plugin's tests: `GameKit.Golden.Juice.<case>` and `GameKit.Golden.Shell.<case>` (one test per case) read
 `data/golden/juice.json` and `shell.json` from the project folder and compare every value with the kit's reference
