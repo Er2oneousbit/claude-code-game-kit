@@ -6,6 +6,19 @@ examples were built and tested on one Windows 11 machine.
 
 ## The kit
 
+### 0.8.0 follow-ups (juice, shell, LÖVE, CI)
+- **CI workflow** not yet run on GitHub-hosted runners: [#40](https://github.com/Er2oneousbit/claude-code-game-kit/issues/40).
+- **LÖVE:** macOS and Linux packaging, LÖVE 11.4 itself and the POSIX save rename not run: [#41](https://github.com/Er2oneousbit/claude-code-game-kit/issues/41);
+  a plain smoke without `--data-dir` writes to the real save folder: [#44](https://github.com/Er2oneousbit/claude-code-game-kit/issues/44).
+- **Shell:** telemetry columns differ per engine: [#42](https://github.com/Er2oneousbit/claude-code-game-kit/issues/42);
+  the web port counts language codes in UTF-16 units: [#45](https://github.com/Er2oneousbit/claude-code-game-kit/issues/45).
+- **Godot shell:** `--drive menus` assumes master volume starts at 100 %: [#43](https://github.com/Er2oneousbit/claude-code-game-kit/issues/43);
+  crash files need Godot 4.5+, untested on 4.3 and 4.4: [#46](https://github.com/Er2oneousbit/claude-code-game-kit/issues/46).
+- **Unreal:** the GameKitShell plugin not tried in a Blueprint-only project or enabled from the editor:
+  [#47](https://github.com/Er2oneousbit/claude-code-game-kit/issues/47).
+- **Shell screens** ship for Godot, LÖVE and web only; Unity, Unreal, Bevy and C++/SDL2 ship the tested logic and
+  the screens are built in the engine. Display settings the browser cannot apply (vsync, resolution) are stored only.
+
 ### Never run or not run end to end
 - **macOS and Linux:** untested throughout (the scaffolder ran on Linux in an earlier version only). Tool and binary
   names for GIMP and Inkscape on those systems are unverified.
