@@ -12,7 +12,7 @@
 - **Game feel for every code engine** (`SOP-18`, `/game-feel`): screen shake (trauma), hitstop, 14 easing curves, a
   follow camera with deadzone and look-ahead that is the same at any frame rate, input buffer, coyote time, spring and
   squash, and a flash limiter. One reference, `tools/golden_vectors.py`, writes `data/golden/juice.json` and
-  `shell.json`; every port's tests check all 41 cases: Godot 45 GUT tests, LÖVE 86, web 83, web-3d 86, Unity 95 EditMode
+  `shell.json`; every port's tests check all 41 cases: Godot 48 GUT tests, LÖVE 94, web 86, web-3d 89, Unity 95 EditMode
   tests, Unreal 55 automation tests (the GameKitShell plugin, off by default), Bevy 55, C++/SDL2 26 with 598 assertions.
 - **The shell** (`SOP-19`, `/game-shell`): title, menus, settings, pause, credits and loading screens; settings with
   validation that keeps unknown keys; versioned saves with migrations, atomic writes and a backup; actions with
