@@ -13,9 +13,11 @@
 ```
 project.godot            engine config (edit via editor or carefully by hand)
 scenes/                  .tscn scenes (main.tscn is the entry)
-scripts/core/            engine-agnostic helpers: log, timers, math, RNG (no gameplay knowledge)
-scripts/game/            gameplay scripts, one per scene or entity
-data/                    tunables (.tres or .json), levels, dialogue
+scripts/core/            engine-agnostic helpers: log, timers, juice (shake, hitstop, springs...), settings,
+                         bindings, saves, i18n (no gameplay knowledge; tested against data/golden/)
+scripts/shell/           the front end: Shell autoload, screens (title, menus, settings, pause...), smoke drive
+scripts/game/            gameplay scripts, one per scene or entity (play.gd is the placeholder game)
+data/                    tunables (.tres or .json), levels; i18n/ string tables, dialogue/, golden/ test vectors
 assets/                  art, audio, fonts (see docs/ASSET_LOG.md)
 tests/                   GUT tests, files named test_*.gd
 addons/                  third-party addons (GUT, etc.), never edit by hand
@@ -28,7 +30,9 @@ tools/                   dev.py and helpers
 - Tunables: `@export` on a Resource (`.tres`) or load JSON from `data/`. No magic numbers in logic.
 - Physics code in `_physics_process(delta)`, visuals/UI in `_process(delta)`. Always multiply by `delta`.
 - Prefer signals ("call down, signal up"). Node paths with `%UniqueName` over long relative paths.
-- Autoloads: max 3 (Log, Settings, Game state). Each documented in `ARCHITECTURE.md`.
+- Autoloads: max 3: Log, Shell (settings, strings, data folder, crash files) and one for game state. Each documented in `ARCHITECTURE.md`.
+- Every visible string goes through `Shell.t("key")` (tables in `data/i18n/`); `smoke --locale pseudo` fails on any that does not.
+- Player files (settings, saves, logs, crashes) live in `Shell.data_dir` (user://, or `--data-dir`); write them with `AtomicFile`/`SaveStore`.
 - Pure logic goes in `RefCounted` classes under `scripts/core/` or `scripts/game/logic/` so GUT can test it without scenes.
 - Logging via the `Log` autoload (`Log.info("physics", "msg")`), never bare `print` in committed code.
 
@@ -44,6 +48,8 @@ tools/                   dev.py and helpers
    `canvas_items` so 3D renders at full resolution. Do not change without an ADR.
 8. **Physics determinism:** do not rely on `_process` for gameplay timing. Use `_physics_process` or your own fixed-step logic.
 9. **API verification:** Godot 4.x changes between minor versions. Check `godot --version` and the matching docs before using unfamiliar APIs.
+10. **Comparing different types is an error** (`1.0 == "a"` is a SCRIPT ERROR on 4.7.2), and JSON numbers are always floats. Check `typeof()` first when a value can be anything (settings, saves, JSON).
+11. **Crash files need Godot 4.5+** (the `Logger` hook in `scripts/shell/crash_hook.gd`); older versions run the game without them.
 
 ## Generated or binary (do not hand-edit)
 `.godot/`, `*.import`, `*.uid` (commit, but do not edit), exported builds in `build/`, `*.translation`.

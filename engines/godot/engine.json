@@ -9,6 +9,6 @@
   "flow_md": "FLOW.md",
   "assets_dir": "assets",
   "adopt_hints": {
-    "project.godot": "copy the [autoload] line Log=\"*res://scripts/core/log.gd\" into your project.godot, and print Log.info(\"core\", \"BOOT_OK <Game>\") from your main scene's _ready(). See docs/ENGINE_FLOW.md > Adopting an existing project."
+    "project.godot": "copy the [autoload] lines Log=\"*res://scripts/core/log.gd\" and Shell=\"*res://scripts/shell/shell.gd\" into your project.godot, and print Log.info(\"core\", \"BOOT_OK <Game>\") from your main scene's _ready(). See docs/ENGINE_FLOW.md > Adopting an existing project."
   }
 }

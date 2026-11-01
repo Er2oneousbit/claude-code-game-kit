@@ -11,6 +11,7 @@ config_version=5
 [application]
 
 config/name="{{GAME_NAME}}"
+config/version="0.1.0"
 run/main_scene="res://scenes/main.tscn"
 ; SET your exact Godot version here after opening the project once (the editor will rewrite this line).
 config/features=PackedStringArray("4.3")
@@ -18,6 +19,7 @@ config/features=PackedStringArray("4.3")
 [autoload]
 
 Log="*res://scripts/core/log.gd"
+Shell="*res://scripts/shell/shell.gd"
 
 [debug]
 

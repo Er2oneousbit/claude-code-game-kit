@@ -10,6 +10,7 @@ Engine-specific workflow for a Godot 4 / GDScript project. Universal process liv
 python tools/dev.py check      # compile every .gd file inside the project (one Godot launch)
 python tools/dev.py test       # GUT unit tests, headless
 python tools/dev.py smoke      # boot the game headless for 120 frames, scan for errors
+python tools/dev.py smoke --drive menus   # click through title, settings, back; check settings.json
 python tools/dev.py run        # launch the game window
 ```
 Edit in VS Code (godot-tools extension) or the Godot script editor. Keep the Godot editor open for scene work.
@@ -21,7 +22,7 @@ Hot reload: the editor reloads changed scripts on focus. Running games started b
 | `import` | `godot --headless --path . --import` builds `.godot/`; fails on asset import errors (Godot itself exits 0) |
 | `check` | `godot --headless --path . -s res://tools/check_scripts.gd -- res://<file>.gd ...`, loads each script inside the project so autoloads resolve; scripts broken by a dependency count too. Skips `tests/` until GUT is installed |
 | `test` | `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit`; fails when GUT skipped a file or ran 0 tests |
-| `smoke` | `godot --headless --path . --quit-after N`, passes if output has `BOOT_OK` and no `ERROR`/`SCRIPT ERROR` |
+| `smoke` | `godot --headless --path . --quit-after N -- --smoke --data-dir build/smoke-data`, passes if output has `BOOT_OK` and no `ERROR`/`SCRIPT ERROR`; `--drive` scenarios below |
 | `run` | `godot --path .` |
 | `build` | `godot --headless --path . --export-release "<preset>" <out>`. The skeleton ships `export_presets.cfg` with "Windows Desktop", "Linux" and "Web" (tests, tools and docs excluded); with no options `build` picks this computer's preset and its `export_path` (`build/windows/<game>.exe`). Verified on Godot 4.7.2: all three export from Windows in seconds and the exe boots |
 | `clean` | removes `build/`, and `.godot/` with `--deep` (keeps `.godot/export_credentials.cfg`) |
@@ -30,6 +31,56 @@ Hot reload: the editor reloads changed scripts on focus. Running games started b
 `check`, `test` and `smoke` run `import` first when `.godot/` is missing or a `class_name` script was added, renamed or removed:
 Godot only learns class names on import, so without it valid code fails `check` and new test files are skipped.
 
+## The front end (scripts/shell/)
+The skeleton boots into a complete front end, built in code: `main.gd` prints `BOOT_OK`, then `FrontEnd` shows
+title -> main menu (Play, Juice demo in debug builds, Settings, Credits, Quit) -> settings (Display, Audio,
+Controls, Accessibility, Language, Privacy; Back saves) / credits (`CREDITS.md`) / play (`scenes/play.tscn`, through
+a loading screen) -> pause menu (the `pause` action, or losing window focus). Cancel always goes back one screen;
+keyboard and gamepad reach every control, and the focused one has an outline.
+- **Shell autoload** (`scripts/shell/shell.gd`): settings (`GameSettings`), strings (`Shell.t`), bindings and
+  prompt glyphs, the data folder, the log file, crash files, telemetry, F8 bug reports (debug builds).
+- **Data folder** (`user://`, or `--data-dir <dir>` after `--`): `settings.json` (+ `.bak`), `save_<slot>.json`
+  (+ `.bak`, `SaveStore`), `<data>/logs/game.log` (version and time on line 1, 5 older ones kept), `crashes/crash_<time>.txt`
+  (version, seed, error, backtrace, log tail), `telemetry.csv`, `bug_<time>/` (F8: log tail, settings, screenshot).
+- **Strings**: `data/i18n/<locale>.json`, flat `{"key": "text"}` with `{name}` placeholders; `en` is complete, `fr`
+  shows the fallback (fr-CA -> fr -> en). Locale `pseudo` (debug builds) runs every string through `I18n.pseudo()`.
+- **Theme**: the first `assets/ui/theme_*.tres` if there is one (Dotwork's UI kit, tools/art/dotwork, the widgets
+  lane, makes one), else a plain built-in theme. Prompt art: `assets/ui/glyphs/<glyph_name>.png` at 1x, shown in whole
+  multiples with nearest filtering; a missing file shows the binding as text.
+- **Accessibility** applied live: text size (theme font), menu size (UI layer scale), subtitles (on, size,
+  background, speaker names, barks, sound captions), colour-blind filter (`ColorFilter`, a daltonization shader over
+  everything), reduce motion and shake strength (`Shell.effective_shake()`), soften flashes (the `FlashLimiter`
+  always applies; this setting also tones flashes down), toggle instead of hold, game speed (scales game time),
+  difficulty (stored for the game to read).
+- **Subtitles**: `SubtitleBar` reads `data/dialogue/sample.built.json` (format v0 of the dialogue tools in
+  tools/audio: cues for a classic bar, per-character reveal times for a typewriter; unknown fields are ignored).
+- **Juice demo** (`scripts/game/juice_demo.gd`, debug builds): hit the box for shake, hitstop, squash on a spring and
+  a limited flash; follow camera with a deadzone; buffered jump with coyote time; a held guard; a subtitle line.
+  Hitstop and the flash limiter run on real time; everything else on game time (after hitstop and game speed).
+
+### Telemetry
+Off until the player answers the title screen's question (Yes / No / Later; Later asks again next launch). Events
+go to `telemetry.csv` in the data folder only while consent is `yes`; nothing is sent anywhere. To add an endpoint:
+send the rows with `HTTPRequest` only while `Shell.telemetry_allowed()` is true, keep No and Later meaning "nothing
+leaves the computer", and update the privacy policy before shipping: what is collected, why, where it is sent and
+who runs that server, how long it is kept, and how a player can opt out and have it deleted. Players in the EU and
+UK must opt in before anything is sent **(verify with current GDPR guidance for your stores)**.
+
+### Smoke scenarios
+`dev.py smoke` without options keeps its old meaning (boot, 120 frames, no errors). Each run uses a fresh
+`build/smoke-data/` unless `--data-dir` names a folder (never wiped). Drives run with `--fixed-fps 60`, so frames are
+1/60 s of game time and pictures repeat exactly.
+| Command | Passes when |
+|---|---|
+| `smoke --drive menus` | title -> settings -> master volume 0.5, reduce motion toggled -> Back -> Quit; prints `SETTINGS_WRITTEN <path>` and the file holds both values. With consent unset no `telemetry.csv` appears |
+| `smoke --drive crash` | exits 1 on purpose: a script error writes `crashes/crash_<time>.txt` and prints `CRASH_WRITTEN <path>` |
+| `smoke --drive pseudo --locale pseudo` | every screen and settings tab is shown and no label is untranslated, clipped or off screen (`PSEUDO_OK`) |
+| `smoke --drive pseudo-plant --locale pseudo` | exits 1 on purpose, naming a planted label that is too small (`PSEUDO_FAIL`) |
+| `smoke --drive show:<title\|settings\|pause\|subtitle\|juice> --screenshot captures/x.png` | opens that screen (settings with a control focused) and photographs it in a window |
+| `... --screenshot new.png --compare base.png [--tolerance N]` | `tools/image_diff.py` finds no difference (exit 1 when it does) |
+Any run with `--locale pseudo` checks each screen as it appears. The windowed capture ignores the mouse, so a cursor
+resting on the window cannot change the picture.
+
 ## Setting up tests (GUT)
 1. Install GUT into `addons/gut/`. Without the editor: download the release zip for your Godot version from
    https://github.com/bitwes/Gut/releases (9.7.1 works with Godot 4.7.2) and copy the zip's `addons/gut/` folder into
@@ -37,11 +88,13 @@ Godot only learns class names on import, so without it valid code fails `check` 
    `addons/gut/`, not the GUT files loose in `addons/`. The next `check`/`test` re-imports automatically.
 2. Enable it under Project Settings > Plugins for the editor panel. The headless `dev.py test` works without enabling it.
 3. Tests live in `tests/`, files `test_*.gd`, extend `GutTest`, functions `test_*`. Example in `tests/test_coyote_timer.gd`.
+   `test_golden_juice.gd` and `test_golden_shell.gd` check `scripts/core/` against every case in `data/golden/*.json`
+   (the kit's reference, `tools/golden_vectors.py`); a new case type fails them until it is ported.
 4. `python tools/dev.py test` runs them headless. Add `--filter <name>` to run one file.
 
 ## Adopting an existing project
 `new_game.py --adopt` never edits your `project.godot`; the kit's version lands in `project.godot.gold`. After adopting:
-1. Copy the `[autoload]` line `Log="*res://scripts/core/log.gd"` from `project.godot.gold` into your `project.godot` (the kit's scripts call `Log`).
+1. Copy the `[autoload]` lines `Log="*res://scripts/core/log.gd"` and `Shell="*res://scripts/shell/shell.gd"` from `project.godot.gold` into your `project.godot` (the kit's scripts call both).
 2. Print the boot marker from your own main scene's `_ready()`: `Log.info("core", "BOOT_OK <Game>")`. `smoke` passes only when it sees it.
 3. Keep or delete the kit's starter files (`scenes/main.tscn`, `scripts/game/main.gd`, the CoyoteTimer example), then delete every `*.gold` file once merged (Godot ignores them meanwhile).
 4. Install GUT (above), then `python tools/dev.py check`, `test`, `smoke`.
