@@ -145,6 +145,7 @@ or usage (the `[error]` line says what to fix). `preview KIND --help` lists each
 | `recolor --source GLOB --hue DEG\|--to #RRGGBB --out DIR` | palette swap, no model: turns the coloured ramps, keeps outline and greys, snaps to the palette; every file shares one colour map, so an animation stays consistent |
 | `clean --source GLOB --out DIR [--cell N\|--width W]` | any image to clean pixel art, no model: measures the pixel grid of upscaled or generated art (or shrinks to `--width`), keys a plain background, snaps to the palette (`--palette none --colors N` reduces instead), drops specks; `--outline #RRGGBB` adds one |
 | `verify` | load every Dotwork asset of this game in Godot (shader materials compiled, held frames counted) and run its smoke test |
+| `qa pack [--json OUT] [--lineup OUT.png]` | style check over every PNG the game's manifests list, read only: pixel scale, each lane's palette lock (the table under Palettes), outline colour and thickness, light side, figure height in tiles, contrast on the ground tiles, colour-blind separation of gauge fills, status marks, button states and palette swaps (Machado 2009 simulation); `--lineup` draws every character and prop at game scale on a ground tile; exit 1 on findings |
 | `aseprite [--reexport]` | editable `.aseprite` sources; push hand-polished files back |
 | `preview battle\|title\|attack ...` | mock screens composed from the game's art (review only) |
 | `capture --scene S [--frames N] [--fps F] [--size WxH] [--gif]` | record any scene with Godot's Movie Maker: a fixed frame rate, every frame written as PNG (trailer cuts, side-by-side reviews), a contact strip and an optional GIF; a window opens for the capture |
@@ -453,6 +454,8 @@ one-shots that end empty, loops that wrap, ramp-only colours, trails that fade, 
 digests of the skeleton and of a character export taken before the polish; the smear lands on the frame of peak motion
 in that frame's colours; holds reach the SpriteFrames; the wind-up moves against the strike; the shader files are
 well-formed and the flash is the hitfx lane's byte for byte.
+`tests/test_qapack.py` (seconds): `qa pack` on a synthetic game, clean and with planted
+outliers (a 2x upscale, an off-palette prop, a mirrored prop, a red / green gauge pair).
 
 ## Troubleshooting
 | Symptom | Fix |

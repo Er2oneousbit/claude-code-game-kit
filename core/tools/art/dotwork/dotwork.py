@@ -11,6 +11,7 @@
 #           python tools/art/dotwork/dotwork.py audition --name guard --clip walk_e --seeds 8101 8102 8103
 #           python tools/art/dotwork/dotwork.py materials [--only cobble sand] | palette extract "assets_src/*.png" ...
 #           python tools/art/dotwork/dotwork.py verify | aseprite [--reexport] | preview battle|title|attack ... | log
+#           python tools/art/dotwork/dotwork.py qa pack [--json OUT] [--lineup OUT.png]   # style check, read only
 #           Global: --project GAME (default: current folder), --config FILE, --engine godot|none, --debug
 # Notes   : Needs ComfyUI (local, http://127.0.0.1:8188 by default) with the SpriteKiln and GGUF node packs and the
 #           models in models.lock.json; Godot 4 for maps and verify. README.md walks through setup and every lane.
@@ -374,6 +375,13 @@ def cmd_log(a):
     return asset_log.run(s, a)
 
 
+def cmd_qa(a):
+    s = setup_run(a, game=False)   # read only: creates no work folder
+    s.require_game()
+    import qa_pack
+    return qa_pack.run(s, a)
+
+
 def cmd_config(a):
     s = setup_run(a, game=False)
     print(json.dumps({k: v for k, v in s.conf.items() if k != "fixed"}, indent=1, ensure_ascii=False))
@@ -514,6 +522,16 @@ def build_parser():
     p.add_argument("--pack", required=True, help="the pack name (spec \"name\")")
     p.add_argument("--dry-run", action="store_true", help="print the row, write nothing")
     p.set_defaults(fn=cmd_log)
+
+    p = sub.add_parser("qa", parents=[common], help="style check across the game's whole Dotwork asset set (read only)",
+                       description="qa pack: pixel scale, off-palette colours, outline, light direction, figure "
+                                   "height, contrast on the ground tiles and colour-blind separation over every PNG "
+                                   "the game's Dotwork manifests list. Exit 0 clean, 1 findings, 2 usage.")
+    p.add_argument("what", choices=["pack"], help="pack: every asset in the game's manifests")
+    p.add_argument("--json", metavar="OUT", help="also write every finding and measurement to this JSON file")
+    p.add_argument("--lineup", metavar="OUT.png", help="also write a lineup PNG: every character and prop at game "
+                   "scale on a ground tile, labelled, for a by-eye check")
+    p.set_defaults(fn=cmd_qa)
 
     p = sub.add_parser("config", parents=[common], help="print the merged settings")
     p.set_defaults(fn=cmd_config)
