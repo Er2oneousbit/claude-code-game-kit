@@ -58,12 +58,24 @@ WORKER = HERE / "local_tts_worker.py"
 DESIGN_MODEL = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
 CLONE_MODELS = {"1.7b": "Qwen/Qwen3-TTS-12Hz-1.7B-Base", "0.6b": "Qwen/Qwen3-TTS-12Hz-0.6B-Base"}
 LICENSE = "Apache-2.0 (Qwen3-TTS model cards, https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base)"
+# the ten languages the Qwen3-TTS model cards list (read 2026-11-01); anything else fails before the model loads
+LANGUAGES = ("Chinese", "English", "Japanese", "Korean", "German", "French", "Russian", "Portuguese", "Spanish",
+             "Italian")
 # Neutral and phonetically varied, about 10 s: what a designed voice says so it can be cloned later.
 REF_TEXT = ("Good morning. The road north is clear today, and the market is busy. "
             "If you need bread, iron, or a warm place to rest, you will find it here.")
 ORIGINS = {"self": "recorded: your own voice", "permission": "recorded: with the speaker's written permission"}
 LOAD_TIMEOUT_S = 600          # first run downloads about 4.3 GB of weights
 LINE_TIMEOUT_S = 180          # one line; measured about 3x realtime, so a 20 s line takes about a minute
+# A take that never stops (the model misses its end token; seen in Japanese, 2026-11-01) would otherwise run to the
+# model's own limit of 2048 codec steps, almost three minutes of babble. Each line is capped at about twice a natural
+# reading of its text, and a take that reaches the cap is not kept. Measured 2026-11-01 with one designed voice:
+# Latin-script lines about 0.08 s a character, Japanese 0.22 to 0.24 s (a character carries more sound).
+CODEC_HZ = 12                 # Qwen3-TTS-12Hz: 12 codec steps per second of audio
+CAP_BASE_S = 3.0
+CAP_PER_CHAR_S = {"Chinese": 0.30, "Japanese": 0.30, "Korean": 0.30}
+CAP_PER_CHAR_DEFAULT_S = 0.15
+CAP_HIT = 0.85                # a take this close to its cap ran on (natural takes measured at 30 to 55 % of it)
 SILENCE_DB = -45.0
 LEAD_KEEP_S, TAIL_KEEP_S = 0.03, 0.08
 FADE_IN_S, FADE_OUT_S = 0.005, 0.02
@@ -297,6 +309,19 @@ def write_log(args, files, metas):
 
 
 # ---- Commands -----------------------------------------------------------------------
+def line_cap_s(text, language="English"):
+    """The longest take kept for a line: about twice a natural reading of its text in that language."""
+    return CAP_BASE_S + CAP_PER_CHAR_S.get(language, CAP_PER_CHAR_DEFAULT_S) * len(text)
+
+
+def language_name(text):
+    """The model's spelling of a language ("german" -> "German"), or a ToolError listing the ones it speaks."""
+    for name in LANGUAGES:
+        if text.strip().lower() == name.lower():
+            return name
+    raise ToolError(f"--language {text!r} is not one the model speaks: {', '.join(LANGUAGES)}")
+
+
 def cmd_check(args):
     r = run_worker(args, {"op": "check"}, args.timeout or 120)[0]
     print(f"[ OK ] TTS environment ready: Python {r.get('python')}, torch {r['torch']} (CUDA {r['cuda']}), "
@@ -350,8 +375,10 @@ def cmd_say(args):
     with tempfile.TemporaryDirectory() as tmp:
         req = {"op": "say", "model": model, "ref": str(Path(args.ref).resolve()), "ref_text": ref_text,
                "language": args.language, "seed": args.seed, "outdir": tmp,
-               "lines": [{"id": f"line{n}", "text": t} for n, t in enumerate(texts, 1)]}
+               "lines": [{"id": f"line{n}", "text": t, "max_tokens": math.ceil(line_cap_s(t, args.language) * CODEC_HZ)}
+                         for n, t in enumerate(texts, 1)]}
         index = {f"line{n}": (t, o) for n, (t, o) in enumerate(zip(texts, outs), 1)}
+        runaway = []
 
         def done(reply):
             if "id" not in reply:
@@ -359,14 +386,26 @@ def cmd_say(args):
             if reply["id"] not in index:
                 raise JobError(f"the TTS worker answered for an unknown line {reply['id']!r}")
             text, target = index[reply["id"]]
+            # some codec steps are not audio, so a capped take comes back a little short of the cap: 85 % counts
+            if reply.get("seconds", 0) >= CAP_HIT * line_cap_s(text, args.language):
+                runaway.append((reply["id"], text, target))
+                return
             meta = {"tool": "local_tts", "op": "say", "date": date, "model": model, "license": LICENSE, "text": text,
                     "seed": args.seed + int(reply["id"][4:]) - 1, "language": args.language, "voice": voice,
                     "gpu_seconds": reply.get("wall")}
             metas.append(finish(reply["file"], target, args, meta))
 
         replies = run_worker(args, req, timeout, done)
-    if not any(r.get("done") for r in replies) or len(metas) != len(texts):
+    if not any(r.get("done") for r in replies) or len(metas) + len(runaway) != len(texts):
         raise JobError(f"the TTS worker stopped early: {len(metas)} of {len(texts)} line(s) came back")
+    for lid, text, target in runaway:
+        cap = line_cap_s(text, args.language)
+        print(f"[FAIL] {target.as_posix()} not written: the take ran to the {cap:.0f} s cap without ending "
+              f"(the model missed its end; it happens now and then): voice that line again with another --seed"
+              + (" (the file already there is from an earlier run, left as it was)" if target.exists() else ""))
+    if runaway:
+        print(f"[FAIL] {len(metas)} of {len(texts)} line(s) written")
+        return 1
     print(f"[ OK ] {len(metas)} line(s) in the voice from {Path(args.ref).name} ({voice['origin']})")
     if args.log:
         write_log(args, outs, metas)
@@ -388,7 +427,8 @@ def build_parser():
     out_opts = argparse.ArgumentParser(add_help=False)
     out_opts.add_argument("--out", required=True, help="output .wav")
     out_opts.add_argument("--seed", type=int, default=1, help="sampling seed (another seed, another take)")
-    out_opts.add_argument("--language", default="English", help="spoken language (default English)")
+    out_opts.add_argument("--language", default="English",
+                          help="spoken language (default English): " + ", ".join(LANGUAGES))
     out_opts.add_argument("--overwrite", action="store_true", help="replace existing outputs")
     ds = sub.add_parser("design", parents=[common, out_opts], help="make a character's reference voice from a description")
     ds.add_argument("persona", help="the voice in plain words: age, character, pitch, pace, accent")
@@ -428,6 +468,8 @@ def main(argv=None):
             raise ToolError("--ring-mix must be 0..1")
         if args.cmd == "say" and not -12 <= args.pitch <= 12:
             raise ToolError("--pitch must be -12..12 semitones")
+        if args.cmd in ("design", "say"):
+            args.language = language_name(args.language)
         return {"check": cmd_check, "design": cmd_design, "say": cmd_say}[args.cmd](args)
     except JobError as exc:
         print(f"[FAIL] {exc}", file=sys.stderr)

@@ -15,6 +15,7 @@ import ast
 import contextlib
 import io
 import json
+import math
 import os
 import sys
 import tempfile
@@ -65,7 +66,9 @@ elif req["op"] == "say":
         if mode == "short" and i == 1:
             sys.exit(0)
         path = req["outdir"] + "/" + line["id"] + ".wav"
-        out({"id": line["id"], "file": path, "seconds": tone(path, 300 + 50 * i), "wall": 0.1})
+        long = mode == "runaway" and i == 1          # this take runs to its cap: max_tokens / 12 Hz seconds
+        secs = tone(path, 300 + 50 * i, seconds=line["max_tokens"] / 12 - 0.7 if long else 0.6)
+        out({"id": line["id"], "file": path, "seconds": secs, "wall": 0.1})
     out({"done": True})
 '''
 
@@ -292,10 +295,38 @@ class LocalTtsExam(unittest.TestCase):
                      ("say", "--ref", "missing.wav", "hi", "--out", "a.wav"),
                      ("say", "--ref", ref, "hi", "--out", "a.wav", "--pitch", 30),
                      ("say", "--ref", ref, "hi", "--out", "a.wav", "--ring-mix", 2),
-                     ("design", "  ", "--out", "b.wav")):
+                     ("design", "  ", "--out", "b.wav"),
+                     ("say", "--ref", ref, "hi", "--out", "a.wav", "--language", "Klingon"),
+                     ("design", "a calm voice", "--out", "b.wav", "--language", "Dutch")):
             rc, out = self.run_tool(*args)
             self.assertEqual(rc, 2, f"{args}: {out}")
             self.assertNotIn("Traceback", out)
+        rc, out = self.run_tool("say", "--ref", ref, "hi", "--out", "a.wav", "--language", "Klingon")
+        self.assertIn("is not one the model speaks: Chinese, English, Japanese", out)
+
+    def test_a_take_that_never_ends_is_capped_and_not_kept(self):
+        ref = self.design()
+        lines = self.root / "lines.txt"
+        lines.write_text("Fresh bread!\nTwo coins a loaf.\nCome back soon.\n", encoding="utf-8")
+        os.environ["FAKE_TTS_MODE"] = "runaway"
+        rc, out = self.run_tool("say", "--ref", ref, "--lines", lines, "--out", "vo.wav")
+        self.assertEqual(rc, 1, out)
+        say = [r for r in self.requests() if r["op"] == "say"][-1]
+        caps = [line["max_tokens"] for line in say["lines"]]
+        self.assertEqual(caps, [math.ceil(local_tts.line_cap_s(t) * 12) for t in
+                                ("Fresh bread!", "Two coins a loaf.", "Come back soon.")])
+        self.assertTrue((self.root / "vo_1.wav").exists() and (self.root / "vo_3.wav").exists())
+        self.assertFalse((self.root / "vo_2.wav").exists())
+        self.assertIn("vo_2.wav not written: the take ran to the 6 s cap without ending", out)
+        self.assertIn("2 of 3 line(s) written", out)
+        self.assertGreater(local_tts.line_cap_s("x" * 20, "Japanese"), local_tts.line_cap_s("x" * 20, "German"))
+
+    def test_language_names_are_the_models_spelling(self):
+        self.assertEqual(local_tts.language_name(" german "), "German")
+        self.assertEqual(local_tts.language_name("JAPANESE"), "Japanese")
+        self.assertEqual(len(local_tts.LANGUAGES), 10)
+        with self.assertRaises(local_tts.ToolError):
+            local_tts.language_name("Esperanto")
 
     def test_real_worker_keeps_the_protocol_clean_of_library_output(self):
         # The real local_tts_worker.py in a real separate environment (a throwaway venv, no pip) whose stub torch and
@@ -323,7 +354,7 @@ class LocalTtsExam(unittest.TestCase):
             "    def generate_voice_design(self, text, instruct, language):\n"
             "        return [[0.0] * 2400 + [0.5 * math.sin(i / 5) for i in range(12000)] + [0.0] * 2400], 24000\n"
             "    def create_voice_clone_prompt(self, ref_audio, ref_text):\n        return {'ref': ref_audio}\n"
-            "    def generate_voice_clone(self, text, language, voice_clone_prompt):\n"
+            "    def generate_voice_clone(self, text, language, voice_clone_prompt, **kwargs):\n"
             "        print('generating', text)\n"
             "        return [[0.0] * 1200 + [0.4 * math.sin(i / 7) for i in range(9600)] + [0.0] * 1200], 24000\n",
             encoding="utf-8")

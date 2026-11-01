@@ -120,7 +120,8 @@ def op_say(req):
     for i, line in enumerate(req["lines"]):
         seed_all(req["seed"] + i)
         t = time.time()
-        wavs, rate = m.generate_voice_clone(text=line["text"], language=req["language"], voice_clone_prompt=prompt)
+        cap = {"max_new_tokens": line["max_tokens"]} if line.get("max_tokens") else {}   # stop a take that never ends
+        wavs, rate = m.generate_voice_clone(text=line["text"], language=req["language"], voice_clone_prompt=prompt, **cap)
         path = "{}/{}.wav".format(req["outdir"], line["id"])
         seconds = write_wav(path, wavs[0], rate)
         reply({"id": line["id"], "file": path, "seconds": round(seconds, 3), "wall": round(time.time() - t, 2)})

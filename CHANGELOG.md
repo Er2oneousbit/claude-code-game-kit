@@ -112,6 +112,10 @@
   Of the music models on hand, only code-made music (`chiptune.py`) or human-made music is recommended for anything
   that ships; Stable Audio output stays out of examples and samples. Sound sets keep one-shots with the right number
   of attacks first.
+- Voice: `local_tts.py` speaks the ten languages its model lists (`--language` is checked before the model loads)
+  and stops a take that never ends (a per-line cap at about twice a natural reading; the take is not kept and the run
+  says which line to voice again). Measured in five languages with Whisper and a speaker model: German, Spanish and
+  French are usable after a listen, Japanese needs a native listener.
 - SOP-04 measures loudness instead of normalizing peaks, pointing at `tools/audio/loudness.py`. EVIDENCE.md: the 0.8.0
   rows (E69-E92) had one cell more than the table's header, so GitHub showed each finding in the Grade column; every
   row has seven cells again. New rows E100-E106 (Steam store pages, a CJK pixel font) and E120-E125 (loudness).

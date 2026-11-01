@@ -111,6 +111,30 @@ engine's music player changes track on the exact sample the transition map allow
   voice came from.
 - Speed: about 3x slower than realtime on a 16 GB RTX 5060 Ti (a 3 s line takes about 10 s, plus about 30 s to load
   the model per run, so voice a whole `--lines` script in one run). Pre-made lines only, not live speech.
+- **Other languages.** `--language` takes one of the ten the model cards list: Chinese, English, Japanese,
+  Korean, German, French, Russian, Portuguese, Spanish, Italian (anything else stops before the model loads). The
+  same designed voice speaks them all: clone the reference once, voice each language's script with
+  `say --ref <the same ref> --lines <lines>.<lang>.txt --language German --out ...`.
+- Measured 2026-11-01: one designed English voice, the same four lines in five languages, each line transcribed by
+  Whisper large-v3-turbo with its language forced, and compared with WavLM to the voice's reference:
+
+  | Language | Error | Same voice as reference | Notes |
+  |---|---|---|---|
+  | English | WER 0.0 % | 0.978 (min 0.975) | |
+  | German | WER 5.6 % | 0.972 (min 0.963) | one word misheard ("drei" as "dry") |
+  | Spanish | WER 5.0 % | 0.961 (min 0.931) | one word ("Tráeme") |
+  | French | WER 32.4 % | 0.963 (min 0.949) | mostly word splitting ("demain" heard as "de main"), some accent |
+  | Japanese | CER 74.5 % | 0.940 (min 0.908) | the rate is inflated (Whisper writes kana where the script has kanji) but one word was mispronounced, and 3 of 4 seeds ran away on one line |
+
+  A different designed voice scores 0.38 against the same reference, so the character stays recognizable in every
+  language. Treat German, Spanish and French takes as usable after a listen; get a native listener before shipping
+  Japanese (or Chinese and Korean, not measured).
+- **Takes that never end.** Now and then the model misses its end and keeps talking (seen in Japanese). Every line is
+  capped at about twice a natural reading (3 s plus 0.15 s a character, 0.30 for Chinese, Japanese and Korean); a
+  take that reaches the cap is not written, the run says which line, and exits 1: voice it again with another
+  `--seed`.
+- Set `HF_HOME` in the shell that runs `say` to wherever the weights are: a shell without it looks in the default
+  cache and starts a multi-gigabyte download that looks like a hang.
 - Setup (one time). The model runs in its own Python environment so the kit's tools stay standard-library only:
   ```
   uv venv tts-env --python 3.12
