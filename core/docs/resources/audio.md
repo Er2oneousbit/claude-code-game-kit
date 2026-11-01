@@ -21,6 +21,21 @@ Libraries, generators, editors, and implementation hints. Prompts for AI audio t
   (two pulse channels, triangle bass, noise drums) and writes loop points into the WAV, so Godot and Unity loop it
   with default import settings. The song format is in the script's header; `--solo <channel>` renders one part.
   Claude can write the song file; log the result as AI-assisted (`pre-generated`) in `docs/ASSET_LOG.md`.
+- Generated locally (K02, 2026-11-01, two rounds: 6 game-music prompts at 80 to 150 BPM, 3 seeds each, scored by
+  whether the take kept the tempo asked for):
+
+  | Model | Licence | Tempo within 2 % | Time per 24 s (16 GB GPU) |
+  |---|---|---|---|
+  | ACE-Step 1.5 turbo | MIT (ACE-Step's card: generated music may be used commercially; Comfy-Org's repackaging says Apache-2.0) | 17 of 18 | 12 s |
+  | Stable Audio Open 1.0 | Stability AI Community License | 15 of 18 | 5 s |
+  | Stable Audio 3 medium | Stability AI Community License | 11 of 18 | 2 s |
+
+  ACE-Step 1.5 is the one to use: it takes the tempo, meter and key as inputs, and its output may ship. It runs in
+  ComfyUI 0.43 or newer with Comfy-Org's ACE-Step-1.5 files (the all-in-one turbo checkpoint is 9.6 GB), through
+  ComfyUI's own "Text to Audio (ACE-Step 1.5)" template. Wavesmith has no subcommand for it yet. On every take run
+  `wavesmith.py music tempo` (it can read half or double the tempo), then `music loop` at the tempo you asked for, then
+  `loudness normalize` (takes peak above 0 dBTP), and listen. Stable Audio output stays out of what ships unless you
+  have cleared its licence.
 - Generated: `python tools/audio/wavesmith/wavesmith.py eleven music --prompt "..." --instrumental --out <music>.wav --loop-crossfade 2 --log`
   (ElevenLabs, your API key, a paid plan for music). Suno has no official API (third-party "Suno API" sites resell
   their own credits and do not carry your plan's rights): use its web app, then
@@ -141,6 +156,19 @@ engine's music player changes track on the exact sample the transition map allow
   A different designed voice scores 0.38 against the same reference, so the character stays recognizable in every
   language. Treat German, Spanish and French takes as usable after a listen; get a native listener before shipping
   Japanese (or Chinese and Korean, not measured).
+- **Translations and bark lines from a local language model are drafts.** A local model (tested: Qwen3-14B,
+  Apache-2.0, through llama.cpp's llama-server, MIT; nothing of it ships in the kit) can draft other languages and
+  more variety for barks. In the kit's test, 112 of 136 translation drafts passed the checks below. The model also
+  invented placeholders: on one-word strings such as language names it wrote whole sentences with `{name}` and
+  `{n}` in them. So every draft needs:
+  - **Placeholder survival:** the exact set of `{name}`, `%d` and similar tokens as the source; a draft that adds or
+    drops one is rejected, not fixed by hand.
+  - **A back-translation check:** translate the draft back and compare it with the source; low similarity is a flag
+    to look at (short UI labels paraphrase a lot), not an automatic fail.
+  - **A human review** before anything ships: tone, register, plural forms and gender agreement are not checked by
+    any of the above. Japanese and other languages far from English need a native reader.
+  Bark variants need the same placeholder check, plus a check that they really differ from the original and from
+  each other: asked loosely, the model repeated the source line or added `{name}` everywhere.
 - **Takes that never end.** Now and then the model misses its end and keeps talking (seen in Japanese). Every line is
   capped at about twice a natural reading (3 s plus 0.15 s a character, 0.30 for Chinese, Japanese and Korean); a
   take that reaches the cap is not written, the run says which line, and exits 1: voice it again with another

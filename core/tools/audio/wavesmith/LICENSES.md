@@ -13,10 +13,10 @@ re-check the cards before you ship.
 | `fish` | Fish Audio API (paid, your key) | your Fish Audio plan's terms | per your plan; read them for games |
 | `loudness`, `events`, `sets check`, `dialogue`, `music`, `wav` | nothing: measuring and data tools | n/a | n/a |
 
-## Music models looked at, not wired in (K02, 2026-11-01)
+## Music models looked at, not wired in (K02, 2026-11-01, two rounds)
 | Model | Licence as read | Verdict |
 |---|---|---|
-| ACE-Step 1.5 | MIT; card: "You can strictly use the generated music for commercial purposes" | the candidate for a music subcommand; not installed or tested yet |
+| ACE-Step 1.5 (turbo) | MIT on ACE-Step's card ("You can strictly use the generated music for commercial purposes"); Apache-2.0 on Comfy-Org's ComfyUI repackaging | tested in K02 round 2: tempo within 2 % in 17 of 18 takes, the best of the models tried; its output may ship. Runs in ComfyUI 0.43+ (no Wavesmith subcommand yet) |
 | Stable Audio Open 1.0 | Stability AI Community License; its card says it is "better at generating sound effects and field recordings than music" | tested in K02 (tempo within 2 % in 15 of 18 takes); same shipping rule as `sfx` |
 | MusicGen / AudioCraft | CC BY-NC 4.0 (weights) | do not use: non-commercial |
 | YuE2-3B | CC BY-NC 4.0 plus individual creator permission | do not use for a studio or company |

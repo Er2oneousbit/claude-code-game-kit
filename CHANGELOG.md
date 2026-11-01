@@ -120,8 +120,9 @@
   stingers and a transition map (now, next beat, bar, phrase or loop end, fades, synced entry); `tools/audio/wavesmith/music.py`
   cuts bar-aligned loops, validates stems and loop points, plans transitions, estimates tempo and owns the golden
   vectors `data/golden/music.json` (CI checks them); the web music player changes track on the exact planned sample.
-  Of the music models on hand, only code-made music (`chiptune.py`) or human-made music is recommended for anything
-  that ships; Stable Audio output stays out of examples and samples. Sound sets keep one-shots with the right number
+  For music made locally, ACE-Step 1.5 is the recommended model (tempo within 2 % in 17 of 18 takes, against 15 and
+  11 for the two Stable Audio models, and its output may ship; MIT, run through ComfyUI's own template, no Wavesmith
+  subcommand yet); Stable Audio output stays out of anything that ships unless its licence is cleared. Sound sets keep one-shots with the right number
   of attacks first.
 - Voice: `local_tts.py` speaks the ten languages its model lists (`--language` is checked before the model loads)
   and stops a take that never ends (a per-line cap at about twice a natural reading; the take is not kept and the run
@@ -133,6 +134,9 @@
   and LÖVE get music players, slider-to-bus volumes and caption arrows in their subtitle shells, and Unity gets
   `AudioEventPlayer` and a `MusicPlayer` scheduled on the sample (compiled and tested, not yet run in Play mode). A new
   audio case covers a stolen voice that stops ducking when its replacement ends.
+- Translations and bark lines drafted by a local language model are drafts (docs/resources/audio.md, SOP-19 step 6):
+  the placeholders must survive exactly, back-translation flags drift, and a person reviews before anything ships.
+  No language-model code ships in the kit.
 - SOP-04 measures loudness instead of normalizing peaks, pointing at `tools/audio/wavesmith/loudness.py`. EVIDENCE.md: the 0.8.0
   rows (E69-E92) had one cell more than the table's header, so GitHub showed each finding in the Grade column; every
   row has seven cells again. New rows E100-E106 (Steam store pages, a CJK pixel font) and E120-E125 (loudness).
