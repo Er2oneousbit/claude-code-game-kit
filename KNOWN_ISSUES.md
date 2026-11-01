@@ -33,7 +33,21 @@ examples were built and tested on one Windows 11 machine.
 - **UI kit prompt glyphs** are generic; swapping in official console glyphs is not documented or tested:
   [#53](https://github.com/Er2oneousbit/claude-code-game-kit/issues/53).
 - **Godot sliders** draw one highlight for hover and focus, so a focused slider looks hovered (the kit's settings
-  screen outlines the focused row instead); a Godot limit, noted in the Dotwork README.
+  screen outlines the focused row instead): [#54](https://github.com/Er2oneousbit/claude-code-game-kit/issues/54).
+- **Web shell:** the pseudo-locale drive counts 260 or 261 labels on the same build:
+  [#63](https://github.com/Er2oneousbit/claude-code-game-kit/issues/63).
+
+### Art workflow outside Godot
+Dotwork is Godot-first: other engines get PNGs, sheets with their JSON, `.fnt` fonts and a manifest, and no overlay
+outside Godot reads them yet (no animation, tile map, font, UI, lighting, particle or icon import). One issue per
+engine: web [#55](https://github.com/Er2oneousbit/claude-code-game-kit/issues/55), web-3d
+[#56](https://github.com/Er2oneousbit/claude-code-game-kit/issues/56), Unity
+[#57](https://github.com/Er2oneousbit/claude-code-game-kit/issues/57), Unreal
+[#58](https://github.com/Er2oneousbit/claude-code-game-kit/issues/58), Bevy
+[#59](https://github.com/Er2oneousbit/claude-code-game-kit/issues/59), C++/SDL2
+[#60](https://github.com/Er2oneousbit/claude-code-game-kit/issues/60), LÖVE
+[#61](https://github.com/Er2oneousbit/claude-code-game-kit/issues/61), RPG Maker MZ
+[#62](https://github.com/Er2oneousbit/claude-code-game-kit/issues/62).
 
 ### Never run or not run end to end
 - **macOS and Linux:** untested throughout (the scaffolder ran on Linux in an earlier version only). Tool and binary
