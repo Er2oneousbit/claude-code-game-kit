@@ -99,6 +99,7 @@ sentence. Point to `CHOOSING_AN_ENGINE.md` only if they want to compare.
 | "A real engine with an editor", or desktop builds | `godot` | Free and small, but needs a download, an environment variable and a test add-on (you do those for them) |
 | Unity or Unreal already installed, and they want it | `unity` / `unreal` | Heavy installs; the engine must create the project first (README "Already have a project?") |
 | Wants to write Rust, or code-only with no editor | `bevy` | Needs Rust (rustup) and, on Windows, Visual Studio Build Tools; the first build takes 5 to 15 minutes, later ones seconds |
+| A small 2D game as plain code, lightest install, or they like Lua | `love2d` | One small download (LÖVE, a zip on Windows) and an environment variable; no editor, so menus and levels are built in code or with Tiled or LDtk |
 | Wants to learn C++ | `cpp-sdl2` | Needs Visual Studio Build Tools or a compiler, CMake and vcpkg; the slowest start |
 | Art source is Dotwork, and no engine named | `godot` | Dotwork writes Godot-ready art (animations, tile sets, scenes); other engines get only image files to wire in by hand |
 | A classic RPG and they own RPG Maker MZ | `rpgmaker-mz` | They build maps and events in the editor; you write and test the plugins. Tell them this overlay is an untested proof of concept: never run against MZ itself |
@@ -119,6 +120,7 @@ Run these and report in plain words what is there and what is missing:
   Windows and Linux: `nvidia-smi --query-gpu=name,memory.total --format=csv,noheader`. Report the card and its memory
   in plain words; no NVIDIA card or under 8 GB means Dotwork will not run there, so offer to switch the art source.
   Also say how much free disk the models will need (15 GB for sprites, about 78 GB for everything).
+- LÖVE: LÖVE 11.5 from https://love2d.org (Windows: the 64-bit zip, unzip to a simple folder); later, inside the game folder, set `LOVE_BIN` to its `love.exe` for them (ask first).
 - Unity, Unreal, C++: follow that engine's `engines/<id>/ENGINE.md` "Version and setup"; walk them through it step by step.
 Missing pieces: give the link and the one setting that matters, offer to install with the system package manager
 (`winget`, `brew`) if they prefer, and wait. After an install, terminals opened before it do not see it: tell them to
