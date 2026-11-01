@@ -21,6 +21,8 @@ Source/<Game>Tests/      automation tests (optional separate module, or Private/
 Content/                 binary assets (.uasset, .umap): NEVER hand-edit, LFS tracked
 Config/                  .ini settings (text, editable with care)
 Plugins/                 project plugins (including MCP if used)
+Plugins/GameKitShell/    the kit's juice and shell logic in C++ (opt-in: docs/ENGINE_FLOW.md "Juice and shell plugin")
+data/golden/             the kit's golden vectors, read by the plugin's GameKit.* tests
 Tools/ or tools/         dev.py and helpers
 ```
 
@@ -44,6 +46,9 @@ and a clear spec for the Blueprint child.
 - Logging: `DEFINE_LOG_CATEGORY` per system, `UE_LOG(LogMyGame, Warning, TEXT("..."))`. No `GEngine->AddOnScreenDebugMessage` in committed logic except behind a debug cvar.
 - Debug toggles: console variables (`TAutoConsoleVariable`) or `exec` console commands.
 - Tests: Automation Spec or simple automation tests for engine-light logic (see ENGINE_FLOW).
+- Juice and shell (SOP-18, SOP-19): screen shake, hitstop, easing, camera follow, input buffer, coyote time, springs,
+  the flash limiter, settings, rebinding, glyphs, saves and localization are already written in `Plugins/GameKitShell`
+  (plain C++, `GameKit::` and `FGameKit*`). Enable it in the `.uproject` and use it instead of writing them again.
 
 ## Gotchas (Claude: read before editing)
 1. **Header changes require a full editor restart or a Live Coding-incompatible rebuild.** Prefer building with `dev.py check` and restarting the editor after header/reflection changes. Live Coding handles function body edits only.
