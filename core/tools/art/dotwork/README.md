@@ -35,6 +35,7 @@ should work (Dotwork itself is plain Python + HTTP); the numbers below are what 
 5. [Godot notes](#godot-notes)
 6. [Palettes and style references](#palettes-and-style-references)
    - [Store art (Steam sizes)](#store-art-steam-sizes)
+   - [Image to 3D (tested, not part of Dotwork)](#image-to-3d-tested-not-part-of-dotwork)
 7. [Licences](#licences)
 8. [Tests](#tests) and [troubleshooting](#troubleshooting)
 
@@ -263,7 +264,7 @@ Honest list: these are the failure modes seen in testing and what Dotwork does a
 | store | The key art is a render: the hero can land anywhere, and a busy picture leaves no calm spot for the logo. Steam allows no text but the game's name (and an official subtitle), none at all on the library hero | Each size crops the key art at a whole-number scale around `focus` and puts the logo on the calmest spot outside where the prompt places the hero (`logo_anchor: "fixed"` keeps the table's spots); review the sheet and pass your own `source` / `tall_source` art when a render will not do. The logo font has capitals, digits and title punctuation only (a missing character stops the run naming it). Screenshots are not made: Steam wants gameplay, so capture them from the game (`capture`, or the kit's `dev.py smoke --screenshot`) |
 | screens | A title screen's buttons only show: what New Game does is the game's | The kit's shell wires its own menus; use the screen as the backdrop and logo layer, or wire the buttons' `pressed` signals. The credits roll scrolls for a length worked out from the line count (24 px a line), so a theme with a much larger font needs `seconds` raised |
 | bdf (fonts you bring) | Hand-drawn glyph text cannot cover Chinese or Japanese (thousands of characters); a complete CJK pixel font is a download, and every glyph of it would make a big font | Point `source` at a BDF (Ark Pixel Font, OFL-1.1: github.com/TakWolf/ark-pixel-font, the 12 px proportional BDF set has ja, ko, zh_hans, zh_hant, zh_hk and zh_tw variants of 26,179 glyphs each; pick the variant of the language, since shared characters are drawn differently) and `strings` at the game's text: the `.fnt` keeps only the characters used plus ASCII (a menu and a story line came to about 120 glyphs on one 256 px page). A character the strings use that the font lacks stops the run naming it, the file and the key. Not checked: right-to-left scripts and shaping (Arabic, Hebrew), which BMFont cannot lay out |
-| diorama (2.5D) | Flat sprites in 3D are cards: a side-view prop shows its one face from every angle, and a character's 4 directions do not turn with the camera | Billboards turn around their vertical axis to face the camera (fixed-Y), so keep the camera's yaw fixed (the lane's camera looks from the south) and pick the animation that faces it (`walk_s`); blocks put the same side tile on all four faces. Image-to-3D models are not part of Dotwork (see Godot notes) |
+| diorama (2.5D) | Flat sprites in 3D are cards: a side-view prop shows its one face from every angle, and a character's 4 directions do not turn with the camera | Billboards turn around their vertical axis to face the camera (fixed-Y), so keep the camera's yaw fixed (the lane's camera looks from the south) and pick the animation that faces it (`walk_s`); blocks put the same side tile on all four faces. Image-to-3D models are not part of Dotwork (see Image to 3D below) |
 | vfx (drawn in code) | Particles are a Godot node, so their exact motion cannot ship as frames; a projectile's Line2D trail is a fixed streak behind the body, not a record of its path | Projectiles (arrow, bolt, orb: flight loops pointing right) carry a trail that fades along its length: a sprite strip (frames, works in any engine), a Line2D with a stepped gradient, or a world-space GPUParticles2D that lags behind as the node moves (`trail`; use particles for curving shots). Puffs (dust, footstep, landing) and bursts (pickup_sparkle, level_up) are one-shots that end on an empty frame. `dust_particles`, `sparkle_particles` and `ember_particles` are GPUParticles2D scenes with a white mask texture and colour steps from the ramp over each particle's life (`amount`, `one_shot`); `vfx_<name>_particles.json` lists the same settings for other engines, and the review sheet shows a simulated preview, not Godot's run |
 | sprites / props / icons | The refine pass can grow a figure past its canvas | Re-rendered smaller automatically (never rescaled); an icon prompt that fills the frame (a spiral) can still fail: reword it |
 | sprites | White background trapped inside a figure | Removed automatically; skipped for white subjects (`keep_white` / `holes` override) |
@@ -432,6 +433,23 @@ discount or "buy now" text, or other products. All capsule art must be PG-13. Sc
 scales: a size takes the smallest whole multiple of the key art that covers it and crops the rest (the `focus` point
 stays in), so no pixel is ever resampled. The game itself gets `assets/art/brand/<name>/`: `icon_<name>.png` (256),
 `icon_<name>.ico`, `logo_<name>.png` (4x, for a title screen) and `boot_splash_<name>.png` (640 x 360).
+
+## Image to 3D (tested, not part of Dotwork)
+Turning a sprite into a 3D model was tried on 2026-11-01 (RTX 5060 Ti 16 GB, Windows 11) and is not built in. The
+2.5D path Dotwork does ship is the `diorama` lane (billboards over 3D tiles).
+- **TRELLIS** (github.com/microsoft/TRELLIS, MIT code and weights, `microsoft/TRELLIS-image-large` in safetensors):
+  the only candidate that passed the licence check and a code audit. Its README asks for 16 GB of VRAM and is tested on
+  Linux only. On Windows it ran only after changes: DINOv2 loaded from a local safetensors folder instead of
+  `torch.hub` (which runs code fetched at load time and reads `.pth` weights), no background remover (it downloads a
+  model on first use; give an RGBA picture instead), the mesh path only (its Gaussian and texture-bake renderers carry
+  non-commercial or research licences), and its attention routed through PyTorch's own because the xformers build had
+  no kernels for this GPU. Two 64 px pixel-art props each took 20-70 s and up to 10 GB of VRAM; after decimation, UV
+  unwrap and a colour bake in Blender, both GLBs pass `tools/blender/validate_asset.py --class prop`, but the shapes
+  were wrong (a barrel came back as a box). A control run on TRELLIS's own example filled the 16 GB card while
+  decoding and was stopped. Not recommended until it is shown to work on supported hardware.
+- **TRELLIS.2** (MIT) asks for at least 24 GB of VRAM: not testable on a 16 GB card.
+- **Hunyuan3D 2.0**: its community licence excludes the European Union, the United Kingdom and South Korea and needs a
+  separate licence above 1 million monthly users, so the kit does not recommend it.
 
 ## Licences
 - Dotwork: the kit's licence (MIT). `glyphs/*.txt` (fonts authored as text) and the palettes are part of Dotwork.
