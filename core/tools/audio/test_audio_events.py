@@ -175,6 +175,7 @@ class AudioEventsExam(unittest.TestCase):
             (lambda d: d.update(seed=-5), "seed must be a whole number"),
             (lambda d: d.update(seed=1.5), "seed must be a whole number"),
             (lambda d: d["events"]["click"].update(pick=None), "pick is null"),
+            (lambda d: d["events"]["click"].update(directional="yes"), "directional must be true or false"),
         ]
         for edit, words in cases:
             problems = broken(edit)

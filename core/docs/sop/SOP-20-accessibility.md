@@ -36,6 +36,7 @@ The shell (`SOP-19`) has the settings; this SOP is what they must do.
    recording before release (E73, E74), or are softened until they need none.
 5. **Test with the settings at their extremes:** text 200 %, subtitles largest with full background, colour-blind modes,
    gamepad only, keyboard only, mono, reduce motion. Run the pseudo-locale smoke at text 200 % too: it catches clipping.
+   For mono, `python tools/audio/loudness.py mono <stereo files>` finds sounds that cancel out when summed (K01).
 6. **Playtest with the players it is for** when you can, and ask one question (SOP-03): could you finish it?
 7. **Describe it on the store page**: list the options; players look for them.
 

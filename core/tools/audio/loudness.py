@@ -8,6 +8,7 @@
 #           python tools/audio/loudness.py measure build/capture.wav --json         # machine-readable
 #           python tools/audio/loudness.py check-mix build/gameplay_capture.wav --target home     # or portable
 #           python tools/audio/loudness.py normalize vo/line.wav --lufs -24 --out vo/line_n.wav
+#           python tools/audio/loudness.py mono "assets/audio/**/*.wav"          # survives the mono switch?
 #           python tools/audio/loudness.py normalize amb/rain.wav --bus ambience --target home --out amb/rain_n.wav
 #           python tools/audio/loudness.py conventions                               # the house levels table
 # Needs   : Python 3.8+ only. Reads 16/32-bit PCM WAV (wavfile.py) and 16/24-bit FLAC (flacfile.py), mono/stereo.
@@ -35,6 +36,8 @@
 #   true peak: polyphase interpolation (>= 768 kHz), only where a window could beat the running maximum
 #   check-mix: duration >= 30 min? integrated within target +/-2? true peak <= -1? -> verdict
 #   normalize: gain to the target, capped so true peak stays at or below the ceiling (no limiter here)
+#   mono: downmix 0.5 * (L + R) (Web Audio's rule; engines' mono switches do the same) -> loudness lost, and the
+#         channel correlation overall and per loud 400 ms block -> out-of-phase content cancels
 import argparse
 import glob
 import json
@@ -76,6 +79,10 @@ ASWG_MIN_S = 30 * 60
 # Dialogue anchors at the platform target; beds sit under it. Short one-shots are matched by true peak instead,
 # because gated loudness of a sound shorter than one 400 ms block is undefined.
 HOUSE = {"dialogue": 0.0, "music": -4.0, "ambience": -10.0, "sfx": -6.0, "ui": -8.0}
+# Mono check, kit conventions (not a standard). Downmixing to 0.5 * (L + R) costs 3.0 LU when both channels carry the
+# same sound and 6.0 LU when they are unrelated; more than that means the channels cancel each other.
+MONO_MAX_LOSS_LU = 9.0
+MONO_MIN_BLOCK_CORR = -0.5    # a loud 400 ms block this anti-correlated loses most of itself in mono
 DEBUG = False
 
 
@@ -312,6 +319,80 @@ def cmd_measure(args):
     return 0
 
 
+def correlation(left, right):
+    """Phase correlation of two channels, -1 (opposite) .. +1 (identical); 0 for silence."""
+    lr = sum(a * b for a, b in zip(left, right))
+    ll, rr = sum(a * a for a in left), sum(b * b for b in right)
+    return lr / math.sqrt(ll * rr) if ll > 0 and rr > 0 else 0.0
+
+
+def mono_check(channels, rate):
+    """What a stereo sound loses in a mono downmix (0.5 * (L + R)): {stereo_lufs, mono_lufs, loss_lu, corr,
+    worst_block_corr, worst_block_s}. None for mono input. Loudness is integrated when the clip is long enough,
+    otherwise ungated over the whole clip, so short one-shots get a number too."""
+    if len(channels) != 2:
+        return None
+    left, right = channels
+    mono = [0.5 * (a + b) for a, b in zip(left, right)]
+
+    def lufs(chans):
+        subs = [sub_block_energy(c, rate) for c in chans]
+        v = integrated(window_loudness(subs, 4))
+        if not math.isfinite(v):                     # under 400 ms or very quiet: plain K-weighted mean
+            total = [sum(c[i] for c in subs) for i in range(len(subs[0]))] if subs and subs[0] else []
+            v = lk(sum(total) / len(total)) if total else -math.inf
+        return v
+    st, mo = lufs([left, right]), lufs([mono])
+    n = int(round(0.4 * rate))
+    worst, worst_t = 1.0, None
+    gate = 10 ** ((ABS_GATE + 0.691) / 10)
+    for i in range(0, max(len(left) - n + 1, 1), n // 4 or 1):
+        l, r = left[i:i + n], right[i:i + n]
+        power = (sum(a * a for a in l) + sum(b * b for b in r)) / max(len(l), 1)
+        if power > gate:
+            c = correlation(l, r)
+            if c < worst:
+                worst, worst_t = c, i / rate
+    loss = (st - mo) if math.isfinite(st) and math.isfinite(mo) else (math.inf if math.isfinite(st) else None)
+    return {"stereo_lufs": round(st, 2) if math.isfinite(st) else None,
+            "mono_lufs": round(mo, 2) if math.isfinite(mo) else None,
+            "loss_lu": (round(loss, 2) if loss is not None and math.isfinite(loss) else loss),
+            "corr": round(correlation(left, right), 3),
+            "worst_block_corr": round(worst, 3) if worst_t is not None else None,
+            "worst_block_s": round(worst_t, 2) if worst_t is not None else None}
+
+
+def cmd_mono(args):
+    rows, bad = [], 0
+    for f in expand(args.files):
+        channels, rate = read_audio(f)
+        r = mono_check(channels, rate)
+        name = Path(f).as_posix()
+        if r is None:
+            rows.append({"file": name, "mono": True})
+            if not args.json:
+                print(f"[mono] {name}: already mono")
+            continue
+        problems = []
+        if r["loss_lu"] is not None and r["loss_lu"] > args.max_loss:
+            problems.append(f"loses {r['loss_lu']:.1f} LU in mono (more than {args.max_loss:.0f}: the channels cancel)")
+        if r["worst_block_corr"] is not None and r["worst_block_corr"] < args.min_corr:
+            problems.append(f"correlation {r['worst_block_corr']:+.2f} at {r['worst_block_s']:.1f} s (out of phase: "
+                            "that part fades or vanishes in mono)")
+        bad += bool(problems)
+        rows.append(dict(r, file=name, problems=problems))
+        if not args.json:
+            loss = "silent" if r["loss_lu"] is None else f"{r['loss_lu']:5.1f} LU"
+            print(f"[{'FAIL' if problems else ' OK '}] mono loss {loss}  correlation {r['corr']:+.2f}  {name}" +
+                  "".join(f"\n       - {p}" for p in problems))
+    if args.json:
+        print(json.dumps(rows, indent=1))
+    else:
+        print(f"[{'FAIL' if bad else ' OK '}] {len(rows)} file(s), {bad} would suffer in mono (players with hearing in "
+              "one ear use the mono switch)")
+    return 1 if bad else 0
+
+
 def cmd_check_mix(args):
     m = measure_file(args.capture)
     target, minutes = ASWG[args.target], m["seconds"] / 60
@@ -412,6 +493,14 @@ def build_parser():
     nm.add_argument("--out", required=True)
     nm.add_argument("--overwrite", action="store_true")
     sub.add_parser("conventions", parents=[common], help="print the kit house levels per bus")
+    mo = sub.add_parser("mono", parents=[common], help="what stereo files lose in a mono downmix (phase cancellation)")
+    mo.add_argument("files", nargs="+", help="WAV or FLAC files or glob patterns (use quotes for **)")
+    mo.add_argument("--max-loss", type=float, default=MONO_MAX_LOSS_LU,
+                    help=f"LU a file may lose in mono (default {MONO_MAX_LOSS_LU:.0f}; same sound both sides loses 3, "
+                         "unrelated sides 6)")
+    mo.add_argument("--min-corr", type=float, default=MONO_MIN_BLOCK_CORR,
+                    help=f"lowest correlation a loud 400 ms block may have (default {MONO_MIN_BLOCK_CORR})")
+    mo.add_argument("--json", action="store_true", help="print JSON")
     return ap
 
 
@@ -430,7 +519,7 @@ def main(argv=None):
         return 2
     try:
         return {"measure": cmd_measure, "check-mix": cmd_check_mix, "normalize": cmd_normalize,
-                "conventions": cmd_conventions}[args.cmd](args)
+                "conventions": cmd_conventions, "mono": cmd_mono}[args.cmd](args)
     except ToolError as exc:
         print(f"[error] {exc}", file=sys.stderr)
         if DEBUG:

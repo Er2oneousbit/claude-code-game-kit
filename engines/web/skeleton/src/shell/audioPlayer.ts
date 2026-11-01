@@ -6,7 +6,8 @@
 // Usage   : const player = new AudioPlayer(ctx, eventsJson, buffers)   // buffers: { "step_0.wav": AudioBuffer, ... }
 //           player.play("step_stone")              // now (ctx.currentTime), or player.play(name, atMs) to schedule
 //           each frame: player.update()            // ducking; or player.update(atMs) when scheduling ahead
-//           settings: player.setBusVolume("music", -6)
+//           settings: player.applySettings(shell.settings.audio)   // the volume sliders (audioAccess.ts)
+//           player.setBusVolume("music", -6)      // a bus's own level in dB (normally from the events file)
 // Notes   : Works with AudioContext and OfflineAudioContext (the kit's Chromium check renders offline and measures
 //           the duck envelope, pitches and voice cap from the output). Bus routing: each bus connects to its
 //           parent, master to ctx.destination (or to `out`, a node the caller passes). Decisions, randomness and
@@ -16,9 +17,10 @@
 //   constructor: director + bus gain nodes wired child -> parent -> master -> out; lengths from the buffers
 //   play(name, atMs): d = director.play -> stolen? stop its source at atMs -> source(buffer, playbackRate)
 //                     -> voice gain -> bus; remember source by voice id
-//   update(atMs): for each bus: gain = volume_db + duck_db -> setValueAtTime at atMs
+//   update(atMs): for each bus: gain = volume_db + duck_db, times the player's slider -> setValueAtTime at atMs
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
+import { userBusGains, type AudioSliders } from "../core/audioAccess";
 import { AudioDirector, type AudioEvent, type DuckRule, type PlayResult } from "../core/audioDirector";
 
 export interface BusDef {
@@ -40,6 +42,7 @@ export class AudioPlayer {
   readonly director: AudioDirector;
   private readonly buses: Record<string, GainNode> = {};
   private readonly volumes: Record<string, number> = {};
+  private user: Record<string, number> = {};
   private readonly sources = new Map<number, AudioBufferSourceNode>();
   private readonly files: Record<string, string[]> = {};
   private readonly ctx: BaseAudioContext;
@@ -104,8 +107,13 @@ export class AudioPlayer {
   update(atMs = this.nowMs()): void {
     const duck = this.director.duck(atMs);
     for (const [bus, node] of Object.entries(this.buses)) {
-      node.gain.setValueAtTime(dbToGain(this.volumes[bus] + (duck[bus] ?? 0)), atMs / 1000);
+      node.gain.setValueAtTime(dbToGain(this.volumes[bus] + (duck[bus] ?? 0)) * (this.user[bus] ?? 1), atMs / 1000);
     }
+  }
+
+  /** The settings screen's volume sliders (linear 0..1); takes effect at the next update(). */
+  applySettings(sliders: AudioSliders): void {
+    this.user = userBusGains(this.data.buses, sliders);
   }
 
   setBusVolume(bus: string, db: number): void {

@@ -146,14 +146,15 @@ describe("dialogue reader", () => {
         cues: [{ start: 0, end: 0.3, lines: ["Hey"] }], new_field: 1 },
       b: { speaker: "s", text: "Bark", kind: "bark" },
     },
-    captions: { hit: { text: "[thud]", min_s: 0.5 } },
+    captions: { hit: { text: "[thud]", min_s: 0.5 }, growl: { text: "[growl]", directional: true } },
   };
 
   it("ignores unknown fields and fills defaults", () => {
     const d = dialogueFrom(raw);
     expect(Object.keys(d.lines).sort()).toEqual(["a", "b"]);
     expect(d.lines.b.durationS).toBeCloseTo(4 / 30);
-    expect(d.captions.hit).toEqual({ text: "[thud]", priority: 30, minS: 0.5 });
+    expect(d.captions.hit).toEqual({ text: "[thud]", priority: 30, minS: 0.5, directional: false });
+    expect(d.captions.growl.directional).toBe(true);
   });
 
   it("refuses a file that is not format v0", () => {

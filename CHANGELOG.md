@@ -97,6 +97,11 @@
   fails a set on missing or extra takes, double attacks in one-shots, takes more than 3 LU apart, loops without a
   clean loop point, or files with no licence record (`check --ship` also fails Stable Audio output until its licence
   is cleared); it writes their audio_events.json entries.
+- Audio accessibility: `loudness.py mono` reports what each stereo file loses when the mono switch sums it
+  (0.5 * (L + R), the Web Audio rule) and fails out-of-phase content, block by block (SOP-20 step 5 names it); on web
+  and web-3d the settings volume sliders now reach the audio director's buses (`AudioPlayer.applySettings`, never
+  twice down one branch), and captions marked directional get an arrow on the side an off-screen sound comes from
+  (XAG 104). Godot, Unity and LÖVE have the director but not this player layer yet.
 - SOP-04 measures loudness instead of normalizing peaks, pointing at `tools/audio/loudness.py`. EVIDENCE.md: the 0.8.0
   rows (E69-E92) had one cell more than the table's header, so GitHub showed each finding in the Grade column; every
   row has seven cells again. New rows E100-E106 (Steam store pages, a CJK pixel font) and E120-E125 (loudness).

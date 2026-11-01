@@ -270,6 +270,8 @@ def validate(data, root=None):
             p.append(f"{where}: cooldown_ms must be 0..60000")
         if "caption" in ev and not isinstance(ev["caption"], str):
             p.append(f"{where}: caption must be text, e.g. \"[door creaks]\"")
+        if "directional" in ev and not isinstance(ev["directional"], bool):
+            p.append(f"{where}: directional must be true or false (true: the caption gets an arrow off screen)")
     return p
 
 

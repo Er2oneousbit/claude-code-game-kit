@@ -276,6 +276,44 @@ class LoudnessExam(unittest.TestCase):
         rc, out = self.run_tool("measure", self.dir / "bad.wav")
         self.assertEqual(rc, 2, out)
 
+    # ---- mono downmix
+    def test_mono_loss_follows_the_downmix_rule(self):
+        import random
+        rng = random.Random(3)
+        same = tone(-20, 2)
+        r = L.mono_check(stereo(same), FS)                                   # same sound both sides: 3.01 LU
+        self.assertAlmostEqual(r["loss_lu"], 10 * math.log10(2), delta=0.02)
+        self.assertAlmostEqual(r["corr"], 1.0, delta=1e-6)
+        a = [0.1 * rng.gauss(0, 1) for _ in range(2 * FS)]
+        b = [0.1 * rng.gauss(0, 1) for _ in range(2 * FS)]
+        r = L.mono_check([a, b], FS)                                         # unrelated sides: 6.02 LU
+        self.assertAlmostEqual(r["loss_lu"], 10 * math.log10(4), delta=0.15)
+        self.assertLess(abs(r["corr"]), 0.02)
+        r = L.mono_check([same, [-x for x in same]], FS)                     # opposite polarity: nothing left
+        self.assertEqual(r["loss_lu"], math.inf)
+        self.assertAlmostEqual(r["worst_block_corr"], -1.0, delta=1e-6)
+        self.assertIsNone(L.mono_check([same], FS))                          # mono has nothing to lose
+        short = stereo(tone(-20, 0.1))                                       # a 100 ms one-shot still gets a number
+        self.assertAlmostEqual(L.mono_check(short, FS)["loss_lu"], 10 * math.log10(2), delta=0.05)
+
+    def test_mono_flags_an_out_of_phase_moment_and_the_cli_fails(self):
+        x = tone(-20, 3, freq=440)
+        right = [(-v if FS <= i < int(1.4 * FS) else v) for i, v in enumerate(x)]   # 0.4 s flipped at 1 s
+        good = self.wav("good.wav", stereo(x))
+        bad = self.wav("bad.wav", [x, right])
+        r = L.mono_check([x, right], FS)
+        self.assertLess(r["loss_lu"], L.MONO_MAX_LOSS_LU)                     # the whole file looks fine...
+        self.assertAlmostEqual(r["worst_block_s"], 1.0, delta=0.11)          # ...the block test finds the moment
+        rc, out = self.run_tool("mono", good)
+        self.assertEqual(rc, 0, out)
+        rc, out = self.run_tool("mono", good, bad)
+        self.assertEqual(rc, 1, out)
+        self.assertIn("correlation -1.00 at 1.0 s", out)
+        self.assertIn("1 would suffer in mono", out)
+        rc, out = self.run_tool("mono", bad, "--min-corr", "-1.01", "--json")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(json.loads(out)[0]["problems"], [])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

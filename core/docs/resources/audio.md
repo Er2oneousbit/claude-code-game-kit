@@ -320,4 +320,30 @@ only ever added), and into SRT or WebVTT files for trailers and video captures.
   from start to end and gone after it (16 checks). The same check fails when the reveal is moved 20 ms either way or
   a cue is held 0.1 s too long.
 
+## Accessibility: mono, volume sliders, directional captions
+SOP-20 asks for a mono switch, a volume slider per bus and an arrow on captions for sounds from off screen. The
+settings already hold them (settings.audio master, music, sfx, ui, voice, mono; access.captions_sfx); this is how the
+audio side keeps its part.
+- **Mono survives the switch.** Players with hearing in one ear turn on mono, and the browser then plays
+  0.5 * (L + R) (the Web Audio down-mix rule; other engines' mono options were not checked). A stereo sound
+  whose channels are out of phase cancels itself there. `python tools/audio/loudness.py mono "assets/audio/**/*.wav"`
+  prints what each stereo file loses (3 LU when both sides carry the same sound, 6 LU when they are unrelated) and
+  fails a file that loses more than 9 LU or has a loud 400 ms stretch with correlation below -0.5 (kit conventions,
+  not a standard; `--max-loss`, `--min-corr`). Fix it at the source: flip one channel's polarity back, or narrow
+  the stereo widener.
+- **Sliders reach the buses (web, web-3d).** `player.applySettings(shell.settings.audio)` after the settings change
+  sets every bus of data/audio_events.json from its slider (src/core/audioAccess.ts, `SLIDER_FOR_BUS`: music,
+  sfx and ambience, ui, voice for dialogue, master); a bus whose parent already follows the same slider is not turned
+  down a second time, so ambience under sfx moves with the sfx slider once.
+- **Arrows on directional captions (web, web-3d).** Mark the event `"directional": true` in audio_events.json
+  (dialogue.py copies it into the built captions), then pass where the sound is:
+  `shell.subtitles.caption("growl", { dx, dy, halfW, halfH })` with the source's offset from the view's centre and
+  half the view's size (in 3D, the source projected to the screen). Nothing is added while the source is on screen;
+  off screen it gets one of eight arrows, on the side it comes from ("← [growl]", "[growl] ↗").
+- Proven 2026-11-01 in headless Chromium: six stereo ambience beds and an out-of-phase test file through a node set up
+  like the mono switch came out equal to 0.5 * (L + R) to 1.5e-8, and `loudness.py mono` predicted the loudness of
+  Chromium's mono render within 0.01 LU on all seven; the AudioPlayer with sliders set played every bus at its slider
+  times its volume_db within 0.001 dB, ambience included (the same check with the double-count guard removed is 12 dB
+  off and fails).
+
 Back to the index: `docs/RESOURCES.md`.
