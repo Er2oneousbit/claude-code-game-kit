@@ -167,6 +167,42 @@ Prompt patterns: `docs/BRIEFS.md` > Music with Suno. Log prompts and outputs in 
 - Keep SFX short, mono for positional, 44.1 kHz or 48 kHz, WAV in source control, OGG for shipping if size matters.
 - Bus structure: Master > Music, SFX, UI, Voice. Expose volume sliders from day one.
 
+## Sound events: variants, voices, ducking
+Describe every game sound once in data/audio_events.json (you create it), and each engine's audio director
+decides how it plays: which take (never the same one twice in a row), its pitch and volume within a range, how
+many copies may sound at once, a minimum gap between plays, and how far dialogue ducks the music.
+```json
+{
+  "version": 1, "seed": 1,
+  "buses": {"master": {}, "music": {"parent": "master", "volume_db": -4}, "sfx": {"parent": "master"},
+            "ui": {"parent": "master"}, "dialogue": {"parent": "master"}, "ambience": {"parent": "master"}},
+  "ducking": [{"trigger": "dialogue", "targets": ["music", "ambience"], "depth_db": -8,
+               "attack_ms": 80, "release_ms": 400}],
+  "events": {
+    "step_stone": {"bus": "sfx", "files": ["sfx/step_stone_1.wav", "sfx/step_stone_2.wav", "sfx/step_stone_3.wav"],
+                   "pick": "random_no_repeat", "pitch_semitones": [-1, 1], "volume_db": [-3, 0],
+                   "max_voices": 4, "cooldown_ms": 60, "caption": "[footsteps]"},
+    "ui_click": {"bus": "ui", "files": ["ui/click.wav"], "max_voices": 2}
+  }
+}
+```
+- `pick`: `random_no_repeat` (default), `shuffle` (every take once per round, no repeat across rounds),
+  `sequence`, or `random`. `steal`: `oldest` (default: the oldest copy stops) or `none` (the new play is refused).
+  `max_voices` defaults to 8, `pitch_semitones` and `volume_db` to no change. Event ids are lowercase ASCII.
+- Ducking is a straight line in dB: down to `depth_db` over `attack_ms` while anything plays on the trigger bus,
+  back over `release_ms` after it stops; a new line during the release dips again from where it is.
+- `python tools/audio/audio_events.py validate data/audio_events.json --root assets/audio` checks the file and that
+  every take exists. `audit --root assets/audio` warns about sounds that will repeat identically (fewer than 3 takes
+  and no pitch range), `random` picks, takes that differ by more than 3 LU (fix with `loudness.py normalize`), and
+  missing captions (deaf and hard-of-hearing players miss uncaptioned sounds; UI and music are exempt).
+- The engines (each game has only its own): src/core/audioDirector.ts with src/shell/audioPlayer.ts (web; Web
+  Audio, works offline too), scripts/core/audio_director.gd (Godot), Assets/Scripts/Core/AudioDirector.cs (Unity,
+  no UnityEngine dependency), src/core/audio_director.lua (LÖVE). Each is tested against `data/golden/audio.json`, written by
+  `audio_events.py vectors --write` (the reference); randomness is a Park-Miller generator, so every engine makes the
+  same choices from the same seed. Proven 2026-11-01: TypeScript in Vitest and in headless Chromium (an offline
+  render showed the duck envelope within 0.001 dB, pitches exact, the voice cap held), GDScript headless with GUT,
+  C# under dotnet test (plus 400 random scenarios), Lua headless in LÖVE 11.5, all with zero difference.
+
 ## Loudness: measure, check the mix, normalize
 How loud a game sounds is measured, not guessed. `tools/audio/loudness.py` (no installs) gives the numbers the
 platform holders and broadcasters use: integrated loudness in LUFS (ITU-R BS.1770-5), loudness range in LU (EBU

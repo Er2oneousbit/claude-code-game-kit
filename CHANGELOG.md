@@ -59,6 +59,12 @@
   Checked against pyloudnorm and ffmpeg on 815 files; its true peak reads clipped audio up to 0.84 dB closer to an
   ideal reconstruction than the standard's 4x example filter.
 - SOP-19 and `/dotwork` point to the `uikit` lane for prompt glyphs and a menu Theme with a visible focus ring.
+- Audio events: describe each sound once in data/audio_events.json (takes, pitch and volume ranges, no-repeat or
+  shuffle picks, voice caps with stealing, cooldowns, buses, dialogue ducking). An audio director in Godot, LÖVE,
+  web, web-3d and Unity makes the same decisions from the same seed (golden vectors `data/golden/audio.json`, owned
+  by `tools/audio/audio_events.py vectors --write / --check`, which CI also runs); the web overlay plays them
+  through Web Audio. audio_events.py validates and audits the file (repetition, loudness spread between takes,
+  missing captions). Only the web overlay wires the director to a player so far.
 - SOP-04 measures loudness instead of normalizing peaks, pointing at `tools/audio/loudness.py`. EVIDENCE.md: the 0.8.0
   rows (E69-E92) had one cell more than the table's header, so GitHub showed each finding in the Grade column; every
   row has seven cells again. New rows E100-E106 (Steam store pages, a CJK pixel font) and E120-E125 (loudness).
