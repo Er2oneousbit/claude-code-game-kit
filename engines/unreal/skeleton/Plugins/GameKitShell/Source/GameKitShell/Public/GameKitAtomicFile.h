@@ -5,8 +5,10 @@
 // Usage   : FString Error;
 //           if (!GameKit::WriteFileAtomic(Path, Text, &Error)) { UE_LOG(LogMyGame, Error, TEXT("save failed: %s"), *Error); }
 //           if (const TOptional<FString> Text = GameKit::ReadTextFile(Path)) { ... *Text ... }
-// Notes   : A power cut or crash at any moment leaves either the old file or the new one, never half a file:
-//           the bytes go to <file>.tmp first, are flushed to the disk, and only then renamed over <file>.
+// Notes   : A crash at any moment leaves either the old file or the new one, never half a file: the bytes go to
+//           <file>.tmp first, are flushed to the disk, and only then renamed over <file> (MoveFileExW with
+//           replace and write-through on Windows). After a power cut this also depends on the file system keeping
+//           the rename, which is why saves also keep a .bak (FGameKitSaveStore).
 //           A stale <file>.tmp from a crash is harmless (nobody reads it) and is replaced by the next write.
 //           WriteTemp() and CommitTemp() are the two halves, public so tests can stop in between. Text is
 //           written as UTF-8 without a BOM; reading accepts UTF-8 with or without a BOM, and UTF-16.

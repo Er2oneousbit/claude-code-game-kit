@@ -5,8 +5,10 @@
 // Usage   : std::string err;
 //           if (!core::write_file_atomic(path, text, &err)) LOG_ERROR("save", "could not save: " << err);
 //           if (auto text = core::read_file(path)) { ... *text ... }
-// Notes   : A power cut or crash at any moment leaves either the old file or the new one, never half a file:
-//           the bytes go to <file>.tmp first, are flushed to the disk, and only then renamed over <file>.
+// Notes   : A crash at any moment leaves either the old file or the new one, never half a file: the bytes go to
+//           <file>.tmp first, are flushed to the disk, and only then renamed over <file> (a replacing rename). After
+//           a power cut this also depends on the file system keeping the rename (the folder itself is not flushed),
+//           which is why saves also keep a .bak (SaveStore).
 //           A stale <file>.tmp from a crash is harmless (nobody reads it) and is replaced by the next write.
 //           write_temp() and commit_temp() are the two halves, public so tests can stop in between.
 //           Paths are std::filesystem::path: build them with path_from_utf8() from UTF-8 text, so names

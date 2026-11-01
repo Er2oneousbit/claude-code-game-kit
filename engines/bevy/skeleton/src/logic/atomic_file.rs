@@ -1,7 +1,8 @@
 // ---------------------------------------------------------------------------
 // logic/atomic_file.rs
-// Purpose : Crash-safe file writes for settings and saves: the file on disk is always either the old version or
-//           the new one, never half of each.
+// Purpose : Crash-safe file writes for settings and saves: after a crash the file on disk is either the old version
+//           or the new one, never half of each (after a power cut this also depends on the file system keeping the
+//           rename; saves keep a .bak for that case).
 // Usage   : atomic_file::write(&path, text.as_bytes())?;      // <file>.tmp, flush to disk, rename over <file>
 //           atomic_file::backup(&path)?;                       // copy <file> to <file>.bak (also atomically)
 //           let text: Option<String> = atomic_file::read_text(&path)?;   // None when the file does not exist
