@@ -10,12 +10,12 @@
 - Dotwork: focus is a ring in its own colour drawn outside each control, never a brighter hover; tests compare focus
   and hover pixel by pixel for every focusable control (Godot's sliders draw one highlight for both: a known limit).
 - Dotwork: input prompt glyphs for the kit's shell (`assets/ui/glyphs/<glyph_name>.png`, 16 px tall, plus
-  `glyphs.json`): keycaps labelled from the glyph font, mouse buttons, and generic gamepad shapes for the xbox_, ps_
+  a glyphs.json of widths): keycaps labelled from the glyph font, mouse buttons, and generic gamepad shapes for the xbox_, ps_
   and pad_ names, with no maker logos; `keys` adds any rebound key.
 - Dotwork: `uikit` also ships a pointer and a pointing-hand cursor, a preview scene with every control, and a
   labelled review sheet of every state and glyph.
 - Dotwork: verify checks each UI kit Theme's items inside Godot and walks the preview's focus chain with ui_down /
-  ui_up (`UIKIT_FOCUS_RESULT PASS`); the exam (`tests/test_dotwork.py`) also runs the lane exams in `EXTRA_EXAMS`.
+  ui_up (`UIKIT_FOCUS_RESULT PASS`); the exam (`core/tools/art/dotwork/tests/test_dotwork.py`) also runs the lane exams in `EXTRA_EXAMS`.
 - Dotwork: new `store` lane: key art and every Steam capsule and library size (whole-number scaling only, the logo on
   the calmest spot), a logo wordmark from a glyph font, achievement icons with greyed twins, the game icon and a
   multi-size `.ico`, Steam's app and shortcut icons, and a boot splash; `"apply": true` sets the icon and splash in
@@ -24,7 +24,7 @@
 - Dotwork: new `screens` lane: title, loading and credits screens as Godot scenes over a backdrop; they use the UI kit
   theme when the game has one.
 - Dotwork: new `capture` command: any scene recorded with Godot's Movie Maker at a fixed frame rate (trailer frames),
-  with a contact strip and an optional GIF. The overlay's `tools/capture.gd` stays the tool for real-time bursts.
+  with a contact strip and an optional GIF. The Godot overlay's capture.gd stays the tool for real-time bursts.
 - Dotwork: new `bdf` lane: a downloaded bitmap font (such as an OFL CJK pixel font) cut down to the characters the
   game's strings use, with a coverage check that names each missing character and where it is used; the licence
   travels with the font. No font ships in the kit.

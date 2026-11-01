@@ -297,7 +297,7 @@ Timing on the tested GPU: a sprite about 18 s, a texture tile with variants abou
 - Fonts: load the `.fnt` as a `FontFile`; white ink is tinted by `font_color`; gradient title fonts are coloured.
 - UI kit: `assets/ui/theme_<name>.tres` (the kit's shell loads the first `assets/ui/theme_*.tres`, sorted by name); textures in
   `assets/art/ui/uikit/<name>/`; set the project's default texture filter to Nearest. Prompt glyphs: `assets/ui/glyphs/<name>.png`,
-  1x and 16 px tall (draw them at whole multiples), `glyphs.json` gives each width. `cursor_pointer.png` / `cursor_select.png`
+  1x and 16 px tall (draw them at whole multiples), glyphs.json gives each width. `cursor_pointer.png` / `cursor_select.png`
   (hotspots in the manifest). `uikit_preview_<name>.tscn` shows every control; `verify` checks its Theme items in Godot and walks
   its focus chain with ui_down / ui_up (`UIKIT_FOCUS_RESULT PASS` in the log). Vertical sliders, vertical scroll bars and item lists
   use ui_up / ui_down themselves, so they sit last in a focus chain (or are reached with ui_left / ui_right).

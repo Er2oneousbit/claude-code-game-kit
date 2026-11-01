@@ -26,7 +26,9 @@ launch. Steam facts here come from Valve's documentation (F39); the rest is labe
 
 ## 3. Trailer (practice)
 1. Record real gameplay at the target resolution: `dev.py smoke --record` gives frame bursts; OBS (or the engine's
-   own movie writer, such as Godot's `--write-movie`) for longer sequences and live play.
+   own movie writer, such as Godot's `--write-movie`) for longer sequences and live play. In Godot,
+   `python tools/art/dotwork/dotwork.py capture --scene <scene> --frames N --fps F` wraps the movie writer: every frame
+   at a fixed rate, for clean trailer cuts.
 2. Gameplay in the first few seconds, no long logo intro. 30 to 90 seconds; end on the logo, the platforms and "Wishlist
    now".
 3. Captions on screen for any spoken words (players watch muted; `SOP-20` applies to trailers too).
