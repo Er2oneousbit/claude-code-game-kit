@@ -223,13 +223,24 @@ func _iso_check(ts, tset, base, paint, shape):
 '''
 
 
+def project_images(project):
+    """res:// paths of the icon and boot splash project.godot names (the store lane's "apply" sets them), so verify
+    proves they import and load as well."""
+    p = os.path.join(project, "project.godot")
+    if not os.path.isfile(p):
+        return []
+    with open(p, encoding="utf-8") as f:
+        return sorted(set(re.findall(r'^(?:config/icon|boot_splash/image)="(res://[^"]+)"', f.read(), re.M)))
+
+
 def verify(settings, files):
     """Prove the files load in the game itself: import (the game's tools/dev.py when present), the loader above on
-    every .tres / .tscn / .fnt this run wrote (terrain sets are painted and checked), then the game's smoke test.
+    every .tres / .tscn / .fnt this run wrote (terrain sets are painted and checked) and the project's icon and boot
+    splash, then the game's smoke test.
     files: project-relative paths (the manifest's rows). Writes <work>/verify_report.json."""
     godotrun.project_ok(settings)
     res = sorted({godotrun.res_of(settings, os.path.join(settings.project, f)) for f in files
-                  if f.endswith((".tres", ".tscn", ".fnt"))})
+                  if f.endswith((".tres", ".tscn", ".fnt"))} | set(project_images(settings.project)))
     report = {"project": settings.project, "resources": res}
     code, out = godotrun.import_project(settings)
     report["import_exit"], report["import_log_tail"] = code, out[-2000:]

@@ -30,7 +30,7 @@ import fcore  # noqa: E402
 
 LANES = ("props", "effects", "tiles", "ui", "icons", "portraits", "tools", "img2px", "fonts", "battle_bgs", "enemies",
          "windows", "balloons", "scenes", "hitfx", "spells", "animprops", "vehicles", "widgets", "transitions", "weather",
-         "status", "npcs", "platforms", "iso", "uikit")
+         "status", "npcs", "platforms", "iso", "uikit", "store", "screens", "bdf", "diorama")
 
 
 # ---- binding -------------------------------------------------------------------------
@@ -293,6 +293,19 @@ def cmd_verify(a):
     return 0
 
 
+def cmd_capture(a):
+    s = setup_run(a)
+    if not s.godot():
+        raise fcore.ToolError("capture records a Godot scene; with --engine none there is no scene to run")
+    import capture
+    r = capture.run(s, a.scene, a.frames, a.fps, capture.parse_size(a.size) if a.size else None, a.out, a.gif)
+    print(f"[ OK ] capture: {r['frames']} frames at {r['fps']} fps in {r['out']}; first and last frame differ in "
+          f"{r['first_last_changed_px']} px; strip {r['strip']}" + (f"; gif {r['gif']}" if r.get("gif") else ""))
+    if not r["first_last_changed_px"]:
+        print("[warn] the first and last frame are identical: nothing moved (a still scene, or too few frames)")
+    return 0
+
+
 def cmd_aseprite(a):
     s = setup_run(a)
     import aseprite
@@ -470,6 +483,16 @@ def build_parser():
 
     p = sub.add_parser("verify", parents=[common], help="prove this game's Dotwork assets load (Godot)")
     p.set_defaults(fn=cmd_verify)
+
+    p = sub.add_parser("capture", parents=[common], help="record a scene with Godot's Movie Maker (trailer frames)")
+    p.add_argument("--scene", required=True, help="res:// path or a path in the game of the scene to record")
+    p.add_argument("--frames", type=int, default=90, help="frames to write (default 90)")
+    p.add_argument("--fps", type=int, default=30, help="fixed frame rate (default 30)")
+    p.add_argument("--size", help="window size WIDTHxHEIGHT (default: the project's; a game that stretches its "
+                   "viewport still writes frames at the viewport size)")
+    p.add_argument("--out", help="folder in the game for the PNGs (default <src_dir>/captures/<scene>)")
+    p.add_argument("--gif", action="store_true", help="also write a GIF of the capture")
+    p.set_defaults(fn=cmd_capture)
 
     p = sub.add_parser("aseprite", parents=[common], help="editable .aseprite sources / re-export after hand polish")
     p.add_argument("--reexport", action="store_true", help="push hand-polished .aseprite files back into the game")

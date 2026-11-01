@@ -13,7 +13,11 @@ battle backgrounds (optionally with drifting cloud layers), title screens, icons
 talking frames, pixel fonts, window skins, HUD widgets (gauges, button states, a Theme), a menu UI kit (one Theme for
 every settings / pause menu control in every state, input prompt glyphs, cursors), screen transitions, weather,
 status-effect loops, emote balloons, 8-direction vehicles, treasure chests / doors / switches / save points, props
-animated by any motion (Wan clips), sprite edits and normal maps, and image-to-pixel-art.
+animated by any motion (Wan clips), sprite edits and normal maps, image-to-pixel-art, store and platform art (every
+Steam capsule and library size, a logo from a glyph font, the game icon and `.ico`, achievement icons, a boot splash)
+title / loading / credits screens, 2.5D dioramas (tiles as 3D blocks, props and characters as billboards), and
+bitmap fonts you bring (a BDF such as an OFL CJK pixel font) cut down to
+the characters your game's text uses.
 Model-free tools: palette swaps (`recolor`, and `recolor_of` in the enemies lane) and `clean` (any image to clean pixel
 art on the game palette).
 
@@ -28,6 +32,7 @@ should work (Dotwork itself is plain Python + HTTP); the numbers below are what 
 4. [Lanes and their limits](#lanes-and-their-limits)
 5. [Godot notes](#godot-notes)
 6. [Palettes and style references](#palettes-and-style-references)
+   - [Store art (Steam sizes)](#store-art-steam-sizes)
 7. [Licences](#licences)
 8. [Tests](#tests) and [troubleshooting](#troubleshooting)
 
@@ -139,6 +144,7 @@ or usage (the `[error]` line says what to fix). `preview KIND --help` lists each
 | `verify` | load every Dotwork asset of this game in Godot (and run its smoke test) |
 | `aseprite [--reexport]` | editable `.aseprite` sources; push hand-polished files back |
 | `preview battle\|title\|attack ...` | mock screens composed from the game's art (review only) |
+| `capture --scene S [--frames N] [--fps F] [--size WxH] [--gif]` | record any scene with Godot's Movie Maker: a fixed frame rate, every frame written as PNG (trailer cuts, side-by-side reviews), a contact strip and an optional GIF; a window opens for the capture |
 | `log --pack NAME [--dry-run]` | `docs/ASSET_LOG.md` row + evidence file for a pack |
 | `config` | print the merged settings |
 
@@ -191,6 +197,18 @@ pixel-art wording. Ready-to-run specs for every capability are in `examples/` (s
  "tools": [{"name": "guard_edit", "source": "assets/art/characters/guard/frames/spr_guard_idle_s_00.png",
             "edits": ["give him a red scarf"], "normal": true}],
  "img2px": [{"name": "tower", "source": "assets_src/concept/tower.png", "width": 96}],
+ "store": [{"name": "iron_oven", "title": "Iron Oven", "prompt": "a knight in iron armour holding a long loaf of bread",
+            "icon": "a round loaf crossed with an iron sword", "apply": true,
+            "achievements": [{"name": "first_loaf", "source": "assets/art/ui/icons/ui_icon_bread_32.png"}]}],
+ "bdf": [{"name": "ja", "source": "assets_src/fonts/ark-pixel-12px-proportional-ja.bdf",
+          "license": "assets_src/fonts/OFL.txt", "strings": ["data/strings_ja.json"]}],
+ "diorama": [{"name": "yard", "legend": {"g": {"top": "assets/art/tiles/street/base_grass_lush.png"},
+                                        "w": {"top": "assets/art/tiles/street/overlay_cobble.png", "tile": "solid",
+                                              "side": "assets/art/tiles/street/overlay_stone_wall.png", "height": 1}},
+              "rows": ["gggg", "gwwg", "gggg"], "sprites": [{"source": "assets/art/props/spr_barrel.png", "at": [0, 2]}]}],
+ "screens": [{"name": "title", "kind": "title", "backdrop": "assets/art/scenes/spr_scene_title.png", "title": "Iron Oven"},
+             {"name": "loading", "kind": "loading", "backdrop": "assets/art/scenes/spr_scene_title.png"},
+             {"name": "credits", "kind": "credits", "backdrop": "assets/art/scenes/spr_scene_title.png", "file": "CREDITS.md"}],
  "platforms": [{"name": "meadow", "fill": {"material": "dirt"}, "surface": {"material": "grass_lush"},
                 "background": {"prompt": "rolling green hills under a blue sky"}}],
  "iso": [{"name": "village", "floors": [{"material": "grass_lush", "variants": 2}, {"material": "cobble"}],
@@ -231,6 +249,10 @@ Honest list: these are the failure modes seen in testing and what Dotwork does a
 | characters (which way a view faces) | The rotation model reads "right side view" either way round from one character to the next (one test character's east view faced left, another's faced right; a front quarter view flipped on a third), so a fixed output order put some characters' east walk on the west | After the rotation, each east / west pair is judged by where the face sits in the head and swapped when the east view faces left (the log says so; clips and poses made from it move to `_old_facing/` and re-render). Back views and faceless characters (helmets, machines) cannot be judged: the manifest asks you to check them on the review sheet, and `"rot_swap": ["ne"]` swaps a pair by hand |
 | battle / emote poses (klein edits) | Vague wording returns the idle pose; some poses drop a signature prop | Wordings that name body positions (`BATTLE_POSES`, `FIELD_POSES`), `pose_text` per character, a per-pose seed fix |
 | effects (Wan) | Motion can turn particles into a face or a little figure | Effect-only prompt wording, `keep`, a new seed; review every effect. Or use the `spells` lane: fire, ice, bolt, heal, wind, burst (one-shots), orb and aura (loops), drawn in code with the kind's colour ramp or your own (`color`, `colors`), so every frame is exact, free and repeatable; it cannot draw a one-off subject (a summon's creature), which stays a Wan effect |
+| store | The key art is a render: the hero can land anywhere, and a busy picture leaves no calm spot for the logo. Steam allows no text but the game's name (and an official subtitle), none at all on the library hero | Each size crops the key art at a whole-number scale around `focus` and puts the logo on the calmest spot outside where the prompt places the hero (`logo_anchor: "fixed"` keeps the table's spots); review the sheet and pass your own `source` / `tall_source` art when a render will not do. The logo font has capitals, digits and title punctuation only (a missing character stops the run naming it). Screenshots are not made: Steam wants gameplay, so capture them from the game (`capture`, or the kit's `dev.py smoke --screenshot`) |
+| screens | A title screen's buttons only show: what New Game does is the game's | The kit's shell wires its own menus; use the screen as the backdrop and logo layer, or wire the buttons' `pressed` signals. The credits roll scrolls for a length worked out from the line count (24 px a line), so a theme with a much larger font needs `seconds` raised |
+| bdf (fonts you bring) | Hand-drawn glyph text cannot cover Chinese or Japanese (thousands of characters); a complete CJK pixel font is a download, and every glyph of it would make a big font | Point `source` at a BDF (Ark Pixel Font, OFL-1.1: github.com/TakWolf/ark-pixel-font, the 12 px proportional BDF set has ja, ko, zh_hans, zh_hant, zh_hk and zh_tw variants of 26,179 glyphs each; pick the variant of the language, since shared characters are drawn differently) and `strings` at the game's text: the `.fnt` keeps only the characters used plus ASCII (a menu and a story line came to about 120 glyphs on one 256 px page). A character the strings use that the font lacks stops the run naming it, the file and the key. Not checked: right-to-left scripts and shaping (Arabic, Hebrew), which BMFont cannot lay out |
+| diorama (2.5D) | Flat sprites in 3D are cards: a side-view prop shows its one face from every angle, and a character's 4 directions do not turn with the camera | Billboards turn around their vertical axis to face the camera (fixed-Y), so keep the camera's yaw fixed (the lane's camera looks from the south) and pick the animation that faces it (`walk_s`); blocks put the same side tile on all four faces. Image-to-3D models are not part of Dotwork (see Godot notes) |
 | sprites / props / icons | The refine pass can grow a figure past its canvas | Re-rendered smaller automatically (never rescaled); an icon prompt that fills the frame (a spiral) can still fail: reword it |
 | sprites | White background trapped inside a figure | Removed automatically; skipped for white subjects (`keep_white` / `holes` override) |
 | enemies (ground slabs) | The model bakes a soft ground shadow under a figure, and the palette has no dark neutral, so it came out as a light-grey slab (#28, #26) | Removed automatically (wide, flat, light, under the feet, with the outline ring that framed it; `keep_shadow: true` keeps it) and replaced by a dark dithered contact shadow drawn in code: `spr_enemy_<name>_shadow.png`, a `Shadow` child drawn behind the sprite (`shadow: false` skips it). Props: `"slab": "remove"` opts in (an iso plinth looks like a slab, so it is not the default) |
@@ -280,6 +302,15 @@ Timing on the tested GPU: a sprite about 18 s, a texture tile with variants abou
   its focus chain with ui_down / ui_up (`UIKIT_FOCUS_RESULT PASS` in the log). Vertical sliders, vertical scroll bars and item lists
   use ui_up / ui_down themselves, so they sit last in a focus chain (or are reached with ui_left / ui_right).
 - Animated water: TileSet atlas animation (4 frames by default); the editor previews it.
+- Store: `"apply": true` sets `application/config/icon` and the boot splash (`boot_splash/image`, `bg_color`,
+  `use_filter` off so the splash stays crisp) in `project.godot`; for the Windows export, point the preset's
+  `application/icon` at `assets/art/brand/<name>/icon_<name>.ico`. `verify` loads the icon and splash too.
+- Diorama: `diorama_<name>.tscn` is a `Node3D`: `Tiles` (a `PlaneMesh` per cell, a `BoxMesh` under raised ones),
+  `Sprites` (`Sprite3D` / `AnimatedSprite3D`, billboard fixed-Y, pixel size 1 / tile_px, nearest filter, alpha
+  scissor), a sun with shadows, ambient light and a `Camera3D` with optional depth of field. One unit is one tile.
+- Screens: `screen_<name>.tscn` is a full-rect `Control` over the backdrop (`TextureRect`, keep aspect covered,
+  nearest filter), using the first `assets/ui/theme_*.tres` when the game has one; the loading screen's
+  `Progress` is a `TextureProgressBar` (set `value`), the credits `Player` autoplays the roll.
 
 ## Palettes and style references
 Dotwork ships two palettes, both built from dotwork's own renders (no third-party art):
@@ -333,6 +364,34 @@ finished sprites (paths relative to the game) and Dotwork uploads them once per 
 copies for style, outline and shading; changing the list re-renders what used it. A spec can switch the reference off
 for one pack with `"design": {"character": {"style_ref": ""}}`.
 
+## Store art (Steam sizes)
+What the `store` lane writes to `assets_src/store/<name>/steam/`, checked against the Steamworks documentation on
+2026-11-01 (pages: store/assets/standard, store/assets/libraryassets, store/assets/rules, store/assets,
+store/assets/community, features/achievements/ach_guide on partner.steamgames.com). Steam says older dimensions are no
+longer accepted, so check the pages again before a release; the sizes live in `SIZES` in `lane_store.py`.
+
+| File | Size | Steam's rule | What Dotwork puts there |
+|---|---|---|---|
+| `header_capsule.png` | 920 x 430 | no text beyond the game's name; logo legible | wide key art, logo |
+| `small_capsule.png` | 462 x 174 | the logo should nearly fill it | wide key art, logo at up to 90 % of the width |
+| `main_capsule.png` | 1232 x 706 | no text beyond the name | wide key art, logo |
+| `vertical_capsule.png` | 748 x 896 | no text beyond the name | tall key art, logo |
+| `page_background.png` | 1438 x 810 | optional, ambient | wide key art, no logo |
+| `library_capsule.png` | 600 x 900 | logo, no other text | tall key art, logo |
+| `library_header.png` | 920 x 430 | no text beyond the name | wide key art, logo |
+| `library_hero.png` | 3840 x 1240 | no text at all; keep what matters in the centred 860 x 380 | wide key art, no logo |
+| `library_logo.png` | 1280 x 720 | transparent PNG, the logotype only | the logo, transparent |
+| `shortcut_icon.png` / `.ico` | 256 x 256 | ICO or PNG (256 or 512) | the game icon x4; the .ico holds 16 to 256 |
+| `app_icon.jpg` | 184 x 184 | JPG | the game icon x3, cropped 4 px a side, on `bg` |
+| `achievements/<name>.png`, `<name>_locked.png` | 256 x 256 | PNG recommended; achieved in colour, unachieved greyscale | your icon on a plate, and its greyed twin |
+
+Base capsules may carry only the artwork, the game's name and an official subtitle: no review scores, awards,
+discount or "buy now" text, or other products. All capsule art must be PG-13. Screenshots (1920 x 1080 or larger,
+16:9, at least five) must show gameplay, so Dotwork does not make them. Everything is pixel art at whole-number
+scales: a size takes the smallest whole multiple of the key art that covers it and crops the rest (the `focus` point
+stays in), so no pixel is ever resampled. The game itself gets `assets/art/brand/<name>/`: `icon_<name>.png` (256),
+`icon_<name>.ico`, `logo_<name>.png` (4x, for a title screen) and `boot_splash_<name>.png` (640 x 360).
+
 ## Licences
 - Dotwork: the kit's licence (MIT). `glyphs/*.txt` (fonts authored as text) and the palettes are part of Dotwork.
 - Models: every file in `models.lock.json` carries its licence; the ones Dotwork uses are Apache-2.0. Check each model
@@ -340,6 +399,10 @@ for one pack with `"design": {"character": {"style_ref": ""}}`.
 - SpriteKiln (GPL-3.0) and ComfyUI-GGUF (Apache-2.0) are installed by you and called over HTTP; Dotwork contains none
   of their code or workflow files.
 - What you generate: no third-party art is involved unless you supply it (`source`, `style_refs`, `img2px`).
+- Fonts you bring (`bdf`): the font's own licence applies. `license` is required and is copied next to the `.fnt`
+  as `font_<name>_LICENSE.txt`; the SIL Open Font License lets you ship a cut-down copy inside a game when the
+  licence text goes with it and the font declares no Reserved Font Name (Ark Pixel Font declares none). Credit it
+  in `docs/ASSET_LOG.md`.
 
 ## Tests
 `python tools/art/dotwork/tests/test_dotwork.py` - offline, under a minute: a stand-in ComfyUI on 127.0.0.1 with canned
