@@ -62,7 +62,7 @@ are from Valve's own documentation read on 2026-11-01 (F39); check the linked pa
 - **Linux:** no signing; ship a tarball or an AppImage, or let Steam and itch handle it.
 
 ## 6. Legal checklist (not legal advice)
-Fill in, with a lawyer for anything commercial at scale:
+The full fill-in checklist is `docs/LEGAL.md`; the short version, with a lawyer for anything commercial at scale:
 - **Licenses and credits:** `python tools/credits.py` builds CREDITS.md and THIRD_PARTY_LICENSES.md from
   `docs/ASSET_LOG.md` and `docs/licenses/`; ship both with the build. An asset without a known license does not ship
   (`SOP-04`).

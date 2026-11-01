@@ -72,7 +72,7 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 | Screen shake, hitstop, easing, camera feel ("juice") | `docs/sop/SOP-18-game-feel.md` via `/game-feel` |
 | Menus, settings, saves, rebinding, gamepad prompts, localization, crash logs | `docs/sop/SOP-19-front-end-and-settings.md` via `/game-shell` |
 | Subtitles, text size, colour, motion and flash safety, difficulty | `docs/sop/SOP-20-accessibility.md` |
-| Steam and itch.io: store page, uploads, achievements, signing, CI, legal | `docs/sop/SOP-21-ship-on-steam-and-itch.md` |
+| Steam and itch.io: store page, uploads, achievements, signing, CI, legal | `docs/sop/SOP-21-ship-on-steam-and-itch.md`, `docs/LEGAL.md` |
 | Balance, economy, progression curves | `docs/sop/SOP-22-balancing-and-economy.md` |
 | Store page, trailer, press kit, wishlists | `docs/sop/SOP-23-marketing.md` |
 | Put it on GitHub (license, scan, lock down) | `docs/sop/SOP-13-publish-to-github.md` via `/publish-repo` |
