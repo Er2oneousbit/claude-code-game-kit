@@ -44,6 +44,7 @@ func _ready() -> void:
 	ui_layer.name = "UI"
 	ui_layer.layer = UI_LAYER
 	add_child(ui_layer)
+	Shell.apply_all() # the kit's front end owns the window and the input map
 	ui_root = Control.new()
 	ui_root.name = "Root"
 	ui_root.mouse_filter = Control.MOUSE_FILTER_IGNORE

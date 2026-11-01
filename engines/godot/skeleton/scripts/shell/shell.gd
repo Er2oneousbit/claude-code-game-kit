@@ -90,10 +90,18 @@ func _ready() -> void:
 	Log.open_file(path(LOG_FILE), _log_header())
 	if not CrashHook.install():
 		Log.warn("shell", "no crash hook on this Godot version (needs 4.5+): crash files are not written")
+	var player_chose: bool = FileAccess.file_exists(path(SETTINGS_FILE))
 	load_settings()
 	_color_filter = ColorFilter.new()
 	add_child(_color_filter)
-	apply_all()
+	if player_chose:
+		apply_all()
+	else:
+		# Nothing saved yet: leave the project's own window size and input map alone (a game with its own main
+		# scene keeps its look and controls). The kit's front end calls apply_all() when it starts.
+		_apply_audio()
+		_apply_access()
+		_update_locale(false)
 	Log.info("shell", "data folder: %s" % data_dir)
 	telemetry("session_start", version)
 
