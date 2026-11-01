@@ -32,6 +32,13 @@ examples were built and tested on one Windows 11 machine.
   [#52](https://github.com/Er2oneousbit/claude-code-game-kit/issues/52).
 - **UI kit prompt glyphs** are generic; swapping in official console glyphs is not documented or tested:
   [#53](https://github.com/Er2oneousbit/claude-code-game-kit/issues/53).
+- **Hand polish (Aseprite, Pixelorama):** `dotwork.py aseprite` saves over an existing `.aseprite`, so a rebuild before
+  `--reexport` wipes hand polish ([#64](https://github.com/Er2oneousbit/claude-code-game-kit/issues/64), a bug; Pixelorama has an `--overwrite` guard); an edit made by a person
+  in either editor's window is not tried yet ([#65](https://github.com/Er2oneousbit/claude-code-game-kit/issues/65)); partly transparent layer pixels are not compared with
+  Pixelorama's own blend ([#66](https://github.com/Er2oneousbit/claude-code-game-kit/issues/66)); reading Pixelorama 1.2.4 files is built from its release-candidate source
+  ([#67](https://github.com/Er2oneousbit/claude-code-game-kit/issues/67)); spells, VFX, status marks, animated props, balloons and vehicles have no hand-polish path
+  ([#68](https://github.com/Er2oneousbit/claude-code-game-kit/issues/68)); a `.pxo` saved by Pixelorama stores your local export path, which a public repository would show
+  ([#69](https://github.com/Er2oneousbit/claude-code-game-kit/issues/69)).
 - **Godot sliders** draw one highlight for hover and focus, so a focused slider looks hovered (the kit's settings
   screen outlines the focused row instead): [#54](https://github.com/Er2oneousbit/claude-code-game-kit/issues/54).
 - **Web shell:** the pseudo-locale drive counts 260 or 261 labels on the same build:
