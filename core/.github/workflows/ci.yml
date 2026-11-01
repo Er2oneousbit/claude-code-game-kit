@@ -1,13 +1,16 @@
 # ---------------------------------------------------------------------------
 # ci.yml
 # Purpose : Continuous integration for this game: every push and pull request runs `python tools/dev.py check` and
-#           `test` on a GitHub-hosted Linux runner, plus the credits check, so a broken build or a missing license is
-#           caught before anyone ships it (docs/sop/SOP-21 step 7).
-# Notes   : The engine comes from .game-kit.json. Godot, LÖVE, web, web-3d and Bevy are set up here. Unity, Unreal and
-#           RPG Maker MZ need a license or an editor install that a hosted runner does not have: the job says so and
-#           runs only the engine-free checks (use a self-hosted runner for their tests). C++/SDL2 builds SDL2 through
-#           vcpkg on the first run (slow, cached afterwards). Written by the kit; not yet run on GitHub by the kit
-#           itself (verify on your first push). No secrets are needed; never print one in a step.
+#           `test` on a GitHub-hosted Linux runner, plus the golden-vector and credits checks, so a broken build or a
+#           stale credits file is caught before anyone ships it (docs/sop/SOP-21 step 7).
+# Notes   : The engine comes from .game-kit.json. Godot, LÖVE, web, web-3d, Bevy and C++/SDL2 are set up here. Unity,
+#           Unreal and RPG Maker MZ need a license or an editor install that a hosted runner does not have: the job
+#           says so and runs only the engine-free checks (use a self-hosted runner for their tests). Godot runs
+#           `test` only when addons/gut is committed. C++/SDL2 uses the runner's preinstalled vcpkg and builds SDL2
+#           on every run (slow; add a vcpkg binary cache if it matters). Written by the kit and checked as YAML, not
+#           yet run on GitHub by the kit itself (verify on your first push). The publish check (secrets, personal
+#           data, LICENSE) belongs before a repo goes public: python tools/publish_check.py (docs/sop/SOP-13), not
+#           here, because a new game has no LICENSE yet. No secrets are needed; never print one in a step.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 name: ci
@@ -27,7 +30,7 @@ env:
 jobs:
   check-and-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,33 +41,24 @@ jobs:
           python-version: "3.12"
 
       - name: Which engine
-        id: engine
         run: |
           engine=$(python -c "import json; print(json.load(open('.game-kit.json', encoding='utf-8')).get('engine', ''))")
-          echo "id=$engine" >> "$GITHUB_OUTPUT"
+          echo "ENGINE=$engine" >> "$GITHUB_ENV"
           echo "Engine: $engine"
 
       - name: Node (web, web-3d)
-        if: steps.engine.outputs.id == 'web' || steps.engine.outputs.id == 'web-3d'
+        if: env.ENGINE == 'web' || env.ENGINE == 'web-3d'
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Rust (bevy)
-        if: steps.engine.outputs.id == 'bevy'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev libudev-dev pkg-config
-          rustup toolchain install stable --profile minimal
-
       - name: Set up the engine
         run: |
-          case "${{ steps.engine.outputs.id }}" in
+          case "$ENGINE" in
             godot)
               curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
               unzip -q godot.zip -d "$RUNNER_TEMP/godot"
               echo "GODOT_BIN=$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
-              [ -d addons/gut ] || echo "::warning::addons/gut is not in the repo, so dev.py test will report that GUT is missing (docs/ENGINE_FLOW.md 'Setting up tests')"
               ;;
             love2d)
               sudo add-apt-repository -y "$LOVE_PPA"
@@ -75,21 +69,41 @@ jobs:
             web|web-3d)
               python tools/dev.py setup
               ;;
+            bevy)
+              sudo apt-get update
+              sudo apt-get install -y libasound2-dev libudev-dev pkg-config
+              rustup toolchain install stable --profile minimal
+              ;;
+            cpp-sdl2)
+              # SDL2 from vcpkg needs the X11 and audio headers on Linux (verify the list on your first run)
+              sudo apt-get update
+              sudo apt-get install -y ninja-build pkg-config libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
+                libxi-dev libxss-dev libxinerama-dev libasound2-dev libpulse-dev autoconf automake libtool
+              echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
+              ;;
             unity|unreal|rpgmaker-mz)
-              echo "::notice::${{ steps.engine.outputs.id }} needs a licensed editor: only the engine-free checks run here"
+              echo "::notice::$ENGINE needs a licensed editor: only the engine-free checks run here"
               ;;
           esac
 
       - name: dev.py check
-        if: steps.engine.outputs.id != 'unity' && steps.engine.outputs.id != 'unreal' && steps.engine.outputs.id != 'rpgmaker-mz'
-        run: python tools/dev.py check
+        if: env.ENGINE != 'unity' && env.ENGINE != 'unreal' && env.ENGINE != 'rpgmaker-mz'
+        run: |
+          if [ "$ENGINE" = love2d ]; then xvfb-run -a python tools/dev.py check; else python tools/dev.py check; fi
 
       - name: dev.py test
-        if: steps.engine.outputs.id != 'unity' && steps.engine.outputs.id != 'unreal' && steps.engine.outputs.id != 'rpgmaker-mz'
-        run: python tools/dev.py test
+        if: env.ENGINE != 'unity' && env.ENGINE != 'unreal' && env.ENGINE != 'rpgmaker-mz'
+        run: |
+          if [ "$ENGINE" = godot ] && [ ! -d addons/gut ]; then
+            echo "::warning::addons/gut is not committed, so the GUT tests cannot run here (docs/ENGINE_FLOW.md 'Setting up tests')"
+          elif [ "$ENGINE" = love2d ]; then
+            xvfb-run -a python tools/dev.py test
+          else
+            python tools/dev.py test
+          fi
 
       - name: dev.py smoke (LÖVE under a virtual display)
-        if: steps.engine.outputs.id == 'love2d'
+        if: env.ENGINE == 'love2d'
         run: xvfb-run -a python tools/dev.py smoke
 
       - name: Golden vectors are current
@@ -98,6 +112,3 @@ jobs:
       - name: Credits match the asset log
         run: |
           if [ -f CREDITS.md ]; then python tools/credits.py --check --allow-placeholders; else echo "No CREDITS.md yet: run python tools/credits.py before the first release"; fi
-
-      - name: Publish check (secrets and personal data)
-        run: python tools/publish_check.py

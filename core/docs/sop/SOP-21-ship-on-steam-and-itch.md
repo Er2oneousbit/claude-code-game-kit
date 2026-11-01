@@ -10,7 +10,7 @@ are from Valve's own documentation read on 2026-11-01 (F39); check the linked pa
 |---|---|---|
 | Steamworks account and an app (Steam Direct) | partner.steamgames.com | A one-time fee per app (verify the current amount on Steamworks) |
 | itch.io account | itch.io | Free; you pick the revenue share |
-| Store art | Steam sizes in step 2; Dotwork's store lane makes them from the game's own art | Logo or title only on capsules (E77) |
+| Store art | Steam sizes in step 2; an image editor (pixel art: scale by whole numbers, then place on each canvas) | Logo or title only on capsules (E77) |
 | Signing certificate (Windows), Apple Developer Program (macOS) | step 5 | Paid; Windows SmartScreen warns about unsigned downloads (verify) |
 | Age rating (consoles, mobile, many stores) | IARC, through each participating store (E88) | IARC states developers have rated "at no cost" |
 
@@ -34,7 +34,8 @@ are from Valve's own documentation read on 2026-11-01 (F39); check the linked pa
    LocalPath and DepotPath, FileExclusion for debug files) (E76). Keep them in the repo under `tools/steam/`, without
    any login.
 3. Upload with `steamcmd +login <build account> +run_app_build <app_build.vdf> +quit`. The build account needs "Edit App
-   Metadata" rights. Use `SetLive` to put a build on a beta branch automatically; the default branch can only be set
+   Metadata" rights; the first login asks for a Steam Guard code, so run it by hand once on the machine that uploads
+   (verify the current flow on Steamworks). Use `SetLive` to put a build on a beta branch automatically; the default branch can only be set
    live by hand in the App Admin panel (E76), which is the last human check before players get it.
 4. **itch.io:** `butler push build/windows user/game:windows --userversion 1.2.0` (E84). Channel names containing
    `windows`, `linux`, `mac` or `android` tag the platform. butler uploads only what changed.
@@ -85,12 +86,13 @@ from a tagged commit (`SOP-06`), never from a working copy.
 
 ## Done when
 - The store page is live as Coming Soon with assets at the listed sizes and the AI disclosure filled.
-- A build went from a tag through CI to a beta branch and was played from Steam (or itch) on a clean machine.
+- A build from a tagged commit with green CI went to a beta branch (or an itch channel) and was played from there on a
+  clean machine. The kit's CI checks and tests; the upload is a step you run (step 3).
 - Executables are signed and verified (or the reason they are not is written down).
 - CREDITS and THIRD_PARTY_LICENSES ship with the build; the privacy policy exists if anything is collected.
 
 ## Common mistakes
-- A Coming Soon page put up a month before launch: almost no wishlists.
+- A Coming Soon page put up a month before launch, which leaves little time to gather wishlists (tip).
 - Marketing text, awards or review quotes on capsules (E77 forbids them).
 - Uploading straight to the default branch with no human check.
 - Credentials in a VDF, a script or CI logs.

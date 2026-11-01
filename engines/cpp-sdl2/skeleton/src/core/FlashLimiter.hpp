@@ -4,10 +4,13 @@
 //           window_seconds (three per second by default). Pure logic, no SDL, time injected.
 // Usage   : core::FlashLimiter flashes;          // or FlashLimiter(max_flashes, window_seconds)
 //           before a white-out or hit flash:
-//             if (!settings["access"]["flash_limit"].get<bool>() || flashes.request(now_seconds)) flash();
+//             if (flashes.request(real_seconds)) flash(flash_limit_setting ? kGentle : kFull);
 //             else use a gentler cue (a tint, a shake, a sound)
-// Notes   : request() records the flash when it allows it, so ask only when the flash will really be drawn.
-//           now is any steadily rising clock in seconds (game time is fine). Matches tools/golden_vectors.py
+// Notes   : The limiter is always on: no setting skips it (docs/sop/SOP-18, F34). The player's flash_limit
+//           setting only makes the flashes it allows gentler. request() records the flash when it allows it,
+//           so ask only when the flash will really be drawn. now is REAL time in seconds (SDL_GetTicks64() /
+//           1000.0), not game time: hitstop or slow motion must not squeeze flashes together. Matches
+//           tools/golden_vectors.py
 //           (FlashLimiter), checked against data/golden/juice.json.
 //
 // Pseudocode:

@@ -2,9 +2,11 @@
 // logic/flash_limiter.rs
 // Purpose : Photosensitivity guard: at most max_flashes full-screen flashes in any window_s seconds (three per
 //           second by default). Ask it before every flash.
-// Usage   : if limiter.request(elapsed_secs) { start_flash(); }   // refused: skip the flash, keep the sound
-// Notes   : `now` is any clock that only moves forward (game seconds). Respect the player's flash_limit setting
-//           by asking the limiter whenever it is on. Tested in tests/golden.rs against data/golden/juice.json.
+// Usage   : if limiter.request(real_elapsed_secs) { start_flash(gentle); }
+//           (refused: skip the flash, keep the sound)
+// Notes   : `now` is REAL time (Time<Real> elapsed seconds), not game time, so hitstop or slow motion cannot
+//           squeeze flashes together. The limiter is always on: no setting skips it (docs/sop/SOP-18, F34);
+//           the player's flash_limit setting only makes the allowed flashes gentler. Tested in tests/golden.rs against data/golden/juice.json.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 

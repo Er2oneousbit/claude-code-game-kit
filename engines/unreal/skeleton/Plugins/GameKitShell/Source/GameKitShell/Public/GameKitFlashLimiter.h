@@ -4,9 +4,11 @@
 //           second by default), so effects cannot strobe at the rates that trigger seizures.
 // Usage   : FGameKitFlashLimiter Flashes;                  // or FGameKitFlashLimiter(MaxFlashes, WindowSeconds)
 //           when an effect wants a flash:
-//             if (!bFlashLimitSetting || Flashes.Request(GetWorld()->GetRealTimeSeconds())) { PlayFlash(); }
+//             if (Flashes.Request(GetWorld()->GetRealTimeSeconds())) { PlayFlash(bFlashLimitSetting); }
 //             else { PlaySubtleVersion(); }               // e.g. a vignette pulse instead of a white screen
-// Notes   : Pass real time (not dilated game time), so hitstop or slow motion cannot squeeze flashes together.
+// Notes   : The limiter is always on: no setting skips it (docs/sop/SOP-18, F34); the player's flash_limit
+//           setting only makes the allowed flashes gentler. Pass real time (not dilated game time), so
+//           hitstop or slow motion cannot squeeze flashes together.
 //           The three-per-second rule is WCAG's flash rule (docs/sop/SOP-20). Matches
 //           tools/golden_vectors.py (FlashLimiter), checked against data/golden/juice.json.
 //

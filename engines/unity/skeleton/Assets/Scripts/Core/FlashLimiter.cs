@@ -3,9 +3,11 @@
 // Purpose : Photosensitivity guard: at most MaxFlashes full-screen flashes in any window (three per second
 //           by default). Checked against data/golden/juice.json ("flash_limiter").
 // Usage   : var flashes = new FlashLimiter();
-//           before a full-screen flash: if (!settingFlashLimit || flashes.Request(Time.unscaledTimeAsDouble)) Flash();
-// Notes   : No UnityEngine types (EditMode tests run it). A refused flash is skipped, not queued. The access
-//           setting "flash_limit" (GameSettings) is on by default; keep it on unless the player turns it off.
+//           before a full-screen flash:
+//             if (flashes.Request(Time.unscaledTimeAsDouble)) Flash(flashLimitSetting ? Gentle : Full);
+// Notes   : No UnityEngine types (EditMode tests run it). A refused flash is skipped, not queued. The limiter is
+//           always on: no setting skips it (docs/sop/SOP-18, F34); the access setting "flash_limit" (on by
+//           default) only makes the allowed flashes gentler.
 //           now is any clock in seconds that only goes forward (unscaled, so hitstop cannot bunch flashes).
 //
 // Pseudocode:

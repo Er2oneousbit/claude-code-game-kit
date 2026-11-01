@@ -61,8 +61,8 @@ def parse_log(text):
     for line in text.splitlines():
         cells = [c.strip() for c in line.strip().strip("|").split("|")] if line.strip().startswith("|") else None
         if cells is None:
-            if in_table:
-                break
+            if in_table and line.strip():
+                break                                       # a heading or prose ends the table; blank lines do not
             continue
         if not in_table:
             if cells and cells[0].lower() == "id":

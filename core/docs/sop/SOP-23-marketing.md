@@ -16,8 +16,8 @@ launch. Steam facts here come from Valve's documentation (F39); the rest is labe
 ## 2. The hook and the store page
 1. One sentence that says what the player does and why it is different (the GDD's pitch and twist). Test it on people
    who have not seen the game.
-2. Capsules: logo or title only, readable at the small size (E77); Dotwork's store lane makes every size. The
-   capsule is what most players see first: show the genre and mood at a glance.
+2. Capsules: logo or title only, readable at the small size (E77); make each size from the key art (pixel art: scale by whole
+   numbers, then place on the canvas). The capsule is what most players see first: show the genre and mood at a glance.
 3. Screenshots: real gameplay only (E77), the most readable moments, UI visible. The first screenshot and the first
    seconds of the trailer do most of the work (tip).
 4. Description: the hook first, then three to five short bullets of what you do, then features (including accessibility
@@ -25,8 +25,8 @@ launch. Steam facts here come from Valve's documentation (F39); the rest is labe
    description is optional.
 
 ## 3. Trailer (practice)
-1. Record real gameplay at the target resolution: `dev.py smoke --record` gives frame bursts; Dotwork's capture
-   command records longer sequences; OBS for live play.
+1. Record real gameplay at the target resolution: `dev.py smoke --record` gives frame bursts; OBS (or the engine's
+   own movie writer, such as Godot's `--write-movie`) for longer sequences and live play.
 2. Gameplay in the first few seconds, no long logo intro. 30 to 90 seconds; end on the logo, the platforms and "Wishlist
    now".
 3. Captions on screen for any spoken words (players watch muted; `SOP-20` applies to trailers too).
@@ -49,7 +49,7 @@ launch. Steam facts here come from Valve's documentation (F39); the rest is labe
 - The press kit exists and the devlog has a rhythm.
 
 ## Common mistakes
-- Waiting for the game to be "ready" before the store page: wishlists take months to grow.
+- Waiting for the game to be "ready" before the store page: wishlists need time to build (tip).
 - Text, quotes or awards on capsules (E77).
 - A trailer that opens with logos and cinematics instead of play.
 - Joining Next Fest with a weak demo: a game gets one Next Fest (E81).

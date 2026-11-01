@@ -6,7 +6,8 @@
 //           each Tick:      const double GameDt = Hitstop.ScaledDt(DeltaSeconds);  // step gameplay with GameDt
 // Notes   : Overlapping hits keep the longest freeze, capped at MaxSeconds, so a flurry never locks the
 //           game. Freeze gameplay only: menus, audio and the camera shake keep the real delta. In a world,
-//           the same number can drive UGameplayStatics::SetGlobalTimeDilation or an actor's CustomTimeDilation.
+//           scale the gameplay actors' delta (an actor's CustomTimeDilation, or your own tick), not
+//           UGameplayStatics::SetGlobalTimeDilation, which also slows UI and timers (docs/sop/SOP-18).
 //           Matches tools/golden_vectors.py (Hitstop), checked against data/golden/juice.json.
 //
 // Pseudocode:

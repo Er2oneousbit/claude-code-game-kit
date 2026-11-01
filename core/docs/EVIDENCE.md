@@ -155,7 +155,7 @@ capped at **D** until an independent source (B) or this kit's own test (A) shows
 | F30 | Judge a generator over many generated levels with metrics and agents, not by looking at a few | **A** | E56, K01 | `SOP-17` |
 | F31 | Shipped generators assemble hand-made pieces on a path that is guaranteed by construction (local retries are E59 alone: a tip) | **B** (two independent write-ups of two games) | E58, E59 | `SOP-17` |
 | F32 | Automated players must also take the cheap ways through (lazy generic answers, exploits), and a level or build passes only if those lose while the intended play wins | **B** (two independent developers) plus the kit's own bot pairs | E54, E60, K01 | `SOP-14` step 6 |
-| F33 | Every camera shake, bob and full-screen effect has an intensity setting (0 to 100 %) and a way to turn it off; reduce motion turns them off | **A** | E72, E69 | `SOP-18`, `SOP-20` |
+| F33 | Every camera shake, bob and full-screen effect can be turned off (E72's examples use 0 to 100 % intensity sliders); reduce motion turns them off | **A** | E72, E69 | `SOP-18`, `SOP-20` |
 | F34 | Full-screen flashes: at most three in any one second, or below the luminance and red thresholds; remove triggers rather than warn | **A** | E73, E74 | `SOP-18`, `SOP-20` |
 | F35 | Subtitles: on by default (or set before any sound), speaker named, at most two lines of about 40 characters, solid background with adjustable opacity, scalable to 200 %; captions for important sounds | **A** | E71, E69 | `SOP-20` |
 | F36 | Text: smallest body height 18 px at 1080p on PC (26 px console), 9 px at 1280x800 on Steam Deck (12 px recommended); scalable to 200 % | **A** | E70, E75 | `SOP-19`, `SOP-20` |

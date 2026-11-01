@@ -34,8 +34,9 @@ delta), or a slowed game could let more than three flashes through in a real sec
 clock or random number generator: the same inputs give the same frames, in tests and in replays.
 
 ## 3. Rules that protect players (A)
-- **Every shake, camera bob and full-screen effect has an intensity setting and an off switch** (F33). The shell's
-  settings give `shake_scale` (0 to 100 %) and `reduce_motion`; pass `effective_shake(settings)` as the shake's
+- **Every shake, camera bob and full-screen effect can be turned off** (F33); an intensity slider is the form the
+  guideline's examples use, and the kit gives one. The shell's settings give `shake_scale` (0 to 100 %) and
+  `reduce_motion`; pass `effective_shake(settings)` as the shake's
   intensity, and turn camera bob, screen-wide pulses and parallax wobble off with reduce motion.
 - **No more than three full-screen flashes in any one second, and prefer removing a trigger to warning about it**
   (F34). The flash limiter is always on: no setting turns it off. The player's `flash_limit` setting (on by default)

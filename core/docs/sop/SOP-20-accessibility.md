@@ -18,7 +18,7 @@ The shell (`SOP-19`) has the settings; this SOP is what they must do.
 | Text | Smallest body text 18 px at 1080p on PC, 9 px at 1280x800 on Steam Deck (12 recommended); scalable to 200 % | `text_scale`, `display.ui_scale` | F36 |
 | Colour | No information by colour alone (add a shape, icon or label); high contrast for text and UI; a colour-blind option where colour carries meaning | `colorblind` | E69 |
 | Controls | Every action remappable; the whole UI reachable with the gameplay input; no required button holds (toggle option); separate volume per bus and a mono switch | `input.bindings`, `hold_to_toggle`, `audio.*`, `audio.mono` | F37, E69 |
-| Motion | Shake, bob and full-screen effects have an intensity and an off switch; reduce motion turns them off; nothing auto-scrolls without a way to pause it | `shake_scale`, `reduce_motion` | F33 |
+| Motion | Shake, bob and full-screen effects can be turned off (an intensity slider, as in the guideline's examples); reduce motion turns them off; nothing auto-scrolls without a way to pause it | `shake_scale`, `reduce_motion` | F33 |
 | Flashes | At most three full-screen flashes in any one second, or below the thresholds; remove triggers rather than warn. The limiter is always on; the setting only makes flashes gentler | `flash_limit` (on by default: tones flashes down) | F34 |
 | Difficulty | A wide choice of difficulty, changeable during play; assist options where the game allows (slower game speed, more health, skip a section) | `difficulty`, `game_speed` | E69 |
 | Saving | Settings always saved; autosave plus manual save | (shell) | E69 |
@@ -39,7 +39,7 @@ The shell (`SOP-19`) has the settings; this SOP is what they must do.
 6. **Playtest with the players it is for** when you can, and ask one question (SOP-03): could you finish it?
 7. **Describe it on the store page**: list the options; players look for them.
 
-## 3. Tips (C and D)
+## 3. Notes
 - Many colour-blind players can tell red and green apart by brightness: a shape or label is still the fix that works for
   everyone (standard practice).
 - A photosensitivity warning screen does not replace removing the trigger (E73 says removal is preferred).

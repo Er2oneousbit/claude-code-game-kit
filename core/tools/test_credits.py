@@ -87,6 +87,11 @@ class Credits(unittest.TestCase):
         self.assertEqual(self.run_cli("--root", root, "--out", out)[0], 0)
         self.assertIn("LÖVE (zlib license)", (out / "CREDITS.md").read_text(encoding="utf-8"))
 
+    def test_blank_line_inside_the_table_keeps_later_rows(self):
+        root = self.game(GOOD.replace("| A-0003", "\n| A-0003", 1))
+        self.assertEqual(self.run_cli("--root", root)[0], 0)
+        self.assertIn("Íris Nø", (root / "CREDITS.md").read_text(encoding="utf-8"))
+
     def test_missing_log_is_usage(self):
         self.assertEqual(self.run_cli("--root", tempfile.mkdtemp())[0], 2)
 
