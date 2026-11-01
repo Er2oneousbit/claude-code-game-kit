@@ -102,6 +102,9 @@
   and web-3d the settings volume sliders now reach the audio director's buses (`AudioPlayer.applySettings`, never
   twice down one branch), and captions marked directional get an arrow on the side an off-screen sound comes from
   (XAG 104). Godot, Unity and LÖVE have the director but not this player layer yet.
+- Dialogue: `dialogue.py lint --pseudo` checks every line through the kit's pseudo-locale (40 % longer, the same
+  `pseudo()` as the golden vectors) over the same voice timing, and warns where a translated subtitle would be too
+  fast to read, too long for a cue, or a caption would not fit one line.
 - SOP-04 measures loudness instead of normalizing peaks, pointing at `tools/audio/loudness.py`. EVIDENCE.md: the 0.8.0
   rows (E69-E92) had one cell more than the table's header, so GitHub showed each finding in the Grade column; every
   row has seven cells again. New rows E100-E106 (Steam store pages, a CJK pixel font) and E120-E125 (loudness).

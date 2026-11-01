@@ -8,6 +8,7 @@
 # Usage   : python tools/audio/dialogue.py build data/dialogue.json --root . --events data/audio_events.json \
 #               --out data/dialogue/en.built.json                     # --audience children: 17 characters a second
 #           python tools/audio/dialogue.py lint data/dialogue.json --root .        # --strict: warnings fail
+#           python tools/audio/dialogue.py lint data/dialogue.json --root . --pseudo    # will translations fit?
 #           python tools/audio/dialogue.py export data/dialogue/en.built.json --sequence intro --format vtt --out intro.vtt
 # Needs   : Python 3.8+ only (wavfile.py and flacfile.py read voice durations)
 # Exit    : 0 ok, 1 errors found (or warnings with --strict), 2 usage or unreadable files
@@ -27,6 +28,7 @@
 #          -> reveal (timeline | estimate over the voiced span | cps) -> cues (break into <= 40-character lines,
 #          <= 2 lines a cue, timed from the reveal, stretched to 5/6 s, split past 7 s) -> captions -> sequences
 #   lint:  build, then report reading speed, short or long cues, unbreakable words, unknown speakers, missing files
+#          --pseudo: each line through the pseudo-locale (40 % longer) over the same timing -> the same cue checks
 #   export: a sequence's cues at absolute times -> SRT or WebVTT, speaker named when it changes
 import argparse
 import hashlib
@@ -203,6 +205,47 @@ def make_cues(text, reveal, duration, style):
     return out
 
 
+def cue_warnings(where, cues, style):
+    """Reading speed, cue length and unbreakable words, as warnings."""
+    out = []
+    for c in cues:
+        chars = sum(len(x) for x in c["lines"])
+        span = c["end"] - c["start"]
+        if span > 0 and chars / span > style["max_cps"] + 1e-9:
+            out.append(f"{where}: \"{' '.join(c['lines'])[:40]}\" needs {chars / span:.1f} characters a second "
+                       f"(guideline {style['max_cps']}): shorten the text or slow the line")
+        if span > style["max_cue_s"] + 1e-9:
+            out.append(f"{where}: \"{' '.join(c['lines'])[:40]}\" stays {span:.1f} s (guideline at most "
+                       f"{style['max_cue_s']:.0f} s): split the line or trim the silence in its audio")
+        for x in c["lines"]:
+            if len(x) > style["max_chars_per_line"]:
+                out.append(f"{where}: \"{x[:30]}...\" is {len(x)} characters with no place to break")
+    return out
+
+
+def pseudo_warnings(built):
+    """What happens to each line when it is translated and the voice stays: the text through the kit's pseudo-locale
+    (tools/golden_vectors.py pseudo(): accented, 40 % longer, bracketed), revealed over the same voice timing (each
+    pseudo character at the time of the original character it stretches over), cut into cues with the same style.
+    Captions are one line each: they must still fit the line width."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from golden_vectors import pseudo
+    style, out = built["style"], []
+    for lid, ln in built["lines"].items():
+        ptext = pseudo(ln["text"])
+        n, m = len(ln["reveal"]), len(ptext)
+        reveal = [{"i": k, "t": ln["reveal"][min(n - 1, k * n // m)]["t"]} for k in range(m)]
+        cues = make_cues(ptext, reveal, ln["duration_s"], style)
+        out += [w.replace(f"line {lid}: ", f"line {lid} (pseudo, +40 %): ", 1)
+                for w in cue_warnings(f"line {lid}", cues, style)]
+    for cid, c in built["captions"].items():
+        ptext = pseudo(c["text"])
+        if len(ptext) > style["max_chars_per_line"]:
+            out.append(f"caption {cid} (pseudo, +40 %): {len(ptext)} characters on one line (at most "
+                       f"{style['max_chars_per_line']}): keep captions short, \"[door]\" not \"[the old door creaks]\"")
+    return out
+
+
 # ---- Build --------------------------------------------------------------------------
 def load_json(path, what):
     try:
@@ -277,18 +320,7 @@ def build(src_path, root=".", events_path=None, audience="adults"):
         if reveal is None:
             reveal = cps_reveal(text, sp.get("cps", DEFAULT_CPS))
         cues = make_cues(text, reveal, duration, style)
-        for c in cues:
-            chars = sum(len(x) for x in c["lines"])
-            span = c["end"] - c["start"]
-            if span > 0 and chars / span > style["max_cps"] + 1e-9:
-                warnings.append(f"{where}: \"{' '.join(c['lines'])[:40]}\" needs {chars / span:.1f} characters a second "
-                                f"(guideline {style['max_cps']}): shorten the text or slow the line")
-            if span > style["max_cue_s"] + 1e-9:
-                warnings.append(f"{where}: \"{' '.join(c['lines'])[:40]}\" stays {span:.1f} s (guideline at most "
-                                f"{style['max_cue_s']:.0f} s): split the line or trim the silence in its audio")
-            for x in c["lines"]:
-                if len(x) > style["max_chars_per_line"]:
-                    warnings.append(f"{where}: \"{x[:30]}...\" is {len(x)} characters with no place to break")
+        warnings += cue_warnings(where, cues, style)
         entry = {"speaker": spk, "name": sp.get("name", spk), "color": sp.get("color", "#FFFFFF"), "text": text,
                  "kind": kind, "priority": ln.get("priority", 50), "interrupt": ln.get("interrupt", "lower"),
                  "cooldown_s": ln.get("cooldown_s", 0), "duration_s": round(duration, 3), "reveal_source": source,
@@ -396,7 +428,9 @@ def cmd_build(args):
 
 
 def cmd_lint(args):
-    _, errors, warnings = build(args.dialogue, args.root, args.events, args.audience)
+    built, errors, warnings = build(args.dialogue, args.root, args.events, args.audience)
+    if args.pseudo and not errors:
+        warnings += pseudo_warnings(built)
     report(errors, warnings)
     print(f"[{'FAIL' if errors else ' OK '}] {len(errors)} error(s), {len(warnings)} warning(s)")
     return 1 if errors or (warnings and args.strict) else 0
@@ -432,6 +466,9 @@ def build_parser():
     b.add_argument("--overwrite", action="store_true")
     li = sub.add_parser("lint", parents=[common, src], help="errors and subtitle guideline warnings")
     li.add_argument("--strict", action="store_true", help="exit 1 on warnings too")
+    li.add_argument("--pseudo", action="store_true",
+                    help="also check every line 40 %% longer (the pseudo-locale) over the same voice timing: will a "
+                         "translation still be readable?")
     ex = sub.add_parser("export", parents=[common], help="a sequence as SRT or WebVTT")
     ex.add_argument("built", help="a dialogue.built.json")
     ex.add_argument("--sequence", required=True)

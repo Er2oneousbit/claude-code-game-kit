@@ -314,6 +314,11 @@ only ever added), and into SRT or WebVTT files for trailers and video captures.
   data/dialogue/en.built.json`; `lint` reports reading speed, short and long cues, words too long to break, unknown
   speakers and missing files (`--strict` makes warnings fail); `export data/dialogue/en.built.json --sequence gate
   --format vtt --out gate.vtt` writes a sequence at absolute times.
+- `lint --pseudo` asks what happens when the text is translated and the voice stays (subtitled, not dubbed): every
+  line goes through the kit's pseudo-locale (accented, 40 % longer, in brackets; tools/golden_vectors.py `pseudo()`,
+  the same text the engines show in locale "pseudo"), is revealed over the same voice timing and cut into cues by the
+  same rules, and gets the same warnings, marked "(pseudo, +40 %)"; captions must still fit one line. A line that
+  reads at 18 characters a second in English needs about 25 in a language 40 % longer: give it more time now.
 - Proven 2026-11-01: the exam, and the web reader in headless Chromium with three babble lines: all 25 blips found in
   the rendered audio, each blip's character shown on the first 60 fps frame at or after the sound starts (0.4 ms of
   sample rounding at most, so never more than one frame late), and the exported SRT cues shown with the same text

@@ -140,6 +140,32 @@ class DialogueExam(unittest.TestCase):
         self.assertFalse(any("characters a second" in w for w in adults), adults)
         self.assertTrue(any("guideline 17" in w for w in kids), kids)
 
+    def test_pseudo_lint_predicts_translations_that_will_not_fit(self):
+        voice(self.root / "v.wav", lead=0.0, speech=2.9, tail=0.0)
+        tight = {"id": "b.tight", "speaker": "baker", "text": "Bring me three iron ingots from the mine, quickly now.",
+                 "audio": "v.wav"}                   # 18.6 a second in English: fine now, too fast 40 % longer
+        voice(self.root / "w.wav", lead=0.0, speech=6.0, tail=0.0)
+        easy = {"id": "b.easy", "speaker": "baker", "text": "Fresh bread, still warm.", "audio": "w.wav"}
+        events = {"version": 1, "buses": {"master": {}}, "events": {
+            "door": {"bus": "master", "files": ["d.wav"], "caption": "[the heavy iron gate grinds]"},
+            "bell": {"bus": "master", "files": ["b.wav"], "caption": "[bell]"}}}
+        (self.root / "ev.json").write_text(json.dumps(events), encoding="utf-8")
+        built, errors, warnings = self.build([tight, easy], events_path=self.root / "ev.json")
+        self.assertEqual((errors, warnings), ([], []))
+        pw = D.pseudo_warnings(built)
+        self.assertTrue(any(w.startswith("line b.tight (pseudo, +40 %)") and "characters a second" in w for w in pw), pw)
+        self.assertFalse(any("b.easy" in w for w in pw), pw)
+        self.assertTrue(any(w.startswith("caption door (pseudo, +40 %)") for w in pw), pw)
+        self.assertFalse(any("caption bell" in w for w in pw), pw)
+        src = self.root / "dialogue.json"
+        rc, out = self.run_tool("lint", src, "--root", self.root, "--events", self.root / "ev.json")
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn("pseudo", out)
+        rc, out = self.run_tool("lint", src, "--root", self.root, "--events", self.root / "ev.json", "--pseudo",
+                                "--strict")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("(pseudo, +40 %)", out)
+
     # ---- captions and sequences
     def test_captions_come_from_audio_events(self):
         events = {"version": 1, "buses": {"master": {}}, "events": {
