@@ -12,11 +12,15 @@
 - **Game feel for every code engine** (`SOP-18`, `/game-feel`): screen shake (trauma), hitstop, 14 easing curves, a
   follow camera with deadzone and look-ahead that is the same at any frame rate, input buffer, coyote time, spring and
   squash, and a flash limiter. One reference, `tools/golden_vectors.py`, writes `data/golden/juice.json` and
-  `shell.json`; every port's tests check them (Bevy 55 tests, C++/SDL2 26 tests and 598 assertions).
+  `shell.json`; every port's tests check all 41 cases: Godot 45 GUT tests, LÖVE 86, web 83, web-3d 86, Unity 95 EditMode
+  tests, Unreal 55 automation tests (the GameKitShell plugin, off by default), Bevy 55, C++/SDL2 26 with 598 assertions.
 - **The shell** (`SOP-19`, `/game-shell`): title, menus, settings, pause, credits and loading screens; settings with
   validation that keeps unknown keys; versioned saves with migrations, atomic writes and a backup; actions with
   rebinding (swap within a group) and button prompts that follow the device; string tables, plurals and a pseudo-locale;
-  log files, crash files and a bug-report key; telemetry that writes nothing until the player agrees.
+  log files, crash files and a bug-report key; telemetry that writes nothing until the player agrees. Godot, LÖVE and web
+  ship the screens; Unity, Unreal, Bevy and C++/SDL2 ship the tested logic; RPG Maker MZ maps the rules onto its own
+  screens. New smoke scenarios: `--drive menus | crash | pseudo | pseudo-plant | show:<screen>`, `--data-dir`, `--locale`,
+  `--compare`. The flash limiter is always on; the `flash_limit` setting only softens flashes.
 - **Accessibility** (`SOP-20`): the baseline every kit game ships (subtitles and captions, text size and 200 % scaling,
   no colour-only information, remapping and no required holds, shake and flash safety, difficulty), from the Game
   Accessibility Guidelines, the Xbox Accessibility Guidelines 101, 104, 117 and 118 and WCAG 2.3.1, all read this release.
