@@ -18,13 +18,17 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a scaffolder exit 1 fails the example (nothing copied
 #           back, its [WARN] lines shown), work folder errors exit 2, numbered .goldN copies are reported
+# Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): a run with nothing to sync leaves the example untouched
+#           (it used to copy .game-kit.json back anyway, adding one history entry per run)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
 #   for each example with a .game-kit.json: copy (skipping heavy folders) -> new_game.py --upgrade on the copy
 #   -> nonzero exit: [FAIL] with the scaffolder's [WARN] lines, copy nothing back
-#   -> for each tracked file: copy back if upgraded == recorded hash != example -> copy back .game-kit.json, .gitignore
-#   -> copy back .claude/settings.json when the upgrade's merge changed it
+#   -> for each tracked file: copy back if upgraded == recorded hash != example
+#   -> copy back .gitignore and .claude/settings.json when the upgrade changed them
+#   -> copy back .game-kit.json only when something above changed, a .gold conflict is open, or its recorded state
+#      (version, hashes, ...) moved; never just for the upgrade's own history entry
 #   -> report synced files and any .gold conflicts
 import argparse
 import hashlib
@@ -55,6 +59,11 @@ def file_hash(path):
     return hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest()
 
 
+def recorded_state(meta):
+    """.game-kit.json without the upgrade's own log: what a no-op upgrade must leave exactly as it was."""
+    return {k: v for k, v in meta.items() if k not in ("history", "last_upgrade")}
+
+
 def sync_one(src, work):
     meta = json.loads((src / ".game-kit.json").read_text(encoding="utf-8"))
     tmp = work / src.name
@@ -76,18 +85,21 @@ def sync_one(src, work):
             b.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(a, b)
             synced.append(rel)
-    for name in (".game-kit.json", ".gitignore"):
-        shutil.copy2(tmp / name, src / name)
-    # settings.json is not hash-tracked: the upgrade merges the kit's rules into the game's file (lists unioned, the
-    # game's own rules kept), so the merged copy comes back whenever it changed
-    merged, mine = tmp / ".claude" / "settings.json", src / ".claude" / "settings.json"
-    if merged.is_file() and (not mine.is_file() or file_hash(merged) != file_hash(mine)):
-        mine.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(merged, mine)
-        synced.append(".claude/settings.json")
+    # .gitignore is not hash-tracked (core part + the engine's lines); settings.json neither: the upgrade merges the
+    # kit's rules into the game's file (lists unioned, the game's own rules kept). Each comes back when it changed.
+    for rel in (".gitignore", ".claude/settings.json"):
+        a, b = tmp / rel, src / rel
+        if a.is_file() and (not b.is_file() or file_hash(a) != file_hash(b)):
+            b.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(a, b)
+            synced.append(rel)
     # .gold, .gold2, ... (the scaffolder numbers a new copy when an older one is mid-merge); not e.g. x.golden.png
     golds = sorted(p.relative_to(tmp).as_posix() for p in tmp.rglob("*.gold*")
                    if p.is_file() and GOLD_RE.search(p.name))
+    # The upgrade always appends a history entry. Bring the file back only when the sync did something, a conflict
+    # needs recording, or the recorded state moved; otherwise every no-op run would grow every example's history.
+    if synced or golds or recorded_state(upgraded) != recorded_state(meta):
+        shutil.copy2(tmp / ".game-kit.json", src / ".game-kit.json")
     return synced, golds
 
 

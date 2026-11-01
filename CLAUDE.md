@@ -66,7 +66,7 @@ python core/tools/art/test_svg_export.py                 # needs Inkscape 1.x (e
 uv run --python 3.13 --with bpy python core/tools/blender/test_validate_asset.py   # bpy wheels lag the newest Python
 (same for test_prep_export.py and test_render_sprites.py; the sprite exam renders with Cycles on the CPU, a few minutes)
 python core/tools/check_links.py --root . --also core --also core/docs --skip-dir examples   # kit root; ~80 hits are scaffold-time paths, compare before/after
-LC_ALL=C.UTF-8 grep -rnIP --exclude-dir=licenses "\x{2014}" core engines scripts profiles examples *.md   # em dash check (-I skips binaries; docs/licenses/ holds verbatim third-party license texts), must print nothing
+git ls-files -coz --exclude-standard -- core engines scripts profiles examples '*.md' | grep -zv /licenses/ | LC_ALL=C.UTF-8 xargs -0 grep -nIP "\x{2014}"   # em dash check, must print nothing: tracked and new files only (a plain grep -r also reads the examples' node_modules and Library), -I skips binaries, docs/licenses/ holds verbatim third-party license texts
 ```
 Machine-specific engine paths and quirks for running `dev.py` in scratch projects go in `CLAUDE.local.md` (gitignored, loaded by Claude Code). Env vars the wrappers read: `GODOT_BIN`, `UNITY_EDITOR`, `UE_ROOT`, `VCPKG_ROOT`, `LOVE_BIN`, `RPGMZ_EXE` (optional), `CARGO_TARGET_DIR` (optional, Bevy). Unity and Unreal are adopt-first (create the engine project, then `--adopt`); RPG Maker MZ gets MZ's files with `dev.py setup --from <a new MZ project>` (the kit ships none of MZ); keep C++ and Unreal scratch projects at a short path (vcpkg and UBT hit Windows path limits).
 `.vscode/settings.json` points CMake at `engines/cpp-sdl2/skeleton` (presets `debug`/`release`, vcpkg manifest, doctest).
