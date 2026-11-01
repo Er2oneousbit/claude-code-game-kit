@@ -11,6 +11,7 @@
   "setup_step": "set VCPKG_ROOT and put CMake on PATH (docs/ENGINE.md), then: python tools/dev.py check   # first build fetches SDL2 via vcpkg (versions pinned by the baseline)",
   "adopt_hints": {
     "CMakePresets.json": "dev.py needs configure/build/test presets named debug and release with binaryDir build/<preset>.",
-    "CMakeLists.txt": "dev.py looks for the game exe in build/<preset>/bin/ (set CMAKE_RUNTIME_OUTPUT_DIRECTORY), and smoke runs it with --smoke N and expects BOOT_OK in its output."
+    "CMakeLists.txt": "dev.py looks for the game exe in build/<preset>/bin/ (set CMAKE_RUNTIME_OUTPUT_DIRECTORY), and smoke runs it with --smoke N and expects BOOT_OK in its output. The kit's src/core/*.cpp (settings, saves, bindings, i18n) need a target linking nlohmann_json::nlohmann_json, and tests/test_golden_vectors.cpp needs GOLDEN_DIR=\"<root>/data/golden\".",
+    "vcpkg.json": "add the kit's dependencies to yours: doctest (tests) and nlohmann-json (src/core settings, saves, i18n); keep a builtin-baseline."
   }
 }
