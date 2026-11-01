@@ -560,7 +560,6 @@ def tr(tables, locale, key, args=None):
 
 
 def plural(locale, n):
-    base = locale_chain(locale)[1] if len(locale_chain(locale)) > 1 else locale
     base = locale.split("-")[0].split("_")[0]
     if base in ("ja", "zh", "ko"):
         return "other"

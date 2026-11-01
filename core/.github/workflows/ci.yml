@@ -1,0 +1,103 @@
+# ---------------------------------------------------------------------------
+# ci.yml
+# Purpose : Continuous integration for this game: every push and pull request runs `python tools/dev.py check` and
+#           `test` on a GitHub-hosted Linux runner, plus the credits check, so a broken build or a missing license is
+#           caught before anyone ships it (docs/sop/SOP-21 step 7).
+# Notes   : The engine comes from .game-kit.json. Godot, LÖVE, web, web-3d and Bevy are set up here. Unity, Unreal and
+#           RPG Maker MZ need a license or an editor install that a hosted runner does not have: the job says so and
+#           runs only the engine-free checks (use a self-hosted runner for their tests). C++/SDL2 builds SDL2 through
+#           vcpkg on the first run (slow, cached afterwards). Written by the kit; not yet run on GitHub by the kit
+#           itself (verify on your first push). No secrets are needed; never print one in a step.
+# Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# ---------------------------------------------------------------------------
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: "4.7.2"          # match docs/ENGINE.md
+  LOVE_PPA: "ppa:bartbes/love-stable"
+
+jobs:
+  check-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Which engine
+        id: engine
+        run: |
+          engine=$(python -c "import json; print(json.load(open('.game-kit.json', encoding='utf-8')).get('engine', ''))")
+          echo "id=$engine" >> "$GITHUB_OUTPUT"
+          echo "Engine: $engine"
+
+      - name: Node (web, web-3d)
+        if: steps.engine.outputs.id == 'web' || steps.engine.outputs.id == 'web-3d'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Rust (bevy)
+        if: steps.engine.outputs.id == 'bevy'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libudev-dev pkg-config
+          rustup toolchain install stable --profile minimal
+
+      - name: Set up the engine
+        run: |
+          case "${{ steps.engine.outputs.id }}" in
+            godot)
+              curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+              unzip -q godot.zip -d "$RUNNER_TEMP/godot"
+              echo "GODOT_BIN=$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+              [ -d addons/gut ] || echo "::warning::addons/gut is not in the repo, so dev.py test will report that GUT is missing (docs/ENGINE_FLOW.md 'Setting up tests')"
+              ;;
+            love2d)
+              sudo add-apt-repository -y "$LOVE_PPA"
+              sudo apt-get update
+              sudo apt-get install -y love xvfb
+              echo "LOVE_BIN=$(command -v love)" >> "$GITHUB_ENV"
+              ;;
+            web|web-3d)
+              python tools/dev.py setup
+              ;;
+            unity|unreal|rpgmaker-mz)
+              echo "::notice::${{ steps.engine.outputs.id }} needs a licensed editor: only the engine-free checks run here"
+              ;;
+          esac
+
+      - name: dev.py check
+        if: steps.engine.outputs.id != 'unity' && steps.engine.outputs.id != 'unreal' && steps.engine.outputs.id != 'rpgmaker-mz'
+        run: python tools/dev.py check
+
+      - name: dev.py test
+        if: steps.engine.outputs.id != 'unity' && steps.engine.outputs.id != 'unreal' && steps.engine.outputs.id != 'rpgmaker-mz'
+        run: python tools/dev.py test
+
+      - name: dev.py smoke (LÖVE under a virtual display)
+        if: steps.engine.outputs.id == 'love2d'
+        run: xvfb-run -a python tools/dev.py smoke
+
+      - name: Golden vectors are current
+        run: python tools/golden_vectors.py --check
+
+      - name: Credits match the asset log
+        run: |
+          if [ -f CREDITS.md ]; then python tools/credits.py --check --allow-placeholders; else echo "No CREDITS.md yet: run python tools/credits.py before the first release"; fi
+
+      - name: Publish check (secrets and personal data)
+        run: python tools/publish_check.py
