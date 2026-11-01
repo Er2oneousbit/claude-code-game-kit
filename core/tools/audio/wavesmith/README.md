@@ -45,6 +45,7 @@ question.
 | `events` | audio_events.py | Sound events as data: takes, pitch and volume ranges, no-repeat picks, voice caps, cooldowns, buses, ducking. Validate, audit, golden vectors | `events audit data/audio_events.json --root assets/audio` |
 | `sets` | sound_sets.py | Families of sounds made and checked together: footsteps per surface, ambience beds, the code-made UI set. Writes their events | `sets check data/sound_sets.json --ship` |
 | `dialogue` | dialogue.py | dialogue.json and voice files become the built file the engines read: per-character typewriter timing, subtitle cues, SFX captions. Also SRT / WebVTT export and lint (`--pseudo`: will translations fit?) | `dialogue lint data/dialogue.json --root assets/audio --pseudo` |
+| `access` | access.py | The accessibility rules every engine follows: slider gains per bus (never twice down one branch) and caption arrows. Golden vectors | `access gains data/audio_events.json --sfx 0.5` |
 | `music` | music.py | Adaptive music: bar grid in samples, bar-aligned loops, stems, stingers, a transition map, plans, tempo estimates | `music loop raw.wav --bpm 96 --bars 8 --out music/explore.wav` |
 | `babble` | babble.py | Gibberish voices (blips) with exact typewriter timing | `babble "Fresh bread!" --voice baker --out vo/baker_1.wav` |
 | `voice` | local_tts.py | Spoken lines on your GPU (Qwen3-TTS): design a voice from a description once, then say lines in it. 10 languages | `voice say --ref smith_ref.wav --lines smith.txt --language German --out vo/smith_de.wav` |
@@ -70,16 +71,22 @@ and in `docs/resources/audio.md`.
 
 ## The engines' side
 The engines' runtimes follow the golden files in `data/golden/`. Each is written by its reference module
-(`events vectors --write`, `music vectors --write`) and checked in CI (`--check`), so every engine makes the same
-decisions from the same data:
+(`events vectors --write`, `music vectors --write`, `access vectors --write`) and checked in CI (`--check`), so every
+engine makes the same decisions from the same data. Each engine has the audio director, the music director and the
+access rules, with their golden tests:
 - web: src/core/audioDirector.ts, audioAccess.ts, musicDirector.ts and dialogue.ts, with
   src/shell/audioPlayer.ts, musicPlayer.ts and subtitles.ts.
 - web-3d: the same core files.
-- Godot: scripts/core/audio_director.gd.
-- Unity: Assets/Scripts/Core/AudioDirector.cs.
-- LÖVE: src/core/audio_director.lua.
+- Godot: scripts/core/audio_director.gd, music_director.gd and audio_access.gd, with scripts/shell/music_player.gd and
+  the subtitle bar's arrows.
+- Unity: Assets/Scripts/Core/AudioDirector.cs, MusicDirector.cs and AudioAccess.cs, with
+  Assets/Scripts/Game/AudioEventPlayer.cs and MusicPlayer.cs (compiled, not yet run in Play mode).
+- LÖVE: src/core/audio_director.lua, music_director.lua and audio_access.lua, with src/shell/music_player.lua and
+  the subtitles' arrows.
+- Bevy: src/logic/audio_director.rs, music_director.rs and audio_access.rs (logic only).
+- C++/SDL2: src/core/AudioDirector.hpp, MusicDirector.hpp and AudioAccess.hpp (logic only).
 
-Music players exist only on the web so far. Port musicDirector.ts, and the golden file is your test.
+Unreal's GameKitShell plugin and RPG Maker MZ do not have them yet.
 
 ## GPU tools: setup
 - `voice` runs Qwen3-TTS in its own Python environment, so Wavesmith stays standard-library only. Setup steps are in

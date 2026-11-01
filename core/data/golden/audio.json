@@ -1067,6 +1067,100 @@
     }
    ],
    "type": "audio_director"
+  },
+  {
+   "name": "ducking: a stolen long line stops ducking when the short line that replaced it ends",
+   "params": {
+    "ducking": [
+     {
+      "attack_ms": 100.0,
+      "depth_db": -12.0,
+      "release_ms": 600.0,
+      "targets": [
+       "music"
+      ],
+      "trigger": "dialogue"
+     }
+    ],
+    "events": {
+     "line": {
+      "bus": "dialogue",
+      "files": [
+       "long.wav",
+       "short.wav"
+      ],
+      "lengths_ms": [
+       3000,
+       200
+      ],
+      "max_voices": 1,
+      "pick": "sequence",
+      "steal": "oldest"
+     }
+    },
+    "seed": 5
+   },
+   "steps": [
+    {
+     "call": "play",
+     "event": "line",
+     "expect": {
+      "ends_ms": 3000.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 1
+     },
+     "t_ms": 0
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "music": -12.0
+     },
+     "t_ms": 400
+    },
+    {
+     "call": "play",
+     "event": "line",
+     "expect": {
+      "ends_ms": 700.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": 1,
+      "variant": 1,
+      "voice": 2
+     },
+     "t_ms": 500
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "music": -6.0
+     },
+     "t_ms": 1000
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "music": 0.0
+     },
+     "t_ms": 1500
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "music": 0.0
+     },
+     "t_ms": 3500
+    }
+   ],
+   "type": "audio_director"
   }
  ],
  "spec": "tools/audio/wavesmith/audio_events.py",

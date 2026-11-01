@@ -85,11 +85,12 @@ if(BUILD_TESTS)
     tests/test_main.cpp
     tests/test_fixed_timestep.cpp
     tests/test_golden_vectors.cpp
+    tests/test_golden_audio.cpp
     tests/test_shell_files.cpp
   )
   target_link_libraries(unit_tests PRIVATE core doctest::doctest)
   # The kit's golden vectors (reference: tools/golden_vectors.py). Override with -DGOLDEN_DIR=<folder>.
-  set(GOLDEN_DIR "${CMAKE_SOURCE_DIR}/data/golden" CACHE PATH "Folder holding juice.json and shell.json")
+  set(GOLDEN_DIR "${CMAKE_SOURCE_DIR}/data/golden" CACHE PATH "Folder holding the golden vector files")
   target_compile_definitions(unit_tests PRIVATE GOLDEN_DIR="${GOLDEN_DIR}")
   # One CTest test per TEST_CASE (listed at build time); without doctest's CMake module, one test for all
   if(EXISTS "${doctest_DIR}/doctest.cmake")

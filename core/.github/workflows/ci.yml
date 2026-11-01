@@ -114,6 +114,8 @@ jobs:
 
       - name: Music director vectors are current
         run: python tools/audio/wavesmith/wavesmith.py music vectors --check
+      - name: Audio accessibility vectors are current
+        run: python tools/audio/wavesmith/wavesmith.py access vectors --check
 
       - name: Credits match the asset log
         run: |

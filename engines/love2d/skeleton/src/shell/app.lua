@@ -9,11 +9,17 @@
 --           smoke run ({ marker = "DRIVE_DONE menus", code = 0 }).
 --           screens: app:push("settings"), app:pop(), app:replace("play"), app:reset("title")
 --           text: app:t("menu.play"), app:tp("apples", 3)   say a line: app:say("guide.welcome")
+--           sound: app:play_sound("hit", "sfx"), app:bus_volume("ambience")   music: app:play_music("combat")
 -- Notes   : Only the top screen updates and gets input; screens marked transparent (pause) draw over the one
 --           below. Actions go to the top screen in sorted order until one is used, so Esc (ui_cancel and pause)
 --           backs out of a menu but pauses the game. Automated runs (smoke, test) never change the window mode,
 --           never pause on focus loss, and play no sound. A debug build is a run from the source folder (not a
 --           fused exe or a .love): it adds the Juice demo to the menu, the pseudo language, and F8 bug reports.
+--           Volumes: the master slider is LÖVE's listener volume. A game with data/audio_events.json gets each bus's
+--           volume from src/core/audio_access.lua along the bus and its parents (a slider never twice down one
+--           branch: ambience under sfx follows sfx once); without that file a source gets settings.audio[bus], as
+--           before. data/music.json (if present) plays through src/shell/music_player.lua on the music bus; neither
+--           file ships with the skeleton, and automated runs never open the music output.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- ---------------------------------------------------------------------------
 local Json = require("src.core.json")
@@ -32,7 +38,9 @@ local Version = require("src.version")
 local Style = require("src.shell.style")
 local UI = require("src.shell.ui")
 local Input = require("src.shell.input")
+local AudioAccess = require("src.core.audio_access")
 local Subtitles = require("src.shell.subtitles")
+local MusicPlayer = require("src.shell.music_player")
 local Drive = require("src.shell.drive")
 local BugReport = require("src.shell.bug_report")
 
@@ -45,6 +53,10 @@ local DIALOGUE_FILE = "data/dialogue/sample.built.json"
 local TOAST_S = 2.5
 local BUG_KEY = "key:f8"
 local SOUND_RATE = 22050
+local EVENTS_FILE = "data/audio_events.json"   -- its "buses" decide the slider routing when it exists
+local MUSIC_FILE = "data/music.json"           -- adaptive music (src/shell/music_player.lua) when it exists
+local MUSIC_ROOT = "assets/audio/"             -- music.json's stem and stinger paths are relative to this
+local MASTER_SLIDER = "master"                 -- applied as love.audio.setVolume, so left out of the bus chains
 
 function App.is_debug_build()
   if love.filesystem.isFused() then return false end
@@ -90,6 +102,27 @@ local function load_dialogue()
   return Dialogue.parse({ lines = {} })
 end
 
+-- The bus tree of data/audio_events.json, or nil when the game has no such file (or it has no buses).
+local function load_buses()
+  if not love.filesystem.getInfo(EVENTS_FILE) then return nil end
+  local ok, data = Json.try_decode(love.filesystem.read(EVENTS_FILE) or "")
+  if not ok or not Json.is_object(data) then
+    Log.warn("audio", EVENTS_FILE .. " is not a JSON object: " .. tostring(data) .. " (sliders map by name)")
+    return nil
+  end
+  if not Json.is_object(data.buses) or next(data.buses) == nil then return nil end
+  return data.buses
+end
+
+-- The music player for data/music.json, or nil (no file, an automated run, no audio, or a broken setup: logged).
+local function load_music(kit)
+  if kit.automated or kit.headless or not love.audio or not love.filesystem.getInfo(MUSIC_FILE) then return nil end
+  local ok, player = pcall(MusicPlayer.from_file, MUSIC_FILE, { root = MUSIC_ROOT })
+  if ok then return player end
+  Log.warn("music", "no music: " .. tostring(player))
+  return nil
+end
+
 -- a short sine blip as a sound (no audio files needed)
 local function make_sound(freq, seconds, noise)
   local n = math.floor(SOUND_RATE * seconds)
@@ -129,6 +162,8 @@ function App:load()
   self.ui = UI.new(self)
   self.input = Input.new(self)
   self.subtitles = Subtitles.new(self)
+  self.buses = load_buses()
+  self.music = load_music(kit)
   if love.keyboard then love.keyboard.setKeyRepeat(true) end
   if love.audio and not kit.headless then
     local ok, err = pcall(function()
@@ -153,6 +188,18 @@ function App:apply_settings()
   self.ui:set_scale(s.access.text_scale * s.display.ui_scale)
   self.i18n:set_locale(self.kit.locale or s.language)
   if love.audio then love.audio.setVolume(self.kit.automated and 0 or s.audio.master) end
+  self.bus_gains = self.buses and AudioAccess.user_bus_gains(self.buses, s.audio) or nil
+  if self.music then self.music:set_volume(self:bus_volume("music")) end
+end
+
+-- The volume a source on `bus` gets from the sliders, master left out (it is the listener volume).
+-- With data/audio_events.json: the bus chain (audio_access.lua); without it, or for a bus the file does not
+-- name: settings.audio[bus], 1 when there is no such slider.
+function App:bus_volume(bus)
+  if self.bus_gains and self.buses[bus] ~= nil then
+    return AudioAccess.chain_gain(self.buses, self.bus_gains, bus, MASTER_SLIDER)
+  end
+  return self.settings.audio[bus] or 1
 end
 
 -- Window mode, size and vsync. Never in automated runs (the smoke window must stay small and off-screen).
@@ -306,12 +353,22 @@ function App:play_sound(name, bus)
   local source = self.sounds[name]
   if not source or self.kit.automated then return end
   source:stop()
-  source:setVolume(self.settings.audio[bus or "sfx"] or 1)
+  source:setVolume(self:bus_volume(bus or "sfx"))
   source:play()
 end
 
 function App:toast(text)
   self.toasts[#self.toasts + 1] = { text = text, t = TOAST_S }
+end
+
+-- Changes the music to a track of data/music.json on its planned beat, bar or phrase; the plan, or nil (no
+-- music file, the first track, or already playing).
+function App:play_music(track)
+  if not self.music then return nil end
+  local ok, plan = pcall(self.music.request, self.music, track)
+  if ok then return plan end
+  Log.warn("music", tostring(plan))
+  return nil
 end
 
 -- Shows a dialogue line as a subtitle (respects subtitles / barks settings, priority and cooldown).
@@ -348,6 +405,7 @@ function App:update(dt)
   if top and top.update then top:update(dt) end
   self.track:update(dt)
   self.subtitles:update(dt)
+  if self.music then self.music:update() end
   for i = #self.toasts, 1, -1 do
     self.toasts[i].t = self.toasts[i].t - dt
     if self.toasts[i].t <= 0 then table.remove(self.toasts, i) end

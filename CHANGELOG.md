@@ -127,6 +127,12 @@
   and stops a take that never ends (a per-line cap at about twice a natural reading; the take is not kept and the run
   says which line to voice again). Measured in five languages with Whisper and a speaker model: German, Spanish and
   French are usable after a listen, Japanese needs a native listener.
+- Audio in every code engine but Unreal: Wavesmith's new `access` subcommand owns `data/golden/access.json` (the
+  volume-slider to bus mapping and the caption arrows; CI checks it). Godot, LÖVE, Unity, Bevy and C++/SDL2 get the
+  music director and the access logic beside the audio director, each tested against all three golden files; Godot
+  and LÖVE get music players, slider-to-bus volumes and caption arrows in their subtitle shells, and Unity gets
+  `AudioEventPlayer` and a `MusicPlayer` scheduled on the sample (compiled and tested, not yet run in Play mode). A new
+  audio case covers a stolen voice that stops ducking when its replacement ends.
 - SOP-04 measures loudness instead of normalizing peaks, pointing at `tools/audio/wavesmith/loudness.py`. EVIDENCE.md: the 0.8.0
   rows (E69-E92) had one cell more than the table's header, so GitHub showed each finding in the Grade column; every
   row has seven cells again. New rows E100-E106 (Steam store pages, a CJK pixel font) and E120-E125 (loudness).

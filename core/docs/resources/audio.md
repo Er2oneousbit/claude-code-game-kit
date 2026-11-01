@@ -78,8 +78,20 @@ engine's music player changes track on the exact sample the transition map allow
   bus with `player.bus("music")` so the slider and dialogue ducking apply). They follow data/golden/music.json,
   written by `music.py vectors --write` (the reference); the web player's Chromium check renders transitions offline
   and finds every switch, stinger, loop wrap and bar marker on its planned sample (44.1 kHz at 96 BPM included,
-  where beats fall on half samples). Godot, Unity and LÖVE players are not written yet: port musicDirector.ts and
-  test it against the same vectors.
+  where beats fall on half samples). The same planner in every engine, tested against data/golden/music.json:
+  scripts/core/music_director.gd (Godot), Assets/Scripts/Core/MusicDirector.cs (Unity), src/core/music_director.lua
+  (LÖVE), src/logic/music_director.rs (Bevy), src/core/MusicDirector.hpp (C++). Players:
+  - Godot, scripts/shell/music_player.gd: stems fed through AudioStreamGenerators on one shared timeline. Measured
+    with Movie Maker at 44.1 kHz: 0 frames off over 661,500 frames, with loop wraps, a synced switch, a fade and a
+    stinger; on the real audio driver, switches on the planned frame.
+  - LÖVE, src/shell/music_player.lua: a QueueableSource mixer, sample-exact in its own mix (tested sample by sample
+    in Lua); what you hear trails the queue by about 93 ms.
+  - Unity, Assets/Scripts/Game/MusicPlayer.cs: AudioSource.PlayScheduled on the DSP clock. Compiled against Unity
+    6000.6 and in the editor, not yet run in Play mode: verify it by ear.
+  - Bevy and C++ have the planner only: their games mix audio their own way.
+- Godot plays a WAV's loop from the sample after loop_begin to loop_end, so the 'smpl' points `music.py loop` writes
+  make a plain AudioStreamPlayer loop one sample short each pass (it drifts by a sample a loop); the kit's
+  music_player.gd measures and corrects this. Import music WAVs as PCM, not the default QOA compression.
 
 ## Voice
 - Pre-generated lines: `python tools/audio/wavesmith/wavesmith.py fish say --voice <id> --text "..." --out <voice>.mp3` (Fish Audio,
@@ -261,7 +273,8 @@ many copies may sound at once, a minimum gap between plays, and how far dialogue
   `--root`, a bed whose files all have a loop point may be a single file.
 - The engines (each game has only its own): src/core/audioDirector.ts with src/shell/audioPlayer.ts (web; Web
   Audio, works offline too), scripts/core/audio_director.gd (Godot), Assets/Scripts/Core/AudioDirector.cs (Unity,
-  no UnityEngine dependency), src/core/audio_director.lua (LÖVE). Each is tested against `data/golden/audio.json`, written by
+  no UnityEngine dependency), src/core/audio_director.lua (LÖVE), src/logic/audio_director.rs (Bevy),
+  src/core/AudioDirector.hpp (C++). Each is tested against `data/golden/audio.json`, written by
   `audio_events.py vectors --write` (the reference); randomness is a Park-Miller generator, so every engine makes the
   same choices from the same seed. Proven 2026-11-01: TypeScript in Vitest and in headless Chromium (an offline
   render showed the duck envelope within 0.001 dB, pitches exact, the voice cap held), GDScript headless with GUT,
@@ -404,15 +417,23 @@ audio side keeps its part.
   fails a file that loses more than 9 LU or has a loud 400 ms stretch with correlation below -0.5 (kit conventions,
   not a standard; `--max-loss`, `--min-corr`). Fix it at the source: flip one channel's polarity back, or narrow
   the stereo widener.
-- **Sliders reach the buses (web, web-3d).** `player.applySettings(shell.settings.audio)` after the settings change
+- **Sliders reach the buses.** The rule is tools/audio/wavesmith/access.py (`access gains` shows what each bus of a
+  game's events file gets), followed by every engine against data/golden/access.json. On web and web-3d,
+  `player.applySettings(shell.settings.audio)` after the settings change
   sets every bus of data/audio_events.json from its slider (src/core/audioAccess.ts, `SLIDER_FOR_BUS`: music,
   sfx and ambience, ui, voice for dialogue, master); a bus whose parent already follows the same slider is not turned
-  down a second time, so ambience under sfx moves with the sfx slider once.
-- **Arrows on directional captions (web, web-3d).** Mark the event `"directional": true` in audio_events.json
+  down a second time, so ambience under sfx moves with the sfx slider once. LÖVE: a source's volume is the product of
+  the gains along its bus chain (src/core/audio_access.lua). Unity: Assets/Scripts/Game/AudioEventPlayer.cs. Godot's
+  shell already sets its own AudioServer buses from the sliders.
+- **Arrows on directional captions (web, web-3d, Godot, LÖVE).** Mark the event `"directional": true` in
+  audio_events.json
   (dialogue.py copies it into the built captions), then pass where the sound is:
   `shell.subtitles.caption("growl", { dx, dy, halfW, halfH })` with the source's offset from the view's centre and
   half the view's size (in 3D, the source projected to the screen). Nothing is added while the source is on screen;
-  off screen it gets one of eight arrows, on the side it comes from ("← [growl]", "[growl] ↗").
+  off screen it gets one of eight arrows, on the side it comes from ("← [growl]", "[growl] ↗"). Godot:
+  `subtitle_bar.caption("growl", {dx, dy, half_w, half_h})`; LÖVE: `subtitles:caption("growl", from)`, which draws
+  the arrow as a shape because LÖVE's default font has none of the arrow glyphs. Unity, Bevy and C++ have
+  `CaptionArrow` / `caption_arrow` for your own caption UI.
 - Proven 2026-11-01 in headless Chromium: six stereo ambience beds and an out-of-phase test file through a node set up
   like the mono switch came out equal to 0.5 * (L + R) to 1.5e-8, and `loudness.py mono` predicted the loudness of
   Chromium's mono render within 0.01 LU on all seven; the AudioPlayer with sliders set played every bus at its slider

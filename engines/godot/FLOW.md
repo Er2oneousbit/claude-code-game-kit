@@ -55,6 +55,7 @@ keyboard and gamepad reach every control, and the focused one has an outline.
   difficulty (stored for the game to read).
 - **Subtitles**: `SubtitleBar` reads `data/dialogue/sample.built.json` (format v0 of Wavesmith's dialogue
   subcommand, tools/audio/wavesmith: cues for a classic bar, per-character reveal times for a typewriter; unknown fields are ignored).
+  A caption marked `"directional": true` gets an arrow while its source is off screen: `bar.caption(id, {"dx": .., "dy": .., "half_w": .., "half_h": ..})`.
 - **Juice demo** (`scripts/game/juice_demo.gd`, debug builds): hit the box for shake, hitstop, squash on a spring and
   a limited flash; follow camera with a deadzone; buffered jump with coyote time; a held guard; a subtitle line.
   Hitstop and the flash limiter run on real time; everything else on game time (after hitstop and game speed).
@@ -91,6 +92,8 @@ resting on the window cannot change the picture.
 3. Tests live in `tests/`, files `test_*.gd`, extend `GutTest`, functions `test_*`. Example in `tests/test_coyote_timer.gd`.
    `test_golden_juice.gd` and `test_golden_shell.gd` check `scripts/core/` against every case in `data/golden/*.json`
    (the kit's reference, `tools/golden_vectors.py`); a new case type fails them until it is ported.
+   `test_golden_music.gd` checks `scripts/core/music_director.gd` against `data/golden/music.json` (whole samples, tolerance 0).
+   `test_golden_access.gd` checks `scripts/core/audio_access.gd` against `data/golden/access.json` (slider gains, caption arrows).
 4. `python tools/dev.py test` runs them headless. Add `--filter <name>` to run one file.
 
 ## Adopting an existing project
@@ -108,6 +111,7 @@ resting on the window cannot change the picture.
 ## Assets and audio
 - Import settings live in `*.import` files. Pixel art: Filter off, mipmaps off. Audio loops: set loop in the import tab, verify in-game.
 - Audio buses: Master > Music, SFX, UI. Create in the Audio tab, expose volume sliders in settings from day one.
+- Music: `MusicPlayer` (`scripts/shell/music_player.gd`) plays data/music.json on the Music bus and switches on the sample `MusicDirector` plans (import music WAVs as PCM; precision in its header).
 - Naming: `spr_player_idle.png`, `sfx_jump_01.wav`, `mus_level1.ogg`, `fnt_ui.ttf`.
 - Find sources in `docs/RESOURCES.md`, log in `docs/ASSET_LOG.md`.
 - Tripo AI lists a Godot plugin **(verify)**. Whether you use it or just import GLB, import generated meshes as drafts and clean them in Blender first (SOP-11).

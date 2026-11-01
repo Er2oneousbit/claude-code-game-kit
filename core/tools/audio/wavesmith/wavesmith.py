@@ -44,6 +44,7 @@ SUBCOMMANDS = {
     "dialogue": ("dialogue", "dialogue.json and voice files to the built file the engines read, SRT / WebVTT, "
                              "subtitle lint (--pseudo: will translations fit?)"),
     "music":    ("music", "adaptive music: bar grid, bar-aligned loops, stems, stingers, transition plans, tempo"),
+    "access":   ("access", "accessibility rules every engine follows: slider gains per bus, caption arrows"),
     "babble":   ("babble", "gibberish voices (blips) with exact typewriter timing"),
     "voice":    ("local_tts", "spoken lines on your GPU (Qwen3-TTS): design a voice once, say lines in 10 languages"),
     "sfx":      ("local_sfx", "sound effects and ambience loops on your GPU (Stable Audio 3 in a local ComfyUI)"),

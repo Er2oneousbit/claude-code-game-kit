@@ -45,13 +45,20 @@ export function userBusGains(buses: Record<string, { parent?: string }>, sliders
 
 const ARROWS = ["→", "↘", "↓", "↙", "←", "↖", "↑", "↗"]; // every 45 degrees, clockwise from the right (y down)
 
+/** -1 while a sound at (dx, dy) from the view's centre is inside the view (edges included), else the direction
+ *  0..7 clockwise from the right (screen y grows downwards). floor(x + 0.5) is the rule in every engine
+ *  (tools/audio/wavesmith/access.py; data/golden/access.json). */
+export function captionDirection(dx: number, dy: number, halfW: number, halfH: number): number {
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return -1;
+  if (Math.abs(dx) <= halfW && Math.abs(dy) <= halfH) return -1;
+  const k = Math.floor(Math.atan2(dy, dx) / (Math.PI / 4) + 0.5);
+  return ((k % 8) + 8) % 8;
+}
+
 /** The arrow for a sound at (dx, dy) from the view's centre, or "" while it is inside the view. */
 export function captionArrow(dx: number, dy: number, halfW: number, halfH: number): string {
-  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return "";
-  if (Math.abs(dx) <= halfW && Math.abs(dy) <= halfH) return "";
-  const angle = Math.atan2(dy, dx); // -pi..pi, 0 = right, positive = down
-  const k = ((Math.round(angle / (Math.PI / 4)) % 8) + 8) % 8;
-  return ARROWS[k];
+  const k = captionDirection(dx, dy, halfW, halfH);
+  return k < 0 ? "" : ARROWS[k];
 }
 
 // {{FOOTER}}

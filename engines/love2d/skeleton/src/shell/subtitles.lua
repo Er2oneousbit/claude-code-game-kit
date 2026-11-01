@@ -5,15 +5,22 @@
 --           and sound captions ("[thud]") when captions_sfx is on.
 -- Usage   : app.subtitles:draw(ui) once per frame (app.lua does it, over every screen)
 --           app:say("guide.welcome")              app.subtitles:caption("box_hit")
+--           app.subtitles:caption("growl", { dx = 900, dy = 0, half_w = 320, half_h = 180 })   -- "[growl] →"
 -- Notes   : TYPEWRITER = true reveals the line character by character from the file's reveal list; false shows
 --           the classic cue chunks. The text goes through the string tables first (key "dialogue.<id>"), and in
 --           the pseudo-locale through pseudo(), so the layout check covers subtitles too. The speaker's colour is
---           never the only cue: the name is written out.
+--           never the only cue: the name is written out. A caption marked "directional": true in the dialogue file
+--           gets an arrow when `from` (the source's offset from the view centre and the view's half size, in the
+--           same units) is off screen (src/core/audio_access.lua): left-pointing arrows (← ↖ ↙) before the text,
+--           the others after it, so the arrow sits on the side the sound comes from. LÖVE's built-in font has no
+--           arrow glyphs (Font:hasGlyphs is false for all eight in 11.5), so the arrow is drawn as a shape unless
+--           the caption font has the glyph; the string form ("← [growl]") is in captions[id].shown.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- ---------------------------------------------------------------------------
 local Style = require("src.shell.style")
 local Dialogue = require("src.core.dialogue")
 local I18n = require("src.core.i18n")
+local AudioAccess = require("src.core.audio_access")
 local UI = require("src.shell.ui")
 
 local Subtitles = {}
@@ -25,6 +32,21 @@ local BAR_W = 520                        -- px, centred
 local BOTTOM = 14                        -- px from the bottom edge
 local PAD = 6
 local CAPTION_MIN_S = 1.0
+local ARROW_FILL = 0.8                   -- a shape arrow's length as a share of the line height
+
+-- An arrow shape for direction k (0..7 clockwise from the right; y grows downwards, so LÖVE's rotate turns the
+-- right-pointing arrow clockwise on screen): a shaft and a filled head, centred on (cx, cy).
+local function draw_arrow(cx, cy, size, k)
+  local r = size / 2
+  love.graphics.push()
+  love.graphics.translate(cx, cy)
+  love.graphics.rotate(k * math.pi / 4)
+  love.graphics.setColor(Style.color.text)
+  love.graphics.setLineWidth(math.max(1, size / 8))
+  love.graphics.line(-r, 0, r * 0.3, 0)
+  love.graphics.polygon("fill", r, 0, r * 0.1, -r * 0.55, r * 0.1, r * 0.55)
+  love.graphics.pop()
+end
 
 function Subtitles.new(app)
   return setmetatable({ app = app, captions = {} }, Subtitles)
@@ -46,13 +68,29 @@ function Subtitles:text_of(line)
   return line.text
 end
 
-function Subtitles:caption(event_id)
+-- The caption text with its direction arrow: "<- [growl]" for the left-pointing arrows, "[growl] ->" for the rest.
+function Subtitles.with_arrow(text, arrow)
+  if arrow == nil or arrow == "" then return text end
+  if AudioAccess.arrow_leads(arrow) then return arrow .. " " .. text end
+  return text .. " " .. arrow
+end
+
+-- A sound caption for an audio event id; `from` = { dx, dy, half_w, half_h } adds the arrow of a directional
+-- caption while the source is off screen. False when the event has no caption or captions are off.
+function Subtitles:caption(event_id, from)
   local c = self.app.dialogue.captions[event_id]
   if not c or not self.app.settings.access.captions_sfx then return false end
   local key = "caption." .. event_id
   local text = self.app.i18n:has(key) and self.app:t(key) or
                (self.app.i18n:is_pseudo() and I18n.pseudo(c.text) or c.text)
-  self.captions[event_id] = { text = text, t = math.max(c.min_s or CAPTION_MIN_S, CAPTION_MIN_S) }
+  local dir = -1
+  if c.directional == true and type(from) == "table" then
+    dir = AudioAccess.caption_direction(from.dx, from.dy, from.half_w, from.half_h)
+  end
+  local arrow = dir >= 0 and AudioAccess.ARROWS[dir + 1] or ""
+  -- shown: the whole caption as one string (what a player reads; drive checks and tests look at it)
+  self.captions[event_id] = { text = text, dir = dir, arrow = arrow, shown = Subtitles.with_arrow(text, arrow),
+                              t = math.max(c.min_s or CAPTION_MIN_S, CAPTION_MIN_S) }
   return true
 end
 
@@ -101,12 +139,28 @@ function Subtitles:draw(ui)
   end
   local font = ui:font(Style.SMALL_PX)
   for id, c in pairs(self.captions) do
-    local w = font:getWidth(c.text) + PAD * 2
+    local tw = font:getWidth(c.text)
+    local glyph = c.dir >= 0 and font:hasGlyphs(c.arrow)
+    local arrow_w = c.dir < 0 and 0 or (glyph and font:getWidth(c.arrow) or font:getHeight())
+    local gap = arrow_w > 0 and font:getWidth(" ") or 0
+    local w = tw + arrow_w + gap + PAD * 2
     local h = font:getHeight() + PAD
     local x, y = Style.BASE_W - w - 12, bottom - h
     love.graphics.setColor(0, 0, 0, math.max(access.subtitle_background, 0.4))
     love.graphics.rectangle("fill", x, y, w, h, 3, 3)
-    ui:label("caption." .. id, c.text, x + PAD, y, w - PAD * 2, h, { font = font })
+    local tx = x + PAD
+    if arrow_w > 0 then
+      -- the arrow is drawn on its own (a symbol, not text: raw, so the pseudo check still sees the caption's "[")
+      local lead = AudioAccess.arrow_leads(c.arrow)
+      local ax = lead and tx or (tx + tw + gap)
+      if lead then tx = tx + arrow_w + gap end
+      if glyph then
+        ui:label("caption." .. id .. ".arrow", c.arrow, ax, y, arrow_w, h, { font = font, raw = true })
+      else
+        draw_arrow(ax + arrow_w / 2, y + h / 2, arrow_w * ARROW_FILL, c.dir)
+      end
+    end
+    ui:label("caption." .. id, c.text, tx, y, tw, h, { font = font })
     bottom = y - 2
   end
 end

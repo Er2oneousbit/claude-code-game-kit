@@ -24,11 +24,12 @@ src/cli.rs         the program's own options (--smoke, --screenshot, ...)
 src/logic/         engine-free rules and helpers (math, seeded Rng). Plain Rust, unit tested
                    juice: shake, hitstop, ease, follow, input_buffer, coyote, spring (+ squash), flash_limiter
                    shell: settings, bindings (+ glyphs), save_store, i18n (+ pseudo-locale), atomic_file
+                   audio: audio_director (events, voices, ducking), music_director, audio_access (sliders, arrows)
 src/game/mod.rs    GamePlugin: components, resources (ScreenShake), FixedUpdate systems. Must run headless
 src/game/present.rs PresentPlugin: camera (+ shake), sprites, meshes, audio, keyboard -> Intent. Window only
 tests/             integration tests: drive the real GamePlugin headless with app.update()
-tests/golden.rs    the juice and shell modules against data/golden/*.json (the kit's shared vectors)
-data/golden/       golden vectors from tools/golden_vectors.py; never edit them by hand
+tests/golden.rs    the juice, shell and audio modules against data/golden/*.json (the kit's shared vectors)
+data/golden/       golden vectors from tools/golden_vectors.py and tools/audio/wavesmith/; never edit by hand
 assets/            art, audio, fonts (docs/ASSET_LOG.md); Bevy loads paths relative to it
 target/            build output (git-ignored)
 ```

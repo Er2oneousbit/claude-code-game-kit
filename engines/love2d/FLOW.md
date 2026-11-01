@@ -45,6 +45,11 @@ and `tests/test_shell_golden.lua` load `data/golden/*.json` at test time and mak
 with no handler fails). Change behaviour in `tools/golden_vectors.py` first, `--write`, then fix the Lua until the
 tests pass. JSON comes from `src/core/json.lua` (LÖVE has none): `null` is `Json.null`, and `Json.array({})` marks
 a list that may be empty so it writes back as `[]`.
+- `tests/test_audio_golden.lua`: `src/core/audio_director.lua` against `data/golden/audio.json`.
+- `tests/test_music_golden.lua`: `src/core/music_director.lua` (grid, transition plans) against `data/golden/music.json`.
+- `tests/test_access_golden.lua`: `src/core/audio_access.lua` (bus gains, caption arrows) against `data/golden/access.json`.
+- `tests/test_music_player.lua`: the mixer of `src/shell/music_player.lua`, sample by sample, with no audio device.
+- `tests/test_audio_wiring.lua`: bus volumes along the bus chain (`app:bus_volume`) and directional caption arrows.
 
 ## The runtime shell (src/shell/)
 boot > title (press any key; asks for telemetry consent once per run while it is unset) > main menu (Play, Settings,
@@ -60,9 +65,9 @@ Credits, Quit, and Juice demo in a debug build = a run from the source folder) >
   captions_sfx, reduce_motion and shake_scale (the shake intensity), flash_limit (gentler flashes; the 3-per-second
   limiter itself is always on), hold_to_toggle (the demo's guard), game_speed (the game's dt), difficulty (stored for
   the game), window mode, size, vsync, frame cap (never in automated runs), master volume and the sfx / ui buses.
-  Stored only: `audio.mono` (LÖVE cannot downmix a stereo source; ship mono sources if you need it), `music` and
-  `voice` until the game plays music or voice. `colorblind` swaps the juice demo's palette only
-  (`src/shell/style.lua`), not a full-screen filter.
+  Stored only: `audio.mono` (LÖVE cannot downmix a stereo source; ship mono sources if you need it), and `voice`
+  until the game plays voice; `music` drives the music player when data/music.json exists. `colorblind` swaps
+  the juice demo's palette only (`src/shell/style.lua`), not a full-screen filter.
 - **User data** in one folder: the save folder (`love.filesystem.getSaveDirectory()`), or `--data-dir <dir>`:
   `settings.json` (+ `.bak`), `save_<slot>.json` (+ `.bak`; the play screen saves slot 1 when you leave),
   logs/game.log (name, version and UTC time on line 1; 5 older logs as `game.1.log`..`game.5.log`),
@@ -102,6 +107,16 @@ coroutine in `src/shell/drive.lua`: add one there and list it here.
   loads directly.
 - Audio: `love.audio.newSource(path, "static")` for short sounds, `"stream"` for music. WAV and OGG are safe; MP3
   works through mpg123. Log every asset in `docs/ASSET_LOG.md`.
+- Bus volumes: with data/audio_events.json, `app:bus_volume(bus)` (and `app:play_sound`) takes each slider once
+  along the bus and its parents (`src/core/audio_access.lua`: ambience under sfx is not turned down twice); master
+  is LÖVE's listener volume. Without that file a source gets the slider of its bus name, as before.
+- Adaptive music: data/music.json (made and checked with `tools/audio/wavesmith/music.py`; stems under
+  `assets/audio/`) plays through `src/shell/music_player.lua`; `app:play_music("combat")` changes track on the beat,
+  bar, phrase or loop end the rule asks for. The player mixes the stems itself into a QueueableSource, so switches,
+  fades and stingers are sample-exact in its mix; you hear them about 93 ms later (the queue) plus OpenAL's buffer.
+  Stems are decoded whole into memory (about 10 MB per stereo minute) and must be at music.json's `sample_rate`.
+- Directional captions: `app.subtitles:caption(id, { dx, dy, half_w, half_h })` adds an arrow to a caption marked
+  `"directional": true` while the source is off screen (left-pointing arrows before the text, the rest after).
 - Fonts: `love.graphics.newFont(path, size)` (TTF) or `love.graphics.newImageFont` for bitmap fonts; BMFont `.fnt`
   files load with `love.graphics.newFont("font.fnt")`.
 

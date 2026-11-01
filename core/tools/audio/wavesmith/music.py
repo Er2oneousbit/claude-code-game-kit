@@ -20,7 +20,8 @@
 #           (an intro plays once before it) to its last bar. `loop` cuts N bars and adds whatever rings past the loop
 #           end (reverb, a decaying note) back onto the loop's start, so the loop has no click and keeps its tail; it
 #           writes a 'smpl' loop chunk on the bar grid that Godot and Unity read, and the web player uses the same
-#           points. Stems of a track must have the same rate, channels and length: they start together and stay
+#           points (Godot 4.7 loops from the sample after loop_begin, one sample short a pass: the kit's Godot music
+#           player corrects it; a plain AudioStreamPlayer loop drifts by a sample each loop). Stems of a track must have the same rate, channels and length: they start together and stay
 #           locked. A stinger plays at the switch point and the next track enters after the stinger's bars.
 #           `tempo` is an estimate (onset autocorrelation) for checking generated music; it can be off by a factor of
 #           two on sparse material.

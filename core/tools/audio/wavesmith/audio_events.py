@@ -384,6 +384,17 @@ def build_vectors():
                {"call": "duck", "t_ms": 300}, {"call": "duck", "t_ms": 400}, {"call": "play", "event": "line", "t_ms": 450},
                {"call": "duck", "t_ms": 460}, {"call": "play", "event": "line", "t_ms": 600},
                {"call": "duck", "t_ms": 700}, {"call": "duck", "t_ms": 1000}, {"call": "duck", "t_ms": 1400}]),
+        # a long line stolen by a short one: the long voice's end moves to the steal, so the duck releases when the
+        # short one ends (700 ms), not when the long one would have (3000 ms); found missing by the Bevy port's review
+        _case("ducking: a stolen long line stops ducking when the short line that replaced it ends",
+              {"seed": 5,
+               "ducking": [{"trigger": "dialogue", "targets": ["music"], "depth_db": -12.0,
+                            "attack_ms": 100.0, "release_ms": 600.0}],
+               "events": {"line": {"bus": "dialogue", "files": ["long.wav", "short.wav"], "lengths_ms": [3000, 200],
+                                   "pick": "sequence", "max_voices": 1, "steal": "oldest"}}},
+              [{"call": "play", "event": "line", "t_ms": 0}, {"call": "duck", "t_ms": 400},
+               {"call": "play", "event": "line", "t_ms": 500}, {"call": "duck", "t_ms": 1000},
+               {"call": "duck", "t_ms": 1500}, {"call": "duck", "t_ms": 3500}]),
     ]
     return {"version": VECTOR_VERSION, "tolerance": TOLERANCE, "spec": "tools/audio/wavesmith/audio_events.py", "cases": cases}
 
