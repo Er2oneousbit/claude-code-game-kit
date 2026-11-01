@@ -51,6 +51,7 @@ python core/tools/audio/test_sfx_synth.py               # standard library only
 python core/tools/audio/test_chiptune.py
 python core/tools/audio/test_wavfile.py
 python core/tools/audio/test_babble.py                  # standard library only
+python core/tools/audio/test_loudness.py                # standard library only (EBU Tech 3341/3342 cases, about a minute)
 python core/tools/audio/test_flacfile.py                # standard library only (real encoder fixtures)
 python core/tools/audio/test_local_sfx.py               # offline (a stand-in ComfyUI)
 python core/tools/audio/test_local_tts.py               # offline (a fake TTS worker)

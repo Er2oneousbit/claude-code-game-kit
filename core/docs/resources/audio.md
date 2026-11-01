@@ -167,4 +167,34 @@ Prompt patterns: `docs/BRIEFS.md` > Music with Suno. Log prompts and outputs in 
 - Keep SFX short, mono for positional, 44.1 kHz or 48 kHz, WAV in source control, OGG for shipping if size matters.
 - Bus structure: Master > Music, SFX, UI, Voice. Expose volume sliders from day one.
 
+## Loudness: measure, check the mix, normalize
+How loud a game sounds is measured, not guessed. `tools/audio/loudness.py` (no installs) gives the numbers the
+platform holders and broadcasters use: integrated loudness in LUFS (ITU-R BS.1770-5), loudness range in LU (EBU
+Tech 3342) and true peak in dBTP.
+- `python tools/audio/loudness.py measure "assets/audio/**/*.wav"`: one line per file (`--json` for scripts).
+  Files under 0.4 s have no integrated loudness and files under 3 s no loudness range; it says "n/a" there.
+- **Check the whole mix.** Sony's ASWG-R001 (v1.10, August 2013) is the published game target: the average loudness
+  of the *whole* game, "measured as a whole" and not dialogue, music or effects separately, over "a minimum of 30
+  minutes" of play that covers all parts of the game, at **-24 LKFS (+/-2) on home consoles and PC** or
+  **-18 LKFS (+/-2) on handhelds and phones**, with true peak at most **-1 dBTP**. Record a 30-minute capture
+  (Godot: `--write-movie capture.png` writes the frames plus a 32-bit `capture.wav`; it needs a window, Movie
+  Maker crashes under `--headless`) and run
+  `python tools/audio/loudness.py check-mix capture.wav --target home`.
+  It refuses to judge a shorter capture unless you pass `--allow-short` (then the verdict says provisional), and
+  says how far to move the master or which peak to tame.
+- **Single assets: kit house conventions, not a standard.** Before the mix is balanced by ear, assets start at
+  levels relative to the platform target: dialogue at the target, music 4 LU under, effects 6, UI 8, ambience beds
+  10 (`loudness.py conventions` prints the table). `loudness.py normalize vo/line.wav --bus dialogue --target home
+  --out ...` applies it, or `--lufs -24` any level; true peak never goes past `--tp-ceiling` (default -1 dBTP):
+  when the level cannot be reached without a limiter, it says so and stops at the ceiling. One-shots under 0.4 s are
+  matched by true peak instead. These numbers are starting points; tune by ear in the game.
+- Proof (K01, 2026-11-01): on 815 files (the SFX and voice bake-offs plus kit samples), integrated loudness matched
+  pyloudnorm within 0.005 LU once pyloudnorm's two departures from BS.1770 are removed (its default filter
+  approximates the K-weighting, and it counts a partial last block the standard leaves out), and ffmpeg's ebur128
+  within 0.1 LU on all but one short clip; loudness range matched ffmpeg within 0.05 LU when ffmpeg's own
+  percentile rounding is applied (ffmpeg reads a meaningless ~20 LU for clips with four or fewer 3 s windows); true
+  peak was within 0.2 dB of an ideal reconstruction on 806 of 808 files (median 0.003 dB; the two others are
+  heavily clipped full-band clips, 0.27 and 0.38 dB off, where ffmpeg is off by 0.38 and 0.46). The exam reproduces
+  EBU Tech 3341 cases 1-5 and 15-23 and Tech 3342 cases 1-4.
+
 Back to the index: `docs/RESOURCES.md`.

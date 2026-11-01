@@ -31,6 +31,11 @@
 - Dotwork: new `diorama` lane (2.5D): tiles as 3D floors and blocks, props and characters as pixel-crisp billboards,
   lit, under a tilted camera.
 - Dotwork: the exam checks that no shipped file holds an unresolved placeholder token or an em dash.
+- `tools/audio/loudness.py`: measure integrated loudness (ITU-R BS.1770-5), loudness range (EBU Tech 3342) and true
+  peak; check a whole-game capture against Sony's ASWG-R001 targets (home -24, portable -18 LKFS, true peak -1 dBTP,
+  at least 30 minutes); normalize single assets to labeled house levels with a true-peak ceiling. No installs.
+  Checked against pyloudnorm and ffmpeg on 815 files; its true peak reads clipped audio up to 0.84 dB closer to an
+  ideal reconstruction than the standard's 4x example filter.
 - SOP-19 and `/dotwork` point to the `uikit` lane for prompt glyphs and a menu Theme with a visible focus ring.
 - `scripts/sync_examples.py`: a run with nothing to sync leaves the examples untouched (it added a history entry to
   every example on each run). The kit's em dash check reads tracked and new files only.
