@@ -14,6 +14,8 @@
 -- Pseudocode:
 --   open: game.(KEEP-1).log -> game.KEEP.log ... game.log -> game.1.log; new game.log with the header line
 --   write(line): append line to the file and to a ring of TAIL_LINES
+--   ring: ring[first..last] are the kept lines; first and last are counted, never #ring (the length operator is
+--   undefined on a table whose low indices were set to nil; LuaJIT gave 0 there after a few hundred lines)
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- ---------------------------------------------------------------------------
 local LogFile = {}
@@ -36,7 +38,8 @@ end
 
 -- info: { name, version, extra } -> the first line "<name> <version> started <ISO time> <extra>"
 function LogFile.open(store, info, on_error)
-  local self = setmetatable({ store = store, ring = {}, first = 1, enabled = true, on_error = on_error }, LogFile)
+  local self = setmetatable({ store = store, ring = {}, first = 1, last = 0, enabled = true,
+                              on_error = on_error }, LogFile)
   info = info or {}
   self.header = string.format("%s %s started %s%s", info.name or "game", info.version or "0.0.0",
                               os.date("!%Y-%m-%dT%H:%M:%SZ"), info.extra and (" " .. info.extra) or "")
@@ -55,8 +58,9 @@ function LogFile:fail(err)
 end
 
 function LogFile:remember(line)
-  self.ring[#self.ring + 1] = line
-  if #self.ring - self.first + 1 > LogFile.TAIL_LINES then
+  self.last = self.last + 1
+  self.ring[self.last] = line
+  if self.last - self.first + 1 > LogFile.TAIL_LINES then
     self.ring[self.first] = nil
     self.first = self.first + 1
   end
@@ -71,8 +75,8 @@ end
 
 function LogFile:tail(n)
   local out = {}
-  local from = math.max(self.first, #self.ring - (n or LogFile.TAIL_LINES) + 1)
-  for i = from, #self.ring do out[#out + 1] = self.ring[i] end
+  local from = math.max(self.first, self.last - (n or LogFile.TAIL_LINES) + 1)
+  for i = from, self.last do out[#out + 1] = self.ring[i] end
   return table.concat(out, "\n")
 end
 

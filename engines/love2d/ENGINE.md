@@ -4,7 +4,9 @@
 
 ## Version and setup
 - **LÖVE version:** SET EXACT VERSION HERE. The kit is tested on LÖVE 11.5 (LuaJIT, Lua 5.1 syntax); 11.4 is the
-  floor. LÖVE 12 changes APIs: move only with an ADR.
+  floor. LÖVE 12 changes APIs: move only with an ADR. `conf.lua` sets `t.version = "11.4"`, the oldest LÖVE the
+  game supports: a LÖVE that does not list that version as compatible shows a modal warning box, which hangs
+  automated runs. Raise it only together with `MIN_LOVE` in `tools/dev.py`.
 - **Binary:** set env var `LOVE_BIN` to `love.exe` (Windows; the console build `lovec.exe` next to it is used for
   check, test and smoke) or put `love` on PATH. On Windows the official zip is enough, no installer needed.
   `python tools/dev.py doctor` verifies.
@@ -64,8 +66,10 @@ build/              .love and the fused Windows exe (git-ignored)
 6. **Pixel art:** call `love.graphics.setDefaultFilter("nearest", "nearest")` before loading images, and scale by
    whole numbers from the 640x360 base.
 7. **No rename in love.filesystem.** Atomic saves in the save folder write `<file>.tmp`, verify it, then write
-   `<file>.bak` and `<file>`; with `--data-dir` (io.open) they rename for real, removing the target first because
-   a Windows rename does not replace. Keep `--data-dir` paths ASCII on Windows (io.open uses the code page).
+   `<file>.bak` and `<file>`; with `--data-dir` (io.open) they rename for real (atomic on POSIX; on Windows a rename
+   does not replace, so the target is removed first there). A load that finds `<file>` missing next to a `.tmp`
+   that parses (a crash between that remove and the rename) renames the `.tmp` back and logs "recovered". Keep
+   `--data-dir` paths ASCII on Windows (io.open uses the code page).
 8. **API verification:** LÖVE 11 and 12 differ (for example `love.graphics.setColor` takes 0..1 since 11.0, not
    0..255). Check `lovec --version` and the matching wiki page (love2d.org/wiki) before using an unfamiliar API.
 

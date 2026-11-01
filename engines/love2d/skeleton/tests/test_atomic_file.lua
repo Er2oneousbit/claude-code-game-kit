@@ -2,7 +2,8 @@
 -- test_atomic_file.lua
 -- Purpose : Crash-safe writes against the REAL filesystem: both kinds of store (an absolute folder through
 --           io.open, like --data-dir, and the save folder through love.filesystem) in a temp folder, including a
---           simulated crash between writing the .tmp and replacing the file.
+--           simulated crash between writing the .tmp and replacing the file, and the recovery after a crash
+--           between removing the file and the rename (Windows).
 -- Usage   : python tools/dev.py test     (or --filter atomic)
 -- Notes   : The temp folders live in the game's save folder (love.filesystem may only create folders there) and
 --           are removed afterwards.
@@ -69,6 +70,34 @@ function T.test_crash_before_the_rename_leaves_the_old_file()
     A.eq(store:read(NAME), "next", kind)
     A.eq(store:read(NAME .. ".bak"), "good", kind)
     A.falsy(store:exists(NAME .. ".tmp"), kind)
+  end)
+end
+
+function T.test_crash_between_the_remove_and_the_rename_is_recovered()
+  each_store(function(store, kind)
+    AtomicFile.write(store, NAME, "good")
+    AtomicFile.stage(store, NAME, "new")
+    store:remove(NAME)                                            -- Windows: the target is gone, the rename never ran
+    local complete = function(text) return text == "new" end
+    A.truthy(AtomicFile.recover(store, NAME, complete), kind .. ": recovered")
+    A.eq(store:read(NAME), "new", kind)
+    A.falsy(store:exists(NAME .. ".tmp"), kind)
+    A.falsy(AtomicFile.recover(store, NAME, complete), kind .. ": nothing to do when the file is there")
+    store:write(NAME .. ".tmp", "ne")                             -- a torn .tmp
+    store:remove(NAME)
+    A.falsy(AtomicFile.recover(store, NAME, complete), kind .. ": a .tmp that does not parse stays put")
+    A.falsy(store:exists(NAME), kind)
+  end)
+end
+
+function T.test_rename_replaces_an_existing_target()
+  if love.system.getOS() == "Windows" then A.falsy(TextStore.RENAME_REPLACES, "Windows removes the target first") end
+  each_store(function(store, kind)
+    store:write("a.txt", "from a")
+    store:write("b.txt", "old b")
+    store:rename("a.txt", "b.txt")
+    A.eq(store:read("b.txt"), "from a", kind)
+    A.falsy(store:exists("a.txt"), kind)
   end)
 end
 

@@ -24,6 +24,9 @@ local IDENTITY = "{{GAME_SLUG}}"         -- the save folder name (love.filesyste
 local BASE_W, BASE_H = 640, 360          -- pixel-art base resolution
 local WINDOW_SCALE = 2                   -- play window = base x 2
 local OFFSCREEN = -20000                 -- smoke window position: renders, but nobody sees it flash
+-- The OLDEST LÖVE the game runs on (dev.py MIN_LOVE). A LÖVE that does not list this version as compatible shows a
+-- modal "Compatibility Warning" box, which hangs automated runs: 11.5 accepts "11.4", 11.4 does not accept "11.5".
+local LOVE_VERSION = "11.4"
 
 -- The command line, parsed once for conf.lua, main.lua and the shell. Unknown options are left for the game.
 local function parse(args)
@@ -76,7 +79,7 @@ end
 
 function love.conf(t)
   t.identity = IDENTITY
-  t.version = "11.5"
+  t.version = LOVE_VERSION
   t.console = false
   t.window.title = GAME_TITLE
   t.window.width = BASE_W * WINDOW_SCALE

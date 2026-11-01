@@ -200,12 +200,19 @@ function Settings.encode(s)
 end
 
 -- From the user-data folder (src/core/text_store.lua): settings, problems, source ("file", "backup", "none").
--- An unreadable settings.json falls back to settings.json.bak before it falls back to the defaults.
+-- An unreadable settings.json falls back to settings.json.bak before it falls back to the defaults. A missing
+-- settings.json with a complete settings.json.tmp (a crash in the middle of a save) is put back first.
+local function is_object_text(text) local ok, v = Json.try_decode(text); return ok and Json.is_object(v) end
+
 function Settings.load_from(store)
+  local recovered = AtomicFile.recover(store, Settings.FILE, is_object_text)
   local text = store:read(Settings.FILE)
   if text ~= nil then
     local s, problems = Settings.load(text)
-    if problems[1] ~= "unreadable" and problems[1] ~= "not an object" then return s, problems, "file" end
+    if problems[1] ~= "unreadable" and problems[1] ~= "not an object" then
+      if recovered then table.insert(problems, 1, Settings.FILE .. ": recovered from the " .. AtomicFile.TMP_SUFFIX) end
+      return s, problems, "file"
+    end
     local bak = store:read(Settings.FILE .. AtomicFile.BAK_SUFFIX)
     if bak ~= nil then
       local s2, problems2 = Settings.load(bak)
@@ -216,7 +223,7 @@ function Settings.load_from(store)
     end
     return s, problems, "none"
   end
-  -- no settings.json but a .bak: a crash between removing the old file and renaming the new one
+  -- no settings.json (and no complete .tmp) but a .bak: a crash between removing the old file and the rename
   local bak = store:read(Settings.FILE .. AtomicFile.BAK_SUFFIX)
   if bak ~= nil then
     local s, problems = Settings.load(bak)
@@ -228,8 +235,7 @@ end
 
 -- Writes settings.json atomically (keeps settings.json.bak); returns the file's path for messages.
 function Settings.save_to(store, s)
-  AtomicFile.write(store, Settings.FILE, Settings.encode(s), {
-    is_good = function(old) local ok, v = Json.try_decode(old); return ok and Json.is_object(v) end })
+  AtomicFile.write(store, Settings.FILE, Settings.encode(s), { is_good = is_object_text })
   return store:path(Settings.FILE)
 end
 

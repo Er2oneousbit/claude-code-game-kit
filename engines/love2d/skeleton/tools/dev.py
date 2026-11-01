@@ -44,7 +44,7 @@ SMOKE_FRAMES = 120                       # frames to run in `smoke`
 BOOT_MARKER = "BOOT_OK"                  # printed by main.lua through the Log module
 SMOKE_DONE = "SMOKE_DONE"                # printed by main.lua when the frame count is reached
 ERROR_PATTERNS = [r"^\[ERROR\]", r"^\[error\]", r"^Error: ", r"^Error\b.*\.lua:\d+"]
-SKIP_DIRS = {".git", "build", "captures", "node_modules", ".claude"}
+SKIP_DIRS = {".git", "build", "captures", "node_modules", ".claude"}   # top-level only: src/game/build/ is code
 CHECKER = "tools/lovecheck"              # a separate LÖVE program: a broken conf.lua cannot stop it
 CHECK_BATCH = 150                        # files per launch (Windows command line limit)
 SMOKE_TIMEOUT_S = 90
@@ -57,7 +57,7 @@ TESTED_MAJOR = 11                        # LÖVE 12 changes APIs (verify before 
 NO_EXEC = (126, 127)
 # build: what goes into the .love (everything else stays out: tools, tests, docs, sources, captures)
 LOVE_INCLUDE = ["main.lua", "conf.lua", "src", "assets", "data", "lib", "CREDITS.md"]
-LOVE_EXCLUDE_PARTS = {"golden"}          # data/golden/ is test data
+LOVE_EXCLUDE_PATHS = ["data/golden"]     # test data; paths from the project root (assets/golden/ is packaged)
 WINDOWS_RUNTIME = ["love.dll", "lua51.dll", "mpg123.dll", "msvcp120.dll", "msvcr120.dll", "OpenAL32.dll",
                    "SDL2.dll", "license.txt"]
 GAME_SLUG = "{{GAME_SLUG}}"
@@ -167,10 +167,22 @@ def scan_errors(output):
     return [l for l in output.splitlines() if any(re.search(p, l) for p in ERROR_PATTERNS)]
 
 
+def top_level_skipped(path):
+    """True when path (under ROOT) sits in one of SKIP_DIRS at the project root. Only the first part counts, so a
+    game folder such as src/game/build/ is still checked."""
+    return path.relative_to(ROOT).parts[0] in SKIP_DIRS
+
+
+def love_excluded(path):
+    """True when path (under ROOT) is LOVE_EXCLUDE_PATHS or inside one, matched from the project root."""
+    rel = path.relative_to(ROOT).as_posix()
+    return any(rel == ex or rel.startswith(ex + "/") for ex in LOVE_EXCLUDE_PATHS)
+
+
 def lua_files(paths=None):
     if paths:
         return [Path(p).resolve() for p in paths]
-    return sorted(p for p in ROOT.rglob("*.lua") if not (set(p.relative_to(ROOT).parts) & SKIP_DIRS))
+    return sorted(p for p in ROOT.rglob("*.lua") if not top_level_skipped(p))
 
 
 def compile_check(love, files):
@@ -220,12 +232,16 @@ def cmd_test(args, love):
         print(f"[FAIL] the test run printed no summary (exit {rc}); see the output above")
         return 1
     run_n, passed, failed, files = (int(g) for g in m.groups())
-    if failed or rc == 1:
+    if failed:
         print(f"[FAIL] {failed} test(s) failed of {run_n}")
         return 1
     if run_n == 0:
         print(f"[FAIL] no tests ran ({files} file(s)" + (f", filter {args.filter!r})" if args.filter else ")"))
         return 2
+    if rc != 0:                                      # a timeout (124) or a crash after the summary is not a pass
+        print(f"[FAIL] the summary says {passed} passed, but LÖVE exited {rc}" +
+              (" (timed out)" if rc == 124 else "") + "; see the output above")
+        return 1
     print(f"[ OK ] {passed} test(s) passed in {files} file(s)")
     return 0
 
@@ -336,8 +352,7 @@ def love_members():
         if p.is_file():
             files.append(p)
         elif p.is_dir():
-            files += [f for f in p.rglob("*") if f.is_file() and not (set(f.relative_to(ROOT).parts)
-                                                                      & (LOVE_EXCLUDE_PARTS | SKIP_DIRS))]
+            files += [f for f in p.rglob("*") if f.is_file() and not love_excluded(f)]
     return sorted(files)
 
 
@@ -410,15 +425,21 @@ def cmd_doctor(args, love):
     print(f"[info] python {sys.version.split()[0]}")
     if love:
         rc, out = run([love, "--version"], echo="never", timeout=60)
+        text = out.strip() or "(no output)"
         m = re.search(r"LOVE (\d+)\.(\d+)", out)
         ver = (int(m.group(1)), int(m.group(2))) if m else None
-        if ver and ver < MIN_LOVE:
-            print(f"[FAIL] {out.strip()} is older than {MIN_LOVE[0]}.{MIN_LOVE[1]}")
+        if rc != 0:
+            print(f"[FAIL] love: {love} --version exited {rc}: {text}")
             problems += 1
-        elif ver and ver[0] > TESTED_MAJOR:
-            print(f"[WARN] {out.strip()}: the kit is tested on LÖVE 11.5; 12.x changes APIs (verify)")
+        elif not ver:
+            print(f"[WARN] love: {love} --version printed no LÖVE version (is it LÖVE?): {text}")
+        elif ver < MIN_LOVE:
+            print(f"[FAIL] {text} is older than {MIN_LOVE[0]}.{MIN_LOVE[1]}")
+            problems += 1
+        elif ver[0] > TESTED_MAJOR:
+            print(f"[WARN] {text}: the kit is tested on LÖVE 11.5; 12.x changes APIs (verify)")
         else:
-            print(f"[ OK ] love: {love} ({out.strip() or 'version unknown'})")
+            print(f"[ OK ] love: {love} ({text})")
     else:
         print("[FAIL] LÖVE not found. Set LOVE_BIN to love.exe / lovec.exe, or add love to PATH.")
         problems += 1

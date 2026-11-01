@@ -18,13 +18,13 @@ Support" extension for completions. LÖVE has no editor: assets come from Asepri
 ## The universal commands, mapped to LÖVE
 | dev.py | What it runs |
 |---|---|
-| `check` | `lovec tools/lovecheck <every .lua>`: a separate tiny LÖVE program compiles each file with `loadstring` (the game's own LuaJIT) and prints `CHECK_FAIL <file> <message>` |
-| `test` | `lovec . --test [--filter name]`: `tests/runner.lua` runs every `test_*` function and prints `TESTS <run> passed <p> failed <f> files <n>`; 0 tests is exit 2 |
+| `check` | `lovec tools/lovecheck <every .lua>` (all but the top-level `build/`, `captures/`, `.git/`, `.claude/`, `node_modules/`): a separate tiny LÖVE program compiles each file with `loadstring` (the game's own LuaJIT) and prints `CHECK_FAIL <file> <message>` |
+| `test` | `lovec . --test [--filter name]`: `tests/runner.lua` runs every `test_*` function and prints `TESTS <run> passed <p> failed <f> files <n>`; 0 tests is exit 2, and any non-zero LÖVE exit (a crash after the summary, a timeout) fails the run |
 | `smoke` | compiles conf.lua and main.lua first, then `lovec . --smoke N`: walks title > menu > play, passes on `BOOT_OK` and `SMOKE_DONE` (or `DRIVE_DONE` with `--drive`) with no `[ERROR]` / `[error]` lines and exit 0. `--headless` runs with no window. `--screenshot`, `--record`, `--compare`, `--drive`, `--data-dir`, `--locale`: see "Smoke scenarios" below |
 | `run` | `love .` (the GUI build) |
 | `build` | zips `main.lua`, `conf.lua`, `CREDITS.md`, `src/`, `assets/`, `data/` (not `data/golden/`) into `build/<game>.love`; on Windows fuses `love.exe` + the .love into `build/windows/<game>.exe` and copies LÖVE's DLLs and its license file (license.txt) next to it |
 | `clean` | removes `build/` (`--yes` accepted, never asks) |
-| `doctor` | LÖVE found, 11.4 or newer (warns on 12), the boot files present, then `tools/doctor.py` |
+| `doctor` | LÖVE found, 11.4 or newer (warns on 12; fails when `--version` fails, warns when it prints no version), the boot files present, then `tools/doctor.py` |
 
 Game options go after `--`: `python tools/dev.py smoke -- --seed 7` reaches the game as `KIT.rest`.
 

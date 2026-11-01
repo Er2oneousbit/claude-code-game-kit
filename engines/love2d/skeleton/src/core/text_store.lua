@@ -11,9 +11,10 @@
 -- Notes   : Names are folder-style paths relative to the folder ("crashes/crash_1.txt"); parent folders are
 --           created on write. Binary data (PNG) is fine: every backend writes bytes as they are.
 --           Folder store: io.open plus a small mkdir through LuaJIT's FFI (Lua has none). Its rename is real
---           (can_rename = true); on Windows it does not replace an existing target, so remove the target first
---           (atomic_file.lua does). io.open takes the path in the system code page on Windows, so keep
---           --data-dir paths ASCII there (verify for other paths).
+--           (can_rename = true) and replaces the target: on POSIX os.rename does that atomically; on Windows it
+--           cannot, so Dir:rename removes the target first there only (RENAME_REPLACES; atomic_file.lua documents
+--           the crash window that leaves and how a load recovers it). io.open takes the path in the system code
+--           page on Windows, so keep --data-dir paths ASCII there (verify for other paths).
 --           Save-folder store: love.filesystem has no rename (can_rename = false; atomic_file.lua writes and
 --           verifies instead), and read() ignores files that live in the game's own folder, not the save folder.
 --           love.filesystem works without a window, so tests use it too.
@@ -25,6 +26,8 @@ local TextStore = {}
 local POSIX_DIR_MODE = 493                 -- 0755
 local WIN_UTF8 = 65001                     -- CP_UTF8 for MultiByteToWideChar
 local WIN_PATH_MAX = 32768
+-- os.rename replaces an existing target on POSIX (atomically) but not on Windows ("\" is the Windows separator)
+TextStore.RENAME_REPLACES = package.config:sub(1, 1) ~= "\\"
 
 local function parent_of(path)
   return path:match("^(.*)[/\\][^/\\]+$")
@@ -116,7 +119,9 @@ end
 
 function Dir:remove(name) os.remove(self:path(name)) end
 
+-- Replaces `to`. POSIX rename does that atomically; a Windows rename fails when `to` exists, so remove it first there.
 function Dir:rename(from, to)
+  if not TextStore.RENAME_REPLACES then os.remove(self:path(to)) end
   local ok, err = os.rename(self:path(from), self:path(to))
   if not ok then error("cannot rename " .. self:path(from) .. " to " .. self:path(to) .. ": " .. tostring(err), 0) end
 end
