@@ -3,6 +3,24 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.8.0 (unreleased)
+- **Local audio tools** (no account, no per-use cost):
+  - `tools/audio/babble.py`: gibberish character voices for speech bubbles, made from code (no model). Five voices,
+    `--variants` takes, `--lines` for a whole script, and a `.timeline.json` per line with the time each character
+    should appear, so a typewriter reveal stays in step with the voice.
+  - `tools/audio/local_sfx.py`: sound effects and seamless ambience loops from a text prompt on your own GPU (Stable
+    Audio 3 through a local ComfyUI). It renders several takes, trims and normalizes them, ranks them on technical
+    checks and keeps the best few for you to pick by ear; a `.gen.json` per file records model, seed, prompt and
+    license.
+  - `tools/audio/local_tts.py`: character voices on your own GPU with Qwen3-TTS (Apache-2.0): design a voice from a
+    description once, then voice speech bubbles and barks in it; `--pitch` / `--ring-hz` for giants, creatures and
+    golems. The model runs in a separate Python environment (`LOCAL_TTS_PYTHON`), so the kit stays standard library
+    only; `check` names what is missing.
+  - `tools/audio/flacfile.py`: FLAC to samples or WAV with the standard library (16/24-bit, mono/stereo), checked
+    against the file's MD5.
+  - `tools/art/comfy_local.py` saves audio from Save Audio nodes and strips FLAC tags (where ComfyUI writes the prompt
+    and workflow, local paths included), as it already did for PNG text chunks.
+
 ## 0.7.6 (2026-10-31): Dotwork rehearsal fixes
 - **Fix: Dotwork's clip drift check stopped clean clips.** A clip whose colours were a shade off the sprite's (a
   shirt or hands across a colour-bin edge) counted as drift, which stopped the townsfolk and party-member examples in
