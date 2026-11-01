@@ -49,6 +49,61 @@ Prompt patterns: `docs/BRIEFS.md` > Music with Suno. Log prompts and outputs in 
 - Lines written while the game runs (an LLM NPC) cannot be pre-recorded: see the live voice in
   `examples/gatekeeper-godot` and the key rules in `SOP-15`.
 - Never pick a library voice that imitates a real person or a famous character, even if it is marked licensed.
+- Babble instead of words (the gibberish blips many 2D games play while a speech bubble types out): this kit's
+  `python tools/audio/babble.py "Halt! Who goes there?" --voice knight --out assets/audio/voice/halt.wav` makes it
+  from code, so there is no account, cost or license question. Voices: baker, knight, smith, sprite, golem
+  (`--list`; tune with `--set f0=... --set metal=...`); `--variants 3` writes takes to compare, `--lines <file>`
+  voices a whole script. Each WAV gets `<name>.timeline.json` with the time each character should appear: drive
+  the typewriter reveal from it so text and voice stay in step. Questions rise at the end, exclamations get louder.
+  `--bank-dir <folder>` swaps the synth for recorded syllables (`ba.wav`, `ko.wav`, ...) if you want a real voice's
+  colour.
+
+**Local voices, on your own GPU** (`tools/audio/local_tts.py`, Qwen3-TTS; no account, nothing per line)
+- Design a character's voice once from a description, then voice every line in it:
+  `python tools/audio/local_tts.py design "gruff older blacksmith, deep gravelly voice, slow speech" --out
+  assets_src/voice/smith_ref.wav`, then `python tools/audio/local_tts.py say --ref assets_src/voice/smith_ref.wav
+  --lines docs/dialog/smith.txt --out assets/audio/voice/smith.wav` (`smith_1.wav`, `smith_2.wav` ...). Listen to
+  the reference first; a different `--seed` or a clearer description gives another voice. Spoken barks work as
+  plain words ("Hyah!", "Ha ha ha!"). For voices deeper or stranger than a person: `--pitch -5` (a giant, also
+  slower) or `+5` (a small creature), `--ring-hz 40` (metal, golems, robots).
+- **Never clone a real person's voice without their written permission.** Designed voices are the documented
+  path. A recording works only with `--ref-text "<its exact words>" --ref-origin self` (your own voice) or
+  `--ref-origin permission` (the speaker agreed in writing); every `.gen.json` and `--log` row records where the
+  voice came from.
+- Speed: about 3x slower than realtime on a 16 GB RTX 5060 Ti (a 3 s line takes about 10 s, plus about 30 s to load
+  the model per run, so voice a whole `--lines` script in one run). Pre-made lines only, not live speech.
+- Setup (one time). The model runs in its own Python environment so the kit's tools stay standard-library only:
+  ```
+  uv venv tts-env --python 3.12
+  uv pip install --python tts-env qwen-tts torch torchaudio --torch-backend cu130   # your CUDA: cu128, cu126 ...
+  setx LOCAL_TTS_PYTHON "<full path>\tts-env\Scripts\python.exe"                     # macOS/Linux: export ... /bin/python
+  python tools/audio/local_tts.py check        # names what is missing: the env, torch, qwen-tts, or CUDA
+  ```
+  Weights download on first use into the Hugging Face cache (`HF_HOME`, default `~/.cache/huggingface`):
+  Qwen3-TTS-12Hz-1.7B-VoiceDesign (design) and Qwen3-TTS-12Hz-1.7B-Base (say), about 4.3 GB each;
+  `--model 0.6b` uses `Qwen3-TTS-12Hz-0.6B-Base` (2.4 GB). All Apache-2.0 per their model cards
+  (https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base, checked 2026-10-31). Outputs: 24 kHz mono WAV, -3 dBFS peak.
+- Setup gotchas seen on an RTX 50-series (Blackwell) PC, 2026-10-31:
+  - Install torch with `--torch-backend cu130` (or your CUDA). `--extra-index-url` with
+    `--index-strategy unsafe-best-match` silently picks PyPI's newer CPU-only torch; `check` then reports no CUDA.
+  - Scoring speech with Whisper: on a CUDA 13 torch, faster-whisper (CTranslate2) fails with `cublas64_12.dll`
+    missing; the transformers Whisper pipeline works on the same torch.
+  - qwen-tts prints a banner to stdout when imported; local_tts's worker moves it to stderr (no action needed).
+- Voice bake-off K01 (2026-10-31): 5 designed personas x 22 lines (10 speech-bubble lines with name and number
+  traps, 12 barks), scored with Whisper large-v3-turbo word error rate and WavLM speaker similarity to the
+  persona's reference (different personas score 0.26-0.78 against each other; two deep male voices scored 0.93,
+  hence `--pitch` / `--ring-hz` for a golem):
+
+  | Variant | Word error rate | Same voice as reference | Speed (x realtime) | Verdict |
+  |---|---|---|---|---|
+  | Qwen3-TTS 1.7B, design then clone | 0.013 | 0.957 | 3.4 | default: clearest, steadiest voice, Apache-2.0 |
+  | Chatterbox Turbo (clone) | 0.018 | 0.949 | 0.8 | not used: flattest delivery, watermarked |
+  | Chatterbox (clone) | 0.020 | 0.951 | 1.5 | not used: watermarked, reads [laugh]-style tags as words |
+  | Qwen3-TTS VoiceDesign per line | 0.018 | 0.856 | 3.2 | not used: the voice drifts line to line |
+
+  Chatterbox (MIT) was tested but is not wired in: every output carries an inaudible Perth watermark, and its
+  watermarker needs `setuptools<81` (it imports `pkg_resources`; without it every line fails with
+  `'NoneType' object is not callable`). How much emotion each variant can carry is still being judged by ear.
 
 ## SFX
 **Libraries**
@@ -67,10 +122,41 @@ Prompt patterns: `docs/BRIEFS.md` > Music with Suno. Log prompts and outputs in 
 - Generated: `python tools/audio/eleven_audio.py sfx --text "old iron gate creaking open" --seconds 2 --out <sfx>.wav --mono --log`
   (about 10 credits per second; free-plan output is non-commercial and is logged as PLACEHOLDER).
   Generated audio can come back very quiet: `python tools/audio/wavfile.py stats|normalize <file>`.
+- Local, on your own GPU (no account, no per-sound cost): `python tools/audio/local_sfx.py make "heavy wooden door
+  creaking open" --seconds 2.5 --out build/audition/door.wav` renders 6 takes with Stable Audio 3 through a local
+  ComfyUI, trims and normalizes them, and keeps the best 3 (`door_1.wav` is the top-ranked) with a `.gen.json` each.
+  `--loop` makes ambience beds loop seamlessly, `--mono` suits positional one-shots, `--model small-sfx` gives a
+  second opinion. `local_sfx.py check` says what is missing. Setup: ComfyUI 0.43.0 or newer, plus
+  stable_audio_3_medium.safetensors (ComfyUI's checkpoints folder) and t5gemma_b_b_ul2.safetensors (its text_encoders folder) from
+  `huggingface.co/Comfy-Org/stable-audio-3`. About 2 s per take on a 16 GB RTX 5060 Ti once the model is loaded.
+  - **You pick by ear.** The ranking is technical only (clipping, silence, length, loop seam): it cannot hear
+    whether a take matches the prompt. A meaning-based score did not fix that either: in the K01 bake-off the
+    CLAP text-audio model ranked correct retro jumps and coin arpeggios low. Listen to the kept takes and choose.
+  - **License (verify, read it yourself before shipping):** Stable Audio 3 is under the Stability AI Community
+    License (Last Updated July 5, 2024): free while you and your affiliates make under USD 1M a year in total
+    revenue, from any source; commercial use requires registering at `stability.ai/community-license`; you own
+    the outputs as far as the law allows, and the outputs may not be used to train or improve another
+    foundational generative model. The text encoder (T5Gemma) is under Google's Gemma Terms of Use. Each WAV's
+    `.gen.json` and `--log` row record the model and license.
+  - Bake-off K01 (2026-10-31, 29 prompts covering clean UI, retro, realistic foley, stylized and ambience,
+    3 seeds each, scored with CLAP text-audio similarity plus mel spectrograms):
+
+    | Model | CLAP | Own prompt ranked #1 of 29 | Seconds per take | Verdict |
+    |---|---|---|---|---|
+    | Stable Audio 3 medium | 0.283 | 75% | 1.6 | default: best on every style, clean lengths |
+    | Stable Audio 3 small-sfx | 0.229 | 59% | 1.5 | second opinion: wins some creature and foley prompts, weak on retro |
+    | Stable Audio 3 small-sfx base (50 steps) | 0.186 | 40% | 5.0 | not used |
+    | Stable Audio Open 1.0 | 0.175 | 34% | 4.5 | not used: smears short sounds to 1-1.5 s, clips most |
+
+    Not one of them nails "count" prompts ("four footsteps"); render takes and pick. For precise retro
+    blips the sfx_synth presets above are still the better tool.
 - `sfxr` / `jsfxr` (browser), `Bfxr`, `ChipTone`, `LabChirp`. Output is yours to use.
 
 **Edit and process**
 - `Audacity` (free), `Reaper`, `Ocenaudio`. Normalize, trim silence, add tiny fades to avoid clicks.
+- FLAC to WAV with nothing installed: `python tools/audio/flacfile.py towav <file>.flac --out <file>.wav` (16/24-bit,
+  mono/stereo; checks the file's MD5). Tags do not carry over, which matters for ComfyUI's FLACs: they hold the
+  full prompt and workflow, local paths included (`tools/art/comfy_local.py strip` cleans a FLAC in place).
 - Layer 2 to 3 sounds per important event (impact plus tail plus pitch variation). Randomize pitch ±5 percent
   and rotate 3 to 5 variants for anything that repeats.
 

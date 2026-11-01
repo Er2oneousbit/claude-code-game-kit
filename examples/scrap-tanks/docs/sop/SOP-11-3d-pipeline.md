@@ -134,6 +134,15 @@ Tested on a Kenney CC0 character's walk cycle and by its exam (K01: 24/24). Then
 | Hero character | 20k to 60k | 2k to 4k | LODs required |
 | Background NPC | 5k to 15k | 1k to 2k | |
 
+## Lighting and post-processing (standard practice)
+- Light the gameplay first: the player, the path and the threats read at a glance; then mood. Bake what does not move
+  (lightmaps, light probes) and keep dynamic shadows for what does; every dynamic light with shadows is a frame-time cost
+  (measure it, SOP-10).
+- Post-processing stack: tone mapping and exposure first, then color grading, then ambient occlusion, bloom and depth of
+  field only where they help. Motion blur, camera shake, film grain and chromatic aberration each get an off switch
+  (SOP-20, F33).
+- Test the lowest target hardware with the full stack on, and give quality presets (low, medium, high) in the settings.
+
 ## Done when
 - The asset passes `validate_asset.py --class <its class>`, imports at the right scale with materials, has LODs and collision where needed, is logged, and holds the frame budget in the target scene.
 

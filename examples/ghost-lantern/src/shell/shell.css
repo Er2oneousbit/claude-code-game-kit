@@ -1,0 +1,136 @@
+/* ---------------------------------------------------------------------------
+   shell.css
+   Purpose : The built-in look of the front end (title, menus, settings, pause, subtitles, toasts).
+   Notes   : A theme file public/assets/ui/theme_default.css, when present, is loaded after this one and
+             overrides anything here (start with the variables in :root). Dotwork's UI kit (tools/art/dotwork,
+             the widgets lane) can supply the art a theme points at. Sizes are em-based: --ui-scale
+             (display.ui_scale) scales everything, --text-scale (access.text_scale) scales text.
+             Focus is an outline plus a marker, never color alone.
+   Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+   --------------------------------------------------------------------------- */
+:root {
+  --ui-scale: 1;
+  --text-scale: 1;
+  --sub-size: 1.1;
+  --sub-bg: 0.6;
+  --bg: #1d2b53;
+  --panel: rgba(12, 16, 34, 0.94);
+  --edge: #5f574f;
+  --fg: #fff1e8;
+  --muted: #c2c3c7;
+  --focus: #ffec27;
+  --danger: #ff004d;
+}
+
+#shell {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  font-family: system-ui, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  color: var(--fg);
+  font-size: calc(clamp(13px, 2.3vh, 28px) * var(--ui-scale));
+  line-height: 1.35;
+  z-index: 10;
+}
+
+.screen { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: auto; }
+.screen.dim { background: rgba(0, 0, 0, 0.5); }
+.screen.hud { pointer-events: none; align-items: flex-start; justify-content: flex-start; }
+.screen.hidden { display: none; }
+
+.panel {
+  background: var(--panel);
+  border: 2px solid var(--edge);
+  border-radius: 0.4em;
+  padding: 1em 1.4em;
+  width: min(94vw, 52em);
+  max-height: 92vh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35em;
+}
+.panel.narrow { width: min(94vw, 34em); }
+.panel > * { flex-shrink: 0; } /* a long list scrolls; headings, tabs and buttons never get squeezed */
+.panel > .list { flex: 1 1 auto; }
+
+.heading { font-size: calc(1.6em * var(--text-scale)); font-weight: 700; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bigtitle { font-size: calc(3em * var(--text-scale)); font-weight: 800; text-align: center; letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 94vw; }
+.text { font-size: calc(1em * var(--text-scale)); overflow-wrap: anywhere; }
+.muted { color: var(--muted); }
+.press { font-size: calc(1.3em * var(--text-scale)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 94vw; }
+.blink { animation: blink 1.2s steps(2, start) infinite; }
+.reduce-motion .blink, .still .blink { animation: none; } /* .still: smoke drives, so screenshots compare */
+@keyframes blink { to { visibility: hidden; } }
+
+.list { display: flex; flex-direction: column; gap: 0.2em; overflow-y: auto; min-height: 0; padding: 0.15em; }
+.row { display: flex; gap: 0.6em; justify-content: center; flex-wrap: wrap; }
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  padding: 0.25em 0.6em;
+  border: 3px solid transparent;
+  border-radius: 0.3em;
+  font-size: calc(1em * var(--text-scale));
+  cursor: pointer;
+  min-width: 0;
+}
+.item::before { content: "\25B6"; color: var(--focus); visibility: hidden; flex: none; }
+.item.focused { border-color: var(--focus); background: rgba(255, 236, 39, 0.12); }
+.item.focused::before { visibility: visible; }
+.item.button { justify-content: center; }
+.item.disabled { opacity: 0.55; }
+
+.label { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item.button .label { flex: 0 1 auto; }
+.value { flex: 0 0 auto; display: flex; align-items: center; gap: 0.4em; white-space: nowrap; }
+.arrow { color: var(--muted); }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 0.3em 0.9em; justify-content: center; }
+.tab { white-space: nowrap; padding: 0 0.3em; border-bottom: 3px solid transparent; color: var(--muted); }
+.tab.current { color: var(--fg); border-bottom-color: var(--fg); font-weight: 700; }
+
+.keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  padding: 0 0.35em;
+  border: 2px solid var(--muted);
+  border-radius: 0.25em;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+.keycap.active { border-color: var(--fg); }
+.keycap.conflict { border-color: var(--danger); border-style: dashed; }
+.glyph { image-rendering: pixelated; vertical-align: middle; }
+.status { min-height: 1.4em; font-size: calc(0.9em * var(--text-scale)); color: var(--muted); text-align: center; overflow-wrap: anywhere; }
+
+.bar { height: 1em; border: 2px solid var(--fg); border-radius: 0.3em; overflow: hidden; }
+.fill { height: 100%; width: 0; background: var(--focus); }
+
+.credits { height: 50vh; overflow: hidden; position: relative; }
+.credits-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: calc(1em * var(--text-scale)); }
+
+.hudbar { margin: 0.6em; padding: 0.3em 0.6em; background: rgba(0, 0, 0, 0.55); border-radius: 0.3em; display: flex; flex-wrap: wrap; gap: 0.3em 1em; font-size: calc(0.85em * var(--text-scale)); max-width: 92vw; }
+.prompt { display: inline-flex; align-items: center; gap: 0.35em; white-space: nowrap; }
+.corner { position: absolute; right: 0.8em; bottom: 0.5em; font-size: 0.75em; color: var(--muted); }
+
+#subtitles { position: absolute; left: 0; right: 0; bottom: 6vh; display: flex; flex-direction: column; align-items: center; gap: 0.3em; pointer-events: none; }
+.sub {
+  max-width: min(90vw, 44em);
+  padding: 0.25em 0.7em;
+  border-radius: 0.3em;
+  background: rgba(0, 0, 0, var(--sub-bg));
+  font-size: calc(var(--sub-size) * 1em * var(--text-scale));
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.sub .speaker { font-weight: 700; }
+.sub.caption { font-style: italic; }
+
+#toasts { position: absolute; left: 0.8em; bottom: 0.8em; display: flex; flex-direction: column; gap: 0.3em; pointer-events: none; }
+.toast { background: var(--panel); border: 2px solid var(--edge); border-radius: 0.3em; padding: 0.25em 0.6em; font-size: calc(0.85em * var(--text-scale)); max-width: 60vw; overflow-wrap: anywhere; }
+

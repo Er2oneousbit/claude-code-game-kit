@@ -10,7 +10,7 @@ Reproducible builds and a boring release day.
 3. **Run `/release-check`.** It walks the checklist below and reports gaps.
 4. **Test the shipped artifact**, not the editor. Fresh machine or clean user profile if possible.
 5. **Tag and archive.** Tag the commit, archive build artifacts and debug symbols, record versions in HANDOFF.
-6. **Post-release.** Triage feedback into ROADMAP, update TROUBLESHOOTING with known issues.
+6. **Post-release.** Triage feedback into ROADMAP, update TROUBLESHOOTING with known issues. Shipping to Steam and itch.io, signing and CI: `SOP-21`; the post-launch loop: "After launch" below.
 
 ## Versioning (Semantic Versioning, adapted for games)
 Version numbers are `MAJOR.MINOR.PATCH` (semver.org). Before the first full release the game lives in **0.x**, where
@@ -43,13 +43,33 @@ Rules:
 - [ ] Godot: export preset filters exclude `tests/*`, `tools/*`, `addons/gut/*`
 - [ ] Save files versioned and migration tested
 - [ ] Settings persist: audio volumes, display mode, key bindings
-- [ ] Gamepad and keyboard both complete the game
+- [ ] Gamepad and keyboard both complete the game; prompts follow the device in use
+- [ ] Accessibility baseline met (SOP-20 step 1): subtitles and captions, text size and 200 % scaling, no colour-only information, remapping and no required holds, shake and flash safety, difficulty changeable in play
+- [ ] `python tools/credits.py --check` passes; CREDITS.md and THIRD_PARTY_LICENSES.md ship with the build
 - [ ] Performance budget met on lowest target hardware (SOP-10)
 - [ ] Crash and error logging works, log file location documented
 - [ ] Store page assets ready: capsule art, screenshots, trailer, description, AI disclosure if applicable (SOP-04: pre-generated and live content, guardrails for live)
 - [ ] Legal: privacy policy if collecting data, age ratings if required by the store **(verify per store)**
 
 Publishing and store uploads (Steam, Roblox, itch) often need your own logged-in clicks. Claude can prepare builds, checklists and text, but expect to press the final buttons yourself. Key art and thumbnails come from an image generator, with Claude writing the brief.
+
+## After launch (standard practice)
+- **Hotfix flow:** a crash or a save-breaking bug gets a PATCH release (versioning above) from a branch off the release
+  tag, with only that fix, the same release check, then a merge back. Upload to a beta branch first (SteamPipe `SetLive`,
+  `SOP-21` step 3), play it, then set it live by hand.
+- **Patch notes** for every release, in players' words, newest first: what changed for them, known issues, thanks for
+  reports. Template: version and date, then "Fixed", "Changed", "Added", "Known issues". Post them where players are
+  (the Steam event or news page, itch devlog).
+- **Reviews and refunds:** read every review in the first weeks; reply to bug reports with the fix version. Refund
+  reasons (Steam shows them in the partner reports, verify) are a bug list. Do not argue with reviews.
+- **Community:** one place for reports (the GitHub Bug and Feel forms, `SOP-03`, or a Discord with a bug channel), and a
+  pinned post with the known issues. Triage weekly (`/triage-issues`).
+- **Saves across updates:** every update loads every older save version (`SOP-19` step 3); a save from a newer build is
+  never overwritten.
+- **Mod support (decide, then write it down):** none, data-only (JSON or Lua data the game reads from a mods folder), or
+  scripts. Data-only is the safe default: load mods after the base data, validate them like settings (bad values fixed
+  and logged), never let a mod write outside its folder. State the policy and the license terms for mod authors on the
+  store page or in the game's README.
 
 ## Done when
 - The tagged build was tested as the shipped artifact, `/release-check` has no open gaps, and versions are recorded in HANDOFF.

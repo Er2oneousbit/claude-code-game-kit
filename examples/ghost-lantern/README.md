@@ -27,14 +27,14 @@ ghosts), `?autoplay` (a bot plays), `?autoplay=dark` (the bot never brightens), 
 | `src/core/astar.ts`, `src/core/separation.ts` | Movement layer: grid A* and separation steering, engine-free |
 | `src/core/lantern.ts` | The resource: oil, radius, and how much light scares |
 | `src/game/tuning.ts` | Every number, with comments on why it changed during playtests |
-| `tests/` | 40 Vitest tests, including "never chases into strong light" and "the key and exit are reachable" |
+| `tests/` | 120 Vitest tests (the kit's juice and shell checks included), including "never chases into strong light" and "the key and exit are reachable" |
 | `src/game/GameScene.ts` | Perception, the autoplay bot, the darkness overlay, the debug view |
 | `docs/` | GDD, concept lock, slice brief with results, ADR, troubleshooting, asset log with license evidence |
 
 ## Checks
 ```
 python tools/dev.py check     # TypeScript
-python tools/dev.py test      # 40 unit tests
+python tools/dev.py test      # 120 tests: the game's own and the kit's juice and shell checks
 python tools/dev.py smoke     # boots the production build in headless Chromium
 python tools/dev.py smoke --query autoplay --until ESCAPED --fail-on CAUGHT    # the lantern saves you
 python tools/dev.py smoke --query autoplay=dark --until CAUGHT                 # ...and without it you are caught

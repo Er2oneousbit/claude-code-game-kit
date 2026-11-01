@@ -6,7 +6,8 @@
 # Usage   : python tools/dev.py <command> [--config Development] [--platform Win64]
 #             check    compile the editor target (UnrealBuildTool)
 #             build    same as check (kept for command-contract parity)
-#             test     run automation tests headless (--filter, default "<Game>")
+#             test     run automation tests headless (--filter, default "<Game>", plus "GameKit." when the
+#                      kit's GameKitShell plugin is enabled)
 #             smoke    run automation tests named <Game>.Smoke (--filter, --until, --fail-on for scenario runs;
 #                      screenshots need a renderer, so capture from the game itself, e.g. a -record= option)
 #             exec     run an editor Python script headless (asset imports, maps)
@@ -48,8 +49,12 @@
 # Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe; a hung
 #           test/smoke/exec exits 1 (was 2), git lfs output decoded as UTF-8
+# Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): the kit's GameKitShell plugin (Plugins/,
+#           opt-in in the .uproject): `test` also runs its GameKit.* tests when it is enabled and counts them,
+#           doctor reports it, check refuses it on a Blueprint-only project (its C++ needs Source/)
 # ---------------------------------------------------------------------------
 import argparse
+import json
 import os
 import platform
 import re
@@ -90,6 +95,9 @@ LONG_PATH_PATTERN = r"action paths are longer than 260 characters"   # UBT refus
 PLATFORMS = ["Win64", "Linux", "Mac"]
 TEST_FILTER_PATTERN = r"[A-Za-z0-9_.+ -]+"   # automation test names; nothing that can end the RunTests command
 CMD_METACHARS = '&|<>^%!"'                   # cmd.exe syntax characters, unsafe in .bat arguments
+KIT_PLUGIN = "GameKitShell"                   # Plugins/GameKitShell: the kit's juice and shell logic (opt-in)
+KIT_TEST_PREFIX = "GameKit."                  # its automation tests; `test` runs them with the game's own
+KIT_OK_PATTERN = r"Result=\{Success\} Name=\{[^}]*\} Path=\{GameKit\."
 DEBUG = False
 
 
@@ -169,6 +177,23 @@ def target_name():
 def game_name():
     up = find_uproject()
     return up.stem if up else "Game"
+
+
+def kit_plugin_state():
+    """'enabled', 'disabled' or 'absent': is Plugins/GameKitShell here, and does the .uproject enable it?
+    The .uplugin says EnabledByDefault false, so only an entry with "Enabled": true turns it on."""
+    if not (ROOT / "Plugins" / KIT_PLUGIN / f"{KIT_PLUGIN}.uplugin").is_file():
+        return "absent"
+    up = find_uproject()
+    try:
+        data = json.loads(up.read_text(encoding="utf-8-sig")) if up else {}
+    except (OSError, ValueError):
+        return "disabled"
+    plugins = data.get("Plugins") if isinstance(data, dict) else None
+    for entry in plugins if isinstance(plugins, list) else []:
+        if isinstance(entry, dict) and entry.get("Name") == KIT_PLUGIN:
+            return "enabled" if entry.get("Enabled") is True else "disabled"
+    return "disabled"
 
 
 # A child run with a timeout leads its own process group on Linux/macOS, so a timeout can kill its whole tree
@@ -323,6 +348,11 @@ def cmd_check(args):
               "Development)", file=sys.stderr)
         return 2
     if not (ROOT / "Source").is_dir():
+        if kit_plugin_state() == "enabled":
+            print(f"[error] the {KIT_PLUGIN} plugin is enabled, but this is a Blueprint-only project (no Source/) and the "
+                  "plugin is C++. Add a C++ class in the editor (Tools > New C++ Class) to make it a C++ project, or "
+                  "disable the plugin in the .uproject (docs/ENGINE_FLOW.md).", file=sys.stderr)
+            return 2
         # Blueprint-only project: the engine's prebuilt editor runs it, there is no C++ to compile
         print("[ OK ] Blueprint-only project (no Source/), nothing to compile. `test` loads the project.")
         return 0
@@ -412,11 +442,23 @@ def run_automation(filter_, args, until=None, fail_on=None):
         print(f"[FAIL] marker {until!r} not seen in {AUTOMATION_LOG}")
         return 1
     print(f"[ OK ] {oks} test(s) passed (filter {filter_!r})" + (f", marker {until!r} seen" if until else ""))
+    kit = len(re.findall(KIT_OK_PATTERN, out))
+    if kit:
+        print(f"[info] {kit} of them are {KIT_TEST_PREFIX}* tests (the {KIT_PLUGIN} plugin: golden vectors and files)")
     return 0
 
 
+def default_test_filter():
+    """The game's tests, plus the kit plugin's GameKit.* tests when the .uproject enables the plugin."""
+    state = kit_plugin_state()
+    if state == "disabled":
+        print(f"[info] Plugins/{KIT_PLUGIN} is not enabled in the .uproject, so its {KIT_TEST_PREFIX}* tests are skipped "
+              "(enable it, or delete the folder if you do not use it: docs/ENGINE_FLOW.md)")
+    return game_name() + ("+" + KIT_TEST_PREFIX if state == "enabled" else "")
+
+
 def cmd_test(args):
-    return run_automation(args.filter or game_name(), args)
+    return run_automation(args.filter or default_test_filter(), args)
 
 
 def cmd_smoke(args):
@@ -596,6 +638,10 @@ def cmd_doctor(args):
                          errors="replace").returncode == 0 if shutil.which("git") else False
     print(f"[{' OK ' if lfs else 'WARN'}] git-lfs {'installed' if lfs else 'NOT installed (needed for Content/)'}")
     print(f"[{' OK ' if (ROOT / '.gitattributes').exists() else 'WARN'}] .gitattributes (LFS rules)")
+    state = kit_plugin_state()
+    if state != "absent":
+        print(f"[{' OK ' if state == 'enabled' else 'info'}] {KIT_PLUGIN} plugin {state}"
+              + ("" if state == "enabled" else " (optional: docs/ENGINE_FLOW.md)"))
     doctor = ROOT / "tools" / "doctor.py"
     if doctor.exists():
         rc, _ = run([sys.executable, doctor])
@@ -618,7 +664,8 @@ def build_parser():
     sub.add_parser("check", help="compile the editor target").set_defaults(fn=cmd_check)
     sub.add_parser("build", help="same as check").set_defaults(fn=cmd_build)
     p = sub.add_parser("test", help="run automation tests headless")
-    p.add_argument("--filter", help='automation filter, e.g. "MyGame.Logic" (default: the game name)')
+    p.add_argument("--filter", help='automation filter, e.g. "MyGame.Logic" (default: the game name, plus GameKit. '
+                                    'when the GameKitShell plugin is enabled)')
     p.set_defaults(fn=cmd_test)
     p = sub.add_parser("smoke", help="run automation tests named <Game>.Smoke (scenario runs: --until, --fail-on)")
     p.add_argument("--filter", help="only <Game>.Smoke.<filter>, e.g. Boot")

@@ -49,7 +49,7 @@ pipeline, Input Manager, an IMGUI HUD).
 
 ## Checks
 ```
-python tools/dev.py check && python tools/dev.py test     # compile, then 112 EditMode tests (250 generated yards among them, about 2.5 minutes)
+python tools/dev.py check && python tools/dev.py test     # compile, then 197 EditMode tests: the game's 112 (250 generated yards) and the kit's 85 juice and shell checks
 python tools/dev.py smoke                                 # 20 tests: boot, 80 bot nights, the NavMesh, no-way-out, difficulty and review-fix checks (13 to 18 minutes)
 python tools/dev.py build && Build/game.exe -batchmode -nographics -logFile Logs/night.log -- --autoplay careful --handmade --seed 6 --fixed-fps
 ```

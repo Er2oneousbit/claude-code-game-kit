@@ -9,7 +9,11 @@
 - **Path length:** keep the project at a short path on Windows; deep paths break vcpkg's dependency builds (see `docs/ENGINE_FLOW.md`).
 - **Libraries:** SDL2 (window, input, renderer, audio). Optional add-ons are commented `find_package` lines in `CMakeLists.txt`;
   to enable one, add its vcpkg port to `vcpkg.json` (`sdl2-image`, `sdl2-ttf`, `sdl2-mixer`: lowercase with hyphens) and write an ADR.
-- **Tests:** doctest, built as `unit_tests`, run by CTest.
+- **Tests:** doctest, built as `unit_tests`, one CTest test per `TEST_CASE`. `tests/test_golden_vectors.cpp` holds
+  `src/core` to the kit's reference logic: it reads `data/golden/juice.json` and `shell.json` at test time (path from
+  the `GOLDEN_DIR` compile definition); never copy their expected values into code.
+- **JSON:** nlohmann-json (vcpkg, header-only, MIT) for settings, saves and string tables. Settings and saves go
+  through `src/core/AtomicFile.hpp` (write `<file>.tmp`, flush, rename; saves keep `<file>.bak`).
 - **Version:** one source, `project(... VERSION x.y.z)` in `CMakeLists.txt` (SOP-06). Code reads it as the `GAME_VERSION`
   string (a compile definition on `core`); `--version` prints it and the BOOT_OK line carries it.
 - **Game options:** everything after `--` on the command line goes to `Game::configure()` (autoplay modes, cheats, seeds),
@@ -21,7 +25,8 @@
 ## Layout
 ```
 CMakeLists.txt, CMakePresets.json, vcpkg.json
-src/core/        header-light, SDL-free helpers: Log, FixedTimestep, math, RNG. Unit tested.
+src/core/        SDL-free, unit tested: Log, FixedTimestep; juice (Shake, Hitstop, Ease, FollowCamera, InputBuffer,
+                 CoyoteTimer, Spring, FlashLimiter); shell logic (Settings, Bindings, SaveStore, I18n, AtomicFile)
 src/game/        gameplay: Game class, entities, systems. Talks to SDL only through thin wrappers.
 src/main.cpp     startup, arg parsing, main loop
 tests/           doctest tests for src/core and engine-free parts of src/game

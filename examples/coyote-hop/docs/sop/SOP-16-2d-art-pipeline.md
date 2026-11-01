@@ -261,6 +261,18 @@ and GPU minutes. One test machine's setup and test (tip, E68):
   from the game (drawn by hand, drawn in code with `pixel_sprite.py`, or kept from an earlier run) and Dotwork copies
   their outline and shading. Only use sprites you have the rights to: the reference shapes everything made from it.
 
+## Lighting and post-processing (standard practice; engine details in docs/ENGINE_FLOW.md)
+- **2D lights** need normal maps for the lit look (Dotwork writes them for sprites, tiles and props; the tools lane makes
+  one per sprite) and occluders for shadows (Godot `LightOccluder2D`). Start with one ambient color plus a few point lights
+  near what the player should look at; light leads the eye.
+- **Post-processing** in this order of value: color grading (one look-up table or a few curves for the whole game), a light
+  vignette, bloom only on emissive things. Pixel art: apply effects at the base resolution or on whole pixels, or the
+  pixels blur. CRT or scanline filters are an option the player can turn off.
+- Every full-screen pulse or flash follows SOP-20 (flash limit, reduce motion); bloom and grading never reduce the
+  contrast of text or telegraphs.
+- Check the lit scene and the unlit scene side by side (a smoke screenshot of each, `--compare` once it looks right) so a
+  later change to lights or materials is caught.
+
 ## Done when
 - Every shipped 2D asset has a source and a one-line command that recreates it.
 - Pixel art is crisp at every zoom the game uses; vector exports exist at every size the game uses.

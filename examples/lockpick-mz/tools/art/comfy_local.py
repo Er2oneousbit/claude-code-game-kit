@@ -20,9 +20,10 @@
 #           taken off the queue, 2 usage, server not running, missing nodes, or a workflow ComfyUI rejected
 # Notes   : ComfyUI has no login, so this tool talks only to a server on this machine (127.0.0.1, localhost, ::1)
 #           unless --allow-remote. Free per image; the cost is GPU time (each run prints it).
-#           ComfyUI writes the full prompt and workflow (local paths included) into every PNG it saves; this tool
-#           removes those text chunks before writing, and `strip` does the same for images saved by hand.
-#           Other formats (GIF, WebP, video) are saved as they come, with a warning: check them before sharing.
+#           ComfyUI writes the full prompt and workflow (local paths included) into every PNG and FLAC it saves;
+#           this tool removes those text chunks (PNG) and tag blocks (FLAC) before writing, and `strip` does the
+#           same for files saved by hand. Audio jobs (Save Audio nodes) are saved like images. Other formats
+#           (GIF, WebP, video, MP3, Opus) are saved as they come, with a warning: check them before sharing.
 #           Licensing: each model and LoRA has its own license; --log lists the models the workflow names so you
 #           can check every model card before shipping (some are non-commercial).
 #           Existing files are never replaced without --overwrite.
@@ -38,7 +39,7 @@
 #          -> POST /prompt -> poll GET /history/<id> until it has a status -> error? print ComfyUI's message
 #          -> each output image: GET /view -> PNG: drop tEXt/iTXt/zTXt chunks -> write under --out (no overwrite)
 #          -> comfy_local.gen.json (workflow SHA-256, settings, models, files) -> --log: ASSET_LOG row + evidence
-#   strip: each PNG -> same chunk filter -> in place (--overwrite) or into --out
+#   strip: each PNG or FLAC -> same chunk / block filter -> in place (--overwrite) or into --out
 import argparse
 import datetime
 import hashlib
@@ -71,7 +72,10 @@ MAX_DOWNLOAD = 500_000_000              # bytes: one output file
 LOCAL_HOSTS = {"localhost"}
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 TEXT_CHUNKS = {b"tEXt", b"iTXt", b"zTXt"}   # where ComfyUI stores "prompt" and "workflow"
-SAVE_EXTENSIONS = {".png", ".gif", ".webp", ".jpg", ".jpeg", ".mp4", ".webm"}
+FLAC_MAGIC = b"fLaC"
+FLAC_KEEP_BLOCKS = {0, 3, 5}            # STREAMINFO, SEEKTABLE, CUESHEET; tags (VORBIS_COMMENT, where ComfyUI puts
+                                        # the prompt and workflow), PICTURE, APPLICATION and PADDING are dropped
+SAVE_EXTENSIONS = {".png", ".gif", ".webp", ".jpg", ".jpeg", ".mp4", ".webm", ".flac", ".mp3", ".opus", ".wav"}
 MODEL_EXTENSIONS = (".safetensors", ".gguf", ".ckpt", ".pt", ".pth", ".bin", ".sft")
 PROMPT_INPUTS = ("text", "prompt", "positive", "text_g", "text_l")   # inputs that usually hold the prompt
 SEED_INPUTS = ("seed", "noise_seed")
@@ -355,7 +359,7 @@ def wait_history(base, prompt_id, limit):
 def output_files(entry, include_temp):
     files = []
     for nid, out in (entry.get("outputs") or {}).items():
-        for key in ("images", "gifs", "videos", "animated"):
+        for key in ("images", "gifs", "videos", "animated", "audio"):
             for item in out.get(key) or []:
                 if isinstance(item, dict) and item.get("filename") and \
                         (item.get("type") == "output" or (include_temp and item.get("type") == "temp")):
@@ -380,6 +384,40 @@ def strip_png(data):
         if kind == b"IEND":
             break
     return b"".join(out)
+
+
+def strip_flac(data):
+    """The FLAC without its tag blocks (ComfyUI's prompt and workflow); the audio frames are untouched.
+    Raises ToolError when it is not a FLAC."""
+    if not data.startswith(FLAC_MAGIC):
+        raise ToolError("not a FLAC file")
+    pos, kept = len(FLAC_MAGIC), []
+    while True:
+        if pos + 4 > len(data):
+            raise ToolError("FLAC metadata is truncated")
+        head, length = data[pos], int.from_bytes(data[pos + 1:pos + 4], "big")
+        if pos + 4 + length > len(data):
+            raise ToolError("FLAC metadata is truncated")
+        if head & 0x7F in FLAC_KEEP_BLOCKS:
+            kept.append(bytearray(data[pos:pos + 4 + length]))
+        pos += 4 + length
+        if head & 0x80:
+            break
+    if not kept or kept[0][0] & 0x7F != 0:
+        raise ToolError("FLAC has no STREAMINFO block first")
+    for block in kept:                      # exactly one "last block" flag, on the new last block
+        block[0] &= 0x7F
+    kept[-1][0] |= 0x80
+    return FLAC_MAGIC + b"".join(bytes(b) for b in kept) + data[pos:]
+
+
+def strip_embedded(data):
+    """PNG or FLAC without embedded prompt and workflow; anything else is a ToolError."""
+    if data.startswith(PNG_MAGIC):
+        return strip_png(data)
+    if data.startswith(FLAC_MAGIC):
+        return strip_flac(data)
+    raise ToolError("not a PNG or FLAC file")
 
 
 def safe_name(name):
@@ -483,7 +521,7 @@ def cmd_run(args):
     entry, seconds = wait_history(base, prompt_id, args.wait)
     items = output_files(entry, args.include_temp)
     if not items:
-        raise JobError("the job finished but saved no images (does the workflow end in a Save node?)")
+        raise JobError("the job finished but saved no images or audio (does the workflow end in a Save node?)")
     written, hashes = [], []
     for item in items:
         query = urllib.parse.urlencode({"filename": item["filename"], "subfolder": item.get("subfolder", ""),
@@ -494,12 +532,13 @@ def cmd_run(args):
         name = safe_name((args.prefix + "_" if args.prefix else "") + item["filename"])
         ext = Path(name).suffix.lower()
         if ext not in SAVE_EXTENSIONS:
-            print(f"[skip] {item['filename']}: {ext or 'no extension'} is not an image or video type this tool saves")
+            print(f"[skip] {item['filename']}: {ext or 'no extension'} is not an image, video or audio type this "
+                  "tool saves")
             continue
-        if ext == ".png":
-            data = strip_png(data)
-        else:
-            print(f"[warn] {name}: {ext} files can carry the workflow too; this tool strips PNGs only")
+        if ext in (".png", ".flac"):
+            data = strip_embedded(data)
+        elif ext != ".wav":   # ComfyUI writes no workflow into WAV, so there is nothing to strip or warn about
+            print(f"[warn] {name}: {ext} files can carry the workflow too; this tool strips PNGs and FLACs only")
         path = out_dir / name
         write_new(path, data, args.overwrite)
         written.append(path)
@@ -529,7 +568,7 @@ def cmd_strip(args):
             raise ToolError(f"{src} not found")
         data = src.read_bytes()
         try:
-            clean = strip_png(data)
+            clean = strip_embedded(data)
         except ToolError as exc:
             raise ToolError(f"{src}: {exc}")
         dst = Path(args.out) / src.name if args.out else src
@@ -579,8 +618,8 @@ def build_parser():
     p.add_argument("--notes", default="", help="extra text for the ASSET_LOG Notes column")
     p.set_defaults(fn=cmd_run)
 
-    p = sub.add_parser("strip", parents=[common], help="remove embedded prompt and workflow text from PNG files")
-    p.add_argument("files", nargs="+", help="PNG files")
+    p = sub.add_parser("strip", parents=[common], help="remove embedded prompt and workflow text from PNG and FLAC files")
+    p.add_argument("files", nargs="+", help="PNG or FLAC files")
     p.add_argument("--out", help="write clean copies into this folder")
     p.add_argument("--overwrite", action="store_true", help="clean in place, or replace existing copies in --out")
     p.set_defaults(fn=cmd_strip)

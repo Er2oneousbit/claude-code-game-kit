@@ -8,8 +8,11 @@
 #             check    parse all .gd files for errors
 #             test     run GUT unit tests headless
 #             smoke    boot the game headless for N frames, fail on errors; --screenshot FILE and --record DIR then
-#                      capture it in a real window (tools/capture.gd; GIF: tools/art/frames_to_gif.py)
-#             run      launch the game window
+#                      capture it in a real window (tools/capture.gd; GIF: tools/art/frames_to_gif.py);
+#                      --drive SCENARIO runs a scripted visit of the menus (menus, crash, pseudo, pseudo-plant,
+#                      show:<title|settings|pause|subtitle|juice>), --locale pseudo checks every label,
+#                      --data-dir DIR keeps the game's files there, --compare BASE.png diffs the screenshot
+#             run      launch the game window (--data-dir, --locale as for smoke)
 #             build    export a release build (--preset Windows Desktop|Linux|Web, from the shipped export_presets.cfg)
 #             clean    remove build output (--deep also removes .godot/)
 #             doctor   verify the local environment
@@ -39,6 +42,8 @@
 #           deletion, --debug keeps exit 2
 # Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
+# Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive / --data-dir / --locale /
+#           --compare for the front end (scripts/shell/); smoke runs in a fresh build/smoke-data/ by default
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -79,6 +84,15 @@ TEST_TIMEOUT_S = 900
 CHECK_TIMEOUT_S = 600                    # per batch of CHECK_BATCH files
 IMPORT_TIMEOUT_S = 1800                  # first import of a big project is slow
 KILL_TIMEOUT_S = 10                      # after a timeout: seconds to wait for the killed tree's pipe
+SMOKE_DATA = "build/smoke-data"          # the game's data folder in a smoke run without --data-dir (wiped each run)
+DRIVES = ("menus", "crash", "pseudo", "pseudo-plant")   # smoke --drive scenarios (scripts/shell/smoke_drive.gd)
+SHOW_TARGETS = ("title", "settings", "pause", "subtitle", "juice")   # smoke --drive show:<target>
+DRIVE_FPS = 60                           # drives run with --fixed-fps: every frame is 1/60 s, pictures repeat
+DRIVE_MAX_FRAMES = 1000000               # backstop only: headless fixed-fps frames run far faster than real time,
+                                         # so the drive's own real-time waits and DRIVE_TIMEOUT_S end a stuck run
+DRIVE_TIMEOUT_S = 180                    # a drive (headless, or the windowed capture) must finish within this
+MARKERS = ("DRIVE_", "SETTINGS_", "CRASH_WRITTEN", "PSEUDO_", "TELEMETRY_FILE", "BUG_REPORT")  # echoed lines
+IMAGE_DIFF = "tools/image_diff.py"       # smoke --compare runs it: exit 0 same, 1 different, 2 usage
 NO_EXEC = (126, 127)                     # run() codes: not executable / not found -> exit 2
 
 DEBUG = False
@@ -333,35 +347,91 @@ def cmd_test(args, godot):
     return 0
 
 
+def smoke_data_dir(args):
+    """The game's data folder for this smoke run: --data-dir as given (never wiped), else a fresh build/smoke-data/."""
+    if args.data_dir:
+        d = Path(args.data_dir)
+        d = (d if d.is_absolute() else ROOT / d).resolve()
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+    d = ROOT / SMOKE_DATA
+    if d.exists():
+        why = remove_tree(d)
+        if why:
+            raise OSError(f"{SMOKE_DATA} could not be emptied: {why}")
+    d.mkdir(parents=True)
+    return d
+
+
+def game_args(args, data_dir):
+    """User args (after --) for the Shell autoload: smoke mode, data folder, drive, locale."""
+    out = ["--smoke", "--data-dir", data_dir.as_posix()]
+    if args.drive:
+        out += ["--drive", args.drive]
+    if args.locale:
+        out += ["--locale", args.locale]
+    return out
+
+
 def cmd_smoke(args, godot):
+    if args.compare and not args.screenshot:
+        print("[error] --compare needs --screenshot (the new picture to compare)", file=sys.stderr)
+        return 2
+    if args.compare and not (ROOT / args.compare).is_file():
+        print(f"[error] baseline not found: {args.compare} (take one with --screenshot first)", file=sys.stderr)
+        return 2
     frames = args.frames
     rc = ensure_imported(godot)
     if rc:
         return rc
-    rc, out = run([godot, "--headless", "--path", ".", "--quit-after", str(frames)], echo="never",
-                  timeout=SMOKE_TIMEOUT_S + frames // SMOKE_MIN_FPS)
+    data_dir = smoke_data_dir(args)
+    dbg(f"data folder {data_dir}")
+    user = game_args(args, data_dir)
+    if args.drive:
+        # Fixed 1/60 s frames: scripted waits and pictures do not depend on the computer's speed
+        cmd = [godot, "--headless", "--path", ".", "--fixed-fps", str(DRIVE_FPS), "--quit-after", str(DRIVE_MAX_FRAMES)]
+        limit = DRIVE_TIMEOUT_S
+    else:
+        cmd = [godot, "--headless", "--path", ".", "--quit-after", str(frames)]
+        limit = SMOKE_TIMEOUT_S + frames // SMOKE_MIN_FPS
+    rc, out = run(cmd + ["--"] + user, echo="never", timeout=limit)
     if rc in NO_EXEC:
         return 2
+    for line in out.splitlines():
+        if line.startswith(MARKERS):
+            print("  " + line)
     errors = scan_errors(out)
     booted = BOOT_MARKER in out
-    if rc != 0 or errors or not booted:
+    finished = not args.drive or re.search(r"^DRIVE_DONE " + re.escape(args.drive) + r"\s*$", out, re.M)
+    if rc != 0 or errors or not booted or not finished:
         if errors:
-            print("[FAIL] errors during boot:\n  " + "\n  ".join(errors[:10]))
+            print("[FAIL] errors during the run:\n  " + "\n  ".join(errors[:10]))
         if not booted:
             print(f"[FAIL] marker {BOOT_MARKER!r} not seen (did the main scene start?)")
+        if not finished:
+            print(f"[FAIL] drive {args.drive!r} did not finish (no DRIVE_DONE line)")
         if rc != 0:
             print(f"[FAIL] exit code {rc}")
+        if args.drive == "crash" and "CRASH_WRITTEN" in out:
+            print("[info] --drive crash fails on purpose: the CRASH_WRITTEN file above is the proof")
+        if args.drive == "pseudo-plant" and "PSEUDO_FAIL" in out:
+            print("[info] --drive pseudo-plant fails on purpose: the PSEUDO_FAIL line names the planted label")
         return 1
-    print(f"[ OK ] smoke passed ({frames} frames)")
+    print(f"[ OK ] smoke passed ({'drive ' + args.drive if args.drive else str(frames) + ' frames'}"
+          f"{', locale ' + args.locale if args.locale else ''}; data in {data_dir})")
     if args.screenshot or args.record:
-        return capture(args, godot, frames)
+        rc = capture(args, godot, frames, user)
+        if rc:
+            return rc
+    if args.compare:
+        return compare(args)
     return 0
 
 
-def capture(args, godot, frames):
+def capture(args, godot, frames, user):
     """Run the game in a real window (headless has no renderer) and save a screenshot and/or a frame burst."""
-    cmd = [godot, "--path", ".", "-s", "res://tools/capture.gd", "--", "--frames", str(frames),
-           "--every-ms", str(args.record_every)]
+    cmd = [godot, "--path", "."] + (["--fixed-fps", str(DRIVE_FPS)] if args.drive else [])
+    cmd += ["-s", "res://tools/capture.gd", "--", "--frames", str(frames), "--every-ms", str(args.record_every)]
     shot = (ROOT / args.screenshot).resolve() if args.screenshot else None
     rec = (ROOT / args.record).resolve() if args.record else None
     if shot:
@@ -370,11 +440,16 @@ def capture(args, godot, frames):
         for old in rec.glob("f*.png"):          # frames from an earlier run would end up in the GIF
             old.unlink()
         cmd += ["--record", rec.as_posix()]
-    rc, out = run(cmd, echo="never", timeout=SMOKE_TIMEOUT_S + frames // SMOKE_MIN_FPS)
+    cmd += user + ["--capture"]
+    limit = DRIVE_TIMEOUT_S if args.drive else SMOKE_TIMEOUT_S + frames // SMOKE_MIN_FPS
+    rc, out = run(cmd, echo="never", timeout=limit)
     if rc in NO_EXEC:
         return 2
     if rc != 0 or "CAPTURE_DONE" not in out:
         print(f"[FAIL] capture did not finish (exit {rc}): it needs a window, so run it from a desktop session")
+        for line in out.splitlines():
+            if line.startswith(MARKERS) or "capture:" in line:
+                print("  " + line)
         if DEBUG:
             print(out[-2000:])
         return 1
@@ -386,10 +461,33 @@ def capture(args, godot, frames):
     return 0
 
 
+def compare(args):
+    """--compare: the new screenshot against a baseline, through tools/image_diff.py (0 same, 1 different)."""
+    tool = ROOT / IMAGE_DIFF
+    if not tool.is_file():
+        print(f"[error] {IMAGE_DIFF} is missing; it ships with the kit (restore it from a fresh scaffold)", file=sys.stderr)
+        return 2
+    shot = (ROOT / args.screenshot).resolve()
+    base = (ROOT / args.compare).resolve()
+    rc, _ = run([sys.executable, tool, shot, base, "--tolerance", str(args.tolerance)], echo="always", timeout=300)
+    if rc == 0:
+        print(f"[ OK ] screenshot matches {args.compare}")
+        return 0
+    if rc == 1:
+        print(f"[FAIL] screenshot differs from {args.compare} (see the lines above)")
+        return 1
+    return 2
+
+
 def cmd_run(args, godot):
     cmd = [godot, "--path", "."]
-    if args.debug:
-        cmd += ["--", "--debug"]          # picked up by Log autoload
+    user = ["--debug"] if args.debug else []   # picked up by Log autoload
+    if args.data_dir:
+        user += ["--data-dir", str((ROOT / args.data_dir).resolve())]
+    if args.locale:
+        user += ["--locale", args.locale]
+    if user:
+        cmd += ["--"] + user
     rc, _ = run(cmd, capture=False)
     return 2 if rc in NO_EXEC else 0 if rc == 0 else 1
 
@@ -502,6 +600,24 @@ def positive_int(text):
     return n
 
 
+def drive_name(text):
+    """argparse type: a smoke --drive scenario ("" = none; argparse also runs this on the default)."""
+    if text == "" or text in DRIVES or (text.startswith("show:") and text[5:] in SHOW_TARGETS):
+        return text
+    raise argparse.ArgumentTypeError(f"{text!r}: use {', '.join(DRIVES)} or show:<{'|'.join(SHOW_TARGETS)}>")
+
+
+def channel_tolerance(text):
+    """argparse type: 0..255."""
+    try:
+        n = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a whole number")
+    if not 0 <= n <= 255:
+        raise argparse.ArgumentTypeError("must be between 0 and 255")
+    return n
+
+
 def build_parser():
     ap = argparse.ArgumentParser(
         prog="dev.py",
@@ -529,9 +645,26 @@ def build_parser():
     p.add_argument("--screenshot", default="", help="after the smoke, save a PNG of the last frame from a real window (path relative to the project)")
     p.add_argument("--record", default="", help="after the smoke, save PNG frames to this folder from a real window (GIF: tools/art/frames_to_gif.py)")
     p.add_argument("--record-every", type=positive_int, default=66, help="milliseconds between recorded frames (default 66)")
+    p.add_argument("--drive", type=drive_name, default="", metavar="SCENARIO",
+                   help="scripted run of the front end: menus (change two settings, Back, check settings.json), "
+                        "crash (a script error: crash file, exit 1), pseudo (every screen; use --locale pseudo), "
+                        "pseudo-plant (plus one label too small: exit 1), show:<title|settings|pause|subtitle|juice> "
+                        "(open that screen; with --screenshot, photograph it). Runs at --fixed-fps 60")
+    p.add_argument("--data-dir", default="", metavar="DIR",
+                   help=f"the game's data folder (settings, saves, logs, crashes, telemetry), relative to the project; "
+                        f"default: a fresh {SMOKE_DATA}/ each run")
+    p.add_argument("--locale", default="", help="language for this run (en, fr, ...); pseudo also checks that every "
+                                                "label went through the string tables and fits (exit 1 if not)")
+    p.add_argument("--compare", default="", metavar="BASELINE.png",
+                   help=f"after --screenshot, compare it with this picture ({IMAGE_DIFF}); exit 1 when they differ")
+    p.add_argument("--tolerance", type=channel_tolerance, default=0,
+                   help="--compare: per-channel difference allowed, 0-255 (default 0)")
     p.set_defaults(fn=cmd_smoke)
 
-    sub.add_parser("run", help="launch the game window").set_defaults(fn=cmd_run)
+    p = sub.add_parser("run", help="launch the game window")
+    p.add_argument("--data-dir", default="", metavar="DIR", help="the game's data folder (default: Godot's user://)")
+    p.add_argument("--locale", default="", help="language for this run, e.g. fr or pseudo")
+    p.set_defaults(fn=cmd_run)
 
     p = sub.add_parser("build", help="export a release build (needs export_presets.cfg)")
     p.add_argument("--preset", help='export preset name (default: "Windows Desktop" on Windows, else "Linux"; also "Web")')

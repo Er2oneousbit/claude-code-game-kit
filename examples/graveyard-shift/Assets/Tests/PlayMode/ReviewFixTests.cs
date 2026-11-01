@@ -202,7 +202,7 @@ namespace graveyard_shift.Tests
             game.OnEvent(NightEvent.Dawn);
             yield return null;
             Assert.IsTrue(File.Exists(SavePath), "a player's night is saved");
-            Assert.AreEqual(1, new SaveStore(SavePath).Load().nightsPlayed);
+            Assert.AreEqual(1, new graveyard_shift.Game.SaveStore(SavePath).Load().nightsPlayed);
             File.Delete(SavePath);
         }
     }

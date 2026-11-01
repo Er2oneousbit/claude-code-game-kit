@@ -5,7 +5,8 @@
 #           endpoints the tool uses (/system_stats, /object_info, /upload/image, /prompt, /history, /queue,
 #           /view), so no GPU, models or ComfyUI install are needed. Checks the local-only rule, workflow formats,
 #           --set / --seed / --image, missing nodes, rejected, failed, interrupted and cancelled jobs, PNG
-#           text-chunk stripping, no overwrite, ASSET_LOG rows, and a non-ASCII prompt end to end.
+#           text-chunk and FLAC tag stripping (audio jobs), no overwrite, ASSET_LOG rows, and a non-ASCII prompt
+#           end to end.
 # Usage   : python tools/art/test_comfy_local.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -25,7 +26,10 @@ import zlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "audio"))
 import comfy_local as cl  # noqa: E402
+import flacfile  # noqa: E402  (decodes the audio to prove stripping kept it intact)
+from test_flacfile import FIXTURES as FLAC_FIXTURES  # noqa: E402  (a real encoder's FLAC, padding removed)
 
 PNG_SIG = b"\x89PNG\r\n\x1a\n"
 EMBEDDED_PATH = "C:/Users/you/ComfyUI/models/private.safetensors"   # stands in for what ComfyUI embeds
@@ -59,6 +63,22 @@ def png_with_text():
             + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
 
 
+def flac_with_tags():
+    """A real FLAC (ffmpeg's encoder) with a VORBIS_COMMENT block holding ComfyUI-style prompt text."""
+    import base64
+    data = base64.b64decode(FLAC_FIXTURES["mono16"])
+    comment = ("prompt=" + json.dumps({"path": EMBEDDED_PATH})).encode()
+    vendor = b"Lavf63.1.102"
+    body = (struct.pack("<I", len(vendor)) + vendor + struct.pack("<I", 1)
+            + struct.pack("<I", len(comment)) + comment)
+    info_len = int.from_bytes(data[5:8], "big")
+    streaminfo = bytes([data[4] & 0x7F]) + data[5:8 + info_len]
+    # the new tag block goes right after STREAMINFO and takes over its "last block" flag (ffmpeg's own
+    # encoder tag block may follow, and then keeps its flag)
+    tags = bytes([0x04 | (data[4] & 0x80)]) + len(body).to_bytes(3, "big") + body
+    return data[:4] + streaminfo + tags + data[8 + info_len:]
+
+
 class State:
     def __init__(self):
         self.reset()
@@ -74,6 +94,7 @@ class State:
         self.nodes = {n["class_type"] for n in WORKFLOW.values()}
         self.files = [{"filename": "kit_00001_.png", "subfolder": "", "type": "output"},
                       {"filename": "kit_preview.png", "subfolder": "", "type": "temp"}]
+        self.audio = []              # Save Audio node outputs (history key "audio")
 
 
 STATE = State()
@@ -113,7 +134,7 @@ class FakeComfy(http.server.BaseHTTPRequestHandler):
                 return self.send(200, {pid: {"outputs": {}, "status": {"status_str": "error", "completed": False,
                                        "messages": [["execution_error", {"node_id": "3", "node_type": "KSampler",
                                                                          "exception_message": STATE.fail}]]}}})
-            return self.send(200, {pid: {"outputs": {"9": {"images": STATE.files}},
+            return self.send(200, {pid: {"outputs": {"9": {"images": STATE.files}, "10": {"audio": STATE.audio}},
                                          "status": {"status_str": "success", "completed": True, "messages": []}}})
         if url.path == "/queue":
             STATE.queue_polls += 1
@@ -124,6 +145,10 @@ class FakeComfy(http.server.BaseHTTPRequestHandler):
             name = q["filename"][0]
             if name.endswith(".png"):
                 return self.send(200, png_with_text(), "image/png")
+            if name.endswith(".flac"):
+                return self.send(200, flac_with_tags(), "audio/flac")
+            if name.endswith(".mp3"):
+                return self.send(200, b"ID3 fake mp3", "audio/mpeg")
             return self.send(200, b"GIF89a fake", "image/gif")
         self.send(404, {"error": "no such path in the exam"})
 
@@ -367,6 +392,41 @@ class ComfyLocalExam(unittest.TestCase):
         rc, out = self.run_tool("strip", "hero.png", "--overwrite", url=False)
         self.assertEqual(rc, 0, out)
         self.assertNotIn(b"tEXt", (self.root / "hero.png").read_bytes())
+
+    # ---- audio jobs (Save Audio writes FLAC with the prompt and workflow in its tags)
+    def test_audio_job_saves_flac_without_tags_and_same_audio(self):
+        STATE.files = []
+        STATE.audio = [{"filename": "sfx_00001_.flac", "subfolder": "audio", "type": "output"}]
+        rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o")
+        self.assertEqual(rc, 0, out)
+        saved = (self.root / "o" / "sfx_00001_.flac").read_bytes()
+        self.assertNotIn(EMBEDDED_PATH.encode(), saved)
+        self.assertIn(EMBEDDED_PATH.encode(), flac_with_tags(), "the stand-in must carry the path to begin with")
+        before, after = flacfile.decode(flac_with_tags()), flacfile.decode(saved)
+        self.assertEqual((after[2], after[1]), ("ok", before[1]), "stripping changed the audio or broke its MD5")
+        self.assertNotIn("[warn]", out)
+
+    def test_audio_formats_without_strip_are_saved_with_warning(self):
+        STATE.files = []
+        STATE.audio = [{"filename": "sfx_00001_.mp3", "subfolder": "audio", "type": "output"}]
+        rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("[warn] sfx_00001_.mp3", out)
+
+    def test_strip_flac_by_hand(self):
+        (self.root / "take.flac").write_bytes(flac_with_tags())
+        rc, out = self.run_tool("strip", "take.flac", "--out", "clean", url=False)
+        self.assertEqual(rc, 0, out)
+        clean = (self.root / "clean" / "take.flac").read_bytes()
+        self.assertNotIn(EMBEDDED_PATH.encode(), clean)
+        self.assertEqual(flacfile.decode(clean)[2], "ok")
+        self.assertEqual(clean[4] & 0x80, 0x80, "STREAMINFO must now carry the last-block flag")
+
+    def test_strip_refuses_truncated_flac(self):
+        (self.root / "bad.flac").write_bytes(flac_with_tags()[:20])
+        rc, out = self.run_tool("strip", "bad.flac", "--out", "c", url=False)
+        self.assertEqual(rc, 2, out)
+        self.assertIn("truncated", out)
 
     def test_strip_refuses_non_png(self):
         (self.root / "x.png").write_bytes(b"GIF89a")

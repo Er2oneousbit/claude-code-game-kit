@@ -54,7 +54,38 @@ Playwright Chromium) for smoke. The boot marker is logged by `src/main.ts` after
 
 ## Testing
 - Vitest for `src/core` (math, rules, AI decisions, spring follow). Nothing that needs a canvas.
+- `tests/juice.golden.test.ts` and `tests/shell.golden.test.ts` run every case of `data/golden/juice.json` and
+  `shell.json` (written by `tools/golden_vectors.py`, the reference for every engine) through `src/core/`. Never copy
+  expected values into a test; an unknown case type fails. After the kit changes the reference, the vectors change
+  and these tests say which module to fix.
+- `tests/atomicFile.test.ts` proves the crash-safe write on the real filesystem (a temp folder).
 - Smoke boots the real build; give the game an `?autoplay` or scripted mode for scenario checks (SOP-14 step 6).
+
+## Juice and shell logic
+`src/core/` holds the kit's engine-free game logic, the same modules as the web (Phaser) overlay: screen shake,
+hitstop, easing, a 2D follow camera (use it on the XZ plane, or `follow.ts` for a 3D spring), input buffer, coyote
+time, spring and squash, flash limiter; settings (defaults, repair, `effectiveShake`, `telemetryAllowed`), bindings
+and prompt glyph names, save slots with migration and `.bak`, i18n with the pseudo-locale, the crash-safe write over
+localStorage (`textStore.ts`, `atomicFile.ts`), the game log, crash files and telemetry (`userData.ts`), and the
+dialogue reader. The web-3d skeleton has no menu screens: build them on these modules (the web overlay's `src/shell/`
+shows one way). The FlashLimiter is always on; `access.flash_limit` only makes flashes gentler. Hitstop and the
+FlashLimiter take real time; shake, follow, buffer, coyote and spring take game time (after hitstop and game_speed).
+
+## Scenario runs (smoke options)
+`python tools/dev.py smoke` builds, boots the production build in headless Chromium and fails on errors.
+- `--query "autoplay=careful&seed=3"` is appended to the page URL, so the game reads its options from `location.search`.
+- `--until MARKER` passes only if the console logs that marker; `--fail-on A,B` fails if it logs any of them.
+- `--screenshot FILE` saves the last frame; `--record DIR` saves PNG frames every `--record-every` milliseconds
+  (record 3D with `--headed`: headless software rendering is slow).
+- `--drive SCENARIO` adds `?drive=` and waits for `DRIVE_DONE`. The scenarios (menus, crash, pseudo, show:...) are
+  implemented by the web overlay's shell; this skeleton answers `DRIVE_ABORT` at once until a game adds its own.
+- `--data-dir DIR` maps the game's user-data folder (localStorage) onto a real folder: its files are loaded under
+  the key prefix `DIR/` (`?data-dir=DIR`) before the page starts and written back afterwards, so a test reads
+  `settings.json`, the game log, the crash files and `telemetry.csv` as files (and can seed a damaged `settings.json`
+  first). A console line `<NAME>_WRITTEN <file>` is printed again with the real path.
+- `--locale ID` sets `?locale=ID` (overrides the language setting; `pseudo` for the layout check).
+- `--compare BASELINE.png [--tolerance N]` runs `tools/image_diff.py` on the `--screenshot` and fails on a
+  difference (N = per-channel difference allowed, 0-255). Make a baseline by copying a good screenshot.
 
 ## Profiling
 - `renderer.info.render` (draw calls, triangles) and `renderer.info.memory` (geometries, textures) each frame in a debug

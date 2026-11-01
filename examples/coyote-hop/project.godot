@@ -17,6 +17,7 @@ config/features=PackedStringArray("4.7")
 [autoload]
 
 Log="*res://scripts/core/log.gd"
+Shell="*res://scripts/shell/shell.gd"
 
 [debug]
 

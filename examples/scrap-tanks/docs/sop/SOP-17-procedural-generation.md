@@ -88,6 +88,18 @@ list of problems, so the generator, the tests and the debug view share one defin
 - Any seed that ever broke an invariant or a bot run goes into a fixed list the property test always checks, with a
   comment saying what it broke (F28: E56, K01).
 
+## Hand-made levels: pacing and the art pass (standard practice)
+Generated or not, a level is a sequence of beats. For hand-made levels:
+1. **Beat chart first:** one row per beat (teach, practice, twist, test, rest), what the player learns or proves, the
+   intensity from 1 to 5, and roughly how long it takes. Intensity should rise and fall, with rest after peaks; a new
+   mechanic is taught where failing is cheap, then tested where it matters.
+2. **Blockout:** grey boxes and placeholder tiles only, playable end to end. Playtest the blockout (SOP-03) with one
+   question per beat; move geometry, not art.
+3. **Lock the layout,** then the art pass: tiles, props, lighting, decoration. Art may not change collision or sightlines
+   without a new blockout test. Readability first: the path and the danger must read at a glance (SOP-14 "tells").
+4. **Bots on hand-made levels too** (step 6): the bot trio catches a skipped beat or an exploit the same way it does for
+   generated ones.
+
 ## Engine notes
 | Engine | Seeded random | Reachability to check against | Watch out |
 |---|---|---|---|

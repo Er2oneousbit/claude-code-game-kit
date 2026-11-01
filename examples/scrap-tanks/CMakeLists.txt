@@ -6,7 +6,10 @@
 # Notes   : Explicit source lists (no file(GLOB)) so adds/removes show up in diffs.
 #           Layering: `core` (no SDL) <- `game_lib` (SDL) <- exe. Tests link `core` only.
 #           Dependencies come from vcpkg.json via the toolchain file in CMakePresets.json.
+#           The kit's golden-vector tests read data/golden/*.json through the GOLDEN_DIR definition.
 # Authored: Written with Claude (Sonnet 5.5, claude-sonnet-5-5)
+# Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): the kit's juice and shell logic in core
+#           (nlohmann-json), its golden-vector and file tests
 # ---------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.21)
 project(scrap_tanks VERSION 0.2.0 LANGUAGES CXX)
@@ -35,15 +38,24 @@ else()
 endif()
 
 # ---- core: SDL-free simulation, AI and bots, unit tested (the whole fight runs in tests) ----
+# The kit's juice headers and shell logic (settings, saves, bindings, i18n) live here too; the game does not use
+# them yet, the golden-vector tests keep them honest.
+find_package(nlohmann_json CONFIG REQUIRED)
+
 add_library(core STATIC
   src/core/Nav.cpp
   src/core/Sim.cpp
   src/core/Tactics.cpp
   src/core/EnemyBrain.cpp
   src/core/Bot.cpp
+  src/core/AtomicFile.cpp
+  src/core/Bindings.cpp
+  src/core/I18n.cpp
+  src/core/SaveStore.cpp
+  src/core/Settings.cpp
 )
 target_include_directories(core PUBLIC ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(core PUBLIC project_warnings)
+target_link_libraries(core PUBLIC project_warnings nlohmann_json::nlohmann_json)
 # One source of truth for the version (SOP-06): project(... VERSION) above, readable in code as GAME_VERSION
 target_compile_definitions(core PUBLIC GAME_VERSION="${PROJECT_VERSION}")
 
@@ -90,7 +102,12 @@ if(BUILD_TESTS)
     tests/test_view.cpp
     tests/test_scenario.cpp
     tests/test_regressions.cpp
+    tests/test_golden_vectors.cpp
+    tests/test_shell_files.cpp
   )
   target_link_libraries(unit_tests PRIVATE core doctest::doctest)
+  # The kit's golden vectors (reference: tools/golden_vectors.py). Override with -DGOLDEN_DIR=<folder>.
+  set(GOLDEN_DIR "${CMAKE_SOURCE_DIR}/data/golden" CACHE PATH "Folder holding juice.json and shell.json")
+  target_compile_definitions(unit_tests PRIVATE GOLDEN_DIR="${GOLDEN_DIR}")
   add_test(NAME unit_tests COMMAND unit_tests)
 endif()

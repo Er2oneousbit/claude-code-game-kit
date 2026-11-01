@@ -1,0 +1,1427 @@
+{
+ "cases": [
+  {
+   "name": "noise points",
+   "points": [
+    [
+     1,
+     0.0,
+     0,
+     0.2954886120702034
+    ],
+    [
+     1,
+     0.5,
+     0,
+     0.11650305764423968
+    ],
+    [
+     1,
+     1.0,
+     1,
+     0.2705336970002705
+    ],
+    [
+     1,
+     2.75,
+     2,
+     -0.056459341163476284
+    ],
+    [
+     7,
+     13.3,
+     0,
+     -0.6625258919582946
+    ],
+    [
+     42,
+     1500.25,
+     1,
+     0.7309418624613357
+    ],
+    [
+     3,
+     99999.9,
+     2,
+     0.451652889960316
+    ]
+   ],
+   "type": "noise"
+  },
+  {
+   "name": "one hit decays",
+   "params": {
+    "decay": 1.5,
+    "frequency": 15.0,
+    "max_angle": 0.05,
+    "max_offset": 8.0,
+    "seed": 1
+   },
+   "steps": [
+    {
+     "a": 0.6,
+     "call": "add_trauma"
+    },
+    {
+     "call": "update",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "angle": 0.014970501854388921,
+      "trauma": 0.575,
+      "x": 0.6336246315954772,
+      "y": 1.5144524641488524
+     },
+     "intensity": 1.0
+    },
+    {
+     "call": "update",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "angle": 0.011835848608774456,
+      "trauma": 0.5499999999999999,
+      "x": 0.28193739949906,
+      "y": 1.0878365884514865
+     },
+     "intensity": 1.0
+    },
+    {
+     "call": "update",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "angle": 0.00908849839232209,
+      "trauma": 0.5249999999999999,
+      "x": -0.014441671807060803,
+      "y": 0.7198590354822367
+     },
+     "intensity": 1.0
+    },
+    {
+     "call": "update",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "angle": 0.007544373634778309,
+      "trauma": 0.4999999999999999,
+      "x": -0.12496499356344798,
+      "y": 0.5410673940005408
+     },
+     "intensity": 1.0
+    },
+    {
+     "call": "update",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "angle": 0.006177803209803704,
+      "trauma": 0.47499999999999987,
+      "x": -0.2137399459844069,
+      "y": 0.3873542837920929
+     },
+     "intensity": 1.0
+    },
+    {
+     "call": "update",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "angle": 0.004298713905607548,
+      "trauma": 0.44999999999999984,
+      "x": -0.39117824295645365,
+      "y": 0.14830799097037703
+     },
+     "intensity": 1.0
+    },
+    {
+     "call": "update",
+     "dt": 0.5,
+     "expect": {
+      "angle": -0.0,
+      "trauma": 0.0,
+      "x": -0.0,
+      "y": -0.0
+     },
+     "intensity": 1.0
+    }
+   ],
+   "type": "shake"
+  },
+  {
+   "name": "stacked hits clamp and intensity",
+   "params": {
+    "decay": 1.0,
+    "frequency": 20.0,
+    "max_angle": 0.1,
+    "max_offset": 12.0,
+    "seed": 9
+   },
+   "steps": [
+    {
+     "a": 0.7,
+     "call": "add_trauma"
+    },
+    {
+     "a": 0.7,
+     "call": "add_trauma"
+    },
+    {
+     "call": "update",
+     "dt": 0.02,
+     "expect": {
+      "angle": -0.004637576609035702,
+      "trauma": 0.98,
+      "x": 3.0736161802945765,
+      "y": 4.992588695343941
+     },
+     "intensity": 0.5
+    },
+    {
+     "call": "update",
+     "dt": 0.02,
+     "expect": {
+      "angle": 0.0,
+      "trauma": 0.96,
+      "x": 0.0,
+      "y": 0.0
+     },
+     "intensity": 0.0
+    },
+    {
+     "a": -2.0,
+     "call": "add_trauma"
+    },
+    {
+     "call": "update",
+     "dt": 0.02,
+     "expect": {
+      "angle": 0.0,
+      "trauma": 0.0,
+      "x": 0.0,
+      "y": 0.0
+     },
+     "intensity": 1.0
+    }
+   ],
+   "type": "shake"
+  },
+  {
+   "name": "freeze, overlap, cap",
+   "params": {
+    "max_s": 0.25
+   },
+   "steps": [
+    {
+     "call": "scaled_dt",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "dt": 0.016666666666666666,
+      "remaining": 0.0
+     }
+    },
+    {
+     "call": "hit",
+     "duration": 0.05
+    },
+    {
+     "call": "scaled_dt",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "dt": 0.0,
+      "remaining": 0.03333333333333334
+     }
+    },
+    {
+     "call": "scaled_dt",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "dt": 0.0,
+      "remaining": 0.016666666666666673
+     }
+    },
+    {
+     "call": "scaled_dt",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "dt": 0.0,
+      "remaining": 6.938893903907228e-18
+     }
+    },
+    {
+     "call": "scaled_dt",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "dt": 0.01666666666666666,
+      "remaining": 0.0
+     }
+    },
+    {
+     "call": "hit",
+     "duration": 0.02
+    },
+    {
+     "call": "hit",
+     "duration": 1.0
+    },
+    {
+     "call": "scaled_dt",
+     "dt": 0.1,
+     "expect": {
+      "dt": 0.0,
+      "remaining": 0.15
+     }
+    },
+    {
+     "call": "scaled_dt",
+     "dt": 0.1,
+     "expect": {
+      "dt": 0.0,
+      "remaining": 0.04999999999999999
+     }
+    },
+    {
+     "call": "scaled_dt",
+     "dt": 0.1,
+     "expect": {
+      "dt": 0.05000000000000002,
+      "remaining": 0.0
+     }
+    },
+    {
+     "call": "hit",
+     "duration": -1.0
+    },
+    {
+     "call": "scaled_dt",
+     "dt": 0.1,
+     "expect": {
+      "dt": 0.1,
+      "remaining": 0.0
+     }
+    }
+   ],
+   "type": "hitstop"
+  },
+  {
+   "name": "every easing",
+   "points": [
+    [
+     "in_back",
+     0.0,
+     0.0
+    ],
+    [
+     "in_back",
+     0.1,
+     -0.014314220000000004
+    ],
+    [
+     "in_back",
+     0.25,
+     -0.06413656250000001
+    ],
+    [
+     "in_back",
+     0.5,
+     -0.08769750000000004
+    ],
+    [
+     "in_back",
+     0.75,
+     0.18259031249999969
+    ],
+    [
+     "in_back",
+     0.9,
+     0.5911720200000001
+    ],
+    [
+     "in_back",
+     1.0,
+     0.9999999999999998
+    ],
+    [
+     "in_back",
+     -0.5,
+     0.0
+    ],
+    [
+     "in_back",
+     1.5,
+     0.9999999999999998
+    ],
+    [
+     "in_cubic",
+     0.0,
+     0.0
+    ],
+    [
+     "in_cubic",
+     0.1,
+     0.0010000000000000002
+    ],
+    [
+     "in_cubic",
+     0.25,
+     0.015625
+    ],
+    [
+     "in_cubic",
+     0.5,
+     0.125
+    ],
+    [
+     "in_cubic",
+     0.75,
+     0.421875
+    ],
+    [
+     "in_cubic",
+     0.9,
+     0.7290000000000001
+    ],
+    [
+     "in_cubic",
+     1.0,
+     1.0
+    ],
+    [
+     "in_cubic",
+     -0.5,
+     0.0
+    ],
+    [
+     "in_cubic",
+     1.5,
+     1.0
+    ],
+    [
+     "in_out_cubic",
+     0.0,
+     0.0
+    ],
+    [
+     "in_out_cubic",
+     0.1,
+     0.004000000000000001
+    ],
+    [
+     "in_out_cubic",
+     0.25,
+     0.0625
+    ],
+    [
+     "in_out_cubic",
+     0.5,
+     0.5
+    ],
+    [
+     "in_out_cubic",
+     0.75,
+     0.9375
+    ],
+    [
+     "in_out_cubic",
+     0.9,
+     0.996
+    ],
+    [
+     "in_out_cubic",
+     1.0,
+     1.0
+    ],
+    [
+     "in_out_cubic",
+     -0.5,
+     0.0
+    ],
+    [
+     "in_out_cubic",
+     1.5,
+     1.0
+    ],
+    [
+     "in_out_quad",
+     0.0,
+     0.0
+    ],
+    [
+     "in_out_quad",
+     0.1,
+     0.020000000000000004
+    ],
+    [
+     "in_out_quad",
+     0.25,
+     0.125
+    ],
+    [
+     "in_out_quad",
+     0.5,
+     0.5
+    ],
+    [
+     "in_out_quad",
+     0.75,
+     0.875
+    ],
+    [
+     "in_out_quad",
+     0.9,
+     0.98
+    ],
+    [
+     "in_out_quad",
+     1.0,
+     1.0
+    ],
+    [
+     "in_out_quad",
+     -0.5,
+     0.0
+    ],
+    [
+     "in_out_quad",
+     1.5,
+     1.0
+    ],
+    [
+     "in_out_sine",
+     0.0,
+     -0.0
+    ],
+    [
+     "in_out_sine",
+     0.1,
+     0.024471741852423234
+    ],
+    [
+     "in_out_sine",
+     0.25,
+     0.1464466094067262
+    ],
+    [
+     "in_out_sine",
+     0.5,
+     0.49999999999999994
+    ],
+    [
+     "in_out_sine",
+     0.75,
+     0.8535533905932737
+    ],
+    [
+     "in_out_sine",
+     0.9,
+     0.9755282581475768
+    ],
+    [
+     "in_out_sine",
+     1.0,
+     1.0
+    ],
+    [
+     "in_out_sine",
+     -0.5,
+     -0.0
+    ],
+    [
+     "in_out_sine",
+     1.5,
+     1.0
+    ],
+    [
+     "in_quad",
+     0.0,
+     0.0
+    ],
+    [
+     "in_quad",
+     0.1,
+     0.010000000000000002
+    ],
+    [
+     "in_quad",
+     0.25,
+     0.0625
+    ],
+    [
+     "in_quad",
+     0.5,
+     0.25
+    ],
+    [
+     "in_quad",
+     0.75,
+     0.5625
+    ],
+    [
+     "in_quad",
+     0.9,
+     0.81
+    ],
+    [
+     "in_quad",
+     1.0,
+     1.0
+    ],
+    [
+     "in_quad",
+     -0.5,
+     0.0
+    ],
+    [
+     "in_quad",
+     1.5,
+     1.0
+    ],
+    [
+     "in_sine",
+     0.0,
+     0.0
+    ],
+    [
+     "in_sine",
+     0.1,
+     0.01231165940486223
+    ],
+    [
+     "in_sine",
+     0.25,
+     0.07612046748871326
+    ],
+    [
+     "in_sine",
+     0.5,
+     0.2928932188134524
+    ],
+    [
+     "in_sine",
+     0.75,
+     0.6173165676349102
+    ],
+    [
+     "in_sine",
+     0.9,
+     0.843565534959769
+    ],
+    [
+     "in_sine",
+     1.0,
+     0.9999999999999999
+    ],
+    [
+     "in_sine",
+     -0.5,
+     0.0
+    ],
+    [
+     "in_sine",
+     1.5,
+     0.9999999999999999
+    ],
+    [
+     "linear",
+     0.0,
+     0.0
+    ],
+    [
+     "linear",
+     0.1,
+     0.1
+    ],
+    [
+     "linear",
+     0.25,
+     0.25
+    ],
+    [
+     "linear",
+     0.5,
+     0.5
+    ],
+    [
+     "linear",
+     0.75,
+     0.75
+    ],
+    [
+     "linear",
+     0.9,
+     0.9
+    ],
+    [
+     "linear",
+     1.0,
+     1.0
+    ],
+    [
+     "linear",
+     -0.5,
+     0.0
+    ],
+    [
+     "linear",
+     1.5,
+     1.0
+    ],
+    [
+     "out_back",
+     0.0,
+     2.220446049250313e-16
+    ],
+    [
+     "out_back",
+     0.1,
+     0.40882797999999987
+    ],
+    [
+     "out_back",
+     0.25,
+     0.8174096875000002
+    ],
+    [
+     "out_back",
+     0.5,
+     1.0876975
+    ],
+    [
+     "out_back",
+     0.75,
+     1.0641365625
+    ],
+    [
+     "out_back",
+     0.9,
+     1.01431422
+    ],
+    [
+     "out_back",
+     1.0,
+     1.0
+    ],
+    [
+     "out_back",
+     -0.5,
+     2.220446049250313e-16
+    ],
+    [
+     "out_back",
+     1.5,
+     1.0
+    ],
+    [
+     "out_bounce",
+     0.0,
+     0.0
+    ],
+    [
+     "out_bounce",
+     0.1,
+     0.07562500000000001
+    ],
+    [
+     "out_bounce",
+     0.25,
+     0.47265625
+    ],
+    [
+     "out_bounce",
+     0.5,
+     0.765625
+    ],
+    [
+     "out_bounce",
+     0.75,
+     0.97265625
+    ],
+    [
+     "out_bounce",
+     0.9,
+     0.9881249999999999
+    ],
+    [
+     "out_bounce",
+     1.0,
+     1.0
+    ],
+    [
+     "out_bounce",
+     -0.5,
+     0.0
+    ],
+    [
+     "out_bounce",
+     1.5,
+     1.0
+    ],
+    [
+     "out_cubic",
+     0.0,
+     0.0
+    ],
+    [
+     "out_cubic",
+     0.1,
+     0.2709999999999999
+    ],
+    [
+     "out_cubic",
+     0.25,
+     0.578125
+    ],
+    [
+     "out_cubic",
+     0.5,
+     0.875
+    ],
+    [
+     "out_cubic",
+     0.75,
+     0.984375
+    ],
+    [
+     "out_cubic",
+     0.9,
+     0.999
+    ],
+    [
+     "out_cubic",
+     1.0,
+     1.0
+    ],
+    [
+     "out_cubic",
+     -0.5,
+     0.0
+    ],
+    [
+     "out_cubic",
+     1.5,
+     1.0
+    ],
+    [
+     "out_elastic",
+     0.0,
+     0.0
+    ],
+    [
+     "out_elastic",
+     0.1,
+     1.25
+    ],
+    [
+     "out_elastic",
+     0.25,
+     0.9116116523516816
+    ],
+    [
+     "out_elastic",
+     0.5,
+     1.015625
+    ],
+    [
+     "out_elastic",
+     0.75,
+     1.00552427172802
+    ],
+    [
+     "out_elastic",
+     0.9,
+     0.998046875
+    ],
+    [
+     "out_elastic",
+     1.0,
+     1.0
+    ],
+    [
+     "out_elastic",
+     -0.5,
+     0.0
+    ],
+    [
+     "out_elastic",
+     1.5,
+     1.0
+    ],
+    [
+     "out_quad",
+     0.0,
+     0.0
+    ],
+    [
+     "out_quad",
+     0.1,
+     0.18999999999999995
+    ],
+    [
+     "out_quad",
+     0.25,
+     0.4375
+    ],
+    [
+     "out_quad",
+     0.5,
+     0.75
+    ],
+    [
+     "out_quad",
+     0.75,
+     0.9375
+    ],
+    [
+     "out_quad",
+     0.9,
+     0.99
+    ],
+    [
+     "out_quad",
+     1.0,
+     1.0
+    ],
+    [
+     "out_quad",
+     -0.5,
+     0.0
+    ],
+    [
+     "out_quad",
+     1.5,
+     1.0
+    ],
+    [
+     "out_sine",
+     0.0,
+     0.0
+    ],
+    [
+     "out_sine",
+     0.1,
+     0.15643446504023087
+    ],
+    [
+     "out_sine",
+     0.25,
+     0.3826834323650898
+    ],
+    [
+     "out_sine",
+     0.5,
+     0.7071067811865476
+    ],
+    [
+     "out_sine",
+     0.75,
+     0.9238795325112867
+    ],
+    [
+     "out_sine",
+     0.9,
+     0.9876883405951378
+    ],
+    [
+     "out_sine",
+     1.0,
+     1.0
+    ],
+    [
+     "out_sine",
+     -0.5,
+     0.0
+    ],
+    [
+     "out_sine",
+     1.5,
+     1.0
+    ]
+   ],
+   "type": "ease"
+  },
+  {
+   "name": "deadzone, look-ahead, smoothing",
+   "params": {
+    "deadzone_h": 48.0,
+    "deadzone_w": 64.0,
+    "lookahead": 0.25,
+    "smoothing": 8.0,
+    "x": 0.0,
+    "y": 0.0
+   },
+   "steps": [
+    {
+     "call": "update",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "x": 0.0,
+      "y": 0.0
+     },
+     "tx": 10,
+     "ty": 0,
+     "vx": 0,
+     "vy": 0
+    },
+    {
+     "call": "update",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "x": 10.360614519435359,
+      "y": 0.0
+     },
+     "tx": 40,
+     "ty": 0,
+     "vx": 300,
+     "vy": 0
+    },
+    {
+     "call": "update",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "x": 21.924481534875206,
+      "y": 4.493760514453891
+     },
+     "tx": 60,
+     "ty": 30,
+     "vx": 300,
+     "vy": 120
+    },
+    {
+     "call": "update",
+     "dt": 0.1,
+     "expect": {
+      "x": 99.6106834257655,
+      "y": 5.32320297224711
+     },
+     "tx": 120,
+     "ty": 30,
+     "vx": 300,
+     "vy": 0
+    },
+    {
+     "call": "update",
+     "dt": 0.5,
+     "expect": {
+      "x": 99.6106834257655,
+      "y": 5.9876040300387094
+     },
+     "tx": 120,
+     "ty": 30,
+     "vx": 0,
+     "vy": 0
+    },
+    {
+     "call": "update",
+     "dt": 0.016,
+     "expect": {
+      "x": 65.95633134667534,
+      "y": -5.3647623068893795
+     },
+     "tx": -200,
+     "ty": -100,
+     "vx": -50,
+     "vy": -50
+    }
+   ],
+   "type": "follow"
+  },
+  {
+   "name": "snap without smoothing",
+   "params": {
+    "deadzone_h": 32.0,
+    "deadzone_w": 32.0,
+    "lookahead": 0.0,
+    "smoothing": 0.0,
+    "x": 5.0,
+    "y": 5.0
+   },
+   "steps": [
+    {
+     "call": "update",
+     "dt": 0.016,
+     "expect": {
+      "x": 5.0,
+      "y": 5.0
+     },
+     "tx": 10,
+     "ty": 10,
+     "vx": 0,
+     "vy": 0
+    },
+    {
+     "call": "update",
+     "dt": 0.016,
+     "expect": {
+      "x": 24.0,
+      "y": 5.0
+     },
+     "tx": 40,
+     "ty": 5,
+     "vx": 0,
+     "vy": 0
+    },
+    {
+     "call": "update",
+     "dt": 0.016,
+     "expect": {
+      "x": -14.0,
+      "y": 5.0
+     },
+     "tx": -30,
+     "ty": 5,
+     "vx": 0,
+     "vy": 0
+    }
+   ],
+   "type": "follow"
+  },
+  {
+   "name": "press, age, consume",
+   "params": {
+    "window_s": 0.12
+   },
+   "steps": [
+    {
+     "action": "jump",
+     "call": "press"
+    },
+    {
+     "call": "update",
+     "dt": 0.05
+    },
+    {
+     "action": "jump",
+     "call": "consume",
+     "expect": {
+      "result": true
+     }
+    },
+    {
+     "action": "jump",
+     "call": "consume",
+     "expect": {
+      "result": false
+     }
+    },
+    {
+     "action": "jump",
+     "call": "press"
+    },
+    {
+     "call": "update",
+     "dt": 0.1
+    },
+    {
+     "call": "update",
+     "dt": 0.02
+    },
+    {
+     "action": "jump",
+     "call": "consume",
+     "expect": {
+      "result": false
+     }
+    },
+    {
+     "action": "attack",
+     "call": "press"
+    },
+    {
+     "action": "attack",
+     "call": "consume",
+     "expect": {
+      "result": true
+     }
+    },
+    {
+     "action": "jump",
+     "call": "press"
+    },
+    {
+     "action": "attack",
+     "call": "press"
+    },
+    {
+     "call": "update",
+     "dt": 0.119
+    },
+    {
+     "action": "attack",
+     "call": "consume",
+     "expect": {
+      "result": true
+     }
+    },
+    {
+     "action": "jump",
+     "call": "consume",
+     "expect": {
+      "result": true
+     }
+    }
+   ],
+   "type": "input_buffer"
+  },
+  {
+   "name": "grace window and landing",
+   "params": {
+    "window_s": 0.1
+   },
+   "steps": [
+    {
+     "call": "update",
+     "dt": 0.016,
+     "on_floor": true
+    },
+    {
+     "call": "can_jump",
+     "expect": {
+      "result": true
+     }
+    },
+    {
+     "call": "update",
+     "dt": 0.05,
+     "on_floor": false
+    },
+    {
+     "call": "can_jump",
+     "expect": {
+      "result": true
+     }
+    },
+    {
+     "call": "consume"
+    },
+    {
+     "call": "can_jump",
+     "expect": {
+      "result": false
+     }
+    },
+    {
+     "call": "update",
+     "dt": 0.016,
+     "on_floor": true
+    },
+    {
+     "call": "can_jump",
+     "expect": {
+      "result": true
+     }
+    },
+    {
+     "call": "update",
+     "dt": 0.2,
+     "on_floor": false
+    },
+    {
+     "call": "can_jump",
+     "expect": {
+      "result": false
+     }
+    },
+    {
+     "call": "update",
+     "dt": 0.016,
+     "on_floor": true
+    },
+    {
+     "call": "consume"
+    },
+    {
+     "call": "update",
+     "dt": 0.016,
+     "on_floor": true
+    },
+    {
+     "call": "can_jump",
+     "expect": {
+      "result": false
+     }
+    }
+   ],
+   "type": "coyote"
+  },
+  {
+   "name": "squash recovers",
+   "params": {
+    "damping": 0.5,
+    "frequency": 4.0,
+    "target": 0.0,
+    "v": 0.0,
+    "x": 0.4
+   },
+   "steps": [
+    {
+     "call": "update",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "v": -4.211031211131459,
+      "x": 0.3298161464811424
+     }
+    },
+    {
+     "call": "update",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "v": -5.919283799125726,
+      "x": 0.23116141649571362
+     }
+    },
+    {
+     "call": "update",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "v": -5.873389848594885,
+      "x": 0.13327158568579886
+     }
+    },
+    {
+     "call": "update",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "v": -4.816177079125977,
+      "x": 0.053001967700365915
+     }
+    },
+    {
+     "call": "update",
+     "dt": 0.016666666666666666,
+     "expect": {
+      "v": -3.3567638923640706,
+      "x": -0.0029440971723685913
+     }
+    },
+    {
+     "call": "update",
+     "dt": 0.1,
+     "expect": {
+      "v": 5.265669211126805,
+      "x": 0.523622823940312
+     }
+    },
+    {
+     "call": "update",
+     "dt": 0.1,
+     "expect": {
+      "v": -41.04328177390285,
+      "x": -3.5807053534499733
+     }
+    },
+    {
+     "call": "update",
+     "dt": 0.5,
+     "expect": {
+      "v": 1605.606458319784,
+      "x": 799.222523806442
+     }
+    }
+   ],
+   "type": "spring"
+  },
+  {
+   "name": "volume kept",
+   "points": [
+    [
+     0.0,
+     1.0,
+     1.0
+    ],
+    [
+     0.3,
+     1.3,
+     0.7692307692307692
+    ],
+    [
+     -0.25,
+     0.75,
+     1.3333333333333333
+    ],
+    [
+     -2.0,
+     0.09999999999999998,
+     10.000000000000002
+    ]
+   ],
+   "type": "squash"
+  },
+  {
+   "name": "three per second",
+   "params": {
+    "max_flashes": 3,
+    "window_s": 1.0
+   },
+   "steps": [
+    {
+     "call": "request",
+     "expect": {
+      "result": true
+     },
+     "now": 0.0
+    },
+    {
+     "call": "request",
+     "expect": {
+      "result": true
+     },
+     "now": 0.1
+    },
+    {
+     "call": "request",
+     "expect": {
+      "result": true
+     },
+     "now": 0.2
+    },
+    {
+     "call": "request",
+     "expect": {
+      "result": false
+     },
+     "now": 0.3
+    },
+    {
+     "call": "request",
+     "expect": {
+      "result": false
+     },
+     "now": 0.9
+    },
+    {
+     "call": "request",
+     "expect": {
+      "result": true
+     },
+     "now": 1.0
+    },
+    {
+     "call": "request",
+     "expect": {
+      "result": false
+     },
+     "now": 1.05
+    },
+    {
+     "call": "request",
+     "expect": {
+      "result": true
+     },
+     "now": 1.1
+    },
+    {
+     "call": "request",
+     "expect": {
+      "result": false
+     },
+     "now": 1.2
+    },
+    {
+     "call": "request",
+     "expect": {
+      "result": true
+     },
+     "now": 2.5
+    }
+   ],
+   "type": "flash_limiter"
+  }
+ ],
+ "generator": "tools/golden_vectors.py",
+ "tolerance": 1e-06,
+ "version": 1
+}

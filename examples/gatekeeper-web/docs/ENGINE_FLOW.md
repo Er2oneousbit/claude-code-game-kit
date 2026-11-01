@@ -51,8 +51,50 @@ Tiled (mapeditor.org, free) exports JSON that Phaser loads with `this.load.tilem
 
 ## Testing
 - Vitest tests in `tests/`, named `<unit>.test.ts`, one behavior per `it`. Only engine-free code is unit tested.
+- `tests/juice.golden.test.ts` and `tests/shell.golden.test.ts` run every case of `data/golden/juice.json` and
+  `shell.json` (written by `tools/golden_vectors.py`, the reference for every engine) through `src/core/`. Never copy
+  expected values into a test; an unknown case type fails. After the kit changes the reference, the vectors change
+  and these tests say which module to fix.
+- `tests/atomicFile.test.ts` proves the crash-safe write on the real filesystem (a temp folder).
 - Scene behavior is covered by `smoke` (boots the real build). For gameplay checks, give the scene an autoplay or
   scripted-input mode and assert on logged markers, the same way `smoke` waits for `BOOT_OK`.
+
+## The front end (shell)
+The skeleton ships a complete front end around the game: boot, title ("press any key or button"), main menu (Play,
+Settings, Credits, Quit, plus "Juice demo" in debug builds: the dev server or `?debug`), settings, credits (scrolls
+`CREDITS.md` from the project root when it exists), a loading bar, the game, a pause menu (the `pause` action, and
+automatically when the window loses focus), quit and crash screens.
+- **Where:** `src/shell/` (screens, input, subtitles, the smoke driver), `src/core/` (the engine-free logic: settings,
+  bindings and glyphs, saves, i18n, juice), `data/i18n/<locale>.json` (strings), `data/dialogue/*.built.json`
+  (subtitles in the dialogue format v0 of the dialogue tools in tools/audio). Scenes read `shell.settings`,
+  `shell.input` (`isDown`, `takePress`) and `shell.volume("sfx")` from `src/shell/app.ts`.
+- **Screens are HTML over the canvas**, built in code: real text layout, so text size, wrapping and the
+  pseudo-locale check behave like any web page. A theme: a file named `theme_default.css` in the
+  `public/assets/ui` folder (loaded after the built-in `src/shell/shell.css`). Prompt glyphs:
+  `public/assets/ui/glyphs/<glyph_name>.png` (key_space, xbox_a, ps_cross ...), drawn at a whole-number scale with
+  nearest filtering; a missing glyph shows a text keycap.
+  Dotwork's UI kit (tools/art/dotwork, the widgets lane) can supply both. Restart `run` after adding files there.
+- **Navigation:** keyboard and gamepad (the browser's standard mapping) through one input layer; `ui_accept` /
+  `ui_cancel` everywhere, cancel goes back one screen, the focused item has an outline and a marker.
+- **Settings** apply live and save on Back (`settings.json`, atomic, with `.bak`). A browser cannot apply
+  `display.vsync` (it always syncs) or `display.resolution` (the canvas follows the window): they are kept in the
+  file but not shown. Fullscreen and borderless both use the browser's Fullscreen API. The colorblind option recolors
+  the juice demo's palette only (a real game swaps its own palette). Mono audio downmixes Web Audio output.
+- **Juice timing:** the FlashLimiter is always on (at most 3 full-screen flashes per real second); the
+  `access.flash_limit` setting only makes each flash gentler. Hitstop and the FlashLimiter take real time; shake,
+  follow, input buffer, coyote and spring take game time (after hitstop and `game_speed`).
+- **User data** lives in localStorage under one key prefix (`<slug>/`, or `?data-dir=`): `settings.json`,
+  `save_<slot>.json` (+ `.bak`), the game log (`game.log` in a `logs` folder: version and time on the first line, 5 older logs kept),
+  `crashes/crash_<time>.txt`, `telemetry.csv`. Language > "Download my data" gives the player all of it as one file.
+- **Crashes:** an uncaught error or rejected promise writes a crash file (version, seed, error, stack, log tail),
+  logs `CRASH_WRITTEN` and shows the crash screen; in `smoke` it is also a console error, so the run fails.
+- **Telemetry** is off until the player says yes (asked once per launch on the title screen while undecided; Later
+  keeps it undecided). Events go to `telemetry.csv` on the device only (the last 2000 rows); nothing is sent anywhere. Sending it
+  needs a server you run, a privacy policy that says what is collected, and an opt-out (SOP-19).
+- **F8** (debug builds) saves a bug report: `bug_<time>/` with the log tail, settings and a screenshot, plus a download.
+- **Localization:** every visible string goes through `shell.i18n.t(key)`; a new language is a new
+  `data/i18n/<id>.json` (missing keys fall back to English). The `pseudo` locale makes every string accented, 40 %
+  longer and bracketed; with `?locale=pseudo` every screen is checked as it appears and problems are console errors.
 
 ## Assets and audio
 - Put files in `public/assets/` (`art/`, `audio/sfx/`, `audio/music/`, `fonts/`, `maps/`) and load them by relative path.
@@ -100,4 +142,21 @@ None recorded yet. Add notes from videos, forums or your own runs here, with an 
 - `--screenshot FILE` saves the last frame; `--record DIR` saves PNG frames every `--record-every` milliseconds (default 66)
   for `tools/art/frames_to_gif.py`. Headless software rendering is slow, so record 3D or WebGPU games with `--headed`.
 - `--headed` uses a visible browser with the real GPU; `--gpu` adds headless WebGPU flags.
+- `--drive SCENARIO` lets the game play a scripted run (`src/shell/drive.ts`) and waits for `DRIVE_DONE`
+  (`DRIVE_ABORT` fails at once). The shell runs a scenario only with its own data dir (without `--data-dir`, smoke
+  uses `build/smoke-data`) and only in a dev server or an automated browser, so a `?drive=` link to the hosted
+  game logs `DRIVE_IGNORED` (smoke fails at once on it) and never touches the player's settings:
+  - `menus`: title, settings, master volume to 0.5, reduce motion on, Back, quit; prints `SETTINGS_WRITTEN <path>`
+    and checks the file holds the new values (and that `telemetry.csv` was not written without consent).
+  - `crash`: plays, then throws a planted error; prints `CRASH_WRITTEN <path>`. Exit 1 is the expected result.
+  - `pseudo` (with `--locale pseudo`): visits every screen and settings section; exit 0 when nothing is truncated,
+    clipped or untranslated. `pseudo-plant` adds one label that is too small: it must exit 1 naming it.
+  - `show:title|settings|pause|subtitle|juice` (with `--screenshot`): opens that screen, freezes it, captures it.
+- `--data-dir DIR` maps the game's user-data folder (localStorage) onto a real folder: its files are loaded under
+  the key prefix `DIR/` (`?data-dir=DIR`) before the page starts and written back afterwards, so a test reads
+  `settings.json`, the game log, the crash files and `telemetry.csv` as files (and can seed a damaged `settings.json`
+  first). A console line `<NAME>_WRITTEN <file>` is printed again with the real path.
+- `--locale ID` sets `?locale=ID` (overrides the language setting; `pseudo` for the layout check).
+- `--compare BASELINE.png [--tolerance N]` runs `tools/image_diff.py` on the `--screenshot` and fails on a
+  difference (N = per-channel difference allowed, 0-255). Make a baseline by copying a good screenshot.
 

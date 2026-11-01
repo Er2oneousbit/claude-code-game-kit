@@ -29,7 +29,7 @@ python tools/dev.py genproj   # regenerate IDE project files
 | dev.py | What it runs |
 |---|---|
 | `check` / `build` | `<UE_ROOT>/Engine/Build/BatchFiles/Build.bat <Target>Editor Win64 Development -Project=<uproject> -WaitMutex` (`Build.sh` on Linux/Mac). Blueprint-only projects (no `Source/`) skip it and pass. A missing MSVC, Windows SDK or .NET Framework SDK, or an open editor with Live Coding, exits 2 with the fix |
-| `test` | `UnrealEditor-Cmd <uproject> -ExecCmds="Automation RunTests <filter>; Quit" -TestExit="Automation Test Queue Empty" -unattended -nopause -NullRHI -nosplash -abslog=Saved/Logs/dev_automation.log`, then parses that log (the editor does not print results to stdout) |
+| `test` | `UnrealEditor-Cmd <uproject> -ExecCmds="Automation RunTests <filter>; Quit" -TestExit="Automation Test Queue Empty" -unattended -nopause -NullRHI -nosplash -abslog=Saved/Logs/dev_automation.log`, then parses that log (the editor does not print results to stdout). The default filter is `<Game>`, plus `GameKit.` when the GameKitShell plugin is enabled (`+` joins filters); the summary counts the `GameKit.*` tests |
 | `smoke` | same as `test` with filter `<Game>.Smoke` (C++ tests; a Blueprint-only project has none, use `test --filter` on its functional tests). `--filter Boot` runs `<Game>.Smoke.Boot` only; `--until M` and `--fail-on M` check scenario markers your tests log, like the other overlays. Tests run with `-NullRHI`, so nothing renders: capture screenshots from the game itself (a `-record=<dir>` option calling `FScreenshotRequest::RequestScreenshot`, as `examples/rune-delve` does) |
 | `package` | `RunUAT BuildCookRun -project=... -noP4 -platform=<host> -clientconfig=<--config, default Development> -build -cook -stage -pak -archive -archivedirectory=Packaged` (Development verified on UE 5.8; `--config Shipping` for the release build) |
 | `exec <script.py>` | `UnrealEditor-Cmd <uproject> -run=pythonscript -script=<script>`: editor Python headless (asset imports, maps, data assets). Needs the PythonScriptPlugin enabled for the editor. The script's prints are shown; any `LogPython: Error` (a traceback) fails it |
@@ -86,6 +86,50 @@ Worked example: the kit's Rune Delve example (`examples/rune-delve` in the kit r
   and `GEditor->StartQueuedPlaySessionRequest()` (the editor's own code does the same; K01, UE 5.8).
 - Keep logic in plain C++ classes or `UObject`s that do not need a world, so tests are fast.
 - Spec-style (`BEGIN_DEFINE_SPEC`) is also fine, record the choice in an ADR.
+
+## Juice and shell plugin (GameKitShell)
+`Plugins/GameKitShell/` holds the kit's engine-free game logic (SOP-18 game feel, SOP-19 front end and settings) as one
+Runtime module of plain C++ on Unreal's Json module. No UObjects, no world: call it from your actors, components and
+widgets. It ships disabled (`"EnabledByDefault": false`), so a project that does not use it builds as before.
+
+| Header (`Plugins/GameKitShell/Source/GameKitShell/Public/`) | What it gives you |
+|---|---|
+| `GameKitShake.h`, `GameKitHitstop.h`, `GameKitEase.h`, `GameKitFollowCamera.h` | trauma screen shake and its noise, hitstop (`ScaledDt`), 14 easing curves by enum or name, deadzone and look-ahead camera follow |
+| `GameKitInputBuffer.h`, `GameKitCoyoteTimer.h`, `GameKitSpring.h`, `GameKitFlashLimiter.h` | buffered presses, coyote time, a damped spring plus `GameKit::Squash`, at most three full-screen flashes per second |
+| `GameKitSettings.h`, `GameKitBindings.h` | settings defaults and validated loading (bad fields fixed and listed), rebinding with swaps, button-glyph names |
+| `GameKitSaveStore.h`, `GameKitAtomicFile.h` | versioned saves with migrations, a `.bak` of the last good save, crash-safe writes (`.tmp`, flush, rename) |
+| `GameKitI18n.h`, `GameKitJson.h` | `Tr` with a fr-CA -> fr -> en fallback, plurals, the pseudo-locale; JSON helpers that never log |
+
+Turn it on (a C++ project; a Blueprint-only one first needs a C++ class from Tools > New C++ Class, and `dev.py check`
+exits 2 to say so):
+1. In the `.uproject`, add `{ "Name": "GameKitShell", "Enabled": true }` to `"Plugins"`.
+2. In your module's `Build.cs`, add `"GameKitShell"` (and `"Json"` if your code touches `FJsonObject`) to
+   `PublicDependencyModuleNames`, then `#include "GameKitShake.h"` and so on.
+3. `python tools/dev.py check`, then `python tools/dev.py test`: it runs your `<Game>` tests and the plugin's `GameKit.*`
+   tests and prints how many of those passed. `test --filter GameKit` runs only the plugin's.
+   If you only turned the plugin on in the `.uproject` (step 1 without step 2), UnrealBuildTool may say "Target is up
+   to date" and skip it, and `test --filter GameKit` then finds no tests: delete
+   `Intermediate/Build/Win64/x64/<Game>Editor/Development/Makefile.bin` (seen on UE 5.8) and run `check` again.
+
+The plugin's tests: `GameKit.Golden.Juice.<case>` and `GameKit.Golden.Shell.<case>` (one test per case) read
+`data/golden/juice.json` and `shell.json` from the project folder and compare every value with the kit's reference
+(`tools/golden_vectors.py`) within the file's tolerance; `GameKit.Golden.Coverage` fails when a vector type has no case;
+`GameKit.Shell.*` writes real files in a temp folder (a crash between write and rename leaves the old file, a corrupt save
+falls back to the `.bak`, a newer game's save is never overwritten). Keep `data/golden/` in the repo.
+
+- Player files: `FPaths::ProjectSavedDir() / TEXT("GameKit/settings.json")` and `.../save.json` (the user's folder in a
+  packaged game). The headers' Usage blocks show each call; settings and saves are `FJsonObject`, so keys a newer build
+  wrote survive.
+- Wire the values to the engine yourself: `UGameUserSettings` for window mode, resolution and vsync, Sound Classes or
+  submixes for the volumes, your Enhanced Input mapping for the binding strings (`key:space`, `pad:south`), and
+  `EffectiveShake` into your camera shake. Menus (UMG) are yours to build; the plugin is the logic under them.
+- Differences from the reference: keys of `TMap` and `FJsonObject` are case-insensitive (two actions or table keys
+  that differ only in case collapse into one), and Unreal's JSON reader needs an object or array at the top level.
+- Change the logic: edit the plugin, keep `test` green; when the kit's reference changes, the vectors change with it.
+- Verified on UE 5.8 (Windows, VS 2022 Build Tools / MSVC 14.44, 2026-11-01) in a minimal C++ project (K01): `check`
+  builds the plugin without warnings, `test` passes every `GameKit.*` test and the game module links against the
+  plugin; a planted wrong vector value and an unknown case type both fail `test`. Linux and macOS are untested, and so
+  is enabling the plugin in a Blueprint-only project inside the editor **(verify)**.
 
 ## Source control (Git + LFS)
 - `.gitattributes` in this repo routes `.uasset`, `.umap`, textures, audio, and meshes through LFS. Run `git lfs install` before the first commit.

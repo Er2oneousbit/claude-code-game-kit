@@ -6,16 +6,23 @@
 # Usage   : python tools/dev.py smoke --screenshot captures/progress/03-punch.png
 #           python tools/dev.py smoke --record captures/frames-03   (then tools/art/frames_to_gif.py)
 #           Direct: godot --path . -s res://tools/capture.gd -- --frames 120 --shot <abs.png> --record <abs dir> --every-ms 66
+#           With a smoke drive: dev.py smoke --drive show:settings --screenshot captures/settings.png
 # Notes   : Needs a window: headless Godot has no renderer, so dev.py runs this without --headless after the
 #           headless smoke passed. A window opens for a few seconds. Paths are absolute (dev.py passes them).
-#           Exit 0 done, 1 a save failed, 2 bad arguments or no main scene.
+#           With --drive, the picture is taken when the drive has opened its screen (the Shell autoload's
+#           capture_ready), READY_SETTLE_FRAMES later, instead of after --frames; dev.py adds --fixed-fps 60 so the
+#           picture is the same on every run. Other user args (--data-dir, --locale, --smoke) are for the Shell.
+#           Exit 0 done, 1 a save failed or the drive never got there, 2 bad arguments or no main scene.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-10-26: bursts timed in real milliseconds (monitors are not all 60 Hz)
+# Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): --drive waits for Shell.capture_ready
 # ---------------------------------------------------------------------------
 extends SceneTree
 
 const DEFAULT_FRAMES: int = 120
 const DEFAULT_EVERY_MS: int = 66 # milliseconds between burst saves; real time, so a 144 Hz monitor spaces them the same
+const DRIVE_TIMEOUT_FRAMES: int = 3600 # a drive that never reaches its screen fails instead of hanging
+const READY_SETTLE_FRAMES: int = 2 # frames between capture_ready and the picture (the frame must be drawn first)
 
 var _shot: String = ""
 var _record: String = ""
@@ -25,6 +32,8 @@ var _last_ms: int = -1
 var _frame: int = 0
 var _saved: int = 0
 var _failed: bool = false
+var _drive: String = ""
+var _ready_frames: int = 0
 
 
 func _initialize() -> void:
@@ -42,6 +51,8 @@ func _initialize() -> void:
 				_frames = maxi(1, value.to_int())
 			"--every-ms":
 				_every_ms = maxi(1, value.to_int())
+			"--drive":
+				_drive = value # the Shell runs it; we only wait for it
 			_:
 				i -= 1 # not ours (e.g. --debug for the Log autoload): skip one
 		i += 2
@@ -68,12 +79,26 @@ func _process(_delta: float) -> bool:
 		_last_ms = now
 		_save(_record.path_join("f%05d.png" % _saved))
 		_saved += 1
+	if _drive != "":
+		var shell: Node = root.get_node_or_null("Shell")
+		if shell != null and bool(shell.get("capture_ready")):
+			_ready_frames += 1
+			if _ready_frames > READY_SETTLE_FRAMES:
+				_finish()
+		elif _frame >= DRIVE_TIMEOUT_FRAMES:
+			push_error("capture: drive %s never reached its screen" % _drive)
+			quit(1)
+		return false
 	if _frame >= _frames:
-		if _shot != "":
-			_save(_shot)
-		print("CAPTURE_DONE frames=%d saved=%d" % [_frame, _saved])
-		quit(1 if _failed else 0)
+		_finish()
 	return false
+
+
+func _finish() -> void:
+	if _shot != "":
+		_save(_shot)
+	print("CAPTURE_DONE frames=%d saved=%d" % [_frame, _saved])
+	quit(1 if _failed else 0)
 
 
 func _save(path: String) -> void:

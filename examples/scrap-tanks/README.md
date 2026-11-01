@@ -36,7 +36,7 @@ chosen spots, who can hit you, the tree).
 
 ## Checks
 ```
-python tools/dev.py check && python tools/dev.py test      # 46 test cases, the pillar check plays 80 fights
+python tools/dev.py check && python tools/dev.py test      # 61 test cases (15 are the kit's juice and shell checks), the pillar check plays 80 fights
 python tools/dev.py smoke --frames 30000 --timeout 900 --until RUN_WON --fail-on PLAYER_DESTROYED -- --autoplay skilled --seed 7
 python tools/dev.py smoke --frames 30000 --timeout 900 --until PLAYER_DESTROYED --fail-on RUN_WON -- --autoplay reckless --seed 7
 ```
