@@ -10,7 +10,7 @@ are from Valve's own documentation read on 2026-11-01 (F39); check the linked pa
 |---|---|---|
 | Steamworks account and an app (Steam Direct) | partner.steamgames.com | A one-time fee per app (verify the current amount on Steamworks) |
 | itch.io account | itch.io | Free; you pick the revenue share |
-| Store art | Steam sizes in step 2; the art session's store lane (Dotwork) makes them | Logo or title only on capsules (E77) |
+| Store art | Steam sizes in step 2; Dotwork's store lane makes them from the game's own art | Logo or title only on capsules (E77) |
 | Signing certificate (Windows), Apple Developer Program (macOS) | step 5 | Paid; Windows SmartScreen warns about unsigned downloads (verify) |
 | Age rating (consoles, mobile, many stores) | IARC, through each participating store (E88) | IARC states developers have rated "at no cost" |
 

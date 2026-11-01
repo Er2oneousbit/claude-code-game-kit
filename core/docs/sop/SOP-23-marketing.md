@@ -10,12 +10,13 @@ launch. Steam facts here come from Valve's documentation (F39); the rest is labe
   where Steam shows the game. There is no minimum count before Steam starts showing it.
 - Plan the big moments: a demo (one wishlist notification within 14 days of its first release, E80), Steam Next Fest
   (once per game, unreleased, demo required, E81), the launch, the first discount (wishlist emails go out for a discount
-  of at least 20 % on the lowest-priced package lasting over 8 hours, at most one such email per two weeks, E82). Space them so the notifications do not collide.
+  of at least 20 % on the lowest-priced package lasting over 8 hours, at most one such email per two weeks, E82).
+  Space them so the notifications do not collide.
 
 ## 2. The hook and the store page
 1. One sentence that says what the player does and why it is different (the GDD's pitch and twist). Test it on people
    who have not seen the game.
-2. Capsules: logo or title only, readable at the small size (E77); the art session's store lane makes every size. The
+2. Capsules: logo or title only, readable at the small size (E77); Dotwork's store lane makes every size. The
    capsule is what most players see first: show the genre and mood at a glance.
 3. Screenshots: real gameplay only (E77), the most readable moments, UI visible. The first screenshot and the first
    seconds of the trailer do most of the work (tip).
@@ -24,7 +25,7 @@ launch. Steam facts here come from Valve's documentation (F39); the rest is labe
    description is optional.
 
 ## 3. Trailer (practice)
-1. Record real gameplay at the target resolution: `dev.py smoke --record` gives frame bursts; the art session's capture
+1. Record real gameplay at the target resolution: `dev.py smoke --record` gives frame bursts; Dotwork's capture
    command records longer sequences; OBS for live play.
 2. Gameplay in the first few seconds, no long logo intro. 30 to 90 seconds; end on the logo, the platforms and "Wishlist
    now".
