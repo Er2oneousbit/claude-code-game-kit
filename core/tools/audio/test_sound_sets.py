@@ -294,6 +294,41 @@ class SoundSetsExam(unittest.TestCase):
             self.assertEqual(how, "integrated")
             self.assertAlmostEqual(lufs, -34.0, delta=0.1)
 
+    def test_make_keeps_one_shots_with_the_right_number_of_attacks(self):
+        # renders ranked 1..6 by local_sfx; 1, 3 and 4 are double steps: the set must keep 2, 5 (and flag nothing)
+        doubles = {1, 3, 4}
+
+        def fake_main(argv):
+            out = Path(argv[argv.index("--out") + 1])
+            keep = int(argv[argv.index("--keep") + 1])
+            self.assertEqual(keep, int(argv[argv.index("--variants") + 1]))      # every render comes back
+            for k in range(1, keep + 1):
+                p = out.with_name(f"{out.stem}_{k}{out.suffix}")
+                at = [0.05, 0.35] if k in doubles else 0.05
+                write_wav(p, burst(0.15, at, total=0.7, seed=k), RATE)
+                p.with_suffix(".gen.json").write_text(json.dumps({"tool": "local_sfx", "license": "L", "rank": k}),
+                                                      encoding="utf-8")
+            return 0
+        sys.modules["local_sfx"] = types.SimpleNamespace(main=fake_main)
+        try:
+            sets = self.sets_file(self.steps_set(takes=2, renders=6))
+            rc, out = self.run_tool("make", sets, "--root", self.root)
+            self.assertEqual(rc, 0, out)
+            self.assertIn("[pick] 3 of 6 render(s) have 1 attack(s); kept 2 of those", out)
+            folder = self.root / "audio" / "footsteps"
+            ranks = [json.loads((folder / f"footsteps_stone_{k}.gen.json").read_text(encoding="utf-8"))["rank"]
+                     for k in (1, 2)]
+            self.assertEqual(ranks, [2, 5])                                     # the best single steps, in rank order
+            self.assertEqual(sorted(p.name for p in folder.glob("*.wav")), ["footsteps_stone_1.wav",
+                                                                           "footsteps_stone_2.wav"])
+            self.assertEqual(self.run_tool("check", sets, "--root", self.root)[0], 0)
+            doubles.update({2, 5, 6})                                           # now every render is a double step
+            rc, out = self.run_tool("make", sets, "--root", self.root, "--overwrite")
+            self.assertIn("kept 0 of those and 2 that check will flag", out)
+            self.assertEqual(self.run_tool("check", sets, "--root", self.root)[0], 1)
+        finally:
+            del sys.modules["local_sfx"]
+
     def test_docs_example_validates(self):
         doc = (Path(__file__).resolve().parents[2] / "docs" / "resources" / "audio.md").read_text(encoding="utf-8")
         section = doc.split("## Sound sets", 1)[1]

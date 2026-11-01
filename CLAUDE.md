@@ -55,6 +55,7 @@ python core/tools/audio/test_loudness.py                # standard library only 
 python core/tools/audio/test_audio_events.py            # standard library only; also checks data/golden/audio.json is current
 python core/tools/audio/test_dialogue.py                # standard library only
 python core/tools/audio/test_sound_sets.py              # standard library only
+python core/tools/audio/test_music.py                   # standard library only; also checks data/golden/music.json is current
 python core/tools/audio/test_flacfile.py                # standard library only (real encoder fixtures)
 python core/tools/audio/test_local_sfx.py               # offline (a stand-in ComfyUI)
 python core/tools/audio/test_local_tts.py               # offline (a fake TTS worker)

@@ -42,6 +42,45 @@ Libraries, generators, editors, and implementation hints. Prompts for AI audio t
 Suno: paid plans grant commercial use for tracks made while subscribed, free-plan tracks are non-commercial (E34, **verify**).
 Prompt patterns: `docs/BRIEFS.md` > Music with Suno. Log prompts and outputs in `ASSET_LOG.md` if used.
 
+## Adaptive music: bars, loops, stems, transitions
+Describe the music once in data/music.json (you create it); `tools/audio/music.py` checks it and its files, and each
+engine's music player changes track on the exact sample the transition map allows.
+```json
+{
+  "version": 1, "sample_rate": 44100, "start": "explore",
+  "tracks": {
+    "explore": {"bpm": 96, "beats_per_bar": 4, "bars": 9, "loop_start_bar": 1,
+                "stems": {"pads": "music/explore_pads.wav", "drums": "music/explore_drums.wav"}},
+    "combat": {"bpm": 96, "beats_per_bar": 4, "bars": 4, "stems": {"full": "music/combat.wav"}}
+  },
+  "stingers": {"alarm": {"file": "music/alarm.wav", "bars": 1}},
+  "transitions": [
+    {"from": "explore", "to": "combat", "quantize": "beat", "fade_ms": 120, "sync": true},
+    {"from": "combat", "to": "explore", "quantize": "bar", "fade_ms": 500, "stinger": "alarm"}
+  ],
+  "default_transition": {"quantize": "bar", "fade_ms": 250}
+}
+```
+- Everything is counted in samples: beat k starts at floor(k * 60 * rate / bpm + 0.5). A track plays its intro
+  (bars before `loop_start_bar`) once, then loops to its last bar. Stems of a track start together and stay locked:
+  turn layers up and down with the player's stem gain (drums in when the action starts).
+- `quantize`: `immediate`, `beat`, `bar`, `phrase` (`phrase_bars`, default 4) or `loop_end`. `fade_ms` fades the old
+  track out from the switch point. `sync` enters the new track at the same place in its bar (same BPM and meter). A
+  `stinger` plays at the switch point and the new track enters after the stinger's `bars`. Rules match the exact
+  pair first, then `"from": "*"`, then `"to": "*"`, then `default_transition`.
+- `python tools/audio/music.py loop raw/explore.wav --bpm 96 --bars 9 --out assets/audio/music/explore_pads.wav` cuts
+  a render or recording to whole bars, adds what rings past the loop end back onto the start (no click, the tail is
+  kept) and writes the loop point on the grid (a 'smpl' chunk Godot and Unity read). `validate data/music.json --root
+  assets/audio` checks rates, stem lengths and shapes, loop points on the grid, stingers and the map. `plan --from
+  explore --to combat --at 3.2` shows when a change would happen; `tempo` estimates a file's BPM (half or double is
+  possible) to see whether a generated piece kept the tempo it was asked for; `grid` prints bar times.
+- Engines: src/core/musicDirector.ts and src/shell/musicPlayer.ts (web; route it through the audio player's music
+  bus with `player.bus("music")` so the slider and dialogue ducking apply). They follow data/golden/music.json,
+  written by `music.py vectors --write` (the reference); the web player's Chromium check renders transitions offline
+  and finds every switch, stinger, loop wrap and bar marker on its planned sample (44.1 kHz at 96 BPM included,
+  where beats fall on half samples). Godot, Unity and LÖVE players are not written yet: port musicDirector.ts and
+  test it against the same vectors.
+
 ## Voice
 - Pre-generated lines: `python tools/audio/fish_tts.py say --voice <id> --text "..." --out <voice>.mp3` (Fish Audio,
   your key in `FISH_API_KEY`; `check` shows the developer API balance, which is billed apart from a subscription;
@@ -233,6 +272,11 @@ one go and checks it as one. Describe the sets in data/sound_sets.json (you crea
   3, see the SFX section) and sets each file to its bus's house level (see Loudness below: the loudest 400 ms for
   one-shots, integrated loudness for loops, true peak never over -1 dBTP; loop points are kept). Files are named
   `<set>_<variant>_<n>.wav` in `<out_dir>/<set>/`, without `_<n>` when `takes` is 1.
+- For one-shots with `onsets`, `make` renders `renders` takes (default twice `takes`, at least 4), counts each
+  one's attacks and keeps the ones with the right count first, in local_sfx's rank order; it only fills up with the
+  others when too few pass (check then flags them). In the kit's own run, Stable Audio 3 answered "a single short
+  crunch" in packed snow with 0.6 to 0.8 s of crunching: 4 of 16 renders counted as one step with `attack_gap_s`
+  0.45, so snow sits in its own set with `"renders": 16`.
 - `check` fails a set when a take is missing or extra, a one-shot has a different number of attacks than `onsets`
   (Stable Audio often answers "a footstep" with two or three), takes of one variant are more than 3 LU apart, a file
   is more than 2 LU from its bus level, a loop has no loop point or clicks at the seam, or a file has no sidecar

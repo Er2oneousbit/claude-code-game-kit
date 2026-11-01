@@ -112,6 +112,9 @@ jobs:
       - name: Audio director vectors are current
         run: python tools/audio/audio_events.py vectors --check
 
+      - name: Music director vectors are current
+        run: python tools/audio/music.py vectors --check
+
       - name: Credits match the asset log
         run: |
           if [ -f CREDITS.md ]; then python tools/credits.py --check --allow-placeholders; else echo "No CREDITS.md yet: run python tools/credits.py before the first release"; fi

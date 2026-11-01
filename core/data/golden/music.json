@@ -1,0 +1,423 @@
+{
+ "version": 1,
+ "tolerance": 0,
+ "about": "tools/audio/music.py vectors --write",
+ "cases": [
+  {
+   "type": "music_grid",
+   "name": "beat samples",
+   "steps": [
+    {
+     "bpm": 96,
+     "rate": 44100,
+     "k": 0,
+     "sample": 0
+    },
+    {
+     "bpm": 96,
+     "rate": 44100,
+     "k": 1,
+     "sample": 27563
+    },
+    {
+     "bpm": 96,
+     "rate": 44100,
+     "k": 3,
+     "sample": 82688
+    },
+    {
+     "bpm": 96,
+     "rate": 44100,
+     "k": 7,
+     "sample": 192938
+    },
+    {
+     "bpm": 96,
+     "rate": 44100,
+     "k": 64,
+     "sample": 1764000
+    },
+    {
+     "bpm": 96,
+     "rate": 44100,
+     "k": 1001,
+     "sample": 27590063
+    },
+    {
+     "bpm": 137.5,
+     "rate": 44100,
+     "k": 0,
+     "sample": 0
+    },
+    {
+     "bpm": 137.5,
+     "rate": 44100,
+     "k": 1,
+     "sample": 19244
+    },
+    {
+     "bpm": 137.5,
+     "rate": 44100,
+     "k": 3,
+     "sample": 57731
+    },
+    {
+     "bpm": 137.5,
+     "rate": 44100,
+     "k": 7,
+     "sample": 134705
+    },
+    {
+     "bpm": 137.5,
+     "rate": 44100,
+     "k": 64,
+     "sample": 1231593
+    },
+    {
+     "bpm": 137.5,
+     "rate": 44100,
+     "k": 1001,
+     "sample": 19262880
+    },
+    {
+     "bpm": 120,
+     "rate": 48000,
+     "k": 0,
+     "sample": 0
+    },
+    {
+     "bpm": 120,
+     "rate": 48000,
+     "k": 1,
+     "sample": 24000
+    },
+    {
+     "bpm": 120,
+     "rate": 48000,
+     "k": 3,
+     "sample": 72000
+    },
+    {
+     "bpm": 120,
+     "rate": 48000,
+     "k": 7,
+     "sample": 168000
+    },
+    {
+     "bpm": 120,
+     "rate": 48000,
+     "k": 64,
+     "sample": 1536000
+    },
+    {
+     "bpm": 120,
+     "rate": 48000,
+     "k": 1001,
+     "sample": 24024000
+    },
+    {
+     "bpm": 91.7,
+     "rate": 48000,
+     "k": 0,
+     "sample": 0
+    },
+    {
+     "bpm": 91.7,
+     "rate": 48000,
+     "k": 1,
+     "sample": 31407
+    },
+    {
+     "bpm": 91.7,
+     "rate": 48000,
+     "k": 3,
+     "sample": 94220
+    },
+    {
+     "bpm": 91.7,
+     "rate": 48000,
+     "k": 7,
+     "sample": 219847
+    },
+    {
+     "bpm": 91.7,
+     "rate": 48000,
+     "k": 64,
+     "sample": 2010033
+    },
+    {
+     "bpm": 91.7,
+     "rate": 48000,
+     "k": 1001,
+     "sample": 31438168
+    }
+   ]
+  },
+  {
+   "type": "music_plan",
+   "name": "transition plans",
+   "params": {
+    "version": 1,
+    "sample_rate": 44100,
+    "tracks": {
+     "explore": {
+      "bpm": 96,
+      "beats_per_bar": 4,
+      "bars": 8,
+      "loop_start_bar": 1,
+      "stems": {
+       "a": "x"
+      }
+     },
+     "combat": {
+      "bpm": 96,
+      "beats_per_bar": 4,
+      "bars": 4,
+      "stems": {
+       "a": "x"
+      }
+     },
+     "waltz": {
+      "bpm": 137.5,
+      "beats_per_bar": 3,
+      "bars": 6,
+      "stems": {
+       "a": "x"
+      }
+     }
+    },
+    "stingers": {
+     "alarm": {
+      "file": "s.wav",
+      "bars": 1
+     }
+    },
+    "transitions": [
+     {
+      "from": "explore",
+      "to": "combat",
+      "quantize": "beat",
+      "fade_ms": 120,
+      "sync": true
+     },
+     {
+      "from": "combat",
+      "to": "explore",
+      "quantize": "bar",
+      "fade_ms": 500
+     },
+     {
+      "from": "*",
+      "to": "waltz",
+      "quantize": "phrase",
+      "phrase_bars": 2,
+      "stinger": "alarm"
+     },
+     {
+      "from": "waltz",
+      "to": "*",
+      "quantize": "loop_end"
+     }
+    ],
+    "default_transition": {
+     "quantize": "bar",
+     "fade_ms": 250
+    }
+   },
+   "steps": [
+    {
+     "from": "explore",
+     "since": 0,
+     "entry": 0,
+     "to": "combat",
+     "now": 0,
+     "expect": {
+      "switch_at": 0,
+      "from_stop_at": 5292,
+      "fade": 5292,
+      "to_offset": 0,
+      "to_start_at": 0,
+      "stinger": null,
+      "stinger_at": null
+     }
+    },
+    {
+     "from": "explore",
+     "since": 0,
+     "entry": 0,
+     "to": "combat",
+     "now": 1,
+     "expect": {
+      "switch_at": 27563,
+      "from_stop_at": 32855,
+      "fade": 5292,
+      "to_offset": 27563,
+      "to_start_at": 27563,
+      "stinger": null,
+      "stinger_at": null
+     }
+    },
+    {
+     "from": "explore",
+     "since": 0,
+     "entry": 0,
+     "to": "combat",
+     "now": 27562,
+     "expect": {
+      "switch_at": 27563,
+      "from_stop_at": 32855,
+      "fade": 5292,
+      "to_offset": 27563,
+      "to_start_at": 27563,
+      "stinger": null,
+      "stinger_at": null
+     }
+    },
+    {
+     "from": "explore",
+     "since": 0,
+     "entry": 0,
+     "to": "combat",
+     "now": 27563,
+     "expect": {
+      "switch_at": 27563,
+      "from_stop_at": 32855,
+      "fade": 5292,
+      "to_offset": 27563,
+      "to_start_at": 27563,
+      "stinger": null,
+      "stinger_at": null
+     }
+    },
+    {
+     "from": "explore",
+     "since": 1000,
+     "entry": 0,
+     "to": "combat",
+     "now": 900000,
+     "expect": {
+      "switch_at": 910563,
+      "from_stop_at": 915855,
+      "fade": 5292,
+      "to_offset": 27563,
+      "to_start_at": 910563,
+      "stinger": null,
+      "stinger_at": null
+     }
+    },
+    {
+     "from": "explore",
+     "since": 0,
+     "entry": 0,
+     "to": "combat",
+     "now": 999999,
+     "expect": {
+      "switch_at": 1019813,
+      "from_stop_at": 1025105,
+      "fade": 5292,
+      "to_offset": 27563,
+      "to_start_at": 1019813,
+      "stinger": null,
+      "stinger_at": null
+     }
+    },
+    {
+     "from": "combat",
+     "since": 5000,
+     "entry": 0,
+     "to": "explore",
+     "now": 50000,
+     "expect": {
+      "switch_at": 115250,
+      "from_stop_at": 137300,
+      "fade": 22050,
+      "to_offset": 0,
+      "to_start_at": 115250,
+      "stinger": null,
+      "stinger_at": null
+     }
+    },
+    {
+     "from": "combat",
+     "since": 0,
+     "entry": 12345,
+     "to": "explore",
+     "now": 0,
+     "expect": {
+      "switch_at": 97905,
+      "from_stop_at": 119955,
+      "fade": 22050,
+      "to_offset": 0,
+      "to_start_at": 97905,
+      "stinger": null,
+      "stinger_at": null
+     }
+    },
+    {
+     "from": "explore",
+     "since": 0,
+     "entry": 0,
+     "to": "waltz",
+     "now": 70000,
+     "expect": {
+      "switch_at": 220500,
+      "from_stop_at": 231525,
+      "fade": 11025,
+      "to_offset": 0,
+      "to_start_at": 278231,
+      "stinger": "alarm",
+      "stinger_at": 220500
+     }
+    },
+    {
+     "from": "combat",
+     "since": 0,
+     "entry": 0,
+     "to": "waltz",
+     "now": 444444,
+     "expect": {
+      "switch_at": 661500,
+      "from_stop_at": 672525,
+      "fade": 11025,
+      "to_offset": 0,
+      "to_start_at": 719231,
+      "stinger": "alarm",
+      "stinger_at": 661500
+     }
+    },
+    {
+     "from": "waltz",
+     "since": 0,
+     "entry": 0,
+     "to": "explore",
+     "now": 10,
+     "expect": {
+      "switch_at": 346385,
+      "from_stop_at": 357410,
+      "fade": 11025,
+      "to_offset": 0,
+      "to_start_at": 346385,
+      "stinger": null,
+      "stinger_at": null
+     }
+    },
+    {
+     "from": "waltz",
+     "since": 300,
+     "entry": 0,
+     "to": "combat",
+     "now": 600000,
+     "expect": {
+      "switch_at": 693070,
+      "from_stop_at": 704095,
+      "fade": 11025,
+      "to_offset": 0,
+      "to_start_at": 693070,
+      "stinger": null,
+      "stinger_at": null
+     }
+    }
+   ]
+  }
+ ]
+}

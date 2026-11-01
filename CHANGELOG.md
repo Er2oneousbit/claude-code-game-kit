@@ -105,6 +105,13 @@
 - Dialogue: `dialogue.py lint --pseudo` checks every line through the kit's pseudo-locale (40 % longer, the same
   `pseudo()` as the golden vectors) over the same voice timing, and warns where a translated subtitle would be too
   fast to read, too long for a cue, or a caption would not fit one line.
+- Adaptive music: a game's music.json describes tracks on a BPM and bar grid (intro plus loop, synced stems),
+  stingers and a transition map (now, next beat, bar, phrase or loop end, fades, synced entry); `tools/audio/music.py`
+  cuts bar-aligned loops, validates stems and loop points, plans transitions, estimates tempo and owns the golden
+  vectors `data/golden/music.json` (CI checks them); the web music player changes track on the exact planned sample.
+  Of the music models on hand, only code-made music (`chiptune.py`) or human-made music is recommended for anything
+  that ships; Stable Audio output stays out of examples and samples. Sound sets keep one-shots with the right number
+  of attacks first.
 - SOP-04 measures loudness instead of normalizing peaks, pointing at `tools/audio/loudness.py`. EVIDENCE.md: the 0.8.0
   rows (E69-E92) had one cell more than the table's header, so GitHub showed each finding in the Grade column; every
   row has seven cells again. New rows E100-E106 (Steam store pages, a CJK pixel font) and E120-E125 (loudness).

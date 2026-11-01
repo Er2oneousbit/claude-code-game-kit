@@ -116,7 +116,14 @@ export class AudioPlayer {
     this.user = userBusGains(this.data.buses, sliders);
   }
 
-  setBusVolume(bus: string, db: number): void {
+  /** A bus's gain node, to route other audio through it (musicPlayer.ts: the music bus, so sliders and ducking apply). */
+  bus(name: string): GainNode {
+    const node = this.buses[name];
+    if (!node) throw new Error(`unknown bus ${name}`);
+    return node;
+  }
+
+    setBusVolume(bus: string, db: number): void {
     if (!(bus in this.volumes)) throw new Error(`unknown bus ${bus}`);
     this.volumes[bus] = db;
   }

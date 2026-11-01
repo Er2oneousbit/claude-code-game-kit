@@ -142,6 +142,11 @@ def validate(data):
         onsets = s.get("onsets")
         if onsets is not None and (kind == "loop" or not isinstance(onsets, int) or onsets < 1):
             errors.append(f"{where}: onsets is a whole number 1 or more, for one-shots")
+        renders = s.get("renders", max(2 * takes, 4) if isinstance(takes, int) else 4)
+        if isinstance(renders, bool) or not isinstance(renders, int) or not (isinstance(takes, int) and
+                                                                               takes <= renders <= 64):
+            errors.append(f"{where}: renders must be a whole number from takes up to 64 (local_sfx renders this many "
+                          "and keeps the best)")
         gap = s.get("attack_gap_s", ATTACK_GAP_S)
         if isinstance(gap, bool) or not isinstance(gap, (int, float)) or not 0 <= gap <= 2:
             errors.append(f"{where}: attack_gap_s must be 0..2 seconds")
@@ -261,6 +266,32 @@ def sidecar(wav):
     return None
 
 
+def pick_takes(folder, stem, renders, paths, s):
+    """Keep the renders with the expected number of attacks first (in local_sfx's rank order), the rest after them
+    only to fill the set (check will flag those); rename them to the set's names; remove the other renders."""
+    names = [folder / f"{stem}.wav"] if renders == 1 else [folder / f"{stem}_{k}.wav" for k in range(1, renders + 1)]
+    def attacks(path):
+        chans, rate, _ = read_channels(path)
+        return len(onsets(chans, rate, s.get("attack_gap_s")))
+    found = [p for p in names if p.exists()]
+    good = [p for p in found if attacks(p) == s["onsets"]]
+    order = good + [p for p in found if p not in good]
+    if len(order) < len(paths):
+        raise ToolError(f"only {len(order)} usable render(s) for {len(paths)} take(s): raise renders")
+    for src, dst in zip(order, paths):
+        src.replace(dst)
+        side = src.with_suffix(".gen.json")
+        if side.exists():
+            side.replace(dst.with_suffix(".gen.json"))
+    for extra in order[len(paths):]:                       # renders this call made and did not keep
+        extra.unlink()
+        if extra.with_suffix(".gen.json").exists():
+            extra.with_suffix(".gen.json").unlink()
+    return (f"[pick] {len(good)} of {len(found)} render(s) have {s['onsets']} attack(s); kept "
+            f"{min(len(good), len(paths))} of those" + ("" if len(good) >= len(paths) else
+                                                         f" and {len(paths) - len(good)} that check will flag"))
+
+
 # ---- commands --------------------------------------------------------------------------------------------------------
 def make_synth(spec, path, meta, overwrite):
     params = sfx_synth.check_params(spec)
@@ -310,16 +341,26 @@ def cmd_make(args):
             else:
                 import local_sfx  # only here: it imports the ComfyUI client
                 takes = len(paths)
+                renders = s.get("renders", max(2 * takes, 4))
+                # one-shots with an attack count: keep every render under a scratch name, then pick by attacks
+                picky = kind == "oneshot" and bool(s.get("onsets"))
+                if picky and not args.overwrite:
+                    taken = [p for p in paths if p.exists()]
+                    if taken:
+                        raise ToolError(f"{taken[0].as_posix()} exists (use --overwrite); nothing was rendered")
+                stem = f"{name}_{v}__take" if picky else f"{name}_{v}"
                 argv = ["make", s["prompt"].replace("{}", spec), "--seconds", str(s["seconds"]),
-                        "--out", str(out_dir / name / f"{name}_{v}.wav"), "--variants", str(max(2 * takes, 4)),
-                        "--keep", str(takes), "--seed", str(args.seed)]
+                        "--out", str(out_dir / name / f"{stem}.wav"), "--variants", str(renders),
+                        "--keep", str(renders if picky else takes), "--seed", str(args.seed)]
                 argv += ["--loop"] if kind == "loop" else []
                 argv += ["--mono"] if s.get("mono") else []
-                argv += ["--overwrite"] if args.overwrite else []
+                argv += ["--overwrite"] if args.overwrite or picky else []
                 argv += ["--url", args.url] if args.url else []
                 rc = local_sfx.main(argv)
                 if rc:
                     raise ToolError(f"local_sfx exited {rc}")
+                if picky:
+                    print(pick_takes(out_dir / name, stem, renders, paths, s))
             for path in paths:
                 _, note = set_level(path, s["bus"], target, kind)
                 print(f"[ OK ] {path.as_posix()}: {note}")
