@@ -69,6 +69,23 @@ Manager or the project). **(verify)**
 Real numbers come from the editor's Playtest or a real browser (F12 > Performance), not headless smoke (software WebGL).
 MZ's FPS counter: F2 in a Playtest. **(verify)**
 
+## The shell, juice and accessibility in MZ (SOP-18 to SOP-20)
+MZ already has the shell's screens: Scene_Title, Scene_Menu, Scene_Options, Scene_Save and Scene_Load, a pause on
+focus loss (the "background" option) and its own save files. So the kit does not port the shell here; it maps the
+rules onto MZ (verify each against MZ itself: the overlay is not yet run against MZ).
+
+| Kit rule | In MZ |
+|---|---|
+| Settings saved and restored (SOP-19 step 2) | ConfigManager writes config.rpgsave; add new options by extending ConfigManager.makeData / applyData and Window_Options.makeCommandList in a plugin, and keep unknown keys when reading |
+| Versioned saves with migration (SOP-19 step 3) | DataManager.makeSaveContents / extractSaveContents: add a version field in a plugin and migrate in extractSaveContents; test the migration in Node like the other plugin rules |
+| Rebinding and prompts (SOP-19 step 4) | Input.keyMapper and Input.gamepadMapper hold the bindings; a rebinding screen is a plugin (community plugins exist, check their license). Prompts in messages use icons or text codes |
+| Text size and subtitles (SOP-20) | Window_Base.prototype.resetFontSettings and $gameSystem.mainFontSize() set the text size; messages are already text, so "subtitles" mean voiced lines also appear in the message window; a text-size option is a ConfigManager entry |
+| Shake and flash safety (SOP-18 step 3, F33, F34) | Event commands "Shake Screen" and "Flash Screen" and battle animations: add a reduce-motion option that scales $gameScreen.startShake power to 0, and limit $gameScreen.startFlash to three per second in a plugin |
+| Localization (SOP-19 step 5) | Database text and messages live in data/*.json: keep the source language there and load per-locale JSON in a plugin; the pseudo-locale check runs on the extracted strings in Node |
+
+The kit's golden vectors (data/golden/*.json) can still test any rule you write as engine-free plugin code, with the
+same Node test runner as GameCore.js.
+
 ## Packaging (release)
 - `python tools/dev.py build` makes `build/web/`, a plain copy for browsers (itch.io: zip the folder's contents).
 - For a release use the editor: File > Deployment > Web browsers, Windows or macOS, with **Exclude unused files** (smaller)
