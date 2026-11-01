@@ -58,7 +58,7 @@ Track it as you go: `docs/ASSET_LOG.md` column "AI-assisted?" should say `no`, `
 
 ## Audio specifics
 - Source files: WAV 48 kHz (or 44.1 kHz) 16 or 24-bit. Ship compressed (OGG) if size matters.
-- Measure loudness, not peaks: `tools/audio/loudness.py` gives integrated LUFS and true peak (E121), checks the whole
+- Measure loudness, not peaks: `tools/audio/wavesmith/loudness.py` gives integrated LUFS and true peak (E121), checks the whole
   mix against ASWG-R001 (home -24, portable -18 LKFS, true peak at most -1 dBTP, E120) and normalizes single assets
   to house starting levels (`docs/resources/audio.md` "Loudness"). Add short fades to avoid clicks.
 - Loops: verify loop points in the engine, not just the editor.

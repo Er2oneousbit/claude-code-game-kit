@@ -3,13 +3,13 @@
 # local_tts.py
 # Purpose : Spoken lines for your characters on your own GPU (Qwen3-TTS): design a character's voice from a text
 #           description once, then voice speech bubbles and barks in that same voice. Free per line, no account.
-# Usage   : python tools/audio/local_tts.py check                                 # is the TTS environment ready?
-#           python tools/audio/local_tts.py design "warm, cheerful middle-aged baker, slightly husky" \
+# Usage   : python tools/audio/wavesmith/wavesmith.py voice check                                 # is the TTS environment ready?
+#           python tools/audio/wavesmith/wavesmith.py voice design "warm, cheerful middle-aged baker, slightly husky" \
 #               --out assets_src/voice/baker_ref.wav                                # the character's voice, once
-#           python tools/audio/local_tts.py say --ref assets_src/voice/baker_ref.wav "Fresh bread, two coins!" \
+#           python tools/audio/wavesmith/wavesmith.py voice say --ref assets_src/voice/baker_ref.wav "Fresh bread, two coins!" \
 #               --out assets/audio/voice/baker_bread.wav
-#           python tools/audio/local_tts.py say --ref ... --lines docs/dialog/baker.txt --out assets/audio/voice/baker.wav
-#           python tools/audio/local_tts.py say --ref golem_ref.wav "Who... disturbs... me" --pitch -5 --ring-hz 40 \
+#           python tools/audio/wavesmith/wavesmith.py voice say --ref ... --lines docs/dialog/baker.txt --out assets/audio/voice/baker.wav
+#           python tools/audio/wavesmith/wavesmith.py voice say --ref golem_ref.wav "Who... disturbs... me" --pitch -5 --ring-hz 40 \
 #               --out golem_1.wav                                                    # deeper / metallic than any human voice
 # Needs   : Python 3.8+ for this file. The model runs in a separate environment (Python 3.10+, CUDA torch, qwen-tts)
 #           named by --python or LOCAL_TTS_PYTHON; setup commands in docs/resources/audio.md. NVIDIA GPU.
@@ -49,7 +49,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[1]))
 import fetch_asset  # noqa: E402  (shared ASSET_LOG helpers)
 from wavfile import read_wav, stats, write_wav  # noqa: E402
 
@@ -296,7 +296,7 @@ def write_log(args, files, metas):
                                   f"model {m['model']}", args.notes or ""] if x)
     row = (f"| {asset_id} | voice | {', '.join(f'`{r}`' for r in rels)} | Qwen3-TTS (local) | generated locally | "
            f"{fetch_asset.md_cell(LICENSE)} |  | pre-generated | no | {m['date']} | {fetch_asset.md_cell(notes)} |")
-    evidence = (f"{asset_id}  voice  generated {m['date']} with tools/audio/local_tts.py\n"
+    evidence = (f"{asset_id}  voice  generated {m['date']} with tools/audio/wavesmith/local_tts.py\n"
                 f"Model    : {m['model']}\nLicense  : {LICENSE}\n"
                 f"Voice    : {json.dumps(voice, ensure_ascii=False)}\n"
                 + "".join(f"File     : {r}  SHA-256 {x['sha256']}  text: {x['text']}\n" for r, x in zip(rels, metas)))

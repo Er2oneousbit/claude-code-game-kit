@@ -6,7 +6,7 @@
 #           missing sidecars); levels (bus level, spread between takes, true peak cap); loops (loop point kept by
 #           leveling, missing loop point); licenses (--ship); the sets file's errors; audio_events output that
 #           validates; make for both generators (local_sfx replaced by a stand-in, no GPU).
-# Usage   : python tools/audio/test_sound_sets.py
+# Usage   : python tools/audio/wavesmith/test_sound_sets.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
@@ -330,7 +330,7 @@ class SoundSetsExam(unittest.TestCase):
             del sys.modules["local_sfx"]
 
     def test_docs_example_validates(self):
-        doc = (Path(__file__).resolve().parents[2] / "docs" / "resources" / "audio.md").read_text(encoding="utf-8")
+        doc = (Path(__file__).resolve().parents[3] / "docs" / "resources" / "audio.md").read_text(encoding="utf-8")
         section = doc.split("## Sound sets", 1)[1]
         example = json.loads(section.split("```json", 1)[1].split("```", 1)[0])
         self.assertEqual(S.validate(example), [])

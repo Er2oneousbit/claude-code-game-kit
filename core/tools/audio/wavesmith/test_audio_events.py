@@ -5,7 +5,7 @@
 #           rules hold (no back-to-back repeats, shuffle rounds, cooldowns, voice caps, ducking ramps, time order),
 #           validate catches each kind of broken events file, audit warns about repetition, loud takes and missing
 #           captions, and data/golden/audio.json is current.
-# Usage   : python tools/audio/test_audio_events.py
+# Usage   : python tools/audio/wavesmith/test_audio_events.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
@@ -190,7 +190,7 @@ class AudioEventsExam(unittest.TestCase):
 
     def test_the_docs_example_validates(self):
         # the JSON shown in docs/resources/audio.md ("Sound events") must stay a valid events file
-        doc = (Path(__file__).resolve().parents[2] / "docs" / "resources" / "audio.md").read_text(encoding="utf-8")
+        doc = (Path(__file__).resolve().parents[3] / "docs" / "resources" / "audio.md").read_text(encoding="utf-8")
         section = doc[doc.index("## Sound events"):]
         block = section[section.index("```json") + 7:section.index("```", section.index("```json") + 7)]
         data = json.loads(block)

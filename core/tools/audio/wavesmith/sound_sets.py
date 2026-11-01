@@ -5,11 +5,11 @@
 #           out of five, a double step among single ones, or one take 6 dB louder than its siblings: footsteps per
 #           surface and ambience beds (local_sfx.py, Stable Audio 3 on your own ComfyUI), and a UI set made from code
 #           (sfx_synth.py, ship-safe: no model, no third-party rights). Writes the audio_events.json entries for them.
-# Usage   : python tools/audio/sound_sets.py ui --out assets/audio/ui                  # the code-made UI set (12)
-#           python tools/audio/sound_sets.py plan data/sound_sets.json                 # what make would render
-#           python tools/audio/sound_sets.py make data/sound_sets.json --set footsteps # GPU: ComfyUI must be up
-#           python tools/audio/sound_sets.py check data/sound_sets.json               # --ship: license must allow it
-#           python tools/audio/sound_sets.py events data/sound_sets.json --root assets/audio --merge data/audio_events.json
+# Usage   : python tools/audio/wavesmith/wavesmith.py sets ui --out assets/audio/ui                  # the code-made UI set (12)
+#           python tools/audio/wavesmith/wavesmith.py sets plan data/sound_sets.json                 # what make would render
+#           python tools/audio/wavesmith/wavesmith.py sets make data/sound_sets.json --set footsteps # GPU: ComfyUI must be up
+#           python tools/audio/wavesmith/wavesmith.py sets check data/sound_sets.json               # --ship: license must allow it
+#           python tools/audio/wavesmith/wavesmith.py sets events data/sound_sets.json --root assets/audio --merge data/audio_events.json
 # Needs   : Python 3.8+ only; `make` with local_sfx sets needs a running ComfyUI with Stable Audio 3 (see local_sfx.py)
 # Exit    : 0 ok, 1 check problems (or make failures), 2 usage or unreadable files
 # Notes   : A sets file: {"version": 1, "out_dir": "assets/audio", "target": "home", "sets": {<name>: {"generator":

@@ -3,7 +3,7 @@
 // Purpose : Runs data/golden/music.json through the TypeScript music director: the beat grid in samples and every
 //           scripted transition plan (quantize, loop wrap, fades, stingers, synced entries), exactly.
 // Usage   : python tools/dev.py test
-// Notes   : A case type this file does not know fails, so a new vector type added to tools/audio/music.py cannot be
+// Notes   : A case type this file does not know fails, so a new vector type added to tools/audio/wavesmith/music.py cannot be
 //           skipped silently. Expected values come only from the JSON.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------

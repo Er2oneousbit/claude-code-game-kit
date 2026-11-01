@@ -1069,7 +1069,7 @@
    "type": "audio_director"
   }
  ],
- "spec": "tools/audio/audio_events.py",
+ "spec": "tools/audio/wavesmith/audio_events.py",
  "tolerance": 1e-06,
  "version": 1
 }

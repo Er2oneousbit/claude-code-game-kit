@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // dialogue.ts
-// Purpose : Reads dialogue.built.json (the kit's dialogue format v0, written by the dialogue tools in tools/audio
-//           or by hand) and answers what a subtitle bar or typewriter shows at a given time.
+// Purpose : Reads dialogue.built.json (the kit's dialogue format v0, written by Wavesmith's dialogue subcommand,
+//           tools/audio/wavesmith, or by hand) and answers what a subtitle bar or typewriter shows at a given time.
 // Usage   : const d = parseDialogue(jsonText)                  // throws on a file that is not v0-shaped
 //           const d = dialogueFrom(parsedObject)               // the same for JSON a bundler already parsed
 //           const line = d.lines["baker.greet"]

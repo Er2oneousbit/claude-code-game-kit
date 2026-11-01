@@ -10,7 +10,7 @@
 //                           StartVoice(r.Voice, dir.FileOf("step_stone", r.Variant), r.PitchRatio, r.GainDb); }
 //           each frame: foreach (var kv in dir.Duck(nowMs)) SetBusDuckDb(kv.Key, kv.Value);
 // Notes   : No UnityEngine types (EditMode tests run it): this class only decides, an AudioSource wrapper plays.
-//           The spec is tools/audio/audio_events.py; every step of data/golden/audio.json must come out the same.
+//           The spec is tools/audio/wavesmith/audio_events.py; every step of data/golden/audio.json must come out the same.
 //           Parity rules: Park-Miller random source in long arithmetic (products stay below 2^53, no bit
 //           operations), one generator per event seeded from its ASCII id, a fixed draw order (variant, pitch,
 //           volume) and a rejected play (cooldown, voice cap) draws nothing. Times are milliseconds as double

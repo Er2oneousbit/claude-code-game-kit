@@ -4,6 +4,17 @@
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
 ## 0.8.1 (unreleased)
+- Wavesmith: the audio tools are one package, `tools/audio/wavesmith/`, with one front door (`wavesmith.py list`,
+  `check`, `test`, and a subcommand per tool: loudness, events, sets, dialogue, music, babble, voice, sfx, synth,
+  chiptune, eleven, fish, wav). Every module keeps its name and still runs on its own; docs, CI, the engines'
+  headers and the golden files point at the new paths.
+- Upgrading from 0.8.0: `new_game.py --upgrade` adds `tools/audio/wavesmith/` but never deletes kit files, so the
+  old copies stay in the game's tools/audio/ folder (they still run, but go stale). Delete these files directly in
+  tools/audio/ (not in wavesmith/): babble.py, chiptune.py, eleven_audio.py, fish_tts.py, flacfile.py, local_sfx.py,
+  local_tts.py, local_tts_worker.py, sfx_synth.py, wavfile.py and their exams (test_babble.py, test_chiptune.py,
+  test_eleven_audio.py, test_fish_tts.py, test_flacfile.py, test_local_sfx.py, test_local_tts.py, test_sfx_synth.py,
+  test_wavfile.py). The 0.7.x releases shipped only sfx_synth.py, chiptune.py, wavfile.py, eleven_audio.py,
+  fish_tts.py and their exams. Keep tools/audio/wavesmith/.
 - Dotwork: new `uikit` lane: one Godot Theme (`assets/ui/theme_<name>.tres`) for every settings / pause menu control
   in every state (buttons, check boxes, switches, sliders, option buttons, popup menus, scroll bars, tabs, line edits,
   spin boxes, tooltips, item lists, progress bars, labels, panels, separators), drawn in code in the window styles.
@@ -74,7 +85,7 @@
   16 GB card (it needed changes to load offline and on that GPU, and its shapes on pixel art were wrong), TRELLIS.2
   needs 24 GB, and Hunyuan3D 2.0's licence excludes the EU, UK and South Korea, so no image-to-3D model is
   recommended; the 2.5D path is the `diorama` lane. E107-E112 join EVIDENCE.md (E112, the trial itself, graded X).
-- `tools/audio/loudness.py`: measure integrated loudness (ITU-R BS.1770-5), loudness range (EBU Tech 3342) and true
+- `tools/audio/wavesmith/loudness.py`: measure integrated loudness (ITU-R BS.1770-5), loudness range (EBU Tech 3342) and true
   peak; check a whole-game capture against Sony's ASWG-R001 targets (home -24, portable -18 LKFS, true peak -1 dBTP,
   at least 30 minutes); normalize single assets to labeled house levels with a true-peak ceiling. No installs.
   Checked against pyloudnorm and ffmpeg on 815 files; its true peak reads clipped audio up to 0.84 dB closer to an
@@ -83,16 +94,16 @@
 - Audio events: describe each sound once in data/audio_events.json (takes, pitch and volume ranges, no-repeat or
   shuffle picks, voice caps with stealing, cooldowns, buses, dialogue ducking). An audio director in Godot, LÖVE,
   web, web-3d and Unity makes the same decisions from the same seed (golden vectors `data/golden/audio.json`, owned
-  by `tools/audio/audio_events.py vectors --write / --check`, which CI also runs); the web overlay plays them
+  by `tools/audio/wavesmith/audio_events.py vectors --write / --check`, which CI also runs); the web overlay plays them
   through Web Audio. audio_events.py validates and audits the file (repetition, loudness spread between takes,
   missing captions). Only the web overlay wires the director to a player so far.
-- Dialogue: `tools/audio/dialogue.py` builds a game's dialogue source and its voice files into the dialogue.built.json
+- Dialogue: `tools/audio/wavesmith/dialogue.py` builds a game's dialogue source and its voice files into the dialogue.built.json
   the shells read (per-character typewriter reveal, exact from babble timelines and estimated from other voice files),
   subtitle cues that follow Xbox Accessibility Guideline 104 and the Netflix timed text guides (40 characters, two
   lines, 5/6 s to 7 s, 20 characters a second, 17 for children), SFX captions from audio_events.json, lint, and SRT /
   WebVTT export with the speaker named on every change. The built format gains two optional fields (`max_cue_s`,
   `directional` on captions); the shells' readers load it unchanged.
-- Sound sets: `tools/audio/sound_sets.py` makes and checks whole families of sounds (footsteps per surface and
+- Sound sets: `tools/audio/wavesmith/sound_sets.py` makes and checks whole families of sounds (footsteps per surface and
   ambience beds through local_sfx, takes leveled to their bus; a twelve-sound UI set made from code, ship-safe) and
   fails a set on missing or extra takes, double attacks in one-shots, takes more than 3 LU apart, loops without a
   clean loop point, or files with no licence record (`check --ship` also fails Stable Audio output until its licence
@@ -106,7 +117,7 @@
   `pseudo()` as the golden vectors) over the same voice timing, and warns where a translated subtitle would be too
   fast to read, too long for a cue, or a caption would not fit one line.
 - Adaptive music: a game's music.json describes tracks on a BPM and bar grid (intro plus loop, synced stems),
-  stingers and a transition map (now, next beat, bar, phrase or loop end, fades, synced entry); `tools/audio/music.py`
+  stingers and a transition map (now, next beat, bar, phrase or loop end, fades, synced entry); `tools/audio/wavesmith/music.py`
   cuts bar-aligned loops, validates stems and loop points, plans transitions, estimates tempo and owns the golden
   vectors `data/golden/music.json` (CI checks them); the web music player changes track on the exact planned sample.
   Of the music models on hand, only code-made music (`chiptune.py`) or human-made music is recommended for anything
@@ -116,7 +127,7 @@
   and stops a take that never ends (a per-line cap at about twice a natural reading; the take is not kept and the run
   says which line to voice again). Measured in five languages with Whisper and a speaker model: German, Spanish and
   French are usable after a listen, Japanese needs a native listener.
-- SOP-04 measures loudness instead of normalizing peaks, pointing at `tools/audio/loudness.py`. EVIDENCE.md: the 0.8.0
+- SOP-04 measures loudness instead of normalizing peaks, pointing at `tools/audio/wavesmith/loudness.py`. EVIDENCE.md: the 0.8.0
   rows (E69-E92) had one cell more than the table's header, so GitHub showed each finding in the Grade column; every
   row has seven cells again. New rows E100-E106 (Steam store pages, a CJK pixel font) and E120-E125 (loudness).
 - `scripts/sync_examples.py`: a run with nothing to sync leaves the examples untouched (it added a history entry to

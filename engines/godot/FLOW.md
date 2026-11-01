@@ -53,8 +53,8 @@ keyboard and gamepad reach every control, and the focused one has an outline.
   everything), reduce motion and shake strength (`Shell.effective_shake()`), soften flashes (the `FlashLimiter`
   always applies; this setting also tones flashes down), toggle instead of hold, game speed (scales game time),
   difficulty (stored for the game to read).
-- **Subtitles**: `SubtitleBar` reads `data/dialogue/sample.built.json` (format v0 of the dialogue tools in
-  tools/audio: cues for a classic bar, per-character reveal times for a typewriter; unknown fields are ignored).
+- **Subtitles**: `SubtitleBar` reads `data/dialogue/sample.built.json` (format v0 of Wavesmith's dialogue
+  subcommand, tools/audio/wavesmith: cues for a classic bar, per-character reveal times for a typewriter; unknown fields are ignored).
 - **Juice demo** (`scripts/game/juice_demo.gd`, debug builds): hit the box for shake, hitstop, squash on a spring and
   a limited flash; follow camera with a deadzone; buffered jump with coyote time; a held guard; a subtitle line.
   Hitstop and the flash limiter run on real time; everything else on game time (after hitstop and game speed).

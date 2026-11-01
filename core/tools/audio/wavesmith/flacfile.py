@@ -7,8 +7,8 @@
 #           tags never reach the WAV.
 # Usage   : from flacfile import read_flac
 #           samples, rate, channels = read_flac("take.flac")       # floats in -1..1, interleaved L R L R
-#           python tools/audio/flacfile.py info take.flac          # rate, channels, bits, length, MD5 check
-#           python tools/audio/flacfile.py towav take.flac --out take.wav
+#           python tools/audio/wavesmith/flacfile.py info take.flac          # rate, channels, bits, length, MD5 check
+#           python tools/audio/wavesmith/flacfile.py towav take.flac --out take.wav
 # Needs   : Python 3.8+ only
 # Exit    : 0 ok, 1 the file decodes wrong (CRC or MD5 mismatch, truncated), 2 usage, not FLAC, or unsupported
 # Notes   : Scope is what ffmpeg's FLAC encoder writes (ComfyUI's SaveAudio uses it): 16- or 24-bit, mono or

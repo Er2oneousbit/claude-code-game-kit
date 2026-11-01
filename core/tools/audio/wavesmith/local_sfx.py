@@ -4,14 +4,14 @@
 # Purpose : Sound effects and ambience loops from a text prompt on your own GPU: Stable Audio 3 through a local
 #           ComfyUI. Renders several takes (seeds), cleans each one up (trims silence, normalizes, makes loops
 #           seamless), ranks them on technical checks and keeps the best few for you to pick by ear.
-# Usage   : python tools/audio/local_sfx.py check                         # ComfyUI up? Stable Audio 3 files there?
-#           python tools/audio/local_sfx.py make "heavy wooden door creaking open, iron hinges" --seconds 2.5 \
+# Usage   : python tools/audio/wavesmith/wavesmith.py sfx check                         # ComfyUI up? Stable Audio 3 files there?
+#           python tools/audio/wavesmith/wavesmith.py sfx make "heavy wooden door creaking open, iron hinges" --seconds 2.5 \
 #               --out build/audition/door.wav                              # 6 takes, keeps door_1 (best) .. door_3
-#           python tools/audio/local_sfx.py make "steady rain on a roof" --seconds 10 --loop \
+#           python tools/audio/wavesmith/wavesmith.py sfx make "steady rain on a roof" --seconds 10 --loop \
 #               --out assets/audio/amb/rain.wav --keep 1 --log
-#           python tools/audio/local_sfx.py make "short soft UI click" --seconds 0.4 --mono --model small-sfx \
+#           python tools/audio/wavesmith/wavesmith.py sfx make "short soft UI click" --seconds 0.4 --mono --model small-sfx \
 #               --out build/audition/click.wav
-#           python tools/audio/local_sfx.py make "..." --seconds 2 --out x.wav --dry-run   # show the graph, send nothing
+#           python tools/audio/wavesmith/wavesmith.py sfx make "..." --seconds 2 --out x.wav --dry-run   # show the graph, send nothing
 # Needs   : Python 3.8+ only, plus a running ComfyUI (0.43.0 or newer has Stable Audio 3 built in) with
 #           checkpoints/stable_audio_3_medium.safetensors (or _small_sfx) and text_encoders/t5gemma_b_b_ul2.safetensors
 #           from https://huggingface.co/Comfy-Org/stable-audio-3 . `check` names whatever is missing.
@@ -48,8 +48,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parent / "art"))
+sys.path.insert(0, str(HERE.parents[1]))
+sys.path.insert(0, str(HERE.parents[1] / "art"))
 import comfy_local as cl  # noqa: E402  (server URL rule, queue, wait, job errors)
 import fetch_asset  # noqa: E402  (shared ASSET_LOG helpers)
 import flacfile  # noqa: E402
@@ -261,7 +261,7 @@ def write_log(args, files, metas):
     row = (f"| {asset_id} | sfx | {', '.join(f'`{r}`' for r in rels)} | ComfyUI (local), Stable Audio 3 {m['model']} | "
            f"generated locally | {fetch_asset.md_cell(LICENSE)} |  | pre-generated | no | {m['date']} | "
            f"{fetch_asset.md_cell(notes)} |")
-    evidence = (f"{asset_id}  sfx  generated {m['date']} with tools/audio/local_sfx.py\n"
+    evidence = (f"{asset_id}  sfx  generated {m['date']} with tools/audio/wavesmith/local_sfx.py\n"
                 f"Model    : {m['checkpoint']} + {TEXT_ENCODER} ({MODEL_SOURCE})\n"
                 f"Settings : {json.dumps(SAMPLER)}, seconds {m['request_seconds']}\n"
                 f"Prompt   : {m['prompt']}\n"

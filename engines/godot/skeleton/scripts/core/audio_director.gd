@@ -9,7 +9,7 @@
 #           if d["result"] == "played": start files[d.variant] at d.pitch_ratio, d.gain_db; stop voice d.stolen
 #           each frame: for bus in (gains := director.duck(now_ms)): set that bus's duck gain to gains[bus] dB
 # Notes   : Decisions only: no AudioStreamPlayer here, so tests run it headless. The spec is
-#           tools/audio/audio_events.py; every step of data/golden/audio.json must come out the same
+#           tools/audio/wavesmith/audio_events.py; every step of data/golden/audio.json must come out the same
 #           (tests/test_golden_audio.gd). The random source is Park-Miller kept as an int (products stay below
 #           2^53), randomness is drawn in a fixed order (variant, pitch, volume) and never by a rejected play.
 #           Times are milliseconds as 64-bit floats; calls must come in time order. GDScript has no exceptions:

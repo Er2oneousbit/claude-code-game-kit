@@ -4,7 +4,7 @@
 # Purpose : Exam for chiptune.py: notes come out at the right pitch and time, loops get loop points
 #           and a click-free seam, ties and rests work, drums render, and song mistakes name the
 #           pattern, channel and step.
-# Usage   : python tools/audio/test_chiptune.py
+# Usage   : python tools/audio/wavesmith/test_chiptune.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------

@@ -13,7 +13,7 @@
 --           end
 --           each frame: for bus, db in pairs(director:duck(now_ms)) do set_bus_duck(bus, db) end
 -- Notes   : No love.* calls: this file only decides (the tests run it without a window or audio device), the
---           game's player plays. The spec is tools/audio/audio_events.py; every step of data/golden/audio.json
+--           game's player plays. The spec is tools/audio/wavesmith/audio_events.py; every step of data/golden/audio.json
 --           must come out the same. Park-Miller stays exact in doubles (products below 2^53, no bit operations),
 --           event ids are ASCII, and randomness is drawn in a fixed order (variant, pitch, volume) and never by a
 --           rejected play. Calls must come in time order. variant is 0-based (as in the vectors and the other

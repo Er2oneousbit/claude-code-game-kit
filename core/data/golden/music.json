@@ -1,7 +1,7 @@
 {
  "version": 1,
  "tolerance": 0,
- "about": "tools/audio/music.py vectors --write",
+ "about": "tools/audio/wavesmith/music.py vectors --write",
  "cases": [
   {
    "type": "music_grid",

@@ -5,7 +5,7 @@
 //           loop end, which transition rule applies, and the plan for a change (when, fade, stinger, entry point).
 // Usage   : const p = planTransition(music, "explore", sinceSample, entrySample, "combat", nowSample)
 //           p.switch_at, p.from_stop_at, p.to_start_at, p.to_offset, p.stinger_at  (all in samples)
-// Notes   : A port of tools/audio/music.py (the reference): every value is a whole number of samples and must match
+// Notes   : A port of tools/audio/wavesmith/music.py (the reference): every value is a whole number of samples and must match
 //           the golden file exactly. Beat k starts at floor(k * 60 * rate / bpm + 0.5): Math.round is not used, it
 //           rounds -0.5 differently from Python and is not the rule. Plain functions only (type-stripping safe).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)

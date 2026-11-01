@@ -26,7 +26,7 @@ import zlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "audio"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "audio" / "wavesmith"))
 import comfy_local as cl  # noqa: E402
 import flacfile  # noqa: E402  (decodes the audio to prove stripping kept it intact)
 from test_flacfile import FIXTURES as FLAC_FIXTURES  # noqa: E402  (a real encoder's FLAC, padding removed)

@@ -4,13 +4,13 @@
 # Purpose : Generate sound effects and music with the ElevenLabs API, save them in the project, and
 #           (with --log) add the ASSET_LOG row and evidence file: prompt, model, date, your plan and
 #           what that plan lets you do with the result. Opt-in: needs your own account and API key.
-# Usage   : python tools/audio/eleven_audio.py check                       # key works? which plan?
-#           python tools/audio/eleven_audio.py sfx --text "wooden door creaks open" --seconds 2 \
+# Usage   : python tools/audio/wavesmith/wavesmith.py eleven check                       # key works? which plan?
+#           python tools/audio/wavesmith/wavesmith.py eleven sfx --text "wooden door creaks open" --seconds 2 \
 #               --out assets/audio/sfx/door.mp3 --log
-#           python tools/audio/eleven_audio.py sfx --text "..." --variants 3 --out build/audition/door.mp3
-#           python tools/audio/eleven_audio.py music --prompt "slow eerie graveyard music box, instrumental" \
+#           python tools/audio/wavesmith/wavesmith.py eleven sfx --text "..." --variants 3 --out build/audition/door.mp3
+#           python tools/audio/wavesmith/wavesmith.py eleven music --prompt "slow eerie graveyard music box, instrumental" \
 #               --seconds 60 --instrumental --out assets/audio/music/night.wav --loop-crossfade 2 --log
-#           python tools/audio/eleven_audio.py music --prompt "..." --out x.mp3 --dry-run   # show, send nothing
+#           python tools/audio/wavesmith/wavesmith.py eleven music --prompt "..." --out x.mp3 --dry-run   # show, send nothing
 # Needs   : Python 3.8+ only. An ElevenLabs account and an API key in the ELEVENLABS_API_KEY environment
 #           variable (on Windows a user variable set in Settings works without restarting the terminal).
 # Exit    : 0 ok, 1 the service failed (try again later), 2 usage, key, plan or quota problem
@@ -51,7 +51,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[1]))
 from wavfile import crossfade_loop, write_wav  # noqa: E402
 import fetch_asset  # noqa: E402  (shared ASSET_LOG helpers)
 
@@ -321,7 +321,7 @@ def write_log(args, kind, files, meta, lic):
     row = (f"| {asset_id} | {kind if kind == 'sfx' else 'music'} | {', '.join(rels)} | "
            f"ElevenLabs API ({meta['endpoint']}) | ElevenLabs (generated) | {fetch_asset.md_cell(license_text)} | "
            f"{attribution} | pre-generated | no | {meta['date']} | {fetch_asset.md_cell(notes)} |")
-    evidence = (f"{asset_id}  {kind}  generated {meta['date']} with tools/audio/eleven_audio.py\n"
+    evidence = (f"{asset_id}  {kind}  generated {meta['date']} with tools/audio/wavesmith/eleven_audio.py\n"
                 f"Service  : ElevenLabs {meta['endpoint']}, model {meta['model_id']}\n"
                 f"Plan     : {meta.get('plan') or 'given with --plan'}\n"
                 f"License  : {license_text}\n"

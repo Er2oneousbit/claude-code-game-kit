@@ -4,9 +4,9 @@
 # Purpose : Render music written as a small JSON song file (notes in text patterns, like a tracker)
 #           into a WAV with retro channels: pulse waves, a triangle bass and noise drums. Loops get a
 #           'smpl' loop chunk, so Godot and Unity loop the track seamlessly with default settings.
-# Usage   : python tools/audio/chiptune.py assets/audio/src/theme.song.json --out assets/audio/music/theme.wav
-#           python tools/audio/chiptune.py song.json --out solo.wav --solo lead     # one channel, to check it
-#           python tools/audio/chiptune.py song.json --check                        # validate, print the layout
+# Usage   : python tools/audio/wavesmith/wavesmith.py chiptune assets/audio/src/theme.song.json --out assets/audio/music/theme.wav
+#           python tools/audio/wavesmith/wavesmith.py chiptune song.json --out solo.wav --solo lead     # one channel, to check it
+#           python tools/audio/wavesmith/wavesmith.py chiptune song.json --check                        # validate, print the layout
 # Needs   : Python 3.8+ only
 # Exit    : 0 ok, 1 render problem (silent, or a click at a loop seam where nothing starts), 2 usage or song
 #           error (with pattern and step)

@@ -17,14 +17,14 @@ Libraries, generators, editors, and implementation hints. Prompts for AI audio t
 - `freesound.org` for loops and ambience beds, per-file license (filter CC0).
 
 **Make your own**
-- This kit: `python tools/audio/chiptune.py <song>.json --out <music>.wav` renders a song written as text patterns
+- This kit: `python tools/audio/wavesmith/wavesmith.py chiptune <song>.json --out <music>.wav` renders a song written as text patterns
   (two pulse channels, triangle bass, noise drums) and writes loop points into the WAV, so Godot and Unity loop it
   with default import settings. The song format is in the script's header; `--solo <channel>` renders one part.
   Claude can write the song file; log the result as AI-assisted (`pre-generated`) in `docs/ASSET_LOG.md`.
-- Generated: `python tools/audio/eleven_audio.py music --prompt "..." --instrumental --out <music>.wav --loop-crossfade 2 --log`
+- Generated: `python tools/audio/wavesmith/wavesmith.py eleven music --prompt "..." --instrumental --out <music>.wav --loop-crossfade 2 --log`
   (ElevenLabs, your API key, a paid plan for music). Suno has no official API (third-party "Suno API" sites resell
   their own credits and do not carry your plan's rights): use its web app, then
-  `python tools/audio/wavfile.py loop <download>.wav --crossfade 2 --end <s> --out <music>.wav` for a seamless loop.
+  `python tools/audio/wavesmith/wavesmith.py wav loop <download>.wav --crossfade 2 --end <s> --out <music>.wav` for a seamless loop.
 - `LMMS` (free DAW), `BeepBox` (browser chiptune), `Bosca Ceoil` (simple tracker), `Furnace` (chip tracker),
   `FamiTracker`, `SunVox`, `Reaper` (cheap, full DAW), `Cakewalk`/`Ardour` (free DAWs).
 - Sample sources: `freesound.org`, Sonniss bundles (see SFX).
@@ -43,7 +43,7 @@ Suno: paid plans grant commercial use for tracks made while subscribed, free-pla
 Prompt patterns: `docs/BRIEFS.md` > Music with Suno. Log prompts and outputs in `ASSET_LOG.md` if used.
 
 ## Adaptive music: bars, loops, stems, transitions
-Describe the music once in data/music.json (you create it); `tools/audio/music.py` checks it and its files, and each
+Describe the music once in data/music.json (you create it); `tools/audio/wavesmith/music.py` checks it and its files, and each
 engine's music player changes track on the exact sample the transition map allows.
 ```json
 {
@@ -68,7 +68,7 @@ engine's music player changes track on the exact sample the transition map allow
   track out from the switch point. `sync` enters the new track at the same place in its bar (same BPM and meter). A
   `stinger` plays at the switch point and the new track enters after the stinger's `bars`. Rules match the exact
   pair first, then `"from": "*"`, then `"to": "*"`, then `default_transition`.
-- `python tools/audio/music.py loop raw/explore.wav --bpm 96 --bars 9 --out assets/audio/music/explore_pads.wav` cuts
+- `python tools/audio/wavesmith/wavesmith.py music loop raw/explore.wav --bpm 96 --bars 9 --out assets/audio/music/explore_pads.wav` cuts
   a render or recording to whole bars, adds what rings past the loop end back onto the start (no click, the tail is
   kept) and writes the loop point on the grid (a 'smpl' chunk Godot and Unity read). `validate data/music.json --root
   assets/audio` checks rates, stem lengths and shapes, loop points on the grid, stingers and the map. `plan --from
@@ -82,14 +82,14 @@ engine's music player changes track on the exact sample the transition map allow
   test it against the same vectors.
 
 ## Voice
-- Pre-generated lines: `python tools/audio/fish_tts.py say --voice <id> --text "..." --out <voice>.mp3` (Fish Audio,
+- Pre-generated lines: `python tools/audio/wavesmith/wavesmith.py fish say --voice <id> --text "..." --out <voice>.mp3` (Fish Audio,
   your key in `FISH_API_KEY`; `check` shows the developer API balance, which is billed apart from a subscription;
   `voices --licensed --search <words>` finds a voice ID). ElevenLabs and others work too (`docs/BRIEFS.md`, Voice).
 - Lines written while the game runs (an LLM NPC) cannot be pre-recorded: see the live voice in
   `examples/gatekeeper-godot` and the key rules in `SOP-15`.
 - Never pick a library voice that imitates a real person or a famous character, even if it is marked licensed.
 - Babble instead of words (the gibberish blips many 2D games play while a speech bubble types out): this kit's
-  `python tools/audio/babble.py "Halt! Who goes there?" --voice knight --out assets/audio/voice/halt.wav` makes it
+  `python tools/audio/wavesmith/wavesmith.py babble "Halt! Who goes there?" --voice knight --out assets/audio/voice/halt.wav` makes it
   from code, so there is no account, cost or license question. Voices: baker, knight, smith, sprite, golem
   (`--list`; tune with `--set f0=... --set metal=...`); `--variants 3` writes takes to compare, `--lines <file>`
   voices a whole script. Each WAV gets `<name>.timeline.json` with the time each character should appear: drive
@@ -97,10 +97,10 @@ engine's music player changes track on the exact sample the transition map allow
   `--bank-dir <folder>` swaps the synth for recorded syllables (`ba.wav`, `ko.wav`, ...) if you want a real voice's
   colour.
 
-**Local voices, on your own GPU** (`tools/audio/local_tts.py`, Qwen3-TTS; no account, nothing per line)
+**Local voices, on your own GPU** (`tools/audio/wavesmith/local_tts.py`, Qwen3-TTS; no account, nothing per line)
 - Design a character's voice once from a description, then voice every line in it:
-  `python tools/audio/local_tts.py design "gruff older blacksmith, deep gravelly voice, slow speech" --out
-  assets_src/voice/smith_ref.wav`, then `python tools/audio/local_tts.py say --ref assets_src/voice/smith_ref.wav
+  `python tools/audio/wavesmith/wavesmith.py voice design "gruff older blacksmith, deep gravelly voice, slow speech" --out
+  assets_src/voice/smith_ref.wav`, then `python tools/audio/wavesmith/wavesmith.py voice say --ref assets_src/voice/smith_ref.wav
   --lines docs/dialog/smith.txt --out assets/audio/voice/smith.wav` (`smith_1.wav`, `smith_2.wav` ...). Listen to
   the reference first; a different `--seed` or a clearer description gives another voice. Spoken barks work as
   plain words ("Hyah!", "Ha ha ha!"). For voices deeper or stranger than a person: `--pitch -5` (a giant, also
@@ -140,7 +140,7 @@ engine's music player changes track on the exact sample the transition map allow
   uv venv tts-env --python 3.12
   uv pip install --python tts-env qwen-tts torch torchaudio --torch-backend cu130   # your CUDA: cu128, cu126 ...
   setx LOCAL_TTS_PYTHON "<full path>\tts-env\Scripts\python.exe"                     # macOS/Linux: export ... /bin/python
-  python tools/audio/local_tts.py check        # names what is missing: the env, torch, qwen-tts, or CUDA
+  python tools/audio/wavesmith/wavesmith.py voice check        # names what is missing: the env, torch, qwen-tts, or CUDA
   ```
   Weights download on first use into the Hugging Face cache (`HF_HOME`, default `~/.cache/huggingface`):
   Qwen3-TTS-12Hz-1.7B-VoiceDesign (design) and Qwen3-TTS-12Hz-1.7B-Base (say), about 4.3 GB each;
@@ -179,13 +179,13 @@ engine's music player changes track on the exact sample the transition map allow
 - Warning: BBC Sound Effects archive license is non-commercial. Fine for learning, not for a Steam release. **(verify)**
 
 **Generators (retro SFX in seconds)**
-- This kit: `python tools/audio/sfx_synth.py jump --variants 5 --out build/audition/jump.wav` writes five takes to
+- This kit: `python tools/audio/wavesmith/wavesmith.py synth jump --variants 5 --out build/audition/jump.wav` writes five takes to
   compare (presets: jump, coin, land, fall, hit, pickup, blip, laser, explosion). Each WAV gets a JSON recipe;
   `--from <recipe>` re-renders it exactly and `--set key=value` tweaks one number.
-- Generated: `python tools/audio/eleven_audio.py sfx --text "old iron gate creaking open" --seconds 2 --out <sfx>.wav --mono --log`
+- Generated: `python tools/audio/wavesmith/wavesmith.py eleven sfx --text "old iron gate creaking open" --seconds 2 --out <sfx>.wav --mono --log`
   (about 10 credits per second; free-plan output is non-commercial and is logged as PLACEHOLDER).
-  Generated audio can come back very quiet: `python tools/audio/wavfile.py stats|normalize <file>`.
-- Local, on your own GPU (no account, no per-sound cost): `python tools/audio/local_sfx.py make "heavy wooden door
+  Generated audio can come back very quiet: `python tools/audio/wavesmith/wavesmith.py wav stats|normalize <file>`.
+- Local, on your own GPU (no account, no per-sound cost): `python tools/audio/wavesmith/wavesmith.py sfx make "heavy wooden door
   creaking open" --seconds 2.5 --out build/audition/door.wav` renders 6 takes with Stable Audio 3 through a local
   ComfyUI, trims and normalizes them, and keeps the best 3 (`door_1.wav` is the top-ranked) with a `.gen.json` each.
   `--loop` makes ambience beds loop seamlessly, `--mono` suits positional one-shots, `--model small-sfx` gives a
@@ -217,7 +217,7 @@ engine's music player changes track on the exact sample the transition map allow
 
 **Edit and process**
 - `Audacity` (free), `Reaper`, `Ocenaudio`. Normalize, trim silence, add tiny fades to avoid clicks.
-- FLAC to WAV with nothing installed: `python tools/audio/flacfile.py towav <file>.flac --out <file>.wav` (16/24-bit,
+- FLAC to WAV with nothing installed: `python tools/audio/wavesmith/flacfile.py towav <file>.flac --out <file>.wav` (16/24-bit,
   mono/stereo; checks the file's MD5). Tags do not carry over, which matters for ComfyUI's FLACs: they hold the
   full prompt and workflow, local paths included (`tools/art/comfy_local.py strip` cleans a FLAC in place).
 - Layer 2 to 3 sounds per important event (impact plus tail plus pitch variation). Randomize pitch ±5 percent
@@ -254,7 +254,7 @@ many copies may sound at once, a minimum gap between plays, and how far dialogue
   `max_voices` defaults to 8, `pitch_semitones` and `volume_db` to no change. Event ids are lowercase ASCII.
 - Ducking is a straight line in dB: down to `depth_db` over `attack_ms` while anything plays on the trigger bus,
   back over `release_ms` after it stops; a new line during the release dips again from where it is.
-- `python tools/audio/audio_events.py validate data/audio_events.json --root assets/audio` checks the file and that
+- `python tools/audio/wavesmith/wavesmith.py events validate data/audio_events.json --root assets/audio` checks the file and that
   every take exists. `audit --root assets/audio` warns about sounds that will repeat identically (fewer than 3 takes
   and no pitch range), `random` picks, takes that differ by more than 3 LU (fix with `loudness.py normalize`), and
   missing captions (deaf and hard-of-hearing players miss uncaptioned sounds; UI and music are exempt). With
@@ -269,7 +269,7 @@ many copies may sound at once, a minimum gap between plays, and how far dialogue
 
 ## Sound sets: footsteps per surface, ambience beds, a UI set
 Sounds come in families, and a family fails in ways one file never shows: footsteps for four surfaces out of five, a
-"footstep" that is two steps, one take much louder than its siblings. `tools/audio/sound_sets.py` makes a family in
+"footstep" that is two steps, one take much louder than its siblings. `tools/audio/wavesmith/sound_sets.py` makes a family in
 one go and checks it as one. Describe the sets in data/sound_sets.json (you create it):
 ```json
 {
@@ -289,7 +289,7 @@ one go and checks it as one. Describe the sets in data/sound_sets.json (you crea
   }
 }
 ```
-- `python tools/audio/sound_sets.py ui --out assets/audio/ui` writes the built-in UI set from code: click, hover,
+- `python tools/audio/wavesmith/wavesmith.py sets ui --out assets/audio/ui` writes the built-in UI set from code: click, hover,
   confirm, back, error, toggle on and off, open, close, notify, a slider tick and a typewriter tick (`type`, for
   dialogue). Each file's `.sfx.json` says `"ship_safe": true`: no model and no samples, so no license question.
 - `plan` lists what `make` would render; `make` renders every variant (local_sfx sets need ComfyUI with Stable Audio
@@ -316,10 +316,10 @@ one go and checks it as one. Describe the sets in data/sound_sets.json (you crea
   `attack_gap_s` rather than deleting good takes.
 
 ## Loudness: measure, check the mix, normalize
-How loud a game sounds is measured, not guessed. `tools/audio/loudness.py` (no installs) gives the numbers the
+How loud a game sounds is measured, not guessed. `tools/audio/wavesmith/loudness.py` (no installs) gives the numbers the
 platform holders and broadcasters use: integrated loudness in LUFS (ITU-R BS.1770-5), loudness range in LU (EBU
 Tech 3342) and true peak in dBTP.
-- `python tools/audio/loudness.py measure "assets/audio/**/*.wav"`: one line per file (`--json` for scripts).
+- `python tools/audio/wavesmith/wavesmith.py loudness measure "assets/audio/**/*.wav"`: one line per file (`--json` for scripts).
   Files under 0.4 s have no integrated loudness and files under 3 s no loudness range; it says "n/a" there.
 - **Check the whole mix.** Sony's ASWG-R001 (v1.10, August 2013) is the published game target: the average loudness
   of the *whole* game, "measured as a whole" and not dialogue, music or effects separately, over "a minimum of 30
@@ -327,7 +327,7 @@ Tech 3342) and true peak in dBTP.
   **-18 LKFS (+/-2) on handhelds and phones**, with true peak at most **-1 dBTP**. Record a 30-minute capture
   (Godot: `--write-movie capture.png` writes the frames plus a 32-bit `capture.wav`; it needs a window, Movie
   Maker crashes under `--headless`) and run
-  `python tools/audio/loudness.py check-mix capture.wav --target home`.
+  `python tools/audio/wavesmith/wavesmith.py loudness check-mix capture.wav --target home`.
   It refuses to judge a shorter capture unless you pass `--allow-short` (then the verdict says provisional), and
   says how far to move the master or which peak to tame.
 - **Single assets: kit house conventions, not a standard.** Before the mix is balanced by ear, assets start at
@@ -346,7 +346,7 @@ Tech 3342) and true peak in dBTP.
   EBU Tech 3341 cases 1-5 and 15-23 and Tech 3342 cases 1-4.
 
 ## Dialogue and subtitles: typewriter, cues, captions
-Write the lines once in data/dialogue.json (you create it); `tools/audio/dialogue.py` turns them and their voice
+Write the lines once in data/dialogue.json (you create it); `tools/audio/wavesmith/dialogue.py` turns them and their voice
 files into data/dialogue/en.built.json, the file each engine's dialogue reader loads (format v0: optional fields are
 only ever added), and into SRT or WebVTT files for trailers and video captures.
 ```json
@@ -378,7 +378,7 @@ only ever added), and into SRT or WebVTT files for trailers and video captures.
 - SFX captions: build with `--events data/audio_events.json` and every event with a `caption` becomes one (with
   `caption_priority` and `caption_min_s`; `"directional": true` on sounds whose side of the screen matters, so the
   game draws an arrow, as XAG 104 asks). Subtitles and SFX captions should have separate settings toggles.
-- `python tools/audio/dialogue.py build data/dialogue.json --root assets/audio --events data/audio_events.json --out
+- `python tools/audio/wavesmith/wavesmith.py dialogue build data/dialogue.json --root assets/audio --events data/audio_events.json --out
   data/dialogue/en.built.json`; `lint` reports reading speed, short and long cues, words too long to break, unknown
   speakers and missing files (`--strict` makes warnings fail); `export data/dialogue/en.built.json --sequence gate
   --format vtt --out gate.vtt` writes a sequence at absolute times.
@@ -399,7 +399,7 @@ settings already hold them (settings.audio master, music, sfx, ui, voice, mono; 
 audio side keeps its part.
 - **Mono survives the switch.** Players with hearing in one ear turn on mono, and the browser then plays
   0.5 * (L + R) (the Web Audio down-mix rule; other engines' mono options were not checked). A stereo sound
-  whose channels are out of phase cancels itself there. `python tools/audio/loudness.py mono "assets/audio/**/*.wav"`
+  whose channels are out of phase cancels itself there. `python tools/audio/wavesmith/wavesmith.py loudness mono "assets/audio/**/*.wav"`
   prints what each stereo file loses (3 LU when both sides carry the same sound, 6 LU when they are unrelated) and
   fails a file that loses more than 9 LU or has a loud 400 ms stretch with correlation below -0.5 (kit conventions,
   not a standard; `--max-loss`, `--min-corr`). Fix it at the source: flip one channel's polarity back, or narrow

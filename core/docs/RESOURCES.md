@@ -9,8 +9,8 @@
 | Need | Default pick | Why | More options |
 |---|---|---|---|
 | Any license question | The cheat sheet | CC0 first, then CC BY, never NC in a release | `resources/licenses.md` |
-| Music | `incompetech.com` (CC BY), make it in `LMMS` / `BeepBox`, or write a chiptune with `tools/audio/chiptune.py` | Big catalog, easy attribution, or zero license questions | `resources/audio.md` |
-| SFX | `kenney.nl` audio (CC0), retro: `tools/audio/sfx_synth.py` or `jsfxr` | Safe license, instant results | `resources/audio.md` |
+| Music | `incompetech.com` (CC BY), make it in `LMMS` / `BeepBox`, or write a chiptune with `tools/audio/wavesmith/chiptune.py` | Big catalog, easy attribution, or zero license questions | `resources/audio.md` |
+| SFX | `kenney.nl` audio (CC0), retro: `tools/audio/wavesmith/sfx_synth.py` or `jsfxr` | Safe license, instant results | `resources/audio.md` |
 | 2D art | `kenney.nl` (CC0), palettes from `lospec.com` | Consistent style for prototypes | `resources/art.md` |
 | 3D art | `kenney.nl`, `quaternius.com`, `polyhaven.com` (all CC0) | Kits that match each other | `resources/art.md` |
 | Fonts | `fonts.google.com` (mostly OFL) | Ship the license file | `resources/art.md` |

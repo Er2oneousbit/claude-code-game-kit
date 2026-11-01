@@ -61,7 +61,7 @@ an untimed command running ([#37](../../issues/37)).
 - **`tools/art/pixellab.py`:** `image`, v3 `character`, `animate`, `animate-character`, top-down `tileset`, `ui`,
   `font`, `object`, `pixelate`, `tiles-pro`, `outfit`. It also lacks PixelLab's newer Pro Flash models, style images
   and pinned last frames (the MCP server has them; SOP-16 says which tool to use).
-- **`tools/audio/eleven_audio.py`:** music is tested offline only (the live music request returned HTTP 402, "not available").
+- **`tools/audio/wavesmith/eleven_audio.py`:** music is tested offline only (the live music request returned HTTP 402, "not available").
 - **`tools/second_opinion.py`:** only the Kimi Code CLI is supported.
 
 ### Bugs and doubts

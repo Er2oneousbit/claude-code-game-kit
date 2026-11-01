@@ -4,7 +4,7 @@
 # Purpose : Exam for flacfile.py: real encoder output (ffmpeg's FLAC encoder, the one ComfyUI uses) decodes to
 #           the exact source samples with a matching MD5, every subframe type and stereo layout is exercised,
 #           and corrupt or out-of-scope files are refused instead of decoded wrong.
-# Usage   : python tools/audio/test_flacfile.py
+# Usage   : python tools/audio/wavesmith/test_flacfile.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : The fixtures are small FLAC files (base64, padding removed) encoded from the integer-only signals
 #           below, so the expected samples are regenerated exactly on any platform. Measured coverage of the

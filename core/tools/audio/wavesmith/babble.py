@@ -4,12 +4,12 @@
 # Purpose : Gibberish character voices for speech bubbles ("babble"): a line of dialog becomes short voiced
 #           blips plus a timing file, so the game reveals the bubble text in step with the voice. The same
 #           line, voice and seed always sound the same. No model, no account, no license question.
-# Usage   : python tools/audio/babble.py --list
-#           python tools/audio/babble.py "Welcome, traveler!" --voice baker --out assets/audio/voice/welcome.wav
-#           python tools/audio/babble.py "Halt. Who goes there?" --voice knight --variants 3 --out build/audition/halt.wav
-#           python tools/audio/babble.py --lines docs/dialog/smith.txt --voice smith --out assets/audio/voice/smith.wav
-#           python tools/audio/babble.py "..." --voice golem --set f0=50 --set metal=0.7 --out golem.wav
-#           python tools/audio/babble.py "..." --voice baker --bank-dir assets_src/voice/baker_syllables --out x.wav
+# Usage   : python tools/audio/wavesmith/wavesmith.py babble --list
+#           python tools/audio/wavesmith/wavesmith.py babble "Welcome, traveler!" --voice baker --out assets/audio/voice/welcome.wav
+#           python tools/audio/wavesmith/wavesmith.py babble "Halt. Who goes there?" --voice knight --variants 3 --out build/audition/halt.wav
+#           python tools/audio/wavesmith/wavesmith.py babble --lines docs/dialog/smith.txt --voice smith --out assets/audio/voice/smith.wav
+#           python tools/audio/wavesmith/wavesmith.py babble "..." --voice golem --set f0=50 --set metal=0.7 --out golem.wav
+#           python tools/audio/wavesmith/wavesmith.py babble "..." --voice baker --bank-dir assets_src/voice/baker_syllables --out x.wav
 # Needs   : Python 3.8+ only
 # Exit    : 0 ok, 1 render problem (nothing to say: the text has no letters), 2 usage or environment problem
 # Notes   : 44.1 kHz mono 16-bit WAV, plus <name>.timeline.json: {"text", "voice", "seed", "params", "seconds",

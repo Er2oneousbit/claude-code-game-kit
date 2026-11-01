@@ -8,7 +8,7 @@
 //           if (d.result === "played") player.start(event.files[d.variant], d.pitchRatio, d.gainDb, d.voice, d.stolen)
 //           each frame: for (const [bus, db] of Object.entries(dir.duck(nowMs))) busGain(bus, db)
 // Notes   : No Phaser or Web Audio import: this file only decides (Vitest runs it), audioPlayer.ts plays.
-//           The spec is tools/audio/audio_events.py; every step of data/golden/audio.json must come out the same
+//           The spec is tools/audio/wavesmith/audio_events.py; every step of data/golden/audio.json must come out the same
 //           (Park-Miller random source, no bit operations, fixed draw order: variant, pitch, volume; a rejected
 //           play draws nothing). Calls must come in time order. lengths_ms per file: from the loaded buffers.
 //

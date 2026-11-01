@@ -168,7 +168,7 @@ Starter set (swap the palette, keep the shape):
 | Game over | sad, 70 BPM, short, clean ending | `[Short Outro] [End]` |
 
 - Suno does not obey length or "seamless loop" (same lesson as E10 above). Cut a clean 8 or 16 bar loop in an editor, or
-  `python tools/audio/wavfile.py loop <download>.wav --start <intro s> --end <outro s> --crossfade 2`, and test it in engine.
+  `python tools/audio/wavesmith/wavesmith.py wav loop <download>.wav --start <intro s> --end <outro s> --crossfade 2`, and test it in engine.
 - Suno has no official public API (2026-10). Third-party "Suno API" sites sell their own credits; output made there is not
   covered by your Suno plan's rights. Use the web app.
 - Retro: "chiptune" alone may come back modern. Name the sound ("square wave lead, triangle bass, noise drums") and exclude "orchestral, live drums, reverb".

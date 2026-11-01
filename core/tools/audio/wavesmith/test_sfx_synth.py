@@ -3,7 +3,7 @@
 # test_sfx_synth.py
 # Purpose : Exam for sfx_synth.py and wavfile.py: every preset renders a valid, unclipped WAV, seeds
 #           repeat exactly, recipes re-render byte for byte, and bad input is a clear usage error.
-# Usage   : python tools/audio/test_sfx_synth.py
+# Usage   : python tools/audio/wavesmith/test_sfx_synth.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@
 # Usage   : python tools/dev.py test      (or --filter test_golden_audio.gd)
 # Notes   : One test per case type; each prints how many cases and values it checked. A case type this file does
 #           not know fails test_every_case_type_is_known, so a new vector type cannot be skipped silently.
-#           Expected values are only ever read from the JSON (tools/audio/audio_events.py vectors --write writes
+#           Expected values are only ever read from the JSON (tools/audio/wavesmith/audio_events.py vectors --write writes
 #           it). "stolen" is null when nothing was stolen; the comparison treats null as equal to null only.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------

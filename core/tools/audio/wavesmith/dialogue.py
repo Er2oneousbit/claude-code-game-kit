@@ -5,11 +5,11 @@
 #           made for it (local_tts.py speech, babble.py gibberish) into what the game reads: dialogue.built.json
 #           (format v0: per-character reveal times for a typewriter, subtitle cues, SFX captions, timed sequences),
 #           plus SRT / WebVTT subtitle files, and lints it against subtitle reading guidelines.
-# Usage   : python tools/audio/dialogue.py build data/dialogue.json --root . --events data/audio_events.json \
+# Usage   : python tools/audio/wavesmith/wavesmith.py dialogue build data/dialogue.json --root . --events data/audio_events.json \
 #               --out data/dialogue/en.built.json                     # --audience children: 17 characters a second
-#           python tools/audio/dialogue.py lint data/dialogue.json --root .        # --strict: warnings fail
-#           python tools/audio/dialogue.py lint data/dialogue.json --root . --pseudo    # will translations fit?
-#           python tools/audio/dialogue.py export data/dialogue/en.built.json --sequence intro --format vtt --out intro.vtt
+#           python tools/audio/wavesmith/wavesmith.py dialogue lint data/dialogue.json --root .        # --strict: warnings fail
+#           python tools/audio/wavesmith/wavesmith.py dialogue lint data/dialogue.json --root . --pseudo    # will translations fit?
+#           python tools/audio/wavesmith/wavesmith.py dialogue export data/dialogue/en.built.json --sequence intro --format vtt --out intro.vtt
 # Needs   : Python 3.8+ only (wavfile.py and flacfile.py read voice durations)
 # Exit    : 0 ok, 1 errors found (or warnings with --strict), 2 usage or unreadable files
 # Notes   : Reveal times: exact from a babble .timeline.json; estimated for other voice files (characters spread over
@@ -228,7 +228,7 @@ def pseudo_warnings(built):
     (tools/golden_vectors.py pseudo(): accented, 40 % longer, bracketed), revealed over the same voice timing (each
     pseudo character at the time of the original character it stretches over), cut into cues with the same style.
     Captions are one line each: they must still fit the line width."""
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # tools/: golden_vectors.py
     from golden_vectors import pseudo
     style, out = built["style"], []
     for lid, ln in built["lines"].items():
@@ -354,7 +354,7 @@ def build(src_path, root=".", events_path=None, audience="adults"):
             ends[lid] = end
             out.append({"line": lid, "start": round(start, 3), "end": round(end, 3)})
         sequences[sname] = out
-    built = {"version": VERSION, "locale": src.get("locale", "en"), "built_by": "tools/audio/dialogue.py",
+    built = {"version": VERSION, "locale": src.get("locale", "en"), "built_by": "tools/audio/wavesmith/dialogue.py",
              "source_sha256": hashlib.sha256(raw_bytes).hexdigest(), "style": style, "lines": built_lines,
              "captions": captions, "sequences": sequences}
     return built, errors, warnings

@@ -3,7 +3,7 @@
 // Purpose : Runs every case of data/golden/audio.json through the Core audio director (variant picks, pitch and
 //           volume ranges, voice caps, cooldowns, ducking envelopes): one test per case.
 // Usage   : python tools/dev.py test              (or --filter Audio)
-// Notes   : The expected values come from the file at test time (tools/audio/audio_events.py vectors --write
+// Notes   : The expected values come from the file at test time (tools/audio/wavesmith/audio_events.py vectors --write
 //           writes it); never copy them in here. A case type without a runner fails, so a new vector type cannot
 //           be skipped. A rejected play is compared as {result} alone, a played one with all eight fields
 //           ("stolen" is null when nothing was stolen); a duck result as {target bus: dB}.

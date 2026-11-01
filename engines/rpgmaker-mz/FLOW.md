@@ -62,7 +62,7 @@ Manager or the project). **(verify)**
 - MZ's default art and sound come with your copy of MZ; log your own additions in `docs/ASSET_LOG.md` as usual.
 - Images go in the matching `game/img/` folder (characters, faces, tilesets, pictures, ...). Audio must be `.ogg`, and
   `.m4a` for some platforms. **(verify which formats MZ 1.x still needs)**
-- Generated audio (`tools/audio/`): export OGG (ffmpeg converts a WAV). Generated art: match MZ's sheet layouts (a
+- Generated audio (Wavesmith, `tools/audio/wavesmith/`): export OGG (ffmpeg converts a WAV). Generated art: match MZ's sheet layouts (a
   character sheet is 4 x 2 characters of 3 x 4 frames). **(verify sizes)**
 
 ## Profiling

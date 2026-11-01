@@ -5,7 +5,7 @@
 #           Tables 1 and 2, EBU Tech 3341 (2023) cases 1-5 (integrated loudness) and 15-23 (true peak), EBU Tech
 #           3342 (2023) cases 1-4 (loudness range), plus check-mix against ASWG-R001 v1.10, normalize, FLAC input
 #           and the command line.
-# Usage   : python tools/audio/test_loudness.py
+# Usage   : python tools/audio/wavesmith/test_loudness.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Signals are synthesized here at 48 kHz exactly as the EBU documents describe them (cases 7-8 and 3342
 #           cases 5-6 use EBU's authentic programme files, which are not redistributed with the kit). Cases 20-23

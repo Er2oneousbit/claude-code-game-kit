@@ -4,7 +4,7 @@
 # Purpose : Exam for babble.py: every voice renders a valid, unclipped WAV with a reveal timeline that matches
 #           the text, takes repeat exactly, questions rise and exclamations get louder, recorded syllable banks
 #           work, and bad input is a clear usage error.
-# Usage   : python tools/audio/test_babble.py
+# Usage   : python tools/audio/wavesmith/test_babble.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------

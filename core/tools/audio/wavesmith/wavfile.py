@@ -6,9 +6,9 @@
 #           back, and measure them (peak, loudness, duration, clicks at a loop seam).
 # Usage   : from wavfile import write_wav, read_wav, stats
 #           write_wav("out.wav", samples, 44100, loop=(0, len(samples) - 1))
-#           python tools/audio/wavfile.py stats assets/audio/x.wav
-#           python tools/audio/wavfile.py normalize assets/audio/x.wav --peak -3    # too-quiet generated audio
-#           python tools/audio/wavfile.py loop music.wav --crossfade 2 --end 95    # seamless loop from a download
+#           python tools/audio/wavesmith/wavesmith.py wav stats assets/audio/x.wav
+#           python tools/audio/wavesmith/wavesmith.py wav normalize assets/audio/x.wav --peak -3    # too-quiet generated audio
+#           python tools/audio/wavesmith/wavesmith.py wav loop music.wav --crossfade 2 --end 95    # seamless loop from a download
 # Notes   : Standard library only. Samples are floats in -1..1; anything outside is clipped and
 #           counted, so a caller can warn. The smpl loop end is the last sample played (inclusive),
 #           as the WAV spec says.

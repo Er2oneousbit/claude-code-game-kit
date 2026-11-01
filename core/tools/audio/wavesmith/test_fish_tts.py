@@ -6,7 +6,7 @@
 #           saving, --log checks before anything is spent, error mapping, and that the API key never lands
 #           in any output. The redirect cases run the real HTTP call against stand-in servers on 127.0.0.1,
 #           still offline: the key must not follow a redirect off its https origin.
-# Usage   : python tools/audio/test_fish_tts.py
+# Usage   : python tools/audio/wavesmith/test_fish_tts.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------

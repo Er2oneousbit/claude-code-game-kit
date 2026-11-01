@@ -5,11 +5,11 @@
 #           Seeds make variations that repeat exactly, and every file gets a small JSON recipe
 #           so it can be re-rendered or tweaked later. No account, no download, no license
 #           question: the output is yours.
-# Usage   : python tools/audio/sfx_synth.py --list
-#           python tools/audio/sfx_synth.py jump --out assets/audio/sfx/jump.wav
-#           python tools/audio/sfx_synth.py coin --variants 5 --out build/audition/coin.wav   # coin_1..coin_5
-#           python tools/audio/sfx_synth.py jump --seed 3 --set slide=3.0 --set decay=0.25 --out jump.wav
-#           python tools/audio/sfx_synth.py --from assets/audio/src/jump.sfx.json --out jump.wav
+# Usage   : python tools/audio/wavesmith/wavesmith.py synth --list
+#           python tools/audio/wavesmith/wavesmith.py synth jump --out assets/audio/sfx/jump.wav
+#           python tools/audio/wavesmith/wavesmith.py synth coin --variants 5 --out build/audition/coin.wav   # coin_1..coin_5
+#           python tools/audio/wavesmith/wavesmith.py synth jump --seed 3 --set slide=3.0 --set decay=0.25 --out jump.wav
+#           python tools/audio/wavesmith/wavesmith.py synth --from assets/audio/src/jump.sfx.json --out jump.wav
 # Needs   : Python 3.8+ only
 # Exit    : 0 ok, 1 render problem (clipped or silent output), 2 usage or environment problem
 # Notes   : 44.1 kHz mono 16-bit WAV. Godot, Unity, Unreal and browsers all play WAV; convert to OGG

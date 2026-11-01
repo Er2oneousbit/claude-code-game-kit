@@ -5,7 +5,7 @@
 #           subtitle cues that follow the guidelines (40 characters, 2 lines, breaks at punctuation, no scrap cues,
 #           5/6 s minimum, 7 s maximum, reading speed), SFX captions, sequences, exact SRT and WebVTT output with the
 #           speaker named when it changes, errors, and the shape the engines' dialogue readers expect.
-# Usage   : python tools/audio/test_dialogue.py
+# Usage   : python tools/audio/wavesmith/test_dialogue.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
@@ -245,7 +245,7 @@ class DialogueExam(unittest.TestCase):
         self.assertEqual(rc, 2, text)
 
     def test_docs_example_builds_clean(self):
-        doc = (Path(__file__).resolve().parents[2] / "docs" / "resources" / "audio.md").read_text(encoding="utf-8")
+        doc = (Path(__file__).resolve().parents[3] / "docs" / "resources" / "audio.md").read_text(encoding="utf-8")
         section = doc.split("## Dialogue and subtitles", 1)[1]
         example = json.loads(section.split("```json", 1)[1].split("```", 1)[0])
         for line in example["lines"]:            # stand-ins for the voice files the example names

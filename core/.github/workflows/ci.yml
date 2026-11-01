@@ -110,10 +110,10 @@ jobs:
         run: python tools/golden_vectors.py --check
 
       - name: Audio director vectors are current
-        run: python tools/audio/audio_events.py vectors --check
+        run: python tools/audio/wavesmith/wavesmith.py events vectors --check
 
       - name: Music director vectors are current
-        run: python tools/audio/music.py vectors --check
+        run: python tools/audio/wavesmith/wavesmith.py music vectors --check
 
       - name: Credits match the asset log
         run: |

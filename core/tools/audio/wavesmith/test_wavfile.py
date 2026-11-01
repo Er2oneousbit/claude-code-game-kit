@@ -3,7 +3,7 @@
 # test_wavfile.py
 # Purpose : Exam for wavfile.py's commands: stats, normalize (keeps loop points and stereo) and loop (a
 #           seamless crossfade loop from any recording, with intro and outro trimming).
-# Usage   : python tools/audio/test_wavfile.py
+# Usage   : python tools/audio/wavesmith/test_wavfile.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------

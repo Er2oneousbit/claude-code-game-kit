@@ -4,10 +4,10 @@
 # Purpose : Game sound events as data (audio_events.json: variants, pitch and volume randomization, no-repeat picks,
 #           voice limits, cooldowns, buses, ducking) and the reference audio director every engine port reproduces:
 #           it validates and audits a game's events file and writes the golden vectors data/golden/audio.json.
-# Usage   : python tools/audio/audio_events.py validate data/audio_events.json        # schema, files exist
-#           python tools/audio/audio_events.py audit data/audio_events.json           # will it sound repetitive?
-#           python tools/audio/audio_events.py vectors --check                        # golden file current? (exit 1)
-#           python tools/audio/audio_events.py vectors --write                        # after changing the director
+# Usage   : python tools/audio/wavesmith/wavesmith.py events validate data/audio_events.json        # schema, files exist
+#           python tools/audio/wavesmith/wavesmith.py events audit data/audio_events.json           # will it sound repetitive?
+#           python tools/audio/wavesmith/wavesmith.py events vectors --check                        # golden file current? (exit 1)
+#           python tools/audio/wavesmith/wavesmith.py events vectors --write                        # after changing the director
 # Needs   : Python 3.8+ only (audit measures loudness with loudness.py, same folder)
 # Exit    : 0 ok, 1 validation errors, audit warnings with --strict, or stale vectors, 2 usage
 # Notes   : The director is the spec: ports (TypeScript, GDScript, C#, Lua, ...) load data/golden/audio.json in their
@@ -41,7 +41,7 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 HERE = Path(__file__).resolve().parent
-GOLDEN = HERE.parents[1] / "data" / "golden" / "audio.json"
+GOLDEN = HERE.parents[2] / "data" / "golden" / "audio.json"
 TOLERANCE = 1e-6
 VECTOR_VERSION = 1
 PM_M = 2147483647                       # Park-Miller modulus (2^31 - 1)
@@ -385,7 +385,7 @@ def build_vectors():
                {"call": "duck", "t_ms": 460}, {"call": "play", "event": "line", "t_ms": 600},
                {"call": "duck", "t_ms": 700}, {"call": "duck", "t_ms": 1000}, {"call": "duck", "t_ms": 1400}]),
     ]
-    return {"version": VECTOR_VERSION, "tolerance": TOLERANCE, "spec": "tools/audio/audio_events.py", "cases": cases}
+    return {"version": VECTOR_VERSION, "tolerance": TOLERANCE, "spec": "tools/audio/wavesmith/audio_events.py", "cases": cases}
 
 
 def render(obj):

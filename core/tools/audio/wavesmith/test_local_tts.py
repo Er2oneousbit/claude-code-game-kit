@@ -7,7 +7,7 @@
 #           provenance, the real-voice rule, post-processing (trim, pitch, ring, normalize), a bad JSON reply, a
 #           worker crash, a timeout (and that the worker is stopped), an early stop, no work when outputs exist,
 #           ASSET_LOG rows, and that the real worker parses as Python 3.8.
-# Usage   : python tools/audio/test_local_tts.py
+# Usage   : python tools/audio/wavesmith/test_local_tts.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------

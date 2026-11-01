@@ -47,23 +47,25 @@ python core/tools/test_issues.py                     # offline (canned gh output
 python core/tools/test_golden_vectors.py             # the juice and shell reference; data/golden/*.json must be current
 python core/tools/test_image_diff.py                 # standard library only (visual regression)
 python core/tools/test_credits.py                    # standard library only
-python core/tools/audio/test_sfx_synth.py               # standard library only
-python core/tools/audio/test_chiptune.py
-python core/tools/audio/test_wavfile.py
-python core/tools/audio/test_babble.py                  # standard library only
-python core/tools/audio/test_loudness.py                # standard library only (EBU Tech 3341/3342 cases, about a minute)
-python core/tools/audio/test_audio_events.py            # standard library only; also checks data/golden/audio.json is current
-python core/tools/audio/test_dialogue.py                # standard library only
-python core/tools/audio/test_sound_sets.py              # standard library only
-python core/tools/audio/test_music.py                   # standard library only; also checks data/golden/music.json is current
-python core/tools/audio/test_flacfile.py                # standard library only (real encoder fixtures)
-python core/tools/audio/test_local_sfx.py               # offline (a stand-in ComfyUI)
-python core/tools/audio/test_local_tts.py               # offline (a fake TTS worker)
-python core/tools/audio/test_eleven_audio.py             # offline (canned API responses)
+python core/tools/audio/wavesmith/wavesmith.py test  # every audio exam at once (about 2 minutes)
+python core/tools/audio/wavesmith/test_wavesmith.py  # the front door: subcommands, --help, check
+python core/tools/audio/wavesmith/test_sfx_synth.py  # standard library only
+python core/tools/audio/wavesmith/test_chiptune.py
+python core/tools/audio/wavesmith/test_wavfile.py
+python core/tools/audio/wavesmith/test_babble.py     # standard library only
+python core/tools/audio/wavesmith/test_loudness.py   # standard library only (EBU Tech 3341/3342 cases, about a minute)
+python core/tools/audio/wavesmith/test_audio_events.py  # standard library only; also checks data/golden/audio.json is current
+python core/tools/audio/wavesmith/test_dialogue.py   # standard library only
+python core/tools/audio/wavesmith/test_sound_sets.py  # standard library only
+python core/tools/audio/wavesmith/test_music.py      # standard library only; also checks data/golden/music.json is current
+python core/tools/audio/wavesmith/test_flacfile.py   # standard library only (real encoder fixtures)
+python core/tools/audio/wavesmith/test_local_sfx.py  # offline (a stand-in ComfyUI)
+python core/tools/audio/wavesmith/test_local_tts.py  # offline (a fake TTS worker)
+python core/tools/audio/wavesmith/test_eleven_audio.py  # offline (canned API responses)
 python core/tools/art/test_pixellab.py                   # offline (canned API responses)
 python core/tools/art/test_comfy_local.py                # offline (a stand-in ComfyUI server on 127.0.0.1)
 python core/tools/art/dotwork/tests/test_dotwork.py          # offline, needs Pillow + numpy (the ComfyUI venv has both)
-python core/tools/audio/test_fish_tts.py                 # offline (canned API responses)
+python core/tools/audio/wavesmith/test_fish_tts.py   # offline (canned API responses)
 python core/tools/art/test_chroma_key.py                 # needs Pillow
 python core/tools/art/test_pixel_sprite.py               # standard library only
 python core/tools/art/test_gimp_batch.py                 # needs GIMP 3 (exit 2 when missing)

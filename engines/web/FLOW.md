@@ -66,7 +66,7 @@ Settings, Credits, Quit, plus "Juice demo" in debug builds: the dev server or `?
 automatically when the window loses focus), quit and crash screens.
 - **Where:** `src/shell/` (screens, input, subtitles, the smoke driver), `src/core/` (the engine-free logic: settings,
   bindings and glyphs, saves, i18n, juice), `data/i18n/<locale>.json` (strings), `data/dialogue/*.built.json`
-  (subtitles in the dialogue format v0 of the dialogue tools in tools/audio). Scenes read `shell.settings`,
+  (subtitles in the dialogue format v0 of Wavesmith's dialogue subcommand). Scenes read `shell.settings`,
   `shell.input` (`isDown`, `takePress`) and `shell.volume("sfx")` from `src/shell/app.ts`.
 - **Screens are HTML over the canvas**, built in code: real text layout, so text size, wrapping and the
   pseudo-locale check behave like any web page. A theme: a file named `theme_default.css` in the

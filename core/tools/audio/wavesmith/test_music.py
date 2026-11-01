@@ -5,7 +5,7 @@
 #           loop chunk on the grid, boundaries for every quantize (with an intro and loop wrap), the transition map's
 #           rule order, fades, stingers and synced entries, stem and file validation, the tempo estimate, the golden
 #           vectors being current, and the command line.
-# Usage   : python tools/audio/test_music.py
+# Usage   : python tools/audio/wavesmith/test_music.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
@@ -179,7 +179,7 @@ class MusicExam(unittest.TestCase):
             M.tempo([0.0] * RATE, RATE, 1)
 
     def test_docs_example_validates_and_plans(self):
-        doc = (Path(__file__).resolve().parents[2] / "docs" / "resources" / "audio.md").read_text(encoding="utf-8")
+        doc = (Path(__file__).resolve().parents[3] / "docs" / "resources" / "audio.md").read_text(encoding="utf-8")
         example = json.loads(doc.split("## Adaptive music", 1)[1].split("```json", 1)[1].split("```", 1)[0])
         self.assertEqual(M.validate(example), [])
         r = M.plan(example, "combat", 0, 0, "explore", 1000)

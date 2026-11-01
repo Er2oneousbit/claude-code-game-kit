@@ -6,7 +6,7 @@
 #           as ComfyUI's Save Audio does). Checks the preflight messages, the Stable Audio 3 graph, ranking
 #           (clean beats clipped, silent is dropped), trimming and normalizing, loops, mono, failed jobs, no
 #           rendering when outputs exist, the .gen.json record, ASSET_LOG rows, and that no tag text reaches a WAV.
-# Usage   : python tools/audio/test_local_sfx.py
+# Usage   : python tools/audio/wavesmith/test_local_sfx.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------

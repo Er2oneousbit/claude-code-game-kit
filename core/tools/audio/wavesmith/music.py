@@ -6,12 +6,12 @@
 #           plus the tools around it: cut a rendered or recorded piece into a bar-aligned loop, check a game's music
 #           files against the grid, estimate a file's tempo, and the reference transition planner whose golden vectors
 #           (data/golden/music.json) every engine's music player reproduces sample for sample.
-# Usage   : python tools/audio/music.py grid --bpm 96 --bars 8                       # bar start times and samples
-#           python tools/audio/music.py loop raw/explore.wav --bpm 96 --bars 8 --out assets/audio/music/explore.wav
-#           python tools/audio/music.py validate data/music.json --root assets/audio
-#           python tools/audio/music.py plan data/music.json --from explore --to combat --at 3.2   # when, where
-#           python tools/audio/music.py tempo raw/explore.wav                         # about 96 BPM?
-#           python tools/audio/music.py vectors --check                               # golden file current? (exit 1)
+# Usage   : python tools/audio/wavesmith/wavesmith.py music grid --bpm 96 --bars 8                       # bar start times and samples
+#           python tools/audio/wavesmith/wavesmith.py music loop raw/explore.wav --bpm 96 --bars 8 --out assets/audio/music/explore.wav
+#           python tools/audio/wavesmith/wavesmith.py music validate data/music.json --root assets/audio
+#           python tools/audio/wavesmith/wavesmith.py music plan data/music.json --from explore --to combat --at 3.2   # when, where
+#           python tools/audio/wavesmith/wavesmith.py music tempo raw/explore.wav                         # about 96 BPM?
+#           python tools/audio/wavesmith/wavesmith.py music vectors --check                               # golden file current? (exit 1)
 # Needs   : Python 3.8+ only (wavfile.py, same folder)
 # Exit    : 0 ok, 1 validation problems or stale vectors, 2 usage or unreadable files
 # Notes   : Everything is counted in samples at the file's rate, so every engine lands on the same sample: beat k of
@@ -53,7 +53,7 @@ QUANTIZE = ("immediate", "beat", "bar", "phrase", "loop_end")
 DEFAULT_RULE = {"quantize": "bar", "fade_ms": 0, "sync": False}
 MAX_STINGER_BARS = 8
 TEMPO_RANGE = (60.0, 200.0)
-GOLDEN = HERE.parent.parent / "data" / "golden" / "music.json"
+GOLDEN = HERE.parents[2] / "data" / "golden" / "music.json"
 DEBUG = False
 
 
@@ -308,7 +308,7 @@ def vector_cases():
 
 
 def render_vectors():
-    return json.dumps({"version": 1, "tolerance": 0, "about": "tools/audio/music.py vectors --write",
+    return json.dumps({"version": 1, "tolerance": 0, "about": "tools/audio/wavesmith/music.py vectors --write",
                        "cases": vector_cases()}, indent=1) + "\n"
 
 

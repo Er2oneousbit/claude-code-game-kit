@@ -4,11 +4,11 @@
 # Purpose : Fish Audio text to speech from the command line: check the key and API balance, search the
 #           voice library for a voice ID, and render a line to a file (pre-generated voice). Games that
 #           speak live lines call the same API at runtime instead (examples/gatekeeper-godot).
-# Usage   : python tools/audio/fish_tts.py check
-#           python tools/audio/fish_tts.py voices --search "old knight" --language en
-#           python tools/audio/fish_tts.py say --voice <id> --text "Halt. Who goes there?" --out build/voice/halt.mp3
-#           python tools/audio/fish_tts.py say --voice <id> --text "..." --out x.mp3 --dry-run   # send nothing
-#           python tools/audio/fish_tts.py say --voice <id> --text "Who's there?" --text "Gotcha." \
+# Usage   : python tools/audio/wavesmith/wavesmith.py fish check
+#           python tools/audio/wavesmith/wavesmith.py fish voices --search "old knight" --language en
+#           python tools/audio/wavesmith/wavesmith.py fish say --voice <id> --text "Halt. Who goes there?" --out build/voice/halt.mp3
+#           python tools/audio/wavesmith/wavesmith.py fish say --voice <id> --text "..." --out x.mp3 --dry-run   # send nothing
+#           python tools/audio/wavesmith/wavesmith.py fish say --voice <id> --text "Who's there?" --text "Gotcha." \
 #               --out assets/audio/voice/ghost.wav --log      # ghost_1.wav, ghost_2.wav, one ASSET_LOG row
 # Needs   : Python 3.8+ only. A Fish Audio API key in FISH_API_KEY (on Windows a saved user variable works
 #           without restarting the terminal).
@@ -39,7 +39,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # tools/: fetch_asset.py for --log
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # tools/: fetch_asset.py for --log
 
 API = "https://api.fish.audio"
 KEY_ENV = "FISH_API_KEY"
@@ -271,7 +271,7 @@ def write_log(args, key, done):
     row = (f"| {asset_id} | voice | {', '.join(rels)} | Fish Audio API (/v1/tts), model {args.model}, voice "
            f"{args.voice}{f' ({title})' if title else ''} | Fish Audio (generated) | Fish Audio API terms (verify) |  | "
            f"pre-generated | no | {today} | {fetch_asset.md_cell(notes)} |")
-    evidence = (f"{asset_id}  voice  generated {today} with tools/audio/fish_tts.py\n"
+    evidence = (f"{asset_id}  voice  generated {today} with tools/audio/wavesmith/fish_tts.py\n"
                 f"Service  : Fish Audio text to speech (/v1/tts), model {args.model}\n"
                 f"Voice    : {args.voice}{f' ({title})' if title else ''}; check it is not an imitation of a real person\n"
                 f"License  : Fish Audio API terms, read before release (verify)\n"

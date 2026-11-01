@@ -1,0 +1,104 @@
+# Wavesmith: the kit's audio tool
+
+Wavesmith does every audio job a game needs from one front door, `tools/audio/wavesmith/wavesmith.py`:
+- measure loudness and check the whole mix
+- describe sound events and adaptive music as data, which every engine plays the same way
+- make and check whole sets of sounds
+- build subtitles and captions for dialogue
+- voice lines on your own GPU
+- make sound effects from code or from a local model
+
+It is Dotwork's audio sibling (`tools/art/dotwork/`). Claude (or you) orchestrates; the tools do the measuring and
+the making.
+
+Everything except the two GPU tools (`voice`, `sfx`) is Python 3.8+ and the standard library: nothing to install.
+Each subcommand is a module in this folder that also runs on its own (`python tools/audio/wavesmith/loudness.py ...`).
+The background, the sources and the measured proofs are in `docs/resources/audio.md`.
+
+Tested on Windows 11, an RTX 5060 Ti 16 GB, ComfyUI 0.43.0, Godot 4.7.2, LÖVE 11.5 and headless Chromium. Those
+numbers describe that setup and are not promises.
+
+## Contents
+1. [First run](#first-run-no-gpu)
+2. [Subcommands](#subcommands)
+3. [Data files a game writes](#data-files-a-game-writes)
+4. [The engines' side](#the-engines-side)
+5. [GPU tools: setup](#gpu-tools-setup)
+6. [Licences](#licences)
+7. [Exams](#exams)
+
+## First run (no GPU)
+```
+python tools/audio/wavesmith/wavesmith.py list                       # every subcommand
+python tools/audio/wavesmith/wavesmith.py check                      # what is ready on this machine
+python tools/audio/wavesmith/wavesmith.py sets ui --out assets/audio/ui      # 12 UI sounds made from code
+python tools/audio/wavesmith/wavesmith.py loudness measure "assets/audio/ui/*.wav"
+python tools/audio/wavesmith/wavesmith.py test                       # every exam, about 3 minutes
+```
+The UI sounds are ship-safe. Each `.sfx.json` says so: no model and no samples were used, so there is no licence
+question.
+
+## Subcommands
+| Subcommand | Module | What it does | Typical call |
+|---|---|---|---|
+| `loudness` | loudness.py | LUFS, LRA and true peak (ITU-R BS.1770-5, EBU Tech 3342); check a whole-game capture against ASWG-R001; normalize to house levels; mono downmix check | `loudness check-mix capture.wav --target home` |
+| `events` | audio_events.py | Sound events as data: takes, pitch and volume ranges, no-repeat picks, voice caps, cooldowns, buses, ducking. Validate, audit, golden vectors | `events audit data/audio_events.json --root assets/audio` |
+| `sets` | sound_sets.py | Families of sounds made and checked together: footsteps per surface, ambience beds, the code-made UI set. Writes their events | `sets check data/sound_sets.json --ship` |
+| `dialogue` | dialogue.py | dialogue.json and voice files become the built file the engines read: per-character typewriter timing, subtitle cues, SFX captions. Also SRT / WebVTT export and lint (`--pseudo`: will translations fit?) | `dialogue lint data/dialogue.json --root assets/audio --pseudo` |
+| `music` | music.py | Adaptive music: bar grid in samples, bar-aligned loops, stems, stingers, a transition map, plans, tempo estimates | `music loop raw.wav --bpm 96 --bars 8 --out music/explore.wav` |
+| `babble` | babble.py | Gibberish voices (blips) with exact typewriter timing | `babble "Fresh bread!" --voice baker --out vo/baker_1.wav` |
+| `voice` | local_tts.py | Spoken lines on your GPU (Qwen3-TTS): design a voice from a description once, then say lines in it. 10 languages | `voice say --ref smith_ref.wav --lines smith.txt --language German --out vo/smith_de.wav` |
+| `sfx` | local_sfx.py | Sound effects and ambience loops on your GPU (Stable Audio 3 in a local ComfyUI). Takes are ranked; you pick by ear | `sfx make "heavy wooden door creaking" --seconds 2.5 --out build/audition/door.wav` |
+| `synth` | sfx_synth.py | Retro sound effects from code: presets, seeds, recipes (ship-safe) | `synth coin --variants 5 --out build/audition/coin.wav` |
+| `chiptune` | chiptune.py | Chiptune songs written as text patterns, with loop points | `chiptune theme.song.json --out music/theme.wav` |
+| `eleven` | eleven_audio.py | ElevenLabs: sound effects and music. Paid, your API key | `eleven sfx --text "..." --out x.wav` |
+| `fish` | fish_tts.py | Fish Audio text to speech. Paid, your API key | `fish say --voice <id> --text "..." --out x.wav` |
+| `wav` | wavfile.py | WAV helpers: stats, normalize to a peak, seamless loops | `wav loop raw.wav --crossfade 2 --out loop.wav` |
+
+`wavesmith.py <subcommand> --help` lists that tool's options. Exit codes are the subcommand's own:
+- 0: ok
+- 1: the task failed, or a check found problems
+- 2: environment or usage
+
+## Data files a game writes
+The game creates these files itself. Each one is checked by its subcommand, and its format is in that module's header
+and in `docs/resources/audio.md`.
+- data/audio_events.json: buses, ducking and every sound event (`events validate`, `events audit`)
+- data/music.json: tracks, stems, stingers and transitions (`music validate --root assets/audio`)
+- data/dialogue.json: speakers, lines and sequences (`dialogue build ... --out data/dialogue/en.built.json`)
+- data/sound_sets.json: sets to make and check (`sets make`, `sets check`, `sets events --merge`)
+
+## The engines' side
+The engines' runtimes follow the golden files in `data/golden/`. Each is written by its reference module
+(`events vectors --write`, `music vectors --write`) and checked in CI (`--check`), so every engine makes the same
+decisions from the same data:
+- web: src/core/audioDirector.ts, audioAccess.ts, musicDirector.ts and dialogue.ts, with
+  src/shell/audioPlayer.ts, musicPlayer.ts and subtitles.ts.
+- web-3d: the same core files.
+- Godot: scripts/core/audio_director.gd.
+- Unity: Assets/Scripts/Core/AudioDirector.cs.
+- LÖVE: src/core/audio_director.lua.
+
+Music players exist only on the web so far. Port musicDirector.ts, and the golden file is your test.
+
+## GPU tools: setup
+- `voice` runs Qwen3-TTS in its own Python environment, so Wavesmith stays standard-library only. Setup steps are in
+  `docs/resources/audio.md` (Voice).
+  - Set `HF_HOME` to wherever the weights live, in the shell that runs it. Otherwise the first run quietly starts a
+    multi-GB download into the default cache, and it looks like a hang.
+  - `voice check` names whatever is missing.
+- `sfx`, and `sets make` with local_sfx sets, need a running ComfyUI (0.43.0 or newer) with Stable Audio 3.
+  `sfx check` names the missing files.
+- Never clone a real person's voice without their written permission. Designed voices are the documented path.
+
+## Licences
+`LICENSES.md` lists every model Wavesmith can load, with its licence and what that means for shipping. In short:
+- Code-made sounds (`synth`, `chiptune`, `babble`, and the `sets ui` set) are yours.
+- Qwen3-TTS is Apache-2.0.
+- Stable Audio output is under the Stability AI Community License. `sets check --ship` refuses it until you clear that
+  licence.
+
+## Exams
+`wavesmith.py test` runs every `test_*.py` in this folder in its own process, one line each, and exits 1 if any
+failed. `wavesmith.py test music dialogue` runs just those exams. Each exam also runs on its own:
+`python tools/audio/wavesmith/test_music.py`.

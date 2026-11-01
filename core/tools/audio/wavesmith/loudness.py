@@ -4,13 +4,13 @@
 # Purpose : Measure loudness the way broadcast and console audio teams do (ITU-R BS.1770: integrated LUFS, true
 #           peak; EBU Tech 3342: loudness range), check a whole-game mix against the Sony ASWG-R001 targets, and
 #           normalize single assets to the kit's house levels.
-# Usage   : python tools/audio/loudness.py measure assets/audio/**/*.wav          # one line per file
-#           python tools/audio/loudness.py measure build/capture.wav --json         # machine-readable
-#           python tools/audio/loudness.py check-mix build/gameplay_capture.wav --target home     # or portable
-#           python tools/audio/loudness.py normalize vo/line.wav --lufs -24 --out vo/line_n.wav
-#           python tools/audio/loudness.py mono "assets/audio/**/*.wav"          # survives the mono switch?
-#           python tools/audio/loudness.py normalize amb/rain.wav --bus ambience --target home --out amb/rain_n.wav
-#           python tools/audio/loudness.py conventions                               # the house levels table
+# Usage   : python tools/audio/wavesmith/wavesmith.py loudness measure assets/audio/**/*.wav          # one line per file
+#           python tools/audio/wavesmith/wavesmith.py loudness measure build/capture.wav --json         # machine-readable
+#           python tools/audio/wavesmith/wavesmith.py loudness check-mix build/gameplay_capture.wav --target home     # or portable
+#           python tools/audio/wavesmith/wavesmith.py loudness normalize vo/line.wav --lufs -24 --out vo/line_n.wav
+#           python tools/audio/wavesmith/wavesmith.py loudness mono "assets/audio/**/*.wav"          # survives the mono switch?
+#           python tools/audio/wavesmith/wavesmith.py loudness normalize amb/rain.wav --bus ambience --target home --out amb/rain_n.wav
+#           python tools/audio/wavesmith/wavesmith.py loudness conventions                               # the house levels table
 # Needs   : Python 3.8+ only. Reads 16/32-bit PCM WAV (wavfile.py) and 16/24-bit FLAC (flacfile.py), mono/stereo.
 # Exit    : 0 ok / within target, 1 out of target, too short to judge, or true peak too high, 2 usage or bad file
 # Notes   : Integrated loudness: K-weighting (BS.1770-5 Tables 1-2, re-derived for any sample rate), 400 ms blocks
