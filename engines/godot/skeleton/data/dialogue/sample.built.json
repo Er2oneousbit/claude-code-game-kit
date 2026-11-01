@@ -4,7 +4,7 @@
  "built_by": "hand-written sample (dialogue.built.json v0)",
  "source_sha256": "",
  "style": {
-  "max_chars_per_line": 42,
+  "max_chars_per_line": 40,
   "max_lines": 2,
   "min_cue_s": 0.833,
   "max_cps": 20
