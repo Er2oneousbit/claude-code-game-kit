@@ -4,16 +4,20 @@
 //           game log, crash files, consent-gated telemetry, the dialogue reader, hold-to-toggle, binding
 //           conflicts and the key / gamepad names the input layer produces.
 // Usage   : python tools/dev.py test
-// Notes   : No browser, no Phaser: everything runs on MemoryStore.
+// Notes   : No browser, no Phaser: everything runs on MemoryStore, or on fullStorage() (a localStorage stand-in
+//           that throws like a full one) for the log's degraded mode.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_BINDINGS, findConflicts, type Bindings } from "../src/core/bindings";
 import { cueAt, dialogueFrom, revealCount, shouldShow } from "../src/core/dialogue";
 import { HoldToggle } from "../src/core/holdToggle";
 import { defaultSettings, telemetryAllowed } from "../src/core/settings";
-import { MemoryStore } from "../src/core/textStore";
-import { GameLog, LOG_FILE, LOG_KEEP, TELEMETRY_FILE, Telemetry, crashText, csvField, stamp, writeCrash } from "../src/core/userData";
+import { MemoryStore, WebStorageStore, type KeyValueStorage } from "../src/core/textStore";
+import {
+  GameLog, LOG_FILE, LOG_KEEP, TELEMETRY_FILE, TELEMETRY_HEADER, TELEMETRY_MAX_ROWS, Telemetry, crashText, csvField, csvRows,
+  stamp, writeCrash,
+} from "../src/core/userData";
 import { keyName, padButtonName, padDevice } from "../src/shell/input";
 
 describe("GameLog", () => {
@@ -41,7 +45,48 @@ describe("GameLog", () => {
     for (let i = 0; i < 50; i++) log.append(`l${i}`);
     expect(log.tail(3)).toEqual(["l47", "l48", "l49"]);
   });
+
+  it("survives a store that throws on every write (console only, nothing thrown)", () => {
+    const store = new WebStorageStore(fullStorage({ "g/logs/game.log": "previous run" }), "g/");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    let log: GameLog | null = null;
+    expect(() => (log = new GameLog(store, "g"))).not.toThrow();
+    log!.append("still in the tail");
+    expect(() => log!.flush()).not.toThrow();
+    expect(log!.consoleOnly).toBe(true);
+    expect(log!.tail(1)).toEqual(["still in the tail"]);
+    expect(store.read(LOG_FILE)).toBe("previous run");
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it("does not overwrite the previous log when only the rotation runs out of room", () => {
+    const previous = "x".repeat(100);
+    const store = new WebStorageStore(fullStorage({ "g/logs/game.log": previous }, 150), "g/");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    new GameLog(store, "g").flush(); // the short header alone would fit
+    expect(store.read(LOG_FILE)).toBe(previous);
+    warn.mockRestore();
+  });
 });
+
+/** localStorage stand-in that throws like a full one: on every setItem, or once the stored text passes cap. */
+function fullStorage(seed: Record<string, string>, cap = 0): KeyValueStorage {
+  const data = new Map(Object.entries(seed));
+  const size = () => [...data].reduce((n, [k, v]) => n + k.length + v.length, 0);
+  return {
+    get length() {
+      return data.size;
+    },
+    key: (i) => [...data.keys()][i] ?? null,
+    getItem: (k) => data.get(k) ?? null,
+    setItem: (k, v) => {
+      if (size() - (data.get(k)?.length ?? -k.length) + v.length > cap) throw new Error("QuotaExceededError");
+      data.set(k, v);
+    },
+    removeItem: (k) => void data.delete(k),
+  };
+}
 
 describe("crash files", () => {
   it("hold the version, seed, error, stack and log tail", () => {
@@ -76,6 +121,21 @@ describe("Telemetry", () => {
   it("escapes CSV fields", () => {
     expect(csvField("plain")).toBe("plain");
     expect(csvField('say "hi"')).toBe('"say ""hi"""');
+  });
+
+  it(`keeps the header and the last ${TELEMETRY_MAX_ROWS} rows`, () => {
+    const store = new MemoryStore();
+    const old = Array.from({ length: TELEMETRY_MAX_ROWS }, (_, i) => `t,old,${i}`);
+    store.write(TELEMETRY_FILE, [TELEMETRY_HEADER, ...old].join("\n") + "\n");
+    const tel = new Telemetry(store, () => true);
+    expect(tel.event("note", 'two\nlines, "quoted"')).toBe(true); // one row although it holds a line break
+    expect(tel.event("quit")).toBe(true);
+    const rows = csvRows(store.read(TELEMETRY_FILE)!);
+    expect(rows.length).toBe(TELEMETRY_MAX_ROWS + 1);
+    expect(rows[0]).toBe(TELEMETRY_HEADER);
+    expect(rows[1]).toBe("t,old,2");
+    expect(rows.at(-2)).toMatch(/,note,"two\nlines, ""quoted"""$/);
+    expect(rows.at(-1)).toMatch(/,quit,$/);
   });
 });
 

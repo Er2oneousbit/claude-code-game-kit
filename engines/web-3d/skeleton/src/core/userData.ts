@@ -6,16 +6,20 @@
 //           writeCrash(store, { header, error, stack, seed, tail: log.tail(40) })   // -> "crashes/crash_<ts>.txt"
 //           const tel = new Telemetry(store, () => telemetryAllowed(settings)) ; tel.event("screen", "title")
 // Notes   : No Phaser import (Vitest runs it). Files: logs/game.log (first line: version and timestamp;
-//           LOG_KEEP older logs as logs/game.1.log ...), crashes/crash_<ts>.txt, telemetry.csv.
+//           LOG_KEEP older logs as logs/game.1.log ...), crashes/crash_<ts>.txt, telemetry.csv (the last
+//           TELEMETRY_MAX_ROWS rows). Nothing here throws on a full or blocked store: `new Shell()` builds the
+//           log before the crash hook exists, so a full localStorage degrades to console-only logging.
 //           Telemetry never leaves the device: nothing here sends anything anywhere (SOP-19 explains what a
 //           game must add, and promise in its privacy policy, before it uploads the file).
 //
 // Pseudocode:
 //   GameLog(start): game.(KEEP-1).log -> game.KEEP.log ... game.log -> game.1.log ; new game.log with a header
+//                   (a write fails -> console only for this run: the older logs stay as they are)
 //   append(line): memory buffer (tail) + pending text, flushed every FLUSH_MS, before a crash, on page hide
-//   Telemetry.event: only when allowed(): telemetry.csv gets a header once, then one escaped CSV row per event
+//   Telemetry.event: only when allowed(): header + the last TELEMETRY_MAX_ROWS - 1 rows + this one, escaped CSV
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
+import { Log } from "./log";
 import type { TextStore } from "./textStore";
 
 // ---- Tunables ----------------------------------------------------------------
@@ -26,6 +30,7 @@ export const TAIL_LINES = 200; // kept in memory for crash and bug reports
 export const CRASH_DIR = "crashes/";
 export const TELEMETRY_FILE = "telemetry.csv";
 export const TELEMETRY_HEADER = "time,event,detail";
+export const TELEMETRY_MAX_ROWS = 2000; // older rows are dropped: the whole file is rewritten on every event
 
 /** 2026-11-01T09:05:03.042Z -> 20261101_090503_042 (sorts by time, safe in file names). */
 export function stamp(d: Date = new Date()): string {
@@ -39,14 +44,23 @@ export class GameLog {
   private readonly lines: string[] = [];
   private dirty = false;
   private full = false;
+  /** The rotation failed (store full or blocked): this run writes nothing, so the older logs survive. */
+  readonly consoleOnly: boolean = false;
 
   constructor(private readonly store: TextStore, header: string, now: Date = new Date()) {
-    for (let n = LOG_KEEP - 1; n >= 1; n--) {
-      const t = store.read(rotated(n));
-      if (t !== null) store.write(rotated(n + 1), t);
+    try {
+      for (let n = LOG_KEEP - 1; n >= 1; n--) {
+        const t = store.read(rotated(n));
+        if (t !== null) store.write(rotated(n + 1), t);
+      }
+      const prev = store.read(LOG_FILE);
+      if (prev !== null) store.write(rotated(1), prev);
+    } catch (err) {
+      // Writing the new log now would overwrite the previous run's (the one a bug report needs) and could
+      // throw again: leave the files as they are and log to the console only.
+      this.consoleOnly = true;
+      Log.warn("core", `${LOG_FILE} not written this run (storage full or blocked: ${String(err)}): console only`);
     }
-    const prev = store.read(LOG_FILE);
-    if (prev !== null) store.write(rotated(1), prev);
     this.text = `${header} ${now.toISOString()}\n`;
     this.dirty = true;
     this.flush();
@@ -55,7 +69,7 @@ export class GameLog {
   append(line: string): void {
     this.lines.push(line);
     if (this.lines.length > TAIL_LINES) this.lines.shift();
-    if (this.full) return;
+    if (this.full || this.consoleOnly) return;
     if (this.text.length + line.length > LOG_MAX_CHARS) {
       this.text += "[log full: later lines are only in the browser console]\n";
       this.full = true;
@@ -72,7 +86,7 @@ export class GameLog {
 
   /** Writes the log if it changed. Never throws (a full store must not crash the game). */
   flush(): void {
-    if (!this.dirty) return;
+    if (!this.dirty || this.consoleOnly) return;
     try {
       this.store.write(LOG_FILE, this.text);
       this.dirty = false;
@@ -113,15 +127,33 @@ export function csvField(v: string): string {
   return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
 }
 
+/** CSV text -> its records without the line breaks between them (a quoted field may hold a line break). */
+export function csvRows(text: string): string[] {
+  const out: string[] = [];
+  let start = 0;
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '"') quoted = !quoted; // an escaped "" flips twice: still inside the field
+    else if (text[i] === "\n" && !quoted) {
+      out.push(text.slice(start, i));
+      start = i + 1;
+    }
+  }
+  if (start < text.length) out.push(text.slice(start));
+  return out;
+}
+
 export class Telemetry {
   constructor(private readonly store: TextStore, private readonly allowed: () => boolean) {}
 
-  /** Appends one row when the player said yes; returns whether it did. */
+  /** Appends one row when the player said yes (the oldest go past TELEMETRY_MAX_ROWS); returns whether it did. */
   event(name: string, detail = "", now: Date = new Date()): boolean {
     if (!this.allowed()) return false;
     try {
-      const old = this.store.read(TELEMETRY_FILE) ?? TELEMETRY_HEADER + "\n";
-      this.store.write(TELEMETRY_FILE, old + [now.toISOString(), name, detail].map(csvField).join(",") + "\n");
+      const rows = csvRows(this.store.read(TELEMETRY_FILE) ?? "");
+      if (rows[0] === TELEMETRY_HEADER) rows.shift();
+      rows.push([now.toISOString(), name, detail].map(csvField).join(","));
+      this.store.write(TELEMETRY_FILE, [TELEMETRY_HEADER, ...rows.slice(-TELEMETRY_MAX_ROWS)].join("\n") + "\n");
       return true;
     } catch {
       return false;

@@ -89,7 +89,7 @@ automatically when the window loses focus), quit and crash screens.
 - **Crashes:** an uncaught error or rejected promise writes a crash file (version, seed, error, stack, log tail),
   logs `CRASH_WRITTEN` and shows the crash screen; in `smoke` it is also a console error, so the run fails.
 - **Telemetry** is off until the player says yes (asked once per launch on the title screen while undecided; Later
-  keeps it undecided). Events go to `telemetry.csv` on the device only; nothing is sent anywhere. Sending it
+  keeps it undecided). Events go to `telemetry.csv` on the device only (the last 2000 rows); nothing is sent anywhere. Sending it
   needs a server you run, a privacy policy that says what is collected, and an opt-out (SOP-19).
 - **F8** (debug builds) saves a bug report: `bug_<time>/` with the log tail, settings and a screenshot, plus a download.
 - **Localization:** every visible string goes through `shell.i18n.t(key)`; a new language is a new
@@ -143,7 +143,9 @@ None recorded yet. Add notes from videos, forums or your own runs here, with an 
   for `tools/art/frames_to_gif.py`. Headless software rendering is slow, so record 3D or WebGPU games with `--headed`.
 - `--headed` uses a visible browser with the real GPU; `--gpu` adds headless WebGPU flags.
 - `--drive SCENARIO` lets the game play a scripted run (`src/shell/drive.ts`) and waits for `DRIVE_DONE`
-  (`DRIVE_ABORT` fails at once):
+  (`DRIVE_ABORT` fails at once). The shell runs a scenario only with its own data dir (without `--data-dir`, smoke
+  uses `build/smoke-data`) and only in a dev server or an automated browser, so a `?drive=` link to the hosted
+  game logs `DRIVE_IGNORED` (smoke fails at once on it) and never touches the player's settings:
   - `menus`: title, settings, master volume to 0.5, reduce motion on, Back, quit; prints `SETTINGS_WRITTEN <path>`
     and checks the file holds the new values (and that `telemetry.csv` was not written without consent).
   - `crash`: plays, then throws a planted error; prints `CRASH_WRITTEN <path>`. Exit 1 is the expected result.

@@ -10,7 +10,8 @@
 //           and the pseudo-locale check work like any web page); the game itself stays in Phaser scenes
 //           ("main" = the play scene, "juice" = the juice demo, "backdrop" behind the menus).
 //           URL parameters: ?debug (debug build: Juice demo, F8), ?locale=<id> (overrides the setting),
-//           ?data-dir=<prefix> (user-data key prefix), ?drive=<scenario> (smoke, see drive.ts).
+//           ?data-dir=<prefix> (user-data key prefix), ?drive=<scenario> (smoke, see drive.ts: only with its
+//           own ?data-dir= and in a dev server or an automated browser, so a crafted link changes nothing).
 //
 // Pseudocode:
 //   constructor: store (prefix) -> game log (rotate) -> crash hook -> settings (repair) -> i18n -> input
@@ -25,9 +26,9 @@ import { I18n, PSEUDO_LOCALE, type Tables } from "../core/i18n";
 import { Log } from "../core/log";
 import { SaveStore } from "../core/saveStore";
 import { defaultSettings, settingsLoad, settingsText, telemetryAllowed, type Settings } from "../core/settings";
-import { MemoryStore, WebStorageStore, dataPrefix, type TextStore } from "../core/textStore";
+import { DEFAULT_DATA_PREFIX, MemoryStore, WebStorageStore, dataPrefix, type TextStore } from "../core/textStore";
 import { GameLog, Telemetry, TAIL_LINES, stamp, writeCrash } from "../core/userData";
-import { runDrive } from "./drive";
+import { DRIVE_PARAM, driveRequest, runDrive } from "./drive";
 import { ShellInput } from "./input";
 import { checkScreen } from "./pseudoCheck";
 import * as screens from "./screens";
@@ -106,7 +107,8 @@ export function download(name: string, text: string, type = "application/json"):
 export class Shell {
   readonly params = new URLSearchParams(location.search);
   readonly debugBuild = import.meta.env.DEV || this.params.has("debug");
-  readonly drive = this.params.get("drive") ?? "";
+  /** The smoke scenario to run ("" = none, or refused: see driveRequest in drive.ts). */
+  readonly drive: string;
   readonly store: TextStore;
   readonly log: GameLog;
   readonly i18n: I18n;
@@ -141,6 +143,9 @@ export class Shell {
     window.addEventListener("error", (e) => this.crash(e.error ?? e.message));
     window.addEventListener("unhandledrejection", (e) => this.crash(e.reason));
     window.addEventListener("pagehide", () => this.log.flush());
+    const drive = driveRequest(location.search, DEFAULT_DATA_PREFIX, import.meta.env.DEV || navigator.webdriver === true);
+    this.drive = drive.scenario;
+    if (drive.refused) Log.warn("drive", `DRIVE_IGNORED ${this.params.get(DRIVE_PARAM)}: ${drive.refused}`);
 
     const text = this.store.read(SETTINGS_FILE);
     const { settings, problems } = settingsLoad(text);

@@ -39,7 +39,8 @@ a loading screen) -> pause menu (the `pause` action, or losing window focus). Ca
 keyboard and gamepad reach every control, and the focused one has an outline.
 - **Shell autoload** (`scripts/shell/shell.gd`): settings (`GameSettings`), strings (`Shell.t`), bindings and
   prompt glyphs, the data folder, the log file, crash files, telemetry, F8 bug reports (debug builds).
-- **Data folder** (`user://`, or `--data-dir <dir>` after `--`): `settings.json` (+ `.bak`), `save_<slot>.json`
+- **Data folder** (`user://`, or `--data-dir <dir>` after `--`): `settings.json` (+ `.bak`; a missing or broken one is
+  recovered from `settings.json.tmp` or `.bak`, so delete all three to reset by hand), `save_<slot>.json`
   (+ `.bak`, `SaveStore`), `<data>/logs/game.log` (version and time on line 1, 5 older ones kept), `crashes/crash_<time>.txt`
   (version, seed, error, backtrace, log tail), `telemetry.csv`, `bug_<time>/` (F8: log tail, settings, screenshot).
 - **Strings**: `data/i18n/<locale>.json`, flat `{"key": "text"}` with `{name}` placeholders; `en` is complete, `fr`

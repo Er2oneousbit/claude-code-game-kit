@@ -8,6 +8,10 @@
 //           error, so smoke exits 1). Markers: SETTINGS_WRITTEN <file> (menus), CRASH_WRITTEN <file> (crash),
 //           PSEUDO_OK / PSEUDO_FAIL (pseudo), SHOWN <screen> (show:*). Navigation walks the focus with
 //           ui_down until the wanted item is focused, so the menus' keyboard navigation is part of the test.
+//           A scenario rewrites settings and saves, so driveRequest() runs one only with its own ?data-dir=
+//           (never the player's real keys) and only in a dev server or a browser under automation
+//           (navigator.webdriver: Playwright, which dev.py smoke uses). A crafted ?drive= link to the hosted
+//           game logs DRIVE_IGNORED and changes nothing. ?debug does not count: anyone can add it to a link.
 //
 // Pseudocode:
 //   menus : title (consent: Later) -> menu -> settings -> Audio: master 1.0 -> 0.5 -> Accessibility:
@@ -20,6 +24,7 @@
 import { PSEUDO_LOCALE } from "../core/i18n";
 import { Log } from "../core/log";
 import { settingsLoad } from "../core/settings";
+import { DATA_DIR_PARAM, dataPrefix } from "../core/textStore";
 import type { Shell } from "./app";
 import { SETTINGS_FILE } from "./meta";
 import { TABS } from "./settingsScreen";
@@ -28,6 +33,21 @@ import { TABS } from "./settingsScreen";
 const WAIT_MS = 8000; // longest wait for one screen
 const STEP_FRAMES = 2; // frames after each injected press (DOM and layout settle)
 const MENU_TARGET = { master: 0.5, reduceMotion: true }; // what --drive menus sets
+export const DRIVE_PARAM = "drive";
+
+/**
+ * The scenario this page may run: "" when none was asked for or it is refused (then `refused` says why).
+ * realPrefix is the player's own key prefix; trusted = a dev server or an automated browser.
+ */
+export function driveRequest(search: string, realPrefix: string, trusted: boolean): { scenario: string; refused: string } {
+  const asked = new URLSearchParams(search).get(DRIVE_PARAM) ?? "";
+  if (!asked) return { scenario: "", refused: "" };
+  if (dataPrefix(search, realPrefix) === realPrefix) {
+    return { scenario: "", refused: `needs its own ?${DATA_DIR_PARAM}= (a scenario rewrites settings and saves)` };
+  }
+  if (!trusted) return { scenario: "", refused: "runs only in a dev server or an automated browser (dev.py smoke)" };
+  return { scenario: asked, refused: "" };
+}
 
 const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 

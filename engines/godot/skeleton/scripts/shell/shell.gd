@@ -15,10 +15,14 @@
 #           rotated), crashes/crash_<time>.txt, telemetry.csv (only after the player said yes), bug_<time>/ (F8 in
 #           debug builds). When the engine runs a tool script (GUT tests, dev.py check) the Shell stays passive:
 #           defaults only, no files, no hooks. Autoload name "Shell" must NOT also be a class_name.
+#           A missing or broken settings.json is recovered from settings.json.tmp or .bak (see
+#           read_settings_file), so resetting settings by hand means deleting all three files.
 #
 # Pseudocode:
-#   boot: args -> data folder -> log file -> crash hook -> settings.json (fixed by GameSettings) -> string tables
-#         -> apply display, audio, input, accessibility -> telemetry "session_start" (only with consent)
+#   boot: args -> data folder -> log file -> crash hook -> settings.json, else its .tmp / .bak (fixed by
+#         GameSettings) -> string tables -> apply audio, accessibility, language; display and input only when
+#         settings came from disk (else the front end applies them) -> telemetry "session_start" (with consent)
+#   save: settings.json parses -> it becomes .bak; atomic write (AtomicFile)
 #   each frame: a script error caught by CrashHook -> crash file, CRASH_WRITTEN <path>; smoke run -> exit 1
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
@@ -54,6 +58,7 @@ const WINDOW_MODES: Dictionary = {"windowed": DisplayServer.WINDOW_MODE_WINDOWED
 var data_dir: String = ""
 var settings: Dictionary = GameSettings.defaults()
 var settings_problems: PackedStringArray = []
+var settings_source: String = "none" # load_settings(): "file", "backup" or "tmp" (recovered), "none" (defaults)
 var tables: Dictionary = {}
 var locale: String = "en"
 var locale_override: String = ""
@@ -90,11 +95,11 @@ func _ready() -> void:
 	Log.open_file(path(LOG_FILE), _log_header())
 	if not CrashHook.install():
 		Log.warn("shell", "no crash hook on this Godot version (needs 4.5+): crash files are not written")
-	var player_chose: bool = FileAccess.file_exists(path(SETTINGS_FILE))
 	load_settings()
 	_color_filter = ColorFilter.new()
 	add_child(_color_filter)
-	if player_chose:
+	if settings_source != "none":
+		# The player saved settings (settings.json, or the .bak / .tmp a cut-off save left behind)
 		apply_all()
 	else:
 		# Nothing saved yet: leave the project's own window size and input map alone (a game with its own main
@@ -140,28 +145,51 @@ func path(relative: String) -> String:
 
 
 func load_settings() -> void:
-	var file: String = path(SETTINGS_FILE)
-	var text: Variant = AtomicFile.read_text(file)
-	var loaded: Dictionary = GameSettings.load_text(text)
-	var problems: PackedStringArray = loaded["problems"]
-	if problems.has("unreadable") or problems.has("not an object"):
-		# A broken file: the previous good one is in .bak
-		var backup: Variant = AtomicFile.read_text(file + AtomicFile.BAK_SUFFIX)
-		if typeof(backup) != TYPE_NIL:
-			var from_backup: Dictionary = GameSettings.load_text(backup)
-			if not (from_backup["problems"] as PackedStringArray).has("unreadable"):
-				Log.warn("settings", "settings.json unreadable, using settings.json.bak")
-				loaded = from_backup
+	var loaded: Dictionary = read_settings_file(path(SETTINGS_FILE))
 	settings = loaded["settings"]
 	settings_problems = loaded["problems"]
-	if typeof(text) != TYPE_NIL and not settings_problems.is_empty():
-		Log.warn("settings", "fixed %d value(s) in settings.json: %s" % [settings_problems.size(),
-				", ".join(settings_problems)])
+	settings_source = loaded["source"]
+	if settings_source != "none" and not settings_problems.is_empty():
+		Log.warn("settings", "fixed %d value(s) in %s: %s" % [settings_problems.size(),
+				str(loaded["path"]).get_file(), ", ".join(settings_problems)])
+
+
+func read_settings_file(file: String) -> Dictionary:
+	# {"settings", "problems", "source", "path"}. source "file": settings.json (values fixed as needed);
+	# "tmp" / "backup": settings.json was missing or did not parse and a copy that parses was used; "none":
+	# nothing usable on disk, defaults. Order: settings.json missing -> .tmp, .bak (a save cut off between
+	# AtomicFile's delete and rename: .tmp is the new text, .bak the previous); settings.json broken -> .bak, .tmp
+	# (.bak is the last good version, a .tmp is a save that never finished).
+	var text: Variant = AtomicFile.read_text(file)
+	var loaded: Dictionary = GameSettings.load_text(text)
+	var missing: bool = typeof(text) == TYPE_NIL
+	if not missing and _parses(loaded):
+		return _from(loaded, "file", file)
+	var order: PackedStringArray = [AtomicFile.BAK_SUFFIX, AtomicFile.TMP_SUFFIX]
+	if missing:
+		order.reverse()
+	for suffix: String in order:
+		var other: Variant = AtomicFile.read_text(file + suffix)
+		if typeof(other) == TYPE_NIL:
+			continue
+		var recovered: Dictionary = GameSettings.load_text(other)
+		if _parses(recovered):
+			Log.warn("settings", "%s %s, using %s" % [file.get_file(), "missing" if missing else "unreadable",
+					(file + suffix).get_file()])
+			return _from(recovered, "backup" if suffix == AtomicFile.BAK_SUFFIX else "tmp", file + suffix)
+	return _from(loaded, "none" if missing else "file", file)
+
+
+func write_settings_file(file: String, values: Dictionary) -> Error:
+	# Only a settings.json that parses becomes the .bak: a corrupt one must not replace the last good backup
+	var current: Variant = AtomicFile.read_text(file)
+	var keep_backup: bool = typeof(current) != TYPE_NIL and _parses(GameSettings.load_text(current))
+	return AtomicFile.write_text(file, GameSettings.to_text(values), keep_backup)
 
 
 func save_settings() -> String:
 	var file: String = path(SETTINGS_FILE)
-	var err: Error = AtomicFile.write_text(file, GameSettings.to_text(settings))
+	var err: Error = write_settings_file(file, settings)
 	if err != OK:
 		Log.error("settings", "could not save %s (%s)" % [file, error_string(err)])
 		return ""
@@ -348,6 +376,18 @@ func glyph_texture(binding: String, gset: String = "") -> Texture2D:
 
 
 # ---- internals ----------------------------------------------------------------
+
+func _parses(loaded: Dictionary) -> bool:
+	# A GameSettings.load_text() result that came from real JSON settings (values may still have been fixed)
+	var problems: PackedStringArray = loaded["problems"]
+	return not (problems.has("unreadable") or problems.has("not an object"))
+
+
+func _from(loaded: Dictionary, source: String, file: String) -> Dictionary:
+	loaded["source"] = source
+	loaded["path"] = file
+	return loaded
+
 
 func _apply_display() -> void:
 	var d: Dictionary = settings["display"]

@@ -20,12 +20,14 @@
 //           error, failed request or HTTP 4xx/5xx response (a missing asset) fails it.
 //           Headless Chromium has no GPU: games that need WebGPU (local AI models) or real WebGL
 //           speed run with --headed (a visible window), or try --gpu (Chrome's headless WebGPU flags).
-//           --drive X adds ?drive=X and waits for DRIVE_DONE (DRIVE_ABORT fails at once); the game does the
-//           driving (src/shell/drive.ts in games built on the kit's shell). --data-dir DIR maps the game's
-//           user-data folder (localStorage) onto a real folder: its files are loaded into localStorage under the
-//           prefix DIR/ before the page starts (?data-dir=DIR) and written back after the run, so tests can
-//           read settings.json, logs/, crashes/ and telemetry.csv as files. A console line "<NAME>_WRITTEN <file>"
-//           is printed again with the real path. A --drive run without --data-dir uses build/smoke-data.
+//           --drive X adds ?drive=X and waits for DRIVE_DONE (DRIVE_ABORT or DRIVE_IGNORED fail at once); the
+//           game does the driving (src/shell/drive.ts in games built on the kit's shell). --data-dir DIR maps the
+//           game's user-data folder (localStorage) onto a real folder: its files are loaded into localStorage
+//           under the prefix DIR/ before the page starts (?data-dir=DIR) and written back after the run, so tests
+//           can read settings.json, logs/, crashes/ and telemetry.csv as files. A console line
+//           "<NAME>_WRITTEN <file>" is printed again with the real path. A --drive run without --data-dir uses
+//           build/smoke-data: the shell runs a scenario only with its own data dir, never on the player's keys.
+//           drive= and data-dir= inside --query count as --drive and --data-dir.
 //           --locale ID adds ?locale=ID. --compare runs tools/image_diff.py on the --screenshot.
 //
 // Pseudocode:
@@ -49,17 +51,18 @@ const FRAMES = Number(opt("--frames", "120"));
 const TIMEOUT_MS = Number(opt("--timeout-ms", "30000"));
 const MARKER = opt("--marker", "BOOT_OK");
 const QUERY = opt("--query", "");
-const DRIVE = opt("--drive", "");
+const QUERY_ARGS = new URLSearchParams(QUERY);
+const DRIVE = opt("--drive", "") || QUERY_ARGS.get("drive") || "";
 const UNTIL = opt("--until", "") || (DRIVE ? "DRIVE_DONE" : "");
-const ABORT = DRIVE ? "DRIVE_ABORT" : "";
-const FAIL_ON = [...opt("--fail-on", "").split(","), ABORT].filter(Boolean);
+const ABORTS = DRIVE ? ["DRIVE_ABORT", "DRIVE_IGNORED"] : []; // a failed step, or the game refused the scenario
+const FAIL_ON = [...opt("--fail-on", "").split(","), ...ABORTS].filter(Boolean);
 const LOCALE = opt("--locale", "");
 const [VW, VH] = opt("--viewport", "1280x720").split("x").map(Number);
 const ROOT = resolve(import.meta.dirname, "..");
 const SCREENSHOT = opt("--screenshot", "") && resolve(ROOT, opt("--screenshot", ""));
 const RECORD = opt("--record", "") && resolve(ROOT, opt("--record", ""));
 const RECORD_EVERY = Number(opt("--record-every", "66"));
-const DATA_ARG = (opt("--data-dir", "") || (DRIVE ? "build/smoke-data" : "")).replace(/\\/g, "/");
+const DATA_ARG = (opt("--data-dir", "") || QUERY_ARGS.get("data-dir") || (DRIVE ? "build/smoke-data" : "")).replace(/\\/g, "/");
 const DATA_DIR = DATA_ARG && resolve(ROOT, DATA_ARG);
 const DATA_PREFIX = DATA_ARG && (DATA_ARG.endsWith("/") ? DATA_ARG : DATA_ARG + "/");
 const COMPARE = opt("--compare", "") && resolve(ROOT, opt("--compare", ""));
@@ -95,11 +98,11 @@ try {
   process.exit(2);
 }
 
-/** Resolves when a console line contains `text` (or at once if already seen). */
-function waiter(text) {
+/** Resolves when a console line contains one of `texts` (or at once if already seen). */
+function waiter(...texts) {
   let hit = false, done;
   const p = new Promise((res) => (done = res));
-  return { promise: p, check: (line) => { if (!hit && line.includes(text)) { hit = true; done(true); } } };
+  return { promise: p, check: (line) => { if (!hit && texts.some((t) => line.includes(t))) { hit = true; done(true); } } };
 }
 const timeout = (ms) => new Promise((res) => setTimeout(() => res(false), ms));
 
@@ -186,7 +189,7 @@ try {
   }
   const boot = waiter(MARKER);
   const until = UNTIL ? waiter(UNTIL) : null;
-  const abort = ABORT ? waiter(ABORT) : null;
+  const abort = ABORTS.length ? waiter(...ABORTS) : null;
   page.on("console", (msg) => {
     const text = `[console.${msg.type()}] ${msg.text()}`;
     lines.push(text);
@@ -209,9 +212,9 @@ try {
     if (res.status() >= 400 && !res.url().endsWith("/favicon.ico")) errors.push(`[http ${res.status()}] ${res.url()}`);
   });
   const extra = new URLSearchParams();
-  if (DRIVE) extra.set("drive", DRIVE);
+  if (DRIVE && !QUERY_ARGS.has("drive")) extra.set("drive", DRIVE);
   if (LOCALE) extra.set("locale", LOCALE);
-  if (DATA_PREFIX) extra.set("data-dir", DATA_PREFIX);
+  if (DATA_PREFIX && !QUERY_ARGS.has("data-dir")) extra.set("data-dir", DATA_PREFIX);
   const query = [QUERY, extra.toString()].filter(Boolean).join("&");
   await page.goto(query ? `${base}?${query}` : base, { waitUntil: "load", timeout: TIMEOUT_MS });
   if (!(await Promise.race([boot.promise, timeout(TIMEOUT_MS)]))) {
@@ -233,7 +236,7 @@ try {
     if (until) {
       const hit = await Promise.race([until.promise, abort ? abort.promise.then(() => "abort") : new Promise(() => {}), timeout(TIMEOUT_MS)]);
       if (hit === "abort") {
-        /* the DRIVE_ABORT line is already an error */
+        /* the DRIVE_ABORT or DRIVE_IGNORED line is already an error (FAIL_ON) */
       } else if (!hit) {
         errors.push(`[smoke] marker ${JSON.stringify(UNTIL)} not seen within ${TIMEOUT_MS} ms`);
       } else {

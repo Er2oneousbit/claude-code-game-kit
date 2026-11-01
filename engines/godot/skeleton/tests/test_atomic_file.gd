@@ -1,11 +1,15 @@
 # ---------------------------------------------------------------------------
 # test_atomic_file.gd
-# Purpose : AtomicFile and SaveStore against the real filesystem, in a temporary folder: the write is atomic, the
-#           previous good save becomes .bak, a crash between write and rename leaves the old file intact, a corrupt
-#           save falls back to its backup, and a save from a newer build is never overwritten.
+# Purpose : AtomicFile, SaveStore and the Shell's settings file against the real filesystem, in a temporary
+#           folder: the write is atomic, the previous good save becomes .bak, a crash between write and rename
+#           leaves the old file intact, a corrupt save falls back to its backup, a save from a newer build is never
+#           overwritten, settings.json missing or broken is recovered from its .tmp / .bak, and a corrupt
+#           settings.json never replaces a good settings.json.bak.
 # Usage   : python tools/dev.py test --filter test_atomic_file.gd
-# Notes   : The crash is simulated by calling AtomicFile.write_tmp() and never commit(). Files go to
-#           user://gut_atomic_<time>/ and are deleted afterwards.
+# Notes   : The crash is simulated by calling AtomicFile.write_tmp() and never commit(); the Windows cut-off save
+#           by doing commit()'s steps by hand and stopping after the delete. Files go to
+#           user://gut_atomic_<time>/ and are deleted afterwards. The Shell is passive under GUT; its
+#           read_settings_file() and write_settings_file() take a path, so they run here as they do in the game.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 extends GutTest
@@ -86,6 +90,62 @@ func test_corrupt_primary_does_not_replace_good_backup() -> void:
 	SaveStore.write_slot(_dir, 3, {"health": 5, "level": 9, "difficulty": "normal"})
 	var bak: Dictionary = SaveStore.parse(AtomicFile.read_text(SaveStore.slot_path(_dir, 3) + ".bak"))
 	assert_eq(int(bak["envelope"]["data"]["level"]), 7, "the good backup survives a corrupt primary")
+
+
+func _settings(master: float) -> Dictionary:
+	var s: Dictionary = GameSettings.defaults()
+	(s["audio"] as Dictionary)["master"] = master
+	return s
+
+
+func _master(loaded: Dictionary) -> float:
+	var s: Dictionary = loaded["settings"]
+	var audio: Dictionary = s["audio"]
+	return float(audio["master"])
+
+
+func test_settings_cut_off_between_delete_and_rename_recover_the_new_text() -> void:
+	var file: String = _dir.path_join("settings.json")
+	assert_eq(Shell.write_settings_file(file, _settings(0.3)), OK)
+	# commit() by hand, the way it runs on Windows, and the game dies after the delete
+	assert_eq(AtomicFile.write_tmp(file, GameSettings.to_text(_settings(0.6))), OK)
+	assert_eq(DirAccess.copy_absolute(file, file + ".bak"), OK)
+	assert_eq(DirAccess.remove_absolute(file), OK)
+	var r: Dictionary = Shell.read_settings_file(file)
+	assert_eq(r["source"], "tmp", "settings.json missing: the finished .tmp is the newest choice")
+	assert_eq(_master(r), 0.6)
+	DirAccess.remove_absolute(file + ".tmp")
+	r = Shell.read_settings_file(file)
+	assert_eq(r["source"], "backup", "no .tmp: the previous version from .bak")
+	assert_eq(_master(r), 0.3)
+	DirAccess.remove_absolute(file + ".bak")
+	assert_eq(Shell.read_settings_file(file)["source"], "none", "nothing on disk: defaults, the player chose nothing")
+
+
+func test_settings_recovery_skips_copies_that_do_not_parse() -> void:
+	var file: String = _dir.path_join("settings.json")
+	_write_raw(file + ".tmp", "{\"audio\": {\"mas") # a save torn while writing the .tmp
+	_write_raw(file + ".bak", GameSettings.to_text(_settings(0.4)))
+	var r: Dictionary = Shell.read_settings_file(file)
+	assert_eq(r["source"], "backup")
+	assert_eq(_master(r), 0.4)
+	_write_raw(file, "garbage")
+	_write_raw(file + ".tmp", GameSettings.to_text(_settings(0.9)))
+	r = Shell.read_settings_file(file)
+	assert_eq(r["source"], "backup", "settings.json broken: .bak (last good) before an unfinished .tmp")
+	assert_eq(_master(r), 0.4)
+
+
+func test_corrupt_settings_do_not_replace_good_backup() -> void:
+	var file: String = _dir.path_join("settings.json")
+	Shell.write_settings_file(file, _settings(0.7))
+	Shell.write_settings_file(file, _settings(0.8))
+	assert_eq(_master(GameSettings.load_text(AtomicFile.read_text(file + ".bak"))), 0.7)
+	_write_raw(file, "{\"version\": 1, \"aud") # torn
+	assert_eq(Shell.write_settings_file(file, _settings(0.9)), OK)
+	assert_eq(_master(GameSettings.load_text(AtomicFile.read_text(file))), 0.9)
+	assert_eq(_master(GameSettings.load_text(AtomicFile.read_text(file + ".bak"))), 0.7,
+			"the good backup survives a corrupt settings.json")
 
 
 func test_newer_save_is_never_overwritten() -> void:
