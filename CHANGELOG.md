@@ -4,6 +4,32 @@
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
 ## 0.8.0 (unreleased)
+- **New engine: LÖVE (`love2d`, LÖVE 11.5, Lua).** `check` compiles every .lua with LÖVE's own LuaJIT in a separate
+  checker, `test` runs the project's own runner inside LÖVE with no window, `smoke` boots a small off-screen window (or
+  `--headless`) with `--screenshot` / `--record` through a canvas, `build` packages a .love and a fused Windows exe.
+  LÖVE's error screen waits for a key even without a window, so conf.lua's error handler makes every automated run exit
+  1 instead of hanging: proven with planted syntax errors in main.lua, conf.lua and a module, and a runtime error.
+- **Game feel for every code engine** (`SOP-18`, `/game-feel`): screen shake (trauma), hitstop, 14 easing curves, a
+  follow camera with deadzone and look-ahead that is the same at any frame rate, input buffer, coyote time, spring and
+  squash, and a flash limiter. One reference, `tools/golden_vectors.py`, writes `data/golden/juice.json` and
+  `shell.json`; every port's tests check them (Bevy 55 tests, C++/SDL2 26 tests and 598 assertions).
+- **The shell** (`SOP-19`, `/game-shell`): title, menus, settings, pause, credits and loading screens; settings with
+  validation that keeps unknown keys; versioned saves with migrations, atomic writes and a backup; actions with
+  rebinding (swap within a group) and button prompts that follow the device; string tables, plurals and a pseudo-locale;
+  log files, crash files and a bug-report key; telemetry that writes nothing until the player agrees.
+- **Accessibility** (`SOP-20`): the baseline every kit game ships (subtitles and captions, text size and 200 % scaling,
+  no colour-only information, remapping and no required holds, shake and flash safety, difficulty), from the Game
+  Accessibility Guidelines, the Xbox Accessibility Guidelines 101, 104, 117 and 118 and WCAG 2.3.1, all read this release.
+- **Shipping** (`SOP-21`, `docs/LEGAL.md`): Steam store assets, SteamPipe uploads, achievements, Steam Cloud, demos,
+  Playtest, Next Fest, Steam Deck review, butler for itch.io, SignTool, and a legal fill-in checklist; from Valve's,
+  itch.io's and Microsoft's docs read this release. `tools/credits.py` builds CREDITS.md and THIRD_PARTY_LICENSES.md from
+  the asset log and refuses assets with no license or a PLACEHOLDER; `.github/workflows/ci.yml` runs `check` and `test`
+  per engine on a hosted runner (not yet run on GitHub: verify on your first push).
+- **Balancing and marketing** (`SOP-22`, `SOP-23`), a bug severity scale and release bar (`SOP-02`), pacing for
+  hand-made levels (`SOP-17`), lighting and post-processing (`SOP-16`, `SOP-11`), and "After launch" (hotfixes, patch
+  notes, mods) in `SOP-06`; the release check gains the accessibility baseline and the credits check.
+- **`tools/image_diff.py`:** visual regression for `smoke --compare` (a standard-library PNG reader).
+- **Evidence:** E69 to E92 and findings F33 to F39.
 - **Local audio tools** (no account, no per-use cost):
   - `tools/audio/babble.py`: gibberish character voices for speech bubbles, made from code (no model). Five voices,
     `--variants` takes, `--lines` for a whole script, and a `.timeline.json` per line with the time each character
