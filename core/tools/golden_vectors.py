@@ -551,7 +551,9 @@ def _fill(text, args):
 
 
 def tr(tables, locale, key, args=None):
-    """A string through the fallback chain (fr-CA -> fr -> en); a missing key returns the key itself, so it shows."""
+    """A string through the fallback chain (fr-CA -> fr -> en); a missing key returns the key itself, so it shows.
+    Argument values are whole numbers or strings: format a float yourself before passing it (languages print 2.0
+    differently), and count text in code points, not UTF-16 units."""
     for loc in locale_chain(locale):
         table = tables.get(loc, {})
         if key in table:
