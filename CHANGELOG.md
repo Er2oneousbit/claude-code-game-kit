@@ -3,7 +3,7 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## 0.8.1 (unreleased)
+## 0.9.0 (2026-11-01): Wavesmith, Pixelorama, audio in every engine, and Dotwork's store, UI, VFX and lighting lanes
 - Wavesmith: the audio tools are one package, `tools/audio/wavesmith/`, with one front door (`wavesmith.py list`,
   `check`, `test`, and a subcommand per tool: loudness, events, sets, dialogue, music, babble, voice, sfx, synth,
   chiptune, eleven, fish, wav). Every module keeps its name and still runs on its own; docs, CI, the engines'

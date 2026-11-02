@@ -19,7 +19,7 @@ examples were built and tested on one Windows 11 machine.
 - **Shell screens** ship for Godot, LÖVE and web only; Unity, Unreal, Bevy and C++/SDL2 ship the tested logic and
   the screens are built in the engine. Display settings the browser cannot apply (vsync, resolution) are stored only.
 
-### 0.8.1 follow-ups (Dotwork)
+### 0.9.0 follow-ups (Dotwork)
 - **The new lanes not yet run together on one full game** (each was proven in a small test game; qa pack ran on a
   1,435-file test game): [#48](https://github.com/Er2oneousbit/claude-code-game-kit/issues/48).
 - **Anticipation** proven on keypoints and a mocked render, not yet on a rendered sprite:
