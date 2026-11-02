@@ -59,6 +59,20 @@ engine: web [#55](https://github.com/Er2oneousbit/claude-code-game-kit/issues/55
 [#61](https://github.com/Er2oneousbit/claude-code-game-kit/issues/61), RPG Maker MZ
 [#62](https://github.com/Er2oneousbit/claude-code-game-kit/issues/62).
 
+### Audio (Wavesmith) follow-ups
+- **OGG Vorbis decoder:** the start trim and multiplexed Ogg files are not checked against libvorbis's own reader
+  ([#73](https://github.com/Er2oneousbit/claude-code-game-kit/issues/73)); a stream with no end-of-stream page is refused, and a 5.1 file is decoded before it is refused
+  ([#74](https://github.com/Er2oneousbit/claude-code-game-kit/issues/74)).
+- **loudness:** non-WAV input is still decoded whole, and speed depends on the material ([#77](https://github.com/Er2oneousbit/claude-code-game-kit/issues/77)).
+- **Not run:** either `audio.yml` on GitHub, macOS or Python 3.10 ([#75](https://github.com/Er2oneousbit/claude-code-game-kit/issues/75), a sibling of #40); voice and sfx
+  off NVIDIA (Apple, AMD) ([#76](https://github.com/Er2oneousbit/claude-code-game-kit/issues/76)); RPG Maker MZ's GameAudio.js inside MZ ([#78](https://github.com/Er2oneousbit/claude-code-game-kit/issues/78)); Unity's
+  AudioEventPlayer and access sliders in Play mode ([#79](https://github.com/Er2oneousbit/claude-code-game-kit/issues/79)).
+- **Planned:** a music-render subcommand for ACE-Step 1.5 ([#80](https://github.com/Er2oneousbit/claude-code-game-kit/issues/80)).
+
+### Ideas and evaluations
+- **img2threejs:** code-only Three.js models from a reference image, for web-3d and image to 3D ([#71](https://github.com/Er2oneousbit/claude-code-game-kit/issues/71)).
+- **Gameplay visual review:** Claude reviews smoke screenshots against the art direction ([#72](https://github.com/Er2oneousbit/claude-code-game-kit/issues/72)).
+
 ### Never run or not run end to end
 - **macOS and Linux:** untested throughout (the scaffolder ran on Linux in an earlier version only). Tool and binary
   names for GIMP and Inkscape on those systems are unverified.
