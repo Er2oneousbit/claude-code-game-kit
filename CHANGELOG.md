@@ -161,7 +161,8 @@
   pure-Python Vorbis decoder within 5e-7 of ffmpeg's on 47 files) and MP3, Opus or AAC through ffmpeg when it is
   installed (optional, never shipped); a new `formats` subcommand (check, info, convert, OGG output with loop
   points); loudness, events audit, dialogue and music read them all.
-- Every OS: a new audio.yml workflow runs every Wavesmith exam and the golden checks on Linux, Windows and macOS
+- Every OS: a new audio.yml workflow (in every game, and a copy for the kit repository itself) runs every Wavesmith
+  exam and the golden checks on Linux, Windows and macOS
   (Python 3.9 and 3.12) when the audio tools change; all 18 exams pass on Linux (Ubuntu 26.04, Python 3.14) in a
   scaffolded game. macOS is untested here, and the workflow has not run on GitHub yet.
 - Every backend: `voice --device auto|cuda|mps|cpu` (auto: NVIDIA, then Apple Metal, then the CPU; a CPU take ran

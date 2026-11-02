@@ -1,0 +1,56 @@
+# ---------------------------------------------------------------------------
+# audio.yml (the kit repository's own workflow)
+# Purpose : Runs every Wavesmith exam and the audio golden checks on Linux, Windows and macOS for the kit itself,
+#           whenever core/tools/audio or core/data/golden changes. Generated games carry their own copy
+#           (core/.github/workflows/audio.yml, with game paths); this one tests the kit before a release.
+# Notes   : Standard library only: nothing is installed and no GPU is needed. Same jobs as the game copy, paths under
+#           core/. Not yet run on GitHub (verify on the first push that touches core/tools/audio).
+# Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# ---------------------------------------------------------------------------
+name: audio (kit)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "core/tools/audio/**"
+      - "core/data/golden/**"
+      - ".github/workflows/audio.yml"
+  pull_request:
+    paths:
+      - "core/tools/audio/**"
+      - "core/data/golden/**"
+      - ".github/workflows/audio.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wavesmith-exams:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.9", "3.12"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Wavesmith exams
+        shell: bash
+        env:
+          PYTHONIOENCODING: utf-8
+        run: python -B core/tools/audio/wavesmith/wavesmith.py test
+
+      - name: Golden vectors are current
+        shell: bash
+        run: |
+          python core/tools/audio/wavesmith/wavesmith.py events vectors --check
+          python core/tools/audio/wavesmith/wavesmith.py music vectors --check
+          python core/tools/audio/wavesmith/wavesmith.py access vectors --check
