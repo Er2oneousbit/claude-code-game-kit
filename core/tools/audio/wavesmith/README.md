@@ -16,7 +16,8 @@ Each subcommand is a module in this folder that also runs on its own (`python to
 The background, the sources and the measured proofs are in `docs/resources/audio.md`.
 
 Tested on Windows 11, an RTX 5060 Ti 16 GB, ComfyUI 0.43.0, Godot 4.7.2, LÖVE 11.5 and headless Chromium. Those
-numbers describe that setup and are not promises.
+numbers describe that setup and are not promises. The standard-library tools also pass every exam on Linux (Ubuntu
+26.04, Python 3.14); macOS is first exercised by `.github/workflows/audio.yml`.
 
 ## Contents
 1. [First run](#first-run-no-gpu)

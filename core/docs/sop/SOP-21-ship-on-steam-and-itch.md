@@ -84,7 +84,8 @@ The full fill-in checklist is `docs/LEGAL.md`; the short version, with a lawyer 
 
 ## 7. Continuous integration (standard practice)
 `.github/workflows/ci.yml` runs `python tools/dev.py check` and `test` on every push and pull request (the shipped file
-sets up Godot or Node for those overlays and documents the rest). A red build blocks a release. Builds for stores come
+sets up Godot or Node for those overlays and documents the rest). `.github/workflows/audio.yml` runs every Wavesmith
+exam on Linux, Windows and macOS whenever `tools/audio/` or `data/golden/` change. A red build blocks a release. Builds for stores come
 from a tagged commit (`SOP-06`), never from a working copy.
 
 ## Done when
