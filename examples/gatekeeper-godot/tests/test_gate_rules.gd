@@ -3,6 +3,8 @@
 # Purpose : The rules no model can change (same cases as the web version).
 # Usage   : python tools/dev.py test   (GUT)
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-02 with Claude (Fable 5.1, claude-fable-5-1): the after-the-end case compares with a snapshot
+#           (it compared the state with itself); the trust clamp and "no single line opens the gate" cases (#5)
 # ---------------------------------------------------------------------------
 extends GutTest
 
@@ -51,4 +53,20 @@ func test_misunderstood_line_costs_nothing() -> void:
 
 func test_nothing_changes_after_the_end() -> void:
 	var done := play(["greeting", "mentions_captain"])
-	assert_eq(GateRules.apply_intent(done, "threat", R).state, done)
+	var before := done.duplicate(true)   # a snapshot: the rules hand the same object back, and it equals itself
+	assert_eq(GateRules.apply_intent(done, "threat", R).state, before)
+	assert_eq(done, before, "the ended state is not touched in place either")
+
+
+func test_trust_stays_between_0_and_100() -> void:
+	assert_eq(play(["threat"]).trust, 0, "20 - 25 stops at 0")
+	var big: Dictionary = R.duplicate(true)
+	big.open_at = 1000   # out of reach: only the clamp matters
+	big.delta.greeting = 500
+	assert_eq(GateRules.apply_intent(GateRules.new_state(big), "greeting", big).state.trust, 100)
+
+
+func test_no_single_line_opens_the_gate() -> void:
+	# SOP-15: the game decides, not one model label
+	for intent: String in GateIntent.INTENTS:
+		assert_ne(GateRules.apply_intent(GateRules.new_state(R), intent, R).state.outcome, "open", intent)

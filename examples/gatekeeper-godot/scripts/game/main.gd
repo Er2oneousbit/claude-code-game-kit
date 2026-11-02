@@ -4,10 +4,11 @@
 #           guard, notice, trust bar) and the UI (start choice, chat log, input), runs the
 #           conversation through GuardBrain and the rules in GateRules.
 # Usage   : Main scene. User args after "--": --autoplay (winning script, scripted guard),
-#           --autoplay=rude (losing script), --llm (load the local model first), --debug,
+#           --autoplay=rude (losing script), --llm (load the local model first; an autoplay run that ends up on
+#           the scripted guard logs MODEL_MISSING and exits 1), --debug,
 #           --voice / --no-voice (live voice in headless runs / off; needs FISH_API_KEY, see guard_voice.gd).
-# Notes   : Markers for dev.py smoke and scenario runs: BOOT_OK, MODEL_READY, MODEL_LOST, INTENT, GATE_OPEN,
-#           TURNED_AWAY. The model is optional at every step; the scripted guard plays the same game.
+# Notes   : Markers for dev.py smoke and scenario runs: BOOT_OK, MODEL_READY, MODEL_LOST, MODEL_MISSING, INTENT,
+#           GATE_OPEN, TURNED_AWAY. The model is optional at every step; the scripted guard plays the same game.
 #           Without the model, a run from the project on Windows offers "Download the AI guard" (tools/setup_ai.py).
 #           "Start over" resets the game in place (no scene reload), so the brain and its 1.1 GB model stay loaded;
 #           a run counter drops a reply that lands after the restart. Both start buttons wait for a model load.
@@ -16,7 +17,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-02 with Claude (Fable 5.1, claude-fable-5-1): restart in place, one intro per start, a reply
 #           in flight dropped after "Start over" (#1); a line typed while Bram thinks stays in the box (#2);
-#           a model the brain dropped (error, timeouts in a row) is announced once, MODEL_LOST (#3)
+#           a model the brain dropped (error, timeouts in a row) is announced once, MODEL_LOST (#3);
+#           --llm --autoplay fails (MODEL_MISSING, exit 1) instead of passing on the scripted guard (#5)
 # ---------------------------------------------------------------------------
 extends Node2D
 
@@ -81,7 +83,8 @@ func _ready() -> void:
 	for a in args:
 		if a.begins_with("--autoplay"):
 			auto = "rude" if a == "--autoplay=rude" else "win"
-	if args.has("--llm"):
+	var want_model := args.has("--llm")
+	if want_model:
 		await _use_model()   # begins with the model, or with the scripted guard when the load fails
 	if auto != "" and not begun:
 		_begin()
@@ -97,7 +100,13 @@ func _ready() -> void:
 		while not voice.idle() and waited < Tuning.VOICE_DRAIN_S:   # let queued lines finish speaking
 			await get_tree().create_timer(0.25).timeout
 			waited += 0.25
-		get_tree().quit()
+		var code := 0
+		if want_model and not brain.has_model():
+			# The "real model" check must not pass on the scripted guard (it did: exit 0 after a warning)
+			Log.warn("ai", "MODEL_MISSING: this --llm run played the scripted guard"
+				+ (" (" + brain.lost_why + ")" if brain.lost_why != "" else ""))
+			code = 1
+		get_tree().quit(code)
 
 
 # ---- world --------------------------------------------------------------------

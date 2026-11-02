@@ -147,17 +147,14 @@ None of the example games has been played by a human tester; the bots and tests 
 intended. Their art and audio are for non-commercial use (`examples/LICENSE.md`). Each game's own
 `docs/HANDOFF.md` "Known broken or flaky" carries its items below.
 
-### Gatekeeper (Godot): 6 review findings, not fixed yet
+### Gatekeeper (Godot): 2 review findings, not fixed yet
 From an adversarial review (Claude Fable 5.1, 2026-10-26); the web twin got the matching fixes, this one has not.
 Fixed in 0.9.0: the model load and restart lifecycle (#1), the line typed while the guard thinks (#2), model errors
 and timeouts (#3: an error or two timeouts in a row hand the session to the scripted guard; history calls and
 `reset()` time out too; proven with a stand-in chat, the load path itself still needs the real plugin), the voice
-cache written before the reply was checked (#4).
-6. The README's "real model" check (`--llm --autoplay`) passes even when the model is missing (it falls back).
-7. The test `test_nothing_changes_after_the_end` compares a value with itself, so it cannot fail.
-8. The live eval counts keyword-fallback answers as model hits.
-10. Rule tests the web twin has (score limits, "no single answer opens the gate", the intent list matching the
-    regex) are missing here. The rules themselves are correct.
+cache written before the reply was checked (#4), the checks that could not fail (#5: `--llm --autoplay` exits 1 on
+the scripted guard, the after-the-end rule test compares with a snapshot, the eval counts only labels from the
+model, and the three rule tests the web twin had are here too).
 11. The scripted `--autoplay` run ends with `ERROR: 1 resources still in use at exit` (exit code still 0). No fix
     found; `dev.py smoke` is unaffected.
 12. An exported build would show players the developer hint "run: python tools/setup_ai.py", because the model file

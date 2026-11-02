@@ -14,6 +14,10 @@
   and a failed warm-up fails the load. Proven with a stand-in chat (the example's new test_guard_brain.gd exam) (#3).
 - Gatekeeper (Godot): a voice reply is cached only once it is known to play; a 200 that is not audio is skipped and
   leaves no file, and a broken cached file is dropped so the line is fetched again (#4).
+- Gatekeeper (Godot): the checks can fail now: `--llm --autoplay` logs `MODEL_MISSING` and exits 1 when the run
+  played the scripted guard; the after-the-end rule test compares with a snapshot instead of the state with itself;
+  the live eval counts only labels from the model and reports fallbacks apart (`tally()`, unit tested); the trust
+  clamp, "no single line opens the gate" and "the regex lists exactly the intents" tests from the web twin (#5).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

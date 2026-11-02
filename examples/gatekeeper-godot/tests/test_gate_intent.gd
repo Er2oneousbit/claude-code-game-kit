@@ -27,6 +27,11 @@ func test_long_lines_are_cut() -> void:
 	assert_lte(GateIntent.parse_line("A".repeat(1000)).length(), GateIntent.MAX_LINE)
 
 
+func test_the_classifier_regex_lists_exactly_the_intents() -> void:
+	# The model can only answer with a label the rules know, and every label the rules know is allowed
+	assert_eq(Array(GuardBrain.INTENT_REGEX.split("|")), Array(GateIntent.INTENTS))
+
+
 func test_keyword_fallback() -> void:
 	var cases := {
 		"Hello there!": "greeting", "Captain Wren sent me.": "mentions_captain", "Here, take some gold.": "bribe",
