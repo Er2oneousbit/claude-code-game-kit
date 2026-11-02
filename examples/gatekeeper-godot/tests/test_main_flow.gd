@@ -27,13 +27,15 @@ class FakeBrain extends GuardBrain:
 	var next_reply := {"intent": "greeting", "line": "Evening.", "source": "model", "ms": 1, "why": ""}
 	var resets := 0
 	var slow_reset := false   # true: reset() waits for reset_done, like history calls on the real model
+	var alive := true         # false once the brain dropped the model (an error, timeouts in a row)
+	var die_on_reply := false
 	var asked: Array[String] = []
 
 	func _init() -> void:
 		super(RandomNumberGenerator.new())
 
 	func has_model() -> bool:
-		return true
+		return alive
 
 	func load_model(_tree: SceneTree) -> String:
 		await loaded
@@ -47,6 +49,10 @@ class FakeBrain extends GuardBrain:
 	func reply(_tree: SceneTree, text: String, _mood: String) -> Dictionary:
 		asked.append(text)
 		await answered
+		if die_on_reply:
+			alive = false
+			lost_why = "model error: a stand-in failure"
+			return scripted(text, lost_why)
 		return next_reply.duplicate()
 
 
@@ -134,6 +140,20 @@ func test_a_line_typed_while_the_guard_is_thinking_is_kept() -> void:
 	assert_eq(main.input.text, "", "taken now")
 	assert_true(main.log_box.get_parsed_text().contains("You: Captain Wren sent me."))
 	assert_eq(brain.asked.back(), "Captain Wren sent me.")
+
+
+func test_a_lost_model_is_announced_once_and_the_game_goes_on() -> void:
+	button(SCRIPTED_BUTTON).pressed.emit()
+	brain.die_on_reply = true
+	main.say("Good evening.")
+	brain.answered.emit()
+	var text := main.log_box.get_parsed_text()
+	assert_true(text.contains("The AI guard stopped working; the scripted guard takes over."), "announced")
+	assert_eq(main.state.turns_left, Tuning.RULES.turns - 1, "the line still counted (it has a scripted reply)")
+	main.say("Nice helmet.")
+	brain.answered.emit()
+	assert_eq(main.log_box.get_parsed_text().count("stopped working"), 1, "announced once, not per line")
+	assert_eq(main.state.turns_left, Tuning.RULES.turns - 2, "the game goes on with the scripted guard")
 
 
 func test_enter_on_an_empty_box_does_nothing() -> void:

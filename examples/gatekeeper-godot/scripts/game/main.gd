@@ -6,7 +6,7 @@
 # Usage   : Main scene. User args after "--": --autoplay (winning script, scripted guard),
 #           --autoplay=rude (losing script), --llm (load the local model first), --debug,
 #           --voice / --no-voice (live voice in headless runs / off; needs FISH_API_KEY, see guard_voice.gd).
-# Notes   : Markers for dev.py smoke and scenario runs: BOOT_OK, MODEL_READY, INTENT, GATE_OPEN,
+# Notes   : Markers for dev.py smoke and scenario runs: BOOT_OK, MODEL_READY, MODEL_LOST, INTENT, GATE_OPEN,
 #           TURNED_AWAY. The model is optional at every step; the scripted guard plays the same game.
 #           Without the model, a run from the project on Windows offers "Download the AI guard" (tools/setup_ai.py).
 #           "Start over" resets the game in place (no scene reload), so the brain and its 1.1 GB model stay loaded;
@@ -15,7 +15,8 @@
 #           Sounds: ElevenLabs (A-0006 to A-0009, the web twin's files), with an ambience loop at the wall.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-02 with Claude (Fable 5.1, claude-fable-5-1): restart in place, one intro per start, a reply
-#           in flight dropped after "Start over" (#1); a line typed while Bram thinks stays in the box (#2)
+#           in flight dropped after "Start over" (#1); a line typed while Bram thinks stays in the box (#2);
+#           a model the brain dropped (error, timeouts in a row) is announced once, MODEL_LOST (#3)
 # ---------------------------------------------------------------------------
 extends Node2D
 
@@ -367,6 +368,7 @@ func say(text: String) -> void:
 	var my_run := run
 	busy = true
 	_add("you", text)
+	var had_model := brain.has_model()
 	var r: Dictionary = await brain.reply(get_tree(), text, GateRules.mood(state, Tuning.RULES))
 	if my_run != run:
 		return   # "Start over" while Bram was thinking: this reply belongs to the old game
@@ -381,6 +383,10 @@ func say(text: String) -> void:
 		Log.warn("ai", "FALLBACK: " + r.why)
 	if r.source == "model":
 		Log.info("ai", "MODEL_REPLY %d ms: %s" % [r.ms, r.line])
+	if had_model and not brain.has_model():
+		# An error, or timeouts in a row: the brain dropped the model so it does not cost that on every line
+		_add("sys", "The AI guard stopped working; the scripted guard takes over.")
+		Log.warn("ai", "MODEL_LOST: " + brain.lost_why)
 	_show(true)
 	if state.outcome != "talking":
 		_add("guard", GuardLines.outcome_line(state.outcome, rng))

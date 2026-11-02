@@ -8,6 +8,10 @@
   is dropped; both start buttons wait for a model load, which gives one intro instead of two (#1).
 - Gatekeeper (Godot): a line typed while the guard is still thinking (or after the game ended) stays in the box
   instead of being cleared and lost; Enter again sends it once Bram has answered (#2).
+- Gatekeeper (Godot): a plugin error is reported as `model error`, not "too slow"; an error or `MAX_SLOW_REPLIES`
+  (2) timeouts in a row drop the model for the session and the scripted guard plays on at once (`MODEL_LOST`),
+  instead of a 12 s timeout on every line; the history calls in `reply()` and `reset()` have the reply timeout too,
+  and a failed warm-up fails the load. Proven with a stand-in chat (the example's new test_guard_brain.gd exam) (#3).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

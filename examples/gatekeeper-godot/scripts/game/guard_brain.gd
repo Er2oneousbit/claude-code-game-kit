@@ -9,13 +9,27 @@
 # Usage   : var brain := GuardBrain.new(rng)
 #           var err := await brain.load_model(tree)             # "" when ready, else the reason (times out)
 #           var r := await brain.reply(tree, text, mood)        # {intent, line, source, ms, why}
+#           brain.has_model(), brain.lost_why                   # false once the model was dropped, and why
 # Notes   : The plugin is reached through ClassDB.class_call_static, never by class name, so this
 #           script parses and the game runs without the plugin (scripted guard only).
 #           NobodyWho v12 API (verified against its docs and source, 2026-10): NobodyWhoModel.create(path)
 #           loads once and is shared by both chats; NobodyWhoChat.create(model, config) and
 #           chat.ask(text).completed() are awaitable; NobodyWhoSamplerPresets.constrain_with_regex(re).
-#           Every model step has a timeout and a scripted fallback (SOP-15).
+#           Every model step has a timeout and a scripted fallback (SOP-15). A plugin error (completed()
+#           resolves with null) or Tuning.MAX_SLOW_REPLIES timeouts in a row drop the model for the session:
+#           has_model() turns false and the scripted guard plays on at once, instead of an error or a
+#           timeout on every line. Tested with a stand-in chat (tests/test_guard_brain.gd); the load path
+#           (NobodyWhoModel.create, the warm-up) needs the real plugin (verify).
+#
+# Pseudocode (reply)
+#   no model -> scripted
+#   seed the classifier, ask the label, ask the line: each awaited with a frame-polled timeout (_bounded)
+#   restarted meanwhile -> scripted (the game drops it) | label slow -> count, maybe drop | error -> drop
+#   bad label -> scripted | line slow or rejected -> the model's intent, scripted words | line error -> drop
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-02 with Claude (Fable 5.1, claude-fable-5-1): a restart stops the generation in flight (#1);
+#           errors told apart from timeouts, the model dropped after an error or MAX_SLOW_REPLIES timeouts,
+#           history calls and reset() bounded (#3)
 # ---------------------------------------------------------------------------
 class_name GuardBrain
 extends RefCounted
@@ -49,11 +63,19 @@ var SPEAK_EXAMPLES: Array = _pairs([
 ])
 const INTENT_REGEX := "greeting|flattery|bribe|threat|mentions_captain|question|other"
 const LINE_REGEX := "[A-Z][^\\n\\[\\]{}]{4,150}[.!?]"   # one sentence, no brackets or braces, at most ~150 chars
+const NO_REPLY := "the plugin returned no reply (see the console)"   # completed() resolved with null
+const TOO_SLOW := "model too slow"
 
 var rng: RandomNumberGenerator
 var classifier: Variant = null   # NobodyWhoChat
 var speaker: Variant = null      # NobodyWhoChat
+var reply_timeout_s: float = Tuning.REPLY_TIMEOUT_S   # instance copies of the tunables, so a test can shrink them
+var load_timeout_s: float = Tuning.LOAD_TIMEOUT_S
+var slow_in_a_row: int = 0       # model timeouts in a row; Tuning.MAX_SLOW_REPLIES of them drop the model
+var lost_why: String = ""        # why the model was dropped this session ("" while it is still in use)
 var _asking: Variant = null      # the chat generating a reply right now, so a restart can stop it
+var _epoch: int = 0              # bumped by reset(): a reply started before it ends after its current step
+var _tree: SceneTree = null      # the tree given to load_model() or reply(); Engine.get_main_loop() when none
 
 
 func _init(random: RandomNumberGenerator) -> void:
@@ -86,21 +108,22 @@ static func _sampler(regex: String) -> Variant:
 
 
 ## Load the model once, make both chats from it. Returns "" on success, else the reason.
-## Gives up after Tuning.LOAD_TIMEOUT_S, so a stuck load or warm-up never leaves the start screen hanging.
+## Gives up after load_timeout_s, so a stuck load or warm-up never leaves the start screen hanging.
 func load_model(tree: SceneTree) -> String:
 	var problem := model_problem()
 	if problem != "":
 		return problem
+	_tree = tree
 	var box := {"done": false, "err": "", "abandoned": false}
 	_load(box)
 	var t0 := Time.get_ticks_msec()
-	while not box.done and (Time.get_ticks_msec() - t0) < Tuning.LOAD_TIMEOUT_S * 1000.0:
-		await tree.process_frame
+	while not box.done and (Time.get_ticks_msec() - t0) < load_timeout_s * 1000.0:
+		await _loop().process_frame
 	if not box.done:
 		box.abandoned = true   # a late finish must not switch the guard to the model mid-game
 		classifier = null
 		speaker = null
-		return "the model took longer than %d s to load" % int(Tuning.LOAD_TIMEOUT_S)
+		return "the model took longer than %d s to load" % int(load_timeout_s)
 	return box.err
 
 
@@ -118,8 +141,12 @@ func _load(box: Dictionary) -> void:
 		box.err = "the chats failed to start (see the console)"
 		box.done = true
 		return
-	await c.ask("Hello").completed()   # first generation warms up the GPU: do it now, not on turn one
+	var warm: Variant = await c.ask("Hello").completed()   # first generation warms up the GPU: now, not on turn one
 	if box.abandoned:
+		return
+	if warm == null:   # the plugin's error: a model that cannot answer once will not answer later either
+		box.err = "the warm-up reply failed (see the console)"
+		box.done = true
 		return
 	classifier = c
 	speaker = s
@@ -128,16 +155,25 @@ func _load(box: Dictionary) -> void:
 
 
 ## Fresh conversation: both chats start from their examples. A reply still being generated ("Start over" while
-## Bram was thinking) is stopped first; the game drops its result by its run counter (verify with the real model).
+## Bram was thinking) is stopped first, and the reply() that started it ends after its current step (the game
+## drops its result by its run counter). History calls that hang drop the model (verify with the real model:
+## tested with a stand-in chat).
 func reset() -> void:
 	if not has_model():
 		return
+	_epoch += 1
 	if _asking != null:
 		_asking.stop_generation()
-	await classifier.reset_history()
-	await classifier.set_chat_history(CLASSIFY_EXAMPLES)
-	await speaker.reset_history()
-	await speaker.set_chat_history(SPEAK_EXAMPLES)
+	var r := await _bounded(_reseed.bind(classifier, speaker), reply_timeout_s)
+	if not r.done:
+		_drop("the model stopped answering (a history call took longer than %d s)" % int(reply_timeout_s))
+
+
+func _reseed(c: Variant, s: Variant) -> void:
+	await c.reset_history()
+	await c.set_chat_history(CLASSIFY_EXAMPLES)
+	await s.reset_history()
+	await s.set_chat_history(SPEAK_EXAMPLES)
 
 
 func scripted(text: String, why: String = "") -> Dictionary:
@@ -150,38 +186,103 @@ func reply(tree: SceneTree, text: String, mood: String) -> Dictionary:
 	text = text.substr(0, GateIntent.MAX_INPUT)
 	if not has_model():
 		return scripted(text)
+	_tree = tree
 	var t0 := Time.get_ticks_msec()
-	await classifier.set_chat_history(CLASSIFY_EXAMPLES)          # stateless classification
-	var label: Variant = await _timed(tree, classifier, text)
-	if label == null:
-		return scripted(text, "model too slow").merged({"ms": Time.get_ticks_msec() - t0}, true)
-	var intent := GateIntent.parse_label(str(label))
+	var epoch := _epoch
+	var c: Variant = classifier
+	var seeded := await _bounded(_seed.bind(c, CLASSIFY_EXAMPLES), reply_timeout_s)   # stateless classification
+	if epoch != _epoch:
+		return scripted(text, "restarted")
+	if not seeded.done:
+		return _slow(text, t0)
+	var label := await _ask(c, text)
+	if epoch != _epoch:
+		return scripted(text, "restarted")
+	if label.has("slow"):
+		return _slow(text, t0)
+	if label.has("error"):
+		_drop("model error: " + str(label.error))
+		return scripted(text, lost_why).merged({"ms": Time.get_ticks_msec() - t0}, true)
+	var intent := GateIntent.parse_label(str(label.text))
 	if intent == "":
-		return scripted(text, "invalid label: " + str(label).substr(0, 40)).merged({"ms": Time.get_ticks_msec() - t0}, true)
-	var spoken: Variant = await _timed(tree, speaker, "%s [intent: %s; Bram feels %s]" % [text, intent, mood])
-	var line := GateIntent.parse_line(str(spoken)) if spoken != null else ""
+		return scripted(text, "invalid label: " + str(label.text).substr(0, 40)).merged({"ms": Time.get_ticks_msec() - t0}, true)
+	var spoken := await _ask(speaker, "%s [intent: %s; Bram feels %s]" % [text, intent, mood])
+	if epoch != _epoch:
+		return scripted(text, "restarted")
+	var line := ""
 	var why := ""
+	if spoken.has("error"):
+		_drop("model error: " + str(spoken.error))
+		why = lost_why
+	elif spoken.has("slow"):
+		why = TOO_SLOW + " (the line), scripted instead"
+		_note_slow()
+	else:
+		slow_in_a_row = 0   # a whole reply in time: earlier timeouts were a hiccup
+		line = GateIntent.parse_line(str(spoken.text))
+		if line.is_empty():
+			why = "line rejected, scripted instead: " + JSON.stringify(str(spoken.text).substr(0, 80))
 	if line.is_empty():
 		line = GuardLines.fallback_line(intent, rng)    # keep the model's intent, script the words
-		why = "line rejected, scripted instead: " + JSON.stringify(str(spoken).substr(0, 80))
 	return {"intent": intent, "line": line, "source": "model", "ms": Time.get_ticks_msec() - t0, "why": why}
 
 
-## Ask a chat, give up after Tuning.REPLY_TIMEOUT_S. Returns the text, or null on timeout.
-func _timed(tree: SceneTree, chat: Variant, prompt: String) -> Variant:
-	var box := {"done": false, "text": null}
+## A label that never came: counted; the scripted guard answers this line.
+func _slow(text: String, t0: int) -> Dictionary:
+	_note_slow()
+	return scripted(text, TOO_SLOW).merged({"ms": Time.get_ticks_msec() - t0}, true)
+
+
+func _note_slow() -> void:
+	slow_in_a_row += 1
+	if slow_in_a_row >= Tuning.MAX_SLOW_REPLIES:
+		_drop("the model timed out %d times in a row" % slow_in_a_row)
+
+
+## The model is not asked again this session: has_model() turns false and the scripted guard plays on.
+func _drop(why: String) -> void:
+	lost_why = why
+	classifier = null
+	speaker = null
+
+
+func _seed(chat: Variant, history: Array) -> void:
+	await chat.set_chat_history(history)
+
+
+## One completion. {"text": ...}, {"slow": true} (stopped after reply_timeout_s) or {"error": ...} (the plugin
+## resolved completed() with null). Only the last two are the model's fault, and only the error is final.
+func _ask(chat: Variant, prompt: String) -> Dictionary:
 	_asking = chat
-	_ask(box, chat, prompt)
-	var t0 := Time.get_ticks_msec()
-	while not box.done and (Time.get_ticks_msec() - t0) < Tuning.REPLY_TIMEOUT_S * 1000.0:
-		await tree.process_frame
+	var r := await _bounded(_completion.bind(chat, prompt), reply_timeout_s)
 	_asking = null
-	if not box.done:
+	if not r.done:
 		chat.stop_generation()
-		return null
-	return box.text
+		return {"slow": true}
+	if r.value == null:
+		return {"error": NO_REPLY}
+	return {"text": str(r.value)}
 
 
-func _ask(box: Dictionary, chat: Variant, prompt: String) -> void:
-	box.text = await chat.ask(prompt).completed()
+func _completion(chat: Variant, prompt: String) -> Variant:
+	return await chat.ask(prompt).completed()
+
+
+## Run `work` (a coroutine Callable) and give up after `seconds` of frames. Returns {done, value}; a late
+## finish still writes into a box nobody reads, which is harmless.
+func _bounded(work: Callable, seconds: float) -> Dictionary:
+	var box := {"done": false, "value": null}
+	_run_into(box, work)
+	var t0 := Time.get_ticks_msec()
+	while not box.done and (Time.get_ticks_msec() - t0) < seconds * 1000.0:
+		await _loop().process_frame
+	return box
+
+
+func _run_into(box: Dictionary, work: Callable) -> void:
+	box.value = await work.call()
 	box.done = true
+
+
+func _loop() -> SceneTree:
+	return _tree if _tree != null else Engine.get_main_loop() as SceneTree

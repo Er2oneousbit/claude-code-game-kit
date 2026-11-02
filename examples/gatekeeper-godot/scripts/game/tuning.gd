@@ -19,6 +19,7 @@ const MODEL_PATH: String = "res://models/qwen2.5-1.5b-instruct-q4_k_m.gguf"
 const MODEL_NAME: String = "Qwen2.5 1.5B"
 const N_CTX: int = 2048
 const REPLY_TIMEOUT_S: float = 12.0   # a model reply slower than this falls back to the scripted line
+const MAX_SLOW_REPLIES: int = 2       # this many model timeouts in a row drop the model: the scripted guard plays on
 const LOAD_TIMEOUT_S: float = 90.0    # loading plus the warm-up reply; slower than this and the scripted guard plays
 const SEED: int = 7
 

@@ -39,7 +39,7 @@ own Fish Audio API key**; nothing is shipped with the game, and without a key he
 | Piece | File |
 |---|---|
 | The rules: trust per intent, when the gate opens. The model never sees them | `scripts/core/gate_rules.gd` |
-| Two model jobs, one call each: a label (regex: one exact intent, no history), then one sentence | `scripts/game/guard_brain.gd` |
+| Two model jobs, one call each: a label (regex: one exact intent, no history), then one sentence. Every step has a timeout; an error or two timeouts in a row hand the session to the scripted guard | `scripts/game/guard_brain.gd` |
 | Checks on every model output, scripted fallback on anything late or wrong | `scripts/core/gate_intent.gd`, `scripts/core/guard_lines.gd` |
 | Recorded model outputs the checks must accept or reject (shared with the web twin) | `tests/fixtures/recorded.json` |
 | A live eval: 14 labelled lines through the real model | `tools/eval_guard.gd` (93%, about 190 ms per reply on an RTX 5060 Ti) |
