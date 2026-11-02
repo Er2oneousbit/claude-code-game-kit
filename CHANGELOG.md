@@ -11,7 +11,8 @@ Fixes from a fresh review of 0.8.1.
   unpacked, layers, tags); blending large canvases uses bounded memory.
 - Dotwork hand polish: a tag holds at most 100 frames in both editors (Aseprite's 101st frame became a bogus
   animation); an untagged character export says so.
-- Dotwork pixelorama: `build --overwrite` keeps the replaced file as `<name>.pxo.bak`.
+- Dotwork pixelorama: `build --overwrite` keeps the replaced file as `<name>.pxo.bak`, which the game's `.gitignore`
+  now ignores (it would not go through LFS).
 - README: nine engines, eight tested against their real toolchains (the intro still said eight and seven).
 
 ## 0.8.1 (2026-11-01): Wavesmith, Pixelorama, audio in every engine, and Dotwork's store, UI, VFX and lighting lanes

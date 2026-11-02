@@ -44,4 +44,6 @@ CLAUDE.local.md
 scratch/
 *.log
 *.tmp
+# Hand-polish backups (dotwork.py pixelorama --overwrite keeps the replaced project here)
+*.pxo.bak
 
