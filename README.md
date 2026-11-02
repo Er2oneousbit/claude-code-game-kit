@@ -1,7 +1,8 @@
 # Claude Code Game Kit
 
-Make games with Claude Code that hold together. Every project gets the same commands, tests and habits on any of eight
-engines (seven tested against their real toolchains; RPG Maker MZ is an untested proof of concept), so Claude builds, tests and checks your game instead of guessing. Free and open source (MIT).
+Make games with Claude Code that hold together. Every project gets the same commands, tests and habits on any of nine
+engines (eight tested against their real toolchains; RPG Maker MZ is an untested proof of concept), so Claude builds,
+tests and checks your game instead of guessing. Free and open source (MIT).
 
 **New to this?** Read **[START_HERE.md](START_HERE.md)**: install Claude Code and Python, open this folder in VS Code (or the Claude desktop app), open Claude Code and type **Start**. Claude interviews you about your game, writes a one-page game plan with you, then sets everything up. The steps below are the same thing done by hand.
 
