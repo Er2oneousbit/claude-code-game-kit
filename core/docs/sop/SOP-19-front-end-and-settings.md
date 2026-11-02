@@ -85,7 +85,7 @@ values in `data/golden/shell.json` that every port's tests check (K01).
 - An unhandled error writes `crashes/crash_<time>.txt` (version, seed if any, the error, the log tail) before the
   engine's own handler runs; in automated runs it exits non-zero so `dev.py smoke` fails.
 - In debug builds a key (F8) bundles the log tail, settings and a screenshot into a folder the player can attach to
-  the Bug issue form (`SOP-03`).
+  the Bug issue form (`SOP-03`), after checking it for user names, local paths and anything private (issues are public).
 
 ## 8. Telemetry (consent first)
 Off until the player chooses Yes on a one-time question; No and Later write nothing. The kit's version appends events

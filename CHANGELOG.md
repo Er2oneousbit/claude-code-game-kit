@@ -3,7 +3,9 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## 0.9.0 (2026-11-01): Wavesmith, Pixelorama, audio in every engine, and Dotwork's store, UI, VFX and lighting lanes
+## 0.8.1 (2026-11-01): Wavesmith, Pixelorama, audio in every engine, and Dotwork's store, UI, VFX and lighting lanes
+Released as 0.8.1 at the user's call: by the kit's own rule (SOP-06) new features are a MINOR bump, and 0.9.0 is kept
+for the next release.
 - Wavesmith: the audio tools are one package, `tools/audio/wavesmith/`, with one front door (`wavesmith.py list`,
   `check`, `test`, and a subcommand per tool: loudness, events, sets, dialogue, music, babble, voice, sfx, synth,
   chiptune, eleven, fish, wav). Every module keeps its name and still runs on its own; docs, CI, the engines'
@@ -152,7 +154,7 @@
   audio case covers a stolen voice that stops ducking when its replacement ends.
 - Translations and bark lines drafted by a local language model are drafts (docs/resources/audio.md, SOP-19 step 6):
   the placeholders must survive exactly, back-translation flags drift, and a person reviews before anything ships.
-  No language-model code ships in the kit.
+  No language-model drafting code ships in the kit.
 - Audio logic in every engine: Unreal's GameKitShell plugin (GameKitAudioDirector.h, GameKitMusicDirector.h,
   GameKitAudioAccess.h; 13 new golden tests, 68 GameKit tests in all) and RPG Maker MZ (GameAudio.js, tested in
   Node; verify in RPG Maker MZ) now follow the same audio, music and access golden vectors as the other seven
