@@ -3,6 +3,10 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.9.0 (unreleased)
+- Gatekeeper (Godot): "Start over" resets the game in place, so the loaded model stays and a reply still on its way
+  is dropped; both start buttons wait for a model load, which gives one intro instead of two (#1).
+
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
 - Dotwork hand polish: a frame or clip added in the editor takes only its sibling's provenance (models, workflow,

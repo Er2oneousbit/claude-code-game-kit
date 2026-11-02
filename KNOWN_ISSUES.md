@@ -147,11 +147,9 @@ None of the example games has been played by a human tester; the bots and tests 
 intended. Their art and audio are for non-commercial use (`examples/LICENSE.md`). Each game's own
 `docs/HANDOFF.md` "Known broken or flaky" carries its items below.
 
-### Gatekeeper (Godot): 12 review findings, not fixed yet
+### Gatekeeper (Godot): 10 review findings, not fixed yet
 From an adversarial review (Claude Fable 5.1, 2026-10-26); the web twin got the matching fixes, this one has not.
-1. Picking the scripted guard while the model loads shows the intro twice, and the game swaps to the model mid-game.
-2. "Start over" reloads the scene, so the 1.1 GB model unloads and loads again on every restart (and a restart
-   during a load runs two loads at once).
+The model load and restart lifecycle (#1) is fixed in 0.9.0.
 3. A line typed while the guard is thinking is cleared and lost.
 4. An engine error is reported as "model too slow", and a failing model costs the full 12 s timeout on every line
    without handing over to the scripted guard.

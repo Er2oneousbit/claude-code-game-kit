@@ -53,6 +53,7 @@ const LINE_REGEX := "[A-Z][^\\n\\[\\]{}]{4,150}[.!?]"   # one sentence, no brack
 var rng: RandomNumberGenerator
 var classifier: Variant = null   # NobodyWhoChat
 var speaker: Variant = null      # NobodyWhoChat
+var _asking: Variant = null      # the chat generating a reply right now, so a restart can stop it
 
 
 func _init(random: RandomNumberGenerator) -> void:
@@ -126,10 +127,13 @@ func _load(box: Dictionary) -> void:
 	box.done = true
 
 
-## Fresh conversation: both chats start from their examples.
+## Fresh conversation: both chats start from their examples. A reply still being generated ("Start over" while
+## Bram was thinking) is stopped first; the game drops its result by its run counter (verify with the real model).
 func reset() -> void:
 	if not has_model():
 		return
+	if _asking != null:
+		_asking.stop_generation()
 	await classifier.reset_history()
 	await classifier.set_chat_history(CLASSIFY_EXAMPLES)
 	await speaker.reset_history()
@@ -166,10 +170,12 @@ func reply(tree: SceneTree, text: String, mood: String) -> Dictionary:
 ## Ask a chat, give up after Tuning.REPLY_TIMEOUT_S. Returns the text, or null on timeout.
 func _timed(tree: SceneTree, chat: Variant, prompt: String) -> Variant:
 	var box := {"done": false, "text": null}
+	_asking = chat
 	_ask(box, chat, prompt)
 	var t0 := Time.get_ticks_msec()
 	while not box.done and (Time.get_ticks_msec() - t0) < Tuning.REPLY_TIMEOUT_S * 1000.0:
 		await tree.process_frame
+	_asking = null
 	if not box.done:
 		chat.stop_generation()
 		return null

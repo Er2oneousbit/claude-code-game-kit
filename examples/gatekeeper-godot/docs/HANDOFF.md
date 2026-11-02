@@ -23,10 +23,10 @@ Done as a kit example: talk-past-the-guard with a local language model (two cons
 - 
 
 ## Known broken or flaky
-- 12 review findings from 2026-10-26 are not fixed yet (the web twin has its fixes): the full list is in KNOWN_ISSUES at the kit's root. The main ones:
-  picking the scripted guard during the model load doubles the intro; "Start over" reloads the 1.1 GB model;
+- 10 review findings from 2026-10-26 are not fixed yet (the web twin has its fixes): the full list is in KNOWN_ISSUES at the kit's root. The main ones:
   a line typed while the guard thinks is lost; engine errors show as "too slow" with no hand-over; one bad voice reply
-  poisons the cache; `--llm --autoplay` passes on the fallback; one rule test cannot fail.
+  poisons the cache; `--llm --autoplay` passes on the fallback; one rule test cannot fail. Fixed 2026-11-02: the double
+  intro and the model reload on "Start over" (#1, `tests/test_main_flow.gd`).
 - Scripted `--autoplay` ends with `ERROR: 1 resources still in use at exit` (exit 0; no fix found; `dev.py smoke` unaffected).
 
 ## Commands that matter right now

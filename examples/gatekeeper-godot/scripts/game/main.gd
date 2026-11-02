@@ -9,9 +9,13 @@
 # Notes   : Markers for dev.py smoke and scenario runs: BOOT_OK, MODEL_READY, INTENT, GATE_OPEN,
 #           TURNED_AWAY. The model is optional at every step; the scripted guard plays the same game.
 #           Without the model, a run from the project on Windows offers "Download the AI guard" (tools/setup_ai.py).
+#           "Start over" resets the game in place (no scene reload), so the brain and its 1.1 GB model stay loaded;
+#           a run counter drops a reply that lands after the restart. Both start buttons wait for a model load.
 #           Tiles from Kenney Tiny Dungeon (A-0003): 40 wall, 48 floor, 45 door, 97 guard, 84 traveler.
 #           Sounds: ElevenLabs (A-0006 to A-0009, the web twin's files), with an ambience loop at the wall.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-02 with Claude (Fable 5.1, claude-fable-5-1): restart in place, one intro per start, a reply
+#           in flight dropped after "Start over" (#1)
 # ---------------------------------------------------------------------------
 extends Node2D
 
@@ -36,8 +40,14 @@ var brain: GuardBrain
 var state: Dictionary
 var busy := false
 var debug := false
+var run := 0              # bumped by _restart(); say() drops a reply that comes back in a later run
+var begun := false        # _begin() ran, so neither start button nor a finished load may run the intro again
+var loading := false      # a model load is under way: both start buttons wait for it
+var restarting := false   # "Start over" clicked, the reset has not finished yet (a double click restarts once)
 var door: Sprite2D
 var guard: Sprite2D
+var guard_home: Vector2   # where the guard stands until the gate opens (put back on restart)
+var end_tween: Tween      # the gate-open animation, killed by a restart during it
 var trust_bar: ColorRect
 var trust_label: Label
 var start_panel: PanelContainer
@@ -45,6 +55,7 @@ var chat_panel: PanelContainer
 var log_box: RichTextLabel
 var input: LineEdit
 var ai_button: Button
+var plain_button: Button   # "Play with the scripted guard"
 var get_button: Button   # "Download the AI guard": only when it is missing and this is a run from the project
 var status: Label
 var sfx: AudioStreamPlayer
@@ -70,8 +81,8 @@ func _ready() -> void:
 		if a.begins_with("--autoplay"):
 			auto = "rude" if a == "--autoplay=rude" else "win"
 	if args.has("--llm"):
-		await _use_model()
-	elif auto != "":
+		await _use_model()   # begins with the model, or with the scripted guard when the load fails
+	if auto != "" and not begun:
 		_begin()
 	if auto != "":
 		for line in (RUDE_SCRIPT if auto == "rude" else WIN_SCRIPT):
@@ -112,6 +123,7 @@ func _build_world() -> void:
 	var gate_x := int(cols / 2.0) * T
 	door = _tile(45, Vector2(gate_x, 2 * T))
 	guard = _tile(97, Vector2(gate_x + T * 1.2, 3 * T + 6))
+	guard_home = guard.position
 	var traveler := _tile(84, Vector2(gate_x - T * 0.2, 3 * T + T * 2.4))
 	traveler.flip_h = true
 	var notice := ColorRect.new()
@@ -168,11 +180,11 @@ func _build_ui() -> void:
 	ai_button.add_theme_font_size_override("font_size", UI_FONT)
 	ai_button.pressed.connect(func() -> void: _use_model())
 	row.add_child(ai_button)
-	var plain := Button.new()
-	plain.text = "Play with the scripted guard"
-	plain.add_theme_font_size_override("font_size", UI_FONT)
-	plain.pressed.connect(_begin)
-	row.add_child(plain)
+	plain_button = Button.new()
+	plain_button.text = "Play with the scripted guard"
+	plain_button.add_theme_font_size_override("font_size", UI_FONT)
+	plain_button.pressed.connect(_start_scripted)
+	row.add_child(plain_button)
 	status = Label.new()
 	status.add_theme_font_size_override("font_size", 12)
 	box.add_child(status)
@@ -207,7 +219,7 @@ func _build_ui() -> void:
 	say_row.add_child(input)
 	var again := Button.new()
 	again.text = "Start over"
-	again.pressed.connect(func() -> void: get_tree().reload_current_scene())
+	again.pressed.connect(func() -> void: _restart())
 	say_row.add_child(again)
 
 
@@ -226,15 +238,30 @@ func _panel(layer: CanvasLayer) -> PanelContainer:
 
 
 # ---- flow ---------------------------------------------------------------------
+## "Talk to the AI guard": load the model, then begin. Both start buttons wait for the load, so the game cannot
+## begin twice or switch guards mid-game (a load that fails begins with the scripted guard).
 func _use_model() -> void:
+	if begun or loading:
+		return
+	loading = true
 	ai_button.disabled = true
+	plain_button.disabled = true
 	status.text = "Loading %s..." % Tuning.MODEL_NAME
 	var err: String = await brain.load_model(get_tree())
+	loading = false
 	if err != "":
 		Log.warn("ai", "model unavailable: " + err)
 		status.text = "AI guard unavailable (%s): the scripted guard takes over." % err
 	else:
 		Log.info("ai", "MODEL_READY")
+	if not begun:
+		_begin()
+
+
+## "Play with the scripted guard": never during a load (the button is disabled, but a key or a race is not).
+func _start_scripted() -> void:
+	if begun or loading:
+		return
 	_begin()
 
 
@@ -280,6 +307,7 @@ func _ai_note(text: String) -> void:
 
 
 func _begin() -> void:
+	begun = true
 	start_panel.visible = false
 	chat_panel.visible = true
 	_add("sys", "You are talking to an AI guard running on your computer. He will improvise; the rules do not."
@@ -287,6 +315,30 @@ func _begin() -> void:
 	_add("guard", "Halt. The gate is closed.")
 	_show(false)
 	input.grab_focus()
+
+
+## "Start over" without reloading the scene: the brain (and the model it took seconds to load) stays. A reply
+## still on its way belongs to the old game; say() drops it because the run counter moved on.
+func _restart() -> void:
+	if restarting:
+		return   # a double click would queue two restarts and two intros
+	restarting = true
+	run += 1
+	busy = false   # the reply in flight is dropped by say(), so nothing else would clear this
+	state = GateRules.new_state(Tuning.RULES)
+	log_box.clear()
+	if end_tween != null and end_tween.is_valid():
+		end_tween.kill()
+	door.modulate.a = 1.0
+	guard.position = guard_home
+	await brain.reset()   # stops a reply in flight, fresh history; nothing to do without the model
+	restarting = false
+	_begin()
+
+
+## Whether say() would take a line now.
+func _can_say() -> bool:
+	return not busy and not restarting and state.outcome == "talking"
 
 
 func _submit(text: String) -> void:
@@ -308,11 +360,14 @@ func _add(kind: String, text: String) -> void:
 
 
 func say(text: String) -> void:
-	if busy or state.outcome != "talking":
+	if not _can_say():
 		return
+	var my_run := run
 	busy = true
 	_add("you", text)
 	var r: Dictionary = await brain.reply(get_tree(), text, GateRules.mood(state, Tuning.RULES))
+	if my_run != run:
+		return   # "Start over" while Bram was thinking: this reply belongs to the old game
 	var step := GateRules.apply_intent(state, r.intent, Tuning.RULES)
 	state = step.state
 	_add("guard", r.line)
@@ -360,8 +415,9 @@ func _start_ambience() -> void:
 func _finish() -> void:
 	if state.outcome == "open":
 		sfx.stream = SND_OPEN
-		create_tween().tween_property(door, "modulate:a", 0.0, 0.6)
-		create_tween().tween_property(guard, "position:x", guard.position.x + T, 0.6)
+		end_tween = create_tween().set_parallel(true)
+		end_tween.tween_property(door, "modulate:a", 0.0, 0.6)
+		end_tween.tween_property(guard, "position:x", guard_home.x + T, 0.6)
 		Log.info("game", "GATE_OPEN")
 	else:
 		sfx.stream = SND_AWAY
