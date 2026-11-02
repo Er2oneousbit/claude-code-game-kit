@@ -40,6 +40,7 @@ import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import audioio  # noqa: E402
 import flacfile  # noqa: E402
 from wavfile import read_wav_channels  # noqa: E402
 
@@ -67,20 +68,12 @@ def dbg(msg):
 
 # ---- Voice files --------------------------------------------------------------------
 def read_mono(path):
-    """(samples of the loudest channel envelope source, rate) from WAV or FLAC."""
-    data = Path(path).read_bytes()
-    if data[:4] == b"fLaC":
-        try:
-            info, chans, _ = flacfile.decode(data)
-        except (flacfile.FlacError, flacfile.FlacCorrupt) as exc:
-            raise ToolError(f"{path}: {exc}")
-        scale = float(1 << (info["bits"] - 1))
-        return [max(abs(s) for s in frame) / scale for frame in zip(*chans)], info["rate"]
+    """(the loudest channel's level per sample, rate) from WAV, FLAC, OGG Vorbis, or anything ffmpeg reads."""
     try:
-        samples, rate, _, channels = read_wav_channels(path)
-    except ValueError as exc:
-        raise ToolError(f"{path}: {exc}")
-    return [max(abs(samples[i + c]) for c in range(channels)) for i in range(0, len(samples), channels)], rate
+        chans, rate = audioio.read_audio(path)
+    except audioio.AudioIOError as exc:
+        raise ToolError(str(exc))
+    return [max(abs(s) for s in frame) for frame in zip(*chans)], rate
 
 
 def voiced_span(levels, rate):

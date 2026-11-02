@@ -12,6 +12,7 @@ re-check the cards before you ship.
 | `eleven` | ElevenLabs API (paid, your key) | your ElevenLabs plan's terms | per your plan; read them for games |
 | `fish` | Fish Audio API (paid, your key) | your Fish Audio plan's terms | per your plan; read them for games |
 | `loudness`, `events`, `sets check`, `dialogue`, `music`, `wav` | nothing: measuring and data tools | n/a | n/a |
+| `formats` (and every tool above, for MP3, Opus or AAC input) | WAV, FLAC and OGG Vorbis: nothing (the decoders are in this folder). Other formats, and OGG output: ffmpeg, only if you installed it | ffmpeg: LGPL 2.1 or later; "If those parts get used the GPL applies to all of FFmpeg" (ffmpeg.org/legal.html, checked 2026-11-01). Many ready-made builds include the GPL parts | yes: converting does not change who owns the sound. The kit ships no ffmpeg and only runs it as a separate program; if your game ships ffmpeg itself, follow that page's checklist |
 
 ## Music models looked at, not wired in (K02, 2026-11-01, two rounds)
 | Model | Licence as read | Verdict |

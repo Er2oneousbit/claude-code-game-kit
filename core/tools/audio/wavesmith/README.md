@@ -55,6 +55,7 @@ question.
 | `eleven` | eleven_audio.py | ElevenLabs: sound effects and music. Paid, your API key | `eleven sfx --text "..." --out x.wav` |
 | `fish` | fish_tts.py | Fish Audio text to speech. Paid, your API key | `fish say --voice <id> --text "..." --out x.wav` |
 | `wav` | wavfile.py | WAV helpers: stats, normalize to a peak, seamless loops | `wav loop raw.wav --crossfade 2 --out loop.wav` |
+| `formats` | audioio.py | Read WAV, FLAC and OGG Vorbis with nothing installed (flacfile.py, oggvorbis.py), MP3 / Opus / AAC through ffmpeg if installed; convert to WAV, or to OGG with ffmpeg (loop points kept) | `formats convert theme.ogg --out theme.wav` |
 
 `wavesmith.py <subcommand> --help` lists that tool's options. Exit codes are the subcommand's own:
 - 0: ok

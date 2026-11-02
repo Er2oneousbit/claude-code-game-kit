@@ -53,6 +53,8 @@ SUBCOMMANDS = {
     "eleven":   ("eleven_audio", "ElevenLabs (paid, your API key): sound effects and music"),
     "fish":     ("fish_tts", "Fish Audio text to speech (paid, your API key)"),
     "wav":      ("wavfile", "WAV helpers: stats, normalize to a peak, seamless loops"),
+    "formats":  ("audioio", "read WAV / FLAC / OGG Vorbis with nothing installed, MP3 / Opus with ffmpeg; convert, "
+                            "write OGG (ffmpeg)"),
 }
 GPU_CHECKS = (("voice", ["check"]), ("sfx", ["check"]))
 TEST_TIMEOUT_S = 900

@@ -157,6 +157,10 @@
   GameKitAudioAccess.h; 13 new golden tests, 68 GameKit tests in all) and RPG Maker MZ (GameAudio.js, tested in
   Node; verify in RPG Maker MZ) now follow the same audio, music and access golden vectors as the other seven
   engines. RPG Maker MZ's `setup` puts a newly added kit plugin before the game's plugins that load after it.
+- Every audio format: Wavesmith reads WAV, FLAC and OGG Vorbis with nothing installed (new oggvorbis.py, a
+  pure-Python Vorbis decoder within 5e-7 of ffmpeg's on 47 files) and MP3, Opus or AAC through ffmpeg when it is
+  installed (optional, never shipped); a new `formats` subcommand (check, info, convert, OGG output with loop
+  points); loudness, events audit, dialogue and music read them all.
 - SOP-04 measures loudness instead of normalizing peaks, pointing at `tools/audio/wavesmith/loudness.py`. EVIDENCE.md: the 0.8.0
   rows (E69-E92) had one cell more than the table's header, so GitHub showed each finding in the Grade column; every
   row has seven cells again. New rows E100-E106 (Steam store pages, a CJK pixel font) and E120-E125 (loudness).

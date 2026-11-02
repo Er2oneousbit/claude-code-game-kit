@@ -260,9 +260,27 @@ engine's music player changes track on the exact sample the transition map allow
 
 **Edit and process**
 - `Audacity` (free), `Reaper`, `Ocenaudio`. Normalize, trim silence, add tiny fades to avoid clicks.
+- Formats: every Wavesmith tool that reads audio (loudness, events audit, dialogue, music, sets) reads WAV, FLAC and
+  OGG Vorbis with nothing installed, and MP3, Opus, AAC or anything else ffmpeg reads when ffmpeg is installed
+  (on PATH, or `WAVESMITH_FFMPEG` naming it). Files are recognised by their bytes, not their names.
+  - `wavesmith.py formats check`: what this machine can read and write.
+  - `wavesmith.py formats info <file>`: format, rate, channels, length, peak, and which decoder read it.
+  - `wavesmith.py formats convert <file> --out <file>.wav`: anything readable to WAV, with nothing installed.
+    `--out <file>.ogg` writes OGG Vorbis through ffmpeg (`--quality 0..10`; `--loop` keeps a WAV loop point as the
+    LOOPSTART / LOOPLENGTH comments RPG Maker reads, verify in RPG Maker MZ). A lossy source can decode slightly above
+    full scale: convert then warns, counts the clipped samples and exits 1.
+  - The OGG Vorbis decoder (`oggvorbis.py`) is plain Python: measured within 5e-7 of ffmpeg's decoder on every
+    sample of 47 libvorbis files (q-1 to q10, 11.025 to 48 kHz, mono to 5.1), with exact sample counts. It takes
+    about 0.13 to 0.2 s per second of 44.1 kHz stereo (CPython 3.12), fine for checking and converting, not for
+    playback. It refuses floor type 0 (no real encoder writes it), chained streams, and Opus or FLAC inside Ogg,
+    by name. Where ffmpeg 9.0.2 and the file's own sample count disagree (streams that fit on one Ogg page), the
+    decoder follows the file.
+  - ffmpeg is never shipped or installed by the kit; Wavesmith only runs it as a separate program. Its licence is
+    in `tools/audio/wavesmith/LICENSES.md`.
 - FLAC to WAV with nothing installed: `python tools/audio/wavesmith/flacfile.py towav <file>.flac --out <file>.wav` (16/24-bit,
   mono/stereo; checks the file's MD5). Tags do not carry over, which matters for ComfyUI's FLACs: they hold the
   full prompt and workflow, local paths included (`tools/art/comfy_local.py strip` cleans a FLAC in place).
+  `oggvorbis.py towav` does the same for OGG Vorbis.
 - Layer 2 to 3 sounds per important event (impact plus tail plus pitch variation). Randomize pitch ±5 percent
   and rotate 3 to 5 variants for anything that repeats.
 

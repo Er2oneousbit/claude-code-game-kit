@@ -47,6 +47,7 @@ import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import audioio  # noqa: E402
 import flacfile  # noqa: E402
 from wavfile import read_wav_channels, write_wav  # noqa: E402
 
@@ -97,21 +98,12 @@ def dbg(msg):
 
 # ---- Input --------------------------------------------------------------------------
 def read_audio(path):
-    """(list of channel sample lists in -1..1, rate). WAV via wavfile.py, FLAC via flacfile.py."""
-    path = Path(path)
-    data = path.read_bytes()
-    if data[:4] == b"fLaC":
-        try:
-            info, chans, _ = flacfile.decode(data)
-        except (flacfile.FlacError, flacfile.FlacCorrupt) as exc:
-            raise ToolError(f"{path}: {exc}")
-        scale = float(1 << (info["bits"] - 1))
-        return [[s / scale for s in c] for c in chans], info["rate"]
+    """(list of channel sample lists in -1..1, rate): WAV, FLAC and OGG Vorbis with the standard library, MP3 /
+    Opus / others through ffmpeg when it is installed (audioio.py)."""
     try:
-        samples, rate, _, channels = read_wav_channels(path)
-    except ValueError as exc:
-        raise ToolError(f"{path}: {exc}")
-    return [samples[c::channels] for c in range(channels)], rate
+        return audioio.read_audio(path)
+    except audioio.AudioIOError as exc:
+        raise ToolError(str(exc))
 
 
 # ---- K-weighting --------------------------------------------------------------------

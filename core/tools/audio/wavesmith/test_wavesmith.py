@@ -21,7 +21,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import wavesmith as W  # noqa: E402
 
-NOT_TOOLS = {"wavesmith", "local_tts_worker", "flacfile"}   # the front door, the TTS worker, a codec library
+NOT_TOOLS = {"wavesmith", "local_tts_worker", "flacfile", "oggvorbis"}   # the front door, the TTS worker, codecs
 
 
 class WavesmithExam(unittest.TestCase):

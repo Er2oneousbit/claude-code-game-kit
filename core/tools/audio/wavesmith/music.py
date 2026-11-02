@@ -47,6 +47,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+import audioio  # noqa: E402
 from wavfile import read_wav_channels, write_wav  # noqa: E402
 
 VERSION = 1
@@ -236,11 +237,15 @@ def check_stems(where, t, stems, root, rate):
             p.append(f"{where} stem {stem}: {f} not found under the root")
             continue
         try:
-            samples, r, loop, ch = read_wav_channels(path)
-        except ValueError as exc:
+            if audioio.sniff(path.read_bytes()[:64]) == "wav":
+                samples, r, loop, ch = read_wav_channels(path)
+                frames = len(samples) // ch
+            else:                       # OGG / FLAC stems: no 'smpl' chunk; the engine's import sets the loop
+                chans, r = audioio.read_audio(path)
+                loop, ch, frames = (start, end - 1), len(chans), len(chans[0])
+        except (ValueError, audioio.AudioIOError) as exc:
             p.append(f"{where} stem {stem}: {exc}")
             continue
-        frames = len(samples) // ch
         if r != rate:
             p.append(f"{where} stem {stem}: {r} Hz, the music runs at {rate} Hz (resample it)")
         if frames < end:
@@ -333,10 +338,7 @@ def cmd_loop(args):
     out = Path(args.out)
     if out.exists() and not args.overwrite:
         raise ToolError(f"{out} exists (use --overwrite)")
-    try:
-        samples, rate, _, channels = read_wav_channels(args.file)
-    except ValueError as exc:
-        raise ToolError(str(exc))
+    samples, rate, channels = read_interleaved(args.file)
     body, loop = make_loop(samples, rate, channels, args.bpm, args.bars, args.beats_per_bar, args.tail)
     peak = max((abs(x) for x in body), default=0.0)
     if peak > 1.0:                                          # the folded tail can add up: keep it unclipped
@@ -373,11 +375,19 @@ def cmd_plan(args):
     return 0
 
 
-def cmd_tempo(args):
+def read_interleaved(path):
+    """(interleaved samples, rate, channels) from any format audioio.py reads."""
     try:
-        samples, rate, _, channels = read_wav_channels(args.file)
-    except ValueError as exc:
+        chans, rate = audioio.read_audio(path)
+    except audioio.AudioIOError as exc:
         raise ToolError(str(exc))
+    if len(chans) == 1:
+        return list(chans[0]), rate, 1
+    return [s for frame in zip(*chans) for s in frame], rate, len(chans)
+
+
+def cmd_tempo(args):
+    samples, rate, channels = read_interleaved(args.file)
     bpm, conf = tempo(samples, rate, channels)
     print(f"[ OK ] {Path(args.file).as_posix()}: about {bpm:.1f} BPM (confidence {conf:.2f}; half or double is possible)")
     return 0
