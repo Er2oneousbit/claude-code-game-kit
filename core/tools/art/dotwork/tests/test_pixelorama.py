@@ -8,9 +8,10 @@
 #           times (holds in the build list, kept through a re-export that rounds to milliseconds), the
 #           manifests (an untouched trip rewrites none, code-drawn effects keep their provenance, a clip added in the
 #           editor takes only its sibling's provenance), the size limits (a project too large to hold is refused
-#           before any image is read; a tag holds at most 100 frames in both editors) and the .bak --overwrite
-#           keeps. No Pixelorama,
-#           Aseprite, ComfyUI or Godot needed: verify is stubbed, Aseprite's script runs are stubbed.
+#           before any image is read; a tag holds at most 100 frames in both editors), and building again in
+#           either editor (a source that differs from the game's frames is kept; --overwrite keeps a .bak; an
+#           Aseprite source is indexed only when that loses nothing). No Pixelorama, Aseprite, ComfyUI or Godot
+#           needed: verify is stubbed, Aseprite's script runs are stubbed.
 # Usage   : python tools/art/dotwork/tests/test_pixelorama.py   (test_dotwork.py runs it too)
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -807,6 +808,180 @@ class AsepriteHoldsExam(unittest.TestCase):
         self.ase._run = run
         with stub_verify(), self.assertRaisesRegex(fcore.ToolError, "in no tag"):
             self.ase.reexport(self.s.project, self.s.conf)
+
+
+class AsepriteGuardExam(unittest.TestCase):
+    """aseprite.py build keeps hand polish (issue #64: it rebuilt every source from the game's frames). An existing
+    .aseprite is exported first: one that still shows the game's frames is left alone, one that differs is kept
+    unless --overwrite, which keeps <name>.aseprite.bak. The stand-in Aseprite keeps a file as JSON (each frame's tag,
+    time in whole milliseconds and pixels) and exports what it holds, as EXPORT_LUA does."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="dotwork_aseguard_")
+        self.s = make_game(self.tmp)
+        import aseprite
+        self.ase = aseprite
+        self.real_run, self.env = aseprite._run, os.environ.get("ASEPRITE_BIN")
+        os.environ["ASEPRITE_BIN"] = sys.executable          # any file that exists: _run is stubbed
+        self.runs, self.built = [], []
+        aseprite._run = self.fake
+        self.src = os.path.join(self.tmp, "assets_src", "aseprite")
+        self.knight = os.path.join(self.src, "characters", "knight.aseprite")
+        self.others = [os.path.join(self.src, "fx", "spark.aseprite"),
+                       os.path.join(self.src, "single", "barrel.aseprite")]
+
+    def tearDown(self):
+        self.ase._run = self.real_run
+        if self.env is None:
+            os.environ.pop("ASEPRITE_BIN", None)
+        else:
+            os.environ["ASEPRITE_BIN"] = self.env
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def fake(self, conf, lua, name, params):
+        self.runs.append(name)
+        if name == "ase_build.lua":
+            self.built.append(dict(params))
+            frames = []
+            with open(params["list"], encoding="utf-8") as f:
+                for ln in f.read().splitlines():
+                    tag, dur, png = ln.split("|", 2)
+                    with Image.open(png) as im:
+                        a = np.array(im.convert("RGBA"))
+                    frames.append({"tag": tag, "ms": int(float(dur) * 1000), "size": [a.shape[1], a.shape[0]],
+                                   "rgba": a.tobytes().hex()})
+            with open(params["out"], "w", encoding="utf-8") as f:
+                json.dump({"frames": frames}, f, sort_keys=True)
+            return "DOTWORK_ASE_OK"
+        with open(params["file"], encoding="utf-8") as f:
+            data = json.load(f)
+        if data.get("badtag"):
+            return "DOTWORK_ASE_BADTAG " + data["badtag"]
+        tags = []
+        for fr in data["frames"]:
+            if fr["tag"] and fr["tag"] not in tags:
+                tags.append(fr["tag"])
+        lines, todo = [], ([(params["prefix"] + ".png", data["frames"][0])] if not tags else
+                           [("%s_%s_%02d.png" % (params["prefix"], t, k), fr) for t in tags
+                            for k, fr in enumerate(x for x in data["frames"] if x["tag"] == t)])
+        for path, fr in todo:
+            w, h = fr["size"]
+            a = np.frombuffer(bytes.fromhex(fr["rgba"]), np.uint8).reshape(h, w, 4).copy()
+            Image.fromarray(a, "RGBA").save(path)
+            lines.append(f"DOTWORK_ASE_PNG {fr['ms'] / 1000:.6f} {path}")
+        return "\n".join(lines)
+
+    def build(self, **kw):
+        return self.ase.build(self.s.project, self.s.conf, **kw)
+
+    def polish(self, path, change):
+        """Change the stand-in file as a hand edit in Aseprite would."""
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        change(data)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, sort_keys=True)
+        with open(path, "rb") as f:
+            return f.read()
+
+    @staticmethod
+    def read(path):
+        with open(path, "rb") as f:
+            return f.read()
+
+    def test_a_second_build_leaves_every_source_alone(self):
+        first = self.build()
+        before = {p: self.read(p) for p in [self.knight] + self.others}
+        self.runs.clear()
+        done = self.build()
+        # the knight's walk frames show 1/12 s in the game and 83 ms in Aseprite: within HOLD_TOLERANCE_S, the same
+        self.assertNotIn("ase_build.lua", self.runs)               # compared by exporting, never rebuilt
+        self.assertEqual({p: self.read(p) for p in before}, before)
+        self.assertEqual(sorted(first["written"]), sorted(before))
+        self.assertEqual((done["written"], done["kept"], done["backups"]), ([], [], []))
+        self.assertEqual(sorted(done["unchanged"]), sorted(before))
+
+    def test_polish_is_kept_and_overwrite_keeps_a_bak(self):
+        self.build()
+        first = self.read(self.knight)
+        others = {p: self.read(p) for p in self.others}
+
+        def pixel(data):
+            fr = data["frames"][1]
+            w, h = fr["size"]
+            a = np.frombuffer(bytes.fromhex(fr["rgba"]), np.uint8).reshape(h, w, 4).copy()
+            a[0, 0] = (200, 60, 50, 255)
+            fr["rgba"] = a.tobytes().hex()
+        polished = self.polish(self.knight, pixel)
+        done = self.build()
+        self.assertEqual(self.read(self.knight), polished)        # issue #64: this was rebuilt from the game's frames
+        self.assertEqual((done["kept"], done["written"], done["backups"]), ([self.knight], [], []))
+        self.assertFalse(os.path.exists(self.knight + ".bak"))
+        done = self.build(overwrite=True)
+        self.assertEqual((done["written"], done["backups"]), ([self.knight], [self.knight + ".bak"]))
+        self.assertEqual(self.read(self.knight + ".bak"), polished)
+        self.assertEqual(self.read(self.knight), first)
+        self.assertEqual({p: self.read(p) for p in self.others}, others)
+        self.assertFalse(any(os.path.exists(p + ".bak") for p in self.others))
+        done = self.build(overwrite=True)                           # nothing differs now: nothing replaced
+        self.assertEqual((done["written"], done["backups"]), ([], []))
+        self.assertEqual(self.read(self.knight + ".bak"), polished)
+
+    def test_every_kind_of_change_counts_as_polish(self):
+        self.build()
+        clean = self.read(self.knight)
+
+        def retime(data):
+            data["frames"][4]["ms"] += 50                               # walk_e 0: 83 ms -> 133 ms
+        cases = {
+            "a retimed frame": retime,
+            "a frame added to a tag": lambda d: d["frames"].insert(4, dict(d["frames"][3])),
+            "a frame removed": lambda d: d["frames"].pop(),
+            "a new tag": lambda d: d["frames"].append(dict(d["frames"][0], tag="idle_e")),
+            "a renamed tag": lambda d: [fr.update(tag="stride_e") for fr in d["frames"] if fr["tag"] == "walk_e"],
+            "a resized canvas": lambda d: [fr.update(size=[fr["size"][1], fr["size"][0]]) for fr in d["frames"]],
+            "a tag name that leaves the folder": lambda d: d.update(badtag="../escape"),
+        }
+        for what, change in cases.items():
+            with open(self.knight, "wb") as f:
+                f.write(clean)
+            polished = self.polish(self.knight, change)
+            done = self.build()
+            self.assertEqual(self.read(self.knight), polished, what)
+            self.assertEqual(done["kept"], [self.knight], what)
+
+    def test_indexed_only_when_it_loses_nothing(self):
+        # the batch_27 live check (2026-11-01): portraits of 845 to 2772 colours came back quantized from an indexed
+        # sprite, an untouched re-export shipped them, and build reported them as differing every time
+        man, rng = fcore.Manifest(self.s, "knights"), np.random.default_rng(5)
+        bust = np.zeros((32, 32, 4), np.uint8)
+        bust[..., :3], bust[..., 3] = rng.integers(0, 256, (32, 32, 3)), 255        # about 1000 colours
+        man.add(fcore.save_clean(Image.fromarray(bust), fcore.art(self.s.conf, "portraits", "spr_bust.png")),
+                "portrait")
+        glow = np.zeros((16, 16, 4), np.uint8)
+        glow[4:12, 4:12] = (240, 230, 200, 255)
+        glow[3, 4:12, 3] = 120                                                      # a few colours, partly clear
+        man.add(fcore.save_clean(Image.fromarray(glow), fcore.art(self.s.conf, "ui", "icons", "ui_icon_glow.png")),
+                "icon")
+        self.build()
+        self.assertEqual({os.path.basename(p["out"]): p["indexed"] for p in self.built},
+                         {"knight.aseprite": "1", "spark.aseprite": "1", "barrel.aseprite": "1",
+                          "spr_bust.aseprite": "0", "ui_icon_glow.aseprite": "0"})
+
+    def test_the_command_line_reports_kept_and_replaced_files(self):
+        import dotwork
+        self.build()
+        self.polish(self.knight, lambda d: d["frames"][0].update(ms=500))
+        for args, says in ((["aseprite"], "[warn] kept assets_src"), (["aseprite", "--overwrite"],
+                                                                      "the old file is kept as knight.aseprite.bak")):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(dotwork.main(args + ["--project", self.tmp]), 0)
+            self.assertIn(says, out.getvalue().replace(os.sep, "/"))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(dotwork.main(["aseprite", "--project", self.tmp]), 0)
+        self.assertIn("0 .aseprite files written, 3 unchanged", out.getvalue())
 
 
 if __name__ == "__main__":

@@ -13,6 +13,11 @@ Fixes from a fresh review of 0.8.1.
   animation); an untagged character export says so.
 - Dotwork pixelorama: `build --overwrite` keeps the replaced file as `<name>.pxo.bak`, which the game's `.gitignore`
   now ignores (it would not go through LFS).
+- Dotwork aseprite: building again keeps a `.aseprite` that differs from the game's frames (it may hold hand
+  polish); `--overwrite` replaces it and keeps the old file as `<name>.aseprite.bak`, which games ignore; a source
+  that still shows the game's frames is left untouched (#64).
+- Dotwork aseprite: a source is indexed only when that loses nothing (at most 255 opaque colours, no partly clear
+  pixels); portraits and other many-colour images stay RGB, so an untouched round trip no longer changes them.
 - README: nine engines, eight tested against their real toolchains (the intro still said eight and seven).
 
 ## 0.8.1 (2026-11-01): Wavesmith, Pixelorama, audio in every engine, and Dotwork's store, UI, VFX and lighting lanes

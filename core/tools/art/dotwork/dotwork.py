@@ -10,7 +10,8 @@
 #           python tools/art/dotwork/dotwork.py character --name guard --prompt "a town guard in a brass helmet"
 #           python tools/art/dotwork/dotwork.py audition --name guard --clip walk_e --seeds 8101 8102 8103
 #           python tools/art/dotwork/dotwork.py materials [--only cobble sand] | palette extract "assets_src/*.png" ...
-#           python tools/art/dotwork/dotwork.py verify | aseprite [--reexport] | preview battle|title|attack ... | log
+#           python tools/art/dotwork/dotwork.py verify | aseprite [--overwrite] | aseprite --reexport | log
+#           python tools/art/dotwork/dotwork.py preview battle|title|attack ...
 #           python tools/art/dotwork/dotwork.py pixelorama [--overwrite] | pixelorama --reexport   # hand polish
 #           python tools/art/dotwork/dotwork.py qa pack [--json OUT] [--lineup OUT.png]   # style check, read only
 #           Global: --project GAME (default: current folder), --config FILE, --engine godot|none, --debug
@@ -322,8 +323,7 @@ def cmd_aseprite(a):
             raise fcore.JobError("re-exported files failed verify")
         print("[ OK ] re-exported and verified")
         return 0
-    files = aseprite.build(s.project, s.conf)
-    print(f"[ OK ] {len(files)} .aseprite files under {os.path.join(s.src, 'aseprite')}")
+    report_sources(s, aseprite.build(s.project, s.conf, overwrite=a.overwrite), "aseprite")
     return 0
 
 
@@ -336,15 +336,20 @@ def cmd_pixelorama(a):
             raise fcore.JobError("re-exported files failed verify")
         print("[ OK ] re-exported and verified")
         return 0
-    done = pixelorama.build(s.project, s.conf, overwrite=a.overwrite)
-    where = os.path.join(s.src, "pixelorama")
-    print(f"[ OK ] {len(done['written'])} .pxo files written, {len(done['unchanged'])} unchanged, under {where}")
+    report_sources(s, pixelorama.build(s.project, s.conf, overwrite=a.overwrite), "pixelorama")
+    return 0
+
+
+def report_sources(s, done, editor):
+    """What a hand-polish build did (aseprite.build or pixelorama.build: written, unchanged, kept, backups)."""
+    ext = {"aseprite": ".aseprite", "pixelorama": ".pxo"}[editor]
+    print(f"[ OK ] {len(done['written'])} {ext} files written, {len(done['unchanged'])} unchanged, under "
+          f"{os.path.join(s.src, editor)}")
     for p in done["kept"]:
         print(f"[warn] kept {os.path.relpath(p, s.project)}: it differs from the game's frames (hand polish not "
               "re-exported yet, or newer art in the game); --overwrite replaces it with the game's frames")
     for p in done["backups"]:
         print(f"[info] replaced {os.path.relpath(p[:-4], s.project)}; the old file is kept as {os.path.basename(p)}")
-    return 0
 
 
 PREVIEWS = {"battle": ("battle_mock", "a battle screen from a party character, enemies and a background"),
@@ -537,6 +542,8 @@ def build_parser():
 
     p = sub.add_parser("aseprite", parents=[common], help="editable .aseprite sources / re-export after hand polish")
     p.add_argument("--reexport", action="store_true", help="push hand-polished .aseprite files back into the game")
+    p.add_argument("--overwrite", action="store_true",
+                   help="replace a .aseprite that differs from the game's frames (it may hold hand polish)")
     p.set_defaults(fn=cmd_aseprite)
 
     p = sub.add_parser("pixelorama", parents=[common],
