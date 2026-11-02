@@ -419,8 +419,10 @@ becomes a hold), removes frames you deleted and runs `verify`. A frame that stil
 file byte for byte (editors drop the colour stored under fully clear pixels; that alone is not a change), and an
 untouched hold keeps its exact value. Manifest rows change only for files that changed: such a file keeps its row
 (models, workflow, canvas, anchor, position) and gains its new hash and a polish note, so an untouched round trip
-rewrites no manifest and a frame drawn in code never gains a model. Tag names use letters, digits and `_` only (they
-become file names). Effects in the effects lane's layout (`fx/<name>/spr_fx_<name>_NN.png`, which hit effects share)
+rewrites no manifest and a frame drawn in code never gains a model. A frame or clip you add gets a new row with its
+sibling's provenance only (models, workflow, routes, blend), never the sibling's holds, checks or prompt. Tag names
+use letters, digits and `_` only (they become file names), and a tag holds at most 100 frames (the shipped names
+carry two digits). Effects in the effects lane's layout (`fx/<name>/spr_fx_<name>_NN.png`, which hit effects share)
 are included. Spells, VFX, status marks, animated props, balloons and vehicles keep their lanes' own files and are
 drawn from their specs, so neither editor gets them.
 
@@ -430,7 +432,8 @@ drawn from their specs, so neither editor gets them.
 | Versions | Lua scripting (`--script`); run with Aseprite 1.3.18 on Windows | writes `pxo_version` 7 (Pixelorama 1.2.0 to 1.2.3; 1.2.3 opened, exported and saved Dotwork's files); reads 7 and 8 (the 1.2.4 release candidates, where a cel keeps its own size and offset; (verify) against a released 1.2.4) |
 | The file | indexed on the asset's own colours | RGBA in one layer `art`, the asset's own colours as the project palette; the project's frame rate is the one most of the character's frames play at, and other clips carry per-frame durations |
 | Layers you add | flattened by Aseprite on export | visible pixel layers and groups are composited (Normal blending, cel and layer opacity); a visible layer with another blend mode, a clipping mask, layer effects, animated opacity, a 3D or tilemap layer, or a group below 100 % stops the re-export with its name (merge it down or hide it); hidden layers are ignored |
-| A file that exists | rebuilt by `aseprite` | kept when it differs from the game's frames (it may hold your polish); `--overwrite` replaces it |
+| A file that exists | rebuilt by `aseprite` | kept when it differs from the game's frames (it may hold your polish); `--overwrite` replaces it and keeps the old file as `<name>.pxo.bak` |
+| Size | read by Aseprite | a project whose frames would take over 512 MB, whose visible cels would unpack to over 1 GB, or with over 256 layers is refused before any image is read |
 
 Pixelorama stores the folder you last exported to, a full path on your machine, in every `.pxo` it saves: in a public
 repository, that path is public too. Aseprite 1.3.18 on Windows built the sources and re-exported them untouched

@@ -342,6 +342,8 @@ def cmd_pixelorama(a):
     for p in done["kept"]:
         print(f"[warn] kept {os.path.relpath(p, s.project)}: it differs from the game's frames (hand polish not "
               "re-exported yet, or newer art in the game); --overwrite replaces it with the game's frames")
+    for p in done["backups"]:
+        print(f"[info] replaced {os.path.relpath(p[:-4], s.project)}; the old file is kept as {os.path.basename(p)}")
     return 0
 
 

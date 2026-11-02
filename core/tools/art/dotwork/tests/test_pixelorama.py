@@ -5,8 +5,11 @@
 #           per clip, frame durations from the holds, the asset's colours as the palette; an untouched re-export
 #           gives every file back byte for byte, an edit reaches the game, layers composite, a refused feature stops
 #           before anything is written, pxo_version 8 cels with their own size and offset) and aseprite.py's frame
-#           times (holds in the build list, kept through a re-export that rounds to milliseconds), and the
-#           manifests (an untouched trip rewrites none, code-drawn effects keep their provenance). No Pixelorama,
+#           times (holds in the build list, kept through a re-export that rounds to milliseconds), the
+#           manifests (an untouched trip rewrites none, code-drawn effects keep their provenance, a clip added in the
+#           editor takes only its sibling's provenance), the size limits (a project too large to hold is refused
+#           before any image is read; a tag holds at most 100 frames in both editors) and the .bak --overwrite
+#           keeps. No Pixelorama,
 #           Aseprite, ComfyUI or Godot needed: verify is stubbed, Aseprite's script runs are stubbed.
 # Usage   : python tools/art/dotwork/tests/test_pixelorama.py   (test_dotwork.py runs it too)
 # Exit    : 0 all pass, 1 a case failed
@@ -234,6 +237,82 @@ class PixeloramaExam(unittest.TestCase):
         with open(self.knight, "rb") as f:
             self.assertEqual(f.read(), first)
 
+    def test_overwrite_keeps_the_replaced_file(self):
+        self.build()
+        with open(self.knight, "rb") as f:
+            first = f.read()
+        rewrite_pxo(self.knight, lambda d, b: d["frames"][0].update(duration=5.0))
+        with open(self.knight, "rb") as f:
+            polished = f.read()
+        done = self.build(overwrite=True)
+        self.assertEqual(done["backups"], [self.knight + ".bak"])
+        with open(self.knight + ".bak", "rb") as f:
+            self.assertEqual(f.read(), polished)                    # the polish it replaced is still there
+        with open(self.knight, "rb") as f:
+            self.assertEqual(f.read(), first)
+        self.assertEqual(self.build(overwrite=True)["backups"], [])  # nothing replaced: the .bak stays as it was
+        with open(self.knight + ".bak", "rb") as f:
+            self.assertEqual(f.read(), polished)
+        rewrite_pxo(self.knight, lambda d, b: d["frames"][1].update(duration=4.0))
+        code = subprocess.run([sys.executable, os.path.join(DOTWORK, "dotwork.py"), "pixelorama", "--overwrite",
+                               "--project", self.tmp], capture_output=True, text=True, timeout=120)
+        self.assertEqual(code.returncode, 0, code.stdout + code.stderr)
+        self.assertIn("the old file is kept as knight.pxo.bak", code.stdout)
+
+    def test_a_new_clip_takes_only_provenance(self):
+        # the review's case (2026-11-01): a tag added in the editor, on a character whose first sheet row is the
+        # attack. The new clip's rows took the attack's holds [1, 2, 1, 3] and qa, so the next build timed the
+        # 2-frame clip by them and the re-export after it wrote them into the SpriteFrames and the sheet data.
+        k = "assets/art/characters/knight/"
+        for m in ("knights", "knights_old"):
+            mp = os.path.join(self.tmp, "assets_src", "dotwork", f"manifest_{m}.json")
+            with open(mp, encoding="utf-8") as f:
+                man = json.load(f)
+            attack = next(r for r in man["assets"] if r["file"] == k + "knight_attack_e_sheet.png")
+            man["assets"].remove(attack)
+            man["assets"].insert(0, attack)                         # the sheet row a new clip finds first
+            for r in man["assets"]:
+                if r["file"].startswith(k):
+                    r.update(models=["knight_model.safetensors"], workflow="knight clips", request="a knight", seed=7,
+                             prompt="a knight, side view")
+            with open(mp, "w", encoding="utf-8") as f:
+                json.dump(man, f, indent=1)
+        self.build()
+
+        def edit(d, b):                                           # a 2-frame clip idle_e after the others
+            n = len(d["frames"])
+            for j in range(2):
+                d["frames"].append({"cels": [{"opacity": 1.0, "z_index": 0}], "duration": 1.0})
+                a = np.frombuffer(b["image_data/frames/5/layer_1"], np.uint8).reshape(H, W, 4).copy()
+                a[0, j] = (200, 60, 50, 255)
+                b[f"image_data/frames/{n + j + 1}/layer_1"] = a.tobytes()
+            d["tags"].append({"name": "idle_e", "color": "c38ce1ff", "from": n + 1, "to": n + 2})
+        rewrite_pxo(self.knight, edit)
+        self.reexport()
+
+        def rows():
+            return {r["file"]: r for rs in manifest_rows(self.tmp).values() for r in rs}
+        got = rows()
+        for f in (k + "knight_idle_e_sheet.png", k + "frames/spr_knight_idle_e_00.png",
+                  k + "frames/spr_knight_idle_e_01.png"):
+            for key in ("durations", "qa", "request", "seed", "prompt"):
+                self.assertNotIn(key, got[f], f"{f} {key}")
+            self.assertEqual((got[f]["models"], got[f]["workflow"]), (["knight_model.safetensors"], "knight clips"), f)
+            self.assertEqual(got[f]["note"], "hand-polished in Pixelorama")
+        self.assertEqual(got[k + "knight_idle_e_sheet.png"]["frames"], 2)
+        sheet_json = os.path.join(self.tmp, k, "knight_idle_e_sheet.json")
+        with open(sheet_json, encoding="utf-8") as f:
+            self.assertNotIn("durations", json.load(f))
+        # the next build and re-export: the clip still plays one frame per tick
+        self.build(overwrite=True)
+        pj = self.px.read_pxo(self.knight)
+        first = next(a for n, a, _ in pj["tags"] if n == "idle_e")
+        self.assertEqual(pj["seconds"][first:first + 2], [1 / 8, 1 / 8])
+        self.reexport()
+        self.assertNotIn("durations", rows()[k + "knight_idle_e_sheet.png"])
+        with open(sheet_json, encoding="utf-8") as f:
+            self.assertNotIn("durations", json.load(f))
+
     def test_untouched_reexport_is_byte_identical(self):
         before = snapshot(self.tmp)
         self.build()
@@ -345,6 +424,10 @@ class PixeloramaExam(unittest.TestCase):
             "zero duration": lambda d, b: d["frames"][0].update(duration=0),
             "huge canvas": lambda d, b: d.update(size_x=100000),
             "parent loop": lambda d, b: d["layers"].__setitem__(0, dict(d["layers"][0], parent=0)),
+            "tag over 100 frames": lambda d, b: (
+                [d["frames"].append(dict(d["frames"][0])) or b.update({
+                    f"image_data/frames/{len(d['frames'])}/layer_1": b["image_data/frames/1/layer_1"]})
+                 for _ in range(101 - len(d["frames"]))], d["tags"][0].update({"from": 1, "to": 101})),
         }
         for what, edit in cases.items():
             with open(self.knight, "wb") as f:
@@ -357,6 +440,89 @@ class PixeloramaExam(unittest.TestCase):
             f.write(b"not a zip")
         with self.assertRaises(fcore.ToolError):
             self.reexport()
+
+    def test_size_is_checked_before_any_image_is_read(self):
+        # the review's case (2026-11-01): the limits were per cel, so a small file could declare frames that take
+        # gigabytes to hold. data.json alone decides, and a refused project has no buffer read.
+        self.build()
+        with open(self.knight, "rb") as f:
+            clean = f.read()
+        reads, real = [], self.px._buffer
+
+        def counting(z, name, w, h, rel):
+            reads.append(name)
+            return real(z, name, w, h, rel)
+
+        def frames_of(n):
+            return lambda d: d["frames"].extend(json.loads(json.dumps(d["frames"][0])) for _ in range(n - 7))
+
+        def layers(n, visible):
+            def add(d):
+                for _ in range(n):
+                    d["layers"].append(dict(d["layers"][0], name="more", visible=visible))
+                    for fr in d["frames"]:
+                        fr["cels"].append({"opacity": 1.0, "z_index": 0})
+            return add
+
+        def v8_cels(d):
+            d["pxo_version"] = 8
+            for fr in d["frames"]:
+                fr["cels"][0].update(image_size="Vector2i(8192, 8192)", offset="(0, 0)")
+        cases = {   # what: (edit of data.json, what the refusal says)
+            "200 frames of 8192x8192": (lambda d: (d.update(size_x=8192, size_y=8192), frames_of(200)(d)), "to hold"),
+            "300 layers": (layers(299, False), "layers"),
+            "3 visible layers of 4096x4096": (lambda d: (d.update(size_x=4096, size_y=4096), layers(2, True)(d)),
+                                              "unpack"),
+            "v8 cels of 8192x8192": (v8_cels, "unpack"),
+            "5000 tags": (lambda d: d["tags"].extend(dict(d["tags"][0], name=f"t{i}") for i in range(5000)), "tags"),
+        }
+        self.px._buffer = counting
+        try:
+            for what, (edit, says) in cases.items():
+                with open(self.knight, "wb") as f:
+                    f.write(clean)
+                rewrite_pxo(self.knight, lambda d, b: edit(d))
+                with self.assertRaisesRegex(fcore.ToolError, says, msg=what):
+                    self.px.read_pxo(self.knight)
+                self.assertEqual(reads, [], what)
+        finally:
+            self.px._buffer = real
+
+    def test_a_reexport_writes_no_more_than_the_budget(self):
+        # overlapping tags can name one frame many times: what a re-export writes is held to the same budget
+        self.build()
+        before = snapshot(self.tmp)
+        rewrite_pxo(self.knight, lambda d, b: d["tags"].append(dict(d["tags"][1], name="walk_e_again")))
+        real = self.px.MAX_DECODED
+        self.px.MAX_DECODED = 7 * W * H * 4                          # the knight's own 7 frames, exactly
+        try:
+            self.assertEqual(len(self.px.read_pxo(self.knight)["frames"]), 7)
+            with self.assertRaisesRegex(fcore.ToolError, "to write"):
+                self.reexport()
+        finally:
+            self.px.MAX_DECODED = real
+        self.assertEqual(changed(before, snapshot(self.tmp)), [])
+
+    def test_banded_blending_is_the_same(self):
+        self.build()
+        rng = np.random.default_rng(3)
+
+        def edit(d, b):
+            d["layers"].append({"name": "glaze", "visible": True, "blend_mode": 0, "opacity": 0.6, "parent": -1,
+                                "type": 0, "new_cels_linked": False})
+            for fi, fr in enumerate(d["frames"]):
+                fr["cels"].append({"opacity": 0.7, "z_index": 0})
+                b[f"image_data/frames/{fi + 1}/layer_2"] = rng.integers(0, 256, (H, W, 4), np.uint8).tobytes()
+        rewrite_pxo(self.knight, edit)
+        whole = self.px.read_pxo(self.knight)["frames"]
+        real = self.px.BAND_PIXELS
+        try:
+            for band in (1, W * 5):                                   # one row at a time; 5 rows (a short last band)
+                self.px.BAND_PIXELS = band
+                for a, b in zip(whole, self.px.read_pxo(self.knight)["frames"]):
+                    self.assertTrue(np.array_equal(a, b), band)
+        finally:
+            self.px.BAND_PIXELS = real
 
     def test_pxo_version_8_cels_with_size_and_offset(self):
         self.build()
@@ -610,6 +776,36 @@ class AsepriteHoldsExam(unittest.TestCase):
         self.sources()
         self.ase._run = lambda conf, lua, name, params: "DOTWORK_ASE_BADTAG ../escape"
         with stub_verify(), self.assertRaises(fcore.ToolError):
+            self.ase.reexport(self.s.project, self.s.conf)
+
+    def test_a_tag_over_100_frames_stops(self):
+        # the review's case (2026-11-01): EXPORT_LUA names frame 100 of a tag _100.png, which the re-export read as
+        # an animation "walk_e_" with its own sheet
+        self.sources()
+        before = snapshot(self.tmp)
+        frame0 = os.path.join(self.tmp, "assets", "art", "characters", "knight", "frames", "spr_knight_walk_e_00.png")
+
+        def run(conf, lua, name, params):
+            lines = []
+            for k in range(101):
+                p = "%s_walk_e_%02d.png" % (params["prefix"], k)
+                shutil.copyfile(frame0, p)
+                lines.append(f"DOTWORK_ASE_PNG 0.083000 {p}")
+            return "\n".join(lines)
+        self.ase._run = run
+        with stub_verify(), self.assertRaisesRegex(fcore.ToolError, "walk_e has 101 frames"):
+            self.ase.reexport(self.s.project, self.s.conf)
+        self.assertEqual(changed(before, snapshot(self.tmp)), [])
+
+    def test_an_untagged_character_stops(self):
+        self.sources()
+        frame0 = os.path.join(self.tmp, "assets", "art", "characters", "knight", "frames", "spr_knight_walk_e_00.png")
+
+        def run(conf, lua, name, params):                          # no tags: EXPORT_LUA writes <prefix>.png
+            shutil.copyfile(frame0, params["prefix"] + ".png")
+            return f"DOTWORK_ASE_PNG 0.100000 {params['prefix']}.png"
+        self.ase._run = run
+        with stub_verify(), self.assertRaisesRegex(fcore.ToolError, "in no tag"):
             self.ase.reexport(self.s.project, self.s.conf)
 
 

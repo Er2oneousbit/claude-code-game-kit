@@ -3,6 +3,17 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.8.2 (unreleased)
+Fixes from a fresh review of 0.8.1.
+- Dotwork hand polish: a frame or clip added in the editor takes only its sibling's provenance (models, workflow,
+  routes, blend) in the manifest, never its holds, checks or prompt.
+- Dotwork pixelorama: a project's size is checked from its data.json before any image is read (frames held, cels
+  unpacked, layers, tags); blending large canvases uses bounded memory.
+- Dotwork hand polish: a tag holds at most 100 frames in both editors (Aseprite's 101st frame became a bogus
+  animation); an untagged character export says so.
+- Dotwork pixelorama: `build --overwrite` keeps the replaced file as `<name>.pxo.bak`.
+- README: nine engines, eight tested against their real toolchains (the intro still said eight and seven).
+
 ## 0.8.1 (2026-11-01): Wavesmith, Pixelorama, audio in every engine, and Dotwork's store, UI, VFX and lighting lanes
 Released as 0.8.1 at the user's call: by the kit's own rule (SOP-06) new features are a MINOR bump, and 0.9.0 is kept
 for the next release.
