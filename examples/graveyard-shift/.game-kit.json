@@ -1140,6 +1140,12 @@
         "docs/BRIEFS.md",
         "docs/ENGINE.md"
       ]
+    },
+    {
+      "version": "0.8.1",
+      "date": "2026-11-01",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1225,7 +1231,7 @@
     "docs/CONCEPTS.md": "d58ca9426877811564a704ca240d797d22877e8ee5aadd3d052c652bcc188e9a",
     "docs/ENGINE.md": "3f1692c1c3b2d8d33b63c915635447dc5534d60ad44629f93ec6db3cf71e452e",
     "docs/ENGINE_FLOW.md": "9a993a0ef96f527b4dc431b6bed67e5625cd456c3c8fe4b5a1807f39d3131183",
-    "docs/EVIDENCE.md": "cd48975d1a8af1323aee437b385abec0ea73de4a6ec1f4d5d0129e08c4d93c0f",
+    "docs/EVIDENCE.md": "5c39e391445e7ee04b0f9cb4fe7e405914bc303532def22772539eddb890f9c6",
     "docs/FIRST_HOUR.md": "3c632eb026ec7a3efcbec4d9b3a927698dd56941284c3bb1988aad2d48dcbca8",
     "docs/GDD.md": "ac5c121cd1e22be720dd918c8b2325d281ffe0a31f3afec387b3455f903d52ff",
     "docs/HANDOFF.md": "3124d0370759299ac022f9a08c1ddccfc85291b52be010fcffe1582dd4aa1945",
@@ -1242,7 +1248,7 @@
     "docs/evidence/video-notes.md": "465f80c07317283c91ac947f99ce511b246b882b2659e6abb21bc3412a789ba1",
     "docs/resources/ai-tools.md": "38711eb9568d663366008fa774d9c10e71d5d611feade0cac0b1a02c31d03f33",
     "docs/resources/art.md": "71e09ac6d47cbe6c4c61312ad38da4d99ab3b3889ca8bd7987a8ffe3d8dcddd0",
-    "docs/resources/audio.md": "ff66e777862bdeed94d251d1c050a15c76d50d5c1934545f31bd816addecf89d",
+    "docs/resources/audio.md": "b4336234f453cd3345fd1eed86d7b14cd733d90105dc433c12bb787d9aa4f1a4",
     "docs/resources/learning-and-release.md": "8e08ccf6f94762135717225f46113807154511de562cffc87b209aa6908a8057",
     "docs/resources/licenses.md": "6584c21e9e295cbbdd2f338911963cde92bdc56aed8a691bce079533d39ca90e",
     "docs/resources/pipelines.md": "c36f860a00743f20eeff0b068ceefbb4f2a2134b36da9393a3a2ca19b8cfdc35",
@@ -1251,7 +1257,7 @@
     "docs/sop/SOP-01-feature-workflow.md": "e34b37388cbe6323cc1463218be129f2202034dc99a73d84f043ff6809c0def8",
     "docs/sop/SOP-02-bug-workflow.md": "ad6236e4581de16eec6df30504eca4143bdd3bb7f6c0a2d03ab42374d40110f2",
     "docs/sop/SOP-03-playtest-and-tuning.md": "bc9be28988fb60542e8bd3dd6d36da1ddafe9db3bea85b042b3c8e84f29b5f5d",
-    "docs/sop/SOP-04-assets-and-licensing.md": "2e7266ed870ad622504a792b07e5bc614d3edf17eace3d8d919c90ea17463296",
+    "docs/sop/SOP-04-assets-and-licensing.md": "4dbc8a82ace9a249f0d40561c66cec12326b13cc0e63996f84170431e20aaf20",
     "docs/sop/SOP-05-git.md": "50562626921658fe100438b49650cc405c8df6cb279787754de2d693a5bd86f0",
     "docs/sop/SOP-06-build-and-release.md": "856a6c29c917716178de35b8ffa69ad59143ca7a91ddfdfa5202578c484f31e6",
     "docs/sop/SOP-07-claude-code-hygiene.md": "26afd287af1604993481e758070c2da331c48de793271bfa98489b5bac30bf18",
@@ -1263,10 +1269,10 @@
     "docs/sop/SOP-13-publish-to-github.md": "0b3c430b934db860e96d1bbcc43edf6ed72ac93bb95ae39bb4e8e1f3508d5a56",
     "docs/sop/SOP-14-game-ai.md": "3ebe3c69c88fd758d97558d51d534a7a0b9a2f3dbff1892c805d748c3f0aac86",
     "docs/sop/SOP-15-ai-features.md": "d17cb35edaa0de3e42b9a5195d6538f9e9617b37dcdfd9c8c8d53682756ab817",
-    "docs/sop/SOP-16-2d-art-pipeline.md": "465f78b245a0e808dba2eb4d8bb9c043d9993ce5ef83839c0eec4d9c35aff9fb",
+    "docs/sop/SOP-16-2d-art-pipeline.md": "44400a439700876bf81db81a2873c60afb3308611d99c3403a8c9337450d9ac0",
     "docs/sop/SOP-17-procedural-generation.md": "82d0976071252f23a8797c94c1afe948f6bd13be9a56af8003dd522614c67ca3",
     "docs/sop/SOP-18-game-feel.md": "8b3db56639f03d3e779422d39edb8df81539cc7fcadd83b2ed1a60528e288f7f",
-    "docs/sop/SOP-19-front-end-and-settings.md": "c35a303ee4c7bef2bfa978a566081d02f007e77bb9c34f3e255822246256bc7c",
+    "docs/sop/SOP-19-front-end-and-settings.md": "7155af83b20d188534c3be63dc8697cf813bb9ad5b7ce61cf85bb7d46c158ffb",
     "docs/sop/SOP-20-accessibility.md": "1923775e72d74c90a279e0f58e9af111d24a472adc75f67f83aa2c80da6d5ffc",
     "docs/sop/SOP-21-ship-on-steam-and-itch.md": "8096e0dec71745ecf691c2e5140366e954c1aeae126a68a40ff7da540da793e0",
     "docs/sop/SOP-22-balancing-and-economy.md": "248365f65f715b43cb4417a73793ace4d8e8d98e6f3f94617a9af4149ccf6d32",
@@ -1425,8 +1431,8 @@
     "tools/audio/test_local_tts.py": "b9a9c6a364b03c8af006405efec2e921698eae0efa7878a6d08be4e62271df3c",
     "tools/audio/test_sfx_synth.py": "34773ec7b5b973cd53c3d85fced8b48d70b47e00fce4f5fdffde93a5e541e0bb",
     "tools/audio/test_wavfile.py": "e99470234b4d08cd662aeacadaf2a2f7b03a2282bfa34eb6474bc64ad0b05829",
-    "tools/audio/wavesmith/LICENSES.md": "f766354a4bdf42185a01e550b709736e9338c6edce9b6f72c44dc57c5aadf721",
-    "tools/audio/wavesmith/README.md": "eabc99d464b618b966df1ccab42baa64794aad9aa682394969e9c25a65dfd973",
+    "tools/audio/wavesmith/LICENSES.md": "8bb7a065ba74d5e1ce6ecf4b387d9f3212fa8d4479904804a1913279c0d51513",
+    "tools/audio/wavesmith/README.md": "6240c716fac27c7651c5f4389fccd99e88d899ba7912592e31afa69619e63637",
     "tools/audio/wavesmith/access.py": "2926a01110b4a2734fcbbc9aa2f2127f41a7da2b3cc12687bd6fe2e25dbed2fc",
     "tools/audio/wavesmith/audio_events.py": "9b4143400191f690b4f32aef086d651d9e38ef708e471ed99988b3f3fba24249",
     "tools/audio/wavesmith/audioio.py": "a20d1e0f2d09f67b55fa4212dd9c624997bfea6906787db83413eb44b1116d1d",

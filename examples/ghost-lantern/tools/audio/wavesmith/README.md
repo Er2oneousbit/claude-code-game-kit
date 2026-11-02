@@ -103,7 +103,7 @@ access rules, with their golden tests:
 - `sfx`, and `sets make` with local_sfx sets, need a running ComfyUI (0.43.0 or newer) with Stable Audio 3.
   `sfx check` names the missing files. ComfyUI itself runs on NVIDIA, AMD, Intel and Apple hardware (its README);
   only NVIDIA was measured here.
-- Everything else needs no GPU and runs on Windows, Linux and macOS with Python 3.8+ (docs/resources/audio.md,
+- Everything else needs no GPU and runs with Python 3.8+ on Windows and Linux (tested) and should on macOS (untested) (docs/resources/audio.md,
   "Hardware").
 - Never clone a real person's voice without their written permission. Designed voices are the documented path.
 

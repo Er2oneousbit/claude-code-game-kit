@@ -32,7 +32,7 @@ Every asset in the repo has known provenance and a license compatible with relea
 Source: the Steamworks Content Survey page, "Generative AI Content" part (E23, read 2026-10-19), plus a video explaining it (E22). Grade A (F11). **Policies change, re-read the live page before you submit.**
 | Bucket | Example | Disclose on Steam? |
 |---|---|---|
-| AI-assisted development | Claude debugs the upgrade system, writes build or test tools that never ship. Nothing AI-made reaches the player. | Steam says efficiency gains from tools are not the focus of this section. Generally not the target of the survey. Still your call to describe honestly if a question fits. |
+| AI-assisted development | Claude writes build or test tools that never ship, or explains a bug you then fix yourself. Nothing AI-made reaches the player. | Steam says efficiency gains from tools are not the focus of this section. Generally not the target of the survey. Still your call to describe honestly if a question fits. |
 | Pre-generated content | AI portraits, icons, textures, music, voice, text, AI-translated localization that ship in the build | Yes. Describe the implementation. Valve reviews it like any other content (illegal or infringing material, matches your marketing). |
 | Live-generated content | An NPC backed by a language model, runtime image generation | Yes, plus describe your guardrails against illegal content. Valve said it does not want live-generated adult-only sexual content at this time. |
 AI-written game code that ships is AI-made output in the build; the official page does not single it out, so check the

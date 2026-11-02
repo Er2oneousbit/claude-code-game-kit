@@ -33,7 +33,7 @@ Libraries, generators, editors, and implementation hints. Prompts for AI audio t
   ACE-Step 1.5 is the one to use: it takes the tempo, meter and key as inputs, and its output may ship. It runs in
   ComfyUI 0.43 or newer with Comfy-Org's ACE-Step-1.5 files (the all-in-one turbo checkpoint is 9.6 GB), through
   ComfyUI's own "Text to Audio (ACE-Step 1.5)" template. Wavesmith has no subcommand for it yet. On every take run
-  `wavesmith.py music tempo` (it can read half or double the tempo), then `music loop` at the tempo you asked for, then
+  `wavesmith.py music tempo <take>.wav` (it can read half or double the tempo), then `music loop` at the tempo you asked for, then
   `loudness normalize` (takes peak above 0 dBTP), and listen. Stable Audio output stays out of what ships unless you
   have cleared its licence.
 - Generated: `python tools/audio/wavesmith/wavesmith.py eleven music --prompt "..." --instrumental --out <music>.wav --loop-crossfade 2 --log`
@@ -58,8 +58,9 @@ Suno: paid plans grant commercial use for tracks made while subscribed, free-pla
 Prompt patterns: `docs/BRIEFS.md` > Music with Suno. Log prompts and outputs in `ASSET_LOG.md` if used.
 
 ## Adaptive music: bars, loops, stems, transitions
-Describe the music once in data/music.json (you create it); `tools/audio/wavesmith/music.py` checks it and its files, and each
-engine's music player changes track on the exact sample the transition map allows.
+Describe the music once in data/music.json (you create it); `tools/audio/wavesmith/music.py` checks it and its files, and every engine's
+music director plans the same transitions; the web, Godot and LÖVE players (and Unity's, not yet run in Play mode) change
+track on the sample the plan names.
 ```json
 {
   "version": 1, "sample_rate": 44100, "start": "explore",
@@ -162,7 +163,7 @@ engine's music player changes track on the exact sample the transition map allow
   language. Treat German, Spanish and French takes as usable after a listen; get a native listener before shipping
   Japanese (or Chinese and Korean, not measured).
 - **Translations and bark lines from a local language model are drafts.** A local model (tested: Qwen3-14B,
-  Apache-2.0, through llama.cpp's llama-server, MIT; nothing of it ships in the kit) can draft other languages and
+  Apache-2.0, through llama.cpp's llama-server, MIT; none of its drafting code ships in the kit) can draft other languages and
   more variety for barks. In the kit's test, 112 of 136 translation drafts passed the checks below. The model also
   invented placeholders: on one-word strings such as language names it wrote whole sentences with `{name}` and
   `{n}` in them. So every draft needs:
@@ -185,6 +186,7 @@ engine's music player changes track on the exact sample the transition map allow
   uv venv tts-env --python 3.12
   uv pip install --python tts-env qwen-tts torch torchaudio --torch-backend cu130   # your CUDA: cu128, cu126 ...
   setx LOCAL_TTS_PYTHON "<full path>\tts-env\Scripts\python.exe"                     # macOS/Linux: export ... /bin/python
+  # open a new terminal here: setx does not change the one it ran in
   python tools/audio/wavesmith/wavesmith.py voice check        # names what is missing: the env, torch, qwen-tts, or CUDA
   ```
   Weights download on first use into the Hugging Face cache (`HF_HOME`, default `~/.cache/huggingface`):
@@ -494,13 +496,13 @@ audio side keeps its part.
   off and fails).
 
 ## Hardware: what runs where
-Most of Wavesmith needs nothing but Python 3.8 or newer: no GPU, no installs, any operating system (all its exams pass
-on Windows with Python 3.8, 3.9 and 3.12 and on Linux, Ubuntu 26.04 with Python 3.14, measured 2026-11-01). The two
+Most of Wavesmith needs nothing but Python 3.8 or newer: no GPU, no installs, and no operating-system code (all its exams pass
+on Windows with Python 3.8, 3.9 and 3.12 and on Linux, Ubuntu 26.04 with Python 3.14, measured 2026-11-01; macOS untested). The two
 model-backed tools have their own needs:
 
 | Subcommand | Needs | Without an NVIDIA GPU |
 |---|---|---|
-| loudness, events, sets (check, ui), dialogue, music, access, babble, synth, chiptune, wav, formats | Python 3.8+ | runs everywhere |
+| loudness, events, sets (check, ui), dialogue, music, access, babble, synth, chiptune, wav, formats | Python 3.8+ | runs anywhere Python does (macOS untested) |
 | formats (MP3, Opus input; OGG output) | ffmpeg, optional | WAV, FLAC and OGG Vorbis need nothing |
 | voice (local_tts) | a separate Python with torch and qwen-tts | `--device auto` (the default) uses an NVIDIA GPU, else Apple's Metal (mps), else the CPU. CPU measured: a 2.4 s line in 47 s (about 20x realtime, 8-core desktop CPU, plus about 30 s to load), transcribed word for word, same voice as on the GPU (0.961). Apple Metal is not tested here |
 | sfx, sets make (local_sfx) | a running ComfyUI with Stable Audio 3 | ComfyUI's own README lists NVIDIA, AMD (ROCm on Linux, and on Windows 11), Intel Arc, Apple silicon and Ascend, and its Windows portable build can run on the CPU alone; Wavesmith only talks to it over HTTP. Measured here on NVIDIA only |

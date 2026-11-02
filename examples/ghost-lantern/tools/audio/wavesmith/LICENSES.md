@@ -8,7 +8,7 @@ re-check the cards before you ship.
 |---|---|---|---|
 | `synth`, `chiptune`, `babble` (and `sets ui`) | nothing: sound made from code | yours | yes |
 | `voice` | Qwen3-TTS-12Hz-1.7B-VoiceDesign, -1.7B-Base, -0.6B-Base (Qwen) | Apache-2.0 (model cards) | yes. Never clone a real person's voice without written permission; every `.gen.json` records where the voice came from |
-| `sfx`, `sets make` (local_sfx sets) | Stable Audio 3 medium or small-sfx (Stability AI), with the T5Gemma text encoder | Stability AI Community License: free under USD 1M annual revenue, Enterprise licence above; "you own outputs"; the bundled T5Gemma encoder carries Google's Gemma terms | only after you have checked that licence for your game. `sets check --ship` refuses these files until then, and the kit's own examples never contain them |
+| `sfx`, `sets make` (local_sfx sets) | Stable Audio 3 medium or small-sfx (Stability AI), with the T5Gemma text encoder | Stability AI Community License: free under USD 1M annual revenue, Enterprise licence above; commercial use asks you to register (verify on the licence page); "you own outputs"; the bundled T5Gemma encoder carries Google's Gemma terms | only after you have checked that licence for your game. `sets check --ship` refuses these files until then, and the kit's own examples never contain them |
 | `eleven` | ElevenLabs API (paid, your key) | your ElevenLabs plan's terms | per your plan; read them for games |
 | `fish` | Fish Audio API (paid, your key) | your Fish Audio plan's terms | per your plan; read them for games |
 | `loudness`, `events`, `sets check`, `dialogue`, `music`, `wav` | nothing: measuring and data tools | n/a | n/a |
