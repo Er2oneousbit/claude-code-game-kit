@@ -32,8 +32,9 @@ examples were built and tested on one Windows 11 machine.
   [#52](https://github.com/Er2oneousbit/claude-code-game-kit/issues/52).
 - **UI kit prompt glyphs** are generic; swapping in official console glyphs is not documented or tested:
   [#53](https://github.com/Er2oneousbit/claude-code-game-kit/issues/53).
-- **Hand polish (Aseprite, Pixelorama):** `dotwork.py aseprite` saves over an existing `.aseprite`, so a rebuild before
-  `--reexport` wipes hand polish ([#64](https://github.com/Er2oneousbit/claude-code-game-kit/issues/64), a bug; Pixelorama has an `--overwrite` guard); an edit made by a person
+- **Hand polish (Aseprite, Pixelorama):** two Aseprite tags with the same name mix their frames on re-export
+  ([#81](https://github.com/Er2oneousbit/claude-code-game-kit/issues/81)); clips of different canvas sizes are resized and shifted on an Aseprite round trip, and Pixelorama
+  cannot polish such a character ([#82](https://github.com/Er2oneousbit/claude-code-game-kit/issues/82)); an edit made by a person
   in either editor's window is not tried yet ([#65](https://github.com/Er2oneousbit/claude-code-game-kit/issues/65)); partly transparent layer pixels are not compared with
   Pixelorama's own blend ([#66](https://github.com/Er2oneousbit/claude-code-game-kit/issues/66)); reading Pixelorama 1.2.4 files is built from its release-candidate source
   ([#67](https://github.com/Er2oneousbit/claude-code-game-kit/issues/67)); spells, VFX, status marks, animated props, balloons and vehicles have no hand-polish path
