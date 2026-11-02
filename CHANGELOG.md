@@ -3,8 +3,8 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## 0.8.2 (unreleased)
-Fixes from a fresh review of 0.8.1.
+## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
+A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
 - Dotwork hand polish: a frame or clip added in the editor takes only its sibling's provenance (models, workflow,
   routes, blend) in the manifest, never its holds, checks or prompt.
 - Dotwork pixelorama: a project's size is checked from its data.json before any image is read (frames held, cels
