@@ -85,8 +85,11 @@ access rules, with their golden tests:
   the subtitles' arrows.
 - Bevy: src/logic/audio_director.rs, music_director.rs and audio_access.rs (logic only).
 - C++/SDL2: src/core/AudioDirector.hpp, MusicDirector.hpp and AudioAccess.hpp (logic only).
+- Unreal: the GameKitShell plugin's GameKitAudioDirector.h, GameKitMusicDirector.h and GameKitAudioAccess.h (logic
+  only; the plugin ships disabled, engines/unreal FLOW.md says how to turn it on).
 
-Unreal's GameKitShell plugin and RPG Maker MZ do not have them yet.
+- RPG Maker MZ: game/js/plugins/GameAudio.js, an engine-free plugin with all three, tested with Node against the
+  golden files (the overlay itself is a proof of concept: everything that touches MZ says verify in RPG Maker MZ).
 
 ## GPU tools: setup
 - `voice` runs Qwen3-TTS in its own Python environment, so Wavesmith stays standard-library only. Setup steps are in

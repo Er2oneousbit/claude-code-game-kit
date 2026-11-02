@@ -99,6 +99,7 @@ widgets. It ships disabled (`"EnabledByDefault": false`), so a project that does
 | `GameKitSettings.h`, `GameKitBindings.h` | settings defaults and validated loading (bad fields fixed and listed), rebinding with swaps, button-glyph names |
 | `GameKitSaveStore.h`, `GameKitAtomicFile.h` | versioned saves with migrations, a `.bak` of the last good save, crash-safe writes (`.tmp`, flush, rename) |
 | `GameKitI18n.h`, `GameKitJson.h` | `Tr` with a fr-CA -> fr -> en fallback, plurals, the pseudo-locale; JSON helpers that never log |
+| `GameKitAudioDirector.h`, `GameKitMusicDirector.h`, `GameKitAudioAccess.h` | Wavesmith's audio rules (tools/audio/wavesmith): which take of a sound event plays at what pitch and volume, voice caps, cooldowns and dialogue ducking; music transition plans on the exact sample (beat, bar, phrase, loop end, fades, stingers, synced entry; start sounds on them with a Quartz clock); settings sliders per bus, never twice down one branch, and the arrow for a caption whose sound is off screen |
 
 Turn it on (a C++ project; a Blueprint-only one first needs a C++ class from Tools > New C++ Class, and `dev.py check`
 exits 2 to say so):
@@ -111,8 +112,9 @@ exits 2 to say so):
    to date" and skip it, and `test --filter GameKit` then finds no tests: delete
    `Intermediate/Build/Win64/x64/<Game>Editor/Development/Makefile.bin` (seen on UE 5.8) and run `check` again.
 
-The plugin's tests: `GameKit.Golden.Juice.<case>` and `GameKit.Golden.Shell.<case>` (one test per case) read
-`data/golden/juice.json` and `shell.json` from the project folder and compare every value with the kit's reference
+The plugin's tests: `GameKit.Golden.Juice.<case>`, `GameKit.Golden.Shell.<case>`, `GameKit.Golden.Audio.<case>`,
+`GameKit.Golden.Music.<case>` and `GameKit.Golden.Access.<case>` (one test per case) read `data/golden/juice.json`,
+`shell.json`, `audio.json`, `music.json` and `access.json` from the project folder and compare every value with the kit's reference
 (`tools/golden_vectors.py`) within the file's tolerance; `GameKit.Golden.Coverage` fails when a vector type has no case;
 `GameKit.Shell.*` writes real files in a temp folder (a crash between write and rename leaves the old file, a corrupt save
 falls back to the `.bak`, a newer game's save is never overwritten). Keep `data/golden/` in the repo.

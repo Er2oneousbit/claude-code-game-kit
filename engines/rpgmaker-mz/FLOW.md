@@ -57,6 +57,7 @@ Manager or the project). **(verify)**
   read `location.search` in a plugin (for example `?autoplay`), log markers, and run
   `python tools/dev.py smoke --query autoplay --until DONE --fail-on LOST`.
 - Bot pairs (SOP-14 step 6) belong in GameCore tests: they run in seconds over many seeds.
+- **Audio:** `tests/gameAudio.test.js` runs `data/golden/audio.json`, `music.json`, `access.json` through `GameAudio.js`.
 
 ## Assets and audio
 - MZ's default art and sound come with your copy of MZ; log your own additions in `docs/ASSET_LOG.md` as usual.

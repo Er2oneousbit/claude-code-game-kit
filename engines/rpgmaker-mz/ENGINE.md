@@ -18,6 +18,7 @@
 ```
 game/                     the RPG Maker MZ project: open game/game.rmmzproject in the editor
 game/js/plugins/GameCore.js   engine-free rules: no $game*, Scene_*, Window_*. Tested in Node. Yours.
+game/js/plugins/GameAudio.js  the kit's audio rules (sound events, music, access), engine-free, golden-tested in Node.
 game/js/plugins/GameMain.js   MZ glue: plugin commands, scene hooks, the BOOT_OK marker. Yours.
 game/js/plugins.js        the Plugin Manager's list (the editor writes it; setup adds the game's plugins)
 game/data/*.json          the database and maps (the editor writes them; see gotcha 1)
