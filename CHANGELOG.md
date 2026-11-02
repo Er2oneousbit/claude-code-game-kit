@@ -154,7 +154,7 @@
   the placeholders must survive exactly, back-translation flags drift, and a person reviews before anything ships.
   No language-model code ships in the kit.
 - Audio logic in every engine: Unreal's GameKitShell plugin (GameKitAudioDirector.h, GameKitMusicDirector.h,
-  GameKitAudioAccess.h; 13 new golden tests, 68 GameKit tests in all) and RPG Maker MZ (`GameAudio.js`, tested in
+  GameKitAudioAccess.h; 13 new golden tests, 68 GameKit tests in all) and RPG Maker MZ (GameAudio.js, tested in
   Node; verify in RPG Maker MZ) now follow the same audio, music and access golden vectors as the other seven
   engines. RPG Maker MZ's `setup` puts a newly added kit plugin before the game's plugins that load after it.
 - SOP-04 measures loudness instead of normalizing peaks, pointing at `tools/audio/wavesmith/loudness.py`. EVIDENCE.md: the 0.8.0
