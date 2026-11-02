@@ -7,7 +7,9 @@ examples were built and tested on one Windows 11 machine.
 ## The kit
 
 ### 0.8.0 follow-ups (juice, shell, LÖVE, CI)
-- **CI workflow** not yet run on GitHub-hosted runners: [#40](https://github.com/Er2oneousbit/claude-code-game-kit/issues/40).
+- **CI workflow** not yet run on GitHub-hosted runners (Actions is disabled on this repository, so it cannot run
+  until that is turned on): [#40](https://github.com/Er2oneousbit/claude-code-game-kit/issues/40); a missing blank line between two of its steps:
+  [#95](https://github.com/Er2oneousbit/claude-code-game-kit/issues/95).
 - **LÖVE:** macOS and Linux packaging, LÖVE 11.4 itself and the POSIX save rename not run: [#41](https://github.com/Er2oneousbit/claude-code-game-kit/issues/41);
   a plain smoke without `--data-dir` writes to the real save folder: [#44](https://github.com/Er2oneousbit/claude-code-game-kit/issues/44).
 - **Shell:** telemetry columns differ per engine: [#42](https://github.com/Er2oneousbit/claude-code-game-kit/issues/42);
@@ -58,7 +60,8 @@ engine: web [#55](https://github.com/Er2oneousbit/claude-code-game-kit/issues/55
 [#59](https://github.com/Er2oneousbit/claude-code-game-kit/issues/59), C++/SDL2
 [#60](https://github.com/Er2oneousbit/claude-code-game-kit/issues/60), LÖVE
 [#61](https://github.com/Er2oneousbit/claude-code-game-kit/issues/61), RPG Maker MZ
-[#62](https://github.com/Er2oneousbit/claude-code-game-kit/issues/62).
+[#62](https://github.com/Er2oneousbit/claude-code-game-kit/issues/62). The umbrella, a manifest spec with golden
+fixtures that every loader is tested against: [#83](https://github.com/Er2oneousbit/claude-code-game-kit/issues/83).
 
 ### Audio (Wavesmith) follow-ups
 - **OGG Vorbis decoder:** the start trim and multiplexed Ogg files are not checked against libvorbis's own reader
@@ -68,11 +71,25 @@ engine: web [#55](https://github.com/Er2oneousbit/claude-code-game-kit/issues/55
 - **Not run:** either `audio.yml` on GitHub, macOS or Python 3.10 ([#75](https://github.com/Er2oneousbit/claude-code-game-kit/issues/75), a sibling of #40); voice and sfx
   off NVIDIA (Apple, AMD) ([#76](https://github.com/Er2oneousbit/claude-code-game-kit/issues/76)); RPG Maker MZ's GameAudio.js inside MZ ([#78](https://github.com/Er2oneousbit/claude-code-game-kit/issues/78)); Unity's
   AudioEventPlayer and access sliders in Play mode ([#79](https://github.com/Er2oneousbit/claude-code-game-kit/issues/79)).
-- **Planned:** a music-render subcommand for ACE-Step 1.5 ([#80](https://github.com/Er2oneousbit/claude-code-game-kit/issues/80)).
+- **Planned:** a music-render subcommand for ACE-Step 1.5 ([#80](https://github.com/Er2oneousbit/claude-code-game-kit/issues/80)); a listen-and-rate page for takes, and a
+  check of the deep babble presets for clicks between blips ([#94](https://github.com/Er2oneousbit/claude-code-game-kit/issues/94)).
+- **Open question:** may the kit's examples ship Stable Audio output ([#92](https://github.com/Er2oneousbit/claude-code-game-kit/issues/92))?
 
 ### Ideas and evaluations
 - **img2threejs:** code-only Three.js models from a reference image, for web-3d and image to 3D ([#71](https://github.com/Er2oneousbit/claude-code-game-kit/issues/71)).
 - **Gameplay visual review:** Claude reviews smoke screenshots against the art direction ([#72](https://github.com/Er2oneousbit/claude-code-game-kit/issues/72)).
+
+### Planned for 0.9.0 and later
+- **Steam:** a platform-services layer with a null backend and one adapter per engine
+  ([#84](https://github.com/Er2oneousbit/claude-code-game-kit/issues/84)); an automated Steam Deck pass ([#85](https://github.com/Er2oneousbit/claude-code-game-kit/issues/85)); `dev.py ship` for
+  SteamPipe and itch.io with a dry run ([#86](https://github.com/Er2oneousbit/claude-code-game-kit/issues/86)).
+- **Localization round trip:** export, local-model drafts, review, re-import and checks
+  ([#87](https://github.com/Er2oneousbit/claude-code-game-kit/issues/87)).
+- **Checks:** frame-time budgets in smoke and CI ([#90](https://github.com/Er2oneousbit/claude-code-game-kit/issues/90)); an automated accessibility sweep of the shell
+  screens ([#91](https://github.com/Er2oneousbit/claude-code-game-kit/issues/91)).
+- **Starting a game:** genre starters with a tested core loop ([#89](https://github.com/Er2oneousbit/claude-code-game-kit/issues/89)).
+- **Examples:** bring them onto the 0.8 systems ([#88](https://github.com/Er2oneousbit/claude-code-game-kit/issues/88)); designed-voice dialogue in one example
+  ([#93](https://github.com/Er2oneousbit/claude-code-game-kit/issues/93)).
 
 ### Never run or not run end to end
 - **macOS and Linux:** untested throughout (the scaffolder ran on Linux in an earlier version only). Tool and binary
