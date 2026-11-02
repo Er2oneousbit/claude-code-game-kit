@@ -6,6 +6,8 @@
 ## 0.9.0 (unreleased)
 - Gatekeeper (Godot): "Start over" resets the game in place, so the loaded model stays and a reply still on its way
   is dropped; both start buttons wait for a model load, which gives one intro instead of two (#1).
+- Gatekeeper (Godot): a line typed while the guard is still thinking (or after the game ended) stays in the box
+  instead of being cleared and lost; Enter again sends it once Bram has answered (#2).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

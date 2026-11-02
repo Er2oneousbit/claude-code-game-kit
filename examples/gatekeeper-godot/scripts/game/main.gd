@@ -15,7 +15,7 @@
 #           Sounds: ElevenLabs (A-0006 to A-0009, the web twin's files), with an ambience loop at the wall.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-02 with Claude (Fable 5.1, claude-fable-5-1): restart in place, one intro per start, a reply
-#           in flight dropped after "Start over" (#1)
+#           in flight dropped after "Start over" (#1); a line typed while Bram thinks stays in the box (#2)
 # ---------------------------------------------------------------------------
 extends Node2D
 
@@ -342,9 +342,11 @@ func _can_say() -> bool:
 
 
 func _submit(text: String) -> void:
+	var line := text.strip_edges()
+	if line == "" or not _can_say():
+		return   # keep the text in the box: Enter again once Bram has answered (it used to be cleared and lost)
 	input.clear()
-	if text.strip_edges() != "":
-		say(text.strip_edges())
+	say(line)
 
 
 func _add(kind: String, text: String) -> void:

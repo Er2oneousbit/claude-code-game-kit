@@ -2,7 +2,8 @@
 # test_main_flow.gd
 # Purpose : GUT tests for the game flow in scripts/game/main.gd with a stand-in brain (no plugin, no model):
 #           one intro when the scripted guard is picked during a model load, "Start over" keeps the brain and
-#           drops a reply still on its way, and the new game takes a line at once.
+#           drops a reply still on its way, the new game takes a line at once, and a line typed while the guard
+#           is thinking stays in the box.
 # Usage   : python tools/dev.py test      (needs the GUT addon in addons/gut/)
 # Notes   : The main scene is built headless (its sounds play into no device). The stand-in extends GuardBrain
 #           and finishes loading or answering only when the test says so, like the web twin's fake brains.
@@ -118,6 +119,29 @@ func test_a_double_click_on_start_over_restarts_once() -> void:
 	assert_false(main.restarting)
 	button(AGAIN_BUTTON).pressed.emit()              # a later click works again
 	assert_eq(main.run, 2)
+
+
+func test_a_line_typed_while_the_guard_is_thinking_is_kept() -> void:
+	button(SCRIPTED_BUTTON).pressed.emit()
+	main.say("Good evening.")                        # the model is thinking
+	main.input.text = "Captain Wren sent me."
+	main.input.text_submitted.emit(main.input.text)  # Enter while Bram thinks
+	assert_eq(main.input.text, "Captain Wren sent me.", "the line stays in the box (it was cleared and lost)")
+	assert_false(main.log_box.get_parsed_text().contains("You: Captain Wren sent me."), "and is not sent yet")
+	assert_eq(brain.asked.size(), 1, "the model got the first line only")
+	brain.answered.emit()                            # Bram answers the first line
+	main.input.text_submitted.emit(main.input.text)  # Enter again
+	assert_eq(main.input.text, "", "taken now")
+	assert_true(main.log_box.get_parsed_text().contains("You: Captain Wren sent me."))
+	assert_eq(brain.asked.back(), "Captain Wren sent me.")
+
+
+func test_enter_on_an_empty_box_does_nothing() -> void:
+	button(SCRIPTED_BUTTON).pressed.emit()
+	main.input.text = "   "
+	main.input.text_submitted.emit(main.input.text)
+	assert_eq(brain.asked.size(), 0)
+	assert_false(main.busy)
 
 
 func test_start_over_puts_the_gate_and_the_guard_back() -> void:

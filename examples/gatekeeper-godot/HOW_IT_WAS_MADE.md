@@ -12,6 +12,7 @@ an RTX 5060 Ti, 2026-10-21, alongside its browser twin (`../gatekeeper-web/`). B
 | 3 | 10-22 | The first live run logged no speech at all | Autoplay quit before the first reply arrived; it now waits for queued lines | `VOICE_OK` per line |
 | 4 | 10-22 | A recording of the game "sounded like white noise" | Nothing wrong in the game: the recording was 32-bit and had been read as 16-bit. The kit's `wavfile.py` now reads 32-bit | 14.5 s of sound where the log says 14.4 s of speech |
 | 5 | 11-02 | Review finding #1: the scripted guard picked during a model load doubled the intro, and "Start over" reloaded the scene (and the 1.1 GB model) | Both start buttons wait for the load; "Start over" resets the game in place and a run counter drops a reply still on its way | `tests/test_main_flow.gd` with a stand-in brain: 4 tests fail on the old code (two intros, the stale reply landing at 65 trust) |
+| 6 | 11-02 | Review finding #2: a line typed while Bram was thinking was cleared and lost | The box keeps the line while `say()` would not take it; Enter again sends it | `test_a_line_typed_while_the_guard_is_thinking_is_kept` fails on the old code (box emptied, line never sent) |
 
 ## What it demonstrates
 - **The model never decides anything.** It labels the player's line with one intent from a fixed list and speaks one
