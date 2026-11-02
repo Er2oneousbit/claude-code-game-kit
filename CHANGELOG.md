@@ -21,6 +21,9 @@
 - Gatekeeper (Godot): an exported build no longer tells players to run the developer's setup script; it names what
   is missing and looks for the model in a `models` folder next to the game (not in the .pck). Scripted `--autoplay`
   stops its sounds and waits 0.2 s before quitting, so it no longer ends with `1 resources still in use at exit` (#6).
+- Rune Delve (Unreal): the bot pair test states its margin over the pillar thresholds (named constants, logged as
+  `[test] pair: margin ...`) and warns when it passes with none, as it does now (weaver 65 against 55, 3 clears
+  against 0). The balance is not retuned: that waits for a human playtest (#7).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

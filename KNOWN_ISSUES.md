@@ -161,7 +161,8 @@ autoplay exit leak (#6).
 
 ### Rune Delve (Unreal)
 - **Balance at its limit:** after the review fixes the weaver bot clears 3 of 8 dungeons (was 5) against the
-  masher's 0; the pair test passes exactly on its thresholds, with no margin. Tuning is on hold.
+  masher's 0; the pair test passes exactly on its thresholds and now says so (a margin line and a warning). Retuning
+  the ward waits for a human playtest ([#7](https://github.com/Er2oneousbit/claude-code-game-kit/issues/7)).
 - `-quitatend` exits 0 even when the mage dies (Unreal 5.8 needs a forced exit for a non-zero code).
 - Replays under `-nullrhi` (no renderer) differ from rendered runs; cause unknown (`docs/TROUBLESHOOTING.md`).
 

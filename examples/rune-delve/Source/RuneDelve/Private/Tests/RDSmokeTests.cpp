@@ -10,6 +10,7 @@
 //           Assert a gap over seeds, never one outcome (SOP-14). The review regressions are in RDRegressionTests.cpp.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-10-26 the measured pair after the review fixes (thresholds unchanged)
+//           2026-11-02 the pair states its margin over the pillar thresholds and warns at zero (#7)
 // ---------------------------------------------------------------------------
 #include "Misc/AutomationTest.h"
 
@@ -34,6 +35,13 @@ namespace
 	constexpr EAutomationTestFlags SmokeFlags = EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter;
 	constexpr double WallTimeoutSeconds = 600.0;   // one delve, real time: a stuck run fails instead of hanging
 	const int32 AllSeeds[] = {0, 1, 2, 3, 4, 5, 6, 7};
+	// Pillar 1 thresholds over the 8 seeds: the gaps that mean "timing beats spam", not the measured numbers.
+	constexpr int32 PillarProgressGap = 10;   // weaver progress minus masher progress (of 80 each)
+	constexpr int32 PillarClearGap = 3;       // weaver full clears minus masher full clears (of 8 each)
+	// Below this margin over either threshold the pair warns: the runs replay exactly, so the margin is exact, and a
+	// smaller one means the next balance change can fail the test. A warning, not a failure: retuning is a design
+	// call for a human playtest (docs/VERTICAL_SLICE.md), not something the test may force.
+	constexpr int32 WantedMargin = 1;
 
 	struct FRDRunResult
 	{
@@ -213,9 +221,20 @@ public:
 		// Measured 2026-10-22 (UE 5.8.4): weaver 71, masher 55 of 80; clears weaver 5/8, masher 0/8. The masher's
 		// wards met no swing in any run: spam drains the mana the ward needs.
 		// 2026-10-26, after the review fixes (a ward stops one swing, not every swing in its window): weaver 65,
-		// masher 55; clears 3/8 against 0/8. Both checks pass with no margin left: tune before tightening them.
-		Test->TestTrue(TEXT("the weaver gets clearly further than the masher: ") + Line, WP - MP >= 10);
-		Test->TestTrue(TEXT("the weaver clears clearly more delves: ") + Line, WC >= MC + 3);
+		// masher 55; clears 3/8 against 0/8. Both checks pass with no margin left (#7): the margin is logged and
+		// warned about below, so a run never reads as a comfortable pass. Tune before tightening the thresholds.
+		const int32 ProgressMargin = (WP - MP) - PillarProgressGap;
+		const int32 ClearMargin = (WC - MC) - PillarClearGap;
+		const FString Margin = FString::Printf(TEXT("margin over the pillar thresholds: progress %d (gap %d, needs %d), clears %d (gap %d, needs %d)"),
+		                                       ProgressMargin, WP - MP, PillarProgressGap, ClearMargin, WC - MC, PillarClearGap);
+		UE_LOG(LogRuneDelve, Display, TEXT("[test] pair: %s"), *Margin);
+		Test->TestTrue(TEXT("the weaver gets clearly further than the masher: ") + Line, ProgressMargin >= 0);
+		Test->TestTrue(TEXT("the weaver clears clearly more delves: ") + Line, ClearMargin >= 0);
+		if (ProgressMargin >= 0 && ClearMargin >= 0 && FMath::Min(ProgressMargin, ClearMargin) < WantedMargin)
+		{
+			Test->AddWarning(TEXT("the pair passes at its limit, one point from failing (") + Margin +
+			                 TEXT("); see docs/VERTICAL_SLICE.md before changing the ward or the thresholds"));
+		}
 		return true;
 	}
 
