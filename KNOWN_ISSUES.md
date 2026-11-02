@@ -149,7 +149,7 @@ intended. Their art and audio are for non-commercial use (`examples/LICENSE.md`)
 
 ### Gatekeeper (Godot): review findings fixed, some proven only without the model
 From an adversarial review (Claude Fable 5.1, 2026-10-26); the web twin got the matching fixes first.
-Fixed in 0.9.0: the model load and restart lifecycle (#1), the line typed while the guard thinks (#2), model errors
+Fixed in 0.8.3: the model load and restart lifecycle (#1), the line typed while the guard thinks (#2), model errors
 and timeouts (#3: an error or two timeouts in a row hand the session to the scripted guard; history calls and
 `reset()` time out too; proven with a stand-in chat, the load path itself still needs the real plugin), the voice
 cache written before the reply was checked (#4), the checks that could not fail (#5: `--llm --autoplay` exits 1 on
