@@ -4,7 +4,7 @@
 #           local model, is spoken with Fish Audio text to speech while you play.
 # Usage   : var v := GuardVoice.new(); add_child(v); v.speak("Halt.")
 #           Needs YOUR Fish Audio API key in the FISH_API_KEY environment variable; nothing is shipped.
-#           Optional FISH_VOICE_ID picks another voice (`python tools/audio/fish_tts.py voices`).
+#           Optional FISH_VOICE_ID picks another voice (`python tools/audio/wavesmith/fish_tts.py voices`).
 #           User args: --voice speaks in headless runs too (tests), --no-voice turns it off.
 # Notes   : Text always shows; the voice is extra and never blocks or breaks the game. Without a key it
 #           stays off (VOICE_OFF). A rejected key or empty balance (401/402/403) turns it off for the

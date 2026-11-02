@@ -1,35 +1,43 @@
 // ---------------------------------------------------------------------------
 // tests/golden.rs
 // Purpose : The golden-vector exam: every case in data/golden/juice.json and data/golden/shell.json (written by
-//           tools/golden_vectors.py, the reference every engine port matches) replayed through src/logic/.
+//           tools/golden_vectors.py) and in audio.json, music.json and access.json (written by
+//           tools/audio/wavesmith/), the references every engine port matches, replayed through src/logic/.
 // Usage   : python tools/dev.py test   (cargo test --test golden -- --nocapture also prints the case counts)
 // Notes   : One test per case type: it checks every case of that type within the file's tolerance and fails
 //           when the file has none. A case type this file does not know fails vector_files_hold_only_known_types,
 //           so a new vector type cannot be skipped silently. Expected values come only from the JSON: when the
-//           behavior should change, change the reference, run `python tools/golden_vectors.py --write`, then fix
-//           src/logic/ until this passes. Numbers compare numerically (1 == 1.0), arrays in order, objects as
+//           behavior should change, change the reference, run `python tools/golden_vectors.py --write` (or the
+//           wavesmith tool's `vectors --write`), then fix src/logic/ until this passes. Numbers compare numerically (1 == 1.0), arrays in order, objects as
 //           key sets.
 //
 // Pseudocode:
 //   load the file -> for each case of the type: build the module from "params", replay "steps" (or "points"),
 //   compare each result with its "expect" -> collect every mismatch -> fail with the list
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): audio, music and access vectors
 // ---------------------------------------------------------------------------
 use std::path::Path;
 
 use serde_json::{Value, json};
 
+use project_crimson_nebula::logic::audio_access;
+use project_crimson_nebula::logic::audio_director::{AudioDirector, PlayResult};
 use project_crimson_nebula::logic::coyote::Coyote;
 use project_crimson_nebula::logic::flash_limiter::FlashLimiter;
 use project_crimson_nebula::logic::follow::Follow;
 use project_crimson_nebula::logic::hitstop::Hitstop;
 use project_crimson_nebula::logic::input_buffer::InputBuffer;
+use project_crimson_nebula::logic::music_director::{self, MusicFile};
 use project_crimson_nebula::logic::shake::{self, Shake};
 use project_crimson_nebula::logic::spring::{self, Spring};
 use project_crimson_nebula::logic::{bindings, ease, i18n, save_store, settings};
 
 const JUICE: &str = "juice.json";
 const SHELL: &str = "shell.json";
+const AUDIO: &str = "audio.json";
+const MUSIC: &str = "music.json";
+const ACCESS: &str = "access.json";
 const JUICE_TYPES: [&str; 10] = [
     "noise",
     "shake",
@@ -54,6 +62,9 @@ const SHELL_TYPES: [&str; 10] = [
     "plural",
     "pseudo",
 ];
+const AUDIO_TYPES: [&str; 1] = ["audio_director"];
+const MUSIC_TYPES: [&str; 2] = ["music_grid", "music_plan"];
+const ACCESS_TYPES: [&str; 2] = ["access_gains", "access_arrow"];
 /// The vector file format this exam reads (the files' "version").
 const VECTOR_VERSION: i64 = 1;
 /// The plural case's points do not name their key; the reference builds them all from this one.
@@ -195,6 +206,11 @@ fn check_case(kind: &str, case: &Value, exam: &mut Exam) {
         "tr" => tr(case, exam),
         "plural" => plural(case, exam),
         "pseudo" => pseudo(case, exam),
+        "audio_director" => audio_director_steps(case, exam),
+        "music_grid" => music_grid_steps(case, exam),
+        "music_plan" => music_plan_steps(case, exam),
+        "access_gains" => access_gains_steps(case, exam),
+        "access_arrow" => access_arrow_steps(case, exam),
         other => exam.fail(format!("unknown case type {other:?}")),
     }
 }
@@ -471,10 +487,115 @@ fn pseudo(case: &Value, exam: &mut Exam) {
     }
 }
 
+// ---- Audio ---------------------------------------------------------------------
+fn audio_director_steps(case: &Value, exam: &mut Exam) {
+    let mut d = match AudioDirector::from_value(&case["params"]) {
+        Ok(d) => d,
+        Err(e) => return exam.fail(format!("params: {e}")),
+    };
+    for (n, st, call) in steps(case) {
+        let t = f(&st["t_ms"]);
+        let got = match call {
+            "play" => d.play(s(&st["event"]), t).map(|r| match r {
+                PlayResult::Cooldown => json!({"result": "cooldown"}),
+                PlayResult::Capped => json!({"result": "capped"}),
+                PlayResult::Played(p) => json!({
+                    "result": "played",
+                    "variant": p.variant,
+                    "pitch_semitones": p.pitch_semitones,
+                    "pitch_ratio": p.pitch_ratio,
+                    "gain_db": p.gain_db,
+                    "voice": p.voice,
+                    "stolen": p.stolen,
+                    "ends_ms": p.ends_ms,
+                }),
+            }),
+            "duck" => d.duck(t).map(|gains| json!(gains)),
+            other => {
+                exam.fail(format!("step {n}: unknown call {other:?}"));
+                continue;
+            }
+        };
+        match got {
+            Ok(got) => exam.check(&format!("step {n}"), got, &st["expect"]),
+            Err(e) => exam.fail(format!("step {n}: {e}")),
+        }
+    }
+}
+
+fn music_grid_steps(case: &Value, exam: &mut Exam) {
+    for (n, st) in arr(&case["steps"]).iter().enumerate() {
+        let got = music_director::beat_sample(f(&st["k"]), f(&st["bpm"]), i(&st["rate"]));
+        exam.check(
+            &format!("step {n} beat_sample({}, {}, {})", st["k"], st["bpm"], st["rate"]),
+            json!(got),
+            &st["sample"],
+        );
+    }
+}
+
+fn music_plan_steps(case: &Value, exam: &mut Exam) {
+    let music = match MusicFile::from_value(&case["params"]) {
+        Ok(m) => m,
+        Err(e) => return exam.fail(format!("params: {e}")),
+    };
+    for (n, st) in arr(&case["steps"]).iter().enumerate() {
+        let what = format!("step {n} ({} -> {} at {})", st["from"], st["to"], st["now"]);
+        match music_director::plan(
+            &music,
+            s(&st["from"]),
+            i(&st["since"]),
+            i(&st["entry"]),
+            s(&st["to"]),
+            i(&st["now"]),
+        ) {
+            Ok(p) => {
+                let got = json!({
+                    "switch_at": p.switch_at,
+                    "from_stop_at": p.from_stop_at,
+                    "fade": p.fade,
+                    "to_offset": p.to_offset,
+                    "to_start_at": p.to_start_at,
+                    "stinger": p.stinger,
+                    "stinger_at": p.stinger_at,
+                });
+                exam.check(&what, got, &st["expect"]);
+            }
+            Err(e) => exam.fail(format!("{what}: {e}")),
+        }
+    }
+}
+
+fn access_gains_steps(case: &Value, exam: &mut Exam) {
+    for (n, st) in arr(&case["steps"]).iter().enumerate() {
+        let got = audio_access::user_bus_gains(&st["buses"], &st["sliders"]);
+        exam.check(&format!("step {n}"), json!(got), &st["expect"]);
+    }
+}
+
+fn access_arrow_steps(case: &Value, exam: &mut Exam) {
+    for (n, st) in arr(&case["steps"]).iter().enumerate() {
+        let (dx, dy, w, h) = (f(&st["dx"]), f(&st["dy"]), f(&st["half_w"]), f(&st["half_h"]));
+        let got = json!({
+            "dir": audio_access::caption_direction(dx, dy, w, h),
+            "arrow": audio_access::caption_arrow(dx, dy, w, h),
+        });
+        let want = json!({"dir": st["dir"], "arrow": st["arrow"]});
+        exam.check(&format!("step {n} ({dx}, {dy})"), got, &want);
+    }
+}
+
 // ---- The tests -----------------------------------------------------------------
 #[test]
 fn vector_files_hold_only_known_types() {
-    for (file, known) in [(JUICE, &JUICE_TYPES), (SHELL, &SHELL_TYPES)] {
+    let files: [(&str, &[&str]); 5] = [
+        (JUICE, &JUICE_TYPES),
+        (SHELL, &SHELL_TYPES),
+        (AUDIO, &AUDIO_TYPES),
+        (MUSIC, &MUSIC_TYPES),
+        (ACCESS, &ACCESS_TYPES),
+    ];
+    for (file, known) in files {
         let doc = load(file);
         assert_eq!(
             i(&doc["version"]),
@@ -490,6 +611,17 @@ fn vector_files_hold_only_known_types() {
             );
         }
     }
+}
+
+#[test]
+fn access_arrow_table_matches_the_reference() {
+    // the file lists the eight arrows in direction order: a reordered table would point captions the wrong way
+    let doc = load(ACCESS);
+    assert_eq!(
+        json!(audio_access::ARROWS),
+        doc["arrows"],
+        "{ACCESS}: arrows differ from audio_access::ARROWS"
+    );
 }
 
 /// One #[test] per case type, so `cargo test` names the module that broke.
@@ -525,4 +657,9 @@ golden! {
     shell_tr: SHELL, "tr";
     shell_plural: SHELL, "plural";
     shell_pseudo: SHELL, "pseudo";
+    audio_director: AUDIO, "audio_director";
+    music_grid: MUSIC, "music_grid";
+    music_plan: MUSIC, "music_plan";
+    access_gains: ACCESS, "access_gains";
+    access_arrow: ACCESS, "access_arrow";
 }

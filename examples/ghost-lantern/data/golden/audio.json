@@ -1,0 +1,1169 @@
+{
+ "cases": [
+  {
+   "name": "footsteps: no repeats, pitch and volume ranges, cooldown",
+   "params": {
+    "events": {
+     "step_stone": {
+      "bus": "sfx",
+      "cooldown_ms": 60,
+      "files": [
+       "step_0.wav",
+       "step_1.wav",
+       "step_2.wav",
+       "step_3.wav"
+      ],
+      "lengths_ms": [
+       180,
+       200,
+       170,
+       190
+      ],
+      "max_voices": 4,
+      "pick": "random_no_repeat",
+      "pitch_semitones": [
+       -1.0,
+       1.0
+      ],
+      "steal": "oldest",
+      "volume_db": [
+       -3.0,
+       0.0
+      ]
+     }
+    },
+    "seed": 1
+   },
+   "steps": [
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 201.31511221876275,
+      "gain_db": -0.02726176011121062,
+      "pitch_ratio": 0.993467394453062,
+      "pitch_semitones": -0.11346570971744663,
+      "result": "played",
+      "stolen": null,
+      "variant": 1,
+      "voice": 1
+     },
+     "t_ms": 0
+    },
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 423.013685309742,
+      "gain_db": -1.0139653096105583,
+      "pitch_ratio": 1.0403801276052271,
+      "pitch_semitones": 0.6853289713015118,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 2
+     },
+     "t_ms": 250
+    },
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 674.4850056746911,
+      "gain_db": -2.8928820070744323,
+      "pitch_ratio": 0.9742957530513944,
+      "pitch_semitones": -0.45081981313491226,
+      "result": "played",
+      "stolen": null,
+      "variant": 2,
+      "voice": 3
+     },
+     "t_ms": 500
+    },
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "result": "cooldown"
+     },
+     "t_ms": 520
+    },
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 925.8579572733806,
+      "gain_db": -1.7738372979442005,
+      "pitch_ratio": 1.0235533426569967,
+      "pitch_semitones": 0.4030354874236839,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 4
+     },
+     "t_ms": 750
+    },
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 1174.5704859699506,
+      "gain_db": -0.658958792834504,
+      "pitch_ratio": 0.9738186787728984,
+      "pitch_semitones": -0.459299060943815,
+      "result": "played",
+      "stolen": null,
+      "variant": 2,
+      "voice": 5
+     },
+     "t_ms": 1000
+    },
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 1426.5673344637876,
+      "gain_db": -0.79898753231297,
+      "pitch_ratio": 1.0194411131970533,
+      "pitch_semitones": 0.3333413063859021,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 6
+     },
+     "t_ms": 1250
+    },
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 1693.9393075031844,
+      "gain_db": -0.030011678142483955,
+      "pitch_ratio": 0.9796879366338892,
+      "pitch_semitones": -0.35526982914215866,
+      "result": "played",
+      "stolen": null,
+      "variant": 3,
+      "voice": 7
+     },
+     "t_ms": 1500
+    },
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 1912.024924947402,
+      "gain_db": -0.7060771474671337,
+      "pitch_ratio": 1.0492212852756255,
+      "pitch_semitones": 0.8318277670366949,
+      "result": "played",
+      "stolen": null,
+      "variant": 2,
+      "voice": 8
+     },
+     "t_ms": 1750
+    },
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 2190.3446825294536,
+      "gain_db": -0.3476606559452238,
+      "pitch_ratio": 0.9456528945700766,
+      "pitch_semitones": -0.967408329218075,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 9
+     },
+     "t_ms": 2000
+    },
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 2456.335839769339,
+      "gain_db": -2.486050451161387,
+      "pitch_ratio": 0.9692935566772012,
+      "pitch_semitones": -0.5399332051537309,
+      "result": "played",
+      "stolen": null,
+      "variant": 1,
+      "voice": 10
+     },
+     "t_ms": 2250
+    },
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "result": "cooldown"
+     },
+     "t_ms": 2300
+    },
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 2675.830321331637,
+      "gain_db": -2.1802343806999125,
+      "pitch_ratio": 1.0237142185533423,
+      "pitch_semitones": 0.40575632211357004,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 11
+     },
+     "t_ms": 2500
+    }
+   ],
+   "type": "audio_director"
+  },
+  {
+   "name": "voice cap: steal the oldest",
+   "params": {
+    "events": {
+     "impact": {
+      "bus": "sfx",
+      "files": [
+       "hit_a.wav",
+       "hit_b.wav",
+       "hit_c.wav"
+      ],
+      "lengths_ms": [
+       600,
+       600,
+       600
+      ],
+      "max_voices": 2,
+      "pick": "random",
+      "steal": "oldest"
+     }
+    },
+    "seed": 7
+   },
+   "steps": [
+    {
+     "call": "play",
+     "event": "impact",
+     "expect": {
+      "ends_ms": 600.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 2,
+      "voice": 1
+     },
+     "t_ms": 0
+    },
+    {
+     "call": "play",
+     "event": "impact",
+     "expect": {
+      "ends_ms": 700.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 2
+     },
+     "t_ms": 100
+    },
+    {
+     "call": "play",
+     "event": "impact",
+     "expect": {
+      "ends_ms": 800.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": 1,
+      "variant": 1,
+      "voice": 3
+     },
+     "t_ms": 200
+    },
+    {
+     "call": "play",
+     "event": "impact",
+     "expect": {
+      "ends_ms": 900.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": 2,
+      "variant": 0,
+      "voice": 4
+     },
+     "t_ms": 300
+    },
+    {
+     "call": "play",
+     "event": "impact",
+     "expect": {
+      "ends_ms": 1500.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 1,
+      "voice": 5
+     },
+     "t_ms": 900
+    },
+    {
+     "call": "play",
+     "event": "impact",
+     "expect": {
+      "ends_ms": 1600.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 6
+     },
+     "t_ms": 1000
+    }
+   ],
+   "type": "audio_director"
+  },
+  {
+   "name": "voice cap: refuse when full",
+   "params": {
+    "events": {
+     "coin": {
+      "bus": "sfx",
+      "files": [
+       "coin.wav"
+      ],
+      "lengths_ms": [
+       400
+      ],
+      "max_voices": 2,
+      "pitch_semitones": [
+       0.0,
+       2.0
+      ],
+      "steal": "none"
+     }
+    },
+    "seed": 7
+   },
+   "steps": [
+    {
+     "call": "play",
+     "event": "coin",
+     "expect": {
+      "ends_ms": 382.9350020244457,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0445636932778084,
+      "pitch_semitones": 0.754805577690532,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 1
+     },
+     "t_ms": 0
+    },
+    {
+     "call": "play",
+     "event": "coin",
+     "expect": {
+      "ends_ms": 449.59923860679845,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0010029083003231,
+      "pitch_semitones": 0.017353989200064902,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 2
+     },
+     "t_ms": 50
+    },
+    {
+     "call": "play",
+     "event": "coin",
+     "expect": {
+      "result": "capped"
+     },
+     "t_ms": 100
+    },
+    {
+     "call": "play",
+     "event": "coin",
+     "expect": {
+      "result": "capped"
+     },
+     "t_ms": 150
+    },
+    {
+     "call": "play",
+     "event": "coin",
+     "expect": {
+      "ends_ms": 813.2486240659945,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.1011741641926456,
+      "pitch_semitones": 1.6685120022562445,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 3
+     },
+     "t_ms": 450
+    },
+    {
+     "call": "play",
+     "event": "coin",
+     "expect": {
+      "ends_ms": 884.5660193968488,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0401335006856764,
+      "pitch_semitones": 0.6812245144333918,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 4
+     },
+     "t_ms": 500
+    }
+   ],
+   "type": "audio_director"
+  },
+  {
+   "name": "shuffle bag: every file once per round, no repeat across rounds",
+   "params": {
+    "events": {
+     "swing": {
+      "bus": "sfx",
+      "files": [
+       "s1.wav",
+       "s2.wav",
+       "s3.wav"
+      ],
+      "lengths_ms": [
+       100,
+       100,
+       100
+      ],
+      "pick": "shuffle"
+     }
+    },
+    "seed": 3
+   },
+   "steps": [
+    {
+     "call": "play",
+     "event": "swing",
+     "expect": {
+      "ends_ms": 100.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 1
+     },
+     "t_ms": 0
+    },
+    {
+     "call": "play",
+     "event": "swing",
+     "expect": {
+      "ends_ms": 300.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 1,
+      "voice": 2
+     },
+     "t_ms": 200
+    },
+    {
+     "call": "play",
+     "event": "swing",
+     "expect": {
+      "ends_ms": 500.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 2,
+      "voice": 3
+     },
+     "t_ms": 400
+    },
+    {
+     "call": "play",
+     "event": "swing",
+     "expect": {
+      "ends_ms": 700.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 1,
+      "voice": 4
+     },
+     "t_ms": 600
+    },
+    {
+     "call": "play",
+     "event": "swing",
+     "expect": {
+      "ends_ms": 900.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 2,
+      "voice": 5
+     },
+     "t_ms": 800
+    },
+    {
+     "call": "play",
+     "event": "swing",
+     "expect": {
+      "ends_ms": 1100.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 6
+     },
+     "t_ms": 1000
+    },
+    {
+     "call": "play",
+     "event": "swing",
+     "expect": {
+      "ends_ms": 1300.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 1,
+      "voice": 7
+     },
+     "t_ms": 1200
+    },
+    {
+     "call": "play",
+     "event": "swing",
+     "expect": {
+      "ends_ms": 1500.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 2,
+      "voice": 8
+     },
+     "t_ms": 1400
+    },
+    {
+     "call": "play",
+     "event": "swing",
+     "expect": {
+      "ends_ms": 1700.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 9
+     },
+     "t_ms": 1600
+    },
+    {
+     "call": "play",
+     "event": "swing",
+     "expect": {
+      "ends_ms": 1900.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 2,
+      "voice": 10
+     },
+     "t_ms": 1800
+    }
+   ],
+   "type": "audio_director"
+  },
+  {
+   "name": "sequence: round robin",
+   "params": {
+    "events": {
+     "chime": {
+      "bus": "ui",
+      "files": [
+       "c1.wav",
+       "c2.wav",
+       "c3.wav"
+      ],
+      "lengths_ms": [
+       300,
+       300,
+       300
+      ],
+      "pick": "sequence"
+     }
+    },
+    "seed": 3
+   },
+   "steps": [
+    {
+     "call": "play",
+     "event": "chime",
+     "expect": {
+      "ends_ms": 300.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 1
+     },
+     "t_ms": 0
+    },
+    {
+     "call": "play",
+     "event": "chime",
+     "expect": {
+      "ends_ms": 700.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 1,
+      "voice": 2
+     },
+     "t_ms": 400
+    },
+    {
+     "call": "play",
+     "event": "chime",
+     "expect": {
+      "ends_ms": 1100.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 2,
+      "voice": 3
+     },
+     "t_ms": 800
+    },
+    {
+     "call": "play",
+     "event": "chime",
+     "expect": {
+      "ends_ms": 1500.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 4
+     },
+     "t_ms": 1200
+    },
+    {
+     "call": "play",
+     "event": "chime",
+     "expect": {
+      "ends_ms": 1900.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 1,
+      "voice": 5
+     },
+     "t_ms": 1600
+    }
+   ],
+   "type": "audio_director"
+  },
+  {
+   "name": "a seed above 2^32 stays exact in every port",
+   "params": {
+    "events": {
+     "step_stone": {
+      "bus": "sfx",
+      "cooldown_ms": 60,
+      "files": [
+       "step_0.wav",
+       "step_1.wav",
+       "step_2.wav",
+       "step_3.wav"
+      ],
+      "lengths_ms": [
+       180,
+       200,
+       170,
+       190
+      ],
+      "max_voices": 4,
+      "pick": "random_no_repeat",
+      "pitch_semitones": [
+       -1.0,
+       1.0
+      ],
+      "steal": "oldest",
+      "volume_db": [
+       -3.0,
+       0.0
+      ]
+     }
+    },
+    "seed": 1099511627783
+   },
+   "steps": [
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 160.92611823522873,
+      "gain_db": -0.7260590849686963,
+      "pitch_ratio": 1.0563853889243,
+      "pitch_semitones": 0.9496350306548504,
+      "result": "played",
+      "stolen": null,
+      "variant": 2,
+      "voice": 1
+     },
+     "t_ms": 0
+    },
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 451.6995414632248,
+      "gain_db": -1.6781543527526355,
+      "pitch_ratio": 0.9915738952558072,
+      "pitch_semitones": -0.14649365017795346,
+      "result": "played",
+      "stolen": null,
+      "variant": 1,
+      "voice": 2
+     },
+     "t_ms": 250
+    },
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 663.1596599309604,
+      "gain_db": -1.7313095216930934,
+      "pitch_ratio": 1.0419242113640959,
+      "pitch_semitones": 0.7110040930202268,
+      "result": "played",
+      "stolen": null,
+      "variant": 2,
+      "voice": 3
+     },
+     "t_ms": 500
+    },
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 953.9556207402363,
+      "gain_db": -2.4527061688273273,
+      "pitch_ratio": 0.980605483065974,
+      "pitch_semitones": -0.3390631967587985,
+      "result": "played",
+      "stolen": null,
+      "variant": 1,
+      "voice": 4
+     },
+     "t_ms": 750
+    }
+   ],
+   "type": "audio_director"
+  },
+  {
+   "name": "ducking: dialogue under music, attack and release",
+   "params": {
+    "ducking": [
+     {
+      "attack_ms": 80.0,
+      "depth_db": -8.0,
+      "release_ms": 400.0,
+      "targets": [
+       "music",
+       "ambience"
+      ],
+      "trigger": "dialogue"
+     }
+    ],
+    "events": {
+     "line": {
+      "bus": "dialogue",
+      "files": [
+       "line.wav"
+      ],
+      "lengths_ms": [
+       2000
+      ]
+     }
+    },
+    "seed": 5
+   },
+   "steps": [
+    {
+     "call": "duck",
+     "expect": {
+      "ambience": 0.0,
+      "music": 0.0
+     },
+     "t_ms": 900
+    },
+    {
+     "call": "play",
+     "event": "line",
+     "expect": {
+      "ends_ms": 3000.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 1
+     },
+     "t_ms": 1000
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "ambience": 0.0,
+      "music": 0.0
+     },
+     "t_ms": 1000
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "ambience": -4.0,
+      "music": -4.0
+     },
+     "t_ms": 1040
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "ambience": -8.0,
+      "music": -8.0
+     },
+     "t_ms": 1080
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "ambience": -8.0,
+      "music": -8.0
+     },
+     "t_ms": 2000
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "ambience": -8.0,
+      "music": -8.0
+     },
+     "t_ms": 3000
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "ambience": -6.0,
+      "music": -6.0
+     },
+     "t_ms": 3100
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "ambience": -4.0,
+      "music": -4.0
+     },
+     "t_ms": 3200
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "ambience": 0.0,
+      "music": 0.0
+     },
+     "t_ms": 3400
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "ambience": 0.0,
+      "music": 0.0
+     },
+     "t_ms": 3600
+    }
+   ],
+   "type": "audio_director"
+  },
+  {
+   "name": "ducking: a new line during the release dips again from where it was",
+   "params": {
+    "ducking": [
+     {
+      "attack_ms": 100.0,
+      "depth_db": -10.0,
+      "release_ms": 500.0,
+      "targets": [
+       "music"
+      ],
+      "trigger": "dialogue"
+     }
+    ],
+    "events": {
+     "line": {
+      "bus": "dialogue",
+      "files": [
+       "a.wav",
+       "b.wav"
+      ],
+      "lengths_ms": [
+       300,
+       300
+      ],
+      "max_voices": 1,
+      "pick": "sequence",
+      "steal": "oldest"
+     }
+    },
+    "seed": 5
+   },
+   "steps": [
+    {
+     "call": "play",
+     "event": "line",
+     "expect": {
+      "ends_ms": 300.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 1
+     },
+     "t_ms": 0
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "music": -5.0
+     },
+     "t_ms": 50
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "music": -10.0
+     },
+     "t_ms": 300
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "music": -8.0
+     },
+     "t_ms": 400
+    },
+    {
+     "call": "play",
+     "event": "line",
+     "expect": {
+      "ends_ms": 750.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 1,
+      "voice": 2
+     },
+     "t_ms": 450
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "music": -8.0
+     },
+     "t_ms": 460
+    },
+    {
+     "call": "play",
+     "event": "line",
+     "expect": {
+      "ends_ms": 900.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": 2,
+      "variant": 0,
+      "voice": 3
+     },
+     "t_ms": 600
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "music": -10.0
+     },
+     "t_ms": 700
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "music": -8.0
+     },
+     "t_ms": 1000
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "music": 0.0
+     },
+     "t_ms": 1400
+    }
+   ],
+   "type": "audio_director"
+  },
+  {
+   "name": "ducking: a stolen long line stops ducking when the short line that replaced it ends",
+   "params": {
+    "ducking": [
+     {
+      "attack_ms": 100.0,
+      "depth_db": -12.0,
+      "release_ms": 600.0,
+      "targets": [
+       "music"
+      ],
+      "trigger": "dialogue"
+     }
+    ],
+    "events": {
+     "line": {
+      "bus": "dialogue",
+      "files": [
+       "long.wav",
+       "short.wav"
+      ],
+      "lengths_ms": [
+       3000,
+       200
+      ],
+      "max_voices": 1,
+      "pick": "sequence",
+      "steal": "oldest"
+     }
+    },
+    "seed": 5
+   },
+   "steps": [
+    {
+     "call": "play",
+     "event": "line",
+     "expect": {
+      "ends_ms": 3000.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": null,
+      "variant": 0,
+      "voice": 1
+     },
+     "t_ms": 0
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "music": -12.0
+     },
+     "t_ms": 400
+    },
+    {
+     "call": "play",
+     "event": "line",
+     "expect": {
+      "ends_ms": 700.0,
+      "gain_db": 0.0,
+      "pitch_ratio": 1.0,
+      "pitch_semitones": 0.0,
+      "result": "played",
+      "stolen": 1,
+      "variant": 1,
+      "voice": 2
+     },
+     "t_ms": 500
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "music": -6.0
+     },
+     "t_ms": 1000
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "music": 0.0
+     },
+     "t_ms": 1500
+    },
+    {
+     "call": "duck",
+     "expect": {
+      "music": 0.0
+     },
+     "t_ms": 3500
+    }
+   ],
+   "type": "audio_director"
+  }
+ ],
+ "spec": "tools/audio/wavesmith/audio_events.py",
+ "tolerance": 1e-06,
+ "version": 1
+}

@@ -79,18 +79,18 @@ project and its `ASSET_LOG.md` row.
 ### Later: sound and music made, not fetched
 All the fetched audio was replaced with audio made by the kit's `tools/audio/` synth:
 ```
-python tools/audio/sfx_synth.py jump --set volume=0.3 --out assets/audio/sfx/jump.wav --recipe assets/audio/src/jump.sfx.json
-python tools/audio/sfx_synth.py coin --set volume=0.32 --out assets/audio/sfx/coin.wav --recipe assets/audio/src/coin.sfx.json
-python tools/audio/sfx_synth.py fall --out assets/audio/sfx/fall.wav --recipe assets/audio/src/fall.sfx.json
-python tools/audio/sfx_synth.py land --out assets/audio/sfx/land.wav --recipe assets/audio/src/land.sfx.json
-python tools/audio/chiptune.py assets/audio/src/theme.song.json --out assets/audio/music/theme.wav
-python tools/audio/chiptune.py assets/audio/src/goal.song.json --out assets/audio/music/goal.wav
+python tools/audio/wavesmith/sfx_synth.py jump --set volume=0.3 --out assets/audio/sfx/jump.wav --recipe assets/audio/src/jump.sfx.json
+python tools/audio/wavesmith/sfx_synth.py coin --set volume=0.32 --out assets/audio/sfx/coin.wav --recipe assets/audio/src/coin.sfx.json
+python tools/audio/wavesmith/sfx_synth.py fall --out assets/audio/sfx/fall.wav --recipe assets/audio/src/fall.sfx.json
+python tools/audio/wavesmith/sfx_synth.py land --out assets/audio/sfx/land.wav --recipe assets/audio/src/land.sfx.json
+python tools/audio/wavesmith/chiptune.py assets/audio/src/theme.song.json --out assets/audio/music/theme.wav
+python tools/audio/wavesmith/chiptune.py assets/audio/src/goal.song.json --out assets/audio/music/goal.wav
 ```
 - The theme is a song file Claude wrote: 16 bars at 150 bpm in C major (A section over C, Am, F, G; B section over
   F, G, Em, G), a square lead with vibrato, a quiet 25% pulse arpeggio, a triangle bass bouncing octaves, noise drums.
 - Nobody on the AI side can hear it, so it was checked by measurement: an FFT of the solo lead and bass found every
   sampled note where the song file puts it, the loop seam has no jump, and Godot's movie writer recorded the game's
-  own audio (a WAV next to the recorded frames, 32-bit: read it with `tools/audio/wavfile.py`), whose spectrogram shows the music, a rising sweep at each jump and
+  own audio (a WAV next to the recorded frames, 32-bit: read it with `tools/audio/wavesmith/wavfile.py`), whose spectrogram shows the music, a rising sweep at each jump and
   the jingle at the goal. Whether it is any good is your call: play it.
 - Loudness was matched to the old mix by measuring both (RMS): the new theme is 5 dB quieter, so `MUSIC_DB` went
   from -8 to -3; jump and coin were rendered quieter so square waves do not grate.

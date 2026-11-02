@@ -1,0 +1,62 @@
+# ---------------------------------------------------------------------------
+# audio.yml
+# Purpose : Runs every Wavesmith exam (the audio tools in tools/audio/wavesmith) on Linux, Windows and macOS, on the
+#           oldest and newest Python the matrix holds, whenever the audio tools or the golden vectors change, so a
+#           path, encoding or line-ending problem on one operating system is caught before a game ships on it.
+# Notes   : Standard library only: nothing is installed and no GPU is needed. ffmpeg is not installed either; the one
+#           exam that uses a real ffmpeg runs only where the runner image has it; elsewhere it skips and says so.
+#           `wavesmith.py test` runs each exam in its own process and prints one line each; it exits 1 if any failed.
+#           Python 3.8 is the tools' floor and is tested locally by the kit; GitHub's newest runner images may no
+#           longer offer 3.8, so the matrix starts at 3.9. The kit ran these exams on Windows (3.8, 3.9, 3.12) and on
+#           Linux (Ubuntu 26.04, 3.14); macOS is first exercised here. Written by the kit and checked as YAML, not yet
+#           run on GitHub by the kit itself (verify on your first push that touches tools/audio). Run it by hand from
+#           the Actions tab (workflow_dispatch) any time.
+# Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# ---------------------------------------------------------------------------
+name: audio
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/audio/**"
+      - "data/golden/**"
+      - ".github/workflows/audio.yml"
+  pull_request:
+    paths:
+      - "tools/audio/**"
+      - "data/golden/**"
+      - ".github/workflows/audio.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wavesmith-exams:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.9", "3.12"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Wavesmith exams
+        shell: bash
+        env:
+          PYTHONIOENCODING: utf-8
+        run: python -B tools/audio/wavesmith/wavesmith.py test
+
+      - name: Golden vectors are current
+        shell: bash
+        run: |
+          python tools/audio/wavesmith/wavesmith.py events vectors --check
+          python tools/audio/wavesmith/wavesmith.py music vectors --check
+          python tools/audio/wavesmith/wavesmith.py access vectors --check

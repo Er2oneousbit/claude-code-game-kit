@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
 # test_audio.gd
 # Purpose : GUT tests for the created audio: the theme loops by itself (loop points written into the
-#           WAV by tools/audio/chiptune.py, picked up by Godot's default "Detect From WAV" import),
+#           WAV by tools/audio/wavesmith/chiptune.py, picked up by Godot's default "Detect From WAV" import),
 #           the goal jingle and the effects play once.
 # Usage   : python tools/dev.py test      (needs the GUT addon in addons/gut/)
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)

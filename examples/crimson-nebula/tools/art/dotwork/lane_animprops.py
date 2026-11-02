@@ -124,9 +124,12 @@ def keep_moving(base_p, edit_p, kind, out_p):
 
 
 def glow_frames(src, n=8, seed=3):
-    """Save-point loop: bright pixels pulse, the upper 60% floats 1 px, a few sparkles twinkle."""
+    """Save-point loop: bright pixels pulse, the upper 60% floats 1 px, a few sparkles twinkle. Every frame is snapped
+    back to the render's own colours (palette-locked), and the sparkles use its two lightest colours."""
     base = np.array(Image.open(src).convert("RGBA")).astype(np.float32)
     a = base[..., 3] > 0
+    keep = np.unique(base[base[..., 3] >= 128][:, :3].astype(np.uint8), axis=0)
+    light = keep[np.argsort(-(keep.astype(np.float32) @ np.array([0.299, 0.587, 0.114], np.float32)))[:2]]
     ys, xs = np.nonzero(a)
     top, bot = ys.min(), ys.max()
     split = int(top + (bot - top) * 0.6)
@@ -146,10 +149,10 @@ def glow_frames(src, n=8, seed=3):
             im = up
         for j, (py, px) in enumerate(spark_pts):
             if (f + j) % 4 == 0 and 0 < py < im.shape[0] - 1 and 0 < px < im.shape[1] - 1:
-                im[py, px] = (255, 255, 255, 255)
+                im[py, px] = tuple(light[0]) + (255,)
                 for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-                    im[py + dy, px + dx] = (190, 230, 255, 255)
-        out.append(Image.fromarray(im.astype(np.uint8)))
+                    im[py + dy, px + dx] = tuple(light[-1]) + (255,)
+        out.append(Image.fromarray(_snap(im.astype(np.uint8), keep)))
     return out
 
 
@@ -225,9 +228,10 @@ def flag_frames(src, n=6, pole="left", amp=1.5):
     return out
 
 
-def smoke_frames(src, n=8, emit=None, pad=28):
+def smoke_frames(src, n=8, emit=None, pad=28, palette=None):
     """Chimney / smokestack: grey puffs rise from the top of the sprite (or emit [x, y]), grow, drift and thin out. The
-    canvas grows by pad px on top so the smoke has room; the prop's feet stay at the bottom."""
+    canvas grows by pad px on top so the smoke has room; the prop's feet stay at the bottom. The three greys are the
+    palette's nearest colours (palette: a .hex file), so the smoke stays on the game's palette like the prop."""
     base = Image.open(src).convert("RGBA")
     can = Image.new("RGBA", (base.width, base.height + pad), (0, 0, 0, 0))
     can.alpha_composite(base, (0, pad))
@@ -239,6 +243,9 @@ def smoke_frames(src, n=8, emit=None, pad=28):
         ey = ys.min()
         ex = int(np.median(xs[ys <= ey + 1]))
     greys = [(196, 196, 200), (150, 150, 158), (110, 110, 120)]
+    if palette:
+        snapped = lib.quantize(np.array([list(g) + [255] for g in greys], np.uint8)[None], lib.load_hex(palette))
+        greys = [tuple(int(v) for v in c[:3]) for c in snapped[0]]
     out = []
     for f in range(n):
         a = a0.copy()
@@ -499,7 +506,7 @@ def run(entries, pack, man, conf):
             n, fps, solid = AMBIENT[kind]
             n, fps = int(e.get("frames", n)), int(e.get("fps", fps))
             solid = bool(e.get("solid", solid))
-            kw = {"flag": {"pole": e.get("pole", "left")}, "smoke": {"emit": e.get("emit")},
+            kw = {"flag": {"pole": e.get("pole", "left")}, "smoke": {"emit": e.get("emit"), "palette": pal},
                   "spin": {"sym": int(e.get("sym", 8))}}.get(kind, {})
             paths = []
             for i, f in enumerate(AMBIENT_FN[kind](base, n=n, **kw)):

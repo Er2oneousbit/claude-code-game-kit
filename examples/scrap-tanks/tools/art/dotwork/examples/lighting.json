@@ -1,0 +1,19 @@
+{
+ "name": "lighting",
+ "_comment": "2D lighting for art already in the game, no model: a normal map for every frame of the duelist (party_member.json), a lit copy of the street TileSet (town.json) and the props (props_icons.json) with CanvasTextures and light occluders, plus a lit demo scene. Run those three examples first, or point the paths at your own SpriteFrames, TileSets and prop PNGs. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "lighting": [
+  {
+   "name": "town_lit",
+   "frames": ["assets/art/characters/duelist/duelist_frames.tres"],
+   "tilesets": ["res://assets/art/tiles/street/ground_street_tileset.tres"],
+   "props": ["assets/art/props/spr_bench.png", "assets/art/props/spr_barrel.png", "assets/art/props/spr_crate.png"],
+   "bevel": 3,
+   "detail": 1,
+   "occluder": "base",
+   "light_color": "#ffd8a0",
+   "light_energy": 1.2,
+   "light_height": 48,
+   "ambient": "#4a4a66"
+  }
+ ]
+}

@@ -218,7 +218,7 @@ def windows_unsafe(name):
 
 def add_log_row(log_text, row, fill_template):
     """ASSET_LOG text with the row added: in place of the empty template row, or after the last row.
-    Also used by tools/audio/eleven_audio.py."""
+    Also used by tools/audio/wavesmith/eleven_audio.py."""
     if fill_template:
         return EMPTY_TEMPLATE_ROW.sub(lambda _m: row, log_text, count=1)
     lines = log_text.split("\n")

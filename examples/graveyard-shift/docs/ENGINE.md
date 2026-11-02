@@ -17,9 +17,10 @@
 ## Layout
 ```
 Assets/Scripts/Core/     engine-agnostic logic (no UnityEngine types where possible), unit tested: juice (Shake, Hitstop,
-                         Ease, FollowCamera, InputBuffer, CoyoteTimer, Spring, FlashLimiter) and shell logic
-                         (GameSettings, Bindings, SaveStore, I18n, AtomicFile, Json), checked against data/golden/*.json
-Assets/Scripts/Game/     gameplay MonoBehaviours and ScriptableObjects
+                         Ease, FollowCamera, InputBuffer, CoyoteTimer, Spring, FlashLimiter), shell logic
+                         (GameSettings, Bindings, SaveStore, I18n, AtomicFile, Json) and audio decisions
+                         (AudioDirector, MusicDirector, AudioAccess), checked against data/golden/*.json
+Assets/Scripts/Game/     gameplay MonoBehaviours and ScriptableObjects; AudioEventPlayer, MusicPlayer play the audio decisions
 Assets/Editor/           editor-only code (GameKitBuild.cs lives here)
 Assets/Tests/EditMode/   EditMode tests (own assembly definition)
 Assets/Tests/PlayMode/   PlayMode tests, incl. BootSmokeTests (what `dev.py smoke` runs)

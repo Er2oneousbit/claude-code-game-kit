@@ -26,7 +26,7 @@ import zlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "audio"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "audio" / "wavesmith"))
 import comfy_local as cl  # noqa: E402
 import flacfile  # noqa: E402  (decodes the audio to prove stripping kept it intact)
 from test_flacfile import FIXTURES as FLAC_FIXTURES  # noqa: E402  (a real encoder's FLAC, padding removed)
@@ -359,14 +359,14 @@ class ComfyLocalExam(unittest.TestCase):
 
     # ---- logging
     def test_log_row_and_evidence_non_ascii_prompt(self):
-        prompt = "Í lamplighter \u201cold\u201d | brass"
+        prompt = "Í baker \u201cold\u201d | brass"
         rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "assets/art", "--log",
                                 "--set", f"Prompt.text={prompt}", "--type", "sprite", "--seed", "3")
         self.assertEqual(rc, 0, out)
         log = (self.root / "docs" / "ASSET_LOG.md").read_text(encoding="utf-8")
         self.assertIn("| A-0001 | sprite | `assets/art/kit_00001_.png` | ComfyUI (local)", log)
         self.assertIn("pre-generated", log)
-        self.assertIn("Í lamplighter", log)
+        self.assertIn("Í baker", log)
         self.assertIn("\\| brass", log, "a pipe in the prompt must not break the table")
         self.assertIn("seed 3", log)
         ev = (self.root / "docs" / "licenses" / "A-0001.txt").read_text(encoding="utf-8")

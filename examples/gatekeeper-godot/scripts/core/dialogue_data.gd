@@ -10,8 +10,8 @@
 #           DialogueData.revealed(line, t)    # characters of line.text visible at t (typewriter)
 # Notes   : Fields this reader does not know are ignored (the format only ever adds fields). A line is "line"
 #           (story: always subtitled when subtitles are on) or "bark" (ambient: only with subtitle_barks).
-#           Without reveal data the typewriter runs at DEFAULT_CPS. The format comes from the dialogue tools in
-#           tools/audio; data/dialogue/sample.built.json is a small hand-made example of it.
+#           Without reveal data the typewriter runs at DEFAULT_CPS. The format comes from Wavesmith's dialogue
+#           subcommand (tools/audio/wavesmith); data/dialogue/sample.built.json is a small hand-made example of it.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 class_name DialogueData

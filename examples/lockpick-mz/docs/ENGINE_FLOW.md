@@ -57,12 +57,14 @@ Manager or the project). **(verify)**
   read `location.search` in a plugin (for example `?autoplay`), log markers, and run
   `python tools/dev.py smoke --query autoplay --until DONE --fail-on LOST`.
 - Bot pairs (SOP-14 step 6) belong in GameCore tests: they run in seconds over many seeds.
+- **Audio:** `tests/gameAudio.test.js` runs `data/golden/audio.json`, `music.json`, `access.json` through `GameAudio.js`.
 
 ## Assets and audio
 - MZ's default art and sound come with your copy of MZ; log your own additions in `docs/ASSET_LOG.md` as usual.
 - Images go in the matching `game/img/` folder (characters, faces, tilesets, pictures, ...). Audio must be `.ogg`, and
   `.m4a` for some platforms. **(verify which formats MZ 1.x still needs)**
-- Generated audio (`tools/audio/`): export OGG (ffmpeg converts a WAV). Generated art: match MZ's sheet layouts (a
+- Generated audio (Wavesmith, `tools/audio/wavesmith/`): export OGG with `wavesmith.py formats convert x.wav --out x.ogg`
+  (needs ffmpeg; `--loop` keeps a WAV loop point as LOOPSTART / LOOPLENGTH). Generated art: match MZ's sheet layouts (a
   character sheet is 4 x 2 characters of 3 x 4 frames). **(verify sizes)**
 
 ## Profiling

@@ -18,7 +18,8 @@ and its keys, limits) and SOP-16 "Generating pixel art locally" before the first
    stays on 127.0.0.1. No GPU or too little memory: say so and offer the other art routes (GDD "Art source").
 3. **First run, no GPU:** `python tools/art/dotwork/dotwork.py pack --spec tools/art/dotwork/examples/ui.json`
    (needs `GODOT_BIN`, or add `--engine none` on another engine). It proves the folder layout, the Godot import and the
-   asset log in seconds.
+   asset log in seconds. `tools/art/dotwork/examples/uikit.json` is the same kind of run: the menu Theme, prompt
+   glyphs and cursors.
 4. **Write a spec from the plan.** Read GDD "Art and audio direction" and the style fragments in `docs/BRIEFS.md`
    (fill them first if blank, as `/gen-brief` does). Start from the closest file in `tools/art/dotwork/examples/` and
    save the game's spec as `assets_src/specs/<pack>.json`. Start small: one prop, one character, one tile set, then grow.
@@ -31,7 +32,7 @@ and its keys, limits) and SOP-16 "Generating pixel art locally" before the first
 7. **Review before anything ships.** Open the review sheets under `assets_src/` and look at them yourself, then show
    the user. Typical faults: a character turning toward the camera, faces on back views, background left around a
    sprite, a tile edge repeating, a cropped figure. Fix one clip at a time (`character --fix CLIP:seed=N`), or render
-   takes side by side and pick one (`audition`, then `--promote`). Hand polish goes through `dotwork.py aseprite`; `dotwork.py clean` tidies pixel art from elsewhere (grid, palette,
+   takes side by side and pick one (`audition`, then `--promote`). Hand polish goes through `dotwork.py aseprite` or `dotwork.py pixelorama` (Pixelorama `.pxo` files, no install needed); `dotwork.py clean` tidies pixel art from elsewhere (grid, palette,
    stray pixels), and `recolor` makes palette-swapped variants without a render.
 8. **Prove it in the game.** `pack` ends with `verify` (every asset loads, then the game's smoke). On other engines,
    import the PNGs and sheets as `docs/ENGINE.md` says and run `python tools/dev.py smoke`.

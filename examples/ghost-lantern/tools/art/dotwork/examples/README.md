@@ -14,7 +14,10 @@ change a seed to get a different take.
 | Example | Shows | Model tiers |
 |---|---|---|
 | `ui.json` | glyph-tool fonts (dialogue, damage numbers, brass and steel titles, symbols), window skins, HUD widgets (gauges, button states, panel, a Theme), emote balloons, hit spark / slash / damage-flash shader | none |
+| `uikit.json` | a menu UI kit: one Theme for every settings / pause menu control in every state (iron, with the dialogue font), prompt glyphs for keyboard, mouse and generic pads, pointer and hand cursors, a preview scene whose focus chain verify walks | none |
+| `fonts_latin.json` | accented glyph fonts (Latin-1 + Latin Extended-A: dialogue and a brass title) and the coverage check against `strings_latin.csv` (a Godot translation CSV: one sentence per language, nine languages) | none |
 | `status.json` | status-effect loops: poison, sleep, haste, slow, stop, blind, regen, berserk, confuse, silence, doom, burn, freeze, protect, shell, petrify | none |
+| `vfx.json` | small effects drawn in code: arrows, energy bolts and orbs with sprite-strip, Line2D and particle trails; dust, flour, footstep and landing puffs; a pickup twinkle; a level-up burst; dust, sparkle and ember emitters (GPUParticles2D) | none |
 | `screen.json` | screen transitions (battle swirl, fade, iris, diamond, wipe, blinds, dither, clock, blocks, mosaic) and weather (rain, snow, fog, ash, embers, leaves, sandstorm) | none |
 | `town.json` | grass, dirt, raised cobble; brick / timber / stone facades; clay / slate / copper roofs; doors, windows, chimney, sign; one painted street map | sprites |
 | `interior.json` | floor, wall tops, north wall face, black void, furniture fixtures | sprites |
@@ -35,6 +38,7 @@ change a seed to get a different take.
 | `party_member.json` | a party member: 4-direction idle and walk, attack, the battle pose set, a portrait with five expressions and talking frames | sprites, rotate, animate |
 | `tools.json` | instruction edits, an inpaint and a normal map on one of your sprites | sprites |
 | `img2px.json` | concept art or a photo to pixel art at a set width | sprites |
+| `lighting.json` | normal maps, CanvasTextures and light occluders for the party member, the street TileSet and the props; a lit demo scene (CanvasModulate + PointLight2D with shadows) | none (needs the art of `party_member.json`, `town.json` and `props_icons.json` in the game) |
 
 Measured per-render costs on an RTX 5060 Ti 16 GB (from dotwork's own logs), to size a pack before you run it:
 

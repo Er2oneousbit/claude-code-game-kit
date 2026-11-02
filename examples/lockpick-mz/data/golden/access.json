@@ -1,0 +1,333 @@
+{
+ "version": 1,
+ "tolerance": 1e-09,
+ "about": "tools/audio/wavesmith/access.py vectors --write",
+ "arrows": [
+  "→",
+  "↘",
+  "↓",
+  "↙",
+  "←",
+  "↖",
+  "↑",
+  "↗"
+ ],
+ "cases": [
+  {
+   "type": "access_gains",
+   "name": "slider gains per bus",
+   "steps": [
+    {
+     "buses": {
+      "master": {},
+      "music": {
+       "parent": "master"
+      },
+      "sfx": {
+       "parent": "master"
+      },
+      "ui": {
+       "parent": "master"
+      },
+      "dialogue": {
+       "parent": "master"
+      },
+      "ambience": {
+       "parent": "master"
+      }
+     },
+     "sliders": {
+      "master": 0.9,
+      "music": 0.5,
+      "sfx": 0.25,
+      "ui": 0.75,
+      "voice": 0.6
+     },
+     "expect": {
+      "master": 0.9,
+      "music": 0.5,
+      "sfx": 0.25,
+      "ui": 0.75,
+      "dialogue": 0.6,
+      "ambience": 0.25
+     }
+    },
+    {
+     "buses": {
+      "master": {},
+      "sfx": {
+       "parent": "master"
+      },
+      "ambience": {
+       "parent": "sfx"
+      },
+      "foley": {
+       "parent": "sfx"
+      },
+      "stingers": {
+       "parent": "music"
+      },
+      "music": {}
+     },
+     "sliders": {
+      "master": 0.9,
+      "music": 0.5,
+      "sfx": 0.25,
+      "ui": 0.75,
+      "voice": 0.6
+     },
+     "expect": {
+      "master": 0.9,
+      "sfx": 0.25,
+      "ambience": 1.0,
+      "foley": 1.0,
+      "stingers": 1.0,
+      "music": 0.5
+     }
+    },
+    {
+     "buses": {
+      "master": {},
+      "voice": {},
+      "dialogue": {
+       "parent": "voice"
+      },
+      "barks": {
+       "parent": "dialogue"
+      }
+     },
+     "sliders": {
+      "master": 0.9,
+      "music": 0.5,
+      "sfx": 0.25,
+      "ui": 0.75,
+      "voice": 0.6
+     },
+     "expect": {
+      "master": 0.9,
+      "voice": 0.6,
+      "dialogue": 1.0,
+      "barks": 1.0
+     }
+    },
+    {
+     "buses": {
+      "master": {},
+      "music": {
+       "parent": "master"
+      },
+      "sfx": {
+       "parent": "master"
+      },
+      "ui": {
+       "parent": "master"
+      },
+      "dialogue": {
+       "parent": "master"
+      },
+      "ambience": {
+       "parent": "master"
+      }
+     },
+     "sliders": {
+      "master": 2,
+      "music": -1,
+      "sfx": "loud",
+      "ui": null,
+      "voice": 0.5
+     },
+     "expect": {
+      "master": 1.0,
+      "music": 0.0,
+      "sfx": 1.0,
+      "ui": 1.0,
+      "dialogue": 0.5,
+      "ambience": 1.0
+     }
+    },
+    {
+     "buses": {
+      "a": {
+       "parent": "b"
+      },
+      "b": {
+       "parent": "a"
+      }
+     },
+     "sliders": {
+      "master": 0.9,
+      "music": 0.5,
+      "sfx": 0.25,
+      "ui": 0.75,
+      "voice": 0.6
+     },
+     "expect": {
+      "a": 1.0,
+      "b": 1.0
+     }
+    },
+    {
+     "buses": {
+      "master": {},
+      "music": {}
+     },
+     "sliders": {},
+     "expect": {
+      "master": 1.0,
+      "music": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "type": "access_arrow",
+   "name": "caption arrows",
+   "steps": [
+    {
+     "dx": 0,
+     "dy": 0,
+     "half_w": 320,
+     "half_h": 180,
+     "dir": -1,
+     "arrow": ""
+    },
+    {
+     "dx": 320,
+     "dy": -180,
+     "half_w": 320,
+     "half_h": 180,
+     "dir": -1,
+     "arrow": ""
+    },
+    {
+     "dx": -320,
+     "dy": 180,
+     "half_w": 320,
+     "half_h": 180,
+     "dir": -1,
+     "arrow": ""
+    },
+    {
+     "dx": 321,
+     "dy": 0,
+     "half_w": 320,
+     "half_h": 180,
+     "dir": 0,
+     "arrow": "→"
+    },
+    {
+     "dx": 500,
+     "dy": 0,
+     "half_w": 320,
+     "half_h": 180,
+     "dir": 0,
+     "arrow": "→"
+    },
+    {
+     "dx": -500,
+     "dy": 0,
+     "half_w": 320,
+     "half_h": 180,
+     "dir": 4,
+     "arrow": "←"
+    },
+    {
+     "dx": 0,
+     "dy": -400,
+     "half_w": 320,
+     "half_h": 180,
+     "dir": 6,
+     "arrow": "↑"
+    },
+    {
+     "dx": 0,
+     "dy": 400,
+     "half_w": 320,
+     "half_h": 180,
+     "dir": 2,
+     "arrow": "↓"
+    },
+    {
+     "dx": 500,
+     "dy": 500,
+     "half_w": 320,
+     "half_h": 180,
+     "dir": 1,
+     "arrow": "↘"
+    },
+    {
+     "dx": -500,
+     "dy": 500,
+     "half_w": 320,
+     "half_h": 180,
+     "dir": 3,
+     "arrow": "↙"
+    },
+    {
+     "dx": -500,
+     "dy": -500,
+     "half_w": 320,
+     "half_h": 180,
+     "dir": 5,
+     "arrow": "↖"
+    },
+    {
+     "dx": 500,
+     "dy": -500,
+     "half_w": 320,
+     "half_h": 180,
+     "dir": 7,
+     "arrow": "↗"
+    },
+    {
+     "dx": 900,
+     "dy": 120,
+     "half_w": 320,
+     "half_h": 180,
+     "dir": 0,
+     "arrow": "→"
+    },
+    {
+     "dx": -900,
+     "dy": 300,
+     "half_w": 320,
+     "half_h": 180,
+     "dir": 4,
+     "arrow": "←"
+    },
+    {
+     "dx": 100,
+     "dy": -181,
+     "half_w": 320,
+     "half_h": 180,
+     "dir": 7,
+     "arrow": "↗"
+    },
+    {
+     "dx": 2000,
+     "dy": -1999,
+     "half_w": 320,
+     "half_h": 180,
+     "dir": 7,
+     "arrow": "↗"
+    },
+    {
+     "dx": -3,
+     "dy": 900,
+     "half_w": 320,
+     "half_h": 180,
+     "dir": 2,
+     "arrow": "↓"
+    },
+    {
+     "dx": 640.5,
+     "dy": -0.25,
+     "half_w": 320,
+     "half_h": 180,
+     "dir": 0,
+     "arrow": "→"
+    }
+   ]
+  }
+ ]
+}

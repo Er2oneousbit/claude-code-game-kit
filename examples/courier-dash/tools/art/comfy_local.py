@@ -8,7 +8,7 @@
 # Usage   : python tools/art/comfy_local.py check                      # server up? version, GPU, free VRAM
 #           python tools/art/comfy_local.py check --workflow art_src/comfy/npc.api.json   # every node installed?
 #           python tools/art/comfy_local.py run --workflow art_src/comfy/npc.api.json \
-#               --set "6.text=old lamplighter, top-down, pixel art" --seed 3001 --out assets/art/npcs --log
+#               --set "6.text=old baker, top-down, pixel art" --seed 3001 --out assets/art/npcs --log
 #           python tools/art/comfy_local.py run --workflow art_src/comfy/edit.api.json \
 #               --image 12=assets/art/hero.png --set "Prompt.text=add a red scarf" --out assets/art/hero_scarf
 #           python tools/art/comfy_local.py run --workflow ... --out ... --dry-run   # show the edited graph, send nothing

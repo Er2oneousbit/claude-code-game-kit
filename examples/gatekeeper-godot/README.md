@@ -29,7 +29,7 @@ own Fish Audio API key**; nothing is shipped with the game, and without a key he
    is instant and free.
 - Cost: the default model `s2.1-pro-free` is free (2026-10). `s2.1-pro` (in `scripts/game/tuning.gd`) bills Fish Audio's
   developer API wallet, which is separate from a Fish Audio subscription: about $0.001 per line.
-- Another voice: `python tools/audio/fish_tts.py voices --licensed --search narrator`, then set `FISH_VOICE_ID`. Many
+- Another voice: `python tools/audio/wavesmith/fish_tts.py voices --licensed --search narrator`, then set `FISH_VOICE_ID`. Many
   library voices imitate real people or famous characters; do not use those.
 - Why a key per player, not one in the game: a key inside a build can be pulled out by anyone (`SOP-15` rule 1). This is
   a proof of concept for your own machine. A real release calls your own server, which holds the key and caps the spend.
@@ -60,5 +60,5 @@ godot --headless --path . --script res://tools/eval_guard.gd
   [github.com/nobodywho-ooo/nobodywho](https://github.com/nobodywho-ooo/nobodywho).
 - Model: Qwen2.5 1.5B Instruct (official Qwen GGUF), Apache-2.0.
 - Art: [Kenney](https://kenney.nl) (Tiny Dungeon), CC0. Details: `docs/ASSET_LOG.md`.
-- Sound effects and the night ambience at the wall: Created in collaboration with ElevenLabs (elevenlabs.io) (generated with the kit's `tools/audio/eleven_audio.py` under non-commercial terms, so **non-commercial**: marked PLACEHOLDER in `docs/ASSET_LOG.md`, replace or regenerate under a license that allows commercial use before any commercial use). Earlier builds used Kenney Interface Sounds (CC0). The same files as the web twin.
+- Sound effects and the night ambience at the wall: Created in collaboration with ElevenLabs (elevenlabs.io) (generated with the kit's `tools/audio/wavesmith/eleven_audio.py` under non-commercial terms, so **non-commercial**: marked PLACEHOLDER in `docs/ASSET_LOG.md`, replace or regenerate under a license that allows commercial use before any commercial use). Earlier builds used Kenney Interface Sounds (CC0). The same files as the web twin.
 - Optional live voice: generated at runtime by Fish Audio with the player's own key (nothing generated ships).

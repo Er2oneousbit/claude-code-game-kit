@@ -141,13 +141,13 @@ the game into the kit). **Kit gap U8:** once, Unity's Package Manager server did
 
 ### Later: generated sound (ElevenLabs) and a music brief (Suno)
 Each kit example gets its audio a different way: Coyote Hop synthesizes it with code, this one generates it with
-ElevenLabs through `tools/audio/eleven_audio.py`, and its music comes from Suno's web app.
+ElevenLabs through `tools/audio/wavesmith/eleven_audio.py`, and its music comes from Suno's web app.
 ```
-python tools/audio/eleven_audio.py check          # a plan without music access: sound effects yes, music no (HTTP 402)
-python tools/audio/eleven_audio.py sfx --text "soft glassy magical chime with a gentle shimmer, a lost soul set free"   --seconds 1.2 --format pcm_32000 --mono --out Assets/Audio/soul_collected.wav --log
+python tools/audio/wavesmith/eleven_audio.py check          # a plan without music access: sound effects yes, music no (HTTP 402)
+python tools/audio/wavesmith/eleven_audio.py sfx --text "soft glassy magical chime with a gentle shimmer, a lost soul set free"   --seconds 1.2 --format pcm_32000 --mono --out Assets/Audio/soul_collected.wav --log
 (four more effects the same way, prompts in docs/BRIEFS.md)
-python tools/audio/eleven_audio.py sfx --text "quiet graveyard at night, soft wind through pine trees, distant crickets, an owl far away, no music"   --seconds 20 --loop --format pcm_32000 --out Assets/Audio/night_ambience.wav --log
-python tools/audio/wavfile.py normalize Assets/Audio/night_ambience.wav --peak -3
+python tools/audio/wavesmith/eleven_audio.py sfx --text "quiet graveyard at night, soft wind through pine trees, distant crickets, an owl far away, no music"   --seconds 20 --loop --format pcm_32000 --out Assets/Audio/night_ambience.wav --log
+python tools/audio/wavesmith/wavfile.py normalize Assets/Audio/night_ambience.wav --peak -3
 python tools/dev.py exec SceneBuilder.Build
 ```
 - `--log` wrote six ASSET_LOG rows and evidence files with the prompt, model and SHA-256. Under non-commercial terms the
@@ -179,7 +179,7 @@ Four more generated sounds, wired by `Assets/Scripts/Game/GraveyardAudio.cs`:
 
 ### Later: ghost voices (Fish Audio) and the end of the night
 - **Whispers:** three "noticed you" lines ("Who's there?", "I see a light...", "Someone's here...") and two "caught" lines,
-  made with `tools/audio/fish_tts.py` on the free model in one call per set (`--text` repeated, `--log` wrote one
+  made with `tools/audio/wavesmith/fish_tts.py` on the free model in one call per set (`--text` repeated, `--log` wrote one
   ASSET_LOG row each). The voice is "Creepy Whisper" from Fish's library, picked by reading descriptions: "Creepy Tale"
   said it copies a CapCut voice, so it was out. A ghost whispers from where it floats (3D), at most once per 6 s.
 - **The ending** (`EndSequence.cs`): at dawn the night's sounds fade, birds sing (ElevenLabs "dawn chorus"), and the
@@ -219,7 +219,7 @@ instrumental, weirdness about 25-30%, style influence about 70%) and the two tak
 - Suno does not make loops. The loop point was found by measurement instead of by ear: the spot late in each track
   whose spectrum best matches the first 8 s (A at 76.95 s; B at 92.17 s, a clear match). The tempo guess (76 to 78
   BPM) was too rough to cut by bar count. Then:
-  `python tools/audio/wavfile.py loop "<download>.wav" --end 95.17 --crossfade 3 --out night_music_b_loop.wav`
+  `python tools/audio/wavesmith/wavfile.py loop "<download>.wav" --end 95.17 --crossfade 3 --out night_music_b_loop.wav`
 - The downloads became 1.5 and 1.8 MB OGG files (ffmpeg, Vorbis q6, outside the kit). Decoded, each is exactly as long
   as the cut WAV and the seam step is smaller than an ordinary sample step, so the loop has no gap or click.
 - Then the human check the numbers cannot do: 30 s MP3s with each wrap point at 0:15, plus both full loops, went to

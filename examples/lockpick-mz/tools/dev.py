@@ -31,6 +31,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
+# Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): GameAudio.js (the kit's audio rules) is one of the
+#           game's plugins; setup puts a newly added one before the game's plugins that load after it
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -48,7 +50,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # ---- Tunables / constants ----------------------------------------------------
 MIN_NODE = (22, 12)
 GAME_DIR = "game"                          # where the MZ project lives
-OWN_PLUGINS = ("GameCore", "GameMain")     # the game's plugins, in load order (setup registers them)
+OWN_PLUGINS = ("GameCore", "GameAudio", "GameMain")   # the game's plugins, in load order (setup registers them)
 CORE_FILES = ("index.html", "js/main.js", "js/rmmz_core.js", "js/rmmz_managers.js", "js/rmmz_objects.js",
               "js/rmmz_scenes.js", "js/rmmz_sprites.js", "js/rmmz_windows.js", "data/System.json")
 DATABASE = ("Actors", "Animations", "Armors", "Classes", "CommonEvents", "Enemies", "Items", "MapInfos",
@@ -262,18 +264,25 @@ def write_plugins_js(path, plugins):
 
 
 def register_own_plugins(g):
-    """Add the game's plugins to js/plugins.js (enabled, in OWN_PLUGINS order, after any others). Returns a message."""
+    """Add the game's plugins to js/plugins.js (enabled, in OWN_PLUGINS order, after any others). Returns a message.
+
+    A plugin missing from an existing list goes just before the first of the game's plugins that must load after
+    it (GameAudio added to a game that already has GameCore and GameMain lands between them), so `check` agrees.
+    """
     pj = g / "js" / "plugins.js"
     plugins = read_plugins_js(pj) if pj.exists() else []
     names = [p.get("name") for p in plugins]
     added = []
-    for name in OWN_PLUGINS:
+    for i, name in enumerate(OWN_PLUGINS):
         if name in names:
             continue
         text = (g / "js" / "plugins" / f"{name}.js").read_text(encoding="utf-8")
         ann = annotation(text) or {"tags": {}, "body": ""}
         desc = (ann["tags"].get("plugindesc") or [""])[0]
-        plugins.append({"name": name, "status": True, "description": desc, "parameters": param_defaults(ann["body"])})
+        later = [names.index(n) for n in OWN_PLUGINS[i + 1:] if n in names]
+        at = min(later) if later else len(plugins)
+        plugins.insert(at, {"name": name, "status": True, "description": desc, "parameters": param_defaults(ann["body"])})
+        names.insert(at, name)
         added.append(name)
     if added:
         write_plugins_js(pj, plugins)

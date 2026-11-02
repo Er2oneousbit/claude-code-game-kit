@@ -1,0 +1,23 @@
+{
+ "name": "uikit",
+ "_comment": "A menu UI kit without a model: a Theme for every control a settings or pause menu uses (buttons, check boxes, switches, sliders, option buttons, popup menus, scroll bars, tabs, line edits, spin boxes, tooltips, item lists, progress bars, labels, panels, separators) in every state, input prompt glyphs and cursors. The kit's shell loads assets/ui/theme_*.tres and assets/ui/glyphs/. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "fonts": [
+  {
+   "name": "dialogue",
+   "glyphs": "glyphs/dialogue.txt",
+   "scale": 1,
+   "effect": "shadow"
+  }
+ ],
+ "uikit": [
+  {
+   "name": "menu",
+   "style": "iron",
+   "font": "assets/art/ui/fonts/font_dialogue.fnt",
+   "keys": [
+    "minus",
+    "period"
+   ]
+  }
+ ]
+}

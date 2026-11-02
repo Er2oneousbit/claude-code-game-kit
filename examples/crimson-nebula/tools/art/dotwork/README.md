@@ -10,11 +10,18 @@ buildings, interiors and cliffs, side-view platformer tilesets with parallax bac
 and terrain transitions, maps painted from text, fences / pipes / rails, animated water, effects and spells (Wan
 clips, or drawn in code: fire, ice, lightning, heal, wind, explosions, projectile orbs, auras), enemies and bosses,
 battle backgrounds (optionally with drifting cloud layers), title screens, icons, portraits with expressions and
-talking frames, pixel fonts, window skins, HUD widgets (gauges, button states, a Theme), screen transitions, weather,
-status-effect loops, emote balloons, 8-direction vehicles, treasure chests / doors / switches / save points, props
-animated by any motion (Wan clips), sprite edits and normal maps, and image-to-pixel-art.
-Model-free tools: palette swaps (`recolor`, and `recolor_of` in the enemies lane) and `clean` (any image to clean pixel
-art on the game palette).
+talking frames, pixel fonts, window skins, HUD widgets (gauges, button states, a Theme), a menu UI kit (one Theme for
+every settings / pause menu control in every state, input prompt glyphs, cursors), screen transitions, weather,
+small effects drawn in code (arrows, bolts and orbs with trails, dust puffs, pickup twinkles, level-up bursts, and
+GPUParticles2D dust / sparkle / ember emitters), status-effect loops, emote balloons, 8-direction vehicles, treasure
+chests / doors / switches / save points, props animated by any motion (Wan clips), sprite edits and normal maps,
+image-to-pixel-art, store and platform art (every Steam capsule and library size, a logo from a glyph font, the game
+icon and `.ico`, achievement icons, a boot splash), title / loading / credits screens, 2.5D dioramas (tiles as 3D
+blocks, props and characters as billboards), and bitmap fonts you bring (a BDF such as an OFL CJK pixel font) cut
+down to the characters your game's text uses.
+Model-free tools: palette swaps (`recolor`, and `recolor_of` in the enemies lane), `clean` (any image to clean pixel
+art on the game palette) and `lighting` (normal maps, CanvasTextures, light occluders and a lit demo scene for art
+already in the game, computed in numpy).
 
 Tested on Windows 11, RTX 5060 Ti 16 GB, 64 GB RAM, ComfyUI 0.43.0, Godot 4.7.2. Other GPUs and operating systems
 should work (Dotwork itself is plain Python + HTTP); the numbers below are what this setup needed, not promises.
@@ -27,13 +34,17 @@ should work (Dotwork itself is plain Python + HTTP); the numbers below are what 
 4. [Lanes and their limits](#lanes-and-their-limits)
 5. [Godot notes](#godot-notes)
 6. [Palettes and style references](#palettes-and-style-references)
+   - [Hand polish (Aseprite or Pixelorama)](#hand-polish-aseprite-or-pixelorama)
+   - [Store art (Steam sizes)](#store-art-steam-sizes)
+   - [Image to 3D (tested, not part of Dotwork)](#image-to-3d-tested-not-part-of-dotwork)
 7. [Licences](#licences)
 8. [Tests](#tests) and [troubleshooting](#troubleshooting)
 
 ## First run (no GPU, about 10 s)
 The model-free lanes (pixel fonts, window skins, HUD widgets, emote balloons, hit effects; `examples/screen.json` and
-`examples/status.json` add transitions, weather and status loops) need no ComfyUI and no models, so you can see Dotwork
-work before installing anything. From your Godot game's root folder:
+`examples/status.json` add transitions, weather and status loops, `examples/vfx.json` projectiles, puffs and
+particles) need no ComfyUI and no models, so you can see Dotwork work before installing anything. From your Godot
+game's root folder:
 ```
 GODOT_BIN=/path/to/godot python tools/art/dotwork/dotwork.py pack --spec tools/art/dotwork/examples/ui.json   # 102 files, verified in Godot
 python tools/art/dotwork/dotwork.py verify            # every Dotwork asset of this game loads in Godot
@@ -103,7 +114,8 @@ workflow it loads.
 
 ### 4. Godot and Dotwork's config
 - `GODOT_BIN`: your Godot 4 binary (maps are painted and every asset is verified inside the game).
-- `ASEPRITE_BIN` (optional): the hand-polish round trip.
+- `ASEPRITE_BIN` (optional): the Aseprite hand-polish round trip. The Pixelorama one needs nothing set: Dotwork reads
+  and writes `.pxo` files itself ([Hand polish](#hand-polish-aseprite-or-pixelorama)).
 - Python for Dotwork: 3.8 or newer with Pillow + numpy (the ComfyUI venv has both, and works fine to run Dotwork).
 - Settings: copy what you want to change from `config.example.json` into `<game>/art_src/dotwork/dotwork.config.json`.
   That file is tracked in git and can name programs Dotwork runs (`godot_bin`, `aseprite_bin`, `comfyui.python`,
@@ -135,10 +147,14 @@ or usage (the `[error]` line says what to fix). `preview KIND --help` lists each
 | `palette extract\|extend ...` | build a palette from your own art |
 | `recolor --source GLOB --hue DEG\|--to #RRGGBB --out DIR` | palette swap, no model: turns the coloured ramps, keeps outline and greys, snaps to the palette; every file shares one colour map, so an animation stays consistent |
 | `clean --source GLOB --out DIR [--cell N\|--width W]` | any image to clean pixel art, no model: measures the pixel grid of upscaled or generated art (or shrinks to `--width`), keys a plain background, snaps to the palette (`--palette none --colors N` reduces instead), drops specks; `--outline #RRGGBB` adds one |
-| `verify` | load every Dotwork asset of this game in Godot (and run its smoke test) |
-| `aseprite [--reexport]` | editable `.aseprite` sources; push hand-polished files back |
+| `verify` | load every Dotwork asset of this game in Godot (shader materials compiled, held frames counted) and run its smoke test |
+| `qa pack [--json OUT] [--lineup OUT.png]` | style check over every PNG the game's manifests list, read only: pixel scale, each lane's palette lock (the table under Palettes), outline colour and thickness, light side, figure height in tiles, contrast on the ground tiles, colour-blind separation of gauge fills, status marks, button states and palette swaps (Machado 2009 simulation); `--lineup` draws every character and prop at game scale on a ground tile; exit 1 on findings |
+| `aseprite [--reexport]` | editable `.aseprite` sources (frames timed by their holds); push hand-polished files back |
+| `pixelorama [--reexport] [--overwrite]` | the same round trip with Pixelorama `.pxo` files, no install needed ([Hand polish](#hand-polish-aseprite-or-pixelorama)) |
 | `preview battle\|title\|attack ...` | mock screens composed from the game's art (review only) |
+| `capture --scene S [--frames N] [--fps F] [--size WxH] [--gif]` | record any scene with Godot's Movie Maker: a fixed frame rate, every frame written as PNG (trailer cuts, side-by-side reviews), a contact strip and an optional GIF; a window opens for the capture |
 | `log --pack NAME [--dry-run]` | `docs/ASSET_LOG.md` row + evidence file for a pack |
+| `fonts-check --font F --strings FILE... [--caps-only]` | font coverage, no model, writes nothing: every character the strings use (JSON string values at any depth, CSV / Godot translation CSV, PO / POT, plain text) must be in the font (a glyph file or a built `.fnt`); lists each missing one with its language and string ids, exit 1 when one is missing |
 | `config` | print the merged settings |
 
 A run resumes: renders are cached in the work folder under a key of everything that shapes them (prompt, seed, size,
@@ -177,11 +193,14 @@ pixel-art wording. Ready-to-run specs for every capability are in `examples/` (s
  "fonts": [{"name": "dialogue", "glyphs": "glyphs/dialogue.txt", "effect": "shadow"}],
  "windows": [{"name": "classic", "style": "classic"}], "balloons": [{"name": "exclaim", "symbol": "!", "color": "d83a3a"}],
  "widgets": [{"name": "hud", "style": "brass", "gauges": ["hp", "mp", "atb"]}],
+ "uikit": [{"name": "menu", "style": "iron", "font": "assets/art/ui/fonts/font_dialogue.fnt", "keys": ["minus"]}],
  "transitions": [{"name": "battle_swirl", "kind": "spiral"}, {"name": "mosaic", "kind": "mosaic"}],
  "weather": [{"name": "storm", "kind": "rain", "intensity": 0.8}],
  "status": [{"name": "poison"}, {"name": "zzz", "kind": "sleep"}],
  "hitfx": [{"name": "spark", "kind": "spark"}, {"name": "flash", "kind": "flash"}],
  "spells": [{"name": "fire"}, {"name": "frost", "kind": "ice"}, {"name": "zap", "kind": "bolt", "color": "#ffe070"}],
+ "vfx": [{"name": "arrow"}, {"name": "spark_bolt", "kind": "bolt", "trail": "line"}, {"name": "step", "kind": "footstep"},
+         {"name": "forge_embers", "kind": "ember_particles", "amount": 24}],
  "animprops": [{"name": "chest", "kind": "chest", "prompt": "a wooden treasure chest"},
                {"name": "torch", "kind": "flame", "prompt": "a wall torch with a lit flame"},
                {"name": "pot", "kind": "clip", "prompt": "a clay pot", "motion": "it bursts into pieces"}],
@@ -189,11 +208,26 @@ pixel-art wording. Ready-to-run specs for every capability are in `examples/` (s
  "tools": [{"name": "guard_edit", "source": "assets/art/characters/guard/frames/spr_guard_idle_s_00.png",
             "edits": ["give him a red scarf"], "normal": true}],
  "img2px": [{"name": "tower", "source": "assets_src/concept/tower.png", "width": 96}],
+ "store": [{"name": "iron_oven", "title": "Iron Oven", "prompt": "a knight in iron armour holding a long loaf of bread",
+            "icon": "a round loaf crossed with an iron sword", "apply": true,
+            "achievements": [{"name": "first_loaf", "source": "assets/art/ui/icons/ui_icon_bread_32.png"}]}],
+ "bdf": [{"name": "ja", "source": "assets_src/fonts/ark-pixel-12px-proportional-ja.bdf",
+          "license": "assets_src/fonts/OFL.txt", "strings": ["data/strings_ja.json"]}],
+ "diorama": [{"name": "yard", "legend": {"g": {"top": "assets/art/tiles/street/base_grass_lush.png"},
+                                        "w": {"top": "assets/art/tiles/street/overlay_cobble.png", "tile": "solid",
+                                              "side": "assets/art/tiles/street/overlay_stone_wall.png", "height": 1}},
+              "rows": ["gggg", "gwwg", "gggg"], "sprites": [{"source": "assets/art/props/spr_barrel.png", "at": [0, 2]}]}],
+ "screens": [{"name": "title", "kind": "title", "backdrop": "assets/art/scenes/spr_scene_title.png", "title": "Iron Oven"},
+             {"name": "loading", "kind": "loading", "backdrop": "assets/art/scenes/spr_scene_title.png"},
+             {"name": "credits", "kind": "credits", "backdrop": "assets/art/scenes/spr_scene_title.png", "file": "CREDITS.md"}],
  "platforms": [{"name": "meadow", "fill": {"material": "dirt"}, "surface": {"material": "grass_lush"},
                 "background": {"prompt": "rolling green hills under a blue sky"}}],
  "iso": [{"name": "village", "floors": [{"material": "grass_lush", "variants": 2}, {"material": "cobble"}],
           "blocks": [{"name": "wall", "top": {"material": "stone_floor"}, "side": {"material": "brick_wall"}}],
           "transitions": [{"upper": {"material": "cobble"}, "lower": {"material": "grass_lush"}}]}],
+ "lighting": [{"name": "town_lit", "frames": ["assets/art/characters/*/*_frames.tres"],
+               "tilesets": ["res://assets/art/tiles/street/ground_street_tileset.tres"],
+               "props": ["assets/art/props/spr_*.png"], "bevel": 3, "light_color": "#ffd8a0", "light_energy": 1.2}],
  "design": {"setting": "steampunk", "character": {"fig_height": 66}, "tile_px": 32}
 }
 ```
@@ -222,6 +256,7 @@ Honest list: these are the failure modes seen in testing and what Dotwork does a
 | characters (Wan clips: drift, matte, shadow) | A clip can drift into another view's design (a staff the side view does not have, a turned body); the generator's white could stay between the limbs as a matte; the ground shadow could blink because each frame was judged alone (#24, #22, #25) | Drift: colours another direction's sprite has and this one lacks, over 4 % of the figure two frames running, trim the clip to the frames before it (played back and forth) when 3 or more remain, and otherwise stop the character with an audition command to run; `clip_fix: {"<clip>": {"allow_drift": true}}` keeps it. A small feature (a beak, about 1 %) is not caught: the head-signature note still asks for review. Matte: flat generator white touching the outside in the unlocked frames is removed with its rim; skipped when the sprite itself is 5 % or more white (clothing and matte look alike) or has white at its own edge. Shadow: the clip learns its shadow colours from the frames where the per-frame pass worked and removes them under the feet in every frame |
 | npcs | Each NPC is still a rotation and a Wan clip per walk direction (about 8 minutes for a symmetric one) | Idles are the code-drawn breathing bob in every direction (`idle: "clip"` renders them), so walk is the only clip; `variants` recolour the finished NPC into more townsfolk with one colour map across every frame, no render |
 | characters (skeleton) | A free image-to-video clip decides the motion itself: strides vary, limbs drift, loops do not close | `"skeleton": ["walk", "run"]` drives those actions with a procedural OpenPose skeleton (walk, run, idle, attack, jump, hurt, cast, shoot, death; side, three-quarter and front / back views, chibi proportions) fitted to exactly where the sprite sits on the model canvas; Wan 2.2 Fun-Control follows it. Needs the optional `pose` tier (`setup --check --tier pose`). The skeleton fixes the motion, not the drawing: judge the sheet as usual. Every clip used to be pinned to the feet line frame by frame, which flattened a jump into standing frames (the skeleton lifts the feet 18 % of the figure and Wan follows): a jump now keeps its height (Godot notes). Hurt, cast and shoot plant the feet and come back to rest (hurt: lean back and guard the face; cast: draw the hands in, thrust them out, hold; shoot: raise the weapon, aim, recoil). Death is the one clip that does not loop: stagger, drop to the knees, fall backward (side views) or sideways (front and back), and lie still, centred where the character stood. The lying frames are wider than a standing figure, and every animation of a character shares one canvas, so `death` widens all of them; the feet stay on the same line. Back-view idles stay the code-drawn bob even when `idle` is in `skeleton`; `"clip_fix": {"idle_n": {"wan": true}}` renders one from the skeleton instead (the back view has no face points, and the live check drew a gentle breathing back with no face on the head, one take out of one) |
+| characters (polish) | A generated clip shows every frame for the same time and draws no in-betweens: a strike has no wind-up, no weight and no hit-stop, and a sprite has no flash or dissolve for a hit or a defeat | All opt-in: an entry without these keys exports the same files as before. `"holds": true` times attack, cast and shoot around their frame of peak motion, measured from the frames (the silhouette change between each frame's neighbours, body aligned): the frame before it is held as the wind-up, the frame after it as the impact (attack 2 and 3, a hit-stop; cast 2 and 2; shoot 3 and 1.5). `{"attack_w": [1, 1, 2, 1, 3, 1, 1, 1]}` lists one clip's durations, `{"walk": {"3": 2}}` holds single frames (numbered from 0, as in the file names), `{"shoot": {"windup": 3, "impact": 1}}` sets the pair. `"smear": true` redraws that peak frame with the moving part dragged back along its motion in the frame's own colours, thinning to a checker; it replaces the frame (the count, loop and holds stay). The body is aligned first and outline redraws are ignored, but on an 8-frame Wan clip a thin blade leaves a small smear and a part that sweeps over the body leaves none (the QA note says which): judge the sheet. `"anticipation": true` gives skeleton attack, cast and shoot a wind-up (lean away, sink, draw the arm back, then strike; `{"cast": 0.5}` for less); it is a new skeleton, so those clips re-render. `"shaders": true` writes the damage flash (the hitfx lane's, the same files) and a pixel-art dissolve to `fx/shaders` (Godot notes) |
 | characters (8 directions) | Each generated direction is another set of clips (a symmetric 8-way character renders s, se, e, ne and n; w, sw and nw are mirrors) | Add the diagonals to `directions`; the rotation runs 8-way (about 200 s) and the back diagonals idle in code like n. The animation node knows one diagonal view wording ("three-quarter view"), so diagonal clips drift toward front or side more often than cardinal ones: judge the review sheet |
 | character variants | Editing each finished frame for a new outfit flickers (every frame gets its own coat) | `variants` with `edit` render a whole character from the once-edited south sprite (a full character's cost); with `hue` / `to` they recolour every frame with one map and cost nothing |
 | characters (four-legged) | The character lane draws upright chibi figures and the skeleton is a person's: asked for a warhorse, it drew a horse standing on two legs in a hood, and its back-view walk turned to face the camera (2026-10-31 rehearsal) | A two-legged mount (a big bird, a walker machine: the `mount` example) works as a character. A horse or a wolf to ride is an 8-direction `vehicles` entry for now: it turns, but has no walk cycle |
@@ -229,6 +264,11 @@ Honest list: these are the failure modes seen in testing and what Dotwork does a
 | characters (which way a view faces) | The rotation model reads "right side view" either way round from one character to the next (one test character's east view faced left, another's faced right; a front quarter view flipped on a third), so a fixed output order put some characters' east walk on the west | After the rotation, each east / west pair is judged by where the face sits in the head and swapped when the east view faces left (the log says so; clips and poses made from it move to `_old_facing/` and re-render). Back views and faceless characters (helmets, machines) cannot be judged: the manifest asks you to check them on the review sheet, and `"rot_swap": ["ne"]` swaps a pair by hand |
 | battle / emote poses (klein edits) | Vague wording returns the idle pose; some poses drop a signature prop | Wordings that name body positions (`BATTLE_POSES`, `FIELD_POSES`), `pose_text` per character, a per-pose seed fix |
 | effects (Wan) | Motion can turn particles into a face or a little figure | Effect-only prompt wording, `keep`, a new seed; review every effect. Or use the `spells` lane: fire, ice, bolt, heal, wind, burst (one-shots), orb and aura (loops), drawn in code with the kind's colour ramp or your own (`color`, `colors`), so every frame is exact, free and repeatable; it cannot draw a one-off subject (a summon's creature), which stays a Wan effect |
+| store | The key art is a render: the hero can land anywhere, and a busy picture leaves no calm spot for the logo. Steam allows no text but the game's name (and an official subtitle), none at all on the library hero | Each size crops the key art at a whole-number scale around `focus` and puts the logo on the calmest spot outside where the prompt places the hero (`logo_anchor: "fixed"` keeps the table's spots); review the sheet and pass your own `source` / `tall_source` art when a render will not do. The logo font has capitals, digits and title punctuation only (a missing character stops the run naming it). Screenshots are not made: Steam wants gameplay, so capture them from the game (`capture`, or the kit's `dev.py smoke --screenshot`) |
+| screens | A title screen's buttons only show: what New Game does is the game's | The kit's shell wires its own menus; use the screen as the backdrop and logo layer, or wire the buttons' `pressed` signals. The credits roll scrolls for a length worked out from the line count (24 px a line), so a theme with a much larger font needs `seconds` raised |
+| bdf (fonts you bring) | Hand-drawn glyph text cannot cover Chinese or Japanese (thousands of characters); a complete CJK pixel font is a download, and every glyph of it would make a big font | Point `source` at a BDF (Ark Pixel Font, OFL-1.1: github.com/TakWolf/ark-pixel-font, the 12 px proportional BDF set has ja, ko, zh_hans, zh_hant, zh_hk and zh_tw variants of 26,179 glyphs each; pick the variant of the language, since shared characters are drawn differently) and `strings` at the game's text: the `.fnt` keeps only the characters used plus ASCII (a menu and a story line came to about 120 glyphs on one 256 px page). A character the strings use that the font lacks stops the run naming it, the file and the key. Not checked: right-to-left scripts and shaping (Arabic, Hebrew), which BMFont cannot lay out |
+| diorama (2.5D) | Flat sprites in 3D are cards: a side-view prop shows its one face from every angle, and a character's 4 directions do not turn with the camera | Billboards turn around their vertical axis to face the camera (fixed-Y), so keep the camera's yaw fixed (the lane's camera looks from the south) and pick the animation that faces it (`walk_s`); blocks put the same side tile on all four faces. Image-to-3D models are not part of Dotwork (see Image to 3D below) |
+| vfx (drawn in code) | Particles are a Godot node, so their exact motion cannot ship as frames; a projectile's Line2D trail is a fixed streak behind the body, not a record of its path | Projectiles (arrow, bolt, orb: flight loops pointing right) carry a trail that fades along its length: a sprite strip (frames, works in any engine), a Line2D with a stepped gradient, or a world-space GPUParticles2D that lags behind as the node moves (`trail`; use particles for curving shots). Puffs (dust, footstep, landing) and bursts (pickup_sparkle, level_up) are one-shots that end on an empty frame. `dust_particles`, `sparkle_particles` and `ember_particles` are GPUParticles2D scenes with a white mask texture and colour steps from the ramp over each particle's life (`amount`, `one_shot`); `vfx_<name>_particles.json` lists the same settings for other engines, and the review sheet shows a simulated preview, not Godot's run |
 | sprites / props / icons | The refine pass can grow a figure past its canvas | Re-rendered smaller automatically (never rescaled); an icon prompt that fills the frame (a spiral) can still fail: reword it |
 | sprites | White background trapped inside a figure | Removed automatically; skipped for white subjects (`keep_white` / `holes` override) |
 | enemies (ground slabs) | The model bakes a soft ground shadow under a figure, and the palette has no dark neutral, so it came out as a light-grey slab (#28, #26) | Removed automatically (wide, flat, light, under the feet, with the outline ring that framed it; `keep_shadow: true` keeps it) and replaced by a dark dithered contact shadow drawn in code: `spr_enemy_<name>_shadow.png`, a `Shadow` child drawn behind the sprite (`shadow: false` skips it). Props: `"slab": "remove"` opts in (an iso plinth looks like a slab, so it is not the default) |
@@ -245,10 +285,14 @@ Honest list: these are the failure modes seen in testing and what Dotwork does a
 | animated props (`clip`) | The code loops move pixels; they cannot change an object's shape (a pot breaking, liquid churning) | `"kind": "clip"` with a `motion` runs Wan 2.2 on the prop's render, palette locked to its colours; a one-shot keeps its first and last frames (`start` / `play` / `end` / `back`), `"loop": true` finds a loop point (`idle`). Wan keeps its subject in frame, so a change that removes the object (a pot bursting) comes back whole: use an effect over the prop for that. Like every model clip it can drift or redraw the object: review the sheet, a new `seed` gives another take, `anchor` changes how frames are aligned (default sideways only); Wan's grey ground shadow is removed (a faint shadow tinted by the prop's colours, right against it, can remain: judge the sheet); `"slab": "remove"` (any animprops kind, opt-in as for props) strips a flat light-grey ground slab under the base render before anything is animated from it; a light shadow cast diagonally beside the prop is not a slab and stays (a new `seed` or an edit of the base) |
 | platforms (side view) | A platformer needs edges, a top surface and one-way ledges that join in every combination | 16 tiles indexed by which sides are exposed (fill inside, the surface lip on top, shaded rims and an outline on open sides, rounded outer corners) plus 3 one-way pieces; a Match Sides TileSet with full-tile collision that `verify` paints and checks side by side; the background is made seamless left to right and ships with a ParallaxBackground scene |
 | iso (2:1 isometric) | Iso tiles drawn one by one do not continue each other | Floors and blocks are projected from the ground lane's seamless textures, so neighbouring diamonds continue one texture; blocks are taller tiles with a texture origin. `transitions` add the 16 corner tiles between two materials (the pair lane's wang16 tiles, projected the same way), a Match Corners terrain set per pair that Godot's terrain tool paints; `verify` paints shapes in both directions and checks every shared corner across the diamond's sides |
+| uikit (focus on sliders) | Godot's `Slider` draws one highlight for hover and for focus (`grabber_highlight`, `grabber_area_highlight`), so no Theme can tell a hovered slider from a focused one | Every other control gets a focus ring in its own colour drawn outside the control (never a brighter hover); the slider highlight uses the focus colour, and the kit's settings screen outlines the focused row. The test suite composites focus and hover of every control from the shipped textures and compares them pixel by pixel |
+| uikit (glyphs) | Prompt glyphs are generic drawn shapes: letters in neutral circles, outline cross / circle / square / triangle, a four-dot diamond, labelled shoulders and triggers, a lit d-pad arm; no maker's logos or colours | One neutral set per game (`assets/ui/glyphs/`), shared by every uikit entry; a rebound key with no glyph yet: add it to `keys` (the label comes from the glyph font), or the shell shows its text label |
 | fonts | Models cannot draw consistent letters | Glyphs are text bitmaps (`glyphs/*.txt`), built into BMFont `.fnt`; edit a letter by editing its rows |
+| fonts (accents) | A 9-row font has no room above a capital for an accent, and a missing glyph shows as a gap in game | `glyphs/dialogue_latin.txt` and `glyphs/title_brass_latin.txt` add Latin-1 Supplement and Latin Extended-A (French, Italian, German, Spanish, Portuguese, Polish, Czech, Hungarian, Turkish) with 2 (title: 3) rows above the capitals for accents, so their line is taller; their ASCII glyphs are the old ones, unchanged. The title font is capitals only: with `caps_only` accented lowercase uses its capital, but ß and ı have none. `"check": ["assets/i18n/strings.csv"]` on a font entry (paths in the game, like `glyphs`; or `dotwork.py fonts-check`) lists every character the game's strings use that the font lacks, with its language and string ids, and fails the pack (exit 1) after building every font |
 | battle backgrounds / scenes | 320x128 / 320x180 art shown at 2x (chunkier than 1x sprites) | Same exact-2x scale everywhere it is used |
 | battle backgrounds (moving sky) | Cutting the painted sky off at the horizon and scrolling it split mountain peaks (the tip drifted away from its base) | `"scroll": -4` keeps the picture whole and adds two cloud layers drawn in code in its own lightest sky colours (far: small, half speed; near: bigger, full speed) that tile sideways; `horizon` sets how far down they reach, `clouds` how many. They drift over far mountains, which reads as nearer clouds; leave `scroll` off for caves and interiors |
-| `--engine none` | Maps, TileSets, scenes, SpriteFrames and the damage-flash shader are Godot resources | PNGs, sprite sheets + their JSON, BMFont `.fnt` fonts, 9-slice margins (in the manifest) and the manifest still ship; maps and the flash are skipped with a log line |
+| lighting (normal maps, no model) | A normal map guessed from one picture cannot know the real shape: it reads a rounded rim from the alpha edge (`bevel` px) and small relief from brightness (`detail` px), so dark paint reads as a dent and a flat-coloured cloak reads flat; an atlas tile cannot see its neighbours | Opaque tiles get no rim at their borders and the brightness relief wraps inside each tile, so Dotwork's seamless tiles stay seamless (a tile whose opposite edge is clear repeats its own edge instead). Occluders are the largest opaque region only, `base` (default) spans the feet of the bottom quarter, `full` the whole outline, at most `occluder_points` corners, never self-crossing (a crossing outline falls back to its convex hull). A sprite node that is scaled, flipped or nested in its own scene gets a fresh lit scene instead of a copy. Headless Godot renders nothing: `verify` proves the lit resources are wired (both textures, same size, normals that decode with z > 0, occluder polygons, cells on lit tiles), not how the light looks; judge `assets_src/art/lit/<name>/<name>_review.png` and the demo scene in the editor |
+| `--engine none` | Maps, TileSets, scenes, SpriteFrames and the damage-flash and dissolve shaders are Godot resources | PNGs, sprite sheets + their JSON (with any hold `durations`), BMFont `.fnt` fonts, 9-slice margins (in the manifest) and the manifest still ship; maps and the shaders are skipped with a log line |
 
 Timing on the tested GPU: a sprite about 18 s, a texture tile with variants about 25 s, a Wan clip about 110 s, a
 4-direction rotation about 130-170 s, an 8-direction rotation about 210 s, a battle background about 13 s.
@@ -258,6 +302,15 @@ Timing on the tested GPU: a sprite about 18 s, a texture tile with variants abou
   A jump keeps its rise and fall in the frames (the canvas bottom is the ground, so the sprite leaves it without
   code). A game whose physics already lifts the body (a platformer) sets `"design": {"character": {"actions":
   {"jump": {"airborne": false}}}}` and gets jump frames that stand on the feet line like every other action.
+- Character holds: a held frame carries its `duration` in the SpriteFrames (relative: it shows duration / speed
+  seconds, so 2.0 is twice as long); the sheet JSON lists them as `durations` for other engines. A smeared frame is an
+  ordinary frame.
+- Sprite shaders (`"shaders": true` on a character): fx/shaders/mat_damage_flash.tres under the art folder (tween `shader_parameter/flash`
+  1 -> 0 on a hit) and `mat_dissolve.tres` (tween `shader_parameter/progress` 0 -> 1 for a defeat, 1 -> 0 to appear;
+  `edge_color`, `edge_width`, `noise_scale`, `pixel_size` and `seed` shape it). The dissolve works per whole texel and
+  reads texel centres, so it stays on the pixel grid with hard edges. A material file is shared by every node that
+  uses it: give each sprite its own copy (`material.duplicate()`, or Local To Scene in the inspector), or one hit
+  flashes every character.
 - Props: `prop_<name>.tscn` is a `StaticBody2D` with the origin at the feet and a footprint box; put props under a
   `Node2D` with `y_sort_enabled` and characters walk behind tree canopies and lamp posts by their feet.
 - Ground: one TileSet for stacked `TileMapLayer`s: Base (plain tiles, random paint), one layer per overlay terrain,
@@ -268,8 +321,40 @@ Timing on the tested GPU: a sprite about 18 s, a texture tile with variants abou
   plus `assets_src/maps/<name>_preview.png` from the cells Godot chose.
 - Effects: `fx_<name>.tscn` (additive material, autoplay). Damage flash: `mat_damage_flash.tres`, tween its
   `shader_parameter/flash` from 1 to 0 on hit.
+- VFX: `fx/vfx/<name>/vfx_<name>.tscn`. A projectile is a `Node2D` pointing right (a `Trail` behind a `Body`):
+  set `rotation` to the flight direction and move it. Puffs and bursts autoplay once and stop on an empty frame
+  (free them on `animation_finished`); ground kinds have the origin on the ground line. Particle kinds are a
+  `GPUParticles2D`; a one-shot bursts on spawn (a small `Start` AnimationPlayer arms it, because Godot 4.7 stops a
+  one-shot that starts emitting from the scene file) and sends `finished`; `restart()` replays it.
 - Fonts: load the `.fnt` as a `FontFile`; white ink is tinted by `font_color`; gradient title fonts are coloured.
+  The Latin fonts are taller than the ASCII ones they extend (at 2x: dialogue_latin 26 px lines instead of 22,
+  title_brass_latin 34 instead of 24) and their baseline sits lower in the line (the accent rows come first), so a
+  Label that switches to one shows its text a few pixels lower.
+- UI kit: `assets/ui/theme_<name>.tres` (the kit's shell loads the first `assets/ui/theme_*.tres`, sorted by name); textures in
+  `assets/art/ui/uikit/<name>/`; set the project's default texture filter to Nearest. Prompt glyphs: `assets/ui/glyphs/<name>.png`,
+  1x and 16 px tall (draw them at whole multiples), glyphs.json gives each width. `cursor_pointer.png` / `cursor_select.png`
+  (hotspots in the manifest). `uikit_preview_<name>.tscn` shows every control; `verify` checks its Theme items in Godot and walks
+  its focus chain with ui_down / ui_up (`UIKIT_FOCUS_RESULT PASS` in the log). Vertical sliders, vertical scroll bars and item lists
+  use ui_up / ui_down themselves, so they sit last in a focus chain (or are reached with ui_left / ui_right).
 - Animated water: TileSet atlas animation (4 frames by default); the editor previews it.
+- Store: `"apply": true` sets `application/config/icon` and the boot splash (`boot_splash/image`, `bg_color`,
+  `use_filter` off so the splash stays crisp) in `project.godot`; for the Windows export, point the preset's
+  `application/icon` at `assets/art/brand/<name>/icon_<name>.ico`. `verify` loads the icon and splash too.
+- Diorama: `diorama_<name>.tscn` is a `Node3D`: `Tiles` (a `PlaneMesh` per cell, a `BoxMesh` under raised ones),
+  `Sprites` (`Sprite3D` / `AnimatedSprite3D`, billboard fixed-Y, pixel size 1 / tile_px, nearest filter, alpha
+  scissor), a sun with shadows, ambient light and a `Camera3D` with optional depth of field. One unit is one tile.
+- Screens: `screen_<name>.tscn` is a full-rect `Control` over the backdrop (`TextureRect`, keep aspect covered,
+  nearest filter), using the first `assets/ui/theme_*.tres` when the game has one; the loading screen's
+  `Progress` is a `TextureProgressBar` (set `value`), the credits `Player` autoplays the roll.
+- Lighting (`lighting` lane): `assets/art/lit/<name>/` holds lit copies that point at the original PNGs, which stay
+  untouched: `<frames>_lit.tres` (every frame a CanvasTexture: diffuse + normal map), `<tileset>_lit.tres` (every atlas
+  a CanvasTexture; terrains and collision copied, so Godot's terrain tool paints it as before), `props/<png>_lit.tscn`
+  (the prop's own scene with the CanvasTexture and a LightOccluder2D under the root; collision kept) and
+  `<name>_demo.tscn`. Normal maps are OpenGL style (green up), what Godot 4 expects; Godot flips green into its
+  y-down canvas itself. A normal map changes nothing until a light shines: add a `PointLight2D` with a texture, a
+  `height` above 0 (the demo uses 48 px; at 0 a flat surface gets no light) and `shadow_enabled` for the occluders,
+  and a `CanvasModulate` to darken the rest. An occluder shadows everything behind it, its own sprite included,
+  which is why `base` keeps it to the feet.
 
 ## Palettes and style references
 Dotwork ships two palettes, both built from dotwork's own renders (no third-party art):
@@ -304,6 +389,8 @@ together with a palette lock; where a lane uses no palette it has no effect.
 | effects | none: each effect is reduced to 16 colours of its own, no outline | 16 | none |
 | tools (edits, inpaint) | the source sprite's own colours plus `palette` (untouched pixels map back exactly) | source count + 12 | none |
 | hit sparks / slashes (drawn in code) | a 4-step ramp of the entry's `color` | about 4 per frame | `color` |
+| uikit (drawn in code) | the style's fill / frame colours plus a focus colour; glyphs and cursors one fixed neutral set | about 12 per theme, 12 for glyphs | `style`, `fill`, `frame`, `focus` |
+| vfx (drawn in code) | the kind's ramp (bolt, orb, level-up and embers share the spells ramps), or one built around `color`, or `colors` as given; particle textures are white masks tinted by the same steps | the ramp's 2-6 colours | `color`, `colors` |
 | characters | none of the files: every animation frame is locked to the colours of the direction sprite it was animated from | per character | none |
 
 So props, enemies, terrain and backdrops read as one set because they share the two files; characters, icons,
@@ -322,6 +409,78 @@ finished sprites (paths relative to the game) and Dotwork uploads them once per 
 copies for style, outline and shading; changing the list re-renders what used it. A spec can switch the reference off
 for one pack with `"design": {"character": {"style_ref": ""}}`.
 
+## Hand polish (Aseprite or Pixelorama)
+Both editors get the same round trip. `dotwork.py aseprite` or `dotwork.py pixelorama` writes one editable file per
+character (one tag per animation, named like the animation, such as `walk_s`), per effect and per single image (props,
+icons, portraits, window skins) under `<src_dir>/aseprite/` or `<src_dir>/pixelorama/`. Each frame shows for as long as
+it does in the game: its hold divided by the clip's frame rate. Polish there and save, then `--reexport` writes the
+frames back to the shipped PNGs, sheets, sheet data and SpriteFrames, keeps each clip's holds (a frame you retime
+becomes a hold), removes frames you deleted and runs `verify`. A frame that still looks the same keeps its shipped
+file byte for byte (editors drop the colour stored under fully clear pixels; that alone is not a change), and an
+untouched hold keeps its exact value. Manifest rows change only for files that changed: such a file keeps its row
+(models, workflow, canvas, anchor, position) and gains its new hash and a polish note, so an untouched round trip
+rewrites no manifest and a frame drawn in code never gains a model. Tag names use letters, digits and `_` only (they
+become file names). Effects in the effects lane's layout (`fx/<name>/spr_fx_<name>_NN.png`, which hit effects share)
+are included. Spells, VFX, status marks, animated props, balloons and vehicles keep their lanes' own files and are
+drawn from their specs, so neither editor gets them.
+
+| | Aseprite | Pixelorama |
+|---|---|---|
+| Needs | `ASEPRITE_BIN`: Aseprite runs headless for both directions | nothing: Dotwork reads and writes `.pxo` in Python |
+| Versions | Lua scripting (`--script`); run with Aseprite 1.3.18 on Windows | writes `pxo_version` 7 (Pixelorama 1.2.0 to 1.2.3; 1.2.3 opened, exported and saved Dotwork's files); reads 7 and 8 (the 1.2.4 release candidates, where a cel keeps its own size and offset; (verify) against a released 1.2.4) |
+| The file | indexed on the asset's own colours | RGBA in one layer `art`, the asset's own colours as the project palette; the project's frame rate is the one most of the character's frames play at, and other clips carry per-frame durations |
+| Layers you add | flattened by Aseprite on export | visible pixel layers and groups are composited (Normal blending, cel and layer opacity); a visible layer with another blend mode, a clipping mask, layer effects, animated opacity, a 3D or tilemap layer, or a group below 100 % stops the re-export with its name (merge it down or hide it); hidden layers are ignored |
+| A file that exists | rebuilt by `aseprite` | kept when it differs from the game's frames (it may hold your polish); `--overwrite` replaces it |
+
+Pixelorama stores the folder you last exported to, a full path on your machine, in every `.pxo` it saves: in a public
+repository, that path is public too. Aseprite 1.3.18 on Windows built the sources and re-exported them untouched
+with every file unchanged; an edit made in Aseprite's window is not tested yet.
+
+## Store art (Steam sizes)
+What the `store` lane writes to `assets_src/store/<name>/steam/`, checked against the Steamworks documentation on
+2026-11-01 (pages: store/assets/standard, store/assets/libraryassets, store/assets/rules, store/assets,
+store/assets/community, features/achievements/ach_guide on partner.steamgames.com). Steam says older dimensions are no
+longer accepted, so check the pages again before a release; the sizes live in `SIZES` in `lane_store.py`.
+
+| File | Size | Steam's rule | What Dotwork puts there |
+|---|---|---|---|
+| `header_capsule.png` | 920 x 430 | no text beyond the game's name; logo legible | wide key art, logo |
+| `small_capsule.png` | 462 x 174 | the logo should nearly fill it | wide key art, logo at up to 90 % of the width |
+| `main_capsule.png` | 1232 x 706 | no text beyond the name | wide key art, logo |
+| `vertical_capsule.png` | 748 x 896 | no text beyond the name | tall key art, logo |
+| `page_background.png` | 1438 x 810 | optional, ambient | wide key art, no logo |
+| `library_capsule.png` | 600 x 900 | logo, no other text | tall key art, logo |
+| `library_header.png` | 920 x 430 | no text beyond the name | wide key art, logo |
+| `library_hero.png` | 3840 x 1240 | no text at all; keep what matters in the centred 860 x 380 | wide key art, no logo |
+| `library_logo.png` | 1280 x 720 | transparent PNG, the logotype only | the logo, transparent |
+| `shortcut_icon.png` / `.ico` | 256 x 256 | ICO or PNG (256 or 512) | the game icon x4; the .ico holds 16 to 256 |
+| `app_icon.jpg` | 184 x 184 | JPG | the game icon x3, cropped 4 px a side, on `bg` |
+| `achievements/<name>.png`, `<name>_locked.png` | 256 x 256 | PNG recommended; achieved in colour, unachieved greyscale | your icon on a plate, and its greyed twin |
+
+Base capsules may carry only the artwork, the game's name and an official subtitle: no review scores, awards,
+discount or "buy now" text, or other products. All capsule art must be PG-13. Screenshots (1920 x 1080 or larger,
+16:9, at least five) must show gameplay, so Dotwork does not make them. Everything is pixel art at whole-number
+scales: a size takes the smallest whole multiple of the key art that covers it and crops the rest (the `focus` point
+stays in), so no pixel is ever resampled. The game itself gets `assets/art/brand/<name>/`: `icon_<name>.png` (256),
+`icon_<name>.ico`, `logo_<name>.png` (4x, for a title screen) and `boot_splash_<name>.png` (640 x 360).
+
+## Image to 3D (tested, not part of Dotwork)
+Turning a sprite into a 3D model was tried on 2026-11-01 (RTX 5060 Ti 16 GB, Windows 11) and is not built in. The
+2.5D path Dotwork does ship is the `diorama` lane (billboards over 3D tiles).
+- **TRELLIS** (github.com/microsoft/TRELLIS, MIT code and weights, `microsoft/TRELLIS-image-large` in safetensors):
+  the only candidate that passed the licence check and a code audit. Its README asks for 16 GB of VRAM and is tested on
+  Linux only. On Windows it ran only after changes: DINOv2 loaded from a local safetensors folder instead of
+  `torch.hub` (which runs code fetched at load time and reads `.pth` weights), no background remover (it downloads a
+  model on first use; give an RGBA picture instead), the mesh path only (its Gaussian and texture-bake renderers carry
+  non-commercial or research licences), and its attention routed through PyTorch's own because the xformers build had
+  no kernels for this GPU. Two 64 px pixel-art props each took 20-70 s and up to 10 GB of VRAM; after decimation, UV
+  unwrap and a colour bake in Blender, both GLBs pass `tools/blender/validate_asset.py --class prop`, but the shapes
+  were wrong (a barrel came back as a box). A control run on TRELLIS's own example filled the 16 GB card while
+  decoding and was stopped. Not recommended until it is shown to work on supported hardware.
+- **TRELLIS.2** (MIT) asks for at least 24 GB of VRAM: not testable on a 16 GB card.
+- **Hunyuan3D 2.0**: its community licence excludes the European Union, the United Kingdom and South Korea and needs a
+  separate licence above 1 million monthly users, so the kit does not recommend it.
+
 ## Licences
 - Dotwork: the kit's licence (MIT). `glyphs/*.txt` (fonts authored as text) and the palettes are part of Dotwork.
 - Models: every file in `models.lock.json` carries its licence; the ones Dotwork uses are Apache-2.0. Check each model
@@ -329,14 +488,35 @@ for one pack with `"design": {"character": {"style_ref": ""}}`.
 - SpriteKiln (GPL-3.0) and ComfyUI-GGUF (Apache-2.0) are installed by you and called over HTTP; Dotwork contains none
   of their code or workflow files.
 - What you generate: no third-party art is involved unless you supply it (`source`, `style_refs`, `img2px`).
+- Fonts you bring (`bdf`): the font's own licence applies. `license` is required and is copied next to the `.fnt`
+  as `font_<name>_LICENSE.txt`; the SIL Open Font License lets you ship a cut-down copy inside a game when the
+  licence text goes with it and the font declares no Reserved Font Name (Ark Pixel Font declares none). Credit it
+  in `docs/ASSET_LOG.md`.
 
 ## Tests
+`python tools/art/dotwork/tests/test_lighting.py` - offline, seconds: normal maps (unit length, facing the camera,
+rims pointing outward, seamless tiles), occluder outlines and the lighting lane end to end on a throwaway game.
 `python tools/art/dotwork/tests/test_dotwork.py` - offline, under a minute: a stand-in ComfyUI on 127.0.0.1 with canned
 outputs; covers settings, spec parsing and exit codes (entry-level errors and warnings, options before the command),
 the manifest and its model provenance, naming, cache keys and seeds, metadata stripping, spec path containment, grid
 sampling, connected components, blob atlas layout and seams, the .tres/.tscn writers (multi-source animated
 TileSets), mapbuild's text-to-cells, glyphs, connectors, tool timeouts (the whole process tree is stopped) and
-verify's error markers.
+verify's error markers. `python -I -B tools/art/dotwork/tests/test_vfx.py` covers the vfx lane: frame counts and sizes,
+one-shots that end empty, loops that wrap, ramp-only colours, trails that fade, the particle scenes and spec errors.
+`python tools/art/dotwork/tests/test_animpolish.py` - offline, a few seconds: the animation polish keys. Defaults match
+digests of the skeleton and of a character export taken before the polish; the smear lands on the frame of peak motion
+in that frame's colours; holds reach the SpriteFrames; the wind-up moves against the strike; the shader files are
+well-formed and the flash is the hitfx lane's byte for byte.
+`tests/test_qapack.py` (seconds): `qa pack` on a synthetic game, clean and with planted
+outliers (a 2x upscale, an off-palette prop, a mirrored prop, a red / green gauge pair).
+`python tools/art/dotwork/tests/test_fonts.py` - offline, seconds: the Latin glyph fonts (height, baseline, coverage,
+accents drawn over unchanged base letters), the coverage check (JSON, CSV, PO, text; command line and pack) and the
+old fonts' output against golden hashes.
+`python tools/art/dotwork/tests/test_pixelorama.py` - offline, seconds: both hand-polish round trips. `.pxo` files
+(tags, frame durations from holds, palette, the same bytes on every build, polish never overwritten), an untouched
+re-export that changes no file, an edit and a new hold reaching the game, layers composited, every refused layer
+feature stopping before a file is written, `pxo_version` 8 cels and the fields Pixelorama 1.2.3 saves; Aseprite's
+frame times in the build list and through a re-export rounded to milliseconds (its script runs stubbed).
 
 ## Troubleshooting
 | Symptom | Fix |

@@ -50,7 +50,8 @@ values in `data/golden/shell.json` that every port's tests check (K01).
 - Prompts show the device in use: keyboard keys after a key press, the gamepad's buttons after a button press
   (`glyph_set`); on Steam Deck, keyboard glyphs while a controller is active fail the review (E75). The kit's prompt
   names (`glyph_name`): `key_space`, `mouse_left`, `xbox_a`, `ps_cross`, `pad_south`; art in `assets/ui/glyphs/`.
-  Use generic shapes for button art, never platform logos.
+  Use generic shapes for button art, never platform logos. In Godot, Dotwork's `uikit` lane (drawn in code, no GPU)
+  makes that whole set plus a Theme for every menu control in every state, focus a ring of its own colour (K01).
 - Platform holders' certification may require their own button art from their SDKs; the generic set is for PC.
 
 ## 5. Localization (A)
@@ -64,7 +65,11 @@ values in `data/golden/shell.json` that every port's tests check (K01).
    such as `{name}` and `%d` neither change nor count, so short strings grow more), wrapped in brackets (F38). The
    pseudo smoke run (`dev.py smoke --drive pseudo --locale pseudo`) visits every screen and fails on a clipped or
    untranslated label. Use the reserved name only on the command line, never as a real locale code (E87).
-5. Fonts must cover every character of every shipped language (E70); check before adding a language.
+5. Fonts must cover every character of every shipped language (E70); check before adding a language (Dotwork's
+   `fonts-check` lists every character the game's strings use that a font lacks).
+6. Machine or local-model translations are drafts: a draft keeps exactly the source's placeholders or is rejected,
+   and a person reviews it before it ships, with a native reader for languages far from English (K01: a local
+   model invented placeholders in its drafts; `docs/resources/audio.md`, "Translations and bark lines").
 
 ## 6. Display and platforms
 - Pixel art: the kit's 640x360 base scales by whole numbers (2x at 720p, 3x at 1080p, 4x at 1440p); letterbox the rest

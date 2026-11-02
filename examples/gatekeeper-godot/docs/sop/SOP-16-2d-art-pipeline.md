@@ -184,6 +184,9 @@ and GPU minutes. One test machine's setup and test (tip, E68):
   with no edits, 0 of 120 PNGs changed there. Two scripting traps: Aseprite on Windows is a GUI program, so start it
   from Python's `subprocess.run` (which waits) or PowerShell's `ProcessStartInfo` with `WaitForExit`, not `&`; and in
   Lua, an indexed `Image` saved on its own loses its palette (all black), so convert the sprite to RGB in memory first.
+  Dotwork does the trip for either editor: `dotwork.py aseprite` (needs `ASEPRITE_BIN`) or `dotwork.py pixelorama`
+  (free; Dotwork reads and writes `.pxo` itself, so no install is needed to build or re-export), then `--reexport`.
+  An untouched trip changes no file; a changed frame keeps its provenance in the manifest (K01, E113).
 - **Godot terrain: prefer blob (47 tiles, Match Corners and Sides) for overlays** (tip, E68). In corner mode the
   visible edge sits half a tile inside the painted cells and single cells vanish; blob mode fills exactly the painted
   cells, keeps single cells as islands and 1-wide lines as paths. Give each overlay terrain its own TileMapLayer over

@@ -10,7 +10,7 @@ are from Valve's own documentation read on 2026-11-01 (F39); check the linked pa
 |---|---|---|
 | Steamworks account and an app (Steam Direct) | partner.steamgames.com | A one-time fee per app (verify the current amount on Steamworks) |
 | itch.io account | itch.io | Free; you pick the revenue share |
-| Store art | Steam sizes in step 2; an image editor (pixel art: scale by whole numbers, then place on each canvas) | Logo or title only on capsules (E77) |
+| Store art | Steam sizes in step 2; an image editor (pixel art: scale by whole numbers, then place on each canvas), or Dotwork's `store` lane in Godot | Logo or title only on capsules (E77, E102) |
 | Signing certificate (Windows), Apple Developer Program (macOS) | step 5 | Paid; Windows SmartScreen warns about unsigned downloads (verify) |
 | Age rating (consoles, mobile, many stores) | IARC, through each participating store (E88) | IARC states developers have rated "at no cost" |
 
@@ -20,11 +20,14 @@ are from Valve's own documentation read on 2026-11-01 (F39); check the linked pa
    two weeks), and wishlists are "an important factor"
    in where Steam shows a game (E82).
 2. **Graphical assets** (E77): header capsule 920x430, small capsule 462x174, main capsule 1232x706, vertical capsule
-   748x896, at least five screenshots of 1920x1080 or more (16:9), optional page background 1438x810. Library assets have
-   their own page on Steamworks. Capsules carry only the logo or title (no quotes, awards or other text), and the logo
-   must stay readable on the small capsule. Screenshots show real gameplay only; mark at least four as suitable for all
-   ages. Pixel art: scale the artwork by a whole number to the largest size that fits each canvas, then place it on
-   that canvas and fill the rest with the background colour or more scene; never resample by a fraction.
+   748x896, at least five screenshots of 1920x1080 or more (16:9), optional page background 1438x810. Library assets
+   (E101): capsule 600x900, header 920x430, hero 3840x1240 with no text and the key content in the centred 860x380, and
+   a transparent logo 1280 wide or 720 tall. In Godot, Dotwork's `store` lane makes every one of these sizes, the icons
+   and the boot splash from one key art ([Dotwork store art](../../tools/art/dotwork/README.md#store-art-steam-sizes)).
+   Capsules carry only the logo or title (no quotes, awards or other text), and the logo must stay readable on the small
+   capsule. Screenshots show real gameplay only; mark at least four as suitable for all ages. Pixel art: scale the
+   artwork by a whole number to the largest size that fits each canvas, then place it on that canvas and fill the rest
+   with the background colour or more scene; never resample by a fraction.
 3. **AI disclosure:** fill the Content Survey's generative AI section as `SOP-04` says (F11).
 4. **Accessibility:** list the options from `SOP-20` in the description.
 
@@ -81,7 +84,8 @@ The full fill-in checklist is `docs/LEGAL.md`; the short version, with a lawyer 
 
 ## 7. Continuous integration (standard practice)
 `.github/workflows/ci.yml` runs `python tools/dev.py check` and `test` on every push and pull request (the shipped file
-sets up Godot or Node for those overlays and documents the rest). A red build blocks a release. Builds for stores come
+sets up Godot or Node for those overlays and documents the rest). `.github/workflows/audio.yml` runs every Wavesmith
+exam on Linux, Windows and macOS whenever `tools/audio/` or `data/golden/` change. A red build blocks a release. Builds for stores come
 from a tagged commit (`SOP-06`), never from a working copy.
 
 ## Done when

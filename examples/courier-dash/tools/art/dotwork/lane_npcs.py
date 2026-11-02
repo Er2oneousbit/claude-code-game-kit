@@ -62,8 +62,10 @@ def variant(base, clips, rot, v, pack, man, conf, pal):
     frames = [f for fr, _ in clips.values() for f in fr] + [Image.open(p).convert("RGBA") for p in rot.values()]
     cols, counts = recolor.colours_of(frames)
     mapping = recolor.plan(cols, counts, pal, **recolor.options(dict({"keep_skin": True}, **v)))
-    vc = Character({"name": name, "actions": base.actions, "directions": base.dirs, "asymmetric": base.asym}, pack, man,
-                   conf)
+    # the base's timing polish too (holds, smear: animpolish.py), so a recoloured variant animates exactly like it
+    polish = {k: base.e[k] for k in ("holds", "smear") if base.e.get(k) is not None}
+    vc = Character(dict({"name": name, "actions": base.actions, "directions": base.dirs, "asymmetric": base.asym},
+                        **polish), pack, man, conf)
     vrot = {}
     for k, p in rot.items():
         dst = os.path.join(vc.work, f"rot_{k}.png")

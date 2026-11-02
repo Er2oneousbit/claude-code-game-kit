@@ -107,7 +107,7 @@ The browser run ended with 24.7 s left, the same as the unit test for that start
 
 ### Later: generated sound (ElevenLabs)
 The user asked for API audio in the other example games (2026-10-23), after Graveyard Shift had it. The Kenney sounds
-were replaced by sound effects generated with the kit's `tools/audio/eleven_audio.py`, plus an ambience loop the game
+were replaced by sound effects generated with the kit's `tools/audio/wavesmith/eleven_audio.py`, plus an ambience loop the game
 never had. Every file is a PLACEHOLDER (non-commercial terms) in `docs/ASSET_LOG.md` (credit in the README); the old
 Kenney rows stay, marked removed. Every file was measured before use (peak, loudness, silence at the start, the jump at
 a loop's seam, flat-topped samples), then peak-normalized: one-shots to -3 dBFS, loops to -6 (the log says Modified, the

@@ -55,6 +55,8 @@ pauses on the last frame, waits for the GPU to hand back the pictures, then exit
 - `tests/golden.rs`: replays every case in `data/golden/juice.json` and `shell.json` through the juice and shell
   modules (one test per case type; `cargo test --test golden -- --nocapture` prints the counts). To change their
   behavior, change `tools/golden_vectors.py` first, run it with `--write`, then fix `src/logic/` until this passes.
+  `audio.json`, `music.json` and `access.json` check the audio modules the same way (`audio_director`,
+  `music_director`, `audio_access`); their references are `tools/audio/wavesmith/` (`vectors --write`).
 - `tests/*.rs`: integration tests that use `app::test_app(GameConfig)`, call `app.update()` and read the world
   (`app.world_mut().query_filtered::<&Transform, With<Player>>()`). Set input by writing the `Intent` resource,
   or pick a bot through `GameConfig`.

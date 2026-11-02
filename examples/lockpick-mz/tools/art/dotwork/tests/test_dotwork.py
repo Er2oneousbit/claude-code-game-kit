@@ -2182,6 +2182,20 @@ class DotworkExam(unittest.TestCase):
         self.assertEqual(os.listdir(nogame), [])           # setup --check creates nothing
 
 
+# lane exams kept in their own files run with this one (the kit runs only this file)
+EXTRA_EXAMS = ("test_uikit", "test_store", "test_screens", "test_bdf", "test_diorama", "test_shipped", "test_vfx", "test_animpolish", "test_lighting", "test_qapack", "test_fonts", "test_defaults_cvd", "test_pixelorama")
+
+def load_extra_exams():
+    """Put each extra module's TestCase classes into this module (in a function, so no loop variable is left behind
+    for unittest to find a second time)."""
+    sys.path.insert(0, HERE)
+    for mod in EXTRA_EXAMS:
+        for name, obj in vars(__import__(mod)).items():
+            if isinstance(obj, type) and issubclass(obj, unittest.TestCase) and obj.__module__ == mod:
+                globals()[name] = obj
+
+
 if __name__ == "__main__":
+    load_extra_exams()
     result = unittest.main(exit=False, verbosity=1).result
     sys.exit(0 if result.wasSuccessful() else 1)

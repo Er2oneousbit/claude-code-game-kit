@@ -8,6 +8,8 @@
 //           Named `logic`, not `core`: a module called core shadows Rust's own core crate in macro paths.
 //           The juice and shell modules are the kit's ports of tools/golden_vectors.py (f64, like the
 //           reference): tests/golden.rs checks them against data/golden/*.json. The race does not use them yet.
+//           The audio modules are ports of tools/audio/wavesmith/ (audio_events.py, music.py, access.py): they
+//           only decide (which file, pitch, gain, duck, when the music changes); a Bevy audio system plays it.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): the kit's juice and shell modules
 // ---------------------------------------------------------------------------
@@ -35,3 +37,8 @@ pub mod bindings;
 pub mod i18n;
 pub mod save_store;
 pub mod settings;
+
+// Audio: sound events, adaptive music, accessibility (kit modules)
+pub mod audio_access;
+pub mod audio_director;
+pub mod music_director;

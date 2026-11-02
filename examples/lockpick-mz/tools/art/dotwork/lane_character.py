@@ -10,8 +10,10 @@
 #           --name guard --prompt ...
 # Notes   : Keys: prompt | source, seeds, asymmetric (generate west instead of mirroring), actions, directions, east_edit,
 #           subject, motions {action: wording}, clip_fix {clip: {seed, keep, motion, allow_drift}}, poses (battle | field | {name: wording}),
-#           pose_dirs, pose_text, variants, skeleton (actions driven by pose.py). Back-view idles are a procedural 1 px bob (Wan paints faces on the back of
-#           heads). directions may add the diagonals se, ne, nw, sw: any diagonal switches to the 8-way rotation (the
+#           pose_dirs, pose_text, variants, skeleton (actions driven by pose.py), and the opt-in polish (animpolish.py):
+#           holds (per-frame durations), smear (the peak frame smeared), anticipation (a wind-up for skeleton attack /
+#           cast / shoot), shaders (hit flash and dissolve materials). Back-view idles are a procedural 1 px bob
+#           (Wan paints faces on the back of heads). directions may add the diagonals se, ne, nw, sw: any diagonal switches to the 8-way rotation (the
 #           west-facing views are mirrors of their east twins unless asymmetric; the back diagonals idle in code).
 #           After the rotation each east / west pair is checked by where the face sits and swapped when the east view
 #           faces left; rot_swap ["ne"] swaps a pair by hand (back views show no face to check).
@@ -32,6 +34,7 @@ import shutil
 import numpy as np
 from PIL import Image, ImageOps
 
+import animpolish
 import fcore as core
 import godot
 import pose
@@ -165,6 +168,10 @@ class Character:
         if bad:
             raise core.ToolError(f"character {self.name}: skeleton {bad}: each must be one of {', '.join(pose.ACTIONS)} "
                                  "and one of the character's actions")
+        # opt-in polish (animpolish.py): holds, smear, shaders, anticipation; self.wind = {skeleton action: amount}
+        self.wind = animpolish.check(self.name, entry, self.actions, self.skeleton)
+        if entry.get("anticipation") is True and not self.wind:
+            man.assume(f"{self.name}: anticipation is for skeleton attack, cast and shoot; this character has none")
         self.work = os.path.join(core.WORK, self.name)           # resumable working files
         self.src = core.src(conf, "art", "characters", self.name)
         self.out = core.art(conf, "characters", self.name)   # the configured assets_dir (public/assets for web games)
@@ -373,6 +380,8 @@ class Character:
                  f"skeleton {pose.VERSION}" if action in self.skeleton else None]   # a skeleton or a new one re-renders
         if self.airborne(action):   # appended only here, so every other clip keeps its key (and its cache)
             parts.append("airborne")
+        if action in self.skeleton and self.wind.get(action):   # likewise: a wind-up re-renders that clip only
+            parts.append(f"anticipation {self.wind[action]}")
         return core.key(*parts)
 
     def airborne(self, action):
@@ -414,7 +423,8 @@ class Character:
                 raise core.ToolError(f"{self.name}: skeleton actions need the pose models ({', '.join(miss)}): "
                                      "README, Setup, tier pose")
             names = [lib.put(f, f"dotwork_{self.name}_pose_{action}_{direction}_{i:02d}.png")
-                     for i, f in enumerate(pose.frames(action, direction, Image.open(sprite)))]
+                     for i, f in enumerate(pose.frames(action, direction, Image.open(sprite),
+                                                       anticipation=self.wind.get(action, 0.0)))]
             g = pose.control_graph(g, names, *pose.MODELS)
         # v2: skip SpriteKiln's palette lock (node 28). Locked frames paint Wan's ground shadow in the sprite's own
         # darkest colors, so no rule can tell shadow from boots. Unlocked, the shadow stays a neutral grey-blue;
@@ -571,30 +581,39 @@ class Character:
         for (action, direction), (fr, notes) in clips.items():
             name = f"{action}_{direction}"
             files = []
-            sheet = Image.new("RGBA", (W * len(fr), H), (0, 0, 0, 0))
+            fps = acts.get(action, {}).get("fps", 8)
+            loop = acts.get(action, {}).get("loop", action in ("idle", "walk", "run"))
+            cans = []
             for i, f in enumerate(fr):
                 bb = f.getbbox()
                 f = f.crop(bb)
                 can = Image.new("RGBA", (W, H), (0, 0, 0, 0))
                 can.alpha_composite(f, ((W - f.width) // 2, H - f.height - lifts[(action, direction)][i]))
+                cans.append(can)
+            # polish on the placed frames, as the game shows them: the peak is measured where the player sees the
+            # motion, and a smear stays inside the shared canvas (cropped, its frame would re-centre)
+            cans, durs, more = self.polish(action, direction, cans, loop)
+            notes = notes + more if more else notes
+            sheet = Image.new("RGBA", (W * len(fr), H), (0, 0, 0, 0))
+            for i, can in enumerate(cans):
                 fn = f"spr_{self.name}_{name}_{i:02d}.png"
                 p = core.save_clean(can, os.path.join(self.out, "frames", fn))
                 files.append(fn)
                 sheet.alpha_composite(can, (i * W, 0))
-            fps = acts.get(action, {}).get("fps", 8)
-            loop = acts.get(action, {}).get("loop", action in ("idle", "walk", "run"))
-            anims[name] = (files, fps, loop)
+            anims[name] = (files, fps, loop) if durs is None else (files, fps, loop, durs)
             sp = core.save_clean(sheet, os.path.join(self.out, f"{self.name}_{name}_sheet.png"))
+            data = {"frame_w": W, "frame_h": H, "frames": len(fr), "fps": fps, "loop": loop, "anchor": "bottom_center"}
+            if durs is not None:   # other engines read the holds here: frame i shows durations[i] / fps seconds
+                data["durations"] = durs
             with open(core.safe_dest(sp[:-4] + ".json"), "w", encoding="utf-8") as fh:
-                json.dump({"frame_w": W, "frame_h": H, "frames": len(fr), "fps": fps, "loop": loop,
-                           "anchor": "bottom_center"}, fh, indent=1)
+                json.dump(data, fh, indent=1)
             self.man.add(sp, "sheet", animation=name, frames=len(fr), fps=fps, loop=loop, canvas=[W, H],
-                         anchor="feet_bottom_center", qa=notes, routes=routes)
+                         anchor="feet_bottom_center", qa=notes, routes=routes, durations=durs)
             self.man.add(sp[:-4] + ".json", "sheet_data", animation=name)
             for fn in files:
                 self.man.add(os.path.join(self.out, "frames", fn), "frame", animation=name, canvas=[W, H],
                              anchor="feet_bottom_center", routes=routes)
-        rows = [(n, [os.path.join(self.out, "frames", f) for f in fs]) for n, (fs, _, _) in sorted(anims.items())]
+        rows = [(n, [os.path.join(self.out, "frames", f) for f in a[0]]) for n, a in sorted(anims.items())]
         os.makedirs(self.src, exist_ok=True)
         lib.sheet(rows, os.path.join(self.src, "review_sheet.png"), scale=2)
         tres = godot.sprite_frames(os.path.join(self.out, f"{self.name}_frames.tres"), self.res + "/frames", anims)
@@ -608,6 +627,29 @@ class Character:
             if os.path.exists(os.path.join(self.work, extra)):
                 shutil.copyfile(os.path.join(self.work, extra), os.path.join(self.src, extra))
         return tres, [W, H]
+
+    def polish(self, action, direction, cans, loop):
+        """The opt-in polish of one placed clip (animpolish.py): (frames, durations or None, QA notes). A clip no
+        polish key covers comes back as it went in. The peak frame is measured before the smear, so the holds sit
+        around the same frame either way; the smear replaces that frame (the frame count stays)."""
+        hold = animpolish.pick(self.e.get("holds"), action, direction)
+        sm = animpolish.pick(self.e.get("smear"), action, direction)
+        if hold is None and sm is None:
+            return cans, None, []
+        k = animpolish.peak(cans, loop)
+        notes = []
+        if sm is not None:
+            img, info = animpolish.smear(cans, k) if k is not None else (None, "no frame of peak motion")
+            if img is None:
+                notes.append(f"smear skipped: {info}")
+            else:
+                cans = cans[:k] + [img] + cans[k + 1:]
+                notes.append(f"smear on frame {k} (peak motion): {info['px']} px over {info['length']} px")
+        durs = None
+        if hold is not None:
+            durs, note = animpolish.durations(len(cans), k, hold, action, loop)
+            notes.append(note)
+        return cans, durs, notes
 
     # -------------------------------------------------- 4b. still poses (battle / emotes): klein edit of a sprite
     def pose(self, name, direction, instr, sprite):
@@ -653,6 +695,9 @@ class Character:
     def run(self):
         clips, rot = self.build()
         out = self.export(clips, rot)
+        if self.e.get("shaders"):
+            kinds = list(animpolish.SHADERS) if self.e["shaders"] is True else list(self.e["shaders"])
+            animpolish.write_shaders(self.conf, self.man, kinds)
         self.variants(clips, rot)
         return out
 

@@ -2,8 +2,8 @@
 
 ## Goal
 The numbers make the game's choices interesting: no option is always right, nothing is useless, the difficulty rises the
-way the GDD intends, and the economy neither floods nor starves the player. Balance is mostly choosing numbers (E92); this
-SOP is how to choose them on evidence instead of by feel alone.
+way the GDD intends, and the economy neither floods nor starves the player. Balance is mostly choosing numbers (E92,
+tip); this SOP is how to choose them on evidence instead of by feel alone.
 
 ## 1. Put every number where you can see it (standard practice)
 - All balance numbers in data files (`data/`) or one constants module, never in logic (`docs/STYLE.md`). One table per

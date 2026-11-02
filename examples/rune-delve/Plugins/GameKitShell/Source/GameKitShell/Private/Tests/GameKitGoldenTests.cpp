@@ -1,7 +1,8 @@
 // ---------------------------------------------------------------------------
 // GameKitGoldenTests.cpp
-// Purpose : Checks the plugin's juice and shell logic against the kit's golden vectors, data/golden/juice.json
-//           and data/golden/shell.json (under the project folder), one automation test per case.
+// Purpose : Checks the plugin's juice, shell and audio logic against the kit's golden vectors (under the project
+//           folder): data/golden/juice.json, shell.json, audio.json, music.json and access.json, one automation
+//           test per case.
 // Usage   : python tools/dev.py test                                  (runs GameKit.* with the game's tests)
 //           python tools/dev.py test --filter GameKit.Golden.Shell     (one file; or GameKit.Golden.Juice.shake)
 // Notes   : The vectors are written by tools/golden_vectors.py, the reference implementation every engine port
@@ -23,6 +24,8 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "GameKitAtomicFile.h"
+#include "GameKitAudioAccess.h"
+#include "GameKitAudioDirector.h"
 #include "GameKitBindings.h"
 #include "GameKitCoyoteTimer.h"
 #include "GameKitEase.h"
@@ -32,6 +35,7 @@
 #include "GameKitI18n.h"
 #include "GameKitInputBuffer.h"
 #include "GameKitJson.h"
+#include "GameKitMusicDirector.h"
 #include "GameKitSaveStore.h"
 #include "GameKitSettings.h"
 #include "GameKitShake.h"
@@ -51,6 +55,9 @@ namespace GameKitGoldenTests
 	constexpr const TCHAR* GoldenLoadCommand = TEXT("load");     // the entry that reports a missing or broken file
 	constexpr const TCHAR* JuiceFile = TEXT("juice.json");
 	constexpr const TCHAR* ShellFile = TEXT("shell.json");
+	constexpr const TCHAR* AudioFile = TEXT("audio.json");     // written by tools/audio/wavesmith/audio_events.py
+	constexpr const TCHAR* MusicFile = TEXT("music.json");     // tools/audio/wavesmith/music.py
+	constexpr const TCHAR* AccessFile = TEXT("access.json");   // tools/audio/wavesmith/access.py
 
 	FString GoldenPath(const TCHAR* File)
 	{
@@ -562,6 +569,118 @@ namespace GameKitGoldenTests
 		}
 	}
 
+	// ---- audio.json, music.json, access.json (Wavesmith) ----------------------------------------
+
+	TSharedPtr<FJsonValue> PlayAsJson(const FGameKitPlayDecision& D)
+	{
+		const TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
+		const TCHAR* Result = D.Result == EGameKitPlayResult::Played ? TEXT("played")
+		                      : D.Result == EGameKitPlayResult::Cooldown ? TEXT("cooldown") : TEXT("capped");
+		O->SetField(TEXT("result"), MakeString(Result));
+		if (D.Result == EGameKitPlayResult::Played)
+		{
+			O->SetField(TEXT("variant"), MakeNumber(D.Variant));
+			O->SetField(TEXT("pitch_semitones"), MakeNumber(D.PitchSemitones));
+			O->SetField(TEXT("pitch_ratio"), MakeNumber(D.PitchRatio));
+			O->SetField(TEXT("gain_db"), MakeNumber(D.GainDb));
+			O->SetField(TEXT("voice"), MakeNumber(D.Voice));
+			O->SetField(TEXT("stolen"), D.Stolen.IsSet() ? MakeNumber(D.Stolen.GetValue()) : MakeNull());
+			O->SetField(TEXT("ends_ms"), MakeNumber(D.EndsMs));
+		}
+		return MakeObject(O);
+	}
+
+	TSharedPtr<FJsonValue> GainsAsJson(const TMap<FString, double>& Gains)
+	{
+		const TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
+		for (const TPair<FString, double>& G : Gains)
+		{
+			O->SetField(G.Key, MakeNumber(G.Value));
+		}
+		return MakeObject(O);
+	}
+
+	void CheckAudioDirector(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case)
+	{
+		FGameKitAudioDirector Director(Run.Obj(Case, TEXT("params")));
+		int32 I = 0;
+		for (const TSharedPtr<FJsonObject>& Step : Run.Steps(Case))
+		{
+			const FString Call = Run.Text(Step, TEXT("call"));
+			const double T = Run.Num(Step, TEXT("t_ms"));
+			if (Call == TEXT("play"))
+			{
+				Run.SameValue(PlayAsJson(Director.Play(Run.Text(Step, TEXT("event")), T)), Run.Field(Step, TEXT("expect")),
+				              StepLabel(I, TEXT("play")));
+			}
+			else if (Call == TEXT("duck"))
+			{
+				Run.SameValue(GainsAsJson(Director.Duck(T)), Run.Field(Step, TEXT("expect")), StepLabel(I, TEXT("duck")));
+			}
+			else
+			{
+				Run.UnknownCall(Call);
+			}
+			++I;
+		}
+	}
+
+	void CheckMusicGrid(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case)
+	{
+		int32 I = 0;
+		for (const TSharedPtr<FJsonObject>& Step : Run.Steps(Case))
+		{
+			const int64 Got = GameKit::Audio::BeatSample(Run.Num(Step, TEXT("k")), Run.Num(Step, TEXT("bpm")), Run.Num(Step, TEXT("rate")));
+			Run.SameNumber(static_cast<double>(Got), Run.Field(Step, TEXT("sample")), StepLabel(I++, TEXT("beat sample")));
+		}
+	}
+
+	void CheckMusicPlan(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case)
+	{
+		const FGameKitMusicDirector Music(Run.Obj(Case, TEXT("params")));
+		int32 I = 0;
+		for (const TSharedPtr<FJsonObject>& Step : Run.Steps(Case))
+		{
+			const FGameKitMusicPlan P = Music.Plan(Run.Text(Step, TEXT("from")), static_cast<int64>(Run.Num(Step, TEXT("since"))),
+			                                       static_cast<int64>(Run.Num(Step, TEXT("entry"))), Run.Text(Step, TEXT("to")),
+			                                       static_cast<int64>(Run.Num(Step, TEXT("now"))));
+			const TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
+			O->SetField(TEXT("switch_at"), MakeNumber(static_cast<double>(P.SwitchAt)));
+			O->SetField(TEXT("from_stop_at"), MakeNumber(static_cast<double>(P.FromStopAt)));
+			O->SetField(TEXT("fade"), MakeNumber(static_cast<double>(P.Fade)));
+			O->SetField(TEXT("to_offset"), MakeNumber(static_cast<double>(P.ToOffset)));
+			O->SetField(TEXT("to_start_at"), MakeNumber(static_cast<double>(P.ToStartAt)));
+			O->SetField(TEXT("stinger"), P.Stinger.IsSet() ? MakeString(P.Stinger.GetValue()) : MakeNull());
+			O->SetField(TEXT("stinger_at"), P.StingerAt.IsSet() ? MakeNumber(static_cast<double>(P.StingerAt.GetValue())) : MakeNull());
+			Run.SameValue(MakeObject(O), Run.Field(Step, TEXT("expect")), StepLabel(I++, TEXT("plan")));
+		}
+	}
+
+	void CheckAccessGains(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case)
+	{
+		int32 I = 0;
+		for (const TSharedPtr<FJsonObject>& Step : Run.Steps(Case))
+		{
+			const TSharedPtr<FJsonObject> Buses = Run.Obj(Step, TEXT("buses"));
+			const TSharedPtr<FJsonObject> Sliders = Run.Obj(Step, TEXT("sliders"));
+			Run.SameValue(GainsAsJson(GameKit::Audio::UserBusGains(Buses, Sliders)), Run.Field(Step, TEXT("expect")),
+			              StepLabel(I++, TEXT("gains")));
+		}
+	}
+
+	void CheckAccessArrow(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case)
+	{
+		int32 I = 0;
+		for (const TSharedPtr<FJsonObject>& Step : Run.Steps(Case))
+		{
+			const double Dx = Run.Num(Step, TEXT("dx")), Dy = Run.Num(Step, TEXT("dy"));
+			const double W = Run.Num(Step, TEXT("half_w")), H = Run.Num(Step, TEXT("half_h"));
+			Run.SameNumber(GameKit::Audio::CaptionDirection(Dx, Dy, W, H), Run.Field(Step, TEXT("dir")), StepLabel(I, TEXT("dir")));
+			Run.SameText(GameKit::Audio::CaptionArrow(Dx, Dy, W, H), Run.Field(Step, TEXT("arrow")), StepLabel(I, TEXT("arrow")));
+			++I;
+		}
+	}
+
 	// ---- Case types per file: a type missing here fails its cases ----
 	using FGoldenCheck = void (*)(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case);
 
@@ -582,6 +701,10 @@ namespace GameKitGoldenTests
 		{TEXT("glyph_set"), CheckGlyphSet}, {TEXT("glyph_name"), CheckGlyphName}, {TEXT("prompt_binding"), CheckPromptBinding},
 		{TEXT("save_load"), CheckSaveLoad}, {TEXT("tr"), CheckTr}, {TEXT("plural"), CheckPlural}, {TEXT("pseudo"), CheckPseudo},
 	};
+
+	const FGoldenType AudioTypes[] = {{TEXT("audio_director"), CheckAudioDirector}};
+	const FGoldenType MusicTypes[] = {{TEXT("music_grid"), CheckMusicGrid}, {TEXT("music_plan"), CheckMusicPlan}};
+	const FGoldenType AccessTypes[] = {{TEXT("access_gains"), CheckAccessGains}, {TEXT("access_arrow"), CheckAccessArrow}};
 
 	template <int32 N>
 	const FGoldenType* FindGoldenType(const FGoldenType (&Types)[N], const FString& Type)
@@ -731,12 +854,51 @@ bool FGameKitGoldenShellTest::RunTest(const FString& Parameters)
 	return GameKitGoldenTests::RunGoldenCase(*this, GameKitGoldenTests::ShellFile, GameKitGoldenTests::ShellTypes, Parameters);
 }
 
+IMPLEMENT_COMPLEX_AUTOMATION_TEST(FGameKitGoldenAudioTest, "GameKit.Golden.Audio", GameKitGoldenTests::GoldenTestFlags)
+
+void FGameKitGoldenAudioTest::GetTests(TArray<FString>& OutBeautifiedNames, TArray<FString>& OutTestCommands) const
+{
+	GameKitGoldenTests::ListGoldenCases(GameKitGoldenTests::AudioFile, OutBeautifiedNames, OutTestCommands);
+}
+
+bool FGameKitGoldenAudioTest::RunTest(const FString& Parameters)
+{
+	return GameKitGoldenTests::RunGoldenCase(*this, GameKitGoldenTests::AudioFile, GameKitGoldenTests::AudioTypes, Parameters);
+}
+
+IMPLEMENT_COMPLEX_AUTOMATION_TEST(FGameKitGoldenMusicTest, "GameKit.Golden.Music", GameKitGoldenTests::GoldenTestFlags)
+
+void FGameKitGoldenMusicTest::GetTests(TArray<FString>& OutBeautifiedNames, TArray<FString>& OutTestCommands) const
+{
+	GameKitGoldenTests::ListGoldenCases(GameKitGoldenTests::MusicFile, OutBeautifiedNames, OutTestCommands);
+}
+
+bool FGameKitGoldenMusicTest::RunTest(const FString& Parameters)
+{
+	return GameKitGoldenTests::RunGoldenCase(*this, GameKitGoldenTests::MusicFile, GameKitGoldenTests::MusicTypes, Parameters);
+}
+
+IMPLEMENT_COMPLEX_AUTOMATION_TEST(FGameKitGoldenAccessTest, "GameKit.Golden.Access", GameKitGoldenTests::GoldenTestFlags)
+
+void FGameKitGoldenAccessTest::GetTests(TArray<FString>& OutBeautifiedNames, TArray<FString>& OutTestCommands) const
+{
+	GameKitGoldenTests::ListGoldenCases(GameKitGoldenTests::AccessFile, OutBeautifiedNames, OutTestCommands);
+}
+
+bool FGameKitGoldenAccessTest::RunTest(const FString& Parameters)
+{
+	return GameKitGoldenTests::RunGoldenCase(*this, GameKitGoldenTests::AccessFile, GameKitGoldenTests::AccessTypes, Parameters);
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitGoldenCoverageTest, "GameKit.Golden.Coverage", GameKitGoldenTests::GoldenTestFlags)
 
 bool FGameKitGoldenCoverageTest::RunTest(const FString&)
 {
 	GameKitGoldenTests::CheckCoverage(*this, GameKitGoldenTests::JuiceFile, GameKitGoldenTests::JuiceTypes);
 	GameKitGoldenTests::CheckCoverage(*this, GameKitGoldenTests::ShellFile, GameKitGoldenTests::ShellTypes);
+	GameKitGoldenTests::CheckCoverage(*this, GameKitGoldenTests::AudioFile, GameKitGoldenTests::AudioTypes);
+	GameKitGoldenTests::CheckCoverage(*this, GameKitGoldenTests::MusicFile, GameKitGoldenTests::MusicTypes);
+	GameKitGoldenTests::CheckCoverage(*this, GameKitGoldenTests::AccessFile, GameKitGoldenTests::AccessTypes);
 	return true;
 }
 

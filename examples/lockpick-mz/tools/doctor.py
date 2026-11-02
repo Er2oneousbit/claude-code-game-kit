@@ -56,7 +56,7 @@ REQUIRED = [
 PLACEHOLDER_RE = re.compile(r"\{\{(?:GAME_NAME|GAME_SLUG|ENGINE|ENGINE_LABEL|DATE|AUTHOR)\}\}")
 TEXT_EXT = {".md", ".json", ".py", ".txt", ".toml", ".cfg", ".yml", ".yaml"}
 HANDOFF_STALE_DAYS = 14
-MEDIA_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".tga", ".psd", ".aseprite", ".ogg", ".wav", ".mp3",
+MEDIA_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".tga", ".psd", ".aseprite", ".pxo", ".ogg", ".wav", ".mp3",
              ".flac", ".aif", ".aiff", ".ttf", ".otf", ".woff", ".woff2", ".glb", ".gltf", ".fbx", ".obj", ".blend"}
 # Template files legitimately mention placeholders in prose (they document them).
 PLACEHOLDER_ALLOWED = {"tools/doctor.py", "scripts/new_game.py"}

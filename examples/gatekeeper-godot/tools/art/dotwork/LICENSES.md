@@ -34,6 +34,7 @@ licences can change upstream.
 | ComfyUI-GGUF | Apache-2.0 | its loader node runs inside your ComfyUI |
 | Godot 4 | MIT | runs headless against your game (import, map painting, verify) |
 | Aseprite (optional) | proprietary | runs headless for the hand-polish round trip |
+| Pixelorama (optional) | MIT | never run by Dotwork: Dotwork reads and writes its `.pxo` files itself (the layout was read from Pixelorama's source; none of its code is in Dotwork) |
 
 ## Dotwork's own files
 `glyphs/*.txt` (pixel fonts authored as text), `palettes/*.hex` (extracted from dotwork's own renders), the material

@@ -65,7 +65,7 @@ GITHUB_WARN_LIMIT = 50 * 1024 * 1024    # and warns over 50 MB
 MAX_TEXT_SCAN = 2 * 1024 * 1024         # skip content scans of larger files (assets, not config)
 SNIFF_BYTES = 8192                      # a NUL in this much of the start marks a file as binary
 # Media and other binary formats: an unscanned big one is expected, a big text file (a log, a dump) is reported
-MEDIA_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tga", ".tif", ".tiff", ".webp", ".psd", ".kra", ".aseprite",
+MEDIA_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tga", ".tif", ".tiff", ".webp", ".psd", ".kra", ".aseprite", ".pxo",
               ".ase", ".exr", ".hdr", ".dds", ".ktx", ".ktx2", ".basis", ".ico", ".icns", ".svgz",
               ".wav", ".ogg", ".mp3", ".flac", ".opus", ".m4a", ".aiff", ".aif", ".mid", ".midi", ".bank", ".wem",
               ".mp4", ".webm", ".mov", ".avi", ".mkv", ".ogv",

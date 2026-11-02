@@ -11,6 +11,8 @@
 #           python tools/art/dotwork/dotwork.py audition --name guard --clip walk_e --seeds 8101 8102 8103
 #           python tools/art/dotwork/dotwork.py materials [--only cobble sand] | palette extract "assets_src/*.png" ...
 #           python tools/art/dotwork/dotwork.py verify | aseprite [--reexport] | preview battle|title|attack ... | log
+#           python tools/art/dotwork/dotwork.py pixelorama [--overwrite] | pixelorama --reexport   # hand polish
+#           python tools/art/dotwork/dotwork.py qa pack [--json OUT] [--lineup OUT.png]   # style check, read only
 #           Global: --project GAME (default: current folder), --config FILE, --engine godot|none, --debug
 # Notes   : Needs ComfyUI (local, http://127.0.0.1:8188 by default) with the SpriteKiln and GGUF node packs and the
 #           models in models.lock.json; Godot 4 for maps and verify. README.md walks through setup and every lane.
@@ -30,7 +32,8 @@ import fcore  # noqa: E402
 
 LANES = ("props", "effects", "tiles", "ui", "icons", "portraits", "tools", "img2px", "fonts", "battle_bgs", "enemies",
          "windows", "balloons", "scenes", "hitfx", "spells", "animprops", "vehicles", "widgets", "transitions", "weather",
-         "status", "npcs", "platforms", "iso")
+         "status", "npcs", "platforms", "iso", "uikit", "store", "screens", "bdf", "diorama", "vfx", "lighting")
+LATE = ("lighting",)   # lanes that read what the others made: they run after every other lane, ground included
 
 
 # ---- binding -------------------------------------------------------------------------
@@ -166,7 +169,7 @@ def cmd_pack(a):
             for e in spec["characters"]:
                 lane_character.Character(e, s.project, man, conf).run()
         for lane in LANES:
-            if spec.get(lane):
+            if spec.get(lane) and lane not in LATE:
                 where = lane
                 mod = __import__(f"lane_{lane}")
                 mod.run(spec[lane], s.project, man, conf)
@@ -180,6 +183,10 @@ def cmd_pack(a):
                 scene, summary = mapbuild.build(m, built, s.project, conf)
                 man.add(scene, "scene", node="Node2D + TileMapLayers", layers=summary, tileset=built["res"],
                         note="painted by Godot's terrain solver from an ASCII map (mapbuild)")
+        for lane in LATE:
+            if spec.get(lane):
+                where = lane
+                __import__(f"lane_{lane}").run(spec[lane], s.project, man, conf)
     except KeyError as exc:   # a key a lane needs is not in the entry: say so instead of "unexpected failure"
         if fcore.DEBUG:
             raise
@@ -293,6 +300,19 @@ def cmd_verify(a):
     return 0
 
 
+def cmd_capture(a):
+    s = setup_run(a)
+    if not s.godot():
+        raise fcore.ToolError("capture records a Godot scene; with --engine none there is no scene to run")
+    import capture
+    r = capture.run(s, a.scene, a.frames, a.fps, capture.parse_size(a.size) if a.size else None, a.out, a.gif)
+    print(f"[ OK ] capture: {r['frames']} frames at {r['fps']} fps in {r['out']}; first and last frame differ in "
+          f"{r['first_last_changed_px']} px; strip {r['strip']}" + (f"; gif {r['gif']}" if r.get("gif") else ""))
+    if not r["first_last_changed_px"]:
+        print("[warn] the first and last frame are identical: nothing moved (a still scene, or too few frames)")
+    return 0
+
+
 def cmd_aseprite(a):
     s = setup_run(a)
     import aseprite
@@ -304,6 +324,24 @@ def cmd_aseprite(a):
         return 0
     files = aseprite.build(s.project, s.conf)
     print(f"[ OK ] {len(files)} .aseprite files under {os.path.join(s.src, 'aseprite')}")
+    return 0
+
+
+def cmd_pixelorama(a):
+    s = setup_run(a)
+    import pixelorama
+    if a.reexport:
+        r = pixelorama.reexport(s.project, s.conf)
+        if r and not r["ok"]:
+            raise fcore.JobError("re-exported files failed verify")
+        print("[ OK ] re-exported and verified")
+        return 0
+    done = pixelorama.build(s.project, s.conf, overwrite=a.overwrite)
+    where = os.path.join(s.src, "pixelorama")
+    print(f"[ OK ] {len(done['written'])} .pxo files written, {len(done['unchanged'])} unchanged, under {where}")
+    for p in done["kept"]:
+        print(f"[warn] kept {os.path.relpath(p, s.project)}: it differs from the game's frames (hand polish not "
+              "re-exported yet, or newer art in the game); --overwrite replaces it with the game's frames")
     return 0
 
 
@@ -354,6 +392,20 @@ def cmd_log(a):
     s = setup_run(a)
     import asset_log
     return asset_log.run(s, a)
+
+
+def cmd_qa(a):
+    s = setup_run(a, game=False)   # read only: creates no work folder
+    s.require_game()
+    import qa_pack
+    return qa_pack.run(s, a)
+
+
+def cmd_fonts_check(a):
+    """Font coverage (fontcheck.py): every character of the strings files must be in the font. Writes nothing and
+    needs no Dotwork config: the font is a glyph file or a built .fnt, the strings any UTF-8 JSON, CSV, PO or text."""
+    import fontcheck
+    return fontcheck.cmd(a, os.path.abspath(a.project), HERE)
 
 
 def cmd_config(a):
@@ -471,9 +523,26 @@ def build_parser():
     p = sub.add_parser("verify", parents=[common], help="prove this game's Dotwork assets load (Godot)")
     p.set_defaults(fn=cmd_verify)
 
+    p = sub.add_parser("capture", parents=[common], help="record a scene with Godot's Movie Maker (trailer frames)")
+    p.add_argument("--scene", required=True, help="res:// path or a path in the game of the scene to record")
+    p.add_argument("--frames", type=int, default=90, help="frames to write (default 90)")
+    p.add_argument("--fps", type=int, default=30, help="fixed frame rate (default 30)")
+    p.add_argument("--size", help="window size WIDTHxHEIGHT (default: the project's; a game that stretches its "
+                   "viewport still writes frames at the viewport size)")
+    p.add_argument("--out", help="folder in the game for the PNGs (default <src_dir>/captures/<scene>)")
+    p.add_argument("--gif", action="store_true", help="also write a GIF of the capture")
+    p.set_defaults(fn=cmd_capture)
+
     p = sub.add_parser("aseprite", parents=[common], help="editable .aseprite sources / re-export after hand polish")
     p.add_argument("--reexport", action="store_true", help="push hand-polished .aseprite files back into the game")
     p.set_defaults(fn=cmd_aseprite)
+
+    p = sub.add_parser("pixelorama", parents=[common],
+                       help="editable Pixelorama .pxo sources / re-export after hand polish (no Pixelorama install needed)")
+    p.add_argument("--reexport", action="store_true", help="push hand-polished .pxo files back into the game")
+    p.add_argument("--overwrite", action="store_true",
+                   help="replace a .pxo that differs from the game's frames (it may hold hand polish)")
+    p.set_defaults(fn=cmd_pixelorama)
 
     # add_help=False: "preview battle --help" reaches the battle module, which lists its own flags (--char, --bg ...)
     p = sub.add_parser("preview", parents=[common], add_help=False,
@@ -486,6 +555,27 @@ def build_parser():
     p.add_argument("--pack", required=True, help="the pack name (spec \"name\")")
     p.add_argument("--dry-run", action="store_true", help="print the row, write nothing")
     p.set_defaults(fn=cmd_log)
+
+    p = sub.add_parser("qa", parents=[common], help="style check across the game's whole Dotwork asset set (read only)",
+                       description="qa pack: pixel scale, off-palette colours, outline, light direction, figure "
+                                   "height, contrast on the ground tiles and colour-blind separation over every PNG "
+                                   "the game's Dotwork manifests list. Exit 0 clean, 1 findings, 2 usage.")
+    p.add_argument("what", choices=["pack"], help="pack: every asset in the game's manifests")
+    p.add_argument("--json", metavar="OUT", help="also write every finding and measurement to this JSON file")
+    p.add_argument("--lineup", metavar="OUT.png", help="also write a lineup PNG: every character and prop at game "
+                   "scale on a ground tile, labelled, for a by-eye check")
+    p.set_defaults(fn=cmd_qa)
+
+    p = sub.add_parser("fonts-check", parents=[common], help="list characters a game's strings use that a font lacks "
+                                                             "(exit 1 when one is missing)")
+    p.add_argument("--font", required=True, help="a glyph file (glyphs/dialogue_latin.txt: as typed, Dotwork's "
+                   "folder, then the game) or a built .fnt")
+    p.add_argument("--strings", nargs="+", required=True, metavar="FILE",
+                   help="strings files: JSON (string values at any depth), CSV (Godot translation CSV: keys,en,fr), "
+                        "PO / POT, or text (one string per line)")
+    p.add_argument("--caps-only", action="store_true", help="as the spec key: lowercase is drawn with the capitals "
+                   "(title fonts)")
+    p.set_defaults(fn=cmd_fonts_check)
 
     p = sub.add_parser("config", parents=[common], help="print the merged settings")
     p.set_defaults(fn=cmd_config)

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # ---------------------------------------------------------------------------
 # godot.py
-# Purpose : write Godot 4 text resources (format 3): SpriteFrames, additive material, effect / sprite / prop scenes,
-#           TileSets (one terrain set, or layered with probability, animation and per-tile collision).
+# Purpose : write Godot 4 text resources (format 3): SpriteFrames (with per-frame durations for holds), additive
+#           material, effect / sprite / prop scenes, TileSets (one terrain set, or layered with probability, animation
+#           and per-tile collision).
 # Usage   : imported by the lanes; ENABLED = False (--engine none) turns every writer into a no-op
 # Notes   : Never writes .godot/, *.import or *.uid: Godot creates those on import.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -35,17 +36,33 @@ def _write(path, text):
     return path
 
 
+def duration(d):
+    """A SpriteFrames frame duration as Godot writes it: 1.0, 2.0, 1.5 (relative: the frame shows d / speed seconds)."""
+    d = float(d)
+    if not d > 0:
+        raise ValueError(f"frame duration {d}: must be above 0")
+    s = f"{d:.3f}".rstrip("0")
+    return s + "0" if s.endswith(".") else s
+
+
 def sprite_frames(path, res_dir, animations):
-    """animations: {name: (list_of_png_basenames, fps, loop)}; textures live in res_dir (a res:// folder)."""
+    """animations: {name: (list_of_png_basenames, fps, loop)} or (files, fps, loop, durations): one relative duration
+    per frame (holds: 2.0 shows a frame twice as long; None or no fourth item is 1.0 each, as before); textures live in
+    res_dir (a res:// folder)."""
     ext, anims, n = [], [], 0
-    for name, (files, fps, loop) in animations.items():
+    for name, anim in animations.items():
+        files, fps, loop = anim[:3]
+        durs = anim[3] if len(anim) > 3 else None
+        if durs and len(durs) != len(files):
+            raise ValueError(f"animation {name}: {len(durs)} durations for {len(files)} frames")
         refs = []
         for fn in files:
             n += 1
             rid = f"{n}_{name}"
             ext.append(f'[ext_resource type="Texture2D" path="{res_dir.rstrip("/")}/{fn}" id="{rid}"]')
             refs.append(rid)
-        fr = ", ".join('{\n"duration": 1.0,\n"texture": ExtResource("%s")\n}' % r for r in refs)
+        fr = ", ".join('{\n"duration": %s,\n"texture": ExtResource("%s")\n}' % (duration(durs[i]) if durs else "1.0", r)
+                       for i, r in enumerate(refs))
         anims.append('{\n"frames": [%s],\n"loop": %s,\n"name": &"%s",\n"speed": %.1f\n}'
                      % (fr, "true" if loop else "false", name, fps))
     text = (f'[gd_resource type="SpriteFrames" load_steps={len(ext) + 1} format=3]\n\n' + "\n".join(ext) +

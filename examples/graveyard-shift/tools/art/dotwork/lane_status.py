@@ -44,11 +44,11 @@ GLYPHS = {   # small bitmaps: '#' main colour, '+' highlight, '-' shade
     "silence": [".#######.", "#.......#", "#..#.#..#", "#...#...#", "#..#.#..#", "#.......#", ".###.###.",
                 "....#...."],
 }
-KINDS = {   # main colour hint, drawing
+KINDS = {   # main colour hint, drawing (as drawn on the palette, no two marks collapse for a colour-blind player)
     "poison": ("8ad048", "rise_bubbles"), "sleep": ("d8e4ff", "rise_z"), "haste": ("f8d040", "chevrons_up"),
     "slow": ("6aa0f0", "chevrons_down"), "stop": ("c8ccd8", "clock"), "blind": ("6a6478", "smoke"),
     "regen": ("78e080", "rise_sparkles"), "berserk": ("e83a30", "vein"), "confuse": ("f8e070", "orbit_stars"),
-    "silence": ("e8e8f0", "silence"), "doom": ("b090d0", "skull"), "burn": ("f08a30", "flames"),
+    "silence": ("e8e8f0", "silence"), "doom": ("b090d0", "skull"), "burn": ("c76500", "flames"),
     "freeze": ("a0e0f8", "crystals"), "protect": ("70a8ff", "ring"), "shell": ("80e098", "ring"),
     "petrify": ("a8a4a0", "fall_flakes"),
 }

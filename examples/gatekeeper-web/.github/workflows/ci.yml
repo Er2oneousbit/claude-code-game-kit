@@ -109,6 +109,14 @@ jobs:
       - name: Golden vectors are current
         run: python tools/golden_vectors.py --check
 
+      - name: Audio director vectors are current
+        run: python tools/audio/wavesmith/wavesmith.py events vectors --check
+
+      - name: Music director vectors are current
+        run: python tools/audio/wavesmith/wavesmith.py music vectors --check
+      - name: Audio accessibility vectors are current
+        run: python tools/audio/wavesmith/wavesmith.py access vectors --check
+
       - name: Credits match the asset log
         run: |
           if [ -f CREDITS.md ]; then python tools/credits.py --check --allow-placeholders; else echo "No CREDITS.md yet: run python tools/credits.py before the first release"; fi

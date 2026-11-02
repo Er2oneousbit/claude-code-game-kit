@@ -4,12 +4,14 @@
 //           player's settings (subtitles on/off, size, background, speaker names, barks, sound captions).
 // Usage   : shell.subtitles.say("demo.welcome")          // typewriter (default) or { typewriter: false } for cues
 //           shell.subtitles.caption("hit")               // "[thud]" when access.captions_sfx is on
+//           shell.subtitles.caption("growl", { dx, dy, halfW, halfH })   // "← [growl]" from off screen, left
 //           shell.subtitles.finish()                     // reveal the whole line now (screenshots)
 // Notes   : Browser only (DOM), no Phaser. Bundles every data/dialogue/*.built.json at build time (Vite glob);
 //           a later file's line id wins. In locale "pseudo" the text runs through pseudo(), so the bar's
 //           layout gets the same overflow check as the menus. Unknown fields in the files are ignored.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
+import { captionArrow } from "../core/audioAccess";
 import { cueAt, dialogueFrom, lineLife, revealCount, shouldShow, type Caption, type DialogueLine } from "../core/dialogue";
 import { PSEUDO_LOCALE, pseudo } from "../core/i18n";
 import { Log } from "../core/log";
@@ -76,11 +78,16 @@ export class SubtitleBar {
     return true;
   }
 
-  /** A sound caption ("[thud]") for an audio event id, shown at least its min_s. */
-  caption(id: string): boolean {
+  /** A sound caption ("[thud]") for an audio event id, shown at least its min_s. A caption marked directional
+   *  gets an arrow when `from` (the source's offset from the view centre, and the view's half size) is off screen. */
+  caption(id: string, from?: { dx: number; dy: number; halfW: number; halfH: number }): boolean {
     const c = this.data.captions[id];
     if (!c || !this.shell.settings.access.captions_sfx) return false;
-    const root = el("div", "sub caption", this.text(c.text));
+    const arrow = c.directional && from ? captionArrow(from.dx, from.dy, from.halfW, from.halfH) : "";
+    const label = this.text(c.text);
+    // the arrow sits on the side the sound comes from: left-pointing arrows before the text, the rest after it
+    const shown = !arrow ? label : "←↖↙".includes(arrow) ? `${arrow} ${label}` : `${label} ${arrow}`;
+    const root = el("div", "sub caption", shown);
     root.dataset.id = `caption.${id}`;
     this.mark(root);
     this.host.append(root);

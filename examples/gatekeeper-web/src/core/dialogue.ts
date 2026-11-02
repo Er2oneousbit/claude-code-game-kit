@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // dialogue.ts
-// Purpose : Reads dialogue.built.json (the kit's dialogue format v0, written by the dialogue tools in tools/audio
-//           or by hand) and answers what a subtitle bar or typewriter shows at a given time.
+// Purpose : Reads dialogue.built.json (the kit's dialogue format v0, written by Wavesmith's dialogue subcommand,
+//           tools/audio/wavesmith, or by hand) and answers what a subtitle bar or typewriter shows at a given time.
 // Usage   : const d = parseDialogue(jsonText)                  // throws on a file that is not v0-shaped
 //           const d = dialogueFrom(parsedObject)               // the same for JSON a bundler already parsed
 //           const line = d.lines["baker.greet"]
@@ -24,7 +24,7 @@ export type DialogueLine = {
   id: string; speaker: string; name: string; color: string; text: string; kind: "line" | "bark";
   priority: number; durationS: number; reveal: { i: number; t: number }[]; cues: Cue[]; audio?: string;
 };
-export type Caption = { text: string; priority: number; minS: number };
+export type Caption = { text: string; priority: number; minS: number; directional: boolean };
 export type Dialogue = { locale: string; lines: Record<string, DialogueLine>; captions: Record<string, Caption> };
 
 const str = (v: unknown, d = "") => (typeof v === "string" ? v : d);
@@ -52,7 +52,7 @@ export function dialogueFrom(raw: unknown): Dialogue {
   const captions: Record<string, Caption> = {};
   if (isObject(raw.captions)) {
     for (const [id, c] of Object.entries(raw.captions)) {
-      if (isObject(c) && typeof c.text === "string") captions[id] = { text: c.text, priority: num(c.priority, 30), minS: num(c.min_s, 1) };
+      if (isObject(c) && typeof c.text === "string") captions[id] = { text: c.text, priority: num(c.priority, 30), minS: num(c.min_s, 1), directional: c.directional === true };
     }
   }
   return { locale: str(raw.locale, "en"), lines, captions };

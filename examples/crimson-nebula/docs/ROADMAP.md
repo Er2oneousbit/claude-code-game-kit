@@ -16,7 +16,7 @@
 
 ## Parking lot (ideas, no commitment)
 - A minimap that shows where the next change is
-- Sound: engine hum, zap, boost whoosh (`tools/audio/sfx_synth.py`)
+- Sound: engine hum, zap, boost whoosh (`tools/audio/wavesmith/sfx_synth.py`)
 
 ## Milestones
 Scope, not dates. `/next-tier` moves the game from one tier to the next; after the slice, `docs/PRODUCTION.md` holds the

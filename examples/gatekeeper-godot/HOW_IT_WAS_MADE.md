@@ -69,7 +69,7 @@ A 1.5B model asked for two jobs at once does both badly; one job per call fixed 
 Bram's lines are written while you play, so recorded voice files cannot match them: the voice has to be made live.
 `scripts/game/guard_voice.gd` sends each guard line to Fish Audio's text-to-speech API and plays the MP3 that comes
 back. The key is the player's own, read from `FISH_API_KEY` at runtime, so nothing secret is in the project or a build.
-- Built in this order: the kit tool first (`python tools/audio/fish_tts.py check`, `voices --licensed`, one `say` line),
+- Built in this order: the kit tool first (`python tools/audio/wavesmith/fish_tts.py check`, `voices --licensed`, one `say` line),
   which showed that the paid model draws on a separate API balance, so the free model `s2.1-pro-free`
   became the default; and that "licensed" voices still include imitations of real people, so the default is an
   original-sounding one ("Calm Reflective Male").
@@ -79,11 +79,11 @@ back. The key is the player's own, read from `FISH_API_KEY` at runtime, so nothi
   `Tuning.VOICE_DRAIN_S`.
 - Checked by ear, without ears: Godot's movie writer recorded a windowed run, and the recording holds 14.5 s of sound
   where the log reports 14.4 s of speech, with a speech-like spectrum. A first analysis said "white noise": the movie
-  writer records 32-bit samples and they had been read as 16-bit. The kit's `tools/audio/wavfile.py` reads 32-bit now.
+  writer records 32-bit samples and they had been read as 16-bit. The kit's `tools/audio/wavesmith/wavfile.py` reads 32-bit now.
 
 ### Later: generated sound (ElevenLabs)
 The user asked for API audio in the other example games (2026-10-23), after Graveyard Shift had it. The Kenney sounds
-were replaced by sound effects generated with the kit's `tools/audio/eleven_audio.py`, plus an ambience loop the game
+were replaced by sound effects generated with the kit's `tools/audio/wavesmith/eleven_audio.py`, plus an ambience loop the game
 never had. Every file is a PLACEHOLDER (non-commercial terms) in `docs/ASSET_LOG.md` (credit in the README); the old
 Kenney rows stay, marked removed. Every file was measured before use (peak, loudness, silence at the start, the jump at
 a loop's seam, flat-topped samples), then peak-normalized: one-shots to -3 dBFS, loops to -6 (the log says Modified, the

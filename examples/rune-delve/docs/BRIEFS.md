@@ -74,6 +74,10 @@ Direct sprite-sheet prompts failed for days. What worked, in order:
 Input: one clean front-view concept image (plain background, neutral pose), or: "[SUBJECT], game asset, [ART_STYLE], neutral pose, no base, no background"
 ```
 - Treat output as a **draft**: expect to retopologize, fix UVs, and rebuild materials (`SOP-11`).
+- Local image-to-3D on your own GPU was tested and is not recommended yet: TRELLIS needed changes to run offline on a
+  16 GB card and its shapes from pixel art were wrong, TRELLIS.2 needs 24 GB, and Hunyuan3D 2.0's licence excludes
+  the EU, UK and South Korea (E109, E111, E112; `tools/art/dotwork/README.md` "Image to 3D"). For 2.5D, use
+  Dotwork's `diorama` lane.
 - Decide poly target and format before generating. Export glTF/GLB when offered.
 - Reject if: baked lighting in textures, non-manifold or messy topology, wrong scale or pivot, fused limbs.
 - Kit pieces: generate PARTS (walls, towers, flags, banners as separate pieces) and assemble in Blender, instead of whole buildings. Flags separate so team color is a material swap **(one video, E16)**.
@@ -164,7 +168,7 @@ Starter set (swap the palette, keep the shape):
 | Game over | sad, 70 BPM, short, clean ending | `[Short Outro] [End]` |
 
 - Suno does not obey length or "seamless loop" (same lesson as E10 above). Cut a clean 8 or 16 bar loop in an editor, or
-  `python tools/audio/wavfile.py loop <download>.wav --start <intro s> --end <outro s> --crossfade 2`, and test it in engine.
+  `python tools/audio/wavesmith/wavesmith.py wav loop <download>.wav --start <intro s> --end <outro s> --crossfade 2`, and test it in engine.
 - Suno has no official public API (2026-10). Third-party "Suno API" sites sell their own credits; output made there is not
   covered by your Suno plan's rights. Use the web app.
 - Retro: "chiptune" alone may come back modern. Name the sound ("square wave lead, triangle bass, noise drums") and exclude "orchestral, live drums, reverb".

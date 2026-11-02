@@ -5,11 +5,14 @@
 # Usage   : var bar := SubtitleBar.new(); hud_root.add_child(bar)
 #           bar.play("guide.intro")               # a line id from data/dialogue/sample.built.json
 #           bar.caption("box_hit")                # an SFX caption ("[box thuds]"), only with captions_sfx on
+#           bar.caption("growl", {"dx": dx, "dy": dy, "half_w": hw, "half_h": hh})   # "← [growl]" from off screen, left
 #           bar.typewriter = true                 # reveal letter by letter (from the file's reveal times)
 # Notes   : Classic mode shows the file's cues (at most two lines of about 42 characters each); typewriter mode
 #           shows the whole text as it is revealed. Barks (kind "bark") appear only with subtitle_barks on. Time
 #           runs on the frame delta, so pausing the game pauses the line. Text from the file goes through
 #           Shell.content(), so the pseudo locale marks it too. Not colour alone: the speaker name is text.
+#           A caption marked "directional": true in the file gets an arrow (AudioAccess.caption_arrow) while its
+#           source is off screen: `from` is the source's offset from the view centre and the view's half size.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 class_name SubtitleBar
@@ -87,15 +90,27 @@ func play(id: String) -> bool:
 	return true
 
 
-func caption(event_id: String) -> bool:
+func caption(event_id: String, from: Dictionary = {}) -> bool:
+	# A sound caption for an audio event id; `from` (dx, dy, half_w, half_h) adds the arrow for a directional one
 	if not bool(Shell.access("captions_sfx")):
 		return false
 	var entry: Dictionary = DialogueData.caption(dialogue, event_id)
 	if entry.is_empty():
 		return false
-	_caption.text = Shell.content(str(entry.get("text", "")))
+	var arrow: String = ""
+	if typeof(entry.get("directional")) == TYPE_BOOL and entry["directional"] and _has_offset(from):
+		arrow = AudioAccess.caption_arrow(float(from["dx"]), float(from["dy"]), float(from["half_w"]),
+				float(from["half_h"]))
+	_caption.text = AudioAccess.with_arrow(Shell.content(str(entry.get("text", ""))), arrow)
 	_caption_left = maxf(CAPTION_MIN_S, float(entry.get("min_s", CAPTION_MIN_S)))
 	_caption.show()
+	return true
+
+
+func _has_offset(from: Dictionary) -> bool:
+	for key: String in ["dx", "dy", "half_w", "half_h"]:
+		if not GameSettings.is_num(from.get(key)):
+			return false
 	return true
 
 

@@ -5,7 +5,9 @@
 #           that Godot imports as a FontFile. No model: glyphs are authored as text.
 # Usage   : pack spec "fonts": [{"name": "dialogue", "glyphs": "glyphs/dialogue.txt", "scale": 2, "effect":
 #           "shadow"}]
-# Notes   : effect shadow | outline | none; gradient brass | steel | copper | [hex...]; caps_only; export {char: file}.
+# Notes   : effect shadow | outline | none; gradient brass | steel | copper | [hex...]; caps_only; export {char: file};
+#           check [strings files in the game]: every character they use must be in the font, or the pack fails
+#           (fontcheck.py; also `dotwork.py fonts-check`). glyphs/*_latin.txt add Latin-1 + Latin Extended-A.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 import os
@@ -20,6 +22,16 @@ SAMPLE = ["The quick brown fox jumps over the lazy dog.",
           "THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG!",
           "0123456789 ?!.,:;'\"()[]{}<>+-*/=%&#$@_~|\\^`",
           "Welcome to the mining town. Got any coin, kid?"]
+# extra preview lines for fonts that cover Latin-1 + Latin Extended-A; a line shows only when the font has every
+# character in it, so an ASCII font's preview is the same as before
+LATIN_SAMPLE = ["Ch\u00e2teau, cr\u00e8me br\u00fbl\u00e9e, gar\u00e7on, \u0153uvre, No\u00ebl, a\u00ff",
+                "Gr\u00f6\u00dfe B\u00e4ckerei, \u00dcbermut. \u00bfQu\u00e9 tal, se\u00f1or? \u00a1Ma\u00f1ana!",
+                "Za\u017c\u00f3\u0142\u0107 g\u0119\u015bl\u0105 ja\u017a\u0144. P\u0159\u00edli\u0161 "
+                "\u017elu\u0165ou\u010dk\u00fd k\u016f\u0148.",
+                "\u00c1rv\u00edzt\u0171r\u0151 t\u00fck\u00f6rf\u00far\u00f3g\u00e9p. \u00c7a\u011fr\u0131, "
+                "\u0131l\u0131k \u015feftali, \u0130yi!",
+                "\u00ab Oui \u00bb \u201eJa\u201c \u201cYes\u2026\u201d \u2013 1,50 \u20ac \u00a3 \u00a5 \u00a9 "
+                "\u00ae \u00b0 \u00b1 \u00d7 \u00f7"]
 
 
 def _lines(path, **kw):
@@ -49,6 +61,11 @@ def parse(path):
         if line.startswith("char "):
             close()
             cur, rows = line[5:], []
+            if len(cur) > 2 and cur.startswith("U+"):   # "char U+00A0": invisible characters by code point
+                try:
+                    cur = chr(int(cur[2:], 16))
+                except ValueError:
+                    raise ValueError(f"{path}: 'char {cur}' is not a code point (use U+ and hex digits, e.g. U+00A0)")
             if len(cur) != 1:
                 raise ValueError(f"{path}: 'char' needs exactly one character, got {cur!r}")
             continue
@@ -75,9 +92,10 @@ def _hex(h):
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4)) + (255,)
 
 
-def render_glyph(a, scale, effect, gradient=None, height=None):
+def render_glyph(a, scale, effect, gradient=None, height=None, top=0):
     """bool glyph -> RGBA (scaled, effect baked). Shadow/outline add 1 glyph px of room right/bottom (and left/top
-    for outline)."""
+    for outline). A gradient spans `height` rows from row `top` (a Latin font's accent rows take the first colour, so
+    its capitals keep the colours of the ASCII font)."""
     pad = 1 if effect in ("shadow", "outline") else 0
     lead = 1 if effect == "outline" else 0
     h, w = a.shape
@@ -101,7 +119,7 @@ def render_glyph(a, scale, effect, gradient=None, height=None):
         cols = [_hex(c) for c in (GRADIENTS[gradient] if isinstance(gradient, str) else gradient)]
         n = height or h
         for r in range(can.shape[0]):
-            k = min(len(cols) - 1, max(0, (r - lead) * len(cols) // n))
+            k = min(len(cols) - 1, max(0, (r - lead - top) * len(cols) // n))
             row = can[r] == 2
             rgba[r][row] = cols[k]
     else:
@@ -109,13 +127,29 @@ def render_glyph(a, scale, effect, gradient=None, height=None):
     return np.kron(rgba, np.ones((scale, scale, 1), np.uint8)), lead
 
 
+def caps_map(glyphs):
+    """caps_only: lowercase codes reuse the capitals (small-caps style). a-z as always, then every other capital the
+    font has (\u00c9 -> \u00e9, \u0141 -> \u0142) in file order. Only non-ASCII lowercase is added (\u0131 and \u017f
+    have ASCII capitals and are left out on purpose), so an ASCII title font gains no glyph."""
+    for c in "abcdefghijklmnopqrstuvwxyz":
+        if c not in glyphs and c.upper() in glyphs:
+            glyphs[c] = glyphs[c.upper()]
+    for u in [k for k in glyphs if ord(k) > 127 and k.isupper()]:
+        lo = u.lower()
+        if len(lo) == 1 and lo != u and ord(lo) > 127 and lo not in glyphs and lo.upper() == u:
+            glyphs[lo] = glyphs[u]
+    return glyphs
+
+
 def build(name, glyph_path, out_dir, scale=2, effect="shadow", gradient=None, caps_only=False):
     meta, glyphs = parse(glyph_path)
     if caps_only:  # title fonts: lowercase codes reuse the capitals (small-caps style)
-        for c in "abcdefghijklmnopqrstuvwxyz":
-            if c not in glyphs and c.upper() in glyphs:
-                glyphs[c] = glyphs[c.upper()]
-    rendered = {c: render_glyph(a, scale, effect, gradient, meta["height"]) for c, a in glyphs.items()}
+        caps_map(glyphs)
+    # glyph files may reserve accent rows above the capitals ("top") and rows under the baseline ("bottom"): a
+    # gradient spans the rows between, as in the font they extend
+    top, bottom = meta.get("top", 0), meta.get("bottom", 0)
+    rendered = {c: render_glyph(a, scale, effect, gradient, meta["height"] - top - bottom, top)
+                for c, a in glyphs.items()}
     # shelf-pack into a page 512 px wide
     W, x, y, row_h, pos = 512, 0, 0, 0, {}
     for c, (im, _) in rendered.items():
@@ -174,6 +208,7 @@ def run(entries, pack, man, conf):
     src = core.src(conf, "art", "ui", "fonts")
     os.makedirs(out, exist_ok=True)
     os.makedirs(src, exist_ok=True)
+    failed = []
     for e in entries:
         name = core.snake(e["name"])
         # Dotwork's own glyphs/ folder first ("glyphs/dialogue.txt"), then the game ("assets_src/fonts/runes.txt")
@@ -186,7 +221,9 @@ def run(entries, pack, man, conf):
         fnt, png, meta, rendered, line_h, glyphs = build(name, gp, out, scale, effect, e.get("gradient"),
                                                           bool(e.get("caps_only")))
         missing = [chr(c) for c in range(33, 127) if chr(c) not in rendered]
-        text = e.get("sample") or ([t for t in SAMPLE] if not missing else ["".join(sorted(rendered))])
+        latin = [t for t in LATIN_SAMPLE if set(t) <= set(rendered) | {" "}]
+        text = e.get("sample") or ([t for t in SAMPLE] + latin if not missing else ["".join(sorted(rendered))])
+        checked = check_strings(name, e.get("check"), rendered)
         pv = preview(rendered, glyphs, meta, scale, line_h, text, os.path.join(src, f"font_{name}_preview.png"))
         man.add(png, "font_page", font=f"font_{name}.fnt", scale=scale, effect=effect, routes=(),
                 workflow="Dotwork glyph tool (glyphs authored as text by Claude; no model)")
@@ -194,6 +231,7 @@ def run(entries, pack, man, conf):
                 baseline=meta["baseline"] * scale, effect=effect, scale=scale,
                 source=os.path.relpath(gp, core.HERE).replace("\\", "/"), preview=os.path.basename(pv),
                 missing_ascii="".join(missing) or None,
+                checked=checked and checked["files"], check_missing=checked and "".join(checked["missing"]),
                 gradient=e.get("gradient"), caps_only=bool(e.get("caps_only")),
                 usage="Godot: load as FontFile (theme font or LabelSettings.font); font size = line height; "
                       + ("colored ink (gradient): leave font_color white" if e.get("gradient")
@@ -210,3 +248,27 @@ def run(entries, pack, man, conf):
         core.log(f"font {name}: covers {len(rendered)} glyphs, scale {scale}, {effect}, line {line_h}px")
         if missing:
             core.dbg(f"font {name}: ASCII not covered {''.join(missing)!r} (also in the manifest: missing_ascii)")
+        if checked and checked["missing"]:
+            failed.append(f"{name} ({len(checked['missing'])})")
+    if failed:   # every font is built and in the manifest first, so the log lists every gap in one run
+        raise core.JobError(f"font check: characters the game's strings use are missing from {', '.join(failed)}; the "
+                            "lines above name each one with its languages and string ids (add the glyphs, or use a "
+                            "font that has them, e.g. glyphs/dialogue_latin.txt)")
+
+
+def check_strings(name, files, rendered):
+    """Spec "check": the game's strings files (JSON, CSV, PO or plain text, relative to the game) against the built
+    font. Logs one line per missing character with the languages and string ids that use it. None when not asked."""
+    if not files:
+        return None
+    import fontcheck
+    if isinstance(files, str):
+        files = [files]
+    if not isinstance(files, list) or not all(isinstance(f, str) for f in files):
+        raise core.ToolError(f'font {name}: check is a list of strings files in the game, e.g. ["assets/i18n/fr.json"]')
+    paths = [core.contained(f, core.PROJECT, what=f"font {name} check") for f in files]
+    res = fontcheck.check(set(rendered) | {" "}, paths)
+    shown = [f.replace("\\", "/") for f in files]
+    for line in fontcheck.report(res, f"font {name}", shown):
+        core.log(line)
+    return {"files": shown, "missing": list(res["missing"])}

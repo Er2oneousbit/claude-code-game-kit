@@ -60,7 +60,7 @@ Claude scopes work by this line (SOP-08 "Tiers"). Move it with `/next-tier` when
 | Enemies / obstacles | 3 AI rival karts; changing sections | not started |
 | Player abilities | drive, drift, use item | not started |
 | Music tracks | 0 for the toy; synthwave later | not started |
-| SFX sets | placeholders from `tools/audio/sfx_synth.py` | not started |
+| SFX sets | placeholders from `tools/audio/wavesmith/sfx_synth.py` | not started |
 
 ## Systems overview
 | System | One line | In the toy? |
