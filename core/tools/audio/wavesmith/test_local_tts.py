@@ -46,8 +46,9 @@ def tone(path, hz, seconds=0.6, rate=24000):
 sys.stderr.write("[worker] fake worker log line\n")
 if mode == "notorch":
     out({"ok": False, "missing": "torch", "error": "cannot import torch: No module named 'torch'"}); sys.exit(2)
-if mode == "nocuda":
+if mode == "nocuda" and req.get("device", "auto") == "cuda":
     out({"ok": False, "missing": "cuda", "torch": "2.9.0+cpu", "error": "torch 2.9.0+cpu sees no CUDA GPU"}); sys.exit(2)
+device = "cpu" if mode == "nocuda" else "cuda"
 if mode == "badjson":
     sys.stdout.write("Loading weights 100%\n"); sys.stdout.flush(); sys.exit(0)
 if mode == "crash":
@@ -58,7 +59,8 @@ if mode == "hang":
 if mode == "error":
     out({"error": "RuntimeError: CUDA error: device-side assert"}); sys.exit(1)
 if req["op"] == "check":
-    out({"ok": True, "torch": "2.14.1+cu130", "cuda": "13.0", "gpu": "Test GPU", "qwen_tts": "0.1.1", "python": "3.12.12"})
+    out({"ok": True, "torch": "2.14.1+cu130", "cuda": "13.0", "gpu": "Test GPU" if device == "cuda" else "none (CPU)",
+         "device": device, "qwen_tts": "0.1.1", "python": "3.12.12"})
 elif req["op"] == "design":
     out({"file": req["out"], "seconds": tone(req["out"], 220), "wall": 0.1})
 elif req["op"] == "say":
@@ -110,6 +112,17 @@ class LocalTtsExam(unittest.TestCase):
         return self.root / name
 
     # ---- environment
+    def test_without_a_gpu_auto_runs_on_the_cpu(self):
+        os.environ["FAKE_TTS_MODE"] = "nocuda"
+        rc, out = self.run_tool("check")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("runs on cpu", out)
+        self.assertIn("many times slower", out)
+        rc, out = self.run_tool("design", "a calm voice", "--out", "cpu_ref.wav")
+        self.assertEqual(rc, 0, out)
+        reqs = [r for r in self.requests() if r["op"] == "design"]
+        self.assertEqual(reqs[-1]["device"], "auto")
+
     def test_check_prints_versions(self):
         rc, out = self.run_tool("check")
         self.assertEqual(rc, 0, out)
@@ -132,11 +145,11 @@ class LocalTtsExam(unittest.TestCase):
     def test_no_torch_and_no_cuda_are_named(self):
         for mode, word in (("notorch", "(torch)"), ("nocuda", "(cuda)")):
             os.environ["FAKE_TTS_MODE"] = mode
-            rc, out = self.run_tool("check")
+            rc, out = self.run_tool("check", "--device", "cuda")
             self.assertEqual(rc, 2, out)
             self.assertIn(word, out)
             self.assertIn("Fix:", out)
-            rc, out = self.run_tool("design", "a voice", "--out", "x.wav")
+            rc, out = self.run_tool("design", "a voice", "--out", "x.wav", "--device", "cuda")
             self.assertEqual(rc, 2, f"design must name it too: {out}")
 
     # ---- design and say
@@ -343,7 +356,7 @@ class LocalTtsExam(unittest.TestCase):
         (env / "qwen_tts").mkdir(parents=True)
         (env / "torch.py").write_text(
             "import os\nprint('********')\nos.write(1, b'native banner on fd 1\\n')\n__version__ = '9.9.9+stub'\n"
-            "class version:\n    cuda = '13.0'\nbfloat16 = 'bf16'\n"
+            "class version:\n    cuda = '13.0'\nbfloat16 = 'bf16'\nfloat32 = 'f32'\n"
             "class cuda:\n    is_available = staticmethod(lambda: True)\n"
             "    get_device_name = staticmethod(lambda i: 'Stub GPU')\n    manual_seed_all = staticmethod(lambda s: None)\n"
             "def manual_seed(s):\n    pass\n", encoding="utf-8")

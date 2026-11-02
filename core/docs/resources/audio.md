@@ -139,6 +139,8 @@ engine's music player changes track on the exact sample the transition map allow
   path. A recording works only with `--ref-text "<its exact words>" --ref-origin self` (your own voice) or
   `--ref-origin permission` (the speaker agreed in writing); every `.gen.json` and `--log` row records where the
   voice came from.
+- Without an NVIDIA GPU: `--device auto` (the default) falls back to Apple's Metal, then the CPU (measured: about
+  20x realtime on an 8-core desktop CPU; see Hardware below). `--device cuda` insists on the GPU.
 - Speed: about 3x slower than realtime on a 16 GB RTX 5060 Ti (a 3 s line takes about 10 s, plus about 30 s to load
   the model per run, so voice a whole `--lines` script in one run). Pre-made lines only, not live speech.
 - **Other languages.** `--language` takes one of the ten the model cards list: Chinese, English, Japanese,
@@ -490,5 +492,21 @@ audio side keeps its part.
   Chromium's mono render within 0.01 LU on all seven; the AudioPlayer with sliders set played every bus at its slider
   times its volume_db within 0.001 dB, ambience included (the same check with the double-count guard removed is 12 dB
   off and fails).
+
+## Hardware: what runs where
+Most of Wavesmith needs nothing but Python 3.8 or newer: no GPU, no installs, any operating system (all its exams pass
+on Windows with Python 3.8, 3.9 and 3.12 and on Linux, Ubuntu 26.04 with Python 3.14, measured 2026-11-01). The two
+model-backed tools have their own needs:
+
+| Subcommand | Needs | Without an NVIDIA GPU |
+|---|---|---|
+| loudness, events, sets (check, ui), dialogue, music, access, babble, synth, chiptune, wav, formats | Python 3.8+ | runs everywhere |
+| formats (MP3, Opus input; OGG output) | ffmpeg, optional | WAV, FLAC and OGG Vorbis need nothing |
+| voice (local_tts) | a separate Python with torch and qwen-tts | `--device auto` (the default) uses an NVIDIA GPU, else Apple's Metal (mps), else the CPU. CPU measured: a 2.4 s line in 47 s (about 20x realtime, 8-core desktop CPU, plus about 30 s to load), transcribed word for word, same voice as on the GPU (0.961). Apple Metal is not tested here |
+| sfx, sets make (local_sfx) | a running ComfyUI with Stable Audio 3 | ComfyUI's own README lists NVIDIA, AMD (ROCm on Linux, and on Windows 11), Intel Arc, Apple silicon and Ascend, and its Windows portable build can run on the CPU alone; Wavesmith only talks to it over HTTP. Measured here on NVIDIA only |
+| eleven, fish | an API key (paid services) | no local hardware at all |
+
+Local language-model drafts (Voice) were tested with llama.cpp's llama-server; other local servers that speak the
+same OpenAI-style chat API should work the same way, but were not tested here, and none of them ships in the kit.
 
 Back to the index: `docs/RESOURCES.md`.

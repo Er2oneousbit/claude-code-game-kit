@@ -164,6 +164,9 @@
 - Every OS: a new audio.yml workflow runs every Wavesmith exam and the golden checks on Linux, Windows and macOS
   (Python 3.9 and 3.12) when the audio tools change; all 18 exams pass on Linux (Ubuntu 26.04, Python 3.14) in a
   scaffolded game. macOS is untested here, and the workflow has not run on GitHub yet.
+- Every backend: `voice --device auto|cuda|mps|cpu` (auto: NVIDIA, then Apple Metal, then the CPU; a CPU take ran
+  at about 20x real time and transcribed exactly); docs/resources/audio.md gains "Hardware: what runs where"
+  (everything but voice and sfx needs only Python 3.8+). Apple Metal and AMD are untested.
 - SOP-04 measures loudness instead of normalizing peaks, pointing at `tools/audio/wavesmith/loudness.py`. EVIDENCE.md: the 0.8.0
   rows (E69-E92) had one cell more than the table's header, so GitHub showed each finding in the Grade column; every
   row has seven cells again. New rows E100-E106 (Steam store pages, a CJK pixel font) and E120-E125 (loudness).

@@ -98,9 +98,13 @@ access rules, with their golden tests:
   `docs/resources/audio.md` (Voice).
   - Set `HF_HOME` to wherever the weights live, in the shell that runs it. Otherwise the first run quietly starts a
     multi-GB download into the default cache, and it looks like a hang.
-  - `voice check` names whatever is missing.
+  - `voice check` names whatever is missing and says where the model will run: `--device auto` uses an NVIDIA GPU,
+    else Apple's Metal, else the CPU (about 20x realtime; fine for a handful of lines).
 - `sfx`, and `sets make` with local_sfx sets, need a running ComfyUI (0.43.0 or newer) with Stable Audio 3.
-  `sfx check` names the missing files.
+  `sfx check` names the missing files. ComfyUI itself runs on NVIDIA, AMD, Intel and Apple hardware (its README);
+  only NVIDIA was measured here.
+- Everything else needs no GPU and runs on Windows, Linux and macOS with Python 3.8+ (docs/resources/audio.md,
+  "Hardware").
 - Never clone a real person's voice without their written permission. Designed voices are the documented path.
 
 ## Licences

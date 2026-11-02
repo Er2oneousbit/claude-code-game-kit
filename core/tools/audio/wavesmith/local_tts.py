@@ -11,9 +11,10 @@
 #           python tools/audio/wavesmith/wavesmith.py voice say --ref ... --lines docs/dialog/baker.txt --out assets/audio/voice/baker.wav
 #           python tools/audio/wavesmith/wavesmith.py voice say --ref golem_ref.wav "Who... disturbs... me" --pitch -5 --ring-hz 40 \
 #               --out golem_1.wav                                                    # deeper / metallic than any human voice
-# Needs   : Python 3.8+ for this file. The model runs in a separate environment (Python 3.10+, CUDA torch, qwen-tts)
+# Needs   : Python 3.8+ for this file. The model runs in a separate environment (Python 3.10+, torch, qwen-tts)
 #           named by --python or LOCAL_TTS_PYTHON; setup commands in docs/resources/audio.md. NVIDIA GPU.
-# Exit    : 0 ok, 1 the model failed (worker crashed, timed out, bad reply), 2 usage, missing environment, no CUDA
+# Exit    : 0 ok, 1 the model failed (worker crashed, timed out, bad reply), 2 usage, missing environment, or the
+#           --device asked for (cuda / mps) is not there
 # Notes   : Never clone a real person's voice without their written permission. The documented path designs voices
 #           from a text description; a recorded reference needs --ref-origin (self or permission), and every
 #           .gen.json records where the voice came from. Models: Qwen3-TTS-12Hz-1.7B-VoiceDesign (design) and
@@ -21,6 +22,8 @@
 #           Hugging Face cache (about 4.3 GB each; 0.6B 2.4 GB). Output: mono 16-bit WAV at the model's rate
 #           (24 kHz), trimmed, faded and normalized (-3 dBFS peak). About 3x slower than realtime on a 16 GB
 #           RTX 5060 Ti: fine for pre-made lines, not for live speech. Bake-off K01 voice round: docs/resources/audio.md.
+#           --device auto runs on an NVIDIA GPU, else Apple's Metal (mps; not tested here), else the CPU (measured about
+#           20x realtime): every .gen.json records the device.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
@@ -173,7 +176,9 @@ def read_replies(proc, lines, err_tail, timeout, on_reply):
 def not_ready_text(reply):
     fix = {"torch": "install a CUDA build of torch into that environment (uv pip install torch --torch-backend cu130)",
            "qwen_tts": "install qwen-tts into that environment (uv pip install qwen-tts)",
-           "cuda": "that torch is a CPU build or sees no NVIDIA GPU: reinstall with --torch-backend <your CUDA>"}
+           "cuda": "that torch is a CPU build or sees no NVIDIA GPU: reinstall with --torch-backend <your CUDA>, "
+                   "or leave --device on auto to use Apple's Metal or the CPU (slow)",
+           "mps": "this torch has no Apple Metal (mps) here: leave --device on auto (the CPU then, slow)"}
     missing = reply.get("missing", "?")
     return f"the TTS environment is not ready ({missing}): {reply.get('error', '')}. Fix: {fix.get(missing, 'see the docs')}"
 
@@ -323,9 +328,13 @@ def language_name(text):
 
 
 def cmd_check(args):
-    r = run_worker(args, {"op": "check"}, args.timeout or 120)[0]
-    print(f"[ OK ] TTS environment ready: Python {r.get('python')}, torch {r['torch']} (CUDA {r['cuda']}), "
-          f"qwen-tts {r['qwen_tts']}, GPU {r['gpu']}")
+    r = run_worker(args, {"op": "check", "device": args.device}, args.timeout or 120)[0]
+    device = r.get("device", "cuda")
+    print(f"[ OK ] TTS environment ready: Python {r.get('python')}, torch {r['torch']} (CUDA {r.get('cuda')}), "
+          f"qwen-tts {r['qwen_tts']}, GPU {r['gpu']}, runs on {device}")
+    if device == "cpu":
+        print("[note] no GPU: voices render on the CPU, many times slower than realtime (fine for a few lines; "
+              "pass --timeout for long scripts)")
     return 0
 
 
@@ -336,14 +345,15 @@ def cmd_design(args):
     refuse_existing([out], args.overwrite)
     with tempfile.TemporaryDirectory() as tmp:
         tmp_wav = str(Path(tmp) / "ref.wav")
-        req = {"op": "design", "model": DESIGN_MODEL, "persona": args.persona, "text": REF_TEXT,
+        req = {"op": "design", "device": args.device, "model": DESIGN_MODEL, "persona": args.persona, "text": REF_TEXT,
                "language": args.language, "seed": args.seed, "out": tmp_wav}
         rep = run_worker(args, req, args.timeout or LOAD_TIMEOUT_S + LINE_TIMEOUT_S)
         if not rep:
             raise JobError("the TTS worker finished without an answer")
         meta = {"tool": "local_tts", "op": "design", "date": datetime.date.today().isoformat(), "model": DESIGN_MODEL,
                 "license": LICENSE, "persona": args.persona, "ref_text": REF_TEXT, "seed": args.seed,
-                "language": args.language, "voice": {"origin": "designed from text", "persona": args.persona}}
+                "language": args.language, "voice": {"origin": "designed from text", "persona": args.persona},
+                "device": rep[-1].get("device")}
         finish(tmp_wav, out, args, meta)
     print("[note] listen to it; if the voice is wrong, run design again with another --seed or a clearer description")
     return 0
@@ -373,7 +383,7 @@ def cmd_say(args):
     date = datetime.date.today().isoformat()
     metas = []
     with tempfile.TemporaryDirectory() as tmp:
-        req = {"op": "say", "model": model, "ref": str(Path(args.ref).resolve()), "ref_text": ref_text,
+        req = {"op": "say", "device": args.device, "model": model, "ref": str(Path(args.ref).resolve()), "ref_text": ref_text,
                "language": args.language, "seed": args.seed, "outdir": tmp,
                "lines": [{"id": f"line{n}", "text": t, "max_tokens": math.ceil(line_cap_s(t, args.language) * CODEC_HZ)}
                          for n, t in enumerate(texts, 1)]}
@@ -392,7 +402,7 @@ def cmd_say(args):
                 return
             meta = {"tool": "local_tts", "op": "say", "date": date, "model": model, "license": LICENSE, "text": text,
                     "seed": args.seed + int(reply["id"][4:]) - 1, "language": args.language, "voice": voice,
-                    "gpu_seconds": reply.get("wall")}
+                    "gpu_seconds": reply.get("wall"), "device": reply.get("device")}
             metas.append(finish(reply["file"], target, args, meta))
 
         replies = run_worker(args, req, timeout, done)
@@ -421,6 +431,8 @@ def build_parser():
     common.add_argument("--python", help=f"the TTS environment's python (default: ${PYTHON_ENV})")
     common.add_argument("--worker", help=argparse.SUPPRESS)          # tests point this at a stand-in worker
     common.add_argument("--timeout", type=float, help="seconds before a job is stopped (default: generous per line)")
+    common.add_argument("--device", choices=("auto", "cuda", "mps", "cpu"), default="auto",
+                        help="where the model runs: auto (an NVIDIA GPU, else Apple's Metal, else the CPU, slow)")
     common.add_argument("--debug", action="store_true", help="show the worker's log and tracebacks")
     sub = ap.add_subparsers(dest="cmd")
     sub.add_parser("check", parents=[common], help="is the TTS environment ready (torch, CUDA, qwen-tts)?")

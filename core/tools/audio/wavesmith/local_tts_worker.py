@@ -68,7 +68,7 @@ def write_wav(path, samples, rate):
     return len(frames) // 2 / float(rate)
 
 
-def op_check():
+def op_check(wanted="auto"):
     try:
         import torch
     except Exception as exc:                       # broad on purpose: a broken torch install raises many kinds
@@ -83,19 +83,38 @@ def op_check():
         qv = version("qwen-tts")
     except Exception:                              # an editable or vendored install has no dist-info
         qv = getattr(qwen_tts, "__version__", "unknown")
-    if not torch.cuda.is_available():
-        return {"ok": False, "missing": "cuda", "torch": torch.__version__, "qwen_tts": qv,
-                "error": "torch {} sees no CUDA GPU (a CPU build, or the driver is missing)".format(torch.__version__)}
-    return {"ok": True, "torch": torch.__version__, "cuda": torch.version.cuda, "gpu": torch.cuda.get_device_name(0),
-            "qwen_tts": qv, "python": sys.version.split()[0]}
+    device = pick_device(torch, wanted)
+    if device is None:
+        what = "a CUDA GPU" if wanted == "cuda" else "Apple's Metal (mps)"
+        return {"ok": False, "missing": wanted, "torch": torch.__version__, "qwen_tts": qv,
+                "error": "torch {} has no {} here (a CPU build, or the driver is missing)".format(torch.__version__, what)}
+    gpu = (torch.cuda.get_device_name(0) if device == "cuda" else "Apple GPU (mps)" if device == "mps" else "none (CPU)")
+    return {"ok": True, "torch": torch.__version__, "cuda": getattr(torch.version, "cuda", None), "gpu": gpu,
+            "device": device, "qwen_tts": qv, "python": sys.version.split()[0]}
 
 
-def load(model_id):
+def pick_device(torch, wanted):
+    """'cuda', 'mps' or 'cpu' for a request, or None when the asked-for device is not there. auto prefers an NVIDIA
+    GPU, then Apple's Metal, then the CPU (works everywhere, many times slower)."""
+    has_cuda = bool(torch.cuda.is_available())
+    mps = getattr(getattr(torch, "backends", None), "mps", None)
+    has_mps = bool(mps is not None and mps.is_available())
+    if wanted == "auto":
+        return "cuda" if has_cuda else ("mps" if has_mps else "cpu")
+    if (wanted == "cuda" and not has_cuda) or (wanted == "mps" and not has_mps):
+        return None
+    return wanted
+
+
+def load(model_id, device="cuda"):
     import torch
     from qwen_tts import Qwen3TTSModel
     t = time.time()
-    m = Qwen3TTSModel.from_pretrained(model_id, device_map="cuda:0", dtype=torch.bfloat16, attn_implementation="sdpa")
-    log("loaded {} in {:.1f}s".format(model_id, time.time() - t))
+    # bfloat16 on an NVIDIA GPU (the measured setup); float32 elsewhere, where bfloat16 is slow or missing kernels
+    dtype = torch.bfloat16 if device == "cuda" else torch.float32
+    m = Qwen3TTSModel.from_pretrained(model_id, device_map={"cuda": "cuda:0", "mps": "mps", "cpu": "cpu"}[device],
+                                      dtype=dtype, attn_implementation="sdpa")
+    log("loaded {} on {} in {:.1f}s".format(model_id, device, time.time() - t))
     return m
 
 
@@ -106,16 +125,16 @@ def seed_all(seed):
 
 
 def op_design(req):
-    m = load(req["model"])
+    m = load(req["model"], req["_device"])
     seed_all(req["seed"])
     t = time.time()
     wavs, rate = m.generate_voice_design(text=req["text"], instruct=req["persona"], language=req["language"])
     seconds = write_wav(req["out"], wavs[0], rate)
-    reply({"file": req["out"], "seconds": round(seconds, 3), "wall": round(time.time() - t, 2)})
+    reply({"file": req["out"], "seconds": round(seconds, 3), "wall": round(time.time() - t, 2), "device": req["_device"]})
 
 
 def op_say(req):
-    m = load(req["model"])
+    m = load(req["model"], req["_device"])
     prompt = m.create_voice_clone_prompt(ref_audio=req["ref"], ref_text=req["ref_text"])   # embed the voice once
     for i, line in enumerate(req["lines"]):
         seed_all(req["seed"] + i)
@@ -124,7 +143,8 @@ def op_say(req):
         wavs, rate = m.generate_voice_clone(text=line["text"], language=req["language"], voice_clone_prompt=prompt, **cap)
         path = "{}/{}.wav".format(req["outdir"], line["id"])
         seconds = write_wav(path, wavs[0], rate)
-        reply({"id": line["id"], "file": path, "seconds": round(seconds, 3), "wall": round(time.time() - t, 2)})
+        reply({"id": line["id"], "file": path, "seconds": round(seconds, 3), "wall": round(time.time() - t, 2),
+               "device": req["_device"]})
     reply({"done": True})
 
 
@@ -135,12 +155,13 @@ def main():
         req = json.loads(sys.stdin.read())
         op = req.get("op")
         if op == "check":
-            reply(op_check())
+            reply(op_check(req.get("device", "auto")))
         elif op in ("design", "say"):
-            ready = op_check()                     # a missing torch / qwen_tts / CUDA is named, not a crash
+            ready = op_check(req.get("device", "auto"))   # a missing torch / qwen_tts / device is named, not a crash
             if not ready["ok"]:
                 reply(ready)
                 return 2
+            req["_device"] = ready["device"]
             (op_design if op == "design" else op_say)(req)
         else:
             reply({"error": "unknown op {!r}".format(op)})
