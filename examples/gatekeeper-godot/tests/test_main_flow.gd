@@ -3,7 +3,7 @@
 # Purpose : GUT tests for the game flow in scripts/game/main.gd with a stand-in brain (no plugin, no model):
 #           one intro when the scripted guard is picked during a model load, "Start over" keeps the brain and
 #           drops a reply still on its way, the new game takes a line at once, and a line typed while the guard
-#           is thinking stays in the box.
+#           is thinking stays in the box, and the autoplay quit stops every sound first (#6).
 # Usage   : python tools/dev.py test      (needs the GUT addon in addons/gut/)
 # Notes   : The main scene is built headless (its sounds play into no device). The stand-in extends GuardBrain
 #           and finishes loading or answering only when the test says so, like the web twin's fake brains.
@@ -176,3 +176,15 @@ func test_start_over_puts_the_gate_and_the_guard_back() -> void:
 	assert_eq(main.door.modulate.a, 1.0, "the door is shut again")
 	assert_eq(main.guard.position, main.guard_home, "the guard is back in the way")
 	assert_eq(main.state.outcome, "talking")
+
+
+func test_stop_sounds_silences_every_player_before_a_quit() -> void:
+	# An autoplay quit with a sound still playing left "1 resources still in use at exit" (#6)
+	main.sfx.stream = MainScript.SND_OPEN
+	main.sfx.play()
+	var players := main.find_children("*", "AudioStreamPlayer", true, false)
+	assert_gt(players.size(), 1, "effects and the ambience at least")
+	assert_true(main.sfx.playing, "the gate sound is playing")
+	main._stop_sounds()
+	for p: AudioStreamPlayer in players:
+		assert_false(p.playing, "%s stopped" % p.name)

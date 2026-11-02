@@ -147,18 +147,17 @@ None of the example games has been played by a human tester; the bots and tests 
 intended. Their art and audio are for non-commercial use (`examples/LICENSE.md`). Each game's own
 `docs/HANDOFF.md` "Known broken or flaky" carries its items below.
 
-### Gatekeeper (Godot): 2 review findings, not fixed yet
-From an adversarial review (Claude Fable 5.1, 2026-10-26); the web twin got the matching fixes, this one has not.
+### Gatekeeper (Godot): review findings fixed, some proven only without the model
+From an adversarial review (Claude Fable 5.1, 2026-10-26); the web twin got the matching fixes first.
 Fixed in 0.9.0: the model load and restart lifecycle (#1), the line typed while the guard thinks (#2), model errors
 and timeouts (#3: an error or two timeouts in a row hand the session to the scripted guard; history calls and
 `reset()` time out too; proven with a stand-in chat, the load path itself still needs the real plugin), the voice
 cache written before the reply was checked (#4), the checks that could not fail (#5: `--llm --autoplay` exits 1 on
 the scripted guard, the after-the-end rule test compares with a snapshot, the eval counts only labels from the
-model, and the three rule tests the web twin had are here too).
-11. The scripted `--autoplay` run ends with `ERROR: 1 resources still in use at exit` (exit code still 0). No fix
-    found; `dev.py smoke` is unaffected.
-12. An exported build would show players the developer hint "run: python tools/setup_ai.py", because the model file
-    is not packed into builds.
+model, and the three rule tests the web twin had are here too), the exported build's developer hint and the
+autoplay exit leak (#6).
+- An exported build with the real plugin, and the model in `models/` next to the game, has not been tried (the
+  `.gdextension` library export and the model load from there are (verify)).
 
 ### Rune Delve (Unreal)
 - **Balance at its limit:** after the review fixes the weaver bot clears 3 of 8 dungeons (was 5) against the

@@ -18,7 +18,8 @@
 # Updated : 2026-11-02 with Claude (Fable 5.1, claude-fable-5-1): restart in place, one intro per start, a reply
 #           in flight dropped after "Start over" (#1); a line typed while Bram thinks stays in the box (#2);
 #           a model the brain dropped (error, timeouts in a row) is announced once, MODEL_LOST (#3);
-#           --llm --autoplay fails (MODEL_MISSING, exit 1) instead of passing on the scripted guard (#5)
+#           --llm --autoplay fails (MODEL_MISSING, exit 1) instead of passing on the scripted guard (#5);
+#           Opus 5.5: autoplay stops its sounds before quitting, no "resources still in use" (#6)
 # ---------------------------------------------------------------------------
 extends Node2D
 
@@ -28,6 +29,9 @@ const SND_AWAY: AudioStream = preload("res://assets/audio/turned-away.mp3")
 const SND_TALK: AudioStream = preload("res://assets/audio/guard-talk.mp3")
 const SND_AMBIENCE: AudioStreamWAV = preload("res://assets/audio/gate-ambience.wav")
 const AMBIENCE_DB: float = -10.0   # under the guard and the gate
+# Autoplay stops every sound and waits this long before quitting: the audio server frees a stopped sound on a
+# later mix, and quitting sooner left "1 resources still in use at exit" (Godot 4.7.2; 0.03 s still did 1 run in 5)
+const QUIT_AUDIO_S: float = 0.2
 const SCALE: int = 3
 const T: int = 16 * SCALE
 const UI_FONT: int = 13   # start panel text and buttons: the 640x360 window fits about four lines plus a button row
@@ -106,6 +110,8 @@ func _ready() -> void:
 			Log.warn("ai", "MODEL_MISSING: this --llm run played the scripted guard"
 				+ (" (" + brain.lost_why + ")" if brain.lost_why != "" else ""))
 			code = 1
+		_stop_sounds()
+		await get_tree().create_timer(QUIT_AUDIO_S).timeout
 		get_tree().quit(code)
 
 
@@ -427,6 +433,12 @@ func _start_ambience() -> void:
 	player.volume_db = AMBIENCE_DB
 	add_child(player)
 	player.play()
+
+
+## Every player in the scene (effects, the ambience loop, the voice) stopped, so a quit frees their playbacks.
+func _stop_sounds() -> void:
+	for p: AudioStreamPlayer in find_children("*", "AudioStreamPlayer", true, false):
+		p.stop()
 
 
 func _finish() -> void:

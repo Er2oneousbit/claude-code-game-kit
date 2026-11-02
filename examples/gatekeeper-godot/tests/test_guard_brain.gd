@@ -3,6 +3,7 @@
 # Purpose : GUT tests for GuardBrain's error paths with a stand-in chat (no plugin, no model): a plugin error
 #           is told apart from a timeout and drops the model, two timeouts in a row hand over to the scripted
 #           guard, a hung history call cannot hang say() or reset(), and a restart stops the generation in flight.
+#           Also where an exported build looks for the model, and that it never gives a player developer steps (#6).
 # Usage   : python tools/dev.py test      (needs the GUT addon in addons/gut/)
 # Notes   : The stand-in has the calls the brain makes on a NobodyWhoChat (ask().completed(), stop_generation,
 #           reset_history, set_chat_history) and answers, errors or hangs as told. Timeouts are shrunk to 50 ms.
@@ -179,3 +180,26 @@ func test_reset_stops_the_generation_in_flight_and_ends_that_reply() -> void:
 	assert_true(brain.has_model(), "a restart is not a timeout")
 	assert_eq(brain.slow_in_a_row, 0)
 	assert_eq(classifier.history_calls, 3, "seeded for the reply, then reset and seeded again")
+
+
+# ---- where the model is, and what a player is told without it (#6) ----
+func test_an_exported_build_never_tells_a_player_to_run_setup_ai() -> void:
+	for plugin: bool in [false, true]:
+		var why := GuardBrain.problem_for(true, plugin, false)
+		assert_ne(why, "", "something is missing")
+		assert_false(why.contains("setup_ai") or why.contains("python"), "a build has no tools/ or Python: " + why)
+	assert_true(GuardBrain.problem_for(true, true, false).contains(Tuning.MODEL_PATH.get_file()), "names the file")
+	assert_eq(GuardBrain.problem_for(true, true, true), "", "plugin and model: no problem")
+
+
+func test_the_project_still_points_at_setup_ai() -> void:
+	assert_true(GuardBrain.problem_for(false, false, false).contains("tools/setup_ai.py"))
+	assert_true(GuardBrain.problem_for(false, true, false).contains("tools/setup_ai.py"))
+	assert_eq(GuardBrain.problem_for(false, true, true), "")
+
+
+func test_an_exported_build_looks_for_the_model_next_to_the_game() -> void:
+	assert_eq(GuardBrain.model_path_for(false, "C:/Games/Gatekeeper"), Tuning.MODEL_PATH, "the project: res://models/")
+	assert_eq(GuardBrain.model_path_for(true, "C:/Games/Gatekeeper"),
+		"C:/Games/Gatekeeper/models/" + Tuning.MODEL_PATH.get_file(), "a build: models/ beside the exe, not the .pck")
+	assert_false(GuardBrain.is_exported(), "these tests run from the project")

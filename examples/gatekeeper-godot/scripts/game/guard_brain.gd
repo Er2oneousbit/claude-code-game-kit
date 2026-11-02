@@ -20,6 +20,9 @@
 #           has_model() turns false and the scripted guard plays on at once, instead of an error or a
 #           timeout on every line. Tested with a stand-in chat (tests/test_guard_brain.gd); the load path
 #           (NobodyWhoModel.create, the warm-up) needs the real plugin (verify).
+#           An exported build reads the model from models/ next to the game, not from the .pck, and tells a player
+#           what is missing without developer steps (model_path, problem_for). Loading from there needs the real
+#           plugin in a build (verify).
 #
 # Pseudocode (reply)
 #   no model -> scripted
@@ -29,7 +32,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-02 with Claude (Fable 5.1, claude-fable-5-1): a restart stops the generation in flight (#1);
 #           errors told apart from timeouts, the model dropped after an error or MAX_SLOW_REPLIES timeouts,
-#           history calls and reset() bounded (#3)
+#           history calls and reset() bounded (#3); Opus 5.5: exported builds look beside the game for the model
+#           and give players no developer hint (#6)
 # ---------------------------------------------------------------------------
 class_name GuardBrain
 extends RefCounted
@@ -65,6 +69,7 @@ const INTENT_REGEX := "greeting|flattery|bribe|threat|mentions_captain|question|
 const LINE_REGEX := "[A-Z][^\\n\\[\\]{}]{4,150}[.!?]"   # one sentence, no brackets or braces, at most ~150 chars
 const NO_REPLY := "the plugin returned no reply (see the console)"   # completed() resolved with null
 const TOO_SLOW := "model too slow"
+const EXPORT_MODEL_DIR := "models"   # an exported build looks for the model file in this folder next to the game
 
 var rng: RandomNumberGenerator
 var classifier: Variant = null   # NobodyWhoChat
@@ -96,11 +101,36 @@ func has_model() -> bool:
 
 ## Why the model cannot be used on this machine, or "" if it can.
 static func model_problem() -> String:
-	if not ClassDB.class_exists("NobodyWhoChat"):
-		return "the NobodyWho plugin is not installed (run: python tools/setup_ai.py)"
-	if not FileAccess.file_exists(Tuning.MODEL_PATH):
-		return "the model file is missing (run: python tools/setup_ai.py)"
+	return problem_for(is_exported(), ClassDB.class_exists("NobodyWhoChat"), FileAccess.file_exists(model_path()))
+
+
+## The reason text, apart from the checks so a test can ask for each case. A player of an exported build has no
+## tools/ folder and no Python, so the build never tells them to run setup_ai.py (it did: #6).
+static func problem_for(exported: bool, has_plugin: bool, has_model: bool) -> String:
+	if not has_plugin:
+		return ("this build was made without the AI guard" if exported
+			else "the NobodyWho plugin is not installed (run: python tools/setup_ai.py)")
+	if not has_model:
+		return ("the model file is missing (put %s in a folder named %s next to the game)"
+			% [Tuning.MODEL_PATH.get_file(), EXPORT_MODEL_DIR] if exported
+			else "the model file is missing (run: python tools/setup_ai.py)")
 	return ""
+
+
+## True in an exported build (an export template), false when run from the project.
+static func is_exported() -> bool:
+	return not OS.has_feature("editor")
+
+
+## Where the model file is: Tuning.MODEL_PATH in the project; in an exported build, EXPORT_MODEL_DIR next to the
+## executable. The 1.1 GB file stays out of the .pck: every patch would carry it, and whether the plugin can read
+## a file inside a .pck is not verified.
+static func model_path() -> String:
+	return model_path_for(is_exported(), OS.get_executable_path().get_base_dir())
+
+
+static func model_path_for(exported: bool, exe_dir: String) -> String:
+	return exe_dir.path_join(EXPORT_MODEL_DIR).path_join(Tuning.MODEL_PATH.get_file()) if exported else Tuning.MODEL_PATH
 
 
 static func _sampler(regex: String) -> Variant:
@@ -128,7 +158,7 @@ func load_model(tree: SceneTree) -> String:
 
 
 func _load(box: Dictionary) -> void:
-	var model: Variant = await ClassDB.class_call_static("NobodyWhoModel", "create", Tuning.MODEL_PATH, {})
+	var model: Variant = await ClassDB.class_call_static("NobodyWhoModel", "create", model_path(), {})
 	if model == null:
 		box.err = "the model failed to load (see the console)"
 		box.done = true

@@ -18,6 +18,9 @@
   played the scripted guard; the after-the-end rule test compares with a snapshot instead of the state with itself;
   the live eval counts only labels from the model and reports fallbacks apart (`tally()`, unit tested); the trust
   clamp, "no single line opens the gate" and "the regex lists exactly the intents" tests from the web twin (#5).
+- Gatekeeper (Godot): an exported build no longer tells players to run the developer's setup script; it names what
+  is missing and looks for the model in a `models` folder next to the game (not in the .pck). Scripted `--autoplay`
+  stops its sounds and waits 0.2 s before quitting, so it no longer ends with `1 resources still in use at exit` (#6).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

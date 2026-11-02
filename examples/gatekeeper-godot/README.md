@@ -16,6 +16,11 @@ then open the project in Godot (it imports the plugin) and pick "Talk to the AI 
 game from the Godot project on Windows and press "Download the AI guard" on the start screen (it runs the same script
 in the background; run the game again when it says so). Hint: read the notice on the wall.
 
+**In an exported build** the AI guard needs the plugin installed before you export (Godot copies its library next to
+the game) and the model file in a `models` folder next to the game (`build/windows/models/qwen2.5-1.5b-instruct-q4_k_m.gguf`);
+it is not packed into the .pck. Without them a build plays the scripted guard and says what is missing. Not tried
+with the real plugin yet **(verify)**.
+
 User args after `--`: `--debug`, `--autoplay` / `--autoplay=rude` (scripted runs), `--llm` (load the model at once),
 `--voice` / `--no-voice` (live voice in headless runs / off).
 
