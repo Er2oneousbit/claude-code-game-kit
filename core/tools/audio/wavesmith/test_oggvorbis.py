@@ -19,6 +19,9 @@
 #           decode the same, and they are compared with libvorbis's own decoder (ffmpeg -c:a libvorbis).
 #           The start trim is checked on a fixture whose granules were lowered (libvorbis's rule; ffmpeg
 #           keeps those samples, so it cannot be the reference there).
+#           Limits: tiny hand-built files whose setup headers ask for huge codebooks, and a silent 255-channel
+#           flood that would decode to billions of samples, must be refused at once (VorbisLimit), and a
+#           zero-dimension codebook is a broken file, not a crash.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 import base64
@@ -29,6 +32,7 @@ import math
 import struct
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -80,17 +84,21 @@ def hand_patterns():
             for _ in range(5)]
 
 
-def hand_stream(rtype, lookup, floor_type=1):
+def hand_stream(rtype, lookup, floor_type=1, channels=1, blocksizes=0x66, first_book=None, audio=None):
     """Mono 8 kHz stream with 64-sample blocks: a 2-entry class book, a 4-entry 2-D VQ book holding the grid
     {-1, 1} x {-1, 1} (lookup 1, or the same values spelled out as lookup 2), floor 1 with only its two end
     points, and one residue of the given type. Each block's spectrum is written in that residue's layout, so
-    every combination must decode to the same samples."""
-    ident = b"\x01vorbis" + struct.pack("<IBIiii", 0, 1, 8000, 0, 0, 0) + bytes([0x66, 1])
+    every combination must decode to the same samples. For the limit tests: channels and blocksizes (the
+    identification byte) change the shape, first_book(w) writes an extra, hostile codebook first, and audio
+    replaces the audio packets."""
+    ident = b"\x01vorbis" + struct.pack("<IBIiii", 0, channels, 8000, 0, 0, 0) + bytes([blocksizes, 1])
     comment = b"\x03vorbis" + struct.pack("<I", 4) + b"exam" + struct.pack("<I", 0) + b"\x01"
     w = BitWriter()
     for c in b"\x05vorbis":
         w.put(8, c)
-    w.put(8, 1)                                             # 2 codebooks
+    w.put(8, 2 if first_book else 1)                        # 2 codebooks (3 with the hostile one)
+    if first_book:
+        first_book(w)
     for dims, lengths, look in ((1, [1, 1], 0), (2, [2, 2, 2, 2], lookup)):
         w.put(24, 0x564342); w.put(16, dims); w.put(24, len(lengths)); w.put(1, 0); w.put(1, 0)
         for n in lengths:
@@ -103,11 +111,17 @@ def hand_stream(rtype, lookup, floor_type=1):
     w.put(6, 0); w.put(16, 0)                               # one time domain placeholder
     w.put(6, 0); w.put(16, floor_type)
     w.put(5, 0); w.put(2, 3); w.put(4, 5)                   # floor 1: no partitions, multiplier 4, X = 0, 32
-    w.put(6, 0); w.put(16, rtype); w.put(24, 0); w.put(24, 32); w.put(24, 7); w.put(6, 0); w.put(8, 0)
-    w.put(3, 1); w.put(1, 0); w.put(8, 1)                   # class 0 uses book 1 in pass 0
+    shift = 1 if first_book else 0                          # the hostile book takes number 0
+    w.put(6, 0); w.put(16, rtype); w.put(24, 0); w.put(24, 32); w.put(24, 7); w.put(6, 0); w.put(8, shift)
+    w.put(3, 1); w.put(1, 0); w.put(8, 1 + shift)           # class 0 uses book 1 in pass 0
     w.put(6, 0); w.put(16, 0); w.put(1, 0); w.put(1, 0); w.put(2, 0); w.put(8, 0); w.put(8, 0); w.put(8, 0)
     w.put(6, 0); w.put(1, 0); w.put(16, 0); w.put(16, 0); w.put(8, 0)
     w.put(1, 1)
+    if audio is not None:                                   # many small pages of the given packets
+        pages = [ogg_page(7, 0, 0, 2, [ident]), ogg_page(7, 1, 0, 0, [comment, w.bytes()])]
+        for k in range(0, len(audio), 255):
+            pages.append(ogg_page(7, 2 + k // 255, 0, 4 if k + 255 >= len(audio) else 0, audio[k:k + 255]))
+        return b"".join(pages)
     audio = []
     patterns = hand_patterns()
     for y0, y1, spectrum in patterns:
@@ -702,6 +716,51 @@ class OggVorbisExam(unittest.TestCase):
             oggvorbis.decode(hand_stream(1, 1, floor_type=0))
         self.assertIn("floor type 0", str(ctx.exception))
 
+    def test_huge_codebooks_are_refused_at_once(self):
+        def ordered(entries, dims=1, lookup=0, length=1):
+            def book(w):                    # one ordered run of length-1 codes: a few bytes ask for `entries`
+                w.put(24, 0x564342); w.put(16, dims); w.put(24, entries); w.put(1, 1); w.put(5, length - 1)
+                w.put(oggvorbis.ilog(entries), entries); w.put(4, lookup)
+                if lookup:
+                    w.put(32, vorbis_float(1, 0)); w.put(32, vorbis_float(1, 0)); w.put(4, 0); w.put(1, 0)
+                    if dims and entries * dims <= 1 << 16:      # the values, when the book is meant to read
+                        nvals = oggvorbis._lookup1_values(entries, dims) if lookup == 1 else entries * dims
+                        w.put(nvals, 0)
+            return book
+        for entries, dims, lookup, word in ((1 << 18, 1, 0, "entries"), ((1 << 24) - 1, 1, 0, "entries"),
+                                            (2048, 2048, 1, "values"), (2048, 2048, 2, "values")):
+            # a complete code tree (every code ceil(log2 entries) bits): valid, so only the size can stop it
+            data = hand_stream(1, 1, first_book=ordered(entries, dims, lookup, length=(entries - 1).bit_length()))
+            self.assertLess(len(data), 400, "the point: a tiny file")
+            t = time.time()
+            with self.assertRaises(oggvorbis.VorbisLimit) as ctx:
+                oggvorbis.decode(data)
+            self.assertLess(time.time() - t, 1.0, f"{entries} x {dims} must be refused at once")
+            self.assertIn(word, str(ctx.exception))
+        zero = self.dir / "zero.ogg"                # dims 0 with lookup 1: a broken file, not ZeroDivisionError
+        zero.write_bytes(hand_stream(1, 1, first_book=ordered(16, 0, 1)))
+        with self.assertRaises(oggvorbis.VorbisCorrupt):
+            oggvorbis.decode(zero.read_bytes())
+        rc, out = self.run_tool("info", zero)
+        self.assertEqual(rc, 1, out)
+        self.assertNotIn("Traceback", out)
+        oggvorbis.decode(hand_stream(1, 1, first_book=ordered(6561, 8, 1, length=13)))   # as big as real books get: reads
+
+    def test_a_silent_flood_is_refused_not_decoded(self):
+        # 255 channels of 8192-sample blocks, every audio packet one byte (all floors unused): each packet is
+        # about a million samples of silence, so a few kilobytes would decode to billions
+        data = hand_stream(1, 1, channels=255, blocksizes=0xDD, audio=[b"\x00"] * 2000)
+        self.assertLess(len(data), 5000)
+        t = time.time()
+        with self.assertRaises(oggvorbis.VorbisLimit) as ctx:
+            oggvorbis.decode(data)
+        self.assertLess(time.time() - t, 10.0)
+        self.assertIn("more than", str(ctx.exception))
+        info, chans, _ = oggvorbis.decode(self.data("mono22k"), max_values=20000)   # the cap can be set
+        self.assertEqual(len(chans[0]), 11025)
+        with self.assertRaises(oggvorbis.VorbisLimit):
+            oggvorbis.decode(self.data("mono22k"), max_values=5000)
+
     def test_truncated_streams_fail(self):
         data = self.data("stereo44k")
         with self.assertRaises(oggvorbis.VorbisCorrupt) as ctx:
@@ -745,6 +804,10 @@ class OggVorbisExam(unittest.TestCase):
         self.assertNotIn(b"Exam tone", wav.read_bytes())
         rc, out = self.run_tool("wav", src, "--out", wav)
         self.assertEqual(rc, 2, "an existing WAV needs --overwrite")
+        rc, out = self.run_tool("towav", src, "--out", self.dir / "t2.ogg")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("must end in .wav", out)
+        self.assertNotIn("Traceback", out)
         rc, out = self.run_tool("wav", src, "--out", wav, "--overwrite")
         self.assertEqual(rc, 0, out)
 

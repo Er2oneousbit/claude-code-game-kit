@@ -2,7 +2,8 @@
 -- test_music_player.lua
 -- Purpose : The music player's own mixer (src/shell/music_player.lua) sample by sample, as pure Lua: stems in sync,
 --           the loop wrap on the bar grid, a switch with its fade on the planned samples, a stinger and the delayed
---           entry after it, a synced entry offset, a stem gain change on its sample, and the clamp.
+--           entry after it, a synced entry offset, a stem gain change on its sample, the clamp, and a change asked
+--           back before its switch (undone, as Godot's player does: the old track plays on, nothing restarts).
 -- Usage   : python tools/dev.py test     (or --filter music_player)
 -- Notes   : No love.audio here: the stems are tables with SoundData's getSample / getSampleCount / getChannelCount,
 --           and the output is a table with setSample, so nothing needs an audio device. The track is tiny on
@@ -141,6 +142,52 @@ function T.test_stinger_then_the_next_track()
     local q = t - 200
     return q / 1000 + 0.25, q / 1000 - 0.25
   end, "a from its start")
+end
+
+function T.test_a_change_asked_back_before_its_switch_is_undone()
+  local m = MusicPlayer.new(music(), readers())
+  m:start("a")
+  local out = render(m, 100, 64)
+  local p = m:request("b")
+  A.eq(p.switch_at, 160, "b is planned for the bar at 160 (with a 4-sample fade)")
+  render(m, 130, 7, out)
+  A.eq(m:request("a"), nil, "a is current again: nothing new to plan")
+  A.eq(m:track(), "a", "current track")
+  render(m, 400, 37, out)
+  -- exactly as if b had never been asked for: a's intro, then its loop, no fade, no b, no restart at 160
+  expect_range(out, 0, 400, function(t)
+    local q = t < 320 and t or 160 + (t - 160) % 160
+    return q / 1000 + 0.25, q / 1000 - 0.25
+  end, "a played on")
+  A.eq(#m.voices, 1, "b's voice is gone")
+  A.eq(m:request("b").switch_at, 480, "a later change plans as usual")
+end
+
+function T.test_a_stinger_not_started_goes_with_the_undone_change()
+  local m = MusicPlayer.new(music(), readers())
+  m:start("b")
+  local out = render(m, 90, 37)
+  local p = m:request("a")
+  A.eq(p.stinger_at, 120, "a stinger at 120, a enters at 200")
+  render(m, 110, 7, out)
+  A.eq(m:request("b"), nil, "back to b before the stinger starts")
+  render(m, 300, 37, out)
+  expect_range(out, 0, 300, function(t) local b = 0.5 + (t % 160) / 10000; return b, b end, "b alone, no stinger")
+  A.eq(#m.voices, 1, "neither the stinger nor a is left")
+end
+
+function T.test_too_late_to_undo_plans_from_the_entry()
+  local m = MusicPlayer.new(music(), readers())
+  m:start("b")
+  local out = render(m, 90, 37)
+  m:request("a")                                   -- switch 120 (the stinger), a enters at 200
+  render(m, 150, 7, out)                           -- 120 is mixed: this change can no longer be undone
+  local p = m:request("b")
+  A.truthy(p, "a new change is planned")
+  A.truthy(p.switch_at >= 200, "planned from a's entry at 200, not from before it (got " .. p.switch_at .. ")")
+  expect_range(out, 120, 150, function() return 0.125, 0.125 end, "the stinger kept playing")
+  render(m, 500, 37, out)
+  A.eq(m:track(), "b", "current track")
 end
 
 function T.test_synced_entry_offset()

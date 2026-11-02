@@ -30,7 +30,8 @@
 --
 -- Pseudocode:
 --   start(track, at): a voice { stems, since = at, entry = 0 } on the music clock
---   request(to): plan = MusicDirector.plan(current, cursor) -> old voice fades from switch_at, stops at from_stop_at
+--   request(to): a change still pending (its switch sample not mixed yet) is undone first, as Godot's player does
+--                -> plan = MusicDirector.plan(current, cursor) -> old voice fades from switch_at, stops at from_stop_at
 --                -> stinger voice at stinger_at -> new voice from to_start_at at to_offset
 --   mix(buffer, n): for each voice: its active samples in [cursor, cursor + n) -> position (loop wrap) -> stem
 --                   samples x stem gain x fade -> sum -> clamp -> buffer; cursor += n; drop finished voices
@@ -124,36 +125,58 @@ end
 
 -- Starts a track at `at` (default: the next sample to mix). Stops nothing: call it once, then use request.
 function MusicPlayer:start(name, at)
-  self.stopped = false
+  self.stopped, self.pending = false, nil
   local v = track_voice(self, name, at or self.cursor, 0)
   self.voices[#self.voices + 1] = v
   self.current = v
   return v
 end
 
+-- Undoes the last planned change when its switch sample has not been mixed yet (Godot's _cancel_pending): the new
+-- track and a stinger that has not started are dropped, and the old track plays on with its old fade and stop, as
+-- if the change had never been asked for. Too late (the switch is already mixed): nothing changes.
+local function cancel_pending(self)
+  local pend = self.pending
+  self.pending = nil
+  if not pend or pend.switch_at < self.cursor then return end
+  local keep, has_old = {}, false
+  for _, v in ipairs(self.voices) do
+    if v == pend.old then has_old = true end
+    if v ~= pend.new and not (v == pend.stinger and v.since >= self.cursor) then keep[#keep + 1] = v end
+  end
+  if not has_old then keep[#keep + 1] = pend.old end    -- dropped at a stop sample that is now undone
+  self.voices = keep
+  pend.old.fade_at, pend.old.stop_at = pend.fade_at, pend.stop_at
+  self.current = pend.old
+end
+
 -- Plans and schedules a change to `to` at the mix cursor; returns the plan, or nil when nothing was planned
--- (no track yet: `to` starts now; `to` already current: nothing happens).
+-- (no track yet: `to` starts now; `to` already current: nothing happens). A change asked for while the previous
+-- one is still pending replaces it, so asking for the playing track again before the switch keeps it playing.
 function MusicPlayer:request(to)
-  local cur = self.current
-  if not cur then
+  if not self.current then
     self:start(to)
     return nil
   end
+  cancel_pending(self)
+  local cur = self.current
   if cur.name == to then return nil end
-  local p = MusicDirector.plan(self.data, cur.name, cur.since, cur.entry, to, self.cursor)
+  -- a track that has not entered yet (a stinger's delayed entry) is planned from where it enters, not before
+  local p = MusicDirector.plan(self.data, cur.name, cur.since, cur.entry, to, math.max(self.cursor, cur.since))
+  local pend = { old = cur, fade_at = cur.fade_at, stop_at = cur.stop_at, switch_at = p.switch_at }
   -- the old track: full gain until switch_at, a straight line to 0 at from_stop_at, then silent and dropped
   if p.fade > 0 then cur.fade_at = p.switch_at end
   cur.stop_at = cur.stop_at and math.min(cur.stop_at, p.from_stop_at) or p.from_stop_at
   if p.stinger ~= MusicDirector.NONE then
     local st = self.data.stingers[p.stinger]
     local r = reader_of(self, st.file)
-    self.voices[#self.voices + 1] = { kind = "stinger", name = p.stinger, since = p.stinger_at,
-                                      stems = { { name = "stinger", reader = r, gain = 1 } },
-                                      stop_at = p.stinger_at + r:getSampleCount() }
+    pend.stinger = { kind = "stinger", name = p.stinger, since = p.stinger_at,
+                     stems = { { name = "stinger", reader = r, gain = 1 } }, stop_at = p.stinger_at + r:getSampleCount() }
+    self.voices[#self.voices + 1] = pend.stinger
   end
   local v = track_voice(self, to, p.to_start_at, p.to_offset)
   self.voices[#self.voices + 1] = v
-  self.current = v
+  self.current, pend.new, self.pending = v, v, pend
   return p
 end
 
@@ -274,7 +297,7 @@ end
 -- Stops the output and forgets every voice until the next start (the clock keeps its count).
 function MusicPlayer:stop()
   if self.source then self.source:stop() end
-  self.voices, self.current, self.stopped = {}, nil, true
+  self.voices, self.current, self.stopped, self.pending = {}, nil, true, nil
 end
 
 return MusicPlayer

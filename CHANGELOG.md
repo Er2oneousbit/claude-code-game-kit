@@ -18,6 +18,13 @@ Fixes from a fresh review of 0.8.1.
   that still shows the game's frames is left untouched (#64).
 - Dotwork aseprite: a source is indexed only when that loses nothing (at most 255 opaque colours, no partly clear
   pixels); portraits and other many-colour images stay RGB, so an untouched round trip no longer changes them.
+- Wavesmith fixes from the 0.8.1 review: the OGG Vorbis decoder refuses files that ask for far more than real Vorbis
+  does (codebook and output limits; a malformed file is a clean error, never a traceback); no tool writes WAV bytes
+  under another format's name (loudness normalize and music loop write OGG through ffmpeg); sound_sets out_dir stays
+  inside the project; the LÖVE and web music players undo a change asked back before its switch, as Godot's does;
+  loudness measures a WAV as it reads it (a 30-minute capture in under 40 MB); WebVTT export escapes markup; ffmpeg
+  reads local files only; the validators name values of the wrong type instead of crashing; audio.yml runs Python
+  3.10 and 3.13.
 - README: nine engines, eight tested against their real toolchains (the intro still said eight and seven).
 
 ## 0.8.1 (2026-11-01): Wavesmith, Pixelorama, audio in every engine, and Dotwork's store, UI, VFX and lighting lanes

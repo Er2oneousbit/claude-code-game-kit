@@ -199,6 +199,12 @@ class DialogueExam(unittest.TestCase):
                          "00:00:01.750 --> 00:00:03.250\n<v Baker>Two coins.\n\n"
                          "00:00:03.500 --> 00:00:04.500\n<v Knight>Halt!\n")
 
+    def test_vtt_escapes_markup_in_text_and_names(self):
+        cues = [{"start": 0.0, "end": 1.0, "lines": ["Fish & chips <b>now</b>", "", "a --> b"], "name": "Tom <3"}]
+        self.assertEqual(D.to_vtt(cues), "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n<v Tom &lt;3>"
+                                         "Fish &amp; chips &lt;b&gt;now&lt;/b&gt;\na --&gt; b\n")
+        self.assertIn("Fish & chips <b>now</b>", D.to_srt(cues), "SRT has no escapes: the text is kept as written")
+
     def test_speaker_named_again_after_a_long_pause(self):
         built, _, _ = self.build([{"id": "b.a", "speaker": "baker", "text": "Morning."},
                                   {"id": "b.b", "speaker": "baker", "text": "Still here."}],

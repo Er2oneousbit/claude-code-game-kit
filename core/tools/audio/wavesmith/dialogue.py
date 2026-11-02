@@ -386,12 +386,18 @@ def to_srt(cues):
     return "\r\n\r\n".join(blocks) + "\r\n"
 
 
+def vtt_escape(text):
+    """WebVTT cue text is markup: & < > must be written as entities, or "<b>" turns bold and "-->" ends the cue."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def to_vtt(cues):
     blocks, speaker = ["WEBVTT"], None
     for c in cues:
         speaker = c["name"] or speaker
-        body = "\n".join(c["lines"])
-        voice = f"<v {speaker}>" if speaker else ""
+        # a blank line would end the cue early, so empty lines are left out
+        body = "\n".join(vtt_escape(line) for line in c["lines"] if line.strip())
+        voice = f"<v {vtt_escape(speaker)}>" if speaker else ""
         blocks.append(f"{fmt_time(c['start'], '.')} --> {fmt_time(c['end'], '.')}\n{voice}{body}")
     return "\n\n".join(blocks) + "\n"
 
