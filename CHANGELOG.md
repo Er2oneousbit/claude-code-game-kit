@@ -12,6 +12,8 @@
   (2) timeouts in a row drop the model for the session and the scripted guard plays on at once (`MODEL_LOST`),
   instead of a 12 s timeout on every line; the history calls in `reply()` and `reset()` have the reply timeout too,
   and a failed warm-up fails the load. Proven with a stand-in chat (the example's new test_guard_brain.gd exam) (#3).
+- Gatekeeper (Godot): a voice reply is cached only once it is known to play; a 200 that is not audio is skipped and
+  leaves no file, and a broken cached file is dropped so the line is fetched again (#4).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

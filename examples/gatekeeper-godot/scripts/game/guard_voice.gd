@@ -8,15 +8,18 @@
 #           User args: --voice speaks in headless runs too (tests), --no-voice turns it off.
 # Notes   : Text always shows; the voice is extra and never blocks or breaks the game. Without a key it
 #           stays off (VOICE_OFF). A rejected key or empty balance (401/402/403) turns it off for the
-#           session; other errors skip one line. Every line is cached in user://voice_cache by
-#           sha256(model|voice|text), so repeats cost nothing. The key is read at runtime and never logged,
-#           saved or exported. Live generation: ASSET_LOG "live", Fish Audio's terms apply (verify).
+#           session; other errors skip one line. Every line that plays is cached in user://voice_cache by
+#           sha256(model|voice|text), so repeats cost nothing; a 200 that is not audio is skipped and never
+#           cached, so one bad answer cannot break that line for good. The key is read at runtime and never
+#           logged, saved or exported. Live generation: ASSET_LOG "live", Fish Audio's terms apply (verify).
 #
 # Pseudocode
 #   _ready: key/voice from the environment -> enabled? -> log VOICE_ON or VOICE_OFF (why)
-#   speak: queue -> next: cache hit? play : POST /v1/tts -> 200 cache + play | auth/balance error: off
+#   speak: queue -> next: cache hit that plays? play : (drop a broken cached file) POST /v1/tts
+#          -> 200 and playable: cache + play | 200 but not audio: skip | auth/balance error: off
 #   play: AudioStreamMP3 from the bytes, wait its length (headless audio may never send `finished`) -> next
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-02 with Claude (Fable 5.1, claude-fable-5-1): a reply is checked before it is cached (#4)
 # ---------------------------------------------------------------------------
 class_name GuardVoice
 extends Node
@@ -49,6 +52,35 @@ static func cache_path(model: String, voice: String, text: String) -> String:
 
 static func request_body(text: String, voice: String) -> String:
 	return JSON.stringify({"text": text, "reference_id": voice, "format": "mp3", "latency": "balanced"})
+
+
+## The bytes as a stream that plays, or null when they are not audio (a 200 with an error page, a cut-off file).
+static func playable(bytes: PackedByteArray) -> AudioStreamMP3:
+	if not looks_like_mp3(bytes):
+		return null   # text, JSON, nothing: decided here, so the decoder prints no error for an error page
+	var stream := AudioStreamMP3.new()
+	stream.data = bytes
+	return stream if stream.get_length() > 0.0 else null
+
+
+## MP3 data starts with an ID3 tag or a frame sync (0xFF, then a byte with its top three bits set).
+static func looks_like_mp3(bytes: PackedByteArray) -> bool:
+	if bytes.size() < 4:
+		return false
+	if bytes[0] == 0x49 and bytes[1] == 0x44 and bytes[2] == 0x33:   # "ID3"
+		return true
+	return bytes[0] == 0xFF and (bytes[1] & 0xE0) == 0xE0
+
+
+## The cached reply at path as a stream, or null. A cached file that does not play is deleted (an older build
+## cached replies unchecked), so the line is fetched again instead of failing for good.
+static func cached_stream(path: String) -> AudioStreamMP3:
+	if not FileAccess.file_exists(path):
+		return null
+	var stream := playable(FileAccess.get_file_as_bytes(path))
+	if stream == null:
+		DirAccess.remove_absolute(path)
+	return stream
 
 
 func _ready() -> void:
@@ -90,9 +122,9 @@ func _next() -> void:
 	_busy = true
 	_current = _queue.pop_front()
 	_t0 = Time.get_ticks_msec()
-	var path := cache_path(Tuning.VOICE_MODEL, _voice, _current)
-	if FileAccess.file_exists(path):
-		_play(FileAccess.get_file_as_bytes(path), true)
+	var cached := cached_stream(cache_path(Tuning.VOICE_MODEL, _voice, _current))
+	if cached != null:
+		_play(cached, true)
 		return
 	var headers := PackedStringArray(["Authorization: Bearer " + _key, "Content-Type: application/json",
 		"model: " + Tuning.VOICE_MODEL])
@@ -108,26 +140,25 @@ func _on_done(result: int, code: int, _headers: PackedStringArray, body: PackedB
 	if code != 200:
 		_fail("HTTP %d: %s" % [code, body.get_string_from_utf8().substr(0, 160)], STOP_CODES.has(code))
 		return
-	DirAccess.make_dir_recursive_absolute(CACHE_DIR)
+	var stream := playable(body)
+	if stream == null:
+		_fail("the reply was not playable audio (%d bytes), not cached" % body.size(), false)
+		return
+	DirAccess.make_dir_recursive_absolute(CACHE_DIR)   # only a reply that plays is kept for next time
 	var f := FileAccess.open(cache_path(Tuning.VOICE_MODEL, _voice, _current), FileAccess.WRITE)
 	if f:
 		f.store_buffer(body)
 		f.close()
-	_play(body, false)
+	_play(stream, false)
 
 
-func _play(bytes: PackedByteArray, cached: bool) -> void:
-	var stream := AudioStreamMP3.new()
-	stream.data = bytes
+func _play(stream: AudioStreamMP3, cached: bool) -> void:
 	var seconds := stream.get_length()
-	if seconds <= 0.0:
-		_fail("the reply was not playable audio (%d bytes)" % bytes.size(), false)
-		return
 	_player.stream = stream
 	_player.volume_db = Tuning.VOICE_DB
 	_player.play()
-	Log.info("voice", "VOICE_OK %.1f s of speech, %s in %d ms" % [seconds, "cache" if cached else "%d KB" % int(bytes.size() / 1024.0),
-		Time.get_ticks_msec() - _t0])
+	Log.info("voice", "VOICE_OK %.1f s of speech, %s in %d ms" % [seconds,
+		"cache" if cached else "%d KB" % int(stream.data.size() / 1024.0), Time.get_ticks_msec() - _t0])
 	await get_tree().create_timer(seconds + 0.15).timeout
 	_busy = false
 	_next()
