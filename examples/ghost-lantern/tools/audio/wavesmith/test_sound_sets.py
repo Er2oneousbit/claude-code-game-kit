@@ -5,7 +5,8 @@
 #           attack counting (one step, heel and toe, two steps, a noise floor); completeness (missing and extra takes,
 #           missing sidecars); levels (bus level, spread between takes, true peak cap); loops (loop point kept by
 #           leveling, missing loop point); licenses (--ship); the sets file's errors; audio_events output that
-#           validates; make for both generators (local_sfx replaced by a stand-in, no GPU).
+#           validates; make for both generators (local_sfx replaced by a stand-in, no GPU); out_dir never leaves
+#           --root (.., absolute paths, network shares, a symlinked folder).
 # Usage   : python tools/audio/wavesmith/test_sound_sets.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -14,6 +15,7 @@ import contextlib
 import io
 import json
 import math
+import os
 import random
 import sys
 import tempfile
@@ -199,6 +201,16 @@ class SoundSetsExam(unittest.TestCase):
         self.assertIn("not ship-safe (Stability AI Community License)", out)
 
     # ---- the sets file
+    def test_values_of_the_wrong_type_are_problems_not_crashes(self):
+        ok = {"generator": "sfx_synth", "bus": "ui", "variants": {"soft": S.UI_SET["click"]}}
+        for bad in ("x", [1], 3, None, True):
+            for data, word in (({"version": 1, "target": [bad], "sets": {"s": ok}}, "target"),
+                               ({"version": 1, "sets": {"s": dict(ok, bus=[bad])}}, "bus"),
+                               ({"version": 1, "sets": {"s": dict(ok, event=bad)}}, "event"),
+                               ({"version": 1, "sets": {"s": dict(ok, variants=bad)}}, "variants")):
+                problems = S.validate(data)                          # must not raise
+                self.assertTrue(problems and any(word in p for p in problems), f"{data}: {problems}")
+
     def test_errors_are_named(self):
         bad = {"x": {"generator": "magic", "bus": "sfx", "variants": {"a": "b"}},
                "y": {"generator": "local_sfx", "bus": "sfx", "seconds": 1, "prompt": "no slot", "variants": {"a": "b"}},
@@ -257,6 +269,32 @@ class SoundSetsExam(unittest.TestCase):
         rc, out = self.run_tool("check", sets, "--root", self.root, "--ship")
         self.assertEqual(rc, 0, out)
         self.assertEqual(self.run_tool("make", sets, "--root", self.root)[0], 1)   # exists: refused, not replaced
+
+    def test_out_dir_never_leaves_the_root(self):
+        proj = self.root / "proj"
+        proj.mkdir()
+        blips = {"blips": {"generator": "sfx_synth", "bus": "ui", "variants": {"soft": S.UI_SET["click"]}}}
+        outside = self.root / "escape_dir"
+        for bad in ("../escape_dir", str(outside), "a/../../escape_dir", "//host/share", "C:/escape_dir"):
+            f = self.root / "bad_sets.json"
+            f.write_text(json.dumps({"version": 1, "out_dir": bad, "sets": blips}), encoding="utf-8")
+            for cmd in ("make", "check"):
+                rc, out = self.run_tool(cmd, f, "--root", proj)
+                self.assertEqual(rc, 2, f"{cmd} {bad}: {out}")
+                self.assertIn("out_dir", out)
+            self.assertFalse(outside.exists(), f"{bad} wrote outside the root")
+        self.assertTrue(any("climbs out" in e for e in S.validate({"version": 1, "out_dir": "../x", "sets": blips})))
+        try:                                        # a folder inside the root that is a link to somewhere outside
+            outside.mkdir()
+            os.symlink(outside, proj / "linked", target_is_directory=True)
+        except (OSError, NotImplementedError):
+            return                                  # no symlink rights here (Windows without developer mode)
+        f = self.root / "link_sets.json"
+        f.write_text(json.dumps({"version": 1, "out_dir": "linked", "sets": blips}), encoding="utf-8")
+        rc, out = self.run_tool("make", f, "--root", proj)
+        self.assertEqual(rc, 2, out)
+        self.assertIn("outside the project root", out)
+        self.assertEqual(list(outside.iterdir()), [])
 
     def test_make_with_local_sfx_calls_it_right_and_levels_its_output(self):
         calls = []

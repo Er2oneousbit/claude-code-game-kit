@@ -58,3 +58,7 @@ game/save/
 
 # ---- Claude Code Game Kit 0.3.1: rules added by --upgrade ----
 captures/
+
+# ---- Claude Code Game Kit 0.8.2: rules added by --upgrade ----
+*.aseprite.bak
+*.pxo.bak

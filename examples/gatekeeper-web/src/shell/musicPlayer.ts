@@ -15,16 +15,24 @@
 //
 // Pseudocode:
 //   start(track, at): one looping source per stem -> stem gain -> track gain -> out; remember since / entry
-//   request(to, now): plan = planTransition(...) -> old track: gain ramp to 0 by from_stop_at, stop there
+//   request(to, now): a change still pending (its switch sample not reached) is undone first, as Godot's player does
+//                     -> plan = planTransition(...) -> old track: gain ramp to 0 by from_stop_at, stop there
 //                     -> stinger source at stinger_at -> new track's stems start at to_start_at from to_offset
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 import { loopPoints, planTransition, type MusicFile, type MusicPlan } from "../core/musicDirector";
 
-type Playing = { name: string; since: number; entry: number; gain: GainNode; sources: AudioBufferSourceNode[]; stems: Record<string, GainNode> };
+type Playing = { name: string; since: number; entry: number; gain: GainNode; sources: AudioBufferSourceNode[]; stems: Record<string, GainNode>; stopAt: number | null };
+// The last planned change, kept until it can no longer be undone: what the old track was before it, and what it added
+type Pending = { old: Playing; oldStopAt: number | null; switchAt: number; next: Playing; stinger: { src: AudioBufferSourceNode; at: number } | null };
+
+// Web Audio cannot un-stop a source, but the last stop() call is the one that counts: an undone stop is moved here,
+// a time no game reaches (about 30,000 years)
+const NEVER_S = 1e12;
 
 export class MusicPlayer {
   private current: Playing | null = null;
+  private pending: Pending | null = null;
   private readonly ctx: BaseAudioContext;
   private readonly data: MusicFile;
   private readonly buffers: Record<string, AudioBuffer>;
@@ -78,35 +86,66 @@ export class MusicPlayer {
       sources.push(src);
       stems[stem] = g;
     }
-    return { name, since: at, entry, gain, sources, stems };
+    return { name, since: at, entry, gain, sources, stems, stopAt: null };
   }
 
   /** Starts a track (stopping nothing: call it once, then use request). */
   start(name: string, atSample = this.nowSample()): void {
+    this.pending = null;
     this.current = this.launch(name, atSample, 0);
   }
 
-  /** Plans and schedules a change to `to`; returns the plan. Nothing happens when `to` is already playing. */
+  /** Plans and schedules a change to `to`; returns the plan. Nothing happens when `to` is already playing. A change
+   *  asked for while the previous one is still pending replaces it, so asking for the playing track again before the
+   *  switch keeps it playing (no restart). */
   request(to: string, nowSample = this.nowSample()): MusicPlan | null {
-    const cur = this.current;
-    if (!cur) {
+    if (!this.current) {
       this.start(to, nowSample);
       return null;
     }
+    this.cancelPending(nowSample);
+    const cur = this.current;
     if (cur.name === to) return null;
-    const p = planTransition(this.data, cur.name, cur.since, cur.entry, to, nowSample);
+    // a track that has not entered yet (a stinger's delayed entry) is planned from where it enters, not before
+    const p = planTransition(this.data, cur.name, cur.since, cur.entry, to, Math.max(nowSample, cur.since));
     const g = cur.gain.gain;
     g.setValueAtTime(1, p.switch_at / this.rate);
     if (p.fade > 0) g.linearRampToValueAtTime(0, p.from_stop_at / this.rate);
+    const oldStopAt = cur.stopAt;
     for (const s of cur.sources) s.stop(p.from_stop_at / this.rate);
+    cur.stopAt = p.from_stop_at;
+    let stinger: Pending["stinger"] = null;
     if (p.stinger && p.stinger_at !== null) {
       const st = this.ctx.createBufferSource();
       st.buffer = this.buffer(this.data.stingers![p.stinger].file);
       st.connect(this.out);
       st.start(p.stinger_at / this.rate);
+      stinger = { src: st, at: p.stinger_at };
     }
     this.current = this.launch(to, p.to_start_at, p.to_offset);
+    this.pending = { old: cur, oldStopAt, switchAt: p.switch_at, next: this.current, stinger };
     return p;
+  }
+
+  /** Undoes the last planned change when its switch sample has not come yet (Godot's _cancel_pending): the new
+   *  track never starts, a stinger that has not started is dropped, and the old track plays on with its old gain
+   *  and stop, as if the change had never been asked for. Too late (the switch has begun): nothing changes. */
+  private cancelPending(nowSample: number): void {
+    const pend = this.pending;
+    this.pending = null;
+    if (!pend || pend.switchAt < nowSample) return;
+    for (const s of pend.next.sources) s.stop();             // stopped before its start time: it never sounds
+    pend.next.gain.disconnect();
+    if (pend.stinger && pend.stinger.at >= nowSample) {
+      pend.stinger.src.stop();
+      pend.stinger.src.disconnect();
+    }
+    const old = pend.old;
+    old.gain.gain.cancelScheduledValues(pend.switchAt / this.rate);  // the switch's gain step and fade ramp
+    const until = pend.oldStopAt === null ? NEVER_S : pend.oldStopAt / this.rate;
+    for (const s of old.sources) s.stop(until);
+    old.stopAt = pend.oldStopAt;
+    this.current = old;
   }
 
   /** A stem's level (linear 0..1), from `atSample` on (layers: add drums when the action starts). */

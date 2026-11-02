@@ -50,6 +50,19 @@ class AccessExam(unittest.TestCase):
         self.assertEqual(g, {"master": 1.0, "music": 0.0, "sfx": 1.0, "ui": 1.0})
         self.assertEqual(A.user_bus_gains({"dialogue": {}}, {}), {"dialogue": 1.0})        # missing slider
 
+    def test_a_malformed_bus_is_named_not_a_crash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "events.json"
+            for buses in ({"master": {}, "sfx": "master"}, {"master": {}, "sfx": [1]}):
+                f.write_text(json.dumps({"version": 1, "buses": buses, "events": {}}), encoding="utf-8")
+                rc, out = self.run_tool("gains", f)
+                self.assertEqual(rc, 2, out)
+                self.assertIn("bus sfx must be an object", out)
+                self.assertNotIn("Traceback", out)
+        self.assertEqual(A.user_bus_gains({"master": {}, "sfx": {"parent": ["x"]}}, SLIDERS)["sfx"], 0.25)
+        with self.assertRaises(ValueError):
+            A.user_bus_gains(["master"], SLIDERS)
+
     def test_arrows(self):
         w, h = 320, 180
         self.assertEqual(A.caption_arrow(0, 0, w, h), "")

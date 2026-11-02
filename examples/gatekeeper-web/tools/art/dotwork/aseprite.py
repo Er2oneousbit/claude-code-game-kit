@@ -2,14 +2,17 @@
 # ---------------------------------------------------------------------------
 # aseprite.py
 # Purpose : the Aseprite round trip: build editable .aseprite sources (one tag per animation, indexed on the asset's
-#           own colours, each frame timed by its hold), and re-export hand-polished files back to the shipped PNGs,
-#           sheets and SpriteFrames (frame times included). The editor-neutral half is handpolish.py.
-# Usage   : dotwork.py aseprite then dotwork.py aseprite --reexport
-# Notes   : Needs ASEPRITE_BIN (optional tool). Pixelorama users: pixelorama.py, the same round trip.
+#           own colours when that loses nothing, each frame timed by its hold), and re-export hand-polished files back
+#           to the shipped PNGs, sheets and SpriteFrames (frame times included). The editor-neutral half is
+#           handpolish.py.
+# Usage   : dotwork.py aseprite [--overwrite] then dotwork.py aseprite --reexport
+# Notes   : Needs ASEPRITE_BIN (optional tool). Pixelorama users: pixelorama.py, the same round trip. A build never
+#           replaces a source that may hold hand polish without --overwrite (the same rule as pixelorama.py).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 import glob
 import os
+from collections import Counter
 
 from PIL import Image
 
@@ -17,6 +20,8 @@ import fcore as core
 import handpolish
 
 _Manifests = handpolish.GameManifests   # the old name, kept for callers of the 0.8.0 module
+# opaque colours an indexed sprite holds without loss: 256 entries, and index 0 is the transparent colour
+INDEXED_MAX = 255
 
 
 BUILD_LUA = r'''
@@ -47,7 +52,11 @@ for _, name in ipairs(order) do
 end
 spr:setPalette(Palette{ fromFile = p.palette })
 spr.transparentColor = 0
-app.command.ChangePixelFormat{ format = "indexed", dithering = "none" }
+-- indexed only when that loses nothing (Dotwork checks the frames first): a portrait of 1805 colours came back
+-- quantized from an indexed sprite, and an untouched re-export shipped it (2026-11-01 live check)
+if p.indexed == "1" then
+  app.command.ChangePixelFormat{ format = "indexed", dithering = "none" }
+end
 spr:saveAs(p.out)
 print("DOTWORK_ASE_OK " .. p.out .. " frames=" .. #items)
 '''
@@ -56,7 +65,7 @@ EXPORT_LUA = r'''
 -- Dotwork: export every frame of a .aseprite as "<prefix>_<tag>_<NN>.png" (or "<prefix>.png" for one untagged frame)
 local p = app.params
 local spr = app.open(p.file)
--- export in RGB (in memory only; the .aseprite stays indexed): saving an indexed Image on its own drops the
+-- export in RGB (in memory only; an indexed .aseprite stays indexed): saving an indexed Image on its own drops the
 -- palette and every color comes out black (round-trip test, 2026-10-29)
 app.command.ChangePixelFormat{ format = "rgb" }
 local function save(frameNumber, path)
@@ -111,20 +120,75 @@ def _run(conf, lua_text, lua_name, params):
 
 
 def _palette_file(pngs, path):
-    """GIMP palette of every opaque color in the frames, with index 0 reserved for transparency."""
-    cols = set()
+    """GIMP palette of every opaque color in the frames, with index 0 reserved for transparency. Returns (how many
+    colours, True when the frames can be indexed without loss: at most INDEXED_MAX opaque colours and no partly clear
+    pixel, which an indexed sprite would turn opaque or clear)."""
+    cols, partial = set(), False
     for p in pngs:
-        a = Image.open(p).convert("RGBA")
-        cols |= {c[:3] for c in a.getdata() if c[3] == 255}
+        with Image.open(p) as im:
+            px = list(im.convert("RGBA").getdata())
+        cols |= {c[:3] for c in px if c[3] == 255}
+        partial = partial or any(0 < c[3] < 255 for c in px)
     cols = sorted(cols)
     lines = ["GIMP Palette", "Name: Dotwork", "Columns: 16", "#", "255   0 255\ttransparent"]
     lines += [f"{r:3d} {g:3d} {b:3d}\tc" for r, g, b in cols]
     with open(core.safe_dest(path), "w", encoding="ascii") as f:
         f.write("\n".join(lines) + "\n")
-    return len(cols)
+    return len(cols), len(cols) <= INDEXED_MAX and not partial
 
 
-def build(pack, conf):
+def _export(conf, file, prefix):
+    """EXPORT_LUA on one .aseprite: ([(PNG path, seconds that frame shows)] in the order Aseprite wrote them, the
+    first tag name that could leave the export folder or None). Nothing is written for a file with such a tag."""
+    lines = _run(conf, EXPORT_LUA, "ase_export.lua", {"file": file, "prefix": prefix}).splitlines()
+    bad = [ln.split(" ", 1)[1].strip() for ln in lines if ln.startswith("DOTWORK_ASE_BADTAG ")]
+    pngs = []
+    for ln in lines:
+        if ln.startswith("DOTWORK_ASE_PNG "):
+            parts = ln.split(" ", 2)
+            try:
+                pngs.append((parts[2].strip(), float(parts[1])))
+            except (IndexError, ValueError):   # an older script's line (path only): the frame keeps its hold
+                pass
+    return pngs, (bad[0] if bad else None)
+
+
+def _shows_the_game(conf, path, items):
+    """True when the .aseprite at path still shows what a build from items (the game's frames) holds: Aseprite
+    exports it (EXPORT_LUA), and the tags, the frames in each, every frame's look (handpolish.same_look) and, in a
+    tag, its time on screen (within HOLD_TOLERANCE_S: Aseprite keeps whole milliseconds) all match. Anything else
+    may be hand polish not re-exported yet, so build keeps the file (issue #64: it was overwritten)."""
+    tmp = os.path.join(core.WORK, "ase_check")
+    os.makedirs(tmp, exist_ok=True)
+    for p in glob.glob(os.path.join(tmp, "*.png")):
+        os.remove(p)
+    want, k = {}, Counter()     # {png name EXPORT_LUA writes: (the game's png, seconds or None)}
+    for tag, secs, png in items:
+        if tag:
+            want[f"f_{tag}_{k[tag]:02d}.png"] = (png, secs)
+            k[tag] += 1
+        else:                   # one untagged frame (a single image): its time does not matter
+            want["f.png"] = (png, None)
+    pngs, bad = _export(conf, path, os.path.join(tmp, "f"))
+    names = [os.path.basename(p) for p, _ in pngs]
+    if bad or len(names) != len(set(names)) or set(names) != set(want):
+        return False
+    for name, secs in zip(names, (s for _, s in pngs)):
+        game, should = want[name]
+        if should is not None and abs(secs - should) > handpolish.HOLD_TOLERANCE_S:
+            return False
+        with Image.open(os.path.join(tmp, name)) as a, Image.open(game) as b:
+            if not handpolish.same_look(a.convert("RGBA"), b.convert("RGBA")):
+                return False
+    return True
+
+
+def build(pack, conf, overwrite=False):
+    """Write <src_dir>/aseprite/{characters,fx,single}/<name>.aseprite. A file that already exists is exported first:
+    one that still shows the game's frames is left as it is; one that differs may hold hand polish (or the game's
+    art changed since) and is kept unless overwrite, and a file overwrite replaces is first copied to
+    <name>.aseprite.bak (one level, as pixelorama.build does).
+    Returns {"written": [...], "unchanged": [...], "kept": [...], "backups": [the .bak files written]}."""
     _bin(conf)   # no Aseprite = stop before anything is written into the game's tracked folders
     src = core.src(conf, "aseprite")
     chars, fx, single, fps, fx_loop, holds = handpolish.groups(pack)
@@ -144,19 +208,39 @@ def build(pack, conf):
     for f in single:
         jobs.append((os.path.join(src, "single", os.path.basename(f)[:-4] + ".aseprite"),
                      [("", 0.1, os.path.join(pack, f))]))
+    done = {"written": [], "unchanged": [], "kept": [], "backups": []}
     for out, items in jobs:
+        rel = os.path.relpath(out, pack)
+        if os.path.exists(out):
+            if _shows_the_game(conf, out, items):
+                done["unchanged"].append(out)
+                continue
+            if not overwrite:
+                done["kept"].append(out)
+                core.log(f"aseprite build {rel}: kept (it differs from the game's frames; --overwrite replaces it)")
+                continue
+            # the file being replaced may hold polish that was never re-exported: keep it beside the new one
+            with open(out, "rb") as fh:
+                old = fh.read()
+            with open(core.safe_dest(out + ".bak"), "wb") as fh:
+                fh.write(old)
+            done["backups"].append(out + ".bak")
+            core.log(f"aseprite build {rel}: the file it replaces is kept as {os.path.basename(out)}.bak")
         os.makedirs(os.path.dirname(out), exist_ok=True)
         lst = out[:-9] + ".list.txt"
         with open(core.safe_dest(lst), "w", encoding="utf-8") as fh:
             fh.write("\n".join(f"{t}|{d:.4f}|{p}" for t, d, p in items) + "\n")
         pal = out[:-9] + ".gpl"
-        n = _palette_file([p for _, _, p in items], pal)
+        n, indexed = _palette_file([p for _, _, p in items], pal)
         with Image.open(items[0][2]) as im:
             w, h = im.size
-        _run(conf, BUILD_LUA, "ase_build.lua", {"list": lst, "w": w, "h": h, "palette": pal, "out": out})
+        _run(conf, BUILD_LUA, "ase_build.lua", {"list": lst, "w": w, "h": h, "palette": pal, "out": out,
+                                                 "indexed": "1" if indexed else "0"})
         os.remove(lst)
-        core.log(f"aseprite build {os.path.relpath(out, pack)}: {len(items)} frames, {n} colors")
-    return [j[0] for j in jobs]
+        done["written"].append(out)
+        core.log(f"aseprite build {rel}: {len(items)} frames, {n} colors"
+                 + ("" if indexed else ", RGB (too many colours or partly clear pixels to index without loss)"))
+    return done
 
 
 def reexport(pack, conf):
@@ -168,21 +252,11 @@ def reexport(pack, conf):
     def export(file, prefix):
         for p in glob.glob(os.path.join(tmp, "*.png")):
             os.remove(p)
-        out = _run(conf, EXPORT_LUA, "ase_export.lua", {"file": file, "prefix": os.path.join(tmp, prefix)})
-        lines = out.splitlines()
-        bad = [ln.split(" ", 1)[1].strip() for ln in lines if ln.startswith("DOTWORK_ASE_BADTAG ")]
+        pngs, bad = _export(conf, file, os.path.join(tmp, prefix))
         if bad:
-            raise core.ToolError(f"{os.path.relpath(file, pack)}: tag {bad[0]!r}: animation names use letters, "
+            raise core.ToolError(f"{os.path.relpath(file, pack)}: tag {bad!r}: animation names use letters, "
                                  "digits and _ only")
-        secs = {}
-        for ln in lines:
-            if ln.startswith("DOTWORK_ASE_PNG "):
-                parts = ln.split(" ", 2)
-                if len(parts) == 3:
-                    try:
-                        secs[os.path.basename(parts[2].strip())] = float(parts[1])
-                    except ValueError:   # an older script's line (path only): the frame keeps its hold
-                        pass
+        secs = {os.path.basename(p): s for p, s in pngs}
         return sorted(glob.glob(os.path.join(tmp, "*.png"))), secs
 
     return handpolish.write_back(pack, conf, core.src(conf, "aseprite"), ".aseprite", export, "Aseprite")

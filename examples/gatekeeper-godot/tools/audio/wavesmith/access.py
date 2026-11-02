@@ -54,11 +54,14 @@ def clamp01(v):
 def user_bus_gains(buses, sliders, mapping=None):
     """{bus: linear gain} from the player's sliders, a slider never applied twice down one branch."""
     mapping = SLIDER_FOR_BUS if mapping is None else mapping
+    if not isinstance(buses, dict):
+        raise ValueError("buses must be an object of bus name -> {parent}")
     names = list(buses)
 
     def parent_of(b):
-        p = (buses.get(b) or {}).get("parent")
-        return p if p is not None else (None if b == "master" else "master")
+        entry = buses.get(b)
+        p = entry.get("parent") if isinstance(entry, dict) else None   # a malformed bus counts as under master
+        return p if isinstance(p, str) else (None if b == "master" else "master")
     out = {}
     for name in names:
         slider = mapping.get(name)
@@ -120,9 +123,13 @@ def cmd_gains(args):
         data = json.loads(Path(args.events).read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise ToolError(f"cannot read {args.events}: {exc}")
-    buses = data.get("buses")
+    buses = data.get("buses") if isinstance(data, dict) else None
     if not isinstance(buses, dict) or not buses:
         raise ToolError(f"{args.events} has no buses")
+    bad = [name for name, b in buses.items() if not isinstance(b, dict)]
+    if bad:
+        raise ToolError(f"{args.events}: bus {bad[0]} must be an object, e.g. {{\"parent\": \"master\"}} "
+                        f"(events validate names every problem)")
     sliders = {s: getattr(args, s) for s in SLIDERS}
     for bus, g in user_bus_gains(buses, sliders).items():
         slider = SLIDER_FOR_BUS.get(bus)

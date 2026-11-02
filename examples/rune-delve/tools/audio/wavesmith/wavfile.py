@@ -32,9 +32,21 @@ def to_pcm16(samples):
     return bytes(out), clipped
 
 
+class WavNameError(ValueError):
+    """A WAV was about to be written under another format's name (out.ogg holding RIFF bytes)."""
+
+
+def check_wav_name(path):
+    """Raises WavNameError unless path ends in .wav (any case): WAV bytes never go out under another name."""
+    if Path(path).suffix.lower() not in (".wav", ".wave"):
+        raise WavNameError(f"{path}: this writes a WAV, so the name must end in .wav (for OGG or MP3, write the .wav "
+                           f"and convert it: wavesmith.py formats convert x.wav --out x.ogg)")
+
+
 def write_wav(path, samples, rate, loop=None, channels=1):
     """Write a 16-bit WAV (stereo: samples interleaved L R L R). loop=(start, end) in frames adds a forward
-    'smpl' loop (end inclusive). Returns the number of clipped samples."""
+    'smpl' loop (end inclusive). Returns the number of clipped samples. The path must end in .wav."""
+    check_wav_name(path)
     data, clipped = to_pcm16(samples)
     fmt = struct.pack("<HHIIHH", 1, channels, rate, rate * 2 * channels, 2 * channels, 16)
     chunks = b"fmt " + struct.pack("<I", len(fmt)) + fmt
@@ -71,11 +83,7 @@ def read_wav_channels(path):
         cid, size = raw[pos:pos + 4], struct.unpack("<I", raw[pos + 4:pos + 8])[0]
         body = raw[pos + 8:pos + 8 + size]
         if cid == b"fmt ":
-            tag, channels, rate, _, _, bits = struct.unpack("<HHIIHH", body[:16])
-            # 32-bit is what Godot's movie writer records (--write-movie): reading it as 16-bit turns speech
-            # into what looks like white noise, a mistake made once while checking a game's audio
-            if tag != 1 or channels not in (1, 2) or bits not in (16, 32):
-                raise ValueError(f"{path}: only mono or stereo 16-bit or 32-bit integer PCM is supported")
+            channels, rate, bits = _fmt(path, body)
         elif cid == b"data":
             width = 4 if bits == 32 else 2
             n = len(body) // width
@@ -92,6 +100,67 @@ def read_wav_channels(path):
         start, end = loop[0], min(loop[1], frames - 1)
         loop = (start, end) if 0 <= start < end else None
     return samples, rate, loop, channels
+
+
+def _fmt(path, body):
+    """(channels, rate, bits) from a fmt chunk's body; ValueError for anything this module cannot read."""
+    if len(body) < 16:
+        raise ValueError(f"{path}: the fmt chunk is cut short ({len(body)} of 16 bytes): a broken WAV")
+    tag, channels, rate, _, _, bits = struct.unpack("<HHIIHH", body[:16])
+    # 32-bit is what Godot's movie writer records (--write-movie): reading it as 16-bit turns speech
+    # into what looks like white noise, a mistake made once while checking a game's audio
+    if tag != 1 or channels not in (1, 2) or bits not in (16, 32):
+        raise ValueError(f"{path}: only mono or stereo 16-bit or 32-bit integer PCM is supported")
+    if rate < 1:
+        raise ValueError(f"{path}: the WAV says its sample rate is {rate} Hz: a broken WAV")
+    return channels, rate, bits
+
+
+def wav_stream(path, chunk_frames=48000):
+    """(rate, channels, frames, chunks) for a WAV of any length in constant memory: chunks() yields one list of
+    floats per channel for up to chunk_frames frames at a time. Same formats and errors as read_wav_channels."""
+    path = Path(path)
+    size = path.stat().st_size
+    with path.open("rb") as f:
+        head = f.read(12)
+        if len(head) < 12 or head[:4] != b"RIFF" or head[8:12] != b"WAVE":
+            raise ValueError(f"{path}: not a WAV file")
+        fmt, data = None, None
+        while data is None or fmt is None:
+            h = f.read(8)
+            if len(h) < 8:
+                break
+            cid, n = h[:4], struct.unpack("<I", h[4:])[0]
+            if cid == b"fmt ":
+                fmt = _fmt(path, f.read(n))
+                f.seek(n % 2, 1)
+            elif cid == b"data":
+                data = (f.tell(), min(n, size - f.tell()))     # a recorder that never fixed the size: up to the end
+                f.seek(data[1] + data[1] % 2, 1)
+            else:
+                f.seek(n + n % 2, 1)
+    if fmt is None or data is None:
+        raise ValueError(f"{path}: missing fmt or data chunk")
+    channels, rate, bits = fmt
+    width = 4 if bits == 32 else 2
+    code, scale = ("i", 2147483647.0) if width == 4 else ("h", 32767.0)
+    frames = data[1] // (width * channels)
+
+    def chunks():
+        with path.open("rb") as f:
+            f.seek(data[0])
+            left = frames
+            while left > 0:
+                n = min(chunk_frames, left)
+                raw = f.read(n * width * channels)
+                n = len(raw) // (width * channels)
+                if n == 0:
+                    return
+                vals = [v / scale for v in struct.unpack(f"<{n * channels}{code}", raw[:n * width * channels])]
+                yield [vals] if channels == 1 else [vals[c::channels] for c in range(channels)]
+                left -= n
+
+    return rate, channels, frames, chunks
 
 
 def stats(samples, rate, loop=None):
@@ -162,6 +231,8 @@ def main(argv=None):
     lp.add_argument("--out", help="write here instead of replacing the input")
     args = ap.parse_args(argv)
     try:
+        if args.command != "stats":
+            check_wav_name(getattr(args, "out", None) or args.wav)
         samples, rate, loop, channels = read_wav_channels(args.wav)
     except (OSError, ValueError) as exc:
         print(f"[error] {exc}", file=sys.stderr)

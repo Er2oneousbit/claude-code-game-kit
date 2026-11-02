@@ -34,7 +34,7 @@ import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from wavfile import stats, write_wav  # noqa: E402
+from wavfile import WavNameError, check_wav_name, stats, write_wav  # noqa: E402
 
 MAGIC = b"fLaC"
 SUPPORTED_BITS = (16, 24)
@@ -385,6 +385,7 @@ def main(argv=None):
                   f"{seconds:.3f} s, {md5_note}")
             return 0
         out = Path(args.out)
+        check_wav_name(out)                         # before the decode: a wrong name costs nothing
         if out.exists() and not args.overwrite:
             print(f"[error] {out} exists (use --overwrite)", file=sys.stderr)
             return 2
@@ -399,7 +400,7 @@ def main(argv=None):
         if DEBUG:
             traceback.print_exc()
         return 1
-    except (FlacError, OSError) as exc:
+    except (FlacError, WavNameError, OSError) as exc:
         print(f"[error] {exc}", file=sys.stderr)
         if DEBUG:
             traceback.print_exc()

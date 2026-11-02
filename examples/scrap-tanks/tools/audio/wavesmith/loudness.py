@@ -24,7 +24,12 @@
 #           separately), measured over at least 30 minutes of representative gameplay; home -24 +/-2 LKFS, portable
 #           -18 +/-2 LKFS, true peak at most -1 dBTP. Record a capture with your engine (Godot: --write-movie).
 #           Per-asset levels (`normalize --bus`, `conventions`) are kit house conventions, starting points to tune by
-#           ear, not part of any standard. Pure Python: about 4 s per minute of stereo 44.1 kHz audio.
+#           ear, not part of any standard. Pure Python: about 4 s per minute of stereo 44.1 kHz audio; other
+#           material can cost far more (measured: 27 s per minute of 48 kHz stereo tone plus noise).
+#           Memory: a WAV is measured as it is read (measure, check-mix), in under 40 MB whatever its length, so a
+#           30-minute capture is fine; record captures as WAV. FLAC, OGG and ffmpeg formats are decoded whole first:
+#           about 32 bytes per sample, so roughly 180 MB per minute of 48 kHz stereo (convert long ones to WAV).
+#           normalize and mono also hold the whole file (they are for single assets).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
@@ -49,7 +54,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import audioio  # noqa: E402
 import flacfile  # noqa: E402
-from wavfile import read_wav_channels, write_wav  # noqa: E402
+from wavfile import read_wav_channels, wav_stream  # noqa: E402
 
 ABS_GATE = -70.0            # LKFS, BS.1770 and Tech 3342
 REL_GATE_I = -10.0          # LU below the absolute-gated loudness, integrated (BS.1770-2 onward)
@@ -124,24 +129,39 @@ def k_weighting(rate):
     return shelf, highpass
 
 
+class KMeter:
+    """K-weighting and 100 ms sub-block mean squares for one channel, fed in any number of chunks (the filter
+    state carries over, so the result does not depend on where the chunks split). subs: the finished sub-blocks."""
+
+    def __init__(self, rate):
+        self.coef = k_weighting(rate)
+        self.n = int(round(SUB_S * rate))
+        self.state = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0)      # x1 x2 y1 y2 z1 z2, the running sum and count
+        self.subs = []
+
+    def feed(self, channel):
+        (b0, b1, b2, a1, a2), (c0, c1, c2, d1, d2) = self.coef
+        n, out = self.n, self.subs
+        x1, x2, y1, y2, z1, z2, acc, count = self.state
+        for x in channel:
+            y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+            x2, x1 = x1, x
+            z = c0 * y + c1 * y1 + c2 * y2 - d1 * z1 - d2 * z2
+            y2, y1 = y1, y
+            z2, z1 = z1, z
+            acc += z * z
+            count += 1
+            if count == n:
+                out.append(acc / n)
+                acc, count = 0.0, 0
+        self.state = (x1, x2, y1, y2, z1, z2, acc, count)
+
+
 def sub_block_energy(channel, rate):
     """Mean square of the K-weighted channel per 100 ms sub-block (incomplete last sub-block dropped)."""
-    (b0, b1, b2, a1, a2), (c0, c1, c2, d1, d2) = k_weighting(rate)
-    n = int(round(SUB_S * rate))
-    out, acc, count = [], 0.0, 0
-    x1 = x2 = y1 = y2 = z1 = z2 = 0.0
-    for x in channel:
-        y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
-        x2, x1 = x1, x
-        z = c0 * y + c1 * y1 + c2 * y2 - d1 * z1 - d2 * z2
-        y2, y1 = y1, y
-        z2, z1 = z1, z
-        acc += z * z
-        count += 1
-        if count == n:
-            out.append(acc / n)
-            acc, count = 0.0, 0
-    return out
+    m = KMeter(rate)
+    m.feed(channel)
+    return m.subs
 
 
 def lk(power):
@@ -221,41 +241,76 @@ def interpolator(rate, factor=None):
     return factor, phases
 
 
+class PeakMeter:
+    """True peak over any number of channels, fed in chunks of any size. Each channel keeps a buffer of the samples
+    it still needs (two blocks of `taps` plus whatever has not filled a block yet), so memory does not grow with
+    the file. best starts at the caller's sample peak; finish() returns the true peak as a linear amplitude."""
+
+    def __init__(self, rate, channels, best=0.0):
+        self.factor, self.phases = interpolator(rate)
+        self.taps = len(self.phases[0])
+        self.bound = max(sum(abs(c) for c in p) for p in self.phases)
+        self.best = best
+        self.bufs = [[0.0] * self.taps for _ in range(channels)]   # the leading zeros: room for the first window
+
+    def feed(self, chans):
+        for buf, ch in zip(self.bufs, chans):
+            buf.extend(ch)
+            self._scan(buf)
+
+    def finish(self):
+        for buf in self.bufs:
+            buf.extend([0.0] * (2 * self.taps))                    # the trailing zeros: the last windows
+            self._scan(buf)
+        return self.best
+
+    def _scan(self, buf):
+        """Every complete block whose next block is complete too, then drops them from the buffer's front."""
+        taps = self.taps
+        blocks = len(buf) // taps - 1
+        if blocks < 1:
+            return
+        self.best = _scan_peaks(buf, blocks, taps, self.factor, self.phases, self.bound, self.best)
+        del buf[:blocks * taps]
+
+
+def _scan_peaks(padded, blocks, taps, factor, phases, bound, best):
+    """The running maximum after interpolating the windows that start in blocks 0..blocks-1 of padded."""
+    # A window starting in block c lies inside blocks c and c+1, so max(block c, block c+1) bounds it; an
+    # interpolated value is at most that bound times the filter's L1 norm. Skip every block that cannot beat
+    # the running maximum (most of real audio), interpolate the rest.
+    chunk_max = [max(abs(v) for v in padded[k:k + taps]) for k in range(0, (blocks + 1) * taps, taps)]
+    for c in range(blocks):
+        if max(chunk_max[c], chunk_max[c + 1]) * bound <= best:
+            continue
+        for i in range(c * taps, (c + 1) * taps):
+            # Stage 1: the cheap 12-tap Annex 2 interpolator, centred on the same sample gap as the fine
+            # filter, locates candidates; only a window that comes within LOCATE_MARGIN of the running
+            # maximum gets the fine filter. The coarse filter under-read real audio by at most 0.84 dB (K01),
+            # so a 1.5 dB margin never skips a true maximum, and dense loud mixes stay affordable.
+            mid = i + taps // 2 - 6
+            coarse_seg = padded[mid:mid + 12][::-1]
+            values = [abs(sum(k * x for k, x in zip(p, coarse_seg))) for p in ANNEX2]
+            coarse = max(values)
+            if coarse * LOCATE_MARGIN <= best:
+                continue
+            # Stage 2: fine phases around the coarse maximum only (coarse phase q sits at fine phase q*f/4);
+            # phases near the gap's edges are covered when the neighbouring gap is refined
+            centre = values.index(coarse) * factor // 4
+            seg = padded[i:i + taps][::-1]
+            for ph in range(max(0, centre - factor // 4), min(factor, centre + factor // 4 + 1)):
+                v = abs(sum(k * x for k, x in zip(phases[ph], seg)))
+                if v > best:
+                    best = v
+    return best
+
+
 def true_peak(channels, rate):
     """Max over channels of the interpolated absolute value, as a linear amplitude."""
-    factor, phases = interpolator(rate)
-    taps = len(phases[0])
-    bound = max(sum(abs(c) for c in p) for p in phases)
     best = max((max((abs(s) for s in ch), default=0.0) for ch in channels), default=0.0)
-    for ch in channels:
-        padded = [0.0] * taps + list(ch) + [0.0] * (2 * taps)
-        # A window starting in chunk c lies inside chunks c and c+1, so max(chunk c, chunk c+1) bounds it; an
-        # interpolated value is at most that bound times the filter's L1 norm. Skip every chunk that cannot beat
-        # the running maximum (most of real audio), interpolate the rest.
-        chunk_max = [max(abs(v) for v in padded[k:k + taps]) for k in range(0, len(padded) - taps + 1, taps)]
-        for c in range(len(chunk_max) - 1):
-            if max(chunk_max[c], chunk_max[c + 1]) * bound <= best:
-                continue
-            for i in range(c * taps, min((c + 1) * taps, len(padded) - taps)):
-                # Stage 1: the cheap 12-tap Annex 2 interpolator, centred on the same sample gap as the fine
-                # filter, locates candidates; only a window that comes within LOCATE_MARGIN of the running
-                # maximum gets the fine filter. The coarse filter under-read real audio by at most 0.84 dB (K01),
-                # so a 1.5 dB margin never skips a true maximum, and dense loud mixes stay affordable.
-                mid = i + taps // 2 - 6
-                coarse_seg = padded[mid:mid + 12][::-1]
-                values = [abs(sum(k * x for k, x in zip(p, coarse_seg))) for p in ANNEX2]
-                coarse = max(values)
-                if coarse * LOCATE_MARGIN <= best:
-                    continue
-                # Stage 2: fine phases around the coarse maximum only (coarse phase q sits at fine phase q*f/4);
-                # phases near the gap's edges are covered when the neighbouring gap is refined
-                centre = values.index(coarse) * factor // 4
-                seg = padded[i:i + taps][::-1]
-                for ph in range(max(0, centre - factor // 4), min(factor, centre + factor // 4 + 1)):
-                    v = abs(sum(k * x for k, x in zip(phases[ph], seg)))
-                    if v > best:
-                        best = v
-    return best
+    meter = PeakMeter(rate, len(channels), best)
+    meter.feed(channels)
+    return meter.finish()
 
 
 def db(x):
@@ -264,21 +319,56 @@ def db(x):
 
 # ---- Measure ------------------------------------------------------------------------
 def measure_channels(channels, rate, want_tp=True):
+    if not rate or rate < 1:
+        raise ToolError(f"a sample rate of {rate} Hz cannot be measured (a broken file)")
     subs = [sub_block_energy(c, rate) for c in channels]
+    frames = len(channels[0]) if channels else 0
+    sample_peak = max((max((abs(s) for s in c), default=0.0) for c in channels), default=0.0)
+    tp = true_peak(channels, rate) if want_tp and sample_peak > 0 else None
+    return _result(subs, sample_peak, tp, frames, rate, len(channels))
+
+
+def _result(subs, sample_peak, tp, frames, rate, nch):
     i_lufs = integrated(window_loudness(subs, 4))
     # Full 3 s windows only, every 100 ms (as ffmpeg's ebur128 does); a file shorter than 3 s has no loudness range
     windows = window_loudness(subs, 30)
     lra = loudness_range(windows) if windows else None
-    frames = len(channels[0]) if channels else 0
-    sample_peak = max((max((abs(s) for s in c), default=0.0) for c in channels), default=0.0)
     return {"integrated_lufs": round(i_lufs, 2) if math.isfinite(i_lufs) else None,
             "lra_lu": round(lra, 2) if lra is not None else None,
-            "true_peak_dbtp": round(db(true_peak(channels, rate)), 2) if want_tp and sample_peak > 0 else None,
+            "true_peak_dbtp": round(db(tp), 2) if tp is not None and sample_peak > 0 else None,
             "sample_peak_dbfs": round(db(sample_peak), 2) if sample_peak > 0 else None,
-            "seconds": round(frames / rate, 3) if rate else 0.0, "rate": rate, "channels": len(channels)}
+            "seconds": round(frames / rate, 3) if rate else 0.0, "rate": rate, "channels": nch}
+
+
+def measure_wav_stream(path, want_tp=True):
+    """measure_channels for a WAV read chunk by chunk: the same numbers in constant memory."""
+    try:
+        rate, nch, frames, chunks = wav_stream(path)
+    except (OSError, ValueError) as exc:
+        raise ToolError(str(exc))
+    meters = [KMeter(rate) for _ in range(nch)]
+    peak_meter = PeakMeter(rate, nch) if want_tp else None
+    sample_peak = 0.0
+    for chans in chunks():
+        sample_peak = max(sample_peak, max((max((abs(s) for s in c), default=0.0) for c in chans), default=0.0))
+        for m, c in zip(meters, chans):
+            m.feed(c)
+        if peak_meter:
+            # every sample is a candidate; starting from the running sample peak only skips windows that cannot win
+            peak_meter.best = max(peak_meter.best, sample_peak)
+            peak_meter.feed(chans)
+    tp = peak_meter.finish() if peak_meter and sample_peak > 0 else None
+    return _result([m.subs for m in meters], sample_peak, tp, frames, rate, nch)
 
 
 def measure_file(path, want_tp=True):
+    try:
+        with Path(path).open("rb") as f:
+            is_wav = audioio.sniff(f.read(16)) == "wav"
+    except OSError as exc:
+        raise ToolError(f"cannot read {path}: {exc}")
+    if is_wav:                              # any length in constant memory
+        return measure_wav_stream(path, want_tp)
     channels, rate = read_audio(path)
     return measure_channels(channels, rate, want_tp)
 
@@ -444,8 +534,10 @@ def cmd_normalize(args):
                   f"applied {capped:+.1f} dB (a limiter would be needed for the rest)")
             gain = capped
     g = 10 ** (gain / 20)
-    interleaved = [s * g for frame in zip(*channels) for s in frame]
-    clipped = write_wav(out, interleaved, rate, channels=len(channels))
+    try:                                    # any format audioio writes: .wav natively, .ogg and others via ffmpeg
+        clipped = audioio.write_audio(out, [[s * g for s in c] for c in channels], rate)
+    except audioio.AudioIOError as exc:
+        raise ToolError(str(exc))
     after = measure_file(out)
     print(f"[ OK ] {out.as_posix()}: {gain:+.2f} dB -> {fmt(after['integrated_lufs'], 'LUFS')}, "
           f"true peak {fmt(after['true_peak_dbtp'], 'dBTP')} (target {label})")

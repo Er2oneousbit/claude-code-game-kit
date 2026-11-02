@@ -198,7 +198,17 @@ def load_events(path):
 
 
 def validate(data, root=None):
-    """List of problems (empty = valid)."""
+    """List of problems (empty = valid). Never raises: a value of the wrong type is one of the problems."""
+    if not isinstance(data, dict):
+        return ["the file must hold one JSON object: {\"version\": 1, \"buses\": {...}, \"events\": {...}}"]
+    try:
+        return _validate(data, root)
+    except (TypeError, AttributeError, KeyError) as exc:   # a value of a type no check foresaw: named, not a crash
+        return [f"a value has the wrong type ({type(exc).__name__}: {exc}); compare the file with the format in "
+                f"docs/resources/audio.md"]
+
+
+def _validate(data, root):
     p = []
     if data.get("version") != 1:
         p.append("version must be 1")
@@ -206,26 +216,41 @@ def validate(data, root=None):
     if isinstance(seed, bool) or not isinstance(seed, int) or seed < 0:
         p.append("seed must be a whole number, 0 or more (ports compute with it exactly)")
     buses = data.get("buses", {})
+    if not isinstance(buses, dict):
+        p.append("buses must be an object: {\"master\": {}, \"sfx\": {\"parent\": \"master\"}}")
+        buses = {}
     if "master" not in buses:
         p.append("buses: a 'master' bus is required")
     for name, b in buses.items():
+        if not isinstance(b, dict):
+            p.append(f"bus {name}: must be an object, e.g. {{\"parent\": \"master\"}}")
+            continue
         parent = b.get("parent")
-        if name != "master" and parent not in buses:
+        if name != "master" and not (isinstance(parent, str) and parent in buses):
             p.append(f"bus {name}: parent {parent!r} is not a bus")
         seen, cur = set(), name
-        while cur in buses and cur != "master":
+        while isinstance(cur, str) and cur in buses and cur != "master":
             if cur in seen:
                 p.append(f"bus {name}: parent loop")
                 break
             seen.add(cur)
-            cur = buses[cur].get("parent")
+            up = buses[cur]
+            cur = up.get("parent") if isinstance(up, dict) else None
         if not isinstance(b.get("volume_db", 0), (int, float)) or b.get("volume_db", 0) > 12:
             p.append(f"bus {name}: volume_db must be a number at most +12")
-    for i, rule in enumerate(data.get("ducking", [])):
-        if rule.get("trigger") not in buses:
+    ducking = data.get("ducking", [])
+    if not isinstance(ducking, list):
+        p.append("ducking must be a list of rules")
+        ducking = []
+    for i, rule in enumerate(ducking):
+        if not isinstance(rule, dict):
+            p.append(f"ducking[{i}]: must be an object (trigger, targets, depth_db, attack_ms, release_ms)")
+            continue
+        if not (isinstance(rule.get("trigger"), str) and rule["trigger"] in buses):
             p.append(f"ducking[{i}]: trigger {rule.get('trigger')!r} is not a bus")
-        for t in rule.get("targets", []):
-            if t not in buses:
+        targets = rule.get("targets", [])
+        for t in targets if isinstance(targets, list) else [targets]:
+            if not (isinstance(t, str) and t in buses):
                 p.append(f"ducking[{i}]: target {t!r} is not a bus")
         if not rule.get("targets"):
             p.append(f"ducking[{i}]: no targets")
@@ -235,16 +260,22 @@ def validate(data, root=None):
             if not 0 <= rule.get(k, -1) <= 10000:
                 p.append(f"ducking[{i}]: {k} must be 0..10000")
     events = data.get("events", {})
+    if not isinstance(events, dict):
+        p.append("events must be an object of event id -> {bus, files, ...}")
+        events = {}
     if not events:
         p.append("events: none defined")
     for name, ev in events.items():
         where = f"event {name}"
+        if not isinstance(ev, dict):
+            p.append(f"{where}: must be an object, e.g. {{\"bus\": \"sfx\", \"files\": [\"hit.wav\"]}}")
+            continue
         nulls = sorted(k for k, v in ev.items() if v is None)
         if nulls:
             p.append(f"{where}: {', '.join(nulls)} is null: leave the field out to get its default")
         if not ID_RE.match(name):
             p.append(f"{where}: id must be lowercase ASCII letters, digits, _ . - (it seeds the random source)")
-        if ev.get("bus") not in buses:
+        if not (isinstance(ev.get("bus"), str) and ev["bus"] in buses):
             p.append(f"{where}: bus {ev.get('bus')!r} is not a bus")
         files = ev.get("files")
         if not isinstance(files, list) or not files:

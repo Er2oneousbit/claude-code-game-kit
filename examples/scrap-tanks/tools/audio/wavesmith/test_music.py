@@ -14,6 +14,7 @@ import copy
 import io
 import json
 import math
+import os
 import sys
 import tempfile
 import unittest
@@ -100,6 +101,18 @@ class MusicExam(unittest.TestCase):
         self.assertEqual(rc, 0, out)
         samples, rate, lp, ch = read_wav_channels(self.dir / "loop.wav")
         self.assertEqual((len(samples), lp), (end, (0, end - 1)))
+        before = os.environ.get("WAVESMITH_FFMPEG")
+        os.environ["WAVESMITH_FFMPEG"] = str(self.dir / "no-such-ffmpeg")   # no ffmpeg: .ogg is refused, not faked
+        try:
+            rc, out = self.run_tool("loop", f, "--bpm", 96, "--bars", 2, "--out", self.dir / "loop.ogg")
+        finally:
+            if before is None:
+                os.environ.pop("WAVESMITH_FFMPEG")
+            else:
+                os.environ["WAVESMITH_FFMPEG"] = before
+        self.assertEqual(rc, 2, out)
+        self.assertIn("needs ffmpeg", out)
+        self.assertFalse((self.dir / "loop.ogg").exists())
 
     # ---- boundaries and plans
     def test_boundaries_for_every_quantize_with_an_intro(self):
@@ -153,6 +166,18 @@ class MusicExam(unittest.TestCase):
             self.assertIn(words, problems)
         write_wav(self.dir / "explore_pads.wav", [0.1] * end, RATE)
         self.assertIn("stem pads: no loop point", "\n".join(M.validate(MUSIC, self.dir)))
+
+    def test_values_of_the_wrong_type_are_problems_not_crashes(self):
+        for bad in ("x", [1], 3, None, True):
+            for change, word in (({"tracks": {"explore": bad}}, "track explore"), ({"tracks": bad}, "track"),
+                                 ({"stingers": {"alarm": bad}}, "stinger alarm"), ({"transitions": [bad]}, "transition 0"),
+                                 ({"transitions": bad}, "transition")):
+                data = dict(copy.deepcopy(MUSIC), **change)
+                problems = M.validate(data)                          # must not raise
+                if change.get("transitions", 0) is None:
+                    continue                                         # "transitions": null means none: valid
+                self.assertTrue(problems and any(word in p for p in problems), f"{change}: {problems}")
+        self.assertIn("JSON object", M.validate("music")[0])
 
     def test_map_problems_are_named(self):
         d = copy.deepcopy(MUSIC)

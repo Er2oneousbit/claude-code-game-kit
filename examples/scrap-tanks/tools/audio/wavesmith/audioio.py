@@ -13,7 +13,8 @@
 #           Opus and AAC input and for writing OGG
 # Exit    : 0 ok, 1 a conversion failed, 2 usage, unreadable file or a format that needs ffmpeg when it is missing
 # Notes   : Files are recognised by their first bytes, not their names. ffmpeg runs as a separate program on local
-#           files only (no network), with -nostdin, decoding to a temporary 16-bit WAV that wavfile.py reads, so no
+#           files only (-protocol_whitelist file: a playlist-style input cannot make it open a URL), with -nostdin,
+#           decoding to a temporary 16-bit WAV that wavfile.py reads, so no
 #           output parsing depends on ffmpeg's version (ffmpeg writes deeper WAVs with an extensible header that
 #           wavfile.py does not read; 16 bits is plenty for lossy sources). `convert --loop` keeps a WAV's 'smpl' loop as LOOPSTART /
 #           LOOPLENGTH comments in the OGG, the convention RPG Maker reads (verify in RPG Maker MZ); Godot and Unity
@@ -110,6 +111,9 @@ def _from_vorbis(data, path, mod):
     try:
         info, chans, _ = mod.decode(data)
     except Exception as exc:          # the decoder's own error classes: report, never a traceback
+        if type(exc).__name__ == "VorbisLimit" and find_ffmpeg():
+            dbg(f"{path}: {exc}; decoding with ffmpeg instead")
+            return _via_ffmpeg(path, "OGG Vorbis")
         raise AudioIOError(f"{path}: {exc}")
     if "bits" in info:                # integer samples (a decoder that mirrors flacfile.py exactly)
         scale = float(1 << (info["bits"] - 1))
@@ -124,7 +128,10 @@ def _via_ffmpeg(path, kind):
                            f"{FFMPEG_ENV}), or convert it to WAV, FLAC or OGG Vorbis first")
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "decoded.wav"
-        cmd = [ff, "-nostdin", "-v", "error", "-i", str(path), "-c:a", "pcm_s16le", str(out)]
+        # local files only: a playlist-style input (HLS, concat) cannot make ffmpeg open a URL; an absolute path
+        # cannot be mistaken for an option (a file named -x.mp3)
+        cmd = [ff, "-nostdin", "-v", "error", "-protocol_whitelist", "file", "-i", str(Path(path).resolve()),
+               "-c:a", "pcm_s16le", str(out)]
         dbg(" ".join(cmd))
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
@@ -177,13 +184,13 @@ def write_audio(path, channels, rate, loop=None, quality=OGG_QUALITY):
     with tempfile.TemporaryDirectory() as tmp:
         src = Path(tmp) / "source.wav"
         clipped = write_wav(src, interleaved, rate, channels=len(channels))
-        cmd = [ff, "-nostdin", "-v", "error", "-y", "-i", str(src)]
+        cmd = [ff, "-nostdin", "-v", "error", "-y", "-protocol_whitelist", "file", "-i", str(src)]
         if path.suffix.lower() == ".ogg":
             cmd += ["-c:a", "libvorbis", "-q:a", str(quality)]
             if loop:
                 start, end = loop
                 cmd += ["-metadata", f"LOOPSTART={start}", "-metadata", f"LOOPLENGTH={end - start + 1}"]
-        cmd.append(str(path))
+        cmd.append(str(path.resolve()))
         dbg(" ".join(cmd))
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",

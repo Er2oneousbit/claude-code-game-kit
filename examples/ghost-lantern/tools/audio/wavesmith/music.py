@@ -48,7 +48,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import audioio  # noqa: E402
-from wavfile import read_wav_channels, write_wav  # noqa: E402
+from wavfile import read_wav_channels  # noqa: E402
 
 VERSION = 1
 QUANTIZE = ("immediate", "beat", "bar", "phrase", "loop_end")
@@ -170,7 +170,17 @@ def make_loop(samples, rate, channels, bpm, bars, beats_per_bar=4, tail_s=None):
 
 # ---- Validate ----------------------------------------------------------------------------------------------------
 def validate(data, root=None):
-    """List of problems (empty = valid)."""
+    """List of problems (empty = valid). Never raises: a value of the wrong type is one of the problems."""
+    if not isinstance(data, dict):
+        return [f"the file must hold one JSON object: {{\"version\": {VERSION}, \"tracks\": {{...}}, ...}}"]
+    try:
+        return _validate(data, root)
+    except (TypeError, AttributeError, KeyError) as exc:   # a value of a type no check foresaw: named, not a crash
+        return [f"a value has the wrong type ({type(exc).__name__}: {exc}); compare the file with the format in "
+                f"docs/resources/audio.md"]
+
+
+def _validate(data, root):
     p = []
     if data.get("version") != VERSION:
         return [f"version must be {VERSION}"]
@@ -179,10 +189,18 @@ def validate(data, root=None):
         p.append("sample_rate must be a whole number of Hz (44100 or 48000), the rate of every music file")
         rate = None
     tracks, stingers = data.get("tracks") or {}, data.get("stingers") or {}
+    for key, value in (("tracks", tracks), ("stingers", stingers)):
+        if not isinstance(value, dict):
+            p.append(f"{key} must be an object of name -> {{...}}")
+    tracks = tracks if isinstance(tracks, dict) else {}
+    stingers = stingers if isinstance(stingers, dict) else {}
     if not tracks:
         p.append("tracks: at least one track")
     for name, t in tracks.items():
         where = f"track {name}"
+        if not isinstance(t, dict):
+            p.append(f"{where}: must be an object (bpm, bars, stems, ...)")
+            continue
         bpm, bpb, bars = t.get("bpm"), t.get("beats_per_bar", 4), t.get("bars")
         if not isinstance(bpm, (int, float)) or isinstance(bpm, bool) or not 20 <= bpm <= 400:
             p.append(f"{where}: bpm must be 20..400")
@@ -204,13 +222,23 @@ def validate(data, root=None):
             p += check_stems(where, t, stems, root, rate)
     for name, s in stingers.items():
         where = f"stinger {name}"
+        if not isinstance(s, dict):
+            p.append(f"{where}: must be an object (file, bars)")
+            continue
         if not isinstance(s.get("bars"), (int, float)) or not 0 < s["bars"] <= MAX_STINGER_BARS:
             p.append(f"{where}: bars must be above 0 and at most {MAX_STINGER_BARS} (the next track enters after it)")
         if not isinstance(s.get("file"), str):
             p.append(f"{where}: file is required")
         elif root and not (Path(root) / s["file"]).is_file():
             p.append(f"{where}: {s['file']} not found under the root")
-    for k, r in enumerate(data.get("transitions") or []):
+    transitions = data.get("transitions") or []
+    if not isinstance(transitions, list):
+        p.append("transitions must be a list of rules")
+        transitions = []
+    for k, r in enumerate(transitions):
+        if not isinstance(r, dict):
+            p.append(f"transition {k}: must be an object (from, to, quantize, ...)")
+            continue
         where = f"transition {k} ({r.get('from')} -> {r.get('to')})"
         for end in ("from", "to"):
             if r.get(end) != "*" and r.get(end) not in tracks:
@@ -344,7 +372,10 @@ def cmd_loop(args):
     if peak > 1.0:                                          # the folded tail can add up: keep it unclipped
         body = [x / peak * 0.98 for x in body]
     out.parent.mkdir(parents=True, exist_ok=True)
-    write_wav(out, body, rate, loop=loop, channels=channels)
+    try:                                    # .wav natively (smpl loop), .ogg via ffmpeg (LOOPSTART / LOOPLENGTH)
+        audioio.write_audio(out, [body[c::channels] for c in range(channels)], rate, loop=loop)
+    except audioio.AudioIOError as exc:
+        raise ToolError(str(exc))
     print(f"[ OK ] {out.as_posix()}: {args.bars} bars at {args.bpm} BPM = {(loop[1] + 1) / rate:.3f} s, loop 0..{loop[1]}"
           + (f", scaled by {0.98 / peak:.3f} to stay unclipped" if peak > 1.0 else ""))
     return 0

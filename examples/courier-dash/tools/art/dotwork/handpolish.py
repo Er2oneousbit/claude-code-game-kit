@@ -14,6 +14,7 @@ import glob
 import json
 import os
 import re
+from collections import Counter
 
 import numpy as np
 from PIL import Image
@@ -25,6 +26,14 @@ import godot
 # Dotwork hands it has 4 decimals); a deliberate change is far larger than 1.5 ms
 HOLD_TOLERANCE_S = 0.0015
 TAG_NAME = re.compile(r"[A-Za-z0-9_]+")   # animation names become file names: nothing that can leave the folder
+# a character frame an editor exports, after spr_<name>_: <animation>_<frame number>.png (the number is the last part,
+# so animation names may hold digits and _)
+FRAME_NAME = re.compile(r"(.+)_([0-9]+)\.png")
+MAX_CLIP = 100       # frames per animation: the shipped names carry two digits (spr_<name>_<anim>_NN.png)
+# what a row added for a new file (a frame or clip made in the editor) takes from its sibling's row: where the art
+# came from. Holds (durations), checks (qa) and generation inputs (request, seed, prompt) belong to the sibling's own
+# file: a 2-frame clip added next to an attack inherited its 4 holds and timed itself by them (2026-11-01 review)
+PROVENANCE = ("models", "workflow", "routes", "blend")
 # one animation of a SpriteFrames .tres, as godot.sprite_frames and Godot itself write it
 TRES_ANIM = re.compile(r'"loop": (true|false),\s*"name": &"([^"]*)",\s*"speed": ([0-9.]+)')
 
@@ -67,9 +76,9 @@ class GameManifests:
         anchor, blend, qa ...), its date and its position: a changed file gets its new sha256, the polish note (added
         once) and the given fields. An unchanged file's rows stay exactly as they are, except the keys named in
         force (a retimed clip: its sheet PNG is the same, its holds are not), so an untouched round trip saves no
-        manifest at all. A file no row lists yet (a frame or clip added in the
-        editor) gets a new row copied from like (a sibling row: same models and workflow), never a default model
-        list; with no sibling, models is empty."""
+        manifest at all. A file no row lists yet (a frame or clip added in the editor) gets a new row: the given
+        fields, plus the PROVENANCE keys of like (a sibling row: same models and workflow) and nothing else of it,
+        never a default model list; with no sibling, models is empty."""
         rel = os.path.relpath(path, core.PROJECT).replace(os.sep, "/")
         found = False
         for m in self.mans:
@@ -99,7 +108,7 @@ class GameManifests:
             return
         row = {"file": rel, "kind": kind, "sha256": core.sha256_file(path), "date": datetime.date.today().isoformat(),
                "models": []}
-        row.update({k: v for k, v in (like or {}).items() if k not in ("file", "kind", "sha256", "date", "note")})
+        row.update({k: like[k] for k in PROVENANCE if like and k in like})
         row.update({k: v for k, v in fields.items() if v is not None})
         row["note"] = note
         home = next((m for m in self.mans if like and any(r["file"] == like.get("file") for r in m.data["assets"])),
@@ -316,13 +325,26 @@ def write_back(pack, conf, src_dir, ext, export, tool):
         pngs, secs = frames_of(a_file, f"spr_{name}")
         with Image.open(pngs[0]) as im:
             W, H = im.size
-        anims = {}
+        clip_of = {}                                       # png basename -> animation, every name checked first
         for p in pngs:
             base = os.path.basename(p)                     # spr_<name>_<anim>_NN.png
-            anim = base[len(f"spr_{name}_"):-7]
-            if not TAG_NAME.fullmatch(anim):
-                raise core.ToolError(f"{os.path.relpath(a_file, pack)}: tag {anim!r}: animation names use letters, "
-                                     "digits and _ only")
+            m = FRAME_NAME.fullmatch(base[len(f"spr_{name}_"):]) if base.startswith(f"spr_{name}_") else None
+            if not m:
+                raise core.ToolError(f"{os.path.relpath(a_file, pack)}: frame {base!r} is in no tag: each animation "
+                                     "is one tag named like the animation (walk_s)")
+            if not TAG_NAME.fullmatch(m.group(1)):
+                raise core.ToolError(f"{os.path.relpath(a_file, pack)}: tag {m.group(1)!r}: animation names use "
+                                     "letters, digits and _ only")
+            clip_of[base] = m.group(1)
+        # a longer tag used to turn frame 100 (named _100) into a bogus animation "<anim>_" with its own sheet
+        for anim, n in sorted(Counter(clip_of.values()).items()):
+            if n > MAX_CLIP:
+                raise core.ToolError(f"{os.path.relpath(a_file, pack)}: tag {anim} has {n} frames (at most "
+                                     f"{MAX_CLIP}: split it into two tags)")
+        anims = {}
+        for p in pngs:
+            base = os.path.basename(p)
+            anim = clip_of[base]
             with Image.open(p) as im:
                 png(im, os.path.join(out, "frames", base), "frame", sibling("frame", home), animation=anim,
                     canvas=[W, H], anchor="feet_bottom_center")
@@ -368,10 +390,13 @@ def write_back(pack, conf, src_dir, ext, export, tool):
         tag = fx_loop.get(name, "play")
         fx_fps, loop = fx_rate(conf, name, tag)
         files = []
+        like = sibling("fx_frame", home)
+        # the effect's frame size and anchor, given: a row added for a new frame takes only provenance from like
+        shape = {"anchor": like["anchor"]} if like and "anchor" in like else {}
         for i, p in enumerate(pngs):
             fn = f"spr_fx_{name}_{i:02d}.png"
             with Image.open(p) as im:
-                png(im, os.path.join(out, fn), "fx_frame", sibling("fx_frame", home))
+                png(im, os.path.join(out, fn), "fx_frame", like, canvas=list(im.size), **shape)
             files.append(fn)
         durs = holds_from_seconds([secs.get(os.path.basename(p)) for p in pngs], fx_fps, what=f"effect {name}")
         tres_path = os.path.join(out, f"fx_{name}_frames.tres")

@@ -18,6 +18,11 @@
 #           granule position and the start where the first page's granule says so, like a conformant decoder.
 #           Floor type 0 (never written by libvorbis), chained streams and Ogg files holding another codec
 #           (Opus, FLAC, Speex) are refused by name, never guessed.
+#           Limits: a page CRC proves nothing (anyone can recompute it), so a setup header may ask for at most
+#           65536 entries and 1M VQ values per codebook and 262144 entries and 2M values in all (real libvorbis
+#           files peak at 6561, 52488, 13411 and 61254), and a file may decode to at most 16384 samples per byte
+#           of file (at least 4M; digital 5.1 silence, the most compressible real file measured, is about 1600).
+#           Past a limit: VorbisLimit (exit 2), naming it; decode(data, max_values=N) raises the output limit.
 #           Accuracy: within 5e-7 of ffmpeg's decoder on every sample of a 47-file libvorbis corpus (q-1 to
 #           q10, 11.025 to 48 kHz, mono to 5.1); the difference is float32 against double rounding.
 #           Speed (measured, CPython 3.12): about 0.13 s per second of 44.1 kHz stereo at q3 and 0.2 s at q10;
@@ -48,18 +53,29 @@ import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from wavfile import stats, write_wav  # noqa: E402
+from wavfile import WavNameError, check_wav_name, stats, write_wav  # noqa: E402
 
 MAGIC = b"OggS"
 # What a BOS page of another codec starts with, so a wrong file is named instead of called corrupt
 OTHER_CODECS = ((b"OpusHead", "Opus"), (b"\x7fFLAC", "FLAC"), (b"fLaC", "FLAC"), (b"Speex   ", "Speex"),
                 (b"\x80theora", "Theora video"), (b"fishead\0", "Skeleton"), (b"PCM     ", "PCM"))
 PAD = 64            # spare slots at the end of residue vectors: a partition may overrun by part of a VQ vector
+# Limits (see the header): what one setup header may build, and what one file may decode to
+MAX_BOOK_ENTRIES = 1 << 16
+MAX_BOOK_VALUES = 1 << 20
+MAX_SETUP_ENTRIES = 1 << 18
+MAX_SETUP_VALUES = 1 << 21
+MAX_VALUES_PER_BYTE = 1 << 14
+MIN_VALUES_ALLOWED = 1 << 22
 DEBUG = False
 
 
 class VorbisError(Exception):
     """Exit 2: not an Ogg Vorbis file, or a Vorbis feature outside this decoder's scope."""
+
+
+class VorbisLimit(VorbisError):
+    """The file asks for more than this decoder allows (see Limits in the header): refused, not decoded."""
 
 
 class VorbisCorrupt(Exception):
@@ -307,10 +323,17 @@ def _huffman_codes(lengths, used):
     return codes
 
 
-def _read_codebook(br):
+def _read_codebook(br, budget):
+    """One codebook. budget = [entries, VQ values] still allowed in this setup header (spent here)."""
     if br.read(24) != 0x564342:
         raise VorbisCorrupt("codebook sync pattern missing (broken setup header)")
     dims, entries = br.read(16), br.read(24)
+    if dims < 1 or entries < 1:
+        raise VorbisCorrupt(f"a codebook with {dims} dimension(s) and {entries} entries (broken setup header)")
+    if entries > MAX_BOOK_ENTRIES or entries > budget[0]:
+        raise VorbisLimit(f"a codebook with {entries} entries: over this decoder's limit "
+                          f"({MAX_BOOK_ENTRIES} per codebook, {MAX_SETUP_ENTRIES} in all; real files use under 7000)")
+    budget[0] -= entries
     lengths = [0] * entries
     if not br.read(1):                              # not ordered: one length per entry, maybe sparse
         sparse = br.read(1)
@@ -329,6 +352,10 @@ def _read_codebook(br):
     lookup = br.read(4)
     vq = None
     if lookup in (1, 2):
+        if entries * dims > MAX_BOOK_VALUES or entries * dims > budget[1]:
+            raise VorbisLimit(f"a codebook of {entries} x {dims} values: over this decoder's limit "
+                              f"({MAX_BOOK_VALUES} per codebook, {MAX_SETUP_VALUES} in all; real files use under 60000)")
+        budget[1] -= entries * dims
         minimum, delta = _float32(br.read(32)), _float32(br.read(32))
         value_bits, sequence = br.read(4) + 1, br.read(1)
         nvals = _lookup1_values(entries, dims) if lookup == 1 else entries * dims
@@ -441,7 +468,8 @@ def _read_setup(packet, channels):
         raise VorbisCorrupt("the third packet is not a Vorbis setup header")
     br = BitReader(packet, 56)
     try:
-        books = [_read_codebook(br) for _ in range(br.read(8) + 1)]
+        budget = [MAX_SETUP_ENTRIES, MAX_SETUP_VALUES]
+        books = [_read_codebook(br, budget) for _ in range(br.read(8) + 1)]
         for _ in range(br.read(6) + 1):             # time domain transforms: placeholders, always 0
             if br.read(16) != 0:
                 raise VorbisCorrupt("nonzero time domain transform type (broken setup header)")
@@ -874,8 +902,22 @@ def _overlap(prev, prev_n, cur, cur_n):
     return [a + b for a, b in zip(prev, cur[s:s + prev_n // 2])] + cur[s + prev_n // 2:cur_n // 2]
 
 
-def decode(data):
-    """(info, list of float sample lists per channel, comments as [(key, value), ...])."""
+# Python errors a broken file can still provoke deep in the maths: reported as a broken file, never a traceback
+_BROKEN = (IndexError, KeyError, ValueError, ZeroDivisionError, OverflowError, struct.error)
+
+
+def decode(data, max_values=None):
+    """(info, list of float sample lists per channel, comments as [(key, value), ...]). max_values caps the
+    samples decoded (all channels); default: MAX_VALUES_PER_BYTE per byte of data, at least MIN_VALUES_ALLOWED."""
+    if max_values is None:
+        max_values = max(MIN_VALUES_ALLOWED, MAX_VALUES_PER_BYTE * len(data))
+    try:
+        return _decode(data, max_values)
+    except _BROKEN as exc:
+        raise VorbisCorrupt(f"broken file ({type(exc).__name__}: {exc})") from None
+
+
+def _decode(data, max_values):
     packets = read_packets(data)
     if len(packets) < 3:
         raise VorbisCorrupt("the stream ends before its three Vorbis headers")
@@ -904,6 +946,10 @@ def decode(data):
                     pc = prev[c]
                     out[c].extend(_overlap(pc, prev_n, blocks[c], n))
                 count += prev_n // 4 + n // 4
+                if count * ch > max_values:
+                    raise VorbisLimit(f"the file decodes to more than {max_values} samples ({len(data)} bytes of "
+                                      f"file; real Vorbis stays under about 2000 samples per byte): refused. "
+                                      f"Convert it with ffmpeg if it is genuine")
             prev, prev_n = [None if b is None else b[n // 2:] for b in blocks], n
         if granule is not None and granule >= 0:
             if start is None and not eos:
@@ -955,6 +1001,7 @@ def main(argv=None):
     try:
         if args.cmd != "info":
             out = Path(args.out)
+            check_wav_name(out)                     # before the decode: a wrong name costs nothing
             if out.exists() and not args.overwrite:
                 print(f"[error] {out} exists (use --overwrite)", file=sys.stderr)
                 return 2
@@ -981,7 +1028,7 @@ def main(argv=None):
         if DEBUG:
             traceback.print_exc()
         return 1
-    except (VorbisError, OSError) as exc:
+    except (VorbisError, WavNameError, OSError) as exc:
         print(f"[error] {exc}", file=sys.stderr)
         if DEBUG:
             traceback.print_exc()

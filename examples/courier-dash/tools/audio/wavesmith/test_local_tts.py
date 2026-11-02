@@ -123,6 +123,12 @@ class LocalTtsExam(unittest.TestCase):
         reqs = [r for r in self.requests() if r["op"] == "design"]
         self.assertEqual(reqs[-1]["device"], "auto")
 
+    def test_a_non_wav_out_is_refused_before_the_model_runs(self):
+        rc, out = self.run_tool("design", "a calm voice", "--out", "ref.ogg")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("must end in .wav", out)
+        self.assertEqual(self.requests(), [], "the worker never started")
+
     def test_check_prints_versions(self):
         rc, out = self.run_tool("check")
         self.assertEqual(rc, 0, out)

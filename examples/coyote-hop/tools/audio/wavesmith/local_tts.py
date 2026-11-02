@@ -54,7 +54,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 import fetch_asset  # noqa: E402  (shared ASSET_LOG helpers)
-from wavfile import read_wav, stats, write_wav  # noqa: E402
+from wavfile import WavNameError, check_wav_name, read_wav, stats, write_wav  # noqa: E402
 
 PYTHON_ENV = "LOCAL_TTS_PYTHON"
 WORKER = HERE / "local_tts_worker.py"
@@ -83,6 +83,14 @@ SILENCE_DB = -45.0
 LEAD_KEEP_S, TAIL_KEEP_S = 0.03, 0.08
 FADE_IN_S, FADE_OUT_S = 0.005, 0.02
 DEBUG = False
+
+
+def wav_out(out):
+    """The model writes WAV: a wrong --out name is refused before the (slow) render, not after it."""
+    try:
+        check_wav_name(out)
+    except WavNameError as exc:
+        raise ToolError(str(exc))
 
 
 class ToolError(Exception):
@@ -342,6 +350,7 @@ def cmd_design(args):
     if not args.persona.strip():
         raise ToolError("describe the voice, e.g. \"gruff older blacksmith, deep gravelly voice, slow speech\"")
     out = Path(args.out)
+    wav_out(out)
     refuse_existing([out], args.overwrite)
     with tempfile.TemporaryDirectory() as tmp:
         tmp_wav = str(Path(tmp) / "ref.wav")
@@ -372,6 +381,7 @@ def cmd_say(args):
     else:
         texts = [args.text]
     out = Path(args.out)
+    wav_out(out)
     outs = [out] if len(texts) == 1 and not args.lines else [out.with_name(f"{out.stem}_{n}{out.suffix}")
                                                              for n in range(1, len(texts) + 1)]
     ref_text, voice = ref_provenance(args)

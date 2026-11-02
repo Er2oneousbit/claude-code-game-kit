@@ -277,7 +277,9 @@ track on the sample the plan names.
     sample of 47 libvorbis files (q-1 to q10, 11.025 to 48 kHz, mono to 5.1), with exact sample counts. It takes
     about 0.13 to 0.2 s per second of 44.1 kHz stereo (CPython 3.12), fine for checking and converting, not for
     playback. It refuses floor type 0 (no real encoder writes it), chained streams, and Opus or FLAC inside Ogg,
-    by name. Where ffmpeg 9.0.2 and the file's own sample count disagree (streams that fit on one Ogg page), the
+    by name, and a file that asks for far more than real Vorbis ever does (codebook sizes, or more samples per byte
+    than any real file decodes to: the limits are in its header); with ffmpeg installed, such a file goes to ffmpeg
+    instead. Where ffmpeg 9.0.2 and the file's own sample count disagree (streams that fit on one Ogg page), the
     decoder follows the file.
   - ffmpeg is never shipped or installed by the kit; Wavesmith only runs it as a separate program. Its licence is
     in `tools/audio/wavesmith/LICENSES.md`.
@@ -397,7 +399,10 @@ Tech 3342) and true peak in dBTP.
   Maker crashes under `--headless`) and run
   `python tools/audio/wavesmith/wavesmith.py loudness check-mix capture.wav --target home`.
   It refuses to judge a shorter capture unless you pass `--allow-short` (then the verdict says provisional), and
-  says how far to move the master or which peak to tame.
+  says how far to move the master or which peak to tame. A WAV capture is measured as it is read, in under 40 MB
+  of memory at any length (measured: a 10-minute 48 kHz stereo capture peaked at 38 MB, as did a 1-minute one,
+  against 508 MB for 1 minute before); FLAC, OGG and MP3 are decoded whole first, about 180 MB per minute of
+  48 kHz stereo, so record long captures as WAV.
 - **Single assets: kit house conventions, not a standard.** Before the mix is balanced by ear, assets start at
   levels relative to the platform target: dialogue at the target, music 4 LU under, effects 6, UI 8, ambience beds
   10 (`loudness.py conventions` prints the table). `loudness.py normalize vo/line.wav --bus dialogue --target home
@@ -497,7 +502,7 @@ audio side keeps its part.
 
 ## Hardware: what runs where
 Most of Wavesmith needs nothing but Python 3.8 or newer: no GPU, no installs, and no operating-system code (all its exams pass
-on Windows with Python 3.8, 3.9 and 3.12 and on Linux, Ubuntu 26.04 with Python 3.14, measured 2026-11-01; macOS untested). The two
+on Windows with Python 3.8, 3.9, 3.12 and 3.13 and on Linux, Ubuntu 26.04 with Python 3.14, measured 2026-11-01; macOS untested). The two
 model-backed tools have their own needs:
 
 | Subcommand | Needs | Without an NVIDIA GPU |

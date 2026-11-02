@@ -56,6 +56,19 @@ class AudioEventsExam(unittest.TestCase):
             rc = AE.main([str(a) for a in args])
         return rc, out.getvalue() + err.getvalue()
 
+    def test_values_of_the_wrong_type_are_problems_not_crashes(self):
+        good = {"version": 1, "seed": 1, "buses": {"master": {}, "sfx": {"parent": "master"}},
+                "events": {"hit": {"bus": "sfx", "files": ["a.wav"]}}}
+        self.assertEqual(AE.validate(good), [])
+        for bad in ("x", [1], 3, None, True):
+            for change, word in (({"buses": {"master": {}, "sfx": bad}}, "bus sfx"), ({"buses": bad}, "bus"),
+                                 ({"events": {"hit": bad}}, "event hit"), ({"events": bad}, "events"),
+                                 ({"ducking": bad}, "ducking"), ({"ducking": [bad]}, "ducking[0]"),
+                                 ({"events": {"hit": {"bus": [bad], "files": ["a.wav"]}}}, "bus")):
+                problems = AE.validate(dict(good, **change))        # must not raise
+                self.assertTrue(problems and any(word in p for p in problems), f"{change}: {problems}")
+        self.assertEqual(AE.validate(["not", "an", "object"])[0][:30], "the file must hold one JSON ob")
+
     # ---- the random source
     def test_park_miller_matches_the_published_check_value(self):
         # Park and Miller (1988): seeded with 1, the state after 10000 steps is 1043618065

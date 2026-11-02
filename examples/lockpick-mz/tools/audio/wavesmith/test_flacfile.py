@@ -233,6 +233,10 @@ class FlacExam(unittest.TestCase):
         self.assertNotIn(b"ComfyUI", wav.read_bytes())
         rc, out = self.run_tool("towav", src, "--out", wav)
         self.assertEqual(rc, 2, "an existing WAV needs --overwrite")
+        rc, out = self.run_tool("towav", src, "--out", self.dir / "t.ogg")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("must end in .wav", out)
+        self.assertNotIn("Traceback", out)
 
     def test_cli_exit_codes(self):
         bad, corrupt = self.dir / "bad.flac", self.dir / "corrupt.flac"

@@ -6,8 +6,9 @@
 # Notes   : Standard library only: nothing is installed and no GPU is needed. ffmpeg is not installed either; the one
 #           exam that uses a real ffmpeg runs only where the runner image has it; elsewhere it skips and says so.
 #           `wavesmith.py test` runs each exam in its own process and prints one line each; it exits 1 if any failed.
-#           Python 3.8 is the tools' floor and is tested locally by the kit; GitHub's newest runner images may no
-#           longer offer 3.8, so the matrix starts at 3.9. The kit ran these exams on Windows (3.8, 3.9, 3.12) and on
+#           Python 3.8 is the tools' floor and is tested locally by the kit; 3.8 and 3.9 are past their end of
+#           life and newer runner images drop them, so the matrix runs 3.10 and 3.13. The kit ran these exams on
+#           Windows (3.8, 3.9, 3.12, 3.13) and on
 #           Linux (Ubuntu 26.04, 3.14); macOS is first exercised here. Written by the kit and checked as YAML, not yet
 #           run on GitHub by the kit itself (verify on your first push that touches tools/audio). Run it by hand from
 #           the Actions tab (workflow_dispatch) any time.
@@ -38,7 +39,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python: ["3.9", "3.12"]
+        python: ["3.10", "3.13"]          # the oldest and newest Pythons still supported upstream
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:

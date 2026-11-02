@@ -104,7 +104,8 @@ class AudioIOExam(unittest.TestCase):
     def test_wav_reads_with_nothing_installed(self):
         self.no_ffmpeg()
         f = self.dir / "a.mp3"                          # the name lies: the bytes are a WAV, and that is what counts
-        write_wav(f, tone(), RATE)
+        write_wav(self.dir / "a.wav", tone(), RATE)
+        (self.dir / "a.wav").rename(f)
         chans, rate = audioio.read_audio(f)
         self.assertEqual((len(chans), rate, len(chans[0])), (1, RATE, int(0.5 * RATE)))
 
@@ -166,7 +167,8 @@ class AudioIOExam(unittest.TestCase):
         chans, rate = audioio.read_audio(mp3)
         self.assertEqual((len(chans), rate), (2, RATE))
         call = self.stub_calls()[-1]
-        self.assertEqual(call[:6], ["-nostdin", "-v", "error", "-i", str(mp3), "-c:a"])
+        self.assertEqual(call[:8], ["-nostdin", "-v", "error", "-protocol_whitelist", "file", "-i", str(mp3.resolve()),
+                                    "-c:a"])                # local files only: no URL from a playlist-style input
         self.assertIn("pcm_s16le", call)
         src = self.dir / "loop.wav"
         body = tone(seconds=1.0)
@@ -175,6 +177,7 @@ class AudioIOExam(unittest.TestCase):
         self.assertEqual(rc, 0, out)
         call = self.stub_calls()[-1]
         self.assertIn("libvorbis", call)
+        self.assertEqual(call[call.index("-protocol_whitelist") + 1], "file")
         self.assertEqual(call[call.index("-q:a") + 1], "5")
         self.assertIn(f"LOOPSTART=0", call)
         self.assertIn(f"LOOPLENGTH={len(body)}", call)

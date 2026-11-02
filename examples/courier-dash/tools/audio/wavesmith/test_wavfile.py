@@ -10,6 +10,7 @@
 import contextlib
 import io
 import math
+import struct
 import sys
 import tempfile
 import unittest
@@ -53,6 +54,19 @@ class WavfileExam(unittest.TestCase):
         self.assertEqual((rate, loop, ch), (RATE, (0, RATE - 1), 2))
         self.assertAlmostEqual(20 * math.log10(max(abs(v) for v in s)), -3.0, delta=0.05)
         self.assertAlmostEqual(max(s[1::2]) / max(s[0::2]), 0.5, delta=0.01, msg="channel balance kept")
+
+    def test_never_writes_wav_bytes_under_another_name(self):
+        with self.assertRaises(ValueError):
+            wavfile.write_wav(self.dir / "x.ogg", [0.1] * 100, RATE)
+        self.assertFalse((self.dir / "x.ogg").exists())
+        wavfile.write_wav(self.dir / "UPPER.WAV", [0.1] * 100, RATE)          # any case of .wav is fine
+        path = self.dir / "in.wav"
+        wavfile.write_wav(path, [0.1] * 1000, RATE)
+        for cmd in ("normalize", "loop"):
+            rc, out = self.cli(cmd, path, "--out", self.dir / f"{cmd}.ogg")
+            self.assertEqual(rc, 2, out)
+            self.assertIn("must end in .wav", out)
+            self.assertFalse((self.dir / f"{cmd}.ogg").exists())
 
     def test_normalize_silent_file_fails(self):
         path = self.dir / "silent.wav"
@@ -115,6 +129,39 @@ class WavfileExam(unittest.TestCase):
         self.assertIn("2 ch", out)
         rc, out = self.cli("stats", self.dir / "nope.wav")
         self.assertEqual(rc, 2)
+
+    def test_broken_headers_are_clean_errors(self):
+        good = self.dir / "good.wav"
+        wavfile.write_wav(good, [0.1] * 100, RATE)
+        raw = good.read_bytes()
+        fmt_at = raw.index(b"fmt ")
+        short = raw[:fmt_at + 4] + struct.pack("<I", 8) + raw[fmt_at + 8:fmt_at + 16] + raw[fmt_at + 24:]
+        zero = bytearray(raw)
+        zero[fmt_at + 12:fmt_at + 16] = struct.pack("<I", 0)            # the sample rate field
+        for name, data, word in (("short.wav", short, "cut short"), ("zero.wav", bytes(zero), "0 Hz")):
+            path = self.dir / name
+            path.write_bytes(data)
+            with self.assertRaises(ValueError) as ctx:
+                wavfile.read_wav_channels(path)
+            self.assertIn(word, str(ctx.exception))
+            with self.assertRaises(ValueError):
+                wavfile.wav_stream(path)
+            rc, out = self.cli("stats", path)
+            self.assertEqual(rc, 2, out)
+            self.assertNotIn("Traceback", out)
+
+    def test_stream_reads_the_same_samples(self):
+        path = self.dir / "s.wav"
+        wavfile.write_wav(path, stereo_tone(0.3), RATE, loop=(0, 99), channels=2)
+        samples, rate, _, ch = wavfile.read_wav_channels(path)
+        r, c, frames, chunks = wavfile.wav_stream(path, chunk_frames=777)
+        got = [[], []]
+        for part in chunks():
+            self.assertLessEqual(len(part[0]), 777)
+            got[0] += part[0]
+            got[1] += part[1]
+        self.assertEqual((r, c, frames), (rate, 2, len(samples) // 2))
+        self.assertEqual(got, [samples[0::2], samples[1::2]])
 
 
 if __name__ == "__main__":

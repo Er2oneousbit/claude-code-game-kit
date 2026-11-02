@@ -16,6 +16,7 @@ import contextlib
 import io
 import json
 import math
+import os
 import sys
 import tempfile
 import unittest
@@ -229,6 +230,21 @@ class LoudnessExam(unittest.TestCase):
             L.ASWG_MIN_S = real
 
     # ---- normalize and conventions
+    def test_normalize_writes_the_format_its_name_says(self):
+        src = self.wav("music.wav", stereo(bursts(-24, 3)))
+        before = os.environ.get("WAVESMITH_FFMPEG")
+        os.environ["WAVESMITH_FFMPEG"] = str(self.dir / "no-such-ffmpeg")   # no ffmpeg: .ogg is refused, not faked
+        try:
+            rc, out = self.run_tool("normalize", src, "--lufs", -24, "--out", self.dir / "a.ogg")
+        finally:
+            if before is None:
+                os.environ.pop("WAVESMITH_FFMPEG")
+            else:
+                os.environ["WAVESMITH_FFMPEG"] = before
+        self.assertEqual(rc, 2, out)
+        self.assertIn("needs ffmpeg", out)
+        self.assertFalse((self.dir / "a.ogg").exists(), "never WAV bytes under an .ogg name")
+
     def test_normalize_to_lufs_and_bus(self):
         src = self.wav("music.wav", stereo(bursts(-24, 3)))
         rc, out = self.run_tool("normalize", src, "--lufs", -24, "--out", self.dir / "a.wav")
@@ -252,6 +268,23 @@ class LoudnessExam(unittest.TestCase):
         self.assertIn("NOT part of ASWG-R001", out)
 
     # ---- input and CLI
+    def test_a_wav_measured_as_it_is_read_gives_the_whole_file_numbers(self):
+        # clipped, so the true peak sits between samples and the peak meter's buffers matter
+        left = [max(-1.0, min(1.0, 1.6 * math.sin(i * 0.071))) for i in range(int(3.5 * FS))]
+        right = [0.3 * math.sin(i * 0.013) for i in range(int(3.5 * FS))]
+        path = self.wav("clipped.wav", [left, right])
+        samples, rate, _, ch = read_wav_channels(path)
+        whole = L.measure_channels([samples[0::2], samples[1::2]], rate)
+        self.assertIsNotNone(whole["lra_lu"])
+        self.assertEqual(L.measure_file(path), whole, "measure_file streams a WAV")
+        real = L.wav_stream
+        try:
+            for chunk in (1000, 777, 64):        # buffer edges anywhere, even inside one interpolation window
+                L.wav_stream = lambda p, chunk_frames=48000, _c=chunk: real(p, _c)
+                self.assertEqual(L.measure_wav_stream(path), whole, f"chunks of {chunk} frames")
+        finally:
+            L.wav_stream = real
+
     def test_flac_and_wav_of_the_same_audio_measure_the_same(self):
         import base64
         from test_flacfile import FIXTURES, signal

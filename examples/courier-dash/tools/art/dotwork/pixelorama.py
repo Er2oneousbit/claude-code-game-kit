@@ -35,9 +35,17 @@ import handpolish
 WRITE_VERSION = 7                  # pxo_version Dotwork writes (Pixelorama 1.2.0 to 1.2.3 write 7)
 READ_VERSIONS = (7, 8)             # 8: Pixelorama 1.2.4 release candidates (a cel's own size and offset)
 MAX_SIDE = 8192                    # px: a larger canvas or cel in data.json is refused before any buffer is read
-MAX_JSON = 32 * 1024 * 1024        # bytes: a larger data.json is refused
-MAX_FRAMES = 4096
-MAX_CLIP = 100                     # frames per animation: the shipped names carry two digits (spr_<name>_<anim>_NN)
+MAX_JSON = 8 * 1024 * 1024         # bytes: a larger data.json is refused (a real one is well under 1 MB)
+MAX_FRAMES = 4096                  # frames, and tags
+MAX_LAYERS = 256
+# A .pxo is a tracked file a pull request can carry, and its zip packs zeros tightly: a 411 KB file declaring 100
+# frames of 1024x1024 took 434 MB to read (2026-11-01 review). What a project would take is added up from data.json
+# and refused before any buffer is read:
+MAX_DECODED = 512 * 1024 * 1024    # bytes: the composited frames held at once (frames x width x height x 4), and the
+#                                    frames one re-export writes
+MAX_UNPACKED = 1024 * 1024 * 1024  # bytes: every cel buffer of the visible pixel layers, together
+BAND_PIXELS = 1 << 20              # pixels blended at a time: a layer's float work stays near 80 MB on any canvas
+MAX_CLIP = handpolish.MAX_CLIP     # frames per animation: the shipped names carry two digits (spr_<name>_<anim>_NN)
 PALETTE_MAX = 256                  # colours: a frame set with more gets no project palette (the art is unchanged)
 PALETTE_WIDTH = 8                  # Pixelorama's default palette grid width
 DEFAULT_FPS = 6.0                  # Pixelorama's default when data.json has no fps
@@ -159,18 +167,29 @@ def _buffer(z, name, w, h, rel):
 
 def _over(base, top, k):
     """Normal blending of top (straight alpha) over base, both H x W x 4 uint8, with top's alpha times k (cel and
-    layer opacity). Pixels top leaves fully clear keep base untouched, colour under its transparency included."""
-    a = top[..., 3:4].astype(np.float64) / 255.0 * k
-    hit = a[..., 0] > 0
-    if not hit.any():
-        return base
-    out = base.copy()
-    da = base[..., 3:4].astype(np.float64) / 255.0
-    ra = a + da * (1.0 - a)
-    rgb = (top[..., :3] * a + base[..., :3] * da * (1.0 - a)) / np.maximum(ra, 1e-12)
-    px = np.concatenate([np.rint(rgb), np.rint(ra * 255.0)], axis=-1).clip(0, 255).astype(np.uint8)
-    out[hit] = px[hit]
+    layer opacity). Pixels top leaves fully clear keep base untouched, colour under its transparency included.
+    Blended in bands of rows (BAND_PIXELS at a time): the float arrays take about 80 bytes a pixel, 5 GB on a whole
+    8192 x 8192 canvas."""
+    out = base
+    step = max(1, BAND_PIXELS // base.shape[1])
+    for y in range(0, base.shape[0], step):
+        t, b = top[y:y + step], base[y:y + step]
+        a = t[..., 3:4].astype(np.float64) / 255.0 * k
+        hit = a[..., 0] > 0
+        if not hit.any():
+            continue
+        if out is base:
+            out = base.copy()
+        da = b[..., 3:4].astype(np.float64) / 255.0
+        ra = a + da * (1.0 - a)
+        rgb = (t[..., :3] * a + b[..., :3] * da * (1.0 - a)) / np.maximum(ra, 1e-12)
+        px = np.concatenate([np.rint(rgb), np.rint(ra * 255.0)], axis=-1).clip(0, 255).astype(np.uint8)
+        out[y:y + step][hit] = px[hit]
     return out
+
+
+def _mb(n):
+    return f"{n / (1024 * 1024):.0f} MB"
 
 
 def read_pxo(path):
@@ -191,7 +210,7 @@ def read_pxo(path):
             _fail(rel, f"data.json is {info.file_size} bytes (over {MAX_JSON})")
         try:
             d = json.loads(z.read("data.json").decode("utf-8"))
-        except (ValueError, UnicodeDecodeError, zipfile.BadZipFile, zlib.error) as e:
+        except (ValueError, UnicodeDecodeError, RecursionError, zipfile.BadZipFile, zlib.error) as e:
             _fail(rel, f"data.json cannot be read ({e})")
         if not isinstance(d, dict):
             _fail(rel, "data.json is not an object")
@@ -209,6 +228,11 @@ def read_pxo(path):
             _fail(rel, "no layers or no frames")
         if len(frames) > MAX_FRAMES:
             _fail(rel, f"{len(frames)} frames (over {MAX_FRAMES})")
+        if len(layers) > MAX_LAYERS:
+            _fail(rel, f"{len(layers)} layers (over {MAX_LAYERS})")
+        if len(frames) * w * h * 4 > MAX_DECODED:
+            _fail(rel, f"{len(frames)} frames of {w}x{h} would take {_mb(len(frames) * w * h * 4)} to hold (over "
+                       f"{_mb(MAX_DECODED)}): split the project")
         for i, ly in enumerate(layers):
             if not isinstance(ly, dict):
                 _fail(rel, f"layer {i + 1} is not an object")
@@ -252,7 +276,7 @@ def read_pxo(path):
             if kind == LAYER_GROUP and op != 1:
                 _fail(rel, f"group {name_of(i)} has opacity {op}: Dotwork reads groups at 100 % only")
 
-        out, seconds = [], []
+        plans, seconds, unpacked = [], [], 0
         for fi, fr in enumerate(frames):
             cels = fr.get("cels") if isinstance(fr, dict) else None
             if not isinstance(cels, list) or len(cels) != len(layers):
@@ -268,7 +292,7 @@ def read_pxo(path):
                   for c in cels]
             # draw order as Pixelorama sorts it (Project._z_index_sort): layer index plus the cel's z-index, then z
             order = sorted(range(len(layers)), key=lambda i: (i + zs[i], zs[i]))
-            img, first = np.zeros((h, w, 4), np.uint8), True
+            plan = []                  # (buffer name, opacity, (cel w, cel h, x, y) or None for a whole-canvas cel)
             for li in order:
                 if not visible[li] or layers[li].get("type", LAYER_PIXEL) != LAYER_PIXEL:
                     continue
@@ -281,21 +305,18 @@ def read_pxo(path):
                     ox, oy = _vec2i(cel.get("offset", "(0, 0)"), rel, f"frame {fi + 1} {name_of(li)} offset")
                     if cw < 0 or ch < 0:
                         _fail(rel, f"frame {fi + 1} {name_of(li)}: negative cel size")
-                    layer = np.zeros((h, w, 4), np.uint8)
-                    if cw and ch:
-                        part = _buffer(z, name, cw, ch, rel)
-                        x0, y0, x1, y1 = max(ox, 0), max(oy, 0), min(ox + cw, w), min(oy + ch, h)
-                        if x1 > x0 and y1 > y0:
-                            layer[y0:y1, x0:x1] = part[y0 - oy:y1 - oy, x0 - ox:x1 - ox]
+                    plan.append((name, k, (cw, ch, ox, oy)))
+                    unpacked += cw * ch * 4
                 else:
-                    layer = _buffer(z, name, w, h, rel)
-                if first and k == 1:
-                    img = layer.copy()     # copied as it is: an untouched frame comes back byte for byte
-                elif k > 0:
-                    img = _over(img, layer, k)
-                first = False
-            out.append(img)
+                    plan.append((name, k, None))
+                    unpacked += w * h * 4
+            plans.append(plan)
+        if unpacked > MAX_UNPACKED:
+            _fail(rel, f"its visible cels would unpack to {_mb(unpacked)} (over {_mb(MAX_UNPACKED)}): merge or hide "
+                       "layers, or split the project")
         tags = []
+        if len(d.get("tags") or []) > MAX_FRAMES:
+            _fail(rel, f"{len(d['tags'])} tags (over {MAX_FRAMES})")
         for t in d.get("tags") or []:
             if not isinstance(t, dict):
                 _fail(rel, "a tag is not an object")
@@ -305,6 +326,26 @@ def read_pxo(path):
             a = int(_number(t.get("from"), rel, f"tag {name} from", 1, len(frames)))
             b = int(_number(t.get("to"), rel, f"tag {name} to", a, len(frames)))
             tags.append((name, a - 1, b - 1))
+        out = []
+        for plan in plans:
+            img, first = np.zeros((h, w, 4), np.uint8), True
+            for name, k, part in plan:
+                if part:
+                    cw, ch, ox, oy = part
+                    layer = np.zeros((h, w, 4), np.uint8)
+                    if cw and ch:
+                        cel = _buffer(z, name, cw, ch, rel)
+                        x0, y0, x1, y1 = max(ox, 0), max(oy, 0), min(ox + cw, w), min(oy + ch, h)
+                        if x1 > x0 and y1 > y0:
+                            layer[y0:y1, x0:x1] = cel[y0 - oy:y1 - oy, x0 - ox:x1 - ox]
+                else:
+                    layer = _buffer(z, name, w, h, rel)
+                if first and k == 1:
+                    img = layer.copy()     # copied as it is: an untouched frame comes back byte for byte
+                elif k > 0:
+                    img = _over(img, layer, k)
+                first = False
+            out.append(img)
     return {"size": (w, h), "fps": fps, "frames": out, "seconds": seconds, "tags": tags}
 
 
@@ -324,8 +365,9 @@ def _runs(items):
 
 def build(pack, conf, overwrite=False):
     """Write <src_dir>/pixelorama/{characters,fx,single}/<name>.pxo. A .pxo that already exists and differs from what
-    this build writes may hold hand polish (or the game's art changed since): it is kept unless overwrite.
-    Returns {"written": [...], "unchanged": [...], "kept": [...]}."""
+    this build writes may hold hand polish (or the game's art changed since): it is kept unless overwrite, and a file
+    overwrite replaces is first copied to <name>.pxo.bak (one level, as the game shells keep their saves).
+    Returns {"written": [...], "unchanged": [...], "kept": [...], "backups": [the .bak files written]}."""
     src = core.src(conf, "pixelorama")
     chars, fx, single, fps, fx_loop, holds = handpolish.groups(pack)
     jobs = []   # (out, [(tag, seconds or None, png)], project fps)
@@ -348,7 +390,7 @@ def build(pack, conf, overwrite=False):
     for f in single:
         jobs.append((os.path.join(src, "single", os.path.basename(f)[:-4] + ".pxo"),
                      [("", None, os.path.join(pack, f))], 8))
-    done = {"written": [], "unchanged": [], "kept": []}
+    done = {"written": [], "unchanged": [], "kept": [], "backups": []}
     for out, items, proj_fps in jobs:
         rel = os.path.relpath(out, pack)
         frames = [np.array(Image.open(p).convert("RGBA")) for _, _, p in items]
@@ -374,6 +416,11 @@ def build(pack, conf, overwrite=False):
                 done["kept"].append(out)
                 core.log(f"pixelorama build {rel}: kept (it differs from the game's frames; --overwrite replaces it)")
                 continue
+            # the file being replaced may hold polish that was never re-exported: keep it beside the new one
+            with open(core.safe_dest(out + ".bak"), "wb") as fh:
+                fh.write(old)
+            done["backups"].append(out + ".bak")
+            core.log(f"pixelorama build {rel}: the file it replaces is kept as {os.path.basename(out)}.bak")
         os.makedirs(os.path.dirname(out), exist_ok=True)
         with open(core.safe_dest(out), "wb") as fh:
             fh.write(blob)
@@ -415,6 +462,10 @@ def reexport(pack, conf):
             named = {f"{prefix}_{k:04d}.png": i for k, i in enumerate(order)}   # renamed by write_back
         else:
             named = {f"{prefix}.png": 0}
+        w, h = pj["size"]
+        if len(named) * w * h * 4 > MAX_DECODED:   # overlapping tags can name one frame many times
+            raise core.ToolError(f"{rel}: its tags name {len(named)} frames of {w}x{h}, "
+                                 f"{_mb(len(named) * w * h * 4)} to write (over {_mb(MAX_DECODED)})")
         for fn, i in named.items():
             Image.fromarray(frames[i], "RGBA").save(os.path.join(tmp, fn))
         return sorted(os.path.join(tmp, fn) for fn in named), {fn: secs[i] for fn, i in named.items()}

@@ -43,7 +43,7 @@ import math
 import re
 import sys
 import traceback
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -110,12 +110,52 @@ def load_sets(path):
     return data
 
 
+def out_dir_problem(rel):
+    """Why a sets file's out_dir is unsafe, or None. Sets files can come from anyone (a teammate, a PR, a download),
+    so out_dir must be a plain relative path inside the project: no absolute path, drive or network share (a
+    \\\\host\\share path would make Windows connect out), and no '..' that climbs above the root."""
+    if not isinstance(rel, str) or not rel.strip():
+        return "out_dir must be a folder path relative to the project root, e.g. \"assets/audio\""
+    if rel.startswith(("\\\\", "//")) or PureWindowsPath(rel).drive or PureWindowsPath(rel).root or rel.startswith("/"):
+        return f"out_dir {rel!r} must be relative to the project root (no absolute paths, drives or network shares)"
+    depth = 0
+    for part in rel.replace("\\", "/").split("/"):
+        depth += -1 if part == ".." else (0 if part in ("", ".") else 1)
+        if depth < 0:
+            return f"out_dir {rel!r} climbs out of the project root ('..')"
+    return None
+
+
+def out_dir_in(data, root):
+    """The sets file's out_dir under root, checked again after resolving (a symlinked folder may point outside)."""
+    rel = data.get("out_dir", ".")
+    problem = out_dir_problem(rel)
+    if problem:
+        raise ToolError(problem)
+    base = Path(root).resolve()
+    full = (Path(root) / rel).resolve()
+    if full != base and base not in full.parents:
+        raise ToolError(f"out_dir {rel!r} resolves to {full}, outside the project root {base} (a symlink?)")
+    return Path(root) / rel
+
+
 def validate(data):
-    """List of problems in a sets file (empty when it is good)."""
+    """List of problems in a sets file (empty when it is good). Never raises on a malformed file."""
+    try:
+        return _validate(data)
+    except (TypeError, AttributeError, KeyError) as exc:   # a value of a type no check foresaw: named, not a crash
+        return [f"a value has the wrong type ({type(exc).__name__}: {exc}); compare the file with the format in "
+                f"docs/resources/audio.md"]
+
+
+def _validate(data):
     errors = []
     if not isinstance(data, dict) or data.get("version") != VERSION:
         return [f"version must be {VERSION}"]
-    if data.get("target", "home") not in loudness.ASWG:
+    problem = out_dir_problem(data.get("out_dir", "."))
+    if problem:
+        errors.append(problem)
+    if not (isinstance(data.get("target", "home"), str) and data.get("target", "home") in loudness.ASWG):
         errors.append(f"target must be one of {', '.join(loudness.ASWG)}")
     sets = data.get("sets")
     if not isinstance(sets, dict) or not sets:
@@ -134,7 +174,7 @@ def validate(data):
             errors.append(f"{where}: kind must be oneshot or loop")
         if gen == "sfx_synth" and kind == "loop":
             errors.append(f"{where}: sfx_synth makes one-shots; loops come from local_sfx")
-        if s.get("bus") not in loudness.HOUSE:
+        if not (isinstance(s.get("bus"), str) and s["bus"] in loudness.HOUSE):
             errors.append(f"{where}: bus must be one of {', '.join(loudness.HOUSE)}")
         takes = s.get("takes", 1)
         if not isinstance(takes, int) or isinstance(takes, bool) or not 1 <= takes <= 16:
@@ -325,7 +365,7 @@ def cmd_plan(args):
 
 def cmd_make(args):
     data = load_sets(args.sets)
-    out_dir = Path(args.root) / data.get("out_dir", ".")
+    out_dir = out_dir_in(data, args.root)
     target, failed = data.get("target", "home"), 0
     for name, s, v, spec, files in plan(data, args.set, args.variant):
         paths = [out_dir / f for f in files]
@@ -416,7 +456,7 @@ def check_file(path, s, target):
 
 def cmd_check(args):
     data = load_sets(args.sets)
-    out_dir = Path(args.root) / data.get("out_dir", ".")
+    out_dir = out_dir_in(data, args.root)
     target = data.get("target", "home")
     report, n_problems, n_files = {}, 0, 0
     for name, s, v, spec, files in plan(data, args.set, args.variant):
