@@ -41,6 +41,9 @@ examples were built and tested on one Windows 11 machine.
   ([#69](https://github.com/Er2oneousbit/claude-code-game-kit/issues/69)).
 - **Godot sliders** draw one highlight for hover and focus, so a focused slider looks hovered (the kit's settings
   screen outlines the focused row instead): [#54](https://github.com/Er2oneousbit/claude-code-game-kit/issues/54).
+- **Unity music player:** a change asked back before the previous one starts restarts the track (Godot, LÖVE and web
+  cancel it); Godot's stinger-gap case not checked:
+  [#70](https://github.com/Er2oneousbit/claude-code-game-kit/issues/70).
 - **Web shell:** the pseudo-locale drive counts 260 or 261 labels on the same build:
   [#63](https://github.com/Er2oneousbit/claude-code-game-kit/issues/63).
 
