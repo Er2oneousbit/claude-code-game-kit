@@ -49,10 +49,32 @@
   10 wards, 10 blocks, 138 damage (44.5 s against 44.6 s, 2026-10-26). Before the review fixes it was seed 4: 30 bolts,
   8 wards, 9 blocks, 54 damage (40.0 s against 40.1 s)
 
+### -quitatend exited 0 when the mage died
+- First seen: 2026-10-26
+- Environment: UE 5.8, packaged Windows build
+- Symptom: `RuneDelve.exe -autoplay=masher -seed=0 -fixedfps -quitatend` logs `MAGE_DOWN` and
+  `RequestExitWithStatus(0, 3)`, but the process exit code is 0
+- Root cause: a clean exit drops the code on Windows: it only reaches `PostQuitMessage`, and `GuardedMain` returns
+  its own 0. Only a forced exit (`TerminateProcess`) carries it
+- Fix: `ARDGameMode::QuitAtEnd` asks for a clean exit and, for a non-zero code, forces the exit with the code from
+  `FCoreDelegates::OnExit`, after the world is shut down and the log flushed
+- How to verify: the masher on seed 0 exits 3, the weaver on seed 6 exits 0 (both with `-quitatend`)
+- Related: #8
+
 ### The packaged replay with -nullrhi plays a different delve
 - First seen: 2026-10-26
 - Symptom: weaver seed 6 cleared in 44.6 s with 10 wards in the packaged game (the smoke test: 44.5 s, 10 wards) but in
   46.3 s with 11 wards when `-nullrhi` was added; seed 4 also diverged (39.5 s against 36.7 s)
-- Root cause: not known (verify); gameplay does not read animation or rendering on purpose
+- Root cause (2026-11-02): the runtime NavMesh. A bolt's collision sphere counts for navigation, so every cast
+  dirties the NavMesh and starts a rebuild on worker threads (logged: a build every 0.4 s, the bolt cooldown). The
+  rebuild takes real time, so how many fixed 1/60 s frames the bots and orcs path on the old NavMesh depends on how
+  fast frames run; without a renderer they run faster. Two `-nullrhi` runs of seed 6 differed from each other too
+  (43.0 s and 44.6 s)
+- Tried: `SetCanEverAffectNavigation(false)` on the bolt's sphere. Packaged rendered and `-nullrhi` runs then
+  matched on all 8 weaver seeds, but the editor's bot pair varied between runs (67/53, 68/51, 71/53 of 80) where
+  the old code repeats 65/55: the rebuilds at the start and at each gate still run in real time. Pausing the world
+  while the NavMesh builds stalled the regression test. Neither is in; the next try is a NavMesh that never
+  rebuilds during a delve (gates off the NavMesh, the start held until the first build is done)
 - Fix: none yet; compare replays with a renderer (a small window is enough: `-windowed -resx=640 -resy=360`)
 - How to verify: run the same seed with and without `-nullrhi` and compare the `DELVE_COMPLETE` or `MAGE_DOWN` line
+- Related: #8

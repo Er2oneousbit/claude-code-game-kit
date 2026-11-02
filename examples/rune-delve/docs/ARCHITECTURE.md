@@ -56,7 +56,7 @@ Direct calls. Damage always goes through GAS (an effect spec into `URDAttributeS
 - `-seed=N` moves the orcs (`FRDLevel::Orcs`, one `FRandomStream` per room). `-fixedfps` makes every frame 1/60 s and runs
   flat out: the smoke tests and the packaged game play the same delve (2026-10-26: seed 6 has the same counts, 44.5 s
   against 44.6 s, and seed 4 36.6 s against 36.7 s). Only with a renderer: the packaged game with `-nullrhi` played a
-  different delve on both seeds (cause not known, `docs/TROUBLESHOOTING.md`).
+  different delve on both seeds (the runtime NavMesh rebuilds on every bolt, in real time: `docs/TROUBLESHOOTING.md`).
 
 ## Budgets
 | Budget | Target | Measured on | Last measured |

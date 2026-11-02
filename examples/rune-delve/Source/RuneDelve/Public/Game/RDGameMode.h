@@ -66,6 +66,7 @@ private:
 	void Finish(ERDOutcome Result, const TCHAR* Marker);
 	void Record();
 	void ShowToast(const FString& Text);
+	void QuitAtEnd(uint8 ExitCode);
 
 	UPROPERTY() TObjectPtr<ARDDungeon> Dungeon;
 	UPROPERTY() TArray<TObjectPtr<ARDOrc>> Orcs;
@@ -76,6 +77,7 @@ private:
 	int32 Kills = 0;
 	float Elapsed = 0.f;
 	float EndTimer = 0.f;
+	bool bQuitRequested = false;
 	int32 Frame = 0;
 	FString Toast;
 	float ToastLeft = 0.f;

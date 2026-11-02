@@ -163,8 +163,10 @@ autoplay exit leak (#6).
 - **Balance at its limit:** after the review fixes the weaver bot clears 3 of 8 dungeons (was 5) against the
   masher's 0; the pair test passes exactly on its thresholds and now says so (a margin line and a warning). Retuning
   the ward waits for a human playtest ([#7](https://github.com/Er2oneousbit/claude-code-game-kit/issues/7)).
-- `-quitatend` exits 0 even when the mage dies (Unreal 5.8 needs a forced exit for a non-zero code).
-- Replays under `-nullrhi` (no renderer) differ from rendered runs; cause unknown (`docs/TROUBLESHOOTING.md`).
+- Replays under `-nullrhi` (no renderer) differ from rendered runs, and two `-nullrhi` runs can differ: every bolt
+  dirties the runtime NavMesh, which rebuilds in real time. Taking bolts off the NavMesh made rendered and `-nullrhi`
+  runs match on 8 seeds but made the editor's bot pair vary from run to run, so it is not in
+  (`docs/TROUBLESHOOTING.md`, [#8](https://github.com/Er2oneousbit/claude-code-game-kit/issues/8)).
 
 ### Graveyard Shift (Unity)
 - `Smoke_D` (careful bot scores at least the always-dark bot) is flaky: it sits at the 104 cap and one run in two

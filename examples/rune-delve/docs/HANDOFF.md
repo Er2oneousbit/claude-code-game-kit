@@ -28,8 +28,7 @@ Not yet played by a human.
 
 ## Known broken or flaky
 - Balance at its limit: weaver clears 3/8 against the masher's 0/8, and the pair test passes exactly on its thresholds (it logs `[test] pair: margin ...` and warns at zero). Tuning waits for a human playtest.
-- `-quitatend` exits 0 even when the mage dies (Unreal 5.8 needs a forced exit for a non-zero code).
-- `-nullrhi` replays differ from rendered runs; cause unknown (`docs/TROUBLESHOOTING.md`).
+- `-nullrhi` replays differ from rendered runs: the runtime NavMesh rebuilds on every bolt, in real time (`docs/TROUBLESHOOTING.md`).
 
 ## Commands that matter right now
 ```

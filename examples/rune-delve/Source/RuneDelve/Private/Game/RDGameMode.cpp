@@ -10,6 +10,7 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-10-26 review fix: the bots saw orcs by spawn room, so an orc that chased the mage through a
 //           gate was invisible to them; they now see orcs by the room (or doorway) the orc stands in
+//           2026-11-02 -quitatend exits 3 on a loss or timeout: a clean exit always returned 0 (#8)
 // ---------------------------------------------------------------------------
 #include "Game/RDGameMode.h"
 
@@ -26,6 +27,8 @@
 #include "HAL/PlatformMisc.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/App.h"
+#include "Misc/CoreDelegates.h"
+#include "Misc/OutputDeviceRedirector.h"
 #include "Misc/Paths.h"
 #include "UnrealClient.h"
 
@@ -95,9 +98,10 @@ void ARDGameMode::Tick(float DeltaSeconds)
 	if (Outcome != ERDOutcome::Playing)
 	{
 		EndTimer += DeltaSeconds;
-		if (FRDLaunchOptions::Get().bQuitAtEnd && EndTimer >= QuitDelaySeconds)
+		if (FRDLaunchOptions::Get().bQuitAtEnd && EndTimer >= QuitDelaySeconds && !bQuitRequested)
 		{
-			FPlatformMisc::RequestExitWithStatus(false, Outcome == ERDOutcome::Cleared ? 0 : 3);
+			bQuitRequested = true;
+			QuitAtEnd(Outcome == ERDOutcome::Cleared ? 0 : 3);
 		}
 		return;
 	}
@@ -159,6 +163,22 @@ void ARDGameMode::OnOrcDied(ARDOrc* Orc)
 void ARDGameMode::OnMageDied()
 {
 	Finish(ERDOutcome::Fallen, TEXT("MAGE_DOWN"));
+}
+
+/** Exit 0 after a full clear, ExitCode otherwise. A clean exit always ends with 0 on UE 5.8 (on Windows the code only
+ *  reaches PostQuitMessage, and GuardedMain returns its own 0), so for a non-zero code the engine still shuts the
+ *  world down cleanly, and once it broadcasts OnExit the log is flushed and the process ends with the code. */
+void ARDGameMode::QuitAtEnd(uint8 ExitCode)
+{
+	if (ExitCode != 0)
+	{
+		FCoreDelegates::OnExit.AddLambda([ExitCode]() {
+			UE_LOG(LogRuneDelve, Display, TEXT("[quit] exit code %d"), ExitCode);
+			GLog->Flush();
+			FPlatformMisc::RequestExitWithStatus(true, ExitCode, TEXT("RuneDelve -quitatend"));
+		});
+	}
+	FPlatformMisc::RequestExitWithStatus(false, ExitCode, TEXT("RuneDelve -quitatend"));
 }
 
 void ARDGameMode::Finish(ERDOutcome Result, const TCHAR* Marker)

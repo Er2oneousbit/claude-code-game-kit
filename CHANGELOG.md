@@ -24,6 +24,9 @@
 - Rune Delve (Unreal): the bot pair test states its margin over the pillar thresholds (named constants, logged as
   `[test] pair: margin ...`) and warns when it passes with none, as it does now (weaver 65 against 55, 3 clears
   against 0). The balance is not retuned: that waits for a human playtest (#7).
+- Rune Delve (Unreal): `-quitatend` exits 3 after `MAGE_DOWN` or `TIMEOUT` (it always gave 0: UE 5.8 drops the code
+  of a clean exit); the world still shuts down cleanly, then the process ends with the code. The `-nullrhi` drift is
+  traced to the runtime NavMesh, which every bolt rebuilds in real time; not fixed yet (#8).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
