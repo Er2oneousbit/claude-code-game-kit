@@ -331,6 +331,9 @@
 - Bevy FLOW.md: the audio vectors line gives the three working commands (`wavesmith.py events vectors --write`,
   `music vectors --write`, `access vectors --write`) instead of a bare `vectors --write`, which `wavesmith.py`
   refuses. `test_kit_docs.py` checks every Wavesmith command the docs give against its subcommands (#118).
+- Docs: `docs/resources/ai-tools.md` no longer says PixelLab was never run live; it points at SOP-16, which lists the
+  commands that were (now `fix reduce-colors`, as the README says, not every `fix` operation).
+  `test_kit_docs.py` checks that the README and SOP-16 lists agree (#119).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

@@ -8,6 +8,7 @@
 #           - an ENGINE.md whose overlay has no juice port says so (#103)
 #           - the web and web-3d ENGINE.md layout names every src/core module the skeleton holds (#117)
 #           - every Wavesmith command the docs give names a real subcommand, and `vectors` always says whose (#118)
+#           - the PixelLab commands run live are the same in README and SOP-16, and ai-tools.md points there (#119)
 # Usage   : python scripts/test_kit_docs.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, reads the kit tree read-only. The engines and their doc names are in the
@@ -179,6 +180,22 @@ class CommandExam(unittest.TestCase):
                 if span.startswith("vectors ") or (m and m.group(1) not in owners):
                     bad.append("%s: `%s`" % (rel, span))
         self.assertEqual(bad, [])
+
+
+class AgreementExam(unittest.TestCase):
+    def test_pixellab_live_lists_agree(self):
+        # #119: ai-tools.md said the live service was never run while README and SOP-16 listed live commands
+        def spans(text):
+            return {" ".join(s.split()) for s in re.findall(r"`([^`\n]+)`", text)}
+        readme = section(read("README.md"), r"^\| `tools/art/pixellab\.py`", r"$")
+        sop = " ".join(read("core/docs/sop/SOP-16-2d-art-pipeline.md").split())
+        live_readme = spans(readme[readme.index("Live ("):readme.index("Not yet live")])
+        live_sop = spans(sop[sop.index("live so far:"):sop.index("the rest **(verify)** live")])
+        self.assertIn("character --legacy", live_readme)
+        self.assertEqual(live_sop, live_readme, "SOP-16 and the README 'What was tested' row")
+        row = section(read("core/docs/resources/ai-tools.md"), r"^\| \*\*PixelLab\*\*", r"$")
+        self.assertIn("SOP-16", row)
+        self.assertNotRegex(row, r"(?i)not yet run|never run", "ai-tools.md defers the live status to SOP-16")
 
 
 if __name__ == "__main__":
