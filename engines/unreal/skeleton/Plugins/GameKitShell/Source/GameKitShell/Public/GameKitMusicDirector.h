@@ -6,11 +6,14 @@
 // Usage   : FGameKitMusicDirector Music(MusicObject);               // data/music.json parsed (GameKit::Json::Parse)
 //           const FGameKitMusicPlan P = Music.Plan(TEXT("explore"), Since, Entry, TEXT("combat"), Now);   // samples
 //           P.SwitchAt, P.FromStopAt, P.ToStartAt, P.ToOffset, P.Stinger, P.StingerAt
+//           if (!P.Error.IsEmpty()) { UE_LOG(LogMyGame, Error, TEXT("music: %s"), *P.Error); }
 // Notes   : A port of tools/audio/wavesmith/music.py (the reference); data/golden/music.json must come out exactly
 //           (integers, tolerance 0; GameKitGoldenTests.cpp). Beat k starts at floor(k * 60 * rate / bpm + 0.5),
 //           computed in the same order as the reference so every engine lands on the same sample; FMath::RoundToDouble
 //           is not the rule. In Unreal, a Quartz clock (UQuartzSubsystem) can start sounds on a sample: convert a
-//           plan's samples to its time with the music's sample rate.
+//           plan's samples to its time with the music's sample rate. An unknown track, quantize or stinger name
+//           (the reference raises) gives an empty plan with Error set; "stinger": "" means no stinger. The
+//           director does not validate music.json: run `wavesmith.py music validate` on it.
 //
 // Pseudocode:
 //   Position: p = now - since + entry; past the loop end -> wrap into [loop start, loop end)
@@ -57,6 +60,7 @@ struct FGameKitMusicPlan
 	int64 SwitchAt = 0, FromStopAt = 0, Fade = 0, ToOffset = 0, ToStartAt = 0;
 	TOptional<FString> Stinger;
 	TOptional<int64> StingerAt;
+	FString Error;   // empty for a usable plan; else why there is none (the times are then 0)
 };
 
 class FGameKitMusicDirector
@@ -136,7 +140,11 @@ public:
 		int64 Start, End;
 		LoopPoints(T, Start, End);
 		if (Quantize == TEXT("loop_end")) { return End; }
-		const int32 Step = Quantize == TEXT("beat") ? 1 : Quantize == TEXT("bar") ? T.BeatsPerBar : T.BeatsPerBar * PhraseBars;
+		int32 Step = 0;
+		if (Quantize == TEXT("beat")) { Step = 1; }
+		else if (Quantize == TEXT("bar")) { Step = T.BeatsPerBar; }
+		else if (Quantize == TEXT("phrase")) { Step = T.BeatsPerBar * PhraseBars; }
+		else { return INDEX_NONE; }   // unknown quantize (a typo must not mean "phrase"); Plan reports it
 		int64 K = static_cast<int64>(FMath::FloorToDouble(static_cast<double>(P) * T.Bpm / (60 * Rate)));
 		while (GameKit::Audio::BeatSample(static_cast<double>(K), T.Bpm, Rate) < P) { ++K; }
 		while (K % Step != 0) { ++K; }
@@ -157,26 +165,42 @@ public:
 		return Default;
 	}
 
-	/** When and how to change from track From (playing since Since from offset Entry) to To, asked at NowSample. */
+	/** When and how to change from track From (playing since Since from offset Entry) to To, asked at NowSample.
+	 *  An unknown track, quantize or stinger gives an empty plan with Error set. */
 	FGameKitMusicPlan Plan(const FString& From, int64 Since, int64 Entry, const FString& To, int64 NowSample) const
 	{
 		FGameKitMusicPlan Out;
 		const FGameKitMusicTrack* A = TracksByName.Find(From);
 		const FGameKitMusicTrack* B = TracksByName.Find(To);
-		if (!A || !B) { return Out; }   // unknown track: an empty plan (switch at 0); check FindTrack first
+		if (!A || !B)
+		{
+			Out.Error = FString::Printf(TEXT("unknown music track %s"), A ? *To : *From);
+			return Out;
+		}
 		const FGameKitMusicRule Rule = RuleFor(From, To);
 		const int64 P = Position(*A, Since, NowSample, Entry);
 		const int64 Boundary = NextBoundary(*A, P, Rule.Quantize, Rule.PhraseBars);
+		if (Boundary == INDEX_NONE)
+		{
+			Out.Error = FString::Printf(TEXT("unknown quantize %s"), *Rule.Quantize);
+			return Out;
+		}
+		const bool bStinger = Rule.Stinger.IsSet() && !Rule.Stinger.GetValue().IsEmpty();   // "" means none
+		const double* StingerBarCount = bStinger ? StingerBars.Find(Rule.Stinger.GetValue()) : nullptr;
+		if (bStinger && !StingerBarCount)
+		{
+			Out.Error = FString::Printf(TEXT("unknown stinger %s"), *Rule.Stinger.GetValue());
+			return Out;
+		}
 		Out.SwitchAt = NowSample + (Boundary - P);
 		Out.Fade = static_cast<int64>(FMath::FloorToDouble(Rule.FadeMs * Rate / 1000 + 0.5));
 		Out.FromStopAt = Out.SwitchAt + Out.Fade;
 		Out.ToStartAt = Out.SwitchAt;
 		Out.Stinger = Rule.Stinger;
-		if (Rule.Stinger.IsSet())
+		if (bStinger)
 		{
-			const double* Bars = StingerBars.Find(Rule.Stinger.GetValue());
 			Out.StingerAt = Out.SwitchAt;
-			Out.ToStartAt = Out.SwitchAt + GameKit::Audio::BeatSample((Bars ? *Bars : 1.0) * B->BeatsPerBar, B->Bpm, Rate);
+			Out.ToStartAt = Out.SwitchAt + GameKit::Audio::BeatSample(*StingerBarCount * B->BeatsPerBar, B->Bpm, Rate);
 		}
 		else if (Rule.bSync && A->Bpm == B->Bpm && A->BeatsPerBar == B->BeatsPerBar)
 		{

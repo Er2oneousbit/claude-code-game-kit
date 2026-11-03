@@ -12,7 +12,7 @@
 #           GDScript's round() is not used (the rule is floor(x + 0.5) in every engine). Godot parses every JSON
 #           number as a float, so counts are turned into ints before they are used as samples, and each division is
 #           written as a float division (int / int truncates in GDScript, Python's / never does). GDScript has no
-#           exceptions: an unknown track or stinger is reported with push_error and plan() returns {}.
+#           exceptions: an unknown track, quantize or stinger is reported with push_error and plan() returns {}.
 #           scripts/shell/music_player.gd plays the plans.
 #
 # Pseudocode:
@@ -80,7 +80,16 @@ static func next_boundary(track: Dictionary, rate: int, p: int, quantize: String
 	if quantize == "loop_end":
 		return lp[1]
 	var bpb: int = beats_per_bar(track)
-	var step: int = 1 if quantize == "beat" else (bpb if quantize == "bar" else bpb * phrase_bars)
+	var step: int = 0
+	if quantize == "beat":
+		step = 1
+	elif quantize == "bar":
+		step = bpb
+	elif quantize == "phrase":
+		step = bpb * phrase_bars
+	else: # a typo must not mean "phrase"; plan() checks the name before it gets here
+		push_error("MusicDirector: unknown quantize '%s'" % quantize)
+		return p
 	var bpm: float = float(track["bpm"])
 	# the beat at or after p, then up to the next multiple of step (counted from the track's first beat)
 	var k: int = floori(float(p) * bpm / float(60 * rate))
@@ -120,6 +129,9 @@ static func plan(data: Dictionary, from: String, since: int, entry: int, to: Str
 	var a: Dictionary = tracks[from]
 	var b: Dictionary = tracks[to]
 	var rule: Dictionary = rule_for(data, from, to)
+	if not QUANTIZE.has(str(rule["quantize"])):
+		push_error("MusicDirector: unknown quantize '%s'" % rule["quantize"])
+		return {}
 	var p: int = position(a, rate, since, now, entry)
 	var boundary: int = next_boundary(a, rate, p, str(rule["quantize"]), int(rule.get("phrase_bars", DEFAULT_PHRASE_BARS)))
 	var switch_at: int = now + (boundary - p)

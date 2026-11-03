@@ -249,6 +249,11 @@ def _validate(data, root):
             p.append(f"{where}: quantize must be one of {', '.join(QUANTIZE)}")
         if not 0 <= r.get("fade_ms", 0) <= 10000:
             p.append(f"{where}: fade_ms must be 0..10000")
+        if not isinstance(r.get("sync", False), bool):              # the engines read it as a JSON boolean
+            p.append(f"{where}: sync must be true or false")
+        bars = r.get("phrase_bars", 4)
+        if not isinstance(bars, int) or isinstance(bars, bool) or bars < 1:
+            p.append(f"{where}: phrase_bars must be a whole number, 1 or more")
         if r.get("stinger") is not None and r["stinger"] not in stingers:
             p.append(f"{where}: stinger {r['stinger']!r} is not in stingers")
         if r.get("stinger") and r.get("sync"):

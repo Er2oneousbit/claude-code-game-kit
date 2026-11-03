@@ -346,6 +346,12 @@
   `save_store::write_to` read it with `read_to_string` and returned `cannot read ...: stream did not contain valid
   UTF-8` on every later save; it now counts the file as unreadable, as `load_from` and the other ports do, writes
   the new save and keeps the good `.bak` (#106).
+- Music directors: a `quantize` the reference does not know (a typo such as `"bars"`) is an error in Godot
+  (`push_error`, empty plan), C++ (throws), Unreal (an empty plan with the new `FGameKitMusicPlan::Error`) and web and
+  web 3D (throws); it planned a phrase change. Unreal refuses an unknown stinger name (it played a one-bar stinger) and
+  C++ and Unreal plan `"stinger": ""` as no stinger, as `music.py` does (C++ threw `unknown stinger`). `music validate`
+  requires `sync` to be `true` or `false` and `phrase_bars` a whole number, 1 or more, the two fields the engines read
+  differently; docs/resources/audio.md says the directors do not validate the file (#125).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

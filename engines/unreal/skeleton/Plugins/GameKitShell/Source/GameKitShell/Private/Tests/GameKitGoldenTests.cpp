@@ -652,6 +652,7 @@ namespace GameKitGoldenTests
 			O->SetField(TEXT("to_start_at"), MakeNumber(static_cast<double>(P.ToStartAt)));
 			O->SetField(TEXT("stinger"), P.Stinger.IsSet() ? MakeString(P.Stinger.GetValue()) : MakeNull());
 			O->SetField(TEXT("stinger_at"), P.StingerAt.IsSet() ? MakeNumber(static_cast<double>(P.StingerAt.GetValue())) : MakeNull());
+			if (!P.Error.IsEmpty()) { Run.Test.AddError(StepLabel(I, TEXT("plan")) + TEXT(" refused: ") + P.Error); }
 			Run.SameValue(MakeObject(O), Run.Field(Step, TEXT("expect")), StepLabel(I++, TEXT("plan")));
 		}
 	}
@@ -900,6 +901,62 @@ bool FGameKitGoldenCoverageTest::RunTest(const FString&)
 	GameKitGoldenTests::CheckCoverage(*this, GameKitGoldenTests::MusicFile, GameKitGoldenTests::MusicTypes);
 	GameKitGoldenTests::CheckCoverage(*this, GameKitGoldenTests::AccessFile, GameKitGoldenTests::AccessTypes);
 	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitMusicPlanErrorsTest, "GameKit.Golden.MusicErrors", GameKitGoldenTests::GoldenTestFlags)
+
+// music.py raises on a quantize or stinger it does not know (a typo must not mean "phrase" or a one-bar stinger)
+// and plans "stinger": "" as no stinger. The golden plans never reach these, so they run here on the golden params.
+bool FGameKitMusicPlanErrorsTest::RunTest(const FString&)
+{
+	using namespace GameKit::Json;
+	FString Error;
+	const TSharedPtr<FJsonObject> Root = GameKitGoldenTests::LoadGolden(GameKitGoldenTests::MusicFile, Error);
+	if (!Root.IsValid())
+	{
+		AddError(Error);
+		return false;
+	}
+	TSharedPtr<FJsonObject> Params;
+	for (const TSharedPtr<FJsonValue>& C : Root->GetArrayField(TEXT("cases")))
+	{
+		if (Is(C, EJson::Object) && GetString(C->AsObject(), TEXT("type"), FString()) == TEXT("music_plan"))
+		{
+			Params = FindObject(C->AsObject(), TEXT("params"));
+		}
+	}
+	if (!Params.IsValid())
+	{
+		AddError(TEXT("music.json has no music_plan params"));
+		return false;
+	}
+	// a rule change on a fresh copy of the params: the first transition matching From -> To gets Key = Value
+	auto WithRule = [&Params](const FString& From, const FString& To, const TCHAR* Key, const FString& Value)
+	{
+		const TSharedPtr<FJsonObject> Copy = Parse(Write(Params.ToSharedRef(), 0))->AsObject();
+		for (const TSharedPtr<FJsonValue>& R : Copy->GetArrayField(TEXT("transitions")))
+		{
+			const TSharedPtr<FJsonObject> Rule = R->AsObject();
+			if (GetString(Rule, TEXT("from"), FString()) == From && GetString(Rule, TEXT("to"), FString()) == To)
+			{
+				Rule->SetStringField(Key, Value);
+				break;
+			}
+		}
+		return Copy;
+	};
+	const FGameKitMusicPlan Typo = FGameKitMusicDirector(WithRule(TEXT("combat"), TEXT("explore"), TEXT("quantize"), TEXT("bars")))
+	                                   .Plan(TEXT("combat"), 5000, 0, TEXT("explore"), 50000);
+	TestEqual(TEXT("quantize \"bars\" is refused"), Typo.Error, FString(TEXT("unknown quantize bars")));
+	const FGameKitMusicPlan Unknown = FGameKitMusicDirector(WithRule(TEXT("*"), TEXT("waltz"), TEXT("stinger"), TEXT("alram")))
+	                                      .Plan(TEXT("explore"), 0, 0, TEXT("waltz"), 70000);
+	TestEqual(TEXT("an unknown stinger is refused"), Unknown.Error, FString(TEXT("unknown stinger alram")));
+	const FGameKitMusicPlan Empty = FGameKitMusicDirector(WithRule(TEXT("*"), TEXT("waltz"), TEXT("stinger"), FString()))
+	                                    .Plan(TEXT("explore"), 0, 0, TEXT("waltz"), 70000);
+	TestTrue(TEXT("\"stinger\": \"\" plans without an error"), Empty.Error.IsEmpty());
+	TestFalse(TEXT("\"stinger\": \"\" sets no stinger_at"), Empty.StingerAt.IsSet());
+	TestEqual(TEXT("\"stinger\": \"\" enters the next track at the switch"), Empty.ToStartAt, Empty.SwitchAt);
+	return !HasAnyErrors();
 }
 
 #endif // WITH_DEV_AUTOMATION_TESTS

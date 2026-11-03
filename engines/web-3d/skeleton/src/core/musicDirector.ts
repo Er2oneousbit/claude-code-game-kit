@@ -61,7 +61,9 @@ export function nextBoundary(t: MusicTrack, rate: number, p: number, quantize: Q
   const [, end] = loopPoints(t, rate);
   if (quantize === "loop_end") return end;
   const bpb = bpbOf(t);
-  const step = quantize === "beat" ? 1 : quantize === "bar" ? bpb : bpb * phraseBars;
+  // a typo in music.json must not mean "phrase" (the type does not reach the data a game loads)
+  const step = quantize === "beat" ? 1 : quantize === "bar" ? bpb : quantize === "phrase" ? bpb * phraseBars : 0;
+  if (step === 0) throw new Error(`unknown quantize ${quantize}`);
   let k = Math.floor((p * t.bpm) / (60 * rate));
   while (beatSample(k, t.bpm, rate) < p) k++;
   while (k % step) k++;

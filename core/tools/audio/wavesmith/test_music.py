@@ -183,14 +183,18 @@ class MusicExam(unittest.TestCase):
         d = copy.deepcopy(MUSIC)
         d["transitions"] += [{"from": "nowhere", "to": "combat"}, {"from": "*", "to": "explore", "quantize": "soon"},
                              {"from": "*", "to": "combat", "stinger": "boom"},
-                             {"from": "*", "to": "combat", "stinger": "alarm", "sync": True}]
+                             {"from": "*", "to": "combat", "stinger": "alarm", "sync": True},
+                             {"from": "*", "to": "combat", "sync": 1}, {"from": "*", "to": "combat", "phrase_bars": 2.5},
+                             {"from": "*", "to": "combat", "phrase_bars": 0}]
         d["stingers"]["long"] = {"file": "l.wav", "bars": 99}
         d["tracks"]["bad"] = {"bpm": 5, "bars": 1, "stems": {"a": "a.wav"}}
         d["start"] = "title"
         text = "\n".join(M.validate(d))
         for words in ("from must be a track name", "quantize must be one of", "stinger 'boom' is not in stingers",
                       "a stinger and sync do not combine", "stinger long: bars must be", "track bad: bpm must be",
-                      "start 'title' is not a track"):
+                      "start 'title' is not a track", "transition 6 (* -> combat): sync must be true or false",
+                      "transition 7 (* -> combat): phrase_bars must be a whole number",
+                      "transition 8 (* -> combat): phrase_bars must be a whole number"):
             self.assertIn(words, text)
         self.assertEqual(M.validate({"version": 2}), ["version must be 1"])
 

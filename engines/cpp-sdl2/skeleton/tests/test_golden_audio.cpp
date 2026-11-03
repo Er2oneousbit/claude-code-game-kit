@@ -178,6 +178,30 @@ TEST_CASE("golden audio: music.json") {
     CHECK(cases > 0);
 }
 
+TEST_CASE("music director: a misspelt quantize is an error, an empty stinger is none") {
+    // music.py raises on a quantize it does not know (a typo must not mean "phrase") and plans "stinger": ""
+    // as no stinger; the golden plans never reach either, so they are checked here on the golden params
+    const json file = load("music.json");  // a named file: a range-for over a temporary's member dangles
+    json params;
+    for (const auto& c : file.at("cases")) {
+        if (c.at("type") == "music_plan") params = c.at("params");
+    }
+    REQUIRE(params.is_object());
+    json typo = params;
+    for (auto& r : typo.at("transitions")) {
+        if (r.at("from") == "combat" && r.at("to") == "explore") r["quantize"] = "bars";
+    }
+    CHECK_THROWS_WITH_AS(core::MusicDirector(typo).plan("combat", 5000, 0, "explore", 50000), "unknown quantize bars",
+                         std::runtime_error);
+    json empty = params;
+    for (auto& r : empty.at("transitions")) {
+        if (r.at("to") == "waltz") r["stinger"] = "";
+    }
+    const core::MusicPlan p = core::MusicDirector(empty).plan("explore", 0, 0, "waltz", 70000);
+    CHECK_FALSE(p.stinger_at.has_value());
+    CHECK(p.to_start_at == p.switch_at);
+}
+
 TEST_CASE("golden audio: access.json") {
     const json file = load("access.json");
     const double tol = file.at("tolerance").get<double>();
