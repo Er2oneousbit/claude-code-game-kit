@@ -215,6 +215,9 @@
 - Dotwork aseprite: build writes the palette and frame list Aseprite loads to the work folder and removes both after
   the run, also when it fails. The `<name>.gpl` stayed beside every `.aseprite` in the game's tracked sources; ones
   an earlier build left there are not used and can be deleted (#109).
+- Dotwork skill: step 2 quotes the lock's GPU memory per tier, 8 GB for sprites, 12 GB for rotation and 16 GB for
+  animation (it said 16 GB for rotation, so a 12 GB card was turned away); a Dotwork exam now compares the skill's
+  and the README's numbers with `models.lock.json` (#110).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

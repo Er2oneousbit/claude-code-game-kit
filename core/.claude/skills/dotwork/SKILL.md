@@ -12,10 +12,10 @@ and its keys, limits) and SOP-16 "Generating pixel art locally" before the first
 1. **Check the tier.** The toy is built with code-drawn art (`tools/art/pixel_sprite.py`); real art waits until the
    fun is proven (GDD "Current tier"). If the game is still a toy, say so and ask before spending GPU time on art.
 2. **Check the machine.** `python tools/art/dotwork/dotwork.py setup --check`. Explain each `[FAIL]` line in plain
-   words. Dotwork needs an NVIDIA GPU (8 GB for sprites, 16 GB for rotation and animation), ComfyUI, two reviewed node
-   packs and 15 to 78 GB of models, depending on the tier. **Never download a model, install a node pack or install
-   ComfyUI without a clear yes for that item.** Node packs are untrusted code: review them as SOP-16 says. ComfyUI
-   stays on 127.0.0.1. No GPU or too little memory: say so and offer the other art routes (GDD "Art source").
+   words. Dotwork needs an NVIDIA GPU (8 GB for sprites, 12 GB for rotation, 16 GB for animation: the `tiers` in
+   `models.lock.json`, which `setup --check` prints), ComfyUI, two reviewed node packs and 15 to 78 GB of models,
+   depending on the tier. **Never download a model, install a node pack or install ComfyUI without a clear yes for
+   that item.** Node packs are untrusted code: review them as SOP-16 says. ComfyUI stays on 127.0.0.1. No GPU or too little memory: say so and offer the other art routes (GDD "Art source").
 3. **First run, no GPU:** `python tools/art/dotwork/dotwork.py pack --spec tools/art/dotwork/examples/ui.json`
    (needs `GODOT_BIN`, or add `--engine none` on another engine). It proves the folder layout, the Godot import and the
    asset log in seconds. `tools/art/dotwork/examples/uikit.json` is the same kind of run: the menu Theme, prompt
