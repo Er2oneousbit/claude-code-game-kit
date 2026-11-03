@@ -35,7 +35,8 @@
 #           placeholder check on the rendered plan (also on re-runs), .gold reuse folds CRLF only for text,
 #           backtick and */ rejected in names and authors, more reserved slugs (CMake targets, Windows devices)
 #           2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): the slug is recorded; --adopt/--upgrade reuse the
-#           recorded name, slug and engine and refuse different ones (--rename opts in for name and slug)
+#           recorded name, slug and engine and refuse different ones (--rename opts in for name and slug);
+#           --restore PATH puts a deleted kit file back rendered (copying the raw template left placeholders)
 # ---------------------------------------------------------------------------
 import argparse
 import datetime
@@ -300,13 +301,15 @@ class Writer:
     content still matches the hash recorded when the kit last wrote them).
     """
 
-    def __init__(self, dest, mapping, dry_run, mode, force, prev_hashes):
+    def __init__(self, dest, mapping, dry_run, mode, force, prev_hashes, restore=()):
         self.dest, self.mapping = dest, mapping
         self.dry_run, self.mode, self.force = dry_run, mode, force
         self.prev_hashes = prev_hashes
+        self.restore = set(restore)  # --restore: kit files to put back rendered, whatever is there now
         self.hashes = {}            # rel -> hash of the kit version now in place (feeds the next --upgrade)
         self.created, self.skipped, self.conflicts, self.overridden, self.upgraded = [], [], [], [], []
         self.kept_deleted = []      # --upgrade: kit files the project deleted on purpose, left out
+        self.restored = []          # --restore: kit files put back on request
         self.written = []           # every path this run wrote (listed by --debug)
 
     def _write(self, rel, data):
@@ -321,6 +324,12 @@ class Writer:
         key = rel.as_posix()
         target = self.dest / rel
         new_hash = digest(data)
+        if key in self.restore:
+            # Asked for by name: the rendered kit version (a file copied from the kit by hand is a raw template)
+            self._write(rel, data)
+            self.restored.append(key)
+            self.hashes[key] = new_hash
+            return
         if not target.exists():
             # --upgrade: a kit file this project had (it is in the record) and no longer has was deleted on purpose,
             # e.g. a starter test for a rule the game replaced. Leave it out; only files new to the project are added.
@@ -465,6 +474,14 @@ def load_meta(dest):
     return {}
 
 
+def restore_key(path):
+    """--restore argument -> the plan key: forward slashes, relative to the game folder, no leading ./"""
+    key = Path(path.replace("\\", "/")).as_posix()
+    if Path(key).is_absolute() or re.match(r"^[A-Za-z]:", key) or ".." in key.split("/"):
+        raise ScaffoldError(f"--restore {path}: give the path relative to the game folder, e.g. scripts/core/spring.gd")
+    return key
+
+
 def settle_identity(args, old, derived, engines):
     """(name, slug, engine) for this run.
 
@@ -605,7 +622,11 @@ def scaffold(args):
     dbg(f"dest: {dest} mode: {mode}")
 
     edir = meta["_dir"]
-    writer = Writer(dest, mapping, args.dry_run, mode, args.force, prev_hashes)
+    restore = [restore_key(r) for r in args.restore]
+    if restore and mode != "upgrade":
+        raise ScaffoldError("--restore only applies with --upgrade (a new project or --adopt writes every missing "
+                            "kit file anyway)")
+    writer = Writer(dest, mapping, args.dry_run, mode, args.force, prev_hashes, restore)
     if not args.dry_run:
         dest.mkdir(parents=True, exist_ok=True)
 
@@ -626,6 +647,10 @@ def scaffold(args):
     assets_dir = meta.get("assets_dir", "assets")
     if assets_dir != "Content":  # Unreal creates Content itself
         plan.setdefault(f"{assets_dir}/.gitkeep", (b"", True))
+    unknown = [r for r in restore if r not in plan]
+    if unknown:
+        raise ScaffoldError(f"--restore {', '.join(unknown)}: not a file the kit ships to a {engine_id} project "
+                            "(give the path relative to the game folder, e.g. --restore scripts/core/spring.gd)")
     for rel, (data, is_text) in plan.items():
         writer.write(rel, data, is_text)
 
@@ -691,9 +716,13 @@ def report(args, dest, writer, unresolved, adopt_hints, setup_step=None):
             print(f"       {u}")
         if len(writer.upgraded) > 15:
             print(f"       ... and {len(writer.upgraded) - 15} more (--debug lists every file)")
+    if writer.restored:
+        print(f"[ OK ] {'would restore' if args.dry_run else 'restored'} {len(writer.restored)} kit file(s): "
+              + ", ".join(writer.restored))
     if writer.kept_deleted:
-        print(f"[info] left out {len(writer.kept_deleted)} kit file(s) you deleted (copy one back from the kit to restore it): "
-              + ", ".join(writer.kept_deleted[:5]) + (" ..." if len(writer.kept_deleted) > 5 else ""))
+        # Not "copy it from the kit": kit files are templates ({{GAME_NAME}}, the footer line), --restore renders them
+        print(f"[info] left out {len(writer.kept_deleted)} kit file(s) you deleted (put one back with --upgrade "
+              f"--restore <path>): " + ", ".join(writer.kept_deleted[:5]) + (" ..." if len(writer.kept_deleted) > 5 else ""))
     if writer.skipped:
         print(f"[info] left untouched (already current): {len(writer.skipped)}")
         for s in writer.skipped[:10]:
@@ -762,6 +791,10 @@ def build_parser():
     mode.add_argument("--upgrade", action="store_true",
                       help="like --adopt, but replaces kit files you never edited with the new kit version "
                            "(needs the file hashes this kit records; older projects fall back to .gold copies)")
+    ap.add_argument("--restore", action="append", default=[], metavar="PATH",
+                    help="with --upgrade: put the kit's version of PATH (relative to the game folder) back, rendered "
+                         "for this project, replacing whatever is there; for a kit file you deleted and want again "
+                         "(repeatable)")
     ap.add_argument("--force", action="store_true", help="overwrite existing files in dest (dangerous, prefer --adopt)")
     ap.add_argument("--git-init", action="store_true", help="run `git init` on branch main in the destination (does not commit)")
     ap.add_argument("--dry-run", action="store_true", help="show what would happen, write nothing")

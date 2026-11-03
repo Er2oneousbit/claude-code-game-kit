@@ -232,6 +232,12 @@
   `[warn] ShareAlike: derivatives of this asset must be released under the same license; check SOP-04 before
   shipping` and `SHAREALIKE` in the log row's Notes, also on `--dry-run`. "CC BY" matched inside "CC BY-SA", so
   the pack was logged as a plain CC BY asset with no note (#105).
+- Scaffolder: `--upgrade --restore <path>` puts a kit file you deleted back, rendered for the game (name, date,
+  footer), and records it, so the next `--upgrade` treats it as untouched. The "left out N kit file(s) you deleted"
+  line said to copy one back from the kit, which leaves a raw template (`# {{FOOTER}}`, `{{GAME_NAME}}`) that the
+  next upgrade took for your edit and answered with a `.gold`. `doctor.py` now scans the overlays' source files
+  (`.gd .tscn .cs .cpp .h .rs .lua .ts .js .html` and more, not only docs and config) and reports the profile
+  tokens `{{FOOTER}}`, `{{PROFILE_STYLE}}` and `{{FOOTER_RULE}}` too (#122).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

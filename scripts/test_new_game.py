@@ -8,7 +8,8 @@
 #           overwrites (a .gold copy and the engine's adopt hint instead), appends the .gitignore block once, merges
 #           settings keeping the project's rules, a second adopt adds nothing. Upgrade: replaces untouched kit files,
 #           keeps edited ones (.gold), leaves out files the project deleted, adds new kit files, a second upgrade is
-#           quiet, the recorded name, slug and engine are reused and a different one is refused. Exit codes: 1 for an unresolved placeholder, 2 for every refusal; --dry-run writes nothing.
+#           quiet, the recorded name, slug and engine are reused and a different one is refused, --restore puts a
+#           deleted kit file back rendered. Exit codes: 1 for an unresolved placeholder, 2 for every refusal; --dry-run writes nothing.
 # Usage   : python scripts/test_new_game.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline. The real engines are checked by scaffolding them (CLAUDE.md, "Verify a
@@ -257,6 +258,37 @@ class NewGameExam(unittest.TestCase):
         self.assertNotIn("[merge]", out)
         self.assertFalse((self.dest / "docs" / "GDD.md.gold2").exists())
         self.assertEqual(self.text("docs/GDD.md"), "# Fake Game design\nOur plan.\n")
+
+    def test_restore_puts_a_deleted_kit_file_back_rendered(self):
+        """#122: the hint said to copy the file back from the kit, which leaves a raw template ({{FOOTER}} line)."""
+        self.new()
+        rendered = self.text("src/main.py")
+        (self.dest / "src" / "main.py").unlink()
+        code, out = self.ng("--upgrade")
+        self.assertEqual(code, 0, out)
+        self.assertIn("left out 1 kit file(s) you deleted (put one back with --upgrade --restore <path>)", out)
+        self.assertNotIn("copy one back", out)
+        # What the old hint led to: the raw template copied by hand
+        shutil.copy2(self.kit / "engines" / "fake" / "skeleton" / "src" / "main.py", self.dest / "src" / "main.py")
+        code, out = self.ng("--upgrade", "--restore", "src/main.py")
+        self.assertEqual(code, 0, out)
+        self.assertIn("restored 1 kit file(s): src/main.py", out)
+        self.assertEqual(self.text("src/main.py"), rendered)
+        self.assertEqual(self.meta()["files"]["src/main.py"], sha(self.dest / "src" / "main.py"))
+        self.assertEqual(list(self.dest.rglob("*.gold*")), [])
+        code, out = self.ng("--upgrade")                                      # and the next upgrade is quiet
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("[merge]", out)
+        (self.dest / "src" / "main.py").unlink()
+        code, out = self.ng("--upgrade", "--restore", "./src\\main.py")       # any spelling of the path
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.text("src/main.py"), rendered)
+        for extra, needle in ((("--upgrade", "--restore", "src/nope.py"), "not a file the kit ships"),
+                              (("--upgrade", "--restore", "../x.py"), "relative to the game folder"),
+                              (("--adopt", "--restore", "src/main.py"), "only applies with --upgrade")):
+            code, out = self.ng(*extra)
+            self.assertEqual(code, 2, f"{extra}: {out}")
+            self.assertIn(needle, out)
 
     def test_upgrade_keeps_the_recorded_name_slug_and_engine(self):
         """#97: --upgrade without the original --slug rewrote the slug; another --engine or --name was taken as is."""

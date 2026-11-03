@@ -2,7 +2,8 @@
 # ---------------------------------------------------------------------------
 # test_doctor.py
 # Purpose : Exam for doctor.py, the engine-agnostic health check: the asset-log reminder fires in every overlay's
-#           media folder (assets, Assets, Content, public/assets, game/img) and stays quiet once a row is filled.
+#           media folder (assets, Assets, Content, public/assets, game/img) and stays quiet once a row is filled;
+#           the placeholder scan reads the overlays' source files and the profile tokens.
 # Usage   : python tools/test_doctor.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only. Each case copies doctor.py and check_links.py into a fake project under a temp
@@ -57,6 +58,19 @@ class DoctorExam(unittest.TestCase):
         self.put("public/assets/art/hero.png", "x")
         self.put("docs/ASSET_LOG.md", LOG_HEAD + "| A-0001 | hero | public/assets/art/hero.png | CC0 |\n")
         self.assertNotIn("media file(s) under", self.doctor())
+
+    def test_raw_templates_in_source_files_are_caught(self):
+        """#122: only .md .json .py ... were scanned, and only the six name tokens (not the profile ones)."""
+        footer, name = "{{" + "FOOTER}}", "{{" + "GAME_NAME}}"      # split: this exam ships into games itself
+        self.put("scripts/core/spring.gd", f"extends Node\n\n# {footer}\n")
+        self.put("src/main.ts", f"document.title = '{name}';\n")
+        self.put("src/game.lua", f"-- {footer}\n")
+        self.put("data/dialogue.json", '{"line": "{{' + 'PLAYER_NAME}} wins"}\n')   # a game's own template: fine
+        out = self.doctor()
+        self.assertIn(f"UNRESOLVED placeholder(s) ['{footer}'] in scripts/core/spring.gd", out)
+        self.assertIn(f"UNRESOLVED placeholder(s) ['{name}'] in src/main.ts", out)
+        self.assertIn("in src/game.lua", out)
+        self.assertNotIn("dialogue.json", out)
 
     def test_assets_dir_option_wins(self):
         self.put("public/assets/art/hero.png", "x")
