@@ -6,6 +6,7 @@
 #           - the juice and shell coverage lines (SOP-18, SOP-19, /game-feel, /game-shell, KNOWN_ISSUES) name every
 #             engine, and every engine without a juice port is named where the module is promised (#103)
 #           - an ENGINE.md whose overlay has no juice port says so (#103)
+#           - the web and web-3d ENGINE.md layout names every src/core module the skeleton holds (#117)
 # Usage   : python scripts/test_kit_docs.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, reads the kit tree read-only. The engines and their doc names are in the
@@ -32,6 +33,15 @@ ENGINE_NAMES = {
 }
 GOLDEN_JUICE = "juice.json"   # a skeleton that names this file has a juice port with golden tests
 SKIP_DIRS = {"node_modules", "target", "Library", "build", "dist"}
+# web and web-3d src/core module -> the words its ENGINE.md layout line uses for it (None: a helper, need not be named)
+WEB_CORE_WORDS = {
+    "log": "log", "shake": "shake", "hitstop": "hitstop", "ease": "ease", "followCamera": "follow",
+    "follow": "follow spring", "inputBuffer": "buffer", "coyoteTimer": "coyote", "spring": "spring",
+    "flashLimiter": "flash limiter", "holdToggle": "hold toggle", "settings": "settings", "bindings": "bindings",
+    "saveStore": "saves", "i18n": "i18n", "userData": "user data", "dialogue": "dialogue",
+    "audioDirector": "audio director", "musicDirector": "music director", "audioAccess": "audio access",
+    "atomicFile": None, "textStore": None, "jsonUtil": None,
+}
 
 
 def read(rel):
@@ -62,6 +72,14 @@ def section(text, start, end):
     rest = text[m.end():]
     n = re.search(end, rest, re.M)
     return text[m.start():m.end() + (n.start() if n else len(rest))]
+
+
+def layout_entry(engine_md, name):
+    """One entry of an ENGINE.md layout block: its line and the indented lines under it, whitespace folded."""
+    m = re.search(r"^" + re.escape(name) + r" .*\n(?:[ \t]+\S.*\n)*", engine_md, re.M)
+    if not m:
+        raise AssertionError("no layout entry for " + name)
+    return " ".join(m.group(0).split())
 
 
 def missing_engines(text, wanted):
@@ -102,6 +120,22 @@ class OverlayCoverageExam(unittest.TestCase):
         quiet = [e for e in engines() if not has_juice_port(e)
                  and not re.search(r"no juice", read("engines/%s/ENGINE.md" % e), re.I)]
         self.assertEqual(quiet, [])
+
+
+class LayoutExam(unittest.TestCase):
+    def test_web_core_modules_are_named_in_the_layout(self):
+        # #117: web-3d's layout named timers, math, RNG and state machines (none exist) and none of its 23 modules
+        for engine in ("web", "web-3d"):
+            line = layout_entry(read("engines/%s/ENGINE.md" % engine), "src/core/").lower()
+            stems = sorted(p.stem for p in (KIT / "engines" / engine / "skeleton" / "src" / "core").glob("*.ts"))
+            unknown = [s for s in stems if s not in WEB_CORE_WORDS]
+            self.assertEqual(unknown, [], engine + ": a new module, add it to WEB_CORE_WORDS and the layout")
+            unnamed = [s for s in stems if WEB_CORE_WORDS[s] and WEB_CORE_WORDS[s] not in line]
+            self.assertEqual(unnamed, [], engine + " ENGINE.md src/core/ line")
+
+    def test_layout_entry_takes_the_continuation_lines(self):
+        text = "src/core/   one,\n            two.\nsrc/game/   three\n"
+        self.assertEqual(layout_entry(text, "src/core/"), "src/core/ one, two.")
 
 
 if __name__ == "__main__":

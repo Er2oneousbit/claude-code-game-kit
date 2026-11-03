@@ -324,6 +324,10 @@
   flash), web-3d has the tested logic but no screens, and the `--drive` scenario runs are for Godot, LÖVE and web,
   with the same checks by hand elsewhere. A new kit exam, `scripts/test_kit_docs.py`, checks these lines against the
   engines in the tree (#103).
+- web-3d ENGINE.md: the `src/core/` layout line names the modules that are there (juice, settings, bindings, saves,
+  i18n, user data, dialogue and the three audio modules) instead of timers, math, RNG and state machines, which never
+  were, and says there is no `src/shell/`; the web ENGINE.md line gains coyote, hold toggle, dialogue and the audio
+  modules. `test_kit_docs.py` checks both lines against `src/core/` (#117).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
