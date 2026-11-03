@@ -13,8 +13,9 @@ examples were built and tested on one Windows 11 machine.
 - **Godot shell:** crash files need Godot 4.5+, untested on 4.3 and 4.4: [#46](https://github.com/Er2oneousbit/claude-code-game-kit/issues/46).
 - **Unreal:** the GameKitShell plugin builds and passes its tests in a Blueprint-only project (headless), but turning
   it on from the editor's Plugins window is not tried: [#47](https://github.com/Er2oneousbit/claude-code-game-kit/issues/47).
-- **Shell screens** ship for Godot, LÖVE and web only; Unity, Unreal, Bevy and C++/SDL2 ship the tested logic and
-  the screens are built in the engine. Display settings the browser cannot apply (vsync, resolution) are stored only.
+- **Shell screens** ship for Godot, LÖVE and web only; Unity, Unreal, Bevy, C++/SDL2 and web-3d ship the tested
+  logic and the screens are built in the engine; RPG Maker MZ keeps MZ's own screens and ships no juice or shell
+  port (its ENGINE_FLOW maps the rules onto MZ). Display settings the browser cannot apply (vsync, resolution) are stored only.
 
 ### 0.8.1 follow-ups (Dotwork)
 - **The new lanes not yet run together on one full game** (each was proven in a small test game; qa pack ran on a

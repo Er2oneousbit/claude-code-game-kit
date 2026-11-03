@@ -319,6 +319,11 @@
   line past the 40-character limit, so a 38-character line by "Research lead" reads `RESEARCH LEAD:` over the text
   instead of one 53-character line. When the cue cannot fit even then, `lint` and `build` warn about the line and
   `export` names the cue, so the display name or the opening can be shortened (WebVTT's `<v Name>` was fine) (#116).
+- Docs: SOP-18, SOP-19, `/game-feel`, `/game-shell` and KNOWN_ISSUES say what RPG Maker MZ and web-3d ship: MZ has no
+  juice or shell port (its ENGINE.md now says so, and ENGINE_FLOW maps the rules onto MZ's own screens, shake and
+  flash), web-3d has the tested logic but no screens, and the `--drive` scenario runs are for Godot, LÖVE and web,
+  with the same checks by hand elsewhere. A new kit exam, `scripts/test_kit_docs.py`, checks these lines against the
+  engines in the tree (#103).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

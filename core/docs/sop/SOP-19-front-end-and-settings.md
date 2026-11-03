@@ -8,8 +8,9 @@ prompts that show the buttons they hold, text that fits in every language, and a
 Run it with `/game-shell`.
 
 ## 1. The shell's parts
-Godot, LÖVE and web overlays ship a working shell; Unity, Unreal, Bevy and C++/SDL2 ship its engine-free logic with
-tests (details per engine: `docs/ENGINE_FLOW.md`). The behavior is one spec, `tools/golden_vectors.py`, with expected
+Godot, LÖVE and web overlays ship a working shell; Unity, Unreal, Bevy, C++/SDL2 and web-3d ship its engine-free
+logic with tests, and the screens are built in the engine on top of it; RPG Maker MZ keeps MZ's own screens, settings
+and saves, and the kit maps the rules onto them (details per engine: `docs/ENGINE_FLOW.md`). The behavior is one spec, `tools/golden_vectors.py`, with expected
 values in `data/golden/shell.json` that every port's tests check (K01).
 
 | Part | What it gives |

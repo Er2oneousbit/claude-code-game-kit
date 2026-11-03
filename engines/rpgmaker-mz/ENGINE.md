@@ -29,6 +29,8 @@ tools/                    dev.py, smoke.mjs, serve.mjs and helpers
 build/web/                a web-browser copy of the game (git-ignored)
 ```
 Keeping the MZ project in `game/` means the editor's Deployment exports the game and none of the kit's docs or tools.
+No juice or shell module ships here: MZ has its own screens, settings, saves, shake and flash, and ENGINE_FLOW
+("The shell, juice and accessibility in MZ") maps SOP-18 to SOP-20 onto them.
 
 ## Conventions
 - **Rules in GameCore, MZ in GameMain.** GameCore must stay loadable by Node (tests); anything that touches RPG Maker
