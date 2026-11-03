@@ -708,6 +708,21 @@ class DotworkExam(unittest.TestCase):
         self.assertIn("A-0001 updated in", out)
         with open(os.path.join(self.tmp, "docs", "ASSET_LOG.md"), encoding="utf-8") as f:
             self.assertEqual(len([r for r in f.read().splitlines() if r.startswith("| A-")]), 1)
+        # the "Modified?" column: yes for a polish note from either editor, also after an earlier note (#101)
+        man = os.path.join(self.tmp, "assets_src", "dotwork", "manifest_ui.json")
+        with open(man, encoding="utf-8") as f:
+            original = f.read()
+        for note, want in ((None, "no"), ("hand-polished in Pixelorama", "yes"),
+                           ("qa: two colours merged; hand-polished in Aseprite", "yes")):
+            data = json.loads(original)
+            if note:
+                data["assets"][0]["note"] = note
+            with open(man, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+            code, out = self.run_dotwork("log", "--pack", "ui", "--project", self.tmp, "--dry-run")
+            self.assertEqual(code, 0, out)
+            row = next(ln for ln in out.splitlines() if ln.startswith("| A-0001 "))
+            self.assertEqual(row.split("|")[9].strip(), want, note)
 
     def test_engine_none_drops_godot_rows(self):
         make_project(self.tmp, {"comfyui": {"url": self.url}})

@@ -204,6 +204,9 @@
   count, each frame's look and its time on screen), not by its bytes. Pixelorama rewrites the project data on each save,
   so a file only opened and saved, or polished and re-exported, was "kept: it differs from the game's frames" on
   every build, and `--overwrite` then replaced the user's layers and palette with Dotwork's flat file (#100).
+- Dotwork log: `log --pack` writes "Modified? yes" in `docs/ASSET_LOG.md` when any row of the pack carries a polish
+  note from either editor, also after an earlier note (`qa ...; hand-polished in Aseprite`). It matched only the
+  exact note `hand-polished in Aseprite`, so every Pixelorama polish was logged as unmodified (#101).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
