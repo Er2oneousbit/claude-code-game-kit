@@ -1,7 +1,7 @@
 # Rune Delve: Game Design Document
 
 > Living document. Short beats complete. Update with `/gdd-sync` when reality diverges from this page.
-> Last reviewed: 2026-10-22
+> Last reviewed: 2026-11-03
 
 ## Identity
 - **Working title:** Rune Delve (a codename is fine, do not spend time on the name yet)
@@ -15,7 +15,7 @@
 Pillars decide arguments. If a feature does not serve one, it goes to the Parking lot.
 1. **Timing beats spam**: the ward blocks one swing and staggers the orc (double damage) if it meets a wind-up; spammed, it wastes mana and leaves you open. Bolts cost mana. Rules out a best button.
 2. **Read the orcs**: an orc raises its weapon and glows before every swing, sleeping orcs wake to bolt noise or a hit, and a "!" shows when one has spotted you. Rules out unreadable hits.
-3. **One more delve**: three rooms in about three minutes, death restarts the delve, R restarts any time. Rules out long runs and saves mid-delve.
+3. **One more delve**: three rooms in about three minutes, death ends the delve and R (or Start) begins it again at once, R restarts any time. Rules out long runs and saves mid-delve.
 
 ## Core loop
 ```
