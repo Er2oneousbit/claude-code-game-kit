@@ -38,6 +38,11 @@
 - Scrap Tanks (C++/SDL2): the skilled bot's HIDE search skips spots no nav path reaches, as the two Tactics pickers
   already did, so it no longer picks a nav-island spot and stalls against the center rock (20 such picks in a new
   test_arena.cpp sweep on the old code). The scenario pair is unchanged (#153).
+- LÖVE: `check`, `smoke`, `--screenshot`, `--record` and `--data-dir` work in a project folder whose path has a
+  character outside the Windows code page ("Í", a curly quote). `io.open` took the path in the code page, so
+  `check` reported every file as `cannot read the file` and `smoke` said "the game does not compile". The checker
+  and the new `TextStore.file` (the folder store and main.lua's captures) open files with `_wfopen`, `_wremove`
+  and `_wrename` through the FFI on Windows; a boot file the checker cannot read is reported as that (#98).
 - Scrap Tanks (C++/SDL2): make_sprites.py checks the bpy launcher (uv, or `BPY_PYTHON`) and the kit's render tool
   before the first job and stops with `[error]` and exit 2 instead of a traceback; a render that dies before its
   first `[..]` line shows its last output lines; `--debug` prints each command and all output; a Windows path in

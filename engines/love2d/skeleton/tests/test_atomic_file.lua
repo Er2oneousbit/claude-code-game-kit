@@ -123,6 +123,34 @@ function T.test_binary_and_nested_paths()
   end)
 end
 
+-- io.open takes the Windows code page, so a folder named with "Í" or a right double quote (bytes cp1252 cannot
+-- decode) was unreadable through the folder store (#98). love.filesystem (UTF-8) checks the files landed by name.
+function T.test_folder_store_with_a_name_outside_the_code_page()
+  local base = "test_tmp_" .. os.time() .. "_" .. math.random(100000)
+  local folder = base .. "/l\195\141ve \226\128\157q"            -- "lÍve ”q"
+  love.filesystem.createDirectory(folder)
+  local ok, err = pcall(function()
+    local store = TextStore.dir(love.filesystem.getSaveDirectory() .. "/" .. folder)
+    local big = string.rep("0123456789abcdef", 10000)             -- several read chunks
+    AtomicFile.write(store, NAME, big)
+    A.eq(store:read(NAME), big, "read back")
+    A.eq(love.filesystem.read(folder .. "/" .. NAME), big, "the file has the right name on disk")
+    store:append("logs/game.log", "a\n")
+    store:append("logs/game.log", "b\n")
+    A.eq(love.filesystem.read(folder .. "/logs/game.log"), "a\nb\n", "append in a new subfolder")
+    AtomicFile.write(store, NAME, "two")                          -- rename over the old file
+    A.eq(store:read(NAME .. ".bak"), big, ".bak")
+    A.truthy(store:exists(NAME), "exists")
+    store:remove(NAME)
+    A.falsy(store:exists(NAME), "removed")
+    local shot = love.filesystem.getSaveDirectory() .. "/" .. folder .. "/shot.png"
+    A.truthy(TextStore.file.write(shot, "\137PNG", "wb"), "TextStore.file.write (main.lua captures)")
+    A.eq(love.filesystem.read(folder .. "/shot.png"), "\137PNG", "capture bytes")
+  end)
+  cleanup(base)
+  if not ok then error(err, 0) end
+end
+
 function T.test_memory_store_contract()
   local store = TextStore.memory()
   AtomicFile.write(store, NAME, "x")

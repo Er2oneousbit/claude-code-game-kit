@@ -66,10 +66,12 @@ build/              .love and the fused Windows exe (git-ignored)
 6. **Pixel art:** call `love.graphics.setDefaultFilter("nearest", "nearest")` before loading images, and scale by
    whole numbers from the 640x360 base.
 7. **No rename in love.filesystem.** Atomic saves in the save folder write `<file>.tmp`, verify it, then write
-   `<file>.bak` and `<file>`; with `--data-dir` (io.open) they rename for real (atomic on POSIX; on Windows a rename
-   does not replace, so the target is removed first there). A load that finds `<file>` missing next to a `.tmp`
-   that parses (a crash between that remove and the rename) renames the `.tmp` back and logs "recovered". Keep
-   `--data-dir` paths ASCII on Windows (io.open uses the code page).
+   `<file>.bak` and `<file>`; with `--data-dir` (real files) they rename for real (atomic on POSIX; on Windows a
+   rename does not replace, so the target is removed first there). A load that finds `<file>` missing next to a
+   `.tmp` that parses (a crash between that remove and the rename) renames the `.tmp` back and logs "recovered".
+   `io.open`, `os.remove` and `os.rename` take a path in the Windows code page, so a path with "Í" or a curly quote
+   fails through them; for files by absolute path use `TextStore.file` (`require("src.core.text_store")`), which
+   calls the wide C runtime functions there.
 8. **API verification:** LÖVE 11 and 12 differ (for example `love.graphics.setColor` takes 0..1 since 11.0, not
    0..255). Check `lovec --version` and the matching wiki page (love2d.org/wiki) before using an unfamiliar API.
 

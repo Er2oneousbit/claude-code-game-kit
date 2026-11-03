@@ -32,6 +32,8 @@
 #           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
 # Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): smoke without --data-dir uses a fresh
 #           build/smoke-data/, never the real save folder
+# Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): smoke says the checker cannot read conf.lua /
+#           main.lua instead of "does not compile" (lovecheck now opens non-ASCII paths on Windows)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -291,22 +293,24 @@ def lua_files(paths=None):
 
 
 def compile_check(love, files):
-    """(failed paths, ok?) for files, through tools/lovecheck. ok is False when the checker itself broke."""
-    failed = []
+    """(failed paths, ok?, unreadable count) for files, through tools/lovecheck. ok is False when the checker itself
+    broke."""
+    failed, unreadable = [], 0
     for i in range(0, len(files), CHECK_BATCH):
         batch = files[i:i + CHECK_BATCH]
         rc, out = run([love, ROOT / CHECKER] + [str(f) for f in batch], echo="never", timeout=CHECK_TIMEOUT_S)
         if rc in NO_EXEC:
-            return failed, None
+            return failed, None, unreadable
         if "CHECK_DONE" not in out:
             print(out)
             print(f"[FAIL] the checker did not finish (exit {rc}). Is {CHECKER}/ present?")
-            return failed, False
+            return failed, False, unreadable
         for line in out.splitlines():
             if line.startswith("CHECK_FAIL "):
                 print("  " + line[len("CHECK_FAIL "):])
                 failed.append(line.split(" ", 2)[1])
-    return failed, True
+                unreadable += line.endswith(" cannot read the file")
+    return failed, True, unreadable
 
 
 # ---- Commands -----------------------------------------------------------------
@@ -315,7 +319,7 @@ def cmd_check(args, love):
     if not files:
         print("[warn] no .lua files found")
         return 0
-    failed, ok = compile_check(love, files)
+    failed, ok, _ = compile_check(love, files)
     if ok is None:
         return 2
     if ok is False:
@@ -354,9 +358,12 @@ def cmd_test(args, love):
 def cmd_smoke(args, love):
     # a syntax error in conf.lua happens before any handler exists: catch it here, fast and clearly
     boot = [p for p in (ROOT / "conf.lua", ROOT / "main.lua") if p.is_file()]
-    failed, ok = compile_check(love, boot)
+    failed, ok, unreadable = compile_check(love, boot)
     if ok is None:
         return 2
+    if unreadable:
+        print("[FAIL] the checker cannot read conf.lua / main.lua (see above)")
+        return 1
     if failed or ok is False:
         print("[FAIL] the game does not compile (python tools/dev.py check)")
         return 1

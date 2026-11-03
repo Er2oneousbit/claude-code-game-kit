@@ -8,7 +8,7 @@
 --           AtomicFile.recover(store, "save_1.json", is_complete)   -- before a load: puts a stranded .tmp back
 --           (store: src/core/text_store.lua, the user-data folder)
 -- Notes   : No love.* calls; the store does the file work. Two kinds of store:
---           - a real folder (--data-dir, io.open): write <file>.tmp, close it, read it back, copy the old file to
+--           - a real folder (--data-dir, real files): write <file>.tmp, close it, read it back, copy the old file to
 --             <file>.bak, rename <file>.tmp over <file>. On POSIX that rename replaces <file> atomically. On
 --             Windows a rename does not replace an existing file, so the store removes <file> first
 --             (text_store.lua Dir:rename). A crash before the rename leaves the old file intact; a crash between

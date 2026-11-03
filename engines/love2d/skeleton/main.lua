@@ -19,6 +19,7 @@
 --                 (--shot) or every N ms (--record)
 
 local Log = require("src.core.log")
+local TextStore = require("src.core.text_store")
 
 local BOOT_MARKER = "BOOT_OK"
 
@@ -35,11 +36,11 @@ local Version = require("src.version")
 local app = App.new(KIT)
 local frame, canvas, record_t, record_n = 0, nil, 0, 0
 
--- Writes a PNG to an absolute path (love.filesystem may only write inside the save folder).
+-- Writes a PNG to an absolute path (love.filesystem may only write inside the save folder). TextStore.file, not
+-- io.open: io.open cannot open a path with "Í" or a curly quote on Windows.
 local function save_png(image_data, path)
-  local file = assert(io.open(path, "wb"), "cannot write " .. path)
-  file:write(image_data:encode("png"):getString())
-  file:close()
+  local ok, err = TextStore.file.write(path, image_data:encode("png"):getString(), "wb")
+  if not ok then error("cannot write " .. path .. ": " .. tostring(err), 0) end
 end
 
 -- Ends an automated run: the screenshot of the last drawn frame, the end marker, the exit code.

@@ -2,19 +2,23 @@
 -- text_store.lua
 -- Purpose : The game's user-data folder as one small interface, so settings, saves, logs, crash files and
 --           telemetry never care where they live: the save folder (love.filesystem), an absolute folder given
---           with --data-dir (io.open, so tests can inspect the files), or memory (unit tests).
+--           with --data-dir (real files, so tests can inspect them), or memory (unit tests).
 -- Usage   : local TextStore = require("src.core.text_store")
 --           local store = TextStore.for_run(KIT.data_dir)  -- --data-dir if given, else the save folder
 --           store:read("settings.json") -> text or nil      store:write("logs/game.log", text)
 --           store:append(name, text)  store:remove(name)  store:rename(from, to)  store:exists(name)
 --           store:path(name) -> the absolute path, for messages and the proof lines dev.py prints
+--           TextStore.file.read(path) / .write(path, text, "wb"|"ab") / .exists / .remove / .rename: the same file
+--           calls by absolute UTF-8 path, for code outside a store (main.lua's captures)
 -- Notes   : Names are folder-style paths relative to the folder ("crashes/crash_1.txt"); parent folders are
 --           created on write. Binary data (PNG) is fine: every backend writes bytes as they are.
---           Folder store: io.open plus a small mkdir through LuaJIT's FFI (Lua has none). Its rename is real
+--           Folder store: TextStore.file plus a small mkdir through LuaJIT's FFI (Lua has none). Its rename is real
 --           (can_rename = true) and replaces the target: on POSIX os.rename does that atomically; on Windows it
 --           cannot, so Dir:rename removes the target first there only (RENAME_REPLACES; atomic_file.lua documents
---           the crash window that leaves and how a load recovers it). io.open takes the path in the system code
---           page on Windows, so keep --data-dir paths ASCII there (verify for other paths).
+--           the crash window that leaves and how a load recovers it). io.open, os.remove and os.rename take the
+--           path in the system code page on Windows, so a folder named with "Í" or a curly quote cannot be opened
+--           through them: on Windows TextStore.file converts the UTF-8 path to UTF-16 and calls the C runtime's
+--           wide functions (_wfopen, _wremove, _wrename) through the FFI. Elsewhere it is io.open and os.*.
 --           Save-folder store: love.filesystem has no rename (can_rename = false; atomic_file.lua writes and
 --           verifies instead), and read() ignores files that live in the game's own folder, not the save folder.
 --           love.filesystem works without a window, so tests use it too.
@@ -25,7 +29,8 @@ local TextStore = {}
 -- ---- Tunables ----------------------------------------------------------------
 local POSIX_DIR_MODE = 493                 -- 0755
 local WIN_UTF8 = 65001                     -- CP_UTF8 for MultiByteToWideChar
-local WIN_PATH_MAX = 32768
+local WIN_INVALID_CHARS = 8                -- MB_ERR_INVALID_CHARS: a path that is not UTF-8 falls back to io.open
+local READ_CHUNK = 65536                   -- bytes per fread
 -- os.rename replaces an existing target on POSIX (atomically) but not on Windows ("\" is the Windows separator)
 TextStore.RENAME_REPLACES = package.config:sub(1, 1) ~= "\\"
 
@@ -33,20 +38,122 @@ local function parent_of(path)
   return path:match("^(.*)[/\\][^/\\]+$")
 end
 
+-- ---- Files by UTF-8 path (wide C runtime calls on Windows, io.open and os.* elsewhere) -------------------
+local ok_ffi, ffi = pcall(require, "ffi")
+local WIDE = ok_ffi and ffi.os == "Windows"
+if WIDE then
+  -- one declaration per call, so a module that already declared one of them cannot stop the rest
+  for _, decl in ipairs({
+    "int MultiByteToWideChar(unsigned int cp, unsigned long flags, const char *src, int srclen, uint16_t *dst, "
+      .. "int dstlen);",
+    "int CreateDirectoryW(const uint16_t *path, void *security);",
+    "void *_wfopen(const uint16_t *name, const uint16_t *mode);",
+    "size_t fread(void *buf, size_t size, size_t n, void *f);",
+    "size_t fwrite(const void *buf, size_t size, size_t n, void *f);",
+    "int fflush(void *f);",
+    "int fclose(void *f);",
+    "int _wremove(const uint16_t *name);",
+    "int _wrename(const uint16_t *from, const uint16_t *to);",
+    "char *strerror(int errnum);",
+  }) do pcall(ffi.cdef, decl) end
+end
+
+-- The UTF-16 copy of a UTF-8 string for the wide calls, or nil when it is not valid UTF-8
+local function wide(s)
+  local n = ffi.C.MultiByteToWideChar(WIN_UTF8, WIN_INVALID_CHARS, s, -1, nil, 0)
+  if n == 0 then return nil end
+  local buf = ffi.new("uint16_t[?]", n)
+  if ffi.C.MultiByteToWideChar(WIN_UTF8, WIN_INVALID_CHARS, s, -1, buf, n) == 0 then return nil end
+  return buf
+end
+
+local function c_error(path)
+  return path .. ": " .. ffi.string(ffi.C.strerror(ffi.errno()))
+end
+
+local File = {}
+TextStore.file = File
+
+-- The whole file as a string, or nil and a message
+function File.read(path)
+  local wpath = WIDE and wide(path)
+  if not wpath then
+    local f, err = io.open(path, "rb")
+    if not f then return nil, err end
+    local text = f:read("*a")
+    f:close()
+    return text
+  end
+  local f = ffi.C._wfopen(wpath, wide("rb"))
+  if f == nil then return nil, c_error(path) end
+  local buf, parts = ffi.new("char[?]", READ_CHUNK), {}
+  while true do
+    local got = tonumber(ffi.C.fread(buf, 1, READ_CHUNK, f))
+    if got > 0 then parts[#parts + 1] = ffi.string(buf, got) end
+    if got < READ_CHUNK then break end
+  end
+  ffi.C.fclose(f)
+  return table.concat(parts)
+end
+
+-- Writes (mode "wb") or appends ("ab") text: true, or nil and a message. The parent folder must exist.
+function File.write(path, text, mode)
+  local wpath = WIDE and wide(path)
+  if not wpath then
+    local f, err = io.open(path, mode)
+    if not f then return nil, err end
+    local ok
+    ok, err = f:write(text)
+    if ok then ok, err = f:flush() end
+    f:close()
+    if not ok then return nil, err end
+    return true
+  end
+  local f = ffi.C._wfopen(wpath, wide(mode))
+  if f == nil then return nil, c_error(path) end
+  local ok = tonumber(ffi.C.fwrite(text, 1, #text, f)) == #text and ffi.C.fflush(f) == 0
+  local err = (not ok) and c_error(path) or nil
+  if ffi.C.fclose(f) ~= 0 and ok then ok, err = false, c_error(path) end
+  if not ok then return nil, err end
+  return true
+end
+
+function File.exists(path)
+  local wpath = WIDE and wide(path)
+  if not wpath then
+    local f = io.open(path, "rb")
+    if f then f:close() return true end
+    return false
+  end
+  local f = ffi.C._wfopen(wpath, wide("rb"))
+  if f == nil then return false end
+  ffi.C.fclose(f)
+  return true
+end
+
+-- true, or nil and a message (like os.remove)
+function File.remove(path)
+  local wpath = WIDE and wide(path)
+  if not wpath then return os.remove(path) end
+  if ffi.C._wremove(wpath) ~= 0 then return nil, c_error(path) end
+  return true
+end
+
+-- Like os.rename: on Windows it fails when `to` exists (Dir:rename removes it first there)
+function File.rename(from, to)
+  local wfrom, wto = WIDE and wide(from), WIDE and wide(to)
+  if not (wfrom and wto) then return os.rename(from, to) end
+  if ffi.C._wrename(wfrom, wto) ~= 0 then return nil, c_error(from) end
+  return true
+end
+
 -- ---- mkdir through the FFI (falls back to os.execute when the FFI is missing) -----------------------
 local mkdir_one
 do
-  local ok_ffi, ffi = pcall(require, "ffi")
-  if ok_ffi and ffi.os == "Windows" then
-    pcall(ffi.cdef, [[
-      int MultiByteToWideChar(unsigned int cp, unsigned long flags, const char *src, int srclen,
-                              uint16_t *dst, int dstlen);
-      int CreateDirectoryW(const uint16_t *path, void *security);
-    ]])
+  if WIDE then
     mkdir_one = function(path)
-      local buf = ffi.new("uint16_t[?]", WIN_PATH_MAX)
-      if ffi.C.MultiByteToWideChar(WIN_UTF8, 0, path, -1, buf, WIN_PATH_MAX) == 0 then return false end
-      return ffi.C.CreateDirectoryW(buf, nil) ~= 0
+      local wpath = wide(path)
+      return wpath ~= nil and ffi.C.CreateDirectoryW(wpath, nil) ~= 0
     end
   elseif ok_ffi then
     pcall(ffi.cdef, "int mkdir(const char *path, unsigned int mode);")
@@ -73,7 +180,7 @@ function TextStore.mkdir_p(path)
   end
 end
 
--- ---- A real folder (io.open) -------------------------------------------------------------------------
+-- ---- A real folder (TextStore.file) ---------------------------------------------------------------------
 local Dir = {}
 Dir.__index = Dir
 
@@ -85,44 +192,29 @@ end
 function Dir:path(name) return self.root .. "/" .. name end
 
 function Dir:read(name)
-  local f = io.open(self:path(name), "rb")
-  if not f then return nil end
-  local text = f:read("*a")
-  f:close()
-  return text
+  return (File.read(self:path(name)))
 end
 
 local function write_mode(self, name, text, mode)
   local path = self:path(name)
-  local f = io.open(path, mode)
-  if not f then
-    local parent = parent_of(path)
-    if parent then TextStore.mkdir_p(parent) end
-    local err
-    f, err = io.open(path, mode)
-    if not f then error("cannot write " .. path .. ": " .. tostring(err), 0) end
-  end
-  local ok, err = f:write(text)
-  if ok then ok, err = f:flush() end
-  f:close()
+  if File.write(path, text, mode) then return end
+  local parent = parent_of(path)
+  if parent then TextStore.mkdir_p(parent) end
+  local ok, err = File.write(path, text, mode)
   if not ok then error("cannot write " .. path .. ": " .. tostring(err), 0) end
 end
 
 function Dir:write(name, text) write_mode(self, name, text, "wb") end
 function Dir:append(name, text) write_mode(self, name, text, "ab") end
 
-function Dir:exists(name)
-  local f = io.open(self:path(name), "rb")
-  if f then f:close() return true end
-  return false
-end
+function Dir:exists(name) return File.exists(self:path(name)) end
 
-function Dir:remove(name) os.remove(self:path(name)) end
+function Dir:remove(name) File.remove(self:path(name)) end
 
 -- Replaces `to`. POSIX rename does that atomically; a Windows rename fails when `to` exists, so remove it first there.
 function Dir:rename(from, to)
-  if not TextStore.RENAME_REPLACES then os.remove(self:path(to)) end
-  local ok, err = os.rename(self:path(from), self:path(to))
+  if not TextStore.RENAME_REPLACES then File.remove(self:path(to)) end
+  local ok, err = File.rename(self:path(from), self:path(to))
   if not ok then error("cannot rename " .. self:path(from) .. " to " .. self:path(to) .. ": " .. tostring(err), 0) end
 end
 
