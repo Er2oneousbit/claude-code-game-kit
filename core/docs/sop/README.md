@@ -19,7 +19,7 @@ Short, followable, engine-agnostic. Engine specifics are in `docs/ENGINE_FLOW.md
 | SOP-13 Publish to GitHub | Sharing the code: license, secret scan, private first, lock-down settings | `/publish-repo` |
 | SOP-14 Game AI | Enemies, NPCs, companions: perception, decisions (FSM, BT, utility), pathfinding, debug views | `/game-ai` |
 | SOP-15 Language models in your game | Talking NPCs, generated text: cloud vs local small models, keys, licenses, fallbacks, the "train our own LLM" reality check | (manual) |
-| SOP-16 2D art pipeline | Exports from GIMP, Inkscape, Blender sprite sheets; pixel-art rules | `/model-pipeline` (3D to 2D), (manual) |
+| SOP-16 2D art pipeline | Exports from GIMP, Inkscape, Blender sprite sheets; pixel-art rules | `/dotwork` (pixel art on your own GPU), `/model-pipeline` (3D to 2D), (manual) |
 | SOP-17 Procedural generation | Levels made at runtime: invariants first, one seed one level, retry with a fallback, property tests and bots over many seeds | `/procgen` |
 | SOP-18 Game feel | Shake, hitstop, easing, follow camera, input buffer, squash; the shake off switch and the flash limit | `/game-feel` |
 | SOP-19 Front end and settings | Menus, settings, versioned saves with backups, rebinding and prompts, localization and the pseudo-locale, crash logs, consent-first telemetry | `/game-shell` |

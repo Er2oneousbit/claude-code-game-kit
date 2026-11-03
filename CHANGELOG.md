@@ -338,6 +338,10 @@
   prompts, takes, results, grade); K01 points at the README "What was tested" table instead of describing the six
   engines of 0.2; two rules on grade C sources are labelled tips, as the ledger requires ("Tell Claude your machine",
   E27; the death rule, E09). `test_kit_docs.py` checks that every cited E, F and K ID has a row (#120).
+- README, START_HERE and the SOP index match the tree: 23 short SOPs (game feel, the shell, accessibility, Steam and
+  itch, balancing and marketing were missing from the list), one example for every engine but LÖVE, ten example
+  games, and the SOP-16 row names `/dotwork`. `test_kit_docs.py` checks the counts against the folders and that
+  every skill is in the SOP index (#121).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

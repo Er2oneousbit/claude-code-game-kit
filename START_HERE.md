@@ -131,6 +131,6 @@ Godot and C++ open a game window, and Unity and Unreal open their editor (press 
 - **Small first.** One screen, one action, then grow. "Make me an open-world RPG" in one go never works.
 - **Fresh sessions stay sharp.** Long sessions use more of your limit; `/end-session` and a fresh start keep it lean.
 - **Free assets.** The kit lists free music, sounds and art with their licenses (`docs/RESOURCES.md` in your game).
-- **Want to see finished examples first?** The `examples/` folder has nine small games (one an untested RPG Maker
+- **Want to see finished examples first?** The `examples/` folder has ten small games (one an untested RPG Maker
   MZ proof of concept), most with a GIF, each with a step-by-step story of how it was made.
 - **Prefer to do the setup yourself?** The main `README.md` has the manual commands.

@@ -10,6 +10,8 @@
 #           - every Wavesmith command the docs give names a real subcommand, and `vectors` always says whose (#118)
 #           - the PixelLab commands run live are the same in README and SOP-16, and ai-tools.md points there (#119)
 #           - every source ID the shipped docs cite (E##, F##, K##) has a row in EVIDENCE.md (#120)
+#           - README's SOP count, START_HERE's example count and README's "one game per engine" match the tree, and
+#             every skill is named in the SOP index (in the row of the SOP it follows) (#121)
 # Usage   : python scripts/test_kit_docs.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, reads the kit tree read-only. The engines and their doc names are in the
@@ -52,6 +54,9 @@ EVIDENCE = "core/docs/EVIDENCE.md"
 EVIDENCE_ROOTS = ["core/docs", "core/CLAUDE.md", "core/.claude", "engines"]   # where docs cite sources
 # a source ID as the docs cite it: E01..E999, F1..F99, K01..K99 (not "Kimi K3", "E2E" or "F12-key")
 CITATION = re.compile(r"(?<![\w-])(E\d{2,3}|F\d{1,2}|K\d{2})(?![\w-])")
+NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
+                "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty"]
+SKILLS_OUTSIDE_THE_INDEX = {"adr"}   # decision records belong to no single SOP
 
 
 def read(rel):
@@ -108,6 +113,15 @@ def wavesmith_subcommands():
     table = src[src.index("SUBCOMMANDS = {"):]
     table = table[:table.index("\n}\n")]
     return dict(re.findall(r'^    "([a-z]+)":\s*\("(\w+)"', table, re.M))
+
+
+def example_engines():
+    """{example folder: engine id} from each example's .game-kit.json."""
+    import json
+    found = {}
+    for record in sorted(KIT.glob("examples/*/.game-kit.json")):
+        found[record.parent.name] = json.loads(record.read_text(encoding="utf-8"))["engine"]
+    return found
 
 
 def missing_engines(text, wanted):
@@ -214,8 +228,48 @@ class EvidenceExam(unittest.TestCase):
                 missing.append("%s: %s" % (rel, tok))
         self.assertEqual(missing, [], "cite only IDs with a row in " + EVIDENCE)
 
-    def test_the_citation_pattern(self):
+    def test_the_citation_pattern_skips_names(self):
         self.assertEqual(CITATION.findall("(E09, F4; K02) Kimi K3, F12-key, E2E"), ["E09", "F4", "K02"])
+
+
+class CountExam(unittest.TestCase):
+    def test_readme_sop_count_matches_the_folder(self):
+        # #121: README said 17 short SOPs while core/docs/sop held 23
+        sops = sorted(p.name[:6] for p in (KIT / "core/docs/sop").glob("SOP-*.md"))
+        said = re.search(r"\*\*(\d+) short SOPs:\*\*", read("README.md"))
+        self.assertIsNotNone(said, "README's SOP line")
+        self.assertEqual(int(said.group(1)), len(sops))
+        index = read("core/docs/sop/README.md")
+        self.assertEqual(sorted(set(re.findall(r"^\| (SOP-\d\d) ", index, re.M))), sops, "one index row per SOP")
+
+    def test_example_counts_match_the_folder(self):
+        # #121: START_HERE said nine small games (there are ten); README said one per engine (LÖVE has none)
+        examples = example_engines()
+        said = re.search(r"`examples/` folder has (\w+) small games", read("START_HERE.md"))
+        self.assertIsNotNone(said, "START_HERE's examples line")
+        self.assertEqual(NUMBER_WORDS.index(said.group(1)), len(examples))
+        lead = section(read("README.md"), r"^## Made with the kit", r"^(<table>|\||## )")
+        without = [e for e in engines() if e not in examples.values()]
+        if without:
+            self.assertNotIn("per engine", lead)
+            self.assertEqual(missing_engines(lead, without), [], "README names the engines without an example")
+
+    def test_every_skill_is_reachable_from_the_sop_index(self):
+        # #121: SOP-16's row did not name /dotwork, which runs its largest section
+        index = read("core/docs/sop/README.md")
+        rows = {m.group(1): m.group(0) for m in re.finditer(r"^\| (SOP-\d\d) .*$", index, re.M)}
+        unlisted, wrong_row = [], []
+        for skill in sorted((KIT / "core/.claude/skills").glob("*/SKILL.md")):
+            name = skill.parent.name
+            if name in SKILLS_OUTSIDE_THE_INDEX:
+                continue
+            if not any("`/%s`" % name in row for row in rows.values()):
+                unlisted.append(name)
+            for sop in set(re.findall(r"Follows? (?:`docs/sop/)?(SOP-\d\d)", skill.read_text(encoding="utf-8"))):
+                if "`/%s`" % name not in rows.get(sop, ""):
+                    wrong_row.append("%s (follows %s)" % (name, sop))
+        self.assertEqual(unlisted, [], "skills no SOP index row names")
+        self.assertEqual(wrong_row, [], "skills missing from the row of the SOP they follow")
 
 
 if __name__ == "__main__":
