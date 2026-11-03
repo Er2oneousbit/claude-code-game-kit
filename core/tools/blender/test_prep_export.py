@@ -188,6 +188,14 @@ def main():
 
     rc, out = run_tool(src, "--out", tmp / "rock.glb")
     case("existing output is not overwritten without --overwrite (exit 2)", rc == 2, out[-200:])
+    # #32: an LOD path could be the source itself, and --overwrite replaced the source with a decimated copy
+    lod_src = tmp / "tree_LOD1.glb"
+    shutil.copyfile(src, lod_src)
+    before = lod_src.read_bytes()
+    rc, out = run_tool(lod_src, "--out", tmp / "tree.glb", "--lods", "0.5", "--overwrite")
+    case("an LOD output that is the source file is refused (exit 2), source untouched",
+         rc == 2 and "is the source file" in out and lod_src.read_bytes() == before
+         and not (tmp / "tree.glb").exists(), out[-200:])
     no_uv = tmp / "no_uv.glb"
     build_no_uv(bpy, no_uv)
     rc, out = run_tool(no_uv, "--out", tmp / "no_uv_out.glb")

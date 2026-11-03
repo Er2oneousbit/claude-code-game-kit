@@ -50,8 +50,8 @@ class Fake:
     """Stands in for eleven_audio.http: records calls, answers from a script."""
 
     def __init__(self, tier="creator", status="active", audio=b"ID3fake-mp3", sub_status=200, gen_status=200,
-                 gen_body=None):
-        self.calls = []
+                 gen_body=None, sub_body=b'{"detail": {"status": "missing_permissions"}}'):
+        self.calls, self.sub_body = [], sub_body
         self.tier, self.status, self.audio = tier, status, audio
         self.sub_status, self.gen_status, self.gen_body = sub_status, gen_status, gen_body
 
@@ -59,7 +59,7 @@ class Fake:
         self.calls.append((method, url, key, body))
         if url.endswith("/v1/user/subscription"):
             if self.sub_status != 200:
-                return self.sub_status, {}, b'{"detail": {"status": "missing_permissions"}}'
+                return self.sub_status, {}, self.sub_body
             return 200, {}, json.dumps({"tier": self.tier, "status": self.status, "character_count": 100,
                                         "character_limit": 10000,
                                         "next_character_count_reset_unix": 1800000000}).encode()
@@ -260,6 +260,21 @@ class ElevenAudioExam(unittest.TestCase):
         self.assertEqual(rc, 0, out)
         self.assertIn("plan free", out)
         self.assertIn("non-commercial", out)
+
+    def test_check_tells_an_invalid_key_from_a_restricted_one(self):
+        # #32: an invalid key printed "[ OK ] the key is set ... plan unknown"; a 401 also means a restricted key
+        bad = b'{"detail": {"status": "invalid_api_key", "message": "Invalid API key"}}'
+        rc, out = self.run_tool(Fake(sub_status=401, sub_body=bad), "check")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("rejected (Invalid API key)", out)
+        self.assertNotIn("[ OK ]", out)
+        rc, out = self.run_tool(Fake(sub_status=401), "check")                  # missing_permissions
+        self.assertEqual(rc, 0, out)
+        self.assertIn("plan is unknown", out)
+        fake = Fake(sub_status=401, sub_body=bad)
+        rc, out = self.run_tool(fake, "sfx", "--text", "x", "--out", "k.mp3", "--plan", "paid")
+        self.assertEqual(rc, 2, out)
+        self.assertFalse(any(c[0] == "POST" for c in fake.calls), "an invalid key stops before the paid call")
 
     def test_key_never_written_or_printed(self):
         rc, out = self.run_tool(Fake(), "sfx", "--text", "x", "--out", "assets/x.mp3", "--log", "--debug")

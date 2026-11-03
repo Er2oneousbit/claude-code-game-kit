@@ -275,9 +275,9 @@ def render_song(song, rate, solo=None):
         raise SongError(f"no channel named {solo!r}" if solo else "the song has no channels")
     end = int(round(total_steps * step_s * rate))
     loop = None
-    if song.get("loop", True):
+    if song.get("loop", True) and end > 0:
         for i in range(end, len(mix)):                    # wrap release tails onto the start: seamless loop
-            mix[i - end] += mix[i]
+            mix[i % end] += mix[i]                        # a tail longer than the song wraps more than once
         mix = mix[:end]
         loop = (0, end - 1)
     else:

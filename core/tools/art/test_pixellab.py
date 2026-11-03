@@ -405,6 +405,17 @@ class PixelLabExam(unittest.TestCase):
         self.assertIn("| A-0001 | vfx | ", (self.root / "docs/ASSET_LOG.md").read_text(encoding="utf-8"))
         self.no_key_anywhere()
 
+    def test_files_with_one_base_name_in_a_job_all_survive(self):
+        # #32: two result links with the same base name (and the job's own image) overwrote each other
+        links = {f"{CDN}/x/boom.png": real_png(2, 1), f"{CDN}/y/BOOM.png": real_png(3, 1), f"{CDN}/z/boom.png": real_png(4, 1)}
+        pl.http = lambda m, u, k, b=None: (200, {}, links[u])               # each link sends a different PNG
+        out = self.root / "same"
+        files = pl.save_last({"image": b64img(), "files": dict(zip("abc", links))}, out, KEY, stem="boom")
+        self.assertEqual(len({f.name.lower() for f in files}), 4, [f.name for f in files])
+        self.assertEqual(sorted(p.name for p in out.iterdir()), sorted(f.name for f in files))
+        self.assertEqual((out / "boom.png").read_bytes(), PNG, "the job's image is kept")
+        self.assertEqual(sorted(f.read_bytes() for f in files[1:]), sorted(links.values()), "every link has its own file")
+
     def test_download_link_must_be_https_and_match_its_type(self):
         with self.assertRaises(pl.ServiceError):
             pl.fetch_url("http://cdn.pixellab.example/a.png", KEY, self.root / "a.png")

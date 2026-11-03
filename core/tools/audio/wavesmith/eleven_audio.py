@@ -76,6 +76,15 @@ class ToolError(Exception):
     """Exit 2: something the user can fix (usage, key, plan, quota)."""
 
 
+class KeyRejected(ToolError):
+    """A 401. `restricted` is True when the key is real but lacks the permission (status missing_permissions), False
+    when the key itself is wrong (invalid_api_key, or anything else)."""
+
+    def __init__(self, msg, restricted):
+        super().__init__(msg)
+        self.restricted = restricted
+
+
 class ServiceError(Exception):
     """Exit 1: the service failed; trying again later may work."""
 
@@ -170,8 +179,8 @@ def call(method, path, key, body=None, query=None):
         return headers, raw
     detail = error_detail(raw)
     if status == 401:
-        raise ToolError(f"the API key was rejected ({detail}). Check {KEY_ENV}, and that the key has the permission "
-                        "for this request")
+        raise KeyRejected(f"the API key was rejected ({detail}). Check {KEY_ENV}, and that the key has the permission "
+                          "for this request", b"missing_permissions" in (raw or b""))
     if status == 402:   # seen 2026-10-22: "Music API is not available for free users"
         raise ToolError(f"your ElevenLabs plan does not include this, or its credits are used up: {detail}")
     if status == 429:
@@ -182,9 +191,15 @@ def call(method, path, key, body=None, query=None):
 
 
 def plan_info(key):
-    """dict with tier, status, used, limit, reset; or None when the key may not read the account."""
+    """dict with tier, status, used, limit, reset; or None when the key may not read the account. A key that is
+    rejected outright raises: a 401 is either one (an invalid key used to report "[ OK ] ... plan unknown")."""
     try:
         _, raw = call("GET", "/v1/user/subscription", key)
+    except KeyRejected as exc:
+        if not exc.restricted:
+            raise
+        dbg(f"subscription: {exc}")
+        return None
     except ToolError as exc:
         dbg(f"subscription: {exc}")
         return None

@@ -258,7 +258,8 @@ def apply_images(base, wf, images, dry_run):
             raise ToolError(f"--image file {src} not found")
         name = src.name
         if not dry_run:
-            body, ctype = multipart("image", src.name, src.read_bytes(), {"overwrite": "true", "type": "input"})
+            # never replace a file already in ComfyUI's input folder: it keeps both and says which name it used
+            body, ctype = multipart("image", src.name, src.read_bytes(), {"overwrite": "false", "type": "input"})
             status, data = http("POST", base + "/upload/image", body, {"Content-Type": ctype})
             if status != 200:
                 raise ToolError(f"upload of {src} failed: HTTP {status} {data[:200].decode('utf-8', 'replace')}")

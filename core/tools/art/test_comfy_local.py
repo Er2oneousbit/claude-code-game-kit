@@ -85,6 +85,7 @@ class State:
 
     def reset(self):
         self.prompts, self.uploads = [], []
+        self.upload_name = "hero.png"  # the name /upload/image answers with (ComfyUI renames when one is taken)
         self.reject = False          # /prompt answers 400 with node errors
         self.fail = None             # history status error with this exception message
         self.interrupted = False     # history status error with only an execution_interrupted message
@@ -163,7 +164,7 @@ class FakeComfy(http.server.BaseHTTPRequestHandler):
             return self.send(200, {"prompt_id": "p-1", "number": 1, "node_errors": {}})
         if self.path == "/upload/image":
             STATE.uploads.append(body)
-            return self.send(200, {"name": "hero.png", "subfolder": "", "type": "input"})
+            return self.send(200, {"name": STATE.upload_name, "subfolder": "", "type": "input"})
         self.send(404, {"error": "no such path"})
 
 
@@ -327,6 +328,14 @@ class ComfyLocalExam(unittest.TestCase):
         self.assertEqual(rc, 0, out)
         self.assertEqual(len(STATE.uploads), 1)
         self.assertEqual(STATE.prompts[0]["prompt"]["12"]["inputs"]["image"], "hero.png")
+
+    def test_upload_never_replaces_comfyuis_own_file(self):
+        # #32: uploads sent overwrite=true, replacing an input file of the same name already in ComfyUI
+        STATE.upload_name = "hero (1).png"
+        rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o", "--image", "12=hero.png")
+        self.assertEqual(rc, 0, out)
+        self.assertIn(b'name="overwrite"' + bytes([13, 10, 13, 10]) + b"false", STATE.uploads[0])
+        self.assertEqual(STATE.prompts[0]["prompt"]["12"]["inputs"]["image"], "hero (1).png", "the name ComfyUI chose")
 
     def test_rejected_workflow_shows_node_errors(self):
         STATE.reject = True

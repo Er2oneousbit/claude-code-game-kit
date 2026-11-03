@@ -76,6 +76,14 @@
   `channels`, `patterns` or `order` has the wrong type (`"channels": []`). `pixellab.py` downloads (also zip
   members) and `comfy_local.py strip` require a whole PNG, IHDR first and IEND last; a bare 8-byte signature
   was saved as an image. The `wavfile.py stats` item was fixed in 0.8.2 (#31).
+- Small tool fixes: `chiptune.py` wraps a release tail longer than the looping song onto the loop whole (it
+  folded into `mix[i - end]`, so all past one loop was lost); `svg_export.py` counts a nonzero Inkscape exit as
+  a failure and calls an `--overwrite` target written only when its timestamp moved (an old file from the last
+  second passed); `pixellab.py` gives every download of a job its own name (two links with one base name
+  overwrote each other); `prep_export.py` refuses an LOD path that is the source (`--overwrite` replaced it);
+  `eleven_audio.py check` exits 2 on an invalid key instead of `[ OK ] ... plan unknown`, which it still says
+  for a key without the User read permission; `comfy_local.py` uploads with `overwrite=false`, so ComfyUI keeps
+  its own input file of the same name and the node gets the name ComfyUI chose (#32).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

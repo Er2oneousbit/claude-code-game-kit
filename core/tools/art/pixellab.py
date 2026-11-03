@@ -394,6 +394,14 @@ def safe_name(url, fallback):
     return name if name and allowed_name(name) else fallback
 
 
+def unique_name(name, i, used):
+    """name, or <stem>_<i><suffix> when an earlier file of the same job already took it (case-insensitive: Windows)."""
+    if name.lower() in used:                             # two links with one basename must not overwrite each other
+        name = f"{Path(name).stem}_{i:02d}{Path(name).suffix}"
+    used.add(name.lower())
+    return name
+
+
 def fetch_url(url, key, path):
     """Download one result file. The token goes only to PixelLab's own API host, never to storage links."""
     parsed = urllib.parse.urlparse(url)
@@ -453,8 +461,9 @@ def save_last(last, out, key, stem="image"):
     images = last.get("images") or []
     for i, img in enumerate(images):
         files.append(_save(img, out / (f"{stem}.png" if len(images) == 1 and not files else f"{stem}_{i:02d}.png")))
+    used = {f.name.lower() for f in files}
     for i, url in enumerate(url_values(last.get("files"))):
-        files.append(fetch_url(url, key, out / safe_name(url, f"file_{i:02d}.bin")))
+        files.append(fetch_url(url, key, out / unique_name(safe_name(url, f"file_{i:02d}.bin"), i, used)))
     if last.get("ttf_base64"):
         data = b64decode(last["ttf_base64"], "the font")
         check_bytes(data, "font.ttf")
@@ -803,11 +812,7 @@ def run_job(kind, key, endpoint, body, out, args):
             raise ServiceError("the tiles finished without download links")
         used, files = set(), []
         for i, u in enumerate(links):
-            name = safe_name(u, f"tile_{i:02d}.png")
-            if name.lower() in used:                     # two links with one basename must not overwrite each other
-                name = f"{Path(name).stem}_{i:02d}{Path(name).suffix}"
-            used.add(name.lower())
-            files.append(fetch_url(u, key, out / name))
+            files.append(fetch_url(u, key, out / unique_name(safe_name(u, f"tile_{i:02d}.png"), i, used)))
         rules = out / "tiles_pro.json"
         rules.write_text(json.dumps({"kind": res.get("kind"), "tile_rules": res.get("tile_rules"),
                                      "files": [f.name for f in files]}, indent=2) + "\n", encoding="utf-8")

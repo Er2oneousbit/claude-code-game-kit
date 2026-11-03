@@ -38,6 +38,7 @@
 #   validate the main export with validate_asset's rules, return its verdict
 import argparse
 import fnmatch
+import os
 import re
 import sys
 from pathlib import Path
@@ -196,12 +197,13 @@ def run(args):
         print("[ENV ] --out must end in .glb", file=sys.stderr)
         return 2
     lod_paths = [out.with_name(f"{out.stem}_LOD{i}.glb") for i in range(1, len(args.lods) + 1)]
+    same = [p for p in [out] + lod_paths if os.path.normcase(str(p.resolve())) == os.path.normcase(str(src.resolve()))]
+    if same:                              # an LOD path too: tree_LOD1.glb as the source, --overwrite replaced it
+        print(f"[ENV ] {'--out' if same[0] == out else 'an LOD output'} ({same[0]}) is the source file", file=sys.stderr)
+        return 2
     existing = [p for p in [out] + lod_paths if p.exists()]
     if existing and not args.overwrite:
         print(f"[ENV ] {', '.join(str(p) for p in existing)} exists (use --overwrite)", file=sys.stderr)
-        return 2
-    if src.resolve() == out.resolve():
-        print("[ENV ] --out must not be the source file", file=sys.stderr)
         return 2
     bpy, va = load_modules()
     if bpy is None:
