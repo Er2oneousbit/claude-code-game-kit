@@ -363,6 +363,10 @@
   size and said "ports compute with it exactly", so a seed of 2^53 + 1 played other takes in Godot and Unreal and
   threw in Unity. Unity's own limit moves from 9e15 to the same 2^53 - 1, and data/golden/audio.json has a case at
   that seed, which all nine engines pass (#127).
+- Godot, Unity, Bevy: a slot whose `.bak` holds a save from a newer game version refuses every write, as C++ and
+  Unreal already did. The three wrote a new primary, and the save after it copied that file over the newer `.bak`,
+  so the newer build's progress was lost on the second save. The rule is in the `save_load` docstring and SOP-19
+  step 3, and every port has a file test for it (#128).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

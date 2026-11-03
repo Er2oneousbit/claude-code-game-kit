@@ -9,12 +9,13 @@
 #           {"format": "save", "version": SAVE_VERSION, "data": {...}}. Bump SAVE_VERSION when the data changes
 #           shape and add a step to _migrate(); never edit an old step. The two steps here are the kit's example
 #           chain (v2 renamed hp to health, v3 added difficulty): replace them with your game's own.
-#           A save from a newer version is never loaded and never overwritten. Tested against data/golden/shell.json.
+#           A save from a newer version is never loaded and never overwritten: while the slot or its .bak holds
+#           one, write_slot refuses. Tested against data/golden/shell.json.
 #
 # Pseudocode:
 #   load_texts(primary, backup): for each of primary, backup: parse -> envelope or a problem; first good one wins,
 #     migrated step by step up to SAVE_VERSION; none -> null, source "none"
-#   write_slot: primary on disk is "newer" -> refuse; old primary readable -> keep it as .bak; atomic write
+#   write_slot: primary or .bak on disk is "newer" -> refuse; old primary readable -> keep it as .bak; atomic write
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 class_name SaveStore
@@ -78,8 +79,8 @@ static func read_slot(dir: String, slot: Variant) -> Dictionary:
 static func write_slot(dir: String, slot: Variant, data: Dictionary) -> Error:
 	var path: String = slot_path(dir, slot)
 	var current: Dictionary = parse(AtomicFile.read_text(path))
-	if current["problem"] == "newer":
-		return ERR_ALREADY_EXISTS # made by a newer build of the game: leave it alone
+	if current["problem"] == "newer" or parse(AtomicFile.read_text(path + AtomicFile.BAK_SUFFIX))["problem"] == "newer":
+		return ERR_ALREADY_EXISTS # made by a newer build of the game: leave both files alone
 	var env: Dictionary = {"format": FORMAT, "version": SAVE_VERSION, "data": data}
 	# Only a readable save becomes the backup: a corrupt primary must not replace a good .bak
 	var keep_backup: bool = typeof(current["envelope"]) != TYPE_NIL

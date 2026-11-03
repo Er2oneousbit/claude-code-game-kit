@@ -8,7 +8,8 @@
 //           save_store::write_to(&path, &json!({"health": 5, "level": 2}))?;
 // Notes   : Bump SAVE_VERSION when the data shape changes and add a migration from the old version (never edit
 //           an old one: players have saves made with it). A save from a NEWER version is never loaded and never
-//           overwritten (the player went back to an older build; their progress stays safe). The two example
+//           overwritten (the player went back to an older build; their progress stays safe): while the slot or
+//           its .bak holds one, write_to refuses. The two example
 //           migrations (v2 renamed hp to health, v3 added difficulty) are the shape the golden vectors test:
 //           replace them with your game's own once it has saves. Tested in tests/golden.rs against
 //           data/golden/shell.json (tools/golden_vectors.py is the reference).
@@ -16,7 +17,7 @@
 // Pseudocode:
 //   load(primary, backup): for each of primary, backup: parse (missing | unreadable | not a save | bad version |
 //   newer -> a problem, try the next) -> the first good one, migrated step by step to SAVE_VERSION
-//   write_to(path, data): refuse when path holds a newer save -> path is a good save? copy it to <path>.bak
+//   write_to(path, data): refuse when path or its .bak holds a newer save -> path is a good save? copy it to <path>.bak
 //   -> atomic write of the new envelope
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
@@ -145,13 +146,21 @@ pub fn load_from(path: &Path) -> Loaded {
     load(primary.as_deref(), backup.as_deref())
 }
 
-/// Saves `data` (a JSON object) at SAVE_VERSION. The previous good save becomes `<path>.bak`; a newer game's
-/// save at `path` is never replaced (Err).
+/// Saves `data` (a JSON object) at SAVE_VERSION. The previous good save becomes `<path>.bak`; while `path` or
+/// `<path>.bak` holds a newer game's save, nothing is written (Err).
 pub fn write_to(path: &Path, data: &Value) -> Result<(), String> {
     if !data.is_object() {
         return Err("save data must be a JSON object".into());
     }
     let current = read_save_text(path); // unreadable here too, so a damaged primary never blocks saving
+    let backup = atomic_file::bak_path(path);
+    if parse(read_save_text(&backup).as_deref()) == Err("newer") {
+        // the next save would copy this build's file over it
+        return Err(format!(
+            "{} holds a save made by a newer version of the game: not saving over this slot",
+            backup.display()
+        ));
+    }
     match parse(current.as_deref()) {
         Err("newer") => {
             return Err(format!(
@@ -246,6 +255,22 @@ mod tests {
         std::fs::write(&path, &newer).unwrap();
         assert!(write_to(&path, &json!({"health": 1})).is_err());
         assert_eq!(atomic_file::read_text(&path).unwrap(), Some(newer));
+    }
+
+    #[test]
+    fn a_newer_backup_blocks_saving_too() {
+        // a newer build saved twice, then the primary was deleted: the save after this one would copy this
+        // build's file over the newer .bak, so every port refuses the slot
+        let dir = TempDir::new("save-newer-bak");
+        let path = dir.0.join("slot1.json");
+        let newer = format!(
+            "{{\"format\": \"save\", \"version\": {}, \"data\": {{}}}}",
+            SAVE_VERSION + 1
+        );
+        std::fs::write(bak_path(&path), &newer).unwrap();
+        assert!(write_to(&path, &json!({"health": 1})).is_err());
+        assert!(!path.exists());
+        assert_eq!(atomic_file::read_text(&bak_path(&path)).unwrap(), Some(newer));
     }
 }
 

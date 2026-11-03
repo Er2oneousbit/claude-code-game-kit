@@ -37,7 +37,8 @@ values in `data/golden/shell.json` that every port's tests check (K01).
    (ARCHITECTURE.md) and goes up whenever the data's shape changes.
 2. Each version change gets a migration function (version N to N+1) and a test that loads a real file from version N.
    Loading runs every migration in order.
-3. A save from a newer version is never loaded and never overwritten: say "this save is from a newer version".
+3. A save from a newer version is never loaded and never overwritten: say "this save is from a newer version". That
+   holds for the backup too: while `<file>` or `<file>.bak` holds a newer save, every write to the slot is refused.
 4. Write atomically: write `<file>.tmp`, flush, then replace the file with it (rename). Keep the previous good save as
    `<file>.bak`; if the main file does not parse, load the backup and say so.
 5. Autosave at safe points (level start, checkpoint), never in the middle of a transition.

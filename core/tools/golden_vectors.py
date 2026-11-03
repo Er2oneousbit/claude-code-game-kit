@@ -522,7 +522,8 @@ def save_migrate(env):
 
 def save_load(primary, backup):
     """(envelope at SAVE_VERSION or None, source "primary" | "backup" | "none", problems). A save from a newer game
-    version is never loaded (and the game must not overwrite it)."""
+    version is never loaded and the game must not overwrite it: while the primary or the backup holds one, every
+    write to that slot is refused (a write after a good primary would copy it over a newer backup)."""
     problems = []
     for source, text in (("primary", primary), ("backup", backup)):
         env, problem = _parse_save(text)

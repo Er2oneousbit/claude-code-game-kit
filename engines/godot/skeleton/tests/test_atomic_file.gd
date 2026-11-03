@@ -156,4 +156,15 @@ func test_newer_save_is_never_overwritten() -> void:
 	assert_eq(AtomicFile.read_text(path), newer)
 	assert_eq(SaveStore.read_slot(_dir, 4)["source"], "none")
 
+
+func test_newer_backup_blocks_saving_too() -> void:
+	# A newer build saved twice, then the primary was deleted: writing it would be fine, but the next save would
+	# copy the old build's file over the newer .bak. Every port refuses the slot instead.
+	var path: String = SaveStore.slot_path(_dir, 5)
+	var newer: String = JSON.stringify({"format": "save", "version": SaveStore.SAVE_VERSION + 1, "data": {}})
+	_write_raw(path + ".bak", newer)
+	assert_eq(SaveStore.write_slot(_dir, 5, {"health": 1}), ERR_ALREADY_EXISTS)
+	assert_false(FileAccess.file_exists(path), "no primary was written")
+	assert_eq(AtomicFile.read_text(path + ".bak"), newer)
+
 # {{FOOTER}}

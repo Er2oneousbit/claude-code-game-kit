@@ -183,6 +183,19 @@ namespace {{GAME_SLUG}}.Tests
             Assert.AreEqual(newer, File.ReadAllText(saves.PathFor("1")));
         }
 
+        [Test]
+        public void SaveStore_ANewerBackupBlocksSavingToo()
+        {
+            // a newer build saved twice, then the primary was deleted: the next save after this one would copy the
+            // old build's file over the newer .bak, so the slot is refused (no Load first: the rule is on disk)
+            var saves = new SaveStore(_dir);
+            string newer = "{\"format\": \"save\", \"version\": 99, \"data\": {\"level\": 50}}";
+            File.WriteAllText(saves.PathFor("3") + AtomicFile.BAK_SUFFIX, newer);
+            Assert.Throws<InvalidOperationException>(() => saves.Save(3, Data(1)));
+            Assert.IsFalse(File.Exists(saves.PathFor("3")));
+            Assert.AreEqual(newer, File.ReadAllText(saves.PathFor("3") + AtomicFile.BAK_SUFFIX));
+        }
+
         // ---- Settings on disk ------------------------------------------------------------
 
         [Test]
