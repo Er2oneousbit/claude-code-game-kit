@@ -8,8 +8,7 @@ examples were built and tested on one Windows 11 machine.
 
 ### 0.8.0 follow-ups (juice, shell, LÖVE, CI)
 - **CI workflow** not yet run on GitHub-hosted runners (Actions is disabled on this repository, so it cannot run
-  until that is turned on): [#40](https://github.com/Er2oneousbit/claude-code-game-kit/issues/40); a missing blank line between two of its steps:
-  [#95](https://github.com/Er2oneousbit/claude-code-game-kit/issues/95).
+  until that is turned on): [#40](https://github.com/Er2oneousbit/claude-code-game-kit/issues/40).
 - **LÖVE:** macOS and Linux packaging, LÖVE 11.4 itself and the POSIX save rename not run: [#41](https://github.com/Er2oneousbit/claude-code-game-kit/issues/41).
 - **Godot shell:** crash files need Godot 4.5+, untested on 4.3 and 4.4: [#46](https://github.com/Er2oneousbit/claude-code-game-kit/issues/46).
 - **Unreal:** the GameKitShell plugin builds and passes its tests in a Blueprint-only project (headless), but turning

@@ -189,6 +189,8 @@
   is written, as `pixelorama` does. The sprite took the first frame's size, so an untouched round trip shipped the
   other clips padded or cropped to it, off their anchor, with verify passing. One canvas per clip in either editor
   is still open (#82).
+- CI: the game's `ci.yml` has a blank line between the "Music director vectors" and "Audio accessibility vectors"
+  steps, as between every other pair; nothing changes at run time (#95).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
