@@ -71,6 +71,11 @@
   before writing any file of a job), the layout `.json` beside a `render_sprites.py` sheet, and an existing
   `wav normalize|loop --out` (new `--overwrite`; without `--out` the input is still changed in place).
   `sfx_synth.py` refuses a `--recipe` that names the `--out` WAV, which it replaced with JSON (#30).
+- Malformed input is a clean `[error]` and exit 2, not a traceback: `pixel_sprite.py check` on a palette PNG
+  whose PLTE is not whole 3-byte colors, and `chiptune.py` (with or without `--check`) on a song whose
+  `channels`, `patterns` or `order` has the wrong type (`"channels": []`). `pixellab.py` downloads (also zip
+  members) and `comfy_local.py strip` require a whole PNG, IHDR first and IEND last; a bare 8-byte signature
+  was saved as an image. The `wavfile.py stats` item was fixed in 0.8.2 (#31).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

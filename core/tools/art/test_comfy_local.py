@@ -450,6 +450,17 @@ class ComfyLocalExam(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertIn("not a PNG", out)
 
+    def test_strip_refuses_a_bare_signature_or_cut_png(self):
+        # #31: a file that was only the 8-byte PNG signature was "cleaned" and written
+        whole = png_with_text()
+        for name, data, why in (("sig.png", PNG_SIG, "IHDR"), ("cut.png", whole[:-12], "no IEND"),
+                                ("headless.png", PNG_SIG + whole[33:], "IHDR")):
+            (self.root / name).write_bytes(data)
+            rc, out = self.run_tool("strip", name, "--out", "c", url=False)
+            self.assertEqual(rc, 2, out)
+            self.assertIn(why, out)
+            self.assertFalse((self.root / "c" / name).exists())
+
 
 if __name__ == "__main__":
     for stream in (sys.stdout, sys.stderr):

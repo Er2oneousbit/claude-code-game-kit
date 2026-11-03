@@ -284,10 +284,17 @@ def b64decode(text, what):
         raise ServiceError(f"PixelLab sent broken base64 data for {what}")
 
 
+def png_whole(data):
+    """True for a PNG that starts with its IHDR chunk and ends with IEND: a bare 8-byte signature or a download cut
+    short is not an image (both used to be saved as one)."""
+    return (data.startswith(PNG_MAGIC) and len(data) >= len(PNG_MAGIC) + 25 + 12
+            and data[8:16] == b"\x00\x00\x00\x0dIHDR" and data[-12:-4] == b"\x00\x00\x00\x00IEND")
+
+
 def png_from_b64(img, path):
     """Write one Base64Image (or a bare base64 string) to path as PNG. Returns the SHA-256."""
     data = b64decode(img["base64"] if isinstance(img, dict) else img, path.name)
-    if not data.startswith(PNG_MAGIC):
+    if not png_whole(data):
         raise ServiceError(f"PixelLab sent something that is not a PNG for {path.name}")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
@@ -323,8 +330,10 @@ def extract_zip(data, out_dir):
                 raise ServiceError(f"refusing zip member outside {out_dir}: {info.filename}")
             if not allowed_name(target.name):
                 raise ServiceError(f"refusing zip member with an unexpected name or type: {info.filename}")
+            body = zf.read(info)
+            check_bytes(body, target.name)      # a zip member is a download too
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(zf.read(info))
+            target.write_bytes(body)
             files.append(target)
     return files
 
@@ -369,7 +378,7 @@ MAGIC = {".png": (PNG_MAGIC,), ".gif": (b"GIF87a", b"GIF89a"), ".zip": (b"PK\x03
 def check_bytes(data, name):
     """Refuse a download whose content does not match its file type."""
     ext = Path(name).suffix.lower()
-    if ext in MAGIC and not data.startswith(MAGIC[ext]):
+    if (ext in MAGIC and not data.startswith(MAGIC[ext])) or (ext == ".png" and not png_whole(data)):
         raise ServiceError(f"PixelLab sent something that is not a {ext} file for {name}")
     if ext == ".json":
         try:

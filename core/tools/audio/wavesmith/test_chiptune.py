@@ -153,6 +153,21 @@ class ChiptuneExam(unittest.TestCase):
             self.assertIn(where, out)
             self.assertNotIn("Traceback", out)
 
+    def test_wrong_shapes_are_song_errors(self):
+        # #31: "channels": [] (and other wrong types) crashed --check with a traceback
+        good = song({"p": {"lead": "C4"}})
+        bad = [(5, "one JSON object"), (dict(good, channels=[]), "\"channels\" must be an object"),
+               (dict(good, channels={"lead": 5}), "\"channels\" must be an object"),
+               (dict(good, patterns={"p": []}), "\"patterns\" must be an object"),
+               (dict(good, patterns={"p": {"lead": 5}}), "must be one string"),
+               (dict(good, order="p"), "\"order\" must be a list"), (dict(good, order=[["p"]]), "\"order\" must be a list")]
+        for data, where in bad:
+            for extra in ((), ("--check",)):
+                rc, out = self.render(data, *extra)
+                self.assertEqual(rc, 2, f"{where}: {out}")
+                self.assertIn(where, out)
+                self.assertNotIn("Traceback", out)
+
     def test_check_does_not_write(self):
         path = self.write(song({"p": {"lead": "C4 . . ."}}))
         out = io.StringIO()

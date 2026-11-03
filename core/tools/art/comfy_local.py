@@ -372,7 +372,9 @@ def strip_png(data):
     """The PNG without its text chunks (ComfyUI's prompt and workflow). Raises ToolError when it is not a PNG."""
     if not data.startswith(PNG_MAGIC):
         raise ToolError("not a PNG file")
-    out, pos = [PNG_MAGIC], len(PNG_MAGIC)
+    if data[12:16] != b"IHDR":           # a bare signature used to pass as a (clean, empty) PNG
+        raise ToolError("PNG does not start with its IHDR header")
+    out, pos, kind = [PNG_MAGIC], len(PNG_MAGIC), None
     while pos + 8 <= len(data):
         length, kind = struct.unpack(">I4s", data[pos:pos + 8])
         end = pos + 12 + length
@@ -383,6 +385,8 @@ def strip_png(data):
         pos = end
         if kind == b"IEND":
             break
+    if kind != b"IEND":
+        raise ToolError("PNG is truncated (no IEND chunk at the end)")
     return b"".join(out)
 
 

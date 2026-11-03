@@ -163,6 +163,9 @@ def _read_png(path):
         if tag == b"IHDR":
             w, h, depth, ctype, _, _, interlace = struct.unpack(">IIBBBBB", body)
         elif tag == b"PLTE":
+            if not body or len(body) % 3 or len(body) > 768:   # a short last entry read as a 3-value "RGBA" pixel
+                raise SpriteError(f"{path}: its palette (PLTE) is {len(body)} bytes; a palette is 1 to 256 colors "
+                                  "of 3 bytes each")
             plte = [tuple(body[i:i + 3]) for i in range(0, len(body), 3)]
         elif tag == b"tRNS":
             trns = body
