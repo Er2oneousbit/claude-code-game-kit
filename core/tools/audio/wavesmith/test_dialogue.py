@@ -199,6 +199,34 @@ class DialogueExam(unittest.TestCase):
                          "00:00:01.750 --> 00:00:03.250\n<v Baker>Two coins.\n\n"
                          "00:00:03.500 --> 00:00:04.500\n<v Knight>Halt!\n")
 
+    def test_srt_speaker_name_keeps_to_the_line_width(self):
+        # #116: "NAME: " went in front of a first line already filled to 40 characters
+        width = D.STYLE["max_chars_per_line"]
+
+        def run(text, name):
+            src = {"version": 1, "speakers": {"rd": {"name": "Research lead", "cps": 30}},
+                   "lines": [{"id": "l1", "speaker": "rd", "text": text}], "sequences": {"intro": [{"line": "l1"}]}}
+            path = self.root / f"{name}.json"
+            path.write_text(json.dumps(src), encoding="utf-8")
+            _, lint = self.run_tool("lint", path, "--root", self.root)
+            self.run_tool("build", path, "--root", self.root, "--out", self.root / f"{name}.built.json")
+            rc, out = self.run_tool("export", self.root / f"{name}.built.json", "--sequence", "intro",
+                                    "--out", self.root / f"{name}.srt")
+            self.assertEqual(rc, 0, out)
+            srt = (self.root / f"{name}.srt").read_bytes().decode("utf-8").split("\r\n")[2:-1]
+            return srt, lint, out
+
+        fits = "Press the button and run now, then go."           # one 38-character line: the name needs a second
+        srt, lint, out = run(fits, "fits")
+        self.assertTrue(srt[0].startswith("RESEARCH LEAD:"), srt)            # the name may take the top line
+        self.assertTrue(all(len(x) <= width for x in srt), srt)
+        self.assertEqual(" ".join(srt), "RESEARCH LEAD: " + fits, "every word kept, in order")
+        self.assertNotIn("SRT", lint + out)
+        full = "Press the button and run now! Then wait a bit longer than that, friend."   # the issue's line
+        srt, lint, out = run(full, "full")
+        self.assertIn("SRT puts \"RESEARCH LEAD: \" in front", lint, "lint says the name cannot fit")
+        self.assertIn("[warn] cue 1: \"RESEARCH LEAD: Press", out, "86 characters cannot fit 2 x 40: said")
+
     def test_vtt_escapes_markup_in_text_and_names(self):
         cues = [{"start": 0.0, "end": 1.0, "lines": ["Fish & chips <b>now</b>", "", "a --> b"], "name": "Tom <3"}]
         self.assertEqual(D.to_vtt(cues), "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n<v Tom &lt;3>"

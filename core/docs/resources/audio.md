@@ -447,7 +447,8 @@ only ever added), and into SRT or WebVTT files for trailers and video captures.
   Accessibility Guideline 104 calls longer lines long; Netflix allows 42), at most 2 lines, line breaks at
   punctuation and bottom-heavy, at least 5/6 s and at most 7 s on screen, and a reading speed of at most 20
   characters a second (Netflix, adults; `--audience children` uses 17). Exports name the speaker whenever it changes
-  and again after a minute of silence (XAG 104).
+  and again after a minute of silence (XAG 104); SRT has no voice tag, so its `NAME: ` prefix is laid out within
+  the 40 characters, and lint warns about a line whose first cue has no room for it.
 - `kind: "bark"` lines are short reactions the game fires itself: `priority`, `interrupt` (`never`, `lower`,
   `always`) and `cooldown_s` say what may cut in; lint warns about a bark without a cooldown.
 - SFX captions: build with `--events data/audio_events.json` and every event with a `caption` becomes one (with

@@ -17,7 +17,8 @@
 #           speaker's cps when there is no audio. One reveal entry per character (code point), as the engines expect.
 #           Subtitle style defaults: at most 40 characters a line (Xbox Accessibility Guideline 104 calls longer
 #           lines long; Netflix allows 42), 2 lines, 20 characters a second (Netflix, adults; 17 for children),
-#           5/6 s minimum and 7 s maximum per cue (Netflix). Exports name the speaker whenever it changes (XAG 104).
+#           5/6 s minimum and 7 s maximum per cue (Netflix). Exports name the speaker whenever it changes (XAG 104);
+#           SRT's inline "NAME: " is laid out within the line width, and lint warns when a cue has no room for it.
 #           SFX captions come from audio_events.json events with a "caption" (and "directional": true for sounds
 #           whose side of the screen matters; XAG 104 asks for an arrow). The format only ever adds optional fields.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -354,6 +355,11 @@ def _build(src, raw_bytes, root, events_path, audience):
             reveal = cps_reveal(text, sp.get("cps", DEFAULT_CPS))
         cues = make_cues(text, reveal, duration, style)
         warnings += cue_warnings(where, cues, style)
+        name = sp.get("name", spk)
+        if cues and named_lines(name, cues[0]["lines"], style) is None:
+            warnings.append(f"{where}: SRT puts \"{srt_prefix(name)}\" in front when the speaker changes, and the first "
+                            f"cue no longer fits {style['max_lines']} lines of {style['max_chars_per_line']} "
+                            f"characters: shorten the speaker's name or the line's opening")
         entry = {"speaker": spk, "name": sp.get("name", spk), "color": sp.get("color", "#FFFFFF"), "text": text,
                  "kind": kind, "priority": ln.get("priority", 50), "interrupt": ln.get("interrupt", "lower"),
                  "cooldown_s": ln.get("cooldown_s", 0), "duration_s": round(duration, 3), "reveal_source": source,
@@ -424,12 +430,37 @@ def sequence_cues(built, name):
     return out
 
 
-def to_srt(cues):
+def srt_prefix(name):
+    return f"{name.upper()}: "
+
+
+def named_lines(name, lines, style):
+    """A cue's lines with "NAME: " in front (SRT has no voice tag, so players show the name inline), laid out again
+    when the first line would pass the line width. None when the cue no longer fits its lines."""
+    first = srt_prefix(name) + (lines[0] if lines else "")
+    width = style["max_chars_per_line"]
+    if len(first) <= width:
+        return [first] + list(lines[1:])
+    words = [srt_prefix(name).strip()] + [w for x in lines for w in x.split()]   # the name stays one piece
+    if style["max_lines"] >= 2:
+        return split_two(words, width)
+    return [" ".join(words)] if len(" ".join(words)) <= width else None
+
+
+def to_srt(cues, style=STYLE, warnings=None):
+    """SRT text; the speaker's name goes in front of the cue that names it, within the line width when it fits
+    (otherwise in front anyway, with a note in warnings when a list is given)."""
     blocks = []
     for n, c in enumerate(cues, 1):
         lines = list(c["lines"])
         if c["name"]:
-            lines[0] = f"{c['name'].upper()}: {lines[0]}"
+            laid = named_lines(c["name"], lines, style)
+            if laid is None:
+                laid = [srt_prefix(c["name"]) + (lines[0] if lines else "")] + lines[1:]
+                if warnings is not None:
+                    warnings.append(f"cue {n}: \"{laid[0][:40]}\" is {len(laid[0])} characters with the speaker's name "
+                                    f"in front (at most {style['max_chars_per_line']}): shorten the name or the line")
+            lines = laid
         blocks.append(f"{n}\r\n{fmt_time(c['start'], ',')} --> {fmt_time(c['end'], ',')}\r\n" + "\r\n".join(lines))
     return "\r\n\r\n".join(blocks) + "\r\n"
 
@@ -486,7 +517,10 @@ def cmd_lint(args):
 def cmd_export(args):
     built = load_json(args.built, "built dialogue")
     cues = sequence_cues(built, args.sequence)
-    text = to_srt(cues) if args.format == "srt" else to_vtt(cues)
+    notes = []
+    text = to_srt(cues, built.get("style", STYLE), notes) if args.format == "srt" else to_vtt(cues)
+    for x in notes:
+        print(f"[warn] {x}")
     out = Path(args.out)
     if out.exists() and not args.overwrite:
         raise ToolError(f"{out} exists (use --overwrite)")

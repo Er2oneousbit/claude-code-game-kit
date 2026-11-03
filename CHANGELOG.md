@@ -315,6 +315,10 @@
   `"cancels": true` instead of `Infinity`, which jq and `JSON.parse` refuse, and the problem reads "the mono downmix
   is silent: the channels cancel" instead of "loses inf LU". The JSON paths of `measure` and `mono` refuse any
   non-finite value instead of writing it (#115).
+- Wavesmith dialogue: the SRT export lays a cue out again when the speaker's `NAME: ` prefix would push its first
+  line past the 40-character limit, so a 38-character line by "Research lead" reads `RESEARCH LEAD:` over the text
+  instead of one 53-character line. When the cue cannot fit even then, `lint` and `build` warn about the line and
+  `export` names the cue, so the display name or the opening can be shortened (WebVTT's `<v Name>` was fine) (#116).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
