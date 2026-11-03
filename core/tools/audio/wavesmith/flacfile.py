@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from wavfile import WavNameError, check_wav_name, stats, write_wav  # noqa: E402
 
 MAGIC = b"fLaC"
+STREAMINFO_BYTES = 34        # the fixed size of the STREAMINFO block's body
 SUPPORTED_BITS = (16, 24)
 SUPPORTED_CHANNELS = (1, 2)
 BLOCK_SIZES = {1: 192, 2: 576, 3: 1152, 4: 2304, 5: 4608,
@@ -157,8 +158,15 @@ def read_streaminfo(data):
         head = data[pos]
         kind, last = head & 0x7F, head & 0x80
         length = int.from_bytes(data[pos + 1:pos + 4], "big")
+        if pos + 4 + length > len(data):
+            raise FlacCorrupt(f"a metadata block of {length} bytes runs past the end of the file (corrupt file)")
         body = data[pos + 4:pos + 4 + length]
         if kind == 0:
+            # a zero-filled tail (a cut, padded download) parses as another STREAMINFO block of length 0
+            if length < STREAMINFO_BYTES:
+                raise FlacCorrupt(f"STREAMINFO block is {length} bytes, not {STREAMINFO_BYTES} (corrupt file)")
+            if info is not None:
+                raise FlacCorrupt("a second STREAMINFO block (corrupt file)")
             bits = int.from_bytes(body[10:18], "big")
             info = {"min_block": struct.unpack(">H", body[0:2])[0], "max_block": struct.unpack(">H", body[2:4])[0],
                     "rate": bits >> 44, "channels": ((bits >> 41) & 0x7) + 1, "bits": ((bits >> 36) & 0x1F) + 1,

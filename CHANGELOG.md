@@ -296,6 +296,10 @@
   PCM with a plain header were read, so a 24-bit DAW export or voice line stopped every tool, `formats convert`
   included. A WAV in another sample format (ADPCM, A-law) goes through ffmpeg when it is installed and names it when
   it is not; `formats info` says which decoder read it (#102).
+- Wavesmith flacfile.py: a STREAMINFO block shorter than 34 bytes (a header that says length 0, or a real file
+  zeroed after its STREAMINFO by a cut, padded download), a second STREAMINFO block, or a metadata block that runs
+  past the end of the file is a named corrupt file (`[FAIL]`, exit 1; `[error]`, exit 2, from the tools that read
+  audio) instead of a `struct.error` traceback (#111).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
