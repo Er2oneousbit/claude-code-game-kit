@@ -17,7 +17,7 @@
 #             doctor   verify the local environment
 # Env     : RPGMZ_EXE  optional, the editor (RPGMZ.exe) for `run --editor` and `doctor`.
 # Exit    : 0 ok, 1 task failed, 2 environment/usage problem
-# Notes   : The MZ project lives in game/ (open game/game.rmmzproject in the editor), so the editor's Deployment
+# Notes   : The MZ project lives in game/ (open its .rmmzproject in the editor), so the editor's Deployment
 #           exports the game and nothing else. A project at the root (an adopted one) works too. RPG Maker MZ's own
 #           files (core scripts, default assets) come from your MZ install, never from the kit. Python 3.8+,
 #           standard library only. Not yet run against a real MZ install: engine-specific steps say (verify).
@@ -441,8 +441,15 @@ def cmd_setup(args):
         print(out[-3000:])
         print("[FAIL] browser install failed")
         return 2
-    print("[ OK ] setup done" + ("" if missing_core(g) else ": open game/game.rmmzproject in RPG Maker MZ, or `python tools/dev.py run`"))
+    print("[ OK ] setup done" + ("" if missing_core(g) else f": open {project_hint(g)} in RPG Maker MZ, or `python tools/dev.py run`"))
     return 0
+
+
+def project_hint(g):
+    """The editor's project file in g as the user should open it. setup --from keeps the name MZ gave the project
+    (game/Project1.rmmzproject), so the message names the file that is there."""
+    project = next(iter(sorted(g.glob("*.rmmzproject"))), None)
+    return rel(project) if project else f"the .rmmzproject file in {rel(g)}/"
 
 
 def check_plugins(g, problems):

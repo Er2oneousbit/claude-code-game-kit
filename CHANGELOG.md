@@ -55,6 +55,9 @@
   `DRIVE_HELP`, `DATA_DIR_HELP` and `LOCALE_HELP` next to `BOOT_MARKER`, so the two dev.py files stay alike. Web and
   Web 3D `smoke.mjs` skip the data-dir checks of a scenario that answered `DRIVE_ABORT` or `DRIVE_IGNORED`, so a
   refused drive no longer also reports `settings.json missing` (#135).
+- RPG Maker MZ: `setup --from` names the project file it copied (`open game/Project1.rmmzproject ...`); it said
+  `game/game.rmmzproject`, but the copy keeps the name the editor gave the new project. The overlay's ENGINE.md
+  and FLOW.md and the dev.py header say to open the `.rmmzproject` file in `game/` (#136).
 - Scrap Tanks (C++/SDL2): make_sprites.py checks the bpy launcher (uv, or `BPY_PYTHON`) and the kit's render tool
   before the first job and stops with `[error]` and exit 2 instead of a traceback; a render that dies before its
   first `[..]` line shows its last output lines; `--debug` prints each command and all output; a Windows path in

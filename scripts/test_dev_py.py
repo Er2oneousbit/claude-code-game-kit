@@ -9,7 +9,8 @@
 #           Linux and macOS (process-group calls faked) that killing an untimed command kills what it started (#37),
 #           that the Godot build fails on a .pck holding .game-kit.json or a dev-only folder (#161), and that the
 #           web, web-3d and RPG Maker MZ smoke.mjs --record leaves only this run's frames (#134; needs node), a
-#           refused --drive is one error (#135) and web-3d's -h says its --drive aborts (#135).
+#           refused --drive is one error (#135), web-3d's -h says its --drive aborts (#135), and RPG Maker MZ's
+#           setup names the project file it copied (#136).
 # Usage   : python scripts/test_dev_py.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, no engine needed. The live checks (a real smoke with each toolchain) are
@@ -256,6 +257,26 @@ class RunLauncherMissing(TempRoot):
         dev.need_project = lambda: self.root
         dev.run = lambda *a, **kw: (127, "")
         self.assertEqual(quiet(dev.cmd_run, argparse.Namespace(editor=False, port=8000))[0], 2)
+
+
+# ---- #136: RPG Maker MZ setup names the project file it copied -----------------
+class RpgMakerSetup(TempRoot):
+    def test_setup_names_the_copied_project_file(self):
+        src = self.root / "new_mz"                   # a project the editor made, named as MZ names it
+        dev = load("rpgmaker-mz")
+        for rel in ("Project1.rmmzproject", "js/plugins.js") + dev.CORE_FILES:
+            (src / rel).parent.mkdir(parents=True, exist_ok=True)
+            (src / rel).write_text("")
+        dev.ROOT = self.root / "game_proj"
+        dev.ROOT.mkdir()
+        dev.node_problem = lambda: None
+        dev.register_own_plugins = lambda g: "plugins registered"
+        dev.deps_stale = lambda: False
+        dev.run = lambda *a, **kw: (0, "")
+        rc, text = quiet(dev.cmd_setup, argparse.Namespace(source=str(src)))
+        self.assertEqual(rc, 0, text)
+        self.assertTrue((dev.ROOT / "game" / "Project1.rmmzproject").is_file())
+        self.assertIn("open game/Project1.rmmzproject in RPG Maker MZ", text)
 
 
 # ---- #134, #135: web, web-3d and RPG Maker MZ smoke.mjs ------------------------
