@@ -130,6 +130,9 @@
   longer leave logs and crash files in the player's save folder, and `--drive menus` no longer rewrites the
   player's `settings.json` (master 0.5, reduce motion on). A hand-run `lovec . --smoke N --drive <scenario>` with no
   `--data-dir` stops with `DRIVE_IGNORED` and exit 1 instead of driving the save folder (#44, #107).
+- Web, Web 3D: a settings file's language code is 2 to 12 code points, as the reference counts, not UTF-16 units
+  (`String.length`), which differ for characters outside the Basic Multilingual Plane. Two new `settings_load`
+  vectors in `shell.json` cover both directions; all eight ports pass them (#45).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

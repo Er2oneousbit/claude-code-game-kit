@@ -127,6 +127,11 @@ class Shell(unittest.TestCase):
         self.assertEqual((env, source), (None, "none"))
         self.assertIn("primary: newer", problems)
 
+    def test_language_length_counts_code_points(self):
+        wide = "\U0001D523"                          # one code point, two UTF-16 units
+        self.assertEqual(gv.settings_load(json.dumps({"language": "x-" + wide * 6}))[0]["language"], "x-" + wide * 6)
+        self.assertEqual(gv.settings_load(json.dumps({"language": wide}))[0]["language"], "en")
+
     def test_pseudo_keeps_placeholders_and_grows(self):
         out = gv.pseudo("Hello {name}, you have %d coins")
         self.assertIn("{name}", out)

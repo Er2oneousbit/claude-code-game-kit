@@ -11,7 +11,6 @@ examples were built and tested on one Windows 11 machine.
   until that is turned on): [#40](https://github.com/Er2oneousbit/claude-code-game-kit/issues/40); a missing blank line between two of its steps:
   [#95](https://github.com/Er2oneousbit/claude-code-game-kit/issues/95).
 - **LÖVE:** macOS and Linux packaging, LÖVE 11.4 itself and the POSIX save rename not run: [#41](https://github.com/Er2oneousbit/claude-code-game-kit/issues/41).
-- **Shell:** the web port counts language codes in UTF-16 units: [#45](https://github.com/Er2oneousbit/claude-code-game-kit/issues/45).
 - **Godot shell:** crash files need Godot 4.5+, untested on 4.3 and 4.4: [#46](https://github.com/Er2oneousbit/claude-code-game-kit/issues/46).
 - **Unreal:** the GameKitShell plugin not tried in a Blueprint-only project or enabled from the editor:
   [#47](https://github.com/Er2oneousbit/claude-code-game-kit/issues/47).

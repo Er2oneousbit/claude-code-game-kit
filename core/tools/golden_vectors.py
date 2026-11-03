@@ -770,6 +770,11 @@ def build_shell():
         ("bad sections and bindings", json.dumps({"display": 5, "language": 7, "input": {
             "bindings": {"jump": ["key:k", 5], "dash": ["key:shift", "pad:r1"], "attack": "key:j"},
             "glyphs": "playstation", "deadzone": 0.95}})),
+        # the language length counts code points: characters outside the Basic Multilingual Plane are two UTF-16
+        # units each, so a port counting units (JavaScript String.length, C# Length) would get these two wrong
+        ("language in code points", json.dumps({"language": "x-" + "\U0001D523\U0001D52F\U0001D51E\U0001D52B"
+                                                "\U0001D520\U0001D522"}, ensure_ascii=False)),
+        ("one code point is too short", json.dumps({"language": "\U0001D523"}, ensure_ascii=False)),
     ]
     for name, text in inputs:
         s, problems = settings_load(text)

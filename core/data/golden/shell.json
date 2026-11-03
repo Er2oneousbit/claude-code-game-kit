@@ -999,6 +999,230 @@
      "glyphs": "auto",
      "invert_y": false
     },
+    "language": "x-𝔣𝔯𝔞𝔫𝔠𝔢",
+    "telemetry": {
+     "consent": "unset"
+    },
+    "version": 1
+   },
+   "input": "{\"language\": \"x-𝔣𝔯𝔞𝔫𝔠𝔢\"}",
+   "name": "language in code points",
+   "problems": 0,
+   "telemetry_allowed": false,
+   "type": "settings_load"
+  },
+  {
+   "effective_shake": 1.0,
+   "expect": {
+    "access": {
+     "captions_sfx": false,
+     "colorblind": "none",
+     "difficulty": "normal",
+     "flash_limit": true,
+     "game_speed": 1.0,
+     "hold_to_toggle": false,
+     "reduce_motion": false,
+     "shake_scale": 1.0,
+     "speaker_names": true,
+     "subtitle_background": 0.6,
+     "subtitle_barks": false,
+     "subtitle_size": "medium",
+     "subtitles": true,
+     "text_scale": 1.0
+    },
+    "audio": {
+     "master": 1.0,
+     "mono": false,
+     "music": 0.8,
+     "sfx": 1.0,
+     "ui": 1.0,
+     "voice": 1.0
+    },
+    "display": {
+     "frame_cap": 0,
+     "mode": "windowed",
+     "resolution": [
+      1920,
+      1080
+     ],
+     "ui_scale": 1.0,
+     "vsync": true
+    },
+    "input": {
+     "bindings": {
+      "attack": [
+       "key:j",
+       "pad:west"
+      ],
+      "interact": [
+       "key:e",
+       "pad:north"
+      ],
+      "jump": [
+       "key:space",
+       "pad:south"
+      ],
+      "move_down": [
+       "key:s",
+       "pad:dpad_down"
+      ],
+      "move_left": [
+       "key:a",
+       "pad:dpad_left"
+      ],
+      "move_right": [
+       "key:d",
+       "pad:dpad_right"
+      ],
+      "move_up": [
+       "key:w",
+       "pad:dpad_up"
+      ],
+      "pause": [
+       "key:escape",
+       "pad:start"
+      ],
+      "ui_accept": [
+       "key:enter",
+       "pad:south"
+      ],
+      "ui_cancel": [
+       "key:escape",
+       "pad:east"
+      ],
+      "ui_down": [
+       "key:down",
+       "pad:dpad_down"
+      ],
+      "ui_left": [
+       "key:left",
+       "pad:dpad_left"
+      ],
+      "ui_right": [
+       "key:right",
+       "pad:dpad_right"
+      ],
+      "ui_up": [
+       "key:up",
+       "pad:dpad_up"
+      ]
+     },
+     "deadzone": 0.2,
+     "glyphs": "auto",
+     "invert_y": false
+    },
+    "language": "en",
+    "telemetry": {
+     "consent": "unset"
+    },
+    "version": 1
+   },
+   "input": "{\"language\": \"𝔣\"}",
+   "name": "one code point is too short",
+   "problems": 1,
+   "telemetry_allowed": false,
+   "type": "settings_load"
+  },
+  {
+   "effective_shake": 1.0,
+   "expect": {
+    "access": {
+     "captions_sfx": false,
+     "colorblind": "none",
+     "difficulty": "normal",
+     "flash_limit": true,
+     "game_speed": 1.0,
+     "hold_to_toggle": false,
+     "reduce_motion": false,
+     "shake_scale": 1.0,
+     "speaker_names": true,
+     "subtitle_background": 0.6,
+     "subtitle_barks": false,
+     "subtitle_size": "medium",
+     "subtitles": true,
+     "text_scale": 1.0
+    },
+    "audio": {
+     "master": 1.0,
+     "mono": false,
+     "music": 0.8,
+     "sfx": 1.0,
+     "ui": 1.0,
+     "voice": 1.0
+    },
+    "display": {
+     "frame_cap": 0,
+     "mode": "windowed",
+     "resolution": [
+      1920,
+      1080
+     ],
+     "ui_scale": 1.0,
+     "vsync": true
+    },
+    "input": {
+     "bindings": {
+      "attack": [
+       "key:j",
+       "pad:west"
+      ],
+      "interact": [
+       "key:e",
+       "pad:north"
+      ],
+      "jump": [
+       "key:space",
+       "pad:south"
+      ],
+      "move_down": [
+       "key:s",
+       "pad:dpad_down"
+      ],
+      "move_left": [
+       "key:a",
+       "pad:dpad_left"
+      ],
+      "move_right": [
+       "key:d",
+       "pad:dpad_right"
+      ],
+      "move_up": [
+       "key:w",
+       "pad:dpad_up"
+      ],
+      "pause": [
+       "key:escape",
+       "pad:start"
+      ],
+      "ui_accept": [
+       "key:enter",
+       "pad:south"
+      ],
+      "ui_cancel": [
+       "key:escape",
+       "pad:east"
+      ],
+      "ui_down": [
+       "key:down",
+       "pad:dpad_down"
+      ],
+      "ui_left": [
+       "key:left",
+       "pad:dpad_left"
+      ],
+      "ui_right": [
+       "key:right",
+       "pad:dpad_right"
+      ],
+      "ui_up": [
+       "key:up",
+       "pad:dpad_up"
+      ]
+     },
+     "deadzone": 0.2,
+     "glyphs": "auto",
+     "invert_y": false
+    },
     "language": "en",
     "telemetry": {
      "consent": "yes"
