@@ -94,6 +94,10 @@
   Godot and the web smokes check each `--screenshot` and `--record` after the run. Web, web-3d and RPG Maker MZ
   `run` exit 2 when node or the launcher is missing (it gave 1). A new exam, `scripts/test_dev_py.py`, runs every
   engine's dev.py with the engine call faked (#33).
+- `yt_transcript.py --whisper` without faster-whisper tries the captions first and exits 2 only when transcription
+  is reached (it exited 2 before trying captions that would have worked); WebVTT cue identifiers (`1 Hello ...`)
+  and NOTE, STYLE and REGION blocks stay out of the transcript. A new exam, `tools/test_yt_transcript.py`, runs on
+  canned captions, offline (#34).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
