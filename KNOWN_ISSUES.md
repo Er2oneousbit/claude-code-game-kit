@@ -73,6 +73,14 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
 - **Starting a game:** genre starters with a tested core loop ([#89](https://github.com/Er2oneousbit/claude-code-game-kit/issues/89)).
 - **Examples:** bring them onto the 0.8 systems ([#88](https://github.com/Er2oneousbit/claude-code-game-kit/issues/88)); designed-voice dialogue in one example
   ([#93](https://github.com/Er2oneousbit/claude-code-game-kit/issues/93)).
+- **Kit tools for recurring jobs:** `/file-issue` and `issues.py new` [#156](https://github.com/Er2oneousbit/claude-code-game-kit/issues/156); `publish_check.py` over a commit
+  range and a private term list [#157](https://github.com/Er2oneousbit/claude-code-game-kit/issues/157); a script that runs every exam on the supported Pythons [#158](https://github.com/Er2oneousbit/claude-code-game-kit/issues/158); one that runs
+  every example's doctor, check, test and smoke [#159](https://github.com/Er2oneousbit/claude-code-game-kit/issues/159).
+- **Game feel:** recipes for common effects built from the juice primitives, added per game as needed [#170](https://github.com/Er2oneousbit/claude-code-game-kit/issues/170);
+  shooting effects (muzzle flash, tracer, firing light, wall debris) [#164](https://github.com/Er2oneousbit/claude-code-game-kit/issues/164); a blood on/off setting [#171](https://github.com/Er2oneousbit/claude-code-game-kit/issues/171).
+- **Accessibility:** screen reader and menu narration [#165](https://github.com/Er2oneousbit/claude-code-game-kit/issues/165); motor access beyond remapping [#166](https://github.com/Er2oneousbit/claude-code-game-kit/issues/166);
+  cognitive access [#167](https://github.com/Er2oneousbit/claude-code-game-kit/issues/167); shell screens for Unity, Unreal, Bevy and C++ [#168](https://github.com/Er2oneousbit/claude-code-game-kit/issues/168); colour-blind modes tested
+  beyond the demo palettes [#169](https://github.com/Er2oneousbit/claude-code-game-kit/issues/169).
 
 ### Never run or not run end to end
 - **macOS and Linux:** untested throughout (the scaffolder ran on Linux in an earlier version only). Tool and binary
@@ -112,6 +120,9 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
 ### Bugs and doubts
 - **Docs marked (verify):** facts about outside services (prices, plans, menu paths, license terms) that were not
   checked live. They are the most likely to be out of date.
+- **Godot:** `.game-kit.json` (per-file hashes and upgrade history) is packed into every exported .pck [#161](https://github.com/Er2oneousbit/claude-code-game-kit/issues/161).
+- **Web:** typewriter subtitles can outrun a line's duration [#162](https://github.com/Er2oneousbit/claude-code-game-kit/issues/162); the pseudo-locale drive can still drift on
+  slow loads [#163](https://github.com/Er2oneousbit/claude-code-game-kit/issues/163).
 
 ## The examples
 None of the example games has been played by a human tester; the bots and tests are the only proof they play as
