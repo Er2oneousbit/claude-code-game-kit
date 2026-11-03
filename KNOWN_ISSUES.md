@@ -37,9 +37,6 @@ examples were built and tested on one Windows 11 machine.
   Pixelorama's own blend ([#66](https://github.com/Er2oneousbit/claude-code-game-kit/issues/66)); reading Pixelorama 1.2.4 files is built from its release-candidate source
   ([#67](https://github.com/Er2oneousbit/claude-code-game-kit/issues/67)); spells, VFX, status marks, animated props, balloons and vehicles have no hand-polish path
   ([#68](https://github.com/Er2oneousbit/claude-code-game-kit/issues/68)).
-- **Unity music player:** a change asked back before the previous one starts restarts the track (Godot, LÖVE and web
-  cancel it); Godot's stinger-gap case not checked:
-  [#70](https://github.com/Er2oneousbit/claude-code-game-kit/issues/70).
 
 ### Art workflow outside Godot
 Dotwork is Godot-first: other engines get PNGs, sheets with their JSON, `.fnt` fonts and a manifest, and no overlay

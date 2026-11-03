@@ -43,7 +43,8 @@
 #                     started together -> prime with silence
 #   _process: n = frames every generator can take (up to buffer_s queued) -> per deck and stem slot: silence
 #             before start, mix_audio between start and stop (times the fade line), silence after -> push to all
-#   request(to): cancel a pending switch -> plan = MusicDirector.plan(current, since, entry, to, now = next frame)
+#   request(to): cancel a pending switch -> plan = MusicDirector.plan(current, since, entry, to, now = next frame,
+#                or the current track's entry when it has not entered yet)
 #                -> current deck: fade from switch_at, stop at from_stop_at -> stinger deck at stinger_at
 #                -> a free deck plays `to` from to_start_at, decoded up to to_offset
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -287,8 +288,7 @@ func request(to: String, now: int = -1) -> Dictionary:
 	var cur: Dictionary = _decks[_cur]
 	if cur["track"] == to:
 		return {}
-	var at: int = maxi(now, now_sample())
-	var p: Dictionary = MusicDirector.plan(data, cur["track"], cur["since"], cur["entry"], to, at)
+	var p: Dictionary = plan_change(data, cur, to, maxi(now, now_sample()))
 	if p.is_empty():
 		return {}
 	var switch_frame: int = frame_of(p["switch_at"])
@@ -307,6 +307,13 @@ func request(to: String, now: int = -1) -> Dictionary:
 	_cur = next
 	_launch(next, to, p["to_start_at"], p["to_offset"])
 	return p
+
+
+static func plan_change(music: Dictionary, deck: Dictionary, to: String, at: int) -> Dictionary:
+	# The plan for a change from the deck's track asked at music sample `at`. A track that has not entered yet (a
+	# stinger's gap) is planned from where it enters, as the LÖVE, web and Unity players do: planned from before
+	# it, a beat or immediate switch could land in the gap and the track would never sound
+	return MusicDirector.plan(music, deck["track"], deck["since"], deck["entry"], to, maxi(at, int(deck["since"])))
 
 
 func set_stem_gain(track_name: String, stem: String, value: float) -> void:

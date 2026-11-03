@@ -154,6 +154,12 @@
   too (it sits in the zipped project data, which the text scan cannot read). The new `--clear-export-path` blanks it
   in place; every other entry of the file stays as it was and the round trip gives the same frames. Without the
   flag, Dotwork does not rewrite the file (#69).
+- Unity: `MusicPlayer` undoes a change asked back before its switch, as the Godot, LÖVE and web players do:
+  `Request("combat")` then `Request("explore")` before the bar line leaves explore playing on instead of restarting
+  it from the top. The decisions moved into Core `MusicQueue` (six EditMode tests); run once in Play mode with
+  generated tones. Godot: a change asked while the current track waits out a stinger is planned from where that
+  track enters (a beat or immediate switch could fall in the gap, so the track never sounded), as the other players
+  plan it (#70).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
