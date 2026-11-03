@@ -40,7 +40,7 @@ Rules:
 - [ ] `CREDITS.md` complete from `ASSET_LOG.md`, no `PLACEHOLDER` assets remain
 - [ ] Licenses for engine, middleware, fonts shipped where required
 - [ ] Engine license obligations: Unreal Release Form submitted before launch (royalty reporting above the revenue threshold), Unity plan tier matches revenue and funding **(verify current terms)**
-- [ ] Godot: export preset filters exclude `tests/*`, `tools/*`, `addons/gut/*`
+- [ ] Godot: export preset filters exclude `tests/*`, `tools/*`, `addons/gut/*`, `assets_src/*` (sources and review sheets)
 - [ ] Save files versioned and migration tested
 - [ ] Settings persist: audio volumes, display mode, key bindings
 - [ ] Gamepad and keyboard both complete the game; prompts follow the device in use

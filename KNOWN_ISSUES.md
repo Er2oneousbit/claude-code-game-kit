@@ -117,7 +117,6 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
   hand). The art flaws found in 0.7.0 review (#22 to #28) are fixed in 0.7.1. Open: a cancelled ComfyUI job reads
   as "failed: no message" ([#38](../../issues/38)); skeleton clips other than walk are not rendered live yet
   ([#39](../../issues/39)).
-- **Godot builds include `assets_src/`** review sheets and sources ([#29](../../issues/29)).
 
 ### Low-severity audit findings left for 0.7.x
 From the 2026-10-30 audit; each needs unusual input or a broken local file:

@@ -124,7 +124,8 @@ Release-like check: export a release build and watch the on-screen FPS counter. 
 1. Install export templates for your exact Godot version once (Editor > Manage Export Templates, or download the
    `.tpz` for your version from godotengine.org and install it from that dialog).
 2. `export_presets.cfg` comes with the project: "Windows Desktop", "Linux" and "Web", with `tests/*, tools/*, docs/*,
-   addons/gut/*` excluded. Add macOS, Android or iOS in Project > Export (they need signing). Commit `export_presets.cfg` but
+   addons/gut/*, data/golden/*, assets_src/*` excluded. `assets_src/` (art sources, Dotwork's review sheets) also holds
+   an empty `.gdignore`, so Godot never imports it: keep anything a scene loads under `assets/`. Add macOS, Android or iOS in Project > Export (they need signing). Commit `export_presets.cfg` but
    **never** credentials: Godot 4 writes keystore passwords and the PCK encryption key to .godot/export_credentials.cfg
    (git-ignored with the rest of .godot/, denied to Claude, and kept by `clean --deep`).
 3. `python tools/dev.py build` (this computer's preset), or `build --preset Web` (a folder you can upload to itch.io).

@@ -60,6 +60,11 @@
   transforms. Blender applied the transform to the shared mesh once and left the other objects with a leftover
   scale, so the export kept an unapplied scale and only the validator warned. test_prep_export.py has the case,
   two posts on one mesh with different scales and rotations (#18).
+- Godot: review sheets and sources under `assets_src/` no longer ship in builds. The folder holds an empty
+  `.gdignore` (Godot never imports it) and the three export presets exclude `assets_src/*`; a Windows, Linux
+  and Web export of a game with a sheet there had it in the .pck before and has not now. Dotwork refuses a
+  backdrop, logo, font or diorama sprite in a folder Godot ignores, naming it, instead of writing a scene that
+  opens with a missing resource (#29).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
