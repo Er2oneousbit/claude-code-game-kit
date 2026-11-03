@@ -311,6 +311,10 @@
 - Wavesmith events: `validate` and `audit` exit 2, not 1, when the events file cannot be read or is not JSON, as the
   header and every other Wavesmith tool say; a CI step reading 1 as "the file has problems" misread a wrong path
   (#114).
+- Wavesmith loudness: `mono --json` stays JSON when a file cancels completely in mono: `loss_lu` is `null` with
+  `"cancels": true` instead of `Infinity`, which jq and `JSON.parse` refuse, and the problem reads "the mono downmix
+  is silent: the channels cancel" instead of "loses inf LU". The JSON paths of `measure` and `mono` refuse any
+  non-finite value instead of writing it (#115).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

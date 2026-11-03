@@ -449,7 +449,7 @@ def cmd_measure(args):
             print(f"{fmt(m['integrated_lufs'], 'LUFS')}  LRA {fmt(m['lra_lu'], 'LU')}  TP {fmt(m['true_peak_dbtp'], 'dBTP')}"
                   f"  {m['seconds']:8.2f} s  {m['file']}")
     if args.json:
-        print(json.dumps(rows, indent=1))
+        print(json.dumps(rows, indent=1, allow_nan=False))     # a non-finite value fails loudly, never "Infinity"
     return 0
 
 
@@ -461,8 +461,9 @@ def correlation(left, right):
 
 
 def mono_check(channels, rate):
-    """What a stereo sound loses in a mono downmix (0.5 * (L + R)): {stereo_lufs, mono_lufs, loss_lu, corr,
-    worst_block_corr, worst_block_s}. None for mono input. Loudness is integrated when the clip is long enough,
+    """What a stereo sound loses in a mono downmix (0.5 * (L + R)): {stereo_lufs, mono_lufs, loss_lu, cancels, corr,
+    worst_block_corr, worst_block_s}. None for mono input. When the channels cancel completely (the downmix is
+    silent, the stereo is not) loss_lu is None and cancels is True: JSON has no infinity. Loudness is integrated when the clip is long enough,
     otherwise ungated over the whole clip, so short one-shots get a number too."""
     if len(channels) != 2:
         return None
@@ -487,10 +488,11 @@ def mono_check(channels, rate):
             c = correlation(l, r)
             if c < worst:
                 worst, worst_t = c, i / rate
-    loss = (st - mo) if math.isfinite(st) and math.isfinite(mo) else (math.inf if math.isfinite(st) else None)
+    cancels = math.isfinite(st) and not math.isfinite(mo)
     return {"stereo_lufs": round(st, 2) if math.isfinite(st) else None,
             "mono_lufs": round(mo, 2) if math.isfinite(mo) else None,
-            "loss_lu": (round(loss, 2) if loss is not None and math.isfinite(loss) else loss),
+            "loss_lu": round(st - mo, 2) if math.isfinite(st) and math.isfinite(mo) else None,
+            "cancels": cancels,
             "corr": round(correlation(left, right), 3),
             "worst_block_corr": round(worst, 3) if worst_t is not None else None,
             "worst_block_s": round(worst_t, 2) if worst_t is not None else None}
@@ -508,7 +510,9 @@ def cmd_mono(args):
                 print(f"[mono] {name}: already mono")
             continue
         problems = []
-        if r["loss_lu"] is not None and r["loss_lu"] > args.max_loss:
+        if r["cancels"]:
+            problems.append("the mono downmix is silent: the channels cancel (opposite polarity)")
+        elif r["loss_lu"] is not None and r["loss_lu"] > args.max_loss:
             problems.append(f"loses {r['loss_lu']:.1f} LU in mono (more than {args.max_loss:.0f}: the channels cancel)")
         if r["worst_block_corr"] is not None and r["worst_block_corr"] < args.min_corr:
             problems.append(f"correlation {r['worst_block_corr']:+.2f} at {r['worst_block_s']:.1f} s (out of phase: "
@@ -516,11 +520,11 @@ def cmd_mono(args):
         bad += bool(problems)
         rows.append(dict(r, file=name, problems=problems))
         if not args.json:
-            loss = "silent" if r["loss_lu"] is None else f"{r['loss_lu']:5.1f} LU"
+            loss = "cancels" if r["cancels"] else "silent" if r["loss_lu"] is None else f"{r['loss_lu']:5.1f} LU"
             print(f"[{'FAIL' if problems else ' OK '}] mono loss {loss}  correlation {r['corr']:+.2f}  {name}" +
                   "".join(f"\n       - {p}" for p in problems))
     if args.json:
-        print(json.dumps(rows, indent=1))
+        print(json.dumps(rows, indent=1, allow_nan=False))     # a non-finite value fails loudly, never "Infinity"
     else:
         print(f"[{'FAIL' if bad else ' OK '}] {len(rows)} file(s), {bad} would suffer in mono (players with hearing in "
               "one ear use the mono switch)")

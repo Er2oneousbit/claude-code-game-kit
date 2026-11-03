@@ -346,7 +346,7 @@ class LoudnessExam(unittest.TestCase):
         self.assertAlmostEqual(r["loss_lu"], 10 * math.log10(4), delta=0.15)
         self.assertLess(abs(r["corr"]), 0.02)
         r = L.mono_check([same, [-x for x in same]], FS)                     # opposite polarity: nothing left
-        self.assertEqual(r["loss_lu"], math.inf)
+        self.assertEqual((r["loss_lu"], r["cancels"]), (None, True))         # JSON has no infinity (#115)
         self.assertAlmostEqual(r["worst_block_corr"], -1.0, delta=1e-6)
         self.assertIsNone(L.mono_check([same], FS))                          # mono has nothing to lose
         short = stereo(tone(-20, 0.1))                                       # a 100 ms one-shot still gets a number
@@ -369,6 +369,21 @@ class LoudnessExam(unittest.TestCase):
         rc, out = self.run_tool("mono", bad, "--min-corr", "-1.01", "--json")
         self.assertEqual(rc, 0, out)
         self.assertEqual(json.loads(out)[0]["problems"], [])
+
+    def test_mono_json_stays_json_when_the_channels_cancel(self):
+        # #115: loss_lu was math.inf, printed as `Infinity`, which jq and JSON.parse refuse
+        x = tone(-20, 2, freq=440)
+        anti = self.wav("anti.wav", [x, [-v for v in x]])
+        rc, out = self.run_tool("mono", anti, "--json")
+        self.assertEqual(rc, 1, out)
+        self.assertNotIn("Infinity", out)
+        row = json.loads(out, parse_constant=lambda c: self.fail(f"{c} is not JSON"))[0]
+        self.assertEqual((row["loss_lu"], row["cancels"]), (None, True))
+        self.assertIn("the channels cancel", row["problems"][0])
+        rc, out = self.run_tool("mono", anti)
+        self.assertEqual(rc, 1, out)
+        self.assertIn("mono loss cancels", out)
+        self.assertNotIn("inf LU", out)
 
 
 if __name__ == "__main__":
