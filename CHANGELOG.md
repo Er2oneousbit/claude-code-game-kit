@@ -434,6 +434,13 @@
   read the same command line, skipped the title again, and Esc only restarted the night. The command line is read
   once per session (`GraveyardGame.CommandLine`) and Esc (`BackToTitle`) spends its difficulty; the title saves
   the next one. `Smoke_R8` (old code: no title after Esc) (#148).
+- Graveyard Shift (Unity): the two narrator takes re-voiced on 2026-10-23 are normalized to peak -3 dBFS like
+  the rest of the cast (they played 2.6 dB louder), with Wavesmith's `wavfile.py normalize`, which also writes their
+  real header sizes. The nine ghost voice files had the same streamed placeholder sizes (RIFF 0xFFFFFF24, data
+  0xFFFFFF00, about 4 GB); their headers are set to the real sizes, samples unchanged. Unity's importer read every
+  one to the end of the file (4.830 s for `narrator_escape_1`), so the end card's music duck was never stuck. Two
+  EditMode tests check every WAV header and the narrator peak (old files: 11 headers and 2 peaks reported); the
+  ASSET_LOG rows say what changed. The mix still needs ears (#139).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
