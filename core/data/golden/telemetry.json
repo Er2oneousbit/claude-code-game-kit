@@ -78,6 +78,6 @@
   }
  ],
  "generator": "tools/golden_vectors.py",
- "tolerance": 1e-06,
+ "tolerance": 1e-09,
  "version": 1
 }

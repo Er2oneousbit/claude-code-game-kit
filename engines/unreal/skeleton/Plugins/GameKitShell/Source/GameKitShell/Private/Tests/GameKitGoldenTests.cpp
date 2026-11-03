@@ -232,6 +232,18 @@ namespace GameKitGoldenTests
 		}
 	}
 
+	/** A step's result as one JSON object, so SameValue compares key sets: a field the reference adds to
+	 *  "expect" fails here instead of passing unchecked. */
+	TSharedPtr<FJsonValue> Numbers(std::initializer_list<TPair<const TCHAR*, double>> Fields)
+	{
+		const TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
+		for (const TPair<const TCHAR*, double>& F : Fields)
+		{
+			O->SetField(F.Key, MakeNumber(F.Value));
+		}
+		return MakeObject(O);
+	}
+
 	void CheckShake(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case)
 	{
 		const TSharedPtr<FJsonObject> K = Run.Obj(Case, TEXT("params"));
@@ -248,11 +260,8 @@ namespace GameKitGoldenTests
 			else if (Call == TEXT("update"))
 			{
 				const FGameKitShakeOffset O = Shake.Update(Run.Num(Step, TEXT("dt")), Run.Num(Step, TEXT("intensity")));
-				const TSharedPtr<FJsonObject> E = Run.Obj(Step, TEXT("expect"));
-				Run.SameNumber(O.X, Run.Field(E, TEXT("x")), StepLabel(I, TEXT("x")));
-				Run.SameNumber(O.Y, Run.Field(E, TEXT("y")), StepLabel(I, TEXT("y")));
-				Run.SameNumber(O.Angle, Run.Field(E, TEXT("angle")), StepLabel(I, TEXT("angle")));
-				Run.SameNumber(Shake.GetTrauma(), Run.Field(E, TEXT("trauma")), StepLabel(I, TEXT("trauma")));
+				Run.SameValue(Numbers({{TEXT("x"), O.X}, {TEXT("y"), O.Y}, {TEXT("angle"), O.Angle}, {TEXT("trauma"), Shake.GetTrauma()}}),
+				              Run.Field(Step, TEXT("expect")), StepLabel(I, TEXT("update")));
 			}
 			else
 			{
@@ -276,9 +285,8 @@ namespace GameKitGoldenTests
 			else if (Call == TEXT("scaled_dt"))
 			{
 				const double Dt = Hitstop.ScaledDt(Run.Num(Step, TEXT("dt")));
-				const TSharedPtr<FJsonObject> E = Run.Obj(Step, TEXT("expect"));
-				Run.SameNumber(Dt, Run.Field(E, TEXT("dt")), StepLabel(I, TEXT("dt")));
-				Run.SameNumber(Hitstop.GetRemaining(), Run.Field(E, TEXT("remaining")), StepLabel(I, TEXT("remaining")));
+				Run.SameValue(Numbers({{TEXT("dt"), Dt}, {TEXT("remaining"), Hitstop.GetRemaining()}}), Run.Field(Step, TEXT("expect")),
+				              StepLabel(I, TEXT("scaled_dt")));
 			}
 			else
 			{
@@ -316,9 +324,7 @@ namespace GameKitGoldenTests
 			{
 				const FVector2D C = Follow.Update(Run.Num(Step, TEXT("dt")), Run.Num(Step, TEXT("tx")), Run.Num(Step, TEXT("ty")),
 				                                  Run.Num(Step, TEXT("vx")), Run.Num(Step, TEXT("vy")));
-				const TSharedPtr<FJsonObject> E = Run.Obj(Step, TEXT("expect"));
-				Run.SameNumber(C.X, Run.Field(E, TEXT("x")), StepLabel(I, TEXT("x")));
-				Run.SameNumber(C.Y, Run.Field(E, TEXT("y")), StepLabel(I, TEXT("y")));
+				Run.SameValue(Numbers({{TEXT("x"), C.X}, {TEXT("y"), C.Y}}), Run.Field(Step, TEXT("expect")), StepLabel(I, TEXT("update")));
 			}
 			else
 			{
@@ -397,9 +403,7 @@ namespace GameKitGoldenTests
 			if (Call == TEXT("update"))
 			{
 				const double X = Spring.Update(Run.Num(Step, TEXT("dt")));
-				const TSharedPtr<FJsonObject> E = Run.Obj(Step, TEXT("expect"));
-				Run.SameNumber(X, Run.Field(E, TEXT("x")), StepLabel(I, TEXT("x")));
-				Run.SameNumber(Spring.V, Run.Field(E, TEXT("v")), StepLabel(I, TEXT("v")));
+				Run.SameValue(Numbers({{TEXT("x"), X}, {TEXT("v"), Spring.V}}), Run.Field(Step, TEXT("expect")), StepLabel(I, TEXT("update")));
 			}
 			else
 			{

@@ -9,6 +9,7 @@
 # ---------------------------------------------------------------------------
 import json
 import math
+import struct
 import sys
 import tempfile
 import unittest
@@ -28,6 +29,20 @@ class VectorFiles(unittest.TestCase):
             first = {p.name: p.read_bytes() for p in Path(d).iterdir()}
             gv.main(["--write", "--out", d])
             self.assertEqual(first, {p.name: p.read_bytes() for p in Path(d).iterdir()})
+
+    def test_tolerance_tells_a_float32_port_from_a_64_bit_one(self):
+        # Every port is 64-bit. A port that stored its results as float32 must fail the exam: the ease and
+        # hitstop vectors carry values near 1 and 0.1, where float32 rounding moves them by up to 6e-8.
+        juice = json.loads((gv.OUT_DIR / "juice.json").read_text(encoding="utf-8"))
+        tol = juice["tolerance"]
+
+        def f32(x):
+            return struct.unpack("f", struct.pack("f", x))[0]
+        for kind, values in (("ease", [p[2] for c in juice["cases"] if c["type"] == "ease" for p in c["points"]]),
+                             ("hitstop", [v for c in juice["cases"] if c["type"] == "hitstop" for st in c["steps"]
+                                          if "expect" in st for v in st["expect"].values()])):
+            worst = max(abs(f32(v) - v) for v in values)
+            self.assertGreater(worst, tol, f"{kind}: a float32 port would pass at tolerance {tol}")
 
     def test_every_case_has_a_type_and_name(self):
         for build in (gv.build_juice, gv.build_shell, gv.build_telemetry):

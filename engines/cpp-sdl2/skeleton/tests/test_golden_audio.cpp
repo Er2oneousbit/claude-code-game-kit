@@ -16,6 +16,7 @@
 
 #include <cmath>
 #include <fstream>
+#include <set>
 #include <string>
 
 #include <nlohmann/json.hpp>
@@ -40,12 +41,21 @@ json load(const char* name) {
 
 bool near(double a, double b, double tol) { return std::fabs(a - b) <= tol; }
 
+// The fields of a played decision in audio.json (audio_events.py Director.play); a rejected one has only "result"
+const std::set<std::string> kPlayedKeys = {"result", "variant", "pitch_semitones", "pitch_ratio", "gain_db",
+                                           "voice", "stolen", "ends_ms"};
+
 // One played or rejected decision against its expected object
 int check_play(const core::PlayDecision& d, const json& want, double tol, const std::string& at) {
     const std::string result = d.result == core::PlayResult::Played    ? "played"
                                : d.result == core::PlayResult::Cooldown ? "cooldown"
                                                                         : "capped";
     CHECK_MESSAGE(result == want.at("result").get<std::string>(), at << ": result " << result);
+    // the same keys as the reference's decision, so a field it adds to audio.json fails here instead of passing
+    const std::set<std::string> keys = result == "played" ? kPlayedKeys : std::set<std::string>{"result"};
+    std::set<std::string> want_keys;
+    for (const auto& [key, value] : want.items()) want_keys.insert(key);
+    CHECK_MESSAGE(want_keys == keys, at << ": the expected decision has fields this test does not compare");
     if (result != "played") return 1;
     CHECK_MESSAGE(d.variant == want.at("variant").get<int>(), at << ": variant " << d.variant);
     CHECK_MESSAGE(d.voice == want.at("voice").get<int>(), at << ": voice " << d.voice);

@@ -38,7 +38,9 @@ for _stream in (sys.stdout, sys.stderr):
 
 ROOT = Path(__file__).resolve().parents[1]          # the game root (core/ in the kit)
 OUT_DIR = ROOT / "data" / "golden"
-TOLERANCE = 1e-6                                     # ports compare floats within this (absolute)
+TOLERANCE = 1e-9                                     # ports compare floats within this (absolute): every port
+                                                     # is 64-bit and libm differs by about 1 ulp; at 1e-6 a
+                                                     # float32 Hitstop or Ease port would pass
 VECTOR_VERSION = 1
 
 # ----------------------------------------------------------------------------------------------- juice

@@ -375,6 +375,12 @@
   test compares those; `squash()` still packs them into a `Vector2` for a sprite's scale. The test compared the
   32-bit `Vector2`, which a large amount pushes past the file's tolerance: data/golden/juice.json has a point at
   100.3 (the old test was off by 3.05e-6 there), which all eight engines with the juice module pass (#130).
+- Golden vectors: the C++/SDL2 and Unreal exams compare whole results, as the other ports do. C++ checks a play
+  decision's field set against audio.json and that every case type it has a checker for appears in juice.json and
+  shell.json (a shell.json with no `pseudo` case passed); Unreal compares shake, hitstop, follow and spring steps as
+  objects, so a field the reference adds to `expect` fails there too (planted `time` fields and a missing `pseudo`
+  case passed the old checks). juice.json, shell.json and telemetry.json have tolerance 1e-9 instead of 1e-6, at
+  which a float32 port of the easing curves or hitstop would have passed; every engine passes at 1e-9 (#131).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

@@ -354,6 +354,7 @@ int run_file(const char* file, const std::map<std::string, Checker>& checkers) {
     CHECK_MESSAGE(vectors.at("version") == kVectorFormat, name << " has a vector format this test does not know");
     g_tol = vectors.at("tolerance").get<double>();
     int checked = 0;
+    std::map<std::string, int> per_type;  // cases run per type: every type with a checker must have one
     for (const json& c : vectors.at("cases")) {
         const std::string type = c.value("type", "?");
         const std::string label = type + " | " + c.value("name", "?");
@@ -366,11 +367,15 @@ int run_file(const char* file, const std::map<std::string, Checker>& checkers) {
         try {
             it->second(c);
             ++checked;
+            ++per_type[type];
         } catch (const std::exception& e) {  // a missing field or a wrong type in the case data
             FAIL_CHECK("case threw: " << e.what());
         }
     }
     CHECK(checked > 0);
+    for (const auto& [type, checker] : checkers) {
+        CHECK_MESSAGE(per_type[type] > 0, name << " has no '" << type << "' case (a truncated file must not pass)");
+    }
     MESSAGE(name << ": " << checked << " cases checked");
     return checked;
 }
