@@ -234,6 +234,32 @@ class MusicExam(unittest.TestCase):
         rc, out = self.run_tool("validate", self.write({"version": 1, "sample_rate": RATE, "tracks": {}}))
         self.assertEqual(rc, 1, out)
 
+    def test_out_of_range_grid_args_and_a_non_object_file_are_named(self):
+        # #113: --bpm 0 divided by zero, --bars 0 failed packing the loop, and validate on [] crashed after
+        # naming the problem
+        f = self.dir / "raw.wav"
+        write_wav(f, [0.1] * RATE * 3, RATE)
+        for args, word in ((("grid", "--bpm", 0, "--bars", 4), "bpm must be 20..400"),
+                           (("grid", "--bpm", -96, "--bars", 4), "bpm must be 20..400"),
+                           (("grid", "--bpm", 120, "--bars", 0), "bars must be 1 or more"),
+                           (("grid", "--bpm", 120, "--bars", 2, "--beats-per-bar", 0), "beats-per-bar must be"),
+                           (("loop", f, "--bpm", 0, "--bars", 1, "--out", self.dir / "a.wav"), "bpm must be"),
+                           (("loop", f, "--bpm", 120, "--bars", 0, "--out", self.dir / "b.wav"), "bars must be 1"),
+                           (("loop", f, "--bpm", 120, "--bars", -2, "--out", self.dir / "c.wav"), "bars must be 1")):
+            with self.subTest(args):
+                rc, out = self.run_tool(*args)
+                self.assertEqual(rc, 2, out)
+                self.assertIn(word, out)
+                self.assertNotIn("Traceback", out)
+        self.assertEqual(list(self.dir.glob("[abc].wav")), [], "nothing written")
+        for bad in ([], "music", 3):
+            rc, out = self.run_tool("validate", self.write(bad, "bad.json"))
+            self.assertEqual(rc, 1, out)
+            self.assertIn("JSON object", out)
+        rc, out = self.run_tool("validate", self.write({"version": 1, "tracks": "x", "transitions": 5}, "odd.json"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("0 track(s)", out)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

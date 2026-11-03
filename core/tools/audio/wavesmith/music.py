@@ -55,6 +55,8 @@ QUANTIZE = ("immediate", "beat", "bar", "phrase", "loop_end")
 DEFAULT_RULE = {"quantize": "bar", "fade_ms": 0, "sync": False}
 MAX_STINGER_BARS = 8
 TEMPO_RANGE = (60.0, 200.0)
+BPM_RANGE = (20, 400)        # what validate accepts in music.json, and grid / loop on the command line
+BEATS_PER_BAR_RANGE = (1, 16)
 GOLDEN = HERE.parents[2] / "data" / "golden" / "music.json"
 DEBUG = False
 
@@ -202,11 +204,11 @@ def _validate(data, root):
             p.append(f"{where}: must be an object (bpm, bars, stems, ...)")
             continue
         bpm, bpb, bars = t.get("bpm"), t.get("beats_per_bar", 4), t.get("bars")
-        if not isinstance(bpm, (int, float)) or isinstance(bpm, bool) or not 20 <= bpm <= 400:
-            p.append(f"{where}: bpm must be 20..400")
+        if not isinstance(bpm, (int, float)) or isinstance(bpm, bool) or not BPM_RANGE[0] <= bpm <= BPM_RANGE[1]:
+            p.append(f"{where}: bpm must be {BPM_RANGE[0]}..{BPM_RANGE[1]}")
             continue
-        if not isinstance(bpb, int) or not 1 <= bpb <= 16:
-            p.append(f"{where}: beats_per_bar must be 1..16")
+        if not isinstance(bpb, int) or not BEATS_PER_BAR_RANGE[0] <= bpb <= BEATS_PER_BAR_RANGE[1]:
+            p.append(f"{where}: beats_per_bar must be {BEATS_PER_BAR_RANGE[0]}..{BEATS_PER_BAR_RANGE[1]}")
             continue
         if not isinstance(bars, int) or bars < 1:
             p.append(f"{where}: bars must be a whole number, 1 or more")
@@ -354,7 +356,21 @@ def load_json(path, what):
         raise ToolError(f"cannot read {what} {path}: {exc}")
 
 
+def check_grid_args(args):
+    """The ranges validate applies to music.json, for --bpm, --bars and --beats-per-bar (ToolError, exit 2)."""
+    if not BPM_RANGE[0] <= args.bpm <= BPM_RANGE[1]:
+        raise ToolError(f"bpm must be {BPM_RANGE[0]}..{BPM_RANGE[1]} (got {args.bpm:g})")
+    if args.bars < 1:
+        raise ToolError(f"bars must be 1 or more (got {args.bars})")
+    if not BEATS_PER_BAR_RANGE[0] <= args.beats_per_bar <= BEATS_PER_BAR_RANGE[1]:
+        raise ToolError(f"beats-per-bar must be {BEATS_PER_BAR_RANGE[0]}..{BEATS_PER_BAR_RANGE[1]} "
+                        f"(got {args.beats_per_bar})")
+    if getattr(args, "rate", 1) < 1:
+        raise ToolError(f"rate must be 1 Hz or more (got {args.rate})")
+
+
 def cmd_grid(args):
+    check_grid_args(args)
     track = {"bpm": args.bpm, "beats_per_bar": args.beats_per_bar}
     for b in range(args.bars + 1):
         s = bar_sample(b, track, args.rate)
@@ -366,6 +382,7 @@ def cmd_loop(args):
     out = Path(args.out)
     if out.exists() and not args.overwrite:
         raise ToolError(f"{out} exists (use --overwrite)")
+    check_grid_args(args)
     samples, rate, channels = read_interleaved(args.file)
     body, loop = make_loop(samples, rate, channels, args.bpm, args.bars, args.beats_per_bar, args.tail)
     peak = max((abs(x) for x in body), default=0.0)
@@ -386,9 +403,15 @@ def cmd_validate(args):
     problems = validate(data, args.root)
     for x in problems:
         print(f"[FAIL] {x}")
-    print(f"[{'FAIL' if problems else ' OK '}] {len(data.get('tracks') or {})} track(s), "
-          f"{len(data.get('stingers') or {})} stinger(s), {len(data.get('transitions') or [])} transition(s), "
-          f"{len(problems)} problem(s)")
+    if not isinstance(data, dict):                  # validate named it; there is nothing to count
+        print(f"[FAIL] {len(problems)} problem(s)")
+        return 1
+
+    def count(key, empty):          # a value of the wrong type was a problem above: counted as none here
+        value = data.get(key) or empty
+        return len(value) if isinstance(value, type(empty)) else 0
+    print(f"[{'FAIL' if problems else ' OK '}] {count('tracks', {})} track(s), {count('stingers', {})} stinger(s), "
+          f"{count('transitions', [])} transition(s), {len(problems)} problem(s)")
     return 1 if problems else 0
 
 

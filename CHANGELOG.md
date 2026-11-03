@@ -304,6 +304,10 @@
   is not an object is `[error]` (exit 2); a line that is not an object, an id that is not a string, `speakers` or
   `sequences` of the wrong type, a sequence that is not a list of steps, a speaker's `cps` of 0 or less, and any
   other value of the wrong type are `[FAIL]` lines (exit 1), and nothing is written (#112).
+- Wavesmith music: `grid` and `loop` refuse a `--bpm` outside 20..400, `--bars` below 1 or `--beats-per-bar` outside
+  1..16 with `[error] ...` (exit 2), the ranges `validate` applies to music.json; `--bpm 0` divided by zero, `--bars 0`
+  failed packing the loop and `--bpm -96` printed negative bar times. `validate` on a file that is not a JSON object
+  names it and exits 1 instead of crashing on its summary line (#113).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
