@@ -746,6 +746,40 @@ class CodeDrawnEffectExam(unittest.TestCase):
                 else:
                     self.assertEqual(new, old, old["file"])
 
+    def dotwork(self, *args):
+        """dotwork.main in this process (so the Aseprite stand-in holds) with no Godot anywhere: GODOT_BIN unset."""
+        import dotwork
+        out, godot_bin = io.StringIO(), os.environ.pop("GODOT_BIN", None)
+        try:
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = dotwork.main(list(args) + ["--project", self.tmp])
+        finally:
+            if godot_bin is not None:
+                os.environ["GODOT_BIN"] = godot_bin
+        return code, out.getvalue()
+
+    def test_reexport_with_engine_none_needs_no_godot(self):
+        # #99: the re-export ended in Godot verify whatever the engine, so --engine none wrote the game, then exit 2
+        code, out = self.dotwork("pixelorama", "--engine", "none")
+        self.assertEqual(code, 0, out)
+        pxo = os.path.join(self.tmp, "assets_src", "pixelorama", "fx", "slash.pxo")
+
+        def edit(d, b):
+            w, h = d["size_x"], d["size_y"]
+            a = np.frombuffer(b["image_data/frames/1/layer_1"], np.uint8).reshape(h, w, 4).copy()
+            a[0, 0] = (200, 60, 50, 255)
+            b["image_data/frames/1/layer_1"] = a.tobytes()
+        rewrite_pxo(pxo, edit)
+        code, out = self.dotwork("pixelorama", "--reexport", "--engine", "none")
+        self.assertEqual(code, 0, out)
+        self.assertIn("[ OK ] re-exported (1 files changed; no Godot verify with --engine none)", out)
+        self.ase._run = self.fake_aseprite()
+        code, out = self.dotwork("aseprite", "--engine", "none")
+        self.assertEqual(code, 0, out)
+        code, out = self.dotwork("aseprite", "--reexport", "--engine", "none")
+        self.assertEqual(code, 0, out)
+        self.assertIn("[ OK ] re-exported (0 files changed; no Godot verify with --engine none)", out)
+
 
 class AsepriteHoldsExam(unittest.TestCase):
     """aseprite.py's frame times, with Aseprite's script runs stubbed (the Lua itself needs Aseprite)."""

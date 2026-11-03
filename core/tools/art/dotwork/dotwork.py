@@ -314,14 +314,22 @@ def cmd_capture(a):
     return 0
 
 
+def report_reexport(r):
+    """The hand-polish re-export's last line: verified in Godot, or written only (--engine none has no Godot proof,
+    as pack --engine none)."""
+    if not r["ok"]:
+        raise fcore.JobError("re-exported files failed verify")
+    if r.get("verified", True):
+        print(f"[ OK ] re-exported and verified ({r.get('changed', 0)} files changed)")
+    else:
+        print(f"[ OK ] re-exported ({r.get('changed', 0)} files changed; no Godot verify with --engine none)")
+
+
 def cmd_aseprite(a):
     s = setup_run(a)
     import aseprite
     if a.reexport:
-        r = aseprite.reexport(s.project, s.conf)
-        if r and not r["ok"]:
-            raise fcore.JobError("re-exported files failed verify")
-        print("[ OK ] re-exported and verified")
+        report_reexport(aseprite.reexport(s.project, s.conf))
         return 0
     report_sources(s, aseprite.build(s.project, s.conf, overwrite=a.overwrite), "aseprite")
     return 0
@@ -331,10 +339,7 @@ def cmd_pixelorama(a):
     s = setup_run(a)
     import pixelorama
     if a.reexport:
-        r = pixelorama.reexport(s.project, s.conf)
-        if r and not r["ok"]:
-            raise fcore.JobError("re-exported files failed verify")
-        print("[ OK ] re-exported and verified")
+        report_reexport(pixelorama.reexport(s.project, s.conf))
     else:
         report_sources(s, pixelorama.build(s.project, s.conf, overwrite=a.overwrite), "pixelorama")
     for rel, folder, cleared in pixelorama.local_paths(s.project, s.conf, clear=a.clear_export_path):

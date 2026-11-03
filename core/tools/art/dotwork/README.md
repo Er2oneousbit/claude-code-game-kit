@@ -292,7 +292,7 @@ Honest list: these are the failure modes seen in testing and what Dotwork does a
 | battle backgrounds / scenes | 320x128 / 320x180 art shown at 2x (chunkier than 1x sprites) | Same exact-2x scale everywhere it is used |
 | battle backgrounds (moving sky) | Cutting the painted sky off at the horizon and scrolling it split mountain peaks (the tip drifted away from its base) | `"scroll": -4` keeps the picture whole and adds two cloud layers drawn in code in its own lightest sky colours (far: small, half speed; near: bigger, full speed) that tile sideways; `horizon` sets how far down they reach, `clouds` how many. They drift over far mountains, which reads as nearer clouds; leave `scroll` off for caves and interiors |
 | lighting (normal maps, no model) | A normal map guessed from one picture cannot know the real shape: it reads a rounded rim from the alpha edge (`bevel` px) and small relief from brightness (`detail` px), so dark paint reads as a dent and a flat-coloured cloak reads flat; an atlas tile cannot see its neighbours | Opaque tiles get no rim at their borders and the brightness relief wraps inside each tile, so Dotwork's seamless tiles stay seamless (a tile whose opposite edge is clear repeats its own edge instead). Occluders are the largest opaque region only, `base` (default) spans the feet of the bottom quarter, `full` the whole outline, at most `occluder_points` corners, never self-crossing (a crossing outline falls back to its convex hull). A sprite node that is scaled, flipped or nested in its own scene gets a fresh lit scene instead of a copy. Headless Godot renders nothing: `verify` proves the lit resources are wired (both textures, same size, normals that decode with z > 0, occluder polygons, cells on lit tiles), not how the light looks; judge `assets_src/art/lit/<name>/<name>_review.png` and the demo scene in the editor |
-| `--engine none` | Maps, TileSets, scenes, SpriteFrames and the damage-flash and dissolve shaders are Godot resources | PNGs, sprite sheets + their JSON (with any hold `durations`), BMFont `.fnt` fonts, 9-slice margins (in the manifest) and the manifest still ship; maps and the shaders are skipped with a log line |
+| `--engine none` | Maps, TileSets, scenes, SpriteFrames and the damage-flash and dissolve shaders are Godot resources | PNGs, sprite sheets + their JSON (with any hold `durations`), BMFont `.fnt` fonts, 9-slice margins (in the manifest) and the manifest still ship; maps and the shaders are skipped with a log line; the hand-polish round trip (`aseprite`, `pixelorama`, `--reexport`) works the same, with no `verify` |
 
 Timing on the tested GPU: a sprite about 18 s, a texture tile with variants about 25 s, a Wan clip about 110 s, a
 4-direction rotation about 130-170 s, an 8-direction rotation about 210 s, a battle background about 13 s.
@@ -415,7 +415,10 @@ character (one tag per animation, named like the animation, such as `walk_s`), p
 icons, portraits, window skins) under `<src_dir>/aseprite/` or `<src_dir>/pixelorama/`. Each frame shows for as long as
 it does in the game: its hold divided by the clip's frame rate. Polish there and save, then `--reexport` writes the
 frames back to the shipped PNGs, sheets, sheet data and SpriteFrames, keeps each clip's holds (a frame you retime
-becomes a hold), removes frames you deleted and runs `verify`. A frame that still looks the same keeps its shipped
+becomes a hold), removes frames you deleted and runs `verify`. Neither half needs Godot with `--engine none`: the
+build reads the shipped PNGs and the re-export writes PNGs, sheets, sheet data and manifest rows, then reports
+`[ OK ] re-exported (N files changed; no Godot verify with --engine none)`; only the SpriteFrames and `verify` are
+Godot's. A frame that still looks the same keeps its shipped
 file byte for byte (editors drop the colour stored under fully clear pixels; that alone is not a change), and an
 untouched hold keeps its exact value. Manifest rows change only for files that changed: such a file keeps its row
 (models, workflow, canvas, anchor, position) and gains its new hash and a polish note, so an untouched round trip

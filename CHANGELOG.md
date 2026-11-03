@@ -196,6 +196,10 @@
   only the empty first line (the font shipped without that string's letters while the pack said every character was
   covered) and turned non-ASCII on a `\u` line into mojibake. Coverage compares the composed (NFC) form and skips
   control and format characters as `fonts-check` does; a string's place reads `file:string id` (#96).
+- Dotwork hand polish: `aseprite --reexport` and `pixelorama --reexport` with `--engine none` skip the Godot verify,
+  as `pack --engine none` does, and end with `[ OK ] re-exported (N files changed; no Godot verify with --engine
+  none)`, exit 0. They wrote the game, then always ran verify and exited 2 (no `project.godot`, or no `GODOT_BIN`),
+  so a successful re-export read as a failure. With Godot the line now counts the changed files too (#99).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
