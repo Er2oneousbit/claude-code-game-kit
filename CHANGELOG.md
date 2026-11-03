@@ -98,6 +98,10 @@
   is reached (it exited 2 before trying captions that would have worked); WebVTT cue identifiers (`1 Hello ...`)
   and NOTE, STYLE and REGION blocks stay out of the transcript. A new exam, `tools/test_yt_transcript.py`, runs on
   canned captions, offline (#34).
+- Web 3D: `smoothDamp` (src/core/follow.ts) lands on the target and stops when a step would reach or cross it, so
+  a follow already moving fast toward its target no longer overshoots (`smoothDamp(9, 10, 100, 0.2, 1/60)` gave
+  10.42); new tests start with velocity toward and away from the target. No other engine has a smoothDamp; the
+  juice springs and their golden vectors are unchanged (#35).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

@@ -120,8 +120,7 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
 
 ### Low-severity audit findings left for 0.7.x
 From the 2026-10-30 audit; each needs unusual input or a broken local file:
-web-3d `smoothDamp` overshoot
-([#35](../../issues/35)), an orphaned grandchild on a Windows timeout ([#36](../../issues/36)), and Ctrl+C on Linux and macOS leaving grandchildren of
+an orphaned grandchild on a Windows timeout ([#36](../../issues/36)), and Ctrl+C on Linux and macOS leaving grandchildren of
 an untimed command running ([#37](../../issues/37)).
 
 ### Tools with commands not yet run live
