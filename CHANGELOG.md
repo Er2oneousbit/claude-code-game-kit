@@ -176,6 +176,11 @@
   `audioio.stream_audio()`; ffmpeg's temporary WAV is streamed and deleted. Profiled: on dense material the true
   peak's coarse locator runs on nearly every sample; it now works a run of blocks at a time with the same sums,
   34 s to 21 s per minute of 48 kHz stereo tone plus white noise, and the header says what drives the cost (#77).
+- Unity: AudioEventPlayer and the access sliders run in Play mode, in three new PlayMode tests
+  (`AudioPlayModeTests.cs`, `dev.py test --mode PlayMode --filter Audio`) on real AudioSources with generated
+  clips: 24 plays of a four-take event never repeat a take back to back and keep pitch and volume in range, a
+  dialogue duck takes the music bus to -4 / -8 / -4 / 0 dB on the planned times, and each slider changes only its
+  own buses (ambience under sfx follows the sfx slider once). Passed on Unity 6000.6.6f1 (#79).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

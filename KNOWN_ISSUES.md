@@ -53,8 +53,7 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
 
 ### Audio (Wavesmith) follow-ups
 - **Not run:** either `audio.yml` on GitHub, macOS or Python 3.10 ([#75](https://github.com/Er2oneousbit/claude-code-game-kit/issues/75), a sibling of #40); voice and sfx
-  off NVIDIA (Apple, AMD) ([#76](https://github.com/Er2oneousbit/claude-code-game-kit/issues/76)); RPG Maker MZ's GameAudio.js inside MZ ([#78](https://github.com/Er2oneousbit/claude-code-game-kit/issues/78)); Unity's
-  AudioEventPlayer and access sliders in Play mode ([#79](https://github.com/Er2oneousbit/claude-code-game-kit/issues/79)).
+  off NVIDIA (Apple, AMD) ([#76](https://github.com/Er2oneousbit/claude-code-game-kit/issues/76)); RPG Maker MZ's GameAudio.js inside MZ ([#78](https://github.com/Er2oneousbit/claude-code-game-kit/issues/78)).
 - **Planned:** a music-render subcommand for ACE-Step 1.5 ([#80](https://github.com/Er2oneousbit/claude-code-game-kit/issues/80)); a listen-and-rate page for takes, and a
   check of the deep babble presets for clicks between blips ([#94](https://github.com/Er2oneousbit/claude-code-game-kit/issues/94)).
 - **Open question:** may the kit's examples ship Stable Audio output ([#92](https://github.com/Er2oneousbit/claude-code-game-kit/issues/92))?

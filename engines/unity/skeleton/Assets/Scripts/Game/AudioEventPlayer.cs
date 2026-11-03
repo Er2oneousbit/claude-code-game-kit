@@ -17,8 +17,9 @@
 //           scheduled parameter), so a duck ramp moves in frame steps. AudioSource.volume stops at 1: a positive
 //           volume_db or gain_db cannot boost here (route through an AudioMixer for that). Clips are matched to
 //           the events file's paths by file name without extension (assets/audio/sfx/step_0.wav -> step_0).
-//           lengths_ms comes from each clip (samples / frequency). Compile-checked against Unity 6.6
-//           (verify in the editor: Play mode behaviour was not run by the kit).
+//           lengths_ms comes from each clip (samples / frequency). Run in Play mode on Unity 6000.6.6f1 by
+//           Assets/Tests/PlayMode/AudioPlayModeTests.cs (takes, pitch and volume, ducking, the sliders, read
+//           back from the AudioSources); how it sounds is not checked (verify by ear).
 //
 // Pseudocode:
 //   Init: buses {parent, volume_db} -> events with lengths_ms from the clips -> AudioDirector

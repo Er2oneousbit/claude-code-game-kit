@@ -82,7 +82,8 @@ access rules, with their golden tests:
 - Godot: scripts/core/audio_director.gd, music_director.gd and audio_access.gd, with scripts/shell/music_player.gd and
   the subtitle bar's arrows.
 - Unity: Assets/Scripts/Core/AudioDirector.cs, MusicDirector.cs and AudioAccess.cs, with
-  Assets/Scripts/Game/AudioEventPlayer.cs and MusicPlayer.cs (compiled, not yet run in Play mode).
+  Assets/Scripts/Game/AudioEventPlayer.cs (run in Play mode by Assets/Tests/PlayMode/AudioPlayModeTests.cs) and
+  MusicPlayer.cs (compiled, not yet run in Play mode).
 - LÖVE: src/core/audio_director.lua, music_director.lua and audio_access.lua, with src/shell/music_player.lua and
   the subtitles' arrows.
 - Bevy: src/logic/audio_director.rs, music_director.rs and audio_access.rs (logic only).
