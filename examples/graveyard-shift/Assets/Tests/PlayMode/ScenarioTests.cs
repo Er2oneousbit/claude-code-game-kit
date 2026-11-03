@@ -191,6 +191,7 @@ namespace graveyard_shift.Tests
             // That 103 was a night starting one frame late, by when the first physics step came (issue #9, Smoke_R6).
             // Since LevelBuilder syncs the physics scene: careful 104 (8, 5), dark 104 (8, 0), lit 86 (0, 12 or 14) in
             // ten runs in a row. Both are at the cap, so there is no margin: this catches careful falling below dark.
+            // Since the catching ghost goes home (issue #147, one run): careful 104 (8, 5), dark 104 (8, 0), lit 85 (0, 11).
             TheLanternIsAChoice(false, 10, false, true);
         }
 
@@ -276,6 +277,7 @@ namespace graveyard_shift.Tests
             // 101, lit 45 (of 104); escapes 6, 7, 0; catches careful 8, dark 0, lit 25. Always-dark edges careful here, the
             // comparison bots cannot judge (they see in the dark), so it is logged; careful still beats lit by 53.
             // After the review fixes (2026-10-26, new yards): careful 96 (5 escapes, 23 catches), dark 103 (7, 6), lit 41 (0, 13).
+            // Since the catching ghost goes home (issue #147, one run): careful 97 (5, 20), dark 102 (7, 5), lit 41 (0, 20).
             TheLanternIsAChoice(true, 10, false, false);
         }
 

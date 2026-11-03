@@ -20,6 +20,8 @@
 // Updated : 2026-10-26 review fixes (Claude Opus 5.5): GateShut after a catch shuts the gate at once (the respawned
 //           keeper slipped out while it swung); bot nights never write the save (--autoplay advanced the player's
 //           nightsPlayed); OnEvent is public so PlayMode tests can drive a catch or an ending.
+// Updated : 2026-11-03 (Claude Opus 5.5): after a catch the catching ghost goes home (the sweep read the keeper's
+//           position after the respawn, issue #147).
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -85,6 +87,7 @@ namespace graveyard_shift.Game
         private const float AutoplayQuitAfter = 2f;   // s
         private const int ShotDelayFrames = 90;       // --shot waits this long, so the HUD and the yard have settled
         private const float FallLimit = -3f;          // m: below the ground means out of the world
+        public const float CatchSweep = 30f;          // m: after a catch, hunters this close to the catch or the start go home
 
         public NightRules Night { get; private set; }
         public KeeperController Keeper { get; private set; }
@@ -275,9 +278,10 @@ namespace graveyard_shift.Game
                     // Costs time, not the night: wake at the gate, the last soul slips back, the ghost goes home
                     Play(setup.caught, 1f);
                     _world.Caught();
+                    V2 caughtAt = Keeper.Ground;   // before the respawn: the catch spot, not the start
                     Keeper.Respawn(LevelBuilder.ToWorld(_level.KeeperStart));
                     if (Night.LastLostSoul >= 0) _built.Souls[Night.LastLostSoul].SetActive(true);
-                    foreach (var g in Ghosts) if (V2.Distance(g.Ground, Keeper.Ground) < 30f && g.Brain.State == GhostState.Hunt) g.Brain.Tire();
+                    foreach (var g in Ghosts) if (ShouldTireAfterCatch(g, caughtAt, Keeper.Ground)) g.Brain.Tire();
                     _built.GateLight.color = new Color(1f, 0.35f, 0.25f);
                     CaughtMessage = CaughtMessageSeconds;
                     GameLog.Info("game", $"CAUGHT time={Night.Elapsed:0.0}s souls={Night.Collected} catches={Night.Catches}");
@@ -293,6 +297,16 @@ namespace graveyard_shift.Game
                     EndNight(escaped: false);
                     break;
             }
+        }
+
+        // After a catch the ghost that made it goes home, and so does any hunter near the catch spot or the start
+        // (the keeper wakes there). The spot is read before the respawn: issue #147 (it read the start, so on the
+        // big yards the catching ghost kept hunting the empty spot).
+        private bool ShouldTireAfterCatch(GhostAgent g, V2 caughtAt, V2 start)
+        {
+            if (V2.Distance(g.Ground, caughtAt) <= _t.CatchRadius) return true;
+            if (g.Brain.State != GhostState.Hunt) return false;
+            return V2.Distance(g.Ground, caughtAt) < CatchSweep || V2.Distance(g.Ground, start) < CatchSweep;
         }
 
         private void EndNight(bool escaped)

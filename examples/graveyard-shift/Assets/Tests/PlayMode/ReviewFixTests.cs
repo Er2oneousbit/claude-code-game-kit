@@ -3,13 +3,15 @@
 // Purpose : PlayMode regression tests for the bugs a review proved on the real scene (2026-10-26): a catch
 //           cascade at the start, cover that a keeper hides behind, a search that ends, a ghost that keeps
 //           walking toward a spot it cannot reach, and bot nights that leave the player's save alone; and (issue #9)
-//           a keeper who walks from the night's first frames whenever the physics step comes.
+//           a keeper who walks from the night's first frames whenever the physics step comes; and (issue #147) the ghost
+//           that made a catch going home.
 // Usage   : python tools/dev.py smoke                       (they are named Smoke_R*, so smoke runs them)
 //           python tools/dev.py smoke --filter Smoke_R      (only these, about a minute)
 // Notes   : Each test loads the scene with a temp save. Where only the test may move things it disables the
 //           game loop (as Smoke_K does). The gate case lives in Smoke_K (ScenarioTests.cs), next to its pushes.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-02 (Claude Opus 5.5): Smoke_R6, the physics clock at the start of a night (issue #9).
+// Updated : 2026-11-03 (Claude Opus 5.5): Smoke_R7, the catching ghost goes home (issue #147).
 // ---------------------------------------------------------------------------
 using System.Collections;
 using System.Collections.Generic;
@@ -238,6 +240,45 @@ namespace graveyard_shift.Tests
             {
                 Time.fixedDeltaTime = fixedStep;
             }
+        }
+
+        // The nearest NavMesh point to a ground spot (a soul's neighbourhood can hold a gravestone)
+        private static Vector3 OnNavMesh(V2 spot)
+        {
+            return NavMesh.SamplePosition(LevelBuilder.ToWorld(spot), out NavMeshHit hit, 3f, NavMesh.AllAreas)
+                ? hit.position : LevelBuilder.ToWorld(spot);
+        }
+
+        // After a catch the ghost that made it goes home (issue #147). The sweep that tires it measured from the keeper
+        // after his respawn, so it covered the start, not the catch: on the big yards a catch far from the gate left
+        // the catching ghost hunting the empty spot. Here a catch at the soul farthest from the start, with the
+        // catching ghost and a second hunter 10 m away; the game loop is off, so only the catch moves anything.
+        [UnityTest]
+        public IEnumerator Smoke_R7_TheCatchingGhostGoesHome()
+        {
+            yield return Load(0);
+            var game = GraveyardGame.Current;
+            game.enabled = false;
+            var yard = game.Yard;
+            V2 far = yard.Souls.OrderByDescending(s => V2.Distance(s, yard.KeeperStart)).First();
+            Assert.Greater(V2.Distance(far, yard.KeeperStart), GraveyardGame.CatchSweep, "a catch spot out of the start's sweep");
+            game.Keeper.Respawn(LevelBuilder.ToWorld(far));
+            var catcher = game.Ghosts[0];
+            var hunter = game.Ghosts[1];
+            Assert.IsTrue(catcher.GetComponent<NavMeshAgent>().Warp(OnNavMesh(far + new V2(0.5f, 0f))), "the catcher on the NavMesh");
+            Assert.IsTrue(hunter.GetComponent<NavMeshAgent>().Warp(OnNavMesh(far + new V2(0f, 10f))), "the hunter on the NavMesh");
+            yield return null;
+            foreach (var g in new[] { catcher, hunter })
+            {
+                g.Brain.Tick(1f / Fps, true, game.Keeper.Ground, g.Ground, out _);                          // Patrol -> Suspicious
+                g.Brain.Tick(game.Tuning.SuspiciousSeconds, true, game.Keeper.Ground, g.Ground, out _);     // -> Hunt
+                Assert.AreEqual(GhostState.Hunt, g.Brain.State, "hunting before the catch");
+            }
+            Assert.IsTrue(catcher.Brain.CanCatch(catcher.Ground, game.Keeper.Ground), "the catcher touches the keeper");
+            game.OnEvent(NightEvent.Caught);
+            Debug.Log($"[INFO][test] catch {V2.Distance(far, yard.KeeperStart):0.0} m from the start: catcher {catcher.Brain.State} tired {catcher.Brain.Tired}, hunter {hunter.Brain.State} tired {hunter.Brain.Tired}");
+            Assert.IsTrue(catcher.Brain.Tired && catcher.Brain.State == GhostState.Return, "the catching ghost goes home");
+            Assert.IsTrue(hunter.Brain.Tired && hunter.Brain.State == GhostState.Return, "a hunter near the catch goes home");
         }
     }
 }

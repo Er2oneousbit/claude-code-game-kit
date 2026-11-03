@@ -424,6 +424,12 @@
 - Graveyard Shift (Unity): the GDD, ARCHITECTURE, HANDOFF and both READMEs describe the game as built: one ghost
   per patrol loop plus the difficulty's extras (not three), a night of five minutes at most (not under three), and a
   v3 save with v1 and v2 migrations; the `Smoke_E` comment names the 8 generated yards it checks, not 16 (#146).
+- Graveyard Shift (Unity): after a catch the ghost that made it goes home, as the code said it did. The sweep that
+  tires hunters measured from the keeper after his respawn at the gate, so a catch more than 30 m out (most of them
+  on the 4x yards) left the catching ghost hunting the empty spot. It now tires the ghost at the catch and hunters
+  within 30 m of the catch or the start; `Smoke_R7` catches the keeper 64 m from the start (old code: the catcher
+  still hunting). Escapes are unchanged on the asserted trios; catches moved (hand-made lit 14 to 11, generated
+  careful 23 to 20, lit 13 to 20) (#147).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
