@@ -38,6 +38,10 @@
 - Scrap Tanks (C++/SDL2): the skilled bot's HIDE search skips spots no nav path reaches, as the two Tactics pickers
   already did, so it no longer picks a nav-island spot and stalls against the center rock (20 such picks in a new
   test_arena.cpp sweep on the old code). The scenario pair is unchanged (#153).
+- Scrap Tanks (C++/SDL2): make_sprites.py checks the bpy launcher (uv, or `BPY_PYTHON`) and the kit's render tool
+  before the first job and stops with `[error]` and exit 2 instead of a traceback; a render that dies before its
+  first `[..]` line shows its last output lines; `--debug` prints each command and all output; a Windows path in
+  `BPY_PYTHON` keeps its backslashes. A new exam, test_make_sprites.py, runs it with stand-in renderers (#154).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
