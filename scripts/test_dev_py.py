@@ -5,7 +5,8 @@
 #           checked without the engine: each module is loaded from its file and its helpers run against a temp
 #           folder with the engine call faked. Covers smoke and capture checks (a run that ended early, a stale or
 #           missing screenshot, no recorded frames; #33), `run` exiting 2 when the launcher is missing, and on
-#           Windows that a timeout ends a grandchild whose parent already exited (the job object, #36).
+#           Windows that a timeout ends a grandchild whose parent already exited (the job object, #36), and on
+#           Linux and macOS (process-group calls faked) that killing an untimed command kills what it started (#37).
 # Usage   : python scripts/test_dev_py.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, no engine needed. The live checks (a real smoke with each toolchain) are
@@ -281,6 +282,66 @@ class WindowsOrphanOnTimeout(TempRoot):
         pid = self.grandchild(pidfile)
         time.sleep(0.2)
         self.assertTrue(win_alive(pid), "closing the job must not end what the command left running")
+
+
+# ---- #37: Linux / macOS, killing an untimed command ------------------------------
+class FakeProc:
+    def __init__(self, pid):
+        self.pid, self.killed = pid, False
+
+    def kill(self):
+        self.killed = True
+
+
+class PosixKillTree(unittest.TestCase):
+    """kill_tree with the process-group calls faked, as on Linux: dev.py is pid 50 and leads group 50."""
+    # 100 is the command; 101 and 104 its children, 102 a grandchild under 101; 103 belongs to someone else
+    PS = [(50, 1), (100, 50), (101, 100), (102, 101), (103, 1), (104, 100)]
+
+    def kill(self, engine, group_of_100):
+        dev = load(engine)
+        calls = []
+
+        def kill(pid, sig):
+            calls.append(("kill", pid))
+            if pid == 104:
+                raise ProcessLookupError(pid)   # ended between ps and the kill: the rest must still go
+        dev.os = argparse.Namespace(getpgid=lambda pid: {100: group_of_100}[pid],
+                                    killpg=lambda pg, sig: calls.append(("killpg", pg)), kill=kill)
+        dev.sys = argparse.Namespace(platform="linux")
+        dev.signal = argparse.Namespace(SIGKILL=9)
+        dev.ps_pairs = lambda: list(self.PS)
+        proc = FakeProc(100)
+        dev.kill_tree(proc)
+        return calls, proc.killed
+
+    def test_untimed_command_loses_its_descendants(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                calls, killed = self.kill(engine, group_of_100=50)   # shares dev.py's group (no new session)
+                self.assertEqual(sorted(calls), [("kill", 101), ("kill", 102), ("kill", 104)])
+                self.assertTrue(killed)
+
+    def test_timed_command_is_killed_as_a_group(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                calls, killed = self.kill(engine, group_of_100=100)  # start_new_session: it leads its group
+                self.assertEqual(calls, [("killpg", 100)])
+                self.assertTrue(killed)
+
+    def test_ps_output_parsing(self):
+        dev = load("web")
+        out = "    1     0\n  100    50\nnot a row\n  101   100\n"
+        dev.subprocess = argparse.Namespace(run=lambda *a, **k: argparse.Namespace(stdout=out), DEVNULL=-3,
+                                            SubprocessError=subprocess.SubprocessError)
+        self.assertEqual(dev.ps_pairs(), [(1, 0), (100, 50), (101, 100)])
+
+        def no_ps(*a, **k):
+            raise FileNotFoundError("ps")
+        dev.subprocess.run = no_ps
+        self.assertEqual(dev.ps_pairs(), [])
+        dev.ps_pairs = lambda: [(7, 3), (8, 7), (9, 8), (3, 9)]          # a cycle (pid reuse) must not loop
+        self.assertEqual(dev.descendants(3), [7, 8, 9])
 
 
 if __name__ == "__main__":

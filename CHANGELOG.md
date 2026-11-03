@@ -107,6 +107,12 @@
   holding the output pipe (`taskkill /T` only finds children through living parents). A normal exit only lets go
   of the job; untimed commands (`run`, a browser a dev server opens) are left as before. `scripts/test_dev_py.py`
   runs a real orphan against each engine's `run` (#36).
+- Every engine's `dev.py` on Linux and macOS: killing an untimed command (Ctrl+C) also kills what it started. Such a
+  command shares dev.py's process group (so a terminal's Ctrl+C still reaches it as before), and `os.killpg` on it
+  failed, which left a build server or test workers running when dev.py ran without a terminal; `kill_tree` now
+  finds its descendants through `ps` and kills each. A timed command is still killed as its own group. Run live on
+  Linux (Ubuntu under WSL, every engine but Unity, whose editor always runs timed); macOS's `ps` is (verify).
+  `scripts/test_dev_py.py` fakes the process-group calls (#37).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

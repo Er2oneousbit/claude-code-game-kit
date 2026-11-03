@@ -48,6 +48,8 @@
 #           and a capture that wrote no screenshot or no frames fails
 # Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Windows a command with a timeout runs in a
 #           job object (WinJob), so a timeout also ends a grandchild whose parent already exited
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Linux and macOS, killing an untimed command
+#           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -210,13 +212,52 @@ def kill_tree(proc, job=None):
             dbg(f"taskkill: {exc}")
     else:
         try:
-            os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+            if os.getpgid(proc.pid) == proc.pid:
+                os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+            else:
+                # An untimed command shares our group (so a terminal's Ctrl+C reaches it as before): kill what it
+                # started one by one, found through the parent ids ps lists, or a build server outlives us
+                for pid in descendants(proc.pid):
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except OSError:
+                        pass                  # it ended on its own meanwhile
         except OSError as exc:
             dbg(f"killpg: {exc}")
     try:
         proc.kill()
     except OSError:
         pass
+
+
+def ps_pairs():
+    """(pid, parent pid) of every process, from ps (Linux and macOS). Empty when ps cannot run."""
+    try:
+        out = subprocess.run(["ps", "-A", "-o", "pid=", "-o", "ppid="], stdin=subprocess.DEVNULL,
+                             capture_output=True, encoding="utf-8", errors="replace", timeout=KILL_TIMEOUT_S).stdout
+    except (OSError, subprocess.SubprocessError) as exc:
+        dbg(f"ps: {exc}")
+        return []
+    pairs = []
+    for line in out.splitlines():
+        cols = line.split()
+        if len(cols) == 2 and cols[0].isdigit() and cols[1].isdigit():
+            pairs.append((int(cols[0]), int(cols[1])))
+    return pairs
+
+
+def descendants(root):
+    """Every process below root (children, grandchildren, ...), parents before their children."""
+    children = {}
+    for pid, ppid in ps_pairs():
+        children.setdefault(ppid, []).append(pid)
+    found, todo = [], list(children.get(root, []))
+    while todo:
+        pid = todo.pop(0)
+        if pid != root and pid not in found:
+            found.append(pid)
+            todo.extend(children.get(pid, []))
+    return found
 
 
 def reap(proc):

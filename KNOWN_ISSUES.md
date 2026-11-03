@@ -118,10 +118,6 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
   as "failed: no message" ([#38](../../issues/38)); skeleton clips other than walk are not rendered live yet
   ([#39](../../issues/39)).
 
-### Low-severity audit findings left for 0.7.x
-From the 2026-10-30 audit; each needs unusual input or a broken local file:
-Ctrl+C on Linux and macOS leaving grandchildren of an untimed command running ([#37](../../issues/37)).
-
 ### Tools with commands not yet run live
 - **`tools/art/comfy_local.py`:** `check` (with `--workflow`) ran live against ComfyUI 0.43.0; `run` and `strip`
   only against the exam's stand-in server. A real `run` of a SpriteKiln workflow is the next step.
