@@ -44,6 +44,8 @@
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
 # Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive / --data-dir / --locale /
 #           --compare for the front end (scripts/shell/); smoke runs in a fresh build/smoke-data/ by default
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): an old --screenshot is deleted before the capture,
+#           and a capture that wrote no screenshot or no frames fails
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -435,6 +437,8 @@ def capture(args, godot, frames, user):
     shot = (ROOT / args.screenshot).resolve() if args.screenshot else None
     rec = (ROOT / args.record).resolve() if args.record else None
     if shot:
+        if shot.is_file():
+            shot.unlink()                       # a picture from an earlier run must not pass for this one
         cmd += ["--shot", shot.as_posix()]
     if rec:
         for old in rec.glob("f*.png"):          # frames from an earlier run would end up in the GIF
@@ -453,12 +457,19 @@ def capture(args, godot, frames, user):
         if DEBUG:
             print(out[-2000:])
         return 1
-    if shot:
+    count = len(list(rec.glob("f*.png"))) if rec else 0
+    rc = 0
+    if shot and not (shot.is_file() and shot.stat().st_size > 0):
+        print(f"[FAIL] capture finished but wrote no screenshot to {shot}")
+        rc = 1
+    elif shot:
         print(f"[ OK ] screenshot: {shot}")
-    if rec:
-        count = len(list(rec.glob("f*.png")))
+    if rec and count == 0:
+        print(f"[FAIL] capture finished but recorded no frames in {rec}")
+        rc = 1
+    elif rec:
         print(f"[ OK ] {count} frame(s) in {rec} (make a GIF: python tools/art/frames_to_gif.py {args.record} out.gif)")
-    return 0
+    return rc
 
 
 def compare(args):

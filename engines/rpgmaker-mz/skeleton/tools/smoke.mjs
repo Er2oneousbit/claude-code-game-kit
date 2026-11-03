@@ -24,8 +24,10 @@
 //   recording: screenshot every --record-every ms while it runs
 //   screenshot -> print errors (or everything with --verbose) -> close all -> exit code
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): a recorded frame that fails to save is an error
+//           (it was swallowed), an old --screenshot is deleted first, and each capture is checked after the run
 // ---------------------------------------------------------------------------
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 const args = process.argv.slice(2);
@@ -80,8 +82,11 @@ const errors = [];
 let server;
 let browser;
 let recorder;
+let recording = null; // the screenshot in flight, awaited before the final picture
+let recordError = "";
 let frameCount = 0;
 let code = 0;
+if (SCREENSHOT) rmSync(SCREENSHOT, { force: true }); // a picture from an earlier run must not pass for this one
 try {
   server = await serve(GAME);
   const base = server.url;
@@ -119,15 +124,13 @@ try {
   } else {
     if (RECORD) {
       mkdirSync(RECORD, { recursive: true });
-      let busy = false;
-      recorder = setInterval(async () => {
-        if (busy) return;
-        busy = true;
-        try {
-          await page.screenshot({ path: join(RECORD, `f${String(frameCount).padStart(5, "0")}.png`) });
-          frameCount++;
-        } catch { /* page closing */ }
-        busy = false;
+      recorder = setInterval(() => {
+        if (recording) return;
+        const file = join(RECORD, `f${String(frameCount).padStart(5, "0")}.png`);
+        recording = page.screenshot({ path: file })
+          .then(() => frameCount++)
+          .catch((err) => { recordError ||= `[record] could not save ${file}: ${String(err.message).split("\n")[0]}`; })
+          .finally(() => { recording = null; });
       }, RECORD_EVERY);
     }
     if (until) {
@@ -147,10 +150,16 @@ try {
       );
     }
     if (recorder) clearInterval(recorder);
+    recorder = null;
+    await recording; // the last frame lands (or fails) before the page can close
     if (SCREENSHOT) {
       mkdirSync(dirname(SCREENSHOT), { recursive: true });
       await page.screenshot({ path: SCREENSHOT });
     }
+    // every capture asked for must be there after the run
+    if (recordError) errors.push(recordError);
+    else if (RECORD && frameCount === 0) errors.push(`[record] no frame saved in ${RECORD}`);
+    if (SCREENSHOT && !(existsSync(SCREENSHOT) && statSync(SCREENSHOT).size > 0)) errors.push(`[screenshot] no picture written to ${SCREENSHOT}`);
   }
 } catch (err) {
   errors.push(`[smoke] ${err.message}`);

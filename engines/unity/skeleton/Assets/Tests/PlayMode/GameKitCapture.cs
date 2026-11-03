@@ -3,12 +3,16 @@
 // Purpose : Frame capture for `dev.py smoke --screenshot FILE` and `--record DIR`: PNGs of what the
 //           main camera sees during a PlayMode smoke or scenario test.
 // Usage   : in a Smoke_* test, after the scene loads:  GameKitCapture.Attach();
-//           at the end (optional, for the final frame):   GameKitCapture.Finish();
+//           at the end (this saves the --screenshot):     GameKitCapture.Finish();
 // Notes   : dev.py passes the targets as environment variables (GAMEKIT_SCREENSHOT, GAMEKIT_RECORD_DIR,
 //           GAMEKIT_RECORD_EVERY) and drops -nographics, because a camera cannot render without a
 //           graphics device. Without the variables Attach() does nothing, so tests stay fast. Renders the
-//           camera into its own RenderTexture (batchmode has no game view for ScreenCapture).
+//           camera into its own RenderTexture (batchmode has no game view for ScreenCapture). A capture that
+//           cannot be saved (no main camera, a write error) is a Debug.LogError, which fails the test.
+//           dev.py smoke fails when an asked-for screenshot or frame folder is empty afterwards.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): a failed save is an error, not a warning;
+//           Finish() is required for --screenshot (it takes the picture)
 // ---------------------------------------------------------------------------
 using System;
 using System.IO;
@@ -43,7 +47,8 @@ namespace {{GAME_SLUG}}.Tests
             if (_driver.Every < 1) _driver.Every = 6;
         }
 
-        // Saves the screenshot now (call it when the scenario ends) and stops recording.
+        // Saves the screenshot now and stops recording. Call it when the scenario ends: without it no
+        // --screenshot is written.
         public static void Finish()
         {
             if (_driver == null) return;
@@ -57,7 +62,7 @@ namespace {{GAME_SLUG}}.Tests
             Camera cam = Camera.main;
             if (cam == null)
             {
-                Debug.LogWarning("[WARN][capture] no main camera to capture");
+                Debug.LogError($"[ERROR][capture] no main camera to capture for {path}");
                 return;
             }
             var rt = RenderTexture.GetTemporary(Width, Height, 24);
@@ -72,9 +77,19 @@ namespace {{GAME_SLUG}}.Tests
             tex.Apply();
             RenderTexture.active = active;
             RenderTexture.ReleaseTemporary(rt);
-            Directory.CreateDirectory(Path.GetDirectoryName(path));
-            File.WriteAllBytes(path, tex.EncodeToPNG());
-            UnityEngine.Object.Destroy(tex);
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllBytes(path, tex.EncodeToPNG());
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+            {
+                Debug.LogError($"[ERROR][capture] could not save {path}: {e.Message}");
+            }
+            finally
+            {
+                UnityEngine.Object.Destroy(tex);
+            }
         }
 
         private sealed class Driver : MonoBehaviour

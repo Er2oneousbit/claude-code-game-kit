@@ -33,6 +33,8 @@
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
 # Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): GameAudio.js (the kit's audio rules) is one of the
 #           game's plugins; setup puts a newly added one before the game's plugins that load after it
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): `run` exits 2 when node or the launcher is
+#           not found (it gave 1)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -562,7 +564,11 @@ def cmd_run(args):
         if project is None:
             print("[error] no *.rmmzproject in the game folder: run setup --from first", file=sys.stderr)
             return 2
-        subprocess.Popen([exe, str(project)], cwd=ROOT)   # (verify: does RPGMZ.exe open a project given on the command line?)
+        try:
+            subprocess.Popen([exe, str(project)], cwd=ROOT)   # (verify: does RPGMZ.exe open a project given on the command line?)
+        except OSError as exc:
+            print(f"[error] cannot start RPGMZ_EXE ({exe}): {exc.strerror or exc}", file=sys.stderr)
+            return 2
         print(f"[ OK ] opening {rel(project)} in RPG Maker MZ")
         return 0
     err = node_problem()
@@ -575,6 +581,8 @@ def cmd_run(args):
     print("[info] serving the game for your browser; Ctrl+C to stop. In the editor, Playtest (Ctrl+R) runs it too.")
     rc, _ = run([shutil.which("node") or "node", ROOT / "tools" / "serve.mjs", "--root", g, "--port", str(args.port),
                  "--open"])
+    if rc in NO_EXEC:
+        return 2                            # node or the launcher was not found: an environment problem
     return 0 if rc in (0, 130) else 1
 
 

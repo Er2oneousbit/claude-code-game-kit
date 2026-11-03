@@ -30,6 +30,8 @@
 # Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
 #           2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive, --data-dir, --locale, --compare
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): `run` exits 2 when node or the launcher is
+#           not found (it gave 1)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -305,6 +307,8 @@ def cmd_run(args):
         return rc
     print("[info] dev server with hot reload; Ctrl+C to stop. Add ?debug to the URL for debug logs.")
     rc, _ = tool("vite", "--open", capture=False)
+    if rc in NO_EXEC:
+        return 2                            # node or the launcher was not found: an environment problem
     return 0 if rc in (0, 130) else 1
 
 

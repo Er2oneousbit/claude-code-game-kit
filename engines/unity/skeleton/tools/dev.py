@@ -33,6 +33,8 @@
 #           inside Build/; a Package Manager server that never started is exit 2, not "compile failed"
 # Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): smoke deletes an old --screenshot and old --record
+#           frames first, and fails when a capture it asked for was not written (it only warned)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -306,25 +308,36 @@ def cmd_smoke(args):
             print(f"[error] {path} is inside the player build folder (build/ and Build/ are the same folder on Windows). "
                   f"Capture into Logs/ instead, e.g. --screenshot Logs/shot.png or --record Logs/frames", file=sys.stderr)
             return 2
-    if args.screenshot:
-        shot = (ROOT / args.screenshot).resolve()
+    shot = (ROOT / args.screenshot).resolve() if args.screenshot else None
+    rec = (ROOT / args.record).resolve() if args.record else None
+    if shot:
         shot.parent.mkdir(parents=True, exist_ok=True)
+        if shot.is_file():
+            shot.unlink()                   # a picture from an earlier run must not pass for this one
         env["GAMEKIT_SCREENSHOT"] = str(shot)
-    if args.record:
-        rec = (ROOT / args.record).resolve()
+    if rec:
         rec.mkdir(parents=True, exist_ok=True)
+        for old in rec.glob("frame_*.png"):  # frames from an earlier run would end up in the GIF
+            old.unlink()
         env["GAMEKIT_RECORD_DIR"] = str(rec)
         env["GAMEKIT_RECORD_EVERY"] = str(args.record_every)
     graphics = args.graphics or bool(env)
     fail_on = [m for m in (args.fail_on or "").split(",") if m]
     rc = run_tests("PlayMode", args.filter, graphics=graphics, env=env, until=args.until, fail_on=fail_on)
-    if rc == 0 and args.screenshot:
-        shot = ROOT / args.screenshot
-        print(f"[ OK ] screenshot: {shot.resolve()}" if shot.exists()
-              else "[WARN] no screenshot written: the test must call GameKitCapture.Attach() (Assets/Tests/PlayMode)")
-    if rc == 0 and args.record:
-        n = len(list((ROOT / args.record).glob("*.png")))
-        print(f"[ OK ] {n} frame(s) in {(ROOT / args.record).resolve()} (GIF: python tools/art/frames_to_gif.py <dir> out.gif)")
+    if rc != 0:
+        return rc
+    if shot and not (shot.is_file() and shot.stat().st_size > 0):
+        print(f"[FAIL] no screenshot written to {shot}: the test must call GameKitCapture.Attach() after its scene "
+              "loads and GameKitCapture.Finish() at the end, which saves it (Assets/Tests/PlayMode)")
+        rc = 1
+    elif shot:
+        print(f"[ OK ] screenshot: {shot}")
+    n = len(list(rec.glob("frame_*.png"))) if rec else 0
+    if rec and n == 0:
+        print(f"[FAIL] no frames recorded in {rec}: the test must call GameKitCapture.Attach() after its scene loads")
+        rc = 1
+    elif rec:
+        print(f"[ OK ] {n} frame(s) in {rec} (GIF: python tools/art/frames_to_gif.py <dir> out.gif)")
     return rc
 
 

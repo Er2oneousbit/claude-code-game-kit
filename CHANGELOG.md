@@ -84,6 +84,16 @@
   `eleven_audio.py check` exits 2 on an invalid key instead of `[ OK ] ... plan unknown`, which it still says
   for a key without the User read permission; `comfy_local.py` uploads with `overwrite=false`, so ComfyUI keeps
   its own input file of the same name and the node gets the name ComfyUI chose (#32).
+- Engine smoke and capture fail when a capture failed: C++/SDL2 needs the game's end-of-run line (a game that quit
+  early passed as "120 frames"; an early quit now passes only after `--until`'s marker) and a failed `--record`
+  frame is an `[ERROR]`; Unity deletes an old screenshot before the run and fails on a missing one (it warned, and a
+  stale file passed), a capture that cannot be saved is a test error, `GameKitCapture.Finish()` is documented as
+  what saves the screenshot, and `GameKitScenes` throws when `SaveScene` fails; Godot's `capture.gd` exits 2 when
+  the main scene does not load or `--frames` / `--every-ms` is not a whole number (blank capture, exit 0); web,
+  web-3d and RPG Maker MZ `smoke.mjs` report a recorded frame that failed to save (it was swallowed). C++, Unity,
+  Godot and the web smokes check each `--screenshot` and `--record` after the run. Web, web-3d and RPG Maker MZ
+  `run` exit 2 when node or the launcher is missing (it gave 1). A new exam, `scripts/test_dev_py.py`, runs every
+  engine's dev.py with the engine call faked (#33).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

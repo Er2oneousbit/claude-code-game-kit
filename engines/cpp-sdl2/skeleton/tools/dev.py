@@ -32,6 +32,8 @@
 #           `--`, --until, --fail-on, --timeout, --screenshot, --record (BMP frames for frames_to_gif.py)
 # Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): smoke needs main.cpp's end-of-run line (an early
+#           quit passes only after --until's marker); each --screenshot / --record is checked after the run
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -48,6 +50,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # ---- Tunables / constants ----------------------------------------------------
 SMOKE_FRAMES = 120
 BOOT_MARKER = "BOOT_OK"
+END_RE = re.compile(r"smoke complete after (\d+) frames|smoke ended early: the game quit after (\d+) of")  # main.cpp
 ERROR_MARKERS = ["[ERROR]", "Assertion failed", "terminate called"]
 SMOKE_TIMEOUT_S = 120                    # a game that hangs at boot must fail, not block forever
 TEST_TIMEOUT_S = 600
@@ -236,13 +239,17 @@ def cmd_smoke(args):
         return 1
     env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy")
     cmd = [exe, "--smoke", str(args.frames)]
-    if args.screenshot:
-        shot = (ROOT / args.screenshot).resolve()
+    shot = (ROOT / args.screenshot).resolve() if args.screenshot else None
+    rec = (ROOT / args.record).resolve() if args.record else None
+    if shot:
         shot.parent.mkdir(parents=True, exist_ok=True)
+        if shot.is_file():
+            shot.unlink()                   # a picture from an earlier run must not pass for this one
         cmd += ["--screenshot", str(shot)]
-    if args.record:
-        rec = (ROOT / args.record).resolve()
+    if rec:
         rec.mkdir(parents=True, exist_ok=True)
+        for old in rec.glob("frame_*.bmp"):  # frames from an earlier run would end up in the GIF
+            old.unlink()
         cmd += ["--record", str(rec), "--record-every", str(args.record_every)]
     if args.game_args:
         cmd += ["--"] + args.game_args
@@ -259,7 +266,9 @@ def cmd_smoke(args):
     fail_on = [m for m in (args.fail_on or "").split(",") if m]
     bad = [l for l in lines if any(m in l for m in fail_on)]
     missing_until = bool(args.until) and not any(args.until in l for l in lines)
-    if rc != 0 or errors or bad or missing_until or BOOT_MARKER not in out:
+    problems = smoke_end_problems(out, args.frames, until_seen=bool(args.until) and not missing_until)
+    problems += capture_problems(shot, rec)
+    if rc != 0 or errors or bad or missing_until or problems or BOOT_MARKER not in out:
         if errors:
             print("[FAIL] errors during smoke:\n  " + "\n  ".join(errors[:10]))
         if bad:
@@ -268,17 +277,45 @@ def cmd_smoke(args):
             print(f"[FAIL] marker {args.until!r} not seen within {args.frames} frames")
         if BOOT_MARKER not in out:
             print(f"[FAIL] marker {BOOT_MARKER!r} not seen")
+        for p in problems:
+            print(f"[FAIL] {p}")
         if rc != 0:
             print(f"[FAIL] exit code {rc}")
         return 1
     what = f"marker {args.until!r} reached" if args.until else f"{args.frames} frames"
     print(f"[ OK ] smoke passed ({what})")
-    if args.screenshot:
-        print(f"[ OK ] screenshot: {(ROOT / args.screenshot).resolve()}")
-    if args.record:
-        n = len(list((ROOT / args.record).glob("*.bmp")))
-        print(f"[ OK ] {n} frame(s) in {(ROOT / args.record).resolve()} (GIF: python tools/art/frames_to_gif.py <dir> out.gif)")
+    if shot:
+        print(f"[ OK ] screenshot: {shot}")
+    if rec:
+        n = len(list(rec.glob("frame_*.bmp")))
+        print(f"[ OK ] {n} frame(s) in {rec} (GIF: python tools/art/frames_to_gif.py <dir> out.gif)")
     return 0
+
+
+def smoke_end_problems(out, frames, until_seen):
+    """The end-of-run line main.cpp prints: a run must reach its frame count, unless --until's marker was seen (a
+    scenario may end itself there). Without the line the game crashed or exited before its loop ended.
+    Returns a list of reasons (empty = fine)."""
+    if until_seen:
+        return []
+    m = None
+    for m in END_RE.finditer(out):
+        pass                                # the last end line counts
+    if m is None:
+        return ["no end-of-run line (\"smoke complete after N frames\"): the game exited before its loop ended"]
+    if m.group(2) is not None:
+        return [f"the game quit after {m.group(2)} of {frames} frames (a run that ends itself needs --until <marker>)"]
+    return []
+
+
+def capture_problems(shot, rec):
+    """Each capture asked for must exist after the run (stale ones were deleted before it)."""
+    problems = []
+    if shot and not (shot.is_file() and shot.stat().st_size > 0):
+        problems.append(f"no screenshot written to {shot}")
+    if rec and not any(rec.glob("frame_*.bmp")):
+        problems.append(f"no frames recorded in {rec}")
+    return problems
 
 
 def cmd_run(args):
