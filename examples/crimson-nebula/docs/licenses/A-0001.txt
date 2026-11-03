@@ -1,0 +1,15 @@
+A-0001  font  recorded 2026-11-03 from the font file itself (nothing downloaded)
+File     : FiraMono-subset.ttf in the bevy_text 0.20.0 crate (src/), compiled into the game binary; no font file in this repo
+Source   : https://github.com/bevyengine/bevy (Bevy's built-in default font)
+License  : SIL Open Font License 1.1 or later, as the font's own name table says (below)
+Missing  : the full OFL text. The crate ships none (only its own LICENSE-MIT and LICENSE-APACHE); save the OFL 1.1
+           text from the license URL below next to this file before a release (verify)
+
+---- name table of FiraMono-subset.ttf (Windows, English), quoted as stored ----
+0  Copyright    : Digitized data copyright © 2012-2015, The Mozilla Foundation and Telefonica S.A.
+7  Trademark    : Fira Mono is a trademark of The Mozilla Corporation.
+8  Manufacturer : Carrois Corporate GbR & Edenspiekermann AG
+9  Designer     : Carrois Corporate & Edenspiekermann AG
+5  Version      : Version 3.206
+13 License      : Licensed under the Open Font License, version 1.1 or later
+14 License URL  : http://scripts.sil.org/OFL

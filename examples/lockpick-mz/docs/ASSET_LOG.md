@@ -6,7 +6,6 @@
 
 | ID | Type | File(s) in repo | Source / URL | Author | License | Attribution text (if required) | AI-assisted? | Modified? | Date added | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|
-| A-0001 | | | | | | | no | no | 2026-10-23 | |
 
 ## Rules
 - "AI-assisted?" uses one of: `no`, `dev-only` (AI helped, nothing AI-made ships), `pre-generated` (AI output ships in the build), `live` (generated at runtime). Steam's disclosure is built from the `pre-generated` and `live` rows (see SOP-04).

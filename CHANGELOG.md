@@ -415,6 +415,12 @@
 - Examples: the Ghost Lantern, Courier Dash, Coyote Hop and Lockpick MZ READMEs no longer give a test count (120,
   144, 78 and 16; 143, 164, 90 and 36 ran at 0.8.2). Each sync brings in more kit exams, so the lines say what the
   tests cover instead (#144).
+- Examples: asset logs without licence evidence are marked or fixed. Lockpick MZ drops its empty A-0001 template
+  row (it has no third-party assets). Crimson Nebula's A-0001 (Bevy's built-in Fira Mono subset) gets a
+  licence file, the font's own name table quoted as stored (copyright, designer, "Open Font License,
+  version 1.1 or later" and its URL), with the author column taken from it; the full OFL text is not in the crate and
+  is still to be saved (verify). Gatekeeper Godot's A-0005 (the live Fish Audio voice) says plainly that no terms are
+  stored yet (#145).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

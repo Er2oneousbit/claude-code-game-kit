@@ -6,7 +6,7 @@
 
 | ID | Type | File(s) in repo | Source / URL | Author | License | Attribution text (if required) | AI-assisted? | Modified? | Date added | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|
-| A-0001 | font | none in this repo (compiled in from the `bevy_text` 0.20.0 crate, `FiraMono-subset.ttf`) | https://github.com/bevyengine/bevy (Bevy's built-in default font) | Mozilla, Carrois Apostrophe (Fira Mono) | SIL OFL 1.1 (verify) | none required | no | no (Bevy's subset) | 2026-10-28 | HUD text. Every kart, wall and barrier is built in code from shapes; no other assets |
+| A-0001 | font | none in this repo (compiled in from the `bevy_text` 0.20.0 crate, `FiraMono-subset.ttf`) | https://github.com/bevyengine/bevy (Bevy's built-in default font) | The Mozilla Foundation and Telefonica S.A. (copyright), Carrois Corporate and Edenspiekermann (design) | SIL OFL 1.1 or later (the font's name table, quoted in docs/licenses/A-0001.txt; the full OFL text is not stored yet: verify) | none required | no | no (Bevy's subset) | 2026-10-28 | HUD text. Every kart, wall and barrier is built in code from shapes; no other assets |
 
 ## Rules
 - "AI-assisted?" uses one of: `no`, `dev-only` (AI helped, nothing AI-made ships), `pre-generated` (AI output ships in the build), `live` (generated at runtime). Steam's disclosure is built from the `pre-generated` and `live` rows (see SOP-04).
