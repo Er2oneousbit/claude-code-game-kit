@@ -48,6 +48,10 @@
   temp folder (never the real examples) and checks that a kit change syncs, a game's edit stays and is reported as a
   .gold, settings.json and .gitignore come back merged, a binary file syncs, a CRLF copy is no change, a failed
   upgrade copies nothing back, and a second run says 0 synced without touching .game-kit.json (#13).
+- Kit: `scripts/codename.py` and `scripts/new_game.py` have exams, `scripts/test_codename.py` (taken folders and
+  files in any spelling, one free name left is the one picked, every name taken, a file as --check-dir, --seed) and
+  `scripts/test_new_game.py` (a fake kit: new, adopt and upgrade rules, the profile footer, exit codes 1 and 2).
+  doctor.py, session_context.py, frames_to_gif.py and yt_transcript.py still have none (#14).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
