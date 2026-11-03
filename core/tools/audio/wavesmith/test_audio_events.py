@@ -259,6 +259,17 @@ class AudioEventsExam(unittest.TestCase):
         rc, out = self.run_tool("vectors")
         self.assertEqual(rc, 2, out)
 
+    def test_an_unreadable_file_exits_2_not_1(self):
+        # #114: a SystemExit with a message exits 1, which CI reads as "the events file has problems"
+        with tempfile.TemporaryDirectory() as tmp:
+            broken = Path(tmp) / "broken.json"
+            broken.write_text("{not json", encoding="utf-8")
+            for cmd in ("validate", "audit"):
+                for path in (Path(tmp) / "no-such-file.json", broken):
+                    rc, out = self.run_tool(cmd, path)
+                    self.assertEqual(rc, 2, f"{cmd} {path.name}: {out}")
+                    self.assertIn("[error] cannot read", out)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

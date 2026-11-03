@@ -9,7 +9,7 @@
 #           python tools/audio/wavesmith/wavesmith.py events vectors --check                        # golden file current? (exit 1)
 #           python tools/audio/wavesmith/wavesmith.py events vectors --write                        # after changing the director
 # Needs   : Python 3.8+ only (audit measures loudness with loudness.py, same folder)
-# Exit    : 0 ok, 1 validation errors, audit warnings with --strict, or stale vectors, 2 usage
+# Exit    : 0 ok, 1 validation errors, audit warnings with --strict, or stale vectors, 2 usage or an unreadable file
 # Notes   : The director is the spec: ports (TypeScript, GDScript, C#, Lua, ...) load data/golden/audio.json in their
 #           tests and must reproduce every step within its tolerance (docs/sop/SOP-18 explains golden vectors).
 #           Like tools/golden_vectors.py, every formula gives the same result in every language: the random source
@@ -189,11 +189,15 @@ def _ramp(gain, active, rule, dt):
 
 
 # ----------------------------------------------------------------------------------------------- validate / audit
+class ToolError(Exception):
+    """Exit 2: a file that cannot be read (a SystemExit with a message would exit 1, the code for problems found)."""
+
+
 def load_events(path):
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        raise SystemExit(f"[error] cannot read {path}: {exc}")
+        raise ToolError(f"cannot read {path}: {exc}")
     return data
 
 
@@ -437,7 +441,7 @@ def render(obj):
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Sound events as data: validate, audit, and the golden vectors of the "
                                              "reference audio director.",
-                                 epilog="Exit codes: 0 ok, 1 problems found or stale vectors, 2 usage.")
+                                 epilog="Exit codes: 0 ok, 1 problems found or stale vectors, 2 usage or an unreadable file.")
     sub = ap.add_subparsers(dest="cmd")
     v = sub.add_parser("validate", help="schema checks (and files exist, with --root)")
     v.add_argument("file")
@@ -452,7 +456,11 @@ def main(argv=None):
     g.add_argument("--out", help="write here instead of data/golden/audio.json")
     args = ap.parse_args(argv)
     if args.cmd in ("validate", "audit"):
-        data = load_events(args.file)
+        try:
+            data = load_events(args.file)
+        except ToolError as exc:
+            print(f"[error] {exc}", file=sys.stderr)
+            return 2
         problems = validate(data, getattr(args, "root", None))
         if problems:
             for x in problems:

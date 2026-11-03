@@ -308,6 +308,9 @@
   1..16 with `[error] ...` (exit 2), the ranges `validate` applies to music.json; `--bpm 0` divided by zero, `--bars 0`
   failed packing the loop and `--bpm -96` printed negative bar times. `validate` on a file that is not a JSON object
   names it and exits 1 instead of crashing on its summary line (#113).
+- Wavesmith events: `validate` and `audit` exit 2, not 1, when the events file cannot be read or is not JSON, as the
+  header and every other Wavesmith tool say; a CI step reading 1 as "the file has problems" misread a wrong path
+  (#114).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
