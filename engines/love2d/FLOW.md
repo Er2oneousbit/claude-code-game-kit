@@ -97,7 +97,10 @@ Credits, Quit, and Juice demo in a debug build = a run from the source folder) >
 | `bug` | presses F8 on the menu and checks the `bug_<timestamp>/` files: `DRIVE_BUG <path>` |
 | `show:<screen>` | `title`, `settings` (a slider focused), `pause`, `subtitle`, `juice`: opens it and ends; add `--screenshot captures/<screen>.png` |
 
-Add `--data-dir captures/run1` to keep a run's files out of the real save folder, and
+`dev.py smoke` never uses the real save folder: without `--data-dir` the game's files go to a fresh
+`build/smoke-data/` each run (read its logs and crash files there); `--data-dir captures/run1` keeps a run's files
+between runs. A hand-run `lovec . --smoke 120 --drive menus` with no `--data-dir` stops with `DRIVE_IGNORED`
+(exit 1) instead of changing the player's settings. Add
 `--compare <baseline.png> [--tolerance N] [--max-pixels N]` after `--screenshot` for a visual regression check
 (`tools/image_diff.py`; exit 1 on a difference, a `_diff.png` next to the screenshot shows where). A scenario is a
 coroutine in `src/shell/drive.lua`: add one there and list it here.

@@ -178,7 +178,15 @@ function App:load()
   Log.info("shell", string.format("data folder %s (%s), locale %s, %s build", self.store:path(""), self.store.kind,
            self.i18n.locale, self.debug_build and "debug" or "release"))
   self.telemetry:event("session_start", Version.version)
-  if kit.mode == "smoke" then self.drive = Drive.new(self, kit.drive) end
+  if kit.mode == "smoke" and kit.drive and self.store.kind == "love" then
+    -- a scripted run changes settings and saves them: never in the player's own save folder (a hand-run
+    -- `lovec . --smoke 120 --drive menus`); dev.py smoke always passes --data-dir
+    Log.error("drive", "DRIVE_IGNORED " .. kit.drive .. ": a drive needs its own --data-dir (python tools/dev.py " ..
+              "smoke --drive " .. kit.drive .. " uses build/smoke-data)")
+    self:finish("DRIVE_IGNORED " .. kit.drive, 1)
+  elseif kit.mode == "smoke" then
+    self.drive = Drive.new(self, kit.drive)
+  end
   self:push("boot")
 end
 

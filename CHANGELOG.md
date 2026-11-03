@@ -126,6 +126,10 @@
 - Godot: `smoke --drive menus` reaches master volume 0.5 from any start value: it presses left or right until the
   live setting is there, instead of ten fixed presses left from 1.0, so a `--data-dir` seeded with 0.3 ended at 0
   and failed (#43).
+- LÖVE: `dev.py smoke` without `--data-dir` runs in a fresh `build/smoke-data/` (as Godot does), so test runs no
+  longer leave logs and crash files in the player's save folder, and `--drive menus` no longer rewrites the
+  player's `settings.json` (master 0.5, reduce motion on). A hand-run `lovec . --smoke N --drive <scenario>` with no
+  `--data-dir` stops with `DRIVE_IGNORED` and exit 1 instead of driving the save folder (#44, #107).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

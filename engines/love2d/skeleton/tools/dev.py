@@ -9,7 +9,8 @@
 #             smoke    boot the game for N frames in a small off-screen window, fail on errors; --headless runs
 #                      without a window; --screenshot FILE / --record DIR capture it; --compare BASELINE diffs;
 #                      --drive SCENARIO runs a scripted path through the menus (menus, crash, pseudo,
-#                      pseudo-plant, bug, show:<screen>) with --data-dir DIR and --locale LANG
+#                      pseudo-plant, bug, show:<screen>) with --data-dir DIR and --locale LANG; without
+#                      --data-dir the game's files go to a fresh build/smoke-data/, never the real save folder
 #             run      launch the game window
 #             build    package build/<game>.love, and on Windows a fused build/windows/<game>.exe with LÖVE's DLLs
 #             clean    remove build output (--yes is accepted; LÖVE clean never asks)
@@ -29,6 +30,8 @@
 #           job object (WinJob), so a timeout also ends a grandchild whose parent already exited
 # Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Linux and macOS, killing an untimed command
 #           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): smoke without --data-dir uses a fresh
+#           build/smoke-data/, never the real save folder
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -52,6 +55,7 @@ SKIP_DIRS = {".git", "build", "captures", "node_modules", ".claude"}   # top-lev
 CHECKER = "tools/lovecheck"              # a separate LÖVE program: a broken conf.lua cannot stop it
 CHECK_BATCH = 150                        # files per launch (Windows command line limit)
 SMOKE_TIMEOUT_S = 90
+SMOKE_DATA = "build/smoke-data"          # the game's data folder in a smoke run without --data-dir (wiped each run)
 SMOKE_MIN_FPS = 30                       # --frames adds frames/30 s to the limit
 TEST_TIMEOUT_S = 600
 CHECK_TIMEOUT_S = 120
@@ -376,10 +380,13 @@ def cmd_smoke(args, love):
     for flag, value in (("--drive", args.drive), ("--locale", args.locale)):
         if value:
             cmd += [flag, value]
-    if args.data_dir:
-        data = (ROOT / args.data_dir).resolve()
-        data.mkdir(parents=True, exist_ok=True)
-        cmd += ["--data-dir", data.as_posix()]
+    try:
+        data = smoke_data_dir(args)
+    except OSError as e:
+        print(f"[error] {e}", file=sys.stderr)
+        return 2
+    dbg(f"data folder {data}")
+    cmd += ["--data-dir", data.as_posix()]
     if args.debug:
         cmd.append("--debug")
     cmd += args.game_args
@@ -408,7 +415,7 @@ def cmd_smoke(args, love):
             print(out[-3000:])
         return 1
     what = f"drive {args.drive}" if args.drive else f"{frames} frames"
-    print(f"[ OK ] smoke passed ({what}{', headless' if args.headless else ''})")
+    print(f"[ OK ] smoke passed ({what}{', headless' if args.headless else ''}; data in {data})")
     if shot:
         if not shot.is_file():
             print(f"[FAIL] no screenshot was written to {shot}")
@@ -420,6 +427,23 @@ def cmd_smoke(args, love):
     if args.compare:
         return compare(args, shot)
     return 0
+
+
+def smoke_data_dir(args):
+    """The game's data folder for this smoke run: --data-dir as given (never wiped), else a fresh build/smoke-data/.
+    A test run never touches the player's save folder (logs, crash files, settings)."""
+    if args.data_dir:
+        d = Path(args.data_dir)
+        d = (d if d.is_absolute() else ROOT / d).resolve()
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+    d = ROOT / SMOKE_DATA
+    if d.exists():
+        why = remove_tree(d)
+        if why:
+            raise OSError(f"{SMOKE_DATA} could not be emptied: {why}")
+    d.mkdir(parents=True)
+    return d
 
 
 def compare(args, shot):
@@ -602,7 +626,8 @@ def build_parser():
                         "must fail), bug (F8 bug report), show:<title|settings|pause|subtitle|juice> (opens that "
                         "screen; add --screenshot)")
     p.add_argument("--data-dir", default="", help="keep settings, saves, logs, crashes, telemetry and bug reports "
-                   "in this folder instead of the save folder (relative to the project)")
+                   f"in this folder (relative to the project; kept between runs); default: a fresh {SMOKE_DATA}/ "
+                   "each run, never the real save folder")
     p.add_argument("--locale", default="", help="language for the run (pseudo = the pseudo-locale)")
     p.set_defaults(fn=cmd_smoke)
 

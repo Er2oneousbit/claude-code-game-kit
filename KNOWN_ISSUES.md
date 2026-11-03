@@ -10,8 +10,7 @@ examples were built and tested on one Windows 11 machine.
 - **CI workflow** not yet run on GitHub-hosted runners (Actions is disabled on this repository, so it cannot run
   until that is turned on): [#40](https://github.com/Er2oneousbit/claude-code-game-kit/issues/40); a missing blank line between two of its steps:
   [#95](https://github.com/Er2oneousbit/claude-code-game-kit/issues/95).
-- **LÖVE:** macOS and Linux packaging, LÖVE 11.4 itself and the POSIX save rename not run: [#41](https://github.com/Er2oneousbit/claude-code-game-kit/issues/41);
-  a plain smoke without `--data-dir` writes to the real save folder: [#44](https://github.com/Er2oneousbit/claude-code-game-kit/issues/44).
+- **LÖVE:** macOS and Linux packaging, LÖVE 11.4 itself and the POSIX save rename not run: [#41](https://github.com/Er2oneousbit/claude-code-game-kit/issues/41).
 - **Shell:** the web port counts language codes in UTF-16 units: [#45](https://github.com/Er2oneousbit/claude-code-game-kit/issues/45).
 - **Godot shell:** crash files need Godot 4.5+, untested on 4.3 and 4.4: [#46](https://github.com/Er2oneousbit/claude-code-game-kit/issues/46).
 - **Unreal:** the GameKitShell plugin not tried in a Blueprint-only project or enabled from the editor:
