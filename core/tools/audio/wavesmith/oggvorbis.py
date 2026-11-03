@@ -14,10 +14,14 @@
 #           or unsupported
 # Notes   : Scope is Vorbis I as real encoders write it (libvorbis, which ffmpeg's -c:a libvorbis uses): floor
 #           type 1, residue types 0, 1 and 2, channel coupling, short and long blocks, any channel count (kept
-#           in Vorbis channel order). Every Ogg page's CRC-32 is checked; the end is trimmed to the last page's
-#           granule position and the start where the first page's granule says so, like a conformant decoder.
-#           Floor type 0 (never written by libvorbis), chained streams and Ogg files holding another codec
-#           (Opus, FLAC, Speex) are refused by name, never guessed.
+#           in Vorbis channel order). Every Ogg page's CRC-32 is checked. Start and end follow the granule
+#           positions exactly as libvorbis 1.3.7 trims them (compared sample by sample through its own
+#           vorbis_synthesis calls): a first page whose granule is below the samples decoded so far loses the
+#           difference from the output of its last packet, at most that packet's samples (so not always the
+#           very first samples), and the end trim takes at most the last packet's samples (ffmpeg 9.0.2 trims
+#           neither a short first page nor a stream that fits on one page). A Vorbis stream multiplexed with video (Theora) or a Skeleton track decodes, the
+#           other streams skipped. Floor type 0 (never written by libvorbis), chained streams and Ogg files
+#           holding only another codec (Opus, FLAC, Speex) are refused by name, never guessed.
 #           Limits: a page CRC proves nothing (anyone can recompute it), so a setup header may ask for at most
 #           65536 entries and 1M VQ values per codebook and 262144 entries and 2M values in all (real libvorbis
 #           files peak at 6561, 52488, 13411 and 61254), and a file may decode to at most 16384 samples per byte
@@ -43,7 +47,8 @@
 #     residue vectors per submap (classification words, then up to 8 passes of VQ partitions)
 #     undo magnitude/angle coupling -> spectrum = residue * floor curve -> inverse MDCT -> window
 #     overlap-add with the previous block: output runs from the centre of the previous window to this one's
-#   trim: first page granule < samples decoded so far -> drop the start; last page granule -> cut the end
+#   trim (libvorbis's rule): first granule < samples decoded so far -> drop the difference from the start of
+#     that page's last packet's output; last page granule -> cut the end (both at most one packet's samples)
 import argparse
 import cmath
 import math
@@ -928,8 +933,11 @@ def _decode(data, max_values):
     bs0, bs1 = ident["blocksizes"]
     out = [[] for _ in range(ch)]
     count, prev, prev_n = 0, None, 0
-    start, end_granule = None, None
+    first_count = first_granule = None      # samples decoded and granule at the first page that has one
+    cut_at, cut = 0, 0                      # the start trim: cut samples from output index cut_at
+    end_granule, end_made = None, 0
     for packet, granule, eos in packets[3:]:
+        made = 0                            # samples this packet adds to the output
         try:
             decoded = _audio_packet(setup, ident, packet)
         except IndexError:
@@ -945,25 +953,30 @@ def _decode(data, max_values):
                 for c in range(ch):
                     pc = prev[c]
                     out[c].extend(_overlap(pc, prev_n, blocks[c], n))
-                count += prev_n // 4 + n // 4
+                made = prev_n // 4 + n // 4
+                count += made
                 if count * ch > max_values:
                     raise VorbisLimit(f"the file decodes to more than {max_values} samples ({len(data)} bytes of "
                                       f"file; real Vorbis stays under about 2000 samples per byte): refused. "
                                       f"Convert it with ffmpeg if it is genuine")
             prev, prev_n = [None if b is None else b[n // 2:] for b in blocks], n
         if granule is not None and granule >= 0:
-            if start is None and not eos:
-                start = granule - count             # negative: the encoder asks us to drop that many samples
-            end_granule = granule
-    # positions: output sample i sits at stream position (start + i); keep 0 <= position < end granule
-    first = -start if start is not None and start < 0 else 0
-    offset = start if start is not None else 0
+            if first_granule is None and not eos:
+                # libvorbis (vorbis_synthesis_blockin): a first granule below the samples decoded so far drops
+                # the difference from the output of the packet that carries it, at most what that packet made
+                first_count, first_granule = count, granule
+                cut = min(max(0, count - granule), made)
+                cut_at = count - made
+            end_granule, end_made = granule, made
     last = count
     if end_granule is not None:
-        last = max(first, min(count, end_granule - offset))
-    out = [c[first:last] for c in out]
+        # output index i >= first_count sits at stream position first_granule + (i - first_count); the end
+        # granule ends the stream there. Like libvorbis, the end trim takes at most the last packet's samples
+        want = end_granule if first_granule is None else first_count + end_granule - first_granule
+        last = max(count - end_made, cut_at + cut, min(count, want))
+    out = [c[:cut_at] + c[cut_at + cut:last] for c in out]
     info = dict(ident)
-    info.update({"samples": last - first, "vendor": vendor, "start_trim": first, "end_trim": count - last})
+    info.update({"samples": last - cut, "vendor": vendor, "start_trim": cut, "end_trim": count - last})
     return info, out, comments
 
 

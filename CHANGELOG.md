@@ -160,6 +160,11 @@
   generated tones. Godot: a change asked while the current track waits out a stinger is planned from where that
   track enters (a beat or immediate switch could fall in the gap, so the track never sounded), as the other players
   plan it (#70).
+- Wavesmith: the OGG Vorbis decoder trims a short first page the way libvorbis 1.3.7 does, checked sample by sample
+  against libvorbis's own decode: the extra samples leave the output of that page's last packet, at most that
+  packet's samples, not the first samples of the file (the count was right, the samples were not). The end trim takes
+  at most the last packet's samples, as in libvorbis. A real Theora plus Vorbis file (ffmpeg test sources) is a new
+  fixture and decodes as ffmpeg and libvorbis decode its audio (#73).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
