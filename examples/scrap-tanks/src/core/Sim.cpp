@@ -5,6 +5,8 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-10-26 with Claude (Opus 5.5, claude-opus-5-5): no-path fallback in follow_path, cover that a
 //           shell reaches first now stops it before the tank behind (Fable review)
+//           2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): sees() counts the target hull's edges, not
+//           only its center (#11)
 // ---------------------------------------------------------------------------
 #include "core/Sim.hpp"
 
@@ -59,7 +61,14 @@ int Sim::raiders_alive() const {
 }
 
 bool Sim::sees(Vec2 from, Vec2 to) const {
-    return distance(from, to) <= tuning::kSightRange && line_of_sight(from, to, blockers_);
+    const double d = distance(from, to);
+    if (d > tuning::kSightRange) return false;
+    if (line_of_sight(from, to, blockers_)) return true;
+    if (d < 1e-9) return true;
+    // `to` is a tank: its hull edges as seen from `from` count too, so a flank showing past cover is seen
+    const Vec2 dir = (to - from) * (1.0 / d);
+    const Vec2 side = Vec2{-dir.y, dir.x} * tuning::kTankRadius;
+    return line_of_sight(from, to + side, blockers_) || line_of_sight(from, to - side, blockers_);
 }
 
 bool Sim::clear_shot(Vec2 from, Vec2 to) const {

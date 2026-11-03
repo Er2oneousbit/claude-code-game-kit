@@ -178,10 +178,6 @@ autoplay exit leak (#6).
   tuned balance and was reverted.
 - Built with Mono only; IL2CPP builds were not made or compared.
 
-### Scrap Tanks (C++/SDL2)
-- Line of sight is checked center to center, so a 1.9 m tank whose center is hidden cannot be seen even when its
-  edge shows (a known limit, written in its docs).
-
 ### Lockpick (RPG Maker MZ)
 - An untested proof of concept: it has never run inside RPG Maker MZ, only against stand-ins.
 

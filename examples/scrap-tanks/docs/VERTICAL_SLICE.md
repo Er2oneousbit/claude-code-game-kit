@@ -62,3 +62,4 @@ log every file in `ASSET_LOG.md`, then ask Claude to wire it in and **playtest i
 | 1 | 2026-10-21 | none: as first built, charging won 9 of 12 and cover 1 of 12 | (1) cover decides fights | Raiders aimed at the player while flanking, so whoever rounded a corner shot first: guns now point where they drive until FIRE |
 | 2 | 2026-10-21 | (1) cover decides fights, more weakly than hoped: from cover the bot wins 25 of 40 seeds, charging 10 of 40 | none | (2) and (3) need human players: are the labels readable, does a run invite another |
 | 3 | 2026-10-26 | (1) still holds after the review fixes (nav islands, shells stopped by cover first): cover 25 of 40, charging 11 of 40 | none | unchanged: human playtest |
+| 4 | 2026-11-02 | (1) still holds once sight counts a tank's hull edges, not only its center (#11): cover 30 of 40, charging 13 of 40 | none | unchanged: human playtest |

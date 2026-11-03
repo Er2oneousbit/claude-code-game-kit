@@ -11,7 +11,7 @@
 v0.2.0. Vertical slice "Scrapyard, three waves" done: tank controls and a free turret, raiders on a behavior tree
 (RETREAT, COVER, FIRE, FLANK) shown over each raider, shells stopped by cover, scrap repairs, three waves, HUD, five
 sounds, keyboard, mouse and gamepad, `-- --debug-ai` overlay, autoplay bots, 46 test cases including the scenario pair.
-Bot-verified: fighting from cover wins 25 of 40 seeds, charging 11 of 40. Not yet played by a human.
+Bot-verified: fighting from cover wins 30 of 40 seeds, charging 13 of 40. Not yet played by a human.
 
 ## What changed last session
 - Built the slice per SOP-01 and SOP-14; the scenario pair refuted pillar 1 three times before it held (`docs/TROUBLESHOOTING.md`).
@@ -28,7 +28,7 @@ Bot-verified: fighting from cover wins 25 of 40 seeds, charging 11 of 40. Not ye
 - 
 
 ## Known broken or flaky
-- Sight is checked center to center: a 1.9 m tank with its center hidden is not seen even when its edge shows (known limit).
+- Hiding spots are still judged by one line to the spot's center (with a 0.35 m margin); sight itself counts hull edges since #11.
 
 ## Commands that matter right now
 ```

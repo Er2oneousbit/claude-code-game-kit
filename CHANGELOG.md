@@ -32,6 +32,9 @@
   step waited for a physics step that came or not by real time spent loading. `Build` now ends with
   `Physics.SyncTransforms()`; `Smoke_R6` runs the first frames with no physics step (old code: 0.000 m walked).
   Careful and always-dark replay exactly; always-lit's catches still read 12 or 14 (two ghosts passing close) (#9).
+- Scrap Tanks (C++/SDL2): sight counts a tank's two hull edges, not only its center, so a raider with its flank
+  showing past cover is seen (a new test slides a tank behind the center rock). The pillar still holds and moved:
+  cover 30 of 40 seeds, charging 13 of 40, debug and release alike (was 25 and 11) (#11).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

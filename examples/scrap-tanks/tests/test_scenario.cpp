@@ -4,8 +4,9 @@
 //           cover must win clearly more often than the bot that charges in the open. If charging wins
 //           as often, cover does not matter and pillar 1 is false.
 // Usage   : python tools/dev.py test     (the same fights play in the game: `-- --autoplay skilled --seed 7`)
-// Notes   : Fixed steps and a seeded RNG: a failing seed replays exactly. Measured 2026-10-26 (debug and
-//           release agree): skilled 25/40, reckless 11/40 (25/40 and 10/40 before the review fixes).
+// Notes   : Fixed steps and a seeded RNG: a failing seed replays exactly. Measured 2026-11-02 (debug and
+//           release agree): skilled 30/40, reckless 13/40 once sight counts hull edges (#11); 25/40 and 11/40
+//           before that, 25/40 and 10/40 before the 2026-10-26 review fixes.
 //           Thresholds, not exact counts, so a small tuning change may move a seed or two, not the verdict.
 //           40 seeds because 12 swung by 5 wins after a 1 m layout change.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)

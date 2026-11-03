@@ -117,7 +117,8 @@ public:
     int raiders_alive() const;
     bool god() const { return god_; }
 
-    // Can a tank at `from` see `to`? Within sight range and no cover in between.
+    // Can a tank at `from` see the tank at `to`? Within sight range, and no cover hides its center or
+    // both edges of its hull (an edge showing past cover is seen; shots still need clear_shot).
     bool sees(Vec2 from, Vec2 to) const;
     // Would a shell from `from` reach `to` without hitting cover?
     bool clear_shot(Vec2 from, Vec2 to) const;

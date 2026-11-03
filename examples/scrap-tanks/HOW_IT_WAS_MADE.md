@@ -138,8 +138,13 @@ bot now loses seed 4, so the smoke seed moved to 7 (the first where skilled wins
 
 **Known limit (left as is, it would change the balance):** sight and hiding test one line between tank centers, but a
 tank is 1.9 m wide, so a raider counted as hidden can still show a flank to a shell that grazes its edge, and one counted
-as seen may have only its edge in view. Regeneration counts "unseen" with the 22 m sight range, so a retreating raider
+as seen may have only its edge in view. (Sight was fixed on 2026-11-02, below; hiding spots still use one line.) Regeneration counts "unseen" with the 22 m sight range, so a retreating raider
 heals in the open once it is more than 22 m from the player, even though a shell could still reach it.
+
+### Later: audit fixes (2026-11-02)
+| Defect | Fix | Scenario pair after it |
+|---|---|---|
+| Sight ran center to center, so a raider with its center behind cover was unseen even with a flank showing (#11) | `Sim::sees` also tries the two hull edges as seen from the viewer (a test slides a tank behind the center rock) | cover 30 of 40, charging 13 of 40 (debug and release) |
 
 ## 9. Outside the kit (be honest)
 - Three throwaway Blender probes found the black-render cause (texture samples, a Cycles variant per suspect, a count of

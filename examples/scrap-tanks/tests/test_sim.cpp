@@ -97,6 +97,28 @@ TEST_CASE("cover stops shells; a clear shot hits") {
     CHECK(r.hp < r.spec->max_hp);
 }
 
+TEST_CASE("sight: a tank whose center is behind cover is seen when an edge of its hull shows (#11)") {
+    const Sim sim(1);
+    core::Circle rock;  // the center rock in front of the start: open ground either side of it
+    for (const core::Circle& c : sim.blockers()) {
+        if (core::distance(c.c, {19.0, 15.5}) < 0.1) rock = c;
+    }
+    REQUIRE(rock.r > 1.0);
+    const Vec2 viewer = rock.c + Vec2{0.0, rock.r + 8.0};
+    // Slide a tank sideways behind the cover: straight behind it is hidden, far to the side it is seen,
+    // and in between there is a band where the center line is blocked but one hull edge shows past the cover
+    const auto behind = [&](double dx) { return rock.c + Vec2{dx, -(rock.r + 1.5)}; };
+    CHECK_FALSE(sim.sees(viewer, behind(0.0)));
+    int edge_only = 0;
+    for (double dx = 0.0; dx < rock.r + 2.0; dx += 0.05) {
+        const Vec2 t = behind(dx);
+        const bool center_visible = core::line_of_sight(viewer, t, sim.blockers());
+        if (center_visible) CHECK(sim.sees(viewer, t));
+        else if (sim.sees(viewer, t)) ++edge_only;
+    }
+    CHECK(edge_only > 0);
+}
+
 TEST_CASE("a destroyed raider drops scrap; scrap repairs the player once") {
     Sim sim = with_first_wave(true);
     Tank& r = first_raider(sim);
