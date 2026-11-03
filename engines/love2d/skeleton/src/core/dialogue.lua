@@ -12,8 +12,10 @@
 -- Notes   : No love.* calls. Unknown fields are ignored (the schema only ever adds optional fields). Lines of kind
 --           "bark" show only with access.subtitle_barks; nothing shows with access.subtitles off. Interrupts:
 --           "never" waits its turn (dropped here: barks are not queued), "lower" may cut a lower-priority line,
---           "always" cuts anything. A line with no reveal list reveals at DEFAULT_CPS, faster when its duration_s
---           is too short for that, so the whole line is shown before it ends.
+--           "always" cuts anything. The reveal list counts only when it has one entry per character of the text;
+--           a line without one that fits (none built, or built for another take) reveals at DEFAULT_CPS, faster
+--           when its duration_s is too short for that, so the whole line is shown before it ends. Reference:
+--           Wavesmith's dialogue.py reveal_count, tested against data/golden/dialogue.json.
 --
 -- Pseudocode (play):
 --   line missing or not allowed by the settings -> false; on cooldown -> false
@@ -70,15 +72,15 @@ function Dialogue.cue_at(line, t)
   return nil
 end
 
--- characters of line.text revealed at t (a typewriter); the reveal list's i is 0-based
+-- characters of line.text revealed at t (a typewriter)
 function Dialogue.revealed(line, t)
   local total = char_count(line.text)
-  if type(line.reveal) == "table" and #line.reveal > 0 then
+  if type(line.reveal) == "table" and #line.reveal == total then   -- a list that does not fit would stop short
     local n = 0
     for _, r in ipairs(line.reveal) do
-      if type(r) == "table" and type(r.t) == "number" and r.t <= t then n = math.max(n, (r.i or 0) + 1) end
+      if type(r) == "table" and type(r.t) == "number" and r.t <= t then n = n + 1 end
     end
-    return math.min(n, total)
+    return n
   end
   local cps = Dialogue.DEFAULT_CPS
   if type(line.duration_s) == "number" then

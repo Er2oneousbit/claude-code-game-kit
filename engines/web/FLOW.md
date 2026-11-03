@@ -57,6 +57,8 @@ Tiled (mapeditor.org, free) exports JSON that Phaser loads with `this.load.tilem
   and these tests say which module to fix.
 - `telemetry.golden.test.ts` checks the `telemetry.csv` columns and row format (`userData.ts`) against
   `data/golden/telemetry.json`, so every engine writes the same file.
+- `dialogue.golden.test.ts` checks the subtitle typewriter (`revealCount` in `dialogue.ts`) against
+  `data/golden/dialogue.json` (written by `python tools/audio/wavesmith/wavesmith.py dialogue vectors --write`).
 - `tests/atomicFile.test.ts` proves the crash-safe write on the real filesystem (a temp folder).
 - Scene behavior is covered by `smoke` (boots the real build). For gameplay checks, give the scene an autoplay or
   scripted-input mode and assert on logged markers, the same way `smoke` waits for `BOOT_OK`.

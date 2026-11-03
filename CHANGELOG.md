@@ -381,6 +381,13 @@
   objects, so a field the reference adds to `expect` fails there too (planted `time` fields and a missing `pseudo`
   case passed the old checks). juice.json, shell.json and telemetry.json have tolerance 1e-9 instead of 1e-6, at
   which a float32 port of the easing curves or hitstop would have passed; every engine passes at 1e-9 (#131).
+- Godot, LÖVE: the subtitle typewriter uses a line's reveal list only when it has one entry per character of the
+  text, as web and web 3D do; otherwise the line types at 30 characters a second, faster when that would not finish
+  within `duration_s`. A list shorter than the text (a translation, the pseudo locale, data built for another take)
+  stopped the count at its length, so the line never showed in full and Godot's `is_fully_shown()` never turned
+  true. The rule is Wavesmith's new `dialogue.py` `reveal_count`, and `wavesmith.py dialogue vectors --write`
+  writes data/golden/dialogue.json (27 steps: lists that fit, are too short or too long, no list, no duration, a
+  zero duration, code points), which Godot, LÖVE, web and web 3D pass (#174).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

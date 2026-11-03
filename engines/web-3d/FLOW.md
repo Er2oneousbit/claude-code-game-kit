@@ -60,6 +60,8 @@ Playwright Chromium) for smoke. The boot marker is logged by `src/main.ts` after
   and these tests say which module to fix.
 - `telemetry.golden.test.ts` checks the `telemetry.csv` columns and row format (`userData.ts`) against
   `data/golden/telemetry.json`, so every engine writes the same file.
+- `dialogue.golden.test.ts` checks the subtitle typewriter (`revealCount` in `dialogue.ts`) against
+  `data/golden/dialogue.json` (written by `python tools/audio/wavesmith/wavesmith.py dialogue vectors --write`).
 - `tests/atomicFile.test.ts` proves the crash-safe write on the real filesystem (a temp folder).
 - Smoke boots the real build; give the game an `?autoplay` or scripted mode for scenario checks (SOP-14 step 6).
 

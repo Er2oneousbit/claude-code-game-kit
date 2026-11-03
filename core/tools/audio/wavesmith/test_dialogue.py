@@ -346,6 +346,32 @@ class DialogueExam(unittest.TestCase):
         self.assertEqual(len(line["reveal"]), len(list(line["text"])))
         self.assertTrue(all(set(c) == {"start", "end", "lines"} for c in line["cues"]))
 
+    # ---- the typewriter reference and its golden vectors
+    def test_reveal_list_counts_only_when_it_fits_the_shown_text(self):
+        reveal = [{"i": i, "t": i * 0.1} for i in range(5)]
+        short = {"text": "Hello there", "duration_s": 2.0, "reveal": reveal}   # 11 characters, 5 reveal entries
+        self.assertEqual(D.reveal_count(short, 2.0), 11)              # the line finishes (it stopped at 5)
+        self.assertEqual(D.reveal_count(short, 0.1), 3)               # 30 characters a second
+        self.assertEqual(D.reveal_count(short, 0.25, length=5), 3)    # a shown text of 5 follows the list
+        self.assertEqual(D.reveal_count({"text": "x" * 140, "duration_s": 2.0}, 1.0), 70)   # fitted to the duration
+
+    def test_golden_vectors_are_current(self):
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            rc = D.main(["vectors", "--check"])
+        self.assertEqual(rc, 0, out.getvalue())
+        cases = json.loads(D.GOLDEN.read_text(encoding="utf-8"))["cases"]
+        for step in cases[0]["steps"]:
+            self.assertEqual(D.reveal_count(step["line"], step["t"]), step["expect"], step["about"])
+        stale = self.root / "stale.json"
+        stale.write_text("{}", encoding="utf-8")
+        old = D.GOLDEN
+        try:
+            D.GOLDEN = stale
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(D.main(["vectors", "--check"]), 1)
+        finally:
+            D.GOLDEN = old
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

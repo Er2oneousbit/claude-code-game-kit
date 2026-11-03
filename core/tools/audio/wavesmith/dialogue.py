@@ -10,8 +10,9 @@
 #           python tools/audio/wavesmith/wavesmith.py dialogue lint data/dialogue.json --root .        # --strict: warnings fail
 #           python tools/audio/wavesmith/wavesmith.py dialogue lint data/dialogue.json --root . --pseudo    # will translations fit?
 #           python tools/audio/wavesmith/wavesmith.py dialogue export data/dialogue/en.built.json --sequence intro --format vtt --out intro.vtt
+#           python tools/audio/wavesmith/wavesmith.py dialogue vectors --check     # data/golden/dialogue.json current? (exit 1)
 # Needs   : Python 3.8+ only (wavfile.py and flacfile.py read voice durations)
-# Exit    : 0 ok, 1 errors found (or warnings with --strict), 2 usage or unreadable files
+# Exit    : 0 ok, 1 errors found (or warnings with --strict) or stale vectors, 2 usage or unreadable files
 # Notes   : Reveal times: exact from a babble .timeline.json; estimated for other voice files (characters spread over
 #           the voiced part, with pauses at punctuation: right for a typewriter, not for lip sync); characters at the
 #           speaker's cps when there is no audio. One reveal entry per character (code point), as the engines expect.
@@ -21,6 +22,9 @@
 #           SRT's inline "NAME: " is laid out within the line width, and lint warns when a cue has no room for it.
 #           SFX captions come from audio_events.json events with a "caption" (and "directional": true for sounds
 #           whose side of the screen matters; XAG 104 asks for an arrow). The format only ever adds optional fields.
+#           reveal_count() is the reference typewriter: a line's reveal list counts only when it has one entry per
+#           character of the shown text; otherwise the text types at DEFAULT_CPS, faster when that would not finish
+#           within duration_s. Every engine with a dialogue module follows data/golden/dialogue.json.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
@@ -31,6 +35,9 @@
 #   lint:  build, then report reading speed, short or long cues, unbreakable words, unknown speakers, missing files
 #          --pseudo: each line through the pseudo-locale (40 % longer) over the same timing -> the same cue checks
 #   export: a sequence's cues at absolute times -> SRT or WebVTT, speaker named when it changes
+#   reveal_count(line, t): reveal list as long as the shown text? entries at or before t
+#          else duration 0? everything; else floor(t * max(DEFAULT_CPS, length / duration) + eps), capped
+#   vectors: scripted reveal counts through reveal_count -> data/golden/dialogue.json (--write / --check)
 import argparse
 import hashlib
 import json
@@ -49,6 +56,8 @@ VERSION = 1
 STYLE = {"max_chars_per_line": 40, "max_lines": 2, "min_cue_s": 0.833, "max_cue_s": 7.0, "max_cps": 20}
 CHILDREN_CPS = 17
 DEFAULT_CPS = 30                 # typewriter speed without audio (matches the engines' DEFAULT_CPS)
+REVEAL_EPS = 1e-9                # t * cps lands on a whole character count despite rounding
+GOLDEN = Path(__file__).resolve().parents[3] / "data" / "golden" / "dialogue.json"
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,63}$")
 KINDS = ("line", "bark")
 INTERRUPTS = ("never", "lower", "always")
@@ -103,6 +112,57 @@ def estimate_reveal(text, start, end):
 
 def cps_reveal(text, cps):
     return [{"i": i, "t": round(i / cps, 4)} for i in range(len(list(text)))]
+
+
+# ---- The typewriter (reference for every engine) -----------------------------------------------------------------
+def reveal_count(line, t, length=None):
+    """Characters (code points) of the shown text visible t seconds into a built line. `length` is the shown
+    text's length when it differs from line["text"] (a translation, the pseudo locale). The reveal list counts only
+    when it has one entry per shown character: built for another take or text, it would stop short and the line
+    would never finish. Otherwise the text types at DEFAULT_CPS, faster when that would not finish by duration_s."""
+    n = len(line.get("text", "")) if length is None else length
+    reveal = line.get("reveal") or []
+    if len(reveal) == n:
+        return sum(1 for r in reveal if r["t"] <= t)
+    duration = line.get("duration_s", n / DEFAULT_CPS)
+    if duration <= 0:
+        return n
+    cps = max(DEFAULT_CPS, n / duration)                  # all of it by duration_s, never slower than DEFAULT_CPS
+    return min(n, max(0, math.floor(t * cps + REVEAL_EPS)))
+
+
+def vector_cases():
+    """Scripted typewriter questions every engine's dialogue module must answer exactly (whole characters)."""
+    hello = "Hello there"                                 # 11 characters
+    fits = [{"i": i, "t": round(i * 0.05, 4)} for i in range(len(hello))]
+    long_text = "The bakery opens at dawn, and the baker wants every loaf on the shelf before the first cart rolls in. " \
+                "Bring flour, bring salt, and bring the key."
+    lines = [
+        ("a reveal list with one entry per character is followed",
+         {"text": hello, "duration_s": 1.0, "reveal": fits}, (0.0, 0.12, 0.25, 0.5, 2.0)),
+        ("a reveal list shorter than the text is ignored: 30 per second, the line finishes",
+         {"text": hello, "duration_s": 2.0, "reveal": fits[:5]}, (0.0, 0.1, 0.2, 0.3, 2.0)),
+        ("a reveal list longer than the text is ignored too",
+         {"text": "Hi", "duration_s": 1.0, "reveal": fits[:5]}, (0.0, 0.04, 1.0)),
+        ("no reveal list: a long line types faster to finish by its duration",
+         {"text": long_text, "duration_s": 2.0}, (0.0, 0.5, 1.0, 1.99, 2.0, 3.0)),
+        ("no reveal list and no duration: 30 per second",
+         {"text": "Forty-five characters of plain text, no data."}, (0.0, 1.0, 1.5, 2.0)),
+        ("a duration of 0 shows the whole line at once",
+         {"text": hello, "duration_s": 0}, (0.0,)),
+        ("characters are code points, not bytes",
+         {"text": "\u00c7a va, Zo\u00eb? \u00a1S\u00ed!", "duration_s": 0.2}, (0.0, 0.1, 0.2)),
+    ]
+    steps = [{"line": line, "t": t, "expect": reveal_count(line, t)} for _, line, ts in lines for t in ts]
+    names = [name for name, _, ts in lines for _ in ts]
+    for step, name in zip(steps, names):
+        step["about"] = name
+    return [{"type": "reveal_count", "name": "typewriter reveal counts", "steps": steps}]
+
+
+def render_vectors():
+    return json.dumps({"version": 1, "tolerance": 0, "about": "tools/audio/wavesmith/dialogue.py vectors --write",
+                       "cases": vector_cases()}, indent=1, ensure_ascii=False) + "\n"
 
 
 def _end_bonus(word):
@@ -529,10 +589,26 @@ def cmd_export(args):
     return 0
 
 
+def cmd_vectors(args):
+    text = render_vectors()
+    if args.write:
+        GOLDEN.parent.mkdir(parents=True, exist_ok=True)
+        GOLDEN.write_bytes(text.encode("utf-8"))
+        print(f"[ OK ] wrote {GOLDEN}")
+        return 0
+    current = GOLDEN.read_bytes().decode("utf-8") if GOLDEN.exists() else None
+    if current != text:
+        print(f"[FAIL] {GOLDEN} is stale or missing: run dialogue.py vectors --write")
+        return 1
+    print(f"[ OK ] {GOLDEN} is current")
+    return 0
+
+
 def build_parser():
     ap = argparse.ArgumentParser(description="Dialogue for games: built file (typewriter reveal, subtitle cues, SFX "
                                              "captions), SRT / WebVTT export, and subtitle linting.",
-                                 epilog="Exit codes: 0 ok, 1 errors (or warnings with --strict), 2 usage.")
+                                 epilog="Exit codes: 0 ok, 1 errors (or warnings with --strict) or stale vectors, "
+                                        "2 usage.")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--debug", action="store_true", help="tracebacks")
     src = argparse.ArgumentParser(add_help=False)
@@ -556,6 +632,10 @@ def build_parser():
     ex.add_argument("--format", choices=("srt", "vtt"), default="srt")
     ex.add_argument("--out", required=True)
     ex.add_argument("--overwrite", action="store_true")
+    ve = sub.add_parser("vectors", parents=[common], help="the typewriter golden vectors (data/golden/dialogue.json)")
+    mode = ve.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--write", action="store_true", help="rewrite the file from the reference")
+    mode.add_argument("--check", action="store_true", help="exit 1 when the file is stale or missing")
     return ap
 
 
@@ -573,7 +653,7 @@ def main(argv=None):
         ap.print_help()
         return 2
     try:
-        return {"build": cmd_build, "lint": cmd_lint, "export": cmd_export}[args.cmd](args)
+        return {"build": cmd_build, "lint": cmd_lint, "export": cmd_export, "vectors": cmd_vectors}[args.cmd](args)
     except ToolError as exc:
         print(f"[error] {exc}", file=sys.stderr)
         if DEBUG:

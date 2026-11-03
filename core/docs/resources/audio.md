@@ -447,7 +447,11 @@ only ever added), and into SRT or WebVTT files for trailers and video captures.
 ```
 - Typewriter reveal, one time per character: exact from a babble.py `.timeline.json`; estimated from any other
   voice file (spread over its voiced part with pauses at punctuation: right for a typewriter, not for lip sync); at
-  the speaker's `cps` when a line has no audio yet.
+  the speaker's `cps` when a line has no audio yet. The engines use the reveal list only when it has one entry per
+  character of the text they show; otherwise (a translation, the pseudo locale, a list built for another take) they
+  type at 30 characters a second, faster when that would not finish within the line's `duration_s`, so a line always
+  ends fully shown (`dialogue.py` `reveal_count`, the reference; Godot, LÖVE, web and web 3D follow
+  data/golden/dialogue.json, written by `dialogue.py vectors --write`).
 - Subtitle cues follow the published guidelines (checked 2026-11-01): at most 40 characters a line (Xbox
   Accessibility Guideline 104 calls longer lines long; Netflix allows 42), at most 2 lines, line breaks at
   punctuation and bottom-heavy, at least 5/6 s and at most 7 s on screen, and a reading speed of at most 20

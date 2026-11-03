@@ -186,7 +186,7 @@ class CommandExam(unittest.TestCase):
         self.assertIn("events", subs)
         known = set(subs) | WAVESMITH_BUILTINS
         owners = {name for name, mod in subs.items() if '"vectors"' in read("%s/%s.py" % (WAVESMITH, mod))}
-        self.assertEqual(owners, {"events", "music", "access"})
+        self.assertEqual(owners, {"events", "music", "access", "dialogue"})
         owners |= {subs[name] + ".py" for name in list(owners)}   # the module run on its own: `music.py vectors`
         bad = []
         for rel, text in kit_markdown():
