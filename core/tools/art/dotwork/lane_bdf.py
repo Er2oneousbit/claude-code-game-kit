@@ -6,7 +6,8 @@
 #           the font lacks and where it appears.
 # Usage   : pack spec "bdf": [{"name": "ja", "source": "assets_src/fonts/ark-pixel-12px-proportional-ja.bdf",
 #                              "license": "assets_src/fonts/OFL.txt", "strings": ["data/strings_ja.json"]}]
-#           strings: text / JSON (every string value, nested) / CSV / PO files in the game; "chars": extra characters;
+#           strings: text / JSON (every string value, nested) / CSV / PO / POT files in the game, read as fonts-check
+#           reads them; "chars": extra characters;
 #           "ascii": false to leave out printable ASCII (kept by default); "all": true keeps every glyph (big);
 #           "scale": whole-number upscale of the glyphs (default 1).
 # Notes   : The font's licence file is required and is copied next to the .fnt (the SIL Open Font License asks for it
@@ -15,17 +16,15 @@
 #           stops the run (exit 1) with the file and key it came from. White ink: tint it with font_color in Godot.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
-import csv
-import io
-import json
 import os
-import re
 import shutil
+import unicodedata
 
 import numpy as np
 from PIL import Image
 
 import fcore as core
+import fontcheck
 
 PAGE = 256
 
@@ -78,44 +77,33 @@ def parse_bdf(path):
 
 
 def strings_of(path):
-    """[(where, text)] from a text, JSON, CSV or PO file: where = 'file:key.path' or 'file:line N'."""
+    """[(where, text)] from a strings file, read the way fonts-check reads it (fontcheck.read_strings: JSON string
+    values, CSV, gettext PO / POT with continuation lines and escapes, plain text): where = 'file:string id'. The text
+    is in composed form (NFC), the form the shaper draws, so "e" + a combining accent needs the font's own accented
+    letter."""
     base = os.path.basename(path)
-    with open(path, encoding="utf-8") as f:
-        text = f.read()
-    out = []
-    ext = os.path.splitext(path)[1].lower()
-    if ext == ".json":
-        def walk(v, key):
-            if isinstance(v, str):
-                out.append((f"{base}:{key or '(root)'}", v))
-            elif isinstance(v, dict):
-                for k in v:
-                    walk(v[k], f"{key}.{k}" if key else str(k))
-            elif isinstance(v, list):
-                for n, x in enumerate(v):
-                    walk(x, f"{key}[{n}]")
-        walk(json.loads(text), "")
-    elif ext == ".csv":
-        for n, row in enumerate(csv.reader(io.StringIO(text)), 1):
-            out += [(f"{base}:row {n}", c) for c in row]
-    elif ext == ".po":
-        for n, ln in enumerate(text.splitlines(), 1):
-            m = re.match(r'\s*msgstr(?:\[\d+\])?\s+"(.*)"\s*$', ln)
-            if m:
-                out.append((f"{base}:line {n}", m.group(1).encode("utf-8").decode("unicode_escape")
-                            if "\\u" in m.group(1) else m.group(1)))
-    else:
-        out += [(f"{base}:line {n}", ln) for n, ln in enumerate(text.splitlines(), 1)]
-    return out
+    try:
+        rows = fontcheck.read_strings(path)
+    except FileNotFoundError:
+        raise core.ToolError(f"strings file {path} not found")
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise core.ToolError(f"strings file {path}: {exc} (strings files are UTF-8)")
+    return [(f"{base}:{sid}", unicodedata.normalize("NFC", text)) for _, sid, text in rows]
+
+
+def glyph_chars(text):
+    """The characters of text that are drawn (composed form; no line breaks, tabs or other control and format
+    characters, as fontcheck.needed decides). The space is kept: the font's space glyph gives its advance."""
+    return [c for c in unicodedata.normalize("NFC", text) if c == " " or fontcheck.needed(c)]
 
 
 def coverage(glyphs, sources):
-    """{char: [where ...]} for every character the strings use that the font has no glyph for (spaces and line
-    breaks are layout, not glyphs)."""
+    """{char: [where ...]} for every character the strings use that the font has no glyph for (spaces, line breaks
+    and other controls are layout, not glyphs)."""
     missing = {}
     for where, text in sources:
-        for c in text:
-            if c in " \t\r\n" or ord(c) in glyphs:
+        for c in glyph_chars(text):
+            if c == " " or ord(c) in glyphs:
                 continue
             missing.setdefault(c, [])
             if where not in missing[c] and len(missing[c]) < 3:
@@ -184,7 +172,7 @@ def run(entries, pack, man, conf):
             listed = "; ".join(f"{c!r} U+{ord(c):04X} in {', '.join(w)}" for c, w in sorted(missing.items())[:20])
             raise core.JobError(f"bdf {name}: {len(missing)} characters the strings use are not in "
                                 f"{os.path.basename(src)}: {listed}")
-        keep = set(glyphs) if e.get("all") else {ord(c) for _, t in sources for c in t if c not in "\t\r\n"}
+        keep = set(glyphs) if e.get("all") else {ord(c) for _, t in sources for c in glyph_chars(t)}
         if e.get("ascii", True):
             keep |= set(range(32, 127))
         out = core.art(conf, "fonts", name)
