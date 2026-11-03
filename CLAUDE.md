@@ -40,6 +40,7 @@ Python (`uv run --python 3.8 python core/tools/test_<name>.py`): `Path.write_tex
 missing relative paths behave differently there, and 0.7.2 shipped broken on 3.8 and 3.9 because only 3.14 was run.
 ```
 python core/tools/test_check_links.py
+python core/tools/test_doctor.py                     # standard library only (the asset-log check per overlay layout)
 python core/tools/test_publish_check.py              # needs git
 python core/tools/test_fetch_asset.py                # offline (file:// URLs)
 python core/tools/test_second_opinion.py             # offline (canned CLI results)

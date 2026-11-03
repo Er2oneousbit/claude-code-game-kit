@@ -225,6 +225,9 @@
   `--slug` re-derived it, so CMake targets, the Cargo package and the LÖVE save folder changed silently. A record
   from an older kit has no slug: it is derived from the recorded name, with an `[info]` line. `sync_examples.py`
   passes the recorded slug (#97).
+- Doctor: the asset-log check also looks in `public/assets` (web, web-3d) and `game/img` (RPG Maker MZ), so media
+  there with no filled `ASSET_LOG.md` row gets the `[WARN]` line as in the other overlays; it looked only for
+  `assets`, `Assets` and `Content` and reported those projects healthy. New exam `tools/test_doctor.py` (#104).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
