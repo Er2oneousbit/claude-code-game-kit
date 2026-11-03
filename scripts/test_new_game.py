@@ -9,7 +9,7 @@
 #           settings keeping the project's rules, a second adopt adds nothing. Upgrade: replaces untouched kit files,
 #           keeps edited ones (.gold), leaves out files the project deleted, adds new kit files, a second upgrade is
 #           quiet, the recorded name, slug and engine are reused and a different one is refused, --restore puts a
-#           deleted kit file back rendered. Exit codes: 1 for an unresolved placeholder, 2 for every refusal; --dry-run writes nothing.
+#           deleted kit file back rendered, a corrupt record stops the run. Exit codes: 1 for an unresolved placeholder, 2 for every refusal; --dry-run writes nothing.
 # Usage   : python scripts/test_new_game.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline. The real engines are checked by scaffolding them (CLAUDE.md, "Verify a
@@ -336,6 +336,20 @@ class NewGameExam(unittest.TestCase):
         self.assertIn("records no slug", out)
         self.assertEqual(self.meta()["slug"], "fake_game")
         self.assertNotIn("upgraded", out)
+
+    def test_corrupt_record_stops_the_run(self):
+        """#123: a truncated .game-kit.json was taken as a pre-0.3 project: .gold everywhere, history rewritten."""
+        self.new()
+        for broken in (b'{"kit_version": "0.8.2", "files": {', b"[1, 2]", b"\xff\xfe{}"):
+            (self.dest / ".game-kit.json").write_bytes(broken)
+            for mode in ("--upgrade", "--adopt"):
+                code, out = self.ng(mode)
+                self.assertEqual(code, 2, f"{broken!r} {mode}: {out}")
+                self.assertIn(".game-kit.json", out)
+                self.assertNotIn("no file hashes", out)
+                self.assertNotIn("Traceback", out)
+                self.assertEqual((self.dest / ".game-kit.json").read_bytes(), broken, "the record was rewritten")
+                self.assertEqual(list(self.dest.rglob("*.gold*")), [])
 
     def test_upgrade_appends_only_new_gitignore_rules(self):
         self.new()

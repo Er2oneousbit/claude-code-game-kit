@@ -37,6 +37,7 @@
 #           2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): the slug is recorded; --adopt/--upgrade reuse the
 #           recorded name, slug and engine and refuse different ones (--rename opts in for name and slug);
 #           --restore PATH puts a deleted kit file back rendered (copying the raw template left placeholders)
+#           A .game-kit.json that does not parse stops the run (it was taken as "no record")
 # ---------------------------------------------------------------------------
 import argparse
 import datetime
@@ -465,12 +466,26 @@ def verify_no_placeholders(plan):
 
 
 def load_meta(dest):
-    """Existing project metadata (.game-kit.json, or the pre-0.3.0 .gold-standard.json), or {}."""
+    """Existing project metadata (.game-kit.json, or the pre-0.3.0 .gold-standard.json), or {} when neither exists.
+
+    Only a missing file means "no record". One that cannot be read or parsed (truncated by a crash or a bad merge)
+    stops the run: taken as no record, --upgrade would .gold every file and rewrite the history from scratch.
+    """
     for name in (META_FILE, LEGACY_META_FILE):
+        path = dest / name
         try:
-            return json.loads((dest / name).read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
             continue
+        except OSError as exc:
+            raise ScaffoldError(f"cannot read {name} ({exc.strerror or exc}): close any program using it, then re-run")
+        except ValueError as exc:   # bad JSON or bytes that are not UTF-8
+            raise ScaffoldError(f"{name} is not valid JSON ({exc}): fix it (git can show the last good version), "
+                                "or delete it to start the record again (the next --upgrade then writes a .gold for "
+                                "every file that differs)")
+        if not isinstance(data, dict):
+            raise ScaffoldError(f"{name} does not hold a JSON object: fix it, or delete it to start the record again")
+        return data
     return {}
 
 
