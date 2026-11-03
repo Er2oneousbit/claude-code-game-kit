@@ -3,7 +3,7 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## 0.9.0 (unreleased)
+## Unreleased (features, no version yet)
 - **`/token-audit`** (22 skills) and **`tools/token_audit.py`**: a read-only audit of what a project's Claude Code
   sessions spend tokens on, after a video's audit prompt (E141, description only, grade D). The tool reads files,
   never the network, and changes nothing: memory files loaded at the start (CLAUDE.md in the project and its
