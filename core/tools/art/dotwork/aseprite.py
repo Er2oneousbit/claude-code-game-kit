@@ -206,7 +206,8 @@ def build(pack, conf, overwrite=False):
     """Write <src_dir>/aseprite/{characters,fx,single}/<name>.aseprite. A file that already exists is exported first:
     one that still shows the game's frames is left as it is; one that differs may hold hand polish (or the game's
     art changed since) and is kept unless overwrite, and a file overwrite replaces is first copied to
-    <name>.aseprite.bak (one level, as pixelorama.build does).
+    <name>.aseprite.bak (one level, as pixelorama.build does). Nothing is written when an asset's frames are not all
+    one size (ToolError naming the sizes).
     Returns {"written": [...], "unchanged": [...], "kept": [...], "backups": [the .bak files written]}."""
     _bin(conf)   # no Aseprite = stop before anything is written into the game's tracked folders
     src = core.src(conf, "aseprite")
@@ -227,6 +228,20 @@ def build(pack, conf, overwrite=False):
     for f in single:
         jobs.append((os.path.join(src, "single", os.path.basename(f)[:-4] + ".aseprite"),
                      [("", 0.1, os.path.join(pack, f))]))
+    # an Aseprite sprite has one canvas: BUILD_LUA sized it from the first frame, so clips of another size came back
+    # from a re-export padded or cropped to it, off their anchor, with verify passing (issue #82). Every source is
+    # checked before any is written.
+    canvas = {}
+    for out, items in jobs:
+        sizes = set()
+        for _, _, p in items:
+            with Image.open(p) as im:   # the header only: no pixels are read here
+                sizes.add(im.size)
+        if len(sizes) > 1:
+            raise core.ToolError(f"{os.path.relpath(out, pack)}: frames of {len(sizes)} sizes "
+                                 f"({', '.join('%dx%d' % s for s in sorted(sizes))}): an Aseprite sprite has one "
+                                 "canvas (give every clip the same frame size)")
+        canvas[out] = sizes.pop()
     done = {"written": [], "unchanged": [], "kept": [], "backups": []}
     for out, items in jobs:
         rel = os.path.relpath(out, pack)
@@ -251,8 +266,7 @@ def build(pack, conf, overwrite=False):
             fh.write("\n".join(f"{t}|{d:.4f}|{p}" for t, d, p in items) + "\n")
         pal = out[:-9] + ".gpl"
         n, indexed = _palette_file([p for _, _, p in items], pal)
-        with Image.open(items[0][2]) as im:
-            w, h = im.size
+        w, h = canvas[out]
         _run(conf, BUILD_LUA, "ase_build.lua", {"list": lst, "w": w, "h": h, "palette": pal, "out": out,
                                                  "indexed": "1" if indexed else "0"})
         os.remove(lst)

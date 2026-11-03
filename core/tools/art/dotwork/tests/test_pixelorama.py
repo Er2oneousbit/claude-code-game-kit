@@ -1051,6 +1051,21 @@ class AsepriteGuardExam(unittest.TestCase):
                          {"knight.aseprite": "1", "spark.aseprite": "1", "barrel.aseprite": "1",
                           "spr_bust.aseprite": "0", "ui_icon_glow.aseprite": "0"})
 
+    def test_clips_of_two_sizes_stop_before_anything_is_written(self):
+        # issue #82 (live, Aseprite 1.3.18): attack_e padded to a bigger canvas, as a second pack can write it. The
+        # sprite took the first frame's size, and an untouched round trip shipped every other clip padded to it, art
+        # in the top left. Build now refuses, naming the sizes, and writes no source at all.
+        frames = os.path.join(self.tmp, "assets", "art", "characters", "knight", "frames")
+        for p in glob.glob(os.path.join(frames, "spr_knight_attack_e_*.png")):
+            with Image.open(p) as im:
+                big = Image.new("RGBA", (W + 16, H + 16), (0, 0, 0, 0))
+                big.paste(im.convert("RGBA"), (8, 16))
+            fcore.save_clean(big, p)
+        with self.assertRaisesRegex(fcore.ToolError, r"knight\.aseprite: frames of 2 sizes \(24x32, 40x48\)"):
+            self.build()
+        self.assertEqual(self.built, [])
+        self.assertEqual(glob.glob(os.path.join(self.src, "**", "*.aseprite"), recursive=True), [])
+
     def test_the_command_line_reports_kept_and_replaced_files(self):
         import dotwork
         self.build()
