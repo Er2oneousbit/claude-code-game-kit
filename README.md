@@ -118,7 +118,7 @@ media/gallery/            the README's example thumbnails (one frame of each exa
 workflows/                experiments outside the scaffold, with their benchmarks (local-pixel-art: ComfyUI)
 CHOOSING_AN_ENGINE.md     which overlay to pick
 CHANGELOG.md              what changed and why
-DISTILL_PROMPT.md, DISTILL_GOAL.txt, DISTILL_REPORT.md   how the kit's evidence was cleaned up (the report is a 10-19 snapshot)
+DISTILL_PROMPT.md, DISTILL_GOAL.txt, DISTILL_REPORT.md   how the kit's evidence was cleaned up (the report: rules, open claims, experiments)
 PROCGEN_PROMPT.md, PROCGEN_GOAL.txt                      the brief and /goal line that built /procgen and SOP-17
 ```
 
@@ -166,7 +166,7 @@ Being straight about it, because it matters for trust. Everything below was run 
 | Claude Code config shapes (hooks, permissions, skill and agent frontmatter) | Confirmed live in a scaffolded project with Claude Code 2.1.302 (headless): the SessionStart hook runs and injects HANDOFF and ROADMAP, a deny rule blocks a Read of `.env`, and the `code-reviewer` subagent runs. Allow rules apply once the folder is trusted (the interactive trust prompt); `/hooks` and `/permissions` views not checked |
 
 Everything known to be broken, flaky or never tried, kit and examples, is listed in `KNOWN_ISSUES.md`.
-Items marked **(verify)** in the docs are the places most likely to need a tweak on first use. `DISTILL_REPORT.md` is a snapshot of the unverified claims from before the example games; the table above is current.
+Items marked **(verify)** in the docs are the places most likely to need a tweak on first use. `DISTILL_REPORT.md` keeps the enforced rules, the outside claims still unproven and the experiments that would test them.
 
 ## Experimental: local pixel art (ComfyUI)
 An experiment in making pixel art on your own GPU instead of a paid service: ComfyUI with the SpriteKiln node pack,

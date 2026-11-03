@@ -52,6 +52,10 @@
   files in any spelling, one free name left is the one picked, every name taken, a file as --check-dir, --seed) and
   `scripts/test_new_game.py` (a fake kit: new, adopt and upgrade rules, the profile footer, exit codes 1 and 2).
   doctor.py, session_context.py, frames_to_gif.py and yt_transcript.py still have none (#14).
+- Docs: DISTILL_REPORT.md drops its stale 2026-10-19 "still unverified" table (Godot `build`, the Claude Code
+  config checks and `run` on several engines were done since) in favor of the README table and KNOWN_ISSUES.md; it
+  keeps the enforced rules (rechecked against EVIDENCE.md: F1 now has seven creators), the outside claims still
+  unproven, and the experiments, each saying what is already done (#15).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

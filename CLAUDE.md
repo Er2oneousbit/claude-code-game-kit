@@ -103,7 +103,7 @@ Each `engines/<id>/skeleton/tools/dev.py` implements `check | test | smoke | bui
 
 ## Evidence rules for docs
 
-Every claim in the SOPs that comes from an outside source or a test (a video, a doc, a measurement, a number) cites a source ID from `core/docs/EVIDENCE.md`; standard engineering practice (bisecting, small commits, a question per playtest) needs none (`E##` sources, `F##` cross-source findings, `K01` = this kit's own tests), graded A to X. A tip becomes a SOP rule only at grade A or B; grade C and D stay labeled tips. New source: summarize into `core/docs/evidence/video-notes.md`, add an `E##` row, cite it where used. Specifics that are not live-checked are marked **(verify)**. `DISTILL_PROMPT.md` and `DISTILL_GOAL.txt` re-run the whole cleanup; `DISTILL_REPORT.md` lists what is still unverified.
+Every claim in the SOPs that comes from an outside source or a test (a video, a doc, a measurement, a number) cites a source ID from `core/docs/EVIDENCE.md`; standard engineering practice (bisecting, small commits, a question per playtest) needs none (`E##` sources, `F##` cross-source findings, `K01` = this kit's own tests), graded A to X. A tip becomes a SOP rule only at grade A or B; grade C and D stay labeled tips. New source: summarize into `core/docs/evidence/video-notes.md`, add an `E##` row, cite it where used. Specifics that are not live-checked are marked **(verify)**. `DISTILL_PROMPT.md` and `DISTILL_GOAL.txt` re-run the whole cleanup; `DISTILL_REPORT.md` lists the enforced rules, the outside claims still unproven and the experiments to run; open kit issues live in `KNOWN_ISSUES.md`.
 
 ## Conventions (from `core/docs/STYLE.md`, also applied to this repo's own files)
 
