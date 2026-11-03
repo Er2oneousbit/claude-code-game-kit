@@ -4,7 +4,8 @@
 # Purpose : Exam for the engines' tools/dev.py wrappers (engines/<id>/skeleton/tools/dev.py), the parts that can be
 #           checked without the engine: each module is loaded from its file and its helpers run against a temp
 #           folder with the engine call faked. Covers smoke and capture checks (a run that ended early, a stale or
-#           missing screenshot, no recorded frames; #33) and `run` exiting 2 when the launcher is missing.
+#           missing screenshot, no recorded frames; #33), `run` exiting 2 when the launcher is missing, and on
+#           Windows that a timeout ends a grandchild whose parent already exited (the job object, #36).
 # Usage   : python scripts/test_dev_py.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, no engine needed. The live checks (a real smoke with each toolchain) are
@@ -14,8 +15,10 @@
 import argparse
 import importlib.util
 import io
+import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -192,6 +195,92 @@ class RunLauncherMissing(TempRoot):
         dev.need_project = lambda: self.root
         dev.run = lambda *a, **kw: (127, "")
         self.assertEqual(quiet(dev.cmd_run, argparse.Namespace(editor=False, port=8000))[0], 2)
+
+
+# ---- #36: Windows, a grandchild whose parent already exited ---------------------
+# The parent starts a grandchild that inherits stdout (so it holds the pipe), writes its pid, and exits at once.
+ORPHAN_PARENT = (
+    "import subprocess, sys, time\n"
+    "time.sleep(0.3)\n"                      # join the job first (dev.py assigns it right after starting us)
+    "g = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+    "open(sys.argv[1], 'w').write(str(g.pid))\n"
+)
+STILL_ACTIVE = 259
+
+
+def win_alive(pid):
+    """True while a Windows process runs (os.kill(pid, 0) would terminate it there)."""
+    import ctypes
+    from ctypes import wintypes
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.OpenProcess.restype = wintypes.HANDLE
+    k32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    k32.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+    k32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    h = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return False
+    code = wintypes.DWORD()
+    ok = k32.GetExitCodeProcess(h, ctypes.byref(code))
+    k32.CloseHandle(h)
+    return bool(ok) and code.value == STILL_ACTIVE
+
+
+@unittest.skipUnless(sys.platform == "win32", "Windows job objects")
+class WindowsOrphanOnTimeout(TempRoot):
+    def grandchild(self, pidfile):
+        """The orphan's pid, read once its parent wrote it; registered for cleanup in any case."""
+        for _ in range(100):
+            if pidfile.is_file() and pidfile.read_text().strip():
+                pid = int(pidfile.read_text())
+                self.addCleanup(lambda: subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True))
+                return pid
+            time.sleep(0.05)
+        self.fail("the parent never wrote the grandchild's pid")
+
+    def test_run_timeout_ends_the_orphan(self):
+        for engine in [e for e in ENGINES if e != "unity"]:   # Unity's run_unity starts the editor itself
+            with self.subTest(engine=engine):
+                dev = load(engine)
+                dev.ROOT = self.root
+                dev.KILL_TIMEOUT_S = 2
+                pidfile = self.root / f"{engine}.pid"
+                started = time.monotonic()
+                (rc, _), _ = quiet(dev.run, [sys.executable, "-c", ORPHAN_PARENT, str(pidfile)], capture=True,
+                                   timeout=2)
+                self.assertEqual(rc, 124)
+                self.assertLess(time.monotonic() - started, 3.5, f"{engine}: waited on the orphan's pipe")
+                pid = self.grandchild(pidfile)
+                time.sleep(0.2)
+                self.assertFalse(win_alive(pid), f"{engine}: the grandchild outlived the timeout")
+
+    def test_winjob_in_every_module(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                dev = load(engine)
+                pidfile = self.root / f"job-{engine}.pid"
+                proc = subprocess.Popen([sys.executable, "-c", ORPHAN_PARENT, str(pidfile)])
+                job = dev.WinJob(proc, 30)
+                self.assertTrue(job.handle, f"{engine}: no job object")
+                proc.wait(10)
+                pid = self.grandchild(pidfile)
+                self.assertTrue(win_alive(pid))
+                job.kill()
+                time.sleep(0.2)
+                self.assertFalse(win_alive(pid), f"{engine}: WinJob.kill left the grandchild running")
+                self.assertIsNone(job.handle)
+
+    def test_untimed_and_normal_exit_leave_processes_alone(self):
+        dev = load("web")
+        self.assertIsNone(dev.WinJob(subprocess.Popen([sys.executable, "-c", "pass"]), None).handle)
+        pidfile = self.root / "normal.pid"
+        proc = subprocess.Popen([sys.executable, "-c", ORPHAN_PARENT, str(pidfile)])
+        job = dev.WinJob(proc, 30)
+        proc.wait(10)
+        job.close()                              # what run() does after a normal exit
+        pid = self.grandchild(pidfile)
+        time.sleep(0.2)
+        self.assertTrue(win_alive(pid), "closing the job must not end what the command left running")
 
 
 if __name__ == "__main__":

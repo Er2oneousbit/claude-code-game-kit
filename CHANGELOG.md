@@ -102,6 +102,11 @@
   a follow already moving fast toward its target no longer overshoots (`smoothDamp(9, 10, 100, 0.2, 1/60)` gave
   10.42); new tests start with velocity toward and away from the target. No other engine has a smoothDamp; the
   juice springs and their golden vectors are unchanged (#35).
+- Every engine's `dev.py`: on Windows a command with a timeout runs in a job object (`WinJob`, ctypes), and a
+  timeout or Ctrl+C ends the whole job, so a grandchild whose parent already exited no longer keeps running and
+  holding the output pipe (`taskkill /T` only finds children through living parents). A normal exit only lets go
+  of the job; untimed commands (`run`, a browser a dev server opens) are left as before. `scripts/test_dev_py.py`
+  runs a real orphan against each engine's `run` (#36).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

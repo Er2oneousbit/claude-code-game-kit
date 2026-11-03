@@ -52,6 +52,8 @@
 # Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): the kit's GameKitShell plugin (Plugins/,
 #           opt-in in the .uproject): `test` also runs its GameKit.* tests when it is enabled and counts them,
 #           doctor reports it, check refuses it on a Blueprint-only project (its C++ needs Source/)
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Windows a command with a timeout runs in a
+#           job object (WinJob), so a timeout also ends a grandchild whose parent already exited
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -200,9 +202,65 @@ def kit_plugin_state():
 NEW_SESSION = sys.platform != "win32"
 
 
-def kill_tree(proc):
+class WinJob:
+    """Windows: a job object holding proc and every process it starts from then on, so kill_tree can end a
+    grandchild whose parent already exited (taskkill /T only finds children through living parents). Made for
+    commands with a timeout, like the process group on Linux and macOS; elsewhere, or when a call fails, it does
+    nothing. A process proc starts before it joins the job (its first moments) stays outside: taskkill /T covers it."""
+    PROCESS_SET_QUOTA = 0x0100
+    PROCESS_TERMINATE = 0x0001
+
+    def __init__(self, proc, timeout):
+        self.handle = None
+        if sys.platform != "win32" or timeout is None:
+            return
+        try:
+            k32 = kernel32()
+            job = k32.CreateJobObjectW(None, None)
+            child = k32.OpenProcess(self.PROCESS_SET_QUOTA | self.PROCESS_TERMINATE, False, proc.pid) if job else None
+            if child and k32.AssignProcessToJobObject(job, child):
+                self.handle = job
+            elif job:
+                dbg(f"job object: could not add pid {proc.pid}")
+                k32.CloseHandle(job)
+            if child:
+                k32.CloseHandle(child)
+        except (OSError, AttributeError, ImportError) as exc:
+            dbg(f"job object: {exc}")
+
+    def kill(self):
+        """End every process in the job, then close it."""
+        if self.handle:
+            kernel32().TerminateJobObject(self.handle, 1)
+        self.close()
+
+    def close(self):
+        """Let go of the job; its processes keep running (a normal exit changes nothing)."""
+        if self.handle:
+            kernel32().CloseHandle(self.handle)
+            self.handle = None
+
+
+def kernel32():
+    """kernel32 with the job object calls typed (Windows only)."""
+    import ctypes
+    from ctypes import wintypes
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.CreateJobObjectW.restype = wintypes.HANDLE
+    k32.CreateJobObjectW.argtypes = (wintypes.LPVOID, wintypes.LPCWSTR)
+    k32.OpenProcess.restype = wintypes.HANDLE
+    k32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    k32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+    k32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
+    k32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    return k32
+
+
+def kill_tree(proc, job=None):
     """Kill proc and everything it started. A grandchild still holding our stdout pipe (a test exe, a
     worker, an editor helper) would otherwise keep communicate() waiting after proc itself is dead."""
+    if job is not None:
+        job.kill()                         # Windows: the whole job, also orphaned grandchildren
     if sys.platform == "win32":
         try:                               # /T: the whole tree under proc; Popen holds the handle, so the PID is still ours
             subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], stdin=subprocess.DEVNULL,
@@ -250,11 +308,13 @@ def run(cmd, capture=False, timeout=None):
         print(f"[error] cannot execute {cmd[0]}: {exc.strerror or exc} (not a file, or not executable: chmod +x)",
               file=sys.stderr)
         return 126, ""
+    job = WinJob(proc, timeout)
     try:
         out, _ = proc.communicate(timeout=timeout)
+        job.close()                        # a normal exit: anything it left running keeps running
     except (subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
         # The editor's children (shader workers, crash reporter) hold the pipe too: kill the tree
-        kill_tree(proc)
+        kill_tree(proc, job)
         out = reap(proc)
         if isinstance(exc, KeyboardInterrupt):
             raise
