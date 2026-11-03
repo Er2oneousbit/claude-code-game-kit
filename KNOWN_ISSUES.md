@@ -170,7 +170,8 @@ autoplay exit leak (#6).
 
 ### Graveyard Shift (Unity)
 - The bot trio is not quite repeatable: two ghosts close together can part by a millimeter between runs, so
-  always-lit's hand-made catches read 12 or 14 (cause not found; probably not physics timing or job threads). Careful and
+  always-lit's hand-made catches read 12 or 14 (cause not found; probably not physics timing or job threads;
+  [#160](https://github.com/Er2oneousbit/claude-code-game-kit/issues/160)). Careful and
   always-dark now replay exactly, so `Smoke_D` at the 104 cap no longer flakes (#9, fixed in 0.8.3).
 - Generated nights are easier than the hand-made yard (the dark bot escapes 6 of 8 generated against 2 of 8).
 - A low rock the ghosts' NavMesh climbs (0.75 m) blocks the keeper's CharacterController (0.3 m); the fix moved the
