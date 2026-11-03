@@ -9,6 +9,7 @@
 #           - the web and web-3d ENGINE.md layout names every src/core module the skeleton holds (#117)
 #           - every Wavesmith command the docs give names a real subcommand, and `vectors` always says whose (#118)
 #           - the PixelLab commands run live are the same in README and SOP-16, and ai-tools.md points there (#119)
+#           - every source ID the shipped docs cite (E##, F##, K##) has a row in EVIDENCE.md (#120)
 # Usage   : python scripts/test_kit_docs.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, reads the kit tree read-only. The engines and their doc names are in the
@@ -47,6 +48,10 @@ WEB_CORE_WORDS = {
 WAVESMITH = "core/tools/audio/wavesmith"
 WAVESMITH_BUILTINS = {"list", "check", "test"}   # handled by wavesmith.py itself, not in SUBCOMMANDS
 DOC_ROOTS = ["README.md", "START_HERE.md", "CLAUDE.md", "core", "engines"]
+EVIDENCE = "core/docs/EVIDENCE.md"
+EVIDENCE_ROOTS = ["core/docs", "core/CLAUDE.md", "core/.claude", "engines"]   # where docs cite sources
+# a source ID as the docs cite it: E01..E999, F1..F99, K01..K99 (not "Kimi K3", "E2E" or "F12-key")
+CITATION = re.compile(r"(?<![\w-])(E\d{2,3}|F\d{1,2}|K\d{2})(?![\w-])")
 
 
 def read(rel):
@@ -87,9 +92,9 @@ def layout_entry(engine_md, name):
     return " ".join(m.group(0).split())
 
 
-def kit_markdown():
-    """(relative path, text) of every markdown file the kit ships or keeps at its root (vendored trees skipped)."""
-    for root in DOC_ROOTS:
+def kit_markdown(roots=DOC_ROOTS):
+    """(relative path, text) of every markdown file under roots (files or folders; vendored trees skipped)."""
+    for root in roots:
         base = KIT / root
         paths = [base] if base.is_file() else base.rglob("*.md")
         for p in paths:
@@ -196,6 +201,21 @@ class AgreementExam(unittest.TestCase):
         row = section(read("core/docs/resources/ai-tools.md"), r"^\| \*\*PixelLab\*\*", r"$")
         self.assertIn("SOP-16", row)
         self.assertNotRegex(row, r"(?i)not yet run|never run", "ai-tools.md defers the live status to SOP-16")
+
+
+class EvidenceExam(unittest.TestCase):
+    def test_every_cited_source_has_a_ledger_row(self):
+        # #120: audio.md and the E134 row cited K02, which had no row in EVIDENCE.md
+        rows = set(re.findall(r"^\| ([EFK]\d+) \|", read(EVIDENCE), re.M))
+        self.assertIn("K01", rows)
+        missing = []
+        for rel, text in kit_markdown(EVIDENCE_ROOTS):
+            for tok in sorted(set(CITATION.findall(text)) - rows):
+                missing.append("%s: %s" % (rel, tok))
+        self.assertEqual(missing, [], "cite only IDs with a row in " + EVIDENCE)
+
+    def test_the_citation_pattern(self):
+        self.assertEqual(CITATION.findall("(E09, F4; K02) Kimi K3, F12-key, E2E"), ["E09", "F4", "K02"])
 
 
 if __name__ == "__main__":

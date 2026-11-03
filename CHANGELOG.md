@@ -334,6 +334,10 @@
 - Docs: `docs/resources/ai-tools.md` no longer says PixelLab was never run live; it points at SOP-16, which lists the
   commands that were (now `fix reduce-colors`, as the README says, not every `fix` operation).
   `test_kit_docs.py` checks that the README and SOP-16 lists agree (#119).
+- Evidence ledger: K02, the local music-generation test cited by `docs/resources/audio.md`, has a row (machine,
+  prompts, takes, results, grade); K01 points at the README "What was tested" table instead of describing the six
+  engines of 0.2; two rules on grade C sources are labelled tips, as the ledger requires ("Tell Claude your machine",
+  E27; the death rule, E09). `test_kit_docs.py` checks that every cited E, F and K ID has a row (#120).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
