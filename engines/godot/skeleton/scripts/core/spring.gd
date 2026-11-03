@@ -5,9 +5,12 @@
 # Usage   : var spring := Spring.new(4.0, 0.5)              # frequency Hz, damping ratio (1 = no overshoot)
 #           on a hit:   spring.x = 0.4                      # kick it away from target (0)
 #           each tick:  spring.update(dt); sprite.scale = Spring.squash(spring.x)
+#           var xy: PackedFloat64Array = Spring.squash_xy(spring.x)   # the same two numbers, 64-bit
 # Notes   : Semi-implicit Euler, so it stays stable at normal frame rates. squash(a): a > 0 widens and flattens,
-#           a < 0 stretches; amount is clamped above -0.9 so the scale never reaches 0. squash() returns a Vector2
-#           (32-bit floats); that is well inside the golden tolerance. Tested against data/golden/juice.json.
+#           a < 0 stretches; amount is clamped above -0.9 so the scale never reaches 0. squash_xy() keeps both
+#           results 64-bit, as every other port does; squash() packs them into a Vector2 (32-bit floats), which
+#           is fine for a scale but not for a comparison (1 + a is unbounded above). Tested against
+#           data/golden/juice.json through squash_xy().
 #
 # Pseudocode:
 #   w = 2 pi frequency; a = -w^2 (x - target) - 2 damping w v; v += a dt; x += v dt
@@ -39,8 +42,13 @@ func update(dt: float) -> float:
 	return x
 
 
-static func squash(amount: float) -> Vector2:
+static func squash_xy(amount: float) -> PackedFloat64Array:
 	var a: float = maxf(amount, MIN_SQUASH)
-	return Vector2(1.0 + a, 1.0 / (1.0 + a))
+	return PackedFloat64Array([1.0 + a, 1.0 / (1.0 + a)])
+
+
+static func squash(amount: float) -> Vector2:
+	var xy: PackedFloat64Array = squash_xy(amount)
+	return Vector2(xy[0], xy[1])
 
 # {{FOOTER}}

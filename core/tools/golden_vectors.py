@@ -736,7 +736,7 @@ def build_juice():
                                                                           "x": 0.4, "v": 0.0, "target": 0.0},
                   "steps": steps})
     cases.append({"type": "squash", "name": "volume kept", "points": [[a, *squash(a)] for a in
-                                                                       (0.0, 0.3, -0.25, -2.0)]})
+                                                                       (0.0, 0.3, -0.25, -2.0, 100.3)]})
     fl = FlashLimiter(3, 1.0)
     steps = []
     for now in [0.0, 0.1, 0.2, 0.3, 0.9, 1.0, 1.05, 1.1, 1.2, 2.5]:

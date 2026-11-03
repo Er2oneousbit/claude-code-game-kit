@@ -190,8 +190,8 @@ func test_squash() -> void:
 	var cases: Array = _cases("squash")
 	for c: Dictionary in cases:
 		for p: Array in c["points"]:
-			var sc: Vector2 = Spring.squash(float(p[0]))
-			_check([sc.x, sc.y], [p[1], p[2]], "%s a=%s" % [c["name"], p[0]])
+			var sc: PackedFloat64Array = Spring.squash_xy(float(p[0])) # 64-bit: the logic, not a Vector2 packing
+			_check([sc[0], sc[1]], [p[1], p[2]], "%s a=%s" % [c["name"], p[0]])
 	_report("squash", cases.size())
 
 
