@@ -3,6 +3,20 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.9.0 (unreleased)
+- **`/token-audit`** (22 skills) and **`tools/token_audit.py`**: a read-only audit of what a project's Claude Code
+  sessions spend tokens on, after a video's audit prompt (E141, description only, grade D). The tool reads files,
+  never the network, and changes nothing: memory files loaded at the start (CLAUDE.md in the project and its
+  parents, the user's, CLAUDE.local.md, the auto-memory index, @imports one level deep) with sizes estimated at
+  4 characters per token; model, effort and hooks from the three settings files; proxy and gateway variables by
+  name only; `.mcp.json` server names; subagent models; skill description sizes; and the newest session log's
+  cache read, cache write, input and output tokens, counted once per API response (one response is written as
+  several lines), with first and last turn context, model switches and cache lifetimes. What it cannot see (MCP
+  tool counts and deferral, `/usage`, scheduled tasks) is printed as UNKNOWN with the command to run. The skill
+  adds `/context`, `/usage`, the MCP servers and scheduled work Claude can see, and writes one table sorted by
+  cost plus the single highest-leverage change. The 5k and 10k memory thresholds and the deferral claim are tips,
+  not rules. Exam `test_token_audit.py` (20 tests, Python 3.8 and 3.14). SOP-07 points to it.
+
 ## 0.8.3 (unreleased)
 - Gatekeeper (Godot): "Start over" resets the game in place, so the loaded model stays and a reply still on its way
   is dropped; both start buttons wait for a model load, which gives one intro instead of two (#1).
