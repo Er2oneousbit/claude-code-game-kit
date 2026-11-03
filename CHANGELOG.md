@@ -37,7 +37,7 @@
   cover 30 of 40 seeds, charging 13 of 40, debug and release alike (was 25 and 11) (#11).
 - Scrap Tanks (C++/SDL2): the skilled bot's HIDE search skips spots no nav path reaches, as the two Tactics pickers
   already did, so it no longer picks a nav-island spot and stalls against the center rock (20 such picks in a new
-  `test_arena.cpp` sweep on the old code). The scenario pair is unchanged (#153).
+  test_arena.cpp sweep on the old code). The scenario pair is unchanged (#153).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
