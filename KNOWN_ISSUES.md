@@ -118,7 +118,6 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
 ### Bugs and doubts
 - **Docs marked (verify):** facts about outside services (prices, plans, menu paths, license terms) that were not
   checked live. They are the most likely to be out of date.
-- **Godot:** `.game-kit.json` (per-file hashes and upgrade history) is packed into every exported .pck [#161](https://github.com/Er2oneousbit/claude-code-game-kit/issues/161).
 - **Web:** typewriter subtitles can outrun a line's duration [#162](https://github.com/Er2oneousbit/claude-code-game-kit/issues/162); the pseudo-locale drive can still drift on
   slow loads [#163](https://github.com/Er2oneousbit/claude-code-game-kit/issues/163).
 

@@ -50,6 +50,8 @@
 #           job object (WinJob), so a timeout also ends a grandchild whose parent already exited
 # Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Linux and macOS, killing an untimed command
 #           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
+# Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): build lists the exported .pck and fails when it holds
+#           .game-kit.json or a dev-only folder (PCK_FORBIDDEN)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -57,6 +59,7 @@ import platform
 import re
 import shutil
 import signal
+import struct
 import subprocess
 import sys
 import traceback
@@ -100,6 +103,11 @@ DRIVE_TIMEOUT_S = 180                    # a drive (headless, or the windowed ca
 MARKERS = ("DRIVE_", "SETTINGS_", "CRASH_WRITTEN", "PSEUDO_", "TELEMETRY_FILE", "BUG_REPORT")  # echoed lines
 IMAGE_DIFF = "tools/image_diff.py"       # smoke --compare runs it: exit 0 same, 1 different, 2 usage
 NO_EXEC = (126, 127)                     # run() codes: not executable / not found -> exit 2
+# build: what must never ship in the .pck (the kit's bookkeeping and dev-only folders; export_presets.cfg excludes
+# them). Paths from the project root; a trailing / means the folder and everything in it
+PCK_FORBIDDEN = (".game-kit.json", "tests/", "tools/", "docs/", "addons/gut/", "data/golden/", "assets_src/")
+PCK_MAGIC = b"GDPC"
+PCK_DIR_ENCRYPTED = 1                    # pack flag: the file list is encrypted (nothing to read)
 
 DEBUG = False
 
@@ -639,7 +647,71 @@ def cmd_build(args, godot):
     out_path.parent.mkdir(parents=True, exist_ok=True)
     rc, _ = run([godot, "--headless", "--path", ".", "--export-release", args.preset, str(out_path)])
     print(f"[{' OK ' if rc == 0 else 'FAIL'}] export {'done: ' + str(out_path) if rc == 0 else 'failed'}")
-    return 2 if rc in NO_EXEC else 0 if rc == 0 else 1
+    if rc != 0:
+        return 2 if rc in NO_EXEC else 1
+    return check_pck(out_path.with_suffix(".pck"))
+
+
+def pck_paths(path):
+    """Paths in a Godot 4 .pck file (pack format 2 to 4: Godot 4.0 to 4.7), relative to the project root.
+
+    Returns None when the file is not a separate .pck or its file list is encrypted. Layout: "GDPC", u32 format,
+    u32 major, minor, patch, u32 flags, u64 file base, then (format 3+) u64 offset of the file list, or (format 2)
+    16 reserved u32 and the list right after; the list is a u32 count and per file a u32 length, the path (padded
+    with NULs), u64 offset, u64 size, 16 bytes of MD5 and u32 flags.
+    """
+    data = path.read_bytes()
+    if data[:4] != PCK_MAGIC:
+        return None
+    fmt = struct.unpack_from("<I", data, 4)[0]
+    flags = struct.unpack_from("<I", data, 20)[0]
+    if fmt < 2 or flags & PCK_DIR_ENCRYPTED:
+        return None
+    pos = 32                                 # after the u64 file base
+    if fmt >= 3:
+        pos = struct.unpack_from("<Q", data, pos)[0]
+    else:
+        pos += 16 * 4
+    count = struct.unpack_from("<I", data, pos)[0]
+    pos += 4
+    paths = []
+    for _ in range(count):
+        length = struct.unpack_from("<I", data, pos)[0]
+        if pos + 4 + length > len(data):
+            raise ValueError("the file list runs past the end of the file")
+        name = data[pos + 4:pos + 4 + length].rstrip(b"\0").decode("utf-8", "replace")
+        paths.append(name[len("res://"):] if name.startswith("res://") else name)
+        pos += 4 + length + 8 + 8 + 16 + 4
+    return paths
+
+
+def pck_leaks(paths):
+    """The paths of a .pck that PCK_FORBIDDEN says must not ship."""
+    return [p for p in paths if any(p == f or (f.endswith("/") and p.startswith(f)) for f in PCK_FORBIDDEN)]
+
+
+def check_pck(pck):
+    """After an export: fail (exit 1) when the .pck carries kit or dev-only files, e.g. .game-kit.json (the kit's
+    per-file hashes and upgrade history) after a preset edit dropped it from exclude_filter."""
+    if not pck.is_file():
+        print(f"[info] no {pck.name} next to the export (embedded or renamed): its contents were not checked")
+        return 0
+    try:
+        paths = pck_paths(pck)
+    except (OSError, ValueError, struct.error) as exc:
+        print(f"[warn] could not list {pck.name} ({exc}): its contents were not checked")
+        return 0
+    if paths is None:
+        print(f"[info] {pck.name} has an encrypted or unknown file list: its contents were not checked")
+        return 0
+    leaks = pck_leaks(paths)
+    if leaks:
+        shown = ", ".join(leaks[:8]) + (f" and {len(leaks) - 8} more" if len(leaks) > 8 else "")
+        print(f"[FAIL] {pck.name} holds files that must not ship: {shown}. Add them to exclude_filter in "
+              "export_presets.cfg (every preset), then build again.")
+        return 1
+    dbg(f"{pck.name}: {len(paths)} file(s), none of {', '.join(PCK_FORBIDDEN)}")
+    return 0
 
 
 def remove_tree(path):

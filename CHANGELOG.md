@@ -249,6 +249,12 @@
   problem, as the ports do (the default resolution; `bad version`), instead of raising `OverflowError` or
   `ValueError`. Four new cases in `data/golden/shell.json` pin the ports to it; they pass on every engine whose
   reader accepts or refuses the constants (refused counts as `unreadable`, also one problem) (#132).
+- Godot: the three export presets exclude `.game-kit.json`, so Windows, Linux and Web builds no longer carry the
+  kit's record (version, profile, upgrade history and a hash per kit file; Godot exports `.json` as a resource).
+  `dev.py build` lists the exported .pck and fails naming any `.game-kit.json`, `tests/`, `tools/`, `docs/`,
+  `addons/gut/`, `data/golden/` or `assets_src/` file inside, so a preset edited in the editor cannot bring them
+  back unseen. Checked on all three presets with Godot 4.7.2 (92 files, was 93). The other engines' builds take an
+  allow list or their asset folder only and never had it (#161).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

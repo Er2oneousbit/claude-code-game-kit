@@ -6,7 +6,8 @@
 #           folder with the engine call faked. Covers smoke and capture checks (a run that ended early, a stale or
 #           missing screenshot, no recorded frames; #33), `run` exiting 2 when the launcher is missing, and on
 #           Windows that a timeout ends a grandchild whose parent already exited (the job object, #36), and on
-#           Linux and macOS (process-group calls faked) that killing an untimed command kills what it started (#37).
+#           Linux and macOS (process-group calls faked) that killing an untimed command kills what it started (#37),
+#           and that the Godot build fails on a .pck holding .game-kit.json or a dev-only folder (#161).
 # Usage   : python scripts/test_dev_py.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, no engine needed. The live checks (a real smoke with each toolchain) are
@@ -177,6 +178,61 @@ class GodotCapture(TempRoot):
         (self.root / "rec").mkdir()
         self.assertEqual(self.capture(record="rec")[0], 1)
         self.assertEqual(self.capture(record="rec", writes=["rec/f00000.png"])[0], 0)
+
+
+# ---- #161: Godot build lists the .pck ------------------------------------------
+def fake_pck(paths, fmt=4, res_prefix=False):
+    """A Godot .pck with a readable file list (the file data itself is left out: only the list is read)."""
+    import struct
+    entries = b""
+    for p in paths:
+        name = (("res://" + p) if res_prefix else p).encode("utf-8")
+        name += b"\0" * (4 - len(name) % 4)                 # Godot pads each path to a multiple of 4
+        entries += struct.pack("<I", len(name)) + name + struct.pack("<QQ", 0, 0) + b"\0" * 16 + struct.pack("<I", 0)
+    head = b"GDPC" + struct.pack("<5I", fmt, 4, 7, 2, 0) + struct.pack("<Q", 0)
+    if fmt >= 3:
+        head += struct.pack("<Q", len(head) + 8)              # the list follows right after this field
+    else:
+        head += b"\0" * 64
+    return head + struct.pack("<I", len(paths)) + entries
+
+
+class GodotPck(TempRoot):
+    SHIPPED = ["project.binary", "scripts/core/spring.gdc", "data/i18n/en.json", ".godot/uid_cache.bin"]
+
+    def check(self, paths, **kw):
+        dev = load("godot")
+        pck = self.root / "game.pck"
+        pck.write_bytes(fake_pck(paths, **kw))
+        return quiet(dev.check_pck, pck)
+
+    def test_kit_record_in_the_pck_fails_the_build(self):
+        rc, text = self.check(self.SHIPPED + [".game-kit.json", "tests/test_x.gd", "tools/dev.py"])
+        self.assertEqual(rc, 1)
+        self.assertIn("holds files that must not ship: .game-kit.json, tests/test_x.gd, tools/dev.py", text)
+
+    def test_clean_pck_passes_in_every_format(self):
+        for fmt, prefix in ((4, False), (3, False), (2, True)):
+            dev = load("godot")
+            pck = self.root / f"f{fmt}.pck"
+            pck.write_bytes(fake_pck(self.SHIPPED, fmt=fmt, res_prefix=prefix))
+            self.assertEqual(dev.pck_paths(pck), self.SHIPPED, fmt)
+            self.assertEqual(quiet(dev.check_pck, pck)[0], 0, fmt)
+
+    def test_unreadable_or_missing_pck_is_not_a_failure(self):
+        dev = load("godot")
+        self.assertEqual(quiet(dev.check_pck, self.root / "none.pck")[0], 0)
+        (self.root / "cut.pck").write_bytes(fake_pck(self.SHIPPED)[:40])
+        rc, text = quiet(dev.check_pck, self.root / "cut.pck")
+        self.assertEqual(rc, 0)
+        self.assertIn("could not list", text)
+
+    def test_shipped_presets_exclude_the_kit_record(self):
+        cfg = (KIT / "engines" / "godot" / "skeleton" / "export_presets.cfg").read_text(encoding="utf-8")
+        filters = [l for l in cfg.splitlines() if l.startswith("exclude_filter=")]
+        self.assertEqual(len(filters), 3)
+        for line in filters:
+            self.assertIn(".game-kit.json", line)
 
 
 # ---- #33: `run` with a missing launcher ---------------------------------------
