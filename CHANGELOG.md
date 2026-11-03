@@ -207,6 +207,11 @@
 - Dotwork log: `log --pack` writes "Modified? yes" in `docs/ASSET_LOG.md` when any row of the pack carries a polish
   note from either editor, also after an earlier note (`qa ...; hand-polished in Aseprite`). It matched only the
   exact note `hand-polished in Aseprite`, so every Pixelorama polish was logged as unmodified (#101).
+- Dotwork bdf: a malformed or hostile BDF stops with `[error] <font>: line N: ...` (exit 2) before any array is made:
+  a BBX past 256 px or below 0 (`BBX 200000 200000` allocated 40 GB), a BBX of fewer than four numbers, a bad
+  `FONT_ASCENT`, `ENCODING` or `DWIDTH`, a bitmap row that is not hex, or more rows than the BBX height; these
+  crashed as "unexpected failure". A glyph too big for the 256 px page at its `scale` is named, and `scale` is a
+  whole number from 1 to 16 (#108).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

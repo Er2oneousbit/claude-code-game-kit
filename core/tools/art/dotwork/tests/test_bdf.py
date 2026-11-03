@@ -113,6 +113,34 @@ class BdfExam(unittest.TestCase):
         x, y = int(a["x"]), int(a["y"])
         self.assertTrue(((page[y:y + 7, x:x + 5, 3] == 255) == bm).all())       # the page holds exactly the bits
 
+    def test_a_malformed_bdf_names_the_line(self):
+        # #108: a BDF is a download. A huge BBX allocated its array (200000 x 200000 = 40 GB), and bad numbers
+        # crashed as "unexpected failure"; each now stops as a ToolError naming the font and the line
+        import fcore
+        import lane_bdf
+        cases = [("BBX 5 7 0 0", "BBX 200000 200000 0 0", r"line 14: BBX 200000 x 200000"),
+                 ("BBX 5 7 0 0", "BBX -1 7 0 0", r"line 14: BBX -1 x 7"),
+                 ("BBX 5 7 0 0", "BBX 5 7", r"line 14: BBX needs 4 whole numbers"),
+                 ("FONT_ASCENT 8", "FONT_ASCENT abc", r"line 7: FONT_ASCENT needs 1 whole number"),
+                 ("ENCODING 65", "ENCODING x", r"line 12: ENCODING"),
+                 ("DWIDTH 6 0", "DWIDTH six 0", r"line 13: DWIDTH"),
+                 ("F8\n88\n88\n88\nENDCHAR\nSTARTCHAR uni9762", "F8\nZZ\n88\n88\nENDCHAR\nSTARTCHAR uni9762",
+                  r"line 20: bitmap row 'ZZ' is not hex"),
+                 ("88\n88\n88\nENDCHAR\nSTARTCHAR uni9762", "88\n88\n88\n88\nENDCHAR\nSTARTCHAR uni9762",
+                  r"line 23: 8 bitmap rows, but BBX says 7")]
+        for old, new, says in cases:
+            with open(self.bdf, "w", encoding="utf-8") as f:
+                f.write(BDF.replace(old, new, 1))
+            with self.assertRaisesRegex(fcore.ToolError, "^tiny.bdf: " + says, msg=new):
+                lane_bdf.parse_bdf(self.bdf)
+        # a glyph that fits no page at its scale stops before any page is drawn
+        with open(self.bdf, "w", encoding="utf-8") as f:
+            f.write(BDF)
+        meta, g = lane_bdf.parse_bdf(self.bdf)
+        with self.assertRaisesRegex(fcore.ToolError, r"glyph U\+9762 is 264 x 264 px at scale 33"):
+            lane_bdf.build("t", meta, g, {38754}, os.path.join(self.tmp, "out"), 33)
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "out")))
+
     def test_strings_and_coverage(self):
         import lane_bdf
         _, g = lane_bdf.parse_bdf(self.bdf)
@@ -201,6 +229,11 @@ class BdfExam(unittest.TestCase):
         code, out = self.pack(entry, {"title": "A面", "menu": ["Z"]})
         self.assertEqual(code, 1, out)
         self.assertIn("'Z' U+005A in s.json:menu.0", out)
+        # a scale past MAX_SCALE (or not a whole number) is a usage error, not a page that cannot be drawn
+        for bad in (0, 17, 1.5, "2"):
+            code, out = self.pack(dict(entry, scale=bad), {"title": "A"})
+            self.assertEqual(code, 2, out)
+            self.assertIn('"scale" is a whole number from 1 to 16', out)
         # no licence file: a usage error
         entry.pop("license")
         code, out = self.pack(entry, {"title": "A"})
