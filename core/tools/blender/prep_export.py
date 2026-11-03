@@ -21,6 +21,8 @@
 #           --lods 0.5,0.25 writes <name>_LOD1.glb, <name>_LOD2.glb with a Decimate (collapse) modifier
 #           at those ratios. Check LODs by eye: decimation can wreck UVs and silhouettes.
 #           Skinned meshes: rotation and scale are applied to armatures too; check the rig after export.
+#           Linked duplicates (objects sharing one mesh) get their own mesh copy each, so the export
+#           has one mesh per object instead of a shared one.
 #           --ignore NAME drops helper objects (a stray sphere, a ground plane) before anything else.
 #           Validation uses the same rules as validate_asset.py (--class picks the budget; default any).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -28,7 +30,7 @@
 #
 # Pseudocode
 #   import into an empty scene, drop cameras and lights
-#   apply rotation and scale on meshes and armatures; optionally join meshes
+#   apply rotation and scale on meshes and armatures (shared mesh data copied per object first); optionally join
 #   pivot: each mesh's origin to its bottom center (data moves the other way, world shape unchanged),
 #          then shift the roots so the asset's bottom center sits at the world origin
 #   names: spaces and dots to underscores (engines choke on them)
@@ -108,6 +110,13 @@ def select_only(bpy, objs):
 
 def apply_transforms(bpy, scene):
     targets = [o for o in scene.objects if o.type in ("MESH", "ARMATURE")]
+    for obj in targets:
+        # Linked duplicates share one mesh (or armature) data block. Blender applies the transform to the
+        # shared data once and leaves the other users with a compensating scale and rotation, so give every
+        # extra user its own copy first. The last user keeps the original block.
+        if obj.data.users > 1:
+            dbg(f"{obj.name}: {obj.data.name} has {obj.data.users} users, copying it")
+            obj.data = obj.data.copy()
     if targets:
         select_only(bpy, targets)
         bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)

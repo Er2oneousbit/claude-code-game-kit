@@ -56,6 +56,10 @@
   config checks and `run` on several engines were done since) in favor of the README table and KNOWN_ISSUES.md; it
   keeps the enforced rules (rechecked against EVIDENCE.md: F1 now has seven creators), the outside claims still
   unproven, and the experiments, each saying what is already done (#15).
+- Blender: `prep_export.py` gives linked duplicates (objects sharing one mesh) their own mesh copy before applying
+  transforms. Blender applied the transform to the shared mesh once and left the other objects with a leftover
+  scale, so the export kept an unapplied scale and only the validator warned. test_prep_export.py has the case,
+  two posts on one mesh with different scales and rotations (#18).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

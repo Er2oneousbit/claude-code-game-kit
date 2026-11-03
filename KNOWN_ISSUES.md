@@ -137,8 +137,6 @@ an untimed command running ([#37](../../issues/37)).
 - **`tools/second_opinion.py`:** only the Kimi Code CLI is supported.
 
 ### Bugs and doubts
-- **`tools/blender/prep_export.py`:** a possible error on meshes shared by several objects (multi-user meshes), never
-  reproduced.
 - **Docs marked (verify):** facts about outside services (prices, plans, menu paths, license terms) that were not
   checked live. They are the most likely to be out of date.
 

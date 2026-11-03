@@ -4,7 +4,8 @@
 # Purpose : The exam for prep_export.py: a model with unapplied scale and rotation,
 #           a pivot floating above it, an off-center location and a bad name must come
 #           out clean, the LODs must really have fewer triangles, and the validator
-#           verdict and usage errors must reach the exit code.
+#           verdict and usage errors must reach the exit code. Linked duplicates (two
+#           objects sharing one mesh) must both come out with their transforms applied.
 # Usage   : With the bpy module:  python tools/blender/test_prep_export.py [--keep] [--debug]
 #           Inside Blender:       blender -b --python-exit-code 1 -P tools/blender/test_prep_export.py -- [--keep] [--debug]
 # Exit    : 0 all cases pass, 1 some case failed, 2 bpy not available
@@ -15,6 +16,7 @@
 #   build a messy fixture (scaled, rotated, origin above the mesh, off-center, "Rock 01.001")
 #   run prep_export as a separate process with --lods 0.5,0.25
 #   re-import the outputs with bpy and measure: scale, base height, center, origin, names, triangles
+#   two objects sharing one mesh, each scaled and rotated differently: both applied, shapes kept
 #   check validation failures and usage errors reach the exit code
 import argparse
 import shutil
@@ -71,6 +73,35 @@ def build_no_uv(bpy, path):
     while obj.data.uv_layers:
         obj.data.uv_layers.remove(obj.data.uv_layers[0])
     bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB")
+
+
+def build_shared(bpy, path):
+    """Two objects sharing one cube mesh (a linked duplicate), each with its own scale and rotation.
+    Saved as .blend so the sharing is exactly as a user's file has it."""
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 2))
+    post_a = bpy.context.active_object
+    post_a.name = "PostA"
+    post_a.scale = (2, 2, 2)                # 2 m tall, spans z 1..3
+    post_a.rotation_euler = (0, 0, 0.5)
+    post_b = bpy.data.objects.new("PostB", post_a.data)
+    bpy.context.scene.collection.objects.link(post_b)
+    post_b.location = (3, 0, 1)
+    post_b.scale = (1, 1, 3)                # 3 m tall, spans z -0.5..2.5
+    post_b.rotation_euler = (0, 0, -0.4)
+    bpy.ops.wm.save_as_mainfile(filepath=str(path))
+
+
+def measure_all(bpy, path):
+    """Import a .glb and report every mesh object by name: scale, rotation, height, lowest z."""
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.ops.import_scene.gltf(filepath=str(path))
+    found = {}
+    for obj in [o for o in bpy.context.scene.objects if o.type == "MESH"]:
+        zs = [(obj.matrix_world @ v.co)[2] for v in obj.data.vertices]
+        found[obj.name] = {"scale": tuple(obj.scale), "rot": tuple(obj.rotation_euler),
+                           "height": max(zs) - min(zs), "min_z": min(zs)}
+    return found
 
 
 def measure(bpy, path):
@@ -134,6 +165,26 @@ def main():
         case("LOD1 and LOD2 have fewer triangles, in order", m["tris"] > l1["tris"] > l2["tris"],
              (m["tris"], l1["tris"], l2["tris"]))
         case("source file untouched", measure(bpy, src)["name"].startswith("Rock 01"))
+
+    shared = tmp / "shared.blend"
+    build_shared(bpy, shared)
+    rc, out = run_tool(shared, "--out", tmp / "shared.glb", "--lods", "0.5")
+    case("linked duplicates (one shared mesh) export and validate (exit 0)", rc == 0, out[-600:])
+    if rc == 0:
+        posts = measure_all(bpy, tmp / "shared.glb")
+        case("linked duplicates: both objects exported", sorted(posts) == ["PostA", "PostB"], sorted(posts))
+        case("linked duplicates: scale and rotation applied on both",
+             all(abs(v - 1) < 1e-4 for p in posts.values() for v in p["scale"])
+             and all(abs(v) < 1e-4 for p in posts.values() for v in p["rot"]),
+             {n: (p["scale"], p["rot"]) for n, p in posts.items()})
+        case("linked duplicates: each keeps its own height (2 m and 3 m)",
+             abs(posts.get("PostA", {}).get("height", 0) - 2) < 1e-3
+             and abs(posts.get("PostB", {}).get("height", 0) - 3) < 1e-3,
+             {n: p["height"] for n, p in posts.items()})
+        case("linked duplicates: the asset sits on the ground",
+             abs(min(p["min_z"] for p in posts.values()) if posts else 1) < 1e-3,
+             {n: p["min_z"] for n, p in posts.items()})
+        case("linked duplicates: no unapplied-transform warning", "unapplied" not in out, out[-400:])
 
     rc, out = run_tool(src, "--out", tmp / "rock.glb")
     case("existing output is not overwritten without --overwrite (exit 2)", rc == 2, out[-200:])
