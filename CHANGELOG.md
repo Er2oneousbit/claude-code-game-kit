@@ -50,6 +50,11 @@
   LÖVE does, so a shorter run after a longer one no longer leaves the earlier run's tail in the folder that
   `frames_to_gif.py` is pointed at. `scripts/test_dev_py.py` runs all three `smoke.mjs` under node with stand-in
   vite and Playwright modules (#134).
+- Web 3D: `dev.py smoke -h` says what `--drive`, `--data-dir` and `--locale` do in this skeleton (it has no shell
+  screens: a drive answers `DRIVE_ABORT`), instead of the web overlay's scenario list; the wording lives in
+  `DRIVE_HELP`, `DATA_DIR_HELP` and `LOCALE_HELP` next to `BOOT_MARKER`, so the two dev.py files stay alike. Web and
+  Web 3D `smoke.mjs` skip the data-dir checks of a scenario that answered `DRIVE_ABORT` or `DRIVE_IGNORED`, so a
+  refused drive no longer also reports `settings.json missing` (#135).
 - Scrap Tanks (C++/SDL2): make_sprites.py checks the bpy launcher (uv, or `BPY_PYTHON`) and the kit's render tool
   before the first job and stops with `[error]` and exit 2 instead of a traceback; a render that dies before its
   first `[..]` line shows its last output lines; `--debug` prints each command and all output; a Windows path in

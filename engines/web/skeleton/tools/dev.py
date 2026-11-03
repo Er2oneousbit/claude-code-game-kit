@@ -53,6 +53,12 @@ ROOT = Path(__file__).resolve().parents[1]
 MIN_NODE = (22, 12)                       # Vitest 5 needs ^22.12 || ^24 || >=26; Vite 8 needs 20.19+
 SMOKE_FRAMES = 120
 BOOT_MARKER = "BOOT_OK"                   # logged by src/shell/app.ts once the title screen is up
+# --drive, --data-dir, --locale: the shell (src/shell/drive.ts) runs the scenarios and reads both folders
+DRIVE_HELP = ("the game plays a scripted run (shell games): menus, crash (exits 1 on purpose), pseudo, "
+              "pseudo-plant, show:title|settings|pause|subtitle|juice (with --screenshot); waits for DRIVE_DONE")
+DATA_DIR_HELP = ("user-data folder for this run (?data-dir=): loaded before, written back after "
+                 "(default build/smoke-data with --drive)")
+LOCALE_HELP = "language for this run, e.g. fr or pseudo (?locale=)"
 SMOKE_TIMEOUT_S = 180                     # whole smoke run, including browser start
 SMOKE_MIN_FPS = 20                        # slowest headless software rendering we allow for: --frames adds frames/20 s
 TEST_TIMEOUT_S = 600
@@ -532,13 +538,9 @@ def build_parser():
     p.add_argument("--screenshot", default="", help="save a PNG of the final frame (path relative to the project)")
     p.add_argument("--record", default="", help="save PNG frames to this folder (GIF: tools/art/frames_to_gif.py)")
     p.add_argument("--record-every", type=positive_int, default=66, help="milliseconds between recorded frames (default 66)")
-    p.add_argument("--drive", default="", metavar="SCENARIO",
-                   help="the game plays a scripted run (shell games): menus, crash (exits 1 on purpose), pseudo, "
-                        "pseudo-plant, show:title|settings|pause|subtitle|juice (with --screenshot); waits for DRIVE_DONE")
-    p.add_argument("--data-dir", default="", metavar="DIR",
-                   help="user-data folder for this run (?data-dir=): loaded before, written back after "
-                        "(default build/smoke-data with --drive)")
-    p.add_argument("--locale", default="", metavar="ID", help="language for this run, e.g. fr or pseudo (?locale=)")
+    p.add_argument("--drive", default="", metavar="SCENARIO", help=DRIVE_HELP)
+    p.add_argument("--data-dir", default="", metavar="DIR", help=DATA_DIR_HELP)
+    p.add_argument("--locale", default="", metavar="ID", help=LOCALE_HELP)
     p.add_argument("--compare", default="", metavar="PNG", help="compare the --screenshot with this baseline (tools/image_diff.py); exit 1 when it differs")
     p.add_argument("--tolerance", type=channel_delta, default=0, help="--compare: per-channel difference allowed, 0-255 (default 0)")
     p.add_argument("--headed", action="store_true", help="visible browser window (real GPU: WebGPU, local AI models)")

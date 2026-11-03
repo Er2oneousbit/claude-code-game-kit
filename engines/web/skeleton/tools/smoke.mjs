@@ -41,6 +41,8 @@
 //           (it was swallowed), an old --screenshot is deleted first, and each capture is checked after the run
 // Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): --record clears the folder's old f*.png frames
 //           first, so it holds this run's frames only
+// Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): a DRIVE_ABORT or DRIVE_IGNORED run skips the
+//           data-dir scenario checks (the refusal is its one error)
 // ---------------------------------------------------------------------------
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -103,11 +105,11 @@ try {
   process.exit(2);
 }
 
-/** Resolves when a console line contains one of `texts` (or at once if already seen). */
+/** Resolves when a console line contains one of `texts` (or at once if already seen); seen() says whether one did. */
 function waiter(...texts) {
   let hit = false, done;
   const p = new Promise((res) => (done = res));
-  return { promise: p, check: (line) => { if (!hit && texts.some((t) => line.includes(t))) { hit = true; done(true); } } };
+  return { promise: p, seen: () => hit, check: (line) => { if (!hit && texts.some((t) => line.includes(t))) { hit = true; done(true); } } };
 }
 const timeout = (ms) => new Promise((res) => setTimeout(() => res(false), ms));
 
@@ -287,7 +289,8 @@ try {
     writeTree(DATA_DIR, files, seeded);
     console.log(`[info] user data (${Object.keys(files).length} file(s)) in ${DATA_DIR}`);
     for (const [marker, name] of written) console.log(`${marker} ${resolve(DATA_DIR, name)}`);
-    errors.push(...scenarioChecks(files));
+    // a refused or failed scenario is already its one error: what it would have written is not checked
+    if (!abort?.seen()) errors.push(...scenarioChecks(files));
   }
 } catch (err) {
   errors.push(`[smoke] ${err.message}`);

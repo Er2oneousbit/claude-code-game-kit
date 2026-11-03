@@ -8,7 +8,8 @@
 #           Windows that a timeout ends a grandchild whose parent already exited (the job object, #36), and on
 #           Linux and macOS (process-group calls faked) that killing an untimed command kills what it started (#37),
 #           that the Godot build fails on a .pck holding .game-kit.json or a dev-only folder (#161), and that the
-#           web, web-3d and RPG Maker MZ smoke.mjs --record leaves only this run's frames (#134; needs node).
+#           web, web-3d and RPG Maker MZ smoke.mjs --record leaves only this run's frames (#134; needs node), a
+#           refused --drive is one error (#135) and web-3d's -h says its --drive aborts (#135).
 # Usage   : python scripts/test_dev_py.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, no engine needed. The live checks (a real smoke with each toolchain) are
@@ -257,9 +258,9 @@ class RunLauncherMissing(TempRoot):
         self.assertEqual(quiet(dev.cmd_run, argparse.Namespace(editor=False, port=8000))[0], 2)
 
 
-# ---- #134: web, web-3d and RPG Maker MZ smoke.mjs --record clears old frames ------
-# smoke.mjs runs for real under node; vite, Playwright and MZ's serve.mjs are stand-ins that boot at once and
-# "screenshot" by writing a small file.
+# ---- #134, #135: web, web-3d and RPG Maker MZ smoke.mjs ------------------------
+# smoke.mjs runs for real under node; vite, Playwright and MZ's serve.mjs are stand-ins that boot at once,
+# "screenshot" by writing a small file, and answer any ?drive= with DRIVE_ABORT (as the web-3d skeleton does).
 FAKE_PLAYWRIGHT = """import { writeFileSync } from "node:fs";
 export const chromium = {
   async launch() {
@@ -269,9 +270,13 @@ export const chromium = {
         return {
           on(ev, fn) { (handlers[ev] ||= []).push(fn); },
           async addInitScript() {},
-          async goto() {
-            const msg = { type: () => "log", text: () => "BOOT_OK", location: () => ({}) };
-            setTimeout(() => (handlers.console || []).forEach((fn) => fn(msg)), 10);
+          async goto(url) {
+            const emit = (type, text) => (handlers.console || []).forEach((fn) => fn({ type: () => type, text: () => text, location: () => ({}) }));
+            setTimeout(() => {
+              emit("log", "BOOT_OK");
+              const drive = new URL(url).searchParams.get("drive");
+              if (drive) emit("error", `[ERROR][drive] DRIVE_ABORT ${drive}: no scripted runs here`);
+            }, 10);
           },
           async screenshot({ path }) { writeFileSync(path, "new"); },
           async evaluate() { await new Promise((r) => setTimeout(r, 300)); return {}; },
@@ -326,6 +331,31 @@ class WebSmokeRecord(TempRoot):
                 self.assertEqual(left, [f"f{i:05d}.png" for i in range(n)], f"{n} frame(s) reported")
                 self.assertTrue(all((frames / name).read_text() == "new" for name in left))
                 self.assertTrue((frames / "notes.txt").is_file(), "only f<digits>.png is cleared")
+
+    def test_a_refused_drive_is_one_error(self):
+        # #135: DRIVE_ABORT fails the run; the data-dir checks of the scenario it never ran add nothing
+        for engine in ("web", "web-3d"):
+            with self.subTest(engine=engine):
+                root = self.project(engine)
+                r = subprocess.run([NODE, str(root / "tools" / "smoke.mjs"), "--drive", "menus"], cwd=root,
+                                   capture_output=True, encoding="utf-8", errors="replace", timeout=60)
+                self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+                self.assertIn("DRIVE_ABORT menus", r.stdout)
+                self.assertNotIn("[drive menus]", r.stdout)
+
+
+class WebDriveHelp(unittest.TestCase):
+    def test_web_3d_says_its_drive_aborts(self):
+        # #135: web-3d has no shell screens, so its -h must not promise the web overlay's scenarios
+        for engine, want, not_want in (("web", "menus, crash", "DRIVE_ABORT"), ("web-3d", "DRIVE_ABORT", "menus, crash")):
+            with self.subTest(engine=engine):
+                dev_py = KIT / "engines" / engine / "skeleton" / "tools" / "dev.py"
+                r = subprocess.run([sys.executable, str(dev_py), "smoke", "-h"], capture_output=True,
+                                   encoding="utf-8", errors="replace", timeout=60)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                text = " ".join(r.stdout.split())
+                self.assertIn(want, text)
+                self.assertNotIn(not_want, text)
 
 
 # ---- #36: Windows, a grandchild whose parent already exited ---------------------
