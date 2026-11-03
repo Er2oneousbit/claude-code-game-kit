@@ -388,6 +388,10 @@
   true. The rule is Wavesmith's new `dialogue.py` `reveal_count`, and `wavesmith.py dialogue vectors --write`
   writes data/golden/dialogue.json (27 steps: lists that fit, are too short or too long, no list, no duration, a
   zero duration, code points), which Godot, LÖVE, web and web 3D pass (#174).
+- Unreal: `dev.py test` and `smoke` report an editor that exits non-zero before any test passed as a crash,
+  `[FAIL] the editor exited with code N before any test finished` and exit 1, instead of "no tests matched" and
+  exit 2. An empty filter stays exit 2: UE 5.8 exits 255 there too, but logs "No automation tests matched" first,
+  and that line decides. Unity (no results file) and Godot (a non-zero exit) already gave 1 (#176).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

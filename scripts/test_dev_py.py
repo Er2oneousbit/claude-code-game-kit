@@ -10,7 +10,8 @@
 #           that the Godot build fails on a .pck holding .game-kit.json or a dev-only folder (#161), and that the
 #           web, web-3d and RPG Maker MZ smoke.mjs --record leaves only this run's frames (#134; needs node), a
 #           refused --drive is one error (#135), web-3d's -h says its --drive aborts (#135), and RPG Maker MZ's
-#           setup names the project file it copied (#136).
+#           setup names the project file it copied (#136), and that Unreal's test/smoke exit 1 when the editor
+#           crashes before any result, not 2 "no tests matched" (#176).
 # Usage   : python scripts/test_dev_py.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, no engine needed. The live checks (a real smoke with each toolchain) are
@@ -183,6 +184,44 @@ class GodotCapture(TempRoot):
         (self.root / "rec").mkdir()
         self.assertEqual(self.capture(record="rec")[0], 1)
         self.assertEqual(self.capture(record="rec", writes=["rec/f00000.png"])[0], 0)
+
+
+# ---- #176: Unreal test/smoke tell a crash from an empty filter -----------------
+class UnrealAutomation(TempRoot):
+    def automation(self, rc, log=""):
+        dev = load("unreal")
+        dev.ROOT = self.root
+        dev.AUTOMATION_LOG = self.root / "Saved" / "Logs" / "dev_automation.log"
+        exe = self.root / "UnrealEditor-Cmd.exe"
+        exe.write_bytes(b"")
+        dev.preflight = lambda *a, **kw: None
+        dev.editor_cmd = lambda plat: exe
+        dev.find_uproject = lambda: self.root / "Test.uproject"
+
+        def fake_run(cmd, **kwargs):            # the editor writes its results to -abslog, then exits rc
+            dev.AUTOMATION_LOG.write_text(log, encoding="utf-8")
+            return rc, ""
+        dev.run = fake_run
+        return quiet(dev.run_automation, "Test", argparse.Namespace(platform=None))
+
+    def test_crash_before_any_result_exits_1(self):
+        rc, text = self.automation(3, "LogInit: Display: Starting\n")
+        self.assertEqual(rc, 1, text)
+        self.assertIn("exited with code 3 before any test finished", text)
+        self.assertNotIn("no tests matched", text)
+
+    def test_empty_filter_stays_exit_2(self):
+        rc, text = self.automation(0, "LogInit: Display: Starting\n")
+        self.assertEqual(rc, 2, text)
+        self.assertIn("no tests matched", text)
+        # UE 5.8 exits 255 on an empty filter, after logging that nothing matched: still a setup gap
+        rc, text = self.automation(255, "LogAutomationCommandLine: Error: No automation tests matched 'Test'\n")
+        self.assertEqual(rc, 2, text)
+        self.assertIn("no tests matched", text)
+
+    def test_passing_tests_pass(self):
+        rc, text = self.automation(0, "Test Completed. Result={Success} Name={A}\n")
+        self.assertEqual(rc, 0, text)
 
 
 # ---- #161: Godot build lists the .pck ------------------------------------------

@@ -60,6 +60,8 @@
 # Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): check builds an enabled GameKitShell in a
 #           Blueprint-only project (the UnrealEditor target with -Project puts it in the plugin's Binaries/)
 #           instead of refusing it; test/smoke/exec exit 2 with "run check first" while its module is missing
+# Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): test/smoke exit 1 when the editor exits non-zero
+#           before any test passed (a crash), instead of exit 2 "no tests matched"
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -81,6 +83,7 @@ SMOKE_GROUP_SUFFIX = "Smoke"                  # tests named <Game>.Smoke.* are t
 TEST_TIMEOUT_S = 1800
 FAIL_PATTERNS = [r"Result=\{Fail\}", r"Fatal error", r"LogAutomationController: Error", r"\bTest Failed\b"]
 OK_PATTERN = r"Result=\{Success\}"
+NO_TESTS_PATTERN = r"No automation tests matched"  # logged before the editor exits 255 (UE 5.8)
 AUTOMATION_LOG = ROOT / "Saved" / "Logs" / "dev_automation.log"  # UnrealEditor-Cmd does not log to stdout
 EXEC_LOG = ROOT / "Saved" / "Logs" / "dev_exec.log"
 EXEC_TIMEOUT_S = 3600                         # a first import of many assets is slow; a hang still ends
@@ -544,6 +547,11 @@ def run_automation(filter_, args, until=None, fail_on=None):
         for l in fails[:15]:
             print("  " + l)
         print(f"[FAIL] {len(fails)} failure line(s), {oks} passing")
+        return 1
+    if oks == 0 and rc != 0 and not re.search(NO_TESTS_PATTERN, out):
+        # The editor died before any result line: a crash is a task failure (exit 1), not an empty filter
+        # (an empty filter also exits non-zero, 255 on UE 5.8, but logs NO_TESTS_PATTERN first)
+        print(f"[FAIL] the editor exited with code {rc} before any test finished; the log is in {AUTOMATION_LOG}")
         return 1
     if oks == 0:
         # Nothing ran: a setup gap (no such tests yet), not a failing test. Same rule as Unity and Godot.
