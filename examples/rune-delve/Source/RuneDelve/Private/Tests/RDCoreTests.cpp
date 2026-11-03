@@ -8,6 +8,9 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-10-26 Level checks 300 seeds for shared spawn tiles (the warden landed on a grunt's tile for
 //           24 of seeds 0..199; the old loop stopped at 7) and checks GateOf
+// Updated : 2026-11-03 (issue #150) checks what the game runs: no RDRules::Regen checks (the live regen is a GAS
+//           effect, checked by the Regressions smoke), the stagger a blocked swing gives (Recover -> Staggered),
+//           and the masher's low-mana ward
 // ---------------------------------------------------------------------------
 #include "Misc/AutomationTest.h"
 
@@ -69,15 +72,14 @@ bool FRDRulesTest::RunTest(const FString&)
 	TestTrue(TEXT("can cast"), RDRules::CanCast(20.f, 14.f, 0.f));
 	TestFalse(TEXT("not without mana"), RDRules::CanCast(10.f, 14.f, 0.f));
 	TestFalse(TEXT("not on cooldown"), RDRules::CanCast(100.f, 14.f, 0.1f));
-	TestEqual(TEXT("regen"), RDRules::Regen(50.f, 100.f, 10.f, 0.5f), 55.f);
-	TestEqual(TEXT("regen caps"), RDRules::Regen(99.f, 100.f, 10.f, 1.f), 100.f);
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRDOrcBrainTest, "RuneDelve.Core.OrcBrain", CoreFlags)
 bool FRDOrcBrainTest::RunTest(const FString&)
 {
-	const FRDOrcStats G = Tuned().Grunt;
+	const FRDNumbers N = Tuned();
+	const FRDOrcStats G = N.Grunt;
 	const float Dt = 1.f / 60.f;
 	FRDOrcBrain B(G);
 	TestTrue(TEXT("starts asleep"), B.GetState() == ERDOrcState::Sleep);
@@ -101,20 +103,38 @@ bool FRDOrcBrainTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("hunts again after recovering"), B.GetState() == ERDOrcState::Hunt);
 
-	// A stagger mid wind-up cancels the swing (this is what a timed ward buys)
+	// The path a timed ward takes in the game: the blocked swing tags the orc as it strikes (the brain is already in
+	// Recover), the brain sees the tag on the next tick, stays Staggered with no swing for as long as the tag lasts
+	// (StaggerSeconds), and winds up again only after it, even with the mage still in reach
 	FRDOrcBrain S(G);
-	Step(S, Dt, true, G.Reach * 0.5f);
-	Step(S, Dt, true, G.Reach * 0.5f);
+	const float Close = G.Reach * 0.5f;
+	Step(S, Dt, true, Close);
+	Step(S, Dt, true, Close);
 	TestTrue(TEXT("winding up"), S.GetState() == ERDOrcState::Windup);
-	int32 StaggeredStrikes = 0;
-	for (float T = 0.f; T < G.Windup * 2.f; T += Dt)
+	bool bStruck = false;
+	for (float T = 0.f; T < G.Windup + Dt * 2.f && !bStruck; T += Dt)
 	{
-		StaggeredStrikes += Step(S, Dt, true, G.Reach * 0.5f, true).bStrike ? 1 : 0;
+		bStruck = Step(S, Dt, true, Close).bStrike;
 	}
+	TestTrue(TEXT("the swing comes out and the orc recovers"), bStruck && S.GetState() == ERDOrcState::Recover);
+	Step(S, Dt, true, Close, true);
+	TestTrue(TEXT("the tag from the blocked swing staggers it on the next tick"), S.GetState() == ERDOrcState::Staggered);
+	int32 StaggeredStrikes = 0;
+	int32 StaggeredWindups = 0;
+	bool bStayedStaggered = true;
+	for (float T = Dt; T < N.StaggerSeconds; T += Dt)
+	{
+		const FRDOrcOutput O = Step(S, Dt, true, Close, true);
+		StaggeredStrikes += O.bStrike ? 1 : 0;
+		StaggeredWindups += O.bWindupStart ? 1 : 0;
+		bStayedStaggered &= S.GetState() == ERDOrcState::Staggered;
+	}
+	TestTrue(TEXT("staggered for all of StaggerSeconds"), bStayedStaggered);
 	TestEqual(TEXT("no swing while staggered"), StaggeredStrikes, 0);
-	TestTrue(TEXT("staggered"), S.GetState() == ERDOrcState::Staggered);
-	Step(S, Dt, true, G.Reach * 3.f, false);
+	TestEqual(TEXT("no wind-up while staggered"), StaggeredWindups, 0);
+	Step(S, Dt, true, Close, false);
 	TestTrue(TEXT("back to hunting when the stagger ends"), S.GetState() == ERDOrcState::Hunt);
+	TestTrue(TEXT("the next wind-up only after the stagger"), Step(S, Dt, true, Close).bWindupStart && S.GetState() == ERDOrcState::Windup);
 
 	Step(S, Dt, true, 0.f, false, false);
 	TestTrue(TEXT("dies"), S.GetState() == ERDOrcState::Dead);
@@ -226,11 +246,11 @@ bool FRDBotTest::RunTest(const FString&)
 	S.Orcs[0].WindupLeft = N.WardSeconds + 0.5f;
 	TestFalse(TEXT("weaver does not ward a swing beyond the window"), RDBot::Decide(ERDBotMode::Weaver, S, N).bWard);
 
-	// Low mana: the masher still bolts, the weaver keeps a ward's worth
+	// Low mana: the masher wards first, which leaves too little for a bolt; the weaver keeps a ward's worth
 	S.Orcs[0].State = ERDOrcState::Hunt;
 	S.Mana = N.WardCost + N.BoltCost * 0.5f;
 	const FRDBotAction Mash = RDBot::Decide(ERDBotMode::Masher, S, N);
-	TestTrue(TEXT("masher spends the last mana on something"), Mash.bBolt || Mash.bWard);
+	TestTrue(TEXT("masher spends the last mana on a ward, not a bolt"), Mash.bWard && !Mash.bBolt);
 	TestFalse(TEXT("weaver keeps the ward's mana"), RDBot::Decide(ERDBotMode::Weaver, S, N).bBolt);
 	S.Orcs[0].bStaggered = true;
 	TestTrue(TEXT("...unless the orc is staggered"), RDBot::Decide(ERDBotMode::Weaver, S, N).bBolt);

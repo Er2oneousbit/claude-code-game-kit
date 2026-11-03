@@ -4,9 +4,12 @@
 //           with no engine types: Sleep -> Hunt -> Windup -> (swing) -> Recover -> Hunt, Staggered, Dead.
 // Usage   : FRDOrcBrain Brain(N.Grunt); each tick: FRDOrcOutput Out = Brain.Tick({Dt, bAlive, bSenses, Dist, bStaggered});
 //           Out.bMove -> chase the mage; Out.bStrike -> the swing fires now (the actor checks reach and applies damage)
-// Notes   : Pillar 2 (read the orcs): every swing has a Windup the player can see. A stagger (from a ward)
-//           interrupts the wind-up, so no swing comes out. Once awake an orc always knows where the mage is
-//           (rooms are closed until cleared).
+// Notes   : Pillar 2 (read the orcs): every swing has a Windup the player can see. A ward stagger lands with
+//           the blocked swing itself (the attribute set tags the attacker while the orc is already in Recover),
+//           so the brain goes Recover -> Staggered on the next tick and winds up again only after the tag ends:
+//           that is the window pillar 1's "two bolts on a staggered orc" uses. A stagger during a wind-up would
+//           cancel the swing too, but nothing in the game staggers an orc then. Once awake an orc always knows
+//           where the mage is (rooms are closed until cleared).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 #pragma once

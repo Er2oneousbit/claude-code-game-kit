@@ -447,6 +447,13 @@
   `docs/licenses/` (old evidence: both lines reported). Re-voicing `narrator_intro_1` is still to do (#138).
 - Rune Delve (Unreal): GDD pillar 3 says what the game does: death ends the delve and R (or Start) begins it again
   at once (it said "death restarts the delve"; the README was already right) (#151).
+- Rune Delve (Unreal): three Core checks test what the game runs. `RDRules::Regen`, which nothing called, is gone with
+  its two checks, and a Regressions stage measures the mage's live regeneration through the GAS effect (12.00 mana in
+  1 s); the orc brain test follows a blocked swing's stagger (Recover, then Staggered for all of `StaggerSeconds`,
+  the next wind-up only after it) instead of an unreachable wind-up interrupt, and the header says so; the masher's
+  low-mana check asserts the ward it casts and the bolt it then cannot. Three mutants (double regen, a stagger
+  ignored in Recover, a masher that bolts past its ward) pass the old checks and fail the new ones. The bot pair is
+  unchanged (#150).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

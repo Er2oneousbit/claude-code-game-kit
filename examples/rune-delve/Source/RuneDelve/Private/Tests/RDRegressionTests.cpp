@@ -8,17 +8,22 @@
 //              block it) and the mage dodges on every frame of the slide.
 //           4. Doorway: a sleeping grunt shot from the next room through an open gate wakes and hunts (being
 //              hurt was discarded unless the mage stood in the orc's room, so it could be sniped asleep).
+//           5. Regen (issue #150): the mage's mana grows by ManaRegen per second through the periodic GAS effect
+//              (the Core test checked a rule nothing called).
 //           The warden-on-a-grunt's-tile spawn fix is checked over 300 seeds by RuneDelve.Core.Level.
 // Usage   : python tools/dev.py smoke --filter Regressions      (also part of a plain `smoke`)
 // Notes   : One PIE session on seed 7 (room 1's grunts stand on tiles (17,1), (16,0) and (15,0), a clear line
 //           from room 0 through gate 0). Every frame is 1/60 s; the test steps once per frame. Ported from the
 //           reviewer's probes in a scratch copy, which asserted the expected behaviour and failed before the fixes.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5), from probes by Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-03 (Claude Opus 5.5): the Regen stage (issue #150)
 // ---------------------------------------------------------------------------
 #include "Misc/AutomationTest.h"
 
 #if WITH_EDITOR
 
+#include "AbilitySystemComponent.h"
+#include "Abilities/RDAttributeSet.h"
 #include "Abilities/RDEffects.h"
 #include "Abilities/RDTags.h"
 #include "Animation/AnimSingleNodeInstance.h"
@@ -48,6 +53,8 @@ namespace
 	constexpr float DashToleranceCm = 2.f;
 	constexpr float SwingToleranceSeconds = 2.5f * FrameSeconds;   // the test reads the clip a frame after the hit
 	constexpr float WakeMoveCm = 50.f;             // a woken grunt has clearly left its tile
+	constexpr float RegenStartMana = 10.f;         // low enough that a second of regeneration never reaches the cap
+	constexpr int32 RegenFrames = 60;              // one second of game time
 
 	UWorld* RegressionWorld()
 	{
@@ -164,6 +171,7 @@ private:
 enum class ERDRegStage : uint8
 {
 	WaitReady,
+	Regen,
 	Ward,
 	Swing,
 	ClearRoom,
@@ -185,6 +193,7 @@ struct FRDRegressionState
 	float TargetHealth = 0.f;
 	int32 HitFrame = -1;
 	int32 WakeFrame = -1;
+	float ManaBefore = 0.f;
 
 	void Go(ERDRegStage Next, int32 Frame)
 	{
@@ -225,6 +234,29 @@ bool FRDRegressionSmoke::RunTest(const FString&)
 			{
 				return false;
 			}
+			S->Go(ERDRegStage::Regen, Frame);
+			return false;
+		}
+		case ERDRegStage::Regen:   // the live regeneration: ManaRegen per second, give or take one effect period
+		{
+			UAbilitySystemComponent* Asc = Mage->GetAbilitySystemComponent();
+			if (InStage == 1)
+			{
+				Asc->SetNumericAttributeBase(URDAttributeSet::GetManaAttribute(), RegenStartMana);
+				S->ManaBefore = Mage->GetMana();
+				return false;
+			}
+			if (InStage < 1 + RegenFrames)
+			{
+				return false;
+			}
+			const float Gained = Mage->GetMana() - S->ManaBefore;
+			const float Want = N.ManaRegen * RegenFrames * FrameSeconds;
+			const float Slack = N.ManaRegen * URDEffect_ManaRegen::PeriodSeconds + 0.01f;
+			UE_LOG(LogRuneDelve, Display, TEXT("[test] regen: %.2f mana in %d frames (want %.2f, give or take %.2f)"), Gained, RegenFrames, Want, Slack);
+			T.TestTrue(FString::Printf(TEXT("regen: ManaRegen per second through the GAS effect (%.2f in 1 s, want %.2f)"), Gained, Want),
+			           FMath::Abs(Gained - Want) <= Slack);
+			Asc->SetNumericAttributeBase(URDAttributeSet::GetManaAttribute(), Mage->GetMaxMana());   // full again for the ward
 			S->Go(ERDRegStage::Ward, Frame);
 			return false;
 		}

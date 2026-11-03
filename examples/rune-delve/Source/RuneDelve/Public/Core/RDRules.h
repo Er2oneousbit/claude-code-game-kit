@@ -1,11 +1,13 @@
 // ---------------------------------------------------------------------------
 // RDRules.h
-// Purpose : Combat rules with no engine state: how a hit resolves (ward, dash, stagger), whether a spell
-//           can be cast, mana regeneration. The GAS attribute set calls these, the tests call them directly.
+// Purpose : Combat rules with no engine state: how a hit resolves (ward, dash, stagger) and whether a spell
+//           can be cast. The GAS attribute set calls ResolveHit, the bots call CanCast, the tests call both.
+//           Mana regeneration is a periodic GAS effect (URDEffect_ManaRegen), checked live by the Regressions smoke.
 // Usage   : FRDHitResult R = RDRules::ResolveHit(Damage, bWarded, bDashing, bStaggered, bMelee, N.StaggerDamageMult);
 // Notes   : Pillar 1 lives here: a ward meeting a melee swing blocks it AND staggers the attacker, and a
 //           staggered target takes StaggerDamageMult times the damage. Spammed wards meet no swing.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-03 (Claude Opus 5.5): Regen removed; nothing in the game called it (issue #150)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -27,7 +29,4 @@ namespace RDRules
 
 	/** Enough mana and no cooldown left. */
 	bool CanCast(float Mana, float Cost, float CooldownLeft);
-
-	/** Mana after Dt seconds of regeneration, capped at MaxMana. */
-	float Regen(float Mana, float MaxMana, float PerSecond, float Dt);
 }

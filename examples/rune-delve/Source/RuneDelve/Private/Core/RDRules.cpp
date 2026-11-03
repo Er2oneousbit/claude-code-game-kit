@@ -28,8 +28,3 @@ bool RDRules::CanCast(float Mana, float Cost, float CooldownLeft)
 {
 	return CooldownLeft <= 0.f && Mana >= Cost;
 }
-
-float RDRules::Regen(float Mana, float MaxMana, float PerSecond, float Dt)
-{
-	return FMath::Min(MaxMana, Mana + PerSecond * FMath::Max(0.f, Dt));
-}
