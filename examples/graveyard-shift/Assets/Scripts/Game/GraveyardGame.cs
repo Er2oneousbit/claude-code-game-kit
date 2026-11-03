@@ -21,7 +21,8 @@
 //           keeper slipped out while it swung); bot nights never write the save (--autoplay advanced the player's
 //           nightsPlayed); OnEvent is public so PlayMode tests can drive a catch or an ending.
 // Updated : 2026-11-03 (Claude Opus 5.5): after a catch the catching ghost goes home (the sweep read the keeper's
-//           position after the respawn, issue #147).
+//           position after the respawn, issue #147). Esc reaches the title screen after a --difficulty launch: the
+//           command line is read once (CommandLine) and BackToTitle spends its difficulty (issue #148).
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -69,6 +70,7 @@ namespace graveyard_shift.Game
     public sealed class GraveyardGame : MonoBehaviour
     {
         public static LaunchOptions Options;          // set by tests before the scene loads, else the command line
+        public static LaunchOptions CommandLine;      // the command line, read once per session (Esc spends --difficulty)
         public static GraveyardGame Current { get; private set; }
         public static bool TitleDone;                 // the title screen was passed this session (R restarts without it)
 
@@ -107,7 +109,7 @@ namespace graveyard_shift.Game
         private void Start()
         {
             Current = this;
-            Launch = Options ?? LaunchOptions.FromCommandLine();
+            Launch = Options ?? (CommandLine ??= LaunchOptions.FromCommandLine());
             GameLog.DebugEnabled = Launch.DebugAi;
             if (Launch.FixedFps) Time.captureFramerate = 60;
             if (setup == null)
@@ -167,6 +169,15 @@ namespace graveyard_shift.Game
             GameLog.Info("game", $"SHOT {path}");
         }
 
+        // Esc: back to the title screen. A --difficulty given on the command line skipped it; that choice is spent now
+        // (the title saves the next one), or the reload would skip the title again and Esc would only restart (#148).
+        public void BackToTitle()
+        {
+            TitleDone = false;
+            Launch.Difficulty = null;
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        }
+
         // The title screen's Start: remember the difficulty and build the night with it
         public void StartNight(Core.Difficulty difficulty)
         {
@@ -187,8 +198,7 @@ namespace graveyard_shift.Game
             }
             if (Input.GetKeyDown(KeyCode.Escape) && Bot == null)
             {
-                TitleDone = false;   // back to the title screen
-                SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+                BackToTitle();
                 return;
             }
             if (Night.Outcome != Outcome.Playing)

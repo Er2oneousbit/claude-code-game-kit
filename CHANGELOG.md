@@ -430,6 +430,10 @@
   within 30 m of the catch or the start; `Smoke_R7` catches the keeper 64 m from the start (old code: the catcher
   still hunting). Escapes are unchanged on the asserted trios; catches moved (hand-made lit 14 to 11, generated
   careful 23 to 20, lit 13 to 20) (#147).
+- Graveyard Shift (Unity): Esc reaches the title screen after a `--difficulty` launch, as the HUD says. The reload
+  read the same command line, skipped the title again, and Esc only restarted the night. The command line is read
+  once per session (`GraveyardGame.CommandLine`) and Esc (`BackToTitle`) spends its difficulty; the title saves
+  the next one. `Smoke_R8` (old code: no title after Esc) (#148).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

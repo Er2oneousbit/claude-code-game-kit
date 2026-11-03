@@ -11,8 +11,8 @@
 v0.2.0. Vertical slice "One Night" done: the scene is built by `SceneBuilder.Build`, the level and NavMesh at runtime,
 ghosts on a tested FSM (one per patrol loop plus the difficulty's extras), lantern stealth, souls, gate, saves with a migration, HUD, sounds, keyboard and gamepad.
 Every night after the first is a generated yard (`Assets/Scripts/Core/LevelGenerator.cs`, SOP-17; HOW_IT_WAS_MADE "Later: a new graveyard
-every night"). 112 EditMode tests (a 250-seed property test among them); 22 PlayMode smoke tests (boot, no way out of the yard and the gate shutting, the keeper's lantern and legs, the bot trio on
-the hand-made yard and on 8 generated nights, the NavMesh check, a yard from above, seven review-fix regressions).
+every night"). 112 EditMode tests (a 250-seed property test among them); 23 PlayMode smoke tests (boot, no way out of the yard and the gate shutting, the keeper's lantern and legs, the bot trio on
+the hand-made yard and on 8 generated nights, the NavMesh check, a yard from above, eight review-fix regressions).
 Review fixes 2026-10-26 (HOW_IT_WAS_MADE "Later: review fixes"). `Smoke_D`'s careful >= always-dark sits at the 104
 cap; its one failure was a night starting a frame late, fixed 2026-11-02 (issue #9, "Later: a night that started a
 frame late"). The built player replays a test night. Played once by the user (docs/PLAYTEST_LOG.md).

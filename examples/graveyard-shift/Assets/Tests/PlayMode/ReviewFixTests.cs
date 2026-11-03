@@ -4,14 +4,15 @@
 //           cascade at the start, cover that a keeper hides behind, a search that ends, a ghost that keeps
 //           walking toward a spot it cannot reach, and bot nights that leave the player's save alone; and (issue #9)
 //           a keeper who walks from the night's first frames whenever the physics step comes; and (issue #147) the ghost
-//           that made a catch going home.
+//           that made a catch going home; and (issue #148) Esc reaching the title screen after a --difficulty launch.
 // Usage   : python tools/dev.py smoke                       (they are named Smoke_R*, so smoke runs them)
 //           python tools/dev.py smoke --filter Smoke_R      (only these, about a minute)
 // Notes   : Each test loads the scene with a temp save. Where only the test may move things it disables the
 //           game loop (as Smoke_K does). The gate case lives in Smoke_K (ScenarioTests.cs), next to its pushes.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-02 (Claude Opus 5.5): Smoke_R6, the physics clock at the start of a night (issue #9).
-// Updated : 2026-11-03 (Claude Opus 5.5): Smoke_R7, the catching ghost goes home (issue #147).
+// Updated : 2026-11-03 (Claude Opus 5.5): Smoke_R7, the catching ghost goes home (issue #147); Smoke_R8, Esc after
+//           --difficulty (issue #148).
 // ---------------------------------------------------------------------------
 using System.Collections;
 using System.Collections.Generic;
@@ -279,6 +280,40 @@ namespace graveyard_shift.Tests
             Debug.Log($"[INFO][test] catch {V2.Distance(far, yard.KeeperStart):0.0} m from the start: catcher {catcher.Brain.State} tired {catcher.Brain.Tired}, hunter {hunter.Brain.State} tired {hunter.Brain.Tired}");
             Assert.IsTrue(catcher.Brain.Tired && catcher.Brain.State == GhostState.Return, "the catching ghost goes home");
             Assert.IsTrue(hunter.Brain.Tired && hunter.Brain.State == GhostState.Return, "a hunter near the catch goes home");
+        }
+
+        // Started with --difficulty (the README's way to skip the title screen), Esc restarted the night instead of
+        // reaching the title (issue #148): the reload read the same command line and skipped the title again.
+        // The command line is the cached GraveyardGame.CommandLine; BackToTitle is what Esc calls.
+        [UnityTest]
+        public IEnumerator Smoke_R8_EscReachesTheTitleAfterADifficultyLaunch()
+        {
+            GraveyardGame.Options = null;
+            GraveyardGame.TitleDone = false;
+            GraveyardGame.CommandLine = new LaunchOptions
+            {
+                Seed = 0, HandMadeYard = true, Difficulty = Core.Difficulty.Hard, SavePath = SavePath,
+            };
+            try
+            {
+                yield return SceneManager.LoadSceneAsync(Scene);
+                yield return null;
+                var game = GraveyardGame.Current;
+                Assert.IsFalse(game.OnTitle, "--difficulty skips the title screen");
+                Assert.AreEqual(Core.Difficulty.Hard, game.Difficulty.Level, "the night is at the command line's difficulty");
+                game.BackToTitle();
+                int f = 0;
+                while ((GraveyardGame.Current == game || GraveyardGame.Current == null) && f++ < Fps * 5) yield return null;
+                yield return null;
+                Assert.AreNotEqual(game, GraveyardGame.Current, "the scene reloaded");
+                Debug.Log($"[INFO][test] Esc after --difficulty hard: title {GraveyardGame.Current.OnTitle}");
+                Assert.IsTrue(GraveyardGame.Current.OnTitle, "Esc reaches the title screen");
+            }
+            finally
+            {
+                GraveyardGame.CommandLine = null;
+                if (File.Exists(SavePath)) File.Delete(SavePath);
+            }
         }
     }
 }
