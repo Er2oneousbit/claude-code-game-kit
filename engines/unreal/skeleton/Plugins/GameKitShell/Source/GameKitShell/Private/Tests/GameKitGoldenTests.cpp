@@ -574,8 +574,10 @@ namespace GameKitGoldenTests
 	TSharedPtr<FJsonValue> PlayAsJson(const FGameKitPlayDecision& D)
 	{
 		const TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
-		const TCHAR* Result = D.Result == EGameKitPlayResult::Played ? TEXT("played")
-		                      : D.Result == EGameKitPlayResult::Cooldown ? TEXT("cooldown") : TEXT("capped");
+		const TCHAR* Result = D.Result == EGameKitPlayResult::Played     ? TEXT("played")
+		                      : D.Result == EGameKitPlayResult::Cooldown ? TEXT("cooldown")
+		                      : D.Result == EGameKitPlayResult::Capped   ? TEXT("capped")
+		                                                                 : TEXT("error");
 		O->SetField(TEXT("result"), MakeString(Result));
 		if (D.Result == EGameKitPlayResult::Played)
 		{
@@ -956,6 +958,43 @@ bool FGameKitMusicPlanErrorsTest::RunTest(const FString&)
 	TestTrue(TEXT("\"stinger\": \"\" plans without an error"), Empty.Error.IsEmpty());
 	TestFalse(TEXT("\"stinger\": \"\" sets no stinger_at"), Empty.StingerAt.IsSet());
 	TestEqual(TEXT("\"stinger\": \"\" enters the next track at the switch"), Empty.ToStartAt, Empty.SwitchAt);
+	return !HasAnyErrors();
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitAudioDirectorErrorsTest, "GameKit.Golden.AudioErrors", GameKitGoldenTests::GoldenTestFlags)
+
+// Where audio_events.py raises, Play returns Error (not Capped) and changes nothing; the variant count is the number
+// of files, as in the reference. The golden steps never reach these.
+bool FGameKitAudioDirectorErrorsTest::RunTest(const FString&)
+{
+	using namespace GameKit::Json;
+	auto Director = [this](const TCHAR* EventsJson)
+	{
+		const TSharedPtr<FJsonValue> V = Parse(FString::Printf(TEXT("{\"seed\": 1, \"events\": %s}"), EventsJson));
+		TestTrue(TEXT("test params parse"), Is(V, EJson::Object));
+		return FGameKitAudioDirector(V->AsObject());
+	};
+	FGameKitAudioDirector NoVoices = Director(TEXT("{\"x\": {\"bus\": \"sfx\", \"files\": [\"a.wav\"], \"lengths_ms\": [100], \"max_voices\": 0}}"));
+	const FGameKitPlayDecision Zero = NoVoices.Play(TEXT("x"), 0.0);
+	TestTrue(TEXT("max_voices 0 with steal oldest is an error"), Zero.Result == EGameKitPlayResult::Error);
+	TestEqual(TEXT("max_voices 0: the reason"), Zero.Error, FString(TEXT("event x: max_voices must be 1 or more")));
+
+	FGameKitAudioDirector TwoFiles = Director(TEXT("{\"x\": {\"bus\": \"sfx\", \"files\": [\"a\", \"b\"], \"lengths_ms\": [100, 100, 100], \"pick\": \"sequence\"}}"));
+	const int32 Want[] = {0, 1, 0};
+	for (int32 I = 0; I < 3; ++I)
+	{
+		TestEqual(FString::Printf(TEXT("sequence over two files, play %d"), I), TwoFiles.Play(TEXT("x"), 500.0 * I).Variant, Want[I]);
+	}
+	FGameKitAudioDirector Short = Director(TEXT("{\"x\": {\"bus\": \"sfx\", \"files\": [\"a\", \"b\", \"c\"], \"lengths_ms\": [100, 100]}}"));
+	TestTrue(TEXT("fewer lengths than files is an error"), Short.Play(TEXT("x"), 0.0).Result == EGameKitPlayResult::Error);
+
+	TestTrue(TEXT("an unknown event is an error"), TwoFiles.Play(TEXT("nope"), 2000.0).Result == EGameKitPlayResult::Error);
+	const FGameKitPlayDecision Back = TwoFiles.Play(TEXT("x"), 10.0);
+	TestTrue(TEXT("an earlier time is an error, not capped"), Back.Result == EGameKitPlayResult::Error);
+	TestTrue(TEXT("an earlier time names the time order"), Back.Error.Contains(TEXT("time order")));
+	FString DuckError;
+	TwoFiles.Duck(10.0, &DuckError);
+	TestTrue(TEXT("Duck at an earlier time sets the error"), DuckError.Contains(TEXT("time order")));
 	return !HasAnyErrors();
 }
 

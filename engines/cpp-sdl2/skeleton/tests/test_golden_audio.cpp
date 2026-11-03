@@ -162,6 +162,19 @@ TEST_CASE("golden audio: audio.json") {
     CHECK(cases > 0);
 }
 
+TEST_CASE("audio director: the variants are the files, and max_voices 0 is an error") {
+    // audio_events.py counts files (not lengths_ms) and fails on max_voices 0 with steal "oldest"; the golden
+    // steps never reach either
+    core::AudioDirector two(json::parse(R"({"events": {"x": {"bus": "sfx", "files": ["a", "b"],
+        "lengths_ms": [100, 100, 100], "pick": "sequence"}}})"));
+    for (int i : {0, 1, 2}) CHECK(two.play("x", 500.0 * i).variant == i % 2);
+    CHECK_THROWS_AS(core::AudioDirector(json::parse(R"({"events": {"x": {"bus": "sfx", "files": ["a", "b", "c"],
+        "lengths_ms": [100, 100]}}})")), std::runtime_error);
+    core::AudioDirector none(json::parse(R"({"events": {"x": {"bus": "sfx", "files": ["a.wav"],
+        "lengths_ms": [100], "max_voices": 0}}})"));
+    CHECK_THROWS_WITH_AS(none.play("x", 0), "audio event x: max_voices must be 1 or more", std::runtime_error);
+}
+
 TEST_CASE("golden audio: music.json") {
     const json file = load("music.json");
     int cases = 0, values = 0;
