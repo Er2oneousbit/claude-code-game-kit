@@ -358,6 +358,11 @@
   in Unreal; both read past the voice list (the Unreal editor crashed on `Array index out of bounds: -1`). Unreal's
   `Play` returns the new `EGameKitPlayResult::Error` with the reason in `FGameKitPlayDecision::Error` for an unknown
   event or a time earlier than the last call (it said `Capped`), and `Duck` takes an optional `OutError` (#126).
+- Wavesmith events: `validate` caps `seed` at 2^53 - 1 (9007199254740991), the largest whole number the engines
+  that read JSON numbers as doubles (Godot, Unity, Unreal, web, LÖVE, RPG Maker MZ) hold exactly; it accepted any
+  size and said "ports compute with it exactly", so a seed of 2^53 + 1 played other takes in Godot and Unreal and
+  threw in Unity. Unity's own limit moves from 9e15 to the same 2^53 - 1, and data/golden/audio.json has a case at
+  that seed, which all nine engines pass (#127).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

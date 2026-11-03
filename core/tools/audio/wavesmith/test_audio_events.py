@@ -167,6 +167,7 @@ class AudioEventsExam(unittest.TestCase):
         f.write_text(json.dumps(GOOD), encoding="utf-8")
         rc, out = self.run_tool("validate", f)
         self.assertEqual(rc, 0, out)
+        self.assertEqual(AE.validate(dict(GOOD, seed=2 ** 53 - 1)), [])     # the largest seed every port holds
 
     def test_each_kind_of_broken_file_is_named(self):
         def broken(edit):
@@ -187,6 +188,7 @@ class AudioEventsExam(unittest.TestCase):
             (lambda d: d["events"]["click"].update(max_voices=0), "max_voices"),
             (lambda d: d.update(seed=-5), "seed must be a whole number"),
             (lambda d: d.update(seed=1.5), "seed must be a whole number"),
+            (lambda d: d.update(seed=2 ** 53 + 1), "seed must be a whole number, 0 to 9007199254740991"),
             (lambda d: d["events"]["click"].update(pick=None), "pick is null"),
             (lambda d: d["events"]["click"].update(directional="yes"), "directional must be true or false"),
         ]

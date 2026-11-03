@@ -74,6 +74,7 @@ namespace {{GAME_SLUG}}.Core
     {
         // ---- Tunables ------------------------------------------------------------
         public const int DEFAULT_MAX_VOICES = 8;
+        public const double MAX_SEED = 9007199254740991.0;   // 2^53 - 1: Json.cs reads numbers as doubles, exact up to here
         public const string DEFAULT_PICK = PICK_RANDOM_NO_REPEAT;
         public const string DEFAULT_STEAL = STEAL_OLDEST;
         public const long DEFAULT_SEED = 1;
@@ -169,7 +170,7 @@ namespace {{GAME_SLUG}}.Core
             if (parameters.TryGetValue("seed", out object seed))
             {
                 double s = Json.IsNumber(seed) ? Json.ToNumber(seed) : double.NaN;
-                if (double.IsNaN(s) || double.IsInfinity(s) || s != Math.Floor(s) || Math.Abs(s) > 9e15)
+                if (double.IsNaN(s) || double.IsInfinity(s) || s != Math.Floor(s) || Math.Abs(s) > MAX_SEED)
                 {
                     throw new ArgumentException("audio events: seed must be a whole number");
                 }

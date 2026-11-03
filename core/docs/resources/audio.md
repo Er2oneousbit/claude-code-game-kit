@@ -324,6 +324,8 @@ many copies may sound at once, a minimum gap between plays, and how far dialogue
 - `pick`: `random_no_repeat` (default), `shuffle` (every take once per round, no repeat across rounds),
   `sequence`, or `random`. `steal`: `oldest` (default: the oldest copy stops) or `none` (the new play is refused).
   `max_voices` defaults to 8, `pitch_semitones` and `volume_db` to no change. Event ids are lowercase ASCII.
+  `seed` is a whole number from 0 to 2^53 - 1 (9007199254740991): engines that read JSON numbers as doubles hold
+  nothing larger exactly.
 - Ducking is a straight line in dB: down to `depth_db` over `attack_ms` while anything plays on the trigger bus,
   back over `release_ms` after it stops; a new line during the release dips again from where it is.
 - `python tools/audio/wavesmith/wavesmith.py events validate data/audio_events.json --root assets/audio` checks the file and that

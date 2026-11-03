@@ -46,6 +46,8 @@ TOLERANCE = 1e-6
 VECTOR_VERSION = 1
 PM_M = 2147483647                       # Park-Miller modulus (2^31 - 1)
 PM_A = 16807
+MAX_SEED = 2 ** 53 - 1                  # the largest whole number a JSON double holds exactly (Godot, Unity, Unreal,
+                                        # web, LÖVE and RPG Maker MZ read every number as a double)
 PICKS = ("sequence", "random", "random_no_repeat", "shuffle")
 STEALS = ("oldest", "none")
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,63}$")
@@ -217,8 +219,9 @@ def _validate(data, root):
     if data.get("version") != 1:
         p.append("version must be 1")
     seed = data.get("seed", 1)
-    if isinstance(seed, bool) or not isinstance(seed, int) or seed < 0:
-        p.append("seed must be a whole number, 0 or more (ports compute with it exactly)")
+    if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= MAX_SEED:
+        p.append(f"seed must be a whole number, 0 to {MAX_SEED} (2^53 - 1: engines that read JSON numbers as "
+                 f"doubles hold it exactly up to there)")
     buses = data.get("buses", {})
     if not isinstance(buses, dict):
         p.append("buses must be an object: {\"master\": {}, \"sfx\": {\"parent\": \"master\"}}")
@@ -399,6 +402,9 @@ def build_vectors():
               [{"call": "play", "event": "chime", "t_ms": t * 400} for t in range(5)]),
         _case("a seed above 2^32 stays exact in every port",
               {"seed": 1099511627783, "events": {"step_stone": foot}},
+              [{"call": "play", "event": "step_stone", "t_ms": t} for t in (0, 250, 500, 750)]),
+        _case("the largest seed validate allows (2^53 - 1) stays exact in every port",
+              {"seed": MAX_SEED, "events": {"step_stone": foot}},
               [{"call": "play", "event": "step_stone", "t_ms": t} for t in (0, 250, 500, 750)]),
         _case("ducking: dialogue under music, attack and release",
               {"seed": 5,
