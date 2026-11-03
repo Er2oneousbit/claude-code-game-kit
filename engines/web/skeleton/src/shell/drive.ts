@@ -17,7 +17,10 @@
 //   menus : title (consent: Later) -> menu -> settings -> Audio: master 1.0 -> 0.5 -> Accessibility:
 //           reduce motion on -> back (saves) -> read settings.json back -> quit
 //   crash : menu -> play -> a planted error in the next frame (the crash hook does the rest)
-//   pseudo: every screen and settings section once; the shell checks each one as it appears
+//   pseudo: every screen and settings section once; the shell checks each one as it appears (PSEUDO_SCREEN
+//           <id> labels N per check); the "saved" toast is counted on the menu only, then waited out, and the
+//           juice demo's subtitle (skipped while it types) is finished and checked again, so the count is the
+//           same on every run of a build
 //   show  : open one screen, settle, freeze the game, SHOWN <screen> (smoke takes the screenshot)
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
@@ -127,6 +130,11 @@ class Driver {
     await frames(STEP_FRAMES);
     await waitFor("pseudo checks", () => !this.shell.checksPending);
   }
+
+  /** Waits until every toast has timed out, so no later screen check depends on how long a step took. */
+  async toastsGone(): Promise<void> {
+    await waitFor("the toasts to leave", () => this.shell.toastCount === 0);
+  }
 }
 
 async function menus(shell: Shell, d: Driver): Promise<void> {
@@ -168,7 +176,10 @@ async function pseudoTour(shell: Shell, d: Driver): Promise<void> {
     await d.tab(t);
     await d.pseudoWait();
   }
-  await d.press("ui_cancel");
+  await d.press("ui_cancel"); // back saves: the "saved" toast is checked on the menu, then left to go
+  await d.screen("menu");
+  await d.pseudoWait();
+  await d.toastsGone();
   await d.choose("menu", "menu.credits");
   await d.screen("credits");
   await d.pseudoWait();
@@ -176,7 +187,8 @@ async function pseudoTour(shell: Shell, d: Driver): Promise<void> {
   await d.screen("menu");
   await d.game("juice");
   shell.subtitles.say("demo.welcome");
-  shell.subtitles.finish();
+  shell.subtitles.finish(); // a line still typing is skipped by the check: check the whole line once more
+  if (shell.top) shell.checkLayout(shell.top);
   await d.pseudoWait();
   await d.press("pause");
   await d.screen("pause");

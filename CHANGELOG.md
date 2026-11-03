@@ -143,6 +143,12 @@
   scripts), an `HSlider` that draws the theme's focus outline on top while it has keyboard or gamepad focus (the
   `HSlider` focus style, else the `Button` one, so a Dotwork UI kit theme's outline shows too). New
   `test_ui_theme.gd` exam (#54).
+- Web: the pseudo-locale drive counts the same labels on every run (258 on the template, 12 runs; it gave 260 or
+  261). The juice demo's subtitle was counted on the loading screen with or without its first typed character: a
+  subtitle line still typing now carries `data-settling` and the check skips it, the drive checks the line again
+  once `finish()` has shown it, and it waits for the "saved" toast to leave after the menu has checked it. Each
+  check logs `PSEUDO_SCREEN <screen> labels N problems M`, as LÖVE does. `finish()` shows the whole line even when
+  the text is longer than its timing allows (pseudo text is 40 % longer, so it stopped at about two thirds) (#63).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

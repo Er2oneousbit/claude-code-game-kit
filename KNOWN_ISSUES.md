@@ -41,8 +41,6 @@ examples were built and tested on one Windows 11 machine.
 - **Unity music player:** a change asked back before the previous one starts restarts the track (Godot, LÖVE and web
   cancel it); Godot's stinger-gap case not checked:
   [#70](https://github.com/Er2oneousbit/claude-code-game-kit/issues/70).
-- **Web shell:** the pseudo-locale drive counts 260 or 261 labels on the same build:
-  [#63](https://github.com/Er2oneousbit/claude-code-game-kit/issues/63).
 
 ### Art workflow outside Godot
 Dotwork is Godot-first: other engines get PNGs, sheets with their JSON, `.fnt` fonts and a manifest, and no overlay
