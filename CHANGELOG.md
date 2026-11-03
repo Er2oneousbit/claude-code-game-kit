@@ -441,6 +441,10 @@
   one to the end of the file (4.830 s for `narrator_escape_1`), so the end card's music duck was never stuck. Two
   EditMode tests check every WAV header and the narrator peak (old files: 11 headers and 2 peaks reported); the
   ASSET_LOG rows say what changed. The mix still needs ears (#139).
+- Graveyard Shift (Unity): the ASSET_LOG rows and licence evidence for the two re-voiced narrator lines give the
+  text and hash of the files that ship ("Twelve", not "Six"); HOW_IT_WAS_MADE says three lines said six and one,
+  `narrator_intro_1`, still does. An EditMode test checks every `.gen.json` sidecar's text and hash against
+  `docs/licenses/` (old evidence: both lines reported). Re-voicing `narrator_intro_1` is still to do (#138).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

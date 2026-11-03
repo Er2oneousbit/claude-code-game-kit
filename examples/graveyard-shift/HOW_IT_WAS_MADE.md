@@ -331,7 +331,8 @@ new hand-made yard at the new size.
 | Souls, ghosts, night | 6 souls, 3 ghosts, 150 s | 12 souls, one ghost per patrol loop (about one per 550 m2: 6 to 12, typically 8), 300 s |
 | Difficulty | None | Title screen: Easy (the old light, the loops' ghosts), Normal (darker, +2 ghosts), Hard (+4), Insane (+6, no ambient, moon, soul glow or ghost light; souls are found by their whispers). Saved in the save file (v3, with a v2 to v3 migration test); `--difficulty` skips the title |
 Extra ghosts walk the longest checked loops from the opposite corner, so difficulty never changes the yard or its checks.
-The two narrator lines that said "six souls" were re-voiced with "twelve" (Fish Audio, the same free model and voice).
+Three narrator lines said six souls; two were re-voiced with "twelve" (Fish Audio, the same free model and voice), and
+`narrator_intro_1` ("Gather all six") was missed and still says six (issue #138; re-voicing it is still to do).
 
 **What the checks caught**
 | # | Caught by | Problem | Fix |

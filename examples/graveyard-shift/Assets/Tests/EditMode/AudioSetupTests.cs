@@ -3,11 +3,13 @@
 // Purpose : EditMode tests that SceneBuilder wired every sound into the setup asset: the five effects
 //           and the night ambience must be there (a missing clip is silent, not an error, at runtime),
 //           the ambience is long enough to loop, and the loop volumes stay below the effects. Every WAV's
-//           header gives its real sizes, and the narrator lines are normalized to one peak.
+//           header gives its real sizes, the narrator lines are normalized to one peak, and the licence
+//           evidence records the text and hash of every generated file that ships.
 // Usage   : python tools/dev.py test
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-03 (Claude Opus 5.5): WAV header sizes and the narrator peak (issue #139: two narrator takes
-//           and the ghost voices shipped as streamed, with placeholder RIFF and data sizes of about 4 GB).
+//           and the ghost voices shipped as streamed, with placeholder RIFF and data sizes of about 4 GB); the
+//           evidence matches the sidecars (issue #138: two re-voiced lines kept the old text and hash).
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -24,6 +26,10 @@ namespace graveyard_shift.Tests
         private const string AudioFolder = "Assets/Audio";
         private const float NarratorPeakDb = -3f;     // dBFS: what wavfile.py normalize gave every narrator line
         private const float PeakToleranceDb = 0.1f;
+        private const string EvidenceFolder = "docs/licenses";   // relative to the project root (Unity's working folder)
+
+        [Serializable] private class GenRequest { public string text; }
+        [Serializable] private class GenSidecar { public string sha256; public GenRequest request; }
 
         private static graveyard_shift.Game.GraveyardSetup Setup()
         {
@@ -163,6 +169,24 @@ namespace graveyard_shift.Tests
                 if (Mathf.Abs(db - NarratorPeakDb) > PeakToleranceDb) off.Add($"{Path.GetFileName(path)} {db:0.0} dBFS");
             }
             Assert.IsEmpty(off, $"narrator lines not at {NarratorPeakDb} dBFS peak: " + string.Join("; ", off));
+        }
+
+        // Each generated file's .gen.json sidecar holds the text it was made from and its hash as generated; the
+        // licence evidence must describe that file, not an earlier take of it
+        [Test]
+        public void LicenceEvidenceMatchesEverySidecar()
+        {
+            string evidence = string.Join("\n", Array.ConvertAll(Directory.GetFiles(EvidenceFolder, "*.txt"), File.ReadAllText));
+            var stale = new List<string>();
+            foreach (string path in Directory.GetFiles(AudioFolder, "*.gen.json", SearchOption.AllDirectories))
+            {
+                var gen = JsonUtility.FromJson<GenSidecar>(File.ReadAllText(path));
+                string name = Path.GetFileName(path);
+                if (string.IsNullOrEmpty(gen.sha256) || !evidence.Contains(gen.sha256)) stale.Add($"{name}: hash {gen.sha256}");
+                if (gen.request != null && !string.IsNullOrEmpty(gen.request.text) && !evidence.Contains(gen.request.text))
+                    stale.Add($"{name}: text \"{gen.request.text}\"");
+            }
+            Assert.IsEmpty(stale, $"sidecars that no file in {EvidenceFolder} describes: " + string.Join("; ", stale));
         }
 
         // The data chunk's start and size, walking the chunks after "WAVE" (16-bit PCM, as every voice here is)

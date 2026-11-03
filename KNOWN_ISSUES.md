@@ -157,6 +157,9 @@ autoplay exit leak (#6).
 - A low rock the ghosts' NavMesh climbs (0.75 m) blocks the keeper's CharacterController (0.3 m); the fix moved the
   tuned balance and was reverted.
 - Built with Mono only; IL2CPP builds were not made or compared.
+- One of the two intro narrator takes (`narrator_intro_1`) still says "Gather all six" on a twelve-soul night: it
+  needs re-voicing with the same voice, which is a paid generation
+  ([#138](https://github.com/Er2oneousbit/claude-code-game-kit/issues/138)).
 
 ### Lockpick (RPG Maker MZ)
 - An untested proof of concept: it has never run inside RPG Maker MZ, only against stand-ins.
