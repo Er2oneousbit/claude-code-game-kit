@@ -4,7 +4,8 @@
 //           cascade at the start, cover that a keeper hides behind, a search that ends, a ghost that keeps
 //           walking toward a spot it cannot reach, and bot nights that leave the player's save alone; and (issue #9)
 //           a keeper who walks from the night's first frames whenever the physics step comes; and (issue #147) the ghost
-//           that made a catch going home; and (issue #148) Esc reaching the title screen after a --difficulty launch.
+//           that made a catch going home; and (issue #148) Esc reaching the title screen after a --difficulty launch;
+//           and (issue #179) the HUD's Esc hint only on nights where Esc works.
 // Usage   : python tools/dev.py smoke                       (they are named Smoke_R*, so smoke runs them)
 //           python tools/dev.py smoke --filter Smoke_R      (only these, about a minute)
 // Notes   : Each test loads the scene with a temp save. Where only the test may move things it disables the
@@ -12,7 +13,7 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-02 (Claude Opus 5.5): Smoke_R6, the physics clock at the start of a night (issue #9).
 // Updated : 2026-11-03 (Claude Opus 5.5): Smoke_R7, the catching ghost goes home (issue #147); Smoke_R8, Esc after
-//           --difficulty (issue #148).
+//           --difficulty (issue #148); Smoke_R9, no Esc hint on a bot night (issue #179).
 // ---------------------------------------------------------------------------
 using System.Collections;
 using System.Collections.Generic;
@@ -314,6 +315,31 @@ namespace graveyard_shift.Tests
                 GraveyardGame.CommandLine = null;
                 if (File.Exists(SavePath)) File.Delete(SavePath);
             }
+        }
+
+        // The HUD said "(Esc: title screen)" on a bot night too, where Esc does nothing (issue #179). A played night
+        // keeps the hint; a bot night names the bot instead. Batch mode never calls OnGUI, so read the live label.
+        [UnityTest]
+        public IEnumerator Smoke_R9_TheEscHintShowsOnlyWhereEscWorks()
+        {
+            foreach (BotMode? bot in new BotMode?[] { null, BotMode.Careful })
+            {
+                yield return Load(0, bot);
+                yield return null;
+                var hud = Object.FindFirstObjectByType<Hud>();
+                Assert.IsNotNull(hud, "the HUD is in the scene");
+                Debug.Log($"[INFO][test] {(bot.HasValue ? "bot" : "played")} night HUD label: \"{hud.LevelLabel}\"");
+                if (bot.HasValue)
+                {
+                    StringAssert.DoesNotContain("Esc", hud.LevelLabel, "a bot night ignores Esc, so no hint");
+                    Assert.AreEqual("EASY  (autoplay careful)", hud.LevelLabel);
+                }
+                else
+                {
+                    Assert.AreEqual("EASY  (Esc: title screen)", hud.LevelLabel, "a played night keeps the hint");
+                }
+            }
+            if (File.Exists(SavePath)) File.Delete(SavePath);
         }
     }
 }

@@ -465,6 +465,10 @@
   readers that size a buffer from the header misread them. `wavfile.py`'s new `fix_stream_sizes` walks the chunks
   and sets only the two fields (samples unchanged); the `.gen.json` record keeps `sha256` (the file as written) and
   `sha256_as_received`. MP3 and Opus are saved as received (#178).
+- Graveyard Shift (Unity): the HUD's bottom-left label shows "(Esc: title screen)" only on a played night; a bot
+  night (`--autoplay`), where Esc does nothing, says `(autoplay careful)` (or `lit`, `dark`) instead. The label is
+  `Hud.LevelLabel`, kept current like `SeedLabel`, and the new `Smoke_R9` checks both nights (old code: the hint on
+  the bot night) (#179).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

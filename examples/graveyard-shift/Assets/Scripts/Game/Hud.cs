@@ -35,10 +35,19 @@ namespace graveyard_shift.Game
         // calls OnGUI) can read it from the live HUD
         public string SeedLabel { get; private set; }
 
+        // The difficulty label at the bottom left. The Esc hint shows only where Esc works: a bot night (--autoplay)
+        // ignores Esc, so it names the bot instead (issue #179)
+        public static string LevelText(Difficulty level, BotMode? bot) =>
+            level.ToString().ToUpperInvariant() + (bot.HasValue ? $"  (autoplay {bot.Value.ToString().ToLowerInvariant()})" : "  (Esc: title screen)");
+
+        // What OnGUI draws as the difficulty label, kept up to date like SeedLabel
+        public string LevelLabel { get; private set; }
+
         private void Update()
         {
             var game = GraveyardGame.Current;
             if (game != null && game.Yard != null) SeedLabel = SeedText(game.NightSeed, game.Yard.HandMade);
+            if (game != null && game.Difficulty != null) LevelLabel = LevelText(game.Difficulty.Level, game.Bot?.Mode);
         }
 
         private void Styles()
@@ -84,7 +93,7 @@ namespace graveyard_shift.Game
             // Tonight's seed: --seed N replays this exact yard (generated nights); seed 0 is the hand-made one
             string yard = SeedLabel ?? SeedText(game.NightSeed, game.Yard.HandMade);
             GUI.Label(new Rect(_w - 420, h - 30, 290, 24), yard, _small);
-            GUI.Label(new Rect(24, h - 30, 400, 24), $"{game.Difficulty.Level.ToString().ToUpperInvariant()}  (Esc: title screen)", _small);
+            GUI.Label(new Rect(24, h - 30, 400, 24), LevelLabel ?? LevelText(game.Difficulty.Level, game.Bot?.Mode), _small);
             if (!_seedLogged && Event.current.type == EventType.Repaint)
             {
                 _seedLogged = true;   // once per night, so tests can see the label was really drawn
