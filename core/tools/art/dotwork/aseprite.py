@@ -261,15 +261,23 @@ def build(pack, conf, overwrite=False):
             done["backups"].append(out + ".bak")
             core.log(f"aseprite build {rel}: the file it replaces is kept as {os.path.basename(out)}.bak")
         os.makedirs(os.path.dirname(out), exist_ok=True)
-        lst = out[:-9] + ".list.txt"
-        with open(core.safe_dest(lst), "w", encoding="utf-8") as fh:
-            fh.write("\n".join(f"{t}|{d:.4f}|{p}" for t, d, p in items) + "\n")
-        pal = out[:-9] + ".gpl"
-        n, indexed = _palette_file([p for _, _, p in items], pal)
-        w, h = canvas[out]
-        _run(conf, BUILD_LUA, "ase_build.lua", {"list": lst, "w": w, "h": h, "palette": pal, "out": out,
-                                                 "indexed": "1" if indexed else "0"})
-        os.remove(lst)
+        # BUILD_LUA's frame list and palette go to the work folder and are removed after: the .gpl used to stay
+        # beside every .aseprite in the game's tracked sources (issue #109)
+        work = os.path.join(core.WORK, "ase_build")
+        os.makedirs(work, exist_ok=True)
+        stem = os.path.join(work, os.path.basename(out)[:-9])
+        lst, pal = stem + ".list.txt", stem + ".gpl"
+        try:
+            with open(core.safe_dest(lst), "w", encoding="utf-8") as fh:
+                fh.write("\n".join(f"{t}|{d:.4f}|{p}" for t, d, p in items) + "\n")
+            n, indexed = _palette_file([p for _, _, p in items], pal)
+            w, h = canvas[out]
+            _run(conf, BUILD_LUA, "ase_build.lua", {"list": lst, "w": w, "h": h, "palette": pal, "out": out,
+                                                     "indexed": "1" if indexed else "0"})
+        finally:
+            for p in (lst, pal):
+                if os.path.exists(p):
+                    os.remove(p)
         done["written"].append(out)
         core.log(f"aseprite build {rel}: {len(items)} frames, {n} colors"
                  + ("" if indexed else ", RGB (too many colours or partly clear pixels to index without loss)"))

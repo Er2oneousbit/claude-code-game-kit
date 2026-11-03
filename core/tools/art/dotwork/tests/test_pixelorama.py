@@ -842,6 +842,34 @@ class AsepriteHoldsExam(unittest.TestCase):
                          [["attack_e", "0.1250"], ["attack_e", "0.2500"], ["attack_e", "0.1250"], ["attack_e", "0.3750"],
                           ["walk_e", "0.0833"], ["walk_e", "0.0833"], ["walk_e", "0.0833"]])
 
+    def test_build_leaves_no_helper_files_in_the_sources(self):
+        # #109: the palette BUILD_LUA loads was written beside each .aseprite and stayed in the game's tracked sources
+        seen = []
+
+        def run(conf, lua, name, params):
+            if "list" in params:
+                for k in ("list", "palette"):
+                    self.assertTrue(os.path.isfile(params[k]), k)            # there while Aseprite runs
+                    seen.append(os.path.relpath(params[k], self.tmp).replace(os.sep, "/"))
+                open(params["out"], "wb").close()
+            return "DOTWORK_ASE_OK"
+        self.ase._run = run
+        self.ase.build(self.s.project, self.s.conf)
+        src = os.path.join(self.tmp, "assets_src", "aseprite")
+        left = sorted(os.path.relpath(p, src).replace(os.sep, "/")
+                      for p in glob.glob(os.path.join(src, "**", "*"), recursive=True) if os.path.isfile(p))
+        self.assertEqual(left, ["characters/knight.aseprite", "fx/spark.aseprite", "single/barrel.aseprite"])
+        self.assertTrue(seen and all(p.startswith("art_src/dotwork/") for p in seen), seen)
+        self.assertEqual([p for p in seen if os.path.exists(os.path.join(self.tmp, p))], [])   # removed after
+
+        def fails(conf, lua, name, params):
+            raise fcore.JobError("Aseprite failed (1): stand-in")
+        self.ase._run = fails
+        shutil.rmtree(src)                                                    # a fresh build, so BUILD_LUA runs
+        with self.assertRaises(fcore.JobError):
+            self.ase.build(self.s.project, self.s.conf)
+        self.assertEqual([p for p in seen if os.path.exists(os.path.join(self.tmp, p))], [])   # a failed run too
+
     def fake_export(self, edit=None):
         """A stand-in for EXPORT_LUA: the game's frames as Aseprite would export them, frame times in whole
         milliseconds (truncated) as Aseprite keeps them."""

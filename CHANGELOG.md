@@ -212,6 +212,9 @@
   `FONT_ASCENT`, `ENCODING` or `DWIDTH`, a bitmap row that is not hex, or more rows than the BBX height; these
   crashed as "unexpected failure". A glyph too big for the 256 px page at its `scale` is named, and `scale` is a
   whole number from 1 to 16 (#108).
+- Dotwork aseprite: build writes the palette and frame list Aseprite loads to the work folder and removes both after
+  the run, also when it fails. The `<name>.gpl` stayed beside every `.aseprite` in the game's tracked sources; ones
+  an earlier build left there are not used and can be deleted (#109).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
