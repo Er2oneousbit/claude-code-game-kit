@@ -60,7 +60,7 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
 - **img2threejs:** code-only Three.js models from a reference image, for web-3d and image to 3D ([#71](https://github.com/Er2oneousbit/claude-code-game-kit/issues/71)).
 - **Gameplay visual review:** Claude reviews smoke screenshots against the art direction ([#72](https://github.com/Er2oneousbit/claude-code-game-kit/issues/72)).
 
-### Planned for 0.9.0 and later
+### Planned
 - **Steam:** a platform-services layer with a null backend and one adapter per engine
   ([#84](https://github.com/Er2oneousbit/claude-code-game-kit/issues/84)); an automated Steam Deck pass ([#85](https://github.com/Er2oneousbit/claude-code-game-kit/issues/85)); `dev.py ship` for
   SteamPipe and itch.io with a dry run ([#86](https://github.com/Er2oneousbit/claude-code-game-kit/issues/86)).
