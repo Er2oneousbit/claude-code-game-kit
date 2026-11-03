@@ -95,7 +95,7 @@ these lessons from all three AI examples.
 ## 8. Verified
 | Check | Result |
 |---|---|
-| `python tools/dev.py check` / `test` | compiled without warnings / 41 test cases (geometry, A*, BT, arena, rules, each raider branch, camera, the pair over 40 seeds); 46 after the review fixes |
+| `python tools/dev.py check` / `test` | compiled without warnings / 41 test cases (geometry, A*, BT, arena, rules, each raider branch, camera, the pair over 40 seeds); 46 after the review fixes; 66 now (29 of them the kit's, from the 0.8.2 sync) |
 | `python tools/dev.py smoke` | boot, sprites, font and the sounds load headless (Kenney Ogg files then, WAV now) |
 | Scenario pair in the game, seed 4 (seed 7 since the review fixes) | `--autoplay skilled` reaches RUN_WON, `--autoplay reckless` reaches PLAYER_DESTROYED |
 | `python tools/dev.py --preset release build` | compiles; vcpkg copies the SDL, image, font and sound DLLs |

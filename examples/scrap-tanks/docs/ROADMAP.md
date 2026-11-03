@@ -27,7 +27,7 @@ detail.
 | M4 Release candidate (v1.0.0-rc.N, then v1.0.0) | `/release-check` green | |
 
 ## Done (recent, newest first)
-- 2026-11-02: sight counts a tank's hull edges, not only its center (#11): cover 30/40 vs charging 13/40
+- 2026-11-02: sight counts a tank's hull edges, not only its center (#11): cover 30/40 vs charging 13/40; the bot's HIDE skips nav islands (#153); 66 test cases (29 of them the kit's, since the 0.8.2 sync)
 - 2026-10-26: review fixes (nav islands, shell ordering, `--seed` parsing, no Mix_Init), 46 test cases, cover 25/40 vs charging 11/40, smoke seed 7
 - 2026-10-21: v0.2.0, slice built: behavior-tree raiders, cover, scrap, three waves, sprites rendered from Kenney 3D, HUD, sound, gamepad, scenario pair, 41 test cases
 - 2026-10-21: Project scaffolded

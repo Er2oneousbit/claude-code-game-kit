@@ -3,14 +3,15 @@
 > Rewritten at the end of every session by `/end-session`. Read first by `/start-session`.
 > Keep under ~60 lines. It is a baton, not a diary.
 
-**Last updated:** 2026-10-26
+**Last updated:** 2026-11-02
 **Branch / commit:** main (example in the kit repo)
 **Engine version:** see `docs/ENGINE.md`
 
 ## Where we are
 v0.2.0. Vertical slice "Scrapyard, three waves" done: tank controls and a free turret, raiders on a behavior tree
 (RETREAT, COVER, FIRE, FLANK) shown over each raider, shells stopped by cover, scrap repairs, three waves, HUD, five
-sounds, keyboard, mouse and gamepad, `-- --debug-ai` overlay, autoplay bots, 46 test cases including the scenario pair.
+sounds, keyboard, mouse and gamepad, `-- --debug-ai` overlay, autoplay bots, 66 test cases (29 of them the kit's)
+including the scenario pair.
 Bot-verified: fighting from cover wins 30 of 40 seeds, charging 13 of 40. Not yet played by a human.
 
 ## What changed last session
