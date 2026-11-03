@@ -567,6 +567,65 @@ class PixeloramaExam(unittest.TestCase):
         self.reexport()
         self.assertEqual(changed(before, snapshot(self.tmp)), [])
 
+    def test_a_local_export_folder_is_reported_and_cleared_only_on_request(self):
+        # Pixelorama 1.2.3 keeps the folder you last exported to in every .pxo it saves (#69): Dotwork names it, and
+        # blanks it only when asked, leaving every other entry of the file and the round trip as they were
+        self.build()
+        home = "C:/Users/someone/Desktop/exports"
+
+        def edit(d, b):
+            d["export_profile"] = {"directory_path": '"%s"' % home, "file_name": '"knight"'}
+        rewrite_pxo(self.knight, edit)
+        rel = os.path.relpath(self.knight, self.tmp)
+        with zipfile.ZipFile(self.knight) as z:
+            old = {i.filename: (i.compress_type, z.read(i.filename)) for i in z.infolist()}
+        self.assertEqual(self.px.local_paths(self.s.project, self.s.conf), [(rel, home, False)])
+        with zipfile.ZipFile(self.knight) as z:
+            self.assertEqual({i.filename: (i.compress_type, z.read(i.filename)) for i in z.infolist()}, old,
+                             "reporting alone must not touch the file")
+        self.assertEqual(self.px.local_paths(self.s.project, self.s.conf, clear=True), [(rel, home, True)])
+        self.assertEqual(self.px.local_paths(self.s.project, self.s.conf), [])
+        with zipfile.ZipFile(self.knight) as z:
+            new = {i.filename: (i.compress_type, z.read(i.filename)) for i in z.infolist()}
+        self.assertEqual(list(new), list(old))
+        self.assertEqual({n: v for n, v in new.items() if n != "data.json"},
+                         {n: v for n, v in old.items() if n != "data.json"})
+        want = json.loads(old["data.json"][1])
+        want["export_profile"]["directory_path"] = '""'
+        self.assertEqual(json.loads(new["data.json"][1]), want)
+        before = snapshot(self.tmp)
+        r, _ = self.reexport()
+        self.assertTrue(r["ok"])
+        self.assertEqual(changed(before, snapshot(self.tmp)), [])
+
+    def test_which_export_folders_count_as_local(self):
+        self.build()
+        cases = {'"C:/Users/someone/art"': "C:/Users/someone/art", '"D:\\\\art"': "D:\\\\art",
+                 '"/home/someone/art"': "/home/someone/art", "/Users/someone/art": "/Users/someone/art",
+                 '"~/art"': "~/art", '""': "", "": "", '"exports"': "", "art/out": ""}
+        for value, want in cases.items():
+            rewrite_pxo(self.knight, lambda d, b: d.update(export_profile={"directory_path": value}))
+            self.assertEqual(self.px.export_folder(self.knight), want, value)
+        rewrite_pxo(self.knight, lambda d, b: d.pop("export_profile"))
+        self.assertEqual(self.px.export_folder(self.knight), "")
+        rewrite_pxo(self.knight, lambda d, b: d.update(export_profile="C:/x"))
+        self.assertEqual(self.px.export_folder(self.knight), "")
+
+    def test_cli_warns_about_a_local_export_folder_and_clears_it_on_request(self):
+        self.build()
+        rewrite_pxo(self.knight, lambda d, b: d.update(
+            export_profile={"directory_path": '"/home/someone/art"', "file_name": '"knight"'}))
+        cmd = [sys.executable, os.path.join(DOTWORK, "dotwork.py"), "pixelorama", "--project", self.tmp]
+        run = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("[warn] " + os.path.join("assets_src", "pixelorama", "characters", "knight.pxo"), run.stdout)
+        self.assertIn("/home/someone/art", run.stdout)
+        self.assertEqual(self.px.export_folder(self.knight), "/home/someone/art")
+        run = subprocess.run(cmd + ["--clear-export-path"], capture_output=True, text=True, timeout=120)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("is now blank", run.stdout)
+        self.assertEqual(self.px.export_folder(self.knight), "")
+
     def test_cli_build(self):
         code = subprocess.run([sys.executable, os.path.join(DOTWORK, "dotwork.py"), "pixelorama", "--project",
                                self.tmp], capture_output=True, text=True, timeout=120)

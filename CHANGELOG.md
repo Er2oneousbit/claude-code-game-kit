@@ -149,6 +149,11 @@
   once `finish()` has shown it, and it waits for the "saved" toast to leave after the menu has checked it. Each
   check logs `PSEUDO_SCREEN <screen> labels N problems M`, as LÖVE does. `finish()` shows the whole line even when
   the text is longer than its timing allows (pseudo text is 40 % longer, so it stopped at about two thirds) (#63).
+- Dotwork: a `.pxo` that Pixelorama saved with the folder you last exported to (a full path on your machine) is named
+  by `dotwork.py pixelorama` and `pixelorama --reexport` with a `[warn]` line, and `publish_check.py` warns about it
+  too (it sits in the zipped project data, which the text scan cannot read). The new `--clear-export-path` blanks it
+  in place; every other entry of the file stays as it was and the round trip gives the same frames. Without the
+  flag, Dotwork does not rewrite the file (#69).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

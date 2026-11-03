@@ -150,7 +150,7 @@ or usage (the `[error]` line says what to fix). `preview KIND --help` lists each
 | `verify` | load every Dotwork asset of this game in Godot (shader materials compiled, held frames counted) and run its smoke test |
 | `qa pack [--json OUT] [--lineup OUT.png]` | style check over every PNG the game's manifests list, read only: pixel scale, each lane's palette lock (the table under Palettes), outline colour and thickness, light side, figure height in tiles, contrast on the ground tiles, colour-blind separation of gauge fills, status marks, button states and palette swaps (Machado 2009 simulation); `--lineup` draws every character and prop at game scale on a ground tile; exit 1 on findings |
 | `aseprite [--reexport] [--overwrite]` | editable `.aseprite` sources (frames timed by their holds); push hand-polished files back |
-| `pixelorama [--reexport] [--overwrite]` | the same round trip with Pixelorama `.pxo` files, no install needed ([Hand polish](#hand-polish-aseprite-or-pixelorama)) |
+| `pixelorama [--reexport] [--overwrite] [--clear-export-path]` | the same round trip with Pixelorama `.pxo` files, no install needed; `--clear-export-path` blanks the local export folder Pixelorama saves in each file ([Hand polish](#hand-polish-aseprite-or-pixelorama)) |
 | `preview battle\|title\|attack ...` | mock screens composed from the game's art (review only) |
 | `capture --scene S [--frames N] [--fps F] [--size WxH] [--gif]` | record any scene with Godot's Movie Maker: a fixed frame rate, every frame written as PNG (trailer cuts, side-by-side reviews), a contact strip and an optional GIF; a window opens for the capture |
 | `log --pack NAME [--dry-run]` | `docs/ASSET_LOG.md` row + evidence file for a pack |
@@ -436,7 +436,10 @@ drawn from their specs, so neither editor gets them.
 | Size | read by Aseprite | a project whose frames would take over 512 MB, whose visible cels would unpack to over 1 GB, or with over 256 layers is refused before any image is read |
 
 Pixelorama stores the folder you last exported to, a full path on your machine, in every `.pxo` it saves: in a public
-repository, that path is public too. Aseprite 1.3.18 on Windows built the sources and re-exported them untouched
+repository, that path is public too. `pixelorama` and `pixelorama --reexport` name each `.pxo` that holds one (a
+`[warn]` line), and `tools/publish_check.py` warns about it before you publish; `--clear-export-path` blanks the
+folder (nothing else in the file changes, and the round trip still gives the same frames). Dotwork never rewrites a
+`.pxo` for this without that flag. How Pixelorama treats a blank folder on its next export is (verify). Aseprite 1.3.18 on Windows built the sources and re-exported them untouched
 with every file unchanged; an edit made in Aseprite's window is not tested yet.
 
 ## Store art (Steam sizes)

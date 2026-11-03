@@ -12,7 +12,7 @@
 #           python tools/art/dotwork/dotwork.py materials [--only cobble sand] | palette extract "assets_src/*.png" ...
 #           python tools/art/dotwork/dotwork.py verify | aseprite [--overwrite] | aseprite --reexport | log
 #           python tools/art/dotwork/dotwork.py preview battle|title|attack ...
-#           python tools/art/dotwork/dotwork.py pixelorama [--overwrite] | pixelorama --reexport   # hand polish
+#           python tools/art/dotwork/dotwork.py pixelorama [--overwrite] | pixelorama --reexport [--clear-export-path]   # hand polish
 #           python tools/art/dotwork/dotwork.py qa pack [--json OUT] [--lineup OUT.png]   # style check, read only
 #           Global: --project GAME (default: current folder), --config FILE, --engine godot|none, --debug
 # Notes   : Needs ComfyUI (local, http://127.0.0.1:8188 by default) with the SpriteKiln and GGUF node packs and the
@@ -335,8 +335,14 @@ def cmd_pixelorama(a):
         if r and not r["ok"]:
             raise fcore.JobError("re-exported files failed verify")
         print("[ OK ] re-exported and verified")
-        return 0
-    report_sources(s, pixelorama.build(s.project, s.conf, overwrite=a.overwrite), "pixelorama")
+    else:
+        report_sources(s, pixelorama.build(s.project, s.conf, overwrite=a.overwrite), "pixelorama")
+    for rel, folder, cleared in pixelorama.local_paths(s.project, s.conf, clear=a.clear_export_path):
+        if cleared:
+            print(f"[ OK ] {rel}: the export folder Pixelorama saved in it ({folder}) is now blank")
+        else:
+            print(f"[warn] {rel} holds the folder Pixelorama last exported it to, {folder}: a full path on your "
+                  "machine that a public repository would show. --clear-export-path blanks it (frames untouched)")
     return 0
 
 
@@ -551,6 +557,9 @@ def build_parser():
     p.add_argument("--reexport", action="store_true", help="push hand-polished .pxo files back into the game")
     p.add_argument("--overwrite", action="store_true",
                    help="replace a .pxo that differs from the game's frames (it may hold hand polish)")
+    p.add_argument("--clear-export-path", action="store_true",
+                   help="blank the export folder Pixelorama saves in each .pxo (a full path on your machine, often "
+                        "with your user name); without it, a .pxo holding one only gets a warning")
     p.set_defaults(fn=cmd_pixelorama)
 
     # add_help=False: "preview battle --help" reaches the battle module, which lists its own flags (--char, --bg ...)
