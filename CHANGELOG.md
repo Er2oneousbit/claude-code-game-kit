@@ -342,6 +342,10 @@
   itch, balancing and marketing were missing from the list), one example for every engine but LÖVE, ten example
   games, and the SOP-16 row names `/dotwork`. `test_kit_docs.py` checks the counts against the folders and that
   every skill is in the SOP index (#121).
+- Bevy: a save slot whose primary file is not valid UTF-8 (torn inside a multibyte character) can be saved again.
+  `save_store::write_to` read it with `read_to_string` and returned `cannot read ...: stream did not contain valid
+  UTF-8` on every later save; it now counts the file as unreadable, as `load_from` and the other ports do, writes
+  the new save and keeps the good `.bak` (#106).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

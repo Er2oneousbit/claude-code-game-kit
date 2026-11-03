@@ -133,10 +133,15 @@ pub fn load(primary: Option<&str>, backup: Option<&str>) -> Loaded {
     }
 }
 
+/// The file's text, None when it does not exist. A file that cannot be read (no permission, not UTF-8: torn
+/// inside a multibyte character) gives empty text, which parses as unreadable, so load and save agree on it.
+fn read_save_text(path: &Path) -> Option<String> {
+    atomic_file::read_text(path).unwrap_or_else(|_| Some(String::new()))
+}
+
 /// Loads `path`, falling back to `<path>.bak`. A file that cannot be read counts as unreadable.
 pub fn load_from(path: &Path) -> Loaded {
-    let read = |p: &Path| atomic_file::read_text(p).unwrap_or_else(|_| Some(String::new()));
-    let (primary, backup) = (read(path), read(&atomic_file::bak_path(path)));
+    let (primary, backup) = (read_save_text(path), read_save_text(&atomic_file::bak_path(path)));
     load(primary.as_deref(), backup.as_deref())
 }
 
@@ -146,7 +151,7 @@ pub fn write_to(path: &Path, data: &Value) -> Result<(), String> {
     if !data.is_object() {
         return Err("save data must be a JSON object".into());
     }
-    let current = atomic_file::read_text(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    let current = read_save_text(path); // unreadable here too, so a damaged primary never blocks saving
     match parse(current.as_deref()) {
         Err("newer") => {
             return Err(format!(
@@ -192,6 +197,25 @@ mod tests {
         let loaded = load_from(&path);
         assert_eq!((loaded.source, loaded.problems.len()), (Source::Backup, 1));
         write_to(&path, &json!({"health": 5})).unwrap(); // the good backup is kept, not replaced by the torn file
+        let backup = load(atomic_file::read_text(&bak_path(&path)).unwrap().as_deref(), None);
+        assert_eq!(backup.envelope.unwrap()["data"]["health"], 3);
+    }
+
+    #[test]
+    fn a_primary_that_is_not_utf8_counts_as_unreadable_when_saving() {
+        let dir = TempDir::new("save-not-utf8");
+        let path = dir.0.join("slot1.json");
+        write_to(&path, &json!({"health": 3})).unwrap();
+        write_to(&path, &json!({"health": 4})).unwrap();
+        // torn inside a multibyte character: read_to_string gives InvalidData, not text
+        std::fs::write(
+            &path,
+            b"{\"format\": \"save\", \"version\": 3, \"data\": {\"name\": \"\xC3",
+        )
+        .unwrap();
+        assert_eq!(load_from(&path).source, Source::Backup);
+        write_to(&path, &json!({"health": 5})).unwrap(); // saving must not be blocked for good
+        assert_eq!(load_from(&path).envelope.unwrap()["data"]["health"], 5);
         let backup = load(atomic_file::read_text(&bak_path(&path)).unwrap().as_deref(), None);
         assert_eq!(backup.envelope.unwrap()["data"]["health"], 3);
     }
