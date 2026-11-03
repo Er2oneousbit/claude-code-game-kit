@@ -454,6 +454,12 @@
   low-mana check asserts the ward it casts and the bolt it then cannot. Three mutants (double regen, a stagger
   ignored in Recover, a masher that bolts past its ward) pass the old checks and fail the new ones. The bot pair is
   unchanged (#150).
+- Rune Delve (Unreal): orcs stand down when the mage falls. The brain gets `bTargetAlive`, and a Hunt or a Windup
+  with the mage dead goes to Sleep, so no orc keeps winding up at the body with the red telegraph and the swing sound
+  while "You fell" is up; a hunting orc plays walk only while it moves, as the mage does, so it no longer walks in
+  place when blocked or waiting. The OrcBrain test and a new Regressions stage (the awake grunt kills the mage, then
+  every orc must sleep on its idle clip; old code: a room 1 orc in HUNT on the walk clip) cover it. The bot pair
+  totals are unchanged (#149).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

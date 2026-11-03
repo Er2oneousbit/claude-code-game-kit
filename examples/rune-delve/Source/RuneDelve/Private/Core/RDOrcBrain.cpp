@@ -5,8 +5,8 @@
 // Pseudocode:
 //   dead stays dead; a stagger interrupts anything (no swing comes out), and ends back in Hunt
 //   Sleep: senses the mage -> Hunt (alerted)
-//   Hunt: move; within Reach -> Windup
-//   Windup: after Windup seconds -> strike, Recover
+//   Hunt: the mage is dead -> Sleep; move; within Reach -> Windup
+//   Windup: the mage is dead -> Sleep (no swing); after Windup seconds -> strike, Recover
 //   Recover: after Recover seconds -> Hunt
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
@@ -54,7 +54,11 @@ FRDOrcOutput FRDOrcBrain::Tick(const FRDOrcInput& In)
 		Go(ERDOrcState::Hunt);
 		break;
 	case ERDOrcState::Hunt:
-		if (In.DistToMage <= Stats.Reach)
+		if (!In.bTargetAlive)
+		{
+			Go(ERDOrcState::Sleep);   // nothing left to fight: stand down (R restarts the delve)
+		}
+		else if (In.DistToMage <= Stats.Reach)
 		{
 			Out.bWindupStart = true;
 			Go(ERDOrcState::Windup);
@@ -65,7 +69,11 @@ FRDOrcOutput FRDOrcBrain::Tick(const FRDOrcInput& In)
 		}
 		break;
 	case ERDOrcState::Windup:
-		if (StateTime >= Stats.Windup)
+		if (!In.bTargetAlive)
+		{
+			Go(ERDOrcState::Sleep);
+		}
+		else if (StateTime >= Stats.Windup)
 		{
 			Out.bStrike = true;
 			Go(ERDOrcState::Recover);

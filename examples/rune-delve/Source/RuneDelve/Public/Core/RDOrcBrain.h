@@ -1,8 +1,9 @@
 // ---------------------------------------------------------------------------
 // RDOrcBrain.h
 // Purpose : The orc's decisions as a small finite state machine (SOP-14: a handful of modes, so an FSM),
-//           with no engine types: Sleep -> Hunt -> Windup -> (swing) -> Recover -> Hunt, Staggered, Dead.
-// Usage   : FRDOrcBrain Brain(N.Grunt); each tick: FRDOrcOutput Out = Brain.Tick({Dt, bAlive, bSenses, Dist, bStaggered});
+//           with no engine types: Sleep -> Hunt -> Windup -> (swing) -> Recover -> Hunt, Staggered, Dead; a Hunt or
+//           a Windup with the mage dead stands down to Sleep.
+// Usage   : FRDOrcBrain Brain(N.Grunt); each tick: FRDOrcOutput Out = Brain.Tick({Dt, bAlive, bSenses, Dist, bStaggered, bTargetAlive});
 //           Out.bMove -> chase the mage; Out.bStrike -> the swing fires now (the actor checks reach and applies damage)
 // Notes   : Pillar 2 (read the orcs): every swing has a Windup the player can see. A ward stagger lands with
 //           the blocked swing itself (the attribute set tags the attacker while the orc is already in Recover),
@@ -11,6 +12,8 @@
 //           cancel the swing too, but nothing in the game staggers an orc then. Once awake an orc always knows
 //           where the mage is (rooms are closed until cleared).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-03 (Claude Opus 5.5): bTargetAlive; orcs stand down when the mage falls (issue #149: they kept
+//           swinging at the body, with the telegraph and the swing sound, while "You fell" was up)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -34,6 +37,7 @@ struct FRDOrcInput
 	bool bSensesMage = false;   // saw or heard the mage this tick (same room only)
 	float DistToMage = 1e9f;
 	bool bStaggered = false;    // the GAS State.Staggered tag is on this orc
+	bool bTargetAlive = true;   // the mage is alive; when not, a hunting or winding-up orc stands down
 };
 
 struct FRDOrcOutput

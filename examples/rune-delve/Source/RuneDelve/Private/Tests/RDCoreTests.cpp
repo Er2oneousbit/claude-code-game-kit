@@ -10,7 +10,7 @@
 //           24 of seeds 0..199; the old loop stopped at 7) and checks GateOf
 // Updated : 2026-11-03 (issue #150) checks what the game runs: no RDRules::Regen checks (the live regen is a GAS
 //           effect, checked by the Regressions smoke), the stagger a blocked swing gives (Recover -> Staggered),
-//           and the masher's low-mana ward
+//           and the masher's low-mana ward; orcs stand down when the mage is dead (issue #149)
 // ---------------------------------------------------------------------------
 #include "Misc/AutomationTest.h"
 
@@ -29,9 +29,10 @@ namespace
 
 	FRDNumbers Tuned() { return GetDefault<URDTuning>()->Numbers(); }
 
-	FRDOrcOutput Step(FRDOrcBrain& B, float Dt, bool bSenses, float Dist, bool bStaggered = false, bool bAlive = true)
+	FRDOrcOutput Step(FRDOrcBrain& B, float Dt, bool bSenses, float Dist, bool bStaggered = false, bool bAlive = true,
+	                  bool bMageAlive = true)
 	{
-		return B.Tick(FRDOrcInput{Dt, bAlive, bSenses, Dist, bStaggered});
+		return B.Tick(FRDOrcInput{Dt, bAlive, bSenses, Dist, bStaggered, bMageAlive});
 	}
 }
 
@@ -135,6 +136,25 @@ bool FRDOrcBrainTest::RunTest(const FString&)
 	Step(S, Dt, true, Close, false);
 	TestTrue(TEXT("back to hunting when the stagger ends"), S.GetState() == ERDOrcState::Hunt);
 	TestTrue(TEXT("the next wind-up only after the stagger"), Step(S, Dt, true, Close).bWindupStart && S.GetState() == ERDOrcState::Windup);
+
+	// The mage falls: a hunting orc and one mid wind-up stand down, with no swing and no step toward the body
+	FRDOrcBrain H(G);
+	Step(H, Dt, true, G.Reach * 3.f);
+	TestTrue(TEXT("hunting before the mage falls"), H.GetState() == ERDOrcState::Hunt);
+	const FRDOrcOutput Down = Step(H, Dt, false, G.Reach * 3.f, false, true, false);
+	TestTrue(TEXT("a hunting orc stands down when the mage is dead"), H.GetState() == ERDOrcState::Sleep && !Down.bMove);
+	FRDOrcBrain Wind(G);
+	Step(Wind, Dt, true, Close);
+	Step(Wind, Dt, true, Close);
+	TestTrue(TEXT("winding up before the mage falls"), Wind.GetState() == ERDOrcState::Windup);
+	int32 BodyStrikes = 0;
+	for (float T = 0.f; T < G.Windup + G.Recover + Dt * 4.f; T += Dt)
+	{
+		const FRDOrcOutput O = Step(Wind, Dt, false, Close, false, true, false);
+		BodyStrikes += O.bStrike || O.bWindupStart ? 1 : 0;
+	}
+	TestEqual(TEXT("no swing at the body"), BodyStrikes, 0);
+	TestTrue(TEXT("an orc mid wind-up stands down when the mage is dead"), Wind.GetState() == ERDOrcState::Sleep);
 
 	Step(S, Dt, true, 0.f, false, false);
 	TestTrue(TEXT("dies"), S.GetState() == ERDOrcState::Dead);

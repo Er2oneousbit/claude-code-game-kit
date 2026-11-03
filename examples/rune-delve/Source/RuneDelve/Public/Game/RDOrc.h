@@ -33,6 +33,7 @@ public:
 	static constexpr float TelegraphIntensity = 9000.f;
 	static constexpr float AlertMarkSeconds = 1.2f;
 	static constexpr float CorpseSeconds = 0.8f;   // a dead orc disappears after its death animation
+	static constexpr float WalkAnimMinSpeed = 20.f; // cm/s: a hunting orc slower than this plays idle (as the mage does)
 	// s from the start of the Kenney attack-melee-right clip (0.417 s long) to its contact frame: the arm and torso
 	// reach the end of the forward swing at 0.25 s (measured by sampling the clip's bones with a headless exec probe)
 	static constexpr float ContactDelay = 0.25f;

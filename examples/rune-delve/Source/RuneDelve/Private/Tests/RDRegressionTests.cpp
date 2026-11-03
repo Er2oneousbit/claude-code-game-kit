@@ -10,13 +10,15 @@
 //              hurt was discarded unless the mage stood in the orc's room, so it could be sniped asleep).
 //           5. Regen (issue #150): the mage's mana grows by ManaRegen per second through the periodic GAS effect
 //              (the Core test checked a rule nothing called).
+//           6. Mage down (issue #149): once the mage falls no orc winds up at the body, and every orc stands down
+//              to Sleep with the idle clip (they kept swinging, glowing and walking in place).
 //           The warden-on-a-grunt's-tile spawn fix is checked over 300 seeds by RuneDelve.Core.Level.
 // Usage   : python tools/dev.py smoke --filter Regressions      (also part of a plain `smoke`)
 // Notes   : One PIE session on seed 7 (room 1's grunts stand on tiles (17,1), (16,0) and (15,0), a clear line
 //           from room 0 through gate 0). Every frame is 1/60 s; the test steps once per frame. Ported from the
 //           reviewer's probes in a scratch copy, which asserted the expected behaviour and failed before the fixes.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5), from probes by Claude (Fable 5.1, claude-fable-5-1)
-// Updated : 2026-11-03 (Claude Opus 5.5): the Regen stage (issue #150)
+// Updated : 2026-11-03 (Claude Opus 5.5): the Regen stage (issue #150); the MageDown stage (issue #149)
 // ---------------------------------------------------------------------------
 #include "Misc/AutomationTest.h"
 
@@ -55,6 +57,8 @@ namespace
 	constexpr float WakeMoveCm = 50.f;             // a woken grunt has clearly left its tile
 	constexpr float RegenStartMana = 10.f;         // low enough that a second of regeneration never reaches the cap
 	constexpr int32 RegenFrames = 60;              // one second of game time
+	constexpr int32 MageDownFrames = 180;          // 3 s: longer than any orc's Windup + Recover
+	constexpr int32 StandDownFrames = 3;           // frames an orc may take to notice the mage fell
 
 	UWorld* RegressionWorld()
 	{
@@ -177,6 +181,7 @@ enum class ERDRegStage : uint8
 	ClearRoom,
 	Dash,
 	Doorway,
+	MageDown,
 	Done
 };
 
@@ -194,6 +199,7 @@ struct FRDRegressionState
 	int32 HitFrame = -1;
 	int32 WakeFrame = -1;
 	float ManaBefore = 0.f;
+	int32 BodyWindups = 0;
 
 	void Go(ERDRegStage Next, int32 Frame)
 	{
@@ -417,8 +423,8 @@ bool FRDRegressionSmoke::RunTest(const FString&)
 				UE_LOG(LogRuneDelve, Display, TEXT("[test] doorway: hit at frame %d, awake at %d, moved %.0f cm by %d"), S->HitFrame,
 				       S->WakeFrame, Moved, InStage);
 				T.TestTrue(TEXT("doorway: the shot grunt wakes at once"), S->WakeFrame - S->HitFrame <= 2);
-				S->Go(ERDRegStage::Done, Frame);
-				return true;
+				S->Go(ERDRegStage::MageDown, Frame);
+				return false;
 			}
 			if (S->HitFrame >= 0 && InStage - S->HitFrame > 120)
 			{
@@ -432,6 +438,57 @@ bool FRDRegressionSmoke::RunTest(const FString&)
 				return true;
 			}
 			return false;
+		}
+		case ERDRegStage::MageDown:   // the awake grunt kills the mage; nobody may swing at the body or walk in place
+		{
+			ARDOrc* Killer = S->Target.Get();
+			if (InStage == 1)
+			{
+				if (!T.TestNotNull(TEXT("mage down: the awake grunt"), Killer))
+				{
+					return true;
+				}
+				Killer->ApplyInstant(URDEffect_Damage::StaticClass(), Mage->GetMaxHealth() * 10.f, Mage->GetAbilitySystemComponent());
+				T.TestFalse(TEXT("mage down: the mage is dead"), Mage->IsAlive());
+				return false;
+			}
+			if (InStage < 1)
+			{
+				return false;
+			}
+			for (const TObjectPtr<ARDOrc>& O : Game.GetOrcs())
+			{
+				if (O && O->IsAlive() && InStage > StandDownFrames && O->GetState() == ERDOrcState::Windup)
+				{
+					++S->BodyWindups;
+				}
+			}
+			if (InStage < MageDownFrames)
+			{
+				return false;
+			}
+			int32 Standing = 0;
+			for (const TObjectPtr<ARDOrc>& O : Game.GetOrcs())
+			{
+				if (!O || !O->IsAlive())
+				{
+					continue;
+				}
+				const UAnimSingleNodeInstance* Anim = O->GetMesh()->GetSingleNodeInstance();
+				const UAnimationAsset* Clip = Anim ? Anim->GetAnimationAsset() : nullptr;
+				const bool bIdle = O->GetState() == ERDOrcState::Sleep && Clip && Clip->GetName().EndsWith(TEXT("idle"));
+				if (!bIdle)
+				{
+					++Standing;
+					T.AddError(FString::Printf(TEXT("mage down: a room %d orc is %s playing %s, want SLEEP and idle"), O->GetRoom(),
+					                           FRDOrcBrain::StateName(O->GetState()), Clip ? *Clip->GetName() : TEXT("nothing")));
+				}
+			}
+			UE_LOG(LogRuneDelve, Display, TEXT("[test] mage down: %d orc frames in a wind-up at the body, %d orcs not standing down"),
+			       S->BodyWindups, Standing);
+			T.TestEqual(TEXT("mage down: no orc winds up at the body"), S->BodyWindups, 0);
+			S->Go(ERDRegStage::Done, Frame);
+			return true;
 		}
 		default:
 			return true;

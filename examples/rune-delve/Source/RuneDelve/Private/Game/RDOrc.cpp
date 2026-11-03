@@ -4,7 +4,7 @@
 //
 // Pseudocode (each tick):
 //   senses = (perception fired this tick and the mage is in this orc's room) or the orc was hurt this tick
-//   out = brain.Tick(dt, alive, senses, distance, staggered tag)
+//   out = brain.Tick(dt, alive, senses, distance, staggered tag, mage alive)
 //   alerted -> "!" and a grunt; move -> controller chases the mage; windup -> face the mage, glow red,
 //   weapon raised, and ContactDelay before the swing lands the attack clip starts so its contact frame meets it
 //   strike -> if the mage is still within Reach * StrikeSlack and in front: melee damage effect
@@ -12,6 +12,8 @@
 // Updated : 2026-10-26 review fixes: being hurt wakes the orc even when the mage is outside its room (a bolt
 //           through an open gate could kill a sleeping orc that never woke); the attack clip is timed so its
 //           contact frame lands with the damage (the hit used to land on the clip's first frame)
+// Updated : 2026-11-03 (issue #149): the brain hears whether the mage is alive, so orcs stand down when it falls;
+//           a hunting orc plays walk only while it moves (it walked in place when blocked or with the mage down)
 // ---------------------------------------------------------------------------
 #include "Game/RDOrc.h"
 
@@ -85,7 +87,7 @@ void ARDOrc::Tick(float DeltaSeconds)
 	const float Dist = FVector2D::Distance(Ground(), Mage->Ground());
 	// The room gate is for sight and hearing only: damage always wakes the orc, wherever the shooter stands
 	const bool bSenses = (bSensedThisTick && bMageHere) || bHurtThisTick;
-	const FRDOrcOutput Out = Brain->Tick(FRDOrcInput{DeltaSeconds, IsAlive(), bSenses, Dist, HasTag(RDTags::State_Staggered)});
+	const FRDOrcOutput Out = Brain->Tick(FRDOrcInput{DeltaSeconds, IsAlive(), bSenses, Dist, HasTag(RDTags::State_Staggered), Mage->IsAlive()});
 	bSensedThisTick = false;
 	bHurtThisTick = false;
 	if (bWasDead)
@@ -141,9 +143,12 @@ void ARDOrc::Tick(float DeltaSeconds)
 	}
 	switch (State)
 	{
-	case ERDOrcState::Hunt:
-		PlayAnim(TEXT("walk"), true, Stats.Speed / 300.f);
+	case ERDOrcState::Hunt:   // walk only while moving (waiting on a path or blocked, it stands)
+	{
+		const float Speed = GetVelocity().Size2D();
+		PlayAnim(Speed > WalkAnimMinSpeed ? TEXT("walk") : TEXT("idle"), true, Speed > WalkAnimMinSpeed ? Stats.Speed / 300.f : 1.f);
 		break;
+	}
 	case ERDOrcState::Staggered:
 		PlayAnim(TEXT("emote-no"), true, 0.6f);
 		break;
