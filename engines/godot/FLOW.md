@@ -74,7 +74,7 @@ UK must opt in before anything is sent **(verify with current GDPR guidance for 
 1/60 s of game time and pictures repeat exactly.
 | Command | Passes when |
 |---|---|
-| `smoke --drive menus` | title -> settings -> master volume 0.5, reduce motion toggled -> Back -> Quit; prints `SETTINGS_WRITTEN <path>` and the file holds both values. With consent unset no `telemetry.csv` appears |
+| `smoke --drive menus` | title -> settings -> master volume 0.5 (left or right from whatever the data folder held), reduce motion toggled -> Back -> Quit; prints `SETTINGS_WRITTEN <path>` and the file holds both values. With consent unset no `telemetry.csv` appears |
 | `smoke --drive crash` | exits 1 on purpose: a script error writes `crashes/crash_<time>.txt` and prints `CRASH_WRITTEN <path>` |
 | `smoke --drive pseudo --locale pseudo` | every screen and settings tab is shown and no label is untranslated, clipped or off screen (`PSEUDO_OK`) |
 | `smoke --drive pseudo-plant --locale pseudo` | exits 1 on purpose, naming a planted label that is too small (`PSEUDO_FAIL`) |

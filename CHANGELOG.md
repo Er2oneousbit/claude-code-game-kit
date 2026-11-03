@@ -123,6 +123,9 @@
   (`session_s`), web had no session column and kept milliseconds, Godot's time had no `Z`. The reference
   (`tools/golden_vectors.py`) now writes `data/golden/telemetry.json` (header, session id, time and CSV quoting), and
   each of the four ports has a golden test for it (#42).
+- Godot: `smoke --drive menus` reaches master volume 0.5 from any start value: it presses left or right until the
+  live setting is there, instead of ten fixed presses left from 1.0, so a `--data-dir` seeded with 0.3 ended at 0
+  and failed (#43).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

@@ -28,6 +28,24 @@ func test_telemetry_writes_nothing_without_consent() -> void:
 	DirAccess.remove_absolute(path)
 
 
+func test_menus_drive_steps_towards_the_target_from_any_start() -> void:
+	# smoke --drive menus must reach master 0.5 from a data folder seeded with any value, not only 1.0
+	var t: float = SmokeDrive.TARGET_MASTER
+	assert_eq(SmokeDrive.slide_action(1.0, t), "ui_left")
+	assert_eq(SmokeDrive.slide_action(0.3, t), "ui_right")
+	assert_eq(SmokeDrive.slide_action(0.0, t), "ui_right")
+	assert_eq(SmokeDrive.slide_action(t, t), "")
+	# a slider with 0.05 steps gets there from every value it can hold, within the press budget
+	for start: int in 21:
+		var v: float = start * 0.05
+		var presses: int = 0
+		while SmokeDrive.slide_action(v, t) != "" and presses < SmokeDrive.MAX_SLIDER_STEPS:
+			v += -0.05 if SmokeDrive.slide_action(v, t) == "ui_left" else 0.05
+			v = snappedf(v, 0.05)
+			presses += 1
+		assert_almost_eq(v, t, 1e-6, "from %s" % (start * 0.05))
+
+
 func test_sample_dialogue_reads_and_gates_barks() -> void:
 	var dlg: Dictionary = DialogueData.parse(FileAccess.get_file_as_string(DIALOGUE))
 	assert_false(dlg.is_empty(), "sample.built.json parses")
