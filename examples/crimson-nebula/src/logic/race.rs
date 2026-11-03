@@ -78,6 +78,9 @@ pub struct Racer {
     pub zap_cooldown: f32,
     /// The closed lane (index into track.closures) whose barrier zapped this kart, until it leaves that section.
     pub zapped_by: Option<usize>,
+    /// A closed lane that went live with this kart already beside its barrier (a lapped kart): it does not push this
+    /// kart until the kart leaves that section, so a change never pops in under anyone's wheels (GDD pillar 1).
+    pub closure_grace: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -121,6 +124,7 @@ impl Race {
                     bonks: 0,
                     zap_cooldown: 0.0,
                     zapped_by: None,
+                    closure_grace: None,
                 }
             })
             .collect();
@@ -216,6 +220,13 @@ impl Race {
     fn keep_on_track(&mut self, i: usize, live: &Live) {
         let track = &self.track;
         let r = &mut self.racers[i];
+        let graced;
+        let live = if r.closure_grace.is_some() && r.closure_grace == live.closure {
+            graced = Live { closure: None, ..*live };
+            &graced
+        } else {
+            live
+        };
         let p = r.kart.pos;
         if track.drivable(p, live, r.on_shortcut, KART_RADIUS) {
             return;
@@ -301,11 +312,13 @@ impl Race {
         let lap_before = (r.progress / len).floor();
         r.progress += ds;
         r.s = s;
-        // A barrier's zap is remembered only while the kart is still in that section (what a non-reader bot reacts to)
-        if let Some(c) = r.zapped_by.map(|c| self.track.closures[c])
-            && (s < c.s_from || s > c.s_to)
-        {
+        // A barrier's zap (what a non-reader bot reacts to) and its grace last only while the kart is in that section
+        let outside = |c: usize| s < self.track.closures[c].s_from || s > self.track.closures[c].s_to;
+        if r.zapped_by.is_some_and(outside) {
             r.zapped_by = None;
+        }
+        if r.closure_grace.is_some_and(outside) {
+            r.closure_grace = None;
         }
         let lap_after = (r.progress / len).floor();
         if lap_after > lap_before && lap_after >= 1.0 && r.finished.is_none() && lap_after < LAPS as f32 {
@@ -365,6 +378,7 @@ impl Race {
         let lead = &self.racers[leader];
         let lead_lap = self.lap_of(leader);
         let lead_s = lead.progress.rem_euclid(len);
+        let mut closed = None;
         for k in 0..self.schedule.len() {
             let sc = self.schedule[k];
             match sc.state {
@@ -392,9 +406,27 @@ impl Race {
                         }
                         self.schedule[k].state = ChangeState::Live;
                         self.events.push(RaceEvent::ChangeLive { change: sc.change });
+                        if let ChangeKind::CloseLane(ci) = self.track.changes[sc.change] {
+                            closed = Some(ci);
+                        }
                     }
                 }
                 _ => {}
+            }
+        }
+        if let Some(ci) = closed {
+            self.grace_karts_beside(ci);
+        }
+    }
+
+    /// A barrier that goes live with a kart already beside it (on the main loop, overlapping it) leaves that kart
+    /// alone until it leaves the section, instead of pushing it across the track in one tick.
+    fn grace_karts_beside(&mut self, ci: usize) {
+        let c = self.track.closures[ci];
+        for r in self.racers.iter_mut().filter(|r| r.on_shortcut.is_none()) {
+            let pr = self.track.main.project(r.kart.pos);
+            if c.blocks(pr.s, pr.lateral, KART_RADIUS) {
+                r.closure_grace = Some(ci);
             }
         }
     }
@@ -580,6 +612,47 @@ mod tests {
             race.update_schedule(DT);
         }
         assert_eq!(race.schedule[0].state, ChangeState::Live);
+    }
+
+    #[test]
+    fn a_barrier_going_live_leaves_a_kart_already_beside_it_alone() {
+        // #141: a lapped kart parked beside the barrier when it goes live is neither moved nor zapped until it leaves
+        // the section; once it has left, driving back in is pushed and zapped as usual
+        let mut race = Race::new(1, 1);
+        race.phase = Phase::Racing;
+        let ChangeKind::CloseLane(ci) = race.track.changes[race.schedule[0].change] else {
+            panic!("lap 2 closes a lane");
+        };
+        let c = race.track.closures[ci];
+        let park = |race: &mut Race, s: f32| {
+            let (p, t) = race.track.main.point_at(s);
+            let pos = p + t.perp() * c.side.sign() * 4.0;
+            let r = &mut race.racers[0];
+            r.kart.pos = pos;
+            r.kart.vel = Vec2::ZERO;
+            r.s = s;
+            r.progress = s;
+            pos
+        };
+        let s = c.s_from + CLOSURE_TAPER + 5.0; // past the taper: the barrier is at full height
+        assert!(c.blocks(s, c.side.sign() * 4.0, KART_RADIUS));
+        let pos = park(&mut race, s);
+        race.schedule[0].state = ChangeState::Warning(DT / 2.0);
+        let mut bonked = false;
+        for _ in 0..30 {
+            race.step(&[KartInput::default()], DT);
+            bonked |= race.events.iter().any(|e| matches!(e, RaceEvent::Bonk { .. }));
+        }
+        assert_eq!(race.live().closure, Some(ci));
+        let moved = race.racers[0].kart.pos.distance(pos);
+        assert!(moved < 0.1 && !bonked, "moved {moved} m, zapped {bonked}");
+        // Out of the section, then back beside the barrier: no grace any more
+        park(&mut race, c.s_from - 5.0);
+        race.step(&[KartInput::default()], DT);
+        let pos = park(&mut race, s);
+        race.step(&[KartInput::default()], DT);
+        assert!(race.racers[0].kart.pos.distance(pos) > 1.0);
+        assert!(race.events.iter().any(|e| matches!(e, RaceEvent::Bonk { .. })));
     }
 
     #[test]

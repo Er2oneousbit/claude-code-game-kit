@@ -401,6 +401,10 @@
   the lap 2 zap) made it swerve from the section entrance, before the barrier had started, so on seeds with two
   closures it missed the lap 3 zap. Reading now wins 20 of 20 seeds by 0.6 to 1.9 s (was 0.4 to 1.9 s); a new bot
   test gives the Ignorer an earlier bonk and expects the lap 2 zap (#137).
+- Crimson Nebula (Bevy): a barrier that goes live beside a kart already in its section (a lapped player) leaves
+  that kart alone until it leaves the section (`Racer::closure_grace`), as GDD pillar 1 promises ("changes that pop
+  in under your wheels" are ruled out). It moved the kart up to 8 m across the track in one tick and zapped it. The
+  bot balance is unchanged (no bot is ever lapped) (#141).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
