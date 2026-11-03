@@ -20,7 +20,11 @@
 #           difference from the output of its last packet, at most that packet's samples (so not always the
 #           very first samples), and the end trim takes at most the last packet's samples (ffmpeg 9.0.2 trims
 #           neither a short first page nor a stream that fits on one page). A Vorbis stream multiplexed with video (Theora) or a Skeleton track decodes, the
-#           other streams skipped. Floor type 0 (never written by libvorbis), chained streams and Ogg files
+#           other streams skipped. A stream that stops after a whole page without the end-of-stream flag (a cut
+#           capture) decodes with a [warn], its end taken from that last page's granule position like an end
+#           page's; a file that stops inside a page or a packet is truncated (exit 1). towav reads the channel
+#           count from the identification header and refuses more than 2 before decoding anything.
+#           Floor type 0 (never written by libvorbis), chained streams and Ogg files
 #           holding only another codec (Opus, FLAC, Speex) are refused by name, never guessed.
 #           Limits: a page CRC proves nothing (anyone can recompute it), so a setup header may ask for at most
 #           65536 entries and 1M VQ values per codebook and 262144 entries and 2M values in all (real libvorbis
@@ -148,16 +152,26 @@ def _codec_name(packet):
     return "an unknown codec"
 
 
-def read_packets(data):
+def read_packets(data, warnings=None):
     """Packets of the first Vorbis logical stream as [bytes, granule or None, eos flag]. The granule is set on
-    the last packet that ends on a page (Ogg stores one granule per page, for that packet)."""
+    the last packet that ends on a page (Ogg stores one granule per page, for that packet). A stream that stops
+    after a whole page and a whole packet without the end-of-stream flag is read up to there, and a note goes
+    into `warnings` (a list) when one is given."""
     if data[:4] != MAGIC:
         raise VorbisError("not an Ogg file (no OggS page at the start)")
     pos, chosen, others = 0, None, []
     packets, partial, expect = [], None, None
     while True:
         if pos >= len(data):
-            raise VorbisCorrupt("the file ends before the stream's last page (truncated)")
+            if partial is not None:
+                raise VorbisCorrupt("the file ends in the middle of a packet, without the stream's last page "
+                                    "(truncated)")
+            if chosen is None or len(packets) < 4:
+                raise VorbisCorrupt("the file ends before the stream's last page (truncated)")
+            if warnings is not None:        # a capture or dump cut between pages: every page whole, CRCs good
+                warnings.append(f"no end-of-stream page: the stream stops after page {(expect - 1) & 0xFFFFFFFF} "
+                                f"(a cut capture or dump?); decoded to that page's granule position")
+            return packets
         flags, granule, serial, seq, lacing, p, end = _page(data, pos)
         here = pos
         pos = end
@@ -203,6 +217,27 @@ def read_packets(data):
         raise VorbisError("chained Ogg stream (a second stream follows the first): not supported; "
                           "split or re-encode it with ffmpeg")
     return packets
+
+
+def identification(data):
+    """The Vorbis identification header (rate, channels, block sizes, bitrates) from the stream's first page
+    alone, without decoding: the BOS pages come first and Vorbis's own holds just that packet."""
+    if data[:4] != MAGIC:
+        raise VorbisError("not an Ogg file (no OggS page at the start)")
+    pos, others = 0, []
+    while pos < len(data):
+        flags, _, _, _, lacing, p, end = _page(data, pos)
+        if not flags & 2:
+            break
+        first = data[p:p + (lacing[0] if lacing else 0)]
+        if first.startswith(b"\x01vorbis"):
+            return _read_identification(first)
+        others.append(_codec_name(first))
+        pos = end
+    if others:
+        raise VorbisError(f"not Vorbis: {others[0]}; convert with ffmpeg "
+                          f"(for example: ffmpeg -i in.ogg -c:a libvorbis out.ogg)")
+    raise VorbisCorrupt("the Ogg file has no stream header page")
 
 
 # ---- bit reading (Vorbis packs bits LSB first) ----
@@ -923,7 +958,8 @@ def decode(data, max_values=None):
 
 
 def _decode(data, max_values):
-    packets = read_packets(data)
+    warnings = []
+    packets = read_packets(data, warnings)
     if len(packets) < 3:
         raise VorbisCorrupt("the stream ends before its three Vorbis headers")
     ident = _read_identification(packets[0][0])
@@ -976,7 +1012,8 @@ def _decode(data, max_values):
         last = max(count - end_made, cut_at + cut, min(count, want))
     out = [c[:cut_at] + c[cut_at + cut:last] for c in out]
     info = dict(ident)
-    info.update({"samples": last - cut, "vendor": vendor, "start_trim": cut, "end_trim": count - last})
+    info.update({"samples": last - cut, "vendor": vendor, "start_trim": cut, "end_trim": count - last,
+                 "warnings": warnings})
     return info, out, comments
 
 
@@ -1018,7 +1055,15 @@ def main(argv=None):
             if out.exists() and not args.overwrite:
                 print(f"[error] {out} exists (use --overwrite)", file=sys.stderr)
                 return 2
-        info, chans, comments = decode(Path(args.ogg).read_bytes())
+        data = Path(args.ogg).read_bytes()
+        if args.cmd != "info":
+            channels = identification(data)["channels"]
+            if channels > 2:                        # from the header: refused before the (slow) decode
+                raise VorbisError(f"{channels}-channel audio: the WAV writer here is mono or stereo only; "
+                                  f"downmix with ffmpeg -ac 2 first")
+        info, chans, comments = decode(data)
+        for note in info["warnings"]:
+            print(f"[warn] {args.ogg}: {note}", file=sys.stderr)
         seconds = info["samples"] / info["rate"]
         kbps = f", nominal {info['bitrate_nominal'] // 1000} kbit/s" if info["bitrate_nominal"] > 0 else ""
         if args.cmd == "info":
@@ -1027,10 +1072,7 @@ def main(argv=None):
             for key, value in comments:
                 print(f"       {key}={value}")
             return 0
-        if info["channels"] > 2:
-            raise VorbisError(f"{info['channels']}-channel audio: the WAV writer here is mono or stereo only; "
-                              f"downmix with ffmpeg -ac 2 first")
-        samples = chans[0] if len(chans) == 1 else [s for frame in zip(*chans) for s in frame]
+        samples =chans[0] if len(chans) == 1 else [s for frame in zip(*chans) for s in frame]
         clipped = write_wav(out, samples, info["rate"], channels=len(chans))
         st = stats(chans[0], info["rate"])
         print(f"[ OK ] {out}: {seconds:.3f} s, peak {st['peak_dbfs']} dBFS"

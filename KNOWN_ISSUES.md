@@ -52,8 +52,6 @@ engine: web [#55](https://github.com/Er2oneousbit/claude-code-game-kit/issues/55
 fixtures that every loader is tested against: [#83](https://github.com/Er2oneousbit/claude-code-game-kit/issues/83).
 
 ### Audio (Wavesmith) follow-ups
-- **OGG Vorbis decoder:** a stream with no end-of-stream page is refused, and a 5.1 file is decoded before it is refused
-  ([#74](https://github.com/Er2oneousbit/claude-code-game-kit/issues/74)).
 - **loudness:** non-WAV input is still decoded whole, and speed depends on the material ([#77](https://github.com/Er2oneousbit/claude-code-game-kit/issues/77)).
 - **Not run:** either `audio.yml` on GitHub, macOS or Python 3.10 ([#75](https://github.com/Er2oneousbit/claude-code-game-kit/issues/75), a sibling of #40); voice and sfx
   off NVIDIA (Apple, AMD) ([#76](https://github.com/Er2oneousbit/claude-code-game-kit/issues/76)); RPG Maker MZ's GameAudio.js inside MZ ([#78](https://github.com/Er2oneousbit/claude-code-game-kit/issues/78)); Unity's

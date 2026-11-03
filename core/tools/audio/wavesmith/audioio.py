@@ -115,6 +115,8 @@ def _from_vorbis(data, path, mod):
             dbg(f"{path}: {exc}; decoding with ffmpeg instead")
             return _via_ffmpeg(path, "OGG Vorbis")
         raise AudioIOError(f"{path}: {exc}")
+    for note in info.get("warnings", ()):
+        print(f"[warn] {path}: {note}", file=sys.stderr)
     if "bits" in info:                # integer samples (a decoder that mirrors flacfile.py exactly)
         scale = float(1 << (info["bits"] - 1))
         chans = [[s / scale for s in c] for c in chans]

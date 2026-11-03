@@ -37,6 +37,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import oggvorbis  # noqa: E402
@@ -898,10 +899,54 @@ class OggVorbisExam(unittest.TestCase):
         with self.assertRaises(oggvorbis.VorbisCorrupt) as ctx:
             oggvorbis.decode(data[:len(data) - 300])
         self.assertIn("truncated", str(ctx.exception))
-        last_page = self.page_offsets(data)[-1]
-        with self.assertRaises(oggvorbis.VorbisCorrupt) as ctx:
-            oggvorbis.decode(data[:last_page])      # cut cleanly between pages: the end page is missing
+        with self.assertRaises(oggvorbis.VorbisCorrupt) as ctx:     # only the headers: nothing to decode
+            oggvorbis.decode(data[:self.page_offsets(data)[2]])
         self.assertIn("truncated", str(ctx.exception))
+        # a packet continued on a page that never comes: still truncated, though every page is whole
+        head = hand_stream(1, 1)
+        cut = head[:self.page_offsets(head)[2]]
+        page = bytearray(b"OggS" + bytes([0, 0]) + struct.pack("<qIII", -1, 7, 2, 0) + bytes([1, 255]) + bytes(255))
+        struct.pack_into("<I", page, 22, oggvorbis.ogg_crc(bytes(page)))
+        with self.assertRaises(oggvorbis.VorbisCorrupt) as ctx:
+            oggvorbis.decode(cut + bytes(page))
+        self.assertIn("middle of a packet", str(ctx.exception))
+
+    def test_a_stream_without_its_end_page_decodes_with_a_warning(self):
+        data = self.data("stereo44k")
+        _, full, _ = self.decode("stereo44k")
+        offsets = self.page_offsets(data)
+        info, chans, _ = oggvorbis.decode(data[:offsets[-1]])     # cut cleanly between pages
+        self.assertEqual(info["samples"], 11392, "up to the granule of the last page kept")
+        self.assertEqual(chans[1], full[1][:11392])
+        self.assertIn("no end-of-stream page", info["warnings"][0])
+        lost = bytearray(data)                      # the end page is there, only its flag is lost
+        pos = offsets[-1]
+        lost[pos + 5] &= ~4
+        lost[pos + 22:pos + 26] = b"\0\0\0\0"
+        struct.pack_into("<I", lost, pos + 22, oggvorbis.ogg_crc(bytes(lost[pos:])))
+        info, chans, _ = oggvorbis.decode(bytes(lost))
+        self.assertEqual((info["samples"], info["end_trim"]), (13230, 274), "the last granule still ends it")
+        self.assertEqual(chans[0], full[0])
+        self.assertEqual(self.decode("stereo44k")[0]["warnings"], [])
+        src = self.dir / "cut.ogg"
+        src.write_bytes(bytes(lost))
+        rc, out = self.run_tool("info", src)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("[warn]", out)
+        self.assertIn("no end-of-stream page", out)
+
+    def test_towav_refuses_surround_before_decoding(self):
+        src = self.dir / "six.ogg"
+        src.write_bytes(hand_stream(1, 1, channels=6, audio=[b"\x00"] * 40))
+        self.assertEqual(oggvorbis.identification(src.read_bytes())["channels"], 6)
+        with mock.patch.object(oggvorbis, "decode", side_effect=AssertionError("decoded before refusing")):
+            rc, out = self.run_tool("towav", src, "--out", self.dir / "six.wav")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("6-channel audio", out)
+        self.assertFalse((self.dir / "six.wav").exists())
+        self.assertEqual(oggvorbis.identification(self.data("theora11k"))["rate"], 11025, "skips the video header")
+        with self.assertRaises(oggvorbis.VorbisError):
+            oggvorbis.identification(self.data("opus"))
 
     def test_crc_mismatch_and_missing_page_fail(self):
         data = bytearray(self.data("mono22k"))

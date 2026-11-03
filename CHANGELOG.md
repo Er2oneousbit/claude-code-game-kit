@@ -165,6 +165,11 @@
   packet's samples, not the first samples of the file (the count was right, the samples were not). The end trim takes
   at most the last packet's samples, as in libvorbis. A real Theora plus Vorbis file (ffmpeg test sources) is a new
   fixture and decodes as ffmpeg and libvorbis decode its audio (#73).
+- Wavesmith: an OGG Vorbis stream that stops after a whole page without the end-of-stream flag (a cut capture or
+  dump) decodes with a `[warn]` naming the missing end page; its end comes from that last page's granule position,
+  as an end page's would. A file that stops inside a page or a packet is still truncated (exit 1). `oggvorbis.py
+  towav` reads the channel count from the identification header (new `identification()`) and refuses 5.1 before
+  decoding instead of after (#74).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
