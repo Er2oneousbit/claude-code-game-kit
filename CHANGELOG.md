@@ -133,6 +133,11 @@
 - Web, Web 3D: a settings file's language code is 2 to 12 code points, as the reference counts, not UTF-16 units
   (`String.length`), which differ for characters outside the Basic Multilingual Plane. Two new `settings_load`
   vectors in `shell.json` cover both directions; all eight ports pass them (#45).
+- Unreal: the GameKitShell plugin works in a Blueprint-only project. `dev.py check` no longer refuses it there: it
+  builds the engine's `UnrealEditor` target with `-Project`, which compiles only the plugin into its own
+  `Binaries/`; `test` before that exits 2 with "run check first" instead of "no tests matched". Proven on UE 5.8
+  in a project from the Blank Blueprint template (70 `GameKit.*` tests pass headless). Turning the plugin on from
+  the editor's Plugins window is still untried (#47).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

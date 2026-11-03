@@ -12,8 +12,8 @@ examples were built and tested on one Windows 11 machine.
   [#95](https://github.com/Er2oneousbit/claude-code-game-kit/issues/95).
 - **LÖVE:** macOS and Linux packaging, LÖVE 11.4 itself and the POSIX save rename not run: [#41](https://github.com/Er2oneousbit/claude-code-game-kit/issues/41).
 - **Godot shell:** crash files need Godot 4.5+, untested on 4.3 and 4.4: [#46](https://github.com/Er2oneousbit/claude-code-game-kit/issues/46).
-- **Unreal:** the GameKitShell plugin not tried in a Blueprint-only project or enabled from the editor:
-  [#47](https://github.com/Er2oneousbit/claude-code-game-kit/issues/47).
+- **Unreal:** the GameKitShell plugin builds and passes its tests in a Blueprint-only project (headless), but turning
+  it on from the editor's Plugins window is not tried: [#47](https://github.com/Er2oneousbit/claude-code-game-kit/issues/47).
 - **Shell screens** ship for Godot, LÖVE and web only; Unity, Unreal, Bevy and C++/SDL2 ship the tested logic and
   the screens are built in the engine. Display settings the browser cannot apply (vsync, resolution) are stored only.
 

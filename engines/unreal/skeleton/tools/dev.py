@@ -4,7 +4,8 @@
 # Purpose : The ONE command wrapper for this project. Same subcommands on every
 #           engine in the Claude Code Game Kit, so humans and Claude never guess flags.
 # Usage   : python tools/dev.py <command> [--config Development] [--platform Win64]
-#             check    compile the editor target (UnrealBuildTool)
+#             check    compile the editor target (UnrealBuildTool); in a Blueprint-only project, only the
+#                      project's code plugins (GameKitShell), through the engine's UnrealEditor target
 #             build    same as check (kept for command-contract parity)
 #             test     run automation tests headless (--filter, default "<Game>", plus "GameKit." when the
 #                      kit's GameKitShell plugin is enabled)
@@ -56,6 +57,9 @@
 #           job object (WinJob), so a timeout also ends a grandchild whose parent already exited
 # Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Linux and macOS, killing an untimed command
 #           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): check builds an enabled GameKitShell in a
+#           Blueprint-only project (the UnrealEditor target with -Project puts it in the plugin's Binaries/)
+#           instead of refusing it; test/smoke/exec exit 2 with "run check first" while its module is missing
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -87,6 +91,10 @@ PYTHON_STARTUP_NOISE = r"Display: |Python enabled|Using Python|registering <clas
 NO_PYTHON_PATTERN = r"[Uu]nable to find (a )?commandlet.*pythonscript|Unknown commandlet.*pythonscript"
 # A C++ project the editor cannot load yet: the game module was never compiled (fresh clone, after clean)
 MODULE_MISSING_PATTERN = r"[Tt]he game module '([^']+)' could not be found"
+# An enabled code plugin whose module was never compiled (a Blueprint-only project before its first check)
+PLUGIN_MISSING_PATTERN = r"Plugin '([^']+)' failed to load because module '[^']+' could not be found"
+# The engine's own editor target: in a project without Source/ it builds only the project's code plugins
+ENGINE_EDITOR_TARGET = "UnrealEditor"
 # Matched per line, and only when the output has no compiler diagnostics: a project folder named
 # "Visual Studio 2022" plus an ordinary "identifier not found" error must stay a code failure (exit 1)
 SDK_MISSING_PATTERNS = [r"SDK validation failed", r"not a valid platform to build",
@@ -434,6 +442,10 @@ def module_missing(text):
     if m:
         return (f"the editor could not load the game module '{m.group(1)}' because it is not compiled yet. "
                 "Run `python tools/dev.py check` first (a fresh clone or a clean needs it once).")
+    m = re.search(PLUGIN_MISSING_PATTERN, text)
+    if m:
+        return (f"the editor could not load the {m.group(1)} plugin because it is not compiled yet. "
+                "Run `python tools/dev.py check` first (it builds the plugin, also in a Blueprint-only project).")
     return None
 
 
@@ -448,18 +460,20 @@ def cmd_check(args):
         print(f"[error] --config {args.config} applies to `package` only; `check` builds the editor (Debug, DebugGame or "
               "Development)", file=sys.stderr)
         return 2
+    target = target_name()
     if not (ROOT / "Source").is_dir():
-        if kit_plugin_state() == "enabled":
-            print(f"[error] the {KIT_PLUGIN} plugin is enabled, but this is a Blueprint-only project (no Source/) and the "
-                  "plugin is C++. Add a C++ class in the editor (Tools > New C++ Class) to make it a C++ project, or "
-                  "disable the plugin in the .uproject (docs/ENGINE_FLOW.md).", file=sys.stderr)
-            return 2
-        # Blueprint-only project: the engine's prebuilt editor runs it, there is no C++ to compile
-        print("[ OK ] Blueprint-only project (no Source/), nothing to compile. `test` loads the project.")
-        return 0
+        if kit_plugin_state() != "enabled":
+            # Blueprint-only project: the engine's prebuilt editor runs it, there is no C++ to compile
+            print("[ OK ] Blueprint-only project (no Source/), nothing to compile. `test` loads the project.")
+            return 0
+        # Blueprint-only with the kit's C++ plugin: the engine's editor target compiles just the project's plugins
+        # into Plugins/<name>/Binaries/ (the engine itself is prebuilt). Needs the same C++ toolchain as a C++ project.
+        print(f"[info] Blueprint-only project with the {KIT_PLUGIN} plugin enabled: building its C++ "
+              f"({ENGINE_EDITOR_TARGET} target)")
+        target = ENGINE_EDITOR_TARGET
     plat = platform_name(args.platform)
     bf = batch_file("Build")
-    cmd = [bf, target_name(), plat, args.config, f"-Project={find_uproject()}", "-WaitMutex"]
+    cmd = [bf, target, plat, args.config, f"-Project={find_uproject()}", "-WaitMutex"]
     missing = missing_tool(bf)
     if missing:
         return missing
