@@ -14,12 +14,15 @@
 //           GRAVEYARD_SEEDS=6 python tools/dev.py smoke --filter Smoke_C --record Logs/frames   (a GIF)
 //           GRAVEYARD_SEEDS=6258 python tools/dev.py smoke --filter Smoke_J --screenshot Logs/yard.png
 // Notes   : Time.captureFramerate fixes every frame at 1/60 s of game time, so a night runs as fast as the
-//           machine allows and replays exactly. Assert a gap over seeds, not one outcome (SOP-14).
+//           machine allows and replays (careful and always-dark exactly since issue #9; two ghosts close together
+//           can still part by a millimeter between runs, so always-lit's catches read 12 or 14). Assert a gap over
+//           seeds, not one outcome (SOP-14).
 //           Saves go to a temp file, never yours. GRAVEYARD_TRACE=1 logs the bot every half second;
 //           GRAVEYARD_SEEDS=0 limits a run to those seeds (for captures; generated tests take them as night seeds).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-10-26 review fix (Claude Opus 5.5): Smoke_K also pushes through the gate as a catch shuts it (the
 //           leaves used to swing for 1.6 s while a lit keeper ran out and was locked outside).
+// Updated : 2026-11-02 (Claude Opus 5.5): Smoke_D's numbers after the start-of-night physics fix (issue #9).
 // ---------------------------------------------------------------------------
 using System.Collections;
 using System.Collections.Generic;
@@ -185,6 +188,9 @@ namespace graveyard_shift.Tests
             // others together; on the big yard it loses by never getting out, so that ratio is logged, not asserted.
             // After the review fixes (2026-10-26): careful 104 (8 escapes, 5 catches), dark 104 (8, 0), lit 86 (0, 12);
             // one full run had careful 103 (one night at dawn with every soul): careful >= dark sits at the 104 cap.
+            // That 103 was a night starting one frame late, by when the first physics step came (issue #9, Smoke_R6).
+            // Since LevelBuilder syncs the physics scene: careful 104 (8, 5), dark 104 (8, 0), lit 86 (0, 12 or 14) in
+            // ten runs in a row. Both are at the cap, so there is no margin: this catches careful falling below dark.
             TheLanternIsAChoice(false, 10, false, true);
         }
 

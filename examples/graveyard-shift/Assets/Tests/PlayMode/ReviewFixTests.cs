@@ -2,12 +2,14 @@
 // ReviewFixTests.cs
 // Purpose : PlayMode regression tests for the bugs a review proved on the real scene (2026-10-26): a catch
 //           cascade at the start, cover that a keeper hides behind, a search that ends, a ghost that keeps
-//           walking toward a spot it cannot reach, and bot nights that leave the player's save alone.
+//           walking toward a spot it cannot reach, and bot nights that leave the player's save alone; and (issue #9)
+//           a keeper who walks from the night's first frames whenever the physics step comes.
 // Usage   : python tools/dev.py smoke                       (they are named Smoke_R*, so smoke runs them)
 //           python tools/dev.py smoke --filter Smoke_R      (only these, about a minute)
 // Notes   : Each test loads the scene with a temp save. Where only the test may move things it disables the
 //           game loop (as Smoke_K does). The gate case lives in Smoke_K (ScenarioTests.cs), next to its pushes.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-02 (Claude Opus 5.5): Smoke_R6, the physics clock at the start of a night (issue #9).
 // ---------------------------------------------------------------------------
 using System.Collections;
 using System.Collections.Generic;
@@ -29,6 +31,8 @@ namespace graveyard_shift.Tests
         private const int Fps = 60;
         private const float Hug = 0.4f;   // m from a prop to the keeper's center: his CharacterController radius
         private static readonly float[] GhostGaps = { 2f, 4f, 7f };   // m between a ghost and the far side of the cover
+        private const float NoPhysicsStep = 10f;   // s: a fixed step longer than the frames Smoke_R6 watches
+        private const int FirstFrames = 3;         // night frames Smoke_R6 watches
         private static string SavePath => Path.Combine(Application.temporaryCachePath, "review_save.json");
 
         [TearDown]
@@ -204,6 +208,36 @@ namespace graveyard_shift.Tests
             Assert.IsTrue(File.Exists(SavePath), "a player's night is saved");
             Assert.AreEqual(1, new graveyard_shift.Game.SaveStore(SavePath).Load().nightsPlayed);
             File.Delete(SavePath);
+        }
+
+        // The keeper's first steps used to depend on the physics clock (issue #9): LevelBuilder sizes the ground and the
+        // props after their colliders exist, and with auto sync off PhysX saw them only after the next physics step.
+        // Whether that step came before the night's second frame depended on real time spent loading (at 60 frames
+        // and 50 physics steps a second, about one load in six it did not), so a bot night started one frame late and some nights played out differently (Smoke_D at
+        // the 104 cap: 104 or 103). Here no physics step runs at all during the first frames: he must still walk.
+        [UnityTest]
+        public IEnumerator Smoke_R6_TheKeeperWalksFromTheFirstFrameWhateverThePhysicsClock()
+        {
+            float fixedStep = Time.fixedDeltaTime;
+            try
+            {
+                Time.fixedDeltaTime = NoPhysicsStep;
+                yield return Load(0, BotMode.Careful);
+                var game = GraveyardGame.Current;
+                Vector3 start = LevelBuilder.ToWorld(game.Yard.KeeperStart);
+                int f = 0;
+                while (game.Night.Elapsed < FirstFrames / (float)Fps - 0.001f && f++ < Fps) yield return null;
+                float walked = V2.Distance(game.Keeper.Ground, LevelBuilder.ToGround(start));
+                // The bot starts lit, straight at the first soul. The CharacterController's very first move never
+                // carries him (every load, whatever the clock), so the frames after it are what must count.
+                float full = (game.Night.Elapsed - 1f / Fps) * game.Tuning.LitSpeed;
+                Debug.Log($"[INFO][test] first {game.Night.Elapsed * Fps:0} frames, no physics step: walked {walked:0.000} m, {full:0.000} m after the first frame");
+                Assert.Greater(walked, 0.9f * full, "the keeper walks from the night's second frame, physics step or not");
+            }
+            finally
+            {
+                Time.fixedDeltaTime = fixedStep;
+            }
         }
     }
 }

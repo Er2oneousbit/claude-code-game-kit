@@ -27,6 +27,11 @@
 - Rune Delve (Unreal): `-quitatend` exits 3 after `MAGE_DOWN` or `TIMEOUT` (it always gave 0: UE 5.8 drops the code
   of a clean exit); the world still shuts down cleanly, then the process ends with the code. The `-nullrhi` drift is
   traced to the runtime NavMesh, which every bolt rebuilds in real time; not fixed yet (#8).
+- Graveyard Shift (Unity): `Smoke_D` no longer flakes at the 104 cap. Its 103 was a night starting a frame late:
+  `LevelBuilder` sized the ground and props after their colliders existed with auto sync off, so the keeper's first
+  step waited for a physics step that came or not by real time spent loading. `Build` now ends with
+  `Physics.SyncTransforms()`; `Smoke_R6` runs the first frames with no physics step (old code: 0.000 m walked).
+  Careful and always-dark replay exactly; always-lit's catches still read 12 or 14 (two ghosts passing close) (#9).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

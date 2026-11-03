@@ -28,6 +28,7 @@ words, or a check that failed), what changed, and what proved it. Details in the
 | 14 | 10-23 | The user's first playtest of the build: the title text was clipped and the window small; the narrator spoke over the title; the difficulties all looked the same; lantern out, the legs froze; the lantern was not in his hands; caught with every soul, the gate stayed open, and outside it he fell | Six fixes, each found in the code or the player's own log before changing anything ("Later: the first playtest of the big yards") | 89 tests, 14 smoke; brightness away from the lantern measured from the built player at each difficulty: 53 to 0.9 instead of 60 to 46 |
 | 15 | 10-23 | A second opinion from another vendor's model (Kimi K3.1 Pro) | A read-only Kimi audit of this game: 10 findings, 9 confirmed, all fixed ("Later: a second opinion"); the trio's lantern tests moved to Easy | 101 tests, 15 smoke; careful 104 = dark 104 on the hand-made yard at Easy |
 | 16 | 10-26 | A review (Fable) that proved ten bugs with tests in a scratch copy | All ten fixed, plus one the fixes exposed ("Later: review fixes") | 112 tests, 20 smoke; careful still escapes far more than always-lit on both kinds of night |
+| 17 | 11-02 | Issue #9: `Smoke_D` failed once at the 104 cap | The cause found and fixed: a night could start a frame late ("Later: a night that started a frame late") | 21 smoke; careful and always-dark identical in ten runs in a row |
 | next | | The Suno win music and loss stings | Slots ready (`win_music_a/b`, `loss_sting_a/b`), silent until the files arrive | |
 
 What the timeline shows: the plan never said "add a narrator" or "the dawn chorus opens the ending". Those came from a
@@ -133,7 +134,7 @@ the game into the kit). **Kit gap U8:** once, Unity's Package Manager server did
 | Check | Result |
 |---|---|
 | `python tools/dev.py check` / `test` | compiles / 112 EditMode tests in 136 s (2026-10-26, after the review fixes; 101 before, measured at 146 s) (perception, every FSM transition, night rules, saves and their migration, ghost starts, level checks on the hand-made and generated yards, the 250-seed property test, a broken yard for each invariant, pinned yards, measured footprints, audio wiring, music, world sounds, the end sequence, voices) (2026-10-23) |
-| `python tools/dev.py smoke` | 20 tests, 80 bot nights, 779 to 1047 s (2026-10-26, after the review fixes; 15 tests in 812 s before; `Smoke_D` failed once at the 104 cap, see "Later: review fixes"). Before that: 15 tests pass (2026-10-23, after the Kimi audit; the trio at Easy, `Smoke_N` at Normal logged): boot, the trio on the hand-made yard (24 nights), the walk grid against the NavMesh on 9 yards, the trio on 8 generated nights, no way out and the gate shutting, every difficulty, the keeper's lantern and legs, a yard from above |
+| `python tools/dev.py smoke` | 21 tests, 80 bot nights, 673 s (2026-11-02, after issue #9). 20 tests, 779 to 1047 s (2026-10-26, after the review fixes; 15 tests in 812 s before; `Smoke_D` failed once at the 104 cap, see "Later: review fixes"). Before that: 15 tests pass (2026-10-23, after the Kimi audit; the trio at Easy, `Smoke_N` at Normal logged): boot, the trio on the hand-made yard (24 nights), the walk grid against the NavMesh on 9 yards, the trio on 8 generated nights, no way out and the gate shutting, every difficulty, the keeper's lantern and legs, a yard from above |
 | `python tools/dev.py build` | a Windows player in `Build/` (about 45 s) |
 | The built player, `--autoplay careful --seed 6 --fixed-fps` (before the generator; now `--handmade --seed 6`) | escapes at 65.2 s with exit 0, the same as the test; rechecked 2026-10-23 with `--handmade`, and a generated night (`--seed 6258`) escapes at 102.3 s like its test |
 | The README steps in a fresh copy inside the kit repo (no `Library/`) | import, `check`, 34 tests, `smoke` 5 tests in 103 s with the same trio numbers |
@@ -468,9 +469,31 @@ more (23) and always-dark edges it (103 against 96, logged, not asserted, as bef
   careful made 103: night 4 ended at dawn with all twelve souls after four catches. The same code then escaped night 4
   at 177.2 s with one catch (as before the fixes) and passed. So `Smoke_D` can fail on run-to-run variance, which
   the procgen section's "Honest limits" already noted for the trio **(verify the cause)**. Not re-tuned: that is the user's call.
+  (Cause found and fixed 2026-11-02: the next section.)
 - Careful's 23 catches on the new generated nights were not investigated beyond the totals.
 - The built player was not rebuilt or replayed after these fixes, so the "replays a test night" claim (seeds 6 and 6258)
   is from before them **(verify)**.
+
+### Later: a night that started a frame late (issue #9, 2026-11-02)
+`Smoke_C` alone, run twice on unchanged code, gave different nights 3, 6 and 7. A probe logged the keeper and every
+ghost every half second: the ghosts matched to the last digit, the keeper ran exactly one frame behind. `LevelBuilder`
+sizes the ground and the props after their colliders exist, and auto sync is off, so PhysX saw the yard only after the
+next physics step. At 60 frames and 50 physics steps a second, about one load in six had no step before the night's
+second frame, and the keeper's first real step slipped a frame; on some nights that was enough to change a catch.
+Which loads were unlucky depended on real time spent loading, so it moved between runs. That was `Smoke_D`'s 103.
+
+- Fix: `Physics.SyncTransforms()` at the end of `LevelBuilder.Build`.
+- `Smoke_R6` runs the night's first frames with no physics step at all: on the old code the keeper walked 0.000 m,
+  now 0.140 m, all of it after the first frame (the CharacterController's very first move never carries him, on
+  every load, so it changes nothing between runs).
+- The hand-made trio, ten runs in a row (three of `Smoke_A` to `D` and one full smoke on this code, six more with the
+  experiments below): careful 104 (8 escapes, 5 catches) and always-dark 104 (8, 0) every time, identical night by
+  night; always-lit 86 (0 escapes) with 12 or 14 catches. The full smoke: 21 passed in 673 s; generated nights careful
+  96 (5, 22), dark 103 (7, 6), lit 43 (0, 13).
+- **Still open:** always-lit's 12 or 14 comes from two ghosts passing close (under a meter apart) that part by a
+  millimeter between runs. Physics once a frame (simulation mode Update) and no job worker threads gave the same two
+  outcomes, so probably neither is the cause (neither setting was checked to have taken effect) **(verify the cause)**.
+  Nothing asserted depends on it.
 
 ## 9. Outside the kit (be honest)
 - The Behavior package was installed only to read its source (gap U3), then removed.

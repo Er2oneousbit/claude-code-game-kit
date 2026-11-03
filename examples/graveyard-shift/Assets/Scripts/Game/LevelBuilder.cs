@@ -14,6 +14,8 @@
 //           lights the yard from Unity's default sky and ignores the ambient colors, so every difficulty looked the
 //           same (playtest); reflections of that sky are scaled down with it.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-02 (Claude Opus 5.5): Build ends with Physics.SyncTransforms, so the night's first frames do not
+//           depend on when the next physics step comes (issue #9, Smoke_R6).
 // ---------------------------------------------------------------------------
 using System.Collections.Generic;
 using graveyard_shift.Core;
@@ -133,6 +135,10 @@ namespace graveyard_shift.Game
             surface.collectObjects = CollectObjects.Children;
             surface.useGeometry = NavMeshCollectGeometry.PhysicsColliders;
             surface.BuildNavMesh();
+            // The ground and props were sized after their colliders existed, and auto sync is off: without this PhysX
+            // saw them only after the next physics step, which came before the night's second frame or not depending
+            // on real time spent loading. The keeper then lost a frame and bot nights did not replay (issue #9).
+            Physics.SyncTransforms();
             return built;
         }
 
