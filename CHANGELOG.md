@@ -200,6 +200,10 @@
   as `pack --engine none` does, and end with `[ OK ] re-exported (N files changed; no Godot verify with --engine
   none)`, exit 0. They wrote the game, then always ran verify and exited 2 (no `project.godot`, or no `GODOT_BIN`),
   so a successful re-export read as a failure. With Godot the line now counts the changed files too (#99).
+- Dotwork pixelorama: build compares an existing `.pxo` by what it shows, as `aseprite` does (the tags, the frame
+  count, each frame's look and its time on screen), not by its bytes. Pixelorama rewrites the project data on each save,
+  so a file only opened and saved, or polished and re-exported, was "kept: it differs from the game's frames" on
+  every build, and `--overwrite` then replaced the user's layers and palette with Dotwork's flat file (#100).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

@@ -368,9 +368,31 @@ def _runs(items):
     return tags
 
 
+def _shows_the_game(path, items, frames, durations, proj_fps):
+    """True when the .pxo at path still shows what this build writes from items (the game's frames), whatever its
+    bytes: Pixelorama rewrites data.json with its own fields on every save (pixelorama_version, export_profile,
+    indices buffers ...), so a file only opened and saved, or polished and re-exported, never matches pxo_bytes again
+    (issue #100). The checks are aseprite._shows_the_game's: the tags, the frame count, every frame's look
+    (handpolish.same_look) and, in a tag, its time on screen within HOLD_TOLERANCE_S. A file read_pxo refuses (a layer
+    it cannot composite) may hold polish, so it does not match."""
+    try:
+        pj = read_pxo(path)
+    except core.ToolError:
+        return False
+    if len(pj["frames"]) != len(frames) or sorted(pj["tags"]) != sorted(_runs(items)):
+        return False
+    for (tag, _, _), want, have, dur, shown in zip(items, frames, pj["frames"], durations, pj["seconds"]):
+        if tag and abs(shown - dur / proj_fps) > handpolish.HOLD_TOLERANCE_S:
+            return False
+        if not handpolish.same_look(have, want):
+            return False
+    return True
+
+
 def build(pack, conf, overwrite=False):
-    """Write <src_dir>/pixelorama/{characters,fx,single}/<name>.pxo. A .pxo that already exists and differs from what
-    this build writes may hold hand polish (or the game's art changed since): it is kept unless overwrite, and a file
+    """Write <src_dir>/pixelorama/{characters,fx,single}/<name>.pxo. A .pxo that already exists and still shows the
+    game's frames (_shows_the_game) is left as it is. One that differs may hold hand polish (or the game's art changed
+    since): it is kept unless overwrite, and a file
     overwrite replaces is first copied to <name>.pxo.bak (one level, as the game shells keep their saves).
     Returns {"written": [...], "unchanged": [...], "kept": [...], "backups": [the .bak files written]}."""
     src = core.src(conf, "pixelorama")
@@ -414,7 +436,7 @@ def build(pack, conf, overwrite=False):
         if os.path.exists(out):
             with open(out, "rb") as fh:
                 old = fh.read()
-            if old == blob:
+            if old == blob or _shows_the_game(out, items, frames, durations, proj_fps):
                 done["unchanged"].append(out)
                 continue
             if not overwrite:

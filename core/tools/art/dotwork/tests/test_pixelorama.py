@@ -155,6 +155,24 @@ def rewrite_pxo(path, edit):
             z.writestr(n, b)
 
 
+def pixelorama_save(d, b):
+    """rewrite_pxo edit: the shape of a project Pixelorama 1.2.3 saved (its autosave of a Dotwork file, 2026-11-01):
+    extra fields, Godot text values, empty animated parameters, indices buffers and folder entries; no pixel, tag or
+    time changes."""
+    d.update(pixelorama_version="v1.2.3-stable", brushes=[], guides=[], metadata={}, reference_images=[],
+             tilesets=[], vanishing_points=[], symmetry_points=[63.0, 63.0], next_keyframe_id=0,
+             export_profile={"directory_path": "\"/somewhere\"", "file_name": "\"knight\""})
+    for ly in d["layers"]:
+        ly.update(animated_params='Dictionary[String, Dictionary]({\n"opacity": {}\n})', effects=[],
+                  metadata={}, ui_color="(0.0, 0.0, 0.0, 0.0)")
+    for fi, fr in enumerate(d["frames"]):
+        fr["metadata"] = {}
+        for c in fr["cels"]:
+            c.update(metadata={}, ui_color="(0.0, 0.0, 0.0, 0.0)")
+        b[f"image_data/frames/{fi + 1}/indices_layer_1"] = b"\0"
+        b[f"image_data/frames/{fi + 1}/"] = b""
+
+
 @contextlib.contextmanager
 def stub_verify():
     import verify
@@ -545,27 +563,36 @@ class PixeloramaExam(unittest.TestCase):
         self.assertTrue(np.array_equal(got[..., 3], want[..., 3]))
 
     def test_reads_the_fields_pixelorama_writes(self):
-        # the shape of a project Pixelorama 1.2.3 saved (its autosave of a Dotwork file, 2026-11-01): extra fields,
-        # Godot text values, empty animated parameters, indices buffers and folder entries
         self.build()
-
-        def edit(d, b):
-            d.update(pixelorama_version="v1.2.3-stable", brushes=[], guides=[], metadata={}, reference_images=[],
-                     tilesets=[], vanishing_points=[], symmetry_points=[63.0, 63.0], next_keyframe_id=0,
-                     export_profile={"directory_path": "\"/somewhere\"", "file_name": "\"knight\""})
-            for ly in d["layers"]:
-                ly.update(animated_params='Dictionary[String, Dictionary]({\n"opacity": {}\n})', effects=[],
-                          metadata={}, ui_color="(0.0, 0.0, 0.0, 0.0)")
-            for fi, fr in enumerate(d["frames"]):
-                fr["metadata"] = {}
-                for c in fr["cels"]:
-                    c.update(metadata={}, ui_color="(0.0, 0.0, 0.0, 0.0)")
-                b[f"image_data/frames/{fi + 1}/indices_layer_1"] = b"\0"
-                b[f"image_data/frames/{fi + 1}/"] = b""
-        rewrite_pxo(self.knight, edit)
+        rewrite_pxo(self.knight, pixelorama_save)
         before = snapshot(self.tmp)
         self.reexport()
         self.assertEqual(changed(before, snapshot(self.tmp)), [])
+
+    def test_a_file_pixelorama_saved_unchanged_is_not_kept(self):
+        # #100: build compared bytes, so any .pxo Pixelorama had saved was "kept: it differs" on every build, even
+        # with the game's frames, tags and times, and --overwrite then replaced the user's file
+        self.build()
+        for p in (self.knight, os.path.join(self.src, "fx", "spark.pxo"), os.path.join(self.src, "single", "barrel.pxo")):
+            rewrite_pxo(p, pixelorama_save)
+        done = self.build()
+        self.assertEqual(done["kept"], [])
+        self.assertEqual([os.path.basename(p) for p in done["unchanged"]], ["knight.pxo", "spark.pxo", "barrel.pxo"])
+        with open(self.knight, "rb") as f:
+            saved = f.read()
+        self.assertEqual(self.build(overwrite=True)["backups"], [])   # nothing to replace: the saved file stays
+        with open(self.knight, "rb") as f:
+            self.assertEqual(f.read(), saved)
+
+        def edit(d, b):   # a pixel polished in the saved file: kept, until it is re-exported into the game
+            w, h = d["size_x"], d["size_y"]
+            a = np.frombuffer(b["image_data/frames/1/layer_1"], np.uint8).reshape(h, w, 4).copy()
+            a[0, 0] = (200, 60, 50, 255)
+            b["image_data/frames/1/layer_1"] = a.tobytes()
+        rewrite_pxo(self.knight, edit)
+        self.assertEqual([os.path.basename(p) for p in self.build()["kept"]], ["knight.pxo"])
+        self.reexport()
+        self.assertEqual(self.build()["kept"], [])
 
     def test_a_local_export_folder_is_reported_and_cleared_only_on_request(self):
         # Pixelorama 1.2.3 keeps the folder you last exported to in every .pxo it saves (#69): Dotwork names it, and
