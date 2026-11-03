@@ -4,7 +4,7 @@
 # Purpose : offline exam for the bdf lane (lane_bdf.py): BDF parsing, the BMFont offsets, page pixels that match
 #           the glyph bits, cutting the font down to the game's strings, the coverage check naming a missing
 #           character and where it is used, string files (JSON / CSV / PO with continuation lines and escapes / text,
-#           read as fonts-check reads them, in composed form), and the licence rule.
+#           read as fonts-check reads them, in composed form), the licence rule and the page limit.
 # Usage   : python tools/art/dotwork/tests/test_bdf.py   (test_dotwork.py runs it too)
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -140,6 +140,37 @@ class BdfExam(unittest.TestCase):
         with self.assertRaisesRegex(fcore.ToolError, r"glyph U\+9762 is 264 x 264 px at scale 33"):
             lane_bdf.build("t", meta, g, {38754}, os.path.join(self.tmp, "out"), 33)
         self.assertFalse(os.path.exists(os.path.join(self.tmp, "out")))
+
+    def test_too_many_pages_stops_before_writing(self):
+        """#172: no page limit, so "all" on a big font at a high scale allocated and wrote thousands of PNGs."""
+        import fcore
+        import lane_bdf
+        # MAX_PAGES + 1 glyphs of 8 x 8: at scale 16 each is 128 px and takes a page of its own
+        n = lane_bdf.MAX_PAGES + 1
+        chars = "".join(f"STARTCHAR g{i}\nENCODING {0x4E00 + i}\nDWIDTH 9 0\nBBX 8 8 0 0\nBITMAP\n" + "FF\n" * 8
+                        + "ENDCHAR\n" for i in range(n))
+        big = BDF.replace("ENDFONT\n", chars + "ENDFONT\n")
+        with open(self.bdf, "w", encoding="utf-8") as f:
+            f.write(big)
+        meta, g = lane_bdf.parse_bdf(self.bdf)
+        keep = set(range(0x4E00, 0x4E00 + n))
+        out = os.path.join(self.tmp, "out")
+        with self.assertRaisesRegex(fcore.ToolError, rf"bdf t: {n} glyphs at scale 16 need {n} pages of 256 px "
+                                                     rf"\(limit {lane_bdf.MAX_PAGES}\); keep fewer glyphs"):
+            lane_bdf.build("t", meta, g, keep, out, 16)
+        self.assertFalse(os.path.exists(out))
+        self.assertEqual(lane_bdf.plan_pages("t", g, keep, 15)[2], 1 + n // 4)  # 120 px: four to a page
+        # through a pack: refused with exit 2, and the font the last run made is left as it was
+        entry = {"name": "tiny", "source": "assets_src/tiny.bdf", "license": "assets_src/OFL.txt",
+                 "strings": ["assets_src/s.json"], "ascii": False}
+        code, said = self.pack(entry, {"title": "A"})
+        self.assertEqual(code, 0, said)
+        d = os.path.join(self.tmp, "assets", "art", "fonts", "tiny")
+        before = sorted(os.listdir(d))
+        code, said = self.pack(dict(entry, all=True, scale=16), {"title": "A"})
+        self.assertEqual(code, 2, said)
+        self.assertIn(f"need {n + 1} pages", said)   # the "A" (5 x 7) takes a page too
+        self.assertEqual(sorted(os.listdir(d)), before)
 
     def test_strings_and_coverage(self):
         import lane_bdf

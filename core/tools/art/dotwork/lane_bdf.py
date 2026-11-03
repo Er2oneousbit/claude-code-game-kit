@@ -9,12 +9,14 @@
 #           strings: text / JSON (every string value, nested) / CSV / PO / POT files in the game, read as fonts-check
 #           reads them; "chars": extra characters;
 #           "ascii": false to leave out printable ASCII (kept by default); "all": true keeps every glyph (big);
-#           "scale": whole-number upscale of the glyphs (1 to 16, default 1).
+#           "scale": whole-number upscale of the glyphs (1 to 16, default 1). One font takes at most MAX_PAGES
+#           pages of 256 x 256 px; past it the run stops before writing anything.
 # Notes   : The font's licence file is required and is copied next to the .fnt (the SIL Open Font License asks for it
 #           to travel with the font, cut down or not; check the licence names no Reserved Font Name before you rename
 #           or subset, and credit the font in docs/ASSET_LOG.md). A character the strings use that the font lacks
 #           stops the run (exit 1) with the file and key it came from. White ink: tint it with font_color in Godot.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): MAX_PAGES (#172)
 # ---------------------------------------------------------------------------
 import os
 import re
@@ -30,6 +32,7 @@ import fontcheck
 PAGE = 256           # px, each side of a font page
 MAX_GLYPH = 256      # px, a BBX width or height past this is refused before any array is made (pixel fonts: a few dozen)
 MAX_SCALE = 16       # "scale" the lane accepts
+MAX_PAGES = 64       # font pages one font may take ("all" on a big CJK font at a high scale: thousands of PNGs)
 HEX_ROW = re.compile(r"[0-9A-Fa-f]+\Z")
 
 
@@ -154,8 +157,10 @@ def pack_pages(boxes):
     return pos, page + 1
 
 
-def build(name, meta, glyphs, keep, out_dir, scale=1):
-    """Write font_<name>.fnt + font_<name>_<page>.png for the codepoints in keep. Returns (fnt path, page paths)."""
+def plan_pages(name, glyphs, keep, scale=1):
+    """-> (sorted codepoints, {cp: (page, x, y)}, page count) for the codepoints in keep the font has. Stops (a
+    ToolError) on a glyph too big for a page at this scale, or past MAX_PAGES pages: before a page is allocated
+    and, from run(), before the old output is removed."""
     keep = sorted(cp for cp in keep if cp in glyphs)
     boxes = [(cp, glyphs[cp][0].shape[1] * scale, glyphs[cp][0].shape[0] * scale) for cp in keep]
     for cp, w, h in boxes:   # a page holds a glyph with a 1 px gap on each side
@@ -163,6 +168,16 @@ def build(name, meta, glyphs, keep, out_dir, scale=1):
             raise core.ToolError(f"bdf {name}: glyph U+{cp:04X} is {w} x {h} px at scale {scale}, over the "
                                  f"{PAGE - 2} px a {PAGE} px font page holds (lower \"scale\")")
     pos, pages = pack_pages(boxes)
+    if pages > MAX_PAGES:
+        raise core.ToolError(f"bdf {name}: {len(keep)} glyphs at scale {scale} need {pages} pages of {PAGE} px "
+                             f"(limit {MAX_PAGES}); keep fewer glyphs (drop \"all\") or lower \"scale\"")
+    return keep, pos, pages
+
+
+def build(name, meta, glyphs, keep, out_dir, scale=1, plan=None):
+    """Write font_<name>.fnt + font_<name>_<page>.png for the codepoints in keep. Returns (fnt path, page paths).
+    plan: plan_pages()'s result when the caller already made it."""
+    keep, pos, pages = plan or plan_pages(name, glyphs, keep, scale)
     imgs = [np.zeros((PAGE, PAGE, 4), np.uint8) for _ in range(pages)]
     base = meta["ascent"] * scale
     lines = []
@@ -212,9 +227,10 @@ def run(entries, pack, man, conf):
         keep = set(glyphs) if e.get("all") else {ord(c) for _, t in sources for c in glyph_chars(t)}
         if e.get("ascii", True):
             keep |= set(range(32, 127))
+        plan = plan_pages(name, glyphs, keep, int(scale))   # refused here, the last run's font is still in place
         out = core.art(conf, "fonts", name)
         man.drop_dir(out)
-        fnt, pages = build(name, meta, glyphs, keep, out, int(scale))
+        fnt, pages = build(name, meta, glyphs, keep, out, int(scale), plan)
         lic_dst = os.path.join(out, f"font_{name}_LICENSE.txt")
         shutil.copyfile(lic, lic_dst)
         man.add(fnt, "font", glyphs=len([c for c in keep if c in glyphs]), pages=len(pages), family=meta["family"],

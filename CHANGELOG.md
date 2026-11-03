@@ -255,6 +255,10 @@
   `addons/gut/`, `data/golden/` or `assets_src/` file inside, so a preset edited in the editor cannot bring them
   back unseen. Checked on all three presets with Godot 4.7.2 (92 files, was 93). The other engines' builds take an
   allow list or their asset folder only and never had it (#161).
+- Dotwork bdf: one font takes at most `MAX_PAGES` (64) pages of 256 px. Past it the run stops with `[error] bdf
+  <name>: N glyphs at scale S need P pages of 256 px (limit 64); keep fewer glyphs (drop "all") or lower "scale"`
+  (exit 2) before any page is allocated or the last run's font is removed. `"all": true` on a large CJK font at a
+  high `scale` allocated and wrote thousands of PNGs first (#172).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
