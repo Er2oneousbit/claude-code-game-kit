@@ -80,6 +80,8 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
 - **Accessibility:** screen reader and menu narration [#165](https://github.com/Er2oneousbit/claude-code-game-kit/issues/165); motor access beyond remapping [#166](https://github.com/Er2oneousbit/claude-code-game-kit/issues/166);
   cognitive access [#167](https://github.com/Er2oneousbit/claude-code-game-kit/issues/167); shell screens for Unity, Unreal, Bevy and C++ [#168](https://github.com/Er2oneousbit/claude-code-game-kit/issues/168); colour-blind modes tested
   beyond the demo palettes [#169](https://github.com/Er2oneousbit/claude-code-game-kit/issues/169).
+- **RPG Maker MZ and web-3d:** the juice and shell modules the other overlays ship
+  ([#175](https://github.com/Er2oneousbit/claude-code-game-kit/issues/175)).
 
 ### Never run or not run end to end
 - **macOS and Linux:** untested throughout (the scaffolder ran on Linux in an earlier version only). Tool and binary
