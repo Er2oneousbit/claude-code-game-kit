@@ -1,12 +1,12 @@
 # Architecture
 
 > How the code is organized and why. Keep it short and true. Update when structure changes.
-> Last reviewed: 2026-10-21
+> Last reviewed: 2026-11-03
 
 ## Big picture
 ```
 Graveyard.unity (one Bootstrap object) -> Game/GraveyardGame.cs -> LevelBuilder (props, lights, runtime NavMesh)
-                                                 -> KeeperController (input or KeeperBot) and GhostAgent x3 (NavMeshAgent)
+                                                 -> KeeperController (input or KeeperBot) and GhostAgent per ghost (NavMeshAgent)
                                                  -> Core: NightRules, GhostBrain, Perception, SaveMigration, Level
 Editor: SceneBuilder (scene, setup asset, version) and GraveyardImport (FBX import rules)
 ```
@@ -36,7 +36,7 @@ Engine-specific folder layout is documented in `docs/ENGINE.md`. Universal folde
 | Ghost decision | FSM: patrol, suspicious, hunt (tires), search (gives up after `SearchMaxSeconds`), return (ADR 0003); a tired ghost never catches | `Assets/Scripts/Core/GhostBrain.cs` | EditMode `GhostBrainTests` |
 | Ghost perception | Cone and range by lantern; raycast against Cover | `Assets/Scripts/Core/Perception.cs`, `Assets/Scripts/Game/GhostAgent.cs` | EditMode `PerceptionTests` |
 | Level | Props, souls, gate, routes as data; built at runtime | `Assets/Scripts/Core/Level.cs`, `Assets/Scripts/Game/LevelBuilder.cs` | EditMode `LevelTests` |
-| Save | Versioned JSON, v1 to v2 migration | `Assets/Scripts/Core/SaveData.cs`, `Assets/Scripts/Game/SaveStore.cs` | EditMode `SaveMigrationTests` |
+| Save | Versioned JSON (v3), v1 and v2 migrations | `Assets/Scripts/Core/SaveData.cs`, `Assets/Scripts/Game/SaveStore.cs` | EditMode `SaveMigrationTests` |
 | Keeper | CharacterController, lantern, legacy animation | `Assets/Scripts/Game/KeeperController.cs`, `Assets/Scripts/Game/CharacterAnimator.cs` | PlayMode trio |
 | Bots | Careful, AlwaysLit, AlwaysDark on one movement brain | `Assets/Scripts/Game/KeeperBot.cs` | PlayMode `ScenarioTests` |
 | Scene and assets | Scene from code, setup asset, version, import rules | `Assets/Editor/SceneBuilder.cs`, `Assets/Editor/GraveyardImport.cs` | `dev.py exec` |
@@ -47,8 +47,8 @@ Direct calls from GraveyardGame each frame; `NightRules.Tick` returns events (So
 GraveyardGame turns into sounds, log markers and the save.
 
 ## State and save data
-- save.json in `Application.persistentDataPath`: version 2 (best escape, nights, escapes, settings). v1 (the toy) migrates
-  forward (`SaveMigration.Upgrade`); a newer version is refused and the file kept as `.bad`. Written to a temp file, then swapped.
+- save.json in `Application.persistentDataPath`: version 3 (best escape, nights, escapes, settings with the
+  difficulty). v1 (the toy) and v2 migrate forward (`SaveMigration.Upgrade`); a newer version is refused and the file kept as `.bad`. Written to a temp file, then swapped.
   An unreadable save, or an unreadable `.tmp` left with no save, is kept as `save.json.bad` and the game starts fresh (the
   `.tmp` is removed so the next launch does not read it again). Bot nights (`--autoplay`) never write the save.
 - Rule: save files carry a version number from day one.

@@ -421,6 +421,9 @@
   version 1.1 or later" and its URL), with the author column taken from it; the full OFL text is not in the crate and
   is still to be saved (verify). Gatekeeper Godot's A-0005 (the live Fish Audio voice) says plainly that no terms are
   stored yet (#145).
+- Graveyard Shift (Unity): the GDD, ARCHITECTURE, HANDOFF and both READMEs describe the game as built: one ghost
+  per patrol loop plus the difficulty's extras (not three), a night of five minutes at most (not under three), and a
+  v3 save with v1 and v2 migrations; the `Smoke_E` comment names the 8 generated yards it checks, not 16 (#146).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

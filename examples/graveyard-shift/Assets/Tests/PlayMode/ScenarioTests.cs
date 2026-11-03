@@ -194,7 +194,7 @@ namespace graveyard_shift.Tests
             TheLanternIsAChoice(false, 10, false, true);
         }
 
-        // E: the generator's walk grid (Core) against the real NavMesh, on the hand-made yard and 16 generated ones.
+        // E: the generator's walk grid (Core) against the real NavMesh, on the hand-made yard and NavMeshNights (8) generated ones.
         // Every soul and the gate need a complete path from the start, and a ghost must get within
         // GhostBrain.Arrive of every route point, or it stands on that corner for the rest of the night.
         // The grid may be stricter than the NavMesh (it then only rejects good yards), never looser.

@@ -40,7 +40,7 @@ about 1.5 s; windowed only), `--god`, `--debug-ai` (ghost states and the bot's r
 | Difficulties (light, extra ghosts) and the title screen | `Assets/Scripts/Core/Difficulty.cs`, `Assets/Scripts/Game/Hud.cs` |
 | The iron gate | `Assets/Scripts/Game/GateSwing.cs` (built by `LevelBuilder.cs`) |
 | Tunables (one asset, defaults in code) | `Assets/Config/SO_GraveyardSetup.asset`, `Assets/Scripts/Core/GameTuning.cs` |
-| Versioned save with a v1 to v2 migration | `Assets/Scripts/Core/SaveData.cs`, `Assets/Scripts/Game/SaveStore.cs` |
+| Versioned save (v3) with v1 and v2 migrations | `Assets/Scripts/Core/SaveData.cs`, `Assets/Scripts/Game/SaveStore.cs` |
 | Autoplay bots: careful, always lit, always dark, on one movement brain | `Assets/Scripts/Game/KeeperBot.cs` |
 | The scene, setup asset and version, made from code | `Assets/Editor/SceneBuilder.cs` (`python tools/dev.py exec SceneBuilder.Build`) |
 

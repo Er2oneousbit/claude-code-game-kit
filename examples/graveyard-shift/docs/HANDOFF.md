@@ -9,7 +9,7 @@
 
 ## Where we are
 v0.2.0. Vertical slice "One Night" done: the scene is built by `SceneBuilder.Build`, the level and NavMesh at runtime,
-three ghosts on a tested FSM, lantern stealth, souls, gate, saves with a migration, HUD, sounds, keyboard and gamepad.
+ghosts on a tested FSM (one per patrol loop plus the difficulty's extras), lantern stealth, souls, gate, saves with a migration, HUD, sounds, keyboard and gamepad.
 Every night after the first is a generated yard (`Assets/Scripts/Core/LevelGenerator.cs`, SOP-17; HOW_IT_WAS_MADE "Later: a new graveyard
 every night"). 112 EditMode tests (a 250-seed property test among them); 21 PlayMode smoke tests (boot, no way out of the yard and the gate shutting, the keeper's lantern and legs, the bot trio on
 the hand-made yard and on 8 generated nights, the NavMesh check, a yard from above, six review-fix regressions).

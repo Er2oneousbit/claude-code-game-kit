@@ -1,7 +1,7 @@
 # Graveyard Shift: Game Design Document
 
 > Living document. Short beats complete. Update with `/gdd-sync` when reality diverges from this page.
-> Last reviewed: 2026-10-21
+> Last reviewed: 2026-11-03
 
 ## Identity
 - **Working title:** Graveyard Shift (a codename is fine, do not spend time on the name yet)
@@ -15,7 +15,7 @@
 Pillars decide arguments. If a feature does not serve one, it goes to the Parking lot.
 1. **Light is a choice**: lit you move fast and see far, but ghosts notice you from 9 m; dark you creep, nearly invisible. Rules out a lantern that is always right.
 2. **Read the ghosts**: every ghost glows its state (blue patrol, yellow suspicious or searching, red hunting) and pauses with a "?" before a hunt. Rules out instant detection.
-3. **One more night**: a night is under three minutes, getting caught costs time not the run, R restarts, and the next night is a yard you have not seen. Rules out saves mid-night and long losses.
+3. **One more night**: a night is five minutes at most, getting caught costs time not the run, R restarts, and the next night is a yard you have not seen. Rules out saves mid-night and long losses.
 
 ## Core loop
 ```
@@ -79,7 +79,7 @@ List the numbers that make the game feel right (gravity, jump height, coyote tim
 These live in data, not code. File: `Assets/Config/SO_GraveyardSetup.asset` (Inspector), defaults in `Assets/Scripts/Core/GameTuning.cs` (`dev.py exec SceneBuilder.ResetTuning` copies them over).
 
 ## Art and audio direction
-- Style, tone, and the kinds of enemies/NPCs the player sees: cosy-spooky Kenney graveyard: the keeper, three ghosts, crypts, gravestones, pines
+- Style, tone, and the kinds of enemies/NPCs the player sees: cosy-spooky Kenney graveyard: the keeper, one ghost per patrol loop plus the difficulty's extras, crypts, gravestones, pines
 - Palette / resolution / camera: `docs/CONCEPTS.md`; night blues, warm lantern, cyan souls; fixed high camera
 - Music mood and references (see `RESOURCES.md`): music box and celesta over a low cello drone, "cute creepy": two Suno takes that alternate per night (brief in `BRIEFS.md`)
 - SFX style: soft, slightly magical, generated with ElevenLabs: a glassy chime per soul, a startled ghostly gasp when a ghost notices, a shriek when caught; a night ambience loop (wind, crickets, owl) under everything; in the world, each soul whispers where it floats, each ghost moans louder as it grows wary, footsteps and a lantern crackle follow the keeper
