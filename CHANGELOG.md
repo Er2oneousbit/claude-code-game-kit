@@ -170,6 +170,12 @@
   as an end page's would. A file that stops inside a page or a packet is still truncated (exit 1). `oggvorbis.py
   towav` reads the channel count from the identification header (new `identification()`) and refuses 5.1 before
   decoding instead of after (#74).
+- Wavesmith: `loudness measure` and `check-mix` read FLAC, OGG Vorbis and ffmpeg formats as they decode, as they
+  already read WAV: 3 minutes of 48 kHz stereo tone plus noise peaked at 71 MB as FLAC (was 1.47 GB) and 49 MB as
+  OGG (was 0.94 GB), the same numbers to the last digit. New `flacfile.stream()`, `oggvorbis.stream()` and
+  `audioio.stream_audio()`; ffmpeg's temporary WAV is streamed and deleted. Profiled: on dense material the true
+  peak's coarse locator runs on nearly every sample; it now works a run of blocks at a time with the same sums,
+  34 s to 21 s per minute of 48 kHz stereo tone plus white noise, and the header says what drives the cost (#77).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

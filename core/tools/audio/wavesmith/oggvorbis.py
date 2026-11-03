@@ -949,15 +949,35 @@ _BROKEN = (IndexError, KeyError, ValueError, ZeroDivisionError, OverflowError, s
 def decode(data, max_values=None):
     """(info, list of float sample lists per channel, comments as [(key, value), ...]). max_values caps the
     samples decoded (all channels); default: MAX_VALUES_PER_BYTE per byte of data, at least MIN_VALUES_ALLOWED."""
+    info, comments, chunks = stream(data, max_values)
+    out = [[] for _ in range(info["channels"])]
+    for chunk in chunks():
+        for c, s in zip(out, chunk):
+            c.extend(s)
+    return info, out, comments
+
+
+def stream(data, max_values=None):
+    """(info, comments, chunks) without holding the decoded audio: the headers are read here (their errors
+    raised here), chunks() yields lists of float samples per channel in order, trimmed exactly as decode() trims,
+    and fills in info's samples, start_trim and end_trim when it ends. Memory: the packets (about the file's
+    size) plus the audio between two granule positions, normally under a second."""
     if max_values is None:
         max_values = max(MIN_VALUES_ALLOWED, MAX_VALUES_PER_BYTE * len(data))
     try:
-        return _decode(data, max_values)
+        info, comments, gen = _stream(data, max_values)
     except _BROKEN as exc:
         raise VorbisCorrupt(f"broken file ({type(exc).__name__}: {exc})") from None
 
+    def chunks():
+        try:
+            yield from gen
+        except _BROKEN as exc:
+            raise VorbisCorrupt(f"broken file ({type(exc).__name__}: {exc})") from None
+    return info, comments, chunks
 
-def _decode(data, max_values):
+
+def _stream(data, max_values):
     warnings = []
     packets = read_packets(data, warnings)
     if len(packets) < 3:
@@ -965,14 +985,35 @@ def _decode(data, max_values):
     ident = _read_identification(packets[0][0])
     vendor, comments = _read_comments(packets[1][0])
     setup = _read_setup(packets[2][0], ident["channels"])
+    info = dict(ident)
+    info.update({"samples": None, "vendor": vendor, "start_trim": None, "end_trim": None, "warnings": warnings})
+    return info, comments, _audio(packets[3:], setup, ident, info, max_values, len(data))
+
+
+def _audio(packets, setup, ident, info, max_values, size):
+    """The decode loop behind stream(). Output stays pending until a granule position settles it: a trim only
+    ever touches the output of the packet that carries the first granule or of the last one, so everything
+    before the latest granule packet's own output is handed out."""
     ch = ident["channels"]
     bs0, bs1 = ident["blocksizes"]
-    out = [[] for _ in range(ch)]
+    pending, pend_at = [[] for _ in range(ch)], 0   # output not handed out yet, from output index pend_at
     count, prev, prev_n = 0, None, 0
     first_count = first_granule = None      # samples decoded and granule at the first page that has one
     cut_at, cut = 0, 0                      # the start trim: cut samples from output index cut_at
     end_granule, end_made = None, 0
-    for packet, granule, eos in packets[3:]:
+    handed = 0
+
+    def take(n):
+        """The first n pending samples per channel, without the start trim's samples when they are among them."""
+        nonlocal pending, pend_at
+        part, pending = [p[:n] for p in pending], [p[n:] for p in pending]
+        lo = cut_at - pend_at
+        if cut and 0 <= lo < n:
+            part = [p[:lo] + p[lo + cut:] for p in part]
+        pend_at += n
+        return part
+
+    for packet, granule, eos in packets:
         made = 0                            # samples this packet adds to the output
         try:
             decoded = _audio_packet(setup, ident, packet)
@@ -987,12 +1028,11 @@ def _decode(data, max_values):
             blocks = [None if s is None else [a * b for a, b in zip(imdct(s), win)] for s in spectra]
             if prev is not None:                    # the very first block only primes the overlap
                 for c in range(ch):
-                    pc = prev[c]
-                    out[c].extend(_overlap(pc, prev_n, blocks[c], n))
+                    pending[c].extend(_overlap(prev[c], prev_n, blocks[c], n))
                 made = prev_n // 4 + n // 4
                 count += made
                 if count * ch > max_values:
-                    raise VorbisLimit(f"the file decodes to more than {max_values} samples ({len(data)} bytes of "
+                    raise VorbisLimit(f"the file decodes to more than {max_values} samples ({size} bytes of "
                                       f"file; real Vorbis stays under about 2000 samples per byte): refused. "
                                       f"Convert it with ffmpeg if it is genuine")
             prev, prev_n = [None if b is None else b[n // 2:] for b in blocks], n
@@ -1004,17 +1044,22 @@ def _decode(data, max_values):
                 cut = min(max(0, count - granule), made)
                 cut_at = count - made
             end_granule, end_made = granule, made
+            ready = count - made - pend_at          # all but this packet's output, which a trim may still cut
+            if ready > 0:
+                part = take(ready)
+                handed += len(part[0])
+                yield part
     last = count
     if end_granule is not None:
         # output index i >= first_count sits at stream position first_granule + (i - first_count); the end
         # granule ends the stream there. Like libvorbis, the end trim takes at most the last packet's samples
         want = end_granule if first_granule is None else first_count + end_granule - first_granule
         last = max(count - end_made, cut_at + cut, min(count, want))
-    out = [c[:cut_at] + c[cut_at + cut:last] for c in out]
-    info = dict(ident)
-    info.update({"samples": last - cut, "vendor": vendor, "start_trim": cut, "end_trim": count - last,
-                 "warnings": warnings})
-    return info, out, comments
+    part = take(last - pend_at)
+    handed += len(part[0])
+    if part[0]:
+        yield part
+    info.update({"samples": handed, "start_trim": cut, "end_trim": count - last})
 
 
 def read_ogg(path):

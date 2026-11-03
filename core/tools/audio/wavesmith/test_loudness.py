@@ -294,6 +294,29 @@ class LoudnessExam(unittest.TestCase):
         a, b = L.measure_file(flac), L.measure_file(wav)
         self.assertEqual((a["integrated_lufs"], a["true_peak_dbtp"]), (b["integrated_lufs"], b["true_peak_dbtp"]))
 
+    def test_flac_and_ogg_are_measured_as_they_decode_never_whole(self):
+        import base64
+        import flacfile
+        import oggvorbis
+        from test_flacfile import FIXTURES
+        from test_oggvorbis import OggVorbisExam
+        audioio = L.audioio
+        flac, ogg = self.dir / "s.flac", self.dir / "s.ogg"
+        flac.write_bytes(base64.b64decode(FIXTURES["stereo16"]))
+        ogg.write_bytes(OggVorbisExam().data("stereo44k"))
+        info, ints, _ = flacfile.decode(flac.read_bytes())
+        whole_flac = L.measure_channels([[s / 32768.0 for s in c] for c in ints], info["rate"])
+        info, chans, _ = oggvorbis.decode(ogg.read_bytes())
+        whole_ogg = L.measure_channels(chans, info["rate"])
+        refuse = AssertionError("decoded whole")
+        saved = audioio.read_audio, flacfile.decode, oggvorbis.decode
+        try:
+            audioio.read_audio = flacfile.decode = oggvorbis.decode = lambda *a, **k: (_ for _ in ()).throw(refuse)
+            self.assertEqual(L.measure_file(flac), whole_flac)
+            self.assertEqual(L.measure_file(ogg), whole_ogg)
+        finally:
+            audioio.read_audio, flacfile.decode, oggvorbis.decode = saved
+
     def test_measure_json_and_usage_errors(self):
         f = self.wav("x.wav", stereo(tone(-23, 1)))
         rc, out = self.run_tool("measure", f, "--json")

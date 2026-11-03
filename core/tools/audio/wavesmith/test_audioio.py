@@ -201,6 +201,25 @@ class AudioIOExam(unittest.TestCase):
         samples, rate, ch = music.read_interleaved(mp3)
         self.assertEqual((ch, len(samples)), (1, 2 * RATE))
 
+    def test_stream_audio_hands_out_chunks_and_deletes_ffmpegs_wav(self):
+        decoded = self.dir / "decoded_by_stub.wav"
+        write_wav(decoded, tone(seconds=2.5, amp=0.25), RATE)
+        self.stub_ffmpeg(decoded)
+        mp3 = self.dir / "long.mp3"
+        mp3.write_bytes(b"ID3\x04" + b"\0" * 200)
+        made, real = [], tempfile.mkdtemp
+        try:
+            tempfile.mkdtemp = lambda *a, **k: made.append(real(*a, **k)) or made[-1]
+            rate, nch, chunks = audioio.stream_audio(mp3)
+            parts = list(chunks())
+        finally:
+            tempfile.mkdtemp = real
+        self.assertEqual((rate, nch), (RATE, 1))
+        self.assertTrue(all(len(p[0]) <= audioio.CHUNK_FRAMES for p in parts) and len(parts) > 1)
+        self.assertEqual([s for p in parts for s in p[0]], audioio.read_audio(mp3)[0][0])
+        self.assertEqual(len(made), 1)
+        self.assertFalse(Path(made[0]).exists(), "ffmpeg's temporary WAV is deleted once read")
+
     # ---- a real ffmpeg, when there is one
     @unittest.skipUnless(shutil.which("ffmpeg"), "no ffmpeg on PATH: the real round trip is skipped")
     def test_real_round_trip_wav_to_ogg_and_back(self):

@@ -18,8 +18,9 @@
 #           output parsing depends on ffmpeg's version (ffmpeg writes deeper WAVs with an extensible header that
 #           wavfile.py does not read; 16 bits is plenty for lossy sources). `convert --loop` keeps a WAV's 'smpl' loop as LOOPSTART /
 #           LOOPLENGTH comments in the OGG, the convention RPG Maker reads (verify in RPG Maker MZ); Godot and Unity
-#           set OGG loops in their import settings instead. ffmpeg is never shipped with the kit: its builds are LGPL
-#           or GPL, a choice each game makes (docs/resources/audio.md).
+#           set OGG loops in their import settings instead. stream_audio() hands any readable file out in chunks
+#           of about a second (loudness measures long captures that way). ffmpeg is never shipped with the kit:
+#           its builds are LGPL or GPL, a choice each game makes (docs/resources/audio.md).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
@@ -39,9 +40,10 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import flacfile  # noqa: E402
-from wavfile import read_wav_channels, write_wav  # noqa: E402
+from wavfile import read_wav_channels, wav_stream, write_wav  # noqa: E402
 
 FFMPEG_ENV = "WAVESMITH_FFMPEG"
+CHUNK_FRAMES = 48000         # stream_audio: frames per channel handed out at a time (about 1 s)
 NATIVE = ("WAV (16 / 32-bit PCM)", "FLAC", "OGG Vorbis")
 OGG_QUALITY = 6              # libvorbis -q:a: 6 is about 192 kbit/s stereo, transparent for game music
 FFMPEG_TIMEOUT_S = 600
@@ -129,23 +131,29 @@ def _via_ffmpeg(path, kind):
         raise AudioIOError(f"{path} is {kind}: reading it needs ffmpeg (https://ffmpeg.org; put it on PATH or set "
                            f"{FFMPEG_ENV}), or convert it to WAV, FLAC or OGG Vorbis first")
     with tempfile.TemporaryDirectory() as tmp:
-        out = Path(tmp) / "decoded.wav"
-        # local files only: a playlist-style input (HLS, concat) cannot make ffmpeg open a URL; an absolute path
-        # cannot be mistaken for an option (a file named -x.mp3)
-        cmd = [ff, "-nostdin", "-v", "error", "-protocol_whitelist", "file", "-i", str(Path(path).resolve()),
-               "-c:a", "pcm_s16le", str(out)]
-        dbg(" ".join(cmd))
-        try:
-            r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                               timeout=FFMPEG_TIMEOUT_S)
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            raise AudioIOError(f"{path}: ffmpeg did not run: {exc}")
-        if r.returncode != 0 or not out.is_file():
-            raise AudioIOError(f"{path}: ffmpeg could not decode it: {(r.stderr or '').strip()[-300:]}")
+        out = _ffmpeg_to_wav(ff, path, Path(tmp))
         try:
             return _from_wav(out)
         except AudioIOError as exc:
             raise AudioIOError(f"{path}: {exc} (decoded by ffmpeg; more than 2 channels are not supported)")
+
+
+def _ffmpeg_to_wav(ff, path, tmp):
+    """ffmpeg's decode of path as a 16-bit WAV in the folder tmp; returns its path."""
+    out = tmp / "decoded.wav"
+    # local files only: a playlist-style input (HLS, concat) cannot make ffmpeg open a URL; an absolute path
+    # cannot be mistaken for an option (a file named -x.mp3)
+    cmd = [ff, "-nostdin", "-v", "error", "-protocol_whitelist", "file", "-i", str(Path(path).resolve()),
+           "-c:a", "pcm_s16le", str(out)]
+    dbg(" ".join(cmd))
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           timeout=FFMPEG_TIMEOUT_S)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise AudioIOError(f"{path}: ffmpeg did not run: {exc}")
+    if r.returncode != 0 or not out.is_file():
+        raise AudioIOError(f"{path}: ffmpeg could not decode it: {(r.stderr or '').strip()[-300:]}")
+    return out
 
 
 def read_audio(path):
@@ -169,6 +177,115 @@ def read_audio(path):
         return _via_ffmpeg(path, "OGG Vorbis")
     names = {"ogg-opus": "OGG Opus", "ogg": "an OGG file that is not Vorbis", "other": "not WAV, FLAC or OGG"}
     return _via_ffmpeg(path, names[kind])
+
+
+class VorbisTooBig(AudioIOError):
+    """The pure-Python Vorbis decoder hit its output limit part-way through a stream (ffmpeg may still read it)."""
+
+
+def _batched(frames, nch):
+    """Joins small decoder chunks into lists of about CHUNK_FRAMES frames per channel."""
+    buf, n = [[] for _ in range(nch)], 0
+    for part in frames:
+        for b, p in zip(buf, part):
+            b.extend(p)
+        n += len(part[0]) if part else 0
+        if n >= CHUNK_FRAMES:
+            yield buf
+            buf, n = [[] for _ in range(nch)], 0
+    if n:
+        yield buf
+
+
+def stream_audio(path, via_ffmpeg=False):
+    """(rate, channels, chunks) for anything read_audio reads, without holding the decoded file: chunks() yields
+    one list of floats in -1..1 per channel, about CHUNK_FRAMES frames at a time. WAV is read in place, FLAC and
+    OGG Vorbis are decoded as they go, other formats (or via_ffmpeg) through ffmpeg into a temporary WAV that is
+    read the same way and deleted when chunks() ends. Errors inside chunks() are AudioIOError (VorbisTooBig when
+    the Vorbis decoder's output limit stops it: retry with via_ffmpeg)."""
+    path = Path(path)
+    try:
+        with path.open("rb") as f:
+            head = f.read(64)
+    except OSError as exc:
+        raise AudioIOError(f"cannot read {path}: {exc}")
+    kind = sniff(head)
+    mod = oggvorbis_module() if kind == "ogg-vorbis" else None
+    if via_ffmpeg or kind not in ("wav", "flac") and mod is None:
+        names = {"ogg-vorbis": "OGG Vorbis", "ogg-opus": "OGG Opus", "ogg": "an OGG file that is not Vorbis",
+                 "other": "not WAV, FLAC or OGG"}
+        return _stream_via_ffmpeg(path, names.get(kind, kind))
+    if kind == "wav":
+        try:
+            rate, nch, _, chunks = wav_stream(path, CHUNK_FRAMES)
+        except (OSError, ValueError) as exc:
+            raise AudioIOError(str(exc))
+
+        def wav_chunks():
+            try:
+                yield from chunks()
+            except (OSError, ValueError) as exc:
+                raise AudioIOError(str(exc)) from None
+        return rate, nch, wav_chunks
+    try:
+        data = path.read_bytes()
+    except OSError as exc:
+        raise AudioIOError(f"cannot read {path}: {exc}")
+    if kind == "flac":
+        try:
+            info, frames = flacfile.stream(data)
+        except (flacfile.FlacError, flacfile.FlacCorrupt) as exc:
+            raise AudioIOError(f"{path}: {exc}")
+        scale = float(1 << (info["bits"] - 1))
+
+        def flac_chunks():
+            try:
+                for part in _batched(frames(), info["channels"]):
+                    yield [[s / scale for s in c] for c in part]
+            except (flacfile.FlacError, flacfile.FlacCorrupt) as exc:
+                raise AudioIOError(f"{path}: {exc}") from None
+        return info["rate"], info["channels"], flac_chunks
+    try:
+        info, _, parts = mod.stream(data)
+    except Exception as exc:          # the decoder's own error classes: report, never a traceback
+        raise AudioIOError(f"{path}: {exc}")
+    for note in info.get("warnings", ()):
+        print(f"[warn] {path}: {note}", file=sys.stderr)
+
+    def ogg_chunks():
+        try:
+            yield from _batched(parts(), info["channels"])
+        except Exception as exc:
+            if type(exc).__name__ == "VorbisLimit":
+                raise VorbisTooBig(f"{path}: {exc}") from None
+            raise AudioIOError(f"{path}: {exc}") from None
+    return info["rate"], info["channels"], ogg_chunks
+
+
+def _stream_via_ffmpeg(path, kind):
+    ff = find_ffmpeg()
+    if not ff:
+        raise AudioIOError(f"{path} is {kind}: reading it needs ffmpeg (https://ffmpeg.org; put it on PATH or set "
+                           f"{FFMPEG_ENV}), or convert it to WAV, FLAC or OGG Vorbis first")
+    tmp = Path(tempfile.mkdtemp(prefix="wavesmith_"))
+    try:
+        out = _ffmpeg_to_wav(ff, path, tmp)
+        rate, nch, _, chunks = wav_stream(out, CHUNK_FRAMES)
+    except (OSError, ValueError) as exc:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise AudioIOError(f"{path}: {exc} (decoded by ffmpeg; more than 2 channels are not supported)")
+    except BaseException:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+
+    def ffmpeg_chunks():
+        try:
+            yield from chunks()
+        except (OSError, ValueError) as exc:
+            raise AudioIOError(f"{path}: {exc}") from None
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+    return rate, nch, ffmpeg_chunks
 
 
 def write_audio(path, channels, rate, loop=None, quality=OGG_QUALITY):

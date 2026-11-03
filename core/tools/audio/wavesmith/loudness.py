@@ -11,7 +11,8 @@
 #           python tools/audio/wavesmith/wavesmith.py loudness mono "assets/audio/**/*.wav"          # survives the mono switch?
 #           python tools/audio/wavesmith/wavesmith.py loudness normalize amb/rain.wav --bus ambience --target home --out amb/rain_n.wav
 #           python tools/audio/wavesmith/wavesmith.py loudness conventions                               # the house levels table
-# Needs   : Python 3.8+ only. Reads 16/32-bit PCM WAV (wavfile.py) and 16/24-bit FLAC (flacfile.py), mono/stereo.
+# Needs   : Python 3.8+ only. Reads 16/32-bit PCM WAV (wavfile.py), 16/24-bit FLAC (flacfile.py) and OGG Vorbis
+#           (oggvorbis.py), mono/stereo; MP3, Opus and others through ffmpeg when it is installed (audioio.py).
 # Exit    : 0 ok / within target, 1 out of target, too short to judge, or true peak too high, 2 usage or bad file
 # Notes   : Integrated loudness: K-weighting (BS.1770-5 Tables 1-2, re-derived for any sample rate), 400 ms blocks
 #           with 75 percent overlap, gates at -70 LKFS and 10 LU below the absolute-gated level. Loudness range:
@@ -24,12 +25,17 @@
 #           separately), measured over at least 30 minutes of representative gameplay; home -24 +/-2 LKFS, portable
 #           -18 +/-2 LKFS, true peak at most -1 dBTP. Record a capture with your engine (Godot: --write-movie).
 #           Per-asset levels (`normalize --bus`, `conventions`) are kit house conventions, starting points to tune by
-#           ear, not part of any standard. Pure Python: about 4 s per minute of stereo 44.1 kHz audio; other
-#           material can cost far more (measured: 27 s per minute of 48 kHz stereo tone plus noise).
-#           Memory: a WAV is measured as it is read (measure, check-mix), in under 40 MB whatever its length, so a
-#           30-minute capture is fine; record captures as WAV. FLAC, OGG and ffmpeg formats are decoded whole first:
-#           about 32 bytes per sample, so roughly 180 MB per minute of 48 kHz stereo (convert long ones to WAV).
-#           normalize and mono also hold the whole file (they are for single assets).
+#           ear, not part of any standard. Speed (pure Python, measured): loudness and LRA cost about 2.5 s per
+#           minute of 48 kHz stereo; the true peak is what varies. Its coarse locator runs on every sample within
+#           1.5 dB of the loudest so far, so sparse material (most game audio: about 4 s per minute in all at 44.1
+#           kHz) skips most of it and dense material (noise, a loud wall of sound) pays for nearly every sample:
+#           about 21 s per minute for 48 kHz stereo tone plus white noise (34 s before 0.8.3). --no-true-peak
+#           skips it. Decoding adds about 11 s per minute of FLAC and 9 s of OGG on that same material.
+#           Memory: measure and check-mix read every format as it decodes (WAV in place, FLAC and OGG Vorbis frame
+#           by frame, others through ffmpeg into a temporary WAV), so memory does not grow with the length beyond
+#           the bytes of a FLAC or OGG file itself: about 45 MB plus those (3 minutes of 48 kHz stereo tone plus
+#           noise: 71 MB as a 31 MB FLAC, was 1.47 GB; 49 MB as OGG, was 0.94 GB). normalize and mono hold the
+#           whole file (they are for single assets).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
@@ -64,6 +70,7 @@ TP_MIN_RATE = 768000        # oversample to at least this (16x at 48 kHz); see i
 TP_MAX_FACTOR = 16          # ...but never more than 16x
 TP_TAPS = 64                # taps per phase; 24 still under-read near-Nyquist content by up to 0.67 dB (K01)
 LOCATE_MARGIN = 10 ** (1.5 / 20)   # coarse-locator margin in true_peak()
+LOCATE_RUN = 16             # blocks of TP_TAPS samples the coarse locator computes at once
 # BS.1770-5 Annex 2: the order 48, 4-phase FIR interpolator (Phase 0..3 columns, 12 taps each). Used here only to
 # locate candidate peaks cheaply; the reading itself comes from the finer filter in interpolator().
 ANNEX2 = [
@@ -280,28 +287,48 @@ def _scan_peaks(padded, blocks, taps, factor, phases, bound, best):
     # interpolated value is at most that bound times the filter's L1 norm. Skip every block that cannot beat
     # the running maximum (most of real audio), interpolate the rest.
     chunk_max = [max(abs(v) for v in padded[k:k + taps]) for k in range(0, (blocks + 1) * taps, taps)]
-    for c in range(blocks):
+    c = 0
+    while c < blocks:
         if max(chunk_max[c], chunk_max[c + 1]) * bound <= best:
+            c += 1
             continue
-        for i in range(c * taps, (c + 1) * taps):
-            # Stage 1: the cheap 12-tap Annex 2 interpolator, centred on the same sample gap as the fine
-            # filter, locates candidates; only a window that comes within LOCATE_MARGIN of the running
-            # maximum gets the fine filter. The coarse filter under-read real audio by at most 0.84 dB (K01),
-            # so a 1.5 dB margin never skips a true maximum, and dense loud mixes stay affordable.
-            mid = i + taps // 2 - 6
-            coarse_seg = padded[mid:mid + 12][::-1]
-            values = [abs(sum(k * x for k, x in zip(p, coarse_seg))) for p in ANNEX2]
-            coarse = max(values)
-            if coarse * LOCATE_MARGIN <= best:
-                continue
-            # Stage 2: fine phases around the coarse maximum only (coarse phase q sits at fine phase q*f/4);
-            # phases near the gap's edges are covered when the neighbouring gap is refined
-            centre = values.index(coarse) * factor // 4
-            seg = padded[i:i + taps][::-1]
-            for ph in range(max(0, centre - factor // 4), min(factor, centre + factor // 4 + 1)):
-                v = abs(sum(k * x for k, x in zip(phases[ph], seg)))
-                if v > best:
-                    best = v
+        # Stage 1: the cheap 12-tap Annex 2 interpolator, centred on the same sample gap as the fine filter,
+        # locates candidates; only a window that comes within LOCATE_MARGIN of the running maximum gets the
+        # fine filter. The coarse filter under-read real audio by at most 0.84 dB (K01), so a 1.5 dB margin
+        # never skips a true maximum. Dense material (noise, loud mixes) puts nearly every sample through this
+        # stage and almost none through stage 2, so it is computed for a run of blocks at once, one list
+        # comprehension per tap: the same sums in the same order as sample by sample, about 4x faster.
+        run = c + 1
+        while run < blocks and run - c < LOCATE_RUN and max(chunk_max[run], chunk_max[run + 1]) * bound > best:
+            run += 1
+        lo, n = c * taps, (run - c) * taps
+        base = lo + taps // 2 + 5                   # padded[base - j] is tap j of the window at sample lo
+        coarse_all = []
+        for p in ANNEX2:
+            acc = [p[0] * x for x in padded[base:base + n]]
+            for j in range(1, 12):
+                k = p[j]
+                acc = [a + k * x for a, x in zip(acc, padded[base - j:base - j + n])]
+            coarse_all.append(acc)
+        strongest = [max(abs(a), abs(b), abs(d), abs(e)) for a, b, d, e in zip(*coarse_all)]
+        for blk in range(c, run):
+            if max(chunk_max[blk], chunk_max[blk + 1]) * bound <= best:
+                continue                            # the running maximum rose inside this run
+            for off in range((blk - c) * taps, (blk - c + 1) * taps):
+                coarse = strongest[off]
+                if coarse * LOCATE_MARGIN <= best:
+                    continue
+                # Stage 2: fine phases around the coarse maximum only (coarse phase q sits at fine phase q*f/4);
+                # phases near the gap's edges are covered when the neighbouring gap is refined
+                values = [abs(v[off]) for v in coarse_all]
+                centre = values.index(coarse) * factor // 4
+                i = lo + off
+                seg = padded[i:i + taps][::-1]
+                for ph in range(max(0, centre - factor // 4), min(factor, centre + factor // 4 + 1)):
+                    v = abs(sum(k * x for k, x in zip(phases[ph], seg)))
+                    if v > best:
+                        best = v
+        c = run
     return best
 
 
@@ -343,13 +370,22 @@ def _result(subs, sample_peak, tp, frames, rate, nch):
 def measure_wav_stream(path, want_tp=True):
     """measure_channels for a WAV read chunk by chunk: the same numbers in constant memory."""
     try:
-        rate, nch, frames, chunks = wav_stream(path)
+        rate, nch, _, chunks = wav_stream(path)
+        return measure_chunks(rate, nch, chunks(), want_tp)
     except (OSError, ValueError) as exc:
         raise ToolError(str(exc))
+
+
+def measure_chunks(rate, nch, chunks, want_tp=True):
+    """measure_channels for audio fed as chunks (one list per channel each): the same numbers, and memory that
+    does not grow with the length."""
+    if not rate or rate < 1:
+        raise ToolError(f"a sample rate of {rate} Hz cannot be measured (a broken file)")
     meters = [KMeter(rate) for _ in range(nch)]
     peak_meter = PeakMeter(rate, nch) if want_tp else None
-    sample_peak = 0.0
-    for chans in chunks():
+    sample_peak, frames = 0.0, 0
+    for chans in chunks:
+        frames += len(chans[0]) if chans else 0
         sample_peak = max(sample_peak, max((max((abs(s) for s in c), default=0.0) for c in chans), default=0.0))
         for m, c in zip(meters, chans):
             m.feed(c)
@@ -362,15 +398,26 @@ def measure_wav_stream(path, want_tp=True):
 
 
 def measure_file(path, want_tp=True):
+    """Any file audioio reads, measured as it is decoded: memory stays flat whatever the length or format."""
     try:
         with Path(path).open("rb") as f:
             is_wav = audioio.sniff(f.read(16)) == "wav"
     except OSError as exc:
         raise ToolError(f"cannot read {path}: {exc}")
-    if is_wav:                              # any length in constant memory
+    if is_wav:
         return measure_wav_stream(path, want_tp)
-    channels, rate = read_audio(path)
-    return measure_channels(channels, rate, want_tp)
+    try:
+        try:
+            rate, nch, chunks = audioio.stream_audio(path)
+            return measure_chunks(rate, nch, chunks(), want_tp)
+        except audioio.VorbisTooBig as exc:
+            if not audioio.find_ffmpeg():
+                raise
+            dbg(f"{exc}; measuring ffmpeg's decode instead")
+            rate, nch, chunks = audioio.stream_audio(path, via_ffmpeg=True)
+            return measure_chunks(rate, nch, chunks(), want_tp)
+    except audioio.AudioIOError as exc:
+        raise ToolError(str(exc))
 
 
 def fmt(v, unit):
