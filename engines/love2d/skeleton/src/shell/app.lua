@@ -156,7 +156,7 @@ function App:load()
   self.i18n = I18n.new(load_tables(), "en")
   self.saves = SaveStore.new(self.store)
   self.telemetry = Telemetry.new(self.store, function() return Settings.telemetry_allowed(self.settings) end,
-                                 function() return self.time end)
+                                 Telemetry.new_session(love.math.random))
   self.dialogue = load_dialogue()
   self.track = Dialogue.track(self.dialogue)
   self.ui = UI.new(self)

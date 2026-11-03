@@ -58,6 +58,8 @@ Playwright Chromium) for smoke. The boot marker is logged by `src/main.ts` after
   `shell.json` (written by `tools/golden_vectors.py`, the reference for every engine) through `src/core/`. Never copy
   expected values into a test; an unknown case type fails. After the kit changes the reference, the vectors change
   and these tests say which module to fix.
+- `telemetry.golden.test.ts` checks the `telemetry.csv` columns and row format (`userData.ts`) against
+  `data/golden/telemetry.json`, so every engine writes the same file.
 - `tests/atomicFile.test.ts` proves the crash-safe write on the real filesystem (a temp folder).
 - Smoke boots the real build; give the game an `?autoplay` or scripted mode for scenario checks (SOP-14 step 6).
 

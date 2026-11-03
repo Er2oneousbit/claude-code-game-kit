@@ -3,8 +3,9 @@
 # golden_vectors.py
 # Purpose : The reference implementation of the kit's engine-free game logic (juice: screen shake, hitstop, easing,
 #           camera follow, input buffer, coyote time, spring, flash limiter; shell: settings, save migration,
-#           rebinding, button glyphs, localization, pseudo-locale) and the writer of the golden-vector files every
-#           engine port is tested against: data/golden/juice.json and data/golden/shell.json.
+#           rebinding, button glyphs, localization, pseudo-locale; telemetry: the CSV columns and row format) and
+#           the writer of the golden-vector files every engine port is tested against: data/golden/juice.json,
+#           data/golden/shell.json and data/golden/telemetry.json (only the ports that write telemetry.csv read it).
 # Usage   : python tools/golden_vectors.py --check        # are the vector files current? (exit 1 if not)
 #           python tools/golden_vectors.py --write        # rewrite them after changing this reference
 #           python tools/golden_vectors.py --show shake   # print one module's cases
@@ -23,6 +24,7 @@
 #   --write: dump both to data/golden/*.json (sorted keys, stable floats)  --check: compare with what is on disk
 import argparse
 import copy
+import datetime
 import json
 import math
 import sys
@@ -607,7 +609,30 @@ def pseudo(text):
     return "[" + "".join(out) + "~" * math.ceil(visible * PSEUDO_GROWTH) + "]"
 
 
-# ----------------------------------------------------------------------------------------------- vectors
+# ------------------------------------------------------------------------------------------- telemetry
+
+TELEMETRY_HEADER = "time,session,event,detail"     # the one column set every port's telemetry.csv uses
+SESSION_LENGTH = 8                                  # session: a random id per launch, lowercase hex
+SESSION_CHARS = "0123456789abcdef"
+
+
+def csv_field(value):
+    """One CSV field, quoted (RFC 4180) when it holds a comma, a quote or a line break."""
+    if any(c in value for c in ',"\r\n'):
+        return '"' + value.replace('"', '""') + '"'
+    return value
+
+
+def telemetry_time(unix_s):
+    """UTC, ISO 8601, whole seconds (a fraction is dropped, not rounded): 2026-11-02T14:05:03Z."""
+    t = datetime.datetime.fromtimestamp(math.floor(unix_s), datetime.timezone.utc)
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def telemetry_row(unix_s, session, event, detail=""):
+    return ",".join(csv_field(f) for f in (telemetry_time(unix_s), session, event, detail))
+
+
 
 
 def _shake_case(name, params, script):
@@ -812,6 +837,22 @@ def build_shell():
             "save_version": SAVE_VERSION, "cases": cases}
 
 
+def build_telemetry():
+    cases = [{"type": "telemetry_format", "name": "header and session id", "header": TELEMETRY_HEADER,
+              "session_length": SESSION_LENGTH, "session_chars": SESSION_CHARS}]
+    pts = []
+    for unix_s, session, event, detail in [
+            (0, "00000000", "session_start", "0.1.0"), (951782400, "0a1b2c3d", "screen", "title"),
+            (1793628303, "ffffffff", "quit", ""), (1793628303.75, "0a1b2c3d", "level_start", "1-2"),
+            (1793628303, "0a1b2c3d", "screen", "title, then menu"), (1793628303, "0a1b2c3d", "note", 'say "hi"'),
+            (1793628303, "0a1b2c3d", "note", "two\nlines"), (1793628303, "0a1b2c3d", "note", "cr\rhere"),
+            (1793628303, "0a1b2c3d", "crash", "caf\u00e9 \u00cdsla \u201dquoted\u201d")]:
+        pts.append([unix_s, session, event, detail, telemetry_row(unix_s, session, event, detail)])
+    cases.append({"type": "telemetry_row", "name": "time, quoting and escaping", "points": pts})
+    return {"version": VECTOR_VERSION, "tolerance": TOLERANCE, "generator": "tools/golden_vectors.py",
+            "cases": cases}
+
+
 def render(obj):
     return json.dumps(obj, indent=1, sort_keys=True, ensure_ascii=False) + "\n"
 
@@ -824,7 +865,8 @@ def main(argv=None):
     g.add_argument("--show", metavar="TYPE", help="print the cases of one type (shake, settings_load, ...)")
     ap.add_argument("--out", default=str(OUT_DIR), help="folder for the JSON files (default data/golden)")
     args = ap.parse_args(argv)
-    files = {"juice.json": render(build_juice()), "shell.json": render(build_shell())}
+    files = {"juice.json": render(build_juice()), "shell.json": render(build_shell()),
+             "telemetry.json": render(build_telemetry())}
     out = Path(args.out)
     if args.show:
         for text in files.values():

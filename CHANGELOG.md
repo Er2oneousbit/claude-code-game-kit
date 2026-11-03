@@ -118,6 +118,11 @@
   again resumes; any other failed job names its render too. `comfy_local.py` raises `JobCancelled` (a `JobError`)
   for both cancel cases. The interrupted status itself has been read since 0.7.5 (it said `failed: no message`
   before); the Dotwork exam's stand-in ComfyUI answers a cancelled job now (#38).
+- Shell (Godot, LÖVE, web, web-3d): `telemetry.csv` has one column set in every engine, `time,session,event,detail`
+  (UTC in whole seconds with a `Z`, a random 8-digit hex id per launch). LÖVE wrote seconds since launch
+  (`session_s`), web had no session column and kept milliseconds, Godot's time had no `Z`. The reference
+  (`tools/golden_vectors.py`) now writes `data/golden/telemetry.json` (header, session id, time and CSV quoting), and
+  each of the four ports has a golden test for it (#42).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

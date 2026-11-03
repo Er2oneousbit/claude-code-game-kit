@@ -90,7 +90,7 @@ func _ready() -> void:
 	if capture and DisplayServer.get_name() != "headless":
 		# The real mouse must not hover anything in a screenshot run: the window lets it pass through
 		DisplayServer.window_set_mouse_passthrough(CAPTURE_MOUSE_REGION)
-	session_id = "%08x" % randi()
+	session_id = Telemetry.new_session()
 	DirAccess.make_dir_recursive_absolute(data_dir)
 	Log.open_file(path(LOG_FILE), _log_header())
 	if not CrashHook.install():

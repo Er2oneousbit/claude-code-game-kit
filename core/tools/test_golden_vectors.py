@@ -30,7 +30,7 @@ class VectorFiles(unittest.TestCase):
             self.assertEqual(first, {p.name: p.read_bytes() for p in Path(d).iterdir()})
 
     def test_every_case_has_a_type_and_name(self):
-        for build in (gv.build_juice, gv.build_shell):
+        for build in (gv.build_juice, gv.build_shell, gv.build_telemetry):
             data = json.loads(gv.render(build()))
             self.assertEqual(data["version"], gv.VECTOR_VERSION)
             for case in data["cases"]:
@@ -138,6 +138,21 @@ class Shell(unittest.TestCase):
         self.assertEqual(gv.tr(gv.TABLES, "de", "nope"), "nope")
         self.assertEqual(gv.tr_plural(gv.TABLES, "fr", "apples", 0), "0 pomme")
         self.assertEqual(gv.tr_plural(gv.TABLES, "ja", "apples", 1), "りんご1個")
+
+
+class Telemetry(unittest.TestCase):
+    def test_one_column_set(self):
+        self.assertEqual(gv.TELEMETRY_HEADER.split(","), ["time", "session", "event", "detail"])
+        self.assertEqual(len(gv.telemetry_row(0, "00000000", "quit").split(",")), 4)
+
+    def test_time_is_utc_whole_seconds(self):
+        self.assertEqual(gv.telemetry_time(0), "1970-01-01T00:00:00Z")
+        self.assertEqual(gv.telemetry_time(59.99), "1970-01-01T00:00:59Z")     # dropped, not rounded
+
+    def test_fields_are_quoted_only_when_needed(self):
+        self.assertEqual(gv.csv_field("plain"), "plain")
+        self.assertEqual(gv.csv_field('a "b", c'), '"a ""b"", c"')
+        self.assertEqual(gv.csv_field("x\ny"), '"x\ny"')
 
 
 if __name__ == "__main__":

@@ -94,6 +94,7 @@ resting on the window cannot change the picture.
    (the kit's reference, `tools/golden_vectors.py`); a new case type fails them until it is ported.
    `test_golden_music.gd` checks `scripts/core/music_director.gd` against `data/golden/music.json` (whole samples, tolerance 0).
    `test_golden_access.gd` checks `scripts/core/audio_access.gd` against `data/golden/access.json` (slider gains, caption arrows).
+   `test_golden_telemetry.gd` checks `telemetry.gd` against `data/golden/telemetry.json` (the CSV columns every engine writes).
 4. `python tools/dev.py test` runs them headless. Add `--filter <name>` to run one file.
 
 ## Adopting an existing project

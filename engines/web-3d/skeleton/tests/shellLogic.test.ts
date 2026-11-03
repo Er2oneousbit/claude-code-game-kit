@@ -113,8 +113,8 @@ describe("Telemetry", () => {
     s.telemetry.consent = "yes";
     expect(tel.event("screen", "title, then menu")).toBe(true);
     const lines = store.read(TELEMETRY_FILE)!.trim().split("\n");
-    expect(lines[0]).toBe("time,event,detail");
-    expect(lines[1]).toMatch(/^\d{4}-.*Z,screen,"title, then menu"$/);
+    expect(lines[0]).toBe("time,session,event,detail");
+    expect(lines[1]).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ,[0-9a-f]{8},screen,"title, then menu"$/);
   });
 
   it("escapes CSV fields", () => {

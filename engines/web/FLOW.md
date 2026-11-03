@@ -55,6 +55,8 @@ Tiled (mapeditor.org, free) exports JSON that Phaser loads with `this.load.tilem
   `shell.json` (written by `tools/golden_vectors.py`, the reference for every engine) through `src/core/`. Never copy
   expected values into a test; an unknown case type fails. After the kit changes the reference, the vectors change
   and these tests say which module to fix.
+- `telemetry.golden.test.ts` checks the `telemetry.csv` columns and row format (`userData.ts`) against
+  `data/golden/telemetry.json`, so every engine writes the same file.
 - `tests/atomicFile.test.ts` proves the crash-safe write on the real filesystem (a temp folder).
 - Scene behavior is covered by `smoke` (boots the real build). For gameplay checks, give the scene an autoplay or
   scripted-input mode and assert on logged markers, the same way `smoke` waits for `BOOT_OK`.

@@ -89,9 +89,11 @@ values in `data/golden/shell.json` that every port's tests check (K01).
 
 ## 8. Telemetry (consent first)
 Off until the player chooses Yes on a one-time question; No and Later write nothing. The kit's version appends events
-to `telemetry.csv` on the player's machine and sends nothing. Before adding any upload, write the privacy policy
-(`SOP-21` step 6): what is collected, why, for how long, and how to turn it off. `dev.py smoke --drive menus` with
-consent unset must leave no telemetry file.
+to `telemetry.csv` on the player's machine and sends nothing. Every engine writes the same columns,
+`time,session,event,detail` (UTC time in whole seconds, a random 8-digit hex id per launch), checked against
+`data/golden/telemetry.json`, so one analysis script reads any port's file. Before adding any upload, write the
+privacy policy (`SOP-21` step 6): what is collected, why, for how long, and how to turn it off.
+`dev.py smoke --drive menus` with consent unset must leave no telemetry file.
 
 ## Done when
 - A gamepad alone gets through title, settings, play, pause and back; focus is always visible.

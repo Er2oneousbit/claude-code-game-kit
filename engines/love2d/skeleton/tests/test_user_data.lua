@@ -169,14 +169,14 @@ end
 function T.test_telemetry_needs_consent()
   local store = TextStore.memory()
   local allowed = false
-  local tele = Telemetry.new(store, function() return allowed end, function() return 1.5 end)
+  local tele = Telemetry.new(store, function() return allowed end, "0a1b2c3d", function() return 0 end)
   A.falsy(tele:event("screen", "title"))
   A.falsy(store:exists(Telemetry.FILE), "nothing written before consent")
   allowed = true
   A.truthy(tele:event("note", 'has "quotes", commas'))
   local text = store:read(Telemetry.FILE)
   A.truthy(text:find("^" .. Telemetry.HEADER .. "\n"))
-  A.truthy(text:find(',1.50,note,"has ""quotes"", commas"', 1, true), text)
+  A.truthy(text:find('1970-01-01T00:00:00Z,0a1b2c3d,note,"has ""quotes"", commas"', 1, true), text)
 end
 
 function T.test_crash_report_contents()
