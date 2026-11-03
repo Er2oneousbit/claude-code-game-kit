@@ -7,7 +7,8 @@
 #           missing screenshot, no recorded frames; #33), `run` exiting 2 when the launcher is missing, and on
 #           Windows that a timeout ends a grandchild whose parent already exited (the job object, #36), and on
 #           Linux and macOS (process-group calls faked) that killing an untimed command kills what it started (#37),
-#           and that the Godot build fails on a .pck holding .game-kit.json or a dev-only folder (#161).
+#           that the Godot build fails on a .pck holding .game-kit.json or a dev-only folder (#161), and that the
+#           web, web-3d and RPG Maker MZ smoke.mjs --record leaves only this run's frames (#134; needs node).
 # Usage   : python scripts/test_dev_py.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, no engine needed. The live checks (a real smoke with each toolchain) are
@@ -17,6 +18,8 @@
 import argparse
 import importlib.util
 import io
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -252,6 +255,77 @@ class RunLauncherMissing(TempRoot):
         dev.need_project = lambda: self.root
         dev.run = lambda *a, **kw: (127, "")
         self.assertEqual(quiet(dev.cmd_run, argparse.Namespace(editor=False, port=8000))[0], 2)
+
+
+# ---- #134: web, web-3d and RPG Maker MZ smoke.mjs --record clears old frames ------
+# smoke.mjs runs for real under node; vite, Playwright and MZ's serve.mjs are stand-ins that boot at once and
+# "screenshot" by writing a small file.
+FAKE_PLAYWRIGHT = """import { writeFileSync } from "node:fs";
+export const chromium = {
+  async launch() {
+    return {
+      async newPage() {
+        const handlers = {};
+        return {
+          on(ev, fn) { (handlers[ev] ||= []).push(fn); },
+          async addInitScript() {},
+          async goto() {
+            const msg = { type: () => "log", text: () => "BOOT_OK", location: () => ({}) };
+            setTimeout(() => (handlers.console || []).forEach((fn) => fn(msg)), 10);
+          },
+          async screenshot({ path }) { writeFileSync(path, "new"); },
+          async evaluate() { await new Promise((r) => setTimeout(r, 300)); return {}; },
+        };
+      },
+      async close() {},
+    };
+  },
+};
+"""
+FAKE_VITE = 'export async function preview() { return { resolvedUrls: { local: ["http://127.0.0.1:9/"] }, async close() {} }; }\n'
+FAKE_SERVE = 'export async function serve() { return { url: "http://127.0.0.1:9/", async close() {} }; }\n'
+NODE = shutil.which("node")
+
+
+@unittest.skipUnless(NODE, "node is not on PATH")
+class WebSmokeRecord(TempRoot):
+    def project(self, engine):
+        root = self.root / engine
+        (root / "tools").mkdir(parents=True)
+        shutil.copy2(KIT / "engines" / engine / "skeleton" / "tools" / "smoke.mjs", root / "tools" / "smoke.mjs")
+        for name, text in (("vite", FAKE_VITE), ("playwright", FAKE_PLAYWRIGHT)):
+            pkg = root / "node_modules" / name
+            pkg.mkdir(parents=True)
+            (pkg / "package.json").write_text('{"name": "%s", "type": "module", "main": "index.js"}' % name)
+            (pkg / "index.js").write_text(text)
+        if engine == "rpgmaker-mz":
+            (root / "tools" / "serve.mjs").write_text(FAKE_SERVE)
+            (root / "game" / "js").mkdir(parents=True)
+            (root / "game" / "index.html").write_text("<html></html>")
+            (root / "game" / "js" / "rmmz_core.js").write_text("")
+        else:
+            (root / "dist").mkdir()
+            (root / "dist" / "index.html").write_text("<html></html>")
+        return root
+
+    def test_record_keeps_only_this_runs_frames(self):
+        for engine in ("web", "web-3d", "rpgmaker-mz"):
+            with self.subTest(engine=engine):
+                root = self.project(engine)
+                frames = root / "build" / "frames"
+                frames.mkdir(parents=True)
+                for i in range(30):                    # an earlier, longer run
+                    (frames / f"f{i:05d}.png").write_text("old")
+                (frames / "notes.txt").write_text("mine")
+                r = subprocess.run([NODE, str(root / "tools" / "smoke.mjs"), "--record", "build/frames",
+                                    "--record-every", "20", "--frames", "1"], cwd=root, capture_output=True,
+                                   encoding="utf-8", errors="replace", timeout=60)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                n = int(re.search(r"\[ OK \] (\d+) frame\(s\)", r.stdout).group(1))
+                left = sorted(p.name for p in frames.glob("f*.png"))
+                self.assertEqual(left, [f"f{i:05d}.png" for i in range(n)], f"{n} frame(s) reported")
+                self.assertTrue(all((frames / name).read_text() == "new" for name in left))
+                self.assertTrue((frames / "notes.txt").is_file(), "only f<digits>.png is cleared")
 
 
 # ---- #36: Windows, a grandchild whose parent already exited ---------------------

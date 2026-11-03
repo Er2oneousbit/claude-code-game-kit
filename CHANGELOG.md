@@ -46,6 +46,10 @@
 - Web, LÖVE: `smoke --drive menus` reaches master volume 0.5 from any start value, as Godot does since #43: it
   presses left or right until the live setting is there (`slideAction` in the web shell's new `driveLogic.ts`,
   `Drive.slide_action` in LÖVE). A data folder holding 0.3 drove web to 0 and aborted, and left LÖVE at 0.3 (#133).
+- Web, Web 3D, RPG Maker MZ: `smoke --record DIR` clears the folder's old `f<digits>.png` frames before the run, as
+  LÖVE does, so a shorter run after a longer one no longer leaves the earlier run's tail in the folder that
+  `frames_to_gif.py` is pointed at. `scripts/test_dev_py.py` runs all three `smoke.mjs` under node with stand-in
+  vite and Playwright modules (#134).
 - Scrap Tanks (C++/SDL2): make_sprites.py checks the bpy launcher (uv, or `BPY_PYTHON`) and the kit's render tool
   before the first job and stops with `[error]` and exit 2 instead of a traceback; a render that dies before its
   first `[..]` line shows its last output lines; `--debug` prints each command and all output; a Windows path in

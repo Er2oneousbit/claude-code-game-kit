@@ -26,8 +26,10 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): a recorded frame that fails to save is an error
 //           (it was swallowed), an old --screenshot is deleted first, and each capture is checked after the run
+// Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): --record clears the folder's old f*.png frames
+//           first, so it holds this run's frames only
 // ---------------------------------------------------------------------------
-import { existsSync, mkdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 const args = process.argv.slice(2);
@@ -47,6 +49,7 @@ const GAME = resolve(ROOT, opt("--root", "game"));
 const SCREENSHOT = opt("--screenshot", "") && resolve(ROOT, opt("--screenshot", ""));
 const RECORD = opt("--record", "") && resolve(ROOT, opt("--record", ""));
 const RECORD_EVERY = Number(opt("--record-every", "66"));
+const FRAME_FILE = /^f\d+\.png$/; // the frames --record writes (f00000.png, ...), cleared before a run
 const VERBOSE = args.includes("--verbose");
 const HEADED = args.includes("--headed");
 const GPU_ARGS = args.includes("--gpu") ? ["--enable-unsafe-webgpu", "--enable-features=Vulkan", "--use-angle=vulkan"] : [];
@@ -87,6 +90,10 @@ let recordError = "";
 let frameCount = 0;
 let code = 0;
 if (SCREENSHOT) rmSync(SCREENSHOT, { force: true }); // a picture from an earlier run must not pass for this one
+if (RECORD && existsSync(RECORD)) {
+  // nor frames from an earlier, longer run: the folder holds this run's frames only
+  for (const name of readdirSync(RECORD)) if (FRAME_FILE.test(name)) rmSync(join(RECORD, name), { force: true });
+}
 try {
   server = await serve(GAME);
   const base = server.url;
