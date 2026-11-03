@@ -181,6 +181,10 @@
   clips: 24 plays of a four-take event never repeat a take back to back and keep pitch and volume in range, a
   dialogue duck takes the music bus to -4 / -8 / -4 / 0 dB on the planned times, and each slider changes only its
   own buses (ambience under sfx follows the sfx slider once). Passed on Unity 6000.6.6f1 (#79).
+- Dotwork aseprite: `--reexport` refuses a `.aseprite` with two tags of one name (case ignored, as Windows file
+  names are) before writing anything; each numbered its frames from 00, so the second overwrote the first one's and
+  the shipped clip came back mixed with verify passing. An export that names one file twice is refused too. Checked
+  in Aseprite 1.3.18 on fixtures the exam builds there (a new live exam, run when `ASEPRITE_BIN` is set) (#81).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

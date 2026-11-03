@@ -75,12 +75,20 @@ local function save(frameNumber, path)
   -- the frame's time on screen first (seconds): a path can hold spaces
   print(string.format("DOTWORK_ASE_PNG %.6f %s", spr.frames[frameNumber].duration, path))
 end
--- tag names become file names: stop before writing anything when one could leave the export folder
+-- tag names become file names: stop before writing anything when one could leave the export folder, or when two
+-- tags share a name (ignoring case, as Windows file names do): each numbers its frames from 00, so the second one
+-- overwrote the first one's frames and the shipped clip came back mixed (issue #81)
+local seen = {}
 for _, t in ipairs(spr.tags) do
   if not t.name:match("^[%w_]+$") then
     print("DOTWORK_ASE_BADTAG " .. t.name)
     return
   end
+  if seen[t.name:lower()] then
+    print("DOTWORK_ASE_DUPTAG " .. t.name)
+    return
+  end
+  seen[t.name:lower()] = true
 end
 if #spr.tags == 0 then
   save(1, p.prefix .. ".png")
@@ -138,10 +146,16 @@ def _palette_file(pngs, path):
 
 
 def _export(conf, file, prefix):
-    """EXPORT_LUA on one .aseprite: ([(PNG path, seconds that frame shows)] in the order Aseprite wrote them, the
-    first tag name that could leave the export folder or None). Nothing is written for a file with such a tag."""
+    """EXPORT_LUA on one .aseprite: ([(PNG path, seconds that frame shows)] in the order Aseprite wrote them, why the
+    export cannot be used or None). It cannot when a tag name could leave the export folder or two tags share a name
+    (EXPORT_LUA writes nothing for such a file), or when two frames came out under one file name (issue #81)."""
     lines = _run(conf, EXPORT_LUA, "ase_export.lua", {"file": file, "prefix": prefix}).splitlines()
-    bad = [ln.split(" ", 1)[1].strip() for ln in lines if ln.startswith("DOTWORK_ASE_BADTAG ")]
+    for ln in lines:
+        if ln.startswith("DOTWORK_ASE_BADTAG "):
+            return [], f"tag {ln.split(' ', 1)[1].strip()!r}: animation names use letters, digits and _ only"
+        if ln.startswith("DOTWORK_ASE_DUPTAG "):
+            return [], (f"two tags share the name {ln.split(' ', 1)[1].strip()!r}: each animation is one tag "
+                        "(rename or remove one)")
     pngs = []
     for ln in lines:
         if ln.startswith("DOTWORK_ASE_PNG "):
@@ -150,7 +164,12 @@ def _export(conf, file, prefix):
                 pngs.append((parts[2].strip(), float(parts[1])))
             except (IndexError, ValueError):   # an older script's line (path only): the frame keeps its hold
                 pass
-    return pngs, (bad[0] if bad else None)
+    # one file name twice means a later frame overwrote an earlier one: refuse rather than ship the mix
+    names = Counter(os.path.basename(p).lower() for p, _ in pngs)
+    twice = sorted(n for n, c in names.items() if c > 1)
+    if twice:
+        return [], f"two frames were exported as {twice[0]!r}: two tags share a name (rename or remove one)"
+    return pngs, None
 
 
 def _shows_the_game(conf, path, items):
@@ -254,8 +273,7 @@ def reexport(pack, conf):
             os.remove(p)
         pngs, bad = _export(conf, file, os.path.join(tmp, prefix))
         if bad:
-            raise core.ToolError(f"{os.path.relpath(file, pack)}: tag {bad!r}: animation names use letters, "
-                                 "digits and _ only")
+            raise core.ToolError(f"{os.path.relpath(file, pack)}: {bad}")
         secs = {os.path.basename(p): s for p, s in pngs}
         return sorted(glob.glob(os.path.join(tmp, "*.png"))), secs
 

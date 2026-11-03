@@ -857,6 +857,30 @@ class AsepriteHoldsExam(unittest.TestCase):
             self.ase.reexport(self.s.project, self.s.conf)
         self.assertEqual(changed(before, snapshot(self.tmp)), [])
 
+    def test_two_tags_with_one_name_stop(self):
+        # issue #81 (live, Aseprite 1.3.18): a second attack_e tag over 2 frames numbered its frames from 00 too, so
+        # it overwrote attack_e_00 and _01 and the shipped attack came back mixed, with verify passing. The current
+        # EXPORT_LUA says DUPTAG and writes nothing; an export that still names one file twice is refused as well.
+        self.sources()
+        before = snapshot(self.tmp)
+        frames = os.path.join(self.tmp, "assets", "art", "characters", "knight", "frames")
+        walk0 = os.path.join(frames, "spr_knight_walk_e_00.png")
+
+        def old_lua(conf, lua, name, params):                    # what the old EXPORT_LUA wrote and printed
+            lines = []
+            for fn in ("attack_e_00", "attack_e_01", "attack_e_02", "attack_e_03", "attack_e_00", "attack_e_01"):
+                p = f"{params['prefix']}_{fn}.png"
+                shutil.copyfile(walk0 if len(lines) > 3 else os.path.join(frames, f"spr_knight_{fn}.png"), p)
+                lines.append(f"DOTWORK_ASE_PNG 0.125000 {p}")
+            return "\n".join(lines)
+        for run, says in ((old_lua, "two frames were exported as 'spr_knight_attack_e_00.png'"),
+                          (lambda conf, lua, name, params: "DOTWORK_ASE_DUPTAG attack_e",
+                           "two tags share the name 'attack_e'")):
+            self.ase._run = run
+            with stub_verify(), self.assertRaisesRegex(fcore.ToolError, says):
+                self.ase.reexport(self.s.project, self.s.conf)
+            self.assertEqual(changed(before, snapshot(self.tmp)), [])
+
     def test_an_untagged_character_stops(self):
         self.sources()
         frame0 = os.path.join(self.tmp, "assets", "art", "characters", "knight", "frames", "spr_knight_walk_e_00.png")
@@ -1041,6 +1065,69 @@ class AsepriteGuardExam(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             self.assertEqual(dotwork.main(["aseprite", "--project", self.tmp]), 0)
         self.assertIn("0 .aseprite files written, 3 unchanged", out.getvalue())
+
+
+LIVE_ASEPRITE = os.environ.get("ASEPRITE_BIN", "")
+# the live exam's hand-built .aseprite: <frames> frames of w x h, each a flat colour, tags given as "name:from:to,..."
+FIXTURE_LUA = r'''
+local p = app.params
+local spr = Sprite(tonumber(p.w), tonumber(p.h), ColorMode.RGB)
+local n = tonumber(p.frames)
+for i = 2, n do spr:newEmptyFrame() end
+for i = 1, n do
+  local img = Image(spr.spec)
+  img:clear(Color{ r = 40 * i, g = 100, b = 200, a = 255 })
+  spr:newCel(spr.layers[1], i, img, Point(0, 0))
+end
+for name, a, b in p.tags:gmatch("([^:,]+):(%d+):(%d+)") do
+  local t = spr:newTag(tonumber(a), tonumber(b))
+  t.name = name
+end
+spr:saveAs(p.out)
+print("DOTWORK_ASE_OK fixture")
+'''
+
+
+@unittest.skipUnless(LIVE_ASEPRITE and os.path.isfile(LIVE_ASEPRITE),
+                     "set ASEPRITE_BIN to run EXPORT_LUA in a real Aseprite")
+class AsepriteLiveExam(unittest.TestCase):
+    """EXPORT_LUA run in a real Aseprite (batch mode) on .aseprite fixtures the exam builds there; skipped without
+    ASEPRITE_BIN. The stand-in exams above cover the Python half."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="dotwork_aselive_")
+        self.s = make_game(self.tmp)                                  # binds Dotwork's work folder to the game
+        import aseprite
+        self.ase = aseprite
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def fixture(self, name, tags, frames=4, w=8, h=8):
+        out = os.path.join(self.tmp, "src", name + ".aseprite")
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        self.ase._run(self.s.conf, FIXTURE_LUA, "ase_fixture.lua",
+                      {"w": w, "h": h, "frames": frames, "tags": tags, "out": out})
+        return out
+
+    def export(self, file):
+        folder = os.path.join(self.tmp, "export")
+        shutil.rmtree(folder, ignore_errors=True)
+        os.makedirs(folder)
+        pngs, bad = self.ase._export(self.s.conf, file, os.path.join(folder, "spr_x"))
+        return [os.path.basename(p) for p, _ in pngs], bad, sorted(os.listdir(folder))
+
+    def test_two_tags_with_one_name_export_nothing(self):
+        # issue #81: the second tag's frames overwrote the first one's (spr_x_attack_e_00 and _01)
+        for tags in ("attack_e:1:4,attack_e:3:4", "attack_e:1:4,Attack_E:3:4"):
+            names, bad, written = self.export(self.fixture("dup", tags))
+            self.assertEqual((names, written), ([], []), tags)
+            self.assertIn("two tags share the name", bad, tags)
+        names, bad, written = self.export(self.fixture("ok", "attack_e:1:2,walk_e:3:4"))
+        self.assertIsNone(bad)
+        self.assertEqual(names, ["spr_x_attack_e_00.png", "spr_x_attack_e_01.png", "spr_x_walk_e_00.png",
+                                 "spr_x_walk_e_01.png"])
+        self.assertEqual(written, sorted(names))
 
 
 if __name__ == "__main__":
