@@ -412,6 +412,9 @@
 - Crimson Nebula (Bevy): HOW_IT_WAS_MADE gives the loop's 12 control points (it said 24), and it and the GDD no
   longer promise a "long" lap 2 warning: every change warns `WARN_TIME` (2 s) ahead. The README's `dev.py test`
   line drops its stale "78 tests" (98 run now; the kit's exams grow with every sync) (#143).
+- Examples: the Ghost Lantern, Courier Dash, Coyote Hop and Lockpick MZ READMEs no longer give a test count (120,
+  144, 78 and 16; 143, 164, 90 and 36 ran at 0.8.2). Each sync brings in more kit exams, so the lines say what the
+  tests cover instead (#144).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

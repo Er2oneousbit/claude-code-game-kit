@@ -35,7 +35,7 @@ Vitest: `tests/scenario.test.ts` plays the careful and the reckless bot from all
 
 ## Checks
 ```
-python tools/dev.py check && python tools/dev.py test        # types, 144 tests: the game's 60 (scenario pair included) and the kit's 84 (juice and shell, data/golden)
+python tools/dev.py check && python tools/dev.py test        # types, then the game's tests (scenario pair included) and the kit's (juice and shell, data/golden)
 python tools/dev.py smoke --query "autoplay&speed=4" --until RUN_WON --fail-on CAUGHT,TIME_UP --timeout 240
 python tools/dev.py smoke --query "autoplay=reckless&speed=4" --until CAUGHT --fail-on RUN_WON,TIME_UP --timeout 240
 ```

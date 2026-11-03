@@ -39,7 +39,7 @@ Browser flags: `?autoplay` (a careful bot picks the demo lock), `?autoplay=mashe
 ## Checks
 ```
 python tools/dev.py check     # plugin syntax, annotations against registerCommand, database JSON, js/plugins.js
-python tools/dev.py test      # 16 Node tests: rules, the bot pair, the glue against MZ stand-ins
+python tools/dev.py test      # Node tests: rules, the bot pair, the glue against MZ stand-ins, and the kit's checks
 python tools/dev.py smoke --query autoplay --until LOCK_OPEN --fail-on LOCK_JAMMED   # needs setup --from first
 ```
 

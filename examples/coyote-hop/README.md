@@ -28,7 +28,7 @@ Watch the bot play it: `godot --path . -- --autoplay`.
 ```
 python tools/dev.py doctor    # environment check (set GODOT_BIN if godot is not on PATH)
 python tools/dev.py check     # parse every script
-python tools/dev.py test      # GUT tests, 78 with the kit's juice and shell checks (copy a GUT 9.x addons/gut/ in first; it is not committed)
+python tools/dev.py test      # GUT tests, the game's and the kit's juice and shell checks (copy a GUT 9.x addons/gut/ in first; it is not committed)
 python tools/dev.py smoke     # boot headless, fail on errors
 ```
 
