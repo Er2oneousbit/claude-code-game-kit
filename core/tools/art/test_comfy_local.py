@@ -306,6 +306,22 @@ class ComfyLocalExam(unittest.TestCase):
         self.assertIn("--overwrite", out)
         self.assertEqual(self.run_tool("run", "--workflow", "wf.api.json", "--out", "o", "--overwrite")[0], 0)
 
+    def test_existing_record_or_any_output_stops_before_writing(self):
+        # #30: comfy_local.gen.json was always replaced, and a job wrote its first files before refusing a later one
+        (self.root / "o").mkdir()
+        (self.root / "o" / cl.GEN_FILE).write_bytes(b"keep")
+        rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o")
+        self.assertEqual(rc, 2, out)
+        self.assertIn(cl.GEN_FILE, out)
+        self.assertEqual((self.root / "o" / cl.GEN_FILE).read_bytes(), b"keep")
+        self.assertEqual(STATE.prompts, [], "refused before the GPU was spent")
+        (self.root / "o" / cl.GEN_FILE).unlink()
+        (self.root / "o" / "kit_preview.png").write_bytes(b"keep")
+        rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o", "--include-temp")
+        self.assertEqual(rc, 2, out)
+        self.assertFalse((self.root / "o" / "kit_00001_.png").exists(), "nothing written when one file is refused")
+        self.assertEqual((self.root / "o" / "kit_preview.png").read_bytes(), b"keep")
+
     def test_image_upload_points_node_at_it(self):
         rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o", "--image", "12=hero.png")
         self.assertEqual(rc, 0, out)

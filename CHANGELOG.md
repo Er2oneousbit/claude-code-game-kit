@@ -65,6 +65,12 @@
   and Web export of a game with a sheet there had it in the .pck before and has not now. Dotwork refuses a
   backdrop, logo, font or diorama sprite in a folder Godot ignores, naming it, instead of writing a scene that
   opens with a missing resource (#29).
+- Art, audio and Blender tools check every file they write before they write any, and refuse an existing one
+  without `--overwrite`: the `.gen.json` record beside a new output (`pixellab.py`, `comfy_local.py`,
+  `eleven_audio.py`, `fish_tts.py`; the paid tools stop before spending, `comfy_local.py` before queueing and
+  before writing any file of a job), the layout `.json` beside a `render_sprites.py` sheet, and an existing
+  `wav normalize|loop --out` (new `--overwrite`; without `--out` the input is still changed in place).
+  `sfx_synth.py` refuses a `--recipe` that names the `--out` WAV, which it replaced with JSON (#30).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

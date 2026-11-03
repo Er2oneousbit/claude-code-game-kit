@@ -909,6 +909,9 @@ def check_outputs(args, kind, variants):
             raise ToolError(f"{out} is a folder; `{kind}` writes one file there")
         if out.exists() and not args.overwrite and (kind in FILE_KINDS or any(out.iterdir())):
             raise ToolError(f"{out} already exists (--overwrite to replace it)")
+        side = out.with_suffix(".gen.json")              # a folder's record is inside it (checked above)
+        if kind in FILE_KINDS and side.exists() and not args.overwrite:
+            raise ToolError(f"{side} already exists (--overwrite to replace it)")
         if args.log:
             root = Path(args.root).resolve()
             if not (root / fetch_asset.ASSET_LOG).is_file():

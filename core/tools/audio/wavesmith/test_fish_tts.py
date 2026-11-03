@@ -93,6 +93,16 @@ class FishTtsExam(unittest.TestCase):
         side = json.loads(out_path.with_suffix(".gen.json").read_text(encoding="utf-8"))
         self.assertEqual(side["text_bytes"], 5)
 
+    def test_existing_record_not_overwritten(self):
+        # #30: a .gen.json beside a new output was replaced silently
+        (self.dir / "b.gen.json").write_bytes(b"keep")
+        fake = Fake()
+        rc, out = self.run_tool(fake, "say", "--voice", "v", "--text", "x", "--out", self.dir / "b.mp3")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("b.gen.json exists", out)
+        self.assertEqual((self.dir / "b.gen.json").read_bytes(), b"keep")
+        self.assertEqual(fake.calls, [], "refused before spending")
+
     def test_format_from_extension(self):
         fake = Fake()
         self.run_tool(fake, "say", "--voice", "v", "--text", "x", "--out", self.dir / "a.wav")

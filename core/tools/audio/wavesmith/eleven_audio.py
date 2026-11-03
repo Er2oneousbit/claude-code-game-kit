@@ -366,7 +366,7 @@ def missing_key_help():
 def cmd_generate(args, kind):
     path, body, query = build_request(kind, args)
     files = outputs(args)
-    for f in files:
+    for f in files + [f.with_suffix(".gen.json") for f in files]:   # the record beside each file too
         if f.exists() and not args.overwrite:
             raise ToolError(f"{f} exists (use --overwrite)")
     if args.dry_run:

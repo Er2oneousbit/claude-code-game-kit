@@ -256,6 +256,16 @@ class PixelLabExam(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertIn("--overwrite", out)
 
+    def test_existing_record_needs_overwrite(self):
+        # #30: the .gen.json beside a new PNG was replaced silently
+        (self.root / "c.gen.json").write_bytes(b"keep")
+        fake = Fake()
+        rc, out = self.run_tool("image", "--text", "x", "--out", "c.png", fake=fake)
+        self.assertEqual(rc, 2, out)
+        self.assertIn("c.gen.json already exists", out)
+        self.assertEqual((self.root / "c.gen.json").read_bytes(), b"keep")
+        self.assertEqual([c for c in fake.calls if c[0] == "POST"], [], "nothing spent")
+
     def test_output_problems_stop_before_spending(self):
         # A folder where one PNG goes, even with --overwrite, and a log without a table: both used to fail after
         # the paid request

@@ -223,16 +223,20 @@ def main(argv=None):
     nm.add_argument("wav")
     nm.add_argument("--peak", type=float, default=-3.0, help="target peak in dBFS (default -3)")
     nm.add_argument("--out", help="write here instead of replacing the input")
+    nm.add_argument("--overwrite", action="store_true", help="let --out replace a file that already exists")
     lp = sub.add_parser("loop", help="crossfade the end into the start and write loop points (Godot, Unity)")
     lp.add_argument("wav")
     lp.add_argument("--crossfade", type=float, default=2.0, help="seconds of overlap (default 2)")
     lp.add_argument("--start", type=float, default=0.0, help="cut this many seconds off the start first (an intro)")
     lp.add_argument("--end", type=float, help="cut everything after this second first (a fade-out or outro)")
     lp.add_argument("--out", help="write here instead of replacing the input")
+    lp.add_argument("--overwrite", action="store_true", help="let --out replace a file that already exists")
     args = ap.parse_args(argv)
     try:
         if args.command != "stats":
             check_wav_name(getattr(args, "out", None) or args.wav)
+            if args.out and Path(args.out).exists() and not args.overwrite:   # no --out: in place, as asked
+                raise ValueError(f"{args.out} exists (use --overwrite, or leave out --out to change the input in place)")
         samples, rate, loop, channels = read_wav_channels(args.wav)
     except (OSError, ValueError) as exc:
         print(f"[error] {exc}", file=sys.stderr)

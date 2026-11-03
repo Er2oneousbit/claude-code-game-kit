@@ -68,6 +68,21 @@ class WavfileExam(unittest.TestCase):
             self.assertIn("must end in .wav", out)
             self.assertFalse((self.dir / f"{cmd}.ogg").exists())
 
+    def test_out_never_replaces_a_file_without_overwrite(self):
+        # #30: normalize and loop --out replaced an existing file silently
+        path = self.dir / "in.wav"
+        wavfile.write_wav(path, stereo_tone(6.0, level=0.5), RATE, channels=2)
+        for cmd in ("normalize", "loop"):
+            keep = self.dir / f"{cmd}_kept.wav"
+            keep.write_bytes(b"not yours")
+            rc, out = self.cli(cmd, path, "--out", keep)
+            self.assertEqual(rc, 2, out)
+            self.assertIn("--overwrite", out)
+            self.assertEqual(keep.read_bytes(), b"not yours")
+            rc, out = self.cli(cmd, path, "--out", keep, "--overwrite")
+            self.assertEqual(rc, 0, out)
+            self.assertEqual(wavfile.read_wav_channels(keep)[1], RATE)
+
     def test_normalize_silent_file_fails(self):
         path = self.dir / "silent.wav"
         wavfile.write_wav(path, [0.0] * 100, RATE)

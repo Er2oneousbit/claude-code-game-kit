@@ -501,6 +501,8 @@ def cmd_run(args):
     wf = load_workflow(args.workflow)
     wf_sha = sha256(Path(args.workflow).read_bytes())
     out_dir = Path(args.out)
+    if not args.dry_run and (out_dir / GEN_FILE).exists() and not args.overwrite:   # before the GPU is spent
+        raise ToolError(f"{out_dir / GEN_FILE} exists; pass --overwrite to replace it on purpose")
     if args.log and not (Path(args.root) / fetch_asset.ASSET_LOG).is_file():
         raise ToolError(f"{fetch_asset.ASSET_LOG.as_posix()} not found under {Path(args.root).resolve()} (pass --root)")
     settings = apply_sets(wf, args.set)
@@ -522,7 +524,7 @@ def cmd_run(args):
     items = output_files(entry, args.include_temp)
     if not items:
         raise JobError("the job finished but saved no images or audio (does the workflow end in a Save node?)")
-    written, hashes = [], []
+    fetched = []
     for item in items:
         query = urllib.parse.urlencode({"filename": item["filename"], "subfolder": item.get("subfolder", ""),
                                         "type": item.get("type", "output")})
@@ -539,13 +541,18 @@ def cmd_run(args):
             data = strip_embedded(data)
         elif ext != ".wav":   # ComfyUI writes no workflow into WAV, so there is nothing to strip or warn about
             print(f"[warn] {name}: {ext} files can carry the workflow too; this tool strips PNGs and FLACs only")
-        path = out_dir / name
+        fetched.append((out_dir / name, data))
+    if not fetched:
+        raise JobError("nothing was saved")
+    for path, _ in fetched:               # every file is checked before any is written: no half-saved job
+        if path.exists() and not args.overwrite:
+            raise ToolError(f"{path} exists; pass --overwrite to replace it on purpose")
+    written, hashes = [], []
+    for path, data in fetched:
         write_new(path, data, args.overwrite)
         written.append(path)
         hashes.append(sha256(data))
         print(f"[ OK ] {path.as_posix()} ({len(data):,} bytes)")
-    if not written:
-        raise JobError("nothing was saved")
     meta = {"date": datetime.date.today().isoformat(), "server": base, "workflow": Path(args.workflow).as_posix(),
             "workflow_sha256": wf_sha, "settings": args.set or [], "seed": args.seed, "prompt": prompt_in(wf),
             "models": models_in(wf), "gpu_seconds": seconds, "prompt_id": prompt_id,

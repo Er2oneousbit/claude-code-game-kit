@@ -118,7 +118,7 @@ def parse_args(argv):
     ap.add_argument("--engine", choices=sorted(ENGINES), default="cycles", help="render engine (default cycles: CPU, works headless)")
     ap.add_argument("--samples", type=int, default=32, help="Cycles samples (default 32)")
     ap.add_argument("--pixel-art", action="store_true", help="hard pixel edges (tiny pixel filter); render at your target size")
-    ap.add_argument("--overwrite", action="store_true", help="replace an existing sheet")
+    ap.add_argument("--overwrite", action="store_true", help="replace an existing sheet and its .json")
     ap.add_argument("--debug", action="store_true", help="verbose output")
     args = ap.parse_args(argv)
     if not args.out and not args.list_actions:
@@ -340,9 +340,10 @@ def run(args):
     if out.suffix.lower() != ".png":
         print("[ENV ] --out must end in .png", file=sys.stderr)
         return 2
-    if args.out and out.exists() and not args.overwrite:
-        print(f"[ENV ] {out} exists (use --overwrite)", file=sys.stderr)
-        return 2
+    for f in (out, out.with_suffix(".json")):            # the sheet and the layout JSON beside it
+        if args.out and f.exists() and not args.overwrite:
+            print(f"[ENV ] {f} exists (use --overwrite)", file=sys.stderr)
+            return 2
     bpy = load_bpy()
     if bpy is None:
         return 2

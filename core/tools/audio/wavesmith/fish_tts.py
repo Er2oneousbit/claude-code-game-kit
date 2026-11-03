@@ -199,7 +199,7 @@ def cmd_say(args):
         raise ToolError("--text is empty")
     # several --text lines: one file each, <out>_1, <out>_2 ... (and one ASSET_LOG row for the set)
     files = [out] if len(texts) == 1 else [out.with_name(f"{out.stem}_{i}{out.suffix}") for i in range(1, len(texts) + 1)]
-    for f in files:
+    for f in files + [f.with_suffix(".gen.json") for f in files]:   # the record beside each file too
         if f.exists() and not args.overwrite:
             raise ToolError(f"{f} exists (use --overwrite)")
     headers = {"model": args.model}

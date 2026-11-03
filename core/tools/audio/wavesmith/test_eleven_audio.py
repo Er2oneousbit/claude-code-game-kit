@@ -244,6 +244,17 @@ class ElevenAudioExam(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertEqual((self.root / "a.mp3").read_bytes(), b"keep")
 
+    def test_existing_record_not_overwritten(self):
+        # #30: a .gen.json beside a new output was replaced silently
+        (self.root / "b.gen.json").write_bytes(b"keep")
+        fake = Fake()
+        rc, out = self.run_tool(fake, "sfx", "--text", "x", "--out", "b.mp3")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("b.gen.json exists", out)
+        self.assertEqual((self.root / "b.gen.json").read_bytes(), b"keep")
+        self.assertFalse((self.root / "b.mp3").exists())
+        self.assertEqual(fake.calls, [], "refused before spending")
+
     def test_check_reports_plan(self):
         rc, out = self.run_tool(Fake(tier="free", status="free"), "check")
         self.assertEqual(rc, 0, out)
