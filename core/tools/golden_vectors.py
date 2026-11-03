@@ -334,7 +334,9 @@ def _fix(rule, value, default):
                     return allowed, False
         return default, True
     if kind == "res":
-        if isinstance(value, list) and len(value) == 2 and all(_is_num(n) and n >= 1 and n == int(n) for n in value):
+        # isfinite first: int(Infinity) raises, int(NaN) too (Python's json reads both constants; the ports guard)
+        if isinstance(value, list) and len(value) == 2 and all(_is_num(n) and math.isfinite(n) and n >= 1 and n == int(n)
+                                                               for n in value):
             return [int(value[0]), int(value[1])], False
         return list(default), True
     raise ValueError(rule)
@@ -502,7 +504,7 @@ def _parse_save(text):
     if not isinstance(env, dict) or env.get("format") != "save" or not isinstance(env.get("data"), dict):
         return None, "not a save"
     v = env.get("version")
-    if not _is_num(v) or v != int(v) or v < 1:
+    if not _is_num(v) or not math.isfinite(v) or v != int(v) or v < 1:   # Infinity, NaN: a bad version, not a crash
         return None, "bad version"
     if v > SAVE_VERSION:
         return None, "newer"
@@ -775,6 +777,10 @@ def build_shell():
         ("language in code points", json.dumps({"language": "x-" + "\U0001D523\U0001D52F\U0001D51E\U0001D52B"
                                                 "\U0001D520\U0001D522"}, ensure_ascii=False)),
         ("one code point is too short", json.dumps({"language": "\U0001D523"}, ensure_ascii=False)),
+        # not standard JSON, but Python's reader (and some ports') accept the constants: either way the result is
+        # the defaults with one problem (a port whose reader refuses them reports "unreadable", also one problem)
+        ("non-finite resolution", '{"display": {"resolution": [Infinity, 720]}}'),
+        ("NaN resolution", '{"display": {"resolution": [1280, NaN]}}'),
     ]
     for name, text in inputs:
         s, problems = settings_load(text)
@@ -814,10 +820,13 @@ def build_shell():
         "corrupt": '{"format": "save", "version": 3, "data": {"health": 5',
         "wrong": json.dumps({"format": "settings", "version": 1, "data": {}}),
         "badver": json.dumps({"format": "save", "version": "2", "data": {}}),
+        "infver": '{"format": "save", "version": Infinity, "data": {}}',
+        "nanver": '{"format": "save", "version": NaN, "data": {}}',
     }
     for name, p, b in [("current", "v3", None), ("migrate from 1", "v1", None), ("migrate from 2", "v2", "v1"),
                        ("corrupt falls back", "corrupt", "v2"), ("both bad", "corrupt", "wrong"),
                        ("newer is refused", "newer", "v3"), ("bad version type", "badver", None),
+                       ("infinite version", "infver", "v2"), ("NaN version", "nanver", None),
                        ("nothing saved", None, None)]:
         env, source, problems = save_load(saves.get(p), saves.get(b))
         cases.append({"type": "save_load", "name": name, "primary": saves.get(p), "backup": saves.get(b),

@@ -245,6 +245,10 @@
 - Docs: `engines/_template/README.md` no longer tells a new overlay's `dev.py` to include the footer line (kit tools
   carry none); it asks for the header block instead, says starter files end with a `{{FOOTER}}` line, and its
   checklist checks both (#124).
+- Golden vectors: the reference reports `Infinity` or `NaN` in a settings resolution or a save version as a
+  problem, as the ports do (the default resolution; `bad version`), instead of raising `OverflowError` or
+  `ValueError`. Four new cases in `data/golden/shell.json` pin the ports to it; they pass on every engine whose
+  reader accepts or refuses the constants (refused counts as `unreadable`, also one problem) (#132).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

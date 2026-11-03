@@ -127,6 +127,18 @@ class Shell(unittest.TestCase):
         self.assertEqual((env, source), (None, "none"))
         self.assertIn("primary: newer", problems)
 
+    def test_non_finite_numbers_are_problems_not_crashes(self):
+        """#132: int(Infinity) and int(NaN) raised out of the resolution rule and the save version check."""
+        for text in ('{"display": {"resolution": [Infinity, 720]}}', '{"display": {"resolution": [1280, NaN]}}',
+                     '{"display": {"resolution": [-Infinity, 720]}}'):
+            s, problems = gv.settings_load(text)
+            self.assertEqual(s["display"]["resolution"], gv.DEFAULT_SETTINGS["display"]["resolution"], text)
+            self.assertEqual(problems, ["display.resolution"], text)
+        for const in ("Infinity", "-Infinity", "NaN"):
+            env, source, problems = gv.save_load('{"format": "save", "version": %s, "data": {}}' % const, None)
+            self.assertEqual((env, source), (None, "none"), const)
+            self.assertEqual(problems, ["primary: bad version", "backup: missing"], const)
+
     def test_language_length_counts_code_points(self):
         wide = "\U0001D523"                          # one code point, two UTF-16 units
         self.assertEqual(gv.settings_load(json.dumps({"language": "x-" + wide * 6}))[0]["language"], "x-" + wide * 6)
