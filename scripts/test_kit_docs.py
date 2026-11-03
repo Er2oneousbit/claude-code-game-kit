@@ -7,6 +7,7 @@
 #             engine, and every engine without a juice port is named where the module is promised (#103)
 #           - an ENGINE.md whose overlay has no juice port says so (#103)
 #           - the web and web-3d ENGINE.md layout names every src/core module the skeleton holds (#117)
+#           - every Wavesmith command the docs give names a real subcommand, and `vectors` always says whose (#118)
 # Usage   : python scripts/test_kit_docs.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, reads the kit tree read-only. The engines and their doc names are in the
@@ -42,6 +43,9 @@ WEB_CORE_WORDS = {
     "audioDirector": "audio director", "musicDirector": "music director", "audioAccess": "audio access",
     "atomicFile": None, "textStore": None, "jsonUtil": None,
 }
+WAVESMITH = "core/tools/audio/wavesmith"
+WAVESMITH_BUILTINS = {"list", "check", "test"}   # handled by wavesmith.py itself, not in SUBCOMMANDS
+DOC_ROOTS = ["README.md", "START_HERE.md", "CLAUDE.md", "core", "engines"]
 
 
 def read(rel):
@@ -80,6 +84,24 @@ def layout_entry(engine_md, name):
     if not m:
         raise AssertionError("no layout entry for " + name)
     return " ".join(m.group(0).split())
+
+
+def kit_markdown():
+    """(relative path, text) of every markdown file the kit ships or keeps at its root (vendored trees skipped)."""
+    for root in DOC_ROOTS:
+        base = KIT / root
+        paths = [base] if base.is_file() else base.rglob("*.md")
+        for p in paths:
+            if not SKIP_DIRS.intersection(p.relative_to(KIT).parts):
+                yield p.relative_to(KIT).as_posix(), p.read_text(encoding="utf-8", errors="replace")
+
+
+def wavesmith_subcommands():
+    """{subcommand: module file} from the SUBCOMMANDS table in wavesmith.py (read as text, nothing imported)."""
+    src = read(WAVESMITH + "/wavesmith.py")
+    table = src[src.index("SUBCOMMANDS = {"):]
+    table = table[:table.index("\n}\n")]
+    return dict(re.findall(r'^    "([a-z]+)":\s*\("(\w+)"', table, re.M))
 
 
 def missing_engines(text, wanted):
@@ -136,6 +158,27 @@ class LayoutExam(unittest.TestCase):
     def test_layout_entry_takes_the_continuation_lines(self):
         text = "src/core/   one,\n            two.\nsrc/game/   three\n"
         self.assertEqual(layout_entry(text, "src/core/"), "src/core/ one, two.")
+
+
+class CommandExam(unittest.TestCase):
+    def test_wavesmith_commands_in_the_docs_exist(self):
+        subs = wavesmith_subcommands()
+        self.assertIn("events", subs)
+        known = set(subs) | WAVESMITH_BUILTINS
+        owners = {name for name, mod in subs.items() if '"vectors"' in read("%s/%s.py" % (WAVESMITH, mod))}
+        self.assertEqual(owners, {"events", "music", "access"})
+        owners |= {subs[name] + ".py" for name in list(owners)}   # the module run on its own: `music.py vectors`
+        bad = []
+        for rel, text in kit_markdown():
+            for word in re.findall(r"wavesmith\.py ([a-z][a-z-]*)", text):
+                if word not in known:
+                    bad.append("%s: wavesmith.py %s" % (rel, word))
+            for span in re.findall(r"`([^`\n]+)`", text):
+                # #118: Bevy's FLOW.md gave a bare `vectors --write`, which wavesmith.py refuses
+                m = re.match(r"(?:python \S*wavesmith\.py )?(\S+) vectors\b", span)
+                if span.startswith("vectors ") or (m and m.group(1) not in owners):
+                    bad.append("%s: `%s`" % (rel, span))
+        self.assertEqual(bad, [])
 
 
 if __name__ == "__main__":

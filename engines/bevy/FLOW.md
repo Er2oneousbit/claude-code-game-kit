@@ -56,7 +56,9 @@ pauses on the last frame, waits for the GPU to hand back the pictures, then exit
   modules (one test per case type; `cargo test --test golden -- --nocapture` prints the counts). To change their
   behavior, change `tools/golden_vectors.py` first, run it with `--write`, then fix `src/logic/` until this passes.
   `audio.json`, `music.json` and `access.json` check the audio modules the same way (`audio_director`,
-  `music_director`, `audio_access`); their references are `tools/audio/wavesmith/` (`vectors --write`).
+  `music_director`, `audio_access`); their references are in `tools/audio/wavesmith/`, and each file is written by
+  its own command: `python tools/audio/wavesmith/wavesmith.py events vectors --write` (audio.json), then
+  `music vectors --write` and `access vectors --write` the same way.
 - `tests/*.rs`: integration tests that use `app::test_app(GameConfig)`, call `app.update()` and read the world
   (`app.world_mut().query_filtered::<&Transform, With<Player>>()`). Set input by writing the `Intent` resource,
   or pick a bot through `GameConfig`.

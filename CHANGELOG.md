@@ -328,6 +328,9 @@
   i18n, user data, dialogue and the three audio modules) instead of timers, math, RNG and state machines, which never
   were, and says there is no `src/shell/`; the web ENGINE.md line gains coyote, hold toggle, dialogue and the audio
   modules. `test_kit_docs.py` checks both lines against `src/core/` (#117).
+- Bevy FLOW.md: the audio vectors line gives the three working commands (`wavesmith.py events vectors --write`,
+  `music vectors --write`, `access vectors --write`) instead of a bare `vectors --write`, which `wavesmith.py`
+  refuses. `test_kit_docs.py` checks every Wavesmith command the docs give against its subcommands (#118).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
