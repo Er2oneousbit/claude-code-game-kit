@@ -114,9 +114,8 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
 - **`tools/art/dotwork/`:** model lanes ran on one machine only (RTX 5060 Ti 16 GB, 64 GB RAM, Windows 11), and only
   Godot gets engine resources (`--engine none` gives PNGs, sheets and the manifest). The model's in-between rotation
   views stay approximate; back views and faceless designs cannot be checked for facing (`rot_swap` fixes a pair by
-  hand). The art flaws found in 0.7.0 review (#22 to #28) are fixed in 0.7.1. Open: a cancelled ComfyUI job reads
-  as "failed: no message" ([#38](../../issues/38)); skeleton clips other than walk are not rendered live yet
-  ([#39](../../issues/39)).
+  hand). The art flaws found in 0.7.0 review (#22 to #28) are fixed in 0.7.1. Open: skeleton clips other than walk
+  are not rendered live yet ([#39](../../issues/39)).
 
 ### Tools with commands not yet run live
 - **`tools/art/comfy_local.py`:** `check` (with `--workflow`) ran live against ComfyUI 0.43.0; `run` and `strip`

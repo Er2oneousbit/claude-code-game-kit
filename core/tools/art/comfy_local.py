@@ -29,6 +29,8 @@
 #           Existing files are never replaced without --overwrite.
 #           Tested offline against a stand-in server (test_comfy_local.py); live against ComfyUI 0.43.0 (verify).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): an interrupted or dequeued job raises JobCancelled
+#           (a JobError), so a caller can tell a cancel from a failure
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -94,6 +96,11 @@ class ToolError(Exception):
 
 class JobError(Exception):
     """Exit 1: ComfyUI ran the job and it failed."""
+
+
+class JobCancelled(JobError):
+    """Exit 1: the job was stopped in ComfyUI (Cancel, POST /interrupt, taken off the queue, a restart) before it
+    saved anything. Callers that resume (Dotwork) say a rerun picks it up."""
 
 
 def dbg(msg):
@@ -335,7 +342,7 @@ def wait_history(base, prompt_id, limit):
                 stops = [m[1] for m in status.get("messages", []) if m and m[0] == "execution_interrupted"]
                 if stops:
                     # Cancel in ComfyUI's page, or POST /interrupt: ComfyUI files it as an error with no message
-                    raise JobError(f"the ComfyUI job was interrupted at node {stops[0].get('node_id')} "
+                    raise JobCancelled(f"the ComfyUI job was interrupted at node {stops[0].get('node_id')} "
                                    f"({stops[0].get('node_type')}), by Cancel in ComfyUI or /interrupt; "
                                    "nothing was saved, run it again")
                 msgs = [m[1] for m in status.get("messages", []) if m and m[0] == "execution_error"]
@@ -350,7 +357,7 @@ def wait_history(base, prompt_id, limit):
         # the queue says it is gone: it may have finished in between
         if entry is None and polls % QUEUE_CHECK_EVERY == 0 and not in_queue(base, prompt_id) \
                 and prompt_id not in get_json(base, f"/history/{prompt_id}"):
-            raise JobError(f"job {prompt_id} left ComfyUI's queue without a result (cancelled before it ran, or "
+            raise JobCancelled(f"job {prompt_id} left ComfyUI's queue without a result (cancelled before it ran, or "
                            "ComfyUI restarted); nothing was saved, run it again")
         if time.monotonic() - start > limit:
             raise JobError(f"no result after {limit} s (job {prompt_id} may still be running in ComfyUI; raise --wait)")

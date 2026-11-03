@@ -113,6 +113,11 @@
   finds its descendants through `ps` and kills each. A timed command is still killed as its own group. Run live on
   Linux (Ubuntu under WSL, every engine but Unity, whose editor always runs timed); macOS's `ps` is (verify).
   `scripts/test_dev_py.py` fakes the process-group calls (#37).
+- Dotwork: a job cancelled in ComfyUI (Cancel in the queue, `/interrupt`, taken off the queue or a restart) is
+  reported with the render it was (`hero/walk/f: cancelled in ComfyUI ...`) and says that running the same command
+  again resumes; any other failed job names its render too. `comfy_local.py` raises `JobCancelled` (a `JobError`)
+  for both cancel cases. The interrupted status itself has been read since 0.7.5 (it said `failed: no message`
+  before); the Dotwork exam's stand-in ComfyUI answers a cancelled job now (#38).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

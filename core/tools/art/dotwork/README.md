@@ -529,6 +529,7 @@ frame times in the build list and through a re-export rounded to milliseconds (i
 | `SpriteKiln not configured` | set `SPRITEKILN_ROOT` to the repo clone (the folder with `workflows/api/`) |
 | `only N GB RAM free` | close heavy apps; Wan clips need about 18 GB free; Dotwork resumes where it stopped |
 | out of memory in ComfyUI | close other GPU apps; start ComfyUI with `--lowvram` |
+| `<entry>/<clip>: cancelled in ComfyUI` | the job was cancelled in ComfyUI's queue (or ComfyUI restarted): run the same command again, it resumes |
 | verify fails | read verify_report.json in `art_src/dotwork/` (written by the failed run): the import errors and loader lines name the file |
 | `Godot crashed during import ... retrying once` in the log | a rare Godot 4.7 crash on a first import of new fonts; Dotwork retries once by itself. If the retry fails too, run `python tools/dev.py import` and then `dotwork.py verify` |
 | `Cannot get keys from nonexistent section "preset.N.options"` | empty `[preset.N.options]` sections in `export_presets.cfg`; harmless (export still works) and ignored by verify |
