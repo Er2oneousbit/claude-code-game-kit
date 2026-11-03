@@ -12,7 +12,8 @@
 -- Notes   : No love.* calls. Unknown fields are ignored (the schema only ever adds optional fields). Lines of kind
 --           "bark" show only with access.subtitle_barks; nothing shows with access.subtitles off. Interrupts:
 --           "never" waits its turn (dropped here: barks are not queued), "lower" may cut a lower-priority line,
---           "always" cuts anything. A line with no reveal list reveals at DEFAULT_CPS.
+--           "always" cuts anything. A line with no reveal list reveals at DEFAULT_CPS, faster when its duration_s
+--           is too short for that, so the whole line is shown before it ends.
 --
 -- Pseudocode (play):
 --   line missing or not allowed by the settings -> false; on cooldown -> false
@@ -79,7 +80,12 @@ function Dialogue.revealed(line, t)
     end
     return math.min(n, total)
   end
-  return math.min(total, math.floor(t * Dialogue.DEFAULT_CPS))
+  local cps = Dialogue.DEFAULT_CPS
+  if type(line.duration_s) == "number" then
+    if line.duration_s <= 0 then return total end
+    cps = math.max(cps, total / line.duration_s)   -- all of it by duration_s, never slower than DEFAULT_CPS
+  end
+  return math.min(total, math.floor(t * cps + 1e-9))
 end
 
 function Dialogue.allowed(line, settings)

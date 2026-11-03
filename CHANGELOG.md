@@ -58,6 +58,11 @@
 - RPG Maker MZ: `setup --from` names the project file it copied (`open game/Project1.rmmzproject ...`); it said
   `game/game.rmmzproject`, but the copy keeps the name the editor gave the new project. The overlay's ENGINE.md
   and FLOW.md and the dev.py header say to open the `.rmmzproject` file in `game/` (#136).
+- Web, Web 3D, LÖVE: a typewriter subtitle with no reveal data that fits the shown text (none built, or a
+  translation or the pseudo locale made it longer) types at 30 characters per second, faster when that would not
+  finish within the line's duration, so the whole line shows before it is removed; long pseudo-locale lines
+  vanished about two-thirds typed. LÖVE had the same gap for a hand-written `duration_s` with no reveal list.
+  Godot already spreads such a line over its duration (#162).
 - Scrap Tanks (C++/SDL2): make_sprites.py checks the bpy launcher (uv, or `BPY_PYTHON`) and the kit's render tool
   before the first job and stops with `[error]` and exit 2 instead of a traceback; a render that dies before its
   first `[..]` line shows its last output lines; `--debug` prints each command and all output; a Windows path in

@@ -9,7 +9,9 @@
 //           const cap = d.captions["hit"]                       // SFX captions, when access.captions_sfx is on
 // Notes   : No Phaser import (Vitest runs it). Unknown fields are ignored (the format only ever ADDS optional
 //           fields). kind "bark" lines are shown only with access.subtitle_barks; "line" kind always (when
-//           subtitles are on). Without reveal data the typewriter runs at the speaker's cps (DEFAULT_CPS).
+//           subtitles are on). Without reveal data that fits the shown text (none built, or a translation or the
+//           pseudo locale changed its length) the typewriter runs at DEFAULT_CPS, faster when that would not finish
+//           within the line's duration, so a line is always fully shown before its hold and removal.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 import { isNum, isObject } from "./jsonUtil";
@@ -18,6 +20,7 @@ import { isNum, isObject } from "./jsonUtil";
 export const DIALOGUE_VERSION = 1;
 export const DEFAULT_CPS = 30; // typewriter characters per second without reveal data
 export const HOLD_AFTER_S = 1.5; // a finished line stays this long
+const REVEAL_EPS = 1e-9; // t * cps lands on a whole character count despite rounding
 
 export type Cue = { start: number; end: number; lines: string[] };
 export type DialogueLine = {
@@ -71,7 +74,9 @@ export function revealCount(line: DialogueLine, t: number, length = Array.from(l
     for (const r of line.reveal) if (r.t <= t) n++;
     return n;
   }
-  return Math.min(length, Math.max(0, Math.floor(t * DEFAULT_CPS)));
+  if (line.durationS <= 0) return length;
+  const cps = Math.max(DEFAULT_CPS, length / line.durationS); // all of it by durationS, never slower than DEFAULT_CPS
+  return Math.min(length, Math.max(0, Math.floor(t * cps + REVEAL_EPS)));
 }
 
 /** The subtitle chunk shown at time t, or null between and after cues. */

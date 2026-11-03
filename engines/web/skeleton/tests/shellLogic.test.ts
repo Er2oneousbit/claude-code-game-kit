@@ -10,7 +10,7 @@
 // ---------------------------------------------------------------------------
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_BINDINGS, findConflicts, type Bindings } from "../src/core/bindings";
-import { cueAt, dialogueFrom, revealCount, shouldShow } from "../src/core/dialogue";
+import { DEFAULT_CPS, cueAt, dialogueFrom, lineLife, revealCount, shouldShow } from "../src/core/dialogue";
 import { HoldToggle } from "../src/core/holdToggle";
 import { defaultSettings, telemetryAllowed } from "../src/core/settings";
 import { MemoryStore, WebStorageStore, type KeyValueStorage } from "../src/core/textStore";
@@ -168,6 +168,18 @@ describe("dialogue reader", () => {
     expect([0, 0.05, 0.15, 1].map((t) => revealCount(line, t))).toEqual([1, 1, 2, 3]);
     expect(cueAt(line, 0.1)?.lines).toEqual(["Hey"]);
     expect(cueAt(line, 0.5)).toBeNull();
+  });
+
+  it("types a line without fitting reveal data fully within its duration (#162)", () => {
+    // reveal data for the 3-character source, shown as a 40 % longer translation (the pseudo locale): no match
+    const long = { ...dialogueFrom(raw).lines.a, durationS: 2 };
+    const n = 140; // characters at 30 cps would need 4.67 s, the line is gone after 2 + HOLD_AFTER_S
+    expect(revealCount(long, 0, n)).toBe(0);
+    expect(revealCount(long, 1, n)).toBe(70);
+    expect(revealCount(long, long.durationS, n)).toBe(n);
+    expect(revealCount(long, lineLife(long) - 0.01, n)).toBe(n);
+    // a short line still types at DEFAULT_CPS, not slower
+    expect(revealCount({ ...long, durationS: 10 }, 1, n)).toBe(DEFAULT_CPS);
   });
 
   it("shows barks only with subtitle barks on", () => {

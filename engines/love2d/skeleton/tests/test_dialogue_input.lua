@@ -36,6 +36,15 @@ function T.test_typewriter_and_cues()
   A.eq(Dialogue.cue_at(line, 99), nil)
 end
 
+-- a line with no reveal list and a short duration_s is fully typed before it ends, not cut at 30 cps (#162)
+function T.test_typewriter_without_reveal_fits_the_duration()
+  local line = { text = string.rep("x", 140), duration_s = 2 }  -- 140 characters at 30 cps would need 4.67 s
+  A.eq(Dialogue.revealed(line, 1), 70)
+  A.eq(Dialogue.revealed(line, line.duration_s), 140)
+  A.eq(Dialogue.revealed({ text = line.text, duration_s = 10 }, 1), Dialogue.DEFAULT_CPS, "never slower than 30 cps")
+  A.eq(Dialogue.revealed({ text = line.text }, 1), Dialogue.DEFAULT_CPS, "no duration_s: 30 cps")
+end
+
 function T.test_barks_need_the_setting()
   local s = Settings.defaults()
   local track = Dialogue.track(db())
