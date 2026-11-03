@@ -9,7 +9,8 @@
 // Notes   : Browser only (DOM), no Phaser. Bundles every data/dialogue/*.built.json at build time (Vite glob);
 //           a later file's line id wins. In locale "pseudo" the text runs through pseudo(), so the bar's
 //           layout gets the same overflow check as the menus, once the typewriter has finished the line (it carries
-//           data-settling until then). Unknown fields in the files are ignored.
+//           data-settling until then). Unknown fields in the files are ignored. holdTime stops the clock of
+//           lines and captions (the pseudo drive: what its checks count must not depend on how fast the machine is).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 import { captionArrow } from "../core/audioAccess";
@@ -44,6 +45,8 @@ export class SubtitleBar {
   private readonly data = loadDialogue();
   private showing: Showing | null = null;
   private readonly captions: { root: HTMLElement; left: number }[] = [];
+  /** While true no time passes for lines and captions: nothing types on, nothing leaves (finish() still works). */
+  holdTime = false;
 
   constructor(private readonly shell: Shell, private readonly host: HTMLElement) {}
 
@@ -115,6 +118,7 @@ export class SubtitleBar {
   }
 
   update(dt: number): void {
+    if (this.holdTime) return;
     for (const c of [...this.captions]) {
       c.left -= dt;
       if (c.left <= 0) {

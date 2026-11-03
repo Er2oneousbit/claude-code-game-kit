@@ -63,6 +63,10 @@
   finish within the line's duration, so the whole line shows before it is removed; long pseudo-locale lines
   vanished about two-thirds typed. LÖVE had the same gap for a hand-written `duration_s` with no reveal list.
   Godot already spreads such a line over its duration (#162).
+- Web: the pseudo-locale drive no longer depends on machine speed. The subtitle clock stands still for the whole
+  tour (`SubtitleBar.holdTime`), so the line the juice demo says while loading stays untyped and skipped, and the
+  finished line is still up when the pause screen is checked. With the loading screen held 4 s and the pause 2 s
+  late the old drive counted 256 labels; it counts 258, as at normal speed (#163).
 - Scrap Tanks (C++/SDL2): make_sprites.py checks the bpy launcher (uv, or `BPY_PYTHON`) and the kit's render tool
   before the first job and stops with `[error]` and exit 2 instead of a traceback; a render that dies before its
   first `[..]` line shows its last output lines; `--debug` prints each command and all output; a Windows path in

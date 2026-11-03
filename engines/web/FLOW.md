@@ -153,7 +153,8 @@ None recorded yet. Add notes from videos, forums or your own runs here, with an 
     `telemetry.csv` was not written without consent).
   - `crash`: plays, then throws a planted error; prints `CRASH_WRITTEN <path>`. Exit 1 is the expected result.
   - `pseudo` (with `--locale pseudo`): visits every screen and settings section; exit 0 when nothing is truncated,
-    clipped or untranslated. `pseudo-plant` adds one label that is too small: it must exit 1 naming it.
+    clipped or untranslated. Subtitles stand still during the tour, so the label count is the same on a slow
+    machine. `pseudo-plant` adds one label that is too small: it must exit 1 naming it.
   - `show:title|settings|pause|subtitle|juice` (with `--screenshot`): opens that screen, freezes it, captures it.
 - `--data-dir DIR` maps the game's user-data folder (localStorage) onto a real folder: its files are loaded under
   the key prefix `DIR/` (`?data-dir=DIR`) before the page starts and written back afterwards, so a test reads

@@ -20,8 +20,9 @@
 //   crash : menu -> play -> a planted error in the next frame (the crash hook does the rest)
 //   pseudo: every screen and settings section once; the shell checks each one as it appears (PSEUDO_SCREEN
 //           <id> labels N per check); the "saved" toast is counted on the menu only, then waited out, and the
-//           juice demo's subtitle (skipped while it types) is finished and checked again, so the count is the
-//           same on every run of a build
+//           juice demo's subtitle (skipped while it types) is finished and checked again; the subtitle clock
+//           stands still for the tour (holdTime), so the count is the same on every run of a build, however
+//           long loading takes
 //   show  : open one screen, settle, freeze the game, SHOWN <screen> (smoke takes the screenshot)
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
@@ -177,6 +178,20 @@ async function crash(shell: Shell, d: Driver): Promise<void> {
 
 async function pseudoTour(shell: Shell, d: Driver): Promise<void> {
   if (shell.i18n.locale !== PSEUDO_LOCALE) throw new Error("this scenario needs the pseudo-locale: add --locale pseudo");
+  // Subtitles stand still for the whole tour, so each check sees the same subtitle state on a fast or a slow
+  // machine: the line the juice demo says while loading stays untyped (skipped), the finished one stays up
+  shell.subtitles.holdTime = true;
+  try {
+    await pseudoSteps(shell, d);
+  } finally {
+    shell.subtitles.holdTime = false;
+  }
+  const c = shell.checks;
+  if (c.failures.length) Log.error("i18n", `PSEUDO_FAILED ${c.failures.length} problem(s) on ${c.screens} screen check(s)`);
+  else Log.info("i18n", `PSEUDO_OK ${c.screens} screen check(s), ${c.labels} label(s), nothing truncated`);
+}
+
+async function pseudoSteps(shell: Shell, d: Driver): Promise<void> {
   await d.pastConsent();
   await d.pseudoWait();
   await d.press("ui_accept");
@@ -216,9 +231,6 @@ async function pseudoTour(shell: Shell, d: Driver): Promise<void> {
   await d.choose("menu", "menu.quit");
   await d.screen("quit");
   await d.pseudoWait();
-  const c = shell.checks;
-  if (c.failures.length) Log.error("i18n", `PSEUDO_FAILED ${c.failures.length} problem(s) on ${c.screens} screen check(s)`);
-  else Log.info("i18n", `PSEUDO_OK ${c.screens} screen check(s), ${c.labels} label(s), nothing truncated`);
 }
 
 async function show(shell: Shell, d: Driver, what: string): Promise<void> {
