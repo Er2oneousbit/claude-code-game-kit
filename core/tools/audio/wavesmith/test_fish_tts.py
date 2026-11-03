@@ -13,8 +13,10 @@
 import contextlib
 import http.server
 import io
+import hashlib
 import json
 import os
+import struct
 import sys
 import tempfile
 import threading
@@ -24,6 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fish_tts as ft  # noqa: E402
+import wavfile  # noqa: E402
 
 KEY = "fish_exam_DO_NOT_LEAK_5678"
 
@@ -92,6 +95,32 @@ class FishTtsExam(unittest.TestCase):
         self.assertEqual(out_path.read_bytes(), b"\xff\xfbfake-mp3")
         side = json.loads(out_path.with_suffix(".gen.json").read_text(encoding="utf-8"))
         self.assertEqual(side["text_bytes"], 5)
+
+    def test_streamed_wav_saved_with_real_header_sizes(self):
+        # #178: Fish Audio streams WAVs, so the RIFF and data sizes are 0xFFFFFFxx placeholders (4 GB)
+        samples = struct.pack("<8h", 0, 1000, -1000, 32767, -32768, 5, -5, 0)
+        fmt = struct.pack("<HHIIHH", 1, 1, 44100, 88200, 2, 16)
+        streamed = (b"RIFF" + struct.pack("<I", 0xFFFFFF24) + b"WAVE" + b"fmt " + struct.pack("<I", 16) + fmt
+                    + b"data" + struct.pack("<I", 0xFFFFFF00) + samples)
+        out_path = self.dir / "ghost.wav"
+        rc, out = self.run_tool(Fake(body=streamed), "say", "--voice", "v", "--text", "Boo.", "--out", out_path)
+        self.assertEqual(rc, 0, out)
+        saved = out_path.read_bytes()
+        self.assertEqual(struct.unpack("<I", saved[4:8])[0], len(saved) - 8)
+        self.assertEqual(struct.unpack("<I", saved[40:44])[0], len(samples))
+        self.assertEqual(saved[44:], samples, "samples byte-identical")
+        self.assertEqual(saved[8:40], streamed[8:40], "only the two size fields change")
+        got, rate, _ = wavfile.read_wav(out_path)
+        self.assertEqual((len(got), rate), (8, 44100))
+        side = json.loads(out_path.with_suffix(".gen.json").read_text(encoding="utf-8"))
+        self.assertEqual(side["sha256"], hashlib.sha256(saved).hexdigest())
+        self.assertEqual(side["sha256_as_received"], hashlib.sha256(streamed).hexdigest())
+        self.assertTrue(side["header_sizes_fixed"])
+        # other formats are saved exactly as received
+        mp3 = self.dir / "line.mp3"
+        rc, out = self.run_tool(Fake(body=streamed), "say", "--voice", "v", "--text", "Boo.", "--out", mp3)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(mp3.read_bytes(), streamed)
 
     def test_existing_record_not_overwritten(self):
         # #30: a .gen.json beside a new output was replaced silently

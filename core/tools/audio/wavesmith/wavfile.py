@@ -207,6 +207,29 @@ def wav_stream(path, chunk_frames=48000):
     return rate, channels, frames, chunks
 
 
+def fix_stream_sizes(raw):
+    """(bytes, fixed) for WAV bytes a streaming service sent before it knew the length: the RIFF and data size
+    fields are placeholders (0xFFFFFFxx) that run past the end. Walks the chunks, sets a data size that runs past
+    the end to the bytes actually there and a RIFF size that does to the file length - 8; the samples are not
+    touched. Anything that is not a RIFF WAVE, or whose sizes already fit, comes back unchanged (fixed False)."""
+    if len(raw) < 12 or raw[:4] != b"RIFF" or raw[8:12] != b"WAVE":
+        return raw, False
+    out = bytearray(raw)
+    pos, fixed = 12, False
+    while pos + 8 <= len(out):
+        cid, size = out[pos:pos + 4], struct.unpack("<I", out[pos + 4:pos + 8])[0]
+        if pos + 8 + size > len(out):
+            if cid == b"data":            # only the data chunk can be cut short by streaming: the rest is samples
+                struct.pack_into("<I", out, pos + 4, len(out) - pos - 8)
+                fixed = True
+            break
+        pos += 8 + size + (size % 2)
+    if struct.unpack("<I", out[4:8])[0] > len(out) - 8:
+        struct.pack_into("<I", out, 4, len(out) - 8)
+        fixed = True
+    return bytes(out), fixed
+
+
 def stats(samples, rate, loop=None):
     """Numbers to judge a sound without hearing it."""
     n = len(samples)

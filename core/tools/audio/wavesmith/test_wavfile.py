@@ -228,6 +228,20 @@ class WavfileExam(unittest.TestCase):
             self.assertEqual(rc, 2, out)
             self.assertNotIn("Traceback", out)
 
+    def test_fix_stream_sizes_sets_placeholder_sizes_to_the_real_ones(self):
+        # #178: a streamed WAV says 0xFFFFFFxx for the RIFF and data sizes; only those two fields change
+        fmt = struct.pack("<HHIIHH", 1, 1, RATE, RATE * 2, 2, 16)
+        good = raw_wav(fmt, struct.pack("<4h", 1, -1, 300, -300))
+        streamed = good[:4] + struct.pack("<I", 0xFFFFFF24) + good[8:40] + struct.pack("<I", 0xFFFFFF00) + good[44:]
+        fixed, changed = wavfile.fix_stream_sizes(streamed)
+        self.assertEqual((fixed, changed), (good, True))
+        self.assertEqual(wavfile.fix_stream_sizes(good), (good, False))
+        # a chunk after data keeps every size; bytes that are not a WAV come back untouched
+        tail = good + b"LIST" + struct.pack("<I", 4) + b"INFO"
+        tail = tail[:4] + struct.pack("<I", len(tail) - 8) + tail[8:]
+        self.assertEqual(wavfile.fix_stream_sizes(tail), (tail, False))
+        self.assertEqual(wavfile.fix_stream_sizes(b"\xff\xfbmp3"), (b"\xff\xfbmp3", False))
+
     def test_stream_reads_the_same_samples(self):
         path = self.dir / "s.wav"
         wavfile.write_wav(path, stereo_tone(0.3), RATE, loop=(0, 99), channels=2)

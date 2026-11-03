@@ -20,13 +20,16 @@
 #           "licensed" voice, never one that sounds like a real person. Output is mono (wav, mp3 or opus).
 #           The key is never printed or saved, and a redirect carries it only to the same https host and
 #           port (anywhere else it is dropped; a redirect from https to http is refused). say --log checks
-#           ASSET_LOG and --root before any request.
+#           ASSET_LOG and --root before any request. A WAV comes streamed, with placeholder sizes near 4 GB in
+#           its header: they are set to the real sizes before saving (samples unchanged), and the record keeps
+#           the SHA-256 of the bytes as received and of the file as written.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
 #   key from the environment -> check: GET /wallet/self/api-credit | voices: GET /model?title=&language=
-#   | say: --log? ASSET_LOG exists, outputs inside --root -> POST /v1/tts {text, reference_id, format} with the model header -> save + <out>.gen.json
+#   | say: --log? ASSET_LOG exists, outputs inside --root -> POST /v1/tts {text, reference_id, format} with the model header
+#   -> wav: real RIFF/data sizes in the header -> save + <out>.gen.json
 import argparse
 import datetime
 import hashlib
@@ -39,7 +42,9 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))       # wavfile.py: the WAV header walk
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))   # tools/: fetch_asset.py for --log
+from wavfile import fix_stream_sizes  # noqa: E402
 
 API = "https://api.fish.audio"
 KEY_ENV = "FISH_API_KEY"
@@ -215,14 +220,18 @@ def cmd_say(args):
     for f, text in zip(files, texts):
         body = {"text": text, "reference_id": args.voice, "format": fmt, "latency": "balanced"}
         resp_headers, raw = call("POST", "/v1/tts", key, body, extra_headers=headers)
+        # a streamed WAV says RIFF and data sizes near 4 GB (0xFFFFFFxx): readers that trust the header misread it
+        saved, fixed = fix_stream_sizes(raw) if fmt == "wav" else (raw, False)
         f.parent.mkdir(parents=True, exist_ok=True)
-        f.write_bytes(raw)
+        f.write_bytes(saved)
         side = {"tool": "fish_tts", "service": "Fish Audio", "endpoint": "/v1/tts", "model": args.model,
                 "request": body, "date": datetime.date.today().isoformat(),
-                "sha256": hashlib.sha256(raw).hexdigest(), "text_bytes": len(text.encode("utf-8")),
+                "sha256": hashlib.sha256(saved).hexdigest(), "sha256_as_received": hashlib.sha256(raw).hexdigest(),
+                "header_sizes_fixed": fixed, "text_bytes": len(text.encode("utf-8")),
                 "license": "Fish Audio API terms (verify before shipping)"}
         f.with_suffix(".gen.json").write_bytes((json.dumps(side, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
-        print(f"[ OK ] {f}: {len(raw) // 1024} KB {fmt}, {side['text_bytes']} bytes of text on {args.model}")
+        print(f"[ OK ] {f}: {len(saved) // 1024} KB {fmt}, {side['text_bytes']} bytes of text on {args.model}"
+              + (" (streamed WAV header sizes set to the real ones)" if fixed else ""))
         done.append((f, text, side["sha256"]))
     if args.log:
         write_log(args, key, done)

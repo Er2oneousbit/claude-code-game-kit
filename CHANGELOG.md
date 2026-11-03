@@ -460,6 +460,11 @@
   place when blocked or waiting. The OrcBrain test and a new Regressions stage (the awake grunt kills the mage, then
   every orc must sleep on its idle clip; old code: a room 1 orc in HUNT on the walk clip) cover it. The bot pair
   totals are unchanged (#149).
+- Wavesmith fish_tts.py: a WAV from `say` is saved with its real RIFF and data sizes. Fish Audio streams WAVs, so
+  both header fields came as placeholders near 4 GB (`0xFFFFFF24`, `0xFFFFFF00`) and were saved as received;
+  readers that size a buffer from the header misread them. `wavfile.py`'s new `fix_stream_sizes` walks the chunks
+  and sets only the two fields (samples unchanged); the `.gen.json` record keeps `sha256` (the file as written) and
+  `sha256_as_received`. MP3 and Opus are saved as received (#178).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
