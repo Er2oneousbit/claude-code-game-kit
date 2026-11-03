@@ -38,8 +38,6 @@ examples were built and tested on one Windows 11 machine.
   ([#67](https://github.com/Er2oneousbit/claude-code-game-kit/issues/67)); spells, VFX, status marks, animated props, balloons and vehicles have no hand-polish path
   ([#68](https://github.com/Er2oneousbit/claude-code-game-kit/issues/68)); a `.pxo` saved by Pixelorama stores your local export path, which a public repository would show
   ([#69](https://github.com/Er2oneousbit/claude-code-game-kit/issues/69)).
-- **Godot sliders** draw one highlight for hover and focus, so a focused slider looks hovered (the kit's settings
-  screen outlines the focused row instead): [#54](https://github.com/Er2oneousbit/claude-code-game-kit/issues/54).
 - **Unity music player:** a change asked back before the previous one starts restarts the track (Godot, LÖVE and web
   cancel it); Godot's stinger-gap case not checked:
   [#70](https://github.com/Er2oneousbit/claude-code-game-kit/issues/70).

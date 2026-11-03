@@ -138,6 +138,11 @@
   `Binaries/`; `test` before that exits 2 with "run check first" instead of "no tests matched". Proven on UE 5.8
   in a project from the Blank Blueprint template (70 `GameKit.*` tests pass headless). Turning the plugin on from
   the editor's Plugins window is still untried (#47).
+- Godot: a focused slider no longer looks like a hovered one. Godot's `Slider` has no focus style and draws one
+  highlight for both, so the settings screen's sliders are now `FocusSlider` (`focus_slider.gd` in the shell
+  scripts), an `HSlider` that draws the theme's focus outline on top while it has keyboard or gamepad focus (the
+  `HSlider` focus style, else the `Button` one, so a Dotwork UI kit theme's outline shows too). New
+  `test_ui_theme.gd` exam (#54).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

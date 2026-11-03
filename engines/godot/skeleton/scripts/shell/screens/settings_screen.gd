@@ -197,7 +197,7 @@ func _add_field(section: String, field: String) -> void:
 				Shell.set_value(section, field, on))
 			control = sw
 		"num":
-			var slider: HSlider = HSlider.new()
+			var slider: FocusSlider = FocusSlider.new() # an HSlider with a focus outline
 			slider.min_value = float(rule[1])
 			slider.max_value = float(rule[2])
 			slider.step = float(STEPS.get("%s.%s" % [section, field], DEFAULT_STEP))

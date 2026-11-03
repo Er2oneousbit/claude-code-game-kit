@@ -84,7 +84,7 @@ static func plain() -> Theme:
 	th.set_stylebox("slider", "HSlider", track)
 	th.set_stylebox("grabber_area", "HSlider", _box(BUTTON_PRESSED, BUTTON_PRESSED, 0))
 	th.set_stylebox("grabber_area_highlight", "HSlider", _box(FOCUS.darkened(0.2), FOCUS.darkened(0.2), 0))
-	th.set_stylebox("focus", "HSlider", focus)
+	th.set_stylebox("focus", "HSlider", focus) # Slider draws none itself: FocusSlider draws this one
 	th.set_stylebox("background", "ProgressBar", _box(BUTTON, BORDER, 0))
 	th.set_stylebox("fill", "ProgressBar", _box(FOCUS.darkened(0.15), FOCUS.darkened(0.15), 0))
 	return th
