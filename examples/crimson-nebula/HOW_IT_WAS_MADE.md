@@ -41,7 +41,7 @@ into `src/logic/tuning.rs`.
 - **Bevy side:** the race steps in `FixedUpdate` at 60 Hz and prints markers (`RACE_GO`, `LAP`, `CHANGE_WARN`,
   `CHANGE_LIVE`, `FINISH`, `RACE_OVER`). The view is added only with a window: ribbons and walls as meshes built from the
   track, karts from a few shapes (body, wheels, driver), emissive color plus `Hdr` and `Bloom` for the neon, a chase
-  camera with a field-of-view kick on boost, a HUD, results, Enter for a new track. Every Bevy API was checked in the
+  camera with a field-of-view kick on boost, a HUD, results, Enter to race again on a new seed. Every Bevy API was checked in the
   0.20 source under `~/.cargo/registry` first (ENGINE.md gotcha 1): `TextLayout::justify`, `GlobalAmbientLight`,
   `bevy::camera::Hdr` and the mesh imports all differ from older examples.
 

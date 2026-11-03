@@ -22,7 +22,7 @@ python tools/dev.py run       # builds and opens the game
 | Steer | A / D (or arrows) | Left stick |
 | Drift (hold) | Shift | Right bumper |
 | Use the boost | Space | A |
-| After the race | Enter: a new track, Esc: quit | Start |
+| After the race | Enter: race again on a new seed, Esc: quit | Start |
 
 Game options go after `--`: `python tools/dev.py run -- --seed 3` replays a race, `--autoplay reader|late|ignorer`
 lets a bot drive your kart.

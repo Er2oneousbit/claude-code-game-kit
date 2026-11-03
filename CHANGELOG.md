@@ -405,6 +405,10 @@
   that kart alone until it leaves the section (`Racer::closure_grace`), as GDD pillar 1 promises ("changes that pop
   in under your wheels" are ruled out). It moved the kart up to 8 m across the track in one tick and zapped it. The
   bot balance is unchanged (no bot is ever lapped) (#141).
+- Crimson Nebula (Bevy): Enter on the results starts a new race under `--autoplay` too, as the results line
+  offers (it did nothing, so `dev.py run -- --autoplay reader` could only be left with Esc); the bot drives the new
+  race. The README and HOW_IT_WAS_MADE say "race again on a new seed", not "a new track": the loop never changes,
+  the seed picks which sections change (#142).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

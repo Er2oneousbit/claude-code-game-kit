@@ -23,7 +23,7 @@ use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 
-use super::{GameConfig, KARTS, NAMES, PlayerInput, RaceRes, fresh_seed, new_race};
+use super::{KARTS, NAMES, PlayerInput, RaceRes, fresh_seed, new_race};
 use crate::logic::kart::{Item, KartInput};
 use crate::logic::race::{ChangeState, Phase, Race};
 use crate::logic::track::{ChangeKind, Strip};
@@ -745,7 +745,6 @@ fn restart_or_quit(
     keys: Res<ButtonInput<KeyCode>>,
     pads: Query<&Gamepad>,
     race: Res<RaceRes>,
-    cfg: Res<GameConfig>,
     mut commands: Commands,
     mut exit: MessageWriter<AppExit>,
 ) {
@@ -753,7 +752,42 @@ fn restart_or_quit(
         exit.write(AppExit::Success);
     }
     let again = keys.just_pressed(KeyCode::Enter) || pads.iter().any(|p| p.just_pressed(GamepadButton::Start));
-    if again && race.0.phase == Phase::Over && cfg.autoplay.is_none() {
+    // Also under --autoplay: the results offer Enter in every mode, and the bot drives the new race too
+    if again && race.0.phase == Phase::Over {
         commands.insert_resource(new_race(fresh_seed()));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::GameConfig;
+    use crate::logic::bots::Style;
+    use bevy::ecs::message::Messages;
+    use bevy::ecs::system::RunSystemOnce;
+
+    #[test]
+    fn enter_on_the_results_starts_a_new_race_also_under_autoplay() {
+        // #142: the results line says "Enter: race again" whoever drives, so Enter must work with a bot driving
+        for autoplay in [None, Some(Style::Reader)] {
+            let mut world = World::new();
+            let mut keys = ButtonInput::<KeyCode>::default();
+            keys.press(KeyCode::Enter);
+            world.insert_resource(keys);
+            world.init_resource::<Messages<AppExit>>();
+            world.insert_resource(GameConfig {
+                autoplay,
+                seed: Some(3),
+            });
+            let mut race = Race::new(3, KARTS);
+            race.phase = Phase::Over;
+            world.insert_resource(RaceRes(race));
+            world.run_system_once(restart_or_quit).expect("the system runs");
+            assert_eq!(
+                world.resource::<RaceRes>().0.phase,
+                Phase::Countdown,
+                "autoplay {autoplay:?}"
+            );
+        }
     }
 }
