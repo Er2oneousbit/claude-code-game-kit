@@ -409,6 +409,9 @@
   offers (it did nothing, so `dev.py run -- --autoplay reader` could only be left with Esc); the bot drives the new
   race. The README and HOW_IT_WAS_MADE say "race again on a new seed", not "a new track": the loop never changes,
   the seed picks which sections change (#142).
+- Crimson Nebula (Bevy): HOW_IT_WAS_MADE gives the loop's 12 control points (it said 24), and it and the GDD no
+  longer promise a "long" lap 2 warning: every change warns `WARN_TIME` (2 s) ahead. The README's `dev.py test`
+  line drops its stale "78 tests" (98 run now; the kit's exams grow with every sync) (#143).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

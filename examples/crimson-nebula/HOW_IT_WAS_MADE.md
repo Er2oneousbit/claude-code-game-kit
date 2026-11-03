@@ -28,12 +28,13 @@ projects so Bevy compiled once (the first build took 14.5 minutes). The plan wen
 into `src/logic/tuning.rs`.
 
 ## 3. Build (FIRST_HOUR fast lane, SOP-01, SOP-14)
-- **Engine-free race first, with tests:** `track.rs` (a loop of 24 control points, about 1083 m; two shortcuts that
+- **Engine-free race first, with tests:** `track.rs` (a loop of 12 control points, about 1083 m; two shortcuts that
   peel off the loop; two lane closures that taper in), `kart.rs`, `race.rs` (countdown, walls, bumps, items, laps, the
   seeded change schedule, finish), `bots.rs`, `tuning.rs`. Nothing in `src/logic` imports Bevy.
 - **The change schedule:** lap 1 never changes (FTUE lesson 1: just drive and grab a boost), lap 2 always closes a lane
-  with a long warning (lesson 2), lap 3 is any other change. The warning starts when the leader is `WARN_TIME` (2 s) at
-  its current speed plus `WARN_LEAD` (30 m) away, so a fast leader still gets two seconds.
+  (lesson 2: the gentlest change, with the same warning as every change), lap 3 is any other change. The warning
+  starts when the leader is `WARN_TIME` (2 s) at its current speed plus `WARN_LEAD` (30 m) away, so a fast leader
+  still gets two seconds.
 - **Rivals (SOP-14):** steering at a lookahead point along a planned path (the loop at an offset, or a shortcut),
   braking for bends, passing. Technique: plain rules, no FSM needed; the three rivals differ only in how they read the
   track (`Style`: Reader reacts to the warning, Late to a live change, Ignorer never; it only steers out of a barrier

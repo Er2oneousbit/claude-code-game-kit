@@ -99,7 +99,7 @@ time before a change. These live in one constants module, not scattered: `src/lo
 | Lesson | Mechanic taught | How we know they got it |
 |---|---|---|
 | 1 | Lap 1 has no change: just driving and an item box | They finish lap 1 and use the boost |
-| 2 | Lap 2's first change is a lane closing with a long warning | They switch lanes before the closure |
+| 2 | Lap 2's first change is a lane closing, warned like every change (`WARN_TIME`, 2 s) | They switch lanes before the closure |
 
 ## Platform and engine target
 - Engine: see `ENGINE.md` (Bevy 0.20). Storefront: none yet; Windows desktop first.

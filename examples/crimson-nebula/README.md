@@ -44,7 +44,7 @@ ignoring one over 20 seeds: reading the changes wins all 20, by 0.6 to 1.9 s.
 ## Checks
 ```
 python tools/dev.py check     # rustfmt, clippy on every target
-python tools/dev.py test      # 78 tests: the game's own (bot pair included, full headless races) and the kit's juice and shell checks (tests/golden.rs)
+python tools/dev.py test      # the game's own tests (bot pair included, full headless races) and the kit's juice and shell checks (tests/golden.rs)
 python tools/dev.py smoke --frames 9000 --until RACE_OVER -- --autoplay reader --seed 3
 ```
 Not committed (rule 7 of `../README.md`): `target/` (cargo rebuilds it) and `captures/` (screenshots and frames).
