@@ -210,6 +210,14 @@ class FetchAssetExam(unittest.TestCase):
         rc, out = self.good("--take", "Tiles/tile_0001.png")
         self.assertEqual(rc, 2, out)
         self.assertIn("no table", out)
+        self.assertIn("--restore docs/ASSET_LOG.md", out)   # rendered by the scaffolder, not the raw template (#173)
+
+    def test_empty_log_names_the_restore_command(self):
+        (self.root / "docs" / "ASSET_LOG.md").write_text("", encoding="utf-8")
+        rc, out = self.good("--take", "Tiles/tile_0001.png")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("is empty", out)
+        self.assertIn("--restore docs/ASSET_LOG.md", out)
 
     def test_zip_path_escape_refused(self):
         evil = Path(self.tmp.name) / "evil.zip"

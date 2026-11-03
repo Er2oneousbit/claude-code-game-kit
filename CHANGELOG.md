@@ -67,6 +67,9 @@
   tour (`SubtitleBar.holdTime`), so the line the juice demo says while loading stays untyped and skipped, and the
   finished line is still up when the pause screen is checked. With the loading screen held 4 s and the pause 2 s
   late the old drive counted 256 labels; it counts 258, as at normal speed (#163).
+- `fetch_asset.py`: an empty `docs/ASSET_LOG.md`, or one without its table, names the command that puts the log
+  back rendered (`python <kit>/scripts/new_game.py --dest . --upgrade --restore docs/ASSET_LOG.md`); it said to
+  restore it "from the kit", whose copy is a template with scaffold-time placeholders that doctor then reports (#173).
 - Scrap Tanks (C++/SDL2): make_sprites.py checks the bpy launcher (uv, or `BPY_PYTHON`) and the kit's render tool
   before the first job and stops with `[error]` and exit 2 instead of a traceback; a render that dies before its
   first `[..]` line shows its last output lines; `--debug` prints each command and all output; a Windows path in

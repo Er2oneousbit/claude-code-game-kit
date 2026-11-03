@@ -31,6 +31,8 @@
 #           its query string (a license page may need it). Standard library only, Python 3.8+.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): ShareAlike warned and noted (#105)
+# Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): an empty or table-less log names the scaffolder's
+#           --upgrade --restore command, not the kit's raw template (#173)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -58,6 +60,8 @@ from pathlib import Path
 
 CACHE_DIR = ".asset_cache"
 ASSET_LOG = Path("docs/ASSET_LOG.md")
+# the kit's own copy is a template (scaffold-time placeholders in its sample row): the scaffolder puts it back rendered
+RESTORE_HINT = f"python <kit>/scripts/new_game.py --dest . --upgrade --restore {ASSET_LOG.as_posix()}"
 LICENSE_DIR = Path("docs/licenses")
 USER_AGENT = "Mozilla/5.0 (compatible; claude-code-game-kit fetch_asset.py)"  # some hosts reject the urllib default
 RETRIES = 3
@@ -238,7 +242,8 @@ def add_log_row(log_text, row, fill_template):
     else:   # header and separator only (the sample row was deleted): first row goes under the separator
         seps = [i for i, l in enumerate(lines) if re.match(r"^\|\s*:?-{3,}", l)]
         if not seps:
-            raise UsageError(f"{ASSET_LOG.as_posix()} has no table to add a row to (restore its header from the kit)")
+            raise UsageError(f"{ASSET_LOG.as_posix()} has no table to add a row to (keep a copy of it, put the "
+                             f"kit's log back with `{RESTORE_HINT}`, then copy your rows in)")
         at = seps[0] + 1
     lines.insert(at, row)
     return "\n".join(lines)
@@ -298,7 +303,7 @@ def run(args):
 
     log_text = log_path.read_text(encoding="utf-8")
     if not log_text.strip():
-        raise UsageError(f"{ASSET_LOG.as_posix()} is empty (restore it from the kit)")
+        raise UsageError(f"{ASSET_LOG.as_posix()} is empty (put the kit's log back with `{RESTORE_HINT}`)")
     num, fill_template = next_asset_id(log_text)
     asset_id = f"A-{num:04d}"
     today = datetime.date.today().isoformat()
