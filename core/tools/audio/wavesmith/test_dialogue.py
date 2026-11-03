@@ -231,6 +231,45 @@ class DialogueExam(unittest.TestCase):
                                   sequences={"s": [{"line": "k.a", "after": "k.zzz"}]})
         self.assertTrue(any("'after' must name an earlier" in e for e in errors), errors)
 
+    def test_malformed_files_are_named_not_tracebacks(self):
+        # #112: each of these printed a traceback from lint and build (exit 1)
+        a = {"a": {"name": "A"}}
+        cases = {
+            "lines_not_objects": ({"version": 1, "speakers": a, "lines": [1, "x"]}, "line #0: must be an object"),
+            "list_id": ({"version": 1, "speakers": a, "lines": [{"id": ["x"], "speaker": "a", "text": "Hi"}]},
+                        "id must be a string"),
+            "cps_zero": ({"version": 1, "speakers": {"a": {"name": "A", "cps": 0}},
+                          "lines": [{"id": "l1", "speaker": "a", "text": "Hi there."}]}, "cps must be a number above 0"),
+            "sequence_not_list": ({"version": 1, "speakers": a, "lines": [{"id": "l1", "speaker": "a", "text": "Hi"}],
+                                   "sequences": {"intro": {"line": "l1"}}}, "sequence intro: must be a list"),
+            "speaker_list": ({"version": 1, "speakers": a, "lines": [{"id": "l1", "speaker": ["a"], "text": "Hi"}]},
+                             "is not in speakers"),
+            "speakers_list": ({"version": 1, "speakers": [], "lines": []}, "speakers must be an object"),
+            "audio_number": ({"version": 1, "speakers": a, "lines": [{"id": "l1", "speaker": "a", "text": "Hi",
+                                                                     "audio": 5}]}, "must be paths"),
+            "after_list": ({"version": 1, "speakers": a, "lines": [{"id": "l1", "speaker": "a", "text": "Hi"}],
+                            "sequences": {"s": [{"line": "l1", "after": ["l1"]}]}}, "'after' must name"),
+            "deep_wrong_type": ({"version": 1, "speakers": a, "lines": [{"id": "l1", "speaker": "a", "text": "Hi"}],
+                                 "sequences": {"s": [{"line": "l1", "at": "soon"}]}}, "wrong type"),
+        }
+        for name, (data, words) in cases.items():
+            with self.subTest(name):
+                path = self.root / f"{name}.json"
+                path.write_text(json.dumps(data), encoding="utf-8")
+                for cmd in (["lint", path, "--root", self.root],
+                            ["build", path, "--root", self.root, "--out", self.root / f"{name}.built.json"]):
+                    rc, text = self.run_tool(*cmd)
+                    self.assertEqual(rc, 1, text)
+                    self.assertNotIn("Traceback", text)
+                    self.assertIn(words, text)
+                self.assertFalse((self.root / f"{name}.built.json").exists())
+        top = self.root / "top.json"
+        top.write_text("[]", encoding="utf-8")
+        rc, text = self.run_tool("lint", top, "--root", self.root)
+        self.assertEqual(rc, 2, text)
+        self.assertIn("must hold one JSON object", text)
+        self.assertNotIn("Traceback", text)
+
     def test_cli_build_lint_export(self):
         self.src([{"id": "k.a", "speaker": "knight", "text": "Halt! Who goes there?"},
                   {"id": "k.b", "speaker": "knight", "text": "Hey!", "kind": "bark"}],

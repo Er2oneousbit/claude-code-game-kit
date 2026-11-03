@@ -300,6 +300,10 @@
   zeroed after its STREAMINFO by a cut, padded download), a second STREAMINFO block, or a metadata block that runs
   past the end of the file is a named corrupt file (`[FAIL]`, exit 1; `[error]`, exit 2, from the tools that read
   audio) instead of a `struct.error` traceback (#111).
+- Wavesmith dialogue: `lint` and `build` name a malformed dialogue.json instead of printing a traceback: a file that
+  is not an object is `[error]` (exit 2); a line that is not an object, an id that is not a string, `speakers` or
+  `sequences` of the wrong type, a sequence that is not a list of steps, a speaker's `cps` of 0 or less, and any
+  other value of the wrong type are `[FAIL]` lines (exit 1), and nothing is written (#112).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

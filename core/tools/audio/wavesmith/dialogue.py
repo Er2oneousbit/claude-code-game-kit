@@ -247,15 +247,44 @@ def load_json(path, what):
         raise ToolError(f"cannot read {what} {path}: {exc}")
 
 
+def is_number(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
 def build(src_path, root=".", events_path=None, audience="adults"):
-    """(built dict, errors list, warnings list)."""
+    """(built dict, errors list, warnings list). A dialogue file that is not a JSON object is a ToolError; a value of
+    the wrong type anywhere inside is a named error, never a traceback (built is None then)."""
     raw_bytes = Path(src_path).read_bytes()
     src = load_json(src_path, "dialogue")
+    if not isinstance(src, dict):
+        raise ToolError(f"{src_path} must hold one JSON object (version, speakers, lines, sequences), "
+                        f"not a {type(src).__name__}")
+    try:
+        return _build(src, raw_bytes, root, events_path, audience)
+    except (TypeError, AttributeError, KeyError) as exc:   # a value of a type no check foresaw: named, not a crash
+        return None, [f"a value has the wrong type ({type(exc).__name__}: {exc}); compare the file with the format "
+                      f"in docs/resources/audio.md"], []
+
+
+def _build(src, raw_bytes, root, events_path, audience):
     errors, warnings = [], []
     style = dict(STYLE, max_cps=CHILDREN_CPS if audience == "children" else STYLE["max_cps"])
     if src.get("version") != VERSION:
         errors.append("version must be 1")
-    speakers = src.get("speakers") or {}
+    speakers = src.get("speakers")
+    speakers = {} if speakers is None else speakers
+    if not isinstance(speakers, dict):
+        errors.append("speakers must be an object (speaker id to name, cps, color)")
+        speakers = {}
+    broken = set()                    # speakers already reported: their lines are skipped without a second error
+    for spk, sp in speakers.items():
+        if not isinstance(sp, dict):
+            errors.append(f"speaker {spk}: must be an object (name, cps, color)")
+            broken.add(spk)
+        elif "cps" in sp and not (is_number(sp["cps"]) and sp["cps"] > 0):
+            errors.append(f"speaker {spk}: cps must be a number above 0 (characters a second; leave it out for "
+                          f"{DEFAULT_CPS})")
+            broken.add(spk)
     lines_in = src.get("lines") or []
     if not isinstance(lines_in, list):
         errors.append("lines must be a list (in the order they are written)")
@@ -263,16 +292,24 @@ def build(src_path, root=".", events_path=None, audience="adults"):
     root = Path(root)
     built_lines, seen = {}, set()
     for n, ln in enumerate(lines_in):
+        if not isinstance(ln, dict):
+            errors.append(f"line #{n}: must be an object (id, speaker, text), not {json.dumps(ln)[:40]}")
+            continue
         lid = ln.get("id", f"#{n}")
+        if not isinstance(lid, str):
+            errors.append(f"line #{n}: id must be a string, not {json.dumps(lid)[:40]}")
+            continue
         where = f"line {lid}"
-        if not ID_RE.match(str(lid)):
+        if not ID_RE.match(lid):
             errors.append(f"{where}: id must be lowercase ASCII letters, digits, _ . - (it is the localization key)")
         if lid in seen:
             errors.append(f"{where}: duplicate id")
         seen.add(lid)
         spk = ln.get("speaker")
-        if spk not in speakers:
+        if not isinstance(spk, str) or spk not in speakers:
             errors.append(f"{where}: speaker {spk!r} is not in speakers")
+            continue
+        if spk in broken:
             continue
         sp = speakers[spk]
         if not sp.get("name"):
@@ -290,6 +327,9 @@ def build(src_path, root=".", events_path=None, audience="adults"):
             warnings.append(f"{where}: a bark without cooldown_s can repeat back to back")
         count = len(list(text))
         audio, timeline = ln.get("audio"), ln.get("timeline")
+        if not all(v is None or isinstance(v, str) for v in (audio, timeline)):
+            errors.append(f"{where}: audio and timeline must be paths (strings) relative to the root")
+            continue
         reveal, source, duration = None, "text", count / sp.get("cps", DEFAULT_CPS)
         if audio:
             if not (root / audio).is_file():
@@ -329,15 +369,23 @@ def build(src_path, root=".", events_path=None, audience="adults"):
                 captions[name] = {"text": e["caption"], "priority": e.get("caption_priority", 30),
                                   "min_s": e.get("caption_min_s", 1.0), "directional": bool(e.get("directional", False))}
     sequences = {}
-    for sname, steps in sorted((src.get("sequences") or {}).items()):
+    seq_in = src.get("sequences")
+    seq_in = {} if seq_in is None else seq_in
+    if not isinstance(seq_in, dict):
+        errors.append("sequences must be an object (sequence name to a list of steps)")
+        seq_in = {}
+    for sname, steps in sorted(seq_in.items()):
+        if not isinstance(steps, list) or not all(isinstance(step, dict) for step in steps):
+            errors.append(f"sequence {sname}: must be a list of steps, each an object with a line")
+            continue
         out, ends = [], {}
         for k, step in enumerate(steps):
             lid = step.get("line")
-            if lid not in built_lines:
+            if not isinstance(lid, str) or lid not in built_lines:
                 errors.append(f"sequence {sname} step {k}: unknown line {lid!r}")
                 continue
             if "after" in step:
-                if step["after"] not in ends:
+                if not isinstance(step["after"], str) or step["after"] not in ends:
                     errors.append(f"sequence {sname} step {k}: 'after' must name an earlier step's line")
                     continue
                 start = ends[step["after"]] + step.get("gap_s", 0.0)
