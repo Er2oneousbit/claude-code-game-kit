@@ -68,7 +68,7 @@ namespace {{GAME_SLUG}}.Core
 
         /// <summary>{bus: linear gain} from the player's sliders, a slider never applied twice down one branch.
         /// buses is audio_events.json's "buses" object ({name: {parent?, volume_db?}}); sliders is settings.audio.
-        /// mapping defaults to SLIDER_FOR_BUS. Throws ArgumentException when a parent is not text.</summary>
+        /// mapping defaults to SLIDER_FOR_BUS. A parent that is not text counts as master, as in access.py.</summary>
         public static Dictionary<string, double> UserBusGains(IDictionary<string, object> buses,
                                                               IDictionary<string, object> sliders,
                                                               IReadOnlyDictionary<string, string> mapping = null)
@@ -103,8 +103,9 @@ namespace {{GAME_SLUG}}.Core
             return output;
         }
 
-        // The bus's parent: its "parent" field, else "master" (master itself has none). A bus missing from the
-        // map, or one whose entry is not an object, has no fields, so it defaults the same way.
+        // The bus's parent: its "parent" field when that is text, else "master" (master itself has none), as in
+        // access.py. A bus missing from the map, one whose entry is not an object, or a parent that is not text
+        // (a number, null) defaults the same way.
         private static string ParentOf(IDictionary<string, object> buses, string bus)
         {
             object parent = null;
@@ -112,11 +113,7 @@ namespace {{GAME_SLUG}}.Core
             {
                 fields.TryGetValue("parent", out parent);
             }
-            if (parent == null)
-            {
-                return bus == MASTER ? null : MASTER;
-            }
-            return parent as string ?? throw new ArgumentException($"audio buses: bus {bus}: parent must be text");
+            return parent as string ?? (bus == MASTER ? null : MASTER);
         }
 
         private static string Lookup(IReadOnlyDictionary<string, string> mapping, string bus)

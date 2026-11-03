@@ -41,12 +41,13 @@ static func clamp01(v: Variant) -> float:
 
 
 static func _parent_of(buses: Dictionary, bus: Variant) -> Variant:
-	# A bus's parent; a bus without one hangs under "master", and master itself has none (null)
+	# A bus's parent; a bus without one (or whose parent is not text: a number, null) hangs under "master", and
+	# master itself has none (null), as in access.py
 	var entry: Variant = buses.get(bus)
 	var p: Variant = (entry as Dictionary).get("parent") if typeof(entry) == TYPE_DICTIONARY else null
-	if p != null:
+	if typeof(p) == TYPE_STRING or typeof(p) == TYPE_STRING_NAME:
 		return p
-	return null if bus == "master" else "master"
+	return null if typeof(bus) == TYPE_STRING and bus == "master" else "master"
 
 
 static func user_bus_gains(buses: Dictionary, sliders: Dictionary, mapping: Dictionary = SLIDER_FOR_BUS) -> Dictionary:

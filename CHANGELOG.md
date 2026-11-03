@@ -367,6 +367,10 @@
   Unreal already did. The three wrote a new primary, and the save after it copied that file over the newer `.bak`,
   so the newer build's progress was lost on the second save. The rule is in the `save_load` docstring and SOP-19
   step 3, and every port has a file test for it (#128).
+- Unity, Godot: a bus whose `parent` is not text (a number, null) hangs under master, as `access.py` says. Unity threw
+  `parent must be text` while applying the settings; Godot returned the number as the parent and stopped on a script
+  error (`Invalid operands 'float' and 'String'`). data/golden/access.json has a case with such parents, which all
+  nine engines pass (#129).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
