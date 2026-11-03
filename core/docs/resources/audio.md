@@ -86,7 +86,8 @@ track on the sample the plan names.
   pair first, then `"from": "*"`, then `"to": "*"`, then `default_transition`. The engines' directors read the file
   as it is and do not validate it: run `validate` after every edit. An unknown quantize or stinger name is an error
   in every engine (`"stinger": ""` means none); a `sync` that is not `true` or `false`, or a `phrase_bars` that is not
-  a whole number, is caught only by `validate`.
+  a whole number, is caught only by `validate`. `validate` checks `default_transition` like any rule, since every
+  rule inherits it.
 - `python tools/audio/wavesmith/wavesmith.py music loop raw/explore.wav --bpm 96 --bars 9 --out assets/audio/music/explore_pads.wav` cuts
   a render or recording to whole bars, adds what rings past the loop end back onto the start (no click, the tail is
   kept) and writes the loop point on the grid (a 'smpl' chunk Godot and Unity read). `validate data/music.json --root

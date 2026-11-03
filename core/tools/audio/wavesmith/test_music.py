@@ -3,8 +3,8 @@
 # test_music.py
 # Purpose : Exam for music.py: the sample grid (half rounds up), bar-aligned loops with the tail folded back and a
 #           loop chunk on the grid, boundaries for every quantize (with an intro and loop wrap), the transition map's
-#           rule order, fades, stingers and synced entries, stem and file validation, the tempo estimate, the golden
-#           vectors being current, and the command line.
+#           rule order, fades, stingers and synced entries, stem and file validation (default_transition too,
+#           #177), the tempo estimate, the golden vectors being current, and the command line.
 # Usage   : python tools/audio/wavesmith/test_music.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -197,6 +197,22 @@ class MusicExam(unittest.TestCase):
                       "transition 8 (* -> combat): phrase_bars must be a whole number"):
             self.assertIn(words, text)
         self.assertEqual(M.validate({"version": 2}), ["version must be 1"])
+
+    def test_default_transition_is_checked_like_a_rule(self):
+        # every rule inherits it (rule_for), so a bad one must not pass validate and then break plan or the game
+        for bad in ("bar", [1], None, 3):
+            d = dict(copy.deepcopy(MUSIC), default_transition=bad)
+            problems = M.validate(d)
+            self.assertTrue(any(p.startswith("default_transition must be an object") for p in problems), problems)
+        for rule, words in (({"quantize": "half-bar"}, "default_transition: quantize must be one of"),
+                            ({"fade_ms": -5}, "default_transition: fade_ms must be 0..10000"),
+                            ({"sync": "yes"}, "default_transition: sync must be true or false"),
+                            ({"phrase_bars": 0}, "default_transition: phrase_bars must be a whole number"),
+                            ({"stinger": "boom"}, "default_transition: stinger 'boom' is not in stingers")):
+            d = dict(copy.deepcopy(MUSIC), default_transition=rule)
+            self.assertIn(words, "\n".join(M.validate(d)), rule)
+        d = dict(copy.deepcopy(MUSIC), default_transition={"quantize": "phrase", "phrase_bars": 2, "fade_ms": 0})
+        self.assertEqual(M.validate(d), [])
 
     # ---- tempo
     def test_tempo_estimate_finds_the_beat(self):

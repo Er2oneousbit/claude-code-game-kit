@@ -392,6 +392,10 @@
   `[FAIL] the editor exited with code N before any test finished` and exit 1, instead of "no tests matched" and
   exit 2. An empty filter stays exit 2: UE 5.8 exits 255 there too, but logs "No automation tests matched" first,
   and that line decides. Unity (no results file) and Godot (a non-zero exit) already gave 1 (#176).
+- Wavesmith music: `validate` checks `default_transition`, which every rule inherits, as it checks a `transitions`
+  entry: a value that is not an object (it passed, then `plan` crashed), an unknown `quantize` (which the engine
+  directors refuse since #125), a `fade_ms` outside 0..10000, a non-boolean `sync`, a bad `phrase_bars` or an
+  unknown stinger is a named problem (#177).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

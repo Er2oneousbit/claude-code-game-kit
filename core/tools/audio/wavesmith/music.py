@@ -26,6 +26,8 @@
 #           `tempo` is an estimate (onset autocorrelation) for checking generated music; it can be off by a factor of
 #           two on sparse material.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): validate checks default_transition like a
+#           transitions entry (every rule inherits it)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -35,7 +37,8 @@
 #                      -> switch_at = t + (boundary - p); stinger? target enters after the stinger's bars
 #                      -> target entry offset 0, or the same position in the bar when "sync" and the grids match
 #   loop: read -> keep bars [0, N) -> add the tail past N onto the start -> smpl loop on the grid -> write
-#   validate: tracks, stems (exist, same shape, long enough, loop chunk on the grid), stingers, transitions
+#   validate: tracks, stems (exist, same shape, long enough, loop chunk on the grid), stingers, transitions and
+#             default_transition (the same rule checks)
 #   tempo: 10 ms onset envelope -> autocorrelation over 60..200 BPM -> best lag
 #   vectors: scripted plans through the reference -> data/golden/music.json (--write / --check)
 import argparse
@@ -245,21 +248,35 @@ def _validate(data, root):
         for end in ("from", "to"):
             if r.get(end) != "*" and r.get(end) not in tracks:
                 p.append(f"{where}: {end} must be a track name or *")
-        if r.get("quantize", "bar") not in QUANTIZE:
-            p.append(f"{where}: quantize must be one of {', '.join(QUANTIZE)}")
-        if not 0 <= r.get("fade_ms", 0) <= 10000:
-            p.append(f"{where}: fade_ms must be 0..10000")
-        if not isinstance(r.get("sync", False), bool):              # the engines read it as a JSON boolean
-            p.append(f"{where}: sync must be true or false")
-        bars = r.get("phrase_bars", 4)
-        if not isinstance(bars, int) or isinstance(bars, bool) or bars < 1:
-            p.append(f"{where}: phrase_bars must be a whole number, 1 or more")
-        if r.get("stinger") is not None and r["stinger"] not in stingers:
-            p.append(f"{where}: stinger {r['stinger']!r} is not in stingers")
-        if r.get("stinger") and r.get("sync"):
-            p.append(f"{where}: a stinger and sync do not combine (the stinger decides where the next track enters)")
+        p += rule_problems(where, r, stingers)
+    # every rule inherits default_transition (rule_for), so it gets the same checks, minus from and to
+    if "default_transition" in data:
+        d = data["default_transition"]
+        if not isinstance(d, dict):
+            p.append("default_transition must be an object (quantize, fade_ms, ...), the rule every transition inherits")
+        else:
+            p += rule_problems("default_transition", d, stingers)
     if data.get("start") is not None and data["start"] not in tracks:
         p.append(f"start {data['start']!r} is not a track")
+    return p
+
+
+def rule_problems(where, r, stingers):
+    """Problems in one transition rule's own values (a transitions entry or default_transition)."""
+    p = []
+    if r.get("quantize", "bar") not in QUANTIZE:
+        p.append(f"{where}: quantize must be one of {', '.join(QUANTIZE)}")
+    if not 0 <= r.get("fade_ms", 0) <= 10000:
+        p.append(f"{where}: fade_ms must be 0..10000")
+    if not isinstance(r.get("sync", False), bool):              # the engines read it as a JSON boolean
+        p.append(f"{where}: sync must be true or false")
+    bars = r.get("phrase_bars", 4)
+    if not isinstance(bars, int) or isinstance(bars, bool) or bars < 1:
+        p.append(f"{where}: phrase_bars must be a whole number, 1 or more")
+    if r.get("stinger") is not None and r["stinger"] not in stingers:
+        p.append(f"{where}: stinger {r['stinger']!r} is not in stingers")
+    if r.get("stinger") and r.get("sync"):
+        p.append(f"{where}: a stinger and sync do not combine (the stinger decides where the next track enters)")
     return p
 
 
