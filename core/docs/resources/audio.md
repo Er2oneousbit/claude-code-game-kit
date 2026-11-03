@@ -264,9 +264,11 @@ track on the sample the plan names.
 
 **Edit and process**
 - `Audacity` (free), `Reaper`, `Ocenaudio`. Normalize, trim silence, add tiny fades to avoid clicks.
-- Formats: every Wavesmith tool that reads audio (loudness, events audit, dialogue, music, sets) reads WAV, FLAC and
-  OGG Vorbis with nothing installed, and MP3, Opus, AAC or anything else ffmpeg reads when ffmpeg is installed
-  (on PATH, or `WAVESMITH_FFMPEG` naming it). Files are recognised by their bytes, not their names.
+- Formats: every Wavesmith tool that reads audio (loudness, events audit, dialogue, music, sets) reads WAV (mono or
+  stereo, 8 / 16 / 24 / 32-bit PCM or 32 / 64-bit float, plain or extensible header), FLAC and OGG Vorbis with nothing
+  installed, and MP3, Opus, AAC or anything else ffmpeg reads when ffmpeg is installed (on PATH, or
+  `WAVESMITH_FFMPEG` naming it), including a WAV in another sample format such as ADPCM. Files are recognised by
+  their bytes, not their names.
   - `wavesmith.py formats check`: what this machine can read and write.
   - `wavesmith.py formats info <file>`: format, rate, channels, length, peak, and which decoder read it.
   - `wavesmith.py formats convert <file> --out <file>.wav`: anything readable to WAV, with nothing installed.

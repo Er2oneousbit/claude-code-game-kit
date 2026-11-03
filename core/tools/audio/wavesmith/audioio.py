@@ -15,8 +15,8 @@
 # Notes   : Files are recognised by their first bytes, not their names. ffmpeg runs as a separate program on local
 #           files only (-protocol_whitelist file: a playlist-style input cannot make it open a URL), with -nostdin,
 #           decoding to a temporary 16-bit WAV that wavfile.py reads, so no
-#           output parsing depends on ffmpeg's version (ffmpeg writes deeper WAVs with an extensible header that
-#           wavfile.py does not read; 16 bits is plenty for lossy sources). `convert --loop` keeps a WAV's 'smpl' loop as LOOPSTART /
+#           output parsing depends on ffmpeg's version (16 bits is plenty for lossy sources). A WAV whose sample
+#           format wavfile.py does not read (ADPCM, A-law, ...) goes through ffmpeg too. `convert --loop` keeps a WAV's 'smpl' loop as LOOPSTART /
 #           LOOPLENGTH comments in the OGG, the convention RPG Maker reads (verify in RPG Maker MZ); Godot and Unity
 #           set OGG loops in their import settings instead. stream_audio() hands any readable file out in chunks
 #           of about a second (loudness measures long captures that way). ffmpeg is never shipped with the kit:
@@ -40,11 +40,11 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import flacfile  # noqa: E402
-from wavfile import read_wav_channels, wav_stream, write_wav  # noqa: E402
+from wavfile import WavFormatError, read_wav_channels, wav_stream, write_wav  # noqa: E402
 
 FFMPEG_ENV = "WAVESMITH_FFMPEG"
 CHUNK_FRAMES = 48000         # stream_audio: frames per channel handed out at a time (about 1 s)
-NATIVE = ("WAV (16 / 32-bit PCM)", "FLAC", "OGG Vorbis")
+NATIVE = ("WAV (8 / 16 / 24 / 32-bit PCM, 32 / 64-bit float)", "FLAC", "OGG Vorbis")
 OGG_QUALITY = 6              # libvorbis -q:a: 6 is about 192 kbit/s stereo, transparent for game music
 FFMPEG_TIMEOUT_S = 600
 DEBUG = False
@@ -101,9 +101,16 @@ def _from_flac(data, path):
     return [[s / scale for s in c] for c in chans], info["rate"]
 
 
-def _from_wav(path):
+def _from_wav(path, fallback=True):
+    """Channels and rate of a WAV; a sample format wavfile.py does not read goes to ffmpeg when it is installed
+    (fallback=False for ffmpeg's own output, so a bad decode cannot loop)."""
     try:
         samples, rate, _, channels = read_wav_channels(path)
+    except WavFormatError as exc:
+        if fallback and find_ffmpeg():
+            dbg(f"{exc}; decoding with ffmpeg instead")
+            return _via_ffmpeg(path, "a WAV")
+        raise AudioIOError(str(exc))
     except ValueError as exc:
         raise AudioIOError(str(exc))
     return [samples[c::channels] for c in range(channels)], rate
@@ -133,7 +140,7 @@ def _via_ffmpeg(path, kind):
     with tempfile.TemporaryDirectory() as tmp:
         out = _ffmpeg_to_wav(ff, path, Path(tmp))
         try:
-            return _from_wav(out)
+            return _from_wav(out, fallback=False)
         except AudioIOError as exc:
             raise AudioIOError(f"{path}: {exc} (decoded by ffmpeg; more than 2 channels are not supported)")
 
@@ -218,6 +225,11 @@ def stream_audio(path, via_ffmpeg=False):
     if kind == "wav":
         try:
             rate, nch, _, chunks = wav_stream(path, CHUNK_FRAMES)
+        except WavFormatError as exc:
+            if find_ffmpeg():
+                dbg(f"{exc}; decoding with ffmpeg instead")
+                return _stream_via_ffmpeg(path, "a WAV")
+            raise AudioIOError(str(exc))
         except (OSError, ValueError) as exc:
             raise AudioIOError(str(exc))
 
@@ -346,6 +358,13 @@ def cmd_info(args):
     frames = len(chans[0]) if chans else 0
     how = {"wav": "wavfile.py", "flac": "flacfile.py"}.get(kind) or (
         "oggvorbis.py" if kind == "ogg-vorbis" and oggvorbis_module() else "ffmpeg")
+    if kind == "wav":
+        try:
+            wav_stream(path)              # reads the header only: did read_audio need ffmpeg for this one?
+        except WavFormatError:
+            how = "ffmpeg"
+        except (OSError, ValueError):
+            pass
     peak = max((abs(s) for c in chans for s in c), default=0.0)
     print(f"[ OK ] {path.as_posix()}: {kind}, {rate} Hz, {len(chans)} channel(s), {frames / rate if rate else 0:.3f} s, "
           f"peak {peak:.3f} (read by {how})")

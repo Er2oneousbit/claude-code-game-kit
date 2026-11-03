@@ -2,7 +2,8 @@
 # ---------------------------------------------------------------------------
 # test_wavfile.py
 # Purpose : Exam for wavfile.py's commands: stats, normalize (keeps loop points and stereo) and loop (a
-#           seamless crossfade loop from any recording, with intro and outro trimming).
+#           seamless crossfade loop from any recording, with intro and outro trimming); 8 / 16 / 24 / 32-bit PCM and
+#           float WAVs read with plain and extensible headers, and other sample formats are refused naming ffmpeg.
 # Usage   : python tools/audio/wavesmith/test_wavfile.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -29,6 +30,13 @@ def stereo_tone(seconds, freq=220.0, level=0.01):
         v = level * math.sin(2 * math.pi * freq * i / RATE)
         out += [v, v * 0.5]
     return out
+
+
+def raw_wav(fmt, data):
+    """A RIFF/WAVE file from a fmt chunk body and sample bytes, built by hand (write_wav only writes 16-bit)."""
+    body = b"WAVE" + b"fmt " + struct.pack("<I", len(fmt)) + fmt + b"data" + struct.pack("<I", len(data)) + data
+    body += b"\0" * (len(data) % 2)
+    return b"RIFF" + struct.pack("<I", len(body)) + body
 
 
 class WavfileExam(unittest.TestCase):
@@ -124,6 +132,61 @@ class WavfileExam(unittest.TestCase):
         self.assertAlmostEqual(max(s), 0.25, places=3)
         crossings = sum(1 for i in range(2, len(s), 2) if (s[i - 2] < 0) != (s[i] < 0))
         self.assertAlmostEqual(crossings, 600, delta=4, msg="a 300 Hz tone, not noise")
+
+    def test_reads_24_bit_8_bit_float_and_extensible_headers(self):
+        # #102: only 16 and 32-bit integer PCM with a plain header were read; DAW exports (24-bit) and anything
+        # ffmpeg writes as WAVE_FORMAT_EXTENSIBLE (24 / 32-bit, 16-bit above 48 kHz) stopped every tool
+        n = 2000
+        src = [0.5 * math.sin(2 * math.pi * 300 * i / RATE) for i in range(n)]
+        stereo = [v for s in src for v in (s, -s)]
+        guid = lambda tag: struct.pack("<I", tag) + wavfile.GUID_TAIL
+        cases = {
+            "pcm24": (1, 24, b"".join(struct.pack("<i", int(round(v * 8388607)))[:3] for v in stereo), b"", 1e-6),
+            "pcm8": (1, 8, bytes(int(round(v * 127)) + 128 for v in stereo), b"", 1 / 127),
+            "f32": (3, 32, struct.pack(f"<{2 * n}f", *stereo), b"", 1e-7),
+            "f64": (3, 64, struct.pack(f"<{2 * n}d", *stereo), b"", 0.0),
+            "ext16": (0xFFFE, 16, struct.pack(f"<{2 * n}h", *(int(round(v * 32767)) for v in stereo)),
+                      struct.pack("<HHI", 22, 16, 3) + guid(1), 1e-4),
+            "ext24": (0xFFFE, 24, b"".join(struct.pack("<i", int(round(v * 8388607)))[:3] for v in stereo),
+                      struct.pack("<HHI", 22, 24, 3) + guid(1), 1e-6),
+            "extf32": (0xFFFE, 32, struct.pack(f"<{2 * n}f", *stereo), struct.pack("<HHI", 22, 32, 3) + guid(3), 1e-7),
+        }
+        for name, (tag, bits, data, ext, tol) in cases.items():
+            with self.subTest(name):
+                path = self.dir / f"{name}.wav"
+                fmt = struct.pack("<HHIIHH", tag, 2, RATE, RATE * bits // 4, bits // 4, bits) + ext
+                path.write_bytes(raw_wav(fmt, data))
+                s, rate, loop, ch = wavfile.read_wav_channels(path)
+                self.assertEqual((rate, ch, len(s)), (RATE, 2, 2 * n))
+                self.assertLessEqual(max(abs(a - b) for a, b in zip(s, stereo)), tol + 1e-9)
+                r, c, frames, chunks = wavfile.wav_stream(path, chunk_frames=777)
+                self.assertEqual((r, c, frames), (RATE, 2, n))
+                self.assertEqual([v for part in chunks() for v in part[0]], s[0::2], "the stream reads the same")
+                rc, out = self.cli("stats", path)
+                self.assertEqual(rc, 0, out)
+
+    def test_an_unread_sample_format_says_how_to_convert(self):
+        # ADPCM (tag 2), an unknown extensible GUID: WavFormatError, which audioio hands to ffmpeg
+        path = self.dir / "adpcm.wav"
+        path.write_bytes(raw_wav(struct.pack("<HHIIHH", 2, 1, RATE, RATE, 256, 4), b"\0" * 512))
+        odd = self.dir / "odd.wav"
+        odd.write_bytes(raw_wav(struct.pack("<HHIIHH", 0xFFFE, 1, RATE, RATE * 2, 2, 16)
+                                + struct.pack("<HHI", 22, 16, 4) + b"\x01" * 16, b"\0" * 200))
+        for p in (path, odd):
+            with self.assertRaises(wavfile.WavFormatError) as ctx:
+                wavfile.read_wav_channels(p)
+            self.assertIn("ffmpeg", str(ctx.exception))
+            with self.assertRaises(wavfile.WavFormatError):
+                wavfile.wav_stream(p)
+            rc, out = self.cli("stats", p)
+            self.assertEqual(rc, 2, out)
+            self.assertNotIn("Traceback", out)
+        six = self.dir / "six.wav"                         # 5.1: refused, but not as a format ffmpeg would fix
+        six.write_bytes(raw_wav(struct.pack("<HHIIHH", 1, 6, RATE, RATE * 12, 12, 16), b"\0" * 1200))
+        with self.assertRaises(ValueError) as ctx:
+            wavfile.read_wav_channels(six)
+        self.assertNotIsInstance(ctx.exception, wavfile.WavFormatError)
+        self.assertIn("6 channels", str(ctx.exception))
 
     def test_loop_end_past_the_data_is_clamped(self):
         # another writer's off-by-one (loop end = frame count) must not make stats index past the end

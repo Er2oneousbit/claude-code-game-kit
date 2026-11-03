@@ -18,6 +18,7 @@ import json
 import math
 import os
 import shutil
+import struct
 import sys
 import tempfile
 import unittest
@@ -157,7 +158,42 @@ class AudioIOExam(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertNotIn("Traceback", out)
 
+    def adpcm_wav(self):
+        """A WAV in a sample format wavfile.py does not read (IMA ADPCM, tag 0x11)."""
+        fmt = struct.pack("<HHIIHH", 0x11, 1, RATE, RATE // 2, 256, 4)
+        body = b"WAVE" + b"fmt " + struct.pack("<I", len(fmt)) + fmt + b"data" + struct.pack("<I", 512) + b"\0" * 512
+        path = self.dir / "adpcm.wav"
+        path.write_bytes(b"RIFF" + struct.pack("<I", len(body)) + body)
+        return path
+
+    def test_a_wav_format_wavfile_does_not_read_names_ffmpeg(self):
+        # #102: the error named no way out, and ffmpeg was never tried for a RIFF/WAVE file
+        self.no_ffmpeg()
+        wav = self.adpcm_wav()
+        for read in (audioio.read_audio, audioio.stream_audio, loudness.measure_file):
+            with self.assertRaises((audioio.AudioIOError, loudness.ToolError)) as ctx:
+                read(wav)
+            self.assertIn("ffmpeg", str(ctx.exception), read.__name__)
+        rc, out = self.run_tool("info", wav)
+        self.assertEqual(rc, 2, out)
+        self.assertNotIn("Traceback", out)
+
     # ---- with a stand-in ffmpeg
+    def test_a_wav_format_wavfile_does_not_read_goes_through_ffmpeg(self):
+        decoded = self.dir / "decoded_by_stub.wav"
+        write_wav(decoded, tone(seconds=1.0, amp=0.25), RATE)
+        self.stub_ffmpeg(decoded)
+        wav = self.adpcm_wav()
+        chans, rate = audioio.read_audio(wav)
+        self.assertEqual((len(chans), rate, len(chans[0])), (1, RATE, RATE))
+        rate, nch, chunks = audioio.stream_audio(wav)
+        self.assertEqual(sum(len(p[0]) for p in chunks()), RATE)
+        self.assertIsNotNone(loudness.measure_file(wav, want_tp=False)["integrated_lufs"])
+        self.assertEqual(len(self.stub_calls()), 3)
+        rc, out = self.run_tool("info", wav)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("read by ffmpeg", out)
+
     def test_decode_and_encode_command_lines(self):
         decoded = self.dir / "decoded_by_stub.wav"
         write_wav(decoded, [s for frame in zip(tone(hz=220), tone(hz=330)) for s in frame], RATE, channels=2)

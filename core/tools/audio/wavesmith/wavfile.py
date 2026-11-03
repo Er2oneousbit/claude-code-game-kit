@@ -2,8 +2,9 @@
 # ---------------------------------------------------------------------------
 # wavfile.py
 # Purpose : Shared helper for the audio tools: write 16-bit mono or stereo PCM WAV files (optionally with a
-#           'smpl' loop chunk that Godot, Unity and most samplers read as loop points), read them
-#           back, and measure them (peak, loudness, duration, clicks at a loop seam).
+#           'smpl' loop chunk that Godot, Unity and most samplers read as loop points), read mono or stereo WAVs
+#           back (8 / 16 / 24 / 32-bit integer PCM or 32 / 64-bit float, plain or WAVE_FORMAT_EXTENSIBLE header),
+#           and measure them (peak, loudness, duration, clicks at a loop seam).
 # Usage   : from wavfile import write_wav, read_wav, stats
 #           write_wav("out.wav", samples, 44100, loop=(0, len(samples) - 1))
 #           python tools/audio/wavesmith/wavesmith.py wav stats assets/audio/x.wav
@@ -17,6 +18,20 @@
 import math
 import struct
 from pathlib import Path
+
+# fmt chunk format tags read here; WAVE_FORMAT_EXTENSIBLE names one of the first two in its sub-format GUID, whose
+# last 12 bytes are the same for every standard format
+TAG_PCM, TAG_FLOAT, TAG_EXTENSIBLE = 1, 3, 0xFFFE
+GUID_TAIL = bytes.fromhex("000010008000" "00aa00389b71")
+INT_BITS = (8, 16, 24, 32)
+FLOAT_BITS = (32, 64)
+# full scale per integer sample width in bytes (24-bit is widened to 32 bits first, so its scale is shifted too)
+INT_SCALE = {1: 127.0, 2: 32767.0, 3: float(8388607 << 8), 4: 2147483647.0}
+READS = "8 / 16 / 24 / 32-bit integer PCM or 32 / 64-bit float"
+
+
+class WavFormatError(ValueError):
+    """A WAV whose sample format this module does not read (ADPCM, A-law, ...): ffmpeg may still read it."""
 
 
 def to_pcm16(samples):
@@ -74,26 +89,26 @@ def read_wav(path):
 
 
 def read_wav_channels(path):
-    """(samples as floats, interleaved for stereo, rate, loop or None, channels) from a 16-bit PCM WAV."""
+    """(samples as floats, interleaved for stereo, rate, loop or None, channels) from a mono or stereo WAV in any
+    format _fmt accepts. WavFormatError (a ValueError) for a sample format it does not read."""
     raw = Path(path).read_bytes()
     if raw[:4] != b"RIFF" or raw[8:12] != b"WAVE":
         raise ValueError(f"{path}: not a WAV file")
-    pos, rate, samples, loop, channels, bits = 12, None, None, None, 1, 16
+    pos, fmt, data, loop = 12, None, None, None
     while pos + 8 <= len(raw):
         cid, size = raw[pos:pos + 4], struct.unpack("<I", raw[pos + 4:pos + 8])[0]
         body = raw[pos + 8:pos + 8 + size]
         if cid == b"fmt ":
-            channels, rate, bits = _fmt(path, body)
+            fmt = _fmt(path, body)
         elif cid == b"data":
-            width = 4 if bits == 32 else 2
-            n = len(body) // width
-            scale = 2147483647.0 if width == 4 else 32767.0
-            samples = [v / scale for v in struct.unpack(f"<{n}{'i' if width == 4 else 'h'}", body[:n * width])]
+            data = body
         elif cid == b"smpl" and len(body) >= 60 and struct.unpack("<I", body[28:32])[0] > 0:
             loop = struct.unpack("<II", body[44:52])
         pos += 8 + size + (size % 2)
-    if rate is None or samples is None:
+    if fmt is None or data is None:
         raise ValueError(f"{path}: missing fmt or data chunk")
+    channels, rate, bits, is_float = fmt
+    samples = _decode(data, bits, is_float)
     frames = len(samples) // channels
     if loop:
         # some writers store the frame count as the loop end (the spec says last frame): clamp, never index past
@@ -103,17 +118,47 @@ def read_wav_channels(path):
 
 
 def _fmt(path, body):
-    """(channels, rate, bits) from a fmt chunk's body; ValueError for anything this module cannot read."""
+    """(channels, rate, bits, is_float) from a fmt chunk's body. ValueError for a broken chunk or more than two
+    channels, WavFormatError for a sample format this module does not read."""
     if len(body) < 16:
         raise ValueError(f"{path}: the fmt chunk is cut short ({len(body)} of 16 bytes): a broken WAV")
     tag, channels, rate, _, _, bits = struct.unpack("<HHIIHH", body[:16])
+    what = f"format tag {tag:#06x}"
+    if tag == TAG_EXTENSIBLE:
+        # ffmpeg writes this longer header for 24 and 32-bit PCM and for 16-bit above 48 kHz; wBitsPerSample is
+        # the container size, which is what the data holds
+        if len(body) < 40:
+            raise ValueError(f"{path}: the extensible fmt chunk is cut short ({len(body)} of 40 bytes): a broken WAV")
+        sub, tail = struct.unpack("<I", body[24:28])[0], body[28:40]
+        tag = sub if tail == GUID_TAIL else None
+        what = f"extensible sub-format {sub:#06x}" if tail == GUID_TAIL else "an extensible header with an unknown GUID"
+    if channels not in (1, 2):
+        raise ValueError(f"{path}: {channels} channels: only mono and stereo WAVs are read (mix it down first)")
     # 32-bit is what Godot's movie writer records (--write-movie): reading it as 16-bit turns speech
     # into what looks like white noise, a mistake made once while checking a game's audio
-    if tag != 1 or channels not in (1, 2) or bits not in (16, 32):
-        raise ValueError(f"{path}: only mono or stereo 16-bit or 32-bit integer PCM is supported")
+    if not (tag == TAG_PCM and bits in INT_BITS or tag == TAG_FLOAT and bits in FLOAT_BITS):
+        raise WavFormatError(f"{path}: {bits}-bit, {what}: wavfile.py reads {READS}; with ffmpeg installed, "
+                             f"`wavesmith.py formats convert` reads it and writes a 16-bit WAV")
     if rate < 1:
         raise ValueError(f"{path}: the WAV says its sample rate is {rate} Hz: a broken WAV")
-    return channels, rate, bits
+    return channels, rate, bits, tag == TAG_FLOAT
+
+
+def _decode(raw, bits, is_float):
+    """Floats (integer PCM scaled to -1..1) from little-endian sample bytes; a partial last sample is dropped."""
+    width = bits // 8
+    n = len(raw) // width
+    raw = raw[:n * width]
+    if is_float:
+        return list(struct.unpack(f"<{n}{'f' if width == 4 else 'd'}", raw))
+    scale = INT_SCALE[width]
+    if width == 1:                    # 8-bit WAV is unsigned: 128 is silence
+        return [(v - 128) / scale for v in raw]
+    if width == 3:                    # no struct code for 3 bytes: put each sample in the top of an int32
+        wide = bytearray(n * 4)
+        wide[1::4], wide[2::4], wide[3::4] = raw[0::3], raw[1::3], raw[2::3]
+        return [v / scale for v in struct.unpack(f"<{n}i", wide)]
+    return [v / scale for v in struct.unpack(f"<{n}{'i' if width == 4 else 'h'}", raw)]
 
 
 def wav_stream(path, chunk_frames=48000):
@@ -141,9 +186,8 @@ def wav_stream(path, chunk_frames=48000):
                 f.seek(n + n % 2, 1)
     if fmt is None or data is None:
         raise ValueError(f"{path}: missing fmt or data chunk")
-    channels, rate, bits = fmt
-    width = 4 if bits == 32 else 2
-    code, scale = ("i", 2147483647.0) if width == 4 else ("h", 32767.0)
+    channels, rate, bits, is_float = fmt
+    width = bits // 8
     frames = data[1] // (width * channels)
 
     def chunks():
@@ -156,7 +200,7 @@ def wav_stream(path, chunk_frames=48000):
                 n = len(raw) // (width * channels)
                 if n == 0:
                     return
-                vals = [v / scale for v in struct.unpack(f"<{n * channels}{code}", raw[:n * width * channels])]
+                vals = _decode(raw[:n * width * channels], bits, is_float)
                 yield [vals] if channels == 1 else [vals[c::channels] for c in range(channels)]
                 left -= n
 
@@ -214,7 +258,7 @@ def main(argv=None):
             stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, ValueError):
             pass
-    ap = argparse.ArgumentParser(description="Measure a 16-bit WAV, or normalize it to a peak level.",
+    ap = argparse.ArgumentParser(description="Measure a WAV, or normalize it to a peak level (writes 16-bit).",
                                  epilog="Exit codes: 0 ok, 1 silent file, 2 usage or unreadable file.")
     sub = ap.add_subparsers(dest="command", required=True)
     st = sub.add_parser("stats", help="length, peak and loudness (dBFS)")

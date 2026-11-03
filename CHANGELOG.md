@@ -291,6 +291,11 @@
   <name>: N glyphs at scale S need P pages of 256 px (limit 64); keep fewer glyphs (drop "all") or lower "scale"`
   (exit 2) before any page is allocated or the last run's font is removed. `"all": true` on a large CJK font at a
   high `scale` allocated and wrote thousands of PNGs first (#172).
+- Wavesmith: the WAV reader reads 8 and 24-bit PCM, 32 / 64-bit float and WAVE_FORMAT_EXTENSIBLE headers (what
+  ffmpeg writes for 24 and 32-bit PCM and for 16-bit above 48 kHz), whole or streamed. Only 16 and 32-bit integer
+  PCM with a plain header were read, so a 24-bit DAW export or voice line stopped every tool, `formats convert`
+  included. A WAV in another sample format (ADPCM, A-law) goes through ffmpeg when it is installed and names it when
+  it is not; `formats info` says which decoder read it (#102).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

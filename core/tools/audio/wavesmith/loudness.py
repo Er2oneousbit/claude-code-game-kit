@@ -60,7 +60,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import audioio  # noqa: E402
 import flacfile  # noqa: E402
-from wavfile import read_wav_channels, wav_stream  # noqa: E402
+from wavfile import WavFormatError, read_wav_channels, wav_stream  # noqa: E402
 
 ABS_GATE = -70.0            # LKFS, BS.1770 and Tech 3342
 REL_GATE_I = -10.0          # LU below the absolute-gated loudness, integrated (BS.1770-2 onward)
@@ -372,6 +372,8 @@ def measure_wav_stream(path, want_tp=True):
     try:
         rate, nch, _, chunks = wav_stream(path)
         return measure_chunks(rate, nch, chunks(), want_tp)
+    except WavFormatError:
+        raise                         # measure_file hands it to audioio (ffmpeg, or an error naming it)
     except (OSError, ValueError) as exc:
         raise ToolError(str(exc))
 
@@ -405,7 +407,10 @@ def measure_file(path, want_tp=True):
     except OSError as exc:
         raise ToolError(f"cannot read {path}: {exc}")
     if is_wav:
-        return measure_wav_stream(path, want_tp)
+        try:
+            return measure_wav_stream(path, want_tp)
+        except WavFormatError:
+            pass                      # a sample format wavfile.py does not read: audioio tries ffmpeg
     try:
         try:
             rate, nch, chunks = audioio.stream_audio(path)
