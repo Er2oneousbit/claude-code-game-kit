@@ -45,7 +45,9 @@ implements every rule below (including `hoist_global_options`, so options work b
 | `run` | Launch the game | same |
 | `clean` | Remove build artifacts | same |
 | `doctor` | Verify local environment, call `tools/doctor.py` | same |
-Global `--debug`, `-h` help with env vars documented. Header comment names Claude and the model. Footer line included.
+Global `--debug`, `-h` help with env vars documented. Header block (Purpose / Usage / Notes / Authored) naming Claude and the
+model, never a person. No footer line: kit tools carry none. The skeleton's starter files (game code, tests) end with a
+`{{FOOTER}}` comment line instead.
 
 Rules every `dev.py` follows (the shipped ones do; check yours against them):
 - **Exit 2, not 1, for anything that is not the code's fault:** missing or non-executable engine binary (and a folder or `.app`
@@ -61,8 +63,13 @@ Rules every `dev.py` follows (the shipped ones do; check yours against them):
 ## Placeholders available in all text files
 `{{GAME_NAME}}` `{{GAME_SLUG}}` `{{ENGINE}}` `{{ENGINE_LABEL}}` `{{DATE}}` `{{AUTHOR}}`
 
+Profile lines (`profiles/README.md`): a line that is only `# {{FOOTER}}`, `// {{FOOTER}}` or `-- {{FOOTER}}` becomes the
+profile's footer comment, or disappears when the profile has none.
+
 ## Checklist before calling it done
 - [ ] `new_game.py --engine <id> --name "Test" --dest /tmp/x` succeeds
 - [ ] `python tools/doctor.py` passes in the output
 - [ ] Every command in `dev.py -h` works or exits 2 with a clear message
+- [ ] `dev.py` and every other tool script start with the header block (Purpose / Usage / Notes / Authored) and have
+      no footer line; starter files end with a `{{FOOTER}}` comment line (`#`, `//` or `--`)
 - [ ] ENGINE.md gotchas list is real, not filler. Mark unverified commands **(verify)**

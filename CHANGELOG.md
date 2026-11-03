@@ -242,6 +242,9 @@
   JSON object stops `--adopt` and `--upgrade` with `[error] .game-kit.json is not valid JSON (...)`, exit 2, and is
   left as it was. It was taken as a project with no record: `--upgrade` claimed a pre-0.3 kit, wrote a `.gold` for
   every file that differed and replaced the record, losing the scaffold date, history and profile (#123).
+- Docs: `engines/_template/README.md` no longer tells a new overlay's `dev.py` to include the footer line (kit tools
+  carry none); it asks for the header block instead, says starter files end with a `{{FOOTER}}` line, and its
+  checklist checks both (#124).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
