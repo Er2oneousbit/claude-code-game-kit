@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.12.0",
+  "kit_version": "0.13.0",
   "author": "the user",
   "profile": {
     "author": "",
@@ -1305,6 +1305,12 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.0",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1334,6 +1340,7 @@
     ".claude/skills/release-check/SKILL.md": "4198391c8a1d0a85d82e23ee28ca19f0a9d796c4efd435e0dba64d9cb0897bc1",
     ".claude/skills/start-session/SKILL.md": "d789b92825fc7a407031ba2141fae9b105c4edc7d4907ec7f8848a2162684f58",
     ".claude/skills/stuck/SKILL.md": "fe59d6e17f913b66be950d0094d98d08a04da0013c53c0a81a1eb4905adb5304",
+    ".claude/skills/token-audit/SKILL.md": "4cf47bbae4bc21507166107c56a3b217930f82c75aee353ba1e7ee2b06982a62",
     ".claude/skills/triage-issues/SKILL.md": "8ab4d35971015e0849f57f9dc2d788a4bfa8a77f17e4e428f0593b139ac44378",
     ".gitattributes": "1e285ca6df3cc177e49f72c87d05030c2a3bf2d46b8de4ab74d3300df5659b78",
     ".github/ISSUE_TEMPLATE/bug.yml": "77c14acd5f36443147629f97d958413c8ac90c987e10f04f4f4a2ba4a69cadec",
@@ -1345,7 +1352,7 @@
     ".vscode/launch.json": "cbc39b2f03861495b9da42030240c2a41bbb47183f95da230d28756c1529f379",
     ".vscode/settings.json": "d18e31ddfe265ef959bf4f9a391e21b96d5c890b54a67cee484efd855f95e181",
     ".vscode/tasks.json": "f7fff39419d5fdcb458fbd7622a8cdc653192d2a42e0c8ef763a1db339d3e836",
-    "CLAUDE.md": "c5250c96d18fe75273b64fda9cfa50086b1da730364b91cc06fdf1148d108234",
+    "CLAUDE.md": "753dfed19bd6d79664da037a1723648e4a9d345272b8d4b9719288ff750bc57d",
     "CMakeLists.txt": "4c74d37eb385b5de5b96b7ca6b45f4d9b77eed7bdb0a60951eec18c84bbd48dc",
     "CMakePresets.json": "d3a5be5ca583a5c19f142bbc9b672ad20ce7f239a96e2641a273ecc395abb33f",
     "README.md": "61e416ac019a8debab6eac13d9e98eda8364bc8bef6f81d0183668cbaadc4261",
@@ -1363,7 +1370,7 @@
     "docs/CONCEPTS.md": "d58ca9426877811564a704ca240d797d22877e8ee5aadd3d052c652bcc188e9a",
     "docs/ENGINE.md": "b05d1d07946fe19b37b5b9edb8553a3372f7fe45da3bf1fa9d479b2ac47e80ce",
     "docs/ENGINE_FLOW.md": "0b9ededf5148216b9848634df2e03b6972d3b5194a659c591e7681b0cf8662ce",
-    "docs/EVIDENCE.md": "9e7524d6761cfb42fb6164e04dedaa66e382e38a6713709b56864e309da2e202",
+    "docs/EVIDENCE.md": "3e7459a8ca21ff45af359c157a0d0ed9b62497e93e5b0cd1d82c576c9fd6dc3a",
     "docs/FIRST_HOUR.md": "e3c2b06bbdeea3b2e04be57de54b092bb749a4a45a13a5330c8819bd766e4f49",
     "docs/GDD.md": "25bd71d5eadf9aac25e7c40fc338f76e5fac2bc05e4467c5d5f0bda989b1496e",
     "docs/HANDOFF.md": "3124d0370759299ac022f9a08c1ddccfc85291b52be010fcffe1582dd4aa1945",
@@ -1377,7 +1384,7 @@
     "docs/VERTICAL_SLICE.md": "01439765779c97e88b98aade14e89a11fb6ebf8c557a10d996949604dfdcc1e7",
     "docs/adr/0000-template.md": "9dcc503b68b8ff7fbdefdd454b208bcbe944fe730dba9d7e23b8a0aaf8ad7b50",
     "docs/evidence/field-reports.md": "33ed0df3707b8589efb99a714924565e7fe65aaf58d1be07a6e4a18cf1302995",
-    "docs/evidence/video-notes.md": "465f80c07317283c91ac947f99ce511b246b882b2659e6abb21bc3412a789ba1",
+    "docs/evidence/video-notes.md": "f24b4d39638b923c02db804e50cff003adc74f70dc82a770af8b3f3b83430012",
     "docs/resources/ai-tools.md": "53d9bbf9e54b40652dd79743280234bf8796664f1f3a432f061beabeb79f5f79",
     "docs/resources/art.md": "91a1a4aeb35f623d162d5ff1a8b3616d8ec2c4396fd9fc9192e3770fa42e7010",
     "docs/resources/audio.md": "9b92d5c31b4ffc198e08ffa767dba2952f24628b4352f34a88a25c296bef8c3c",
@@ -1385,14 +1392,14 @@
     "docs/resources/licenses.md": "6584c21e9e295cbbdd2f338911963cde92bdc56aed8a691bce079533d39ca90e",
     "docs/resources/pipelines.md": "c36f860a00743f20eeff0b068ceefbb4f2a2134b36da9393a3a2ca19b8cfdc35",
     "docs/resources/world-and-levels.md": "b63113feea320e0b49cb81434e4b14a09dde078d9651c32e4b7857f9f149f1e7",
-    "docs/sop/README.md": "1162c8d5b1e605df8042cc713c4ac3cffc129ce441cda2d89a68df8cb822661f",
+    "docs/sop/README.md": "abb70724e8eafb3fc1994f268b0f9220abcf78827e5295a4ac18752a1bc204d7",
     "docs/sop/SOP-01-feature-workflow.md": "e34b37388cbe6323cc1463218be129f2202034dc99a73d84f043ff6809c0def8",
     "docs/sop/SOP-02-bug-workflow.md": "ad6236e4581de16eec6df30504eca4143bdd3bb7f6c0a2d03ab42374d40110f2",
     "docs/sop/SOP-03-playtest-and-tuning.md": "bc9be28988fb60542e8bd3dd6d36da1ddafe9db3bea85b042b3c8e84f29b5f5d",
     "docs/sop/SOP-04-assets-and-licensing.md": "4dbc8a82ace9a249f0d40561c66cec12326b13cc0e63996f84170431e20aaf20",
     "docs/sop/SOP-05-git.md": "50562626921658fe100438b49650cc405c8df6cb279787754de2d693a5bd86f0",
     "docs/sop/SOP-06-build-and-release.md": "0380dc6a6d61510b4eaab1e55b83fbea3ede4c36c703d6750ed06a0265d3d943",
-    "docs/sop/SOP-07-claude-code-hygiene.md": "26afd287af1604993481e758070c2da331c48de793271bfa98489b5bac30bf18",
+    "docs/sop/SOP-07-claude-code-hygiene.md": "c08cd484dca824ac285354486f3da183e286636f548568c7ddfa5f1eb7207b8d",
     "docs/sop/SOP-08-scope-control.md": "329743dd4b6e14cb70b831f5183d17fa6613f3d48f97e1a2a988b51b4826ab04",
     "docs/sop/SOP-09-testing.md": "6b261c975c9f602dc38c2d6a5d50b5355b3c28af688cb259d51022ddfabad120",
     "docs/sop/SOP-10-performance.md": "4ed22383e9c56b3e30e65d3046b27f626252e701d1420c70ef08af9b36f6d60d",
@@ -1696,7 +1703,9 @@
     "tools/test_issues.py": "259047c45802fd775bc0a39b327135b2abd4e45a22a8d859fb5e9601acf5f1c4",
     "tools/test_publish_check.py": "1c7492fb70cfa23ab08959d8868ae7d60822fb0ea3430d129ed8dff6f60e8f84",
     "tools/test_second_opinion.py": "3a3dada4f6c3032d61ef535663d350d23c13963c1a49eed7368dbf4de03bb72a",
+    "tools/test_token_audit.py": "2f3340478fdbe5aa1909dbe29b6c369e2839c372fb3704803db6368fd2772446",
     "tools/test_yt_transcript.py": "5078a90625d20be03bd2c04ca9d48a13e603c19d08560506b9963eac6f13e744",
+    "tools/token_audit.py": "177644aad21f69ad2585a63d1107486a9956b41af963e10286c6dc38e5e5d2eb",
     "tools/yt_transcript.py": "1c03846e65f4d228d921a2217f2df0fa206aaf4caafa5ac0c04ff66045f457e7",
     "vcpkg.json": "bd9209dedb311eb35a50358f9895ae78f5571660f79e66fcdba01038c7e5f23b"
   },

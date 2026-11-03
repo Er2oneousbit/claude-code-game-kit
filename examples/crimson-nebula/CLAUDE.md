@@ -82,7 +82,7 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 
 ## Skills and subagents
 Skills: `/start-session` `/end-session` `/new-feature` `/bug-hunt` `/stuck` `/playtest-report` `/asset-intake` `/gen-brief`
-`/dotwork` `/model-pipeline` `/adr` `/gdd-sync` `/next-tier` `/perf-pass` `/release-check` `/publish-repo` `/triage-issues` `/game-ai` `/procgen` `/game-feel` `/game-shell`. They encode the SOPs, use them.
+`/dotwork` `/model-pipeline` `/adr` `/gdd-sync` `/next-tier` `/perf-pass` `/release-check` `/publish-repo` `/triage-issues` `/game-ai` `/procgen` `/game-feel` `/game-shell` `/token-audit`. They encode the SOPs, use them.
 Subagents: `code-reviewer` `build-doctor` `design-critic` `playtest-analyst` `researcher`. Delegate wide searches and reviews to keep context clean.
 Never import an asset with an unknown license.
 

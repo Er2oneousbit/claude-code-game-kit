@@ -15,6 +15,8 @@ Keep the AI sharp, cheap, and on-task. Most "Claude got dumb" moments are contex
 - Use plan mode for architecture-level changes.
 - If Claude repeats itself, contradicts earlier decisions, or loses track: write HANDOFF, `/clear`, restart.
 - Paste exact error text. Paraphrased errors lose the clue.
+- Running out of tokens or usage: `/token-audit` measures what each session loads (memory files, MCP tools, model
+  and effort, hooks, subagent models, the prompt cache) with `tools/token_audit.py`, and changes nothing.
 
 ## Prompting patterns that work for game dev
 - "Here is the behavior I see, here is what I expect, here is the log. Propose 3 hypotheses ranked by likelihood. Do not change code yet."

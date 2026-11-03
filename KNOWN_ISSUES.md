@@ -51,6 +51,8 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
 ### Ideas and evaluations
 - **img2threejs:** code-only Three.js models from a reference image, for web-3d and image to 3D ([#71](https://github.com/Er2oneousbit/claude-code-game-kit/issues/71)).
 - **Gameplay visual review:** Claude reviews smoke screenshots against the art direction ([#72](https://github.com/Er2oneousbit/claude-code-game-kit/issues/72)).
+- **Strata, a local LLM runner:** a `second_opinion.py` backend next to Kimi and the engine for local text drafts
+  ([#206](https://github.com/Er2oneousbit/claude-code-game-kit/issues/206)).
 - **Experiments:** does the kit save tokens ([#19](https://github.com/Er2oneousbit/claude-code-game-kit/issues/19)), and does the SOP-09 smoke checklist cut bugs ([#20](https://github.com/Er2oneousbit/claude-code-game-kit/issues/20)), each as an A/B run.
 
 ### Planned
