@@ -14,7 +14,8 @@
 //           game logs DRIVE_IGNORED and changes nothing. ?debug does not count: anyone can add it to a link.
 //
 // Pseudocode:
-//   menus : title (consent: Later) -> menu -> settings -> Audio: master 1.0 -> 0.5 -> Accessibility:
+//   menus : title (consent: Later) -> menu -> settings -> Audio: master -> 0.5 (left or right from whatever the
+//           data folder held) -> Accessibility:
 //           reduce motion on -> back (saves) -> read settings.json back -> quit
 //   crash : menu -> play -> a planted error in the next frame (the crash hook does the rest)
 //   pseudo: every screen and settings section once; the shell checks each one as it appears (PSEUDO_SCREEN
@@ -29,13 +30,13 @@ import { Log } from "../core/log";
 import { settingsLoad } from "../core/settings";
 import { DATA_DIR_PARAM, dataPrefix } from "../core/textStore";
 import type { Shell } from "./app";
+import { MAX_SLIDER_STEPS, MENU_TARGET, slideAction } from "./driveLogic";
 import { SETTINGS_FILE } from "./meta";
 import { TABS } from "./settingsScreen";
 
 // ---- Tunables ----------------------------------------------------------------
 const WAIT_MS = 8000; // longest wait for one screen
 const STEP_FRAMES = 2; // frames after each injected press (DOM and layout settle)
-const MENU_TARGET = { master: 0.5, reduceMotion: true }; // what --drive menus sets
 export const DRIVE_PARAM = "drive";
 
 /**
@@ -113,6 +114,17 @@ class Driver {
     if (TABS[this.shell.settingsTab] !== name) throw new Error(`could not open settings section ${name}`);
   }
 
+  /** Presses left or right on a slider row until read() equals target, from any start value. */
+  async slideTo(id: string, read: () => number, target: number): Promise<void> {
+    await this.focus(id);
+    for (let n = 0; n < MAX_SLIDER_STEPS; n++) {
+      const action = slideAction(read(), target);
+      if (!action) return;
+      await this.press(action);
+    }
+    if (slideAction(read(), target)) throw new Error(`${id} did not reach ${target} (is ${read()})`);
+  }
+
   /** Steps a value row with ui_left / ui_right until read() gives want. */
   async setValue(id: string, read: () => unknown, want: unknown, dir: "ui_left" | "ui_right"): Promise<void> {
     await this.focus(id);
@@ -142,13 +154,13 @@ async function menus(shell: Shell, d: Driver): Promise<void> {
   await d.choose("menu", "menu.settings");
   await d.screen("settings");
   await d.tab("audio");
-  await d.setValue("audio.master", () => shell.settings.audio.master, MENU_TARGET.master, "ui_left");
+  await d.slideTo("audio.master", () => shell.settings.audio.master, MENU_TARGET.master);
   await d.tab("access");
   await d.setValue("access.reduce_motion", () => shell.settings.access.reduce_motion, MENU_TARGET.reduceMotion, "ui_right");
   await d.press("ui_cancel"); // back saves
   await d.screen("menu");
   const { settings, problems } = settingsLoad(shell.store.read(SETTINGS_FILE));
-  if (problems.length || settings.audio.master !== MENU_TARGET.master || settings.access.reduce_motion !== MENU_TARGET.reduceMotion) {
+  if (problems.length || slideAction(settings.audio.master, MENU_TARGET.master) || settings.access.reduce_motion !== MENU_TARGET.reduceMotion) {
     throw new Error(`${SETTINGS_FILE} does not hold the new values (master ${settings.audio.master}, reduce_motion ${settings.access.reduce_motion})`);
   }
   await d.choose("menu", "menu.quit");

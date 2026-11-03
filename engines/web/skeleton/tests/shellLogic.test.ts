@@ -19,6 +19,7 @@ import {
   stamp, writeCrash,
 } from "../src/core/userData";
 import { keyName, padButtonName, padDevice } from "../src/shell/input";
+import { MAX_SLIDER_STEPS, MENU_TARGET, slideAction } from "../src/shell/driveLogic";
 
 describe("GameLog", () => {
   it("starts each log with the version and a timestamp", () => {
@@ -211,6 +212,24 @@ describe("input names", () => {
     expect(padDevice("Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e)")).toBe("pad_xbox");
     expect(padDevice("DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c)")).toBe("pad_playstation");
     expect(padDevice("8BitDo Pro 2")).toBe("pad_other");
+  });
+});
+
+describe("menus drive", () => {
+  it("steps the master slider towards 0.5 from any start value", () => {
+    const t = MENU_TARGET.master;
+    expect([slideAction(1, t), slideAction(0.3, t), slideAction(0, t), slideAction(t, t)])
+      .toEqual(["ui_left", "ui_right", "ui_right", ""]);
+    // a slider with 0.05 steps (rounded like settingsScreen's numRow) gets there within the press budget
+    for (let start = 0; start <= 20; start++) {
+      let v = start * 0.05;
+      let presses = 0;
+      while (slideAction(v, t) && presses < MAX_SLIDER_STEPS) {
+        v = Math.round((v + (slideAction(v, t) === "ui_left" ? -0.05 : 0.05)) * 100) / 100;
+        presses++;
+      }
+      expect(v, `from ${start * 0.05}`).toBeCloseTo(t, 9);
+    }
   });
 });
 

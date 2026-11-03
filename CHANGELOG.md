@@ -43,6 +43,9 @@
   `check` reported every file as `cannot read the file` and `smoke` said "the game does not compile". The checker
   and the new `TextStore.file` (the folder store and main.lua's captures) open files with `_wfopen`, `_wremove`
   and `_wrename` through the FFI on Windows; a boot file the checker cannot read is reported as that (#98).
+- Web, LÖVE: `smoke --drive menus` reaches master volume 0.5 from any start value, as Godot does since #43: it
+  presses left or right until the live setting is there (`slideAction` in the web shell's new `driveLogic.ts`,
+  `Drive.slide_action` in LÖVE). A data folder holding 0.3 drove web to 0 and aborted, and left LÖVE at 0.3 (#133).
 - Scrap Tanks (C++/SDL2): make_sprites.py checks the bpy launcher (uv, or `BPY_PYTHON`) and the kit's render tool
   before the first job and stops with `[error]` and exit 2 instead of a traceback; a render that dies before its
   first `[..]` line shows its last output lines; `--debug` prints each command and all output; a Windows path in

@@ -148,8 +148,9 @@ None recorded yet. Add notes from videos, forums or your own runs here, with an 
   (`DRIVE_ABORT` fails at once). The shell runs a scenario only with its own data dir (without `--data-dir`, smoke
   uses `build/smoke-data`) and only in a dev server or an automated browser, so a `?drive=` link to the hosted
   game logs `DRIVE_IGNORED` (smoke fails at once on it) and never touches the player's settings:
-  - `menus`: title, settings, master volume to 0.5, reduce motion on, Back, quit; prints `SETTINGS_WRITTEN <path>`
-    and checks the file holds the new values (and that `telemetry.csv` was not written without consent).
+  - `menus`: title, settings, master volume to 0.5 (left or right from whatever the data dir held), reduce motion
+    on, Back, quit; prints `SETTINGS_WRITTEN <path>` and checks the file holds the new values (and that
+    `telemetry.csv` was not written without consent).
   - `crash`: plays, then throws a planted error; prints `CRASH_WRITTEN <path>`. Exit 1 is the expected result.
   - `pseudo` (with `--locale pseudo`): visits every screen and settings section; exit 0 when nothing is truncated,
     clipped or untranslated. `pseudo-plant` adds one label that is too small: it must exit 1 naming it.

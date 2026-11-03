@@ -3,7 +3,8 @@
 -- Purpose : Scripted smoke scenarios (`python tools/dev.py smoke --drive <name>`): they press the same actions a
 --           player would, frame by frame, and print proof lines dev.py echoes (SETTINGS_WRITTEN, PSEUDO_*,
 --           DRIVE_*). Without --drive, a smoke run walks title -> menu -> play and lets the game run.
--- Usage   : menus          title -> settings: master volume 0.5, reduce motion on -> back (saves) -> quit;
+-- Usage   : menus          title -> settings: master volume 0.5 (left or right from whatever the data folder
+--                          held), reduce motion on -> back (saves) -> quit;
 --                          prints SETTINGS_WRITTEN <path> once the file holds the new values
 --           crash          raises an error in a frame (conf.lua's handler writes the crash file, exit 1)
 --           pseudo         (with --locale pseudo) visits every screen and checks every visible label
@@ -27,6 +28,15 @@ local PRESS_GAP = 2                      -- frames after each injected press
 local WAIT_LIMIT = 900                   -- frames a wait may take before the scenario fails
 local FOCUS_LIMIT = 40                   -- presses to reach a menu item
 local DRIVE_LIMIT = 6000                 -- frames for a whole scenario
+Drive.TARGET_MASTER = 0.5                -- menus drives the master volume here
+Drive.MAX_SLIDER_STEPS = 40              -- presses a slider gets to reach its target (0..1 is 20 steps of 0.05)
+local SLIDER_EPS = 1e-9                  -- a slider value this close to its target is there
+
+-- The press that moves a slider from now towards target ("" once it is there)
+function Drive.slide_action(now, target)
+  if math.abs(now - target) <= SLIDER_EPS then return "" end
+  return now > target and "ui_left" or "ui_right"
+end
 
 -- ---- Helpers (inside the coroutine) ------------------------------------------------------------------------
 function Drive:frames(n)
@@ -90,6 +100,18 @@ function Drive:to_tab(tab)
   self:focus("tabs." .. tab, "ui_right")
 end
 
+-- Presses left or right on the focused slider until read() equals target, from any start value
+function Drive:slide_to(what, read, target)
+  for _ = 1, Drive.MAX_SLIDER_STEPS do
+    local action = Drive.slide_action(read(), target)
+    if action == "" then return end
+    self:press(action)
+  end
+  if Drive.slide_action(read(), target) ~= "" then
+    error(what .. " did not reach " .. target .. " (is " .. tostring(read()) .. ")", 0)
+  end
+end
+
 -- the layout check of the next drawn frame
 function Drive:check(name)
   self.app.ui:request_check(name)
@@ -128,7 +150,7 @@ function SCENARIOS.menus(d)
   d:to_tab("audio")
   d:press("ui_down")
   d:focus("audio.master")
-  while app.settings.audio.master > 0.5 + 1e-9 do d:press("ui_left") end
+  d:slide_to("audio.master", function() return app.settings.audio.master end, Drive.TARGET_MASTER)
   d:to_tab("access")
   d:press("ui_down")
   d:focus("access.reduce_motion")
@@ -137,8 +159,10 @@ function SCENARIOS.menus(d)
   d:wait_screen("main_menu")
   local path = app.store:path(Settings.FILE)
   local ok, saved = Json.try_decode(app.store:read(Settings.FILE) or "")
-  if not ok or math.abs(saved.audio.master - 0.5) > 1e-9 or saved.access.reduce_motion ~= true then
-    Log.error("drive", "settings.json does not hold master 0.5 and reduce_motion true: " .. path)
+  if not ok or Drive.slide_action(saved.audio.master, Drive.TARGET_MASTER) ~= ""
+      or saved.access.reduce_motion ~= true then
+    Log.error("drive", "settings.json does not hold master " .. Drive.TARGET_MASTER .. " and reduce_motion true: "
+      .. path)
     d:done(1)
   end
   print("SETTINGS_WRITTEN " .. path)

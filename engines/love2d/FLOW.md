@@ -90,7 +90,7 @@ Credits, Quit, and Juice demo in a debug build = a run from the source folder) >
 | Scenario | What it proves |
 |---|---|
 | (none) | title > menu > play, then the game runs for `--frames` (default 120) |
-| `menus` | title > Settings > master volume 0.5, reduce motion on > Back (saves) > Quit; prints `SETTINGS_WRITTEN <path>` once the file holds both values. With consent unset it leaves no `telemetry.csv` |
+| `menus` | title > Settings > master volume 0.5 (left or right from whatever the data folder held), reduce motion on > Back (saves) > Quit; prints `SETTINGS_WRITTEN <path>` once the file holds both values. With consent unset it leaves no `telemetry.csv` |
 | `crash` | raises an error in a frame: prints `CRASH_WRITTEN <path>`, exits 1 (expected) |
 | `pseudo` | with `--locale pseudo`: visits every screen (each settings tab, top and scrolled), checks every visible label (wider than its box, past the screen edge, or not through `t()` = no leading `[`): `PSEUDO_FAIL` lines and exit 1, or `PSEUDO_PASS` |
 | `pseudo-plant` | the same with one planted label too small for its text: must exit 1 naming `plant.too_small` |

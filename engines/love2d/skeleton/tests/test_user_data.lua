@@ -3,7 +3,7 @@
 -- Purpose : The user-data files beyond the golden vectors: save slots through a store (backup fallback, the
 --           newer-save guard with and without a load, recovery from a stranded .tmp), settings files (round trip,
 --           .bak fallback, .tmp recovery), the rotating game log and its tail, consent-gated telemetry, and crash
---           reports.
+--           reports, and the menus drive reaching master volume 0.5 from any saved value.
 -- Usage   : python tools/dev.py test     (or --filter user_data)
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- ---------------------------------------------------------------------------
@@ -16,6 +16,7 @@ local Settings = require("src.core.settings")
 local LogFile = require("src.core.log_file")
 local Telemetry = require("src.core.telemetry")
 local Crash = require("src.core.crash")
+local Drive = require("src.shell.drive")
 local T = {}
 
 function T.test_save_and_load_a_slot()
@@ -192,6 +193,25 @@ function T.test_crash_report_contents()
   end
   local second = Crash.write("boom again", "")
   A.truthy(second ~= path, "two crashes in one second get two files")
+end
+
+-- smoke --drive menus must reach master 0.5 from a data folder seeded with any value, not only from above (#133)
+function T.test_menus_drive_steps_towards_the_target_from_any_start()
+  local t = Drive.TARGET_MASTER
+  A.eq(Drive.slide_action(1.0, t), "ui_left")
+  A.eq(Drive.slide_action(0.3, t), "ui_right")
+  A.eq(Drive.slide_action(0.0, t), "ui_right")
+  A.eq(Drive.slide_action(t, t), "")
+  -- a slider with 0.05 steps (snapped like widgets.lua's slider) gets there within the press budget
+  for start = 0, 20 do
+    local v, presses = start * 0.05, 0
+    while Drive.slide_action(v, t) ~= "" and presses < Drive.MAX_SLIDER_STEPS do
+      v = v + (Drive.slide_action(v, t) == "ui_left" and -0.05 or 0.05)
+      v = math.floor(v / 0.05 + 0.5) * 0.05
+      presses = presses + 1
+    end
+    A.near(v, t, 1e-9, "from " .. start * 0.05)
+  end
 end
 
 return T
