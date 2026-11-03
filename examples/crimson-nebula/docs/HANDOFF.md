@@ -15,7 +15,7 @@ lap 2, any change on lap 3, item boxes give a boost. Waiting for the user's firs
 - Race logic in `src/logic/` (track, kart, race, bots, tuning) with 36 unit tests and 4 headless race tests.
 - 3D view in `src/game/present.rs`: shapes only, neon via emissive + bloom, chase camera, HUD, results, Enter restarts.
 - Tuning found by bot runs: barriers taper in and zap (speed x0.45), shortcuts peel off the loop (no 90 degree
-  corners), bots brake for bends and pass each other. Reading the changes wins 20 of 20 seeds by 0.4 to 1.9 s.
+  corners), bots brake for bends and pass each other. Reading the changes wins 20 of 20 seeds by 0.6 to 1.9 s.
 - Became the kit's Bevy example: README, `HOW_IT_WAS_MADE.md`, `docs/crimson-nebula.gif`, ASSET_LOG row for Bevy's
   built-in font. Checked before it landed: `check`, 40 tests, `smoke --until RACE_OVER`, `doctor`, `publish_check`.
 

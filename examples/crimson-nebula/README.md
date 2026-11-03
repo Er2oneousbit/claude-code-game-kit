@@ -39,7 +39,7 @@ lets a bot drive your kart.
 
 Nothing in `src/logic` uses Bevy, and the race is stepped at a fixed rate from a seed, so the same race plays out
 identically in a unit test, in a headless smoke run and in the window. `bots::tests` races the reading bot against the
-ignoring one over 20 seeds: reading the changes wins all 20, by 0.4 to 1.9 s.
+ignoring one over 20 seeds: reading the changes wins all 20, by 0.6 to 1.9 s.
 
 ## Checks
 ```

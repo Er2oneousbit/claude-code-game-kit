@@ -396,6 +396,11 @@
   entry: a value that is not an object (it passed, then `plan` crashed), an unknown `quantize` (which the engine
   directors refuse since #125), a `fade_ms` outside 0..10000, a non-boolean `sync`, a bad `phrase_bars` or an
   unknown stinger is a named problem (#177).
+- Crimson Nebula (Bevy): the Ignorer dodges a closed lane only once that barrier has zapped it (`Racer::zapped_by`,
+  cleared when the kart leaves the section), as its header and HOW_IT_WAS_MADE say. Any earlier bonk (a lap 1 wall,
+  the lap 2 zap) made it swerve from the section entrance, before the barrier had started, so on seeds with two
+  closures it missed the lap 3 zap. Reading now wins 20 of 20 seeds by 0.6 to 1.9 s (was 0.4 to 1.9 s); a new bot
+  test gives the Ignorer an earlier bonk and expects the lap 2 zap (#137).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

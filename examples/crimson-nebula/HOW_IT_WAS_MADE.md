@@ -54,7 +54,7 @@ row was found by tracing bots, not by guessing.
 | `kart::tests` | Velocity blended toward the facing direction every tick: the blend ate the acceleration | Forward speed and sideways slip kept apart; grip scrubs the slip |
 | Bot pair | Reading barely helped: hitting a closure cost almost nothing | Contact with a barrier zaps once per `ZAP_COOLDOWN` (speed x0.45) |
 | Bot pair | Bots stalled head-on against the barrier face | The closure tapers in over `CLOSURE_TAPER` (15 m) |
-| Bot pair | The Ignorer dodged perfectly at the last moment | It reacts only after a bonk, from inside the barrier |
+| Bot pair | The Ignorer dodged perfectly at the last moment | It reacts only once that barrier has zapped it, from inside the barrier |
 | Bot pair | A fast leader could never take a shortcut: the warning came too late | Warning distance from the leader's speed (above) |
 | Bot trace | Shortcuts met the loop at 90 degrees; bots crashed into the corner | A layout search over the control points: shortcuts branch off over 35 m |
 | Bot trace | Karts side by side glued together (a bump scaled both velocities) | Bumps exchange only the closing velocity |
@@ -78,7 +78,7 @@ row was found by tracing bots, not by guessing.
 |---|---|
 | `python tools/dev.py check` | rustfmt and clippy clean |
 | `python tools/dev.py test` | 40 tests: 36 unit (track, kart, race, bots, rng), 4 headless races through the real `GamePlugin` |
-| Bot pair (`bots::tests`) | reading wins 20 of 20 seeds by 0.4 to 1.9 s; reacting at all beats ignoring |
+| Bot pair (`bots::tests`) | reading wins 20 of 20 seeds by 0.6 to 1.9 s; reacting at all beats ignoring |
 | `smoke --frames 9000 --until RACE_OVER -- --autoplay reader --seed 3` | a full race headless; the player's bot wins in 117.31 s; the same seed replays tick for tick |
 | `smoke --screenshot` / `--record --record-from` | the GIF above: warning banner, then the barrier |
 | `python tools/dev.py run` | boots in a window (Vulkan), no errors |

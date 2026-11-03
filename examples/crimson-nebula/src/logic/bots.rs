@@ -70,8 +70,9 @@ pub fn drive(race: &Race, k: usize, style: Style) -> KartInput {
                 let c = track.closures[i];
                 let ahead = (c.s_from - racer.s).rem_euclid(len);
                 let inside = racer.s >= c.s_from && racer.s <= c.s_to;
-                // Readers swerve early; a non-reader swerves only once it has been zapped by the barrier
-                let panic = sc.state == ChangeState::Live && inside && racer.bonks > 0;
+                // Readers swerve early; a non-reader swerves only once this barrier has zapped it (not after
+                // any earlier bonk: that dodged from the section entrance, before the barrier even started)
+                let panic = sc.state == ChangeState::Live && inside && racer.zapped_by == Some(i);
                 if (reads && (ahead < AI_SIGHT || inside)) || panic {
                     dodge = -c.side.sign() * AI_DODGE_OFFSET;
                 }
@@ -286,6 +287,23 @@ mod tests {
             "the reader won {wins} of 20 (average margin {:.2} s)",
             margin / 20.0
         );
+    }
+
+    #[test]
+    fn the_ignorer_meets_the_barrier_even_after_an_earlier_bonk() {
+        // #137: a bonk earlier in the race (a wall on lap 1) must not make the Ignorer dodge the lap 2 closure from
+        // the section entrance; it swerves only once that barrier has zapped it
+        for seed in 0..20 {
+            let mut race = Race::new(seed, 1);
+            race.racers[0].bonks = 1;
+            let mut zapped = false;
+            while race.phase != Phase::Over && race.lap_of(0) <= 2 {
+                let input = drive(&race, 0, Style::Ignorer);
+                race.step(&[input], DT);
+                zapped |= race.lap_of(0) == 2 && race.racers[0].zapped_by.is_some();
+            }
+            assert!(zapped, "seed {seed}: the Ignorer dodged a barrier it never touched");
+        }
     }
 
     #[test]

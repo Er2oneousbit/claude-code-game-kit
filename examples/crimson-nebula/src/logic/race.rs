@@ -76,6 +76,8 @@ pub struct Racer {
     pub bonks: u32,
     /// Seconds before the next barrier zap can happen.
     pub zap_cooldown: f32,
+    /// The closed lane (index into track.closures) whose barrier zapped this kart, until it leaves that section.
+    pub zapped_by: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -118,6 +120,7 @@ impl Race {
                     finished: None,
                     bonks: 0,
                     zap_cooldown: 0.0,
+                    zapped_by: None,
                 }
             })
             .collect();
@@ -229,12 +232,13 @@ impl Race {
         let max_lat = track.main.half_width - KART_RADIUS - 0.01;
         let mut lat = pr.lateral.clamp(-max_lat, max_lat);
         let mut zapped = false;
-        if let Some(c) = live.closure.map(|c| track.closures[c])
-            && c.blocks(pr.s, lat, KART_RADIUS)
+        if let Some(ci) = live.closure
+            && track.closures[ci].blocks(pr.s, lat, KART_RADIUS)
         {
             // Pushed over to the open side (the barrier's taper turns a straight hit into a deflection)
-            lat = c.clear_lateral(pr.s, KART_RADIUS);
+            lat = track.closures[ci].clear_lateral(pr.s, KART_RADIUS);
             zapped = true;
+            r.zapped_by = Some(ci);
         }
         consider(pr.point + pr.tangent.perp() * lat);
         for (k, sc) in track.shortcuts.iter().enumerate() {
@@ -297,6 +301,12 @@ impl Race {
         let lap_before = (r.progress / len).floor();
         r.progress += ds;
         r.s = s;
+        // A barrier's zap is remembered only while the kart is still in that section (what a non-reader bot reacts to)
+        if let Some(c) = r.zapped_by.map(|c| self.track.closures[c])
+            && (s < c.s_from || s > c.s_to)
+        {
+            r.zapped_by = None;
+        }
         let lap_after = (r.progress / len).floor();
         if lap_after > lap_before && lap_after >= 1.0 && r.finished.is_none() && lap_after < LAPS as f32 {
             self.events.push(RaceEvent::Lap {
