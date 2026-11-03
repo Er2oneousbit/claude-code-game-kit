@@ -47,6 +47,7 @@ python core/tools/test_issues.py                     # offline (canned gh output
 python core/tools/test_golden_vectors.py             # the juice and shell reference; data/golden/*.json must be current
 python core/tools/test_image_diff.py                 # standard library only (visual regression)
 python core/tools/test_credits.py                    # standard library only
+python scripts/test_sync_examples.py                 # standard library only (a fake kit and example in a temp folder)
 python core/tools/audio/wavesmith/wavesmith.py test  # every audio exam at once (about 2 minutes)
 python core/tools/audio/wavesmith/test_wavesmith.py  # the front door: subcommands, --help, check
 python core/tools/audio/wavesmith/test_sfx_synth.py  # standard library only

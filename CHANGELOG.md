@@ -44,6 +44,10 @@
   `BPY_PYTHON` keeps its backslashes. A new exam, test_make_sprites.py, runs it with stand-in renderers (#154).
 - Scrap Tanks (C++/SDL2): the README, HANDOFF and ROADMAP give the current doctest count, 66 test cases with 29 of
   them the kit's (fixed timestep, golden vectors, audio and shell files), not 61 and 15 or 46 (#155).
+- Kit: `scripts/sync_examples.py` has an exam, `scripts/test_sync_examples.py`. It builds a fake kit and example in a
+  temp folder (never the real examples) and checks that a kit change syncs, a game's edit stays and is reported as a
+  .gold, settings.json and .gitignore come back merged, a binary file syncs, a CRLF copy is no change, a failed
+  upgrade copies nothing back, and a second run says 0 synced without touching .game-kit.json (#13).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
