@@ -228,6 +228,10 @@
 - Doctor: the asset-log check also looks in `public/assets` (web, web-3d) and `game/img` (RPG Maker MZ), so media
   there with no filled `ASSET_LOG.md` row gets the `[WARN]` line as in the other overlays; it looked only for
   `assets`, `Assets` and `Content` and reported those projects healthy. New exam `tools/test_doctor.py` (#104).
+- fetch_asset.py: a ShareAlike license (`CC BY-SA 4.0`, `CC-BY-SA 3.0`, "share-alike") is still accepted, now with
+  `[warn] ShareAlike: derivatives of this asset must be released under the same license; check SOP-04 before
+  shipping` and `SHAREALIKE` in the log row's Notes, also on `--dry-run`. "CC BY" matched inside "CC BY-SA", so
+  the pack was logged as a plain CC BY asset with no note (#105).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

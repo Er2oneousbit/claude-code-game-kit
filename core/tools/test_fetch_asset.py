@@ -101,6 +101,22 @@ class FetchAssetExam(unittest.TestCase):
         self.assertEqual(rc, 0, out)
         self.assertIn("PLACEHOLDER", self.log())
 
+    def test_sharealike_warned_and_noted(self):
+        """#105: CC BY-SA matched "CC BY" and was logged as a plain ok with no warning."""
+        for text in ("CC BY-SA 4.0", "CC-BY-SA 3.0", "CC BY-SA",
+                     "CC BY 4.0, share-alike"):
+            self.assertEqual(fetch_asset.judge_license(text, False), "sharealike", text)
+        rc, out = self.fetch("--page", "p", "--author", "Dev", "--license", "CC BY-SA 4.0",
+                             "--to", "assets/art", "--take", "Tiles/tile_0001.png", "--dry-run")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("[warn] ShareAlike", out)
+        rc, out = self.fetch("--page", "p", "--author", "Dev", "--license", "CC BY-SA 4.0",
+                             "--to", "assets/art", "--take", "Tiles/tile_0001.png")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("[warn] ShareAlike: derivatives of this asset must be released under the same license", out)
+        row = next(l for l in self.log().splitlines() if "tile_0001.png" in l)
+        self.assertTrue(row.rstrip().endswith("| SHAREALIKE |"), row)
+
     def test_weak_copyleft_plugin_license_accepted(self):
         rc, out = self.fetch("--page", "p", "--author", "Dev", "--license", "EUPL-1.2", "--type", "plugin",
                              "--to", "addons/x", "--take", "Tiles/tile_0001.png")
