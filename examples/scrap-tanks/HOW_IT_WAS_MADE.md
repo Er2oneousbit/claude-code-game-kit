@@ -145,6 +145,7 @@ heals in the open once it is more than 22 m from the player, even though a shell
 | Defect | Fix | Scenario pair after it |
 |---|---|---|
 | Sight ran center to center, so a raider with its center behind cover was unseen even with a flank showing (#11) | `Sim::sees` also tries the two hull edges as seen from the viewer (a test slides a tank behind the center rock) | cover 30 of 40, charging 13 of 40 (debug and release) |
+| The skilled bot's HIDE search, a third spot picker, still scored nav-island spots, so it could drive straight into the center rock and stall in the open (#153) | the HIDE loop skips spots `NavGrid::reachable()` rejects; `test_arena.cpp` runs HIDE from every spot against nine raider positions (20 island picks on the old code) | unchanged |
 
 ## 9. Outside the kit (be honest)
 - Three throwaway Blender probes found the black-render cause (texture samples, a Cycles variant per suspect, a count of

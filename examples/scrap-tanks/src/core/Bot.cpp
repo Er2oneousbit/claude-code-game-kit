@@ -15,6 +15,8 @@
 //     otherwise: HIDE at the spot within kMoveRange with the lowest exposure * kExposureCost + distance
 //   hunt: one raider left, or all of them retreating, and nobody sees me: go to a spot with a shot at the weakest
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): HIDE skips spots no path reaches, like the
+//           Tactics pickers (#153)
 // ---------------------------------------------------------------------------
 #include "core/Bot.hpp"
 
@@ -132,6 +134,7 @@ Control Bot::skilled(Sim& sim) {
                 goal_ = me.pos;
                 reason_ = "HIDE";
                 for (const Vec2& s : sim.arena().spots) {
+                    if (!sim.nav().reachable(s)) continue;  // a nav-island spot looks close and is never reached
                     const double d = distance(me.pos, s);
                     if (d > kMoveRange) continue;
                     const double score = kExposureCost * exposure(s) + d;

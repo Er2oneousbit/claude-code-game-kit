@@ -1,17 +1,21 @@
 // ---------------------------------------------------------------------------
 // test_arena.cpp
 // Purpose : Guards the arena data: start and spawns on open ground, every spawn reachable from the
-//           start, every spot the spot pickers can return reachable too, cover mirrored left/right
-//           (no safe side), enough standing spots.
+//           start, every spot the spot pickers and the bot's HIDE search can return reachable too,
+//           cover mirrored left/right (no safe side), enough standing spots.
 // Usage   : python tools/dev.py test
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-10-26 with Claude (Opus 5.5, claude-opus-5-5): picker spots have a path (Fable review)
+//           2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): so do the skilled bot's HIDE spots (#153)
 // ---------------------------------------------------------------------------
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <string>
+#include <vector>
 
 #include "core/Arena.hpp"
+#include "core/Bot.hpp"
 #include "core/Nav.hpp"
 #include "core/Sim.hpp"
 #include "core/Tactics.hpp"
@@ -76,4 +80,36 @@ TEST_CASE("every spot the pickers can return has a path from the player start") 
         }
     }
     CHECK(picks > 100);
+}
+
+TEST_CASE("the skilled bot's HIDE search only picks spots with a path from the player start (#153)") {
+    // HIDE scores spots by straight-line distance and exposure, like the pickers above: try it from every spot
+    // with one raider that can hit the player and a gun that is reloading (so the bot hides instead of duelling)
+    const std::vector<core::Vec2> threats{{19.0, 21.0}, {19.0, 2.0}, {4.0, 4.0}, {34.0, 4.0},
+                                          {4.0, 20.0}, {34.0, 20.0}, {19.0, 12.0}, {14.0, 8.0}, {24.0, 8.0}};
+    core::Sim sim(1);
+    for (int i = 0; i < 600 && sim.wave() == 0; ++i) sim.step({});
+    core::Tank* raider = nullptr;
+    for (core::Tank& t : sim.tanks()) {
+        if (t.team != core::Team::Raider) continue;
+        if (!raider) raider = &t;
+        else t.alive = false;
+    }
+    REQUIRE(raider);
+    int hides = 0;
+    for (const core::Vec2& from : sim.arena().spots) {
+        for (const core::Vec2& t : threats) {
+            sim.player().pos = from;
+            sim.player().reload = sim.player().spec->reload;
+            raider->pos = t;
+            if (!sim.can_hit(t, from)) continue;
+            core::Bot bot(core::BotMode::Skilled);
+            const core::Control c = bot.think(sim);
+            if (std::string(bot.reason()) != "HIDE") continue;
+            ++hides;
+            CHECK_MESSAGE(sim.nav().reachable(c.goal), "from " << from.x << "," << from.y << " hid at " << c.goal.x
+                                                                << "," << c.goal.y);
+        }
+    }
+    CHECK(hides > 100);
 }
