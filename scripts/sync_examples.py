@@ -12,7 +12,7 @@
 # Notes   : Syncs by CONTENT, not by parsing the scaffolder's output: a file is copied back when its upgraded copy matches
 #           the hash recorded in .game-kit.json (so it is the kit's version) and differs from the example's. Files the
 #           game edited are never overwritten: the scaffolder leaves the kit's version as <file>.gold in the work
-#           folder; merge those by hand. Name and engine come from each example's .game-kit.json. Keep the work
+#           folder; merge those by hand. Name, engine and slug come from each example's .game-kit.json. Keep the work
 #           folder short on Windows (C++ and Unreal hit path limits). Heavy folders (node_modules, Library, ...) are
 #           not copied.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -20,6 +20,7 @@
 #           back, its [WARN] lines shown), work folder errors exit 2, numbered .goldN copies are reported
 # Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): a run with nothing to sync leaves the example untouched
 #           (it used to copy .game-kit.json back anyway, adding one history entry per run)
+# Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): passes the recorded slug (#97)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -68,8 +69,10 @@ def sync_one(src, work):
     meta = json.loads((src / ".game-kit.json").read_text(encoding="utf-8"))
     tmp = work / src.name
     shutil.copytree(src, tmp, ignore=SKIP)
+    # The recorded slug too: without it the upgrade would derive one from the name (kits before 0.8.3 did not check)
+    slug = ["--slug", meta["slug"]] if meta.get("slug") else []
     r = subprocess.run([sys.executable, "-B", str(KIT / "scripts" / "new_game.py"), "--name", meta["game_name"],
-                        "--engine", meta["engine"], "--dest", str(tmp), "--upgrade"],
+                        "--engine", meta["engine"], *slug, "--dest", str(tmp), "--upgrade"],
                        capture_output=True, encoding="utf-8", errors="replace")
     if r.returncode != 0:
         # Exit 1 means unresolved placeholders in the kit's output: copying that back would spread the breakage

@@ -8,7 +8,7 @@
 #           overwrites (a .gold copy and the engine's adopt hint instead), appends the .gitignore block once, merges
 #           settings keeping the project's rules, a second adopt adds nothing. Upgrade: replaces untouched kit files,
 #           keeps edited ones (.gold), leaves out files the project deleted, adds new kit files, a second upgrade is
-#           quiet. Exit codes: 1 for an unresolved placeholder, 2 for every refusal; --dry-run writes nothing.
+#           quiet, the recorded name, slug and engine are reused and a different one is refused. Exit codes: 1 for an unresolved placeholder, 2 for every refusal; --dry-run writes nothing.
 # Usage   : python scripts/test_new_game.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline. The real engines are checked by scaffolding them (CLAUDE.md, "Verify a
@@ -91,7 +91,9 @@ class NewGameExam(unittest.TestCase):
 
     # ---- helpers ------------------------------------------------------------
     def ng(self, *extra, dest=None, name=NAME, engine="fake", author="Tester"):
-        args = [sys.executable, "-B", str(self.kit / "scripts" / "new_game.py"), "--name", name, "--engine", engine,
+        """Run the fake kit's scaffolder; name=None or engine=None leaves that option out."""
+        ident = (["--name", name] if name is not None else []) + (["--engine", engine] if engine is not None else [])
+        args = [sys.executable, "-B", str(self.kit / "scripts" / "new_game.py"), *ident,
                 "--dest", str(dest or self.dest), "--author", author, *[str(a) for a in extra]]
         r = subprocess.run(args, capture_output=True, encoding="utf-8", errors="replace")
         return r.returncode, r.stdout + r.stderr
@@ -255,6 +257,53 @@ class NewGameExam(unittest.TestCase):
         self.assertNotIn("[merge]", out)
         self.assertFalse((self.dest / "docs" / "GDD.md.gold2").exists())
         self.assertEqual(self.text("docs/GDD.md"), "# Fake Game design\nOur plan.\n")
+
+    def test_upgrade_keeps_the_recorded_name_slug_and_engine(self):
+        """#97: --upgrade without the original --slug rewrote the slug; another --engine or --name was taken as is."""
+        code, out = self.ng("--slug", "fg_custom")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.meta()["slug"], "fg_custom")
+        claude_md = self.text("CLAUDE.md")
+        self.assertEqual(claude_md.splitlines()[0], "# Fake Game (fg_custom)")
+        code, out = self.ng("--upgrade")                                    # the README's command, slug forgotten
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.text("CLAUDE.md"), claude_md, "the slug was re-derived from --name")
+        self.assertNotIn("upgraded", out)
+        code, out = self.ng("--upgrade", name=None, engine=None)            # everything from the record
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.text("CLAUDE.md"), claude_md)
+        shutil.copytree(self.kit / "engines" / "fake", self.kit / "engines" / "other")
+        write(self.kit / "engines" / "other" / "engine.json", json.dumps(dict(ENGINE, id="other"), indent=2))
+        before = self.text(".game-kit.json")
+        for kwargs, extra, needle in (
+                (dict(engine="other"), (), "made for engine 'fake'"),
+                (dict(name="Other Name"), (), "named 'Fake Game'"),
+                (dict(), ("--slug", "fake_game"), "slug is 'fg_custom'")):
+            code, out = self.ng("--upgrade", *extra, **kwargs)
+            self.assertEqual(code, 2, f"{kwargs} {extra}: {out}")
+            self.assertIn(needle, out)
+            self.assertEqual(self.text(".game-kit.json"), before, f"{kwargs} {extra} wrote the record")
+        self.assertEqual(self.text("CLAUDE.md"), claude_md)
+        code, out = self.ng("--upgrade", "--rename", engine="other")         # --rename never covers the engine
+        self.assertEqual(code, 2, out)
+        code, out = self.ng("--upgrade", "--rename", name="Other Name")      # a new title, same slug
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.text("CLAUDE.md").splitlines()[0], "# Other Name (fg_custom)")
+        self.assertEqual((self.meta()["game_name"], self.meta()["slug"]), ("Other Name", "fg_custom"))
+        code, out = self.ng("--rename")                                       # only with --adopt/--upgrade
+        self.assertEqual(code, 2, out)
+
+    def test_upgrade_of_a_record_without_a_slug_derives_it(self):
+        """A project made before the slug was recorded keeps working: the slug comes from the recorded name."""
+        self.new()
+        meta = self.meta()
+        del meta["slug"]
+        write(self.dest / ".game-kit.json", json.dumps(meta, indent=2))
+        code, out = self.ng("--upgrade", name=None, engine=None)
+        self.assertEqual(code, 0, out)
+        self.assertIn("records no slug", out)
+        self.assertEqual(self.meta()["slug"], "fake_game")
+        self.assertNotIn("upgraded", out)
 
     def test_upgrade_appends_only_new_gitignore_rules(self):
         self.new()

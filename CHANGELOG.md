@@ -218,6 +218,13 @@
 - Dotwork skill: step 2 quotes the lock's GPU memory per tier, 8 GB for sprites, 12 GB for rotation and 16 GB for
   animation (it said 16 GB for rotation, so a 12 GB card was turned away); a Dotwork exam now compares the skill's
   and the README's numbers with `models.lock.json` (#110).
+- Scaffolder: `.game-kit.json` records the slug, and `--adopt`/`--upgrade` take the name, slug and engine from it
+  (`--dest <game> --upgrade` is enough). A different `--engine` is refused with exit 2 (it mixed a second overlay
+  into the project and rewrote the record), a different `--name` or `--slug` too unless `--rename`, which keeps
+  the recorded slug unless `--slug` is given. The README's "same command with `--upgrade`" without the original
+  `--slug` re-derived it, so CMake targets, the Cargo package and the LÖVE save folder changed silently. A record
+  from an older kit has no slug: it is derived from the recorded name, with an `[info]` line. `sync_examples.py`
+  passes the recorded slug (#97).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

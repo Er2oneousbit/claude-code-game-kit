@@ -94,7 +94,7 @@ Add `--adopt`. It never overwrites anything: a file that differs gets a `<file>.
   (the editor's Deployment then exports the game, not the kit **(verify)**). Name your own plugins in `OWN_PLUGINS` at the top of the game's dev.py.
 - Always: merge your old `CLAUDE.md` with `CLAUDE.md.gold`. The kit's one imports `docs/HANDOFF.md` and `docs/ENGINE.md`.
 
-**Kit updated since you scaffolded?** Run the same command with `--upgrade`: it replaces kit files you never edited (tracked by content hashes in `.game-kit.json`), writes `.gold` copies only where you changed something, and leaves out kit files you deleted.
+**Kit updated since you scaffolded?** Run `python scripts/new_game.py --dest <your game folder> --upgrade`: it takes the name, slug and engine from the game's `.game-kit.json` (a different `--engine` is refused, a different `--name` or `--slug` too unless you add `--rename`), replaces kit files you never edited (tracked by content hashes in `.game-kit.json`), writes `.gold` copies only where you changed something, and leaves out kit files you deleted.
 
 ## Putting your game on GitHub
 Run `/publish-repo` in the project. It follows `docs/sop/SOP-13-publish-to-github.md`: pick a license (code and assets can differ), check that every asset may be redistributed, scan for secrets and personal data (`tools/publish_check.py`), create the repo private, lock it down (branch ruleset, secret scanning, two-factor), and only then make it public.

@@ -34,6 +34,8 @@
 #           2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): CRLF folded before profile substitution,
 #           placeholder check on the rendered plan (also on re-runs), .gold reuse folds CRLF only for text,
 #           backtick and */ rejected in names and authors, more reserved slugs (CMake targets, Windows devices)
+#           2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): the slug is recorded; --adopt/--upgrade reuse the
+#           recorded name, slug and engine and refuse different ones (--rename opts in for name and slug)
 # ---------------------------------------------------------------------------
 import argparse
 import datetime
@@ -463,6 +465,53 @@ def load_meta(dest):
     return {}
 
 
+def settle_identity(args, old, derived, engines):
+    """(name, slug, engine) for this run.
+
+    A new project takes them from the command line. --adopt and --upgrade on a project with a .game-kit.json reuse
+    the recorded ones, so the README's "run the same command with --upgrade" cannot change them by accident: a
+    different --engine is refused (it would mix a second overlay into the project), a different --name or --slug
+    too unless --rename. The slug is the CMake target, the Cargo package, the LÖVE save folder and the Godot export
+    names; --rename alone changes only the title and keeps the recorded slug.
+    """
+    rec_name, rec_slug, rec_engine = old.get("game_name"), old.get("slug"), old.get("engine")
+    if rec_engine and args.engine and args.engine != rec_engine:
+        raise ScaffoldError(f"this project was made for engine {rec_engine!r} (see {META_FILE}); --engine "
+                            f"{args.engine} would mix a second overlay into it. Omit --engine, or pass --engine "
+                            f"{rec_engine}.")
+    engine_id = args.engine or rec_engine
+    if not engine_id:
+        raise ScaffoldError(f"--engine is required (this project has no {META_FILE} naming one). "
+                            f"Choose one of: {', '.join(engines)}")
+    if engine_id not in engines:
+        raise ScaffoldError(f"{META_FILE} names engine {engine_id!r}, which this kit does not have. "
+                            f"Available: {', '.join(engines)}")
+    name = args.name.strip() if args.name else rec_name
+    if not name:
+        raise ScaffoldError(f"--name is required (this project has no {META_FILE} naming the game)")
+    if args.name is None:
+        validate_name(name)                 # a hand-edited record gets the same checks as --name
+    if rec_name and name != rec_name and not args.rename:
+        raise ScaffoldError(f"this project is named {rec_name!r} in {META_FILE}, not {name!r}. Omit --name to keep "
+                            "the recorded name, or add --rename to rewrite the kit files you never edited with "
+                            "the new one.")
+    if args.slug:
+        slug = args.slug
+    elif rec_slug:
+        slug = rec_slug
+    else:
+        base = rec_name or name             # a renamed project keeps the slug its recorded name gave
+        slug = derived if args.name and args.name.strip() == base else make_slug(base)
+        if old and args.slug is None:
+            print(f"[info] {META_FILE} records no slug (kit 0.8.2 or earlier); using {slug!r}, derived from the "
+                  "name. If the project was made with --slug, pass the same --slug.")
+    if rec_slug and slug != rec_slug and not args.rename:
+        raise ScaffoldError(f"this project's slug is {rec_slug!r} (see {META_FILE}), not {slug!r}: it names the "
+                            "build target, the package and the save folder. Omit --slug to keep it, or add "
+                            "--rename to change it.")
+    return name, slug, engine_id
+
+
 def git_init(dest):
     """git init on branch main (the SOPs assume it); never commits."""
     if (dest / ".git").exists():
@@ -488,26 +537,33 @@ def scaffold(args):
         print("\nAdd more by copying engines/_template (see its README).")
         return 0
 
-    if not args.name:
+    mode = "upgrade" if args.upgrade else "adopt" if args.adopt else "new"
+    # --adopt/--upgrade on a project with a .game-kit.json take the name and engine from it, so only a new project
+    # (or one without --dest, whose folder is named after the slug) needs them on the command line
+    if not args.name and (mode == "new" or not args.dest):
         raise ScaffoldError("--name is required (or use --list-engines)")
-    if not args.engine:
+    if not args.engine and mode == "new":
         raise ScaffoldError(f"--engine is required. Choose one of: {', '.join(engines)}")
-    validate_name(args.name)
+    if args.rename and mode == "new":
+        raise ScaffoldError("--rename only applies with --adopt or --upgrade (a new project takes --name as it is)")
+    if args.name is not None:
+        validate_name(args.name)
     if args.author is not None:
         validate_text_arg("--author", args.author)
         validate_comment_safe("--author", args.author)
-    if args.engine not in engines:
+    if args.engine and args.engine not in engines:
         raise ScaffoldError(f"unknown engine {args.engine!r}. Available: {', '.join(engines)}")
     if not CORE_DIR.exists():
         raise ScaffoldError(f"core folder missing: {CORE_DIR}")
 
-    meta = engines[args.engine]
-    slug = make_slug(args.name, args.slug)
-    dest = Path(args.dest).expanduser().resolve() if args.dest else (Path.cwd() / slug).resolve()
-    mode = "upgrade" if args.upgrade else "adopt" if args.adopt else "new"
+    derived = make_slug(args.name, args.slug) if args.name else None   # once: it explains a reserved slug
+    if args.slug and not args.name:
+        make_slug("", args.slug)                                         # validate it all the same
+    dest = Path(args.dest).expanduser().resolve() if args.dest else (Path.cwd() / derived).resolve()
 
     if dest == REPO_ROOT or REPO_ROOT in dest.parents:
-        raise ScaffoldError(f"{dest} is inside the kit. Pass --dest with a folder outside it, e.g. --dest D:/games/{slug}")
+        raise ScaffoldError(f"{dest} is inside the kit. Pass --dest with a folder outside it, "
+                            f"e.g. --dest D:/games/{derived or 'my_game'}")
     if dest.exists() and not dest.is_dir():
         raise ScaffoldError(f"{dest} exists and is not a directory")
     if mode == "new" and dest.exists() and any(dest.iterdir()) and not args.force:
@@ -517,6 +573,8 @@ def scaffold(args):
         raise ScaffoldError(f"--{mode} needs an existing folder, {dest} does not exist (omit --{mode} for a new project)")
 
     old = load_meta(dest) if mode != "new" else {}
+    name, slug, engine_id = settle_identity(args, old, derived, engines)
+    meta = engines[engine_id]
     prev_hashes = old.get("files", {})
     if mode == "upgrade" and not prev_hashes:
         print("[info] this project has no file hashes (made with kit 0.2.1 or earlier, or never adopted), so --upgrade "
@@ -533,10 +591,10 @@ def scaffold(args):
     author = args.author or profile["author"] or old.get("author") or git_user_name() or "the user"
     today = datetime.date.today().isoformat()
     mapping = {
-        "GAME_NAME": args.name.strip(),
+        "GAME_NAME": name,
         "GAME_SLUG": slug,
-        "ENGINE": args.engine,
-        "ENGINE_LABEL": meta.get("label", args.engine),
+        "ENGINE": engine_id,
+        "ENGINE_LABEL": meta.get("label", engine_id),
         # Re-adopting keeps the original date, so untouched files compare equal on any later day
         "DATE": old.get("scaffolded", today),
         "AUTHOR": author,
@@ -557,14 +615,14 @@ def scaffold(args):
     for key, out_name in (("engine_md", "docs/ENGINE.md"), ("flow_md", "docs/ENGINE_FLOW.md")):
         src = edir / meta.get(key, "")
         if not src.is_file():
-            raise ScaffoldError(f"engine {args.engine}: missing {meta.get(key)!r}")
+            raise ScaffoldError(f"engine {engine_id}: missing {meta.get(key)!r}")
         # LF first, then substitute (same reason as plan_tree)
         plan[out_name] = (substitute(src.read_text(encoding="utf-8").replace("\r\n", "\n"), mapping).encode("utf-8"), True)
     skel = edir / meta.get("skeleton_dir", "skeleton")
     if skel.is_dir():
         plan_tree(plan, skel, mapping, "engine")
     else:
-        print(f"[warn] engine {args.engine} has no skeleton folder, skipping starter files")
+        print(f"[warn] engine {engine_id} has no skeleton folder, skipping starter files")
     assets_dir = meta.get("assets_dir", "assets")
     if assets_dir != "Content":  # Unreal creates Content itself
         plan.setdefault(f"{assets_dir}/.gitkeep", (b"", True))
@@ -588,8 +646,9 @@ def scaffold(args):
         "kit_version": KIT_VERSION,
         "author": author,
         "profile": profile,
-        "engine": args.engine,
-        "game_name": old.get("game_name", args.name.strip()),
+        "engine": engine_id,
+        "game_name": name,
+        "slug": slug,           # the build target, package and save-folder name: reused by --adopt and --upgrade
         "scaffolded": old.get("scaffolded", today),
         "adopted": old.get("adopted", mode != "new"),
     })
@@ -676,15 +735,21 @@ def build_parser():
             "  python scripts/new_game.py --list-engines\n"
             "  python scripts/new_game.py --name \"My Game\" --engine godot --dest ../my-game --git-init\n"
             "  python scripts/new_game.py --name \"Existing\" --engine unreal --dest D:/games/existing --adopt --dry-run\n"
-            "  python scripts/new_game.py --name \"My Game\" --engine godot --dest ../my-game --upgrade\n\n"
+            "  python scripts/new_game.py --dest ../my-game --upgrade   (name, slug and engine from .game-kit.json)\n\n"
             "exit codes: 0 ok, 1 finished with warnings (unresolved placeholders), 2 usage or environment error"
         ),
     )
-    ap.add_argument("--name", help='game title, e.g. "My Game" (also used to derive the code-safe slug)')
-    ap.add_argument("--engine", help="engine overlay id (see --list-engines)")
+    ap.add_argument("--name", help='game title, e.g. "My Game" (also used to derive the code-safe slug). '
+                    "--adopt/--upgrade reuse the one in .game-kit.json when you omit it")
+    ap.add_argument("--engine", help="engine overlay id (see --list-engines). --adopt/--upgrade reuse the one in "
+                    ".game-kit.json when you omit it; a different one is refused")
     ap.add_argument("--dest", help="destination folder, outside the kit (default: ./<slug> in the current directory)")
     ap.add_argument("--slug", help="code-safe identifier (CMake target, C# namespace); default: derived from --name. "
                     "Needed when the name has no Latin letters, e.g. --slug touhou_quest")
+    ap.add_argument("--rename", action="store_true",
+                    help="with --adopt/--upgrade: accept a --name (and a --slug) that differs from the one recorded in "
+                         ".game-kit.json and rewrite the kit files you never edited with it (refused otherwise; "
+                         "without --slug the recorded slug is kept)")
     ap.add_argument("--author", default=None,
                     help="author name for docs and file headers (default: the profile's author, else git config user.name)")
     ap.add_argument("--profile", metavar="FILE",
