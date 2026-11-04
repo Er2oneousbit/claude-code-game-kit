@@ -42,7 +42,11 @@
 #           Learned live: GET /map-objects/{id} answers 423 while it is generating (handled as "still working").
 #           Run live 2026-11-04: character v3 at 32 px (8 directions, 2), animate-character --mode skeleton-v3
 #           (3 per direction), animate at 32x32, 8 frames (1). v3 from text refuses 4 directions and --shading.
-#           Not yet live: ui, font, object, tiles-pro, outfit, pixelate (verify).
+#           Also 2026-11-04: top-down tileset at 16 px (1: 16 opaque tiles), pixelate 256 -> 32 px (1), fix correct,
+#           unzoom and normal-map lite (0.1 each), fix remove-background (1), ui at 192x192 (10: about 100 s),
+#           font at 16 px (15: .ttf + a 128x160 atlas, 8 glyphs a row), object 1 direction at 64 px (10: 16
+#           candidates), fetch (free). unzoom needs a source of at least 256x256 (PixelLab answers 422, free).
+#           Not yet live: tiles-pro, outfit, 8-direction object, vfx --pro (verify).
 #           [paid plan only] in -h (tiles-pro, outfit) is PixelLab's rule; a trial account gets a 402, explained.
 #           Download links on PixelLab's storage get no token: it is sent only to the API host, and a redirect
 #           keeps it only on the same https host and port (anywhere else it is dropped; https to http is refused).
@@ -1191,9 +1195,9 @@ def build_parser():
     p.set_defaults(fn=lambda a: cmd_generate(a, "pixelate"))
     p = sub.add_parser("fix", parents=[common, gen],
                        help="clean up a PNG: reduce-colors, correct (stray pixels), unzoom (upscaled art back to 1x), "
-                            "remove-background, normal-map (about 0.1 each; normal-map pro 0.5)")
+                            "remove-background, normal-map (0.1 each; remove-background 1, normal-map pro 0.5)")
     p.add_argument("--op", required=True, choices=("reduce-colors", "correct", "unzoom", "remove-background", "normal-map"))
-    p.add_argument("--image", required=True, help="the PNG to fix")
+    p.add_argument("--image", required=True, help="the PNG to fix (unzoom: at least 256x256, e.g. 32 px art at 8x)")
     p.add_argument("--colors", type=int, default=16, help="reduce-colors: how many (2 to 256, default 16)")
     p.add_argument("--strength", type=float, default=0.1, help="correct: 0 to 1 (default 0.1)")
     p.add_argument("--pro", action="store_true", help="normal-map: pro mode (0.5 instead of 0.1)")
