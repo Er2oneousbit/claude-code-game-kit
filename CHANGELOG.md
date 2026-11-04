@@ -549,6 +549,12 @@
   audition command and the `clip_fix` seed that retakes it (the rendered clip, `attack_e` for a mirrored
   `attack_w`); it replaces the generic "possible turn-around" note, which skipped frame 0. A rapier held back in a
   wind-up is not a turn: the exam checks a real one from the showcase duelist (#186).
+- Dotwork characters: the smear no longer drags the coat and boots on a lunge. A frame where the body made most of
+  the change (half or more of the moved pixels in its thick mass, a step or a lunge) is not smeared, with a QA note
+  saying so; otherwise the body's mass and the feet are left out, the part is one piece and where it was is the
+  nearest piece that left, so a boot that stepped elsewhere no longer bends the motion across the body. On the
+  showcase duelist's real frames the west attack takes that left a checker trail (seeds 4244 and 4246) and the west
+  cast are now skipped, the east cast smears the hand only, and a blade swing still smears (#187).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
