@@ -2,7 +2,8 @@
 // controller.ts
 // Purpose : Glue between the page (start panel, chat log, input), the brain (model or
 //           scripted), the rules (core/gatekeeper.ts) and the picture (GateScene).
-// Usage   : new Controller(scene).start() from main.ts once the scene is ready.
+// Usage   : new Controller(scene).start() from main.ts once the scene is ready; main.ts calls closed() when
+//           the shell stops the scene (quit to title) and reopened() when "Play" brings it back.
 //           URL flags: ?autoplay (types a winning script with the scripted guard),
 //           ?autoplay=rude (a losing script), ?llm=1 (load the model at once, with ?autoplay too),
 //           ?debug (show intent, trust change and where each reply came from).
@@ -15,6 +16,7 @@
 // Updated : 2026-10-26 with Claude (Opus 5.5, claude-opus-5-5): stale replies after "Start over" dropped,
 //           fatal replies switch to the scripted guard, typed text kept while busy, one intro per
 //           start, one restart per click burst, player text cut to MAX_INPUT
+// Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): closed() and reopened() for the kit's shell (#182)
 // ---------------------------------------------------------------------------
 import { applyIntent, mood, newState, type State } from "../core/gatekeeper";
 import { MAX_INPUT } from "../core/intent";
@@ -115,14 +117,33 @@ export class Controller {
     $<HTMLInputElement>("line").focus();
   }
 
-  private reset(): void {
-    if (this.restarting) return;   // a double click would queue two restarts and two intros
-    this.restarting = true;
+  /** A new game: the rules, the history and the chat start over, and a reply still on its way is dropped. */
+  private clear(): void {
     this.run += 1;
     this.busy = false;             // a reply still on its way is dropped by say(), so nothing else clears this
     this.state = newState(RULES);
     this.history = [];
     $("log").innerHTML = "";
+  }
+
+  /** The shell stopped the scene ("Quit to title"): this conversation is over. */
+  closed(): void {
+    if (this.restarting) return;   // "Start over" restarts the scene itself; reset() handles that
+    this.clear();
+  }
+
+  /** The scene is back after the title ("Play" again): a new conversation with the guard already picked,
+   *  or the start panel as it was when no guard was picked yet (a model still loading begins on its own). */
+  reopened(): void {
+    if (this.restarting) return;
+    this.clear();
+    if (this.begun) this.begin(this.brain);
+  }
+
+  private reset(): void {
+    if (this.restarting) return;   // a double click would queue two restarts and two intros
+    this.restarting = true;
+    this.clear();
     this.scene.scene.restart();
     this.scene.events.once("create", () => {
       this.restarting = false;

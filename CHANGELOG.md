@@ -516,6 +516,11 @@
 - `doctor.py` (web): warns when `src/shell/app.ts` is present but `src/main.ts` never reaches it through its imports,
   naming `/game-shell` (or deleting `src/shell/`). Gatekeeper (web) carried the whole shell unused since the 0.8.0
   sync and nothing noticed; a scene that imports the shell but is never loaded does not count (#182).
+- Gatekeeper (web): the kit's shell is wired in (title, menus, settings, pause, credits; `smoke --drive` works).
+  "Play" shows the start panel and the AI guard loads from there as before; `?autoplay` skips the shell, so the
+  README's scenario and real-model commands are unchanged. Key presses in the chat box stay out of the shell's
+  key bindings (W, A, S, D, Space and Enter); Escape pauses. Quit to title ends the conversation, Play again
+  starts a new one with the guard already loaded (#182).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

@@ -16,8 +16,11 @@ python tools/dev.py run       # opens the game
 ```
 Hint: read the notice on the wall.
 
+The game starts at the kit's title screen: Play, Settings (volume, text size, keys, language), Credits; Escape
+pauses. Typing in the chat box stays in the chat box.
+
 URL flags: `?debug` (intent, trust change and source of every reply), `?autoplay` / `?autoplay=rude` (scripted runs),
-`&llm=1` (load the model at once).
+`&llm=1` (load the model at once). `?autoplay` starts straight in the game, without the title screen.
 
 ## How the AI is kept on a leash
 | Piece | File |
@@ -34,6 +37,7 @@ python tools/dev.py check && python tools/dev.py test
 python tools/dev.py smoke --query autoplay --until GATE_OPEN --fail-on TURNED_AWAY           # scripted, headless
 python tools/dev.py smoke --query autoplay=rude --until TURNED_AWAY --fail-on GATE_OPEN      # scripted, the losing script
 python tools/dev.py smoke --headed --query "autoplay&llm=1" --until GATE_OPEN --timeout 300 --fail-on "FALLBACK,(fallback),model failed to load"  # the real model (GPU)
+python tools/dev.py smoke --drive menus                                                      # the shell: title, settings saved, quit
 ```
 The real-model run needs its `--fail-on` list: the scripted guard wins the same script, so without it a run where the
 model never loaded, or fell back on every line, passes too. `--fail-on` takes comma-separated markers and fails on any

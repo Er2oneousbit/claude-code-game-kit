@@ -79,6 +79,29 @@ A review with Claude (Fable 5.1) found nine problems and proved the code ones wi
   player text cut to `MAX_INPUT` before it is stored or sent, and tighter tests for the grammar and the trust clamp.
 - The real-model smoke command fails on fallbacks (section 5).
 
+### Later: the kit's shell wired in (2026-11-04)
+The example carried the kit's whole web shell (`src/shell/`: title, menus, settings, pause, credits, crash screen, the
+smoke driver) since kit 0.8.0, but nothing started it: that merge kept the game's own `src/main.ts`, so the shell sat
+unused and `smoke --drive` could not run. The kit's `doctor.py` now warns about exactly this (kit issue #182). The
+choice was wire it or delete it; it is wired, the way Ghost Lantern did, because the shell never touches the model:
+- `main.ts` hands the game to the shell. `GateScene` is the shell's "main" scene; "Play" shows the start panel under the
+  canvas, and the AI guard loads from there as before (the same dynamic import, so the page stays 1.4 MB).
+- `?autoplay` skips the shell (GateScene first, as before), so the scripted pair and the real-model command in the
+  README run unchanged.
+- The page panels are text the player types into, and the shell's input listens on the whole window: it would have
+  taken W, A, S, D, Space and Enter for its own actions. Key presses inside the panels stay there; only Escape goes
+  through, and pauses. Pause takes the focus out of the chat box (the pause menu needs the arrow keys), resume gives it
+  back. The panels hide while the title or menus are up.
+- "Quit to title" ends the conversation (a reply still on its way is dropped, like "Start over"); "Play" again starts a
+  new one with the guard already picked, so the model is not loaded twice (`closed()` and `reopened()` in
+  `src/game/controller.ts`, `tests/shell_flow.test.ts`).
+- The backdrop behind the menus is the night sky and the wall instead of the kit's blue stripes.
+
+Verified: `check`, 178 tests, `smoke`, both `?autoplay` scenarios, `smoke --drive menus`, `crash`, `show:pause`,
+`show:title` and `pseudo --locale pseudo` (23 screen checks, nothing truncated), and a Playwright run by keyboard
+(title, Play, the scripted guard, a typed line with W, A, S, D and spaces, Escape to pause and back, quit to title,
+Play again: one intro, no old lines). The real-model run was not repeated: its code path did not change.
+
 ## 6. Honest limits
 - WebGPU: current Chrome and Edge on desktop. Other browsers get the scripted guard (`webGpuAvailable()` decides).
 - The first visit downloads about 880 MB and needs about 1.6 GB of GPU memory (WebLLM's own figures).

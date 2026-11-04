@@ -2,15 +2,20 @@
 // GateScene.ts
 // Purpose : The picture: a town wall at night, the gate, the guard Bram, the notice,
 //           the traveler, and a trust meter. It only shows what the controller tells it.
-// Usage   : Registered in src/main.ts; the controller calls show(state, event).
+// Usage   : Registered in src/main.ts as "main" (the shell's play scene: it starts, pauses and stops it);
+//           the controller calls show(state, event). Emits "gate-ready" on the game when it is created and
+//           "gate-closed" when it shuts down (quit to title, or "Start over" restarting it).
 // Notes   : Kenney Tiny Dungeon tiles (A-0001), drawn 3x. Tile indices were checked against the
 //           pack's single-tile files: 40 wall, 48 floor, 45 door, 97 guard (helmet knight), 84 traveler.
 //           Sounds: ElevenLabs (A-0003 to A-0006): the gate, the guard, and an ambience loop at the wall.
+//           BOOT_OK is logged here too: an ?autoplay run starts this scene without the shell's title.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): the shell's "main" scene, planted crash (#182)
 // ---------------------------------------------------------------------------
 import * as Phaser from "phaser";
 import type { Outcome, State } from "../core/gatekeeper";
 import { Log } from "../core/log";
+import { shell } from "../shell/app";
 import { RULES } from "./tuning";
 
 const AMBIENCE_VOLUME = 0.3;   // under the guard and the gate
@@ -26,7 +31,7 @@ export class GateScene extends Phaser.Scene {
   private label!: Phaser.GameObjects.Text;
 
   constructor() {
-    super("gate");
+    super("main");
   }
 
   preload(): void {
@@ -57,8 +62,16 @@ export class GateScene extends Phaser.Scene {
     this.meter = this.add.graphics();
     this.label = this.add.text(14, 334, "", { fontFamily: "monospace", fontSize: "13px", color: "#f4ecd8" });
     this.startAmbience();
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.game.events.emit("gate-closed"));
     this.game.events.emit("gate-ready", this);
     Log.info("core", "BOOT_OK Gatekeeper");
+  }
+
+  update(): void {
+    if (shell.plantedCrash) {
+      shell.plantedCrash = false;
+      throw new Error("planted crash (dev.py smoke --drive crash)"); // proves the crash hook end to end
+    }
   }
 
   // One ambience loop for the whole session: Phaser keeps sounds across scene restarts, and a browser keeps audio
