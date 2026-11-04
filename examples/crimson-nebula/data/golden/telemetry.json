@@ -1,0 +1,83 @@
+{
+ "cases": [
+  {
+   "header": "time,session,event,detail",
+   "name": "header and session id",
+   "session_chars": "0123456789abcdef",
+   "session_length": 8,
+   "type": "telemetry_format"
+  },
+  {
+   "name": "time, quoting and escaping",
+   "points": [
+    [
+     0,
+     "00000000",
+     "session_start",
+     "0.1.0",
+     "1970-01-01T00:00:00Z,00000000,session_start,0.1.0"
+    ],
+    [
+     951782400,
+     "0a1b2c3d",
+     "screen",
+     "title",
+     "2000-02-29T00:00:00Z,0a1b2c3d,screen,title"
+    ],
+    [
+     1793628303,
+     "ffffffff",
+     "quit",
+     "",
+     "2026-11-02T14:05:03Z,ffffffff,quit,"
+    ],
+    [
+     1793628303.75,
+     "0a1b2c3d",
+     "level_start",
+     "1-2",
+     "2026-11-02T14:05:03Z,0a1b2c3d,level_start,1-2"
+    ],
+    [
+     1793628303,
+     "0a1b2c3d",
+     "screen",
+     "title, then menu",
+     "2026-11-02T14:05:03Z,0a1b2c3d,screen,\"title, then menu\""
+    ],
+    [
+     1793628303,
+     "0a1b2c3d",
+     "note",
+     "say \"hi\"",
+     "2026-11-02T14:05:03Z,0a1b2c3d,note,\"say \"\"hi\"\"\""
+    ],
+    [
+     1793628303,
+     "0a1b2c3d",
+     "note",
+     "two\nlines",
+     "2026-11-02T14:05:03Z,0a1b2c3d,note,\"two\nlines\""
+    ],
+    [
+     1793628303,
+     "0a1b2c3d",
+     "note",
+     "cr\rhere",
+     "2026-11-02T14:05:03Z,0a1b2c3d,note,\"cr\rhere\""
+    ],
+    [
+     1793628303,
+     "0a1b2c3d",
+     "crash",
+     "café Ísla ”quoted”",
+     "2026-11-02T14:05:03Z,0a1b2c3d,crash,café Ísla ”quoted”"
+    ]
+   ],
+   "type": "telemetry_row"
+  }
+ ],
+ "generator": "tools/golden_vectors.py",
+ "tolerance": 1e-09,
+ "version": 1
+}

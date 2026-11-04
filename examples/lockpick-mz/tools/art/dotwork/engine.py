@@ -12,6 +12,8 @@
 #           Dependencies: Pillow + numpy only (connected components are a run-length union-find, not scipy).
 #           Style reference: the user's own sprites from config "style_refs" (a collage), or none.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): a failed or cancelled job names its render
+#           (job_name); a cancel says that running the command again resumes
 # ---------------------------------------------------------------------------
 import fnmatch
 import json
@@ -36,6 +38,7 @@ KLEIN_UNET = "flux-2-klein-4b.safetensors"
 KLEIN_CLIP = "qwen_3_4b.safetensors"
 PIXEL_LORA = "spritekiln_klein_pixel_art.safetensors"
 WHITE_BG = "plain solid white background, no ground shadow"
+WORK_PREFIX = "dotwork_work/"                # lanes save renders under this ComfyUI output folder
 N4 = ((-1, 0), (1, 0), (0, -1), (0, 1))
 N8 = N4 + ((-1, -1), (-1, 1), (1, -1), (1, 1))
 _CONF = None
@@ -83,6 +86,16 @@ def put(img, name):
     return f"{info['subfolder']}/{info['name']}" if info.get("subfolder") else info["name"]
 
 
+def job_name(graph):
+    """What a graph renders, for messages: its first save prefix without the work folder ("hero/walk/f"), the entry
+    and clip a lane names its files after."""
+    for node in graph.values():
+        prefix = (node.get("inputs") or {}).get("filename_prefix") if isinstance(node, dict) else None
+        if isinstance(prefix, str) and prefix:
+            return prefix[len(WORK_PREFIX):] if prefix.startswith(WORK_PREFIX) else prefix
+    return "ComfyUI job"
+
+
 def run_job(graph, timeout=1800):
     """Queue an API graph, wait, mirror every output image into <work>/comfy_out/<subfolder>/<file>.
     Returns {"files": [local paths], "seconds": GPU seconds}."""
@@ -92,8 +105,12 @@ def run_job(graph, timeout=1800):
         entry, seconds = cl.wait_history(base, pid, timeout)
     except cl.ToolError as exc:
         raise fcore.ToolError(str(exc))
+    except cl.JobCancelled as exc:
+        # A cancel in ComfyUI is not a crash: say which render it was and that the same command picks it up
+        raise fcore.JobError(f"{job_name(graph)}: cancelled in ComfyUI ({exc}). Run the same command again to "
+                             "resume: renders already finished are kept and not made again")
     except cl.JobError as exc:
-        raise fcore.JobError(str(exc))
+        raise fcore.JobError(f"{job_name(graph)}: {exc}")
     files = []
     for item in cl.output_files(entry, include_temp=False):
         q = urllib.parse.urlencode({"filename": item["filename"], "subfolder": item.get("subfolder", ""),

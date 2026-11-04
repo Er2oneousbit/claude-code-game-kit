@@ -56,7 +56,7 @@ question.
 | `eleven` | eleven_audio.py | ElevenLabs: sound effects and music. Paid, your API key | `eleven sfx --text "..." --out x.wav` |
 | `fish` | fish_tts.py | Fish Audio text to speech. Paid, your API key | `fish say --voice <id> --text "..." --out x.wav` |
 | `wav` | wavfile.py | WAV helpers: stats, normalize to a peak, seamless loops | `wav loop raw.wav --crossfade 2 --out loop.wav` |
-| `formats` | audioio.py | Read WAV, FLAC and OGG Vorbis with nothing installed (flacfile.py, oggvorbis.py), MP3 / Opus / AAC through ffmpeg if installed; convert to WAV, or to OGG with ffmpeg (loop points kept) | `formats convert theme.ogg --out theme.wav` |
+| `formats` | audioio.py | Read WAV (8 to 32-bit PCM, float, extensible headers), FLAC and OGG Vorbis with nothing installed (flacfile.py, oggvorbis.py), MP3 / Opus / AAC through ffmpeg if installed; convert to WAV, or to OGG with ffmpeg (loop points kept) | `formats convert theme.ogg --out theme.wav` |
 
 `wavesmith.py <subcommand> --help` lists that tool's options. Exit codes are the subcommand's own:
 - 0: ok
@@ -82,7 +82,8 @@ access rules, with their golden tests:
 - Godot: scripts/core/audio_director.gd, music_director.gd and audio_access.gd, with scripts/shell/music_player.gd and
   the subtitle bar's arrows.
 - Unity: Assets/Scripts/Core/AudioDirector.cs, MusicDirector.cs and AudioAccess.cs, with
-  Assets/Scripts/Game/AudioEventPlayer.cs and MusicPlayer.cs (compiled, not yet run in Play mode).
+  Assets/Scripts/Game/AudioEventPlayer.cs (run in Play mode by Assets/Tests/PlayMode/AudioPlayModeTests.cs) and
+  MusicPlayer.cs (compiled, not yet run in Play mode).
 - LÖVE: src/core/audio_director.lua, music_director.lua and audio_access.lua, with src/shell/music_player.lua and
   the subtitles' arrows.
 - Bevy: src/logic/audio_director.rs, music_director.rs and audio_access.rs (logic only).

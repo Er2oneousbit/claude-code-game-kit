@@ -75,12 +75,20 @@ local function save(frameNumber, path)
   -- the frame's time on screen first (seconds): a path can hold spaces
   print(string.format("DOTWORK_ASE_PNG %.6f %s", spr.frames[frameNumber].duration, path))
 end
--- tag names become file names: stop before writing anything when one could leave the export folder
+-- tag names become file names: stop before writing anything when one could leave the export folder, or when two
+-- tags share a name (ignoring case, as Windows file names do): each numbers its frames from 00, so the second one
+-- overwrote the first one's frames and the shipped clip came back mixed (issue #81)
+local seen = {}
 for _, t in ipairs(spr.tags) do
   if not t.name:match("^[%w_]+$") then
     print("DOTWORK_ASE_BADTAG " .. t.name)
     return
   end
+  if seen[t.name:lower()] then
+    print("DOTWORK_ASE_DUPTAG " .. t.name)
+    return
+  end
+  seen[t.name:lower()] = true
 end
 if #spr.tags == 0 then
   save(1, p.prefix .. ".png")
@@ -138,10 +146,16 @@ def _palette_file(pngs, path):
 
 
 def _export(conf, file, prefix):
-    """EXPORT_LUA on one .aseprite: ([(PNG path, seconds that frame shows)] in the order Aseprite wrote them, the
-    first tag name that could leave the export folder or None). Nothing is written for a file with such a tag."""
+    """EXPORT_LUA on one .aseprite: ([(PNG path, seconds that frame shows)] in the order Aseprite wrote them, why the
+    export cannot be used or None). It cannot when a tag name could leave the export folder or two tags share a name
+    (EXPORT_LUA writes nothing for such a file), or when two frames came out under one file name (issue #81)."""
     lines = _run(conf, EXPORT_LUA, "ase_export.lua", {"file": file, "prefix": prefix}).splitlines()
-    bad = [ln.split(" ", 1)[1].strip() for ln in lines if ln.startswith("DOTWORK_ASE_BADTAG ")]
+    for ln in lines:
+        if ln.startswith("DOTWORK_ASE_BADTAG "):
+            return [], f"tag {ln.split(' ', 1)[1].strip()!r}: animation names use letters, digits and _ only"
+        if ln.startswith("DOTWORK_ASE_DUPTAG "):
+            return [], (f"two tags share the name {ln.split(' ', 1)[1].strip()!r}: each animation is one tag "
+                        "(rename or remove one)")
     pngs = []
     for ln in lines:
         if ln.startswith("DOTWORK_ASE_PNG "):
@@ -150,7 +164,12 @@ def _export(conf, file, prefix):
                 pngs.append((parts[2].strip(), float(parts[1])))
             except (IndexError, ValueError):   # an older script's line (path only): the frame keeps its hold
                 pass
-    return pngs, (bad[0] if bad else None)
+    # one file name twice means a later frame overwrote an earlier one: refuse rather than ship the mix
+    names = Counter(os.path.basename(p).lower() for p, _ in pngs)
+    twice = sorted(n for n, c in names.items() if c > 1)
+    if twice:
+        return [], f"two frames were exported as {twice[0]!r}: two tags share a name (rename or remove one)"
+    return pngs, None
 
 
 def _shows_the_game(conf, path, items):
@@ -187,7 +206,8 @@ def build(pack, conf, overwrite=False):
     """Write <src_dir>/aseprite/{characters,fx,single}/<name>.aseprite. A file that already exists is exported first:
     one that still shows the game's frames is left as it is; one that differs may hold hand polish (or the game's
     art changed since) and is kept unless overwrite, and a file overwrite replaces is first copied to
-    <name>.aseprite.bak (one level, as pixelorama.build does).
+    <name>.aseprite.bak (one level, as pixelorama.build does). Nothing is written when an asset's frames are not all
+    one size (ToolError naming the sizes).
     Returns {"written": [...], "unchanged": [...], "kept": [...], "backups": [the .bak files written]}."""
     _bin(conf)   # no Aseprite = stop before anything is written into the game's tracked folders
     src = core.src(conf, "aseprite")
@@ -208,6 +228,20 @@ def build(pack, conf, overwrite=False):
     for f in single:
         jobs.append((os.path.join(src, "single", os.path.basename(f)[:-4] + ".aseprite"),
                      [("", 0.1, os.path.join(pack, f))]))
+    # an Aseprite sprite has one canvas: BUILD_LUA sized it from the first frame, so clips of another size came back
+    # from a re-export padded or cropped to it, off their anchor, with verify passing (issue #82). Every source is
+    # checked before any is written.
+    canvas = {}
+    for out, items in jobs:
+        sizes = set()
+        for _, _, p in items:
+            with Image.open(p) as im:   # the header only: no pixels are read here
+                sizes.add(im.size)
+        if len(sizes) > 1:
+            raise core.ToolError(f"{os.path.relpath(out, pack)}: frames of {len(sizes)} sizes "
+                                 f"({', '.join('%dx%d' % s for s in sorted(sizes))}): an Aseprite sprite has one "
+                                 "canvas (give every clip the same frame size)")
+        canvas[out] = sizes.pop()
     done = {"written": [], "unchanged": [], "kept": [], "backups": []}
     for out, items in jobs:
         rel = os.path.relpath(out, pack)
@@ -227,16 +261,23 @@ def build(pack, conf, overwrite=False):
             done["backups"].append(out + ".bak")
             core.log(f"aseprite build {rel}: the file it replaces is kept as {os.path.basename(out)}.bak")
         os.makedirs(os.path.dirname(out), exist_ok=True)
-        lst = out[:-9] + ".list.txt"
-        with open(core.safe_dest(lst), "w", encoding="utf-8") as fh:
-            fh.write("\n".join(f"{t}|{d:.4f}|{p}" for t, d, p in items) + "\n")
-        pal = out[:-9] + ".gpl"
-        n, indexed = _palette_file([p for _, _, p in items], pal)
-        with Image.open(items[0][2]) as im:
-            w, h = im.size
-        _run(conf, BUILD_LUA, "ase_build.lua", {"list": lst, "w": w, "h": h, "palette": pal, "out": out,
-                                                 "indexed": "1" if indexed else "0"})
-        os.remove(lst)
+        # BUILD_LUA's frame list and palette go to the work folder and are removed after: the .gpl used to stay
+        # beside every .aseprite in the game's tracked sources (issue #109)
+        work = os.path.join(core.WORK, "ase_build")
+        os.makedirs(work, exist_ok=True)
+        stem = os.path.join(work, os.path.basename(out)[:-9])
+        lst, pal = stem + ".list.txt", stem + ".gpl"
+        try:
+            with open(core.safe_dest(lst), "w", encoding="utf-8") as fh:
+                fh.write("\n".join(f"{t}|{d:.4f}|{p}" for t, d, p in items) + "\n")
+            n, indexed = _palette_file([p for _, _, p in items], pal)
+            w, h = canvas[out]
+            _run(conf, BUILD_LUA, "ase_build.lua", {"list": lst, "w": w, "h": h, "palette": pal, "out": out,
+                                                     "indexed": "1" if indexed else "0"})
+        finally:
+            for p in (lst, pal):
+                if os.path.exists(p):
+                    os.remove(p)
         done["written"].append(out)
         core.log(f"aseprite build {rel}: {len(items)} frames, {n} colors"
                  + ("" if indexed else ", RGB (too many colours or partly clear pixels to index without loss)"))
@@ -254,8 +295,7 @@ def reexport(pack, conf):
             os.remove(p)
         pngs, bad = _export(conf, file, os.path.join(tmp, prefix))
         if bad:
-            raise core.ToolError(f"{os.path.relpath(file, pack)}: tag {bad!r}: animation names use letters, "
-                                 "digits and _ only")
+            raise core.ToolError(f"{os.path.relpath(file, pack)}: {bad}")
         secs = {os.path.basename(p): s for p, s in pngs}
         return sorted(glob.glob(os.path.join(tmp, "*.png"))), secs
 

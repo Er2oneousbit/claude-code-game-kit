@@ -17,8 +17,10 @@
 #           Residue type 0 and VQ lookup type 2 never appear in libvorbis output, so streams built bit by
 #           bit in this file carry one spectrum through residue 0, 1 and 2 with lookup 1 and 2; all six must
 #           decode the same, and they are compared with libvorbis's own decoder (ffmpeg -c:a libvorbis).
-#           The start trim is checked on a fixture whose granules were lowered (libvorbis's rule; ffmpeg
-#           keeps those samples, so it cannot be the reference there).
+#           The start trim is checked on stereo44k with its granules lowered, against libvorbis 1.3.7's own
+#           decode of that file (ffmpeg keeps those samples, so it cannot be the reference there), and a real
+#           multiplexed file (Theora video next to the Vorbis audio, from ffmpeg's test sources) against
+#           ffmpeg's decode of its audio stream.
 #           Limits: tiny hand-built files whose setup headers ask for huge codebooks, and a silent 255-channel
 #           flood that would decode to billions of samples, must be refused at once (VorbisLimit), and a
 #           zero-dimension codebook is a broken file, not a crash.
@@ -35,6 +37,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import oggvorbis  # noqa: E402
@@ -539,6 +542,101 @@ FIXTURES = {
         "AAAAAHqdybECAAAANOa45QIpHWTn87f9B2AEALwG9LQ9h2w1X/6P+I94Kk/lqTyVK8VisXtxGIZhGIYKdOXfGB1e96cNwAEAAIBzvdo+362f/YWf"
         "TovqBRI"
     ),
+    # Theora video (32x32, 4 frames) multiplexed with mono 11.025 kHz Vorbis at q-1, 150 ms pages, made from
+    # ffmpeg's own test sources (testsrc, sine): no third-party content
+    "theora11k": (
+        "T2dnUwACAAAAAAAAAAAAAAAAAAAAAK3m8OgBKoB0aGVvcmEDAgEAAgACAAAgAAAgAAAAAAAEAAAAAQAAAQAAAQAAAAAA2E9nZ1MAAgAAAAAAAAAA"
+        "AQAAAAAAAADBWo9rAR4Bdm9yYmlzAAAAAAERKwAAAAAAAEhxAAAAAAAAmQFPZ2dTAAAAAAAAAAAAAAAAAAABAAAAkO66EA4v////////////////"
+        "iIF0aGVvcmEGAAAAZmZtcGVnAQAAABYAAABlbmNvZGVyPUxhdmMgbGlidGhlb3JhgnRoZW9yYZ+TDMqqqqqqqIiIhmZmZmZkRERERERERAAAAAAA"
+        "AAAAEW2uU2eSyPxWEvx4OVts5ir1aKtUKBMpJFoQ/nk5m41mUwl4slUpk4kkghkIfDwdjgajQYC8VioUCQRiIQh8PBwMhgLBQIg4FRba5TZ5LI/F"
+        "YS/Hg5W2zmKvVoq1QoEykkWhD+eTmbjWZTCXiyVSmTiSSCGQh8PB2OBqNBgLxWKhQJBGIhCHw8HAyGAsFAiDgUCw8PDw8PDw8PDw8PDw8PDw8PDw"
+        "8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDAwPEhQUFQ0NDhESFRUUDg4PEhQVFRUOEBETFBUVFRARFBUVFR"
+        "UVEhMUFRUVFRUUFRUVFRUVFRUVFRUVFRUVEAwLEBQZGxwNDQ4SFRwcGw4NEBQZHBwcDhATFhsdHRwRExkcHB4eHRQYGxwdHh4dGxwdHR4eHh4dHR"
+        "0dHh4eHRALChAYKDM9DAwOExo6PDcODRAYKDlFOA4RFh0zV1A+EhYlOkRtZ00YIzdAUWhxXDFATldneXhlSFxfYnBkZ2MTExMTExMTExMTExMTEx"
+        "MTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTEhIVGRoaGhoSFBYaGhoaGhUWGRoaGhoaGRoaGhoaGhoaGh"
+        "oaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhoaGhESFh8kJCQkEhQYIiQkJCQWGCEkJCQkJB8iJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJC"
+        "QkJCQkJCQkJCQREhgvY2NjYxIVGkJjY2NjGBo4Y2NjY2MvQmNjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjFRUVFRUVFRUVFR"
+        "UVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRISEhUXGBkbEhIVFxgZGxwSFRcYGRscHRUXGBkbHB"
+        "0dFxgZGxwdHR0YGRscHR0dHhkbHB0dHR4eGxwdHR0eHh4REREUFxocIBERFBcaHCAiERQXGhwgIiUUFxocICIlJRcaHCAiJSUlGhwgIiUlJSkcIC"
+        "IlJSUpKiAiJSUlKSoqEBAQFBgcICgQEBQYHCAoMBAUGBwgKDBAFBgcICgwQEAYHCAoMEBAQBwgKDBAQEBgICgwQEBAYIAoMEBAQGCAgAfF5cdH1e"
+        "3Ow/L66wGmYnfIUbwdUTe3LMRbqON8B+5RJEvcGxkvrVUjTMrsXYhAnIwe0dTJfOYbWrDYyqUrz7dw/JO4hpmV2LsQQvkUeGq1BsZLx+cu5iV0e0"
+        "eScJ91VIQYrmqfdVSK7GgjOU0oPaPOu5IcDK1mNvnD+K8LwS87f8Jx2mHtHnUkTGAurWZlNQa74ZLSFH9oF6FPGxzLsjQO5Qe0edcpttd7BXBSqM"
+        "CL4k/4tFrHIPuEQ7m1/uIWkbDMWVoDdOSuRQ9286kvVUlQjzOE6VrNguN4oRXYGkgcnih7t13/9kxvLYKQezwLTrO44sVmMPgMqORo1E0sm1/9Sl"
+        "udkcWHwfJwTSybR4LeAz6ugWVgRaY8mV/9SluQmtHrzsBtRF/wPY+X0JuYTs+ltgrXAmlk10xQHmTu9VSIAk1+vcvU4ml2oNzrNhEtQ3CysNP8Ue"
+        "R35wqpKUBdGdZMSjX4WVi8nJpdpHnbhzEIdx7mwf6W1FKAiucMXrWUWVjyRf23chNtR9mIzDoT/6ZLYailAjhFlZuvPtSeZ+2oREubDoWmT3TguY"
+        "+JHPdRVSLKxfKH3vgNqJ/9emeEYikGXDFNzaLjvTeGAL61mogOoeG3y6oU4rW55ydoj0lUTSR/mmRhPmF86uwIfzp3FtiufQCmppaHDlGE0r2iTz"
+        "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"
+        "CUXWsLyZROd9P/rFYNtXPBli0z398iVUlVKAjFlY437JXImUTm2r/4ZYtMy61hf16RPJIU9nZ1MAAAAAAAAAAAAAAQAAAAEAAAAeKrVvCzD/////"
+        "//////+1A3ZvcmJpcwYAAABmZm1wZWcBAAAAFgAAAGVuY29kZXI9TGF2YyBsaWJ2b3JiaXMBBXZvcmJpcxJCQ1YBAAABAAxSFCElGVNKYwiVUlIp"
+        "BR1jUFtHHWPUOUYhZBBTiEkZpXtPKpVYSsgRUlgpRR1TTFNJlVKWKUUdYxRTSCFT1jFloXMUS4ZJCSVsTa50FkvomWOWMUYdY85aSp1j1jFFHWNS"
+        "Ukmhcxg6ZiVkFDpGxehifDA6laJCKL7H3lLpLYWKW4q91xpT6y2EGEtpwQhhc+211dxKasUYY4wxxsXiUyiC0JBVAAABAABABAFCQ1YBAAoAAMJQ"
+        "DEVRgNCQVQBABgCAABRFcRTHcRxHkiTLAkJDVgEAQAAAAgAAKI7hKJIjSZJkWZZlWZameZaouaov+64u667t6roOhIasBADIAAAYhiGH3knMkFOQ"
+        "SSYpVcw5CKH1DjnlFGTSUsaYYoxRzpBTDDEFMYbQKYUQ1E45pQwiCENInWTOIEs96OBi5zgQGrIiAIgCAACMQYwhxpBzDEoGIXKOScggRM45KZ2U"
+        "TEoorbSWSQktldYi55yUTkompbQWUsuklNZCKwUAAAQ4AAAEWAiFhqwIAKIAABCDkFJIKcSUYk4xh5RSjinHkFLMOcWYcowx6CBUzDHIHIRIKcUY"
+        "c0455iBkDCrmHIQMMgEAAAEOAAABFkKhISsCgDgBAIMkaZqlaaJoaZooeqaoqqIoqqrleabpmaaqeqKpqqaquq6pqq5seZ5peqaoqp4pqqqpqq5r"
+        "qqrriqpqy6ar2rbpqrbsyrJuu7Ks256qyrapurJuqq5tu7Js664s27rkearqmabreqbpuqrr2rLqurLtmabriqor26bryrLryratyrKua6bpuqKr"
+        "2q6purLtyq5tu7Ks+6br6rbqyrquyrLu27au+7KtC7vourauyq6uq7Ks67It67Zs20LJ81TVM03X9UzTdVXXtW3VdW1bM03XNV1XlkXVdWXVlXVd"
+        "dWVb90zTdU1XlWXTVWVZlWXddmVXl0XXtW1Vln1ddWVfl23d92VZ133TdXVblWXbV2VZ92Vd94VZt33dU1VbN11X103X1X1b131htm3fF11X11XZ"
+        "1oVVlnXf1n1lmHWdMLqurqu27OuqLOu+ruvGMOu6MKy6bfyurQvDq+vGseu+rty+j2rbvvDqtjG8um4cu7Abv+37xrGpqm2brqvrpivrumzrvm/r"
+        "unGMrqvrqiz7uurKvm/ruvDrvi8Mo+vquirLurDasq/Lui4Mu64bw2rbwu7aunDMsi4Mt+8rx68LQ9W2heHVdaOr28ZvC8PSN3a+AACAAQcAgAAT"
+        "ykChISsCgDgBAAYhCBVjECrGIIQQUgohpFQxBiFjDkrGHJQQSkkhlNIqxiBkjknIHJMQSmiplNBKKKWlUEpLoZTWUmotptRaDKG0FEpprZTSWmop"
+        "ttRSbBVjEDLnpGSOSSiltFZKaSlzTErGoKQOQiqlpNJKSa1lzknJoKPSOUippNJSSam1UEproZTWSkqxpdJKba3FGkppLaTSWkmptdRSba21WiPG"
+        "IGSMQcmck1JKSamU0lrmnJQOOiqZg5JKKamVklKsmJPSQSglg4xKSaW1kkoroZTWSkqxhVJaa63VmFJLNZSSWkmpxVBKa621GlMrNYVQUgultBZK"
+        "aa21VmtqLbZQQmuhpBZLKjG1FmNtrcUYSmmtpBJbKanFFluNrbVYU0s1lpJibK3V2EotOdZaa0ot1tJSjK21mFtMucVYaw0ltBZKaa2U0lpKrcXW"
+        "Wq2hlNZKKrGVklpsrdXYWow1lNJiKSm1kEpsrbVYW2w1ppZibLHVWFKLMcZYc0u11ZRai621WEsrNcYYa2415VIAAMCAAwBAgAlloNCQlQBAFAAA"
+        "YAxjjEFoFHLMOSmNUs45JyVzDkIIKWXOQQghpc45CKW01DkHoZSUQikppRRbKCWl1losAACgwAEAIMAGTYnFAQoNWQkARAEAIMYoxRiExiClGIPQ"
+        "GKMUYxAqpRhzDkKlFGPOQcgYc85BKRljzkEnJYQQQimlhBBCKKWUAgAAChwAAAJs0JRYHKDQkBUBQBQAAGAMYgwxhiB0UjopEYRMSielkRJaCyll"
+        "lkqKJcbMWomtxNhICa2F1jJrJcbSYkatxFhiKgAA7MABAOzAQig0ZCUAkAcAQBijFGPOOWcQYsw5CCE0CDHmHIQQKsaccw5CCBVjzjkHIYTOOecg"
+        "hBBC55xzEEIIoYMQQgillNJBCCGEUkrpIIQQQimldBBCCKGUUgoAACpwAAAIsFFkc4KRoEJDVgIAeQAAgDFKOSclpUYpxiCkFFujFGMQUmqtYgxC"
+        "Sq3FWDEGIaXWYuwgpNRajLV2EFJqLcZaQ0qtxVhrziGl1mKsNdfUWoy15tx7ai3GWnPOuQAA3AUHALADG0U2JxgJKjRkJQCQBwBAIKQUY4w5h5Ri"
+        "jDHnnENKMcaYc84pxhhzzjnnFGOMOeecc4wx55xzzjnGmHPOOeecc84556CDkDnnnHPQQeicc845CCF0zjnnHIQQCgAAKnAAAAiwUWRzgpGgQkNW"
+        "AgDhAACAMZRSSimllFJKqKOUUkoppZRSAiGllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRS"
+        "SimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimllFJKKaWUUkoppZRSSimVUkoppZRSSimllFJKKaUAIN8KBwD/BxtnWEk6KxwNLjRkJQAQ"
+        "DgAAGMMYhIw5JyWlhjEIpXROSkklNYxBKKVzElJKKYPQWmqlpNJSShmElGILIZWUWgqltFZrKam1lFIoKcUaS0qppdYy5ySkklpLrbaYOQelpNZa"
+        "aq3FEEJKsbXWUmuxdVJSSa211lptLaSUWmstxtZibCWlllprqcXWWkyptRZbSy3G1mJLrcXYYosxxhoLAOBucACASLBxhpWks8LR4EJDVgIAIQEA"
+        "BDJKOeecgxBCCCFSijHnoIMQQgghREox5pyDEEIIIYSMMecghBBCCKGUkDHmHIQQQgghhFI65yCEUEoJpZRSSucchBBCCKWUUkoJIYQQQiillFJK"
+        "KSGEEEoppZRSSiklhBBCKKWUUkoppYQQQiillFJKKaWUEEIopZRSSimllBJCCKGUUkoppZRSQgillFJKKaWUUkooIYRSSimllFJKCSWUUkoppZRS"
+        "SikhlFJKKaWUUkoppQAAgAMHAIAAI+gko8oibDThwgMQAAAAAgACTACBAYKCUQgChBEIAAAAAAAIAPgAAEgKgIiIaOYMDhASFBYYGhweICIkAAAA"
+        "AAAAAAAAAAAABE9nZ1MAAAAGAAAAAAAAAQAAAAIAAADmq9jhBzUUFRUWFRSCz0nrzAT4/wIgqHQkhRTx+0PetMEGG+4KkLIbHBw0TdM0TdM0TdM0"
+        "TdNkptkwW7CedYOyA3rRySXLPAAAAACmigAAyF4xJwAAdtCZsWUeAAAAAN9ZAwDgPtj0NwAAdtGZsWUeAAAAAL8TAADi8/d/CwAAdtCZsWceAAAQ"
+        "ACgtAgAg+/85AQAoAHbRmbFlHgAAAADfWQMA4D7w/Q4AAHbQmbFlHgAAAAC/DQAA8flqvwIAT2dnUwAAQAAAAAAAAAAAAAAAAgAAAGFch2AB5QAA"
+        "RtmneMY+2xPjhFASiiEaPc1nUCZ7gfiq5b3beMCCpVDFKmma14q5+ylKV7ZJWqjZmBszMy1gpw4caDHDjYOHDiW6264yU69eTdmu16MMIMLuRZzf"
+        "bHnnmsPPlweefTmd9BlME5ICLfaKen/NeGpZlk3K+Xj/ePGbMMY8devnenCCOT4HVV9UNafeDh6u2ojO6aJEe5qIqVKlOiVK+VKlOkM8//7vwvvm"
+        "qoouuvv9N0Zl3WlosIEP/Kl/9slS70n6ytUnqdz7vAOhVcU5lxDdNCBgwQ6IBYJBAJi8LVknpMlJEIBPZ2dTAAAADQAAAAAAAAEAAAADAAAAYPSq"
+        "vAcWFRUUFRUUdtCZsWceAAAQACgtAgDAJKhpAAAaAHbQmbFlHgAAAADfGQAA3F2TfwAAAHbQmbFnHgAAAAC/HQMAiD/XPwMAAHbQmZFlHgAAAACD"
+        "FgEAEODNQAAAdtGZsWUeAAAAAD8ZAADcXX+8BQAAdtCZsWceAAAAAL8dAwCIP1/5FQAAetDJJcs8AAAAAIaKAAAIYLEqAABPZ2dTAAAAFAAAAAAA"
+        "AAEAAAAEAAAADj3lcAcUFRQVFRQUdtGZsWUeAAAAAG8dAADcXd23AAB20ZmxZx4AAAAA/7EAAOLPX3wNAAB60cklyzwAAAAADi4CAKDyL9UBAHbR"
+        "mbFlHgAAAABvHQAA3EkT7gQAAHbRmbFnHgAAAAD/sQAA4rdH7wcAAHrQySXLPAAAAAAOLgIAYAAxKAAAdtCZsWceAAAAANcHAAB30iMnAgBPZ2dT"
+        "AABBAAAAAAAAAAAAAAADAAAAsynHugEPQGz0/A9hhjkSR9ohnKwAT2dnUwAAABsAAAAAAAABAAAABQAAAMUbfC0HFRQUFxQWFXbRmbFnHgAAAID9"
+        "jwUAEN/PfTcAAHrQySXLPAAAAAAOLgIAoL/3CwIAdtCZsWceAAAAAA8VAADc5ianAgB20JmxZx4AABAA7L8uAID4dpAbAQCYAHrQySXLPAAAAAAu"
+        "TAAAzMlcCAAAdtCZkWceAADQAHioAADgNn+6DQCAAHbRmXPPPAAAIADwBQBAfLzjOwAAHU9nZ1MAAEIAAAAAAAAAAAAAAAQAAAAi/iDeARtAbPQP"
+        "m+XDGIshArANeiDliHNaR9kITHArINBPZ2dTAAAAIgAAAAAAAAEAAAAGAAAAVuLGMgcUFRcVFhUVetDJJcs8AAAAAC5MAADMOW1bAAB20JmRZx4A"
+        "ANAAuCgAADBPaUEAAAF20JmxZx4AABAA7L8uAID4dsA7AACYAHrQyWXPPAAAAACunQAA3GarnwYAAHbQmZFnHgAA0AC4qAAAgIFXLAQAIAB20Zmx"
+        "ZR4AAACA/fcCAIjvzHMPAAB20JmxZx4AAAAA104AAO7Eh08CAABPZ2dTAAAAKQAAAAAAAAEAAAAHAAAALEKTVwcWFBUUFRQUdtGZkWceAADQADik"
+        "AACAgdUGAwAQAHbQmbFlHgAAAAD/XgAA8ceRBwAAdtGZsWceAAAAAG81AQC4E8ffBQAAetHJJc88AAAAAA4pAACgyq81AAB20ZmxZR4AAAAA/54A"
+        "AIg/ffk1AAB20JmxZx4AAAAAbzUBALg7u28DAHrQySXPPAAAAACGCwAACOhfDQAAT2dnUwAEQwAAAAAAAAAAAAAABQAAAKPre/cBGEBoPN9Htwhr"
+        "u6R8ZpAdrRTQGUZB20DGgE9nZ1MABBErAAAAAAAAAQAAAAgAAAAcoX3MAxU9FnbQmbFlHgAAAAC/MQEAEH+66nMAAILQ+ePOBOyvSwCqjHaEFHHR"
+        "c++xwSKFjAKEYnC3BXfnZqsadle9NDU/XiBb9XRqY3ar4M67NitJ/t0V9gxiCLcTXoH6rkMCAAA25O+3CxovvwQA"
+    ),
     "opus": (
         "T2dnUwACAAAAAAAAAAAsClBhAAAAAAn/EAsBE09wdXNIZWFkAQE4AYC7AAAAAABPZ2dTAAAAAAAAAAAAACwKUGEBAAAAVXZd1gE8T3B1c1RhZ3MM"
         "AAAATGF2ZjYzLjEuMTAyAQAAABwAAABlbmNvZGVyPUxhdmM2My4xLjEwMiBsaWJvcHVzT2dnUwAE+AQAAAAAAAAsClBhAgAAAAZBNuECQSJ4g5yK"
@@ -578,7 +676,22 @@ EXPECT = {
                      (0, 28, "oj//PuPG+z7nMfc+a6PxPv4e6z7HhuM+aAjbPnWu0T6ogcc+upy8Pl/esD4BZKQ+1WKXPofQiT4siHc+ZIBaPs6APD7R7h0+NI/9Pcg3vj10RH09APD6PACyH7pE+AG9eIeAvZwTv71YZPy9hmccvrXyOb63zFa+495yvrT3hr4"),
                      (0, 56, "tfI5vrfMVr7j3nK+tPeGvr4OlL5VnKC+BICsvm7Gt76PWsK+MjDMviBE1b4sdt2+nM/kvjRP674U0/C+BGD1vjLv+L6Gdvu+Yv38vhpr/b7Ewvy+mB77vrJ2+L4T0fS+dzDwvhuR6r41DuS+WqzcvqVo1L6gVcu+/HTBvt3btr4"),
                  ]},
+    # ffmpeg's decode of the audio stream only (-map 0:a); libvorbis's own decode agrees within 5e-8
+    "theora11k": {"rate": 11025, "channels": 1, "samples": 11025, "mean_rms": [(-6.08e-07, 0.088340285)],
+                  "windows": [
+                      (0, 0, "KoGWumRDszxSbjQ9V7WEPdIyqz1F7cs9xY7lPRTG9j2K2P49JeT9PczC8z3b8+A97xfGPSpfpD2593k9JGoiPafWijxjiM2783fvvF+YUb3YQJK9fm62vUtN1L1Bkuq9BrT4vVUJ/r3ROPq9MXvtvQ8e2L39F7u9O0iXvQIsXL0"),
+                      (0, 5496, "Xuyau5Fh57yA8U+9B2+SvYO7t70ujda9pc3tvdeq/L1OTwG+VXP/vcNF870khN69HurBvUR6nr2V6Wq9qpgQvVrGRLxFuD88WVkPPfayaT2+5Z09LV/BPeAF3j2e1/I9+Bj/PeotAT5Rg/w9w8TtPcyl1j2V97c9ec+SPVz6UD0"),
+                      (0, 10993, "nHEGPeZ3YD3BaJk9nQG9PYEg2j3Kbe89pFH8PRguAD5TePs9l8jtPWG51z21O7o9pheWPVGtWT38hf48kcgBPPEAgLyrRx690kl3vam5o70lJca953zhvb+y9L3PKf+9YC4AvmFs+L0+o+e9C/bOvV00r71IkIm9wIA+vYHRxrw"),
+                  ]},
 }
+
+# libvorbis 1.3.7's own decode (vorbis_synthesis, blockin and pcmout through ctypes, as vorbisfile and oggdec
+# drive it) of stereo44k with every audio granule lowered by 300: 32 samples per channel from output index 2992,
+# across the 300 samples it drops at 3008 (the start of the first audio page's last packet).
+LOWERED_REF = (
+    (0, "U2xSvnuPbL61bIG+dBmKvgjYj75pTJK+zTeRvtp6jL7fFoS+iltwvvABUr5D3i2+v+EEvkxSsL1ZyyO9k4vtO8D2aTwI2yo9XZuJPTpItz1EL9w9RVv2PVocAj7vUQI+W/P2PTX+2j12HbE9alJ0PcrE3TyQeCq8yf5Tveo9xL0"),
+    (1, "S+lsPmgjZD4491k+wXROPiKuQT5+tzM+xaYkPrKTFD6QlwM+JJrjPXGgvj0nfJg9kdJiPXVKEz0SuoU8bXRfu4CCgD7PiH8+AHt8Pkjgdz7bv3E+SSNqPnkWYT6ap1Y+AOdKPhrnPT5BvC8+tXwgPlxAED5YQf49GHHaPSBItT0"),
+)
 
 # libvorbis's decode (ffmpeg -c:a libvorbis) of hand_stream(0, 2): the first 96 samples.
 HAND_REF = (
@@ -644,21 +757,41 @@ class OggVorbisExam(unittest.TestCase):
         info, _, _ = self.decode("stereo44k")
         self.assertEqual(info["samples"], 13230, "0.3 s at 44.1 kHz, as encoded")
 
-    def test_start_trim_follows_the_first_granule(self):
+    def lowered(self, by):
+        """stereo44k with every audio page's granule moved `by` samples earlier: a short first page."""
         data = bytearray(self.data("stereo44k"))
         packets_seen = 0
         for pos in self.page_offsets(bytes(data)):
             flags, granule, _, _, lacing, _, end = oggvorbis._page(bytes(data), pos)
             packets_seen += sum(1 for lv in lacing if lv < 255)
-            if packets_seen > 3 and granule >= 0:   # an audio page: move every position 300 samples earlier
-                struct.pack_into("<q", data, pos + 6, granule - 300)
+            if packets_seen > 3 and granule >= 0:
+                struct.pack_into("<q", data, pos + 6, granule - by)
                 data[pos + 22:pos + 26] = b"\0\0\0\0"
                 struct.pack_into("<I", data, pos + 22, oggvorbis.ogg_crc(bytes(data[pos:end])))
-        info, chans, _ = oggvorbis.decode(bytes(data))
+        return bytes(data)
+
+    def test_start_trim_follows_libvorbis(self):
+        # libvorbis drops a short first page's extra samples from its last packet's output (here samples
+        # 3008..3307 of the untrimmed decode), at most that packet's 1024 samples; counts from its own decode
         _, full, _ = self.decode("stereo44k")
-        self.assertEqual((info["start_trim"], info["samples"]), (300, 13230 - 300))
-        self.assertEqual(chans[0], full[0][300:])
-        self.assertEqual(chans[1], full[1][300:])
+        info, chans, _ = oggvorbis.decode(self.lowered(300))
+        self.assertEqual((info["start_trim"], info["samples"]), (300, 12930))
+        for c in (0, 1):
+            self.assertEqual(chans[c], full[c][:3008] + full[c][3308:])
+        for c, b64 in LOWERED_REF:
+            ref = floats(b64)
+            worst = max(abs(a - b) for a, b in zip(chans[c][2992:2992 + len(ref)], ref))
+            self.assertLess(worst, 1e-4, f"ch{c} differs from libvorbis across the start trim")
+        info, chans, _ = oggvorbis.decode(self.lowered(3000))
+        self.assertEqual((info["start_trim"], info["samples"]), (1024, 12206), "libvorbis trims one packet at most")
+        self.assertEqual(chans[0], full[0][:3008] + full[0][4032:])
+
+    def test_vorbis_next_to_theora_video_decodes(self):
+        data = self.data("theora11k")
+        serials = {oggvorbis._page(data, pos)[2] for pos in self.page_offsets(data)}
+        self.assertEqual(len(serials), 2, "the fixture carries a video stream and an audio stream")
+        info, _, _ = self.decode("theora11k")
+        self.assertEqual(info["end_trim"], 239)
 
     def test_every_residue_and_lookup_type_decodes_the_same(self):
         ref = floats(HAND_REF)
@@ -766,10 +899,54 @@ class OggVorbisExam(unittest.TestCase):
         with self.assertRaises(oggvorbis.VorbisCorrupt) as ctx:
             oggvorbis.decode(data[:len(data) - 300])
         self.assertIn("truncated", str(ctx.exception))
-        last_page = self.page_offsets(data)[-1]
-        with self.assertRaises(oggvorbis.VorbisCorrupt) as ctx:
-            oggvorbis.decode(data[:last_page])      # cut cleanly between pages: the end page is missing
+        with self.assertRaises(oggvorbis.VorbisCorrupt) as ctx:     # only the headers: nothing to decode
+            oggvorbis.decode(data[:self.page_offsets(data)[2]])
         self.assertIn("truncated", str(ctx.exception))
+        # a packet continued on a page that never comes: still truncated, though every page is whole
+        head = hand_stream(1, 1)
+        cut = head[:self.page_offsets(head)[2]]
+        page = bytearray(b"OggS" + bytes([0, 0]) + struct.pack("<qIII", -1, 7, 2, 0) + bytes([1, 255]) + bytes(255))
+        struct.pack_into("<I", page, 22, oggvorbis.ogg_crc(bytes(page)))
+        with self.assertRaises(oggvorbis.VorbisCorrupt) as ctx:
+            oggvorbis.decode(cut + bytes(page))
+        self.assertIn("middle of a packet", str(ctx.exception))
+
+    def test_a_stream_without_its_end_page_decodes_with_a_warning(self):
+        data = self.data("stereo44k")
+        _, full, _ = self.decode("stereo44k")
+        offsets = self.page_offsets(data)
+        info, chans, _ = oggvorbis.decode(data[:offsets[-1]])     # cut cleanly between pages
+        self.assertEqual(info["samples"], 11392, "up to the granule of the last page kept")
+        self.assertEqual(chans[1], full[1][:11392])
+        self.assertIn("no end-of-stream page", info["warnings"][0])
+        lost = bytearray(data)                      # the end page is there, only its flag is lost
+        pos = offsets[-1]
+        lost[pos + 5] &= ~4
+        lost[pos + 22:pos + 26] = b"\0\0\0\0"
+        struct.pack_into("<I", lost, pos + 22, oggvorbis.ogg_crc(bytes(lost[pos:])))
+        info, chans, _ = oggvorbis.decode(bytes(lost))
+        self.assertEqual((info["samples"], info["end_trim"]), (13230, 274), "the last granule still ends it")
+        self.assertEqual(chans[0], full[0])
+        self.assertEqual(self.decode("stereo44k")[0]["warnings"], [])
+        src = self.dir / "cut.ogg"
+        src.write_bytes(bytes(lost))
+        rc, out = self.run_tool("info", src)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("[warn]", out)
+        self.assertIn("no end-of-stream page", out)
+
+    def test_towav_refuses_surround_before_decoding(self):
+        src = self.dir / "six.ogg"
+        src.write_bytes(hand_stream(1, 1, channels=6, audio=[b"\x00"] * 40))
+        self.assertEqual(oggvorbis.identification(src.read_bytes())["channels"], 6)
+        with mock.patch.object(oggvorbis, "decode", side_effect=AssertionError("decoded before refusing")):
+            rc, out = self.run_tool("towav", src, "--out", self.dir / "six.wav")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("6-channel audio", out)
+        self.assertFalse((self.dir / "six.wav").exists())
+        self.assertEqual(oggvorbis.identification(self.data("theora11k"))["rate"], 11025, "skips the video header")
+        with self.assertRaises(oggvorbis.VorbisError):
+            oggvorbis.identification(self.data("opus"))
 
     def test_crc_mismatch_and_missing_page_fail(self):
         data = bytearray(self.data("mono22k"))

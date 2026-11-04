@@ -30,6 +30,10 @@
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
 #           clean refuses a target folder that is the project or above it, or that cargo did not make
 #           (no CACHEDIR.TAG), since .cargo/config.toml or CARGO_TARGET_DIR can point it anywhere
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Windows a command with a timeout runs in a
+#           job object (WinJob), so a timeout also ends a grandchild whose parent already exited
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Linux and macOS, killing an untimed command
+#           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -74,9 +78,65 @@ def quiet_env():
 NEW_SESSION = sys.platform != "win32"
 
 
-def kill_tree(proc):
+class WinJob:
+    """Windows: a job object holding proc and every process it starts from then on, so kill_tree can end a
+    grandchild whose parent already exited (taskkill /T only finds children through living parents). Made for
+    commands with a timeout, like the process group on Linux and macOS; elsewhere, or when a call fails, it does
+    nothing. A process proc starts before it joins the job (its first moments) stays outside: taskkill /T covers it."""
+    PROCESS_SET_QUOTA = 0x0100
+    PROCESS_TERMINATE = 0x0001
+
+    def __init__(self, proc, timeout):
+        self.handle = None
+        if sys.platform != "win32" or timeout is None:
+            return
+        try:
+            k32 = kernel32()
+            job = k32.CreateJobObjectW(None, None)
+            child = k32.OpenProcess(self.PROCESS_SET_QUOTA | self.PROCESS_TERMINATE, False, proc.pid) if job else None
+            if child and k32.AssignProcessToJobObject(job, child):
+                self.handle = job
+            elif job:
+                dbg(f"job object: could not add pid {proc.pid}")
+                k32.CloseHandle(job)
+            if child:
+                k32.CloseHandle(child)
+        except (OSError, AttributeError, ImportError) as exc:
+            dbg(f"job object: {exc}")
+
+    def kill(self):
+        """End every process in the job, then close it."""
+        if self.handle:
+            kernel32().TerminateJobObject(self.handle, 1)
+        self.close()
+
+    def close(self):
+        """Let go of the job; its processes keep running (a normal exit changes nothing)."""
+        if self.handle:
+            kernel32().CloseHandle(self.handle)
+            self.handle = None
+
+
+def kernel32():
+    """kernel32 with the job object calls typed (Windows only)."""
+    import ctypes
+    from ctypes import wintypes
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.CreateJobObjectW.restype = wintypes.HANDLE
+    k32.CreateJobObjectW.argtypes = (wintypes.LPVOID, wintypes.LPCWSTR)
+    k32.OpenProcess.restype = wintypes.HANDLE
+    k32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    k32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+    k32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
+    k32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    return k32
+
+
+def kill_tree(proc, job=None):
     """Kill proc and everything it started. A grandchild still holding our stdout pipe (a test exe, a
     worker, an editor helper) would otherwise keep communicate() waiting after proc itself is dead."""
+    if job is not None:
+        job.kill()                         # Windows: the whole job, also orphaned grandchildren
     if sys.platform == "win32":
         try:                               # /T: the whole tree under proc; Popen holds the handle, so the PID is still ours
             subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], stdin=subprocess.DEVNULL,
@@ -86,13 +146,52 @@ def kill_tree(proc):
             dbg(f"taskkill: {exc}")
     else:
         try:
-            os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+            if os.getpgid(proc.pid) == proc.pid:
+                os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+            else:
+                # An untimed command shares our group (so a terminal's Ctrl+C reaches it as before): kill what it
+                # started one by one, found through the parent ids ps lists, or a build server outlives us
+                for pid in descendants(proc.pid):
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except OSError:
+                        pass                  # it ended on its own meanwhile
         except OSError as exc:
             dbg(f"killpg: {exc}")
     try:
         proc.kill()
     except OSError:
         pass
+
+
+def ps_pairs():
+    """(pid, parent pid) of every process, from ps (Linux and macOS). Empty when ps cannot run."""
+    try:
+        out = subprocess.run(["ps", "-A", "-o", "pid=", "-o", "ppid="], stdin=subprocess.DEVNULL,
+                             capture_output=True, encoding="utf-8", errors="replace", timeout=KILL_TIMEOUT_S).stdout
+    except (OSError, subprocess.SubprocessError) as exc:
+        dbg(f"ps: {exc}")
+        return []
+    pairs = []
+    for line in out.splitlines():
+        cols = line.split()
+        if len(cols) == 2 and cols[0].isdigit() and cols[1].isdigit():
+            pairs.append((int(cols[0]), int(cols[1])))
+    return pairs
+
+
+def descendants(root):
+    """Every process below root (children, grandchildren, ...), parents before their children."""
+    children = {}
+    for pid, ppid in ps_pairs():
+        children.setdefault(ppid, []).append(pid)
+    found, todo = [], list(children.get(root, []))
+    while todo:
+        pid = todo.pop(0)
+        if pid != root and pid not in found:
+            found.append(pid)
+            todo.extend(children.get(pid, []))
+    return found
 
 
 def reap(proc):
@@ -125,11 +224,13 @@ def run(cmd, env=None, capture=False, timeout=None):
     except OSError as exc:                 # PermissionError, a folder instead of a binary, ...
         print(f"[error] cannot execute {cmd[0]}: {exc.strerror or exc}", file=sys.stderr)
         return 126, ""
+    job = WinJob(proc, timeout)
     try:
         out, _ = proc.communicate(timeout=timeout)
+        job.close()                        # a normal exit: anything it left running keeps running
     except (subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
         # Kill, then keep what the game printed so far: its last lines show where it hung
-        kill_tree(proc)
+        kill_tree(proc, job)
         out = reap(proc)
         if isinstance(exc, KeyboardInterrupt):
             print("\n".join((out or "").splitlines()[-20:]))

@@ -10,16 +10,21 @@
 #           python tools/audio/wavesmith/wavesmith.py dialogue lint data/dialogue.json --root .        # --strict: warnings fail
 #           python tools/audio/wavesmith/wavesmith.py dialogue lint data/dialogue.json --root . --pseudo    # will translations fit?
 #           python tools/audio/wavesmith/wavesmith.py dialogue export data/dialogue/en.built.json --sequence intro --format vtt --out intro.vtt
+#           python tools/audio/wavesmith/wavesmith.py dialogue vectors --check     # data/golden/dialogue.json current? (exit 1)
 # Needs   : Python 3.8+ only (wavfile.py and flacfile.py read voice durations)
-# Exit    : 0 ok, 1 errors found (or warnings with --strict), 2 usage or unreadable files
+# Exit    : 0 ok, 1 errors found (or warnings with --strict) or stale vectors, 2 usage or unreadable files
 # Notes   : Reveal times: exact from a babble .timeline.json; estimated for other voice files (characters spread over
 #           the voiced part, with pauses at punctuation: right for a typewriter, not for lip sync); characters at the
 #           speaker's cps when there is no audio. One reveal entry per character (code point), as the engines expect.
 #           Subtitle style defaults: at most 40 characters a line (Xbox Accessibility Guideline 104 calls longer
 #           lines long; Netflix allows 42), 2 lines, 20 characters a second (Netflix, adults; 17 for children),
-#           5/6 s minimum and 7 s maximum per cue (Netflix). Exports name the speaker whenever it changes (XAG 104).
+#           5/6 s minimum and 7 s maximum per cue (Netflix). Exports name the speaker whenever it changes (XAG 104);
+#           SRT's inline "NAME: " is laid out within the line width, and lint warns when a cue has no room for it.
 #           SFX captions come from audio_events.json events with a "caption" (and "directional": true for sounds
 #           whose side of the screen matters; XAG 104 asks for an arrow). The format only ever adds optional fields.
+#           reveal_count() is the reference typewriter: a line's reveal list counts only when it has one entry per
+#           character of the shown text; otherwise the text types at DEFAULT_CPS, faster when that would not finish
+#           within duration_s. Every engine with a dialogue module follows data/golden/dialogue.json.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
@@ -30,6 +35,9 @@
 #   lint:  build, then report reading speed, short or long cues, unbreakable words, unknown speakers, missing files
 #          --pseudo: each line through the pseudo-locale (40 % longer) over the same timing -> the same cue checks
 #   export: a sequence's cues at absolute times -> SRT or WebVTT, speaker named when it changes
+#   reveal_count(line, t): reveal list as long as the shown text? entries at or before t
+#          else duration 0? everything; else floor(t * max(DEFAULT_CPS, length / duration) + eps), capped
+#   vectors: scripted reveal counts through reveal_count -> data/golden/dialogue.json (--write / --check)
 import argparse
 import hashlib
 import json
@@ -48,6 +56,8 @@ VERSION = 1
 STYLE = {"max_chars_per_line": 40, "max_lines": 2, "min_cue_s": 0.833, "max_cue_s": 7.0, "max_cps": 20}
 CHILDREN_CPS = 17
 DEFAULT_CPS = 30                 # typewriter speed without audio (matches the engines' DEFAULT_CPS)
+REVEAL_EPS = 1e-9                # t * cps lands on a whole character count despite rounding
+GOLDEN = Path(__file__).resolve().parents[3] / "data" / "golden" / "dialogue.json"
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,63}$")
 KINDS = ("line", "bark")
 INTERRUPTS = ("never", "lower", "always")
@@ -102,6 +112,57 @@ def estimate_reveal(text, start, end):
 
 def cps_reveal(text, cps):
     return [{"i": i, "t": round(i / cps, 4)} for i in range(len(list(text)))]
+
+
+# ---- The typewriter (reference for every engine) -----------------------------------------------------------------
+def reveal_count(line, t, length=None):
+    """Characters (code points) of the shown text visible t seconds into a built line. `length` is the shown
+    text's length when it differs from line["text"] (a translation, the pseudo locale). The reveal list counts only
+    when it has one entry per shown character: built for another take or text, it would stop short and the line
+    would never finish. Otherwise the text types at DEFAULT_CPS, faster when that would not finish by duration_s."""
+    n = len(line.get("text", "")) if length is None else length
+    reveal = line.get("reveal") or []
+    if len(reveal) == n:
+        return sum(1 for r in reveal if r["t"] <= t)
+    duration = line.get("duration_s", n / DEFAULT_CPS)
+    if duration <= 0:
+        return n
+    cps = max(DEFAULT_CPS, n / duration)                  # all of it by duration_s, never slower than DEFAULT_CPS
+    return min(n, max(0, math.floor(t * cps + REVEAL_EPS)))
+
+
+def vector_cases():
+    """Scripted typewriter questions every engine's dialogue module must answer exactly (whole characters)."""
+    hello = "Hello there"                                 # 11 characters
+    fits = [{"i": i, "t": round(i * 0.05, 4)} for i in range(len(hello))]
+    long_text = "The bakery opens at dawn, and the baker wants every loaf on the shelf before the first cart rolls in. " \
+                "Bring flour, bring salt, and bring the key."
+    lines = [
+        ("a reveal list with one entry per character is followed",
+         {"text": hello, "duration_s": 1.0, "reveal": fits}, (0.0, 0.12, 0.25, 0.5, 2.0)),
+        ("a reveal list shorter than the text is ignored: 30 per second, the line finishes",
+         {"text": hello, "duration_s": 2.0, "reveal": fits[:5]}, (0.0, 0.1, 0.2, 0.3, 2.0)),
+        ("a reveal list longer than the text is ignored too",
+         {"text": "Hi", "duration_s": 1.0, "reveal": fits[:5]}, (0.0, 0.04, 1.0)),
+        ("no reveal list: a long line types faster to finish by its duration",
+         {"text": long_text, "duration_s": 2.0}, (0.0, 0.5, 1.0, 1.99, 2.0, 3.0)),
+        ("no reveal list and no duration: 30 per second",
+         {"text": "Forty-five characters of plain text, no data."}, (0.0, 1.0, 1.5, 2.0)),
+        ("a duration of 0 shows the whole line at once",
+         {"text": hello, "duration_s": 0}, (0.0,)),
+        ("characters are code points, not bytes",
+         {"text": "\u00c7a va, Zo\u00eb? \u00a1S\u00ed!", "duration_s": 0.2}, (0.0, 0.1, 0.2)),
+    ]
+    steps = [{"line": line, "t": t, "expect": reveal_count(line, t)} for _, line, ts in lines for t in ts]
+    names = [name for name, _, ts in lines for _ in ts]
+    for step, name in zip(steps, names):
+        step["about"] = name
+    return [{"type": "reveal_count", "name": "typewriter reveal counts", "steps": steps}]
+
+
+def render_vectors():
+    return json.dumps({"version": 1, "tolerance": 0, "about": "tools/audio/wavesmith/dialogue.py vectors --write",
+                       "cases": vector_cases()}, indent=1, ensure_ascii=False) + "\n"
 
 
 def _end_bonus(word):
@@ -247,15 +308,44 @@ def load_json(path, what):
         raise ToolError(f"cannot read {what} {path}: {exc}")
 
 
+def is_number(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
 def build(src_path, root=".", events_path=None, audience="adults"):
-    """(built dict, errors list, warnings list)."""
+    """(built dict, errors list, warnings list). A dialogue file that is not a JSON object is a ToolError; a value of
+    the wrong type anywhere inside is a named error, never a traceback (built is None then)."""
     raw_bytes = Path(src_path).read_bytes()
     src = load_json(src_path, "dialogue")
+    if not isinstance(src, dict):
+        raise ToolError(f"{src_path} must hold one JSON object (version, speakers, lines, sequences), "
+                        f"not a {type(src).__name__}")
+    try:
+        return _build(src, raw_bytes, root, events_path, audience)
+    except (TypeError, AttributeError, KeyError) as exc:   # a value of a type no check foresaw: named, not a crash
+        return None, [f"a value has the wrong type ({type(exc).__name__}: {exc}); compare the file with the format "
+                      f"in docs/resources/audio.md"], []
+
+
+def _build(src, raw_bytes, root, events_path, audience):
     errors, warnings = [], []
     style = dict(STYLE, max_cps=CHILDREN_CPS if audience == "children" else STYLE["max_cps"])
     if src.get("version") != VERSION:
         errors.append("version must be 1")
-    speakers = src.get("speakers") or {}
+    speakers = src.get("speakers")
+    speakers = {} if speakers is None else speakers
+    if not isinstance(speakers, dict):
+        errors.append("speakers must be an object (speaker id to name, cps, color)")
+        speakers = {}
+    broken = set()                    # speakers already reported: their lines are skipped without a second error
+    for spk, sp in speakers.items():
+        if not isinstance(sp, dict):
+            errors.append(f"speaker {spk}: must be an object (name, cps, color)")
+            broken.add(spk)
+        elif "cps" in sp and not (is_number(sp["cps"]) and sp["cps"] > 0):
+            errors.append(f"speaker {spk}: cps must be a number above 0 (characters a second; leave it out for "
+                          f"{DEFAULT_CPS})")
+            broken.add(spk)
     lines_in = src.get("lines") or []
     if not isinstance(lines_in, list):
         errors.append("lines must be a list (in the order they are written)")
@@ -263,16 +353,24 @@ def build(src_path, root=".", events_path=None, audience="adults"):
     root = Path(root)
     built_lines, seen = {}, set()
     for n, ln in enumerate(lines_in):
+        if not isinstance(ln, dict):
+            errors.append(f"line #{n}: must be an object (id, speaker, text), not {json.dumps(ln)[:40]}")
+            continue
         lid = ln.get("id", f"#{n}")
+        if not isinstance(lid, str):
+            errors.append(f"line #{n}: id must be a string, not {json.dumps(lid)[:40]}")
+            continue
         where = f"line {lid}"
-        if not ID_RE.match(str(lid)):
+        if not ID_RE.match(lid):
             errors.append(f"{where}: id must be lowercase ASCII letters, digits, _ . - (it is the localization key)")
         if lid in seen:
             errors.append(f"{where}: duplicate id")
         seen.add(lid)
         spk = ln.get("speaker")
-        if spk not in speakers:
+        if not isinstance(spk, str) or spk not in speakers:
             errors.append(f"{where}: speaker {spk!r} is not in speakers")
+            continue
+        if spk in broken:
             continue
         sp = speakers[spk]
         if not sp.get("name"):
@@ -290,6 +388,9 @@ def build(src_path, root=".", events_path=None, audience="adults"):
             warnings.append(f"{where}: a bark without cooldown_s can repeat back to back")
         count = len(list(text))
         audio, timeline = ln.get("audio"), ln.get("timeline")
+        if not all(v is None or isinstance(v, str) for v in (audio, timeline)):
+            errors.append(f"{where}: audio and timeline must be paths (strings) relative to the root")
+            continue
         reveal, source, duration = None, "text", count / sp.get("cps", DEFAULT_CPS)
         if audio:
             if not (root / audio).is_file():
@@ -314,6 +415,11 @@ def build(src_path, root=".", events_path=None, audience="adults"):
             reveal = cps_reveal(text, sp.get("cps", DEFAULT_CPS))
         cues = make_cues(text, reveal, duration, style)
         warnings += cue_warnings(where, cues, style)
+        name = sp.get("name", spk)
+        if cues and named_lines(name, cues[0]["lines"], style) is None:
+            warnings.append(f"{where}: SRT puts \"{srt_prefix(name)}\" in front when the speaker changes, and the first "
+                            f"cue no longer fits {style['max_lines']} lines of {style['max_chars_per_line']} "
+                            f"characters: shorten the speaker's name or the line's opening")
         entry = {"speaker": spk, "name": sp.get("name", spk), "color": sp.get("color", "#FFFFFF"), "text": text,
                  "kind": kind, "priority": ln.get("priority", 50), "interrupt": ln.get("interrupt", "lower"),
                  "cooldown_s": ln.get("cooldown_s", 0), "duration_s": round(duration, 3), "reveal_source": source,
@@ -329,15 +435,23 @@ def build(src_path, root=".", events_path=None, audience="adults"):
                 captions[name] = {"text": e["caption"], "priority": e.get("caption_priority", 30),
                                   "min_s": e.get("caption_min_s", 1.0), "directional": bool(e.get("directional", False))}
     sequences = {}
-    for sname, steps in sorted((src.get("sequences") or {}).items()):
+    seq_in = src.get("sequences")
+    seq_in = {} if seq_in is None else seq_in
+    if not isinstance(seq_in, dict):
+        errors.append("sequences must be an object (sequence name to a list of steps)")
+        seq_in = {}
+    for sname, steps in sorted(seq_in.items()):
+        if not isinstance(steps, list) or not all(isinstance(step, dict) for step in steps):
+            errors.append(f"sequence {sname}: must be a list of steps, each an object with a line")
+            continue
         out, ends = [], {}
         for k, step in enumerate(steps):
             lid = step.get("line")
-            if lid not in built_lines:
+            if not isinstance(lid, str) or lid not in built_lines:
                 errors.append(f"sequence {sname} step {k}: unknown line {lid!r}")
                 continue
             if "after" in step:
-                if step["after"] not in ends:
+                if not isinstance(step["after"], str) or step["after"] not in ends:
                     errors.append(f"sequence {sname} step {k}: 'after' must name an earlier step's line")
                     continue
                 start = ends[step["after"]] + step.get("gap_s", 0.0)
@@ -376,12 +490,37 @@ def sequence_cues(built, name):
     return out
 
 
-def to_srt(cues):
+def srt_prefix(name):
+    return f"{name.upper()}: "
+
+
+def named_lines(name, lines, style):
+    """A cue's lines with "NAME: " in front (SRT has no voice tag, so players show the name inline), laid out again
+    when the first line would pass the line width. None when the cue no longer fits its lines."""
+    first = srt_prefix(name) + (lines[0] if lines else "")
+    width = style["max_chars_per_line"]
+    if len(first) <= width:
+        return [first] + list(lines[1:])
+    words = [srt_prefix(name).strip()] + [w for x in lines for w in x.split()]   # the name stays one piece
+    if style["max_lines"] >= 2:
+        return split_two(words, width)
+    return [" ".join(words)] if len(" ".join(words)) <= width else None
+
+
+def to_srt(cues, style=STYLE, warnings=None):
+    """SRT text; the speaker's name goes in front of the cue that names it, within the line width when it fits
+    (otherwise in front anyway, with a note in warnings when a list is given)."""
     blocks = []
     for n, c in enumerate(cues, 1):
         lines = list(c["lines"])
         if c["name"]:
-            lines[0] = f"{c['name'].upper()}: {lines[0]}"
+            laid = named_lines(c["name"], lines, style)
+            if laid is None:
+                laid = [srt_prefix(c["name"]) + (lines[0] if lines else "")] + lines[1:]
+                if warnings is not None:
+                    warnings.append(f"cue {n}: \"{laid[0][:40]}\" is {len(laid[0])} characters with the speaker's name "
+                                    f"in front (at most {style['max_chars_per_line']}): shorten the name or the line")
+            lines = laid
         blocks.append(f"{n}\r\n{fmt_time(c['start'], ',')} --> {fmt_time(c['end'], ',')}\r\n" + "\r\n".join(lines))
     return "\r\n\r\n".join(blocks) + "\r\n"
 
@@ -438,7 +577,10 @@ def cmd_lint(args):
 def cmd_export(args):
     built = load_json(args.built, "built dialogue")
     cues = sequence_cues(built, args.sequence)
-    text = to_srt(cues) if args.format == "srt" else to_vtt(cues)
+    notes = []
+    text = to_srt(cues, built.get("style", STYLE), notes) if args.format == "srt" else to_vtt(cues)
+    for x in notes:
+        print(f"[warn] {x}")
     out = Path(args.out)
     if out.exists() and not args.overwrite:
         raise ToolError(f"{out} exists (use --overwrite)")
@@ -447,10 +589,26 @@ def cmd_export(args):
     return 0
 
 
+def cmd_vectors(args):
+    text = render_vectors()
+    if args.write:
+        GOLDEN.parent.mkdir(parents=True, exist_ok=True)
+        GOLDEN.write_bytes(text.encode("utf-8"))
+        print(f"[ OK ] wrote {GOLDEN}")
+        return 0
+    current = GOLDEN.read_bytes().decode("utf-8") if GOLDEN.exists() else None
+    if current != text:
+        print(f"[FAIL] {GOLDEN} is stale or missing: run dialogue.py vectors --write")
+        return 1
+    print(f"[ OK ] {GOLDEN} is current")
+    return 0
+
+
 def build_parser():
     ap = argparse.ArgumentParser(description="Dialogue for games: built file (typewriter reveal, subtitle cues, SFX "
                                              "captions), SRT / WebVTT export, and subtitle linting.",
-                                 epilog="Exit codes: 0 ok, 1 errors (or warnings with --strict), 2 usage.")
+                                 epilog="Exit codes: 0 ok, 1 errors (or warnings with --strict) or stale vectors, "
+                                        "2 usage.")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--debug", action="store_true", help="tracebacks")
     src = argparse.ArgumentParser(add_help=False)
@@ -474,6 +632,10 @@ def build_parser():
     ex.add_argument("--format", choices=("srt", "vtt"), default="srt")
     ex.add_argument("--out", required=True)
     ex.add_argument("--overwrite", action="store_true")
+    ve = sub.add_parser("vectors", parents=[common], help="the typewriter golden vectors (data/golden/dialogue.json)")
+    mode = ve.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--write", action="store_true", help="rewrite the file from the reference")
+    mode.add_argument("--check", action="store_true", help="exit 1 when the file is stale or missing")
     return ap
 
 
@@ -491,7 +653,7 @@ def main(argv=None):
         ap.print_help()
         return 2
     try:
-        return {"build": cmd_build, "lint": cmd_lint, "export": cmd_export}[args.cmd](args)
+        return {"build": cmd_build, "lint": cmd_lint, "export": cmd_export, "vectors": cmd_vectors}[args.cmd](args)
     except ToolError as exc:
         print(f"[error] {exc}", file=sys.stderr)
         if DEBUG:

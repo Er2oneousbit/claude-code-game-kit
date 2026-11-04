@@ -167,6 +167,7 @@ class AudioEventsExam(unittest.TestCase):
         f.write_text(json.dumps(GOOD), encoding="utf-8")
         rc, out = self.run_tool("validate", f)
         self.assertEqual(rc, 0, out)
+        self.assertEqual(AE.validate(dict(GOOD, seed=2 ** 53 - 1)), [])     # the largest seed every port holds
 
     def test_each_kind_of_broken_file_is_named(self):
         def broken(edit):
@@ -187,6 +188,7 @@ class AudioEventsExam(unittest.TestCase):
             (lambda d: d["events"]["click"].update(max_voices=0), "max_voices"),
             (lambda d: d.update(seed=-5), "seed must be a whole number"),
             (lambda d: d.update(seed=1.5), "seed must be a whole number"),
+            (lambda d: d.update(seed=2 ** 53 + 1), "seed must be a whole number, 0 to 9007199254740991"),
             (lambda d: d["events"]["click"].update(pick=None), "pick is null"),
             (lambda d: d["events"]["click"].update(directional="yes"), "directional must be true or false"),
         ]
@@ -258,6 +260,17 @@ class AudioEventsExam(unittest.TestCase):
     def test_usage(self):
         rc, out = self.run_tool("vectors")
         self.assertEqual(rc, 2, out)
+
+    def test_an_unreadable_file_exits_2_not_1(self):
+        # #114: a SystemExit with a message exits 1, which CI reads as "the events file has problems"
+        with tempfile.TemporaryDirectory() as tmp:
+            broken = Path(tmp) / "broken.json"
+            broken.write_text("{not json", encoding="utf-8")
+            for cmd in ("validate", "audit"):
+                for path in (Path(tmp) / "no-such-file.json", broken):
+                    rc, out = self.run_tool(cmd, path)
+                    self.assertEqual(rc, 2, f"{cmd} {path.name}: {out}")
+                    self.assertIn("[error] cannot read", out)
 
 
 if __name__ == "__main__":

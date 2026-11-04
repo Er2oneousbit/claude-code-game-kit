@@ -271,6 +271,11 @@ export class Shell {
   shown(s: Screen): void {
     this.telemetry.event("screen", s.id);
     Log.debug("core", `screen ${s.id}`);
+    this.checkLayout(s);
+  }
+
+  /** In locale "pseudo": checks every visible label two frames from now, while s is still the screen shown. */
+  checkLayout(s: Screen): void {
     if (this.i18n.locale !== PSEUDO_LOCALE) return;
     this.pendingChecks++;
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -279,6 +284,7 @@ export class Shell {
       const r = checkScreen(this.rootEl); // the screen plus subtitles and toasts: everything visible
       this.checks.screens++;
       this.checks.labels += r.labels;
+      Log.info("i18n", `PSEUDO_SCREEN ${s.id} labels ${r.labels} problems ${r.failures.length}`);
       for (const f of r.failures) {
         const line = `PSEUDO_FAIL ${s.id}: "${f.id}" ${f.reason}: ${JSON.stringify(f.text)}`;
         this.checks.failures.push(line);
@@ -289,6 +295,11 @@ export class Shell {
 
   get checksPending(): boolean {
     return this.pendingChecks > 0;
+  }
+
+  /** Toasts on screen now (each one leaves after TOAST_MS). */
+  get toastCount(): number {
+    return this.toastsEl.childElementCount;
   }
 
   /** Redraws the top screen in place (language or layout changed), keeping the focused item. */

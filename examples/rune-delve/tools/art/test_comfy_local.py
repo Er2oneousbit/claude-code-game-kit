@@ -85,6 +85,7 @@ class State:
 
     def reset(self):
         self.prompts, self.uploads = [], []
+        self.upload_name = "hero.png"  # the name /upload/image answers with (ComfyUI renames when one is taken)
         self.reject = False          # /prompt answers 400 with node errors
         self.fail = None             # history status error with this exception message
         self.interrupted = False     # history status error with only an execution_interrupted message
@@ -163,7 +164,7 @@ class FakeComfy(http.server.BaseHTTPRequestHandler):
             return self.send(200, {"prompt_id": "p-1", "number": 1, "node_errors": {}})
         if self.path == "/upload/image":
             STATE.uploads.append(body)
-            return self.send(200, {"name": "hero.png", "subfolder": "", "type": "input"})
+            return self.send(200, {"name": STATE.upload_name, "subfolder": "", "type": "input"})
         self.send(404, {"error": "no such path"})
 
 
@@ -306,11 +307,35 @@ class ComfyLocalExam(unittest.TestCase):
         self.assertIn("--overwrite", out)
         self.assertEqual(self.run_tool("run", "--workflow", "wf.api.json", "--out", "o", "--overwrite")[0], 0)
 
+    def test_existing_record_or_any_output_stops_before_writing(self):
+        # #30: comfy_local.gen.json was always replaced, and a job wrote its first files before refusing a later one
+        (self.root / "o").mkdir()
+        (self.root / "o" / cl.GEN_FILE).write_bytes(b"keep")
+        rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o")
+        self.assertEqual(rc, 2, out)
+        self.assertIn(cl.GEN_FILE, out)
+        self.assertEqual((self.root / "o" / cl.GEN_FILE).read_bytes(), b"keep")
+        self.assertEqual(STATE.prompts, [], "refused before the GPU was spent")
+        (self.root / "o" / cl.GEN_FILE).unlink()
+        (self.root / "o" / "kit_preview.png").write_bytes(b"keep")
+        rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o", "--include-temp")
+        self.assertEqual(rc, 2, out)
+        self.assertFalse((self.root / "o" / "kit_00001_.png").exists(), "nothing written when one file is refused")
+        self.assertEqual((self.root / "o" / "kit_preview.png").read_bytes(), b"keep")
+
     def test_image_upload_points_node_at_it(self):
         rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o", "--image", "12=hero.png")
         self.assertEqual(rc, 0, out)
         self.assertEqual(len(STATE.uploads), 1)
         self.assertEqual(STATE.prompts[0]["prompt"]["12"]["inputs"]["image"], "hero.png")
+
+    def test_upload_never_replaces_comfyuis_own_file(self):
+        # #32: uploads sent overwrite=true, replacing an input file of the same name already in ComfyUI
+        STATE.upload_name = "hero (1).png"
+        rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o", "--image", "12=hero.png")
+        self.assertEqual(rc, 0, out)
+        self.assertIn(b'name="overwrite"' + bytes([13, 10, 13, 10]) + b"false", STATE.uploads[0])
+        self.assertEqual(STATE.prompts[0]["prompt"]["12"]["inputs"]["image"], "hero (1).png", "the name ComfyUI chose")
 
     def test_rejected_workflow_shows_node_errors(self):
         STATE.reject = True
@@ -433,6 +458,17 @@ class ComfyLocalExam(unittest.TestCase):
         rc, out = self.run_tool("strip", "x.png", "--out", "c", url=False)
         self.assertEqual(rc, 2)
         self.assertIn("not a PNG", out)
+
+    def test_strip_refuses_a_bare_signature_or_cut_png(self):
+        # #31: a file that was only the 8-byte PNG signature was "cleaned" and written
+        whole = png_with_text()
+        for name, data, why in (("sig.png", PNG_SIG, "IHDR"), ("cut.png", whole[:-12], "no IEND"),
+                                ("headless.png", PNG_SIG + whole[33:], "IHDR")):
+            (self.root / name).write_bytes(data)
+            rc, out = self.run_tool("strip", name, "--out", "c", url=False)
+            self.assertEqual(rc, 2, out)
+            self.assertIn(why, out)
+            self.assertFalse((self.root / "c" / name).exists())
 
 
 if __name__ == "__main__":

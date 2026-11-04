@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from wavfile import WavNameError, check_wav_name, stats, write_wav  # noqa: E402
 
 MAGIC = b"fLaC"
+STREAMINFO_BYTES = 34        # the fixed size of the STREAMINFO block's body
 SUPPORTED_BITS = (16, 24)
 SUPPORTED_CHANNELS = (1, 2)
 BLOCK_SIZES = {1: 192, 2: 576, 3: 1152, 4: 2304, 5: 4608,
@@ -157,8 +158,15 @@ def read_streaminfo(data):
         head = data[pos]
         kind, last = head & 0x7F, head & 0x80
         length = int.from_bytes(data[pos + 1:pos + 4], "big")
+        if pos + 4 + length > len(data):
+            raise FlacCorrupt(f"a metadata block of {length} bytes runs past the end of the file (corrupt file)")
         body = data[pos + 4:pos + 4 + length]
         if kind == 0:
+            # a zero-filled tail (a cut, padded download) parses as another STREAMINFO block of length 0
+            if length < STREAMINFO_BYTES:
+                raise FlacCorrupt(f"STREAMINFO block is {length} bytes, not {STREAMINFO_BYTES} (corrupt file)")
+            if info is not None:
+                raise FlacCorrupt("a second STREAMINFO block (corrupt file)")
             bits = int.from_bytes(body[10:18], "big")
             info = {"min_block": struct.unpack(">H", body[0:2])[0], "max_block": struct.unpack(">H", body[2:4])[0],
                     "rate": bits >> 44, "channels": ((bits >> 41) & 0x7) + 1, "bits": ((bits >> 36) & 0x1F) + 1,
@@ -312,35 +320,45 @@ def _frame(data, pos, info):
     return chans, br.byte_pos()
 
 
+def stream(data):
+    """(info, frames): frames() yields one list of ints per channel for each frame, in order, and checks the
+    sample count and the MD5 once the last frame is out (FlacCorrupt then); info gains "md5_status" ('ok' or
+    'unset') at that point. Memory: the file plus one frame, whatever the length."""
+    info, start = read_streaminfo(data)
+
+    def frames():
+        pos, done, total = start, 0, info["total"]
+        width = info["bits"] // 8
+        md5 = hashlib.md5()
+        while pos < len(data) and (not total or done < total):
+            chans, pos = _frame(data, pos, info)
+            if total and done + len(chans[0]) > total:
+                chans = [c[:total - done] for c in chans]
+            done += len(chans[0])
+            if width == 2:
+                md5.update(struct.pack(f"<{len(chans[0]) * len(chans)}h", *(s for f in zip(*chans) for s in f)))
+            else:
+                md5.update(b"".join((s & 0xFFFFFF).to_bytes(3, "little") for f in zip(*chans) for s in f))
+            yield chans
+        if total and done < total:
+            raise FlacCorrupt(f"decoded {done} samples, STREAMINFO says {total} (truncated)")
+        if info["md5"] == bytes(16):
+            info["md5_status"] = "unset"
+        elif md5.digest() != info["md5"]:
+            raise FlacCorrupt("decoded audio does not match the file's MD5 (corrupt file or a decoder bug)")
+        else:
+            info["md5_status"] = "ok"
+    return info, frames
+
+
 def decode(data):
     """(info, list of int sample lists per channel, md5_status) where md5_status is 'ok' or 'unset'."""
-    info, pos = read_streaminfo(data)
+    info, frames = stream(data)
     chans = [[] for _ in range(info["channels"])]
-    total = info["total"]
-    while pos < len(data) and (not total or len(chans[0]) < total):
-        frame, pos = _frame(data, pos, info)
+    for frame in frames():
         for c, s in zip(chans, frame):
             c.extend(s)
-    if total and len(chans[0]) < total:
-        raise FlacCorrupt(f"decoded {len(chans[0])} samples, STREAMINFO says {total} (truncated)")
-    if total:
-        chans = [c[:total] for c in chans]
-    width = info["bits"] // 8
-    md5 = hashlib.md5()
-    fmt = "<" + "h" * info["channels"] if width == 2 else None
-    for i in range(len(chans[0])):
-        if width == 2:
-            md5.update(struct.pack(fmt, *(c[i] for c in chans)))
-        else:
-            for c in chans:
-                md5.update((c[i] & 0xFFFFFF).to_bytes(3, "little"))
-    if info["md5"] == bytes(16):
-        status = "unset"
-    elif md5.digest() != info["md5"]:
-        raise FlacCorrupt("decoded audio does not match the file's MD5 (corrupt file or a decoder bug)")
-    else:
-        status = "ok"
-    return info, chans, status
+    return info, chans, info["md5_status"]
 
 
 def read_flac(path):

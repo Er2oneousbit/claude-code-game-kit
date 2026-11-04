@@ -138,6 +138,22 @@ class ChiptuneExam(unittest.TestCase):
             rc, out = self.render(song({"p": {"lead": "C4 . . ."}}, channels=ch, loop=loop))
             self.assertEqual(rc, 0, out)
 
+    def test_a_tail_longer_than_the_song_wraps_whole(self):
+        # #32: a release longer than the looping song folded into mix[i - end], so all past one loop was lost
+        ch = {"lead": {"wave": "sine", "volume": 0.5, "sustain": 1.0, "release": 3.0}}
+        data = song({"p": {"lead": "C4 . . ."}}, channels=ch)          # 4 steps = 0.5 s, a 3 s release
+        looped, loop, _ = chiptune.render_song(chiptune.load_song(self.write(data)), RATE)
+        flat, _, _ = chiptune.render_song(chiptune.load_song(self.write(dict(data, loop=False))), RATE)
+        end = len(looped)
+        self.assertEqual(loop, (0, end - 1))
+        self.assertGreater(len(flat), 4 * end, "the tail runs several loops long")
+        fold = [0.0] * end
+        for i, v in enumerate(flat):
+            fold[i % end] += v
+        peak = max(abs(v) for v in fold)
+        diff = max(abs(a - b / peak * chiptune.PEAK) for a, b in zip(looped, fold))
+        self.assertLess(diff, 1e-3, "every part of the tail lands on the loop")
+
     def test_bad_numbers_are_song_errors(self):
         bad = [
             (song({"p": {"lead": "C4"}}, bpm="150"), "\"bpm\" must be a number"),
@@ -152,6 +168,21 @@ class ChiptuneExam(unittest.TestCase):
             self.assertEqual(rc, 2, where)
             self.assertIn(where, out)
             self.assertNotIn("Traceback", out)
+
+    def test_wrong_shapes_are_song_errors(self):
+        # #31: "channels": [] (and other wrong types) crashed --check with a traceback
+        good = song({"p": {"lead": "C4"}})
+        bad = [(5, "one JSON object"), (dict(good, channels=[]), "\"channels\" must be an object"),
+               (dict(good, channels={"lead": 5}), "\"channels\" must be an object"),
+               (dict(good, patterns={"p": []}), "\"patterns\" must be an object"),
+               (dict(good, patterns={"p": {"lead": 5}}), "must be one string"),
+               (dict(good, order="p"), "\"order\" must be a list"), (dict(good, order=[["p"]]), "\"order\" must be a list")]
+        for data, where in bad:
+            for extra in ((), ("--check",)):
+                rc, out = self.render(data, *extra)
+                self.assertEqual(rc, 2, f"{where}: {out}")
+                self.assertIn(where, out)
+                self.assertNotIn("Traceback", out)
 
     def test_check_does_not_write(self):
         path = self.write(song({"p": {"lead": "C4 . . ."}}))

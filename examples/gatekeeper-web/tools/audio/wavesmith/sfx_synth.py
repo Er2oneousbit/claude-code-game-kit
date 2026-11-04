@@ -31,6 +31,7 @@
 import argparse
 import json
 import math
+import os
 import random
 import sys
 import traceback
@@ -198,6 +199,8 @@ def parse_set(items):
 
 def make(params, seed, out_path, recipe_path, meta, overwrite):
     """Render, check and write one sound. Returns (exit_code, message)."""
+    if recipe_path and os.path.normcase(str(recipe_path.resolve())) == os.path.normcase(str(out_path.resolve())):
+        raise SynthError(f"--recipe and --out both name {out_path}: the recipe would replace the WAV")
     for path in (out_path, recipe_path):
         if path and path.exists() and not overwrite:
             raise SynthError(f"{path} exists (use --overwrite)")

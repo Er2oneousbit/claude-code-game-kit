@@ -9,6 +9,7 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 import argparse
+import os
 import shutil
 import struct
 import subprocess
@@ -34,10 +35,24 @@ def png_size(path):
     return struct.unpack(">II", head[16:24])
 
 
-def run_tool(*args):
+def run_tool(*args, env=None):
     p = subprocess.run([sys.executable, str(TOOL), *[str(a) for a in args]], capture_output=True, text=True,
-                       encoding="utf-8", errors="replace")
+                       encoding="utf-8", errors="replace", env=env)
     return p.returncode, p.stdout + p.stderr
+
+
+def failing_inkscape(folder):
+    """A stand-in Inkscape that answers --query-all and then exits 3 without exporting anything."""
+    if os.name == "nt":
+        fake = folder / "inkscape_fails.cmd"
+        fake.write_text('@echo off\r\necho %* | findstr /C:"--query-all" >nul && (echo doc,0,0,100,50& exit /b 0)\r\n'
+                        "echo export crashed 1>&2\r\nexit /b 3\r\n", encoding="ascii")
+    else:
+        fake = folder / "inkscape_fails"
+        fake.write_text('#!/bin/sh\ncase "$*" in *--query-all*) echo doc,0,0,100,50; exit 0;; esac\n'
+                        "echo export crashed >&2\nexit 3\n", encoding="ascii")
+        fake.chmod(0o755)
+    return dict(os.environ, INKSCAPE=str(fake))
 
 
 def main():
@@ -90,6 +105,11 @@ def main():
     case("an unknown id fails (exit 1) with a hint", rc == 1 and "--list-ids" in o, o[-300:])
     rc, o = run_tool(svg, "--out", out, "--size", 200)
     case("existing output is not overwritten (exit 2)", rc == 2, o[-300:])
+    # #32: with --overwrite, an Inkscape that failed (nonzero exit, nothing replaced) right after an export passed
+    rc, o = run_tool(svg, "--out", tmp / "again", "--size", 200)
+    rc2, o2 = run_tool(svg, "--out", tmp / "again", "--size", 200, "--overwrite", env=failing_inkscape(tmp))
+    case("a failed Inkscape run is a failure, even over a file written a moment ago (exit 1)",
+         rc == 0 and rc2 == 1 and "art.png (200 px wide) not written" in o2 and "exited with 3" in o2, o2[-300:])
     rc, o = run_tool(tmp / "missing.svg", "--out", out)
     case("missing SVG exits 2", rc == 2, o[-300:])
     rc, o = run_tool(svg)

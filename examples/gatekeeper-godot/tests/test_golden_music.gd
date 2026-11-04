@@ -90,3 +90,26 @@ func test_music_plan() -> void:
 			_check(got, step["expect"], where)
 			_check_ints(got, where)
 	_report("music_plan", cases.size())
+
+
+func _params_with_rule(from: String, to: String, key: String, value: Variant) -> Dictionary:
+	# The golden music_plan params with one field of the first from -> to rule changed (a deep copy)
+	var params: Dictionary = _cases("music_plan")[0]["params"].duplicate(true)
+	for r: Dictionary in params["transitions"]:
+		if r["from"] == from and r["to"] == to:
+			r[key] = value
+			break
+	return params
+
+
+func test_unknown_quantize_is_an_error_and_an_empty_stinger_is_none() -> void:
+	# music.py raises on a quantize it does not know (a typo must not mean "phrase") and plans "stinger": "" as
+	# no stinger; the golden plans never reach either
+	var typo: Dictionary = MusicDirector.plan(_params_with_rule("combat", "explore", "quantize", "bars"), "combat",
+			5000, 0, "explore", 50000)
+	assert_push_error("unknown quantize 'bars'")
+	assert_eq(typo, {}, "quantize \"bars\" plans nothing")
+	var empty: Dictionary = MusicDirector.plan(_params_with_rule("*", "waltz", "stinger", ""), "explore", 0, 0,
+			"waltz", 70000)
+	assert_eq(empty.get("stinger_at", "missing"), null, "\"stinger\": \"\" plays no stinger")
+	assert_eq(empty.get("to_start_at"), empty.get("switch_at"), "the next track enters at the switch")

@@ -4,7 +4,8 @@
 # Purpose : The ONE command wrapper for this project. Same subcommands on every
 #           engine in the Claude Code Game Kit, so humans and Claude never guess flags.
 # Usage   : python tools/dev.py <command> [--config Development] [--platform Win64]
-#             check    compile the editor target (UnrealBuildTool)
+#             check    compile the editor target (UnrealBuildTool); in a Blueprint-only project, only the
+#                      project's code plugins (GameKitShell), through the engine's UnrealEditor target
 #             build    same as check (kept for command-contract parity)
 #             test     run automation tests headless (--filter, default "<Game>", plus "GameKit." when the
 #                      kit's GameKitShell plugin is enabled)
@@ -52,6 +53,15 @@
 # Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): the kit's GameKitShell plugin (Plugins/,
 #           opt-in in the .uproject): `test` also runs its GameKit.* tests when it is enabled and counts them,
 #           doctor reports it, check refuses it on a Blueprint-only project (its C++ needs Source/)
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Windows a command with a timeout runs in a
+#           job object (WinJob), so a timeout also ends a grandchild whose parent already exited
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Linux and macOS, killing an untimed command
+#           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): check builds an enabled GameKitShell in a
+#           Blueprint-only project (the UnrealEditor target with -Project puts it in the plugin's Binaries/)
+#           instead of refusing it; test/smoke/exec exit 2 with "run check first" while its module is missing
+# Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): test/smoke exit 1 when the editor exits non-zero
+#           before any test passed (a crash), instead of exit 2 "no tests matched"
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -73,6 +83,7 @@ SMOKE_GROUP_SUFFIX = "Smoke"                  # tests named <Game>.Smoke.* are t
 TEST_TIMEOUT_S = 1800
 FAIL_PATTERNS = [r"Result=\{Fail\}", r"Fatal error", r"LogAutomationController: Error", r"\bTest Failed\b"]
 OK_PATTERN = r"Result=\{Success\}"
+NO_TESTS_PATTERN = r"No automation tests matched"  # logged before the editor exits 255 (UE 5.8)
 AUTOMATION_LOG = ROOT / "Saved" / "Logs" / "dev_automation.log"  # UnrealEditor-Cmd does not log to stdout
 EXEC_LOG = ROOT / "Saved" / "Logs" / "dev_exec.log"
 EXEC_TIMEOUT_S = 3600                         # a first import of many assets is slow; a hang still ends
@@ -83,6 +94,10 @@ PYTHON_STARTUP_NOISE = r"Display: |Python enabled|Using Python|registering <clas
 NO_PYTHON_PATTERN = r"[Uu]nable to find (a )?commandlet.*pythonscript|Unknown commandlet.*pythonscript"
 # A C++ project the editor cannot load yet: the game module was never compiled (fresh clone, after clean)
 MODULE_MISSING_PATTERN = r"[Tt]he game module '([^']+)' could not be found"
+# An enabled code plugin whose module was never compiled (a Blueprint-only project before its first check)
+PLUGIN_MISSING_PATTERN = r"Plugin '([^']+)' failed to load because module '[^']+' could not be found"
+# The engine's own editor target: in a project without Source/ it builds only the project's code plugins
+ENGINE_EDITOR_TARGET = "UnrealEditor"
 # Matched per line, and only when the output has no compiler diagnostics: a project folder named
 # "Visual Studio 2022" plus an ordinary "identifier not found" error must stay a code failure (exit 1)
 SDK_MISSING_PATTERNS = [r"SDK validation failed", r"not a valid platform to build",
@@ -200,9 +215,65 @@ def kit_plugin_state():
 NEW_SESSION = sys.platform != "win32"
 
 
-def kill_tree(proc):
+class WinJob:
+    """Windows: a job object holding proc and every process it starts from then on, so kill_tree can end a
+    grandchild whose parent already exited (taskkill /T only finds children through living parents). Made for
+    commands with a timeout, like the process group on Linux and macOS; elsewhere, or when a call fails, it does
+    nothing. A process proc starts before it joins the job (its first moments) stays outside: taskkill /T covers it."""
+    PROCESS_SET_QUOTA = 0x0100
+    PROCESS_TERMINATE = 0x0001
+
+    def __init__(self, proc, timeout):
+        self.handle = None
+        if sys.platform != "win32" or timeout is None:
+            return
+        try:
+            k32 = kernel32()
+            job = k32.CreateJobObjectW(None, None)
+            child = k32.OpenProcess(self.PROCESS_SET_QUOTA | self.PROCESS_TERMINATE, False, proc.pid) if job else None
+            if child and k32.AssignProcessToJobObject(job, child):
+                self.handle = job
+            elif job:
+                dbg(f"job object: could not add pid {proc.pid}")
+                k32.CloseHandle(job)
+            if child:
+                k32.CloseHandle(child)
+        except (OSError, AttributeError, ImportError) as exc:
+            dbg(f"job object: {exc}")
+
+    def kill(self):
+        """End every process in the job, then close it."""
+        if self.handle:
+            kernel32().TerminateJobObject(self.handle, 1)
+        self.close()
+
+    def close(self):
+        """Let go of the job; its processes keep running (a normal exit changes nothing)."""
+        if self.handle:
+            kernel32().CloseHandle(self.handle)
+            self.handle = None
+
+
+def kernel32():
+    """kernel32 with the job object calls typed (Windows only)."""
+    import ctypes
+    from ctypes import wintypes
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.CreateJobObjectW.restype = wintypes.HANDLE
+    k32.CreateJobObjectW.argtypes = (wintypes.LPVOID, wintypes.LPCWSTR)
+    k32.OpenProcess.restype = wintypes.HANDLE
+    k32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    k32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+    k32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
+    k32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    return k32
+
+
+def kill_tree(proc, job=None):
     """Kill proc and everything it started. A grandchild still holding our stdout pipe (a test exe, a
     worker, an editor helper) would otherwise keep communicate() waiting after proc itself is dead."""
+    if job is not None:
+        job.kill()                         # Windows: the whole job, also orphaned grandchildren
     if sys.platform == "win32":
         try:                               # /T: the whole tree under proc; Popen holds the handle, so the PID is still ours
             subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], stdin=subprocess.DEVNULL,
@@ -212,13 +283,52 @@ def kill_tree(proc):
             dbg(f"taskkill: {exc}")
     else:
         try:
-            os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+            if os.getpgid(proc.pid) == proc.pid:
+                os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+            else:
+                # An untimed command shares our group (so a terminal's Ctrl+C reaches it as before): kill what it
+                # started one by one, found through the parent ids ps lists, or a build server outlives us
+                for pid in descendants(proc.pid):
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except OSError:
+                        pass                  # it ended on its own meanwhile
         except OSError as exc:
             dbg(f"killpg: {exc}")
     try:
         proc.kill()
     except OSError:
         pass
+
+
+def ps_pairs():
+    """(pid, parent pid) of every process, from ps (Linux and macOS). Empty when ps cannot run."""
+    try:
+        out = subprocess.run(["ps", "-A", "-o", "pid=", "-o", "ppid="], stdin=subprocess.DEVNULL,
+                             capture_output=True, encoding="utf-8", errors="replace", timeout=KILL_TIMEOUT_S).stdout
+    except (OSError, subprocess.SubprocessError) as exc:
+        dbg(f"ps: {exc}")
+        return []
+    pairs = []
+    for line in out.splitlines():
+        cols = line.split()
+        if len(cols) == 2 and cols[0].isdigit() and cols[1].isdigit():
+            pairs.append((int(cols[0]), int(cols[1])))
+    return pairs
+
+
+def descendants(root):
+    """Every process below root (children, grandchildren, ...), parents before their children."""
+    children = {}
+    for pid, ppid in ps_pairs():
+        children.setdefault(ppid, []).append(pid)
+    found, todo = [], list(children.get(root, []))
+    while todo:
+        pid = todo.pop(0)
+        if pid != root and pid not in found:
+            found.append(pid)
+            todo.extend(children.get(pid, []))
+    return found
 
 
 def reap(proc):
@@ -250,11 +360,13 @@ def run(cmd, capture=False, timeout=None):
         print(f"[error] cannot execute {cmd[0]}: {exc.strerror or exc} (not a file, or not executable: chmod +x)",
               file=sys.stderr)
         return 126, ""
+    job = WinJob(proc, timeout)
     try:
         out, _ = proc.communicate(timeout=timeout)
+        job.close()                        # a normal exit: anything it left running keeps running
     except (subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
         # The editor's children (shader workers, crash reporter) hold the pipe too: kill the tree
-        kill_tree(proc)
+        kill_tree(proc, job)
         out = reap(proc)
         if isinstance(exc, KeyboardInterrupt):
             raise
@@ -333,6 +445,10 @@ def module_missing(text):
     if m:
         return (f"the editor could not load the game module '{m.group(1)}' because it is not compiled yet. "
                 "Run `python tools/dev.py check` first (a fresh clone or a clean needs it once).")
+    m = re.search(PLUGIN_MISSING_PATTERN, text)
+    if m:
+        return (f"the editor could not load the {m.group(1)} plugin because it is not compiled yet. "
+                "Run `python tools/dev.py check` first (it builds the plugin, also in a Blueprint-only project).")
     return None
 
 
@@ -347,18 +463,20 @@ def cmd_check(args):
         print(f"[error] --config {args.config} applies to `package` only; `check` builds the editor (Debug, DebugGame or "
               "Development)", file=sys.stderr)
         return 2
+    target = target_name()
     if not (ROOT / "Source").is_dir():
-        if kit_plugin_state() == "enabled":
-            print(f"[error] the {KIT_PLUGIN} plugin is enabled, but this is a Blueprint-only project (no Source/) and the "
-                  "plugin is C++. Add a C++ class in the editor (Tools > New C++ Class) to make it a C++ project, or "
-                  "disable the plugin in the .uproject (docs/ENGINE_FLOW.md).", file=sys.stderr)
-            return 2
-        # Blueprint-only project: the engine's prebuilt editor runs it, there is no C++ to compile
-        print("[ OK ] Blueprint-only project (no Source/), nothing to compile. `test` loads the project.")
-        return 0
+        if kit_plugin_state() != "enabled":
+            # Blueprint-only project: the engine's prebuilt editor runs it, there is no C++ to compile
+            print("[ OK ] Blueprint-only project (no Source/), nothing to compile. `test` loads the project.")
+            return 0
+        # Blueprint-only with the kit's C++ plugin: the engine's editor target compiles just the project's plugins
+        # into Plugins/<name>/Binaries/ (the engine itself is prebuilt). Needs the same C++ toolchain as a C++ project.
+        print(f"[info] Blueprint-only project with the {KIT_PLUGIN} plugin enabled: building its C++ "
+              f"({ENGINE_EDITOR_TARGET} target)")
+        target = ENGINE_EDITOR_TARGET
     plat = platform_name(args.platform)
     bf = batch_file("Build")
-    cmd = [bf, target_name(), plat, args.config, f"-Project={find_uproject()}", "-WaitMutex"]
+    cmd = [bf, target, plat, args.config, f"-Project={find_uproject()}", "-WaitMutex"]
     missing = missing_tool(bf)
     if missing:
         return missing
@@ -429,6 +547,11 @@ def run_automation(filter_, args, until=None, fail_on=None):
         for l in fails[:15]:
             print("  " + l)
         print(f"[FAIL] {len(fails)} failure line(s), {oks} passing")
+        return 1
+    if oks == 0 and rc != 0 and not re.search(NO_TESTS_PATTERN, out):
+        # The editor died before any result line: a crash is a task failure (exit 1), not an empty filter
+        # (an empty filter also exits non-zero, 255 on UE 5.8, but logs NO_TESTS_PATTERN first)
+        print(f"[FAIL] the editor exited with code {rc} before any test finished; the log is in {AUTOMATION_LOG}")
         return 1
     if oks == 0:
         # Nothing ran: a setup gap (no such tests yet), not a failing test. Same rule as Unity and Godot.

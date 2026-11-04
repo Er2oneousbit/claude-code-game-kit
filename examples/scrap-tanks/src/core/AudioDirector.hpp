@@ -10,7 +10,10 @@
 // Notes   : A port of tools/audio/wavesmith/audio_events.py (the reference); every step of data/golden/audio.json
 //           must come out the same. The random source is Park-Miller in 64-bit integers (exact, no bit operations),
 //           drawn in a fixed order (variant, pitch, volume) and never by a rejected play. Each event needs
-//           "lengths_ms" (one per file, from the loaded sounds). Calls must come in time order.
+//           "files" (their count is the number of variants) and "lengths_ms" (one per file, from the loaded
+//           sounds): fewer lengths than files throws when the director is made. Calls must come in time order.
+//           Where the reference raises (an unknown event, an earlier time, max_voices below 1 with steal
+//           "oldest"), play throws std::runtime_error.
 //
 // Pseudocode:
 //   play(e, t) -> drop finished voices -> cooldown? Cooldown -> at max_voices: steal oldest or Capped
@@ -67,6 +70,7 @@ inline std::int64_t event_seed(const std::string& event_id, std::int64_t global_
 
 struct AudioEvent {
     std::string bus;
+    std::vector<std::string> files;  // the variants (PlayDecision::variant indexes them)
     std::vector<double> lengths_ms;
     std::string pick = "random_no_repeat";  // sequence | random | random_no_repeat | shuffle
     double pitch_lo = 0, pitch_hi = 0;      // semitones
@@ -100,7 +104,10 @@ public:
         for (const auto& [name, e] : params.at("events").items()) {
             AudioEvent ev;
             ev.bus = e.at("bus").get<std::string>();
+            ev.files = e.at("files").get<std::vector<std::string>>();
             ev.lengths_ms = e.at("lengths_ms").get<std::vector<double>>();
+            if (ev.files.empty() || ev.lengths_ms.size() < ev.files.size())
+                throw std::runtime_error("audio event " + name + ": files and lengths_ms need one entry per file");
             ev.pick = e.value("pick", std::string("random_no_repeat"));
             if (e.contains("pitch_semitones")) {
                 ev.pitch_lo = e["pitch_semitones"][0].get<double>();
@@ -159,6 +166,8 @@ public:
                     (v->start == victim->start && v->id < victim->id))
                     victim = v;
             }
+            if (victim == voices_.end())  // max_voices below 1: the reference fails here too (min of nothing)
+                throw std::runtime_error("audio event " + name + ": max_voices must be 1 or more");
             d.stolen = victim->id;
             for (auto& h : history_) {
                 if (h.id == victim->id) h.end = t;  // it stops now: the ducking envelope sees that edge
@@ -234,7 +243,7 @@ private:
     }
 
     int pick(const std::string& name, const AudioEvent& ev, ParkMiller& rng) {
-        const int n = static_cast<int>(ev.lengths_ms.size());
+        const int n = static_cast<int>(ev.files.size());  // the reference counts files, not lengths
         const auto lv = last_variant_.find(name);
         const int last = lv == last_variant_.end() ? -1 : lv->second;
         if (n == 1) return 0;

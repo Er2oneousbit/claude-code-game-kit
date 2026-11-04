@@ -182,14 +182,14 @@ def run(entries, pack, man, conf):
                 fp = core.source_path(s["frames"])
                 w, h = frame_size(fp)
                 anim = s.get("animation", "idle_s")
-                fr = sc.ext_res("SpriteFrames", "res://" + os.path.relpath(fp, core.PROJECT).replace(os.sep, "/"))
+                fr = sc.ext_res("SpriteFrames", core.linked_res(fp, f"diorama {name}: sprite {i + 1} frames"))
                 sc.node(f"S{i}", "AnimatedSprite3D", "Sprites", offset=f"Vector2(0, {h / 2.0:g})", sprite_frames=fr,
                         animation=f'&"{anim}"', autoplay=godot.q(anim), **common)
             elif s.get("source"):
                 sp = core.source_path(s["source"])
                 with Image.open(sp) as im:
                     w, h = im.size
-                tex = sc.ext_res("Texture2D", "res://" + os.path.relpath(sp, core.PROJECT).replace(os.sep, "/"))
+                tex = sc.ext_res("Texture2D", core.linked_res(sp, f"diorama {name}: sprite {i + 1} source"))
                 sc.node(f"S{i}", "Sprite3D", "Sprites", offset=f"Vector2(0, {h / 2.0:g})", texture=tex, **common)
             else:
                 raise core.ToolError(f"diorama {name}: sprite {i + 1} needs \"source\" (a PNG) or \"frames\" (.tres)")

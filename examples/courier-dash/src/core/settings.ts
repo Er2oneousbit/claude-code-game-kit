@@ -12,7 +12,7 @@
 //
 // Pseudocode:
 //   parse (unreadable or not an object -> defaults + one problem) ; copy every key of the file
-//   version = 1 ; language must be a 2..12 character string
+//   version = 1 ; language must be a string of 2..12 code points (as the reference counts: [...s].length)
 //   per schema section: a non-object section counts as one problem ; per field: missing -> default,
 //   present -> fixField (bool | num clamp | enum | resolution) ; input.bindings: lists of strings only
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -139,7 +139,8 @@ export function settingsLoad(text: string | null): { settings: Settings; problem
   const out: JsonObject = deepCopy(raw);
   out.version = SETTINGS_VERSION;
   const lang = hasKey(raw, "language") ? raw.language : "en";
-  if (typeof lang === "string" && lang.length >= 2 && lang.length <= 12) {
+  const langLength = typeof lang === "string" ? [...lang].length : 0; // code points, not UTF-16 units
+  if (typeof lang === "string" && langLength >= 2 && langLength <= 12) {
     out.language = lang;
   } else {
     out.language = "en";

@@ -199,12 +199,13 @@ namespace graveyard_shift.Core
         }
 
         /// <summary>Writes the slot atomically (keeps the previous good save as .bak). Throws
-        /// InvalidOperationException instead of replacing a save from a newer build of the game.</summary>
+        /// InvalidOperationException while the slot or its .bak holds a save from a newer build of the game.</summary>
         public void Save(string slot, Dictionary<string, object> data)
         {
             string path = PathFor(slot);
             ParseSave(AtomicFile.ReadOrNull(path), out string problem);
-            if (_newer.Contains(path) || problem == PROBLEM_NEWER)
+            ParseSave(AtomicFile.ReadOrNull(path + AtomicFile.BAK_SUFFIX), out string backupProblem);
+            if (_newer.Contains(path) || problem == PROBLEM_NEWER || backupProblem == PROBLEM_NEWER)
             {
                 throw new InvalidOperationException($"{path} was written by a newer version of the game: not overwriting it");
             }

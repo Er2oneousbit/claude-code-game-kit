@@ -4,8 +4,8 @@
 # Purpose : Pre-flight before a repo goes public (SOP-13). Looks at what git would
 #           publish (tracked files plus untracked files that are not ignored) and
 #           reports what should not be there: no LICENSE, secret files, token-shaped
-#           strings, files GitHub rejects without LFS, personal paths, and personal
-#           email addresses in commit history.
+#           strings, files GitHub rejects without LFS, personal paths (also the export folder
+#           Pixelorama saves inside each .pxo), and personal email addresses in commit history.
 # Usage   : python tools/publish_check.py [--root DIR] [--debug]
 # Exit    : 0 no FAIL items (WARN items may remain), 1 FAIL items found, 2 not a git repo / git missing
 # Notes   : Scans the working tree, not old commits. A secret that was committed and then
@@ -21,15 +21,18 @@
 #   list files git would publish (ls-files tracked + others --exclude-standard)
 #   FAIL: no LICENSE; secret-named files; token-shaped strings in text files; files > 100 MB not routed to LFS
 #   WARN: files > 50 MB not in LFS; text files > 2 MB (not content-scanned); home-folder paths in text;
-#         non-noreply emails in history;
+#         a .pxo whose data.json holds an absolute export folder; non-noreply emails in history;
 #         PLACEHOLDER rows in docs/ASSET_LOG.md; Unreal's Android File Server token with network connections on
 #   print grouped results and the reminders that cannot be automated, return exit code
 import argparse
 import fnmatch
+import json
 import re
 import subprocess
 import sys
 import traceback
+import zipfile
+import zlib
 from pathlib import Path
 
 LICENSE_NAMES = {"license", "license.md", "license.txt", "copying", "copying.md", "unlicense"}
@@ -59,6 +62,10 @@ TOKEN_PATTERNS = [
 # A real user's home folder (not a <name> placeholder or a generic example)
 HOME_PATH = re.compile(r"(?i)\b[A-Z]:[\\/]+Users[\\/]+(?!<|\{|Public\b|Default\b|you\b|name\b|USERNAME\b)[^\\/\s\"'`<>]+"
                        r"|/(?:Users|home)/(?!<|\{|you\b|name\b|runner\b|user\b)[A-Za-z0-9._-]+(?=[/\s\"'`]|$)")
+# Pixelorama keeps the folder a .pxo was last exported to in its zipped data.json (export_profile.directory_path,
+# written as Godot's var_to_str, so the text sits in double quotes): an absolute one names a folder on your machine
+PXO_ABSOLUTE = re.compile(r'^"?(?:[A-Za-z]:[\\/]|[\\/]|~(?:[\\/]|"?$))')
+PXO_MAX_JSON = 8 * 1024 * 1024          # a bigger data.json is not read (a real one is well under 1 MB)
 NOREPLY = re.compile(r"(?i)@users\.noreply\.github\.com$|^noreply@|@noreply\.")
 GITHUB_HARD_LIMIT = 100 * 1024 * 1024   # GitHub rejects pushes with a file over 100 MB
 GITHUB_WARN_LIMIT = 50 * 1024 * 1024    # and warns over 50 MB
@@ -151,6 +158,20 @@ def unscanned_text(path):
     return any(head.startswith(bom) for bom, _ in BOMS) or b"\0" not in head
 
 
+def pxo_export_folder(path):
+    """The absolute export folder Pixelorama saved in a .pxo, or "" (none, a relative one, or not a readable .pxo)."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            if z.getinfo("data.json").file_size > PXO_MAX_JSON:
+                return ""
+            d = json.loads(z.read("data.json").decode("utf-8"))
+    except (KeyError, OSError, ValueError, RecursionError, zipfile.BadZipFile, zlib.error):
+        return ""
+    prof = d.get("export_profile") if isinstance(d, dict) else None
+    v = prof.get("directory_path") if isinstance(prof, dict) else None
+    return v.strip('"') if isinstance(v, str) and PXO_ABSOLUTE.match(v) else ""
+
+
 def history_emails(root):
     """Distinct author and committer emails across all refs (empty for a repo with no commits)."""
     out = git(root, "log", "--all", "--format=%ae%n%ce", check=False)
@@ -214,6 +235,10 @@ def run(root):
         tokens, homes = scan_text(path)
         fails += [f"{rel} {t}" for t in tokens]
         warns += [f"{rel} {h} (a personal path; it names your account)" for h in homes]
+        folder = pxo_export_folder(path) if rel.lower().endswith(".pxo") else ""
+        if folder:
+            warns.append(f"{rel}: Pixelorama saved the folder you last exported to in it, {folder} (a path on your "
+                         "machine); blank it with `python tools/art/dotwork/dotwork.py pixelorama --clear-export-path`")
     for email in history_emails(root):
         if not NOREPLY.search(email):
             warns.append(f"commit history contains {email} (public once pushed; see SOP-13 step 3 for the noreply address)")

@@ -157,7 +157,7 @@ def run(entries, pack, man, conf):
         if not e.get("backdrop"):
             raise core.ToolError(f"screens {name}: needs a \"backdrop\" image (a scenes lane render, or your own)")
         bd = core.source_path(e["backdrop"])
-        bd_res = "res://" + os.path.relpath(bd, core.PROJECT).replace(os.sep, "/")
+        bd_res = core.linked_res(bd, f"screens {name}: backdrop")
         art = core.art(conf, "screens", name)
         res = core.res(conf, "screens", name)
         man.drop_dir(art)
@@ -166,7 +166,7 @@ def run(entries, pack, man, conf):
         if kind == "title":
             _backdrop(sc, bd_res)
             if e.get("logo"):
-                logo_res = "res://" + os.path.relpath(core.source_path(e["logo"]), core.PROJECT).replace(os.sep, "/")
+                logo_res = core.linked_res(core.source_path(e["logo"]), f"screens {name}: logo")
                 lw, lh = Image.open(core.source_path(e["logo"])).size
             else:
                 if not e.get("title"):

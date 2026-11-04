@@ -8,8 +8,9 @@ description: Build or fix the game's shell - title screen, main menu, settings, 
 Follow `docs/sop/SOP-19-front-end-and-settings.md` (and `docs/sop/SOP-20-accessibility.md` for what the settings must do).
 
 1. **See what is there:** the overlay's shell (`docs/ENGINE.md`, `docs/ENGINE_FLOW.md`): Godot, LÖVE and web ship
-   working screens; Unity, Unreal, Bevy and C++/SDL2 ship the logic with tests, and the screens are built in the engine
-   on top of it. Never write a second settings or save system next to the kit's.
+   working screens; Unity, Unreal, Bevy, C++/SDL2 and web-3d ship the logic with tests, and the screens are built in
+   the engine on top of it; RPG Maker MZ keeps MZ's own screens and settings, and ENGINE_FLOW maps the rules onto
+   them. Never write a second settings or save system next to the kit's.
 2. **Scope:** which parts the request needs (screens, settings, saves, input, localization, logs, telemetry). Confirm it
    is in ROADMAP Now (SOP-01).
 3. **Behavior changes go through the spec:** `tools/golden_vectors.py` first, `--write`, then the port and its tests
@@ -20,7 +21,9 @@ Follow `docs/sop/SOP-19-front-end-and-settings.md` (and `docs/sop/SOP-20-accessi
    actions get defaults for keyboard and gamepad and appear in the rebinding screen.
 6. **Text:** every new visible string goes through `tr()` with a key in the English string table (data/i18n/en.json
    where the overlay ships the shell); placeholders, not concatenation; plurals per category.
-7. **Prove it:** `check`, `test`, `smoke`, and the scenario runs from `docs/ENGINE_FLOW.md`: `--drive menus` (settings
-   file changes), `--drive pseudo --locale pseudo` (nothing clipped), `--drive crash` (a crash file); screenshots of the
-   changed screens with `--drive show:<screen> --screenshot`.
+7. **Prove it:** `check`, `test`, `smoke`, and, where the overlay ships the scripted front end (Godot, LÖVE, web), the
+   scenario runs from `docs/ENGINE_FLOW.md`: `--drive menus` (settings file changes), `--drive pseudo --locale pseudo`
+   (nothing clipped), `--drive crash` (a crash file); screenshots of the changed screens with
+   `--drive show:<screen> --screenshot`. Elsewhere (web-3d answers `DRIVE_ABORT` until the game adds its own) make
+   the same checks by hand, as `/release-check` 7c says.
 8. **Report:** what changed, the save version, the screenshots, anything left (verify).

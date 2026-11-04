@@ -6,17 +6,20 @@
 #           ignored files and doc mentions of token prefixes are not. snake_case secret names (client_secret)
 #           and UTF-16 text with a BOM are caught. Unreal's Android File Server token warns
 #           only while network connections are on. POSIX home paths warn with or without a
-#           trailing slash; text files over the scan cap are listed, media and binaries are not.
+#           trailing slash; text files over the scan cap are listed, media and binaries are not. A .pxo
+#           holding an absolute export folder (Pixelorama) warns; a blank or relative one does not.
 # Usage   : python tools/test_publish_check.py
 # Exit    : 0 all pass, 1 a case failed (skips when git is not installed)
 # Notes   : Fake secrets are built by concatenation so this file never matches itself.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
+import json
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -164,6 +167,28 @@ class PublishCheckExam(unittest.TestCase):
         self.assertNotIn("Android File Server", self.results()[1])
         ini.write_text("[/Script/Other.Settings]\nbAllowNetworkConnection=True\n" + token + "\n", encoding="utf-8")
         self.assertNotIn("Android File Server", self.results()[1])
+
+    def test_pixelorama_export_folder_warns(self):
+        # Pixelorama keeps the folder you last exported to inside each .pxo, in a zip the text scan cannot read (#69)
+        art = self.root / "art"
+        art.mkdir()
+        folders = {"home.pxo": '"C:/' + 'Users/alex/Desktop/out"', "posix.pxo": '"/home/' + 'alex/out"',
+                   "blank.pxo": '""', "relative.pxo": '"exports"', "none.pxo": None}
+        for name, folder in folders.items():
+            data = {"pxo_version": 7, "export_profile": {"file_name": '"x"'}}
+            if folder is None:
+                data.pop("export_profile")
+            else:
+                data["export_profile"]["directory_path"] = folder
+            with zipfile.ZipFile(art / name, "w", zipfile.ZIP_DEFLATED) as z:
+                z.writestr("data.json", json.dumps(data))
+                z.writestr("image_data/frames/1/layer_1", bytes(64))
+        (art / "broken.pxo").write_bytes(b"not a zip")
+        warns = self.results()[1]
+        self.assertIn("art/home.pxo: Pixelorama saved the folder you last exported to in it, C:/" + "Users/alex", warns)
+        self.assertIn("art/posix.pxo: Pixelorama saved", warns)
+        for name in ("blank.pxo", "relative.pxo", "none.pxo", "broken.pxo"):
+            self.assertNotIn(name, warns)
 
     def test_not_a_repo_exits_2(self):
         with tempfile.TemporaryDirectory() as plain:

@@ -238,6 +238,31 @@ class FlacExam(unittest.TestCase):
         self.assertIn("must end in .wav", out)
         self.assertNotIn("Traceback", out)
 
+    def test_a_short_or_zeroed_metadata_region_is_corrupt_not_a_crash(self):
+        # #111: a STREAMINFO of length 0, or a real file zeroed after its STREAMINFO (a cut, padded download),
+        # raised struct.error and printed a traceback
+        import audioio
+        real = self.data("tagged16")                         # STREAMINFO is not the last block here
+        cases = {"empty.flac": (b"fLaC" + bytes([0x80, 0, 0, 0]), "0 bytes, not 34"),
+                 "zeroed.flac": (real[:42] + bytes(len(real) - 42), "0 bytes, not 34"),
+                 "twice.flac": (real[:4] + bytes([0]) + real[5:42] + real[4:42] + real[42:], "second STREAMINFO"),
+                 "cut.flac": (real[:4] + bytes([0x80, 0, 0, 34]) + real[8:30], "runs past the end")}
+        for name, (data, word) in cases.items():
+            with self.subTest(name):
+                with self.assertRaises(flacfile.FlacCorrupt) as ctx:
+                    flacfile.decode(data)
+                self.assertIn(word, str(ctx.exception))
+                path = self.dir / name
+                path.write_bytes(data)
+                rc, out = self.run_tool("info", path)
+                self.assertEqual(rc, 1, out)
+                self.assertIn("[FAIL]", out)
+                self.assertNotIn("Traceback", out)
+                with self.assertRaises(audioio.AudioIOError):
+                    audioio.read_audio(path)
+                with self.assertRaises(audioio.AudioIOError):
+                    audioio.stream_audio(path)
+
     def test_cli_exit_codes(self):
         bad, corrupt = self.dir / "bad.flac", self.dir / "corrupt.flac"
         bad.write_bytes(b"not flac at all")

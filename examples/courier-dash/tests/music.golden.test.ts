@@ -24,6 +24,25 @@ const RUNNERS: Record<string, (c: GoldenCase) => void> = {
   },
 };
 
+// music.py raises on a quantize it does not know and plans "stinger": "" as no stinger; no golden plan reaches either
+describe("music director errors (the golden params with one rule changed)", () => {
+  const params = golden.cases.find((c) => c.type === "music_plan")!.params;
+  const withRule = (from: string, to: string, key: string, value: unknown) => {
+    const copy = JSON.parse(JSON.stringify(params));
+    const rule = copy.transitions.find((r: any) => r.from === from && r.to === to);
+    rule[key] = value;
+    return copy;
+  };
+  it("a misspelt quantize is an error, not a phrase", () => {
+    const typo = withRule("combat", "explore", "quantize", "bars");
+    expect(() => planTransition(typo, "combat", 5000, 0, "explore", 50000)).toThrow("unknown quantize bars");
+  });
+  it("an empty stinger name plays no stinger", () => {
+    const p = planTransition(withRule("*", "waltz", "stinger", ""), "explore", 0, 0, "waltz", 70000);
+    expect([p.stinger_at, p.to_start_at]).toEqual([null, p.switch_at]);
+  });
+});
+
 describe("music golden vectors (data/golden/music.json)", () => {
   for (const c of golden.cases) {
     it(`${c.type}: ${c.name}`, () => {

@@ -17,7 +17,7 @@
 #             doctor   verify the local environment
 # Env     : RPGMZ_EXE  optional, the editor (RPGMZ.exe) for `run --editor` and `doctor`.
 # Exit    : 0 ok, 1 task failed, 2 environment/usage problem
-# Notes   : The MZ project lives in game/ (open game/game.rmmzproject in the editor), so the editor's Deployment
+# Notes   : The MZ project lives in game/ (open its .rmmzproject in the editor), so the editor's Deployment
 #           exports the game and nothing else. A project at the root (an adopted one) works too. RPG Maker MZ's own
 #           files (core scripts, default assets) come from your MZ install, never from the kit. Python 3.8+,
 #           standard library only. Not yet run against a real MZ install: engine-specific steps say (verify).
@@ -33,6 +33,12 @@
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
 # Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): GameAudio.js (the kit's audio rules) is one of the
 #           game's plugins; setup puts a newly added one before the game's plugins that load after it
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): `run` exits 2 when node or the launcher is
+#           not found (it gave 1)
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Windows a command with a timeout runs in a
+#           job object (WinJob), so a timeout also ends a grandchild whose parent already exited
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Linux and macOS, killing an untimed command
+#           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -81,9 +87,65 @@ def dbg(msg):
 NEW_SESSION = sys.platform != "win32"
 
 
-def kill_tree(proc):
+class WinJob:
+    """Windows: a job object holding proc and every process it starts from then on, so kill_tree can end a
+    grandchild whose parent already exited (taskkill /T only finds children through living parents). Made for
+    commands with a timeout, like the process group on Linux and macOS; elsewhere, or when a call fails, it does
+    nothing. A process proc starts before it joins the job (its first moments) stays outside: taskkill /T covers it."""
+    PROCESS_SET_QUOTA = 0x0100
+    PROCESS_TERMINATE = 0x0001
+
+    def __init__(self, proc, timeout):
+        self.handle = None
+        if sys.platform != "win32" or timeout is None:
+            return
+        try:
+            k32 = kernel32()
+            job = k32.CreateJobObjectW(None, None)
+            child = k32.OpenProcess(self.PROCESS_SET_QUOTA | self.PROCESS_TERMINATE, False, proc.pid) if job else None
+            if child and k32.AssignProcessToJobObject(job, child):
+                self.handle = job
+            elif job:
+                dbg(f"job object: could not add pid {proc.pid}")
+                k32.CloseHandle(job)
+            if child:
+                k32.CloseHandle(child)
+        except (OSError, AttributeError, ImportError) as exc:
+            dbg(f"job object: {exc}")
+
+    def kill(self):
+        """End every process in the job, then close it."""
+        if self.handle:
+            kernel32().TerminateJobObject(self.handle, 1)
+        self.close()
+
+    def close(self):
+        """Let go of the job; its processes keep running (a normal exit changes nothing)."""
+        if self.handle:
+            kernel32().CloseHandle(self.handle)
+            self.handle = None
+
+
+def kernel32():
+    """kernel32 with the job object calls typed (Windows only)."""
+    import ctypes
+    from ctypes import wintypes
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.CreateJobObjectW.restype = wintypes.HANDLE
+    k32.CreateJobObjectW.argtypes = (wintypes.LPVOID, wintypes.LPCWSTR)
+    k32.OpenProcess.restype = wintypes.HANDLE
+    k32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    k32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+    k32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
+    k32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    return k32
+
+
+def kill_tree(proc, job=None):
     """Kill proc and everything it started. A grandchild still holding our stdout pipe (a test exe, a
     worker, an editor helper) would otherwise keep communicate() waiting after proc itself is dead."""
+    if job is not None:
+        job.kill()                         # Windows: the whole job, also orphaned grandchildren
     if sys.platform == "win32":
         try:                               # /T: the whole tree under proc; Popen holds the handle, so the PID is still ours
             subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], stdin=subprocess.DEVNULL,
@@ -93,13 +155,52 @@ def kill_tree(proc):
             dbg(f"taskkill: {exc}")
     else:
         try:
-            os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+            if os.getpgid(proc.pid) == proc.pid:
+                os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+            else:
+                # An untimed command shares our group (so a terminal's Ctrl+C reaches it as before): kill what it
+                # started one by one, found through the parent ids ps lists, or a build server outlives us
+                for pid in descendants(proc.pid):
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except OSError:
+                        pass                  # it ended on its own meanwhile
         except OSError as exc:
             dbg(f"killpg: {exc}")
     try:
         proc.kill()
     except OSError:
         pass
+
+
+def ps_pairs():
+    """(pid, parent pid) of every process, from ps (Linux and macOS). Empty when ps cannot run."""
+    try:
+        out = subprocess.run(["ps", "-A", "-o", "pid=", "-o", "ppid="], stdin=subprocess.DEVNULL,
+                             capture_output=True, encoding="utf-8", errors="replace", timeout=KILL_TIMEOUT_S).stdout
+    except (OSError, subprocess.SubprocessError) as exc:
+        dbg(f"ps: {exc}")
+        return []
+    pairs = []
+    for line in out.splitlines():
+        cols = line.split()
+        if len(cols) == 2 and cols[0].isdigit() and cols[1].isdigit():
+            pairs.append((int(cols[0]), int(cols[1])))
+    return pairs
+
+
+def descendants(root):
+    """Every process below root (children, grandchildren, ...), parents before their children."""
+    children = {}
+    for pid, ppid in ps_pairs():
+        children.setdefault(ppid, []).append(pid)
+    found, todo = [], list(children.get(root, []))
+    while todo:
+        pid = todo.pop(0)
+        if pid != root and pid not in found:
+            found.append(pid)
+            todo.extend(children.get(pid, []))
+    return found
 
 
 def reap(proc):
@@ -132,10 +233,12 @@ def run(cmd, capture=False, timeout=None):
     except OSError as exc:
         print(f"[error] cannot execute {cmd[0]}: {exc.strerror or exc}", file=sys.stderr)
         return 126, ""
+    job = WinJob(proc, timeout)
     try:
         out, _ = proc.communicate(timeout=timeout)
+        job.close()                        # a normal exit: anything it left running keeps running
     except (subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
-        kill_tree(proc)
+        kill_tree(proc, job)
         out = reap(proc)
         if isinstance(exc, KeyboardInterrupt):
             print("\n".join((out or "").splitlines()[-20:]))
@@ -338,8 +441,15 @@ def cmd_setup(args):
         print(out[-3000:])
         print("[FAIL] browser install failed")
         return 2
-    print("[ OK ] setup done" + ("" if missing_core(g) else ": open game/game.rmmzproject in RPG Maker MZ, or `python tools/dev.py run`"))
+    print("[ OK ] setup done" + ("" if missing_core(g) else f": open {project_hint(g)} in RPG Maker MZ, or `python tools/dev.py run`"))
     return 0
+
+
+def project_hint(g):
+    """The editor's project file in g as the user should open it. setup --from keeps the name MZ gave the project
+    (game/Project1.rmmzproject), so the message names the file that is there."""
+    project = next(iter(sorted(g.glob("*.rmmzproject"))), None)
+    return rel(project) if project else f"the .rmmzproject file in {rel(g)}/"
 
 
 def check_plugins(g, problems):
@@ -562,7 +672,11 @@ def cmd_run(args):
         if project is None:
             print("[error] no *.rmmzproject in the game folder: run setup --from first", file=sys.stderr)
             return 2
-        subprocess.Popen([exe, str(project)], cwd=ROOT)   # (verify: does RPGMZ.exe open a project given on the command line?)
+        try:
+            subprocess.Popen([exe, str(project)], cwd=ROOT)   # (verify: does RPGMZ.exe open a project given on the command line?)
+        except OSError as exc:
+            print(f"[error] cannot start RPGMZ_EXE ({exe}): {exc.strerror or exc}", file=sys.stderr)
+            return 2
         print(f"[ OK ] opening {rel(project)} in RPG Maker MZ")
         return 0
     err = node_problem()
@@ -575,6 +689,8 @@ def cmd_run(args):
     print("[info] serving the game for your browser; Ctrl+C to stop. In the editor, Playtest (Ctrl+R) runs it too.")
     rc, _ = run([shutil.which("node") or "node", ROOT / "tools" / "serve.mjs", "--root", g, "--port", str(args.port),
                  "--open"])
+    if rc in NO_EXEC:
+        return 2                            # node or the launcher was not found: an environment problem
     return 0 if rc in (0, 130) else 1
 
 

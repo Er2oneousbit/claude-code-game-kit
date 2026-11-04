@@ -8,7 +8,8 @@
 2. In the editor: File > New Project, anywhere (a scratch folder is fine). This is only a source of MZ's own files.
 3. `python tools/dev.py setup --from <that folder>`: copies everything you do not already have into `game/`, registers
    GameCore and GameMain in `game/js/plugins.js`, installs Playwright and its headless Chromium.
-4. `python tools/dev.py doctor`, then open `game/game.rmmzproject` in the editor. **(verify)**
+4. `python tools/dev.py doctor`, then open the `.rmmzproject` file in `game/` in the editor (it keeps the new
+   project's name, such as `Project1.rmmzproject`; setup prints it). **(verify)**
 Optional: set `RPGMZ_EXE` to the editor's `RPGMZ.exe` so `python tools/dev.py run --editor` opens the project.
 
 ## Daily loop

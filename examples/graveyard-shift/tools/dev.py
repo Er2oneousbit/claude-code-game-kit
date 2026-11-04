@@ -33,6 +33,12 @@
 #           inside Build/; a Package Manager server that never started is exit 2, not "compile failed"
 # Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): smoke deletes an old --screenshot and old --record
+#           frames first, and fails when a capture it asked for was not written (it only warned)
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Windows a command with a timeout runs in a
+#           job object (WinJob), so a timeout also ends a grandchild whose parent already exited
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Linux and macOS, killing an untimed command
+#           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -138,9 +144,65 @@ def env_problem(rc, log):
 NEW_SESSION = sys.platform != "win32"
 
 
-def kill_tree(proc):
+class WinJob:
+    """Windows: a job object holding proc and every process it starts from then on, so kill_tree can end a
+    grandchild whose parent already exited (taskkill /T only finds children through living parents). Made for
+    commands with a timeout, like the process group on Linux and macOS; elsewhere, or when a call fails, it does
+    nothing. A process proc starts before it joins the job (its first moments) stays outside: taskkill /T covers it."""
+    PROCESS_SET_QUOTA = 0x0100
+    PROCESS_TERMINATE = 0x0001
+
+    def __init__(self, proc, timeout):
+        self.handle = None
+        if sys.platform != "win32" or timeout is None:
+            return
+        try:
+            k32 = kernel32()
+            job = k32.CreateJobObjectW(None, None)
+            child = k32.OpenProcess(self.PROCESS_SET_QUOTA | self.PROCESS_TERMINATE, False, proc.pid) if job else None
+            if child and k32.AssignProcessToJobObject(job, child):
+                self.handle = job
+            elif job:
+                dbg(f"job object: could not add pid {proc.pid}")
+                k32.CloseHandle(job)
+            if child:
+                k32.CloseHandle(child)
+        except (OSError, AttributeError, ImportError) as exc:
+            dbg(f"job object: {exc}")
+
+    def kill(self):
+        """End every process in the job, then close it."""
+        if self.handle:
+            kernel32().TerminateJobObject(self.handle, 1)
+        self.close()
+
+    def close(self):
+        """Let go of the job; its processes keep running (a normal exit changes nothing)."""
+        if self.handle:
+            kernel32().CloseHandle(self.handle)
+            self.handle = None
+
+
+def kernel32():
+    """kernel32 with the job object calls typed (Windows only)."""
+    import ctypes
+    from ctypes import wintypes
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.CreateJobObjectW.restype = wintypes.HANDLE
+    k32.CreateJobObjectW.argtypes = (wintypes.LPVOID, wintypes.LPCWSTR)
+    k32.OpenProcess.restype = wintypes.HANDLE
+    k32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    k32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+    k32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
+    k32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    return k32
+
+
+def kill_tree(proc, job=None):
     """Kill proc and everything it started. A grandchild still holding our stdout pipe (a test exe, a
     worker, an editor helper) would otherwise keep communicate() waiting after proc itself is dead."""
+    if job is not None:
+        job.kill()                         # Windows: the whole job, also orphaned grandchildren
     if sys.platform == "win32":
         try:                               # /T: the whole tree under proc; Popen holds the handle, so the PID is still ours
             subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], stdin=subprocess.DEVNULL,
@@ -150,13 +212,52 @@ def kill_tree(proc):
             dbg(f"taskkill: {exc}")
     else:
         try:
-            os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+            if os.getpgid(proc.pid) == proc.pid:
+                os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+            else:
+                # An untimed command shares our group (so a terminal's Ctrl+C reaches it as before): kill what it
+                # started one by one, found through the parent ids ps lists, or a build server outlives us
+                for pid in descendants(proc.pid):
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except OSError:
+                        pass                  # it ended on its own meanwhile
         except OSError as exc:
             dbg(f"killpg: {exc}")
     try:
         proc.kill()
     except OSError:
         pass
+
+
+def ps_pairs():
+    """(pid, parent pid) of every process, from ps (Linux and macOS). Empty when ps cannot run."""
+    try:
+        out = subprocess.run(["ps", "-A", "-o", "pid=", "-o", "ppid="], stdin=subprocess.DEVNULL,
+                             capture_output=True, encoding="utf-8", errors="replace", timeout=KILL_TIMEOUT_S).stdout
+    except (OSError, subprocess.SubprocessError) as exc:
+        dbg(f"ps: {exc}")
+        return []
+    pairs = []
+    for line in out.splitlines():
+        cols = line.split()
+        if len(cols) == 2 and cols[0].isdigit() and cols[1].isdigit():
+            pairs.append((int(cols[0]), int(cols[1])))
+    return pairs
+
+
+def descendants(root):
+    """Every process below root (children, grandchildren, ...), parents before their children."""
+    children = {}
+    for pid, ppid in ps_pairs():
+        children.setdefault(ppid, []).append(pid)
+    found, todo = [], list(children.get(root, []))
+    while todo:
+        pid = todo.pop(0)
+        if pid != root and pid not in found:
+            found.append(pid)
+            todo.extend(children.get(pid, []))
+    return found
 
 
 def reap(proc):
@@ -185,11 +286,13 @@ def run_unity(extra, label, graphics=False, env=None):
     except OSError as exc:
         print(f"[error] cannot execute Unity: {exc.strerror or exc} (not a file, or not executable)", file=sys.stderr)
         return 126, ""
+    job = WinJob(proc, UNITY_TIMEOUT_S)
     try:
         rc = proc.wait(timeout=UNITY_TIMEOUT_S)
+        job.close()                        # a normal exit: anything it left running keeps running
     except (subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
         # The editor's helpers (shader compiler, package manager) would keep the project locked: kill the tree
-        kill_tree(proc)
+        kill_tree(proc, job)
         reap(proc)
         if isinstance(exc, KeyboardInterrupt):
             raise
@@ -306,25 +409,36 @@ def cmd_smoke(args):
             print(f"[error] {path} is inside the player build folder (build/ and Build/ are the same folder on Windows). "
                   f"Capture into Logs/ instead, e.g. --screenshot Logs/shot.png or --record Logs/frames", file=sys.stderr)
             return 2
-    if args.screenshot:
-        shot = (ROOT / args.screenshot).resolve()
+    shot = (ROOT / args.screenshot).resolve() if args.screenshot else None
+    rec = (ROOT / args.record).resolve() if args.record else None
+    if shot:
         shot.parent.mkdir(parents=True, exist_ok=True)
+        if shot.is_file():
+            shot.unlink()                   # a picture from an earlier run must not pass for this one
         env["GAMEKIT_SCREENSHOT"] = str(shot)
-    if args.record:
-        rec = (ROOT / args.record).resolve()
+    if rec:
         rec.mkdir(parents=True, exist_ok=True)
+        for old in rec.glob("frame_*.png"):  # frames from an earlier run would end up in the GIF
+            old.unlink()
         env["GAMEKIT_RECORD_DIR"] = str(rec)
         env["GAMEKIT_RECORD_EVERY"] = str(args.record_every)
     graphics = args.graphics or bool(env)
     fail_on = [m for m in (args.fail_on or "").split(",") if m]
     rc = run_tests("PlayMode", args.filter, graphics=graphics, env=env, until=args.until, fail_on=fail_on)
-    if rc == 0 and args.screenshot:
-        shot = ROOT / args.screenshot
-        print(f"[ OK ] screenshot: {shot.resolve()}" if shot.exists()
-              else "[WARN] no screenshot written: the test must call GameKitCapture.Attach() (Assets/Tests/PlayMode)")
-    if rc == 0 and args.record:
-        n = len(list((ROOT / args.record).glob("*.png")))
-        print(f"[ OK ] {n} frame(s) in {(ROOT / args.record).resolve()} (GIF: python tools/art/frames_to_gif.py <dir> out.gif)")
+    if rc != 0:
+        return rc
+    if shot and not (shot.is_file() and shot.stat().st_size > 0):
+        print(f"[FAIL] no screenshot written to {shot}: the test must call GameKitCapture.Attach() after its scene "
+              "loads and GameKitCapture.Finish() at the end, which saves it (Assets/Tests/PlayMode)")
+        rc = 1
+    elif shot:
+        print(f"[ OK ] screenshot: {shot}")
+    n = len(list(rec.glob("frame_*.png"))) if rec else 0
+    if rec and n == 0:
+        print(f"[FAIL] no frames recorded in {rec}: the test must call GameKitCapture.Attach() after its scene loads")
+        rc = 1
+    elif rec:
+        print(f"[ OK ] {n} frame(s) in {rec} (GIF: python tools/art/frames_to_gif.py <dir> out.gif)")
     return rc
 
 

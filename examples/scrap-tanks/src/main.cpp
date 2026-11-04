@@ -23,6 +23,8 @@
 // Authored: Written with Claude (Sonnet 5.5, claude-sonnet-5-5)
 // Updated : 2026-10-21 with Claude (Opus 5.5, claude-opus-5-5): strict --smoke parsing (1..100000);
 //           in smoke mode, MSVC assert/CRT reports go to stderr instead of a modal dialog
+// Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): a failed --record frame is an error; an
+//           early quit in smoke mode says so ("smoke ended early"), for dev.py's end-of-run check
 // ---------------------------------------------------------------------------
 #include <SDL.h>
 
@@ -271,7 +273,7 @@ int main(int argc, char** argv) {
             char name[32];
             std::snprintf(name, sizeof name, "frame_%06d.bmp", frames);
             if (!save_frame(renderer.get(), (std::filesystem::path(opts.record_dir) / name).string())) {
-                LOG_WARN("core", "could not record frame " << frames << ": " << SDL_GetError());
+                LOG_ERROR("core", "could not record frame " << frames << ": " << SDL_GetError());
             }
         }
         if (!opts.screenshot.empty() && (last_frame || (!smoke && game.quit_requested()))) {
@@ -286,6 +288,10 @@ int main(int argc, char** argv) {
             LOG_INFO("core", "smoke complete after " << frames << " frames");
             break;
         }
+    }
+    if (smoke && frames < opts.smoke_frames) {
+        // dev.py smoke passes this only when --until saw its marker: an early quit is not a full run
+        LOG_INFO("core", "smoke ended early: the game quit after " << frames << " of " << opts.smoke_frames << " frames");
     }
     return 0;
 }

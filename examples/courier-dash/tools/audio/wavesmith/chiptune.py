@@ -90,9 +90,20 @@ def load_song(path):
         song = json.loads(Path(path).read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise SongError(f"{path}: not valid JSON ({exc})")
+    if not isinstance(song, dict):
+        raise SongError(f"{path}: the song must be one JSON object")
     for key in ("bpm", "channels", "patterns", "order"):
         if key not in song:
             raise SongError(f"{path}: missing \"{key}\"")
+    # the shapes, so a wrong type is a named problem, not a traceback ("channels": [] crashed --check)
+    for key in ("channels", "patterns"):
+        if not isinstance(song[key], dict) or not all(isinstance(v, dict) for v in song[key].values()):
+            raise SongError(f"\"{key}\" must be an object of objects ({{\"name\": {{...}}}})")
+    for pname, pat in song["patterns"].items():
+        if not all(isinstance(text, str) for text in pat.values()):
+            raise SongError(f"pattern {pname!r}: each channel's steps must be one string, such as \"C4 - E4 .\"")
+    if not isinstance(song["order"], list) or not all(isinstance(p, str) for p in song["order"]):
+        raise SongError("\"order\" must be a list of pattern names")
     if not song["order"]:
         raise SongError("\"order\" is empty")
     for key, low, high in SONG_RANGES:
@@ -264,9 +275,9 @@ def render_song(song, rate, solo=None):
         raise SongError(f"no channel named {solo!r}" if solo else "the song has no channels")
     end = int(round(total_steps * step_s * rate))
     loop = None
-    if song.get("loop", True):
+    if song.get("loop", True) and end > 0:
         for i in range(end, len(mix)):                    # wrap release tails onto the start: seamless loop
-            mix[i - end] += mix[i]
+            mix[i % end] += mix[i]                        # a tail longer than the song wraps more than once
         mix = mix[:end]
         loop = (0, end - 1)
     else:

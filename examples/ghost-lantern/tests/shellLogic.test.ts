@@ -10,7 +10,7 @@
 // ---------------------------------------------------------------------------
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_BINDINGS, findConflicts, type Bindings } from "../src/core/bindings";
-import { cueAt, dialogueFrom, revealCount, shouldShow } from "../src/core/dialogue";
+import { DEFAULT_CPS, cueAt, dialogueFrom, lineLife, revealCount, shouldShow } from "../src/core/dialogue";
 import { HoldToggle } from "../src/core/holdToggle";
 import { defaultSettings, telemetryAllowed } from "../src/core/settings";
 import { MemoryStore, WebStorageStore, type KeyValueStorage } from "../src/core/textStore";
@@ -19,6 +19,7 @@ import {
   stamp, writeCrash,
 } from "../src/core/userData";
 import { keyName, padButtonName, padDevice } from "../src/shell/input";
+import { MAX_SLIDER_STEPS, MENU_TARGET, slideAction } from "../src/shell/driveLogic";
 
 describe("GameLog", () => {
   it("starts each log with the version and a timestamp", () => {
@@ -114,8 +115,8 @@ describe("Telemetry", () => {
     s.telemetry.consent = "yes";
     expect(tel.event("screen", "title, then menu")).toBe(true);
     const lines = store.read(TELEMETRY_FILE)!.trim().split("\n");
-    expect(lines[0]).toBe("time,event,detail");
-    expect(lines[1]).toMatch(/^\d{4}-.*Z,screen,"title, then menu"$/);
+    expect(lines[0]).toBe("time,session,event,detail");
+    expect(lines[1]).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ,[0-9a-f]{8},screen,"title, then menu"$/);
   });
 
   it("escapes CSV fields", () => {
@@ -169,6 +170,18 @@ describe("dialogue reader", () => {
     expect(cueAt(line, 0.5)).toBeNull();
   });
 
+  it("types a line without fitting reveal data fully within its duration (#162)", () => {
+    // reveal data for the 3-character source, shown as a 40 % longer translation (the pseudo locale): no match
+    const long = { ...dialogueFrom(raw).lines.a, durationS: 2 };
+    const n = 140; // characters at 30 cps would need 4.67 s, the line is gone after 2 + HOLD_AFTER_S
+    expect(revealCount(long, 0, n)).toBe(0);
+    expect(revealCount(long, 1, n)).toBe(70);
+    expect(revealCount(long, long.durationS, n)).toBe(n);
+    expect(revealCount(long, lineLife(long) - 0.01, n)).toBe(n);
+    // a short line still types at DEFAULT_CPS, not slower
+    expect(revealCount({ ...long, durationS: 10 }, 1, n)).toBe(DEFAULT_CPS);
+  });
+
   it("shows barks only with subtitle barks on", () => {
     const d = dialogueFrom(raw);
     expect(shouldShow(d.lines.b, { subtitles: true, subtitle_barks: false })).toBe(false);
@@ -211,5 +224,23 @@ describe("input names", () => {
     expect(padDevice("Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e)")).toBe("pad_xbox");
     expect(padDevice("DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c)")).toBe("pad_playstation");
     expect(padDevice("8BitDo Pro 2")).toBe("pad_other");
+  });
+});
+
+describe("menus drive", () => {
+  it("steps the master slider towards 0.5 from any start value", () => {
+    const t = MENU_TARGET.master;
+    expect([slideAction(1, t), slideAction(0.3, t), slideAction(0, t), slideAction(t, t)])
+      .toEqual(["ui_left", "ui_right", "ui_right", ""]);
+    // a slider with 0.05 steps (rounded like settingsScreen's numRow) gets there within the press budget
+    for (let start = 0; start <= 20; start++) {
+      let v = start * 0.05;
+      let presses = 0;
+      while (slideAction(v, t) && presses < MAX_SLIDER_STEPS) {
+        v = Math.round((v + (slideAction(v, t) === "ui_left" ? -0.05 : 0.05)) * 100) / 100;
+        presses++;
+      }
+      expect(v, `from ${start * 0.05}`).toBeCloseTo(t, 9);
+    }
   });
 });

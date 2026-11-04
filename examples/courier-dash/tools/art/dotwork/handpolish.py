@@ -269,7 +269,8 @@ def write_if_changed(path, text):
 
 
 def write_back(pack, conf, src_dir, ext, export, tool):
-    """Hand-polished sources -> shipped PNGs (+ .tres, sheets, manifest rows), then verify.
+    """Hand-polished sources -> shipped PNGs (+ .tres, sheets, manifest rows), then verify in Godot (skipped with
+    --engine none). Returns the verify report plus "verified" (whether it ran) and "changed" (files written).
     src_dir: the editor's folder (characters/, fx/ and single/ inside); ext: the source file extension;
     export(file, prefix) -> (PNG paths, sorted, named <prefix>_<tag>_NN.png, or <prefix>.png for one untagged frame;
     {png basename: seconds that frame shows}); tool: the editor's name for the manifest notes.
@@ -414,4 +415,8 @@ def write_back(pack, conf, src_dir, ext, export, tool):
             png(im, os.path.join(pack, f), rows[f]["kind"], None)
     core.log(f"{tool.lower()} reexport: {len(touched)} files changed"
              + (f" ({', '.join(touched[:8])}{' ...' if len(touched) > 8 else ''})" if touched else ""))
-    return verify.verify(core.SETTINGS, sorted({r["file"] for r in man.data["assets"]}))
+    if not core.SETTINGS.godot():   # --engine none: no Godot project to load the files in (as pack's finish_verify)
+        return {"ok": True, "verified": False, "changed": len(touched)}
+    r = verify.verify(core.SETTINGS, sorted({r["file"] for r in man.data["assets"]}))
+    r.update(verified=True, changed=len(touched))
+    return r

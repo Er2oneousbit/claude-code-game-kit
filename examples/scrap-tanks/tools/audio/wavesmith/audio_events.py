@@ -9,7 +9,7 @@
 #           python tools/audio/wavesmith/wavesmith.py events vectors --check                        # golden file current? (exit 1)
 #           python tools/audio/wavesmith/wavesmith.py events vectors --write                        # after changing the director
 # Needs   : Python 3.8+ only (audit measures loudness with loudness.py, same folder)
-# Exit    : 0 ok, 1 validation errors, audit warnings with --strict, or stale vectors, 2 usage
+# Exit    : 0 ok, 1 validation errors, audit warnings with --strict, or stale vectors, 2 usage or an unreadable file
 # Notes   : The director is the spec: ports (TypeScript, GDScript, C#, Lua, ...) load data/golden/audio.json in their
 #           tests and must reproduce every step within its tolerance (docs/sop/SOP-18 explains golden vectors).
 #           Like tools/golden_vectors.py, every formula gives the same result in every language: the random source
@@ -46,6 +46,8 @@ TOLERANCE = 1e-6
 VECTOR_VERSION = 1
 PM_M = 2147483647                       # Park-Miller modulus (2^31 - 1)
 PM_A = 16807
+MAX_SEED = 2 ** 53 - 1                  # the largest whole number a JSON double holds exactly (Godot, Unity, Unreal,
+                                        # web, LÖVE and RPG Maker MZ read every number as a double)
 PICKS = ("sequence", "random", "random_no_repeat", "shuffle")
 STEALS = ("oldest", "none")
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,63}$")
@@ -189,11 +191,15 @@ def _ramp(gain, active, rule, dt):
 
 
 # ----------------------------------------------------------------------------------------------- validate / audit
+class ToolError(Exception):
+    """Exit 2: a file that cannot be read (a SystemExit with a message would exit 1, the code for problems found)."""
+
+
 def load_events(path):
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        raise SystemExit(f"[error] cannot read {path}: {exc}")
+        raise ToolError(f"cannot read {path}: {exc}")
     return data
 
 
@@ -213,8 +219,9 @@ def _validate(data, root):
     if data.get("version") != 1:
         p.append("version must be 1")
     seed = data.get("seed", 1)
-    if isinstance(seed, bool) or not isinstance(seed, int) or seed < 0:
-        p.append("seed must be a whole number, 0 or more (ports compute with it exactly)")
+    if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= MAX_SEED:
+        p.append(f"seed must be a whole number, 0 to {MAX_SEED} (2^53 - 1: engines that read JSON numbers as "
+                 f"doubles hold it exactly up to there)")
     buses = data.get("buses", {})
     if not isinstance(buses, dict):
         p.append("buses must be an object: {\"master\": {}, \"sfx\": {\"parent\": \"master\"}}")
@@ -396,6 +403,9 @@ def build_vectors():
         _case("a seed above 2^32 stays exact in every port",
               {"seed": 1099511627783, "events": {"step_stone": foot}},
               [{"call": "play", "event": "step_stone", "t_ms": t} for t in (0, 250, 500, 750)]),
+        _case("the largest seed validate allows (2^53 - 1) stays exact in every port",
+              {"seed": MAX_SEED, "events": {"step_stone": foot}},
+              [{"call": "play", "event": "step_stone", "t_ms": t} for t in (0, 250, 500, 750)]),
         _case("ducking: dialogue under music, attack and release",
               {"seed": 5,
                "ducking": [{"trigger": "dialogue", "targets": ["music", "ambience"], "depth_db": -8.0,
@@ -437,7 +447,7 @@ def render(obj):
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Sound events as data: validate, audit, and the golden vectors of the "
                                              "reference audio director.",
-                                 epilog="Exit codes: 0 ok, 1 problems found or stale vectors, 2 usage.")
+                                 epilog="Exit codes: 0 ok, 1 problems found or stale vectors, 2 usage or an unreadable file.")
     sub = ap.add_subparsers(dest="cmd")
     v = sub.add_parser("validate", help="schema checks (and files exist, with --root)")
     v.add_argument("file")
@@ -452,7 +462,11 @@ def main(argv=None):
     g.add_argument("--out", help="write here instead of data/golden/audio.json")
     args = ap.parse_args(argv)
     if args.cmd in ("validate", "audit"):
-        data = load_events(args.file)
+        try:
+            data = load_events(args.file)
+        except ToolError as exc:
+            print(f"[error] {exc}", file=sys.stderr)
+            return 2
         problems = validate(data, getattr(args, "root", None))
         if problems:
             for x in problems:

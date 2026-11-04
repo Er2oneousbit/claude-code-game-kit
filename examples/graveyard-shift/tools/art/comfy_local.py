@@ -29,6 +29,8 @@
 #           Existing files are never replaced without --overwrite.
 #           Tested offline against a stand-in server (test_comfy_local.py); live against ComfyUI 0.43.0 (verify).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): an interrupted or dequeued job raises JobCancelled
+#           (a JobError), so a caller can tell a cancel from a failure
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -94,6 +96,11 @@ class ToolError(Exception):
 
 class JobError(Exception):
     """Exit 1: ComfyUI ran the job and it failed."""
+
+
+class JobCancelled(JobError):
+    """Exit 1: the job was stopped in ComfyUI (Cancel, POST /interrupt, taken off the queue, a restart) before it
+    saved anything. Callers that resume (Dotwork) say a rerun picks it up."""
 
 
 def dbg(msg):
@@ -258,7 +265,8 @@ def apply_images(base, wf, images, dry_run):
             raise ToolError(f"--image file {src} not found")
         name = src.name
         if not dry_run:
-            body, ctype = multipart("image", src.name, src.read_bytes(), {"overwrite": "true", "type": "input"})
+            # never replace a file already in ComfyUI's input folder: it keeps both and says which name it used
+            body, ctype = multipart("image", src.name, src.read_bytes(), {"overwrite": "false", "type": "input"})
             status, data = http("POST", base + "/upload/image", body, {"Content-Type": ctype})
             if status != 200:
                 raise ToolError(f"upload of {src} failed: HTTP {status} {data[:200].decode('utf-8', 'replace')}")
@@ -334,7 +342,7 @@ def wait_history(base, prompt_id, limit):
                 stops = [m[1] for m in status.get("messages", []) if m and m[0] == "execution_interrupted"]
                 if stops:
                     # Cancel in ComfyUI's page, or POST /interrupt: ComfyUI files it as an error with no message
-                    raise JobError(f"the ComfyUI job was interrupted at node {stops[0].get('node_id')} "
+                    raise JobCancelled(f"the ComfyUI job was interrupted at node {stops[0].get('node_id')} "
                                    f"({stops[0].get('node_type')}), by Cancel in ComfyUI or /interrupt; "
                                    "nothing was saved, run it again")
                 msgs = [m[1] for m in status.get("messages", []) if m and m[0] == "execution_error"]
@@ -349,7 +357,7 @@ def wait_history(base, prompt_id, limit):
         # the queue says it is gone: it may have finished in between
         if entry is None and polls % QUEUE_CHECK_EVERY == 0 and not in_queue(base, prompt_id) \
                 and prompt_id not in get_json(base, f"/history/{prompt_id}"):
-            raise JobError(f"job {prompt_id} left ComfyUI's queue without a result (cancelled before it ran, or "
+            raise JobCancelled(f"job {prompt_id} left ComfyUI's queue without a result (cancelled before it ran, or "
                            "ComfyUI restarted); nothing was saved, run it again")
         if time.monotonic() - start > limit:
             raise JobError(f"no result after {limit} s (job {prompt_id} may still be running in ComfyUI; raise --wait)")
@@ -372,7 +380,9 @@ def strip_png(data):
     """The PNG without its text chunks (ComfyUI's prompt and workflow). Raises ToolError when it is not a PNG."""
     if not data.startswith(PNG_MAGIC):
         raise ToolError("not a PNG file")
-    out, pos = [PNG_MAGIC], len(PNG_MAGIC)
+    if data[12:16] != b"IHDR":           # a bare signature used to pass as a (clean, empty) PNG
+        raise ToolError("PNG does not start with its IHDR header")
+    out, pos, kind = [PNG_MAGIC], len(PNG_MAGIC), None
     while pos + 8 <= len(data):
         length, kind = struct.unpack(">I4s", data[pos:pos + 8])
         end = pos + 12 + length
@@ -383,6 +393,8 @@ def strip_png(data):
         pos = end
         if kind == b"IEND":
             break
+    if kind != b"IEND":
+        raise ToolError("PNG is truncated (no IEND chunk at the end)")
     return b"".join(out)
 
 
@@ -501,6 +513,8 @@ def cmd_run(args):
     wf = load_workflow(args.workflow)
     wf_sha = sha256(Path(args.workflow).read_bytes())
     out_dir = Path(args.out)
+    if not args.dry_run and (out_dir / GEN_FILE).exists() and not args.overwrite:   # before the GPU is spent
+        raise ToolError(f"{out_dir / GEN_FILE} exists; pass --overwrite to replace it on purpose")
     if args.log and not (Path(args.root) / fetch_asset.ASSET_LOG).is_file():
         raise ToolError(f"{fetch_asset.ASSET_LOG.as_posix()} not found under {Path(args.root).resolve()} (pass --root)")
     settings = apply_sets(wf, args.set)
@@ -522,7 +536,7 @@ def cmd_run(args):
     items = output_files(entry, args.include_temp)
     if not items:
         raise JobError("the job finished but saved no images or audio (does the workflow end in a Save node?)")
-    written, hashes = [], []
+    fetched = []
     for item in items:
         query = urllib.parse.urlencode({"filename": item["filename"], "subfolder": item.get("subfolder", ""),
                                         "type": item.get("type", "output")})
@@ -539,13 +553,18 @@ def cmd_run(args):
             data = strip_embedded(data)
         elif ext != ".wav":   # ComfyUI writes no workflow into WAV, so there is nothing to strip or warn about
             print(f"[warn] {name}: {ext} files can carry the workflow too; this tool strips PNGs and FLACs only")
-        path = out_dir / name
+        fetched.append((out_dir / name, data))
+    if not fetched:
+        raise JobError("nothing was saved")
+    for path, _ in fetched:               # every file is checked before any is written: no half-saved job
+        if path.exists() and not args.overwrite:
+            raise ToolError(f"{path} exists; pass --overwrite to replace it on purpose")
+    written, hashes = [], []
+    for path, data in fetched:
         write_new(path, data, args.overwrite)
         written.append(path)
         hashes.append(sha256(data))
         print(f"[ OK ] {path.as_posix()} ({len(data):,} bytes)")
-    if not written:
-        raise JobError("nothing was saved")
     meta = {"date": datetime.date.today().isoformat(), "server": base, "workflow": Path(args.workflow).as_posix(),
             "workflow_sha256": wf_sha, "settings": args.set or [], "seed": args.seed, "prompt": prompt_in(wf),
             "models": models_in(wf), "gpu_seconds": seconds, "prompt_id": prompt_id,

@@ -12,8 +12,9 @@
 ```
 index.html          page shell, loads src/main.ts
 src/main.ts         creates the Phaser.Game (size, scale mode, scene list)
-src/core/           engine-free logic: Log, juice (shake, hitstop, ease, follow, buffer, spring, flash limiter),
-                    settings, bindings, saves, i18n, user data. No Phaser import. Unit tested (golden vectors).
+src/core/           engine-free logic: Log, juice (shake, hitstop, ease, follow, buffer, coyote, spring, flash limiter,
+                    hold toggle), settings, bindings, saves, i18n, user data, dialogue, audio director, music director,
+                    audio access. No Phaser import. Unit tested (golden vectors).
 src/shell/          the front end: HTML screens over the canvas, input, subtitles, smoke driver (no Phaser import)
 src/game/           scenes and game objects (Phaser lives here): main (play), juice (demo), backdrop
 data/               i18n/<locale>.json strings, dialogue/*.built.json subtitles, golden/ test vectors

@@ -3,8 +3,8 @@
 # test_music.py
 # Purpose : Exam for music.py: the sample grid (half rounds up), bar-aligned loops with the tail folded back and a
 #           loop chunk on the grid, boundaries for every quantize (with an intro and loop wrap), the transition map's
-#           rule order, fades, stingers and synced entries, stem and file validation, the tempo estimate, the golden
-#           vectors being current, and the command line.
+#           rule order, fades, stingers and synced entries, stem and file validation (default_transition too,
+#           #177), the tempo estimate, the golden vectors being current, and the command line.
 # Usage   : python tools/audio/wavesmith/test_music.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -183,16 +183,36 @@ class MusicExam(unittest.TestCase):
         d = copy.deepcopy(MUSIC)
         d["transitions"] += [{"from": "nowhere", "to": "combat"}, {"from": "*", "to": "explore", "quantize": "soon"},
                              {"from": "*", "to": "combat", "stinger": "boom"},
-                             {"from": "*", "to": "combat", "stinger": "alarm", "sync": True}]
+                             {"from": "*", "to": "combat", "stinger": "alarm", "sync": True},
+                             {"from": "*", "to": "combat", "sync": 1}, {"from": "*", "to": "combat", "phrase_bars": 2.5},
+                             {"from": "*", "to": "combat", "phrase_bars": 0}]
         d["stingers"]["long"] = {"file": "l.wav", "bars": 99}
         d["tracks"]["bad"] = {"bpm": 5, "bars": 1, "stems": {"a": "a.wav"}}
         d["start"] = "title"
         text = "\n".join(M.validate(d))
         for words in ("from must be a track name", "quantize must be one of", "stinger 'boom' is not in stingers",
                       "a stinger and sync do not combine", "stinger long: bars must be", "track bad: bpm must be",
-                      "start 'title' is not a track"):
+                      "start 'title' is not a track", "transition 6 (* -> combat): sync must be true or false",
+                      "transition 7 (* -> combat): phrase_bars must be a whole number",
+                      "transition 8 (* -> combat): phrase_bars must be a whole number"):
             self.assertIn(words, text)
         self.assertEqual(M.validate({"version": 2}), ["version must be 1"])
+
+    def test_default_transition_is_checked_like_a_rule(self):
+        # every rule inherits it (rule_for), so a bad one must not pass validate and then break plan or the game
+        for bad in ("bar", [1], None, 3):
+            d = dict(copy.deepcopy(MUSIC), default_transition=bad)
+            problems = M.validate(d)
+            self.assertTrue(any(p.startswith("default_transition must be an object") for p in problems), problems)
+        for rule, words in (({"quantize": "half-bar"}, "default_transition: quantize must be one of"),
+                            ({"fade_ms": -5}, "default_transition: fade_ms must be 0..10000"),
+                            ({"sync": "yes"}, "default_transition: sync must be true or false"),
+                            ({"phrase_bars": 0}, "default_transition: phrase_bars must be a whole number"),
+                            ({"stinger": "boom"}, "default_transition: stinger 'boom' is not in stingers")):
+            d = dict(copy.deepcopy(MUSIC), default_transition=rule)
+            self.assertIn(words, "\n".join(M.validate(d)), rule)
+        d = dict(copy.deepcopy(MUSIC), default_transition={"quantize": "phrase", "phrase_bars": 2, "fade_ms": 0})
+        self.assertEqual(M.validate(d), [])
 
     # ---- tempo
     def test_tempo_estimate_finds_the_beat(self):
@@ -233,6 +253,32 @@ class MusicExam(unittest.TestCase):
             self.assertNotIn("Traceback", out)
         rc, out = self.run_tool("validate", self.write({"version": 1, "sample_rate": RATE, "tracks": {}}))
         self.assertEqual(rc, 1, out)
+
+    def test_out_of_range_grid_args_and_a_non_object_file_are_named(self):
+        # #113: --bpm 0 divided by zero, --bars 0 failed packing the loop, and validate on [] crashed after
+        # naming the problem
+        f = self.dir / "raw.wav"
+        write_wav(f, [0.1] * RATE * 3, RATE)
+        for args, word in ((("grid", "--bpm", 0, "--bars", 4), "bpm must be 20..400"),
+                           (("grid", "--bpm", -96, "--bars", 4), "bpm must be 20..400"),
+                           (("grid", "--bpm", 120, "--bars", 0), "bars must be 1 or more"),
+                           (("grid", "--bpm", 120, "--bars", 2, "--beats-per-bar", 0), "beats-per-bar must be"),
+                           (("loop", f, "--bpm", 0, "--bars", 1, "--out", self.dir / "a.wav"), "bpm must be"),
+                           (("loop", f, "--bpm", 120, "--bars", 0, "--out", self.dir / "b.wav"), "bars must be 1"),
+                           (("loop", f, "--bpm", 120, "--bars", -2, "--out", self.dir / "c.wav"), "bars must be 1")):
+            with self.subTest(args):
+                rc, out = self.run_tool(*args)
+                self.assertEqual(rc, 2, out)
+                self.assertIn(word, out)
+                self.assertNotIn("Traceback", out)
+        self.assertEqual(list(self.dir.glob("[abc].wav")), [], "nothing written")
+        for bad in ([], "music", 3):
+            rc, out = self.run_tool("validate", self.write(bad, "bad.json"))
+            self.assertEqual(rc, 1, out)
+            self.assertIn("JSON object", out)
+        rc, out = self.run_tool("validate", self.write({"version": 1, "tracks": "x", "transitions": 5}, "odd.json"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("0 track(s)", out)
 
 
 if __name__ == "__main__":

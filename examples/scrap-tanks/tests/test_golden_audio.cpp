@@ -16,6 +16,7 @@
 
 #include <cmath>
 #include <fstream>
+#include <set>
 #include <string>
 
 #include <nlohmann/json.hpp>
@@ -40,12 +41,21 @@ json load(const char* name) {
 
 bool near(double a, double b, double tol) { return std::fabs(a - b) <= tol; }
 
+// The fields of a played decision in audio.json (audio_events.py Director.play); a rejected one has only "result"
+const std::set<std::string> kPlayedKeys = {"result", "variant", "pitch_semitones", "pitch_ratio", "gain_db",
+                                           "voice", "stolen", "ends_ms"};
+
 // One played or rejected decision against its expected object
 int check_play(const core::PlayDecision& d, const json& want, double tol, const std::string& at) {
     const std::string result = d.result == core::PlayResult::Played    ? "played"
                                : d.result == core::PlayResult::Cooldown ? "cooldown"
                                                                         : "capped";
     CHECK_MESSAGE(result == want.at("result").get<std::string>(), at << ": result " << result);
+    // the same keys as the reference's decision, so a field it adds to audio.json fails here instead of passing
+    const std::set<std::string> keys = result == "played" ? kPlayedKeys : std::set<std::string>{"result"};
+    std::set<std::string> want_keys;
+    for (const auto& [key, value] : want.items()) want_keys.insert(key);
+    CHECK_MESSAGE(want_keys == keys, at << ": the expected decision has fields this test does not compare");
     if (result != "played") return 1;
     CHECK_MESSAGE(d.variant == want.at("variant").get<int>(), at << ": variant " << d.variant);
     CHECK_MESSAGE(d.voice == want.at("voice").get<int>(), at << ": voice " << d.voice);
@@ -162,6 +172,19 @@ TEST_CASE("golden audio: audio.json") {
     CHECK(cases > 0);
 }
 
+TEST_CASE("audio director: the variants are the files, and max_voices 0 is an error") {
+    // audio_events.py counts files (not lengths_ms) and fails on max_voices 0 with steal "oldest"; the golden
+    // steps never reach either
+    core::AudioDirector two(json::parse(R"({"events": {"x": {"bus": "sfx", "files": ["a", "b"],
+        "lengths_ms": [100, 100, 100], "pick": "sequence"}}})"));
+    for (int i : {0, 1, 2}) CHECK(two.play("x", 500.0 * i).variant == i % 2);
+    CHECK_THROWS_AS(core::AudioDirector(json::parse(R"({"events": {"x": {"bus": "sfx", "files": ["a", "b", "c"],
+        "lengths_ms": [100, 100]}}})")), std::runtime_error);
+    core::AudioDirector none(json::parse(R"({"events": {"x": {"bus": "sfx", "files": ["a.wav"],
+        "lengths_ms": [100], "max_voices": 0}}})"));
+    CHECK_THROWS_WITH_AS(none.play("x", 0), "audio event x: max_voices must be 1 or more", std::runtime_error);
+}
+
 TEST_CASE("golden audio: music.json") {
     const json file = load("music.json");
     int cases = 0, values = 0;
@@ -176,6 +199,30 @@ TEST_CASE("golden audio: music.json") {
     }
     MESSAGE("music.json: " << cases << " case(s), " << values << " value(s) checked");
     CHECK(cases > 0);
+}
+
+TEST_CASE("music director: a misspelt quantize is an error, an empty stinger is none") {
+    // music.py raises on a quantize it does not know (a typo must not mean "phrase") and plans "stinger": ""
+    // as no stinger; the golden plans never reach either, so they are checked here on the golden params
+    const json file = load("music.json");  // a named file: a range-for over a temporary's member dangles
+    json params;
+    for (const auto& c : file.at("cases")) {
+        if (c.at("type") == "music_plan") params = c.at("params");
+    }
+    REQUIRE(params.is_object());
+    json typo = params;
+    for (auto& r : typo.at("transitions")) {
+        if (r.at("from") == "combat" && r.at("to") == "explore") r["quantize"] = "bars";
+    }
+    CHECK_THROWS_WITH_AS(core::MusicDirector(typo).plan("combat", 5000, 0, "explore", 50000), "unknown quantize bars",
+                         std::runtime_error);
+    json empty = params;
+    for (auto& r : empty.at("transitions")) {
+        if (r.at("to") == "waltz") r["stinger"] = "";
+    }
+    const core::MusicPlan p = core::MusicDirector(empty).plan("explore", 0, 0, "waltz", 70000);
+    CHECK_FALSE(p.stinger_at.has_value());
+    CHECK(p.to_start_at == p.switch_at);
 }
 
 TEST_CASE("golden audio: access.json") {

@@ -44,6 +44,14 @@
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
 # Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive / --data-dir / --locale /
 #           --compare for the front end (scripts/shell/); smoke runs in a fresh build/smoke-data/ by default
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): an old --screenshot is deleted before the capture,
+#           and a capture that wrote no screenshot or no frames fails
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Windows a command with a timeout runs in a
+#           job object (WinJob), so a timeout also ends a grandchild whose parent already exited
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Linux and macOS, killing an untimed command
+#           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
+# Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): build lists the exported .pck and fails when it holds
+#           .game-kit.json or a dev-only folder (PCK_FORBIDDEN)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -51,6 +59,7 @@ import platform
 import re
 import shutil
 import signal
+import struct
 import subprocess
 import sys
 import traceback
@@ -94,6 +103,11 @@ DRIVE_TIMEOUT_S = 180                    # a drive (headless, or the windowed ca
 MARKERS = ("DRIVE_", "SETTINGS_", "CRASH_WRITTEN", "PSEUDO_", "TELEMETRY_FILE", "BUG_REPORT")  # echoed lines
 IMAGE_DIFF = "tools/image_diff.py"       # smoke --compare runs it: exit 0 same, 1 different, 2 usage
 NO_EXEC = (126, 127)                     # run() codes: not executable / not found -> exit 2
+# build: what must never ship in the .pck (the kit's bookkeeping and dev-only folders; export_presets.cfg excludes
+# them). Paths from the project root; a trailing / means the folder and everything in it
+PCK_FORBIDDEN = (".game-kit.json", "tests/", "tools/", "docs/", "addons/gut/", "data/golden/", "assets_src/")
+PCK_MAGIC = b"GDPC"
+PCK_DIR_ENCRYPTED = 1                    # pack flag: the file list is encrypted (nothing to read)
 
 DEBUG = False
 
@@ -138,9 +152,65 @@ def find_godot(cli_path=None):
 NEW_SESSION = sys.platform != "win32"
 
 
-def kill_tree(proc):
+class WinJob:
+    """Windows: a job object holding proc and every process it starts from then on, so kill_tree can end a
+    grandchild whose parent already exited (taskkill /T only finds children through living parents). Made for
+    commands with a timeout, like the process group on Linux and macOS; elsewhere, or when a call fails, it does
+    nothing. A process proc starts before it joins the job (its first moments) stays outside: taskkill /T covers it."""
+    PROCESS_SET_QUOTA = 0x0100
+    PROCESS_TERMINATE = 0x0001
+
+    def __init__(self, proc, timeout):
+        self.handle = None
+        if sys.platform != "win32" or timeout is None:
+            return
+        try:
+            k32 = kernel32()
+            job = k32.CreateJobObjectW(None, None)
+            child = k32.OpenProcess(self.PROCESS_SET_QUOTA | self.PROCESS_TERMINATE, False, proc.pid) if job else None
+            if child and k32.AssignProcessToJobObject(job, child):
+                self.handle = job
+            elif job:
+                dbg(f"job object: could not add pid {proc.pid}")
+                k32.CloseHandle(job)
+            if child:
+                k32.CloseHandle(child)
+        except (OSError, AttributeError, ImportError) as exc:
+            dbg(f"job object: {exc}")
+
+    def kill(self):
+        """End every process in the job, then close it."""
+        if self.handle:
+            kernel32().TerminateJobObject(self.handle, 1)
+        self.close()
+
+    def close(self):
+        """Let go of the job; its processes keep running (a normal exit changes nothing)."""
+        if self.handle:
+            kernel32().CloseHandle(self.handle)
+            self.handle = None
+
+
+def kernel32():
+    """kernel32 with the job object calls typed (Windows only)."""
+    import ctypes
+    from ctypes import wintypes
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.CreateJobObjectW.restype = wintypes.HANDLE
+    k32.CreateJobObjectW.argtypes = (wintypes.LPVOID, wintypes.LPCWSTR)
+    k32.OpenProcess.restype = wintypes.HANDLE
+    k32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    k32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+    k32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
+    k32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    return k32
+
+
+def kill_tree(proc, job=None):
     """Kill proc and everything it started. A grandchild still holding our stdout pipe (a test exe, a
     worker, an editor helper) would otherwise keep communicate() waiting after proc itself is dead."""
+    if job is not None:
+        job.kill()                         # Windows: the whole job, also orphaned grandchildren
     if sys.platform == "win32":
         try:                               # /T: the whole tree under proc; Popen holds the handle, so the PID is still ours
             subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], stdin=subprocess.DEVNULL,
@@ -150,13 +220,52 @@ def kill_tree(proc):
             dbg(f"taskkill: {exc}")
     else:
         try:
-            os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+            if os.getpgid(proc.pid) == proc.pid:
+                os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+            else:
+                # An untimed command shares our group (so a terminal's Ctrl+C reaches it as before): kill what it
+                # started one by one, found through the parent ids ps lists, or a build server outlives us
+                for pid in descendants(proc.pid):
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except OSError:
+                        pass                  # it ended on its own meanwhile
         except OSError as exc:
             dbg(f"killpg: {exc}")
     try:
         proc.kill()
     except OSError:
         pass
+
+
+def ps_pairs():
+    """(pid, parent pid) of every process, from ps (Linux and macOS). Empty when ps cannot run."""
+    try:
+        out = subprocess.run(["ps", "-A", "-o", "pid=", "-o", "ppid="], stdin=subprocess.DEVNULL,
+                             capture_output=True, encoding="utf-8", errors="replace", timeout=KILL_TIMEOUT_S).stdout
+    except (OSError, subprocess.SubprocessError) as exc:
+        dbg(f"ps: {exc}")
+        return []
+    pairs = []
+    for line in out.splitlines():
+        cols = line.split()
+        if len(cols) == 2 and cols[0].isdigit() and cols[1].isdigit():
+            pairs.append((int(cols[0]), int(cols[1])))
+    return pairs
+
+
+def descendants(root):
+    """Every process below root (children, grandchildren, ...), parents before their children."""
+    children = {}
+    for pid, ppid in ps_pairs():
+        children.setdefault(ppid, []).append(pid)
+    found, todo = [], list(children.get(root, []))
+    while todo:
+        pid = todo.pop(0)
+        if pid != root and pid not in found:
+            found.append(pid)
+            todo.extend(children.get(pid, []))
+    return found
 
 
 def reap(proc):
@@ -193,11 +302,13 @@ def run(cmd, capture=True, echo="fail", timeout=None):
         print(f"[error] cannot execute {cmd[0]}: {exc.strerror or exc} (not a file, or not executable: chmod +x)",
               file=sys.stderr)
         return 126, ""
+    job = WinJob(proc, timeout)
     try:
         raw, _ = proc.communicate(timeout=timeout)
+        job.close()                        # a normal exit: anything it left running keeps running
     except (subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
         # Kill, then collect what the engine printed so far: its last lines show where it hung
-        kill_tree(proc)
+        kill_tree(proc, job)
         raw = reap(proc)
         out = ANSI.sub("", raw or "")
         print("\n".join(out.splitlines()[-20:]))
@@ -435,6 +546,8 @@ def capture(args, godot, frames, user):
     shot = (ROOT / args.screenshot).resolve() if args.screenshot else None
     rec = (ROOT / args.record).resolve() if args.record else None
     if shot:
+        if shot.is_file():
+            shot.unlink()                       # a picture from an earlier run must not pass for this one
         cmd += ["--shot", shot.as_posix()]
     if rec:
         for old in rec.glob("f*.png"):          # frames from an earlier run would end up in the GIF
@@ -453,12 +566,19 @@ def capture(args, godot, frames, user):
         if DEBUG:
             print(out[-2000:])
         return 1
-    if shot:
+    count = len(list(rec.glob("f*.png"))) if rec else 0
+    rc = 0
+    if shot and not (shot.is_file() and shot.stat().st_size > 0):
+        print(f"[FAIL] capture finished but wrote no screenshot to {shot}")
+        rc = 1
+    elif shot:
         print(f"[ OK ] screenshot: {shot}")
-    if rec:
-        count = len(list(rec.glob("f*.png")))
+    if rec and count == 0:
+        print(f"[FAIL] capture finished but recorded no frames in {rec}")
+        rc = 1
+    elif rec:
         print(f"[ OK ] {count} frame(s) in {rec} (make a GIF: python tools/art/frames_to_gif.py {args.record} out.gif)")
-    return 0
+    return rc
 
 
 def compare(args):
@@ -527,7 +647,71 @@ def cmd_build(args, godot):
     out_path.parent.mkdir(parents=True, exist_ok=True)
     rc, _ = run([godot, "--headless", "--path", ".", "--export-release", args.preset, str(out_path)])
     print(f"[{' OK ' if rc == 0 else 'FAIL'}] export {'done: ' + str(out_path) if rc == 0 else 'failed'}")
-    return 2 if rc in NO_EXEC else 0 if rc == 0 else 1
+    if rc != 0:
+        return 2 if rc in NO_EXEC else 1
+    return check_pck(out_path.with_suffix(".pck"))
+
+
+def pck_paths(path):
+    """Paths in a Godot 4 .pck file (pack format 2 to 4: Godot 4.0 to 4.7), relative to the project root.
+
+    Returns None when the file is not a separate .pck or its file list is encrypted. Layout: "GDPC", u32 format,
+    u32 major, minor, patch, u32 flags, u64 file base, then (format 3+) u64 offset of the file list, or (format 2)
+    16 reserved u32 and the list right after; the list is a u32 count and per file a u32 length, the path (padded
+    with NULs), u64 offset, u64 size, 16 bytes of MD5 and u32 flags.
+    """
+    data = path.read_bytes()
+    if data[:4] != PCK_MAGIC:
+        return None
+    fmt = struct.unpack_from("<I", data, 4)[0]
+    flags = struct.unpack_from("<I", data, 20)[0]
+    if fmt < 2 or flags & PCK_DIR_ENCRYPTED:
+        return None
+    pos = 32                                 # after the u64 file base
+    if fmt >= 3:
+        pos = struct.unpack_from("<Q", data, pos)[0]
+    else:
+        pos += 16 * 4
+    count = struct.unpack_from("<I", data, pos)[0]
+    pos += 4
+    paths = []
+    for _ in range(count):
+        length = struct.unpack_from("<I", data, pos)[0]
+        if pos + 4 + length > len(data):
+            raise ValueError("the file list runs past the end of the file")
+        name = data[pos + 4:pos + 4 + length].rstrip(b"\0").decode("utf-8", "replace")
+        paths.append(name[len("res://"):] if name.startswith("res://") else name)
+        pos += 4 + length + 8 + 8 + 16 + 4
+    return paths
+
+
+def pck_leaks(paths):
+    """The paths of a .pck that PCK_FORBIDDEN says must not ship."""
+    return [p for p in paths if any(p == f or (f.endswith("/") and p.startswith(f)) for f in PCK_FORBIDDEN)]
+
+
+def check_pck(pck):
+    """After an export: fail (exit 1) when the .pck carries kit or dev-only files, e.g. .game-kit.json (the kit's
+    per-file hashes and upgrade history) after a preset edit dropped it from exclude_filter."""
+    if not pck.is_file():
+        print(f"[info] no {pck.name} next to the export (embedded or renamed): its contents were not checked")
+        return 0
+    try:
+        paths = pck_paths(pck)
+    except (OSError, ValueError, struct.error) as exc:
+        print(f"[warn] could not list {pck.name} ({exc}): its contents were not checked")
+        return 0
+    if paths is None:
+        print(f"[info] {pck.name} has an encrypted or unknown file list: its contents were not checked")
+        return 0
+    leaks = pck_leaks(paths)
+    if leaks:
+        shown = ", ".join(leaks[:8]) + (f" and {len(leaks) - 8} more" if len(leaks) > 8 else "")
+        print(f"[FAIL] {pck.name} holds files that must not ship: {shown}. Add them to exclude_filter in "
+              "export_presets.cfg (every preset), then build again.")
+        return 1
+    dbg(f"{pck.name}: {len(paths)} file(s), none of {', '.join(PCK_FORBIDDEN)}")
+    return 0
 
 
 def remove_tree(path):

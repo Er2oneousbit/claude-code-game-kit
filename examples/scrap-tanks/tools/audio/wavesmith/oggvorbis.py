@@ -14,10 +14,18 @@
 #           or unsupported
 # Notes   : Scope is Vorbis I as real encoders write it (libvorbis, which ffmpeg's -c:a libvorbis uses): floor
 #           type 1, residue types 0, 1 and 2, channel coupling, short and long blocks, any channel count (kept
-#           in Vorbis channel order). Every Ogg page's CRC-32 is checked; the end is trimmed to the last page's
-#           granule position and the start where the first page's granule says so, like a conformant decoder.
-#           Floor type 0 (never written by libvorbis), chained streams and Ogg files holding another codec
-#           (Opus, FLAC, Speex) are refused by name, never guessed.
+#           in Vorbis channel order). Every Ogg page's CRC-32 is checked. Start and end follow the granule
+#           positions exactly as libvorbis 1.3.7 trims them (compared sample by sample through its own
+#           vorbis_synthesis calls): a first page whose granule is below the samples decoded so far loses the
+#           difference from the output of its last packet, at most that packet's samples (so not always the
+#           very first samples), and the end trim takes at most the last packet's samples (ffmpeg 9.0.2 trims
+#           neither a short first page nor a stream that fits on one page). A Vorbis stream multiplexed with video (Theora) or a Skeleton track decodes, the
+#           other streams skipped. A stream that stops after a whole page without the end-of-stream flag (a cut
+#           capture) decodes with a [warn], its end taken from that last page's granule position like an end
+#           page's; a file that stops inside a page or a packet is truncated (exit 1). towav reads the channel
+#           count from the identification header and refuses more than 2 before decoding anything.
+#           Floor type 0 (never written by libvorbis), chained streams and Ogg files
+#           holding only another codec (Opus, FLAC, Speex) are refused by name, never guessed.
 #           Limits: a page CRC proves nothing (anyone can recompute it), so a setup header may ask for at most
 #           65536 entries and 1M VQ values per codebook and 262144 entries and 2M values in all (real libvorbis
 #           files peak at 6561, 52488, 13411 and 61254), and a file may decode to at most 16384 samples per byte
@@ -43,7 +51,8 @@
 #     residue vectors per submap (classification words, then up to 8 passes of VQ partitions)
 #     undo magnitude/angle coupling -> spectrum = residue * floor curve -> inverse MDCT -> window
 #     overlap-add with the previous block: output runs from the centre of the previous window to this one's
-#   trim: first page granule < samples decoded so far -> drop the start; last page granule -> cut the end
+#   trim (libvorbis's rule): first granule < samples decoded so far -> drop the difference from the start of
+#     that page's last packet's output; last page granule -> cut the end (both at most one packet's samples)
 import argparse
 import cmath
 import math
@@ -143,16 +152,26 @@ def _codec_name(packet):
     return "an unknown codec"
 
 
-def read_packets(data):
+def read_packets(data, warnings=None):
     """Packets of the first Vorbis logical stream as [bytes, granule or None, eos flag]. The granule is set on
-    the last packet that ends on a page (Ogg stores one granule per page, for that packet)."""
+    the last packet that ends on a page (Ogg stores one granule per page, for that packet). A stream that stops
+    after a whole page and a whole packet without the end-of-stream flag is read up to there, and a note goes
+    into `warnings` (a list) when one is given."""
     if data[:4] != MAGIC:
         raise VorbisError("not an Ogg file (no OggS page at the start)")
     pos, chosen, others = 0, None, []
     packets, partial, expect = [], None, None
     while True:
         if pos >= len(data):
-            raise VorbisCorrupt("the file ends before the stream's last page (truncated)")
+            if partial is not None:
+                raise VorbisCorrupt("the file ends in the middle of a packet, without the stream's last page "
+                                    "(truncated)")
+            if chosen is None or len(packets) < 4:
+                raise VorbisCorrupt("the file ends before the stream's last page (truncated)")
+            if warnings is not None:        # a capture or dump cut between pages: every page whole, CRCs good
+                warnings.append(f"no end-of-stream page: the stream stops after page {(expect - 1) & 0xFFFFFFFF} "
+                                f"(a cut capture or dump?); decoded to that page's granule position")
+            return packets
         flags, granule, serial, seq, lacing, p, end = _page(data, pos)
         here = pos
         pos = end
@@ -198,6 +217,27 @@ def read_packets(data):
         raise VorbisError("chained Ogg stream (a second stream follows the first): not supported; "
                           "split or re-encode it with ffmpeg")
     return packets
+
+
+def identification(data):
+    """The Vorbis identification header (rate, channels, block sizes, bitrates) from the stream's first page
+    alone, without decoding: the BOS pages come first and Vorbis's own holds just that packet."""
+    if data[:4] != MAGIC:
+        raise VorbisError("not an Ogg file (no OggS page at the start)")
+    pos, others = 0, []
+    while pos < len(data):
+        flags, _, _, _, lacing, p, end = _page(data, pos)
+        if not flags & 2:
+            break
+        first = data[p:p + (lacing[0] if lacing else 0)]
+        if first.startswith(b"\x01vorbis"):
+            return _read_identification(first)
+        others.append(_codec_name(first))
+        pos = end
+    if others:
+        raise VorbisError(f"not Vorbis: {others[0]}; convert with ffmpeg "
+                          f"(for example: ffmpeg -i in.ogg -c:a libvorbis out.ogg)")
+    raise VorbisCorrupt("the Ogg file has no stream header page")
 
 
 # ---- bit reading (Vorbis packs bits LSB first) ----
@@ -909,27 +949,72 @@ _BROKEN = (IndexError, KeyError, ValueError, ZeroDivisionError, OverflowError, s
 def decode(data, max_values=None):
     """(info, list of float sample lists per channel, comments as [(key, value), ...]). max_values caps the
     samples decoded (all channels); default: MAX_VALUES_PER_BYTE per byte of data, at least MIN_VALUES_ALLOWED."""
+    info, comments, chunks = stream(data, max_values)
+    out = [[] for _ in range(info["channels"])]
+    for chunk in chunks():
+        for c, s in zip(out, chunk):
+            c.extend(s)
+    return info, out, comments
+
+
+def stream(data, max_values=None):
+    """(info, comments, chunks) without holding the decoded audio: the headers are read here (their errors
+    raised here), chunks() yields lists of float samples per channel in order, trimmed exactly as decode() trims,
+    and fills in info's samples, start_trim and end_trim when it ends. Memory: the packets (about the file's
+    size) plus the audio between two granule positions, normally under a second."""
     if max_values is None:
         max_values = max(MIN_VALUES_ALLOWED, MAX_VALUES_PER_BYTE * len(data))
     try:
-        return _decode(data, max_values)
+        info, comments, gen = _stream(data, max_values)
     except _BROKEN as exc:
         raise VorbisCorrupt(f"broken file ({type(exc).__name__}: {exc})") from None
 
+    def chunks():
+        try:
+            yield from gen
+        except _BROKEN as exc:
+            raise VorbisCorrupt(f"broken file ({type(exc).__name__}: {exc})") from None
+    return info, comments, chunks
 
-def _decode(data, max_values):
-    packets = read_packets(data)
+
+def _stream(data, max_values):
+    warnings = []
+    packets = read_packets(data, warnings)
     if len(packets) < 3:
         raise VorbisCorrupt("the stream ends before its three Vorbis headers")
     ident = _read_identification(packets[0][0])
     vendor, comments = _read_comments(packets[1][0])
     setup = _read_setup(packets[2][0], ident["channels"])
+    info = dict(ident)
+    info.update({"samples": None, "vendor": vendor, "start_trim": None, "end_trim": None, "warnings": warnings})
+    return info, comments, _audio(packets[3:], setup, ident, info, max_values, len(data))
+
+
+def _audio(packets, setup, ident, info, max_values, size):
+    """The decode loop behind stream(). Output stays pending until a granule position settles it: a trim only
+    ever touches the output of the packet that carries the first granule or of the last one, so everything
+    before the latest granule packet's own output is handed out."""
     ch = ident["channels"]
     bs0, bs1 = ident["blocksizes"]
-    out = [[] for _ in range(ch)]
+    pending, pend_at = [[] for _ in range(ch)], 0   # output not handed out yet, from output index pend_at
     count, prev, prev_n = 0, None, 0
-    start, end_granule = None, None
-    for packet, granule, eos in packets[3:]:
+    first_count = first_granule = None      # samples decoded and granule at the first page that has one
+    cut_at, cut = 0, 0                      # the start trim: cut samples from output index cut_at
+    end_granule, end_made = None, 0
+    handed = 0
+
+    def take(n):
+        """The first n pending samples per channel, without the start trim's samples when they are among them."""
+        nonlocal pending, pend_at
+        part, pending = [p[:n] for p in pending], [p[n:] for p in pending]
+        lo = cut_at - pend_at
+        if cut and 0 <= lo < n:
+            part = [p[:lo] + p[lo + cut:] for p in part]
+        pend_at += n
+        return part
+
+    for packet, granule, eos in packets:
+        made = 0                            # samples this packet adds to the output
         try:
             decoded = _audio_packet(setup, ident, packet)
         except IndexError:
@@ -943,28 +1028,38 @@ def _decode(data, max_values):
             blocks = [None if s is None else [a * b for a, b in zip(imdct(s), win)] for s in spectra]
             if prev is not None:                    # the very first block only primes the overlap
                 for c in range(ch):
-                    pc = prev[c]
-                    out[c].extend(_overlap(pc, prev_n, blocks[c], n))
-                count += prev_n // 4 + n // 4
+                    pending[c].extend(_overlap(prev[c], prev_n, blocks[c], n))
+                made = prev_n // 4 + n // 4
+                count += made
                 if count * ch > max_values:
-                    raise VorbisLimit(f"the file decodes to more than {max_values} samples ({len(data)} bytes of "
+                    raise VorbisLimit(f"the file decodes to more than {max_values} samples ({size} bytes of "
                                       f"file; real Vorbis stays under about 2000 samples per byte): refused. "
                                       f"Convert it with ffmpeg if it is genuine")
             prev, prev_n = [None if b is None else b[n // 2:] for b in blocks], n
         if granule is not None and granule >= 0:
-            if start is None and not eos:
-                start = granule - count             # negative: the encoder asks us to drop that many samples
-            end_granule = granule
-    # positions: output sample i sits at stream position (start + i); keep 0 <= position < end granule
-    first = -start if start is not None and start < 0 else 0
-    offset = start if start is not None else 0
+            if first_granule is None and not eos:
+                # libvorbis (vorbis_synthesis_blockin): a first granule below the samples decoded so far drops
+                # the difference from the output of the packet that carries it, at most what that packet made
+                first_count, first_granule = count, granule
+                cut = min(max(0, count - granule), made)
+                cut_at = count - made
+            end_granule, end_made = granule, made
+            ready = count - made - pend_at          # all but this packet's output, which a trim may still cut
+            if ready > 0:
+                part = take(ready)
+                handed += len(part[0])
+                yield part
     last = count
     if end_granule is not None:
-        last = max(first, min(count, end_granule - offset))
-    out = [c[first:last] for c in out]
-    info = dict(ident)
-    info.update({"samples": last - first, "vendor": vendor, "start_trim": first, "end_trim": count - last})
-    return info, out, comments
+        # output index i >= first_count sits at stream position first_granule + (i - first_count); the end
+        # granule ends the stream there. Like libvorbis, the end trim takes at most the last packet's samples
+        want = end_granule if first_granule is None else first_count + end_granule - first_granule
+        last = max(count - end_made, cut_at + cut, min(count, want))
+    part = take(last - pend_at)
+    handed += len(part[0])
+    if part[0]:
+        yield part
+    info.update({"samples": handed, "start_trim": cut, "end_trim": count - last})
 
 
 def read_ogg(path):
@@ -1005,7 +1100,15 @@ def main(argv=None):
             if out.exists() and not args.overwrite:
                 print(f"[error] {out} exists (use --overwrite)", file=sys.stderr)
                 return 2
-        info, chans, comments = decode(Path(args.ogg).read_bytes())
+        data = Path(args.ogg).read_bytes()
+        if args.cmd != "info":
+            channels = identification(data)["channels"]
+            if channels > 2:                        # from the header: refused before the (slow) decode
+                raise VorbisError(f"{channels}-channel audio: the WAV writer here is mono or stereo only; "
+                                  f"downmix with ffmpeg -ac 2 first")
+        info, chans, comments = decode(data)
+        for note in info["warnings"]:
+            print(f"[warn] {args.ogg}: {note}", file=sys.stderr)
         seconds = info["samples"] / info["rate"]
         kbps = f", nominal {info['bitrate_nominal'] // 1000} kbit/s" if info["bitrate_nominal"] > 0 else ""
         if args.cmd == "info":
@@ -1014,10 +1117,7 @@ def main(argv=None):
             for key, value in comments:
                 print(f"       {key}={value}")
             return 0
-        if info["channels"] > 2:
-            raise VorbisError(f"{info['channels']}-channel audio: the WAV writer here is mono or stereo only; "
-                              f"downmix with ffmpeg -ac 2 first")
-        samples = chans[0] if len(chans) == 1 else [s for frame in zip(*chans) for s in frame]
+        samples =chans[0] if len(chans) == 1 else [s for frame in zip(*chans) for s in frame]
         clipped = write_wav(out, samples, info["rate"], channels=len(chans))
         st = stats(chans[0], info["rate"])
         print(f"[ OK ] {out}: {seconds:.3f} s, peak {st['peak_dbfs']} dBFS"

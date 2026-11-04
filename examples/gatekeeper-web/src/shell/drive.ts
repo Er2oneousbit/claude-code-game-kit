@@ -14,10 +14,15 @@
 //           game logs DRIVE_IGNORED and changes nothing. ?debug does not count: anyone can add it to a link.
 //
 // Pseudocode:
-//   menus : title (consent: Later) -> menu -> settings -> Audio: master 1.0 -> 0.5 -> Accessibility:
+//   menus : title (consent: Later) -> menu -> settings -> Audio: master -> 0.5 (left or right from whatever the
+//           data folder held) -> Accessibility:
 //           reduce motion on -> back (saves) -> read settings.json back -> quit
 //   crash : menu -> play -> a planted error in the next frame (the crash hook does the rest)
-//   pseudo: every screen and settings section once; the shell checks each one as it appears
+//   pseudo: every screen and settings section once; the shell checks each one as it appears (PSEUDO_SCREEN
+//           <id> labels N per check); the "saved" toast is counted on the menu only, then waited out, and the
+//           juice demo's subtitle (skipped while it types) is finished and checked again; the subtitle clock
+//           stands still for the tour (holdTime), so the count is the same on every run of a build, however
+//           long loading takes
 //   show  : open one screen, settle, freeze the game, SHOWN <screen> (smoke takes the screenshot)
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
@@ -26,13 +31,13 @@ import { Log } from "../core/log";
 import { settingsLoad } from "../core/settings";
 import { DATA_DIR_PARAM, dataPrefix } from "../core/textStore";
 import type { Shell } from "./app";
+import { MAX_SLIDER_STEPS, MENU_TARGET, slideAction } from "./driveLogic";
 import { SETTINGS_FILE } from "./meta";
 import { TABS } from "./settingsScreen";
 
 // ---- Tunables ----------------------------------------------------------------
 const WAIT_MS = 8000; // longest wait for one screen
 const STEP_FRAMES = 2; // frames after each injected press (DOM and layout settle)
-const MENU_TARGET = { master: 0.5, reduceMotion: true }; // what --drive menus sets
 export const DRIVE_PARAM = "drive";
 
 /**
@@ -110,6 +115,17 @@ class Driver {
     if (TABS[this.shell.settingsTab] !== name) throw new Error(`could not open settings section ${name}`);
   }
 
+  /** Presses left or right on a slider row until read() equals target, from any start value. */
+  async slideTo(id: string, read: () => number, target: number): Promise<void> {
+    await this.focus(id);
+    for (let n = 0; n < MAX_SLIDER_STEPS; n++) {
+      const action = slideAction(read(), target);
+      if (!action) return;
+      await this.press(action);
+    }
+    if (slideAction(read(), target)) throw new Error(`${id} did not reach ${target} (is ${read()})`);
+  }
+
   /** Steps a value row with ui_left / ui_right until read() gives want. */
   async setValue(id: string, read: () => unknown, want: unknown, dir: "ui_left" | "ui_right"): Promise<void> {
     await this.focus(id);
@@ -127,6 +143,11 @@ class Driver {
     await frames(STEP_FRAMES);
     await waitFor("pseudo checks", () => !this.shell.checksPending);
   }
+
+  /** Waits until every toast has timed out, so no later screen check depends on how long a step took. */
+  async toastsGone(): Promise<void> {
+    await waitFor("the toasts to leave", () => this.shell.toastCount === 0);
+  }
 }
 
 async function menus(shell: Shell, d: Driver): Promise<void> {
@@ -134,13 +155,13 @@ async function menus(shell: Shell, d: Driver): Promise<void> {
   await d.choose("menu", "menu.settings");
   await d.screen("settings");
   await d.tab("audio");
-  await d.setValue("audio.master", () => shell.settings.audio.master, MENU_TARGET.master, "ui_left");
+  await d.slideTo("audio.master", () => shell.settings.audio.master, MENU_TARGET.master);
   await d.tab("access");
   await d.setValue("access.reduce_motion", () => shell.settings.access.reduce_motion, MENU_TARGET.reduceMotion, "ui_right");
   await d.press("ui_cancel"); // back saves
   await d.screen("menu");
   const { settings, problems } = settingsLoad(shell.store.read(SETTINGS_FILE));
-  if (problems.length || settings.audio.master !== MENU_TARGET.master || settings.access.reduce_motion !== MENU_TARGET.reduceMotion) {
+  if (problems.length || slideAction(settings.audio.master, MENU_TARGET.master) || settings.access.reduce_motion !== MENU_TARGET.reduceMotion) {
     throw new Error(`${SETTINGS_FILE} does not hold the new values (master ${settings.audio.master}, reduce_motion ${settings.access.reduce_motion})`);
   }
   await d.choose("menu", "menu.quit");
@@ -157,6 +178,20 @@ async function crash(shell: Shell, d: Driver): Promise<void> {
 
 async function pseudoTour(shell: Shell, d: Driver): Promise<void> {
   if (shell.i18n.locale !== PSEUDO_LOCALE) throw new Error("this scenario needs the pseudo-locale: add --locale pseudo");
+  // Subtitles stand still for the whole tour, so each check sees the same subtitle state on a fast or a slow
+  // machine: the line the juice demo says while loading stays untyped (skipped), the finished one stays up
+  shell.subtitles.holdTime = true;
+  try {
+    await pseudoSteps(shell, d);
+  } finally {
+    shell.subtitles.holdTime = false;
+  }
+  const c = shell.checks;
+  if (c.failures.length) Log.error("i18n", `PSEUDO_FAILED ${c.failures.length} problem(s) on ${c.screens} screen check(s)`);
+  else Log.info("i18n", `PSEUDO_OK ${c.screens} screen check(s), ${c.labels} label(s), nothing truncated`);
+}
+
+async function pseudoSteps(shell: Shell, d: Driver): Promise<void> {
   await d.pastConsent();
   await d.pseudoWait();
   await d.press("ui_accept");
@@ -168,7 +203,10 @@ async function pseudoTour(shell: Shell, d: Driver): Promise<void> {
     await d.tab(t);
     await d.pseudoWait();
   }
-  await d.press("ui_cancel");
+  await d.press("ui_cancel"); // back saves: the "saved" toast is checked on the menu, then left to go
+  await d.screen("menu");
+  await d.pseudoWait();
+  await d.toastsGone();
   await d.choose("menu", "menu.credits");
   await d.screen("credits");
   await d.pseudoWait();
@@ -176,7 +214,8 @@ async function pseudoTour(shell: Shell, d: Driver): Promise<void> {
   await d.screen("menu");
   await d.game("juice");
   shell.subtitles.say("demo.welcome");
-  shell.subtitles.finish();
+  shell.subtitles.finish(); // a line still typing is skipped by the check: check the whole line once more
+  if (shell.top) shell.checkLayout(shell.top);
   await d.pseudoWait();
   await d.press("pause");
   await d.screen("pause");
@@ -192,9 +231,6 @@ async function pseudoTour(shell: Shell, d: Driver): Promise<void> {
   await d.choose("menu", "menu.quit");
   await d.screen("quit");
   await d.pseudoWait();
-  const c = shell.checks;
-  if (c.failures.length) Log.error("i18n", `PSEUDO_FAILED ${c.failures.length} problem(s) on ${c.screens} screen check(s)`);
-  else Log.info("i18n", `PSEUDO_OK ${c.screens} screen check(s), ${c.labels} label(s), nothing truncated`);
 }
 
 async function show(shell: Shell, d: Driver, what: string): Promise<void> {

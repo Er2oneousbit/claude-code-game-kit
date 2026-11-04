@@ -15,6 +15,10 @@ import os
 
 import fcore
 
+# the note handpolish.write_back puts on a re-exported file's row ("hand-polished in Aseprite" or "... Pixelorama"),
+# appended after "; " when the row already had a note: any row holding it makes the pack "modified"
+POLISH_NOTE = "hand-polished in "
+
 
 def run(settings, a):
     import engine  # noqa: F401  (puts the kit's tools/ on sys.path)
@@ -52,7 +56,7 @@ def run(settings, a):
         aid = f"A-{num:04d}"
     # the kit's AI-assisted values: "pre-generated" when model output ships, "no" for a pack drawn wholly in code
     ai = "pre-generated" if models else "no"
-    modified = "yes" if any(r.get("note") == "hand-polished in Aseprite" for r in rows) else "no"
+    modified = "yes" if any(POLISH_NOTE in (r.get("note") or "") for r in rows) else "no"
     row = (f"| {aid} | art | {shown} | Dotwork (local ComfyUI), manifest `{rel}` "
            f"| generated locally | {fetch_asset.md_cell(', '.join(licenses))} |  | {ai} | {modified} | {date} | "
            f"{fetch_asset.md_cell(notes)} |")

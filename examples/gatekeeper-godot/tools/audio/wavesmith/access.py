@@ -97,11 +97,12 @@ def vector_cases():
               "stingers": {"parent": "music"}, "music": {}}
     voice_tree = {"master": {}, "voice": {}, "dialogue": {"parent": "voice"}, "barks": {"parent": "dialogue"}}
     cycle = {"a": {"parent": "b"}, "b": {"parent": "a"}}
+    odd_parent = {"master": {}, "sfx": {"parent": 7}, "ui": {"parent": None}}   # not text: under master
     s1 = {"master": 0.9, "music": 0.5, "sfx": 0.25, "ui": 0.75, "voice": 0.6}
     bad = {"master": 2, "music": -1, "sfx": "loud", "ui": None, "voice": 0.5}
     gains = [{"buses": b, "sliders": s, "expect": user_bus_gains(b, s)}
              for b, s in ((full, s1), (nested, s1), (voice_tree, s1), (full, bad), (cycle, s1),
-                          ({"master": {}, "music": {}}, {}))]
+                          ({"master": {}, "music": {}}, {}), (odd_parent, s1))]
     w, h = 320, 180
     pts = [(0, 0), (320, -180), (-320, 180), (321, 0), (500, 0), (-500, 0), (0, -400), (0, 400), (500, 500),
            (-500, 500), (-500, -500), (500, -500), (900, 120), (-900, 300), (100, -181), (2000, -1999), (-3, 900),

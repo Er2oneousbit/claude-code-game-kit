@@ -12,10 +12,13 @@
 #           With --drive, the picture is taken when the drive has opened its screen (the Shell autoload's
 #           capture_ready), READY_SETTLE_FRAMES later, instead of after --frames; dev.py adds --fixed-fps 60 so the
 #           picture is the same on every run. Other user args (--data-dir, --locale, --smoke) are for the Shell.
-#           Exit 0 done, 1 a save failed or the drive never got there, 2 bad arguments or no main scene.
+#           Exit 0 done, 1 a save failed or the drive never got there, 2 bad arguments or a main scene that is
+#           missing or does not load.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-10-26: bursts timed in real milliseconds (monitors are not all 60 Hz)
 # Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): --drive waits for Shell.capture_ready
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): a main scene that fails to load and a --frames or
+#           --every-ms that is not a whole number exit 2 (they gave a blank capture and exit 0, or a silent 1)
 # ---------------------------------------------------------------------------
 extends SceneTree
 
@@ -34,6 +37,7 @@ var _saved: int = 0
 var _failed: bool = false
 var _drive: String = ""
 var _ready_frames: int = 0
+var _stopped: bool = false # quit() was called: no more frames are saved
 
 
 func _initialize() -> void:
@@ -48,17 +52,22 @@ func _initialize() -> void:
 			"--record":
 				_record = value
 			"--frames":
-				_frames = maxi(1, value.to_int())
+				if not value.is_valid_int() or value.to_int() < 1:
+					_stop(2, "capture: --frames needs a whole number of 1 or more, got %s" % value)
+					return
+				_frames = value.to_int()
 			"--every-ms":
-				_every_ms = maxi(1, value.to_int())
+				if not value.is_valid_int() or value.to_int() < 1:
+					_stop(2, "capture: --every-ms needs a whole number of 1 or more, got %s" % value)
+					return
+				_every_ms = value.to_int()
 			"--drive":
 				_drive = value # the Shell runs it; we only wait for it
 			_:
 				i -= 1 # not ours (e.g. --debug for the Log autoload): skip one
 		i += 2
 	if _shot == "" and _record == "":
-		push_error("capture: give --shot <file.png> and/or --record <folder>")
-		quit(2)
+		_stop(2, "capture: give --shot <file.png> and/or --record <folder>")
 		return
 	if _record != "":
 		DirAccess.make_dir_recursive_absolute(_record)
@@ -66,13 +75,22 @@ func _initialize() -> void:
 		DirAccess.make_dir_recursive_absolute(_shot.get_base_dir())
 	var main_scene: String = ProjectSettings.get_setting("application/run/main_scene", "")
 	if main_scene == "":
-		push_error("capture: the project has no main scene (Project Settings > Application > Run)")
-		quit(2)
+		_stop(2, "capture: the project has no main scene (Project Settings > Application > Run)")
 		return
-	change_scene_to_file(main_scene)
+	var err: Error = change_scene_to_file(main_scene)
+	if err != OK:
+		_stop(2, "capture: could not load the main scene %s (%s)" % [main_scene, error_string(err)])
+
+
+func _stop(code: int, message: String) -> void:
+	push_error(message)
+	_stopped = true
+	quit(code)
 
 
 func _process(_delta: float) -> bool:
+	if _stopped:
+		return false
 	_frame += 1
 	var now: int = Time.get_ticks_msec()
 	if _record != "" and (_last_ms < 0 or now - _last_ms >= _every_ms):
@@ -86,8 +104,7 @@ func _process(_delta: float) -> bool:
 			if _ready_frames > READY_SETTLE_FRAMES:
 				_finish()
 		elif _frame >= DRIVE_TIMEOUT_FRAMES:
-			push_error("capture: drive %s never reached its screen" % _drive)
-			quit(1)
+			_stop(1, "capture: drive %s never reached its screen" % _drive)
 		return false
 	if _frame >= _frames:
 		_finish()
@@ -98,6 +115,7 @@ func _finish() -> void:
 	if _shot != "":
 		_save(_shot)
 	print("CAPTURE_DONE frames=%d saved=%d" % [_frame, _saved])
+	_stopped = true
 	quit(1 if _failed else 0)
 
 

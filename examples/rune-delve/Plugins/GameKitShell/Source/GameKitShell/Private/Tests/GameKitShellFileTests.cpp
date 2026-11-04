@@ -212,6 +212,22 @@ bool FGameKitSaveNewerTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitSaveNewerBackupTest, "GameKit.Shell.SaveStore.NewerBackupBlocksSaving", FileTestFlags)
+bool FGameKitSaveNewerBackupTest::RunTest(const FString&)
+{
+	// a newer build saved twice, then the primary was deleted: every port refuses the slot, so a later save never
+	// copies this build's file over the newer .bak
+	const FTempFolder Dir;
+	const FGameKitSaveStore Store(Dir / TEXT("save.json"));
+	const FString Newer = FString::Printf(TEXT("{\"format\": \"save\", \"version\": %d, \"data\": {}}"), GameKit::SaveVersion + 1);
+	TestTrue(TEXT("a newer game's backup"), GameKit::WriteFileAtomic(Store.GetBackupFile(), Newer));
+	FString Error;
+	TestFalse(TEXT("saving the slot is refused"), Store.Save(Level(1), &Error));
+	TestFalse(TEXT("no primary was written"), FileExists(Store.GetFile()));
+	TestEqual(TEXT("the newer backup is untouched"), ReadOrMissing(Store.GetBackupFile()), Newer);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitSaveMigrateTest, "GameKit.Shell.SaveStore.MigratesOnLoad", FileTestFlags)
 bool FGameKitSaveMigrateTest::RunTest(const FString&)
 {

@@ -1,0 +1,658 @@
+{
+ "version": 1,
+ "tolerance": 0,
+ "about": "tools/audio/wavesmith/dialogue.py vectors --write",
+ "cases": [
+  {
+   "type": "reveal_count",
+   "name": "typewriter reveal counts",
+   "steps": [
+    {
+     "line": {
+      "text": "Hello there",
+      "duration_s": 1.0,
+      "reveal": [
+       {
+        "i": 0,
+        "t": 0.0
+       },
+       {
+        "i": 1,
+        "t": 0.05
+       },
+       {
+        "i": 2,
+        "t": 0.1
+       },
+       {
+        "i": 3,
+        "t": 0.15
+       },
+       {
+        "i": 4,
+        "t": 0.2
+       },
+       {
+        "i": 5,
+        "t": 0.25
+       },
+       {
+        "i": 6,
+        "t": 0.3
+       },
+       {
+        "i": 7,
+        "t": 0.35
+       },
+       {
+        "i": 8,
+        "t": 0.4
+       },
+       {
+        "i": 9,
+        "t": 0.45
+       },
+       {
+        "i": 10,
+        "t": 0.5
+       }
+      ]
+     },
+     "t": 0.0,
+     "expect": 1,
+     "about": "a reveal list with one entry per character is followed"
+    },
+    {
+     "line": {
+      "text": "Hello there",
+      "duration_s": 1.0,
+      "reveal": [
+       {
+        "i": 0,
+        "t": 0.0
+       },
+       {
+        "i": 1,
+        "t": 0.05
+       },
+       {
+        "i": 2,
+        "t": 0.1
+       },
+       {
+        "i": 3,
+        "t": 0.15
+       },
+       {
+        "i": 4,
+        "t": 0.2
+       },
+       {
+        "i": 5,
+        "t": 0.25
+       },
+       {
+        "i": 6,
+        "t": 0.3
+       },
+       {
+        "i": 7,
+        "t": 0.35
+       },
+       {
+        "i": 8,
+        "t": 0.4
+       },
+       {
+        "i": 9,
+        "t": 0.45
+       },
+       {
+        "i": 10,
+        "t": 0.5
+       }
+      ]
+     },
+     "t": 0.12,
+     "expect": 3,
+     "about": "a reveal list with one entry per character is followed"
+    },
+    {
+     "line": {
+      "text": "Hello there",
+      "duration_s": 1.0,
+      "reveal": [
+       {
+        "i": 0,
+        "t": 0.0
+       },
+       {
+        "i": 1,
+        "t": 0.05
+       },
+       {
+        "i": 2,
+        "t": 0.1
+       },
+       {
+        "i": 3,
+        "t": 0.15
+       },
+       {
+        "i": 4,
+        "t": 0.2
+       },
+       {
+        "i": 5,
+        "t": 0.25
+       },
+       {
+        "i": 6,
+        "t": 0.3
+       },
+       {
+        "i": 7,
+        "t": 0.35
+       },
+       {
+        "i": 8,
+        "t": 0.4
+       },
+       {
+        "i": 9,
+        "t": 0.45
+       },
+       {
+        "i": 10,
+        "t": 0.5
+       }
+      ]
+     },
+     "t": 0.25,
+     "expect": 6,
+     "about": "a reveal list with one entry per character is followed"
+    },
+    {
+     "line": {
+      "text": "Hello there",
+      "duration_s": 1.0,
+      "reveal": [
+       {
+        "i": 0,
+        "t": 0.0
+       },
+       {
+        "i": 1,
+        "t": 0.05
+       },
+       {
+        "i": 2,
+        "t": 0.1
+       },
+       {
+        "i": 3,
+        "t": 0.15
+       },
+       {
+        "i": 4,
+        "t": 0.2
+       },
+       {
+        "i": 5,
+        "t": 0.25
+       },
+       {
+        "i": 6,
+        "t": 0.3
+       },
+       {
+        "i": 7,
+        "t": 0.35
+       },
+       {
+        "i": 8,
+        "t": 0.4
+       },
+       {
+        "i": 9,
+        "t": 0.45
+       },
+       {
+        "i": 10,
+        "t": 0.5
+       }
+      ]
+     },
+     "t": 0.5,
+     "expect": 11,
+     "about": "a reveal list with one entry per character is followed"
+    },
+    {
+     "line": {
+      "text": "Hello there",
+      "duration_s": 1.0,
+      "reveal": [
+       {
+        "i": 0,
+        "t": 0.0
+       },
+       {
+        "i": 1,
+        "t": 0.05
+       },
+       {
+        "i": 2,
+        "t": 0.1
+       },
+       {
+        "i": 3,
+        "t": 0.15
+       },
+       {
+        "i": 4,
+        "t": 0.2
+       },
+       {
+        "i": 5,
+        "t": 0.25
+       },
+       {
+        "i": 6,
+        "t": 0.3
+       },
+       {
+        "i": 7,
+        "t": 0.35
+       },
+       {
+        "i": 8,
+        "t": 0.4
+       },
+       {
+        "i": 9,
+        "t": 0.45
+       },
+       {
+        "i": 10,
+        "t": 0.5
+       }
+      ]
+     },
+     "t": 2.0,
+     "expect": 11,
+     "about": "a reveal list with one entry per character is followed"
+    },
+    {
+     "line": {
+      "text": "Hello there",
+      "duration_s": 2.0,
+      "reveal": [
+       {
+        "i": 0,
+        "t": 0.0
+       },
+       {
+        "i": 1,
+        "t": 0.05
+       },
+       {
+        "i": 2,
+        "t": 0.1
+       },
+       {
+        "i": 3,
+        "t": 0.15
+       },
+       {
+        "i": 4,
+        "t": 0.2
+       }
+      ]
+     },
+     "t": 0.0,
+     "expect": 0,
+     "about": "a reveal list shorter than the text is ignored: 30 per second, the line finishes"
+    },
+    {
+     "line": {
+      "text": "Hello there",
+      "duration_s": 2.0,
+      "reveal": [
+       {
+        "i": 0,
+        "t": 0.0
+       },
+       {
+        "i": 1,
+        "t": 0.05
+       },
+       {
+        "i": 2,
+        "t": 0.1
+       },
+       {
+        "i": 3,
+        "t": 0.15
+       },
+       {
+        "i": 4,
+        "t": 0.2
+       }
+      ]
+     },
+     "t": 0.1,
+     "expect": 3,
+     "about": "a reveal list shorter than the text is ignored: 30 per second, the line finishes"
+    },
+    {
+     "line": {
+      "text": "Hello there",
+      "duration_s": 2.0,
+      "reveal": [
+       {
+        "i": 0,
+        "t": 0.0
+       },
+       {
+        "i": 1,
+        "t": 0.05
+       },
+       {
+        "i": 2,
+        "t": 0.1
+       },
+       {
+        "i": 3,
+        "t": 0.15
+       },
+       {
+        "i": 4,
+        "t": 0.2
+       }
+      ]
+     },
+     "t": 0.2,
+     "expect": 6,
+     "about": "a reveal list shorter than the text is ignored: 30 per second, the line finishes"
+    },
+    {
+     "line": {
+      "text": "Hello there",
+      "duration_s": 2.0,
+      "reveal": [
+       {
+        "i": 0,
+        "t": 0.0
+       },
+       {
+        "i": 1,
+        "t": 0.05
+       },
+       {
+        "i": 2,
+        "t": 0.1
+       },
+       {
+        "i": 3,
+        "t": 0.15
+       },
+       {
+        "i": 4,
+        "t": 0.2
+       }
+      ]
+     },
+     "t": 0.3,
+     "expect": 9,
+     "about": "a reveal list shorter than the text is ignored: 30 per second, the line finishes"
+    },
+    {
+     "line": {
+      "text": "Hello there",
+      "duration_s": 2.0,
+      "reveal": [
+       {
+        "i": 0,
+        "t": 0.0
+       },
+       {
+        "i": 1,
+        "t": 0.05
+       },
+       {
+        "i": 2,
+        "t": 0.1
+       },
+       {
+        "i": 3,
+        "t": 0.15
+       },
+       {
+        "i": 4,
+        "t": 0.2
+       }
+      ]
+     },
+     "t": 2.0,
+     "expect": 11,
+     "about": "a reveal list shorter than the text is ignored: 30 per second, the line finishes"
+    },
+    {
+     "line": {
+      "text": "Hi",
+      "duration_s": 1.0,
+      "reveal": [
+       {
+        "i": 0,
+        "t": 0.0
+       },
+       {
+        "i": 1,
+        "t": 0.05
+       },
+       {
+        "i": 2,
+        "t": 0.1
+       },
+       {
+        "i": 3,
+        "t": 0.15
+       },
+       {
+        "i": 4,
+        "t": 0.2
+       }
+      ]
+     },
+     "t": 0.0,
+     "expect": 0,
+     "about": "a reveal list longer than the text is ignored too"
+    },
+    {
+     "line": {
+      "text": "Hi",
+      "duration_s": 1.0,
+      "reveal": [
+       {
+        "i": 0,
+        "t": 0.0
+       },
+       {
+        "i": 1,
+        "t": 0.05
+       },
+       {
+        "i": 2,
+        "t": 0.1
+       },
+       {
+        "i": 3,
+        "t": 0.15
+       },
+       {
+        "i": 4,
+        "t": 0.2
+       }
+      ]
+     },
+     "t": 0.04,
+     "expect": 1,
+     "about": "a reveal list longer than the text is ignored too"
+    },
+    {
+     "line": {
+      "text": "Hi",
+      "duration_s": 1.0,
+      "reveal": [
+       {
+        "i": 0,
+        "t": 0.0
+       },
+       {
+        "i": 1,
+        "t": 0.05
+       },
+       {
+        "i": 2,
+        "t": 0.1
+       },
+       {
+        "i": 3,
+        "t": 0.15
+       },
+       {
+        "i": 4,
+        "t": 0.2
+       }
+      ]
+     },
+     "t": 1.0,
+     "expect": 2,
+     "about": "a reveal list longer than the text is ignored too"
+    },
+    {
+     "line": {
+      "text": "The bakery opens at dawn, and the baker wants every loaf on the shelf before the first cart rolls in. Bring flour, bring salt, and bring the key.",
+      "duration_s": 2.0
+     },
+     "t": 0.0,
+     "expect": 0,
+     "about": "no reveal list: a long line types faster to finish by its duration"
+    },
+    {
+     "line": {
+      "text": "The bakery opens at dawn, and the baker wants every loaf on the shelf before the first cart rolls in. Bring flour, bring salt, and bring the key.",
+      "duration_s": 2.0
+     },
+     "t": 0.5,
+     "expect": 36,
+     "about": "no reveal list: a long line types faster to finish by its duration"
+    },
+    {
+     "line": {
+      "text": "The bakery opens at dawn, and the baker wants every loaf on the shelf before the first cart rolls in. Bring flour, bring salt, and bring the key.",
+      "duration_s": 2.0
+     },
+     "t": 1.0,
+     "expect": 72,
+     "about": "no reveal list: a long line types faster to finish by its duration"
+    },
+    {
+     "line": {
+      "text": "The bakery opens at dawn, and the baker wants every loaf on the shelf before the first cart rolls in. Bring flour, bring salt, and bring the key.",
+      "duration_s": 2.0
+     },
+     "t": 1.99,
+     "expect": 144,
+     "about": "no reveal list: a long line types faster to finish by its duration"
+    },
+    {
+     "line": {
+      "text": "The bakery opens at dawn, and the baker wants every loaf on the shelf before the first cart rolls in. Bring flour, bring salt, and bring the key.",
+      "duration_s": 2.0
+     },
+     "t": 2.0,
+     "expect": 145,
+     "about": "no reveal list: a long line types faster to finish by its duration"
+    },
+    {
+     "line": {
+      "text": "The bakery opens at dawn, and the baker wants every loaf on the shelf before the first cart rolls in. Bring flour, bring salt, and bring the key.",
+      "duration_s": 2.0
+     },
+     "t": 3.0,
+     "expect": 145,
+     "about": "no reveal list: a long line types faster to finish by its duration"
+    },
+    {
+     "line": {
+      "text": "Forty-five characters of plain text, no data."
+     },
+     "t": 0.0,
+     "expect": 0,
+     "about": "no reveal list and no duration: 30 per second"
+    },
+    {
+     "line": {
+      "text": "Forty-five characters of plain text, no data."
+     },
+     "t": 1.0,
+     "expect": 30,
+     "about": "no reveal list and no duration: 30 per second"
+    },
+    {
+     "line": {
+      "text": "Forty-five characters of plain text, no data."
+     },
+     "t": 1.5,
+     "expect": 45,
+     "about": "no reveal list and no duration: 30 per second"
+    },
+    {
+     "line": {
+      "text": "Forty-five characters of plain text, no data."
+     },
+     "t": 2.0,
+     "expect": 45,
+     "about": "no reveal list and no duration: 30 per second"
+    },
+    {
+     "line": {
+      "text": "Hello there",
+      "duration_s": 0
+     },
+     "t": 0.0,
+     "expect": 11,
+     "about": "a duration of 0 shows the whole line at once"
+    },
+    {
+     "line": {
+      "text": "Ça va, Zoë? ¡Sí!",
+      "duration_s": 0.2
+     },
+     "t": 0.0,
+     "expect": 0,
+     "about": "characters are code points, not bytes"
+    },
+    {
+     "line": {
+      "text": "Ça va, Zoë? ¡Sí!",
+      "duration_s": 0.2
+     },
+     "t": 0.1,
+     "expect": 8,
+     "about": "characters are code points, not bytes"
+    },
+    {
+     "line": {
+      "text": "Ça va, Zoë? ¡Sí!",
+      "duration_s": 0.2
+     },
+     "t": 0.2,
+     "expect": 16,
+     "about": "characters are code points, not bytes"
+    }
+   ]
+  }
+ ]
+}

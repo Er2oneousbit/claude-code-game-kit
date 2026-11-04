@@ -8,8 +8,9 @@ prompts that show the buttons they hold, text that fits in every language, and a
 Run it with `/game-shell`.
 
 ## 1. The shell's parts
-Godot, LÖVE and web overlays ship a working shell; Unity, Unreal, Bevy and C++/SDL2 ship its engine-free logic with
-tests (details per engine: `docs/ENGINE_FLOW.md`). The behavior is one spec, `tools/golden_vectors.py`, with expected
+Godot, LÖVE and web overlays ship a working shell; Unity, Unreal, Bevy, C++/SDL2 and web-3d ship its engine-free
+logic with tests, and the screens are built in the engine on top of it; RPG Maker MZ keeps MZ's own screens, settings
+and saves, and the kit maps the rules onto them (details per engine: `docs/ENGINE_FLOW.md`). The behavior is one spec, `tools/golden_vectors.py`, with expected
 values in `data/golden/shell.json` that every port's tests check (K01).
 
 | Part | What it gives |
@@ -36,7 +37,8 @@ values in `data/golden/shell.json` that every port's tests check (K01).
    (ARCHITECTURE.md) and goes up whenever the data's shape changes.
 2. Each version change gets a migration function (version N to N+1) and a test that loads a real file from version N.
    Loading runs every migration in order.
-3. A save from a newer version is never loaded and never overwritten: say "this save is from a newer version".
+3. A save from a newer version is never loaded and never overwritten: say "this save is from a newer version". That
+   holds for the backup too: while `<file>` or `<file>.bak` holds a newer save, every write to the slot is refused.
 4. Write atomically: write `<file>.tmp`, flush, then replace the file with it (rename). Keep the previous good save as
    `<file>.bak`; if the main file does not parse, load the backup and say so.
 5. Autosave at safe points (level start, checkpoint), never in the middle of a transition.
@@ -89,9 +91,11 @@ values in `data/golden/shell.json` that every port's tests check (K01).
 
 ## 8. Telemetry (consent first)
 Off until the player chooses Yes on a one-time question; No and Later write nothing. The kit's version appends events
-to `telemetry.csv` on the player's machine and sends nothing. Before adding any upload, write the privacy policy
-(`SOP-21` step 6): what is collected, why, for how long, and how to turn it off. `dev.py smoke --drive menus` with
-consent unset must leave no telemetry file.
+to `telemetry.csv` on the player's machine and sends nothing. Every engine writes the same columns,
+`time,session,event,detail` (UTC time in whole seconds, a random 8-digit hex id per launch), checked against
+`data/golden/telemetry.json`, so one analysis script reads any port's file. Before adding any upload, write the
+privacy policy (`SOP-21` step 6): what is collected, why, for how long, and how to turn it off.
+`dev.py smoke --drive menus` with consent unset must leave no telemetry file.
 
 ## Done when
 - A gamepad alone gets through title, settings, play, pause and back; focus is always visible.

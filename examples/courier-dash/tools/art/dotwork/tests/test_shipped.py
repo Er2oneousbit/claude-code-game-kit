@@ -5,6 +5,7 @@
 #           double curly braces: the kit's scaffolder stops on one, so a template token in a lane breaks every new
 #           game) except the placeholders the kit fills in on purpose, and no em dashes (the kit's writing rule).
 #           The tokens and the dash are built from pieces here, so this file passes its own checks.
+#           Also: the GPU memory the dotwork skill and the README quote per tier matches models.lock.json.
 # Usage   : python tools/art/dotwork/tests/test_shipped.py   (test_dotwork.py runs it too)
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -51,6 +52,21 @@ class ShippedExam(unittest.TestCase):
                     if EM_DASH in line:
                         found.append(rel + ":" + str(n))
         self.assertEqual(found, [])
+
+    def test_the_gpu_memory_quoted_matches_the_lock(self):
+        # #110: the dotwork skill said rotation needs 16 GB of VRAM; the lock (and setup --check) say 12
+        import json
+        with open(os.path.join(DOTWORK, "models.lock.json"), encoding="utf-8") as fh:
+            lock = {t: v["vram_gb"] for t, v in json.load(fh)["tiers"].items()}
+        skill = os.path.join(DOTWORK, "..", "..", "..", ".claude", "skills", "dotwork", "SKILL.md")
+        with open(skill, encoding="utf-8") as fh:
+            quoted = re.findall(r"(\d+) GB for (sprites|rotation|animation)", fh.read())
+        names = {"sprites": "sprites", "rotation": "rotate", "animation": "animate"}
+        self.assertEqual(sorted(n for _, n in quoted), ["animation", "rotation", "sprites"], quoted)
+        self.assertEqual({names[n]: int(gb) for gb, n in quoted}, {t: lock[t] for t in names.values()})
+        with open(os.path.join(DOTWORK, "README.md"), encoding="utf-8") as fh:
+            table = dict(re.findall(r"^\| `(\w+)`[^|\n]*\|[^|\n]*\|[^|\n]*\| (\d+) GB VRAM", fh.read(), re.M))
+        self.assertEqual({t: int(gb) for t, gb in table.items() if t in lock}, lock)
 
     def test_the_guard_sees_a_token(self):
         token = OPEN + "REQUIRED" + CLOSE

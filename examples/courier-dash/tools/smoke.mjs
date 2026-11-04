@@ -37,6 +37,12 @@
 //   screenshot -> (data dir) write localStorage back to DIR -> scenario checks -> (--compare) image_diff
 //   print errors (or everything with --verbose) -> close all -> exit code
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): a recorded frame that fails to save is an error
+//           (it was swallowed), an old --screenshot is deleted first, and each capture is checked after the run
+// Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): --record clears the folder's old f*.png frames
+//           first, so it holds this run's frames only
+// Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): a DRIVE_ABORT or DRIVE_IGNORED run skips the
+//           data-dir scenario checks (the refusal is its one error)
 // ---------------------------------------------------------------------------
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -62,6 +68,7 @@ const ROOT = resolve(import.meta.dirname, "..");
 const SCREENSHOT = opt("--screenshot", "") && resolve(ROOT, opt("--screenshot", ""));
 const RECORD = opt("--record", "") && resolve(ROOT, opt("--record", ""));
 const RECORD_EVERY = Number(opt("--record-every", "66"));
+const FRAME_FILE = /^f\d+\.png$/; // the frames --record writes (f00000.png, ...), cleared before a run
 const DATA_ARG = (opt("--data-dir", "") || QUERY_ARGS.get("data-dir") || (DRIVE ? "build/smoke-data" : "")).replace(/\\/g, "/");
 const DATA_DIR = DATA_ARG && resolve(ROOT, DATA_ARG);
 const DATA_PREFIX = DATA_ARG && (DATA_ARG.endsWith("/") ? DATA_ARG : DATA_ARG + "/");
@@ -98,11 +105,11 @@ try {
   process.exit(2);
 }
 
-/** Resolves when a console line contains one of `texts` (or at once if already seen). */
+/** Resolves when a console line contains one of `texts` (or at once if already seen); seen() says whether one did. */
 function waiter(...texts) {
   let hit = false, done;
   const p = new Promise((res) => (done = res));
-  return { promise: p, check: (line) => { if (!hit && texts.some((t) => line.includes(t))) { hit = true; done(true); } } };
+  return { promise: p, seen: () => hit, check: (line) => { if (!hit && texts.some((t) => line.includes(t))) { hit = true; done(true); } } };
 }
 const timeout = (ms) => new Promise((res) => setTimeout(() => res(false), ms));
 
@@ -163,8 +170,15 @@ const written = [];
 let server;
 let browser;
 let recorder;
+let recording = null; // the screenshot in flight, awaited before the final picture
+let recordError = "";
 let frameCount = 0;
 let code = 0;
+if (SCREENSHOT) rmSync(SCREENSHOT, { force: true }); // a picture from an earlier run must not pass for this one
+if (RECORD && existsSync(RECORD)) {
+  // nor frames from an earlier, longer run: the folder holds this run's frames only
+  for (const name of readdirSync(RECORD)) if (FRAME_FILE.test(name)) rmSync(join(RECORD, name), { force: true });
+}
 let seeded = {};
 try {
   // appType "mpa": a missing file is a real 404, not the SPA fallback page with status 200
@@ -222,15 +236,13 @@ try {
   } else {
     if (RECORD) {
       mkdirSync(RECORD, { recursive: true });
-      let busy = false;
-      recorder = setInterval(async () => {
-        if (busy) return;
-        busy = true;
-        try {
-          await page.screenshot({ path: join(RECORD, `f${String(frameCount).padStart(5, "0")}.png`) });
-          frameCount++;
-        } catch { /* page closing */ }
-        busy = false;
+      recorder = setInterval(() => {
+        if (recording) return;
+        const file = join(RECORD, `f${String(frameCount).padStart(5, "0")}.png`);
+        recording = page.screenshot({ path: file })
+          .then(() => frameCount++)
+          .catch((err) => { recordError ||= `[record] could not save ${file}: ${String(err.message).split("\n")[0]}`; })
+          .finally(() => { recording = null; });
       }, RECORD_EVERY);
     }
     if (until) {
@@ -253,10 +265,16 @@ try {
       );
     }
     if (recorder) clearInterval(recorder);
+    recorder = null;
+    await recording; // the last frame lands (or fails) before the page can close
     if (SCREENSHOT) {
       mkdirSync(dirname(SCREENSHOT), { recursive: true });
       await page.screenshot({ path: SCREENSHOT });
     }
+    // every capture asked for must be there after the run
+    if (recordError) errors.push(recordError);
+    else if (RECORD && frameCount === 0) errors.push(`[record] no frame saved in ${RECORD}`);
+    if (SCREENSHOT && !(existsSync(SCREENSHOT) && statSync(SCREENSHOT).size > 0)) errors.push(`[screenshot] no picture written to ${SCREENSHOT}`);
   }
   if (DATA_DIR) {
     await page.evaluate(() => new Promise((r) => setTimeout(r, 50))); // let a pending log flush land
@@ -271,7 +289,8 @@ try {
     writeTree(DATA_DIR, files, seeded);
     console.log(`[info] user data (${Object.keys(files).length} file(s)) in ${DATA_DIR}`);
     for (const [marker, name] of written) console.log(`${marker} ${resolve(DATA_DIR, name)}`);
-    errors.push(...scenarioChecks(files));
+    // a refused or failed scenario is already its one error: what it would have written is not checked
+    if (!abort?.seen()) errors.push(...scenarioChecks(files));
   }
 } catch (err) {
   errors.push(`[smoke] ${err.message}`);

@@ -8,7 +8,9 @@
 //           shell.subtitles.finish()                     // reveal the whole line now (screenshots)
 // Notes   : Browser only (DOM), no Phaser. Bundles every data/dialogue/*.built.json at build time (Vite glob);
 //           a later file's line id wins. In locale "pseudo" the text runs through pseudo(), so the bar's
-//           layout gets the same overflow check as the menus. Unknown fields in the files are ignored.
+//           layout gets the same overflow check as the menus, once the typewriter has finished the line (it carries
+//           data-settling until then). Unknown fields in the files are ignored. holdTime stops the clock of
+//           lines and captions (the pseudo drive: what its checks count must not depend on how fast the machine is).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 import { captionArrow } from "../core/audioAccess";
@@ -16,9 +18,13 @@ import { cueAt, dialogueFrom, lineLife, revealCount, shouldShow, type Caption, t
 import { PSEUDO_LOCALE, pseudo } from "../core/i18n";
 import { Log } from "../core/log";
 import type { Shell } from "./app";
+import { SETTLING_ATTR } from "./pseudoCheck";
 import { el } from "./ui";
 
-type Showing = { line: DialogueLine; t: number; typewriter: boolean; root: HTMLElement; body: HTMLElement; chars: string[] };
+type Showing = {
+  line: DialogueLine; t: number; typewriter: boolean; root: HTMLElement; body: HTMLElement; chars: string[];
+  full: boolean; // finish() was called: every character shows, even when the text outgrew the timing (pseudo)
+};
 
 function loadDialogue(): { lines: Record<string, DialogueLine>; captions: Record<string, Caption> } {
   const files = import.meta.glob("../../data/dialogue/*.built.json", { eager: true, import: "default" }) as Record<string, unknown>;
@@ -39,6 +45,8 @@ export class SubtitleBar {
   private readonly data = loadDialogue();
   private showing: Showing | null = null;
   private readonly captions: { root: HTMLElement; left: number }[] = [];
+  /** While true no time passes for lines and captions: nothing types on, nothing leaves (finish() still works). */
+  holdTime = false;
 
   constructor(private readonly shell: Shell, private readonly host: HTMLElement) {}
 
@@ -73,7 +81,7 @@ export class SubtitleBar {
     body.dataset.id = `line.${id}`;
     root.append(body);
     this.host.append(root);
-    this.showing = { line, t: 0, typewriter: opts.typewriter ?? true, root, body, chars: Array.from(this.text(line.text)) };
+    this.showing = { line, t: 0, typewriter: opts.typewriter ?? true, root, body, chars: Array.from(this.text(line.text)), full: false };
     this.draw();
     return true;
   }
@@ -98,7 +106,8 @@ export class SubtitleBar {
   /** Reveals the current line completely (a screenshot or a skip button). */
   finish(): void {
     if (!this.showing) return;
-    this.showing.t = this.showing.line.durationS;
+    this.showing.t = Math.max(this.showing.t, this.showing.line.durationS);
+    this.showing.full = true;
     this.draw();
   }
 
@@ -109,6 +118,7 @@ export class SubtitleBar {
   }
 
   update(dt: number): void {
+    if (this.holdTime) return;
     for (const c of [...this.captions]) {
       c.left -= dt;
       if (c.left <= 0) {
@@ -131,7 +141,9 @@ export class SubtitleBar {
     const s = this.showing;
     if (!s) return;
     if (s.typewriter) {
-      s.body.textContent = s.chars.slice(0, revealCount(s.line, s.t, s.chars.length)).join("");
+      const n = s.full ? s.chars.length : revealCount(s.line, s.t, s.chars.length);
+      s.body.textContent = s.chars.slice(0, n).join("");
+      s.root.toggleAttribute(SETTLING_ATTR, n < s.chars.length); // still typing: the pseudo check waits for it
     } else {
       const cue = cueAt(s.line, Math.min(s.t, s.line.durationS - 1e-6));
       s.body.textContent = cue ? this.text(cue.lines.join("\n")) : "";

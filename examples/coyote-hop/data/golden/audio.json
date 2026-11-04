@@ -812,6 +812,104 @@
    "type": "audio_director"
   },
   {
+   "name": "the largest seed validate allows (2^53 - 1) stays exact in every port",
+   "params": {
+    "events": {
+     "step_stone": {
+      "bus": "sfx",
+      "cooldown_ms": 60,
+      "files": [
+       "step_0.wav",
+       "step_1.wav",
+       "step_2.wav",
+       "step_3.wav"
+      ],
+      "lengths_ms": [
+       180,
+       200,
+       170,
+       190
+      ],
+      "max_voices": 4,
+      "pick": "random_no_repeat",
+      "pitch_semitones": [
+       -1.0,
+       1.0
+      ],
+      "steal": "oldest",
+      "volume_db": [
+       -3.0,
+       0.0
+      ]
+     }
+    },
+    "seed": 9007199254740991
+   },
+   "steps": [
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 186.08354357587953,
+      "gain_db": -0.9133928021540796,
+      "pitch_ratio": 1.0210467639903011,
+      "pitch_semitones": 0.3605873187636839,
+      "result": "played",
+      "stolen": null,
+      "variant": 3,
+      "voice": 1
+     },
+     "t_ms": 0
+    },
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 423.99457068317906,
+      "gain_db": -1.4028277261209001,
+      "pitch_ratio": 0.977041980864721,
+      "pitch_semitones": -0.4020905116592446,
+      "result": "played",
+      "stolen": null,
+      "variant": 2,
+      "voice": 2
+     },
+     "t_ms": 250
+    },
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 679.7203621896797,
+      "gain_db": -1.1365184710701168,
+      "pitch_ratio": 1.057197958456544,
+      "pitch_semitones": 0.9629465294656776,
+      "result": "played",
+      "stolen": null,
+      "variant": 3,
+      "voice": 3
+     },
+     "t_ms": 500
+    },
+    {
+     "call": "play",
+     "event": "step_stone",
+     "expect": {
+      "ends_ms": 916.4959072894786,
+      "gain_db": -1.1890140484916176,
+      "pitch_ratio": 1.0210461191963656,
+      "pitch_semitones": 0.36057638596797026,
+      "result": "played",
+      "stolen": null,
+      "variant": 2,
+      "voice": 4
+     },
+     "t_ms": 750
+    }
+   ],
+   "type": "audio_director"
+  },
+  {
    "name": "ducking: dialogue under music, attack and release",
    "params": {
     "ducking": [

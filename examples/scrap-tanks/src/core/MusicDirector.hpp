@@ -109,7 +109,11 @@ public:
         if (quantize == "immediate") return p;
         const auto [start, end] = loop_points(t);
         if (quantize == "loop_end") return end;
-        const int step = quantize == "beat" ? 1 : quantize == "bar" ? t.beats_per_bar : t.beats_per_bar * phrase_bars;
+        int step = 0;
+        if (quantize == "beat") step = 1;
+        else if (quantize == "bar") step = t.beats_per_bar;
+        else if (quantize == "phrase") step = t.beats_per_bar * phrase_bars;
+        else throw std::runtime_error("unknown quantize " + quantize);  // a typo must not mean "phrase"
         auto k = static_cast<std::int64_t>(std::floor(double(p) * t.bpm / (60 * rate_)));
         while (beat_sample(double(k), t.bpm, rate_) < p) ++k;
         while (k % step) ++k;
@@ -140,7 +144,7 @@ public:
         out.from_stop_at = out.switch_at + out.fade;
         out.to_start_at = out.switch_at;
         out.stinger = rule.stinger;
-        if (rule.stinger) {
+        if (rule.stinger && !rule.stinger->empty()) {  // "stinger": "" means none, as in the reference
             const auto s = stinger_bars_.find(*rule.stinger);
             if (s == stinger_bars_.end()) throw std::runtime_error("unknown stinger " + *rule.stinger);
             out.stinger_at = out.switch_at;

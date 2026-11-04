@@ -23,6 +23,9 @@
 #           Audit pass 7: CPU by default (CUDA crashed on NVIDIA PCs without cuBLAS), no ffmpeg, av<19,
 #           exit 2 when no method is installed, real failure reasons, entities and whitespace cleaned,
 #           regional --lang codes, stricter URL parsing, --model
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): --whisper without faster-whisper tries captions
+#           first (exit 2 only if transcription is reached); WebVTT cue ids and NOTE / STYLE / REGION blocks
+#           stay out of the text (vtt_text). Exam: tools/test_yt_transcript.py
 # ---------------------------------------------------------------------------
 import argparse
 import html
@@ -93,17 +96,30 @@ def via_ytdlp_subs(vid, lang, tmp):
     files = list(tmp.glob("*.vtt"))
     if not files:
         return None, f"yt-dlp subtitles: {last_error(r.stderr) or f'no {lang} captions'}"
+    return vtt_text(files[0].read_text(encoding="utf-8", errors="ignore")), None
+
+
+def vtt_text(raw):
+    """The spoken text of a WebVTT file as one line. A file is blocks split by blank lines: the WEBVTT header,
+    NOTE / STYLE / REGION blocks (skipped whole), and cues, where only the lines after the timing line are text
+    (a line before it is the cue identifier, often a number)."""
     lines, last = [], ""
-    for ln in files[0].read_text(encoding="utf-8", errors="ignore").splitlines():
-        ln = re.sub(r"<[^>]+>", "", ln).strip()          # drop inline timing tags
-        if not ln or "-->" in ln or ln.startswith(("WEBVTT", "Kind:", "Language:")):
+    raw = raw.replace("\r\n", "\n").replace("\r", "\n").lstrip("﻿")
+    for block in re.split(r"\n[ \t]*\n", raw):
+        rows = block.strip("\n").split("\n")
+        if rows[0].strip().startswith(("WEBVTT", "NOTE", "STYLE", "REGION")):
             continue
-        ln = html.unescape(ln)                            # VTT escapes & and <; auto captions write ">>" speaker marks
-        ln = re.sub(r"^>>\s*", "", ln)
-        if ln and ln != last:                             # auto-captions repeat lines
-            lines.append(ln)
-            last = ln
-    return flat(" ".join(lines)), None
+        timing = next((i for i, row in enumerate(rows) if "-->" in row), None)
+        if timing is None:
+            continue                                      # not a cue (a stray header line)
+        for ln in rows[timing + 1:]:
+            ln = re.sub(r"<[^>]+>", "", ln).strip()      # drop inline timing tags
+            ln = html.unescape(ln)                        # VTT escapes & and <; auto captions write ">>" speaker marks
+            ln = re.sub(r"^>>\s*", "", ln)
+            if ln and ln != last:                         # auto-captions repeat lines
+                lines.append(ln)
+                last = ln
+    return flat(" ".join(lines))
 
 
 def whisper_lang(lang):
@@ -175,10 +191,10 @@ def main(argv=None):
     if have("yt_dlp"):
         methods.append(("yt-dlp subtitles", lambda tmp: via_ytdlp_subs(vid, args.lang, tmp)))
     if args.whisper:
-        if not (have("faster_whisper") and have("yt_dlp")):
-            print('[error] --whisper needs: pip install yt-dlp faster-whisper "av<19"', file=sys.stderr)
-            return 2
-        methods.append(("whisper", lambda tmp: via_whisper(vid, args.lang, tmp, args.device, args.model)))
+        if have("faster_whisper") and have("yt_dlp"):
+            methods.append(("whisper", lambda tmp: via_whisper(vid, args.lang, tmp, args.device, args.model)))
+        else:
+            methods.append(("whisper", None))           # captions may still work: report it only when reached
     if not methods:
         print("[error] no transcript method installed: pip install youtube-transcript-api yt-dlp", file=sys.stderr)
         return 2
@@ -186,6 +202,12 @@ def main(argv=None):
     text, reasons = None, []
     with tempfile.TemporaryDirectory() as d:
         for name, method in methods:
+            if method is None:
+                for why in reasons:
+                    print(f"[FAIL] {why}", file=sys.stderr)
+                print('[error] no captions, and --whisper needs: pip install yt-dlp faster-whisper "av<19"',
+                      file=sys.stderr)
+                return 2
             dbg(f"trying {name}")
             text, why = method(Path(d))
             if text:

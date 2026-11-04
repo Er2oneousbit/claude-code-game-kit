@@ -12,11 +12,12 @@
 - **First run:** in RPG Maker MZ make a new project anywhere (File > New Project), then
   `python tools/dev.py setup --from <that project folder>`. It copies MZ's own files (core scripts, default database,
   default art and sound) into `game/` without touching yours, registers the game's plugins and installs the tools.
-  Then `python tools/dev.py doctor`, and open `game/game.rmmzproject` in the editor. **(verify)**
+  Then `python tools/dev.py doctor`, and open the `.rmmzproject` file in `game/` in the editor (it keeps the name
+  the new project had, such as `Project1.rmmzproject`; setup prints it). **(verify)**
 
 ## Layout
 ```
-game/                     the RPG Maker MZ project: open game/game.rmmzproject in the editor
+game/                     the RPG Maker MZ project: open its .rmmzproject file in the editor
 game/js/plugins/GameCore.js   engine-free rules: no $game*, Scene_*, Window_*. Tested in Node. Yours.
 game/js/plugins/GameAudio.js  the kit's audio rules (sound events, music, access), engine-free, golden-tested in Node.
 game/js/plugins/GameMain.js   MZ glue: plugin commands, scene hooks, the BOOT_OK marker. Yours.
@@ -28,6 +29,8 @@ tools/                    dev.py, smoke.mjs, serve.mjs and helpers
 build/web/                a web-browser copy of the game (git-ignored)
 ```
 Keeping the MZ project in `game/` means the editor's Deployment exports the game and none of the kit's docs or tools.
+No juice or shell module ships here: MZ has its own screens, settings, saves, shake and flash, and ENGINE_FLOW
+("The shell, juice and accessibility in MZ") maps SOP-18 to SOP-20 onto them.
 
 ## Conventions
 - **Rules in GameCore, MZ in GameMain.** GameCore must stay loadable by Node (tests); anything that touches RPG Maker

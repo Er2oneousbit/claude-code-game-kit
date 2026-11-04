@@ -233,7 +233,7 @@ def run(entries, pack, man, conf):
             fp = core.project_path(e["font"])
             if not os.path.isfile(fp):
                 raise core.ToolError(f"widgets {name}: font {e['font']!r} not found (make it with the fonts lane first)")
-            font_res = "res://" + os.path.relpath(fp, core.PROJECT).replace(os.sep, "/")   # res:// is the game root
+            font_res = core.linked_res(fp, f"widgets {name}: font")   # res:// is the game root
         if margins or pm:
             th = theme(os.path.join(art, f"theme_{name}.tres"), res, name, margins, pm, scale, font_res)
             man.add(th, "theme", buttons=sorted(margins), panel=bool(pm), font=font_res,

@@ -10,6 +10,7 @@
 //           folder that creates the scene, wires assets with AssetDatabase, saves, and calls
 //           AddToBuildSettings; run it with `dev.py exec YourBuilder.Build`. Idempotent: run it again any time.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): a failed SaveScene throws (it was ignored)
 // ---------------------------------------------------------------------------
 using System.IO;
 using System.Linq;
@@ -29,7 +30,11 @@ public static class GameKitScenes
             // A camera and a light, nothing else: the smallest scene the boot smoke test can load
             var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
             Directory.CreateDirectory(Path.GetDirectoryName(StarterScenePath));
-            EditorSceneManager.SaveScene(scene, StarterScenePath);
+            if (!EditorSceneManager.SaveScene(scene, StarterScenePath))
+            {
+                // Throwing makes `dev.py exec` fail (exit 1) instead of putting a missing scene in Build Settings
+                throw new IOException($"could not save {StarterScenePath} (read-only folder, or a file in the way?)");
+            }
             Debug.Log($"[INFO][scenes] created {StarterScenePath}");
         }
         AddToBuildSettings(StarterScenePath, first: true);

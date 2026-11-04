@@ -23,7 +23,8 @@ Assets/Scripts/Core/     engine-agnostic logic (no UnityEngine types where possi
 Assets/Scripts/Game/     gameplay MonoBehaviours and ScriptableObjects; AudioEventPlayer, MusicPlayer play the audio decisions
 Assets/Editor/           editor-only code (GameKitBuild.cs lives here)
 Assets/Tests/EditMode/   EditMode tests (own assembly definition)
-Assets/Tests/PlayMode/   PlayMode tests, incl. BootSmokeTests (what `dev.py smoke` runs)
+Assets/Tests/PlayMode/   PlayMode tests, incl. BootSmokeTests (what `dev.py smoke` runs) and AudioPlayModeTests
+                         (AudioEventPlayer on real AudioSources: `dev.py test --mode PlayMode --filter Audio`)
 Assets/Art, Audio, Prefabs, Scenes/   content (see docs/ASSET_LOG.md)
 Packages/manifest.json   package list (edit through the Package Manager or with care)
 ProjectSettings/         project config (text, edit with care)

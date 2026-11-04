@@ -9,7 +9,8 @@
 //           music.PlayTrack("explore");                 // or let Play Start Track start music.json's "start"
 //           MusicPlan p = music.Request("combat");       // samples on the music clock (see Notes)
 //           music.SetStemGain("explore", "drums", 0f);   // layers: a stem in or out (linear 0..1)
-// Notes   : Thin glue: the grid and every decision live in Assets/Scripts/Core/MusicDirector.cs. The music clock is
+// Notes   : Thin glue: the grid and every decision live in Assets/Scripts/Core/MusicDirector.cs and MusicQueue.cs
+//           (which change is pending, and undoing it when it is asked back before its switch). The music clock is
 //           AudioSettings.dspTime in samples at music.json's sample_rate; a plan's sample s is scheduled at dspTime
 //           s / sample_rate with AudioSource.PlayScheduled / SetScheduledEndTime, which Unity starts and stops on
 //           the exact output sample. A request is planned at now + Schedule Lead, so the switch is never already in
@@ -21,11 +22,15 @@
 //           the output rate, which only matters for sample accuracy when they differ (a warning says so).
 //           A fade is a straight line in volume from switch_at to from_stop_at, applied per frame; the stop itself
 //           is scheduled. Starting a source mid-clip sets timeSamples before PlayScheduled.
-//           Compile-checked against Unity 6.6 (verify in the editor: Play mode behaviour was not run by the kit).
+//           Play mode, run once on Unity 6000.6.6f1 with generated tones: a change asked back before its switch
+//           left the old track playing on and the new one never sounded. The rest of the Play mode behaviour
+//           (fades, stingers, loops by ear) is compile-checked only (verify in the editor).
 //
 // Pseudocode:
 //   PlayTrack(track, at): per stem: head(clip from entry, ends at loop end) + loop(loop clip, from loop end on)
-//   Request(to): plan = director.Plan(current, since, entry, to, now + lead)
+//   Request(to): queue.Request(to, now + lead): a change still pending is undone first (its new track and a
+//                stinger not started yet are dropped, the old track gets its loop and no stop back)
+//                -> plan (from the current track, or from its entry when it has not entered yet)
 //                -> old track: fade from switch_at, scheduled stop at from_stop_at
 //                -> stinger source at stinger_at -> new track's stems from to_offset at to_start_at
 //   Update: volume = track fade x stem gain x music bus gain x Volume; drop tracks and stingers that ended
@@ -74,8 +79,21 @@ namespace graveyard_shift.Game
         private sealed class OneShot
         {
             public AudioSource Source;
+            public long StartsAt;
             public long EndsAt;
         }
+
+        // The last change, kept while it can be undone: what Leave changed on the old track, and what it started
+        private sealed class Pending
+        {
+            public Playing Old;
+            public long OldFadeFrom, OldFadeLength, OldStopAt;
+            public long LeftAt;                  // the stop Leave scheduled on the old track
+            public Playing Next;
+            public OneShot Stinger;
+        }
+
+        private const double NEVER_SECONDS = 1e12;   // a scheduled end that never comes (the dsp clock is in seconds)
 
         private readonly List<Playing> _leaving = new List<Playing>();   // fading out or waiting for their stop
         private readonly List<OneShot> _stingers = new List<OneShot>();
@@ -83,6 +101,8 @@ namespace graveyard_shift.Game
         private readonly Stack<AudioSource> _pool = new Stack<AudioSource>();
         private Func<string, AudioClip> _resolve;
         private Playing _current;
+        private Pending _pending;
+        private MusicQueue _queue;
 
         public MusicDirector Director { get; private set; }
         public string Track => _current?.Name;
@@ -117,6 +137,7 @@ namespace graveyard_shift.Game
             _resolve = resolveClip ?? throw new ArgumentNullException(nameof(resolveClip));
             StopAll();
             Director = MusicDirector.FromJson(musicJson);
+            _queue = new MusicQueue(Director);
             foreach (MusicTrack t in Director.Tracks.Values)
             {
                 long loopEnd = Director.LoopPoints(t.Name).End;
@@ -151,6 +172,7 @@ namespace graveyard_shift.Game
         {
             RequireInit();
             StopAll();
+            _queue.Start(name, atSample);
             _current = Launch(name, atSample, 0);
         }
 
@@ -162,29 +184,39 @@ namespace graveyard_shift.Game
             return Request(to, NowSample + LeadSamples());
         }
 
-        /// <summary>As Request(to), planned at a music-clock sample. A request while the previous change has not
-        /// started yet is planned from the moment that track starts.</summary>
+        /// <summary>As Request(to), planned at a music-clock sample. A change asked for while the previous one has
+        /// not reached its switch replaces it, so asking for the playing track again before the switch keeps it
+        /// playing (no restart). A track that has not entered yet (a stinger's gap) is planned from its entry.</summary>
         public MusicPlan Request(string to, long nowSample)
         {
             RequireInit();
-            Playing cur = _current;
-            if (cur == null)
+            if (_current == null)
             {
                 PlayTrack(to, nowSample);
                 return null;
             }
-            if (cur.Name == to)
+            MusicQueue.Step step = _queue.Request(to, nowSample);
+            if (step.Undone)
+            {
+                UndoPending(nowSample);
+            }
+            _pending = null;
+            MusicPlan p = step.Plan;
+            if (p == null)
             {
                 return null;
             }
-            long now = Math.Max(nowSample, cur.Since);
-            MusicPlan p = Director.Plan(cur.Name, cur.Since, cur.Entry, to, now);
+            Playing cur = _current;
+            var pend = new Pending { Old = cur, OldFadeFrom = cur.FadeFrom, OldFadeLength = cur.FadeLength,
+                                     OldStopAt = cur.StopAt, LeftAt = p.FromStopAt };
             Leave(cur, p.SwitchAt, p.Fade, p.FromStopAt);
             if (!string.IsNullOrEmpty(p.Stinger) && p.StingerAt.HasValue)
             {
-                PlayStinger(p.Stinger, p.StingerAt.Value);
+                pend.Stinger = PlayStinger(p.Stinger, p.StingerAt.Value);
             }
             _current = Launch(to, p.ToStartAt, p.ToOffset);
+            pend.Next = _current;
+            _pending = pend;
             return p;
         }
 
@@ -206,6 +238,8 @@ namespace graveyard_shift.Game
         /// <summary>Stops the music and every stinger now.</summary>
         public void StopAll()
         {
+            _queue?.Clear();
+            _pending = null;
             if (_current != null)
             {
                 Release(_current);
@@ -315,7 +349,7 @@ namespace graveyard_shift.Game
             _leaving.Add(p);
         }
 
-        private void PlayStinger(string name, long at)
+        private OneShot PlayStinger(string name, long at)
         {
             MusicStinger st = Director.Stinger(name);
             AudioClip clip = Clip(st.File, $"stinger {name}");
@@ -326,7 +360,46 @@ namespace graveyard_shift.Game
             src.volume = 0f;
             src.PlayScheduled(Dsp(at));
             long length = (long)Math.Ceiling((double)clip.samples / clip.frequency * Director.SampleRate);
-            _stingers.Add(new OneShot { Source = src, EndsAt = at + length });
+            var shot = new OneShot { Source = src, StartsAt = at, EndsAt = at + length };
+            _stingers.Add(shot);
+            return shot;
+        }
+
+        // Takes back the last change (its switch has not come): the new track never sounds, a stinger that has not
+        // started is dropped, and the old track gets back its levels, its loop and its stop, as Leave found them
+        private void UndoPending(long now)
+        {
+            Pending pd = _pending;
+            if (pd == null)
+            {
+                return;
+            }
+            Release(pd.Next);                                // Stop() before the scheduled start: it never plays
+            if (pd.Stinger != null && pd.Stinger.StartsAt >= now && _stingers.Remove(pd.Stinger))
+            {
+                Return(pd.Stinger.Source);
+            }
+            Playing old = pd.Old;
+            _leaving.Remove(old);
+            old.FadeFrom = pd.OldFadeFrom;
+            old.FadeLength = pd.OldFadeLength;
+            old.StopAt = pd.OldStopAt;
+            foreach (Stem s in old.Stems)
+            {
+                if (pd.LeftAt <= old.LoopFrom)
+                {
+                    // Leave cut the head short and cancelled the loop: both back as Launch scheduled them
+                    s.Head.SetScheduledEndTime(Dsp(old.LoopFrom));
+                    s.Loop.timeSamples = 0;
+                    s.Loop.PlayScheduled(Dsp(old.LoopFrom));
+                }
+                s.Loop.SetScheduledEndTime(old.StopAt == long.MaxValue ? NEVER_SECONDS : Dsp(old.StopAt));
+            }
+            if (old.StopAt != long.MaxValue)
+            {
+                _leaving.Add(old);
+            }
+            _current = old;
         }
 
         private static void SetLevels(Playing p, float bus, long now)

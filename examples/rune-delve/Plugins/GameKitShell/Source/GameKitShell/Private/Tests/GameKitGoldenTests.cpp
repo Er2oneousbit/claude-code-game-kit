@@ -232,6 +232,18 @@ namespace GameKitGoldenTests
 		}
 	}
 
+	/** A step's result as one JSON object, so SameValue compares key sets: a field the reference adds to
+	 *  "expect" fails here instead of passing unchecked. */
+	TSharedPtr<FJsonValue> Numbers(std::initializer_list<TPair<const TCHAR*, double>> Fields)
+	{
+		const TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
+		for (const TPair<const TCHAR*, double>& F : Fields)
+		{
+			O->SetField(F.Key, MakeNumber(F.Value));
+		}
+		return MakeObject(O);
+	}
+
 	void CheckShake(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case)
 	{
 		const TSharedPtr<FJsonObject> K = Run.Obj(Case, TEXT("params"));
@@ -248,11 +260,8 @@ namespace GameKitGoldenTests
 			else if (Call == TEXT("update"))
 			{
 				const FGameKitShakeOffset O = Shake.Update(Run.Num(Step, TEXT("dt")), Run.Num(Step, TEXT("intensity")));
-				const TSharedPtr<FJsonObject> E = Run.Obj(Step, TEXT("expect"));
-				Run.SameNumber(O.X, Run.Field(E, TEXT("x")), StepLabel(I, TEXT("x")));
-				Run.SameNumber(O.Y, Run.Field(E, TEXT("y")), StepLabel(I, TEXT("y")));
-				Run.SameNumber(O.Angle, Run.Field(E, TEXT("angle")), StepLabel(I, TEXT("angle")));
-				Run.SameNumber(Shake.GetTrauma(), Run.Field(E, TEXT("trauma")), StepLabel(I, TEXT("trauma")));
+				Run.SameValue(Numbers({{TEXT("x"), O.X}, {TEXT("y"), O.Y}, {TEXT("angle"), O.Angle}, {TEXT("trauma"), Shake.GetTrauma()}}),
+				              Run.Field(Step, TEXT("expect")), StepLabel(I, TEXT("update")));
 			}
 			else
 			{
@@ -276,9 +285,8 @@ namespace GameKitGoldenTests
 			else if (Call == TEXT("scaled_dt"))
 			{
 				const double Dt = Hitstop.ScaledDt(Run.Num(Step, TEXT("dt")));
-				const TSharedPtr<FJsonObject> E = Run.Obj(Step, TEXT("expect"));
-				Run.SameNumber(Dt, Run.Field(E, TEXT("dt")), StepLabel(I, TEXT("dt")));
-				Run.SameNumber(Hitstop.GetRemaining(), Run.Field(E, TEXT("remaining")), StepLabel(I, TEXT("remaining")));
+				Run.SameValue(Numbers({{TEXT("dt"), Dt}, {TEXT("remaining"), Hitstop.GetRemaining()}}), Run.Field(Step, TEXT("expect")),
+				              StepLabel(I, TEXT("scaled_dt")));
 			}
 			else
 			{
@@ -316,9 +324,7 @@ namespace GameKitGoldenTests
 			{
 				const FVector2D C = Follow.Update(Run.Num(Step, TEXT("dt")), Run.Num(Step, TEXT("tx")), Run.Num(Step, TEXT("ty")),
 				                                  Run.Num(Step, TEXT("vx")), Run.Num(Step, TEXT("vy")));
-				const TSharedPtr<FJsonObject> E = Run.Obj(Step, TEXT("expect"));
-				Run.SameNumber(C.X, Run.Field(E, TEXT("x")), StepLabel(I, TEXT("x")));
-				Run.SameNumber(C.Y, Run.Field(E, TEXT("y")), StepLabel(I, TEXT("y")));
+				Run.SameValue(Numbers({{TEXT("x"), C.X}, {TEXT("y"), C.Y}}), Run.Field(Step, TEXT("expect")), StepLabel(I, TEXT("update")));
 			}
 			else
 			{
@@ -397,9 +403,7 @@ namespace GameKitGoldenTests
 			if (Call == TEXT("update"))
 			{
 				const double X = Spring.Update(Run.Num(Step, TEXT("dt")));
-				const TSharedPtr<FJsonObject> E = Run.Obj(Step, TEXT("expect"));
-				Run.SameNumber(X, Run.Field(E, TEXT("x")), StepLabel(I, TEXT("x")));
-				Run.SameNumber(Spring.V, Run.Field(E, TEXT("v")), StepLabel(I, TEXT("v")));
+				Run.SameValue(Numbers({{TEXT("x"), X}, {TEXT("v"), Spring.V}}), Run.Field(Step, TEXT("expect")), StepLabel(I, TEXT("update")));
 			}
 			else
 			{
@@ -574,8 +578,10 @@ namespace GameKitGoldenTests
 	TSharedPtr<FJsonValue> PlayAsJson(const FGameKitPlayDecision& D)
 	{
 		const TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
-		const TCHAR* Result = D.Result == EGameKitPlayResult::Played ? TEXT("played")
-		                      : D.Result == EGameKitPlayResult::Cooldown ? TEXT("cooldown") : TEXT("capped");
+		const TCHAR* Result = D.Result == EGameKitPlayResult::Played     ? TEXT("played")
+		                      : D.Result == EGameKitPlayResult::Cooldown ? TEXT("cooldown")
+		                      : D.Result == EGameKitPlayResult::Capped   ? TEXT("capped")
+		                                                                 : TEXT("error");
 		O->SetField(TEXT("result"), MakeString(Result));
 		if (D.Result == EGameKitPlayResult::Played)
 		{
@@ -652,6 +658,7 @@ namespace GameKitGoldenTests
 			O->SetField(TEXT("to_start_at"), MakeNumber(static_cast<double>(P.ToStartAt)));
 			O->SetField(TEXT("stinger"), P.Stinger.IsSet() ? MakeString(P.Stinger.GetValue()) : MakeNull());
 			O->SetField(TEXT("stinger_at"), P.StingerAt.IsSet() ? MakeNumber(static_cast<double>(P.StingerAt.GetValue())) : MakeNull());
+			if (!P.Error.IsEmpty()) { Run.Test.AddError(StepLabel(I, TEXT("plan")) + TEXT(" refused: ") + P.Error); }
 			Run.SameValue(MakeObject(O), Run.Field(Step, TEXT("expect")), StepLabel(I++, TEXT("plan")));
 		}
 	}
@@ -900,6 +907,99 @@ bool FGameKitGoldenCoverageTest::RunTest(const FString&)
 	GameKitGoldenTests::CheckCoverage(*this, GameKitGoldenTests::MusicFile, GameKitGoldenTests::MusicTypes);
 	GameKitGoldenTests::CheckCoverage(*this, GameKitGoldenTests::AccessFile, GameKitGoldenTests::AccessTypes);
 	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitMusicPlanErrorsTest, "GameKit.Golden.MusicErrors", GameKitGoldenTests::GoldenTestFlags)
+
+// music.py raises on a quantize or stinger it does not know (a typo must not mean "phrase" or a one-bar stinger)
+// and plans "stinger": "" as no stinger. The golden plans never reach these, so they run here on the golden params.
+bool FGameKitMusicPlanErrorsTest::RunTest(const FString&)
+{
+	using namespace GameKit::Json;
+	FString Error;
+	const TSharedPtr<FJsonObject> Root = GameKitGoldenTests::LoadGolden(GameKitGoldenTests::MusicFile, Error);
+	if (!Root.IsValid())
+	{
+		AddError(Error);
+		return false;
+	}
+	TSharedPtr<FJsonObject> Params;
+	for (const TSharedPtr<FJsonValue>& C : Root->GetArrayField(TEXT("cases")))
+	{
+		if (Is(C, EJson::Object) && GetString(C->AsObject(), TEXT("type"), FString()) == TEXT("music_plan"))
+		{
+			Params = FindObject(C->AsObject(), TEXT("params"));
+		}
+	}
+	if (!Params.IsValid())
+	{
+		AddError(TEXT("music.json has no music_plan params"));
+		return false;
+	}
+	// a rule change on a fresh copy of the params: the first transition matching From -> To gets Key = Value
+	auto WithRule = [&Params](const FString& From, const FString& To, const TCHAR* Key, const FString& Value)
+	{
+		const TSharedPtr<FJsonObject> Copy = Parse(Write(Params.ToSharedRef(), 0))->AsObject();
+		for (const TSharedPtr<FJsonValue>& R : Copy->GetArrayField(TEXT("transitions")))
+		{
+			const TSharedPtr<FJsonObject> Rule = R->AsObject();
+			if (GetString(Rule, TEXT("from"), FString()) == From && GetString(Rule, TEXT("to"), FString()) == To)
+			{
+				Rule->SetStringField(Key, Value);
+				break;
+			}
+		}
+		return Copy;
+	};
+	const FGameKitMusicPlan Typo = FGameKitMusicDirector(WithRule(TEXT("combat"), TEXT("explore"), TEXT("quantize"), TEXT("bars")))
+	                                   .Plan(TEXT("combat"), 5000, 0, TEXT("explore"), 50000);
+	TestEqual(TEXT("quantize \"bars\" is refused"), Typo.Error, FString(TEXT("unknown quantize bars")));
+	const FGameKitMusicPlan Unknown = FGameKitMusicDirector(WithRule(TEXT("*"), TEXT("waltz"), TEXT("stinger"), TEXT("alram")))
+	                                      .Plan(TEXT("explore"), 0, 0, TEXT("waltz"), 70000);
+	TestEqual(TEXT("an unknown stinger is refused"), Unknown.Error, FString(TEXT("unknown stinger alram")));
+	const FGameKitMusicPlan Empty = FGameKitMusicDirector(WithRule(TEXT("*"), TEXT("waltz"), TEXT("stinger"), FString()))
+	                                    .Plan(TEXT("explore"), 0, 0, TEXT("waltz"), 70000);
+	TestTrue(TEXT("\"stinger\": \"\" plans without an error"), Empty.Error.IsEmpty());
+	TestFalse(TEXT("\"stinger\": \"\" sets no stinger_at"), Empty.StingerAt.IsSet());
+	TestEqual(TEXT("\"stinger\": \"\" enters the next track at the switch"), Empty.ToStartAt, Empty.SwitchAt);
+	return !HasAnyErrors();
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitAudioDirectorErrorsTest, "GameKit.Golden.AudioErrors", GameKitGoldenTests::GoldenTestFlags)
+
+// Where audio_events.py raises, Play returns Error (not Capped) and changes nothing; the variant count is the number
+// of files, as in the reference. The golden steps never reach these.
+bool FGameKitAudioDirectorErrorsTest::RunTest(const FString&)
+{
+	using namespace GameKit::Json;
+	auto Director = [this](const TCHAR* EventsJson)
+	{
+		const TSharedPtr<FJsonValue> V = Parse(FString::Printf(TEXT("{\"seed\": 1, \"events\": %s}"), EventsJson));
+		TestTrue(TEXT("test params parse"), Is(V, EJson::Object));
+		return FGameKitAudioDirector(V->AsObject());
+	};
+	FGameKitAudioDirector NoVoices = Director(TEXT("{\"x\": {\"bus\": \"sfx\", \"files\": [\"a.wav\"], \"lengths_ms\": [100], \"max_voices\": 0}}"));
+	const FGameKitPlayDecision Zero = NoVoices.Play(TEXT("x"), 0.0);
+	TestTrue(TEXT("max_voices 0 with steal oldest is an error"), Zero.Result == EGameKitPlayResult::Error);
+	TestEqual(TEXT("max_voices 0: the reason"), Zero.Error, FString(TEXT("event x: max_voices must be 1 or more")));
+
+	FGameKitAudioDirector TwoFiles = Director(TEXT("{\"x\": {\"bus\": \"sfx\", \"files\": [\"a\", \"b\"], \"lengths_ms\": [100, 100, 100], \"pick\": \"sequence\"}}"));
+	const int32 Want[] = {0, 1, 0};
+	for (int32 I = 0; I < 3; ++I)
+	{
+		TestEqual(FString::Printf(TEXT("sequence over two files, play %d"), I), TwoFiles.Play(TEXT("x"), 500.0 * I).Variant, Want[I]);
+	}
+	FGameKitAudioDirector Short = Director(TEXT("{\"x\": {\"bus\": \"sfx\", \"files\": [\"a\", \"b\", \"c\"], \"lengths_ms\": [100, 100]}}"));
+	TestTrue(TEXT("fewer lengths than files is an error"), Short.Play(TEXT("x"), 0.0).Result == EGameKitPlayResult::Error);
+
+	TestTrue(TEXT("an unknown event is an error"), TwoFiles.Play(TEXT("nope"), 2000.0).Result == EGameKitPlayResult::Error);
+	const FGameKitPlayDecision Back = TwoFiles.Play(TEXT("x"), 10.0);
+	TestTrue(TEXT("an earlier time is an error, not capped"), Back.Result == EGameKitPlayResult::Error);
+	TestTrue(TEXT("an earlier time names the time order"), Back.Error.Contains(TEXT("time order")));
+	FString DuckError;
+	TwoFiles.Duck(10.0, &DuckError);
+	TestTrue(TEXT("Duck at an earlier time sets the error"), DuckError.Contains(TEXT("time order")));
+	return !HasAnyErrors();
 }
 
 #endif // WITH_DEV_AUTOMATION_TESTS

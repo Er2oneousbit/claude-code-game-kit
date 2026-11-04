@@ -138,6 +138,19 @@ TEST_CASE("a save from a newer game version is neither loaded nor overwritten") 
     CHECK(read(store.file()) == newer);
 }
 
+TEST_CASE("a newer save in the backup blocks saving too") {
+    // a newer build saved twice, then the primary was deleted: every port refuses the slot, so a later save
+    // never copies this build's file over the newer .bak
+    TempDir dir;
+    const core::SaveStore store(dir.path / "save.json");
+    const std::string newer = json{{"format", "save"}, {"version", core::kSaveVersion + 1}, {"data", json::object()}}.dump();
+    REQUIRE(core::write_file_atomic(store.backup_file(), newer, nullptr));
+    std::string error;
+    CHECK_FALSE(store.save({{"level", 1}}, &error));
+    CHECK_FALSE(std::filesystem::exists(store.file()));
+    CHECK(read(store.backup_file()) == newer);
+}
+
 TEST_CASE("an old save on disk is migrated on load") {
     TempDir dir;
     const core::SaveStore store(dir.path / "save.json");

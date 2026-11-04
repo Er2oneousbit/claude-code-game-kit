@@ -74,7 +74,7 @@ UK must opt in before anything is sent **(verify with current GDPR guidance for 
 1/60 s of game time and pictures repeat exactly.
 | Command | Passes when |
 |---|---|
-| `smoke --drive menus` | title -> settings -> master volume 0.5, reduce motion toggled -> Back -> Quit; prints `SETTINGS_WRITTEN <path>` and the file holds both values. With consent unset no `telemetry.csv` appears |
+| `smoke --drive menus` | title -> settings -> master volume 0.5 (left or right from whatever the data folder held), reduce motion toggled -> Back -> Quit; prints `SETTINGS_WRITTEN <path>` and the file holds both values. With consent unset no `telemetry.csv` appears |
 | `smoke --drive crash` | exits 1 on purpose: a script error writes `crashes/crash_<time>.txt` and prints `CRASH_WRITTEN <path>` |
 | `smoke --drive pseudo --locale pseudo` | every screen and settings tab is shown and no label is untranslated, clipped or off screen (`PSEUDO_OK`) |
 | `smoke --drive pseudo-plant --locale pseudo` | exits 1 on purpose, naming a planted label that is too small (`PSEUDO_FAIL`) |
@@ -94,6 +94,8 @@ resting on the window cannot change the picture.
    (the kit's reference, `tools/golden_vectors.py`); a new case type fails them until it is ported.
    `test_golden_music.gd` checks `scripts/core/music_director.gd` against `data/golden/music.json` (whole samples, tolerance 0).
    `test_golden_access.gd` checks `scripts/core/audio_access.gd` against `data/golden/access.json` (slider gains, caption arrows).
+   `test_golden_telemetry.gd` checks `telemetry.gd` against `data/golden/telemetry.json` (the CSV columns every engine writes).
+   `test_golden_dialogue.gd` checks the subtitle typewriter (`DialogueData.revealed`) against `data/golden/dialogue.json`.
 4. `python tools/dev.py test` runs them headless. Add `--filter <name>` to run one file.
 
 ## Adopting an existing project
@@ -124,7 +126,10 @@ Release-like check: export a release build and watch the on-screen FPS counter. 
 1. Install export templates for your exact Godot version once (Editor > Manage Export Templates, or download the
    `.tpz` for your version from godotengine.org and install it from that dialog).
 2. `export_presets.cfg` comes with the project: "Windows Desktop", "Linux" and "Web", with `tests/*, tools/*, docs/*,
-   addons/gut/*` excluded. Add macOS, Android or iOS in Project > Export (they need signing). Commit `export_presets.cfg` but
+   addons/gut/*, data/golden/*, assets_src/*` and the kit's `.game-kit.json` excluded; `build` lists the exported
+   .pck and fails when one of them is inside (a preset edited in the editor can drop the filter). `assets_src/`
+   (art sources, Dotwork's review sheets) also holds
+   an empty `.gdignore`, so Godot never imports it: keep anything a scene loads under `assets/`. Add macOS, Android or iOS in Project > Export (they need signing). Commit `export_presets.cfg` but
    **never** credentials: Godot 4 writes keystore passwords and the PCK encryption key to .godot/export_credentials.cfg
    (git-ignored with the rest of .godot/, denied to Claude, and kept by `clean --deep`).
 3. `python tools/dev.py build` (this computer's preset), or `build --preset Web` (a folder you can upload to itch.io).

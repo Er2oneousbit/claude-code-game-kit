@@ -55,6 +55,10 @@ Tiled (mapeditor.org, free) exports JSON that Phaser loads with `this.load.tilem
   `shell.json` (written by `tools/golden_vectors.py`, the reference for every engine) through `src/core/`. Never copy
   expected values into a test; an unknown case type fails. After the kit changes the reference, the vectors change
   and these tests say which module to fix.
+- `telemetry.golden.test.ts` checks the `telemetry.csv` columns and row format (`userData.ts`) against
+  `data/golden/telemetry.json`, so every engine writes the same file.
+- `dialogue.golden.test.ts` checks the subtitle typewriter (`revealCount` in `dialogue.ts`) against
+  `data/golden/dialogue.json` (written by `python tools/audio/wavesmith/wavesmith.py dialogue vectors --write`).
 - `tests/atomicFile.test.ts` proves the crash-safe write on the real filesystem (a temp folder).
 - Scene behavior is covered by `smoke` (boots the real build). For gameplay checks, give the scene an autoplay or
   scripted-input mode and assert on logged markers, the same way `smoke` waits for `BOOT_OK`.
@@ -146,11 +150,13 @@ None recorded yet. Add notes from videos, forums or your own runs here, with an 
   (`DRIVE_ABORT` fails at once). The shell runs a scenario only with its own data dir (without `--data-dir`, smoke
   uses `build/smoke-data`) and only in a dev server or an automated browser, so a `?drive=` link to the hosted
   game logs `DRIVE_IGNORED` (smoke fails at once on it) and never touches the player's settings:
-  - `menus`: title, settings, master volume to 0.5, reduce motion on, Back, quit; prints `SETTINGS_WRITTEN <path>`
-    and checks the file holds the new values (and that `telemetry.csv` was not written without consent).
+  - `menus`: title, settings, master volume to 0.5 (left or right from whatever the data dir held), reduce motion
+    on, Back, quit; prints `SETTINGS_WRITTEN <path>` and checks the file holds the new values (and that
+    `telemetry.csv` was not written without consent).
   - `crash`: plays, then throws a planted error; prints `CRASH_WRITTEN <path>`. Exit 1 is the expected result.
   - `pseudo` (with `--locale pseudo`): visits every screen and settings section; exit 0 when nothing is truncated,
-    clipped or untranslated. `pseudo-plant` adds one label that is too small: it must exit 1 naming it.
+    clipped or untranslated. Subtitles stand still during the tour, so the label count is the same on a slow
+    machine. `pseudo-plant` adds one label that is too small: it must exit 1 naming it.
   - `show:title|settings|pause|subtitle|juice` (with `--screenshot`): opens that screen, freezes it, captures it.
 - `--data-dir DIR` maps the game's user-data folder (localStorage) onto a real folder: its files are loaded under
   the key prefix `DIR/` (`?data-dir=DIR`) before the page starts and written back afterwards, so a test reads

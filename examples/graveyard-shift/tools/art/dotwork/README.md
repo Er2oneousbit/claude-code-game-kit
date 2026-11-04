@@ -150,7 +150,7 @@ or usage (the `[error]` line says what to fix). `preview KIND --help` lists each
 | `verify` | load every Dotwork asset of this game in Godot (shader materials compiled, held frames counted) and run its smoke test |
 | `qa pack [--json OUT] [--lineup OUT.png]` | style check over every PNG the game's manifests list, read only: pixel scale, each lane's palette lock (the table under Palettes), outline colour and thickness, light side, figure height in tiles, contrast on the ground tiles, colour-blind separation of gauge fills, status marks, button states and palette swaps (Machado 2009 simulation); `--lineup` draws every character and prop at game scale on a ground tile; exit 1 on findings |
 | `aseprite [--reexport] [--overwrite]` | editable `.aseprite` sources (frames timed by their holds); push hand-polished files back |
-| `pixelorama [--reexport] [--overwrite]` | the same round trip with Pixelorama `.pxo` files, no install needed ([Hand polish](#hand-polish-aseprite-or-pixelorama)) |
+| `pixelorama [--reexport] [--overwrite] [--clear-export-path]` | the same round trip with Pixelorama `.pxo` files, no install needed; `--clear-export-path` blanks the local export folder Pixelorama saves in each file ([Hand polish](#hand-polish-aseprite-or-pixelorama)) |
 | `preview battle\|title\|attack ...` | mock screens composed from the game's art (review only) |
 | `capture --scene S [--frames N] [--fps F] [--size WxH] [--gif]` | record any scene with Godot's Movie Maker: a fixed frame rate, every frame written as PNG (trailer cuts, side-by-side reviews), a contact strip and an optional GIF; a window opens for the capture |
 | `log --pack NAME [--dry-run]` | `docs/ASSET_LOG.md` row + evidence file for a pack |
@@ -292,7 +292,7 @@ Honest list: these are the failure modes seen in testing and what Dotwork does a
 | battle backgrounds / scenes | 320x128 / 320x180 art shown at 2x (chunkier than 1x sprites) | Same exact-2x scale everywhere it is used |
 | battle backgrounds (moving sky) | Cutting the painted sky off at the horizon and scrolling it split mountain peaks (the tip drifted away from its base) | `"scroll": -4` keeps the picture whole and adds two cloud layers drawn in code in its own lightest sky colours (far: small, half speed; near: bigger, full speed) that tile sideways; `horizon` sets how far down they reach, `clouds` how many. They drift over far mountains, which reads as nearer clouds; leave `scroll` off for caves and interiors |
 | lighting (normal maps, no model) | A normal map guessed from one picture cannot know the real shape: it reads a rounded rim from the alpha edge (`bevel` px) and small relief from brightness (`detail` px), so dark paint reads as a dent and a flat-coloured cloak reads flat; an atlas tile cannot see its neighbours | Opaque tiles get no rim at their borders and the brightness relief wraps inside each tile, so Dotwork's seamless tiles stay seamless (a tile whose opposite edge is clear repeats its own edge instead). Occluders are the largest opaque region only, `base` (default) spans the feet of the bottom quarter, `full` the whole outline, at most `occluder_points` corners, never self-crossing (a crossing outline falls back to its convex hull). A sprite node that is scaled, flipped or nested in its own scene gets a fresh lit scene instead of a copy. Headless Godot renders nothing: `verify` proves the lit resources are wired (both textures, same size, normals that decode with z > 0, occluder polygons, cells on lit tiles), not how the light looks; judge `assets_src/art/lit/<name>/<name>_review.png` and the demo scene in the editor |
-| `--engine none` | Maps, TileSets, scenes, SpriteFrames and the damage-flash and dissolve shaders are Godot resources | PNGs, sprite sheets + their JSON (with any hold `durations`), BMFont `.fnt` fonts, 9-slice margins (in the manifest) and the manifest still ship; maps and the shaders are skipped with a log line |
+| `--engine none` | Maps, TileSets, scenes, SpriteFrames and the damage-flash and dissolve shaders are Godot resources | PNGs, sprite sheets + their JSON (with any hold `durations`), BMFont `.fnt` fonts, 9-slice margins (in the manifest) and the manifest still ship; maps and the shaders are skipped with a log line; the hand-polish round trip (`aseprite`, `pixelorama`, `--reexport`) works the same, with no `verify` |
 
 Timing on the tested GPU: a sprite about 18 s, a texture tile with variants about 25 s, a Wan clip about 110 s, a
 4-direction rotation about 130-170 s, an 8-direction rotation about 210 s, a battle background about 13 s.
@@ -415,7 +415,10 @@ character (one tag per animation, named like the animation, such as `walk_s`), p
 icons, portraits, window skins) under `<src_dir>/aseprite/` or `<src_dir>/pixelorama/`. Each frame shows for as long as
 it does in the game: its hold divided by the clip's frame rate. Polish there and save, then `--reexport` writes the
 frames back to the shipped PNGs, sheets, sheet data and SpriteFrames, keeps each clip's holds (a frame you retime
-becomes a hold), removes frames you deleted and runs `verify`. A frame that still looks the same keeps its shipped
+becomes a hold), removes frames you deleted and runs `verify`. Neither half needs Godot with `--engine none`: the
+build reads the shipped PNGs and the re-export writes PNGs, sheets, sheet data and manifest rows, then reports
+`[ OK ] re-exported (N files changed; no Godot verify with --engine none)`; only the SpriteFrames and `verify` are
+Godot's. A frame that still looks the same keeps its shipped
 file byte for byte (editors drop the colour stored under fully clear pixels; that alone is not a change), and an
 untouched hold keeps its exact value. Manifest rows change only for files that changed: such a file keeps its row
 (models, workflow, canvas, anchor, position) and gains its new hash and a polish note, so an untouched round trip
@@ -432,11 +435,14 @@ drawn from their specs, so neither editor gets them.
 | Versions | Lua scripting (`--script`); run with Aseprite 1.3.18 on Windows | writes `pxo_version` 7 (Pixelorama 1.2.0 to 1.2.3; 1.2.3 opened, exported and saved Dotwork's files); reads 7 and 8 (the 1.2.4 release candidates, where a cel keeps its own size and offset; (verify) against a released 1.2.4) |
 | The file | indexed on the asset's own colours when that loses nothing (at most 255 opaque colours, no partly clear pixels); RGB otherwise, such as a portrait of 1,800 colours | RGBA in one layer `art`, the asset's own colours as the project palette; the project's frame rate is the one most of the character's frames play at, and other clips carry per-frame durations |
 | Layers you add | flattened by Aseprite on export | visible pixel layers and groups are composited (Normal blending, cel and layer opacity); a visible layer with another blend mode, a clipping mask, layer effects, animated opacity, a 3D or tilemap layer, or a group below 100 % stops the re-export with its name (merge it down or hide it); hidden layers are ignored |
-| A file that exists | kept when it differs from the game's frames (Aseprite exports it to compare the tags, frames and frame times; one that still matches is left as it is); `--overwrite` replaces it and keeps the old file as `<name>.aseprite.bak` | kept when it differs from the game's frames (it may hold your polish); `--overwrite` replaces it and keeps the old file as `<name>.pxo.bak` |
+| A file that exists | kept when it differs from the game's frames (Aseprite exports it to compare the tags, frames and frame times; one that still matches is left as it is); `--overwrite` replaces it and keeps the old file as `<name>.aseprite.bak` | kept when it differs from the game's frames (Dotwork reads it to compare the tags, frames and frame times; one that still matches, such as a file Pixelorama only opened and saved, is left as it is); `--overwrite` replaces it and keeps the old file as `<name>.pxo.bak` |
 | Size | read by Aseprite | a project whose frames would take over 512 MB, whose visible cels would unpack to over 1 GB, or with over 256 layers is refused before any image is read |
 
 Pixelorama stores the folder you last exported to, a full path on your machine, in every `.pxo` it saves: in a public
-repository, that path is public too. Aseprite 1.3.18 on Windows built the sources and re-exported them untouched
+repository, that path is public too. `pixelorama` and `pixelorama --reexport` name each `.pxo` that holds one (a
+`[warn]` line), and `tools/publish_check.py` warns about it before you publish; `--clear-export-path` blanks the
+folder (nothing else in the file changes, and the round trip still gives the same frames). Dotwork never rewrites a
+`.pxo` for this without that flag. How Pixelorama treats a blank folder on its next export is (verify). Aseprite 1.3.18 on Windows built the sources and re-exported them untouched
 with every file unchanged; an edit made in Aseprite's window is not tested yet.
 
 ## Store art (Steam sizes)
@@ -529,6 +535,7 @@ frame times in the build list and through a re-export rounded to milliseconds (i
 | `SpriteKiln not configured` | set `SPRITEKILN_ROOT` to the repo clone (the folder with `workflows/api/`) |
 | `only N GB RAM free` | close heavy apps; Wan clips need about 18 GB free; Dotwork resumes where it stopped |
 | out of memory in ComfyUI | close other GPU apps; start ComfyUI with `--lowvram` |
+| `<entry>/<clip>: cancelled in ComfyUI` | the job was cancelled in ComfyUI's queue (or ComfyUI restarted): run the same command again, it resumes |
 | verify fails | read verify_report.json in `art_src/dotwork/` (written by the failed run): the import errors and loader lines name the file |
 | `Godot crashed during import ... retrying once` in the log | a rare Godot 4.7 crash on a first import of new fonts; Dotwork retries once by itself. If the retry fails too, run `python tools/dev.py import` and then `dotwork.py verify` |
 | `Cannot get keys from nonexistent section "preset.N.options"` | empty `[preset.N.options]` sections in `export_presets.cfg`; harmless (export still works) and ignored by verify |

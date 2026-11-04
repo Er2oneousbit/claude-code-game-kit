@@ -32,6 +32,12 @@
 #           `--`, --until, --fail-on, --timeout, --screenshot, --record (BMP frames for frames_to_gif.py)
 # Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): smoke needs main.cpp's end-of-run line (an early
+#           quit passes only after --until's marker); each --screenshot / --record is checked after the run
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Windows a command with a timeout runs in a
+#           job object (WinJob), so a timeout also ends a grandchild whose parent already exited
+# Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Linux and macOS, killing an untimed command
+#           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -48,6 +54,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # ---- Tunables / constants ----------------------------------------------------
 SMOKE_FRAMES = 120
 BOOT_MARKER = "BOOT_OK"
+END_RE = re.compile(r"smoke complete after (\d+) frames|smoke ended early: the game quit after (\d+) of")  # main.cpp
 ERROR_MARKERS = ["[ERROR]", "Assertion failed", "terminate called"]
 SMOKE_TIMEOUT_S = 120                    # a game that hangs at boot must fail, not block forever
 TEST_TIMEOUT_S = 600
@@ -78,9 +85,65 @@ def project_slug():
 NEW_SESSION = sys.platform != "win32"
 
 
-def kill_tree(proc):
+class WinJob:
+    """Windows: a job object holding proc and every process it starts from then on, so kill_tree can end a
+    grandchild whose parent already exited (taskkill /T only finds children through living parents). Made for
+    commands with a timeout, like the process group on Linux and macOS; elsewhere, or when a call fails, it does
+    nothing. A process proc starts before it joins the job (its first moments) stays outside: taskkill /T covers it."""
+    PROCESS_SET_QUOTA = 0x0100
+    PROCESS_TERMINATE = 0x0001
+
+    def __init__(self, proc, timeout):
+        self.handle = None
+        if sys.platform != "win32" or timeout is None:
+            return
+        try:
+            k32 = kernel32()
+            job = k32.CreateJobObjectW(None, None)
+            child = k32.OpenProcess(self.PROCESS_SET_QUOTA | self.PROCESS_TERMINATE, False, proc.pid) if job else None
+            if child and k32.AssignProcessToJobObject(job, child):
+                self.handle = job
+            elif job:
+                dbg(f"job object: could not add pid {proc.pid}")
+                k32.CloseHandle(job)
+            if child:
+                k32.CloseHandle(child)
+        except (OSError, AttributeError, ImportError) as exc:
+            dbg(f"job object: {exc}")
+
+    def kill(self):
+        """End every process in the job, then close it."""
+        if self.handle:
+            kernel32().TerminateJobObject(self.handle, 1)
+        self.close()
+
+    def close(self):
+        """Let go of the job; its processes keep running (a normal exit changes nothing)."""
+        if self.handle:
+            kernel32().CloseHandle(self.handle)
+            self.handle = None
+
+
+def kernel32():
+    """kernel32 with the job object calls typed (Windows only)."""
+    import ctypes
+    from ctypes import wintypes
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.CreateJobObjectW.restype = wintypes.HANDLE
+    k32.CreateJobObjectW.argtypes = (wintypes.LPVOID, wintypes.LPCWSTR)
+    k32.OpenProcess.restype = wintypes.HANDLE
+    k32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    k32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+    k32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
+    k32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    return k32
+
+
+def kill_tree(proc, job=None):
     """Kill proc and everything it started. A grandchild still holding our stdout pipe (a test exe, a
     worker, an editor helper) would otherwise keep communicate() waiting after proc itself is dead."""
+    if job is not None:
+        job.kill()                         # Windows: the whole job, also orphaned grandchildren
     if sys.platform == "win32":
         try:                               # /T: the whole tree under proc; Popen holds the handle, so the PID is still ours
             subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], stdin=subprocess.DEVNULL,
@@ -90,13 +153,52 @@ def kill_tree(proc):
             dbg(f"taskkill: {exc}")
     else:
         try:
-            os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+            if os.getpgid(proc.pid) == proc.pid:
+                os.killpg(proc.pid, signal.SIGKILL)   # proc leads its group (start_new_session)
+            else:
+                # An untimed command shares our group (so a terminal's Ctrl+C reaches it as before): kill what it
+                # started one by one, found through the parent ids ps lists, or a build server outlives us
+                for pid in descendants(proc.pid):
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except OSError:
+                        pass                  # it ended on its own meanwhile
         except OSError as exc:
             dbg(f"killpg: {exc}")
     try:
         proc.kill()
     except OSError:
         pass
+
+
+def ps_pairs():
+    """(pid, parent pid) of every process, from ps (Linux and macOS). Empty when ps cannot run."""
+    try:
+        out = subprocess.run(["ps", "-A", "-o", "pid=", "-o", "ppid="], stdin=subprocess.DEVNULL,
+                             capture_output=True, encoding="utf-8", errors="replace", timeout=KILL_TIMEOUT_S).stdout
+    except (OSError, subprocess.SubprocessError) as exc:
+        dbg(f"ps: {exc}")
+        return []
+    pairs = []
+    for line in out.splitlines():
+        cols = line.split()
+        if len(cols) == 2 and cols[0].isdigit() and cols[1].isdigit():
+            pairs.append((int(cols[0]), int(cols[1])))
+    return pairs
+
+
+def descendants(root):
+    """Every process below root (children, grandchildren, ...), parents before their children."""
+    children = {}
+    for pid, ppid in ps_pairs():
+        children.setdefault(ppid, []).append(pid)
+    found, todo = [], list(children.get(root, []))
+    while todo:
+        pid = todo.pop(0)
+        if pid != root and pid not in found:
+            found.append(pid)
+            todo.extend(children.get(pid, []))
+    return found
 
 
 def reap(proc):
@@ -130,11 +232,13 @@ def run(cmd, env=None, capture=False, timeout=None):
         print(f"[error] cannot execute {cmd[0]}: {exc.strerror or exc} (not a file, or not executable: chmod +x)",
               file=sys.stderr)
         return 126, ""
+    job = WinJob(proc, timeout)
     try:
         out, _ = proc.communicate(timeout=timeout)
+        job.close()                        # a normal exit: anything it left running keeps running
     except (subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
         # Kill, then keep what the game printed so far: its last lines show where it hung
-        kill_tree(proc)
+        kill_tree(proc, job)
         out = reap(proc)
         if isinstance(exc, KeyboardInterrupt):
             print("\n".join((out or "").splitlines()[-20:]))
@@ -236,13 +340,17 @@ def cmd_smoke(args):
         return 1
     env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy")
     cmd = [exe, "--smoke", str(args.frames)]
-    if args.screenshot:
-        shot = (ROOT / args.screenshot).resolve()
+    shot = (ROOT / args.screenshot).resolve() if args.screenshot else None
+    rec = (ROOT / args.record).resolve() if args.record else None
+    if shot:
         shot.parent.mkdir(parents=True, exist_ok=True)
+        if shot.is_file():
+            shot.unlink()                   # a picture from an earlier run must not pass for this one
         cmd += ["--screenshot", str(shot)]
-    if args.record:
-        rec = (ROOT / args.record).resolve()
+    if rec:
         rec.mkdir(parents=True, exist_ok=True)
+        for old in rec.glob("frame_*.bmp"):  # frames from an earlier run would end up in the GIF
+            old.unlink()
         cmd += ["--record", str(rec), "--record-every", str(args.record_every)]
     if args.game_args:
         cmd += ["--"] + args.game_args
@@ -259,7 +367,9 @@ def cmd_smoke(args):
     fail_on = [m for m in (args.fail_on or "").split(",") if m]
     bad = [l for l in lines if any(m in l for m in fail_on)]
     missing_until = bool(args.until) and not any(args.until in l for l in lines)
-    if rc != 0 or errors or bad or missing_until or BOOT_MARKER not in out:
+    problems = smoke_end_problems(out, args.frames, until_seen=bool(args.until) and not missing_until)
+    problems += capture_problems(shot, rec)
+    if rc != 0 or errors or bad or missing_until or problems or BOOT_MARKER not in out:
         if errors:
             print("[FAIL] errors during smoke:\n  " + "\n  ".join(errors[:10]))
         if bad:
@@ -268,17 +378,45 @@ def cmd_smoke(args):
             print(f"[FAIL] marker {args.until!r} not seen within {args.frames} frames")
         if BOOT_MARKER not in out:
             print(f"[FAIL] marker {BOOT_MARKER!r} not seen")
+        for p in problems:
+            print(f"[FAIL] {p}")
         if rc != 0:
             print(f"[FAIL] exit code {rc}")
         return 1
     what = f"marker {args.until!r} reached" if args.until else f"{args.frames} frames"
     print(f"[ OK ] smoke passed ({what})")
-    if args.screenshot:
-        print(f"[ OK ] screenshot: {(ROOT / args.screenshot).resolve()}")
-    if args.record:
-        n = len(list((ROOT / args.record).glob("*.bmp")))
-        print(f"[ OK ] {n} frame(s) in {(ROOT / args.record).resolve()} (GIF: python tools/art/frames_to_gif.py <dir> out.gif)")
+    if shot:
+        print(f"[ OK ] screenshot: {shot}")
+    if rec:
+        n = len(list(rec.glob("frame_*.bmp")))
+        print(f"[ OK ] {n} frame(s) in {rec} (GIF: python tools/art/frames_to_gif.py <dir> out.gif)")
     return 0
+
+
+def smoke_end_problems(out, frames, until_seen):
+    """The end-of-run line main.cpp prints: a run must reach its frame count, unless --until's marker was seen (a
+    scenario may end itself there). Without the line the game crashed or exited before its loop ended.
+    Returns a list of reasons (empty = fine)."""
+    if until_seen:
+        return []
+    m = None
+    for m in END_RE.finditer(out):
+        pass                                # the last end line counts
+    if m is None:
+        return ["no end-of-run line (\"smoke complete after N frames\"): the game exited before its loop ended"]
+    if m.group(2) is not None:
+        return [f"the game quit after {m.group(2)} of {frames} frames (a run that ends itself needs --until <marker>)"]
+    return []
+
+
+def capture_problems(shot, rec):
+    """Each capture asked for must exist after the run (stale ones were deleted before it)."""
+    problems = []
+    if shot and not (shot.is_file() and shot.stat().st_size > 0):
+        problems.append(f"no screenshot written to {shot}")
+    if rec and not any(rec.glob("frame_*.bmp")):
+        problems.append(f"no frames recorded in {rec}")
+    return problems
 
 
 def cmd_run(args):

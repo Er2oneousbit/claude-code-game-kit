@@ -250,6 +250,11 @@ def main():
 
     rc, out = run_tool(still, "--out", tmp / "four.png", "--directions", 4, *common)
     case("existing sheet is not overwritten without --overwrite (exit 2)", rc == 2, out[-200:])
+    (tmp / "side.json").write_text("keep", encoding="utf-8")       # #30: the layout JSON was replaced silently
+    rc, out = run_tool(still, "--out", tmp / "side.png", "--directions", 1, *common)
+    case("an existing layout .json is not overwritten without --overwrite (exit 2)",
+         rc == 2 and "side.json exists" in out and (tmp / "side.json").read_text(encoding="utf-8") == "keep"
+         and not (tmp / "side.png").exists(), out[-200:])
     rc, out = run_tool(tmp / "missing.glb", "--out", tmp / "x.png")
     case("missing asset exits 2", rc == 2, out[-200:])
     rc, out = run_tool(still, "--out", tmp / "x.png", "--frames", "5:1")

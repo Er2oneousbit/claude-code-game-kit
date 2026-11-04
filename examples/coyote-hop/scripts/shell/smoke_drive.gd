@@ -25,7 +25,8 @@ const WAIT_MS: int = 10000 # real time a screen gets to appear (headless frames 
 		# so background loading needs a real-time budget, not a frame count)
 const WAIT_FRAMES: int = 600 # game frames the subtitle line gets to finish
 const SETTLE_FRAMES: int = 20 # frames a screen gets before it is photographed
-const VOLUME_STEPS: int = 10 # ui_left presses: master 1.0 -> 0.5 in 0.05 steps
+const TARGET_MASTER: float = 0.5 # menus drives the master volume here from whatever the data folder held
+const MAX_SLIDER_STEPS: int = 40 # presses a slider gets to reach its target (0..1 is 20 steps of 0.05)
 const JUICE_HIT_FRAME: int = 40 # frames into the juice demo before the drive attacks
 const JUICE_SHOT_FRAMES: int = 1 # frames after the hit; capture adds 3, still inside the hitstop freeze
 const PLANTED_NAME: String = "PlantedTooSmall"
@@ -77,8 +78,8 @@ func _menus() -> void:
 		return
 	if not await _nav_to("Tab_audio", "ui_right") or not await _nav_to("Setting_audio_master", "ui_down"):
 		return
-	for i: int in VOLUME_STEPS:
-		await _press("ui_left")
+	if not await _slide_to("audio", "master", TARGET_MASTER):
+		return
 	if not await _nav_to("Tab_audio", "ui_up") or not await _nav_to("Tab_access", "ui_right"):
 		return
 	if not await _nav_to("Setting_access_reduce_motion", "ui_down"):
@@ -92,8 +93,8 @@ func _menus() -> void:
 	var master: float = float(s["audio"]["master"])
 	var motion: bool = bool(s["access"]["reduce_motion"])
 	Log.raw("SETTINGS_WRITTEN %s master=%s reduce_motion=%s" % [file, master, motion])
-	if absf(master - 0.5) > 1e-6 or motion == before_motion:
-		_fail("settings file does not hold master=0.5 and reduce_motion=%s" % (not before_motion))
+	if absf(master - TARGET_MASTER) > 1e-6 or motion == before_motion:
+		_fail("settings file does not hold master=%s and reduce_motion=%s" % [TARGET_MASTER, not before_motion])
 		return
 	Log.raw("TELEMETRY_FILE %s" % ("present" if FileAccess.file_exists(Shell.path(Shell.TELEMETRY_FILE))
 			else "absent (consent %s)" % Shell.settings["telemetry"]["consent"]))
@@ -275,6 +276,24 @@ func _nav_to(node_name: String, action: String) -> bool:
 	var owner_now: Control = get_viewport().gui_get_focus_owner()
 	_fail("could not reach '%s' with %s (focus is on %s)" % [node_name, action,
 			owner_now.name if owner_now != null else "nothing"])
+	return false
+
+
+static func slide_action(now: float, target: float) -> String:
+	# The press that moves a slider from now towards target ("" once it is there)
+	if absf(now - target) <= 1e-6:
+		return ""
+	return "ui_left" if now > target else "ui_right"
+
+
+func _slide_to(section: String, field: String, target: float) -> bool:
+	# Press left or right on the focused slider until the live setting equals target, from any start value
+	for i: int in MAX_SLIDER_STEPS:
+		var action: String = slide_action(float(Shell.settings[section][field]), target)
+		if action == "":
+			return true
+		await _press(action)
+	_fail("%s.%s did not reach %s (is %s)" % [section, field, target, Shell.settings[section][field]])
 	return false
 
 

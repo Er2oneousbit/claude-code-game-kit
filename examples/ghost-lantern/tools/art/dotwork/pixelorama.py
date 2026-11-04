@@ -6,14 +6,16 @@
 #           colours as the project palette), and re-export hand-polished ones back to the shipped PNGs, sheets and
 #           SpriteFrames (handpolish.py). The .pxo files are read and written here in Python: neither direction needs
 #           Pixelorama installed.
-# Usage   : dotwork.py pixelorama [--overwrite], then dotwork.py pixelorama --reexport
+# Usage   : dotwork.py pixelorama [--overwrite], then dotwork.py pixelorama --reexport [--clear-export-path]
 # Notes   : The format is Pixelorama's own (src/Autoload/OpenSave.gd and src/Classes/Project.gd): a zip holding
 #           data.json (the project) and one raw RGBA8 buffer per cel at image_data/frames/<frame>/layer_<layer>, both
 #           numbered from 1. Written as pxo_version 7 (what Pixelorama 1.2.0 to 1.2.3 write; checked with 1.2.3);
 #           read: 7, and 8 (Pixelorama 1.2.4 release candidates, where a cel stores its own size and offset). Layer
 #           features Dotwork cannot reproduce exactly (blend modes, clipping masks, layer effects, animated opacity,
 #           3D and tilemap layers, group opacity) stop the re-export when the layer is visible, instead of shipping
-#           frames that differ from what the editor shows.
+#           frames that differ from what the editor shows. Pixelorama saves the folder you last exported to, a
+#           full path on your machine, in every .pxo (export_profile.directory_path): both commands warn about it,
+#           and only --clear-export-path rewrites the file to blank it (the frames and every other entry stay).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 import glob
@@ -56,6 +58,9 @@ BLEND_NORMAL, BLEND_PASS = 0, -2   # BaseLayer.BlendModes NORMAL and PASS_THROUG
 TAG_COLOURS = ("c38ce1ff", "f5a677ff", "77c341ff", "6fb7e8ff", "e8d06fff", "e86f8aff")
 ZIP_TIME = (1980, 1, 1, 0, 0, 0)   # a fixed date: the same frames always give the same .pxo bytes
 MIMETYPE = b"application/x-pixelorama"
+SOURCE_KINDS = ("characters", "fx", "single")   # the folders under the pixelorama sources (handpolish.write_back)
+# An absolute path as a Godot program on Windows, Linux or macOS writes it: C:/ or C:\, /home/..., \\server\...
+ABSOLUTE = re.compile(r"^(?:[A-Za-z]:[\\/]|[\\/]|~(?:[\\/]|$))")
 
 
 # -------------------------------------------------- writing
@@ -363,9 +368,31 @@ def _runs(items):
     return tags
 
 
+def _shows_the_game(path, items, frames, durations, proj_fps):
+    """True when the .pxo at path still shows what this build writes from items (the game's frames), whatever its
+    bytes: Pixelorama rewrites data.json with its own fields on every save (pixelorama_version, export_profile,
+    indices buffers ...), so a file only opened and saved, or polished and re-exported, never matches pxo_bytes again
+    (issue #100). The checks are aseprite._shows_the_game's: the tags, the frame count, every frame's look
+    (handpolish.same_look) and, in a tag, its time on screen within HOLD_TOLERANCE_S. A file read_pxo refuses (a layer
+    it cannot composite) may hold polish, so it does not match."""
+    try:
+        pj = read_pxo(path)
+    except core.ToolError:
+        return False
+    if len(pj["frames"]) != len(frames) or sorted(pj["tags"]) != sorted(_runs(items)):
+        return False
+    for (tag, _, _), want, have, dur, shown in zip(items, frames, pj["frames"], durations, pj["seconds"]):
+        if tag and abs(shown - dur / proj_fps) > handpolish.HOLD_TOLERANCE_S:
+            return False
+        if not handpolish.same_look(have, want):
+            return False
+    return True
+
+
 def build(pack, conf, overwrite=False):
-    """Write <src_dir>/pixelorama/{characters,fx,single}/<name>.pxo. A .pxo that already exists and differs from what
-    this build writes may hold hand polish (or the game's art changed since): it is kept unless overwrite, and a file
+    """Write <src_dir>/pixelorama/{characters,fx,single}/<name>.pxo. A .pxo that already exists and still shows the
+    game's frames (_shows_the_game) is left as it is. One that differs may hold hand polish (or the game's art changed
+    since): it is kept unless overwrite, and a file
     overwrite replaces is first copied to <name>.pxo.bak (one level, as the game shells keep their saves).
     Returns {"written": [...], "unchanged": [...], "kept": [...], "backups": [the .bak files written]}."""
     src = core.src(conf, "pixelorama")
@@ -409,7 +436,7 @@ def build(pack, conf, overwrite=False):
         if os.path.exists(out):
             with open(out, "rb") as fh:
                 old = fh.read()
-            if old == blob:
+            if old == blob or _shows_the_game(out, items, frames, durations, proj_fps):
                 done["unchanged"].append(out)
                 continue
             if not overwrite:
@@ -428,6 +455,74 @@ def build(pack, conf, overwrite=False):
         core.log(f"pixelorama build {rel}: {len(frames)} frames, {len(_runs(items))} tags, "
                  f"{len(colours or [])} colours, {proj_fps} fps")
     return done
+
+
+# -------------------------------------------------- the export folder Pixelorama keeps in each .pxo
+def _unquote(v):
+    """A Godot String as var_to_str writes it (the text in double quotes, the form Pixelorama 1.2.3 keeps in
+    export_profile) or as plain text: the text itself."""
+    return v[1:-1] if len(v) >= 2 and v[0] == v[-1] == '"' else v
+
+
+def _data(z):
+    """data.json of an open .pxo as a dict, or None when it is missing, too big or not an object (read_pxo reports
+    those)."""
+    try:
+        if z.getinfo("data.json").file_size > MAX_JSON:
+            return None
+        d = json.loads(z.read("data.json").decode("utf-8"))
+    except (KeyError, ValueError, UnicodeDecodeError, RecursionError, zipfile.BadZipFile, zlib.error):
+        return None
+    return d if isinstance(d, dict) else None
+
+
+def export_folder(path):
+    """The folder Pixelorama last exported this .pxo to, when it is an absolute path on someone's machine; else ""."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            d = _data(z)
+    except (zipfile.BadZipFile, OSError):
+        return ""
+    prof = d.get("export_profile") if d else None
+    v = prof.get("directory_path") if isinstance(prof, dict) else None
+    folder = _unquote(v) if isinstance(v, str) else ""
+    return folder if ABSOLUTE.match(folder) else ""
+
+
+def clear_export_folder(path):
+    """Rewrites a .pxo with its export folder blank (in the same form, quoted or not). Every other zip entry is
+    copied as it was, in the same order and compression; data.json changes only in that one value."""
+    with zipfile.ZipFile(path) as z:
+        d = _data(z)
+        entries = [(info, z.read(info.filename)) for info in z.infolist()]
+    if d is None:
+        return False
+    prof = d["export_profile"]
+    prof["directory_path"] = '""' if prof["directory_path"].startswith('"') else ""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as out:
+        for info, data in entries:
+            if info.filename == "data.json":
+                data = json.dumps(d, ensure_ascii=False).encode("utf-8")
+            out.writestr(info, data)
+    tmp = path + ".tmp"
+    with open(core.safe_dest(tmp), "wb") as fh:
+        fh.write(buf.getvalue())
+    os.replace(tmp, path)
+    return True
+
+
+def local_paths(pack, conf, clear=False):
+    """[(.pxo path relative to the game, the absolute export folder it holds, cleared)] for every Pixelorama source;
+    clear=True blanks each folder (dotwork.py pixelorama --clear-export-path)."""
+    src = core.src(conf, "pixelorama")
+    found = []
+    for kind in SOURCE_KINDS:
+        for f in sorted(glob.glob(os.path.join(src, kind, "*.pxo"))):
+            folder = export_folder(f)
+            if folder:
+                found.append((os.path.relpath(f, pack), folder, bool(clear) and clear_export_folder(f)))
+    return found
 
 
 def reexport(pack, conf):

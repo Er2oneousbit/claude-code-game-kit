@@ -155,6 +155,24 @@ def rewrite_pxo(path, edit):
             z.writestr(n, b)
 
 
+def pixelorama_save(d, b):
+    """rewrite_pxo edit: the shape of a project Pixelorama 1.2.3 saved (its autosave of a Dotwork file, 2026-11-01):
+    extra fields, Godot text values, empty animated parameters, indices buffers and folder entries; no pixel, tag or
+    time changes."""
+    d.update(pixelorama_version="v1.2.3-stable", brushes=[], guides=[], metadata={}, reference_images=[],
+             tilesets=[], vanishing_points=[], symmetry_points=[63.0, 63.0], next_keyframe_id=0,
+             export_profile={"directory_path": "\"/somewhere\"", "file_name": "\"knight\""})
+    for ly in d["layers"]:
+        ly.update(animated_params='Dictionary[String, Dictionary]({\n"opacity": {}\n})', effects=[],
+                  metadata={}, ui_color="(0.0, 0.0, 0.0, 0.0)")
+    for fi, fr in enumerate(d["frames"]):
+        fr["metadata"] = {}
+        for c in fr["cels"]:
+            c.update(metadata={}, ui_color="(0.0, 0.0, 0.0, 0.0)")
+        b[f"image_data/frames/{fi + 1}/indices_layer_1"] = b"\0"
+        b[f"image_data/frames/{fi + 1}/"] = b""
+
+
 @contextlib.contextmanager
 def stub_verify():
     import verify
@@ -545,27 +563,95 @@ class PixeloramaExam(unittest.TestCase):
         self.assertTrue(np.array_equal(got[..., 3], want[..., 3]))
 
     def test_reads_the_fields_pixelorama_writes(self):
-        # the shape of a project Pixelorama 1.2.3 saved (its autosave of a Dotwork file, 2026-11-01): extra fields,
-        # Godot text values, empty animated parameters, indices buffers and folder entries
         self.build()
-
-        def edit(d, b):
-            d.update(pixelorama_version="v1.2.3-stable", brushes=[], guides=[], metadata={}, reference_images=[],
-                     tilesets=[], vanishing_points=[], symmetry_points=[63.0, 63.0], next_keyframe_id=0,
-                     export_profile={"directory_path": "\"/somewhere\"", "file_name": "\"knight\""})
-            for ly in d["layers"]:
-                ly.update(animated_params='Dictionary[String, Dictionary]({\n"opacity": {}\n})', effects=[],
-                          metadata={}, ui_color="(0.0, 0.0, 0.0, 0.0)")
-            for fi, fr in enumerate(d["frames"]):
-                fr["metadata"] = {}
-                for c in fr["cels"]:
-                    c.update(metadata={}, ui_color="(0.0, 0.0, 0.0, 0.0)")
-                b[f"image_data/frames/{fi + 1}/indices_layer_1"] = b"\0"
-                b[f"image_data/frames/{fi + 1}/"] = b""
-        rewrite_pxo(self.knight, edit)
+        rewrite_pxo(self.knight, pixelorama_save)
         before = snapshot(self.tmp)
         self.reexport()
         self.assertEqual(changed(before, snapshot(self.tmp)), [])
+
+    def test_a_file_pixelorama_saved_unchanged_is_not_kept(self):
+        # #100: build compared bytes, so any .pxo Pixelorama had saved was "kept: it differs" on every build, even
+        # with the game's frames, tags and times, and --overwrite then replaced the user's file
+        self.build()
+        for p in (self.knight, os.path.join(self.src, "fx", "spark.pxo"), os.path.join(self.src, "single", "barrel.pxo")):
+            rewrite_pxo(p, pixelorama_save)
+        done = self.build()
+        self.assertEqual(done["kept"], [])
+        self.assertEqual([os.path.basename(p) for p in done["unchanged"]], ["knight.pxo", "spark.pxo", "barrel.pxo"])
+        with open(self.knight, "rb") as f:
+            saved = f.read()
+        self.assertEqual(self.build(overwrite=True)["backups"], [])   # nothing to replace: the saved file stays
+        with open(self.knight, "rb") as f:
+            self.assertEqual(f.read(), saved)
+
+        def edit(d, b):   # a pixel polished in the saved file: kept, until it is re-exported into the game
+            w, h = d["size_x"], d["size_y"]
+            a = np.frombuffer(b["image_data/frames/1/layer_1"], np.uint8).reshape(h, w, 4).copy()
+            a[0, 0] = (200, 60, 50, 255)
+            b["image_data/frames/1/layer_1"] = a.tobytes()
+        rewrite_pxo(self.knight, edit)
+        self.assertEqual([os.path.basename(p) for p in self.build()["kept"]], ["knight.pxo"])
+        self.reexport()
+        self.assertEqual(self.build()["kept"], [])
+
+    def test_a_local_export_folder_is_reported_and_cleared_only_on_request(self):
+        # Pixelorama 1.2.3 keeps the folder you last exported to in every .pxo it saves (#69): Dotwork names it, and
+        # blanks it only when asked, leaving every other entry of the file and the round trip as they were
+        self.build()
+        home = "C:/Users/someone/Desktop/exports"
+
+        def edit(d, b):
+            d["export_profile"] = {"directory_path": '"%s"' % home, "file_name": '"knight"'}
+        rewrite_pxo(self.knight, edit)
+        rel = os.path.relpath(self.knight, self.tmp)
+        with zipfile.ZipFile(self.knight) as z:
+            old = {i.filename: (i.compress_type, z.read(i.filename)) for i in z.infolist()}
+        self.assertEqual(self.px.local_paths(self.s.project, self.s.conf), [(rel, home, False)])
+        with zipfile.ZipFile(self.knight) as z:
+            self.assertEqual({i.filename: (i.compress_type, z.read(i.filename)) for i in z.infolist()}, old,
+                             "reporting alone must not touch the file")
+        self.assertEqual(self.px.local_paths(self.s.project, self.s.conf, clear=True), [(rel, home, True)])
+        self.assertEqual(self.px.local_paths(self.s.project, self.s.conf), [])
+        with zipfile.ZipFile(self.knight) as z:
+            new = {i.filename: (i.compress_type, z.read(i.filename)) for i in z.infolist()}
+        self.assertEqual(list(new), list(old))
+        self.assertEqual({n: v for n, v in new.items() if n != "data.json"},
+                         {n: v for n, v in old.items() if n != "data.json"})
+        want = json.loads(old["data.json"][1])
+        want["export_profile"]["directory_path"] = '""'
+        self.assertEqual(json.loads(new["data.json"][1]), want)
+        before = snapshot(self.tmp)
+        r, _ = self.reexport()
+        self.assertTrue(r["ok"])
+        self.assertEqual(changed(before, snapshot(self.tmp)), [])
+
+    def test_which_export_folders_count_as_local(self):
+        self.build()
+        cases = {'"C:/Users/someone/art"': "C:/Users/someone/art", '"D:\\\\art"': "D:\\\\art",
+                 '"/home/someone/art"': "/home/someone/art", "/Users/someone/art": "/Users/someone/art",
+                 '"~/art"': "~/art", '""': "", "": "", '"exports"': "", "art/out": ""}
+        for value, want in cases.items():
+            rewrite_pxo(self.knight, lambda d, b: d.update(export_profile={"directory_path": value}))
+            self.assertEqual(self.px.export_folder(self.knight), want, value)
+        rewrite_pxo(self.knight, lambda d, b: d.pop("export_profile"))
+        self.assertEqual(self.px.export_folder(self.knight), "")
+        rewrite_pxo(self.knight, lambda d, b: d.update(export_profile="C:/x"))
+        self.assertEqual(self.px.export_folder(self.knight), "")
+
+    def test_cli_warns_about_a_local_export_folder_and_clears_it_on_request(self):
+        self.build()
+        rewrite_pxo(self.knight, lambda d, b: d.update(
+            export_profile={"directory_path": '"/home/someone/art"', "file_name": '"knight"'}))
+        cmd = [sys.executable, os.path.join(DOTWORK, "dotwork.py"), "pixelorama", "--project", self.tmp]
+        run = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("[warn] " + os.path.join("assets_src", "pixelorama", "characters", "knight.pxo"), run.stdout)
+        self.assertIn("/home/someone/art", run.stdout)
+        self.assertEqual(self.px.export_folder(self.knight), "/home/someone/art")
+        run = subprocess.run(cmd + ["--clear-export-path"], capture_output=True, text=True, timeout=120)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("is now blank", run.stdout)
+        self.assertEqual(self.px.export_folder(self.knight), "")
 
     def test_cli_build(self):
         code = subprocess.run([sys.executable, os.path.join(DOTWORK, "dotwork.py"), "pixelorama", "--project",
@@ -687,6 +773,40 @@ class CodeDrawnEffectExam(unittest.TestCase):
                 else:
                     self.assertEqual(new, old, old["file"])
 
+    def dotwork(self, *args):
+        """dotwork.main in this process (so the Aseprite stand-in holds) with no Godot anywhere: GODOT_BIN unset."""
+        import dotwork
+        out, godot_bin = io.StringIO(), os.environ.pop("GODOT_BIN", None)
+        try:
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = dotwork.main(list(args) + ["--project", self.tmp])
+        finally:
+            if godot_bin is not None:
+                os.environ["GODOT_BIN"] = godot_bin
+        return code, out.getvalue()
+
+    def test_reexport_with_engine_none_needs_no_godot(self):
+        # #99: the re-export ended in Godot verify whatever the engine, so --engine none wrote the game, then exit 2
+        code, out = self.dotwork("pixelorama", "--engine", "none")
+        self.assertEqual(code, 0, out)
+        pxo = os.path.join(self.tmp, "assets_src", "pixelorama", "fx", "slash.pxo")
+
+        def edit(d, b):
+            w, h = d["size_x"], d["size_y"]
+            a = np.frombuffer(b["image_data/frames/1/layer_1"], np.uint8).reshape(h, w, 4).copy()
+            a[0, 0] = (200, 60, 50, 255)
+            b["image_data/frames/1/layer_1"] = a.tobytes()
+        rewrite_pxo(pxo, edit)
+        code, out = self.dotwork("pixelorama", "--reexport", "--engine", "none")
+        self.assertEqual(code, 0, out)
+        self.assertIn("[ OK ] re-exported (1 files changed; no Godot verify with --engine none)", out)
+        self.ase._run = self.fake_aseprite()
+        code, out = self.dotwork("aseprite", "--engine", "none")
+        self.assertEqual(code, 0, out)
+        code, out = self.dotwork("aseprite", "--reexport", "--engine", "none")
+        self.assertEqual(code, 0, out)
+        self.assertIn("[ OK ] re-exported (0 files changed; no Godot verify with --engine none)", out)
+
 
 class AsepriteHoldsExam(unittest.TestCase):
     """aseprite.py's frame times, with Aseprite's script runs stubbed (the Lua itself needs Aseprite)."""
@@ -721,6 +841,34 @@ class AsepriteHoldsExam(unittest.TestCase):
         self.assertEqual(lists["knight.aseprite"],
                          [["attack_e", "0.1250"], ["attack_e", "0.2500"], ["attack_e", "0.1250"], ["attack_e", "0.3750"],
                           ["walk_e", "0.0833"], ["walk_e", "0.0833"], ["walk_e", "0.0833"]])
+
+    def test_build_leaves_no_helper_files_in_the_sources(self):
+        # #109: the palette BUILD_LUA loads was written beside each .aseprite and stayed in the game's tracked sources
+        seen = []
+
+        def run(conf, lua, name, params):
+            if "list" in params:
+                for k in ("list", "palette"):
+                    self.assertTrue(os.path.isfile(params[k]), k)            # there while Aseprite runs
+                    seen.append(os.path.relpath(params[k], self.tmp).replace(os.sep, "/"))
+                open(params["out"], "wb").close()
+            return "DOTWORK_ASE_OK"
+        self.ase._run = run
+        self.ase.build(self.s.project, self.s.conf)
+        src = os.path.join(self.tmp, "assets_src", "aseprite")
+        left = sorted(os.path.relpath(p, src).replace(os.sep, "/")
+                      for p in glob.glob(os.path.join(src, "**", "*"), recursive=True) if os.path.isfile(p))
+        self.assertEqual(left, ["characters/knight.aseprite", "fx/spark.aseprite", "single/barrel.aseprite"])
+        self.assertTrue(seen and all(p.startswith("art_src/dotwork/") for p in seen), seen)
+        self.assertEqual([p for p in seen if os.path.exists(os.path.join(self.tmp, p))], [])   # removed after
+
+        def fails(conf, lua, name, params):
+            raise fcore.JobError("Aseprite failed (1): stand-in")
+        self.ase._run = fails
+        shutil.rmtree(src)                                                    # a fresh build, so BUILD_LUA runs
+        with self.assertRaises(fcore.JobError):
+            self.ase.build(self.s.project, self.s.conf)
+        self.assertEqual([p for p in seen if os.path.exists(os.path.join(self.tmp, p))], [])   # a failed run too
 
     def fake_export(self, edit=None):
         """A stand-in for EXPORT_LUA: the game's frames as Aseprite would export them, frame times in whole
@@ -797,6 +945,30 @@ class AsepriteHoldsExam(unittest.TestCase):
         with stub_verify(), self.assertRaisesRegex(fcore.ToolError, "walk_e has 101 frames"):
             self.ase.reexport(self.s.project, self.s.conf)
         self.assertEqual(changed(before, snapshot(self.tmp)), [])
+
+    def test_two_tags_with_one_name_stop(self):
+        # issue #81 (live, Aseprite 1.3.18): a second attack_e tag over 2 frames numbered its frames from 00 too, so
+        # it overwrote attack_e_00 and _01 and the shipped attack came back mixed, with verify passing. The current
+        # EXPORT_LUA says DUPTAG and writes nothing; an export that still names one file twice is refused as well.
+        self.sources()
+        before = snapshot(self.tmp)
+        frames = os.path.join(self.tmp, "assets", "art", "characters", "knight", "frames")
+        walk0 = os.path.join(frames, "spr_knight_walk_e_00.png")
+
+        def old_lua(conf, lua, name, params):                    # what the old EXPORT_LUA wrote and printed
+            lines = []
+            for fn in ("attack_e_00", "attack_e_01", "attack_e_02", "attack_e_03", "attack_e_00", "attack_e_01"):
+                p = f"{params['prefix']}_{fn}.png"
+                shutil.copyfile(walk0 if len(lines) > 3 else os.path.join(frames, f"spr_knight_{fn}.png"), p)
+                lines.append(f"DOTWORK_ASE_PNG 0.125000 {p}")
+            return "\n".join(lines)
+        for run, says in ((old_lua, "two frames were exported as 'spr_knight_attack_e_00.png'"),
+                          (lambda conf, lua, name, params: "DOTWORK_ASE_DUPTAG attack_e",
+                           "two tags share the name 'attack_e'")):
+            self.ase._run = run
+            with stub_verify(), self.assertRaisesRegex(fcore.ToolError, says):
+                self.ase.reexport(self.s.project, self.s.conf)
+            self.assertEqual(changed(before, snapshot(self.tmp)), [])
 
     def test_an_untagged_character_stops(self):
         self.sources()
@@ -968,6 +1140,21 @@ class AsepriteGuardExam(unittest.TestCase):
                          {"knight.aseprite": "1", "spark.aseprite": "1", "barrel.aseprite": "1",
                           "spr_bust.aseprite": "0", "ui_icon_glow.aseprite": "0"})
 
+    def test_clips_of_two_sizes_stop_before_anything_is_written(self):
+        # issue #82 (live, Aseprite 1.3.18): attack_e padded to a bigger canvas, as a second pack can write it. The
+        # sprite took the first frame's size, and an untouched round trip shipped every other clip padded to it, art
+        # in the top left. Build now refuses, naming the sizes, and writes no source at all.
+        frames = os.path.join(self.tmp, "assets", "art", "characters", "knight", "frames")
+        for p in glob.glob(os.path.join(frames, "spr_knight_attack_e_*.png")):
+            with Image.open(p) as im:
+                big = Image.new("RGBA", (W + 16, H + 16), (0, 0, 0, 0))
+                big.paste(im.convert("RGBA"), (8, 16))
+            fcore.save_clean(big, p)
+        with self.assertRaisesRegex(fcore.ToolError, r"knight\.aseprite: frames of 2 sizes \(24x32, 40x48\)"):
+            self.build()
+        self.assertEqual(self.built, [])
+        self.assertEqual(glob.glob(os.path.join(self.src, "**", "*.aseprite"), recursive=True), [])
+
     def test_the_command_line_reports_kept_and_replaced_files(self):
         import dotwork
         self.build()
@@ -982,6 +1169,69 @@ class AsepriteGuardExam(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             self.assertEqual(dotwork.main(["aseprite", "--project", self.tmp]), 0)
         self.assertIn("0 .aseprite files written, 3 unchanged", out.getvalue())
+
+
+LIVE_ASEPRITE = os.environ.get("ASEPRITE_BIN", "")
+# the live exam's hand-built .aseprite: <frames> frames of w x h, each a flat colour, tags given as "name:from:to,..."
+FIXTURE_LUA = r'''
+local p = app.params
+local spr = Sprite(tonumber(p.w), tonumber(p.h), ColorMode.RGB)
+local n = tonumber(p.frames)
+for i = 2, n do spr:newEmptyFrame() end
+for i = 1, n do
+  local img = Image(spr.spec)
+  img:clear(Color{ r = 40 * i, g = 100, b = 200, a = 255 })
+  spr:newCel(spr.layers[1], i, img, Point(0, 0))
+end
+for name, a, b in p.tags:gmatch("([^:,]+):(%d+):(%d+)") do
+  local t = spr:newTag(tonumber(a), tonumber(b))
+  t.name = name
+end
+spr:saveAs(p.out)
+print("DOTWORK_ASE_OK fixture")
+'''
+
+
+@unittest.skipUnless(LIVE_ASEPRITE and os.path.isfile(LIVE_ASEPRITE),
+                     "set ASEPRITE_BIN to run EXPORT_LUA in a real Aseprite")
+class AsepriteLiveExam(unittest.TestCase):
+    """EXPORT_LUA run in a real Aseprite (batch mode) on .aseprite fixtures the exam builds there; skipped without
+    ASEPRITE_BIN. The stand-in exams above cover the Python half."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="dotwork_aselive_")
+        self.s = make_game(self.tmp)                                  # binds Dotwork's work folder to the game
+        import aseprite
+        self.ase = aseprite
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def fixture(self, name, tags, frames=4, w=8, h=8):
+        out = os.path.join(self.tmp, "src", name + ".aseprite")
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        self.ase._run(self.s.conf, FIXTURE_LUA, "ase_fixture.lua",
+                      {"w": w, "h": h, "frames": frames, "tags": tags, "out": out})
+        return out
+
+    def export(self, file):
+        folder = os.path.join(self.tmp, "export")
+        shutil.rmtree(folder, ignore_errors=True)
+        os.makedirs(folder)
+        pngs, bad = self.ase._export(self.s.conf, file, os.path.join(folder, "spr_x"))
+        return [os.path.basename(p) for p, _ in pngs], bad, sorted(os.listdir(folder))
+
+    def test_two_tags_with_one_name_export_nothing(self):
+        # issue #81: the second tag's frames overwrote the first one's (spr_x_attack_e_00 and _01)
+        for tags in ("attack_e:1:4,attack_e:3:4", "attack_e:1:4,Attack_E:3:4"):
+            names, bad, written = self.export(self.fixture("dup", tags))
+            self.assertEqual((names, written), ([], []), tags)
+            self.assertIn("two tags share the name", bad, tags)
+        names, bad, written = self.export(self.fixture("ok", "attack_e:1:2,walk_e:3:4"))
+        self.assertIsNone(bad)
+        self.assertEqual(names, ["spr_x_attack_e_00.png", "spr_x_attack_e_01.png", "spr_x_walk_e_00.png",
+                                 "spr_x_walk_e_01.png"])
+        self.assertEqual(written, sorted(names))
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@
 import contextlib
 import io
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -114,6 +115,16 @@ class SfxSynthExam(unittest.TestCase):
         rc, out = self.run_tool("jump", "--seed", 9, "--out", path)
         self.assertEqual(rc, 2)
         self.assertIn("--overwrite", out)
+
+    def test_recipe_never_replaces_its_own_wav(self):
+        # #30: --recipe naming the --out file replaced the WAV with JSON (with or without --overwrite)
+        path = self.dir / "same.wav"
+        for extra in ((), ("--overwrite",)):
+            rc, out = self.run_tool("coin", "--out", path, "--recipe", self.dir / "SAME.wav" if os.name == "nt" else path,
+                                    *extra)
+            self.assertEqual(rc, 2, out)
+            self.assertIn("would replace the WAV", out)
+            self.assertFalse(path.exists())
 
     def test_clipping_is_reported(self):
         rc, out = self.run_tool("explosion", "--set", "volume=1", "--set", "punch=1", "--out", self.dir / "loud.wav")

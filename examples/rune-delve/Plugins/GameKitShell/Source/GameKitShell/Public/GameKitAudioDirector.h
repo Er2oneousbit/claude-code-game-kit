@@ -6,12 +6,15 @@
 // Usage   : FGameKitAudioDirector Director(EventsObject);            // {"seed", "events", "ducking"} (GameKit::Json::Parse)
 //           const FGameKitPlayDecision D = Director.Play(TEXT("step_stone"), NowMs);
 //           if (D.Result == EGameKitPlayResult::Played) { spawn the sound: Files[D.Variant], pitch D.PitchRatio, D.GainDb }
+//           else if (D.Result == EGameKitPlayResult::Error) { UE_LOG(LogMyGame, Error, TEXT("audio: %s"), *D.Error); }
 //           each Tick: for (const TPair<FString, double>& Bus : Director.Duck(NowMs)) set that bus's duck in dB
 // Notes   : A port of tools/audio/wavesmith/audio_events.py (the reference); every step of data/golden/audio.json
 //           must come out the same (GameKitGoldenTests.cpp). The random source is Park-Miller in int64 (exact, no
 //           bit operations), drawn in a fixed order (variant, pitch, volume) and never by a rejected play. Each
-//           event needs "lengths_ms" (one per file, from the loaded sounds' durations). Calls must come in time
-//           order; an earlier time is ignored with a warning in the result (Played is never returned for it).
+//           event needs "files" (their count is the number of variants) and "lengths_ms" (one per file, from the
+//           loaded sounds' durations). Where the reference raises (an unknown event, a time earlier than the last
+//           call, fewer lengths than files, max_voices below 1 with steal "oldest"), Play returns Error with the
+//           reason in D.Error and changes nothing; Duck returns no gains and sets *OutError.
 //
 // Pseudocode:
 //   Play(e, t) -> drop finished voices -> cooldown? Cooldown -> at max_voices: steal oldest or Capped
@@ -59,7 +62,7 @@ namespace GameKit::Audio
 	}
 }
 
-enum class EGameKitPlayResult : uint8 { Played, Cooldown, Capped };
+enum class EGameKitPlayResult : uint8 { Played, Cooldown, Capped, Error };
 
 struct FGameKitPlayDecision
 {
@@ -69,6 +72,7 @@ struct FGameKitPlayDecision
 	int32 Voice = 0;
 	TOptional<int32> Stolen;   // the voice stopped to make room, if any
 	double EndsMs = 0.0;
+	FString Error;   // why, when Result is Error (the reference raises there); empty otherwise
 };
 
 class FGameKitAudioDirector
@@ -86,6 +90,7 @@ public:
 				const TSharedPtr<FJsonObject> E = Pair.Value->AsObject();
 				FEvent Ev;
 				Ev.Bus = GetString(E, TEXT("bus"), TEXT("sfx"));
+				for (const TSharedPtr<FJsonValue>& F : ArrayOf(E, TEXT("files"))) { Ev.Files.Add(F->AsString()); }
 				for (const TSharedPtr<FJsonValue>& L : ArrayOf(E, TEXT("lengths_ms"))) { Ev.LengthsMs.Add(L->AsNumber()); }
 				Ev.Pick = GetString(E, TEXT("pick"), TEXT("random_no_repeat"));
 				ReadRange(E, TEXT("pitch_semitones"), Ev.PitchLo, Ev.PitchHi);
@@ -116,16 +121,18 @@ public:
 
 	bool HasEvent(const FString& Name) const { return EventsByName.Contains(Name); }
 
-	/** The decision for one play of Name at T (ms). An unknown event or an earlier time than the last call is Capped. */
+	/** The decision for one play of Name at T (ms). An unknown event, an earlier time than the last call or a
+	 *  malformed event is an Error (D.Error says why) and changes nothing. */
 	FGameKitPlayDecision Play(const FString& Name, double T)
 	{
-		FGameKitPlayDecision D;
 		const FEvent* Ev = EventsByName.Find(Name);
-		if (!Ev || T < Now)
+		if (!Ev) { return Failed(FString::Printf(TEXT("unknown audio event %s"), *Name)); }
+		if (T < Now) { return Failed(FString::Printf(TEXT("calls must come in time order (%g ms after %g ms)"), T, Now)); }
+		if (Ev->Files.IsEmpty() || Ev->LengthsMs.Num() < Ev->Files.Num())
 		{
-			D.Result = EGameKitPlayResult::Capped;
-			return D;
+			return Failed(FString::Printf(TEXT("event %s: files and lengths_ms need one entry per file (from the loaded sounds)"), *Name));
 		}
+		FGameKitPlayDecision D;
 		Now = T;
 		Voices.RemoveAll([T](const FVoice& V) { return V.End <= T; });
 		if (Ev->CooldownMs != 0.0)
@@ -155,6 +162,10 @@ public:
 					Victim = I;
 				}
 			}
+			if (Victim == INDEX_NONE)   // max_voices below 1: the reference fails here too (min of nothing)
+			{
+				return Failed(FString::Printf(TEXT("event %s: max_voices must be 1 or more"), *Name));
+			}
 			D.Stolen = Voices[Victim].Id;
 			for (FVoice& H : History)
 			{
@@ -167,8 +178,7 @@ public:
 		const double Semis = Ev->PitchLo == Ev->PitchHi ? Ev->PitchLo : Ev->PitchLo + (Ev->PitchHi - Ev->PitchLo) * R.Next();
 		const double Gain = Ev->VolLo == Ev->VolHi ? Ev->VolLo : Ev->VolLo + (Ev->VolHi - Ev->VolLo) * R.Next();
 		const double Ratio = FMath::Pow(2.0, Semis / 12.0);
-		const double Length = Ev->LengthsMs.IsValidIndex(Idx) ? Ev->LengthsMs[Idx] : 0.0;
-		const FVoice Voice{NextId++, Name, Ev->Bus, T, T + Length / Ratio};
+		const FVoice Voice{NextId++, Name, Ev->Bus, T, T + Ev->LengthsMs[Idx] / Ratio};
 		Voices.Add(Voice);
 		if (Triggers.Contains(Voice.Bus)) { History.Add(Voice); }
 		LastPlay.Add(Name, T);
@@ -182,11 +192,16 @@ public:
 		return D;
 	}
 
-	/** Duck gain in dB per target bus at T (every rule advanced to T). An earlier time than the last call changes nothing. */
-	TMap<FString, double> Duck(double T)
+	/** Duck gain in dB per target bus at T (every rule advanced to T). An earlier time than the last call changes
+	 *  nothing and returns no gains (keep the last ones): *OutError says so. */
+	TMap<FString, double> Duck(double T, FString* OutError = nullptr)
 	{
 		TMap<FString, double> Out;
-		if (T < Now) { return Out; }
+		if (T < Now)
+		{
+			if (OutError) { *OutError = FString::Printf(TEXT("calls must come in time order (%g ms after %g ms)"), T, Now); }
+			return Out;
+		}
 		Now = T;
 		for (int32 I = 0; I < Ducking.Num(); ++I)
 		{
@@ -229,6 +244,7 @@ private:
 	struct FEvent
 	{
 		FString Bus;
+		TArray<FString> Files;      // the variants (Play's D.Variant indexes them)
 		TArray<double> LengthsMs;
 		FString Pick;
 		double PitchLo = 0.0, PitchHi = 0.0, VolLo = 0.0, VolHi = 0.0;
@@ -249,6 +265,14 @@ private:
 		double Start, End;
 	};
 
+	static FGameKitPlayDecision Failed(const FString& Why)
+	{
+		FGameKitPlayDecision D;
+		D.Result = EGameKitPlayResult::Error;
+		D.Error = Why;
+		return D;
+	}
+
 	static TArray<TSharedPtr<FJsonValue>> ArrayOf(const TSharedPtr<FJsonObject>& O, const TCHAR* Key)
 	{
 		const TSharedPtr<FJsonValue> V = GameKit::Json::Find(O, Key);
@@ -267,7 +291,7 @@ private:
 
 	int32 PickVariant(const FString& Name, const FEvent& Ev, GameKit::Audio::FParkMiller& R)
 	{
-		const int32 N = Ev.LengthsMs.Num();
+		const int32 N = Ev.Files.Num();   // the reference counts files, not lengths
 		const int32* LastPtr = LastVariant.Find(Name);
 		const int32 Last = LastPtr ? *LastPtr : -1;
 		if (N <= 1) { return 0; }

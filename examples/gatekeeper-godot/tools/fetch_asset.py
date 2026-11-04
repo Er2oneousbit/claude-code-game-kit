@@ -17,6 +17,7 @@
 #           records what you tell it, it cannot judge a license. NC/ND and unknown licenses are
 #           refused unless --placeholder (logged as PLACEHOLDER, replace before release). Weak copyleft
 #           (EUPL, MPL, LGPL) is accepted for plugins and libraries: share changes you make to them.
+#           ShareAlike (CC BY-SA) is accepted with a [warn] line and SHAREALIKE in the Notes column.
 #           --type model is for AI model weights (SOP-15): big files, keep them out of git (.gitignore).
 #           --take accepts globs relative to the pack root and may repeat. Files land flat in --to, unless
 #           --base DIR is given: then each file keeps its path relative to DIR (models that reference
@@ -29,10 +30,13 @@
 #           is used only to download and to name the cache folder. --page is recorded without user:password@ but with
 #           its query string (a license page may need it). Standard library only, Python 3.8+.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): ShareAlike warned and noted (#105)
+# Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): an empty or table-less log names the scaffolder's
+#           --upgrade --restore command, not the kit's raw template (#173)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
-#   check license text -> allowed / placeholder / refused
+#   check license text -> allowed / sharealike (warn, note) / placeholder / refused
 #   download URL into .asset_cache/<name> (retry, browser-like agent), unzip safely
 #   --list: print the pack's files, stop
 #   copy each --take match into --to (refuse to overwrite)
@@ -56,6 +60,8 @@ from pathlib import Path
 
 CACHE_DIR = ".asset_cache"
 ASSET_LOG = Path("docs/ASSET_LOG.md")
+# the kit's own copy is a template (scaffold-time placeholders in its sample row): the scaffolder puts it back rendered
+RESTORE_HINT = f"python <kit>/scripts/new_game.py --dest . --upgrade --restore {ASSET_LOG.as_posix()}"
 LICENSE_DIR = Path("docs/licenses")
 USER_AGENT = "Mozilla/5.0 (compatible; claude-code-game-kit fetch_asset.py)"  # some hosts reject the urllib default
 RETRIES = 3
@@ -63,6 +69,9 @@ TIMEOUT = 120
 ALLOWED = ("CC0", "PUBLIC DOMAIN", "CC BY", "CC-BY", "OFL", "SIL OPEN FONT", "MIT", "APACHE", "BSD", "ZLIB", "UNLICENSE",
            "EUPL", "MPL", "LGPL")   # weak copyleft (plugins, libraries): changes to THAT component must be shared
 REFUSED = ("NC", "ND", "NONCOMMERCIAL", "NON-COMMERCIAL", "NODERIVATIVES", "UNKNOWN", "?")
+SHAREALIKE = ("SA", "SHAREALIKE")                    # whole words; "SHARE-ALIKE" and "SHARE ALIKE" too
+SHAREALIKE_WARNING = ("ShareAlike: derivatives of this asset must be released under the same license; check SOP-04 "
+                      "before shipping")
 LICENSE_FILE_GLOBS = ("license*", "licence*", "copying*", "info.txt", "readme*", "credits*")
 LICENSE_TEXT_SUFFIXES = ("", ".txt", ".md", ".rst", ".html", ".htm")   # not license_plate.png
 TYPES = ("art", "sprite", "tileset", "ui", "font", "music", "sfx", "voice", "3d", "vfx", "tool", "plugin", "model", "other")
@@ -82,7 +91,8 @@ class UsageError(FetchError):
 
 
 def judge_license(text, placeholder):
-    """Return 'ok' or 'placeholder'; raise FetchError when the license is refused."""
+    """Return 'ok', 'sharealike' (allowed, but derivatives must use the same license: warned and noted) or
+    'placeholder'; raise FetchError when the license is refused."""
     words = set(re.split(r"[\s/,()-]+", text.upper()))
     if words & {"NC", "ND", "NONCOMMERCIAL", "NODERIVATIVES"} or any(r in text.upper() for r in REFUSED[2:]):
         if placeholder:
@@ -94,6 +104,10 @@ def judge_license(text, placeholder):
     for allowed in ALLOWED:
         want = re.findall(r"[A-Z0-9.]+", allowed)
         if any(tokens[i:i + len(want)] == want for i in range(len(tokens) - len(want) + 1)):
+            # "CC BY" is found inside "CC BY-SA 4.0": a known trap, recorded instead of waved through
+            upper = text.upper()
+            if words & set(SHAREALIKE) or "SHARE-ALIKE" in upper or "SHARE ALIKE" in upper:
+                return "sharealike"
             return "ok"
     if placeholder:
         return "placeholder"
@@ -228,7 +242,8 @@ def add_log_row(log_text, row, fill_template):
     else:   # header and separator only (the sample row was deleted): first row goes under the separator
         seps = [i for i, l in enumerate(lines) if re.match(r"^\|\s*:?-{3,}", l)]
         if not seps:
-            raise UsageError(f"{ASSET_LOG.as_posix()} has no table to add a row to (restore its header from the kit)")
+            raise UsageError(f"{ASSET_LOG.as_posix()} has no table to add a row to (keep a copy of it, put the "
+                             f"kit's log back with `{RESTORE_HINT}`, then copy your rows in)")
         at = seps[0] + 1
     lines.insert(at, row)
     return "\n".join(lines)
@@ -288,7 +303,7 @@ def run(args):
 
     log_text = log_path.read_text(encoding="utf-8")
     if not log_text.strip():
-        raise UsageError(f"{ASSET_LOG.as_posix()} is empty (restore it from the kit)")
+        raise UsageError(f"{ASSET_LOG.as_posix()} is empty (put the kit's log back with `{RESTORE_HINT}`)")
     num, fill_template = next_asset_id(log_text)
     asset_id = f"A-{num:04d}"
     today = datetime.date.today().isoformat()
@@ -305,13 +320,16 @@ def run(args):
         return "`" + md_cell(text).replace("`", "'") + "`"
     rel_files = ", ".join(code((Path(args.to) / n).as_posix()) for n in names) if len(names) <= 3 else \
         f"{code(Path(args.to).as_posix() + '/')} ({len(names)} files)"
-    notes = "; ".join(x for x in ["PLACEHOLDER" if status == "placeholder" else "", args.notes] if x)
+    marker = {"placeholder": "PLACEHOLDER", "sharealike": "SHAREALIKE"}.get(status, "")
+    notes = "; ".join(x for x in [marker, args.notes] if x)
     row = (f"| {asset_id} | {md_cell(args.type)} | {rel_files} | {md_cell(page or redact_url(args.url))} | {md_cell(args.author)} | "
            f"{md_cell(args.license)} | {md_cell(args.attribution)} | {args.ai} | {args.modified} | {today} | {md_cell(notes)} |")
 
     if args.dry_run:
         print(f"[dry-run] would copy {len(plans)} file(s) to {Path(args.to).as_posix()}, write "
               f"{(LICENSE_DIR / (asset_id + '.txt')).as_posix()} and add:\n{row}")
+        if status == "sharealike":
+            print(f"[warn] {SHAREALIKE_WARNING}")
         return 0
     # Work out the new log first: if it cannot be written, nothing in the project has changed yet
     log_text = add_log_row(log_text, row, fill_template)
@@ -326,6 +344,8 @@ def run(args):
           f"{(LICENSE_DIR / (asset_id + '.txt')).as_posix()}, row added to {ASSET_LOG.as_posix()}")
     if status == "placeholder":
         print("[warn] logged as PLACEHOLDER: replace it before release (/release-check will flag it)")
+    if status == "sharealike":
+        print(f"[warn] {SHAREALIKE_WARNING} (logged with SHAREALIKE in Notes)")
     if not lic_text:
         print("[warn] the pack has no license file: save the asset page's license as a screenshot next to the evidence")
     return 0

@@ -176,6 +176,29 @@
       "master": 1.0,
       "music": 1.0
      }
+    },
+    {
+     "buses": {
+      "master": {},
+      "sfx": {
+       "parent": 7
+      },
+      "ui": {
+       "parent": null
+      }
+     },
+     "sliders": {
+      "master": 0.9,
+      "music": 0.5,
+      "sfx": 0.25,
+      "ui": 0.75,
+      "voice": 0.6
+     },
+     "expect": {
+      "master": 0.9,
+      "sfx": 0.25,
+      "ui": 0.75
+     }
     }
    ]
   },

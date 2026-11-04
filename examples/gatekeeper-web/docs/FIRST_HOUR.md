@@ -38,7 +38,7 @@ Still true in the fast lane: mechanics before art, and never "make the whole gam
   for characters and key objects (`tools/art/pixel_sprite.py`, never dots; 3D: figures built from simple shapes). If it is not fun with crude figures, polished art will not save it.
 - **Grow one toy at a time.** Add one mechanic, play until it is fun again, then the next. Combine new toys with old ones so
   they play off each other. Never add three at once (tip, E49).
-- **Tell Claude your machine.** GPU, RAM, target platform. It sizes the graphics to fit (E27).
+- **Tell Claude your machine.** GPU, RAM, target platform. It sizes the graphics to fit (tip, E27).
 - **Know what breaks.** Interaction bugs are the norm: run the `SOP-09` interaction smoke checklist on every build (F1).
 - **Do not clone.** Learn from famous games, ship your own (`SOP-04`).
 

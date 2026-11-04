@@ -28,7 +28,7 @@ python tools/dev.py genproj   # regenerate IDE project files
 ## Mapped to Unreal
 | dev.py | What it runs |
 |---|---|
-| `check` / `build` | `<UE_ROOT>/Engine/Build/BatchFiles/Build.bat <Target>Editor Win64 Development -Project=<uproject> -WaitMutex` (`Build.sh` on Linux/Mac). Blueprint-only projects (no `Source/`) skip it and pass. A missing MSVC, Windows SDK or .NET Framework SDK, or an open editor with Live Coding, exits 2 with the fix |
+| `check` / `build` | `<UE_ROOT>/Engine/Build/BatchFiles/Build.bat <Target>Editor Win64 Development -Project=<uproject> -WaitMutex` (`Build.sh` on Linux/Mac). Blueprint-only projects (no `Source/`) skip it and pass, unless the GameKitShell plugin is enabled: then it builds the engine's `UnrealEditor` target with `-Project`, which compiles only the plugin (into `Plugins/GameKitShell/Binaries/`). A missing MSVC, Windows SDK or .NET Framework SDK, or an open editor with Live Coding, exits 2 with the fix |
 | `test` | `UnrealEditor-Cmd <uproject> -ExecCmds="Automation RunTests <filter>; Quit" -TestExit="Automation Test Queue Empty" -unattended -nopause -NullRHI -nosplash -abslog=Saved/Logs/dev_automation.log`, then parses that log (the editor does not print results to stdout). The default filter is `<Game>`, plus `GameKit.` when the GameKitShell plugin is enabled (`+` joins filters); the summary counts the `GameKit.*` tests |
 | `smoke` | same as `test` with filter `<Game>.Smoke` (C++ tests; a Blueprint-only project has none, use `test --filter` on its functional tests). `--filter Boot` runs `<Game>.Smoke.Boot` only; `--until M` and `--fail-on M` check scenario markers your tests log, like the other overlays. Tests run with `-NullRHI`, so nothing renders: capture screenshots from the game itself (a `-record=<dir>` option calling `FScreenshotRequest::RequestScreenshot`, as `examples/rune-delve` does) |
 | `package` | `RunUAT BuildCookRun -project=... -noP4 -platform=<host> -clientconfig=<--config, default Development> -build -cook -stage -pak -archive -archivedirectory=Packaged` (Development verified on UE 5.8; `--config Shipping` for the release build) |
@@ -101,13 +101,18 @@ widgets. It ships disabled (`"EnabledByDefault": false`), so a project that does
 | `GameKitI18n.h`, `GameKitJson.h` | `Tr` with a fr-CA -> fr -> en fallback, plurals, the pseudo-locale; JSON helpers that never log |
 | `GameKitAudioDirector.h`, `GameKitMusicDirector.h`, `GameKitAudioAccess.h` | Wavesmith's audio rules (tools/audio/wavesmith): which take of a sound event plays at what pitch and volume, voice caps, cooldowns and dialogue ducking; music transition plans on the exact sample (beat, bar, phrase, loop end, fades, stingers, synced entry; start sounds on them with a Quartz clock); settings sliders per bus, never twice down one branch, and the arrow for a caption whose sound is off screen |
 
-Turn it on (a C++ project; a Blueprint-only one first needs a C++ class from Tools > New C++ Class, and `dev.py check`
-exits 2 to say so):
+Turn it on:
 1. In the `.uproject`, add `{ "Name": "GameKitShell", "Enabled": true }` to `"Plugins"`.
 2. In your module's `Build.cs`, add `"GameKitShell"` (and `"Json"` if your code touches `FJsonObject`) to
    `PublicDependencyModuleNames`, then `#include "GameKitShake.h"` and so on.
 3. `python tools/dev.py check`, then `python tools/dev.py test`: it runs your `<Game>` tests and the plugin's `GameKit.*`
    tests and prints how many of those passed. `test --filter GameKit` runs only the plugin's.
+
+A Blueprint-only project (no `Source/`) has no `Build.cs`, so skip step 2. `check` then compiles the plugin once through
+the engine's own `UnrealEditor` target (the C++ toolchain from docs/ENGINE.md is needed for that), and `test` runs its
+`GameKit.*` tests; until then `test` exits 2 with "run check first", because the editor cannot load a plugin module
+that was never built. Blueprints cannot call the plugin (plain C++, no Blueprint nodes): to use it in the game, add a
+C++ class (Tools > New C++ Class), which makes it a C++ project, and do step 2.
    If you only turned the plugin on in the `.uproject` (step 1 without step 2), UnrealBuildTool may say "Target is up
    to date" and skip it, and `test --filter GameKit` then finds no tests: delete
    `Intermediate/Build/Win64/x64/<Game>Editor/Development/Makefile.bin` (seen on UE 5.8) and run `check` again.
@@ -130,8 +135,12 @@ falls back to the `.bak`, a newer game's save is never overwritten). Keep `data/
 - Change the logic: edit the plugin, keep `test` green; when the kit's reference changes, the vectors change with it.
 - Verified on UE 5.8 (Windows, VS 2022 Build Tools / MSVC 14.44, 2026-11-01) in a minimal C++ project (K01): `check`
   builds the plugin without warnings, `test` passes every `GameKit.*` test and the game module links against the
-  plugin; a planted wrong vector value and an unknown case type both fail `test`. Linux and macOS are untested, and so
-  is enabling the plugin in a Blueprint-only project inside the editor **(verify)**.
+  plugin; a planted wrong vector value and an unknown case type both fail `test`. In a Blueprint-only project made
+  from UE 5.8's Blank Blueprint template (K01, 2026-11-02): `test` before `check` exits 2 (the plugin module is
+  missing), `check` compiles the plugin with no warnings, then `test` passes all 70 `GameKit.*` tests headless.
+  Linux and macOS are untested, and so is turning the plugin on from the editor's Plugins window (Edit > Plugins,
+  then restart); in a Blueprint-only project run `check` before opening the editor, or it reports the module as
+  missing **(verify)**.
 
 ## Source control (Git + LFS)
 - `.gitattributes` in this repo routes `.uasset`, `.umap`, textures, audio, and meshes through LFS. Run `git lfs install` before the first commit.

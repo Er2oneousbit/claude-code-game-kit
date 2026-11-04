@@ -199,6 +199,34 @@ class DialogueExam(unittest.TestCase):
                          "00:00:01.750 --> 00:00:03.250\n<v Baker>Two coins.\n\n"
                          "00:00:03.500 --> 00:00:04.500\n<v Knight>Halt!\n")
 
+    def test_srt_speaker_name_keeps_to_the_line_width(self):
+        # #116: "NAME: " went in front of a first line already filled to 40 characters
+        width = D.STYLE["max_chars_per_line"]
+
+        def run(text, name):
+            src = {"version": 1, "speakers": {"rd": {"name": "Research lead", "cps": 30}},
+                   "lines": [{"id": "l1", "speaker": "rd", "text": text}], "sequences": {"intro": [{"line": "l1"}]}}
+            path = self.root / f"{name}.json"
+            path.write_text(json.dumps(src), encoding="utf-8")
+            _, lint = self.run_tool("lint", path, "--root", self.root)
+            self.run_tool("build", path, "--root", self.root, "--out", self.root / f"{name}.built.json")
+            rc, out = self.run_tool("export", self.root / f"{name}.built.json", "--sequence", "intro",
+                                    "--out", self.root / f"{name}.srt")
+            self.assertEqual(rc, 0, out)
+            srt = (self.root / f"{name}.srt").read_bytes().decode("utf-8").split("\r\n")[2:-1]
+            return srt, lint, out
+
+        fits = "Press the button and run now, then go."           # one 38-character line: the name needs a second
+        srt, lint, out = run(fits, "fits")
+        self.assertTrue(srt[0].startswith("RESEARCH LEAD:"), srt)            # the name may take the top line
+        self.assertTrue(all(len(x) <= width for x in srt), srt)
+        self.assertEqual(" ".join(srt), "RESEARCH LEAD: " + fits, "every word kept, in order")
+        self.assertNotIn("SRT", lint + out)
+        full = "Press the button and run now! Then wait a bit longer than that, friend."   # the issue's line
+        srt, lint, out = run(full, "full")
+        self.assertIn("SRT puts \"RESEARCH LEAD: \" in front", lint, "lint says the name cannot fit")
+        self.assertIn("[warn] cue 1: \"RESEARCH LEAD: Press", out, "86 characters cannot fit 2 x 40: said")
+
     def test_vtt_escapes_markup_in_text_and_names(self):
         cues = [{"start": 0.0, "end": 1.0, "lines": ["Fish & chips <b>now</b>", "", "a --> b"], "name": "Tom <3"}]
         self.assertEqual(D.to_vtt(cues), "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n<v Tom &lt;3>"
@@ -230,6 +258,45 @@ class DialogueExam(unittest.TestCase):
         _, errors, _ = self.build([{"id": "k.a", "speaker": "knight", "text": "x"}],
                                   sequences={"s": [{"line": "k.a", "after": "k.zzz"}]})
         self.assertTrue(any("'after' must name an earlier" in e for e in errors), errors)
+
+    def test_malformed_files_are_named_not_tracebacks(self):
+        # #112: each of these printed a traceback from lint and build (exit 1)
+        a = {"a": {"name": "A"}}
+        cases = {
+            "lines_not_objects": ({"version": 1, "speakers": a, "lines": [1, "x"]}, "line #0: must be an object"),
+            "list_id": ({"version": 1, "speakers": a, "lines": [{"id": ["x"], "speaker": "a", "text": "Hi"}]},
+                        "id must be a string"),
+            "cps_zero": ({"version": 1, "speakers": {"a": {"name": "A", "cps": 0}},
+                          "lines": [{"id": "l1", "speaker": "a", "text": "Hi there."}]}, "cps must be a number above 0"),
+            "sequence_not_list": ({"version": 1, "speakers": a, "lines": [{"id": "l1", "speaker": "a", "text": "Hi"}],
+                                   "sequences": {"intro": {"line": "l1"}}}, "sequence intro: must be a list"),
+            "speaker_list": ({"version": 1, "speakers": a, "lines": [{"id": "l1", "speaker": ["a"], "text": "Hi"}]},
+                             "is not in speakers"),
+            "speakers_list": ({"version": 1, "speakers": [], "lines": []}, "speakers must be an object"),
+            "audio_number": ({"version": 1, "speakers": a, "lines": [{"id": "l1", "speaker": "a", "text": "Hi",
+                                                                     "audio": 5}]}, "must be paths"),
+            "after_list": ({"version": 1, "speakers": a, "lines": [{"id": "l1", "speaker": "a", "text": "Hi"}],
+                            "sequences": {"s": [{"line": "l1", "after": ["l1"]}]}}, "'after' must name"),
+            "deep_wrong_type": ({"version": 1, "speakers": a, "lines": [{"id": "l1", "speaker": "a", "text": "Hi"}],
+                                 "sequences": {"s": [{"line": "l1", "at": "soon"}]}}, "wrong type"),
+        }
+        for name, (data, words) in cases.items():
+            with self.subTest(name):
+                path = self.root / f"{name}.json"
+                path.write_text(json.dumps(data), encoding="utf-8")
+                for cmd in (["lint", path, "--root", self.root],
+                            ["build", path, "--root", self.root, "--out", self.root / f"{name}.built.json"]):
+                    rc, text = self.run_tool(*cmd)
+                    self.assertEqual(rc, 1, text)
+                    self.assertNotIn("Traceback", text)
+                    self.assertIn(words, text)
+                self.assertFalse((self.root / f"{name}.built.json").exists())
+        top = self.root / "top.json"
+        top.write_text("[]", encoding="utf-8")
+        rc, text = self.run_tool("lint", top, "--root", self.root)
+        self.assertEqual(rc, 2, text)
+        self.assertIn("must hold one JSON object", text)
+        self.assertNotIn("Traceback", text)
 
     def test_cli_build_lint_export(self):
         self.src([{"id": "k.a", "speaker": "knight", "text": "Halt! Who goes there?"},
@@ -278,6 +345,32 @@ class DialogueExam(unittest.TestCase):
             self.assertIn(key, line)
         self.assertEqual(len(line["reveal"]), len(list(line["text"])))
         self.assertTrue(all(set(c) == {"start", "end", "lines"} for c in line["cues"]))
+
+    # ---- the typewriter reference and its golden vectors
+    def test_reveal_list_counts_only_when_it_fits_the_shown_text(self):
+        reveal = [{"i": i, "t": i * 0.1} for i in range(5)]
+        short = {"text": "Hello there", "duration_s": 2.0, "reveal": reveal}   # 11 characters, 5 reveal entries
+        self.assertEqual(D.reveal_count(short, 2.0), 11)              # the line finishes (it stopped at 5)
+        self.assertEqual(D.reveal_count(short, 0.1), 3)               # 30 characters a second
+        self.assertEqual(D.reveal_count(short, 0.25, length=5), 3)    # a shown text of 5 follows the list
+        self.assertEqual(D.reveal_count({"text": "x" * 140, "duration_s": 2.0}, 1.0), 70)   # fitted to the duration
+
+    def test_golden_vectors_are_current(self):
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            rc = D.main(["vectors", "--check"])
+        self.assertEqual(rc, 0, out.getvalue())
+        cases = json.loads(D.GOLDEN.read_text(encoding="utf-8"))["cases"]
+        for step in cases[0]["steps"]:
+            self.assertEqual(D.reveal_count(step["line"], step["t"]), step["expect"], step["about"])
+        stale = self.root / "stale.json"
+        stale.write_text("{}", encoding="utf-8")
+        old = D.GOLDEN
+        try:
+            D.GOLDEN = stale
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(D.main(["vectors", "--check"]), 1)
+        finally:
+            D.GOLDEN = old
 
 
 if __name__ == "__main__":

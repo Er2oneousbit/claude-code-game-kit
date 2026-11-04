@@ -31,7 +31,18 @@ import pixellab as pl  # noqa: E402
 
 KEY = "pl_exam_DO_NOT_LEAK_5678"
 PNG_SIG = b"\x89PNG\r\n\x1a\n"
-PNG = PNG_SIG + b"fake-png-body"
+
+
+def real_png(w, h):
+    """A valid w x h transparent PNG (the tools that read a PNG's size need a real header)."""
+    raw = b"".join(b"\x00" + b"\x00\x00\x00\x00" * w for _ in range(h))
+    chunk = lambda tag, data: (struct.pack(">I", len(data)) + tag + data  # noqa: E731
+                               + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))
+    return (PNG_SIG + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
+PNG = real_png(1, 1)   # a whole PNG: the tool refuses a bare signature or a cut download (#31)
 LOG = """# Asset Log
 
 | ID | Type | File(s) in repo | Source / URL | Author | License | Attribution text (if required) | AI-assisted? | Modified? | Date added | Notes |
@@ -45,15 +56,6 @@ LOG = """# Asset Log
 CDN = "https://cdn.pixellab.example"                  # stands in for PixelLab's storage host (not the API host)
 TTF = b"\x00\x01\x00\x00" + b"fake-font-body"
 CDN_FILES = {"png": PNG, "gif": b"GIF89a fake", "json": b'{"frames": 6}'}
-
-
-def real_png(w, h):
-    """A valid w x h transparent PNG (the tools that read a PNG's size need a real header)."""
-    raw = b"".join(b"\x00" + b"\x00\x00\x00\x00" * w for _ in range(h))
-    chunk = lambda tag, data: (struct.pack(">I", len(data)) + tag + data  # noqa: E731
-                               + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))
-    return (PNG_SIG + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
 
 
 def b64img(data=PNG):
@@ -245,6 +247,19 @@ class PixelLabExam(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertTrue((self.root / "a_1.png").exists() and (self.root / "a_2.png").exists())
 
+    def test_a_bare_signature_or_cut_png_is_refused(self):
+        # #31: a file that was only the 8-byte PNG signature was saved as an image
+        for data in (PNG_SIG, PNG[:-12], PNG_SIG + PNG[33:]):
+            rc, out = self.run_tool("image", "--text", "x", "--out", "sig.png", fake=Fake(image_bytes=data))
+            self.assertEqual(rc, 1, out)
+            self.assertIn("not a PNG", out)
+            self.assertFalse((self.root / "sig.png").exists())
+        with self.assertRaises(pl.ServiceError):          # a storage-link download
+            pl.check_bytes(PNG_SIG, "tile.png")
+        with self.assertRaises(pl.ServiceError):          # a zip member
+            pl.extract_zip(zip_bytes({"rotations/south.png": PNG_SIG}), self.root / "z")
+        self.assertFalse((self.root / "z" / "rotations" / "south.png").exists())
+
     def test_not_a_png_is_a_service_failure(self):
         rc, out = self.run_tool("image", "--text", "x", "--out", "a.png", fake=Fake(image_bytes=b"<html>oops"))
         self.assertEqual(rc, 1)
@@ -255,6 +270,16 @@ class PixelLabExam(unittest.TestCase):
         rc, out = self.run_tool("image", "--text", "x", "--out", "a.png")
         self.assertEqual(rc, 2)
         self.assertIn("--overwrite", out)
+
+    def test_existing_record_needs_overwrite(self):
+        # #30: the .gen.json beside a new PNG was replaced silently
+        (self.root / "c.gen.json").write_bytes(b"keep")
+        fake = Fake()
+        rc, out = self.run_tool("image", "--text", "x", "--out", "c.png", fake=fake)
+        self.assertEqual(rc, 2, out)
+        self.assertIn("c.gen.json already exists", out)
+        self.assertEqual((self.root / "c.gen.json").read_bytes(), b"keep")
+        self.assertEqual([c for c in fake.calls if c[0] == "POST"], [], "nothing spent")
 
     def test_output_problems_stop_before_spending(self):
         # A folder where one PNG goes, even with --overwrite, and a log without a table: both used to fail after
@@ -379,6 +404,17 @@ class PixelLabExam(unittest.TestCase):
         self.assertEqual(json.loads((self.root / "fx/punch/vfx.json").read_text(encoding="utf-8"))["effect_id"], "fx1")
         self.assertIn("| A-0001 | vfx | ", (self.root / "docs/ASSET_LOG.md").read_text(encoding="utf-8"))
         self.no_key_anywhere()
+
+    def test_files_with_one_base_name_in_a_job_all_survive(self):
+        # #32: two result links with the same base name (and the job's own image) overwrote each other
+        links = {f"{CDN}/x/boom.png": real_png(2, 1), f"{CDN}/y/BOOM.png": real_png(3, 1), f"{CDN}/z/boom.png": real_png(4, 1)}
+        pl.http = lambda m, u, k, b=None: (200, {}, links[u])               # each link sends a different PNG
+        out = self.root / "same"
+        files = pl.save_last({"image": b64img(), "files": dict(zip("abc", links))}, out, KEY, stem="boom")
+        self.assertEqual(len({f.name.lower() for f in files}), 4, [f.name for f in files])
+        self.assertEqual(sorted(p.name for p in out.iterdir()), sorted(f.name for f in files))
+        self.assertEqual((out / "boom.png").read_bytes(), PNG, "the job's image is kept")
+        self.assertEqual(sorted(f.read_bytes() for f in files[1:]), sorted(links.values()), "every link has its own file")
 
     def test_download_link_must_be_https_and_match_its_type(self):
         with self.assertRaises(pl.ServiceError):

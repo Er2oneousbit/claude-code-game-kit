@@ -56,6 +56,7 @@ def png_with_text(w=4, h=4):
 
 class State:
     uploads, prompts = [], []
+    interrupted = False   # /history answers as ComfyUI does for a job cancelled while it ran
 
 
 class FakeComfy(http.server.BaseHTTPRequestHandler):
@@ -82,6 +83,11 @@ class FakeComfy(http.server.BaseHTTPRequestHandler):
             prefix = next(n["inputs"]["filename_prefix"] for n in State.prompts[int(pid)].values()
                           if n["class_type"] == "SaveImage")
             sub, _, stem = prefix.rpartition("/")
+            if State.interrupted:
+                return self._send(200, {pid: {"status": {"completed": False, "status_str": "error", "messages": [
+                    ["execution_start", {"prompt_id": pid}],
+                    ["execution_interrupted", {"prompt_id": pid, "node_id": "12", "node_type": "SamplerCustomAdvanced"}]]},
+                    "outputs": {}}})
             return self._send(200, {pid: {"status": {"completed": True, "status_str": "success"},
                                           "outputs": {"9": {"images": [{"filename": f"{stem}_00001_.png",
                                                                         "subfolder": sub, "type": "output"}]}}}})
@@ -325,6 +331,25 @@ class DotworkExam(unittest.TestCase):
         self.assertTrue(data.startswith(PNG_SIG))
         self.assertNotIn(b"tEXt", data)
         self.assertNotIn(b"secret.safetensors", data)
+
+    def test_cancelled_job_names_the_render_and_says_rerun_resumes(self):
+        # A Cancel in ComfyUI's queue (or POST /interrupt) read as "failed: no message", like a crash
+        self.bind()
+        import engine
+        State.interrupted = True
+        try:
+            with self.assertRaises(fcore.JobError) as cm:
+                engine.run(engine.klein("a lamp", 1, 64, 64, "dotwork_work/hero/walk/f"))
+        finally:
+            State.interrupted = False
+        msg = str(cm.exception)
+        self.assertTrue(msg.startswith("hero/walk/f: cancelled in ComfyUI"), msg)
+        self.assertIn("interrupted at node 12", msg)
+        self.assertIn("Run the same command again to resume", msg)
+        self.assertNotIn("no message", msg)
+        self.assertEqual(engine.job_name({"1": {"class_type": "SaveImage", "inputs": {"filename_prefix": "x/y"}}}),
+                         "x/y")
+        self.assertEqual(engine.job_name({}), "ComfyUI job")
 
     def test_remote_server_refused(self):
         make_project(self.tmp, {"comfyui": {"url": "http://10.1.2.3:8188"}})
@@ -683,6 +708,21 @@ class DotworkExam(unittest.TestCase):
         self.assertIn("A-0001 updated in", out)
         with open(os.path.join(self.tmp, "docs", "ASSET_LOG.md"), encoding="utf-8") as f:
             self.assertEqual(len([r for r in f.read().splitlines() if r.startswith("| A-")]), 1)
+        # the "Modified?" column: yes for a polish note from either editor, also after an earlier note (#101)
+        man = os.path.join(self.tmp, "assets_src", "dotwork", "manifest_ui.json")
+        with open(man, encoding="utf-8") as f:
+            original = f.read()
+        for note, want in ((None, "no"), ("hand-polished in Pixelorama", "yes"),
+                           ("qa: two colours merged; hand-polished in Aseprite", "yes")):
+            data = json.loads(original)
+            if note:
+                data["assets"][0]["note"] = note
+            with open(man, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+            code, out = self.run_dotwork("log", "--pack", "ui", "--project", self.tmp, "--dry-run")
+            self.assertEqual(code, 0, out)
+            row = next(ln for ln in out.splitlines() if ln.startswith("| A-0001 "))
+            self.assertEqual(row.split("|")[9].strip(), want, note)
 
     def test_engine_none_drops_godot_rows(self):
         make_project(self.tmp, {"comfyui": {"url": self.url}})

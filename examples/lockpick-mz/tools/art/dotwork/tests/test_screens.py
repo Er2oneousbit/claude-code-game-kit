@@ -121,6 +121,15 @@ class ScreensExam(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn('"lines" or "file"', out)
 
+    def test_backdrop_godot_ignores_is_refused(self):
+        # Kit Godot games ship assets_src/.gdignore (#29): a scene linking a file in there opens with a missing resource
+        os.makedirs(os.path.join(self.tmp, "assets_src"), exist_ok=True)
+        open(os.path.join(self.tmp, "assets_src", ".gdignore"), "w").close()
+        code, out = self.pack([{"name": "title", "kind": "title", "backdrop": "assets_src/bd.png", "title": "Iron Oven"}])
+        self.assertEqual(code, 2, out)
+        self.assertIn("'assets_src/bd.png' is in assets_src/, which Godot does not import", out)
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "assets", "art", "screens", "title", "screen_title.tscn")))
+
 
 class CaptureExam(unittest.TestCase):
     def setUp(self):

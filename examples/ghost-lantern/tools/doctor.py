@@ -16,6 +16,9 @@
 #           and carry deny rules; UTF-8 output, tolerant ASSET_LOG read, each check isolated.
 #           Audit pass 7: shared pruning walk with check_links (Unity/VS/CMake caches skipped), kit tokens
 #           only, --ignore, HANDOFF 'Last updated' date, filled sample row counts, no .uasset noise
+# Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): the asset-log check finds public/assets (web, web-3d)
+#           and game/img (RPG Maker MZ) too; the placeholder scan reads the overlays' source files and reports the
+#           profile tokens ({{FOOTER}} and the like) as well
 # ---------------------------------------------------------------------------
 import argparse
 import datetime
@@ -52,10 +55,19 @@ REQUIRED = [
     "tools/dev.py",
     ".claude/settings.json",
 ]
-# Only the kit's own tokens: game data may use {{PLAYER_NAME}} style templates of its own
-PLACEHOLDER_RE = re.compile(r"\{\{(?:GAME_NAME|GAME_SLUG|ENGINE|ENGINE_LABEL|DATE|AUTHOR)\}\}")
-TEXT_EXT = {".md", ".json", ".py", ".txt", ".toml", ".cfg", ".yml", ".yaml"}
+# Only the kit's own tokens (the profile ones too): game data may use {{PLAYER_NAME}} style templates of its own
+PLACEHOLDER_RE = re.compile(r"\{\{(?:GAME_NAME|GAME_SLUG|ENGINE|ENGINE_LABEL|DATE|AUTHOR|FOOTER|PROFILE_STYLE|"
+                            r"FOOTER_RULE)\}\}")
+# Docs and config, plus the source files the overlays ship: a kit file copied back by hand is still a raw template
+TEXT_EXT = {".md", ".json", ".py", ".txt", ".toml", ".cfg", ".yml", ".yaml", ".ini",
+            ".gd", ".tscn", ".tres", ".godot", ".gdshader",              # Godot
+            ".cs", ".asmdef", ".uplugin", ".uproject",                     # Unity, Unreal
+            ".cpp", ".hpp", ".h", ".rs", ".lua",                           # C++, Bevy, LÖVE
+            ".ts", ".js", ".mjs", ".html", ".css"}                         # web, web-3d, RPG Maker MZ plugins
 HANDOFF_STALE_DAYS = 14
+# Where each overlay keeps its media (assets_dir in engines/*/engine.json): Godot, Bevy, C++, LÖVE; Unity; Unreal;
+# web and web-3d; RPG Maker MZ. The first one present is checked when --assets-dir is not given
+ASSET_DIRS = ("assets", "Assets", "Content", "public/assets", "game/img")
 MEDIA_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".tga", ".psd", ".aseprite", ".pxo", ".ogg", ".wav", ".mp3",
              ".flac", ".aif", ".aiff", ".ttf", ".otf", ".woff", ".woff2", ".glb", ".gltf", ".fbx", ".obj", ".blend"}
 # Template files legitimately mention placeholders in prose (they document them).
@@ -148,6 +160,24 @@ def check_assets(warnings, assets_dir, debug):
         warnings.append(f"{len(files)} media file(s) under {assets_dir}/ but ASSET_LOG.md has no real entries ({hint})")
 
 
+def default_assets_dir(root):
+    """The first of ASSET_DIRS that exists, matched with exact case at every level (on Linux "assets" and Unity's
+    "Assets" are different folders, and Windows would match either); "assets" when none does."""
+    for cand in ASSET_DIRS:
+        here = root
+        for part in cand.split("/"):
+            try:
+                if part not in os.listdir(here):
+                    break
+            except OSError:
+                break
+            here = here / part
+        else:
+            if here.is_dir():
+                return cand
+    return "assets"
+
+
 def check_doc_links(warnings, debug, ignore):
     """Warn about markdown links and backticked paths that point nowhere (tools/check_links.py)."""
     broken = check_links.scan(ROOT, [], [], ignore)
@@ -164,7 +194,8 @@ def main():
     ap.add_argument("--debug", action="store_true", help="print extra detail about what is being checked")
     ap.add_argument("--strict", action="store_true", help="treat warnings as failures")
     ap.add_argument("--assets-dir", default=None,
-                    help="folder to scan for media files (default: the first of assets, Assets (Unity), Content (Unreal))")
+                    help="folder to scan for media files (default: the first of assets, Assets (Unity), Content "
+                         "(Unreal), public/assets (web, web-3d), game/img (RPG Maker MZ))")
     ap.add_argument("--ignore", action="append", default=[],
                     help="folder glob to skip in the placeholder and link checks, e.g. --ignore localization (repeatable; "
                          "tools/check_links.ignore is read too)")
@@ -175,9 +206,7 @@ def main():
         except (AttributeError, ValueError):
             pass
     if args.assets_dir is None:
-        # Exact-case match: on Linux "assets" and Unity's "Assets" are different folders
-        names = set(os.listdir(ROOT))
-        args.assets_dir = next((d for d in ("assets", "Assets", "Content") if d in names), "assets")
+        args.assets_dir = default_assets_dir(ROOT)
 
     problems, warnings = [], []
     checks = [

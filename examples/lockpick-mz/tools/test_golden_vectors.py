@@ -9,6 +9,7 @@
 # ---------------------------------------------------------------------------
 import json
 import math
+import struct
 import sys
 import tempfile
 import unittest
@@ -29,8 +30,22 @@ class VectorFiles(unittest.TestCase):
             gv.main(["--write", "--out", d])
             self.assertEqual(first, {p.name: p.read_bytes() for p in Path(d).iterdir()})
 
+    def test_tolerance_tells_a_float32_port_from_a_64_bit_one(self):
+        # Every port is 64-bit. A port that stored its results as float32 must fail the exam: the ease and
+        # hitstop vectors carry values near 1 and 0.1, where float32 rounding moves them by up to 6e-8.
+        juice = json.loads((gv.OUT_DIR / "juice.json").read_text(encoding="utf-8"))
+        tol = juice["tolerance"]
+
+        def f32(x):
+            return struct.unpack("f", struct.pack("f", x))[0]
+        for kind, values in (("ease", [p[2] for c in juice["cases"] if c["type"] == "ease" for p in c["points"]]),
+                             ("hitstop", [v for c in juice["cases"] if c["type"] == "hitstop" for st in c["steps"]
+                                          if "expect" in st for v in st["expect"].values()])):
+            worst = max(abs(f32(v) - v) for v in values)
+            self.assertGreater(worst, tol, f"{kind}: a float32 port would pass at tolerance {tol}")
+
     def test_every_case_has_a_type_and_name(self):
-        for build in (gv.build_juice, gv.build_shell):
+        for build in (gv.build_juice, gv.build_shell, gv.build_telemetry):
             data = json.loads(gv.render(build()))
             self.assertEqual(data["version"], gv.VECTOR_VERSION)
             for case in data["cases"]:
@@ -127,6 +142,23 @@ class Shell(unittest.TestCase):
         self.assertEqual((env, source), (None, "none"))
         self.assertIn("primary: newer", problems)
 
+    def test_non_finite_numbers_are_problems_not_crashes(self):
+        """#132: int(Infinity) and int(NaN) raised out of the resolution rule and the save version check."""
+        for text in ('{"display": {"resolution": [Infinity, 720]}}', '{"display": {"resolution": [1280, NaN]}}',
+                     '{"display": {"resolution": [-Infinity, 720]}}'):
+            s, problems = gv.settings_load(text)
+            self.assertEqual(s["display"]["resolution"], gv.DEFAULT_SETTINGS["display"]["resolution"], text)
+            self.assertEqual(problems, ["display.resolution"], text)
+        for const in ("Infinity", "-Infinity", "NaN"):
+            env, source, problems = gv.save_load('{"format": "save", "version": %s, "data": {}}' % const, None)
+            self.assertEqual((env, source), (None, "none"), const)
+            self.assertEqual(problems, ["primary: bad version", "backup: missing"], const)
+
+    def test_language_length_counts_code_points(self):
+        wide = "\U0001D523"                          # one code point, two UTF-16 units
+        self.assertEqual(gv.settings_load(json.dumps({"language": "x-" + wide * 6}))[0]["language"], "x-" + wide * 6)
+        self.assertEqual(gv.settings_load(json.dumps({"language": wide}))[0]["language"], "en")
+
     def test_pseudo_keeps_placeholders_and_grows(self):
         out = gv.pseudo("Hello {name}, you have %d coins")
         self.assertIn("{name}", out)
@@ -138,6 +170,21 @@ class Shell(unittest.TestCase):
         self.assertEqual(gv.tr(gv.TABLES, "de", "nope"), "nope")
         self.assertEqual(gv.tr_plural(gv.TABLES, "fr", "apples", 0), "0 pomme")
         self.assertEqual(gv.tr_plural(gv.TABLES, "ja", "apples", 1), "りんご1個")
+
+
+class Telemetry(unittest.TestCase):
+    def test_one_column_set(self):
+        self.assertEqual(gv.TELEMETRY_HEADER.split(","), ["time", "session", "event", "detail"])
+        self.assertEqual(len(gv.telemetry_row(0, "00000000", "quit").split(",")), 4)
+
+    def test_time_is_utc_whole_seconds(self):
+        self.assertEqual(gv.telemetry_time(0), "1970-01-01T00:00:00Z")
+        self.assertEqual(gv.telemetry_time(59.99), "1970-01-01T00:00:59Z")     # dropped, not rounded
+
+    def test_fields_are_quoted_only_when_needed(self):
+        self.assertEqual(gv.csv_field("plain"), "plain")
+        self.assertEqual(gv.csv_field('a "b", c'), '"a ""b"", c"')
+        self.assertEqual(gv.csv_field("x\ny"), '"x\ny"')
 
 
 if __name__ == "__main__":

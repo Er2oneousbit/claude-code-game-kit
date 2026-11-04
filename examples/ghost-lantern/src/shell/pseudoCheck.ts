@@ -9,11 +9,14 @@
 //           so `dev.py smoke --locale pseudo --drive pseudo` exits 1).
 // Notes   : Browser only (layout APIs). Hidden screens, display:none and text scrolled out of a scroll box do not
 //           count as visible. Inline spans have no box of their own: only their panel and the window are checked.
+//           Text inside a [data-settling] element (a subtitle line still typing) is skipped: it grows every frame,
+//           so it is checked once complete, and a check never counts a line that is half there.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 
 // ---- Tunables ----------------------------------------------------------------
 const SLACK_PX = 1; // sub-pixel rounding is not truncation
+export const SETTLING_ATTR = "data-settling"; // on an element whose text is still changing (typewriter)
 
 export type CheckFailure = { id: string; reason: string; text: string };
 
@@ -49,7 +52,7 @@ export function checkScreen(root: HTMLElement): { labels: number; failures: Chec
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
     const text = (n.textContent ?? "").trim();
     const parent = n.parentElement;
-    if (!text || !parent || !visible(parent)) continue;
+    if (!text || !parent || parent.closest(`[${SETTLING_ATTR}]`) || !visible(parent)) continue;
     const mark = parent.closest<HTMLElement>("[data-tr],[data-val]");
     if (!mark || !root.contains(mark)) {
       failures.push({ id: describe(parent), reason: "not passed through tr (no data-tr / data-val mark)", text });

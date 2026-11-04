@@ -17,7 +17,8 @@
 #           --size sets the WIDTH in px (height follows the aspect ratio); --scale multiplies the
 #           page or object size at 96 dpi. --id accepts wildcards, matched against --list-ids.
 #           Inkscape exits 0 even when an export is skipped, so this script checks that every expected
-#           file was written (fresh and not empty) and reports Inkscape's "Skipping" lines.
+#           file was written (fresh and not empty) and reports Inkscape's "Skipping" lines; a nonzero exit
+#           fails the run as well.
 #           Text uses the fonts installed on THIS machine: convert text to paths in the SVG for art that
 #           must look the same everywhere. Tested with Inkscape 1.4 on Windows (tools/art/test_svg_export.py).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -28,7 +29,8 @@
 #   plan outputs (target, width) per page or id and per size/scale; refuse overwrites
 #   write an actions file: export-id / export-id-only / export-width / export-filename / export-do per output
 #   run inkscape once per svg with --actions-file, cwd = output folder (plain file names in actions)
-#   verify each output exists, is newer than the run and not empty; report missing ones
+#   verify each output exists, was written by this run (new, or its timestamp moved) and is not empty; a nonzero
+#   Inkscape exit is a failure too; report missing ones
 import argparse
 import fnmatch
 import os
@@ -38,7 +40,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
 
 DEBUG = False
@@ -228,7 +229,9 @@ def main(argv=None):
                 print(f"[dry-run] {svg.name}{' #' + t if t else ''} -> {o.name} ({w} px wide)")
             continue
         out_dir.mkdir(parents=True, exist_ok=True)
-        start = time.time() - 1
+        # an --overwrite target is fresh only if its timestamp moved: "newer than the run" passed an old file
+        # written in the last second when Inkscape failed without replacing it
+        before = {o: (o.stat().st_mtime_ns if o.exists() else None) for o, _, _ in plan}
         with tempfile.TemporaryDirectory(prefix="svg_export_") as tmp:
             actions = Path(tmp) / "actions.txt"
             actions.write_text(actions_for(plan, args), encoding="utf-8")
@@ -237,8 +240,12 @@ def main(argv=None):
         skipped = [l.strip() for l in out.splitlines() if "Skipping" in l or "not found" in l]
         if DEBUG or rc != 0:
             print(out.rstrip())
+        if rc != 0:                                       # a crash or error exit fails the run, files or not
+            print(f"[FAIL] {svg.name}: Inkscape exited with {rc}")
+            failed += 1
         for o, t, w in plan:
-            fresh = o.is_file() and o.stat().st_size > 0 and o.stat().st_mtime >= start
+            fresh = (o.is_file() and o.stat().st_size > 0
+                     and (before[o] is None or o.stat().st_mtime_ns != before[o]))
             print(f"[{' OK ' if fresh else 'FAIL'}] {o.name} ({w} px wide){'' if fresh else ' not written'}")
             failed += 0 if fresh else 1
         for line in skipped:

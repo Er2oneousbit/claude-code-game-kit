@@ -35,7 +35,7 @@ When done: list what is built, what you assumed, what is NOT built, how to run i
 ## Answering the clarifying questions
 - Getting questions back is good: the AI understood the assignment. Answer fast; it is a prototype.
 - Say "use your best judgment" where you do not care. Be precise only where the test depends on it, above all **controls** (keys and gamepad).
-- **Death rule:** prefer "restart the current room" unless the death rule is what you are testing. Full resets feel bad in play (E09).
+- **Death rule:** prefer "restart the current room" unless the death rule is what you are testing. Full resets feel bad in play (tip, E09).
 
 ## First build review
 - Expect crude placeholder art and code-made sounds. Judge the loop, not the look.

@@ -18,6 +18,7 @@ import json
 import math
 import os
 import shutil
+import struct
 import sys
 import tempfile
 import unittest
@@ -157,7 +158,42 @@ class AudioIOExam(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertNotIn("Traceback", out)
 
+    def adpcm_wav(self):
+        """A WAV in a sample format wavfile.py does not read (IMA ADPCM, tag 0x11)."""
+        fmt = struct.pack("<HHIIHH", 0x11, 1, RATE, RATE // 2, 256, 4)
+        body = b"WAVE" + b"fmt " + struct.pack("<I", len(fmt)) + fmt + b"data" + struct.pack("<I", 512) + b"\0" * 512
+        path = self.dir / "adpcm.wav"
+        path.write_bytes(b"RIFF" + struct.pack("<I", len(body)) + body)
+        return path
+
+    def test_a_wav_format_wavfile_does_not_read_names_ffmpeg(self):
+        # #102: the error named no way out, and ffmpeg was never tried for a RIFF/WAVE file
+        self.no_ffmpeg()
+        wav = self.adpcm_wav()
+        for read in (audioio.read_audio, audioio.stream_audio, loudness.measure_file):
+            with self.assertRaises((audioio.AudioIOError, loudness.ToolError)) as ctx:
+                read(wav)
+            self.assertIn("ffmpeg", str(ctx.exception), read.__name__)
+        rc, out = self.run_tool("info", wav)
+        self.assertEqual(rc, 2, out)
+        self.assertNotIn("Traceback", out)
+
     # ---- with a stand-in ffmpeg
+    def test_a_wav_format_wavfile_does_not_read_goes_through_ffmpeg(self):
+        decoded = self.dir / "decoded_by_stub.wav"
+        write_wav(decoded, tone(seconds=1.0, amp=0.25), RATE)
+        self.stub_ffmpeg(decoded)
+        wav = self.adpcm_wav()
+        chans, rate = audioio.read_audio(wav)
+        self.assertEqual((len(chans), rate, len(chans[0])), (1, RATE, RATE))
+        rate, nch, chunks = audioio.stream_audio(wav)
+        self.assertEqual(sum(len(p[0]) for p in chunks()), RATE)
+        self.assertIsNotNone(loudness.measure_file(wav, want_tp=False)["integrated_lufs"])
+        self.assertEqual(len(self.stub_calls()), 3)
+        rc, out = self.run_tool("info", wav)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("read by ffmpeg", out)
+
     def test_decode_and_encode_command_lines(self):
         decoded = self.dir / "decoded_by_stub.wav"
         write_wav(decoded, [s for frame in zip(tone(hz=220), tone(hz=330)) for s in frame], RATE, channels=2)
@@ -200,6 +236,25 @@ class AudioIOExam(unittest.TestCase):
         import music
         samples, rate, ch = music.read_interleaved(mp3)
         self.assertEqual((ch, len(samples)), (1, 2 * RATE))
+
+    def test_stream_audio_hands_out_chunks_and_deletes_ffmpegs_wav(self):
+        decoded = self.dir / "decoded_by_stub.wav"
+        write_wav(decoded, tone(seconds=2.5, amp=0.25), RATE)
+        self.stub_ffmpeg(decoded)
+        mp3 = self.dir / "long.mp3"
+        mp3.write_bytes(b"ID3\x04" + b"\0" * 200)
+        made, real = [], tempfile.mkdtemp
+        try:
+            tempfile.mkdtemp = lambda *a, **k: made.append(real(*a, **k)) or made[-1]
+            rate, nch, chunks = audioio.stream_audio(mp3)
+            parts = list(chunks())
+        finally:
+            tempfile.mkdtemp = real
+        self.assertEqual((rate, nch), (RATE, 1))
+        self.assertTrue(all(len(p[0]) <= audioio.CHUNK_FRAMES for p in parts) and len(parts) > 1)
+        self.assertEqual([s for p in parts for s in p[0]], audioio.read_audio(mp3)[0][0])
+        self.assertEqual(len(made), 1)
+        self.assertFalse(Path(made[0]).exists(), "ffmpeg's temporary WAV is deleted once read")
 
     # ---- a real ffmpeg, when there is one
     @unittest.skipUnless(shutil.which("ffmpeg"), "no ffmpeg on PATH: the real round trip is skipped")

@@ -177,6 +177,12 @@ class PixelSpriteExam(unittest.TestCase):
         (self.dir / "cut.png").write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR\x00\x00")
         code, out = run("check", str(self.dir / "cut.png"))
         self.assertEqual(code, 2, out)
+        # #31: a palette whose length is not a multiple of 3 crashed check with an IndexError
+        bad = self.png_with("plte.png", struct.pack(">IIBBBBB", 4, 4, 8, 3, 0, 0, 0),
+                            zlib.compress((b"\x00" + b"\x01" * 4) * 4), plte=b"\xff\x00\x00\x00\xff")
+        code, out = run("check", str(bad), "--cell", "4")
+        self.assertEqual(code, 2, out)
+        self.assertIn("PLTE", out)
 
     def test_a_dark_figure_with_an_outline_can_pass(self):
         dark = self.sprite_file("wraith", '''

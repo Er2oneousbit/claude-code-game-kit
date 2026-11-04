@@ -4,15 +4,27 @@
 #           yes. Nothing is sent anywhere; the file stays in the game's data folder.
 # Usage   : Telemetry.append(path, GameSettings.telemetry_allowed(settings), session_id, "level_start", "1-2")
 #           In the game: Shell.telemetry("level_start", "1-2")
-# Notes   : Consent "unset" (never asked, or "Later") and "no" both mean no file at all. Columns: time (UTC, ISO
-#           8601), session (random per launch), event, detail. To send data somewhere, read docs/ENGINE_FLOW.md
-#           "Telemetry" first: an endpoint changes what the privacy policy must say.
+# Notes   : Consent "unset" (never asked, or "Later") and "no" both mean no file at all. Columns, the same in
+#           every engine: time (UTC, ISO 8601, whole seconds, 2026-11-02T14:05:03Z), session (8 hex digits, random
+#           per launch), event, detail. Tested against data/golden/telemetry.json. To send data somewhere, read
+#           docs/ENGINE_FLOW.md "Telemetry" first: an endpoint changes what the privacy policy must say.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 class_name Telemetry
 extends RefCounted
 
 const HEADER: String = "time,session,event,detail"
+const SESSION_LENGTH: int = 8 # hex digits in a session id
+
+
+static func new_session() -> String:
+	# A random id per launch, so rows of one run can be grouped
+	return "%08x" % randi()
+
+
+static func time_string(unix_s: float) -> String:
+	# Whole seconds: a fraction is dropped, not rounded (as the reference does)
+	return Time.get_datetime_string_from_unix_time(int(floor(unix_s))) + "Z"
 
 
 static func csv_field(value: String) -> String:
@@ -40,6 +52,6 @@ static func append(path: String, allowed: bool, session: String, event: String, 
 		f.store_line(HEADER)
 	else:
 		f.seek_end()
-	f.store_line(row(Time.get_datetime_string_from_system(true), session, event, detail))
+	f.store_line(row(time_string(Time.get_unix_time_from_system()), session, event, detail))
 	f.close()
 	return true

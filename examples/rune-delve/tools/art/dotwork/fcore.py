@@ -211,6 +211,23 @@ def source_path(p):
     return full
 
 
+def linked_res(full, what):
+    """res:// path of a game file a generated scene loads (a backdrop, a logo, a font, a sprite). Refused when a folder
+    between it and the game root holds a .gdignore: Godot never imports such a file, so the scene would open with a
+    missing resource. Kit Godot games ship assets_src/.gdignore (sources and review sheets stay out of builds)."""
+    root = os.path.realpath(PROJECT)
+    d = os.path.dirname(os.path.realpath(full))
+    while _within(d, root):
+        if os.path.exists(os.path.join(d, ".gdignore")):
+            rel = os.path.relpath(d, root).replace(os.sep, "/")
+            raise ToolError(f"{what} {os.path.relpath(full, PROJECT).replace(os.sep, '/')!r} is in {rel}/, which Godot "
+                            f"does not import (.gdignore): copy it under assets/ and point the spec there")
+        if d == root:
+            break
+        d = os.path.dirname(d)
+    return "res://" + os.path.relpath(full, PROJECT).replace(os.sep, "/")
+
+
 def src(conf, *parts):
     """<project>/<src_dir>/... (editable sources, previews, review sheets)."""
     return os.path.normpath(os.path.join(PROJECT, conf["fixed"]["src_dir"], *parts))

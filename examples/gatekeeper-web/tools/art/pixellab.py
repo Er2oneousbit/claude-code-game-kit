@@ -284,10 +284,17 @@ def b64decode(text, what):
         raise ServiceError(f"PixelLab sent broken base64 data for {what}")
 
 
+def png_whole(data):
+    """True for a PNG that starts with its IHDR chunk and ends with IEND: a bare 8-byte signature or a download cut
+    short is not an image (both used to be saved as one)."""
+    return (data.startswith(PNG_MAGIC) and len(data) >= len(PNG_MAGIC) + 25 + 12
+            and data[8:16] == b"\x00\x00\x00\x0dIHDR" and data[-12:-4] == b"\x00\x00\x00\x00IEND")
+
+
 def png_from_b64(img, path):
     """Write one Base64Image (or a bare base64 string) to path as PNG. Returns the SHA-256."""
     data = b64decode(img["base64"] if isinstance(img, dict) else img, path.name)
-    if not data.startswith(PNG_MAGIC):
+    if not png_whole(data):
         raise ServiceError(f"PixelLab sent something that is not a PNG for {path.name}")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
@@ -323,8 +330,10 @@ def extract_zip(data, out_dir):
                 raise ServiceError(f"refusing zip member outside {out_dir}: {info.filename}")
             if not allowed_name(target.name):
                 raise ServiceError(f"refusing zip member with an unexpected name or type: {info.filename}")
+            body = zf.read(info)
+            check_bytes(body, target.name)      # a zip member is a download too
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(zf.read(info))
+            target.write_bytes(body)
             files.append(target)
     return files
 
@@ -369,7 +378,7 @@ MAGIC = {".png": (PNG_MAGIC,), ".gif": (b"GIF87a", b"GIF89a"), ".zip": (b"PK\x03
 def check_bytes(data, name):
     """Refuse a download whose content does not match its file type."""
     ext = Path(name).suffix.lower()
-    if ext in MAGIC and not data.startswith(MAGIC[ext]):
+    if (ext in MAGIC and not data.startswith(MAGIC[ext])) or (ext == ".png" and not png_whole(data)):
         raise ServiceError(f"PixelLab sent something that is not a {ext} file for {name}")
     if ext == ".json":
         try:
@@ -383,6 +392,14 @@ def safe_name(url, fallback):
     name = urllib.parse.unquote(urllib.parse.urlparse(url).path.rsplit("/", 1)[-1])
     name = "".join(c for c in name if c.isalnum() or c in "._-")
     return name if name and allowed_name(name) else fallback
+
+
+def unique_name(name, i, used):
+    """name, or <stem>_<i><suffix> when an earlier file of the same job already took it (case-insensitive: Windows)."""
+    if name.lower() in used:                             # two links with one basename must not overwrite each other
+        name = f"{Path(name).stem}_{i:02d}{Path(name).suffix}"
+    used.add(name.lower())
+    return name
 
 
 def fetch_url(url, key, path):
@@ -444,8 +461,9 @@ def save_last(last, out, key, stem="image"):
     images = last.get("images") or []
     for i, img in enumerate(images):
         files.append(_save(img, out / (f"{stem}.png" if len(images) == 1 and not files else f"{stem}_{i:02d}.png")))
+    used = {f.name.lower() for f in files}
     for i, url in enumerate(url_values(last.get("files"))):
-        files.append(fetch_url(url, key, out / safe_name(url, f"file_{i:02d}.bin")))
+        files.append(fetch_url(url, key, out / unique_name(safe_name(url, f"file_{i:02d}.bin"), i, used)))
     if last.get("ttf_base64"):
         data = b64decode(last["ttf_base64"], "the font")
         check_bytes(data, "font.ttf")
@@ -794,11 +812,7 @@ def run_job(kind, key, endpoint, body, out, args):
             raise ServiceError("the tiles finished without download links")
         used, files = set(), []
         for i, u in enumerate(links):
-            name = safe_name(u, f"tile_{i:02d}.png")
-            if name.lower() in used:                     # two links with one basename must not overwrite each other
-                name = f"{Path(name).stem}_{i:02d}{Path(name).suffix}"
-            used.add(name.lower())
-            files.append(fetch_url(u, key, out / name))
+            files.append(fetch_url(u, key, out / unique_name(safe_name(u, f"tile_{i:02d}.png"), i, used)))
         rules = out / "tiles_pro.json"
         rules.write_text(json.dumps({"kind": res.get("kind"), "tile_rules": res.get("tile_rules"),
                                      "files": [f.name for f in files]}, indent=2) + "\n", encoding="utf-8")
@@ -909,6 +923,9 @@ def check_outputs(args, kind, variants):
             raise ToolError(f"{out} is a folder; `{kind}` writes one file there")
         if out.exists() and not args.overwrite and (kind in FILE_KINDS or any(out.iterdir())):
             raise ToolError(f"{out} already exists (--overwrite to replace it)")
+        side = out.with_suffix(".gen.json")              # a folder's record is inside it (checked above)
+        if kind in FILE_KINDS and side.exists() and not args.overwrite:
+            raise ToolError(f"{side} already exists (--overwrite to replace it)")
         if args.log:
             root = Path(args.root).resolve()
             if not (root / fetch_asset.ASSET_LOG).is_file():

@@ -83,7 +83,11 @@ track on the sample the plan names.
 - `quantize`: `immediate`, `beat`, `bar`, `phrase` (`phrase_bars`, default 4) or `loop_end`. `fade_ms` fades the old
   track out from the switch point. `sync` enters the new track at the same place in its bar (same BPM and meter). A
   `stinger` plays at the switch point and the new track enters after the stinger's `bars`. Rules match the exact
-  pair first, then `"from": "*"`, then `"to": "*"`, then `default_transition`.
+  pair first, then `"from": "*"`, then `"to": "*"`, then `default_transition`. The engines' directors read the file
+  as it is and do not validate it: run `validate` after every edit. An unknown quantize or stinger name is an error
+  in every engine (`"stinger": ""` means none); a `sync` that is not `true` or `false`, or a `phrase_bars` that is not
+  a whole number, is caught only by `validate`. `validate` checks `default_transition` like any rule, since every
+  rule inherits it.
 - `python tools/audio/wavesmith/wavesmith.py music loop raw/explore.wav --bpm 96 --bars 9 --out assets/audio/music/explore_pads.wav` cuts
   a render or recording to whole bars, adds what rings past the loop end back onto the start (no click, the tail is
   kept) and writes the loop point on the grid (a 'smpl' chunk Godot and Unity read). `validate data/music.json --root
@@ -264,9 +268,11 @@ track on the sample the plan names.
 
 **Edit and process**
 - `Audacity` (free), `Reaper`, `Ocenaudio`. Normalize, trim silence, add tiny fades to avoid clicks.
-- Formats: every Wavesmith tool that reads audio (loudness, events audit, dialogue, music, sets) reads WAV, FLAC and
-  OGG Vorbis with nothing installed, and MP3, Opus, AAC or anything else ffmpeg reads when ffmpeg is installed
-  (on PATH, or `WAVESMITH_FFMPEG` naming it). Files are recognised by their bytes, not their names.
+- Formats: every Wavesmith tool that reads audio (loudness, events audit, dialogue, music, sets) reads WAV (mono or
+  stereo, 8 / 16 / 24 / 32-bit PCM or 32 / 64-bit float, plain or extensible header), FLAC and OGG Vorbis with nothing
+  installed, and MP3, Opus, AAC or anything else ffmpeg reads when ffmpeg is installed (on PATH, or
+  `WAVESMITH_FFMPEG` naming it), including a WAV in another sample format such as ADPCM. Files are recognised by
+  their bytes, not their names.
   - `wavesmith.py formats check`: what this machine can read and write.
   - `wavesmith.py formats info <file>`: format, rate, channels, length, peak, and which decoder read it.
   - `wavesmith.py formats convert <file> --out <file>.wav`: anything readable to WAV, with nothing installed.
@@ -319,6 +325,8 @@ many copies may sound at once, a minimum gap between plays, and how far dialogue
 - `pick`: `random_no_repeat` (default), `shuffle` (every take once per round, no repeat across rounds),
   `sequence`, or `random`. `steal`: `oldest` (default: the oldest copy stops) or `none` (the new play is refused).
   `max_voices` defaults to 8, `pitch_semitones` and `volume_db` to no change. Event ids are lowercase ASCII.
+  `seed` is a whole number from 0 to 2^53 - 1 (9007199254740991): engines that read JSON numbers as doubles hold
+  nothing larger exactly.
 - Ducking is a straight line in dB: down to `depth_db` over `attack_ms` while anything plays on the trigger bus,
   back over `release_ms` after it stops; a new line during the release dips again from where it is.
 - `python tools/audio/wavesmith/wavesmith.py events validate data/audio_events.json --root assets/audio` checks the file and that
@@ -440,12 +448,17 @@ only ever added), and into SRT or WebVTT files for trailers and video captures.
 ```
 - Typewriter reveal, one time per character: exact from a babble.py `.timeline.json`; estimated from any other
   voice file (spread over its voiced part with pauses at punctuation: right for a typewriter, not for lip sync); at
-  the speaker's `cps` when a line has no audio yet.
+  the speaker's `cps` when a line has no audio yet. The engines use the reveal list only when it has one entry per
+  character of the text they show; otherwise (a translation, the pseudo locale, a list built for another take) they
+  type at 30 characters a second, faster when that would not finish within the line's `duration_s`, so a line always
+  ends fully shown (`dialogue.py` `reveal_count`, the reference; Godot, LÖVE, web and web 3D follow
+  data/golden/dialogue.json, written by `dialogue.py vectors --write`).
 - Subtitle cues follow the published guidelines (checked 2026-11-01): at most 40 characters a line (Xbox
   Accessibility Guideline 104 calls longer lines long; Netflix allows 42), at most 2 lines, line breaks at
   punctuation and bottom-heavy, at least 5/6 s and at most 7 s on screen, and a reading speed of at most 20
   characters a second (Netflix, adults; `--audience children` uses 17). Exports name the speaker whenever it changes
-  and again after a minute of silence (XAG 104).
+  and again after a minute of silence (XAG 104); SRT has no voice tag, so its `NAME: ` prefix is laid out within
+  the 40 characters, and lint warns about a line whose first cue has no room for it.
 - `kind: "bark"` lines are short reactions the game fires itself: `priority`, `interrupt` (`never`, `lower`,
   `always`) and `cooldown_s` say what may cut in; lint warns about a bark without a cooldown.
 - SFX captions: build with `--events data/audio_events.json` and every event with a `caption` becomes one (with
