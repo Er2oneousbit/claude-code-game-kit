@@ -488,6 +488,11 @@
   the arm coming up, so the aim hold landed on the rest frame. A new render records which control frames
   SpriteKiln's frame select kept (`frame_select` in the clip's meta.json) to place it; older clips assume an even
   loop, and a trim that cuts the strike off keeps the measured peak (#180).
+- Dotwork store: without `"focus"`, the lane's own key art renders no longer lose the hero's head in `small_capsule`
+  and `library_hero` (the widest sizes keep under half the height, and the centre crop started below where the
+  prompt puts the hero's top): each size's default focus moves up just far enough to keep that top edge, so sizes
+  whose centre crop kept it are unchanged. Your own `source` art stays centred; the README says to set `"focus"`
+  when its subject is off centre (#181).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
