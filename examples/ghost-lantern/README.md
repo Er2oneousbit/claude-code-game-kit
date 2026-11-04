@@ -41,6 +41,15 @@ python tools/dev.py smoke --query autoplay --until ESCAPED --fail-on CAUGHT    #
 python tools/dev.py smoke --query autoplay=dark --until CAUGHT                 # ...and without it you are caught
 ```
 
+### Remake the GIF
+The GIF at the top is the autoplay bot's escape, recorded by the smoke run (`captures/` is gitignored). Remake it after
+the art or the level changes:
+```
+python tools/dev.py smoke --query autoplay --until ESCAPED --record captures/gif
+python tools/art/frames_to_gif.py captures/gif docs/ghost-lantern.gif --every 3 --fps 10 --width 384 --colors 128 --overwrite
+```
+128 colours keep the wizard's purple (at 64 it turns brown); the result is about 90 frames and 1.1 MB.
+
 ## Credits and licenses
 - Game: copyright er2oneousbit, all rights reserved, free to read, run, study and reference (`../LICENSE.md`).
   Kit-provided files (`tools/`, `.claude/`, the docs templates) stay MIT (`../../LICENSE`).

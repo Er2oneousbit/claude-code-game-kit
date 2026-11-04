@@ -138,8 +138,8 @@ What did not work first:
   tool asks for transparent frames and refuses both before sending.
 
 Verified: `check`, 160 tests, `smoke`, the scenario pair (`?autoplay` escapes, `?autoplay=dark` is caught) and
-`smoke --screenshot` shots looked at by eye: the keeper and the ghosts read against the tiles. The README GIF still
-shows the old tiles.
+`smoke --screenshot` shots looked at by eye: the keeper and the ghosts read against the tiles. The README GIF was then remade from the autoplay escape with the kit's own commands
+(README "Remake the GIF"); at 64 colours the wizard's purple turned brown, so it uses 128.
 
 ## 9. Outside the kit (be honest)
 - Before writing `src/game/level.ts`, the map was sanity-checked once with a few lines of throwaway Python (row lengths,
