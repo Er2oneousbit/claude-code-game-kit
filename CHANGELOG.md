@@ -521,6 +521,12 @@
   README's scenario and real-model commands are unchanged. Key presses in the chat box stay out of the shell's
   key bindings (W, A, S, D, Space and Enter); Escape pauses. Quit to title ends the conversation, Play again
   starts a new one with the guard already loaded (#182).
+- Dotwork hand polish: a character whose clips have different frame sizes (two packs wrote it) can be polished
+  in Aseprite and Pixelorama. Both builds give it one canvas, the widest and the tallest, each clip centred on
+  its bottom edge so the feet stand on one line; the re-export crops each clip back to its own size (frames,
+  sheets and sheet data), and art drawn outside a clip's box stops it with the frame's name. An untouched round
+  trip changes no file and a second build leaves the source alone (Aseprite 1.3.18 live). Effects keep one
+  frame size (#82).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

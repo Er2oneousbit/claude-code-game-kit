@@ -427,7 +427,10 @@ sibling's provenance only (models, workflow, routes, blend), never the sibling's
 use letters, digits and `_` only (they become file names), and a tag holds at most 100 frames (the shipped names
 carry two digits). Effects in the effects lane's layout (`fx/<name>/spr_fx_<name>_NN.png`, which hit effects share)
 are included. Spells, VFX, status marks, animated props, balloons and vehicles keep their lanes' own files and are
-drawn from their specs, so neither editor gets them.
+drawn from their specs, so neither editor gets them. A character whose clips have different frame sizes (two packs
+wrote it) gets one canvas, the widest and the tallest: each clip sits centred on its bottom edge, so every clip's feet
+stand on one line, and comes back at its own size. Keep a clip's art inside its box; art outside it stops the
+re-export with the frame's name. An effect's frames must all be one size.
 
 | | Aseprite | Pixelorama |
 |---|---|---|
@@ -443,7 +446,8 @@ repository, that path is public too. `pixelorama` and `pixelorama --reexport` na
 `[warn]` line), and `tools/publish_check.py` warns about it before you publish; `--clear-export-path` blanks the
 folder (nothing else in the file changes, and the round trip still gives the same frames). Dotwork never rewrites a
 `.pxo` for this without that flag. How Pixelorama treats a blank folder on its next export is (verify). Aseprite 1.3.18 on Windows built the sources and re-exported them untouched
-with every file unchanged; an edit made in Aseprite's window is not tested yet.
+with every file unchanged, a character with clips of two sizes included; an edit made in Aseprite's window is not
+tested yet.
 
 ## Store art (Steam sizes)
 What the `store` lane writes to `assets_src/store/<name>/steam/`, checked against the Steamworks documentation on

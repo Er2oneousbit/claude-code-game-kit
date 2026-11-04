@@ -10,8 +10,10 @@
 #           editor takes only its sibling's provenance), the size limits (a project too large to hold is refused
 #           before any image is read; a tag holds at most 100 frames in both editors), and building again in
 #           either editor (a source that differs from the game's frames is kept; --overwrite keeps a .bak; an
-#           Aseprite source is indexed only when that loses nothing). No Pixelorama, Aseprite, ComfyUI or Godot
-#           needed: verify is stubbed, Aseprite's script runs are stubbed.
+#           Aseprite source is indexed only when that loses nothing), and a character whose clips have different
+#           sizes (one canvas in either editor, each clip back at its own size; issue #82). No Pixelorama, Aseprite,
+#           ComfyUI or Godot needed: verify is stubbed, Aseprite's script runs are stubbed (AsepriteLiveExam runs
+#           the real one when ASEPRITE_BIN is set).
 # Usage   : python tools/art/dotwork/tests/test_pixelorama.py   (test_dotwork.py runs it too)
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -124,6 +126,42 @@ def make_game(tmp):
     with open(os.path.join(tmp, "assets_src", "dotwork", "manifest_knights_old.json"), "w", encoding="utf-8") as fh:
         json.dump(old, fh, indent=1)
     return s
+
+
+def grow_clip(tmp, anim, dw=16, dh=16):
+    """Issue #82: one clip of the knight at a bigger canvas, as a second pack can write it: its frames padded (the art
+    centred on the bottom edge, where a lane puts the feet), its sheet and sheet data rebuilt at that size. Returns
+    the new (w, h)."""
+    out = os.path.join(tmp, "assets", "art", "characters", "knight")
+    files = sorted(glob.glob(os.path.join(out, "frames", f"spr_knight_{anim}_*.png")))
+    w, h = W + dw, H + dh
+    sheet = Image.new("RGBA", (w * len(files), h), (0, 0, 0, 0))
+    for i, p in enumerate(files):
+        with Image.open(p) as im:
+            big = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            big.paste(im.convert("RGBA"), (dw // 2, dh))
+        fcore.save_clean(big, p)
+        sheet.alpha_composite(big, (i * w, 0))
+    sp = fcore.save_clean(sheet, os.path.join(out, f"knight_{anim}_sheet.png"))
+    with open(sp[:-4] + ".json", encoding="utf-8") as fh:
+        data = json.load(fh)
+    data.update(frame_w=w, frame_h=h)
+    with open(sp[:-4] + ".json", "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=1)
+    # that pack's manifest rows match the new files (the row whose hash matches a file is the one that counts)
+    mp = os.path.join(tmp, "assets_src", "dotwork", "manifest_knights.json")
+    with open(mp, encoding="utf-8") as fh:
+        man = json.load(fh)
+    grown = {os.path.normpath(p) for p in files + [sp, sp[:-4] + ".json"]}
+    for r in man["assets"]:
+        p = os.path.normpath(os.path.join(tmp, r["file"]))
+        if p in grown:
+            r["sha256"] = fcore.sha256_file(p)
+            if "canvas" in r:
+                r["canvas"] = [w, h]
+    with open(mp, "w", encoding="utf-8") as fh:
+        json.dump(man, fh, indent=1)
+    return w, h
 
 
 def snapshot(tmp):
@@ -339,6 +377,22 @@ class PixeloramaExam(unittest.TestCase):
         self.assertTrue(r["ok"])
         self.assertEqual(changed(before, snapshot(self.tmp)), [])   # every PNG, sheet, sheet data and .tres
         self.assertIn("assets/art/characters/knight/knight_frames.tres", seen["files"])
+
+    def test_clips_of_two_sizes_share_one_canvas_and_come_back_at_their_own_size(self):
+        # issue #82: Pixelorama refused a character whose clips have different sizes, so it could not be polished
+        w, h = grow_clip(self.tmp, "attack_e")
+        before = snapshot(self.tmp)
+        self.assertEqual(self.build()["written"], [self.knight, os.path.join(self.src, "fx", "spark.pxo"),
+                                                   os.path.join(self.src, "single", "barrel.pxo")])
+        pj = self.px.read_pxo(self.knight)
+        self.assertEqual(pj["size"], (w, h))
+        walk0 = pj["frames"][4]                                         # attack_e's 4 frames, then walk_e
+        x, y = (w - W) // 2, h - H                                      # centred, feet on the bottom edge
+        self.assertTrue(np.array_equal(walk0[y:, x:x + W], self.frame("walk_e", 0)))
+        self.assertFalse(walk0[:y].any() or walk0[:, :x].any() or walk0[:, x + W:].any())
+        self.assertEqual(self.build()["unchanged"][0], self.knight)     # matches the game: not "kept"
+        self.reexport()
+        self.assertEqual(changed(before, snapshot(self.tmp)), [])        # every clip back at its own size
 
     def test_clear_pixels_zeroed_by_the_editor_change_nothing(self):
         # Pixelorama's export and save write 0, 0, 0, 0 under fully clear pixels; the shipped files must stay
@@ -1017,9 +1071,12 @@ class AsepriteGuardExam(unittest.TestCase):
             frames = []
             with open(params["list"], encoding="utf-8") as f:
                 for ln in f.read().splitlines():
-                    tag, dur, png = ln.split("|", 2)
+                    tag, dur, x, y, png = ln.split("|", 4)   # BUILD_LUA: each frame placed at x, y on the canvas
                     with Image.open(png) as im:
-                        a = np.array(im.convert("RGBA"))
+                        img = np.array(im.convert("RGBA"))
+                    a = np.zeros((int(params["h"]), int(params["w"]), 4), np.uint8)
+                    x, y = int(x), int(y)
+                    a[y:y + img.shape[0], x:x + img.shape[1]] = img
                     frames.append({"tag": tag, "ms": int(float(dur) * 1000), "size": [a.shape[1], a.shape[0]],
                                    "rgba": a.tobytes().hex()})
             with open(params["out"], "w", encoding="utf-8") as f:
@@ -1140,17 +1197,57 @@ class AsepriteGuardExam(unittest.TestCase):
                          {"knight.aseprite": "1", "spark.aseprite": "1", "barrel.aseprite": "1",
                           "spr_bust.aseprite": "0", "ui_icon_glow.aseprite": "0"})
 
-    def test_clips_of_two_sizes_stop_before_anything_is_written(self):
-        # issue #82 (live, Aseprite 1.3.18): attack_e padded to a bigger canvas, as a second pack can write it. The
-        # sprite took the first frame's size, and an untouched round trip shipped every other clip padded to it, art
-        # in the top left. Build now refuses, naming the sizes, and writes no source at all.
-        frames = os.path.join(self.tmp, "assets", "art", "characters", "knight", "frames")
-        for p in glob.glob(os.path.join(frames, "spr_knight_attack_e_*.png")):
-            with Image.open(p) as im:
-                big = Image.new("RGBA", (W + 16, H + 16), (0, 0, 0, 0))
-                big.paste(im.convert("RGBA"), (8, 16))
-            fcore.save_clean(big, p)
-        with self.assertRaisesRegex(fcore.ToolError, r"knight\.aseprite: frames of 2 sizes \(24x32, 40x48\)"):
+    def reexport(self):
+        with stub_verify():
+            return self.ase.reexport(self.s.project, self.s.conf)
+
+    def test_clips_of_two_sizes_share_one_canvas_and_come_back_at_their_own_size(self):
+        # issue #82 (live, Aseprite 1.3.18): attack_e at a bigger canvas, as a second pack can write it. The sprite
+        # took the first frame's size, and an untouched round trip shipped every other clip padded to it, art in the
+        # top left (then build refused such a character). Now the clips share the largest canvas, each centred on
+        # its bottom edge, and each comes back at its own size.
+        w, h = grow_clip(self.tmp, "attack_e")
+        before = snapshot(self.tmp)
+        self.build()
+        knight = next(b for b in self.built if b["out"] == self.knight)
+        self.assertEqual((knight["w"], knight["h"]), (w, h))
+        with open(self.knight, encoding="utf-8") as f:
+            walk0 = json.load(f)["frames"][4]                             # attack_e's 4 frames, then walk_e
+        a = np.frombuffer(bytes.fromhex(walk0["rgba"]), np.uint8).reshape(h, w, 4)
+        x, y = (w - W) // 2, h - H                                        # centred, feet on the bottom edge
+        game = os.path.join(self.tmp, "assets", "art", "characters", "knight", "frames")
+        with Image.open(os.path.join(game, "spr_knight_walk_e_00.png")) as im:
+            self.assertTrue(np.array_equal(a[y:, x:x + W], np.array(im.convert("RGBA"))))
+        self.assertEqual(self.build()["kept"], [])                        # 0.8.2 reported it "kept" every time
+        self.reexport()
+        self.assertEqual(changed(before, snapshot(self.tmp)), [])         # untouched: every clip at its own size
+
+        def paint(i, px, py):
+            def change(data):
+                fr = data["frames"][i]
+                arr = np.frombuffer(bytes.fromhex(fr["rgba"]), np.uint8).reshape(h, w, 4).copy()
+                arr[py, px] = (200, 60, 50, 255)
+                fr["rgba"] = arr.tobytes().hex()
+            return change
+        self.polish(self.knight, paint(4, x + 5, y + 5))                  # inside walk_e's box
+        self.reexport()
+        with Image.open(os.path.join(game, "spr_knight_walk_e_00.png")) as im:
+            self.assertEqual(im.size, (W, H))
+            self.assertEqual(im.convert("RGBA").getpixel((5, 5)), (200, 60, 50, 255))
+        with Image.open(os.path.join(game, "spr_knight_attack_e_00.png")) as im:
+            self.assertEqual(im.size, (w, h))
+        polished = snapshot(self.tmp)
+        self.polish(self.knight, paint(5, 0, 0))                          # outside it: refused, nothing written
+        with self.assertRaisesRegex(fcore.ToolError, r"spr_knight_walk_e_01\.png has art outside clip walk_e's "
+                                                     r"24x32 box"):
+            self.reexport()
+        self.assertEqual(changed(polished, snapshot(self.tmp)), [])
+
+    def test_effect_frames_of_two_sizes_stop_before_anything_is_written(self):
+        # an effect has no clips to tell apart: its frames must be one size, as before
+        fx = os.path.join(self.tmp, "assets", "art", "fx", "spark", "spr_fx_spark_01.png")
+        fcore.save_clean(Image.new("RGBA", (W + 16, H + 16), (0, 0, 0, 0)), fx)
+        with self.assertRaisesRegex(fcore.ToolError, r"spark\.aseprite: frames of 2 sizes \(24x32, 40x48\)"):
             self.build()
         self.assertEqual(self.built, [])
         self.assertEqual(glob.glob(os.path.join(self.src, "**", "*.aseprite"), recursive=True), [])
@@ -1232,6 +1329,22 @@ class AsepriteLiveExam(unittest.TestCase):
         self.assertEqual(names, ["spr_x_attack_e_00.png", "spr_x_attack_e_01.png", "spr_x_walk_e_00.png",
                                  "spr_x_walk_e_01.png"])
         self.assertEqual(written, sorted(names))
+
+    def test_clips_of_two_sizes_round_trip_untouched(self):
+        # issue #82's repro: attack_e at 40x48, walk_e at 24x32. The sprite took the first frame's size and an
+        # untouched round trip changed every walk frame (padded, art in the top left). BUILD_LUA now places each
+        # clip centred on the bottom edge, and the re-export crops each back: nothing changes, and a second build
+        # finds the source still showing the game's frames.
+        grow_clip(self.tmp, "attack_e")
+        before = snapshot(self.tmp)
+        done = self.ase.build(self.s.project, self.s.conf)
+        knight = os.path.join(self.tmp, "assets_src", "aseprite", "characters", "knight.aseprite")
+        self.assertIn(knight, done["written"])
+        with stub_verify():
+            self.ase.reexport(self.s.project, self.s.conf)
+        self.assertEqual(changed(before, snapshot(self.tmp)), [])
+        done = self.ase.build(self.s.project, self.s.conf)
+        self.assertEqual((done["kept"], done["written"]), ([], []))
 
 
 if __name__ == "__main__":
