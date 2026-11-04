@@ -544,6 +544,11 @@
   ceiling. With `--bus sfx` a 0.2 s blip landed about 25 LU over its bus while a longer effect sat at -30 LUFS: a
   level jump in every mix, seen in the Wavesmith showcase's whole-mix check. A UI sound from `sets ui` normalized to
   `--bus ui` now gets +0.0 dB (was about +15). `conventions` and docs/resources/audio.md say so.
+- Dotwork characters: the turned-around check (`qa.turned_around`) runs now. A side or diagonal clip that faces its
+  twin's way from some frame on, frame 0 included, gets a QA note naming the clip, the frame and its file, with the
+  audition command and the `clip_fix` seed that retakes it (the rendered clip, `attack_e` for a mirrored
+  `attack_w`); it replaces the generic "possible turn-around" note, which skipped frame 0. A rapier held back in a
+  wind-up is not a turn: the exam checks a real one from the showcase duelist (#186).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

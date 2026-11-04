@@ -1572,6 +1572,69 @@ class DotworkExam(unittest.TestCase):
             notes = c.frames("cast", "e", rot)[1]
             self.assertTrue(any("possible turn-around" in n and "skeleton" not in n for n in notes), notes)
 
+    def test_turned_around_clip(self):
+        # #186: qa.turned_around existed but nothing ran it. fixtures/duelist_turn.png is the kit's own showcase
+        # duelist (Dotwork output, 72 px tiles): its west and east rotation views, then the first four frames of a
+        # west attack take (seed 4242) whose wind-up points the rapier straight back (east) at hip height while the
+        # head faces west. That backward blade must not read as a turn
+        s = self.bind()
+        import lane_character
+        import qa
+        from PIL import ImageOps
+        strip = Image.open(os.path.join(HERE, "fixtures", "duelist_turn.png")).convert("RGBA")
+        tiles = [strip.crop((i * 72, 0, i * 72 + 72, 72)) for i in range(strip.width // 72)]
+        rot_w, rot_e, windup = tiles[0], tiles[1], tiles[2:]
+        self.assertIsNone(qa.turned_around(windup, rot_w, rot_e))                 # the backward wind-up: no turn
+        self.assertEqual(qa.turned_around([rot_e] * 4, rot_w, rot_e), 0)          # the whole clip faces east
+        self.assertEqual(qa.turned_around(windup[:2] + [rot_e] * 2, rot_w, rot_e), 2)   # turns at the end
+        # a symmetric character: west is the mirror of east, and a west clip drawn from the east view is caught
+        self.assertEqual(qa.turned_around([rot_e] * 4, ImageOps.mirror(rot_e), rot_e), 0)
+        self.assertIsNone(qa.turned_around([ImageOps.mirror(rot_e)] * 4, ImageOps.mirror(rot_e), rot_e))
+
+        def lane(entry, clip, frames):
+            man = fcore.Manifest(s, "turn")
+            c = lane_character.Character(dict({"name": "duelist", "actions": ["attack"]}, **entry), s.project, man,
+                                         s.conf)
+            rot = {}
+            for d, im in (("w", rot_w), ("e", rot_e), ("s", rot_w), ("n", rot_e)):
+                rot[d] = os.path.join(c.work, f"rot_{d}.png")
+                im.save(rot[d])
+            d = os.path.join(c.work, "clips", clip)
+            shutil.rmtree(d, ignore_errors=True)
+            os.makedirs(d)
+            for i, f in enumerate(frames):
+                f.save(os.path.join(d, f"f_00001_{i:02d}.png"))
+            with open(os.path.join(d, "meta.json"), "w") as fh:
+                json.dump({"seed": 4242}, fh)
+            return c, rot
+        # an asymmetric character renders its own west clip: the turn names the clip, the frame and a clip_fix seed
+        c, rot = lane({"asymmetric": True, "clip_fix": {"attack_w": {"allow_drift": True}}}, "attack_w", [rot_e] * 4)
+        notes = c.frames("attack", "w", rot)[1]
+        turned = [n for n in notes if n.startswith("turned around")]
+        self.assertEqual(len(turned), 1, notes)
+        self.assertIn("attack_w faces e from frame 0 (spr_duelist_attack_w_00.png)", turned[0])
+        self.assertIn("--clip attack_w --seeds", turned[0])
+        self.assertIn('clip_fix {"attack_w": {"seed": ', turned[0])
+        self.assertFalse(any("possible turn-around" in n for n in notes), notes)   # one note, the specific one
+        c, rot = lane({"asymmetric": True}, "attack_w", windup)
+        notes = c.frames("attack", "w", rot)[1]
+        self.assertFalse(any("turned around" in n or "turn-around" in n for n in notes), notes)
+        # a symmetric character's west clip is its mirrored east one: the retake names the clip that was rendered
+        c, rot = lane({}, "attack_e", [ImageOps.mirror(rot_e)] * 4)
+        for direction, twin in (("e", "w"), ("w", "e")):
+            notes = c.frames("attack", direction, rot)[1]
+            self.assertTrue(any(f"attack_{direction} faces {twin} from frame 0" in n and "--clip attack_e " in n
+                                for n in notes), notes)
+        # checked on the frames that ship: a turn at the end is named by its frame, and a clip_fix keep that trims it
+        # away leaves no note
+        fix = {"allow_drift": True}
+        c, rot = lane({"asymmetric": True, "clip_fix": {"attack_w": fix}}, "attack_w", windup + [rot_e] * 2)
+        notes = c.frames("attack", "w", rot)[1]
+        self.assertTrue(any("attack_w faces e from frame 4 " in n for n in notes), notes)
+        fix["keep"] = 4
+        notes = c.frames("attack", "w", rot)[1]
+        self.assertFalse(any("turned around" in n for n in notes), notes)
+
     def test_state_props_and_ambient_loops(self):
         s = self.bind()
         import lane_animprops as ap
