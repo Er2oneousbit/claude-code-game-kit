@@ -555,6 +555,10 @@
   nearest piece that left, so a boot that stepped elsewhere no longer bends the motion across the body. On the
   showcase duelist's real frames the west attack takes that left a checker trail (seeds 4244 and 4246) and the west
   cast are now skipped, the east cast smears the hand only, and a blade swing still smears (#187).
+- Dotwork characters: a symmetric character's west clip ships as the exact mirror of its east clip, with the same
+  holds. Odd-width frames were centred rounding left in both views, so a west frame sat 1 px off its twin and the
+  peak measure could hold another frame: the showcase dwarf's two-smash attack held frames 0 and 2 east but 4 and 6
+  west. A mirrored view now rounds the other way.
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
