@@ -42,7 +42,13 @@
 #           Learned live: GET /map-objects/{id} answers 423 while it is generating (handled as "still working").
 #           Run live 2026-11-04: character v3 at 32 px (8 directions, 2), animate-character --mode skeleton-v3
 #           (3 per direction), animate at 32x32, 8 frames (1). v3 from text refuses 4 directions and --shading.
-#           Not yet live: ui, font, object, tiles-pro, outfit, pixelate (verify).
+#           Also 2026-11-04: top-down tileset at 16 px (1: 16 opaque tiles), pixelate 256 -> 32 px (1), fix correct,
+#           unzoom and normal-map lite (0.1 each), fix remove-background (1), ui at 192x192 (10: about 100 s),
+#           font at 16 px (15: .ttf + a 128x160 atlas, 8 glyphs a row), object 1 direction at 64 px (10: 16
+#           candidates), fetch (free). unzoom needs a source of at least 256x256 (PixelLab answers 422, free).
+#           unzoom answers opaque (transparency composited onto white): the source's alpha is mapped back onto it.
+#           correct can add colours (10 in, 235 out live): the run prints both counts and how to reduce them again.
+#           Not yet live: tiles-pro, outfit, 8-direction object, vfx --pro (verify).
 #           [paid plan only] in -h (tiles-pro, outfit) is PixelLab's rule; a trial account gets a 402, explained.
 #           Download links on PixelLab's storage get no token: it is sent only to the API host, and a redirect
 #           keeps it only on the same https host and port (anywhere else it is dropped; https to http is refused).
@@ -59,6 +65,8 @@
 #   tileset:   POST /create-tileset(-sidescroller) -> poll -> GET /tilesets/{id} -> tile PNGs + tileset.json
 #   ui, prop, object: POST -> poll the resource (GET /ui-assets|/map-objects|/objects/{id}) -> download its links
 #   vfx, font, edit, outfit, normal-map: POST -> poll the job -> save last_response (images, files, ttf_base64)
+#   fix unzoom: opaque answer + a source with alpha -> each output pixel gets the most common alpha of its block
+#   fix correct: count the visible colours before and after -> more after: point at `fix --op reduce-colors`
 #   animate-character: POST /characters/animations -> poll every direction's job -> the character's zip
 #   -> pixellab.gen.json (request, date, plan, cost, SHA-256 of each file) -> --log: ASSET_LOG row + evidence file
 import argparse
@@ -82,6 +90,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import fetch_asset  # noqa: E402  (shared ASSET_LOG helpers)
+import image_diff  # noqa: E402  (standard-library PNG reader and writer, for the `fix` follow-ups)
 
 API = "https://api.pixellab.ai/v2"
 KEY_ENV = "PIXELLAB_API_KEY"
@@ -274,6 +283,19 @@ def wait_job(key, job_id, limit):
             print(f"[info] job {status}{where}, {int(waited)} s so far ...")
             said = waited
         SLEEP(POLL_EVERY_S)
+
+
+def job_cost(key, first, limit):
+    """Cost from the background job a POST named, for results fetched as a resource (ui, prop, object): seen live
+    2026-11-04, their POST says "usage": null and the finished resource has no usage, only the job has it. The files
+    are already saved, so a job that cannot be read (or never finishes in time) gives '' rather than a failure."""
+    job = first.get("background_job_id")
+    if not job:
+        return ""
+    try:
+        return cost_text(wait_job(key, job, min(limit, 60))[1])
+    except (ServiceError, ToolError):
+        return ""
 
 
 def b64decode(text, what):
@@ -764,7 +786,10 @@ def run_job(kind, key, endpoint, body, out, args):
         img = first.get("image") or (first.get("images") or [None])[0]
         if img is None:
             raise ServiceError(f"PixelLab answered {endpoint} without an image")
-        return [_save(img, out)], cost, {}
+        files = [_save(img, out)]
+        if kind == "fix":
+            after_fix(args, out)
+        return files, cost, {}
     if kind == "iso-tile" and first.get("image"):
         out.mkdir(parents=True, exist_ok=True)
         return [_save(first["image"], out / "tile.png")], cost, {}
@@ -776,7 +801,8 @@ def run_job(kind, key, endpoint, body, out, args):
         res = poll_resource(key, f"/ui-assets/{asset_id}", args.wait)
         if not res.get("image_url"):
             raise ServiceError("the UI asset finished without an image_url")
-        return [fetch_url(res["image_url"], key, out)], cost, {"ui_asset_id": asset_id}
+        files = [fetch_url(res["image_url"], key, out)]
+        return files, cost or job_cost(key, first, args.wait), {"ui_asset_id": asset_id}
     if kind == "prop":
         obj = first.get("object_id")
         print(f"[info] map object {obj} queued (about 15 to 30 s) ...")
@@ -784,15 +810,24 @@ def run_job(kind, key, endpoint, body, out, args):
         cost = cost or cost_text(res.get("usage"))
         if not res.get("download_url"):
             raise ServiceError("the map object finished without a download_url")
-        return [fetch_url(res["download_url"], key, out)], cost, {"object_id": obj}
+        files = [fetch_url(res["download_url"], key, out)]
+        return files, cost or job_cost(key, first, args.wait), {"object_id": obj}
     if kind == "object":
         obj = first.get("object_id")
         print(f"[info] object {obj} queued; PixelLab takes 30 s to a few minutes ...")
         res = poll_resource(key, f"/objects/{obj}", args.wait)
-        if res.get("status") == "review":
-            raise ToolError(f"PixelLab made several candidates for object {obj}: keep the ones you want on pixellab.ai "
-                            "(or the MCP's select_object_frames), then download them; a different --size gives one")
         out.mkdir(parents=True, exist_ok=True)
+        if res.get("status") == "review":
+            # Seen live 2026-11-04: a 64 px object came back as 16 candidates in "review", already paid for (10
+            # generations), their links in frame_urls (and storage_urls frame_0 ...). Save them all to choose from
+            links = res.get("frame_urls") or url_values(res.get("storage_urls"))
+            if not links:
+                raise ServiceError(f"object {obj} is in review, but PixelLab gave no candidate links")
+            files = [fetch_url(u, key, out / f"candidate_{i:02d}.png") for i, u in enumerate(links)]
+            print(f"[info] PixelLab made {len(files)} candidates (sizes up to 170 make several): all saved as "
+                  f"candidate_NN.png; keep the one you want. On pixellab.ai object {obj} waits for review "
+                  "(keep or dismiss there, or with the MCP's select_object_frames / dismiss_review)")
+            return files, cost or job_cost(key, first, args.wait), {"object_id": obj, "review": len(files)}
         rot = {d: u for d, u in (res.get("rotation_urls") or {}).items() if u}
         for d in rot:                     # the API's keys become file names: a plain name only, never a path
             if not plain_name(d):
@@ -802,7 +837,8 @@ def run_job(kind, key, endpoint, body, out, args):
                 [(f"image_{i:02d}.png", u) for i, u in enumerate(url_values(res.get("storage_urls")))]
         if not links:
             raise ServiceError(f"object {obj} finished without image links")
-        return [fetch_url(u, key, out / name) for name, u in links], cost, {"object_id": obj}
+        files = [fetch_url(u, key, out / name) for name, u in links]
+        return files, cost or job_cost(key, first, args.wait), {"object_id": obj}
     jobs = first.get("background_job_ids") or ([first["background_job_id"]] if first.get("background_job_id") else [])
     if not jobs:
         raise ServiceError(f"PixelLab did not return a job for {endpoint}")
@@ -865,6 +901,69 @@ def run_job(kind, key, endpoint, body, out, args):
             raise ServiceError(f"{endpoint} finished without an image (got: {sorted(last)})")
         return [fetch_url(links[0], key, out)], cost, {}
     raise ToolError(f"unknown kind {kind}")
+
+
+def visible_colours(rows):
+    """Distinct RGBA values among the pixels that are not fully transparent (RGBA rows from image_diff.read_png).
+    A clear pixel is not a colour: PixelLab leaves varied RGB under alpha 0."""
+    seen = set()
+    for row in rows:
+        for i in range(0, len(row), 4):
+            if row[i + 3]:
+                seen.add(bytes(row[i:i + 4]))
+    return len(seen)
+
+
+def block_alpha(src, sw, sh, w, h):
+    """The source's alpha mask (sw x sh RGBA rows) mapped down to w x h: each output pixel takes the most common
+    alpha of the source block it came from."""
+    mask = []
+    for y in range(h):
+        y0, y1 = y * sh // h, max(y * sh // h + 1, (y + 1) * sh // h)
+        line = []
+        for x in range(w):
+            x0, x1 = x * sw // w, max(x * sw // w + 1, (x + 1) * sw // w)
+            votes = {}
+            for row in src[y0:y1]:
+                for a in row[x0 * 4 + 3:x1 * 4:4]:
+                    votes[a] = votes.get(a, 0) + 1
+            line.append(max(votes, key=votes.get))
+        mask.append(line)
+    return mask
+
+
+def after_fix(args, out):
+    """What PixelLab's `fix` ops change without saying so (#184). unzoom answers an opaque image (it composites the
+    source onto white), so a source with transparency gets its alpha mask back; correct can add colours, so both
+    counts are printed with a way back. Never fails the run: the generation is already paid for."""
+    if args.op not in ("unzoom", "correct") or (args.op == "unzoom" and not png_has_alpha(args.image)):
+        return
+    try:
+        sw, sh, src = image_diff.read_png(args.image)
+        w, h, rows = image_diff.read_png(out)
+    except Exception as exc:  # noqa: BLE001  (a check must never fail a run that is already paid for)
+        print(f"[warn] could not read the PNGs to check the {args.op} result: {exc}")
+        return
+    if args.op == "correct":
+        before, after = visible_colours(src), visible_colours(rows)
+        print(f"[info] colours: {before} before, {after} after (fully transparent pixels not counted)")
+        if after > before:
+            print(f"[warn] `correct` raised the colour count; to put it back on {max(2, before)} colours (0.1): "
+                  f"pixellab.py fix --op reduce-colors --colors {max(2, before)} --image {out} --out <new>.png")
+        return
+    if any(a < 255 for row in rows for a in row[3::4]):
+        return                                          # PixelLab kept some transparency: leave its answer alone
+    if not any(a < 255 for row in src for a in row[3::4]):
+        return                                          # an alpha channel with nothing clear in it
+    if w > sw or h > sh:
+        print(f"[warn] unzoom answered {w}x{h} for a {sw}x{sh} source; transparency not restored")
+        return
+    mask = block_alpha(src, sw, sh, w, h)
+    for y, row in enumerate(rows):
+        for x, a in enumerate(mask[y]):
+            row[x * 4:x * 4 + 4] = bytes(4) if a == 0 else bytes((row[x * 4], row[x * 4 + 1], row[x * 4 + 2], a))
+    image_diff.write_png(out, w, h, rows)
+    print("[info] unzoom: PixelLab answers opaque; the source's transparency was mapped back onto the result")
 
 
 def summed_cost(usages):
@@ -1148,7 +1247,8 @@ def build_parser():
     p = sub.add_parser("object", parents=[common, gen], help="a prop seen from 1 or 8 directions (10 to 25)")
     p.add_argument("--text", required=True, help="e.g. 'iron cannon on wheels'")
     p.add_argument("--directions", type=int, choices=(1, 8), default=1)
-    p.add_argument("--size", type=int, default=64, help="1 direction: 16 to 256; 8 directions: 24 to 168 (default 64)")
+    p.add_argument("--size", type=int, default=64, help="1 direction: 16 to 256, where sizes up to 42 give 64 candidates, up to 85 give 16, "
+                        "up to 170 give 4, larger 1 (all saved as candidate_NN.png); 8 directions: 24 to 168 (default 64)")
     p.add_argument("--view", help="1 direction: top-down or sidescroller; 8: low top-down, high top-down or side")
     p.set_defaults(fn=lambda a: cmd_generate(a, "object"))
     p = sub.add_parser("prop", parents=[common, gen, look2], help="a single map prop with a transparent background (about 1)")
@@ -1166,9 +1266,12 @@ def build_parser():
     p.set_defaults(fn=lambda a: cmd_generate(a, "pixelate"))
     p = sub.add_parser("fix", parents=[common, gen],
                        help="clean up a PNG: reduce-colors, correct (stray pixels), unzoom (upscaled art back to 1x), "
-                            "remove-background, normal-map (about 0.1 each; normal-map pro 0.5)")
+                            "remove-background, normal-map (0.1 each; remove-background 1, normal-map pro 0.5)")
     p.add_argument("--op", required=True, choices=("reduce-colors", "correct", "unzoom", "remove-background", "normal-map"))
-    p.add_argument("--image", required=True, help="the PNG to fix")
+    p.add_argument("--image", required=True,
+                   help="the PNG to fix (unzoom: at least 256x256, e.g. 32 px art at 8x; PixelLab answers opaque, "
+                        "the tool puts the source's transparency back). correct can add colours: the run prints "
+                        "the count before and after")
     p.add_argument("--colors", type=int, default=16, help="reduce-colors: how many (2 to 256, default 16)")
     p.add_argument("--strength", type=float, default=0.1, help="correct: 0 to 1 (default 0.1)")
     p.add_argument("--pro", action="store_true", help="normal-map: pro mode (0.5 instead of 0.1)")

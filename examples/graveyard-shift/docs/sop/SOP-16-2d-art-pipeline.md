@@ -55,8 +55,10 @@ tilesets, effects, UI panels, fonts and props, and fixes existing pixel art. It 
   and evidence file (prompt, plan, cost, SHA-256). `check` shows the generations left; `--dry-run` spends nothing.
   Tested by the kit offline against PixelLab's published API spec (K01); live so far: `check`, a 16 px `character --legacy`,
   `prop`, `vfx`, `iso-tile`, `tileset --kind sidescroller`, `edit`, `fix reduce-colors`, `image`, a 32 px v3 `character`
-  (8 directions from text; 4 only on the legacy endpoint), `animate` and `animate-character --mode skeleton-v3`; the rest
-  **(verify)** live.
+  (8 directions from text; 4 only on the legacy endpoint), `animate` and `animate-character --mode skeleton-v3`, and
+  on 2026-11-04 also top-down `tileset`, `ui`, `font`, a 1-direction `object`, `pixelate`, every `fix` op and `fetch`;
+  the rest **(verify)** live. A 1-direction object of 170 px or less comes back as several candidates (64 px: 16),
+  all saved as `candidate_NN.png` to pick from.
   Commands and rough costs in generations (PixelLab's help, 2026-10 **(verify)**; each command prints its real cost):
 
   | Command | Makes | Cost |
@@ -67,7 +69,7 @@ tilesets, effects, UI panels, fonts and props, and fixes existing pixel art. It 
   | `tileset` (top-down or `--kind sidescroller`), `iso-tile`, `prop` | terrain, platforms, one block, one map prop | 1 to 2 |
   | `vfx` | an animated effect: GIF, spritesheet, JSON with its anchor | lite 1, `--pro` 6 |
   | `edit`, `pixelate` | change one thing in an image; a picture into real pixels | 1 |
-  | `fix` | reduce colors, clean stray pixels, unzoom, remove a background, a normal map | 0.1 to 0.5 |
+  | `fix` | reduce colors, clean stray pixels, unzoom, remove a background, a normal map | 0.1 (remove a background 1) |
   | `object`, `ui` | a prop in 1 or 8 directions; a UI panel or bar | 10 to 25 |
   | `font` | a pixel font (.ttf + atlas) | 15 |
   | `tiles-pro` **[paid plan only]** | pro tile variations, a terrain set, road autotiles, a building kit | 10 to 25 |

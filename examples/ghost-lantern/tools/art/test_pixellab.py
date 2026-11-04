@@ -28,14 +28,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pixellab as pl  # noqa: E402
+import image_diff  # noqa: E402  (tools/, on the path once pixellab is imported: reads the saved PNGs)
 
 KEY = "pl_exam_DO_NOT_LEAK_5678"
 PNG_SIG = b"\x89PNG\r\n\x1a\n"
 
 
-def real_png(w, h):
-    """A valid w x h transparent PNG (the tools that read a PNG's size need a real header)."""
-    raw = b"".join(b"\x00" + b"\x00\x00\x00\x00" * w for _ in range(h))
+def real_png(w, h, px=None):
+    """A valid w x h RGBA PNG (the tools that read a PNG's size need a real header): transparent, or px(x, y) gives
+    each pixel's (r, g, b, a)."""
+    px = px or (lambda x, y: (0, 0, 0, 0))
+    raw = b"".join(b"\x00" + b"".join(bytes(px(x, y)) for x in range(w)) for y in range(h))
     chunk = lambda tag, data: (struct.pack(">I", len(data)) + tag + data  # noqa: E731
                                + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))
     return (PNG_SIG + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0))
@@ -76,13 +79,14 @@ class Fake:
     """Stands in for pixellab.http: records calls, answers by path. `jobs` is how many polls say processing."""
 
     def __init__(self, polls=1, job_status="completed", status=None, body=b'{"detail": "nope"}', zip_members=None,
-                 images=2, tiles=3, image_bytes=PNG, object_id="o1"):
+                 images=2, tiles=3, image_bytes=PNG, object_id="o1", fix_bytes=PNG):
         self.calls, self.polls, self.job_status = [], polls, job_status
         self.object_id = object_id
         self.status, self.body = status, body
         self.zip_members = zip_members or {"rotations/south.png": PNG, "rotations/north.png": PNG,
                                            "metadata.json": b"{}"}
         self.images, self.tiles, self.image_bytes = images, tiles, image_bytes
+        self.fix_bytes = fix_bytes
 
     def __call__(self, method, url, key, body=None):
         self.calls.append((method, url, key, body))
@@ -92,7 +96,13 @@ class Fake:
         path = url[len(pl.API):]
         sync = {"/image-to-pixelart": {"image": b64img(), "usage": {"type": "generations", "generations": 1}},
                 "/reduce-colors": {"images": [b64img()], "palette": [], "n_colors": 8},
-                "/create-isometric-tile": {"image": b64img(), "usage": {"type": "usd", "usd": 0.01}}}
+                "/create-isometric-tile": {"image": b64img(), "usage": {"type": "usd", "usd": 0.01}},
+                # unzoom and correct as seen live 2026-11-04: both answer at once
+                "/unzoom": {"usage": {"type": "generations", "generations": 0.1}, "image": b64img(self.fix_bytes),
+                            "original_size": {"width": 256, "height": 256}, "unzoomed_size": {"width": 32, "height": 32},
+                            "zoom_factor_detected": 8.0},
+                "/correct-pixelart": {"usage": {"type": "generations", "generations": 0.1},
+                                      "images": [b64img(self.fix_bytes)]}}
         if path in sync and not self.status:
             return ok(sync[path])
         queued = {"/vfx": {"background_job_id": "job-vfx", "quoted_generations": 1, "status": "processing"},
@@ -102,10 +112,13 @@ class Fake:
                   "/transfer-outfit-v2": {"background_job_id": "job-outfit", "status": "processing"},
                   "/create-tileset-sidescroller": {"background_job_id": "job-3", "tileset_id": "ts-1", "status": "processing"},
                   "/create-tiles-pro": {"background_job_id": "job-tp", "tile_id": "tp1", "status": "processing"},
-                  "/create-ui-asset": {"background_job_id": "job-ui", "ui_asset_id": "ui1", "status": "processing"},
-                  "/create-1-direction-object": {"background_job_id": "job-o1", "object_id": self.object_id, "status": "processing"},
+                  # ui and objects as seen live 2026-11-04: "usage" is null here, only their job reports the cost
+                  "/create-ui-asset": {"usage": None, "background_job_id": "job-ui", "ui_asset_id": "ui1",
+                                       "status": "processing"},
+                  "/create-1-direction-object": {"usage": None, "background_job_id": "job-o1", "object_id": self.object_id,
+                                                 "status": "queued", "n_frames": 16},
                   "/create-8-direction-object": {"background_job_id": "job-o8", "object_id": "o8", "status": "processing"},
-                  "/map-objects": {"background_job_id": "job-m", "object_id": "m1", "status": "processing"},
+                  "/map-objects": {"usage": None, "background_job_id": "job-m", "object_id": "m1", "status": "processing"},
                   "/characters/animations": {"background_job_ids": ["job-a1", "job-a2"], "directions": ["south", "east"],
                                              "animation_group_id": "g1", "status": "processing"}}
         if path in queued and not self.status:
@@ -114,7 +127,13 @@ class Fake:
                                         "image_url": f"{CDN}/ui/panel.png"},
                      "/map-objects/m1": {"status": "completed", "object_id": "m1", "download_url": f"{CDN}/m/pie.png"},
                      "/objects/o1": {"id": "o1", "status": "completed", "frame_urls": [f"{CDN}/o/a.png", f"{CDN}/o/b.png"]},
-                     "/objects/o-review": {"id": "o-review", "status": "review", "frame_urls": []},
+                     # a 1-direction object of 85 px or less, as seen live 2026-11-04: candidates in "review"
+                     "/objects/o-review": {"id": "o-review", "status": "review", "directions": 1,
+                                           "rotation_urls": {"south": None, "north": None},
+                                           "storage_urls": {f"frame_{i}": f"{CDN}/o/rotations/frame_{i}.png" for i in range(3)},
+                                           "frame_urls": [f"{CDN}/o/rotations/frame_{i}.png" for i in range(3)]},
+                     "/objects/o-review-empty": {"id": "o-review-empty", "status": "review", "storage_urls": {},
+                                                 "frame_urls": None},
                      "/objects/o-evil": {"id": "o-evil", "status": "completed",
                                          "rotation_urls": {"south": f"{CDN}/o/s.png", "../escaped": f"{CDN}/o/e.png"}},
                      "/objects/o8": {"id": "o8", "status": "completed",
@@ -486,9 +505,17 @@ class PixelLabExam(unittest.TestCase):
         rc, out = self.run_tool("object", "--text", "barrel", "--directions", "8", "--size", "48", "--out", "obj/barrel", fake=Fake())
         self.assertEqual(rc, 0, out)
         self.assertEqual(sorted(p.name for p in (self.root / "obj/barrel").glob("*.png")), ["east.png", "south.png"])
+        # Live 2026-11-04: a 64 px crate came back as 16 paid candidates in "review"; the tool exited 2 and saved none
         rc, out = self.run_tool("object", "--text", "x", "--out", "obj/rev", fake=Fake(object_id="o-review"))
-        self.assertEqual(rc, 2)
-        self.assertIn("several candidates", out)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(sorted(p.name for p in (self.root / "obj/rev").glob("*.png")),
+                         ["candidate_00.png", "candidate_01.png", "candidate_02.png"])
+        side = json.loads((self.root / "obj/rev/pixellab.gen.json").read_text(encoding="utf-8"))
+        self.assertEqual(side["review"], 3)
+        self.assertIn("3 candidates", out)
+        rc, out = self.run_tool("object", "--text", "x", "--out", "obj/rev0", fake=Fake(object_id="o-review-empty"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("no candidate links", out)
         rc, out = self.run_tool("object", "--text", "x", "--directions", "8", "--size", "200", "--out", "obj/big", fake=Fake())
         self.assertEqual(rc, 2, "8-direction objects stop at 168")
 
@@ -528,6 +555,44 @@ class PixelLabExam(unittest.TestCase):
         rc, out = self.run_tool("fix", "--op", "normal-map", "--image", "src.png", "--out", "f2.png", fake=Fake())
         self.assertEqual(rc, 0, out)
         self.assertEqual((self.root / "f2.png").read_bytes(), PNG)
+
+    def test_unzoom_puts_the_source_transparency_back(self):
+        # Live 2026-11-04: a 32 px crate with clear corners, at 8x, came back from /unzoom opaque (near-white) (#184)
+        crate = lambda x, y: (150, 100, 55, 255) if 4 <= x < 28 and 6 <= y < 30 else (0, 0, 0, 0)  # noqa: E731
+        (self.root / "big.png").write_bytes(real_png(256, 256, lambda x, y: crate(x // 8, y // 8)))
+        opaque = real_png(32, 32, lambda x, y: crate(x, y) if crate(x, y)[3] else (254, 254, 255, 255))
+        rc, out = self.run_tool("fix", "--op", "unzoom", "--image", "big.png", "--out", "u.png", fake=Fake(fix_bytes=opaque))
+        self.assertEqual(rc, 0, out)
+        w, h, rows = image_diff.read_png(self.root / "u.png")
+        self.assertEqual((w, h), (32, 32))
+        got = lambda x, y: tuple(rows[y][x * 4:x * 4 + 4])  # noqa: E731
+        self.assertEqual(got(0, 0), (0, 0, 0, 0), "a clear source corner is clear in the result")
+        self.assertEqual(got(16, 16), (150, 100, 55, 255), "the crate keeps its colour")
+        self.assertEqual(sum(got(x, y)[3] == 0 for x in range(32) for y in range(32)), 32 * 32 - 24 * 24)
+        self.assertIn("transparency", out)
+        side = json.loads((self.root / "u.gen.json").read_text(encoding="utf-8"))
+        self.assertEqual(side["sha256"], [pl.sha256(self.root / "u.png")], "the record hashes the file as saved")
+        # an opaque source: PixelLab's answer is saved as it came
+        (self.root / "flat.png").write_bytes(real_png(256, 256, lambda x, y: (9, 9, 9, 255)))
+        rc, out = self.run_tool("fix", "--op", "unzoom", "--image", "flat.png", "--out", "u2.png", fake=Fake(fix_bytes=opaque))
+        self.assertEqual(rc, 0, out)
+        self.assertEqual((self.root / "u2.png").read_bytes(), opaque)
+
+    def test_correct_prints_the_colour_count_and_a_way_back(self):
+        # Live 2026-11-04: 11 colours in, 302 out, nothing said (#184). Clear pixels with stray RGB are not colours.
+        rgb = ((10, 20, 30, 255), (40, 50, 60, 255), (70, 80, 90, 255))
+        three = lambda x, y: (0, 0, 0, 0) if x < 4 else rgb[y % 3]  # noqa: E731
+        (self.root / "src.png").write_bytes(real_png(32, 32, three))
+        many = real_png(32, 32, lambda x, y: (x, y, 7, 0) if x < 4 else (x * 8, 1, 5, 255))
+        rc, out = self.run_tool("fix", "--op", "correct", "--image", "src.png", "--out", "c.png", fake=Fake(fix_bytes=many))
+        self.assertEqual(rc, 0, out)
+        self.assertIn("colours: 3 before, 28 after", out)
+        self.assertIn("--op reduce-colors --colors 3", out)
+        rc, out = self.run_tool("fix", "--op", "correct", "--image", "src.png", "--out", "c2.png",
+                                fake=Fake(fix_bytes=real_png(32, 32, three)))
+        self.assertEqual(rc, 0, out)
+        self.assertIn("colours: 3 before, 3 after", out)
+        self.assertNotIn("reduce-colors", out)
 
     def test_sidescroller_tileset_and_topdown_needs_upper(self):
         fake = Fake()
@@ -723,6 +788,21 @@ class PixelLabExam(unittest.TestCase):
         rc, out = self.run_tool("fetch", "--character-id", "char-1", "--out", "c2", fake=Fake())
         self.assertEqual(rc, 0, out)
         self.assertTrue((self.root / "c2/rotations/south.png").exists())
+
+    def test_ui_object_and_prop_report_the_cost_their_job_holds(self):
+        # Live 2026-11-04: a 192 px UI panel cost 10 generations but printed none and saved "cost": "" (the POST
+        # says usage null, the finished /ui-assets resource has no usage; GET /background-jobs/{id} has it)
+        for argv, side in ((("ui", "--text", "health bar", "--out", "ui/bar.png"), "ui/bar.gen.json"),
+                           (("object", "--text", "crate", "--out", "obj/crate"), "obj/crate/pixellab.gen.json"),
+                           (("prop", "--text", "crate", "--out", "props/crate.png"), "props/crate.gen.json")):
+            rc, out = self.run_tool(*argv, fake=Fake())
+            self.assertEqual(rc, 0, out)
+            self.assertIn("cost 2 generations", out, argv[0])
+            self.assertEqual(json.loads((self.root / side).read_text(encoding="utf-8"))["cost"], "2 generations", argv[0])
+        fake = Fake(polls=10**6)                     # a job that never says done: the saved files still count
+        rc, out = self.run_tool("ui", "--text", "x", "--out", "ui/slow.png", "--wait", "0", fake=fake)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(json.loads((self.root / "ui/slow.gen.json").read_text(encoding="utf-8"))["cost"], "")
 
     def test_several_direction_jobs_add_up_their_cost(self):
         self.run_tool("character", "--text", "knight", "--out", "knight", fake=Fake())
