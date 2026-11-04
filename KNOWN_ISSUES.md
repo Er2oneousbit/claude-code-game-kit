@@ -1,6 +1,6 @@
 # Known issues and untested parts
 
-Everything known to be broken, flaky, unproven or never tried, in one place (2026-10-27). Fixed bugs are in
+Everything known to be broken, flaky, unproven or never tried, in one place (2026-11-03). Fixed bugs are in
 `CHANGELOG.md`; what *was* tested, and how, is the README table "What was tested and what was not". The kit and the
 examples were built and tested on one Windows 11 machine.
 
@@ -60,6 +60,7 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
 ### Ideas and evaluations
 - **img2threejs:** code-only Three.js models from a reference image, for web-3d and image to 3D ([#71](https://github.com/Er2oneousbit/claude-code-game-kit/issues/71)).
 - **Gameplay visual review:** Claude reviews smoke screenshots against the art direction ([#72](https://github.com/Er2oneousbit/claude-code-game-kit/issues/72)).
+- **Experiments:** does the kit save tokens ([#19](https://github.com/Er2oneousbit/claude-code-game-kit/issues/19)), and does the SOP-09 smoke checklist cut bugs ([#20](https://github.com/Er2oneousbit/claude-code-game-kit/issues/20)), each as an A/B run.
 
 ### Planned
 - **Steam:** a platform-services layer with a null backend and one adapter per engine
@@ -85,7 +86,7 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
 
 ### Never run or not run end to end
 - **macOS and Linux:** untested throughout (the scaffolder ran on Linux in an earlier version only). Tool and binary
-  names for GIMP and Inkscape on those systems are unverified.
+  names for GIMP and Inkscape on those systems are unverified ([#12](https://github.com/Er2oneousbit/claude-code-game-kit/issues/12)).
 - **RPG Maker MZ overlay:** never run against RPG Maker MZ (it was not installed). Checked only against a fake MZ
   project; the editor side (Plugin Manager annotations, `js/plugins.js`, Deployment, `run --editor`) is marked (verify).
 - **Unity:** `run` opens the editor, but on the test machine it stopped at Unity's Hub sign-in, so a loaded editor is
@@ -107,24 +108,27 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
   Godot gets engine resources (`--engine none` gives PNGs, sheets and the manifest). The model's in-between rotation
   views stay approximate; back views and faceless designs cannot be checked for facing (`rot_swap` fixes a pair by
   hand). The art flaws found in 0.7.0 review (#22 to #28) are fixed in 0.7.1. Open: skeleton clips other than walk
-  are not rendered live yet ([#39](../../issues/39)).
+  are not rendered live yet ([#39](https://github.com/Er2oneousbit/claude-code-game-kit/issues/39)).
 
 ### Tools with commands not yet run live
 - **`tools/art/comfy_local.py`:** `check` (with `--workflow`) ran live against ComfyUI 0.43.0; `run` and `strip`
   only against the exam's stand-in server. A real `run` of a SpriteKiln workflow is the next step.
 - **`tools/art/pixellab.py`:** `image`, v3 `character`, `animate`, `animate-character`, top-down `tileset`, `ui`,
   `font`, `object`, `pixelate`, `tiles-pro`, `outfit`. It also lacks PixelLab's newer Pro Flash models, style images
-  and pinned last frames (the MCP server has them; SOP-16 says which tool to use).
+  and pinned last frames (the MCP server has them; SOP-16 says which tool to use; [#16](https://github.com/Er2oneousbit/claude-code-game-kit/issues/16)).
 - **`tools/audio/wavesmith/eleven_audio.py`:** music is tested offline only (the live music request returned HTTP 402, "not available").
 - **`tools/second_opinion.py`:** only the Kimi Code CLI is supported.
 
 ### Bugs and doubts
 - **Docs marked (verify):** facts about outside services (prices, plans, menu paths, license terms) that were not
   checked live. They are the most likely to be out of date.
+- **Tools without an exam:** `core/.claude/hooks/session_context.py`, `tools/art/frames_to_gif.py` and several Dotwork helpers ([#14](https://github.com/Er2oneousbit/claude-code-game-kit/issues/14)).
+- **`prep_export.py`:** may fail on a mesh shared by several objects (reported in a review, never reproduced; [#18](https://github.com/Er2oneousbit/claude-code-game-kit/issues/18)).
+- **`DISTILL_REPORT.md`** is a snapshot from its last run and is out of date ([#15](https://github.com/Er2oneousbit/claude-code-game-kit/issues/15)).
 
 ## The examples
 None of the example games has been played by a human tester; the bots and tests are the only proof they play as
-intended. Their art and audio are for non-commercial use (`examples/LICENSE.md`). Each game's own
+intended ([#21](https://github.com/Er2oneousbit/claude-code-game-kit/issues/21)). Their art and audio are for non-commercial use (`examples/LICENSE.md`). Each game's own
 `docs/HANDOFF.md` "Known broken or flaky" carries its items below.
 
 ### Gatekeeper (Godot): review findings fixed, some proven only without the model
@@ -147,6 +151,9 @@ autoplay exit leak (#6).
   dirties the runtime NavMesh, which rebuilds in real time. Taking bolts off the NavMesh made rendered and `-nullrhi`
   runs match on 8 seeds but made the editor's bot pair vary from run to run, so it is not in
   (`docs/TROUBLESHOOTING.md`, [#8](https://github.com/Er2oneousbit/claude-code-game-kit/issues/8)).
+- Sight and bolt noise never cross an open gate, so the next room's orcs sleep through a fight at its door. Letting
+  them through moved the bot pair from weaver 65 / masher 55 (3 of 8 clears against 0) to 77 / 52 (7 against 0),
+  so it waits for a balance decision ([#140](https://github.com/Er2oneousbit/claude-code-game-kit/issues/140)).
 
 ### Graveyard Shift (Unity)
 - The bot trio is not quite repeatable: two ghosts close together can part by a millimeter between runs, so
@@ -155,14 +162,20 @@ autoplay exit leak (#6).
   always-dark now replay exactly, so `Smoke_D` at the 104 cap no longer flakes (#9, fixed in 0.8.3).
 - Generated nights are easier than the hand-made yard (the dark bot escapes 6 of 8 generated against 2 of 8).
 - A low rock the ghosts' NavMesh climbs (0.75 m) blocks the keeper's CharacterController (0.3 m); the fix moved the
-  tuned balance and was reverted.
+  tuned balance and was reverted. Both wait for a balance decision ([#10](https://github.com/Er2oneousbit/claude-code-game-kit/issues/10)).
 - Built with Mono only; IL2CPP builds were not made or compared.
 - One of the two intro narrator takes (`narrator_intro_1`) still says "Gather all six" on a twelve-soul night: it
   needs re-voicing with the same voice, which is a paid generation
   ([#138](https://github.com/Er2oneousbit/claude-code-game-kit/issues/138)).
+
+### Scrap Tanks (C++/SDL2)
+- Scouts can never reach their RETREAT branch: one hit leaves them above the threshold and a second destroys them.
+  Raising the threshold or lowering damage moved the cover-against-charging balance the pillar test checks, so it
+  waits for a balance decision ([#152](https://github.com/Er2oneousbit/claude-code-game-kit/issues/152)).
 
 ### Lockpick (RPG Maker MZ)
 - An untested proof of concept: it has never run inside RPG Maker MZ, only against stand-ins.
 
 ### Coyote Hop, Courier Dash, Ghost Lantern, Gatekeeper (web)
 - No open bugs after their reviews. Not yet played by a human.
+- Ghost Lantern's keeper and ghosts are placeholder sprites ([#17](https://github.com/Er2oneousbit/claude-code-game-kit/issues/17)).
