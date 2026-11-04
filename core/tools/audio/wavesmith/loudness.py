@@ -37,6 +37,8 @@
 #           noise: 71 MB as a 31 MB FLAC, was 1.47 GB; 49 MB as OGG, was 0.94 GB). normalize and mono hold the
 #           whole file (they are for single assets).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): normalize matches a one-shot shorter than 400 ms by
+#           its momentary loudness (max_momentary), not by putting its true peak at the ceiling
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -46,7 +48,8 @@
 #   LRA: 3 s windows = 30 sub-blocks every 100 ms -> gates -70 / -20 LU -> 95th minus 10th percentile
 #   true peak: polyphase interpolation (>= 768 kHz), only where a window could beat the running maximum
 #   check-mix: duration >= 30 min? integrated within target +/-2? true peak <= -1? -> verdict
-#   normalize: gain to the target, capped so true peak stays at or below the ceiling (no limiter here)
+#   normalize: gain to the target (integrated, or the loudest 400 ms for a one-shot shorter than one block),
+#              capped so true peak stays at or below the ceiling (no limiter here)
 #   mono: downmix 0.5 * (L + R) (Web Audio's rule; engines' mono switches do the same) -> loudness lost, and the
 #         channel correlation overall and per loud 400 ms block -> out-of-phase content cancels
 import argparse
@@ -89,8 +92,9 @@ ASWG_TOL = 2.0
 ASWG_TP_MAX = -1.0
 ASWG_MIN_S = 30 * 60
 # Kit house conventions (NOT a standard): where single assets start before the mix is balanced by ear.
-# Dialogue anchors at the platform target; beds sit under it. Short one-shots are matched by true peak instead,
-# because gated loudness of a sound shorter than one 400 ms block is undefined.
+# Dialogue anchors at the platform target; beds sit under it. Gated loudness of a sound shorter than one 400 ms
+# block is undefined, so short one-shots are matched by their loudest 400 ms (momentary loudness, padded with
+# silence to one block), as `sets make` does: a coin and an explosion on the sfx bus then start at one level.
 HOUSE = {"dialogue": 0.0, "music": -4.0, "ambience": -10.0, "sfx": -6.0, "ui": -8.0}
 # Mono check, kit conventions (not a standard). Downmixing to 0.5 * (L + R) costs 3.0 LU when both channels carry the
 # same sound and 6.0 LU when they are unrelated; more than that means the channels cancel each other.
@@ -345,6 +349,16 @@ def db(x):
 
 
 # ---- Measure ------------------------------------------------------------------------
+def max_momentary(channels, rate):
+    """The loudest 400 ms window (EBU Tech 3341 momentary loudness, LUFS), or None when silent. A clip shorter than
+    one 400 ms block is padded with silence to one block, so short and long one-shots compare."""
+    n, sub = (len(channels[0]) if channels else 0), int(0.1 * rate)
+    pad = max(int(0.4 * rate), -(-n // sub) * sub) - n
+    subs = [sub_block_energy(list(c) + [0.0] * pad, rate) for c in channels]
+    best = max((lv for lv, _ in window_loudness(subs, 4)), default=-math.inf)
+    return round(best, 2) if math.isfinite(best) else None
+
+
 def measure_channels(channels, rate, want_tp=True):
     if not rate or rate < 1:
         raise ToolError(f"a sample rate of {rate} Hz cannot be measured (a broken file)")
@@ -577,25 +591,31 @@ def cmd_normalize(args):
         label = f"{args.bus} house level {goal:.0f} LUFS ({args.target}; kit house convention, not a standard)"
     else:
         goal, label = args.lufs, f"{args.lufs:.1f} LUFS"
-    if m["integrated_lufs"] is None:
-        if m["true_peak_dbtp"] is None:
-            raise ToolError(f"{args.file} is silent")
-        gain = args.tp_ceiling - m["true_peak_dbtp"]          # too short for gated loudness: match by true peak
-        print(f"[note] {args.file} is shorter than one 400 ms block or too quiet for gated loudness; matched by true peak")
+    if m["true_peak_dbtp"] is None:
+        raise ToolError(f"{args.file} is silent")
+    short = m["integrated_lufs"] is None
+    if short:              # too short (or too quiet) for gated loudness: its loudest 400 ms, as `sets make` does
+        now = max_momentary(channels, rate)
+        if now is None:                                  # only DC or sub-bass the K-weighting removes
+            raise ToolError(f"{args.file} has nothing audible to measure (no loudness after K-weighting)")
+        print(f"[note] {args.file} is shorter than one 400 ms block or too quiet for gated loudness; matched by its "
+              f"loudest 400 ms (momentary {now:.1f} LUFS)")
     else:
-        gain = goal - m["integrated_lufs"]
-        if m["true_peak_dbtp"] + gain > args.tp_ceiling:
-            capped = args.tp_ceiling - m["true_peak_dbtp"]
-            print(f"[warn] reaching {label} needs {gain:+.1f} dB, but true peak would pass {args.tp_ceiling:.1f} dBTP; "
-                  f"applied {capped:+.1f} dB (a limiter would be needed for the rest)")
-            gain = capped
+        now = m["integrated_lufs"]
+    gain = goal - now
+    if m["true_peak_dbtp"] + gain > args.tp_ceiling:
+        capped = args.tp_ceiling - m["true_peak_dbtp"]
+        print(f"[warn] reaching {label} needs {gain:+.1f} dB, but true peak would pass {args.tp_ceiling:.1f} dBTP; "
+              f"applied {capped:+.1f} dB (a limiter would be needed for the rest)")
+        gain = capped
     g = 10 ** (gain / 20)
     try:                                    # any format audioio writes: .wav natively, .ogg and others via ffmpeg
         clipped = audioio.write_audio(out, [[s * g for s in c] for c in channels], rate)
     except audioio.AudioIOError as exc:
         raise ToolError(str(exc))
     after = measure_file(out)
-    print(f"[ OK ] {out.as_posix()}: {gain:+.2f} dB -> {fmt(after['integrated_lufs'], 'LUFS')}, "
+    level = (f"momentary {now + gain:.1f} LUFS" if short else fmt(after['integrated_lufs'], 'LUFS'))
+    print(f"[ OK ] {out.as_posix()}: {gain:+.2f} dB -> {level}, "
           f"true peak {fmt(after['true_peak_dbtp'], 'dBTP')} (target {label})")
     return 1 if clipped else 0
 
@@ -605,7 +625,8 @@ def cmd_conventions(args):
     print("NOT part of ASWG-R001 or any standard; the standard measures the whole mix (check-mix).")
     for target, base in ASWG.items():
         print(f"  {target}: " + ", ".join(f"{bus} {base + off:.0f} LUFS" for bus, off in HOUSE.items()))
-    print("  one-shots shorter than 0.4 s: matched by true peak (--tp-ceiling, default -1 dBTP)")
+    print("  one-shots shorter than 0.4 s: matched by their loudest 400 ms (momentary loudness, padded with silence)")
+    print("  true peak never passes --tp-ceiling (default -1 dBTP)")
     return 0
 
 

@@ -539,6 +539,11 @@
   with `holds` or `smear` that stopped the export on an IndexError after every render was done. The still ships
   beside the clip as `<pose>_pose_<dir>` (an assumption line says so) and takes its own `clip_fix` entry. Found
   re-rendering the party example's duelist.
+- Wavesmith: `loudness normalize` matches a one-shot shorter than 400 ms by its loudest 400 ms (momentary loudness,
+  padded with silence; new `max_momentary()`, which `sets make` now shares) instead of pushing its true peak to the
+  ceiling. With `--bus sfx` a 0.2 s blip landed about 25 LU over its bus while a longer effect sat at -30 LUFS: a
+  level jump in every mix, seen in the Wavesmith showcase's whole-mix check. A UI sound from `sets ui` normalized to
+  `--bus ui` now gets +0.0 dB (was about +15). `conventions` and docs/resources/audio.md say so.
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

@@ -262,6 +262,24 @@ class LoudnessExam(unittest.TestCase):
         self.assertIn("limiter", out)
         self.assertLessEqual(L.measure_file(self.dir / "c.wav")["true_peak_dbtp"], -1.0 + 0.05)
 
+    def test_normalize_puts_short_and_long_one_shots_at_one_bus_level(self):
+        # A 0.2 s blip has no gated loudness. It used to be matched by true peak (-1 dBTP), which put it about 20 LU
+        # over a 1 s sound normalized to the same sfx bus: a level jump in every mix. Both now start at the bus level,
+        # the blip by its loudest 400 ms (padded with silence), the way `sets make` levels one-shots.
+        goal = L.ASWG["home"] + L.HOUSE["sfx"]
+        for name, seconds in (("blip", 0.2), ("whoosh", 1.0)):
+            src = self.wav(f"{name}.wav", stereo(tapered(tone(-12, seconds))))
+            rc, out = self.run_tool("normalize", src, "--bus", "sfx", "--target", "home",
+                                    "--out", self.dir / f"{name}_n.wav")
+            self.assertEqual(rc, 0, out)
+            samples, rate, _, nch = read_wav_channels(self.dir / f"{name}_n.wav")
+            chans = [samples[c::nch] for c in range(nch)]
+            pad = int(0.4 * rate) - len(chans[0]) if len(chans[0]) < int(0.4 * rate) else 0
+            subs = [L.sub_block_energy(list(c) + [0.0] * pad, rate) for c in chans]
+            loudest = max(lv for lv, _ in L.window_loudness(subs, 4))
+            self.assertAlmostEqual(loudest, goal, delta=0.2, msg=f"{name}: loudest 400 ms\n{out}")
+            self.assertLess(L.measure_file(self.dir / f"{name}_n.wav")["true_peak_dbtp"], -6.0, name)
+
     def test_conventions_are_labeled_not_a_standard(self):
         rc, out = self.run_tool("conventions")
         self.assertEqual(rc, 0, out)
