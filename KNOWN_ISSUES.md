@@ -20,8 +20,6 @@ examples were built and tested on one Windows 11 machine.
 ### 0.8.1 follow-ups (Dotwork)
 - **The new lanes not yet run together on one full game** (each was proven in a small test game; qa pack ran on a
   1,435-file test game): [#48](https://github.com/Er2oneousbit/claude-code-game-kit/issues/48).
-- **Anticipation** proven on keypoints and a mocked render, not yet on a rendered sprite:
-  [#49](https://github.com/Er2oneousbit/claude-code-game-kit/issues/49).
 - **Image to 3D:** TRELLIS shapes come out wrong on pixel art and the cause is not found (needs a 24 GB Linux GPU):
   [#50](https://github.com/Er2oneousbit/claude-code-game-kit/issues/50).
 - **Cyrillic glyph font** not made (the `bdf` lane may already cover it with an OFL font, untried):

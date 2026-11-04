@@ -473,6 +473,10 @@
   in 4 directions and passed the in-game verify, with no code change. The README's characters (skeleton) row says
   what they look like: side views follow the skeleton, front and back strikes read weakly, a held item can leave the
   hand; hurt and death are still to render (#39).
+- Dotwork: `"anticipation"` was rendered live (attack, cast and shoot, with and without it, 4 directions) with no
+  code change: the side views show the wind-up, the front and back views barely change. The README says so, and that
+  `"holds": true` on a plain skeleton shoot holds the rest frame before the arm comes up (with anticipation the hold
+  lands on the drawn-back aim); Godot's verify counted every held frame (#49).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
