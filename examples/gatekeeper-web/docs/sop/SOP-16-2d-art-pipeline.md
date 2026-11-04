@@ -54,7 +54,9 @@ tilesets, effects, UI panels, fonts and props, and fixes existing pixel art. It 
   request cost, waits for PixelLab's background jobs, checks every PNG, and with `--log` writes the `ASSET_LOG.md` row
   and evidence file (prompt, plan, cost, SHA-256). `check` shows the generations left; `--dry-run` spends nothing.
   Tested by the kit offline against PixelLab's published API spec (K01); live so far: `check`, a 16 px `character --legacy`,
-  `prop`, `vfx`, `iso-tile`, `tileset --kind sidescroller`, `edit` and `fix reduce-colors`; the rest **(verify)** live.
+  `prop`, `vfx`, `iso-tile`, `tileset --kind sidescroller`, `edit`, `fix reduce-colors`, `image`, a 32 px v3 `character`
+  (8 directions from text; 4 only on the legacy endpoint), `animate` and `animate-character --mode skeleton-v3`; the rest
+  **(verify)** live.
   Commands and rough costs in generations (PixelLab's help, 2026-10 **(verify)**; each command prints its real cost):
 
   | Command | Makes | Cost |

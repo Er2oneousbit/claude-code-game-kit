@@ -299,14 +299,14 @@ class PixelLabExam(unittest.TestCase):
 
     def test_character_polls_then_extracts_the_zip(self):
         fake = Fake(polls=2)
-        rc, out = self.run_tool("character", "--text", "old gravekeeper", "--size", "64", "--directions", "4",
+        rc, out = self.run_tool("character", "--text", "old gravekeeper", "--size", "64", "--directions", "8",
                                 "--out", "assets/keeper", "--log", fake=fake)
         self.assertEqual(rc, 0, out)
         self.assertTrue((self.root / "assets/keeper/rotations/south.png").exists())
         polls = [c for c in fake.calls if "/background-jobs/" in c[1]]
         self.assertEqual(len(polls), 3, "two 'processing' answers, then 'completed'")
         sent = [c for c in fake.calls if c[1].endswith("/create-character-v3")][0][3]
-        self.assertEqual(sent["n_directions"], 4)
+        self.assertEqual(sent["n_directions"], 8)
         side = json.loads((self.root / "assets/keeper/pixellab.gen.json").read_text(encoding="utf-8"))
         self.assertIn("rotations/south.png", side["files"])
         self.assertIn("| A-0001 | sprite | ", (self.root / "docs/ASSET_LOG.md").read_text(encoding="utf-8"))
@@ -353,6 +353,42 @@ class PixelLabExam(unittest.TestCase):
         self.assertEqual(base64.b64decode(sent["first_frame"]["base64"]), PNG)
         side = (self.root / "walk/pixellab.gen.json").read_text(encoding="utf-8")
         self.assertNotIn(sent["first_frame"]["base64"], side, "the sidecar records the frame's path, not its bytes")
+
+    def test_v3_character_refuses_4_directions_and_shading_before_spending(self):
+        # Live 2026-11-04: PixelLab answers 422 to both (n_directions 4 needs a reference image; v3 has no shading)
+        for extra, why in ((["--directions", "4"], "--legacy"), (["--shading", "basic shading"], "--shading")):
+            fake = Fake()
+            rc, out = self.run_tool("character", "--text", "wizard", "--size", "32", *extra, "--out", "c", fake=fake)
+            self.assertEqual(rc, 2, out)
+            self.assertIn(why, out)
+            self.assertEqual([c for c in fake.calls if c[0] == "POST"], [], "nothing spent")
+        fake = Fake()
+        rc, out = self.run_tool("character", "--text", "wizard", "--size", "16", "--legacy", "--directions", "4",
+                                "--shading", "basic shading", "--out", "leg", fake=fake)
+        self.assertEqual(rc, 0, out)
+        sent = [c for c in fake.calls if c[1].endswith("/create-character-with-4-directions")][0][3]
+        self.assertEqual(sent["shading"], "basic shading", "the legacy endpoint takes shading")
+
+    def test_animate_keeps_a_transparent_frame_transparent(self):
+        # Live 2026-11-04: without no_background PixelLab filled a transparent ghost's frames with flat grey
+        fake = Fake(images=1)
+        rc, out = self.run_tool("animate", "--frame", "south.png", "--action", "float", "--out", "a", fake=fake)
+        self.assertEqual(rc, 0, out)
+        sent = [c for c in fake.calls if c[1].endswith("/animate-with-text-v3")][0][3]
+        self.assertIs(sent.get("no_background"), True, "an RGBA frame asks for transparent frames")
+        raw = b"\x00" + b"\x00\x00\x00"
+        chunk = lambda tag, data: (struct.pack(">I", len(data)) + tag + data  # noqa: E731
+                                   + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))
+        rgb = (PNG_SIG + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
+               + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+        (self.root / "scene.png").write_bytes(rgb)
+        (self.root / "keyed.png").write_bytes(rgb[:33] + chunk(b"tRNS", b"\x00\x00\x00\x00\x00\x00") + rgb[33:])
+        for frame, want in (("scene.png", None), ("keyed.png", True)):
+            fake = Fake(images=1)
+            rc, out = self.run_tool("animate", "--frame", frame, "--action", "x", "--out", "o_" + frame, fake=fake)
+            self.assertEqual(rc, 0, out)
+            sent = [c for c in fake.calls if c[1].endswith("/animate-with-text-v3")][0][3]
+            self.assertIs(sent.get("no_background"), want, frame)
 
     def test_animate_checks_its_frame(self):
         (self.root / "notpng.png").write_bytes(b"GIF89a")

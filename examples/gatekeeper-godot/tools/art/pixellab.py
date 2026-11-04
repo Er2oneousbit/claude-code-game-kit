@@ -40,7 +40,9 @@
 #           Run live 2026-10-26: prop (1), vfx lite (1: a GIF, spritesheet and JSON from
 #           storage links), iso-tile (1), tileset --kind sidescroller (2, 16 tiles), edit (1), fix reduce-colors (0.1).
 #           Learned live: GET /map-objects/{id} answers 423 while it is generating (handled as "still working").
-#           Not yet live: ui, font, object, tiles-pro, outfit, pixelate, animate-character (verify).
+#           Run live 2026-11-04: character v3 at 32 px (8 directions, 2), animate-character --mode skeleton-v3
+#           (3 per direction), animate at 32x32, 8 frames (1). v3 from text refuses 4 directions and --shading.
+#           Not yet live: ui, font, object, tiles-pro, outfit, pixelate (verify).
 #           [paid plan only] in -h (tiles-pro, outfit) is PixelLab's rule; a trial account gets a 402, explained.
 #           Download links on PixelLab's storage get no token: it is sent only to the API host, and a redirect
 #           keeps it only on the same https host and port (anywhere else it is dropped; https to http is refused).
@@ -312,6 +314,24 @@ def b64_image(path):
     return {"type": "base64", "base64": base64.b64encode(data).decode("ascii"), "format": "png"}
 
 
+def png_has_alpha(path):
+    """True when a local PNG can hold transparency: an alpha color type (4 gray+alpha, 6 RGBA) or a tRNS chunk."""
+    data = Path(path).read_bytes()
+    if len(data) < 26 or not data.startswith(PNG_MAGIC):
+        return False
+    if data[25] in (4, 6):
+        return True
+    pos = 8
+    while pos + 8 <= len(data):  # walk the chunks up to the image data: tRNS must come before IDAT
+        size, name = int.from_bytes(data[pos:pos + 4], "big"), data[pos + 4:pos + 8]
+        if name == b"tRNS":
+            return True
+        if name in (b"IDAT", b"IEND"):
+            return False
+        pos += 12 + size
+    return False
+
+
 def extract_zip(data, out_dir):
     """Unpack a zip from PixelLab into out_dir, refusing any member that would land outside it. Returns the files."""
     out_dir = (Path.cwd() / out_dir).resolve()
@@ -518,6 +538,13 @@ def build(kind, args):
         return "/create-character-with-4-directions", style(args, {"description": args.text, "image_size": args.size})
     if kind == "character":
         check_size(args.size, 32, 256, "character frame")
+        # Learned live 2026-11-04: v3 from text answers 422 to n_directions 4 (it needs a reference image) and to
+        # any shading field, after the request was sent: refuse both here, before anything is spent
+        if args.directions != 8:
+            raise ToolError("v3 makes 8 directions from text (PixelLab takes 4 only with a reference image): "
+                            "drop --directions 4 (same cost) or use --legacy")
+        if args.shading:
+            raise ToolError("v3 takes --outline, --detail and --view but not --shading: drop it or use --legacy")
         body = {"description": args.text, "n_directions": args.directions, "image_size": args.size,
                 "no_background": True}
         if args.name:
@@ -527,6 +554,8 @@ def build(kind, args):
         if not 4 <= args.frames <= 16:
             raise ToolError("--frames must be 4 to 16")
         body = {"first_frame": b64_image(args.frame), "action": args.action, "frame_count": args.frames}
+        if png_has_alpha(args.frame):
+            body["no_background"] = True  # without it PixelLab fills a transparent sprite's frames with flat grey
         if args.seed is not None:
             body["seed"] = args.seed
         return "/animate-with-text-v3", body
@@ -1043,7 +1072,7 @@ def build_parser():
     p = sub.add_parser("character", parents=[common, gen, look], help="a character facing 4 or 8 directions (a folder of PNGs)")
     p.add_argument("--text", required=True, help="who it is, e.g. 'old gravekeeper with a lantern'")
     p.add_argument("--size", type=size_arg, default=size_arg("64"), help="frame size, 32 to 256 (default 64)")
-    p.add_argument("--directions", type=int, choices=(4, 8), default=8, help="4 or 8 directions (default 8)")
+    p.add_argument("--directions", type=int, choices=(4, 8), default=8, help="8 (default), or 4 with --legacy")
     p.add_argument("--name", default="", help="a name for the character in your PixelLab library")
     p.add_argument("--legacy", action="store_true",
                    help="the older 4-direction endpoint: sizes 16 to 128 (v3 starts at 32); the canvas is about 40%% larger")
