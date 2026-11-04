@@ -499,6 +499,10 @@
   ASSET_LOG row, licence evidence and HOW_IT_WAS_MADE say so. A new EditMode test checks every narrator line names
   `LevelCheck.SoulCount` (old take: "six" reported), and the evidence check also covers a sidecar's hash as received.
   Checked by ear on 2026-11-04 (#138).
+- `pixellab.py`: `animate` asks for transparent frames when its first frame has transparency (PixelLab filled them
+  with flat grey), and a v3 `character` refuses `--directions 4` and `--shading` before sending (PixelLab answered
+  422 to both after the request went out). Found making Ghost Lantern's sprites; `image`, a v3 `character`,
+  `animate` and `animate-character --mode skeleton-v3` are now run live (#17).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
