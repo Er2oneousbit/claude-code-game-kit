@@ -483,6 +483,11 @@
   false findings). Found by running the 0.8.1 lanes together on a full test game: store, screens, bdf, diorama, vfx,
   uikit, lighting, the Latin fonts, holds / smear / shaders and `capture` all packed, 231 resources load in `verify`,
   and `qa pack` gives the 13 findings it gave before (#48).
+- Dotwork: `"holds"` (and `"smear"`) on a skeleton attack, cast or shoot centre on the skeleton's own strike frame
+  (`pose.STRIKE`: mid swing, mid thrust, the shot's recoil) instead of the measured peak, which on a plain shoot is
+  the arm coming up, so the aim hold landed on the rest frame. A new render records which control frames
+  SpriteKiln's frame select kept (`frame_select` in the clip's meta.json) to place it; older clips assume an even
+  loop, and a trim that cuts the strike off keeps the measured peak (#180).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
