@@ -1,6 +1,6 @@
 {
  "name": "party_member",
- "_comment": "One party member end to end: 4-direction idle, walk and run, an attack and a cast, all driven by the skeleton (the pose tier) with a wind-up before the strikes (anticipation), held wind-up and impact frames (holds) and a smear on the attack, the hit-flash and dissolve shaders, the battle pose set facing left (poses: battle; pose_text rewords five of them for a fencer and names the rapier, which klein dropped otherwise) and a menu portrait with five expressions and talking frames. clip_fix holds the two retakes its review needed (a sword fragment on the north attack, a lost hat on the kneeling pose). The battle set's cast pose ships as cast_pose_w beside the cast clip. The longest example (a rotation + 19 skeleton clips, about an hour on a 16 GB card). Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "_comment": "One party member end to end: 4-direction idle, walk and run, an attack and a cast, all driven by the skeleton (the pose tier) with a wind-up before the strikes (anticipation), held wind-up and impact frames (holds) and a smear on the attack, the hit-flash and dissolve shaders, the battle pose set facing left (poses: battle; pose_text rewords five of them for a fencer and names the rapier, which klein dropped otherwise) and a menu portrait with five expressions and talking frames. clip_fix holds the three retakes its review needed (a sword fragment on the north attack; the west attack, whose first take held the rapier pointing back behind him for most of the strike, so the figure read as facing the wrong way; a lost hat on the kneeling pose). The battle set's cast pose ships as cast_pose_w beside the cast clip. The longest example (a rotation + 19 skeleton clips, about an hour on a 16 GB card). Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
  "design": {
   "setting": "steampunk",
   "character": {
@@ -50,6 +50,9 @@
    "clip_fix": {
     "attack_n": {
      "seed": 4243
+    },
+    "attack_w": {
+     "seed": 4244
     },
     "weak_w": {
      "seed": 6401
