@@ -3,7 +3,8 @@
 # test_doctor.py
 # Purpose : Exam for doctor.py, the engine-agnostic health check: the asset-log reminder fires in every overlay's
 #           media folder (assets, Assets, Content, public/assets, game/img) and stays quiet once a row is filled;
-#           the placeholder scan reads the overlays' source files and the profile tokens.
+#           the placeholder scan reads the overlays' source files and the profile tokens; a web game's src/shell/
+#           that src/main.ts never reaches is reported.
 # Usage   : python tools/test_doctor.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only. Each case copies doctor.py and check_links.py into a fake project under a temp
@@ -71,6 +72,27 @@ class DoctorExam(unittest.TestCase):
         self.assertIn(f"UNRESOLVED placeholder(s) ['{name}'] in src/main.ts", out)
         self.assertIn("in src/game.lua", out)
         self.assertNotIn("dialogue.json", out)
+
+    def test_unwired_web_shell_is_reported(self):
+        """#182: a web game kept its own main.ts, so src/shell/ (title, menus, settings, pause) never ran."""
+        warn = "src/shell/app.ts is never imported from src/main.ts"
+        self.assertNotIn(warn, self.doctor())                                   # no shell: nothing to say
+        self.put("src/shell/app.ts", "export const shell = {};\n")
+        self.put("src/shell/screens.ts", 'import type { Shell } from "./app";\n')
+        self.put("src/game/MainScene.ts", 'import { shell } from "../shell/app";\n')   # a scene nothing loads
+        self.put("src/main.ts", '// Usage: import { shell } from "./shell/app"\nimport * as Phaser from "phaser";\n'
+                                'import type { Shell } from "./shell/app";\nimport { GateScene } from "./game/GateScene";\n')
+        self.put("src/game/GateScene.ts", 'import { Log } from "../core/log";\n')
+        out = self.doctor()
+        self.assertIn(warn, out)
+        self.assertIn("/game-shell", out)
+        # Reached through another module (main -> GateScene -> shell/app), a multi-line import naming app.js: wired
+        self.put("src/game/GateScene.ts", 'import {\n  shell,\n} from "../shell/app.js";\n')
+        self.assertNotIn(warn, self.doctor())
+        # Imported straight from main.ts, as the web skeleton does
+        self.put("src/game/GateScene.ts", "export {};\n")
+        self.put("src/main.ts", 'import { shell } from "./shell/app";\nimport * as Phaser from "phaser";\n')
+        self.assertNotIn(warn, self.doctor())
 
     def test_assets_dir_option_wins(self):
         self.put("public/assets/art/hero.png", "x")

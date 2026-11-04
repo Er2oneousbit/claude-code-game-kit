@@ -17,6 +17,8 @@
 #           full path on your machine, in every .pxo (export_profile.directory_path): both commands warn about it,
 #           and only --clear-export-path rewrites the file to blank it (the frames and every other entry stay).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): a character whose clips have different sizes gets one
+#           canvas, each clip centred on its bottom edge; the re-export crops each back (#82)
 # ---------------------------------------------------------------------------
 import glob
 import io
@@ -394,6 +396,7 @@ def build(pack, conf, overwrite=False):
     game's frames (_shows_the_game) is left as it is. One that differs may hold hand polish (or the game's art changed
     since): it is kept unless overwrite, and a file
     overwrite replaces is first copied to <name>.pxo.bak (one level, as the game shells keep their saves).
+    A character whose clips have different sizes gets the widest and tallest as its canvas (handpolish.clip_box).
     Returns {"written": [...], "unchanged": [...], "kept": [...], "backups": [the .bak files written]}."""
     src = core.src(conf, "pixelorama")
     chars, fx, single, fps, fx_loop, holds = handpolish.groups(pack)
@@ -423,8 +426,13 @@ def build(pack, conf, overwrite=False):
         frames = [np.array(Image.open(p).convert("RGBA")) for _, _, p in items]
         sizes = sorted({fr.shape[1::-1] for fr in frames})
         if len(sizes) > 1:
-            raise core.ToolError(f"{rel}: frames of {len(sizes)} sizes ({', '.join('%dx%d' % s for s in sizes)}): a "
-                                 "Pixelorama project has one canvas")
+            # a project has one canvas: a character's clips share the largest, each centred on its bottom edge
+            # (handpolish.clip_box), and the re-export crops each back (issue #82). An effect's frames must match.
+            if os.path.basename(os.path.dirname(out)) != "characters":
+                raise core.ToolError(f"{rel}: frames of {len(sizes)} sizes ({', '.join('%dx%d' % s for s in sizes)}): "
+                                     "a Pixelorama project has one canvas")
+            canvas = handpolish.canvas_of(sizes)
+            frames = [np.array(handpolish.pad(Image.fromarray(fr, "RGBA"), canvas)) for fr in frames]
         durations = [1.0 if s is None else round(s * proj_fps, 6) for _, s, _ in items]
         opaque = np.concatenate([fr[fr[..., 3] == 255][:, :3] for fr in frames])
         colours = [tuple(int(v) for v in c) for c in np.unique(opaque, axis=0)]   # sorted, like aseprite.py's .gpl

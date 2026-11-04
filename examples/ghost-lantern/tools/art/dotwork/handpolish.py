@@ -8,6 +8,8 @@
 #           keeps its exact value.
 # Usage   : imported by aseprite.py and pixelorama.py
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): one canvas per clip: a character whose clips have
+#           different sizes is padded to one editor canvas (clip_box) and each clip is cropped back on write_back (#82)
 # ---------------------------------------------------------------------------
 import datetime
 import glob
@@ -237,6 +239,40 @@ def same_look(a, b):
     return bool(np.array_equal(a[..., 3], b[..., 3]) and np.array_equal(a[..., :3][seen], b[..., :3][seen]))
 
 
+def canvas_of(sizes):
+    """The one editor canvas for frames of these (w, h) sizes: the widest and the tallest."""
+    return max(w for w, _ in sizes), max(h for _, h in sizes)
+
+
+def clip_box(canvas, size):
+    """(left, top) of a w x h frame on a W x H editor canvas: centred, its bottom on the canvas's bottom edge.
+    Characters ship with a feet_bottom_center anchor, so every clip's feet stand on one line in the editor; the build
+    puts a smaller clip there and the re-export crops it back from there (issue #82)."""
+    (cw, ch), (w, h) = canvas, size
+    return (cw - w) // 2, ch - h
+
+
+def pad(img, canvas):
+    """img (any mode) as RGBA on a clear canvas, placed by clip_box; the same image when it already fills it."""
+    img = img.convert("RGBA")
+    if img.size == tuple(canvas):
+        return img
+    out = Image.new("RGBA", tuple(canvas), (0, 0, 0, 0))
+    out.paste(img, clip_box(canvas, img.size))   # a plain copy, alpha included: nothing blends
+    return out
+
+
+def clip_sizes(pack, anims):
+    """{animation: (w, h)} of one character's clips as the game ships them (the first frame of each)."""
+    sizes = {}
+    for anim, files in anims.items():
+        p = os.path.join(pack, sorted(files)[0])
+        if os.path.exists(p):
+            with Image.open(p) as im:   # the header only
+                sizes[anim] = im.size
+    return sizes
+
+
 def keep_or_save(img, path):
     """Save a re-exported frame, unless the shipped file already shows the same thing: then that file stays as it is,
     byte for byte (an untouched frame never changes, whatever the editor did to its clear pixels). True when the
@@ -342,13 +378,38 @@ def write_back(pack, conf, src_dir, ext, export, tool):
             if n > MAX_CLIP:
                 raise core.ToolError(f"{os.path.relpath(a_file, pack)}: tag {anim} has {n} frames (at most "
                                      f"{MAX_CLIP}: split it into two tags)")
+        # clips the game ships at different sizes share the editor's canvas (the build pads each one, clip_box):
+        # each comes back at its own size, cropped from where the build put it (issue #82: the sprite took the
+        # first frame's size, and every other clip shipped padded or cropped to it, off its anchor). A character
+        # whose clips are all one size keeps the editor's canvas, as before (a resized canvas ships resized).
+        shipped = clip_sizes(pack, chars[name])
+        size = {a: (W, H) for a in clip_of.values()}
+        boxes = {}
+        if len(set(shipped.values())) > 1:
+            for p in pngs:
+                base, anim = os.path.basename(p), clip_of[os.path.basename(p)]
+                if anim not in shipped:            # a clip made in the editor: the editor's canvas
+                    continue
+                w, h = size[anim] = shipped[anim]
+                x, y = clip_box((W, H), (w, h))
+                if x < 0 or y < 0:
+                    raise core.ToolError(f"{os.path.relpath(a_file, pack)}: the canvas ({W}x{H}) is smaller than "
+                                         f"clip {anim} ({w}x{h}): clips of different sizes keep their own size")
+                with Image.open(p) as im:
+                    alpha = np.asarray(im.convert("RGBA"))[..., 3].copy()
+                alpha[y:y + h, x:x + w] = 0
+                if alpha.any():                    # cropping it would drop art without a word: stop first
+                    raise core.ToolError(f"{os.path.relpath(a_file, pack)}: frame {base} has art outside clip "
+                                         f"{anim}'s {w}x{h} box (centred on the bottom edge of the {W}x{H} canvas): "
+                                         "clips of different sizes keep their own size, so keep the art inside it")
+                boxes[base] = (x, y, x + w, y + h)
         anims = {}
         for p in pngs:
             base = os.path.basename(p)
             anim = clip_of[base]
             with Image.open(p) as im:
-                png(im, os.path.join(out, "frames", base), "frame", sibling("frame", home), animation=anim,
-                    canvas=[W, H], anchor="feet_bottom_center")
+                png(im.crop(boxes[base]) if base in boxes else im, os.path.join(out, "frames", base), "frame",
+                    sibling("frame", home), animation=anim, canvas=list(size[anim]), anchor="feet_bottom_center")
             anims.setdefault(anim, []).append(base)
         tres_path = os.path.join(out, f"{name}_frames.tres")
         shipped = [n for n, _, _ in tres_animations(tres_path) if n in anims]
@@ -359,15 +420,17 @@ def write_back(pack, conf, src_dir, ext, export, tool):
             durs = holds_from_seconds([secs.get(fn) for fn in files], f, holds.get((name, anim)),
                                       what=f"{name} {anim}")
             tres_anims[anim] = (files, f, loop) if durs is None else (files, f, loop, durs)
-            sheet = Image.new("RGBA", (W * len(files), H), (0, 0, 0, 0))
+            cw, ch = size[anim]
+            sheet = Image.new("RGBA", (cw * len(files), ch), (0, 0, 0, 0))
             for i, fn in enumerate(files):
                 with Image.open(os.path.join(out, "frames", fn)) as im:
-                    sheet.alpha_composite(im.convert("RGBA"), (i * W, 0))
+                    sheet.alpha_composite(im.convert("RGBA"), (i * cw, 0))
             sp = os.path.join(out, f"{name}_{anim}_sheet.png")
             retimed = (durs or None) != (holds.get((name, anim)) or None)
             png(sheet, sp, "sheet", sibling("sheet", home), animation=anim, frames=len(files), fps=f, loop=loop,
-                canvas=[W, H], anchor="feet_bottom_center", durations=durs, force=("durations",) if retimed else ())
-            data = {"frame_w": W, "frame_h": H, "frames": len(files), "fps": f, "loop": loop, "anchor": "bottom_center"}
+                canvas=[cw, ch], anchor="feet_bottom_center", durations=durs, force=("durations",) if retimed else ())
+            data = {"frame_w": cw, "frame_h": ch, "frames": len(files), "fps": f, "loop": loop,
+                    "anchor": "bottom_center"}
             if durs is not None:   # other engines read the holds here: frame i shows durations[i] / fps seconds
                 data["durations"] = durs
             text(sp[:-4] + ".json", json.dumps(data, indent=1), "sheet_data", animation=anim)

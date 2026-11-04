@@ -19,6 +19,8 @@
 # Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): the asset-log check finds public/assets (web, web-3d)
 #           and game/img (RPG Maker MZ) too; the placeholder scan reads the overlays' source files and reports the
 #           profile tokens ({{FOOTER}} and the like) as well
+# Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): web games get a warning when src/shell/app.ts is
+#           present but src/main.ts never reaches it through its imports (the shell sits there unused)
 # ---------------------------------------------------------------------------
 import argparse
 import datetime
@@ -72,6 +74,15 @@ MEDIA_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".tga", ".psd", ".aseprit
              ".flac", ".aif", ".aiff", ".ttf", ".otf", ".woff", ".woff2", ".glb", ".gltf", ".fbx", ".obj", ".blend"}
 # Template files legitimately mention placeholders in prose (they document them).
 PLACEHOLDER_ALLOWED = {"tools/doctor.py", "scripts/new_game.py"}
+# The web overlay's front end (title, menus, settings, pause): it only runs when the entry module reaches it
+SHELL_APP = "src/shell/app.ts"
+WEB_ENTRIES = ("src/main.ts", "src/main.js")
+SOURCE_EXT = (".ts", ".tsx", ".js", ".jsx", ".mjs")
+# Runtime imports of a relative module: import x from "./a", import "./a", import("./a"), export { x } from "./a".
+# `import type` and `export type` are left out: TypeScript erases them, so they load nothing
+IMPORT_RE = re.compile(r"""\bimport(?!\s+type\b)[^'"();]*?\bfrom\s*['"](\.{1,2}/[^'"]+)['"]"""
+                       r"""|\bimport\s*\(?\s*['"](\.{1,2}/[^'"]+)['"]"""
+                       r"""|\bexport\s+(?!type\b)[^'";]*?\bfrom\s*['"](\.{1,2}/[^'"]+)['"]""")
 
 
 def log(debug, msg):
@@ -178,6 +189,52 @@ def default_assets_dir(root):
     return "assets"
 
 
+def resolve_import(src, spec):
+    """The source file a relative import names ("./shell/app" -> shell/app.ts), or None outside the tree."""
+    base = (src.parent / spec)
+    stem = base.with_suffix("") if base.suffix in (".js", ".mjs") else base   # "./a.js" may name a.ts (TS ESM)
+    for cand in [base] + [stem.with_name(stem.name + ext) for ext in SOURCE_EXT] + \
+                [base / ("index" + ext) for ext in SOURCE_EXT]:
+        if cand.suffix in SOURCE_EXT and cand.is_file():
+            return cand
+    return None
+
+
+def check_shell_wired(warnings, debug):
+    """Web games: warn when src/shell/ is present but the entry module never reaches it (#182: an example kept
+    its own main.ts through an upgrade, so the whole front end sat there unused and smoke --drive could not work)."""
+    if not (ROOT / SHELL_APP).is_file():
+        return
+    entry = next((ROOT / e for e in WEB_ENTRIES if (ROOT / e).is_file()), None)
+    if entry is None:
+        log(debug, f"{SHELL_APP} present but no {' or '.join(WEB_ENTRIES)}, skipping the shell check")
+        return
+    target = (ROOT / SHELL_APP).resolve()
+    seen, todo = set(), [entry.resolve()]
+    while todo:                                  # every module the entry loads, through relative imports
+        src = todo.pop()
+        if src in seen:
+            continue
+        seen.add(src)
+        if src == target:
+            log(debug, f"{SHELL_APP} is reached from {entry.relative_to(ROOT).as_posix()}")
+            return
+        try:
+            text = src.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            log(debug, f"skip unreadable {src}: {exc}")
+            continue
+        # Comment lines are dropped (a header's "Usage: import { shell } from ..." loads nothing)
+        code = "\n".join(l for l in text.splitlines() if not l.lstrip().startswith(("//", "/*", "*")))
+        for m in IMPORT_RE.finditer(code):
+            found = resolve_import(src, next(g for g in m.groups() if g))
+            if found is not None:
+                todo.append(found.resolve())
+    warnings.append(f"{SHELL_APP} is never imported from {entry.relative_to(ROOT).as_posix()}, so the title, menus, "
+                    "settings and pause never run (and `dev.py smoke --drive` cannot): wire it in with /game-shell, "
+                    "or delete src/shell/ if the game wants no shell")
+
+
 def check_doc_links(warnings, debug, ignore):
     """Warn about markdown links and backticked paths that point nowhere (tools/check_links.py)."""
     broken = check_links.scan(ROOT, [], [], ignore)
@@ -214,6 +271,7 @@ def main():
         ("placeholders", lambda: check_placeholders(problems, args.debug, args.ignore)),
         ("handoff age", lambda: check_handoff_age(warnings)),
         ("asset log", lambda: check_assets(warnings, args.assets_dir, args.debug)),
+        ("web shell", lambda: check_shell_wired(warnings, args.debug)),
         ("doc links", lambda: check_doc_links(warnings, args.debug, args.ignore)),
     ]
     crashed = False

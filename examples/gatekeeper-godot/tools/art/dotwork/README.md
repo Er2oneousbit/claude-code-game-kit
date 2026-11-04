@@ -427,7 +427,10 @@ sibling's provenance only (models, workflow, routes, blend), never the sibling's
 use letters, digits and `_` only (they become file names), and a tag holds at most 100 frames (the shipped names
 carry two digits). Effects in the effects lane's layout (`fx/<name>/spr_fx_<name>_NN.png`, which hit effects share)
 are included. Spells, VFX, status marks, animated props, balloons and vehicles keep their lanes' own files and are
-drawn from their specs, so neither editor gets them.
+drawn from their specs, so neither editor gets them. A character whose clips have different frame sizes (two packs
+wrote it) gets one canvas, the widest and the tallest: each clip sits centred on its bottom edge, so every clip's feet
+stand on one line, and comes back at its own size. Keep a clip's art inside its box; art outside it stops the
+re-export with the frame's name. An effect's frames must all be one size.
 
 | | Aseprite | Pixelorama |
 |---|---|---|
@@ -443,7 +446,8 @@ repository, that path is public too. `pixelorama` and `pixelorama --reexport` na
 `[warn]` line), and `tools/publish_check.py` warns about it before you publish; `--clear-export-path` blanks the
 folder (nothing else in the file changes, and the round trip still gives the same frames). Dotwork never rewrites a
 `.pxo` for this without that flag. How Pixelorama treats a blank folder on its next export is (verify). Aseprite 1.3.18 on Windows built the sources and re-exported them untouched
-with every file unchanged; an edit made in Aseprite's window is not tested yet.
+with every file unchanged, a character with clips of two sizes included; an edit made in Aseprite's window is not
+tested yet.
 
 ## Store art (Steam sizes)
 What the `store` lane writes to `assets_src/store/<name>/steam/`, checked against the Steamworks documentation on
@@ -487,8 +491,30 @@ Turning a sprite into a 3D model was tried on 2026-11-01 (RTX 5060 Ti 16 GB, Win
   non-commercial or research licences), and its attention routed through PyTorch's own because the xformers build had
   no kernels for this GPU. Two 64 px pixel-art props each took 20-70 s and up to 10 GB of VRAM; after decimation, UV
   unwrap and a colour bake in Blender, both GLBs pass `tools/blender/validate_asset.py --class prop`, but the shapes
-  were wrong (a barrel came back as a box). A control run on TRELLIS's own example filled the 16 GB card while
-  decoding and was stopped. Not recommended until it is shown to work on supported hardware.
+  were wrong (a barrel came back as a box, a crate as crossed planes).
+  **The cause, found on 2026-11-04 (same card and setup): that run blew the sprites up 8x with nearest neighbour
+  before TRELLIS saw them, and TRELLIS gets hard pixel steps wrong. The DINOv2 swap is not at fault.** Measured
+  on the coarse 64x64x64 shape TRELLIS builds first, seeds 1 to 3:
+  - The plain 64 px RGBA sprite (TRELLIS's own crop and Lanczos resize then smooth the pixels): the barrel came
+    back a barrel and the crate a framed box, 3 of 3 seeds each. The full meshes (seed 1, 21-39 s, 9.9-11.0 GB
+    peak) keep those shapes.
+  - Blown up with nearest neighbour first, as before: the crate came back crossed planes or a box on a post in
+    3 of 3 seeds, the barrel a box (seed 1, the earlier run's seed) or a plain cylinder. Nearest neighbour on a
+    neutral grey background: crate wrong 3 of 3, barrel right 3 of 3. Blurring or bicubic upscaling instead gave
+    an empty or flat result in 13 of 18 runs.
+  - Controls: plain Blender renders of a barrel and a crate, the same renders cut down to 64 px pixel art, and
+    TRELLIS's own crate and castle examples all came back the right shape (the Blender barrel with a thin ground
+    plate under it).
+  - DINOv2: the local copy loads all 440 tensors of its safetensors file unchanged, and its tokens match an
+    independent float64 re-implementation of the original ViT-L/14 forward pass on the same weights (cosine
+    1.000000 on every token). TRELLIS's own attention path and the routed one give identical shapes. Whether the
+    safetensors weights equal Meta's original `.pth` was not checked (no `.pth` on the test machine) **(verify)**.
+
+  So give TRELLIS the sprite at its own size with transparency, never pre-scaled, and try more than one seed:
+  shapes change between seeds. TRELLIS's own crate example still runs out of memory in the mesh decoder on 16 GB
+  (about 53,000 occupied cells, four times a prop's; 12.4 GB allocated when it failed under an 85 % cap), and
+  the mesh path gives no usable colour without a bake. It stays out of Dotwork: it needs the changes above and was
+  tried on two sprites only.
 - **TRELLIS.2** (MIT) asks for at least 24 GB of VRAM: not testable on a 16 GB card.
 - **Hunyuan3D 2.0**: its community licence excludes the European Union, the United Kingdom and South Korea and needs a
   separate licence above 1 million monthly users, so the kit does not recommend it.
