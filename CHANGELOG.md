@@ -469,6 +469,10 @@
   night (`--autoplay`), where Esc does nothing, says `(autoplay careful)` (or `lit`, `dark`) instead. The label is
   `Hud.LevelLabel`, kept current like `SeedLabel`, and the new `Smoke_R9` checks both nights (old code: the hint on
   the bot night) (#179).
+- Dotwork: the skeleton's run, idle, attack and jump clips (and cast and shoot) were rendered live on a test character
+  in 4 directions and passed the in-game verify, with no code change. The README's characters (skeleton) row says
+  what they look like: side views follow the skeleton, front and back strikes read weakly, a held item can leave the
+  hand; hurt and death are still to render (#39).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
