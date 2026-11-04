@@ -506,6 +506,9 @@
 - `pixellab.py`: `ui`, `object` and `prop` print and record what they cost. Their POST answers `"usage": null`
   and the finished resource has no usage, so a live 192 px UI panel (10 generations) said nothing and saved
   `"cost": ""`; the cost now comes from the background job the POST names (found in a live run, 2026-11-04).
+- `pixellab.py`: an `object` that comes back as several candidates (1 direction, `--size` 170 or less: a live 64 px
+  crate gave 16) saves them all as `candidate_NN.png` and exits 0. It exited 2 and saved nothing, though the
+  candidates were already paid for (10 generations); `--size -h` says how many candidates each size gives.
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

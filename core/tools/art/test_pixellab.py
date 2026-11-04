@@ -117,7 +117,13 @@ class Fake:
                                         "image_url": f"{CDN}/ui/panel.png"},
                      "/map-objects/m1": {"status": "completed", "object_id": "m1", "download_url": f"{CDN}/m/pie.png"},
                      "/objects/o1": {"id": "o1", "status": "completed", "frame_urls": [f"{CDN}/o/a.png", f"{CDN}/o/b.png"]},
-                     "/objects/o-review": {"id": "o-review", "status": "review", "frame_urls": []},
+                     # a 1-direction object of 85 px or less, as seen live 2026-11-04: candidates in "review"
+                     "/objects/o-review": {"id": "o-review", "status": "review", "directions": 1,
+                                           "rotation_urls": {"south": None, "north": None},
+                                           "storage_urls": {f"frame_{i}": f"{CDN}/o/rotations/frame_{i}.png" for i in range(3)},
+                                           "frame_urls": [f"{CDN}/o/rotations/frame_{i}.png" for i in range(3)]},
+                     "/objects/o-review-empty": {"id": "o-review-empty", "status": "review", "storage_urls": {},
+                                                 "frame_urls": None},
                      "/objects/o-evil": {"id": "o-evil", "status": "completed",
                                          "rotation_urls": {"south": f"{CDN}/o/s.png", "../escaped": f"{CDN}/o/e.png"}},
                      "/objects/o8": {"id": "o8", "status": "completed",
@@ -489,9 +495,17 @@ class PixelLabExam(unittest.TestCase):
         rc, out = self.run_tool("object", "--text", "barrel", "--directions", "8", "--size", "48", "--out", "obj/barrel", fake=Fake())
         self.assertEqual(rc, 0, out)
         self.assertEqual(sorted(p.name for p in (self.root / "obj/barrel").glob("*.png")), ["east.png", "south.png"])
+        # Live 2026-11-04: a 64 px crate came back as 16 paid candidates in "review"; the tool exited 2 and saved none
         rc, out = self.run_tool("object", "--text", "x", "--out", "obj/rev", fake=Fake(object_id="o-review"))
-        self.assertEqual(rc, 2)
-        self.assertIn("several candidates", out)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(sorted(p.name for p in (self.root / "obj/rev").glob("*.png")),
+                         ["candidate_00.png", "candidate_01.png", "candidate_02.png"])
+        side = json.loads((self.root / "obj/rev/pixellab.gen.json").read_text(encoding="utf-8"))
+        self.assertEqual(side["review"], 3)
+        self.assertIn("3 candidates", out)
+        rc, out = self.run_tool("object", "--text", "x", "--out", "obj/rev0", fake=Fake(object_id="o-review-empty"))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("no candidate links", out)
         rc, out = self.run_tool("object", "--text", "x", "--directions", "8", "--size", "200", "--out", "obj/big", fake=Fake())
         self.assertEqual(rc, 2, "8-direction objects stop at 168")
 

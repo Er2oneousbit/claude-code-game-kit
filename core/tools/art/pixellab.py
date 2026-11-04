@@ -804,10 +804,18 @@ def run_job(kind, key, endpoint, body, out, args):
         obj = first.get("object_id")
         print(f"[info] object {obj} queued; PixelLab takes 30 s to a few minutes ...")
         res = poll_resource(key, f"/objects/{obj}", args.wait)
-        if res.get("status") == "review":
-            raise ToolError(f"PixelLab made several candidates for object {obj}: keep the ones you want on pixellab.ai "
-                            "(or the MCP's select_object_frames), then download them; a different --size gives one")
         out.mkdir(parents=True, exist_ok=True)
+        if res.get("status") == "review":
+            # Seen live 2026-11-04: a 64 px object came back as 16 candidates in "review", already paid for (10
+            # generations), their links in frame_urls (and storage_urls frame_0 ...). Save them all to choose from
+            links = res.get("frame_urls") or url_values(res.get("storage_urls"))
+            if not links:
+                raise ServiceError(f"object {obj} is in review, but PixelLab gave no candidate links")
+            files = [fetch_url(u, key, out / f"candidate_{i:02d}.png") for i, u in enumerate(links)]
+            print(f"[info] PixelLab made {len(files)} candidates (sizes up to 170 make several): all saved as "
+                  f"candidate_NN.png; keep the one you want. On pixellab.ai object {obj} waits for review "
+                  "(keep or dismiss there, or with the MCP's select_object_frames / dismiss_review)")
+            return files, cost or job_cost(key, first, args.wait), {"object_id": obj, "review": len(files)}
         rot = {d: u for d, u in (res.get("rotation_urls") or {}).items() if u}
         for d in rot:                     # the API's keys become file names: a plain name only, never a path
             if not plain_name(d):
@@ -1164,7 +1172,8 @@ def build_parser():
     p = sub.add_parser("object", parents=[common, gen], help="a prop seen from 1 or 8 directions (10 to 25)")
     p.add_argument("--text", required=True, help="e.g. 'iron cannon on wheels'")
     p.add_argument("--directions", type=int, choices=(1, 8), default=1)
-    p.add_argument("--size", type=int, default=64, help="1 direction: 16 to 256; 8 directions: 24 to 168 (default 64)")
+    p.add_argument("--size", type=int, default=64, help="1 direction: 16 to 256, where sizes up to 42 give 64 candidates, up to 85 give 16, "
+                        "up to 170 give 4, larger 1 (all saved as candidate_NN.png); 8 directions: 24 to 168 (default 64)")
     p.add_argument("--view", help="1 direction: top-down or sidescroller; 8: low top-down, high top-down or side")
     p.set_defaults(fn=lambda a: cmd_generate(a, "object"))
     p = sub.add_parser("prop", parents=[common, gen, look2], help="a single map prop with a transparent background (about 1)")
