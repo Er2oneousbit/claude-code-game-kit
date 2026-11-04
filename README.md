@@ -193,7 +193,7 @@ loudness and the whole-mix check, sound events and adaptive music as data that e
 sound sets, dialogue subtitles and captions, voices on your own GPU and sound made from code. Every subcommand:
 [core/tools/audio/wavesmith/README.md](core/tools/audio/wavesmith/README.md).
 
-![A party member made by Dotwork, every clip driven by its skeleton: a run, an attack with a wind-up, a smear and a hit-stop, and a cast](workflows/local-pixel-art/media/dotwork_duelist.gif)
+![A party member made by Dotwork, every clip driven by its skeleton: walking south, walking east, and attacking west with a wind-up](workflows/local-pixel-art/media/dotwork_duelist.gif)
 
 ![The same party member walking south, east, north and west](workflows/local-pixel-art/media/dotwork_duelist_walk.gif)
 

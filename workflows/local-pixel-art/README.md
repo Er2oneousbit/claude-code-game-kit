@@ -103,14 +103,14 @@ dotwork.py verify                                 # load every Dotwork asset in 
   verify passed.
 
 **The duelist from the party example** (`party_member.json` in Dotwork's examples), re-rendered 2026-11-04 with
-the shipped Dotwork: no style reference, the shipped palettes, one take per clip except two retakes by seed
-(`clip_fix`). Every clip but the back idle (a code-drawn bob) is driven by the skeleton (`skeleton`, the pose tier):
+the shipped Dotwork: no style reference, the shipped palettes, one take per clip except three retakes by seed
+(`clip_fix`; the west attack was retaken for a strike that reads west from wind-up to lunge). Every clip but the back idle (a code-drawn bob) is driven by the skeleton (`skeleton`, the pose tier):
 walk, run, idle, an attack with a wind-up (`anticipation`), its wind-up and impact frames held (`holds`, the
-hit-stop) and a smear on the west strike (`smear`), and a cast. 19 Wan clips (about 135 s each, one more for a
+hit-stop; the smear stays off on the west strike, where it dragged the coat: issue #187), and a cast. 19 Wan clips (about 135 s each, one more for a
 retake) plus a rotation, nine battle poses and a portrait with expressions: about an hour of GPU time on the 16 GB
-card, verify passed. Shown at 3x on a light backing, timed by the game's own frame rates and holds:
+card, verify passed. Shown at 3x on a light backing, every frame at 120 ms (the game plays the holds; a GIF shows each frame once):
 
-![The duelist running east, attacking west with a wind-up, a smear and a hit-stop, attacking east and casting east](media/dotwork_duelist.gif)
+![The duelist walking south, walking east, and attacking west with a wind-up](media/dotwork_duelist.gif)
 
 ![The duelist walking south, east, north and west](media/dotwork_duelist_walk.gif)
 
