@@ -534,6 +534,11 @@
 - Dotwork aseprite: the palette scan reads pixels with Pillow's `get_flattened_data` instead of `Image.getdata`,
   which warns from Pillow 12 and is removed in Pillow 14; the older Pillow that Python 3.8 installs has no
   `get_flattened_data` and keeps `getdata`. The exam turns a DeprecationWarning from the scan into a failure (#185).
+- Dotwork characters: a still pose named like one of the character's actions in a direction that action has a clip
+  (the battle set's `cast` beside a `cast` action facing west) no longer replaces the clip with its one still frame;
+  with `holds` or `smear` that stopped the export on an IndexError after every render was done. The still ships
+  beside the clip as `<pose>_pose_<dir>` (an assumption line says so) and takes its own `clip_fix` entry. Found
+  re-rendering the party example's duelist.
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

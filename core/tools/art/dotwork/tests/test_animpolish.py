@@ -451,6 +451,51 @@ class AnimPolish(unittest.TestCase):
         cut.frames("shoot", "e", rot)
         self.assertIsNone(cut.strikes[("shoot", "e")])
 
+    # ---- 5b. a still pose named like an action: the battle set's cast beside a cast clip facing the same way
+    def test_pose_named_like_an_action(self):
+        # it used to replace the clip: cast_w shipped as the one still frame, and with holds or smear the export
+        # stopped on an IndexError (the 8-frame clip's strike frame looked up in the 1-frame still)
+        import animpolish
+        s = self.bind()
+        fr = [knight(y) for y in (30, 28, 24, 18, 14, 22, 28, 30)]
+        entry = {"name": "fencer", "asymmetric": True, "actions": ["cast"], "directions": ["w"], "skeleton": ["cast"],
+                 "holds": True, "smear": True, "poses": {"cast": "thrusts the free hand forward"}, "pose_dirs": ["w"]}
+        c, man, rot = self.character(s, entry, {("cast", "w"): (fr, [])})
+        still = os.path.join(self.tmp, "still_cast_w.png")
+        knight(30).save(still)
+
+        def fake_frames(action, direction, rot_, clip_dir=None):
+            c.strikes[(action, direction)] = 3                     # as frames() records a skeleton strike
+            return list(fr), []
+        c.south, c.rotate, c.clip, c.frames = (lambda: rot["w"]), (lambda south: rot), (lambda *a, **k: None), \
+            fake_frames
+        asked = []
+        c.pose = lambda name, d, instr, sprite, shipped=None: (asked.append(shipped), still)[1]
+        clips, _ = c.build()
+        self.assertEqual(len(clips[("cast", "w")][0]), 8)          # the animation stays whole
+        self.assertEqual(len(clips[("cast_pose", "w")][0]), 1)     # the still beside it
+        self.assertEqual(asked, ["cast_pose"])                     # rendered under the name it ships as
+        got = durations_of(c.export(clips, rot)[0])
+        self.assertEqual(len(got["cast_w"]), 8)
+        self.assertEqual(sorted(got["cast_w"])[-2:], sorted(animpolish.HOLDS["cast"]))   # held round the strike
+        self.assertEqual(got["cast_pose_w"], [1.0])
+        self.assertTrue(any("cast_pose_w" in a for a in man.data["assumptions"]), man.data["assumptions"])
+        # a pose with its own name keeps it
+        c2, _, _ = self.character(s, dict(entry, poses={"ready": "a fencing guard"}), {("cast", "w"): (fr, [])})
+        c2.south, c2.rotate, c2.clip, c2.frames = c.south, c.rotate, c.clip, fake_frames
+        c2.pose = c.pose
+        self.assertIn(("ready", "w"), c2.build()[0])
+        # the renamed still takes its own clip_fix entry: cast_pose_w retakes the pose, cast_w only the clip
+        import lane_character as lc
+        fixed = lc.Character(dict(entry, clip_fix={"cast_w": {"seed": 11}, "cast_pose_w": {"seed": 77}}), s.project,
+                             man, s.conf)
+        cached = os.path.join(fixed.work, "poses", "cast_w.png")
+        os.makedirs(os.path.dirname(cached), exist_ok=True)
+        knight(30).save(cached)
+        with open(cached[:-4] + ".json", "w", encoding="utf-8") as f:
+            json.dump({"instr": "thrusts the free hand forward", "seed": 77}, f)
+        self.assertEqual(fixed.pose("cast", "w", "thrusts the free hand forward", still, "cast_pose"), cached)
+
     # ---- 6. the shaders: the hitfx flash reused byte for byte, the dissolve beside it, both well-formed
     def test_shader_files(self):
         import animpolish
