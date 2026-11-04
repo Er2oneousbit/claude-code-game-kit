@@ -236,6 +236,44 @@ class AnimPolish(unittest.TestCase):
         far = new[rows.max()]
         self.assertTrue(far.any() and not (far[np.nonzero(far)[0].min():np.nonzero(far)[0].max() + 1]).all())
 
+    # ---- 3b. a lunge: only the blade is smeared, and a body that only changes shape is not smeared at all (#187)
+    def test_smear_leaves_the_body_on_a_lunge(self):
+        import animpolish
+
+        def lunger(legs_x, blade_y):
+            """A head and torso that stay, legs that step legs_x px (the body changes shape: the alignment cannot
+            undo it) and a thin blade held out at blade_y."""
+            a = np.zeros((72, 72, 4), np.uint8)
+            a[5:51, 19:37] = OUTLINE + (255,)
+            a[6:50, 20:36] = IRON + (255,)
+            a[49:71, 19 + legs_x:37 + legs_x] = OUTLINE + (255,)
+            a[50:70, 20 + legs_x:36 + legs_x] = (90, 60, 50, 255)
+            a[blade_y - 1:blade_y + 3, 36:68] = OUTLINE + (255,)
+            a[blade_y:blade_y + 2, 37:67] = BLADE + (255,)
+            return Image.fromarray(a)
+        for step in (4, -4, -6):
+            fr = [lunger(0, 36), lunger(step, 24)]       # the blade rises 12 px while the legs step
+            img, info = animpolish.smear(fr, 1)
+            self.assertIsNotNone(img, (step, info))
+            before, after = np.array(fr[1]), np.array(img)
+            rows, cols = np.nonzero((after[..., 3] == 255) & (before[..., 3] == 0))
+            # only along the blade's path (rows 23-38 between where it was and where it is), nothing at the legs
+            self.assertTrue(rows.min() >= 23 and rows.max() <= 38 and cols.min() >= 36, (step, rows.min(), rows.max()))
+            self.assertLess(info["vector"][1], -10, step)                 # it moved up, as the blade did
+            self.assertLess(abs(info["vector"][0]), 2, step)              # not sideways with the legs
+        # the legs step and nothing else moves: no smear, and the note says why
+        img, info = animpolish.smear([lunger(0, 30), lunger(-6, 30)], 1)
+        self.assertIsNone(img)
+        self.assertIn("mostly the body", info)
+        # the showcase duelist's west attack, frames 2 and 3 of seed 4244 (fixtures/duelist_lunge.png, Dotwork's own
+        # output): the smear dragged the coat and left checker squares at the boots. The blade barely moves there;
+        # the coat and the boots do
+        strip = Image.open(os.path.join(HERE, "fixtures", "duelist_lunge.png")).convert("RGBA")
+        fr = [strip.crop((0, 0, 72, 72)), strip.crop((72, 0, 144, 72))]
+        img, info = animpolish.smear(fr, 1)
+        self.assertIsNone(img, info)
+        self.assertIn("mostly the body", info)
+
     # ---- 4. holds land in the SpriteFrames (and the sheet JSON, for other engines)
     def test_holds_in_the_spriteframes(self):
         import animpolish

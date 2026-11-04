@@ -28,6 +28,7 @@ import os
 import numpy as np
 from PIL import Image
 
+import engine
 import fcore as core
 import godot
 import pose
@@ -40,6 +41,14 @@ HOLD_ANY = (2.0, 2.0)   # an action outside HOLDS named with true
 MAX_HOLD = 20.0
 SMEAR_MAX = 24          # px: the longest smear (a fast swing can move further than that between two frames)
 SMEAR_MIN_PX = 6        # px that must arrive and leave between two frames before a smear is drawn
+# #187: what a smear may drag. The body is the figure's thick mass (torso, coat, legs: BODY_PX across or more, a
+# morphological opening); blades and thin limbs are narrower. Measured 2026-11-04 on the showcase duelist's real
+# strike frames (72 px): the lunges that smeared the coat had 55-66 % of their moved pixels in the body, the
+# blade swings 0-4 %, a front-view cast 8-14 %. The feet are the bottom FEET_SHARE of the figure: a step moves them
+SMEAR_BODY = 0.5        # share of the moved pixels in the body at which the smear is skipped (a step or a lunge)
+BODY_PX = 7             # px: thinner than this is a part (a blade, an arm), not the body
+FEET_SHARE = 0.12       # the bottom share of the figure's height that is feet, never a part to smear
+PART_GAP = 3            # px between two pieces of one moving part (a blade split by the hand that holds it)
 REACH = 12              # px: how far align() looks for the body between two frames
 CLEAR = 2               # px from the old silhouette before a change counts as motion (outline redraws do not)
 DIRS = ("s", "se", "e", "ne", "n", "nw", "w", "sw")
@@ -202,6 +211,58 @@ def _step(arrived, left):
     return float(ay.mean() - ly.mean()), float(ax.mean() - lx.mean())
 
 
+def _dist(mask, upto):
+    """Steps (8 neighbours) from mask to every pixel, up to `upto`; upto + 1 beyond that."""
+    d = np.full(mask.shape, upto + 1, np.int32)
+    d[mask] = 0
+    reach = mask.copy()
+    for r in range(1, upto + 1):
+        grown = _grow(reach)
+        d[grown & ~reach] = r
+        reach = grown
+    return d
+
+
+def _main_part(arrived):
+    """The largest piece of what arrived, with the pieces within PART_GAP px of it (a blade the hand splits in two).
+    A boot or a coat hem that moved on its own, somewhere else on the figure, is not part of it."""
+    lab, n = engine.label(arrived, 8)
+    if n < 2:
+        return arrived
+    main = lab == 1 + int(np.argmax(np.bincount(lab[lab > 0])[1:]))
+    return arrived & np.isin(lab, np.unique(lab[_grow(main, PART_GAP) & arrived]))
+
+
+def _nearest(left, part):
+    """The pieces of what left that lie nearest the part (within PART_GAP px of the nearest one): where the part was.
+    The body's own edges elsewhere left too, and paired with the part they bent its motion across the body."""
+    lab, n = engine.label(left, 8)
+    if n < 2:
+        return left
+    d = _dist(part, 4 * SMEAR_MAX)
+    near = [int(d[lab == i].min()) for i in range(1, n + 1)]
+    return np.isin(lab, [i + 1 for i, v in enumerate(near) if v <= min(near) + PART_GAP])
+
+
+def _body(mask):
+    """The thick mass of a silhouette: what survives an opening BODY_PX wide (torso, coat, legs). A blade, a staff or
+    a thin arm is narrower and drops out."""
+    r = BODY_PX // 2
+    mass = mask.copy()
+    for _ in range(r):
+        mass = engine.erode(mass, 8)
+    return _grow(mass, r) & mask
+
+
+def _feet(mask):
+    """The rows of the bottom FEET_SHARE of a silhouette (its feet and boot soles)."""
+    out = np.zeros_like(mask)
+    ys = np.nonzero(mask.any(1))[0]
+    if len(ys):
+        out[int(ys.max() + 1 - FEET_SHARE * (ys.max() - ys.min() + 1)):] = True
+    return out
+
+
 def speeds(frames, loop):
     """Motion per frame, between the frame before and the frame after (a central difference, so the speed belongs to
     the frame itself), the body aligned: how many pixels moved clear of the old silhouette times how far they went.
@@ -232,7 +293,11 @@ def smear(frames, k, max_len=SMEAR_MAX, min_px=SMEAR_MIN_PX):
     The moving part is what arrived since the frame before, clear of the old silhouette with the body aligned (_moved),
     grown back into its base; its motion is the step from the centre of where it was to the centre of where it is (a
     part that came out of the body left nothing clear behind: then from the centre of everything that left, the body's
-    middle). Copies of the part are stamped back along that
+    middle). Only a part moves: when the body itself made most of the change (a step or a lunge reshapes it: SMEAR_BODY
+    of the moved pixels in its thick mass, _body) there is no smear; otherwise the body's mass and the feet are left
+    out, the part is the largest piece that is left (_main_part) and where it was is the nearest piece that left
+    (_nearest), so a boot or a coat hem that moved elsewhere on the figure is neither smeared nor bends the motion.
+    Copies of the part are stamped back along that
     motion, 1 px at a time up to its length (SMEAR_MAX at most), into empty pixels only: the body stays as drawn and
     only the space the part swept through fills in. The copies leave out the frame's outline colour (its darkest) when
     the part has other colours, so the smear reads as the part's own colours dragged, not as dark streaks; the far half
@@ -244,11 +309,29 @@ def smear(frames, k, max_len=SMEAR_MAX, min_px=SMEAR_MIN_PX):
     arrived, left, new = _moved(prev, cur)
     if arrived.sum() < min_px:
         return None, f"under {min_px} px moved clear of the body between frames {(k - 1) % n} and {k}"
+    # #187: a lunge changes the body's shape, which the alignment cannot undo: the coat's back edge and the boots
+    # arrived, its front edge left. Those pieces joined the part, the step ran between them across the body, and the
+    # stamps left a checker trail behind the coat and at the feet. Mostly body: no smear. Otherwise only a part
+    # moves: the body's thick mass and the feet are taken out, then one piece is the part and the nearest piece that
+    # left is where it was
+    dy, dx = align(prev, cur)
+    was = _shift(prev[..., 3] >= 128, dy, dx, False)
+    body_now, body_was = _body(now), _body(was)
+    share = ((arrived & body_now).sum() + (left & body_was).sum()) / max(1, arrived.sum() + left.sum())
+    if share >= SMEAR_BODY:
+        return None, (f"what moved between frames {(k - 1) % n} and {k} is mostly the body ({share:.0%}: a step or "
+                      "a lunge, not a part swinging clear of it)")
+    feet = _feet(now)
+    arrived, left, new = arrived & ~body_now & ~feet, left & ~body_was & ~feet, new & ~body_now & ~feet
+    if arrived.sum() < min_px:
+        return None, (f"under {min_px} px of a part moved clear of the body between frames {(k - 1) % n} and {k} "
+                      "(the rest is the body or the feet)")
+    arrived = _main_part(arrived)
     if left.sum() < min_px:
-        dy, dx = align(prev, cur)
-        left = _shift(prev[..., 3] >= 128, dy, dx, False) & ~now
+        left = was & ~now & ~body_was & ~feet
         if not left.any():
             return None, f"nothing left its place between frames {(k - 1) % n} and {k}"
+    left = _nearest(left, arrived)
     for _ in range(CLEAR):   # back into the part's base, through the pixels that are new in this frame
         arrived = _grow(arrived) & new
     vy, vx = _step(arrived, left)

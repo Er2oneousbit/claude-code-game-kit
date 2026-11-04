@@ -53,6 +53,7 @@ ROT_ORDER = ["s", "w", "n", "e"]  # rotation workflow output, screen-clockwise f
 ROT_ORDER8 = ["s", "se", "w", "nw", "n", "ne", "e", "sw"]
 DIRS8 = ("s", "se", "e", "ne", "n", "nw", "w", "sw")
 MIRRORED = {"w": "e", "sw": "se", "nw": "ne"}   # west-facing views flipped from their east twins (symmetric characters)
+TWIN = dict(MIRRORED, **{e: w for w, e in MIRRORED.items()})   # each side / diagonal view and the one it turns into
 # Wan view wording per direction; the animation node accepts only VIEWS (SpriteKiln SK_AnimationPreset): a value
 # outside it is refused with "Value not in list" (2026-10-30, a diagonal said "three-quarter front view")
 VIEWS = ("side view", "front view", "three-quarter view", "top-down view", "isometric view", "keep facing direction")
@@ -569,17 +570,29 @@ class Character:
                 if ev in refs:
                     refs[wv] = ImageOps.mirror(refs[ev])
         bad = qa.turned_any(fr[1:], direction, refs)
-        if bad is not None:  # heuristic only (false positives seen): note for review, never auto-trim
-            # name the fix when there is one: a skeleton-driven clip cannot turn (2026-10-31 rehearsal: a free walk_n
-            # ended on the face; the note said only "review")
-            hint = (f'; "skeleton": ["{action}"] keeps the view (README, characters (skeleton))'
-                    if action in pose.ACTIONS and action not in self.skeleton else "")
-            notes.append(f"possible turn-around from frame {bad + 1}: review the contact sheet{hint}")
         keep = self.fix(action, direction).get("keep")
         if keep:
             fr = qa.ping_pong_trim(fr, int(keep))
             strike = strike if strike is not None and strike < max(2, int(keep)) else None
             notes.append(f"spec clip_fix keep={keep}: ping-pong trimmed")
+        # #186: a side or diagonal clip that faces its twin's way (Wan turns characters around at the end of attacks,
+        # or the whole clip comes out mirrored). Checked on the frames as they ship, from frame 0, so the frame number
+        # is the file's. The head signature leaves out a blade held back in a wind-up (the duelist's attack_w points
+        # the rapier east for half the strike while the head faces west): only the head decides
+        back = qa.turned_around(fr, refs[direction], refs[TWIN[direction]]) \
+            if direction in TWIN and TWIN[direction] in refs else None
+        if back is not None:
+            src = f"{action}_{src_dir}"
+            notes.append(f"turned around: {action}_{direction} faces {TWIN[direction]} from frame {back} "
+                         f"(spr_{self.name}_{action}_{direction}_{back:02d}.png). Audition other seeds (dotwork.py "
+                         f"audition --name {self.name} --clip {src} --seeds 8101 8102 8103) and ship one with clip_fix "
+                         f"{{\"{src}\": {{\"seed\": <the take that faces {direction}>}}}}")
+        elif bad is not None:  # heuristic only (false positives seen): note for review, never auto-trim
+            # name the fix when there is one: a skeleton-driven clip cannot turn (2026-10-31 rehearsal: a free walk_n
+            # ended on the face; the note said only "review")
+            hint = (f'; "skeleton": ["{action}"] keeps the view (README, characters (skeleton))'
+                    if action in pose.ACTIONS and action not in self.skeleton else "")
+            notes.append(f"possible turn-around from frame {bad + 1}: review the contact sheet{hint}")
         ref_h = Image.open(rot[direction]).getbbox()
         ok, det = qa.height_ok(fr, ref_h[3] - ref_h[1])
         if not ok:

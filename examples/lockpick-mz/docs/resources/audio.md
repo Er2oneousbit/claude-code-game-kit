@@ -415,8 +415,11 @@ Tech 3342) and true peak in dBTP.
   levels relative to the platform target: dialogue at the target, music 4 LU under, effects 6, UI 8, ambience beds
   10 (`loudness.py conventions` prints the table). `loudness.py normalize vo/line.wav --bus dialogue --target home
   --out ...` applies it, or `--lufs -24` any level; true peak never goes past `--tp-ceiling` (default -1 dBTP):
-  when the level cannot be reached without a limiter, it says so and stops at the ceiling. One-shots under 0.4 s are
-  matched by true peak instead. These numbers are starting points; tune by ear in the game.
+  when the level cannot be reached without a limiter, it says so and stops at the ceiling. One-shots under 0.4 s have
+  no gated loudness, so they are matched by their loudest 400 ms (momentary loudness, padded with silence), the same
+  rule `sets make` uses: a coin and an explosion on the sfx bus start at one level (before 0.8.3 a short one-shot was
+  pushed to the true-peak ceiling instead, up to 25 LU over its bus). These numbers are starting points; tune by ear
+  in the game.
 - Proof (K01, 2026-11-01): on 815 files (the SFX and voice bake-offs plus kit samples), integrated loudness matched
   pyloudnorm within 0.005 LU once pyloudnorm's two departures from BS.1770 are removed (its default filter
   approximates the K-weighting, and it counts a partial last block the standard leaves out), and ffmpeg's ebur128

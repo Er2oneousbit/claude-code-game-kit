@@ -245,11 +245,7 @@ def level(chans, rate, kind):
         m = loudness.measure_channels(chans, rate, want_tp=False)
         if m["integrated_lufs"] is not None:
             return m["integrated_lufs"], "integrated"
-    pad = max(int(0.4 * rate), -(-len(chans[0]) // int(0.1 * rate)) * int(0.1 * rate)) - len(chans[0])
-    subs = [loudness.sub_block_energy(list(c) + [0.0] * pad, rate) for c in chans]
-    windows = loudness.window_loudness(subs, 4)
-    best = max((l for l, _ in windows), default=-math.inf)
-    return (round(best, 2) if math.isfinite(best) else None), "momentary max"
+    return loudness.max_momentary(chans, rate), "momentary max"      # the same rule as `loudness normalize`
 
 
 def onsets(chans, rate, gap_s=None):
