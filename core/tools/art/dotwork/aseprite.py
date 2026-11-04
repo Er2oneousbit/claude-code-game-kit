@@ -11,6 +11,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): a character whose clips have different sizes gets one
 #           canvas, each clip centred on its bottom edge (handpolish.clip_box); the re-export crops each back (#82)
+# Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): the palette scan reads pixels without Image.getdata
+#           (deprecated in Pillow 12, removed in 14) where Pillow has get_flattened_data (#185)
 # ---------------------------------------------------------------------------
 import glob
 import os
@@ -130,6 +132,13 @@ def _run(conf, lua_text, lua_name, params):
     return out
 
 
+def _pixels(im):
+    """Every pixel of an image as a list of tuples. Image.getdata warns from Pillow 12 and is gone in Pillow 14;
+    get_flattened_data replaces it but is missing from the older Pillow that Python 3.8 installs (issue #185)."""
+    flat = getattr(im, "get_flattened_data", None)
+    return list(flat() if flat else im.getdata())
+
+
 def _palette_file(pngs, path):
     """GIMP palette of every opaque color in the frames, with index 0 reserved for transparency. Returns (how many
     colours, True when the frames can be indexed without loss: at most INDEXED_MAX opaque colours and no partly clear
@@ -137,7 +146,7 @@ def _palette_file(pngs, path):
     cols, partial = set(), False
     for p in pngs:
         with Image.open(p) as im:
-            px = list(im.convert("RGBA").getdata())
+            px = _pixels(im.convert("RGBA"))
         cols |= {c[:3] for c in px if c[3] == 255}
         partial = partial or any(0 < c[3] < 255 for c in px)
     cols = sorted(cols)

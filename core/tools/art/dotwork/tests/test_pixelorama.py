@@ -11,7 +11,8 @@
 #           before any image is read; a tag holds at most 100 frames in both editors), and building again in
 #           either editor (a source that differs from the game's frames is kept; --overwrite keeps a .bak; an
 #           Aseprite source is indexed only when that loses nothing), and a character whose clips have different
-#           sizes (one canvas in either editor, each clip back at its own size; issue #82). No Pixelorama, Aseprite,
+#           sizes (one canvas in either editor, each clip back at its own size; issue #82), and an Aseprite palette
+#           scan that makes no deprecated Pillow call (issue #185). No Pixelorama, Aseprite,
 #           ComfyUI or Godot needed: verify is stubbed, Aseprite's script runs are stubbed (AsepriteLiveExam runs
 #           the real one when ASEPRITE_BIN is set).
 # Usage   : python tools/art/dotwork/tests/test_pixelorama.py   (test_dotwork.py runs it too)
@@ -28,6 +29,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import warnings
 import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -1196,6 +1198,21 @@ class AsepriteGuardExam(unittest.TestCase):
         self.assertEqual({os.path.basename(p["out"]): p["indexed"] for p in self.built},
                          {"knight.aseprite": "1", "spark.aseprite": "1", "barrel.aseprite": "1",
                           "spr_bust.aseprite": "0", "ui_icon_glow.aseprite": "0"})
+
+    def test_the_palette_scan_makes_no_deprecated_pillow_call(self):
+        # issue #185: the scan called Image.getdata, which warns under Pillow 12 and is gone in Pillow 14. A
+        # DeprecationWarning is an error here, so the old call fails on Pillow 12; the older Pillow Python 3.8
+        # installs has no get_flattened_data and still takes getdata without a warning
+        img = np.zeros((4, 4, 4), np.uint8)
+        img[1:3, 1:3] = (10, 20, 30, 255)
+        img[0, 0] = (40, 50, 60, 128)                                              # one partly clear pixel
+        png = os.path.join(self.tmp, "scan.png")
+        Image.fromarray(img).save(png)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            self.assertEqual(self.ase._palette_file([png], os.path.join(self.tmp, "scan.gpl")), (1, False))
+        with open(os.path.join(self.tmp, "scan.gpl"), encoding="ascii") as f:
+            self.assertIn(" 10  20  30\tc", f.read())
 
     def reexport(self):
         with stub_verify():
