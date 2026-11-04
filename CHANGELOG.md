@@ -503,6 +503,9 @@
   with flat grey), and a v3 `character` refuses `--directions 4` and `--shading` before sending (PixelLab answered
   422 to both after the request went out). Found making Ghost Lantern's sprites; `image`, a v3 `character`,
   `animate` and `animate-character --mode skeleton-v3` are now run live (#17).
+- `pixellab.py`: `ui`, `object` and `prop` print and record what they cost. Their POST answers `"usage": null`
+  and the finished resource has no usage, so a live 192 px UI panel (10 generations) said nothing and saved
+  `"cost": ""`; the cost now comes from the background job the POST names (found in a live run, 2026-11-04).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

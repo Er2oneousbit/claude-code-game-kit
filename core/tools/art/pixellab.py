@@ -276,6 +276,19 @@ def wait_job(key, job_id, limit):
         SLEEP(POLL_EVERY_S)
 
 
+def job_cost(key, first, limit):
+    """Cost from the background job a POST named, for results fetched as a resource (ui, prop, object): seen live
+    2026-11-04, their POST says "usage": null and the finished resource has no usage, only the job has it. The files
+    are already saved, so a job that cannot be read (or never finishes in time) gives '' rather than a failure."""
+    job = first.get("background_job_id")
+    if not job:
+        return ""
+    try:
+        return cost_text(wait_job(key, job, min(limit, 60))[1])
+    except (ServiceError, ToolError):
+        return ""
+
+
 def b64decode(text, what):
     """Base64 from PixelLab (a bare string or a data: URL) -> bytes; garbage is a service failure, not a crash."""
     if isinstance(text, str) and text.startswith("data:"):
@@ -776,7 +789,8 @@ def run_job(kind, key, endpoint, body, out, args):
         res = poll_resource(key, f"/ui-assets/{asset_id}", args.wait)
         if not res.get("image_url"):
             raise ServiceError("the UI asset finished without an image_url")
-        return [fetch_url(res["image_url"], key, out)], cost, {"ui_asset_id": asset_id}
+        files = [fetch_url(res["image_url"], key, out)]
+        return files, cost or job_cost(key, first, args.wait), {"ui_asset_id": asset_id}
     if kind == "prop":
         obj = first.get("object_id")
         print(f"[info] map object {obj} queued (about 15 to 30 s) ...")
@@ -784,7 +798,8 @@ def run_job(kind, key, endpoint, body, out, args):
         cost = cost or cost_text(res.get("usage"))
         if not res.get("download_url"):
             raise ServiceError("the map object finished without a download_url")
-        return [fetch_url(res["download_url"], key, out)], cost, {"object_id": obj}
+        files = [fetch_url(res["download_url"], key, out)]
+        return files, cost or job_cost(key, first, args.wait), {"object_id": obj}
     if kind == "object":
         obj = first.get("object_id")
         print(f"[info] object {obj} queued; PixelLab takes 30 s to a few minutes ...")
@@ -802,7 +817,8 @@ def run_job(kind, key, endpoint, body, out, args):
                 [(f"image_{i:02d}.png", u) for i, u in enumerate(url_values(res.get("storage_urls")))]
         if not links:
             raise ServiceError(f"object {obj} finished without image links")
-        return [fetch_url(u, key, out / name) for name, u in links], cost, {"object_id": obj}
+        files = [fetch_url(u, key, out / name) for name, u in links]
+        return files, cost or job_cost(key, first, args.wait), {"object_id": obj}
     jobs = first.get("background_job_ids") or ([first["background_job_id"]] if first.get("background_job_id") else [])
     if not jobs:
         raise ServiceError(f"PixelLab did not return a job for {endpoint}")

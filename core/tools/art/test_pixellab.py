@@ -102,10 +102,13 @@ class Fake:
                   "/transfer-outfit-v2": {"background_job_id": "job-outfit", "status": "processing"},
                   "/create-tileset-sidescroller": {"background_job_id": "job-3", "tileset_id": "ts-1", "status": "processing"},
                   "/create-tiles-pro": {"background_job_id": "job-tp", "tile_id": "tp1", "status": "processing"},
-                  "/create-ui-asset": {"background_job_id": "job-ui", "ui_asset_id": "ui1", "status": "processing"},
-                  "/create-1-direction-object": {"background_job_id": "job-o1", "object_id": self.object_id, "status": "processing"},
+                  # ui and objects as seen live 2026-11-04: "usage" is null here, only their job reports the cost
+                  "/create-ui-asset": {"usage": None, "background_job_id": "job-ui", "ui_asset_id": "ui1",
+                                       "status": "processing"},
+                  "/create-1-direction-object": {"usage": None, "background_job_id": "job-o1", "object_id": self.object_id,
+                                                 "status": "queued", "n_frames": 16},
                   "/create-8-direction-object": {"background_job_id": "job-o8", "object_id": "o8", "status": "processing"},
-                  "/map-objects": {"background_job_id": "job-m", "object_id": "m1", "status": "processing"},
+                  "/map-objects": {"usage": None, "background_job_id": "job-m", "object_id": "m1", "status": "processing"},
                   "/characters/animations": {"background_job_ids": ["job-a1", "job-a2"], "directions": ["south", "east"],
                                              "animation_group_id": "g1", "status": "processing"}}
         if path in queued and not self.status:
@@ -723,6 +726,21 @@ class PixelLabExam(unittest.TestCase):
         rc, out = self.run_tool("fetch", "--character-id", "char-1", "--out", "c2", fake=Fake())
         self.assertEqual(rc, 0, out)
         self.assertTrue((self.root / "c2/rotations/south.png").exists())
+
+    def test_ui_object_and_prop_report_the_cost_their_job_holds(self):
+        # Live 2026-11-04: a 192 px UI panel cost 10 generations but printed none and saved "cost": "" (the POST
+        # says usage null, the finished /ui-assets resource has no usage; GET /background-jobs/{id} has it)
+        for argv, side in ((("ui", "--text", "health bar", "--out", "ui/bar.png"), "ui/bar.gen.json"),
+                           (("object", "--text", "crate", "--out", "obj/crate"), "obj/crate/pixellab.gen.json"),
+                           (("prop", "--text", "crate", "--out", "props/crate.png"), "props/crate.gen.json")):
+            rc, out = self.run_tool(*argv, fake=Fake())
+            self.assertEqual(rc, 0, out)
+            self.assertIn("cost 2 generations", out, argv[0])
+            self.assertEqual(json.loads((self.root / side).read_text(encoding="utf-8"))["cost"], "2 generations", argv[0])
+        fake = Fake(polls=10**6)                     # a job that never says done: the saved files still count
+        rc, out = self.run_tool("ui", "--text", "x", "--out", "ui/slow.png", "--wait", "0", fake=fake)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(json.loads((self.root / "ui/slow.gen.json").read_text(encoding="utf-8"))["cost"], "")
 
     def test_several_direction_jobs_add_up_their_cost(self):
         self.run_tool("character", "--text", "knight", "--out", "knight", fake=Fake())
