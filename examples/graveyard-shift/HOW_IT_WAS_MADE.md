@@ -333,7 +333,7 @@ new hand-made yard at the new size.
 Extra ghosts walk the longest checked loops from the opposite corner, so difficulty never changes the yard or its checks.
 Three narrator lines said six souls; all three were re-voiced with "twelve" (Fish Audio, the same free model and voice).
 Two were done with the yard; `narrator_intro_1` ("Gather all six") was missed and re-voiced later (issue #138), one take,
-checked with a local transcriber and the loudness meter: no one has listened to it yet.
+checked with a local transcriber and the loudness meter, then by ear (2026-11-04: it says twelve).
 
 **What the checks caught**
 | # | Caught by | Problem | Fix |

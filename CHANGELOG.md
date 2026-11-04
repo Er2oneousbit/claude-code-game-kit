@@ -498,7 +498,7 @@
   re-voiced lines (-17.9 LUFS, the old take -17.7), and a local transcriber hears the new line word for word. The
   ASSET_LOG row, licence evidence and HOW_IT_WAS_MADE say so. A new EditMode test checks every narrator line names
   `LevelCheck.SoulCount` (old take: "six" reported), and the evidence check also covers a sidecar's hash as received.
-  No one has listened to it yet (#138).
+  Checked by ear on 2026-11-04 (#138).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
