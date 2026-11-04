@@ -20,6 +20,17 @@ ffmpeg 9.0.2), so treat every time here as a data point.
 Videos are H.264 + AAC (mono, 96 kb/s) at 1280x720 and 30 fps. Their audio is normalized to -16 LUFS so they play
 at one level (the dialogue clip stops at -20.5 LUFS, where its loudest peak meets the -1 dBTP ceiling).
 
+## Listen
+Every sound is in `media/` twice: OGG (what games ship and what the build reads) and an MP3 copy, because GitHub
+hands a raw file to the browser and Safari and some phones do not play OGG. Open a file, then **View raw** to play it.
+
+| Sound | MP3 | OGG |
+|---|---|---|
+| Synth: jump, coin, explosion (code) | [jump](media/synth_jump.mp3), [coin](media/synth_coin.mp3), [explosion](media/synth_explosion.mp3) | [jump](media/synth_jump.ogg), [coin](media/synth_coin.ogg), [explosion](media/synth_explosion.ogg) |
+| Chiptune: explore, drums layer, chase, alert stinger (code) | [explore](media/chiptune_explore_base.mp3), [drums](media/chiptune_explore_drums.mp3), [chase](media/chiptune_chase.mp3), [alert](media/chiptune_alert.mp3) | [explore](media/chiptune_explore_base.ogg), [drums](media/chiptune_explore_drums.ogg), [chase](media/chiptune_chase.ogg), [alert](media/chiptune_alert.ogg) |
+| Voices: guide, scout (local GPU) and a babble voice (code) | [guide 1](media/voice_guide_1.mp3), [guide 2](media/voice_guide_2.mp3), [scout](media/voice_scout_1.mp3), [babble](media/babble_sprite.mp3) | [guide 1](media/voice_guide_1.ogg), [guide 2](media/voice_guide_2.ogg), [scout](media/voice_scout_1.ogg), [babble](media/babble_sprite.ogg) |
+| Effects: rain, door (ElevenLabs free plan, non-commercial) | [rain](media/eleven_rain.mp3), [door](media/eleven_door.mp3) | [rain](media/eleven_rain.ogg), [door](media/eleven_door.ogg) |
+
 ## Videos in the main README
 GitHub plays a video inside a README only from a file uploaded through its web editor (a `user-attachments` URL), not
 from a file in the repo. The MP4s are committed here; to show them in the main README:
@@ -141,7 +152,7 @@ bus: `normalize` matched short sounds by true peak while `sets make` used their 
 ```
 python workflows/wavesmith-showcase/build_showcase.py                    # all four, about 1.5 minutes
 python workflows/wavesmith-showcase/build_showcase.py --only dialogue    # code | music | dialogue | mix
-python workflows/wavesmith-showcase/build_showcase.py --export-sources   # also the code-made sources as OGG in media/
+python workflows/wavesmith-showcase/build_showcase.py --export-sources   # also the code-made sources as OGG, and an MP3 copy of every OGG, in media/
 ```
 Needs Python 3.8+ with numpy and Pillow (pictures only; Wavesmith itself needs neither) and ffmpeg on PATH. Work
 files go to `build/` here (gitignored). The script prints every Wavesmith command it runs. Code-made sounds are
@@ -150,12 +161,12 @@ deterministic, so a rebuild gives the same audio; the voices and the two ElevenL
 ## Sources, credits and licences
 | ID | Type | File(s) in repo | Source | Licence | Attribution | AI-assisted? | Notes |
 |---|---|---|---|---|---|---|---|
-| WS-01 | SFX | `media/synth_*.ogg` (and every effect in the code clip) | Wavesmith `synth`, made from code | MIT, as the kit | none | no | presets and seeds in the build script |
-| WS-02 | Music | `media/chiptune_*.ogg`, `src/*.song.json` | Wavesmith `chiptune`, songs written for this showcase | MIT, as the kit | none | no | |
-| WS-03 | Voice | `media/babble_sprite.ogg` | Wavesmith `babble`, made from code | MIT, as the kit | none | no | |
-| WS-04 | Voice | `media/voice_guide_1.ogg`, `voice_guide_2.ogg`, `voice_scout_1.ogg` | Qwen3-TTS-12Hz-1.7B-VoiceDesign and -1.7B-Base on a local GPU, through `voice design` / `voice say` | Apache-2.0 (model cards, per the kit's register `core/tools/audio/wavesmith/LICENSES.md`, checked 2026-11-01) | none required | yes | designed voices from text descriptions, no cloning; neutral lines written for this showcase |
-| WS-05 | SFX | `media/eleven_rain.ogg` | ElevenLabs sound effects (`eleven_text_to_sound_v2`), free plan, prompt "steady light rain on a wooden roof, no thunder, ambience", 5 s, loop | ElevenLabs free plan: non-commercial only; **not covered by the kit's MIT licence** | "Sound effect generated with ElevenLabs" | yes | 50 credits, 2026-11-04 |
-| WS-06 | SFX | `media/eleven_door.ogg` | ElevenLabs sound effects, free plan, prompt "heavy wooden door slams shut in a stone hall", 2 s | ElevenLabs free plan: non-commercial only; **not covered by the kit's MIT licence** | "Sound effect generated with ElevenLabs" | yes | 20 credits, 2026-11-04 |
+| WS-01 | SFX | `media/synth_*.ogg` / `.mp3` (and every effect in the code clip) | Wavesmith `synth`, made from code | MIT, as the kit | none | no | presets and seeds in the build script |
+| WS-02 | Music | `media/chiptune_*.ogg` / `.mp3`, `src/*.song.json` | Wavesmith `chiptune`, songs written for this showcase | MIT, as the kit | none | no | |
+| WS-03 | Voice | `media/babble_sprite.ogg` / `.mp3` | Wavesmith `babble`, made from code | MIT, as the kit | none | no | |
+| WS-04 | Voice | `media/voice_guide_1.ogg` / `.mp3`, `voice_guide_2.ogg`, `voice_scout_1.ogg` | Qwen3-TTS-12Hz-1.7B-VoiceDesign and -1.7B-Base on a local GPU, through `voice design` / `voice say` | Apache-2.0 (model cards, per the kit's register `core/tools/audio/wavesmith/LICENSES.md`, checked 2026-11-01) | none required | yes | designed voices from text descriptions, no cloning; neutral lines written for this showcase |
+| WS-05 | SFX | `media/eleven_rain.ogg` / `.mp3` | ElevenLabs sound effects (`eleven_text_to_sound_v2`), free plan, prompt "steady light rain on a wooden roof, no thunder, ambience", 5 s, loop | ElevenLabs free plan: non-commercial only; **not covered by the kit's MIT licence** | "Sound effect generated with ElevenLabs" | yes | 50 credits, 2026-11-04 |
+| WS-06 | SFX | `media/eleven_door.ogg` / `.mp3` | ElevenLabs sound effects, free plan, prompt "heavy wooden door slams shut in a stone hall", 2 s | ElevenLabs free plan: non-commercial only; **not covered by the kit's MIT licence** | "Sound effect generated with ElevenLabs" | yes | 20 credits, 2026-11-04 |
 | WS-07 | Video, images | `media/wavesmith_*.mp4`, `*.png`, `*.vtt` | rendered by `build_showcase.py` from the sounds above | MIT, as the kit, except the ElevenLabs sounds inside the dialogue video's audio (WS-05, WS-06 terms) | as WS-05 and WS-06 | partly | |
 
 Paid services used: ElevenLabs 70 credits (975 left before, 905 after, free plan). Fish Audio: none. Its public

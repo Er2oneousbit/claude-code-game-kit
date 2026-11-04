@@ -8,7 +8,7 @@
 #           This script only places sounds in time, mixes them and draws the pictures.
 # Usage   : python workflows/wavesmith-showcase/build_showcase.py                  # everything, about 2 minutes
 #           python workflows/wavesmith-showcase/build_showcase.py --only music     # code | music | dialogue | mix
-#           python workflows/wavesmith-showcase/build_showcase.py --export-sources # also write code-made OGGs to media/
+#           python workflows/wavesmith-showcase/build_showcase.py --export-sources # also write code-made OGGs (and MP3 copies of every OGG) to media/
 #           Options: --work DIR (default build/ next to this script, gitignored), --debug
 # Needs   : Python 3.8+, numpy and Pillow (for the pictures), ffmpeg on PATH (decoding, OGG, MP4)
 # Exit    : 0 ok, 1 a step failed, 2 environment or usage
@@ -1115,6 +1115,10 @@ def export_sources(work):
                       ("babble_sprite", work / "dialogue" / "voice" / "sprite.wav")]:
         if src.exists():
             ws("formats", "convert", src, "--out", MEDIA / f"{name}.ogg", "--quality", 4, "--overwrite")
+    # an MP3 copy of every OGG in media/ (the generated voices and effects too): GitHub hands a raw file to the
+    # browser, and Safari and some phones do not play OGG. The OGGs stay the sources the stages read.
+    for ogg in sorted(MEDIA.glob("*.ogg")):
+        ws("formats", "convert", ogg, "--out", ogg.with_suffix(".mp3"), "--overwrite")
 
 
 # ---- Main --------------------------------------------------------------------------------------------------------
@@ -1131,7 +1135,7 @@ def main(argv=None):
                "Exit codes: 0 ok, 1 a step failed, 2 environment or usage.")
     ap.add_argument("--only", action="append", choices=sorted(STAGES), help="run just this stage (repeatable)")
     ap.add_argument("--work", default=str(HERE / "build"), help="scratch folder (default: build/ here, gitignored)")
-    ap.add_argument("--export-sources", action="store_true", help="also write the code-made sources as OGG to media/")
+    ap.add_argument("--export-sources", action="store_true", help="also write the code-made sources as OGG, plus an MP3 copy of every OGG, to media/")
     ap.add_argument("--debug", action="store_true", help="tool output, ffmpeg commands and tracebacks")
     args = ap.parse_args(argv)
     DEBUG = args.debug
