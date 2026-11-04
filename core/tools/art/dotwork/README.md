@@ -148,7 +148,7 @@ or usage (the `[error]` line says what to fix). `preview KIND --help` lists each
 | `recolor --source GLOB --hue DEG\|--to #RRGGBB --out DIR` | palette swap, no model: turns the coloured ramps, keeps outline and greys, snaps to the palette; every file shares one colour map, so an animation stays consistent |
 | `clean --source GLOB --out DIR [--cell N\|--width W]` | any image to clean pixel art, no model: measures the pixel grid of upscaled or generated art (or shrinks to `--width`), keys a plain background, snaps to the palette (`--palette none --colors N` reduces instead), drops specks; `--outline #RRGGBB` adds one |
 | `verify` | load every Dotwork asset of this game in Godot (shader materials compiled, held frames counted) and run its smoke test |
-| `qa pack [--json OUT] [--lineup OUT.png]` | style check over every PNG the game's manifests list, read only: pixel scale, each lane's palette lock (the table under Palettes), outline colour and thickness, light side, figure height in tiles, contrast on the ground tiles, colour-blind separation of gauge fills, status marks, button states and palette swaps (Machado 2009 simulation); `--lineup` draws every character and prop at game scale on a ground tile; exit 1 on findings |
+| `qa pack [--json OUT] [--lineup OUT.png]` | style check over every PNG the game's manifests list (not sheets, normal maps, or store art, the game icon and boot splash, which are scaled up on purpose), read only: pixel scale, each lane's palette lock (the table under Palettes), outline colour and thickness, light side, figure height in tiles, contrast on the ground tiles, colour-blind separation of gauge fills, status marks, button states and palette swaps (Machado 2009 simulation); `--lineup` draws every character and prop at game scale on a ground tile; exit 1 on findings |
 | `aseprite [--reexport] [--overwrite]` | editable `.aseprite` sources (frames timed by their holds); push hand-polished files back |
 | `pixelorama [--reexport] [--overwrite] [--clear-export-path]` | the same round trip with Pixelorama `.pxo` files, no install needed; `--clear-export-path` blanks the local export folder Pixelorama saves in each file ([Hand polish](#hand-polish-aseprite-or-pixelorama)) |
 | `preview battle\|title\|attack ...` | mock screens composed from the game's art (review only) |
@@ -517,7 +517,8 @@ digests of the skeleton and of a character export taken before the polish; the s
 in that frame's colours; holds reach the SpriteFrames; the wind-up moves against the strike; the shader files are
 well-formed and the flash is the hitfx lane's byte for byte.
 `tests/test_qapack.py` (seconds): `qa pack` on a synthetic game, clean and with planted
-outliers (a 2x upscale, an off-palette prop, a mirrored prop, a red / green gauge pair).
+outliers (a 2x upscale, an off-palette prop, a mirrored prop, a red / green gauge pair); lit TileSet normal maps and
+store art in the manifests add no findings.
 `python tools/art/dotwork/tests/test_fonts.py` - offline, seconds: the Latin glyph fonts (height, baseline, coverage,
 accents drawn over unchanged base letters), the coverage check (JSON, CSV, PO, text; command line and pack) and the
 old fonts' output against golden hashes.

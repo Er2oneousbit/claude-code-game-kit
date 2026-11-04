@@ -477,6 +477,12 @@
   code change: the side views show the wind-up, the front and back views barely change. The README says so, and that
   `"holds": true` on a plain skeleton shoot holds the rest frame before the arm comes up (with anticipation the hold
   lands on the drawn-back aim); Godot's verify counted every held frame (#49).
+- Dotwork qa pack: no longer stops with a TypeError (exit 2) on a game with a lit TileSet (the lighting lane's normal
+  map rows give `tile_px` as a `[w, h]` list; only art rows vote on the tile size now), and no longer reports store
+  art, the game icon and the boot splash as accidental upscales (they are scaled up by whole numbers on purpose; 5
+  false findings). Found by running the 0.8.1 lanes together on a full test game: store, screens, bdf, diorama, vfx,
+  uikit, lighting, the Latin fonts, holds / smear / shaders and `capture` all packed, 231 resources load in `verify`,
+  and `qa pack` gives the 13 findings it gave before (#48).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).
