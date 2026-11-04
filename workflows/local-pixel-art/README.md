@@ -102,7 +102,26 @@ dotwork.py verify                                 # load every Dotwork asset in 
   a fireball loop, an explosion, a grass and cobble TileSet, and a dialog panel and button; 141 manifest rows,
   verify passed.
 
-![The duelist from the party example: south walk, east walk, west attack](media/dotwork_duelist.gif)
+**The duelist from the party example** (`party_member.json` in Dotwork's examples), re-rendered 2026-11-04 with
+the shipped Dotwork: no style reference, the shipped palettes, one take per clip except two retakes by seed
+(`clip_fix`). Every clip but the back idle (a code-drawn bob) is driven by the skeleton (`skeleton`, the pose tier):
+walk, run, idle, an attack with a wind-up (`anticipation`), its wind-up and impact frames held (`holds`, the
+hit-stop) and a smear on the west strike (`smear`), and a cast. 19 Wan clips (about 135 s each, one more for a
+retake) plus a rotation, nine battle poses and a portrait with expressions: about an hour of GPU time on the 16 GB
+card, verify passed. Shown at 3x on a light backing, timed by the game's own frame rates and holds:
+
+![The duelist running east, attacking west with a wind-up, a smear and a hit-stop, attacking east and casting east](media/dotwork_duelist.gif)
+
+![The duelist walking south, east, north and west](media/dotwork_duelist_walk.gif)
+
+![The duelist's nine battle poses facing left and his portrait with five expressions, a talking frame and a blink](media/dotwork_duelist_stills.png)
+
+What its review caught: the first north attack drew a grey sword fragment beside the shoulder on its impact frame
+(new seed), the first kneeling pose lost the hat (new seed), the hurt, defend and jump poses dropped the rapier until
+their wording named it (`pose_text`), the cast smears dragged the sinking coat hem into a checker at the feet (so the
+example smears the attack only), and the front and back attacks move less than the side views, as the skeleton
+notes say. The run also found a Dotwork bug, fixed in 0.8.3: the battle set's `cast` pose replaced the `cast` clip
+facing west.
 
 ![Fireball loop](media/dotwork_fx_fireball.gif) ![Explosion, 3 frames kept, then a dithered fade](media/dotwork_fx_explosion.gif)
 
