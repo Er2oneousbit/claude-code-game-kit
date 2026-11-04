@@ -1,18 +1,25 @@
 // ---------------------------------------------------------------------------
 // main.ts
-// Purpose : Entry point. Creates the Phaser game with the project's scenes.
+// Purpose : Entry point. Creates the Phaser game with the project's scenes and hands it to the kit's shell
+//           (title, main menu with the difficulty, settings, pause, credits: src/shell/).
 // Usage   : Loaded by index.html (<script type="module" src="/src/main.ts">).
 // Notes   : 640x360 logical size, scaled to fit the window with pixel-art filtering.
-//           Uncaught errors are logged through Log.error so `dev.py smoke` sees them.
+//           The shell is imported first: its crash hook (crash file + Log.error, which `dev.py smoke` fails
+//           on) is in place before anything else runs. Phaser's gamepad plugin is off because the shell's input
+//           layer (src/shell/input.ts) reads pads for the menus; the keyboard plugin stays on because
+//           GameScene reads its own keys (WASD, SPACE, R), as it did before the shell came in.
+//           ?autoplay (the bot pair, the README GIF) skips the shell: GameScene is first, so Phaser starts it
+//           at once and it logs BOOT_OK itself. Every other load starts at the title (BOOT_OK from the shell).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
+import { shell } from "./shell/app";
 import * as Phaser from "phaser";
-import { Log } from "./core/log";
+import { BackdropScene } from "./game/BackdropScene";
 import { GameScene } from "./game/GameScene";
 import { HudScene } from "./game/HudScene";
+import { JuiceScene } from "./game/JuiceScene";
 
-window.addEventListener("error", (e) => Log.error("core", `uncaught: ${e.message}`));
-window.addEventListener("unhandledrejection", (e) => Log.error("core", `unhandled promise: ${String(e.reason)}`));
+const direct = new URLSearchParams(location.search).has("autoplay"); // a bot plays: straight into the game
 
 export const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -22,5 +29,8 @@ export const game = new Phaser.Game({
   backgroundColor: "#0b0b14",
   pixelArt: true,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [GameScene, HudScene],
+  input: { gamepad: false },
+  // the first one starts on its own; the shell runs the others ("main" = GameScene, "juice" = the kit's demo)
+  scene: direct ? [GameScene, HudScene, BackdropScene, JuiceScene] : [BackdropScene, GameScene, HudScene, JuiceScene],
+  callbacks: { postBoot: (g) => !direct && shell.start(g) },
 });

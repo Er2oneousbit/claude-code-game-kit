@@ -2,7 +2,7 @@
 // HudScene.ts
 // Purpose : The HUD: oil meter, key, timer, and the win or caught message.
 //           A separate scene so the 2x game camera zoom never touches the UI.
-// Usage   : Launched by GameScene; listens to its "hud" event (HudState).
+// Usage   : Launched by GameScene ("main"); listens to its "hud" event (HudState). Stopped with it.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 import * as Phaser from "phaser";
@@ -27,7 +27,7 @@ export class HudScene extends Phaser.Scene {
     this.message = this.add.text(320, 170, "", { ...TEXT, fontSize: "22px" }).setOrigin(0.5);
     this.debug = this.add.text(628, 10, "", { ...TEXT, fontSize: "11px" }).setOrigin(1, 0);
     this.add.text(628, 344, "WASD move  SPACE brighten  R restart", { ...TEXT, fontSize: "10px" }).setOrigin(1, 1);
-    const game = this.scene.get("game");
+    const game = this.scene.get("main");
     game.events.on("hud", (s: HudState) => this.draw(s));
     this.events.once("shutdown", () => game.events.off("hud"));
   }

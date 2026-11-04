@@ -14,11 +14,19 @@ Needs [Node.js](https://nodejs.org) 22.12 or newer and Python 3.8+.
 python tools/dev.py setup     # once: npm install + the headless browser for smoke
 python tools/dev.py run       # opens the game in your browser
 ```
-WASD or arrows to move, hold SPACE (or SHIFT) to brighten the lantern, R to restart.
+The game opens on the kit's title screen: press any key, then pick **Play**. The main menu also holds the
+**Difficulty** (left and right arrows: Story, Easy, Normal, Hard, with a one-line hint), **Settings**, Credits and Quit.
+The difficulty is saved in the kit's settings file and is also under Settings > Accessibility; changed from the pause
+menu, it applies when you resume. Story and Easy burn less oil and slow the ghosts down; Hard burns oil faster.
+The numbers and how each one was measured: `src/game/tuning.ts` (DIFFICULTY).
+
+WASD or arrows to move, hold SPACE (or SHIFT) to brighten the lantern, R to restart, Esc to pause (Resume, Settings,
+Quit to title). Menus: arrows, Enter, Esc, or a gamepad.
 Bright light makes ghosts flee and stops them touching you, but burns oil about three times faster. Dim light lets you see.
 
 URL flags: `?debug` (ghost paths, sense range and a live table of each ghost's utility scores; I = infinite oil, G = freeze
-ghosts), `?autoplay` (a bot plays), `?autoplay=dark` (the bot never brightens), `?seed=N` (replay a run).
+ghosts), `?autoplay` (a bot plays, straight into the game with no title), `?autoplay=dark` (the bot never brightens),
+`?seed=N` (replay a run), `?difficulty=story|easy|normal|hard` (overrides the setting for this page load).
 
 ## What to look at
 | File | Shows |
@@ -26,7 +34,8 @@ ghosts), `?autoplay` (a bot plays), `?autoplay=dark` (the bot never brightens), 
 | `src/core/ghostBrain.ts` | Utility AI in about 60 lines: chase, flee and wander scored from distance, light and memory (SOP-14, ADR 0001) |
 | `src/core/astar.ts`, `src/core/separation.ts` | Movement layer: grid A* and separation steering, engine-free |
 | `src/core/lantern.ts` | The resource: oil, radius, and how much light scares |
-| `src/game/tuning.ts` | Every number, with comments on why it changed during playtests |
+| `src/game/tuning.ts` | Every number, with comments on why it changed during playtests, and the difficulty table with its measured bot results |
+| `src/shell/`, `src/game/difficulty.ts` | The kit's shell (title, menus, settings, pause) and how a run picks its difficulty |
 | `tests/` | Vitest tests (the kit's juice and shell checks included), including "never chases into strong light" and "the key and exit are reachable" |
 | `src/game/GameScene.ts` | Perception, the autoplay bot, the darkness overlay, the debug view |
 | `src/game/sprites.ts` | The keeper's walk and idle per direction and one animation per ghost action (PixelLab frames) |
@@ -39,6 +48,9 @@ python tools/dev.py test      # the game's own tests and the kit's juice and she
 python tools/dev.py smoke     # boots the production build in headless Chromium
 python tools/dev.py smoke --query autoplay --until ESCAPED --fail-on CAUGHT    # the lantern saves you
 python tools/dev.py smoke --query autoplay=dark --until CAUGHT                 # ...and without it you are caught
+python tools/dev.py smoke --query "autoplay&difficulty=hard" --until ESCAPED --fail-on CAUGHT   # any difficulty
+python tools/dev.py smoke --drive menus       # the shell: menus, settings saved and read back
+python tools/dev.py smoke --drive show:menu --screenshot captures/menu.png     # a picture of one screen
 ```
 
 ### Remake the GIF

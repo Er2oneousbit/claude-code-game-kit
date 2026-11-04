@@ -3,6 +3,8 @@
 // Purpose : The front end's screens, built in code: boot, title (with the one-time telemetry question),
 //           main menu, credits, loading, the gameplay HUD (play and juice demo), pause, quit and crash.
 //           The settings screen lives in settingsScreen.ts.
+//           Ghost Lantern: the main menu also has the difficulty (left/right, a one-line hint under it), the same
+//           setting as Settings > Accessibility, saved when the player leaves the menu.
 // Usage   : shell.reset(screens.title(shell)) ; shell.push(screens.pause(shell)) ...
 // Notes   : Browser only (DOM). Every string goes through tl() (tr) or val() (data), every panel is a
 //           [data-box] for the pseudo-locale check. ui_cancel goes back one screen everywhere it can.
@@ -10,10 +12,11 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 import { glyphName, glyphSet, promptBinding } from "../core/bindings";
+import { DIFFICULTIES } from "../core/settings";
 import type { Screen, Shell } from "./app";
 import { GAME_VERSION } from "./meta";
 import { settingsScreen } from "./settingsScreen";
-import { Menu, buttonItem, el, glyph, tl, val } from "./ui";
+import { Menu, buttonItem, el, glyph, tl, val, valueRow } from "./ui";
 
 // ---- Tunables ----------------------------------------------------------------
 const LOADING_MIN_S = 0.6; // the bar is visible at least this long (no flash of a loading screen)
@@ -95,13 +98,39 @@ export function consent(shell: Shell): Screen {
   }, { cancel: () => choose("unset") });
 }
 
+/** The difficulty on the main menu: "< Normal >" plus a hint line. Returns a save-if-changed for leaving the menu. */
+function difficultyRow(shell: Shell, m: Menu, list: HTMLElement): () => void {
+  const a = shell.settings.access;
+  const saved = a.difficulty;
+  let hint = tl(shell.i18n, `diff.hint.${a.difficulty}`, "muted hint", {}, "div");
+  const row = valueRow(shell.i18n, "access.difficulty", () => change(-1), () => change(1));
+  const draw = () => row.set(shell.i18n.t(`opt.diff.${a.difficulty}`), true);
+  const change = (d: number) => {
+    const i = Math.max(0, DIFFICULTIES.indexOf(a.difficulty as (typeof DIFFICULTIES)[number]));
+    a.difficulty = DIFFICULTIES[(i + d + DIFFICULTIES.length) % DIFFICULTIES.length];
+    draw();
+    const next = tl(shell.i18n, `diff.hint.${a.difficulty}`, "muted hint", {}, "div");
+    hint.replaceWith(next);
+    hint = next;
+    const top = shell.top;
+    if (top) shell.checkLayout(top); // the pseudo-locale check sees the new hint too
+  };
+  draw();
+  list.append(m.add(row.item).el, hint);
+  return () => {
+    if (a.difficulty !== saved) shell.saveSettings();
+  };
+}
+
 export function menu(shell: Shell): Screen {
+  let leave = () => {};
   return built("menu", "dim", (root, m) => {
     const p = panel("narrow");
     p.append(tl(shell.i18n, "game.title", "heading", {}, "div"));
     const list = el("div", "list");
     const add = (key: string, fn: () => void) => list.append(m.add(buttonItem(shell.i18n, key, fn)).el);
     add("menu.play", () => shell.startGame("main"));
+    leave = difficultyRow(shell, m, list);
     add("menu.settings", () => shell.push(settingsScreen(shell)));
     add("menu.credits", () => shell.push(creditsScreen(shell)));
     if (shell.debugBuild) add("menu.juice", () => shell.startGame("juice"));
@@ -114,7 +143,7 @@ export function menu(shell: Shell): Screen {
       p.append(planted);
     }
     root.append(p, tl(shell.i18n, "version", "corner", { v: GAME_VERSION }, "div"));
-  }, { cancel: () => shell.reset(title(shell)) });
+  }, { cancel: () => shell.reset(title(shell)), leave: () => leave() });
 }
 
 export function creditsScreen(shell: Shell): Screen {

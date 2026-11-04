@@ -2,7 +2,8 @@
 // drive.ts
 // Purpose : Scripted runs for `dev.py smoke --drive <scenario>`: the game plays itself through the real input
 //           path (injected actions, the same route a key press takes) and logs markers smoke waits for.
-// Usage   : ?drive=menus | crash | pseudo | pseudo-plant | show:<title|settings|pause|subtitle|juice>
+// Usage   : ?drive=menus | crash | pseudo | pseudo-plant | show:<title|menu|settings|pause|subtitle|juice>
+//           (Ghost Lantern added show:menu: the main menu with its difficulty row)
 //           (dev.py smoke --drive X adds it to the URL; --locale pseudo adds ?locale=pseudo)
 // Notes   : Browser only. Every scenario ends with DRIVE_DONE <scenario>; a failed step logs DRIVE_ABORT (an
 //           error, so smoke exits 1). Markers: SETTINGS_WRITTEN <file> (menus), CRASH_WRITTEN <file> (crash),
@@ -238,6 +239,10 @@ async function show(shell: Shell, d: Driver, what: string): Promise<void> {
     case "title":
       await d.pastConsent();
       break;
+    case "menu":
+      await d.toMenu();
+      await d.focus("access.difficulty"); // the difficulty row with visible focus
+      break;
     case "settings":
       await d.toMenu();
       await d.choose("menu", "menu.settings");
@@ -265,7 +270,7 @@ async function show(shell: Shell, d: Driver, what: string): Promise<void> {
       if (shell.scene) shell.game?.scene.pause(shell.scene); // a still frame for the screenshot
       break;
     default:
-      throw new Error(`unknown screen "${what}" (title, settings, pause, subtitle, juice)`);
+      throw new Error(`unknown screen "${what}" (title, menu, settings, pause, subtitle, juice)`);
   }
   await frames(STEP_FRAMES);
   Log.info("drive", `SHOWN ${what}`);

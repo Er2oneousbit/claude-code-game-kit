@@ -36,6 +36,8 @@
 .screen { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: auto; }
 .screen.dim { background: rgba(0, 0, 0, 0.5); }
 .screen.hud { pointer-events: none; align-items: flex-start; justify-content: flex-start; }
+/* Ghost Lantern: the oil bar and timer own the top-left corner, so the play screen's prompt sits bottom centre */
+.screen.hud[data-screen="play"] { align-items: flex-end; justify-content: center; }
 .screen.hidden { display: none; }
 
 .panel {
@@ -58,6 +60,7 @@
 .bigtitle { font-size: calc(3em * var(--text-scale)); font-weight: 800; text-align: center; letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 94vw; }
 .text { font-size: calc(1em * var(--text-scale)); overflow-wrap: anywhere; }
 .muted { color: var(--muted); }
+.hint { font-size: 0.8em; padding: 0 0.6em 0.3em; } /* Ghost Lantern: the difficulty hint on the main menu */
 .press { font-size: calc(1.3em * var(--text-scale)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 94vw; }
 .blink { animation: blink 1.2s steps(2, start) infinite; }
 .reduce-motion .blink, .still .blink { animation: none; } /* .still: smoke drives, so screenshots compare */

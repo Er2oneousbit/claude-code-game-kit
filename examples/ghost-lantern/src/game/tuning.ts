@@ -19,7 +19,9 @@ export const PLAYER = {
 
 export const LANTERN: LanternConfig = {
   maxOil: 100,
-  dimBurn: 3.5, // playtest 1: 2.0 / 7.0 left 72 oil at the exit, so oil never mattered (pillar 2)
+  // playtest 1: 2.0 / 7.0 left 72 oil at the exit, so oil never mattered (pillar 2), so 3.5.
+  // First human playtest (2026-11-04): "I run out of oil and they catch up to me", so 3.0 (Normal; see DIFFICULTY)
+  dimBurn: 3.0,
   brightBurn: 10.0,
   dimRadius: 2.6,
   brightRadius: 4.6,
@@ -53,6 +55,32 @@ export const BRAIN: BrainWeights = {
   fearCurve: 0.6,
   wanderBase: 0.2,
   inertia: 0.08,
+};
+
+// ---- Difficulty (settings.access.difficulty, or ?difficulty=<name>; src/game/difficulty.ts picks one) ----------
+// Only the oil burn and the ghost speeds change: the level, the light and the ghosts' minds stay the same, so every
+// difficulty is the same game. Normal is LANTERN and GHOST above. The pillar "only the light saves you" (chase faster
+// than PLAYER.speed) holds on Normal and Hard; Easy brings the ghosts down to about your speed and Story below it.
+// A full lantern lasts 100 / dimBurn seconds dim: Story 67, Easy 45, Normal 33, Hard 25 (before the playtest: 29).
+// Measured 2026-11-04 with the bot pair, seeds 1 to 8 each (?autoplay&seed=N&difficulty=D; HOW_IT_WAS_MADE):
+//   story : lantern bot escapes 8/8 (19 to 22 s, 35 to 70 oil left) | dark bot caught 8/8 (11 s)
+//   easy  : lantern bot escapes 8/8 (20 to 24 s, 46 to 55 oil)      | dark bot caught 7/8 (seed 8 escapes, fine here)
+//   normal: lantern bot escapes 8/8 (21 to 25 s, 37 to 59 oil)      | dark bot caught 8/8 (6 to 13 s)
+//   hard  : lantern bot escapes 8/8 (21 to 22 s, 45 to 55 oil)      | dark bot caught 8/8 (6 to 13 s)
+// Hard is harder on oil only. Tried and dropped (the lantern bot must escape every seed): chase 4.3 (escaped 3/6),
+// 4.1 (5/6, 7/8), 4.0 (7/8); burn 4.5 / 13.5 (2/8): above 4.0 the bot detours for oil past the ghosts and is caught.
+// Oil left is a noisy number: the bot fetches oil only below 35 %, so a cheap lantern can mean fewer pickups.
+export type DifficultyTuning = {
+  dimBurn: number; // oil per second, dim
+  brightBurn: number; // oil per second, bright
+  ghostSpeed: { chase: number; flee: number; wander: number };
+};
+
+export const DIFFICULTY: Record<"story" | "easy" | "normal" | "hard", DifficultyTuning> = {
+  story: { dimBurn: 1.5, brightBurn: 5.0, ghostSpeed: { chase: 3.0, flee: 3.2, wander: 0.9 } },
+  easy: { dimBurn: 2.2, brightBurn: 7.5, ghostSpeed: { chase: 3.5, flee: 3.2, wander: 1.0 } },
+  normal: { dimBurn: LANTERN.dimBurn, brightBurn: LANTERN.brightBurn, ghostSpeed: GHOST.speed },
+  hard: { dimBurn: 4.0, brightBurn: 12.0, ghostSpeed: { chase: 3.9, flee: 3.2, wander: 1.1 } },
 };
 
 export const SEED = 1337; // all ghost randomness; change it and the run changes, keep it and bugs replay

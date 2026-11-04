@@ -2,14 +2,19 @@
 // GameScene.ts
 // Purpose : The slice: three dark rooms, the wizard and the lantern, oil, the key
 //           chest, the exit, and ghosts driven by utility AI (SOP-14).
-// Usage   : Registered in src/main.ts. URL flags: ?debug (paths, scores, I = infinite
-//           oil, G = freeze ghosts), ?autoplay (a bot plays: scenario check and smoke).
+// Usage   : Registered in src/main.ts as "main": the shell's Play starts it (title, menu, pause: src/shell/).
+//           URL flags: ?debug (paths, scores, I = infinite oil, G = freeze ghosts), ?autoplay (a bot plays:
+//           scenario check and smoke; main.ts then starts this scene straight away, no title),
+//           ?difficulty=story|easy|normal|hard (overrides the setting for this page load), ?seed=N.
 // Notes   : Engine side only. Decisions live in src/core/ghostBrain.ts, paths in
 //           src/core/astar.ts, lantern rules in src/core/lantern.ts, numbers in tuning.ts.
 //           Positions are in tiles (floats); pixels only when drawing. Sounds: ElevenLabs (A-0004 to A-0008),
 //           one-shots plus a haunted-house ambience loop. Keeper and ghost art: PixelLab frames (A-0009 to
 //           A-0013, data in sprites.ts): the keeper walks or idles toward his facing, each ghost plays the
 //           loop of its current action (wander bob, chase wail, flee cower).
+//           Difficulty (src/game/difficulty.ts, numbers in tuning.ts DIFFICULTY) sets the oil burn and the ghost
+//           speeds at the start of each run, and again on resume (changed in the pause menu's settings: the oil
+//           left stays). The setting's game_speed scales time like the kit's scenes do.
 //
 // Pseudocode (update):
 //   read input (or the bot) -> move the player with wall collision -> burn oil
@@ -28,12 +33,14 @@ import { Lantern } from "../core/lantern";
 import { Log } from "../core/log";
 import { Rng } from "../core/rng";
 import { separate } from "../core/separation";
+import { shell } from "../shell/app";
+import { difficultyFor, lanternFor, type Difficulty } from "./difficulty";
 import { LEVEL } from "./level";
 import {
   DRAWN, frameFiles, facingFor, GHOST_ART, GHOST_FRAMES, ghostAnimKey, ghostFrameKey, KEEPER, keeperAnimKey, keeperFrameKey,
   type Facing,
 } from "./sprites";
-import { BRAIN, GHOST, LANTERN, OIL_PICKUP, PLAYER, SEED, TILE_PX, TILES, ZOOM } from "./tuning";
+import { BRAIN, DIFFICULTY, GHOST, LANTERN, OIL_PICKUP, PLAYER, SEED, TILE_PX, TILES, ZOOM, type DifficultyTuning } from "./tuning";
 
 const AMBIENCE_VOLUME = 0.35;   // under the one-shots
 
@@ -78,9 +85,11 @@ export class GameScene extends Phaser.Scene {
   private debugText: Phaser.GameObjects.Text[] = [];
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private flags = { debug: false, autoplay: false, botDark: false, infiniteOil: false, frozen: false };
+  private difficulty: Difficulty = "normal";
+  private ghostSpeed: DifficultyTuning["ghostSpeed"] = GHOST.speed;
 
   constructor() {
-    super("game");
+    super("main"); // the shell starts, pauses and stops the scene called "main"
   }
 
   preload(): void {
@@ -99,8 +108,11 @@ export class GameScene extends Phaser.Scene {
     // (scenario pair: the lantern must be what saves you, VERTICAL_SLICE assumption 2)
     this.flags = { debug: params.has("debug"), autoplay: params.has("autoplay"), botDark: params.get("autoplay") === "dark", infiniteOil: false, frozen: false };
     this.grid = Grid.parse(LEVEL);
-    this.rng = new Rng(Number(params.get("seed") ?? SEED)); // ?seed=N replays a run (SOP-14: seeded randomness)
-    this.lantern = new Lantern(LANTERN);
+    const seed = Number(params.get("seed") ?? SEED);
+    this.rng = new Rng(seed); // ?seed=N replays a run (SOP-14: seeded randomness)
+    this.difficulty = difficultyFor(location.search, shell.settings);
+    this.lantern = new Lantern(lanternFor(this.difficulty));
+    this.ghostSpeed = DIFFICULTY[this.difficulty].ghostSpeed;
     this.hasKey = false;
     this.state = "playing";
     this.elapsed = 0;
@@ -119,9 +131,33 @@ export class GameScene extends Phaser.Scene {
       this.debugGfx = this.add.graphics().setDepth(30);
       Log.enableChannel("ai");
     }
-    if (!this.scene.isActive("hud")) this.scene.launch("hud");
+    // The HUD lives and dies with this scene (quit to title leaves none behind). Both are queued: on a restart
+    // the stop from the old run runs first, then this launch, so the HUD always comes back.
+    this.scene.launch("hud");
+    const onResume = () => this.difficultyChanged();
+    this.events.on(Phaser.Scenes.Events.RESUME, onResume);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scene.stop("hud");
+      this.events.off(Phaser.Scenes.Events.RESUME, onResume);
+    });
     this.startAmbience();
-    Log.info("core", `BOOT_OK Ghost Lantern${this.flags.autoplay ? ` (autoplay${this.flags.botDark ? ", dark" : ""})` : ""}${this.flags.debug ? " (debug)" : ""}`);
+    Log.info("game", `RUN difficulty ${this.difficulty} seed ${seed}`);
+    // With the shell, BOOT_OK comes from the title screen; a bot run has no title, so the scene says it
+    if (this.flags.autoplay) {
+      Log.info("core", `BOOT_OK Ghost Lantern (autoplay${this.flags.botDark ? ", dark" : ""}, ${this.difficulty})${this.flags.debug ? " (debug)" : ""}`);
+    }
+  }
+
+  /** Back from the pause menu: a difficulty changed in its settings applies now (SOP-20), keeping the oil left. */
+  private difficultyChanged(): void {
+    const d = difficultyFor(location.search, shell.settings);
+    if (d === this.difficulty) return;
+    const oil = this.lantern.oil;
+    this.lantern = new Lantern(lanternFor(d));
+    this.lantern.oil = Math.min(oil, LANTERN.maxOil);
+    this.ghostSpeed = DIFFICULTY[d].ghostSpeed;
+    Log.info("game", `DIFFICULTY ${this.difficulty} -> ${d} (oil kept: ${Math.round(oil)})`);
+    this.difficulty = d;
   }
 
   // One ambience loop for the whole session: Phaser keeps sounds across scene restarts, and a browser keeps audio
@@ -209,7 +245,11 @@ export class GameScene extends Phaser.Scene {
 
   // ---- frame -------------------------------------------------------------------
   update(_time: number, deltaMs: number): void {
-    const dt = Math.min(deltaMs / 1000, 0.05);
+    if (shell.plantedCrash) {
+      shell.plantedCrash = false;
+      throw new Error("planted crash (dev.py smoke --drive crash)"); // proves the shell's crash hook end to end
+    }
+    const dt = Math.min(deltaMs / 1000, 0.05) * shell.settings.access.game_speed;
     if (Phaser.Input.Keyboard.JustDown(this.keys.R)) {
       this.scene.restart();
       return;
@@ -309,7 +349,7 @@ export class GameScene extends Phaser.Scene {
       g.repathIn = Math.max(g.repathIn + GHOST.repathEvery, 0);
       g.path = findPath(this.grid, cellOf(g.pos), this.targetFor(g)) ?? [];
     }
-    this.followPath(g, GHOST.speed[g.action] * dt);
+    this.followPath(g, this.ghostSpeed[g.action] * dt);
 
     const lit = light > 0.05;
     g.sprite.setPosition(px(g.pos.x), px(g.pos.y)).setTint(ACTION_TINT[g.action]);

@@ -69,7 +69,23 @@ Mark which ones the **vertical slice** needs. Everything marked "no" waits, othe
 ## Controls
 | Action | Keyboard/Mouse | Gamepad |
 |---|---|---|
-| | | |
+| Move | WASD or arrows | not yet (menus only) |
+| Brighten the lantern (hold) | SPACE or SHIFT | not yet |
+| Restart the run | R | not yet |
+| Pause (Resume, Settings, Quit to title) | Esc | Start |
+| Menus | arrows, Enter, Esc | d-pad, south, east |
+
+## Difficulty
+Picked on the main menu (under Play) or in Settings > Accessibility, saved in the settings file, changeable from the
+pause menu (applies on Resume, oil kept). `?difficulty=<name>` overrides it for one page load. Only the oil burn and the
+ghost speeds change; the level, the light and the ghosts' minds are the same on every difficulty.
+| Difficulty | Who it is for | Dim / bright burn (oil per s) | Chasing ghost speed (keeper: 3.6) |
+|---|---|---|---|
+| Story | explore with oil to spare | 1.5 / 5.0 | 3.0 |
+| Easy | the first human playtest's complaint ("too fast, out of oil") | 2.2 / 7.5 | 3.5 |
+| Normal | the game as designed: pillar 2 holds, you cannot outrun a chaser | 3.0 / 10.0 | 3.9 |
+| Hard | every drop of oil counts | 4.0 / 12.0 | 3.9 |
+Numbers and the bot results per difficulty: `src/game/tuning.ts` (DIFFICULTY) and HOW_IT_WAS_MADE.
 
 ## Tunables that define feel
 List the numbers that make the game feel right (gravity, jump height, coyote time, hit stop, camera lag).
@@ -90,7 +106,7 @@ Teach the mechanics by playing, not by a wall of text. Example from a shipped br
 
 ## Platform and engine target
 - Engine: see `ENGINE.md`. Storefront: <Steam first is the simple default; web (itch.io) or handheld targets change input and performance budgets>.
-- Input: <keyboard + mouse / controller / both>
+- Input: keyboard (a gamepad works in the menus only so far)
 
 ## Assumptions to test (feeds the vertical slice)
 Write these BEFORE building so you know what the slice is for.

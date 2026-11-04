@@ -141,6 +141,56 @@ Verified: `check`, 160 tests, `smoke`, the scenario pair (`?autoplay` escapes, `
 `smoke --screenshot` shots looked at by eye: the keeper and the ghosts read against the tiles. The README GIF was then remade from the autoplay escape with the kit's own commands
 (README "Remake the GIF"); at 64 colours the wizard's purple turned brown, so it uses 128.
 
+### Later: the first human playtest, and a difficulty menu
+The first person to play the slice by hand was the user (2026-11-04), after the sprites: "ghosts are too fast or i run
+out of oil and they catch up to me". The bots had never said so: the lantern bot escapes with oil to spare because it
+plays every run perfectly and fast. The ask: dim burn down to 3, and a difficulty menu built with the kit that changes
+the burn rate and the ghost speed. Logged in `docs/PLAYTEST_LOG.md` (the first entry) and `docs/VERTICAL_SLICE.md`
+(round 2).
+
+- **Normal:** dim burn 3.5 to 3.0 (the user's number). Everything else stays: chase 3.9 is still faster than the keeper's
+  3.6, which is pillar 2 ("only the light saves you").
+- **The table** (`src/game/tuning.ts`, DIFFICULTY): only the oil burn and the ghost speeds change, so every difficulty is
+  the same game. A full lantern lasts 67 s dim on Story, 45 on Easy, 33 on Normal, 25 on Hard (29 before the playtest).
+
+| Difficulty | Dim / bright burn | Chase / flee / wander | Lantern bot (seeds 1 to 8) | Dark bot |
+|---|---|---|---|---|
+| Story | 1.5 / 5.0 | 3.0 / 3.2 / 0.9 | escapes 8/8, 19 to 22 s, 35 to 70 oil left | caught 8/8 (about 11 s) |
+| Easy | 2.2 / 7.5 | 3.5 / 3.2 / 1.0 | escapes 8/8, 20 to 24 s, 46 to 55 oil | caught 7/8 (seed 8 gets through) |
+| Normal | 3.0 / 10.0 | 3.9 / 3.2 / 1.1 | escapes 8/8, 21 to 25 s, 37 to 59 oil | caught 8/8 (6 to 13 s) |
+| Hard | 4.0 / 12.0 | 3.9 / 3.2 / 1.1 | escapes 8/8, 21 to 22 s, 45 to 55 oil | caught 8/8 (6 to 13 s) |
+
+Easy answers both halves of the complaint: a third more oil time than Normal (half again as much as before the
+playtest), and chasers at 3.5, just under the keeper's speed
+(running in the dark can work, sometimes: the dark bot got through once). Even on Story the dark bot is caught: slow ghosts
+still cut corners. What the bots caught while tuning Hard (the lantern bot must escape every seed, SOP-22 section 5):
+- **Faster ghosts beat the bot, not just the player:** chase 4.3 escaped 3 of 6 seeds, 4.1 5 of 6 (7 of 8 with wander back
+  at 1.1), 4.0 7 of 8. The bot brightens only when a ghost is within 2.2 tiles, a fixed reaction that faster ghosts
+  outrun. Hard keeps Normal's ghost speed.
+- **Oil has a cliff:** burn 4.5 / 13.5 escaped only 2 of 8. Below 35 % oil the bot detours for a pickup, and that detour
+  walks past the ghosts (every catch came at 15 to 16 s, right after it). 4.0 / 12.0 escaped 8 of 8. Oil left at the exit
+  is a poor yardstick for this: a thirstier lantern sends the bot to more pickups, so Hard ends with as much oil as Normal.
+
+**The menu, with the kit's shell.** The example already carried the kit's whole web shell (`src/shell/`: title, menus,
+settings, pause, credits, crash screen, the smoke driver) and its tests, but nothing started it: when kit 0.8.0 was
+merged into the examples, `src/main.ts` was the game's own and was kept as it was ("boot flows unchanged"), so the shell
+sat unused and `smoke --drive` could not run. Wiring it in was smaller than any new menu: `main.ts` hands the game to the
+shell, GameScene became the shell's "main" scene, and the kit's settings file already had a `difficulty` field (Story,
+Easy, Normal, Hard) in Settings > Accessibility. Changes on the game's side:
+- The main menu got a Difficulty row under Play (left/right, with a one-line hint), saved to the settings file when you
+  leave the menu. `src/game/difficulty.ts` picks the run's difficulty: `?difficulty=<name>` for tests, else the setting.
+- Changed from the pause menu's settings, it applies on Resume and keeps the oil you have (SOP-20: changeable during play).
+- `?autoplay` skips the shell (GameScene starts at once and logs BOOT_OK itself), so the bot pair and the README GIF run
+  exactly as before. Phaser's keyboard stays on for the game's own keys; the shell reads the menus and Esc (pause).
+- The HUD scene now stops with the game scene (quit to title left it on screen), the shell's pause prompt moved to the
+  bottom centre (it covered the oil bar), and the menu backdrop is the game's night instead of the kit's blue stripes.
+- The kit's `--drive show:` list got `menu` (the main menu with the difficulty row focused).
+
+Verified: `check`, 172 tests (12 new in `tests/difficulty.test.ts`: the table's order and pillar, Easy against the
+complaint, the URL flag against the saved setting), `smoke`, the scenario pair on Normal and on Hard, `smoke --drive
+menus`, `--drive pseudo --locale pseudo` (23 screens, nothing truncated, through a real run and its pause menu), `--drive
+crash`, and screenshots of the title, the menu, settings and pause looked at by eye.
+
 ## 9. Outside the kit (be honest)
 - Before writing `src/game/level.ts`, the map was sanity-checked once with a few lines of throwaway Python (row lengths,
   start-to-key path). The same checks now live in `tests/level.test.ts`; the throwaway was not needed in the end.
@@ -148,4 +198,8 @@ Verified: `check`, 160 tests, `smoke`, the scenario pair (`?autoplay` escapes, `
   review the takes) and one for the five ASSET_LOG rows and evidence files in the tool's `--log` format (each row covers
   an anchor plus an animation, two requests, which `--log` writes as separate rows). The ghost animations ran on a copy
   of the tool with the transparent-frames fix before it was committed to the kit.
+- The difficulty measurements (4 difficulties x 8 seeds x 2 bots, then the Hard retunes): a throwaway Playwright script
+  that runs many pages against one build, because `dev.py smoke` runs one URL per build and waits for one marker. A seed
+  and difficulty sweep in the kit would have replaced it. A second throwaway script pressed real keys (title, menu,
+  Play, hold D, R, Esc, quit) to check movement, restart and quit to title under the shell.
 - Everything else (assets, GIF, screenshots, checks) went through the kit's own commands.

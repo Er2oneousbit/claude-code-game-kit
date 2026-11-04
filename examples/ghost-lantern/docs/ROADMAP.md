@@ -7,7 +7,7 @@
 - [x] **Slice: Three Dark Rooms**  | Done when: start, key, exit, caught or win, restart; check/test/smoke and both scenario runs pass  | Timebox: 1 session
 
 ## Next
-- [ ] 
+- [ ] **Second human playtest** (from the first one, `PLAYTEST_LOG.md` 2026-11-04)  | Done when: Easy and Normal played by hand; the complaint ("too fast, out of oil") is gone on Easy and Normal still feels tense; notes logged
 
 ## Later
 - [ ] 
@@ -27,6 +27,7 @@ detail.
 | M4 Release candidate | `/release-check` green | |
 
 ## Done (recent, newest first)
+- 2026-11-04: First human playtest answered: Normal dim burn 3.0, a difficulty menu (the kit's shell wired in: title, menu, settings, pause), the bot pair measured on every difficulty
 - 2026-10-21: Slice built: lantern, utility-AI ghosts, A*, separation, HUD, debug view, autoplay scenario pair, 40 tests
 - 2026-10-21: Project scaffolded
 

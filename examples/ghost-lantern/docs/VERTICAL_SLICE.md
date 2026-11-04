@@ -60,3 +60,4 @@ log every file in `ASSET_LOG.md`, then ask Claude to wire it in and **playtest i
 | Round | Date | Assumptions confirmed | Assumptions refuted | Next change |
 |---|---|---|---|---|
 | 1 | 2026-10-21 | (2) brighten-vs-dim is a real choice: with the lantern the bot escapes on 6/6 seeds (37 to 48 oil left, two pickups needed), without it it is caught on 6/6 | none yet | (1) and (3) need human players: readability and "one more run" |
+| 2 | 2026-11-04 | First human playtest (`PLAYTEST_LOG.md`): (3) unknown: the player found it too hard: "ghosts are too fast or i run out of oil and they catch up to me" | none; (2) still holds for the bots on Normal and Hard | Normal dim burn 3.5 to 3.0, a difficulty choice on the main menu (menus came into scope for it, through the kit's shell); play Easy and Normal by hand again |
