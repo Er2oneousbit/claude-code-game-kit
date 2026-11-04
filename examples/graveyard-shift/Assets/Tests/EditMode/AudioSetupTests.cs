@@ -3,18 +3,21 @@
 // Purpose : EditMode tests that SceneBuilder wired every sound into the setup asset: the five effects
 //           and the night ambience must be there (a missing clip is silent, not an error, at runtime),
 //           the ambience is long enough to loop, and the loop volumes stay below the effects. Every WAV's
-//           header gives its real sizes, the narrator lines are normalized to one peak, and the licence
-//           evidence records the text and hash of every generated file that ships.
+//           header gives its real sizes, the narrator lines are normalized to one peak and say the night's soul
+//           count, and the licence evidence records the text and hash of every generated file that ships.
 // Usage   : python tools/dev.py test
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-03 (Claude Opus 5.5): WAV header sizes and the narrator peak (issue #139: two narrator takes
 //           and the ghost voices shipped as streamed, with placeholder RIFF and data sizes of about 4 GB); the
 //           evidence matches the sidecars (issue #138: two re-voiced lines kept the old text and hash).
+//           2026-11-04 (Claude Opus 5.5): narrator lines say the night's soul count, and the evidence also gives a
+//           sidecar's hash as received (issue #138: narrator_intro_1 still said "six", re-voiced).
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -29,7 +32,11 @@ namespace graveyard_shift.Tests
         private const string EvidenceFolder = "docs/licenses";   // relative to the project root (Unity's working folder)
 
         [Serializable] private class GenRequest { public string text; }
-        [Serializable] private class GenSidecar { public string sha256; public GenRequest request; }
+        [Serializable] private class GenSidecar { public string sha256; public string sha256_as_received; public GenRequest request; }
+        // count words a narrator line could use for the souls ("one" is left out: "no one", "one more" are not counts)
+        private static readonly string[] NumberWords =
+            { "", "", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
+              "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty" };
 
         private static graveyard_shift.Game.GraveyardSetup Setup()
         {
@@ -183,10 +190,33 @@ namespace graveyard_shift.Tests
                 var gen = JsonUtility.FromJson<GenSidecar>(File.ReadAllText(path));
                 string name = Path.GetFileName(path);
                 if (string.IsNullOrEmpty(gen.sha256) || !evidence.Contains(gen.sha256)) stale.Add($"{name}: hash {gen.sha256}");
+                // newer sidecars also keep the hash of the bytes as received (before fish_tts.py fixed the WAV header)
+                if (!string.IsNullOrEmpty(gen.sha256_as_received) && !evidence.Contains(gen.sha256_as_received))
+                    stale.Add($"{name}: hash as received {gen.sha256_as_received}");
                 if (gen.request != null && !string.IsNullOrEmpty(gen.request.text) && !evidence.Contains(gen.request.text))
                     stale.Add($"{name}: text \"{gen.request.text}\"");
             }
             Assert.IsEmpty(stale, $"sidecars that no file in {EvidenceFolder} describes: " + string.Join("; ", stale));
+        }
+
+        // A narrator line that counts the souls must say the night's count: the yard grew from six souls to twelve
+        // and one intro take kept saying "Gather all six" while the HUD read 0 / 12 (issue #138)
+        [Test]
+        public void NarratorLinesSayTheNightsSoulCount()
+        {
+            int count = graveyard_shift.Core.LevelCheck.SoulCount;
+            Assert.Less(count, NumberWords.Length, $"SoulCount {count}: add its word to NumberWords");
+            string want = NumberWords[count];
+            var wrong = new List<string>();
+            foreach (string path in Directory.GetFiles(AudioFolder, "narrator_*.gen.json"))
+            {
+                var gen = JsonUtility.FromJson<GenSidecar>(File.ReadAllText(path));
+                string text = gen.request != null ? gen.request.text ?? "" : "";
+                foreach (string word in NumberWords)
+                    if (word.Length > 0 && word != want && Regex.IsMatch(text, $@"\b{word}\b", RegexOptions.IgnoreCase))
+                        wrong.Add($"{Path.GetFileName(path)} says \"{word}\": \"{text}\"");
+            }
+            Assert.IsEmpty(wrong, $"narrator lines that do not say {want} souls: " + string.Join("; ", wrong));
         }
 
         // The data chunk's start and size, walking the chunks after "WAVE" (16-bit PCM, as every voice here is)

@@ -159,9 +159,6 @@ autoplay exit leak (#6).
 - A low rock the ghosts' NavMesh climbs (0.75 m) blocks the keeper's CharacterController (0.3 m); the fix moved the
   tuned balance and was reverted. Both wait for a balance decision ([#10](https://github.com/Er2oneousbit/claude-code-game-kit/issues/10)).
 - Built with Mono only; IL2CPP builds were not made or compared.
-- One of the two intro narrator takes (`narrator_intro_1`) still says "Gather all six" on a twelve-soul night: it
-  needs re-voicing with the same voice, which is a paid generation
-  ([#138](https://github.com/Er2oneousbit/claude-code-game-kit/issues/138)).
 
 ### Scrap Tanks (C++/SDL2)
 - Scouts can never reach their RETREAT branch: one hit leaves them above the threshold and a second destroys them.

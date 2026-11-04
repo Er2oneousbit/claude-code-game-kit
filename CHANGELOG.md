@@ -493,6 +493,12 @@
   prompt puts the hero's top): each size's default focus moves up just far enough to keep that top edge, so sizes
   whose centre crop kept it are unchanged. Your own `source` art stays centred; the README says to set `"focus"`
   when its subject is off centre (#181).
+- Graveyard Shift (Unity): `narrator_intro_1` says "Gather all twelve" (it said "six" on a twelve-soul night): one
+  Fish Audio take with the same free model and voice, normalized to the narrator's -3 dBFS peak like the other two
+  re-voiced lines (-17.9 LUFS, the old take -17.7), and a local transcriber hears the new line word for word. The
+  ASSET_LOG row, licence evidence and HOW_IT_WAS_MADE say so. A new EditMode test checks every narrator line names
+  `LevelCheck.SoulCount` (old take: "six" reported), and the evidence check also covers a sidecar's hash as received.
+  No one has listened to it yet (#138).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

@@ -4,13 +4,15 @@
   "endpoint": "/v1/tts",
   "model": "s2.1-pro-free",
   "request": {
-    "text": "The souls are restless tonight. Gather all six, and slip out the gate before the sun comes up.",
+    "text": "The souls are restless tonight. Gather all twelve, and slip out the gate before the sun comes up.",
     "reference_id": "5c8dc6a69c0b4edfb32634db6384bf34",
     "format": "wav",
     "latency": "balanced"
   },
-  "date": "2026-10-22",
-  "sha256": "69d9fbc635a3321aa93515970493475b73480c3d048a1676831eb754736a8a5a",
-  "text_bytes": 94,
+  "date": "2026-11-04",
+  "sha256": "59797b533c59b8db850f041443f8f4a089d308e3a800acca445edbd5cb8a58d1",
+  "sha256_as_received": "054e91301e9a26eabcd7ec41fbfc73fbccaf26c22b6db2e931951dae7afb707a",
+  "header_sizes_fixed": true,
+  "text_bytes": 97,
   "license": "Fish Audio API terms (verify before shipping)"
 }
