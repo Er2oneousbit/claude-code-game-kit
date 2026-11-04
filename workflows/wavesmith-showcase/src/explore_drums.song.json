@@ -1,0 +1,9 @@
+{"bpm": 120, "steps_per_beat": 2, "loop": true, "rate": 44100,
+ "channels": {
+              "drums": {"wave": "drums", "volume": 0.6}},
+ "patterns": {
+  "A": {"drums": "k h s h k k s h"},
+  "B": {"drums": "k h s h k k s h"},
+  "C": {"drums": "k h s h k k s h"},
+  "D": {"drums": "k h s o k k s c"}},
+ "order": ["A", "B", "C", "D"]}

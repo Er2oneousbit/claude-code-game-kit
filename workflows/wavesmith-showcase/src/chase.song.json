@@ -1,0 +1,10 @@
+{"bpm": 120, "steps_per_beat": 4, "loop": true, "rate": 44100,
+ "channels": {"lead": {"wave": "square", "duty": 0.5, "volume": 0.24, "decay": 0.08, "sustain": 0.6, "release": 0.04},
+              "bass": {"wave": "triangle", "volume": 0.5, "sustain": 0.7, "release": 0.02},
+              "drums": {"wave": "drums", "volume": 0.6}},
+ "patterns": {
+  "A": {"lead": "E5 - . E5 D5 - C5 - A4 - . . C5 - D5 -", "bass": "A2 A3 A2 A3 A2 A3 A2 A3 A2 A3 A2 A3 A2 A3 A2 A3", "drums": "k . h . s . h k k . h . s . h h"},
+  "B": {"lead": "C5 - . C5 A4 - F4 - A4 - C5 - F5 - E5 -", "bass": "F2 F3 F2 F3 F2 F3 F2 F3 F2 F3 F2 F3 F2 F3 F2 F3", "drums": "k . h . s . h k k . h . s . h h"},
+  "C": {"lead": "E5 - G5 - E5 - C5 - D5 - E5 - G5 - . .", "bass": "C3 C4 C3 C4 C3 C4 C3 C4 C3 C4 C3 C4 C3 C4 C3 C4", "drums": "k . h . s . h k k . h . s . h h"},
+  "D": {"lead": "B4 - . B4 D5 - G5 - . . D5 - B4 - D5 -", "bass": "G2 G3 G2 G3 G2 G3 G2 G3 G2 G3 G2 G3 G2 G3 G2 G3", "drums": "k . h . s . h k k . s . s s s s"}},
+ "order": ["A", "B", "C", "D"]}

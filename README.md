@@ -202,6 +202,23 @@ sound sets, dialogue subtitles and captions, voices on your own GPU and sound ma
 Host specs, every benchmark, screenshots and lessons: [workflows/local-pixel-art](workflows/local-pixel-art/README.md).
 How a game uses it: SOP-16 "Generating pixel art locally".
 
+## Wavesmith showcase (audio)
+What Wavesmith makes and checks, rebuilt by one script from Wavesmith commands: effects and a loop made from code,
+adaptive music as the engines play it, voices made on your own GPU with the typewriter and subtitles timed to them,
+and the loudness of every asset and of the whole mix.
+
+![Sound from code: eleven effects from synth presets and seeds, and a chiptune loop, each as a spectrogram over its waveform](workflows/wavesmith-showcase/media/wavesmith_code_sheet.png)
+
+![Adaptive music: a drums layer on the next bar, a beat-quantized change to the chase with a stinger, a bar-quantized fade back](workflows/wavesmith-showcase/media/wavesmith_music.png)
+
+![Voices and dialogue: two voices designed on the local GPU and a babble voice, the speech box typing and the subtitle cue, rain ducked under speech](workflows/wavesmith-showcase/media/wavesmith_dialogue.png)
+
+![The whole-mix check: one capture as made (clipping, 9 dB too loud), at house levels, and after the master move check-mix asked for](workflows/wavesmith-showcase/media/wavesmith_mix_check.png)
+
+The same three clips with sound are MP4s in [workflows/wavesmith-showcase/media](workflows/wavesmith-showcase/media)
+(`wavesmith_code.mp4`, `wavesmith_music.mp4`, `wavesmith_dialogue.mp4`). Commands, timings, credits and licences:
+[workflows/wavesmith-showcase](workflows/wavesmith-showcase/README.md).
+
 ## Extending the kit
 - New engine: copy `engines/_template`, follow its README. No scaffolder changes needed.
 - New skill: `core/.claude/skills/<name>/SKILL.md`. New subagent: `core/.claude/agents/<name>.md`.

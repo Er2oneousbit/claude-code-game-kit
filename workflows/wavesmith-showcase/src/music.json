@@ -1,0 +1,13 @@
+{
+  "version": 1, "sample_rate": 44100, "start": "explore",
+  "tracks": {
+    "explore": {"bpm": 120, "beats_per_bar": 4, "bars": 4,
+                "stems": {"base": "music/explore_base.wav", "drums": "music/explore_drums.wav"}},
+    "chase": {"bpm": 120, "beats_per_bar": 4, "bars": 4, "stems": {"full": "music/chase.wav"}}
+  },
+  "stingers": {"alert": {"file": "music/alert.wav", "bars": 1}},
+  "transitions": [
+    {"from": "explore", "to": "chase", "quantize": "beat", "stinger": "alert"},
+    {"from": "chase", "to": "explore", "quantize": "bar", "fade_ms": 1000}
+  ]
+}

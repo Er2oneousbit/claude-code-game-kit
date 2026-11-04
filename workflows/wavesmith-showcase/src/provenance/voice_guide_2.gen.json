@@ -1,0 +1,27 @@
+{
+  "tool": "local_tts",
+  "op": "say",
+  "date": "2026-11-04",
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+  "license": "Apache-2.0 (Qwen3-TTS model cards, https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base)",
+  "text": "Pack light, keep the map dry, and stay close to me.",
+  "seed": 8,
+  "language": "English",
+  "voice": {
+    "origin": "designed from text",
+    "persona": "a warm, steady woman in her forties, clear mid-low voice, calm unhurried pace, neutral accent",
+    "reference": "guide_ref.wav",
+    "reference_sha256": "fa99c448a758f6ed9c8a9b3e59295cb21bbfb973a3f0aa481be313335bb16d37"
+  },
+  "gpu_seconds": 12.05,
+  "device": "cuda",
+  "rate": 24000,
+  "post": {
+    "seconds": 3.496,
+    "raw_seconds": 4.0,
+    "pitch_semitones": 0.0,
+    "ring_hz": 0.0,
+    "ring_mix": 0
+  },
+  "sha256": "6e0f2c29c2efe90cfcfe041d19efe7c6dff3f8d88271aca9782d3191fdbe108c"
+}

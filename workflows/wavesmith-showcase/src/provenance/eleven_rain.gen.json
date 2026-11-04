@@ -1,0 +1,20 @@
+{
+  "tool": "eleven_audio",
+  "service": "ElevenLabs",
+  "endpoint": "/v1/sound-generation",
+  "model_id": "eleven_text_to_sound_v2",
+  "request": {
+    "text": "steady light rain on a wooden roof, no thunder, ambience",
+    "model_id": "eleven_text_to_sound_v2",
+    "prompt_influence": 0.3,
+    "duration_seconds": 5.0,
+    "loop": true,
+    "output_format": "mp3_44100_128"
+  },
+  "date": "2026-11-04",
+  "plan": "free (free)",
+  "sha256": "ea8031360470b1baad57ae21bb03d0c7f98bde94b66cc7de0da9c339a0927c87",
+  "license": "ElevenLabs free plan: non-commercial only",
+  "request_id": "036cd055504c0d95793e581fdc200f57",
+  "credits": "50"
+}

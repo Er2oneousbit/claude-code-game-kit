@@ -1,0 +1,19 @@
+{
+  "version": 1, "locale": "en",
+  "speakers": {"guide": {"name": "Guide", "color": "#E3B04B"}, "scout": {"name": "Scout", "color": "#7FA7D9"},
+               "sprite": {"name": "Sprite", "color": "#9085E9"}},
+  "lines": [
+    {"id": "guide.bridge", "speaker": "guide", "text": "The bridge is out, so we take the river path tonight.",
+     "audio": "voice/guide_1.wav"},
+    {"id": "scout.leave", "speaker": "scout", "text": "Then we leave now, before the lanterns burn down.",
+     "audio": "voice/scout_1.wav"},
+    {"id": "guide.pack", "speaker": "guide", "text": "Pack light, keep the map dry, and stay close to me.",
+     "audio": "voice/guide_2.wav"},
+    {"id": "sprite.psst", "speaker": "sprite", "text": "Psst! Over here. The gate is open!",
+     "audio": "voice/sprite.wav", "timeline": "voice/sprite.timeline.json"}
+  ],
+  "sequences": {"river": [{"line": "guide.bridge", "at": 1.0},
+                          {"line": "scout.leave", "after": "guide.bridge", "gap_s": 0.5},
+                          {"line": "guide.pack", "after": "scout.leave", "gap_s": 0.5},
+                          {"line": "sprite.psst", "after": "guide.pack", "gap_s": 1.6}]}
+}

@@ -1,0 +1,27 @@
+{
+  "tool": "local_tts",
+  "op": "say",
+  "date": "2026-11-04",
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+  "license": "Apache-2.0 (Qwen3-TTS model cards, https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base)",
+  "text": "Then we leave now, before the lanterns burn down.",
+  "seed": 7,
+  "language": "English",
+  "voice": {
+    "origin": "designed from text",
+    "persona": "an eager young man, bright voice, quick pace, a little out of breath, neutral accent",
+    "reference": "scout_ref.wav",
+    "reference_sha256": "fa84c68c281e0e688d25398904759c6f226ae3596d73c081403b88abf1279fe2"
+  },
+  "gpu_seconds": 8.8,
+  "device": "cuda",
+  "rate": 24000,
+  "post": {
+    "seconds": 2.489,
+    "raw_seconds": 2.88,
+    "pitch_semitones": 0.0,
+    "ring_hz": 0.0,
+    "ring_mix": 0
+  },
+  "sha256": "538a203237024d14bac2adabe6ed23f2b263cd793eba4674a41ed33ff25c1ccb"
+}

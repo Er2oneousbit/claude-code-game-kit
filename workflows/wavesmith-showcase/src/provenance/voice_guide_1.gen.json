@@ -1,0 +1,27 @@
+{
+  "tool": "local_tts",
+  "op": "say",
+  "date": "2026-11-04",
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+  "license": "Apache-2.0 (Qwen3-TTS model cards, https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base)",
+  "text": "The bridge is out, so we take the river path tonight.",
+  "seed": 7,
+  "language": "English",
+  "voice": {
+    "origin": "designed from text",
+    "persona": "a warm, steady woman in her forties, clear mid-low voice, calm unhurried pace, neutral accent",
+    "reference": "guide_ref.wav",
+    "reference_sha256": "fa99c448a758f6ed9c8a9b3e59295cb21bbfb973a3f0aa481be313335bb16d37"
+  },
+  "gpu_seconds": 9.89,
+  "device": "cuda",
+  "rate": 24000,
+  "post": {
+    "seconds": 3.022,
+    "raw_seconds": 3.2,
+    "pitch_semitones": 0.0,
+    "ring_hz": 0.0,
+    "ring_mix": 0
+  },
+  "sha256": "e41d44a5491d5f55363097c978a5fb40547e95926a317e8983ae13e7b16d9db7"
+}

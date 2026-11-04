@@ -1,0 +1,11 @@
+{
+  "version": 1, "seed": 1,
+  "buses": {"master": {}, "music": {"parent": "master"}, "sfx": {"parent": "master"}, "ui": {"parent": "master"},
+            "dialogue": {"parent": "master"}, "ambience": {"parent": "master"}},
+  "ducking": [{"trigger": "dialogue", "targets": ["music", "ambience"], "depth_db": -8,
+               "attack_ms": 80, "release_ms": 400}],
+  "events": {
+    "door_slam": {"bus": "sfx", "files": ["sfx/door.wav"], "caption": "[door slams]", "directional": true},
+    "rain": {"bus": "ambience", "files": ["amb/rain.wav"], "max_voices": 1}
+  }
+}

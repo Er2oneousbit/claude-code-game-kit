@@ -1,0 +1,25 @@
+{
+  "tool": "local_tts",
+  "op": "design",
+  "date": "2026-11-04",
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "license": "Apache-2.0 (Qwen3-TTS model cards, https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base)",
+  "persona": "a warm, steady woman in her forties, clear mid-low voice, calm unhurried pace, neutral accent",
+  "ref_text": "Good morning. The road north is clear today, and the market is busy. If you need bread, iron, or a warm place to rest, you will find it here.",
+  "seed": 7,
+  "language": "English",
+  "voice": {
+    "origin": "designed from text",
+    "persona": "a warm, steady woman in her forties, clear mid-low voice, calm unhurried pace, neutral accent"
+  },
+  "device": "cuda",
+  "rate": 24000,
+  "post": {
+    "seconds": 8.913,
+    "raw_seconds": 8.96,
+    "pitch_semitones": 0.0,
+    "ring_hz": 0.0,
+    "ring_mix": 0
+  },
+  "sha256": "fa99c448a758f6ed9c8a9b3e59295cb21bbfb973a3f0aa481be313335bb16d37"
+}

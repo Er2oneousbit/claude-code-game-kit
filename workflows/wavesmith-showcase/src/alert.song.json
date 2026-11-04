@@ -1,0 +1,6 @@
+{"bpm": 120, "steps_per_beat": 4, "loop": false, "rate": 44100,
+ "channels": {"lead": {"wave": "square", "duty": 0.5, "volume": 0.3, "decay": 0.1, "sustain": 0.7, "release": 0.15},
+              "bass": {"wave": "triangle", "volume": 0.5, "sustain": 0.8, "release": 0.1},
+              "drums": {"wave": "drums", "volume": 0.6}},
+ "patterns": {"S": {"lead": "A5 . A5 . A5 . A5 . C6 - - - B5 - - -", "bass": "A2 . A2 . A2 . A2 . A2 - - - G#2 - - -", "drums": "c . s . s . s . s s s s s s s s"}},
+ "order": ["S"]}

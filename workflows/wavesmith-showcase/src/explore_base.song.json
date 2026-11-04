@@ -1,0 +1,11 @@
+{"bpm": 120, "steps_per_beat": 2, "loop": true, "rate": 44100,
+ "channels": {
+              "keys": {"wave": "square", "duty": 0.25, "volume": 0.22, "decay": 0.12, "sustain": 0.35, "release": 0.08},
+              "lead": {"wave": "sine", "volume": 0.3, "attack": 0.03, "sustain": 0.8, "release": 0.25, "vibrato": [0.12, 5.0, 0.2]},
+              "bass": {"wave": "triangle", "volume": 0.5, "sustain": 0.8, "release": 0.06}},
+ "patterns": {
+  "A": {"keys": "A4 C5 E5 C5 A4 C5 E5 C5", "lead": "E5 - - - D5 - C5 -", "bass": "A2 - - - E2 - - -"},
+  "B": {"keys": "F4 A4 C5 A4 F4 A4 C5 A4", "lead": "C5 - - - A4 - - -", "bass": "F2 - - - C3 - - -"},
+  "C": {"keys": "E4 G4 C5 G4 E4 G4 C5 G4", "lead": "G4 - - - C5 - E5 -", "bass": "C3 - - - G2 - - -"},
+  "D": {"keys": "D4 G4 B4 G4 D4 G4 B4 G4", "lead": "D5 - - - B4 - - -", "bass": "G2 - - - D3 - - -"}},
+ "order": ["A", "B", "C", "D"]}
