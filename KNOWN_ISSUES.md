@@ -123,8 +123,6 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
 - **Docs marked (verify):** facts about outside services (prices, plans, menu paths, license terms) that were not
   checked live. They are the most likely to be out of date.
 - **Tools without an exam:** `core/.claude/hooks/session_context.py`, `tools/art/frames_to_gif.py` and several Dotwork helpers ([#14](https://github.com/Er2oneousbit/claude-code-game-kit/issues/14)).
-- **`prep_export.py`:** may fail on a mesh shared by several objects (reported in a review, never reproduced; [#18](https://github.com/Er2oneousbit/claude-code-game-kit/issues/18)).
-- **`DISTILL_REPORT.md`** is a snapshot from its last run and is out of date ([#15](https://github.com/Er2oneousbit/claude-code-game-kit/issues/15)).
 
 ## The examples
 None of the example games has been played by a human tester; the bots and tests are the only proof they play as
