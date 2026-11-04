@@ -513,9 +513,9 @@
   back with near-white corners), so each output pixel now takes the most common alpha of its source block.
   `fix --op correct` prints the colour count before and after and, when it went up (10 in, 235 out live), the
   `fix --op reduce-colors --colors N` line that brings it back. Standard library only, through `image_diff.py` (#184).
-- `doctor.py` (web): warns when `src/shell/app.ts` is present but `src/main.ts` never reaches it through its imports,
-  naming `/game-shell` (or deleting `src/shell/`). Gatekeeper (web) carried the whole shell unused since the 0.8.0
-  sync and nothing noticed; a scene that imports the shell but is never loaded does not count (#182).
+- `doctor.py` (web): warns when a game's src/shell/app.ts is present but its src/main.ts never reaches it through
+  its imports, naming `/game-shell` (or deleting `src/shell/`). Gatekeeper (web) carried the whole shell unused
+  since the 0.8.0 sync and nothing noticed; a scene that imports the shell but is never loaded does not count (#182).
 - Gatekeeper (web): the kit's shell is wired in (title, menus, settings, pause, credits; `smoke --drive` works).
   "Play" shows the start panel and the AI guard loads from there as before; `?autoplay` skips the shell, so the
   README's scenario and real-model commands are unchanged. Key presses in the chat box stay out of the shell's
