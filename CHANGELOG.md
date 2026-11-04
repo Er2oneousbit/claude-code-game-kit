@@ -509,6 +509,10 @@
 - `pixellab.py`: an `object` that comes back as several candidates (1 direction, `--size` 170 or less: a live 64 px
   crate gave 16) saves them all as `candidate_NN.png` and exits 0. It exited 2 and saved nothing, though the
   candidates were already paid for (10 generations); `object -h` says how many candidates each size gives.
+- `pixellab.py`: `fix --op unzoom` keeps a sprite's transparency. PixelLab answers opaque (a live 32 px crate came
+  back with near-white corners), so each output pixel now takes the most common alpha of its source block.
+  `fix --op correct` prints the colour count before and after and, when it went up (10 in, 235 out live), the
+  `fix --op reduce-colors --colors N` line that brings it back. Standard library only, through `image_diff.py` (#184).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

@@ -46,6 +46,8 @@
 #           unzoom and normal-map lite (0.1 each), fix remove-background (1), ui at 192x192 (10: about 100 s),
 #           font at 16 px (15: .ttf + a 128x160 atlas, 8 glyphs a row), object 1 direction at 64 px (10: 16
 #           candidates), fetch (free). unzoom needs a source of at least 256x256 (PixelLab answers 422, free).
+#           unzoom answers opaque (transparency composited onto white): the source's alpha is mapped back onto it.
+#           correct can add colours (10 in, 235 out live): the run prints both counts and how to reduce them again.
 #           Not yet live: tiles-pro, outfit, 8-direction object, vfx --pro (verify).
 #           [paid plan only] in -h (tiles-pro, outfit) is PixelLab's rule; a trial account gets a 402, explained.
 #           Download links on PixelLab's storage get no token: it is sent only to the API host, and a redirect
@@ -63,6 +65,8 @@
 #   tileset:   POST /create-tileset(-sidescroller) -> poll -> GET /tilesets/{id} -> tile PNGs + tileset.json
 #   ui, prop, object: POST -> poll the resource (GET /ui-assets|/map-objects|/objects/{id}) -> download its links
 #   vfx, font, edit, outfit, normal-map: POST -> poll the job -> save last_response (images, files, ttf_base64)
+#   fix unzoom: opaque answer + a source with alpha -> each output pixel gets the most common alpha of its block
+#   fix correct: count the visible colours before and after -> more after: point at `fix --op reduce-colors`
 #   animate-character: POST /characters/animations -> poll every direction's job -> the character's zip
 #   -> pixellab.gen.json (request, date, plan, cost, SHA-256 of each file) -> --log: ASSET_LOG row + evidence file
 import argparse
@@ -86,6 +90,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import fetch_asset  # noqa: E402  (shared ASSET_LOG helpers)
+import image_diff  # noqa: E402  (standard-library PNG reader and writer, for the `fix` follow-ups)
 
 API = "https://api.pixellab.ai/v2"
 KEY_ENV = "PIXELLAB_API_KEY"
@@ -781,7 +786,10 @@ def run_job(kind, key, endpoint, body, out, args):
         img = first.get("image") or (first.get("images") or [None])[0]
         if img is None:
             raise ServiceError(f"PixelLab answered {endpoint} without an image")
-        return [_save(img, out)], cost, {}
+        files = [_save(img, out)]
+        if kind == "fix":
+            after_fix(args, out)
+        return files, cost, {}
     if kind == "iso-tile" and first.get("image"):
         out.mkdir(parents=True, exist_ok=True)
         return [_save(first["image"], out / "tile.png")], cost, {}
@@ -893,6 +901,69 @@ def run_job(kind, key, endpoint, body, out, args):
             raise ServiceError(f"{endpoint} finished without an image (got: {sorted(last)})")
         return [fetch_url(links[0], key, out)], cost, {}
     raise ToolError(f"unknown kind {kind}")
+
+
+def visible_colours(rows):
+    """Distinct RGBA values among the pixels that are not fully transparent (RGBA rows from image_diff.read_png).
+    A clear pixel is not a colour: PixelLab leaves varied RGB under alpha 0."""
+    seen = set()
+    for row in rows:
+        for i in range(0, len(row), 4):
+            if row[i + 3]:
+                seen.add(bytes(row[i:i + 4]))
+    return len(seen)
+
+
+def block_alpha(src, sw, sh, w, h):
+    """The source's alpha mask (sw x sh RGBA rows) mapped down to w x h: each output pixel takes the most common
+    alpha of the source block it came from."""
+    mask = []
+    for y in range(h):
+        y0, y1 = y * sh // h, max(y * sh // h + 1, (y + 1) * sh // h)
+        line = []
+        for x in range(w):
+            x0, x1 = x * sw // w, max(x * sw // w + 1, (x + 1) * sw // w)
+            votes = {}
+            for row in src[y0:y1]:
+                for a in row[x0 * 4 + 3:x1 * 4:4]:
+                    votes[a] = votes.get(a, 0) + 1
+            line.append(max(votes, key=votes.get))
+        mask.append(line)
+    return mask
+
+
+def after_fix(args, out):
+    """What PixelLab's `fix` ops change without saying so (#184). unzoom answers an opaque image (it composites the
+    source onto white), so a source with transparency gets its alpha mask back; correct can add colours, so both
+    counts are printed with a way back. Never fails the run: the generation is already paid for."""
+    if args.op not in ("unzoom", "correct") or (args.op == "unzoom" and not png_has_alpha(args.image)):
+        return
+    try:
+        sw, sh, src = image_diff.read_png(args.image)
+        w, h, rows = image_diff.read_png(out)
+    except Exception as exc:  # noqa: BLE001  (a check must never fail a run that is already paid for)
+        print(f"[warn] could not read the PNGs to check the {args.op} result: {exc}")
+        return
+    if args.op == "correct":
+        before, after = visible_colours(src), visible_colours(rows)
+        print(f"[info] colours: {before} before, {after} after (fully transparent pixels not counted)")
+        if after > before:
+            print(f"[warn] `correct` raised the colour count; to put it back on {max(2, before)} colours (0.1): "
+                  f"pixellab.py fix --op reduce-colors --colors {max(2, before)} --image {out} --out <new>.png")
+        return
+    if any(a < 255 for row in rows for a in row[3::4]):
+        return                                          # PixelLab kept some transparency: leave its answer alone
+    if not any(a < 255 for row in src for a in row[3::4]):
+        return                                          # an alpha channel with nothing clear in it
+    if w > sw or h > sh:
+        print(f"[warn] unzoom answered {w}x{h} for a {sw}x{sh} source; transparency not restored")
+        return
+    mask = block_alpha(src, sw, sh, w, h)
+    for y, row in enumerate(rows):
+        for x, a in enumerate(mask[y]):
+            row[x * 4:x * 4 + 4] = bytes(4) if a == 0 else bytes((row[x * 4], row[x * 4 + 1], row[x * 4 + 2], a))
+    image_diff.write_png(out, w, h, rows)
+    print("[info] unzoom: PixelLab answers opaque; the source's transparency was mapped back onto the result")
 
 
 def summed_cost(usages):
@@ -1197,7 +1268,10 @@ def build_parser():
                        help="clean up a PNG: reduce-colors, correct (stray pixels), unzoom (upscaled art back to 1x), "
                             "remove-background, normal-map (0.1 each; remove-background 1, normal-map pro 0.5)")
     p.add_argument("--op", required=True, choices=("reduce-colors", "correct", "unzoom", "remove-background", "normal-map"))
-    p.add_argument("--image", required=True, help="the PNG to fix (unzoom: at least 256x256, e.g. 32 px art at 8x)")
+    p.add_argument("--image", required=True,
+                   help="the PNG to fix (unzoom: at least 256x256, e.g. 32 px art at 8x; PixelLab answers opaque, "
+                        "the tool puts the source's transparency back). correct can add colours: the run prints "
+                        "the count before and after")
     p.add_argument("--colors", type=int, default=16, help="reduce-colors: how many (2 to 256, default 16)")
     p.add_argument("--strength", type=float, default=0.1, help="correct: 0 to 1 (default 0.1)")
     p.add_argument("--pro", action="store_true", help="normal-map: pro mode (0.5 instead of 0.1)")
