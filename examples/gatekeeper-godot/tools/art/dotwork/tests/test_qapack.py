@@ -6,7 +6,9 @@
 #           zero findings, and each planted outlier must be caught by its check: a 2x nearest-upscaled prop, an
 #           off-palette prop, a prop lit from the wrong side (a correctly lit prop mirrored), a red / green gauge pair.
 #           Also: mirrored character views are not light-checked, a 2 px outline, a missing outline, a character at
-#           twice the height, a prop that melts into the ground, the CLI exit codes, the lineup.
+#           twice the height, a prop that melts into the ground, the CLI exit codes, the lineup, and lit TileSet
+#           normal maps (tile_px a [w, h] list) that must not vote on the tile size, and store / brand art (scaled
+#           up on purpose) that no style check applies to.
 # Usage   : python -I -B tools/art/dotwork/tests/test_qapack.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -203,6 +205,33 @@ class QaPackExam(unittest.TestCase):
         self.assertEqual(ctx.pack_light["side"], "left")
         self.assertEqual(ctx.pack_outline, OUTLINE)
         self.assertEqual(ctx.tile_px, 32)
+
+    def test_lit_tileset_normal_maps_do_not_vote_on_the_tile_size(self):
+        """The lighting lane's TileSet normal maps carry tile_px as the atlas region, a [w, h] list (an iso tile is
+        [64, 32]); qa pack read every row's tile_px as an int and stopped with a TypeError (exit 2) on any game with
+        a lit TileSet (2026-11-03, a full rehearsal game). Normal maps are data, not art: they never vote."""
+        g = clean_game(self.tmp)
+        nm = np.zeros((32, 128, 4), np.uint8)
+        nm[..., 2] = nm[..., 3] = 255
+        for rel, region in (("assets/art/lit/town_lit/ground/base_grass_normal.png", [32, 32]),
+                            ("assets/art/lit/town_lit/iso/floor_cobble_normal.png", [64, 32])):
+            g.put(rel, nm, "normal_map", tile_px=region, per_tile=True, workflow="Dotwork lighting (numpy)")
+        ctx = g.analyse()
+        self.assertEqual(ctx.tile_px, 32)
+        self.assertEqual(ctx.findings, [], "\n".join(f"{f['check']}: {f['detail']}" for f in ctx.findings))
+
+    def test_store_and_brand_art_are_not_style_checked(self):
+        """The store lane scales its key art, icon and boot splash up by whole numbers on purpose (README, Store art);
+        qa pack read them as accidental upscales of 1x game art (2026-11-03, a full rehearsal game: 5 scale
+        findings). Store art, the game icon and the boot splash are not game-scale art: no style check applies."""
+        g = clean_game(self.tmp)
+        art = np.kron(shaded(30, 20, RAMPS["wood"], canvas=40), np.ones((3, 3, 1), np.uint8))
+        g.put("assets_src/store/demo/steam/page_background.png", art, "store_art", size=[120, 120], k=3)
+        g.put("assets/art/brand/demo/icon_demo.png", np.kron(art, np.ones((2, 2, 1), np.uint8)), "game_icon")
+        g.put("assets/art/brand/demo/boot_splash_demo.png", art, "boot_splash", size=[120, 120])
+        ctx = g.analyse()
+        self.assertEqual(ctx.findings, [], "\n".join(f"{f['check']}: {f['detail']} ({f['file']})"
+                                                     for f in ctx.findings))
 
     # ---- the four planted outliers -------------------------------------------------------------------
     def test_planted_2x_upscale(self):

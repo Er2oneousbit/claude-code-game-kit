@@ -287,11 +287,13 @@ class Asset:
 
 def lane_of(row):
     """(lane, group) for a manifest row, from its kind, folder and workflow (the rows do not name their lane).
-    lane None: not art a style check applies to (sheets repeat their frames; shadows, rule maps, normal maps are data)."""
+    lane None: not art a style check applies to (sheets repeat their frames; shadows, rule maps, normal maps are data;
+    store art, the game icon and the boot splash are scaled up by whole numbers on purpose)."""
     f, k, wf = row["file"], row["kind"], row.get("workflow") or ""
     parts = f.split("/")
     name = os.path.splitext(parts[-1])[0]
-    if k in ("sheet", "sheet_data", "sheet_json", "transition_rule", "normal_map", "shadow") or not f.endswith(".png"):
+    if k in ("sheet", "sheet_data", "sheet_json", "transition_rule", "normal_map", "shadow", "store_art", "game_icon",
+             "boot_splash") or not f.endswith(".png"):
         return None, ""
     if "/characters/" in f and k == "frame":
         return "characters", parts[parts.index("characters") + 1]
@@ -363,7 +365,8 @@ class Ctx:
         self.obj = set(_keys(load_hex(palette)).tolist())
         self.env = set(_keys(load_hex(env_palette)).tolist())
         self.outline_key = int(_keys(np.array(OUTLINE)))
-        tiles = Counter(int(a.row["tile_px"]) for a in self.assets if a.row.get("tile_px"))
+        # art rows only: a lit TileSet's normal map (data, lane None) gives its atlas region as a [w, h] list
+        tiles = Counter(int(a.row["tile_px"]) for a in self.assets if a.lane and a.row.get("tile_px"))
         self.tile_px = tile_px or (tiles.most_common(1)[0][0] if tiles else 32)
         self.findings, self.measured = [], defaultdict(dict)
         self.checked = Counter()

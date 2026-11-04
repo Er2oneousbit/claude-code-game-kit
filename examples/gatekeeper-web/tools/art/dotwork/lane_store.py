@@ -12,8 +12,9 @@
 #           "source" / "tall_source": your own key art (paths in the game) instead of the renders; "icon_source": an
 #           existing icon; "subtitle": an official subtitle under the title (the only other text Steam allows);
 #           "font" (default glyphs/title_brass.txt, capitals), "gradient" (brass / steel / copper / [hex...]),
-#           "focus": [x, y] (0..1, the point of the key art every crop keeps), "bg": hex for icon / splash backing,
-#           "logo_anchor": "auto" (default: the calmest spot of each size) or "fixed" (the anchors in SIZES).
+#           "focus": [x, y] (0..1, the point of the key art every crop keeps; default: the centre, and for the lane's
+#           own renders moved up per size until the crop keeps the hero's top, keep_top()), "bg": hex for icon /
+#           splash backing, "logo_anchor": "auto" (default: the calmest spot of each size) or "fixed" (the anchors in SIZES).
 # Notes   : Pixel art is only ever scaled by whole numbers: each size takes the smallest whole-number scale of the key
 #           art that covers it and crops the rest (never resampled, never padded); the logo gets the largest
 #           whole-number scale that fits the size's logo box. Sizes and rules: SIZES below and the README section
@@ -180,15 +181,28 @@ def calm_anchor(img, size, preferred, subject):
     return preferred if score(preferred) <= score(best) * 1.1 else best
 
 
+def keep_top(art, W, H, top):
+    """The default focus of one size for the lane's own key art: the centre, moved up just as far as it takes for the
+    W x H crop to keep the top edge of where the prompt puts the hero (top: a fraction of the height). The widest
+    sizes keep under half the key art's height, and the centre crop cut the hero's head off (#181); the feet give way
+    first, and a size whose centre crop already keeps the top is cropped as before."""
+    h, w = art.shape[:2]
+    k = max(-(-W // w), -(-H // h))
+    return 0.5, min(0.5, top + H / (h * k) / 2)
+
+
 def compose(wide, tall, logo, focus=(0.5, 0.5), anchor="auto"):
     """{size name: (RGB array, info)} for every SIZES entry plus the transparent library logo. info records the
-    art scale k, the crop origin and the logo box so the exam can check whole-number scaling and the safe area.
-    anchor "auto" moves each logo to the calmest of ANCHORS; "fixed" keeps the anchors in SIZES."""
+    art scale k, the crop origin, the focus and the logo box so the exam can check whole-number scaling and the safe
+    area. focus None: keep_top() of the SUBJECT box per size (the lane's own renders). anchor "auto" moves each logo
+    to the calmest of ANCHORS; "fixed" keeps the anchors in SIZES."""
     out = {}
     for name, (W, H, has_logo, box, anc) in SIZES.items():
-        k, x0, y0, img = cover(tall if name in TALL else wide, W, H, focus)
+        art, key = (tall, "tall") if name in TALL else (wide, "wide")
+        at_focus = focus if focus is not None else keep_top(art, W, H, SUBJECT[key][1])
+        k, x0, y0, img = cover(art, W, H, at_focus)
         img = img[..., :3].copy()
-        info = {"k": k, "x0": x0, "y0": y0, "source": "tall" if name in TALL else "wide"}
+        info = {"k": k, "x0": x0, "y0": y0, "source": key, "focus": [round(float(v), 4) for v in at_focus]}
         if has_logo:
             lk = logo_scale(logo, box[0] * W, box[1] * H)
             at = (calm_anchor(img, (logo.shape[1] * lk, logo.shape[0] * lk), anc, SUBJECT[info["source"]])
@@ -359,7 +373,9 @@ def run(entries, pack, man, conf):
         bres = core.res(conf, "brand", name)
         bg = _hex(e.get("bg", "1c1a24"))
         frame = _hex(e.get("frame", "6a5a3a"))
-        focus = tuple(float(v) for v in e.get("focus", (0.5, 0.5)))
+        # your own "focus" for every size; your own pictures default to their centre; the lane's renders to keep_top()
+        own = e.get("source") or e.get("tall_source")
+        focus = tuple(float(v) for v in e["focus"]) if "focus" in e else (0.5, 0.5) if own else None
         font = os.path.join(core.HERE, e.get("font", "glyphs/title_brass.txt"))
         if e.get("font") and not os.path.isfile(font):
             font = core.source_path(e["font"])

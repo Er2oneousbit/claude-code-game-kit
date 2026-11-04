@@ -4,7 +4,8 @@
 # Purpose : offline exam for the store lane (lane_store.py): every Steam size exact, whole-number scaling of the key
 #           art (no resampling), alpha only on the library logo, the logo inside each size's safe area and absent
 #           from the hero and page background, the .ico frames, the app icon, achievement icons, the title-font
-#           check and the project.godot edit, then a whole pack run from your own pictures (no ComfyUI).
+#           check and the project.godot edit, the default crop keeping the hero's top (#181), then whole pack runs
+#           from your own pictures and from stand-in renders (no ComfyUI).
 # Usage   : python tools/art/dotwork/tests/test_store.py   (test_dotwork.py runs it too)
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -17,6 +18,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DOTWORK = os.path.dirname(HERE)
@@ -115,6 +117,25 @@ class StoreExam(unittest.TestCase):
         x0, _, x1, _ = self.parts["small_capsule"][1]["logo_box"]
         self.assertGreater((x1 - x0) / 462, 0.7)                        # "should nearly fill the capsule"
 
+    def test_default_crop_keeps_the_heros_top(self):
+        # #181: the lane's own key art puts the hero's top a tenth of the way down (SUBJECT). The centre crop of the
+        # widest sizes kept under half the height and cut its head off in small_capsule and library_hero
+        top = {key: int(self.ls.SUBJECT[key][1] * a.shape[0]) for key, a in (("wide", self.wide), ("tall", self.tall))}
+        centre = self.ls.compose(self.wide, self.tall, self.logo)
+        for size in ("small_capsule", "library_hero"):
+            self.assertGreater(centre[size][1]["y0"], top["wide"] * centre[size][1]["k"], size)   # the old cut
+        parts = self.ls.compose(self.wide, self.tall, self.logo, None)
+        for size, (W, H) in STEAM.items():
+            if size == "library_logo":
+                continue
+            info = parts[size][1]
+            self.assertLessEqual(info["y0"], top[info["source"]] * info["k"], size)   # the hero's top row stays in
+            if centre[size][1]["y0"] <= top[info["source"]] * info["k"]:
+                self.assertEqual(info["y0"], centre[size][1]["y0"], size)               # already kept: as before
+            self.assertEqual(info["x0"], centre[size][1]["x0"], size)                   # sideways as before
+        self.assertLess(parts["small_capsule"][1]["focus"][1], 0.5)
+        self.assertEqual(parts["vertical_capsule"][1]["focus"], [0.5, 0.5])   # the tall sizes kept it already
+
     def test_ico_frames_and_icons(self):
         icon = icon64()
         frames, app = self.ls.icon_set(icon, (28, 26, 36))
@@ -200,6 +221,23 @@ class StoreExam(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(brand, f)), f)
         pg = read(os.path.join(self.tmp, "project.godot"))
         self.assertIn('config/icon="res://assets/art/brand/iron_oven/icon_iron_oven.png"', pg)
+        with Image.open(os.path.join(steam, "small_capsule.png")) as im:   # your own picture: centred, as before
+            self.assertTrue((np.array(im) == self.parts["small_capsule"][0]).all())
+        # the lane's own renders (stand-ins here) keep the hero's top in every size (#181); "focus" still wins
+        renders = {"wide": self.wide, "tall": self.tall}
+        fake = mock.patch.object(self.ls, "_render", lambda name, *a: renders[name.rsplit("_", 1)[1]])
+        for extra, focus in (({}, None), ({"focus": [0.5, 0.5]}, (0.5, 0.5))):
+            spec_e = dict({k: v for k, v in entry.items() if k not in ("source", "tall_source")}, prompt="a hero",
+                          **extra)
+            with open(spec, "w", encoding="utf-8") as f:
+                json.dump({"name": "store", "store": [spec_e]}, f)
+            with fake, contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = dotwork.main(["pack", "--spec", spec, "--project", self.tmp, "--no-verify"])
+            self.assertEqual(code, 0, out.getvalue())
+            want = self.ls.compose(self.wide, self.tall, self.logo, focus)
+            for size in ("small_capsule", "library_hero", "vertical_capsule"):
+                with Image.open(os.path.join(steam, size + ".png")) as im:
+                    self.assertTrue((np.array(im) == want[size][0]).all(), (size, extra))
         # a spec without a title is a usage error
         entry.pop("title")
         with open(spec, "w", encoding="utf-8") as f:

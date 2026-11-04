@@ -18,7 +18,8 @@
 #           re-centring a frame and a generator redrawing its outline. The smear REPLACES the peak frame instead of adding one: the frame count, the loop
 #           timing, the sheet layout and every hold index stay as they were, and in hand animation the smear is the
 #           in-between itself, not an extra frame. Holds default to the frame before the peak (the wind-up) and the
-#           frame after it (the impact). Frame numbers count from 0, as in the file names (_00 first).
+#           frame after it (the impact); a skeleton strike uses the skeleton's strike frame (pose.STRIKE, lane_character)
+#           instead. Frame numbers count from 0, as in the file names (_00 first).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 import math
@@ -285,8 +286,9 @@ def smear(frames, k, max_len=SMEAR_MAX, min_px=SMEAR_MIN_PX):
 
 
 # -------------------------------------------------- holds
-def durations(n, k, rule, action, loop):
-    """(one relative duration per frame, a note) for a clip of n frames whose peak frame is k (or None).
+def durations(n, k, rule, action, loop, at="the peak frame"):
+    """(one relative duration per frame, a note) for a clip of n frames whose peak frame is k (or None; at: what the
+    note calls k, "the strike frame" for a skeleton strike).
     rule: True (HOLDS for the action: the frame before the peak is the wind-up, the frame after it the impact),
     {"windup": w, "impact": i} (the same with its own numbers), a list (one per frame; padded with 1.0 or cut when the
     clip has another count, said in the note), or {"<frame>": duration} (only those frames). (None, why) when a
@@ -303,7 +305,7 @@ def durations(n, k, rule, action, loop):
             if 0 <= idx < n and val != 1.0:
                 d[idx] = val
                 marks.append(f"frame {idx} x{val:g} ({what})")
-        return d, f"holds around the peak frame {k}: " + (", ".join(marks) or "none fit the clip")
+        return d, f"holds around {at} {k}: " + (", ".join(marks) or "none fit the clip")
     if isinstance(rule, (list, tuple)):
         vals = [float(v) for v in rule][:n]
         fit = "cut" if len(rule) > n else "padded with 1.0"

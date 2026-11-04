@@ -97,6 +97,14 @@ WIND = {"lean": -0.05, "drop": 0.025, "ra": -30.0, "la": -25.0,
         "rf": (-0.02, -0.01, -0.05, -0.03), "lf": (-0.02, -0.01, -0.05, -0.03)}
 WIND_ATTACK = (0.04, 0.25, 0.38)   # attack (not keyframed): the pull-back starts, is deepest, is gone (loop phase t)
 ANTICIPATE = ("attack", "cast", "shoot")
+# The strike of each skeleton strike, as a loop phase t: the frame between the wind-up and the blow, which the holds
+# sit around (animpolish.durations: the frame before is held as the wind-up, the frame after as the impact). attack:
+# the middle of the overhead swing (0.25 -> 0.6); cast: the middle of the thrust (the draw at 0.22, the thrust lands
+# at 0.38; with anticipation 0.26 and 0.4); shoot: the recoil (0.52), after the held aim. The skeleton knows these, so
+# the holds need not guess from measured motion: a plain shoot's largest motion is the arm coming up from rest (#180)
+STRIKE = {"attack": 0.425, "cast": 0.30, "shoot": 0.52}
+STRIKE_WIND = {"cast": 0.33}
+CONTROL_FRAMES = 33   # frames() default n: the control video's length (one loop, its last frame = its first)
 
 
 def _deeper(key, a):
@@ -321,6 +329,19 @@ def keypoints(action, t, view, fitted=None, anticipation=0.0):
     return pts
 
 
+def strike_frame(action, n, picked=None, skip=1, source=CONTROL_FRAMES, anticipation=0.0):
+    """The clip frame (0 .. n-1) nearest the skeleton's strike (STRIKE), or None (not a strike, under 3 frames).
+    picked: the control frames SpriteKiln's frame select kept (its "picked [...]", counted after skip frames), when
+    the render recorded them; without them the n frames are taken as spread evenly over one loop from its start, as a
+    looping selection keeps them. The nearest frame wins round the loop; the earlier one on a tie."""
+    t0 = (STRIKE_WIND if anticipation else {}).get(action, STRIKE.get(action))
+    if t0 is None or n < 3:
+        return None
+    span = source - 1
+    ts = [((skip + p) % span) / span for p in picked] if picked and len(picked) == n else [i / n for i in range(n)]
+    return min(range(n), key=lambda i: (min(abs(ts[i] - t0), 1 - abs(ts[i] - t0)), i))
+
+
 def canvas_map(sprite_w, sprite_h, pad=8, target=640):
     """(scale, ox, oy): sprite pixel (x, y) sits at canvas (x * scale + ox, y * scale + oy) after SpriteKiln's
     SK_ToCanvas (padding pad, target target x target), so the skeleton lands on the figure."""
@@ -331,7 +352,7 @@ def canvas_map(sprite_w, sprite_h, pad=8, target=640):
     return s, (pad + px) * s, (pad + py) * s
 
 
-def frames(action, direction, sprite, n=33, size=640, pad=8, face=True, anticipation=0.0):
+def frames(action, direction, sprite, n=CONTROL_FRAMES, size=640, pad=8, face=True, anticipation=0.0):
     """n control frames (PIL RGB, size x size) for one clip: the skeleton fitted to the sprite's figure (its height,
     feet line and centre), facing direction (e / w side, s front, n back). One loop over the clip, last = first;
     a ONE_SHOT action runs once instead and ends on its last pose (death lies on the ground). anticipation: the

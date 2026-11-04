@@ -29,6 +29,7 @@
 import glob
 import json
 import os
+import re
 import shutil
 
 import numpy as np
@@ -170,6 +171,7 @@ class Character:
                                  "and one of the character's actions")
         # opt-in polish (animpolish.py): holds, smear, shaders, anticipation; self.wind = {skeleton action: amount}
         self.wind = animpolish.check(self.name, entry, self.actions, self.skeleton)
+        self.strikes = {}   # (action, direction): the skeleton strike's frame in the QA'd clip, None when trimmed away
         if entry.get("anticipation") is True and not self.wind:
             man.assume(f"{self.name}: anticipation is for skeleton attack, cast and shoot; this character has none")
         self.work = os.path.join(core.WORK, self.name)           # resumable working files
@@ -426,6 +428,7 @@ class Character:
                      for i, f in enumerate(pose.frames(action, direction, Image.open(sprite),
                                                        anticipation=self.wind.get(action, 0.0)))]
             g = pose.control_graph(g, names, *pose.MODELS)
+            control_n = len(names)
         # v2: skip SpriteKiln's palette lock (node 28). Locked frames paint Wan's ground shadow in the sprite's own
         # darkest colors, so no rule can tell shadow from boots. Unlocked, the shadow stays a neutral grey-blue;
         # frames() removes it and then locks to the sprite palette itself.
@@ -445,12 +448,32 @@ class Character:
                 "motion_key": self.motion_key(action), "skeleton": action in self.skeleton}
         if motion:
             meta["motion_fix"] = motion
+        if action in self.skeleton:   # the control frames the clip kept: the holds find the strike by them (#180)
+            sel = self.kept_frames(g, r, control_n)
+            if sel:
+                meta["frame_select"] = sel
         with open(core.safe_dest(os.path.join(d, "meta.json")), "w", encoding="utf-8") as f:
             json.dump(meta, f)
         core.free_models()
         core.log(f"{self.name}: clip {action}_{direction} {r['seconds']:.0f}s (seed {seed})"
                  + (f" [{tag}]" if not tag.startswith("clips/") else ""))
         return d
+
+    @staticmethod
+    def kept_frames(g, r, control_n):
+        """{"picked", "skip", "source"}: the control frames SpriteKiln's frame select kept (its preview text says
+        "picked [0, 3, 7, ...]", counted after skip_start frames) out of control_n, or None when the job did not say."""
+        fs = next((n for n in g.values() if n.get("class_type") == "SK_FrameSelect"), None)
+        skip = (fs or {}).get("inputs", {}).get("skip_start")
+        if isinstance(skip, bool) or not isinstance(skip, int):
+            return None
+        for texts in (r.get("texts") or {}).values():
+            for t in texts:
+                m = re.search(r"picked \[([0-9, ]*)\]", t)
+                if m:
+                    return {"picked": [int(v) for v in m.group(1).split(",") if v.strip()], "skip": skip,
+                            "source": control_n}
+        return None
 
     # -------------------------------------------------- procedural back-view idle
     def procedural(self, action, direction):
@@ -491,10 +514,18 @@ class Character:
             raise core.JobError(f"{self.name}: clip {action}_{src_dir} has no frames in {d} (re-run to render it)")
         notes = []
         meta = os.path.join(d, "meta.json")
-        dotwork_lock = False
+        dotwork_lock, sel = False, None
         if os.path.exists(meta):
             with open(meta, encoding="utf-8") as f:
-                dotwork_lock = json.load(f).get("palette_lock") == "dotwork"
+                m = json.load(f)
+            dotwork_lock, sel = m.get("palette_lock") == "dotwork", m.get("frame_select")
+        # the skeleton's strike frame (pose.strike_frame), for the holds and the smear: by the frames the render kept
+        # when it recorded them, else spread evenly over the loop. A trim that cuts it off leaves the measured peak
+        strike = None
+        if action in self.skeleton:
+            sel = sel if isinstance(sel, dict) else {}
+            strike = pose.strike_frame(action, len(fr), sel.get("picked"), sel.get("skip", 1),
+                                       sel.get("source", pose.CONTROL_FRAMES), self.wind.get(action, 0.0))
         pal = qa.palette_of(Image.open(rot[src_dir]))
         fx = self.fix(action, direction)
         refs = {k: Image.open(v) for k, v in rot.items()}
@@ -527,6 +558,7 @@ class Character:
                     f"--clip {clip} --seeds 8101 8102 8103) and ship one with clip_fix, or set clip_fix "
                     f"{{\"{clip}\": {{\"allow_drift\": true}}}} to keep it")
             fr = qa.ping_pong_trim(fr, drift)
+            strike = strike if strike is not None and strike < max(2, drift) else None
             notes.append(f"drifts from frame {drift + 1}: trimmed to the first {drift} frames, played back and forth "
                          "(clip_fix allow_drift keeps the whole clip; audition finds a seed that holds)")
         if direction in MIRRORED and self.mirror:
@@ -546,11 +578,14 @@ class Character:
         keep = self.fix(action, direction).get("keep")
         if keep:
             fr = qa.ping_pong_trim(fr, int(keep))
+            strike = strike if strike is not None and strike < max(2, int(keep)) else None
             notes.append(f"spec clip_fix keep={keep}: ping-pong trimmed")
         ref_h = Image.open(rot[direction]).getbbox()
         ok, det = qa.height_ok(fr, ref_h[3] - ref_h[1])
         if not ok:
             notes.append("height drift: " + det)
+        if action in self.skeleton:
+            self.strikes[(action, direction)] = strike
         return fr, notes
 
     # -------------------------------------------------- 6. export
@@ -630,13 +665,20 @@ class Character:
 
     def polish(self, action, direction, cans, loop):
         """The opt-in polish of one placed clip (animpolish.py): (frames, durations or None, QA notes). A clip no
-        polish key covers comes back as it went in. The peak frame is measured before the smear, so the holds sit
-        around the same frame either way; the smear replaces that frame (the frame count stays)."""
+        polish key covers comes back as it went in. A skeleton strike centres on the skeleton's strike frame
+        (pose.STRIKE, found by frames()); any other clip on its frame of peak motion. Either is found before the smear,
+        so the holds sit around the same frame either way; the smear replaces that frame (the frame count stays)."""
         hold = animpolish.pick(self.e.get("holds"), action, direction)
         sm = animpolish.pick(self.e.get("smear"), action, direction)
         if hold is None and sm is None:
             return cans, None, []
-        k = animpolish.peak(cans, loop)
+        k = None
+        if action in self.skeleton and action in pose.STRIKE:   # #180: the measured peak of a plain shoot is the raise
+            k = self.strikes.get((action, direction),
+                                 pose.strike_frame(action, len(cans), anticipation=self.wind.get(action, 0.0)))
+        why = "the skeleton's strike" if k is not None else "peak motion"
+        if k is None:
+            k = animpolish.peak(cans, loop)
         notes = []
         if sm is not None:
             img, info = animpolish.smear(cans, k) if k is not None else (None, "no frame of peak motion")
@@ -644,10 +686,11 @@ class Character:
                 notes.append(f"smear skipped: {info}")
             else:
                 cans = cans[:k] + [img] + cans[k + 1:]
-                notes.append(f"smear on frame {k} (peak motion): {info['px']} px over {info['length']} px")
+                notes.append(f"smear on frame {k} ({why}): {info['px']} px over {info['length']} px")
         durs = None
         if hold is not None:
-            durs, note = animpolish.durations(len(cans), k, hold, action, loop)
+            durs, note = animpolish.durations(len(cans), k, hold, action, loop,
+                                              at="the strike frame" if why != "peak motion" else "the peak frame")
             notes.append(note)
         return cans, durs, notes
 

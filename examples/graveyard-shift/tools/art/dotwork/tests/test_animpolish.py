@@ -384,6 +384,73 @@ class AnimPolish(unittest.TestCase):
                     c.render(action, "e", sprite, 4242, os.path.join(self.tmp, "clips", f"{action}_e"))
         self.assertEqual(seen, [("attack", 1.0), ("walk", 0.0)])
 
+    # ---- 5b. #180: a skeleton strike holds around the skeleton's strike frame, not the measured peak
+    def test_skeleton_holds_land_on_the_strike(self):
+        import animpolish
+        import pose
+        s = self.bind()
+        # a plain skeleton shoot as Wan draws it: the biggest motion is the weapon coming up from rest (frames 0-2),
+        # then the held aim, a small recoil at frame 4 and the aim again. The measured peak is the raise
+        ys = [60, 50, 30, 30, 27, 30, 30, 40]
+        fr = [knight(y) for y in ys]
+        self.assertIn(animpolish.peak(fr, False), (1, 2))
+        self.assertEqual(pose.strike_frame("shoot", 8), 4)   # the recoil, t 0.52, of 8 frames over one loop
+        clips = {("shoot", "e"): (fr, [])}
+        entry = {"name": "archer", "actions": ["shoot"], "directions": ["e"], "skeleton": ["shoot"], "holds": True}
+        c, man, rot = self.character(s, entry, clips)
+        got = durations_of(c.export(clips, rot)[0])["shoot_e"]
+        want = [1.0] * 8
+        want[3], want[5] = animpolish.HOLDS["shoot"]   # the aim before the shot held 3x, the recoil after it 1.5x
+        self.assertEqual(got, want)
+        row = next(r for r in man.data["assets"] if r.get("animation") == "shoot_e" and r["kind"] == "sheet")
+        self.assertTrue(any("holds around the strike frame 4" in q for q in row["qa"]), row["qa"])
+        # without the skeleton the same frames keep the measured peak (generated or hand-drawn clips)
+        free = dict(entry, skeleton=[])
+        c2, _, _ = self.character(s, free, clips)
+        k = animpolish.peak(fr, False)
+        self.assertEqual(durations_of(c2.export(clips, rot)[0])["shoot_e"],
+                         animpolish.durations(8, k, True, "shoot", False)[0])
+        # the frames SpriteKiln kept, when the render recorded them: a loop closing at control frame 31, and a
+        # one-shot preset's six frames spread first to last
+        loop8 = [0, 3, 7, 11, 15, 19, 23, 27]
+        self.assertEqual([pose.strike_frame(a, 8, loop8) for a in ("attack", "cast", "shoot")], [3, 2, 4])
+        self.assertEqual(pose.strike_frame("cast", 8, loop8, anticipation=1.0), 3)   # the deeper draw lands later
+        self.assertEqual(pose.strike_frame("attack", 6, [0, 6, 12, 19, 25, 31]), 2)
+        self.assertEqual(pose.strike_frame("attack", 6), 3)                          # without them: an even loop
+        self.assertIsNone(pose.strike_frame("walk", 8))
+        self.assertIsNone(pose.strike_frame("shoot", 2))
+        # the render records them from the frame select's preview text (the graph and server are stand-ins)
+        graph = {"2": {"class_type": "LoadImage", "inputs": {}}, "5": {"class_type": "SK_AnimationPreset", "inputs": {}},
+                 "18": {"class_type": "CLIPTextEncode", "inputs": {}},
+                 "24": {"class_type": "SK_FrameSelect", "inputs": {"frames": ["22", 0], "skip_start": 1}},
+                 "29": {"class_type": "SK_Stabilize", "inputs": {"frames": ["28", 0], "anchor": "bottom_center"}}}
+        info = "32 source frames, loop closes at frame 31 (diff 0.0012), picked [0, 3, 7, 11, 15, 19, 23, 27]"
+        import lane_character as lc
+        sprite = os.path.join(self.tmp, "a_e.png")
+        chibi().save(sprite)
+        clip = os.path.join(c.work, "clips", "shoot_e")
+        with mock.patch.object(lc, "_wf", lambda name: json.loads(json.dumps(graph))), \
+                mock.patch.object(lc.lib, "put", lambda img, name: (img.close(), name)[1]), \
+                mock.patch.object(lc.lib, "missing_models", lambda names: []), \
+                mock.patch.object(lc.lib, "run_job", lambda g, timeout=0: {"files": [], "seconds": 1.0,
+                                                                            "texts": {"25": [info]}}), \
+                mock.patch.object(lc, "COMFY_WORK", os.path.join(self.tmp, "comfy_work")), \
+                mock.patch.object(lc.pose, "control_graph", lambda g, names, *a, **k: g), \
+                mock.patch.object(lc.core, "free_models", lambda: None), \
+                mock.patch.object(fcore, "ensure_comfy", lambda *a: None), \
+                mock.patch.object(fcore, "require_ram", lambda *a, **k: None):
+            c.render("shoot", "e", sprite, 4242, clip)
+        with open(os.path.join(clip, "meta.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["frame_select"], {"picked": loop8, "skip": 1, "source": 33})
+        # and the QA'd clip carries the strike to the holds; a trim that cuts it off falls back to the measured peak
+        for i, im in enumerate(fr):
+            im.save(os.path.join(clip, f"f_00001_{i:02d}.png"))
+        c.frames("shoot", "e", rot)
+        self.assertEqual(c.strikes[("shoot", "e")], 4)
+        cut = lc.Character(dict(entry, clip_fix={"shoot_e": {"keep": 3}}), s.project, fcore.Manifest(s, "cut"), s.conf)
+        cut.frames("shoot", "e", rot)
+        self.assertIsNone(cut.strikes[("shoot", "e")])
+
     # ---- 6. the shaders: the hitfx flash reused byte for byte, the dissolve beside it, both well-formed
     def test_shader_files(self):
         import animpolish

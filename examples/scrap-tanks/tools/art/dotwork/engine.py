@@ -98,7 +98,8 @@ def job_name(graph):
 
 def run_job(graph, timeout=1800):
     """Queue an API graph, wait, mirror every output image into <work>/comfy_out/<subfolder>/<file>.
-    Returns {"files": [local paths], "seconds": GPU seconds}."""
+    Returns {"files": [local paths], "seconds": GPU seconds, "texts": {node id: [text]}} (texts: what text-preview
+    nodes showed, such as SpriteKiln's frame select naming the frames it kept)."""
     base = base_url()
     try:
         pid = cl.queue(base, graph)
@@ -128,7 +129,9 @@ def run_job(graph, timeout=1800):
         files.append(path)
     if not files:
         raise fcore.JobError("the ComfyUI job finished but saved no images")
-    return {"files": sorted(files), "seconds": seconds}
+    texts = {nid: [str(t) for t in out["text"]] for nid, out in (entry.get("outputs") or {}).items()
+             if isinstance(out, dict) and isinstance(out.get("text"), (list, tuple))}
+    return {"files": sorted(files), "seconds": seconds, "texts": texts}
 
 
 def job_files(r, pattern):
