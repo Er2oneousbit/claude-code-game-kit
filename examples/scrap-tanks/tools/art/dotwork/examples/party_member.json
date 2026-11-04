@@ -1,28 +1,71 @@
 {
  "name": "party_member",
- "_comment": "One party member end to end: 4-direction idle and walk, an attack clip, the battle pose set facing left (poses: battle) and a menu portrait with five expressions and talking frames. The longest example (rotation + one Wan clip per action and direction). Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "_comment": "One party member end to end: 4-direction idle, walk and run, an attack and a cast, all driven by the skeleton (the pose tier) with a wind-up before the strikes (anticipation), held wind-up and impact frames (holds) and a smear on the attack, the hit-flash and dissolve shaders, the battle pose set facing left (poses: battle; pose_text rewords five of them for a fencer and names the rapier, which klein dropped otherwise) and a menu portrait with five expressions and talking frames. clip_fix holds the two retakes its review needed (a sword fragment on the north attack, a lost hat on the kneeling pose). The battle set's cast pose ships as cast_pose_w beside the cast clip. The longest example (a rotation + 19 skeleton clips, about an hour on a 16 GB card). Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
  "design": {
-  "setting": "steampunk"
+  "setting": "steampunk",
+  "character": {
+   "actions": {
+    "run": {
+     "fps": 12,
+     "loop": true
+    },
+    "cast": {
+     "fps": 10,
+     "loop": false
+    }
+   }
+  }
  },
  "characters": [
   {
    "name": "duelist",
    "prompt": "a dashing young swordsman with a red long coat, a black tricorn hat with a feather and a slim rapier in his right hand",
-   "seeds": 3,
-   "seed": 3600,
+   "seeds": 1,
+   "seed": 3601,
    "asymmetric": true,
    "actions": [
     "idle",
     "walk",
+    "run",
+    "attack",
+    "cast"
+   ],
+   "skeleton": [
+    "idle",
+    "walk",
+    "run",
+    "attack",
+    "cast"
+   ],
+   "anticipation": true,
+   "holds": true,
+   "smear": [
     "attack"
    ],
+   "shaders": true,
    "motions": {
-    "attack": "lunges forward and thrusts the rapier straight ahead in a fencing strike, then steps back to the guard stance"
+    "attack": "draws the rapier back over his shoulder, then slashes it forward and down in one fast strike, then returns to the guard stance",
+    "cast": "keeps the rapier low in his right hand, draws the free left hand in, then thrusts it forward casting a spell with a small glow of light at the palm, then lowers it"
+   },
+   "clip_fix": {
+    "attack_n": {
+     "seed": 4243
+    },
+    "weak_w": {
+     "seed": 6401
+    }
    },
    "poses": "battle",
    "pose_dirs": [
     "w"
-   ]
+   ],
+   "pose_text": {
+    "ready": "the character takes a fencing guard stance: feet apart, knees bent, the rapier held out in front pointing left, the free hand raised behind him, the body and head still in side profile facing left",
+    "victory": "the character raises the rapier high above his head in victory with a big grin, facing left",
+    "hurt": "the character flinches in pain: the upper body tilts back a little, head ducked, eyes squeezed shut, both arms pulled in close, the rapier still in his right hand, both feet still on the ground, side profile facing left",
+    "defend": "the character hunches forward behind his raised free forearm held up in front of his face like a shield, the rapier held low in his other hand, side profile facing left",
+    "jump": "the character leaps high into the air with both knees tucked up and both feet off the ground, the rapier in his right hand, side profile facing left"
+   }
   }
  ],
  "portraits": [

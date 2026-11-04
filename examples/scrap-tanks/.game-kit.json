@@ -1195,6 +1195,12 @@
       "date": "2026-11-04",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.8.2",
+      "date": "2026-11-04",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1334,7 +1340,7 @@
     "tools/art/comfy_local.py": "339078ec6329b5290a0a90ab88b642f56087da5e1a87d728f0d491708dbd9e07",
     "tools/art/dotwork/.gdignore": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "tools/art/dotwork/LICENSES.md": "bd4c59c845392ba4010b1ce8527e037eca96656058f9ae025afdf79dee43d756",
-    "tools/art/dotwork/README.md": "9746e6fabbefaaa1dd26a447025ec93cca012b95a43732253bf1bf5d4826156f",
+    "tools/art/dotwork/README.md": "5c98330248c6cc69cfd6bb61431602ec101177204b641ab1a7783dd81ba44622",
     "tools/art/dotwork/animpolish.py": "2b04eb7a08c10e608861da7c96949ff0ae897e9b515adc2e87bd00234bdfa22e",
     "tools/art/dotwork/aseprite.py": "fc18e9ab10d84a5e2a8a53ca997671be45ae60c6d8d5b99cdb676cee32d22d73",
     "tools/art/dotwork/asset_log.py": "48c5a002831cf82cbb3788b01f2294cdf92a1ba9a2fc02a2abb972956befa1cf",
@@ -1348,7 +1354,7 @@
     "tools/art/dotwork/demo_attack.py": "7a8518a0f72a687f9372ff81d3eae88dae7e6c6a32ecc41ae45033751e033615",
     "tools/art/dotwork/dotwork.py": "ac81d1e0db38b8518f3d6c1a5c225ad4dd6bc91f36ebd7108f74069af5230a4c",
     "tools/art/dotwork/engine.py": "d4f04b69310a9745c59729cc3c84307750a70648bb9172376c94974896b1a745",
-    "tools/art/dotwork/examples/README.md": "eb87544cb99a8ef6578e110c50712798b97090a212807833e4502e17e37d139c",
+    "tools/art/dotwork/examples/README.md": "b8a6a6d4bb69753643df26476091bd7bc85500cd2aa4e36f9f3d0f72bb3e4673",
     "tools/art/dotwork/examples/battle.json": "622e2461181faa082ca0d6cb44f3381dc393fa4335d6e868b69fd89d58c4e8c0",
     "tools/art/dotwork/examples/cliffs.json": "19274be49a169baa7b25c6bac755c33d0d4dc4f9d8618d95b2166dd63ce53671",
     "tools/art/dotwork/examples/connectors.json": "525c158536d221cf5dce8193c80e8884d511b058db46b7e865942fbc7f097516",
@@ -1362,7 +1368,7 @@
     "tools/art/dotwork/examples/mount.json": "06cadf7f860ee2ec1726423fcf0934f66dbc619d21f52c522905e92b03b3fb16",
     "tools/art/dotwork/examples/npcs.json": "888a82f73f9191cd3047caf844d5339e8eddc31fd744d76bc0a519982151c166",
     "tools/art/dotwork/examples/overworld.json": "8a2ffe9e80b8f620c52f988d7562670c458c72c930ae0414e71466e7a092be25",
-    "tools/art/dotwork/examples/party_member.json": "7c2397580f7d76e03ceafe86f23913d5ee5c28f1e976476f75d1d37f84bb9bb7",
+    "tools/art/dotwork/examples/party_member.json": "c2654dcef053e3c18d1ff892568e0456c61f5f94b0f3a3840795030a36f4a62d",
     "tools/art/dotwork/examples/platformer.json": "b7f278b064de3d1caa03e4d2ff0c45c75fdd8f51b1eb8d002ff55680bb7b6eb9",
     "tools/art/dotwork/examples/props_icons.json": "4ab0765c5c10a9d5068ec070200876d7da92213050e2c4e6b09f0300ce322022",
     "tools/art/dotwork/examples/scenes.json": "9d3aaad0ef1a1332e65aff3464254c107574fcd392edb71c39a0de1dc3ad39c0",
@@ -1391,7 +1397,7 @@
     "tools/art/dotwork/lane_balloons.py": "7adcc59b424923f1da0b0ab8b38f637fc6a2f6498a13afa721869a06df77f584",
     "tools/art/dotwork/lane_battle_bgs.py": "5e51b640fe5c49c47fb067eb328a1a434df961cf192f1191a0d3773f2b415202",
     "tools/art/dotwork/lane_bdf.py": "03bedfa420c8a1a4e5dfd543d5a318054b2aed58a9148095e45824bdb7665bd8",
-    "tools/art/dotwork/lane_character.py": "25f035bd10e216e37f1781bfdd9e354d0abb5e8191f317d01badb0ebe58d0cdc",
+    "tools/art/dotwork/lane_character.py": "6eb4cd70a6985a45fd5759fcc908adeef22b6e5967b9288a298f5608fadaff28",
     "tools/art/dotwork/lane_diorama.py": "40812a7d669d03cd94ad110f4ef227e0b48672fb2fd8b5de9f4c0e5bc8320076",
     "tools/art/dotwork/lane_effects.py": "097a3322c79a2e5ab93503f837020f250efc5c949b8e7f276036f742dfb0d2a1",
     "tools/art/dotwork/lane_enemies.py": "f7683346278f183cd64fe361a6147ce8afcaf6696dc2c7584785075c196940aa",
@@ -1438,7 +1444,7 @@
     "tools/art/dotwork/recolor.py": "f4bb889ca52be6dfc111e3be5d81dcbe002d4748438492d2e6291c2464d3ee8c",
     "tools/art/dotwork/setup_check.py": "ba6cfd004a3391f042e9b6f77a476d3a33058f1461f6abb0fecc8a818baa34db",
     "tools/art/dotwork/spritekiln.py": "00e25e1766bbae30f1efc719a23bc36a58c834126b5d34cac328592b9386333c",
-    "tools/art/dotwork/tests/test_animpolish.py": "70021191e0e88e9572fe3996b08ffc09381782785c6eac85037c4ecee648286d",
+    "tools/art/dotwork/tests/test_animpolish.py": "231f695d5b268346af07b66abc3fd3c30efd55aa5907236188e7b68f9911407b",
     "tools/art/dotwork/tests/test_bdf.py": "066e738118535c45ee13ae130f69bdac505810c42ad48deecf6e29e0565e2b8f",
     "tools/art/dotwork/tests/test_defaults_cvd.py": "923f3ce193a83d9f770459213f83c09c7ea270d3de06a3b8e2aa41399db0da32",
     "tools/art/dotwork/tests/test_diorama.py": "58a7f8a34131be8cc68a2ad40dc5d123b5326e29cf631243c85d863b121fa047",

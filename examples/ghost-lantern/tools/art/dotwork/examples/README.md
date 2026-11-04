@@ -35,7 +35,7 @@ change a seed to get a different take.
 | `spells.json` | two spells and a summon blast (additive) | sprites, animate |
 | `mount.json` | a rideable walker, idle + walk in 4 directions | sprites, rotate, animate |
 | `npcs.json` | two townsfolk (walk clips, code-drawn idles) and three palette variants of them (no render) | sprites, rotate, animate |
-| `party_member.json` | a party member: 4-direction idle and walk, attack, the battle pose set, a portrait with five expressions and talking frames | sprites, rotate, animate |
+| `party_member.json` | a party member: 4-direction idle, walk and run, an attack with a wind-up, holds and a smear, and a cast, all driven by the skeleton; the hit-flash and dissolve shaders; the battle pose set; a portrait with five expressions and talking frames | sprites, rotate, animate, pose |
 | `tools.json` | instruction edits, an inpaint and a normal map on one of your sprites | sprites |
 | `img2px.json` | concept art or a photo to pixel art at a set width | sprites |
 | `lighting.json` | normal maps, CanvasTextures and light occluders for the party member, the street TileSet and the props; a lit demo scene (CanvasModulate + PointLight2D with shadows) | none (needs the art of `party_member.json`, `town.json` and `props_icons.json` in the game) |
@@ -49,8 +49,9 @@ Measured per-render costs on an RTX 5060 Ti 16 GB (from dotwork's own logs), to 
 | a character's 4-direction rotation (Qwen) | about 130 s |
 | a vehicle's 8-direction rotation | about 210 s |
 | one animation clip (Wan 2.2: one action in one direction, or one effect) | 100-120 s |
+| one skeleton clip (Wan 2.2 Fun-Control, the `skeleton` key) | 132-140 s |
 
-A party member is one rotation plus one clip per action and direction (8-12 clips) plus the battle poses, so plan on 20-30 minutes; ground packs render one texture per material plus its seamless variants. Re-runs reuse the cached renders. `dotwork.py setup --check` lists which model tiers you have.
+A party member is one rotation plus one clip per action and direction (8-12 clips for three actions; `party_member.json` has five actions, 19 clips) plus the battle poses, so plan on 20-30 minutes for three actions and about an hour for the example; ground packs render one texture per material plus its seamless variants. Re-runs reuse the cached renders. `dotwork.py setup --check` lists which model tiers you have.
 
 `tools.json` edits the duelist's first south idle frame, so run `party_member.json` first (or point its `source` at
 any south-facing sprite of yours). `img2px.json` needs your own source image at the path it names. `town.json`,

@@ -695,12 +695,13 @@ class Character:
         return cans, durs, notes
 
     # -------------------------------------------------- 4b. still poses (battle / emotes): klein edit of a sprite
-    def pose(self, name, direction, instr, sprite):
+    def pose(self, name, direction, instr, sprite, shipped=None):
         """One still pose from the direction sprite (SpriteKiln wf04, palette-locked output). Cached by
-        instruction + seed; a per-pose fix {"ko_w": {"seed": 6411}} gives another take."""
+        instruction + seed; a per-pose fix {"ko_w": {"seed": 6411}} gives another take. shipped: the name the pose
+        ships under when it is not its own (cast_pose beside a cast clip), which its clip_fix entry uses too."""
         d = os.path.join(self.work, "poses")
         os.makedirs(d, exist_ok=True)
-        seed = int(self.fix(name, direction).get("seed", 6400))
+        seed = int(self.fix(shipped or name, direction).get("seed", 6400))
         p = os.path.join(d, f"{name}_{direction}.png")
         want = {"instr": instr, "seed": seed}
         if os.path.exists(p) and os.path.exists(p[:-4] + ".json") and json.load(open(p[:-4] + ".json")) == want:
@@ -805,7 +806,15 @@ class Character:
         for pname, instr in poses.items():
             # battle stills face left (w); field emotes face the camera (s), as the pose wordings say
             for d in self.e.get("pose_dirs") or (["s"] if self.e.get("poses") == "field" else ["w"]):
-                clips[(pname, d)] = self.pose_frames(self.pose(pname, d, instr, rot[d]))
+                key = (pname, d)
+                if key in clips:   # a pose named like an action (the battle set's cast, hurt, jump) in a direction
+                    # that action has a clip: it used to replace the clip with its one still frame, and with holds or
+                    # smear the export stopped on the clip's strike frame. The still ships beside it as <pose>_pose,
+                    # and clip_fix {"<pose>_pose_<dir>": ...} retakes it (the clip's own entry retakes the clip only)
+                    key = (f"{pname}_pose", d)
+                    self.man.assume(f"{self.name}: still pose {pname}_{d} ships as {pname}_pose_{d} ({pname}_{d} is "
+                                    "the animation)")
+                clips[key] = self.pose_frames(self.pose(pname, d, instr, rot[d], shipped=key[0]))
         for (a, d), (fr, notes) in clips.items():
             if notes:
                 core.log(f"{self.name}: QA {a}_{d}: {'; '.join(notes)}")
