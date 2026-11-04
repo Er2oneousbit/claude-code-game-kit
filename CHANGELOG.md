@@ -527,6 +527,10 @@
   sheets and sheet data), and art drawn outside a clip's box stops it with the frame's name. An untouched round
   trip changes no file and a second build leaves the source alone (Aseprite 1.3.18 live). Effects keep one
   frame size (#82).
+- Dotwork README, "Image to 3D": the wrong TRELLIS shapes on pixel art came from blowing the sprites up with
+  nearest neighbour first; given at their own 64 px size the barrel and the crate came back the right shape in
+  3 of 3 seeds, and the local DINOv2 matches an independent re-implementation of the original network on the
+  same weights (measured 2026-11-04 on the 16 GB card). Image to 3D stays out of Dotwork (#50).
 
 ## 0.8.2 (2026-11-01): fixes from a fresh review of 0.8.1
 A Sonnet review of the 0.8.1 release found these; each fix has a test. Also #64 (Aseprite rebuilds kept hand polish).

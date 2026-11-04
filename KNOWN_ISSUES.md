@@ -18,8 +18,6 @@ examples were built and tested on one Windows 11 machine.
   port (its ENGINE_FLOW maps the rules onto MZ). Display settings the browser cannot apply (vsync, resolution) are stored only.
 
 ### 0.8.1 follow-ups (Dotwork)
-- **Image to 3D:** TRELLIS shapes come out wrong on pixel art and the cause is not found (needs a 24 GB Linux GPU):
-  [#50](https://github.com/Er2oneousbit/claude-code-game-kit/issues/50).
 - **Cyrillic glyph font** not made (the `bdf` lane may already cover it with an OFL font, untried):
   [#51](https://github.com/Er2oneousbit/claude-code-game-kit/issues/51).
 - **Store art** not yet checked by a real Steamworks upload:
