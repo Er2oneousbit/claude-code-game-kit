@@ -1,0 +1,17 @@
+A-0012  sprite  generated 2026-11-04 with tools/art/pixellab.py (ghost chase loop (wail), 9 frames, the game plays 3 to 7)
+Service  : PixelLab https://api.pixellab.ai/v2/create-image-pixflux, then https://api.pixellab.ai/v2/animate-with-text-v3
+Plan     : Tier 1: Pixel Apprentice (active)
+Cost     : base 1 generation (shared by every row made from it), animation 1 generation
+License  : PixelLab: commercial use allowed; do not train AI models on the output (FAQ 2026-10, verify the terms)
+Terms    : https://www.pixellab.ai (read the terms of service and save a screenshot when you ship)
+Request  : {"description": "small cute ghost, a pale blue-white sheet ghost with a round head, two hollow dark eyes and a small open mouth, short stubby arms, wavy tattered bottom edge, floating, facing the camera, retro 16-bit dungeon monster", "image_size": {"width": 32, "height": 32}, "no_background": true, "outline": "single color black outline", "shading": "basic shading", "detail": "low detail", "view": "low top-down"}
+Request  : {"first_frame": "<the ghost anchor image, the same file as frame_00.png, 565 bytes>", "action": "ghost swooping forward aggressively to grab, both arms stretched out reaching, mouth opening wide in a wail", "frame_count": 8, "no_background": true}
+File     : public/assets/art/ghost/chase/frame_00.png  SHA-256 b9c1b7166ce1c54e572611f6451b0569c44f6f546f285123bf11f05f465b8e60
+File     : public/assets/art/ghost/chase/frame_01.png  SHA-256 b7e10a6f47a98f96ae110bd1a0db56594f153f5278b86d925dc57624e91bd038
+File     : public/assets/art/ghost/chase/frame_02.png  SHA-256 240b7abf5482f2ebb12d94bf7c1b5d959cb8054e9fb618397bd1e7524d5156f6
+File     : public/assets/art/ghost/chase/frame_03.png  SHA-256 225087fc8312ae2acaadd43cf9242f63de928c4173da34bca77f66026c712e13
+File     : public/assets/art/ghost/chase/frame_04.png  SHA-256 513cdd6ddfa972cde8a70f4ab9494f167eec5cf44d41807a1e2f68cc80950647
+File     : public/assets/art/ghost/chase/frame_05.png  SHA-256 654fc4d288bc15e0fe44827620235c7a1f0d6d35ed086bb18eb127937696510b
+File     : public/assets/art/ghost/chase/frame_06.png  SHA-256 39c340af1ba44e1692c99c0891c40a4c020b88081872c56b0920e73e7cc6c8e1
+File     : public/assets/art/ghost/chase/frame_07.png  SHA-256 f0895232f6102dc8cac59ae6debe19d5dcd190fa4894b79960a9fd4371bc1523
+File     : public/assets/art/ghost/chase/frame_08.png  SHA-256 6d4e4e758975c2c90e1541ad9fcb2cc1027a93ccfab771dad4fc9dc824f49e03

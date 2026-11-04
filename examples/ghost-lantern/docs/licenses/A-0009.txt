@@ -1,0 +1,26 @@
+A-0009  sprite  generated 2026-11-04 with tools/art/pixellab.py (keeper walk, 3 directions x 6 frames (east = west mirrored in code))
+Service  : PixelLab https://api.pixellab.ai/v2/create-character-v3, then https://api.pixellab.ai/v2/characters/animations
+Plan     : Tier 1: Pixel Apprentice (active)
+Cost     : base 2 generations (shared by every row made from it), animation 12 generations (4 jobs)
+License  : PixelLab: commercial use allowed; do not train AI models on the output (FAQ 2026-10, verify the terms)
+Terms    : https://www.pixellab.ai (read the terms of service and save a screenshot when you ship)
+Request  : {"description": "chibi wizard with a big round head and a short stubby body, wide purple robe, floppy pointed purple hat, white beard, holding a glowing yellow oil lantern, cute retro 16-bit dungeon hero", "n_directions": 8, "image_size": {"width": 32, "height": 32}, "no_background": true, "name": "gl-keeper-v3-1", "outline": "single color black outline", "detail": "low detail", "view": "low top-down", "seed": 1}
+Request  : {"character_id": "24a18b5c-2422-4f0e-9f1a-3753965a0c22", "mode": "skeleton-v3", "template_animation_id": "walk", "directions": ["south", "east", "north", "west"], "animation_name": "walk"}
+File     : public/assets/art/keeper/walk/north/frame_000.png  SHA-256 649c89d2563b4fe0ec5977f5e51c2453a8b7460232107843ccfc514980a456d7
+File     : public/assets/art/keeper/walk/north/frame_001.png  SHA-256 f2324f695d2ecf8cd3bc4425b2a69a0698c673df61ccc9e97740343fe31478f7
+File     : public/assets/art/keeper/walk/north/frame_002.png  SHA-256 073faee0b3d70a7c788bb00a8800a8bf16a00ff5c5ff78838ae32406c3292feb
+File     : public/assets/art/keeper/walk/north/frame_003.png  SHA-256 5e7f8ccef56e59531006dd14a079fc323ee45c5c5db23ae1e91cf672f851fe60
+File     : public/assets/art/keeper/walk/north/frame_004.png  SHA-256 7345175051652fb338612a9499d15b3a4154fd4339471c55365d1d6440bc48ad
+File     : public/assets/art/keeper/walk/north/frame_005.png  SHA-256 9a5734b6e09a200e35345795627452532c0b525d99ff9df07520a7591431db70
+File     : public/assets/art/keeper/walk/south/frame_000.png  SHA-256 015125de88b27fee4806b714d040e4c7f4c1ffb2ef17ae64763e5ee3587ddf3b
+File     : public/assets/art/keeper/walk/south/frame_001.png  SHA-256 153505591abd16dde4997680dc72f5959f8b8df44ba5f6db70cf81000064a298
+File     : public/assets/art/keeper/walk/south/frame_002.png  SHA-256 1119fb59a8421e0c45fdc26534bcf8f848097368f102ebab1325267994f4ec43
+File     : public/assets/art/keeper/walk/south/frame_003.png  SHA-256 eba49bdc807c0accd6569c8af2df479cd9ecbcd25ae185c71e692835298ba499
+File     : public/assets/art/keeper/walk/south/frame_004.png  SHA-256 a99738f45601303806e39015d303e5bfff9c776615ce8b40a062621ea253e37e
+File     : public/assets/art/keeper/walk/south/frame_005.png  SHA-256 8e731a7727c577c1f3f0c822a6784eabcd4d54e37a6cf6cb6801f549d96f2bd6
+File     : public/assets/art/keeper/walk/west/frame_000.png  SHA-256 579693b75f3a4774ccc1a620e27cb4e7afd1d7e9932e321dbc48f1c526013ba6
+File     : public/assets/art/keeper/walk/west/frame_001.png  SHA-256 e7c5ba1d9e2c9d713623f3f752ca15a6e407d74d39c78ff968033dfbb9e543c6
+File     : public/assets/art/keeper/walk/west/frame_002.png  SHA-256 5492117c8d9d70238ed36fad73f4bb8b83470991bd911123396d6a443a0a9c57
+File     : public/assets/art/keeper/walk/west/frame_003.png  SHA-256 d6b31f2536e54863a3464e7ddd118a6ef7e75128cf7a188cd500c64824216a8d
+File     : public/assets/art/keeper/walk/west/frame_004.png  SHA-256 bd64226f618366ab809f20d09e954440887d5269bea6fe135da3f17ba4c0a0d8
+File     : public/assets/art/keeper/walk/west/frame_005.png  SHA-256 34154dab26685116fb429fcc1fa6343153237c305da54e05e789cf330b42c817

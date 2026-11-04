@@ -1,0 +1,17 @@
+A-0011  sprite  generated 2026-11-04 with tools/art/pixellab.py (ghost wander loop, 9 frames (frame_00 is the anchor image))
+Service  : PixelLab https://api.pixellab.ai/v2/create-image-pixflux, then https://api.pixellab.ai/v2/animate-with-text-v3
+Plan     : Tier 1: Pixel Apprentice (active)
+Cost     : base 1 generation (shared by every row made from it), animation 1 generation
+License  : PixelLab: commercial use allowed; do not train AI models on the output (FAQ 2026-10, verify the terms)
+Terms    : https://www.pixellab.ai (read the terms of service and save a screenshot when you ship)
+Request  : {"description": "small cute ghost, a pale blue-white sheet ghost with a round head, two hollow dark eyes and a small open mouth, short stubby arms, wavy tattered bottom edge, floating, facing the camera, retro 16-bit dungeon monster", "image_size": {"width": 32, "height": 32}, "no_background": true, "outline": "single color black outline", "shading": "basic shading", "detail": "low detail", "view": "low top-down"}
+Request  : {"first_frame": "<the ghost anchor image, the same file as frame_00.png, 565 bytes>", "action": "ghost floating gently up and down in place, arms swaying softly, sheet hem rippling", "frame_count": 8, "no_background": true}
+File     : public/assets/art/ghost/float/frame_00.png  SHA-256 b9c1b7166ce1c54e572611f6451b0569c44f6f546f285123bf11f05f465b8e60
+File     : public/assets/art/ghost/float/frame_01.png  SHA-256 9185ab2a8ae7ac386f46ac1dbfe2d7b149d5d64bc792df7542f0bcb2ebecea7d
+File     : public/assets/art/ghost/float/frame_02.png  SHA-256 ced04e87abeafa6b681e8151ceafb0216c82cbbceaabc0a44e99258d552e783e
+File     : public/assets/art/ghost/float/frame_03.png  SHA-256 e15e1f9e81671b8dcdb82a11dc47b9b7fffda70d7b9f0680cf1903cdeed8fb68
+File     : public/assets/art/ghost/float/frame_04.png  SHA-256 d9bbdaa85f452637fa572382e3b1b5b1e2b2b895c891d2fb1f7e4f4df250d25a
+File     : public/assets/art/ghost/float/frame_05.png  SHA-256 43713e0b70f34cd02932345d41c719a27218df8cfce4a2713258b91aaeedb213
+File     : public/assets/art/ghost/float/frame_06.png  SHA-256 933d08c2d851e52b4a1827d26d5e3ed52db72221d94917c726c891a7632fe8f6
+File     : public/assets/art/ghost/float/frame_07.png  SHA-256 02dca4f11beaad7f3ac34c83f0ad97a06a4113432593a462b634a71365456aea
+File     : public/assets/art/ghost/float/frame_08.png  SHA-256 0d9c85541b64f7c97dfa5e34f01969db817151b008154ab4e1d723076b58603c

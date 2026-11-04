@@ -59,4 +59,5 @@ export const SEED = 1337; // all ghost randomness; change it and the run changes
 
 // Tile indices in tilemap_packed.png (Kenney Tiny Dungeon, A-0001): row * 12 + column
 // The pack has no key sprite: the key sits in a chest (89). Indices checked against Tiles/tile_NNNN.png in the pack.
-export const TILES = { floor: 48, wall: 40, exit: 45, oil: 115, key: 89, wizard: 84, ghost: 121 };
+// The keeper and the ghosts were tiles 84 and 121 until they got PixelLab art (src/game/sprites.ts).
+export const TILES = { floor: 48, wall: 40, exit: 45, oil: 115, key: 89 };

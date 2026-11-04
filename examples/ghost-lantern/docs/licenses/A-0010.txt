@@ -1,0 +1,20 @@
+A-0010  sprite  generated 2026-11-04 with tools/art/pixellab.py (keeper idle, 3 directions x 4 frames (east = west mirrored in code))
+Service  : PixelLab https://api.pixellab.ai/v2/create-character-v3, then https://api.pixellab.ai/v2/characters/animations
+Plan     : Tier 1: Pixel Apprentice (active)
+Cost     : base 2 generations (shared by every row made from it), animation 12 generations (4 jobs)
+License  : PixelLab: commercial use allowed; do not train AI models on the output (FAQ 2026-10, verify the terms)
+Terms    : https://www.pixellab.ai (read the terms of service and save a screenshot when you ship)
+Request  : {"description": "chibi wizard with a big round head and a short stubby body, wide purple robe, floppy pointed purple hat, white beard, holding a glowing yellow oil lantern, cute retro 16-bit dungeon hero", "n_directions": 8, "image_size": {"width": 32, "height": 32}, "no_background": true, "name": "gl-keeper-v3-1", "outline": "single color black outline", "detail": "low detail", "view": "low top-down", "seed": 1}
+Request  : {"character_id": "24a18b5c-2422-4f0e-9f1a-3753965a0c22", "mode": "skeleton-v3", "template_animation_id": "breathing-idle", "directions": ["south", "east", "north", "west"], "animation_name": "idle"}
+File     : public/assets/art/keeper/idle/north/frame_000.png  SHA-256 45823df45dfb8e135f42be381d6e445ad9c7b6fe2634d30a37481a75fdfd3cfe
+File     : public/assets/art/keeper/idle/north/frame_001.png  SHA-256 84d7ec75e0596ec0dce9e7ea0f29bbe4d3712ff733caa15334f280cd46ff2337
+File     : public/assets/art/keeper/idle/north/frame_002.png  SHA-256 84d7ec75e0596ec0dce9e7ea0f29bbe4d3712ff733caa15334f280cd46ff2337
+File     : public/assets/art/keeper/idle/north/frame_003.png  SHA-256 45823df45dfb8e135f42be381d6e445ad9c7b6fe2634d30a37481a75fdfd3cfe
+File     : public/assets/art/keeper/idle/south/frame_000.png  SHA-256 65981f33312d04d122dc3593a3bd16f79b7e343eb9261640a335da0e9a5886ad
+File     : public/assets/art/keeper/idle/south/frame_001.png  SHA-256 24f34e208b652d9fdd290fe0dbff9fc8a3f50ee26528aa249f850b8d58a62077
+File     : public/assets/art/keeper/idle/south/frame_002.png  SHA-256 24f34e208b652d9fdd290fe0dbff9fc8a3f50ee26528aa249f850b8d58a62077
+File     : public/assets/art/keeper/idle/south/frame_003.png  SHA-256 42b0d137000b331a75ff7986fc5aa48601f2c2bdc536c005f13b1b901bf54654
+File     : public/assets/art/keeper/idle/west/frame_000.png  SHA-256 40c2da36eb247514a7a419a03268379b60b441c07491e50b9a5e299cb3467f6d
+File     : public/assets/art/keeper/idle/west/frame_001.png  SHA-256 1da06236fefc843df1ca3a69915715ed28718f28bfd51e51e5f6c0c251cff508
+File     : public/assets/art/keeper/idle/west/frame_002.png  SHA-256 b319493984a38f6a67389247c6935296ffca8226a6baeff1bbc27181defd027d
+File     : public/assets/art/keeper/idle/west/frame_003.png  SHA-256 1982ffb7c14355f38d52191031852f5bf9e8ebbae1254a40ebd44b8a6911c805

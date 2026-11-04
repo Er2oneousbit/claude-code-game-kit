@@ -172,4 +172,3 @@ autoplay exit leak (#6).
 
 ### Coyote Hop, Courier Dash, Ghost Lantern, Gatekeeper (web)
 - No open bugs after their reviews. Not yet played by a human.
-- Ghost Lantern's keeper and ghosts are placeholder sprites ([#17](https://github.com/Er2oneousbit/claude-code-game-kit/issues/17)).

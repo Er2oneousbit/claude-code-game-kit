@@ -34,6 +34,7 @@ Engine-specific folder layout is documented in `docs/ENGINE.md`. Universal folde
 | Ghost AI: perception | Distance, light at the ghost, memory | `GameScene.updateGhost` | scenario runs |
 | Ghost AI: decision | Utility scores, inertia (ADR 0001) | `src/core/ghostBrain.ts` | `ghostBrain.test.ts` |
 | Ghost AI: movement | A* paths, separation steering | `src/core/astar.ts`, `src/core/separation.ts` | `astar.test.ts`, `separation.test.ts` |
+| Sprites | Keeper walk/idle per facing, one loop per ghost action (PixelLab frames) | `src/game/sprites.ts` | `sprites.test.ts`, smoke |
 | HUD | Oil bar, key, timer, messages, AI debug table | `src/game/HudScene.ts` | smoke |
 | Autoplay bot | Scenario check: `?autoplay` escapes, `?autoplay=dark` is caught | `GameScene.botIntent` | `dev.py smoke --query ...` |
 

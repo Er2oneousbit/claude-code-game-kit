@@ -7,7 +7,9 @@
 // Notes   : Engine side only. Decisions live in src/core/ghostBrain.ts, paths in
 //           src/core/astar.ts, lantern rules in src/core/lantern.ts, numbers in tuning.ts.
 //           Positions are in tiles (floats); pixels only when drawing. Sounds: ElevenLabs (A-0004 to A-0008),
-//           one-shots plus a haunted-house ambience loop.
+//           one-shots plus a haunted-house ambience loop. Keeper and ghost art: PixelLab frames (A-0009 to
+//           A-0013, data in sprites.ts): the keeper walks or idles toward his facing, each ghost plays the
+//           loop of its current action (wander bob, chase wail, flee cower).
 //
 // Pseudocode (update):
 //   read input (or the bot) -> move the player with wall collision -> burn oil
@@ -27,6 +29,10 @@ import { Log } from "../core/log";
 import { Rng } from "../core/rng";
 import { separate } from "../core/separation";
 import { LEVEL } from "./level";
+import {
+  DRAWN, frameFiles, facingFor, GHOST_ART, GHOST_FRAMES, ghostAnimKey, ghostFrameKey, KEEPER, keeperAnimKey, keeperFrameKey,
+  type Facing,
+} from "./sprites";
 import { BRAIN, GHOST, LANTERN, OIL_PICKUP, PLAYER, SEED, TILE_PX, TILES, ZOOM } from "./tuning";
 
 const AMBIENCE_VOLUME = 0.35;   // under the one-shots
@@ -59,6 +65,7 @@ export class GameScene extends Phaser.Scene {
   private lantern!: Lantern;
   private player!: Phaser.GameObjects.Sprite;
   private playerPos!: Vec;
+  private facing: Facing = "south";
   private ghosts: Ghost[] = [];
   private oils: Pickup[] = [];
   private chest!: Pickup;
@@ -78,6 +85,7 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     this.load.spritesheet("tiles", "assets/art/tilemap_packed.png", { frameWidth: 16, frameHeight: 16 });
+    for (const f of frameFiles()) this.load.image(f.key, f.file);
     this.load.audio("oil", "assets/audio/oil-refill.mp3");
     this.load.audio("key", "assets/audio/key-found.mp3");
     this.load.audio("win", "assets/audio/door-escape.mp3");
@@ -100,7 +108,9 @@ export class GameScene extends Phaser.Scene {
     this.oils = [];
     this.debugText = [];
 
+    this.facing = "south";
     this.buildMap();
+    this.buildAnimations();
     this.buildActors();
     this.buildDarkness();
     this.setupInput();
@@ -138,15 +148,38 @@ export class GameScene extends Phaser.Scene {
     return this.add.sprite(px(at.x), px(at.y), "tiles", frame).setDepth(depth);
   }
 
+  // Animations live in the game-wide manager, so a restart (R) finds them already made
+  private buildAnimations(): void {
+    for (const clip of ["walk", "idle"] as const) {
+      for (const dir of DRAWN) {
+        if (this.anims.exists(keeperAnimKey(clip, dir))) continue;
+        const frames = Array.from({ length: KEEPER[clip].frames }, (_, i) => ({ key: keeperFrameKey(clip, dir, i) }));
+        this.anims.create({ key: keeperAnimKey(clip, dir), frames, frameRate: KEEPER[clip].fps, repeat: -1 });
+      }
+    }
+    for (const [action, art] of Object.entries(GHOST_ART) as [GhostAction, (typeof GHOST_ART)[GhostAction]][]) {
+      if (this.anims.exists(ghostAnimKey(action))) continue;
+      if (art.to >= GHOST_FRAMES) throw new Error(`ghost clip ${action} reaches past frame ${GHOST_FRAMES - 1}`);
+      const frames = Array.from({ length: art.to - art.from + 1 }, (_, i) => ({ key: ghostFrameKey(art.folder, art.from + i) }));
+      this.anims.create({ key: ghostAnimKey(action), frames, frameRate: art.fps, repeat: -1 });
+    }
+  }
+
   private buildActors(): void {
     for (const c of this.grid.find("o")) this.oils.push({ cell: c, sprite: this.sprite(TILES.oil, center(c), 5) });
     const k = this.grid.find("K")[0];
     this.chest = { cell: k, sprite: this.sprite(TILES.key, center(k), 5) };
     this.playerPos = center(this.grid.find("P")[0]);
-    this.player = this.sprite(TILES.wizard, this.playerPos, 10);
+    this.player = this.add.sprite(px(this.playerPos.x), px(this.playerPos.y), keeperFrameKey("idle", "south", 0))
+      .setOrigin(KEEPER.origin.x, KEEPER.origin.y).setDepth(10);
+    this.animateKeeper(false);
     this.grid.find("G").forEach((c, id) => {
+      const at = center(c);
+      // startFrame staggers the ghosts so a pack does not bob in step
+      const sprite = this.add.sprite(px(at.x), px(at.y), ghostFrameKey(GHOST_ART.wander.folder, 0)).setDepth(25)
+        .play({ key: ghostAnimKey("wander"), startFrame: (id * 3) % (GHOST_ART.wander.to - GHOST_ART.wander.from + 1) });
       this.ghosts.push({
-        id, sprite: this.sprite(TILES.ghost, center(c), 25), pos: center(c), action: "wander",
+        id, sprite, pos: at, action: "wander",
         scores: { chase: 0, flee: 0, wander: BRAIN.wanderBase }, path: [], thinkIn: id * 0.08, repathIn: 0, memory: 0,
       });
     });
@@ -219,9 +252,17 @@ export class GameScene extends Phaser.Scene {
     if (len > 0) {
       const step = (PLAYER.speed * dt) / len;
       this.playerPos = moveBox(this.grid, this.playerPos, { x: dir.x * step, y: dir.y * step }, PLAYER.half);
-      if (dir.x !== 0) this.player.setFlipX(dir.x < 0);
     }
+    this.facing = facingFor(dir, this.facing);
+    this.animateKeeper(len > 0);
     this.player.setPosition(px(this.playerPos.x), px(this.playerPos.y));
+  }
+
+  /** Walk or idle toward the facing; east is the west art mirrored. Same clip keeps playing (no restart). */
+  private animateKeeper(walking: boolean): void {
+    const drawn = this.facing === "east" ? "west" : this.facing;
+    this.player.setFlipX(this.facing === "east");
+    this.player.play(keeperAnimKey(walking ? "walk" : "idle", drawn), true);
   }
 
   private checkPickups(): void {
@@ -272,6 +313,7 @@ export class GameScene extends Phaser.Scene {
 
     const lit = light > 0.05;
     g.sprite.setPosition(px(g.pos.x), px(g.pos.y)).setTint(ACTION_TINT[g.action]);
+    g.sprite.play(ghostAnimKey(g.action), true);
     g.sprite.setAlpha(g.action === "flee" ? 0.55 : lit ? 1 : 0.35);
     if (g.action !== "flee" && light < GHOST.shieldLight && d < GHOST.catchDistance) this.caught(g);
   }

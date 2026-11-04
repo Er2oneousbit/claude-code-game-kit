@@ -25,9 +25,10 @@ Palette with names and hex per role (ground, sky, light, danger, UI, each factio
 ## Board
 | ID | Scene / asset | Direction (1 line) | Final version | Status | Drift notes / pending fixes | Used by (scene, prefab, asset ID) |
 |---|---|---|---|---|---|---|
-| C-0001 | Whole game look | Kenney Tiny Dungeon, 16 px, shown 3x; darkness overlay with an amber lantern circle | v1 | FINAL | none yet | all scenes, A-0001 |
+| C-0001 | Whole game look | Kenney Tiny Dungeon, 16 px, shown 3x; darkness overlay with an amber lantern circle | v2 | FINAL | v2: the PixelLab keeper and ghosts use more colours than the Kenney sheet (105 against 27) and the keeper is about 1.5 tiles tall; same pixel size and a dark outline | all scenes, A-0001, A-0009 to A-0013 |
 
 ## Version log
 | ID | Version | Date | Tool and prompt (or Prompt Library ID) | What changed | Drift found? |
 |---|---|---|---|---|---|
 | C-0001 | v1 | 2026-10-21 | No generator: locked to the Kenney pack preview (`docs/concepts/final/Preview.png`, A-0002) | first version | no |
+| C-0001 | v2 | 2026-11-04 | PixelLab through `tools/art/pixellab.py` (prompts in A-0009 to A-0013) | keeper and ghosts animated, Kenney tiles kept | yes: colour count and keeper size, accepted (HOW_IT_WAS_MADE) |

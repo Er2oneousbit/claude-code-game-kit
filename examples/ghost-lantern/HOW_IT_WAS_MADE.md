@@ -109,7 +109,43 @@ evidence file keeps the shipped file's SHA-256, the `.gen.json` next to it the g
   ("a clear liquid glug glug, then a soft whoomp as the flame flares") reached -16.8 and was normalized.
 - Verified: `check`, 40 tests, `smoke`, and every file decoded in headless Chromium.
 
+### Later: PixelLab sprites for the keeper and the ghosts
+The keeper and the ghosts were single Kenney tiles (84 and 121, flipped to face left). The user asked for real sprites
+(2026-11-04, kit issue #17); they were made with the kit's `tools/art/pixellab.py` the way SOP-16 says: one anchor per
+character, every animation made from it. Kenney's tiles, chest and oil stay. 44 generations in all, logged as A-0009 to
+A-0013 in `docs/ASSET_LOG.md` (prompts and SHA-256 in `docs/licenses/`).
+
+| Sprite | How | In the game |
+|---|---|---|
+| Keeper | v3 `character` at 32 px, 8 directions (2 generations), then `animate-character --mode skeleton-v3` with the `walk` and `breathing-idle` templates on 4 directions (12 each) | walk 6 frames, idle 4, for south, west and north in 48x48 cells; east is west mirrored |
+| Ghost | `image` 32x32, four takes (1 each), the third kept as the anchor; three `animate` runs from it, 8 frames each (1 each) | wander bobs (all 9 frames), chase wails and flee cowers (frames 3 to 7 looped) |
+
+`src/game/sprites.ts` holds the clips and the facing rule; `tests/sprites.test.ts` checks that every frame the game loads
+is a real PNG of its size, so a renamed file fails `test` instead of showing Phaser's missing-texture box. The ghosts keep
+their tint and transparency per action; each action now also has its own pose, which serves pillar 1 (readable ghosts).
+
+What did not work first:
+- **16 px, the Kenney size.** The older 4-direction endpoint (`character --legacy --size 16`) drew a face on every north
+  view: 8 takes over two prompts and two camera views (8 generations). v3 at 32 px gave real back views. The keeper is
+  therefore about 1.5 tiles tall, bigger than Kenney's figures but at the same pixel size (1:1 at 2x zoom).
+- **No palette option.** `pixellab.py` has no colour reference, so the look was matched by prompt and style settings
+  (black outline, low detail, low top-down, "retro 16-bit"). The frames use more colours than the Kenney sheet (105
+  against 27); a shared 16-colour reduction was tried and made the faces worse, so the frames ship as generated.
+- **East view.** PixelLab's east keeper hid the lantern behind his body and its idle turned the lantern into a stick;
+  mirroring the west art fixed both (SOP-16: animate the side where the prop is in front, then mirror).
+- **Two kit bugs, fixed in the kit (CHANGELOG 0.8.3):** `animate` came back with a flat grey background (1 generation
+  retaken), and a v3 `character` was refused by PixelLab for `--directions 4` and for `--shading` (no charge). The fixed
+  tool asks for transparent frames and refuses both before sending.
+
+Verified: `check`, 160 tests, `smoke`, the scenario pair (`?autoplay` escapes, `?autoplay=dark` is caught) and
+`smoke --screenshot` shots looked at by eye: the keeper and the ghosts read against the tiles. The README GIF still
+shows the old tiles.
+
 ## 9. Outside the kit (be honest)
 - Before writing `src/game/level.ts`, the map was sanity-checked once with a few lines of throwaway Python (row lengths,
   start-to-key path). The same checks now live in `tests/level.test.ts`; the throwaway was not needed in the end.
+- The PixelLab sprites: two throwaway Pillow scripts, one for contact sheets (every frame at 4x on a floor tile, to
+  review the takes) and one for the five ASSET_LOG rows and evidence files in the tool's `--log` format (each row covers
+  an anchor plus an animation, two requests, which `--log` writes as separate rows). The ghost animations ran on a copy
+  of the tool with the transparent-frames fix before it was committed to the kit.
 - Everything else (assets, GIF, screenshots, checks) went through the kit's own commands.

@@ -29,6 +29,7 @@ ghosts), `?autoplay` (a bot plays), `?autoplay=dark` (the bot never brightens), 
 | `src/game/tuning.ts` | Every number, with comments on why it changed during playtests |
 | `tests/` | Vitest tests (the kit's juice and shell checks included), including "never chases into strong light" and "the key and exit are reachable" |
 | `src/game/GameScene.ts` | Perception, the autoplay bot, the darkness overlay, the debug view |
+| `src/game/sprites.ts` | The keeper's walk and idle per direction and one animation per ghost action (PixelLab frames) |
 | `docs/` | GDD, concept lock, slice brief with results, ADR, troubleshooting, asset log with license evidence |
 
 ## Checks
@@ -43,5 +44,7 @@ python tools/dev.py smoke --query autoplay=dark --until CAUGHT                 #
 ## Credits and licenses
 - Game: copyright er2oneousbit, all rights reserved, free to read, run, study and reference (`../LICENSE.md`).
   Kit-provided files (`tools/`, `.claude/`, the docs templates) stay MIT (`../../LICENSE`).
-- Art: [Kenney](https://kenney.nl) (Tiny Dungeon), CC0. Details: `docs/ASSET_LOG.md`, `docs/licenses/`.
+- Art: [Kenney](https://kenney.nl) (Tiny Dungeon), CC0: the tiles, the chest and the oil. The keeper and the ghosts:
+  generated with [PixelLab](https://www.pixellab.ai) through the kit's `tools/art/pixellab.py` (its terms allow commercial
+  use; earlier builds used Kenney's figures). Details: `docs/ASSET_LOG.md`, `docs/licenses/`, HOW_IT_WAS_MADE.
 - Sound effects and the haunted-house ambience: Created in collaboration with ElevenLabs (elevenlabs.io) (generated with the kit's `tools/audio/wavesmith/eleven_audio.py` under non-commercial terms, so **non-commercial**: marked PLACEHOLDER in `docs/ASSET_LOG.md`, replace or regenerate under a license that allows commercial use before any commercial use). Earlier builds used Kenney Interface Sounds (CC0).

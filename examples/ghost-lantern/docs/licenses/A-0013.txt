@@ -1,0 +1,17 @@
+A-0013  sprite  generated 2026-11-04 with tools/art/pixellab.py (ghost flee loop (cower), 9 frames, the game plays 3 to 7)
+Service  : PixelLab https://api.pixellab.ai/v2/create-image-pixflux, then https://api.pixellab.ai/v2/animate-with-text-v3
+Plan     : Tier 1: Pixel Apprentice (active)
+Cost     : base 1 generation (shared by every row made from it), animation 1 generation
+License  : PixelLab: commercial use allowed; do not train AI models on the output (FAQ 2026-10, verify the terms)
+Terms    : https://www.pixellab.ai (read the terms of service and save a screenshot when you ship)
+Request  : {"description": "small cute ghost, a pale blue-white sheet ghost with a round head, two hollow dark eyes and a small open mouth, short stubby arms, wavy tattered bottom edge, floating, facing the camera, retro 16-bit dungeon monster", "image_size": {"width": 32, "height": 32}, "no_background": true, "outline": "single color black outline", "shading": "basic shading", "detail": "low detail", "view": "low top-down"}
+Request  : {"first_frame": "<the ghost anchor image, the same file as frame_00.png, 565 bytes>", "action": "ghost cowering in fear, shrinking down and trembling, arms raised to shield its face", "frame_count": 8, "no_background": true}
+File     : public/assets/art/ghost/flee/frame_00.png  SHA-256 b9c1b7166ce1c54e572611f6451b0569c44f6f546f285123bf11f05f465b8e60
+File     : public/assets/art/ghost/flee/frame_01.png  SHA-256 6df2de783259825f3ed39b340a1feb7e7fa289549900abcebb741ce9c25d5240
+File     : public/assets/art/ghost/flee/frame_02.png  SHA-256 9b012062a4effbf8660a7b13f3090f9f8c97d49c5a471bbe76f00fcd36189110
+File     : public/assets/art/ghost/flee/frame_03.png  SHA-256 a0fc89456619339d2fa75cc5095c6c393b07bc77b035890b69cae340c7ad85c3
+File     : public/assets/art/ghost/flee/frame_04.png  SHA-256 7eb3424bba4bde8a5b0555031cdd5727e1258c7aadf4089f6fccf1d04571f0cf
+File     : public/assets/art/ghost/flee/frame_05.png  SHA-256 63eef4ccd5e80d5e28ac3453a8b19b106d1044c9e2f34e9d381beb52cab8ae0d
+File     : public/assets/art/ghost/flee/frame_06.png  SHA-256 249f2a6921fd3bed5a9f95ca5cb6962ede0ba10146e84f1c3b768cfb2bcabe7c
+File     : public/assets/art/ghost/flee/frame_07.png  SHA-256 c35b838f57feadce0eeb8124874f2a8ba41732824fd7ac01c4d82e5e3f02fb92
+File     : public/assets/art/ghost/flee/frame_08.png  SHA-256 9dc0372b4b70ac77fdb0c2754d0f8883ab1da0ae8caf37a8e910d6162b44b35c
