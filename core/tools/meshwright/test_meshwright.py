@@ -122,6 +122,52 @@ def canned_glb(segments=64, rings=30, radius=0.4, height=0.9):
     return cl.write_glb(doc, binary)
 
 
+def vertex_glb(segments=32, rings=8, radius=0.4, height=0.9):
+    """What ComfyUI's SaveGLB writes for PaintMesh's output: an indexed cylinder with linear COLOR_0 (VEC3 float),
+    no TEXCOORD_0 (PaintMesh runs before UnwrapMesh), and a plain material whose base colour factor is white."""
+    pos, col, idx = [], [], []
+    for j in range(rings + 1):
+        y = -height / 2 + height * j / rings
+        for i in range(segments):
+            a = 2 * math.pi * i / segments
+            pos.append((radius * math.cos(a), y, radius * math.sin(a)))
+            col.append((0.6 * j / rings, 0.3, 0.1 + 0.5 * i / segments))
+    for j in range(rings):
+        for i in range(segments):
+            a, b = j * segments + i, j * segments + (i + 1) % segments
+            idx += [a, a + segments, b, b, a + segments, b + segments]
+    for y, flip in ((height / 2, False), (-height / 2, True)):   # caps: a centre vertex and a fan
+        c = len(pos)
+        pos.append((0.0, y, 0.0))
+        col.append((0.8, 0.8, 0.2))
+        ring0 = (rings if not flip else 0) * segments
+        for i in range(segments):
+            a, b = ring0 + i, ring0 + (i + 1) % segments
+            idx += [c, b, a] if not flip else [c, a, b]
+    pad = lambda b: b + b"\x00" * (-len(b) % 4)  # noqa: E731
+    pbin = b"".join(struct.pack("<3f", *p) for p in pos)
+    cbin = b"".join(struct.pack("<3f", *c) for c in col)
+    ibin = b"".join(struct.pack("<I", i) for i in idx)
+    binary = pad(pbin) + pad(cbin) + pad(ibin)
+    o1, o2 = len(pad(pbin)), len(pad(pbin)) + len(pad(cbin))
+    doc = {"asset": {"version": "2.0", "generator": "ComfyUI",
+                     "extras": {"prompt": json.dumps({"1": {"inputs": {"image": EMBEDDED_PATH}}})}},
+           "buffers": [{"byteLength": len(binary)}],
+           "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": len(pbin), "target": 34962},
+                           {"buffer": 0, "byteOffset": o1, "byteLength": len(cbin), "target": 34962},
+                           {"buffer": 0, "byteOffset": o2, "byteLength": len(ibin), "target": 34963}],
+           "accessors": [{"bufferView": 0, "componentType": 5126, "count": len(pos), "type": "VEC3",
+                          "min": [min(p[i] for p in pos) for i in range(3)],
+                          "max": [max(p[i] for p in pos) for i in range(3)]},
+                         {"bufferView": 1, "componentType": 5126, "count": len(col), "type": "VEC3"},
+                         {"bufferView": 2, "componentType": 5125, "count": len(idx), "type": "SCALAR"}],
+           "materials": [{"pbrMetallicRoughness": {"baseColorFactor": [1.0, 1.0, 1.0, 1.0], "metallicFactor": 0.0,
+                                                   "roughnessFactor": 1.0}, "doubleSided": True}],
+           "meshes": [{"primitives": [{"attributes": {"POSITION": 0, "COLOR_0": 1}, "indices": 2, "material": 0}]}],
+           "nodes": [{"mesh": 0}], "scenes": [{"nodes": [0]}], "scene": 0}
+    return cl.write_glb(doc, binary)
+
+
 def glb_doc(path):
     return cl.read_glb(Path(path).read_bytes())[0]
 
@@ -184,9 +230,10 @@ class FakeComfy(http.server.BaseHTTPRequestHandler):
                 return self.send(200, {pid: {"outputs": {}, "status": {"status_str": "error", "completed": False,
                                        "messages": [["execution_error", {"node_id": "24", "node_type": "KSampler",
                                                                          "exception_message": STATE.fail}]]}}})
-            if any(n["class_type"] == "SaveGLB" for n in graph.values()):
-                outs = {"35": {"3d": [{"filename": "textured_00001_.glb", "subfolder": "meshwright", "type": "output"}]},
-                        "37": {"3d": [{"filename": "vertex_00001_.glb", "subfolder": "meshwright", "type": "output"}]}}
+            if any(n["class_type"] == "SaveGLB" for n in graph.values()):   # only the Save nodes in the graph ran
+                outs = {nid: {"3d": [{"filename": f"{n['inputs']['filename_prefix'].split('/')[-1]}_00001_.glb",
+                                      "subfolder": "meshwright", "type": "output"}]}
+                        for nid, n in graph.items() if n["class_type"] == "SaveGLB"}
             else:
                 outs = {"13": {"images": [{"filename": "reference_00001_.png", "subfolder": "meshwright",
                                            "type": "output"}]}}
@@ -204,6 +251,13 @@ class FakeComfy(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
         if self.path == "/prompt":
+            graph = json.loads(body.decode("utf-8"))["prompt"]
+            dangling = {nid: v[0] for nid, n in graph.items() for v in n["inputs"].values()
+                        if isinstance(v, list) and len(v) == 2 and isinstance(v[0], str) and v[0] not in graph}
+            if dangling:   # ComfyUI refuses a graph whose links point at nodes that are not in it
+                return self.send(400, {"error": {"type": "prompt_outputs_failed_validation", "message": "bad link"},
+                                       "node_errors": {k: {"errors": [{"message": f"input from missing node {v}"}]}
+                                                       for k, v in dangling.items()}})
             STATE.prompts.append(json.loads(body.decode("utf-8")))
             return self.send(200, {"prompt_id": f"p-{len(STATE.prompts)}", "number": 1, "node_errors": {}})
         if self.path == "/upload/image":
@@ -639,10 +693,33 @@ class MakeRun(Base):
         self.no_local_paths()
 
     def test_vertex_material_takes_the_other_output(self):
-        STATE.mesh = canned_glb(8, 2)
+        STATE.mesh = vertex_glb()
         rc, out = self.make("--image", "art_src/crate.png", "--seed", "1", "--material", "vertex")
         self.assertEqual(rc, 0, out)
         self.assertIn("raw mesh", out)
+
+    def test_each_material_queues_only_its_own_branch(self):
+        # ComfyUI runs every Save node in a graph: a vertex job must not spend GPU minutes on the unwrap and the
+        # bakes, and a texture job must not paint vertex colours it throws away
+        types = lambda wf: {n["class_type"] for n in wf.values()}  # noqa: E731
+        rc, out = self.make("--image", "art_src/crate.png", "--seed", "1", "--material", "vertex", "--no-preview")
+        self.assertEqual(rc, 0, out)
+        wf = self.mesh_jobs()[-1]
+        self.assertEqual([n["_meta"]["title"] for n in wf.values() if n["class_type"] == "SaveGLB"],
+                         [mw.NODES["vertex"]])
+        for gone in ("UnwrapMesh", "BakeTextureFromVoxel", "BakeNormalMapFromMesh", "BakeAmbientOcclusion",
+                     "ApplyTextureToMesh"):
+            self.assertNotIn(gone, types(wf))
+        self.assertIn("PaintMesh", types(wf))
+        rec = json.loads((self.root / "assets_src/meshwright/prop_crate/meshwright.json").read_text(encoding="utf-8"))
+        self.assertFalse([s for s in rec["job"]["settings"] if "texture_size" in s], "no bake settings on a vertex job")
+        rc, out = self.make("--image", "art_src/crate.png", "--seed", "2", "--overwrite", "--no-preview")
+        self.assertEqual(rc, 0, out)
+        wf = self.mesh_jobs()[-1]
+        self.assertEqual([n["_meta"]["title"] for n in wf.values() if n["class_type"] == "SaveGLB"],
+                         [mw.NODES["textured"]])
+        self.assertNotIn("PaintMesh", types(wf))
+        self.assertIn("BakeTextureFromVoxel", types(wf))
 
 
 # ---- part 2: the real Blender steps ---------------------------------------------------------------
@@ -703,6 +780,24 @@ class RealBlender(Base):
         self.assertTrue((src / "turntable.png").read_bytes().startswith(PNG_SIG))
         self.assertIn("| model |", (self.root / "docs" / "ASSET_LOG.md").read_text(encoding="utf-8"))
         self.no_local_paths()
+
+    def test_real_vertex_colour_mesh_without_uvs(self):
+        # --material vertex: PaintMesh's mesh has no UV map; cleanup.py gives it one (lightmaps need it, and the
+        # validator fails a mesh without), the colours survive cleanup and export, and the model ships
+        STATE.mesh = vertex_glb()
+        rc, out = self.make("--image", "art_src/crate.png", "--seed", "5", "--material", "vertex", "--no-preview")
+        self.assertEqual(rc, 0, out)
+        main = self.root / "assets" / "models" / "prop_crate.glb"
+        doc = glb_doc(main)
+        attrs = doc["meshes"][0]["primitives"][0]["attributes"]
+        self.assertIn("COLOR_0", attrs, "the vertex colours are the model's only colour: they must survive")
+        self.assertIn("TEXCOORD_0", attrs)
+        self.assertFalse(doc.get("images"), "a vertex-colour model has no textures")
+        src = self.root / "assets_src" / "meshwright" / "prop_crate"
+        self.assertTrue(json.loads((src / "cleanup.json").read_text(encoding="utf-8"))["uv_added"])
+        val = json.loads((src / "validate.json").read_text(encoding="utf-8"))
+        self.assertEqual(val["failures"], [])
+        self.assertTrue(any("no image texture" in n for n in val["notes"]), val["notes"])
 
     def test_real_size_budget_failure(self):
         rc, out = self.make("--image", "art_src/crate.png", "--seed", "5", "--height", "5", "--no-preview")

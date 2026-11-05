@@ -64,10 +64,10 @@ python tools/meshwright/meshwright.py make prop_lamp --image ref.png --sprites a
 | `--turn DEG` | Turn around the up axis when the model's front is not glTF's front (+Z). TRELLIS.2 put the reference's front there in every run so far. |
 | `--lods 0.5,0.25` or `none` | LOD files `<name>_LOD1.glb` ... (Blender's Decimate: check them by eye). |
 | `--quality normal\|high` | TRELLIS.2's grid: 1024 (about 5 min warm) or 1536 (about 19 min). |
-| `--material texture\|vertex` | Baked PBR textures (base colour, metallic-roughness, normal, AO), or vertex colours only (small, no textures). |
+| `--material texture\|vertex` | Baked PBR textures (base colour, metallic-roughness, normal, AO), or vertex colours only (small, no textures). A vertex job queues only its own branch, so the UV unwrap and the bakes do not run; TRELLIS.2's vertex-colour mesh has no UV map, so cleanup.py adds one (Smart UV Project) for lightmaps and the budget check. |
 | `--texture 512\|1024\|2048` | Baked texture size. |
 | `--out DIR` | Models folder. Default from the game's engine: `assets/models`, web and web-3d `public/assets/models`, Unity `Assets/Models`, Unreal `SourceArt/Models` (import from there). |
-| `--sprites FILE` | Also an 8-direction sprite sheet (tools/blender/render_sprites.py, its layout in `FILE.json` beside it) for a 2D game. The sheet goes into the same asset log row and the record, with its hash. |
+| `--sprites FILE` | Also an 8-direction sprite sheet (tools/blender/render_sprites.py, with its layout in a .json of the same name beside it) for a 2D game. The sheet goes into the same asset log row and the record, with its hash. |
 | `--no-log`, `--no-preview`, `--overwrite` | Scratch runs; skip the turntable; make the same name again (the asset log row is updated, not doubled). |
 
 Exit codes: 0 ok, 1 the job or the budget check failed, 2 usage, environment, missing models or files in the way.

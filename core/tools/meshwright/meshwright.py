@@ -39,7 +39,8 @@
 #   test:  test_meshwright.py (offline) [+ test_meshwright_live.py]
 #   make:  check name, paths, budget, Blender, ComfyUI, nodes, models, outputs free, ASSET_LOG  [before any GPU time]
 #          reference: --image copied (EXIF/XMP/text gone) | --prompt -> klein job -> free VRAM [-> --reference-only stop]
-#          TRELLIS.2 job (image, seed, resolution, face target, texture size) -> fetch the .glb (extras stripped)
+#          TRELLIS.2 job (only the --material branch; image, seed, resolution, face target, texture size)
+#          -> fetch the .glb (extras stripped)
 #          cleanup.py -> prep_export.py --no-validate -> validate_asset.py --json -> fail: stop, exit 1
 #          copy the .glb and LODs into --out -> --sprites sheet -> record JSON -> ASSET_LOG row (updated on a
 #          re-run; the sheet is in it) -> turntable
@@ -510,21 +511,37 @@ def make_reference(args, plan, base, wfref):
                   "model": "FLUX.2 klein 4B", "gpu_seconds": round(seconds, 1), "sha256": sha256_bytes(data)}
 
 
+def prune_to(wf, title):
+    """Only the node with this title and the nodes it reads from. ComfyUI runs every Save node in a graph, so the
+    branch a job does not use (the unwrap and the bakes for --material vertex) would cost GPU minutes."""
+    need, stack = set(), [node_id(wf, title)]
+    while stack:
+        nid = stack.pop()
+        if nid in need:
+            continue
+        need.add(nid)
+        stack += [v[0] for v in wf[nid].get("inputs", {}).values()
+                  if isinstance(v, list) and len(v) == 2 and isinstance(v[0], str) and v[0] in wf]
+    return {k: v for k, v in wf.items() if k in need}
+
+
 def make_mesh(args, plan, base, wf3d, reference):
-    """TRELLIS.2 over ComfyUI: returns (raw textured .glb path, job facts)."""
-    wf = json.loads(json.dumps(wf3d))
-    settings = comfy(cl.apply_images, base, wf, [f"{NODES['image']}={reference}"], False)
-    settings += comfy(cl.apply_seed, wf, args.seed)
+    """TRELLIS.2 over ComfyUI: returns (raw .glb path, job facts)."""
     sets = {NODES["resolution"]: ("target_resolution", QUALITY[args.quality]),
             NODES["faces"]: ("target_face_count", plan.faces),
             NODES["unwrap"]: ("resolution", plan.texture), NODES["bake"]: ("texture_size", plan.texture),
             NODES["normal"]: ("resolution", plan.texture)}
-    for title, (field, value) in sets.items():
-        nid = node_id(wf, title)
-        wf[nid]["inputs"][field] = value
-        settings.append(f"{nid}.{field}={value}")
-    entry, seconds, vram = run_job(base, wf, f"3D model (TRELLIS.2, {args.quality} quality)", args.wait)
+    ids = {title: node_id(wf3d, title) for title in sets}   # every title must be in the workflow, used or not
     want = NODES["textured"] if args.material == "texture" else NODES["vertex"]
+    wf = prune_to(json.loads(json.dumps(wf3d)), want)
+    settings = comfy(cl.apply_images, base, wf, [f"{NODES['image']}={reference}"], False)
+    settings += comfy(cl.apply_seed, wf, args.seed)
+    for title, (field, value) in sets.items():
+        nid = ids[title]
+        if nid in wf:                    # the bake settings only on a texture job
+            wf[nid]["inputs"][field] = value
+            settings.append(f"{nid}.{field}={value}")
+    entry, seconds, vram = run_job(base, wf, f"3D model (TRELLIS.2, {args.quality} quality)", args.wait)
     items = [i for i in outputs_of(entry, node_id(wf, want)) if i["filename"].lower().endswith(".glb")]
     if not items:
         raise JobError("the 3D job finished but saved no .glb (does the workflow still end in Save 3D Model?)")
@@ -916,7 +933,8 @@ def build_parser():
     p.add_argument("--quality", choices=sorted(QUALITY), default="normal",
                    help="TRELLIS.2 resolution: normal 1024 (about 5 min), high 1536 (about 19 min)")
     p.add_argument("--material", choices=("texture", "vertex"), default="texture",
-                   help="baked PBR textures (default) or vertex colours (no textures, smaller)")
+                   help="baked PBR textures (default), or vertex colours: no textures, smaller, and the unwrap and "
+                        "bakes do not run (cleanup.py adds a UV map for lightmaps)")
     p.add_argument("--sprites", help="also render an 8-direction sprite sheet PNG here (2D games, SOP-11)")
     p.add_argument("--no-preview", action="store_true", help="skip the turntable contact sheet")
     p.add_argument("--no-log", action="store_true", help="do not touch docs/ASSET_LOG.md (scratch runs)")

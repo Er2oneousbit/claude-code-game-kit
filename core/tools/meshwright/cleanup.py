@@ -22,6 +22,8 @@
 #           Normals: the custom normals from the file are cleared and the mesh is shaded smooth, which matches
 #           what TRELLIS.2 bakes its normal map against (smooth normals, crease angle 180).
 #           Decimation is Blender's Decimate (collapse); it keeps UVs but can blur a texture seam. Check by eye.
+#           A mesh without a UV map (TRELLIS.2's vertex-colour output) gets one from Smart UV Project after
+#           decimation: engines need it for lightmaps, and validate_asset.py fails a mesh without one.
 #           --turn rotates around the up axis (degrees, counter-clockwise seen from above) so the model's front
 #           faces Blender's front (-Y), which is glTF's +Z: the direction the glTF spec calls the asset's front.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -34,6 +36,7 @@
 #          drop parts under --min-part of the faces (the biggest part always stays) -> recalc normals outward
 #   clear custom normals, shade smooth
 #   triangles > --max-tris: Decimate (collapse) at max / tris, applied (twice if the first pass lands above)
+#   no UV map: Smart UV Project (vertex colours stay; report uv_added)
 #   rotate --turn around Z -> scale so the height (Z) is --height -> bottom centre to the origin
 #   name the object, mesh, materials and images after --name -> export .glb (prep_export's GLTF_PRESET) -> JSON
 import argparse
@@ -49,6 +52,8 @@ DEBUG = False
 MERGE_DISTANCE = 0.0001   # fraction of the bounds diagonal: vertices closer than this become one
 MIN_PART = 0.01           # parts with fewer than this share of all faces are dropped as fragments
 DECIMATE_MARGIN = 0.97    # aim a little under the budget: collapse decimation overshoots by a few triangles
+UV_ANGLE = 66.0           # Smart UV Project for a mesh without UVs: Blender's default angle limit (degrees)
+UV_MARGIN = 0.003         # and island margin, a little room between islands for lightmap bleeding
 
 
 def dbg(msg):
@@ -223,6 +228,24 @@ def decimate(bpy, obj, max_tris, report):
         dbg(f"decimate {tris} -> {tri_count(obj.data)} (ratio {ratio:.4f})")
 
 
+def ensure_uvs(bpy, obj, report):
+    """Give a mesh without a UV map one (Smart UV Project). Vertex-colour meshes come without: the colours stay,
+    and the map is there for lightmaps and the budget check."""
+    report["uv_added"] = False
+    if obj.data.uv_layers:
+        return
+    obj.data.uv_layers.new(name="UVMap")
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.uv.smart_project(angle_limit=math.radians(UV_ANGLE), island_margin=UV_MARGIN)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    report["uv_added"] = True
+    dbg("no UV map: Smart UV Project added one")
+
+
 def place(obj, args, report):
     """Turn around Z, scale to the height, bottom centre at the origin (geometry moves, the object stays at 0)."""
     from mathutils import Matrix
@@ -299,6 +322,7 @@ def run(args):
         return 1
     smooth(bpy, obj)
     decimate(bpy, obj, args.max_tris, report)
+    ensure_uvs(bpy, obj, report)
     place(obj, args, report)
     rename(obj, args.name or out.stem)
     report["tris_out"] = tri_count(obj.data)
