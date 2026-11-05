@@ -52,6 +52,8 @@
 #           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
 # Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): build lists the exported .pck and fails when it holds
 #           .game-kit.json or a dev-only folder (PCK_FORBIDDEN)
+# Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): check skips folders Godot ignores (.gdignore), such
+#           as Dotwork's Pixelorama extension, whose scripts belong to Pixelorama, not the game
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -383,6 +385,19 @@ def cmd_import(args, godot):
     return 0
 
 
+def game_scripts():
+    """Every .gd of the game: not under SKIP_DIRS, nor under a folder with a .gdignore (Godot does not import it, so
+    its scripts are not the game's: Dotwork's Pixelorama extension uses Pixelorama's classes and cannot compile here)."""
+    ignored = {p.parent for p in ROOT.rglob(".gdignore")}
+    files = []
+    for p in ROOT.rglob("*.gd"):
+        rel = p.relative_to(ROOT)
+        if set(rel.parts) & SKIP_DIRS or any(d in ignored for d in p.parents):
+            continue
+        files.append(p)
+    return files
+
+
 def cmd_check(args, godot):
     """Compile-check .gd files via tools/check_scripts.gd (one Godot launch per CHECK_BATCH files).
 
@@ -392,7 +407,7 @@ def cmd_check(args, godot):
     if args.files:
         files = [Path(f) for f in args.files]
     else:
-        files = [p for p in ROOT.rglob("*.gd") if not (set(p.relative_to(ROOT).parts) & SKIP_DIRS)]
+        files = game_scripts()
         if not (ROOT / GUT_CMDLN).exists():
             # Test scripts extend GutTest, which only exists once GUT is installed
             files = [p for p in files if p.relative_to(ROOT).parts[0] != "tests"]

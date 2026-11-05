@@ -7,6 +7,8 @@
 # Usage   : imported by the lanes; ENABLED = False (--engine none) turns every writer into a no-op
 # Notes   : Never writes .godot/, *.import or *.uid: Godot creates those on import.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): tileset_layers takes a (w, h) tile size and TileSet
+#           metadata (Pixelorama tilemaps)
 # ---------------------------------------------------------------------------
 import os
 
@@ -163,21 +165,23 @@ def _quad(h, i):
 
 
 def tileset_layers(path, tile_px, sources, terrains, custom=None, physics=False, mode="match_corners",
-                   overlays=()):
+                   overlays=(), metadata=None):
     """One TileSet for stacked TileMapLayers (base fill, one layer per overlay terrain, decals, roofs ...).
     sources: [{"atlas_res": res path, "tiles": [{"x", "y", "terrain": id or -1 (or None = no terrain),
                "corners": (tl, tr, bl, br) ids or -1, "probability": float, "custom": str, "solid": [corner idx]}]}]
     terrains: [(name, (r, g, b))] in id order, all in terrain set 0 (each overlay layer paints one of them).
-    solid: corners whose quadrant gets a collision box on physics layer 0 (water, walls)."""
+    solid: corners whose quadrant gets a collision box on physics layer 0 (water, walls).
+    tile_px: one side of a square tile, or (w, h). metadata: {name: Godot value text} set on the TileSet."""
     n = len(sources)
+    tw, th = (tile_px, tile_px) if isinstance(tile_px, int) else tuple(tile_px)
     lines = [f'[gd_resource type="TileSet" load_steps={2 * n + 1} format=3]', ""]
     for i, s in enumerate(sources):
         lines.append(f'[ext_resource type="Texture2D" path="{s["atlas_res"]}" id="{i + 1}_atlas"]')
     lines.append("")
-    h = tile_px // 2
+    h = tw // 2
     for i, s in enumerate(sources):
         lines += [f'[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_{i + 1}"]',
-                  f'texture = ExtResource("{i + 1}_atlas")', f"texture_region_size = Vector2i({tile_px}, {tile_px})"]
+                  f'texture = ExtResource("{i + 1}_atlas")', f"texture_region_size = Vector2i({tw}, {th})"]
         for t in s["tiles"]:
             if t.get("anim"):  # atlas animation: frames sit to the right of the base tile (probed Godot 4.7 syntax)
                 ak = f'{t["x"]}:{t["y"]}'
@@ -203,7 +207,7 @@ def tileset_layers(path, tile_px, sources, terrains, custom=None, physics=False,
                 for j, poly in enumerate(polys):
                     lines.append(f"{k}/physics_layer_0/polygon_{j}/points = {poly}")
         lines.append("")
-    lines += ["[resource]", f"tile_size = Vector2i({tile_px}, {tile_px})"]
+    lines += ["[resource]", f"tile_size = Vector2i({tw}, {th})"]
     if physics:
         lines += ["physics_layer_0/collision_layer = 1", "physics_layer_0/collision_mask = 1"]
     lines.append(f"terrain_set_0/mode = {MODE[mode]}")
@@ -216,4 +220,6 @@ def tileset_layers(path, tile_px, sources, terrains, custom=None, physics=False,
         lines.append(f'sources/{i} = SubResource("TileSetAtlasSource_{i + 1}")')
     if overlays:  # verify paints these terrain ids on an empty layer (overlay test) instead of the pair test
         lines.append(f"metadata/dotwork_overlays = PackedInt32Array({', '.join(str(i) for i in overlays)})")
+    for k, v in sorted((metadata or {}).items()):
+        lines.append(f"metadata/{k} = {v}")
     return _write(path, "\n".join(lines) + "\n")
