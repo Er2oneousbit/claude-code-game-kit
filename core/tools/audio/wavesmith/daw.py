@@ -19,9 +19,12 @@
 #           since the project was made, REAPER rendered nothing), 2 usage, an unreadable file or REAPER not found
 # Notes   : The working folder (default assets_src/daw/<name>, kept out of Godot's import by assets_src/.gdignore)
 #           holds the project, a copy of every sound under media/, and wavesmith_daw.json: which region or track is
-#           which game file, its bus, kind, SHA-256, length, channels and loop. Nothing in it holds an absolute path
-#           (media and the game root are relative to the folder), so it can be committed.
-#           The REAPER render: `reaper -newinst -nosplash -cfgfile <temp>/reaper.ini -renderproject <copy>.rpp`.
+#           which game file, its bus, kind, SHA-256 (and its copy's), length, channels and loop (WAV smpl chunk, OGG
+#           LOOPSTART / LOOPLENGTH). Nothing in it holds an absolute path (media and the game root are relative to
+#           the folder, which must be inside the game), so it can be committed. --reexport and import run from the
+#           game root it was made from (or --root).
+#           The REAPER render: `reaper -newinst -nosplash -cfgfile <temp>/reaper.ini -renderproject <copy>.rpp`,
+#           once per sample rate when the sounds have several (each at its own rate, so none is resampled).
 #           The copy is the project with Wavesmith's render settings put back (24-bit WAV at the sounds' rate, no
 #           dither, no normalization; sounds: master mix of every region, named $region; music: each stem track
 #           through the master, named $track) so a render setting changed while editing cannot break the round trip.
@@ -29,8 +32,10 @@
 #           Audio: no device opens and REAPER does not ask for one), and is deleted afterwards: your own REAPER
 #           settings, in %APPDATA%/REAPER or ~/Library/Application Support/REAPER, are never read or written. REAPER
 #           takes about 13 s per render on the test machine, most of it scanning its plug-ins in the fresh folder.
-#           Back in the game: a render whose audio matches the original (same length and channels, every sample
-#           within 2.5 steps of 16-bit) leaves the game's file untouched, byte for byte. A changed one is set to its
+#           Back in the game (compared with the folder's copy while it has its recorded SHA-256, else with the
+#           game's file while it is the original): a render whose audio matches the original (same length and
+#           channels, every sample within 2.5 steps of 16-bit) leaves the game's file untouched, byte for byte. A
+#           changed one is set to its
 #           bus's house level (sound_sets.py rules: loudest 400 ms for one-shots, integrated for loops, true peak at
 #           most -1 dBTP); music stems are levelled together, by the mix of all their renders, so their balance
 #           stays as you set it and a second run lands on the same bytes. An edit undone in the DAW puts the

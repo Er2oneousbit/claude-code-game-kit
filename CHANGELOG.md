@@ -23,6 +23,16 @@
   check` say whether REAPER was found (#191).
 - Wavesmith: midifile.py (`wavesmith.py midi`), a standard-library MIDI writer: a chiptune song's notes (one track
   per channel, drums on channel 10 with General MIDI notes), or a tempo and bar grid (#191).
+- Wavesmith: review fixes in the DAW round trip. A sound at another sample rate than the REAPER project renders in
+  a pass of its own at its own rate, so an untouched one is no longer resampled and logged as an edit (music stems
+  must share one rate). OGG files are written with ffmpeg's `-fflags +bitexact` (a fixed stream serial), so the same
+  audio is the same bytes and a second re-export finds an edited OGG already in the game. OGG loops keep their
+  LOOPSTART / LOOPLENGTH. `daw export` keeps an OGG or FLAC's own bytes in `originals/`, so an undone edit puts the
+  exact file back. The working copies are checked against the SHA-256 they were made with: an edit saved into one
+  is said and counts as an edit, and is never put back as the original. A manifest's root must lead up to the game
+  root it was made from (run from there, or `--root`). A game file that cannot be replaced (held open) is a named
+  problem, and the files written before it are still recorded. `midi grid --bpm` below 4 is an `[error]`, not a
+  traceback (#191).
 - Wavesmith: test_daw.py checks the round trip offline against a stand-in REAPER (golden .rpp text, no local path
   in any project file, untouched and edited round trips, conflicts, renames, music stems, a hanging REAPER, the
   universal route); `ReaperLiveExam` runs the real REAPER when `REAPER_BIN` is set (checked with REAPER 7.84 on
