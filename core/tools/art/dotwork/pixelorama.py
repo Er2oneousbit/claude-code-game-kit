@@ -9,8 +9,10 @@
 # Usage   : dotwork.py pixelorama [--overwrite], then dotwork.py pixelorama --reexport [--clear-export-path]
 # Notes   : The format is Pixelorama's own (src/Autoload/OpenSave.gd and src/Classes/Project.gd): a zip holding
 #           data.json (the project) and one raw RGBA8 buffer per cel at image_data/frames/<frame>/layer_<layer>, both
-#           numbered from 1. Written as pxo_version 7 (what Pixelorama 1.2.0 to 1.2.3 write; checked with 1.2.3);
-#           read: 7, and 8 (Pixelorama 1.2.4 release candidates, where a cel stores its own size and offset). Layer
+#           numbered from 1. Written as pxo_version 7 (what Pixelorama 1.2.0 to 1.2.3 write; 1.2.3 and 1.2.4 open
+#           it); read: 7, and 8 (Pixelorama 1.2.4, where a cel stores its own size and offset; checked against the
+#           released 1.2.4 by the live exam). 7 stays the written version: 1.2.3 has no version check and reads
+#           every cel as a whole canvas, so a cropped version 8 cel would load wrong there. Layer
 #           features Dotwork cannot reproduce exactly (blend modes, clipping masks, layer effects, animated opacity,
 #           3D and tilemap layers, group opacity) stop the re-export when the layer is visible, instead of shipping
 #           frames that differ from what the editor shows. Pixelorama saves the folder you last exported to, a
@@ -19,6 +21,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): a character whose clips have different sizes gets one
 #           canvas, each clip centred on its bottom edge; the re-export crops each back (#82)
+# Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): version 8 checked against the released Pixelorama
+#           1.2.4 (#67)
 # ---------------------------------------------------------------------------
 import glob
 import io
@@ -36,8 +40,8 @@ from PIL import Image
 import fcore as core
 import handpolish
 
-WRITE_VERSION = 7                  # pxo_version Dotwork writes (Pixelorama 1.2.0 to 1.2.3 write 7)
-READ_VERSIONS = (7, 8)             # 8: Pixelorama 1.2.4 release candidates (a cel's own size and offset)
+WRITE_VERSION = 7                  # pxo_version Dotwork writes (Pixelorama 1.2.0 to 1.2.3 write 7; 1.2.4 reads it)
+READ_VERSIONS = (7, 8)             # 8: Pixelorama 1.2.4 (a cel's own size and offset)
 MAX_SIDE = 8192                    # px: a larger canvas or cel in data.json is refused before any buffer is read
 MAX_JSON = 8 * 1024 * 1024         # bytes: a larger data.json is refused (a real one is well under 1 MB)
 MAX_FRAMES = 4096                  # frames, and tags

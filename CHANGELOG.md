@@ -3,6 +3,17 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.9.0 (unreleased)
+- Dotwork: Pixelorama 1.2.4 is checked against the release. A live exam (`PixeloramaLiveExam`, run when
+  `PIXELORAMA_BIN` is set, about 13 s) has the real Pixelorama open, save and export Dotwork's `.pxo` files headless
+  through a small extension in a user folder of its own: the version 8 files it saves (cels cropped to their
+  pixels) read back equal to the game's frames and to Pixelorama's own export, an untouched re-export changes no
+  file, and a pixel set in Pixelorama changes only its frame, its sheet and the manifests. The reader needed no change;
+  an offline exam pins the shape 1.2.4 saves. Dotwork keeps writing version 7 (1.2.3 reads every cel as a whole
+  canvas). The README now says Pixelorama refills a blank export folder with the file's own folder (#67).
+- Dotwork: the live exam also composites a partly clear layer: Pixelorama's headless CPU blend truncates where
+  Dotwork rounds, at most one step a channel; its windowed GPU blend is still not compared (refs #66).
+
 ## 0.8.3 (unreleased)
 - Gatekeeper (Godot): "Start over" resets the game in place, so the loaded model stays and a reply still on its way
   is dropped; both start buttons wait for a model load, which gives one intro instead of two (#1).

@@ -115,7 +115,8 @@ workflow it loads.
 ### 4. Godot and Dotwork's config
 - `GODOT_BIN`: your Godot 4 binary (maps are painted and every asset is verified inside the game).
 - `ASEPRITE_BIN` (optional): the Aseprite hand-polish round trip. The Pixelorama one needs nothing set: Dotwork reads
-  and writes `.pxo` files itself ([Hand polish](#hand-polish-aseprite-or-pixelorama)).
+  and writes `.pxo` files itself ([Hand polish](#hand-polish-aseprite-or-pixelorama)). `PIXELORAMA_BIN` (optional)
+  only runs the live Pixelorama exam ([Tests](#tests)).
 - Python for Dotwork: 3.8 or newer with Pillow + numpy (the ComfyUI venv has both, and works fine to run Dotwork).
 - Settings: copy what you want to change from `config.example.json` into `<game>/art_src/dotwork/dotwork.config.json`.
   That file is tracked in git and can name programs Dotwork runs (`godot_bin`, `aseprite_bin`, `comfyui.python`,
@@ -436,7 +437,7 @@ re-export with the frame's name. An effect's frames must all be one size.
 | | Aseprite | Pixelorama |
 |---|---|---|
 | Needs | `ASEPRITE_BIN`: Aseprite runs headless for both directions | nothing: Dotwork reads and writes `.pxo` in Python |
-| Versions | Lua scripting (`--script`); run with Aseprite 1.3.18 on Windows | writes `pxo_version` 7 (Pixelorama 1.2.0 to 1.2.3; 1.2.3 opened, exported and saved Dotwork's files); reads 7 and 8 (the 1.2.4 release candidates, where a cel keeps its own size and offset; (verify) against a released 1.2.4) |
+| Versions | Lua scripting (`--script`); run with Aseprite 1.3.18 on Windows | writes `pxo_version` 7 (Pixelorama 1.2.0 to 1.2.3 write it; 1.2.3 and 1.2.4 opened, exported and saved Dotwork's files); reads 7 and 8 (Pixelorama 1.2.4, where a cel keeps its own size and offset; a file 1.2.4 saved, with a pixel edited in it, re-exported exactly). Dotwork keeps writing 7: 1.2.3 reads every cel as a whole canvas, so a cropped version 8 file would load wrong there, and 1.2.4 opens 7 as it is |
 | The file | indexed on the asset's own colours when that loses nothing (at most 255 opaque colours, no partly clear pixels); RGB otherwise, such as a portrait of 1,800 colours | RGBA in one layer `art`, the asset's own colours as the project palette; the project's frame rate is the one most of the character's frames play at, and other clips carry per-frame durations |
 | Layers you add | flattened by Aseprite on export | visible pixel layers and groups are composited (Normal blending, cel and layer opacity); a visible layer with another blend mode, a clipping mask, layer effects, animated opacity, a 3D or tilemap layer, or a group below 100 % stops the re-export with its name (merge it down or hide it); hidden layers are ignored |
 | A file that exists | kept when it differs from the game's frames (Aseprite exports it to compare the tags, frames and frame times; one that still matches is left as it is); `--overwrite` replaces it and keeps the old file as `<name>.aseprite.bak` | kept when it differs from the game's frames (Dotwork reads it to compare the tags, frames and frame times; one that still matches, such as a file Pixelorama only opened and saved, is left as it is); `--overwrite` replaces it and keeps the old file as `<name>.pxo.bak` |
@@ -446,7 +447,9 @@ Pixelorama stores the folder you last exported to, a full path on your machine, 
 repository, that path is public too. `pixelorama` and `pixelorama --reexport` name each `.pxo` that holds one (a
 `[warn]` line), and `tools/publish_check.py` warns about it before you publish; `--clear-export-path` blanks the
 folder (nothing else in the file changes, and the round trip still gives the same frames). Dotwork never rewrites a
-`.pxo` for this without that flag. How Pixelorama treats a blank folder on its next export is (verify). Aseprite 1.3.18 on Windows built the sources and re-exported them untouched
+`.pxo` for this without that flag. Pixelorama 1.2.4 fills a blank folder with the `.pxo`'s own folder when it opens
+the file, and gives a file Dotwork wrote the folder of the last file you opened (your Desktop on a fresh install), so
+the path comes back on every save: clear it again before you commit. Aseprite 1.3.18 on Windows built the sources and re-exported them untouched
 with every file unchanged, a character with clips of two sizes included; an edit made in Aseprite's window is not
 tested yet.
 
@@ -555,8 +558,14 @@ old fonts' output against golden hashes.
 `python tools/art/dotwork/tests/test_pixelorama.py` - offline, seconds: both hand-polish round trips. `.pxo` files
 (tags, frame durations from holds, palette, the same bytes on every build, polish never overwritten), an untouched
 re-export that changes no file, an edit and a new hold reaching the game, layers composited, every refused layer
-feature stopping before a file is written, `pxo_version` 8 cels and the fields Pixelorama 1.2.3 saves; Aseprite's
-frame times in the build list and through a re-export rounded to milliseconds (its script runs stubbed).
+feature stopping before a file is written, `pxo_version` 8 cels and the fields Pixelorama 1.2.3 and 1.2.4 save;
+Aseprite's frame times in the build list and through a re-export rounded to milliseconds (its script runs stubbed).
+Two live exams run only when their editor is set: `ASEPRITE_BIN` runs the export script in Aseprite, and
+`PIXELORAMA_BIN` (about 13 s) has Pixelorama open, save and export Dotwork's `.pxo` files headless, through a small
+extension installed in a user folder of the exam's own (your Pixelorama settings are not touched), then re-exports
+them: no file changes, and a pixel set in Pixelorama changes only its frame. Headless, Pixelorama blends layers on
+the CPU: a partly clear pixel over the art comes out within one step a channel of Dotwork's composite (Pixelorama
+truncates where Dotwork rounds); its windowed GPU blend is not compared (#66).
 
 ## Troubleshooting
 | Symptom | Fix |

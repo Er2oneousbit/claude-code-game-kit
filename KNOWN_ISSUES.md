@@ -26,8 +26,8 @@ examples were built and tested on one Windows 11 machine.
   [#53](https://github.com/Er2oneousbit/claude-code-game-kit/issues/53).
 - **Hand polish (Aseprite, Pixelorama):** an edit made by a person
   in either editor's window is not tried yet ([#65](https://github.com/Er2oneousbit/claude-code-game-kit/issues/65)); partly transparent layer pixels are not compared with
-  Pixelorama's own blend ([#66](https://github.com/Er2oneousbit/claude-code-game-kit/issues/66)); reading Pixelorama 1.2.4 files is built from its release-candidate source
-  ([#67](https://github.com/Er2oneousbit/claude-code-game-kit/issues/67)); spells, VFX, status marks, animated props, balloons and vehicles have no hand-polish path
+  Pixelorama's windowed (GPU) blend, and its headless CPU blend truncates where Dotwork rounds (at most one step a
+  channel) ([#66](https://github.com/Er2oneousbit/claude-code-game-kit/issues/66)); spells, VFX, status marks, animated props, balloons and vehicles have no hand-polish path
   ([#68](https://github.com/Er2oneousbit/claude-code-game-kit/issues/68)).
 
 ### Art workflow outside Godot

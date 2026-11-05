@@ -14,10 +14,12 @@
 #           sizes (one canvas in either editor, each clip back at its own size; issue #82), and an Aseprite palette
 #           scan that makes no deprecated Pillow call (issue #185). No Pixelorama, Aseprite,
 #           ComfyUI or Godot needed: verify is stubbed, Aseprite's script runs are stubbed (AsepriteLiveExam runs
-#           the real one when ASEPRITE_BIN is set).
+#           the real one when ASEPRITE_BIN is set). PixeloramaLiveExam (only when PIXELORAMA_BIN is set) has the real
+#           Pixelorama open, save and export Dotwork's files headless, then re-exports them (#67).
 # Usage   : python tools/art/dotwork/tests/test_pixelorama.py   (test_dotwork.py runs it too)
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): the shape Pixelorama 1.2.4 saves, and the live exam (#67)
 # ---------------------------------------------------------------------------
 import contextlib
 import glob
@@ -211,6 +213,30 @@ def pixelorama_save(d, b):
             c.update(metadata={}, ui_color="(0.0, 0.0, 0.0, 0.0)")
         b[f"image_data/frames/{fi + 1}/indices_layer_1"] = b"\0"
         b[f"image_data/frames/{fi + 1}/"] = b""
+
+
+def pixelorama_124_save(d, b):
+    """rewrite_pxo edit: a Dotwork file as Pixelorama 1.2.4 saves it (PixeloramaLiveExam, 2026-11-04): pxo_version 8,
+    each cel cropped to its used pixels with its size as var_to_str ("Vector2i(14, 22)") and its offset as JSON of a
+    Vector2i ("(4, 2)"), an empty cel 1x1, and the fields 1.2.4 adds (author_*, license, include_blended_images,
+    tile_mode_*, a layer's use_cel_image_for_effects). No pixel, tag or time changes."""
+    pixelorama_save(d, b)
+    w, h = d["size_x"], d["size_y"]
+    d.update(pxo_version=8, pixelorama_version="v1.2.4-stable", author_company="", author_contact="",
+             author_display_name="", author_real_name="", license="", include_blended_images=False,
+             tile_mode_x_basis_x=w, tile_mode_x_basis_y=0, tile_mode_y_basis_x=0, tile_mode_y_basis_y=h)
+    for ly in d["layers"]:
+        ly["use_cel_image_for_effects"] = False
+    for fi, fr in enumerate(d["frames"]):
+        name = f"image_data/frames/{fi + 1}/layer_1"
+        a = np.frombuffer(b[name], np.uint8).reshape(h, w, 4)
+        ys, xs = np.nonzero(a[..., 3])
+        if len(ys):
+            y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
+        else:
+            y0, y1, x0, x1 = 0, 1, 0, 1
+        fr["cels"][0].update(image_size="Vector2i(%d, %d)" % (x1 - x0, y1 - y0), offset="(%d, %d)" % (x0, y0))
+        b[name] = np.ascontiguousarray(a[y0:y1, x0:x1]).tobytes()
 
 
 @contextlib.contextmanager
@@ -623,6 +649,22 @@ class PixeloramaExam(unittest.TestCase):
         rewrite_pxo(self.knight, pixelorama_save)
         before = snapshot(self.tmp)
         self.reexport()
+        self.assertEqual(changed(before, snapshot(self.tmp)), [])
+
+    def test_a_file_pixelorama_1_2_4_saved_round_trips_unchanged(self):
+        # #67: the version 8 reader came from the 1.2.4-rc2 source; this is the shape the released 1.2.4 saves
+        before = snapshot(self.tmp)
+        self.build()
+        sources = [self.knight, os.path.join(self.src, "fx", "spark.pxo"), os.path.join(self.src, "single", "barrel.pxo")]
+        for p in sources:
+            rewrite_pxo(p, pixelorama_124_save)
+        with zipfile.ZipFile(self.knight) as z:
+            cel = json.loads(z.read("data.json"))["frames"][0]["cels"][0]
+        self.assertNotEqual(cel["image_size"], "Vector2i(%d, %d)" % (W, H))     # really cropped
+        done = self.build()
+        self.assertEqual((done["kept"], len(done["unchanged"])), ([], 3))       # still shows the game's frames
+        r, _ = self.reexport()
+        self.assertTrue(r["ok"])
         self.assertEqual(changed(before, snapshot(self.tmp)), [])
 
     def test_a_file_pixelorama_saved_unchanged_is_not_kept(self):
@@ -1362,6 +1404,173 @@ class AsepriteLiveExam(unittest.TestCase):
         self.assertEqual(changed(before, snapshot(self.tmp)), [])
         done = self.ase.build(self.s.project, self.s.conf)
         self.assertEqual((done["kept"], done["written"]), ([], []))
+
+
+LIVE_PIXELORAMA = os.environ.get("PIXELORAMA_BIN", "")
+PXO_TIMEOUT = 180          # s per Pixelorama run (one takes about 3 s; a job that never quits is killed)
+PXO_EXT = "DotworkLive"    # the exam's Pixelorama extension, installed only in the exam's own user folder
+# Pixelorama has no command-line save and its export build ignores Godot's --script, so the exam drives it with a tiny
+# extension (a zip in user://extensions, enabled in user://config.ini; HandleExtensions.gd): when DOTWORK_PXO_JOB
+# holds a job (JSON: files [{src, out, edits [[frame, x, y, r, g, b, a]]}]), it opens each .pxo with
+# OpenSave.open_pxo_file, sets the pixels (canvas coordinates, layer 1; the cel grows as a pencil stroke grows it),
+# saves with OpenSave.save_pxo_file and quits. Exports use Pixelorama's own CLI (--export --output).
+PXO_EXT_GD = '''extends Node
+
+func _ready() -> void:
+    var job_text := OS.get_environment("DOTWORK_PXO_JOB")
+    if job_text.is_empty():
+        return
+    for i in 3:
+        await get_tree().process_frame
+    var job: Dictionary = JSON.parse_string(job_text)
+    for item: Dictionary in job["files"]:
+        OpenSave.open_pxo_file(item["src"])
+        var project: Project = Global.projects.back()
+        for e: Array in item.get("edits", []):
+            var cel: PixelCel = project.frames[int(e[0])].cels[0]
+            var local := cel.ensure_canvas_point_in_bounds(Vector2i(int(e[1]), int(e[2])))
+            cel.image.set_pixelv(local, Color8(int(e[3]), int(e[4]), int(e[5]), int(e[6])))
+        var ok := OpenSave.save_pxo_file(item["out"], false, project)
+        print("DOTWORK_PXO saved %s %s" % [item["out"], ok])
+    print("DOTWORK_PXO_OK")
+    get_tree().quit()
+'''
+PXO_EXT_TSCN = ('[gd_scene load_steps=2 format=3]\n\n[ext_resource type="Script" '
+                f'path="res://src/Extensions/{PXO_EXT}/live.gd" id="1"]\n\n[node name="{PXO_EXT}" type="Node"]\n'
+                'script = ExtResource("1")\n')
+
+
+@unittest.skipUnless(LIVE_PIXELORAMA and os.path.isfile(LIVE_PIXELORAMA),
+                     "set PIXELORAMA_BIN to run the .pxo round trip in a real Pixelorama")
+class PixeloramaLiveExam(unittest.TestCase):
+    """Dotwork's .pxo files opened, saved and exported by a real Pixelorama (headless; checked with 1.2.4 on
+    Windows), then re-exported by Dotwork; skipped without PIXELORAMA_BIN. Pixelorama runs with its user folder in the
+    exam's temp folder (APPDATA, XDG_DATA_HOME), so your own settings, recent files and extensions are not touched.
+    Headless, Pixelorama blends layers on the CPU (DrawingAlgos.blend_layers_headless): its GPU shader is not
+    exercised here (#66)."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="dotwork_pxolive_")
+        self.s = make_game(self.tmp)
+        import pixelorama
+        self.px = pixelorama
+        self.before = snapshot(self.tmp)                              # the game before any Pixelorama step
+        self.px.build(self.s.project, self.s.conf)
+        self.src = os.path.join(self.tmp, "assets_src", "pixelorama")
+        self.sources = [os.path.join(self.src, k, n) for k, n in
+                        (("characters", "knight.pxo"), ("fx", "spark.pxo"), ("single", "barrel.pxo"))]
+        self.user = os.path.join(self.tmp, "pixelorama_user")
+        ext = os.path.join(self.user, "pixelorama", "extensions")
+        os.makedirs(ext)
+        base = f"src/Extensions/{PXO_EXT}/"
+        with zipfile.ZipFile(os.path.join(ext, PXO_EXT + ".zip"), "w") as z:
+            z.writestr(base + "extension.json", json.dumps({
+                "name": PXO_EXT, "display_name": "Dotwork live exam", "nodes": ["Main.tscn"],
+                "supported_api_versions": list(range(5, 21))}))
+            z.writestr(base + "live.gd", PXO_EXT_GD)
+            z.writestr(base + "Main.tscn", PXO_EXT_TSCN)
+        with open(os.path.join(self.user, "pixelorama", "config.ini"), "w", encoding="utf-8") as f:
+            f.write(f"[extensions]\n\n{PXO_EXT}=true\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def pixelorama(self, args, job=None):
+        env = dict(os.environ, APPDATA=self.user, XDG_DATA_HOME=self.user)
+        env.pop("DOTWORK_PXO_JOB", None)
+        if job is not None:
+            env["DOTWORK_PXO_JOB"] = json.dumps(job)
+        p = subprocess.run([LIVE_PIXELORAMA, "--headless"] + args, env=env, capture_output=True, encoding="utf-8",
+                           errors="replace", timeout=PXO_TIMEOUT)
+        return p.stdout + p.stderr
+
+    def save(self, files):
+        """[(src, out, edits)] opened and saved by Pixelorama in one run."""
+        job = {"files": [{"src": s.replace(os.sep, "/"), "out": o.replace(os.sep, "/"), "edits": e or []}
+                         for s, o, e in files]}
+        log = self.pixelorama([], job)
+        self.assertIn("DOTWORK_PXO_OK", log, log[-2000:])
+        self.assertEqual(log.count(" true\n"), len(files), log[-2000:])
+
+    def export(self, pxo):
+        """Pixelorama's own CLI export of every frame: [H x W x 4 uint8], in frame order."""
+        folder = os.path.join(self.tmp, "pxo_export_" + os.path.basename(pxo)[:-4])
+        os.makedirs(folder)
+        self.pixelorama(["--quit", "--", pxo.replace(os.sep, "/"), "--export", "--output",
+                         folder.replace(os.sep, "/") + "/f.png"])
+        return [np.array(Image.open(p).convert("RGBA")) for p in sorted(glob.glob(os.path.join(folder, "*.png")))]
+
+    def reexport(self):
+        with stub_verify():
+            return self.px.reexport(self.s.project, self.s.conf)
+
+    def test_open_save_export_and_reexport_change_nothing(self):
+        # #67: what the released 1.2.4 saves (pxo_version 8, cels cropped to their pixels) is read back exactly
+        import handpolish
+        before = {p: self.px.read_pxo(p)["frames"] for p in self.sources}
+        self.save([(p, p, None) for p in self.sources])
+        with zipfile.ZipFile(self.sources[0]) as z:
+            d = json.loads(z.read("data.json"))
+        self.assertEqual((d["pxo_version"], d["pixelorama_version"][:6]), (8, "v1.2.4"))
+        self.assertTrue(any(c["image_size"] != "Vector2i(%d, %d)" % (W, H) for f in d["frames"] for c in f["cels"]))
+        for p in self.sources:
+            got = self.px.read_pxo(p)["frames"]
+            ours = self.export(p)                                       # Pixelorama's own render of its save
+            self.assertEqual(len(ours), len(got), p)
+            for want, have, theirs in zip(before[p], got, ours):
+                self.assertTrue(handpolish.same_look(have, want), p)
+                self.assertTrue(np.array_equal(theirs[..., 3], have[..., 3]), p)
+                self.assertTrue(np.array_equal(theirs[theirs[..., 3] > 0], have[have[..., 3] > 0]), p)
+            # Pixelorama saves an export folder in each file (the last opened file's folder, the Desktop on a fresh
+            # user folder; the .pxo's own folder once it is blank)
+            self.assertNotEqual(self.px.export_folder(p), "", p)
+        r = self.reexport()
+        self.assertTrue(r["ok"])
+        self.assertEqual(changed(self.before, snapshot(self.tmp)), [])   # every PNG, sheet, .tres and manifest
+        done = self.px.build(self.s.project, self.s.conf)
+        self.assertEqual((done["kept"], len(done["unchanged"])), ([], 3))
+
+    def test_partly_clear_layers_composite_within_one_step_of_pixelorama(self):
+        # #66, the headless half: a glaze layer of partly clear pixels at layer and cel opacity below 100 %, over the
+        # art, composited by Dotwork and by Pixelorama's CPU blend (the windowed GPU shader is not reached headless).
+        # Measured with 1.2.4 (2026-11-04): Pixelorama works in float32, truncates alpha x opacity to 8 bits, blends
+        # (Color.blend) and truncates the result; Dotwork rounds, so about 30 % of the blended pixels differ by one
+        # step in a channel. Which rounding the windowed shader uses is not known yet, so this pins "at most one".
+        rng = np.random.default_rng(66)
+
+        def glaze(d, b):
+            d["layers"].append(dict(d["layers"][0], name="glaze", opacity=0.5))
+            for fi, fr in enumerate(d["frames"]):
+                fr["cels"].append({"opacity": 0.8 if fi == 0 else 1.0, "z_index": 0})
+                a = rng.integers(0, 256, (H, W, 4), dtype=np.uint8)
+                a[..., 3] = rng.choice([0, 1, 64, 128, 200, 254, 255], (H, W))
+                b[f"image_data/frames/{fi + 1}/layer_2"] = a.tobytes()
+        knight = self.sources[0]
+        rewrite_pxo(knight, glaze)
+        have = self.px.read_pxo(knight)["frames"]
+        theirs = self.export(knight)
+        self.assertEqual(len(theirs), len(have))
+        for i, (a, b) in enumerate(zip(have, theirs)):
+            vis = (a[..., 3] > 0) | (b[..., 3] > 0)
+            self.assertEqual(np.array_equal(a[..., 3] > 0, b[..., 3] > 0), True, i)    # the same pixels show
+            self.assertLessEqual(int(np.abs(a[vis].astype(int) - b[vis]).max()), 1, i)
+
+    def test_a_pixel_set_in_pixelorama_lands_only_in_its_frame(self):
+        k = "assets/art/characters/knight/"
+        old = np.array(Image.open(os.path.join(self.tmp, k, "frames", "spr_knight_attack_e_01.png")).convert("RGBA"))
+        self.assertEqual(old[0, 0, 3], 0)            # outside the art: Pixelorama 1.2.4 grows the cropped cel to it
+        self.save([(self.sources[0], self.sources[0], [[1, 0, 0, 200, 60, 50, 255]])])   # attack_e frame 1
+        r = self.reexport()
+        self.assertTrue(r["ok"])
+        self.assertEqual(changed(self.before, snapshot(self.tmp)),
+                         [k + "frames/spr_knight_attack_e_01.png", k + "knight_attack_e_sheet.png",
+                          "assets_src/dotwork/manifest_knights.json", "assets_src/dotwork/manifest_knights_old.json"])
+        new = np.array(Image.open(os.path.join(self.tmp, k, "frames", "spr_knight_attack_e_01.png")).convert("RGBA"))
+        self.assertEqual(tuple(new[0, 0]), (200, 60, 50, 255))
+        new[0, 0] = old[0, 0]
+        # nothing else in the frame moved (the colour under clear pixels is not kept by any editor)
+        self.assertTrue(np.array_equal(new[..., 3], old[..., 3]))
+        self.assertTrue(np.array_equal(new[new[..., 3] > 0], old[old[..., 3] > 0]))
 
 
 if __name__ == "__main__":
