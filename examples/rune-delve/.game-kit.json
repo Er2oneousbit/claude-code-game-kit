@@ -1127,6 +1127,12 @@
       "date": "2026-11-04",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.8.2",
+      "date": "2026-11-04",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1162,7 +1168,7 @@
     ".github/workflows/audio.yml": "22b141d57622ae23ad4800f675eeadf45647069f6f5283b36d205b0d5782d01e",
     ".github/workflows/ci.yml": "b9b6e8c4c416f0f3e531510a54b0113682d696c602ca893365ab04b5a555ab74",
     ".gitleaks.toml": "d8f6978ff742ff6d0cbf93e64cbab0a2d607cbae5029d1c34619451bf1521670",
-    "CLAUDE.md": "06a61d505aa867e359fa05ea33a8ea661c9518789237729a7ee92c0aaf506fb0",
+    "CLAUDE.md": "7eda9a4e23e1291dc175fbb733ca3e09d7db1c64528e865482f8bfb4b9b455f4",
     "Plugins/GameKitShell/GameKitShell.uplugin": "01839feccd2f96ffafd0b8a78dfe922fc7323817d05abb781c8d9be6b1e89b71",
     "Plugins/GameKitShell/Source/GameKitShell/GameKitShell.Build.cs": "648b3bfd4afd28f3cbf57663506f5000b9043316d08466f4212bb0dc26c3fac7",
     "Plugins/GameKitShell/Source/GameKitShell/Private/GameKitAtomicFile.cpp": "6210558e5203aef56c11f415fa73190969e5e710fdff0a4d7404e203eb958754",

@@ -1213,6 +1213,12 @@
       "date": "2026-11-04",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.8.2",
+      "date": "2026-11-04",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1253,7 +1259,7 @@
     ".vscode/launch.json": "cbc39b2f03861495b9da42030240c2a41bbb47183f95da230d28756c1529f379",
     ".vscode/settings.json": "d18e31ddfe265ef959bf4f9a391e21b96d5c890b54a67cee484efd855f95e181",
     ".vscode/tasks.json": "f7fff39419d5fdcb458fbd7622a8cdc653192d2a42e0c8ef763a1db339d3e836",
-    "CLAUDE.md": "939cb2ae22fd7b64d35720ae79568aa12e76c2eeaff0254f1f53e39d30274149",
+    "CLAUDE.md": "4b7aa98663b957cabda0ca6a3bbfd299b804745976b74c3f077770bfac668a8d",
     "CMakeLists.txt": "4c74d37eb385b5de5b96b7ca6b45f4d9b77eed7bdb0a60951eec18c84bbd48dc",
     "CMakePresets.json": "d3a5be5ca583a5c19f142bbc9b672ad20ce7f239a96e2641a273ecc395abb33f",
     "README.md": "61e416ac019a8debab6eac13d9e98eda8364bc8bef6f81d0183668cbaadc4261",

@@ -1203,6 +1203,12 @@
       "date": "2026-11-04",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.8.2",
+      "date": "2026-11-04",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1278,7 +1284,7 @@
     "Assets/Tests/PlayMode/BootSmokeTests.cs": "d877ebb80034846c4a725deb237202db2db4af0770396bff2928e6e175123314",
     "Assets/Tests/PlayMode/Game.Tests.PlayMode.asmdef": "cc414a9b4c5786e0caba2eafb6fb5fe67562cc4c7b3f95dfa576bf05f290a1cc",
     "Assets/Tests/PlayMode/GameKitCapture.cs": "6b2e8a527906ccb9141c4ddd645270bbcf02fcfcc33fdc83577417aa8c27935f",
-    "CLAUDE.md": "1fa721a13a5bc695caa24792407bec578f82578018ceafb81867eb533c7f68fd",
+    "CLAUDE.md": "9e6b646503548e1a43929f94a2452abe302e3e6c8311fb5788d0e36f7ab95f94",
     "README.md": "57b3a9389b8ff98e1d1a4d522c889592b45ad36ebac02ded997b4f4b5ce9b968",
     "data/golden/access.json": "f83c639bffc09117f6258c8d00e02829db101f9cd7ad78b8f4cf363a251b8407",
     "data/golden/audio.json": "4749dbbf68633336ba62cb0821e9463ca07b3ea7c96bb90e95e4bfd037cf8d71",

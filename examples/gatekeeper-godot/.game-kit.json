@@ -1209,6 +1209,12 @@
       "date": "2026-11-04",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.8.2",
+      "date": "2026-11-04",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1244,7 +1250,7 @@
     ".github/workflows/audio.yml": "22b141d57622ae23ad4800f675eeadf45647069f6f5283b36d205b0d5782d01e",
     ".github/workflows/ci.yml": "b9b6e8c4c416f0f3e531510a54b0113682d696c602ca893365ab04b5a555ab74",
     ".gitleaks.toml": "d8f6978ff742ff6d0cbf93e64cbab0a2d607cbae5029d1c34619451bf1521670",
-    "CLAUDE.md": "c1d315098fd778c520992a90fc8e7bdee25b58c117c9a2c7b9ac5904a8c69853",
+    "CLAUDE.md": "36608a44dd1492b9435625dda11d6284efb54c20a38092d47daf24ef7d5b37a2",
     "README.md": "69b4ffcb0ce932f97262a2080ce89fe88ef210d524e0c39bc62624eb86ad5a72",
     "assets/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "assets_src/.gdignore": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",

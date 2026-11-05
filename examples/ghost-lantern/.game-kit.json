@@ -1259,6 +1259,12 @@
       "date": "2026-11-04",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.8.2",
+      "date": "2026-11-04",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1294,7 +1300,7 @@
     ".github/workflows/audio.yml": "22b141d57622ae23ad4800f675eeadf45647069f6f5283b36d205b0d5782d01e",
     ".github/workflows/ci.yml": "b9b6e8c4c416f0f3e531510a54b0113682d696c602ca893365ab04b5a555ab74",
     ".gitleaks.toml": "d8f6978ff742ff6d0cbf93e64cbab0a2d607cbae5029d1c34619451bf1521670",
-    "CLAUDE.md": "58b0bda056dbb12e530af01fd8ea84ef656316c003403dcd4fcb781b0c716da9",
+    "CLAUDE.md": "13ce5ec2f8b4cf5758313f79d80733d4b6f8ca98c3733e60d1e048eddd008223",
     "README.md": "d724f9ac79a7e3e748f5ee7ba5a3da15c56478ce5e3f135b0110c846076807f1",
     "data/dialogue/sample.built.json": "08005bbcd5a860ca6bf5b5e02165eab38554a927300c84e864ad7111623cda4e",
     "data/golden/access.json": "f83c639bffc09117f6258c8d00e02829db101f9cd7ad78b8f4cf363a251b8407",

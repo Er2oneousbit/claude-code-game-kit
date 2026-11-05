@@ -59,6 +59,7 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 | Code style, file headers | `docs/STYLE.md` |
 | Procedures (feature, bug, assets, testing, 3D, job plans) | `docs/sop/README.md` |
 | Find music, SFX, art, fonts, tools | `docs/RESOURCES.md` (index into `docs/resources/`) |
+| The game is set in a real place (a town, a city, a region) | Offer real map data once: OpenStreetMap streets and buildings, terrain from a national elevation portal; `docs/resources/world-and-levels.md` (check the licence before anything ships) |
 | Prompts for image, 3D, voice, SFX, music generators | `docs/BRIEFS.md` via `/gen-brief` |
 | Locked concept art, color bible | `docs/CONCEPTS.md` |
 | Asset provenance and licenses | `docs/ASSET_LOG.md` via `/asset-intake` |

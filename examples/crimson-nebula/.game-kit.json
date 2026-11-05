@@ -361,6 +361,12 @@
       "date": "2026-11-04",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.8.2",
+      "date": "2026-11-04",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -399,7 +405,7 @@
     ".vscode/extensions.json": "8fe489ae25dc53220d49957ef0fe620baff596c795a7d52e719f24098282bb58",
     ".vscode/settings.json": "634c8b4634154ce31afeeb20a7c2884c7857d0d420871974938311dda0212e20",
     ".vscode/tasks.json": "fe78b343c1683f267e3f0788808edb34310cdaacf81325dd531036000d135297",
-    "CLAUDE.md": "b01b1d7e98e6fb7b28937132469652a153b9ae01d6e3cb10df7d26da40ef9475",
+    "CLAUDE.md": "758fc32df70ceaf84c4600185b4db99d6e43a558c13b61e484571384244ae3ae",
     "Cargo.toml": "d12115f69ae3de018ee671ce71cf8b619b46e9e741be6e2f2d91366bc7073e51",
     "README.md": "cad67eee46677aac8f69d67c18da6c9682d84ef629f8936ddf933c12d8596bdc",
     "assets/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
