@@ -34,6 +34,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+import audioio  # noqa: E402
 import daw  # noqa: E402
 import loudness  # noqa: E402
 import midifile  # noqa: E402
@@ -683,6 +684,36 @@ class UniversalExam(GameDir):
         rc, out = run("import", "build/daw_blips")
         self.assertEqual(rc, 0, out)
         self.assertIn("blips_high: unchanged", out)
+        self.assertEqual(self.changed(before), [])
+
+    def make_ogg(self):
+        """assets/audio/amb/hum.ogg, a 2 s ambience loop from 0.1 s to the end (LOOPSTART / LOOPLENGTH tags)."""
+        folder = self.root / "assets" / "audio" / "amb"
+        folder.mkdir(parents=True)
+        n = 2 * RATE
+        hum = [0.25 * math.sin(2 * math.pi * 220 * i / RATE) for i in range(n)]
+        audioio.write_audio(folder / "hum.ogg", [hum], RATE, loop=(4410, n - 1))
+        return folder / "hum.ogg", n
+
+    def render_hum(self, gain):
+        """renders/hum.wav: the exported stem at `gain` (an edit when gain is not 1)."""
+        work = self.root / "build" / "daw_amb"
+        samples, rate, _, _ = read_wav_channels(work / "stems" / "hum.wav")
+        (work / daw.RENDERS_DIR).mkdir(exist_ok=True)
+        write_wav(work / daw.RENDERS_DIR / "hum.wav", [s * gain for s in samples], rate)
+
+    @unittest.skipUnless(audioio.find_ffmpeg(), "writing OGG needs ffmpeg")
+    def test_an_edited_ogg_lands_on_the_same_bytes_twice(self):
+        game, _ = self.make_ogg()
+        self.assertEqual(run("export", "assets/audio/amb", "build/daw_amb", "--bus", "ambience")[0], 0)
+        self.render_hum(0.5)
+        rc, out = run("import", "build/daw_amb")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("1 file(s) written", out)
+        before = self.snapshot()
+        rc, out = run("import", "build/daw_amb")                         # the same render again: nothing moves
+        self.assertEqual(rc, 0, out)
+        self.assertIn("hum: edited, and the game already has this version", out)
         self.assertEqual(self.changed(before), [])
 
     def test_import_of_a_reaper_folder_and_reexport_of_an_export_are_refused(self):
