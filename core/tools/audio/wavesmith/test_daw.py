@@ -313,7 +313,7 @@ class ReexportExam(GameDir):
         self.assertEqual(run("reaper", "--reexport", "assets_src/daw/blips")[0], 0)
         rec = json.loads(self.log.read_text(encoding="utf-8").splitlines()[-1])
         argv = rec["argv"]
-        for flag in ("-newinst", "-nosplash", "-cfgfile", "-renderproject"):
+        for flag in ("-newinst", "-nosplash", "-ignoreerrors", "-cfgfile", "-renderproject"):
             self.assertIn(flag, argv)
         cfg = Path(argv[argv.index("-cfgfile") + 1])
         self.assertTrue(rec["cfg_dir_exists"])
@@ -413,6 +413,16 @@ class ReexportExam(GameDir):
         self.assertEqual(rc, 0, out)
         self.assertEqual(self.changed(before), [])
         self.assertIn("RENDER_PATTERN $project-$region", self.rpp().read_text(encoding="utf-8"))   # yours stays
+
+    def test_missing_media_stops_before_reaper(self):
+        # REAPER runs with -ignoreerrors (no dialog to hang on), so a missing file must be caught here first
+        self.assertEqual(run("reaper", "blips")[0], 0)
+        (self.rpp().parent / "media" / "blips_low.wav").unlink()
+        rc, out = run("reaper", "--reexport", "assets_src/daw/blips")
+        self.assertEqual(rc, 2)
+        self.assertIn("media/blips_low.wav", out)
+        self.assertIn("not there", out)
+        self.assertFalse(self.log.exists())
 
     def test_no_regions_left_stops_before_reaper(self):
         self.assertEqual(run("reaper", "blips")[0], 0)

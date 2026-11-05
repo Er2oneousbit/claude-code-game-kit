@@ -99,6 +99,7 @@ TOP_LEVEL_RENDER = ("RENDER_FILE", "RENDER_PATTERN", "RENDER_FMT", "RENDER_1X", 
                     "RENDER_ADDTOPROJ", "RENDER_STEMS", "RENDER_DITHER", "RENDER_TRIM", "RENDER_NORMALIZE",
                     "RENDER_SRATE", "SAMPLERATE")
 REGION = re.compile(r"^MARKER\s+\d+\s+\S+\s+(\"[^\"]*\"|'[^']*'|`[^`]*`|\S+)\s+(\d+)")   # name, flags (1 = region)
+MEDIA_FILE = re.compile(r'^\s*FILE\s+("[^"\r\n]*"|\'[^\'\r\n]*\'|`[^`\r\n]*`|\S+)', re.M)   # a SOURCE's file
 ABS_PATH = re.compile(r'(?:^|["\s])((?:[A-Za-z]:[\\/]|\\\\|/(?:Users|home|Volumes)/)[^"\r\n]*)')
 CODE_TOOLS = (None, "sfx_synth", "chiptune", "babble")   # sidecar tools that use no model
 LOG_KEY = "Wavesmith DAW project"       # how a working folder's ASSET_LOG row is found again
@@ -392,6 +393,18 @@ def render_copy_text(text, man):
     return "\n".join(out)
 
 
+def missing_media(text, work):
+    """Media files the project names that are not there. Checked before REAPER runs: it is started with
+    -ignoreerrors (E145), so a missing file would otherwise render as silence instead of stopping at a dialog."""
+    out = []
+    for m in MEDIA_FILE.finditer(text):
+        name = m.group(1)[1:-1] if m.group(1)[:1] in "\"'`" else m.group(1)
+        path = Path(name) if Path(name).is_absolute() or re.match(r"^[A-Za-z]:", name) else work / name
+        if not path.is_file():
+            out.append(name)
+    return sorted(set(out))
+
+
 def absolute_paths(text):
     """Absolute paths a project holds (media from outside its folder): they leak a local path when committed."""
     return sorted({m.group(1).strip() for m in ABS_PATH.finditer(text)})
@@ -421,7 +434,8 @@ def run_reaper(exe, project, timeout):
     try:
         ini = cfg / "reaper.ini"
         ini.write_bytes(REAPER_INI.encode("ascii"))
-        argv = launch_argv(exe) + ["-newinst", "-nosplash", "-cfgfile", str(ini), "-renderproject",
+        # -ignoreerrors: no load-error dialog to wait on (missing media was checked before this)
+        argv = launch_argv(exe) + ["-newinst", "-nosplash", "-ignoreerrors", "-cfgfile", str(ini), "-renderproject",
                                    str(Path(project).resolve())]
         dbg(" ".join(argv))
         try:
@@ -647,6 +661,10 @@ def reexport(args):
         print(f"[warn] {rpp.name} names {len(leaks)} file(s) by absolute path (media from outside its folder): "
               f"committing it would publish that path. In REAPER: File > Save project as, with 'Copy all media into "
               f"project directory'. First: {leaks[0]}")
+    gone = missing_media(text, work)
+    if gone:
+        raise ToolError(f"{rpp.name} uses {len(gone)} media file(s) that are not there: {', '.join(gone[:3])}"
+                        + (" ..." if len(gone) > 3 else "") + " (put them back, or remove those items in REAPER)")
     renders = work / RENDER_DIR
     if renders.exists():
         shutil.rmtree(renders)
