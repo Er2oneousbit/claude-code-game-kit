@@ -3,7 +3,9 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## 0.12.0 (unreleased)
+## 0.12.0 (2026-11-05): rigged characters, picture to game, and an interview that asks about 3D art and sound
+0.8.3 to 0.11.0 below were on `main` or side branches without a tag; this release tags them all.
+
 - `bozzetto.py rig`: a skeleton, skin weights and clips for a character in the game, logged as "rig of A-NNNN".
   `rig make <name>` uses UniRig on your own GPU (free; a checkout patched by `tools/bozzetto/rig/patch_unirig.py` runs on standard
   wheels, no flash_attn or Triton) or `--with tripo` (paid API credits, quoted and checked against `--max-credits`
@@ -33,7 +35,7 @@
   `sdpa` for the skeleton model, PTv3's own attention, and a weights-only allowlist for the skin checkpoint. Same
   skeleton, skin weights within run-to-run noise, tested on a fresh clone (#199).
 
-## 0.11.0 (unreleased)
+## 0.11.0 (2026-11-05, first tagged with 0.12.0): Bozzetto, local 3D models from a picture or a prompt
 - Bozzetto, the kit's local 3D asset lane (`tools/bozzetto/`, in every game): `bozzetto.py make <name> --image
   <picture>` or `--prompt "..."` (FLUX.2 klein 4B draws the picture first, as Dotwork loads it) makes a textured mesh
   with TRELLIS.2 4B through a local ComfyUI 0.43.0+ (built-in nodes, BiRefNet background removal inside the shipped
@@ -76,7 +78,7 @@
   export. Each job queues only the branch it saves, so a vertex job no longer runs the unwrap and the bakes, and a
   texture job no longer paints vertex colours it throws away (#193).
 
-## 0.10.0 (unreleased)
+## 0.10.0 (2026-11-05, first tagged with 0.12.0): the DAW round trip
 - Wavesmith: the DAW round trip (`wavesmith.py daw`, daw.py). `daw reaper <set|track|folder>` writes a plain-text
   REAPER project in `assets_src/daw/<name>/`: one named region per sound (a set from data/sound_sets.json, or a
   folder with `--bus`) or one track per stem of a data/music.json track (its tempo, time signature and loop markers),
@@ -113,7 +115,7 @@
   test_midifile.py checks the MIDI bytes (#191).
 - Games: the .gitignore leaves out REAPER's backups and peak files and the render folder each re-export refills (#191).
 
-## 0.9.0 (unreleased)
+## 0.9.0 (2026-11-05, first tagged with 0.12.0): Pixelorama checked against the real release
 - Dotwork: Pixelorama 1.2.4 is checked against the release. A live exam (`PixeloramaLiveExam`, run when
   `PIXELORAMA_BIN` is set, about 13 s) has the real Pixelorama open, save and export Dotwork's `.pxo` files headless
   through a small extension in a user folder of its own: the version 8 files it saves (cels cropped to their
@@ -167,7 +169,7 @@
 - Godot: `dev.py check` skips folders Godot ignores (a `.gdignore` in them, as `tools/art/dotwork/` has). It compiled
   Dotwork's Pixelorama extension, whose scripts use Pixelorama's classes, and failed every new Godot game.
 
-## 0.8.3 (unreleased)
+## 0.8.3 (2026-11-05, first tagged with 0.12.0): fixes, and real-world maps when a game is set in a real place
 - Real-world maps: when a game is set in a real place, its CLAUDE.md and the make-a-game interview now offer
   OpenStreetMap and national elevation data (already listed in `docs/resources/world-and-levels.md`) once, as an
   option; the tooling is planned (#192).

@@ -76,7 +76,8 @@ def main():
                 print(f"[MISS] {rel}: not patched")
                 missing += 1
             else:
-                p.write_text(text.replace(old, new), encoding="utf-8", newline="")
+                # write_bytes: Path.write_text has no newline= before Python 3.10 (the kit supports 3.8)
+                p.write_bytes(text.replace(old, new).encode("utf-8"))
                 print(f"[ OK ] {rel}: patched")
         dst = root / "src" / "model" / "mha_sdpa.py"
         if dst.is_file() and dst.read_bytes() == (HERE / "mha_sdpa.py").read_bytes():

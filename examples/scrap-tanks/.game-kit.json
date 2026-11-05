@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.8.2",
+  "kit_version": "0.12.0",
   "author": "the user",
   "profile": {
     "author": "",
@@ -1293,6 +1293,18 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.12.0",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.12.0",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1655,7 +1667,7 @@
     "tools/bozzetto/rig/licenses/Articulation-XL2.0-NOTICE.txt": "443b50bb7e60dd1fc46b8b901df41ed294c808917cf84016d864fa5562ff3fe3",
     "tools/bozzetto/rig/licenses/UniRig-LICENSE.txt": "d6ee0be05753b9078358b9a5a2ff2e343ea94565749ddc44324f346050d9255c",
     "tools/bozzetto/rig/mha_sdpa.py": "7c26b46b197d2cad3220d6d9871716ce228b88ccbbcbf585d77c1447d4691f36",
-    "tools/bozzetto/rig/patch_unirig.py": "04f8282042b6be1b781463872c11c0bd98307d92eb2c61525de18ed8dcaefe2d",
+    "tools/bozzetto/rig/patch_unirig.py": "52c1a5540a96f875df3aa0f089c6dd463a5fd320155295b875ef5cef9241dfe2",
     "tools/bozzetto/rig_finish.py": "066d8b917df69c671135721ad229f850a89fd6c24a3f2943a55c669b6ffaaa09",
     "tools/bozzetto/test_bozzetto.py": "5a6ae79afa31323218e3e4cf515eb3dbeae4d554ea38261693acbd918857928b",
     "tools/bozzetto/test_bozzetto_live.py": "508e72a2143f5598070fb1dcf21b28697190e6ed1c9dd698f65dce6398e4daf6",
