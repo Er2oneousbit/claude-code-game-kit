@@ -47,4 +47,9 @@ scratch/
 # Hand-polish backups (dotwork.py aseprite / pixelorama --overwrite keep the replaced source here)
 *.aseprite.bak
 *.pxo.bak
+# DAW round trip (wavesmith.py daw): REAPER's backups and peak files, the folder each re-export renders into
+*.rpp-bak
+*.rpp.bak
+*.reapeaks
+assets_src/daw/*/render/
 
