@@ -190,7 +190,12 @@ and GPU minutes. One test machine's setup and test (tip, E68):
   Lua, an indexed `Image` saved on its own loses its palette (all black), so convert the sprite to RGB in memory first.
   Dotwork does the trip for either editor: `dotwork.py aseprite` (needs `ASEPRITE_BIN`) or `dotwork.py pixelorama`
   (free; Dotwork reads and writes `.pxo` itself, so no install is needed to build or re-export), then `--reexport`.
-  An untouched trip changes no file; a changed frame keeps its provenance in the manifest (K01, E113, E115).
+  An untouched trip changes no file; a changed frame keeps its provenance in the manifest (K01, E113, E115, E142).
+  Pixelorama tilemap layers go both ways too: a tilemap you draw there becomes an atlas, a TileSet, a TileMapLayer
+  scene and a JSON map, and the game's maps and TileSets open as tilemap projects whose edited tiles and cells land
+  back in their atlas slots and map scene (K01; Dotwork README, Hand polish). `dotwork.py pixelorama
+  --install-extension` adds a Dotwork tab inside Pixelorama: the asset the open `.pxo` is, its QA notes, and a
+  Re-export to game button that runs the same `--reexport` (K01).
 - **Godot terrain: prefer blob (47 tiles, Match Corners and Sides) for overlays** (tip, E68). In corner mode the
   visible edge sits half a tile inside the painted cells and single cells vanish; blob mode fills exactly the painted
   cells, keeps single cells as islands and 1-wide lines as paths. Give each overlay terrain its own TileMapLayer over

@@ -13,12 +13,15 @@
 #           python tools/art/dotwork/dotwork.py verify | aseprite [--overwrite] | aseprite --reexport | log
 #           python tools/art/dotwork/dotwork.py preview battle|title|attack ...
 #           python tools/art/dotwork/dotwork.py pixelorama [--overwrite] | pixelorama --reexport [--clear-export-path]   # hand polish
+#           python tools/art/dotwork/dotwork.py pixelorama --install-extension   # the Dotwork panel inside Pixelorama
 #           python tools/art/dotwork/dotwork.py qa pack [--json OUT] [--lineup OUT.png]   # style check, read only
 #           Global: --project GAME (default: current folder), --config FILE, --engine godot|none, --debug
 # Notes   : Needs ComfyUI (local, http://127.0.0.1:8188 by default) with the SpriteKiln and GGUF node packs and the
 #           models in models.lock.json; Godot 4 for maps and verify. README.md walks through setup and every lane.
 #           Python: Pillow + numpy (the ComfyUI venv has both). Exit: 0 ok, 1 a task failed, 2 environment or usage.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): pixelorama --install-extension and --info (the
+#           Dotwork panel inside Pixelorama, pxo_panel.py)
 # ---------------------------------------------------------------------------
 import argparse
 import ast
@@ -336,6 +339,8 @@ def cmd_aseprite(a):
 
 
 def cmd_pixelorama(a):
+    if a.install_extension or a.info:
+        return cmd_pixelorama_panel(a)
     s = setup_run(a)
     import pixelorama
     if a.reexport:
@@ -348,6 +353,29 @@ def cmd_pixelorama(a):
         else:
             print(f"[warn] {rel} holds the folder Pixelorama last exported it to, {folder}: a full path on your "
                   "machine that a public repository would show. --clear-export-path blanks it (frames untouched)")
+    return 0
+
+
+def cmd_pixelorama_panel(a):
+    """The Dotwork panel inside Pixelorama: install it (--install-extension) or answer it (--info, pxo_panel.py)."""
+    if a.reexport or a.overwrite or (a.install_extension and a.info):
+        raise fcore.ToolError("--install-extension and --info each run on their own (no --reexport or --overwrite)")
+    s = setup_run(a)
+    import pxo_panel
+    if a.info:
+        # a full path (the panel's) or one relative to the game: info answers only for the game's own sources
+        path = a.info if os.path.isabs(a.info) else os.path.join(s.project, a.info)
+        pxo_panel.print_info(pxo_panel.info(s.project, s.conf, path))
+        return 0
+    r = pxo_panel.install(s, a.pixelorama_user)
+    e = r["entry"]
+    print(f"[ OK ] Dotwork panel {'installed' if r['changed'] else 'already current'}: {r['zip']}")
+    print(f"[ OK ] {r['config']}: this game ({e['project']}) runs Dotwork with {e['python']}")
+    if not e["godot_bin"]:
+        print("[warn] no Godot found (GODOT_BIN or godot_bin): the panel's re-export will stop at verify. Set "
+              "GODOT_BIN and install again")
+    print("[info] next: restart Pixelorama, then Edit > Preferences > Extensions: select \"Dotwork panel\" and "
+          "Enable (once). The panel is a tab named Dotwork (Window > Panels shows or hides it)")
     return 0
 
 
@@ -565,6 +593,14 @@ def build_parser():
     p.add_argument("--clear-export-path", action="store_true",
                    help="blank the export folder Pixelorama saves in each .pxo (a full path on your machine, often "
                         "with your user name); without it, a .pxo holding one only gets a warning")
+    p.add_argument("--install-extension", action="store_true",
+                   help="put the Dotwork panel into Pixelorama (its extensions folder) and record this game in the "
+                        "panel's config; enable it once in Pixelorama's Edit > Preferences > Extensions")
+    p.add_argument("--pixelorama-user", metavar="DIR",
+                   help="Pixelorama's user folder for --install-extension (default: %%APPDATA%%/pixelorama, "
+                        "~/.local/share/pixelorama or ~/Library/Application Support/pixelorama)")
+    p.add_argument("--info", metavar="PXO", help="what the panel shows for one .pxo, as one JSON line (the panel "
+                   "runs this)")
     p.set_defaults(fn=cmd_pixelorama)
 
     # add_help=False: "preview battle --help" reaches the battle module, which lists its own flags (--char, --bg ...)

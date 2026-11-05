@@ -3,6 +3,60 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.9.0 (unreleased)
+- Dotwork: Pixelorama 1.2.4 is checked against the release. A live exam (`PixeloramaLiveExam`, run when
+  `PIXELORAMA_BIN` is set, about 13 s) has the real Pixelorama open, save and export Dotwork's `.pxo` files headless
+  through a small extension in a user folder of its own: the version 8 files it saves (cels cropped to their
+  pixels) read back equal to the game's frames and to Pixelorama's own export, an untouched re-export changes no
+  file, and a pixel set in Pixelorama changes only its frame, its sheet and the manifests. The reader needed no change;
+  an offline exam pins the shape 1.2.4 saves. Dotwork keeps writing version 7 (1.2.3 reads every cel as a whole
+  canvas). The README now says Pixelorama refills a blank export folder with the file's own folder (#67).
+- Dotwork: a Pixelorama re-export carries blend modes (all 22), clipping masks, groups that blend their own layers
+  (with their opacity) and animated layer opacity (every keyframe curve) instead of stopping. Pixelorama 1.2.4 has two
+  composites that disagree: its command-line export blends Normal layers on the CPU and leaves those features out,
+  its window blends on the GPU with a shader that applies them. A project of Normal layers now composites as the
+  command-line export does, byte for byte (Godot's float math, alpha x opacity and the result truncated to 8 bits,
+  where Dotwork rounded before); one with a blend mode, a clipping mask or a blending group composites as the shader
+  does, which lands 85 to 94 % of pixels equal to Pixelorama's window and nearly all the rest one or two steps off
+  (the GPU rounds near a half step its own way). A frame of one layer at full opacity is still copied as it is. Layer
+  effects still stop the re-export, now saying they run only on the GPU. Offline, a fixture of small projects
+  Pixelorama itself composited pins both; the live exam checks the headless one exactly and, with
+  `PIXELORAMA_WINDOW=1`, the windowed one (fixes #66).
+- Dotwork: Pixelorama tilemap layers. A visible tilemap layer no longer stops a re-export: it is drawn from its tiles
+  and cells, every flip and transpose as Pixelorama draws them, and composited like a pixel layer. A tilemap project
+  of your own in `<src_dir>/pixelorama/tilemaps/` re-exports to `<art_dir>/tilemaps/<name>/`: the tileset atlas at
+  its tile size, a TileSet from Dotwork's writer (terrains, peering bits, probabilities, a `surface` custom data layer
+  and full-tile collision from each tile's user data), a TileMapLayer scene per frame and a JSON map for every engine
+  (with `--engine none`, the PNG and the JSON). `dotwork.py pixelorama` also builds a tilemap project from each map
+  scene mapbuild painted and each square TileSet no map uses; each tile carries its atlas slot, so after Pixelorama
+  renumbers its tiles an edited tile still lands in its slot and an edited cell in the map scene (only its
+  `tile_map_data` lines), and the TileSet is never rewritten. A tile Pixelorama added (Auto or Stack tile mode) stops
+  the re-export and says to draw in Manual mode. `verify` now checks that every TileMapLayer cell finds its tile.
+  Checked against Pixelorama 1.2.4 (the live exam has it save tilemaps and edit a cell and a tile: only the atlas, the
+  map and the manifest change) and Godot 4.7.2 (a Movie Maker capture of both kinds of map equals Dotwork's drawing
+  on every opaque pixel).
+- Dotwork: a Dotwork panel inside Pixelorama 1.2.4 (an extension, source in `tools/art/dotwork/pixelorama_extension/`).
+  `dotwork.py pixelorama --install-extension` copies it into Pixelorama's extensions folder and writes a small config
+  beside it (which Python, `dotwork.py` and game folder to use, and Godot for `verify`; one row per game; Pixelorama's
+  own settings are not touched), and you enable it once in Edit > Preferences > Extensions. For the `.pxo` open in
+  Pixelorama the Dotwork tab shows which game asset it is, its game files, Dotwork's QA notes on it, why a re-export
+  would stop and whether the file holds a folder of your machine (`dotwork.py pixelorama --info`); Re-export to game
+  saves the file with its export folder blank and runs `pixelorama --reexport --clear-export-path` in the background,
+  then shows the result; Next asset and Show in game folder do what they say. A missing config, a Python or game
+  folder that moved, or a `.pxo` from elsewhere gets a message saying what to run. The live exam installs the panel
+  into its own user folder, sets a pixel in Pixelorama and drives the panel's refresh and re-export: the game changes
+  exactly as with the command line (with real `verify` when `GODOT_BIN` is set); the panel's text helpers run under
+  plain Godot offline. The tab's look and its clicks in Pixelorama's window still need a look by eye.
+- Dotwork: `dotwork.py log` no longer logs hand work as AI output. Every row said "Dotwork (local ComfyUI)" and
+  "generated locally", so a tilemap drawn in Pixelorama or a frame added in Aseprite read as model output in
+  `ASSET_LOG.md` and the credits. A file's origin now comes from its manifest row (models, or no model and a
+  Pixelorama or Aseprite source, workflow or polish note, or drawn in code), and the Source, Author, License and
+  AI-assisted cells name only the origins the pack holds: a pack you drew is "drawn by hand in Pixelorama", "own
+  work" and AI-assisted `no`; a pack of model output with a frame you added stays `pre-generated` and names both. A
+  code-drawn frame you touched up stays "drawn in code" (its Modified? column says `yes`).
+- Godot: `dev.py check` skips folders Godot ignores (a `.gdignore` in them, as `tools/art/dotwork/` has). It compiled
+  Dotwork's Pixelorama extension, whose scripts use Pixelorama's classes, and failed every new Godot game.
+
 ## 0.8.3 (unreleased)
 - Real-world maps: when a game is set in a real place, its CLAUDE.md and the make-a-game interview now offer
   OpenStreetMap and national elevation data (already listed in `docs/resources/world-and-levels.md`) once, as an

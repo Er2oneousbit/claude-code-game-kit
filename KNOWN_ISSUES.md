@@ -25,9 +25,7 @@ examples were built and tested on one Windows 11 machine.
 - **UI kit prompt glyphs** are generic; swapping in official console glyphs is not documented or tested:
   [#53](https://github.com/Er2oneousbit/claude-code-game-kit/issues/53).
 - **Hand polish (Aseprite, Pixelorama):** an edit made by a person
-  in either editor's window is not tried yet ([#65](https://github.com/Er2oneousbit/claude-code-game-kit/issues/65)); partly transparent layer pixels are not compared with
-  Pixelorama's own blend ([#66](https://github.com/Er2oneousbit/claude-code-game-kit/issues/66)); reading Pixelorama 1.2.4 files is built from its release-candidate source
-  ([#67](https://github.com/Er2oneousbit/claude-code-game-kit/issues/67)); spells, VFX, status marks, animated props, balloons and vehicles have no hand-polish path
+  in either editor's window is not tried yet ([#65](https://github.com/Er2oneousbit/claude-code-game-kit/issues/65)); spells, VFX, status marks, animated props, balloons and vehicles have no hand-polish path
   ([#68](https://github.com/Er2oneousbit/claude-code-game-kit/issues/68)).
 
 ### Art workflow outside Godot

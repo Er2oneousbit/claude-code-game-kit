@@ -1,0 +1,10 @@
+{
+	"name": "DotworkPanel",
+	"display_name": "Dotwork panel",
+	"description": "Which game asset the open .pxo is (from Dotwork's manifests), its QA notes, and a Re-export to game button that runs dotwork.py pixelorama --reexport. Installed by dotwork.py pixelorama --install-extension (Claude Code Game Kit).",
+	"author": "Dotwork, Claude Code Game Kit (written with Claude)",
+	"version": "0.9.0",
+	"license": "MIT",
+	"nodes": ["Main.tscn"],
+	"supported_api_versions": [10]
+}

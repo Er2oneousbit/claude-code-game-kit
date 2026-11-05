@@ -8,13 +8,17 @@
 #           compiled), then the game's smoke test (tools/dev.py smoke) when it exists.
 # Usage   : python dotwork.py verify [--project GAME]     (also runs at the end of `dotwork.py pack` unless --no-verify)
 # Notes   : Overlay TileSets (lane_ground, metadata dotwork_overlays) get the blob check: painting a shape on an empty
-#           layer must give exactly the painted cells with the right tiles. Pair TileSets get the corner check.
+#           layer must give exactly the painted cells with the right tiles. Pair TileSets get the corner check. A
+#           TileSet from Pixelorama (metadata dotwork_pixelorama) only loads; every TileMapLayer in a scene must find
+#           a tile for each of its cells.
 #           Lit resources (lane_lighting): every CanvasTexture needs a diffuse and a same-size normal map whose pixels,
 #           as Godot imported them, decode to unit normals facing the camera (z > 0); occluders need a polygon, point
 #           lights a texture, a TileMapLayer on a lit TileSet a tile in every cell. Headless Godot renders nothing,
 #           so the lit look itself is not checked here (the lighting lane's review sheet shows a numpy preview).
 #           Writes <work>/verify_report.json. The pack command exits 1 when ok is false.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): every TileMapLayer cell must find its tile; a
+#           Pixelorama TileSet is loaded, not terrain-painted
 # ---------------------------------------------------------------------------
 import json
 import os
@@ -68,7 +72,9 @@ func _init():
 			# layered ground TileSets (lane_ground) carry metadata/dotwork_overlays: test each overlay terrain on an
 			# empty layer; pair TileSets (lane_tiles) get the two-terrain test
 			# a TileSet without terrains (iso floors and blocks are placed tile by tile) has nothing to paint
-			var t = 0 if r.get_terrain_sets_count() == 0 else (
+			# a hand-made TileSet (Pixelorama tilemaps, metadata dotwork_pixelorama) has the terrains you gave its tiles:
+			# it loads, and its maps are checked cell by cell; a terrain you left half done is yours to finish
+			var t = 0 if r.get_terrain_sets_count() == 0 or r.has_meta("dotwork_pixelorama") else (
 				_overlay_test(r, r.get_meta("dotwork_overlays")) if r.has_meta("dotwork_overlays") else (
 				_overlay_test(r, r.get_meta("dotwork_sides"), true) if r.has_meta("dotwork_sides") else (
 				_iso_test(r) if r.has_meta("dotwork_iso") else _terrain_test(r))))
@@ -94,6 +100,7 @@ func _init():
 			var n = r.instantiate()
 			print("DOTWORK_OK ", p, " scene root=", n.get_class())
 			bad += _fx_check(p, n)
+			bad += _map_check(p, n)
 			var lit = _lit_scene(n)
 			if lit[0] != "":
 				print("DOTWORK_LIT ", p, lit[0])
@@ -107,6 +114,23 @@ func _init():
 # Particle and trail nodes in a scene (lane_vfx): a GPUParticles2D needs a ParticleProcessMaterial, a texture and at
 # least one particle; a Line2D trail needs two points and a gradient. Each is printed with what a game tunes. Returns
 # the number of broken nodes.
+# Maps (mapbuild, Pixelorama tilemaps): every cell of every TileMapLayer must find its tile in the TileSet (a cell
+# whose atlas slot or source is gone draws nothing and logs no error).
+func _map_check(p, node):
+	var bad = 0
+	if node is TileMapLayer and node.tile_set != null:
+		var missing = 0
+		for c in node.get_used_cells():
+			if node.get_cell_tile_data(c) == null:
+				missing += 1
+		print("DOTWORK_MAP ", p, " layer=", node.name, " cells=", node.get_used_cells().size(), " missing=", missing)
+		if missing > 0:
+			print("DOTWORK_FAIL ", p, " ", node.name, ": ", missing, " cells hold no tile of the TileSet")
+			bad += 1
+	for c in node.get_children():
+		bad += _map_check(p, c)
+	return bad
+
 func _fx_check(p, node):
 	var bad = 0
 	if node is GPUParticles2D:
