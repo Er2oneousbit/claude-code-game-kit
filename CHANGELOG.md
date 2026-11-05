@@ -3,6 +3,33 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.10.0 (unreleased)
+- Wavesmith: the DAW round trip (`wavesmith.py daw`, daw.py). `daw reaper <set|track|folder>` writes a plain-text
+  REAPER project in `assets_src/daw/<name>/`: one named region per sound (a set from data/sound_sets.json, or a
+  folder with `--bus`) or one track per stem of a data/music.json track (its tempo, time signature and loop markers),
+  the bus loudness targets in the project notes, the sounds copied into `media/`, and no absolute path anywhere, so
+  the folder can be committed. `daw reaper --reexport <folder>` renders it headless (`reaper -newinst -nosplash
+  -ignoreerrors -cfgfile <temp>/reaper.ini -renderproject`, Wavesmith's own render settings in a copy of the
+  project) with a throwaway configuration folder set to Dummy Audio, so the user's REAPER settings are never read or
+  written. A sound whose audio did not change keeps its file byte for byte; an edited one is levelled to its bus by
+  the sound sets rules (music: the stems together, by their mix), keeps its loop point and mono, and gets a
+  `hand_edits` sidecar entry and an ASSET_LOG row (`Modified? yes`, one per working folder, updated on later runs)
+  with an evidence file. A renamed region, an unknown render and a game file changed meanwhile (`--force`) are
+  refused by name; missing media stops it before REAPER runs; a REAPER that hangs on a dialog is stopped after
+  `--timeout`. Every other DAW: `daw export` writes WAV stems, a sequence of every sound, markers (CSV and an
+  Audacity label track), MIDI for music and HOW_TO.txt; `daw import` takes the renders back by name (case, spaces and
+  dashes forgiven, near misses named, missing ones kept) with the same levelling and logging. FL Studio and Ableton
+  Live: the stems route only (verify). `daw check`, `daw --help` and `wavesmith.py check` say whether REAPER was
+  found (#191).
+- Wavesmith: midifile.py (`wavesmith.py midi`), a standard-library MIDI writer: a chiptune song's notes (one track
+  per channel, drums on channel 10 with General MIDI notes), or a tempo and bar grid (#191).
+- Wavesmith: test_daw.py checks the round trip offline against a stand-in REAPER (golden .rpp text, no local path
+  in any project file, untouched and edited round trips, conflicts, renames, music stems, a hanging REAPER, the
+  universal route); `ReaperLiveExam` runs the real REAPER when `REAPER_BIN` is set (checked with REAPER 7.84 on
+  Windows 11: about 15 s a render, %APPDATA%/REAPER untouched, a project REAPER saved itself still round-trips).
+  test_midifile.py checks the MIDI bytes (#191).
+- Games: the .gitignore leaves out REAPER's backups and peak files and the render folder each re-export refills (#191).
+
 ## 0.9.0 (unreleased)
 - Dotwork: Pixelorama 1.2.4 is checked against the release. A live exam (`PixeloramaLiveExam`, run when
   `PIXELORAMA_BIN` is set, about 13 s) has the real Pixelorama open, save and export Dotwork's `.pxo` files headless

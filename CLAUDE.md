@@ -72,6 +72,8 @@ python core/tools/audio/wavesmith/test_audioio.py    # offline (a stand-in ffmpe
 python core/tools/audio/wavesmith/test_local_sfx.py  # offline (a stand-in ComfyUI)
 python core/tools/audio/wavesmith/test_local_tts.py  # offline (a fake TTS worker)
 python core/tools/audio/wavesmith/test_eleven_audio.py  # offline (canned API responses)
+python core/tools/audio/wavesmith/test_daw.py        # offline (a stand-in REAPER); with REAPER_BIN set, ReaperLiveExam runs the real one (about 2 minutes)
+python core/tools/audio/wavesmith/test_midifile.py   # standard library only
 python core/tools/art/test_pixellab.py                   # offline (canned API responses)
 python core/tools/art/test_comfy_local.py                # offline (a stand-in ComfyUI server on 127.0.0.1)
 python core/tools/art/dotwork/tests/test_dotwork.py          # offline, needs Pillow + numpy (the ComfyUI venv has both)
