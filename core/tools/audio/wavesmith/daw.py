@@ -83,6 +83,7 @@ DEFAULT_SETS = "data/sound_sets.json"
 DEFAULT_MUSIC = "data/music.json"
 DEFAULT_AUDIO_ROOT = "assets/audio"     # what music.json's stem paths are relative to (music validate --root)
 MEDIA_DIR, RENDER_DIR, STEMS_DIR, RENDERS_DIR = "media", "render", "stems", "renders"
+ORIGINALS_DIR = "originals"             # daw export: the game's own OGG / FLAC bytes, for putting an undone edit back
 RENDER_COPY = "_wavesmith_render.rpp"   # the project with our render settings, deleted after each render
 GAP_S = 1.0                             # silence between sounds on the timeline
 SAME_TOL = 2.5 / 32768                  # a render within this of the original, every sample, is the same audio
@@ -517,7 +518,7 @@ def load_manifest(where):
         raise ToolError(f"{(work / MANIFEST).as_posix()} is not a version {VERSION} Wavesmith DAW manifest")
     # a manifest is a tracked file a pull request can carry: every path in it must stay inside the game
     for it in man["items"]:
-        for key in ("file", "media"):
+        for key in ("file", "media") + (("original",) if "original" in it else ()):
             v = it.get(key)
             if not isinstance(v, str) or not v or v.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", v) \
                     or ".." in re.split(r"[\\/]", v):
@@ -558,7 +559,12 @@ def start_manifest(args, root, work, meta, items, route):
             dst = media / (it["name"] + ".wav")
             chans, r, loop = read_any(src)
             audioio.write_audio(dst, chans, r, loop=loop)
+            keep = work / ORIGINALS_DIR / (it["name"] + Path(it["file"]).suffix.lower())
+            keep.parent.mkdir(exist_ok=True)
+            shutil.copyfile(src, keep)
+            it["original"] = keep.relative_to(work).as_posix()
         it["media"] = dst.relative_to(work).as_posix()
+        it["media_sha256"] = sha256(dst)        # the baseline a render is compared with: checked on the way back
     man = dict(meta, version=VERSION, route=route, root=up, rate=rate, channels=channels,
                items=items, logged=[], written={})
     man["about"] = ("Wavesmith DAW round trip (tools/audio/wavesmith/daw.py): which region or track is which game "
@@ -769,6 +775,26 @@ def cmd_import(args):
     return bring_back(args, work, man, found, args.daw, strict=False, extras=extras)
 
 
+def baseline(work, root, it, game_sha):
+    """(channels, rate) of the original a render is compared with: the working folder's copy (media/ or stems/)
+    while it is as it was made, else the game's file while it is the original; None when neither is (then any
+    render counts as an edit). A copy changed since (an edit saved over it) is said."""
+    media = work / it["media"]
+    want = it.get("media_sha256")
+    if media.is_file() and (not want or sha256(media) == want):
+        return read_any(media)[:2]
+    print(f"[note] {it['media']} " + ("changed since the project was made (an edit saved into the copy itself): "
+                                      "the render counts as an edit" if media.is_file() else "is gone"))
+    return read_any(root / it["file"])[:2] if game_sha == it["sha256"] else None
+
+
+def original_copy(work, it):
+    """The working folder's copy of the original game file (originals/ for an OGG or FLAC exported as a WAV stem,
+    else media/ or stems/), or None when it is gone or no longer the original's bytes."""
+    p = work / it.get("original", it["media"])
+    return p if p.is_file() and sha256(p) == it["sha256"] else None
+
+
 def same_audio(a, ra, b, rb):
     if ra != rb or len(a) != len(b) or len(a[0]) != len(b[0]):
         return False
@@ -871,9 +897,8 @@ def bring_back(args, work, man, renders, daw, strict, extras=()):
         if it["channels"] == 1 and len(chans) == 2 and all(abs(x - y) <= SAME_TOL for x, y in zip(*chans)):
             chans = chans[:1]                              # a mono sound rendered on a stereo bus: mono again
         audio[it["name"]] = (chans, rate)
-        orig_path = work / it["media"]
-        orig, orate, _ = read_any(orig_path) if orig_path.is_file() else read_any(root / it["file"])
-        if same_audio(orig, orate, chans, rate):
+        base = baseline(work, root, it, before[it["file"]])
+        if base is not None and same_audio(base[0], base[1], chans, rate):
             same.append(it)
         else:
             pending.append((it, chans, rate))
@@ -903,16 +928,18 @@ def bring_back(args, work, man, renders, daw, strict, extras=()):
     try:   # a run stopped part-way still records the files it wrote, so the next run does not refuse them
         # rendered as they were: kept; or, when an earlier round trip wrote an edit now undone, the original back
         for it in same:
-            cur, game, media = before[it["file"]], root / it["file"], work / it["media"]
+            cur, game = before[it["file"]], root / it["file"]
             if cur == it["sha256"]:
                 kept.append(f"{it['name']}: unchanged")
-            elif cur == (man.get("written") or {}).get(it["file"]) and media.suffix.lower() == game.suffix.lower() \
-                    and media.is_file():
+            elif cur == (man.get("written") or {}).get(it["file"]) and not original_copy(work, it):
+                kept.append(f"{it['name']}: rendered as the original, but the working folder's copy of the original "
+                            f"is gone or changed: the game keeps the last edit")
+            elif cur == (man.get("written") or {}).get(it["file"]):
                 if args.dry_run:
                     report.append(f"[dry ] {it['file']}: the original would be put back (the edit was undone)")
                     continue
                 tmp = game.with_name(game.stem + ".daw_tmp" + game.suffix)
-                failed = land(lambda: shutil.copyfile(media, tmp), tmp, game)
+                failed = land(lambda: shutil.copyfile(original_copy(work, it), tmp), tmp, game)
                 if failed:
                     problems.append(cannot_write(it, failed))
                     continue

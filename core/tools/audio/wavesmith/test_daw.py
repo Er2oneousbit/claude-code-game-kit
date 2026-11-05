@@ -489,6 +489,20 @@ class ReexportExam(GameDir):
         self.assertNotIn("hand_edits", side)
         self.assertIn("every edit from assets_src/daw/blips is undone", out)
 
+    def test_an_edit_saved_into_media_is_never_put_back_as_the_original(self):
+        self.assertEqual(run("reaper", "blips")[0], 0)
+        plain = self.rpp().read_text(encoding="utf-8")
+        self.edit_rpp("blips", lambda t: self.item_line(t, "blips_high", "FADEOUT", "FADEOUT 1 0.15 0 1 0 0 0"))
+        self.assertEqual(run("reaper", "--reexport", "assets_src/daw/blips")[0], 0)
+        media = self.rpp().parent / "media" / "blips_high.wav"
+        write_wav(media, tone(0.2, 999), RATE)                           # a destructive edit in the copy itself
+        self.edit_rpp("blips", lambda t: plain)
+        rc, out = run("reaper", "--reexport", "assets_src/daw/blips")
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn("the original is back", out)
+        self.assertIn("media/blips_high.wav changed since the project was made", out)
+        self.assertNotEqual((self.root / "assets/audio/blips/blips_high.wav").read_bytes(), media.read_bytes())
+
     def test_a_hanging_reaper_is_stopped(self):
         self.assertEqual(run("reaper", "blips")[0], 0)
         os.environ["WAVESMITH_FAKE_REAPER"] = "hang"
@@ -729,6 +743,36 @@ class UniversalExam(GameDir):
         self.assertNotIn("length changed", out)
         tags = dict(audioio.oggvorbis_module().decode(game.read_bytes())[2])
         self.assertEqual((tags.get("LOOPSTART"), tags.get("LOOPLENGTH")), ("4410", str(n - 4410)))
+
+    @unittest.skipUnless(audioio.find_ffmpeg(), "writing OGG needs ffmpeg")
+    def test_an_undone_edit_of_an_ogg_puts_the_original_back(self):
+        # the stems are WAV, the game's file OGG: the original comes back from the copy kept in originals/
+        game, _ = self.make_ogg()
+        original = game.read_bytes()
+        self.assertEqual(run("export", "assets/audio/amb", "build/daw_amb", "--bus", "ambience")[0], 0)
+        self.render_hum(0.5)
+        self.assertEqual(run("import", "build/daw_amb")[0], 0)
+        self.assertNotEqual(game.read_bytes(), original)
+        self.render_hum(1.0)                                              # undone in the DAW
+        rc, out = run("import", "build/daw_amb")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("the edit was undone in a DAW, the original is back", out)
+        self.assertEqual(game.read_bytes(), original)
+        man = json.loads((self.root / "build/daw_amb" / daw.MANIFEST).read_text(encoding="utf-8"))
+        self.assertEqual((man["written"], man["logged"]), ({}, []))
+
+    def test_an_edit_saved_over_a_stem_counts_as_an_edit(self):
+        self.assertEqual(run("export", "blips", "build/daw_blips")[0], 0)
+        work = self.root / "build" / "daw_blips"
+        samples, rate, _, _ = read_wav_channels(work / "stems" / "blips_high.wav")
+        faded = [s * (1 - i / len(samples)) for i, s in enumerate(samples)]
+        write_wav(work / "stems" / "blips_high.wav", faded, rate)          # the DAW saved over its source file
+        write_wav(work / daw.RENDERS_DIR / "blips_high.wav", faded, rate)
+        rc, out = run("import", "build/daw_blips")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("stems/blips_high.wav changed since the project was made", out)
+        self.assertIn("1 file(s) written", out)
+        self.assertIn("assets/audio/blips/blips_high.wav: hand-edited in a DAW", out)
 
     def test_import_of_a_reaper_folder_and_reexport_of_an_export_are_refused(self):
         self.assertEqual(run("export", "blips", "build/daw_blips")[0], 0)
