@@ -29,6 +29,7 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -552,6 +553,32 @@ class ReexportExam(GameDir):
         rc, out = run("reaper", "--reexport", "../assets_src/daw/blips", "--root", "..")
         self.assertEqual(rc, 0, out)
         self.assertIn("1 file(s) written", out)
+
+    def test_a_file_that_cannot_be_replaced_mid_run(self):
+        # Windows: a game engine or player holding blips_low.wav open makes os.replace fail. The file written before
+        # it must still be recorded, no temporary file may stay, and the next run must not refuse anything.
+        self.assertEqual(run("reaper", "blips")[0], 0)
+        for name in ("blips_high", "blips_low"):
+            self.edit_rpp("blips", lambda t, n=name: self.item_line(t, n, "FADEOUT", "FADEOUT 1 0.1 0 1 0 0 0"))
+        real = os.replace
+
+        def locked(src, dst):
+            if Path(dst).name == "blips_low.wav":
+                raise PermissionError(13, "The process cannot access the file", dst)
+            return real(src, dst)
+        with unittest.mock.patch("os.replace", side_effect=locked):
+            rc, out = run("reaper", "--reexport", "assets_src/daw/blips")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("blips_low.wav: could not be written", out)
+        self.assertNotIn("Traceback", out)
+        self.assertEqual(sorted(p.name for p in self.root.rglob("*daw_tmp*")), [])
+        man = json.loads((self.rpp().parent / daw.MANIFEST).read_text(encoding="utf-8"))
+        self.assertEqual(sorted(man["written"]), ["assets/audio/blips/blips_high.wav"])
+        self.assertIn("blips_high.wav", (self.root / "docs" / "ASSET_LOG.md").read_text(encoding="utf-8"))
+        rc, out = run("reaper", "--reexport", "assets_src/daw/blips")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("1 file(s) written", out)
+        self.assertIn("blips_high: edited, and the game already has this version", out)
 
     def test_a_working_folder_outside_the_game_is_refused(self):
         rc, out = run("reaper", "blips", "--out", self.tmp / "elsewhere")

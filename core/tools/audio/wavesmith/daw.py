@@ -810,6 +810,29 @@ def loop_for(it, frames, man):
     return None, None
 
 
+def discard(path):
+    try:
+        Path(path).unlink()
+    except OSError:
+        pass
+
+
+def land(make, tmp, game):
+    """tmp in place of game (make() writes tmp first, when given): None, or why not. tmp never stays behind."""
+    try:
+        if make:
+            make()
+        os.replace(str(tmp), str(game))
+        return None
+    except OSError as exc:
+        discard(tmp)
+        return exc.strerror or str(exc)
+
+
+def cannot_write(it, why):
+    return f"{it['file']}: could not be written ({why}): close whatever holds it (the game, an editor) and run again"
+
+
 def bring_back(args, work, man, renders, daw, strict, extras=()):
     """Renders -> the game's files. strict (REAPER): a missing region is a problem; otherwise a sound not rendered
     is simply kept."""
@@ -860,67 +883,79 @@ def bring_back(args, work, man, renders, daw, strict, extras=()):
         for it, _, _ in pending:
             gains[it["name"]] = (g, note)
     written, report = [], []
-    # rendered as they were: kept; or, when an earlier round trip wrote an edit that is now undone, the original back
-    for it in same:
-        cur, game, media = before[it["file"]], root / it["file"], work / it["media"]
-        if cur == it["sha256"]:
-            kept.append(f"{it['name']}: unchanged")
-        elif cur == (man.get("written") or {}).get(it["file"]) and media.suffix.lower() == game.suffix.lower() \
-                and media.is_file():
-            if args.dry_run:
-                report.append(f"[dry ] {it['file']}: the original would be put back (the edit was undone)")
+    try:   # a run stopped part-way still records the files it wrote, so the next run does not refuse them
+        # rendered as they were: kept; or, when an earlier round trip wrote an edit now undone, the original back
+        for it in same:
+            cur, game, media = before[it["file"]], root / it["file"], work / it["media"]
+            if cur == it["sha256"]:
+                kept.append(f"{it['name']}: unchanged")
+            elif cur == (man.get("written") or {}).get(it["file"]) and media.suffix.lower() == game.suffix.lower() \
+                    and media.is_file():
+                if args.dry_run:
+                    report.append(f"[dry ] {it['file']}: the original would be put back (the edit was undone)")
+                    continue
+                tmp = game.with_name(game.stem + ".daw_tmp" + game.suffix)
+                failed = land(lambda: shutil.copyfile(media, tmp), tmp, game)
+                if failed:
+                    problems.append(cannot_write(it, failed))
+                    continue
+                written.append({"item": it, "sha256": sha256(game), "gain_db": 0.0, "before": cur,
+                                "note": f"the edit was undone in {daw}: the original put back",
+                                "frames": it["frames"], "channels": it["channels"]})
+                report.append(f"[ OK ] {it['file']}: the edit was undone in {daw}, the original is back")
+            else:
+                kept.append(f"{it['name']}: unchanged in {daw} (the game's file changed elsewhere and is left as "
+                            f"it is)")
+        for it, chans, rate in pending:
+            try:
+                if it["name"] not in gains:
+                    gains[it["name"]] = gain_for(chans, rate, it["kind"], it["bus"], man["target"])
+            except ToolError as exc:
+                problems.append(f"{it['name']}: {exc}")
                 continue
+            g, note = gains[it["name"]]
+            k = 10 ** (g / 20)
+            out = [[s * k for s in c] for c in chans]
+            loop, warn = loop_for(it, len(out[0]), man)
+            game = root / it["file"]
             tmp = game.with_name(game.stem + ".daw_tmp" + game.suffix)
-            shutil.copyfile(media, tmp)
-            os.replace(str(tmp), str(game))
-            written.append({"item": it, "sha256": sha256(game), "gain_db": 0.0, "before": cur,
-                            "note": f"the edit was undone in {daw}: the original put back",
-                            "frames": it["frames"], "channels": it["channels"]})
-            report.append(f"[ OK ] {it['file']}: the edit was undone in {daw}, the original is back")
-        else:
-            kept.append(f"{it['name']}: unchanged in {daw} (the game's file changed elsewhere and is left as it is)")
-    for it, chans, rate in pending:
-        try:
-            if it["name"] not in gains:
-                gains[it["name"]] = gain_for(chans, rate, it["kind"], it["bus"], man["target"])
-        except ToolError as exc:
-            problems.append(f"{it['name']}: {exc}")
-            continue
-        g, note = gains[it["name"]]
-        k = 10 ** (g / 20)
-        out = [[s * k for s in c] for c in chans]
-        loop, warn = loop_for(it, len(out[0]), man)
-        game = root / it["file"]
-        tmp = game.with_name(game.stem + ".daw_tmp" + game.suffix)
-        try:
-            audioio.write_audio(tmp, out, rate, loop=loop)
-        except audioio.AudioIOError as exc:
-            problems.append(f"{it['name']}: {exc}")
-            continue
-        new_sha = sha256(tmp)
-        allowed = {it["sha256"], (man.get("written") or {}).get(it["file"])}
-        if before[it["file"]] == new_sha:
-            tmp.unlink()
-            what = "moved with the mix" if it["name"] in levelled_only else "edited"
-            kept.append(f"{it['name']}: {what}, and the game already has this version (an earlier re-export)")
-            continue
-        if before[it["file"]] not in allowed and not args.force:
-            tmp.unlink()
-            problems.append(f"{it['file']} changed in the game since the project was made (not by this round trip): "
-                            f"not overwritten (--force replaces it)")
-            continue
-        if args.dry_run:
-            tmp.unlink()
-            report.append(f"[dry ] {it['file']}: would be written ({note})")
-            continue
-        os.replace(str(tmp), str(game))
-        written.append({"item": it, "sha256": new_sha, "gain_db": round(g, 2),
-                        "note": note + ("; not edited, moved with the mix" if it["name"] in levelled_only else ""),
-                        "before": before[it["file"]], "frames": len(out[0]), "channels": len(out)})
-        how = "not edited, moved with the mix" if it["name"] in levelled_only else f"hand-edited in {daw}"
-        report.append(f"[ OK ] {it['file']}: {how}, {g:+.2f} dB ({note})")
-        if warn:
-            report.append(f"[warn] {it['file']}: {warn}")
+            try:
+                audioio.write_audio(tmp, out, rate, loop=loop)
+            except (audioio.AudioIOError, OSError) as exc:
+                discard(tmp)
+                problems.append(f"{it['name']}: {exc}")
+                continue
+            new_sha = sha256(tmp)
+            allowed = {it["sha256"], (man.get("written") or {}).get(it["file"])}
+            if before[it["file"]] == new_sha:
+                discard(tmp)
+                what = "moved with the mix" if it["name"] in levelled_only else "edited"
+                kept.append(f"{it['name']}: {what}, and the game already has this version (an earlier re-export)")
+                continue
+            if before[it["file"]] not in allowed and not args.force:
+                discard(tmp)
+                problems.append(f"{it['file']} changed in the game since the project was made (not by this round "
+                                f"trip): not overwritten (--force replaces it)")
+                continue
+            if args.dry_run:
+                discard(tmp)
+                report.append(f"[dry ] {it['file']}: would be written ({note})")
+                continue
+            failed = land(None, tmp, game)
+            if failed:
+                problems.append(cannot_write(it, failed))
+                continue
+            written.append({"item": it, "sha256": new_sha, "gain_db": round(g, 2),
+                            "note": note + ("; not edited, moved with the mix" if it["name"] in levelled_only else ""),
+                            "before": before[it["file"]], "frames": len(out[0]), "channels": len(out)})
+            how = "not edited, moved with the mix" if it["name"] in levelled_only else f"hand-edited in {daw}"
+            report.append(f"[ OK ] {it['file']}: {how}, {g:+.2f} dB ({note})")
+            if warn:
+                report.append(f"[warn] {it['file']}: {warn}")
+    except BaseException:
+        if written:
+            stamp(work, man, written, daw, root)
+        raise
     for ln in report:
         print(ln)
     for ln in kept:
