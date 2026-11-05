@@ -241,6 +241,23 @@ def fake_pck(paths, fmt=4, res_prefix=False):
     return head + struct.pack("<I", len(paths)) + entries
 
 
+class GodotCheckFiles(TempRoot):
+    def test_folders_godot_ignores_are_not_checked(self):
+        # Dotwork ships a Pixelorama extension (Pixelorama's classes) under tools/art/dotwork/, which has a
+        # .gdignore: check compiled it anyway and failed every new Godot game
+        dev = load("godot")
+        for rel in ("scripts/player.gd", "tools/capture.gd", "tools/art/dotwork/pixelorama_extension/Main.gd",
+                    "tools/art/dotwork/.gdignore", "addons/gut/gut.gd", "assets_src/.gdignore", "assets_src/x.gd"):
+            (self.root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (self.root / rel).write_text("extends Node\n", encoding="utf-8")
+        old, dev.ROOT = dev.ROOT, self.root
+        try:
+            got = sorted(p.relative_to(self.root).as_posix() for p in dev.game_scripts())
+        finally:
+            dev.ROOT = old
+        self.assertEqual(got, ["scripts/player.gd", "tools/capture.gd"])
+
+
 class GodotPck(TempRoot):
     SHIPPED = ["project.binary", "scripts/core/spring.gdc", "data/i18n/en.json", ".godot/uid_cache.bin"]
 
