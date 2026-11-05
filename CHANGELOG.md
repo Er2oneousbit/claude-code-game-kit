@@ -3,6 +3,17 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.12.0 (unreleased)
+- `workflows/picture-to-game/`: one generated picture each to a tree (Bozzetto, a grove of six in Godot) and to a
+  character that walks in, waves and idles in Godot: Bozzetto for the mesh, UniRig for the skeleton and skin weights
+  (`workflows/picture-to-game/src/run_unirig.sh`), and `workflows/picture-to-game/src/animate_rig.py`, a Blender
+  script that finds spine, legs and arms in an unlabelled
+  auto-rig from its shape and keys idle, wave and walk loops. Failures shown: a look-alike first prompt, the budget
+  check refusing the textured character twice (UV coverage 51%, 53%), three UniRig problems on a Blackwell GPU
+  (Triton on Windows, a pickled class in the checkpoint, flash_attn wrong at head_dim 16 giving a rig that deforms
+  nothing with exit 0), and a vertex-coloured model rendering white in Godot. EVIDENCE E151 (UniRig and its data),
+  E152 (the runs) (#199, #202, #203).
+
 ## 0.11.0 (unreleased)
 - Bozzetto, the kit's local 3D asset lane (`tools/bozzetto/`, in every game): `bozzetto.py make <name> --image
   <picture>` or `--prompt "..."` (FLUX.2 klein 4B draws the picture first, as Dotwork loads it) makes a textured mesh

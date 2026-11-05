@@ -121,6 +121,10 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
 - **Docs marked (verify):** facts about outside services (prices, plans, menu paths, license terms) that were not
   checked live. They are the most likely to be out of date.
 - **Tools without an exam:** `core/.claude/hooks/session_context.py`, `tools/art/frames_to_gif.py` and several Dotwork helpers ([#14](https://github.com/Er2oneousbit/claude-code-game-kit/issues/14)).
+- **Bozzetto:** a `--material vertex` model renders white in Godot until `vertex_color_use_as_albedo` is set
+  ([#202](https://github.com/Er2oneousbit/claude-code-game-kit/issues/202)); TRELLIS.2 characters with baked textures
+  landed under the `npc` class's 55% UV coverage floor on two seeds
+  ([#203](https://github.com/Er2oneousbit/claude-code-game-kit/issues/203)).
 
 ## The examples
 None of the example games has been played by a human tester; the bots and tests are the only proof they play as

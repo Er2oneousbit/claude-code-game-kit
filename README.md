@@ -117,7 +117,7 @@ scripts/codename.py       a random placeholder name for a new game (Project_Coba
 examples/                 games made with the kit, each with HOW_IT_WAS_MADE.md (all rights reserved, free to reference)
 media/gallery/            the README's example thumbnails (one frame of each example's GIF)
 workflows/                experiments and showcases outside the scaffold (local-pixel-art, wavesmith-showcase,
-                          bozzetto-showcase)
+                          bozzetto-showcase, picture-to-game)
 CHOOSING_AN_ENGINE.md     which overlay to pick
 CHANGELOG.md              what changed and why
 DISTILL_PROMPT.md, DISTILL_GOAL.txt, DISTILL_REPORT.md   how the kit's evidence was cleaned up (the report: rules, open claims, experiments)
@@ -204,7 +204,9 @@ The 3D sibling is Bozzetto (`tools/bozzetto/`, in every game): `bozzetto.py make
 SOP-11 budget for its class, and only then puts the `.glb` in the game, logged. About 5 minutes a model on a 16 GB
 card; the hidden sides are invented and characters come out unrigged, so treat the results as drafts. Setup and
 limits: [core/tools/bozzetto/README.md](core/tools/bozzetto/README.md); a prop and a character from prompt to
-engine, failures included: [workflows/bozzetto-showcase](workflows/bozzetto-showcase/README.md).
+engine, failures included: [workflows/bozzetto-showcase](workflows/bozzetto-showcase/README.md). One picture each
+to a tree in a grove and a character that walks, waves and idles in Godot (auto-rigged with UniRig, animation written
+by Claude): [workflows/picture-to-game](workflows/picture-to-game/README.md).
 
 ![A dwarf party member made by Dotwork: walking south, walking east, and smashing his hammer down in front of him facing west](workflows/local-pixel-art/media/dotwork_dwarf.gif)
 
