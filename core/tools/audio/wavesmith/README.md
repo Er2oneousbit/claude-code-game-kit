@@ -141,5 +141,5 @@ python tools/audio/wavesmith/wavesmith.py daw import build/daw_explore --daw "FL
 ## Exams
 `wavesmith.py test` runs every `test_*.py` in this folder in its own process, one line each, and exits 1 if any
 failed. `test_daw.py` uses a stand-in REAPER; with `REAPER_BIN` set it also runs the real one (`ReaperLiveExam`,
-about 2 minutes; skipped without it). `wavesmith.py test music dialogue` runs just those exams. Each exam also runs
+about 3.5 minutes; skipped without it). `wavesmith.py test music dialogue` runs just those exams. Each exam also runs
 on its own: `python tools/audio/wavesmith/test_music.py`.
