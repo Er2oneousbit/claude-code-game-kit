@@ -241,6 +241,15 @@ class GameDir(unittest.TestCase):
         (self.root / "data" / "music.json").write_bytes(json.dumps(data).encode("utf-8"))
         return frames
 
+    def mixed_rates(self):
+        """assets/audio/mixed: two sounds at 44.1 kHz and one at 48 kHz (the project runs at 44.1 kHz)."""
+        folder = self.root / "assets" / "audio" / "mixed"
+        folder.mkdir(parents=True)
+        write_wav(folder / "beep.wav", tone(0.1, 880), RATE)
+        write_wav(folder / "boop.wav", tone(0.13, 440), RATE)
+        write_wav(folder / "chirp.wav", tone(0.0937, 1500, rate=48000), 48000)
+        return folder
+
 
 class ProjectExam(GameDir):
     def test_golden_rpp_text(self):
@@ -488,6 +497,33 @@ class ReexportExam(GameDir):
         side = json.loads((self.root / "assets/audio/blips/blips_high.sfx.json").read_text(encoding="utf-8"))
         self.assertNotIn("hand_edits", side)
         self.assertIn("every edit from assets_src/daw/blips is undone", out)
+
+    def test_a_sound_at_another_rate_renders_at_its_own_rate(self):
+        self.mixed_rates()
+        rc, made = run("reaper", "assets/audio/mixed", "--bus", "sfx")
+        self.assertEqual(rc, 0, made)
+        before = self.snapshot()
+        rc, out = run("reaper", "--reexport", "assets_src/daw/mixed")       # untouched: no file is resampled
+        self.assertEqual(rc, 0, out)
+        self.assertIn("0 file(s) written, 3 kept, 0 problem(s)", out)
+        self.assertEqual(self.changed(before), [])
+        self.assertEqual(len(self.log.read_text(encoding="utf-8").splitlines()), 2)   # one REAPER run per rate
+        self.edit_rpp("mixed", lambda t: self.item_line(t, "chirp", "FADEOUT", "FADEOUT 1 0.05 0 1 0 0 0"))
+        rc, out = run("reaper", "--reexport", "assets_src/daw/mixed")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("1 file(s) written, 2 kept", out)
+        self.assertNotIn("length changed", out)
+        _, rate, _, _ = read_wav_channels(self.root / "assets/audio/mixed/chirp.wav")
+        self.assertEqual(rate, 48000)
+        self.assertIn("renders it back at 48000 Hz", made)
+
+    def test_music_stems_at_different_rates_are_refused(self):
+        self.make_music()
+        bass = self.root / "assets/audio/music/explore_bass.wav"
+        write_wav(bass, tone(4.0, 110, rate=48000), 48000)
+        rc, out = run("reaper", "explore")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("one sample rate", out)
 
     def test_an_edit_saved_into_media_is_never_put_back_as_the_original(self):
         self.assertEqual(run("reaper", "blips")[0], 0)
@@ -938,6 +974,24 @@ class ReaperLiveExam(GameDir):
         self.assertEqual(self.changed(before), ["assets/audio/blips/blips_low.sfx.json",
                                                 "assets/audio/blips/blips_low.wav", "docs/ASSET_LOG.md",
                                                 "docs/licenses/A-0001.txt"])
+
+    def test_a_sound_at_another_rate_comes_back_at_its_own_rate(self):
+        self.mixed_rates()
+        self.assertEqual(run("reaper", "assets/audio/mixed", "--bus", "sfx")[0], 0)
+        before = self.snapshot()
+        rc, out = run("reaper", "--reexport", "assets_src/daw/mixed")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("REAPER rendered 3 file(s) (exit 0, 0)", out)
+        self.assertEqual(self.changed(before), [])                    # the 48 kHz sound too: not resampled
+        chirp = self.rpp("mixed").parent / "render" / "chirp.wav"
+        self.assertEqual(read_wav_channels(chirp)[1], 48000)
+        self.edit_rpp("mixed", lambda t: self.item_line(t, "chirp", "FADEOUT", "FADEOUT 1 0.05 0 1 0 0 0"))
+        rc, out = run("reaper", "--reexport", "assets_src/daw/mixed")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(self.changed(before), ["assets/audio/mixed/chirp.wav", "docs/ASSET_LOG.md",
+                                                "docs/licenses/A-0001.txt"])
+        samples, rate, _, ch = read_wav_channels(self.root / "assets/audio/mixed/chirp.wav")
+        self.assertEqual((rate, len(samples) // ch), (48000, int(round(0.0937 * 48000))))
 
     def test_music_stems_one_file_each(self):
         frames = self.make_music(mono_bass=False)

@@ -57,6 +57,7 @@ import datetime
 import difflib
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -101,7 +102,7 @@ REAPER_CANDIDATES = (                   # where REAPER installs by default (the 
 TOP_LEVEL_RENDER = ("RENDER_FILE", "RENDER_PATTERN", "RENDER_FMT", "RENDER_1X", "RENDER_RANGE", "RENDER_RESAMPLE",
                     "RENDER_ADDTOPROJ", "RENDER_STEMS", "RENDER_DITHER", "RENDER_TRIM", "RENDER_NORMALIZE",
                     "RENDER_SRATE", "SAMPLERATE")
-REGION = re.compile(r"^MARKER\s+\d+\s+\S+\s+(\"[^\"]*\"|'[^']*'|`[^`]*`|\S+)\s+(\d+)")   # name, flags (1 = region)
+REGION = re.compile(r"^MARKER\s+(\d+)\s+\S+\s+(\"[^\"]*\"|'[^']*'|`[^`]*`|\S+)\s+(\d+)")   # index, name, flags
 MEDIA_FILE = re.compile(r'^\s*FILE\s+("[^"\r\n]*"|\'[^\'\r\n]*\'|`[^`\r\n]*`|\S+)', re.M)   # a SOURCE's file
 ABS_PATH = re.compile(r'(?:^|["\s])((?:[A-Za-z]:[\\/]|\\\\|/(?:Users|home|Volumes)/)[^"\r\n]*)')
 CODE_TOOLS = (None, "sfx_synth", "chiptune", "babble")   # sidecar tools that use no model
@@ -224,6 +225,11 @@ def collect(args, root):
     if in_music:
         t = tracks["tracks"][src]
         items = [item_for(stem, root / args.audio_root / f, root, "music", "stem") for stem, f in t["stems"].items()]
+        rates = sorted({it["rate"] for it in items})
+        if len(rates) > 1:
+            raise ToolError(f"the stems of {src} are at {', '.join(f'{r} Hz' for r in rates)}: a track's stems share "
+                            f"one sample rate (they play together; `music validate --root .` says the same), resample "
+                            f"them first")
         meta = {"kind": "music", "name": args.name or src, "target": args.target, "source": f"{args.music} track {src}",
                 "music": {k: t.get(k, d) for k, d in (("bpm", None), ("beats_per_bar", 4), ("bars", None),
                                                       ("loop_start_bar", 0))}}
@@ -247,21 +253,37 @@ def check_items(items):
         seen[low] = it["file"]
 
 
-def project_shape(items):
+def project_shape(items, route):
     """(rate, channels) of the project: the most common rate (ties: the higher), the most channels."""
     rates = collections.Counter(it["rate"] for it in items)
     rate = max(rates, key=lambda r: (rates[r], r))
     for it in items:
-        if it["rate"] != rate:
-            print(f"[warn] {it['file']} is {it['rate']} Hz and the project runs at {rate} Hz: REAPER resamples it, "
-                  f"and an edited version comes back at {rate} Hz")
+        if it["rate"] != rate and route == "reaper":
+            print(f"[note] {it['file']} is {it['rate']} Hz and the project runs at {rate} Hz: REAPER plays it "
+                  f"resampled while you edit, and --reexport renders it back at {it['rate']} Hz (a render of its own)")
     return rate, max(it["channels"] for it in items)
 
 
+def align_frames(rate, rates):
+    """Project frames each sound's start is a multiple of: 1 when every sound has the project's rate, else a whole
+    number of milliseconds that is a whole number of samples at every rate (44.1 and 48 kHz: 10 ms), so a sound
+    rendered at its own rate starts on one of its own samples."""
+    if set(rates) == {rate}:
+        return 1
+    ms = 1
+    for r in rates:
+        need = 1000 // math.gcd(int(r), 1000)
+        ms = ms * need // math.gcd(ms, need)
+    return rate * ms // 1000
+
+
 def lay_out(meta, items, rate):
-    """Sets each item's start frame: sounds end to end with GAP_S between them, music stems all at 0."""
+    """Sets each item's start frame: sounds end to end with GAP_S between them (each start on align_frames), music
+    stems all at 0."""
     at, gap = 0, int(round(GAP_S * rate))
+    step = align_frames(rate, [it["rate"] for it in items])
     for it in items:
+        at = -(-at // step) * step
         it["start"] = 0 if meta["kind"] == "music" else at
         at += int(round(it["frames"] * rate / it["rate"])) + gap
 
@@ -269,6 +291,14 @@ def lay_out(meta, items, rate):
 def seconds(frames, rate):
     s = f"{frames / rate:.12f}".rstrip("0").rstrip(".")
     return s or "0"
+
+
+def item_end(it, rate):
+    """(length, end) in seconds of an item on a timeline at rate: its own length, exact at its own rate."""
+    if it["rate"] == rate:
+        n = int(round(it["frames"] * rate / it["rate"]))
+        return seconds(n, rate), seconds(it["start"] + n, rate)
+    return seconds(it["frames"], it["rate"]), seconds(it["start"] * it["rate"] + it["frames"] * rate, rate * it["rate"])
 
 
 def targets(meta, items):
@@ -330,17 +360,15 @@ def rpp_text(meta, items, rate, channels, work_rel):
         out.append(f"  MARKER 3 {seconds(music.bar_sample(m['bars'], m, rate), rate)} {q('loop end')} 0 0 1 R")
     else:
         for k, it in enumerate(items, 1):
-            n = int(round(it["frames"] * rate / it["rate"]))
             out += [f"  MARKER {k} {seconds(it['start'], rate)} {q(it['name'])} 1 0 1 R",
-                    f"  MARKER {k} {seconds(it['start'] + n, rate)} \"\" 1"]
+                    f"  MARKER {k} {item_end(it, rate)[1]} \"\" 1"]
     groups = [(it["name"], [it]) for it in items] if meta["kind"] == "music" else [(meta["name"], items)]
     for track, members in groups:
         out += ["  <TRACK", f"    NAME {q(track)}", "    VOLPAN 1 0 -1 -1 1", "    MUTESOLO 0 0 0",
                 f"    SEL {1 if meta['kind'] == 'music' else 0}", "    NCHAN 2", "    MAINSEND 1 0"]
         for it in members:
-            n = int(round(it["frames"] * rate / it["rate"]))
-            out += ["    <ITEM", f"      POSITION {seconds(it['start'], rate)}", f"      LENGTH {seconds(n, rate)}",
-                    f"      LOOP {1 if it['kind'] in ('loop', 'stem') else 0}",
+            out += ["    <ITEM", f"      POSITION {seconds(it['start'], rate)}",
+                    f"      LENGTH {item_end(it, rate)[0]}", f"      LOOP {1 if it['kind'] in ('loop', 'stem') else 0}",
                     "      FADEIN 1 0 0 1 0 0 0", "      FADEOUT 1 0 0 1 0 0 0",
                     f"      NAME {q(it['name'])}", "      VOLPAN 1 0 1 -1", "      SOFFS 0",
                     f"      <SOURCE {SOURCE_TYPE[Path(it['media']).suffix.lower()]}",
@@ -365,11 +393,22 @@ def top_level(lines):
     return out
 
 
-def render_copy_text(text, man):
-    """The user's project with Wavesmith's render settings: top-level RENDER_* / SAMPLERATE lines and the RENDER_CFG
-    block replaced; for music, the stem tracks selected (and only those), since REAPER renders selected tracks."""
+def render_copy_text(text, man, rate=None, keep_region=None):
+    """The user's project with Wavesmith's render settings at rate (default the project's): top-level RENDER_* /
+    SAMPLERATE lines and the RENDER_CFG block replaced; for music, the stem tracks selected (and only those), since
+    REAPER renders selected tracks. keep_region(name) False leaves that region out (it renders at another rate);
+    None when that leaves no region."""
     lines = text.replace("\r\n", "\n").split("\n")
     depths = top_level(lines)
+    regions = [m for i, d in depths if d == 1 for m in [REGION.match(lines[i].strip())] if m
+               and int(m.group(3)) & 1 and m.group(2).strip("\"'`")]
+    if lines[0].startswith("<REAPER_PROJECT") and not regions:
+        raise ToolError("the project has no named regions left: nothing would render (REAPER would stop at a "
+                        "'Nothing to render' dialog)")
+    # a region is two MARKER lines with the same index: its start (named) and its end (no name)
+    drop = {m.group(1) for m in regions if keep_region and not keep_region(m.group(2).strip("\"'`"))}
+    if regions and drop == {m.group(1) for m in regions}:
+        return None
     keep, skip_until = [], None
     track_start, stems = None, {it["name"] for it in man["items"]}
     tracks = []                                  # (start, end) of each depth-1 <TRACK block
@@ -381,6 +420,10 @@ def render_copy_text(text, man):
             continue
         if d == 1 and s.split(" ")[0] in TOP_LEVEL_RENDER:
             continue
+        if d == 1 and drop:
+            m = REGION.match(s)
+            if m and int(m.group(3)) & 1 and m.group(1) in drop:
+                continue
         if d == 1 and s.startswith("<RENDER_CFG"):
             skip_until = next(j for j, dj in depths[i + 1:] if dj == 1 and lines[j].strip() == ">")
             continue
@@ -392,11 +435,6 @@ def render_copy_text(text, man):
             track_start = None
     if not keep or not keep[0].startswith("<REAPER_PROJECT"):
         raise ToolError("the .rpp does not start with <REAPER_PROJECT: not a REAPER project")
-    regions = [m for i, d in depths if d == 1 for m in [REGION.match(lines[i].strip())] if m
-               and int(m.group(2)) & 1 and m.group(1).strip("\"'`")]
-    if not regions:
-        raise ToolError("the project has no named regions left: nothing would render (REAPER would stop at a "
-                        "'Nothing to render' dialog)")
     if man["kind"] == "music":
         for start, end in reversed(tracks):      # from the end, so an inserted line moves no block still to do
             block = keep[start:end + 1]
@@ -409,7 +447,7 @@ def render_copy_text(text, man):
                 keep.insert(start + 1, sel)
             else:
                 keep[start + j] = sel
-    out = [keep[0]] + render_block(man, man["rate"], man["channels"]) + keep[1:]
+    out = [keep[0]] + render_block(man, rate or man["rate"], man["channels"]) + keep[1:]
     return "\n".join(out)
 
 
@@ -545,7 +583,7 @@ def start_manifest(args, root, work, meta, items, route):
     if not UP_ONLY.match(up):
         raise ToolError(f"{work.as_posix()} is not inside the game root {root.as_posix()}: keep the working folder "
                         f"inside the game (its manifest names the root as a path up from it)")
-    rate, channels = project_shape(items)
+    rate, channels = project_shape(items, route)
     lay_out(meta, items, rate)
     media = work / (MEDIA_DIR if route == "reaper" else STEMS_DIR)
     # never emptied: REAPER records into "Media" beside the project by default, and on Windows that is this folder
@@ -637,7 +675,7 @@ def cmd_export(args):
         write_midi(args, man, work)
     else:
         for it in items:
-            rows.append((it["name"], it["start"] / rate, (it["start"] + it["frames"]) / rate))
+            rows.append((it["name"], it["start"] / rate, it["start"] / rate + it["frames"] / it["rate"]))
         if all(it["rate"] == rate for it in items):
             seq = [[0.0] * (items[-1]["start"] + items[-1]["frames"]) for _ in range(man["channels"])]
             for it in items:
@@ -717,22 +755,37 @@ def reexport(args):
     renders = work / RENDER_DIR
     for old in (renders.glob("*.wav") if renders.is_dir() else []):     # last run's renders, so none is taken twice
         old.unlink()
-    copy = work / RENDER_COPY
-    copy.write_bytes(render_copy_text(text, man).encode("utf-8"))
-    try:
-        rc = run_reaper(exe, copy, args.timeout)
-    finally:
+    copy, codes = work / RENDER_COPY, []
+    for rate, keep in render_passes(man):
+        body = render_copy_text(text, man, rate, keep)
+        if body is None:                         # every region of this rate renamed or removed: nothing to render
+            continue
+        copy.write_bytes(body.encode("utf-8"))
         try:
-            copy.unlink()
-        except OSError:
-            pass
+            codes.append(run_reaper(exe, copy, args.timeout))
+        finally:
+            discard(copy)
     got = {p.stem: p for p in sorted(renders.glob("*.wav"))} if renders.is_dir() else {}
-    print(f"[ OK ] REAPER rendered {len(got)} file(s) (exit {rc})")
+    print(f"[ OK ] REAPER rendered {len(got)} file(s) (exit {', '.join(str(c) for c in codes)})")
     if not got:
         print(f"[FAIL] REAPER rendered nothing into {RENDER_DIR}/: open {rpp.name} in REAPER and check its regions "
               f"{'and tracks ' if man['kind'] == 'music' else ''}are still there")
         return 1
     return bring_back(args, work, man, got, "REAPER", strict=True)
+
+
+def render_passes(man):
+    """[(rate, keep_region)]: one REAPER render per sample rate, so a sound at another rate than the project comes
+    back at its own rate, sample for sample, instead of resampled. The project's rate goes first and also renders
+    regions no sound is called (so they are reported as extra)."""
+    if man["kind"] == "music":
+        return [(man["rate"], None)]
+    at = {it["name"]: it["rate"] for it in man["items"]}
+    others = sorted({r for r in at.values() if r != man["rate"]})
+    if not others:
+        return [(man["rate"], None)]
+    return [(man["rate"], lambda n: at.get(n, man["rate"]) == man["rate"])] + \
+        [(r, lambda n, r=r: at.get(n) == r) for r in others]
 
 
 def norm_name(name):
