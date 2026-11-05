@@ -26,6 +26,8 @@
   earlier "not recommended" note replaced), the resources pages, EVIDENCE E147 to E150, import notes in the Godot,
   web-3d, Unity, Unreal and Bevy ENGINE.md (Unity, Unreal and Bevy marked verify), and
   `workflows/bozzetto-showcase/` (a prop and a character from prompt to engine, failures included) (#193).
+- Docs: SOP-11 "Which tool for which job", every 3D tool (Bozzetto, `tools/blender/`, the skill, what has no tool) on
+  one table with where its docs are (#193).
 - Bozzetto: a validator that crashes (any exit but 0, 1 and 2, or no report) stops make before anything is copied
   or logged, and an old validation report from an earlier run is removed first, so it can never pass a model (#193).
 - Bozzetto: the `--sprites` sheet is rendered before the asset log is written, so it gets its place in the row,
