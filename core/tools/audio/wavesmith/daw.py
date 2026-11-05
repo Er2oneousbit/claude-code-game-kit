@@ -32,8 +32,9 @@
 #           Back in the game: a render whose audio matches the original (same length and channels, every sample
 #           within 2.5 steps of 16-bit) leaves the game's file untouched, byte for byte. A changed one is set to its
 #           bus's house level (sound_sets.py rules: loudest 400 ms for one-shots, integrated for loops, true peak at
-#           most -1 dBTP); music stems are levelled together, by the mix of all of them, so their balance stays as
-#           you set it. A file that changed in the game since the project was made is not overwritten (--force).
+#           most -1 dBTP); music stems are levelled together, by the mix of all their renders, so their balance
+#           stays as you set it and a second run lands on the same bytes. An edit undone in the DAW puts the
+#           original back. A file that changed in the game since the project was made is not overwritten (--force).
 #           Every written file gets a "hand_edits" entry in its sidecar (.sfx.json / .gen.json) and one ASSET_LOG
 #           row per working folder ("Modified? yes", updated on later runs) with a docs/licenses evidence file.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -467,7 +468,13 @@ def readiness():
 
 
 # ---- writing the working folder ------------------------------------------------------------------------------------
+def check_name(name):
+    if not NAME_OK.match(name):
+        raise ToolError(f"{name!r} cannot name a project (letters, digits, _ . - only, up to 64): pass --name")
+
+
 def work_folder(args, root, name):
+    check_name(name)
     work = Path(args.out) if args.out else root / DEFAULT_OUT / name
     if (work / MANIFEST).exists() and not args.overwrite:
         raise ToolError(f"{work.as_posix()} already holds a DAW project (re-export it, or --overwrite to start again; "
@@ -504,9 +511,8 @@ def start_manifest(args, root, work, meta, items, route):
     rate, channels = project_shape(items)
     lay_out(meta, items, rate)
     media = work / (MEDIA_DIR if route == "reaper" else STEMS_DIR)
-    if media.exists():
-        shutil.rmtree(media)
-    media.mkdir(parents=True)
+    # never emptied: REAPER records into "Media" beside the project by default, and on Windows that is this folder
+    media.mkdir(parents=True, exist_ok=True)
     for it in items:
         src = root / it["file"]
         if route == "reaper" or Path(it["file"]).suffix.lower() == ".wav":
@@ -574,6 +580,7 @@ def cmd_export(args):
     root = Path(args.root or ".")
     meta, items = collect(args, root)
     check_items(items)
+    check_name(meta["name"])
     work = Path(args.folder)
     if (work / MANIFEST).exists() and not args.overwrite:
         raise ToolError(f"{work.as_posix()} already holds a DAW export (import it, or --overwrite)")
@@ -666,8 +673,8 @@ def reexport(args):
         raise ToolError(f"{rpp.name} uses {len(gone)} media file(s) that are not there: {', '.join(gone[:3])}"
                         + (" ..." if len(gone) > 3 else "") + " (put them back, or remove those items in REAPER)")
     renders = work / RENDER_DIR
-    if renders.exists():
-        shutil.rmtree(renders)
+    for old in (renders.glob("*.wav") if renders.is_dir() else []):     # last run's renders, so none is taken twice
+        old.unlink()
     copy = work / RENDER_COPY
     copy.write_bytes(render_copy_text(text, man).encode("utf-8"))
     try:
@@ -793,6 +800,7 @@ def bring_back(args, work, man, renders, daw, strict, extras=()):
     for it in man["items"]:
         game = root / it["file"]
         before[it["file"]] = sha256(game) if game.is_file() else None
+    audio, same = {}, []                               # name -> (render channels, rate); names rendered as they were
     for it in man["items"]:
         r = renders.get(it["name"])
         if r is None:
@@ -803,39 +811,55 @@ def bring_back(args, work, man, renders, daw, strict, extras=()):
         chans, rate, _ = read_any(r)
         if it["channels"] == 1 and len(chans) == 2 and all(abs(x - y) <= SAME_TOL for x, y in zip(*chans)):
             chans = chans[:1]                              # a mono sound rendered on a stereo bus: mono again
+        audio[it["name"]] = (chans, rate)
         orig_path = work / it["media"]
         orig, orate, _ = read_any(orig_path) if orig_path.is_file() else read_any(root / it["file"])
         if same_audio(orig, orate, chans, rate):
-            kept.append(f"{it['name']}: unchanged")
-            continue
-        pending.append((it, chans, rate))
+            same.append(it)
+        else:
+            pending.append((it, chans, rate))
     for x in extras:
         problems.append(f"extra render {x}")
     if strict:
         names = {it["name"] for it in man["items"]}
         problems += [f"extra render {n}.wav: no sound by that name (a new or renamed region? only the listed "
                      f"names come back)" for n in sorted(set(renders) - names)]
-    # levels: per sound, or one gain for the whole music mix
+    # levels: per sound, or one gain for the whole music mix. The mix is made from the renders (the project as it
+    # is now), never from the game's files, so a second run lands on the same bytes as the first.
     gains, levelled_only = {}, set()
     if pending and man["kind"] == "music":
-        rendered = {it["name"]: (chans, rate) for it, chans, rate in pending}
-        stems = []
-        for it in man["items"]:
-            if it["name"] in rendered:
-                stems.append(rendered[it["name"]][0])
-            else:
-                stems.append(read_any(root / it["file"])[0])
+        stems = [audio[it["name"]][0] if it["name"] in audio else read_any(work / it["media"])[0]
+                 for it in man["items"]]
         g, note = mix_gain(stems, man["rate"], "music", man["target"])
         if g:   # the mix moves: every stem moves with it, also the ones not edited
-            for it in man["items"]:
-                if it["name"] not in rendered:
-                    chans, rate, _ = read_any(root / it["file"])
-                    pending.append((it, chans, rate))
-                    levelled_only.add(it["name"])
-                    kept = [k for k in kept if not k.startswith(it["name"] + ":")]
+            for it in list(same):
+                pending.append((it,) + audio[it["name"]])
+                levelled_only.add(it["name"])
+                same.remove(it)
+            problems += [f"{it['name']}: no render, but the mix moved by {g:+.2f} dB: render it too, or its level "
+                         f"no longer matches" for it in man["items"] if it["name"] not in audio]
         for it, _, _ in pending:
             gains[it["name"]] = (g, note)
     written, report = [], []
+    # rendered as they were: kept; or, when an earlier round trip wrote an edit that is now undone, the original back
+    for it in same:
+        cur, game, media = before[it["file"]], root / it["file"], work / it["media"]
+        if cur == it["sha256"]:
+            kept.append(f"{it['name']}: unchanged")
+        elif cur == (man.get("written") or {}).get(it["file"]) and media.suffix.lower() == game.suffix.lower() \
+                and media.is_file():
+            if args.dry_run:
+                report.append(f"[dry ] {it['file']}: the original would be put back (the edit was undone)")
+                continue
+            tmp = game.with_name(game.stem + ".daw_tmp" + game.suffix)
+            shutil.copyfile(media, tmp)
+            os.replace(str(tmp), str(game))
+            written.append({"item": it, "sha256": sha256(game), "gain_db": 0.0, "before": cur,
+                            "note": f"the edit was undone in {daw}: the original put back",
+                            "frames": it["frames"], "channels": it["channels"]})
+            report.append(f"[ OK ] {it['file']}: the edit was undone in {daw}, the original is back")
+        else:
+            kept.append(f"{it['name']}: unchanged in {daw} (the game's file changed elsewhere and is left as it is)")
     for it, chans, rate in pending:
         try:
             if it["name"] not in gains:
@@ -908,17 +932,29 @@ def sidecar_path(game):
 def stamp(work, man, written, daw, root):
     today = datetime.date.today().isoformat()
     work_rel = posix_rel(work, root)
+    back = {w["item"]["file"] for w in written if w["sha256"] == w["item"]["sha256"]}   # originals put back
     for w in written:
         it, game = w["item"], root / w["item"]["file"]
         side = sidecar_path(game)
         meta = read_sidecar(game)
         if meta is not None:
-            meta.setdefault("hand_edits", []).append({"daw": daw, "date": today, "project": work_rel,
-                                                      "gain_db": w["gain_db"], "sha256": w["sha256"]})
+            if it["file"] in back:          # the edit is gone: so is its record
+                meta["hand_edits"] = [e for e in meta.get("hand_edits", []) if e.get("project") != work_rel]
+                if not meta["hand_edits"]:
+                    del meta["hand_edits"]
+            else:
+                meta.setdefault("hand_edits", []).append({"daw": daw, "date": today, "project": work_rel,
+                                                          "gain_db": w["gain_db"], "sha256": w["sha256"]})
             side.write_bytes((json.dumps(meta, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
-        man.setdefault("written", {})[it["file"]] = w["sha256"]
-    man["logged"] = sorted(set(man.get("logged", [])) | {w["item"]["file"] for w in written})
-    log_row(root, work_rel, man, written, daw, today)
+        if it["file"] in back:
+            man.setdefault("written", {}).pop(it["file"], None)
+        else:
+            man.setdefault("written", {})[it["file"]] = w["sha256"]
+    man["logged"] = sorted((set(man.get("logged", [])) | {w["item"]["file"] for w in written}) - back)
+    if man["logged"]:
+        log_row(root, work_rel, man, written, daw, today)
+    else:
+        print(f"[note] every edit from {work_rel} is undone: its ASSET_LOG row (if any) is out of date, delete it")
     save_manifest(work, man)
 
 

@@ -281,8 +281,14 @@ class ProjectExam(GameDir):
         self.assertEqual(rc, 2)
         self.assertIn("already holds a DAW project", out)
         self.edit_rpp("blips", lambda t: t.replace("RIPPLE 0 0", "RIPPLE 1 0"))
+        take = self.rpp().parent / "media" / "my_recording.wav"           # REAPER records into Media/ by default
+        write_wav(take, tone(0.1, 300), RATE)
         self.assertEqual(run("reaper", "blips", "--overwrite")[0], 0)
         self.assertIn("RIPPLE 1 0", self.rpp().with_name("blips.rpp.bak").read_text(encoding="utf-8"))
+        self.assertTrue(take.is_file(), "--overwrite deleted a recording in media/")
+        rc, out = run("reaper", "blips", "--name", "../../escape")
+        self.assertEqual(rc, 2)
+        self.assertIn("cannot name a project", out)
 
     def test_unknown_source_and_bad_names(self):
         rc, out = run("reaper", "nothing")
@@ -458,6 +464,28 @@ class ReexportExam(GameDir):
             stems.append([samples[c::channels] for c in range(channels)])
         g, note = daw.mix_gain(stems, RATE, "music", "home")
         self.assertEqual(g, 0.0, note)                                   # the mix now sits at the music level
+        # again: the mix is made from the renders, not from the game's (now quieter) files, so nothing moves
+        before = self.snapshot()
+        rc, out = run("reaper", "--reexport", "assets_src/daw/explore")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(out.count("already has this version"), 2, out)
+        self.assertEqual(self.changed(before), [])
+
+    def test_an_undone_edit_puts_the_original_back(self):
+        self.assertEqual(run("reaper", "blips")[0], 0)
+        original = (self.root / "assets/audio/blips/blips_high.wav").read_bytes()
+        plain = self.rpp().read_text(encoding="utf-8")
+        self.edit_rpp("blips", lambda t: self.item_line(t, "blips_high", "FADEOUT", "FADEOUT 1 0.15 0 1 0 0 0"))
+        self.assertEqual(run("reaper", "--reexport", "assets_src/daw/blips")[0], 0)
+        self.assertNotEqual((self.root / "assets/audio/blips/blips_high.wav").read_bytes(), original)
+        self.edit_rpp("blips", lambda t: plain)                          # undone in the DAW
+        rc, out = run("reaper", "--reexport", "assets_src/daw/blips")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("the edit was undone in REAPER, the original is back", out)
+        self.assertEqual((self.root / "assets/audio/blips/blips_high.wav").read_bytes(), original)
+        side = json.loads((self.root / "assets/audio/blips/blips_high.sfx.json").read_text(encoding="utf-8"))
+        self.assertNotIn("hand_edits", side)
+        self.assertIn("every edit from assets_src/daw/blips is undone", out)
 
     def test_a_hanging_reaper_is_stopped(self):
         self.assertEqual(run("reaper", "blips")[0], 0)

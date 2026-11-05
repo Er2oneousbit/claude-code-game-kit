@@ -430,9 +430,11 @@ python tools/audio/wavesmith/wavesmith.py daw reaper --reexport assets_src/daw/f
   kept when the length is the same (else put back on the bar grid for music, or the whole file for loops, with a
   warning), and a mono sound stays mono. Music stems are levelled together, by the mix of all of them, so the
   balance you set stays: when the mix lands within 2 LU of the music level nothing moves, otherwise every stem gets
-  the same gain. Each written file gets a `hand_edits` entry in its sidecar and the working folder one ASSET_LOG row
-  (`Modified? yes`, the edited files, a docs/licenses/A-NNNN.txt evidence file with the SHA-256 before and after),
-  updated on later runs instead of added again. `--dry-run` says what would be written.
+  the same gain (worked out from the renders, so running the re-export again lands on the same bytes). Each written
+  file gets a `hand_edits` entry in its sidecar and the working folder one ASSET_LOG row (`Modified? yes`, the
+  edited files, a docs/licenses/A-NNNN.txt evidence file with the SHA-256 before and after), updated on later runs
+  instead of added again. An edit you undo in the DAW puts the original file back (and takes its `hand_edits` entry
+  out). `--dry-run` says what would be written.
 - It refuses, with exit 1: a region renamed or removed (that file stays as it is; a near miss is named), a render
   with a name no sound has, and a game file that changed since the project was made by anything else (`--force`
   overwrites it). A media file missing from the project stops it before REAPER runs (exit 2). A dialog REAPER shows
