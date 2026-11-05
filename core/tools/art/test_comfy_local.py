@@ -5,8 +5,8 @@
 #           endpoints the tool uses (/system_stats, /object_info, /upload/image, /prompt, /history, /queue,
 #           /view), so no GPU, models or ComfyUI install are needed. Checks the local-only rule, workflow formats,
 #           --set / --seed / --image, missing nodes, rejected, failed, interrupted and cancelled jobs, PNG
-#           text-chunk and FLAC tag stripping (audio jobs), no overwrite, ASSET_LOG rows, and a non-ASCII prompt
-#           end to end.
+#           text-chunk and FLAC tag stripping (audio jobs), EXIF/XMP removal from PNG, JPEG and WebP pictures,
+#           no overwrite, ASSET_LOG rows, and a non-ASCII prompt end to end.
 # Usage   : python tools/art/test_comfy_local.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -513,6 +513,83 @@ class ComfyLocalExam(unittest.TestCase):
             self.assertEqual(rc, 2, out)
             self.assertIn(why, out)
             self.assertFalse((self.root / "c" / name).exists())
+
+
+# ---- reference pictures a user supplies: metadata that can carry personal data -------------------
+GPS = b"GPSLatitude 51.4779 N, GPSLongitude 0.0015 W"   # stands in for a phone photo's EXIF GPS block
+EXIF = b"Exif\x00\x00MM\x00\x2a\x00\x00\x00\x08" + GPS
+XMP = b"http://ns.adobe.com/xap/1.0/\x00<x:xmpmeta><rdf:Description photoshop:City='Somewhere'/></x:xmpmeta>"
+
+
+def seg(marker, body):
+    return bytes((0xFF, marker)) + struct.pack(">H", len(body) + 2) + body
+
+
+def jpeg_with_exif():
+    """A JPEG's segment layout (the scan bytes are not a real image: strip_jpeg copies them as they are):
+    JFIF, EXIF with GPS, XMP, an ICC profile, IPTC, a comment, the tables and the scan with stuffed 0xFF bytes."""
+    head = (seg(0xE0, b"JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00") + seg(0xE1, EXIF) + seg(0xE1, XMP)
+            + seg(0xE2, b"ICC_PROFILE\x00\x01\x01" + b"icc-bytes") + seg(0xED, b"Photoshop 3.0\x00" + GPS)
+            + seg(0xFE, b"taken at home") + seg(0xDB, b"\x00" + bytes(range(64)))
+            + seg(0xC0, b"\x08\x00\x10\x00\x10\x01\x01\x11\x00") + seg(0xC4, b"\x00" + bytes(16) + b"\x00"))
+    scan = seg(0xDA, b"\x01\x01\x00\x00\x3f\x00") + b"\x12\xff\x00\x34\xff\xd0\x56" + b"\xff\xd9"
+    return b"\xff\xd8" + head + scan, scan
+
+
+def riff(kind, body):
+    return kind + struct.pack("<I", len(body)) + body + b"\x00" * (len(body) & 1)
+
+
+def webp_with_exif():
+    """An extended WebP: VP8X (ICC, EXIF and XMP flags), ICC profile, a VP8L image, EXIF with GPS, XMP."""
+    vp8x = bytes((0x20 | 0x08 | 0x04, 0, 0, 0)) + b"\x00\x00\x00" + b"\x00\x00\x00"
+    image = riff(b"VP8L", b"\x2f\x00\x00\x00\x00\x07")       # odd lengths: the padding byte must survive
+    body = (b"WEBP" + riff(b"VP8X", vp8x) + riff(b"ICCP", b"icc-bytes") + image + riff(b"EXIF", EXIF[6:])
+            + riff(b"XMP ", XMP))
+    return b"RIFF" + struct.pack("<I", len(body)) + body, image
+
+
+class PictureMetadata(unittest.TestCase):
+    def test_png_loses_exif_and_time_keeps_colour_and_pixels(self):
+        whole = png_with_text()
+        idat = whole[whole.index(b"IDAT") - 4:whole.index(b"IEND") - 4]
+        data = (whole[:33] + chunk(b"iCCP", b"icc\x00\x00" + zlib.compress(b"p")) + chunk(b"eXIf", EXIF[6:])
+                + chunk(b"tIME", b"\x07\xea\x0b\x05\x0c\x00\x00") + whole[33:])
+        out = cl.strip_png(data)
+        for gone in (GPS, b"eXIf", b"tIME", b"tEXt", b"iTXt"):
+            self.assertNotIn(gone, out)
+        self.assertIn(b"iCCP", out)
+        self.assertIn(idat, out)
+
+    def test_jpeg_loses_exif_xmp_iptc_and_comments(self):
+        data, scan = jpeg_with_exif()
+        out = cl.strip_jpeg(data)
+        for gone in (GPS, b"Exif", b"xmpmeta", b"Photoshop", b"taken at home"):
+            self.assertNotIn(gone, out)
+        self.assertIn(b"JFIF", out)
+        self.assertIn(b"ICC_PROFILE", out)
+        self.assertTrue(out.endswith(scan), "the scan and everything after it is copied byte for byte")
+        self.assertEqual(cl.strip_picture(data), out)
+        self.assertEqual(cl.strip_jpeg(out), out, "a clean JPEG comes back unchanged")
+        for bad in (data[:40], b"\xff\xd8\x00\x00"):
+            with self.assertRaises(cl.ToolError):
+                cl.strip_jpeg(bad)
+
+    def test_webp_loses_exif_and_xmp_and_their_flags(self):
+        data, image = webp_with_exif()
+        out = cl.strip_webp(data)
+        for gone in (GPS, b"EXIF", b"XMP ", b"xmpmeta"):
+            self.assertNotIn(gone, out)
+        self.assertEqual(out[:4] + out[8:12], b"RIFFWEBP")
+        self.assertEqual(struct.unpack("<I", out[4:8])[0], len(out) - 8, "the RIFF size matches the new file")
+        self.assertEqual(out[20], 0x20, "VP8X keeps the ICC flag, loses the EXIF and XMP flags")
+        self.assertIn(b"ICCP", out)
+        self.assertIn(image, out)
+        self.assertEqual(cl.strip_picture(data), out)
+        with self.assertRaises(cl.ToolError):
+            cl.strip_webp(data[:-20])
+        with self.assertRaises(cl.ToolError):
+            cl.strip_picture(b"GIF89a" + bytes(20))
 
 
 if __name__ == "__main__":

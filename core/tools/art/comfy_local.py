@@ -21,10 +21,11 @@
 # Notes   : ComfyUI has no login, so this tool talks only to a server on this machine (127.0.0.1, localhost, ::1)
 #           unless --allow-remote. Free per image; the cost is GPU time (each run prints it).
 #           ComfyUI writes the full prompt and workflow (local paths included) into every PNG and FLAC it saves;
-#           this tool removes those text chunks (PNG) and tag blocks (FLAC) before writing, and `strip` does the
-#           same for files saved by hand. Audio jobs (Save Audio nodes) are saved like images. 3D jobs (Save 3D Model,
-#           history key "3d") save .glb files with the prompt in the glTF "extras": those are removed too. Other formats
-#           (GIF, WebP, video, MP3, Opus) are saved as they come, with a warning: check them before sharing.
+#           this tool removes those text chunks (and EXIF, PNG) and tag blocks (FLAC) before writing, and `strip`
+#           does the same for files saved by hand. Audio jobs (Save Audio nodes) are saved like images. 3D jobs
+#           (Save 3D Model, history key "3d") save .glb files with the prompt in the glTF "extras": those are removed
+#           too. Other formats (GIF, WebP, video, MP3, Opus) are saved as they come, with a warning: check them before
+#           sharing.
 #           Licensing: each model and LoRA has its own license; --log lists the models the workflow names so you
 #           can check every model card before shipping (some are non-commercial).
 #           Existing files are never replaced without --overwrite.
@@ -34,6 +35,8 @@
 #           (a JobError), so a caller can tell a cancel from a failure
 #           2026-11-05 with Claude (Opus 5.5, claude-opus-5-5): 3D outputs (the "3d" history key, .glb saved with its
 #           glTF "extras" removed: ComfyUI's SaveGLB writes the whole prompt there), for Meshwright
+#           2026-11-05 with Claude (Opus 5.5, claude-opus-5-5): strip_png also drops EXIF (eXIf: GPS, camera) and
+#           tIME; strip_jpeg / strip_webp / strip_picture clean a reference picture a user supplies (Meshwright)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -42,7 +45,7 @@
 #   run:   load the API-format workflow -> apply --image (POST /upload/image), --set NODE.INPUT=VALUE, --seed
 #          -> missing nodes? stop -> dry run? print the graph, stop
 #          -> POST /prompt -> poll GET /history/<id> until it has a status -> error? print ComfyUI's message
-#          -> each output image: GET /view -> PNG: drop tEXt/iTXt/zTXt chunks, GLB: drop every glTF "extras"
+#          -> each output image: GET /view -> PNG: drop tEXt/iTXt/zTXt/eXIf/tIME chunks, GLB: drop every glTF "extras"
 #          -> write under --out (no overwrite)
 #          -> comfy_local.gen.json (workflow SHA-256, settings, models, files) -> --log: ASSET_LOG row + evidence
 #   strip: each PNG or FLAC -> same chunk / block filter -> in place (--overwrite) or into --out
@@ -78,6 +81,13 @@ MAX_DOWNLOAD = 500_000_000              # bytes: one output file
 LOCAL_HOSTS = {"localhost"}
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 TEXT_CHUNKS = {b"tEXt", b"iTXt", b"zTXt"}   # where ComfyUI stores "prompt" and "workflow"
+# every PNG chunk strip_png drops: the text chunks plus EXIF (camera, GPS; eXIf and the older exIf/zxIf spellings)
+# and the save time. Colour (iCCP, sRGB, gAMA, cHRM) and pixel data stay.
+PNG_DROP_CHUNKS = TEXT_CHUNKS | {b"eXIf", b"exIf", b"zxIf", b"tIME"}
+JPEG_MAGIC = b"\xff\xd8"
+JPEG_KEEP_APP = {0xE0, 0xEE}            # APP0 (JFIF) and APP14 (Adobe colour transform); APP2 kept only for ICC
+WEBP_DROP_CHUNKS = {b"EXIF", b"XMP "}   # VP8X flags for them: EXIF 0x08, XMP 0x04
+WEBP_META_FLAGS = 0x08 | 0x04
 FLAC_MAGIC = b"fLaC"
 FLAC_KEEP_BLOCKS = {0, 3, 5}            # STREAMINFO, SEEKTABLE, CUESHEET; tags (VORBIS_COMMENT, where ComfyUI puts
                                         # the prompt and workflow), PICTURE, APPLICATION and PADDING are dropped
@@ -383,7 +393,8 @@ def output_files(entry, include_temp):
 
 # ---- Files -------------------------------------------------------------------------
 def strip_png(data):
-    """The PNG without its text chunks (ComfyUI's prompt and workflow). Raises ToolError when it is not a PNG."""
+    """The PNG without its text chunks (ComfyUI's prompt and workflow), its EXIF (GPS, camera) and its save time.
+    Raises ToolError when it is not a PNG."""
     if not data.startswith(PNG_MAGIC):
         raise ToolError("not a PNG file")
     if data[12:16] != b"IHDR":           # a bare signature used to pass as a (clean, empty) PNG
@@ -394,7 +405,7 @@ def strip_png(data):
         end = pos + 12 + length
         if end > len(data):
             raise ToolError("PNG is truncated")
-        if kind not in TEXT_CHUNKS:
+        if kind not in PNG_DROP_CHUNKS:
             out.append(data[pos:end])
         pos = end
         if kind == b"IEND":
@@ -402,6 +413,83 @@ def strip_png(data):
     if kind != b"IEND":
         raise ToolError("PNG is truncated (no IEND chunk at the end)")
     return b"".join(out)
+
+
+def strip_jpeg(data):
+    """The JPEG without its metadata segments: APP1 (EXIF with GPS and camera, XMP), APP13 (IPTC), the other
+    APPn and COM comments. APP0 (JFIF), APP2 ICC_PROFILE, APP14 (Adobe) and the image segments stay; everything
+    from the start of scan on is copied as it is. Raises ToolError when it is not a JPEG or is cut short."""
+    if not data.startswith(JPEG_MAGIC):
+        raise ToolError("not a JPEG file")
+    out, pos = [JPEG_MAGIC], 2
+    while True:
+        if pos >= len(data) or data[pos] != 0xFF:
+            raise ToolError("JPEG is truncated or damaged (no marker where one belongs)")
+        while pos < len(data) and data[pos] == 0xFF:   # fill bytes before a marker
+            pos += 1
+        if pos >= len(data):
+            raise ToolError("JPEG is truncated")
+        marker = data[pos]
+        pos += 1
+        if marker == 0xD9:                              # end of image before any scan
+            out.append(b"\xff\xd9")
+            return b"".join(out)
+        if marker == 0x01 or 0xD0 <= marker <= 0xD7:   # markers without a length
+            out.append(bytes((0xFF, marker)))
+            continue
+        if pos + 2 > len(data):
+            raise ToolError("JPEG is truncated")
+        length = struct.unpack(">H", data[pos:pos + 2])[0]
+        end = pos + length
+        if length < 2 or end > len(data):
+            raise ToolError("JPEG is truncated")
+        body = data[pos + 2:end]
+        drop = marker == 0xFE or (0xE0 <= marker <= 0xEF and marker not in JPEG_KEEP_APP
+                                  and not (marker == 0xE2 and body.startswith(b"ICC_PROFILE\x00")))
+        if not drop:
+            out.append(bytes((0xFF, marker)) + data[pos:end])
+        pos = end
+        if marker == 0xDA:                              # start of scan: the rest is image data, kept whole
+            out.append(data[pos:])
+            return b"".join(out)
+
+
+def strip_webp(data):
+    """The WebP without its EXIF and XMP chunks (and their VP8X flags cleared); image, alpha, animation and ICC
+    stay. Raises ToolError when it is not a WebP or is cut short."""
+    if len(data) < 12 or data[:4] != b"RIFF" or data[8:12] != b"WEBP":
+        raise ToolError("not a WebP file")
+    size = struct.unpack("<I", data[4:8])[0]
+    if size < 4 or size + 8 > len(data):
+        raise ToolError("WebP is truncated")
+    out, pos, end = [], 12, size + 8
+    while pos < end:
+        if pos + 8 > end:
+            raise ToolError("WebP is truncated")
+        kind, length = data[pos:pos + 4], struct.unpack("<I", data[pos + 4:pos + 8])[0]
+        if pos + 8 + length > end:
+            raise ToolError("WebP is truncated")
+        stop = pos + 8 + length + (length & 1)          # chunks are padded to an even length
+        piece = data[pos:pos + 8 + length] + b"\x00" * (length & 1)
+        if kind == b"VP8X" and length >= 1:
+            piece = piece[:8] + bytes((piece[8] & ~WEBP_META_FLAGS & 0xFF,)) + piece[9:]
+        if kind not in WEBP_DROP_CHUNKS:
+            out.append(piece)
+        pos = stop
+    body = b"WEBP" + b"".join(out)
+    return b"RIFF" + struct.pack("<I", len(body)) + body
+
+
+def strip_picture(data):
+    """A PNG, JPEG or WebP picture without the metadata that can carry personal data (EXIF with GPS, XMP, text,
+    comments, ComfyUI's prompt); anything else is a ToolError. For reference pictures a user supplies."""
+    if data.startswith(PNG_MAGIC):
+        return strip_png(data)
+    if data.startswith(JPEG_MAGIC):
+        return strip_jpeg(data)
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return strip_webp(data)
+    raise ToolError("not a PNG, JPEG or WebP picture")
 
 
 def strip_flac(data):

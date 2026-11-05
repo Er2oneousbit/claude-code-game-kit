@@ -78,7 +78,7 @@ the GPU starts.
 | Path | What |
 |---|---|
 | `<models>/<name>.glb`, `<name>_LOD1.glb` ... | The model, only when it passed `validate_asset.py --class`. |
-| `assets_src/meshwright/<name>/reference.png` | The picture the mesh was made from (ComfyUI's embedded prompt removed). |
+| `assets_src/meshwright/<name>/reference.png` | The picture the mesh was made from (`.jpg` or `.webp` when your `--image` was one). Metadata is removed from the copy and from what ComfyUI gets: EXIF (a photo's GPS position, the camera), XMP, IPTC, text chunks, comments and ComfyUI's embedded prompt; the pixels and the colour profile stay. |
 | `assets_src/meshwright/<name>/raw.glb` | TRELLIS.2's own output, before cleanup (its embedded ComfyUI prompt removed: it holds local paths). |
 | `.../clean.glb`, `export/` | After cleanup.py, after prep_export.py. A model that fails the budget stays here. |
 | `.../cleanup.json`, `.../validate.json` | The numbers: triangles in and out, vertices merged, fragments dropped, size; the validator's findings. |

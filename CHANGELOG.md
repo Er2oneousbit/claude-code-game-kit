@@ -31,6 +31,10 @@
 - Meshwright: the `--sprites` sheet is rendered before the asset log is written, so it gets its place in the row,
   the record and the evidence file with its hash (it shipped unlogged); its layout `.json` counts as a file in the
   way (#193).
+- Meshwright: a `--image` reference loses its metadata before it is stored or sent to ComfyUI: EXIF (a photo's GPS
+  position), XMP, IPTC and comments from JPEG and WebP (`comfy_local.strip_jpeg`, `strip_webp`, `strip_picture`), and
+  `strip_png` now also drops eXIf and tIME, for Dotwork's saved PNGs too. JPEG and WebP references were copied byte
+  for byte, and a PNG kept its EXIF (#193).
 
 ## 0.10.0 (unreleased)
 - Wavesmith: the DAW round trip (`wavesmith.py daw`, daw.py). `daw reaper <set|track|folder>` writes a plain-text

@@ -38,7 +38,7 @@
 #          list -> non-commercial pieces named in the workflow? -> Blender or bpy -> exit 0 ready / 2 not
 #   test:  test_meshwright.py (offline) [+ test_meshwright_live.py]
 #   make:  check name, paths, budget, Blender, ComfyUI, nodes, models, outputs free, ASSET_LOG  [before any GPU time]
-#          reference: --image copied (PNG text stripped) | --prompt -> klein job -> free VRAM [-> --reference-only stop]
+#          reference: --image copied (EXIF/XMP/text gone) | --prompt -> klein job -> free VRAM [-> --reference-only stop]
 #          TRELLIS.2 job (image, seed, resolution, face target, texture size) -> fetch the .glb (extras stripped)
 #          cleanup.py -> prep_export.py --no-validate -> validate_asset.py --json -> fail: stop, exit 1
 #          copy the .glb and LODs into --out -> --sprites sheet -> record JSON -> ASSET_LOG row (updated on a
@@ -479,17 +479,20 @@ def write_new(path, data, overwrite):
 
 
 def make_reference(args, plan, base, wfref):
-    """reference.png in the source folder: the --image copied (PNG text stripped), or a FLUX.2 klein render."""
+    """reference.png in the source folder: the --image copied (EXIF, XMP, text and comments removed; a .jpg or .webp
+    keeps its format), or a FLUX.2 klein render."""
     # an audition (--reference-only) is named by its seed, so several sit side by side to choose from
     dest = plan.src / (f"reference_seed{args.seed}.png" if args.reference_only else "reference.png")
     if args.image:
-        data = plan.image.read_bytes()
-        if plan.image.suffix.lower() == ".png":
-            data = comfy(cl.strip_png, data)
-        else:
+        # the copy is committed with the game: EXIF (GPS, camera), XMP, text and comments go, the pixels stay
+        try:
+            data = comfy(cl.strip_picture, plan.image.read_bytes())
+        except ToolError as exc:
+            raise ToolError(f"--image {plan.image.name}: {exc}")
+        if plan.image.suffix.lower() != ".png":
             dest = plan.src / f"reference{plan.image.suffix.lower()}"
         write_new(dest, data, True)
-        print(f"[ OK ] reference: {rel(plan.root, dest)} (from --image)")
+        print(f"[ OK ] reference: {rel(plan.root, dest)} (from --image, metadata removed)")
         return dest, {"kind": "image", "sha256": sha256_bytes(data)}
     cls_kind = "character" if plan.cls in ("hero", "npc") else "object"
     text = args.prompt if args.raw_prompt else REF_TEMPLATES[cls_kind].format(prompt=args.prompt.strip().rstrip("."))

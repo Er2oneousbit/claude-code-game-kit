@@ -594,6 +594,32 @@ class MakeRun(Base):
         self.assertIn("out of memory", out)
         self.assertFalse((self.root / "assets" / "models" / "prop_crate.glb").exists())
 
+    def test_reference_photo_metadata_is_removed(self):
+        # the reference copy is committed with the game: a phone photo's EXIF GPS must not ride along
+        gps = b"GPSLatitude 51.4779 N"
+        seg = lambda m, body: bytes((0xFF, m)) + len(body + b"..").to_bytes(2, "big") + body  # noqa: E731
+        scan = seg(0xDA, b"\x01\x01\x00\x00\x3f\x00") + b"\x12\xff\x00\x34\xff\xd9"
+        jpg = (b"\xff\xd8" + seg(0xE0, b"JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00")
+               + seg(0xE1, b"Exif\x00\x00MM\x00\x2a" + gps) + seg(0xFE, b"a comment") + seg(0xDB, bytes(65)) + scan)
+        (self.root / "art_src" / "photo.jpg").write_bytes(jpg)
+        whole = png(8, 8)
+        (self.root / "art_src" / "shot.png").write_bytes(whole[:33] + chunk(b"eXIf", b"MM\x00\x2a" + gps) + whole[33:])
+        for image, name, ref in (("art_src/photo.jpg", "prop_photo", "reference.jpg"),
+                                 ("art_src/shot.png", "prop_shot", "reference.png")):
+            rc, out = self.make("--image", image, "--seed", "4", "--no-preview", name=name)
+            self.assertEqual(rc, 0, out)
+            kept = (self.root / "assets_src" / "meshwright" / name / ref).read_bytes()
+            self.assertNotIn(gps, kept, f"{ref} kept the GPS position")
+            self.assertNotIn(gps, STATE.uploads[-1], "ComfyUI got the GPS position too")
+            rec = json.loads((self.root / "assets_src/meshwright" / name / "meshwright.json").read_text(encoding="utf-8"))
+            self.assertEqual(rec["reference"]["sha256"], mw.sha256_bytes(kept))
+        self.assertTrue(kept.startswith(PNG_SIG))
+        (self.root / "art_src" / "fake.webp").write_bytes(b"not a picture")
+        rc, out = self.make("--image", "art_src/fake.webp", "--seed", "4", name="prop_fake")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("not a PNG, JPEG or WebP", out)
+        self.assertEqual(len(self.mesh_jobs()), 2, "a file that is not a picture stops before the GPU")
+
     def test_sprite_sheet_is_logged_with_its_hash(self):
         # a 2D game ships the sheet, not the .glb: it is AI-derived art and needs its row, record entry and hash
         rc, out = self.make("--image", "art_src/crate.png", "--seed", "7", "--sprites", "assets/art/crate_sheet.png")
