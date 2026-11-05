@@ -39,6 +39,7 @@ PPQ = 480                   # ticks per quarter note
 DRUM_CHANNEL = 9            # MIDI channel 10, counted from 0
 GM_DRUMS = {"k": 36, "s": 38, "h": 42, "o": 46, "c": 49}
 TOP_VELOCITY = 112
+BPM_RANGE = (4, 1000)       # the tempo is 3 bytes of microseconds a quarter note: 3.58 BPM is the slowest that fits
 SEMITONE = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 DEBUG = False
 
@@ -80,8 +81,8 @@ def smf_bytes(tracks):
 
 def conductor(bpm, beats_per_bar=4, name="", markers=()):
     """Tempo, time signature, an optional track name and [(tick, text)] markers."""
-    if not 1 <= bpm <= 1000:
-        raise MidiError(f"bpm must be 1..1000, not {bpm}")
+    if not BPM_RANGE[0] <= bpm <= BPM_RANGE[1]:          # also refuses nan
+        raise MidiError(f"bpm must be {BPM_RANGE[0]}..{BPM_RANGE[1]}, not {bpm:g}")
     if not 1 <= beats_per_bar <= 255:
         raise MidiError(f"beats per bar must be 1..255, not {beats_per_bar}")
     ev = []

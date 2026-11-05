@@ -107,6 +107,13 @@ class MidiExam(unittest.TestCase):
         rc, out = self.run_tool("song", song_file(self.tmp, {"bpm": 90}), "--out", Path(self.tmp) / "y.mid")
         self.assertEqual(rc, 2)
         self.assertIn("[error]", out)
+        # MIDI's tempo is 3 bytes of microseconds a quarter note: below about 3.6 BPM it does not fit (was a traceback)
+        for bpm in (3, 0.5, "nan"):
+            rc, out = self.run_tool("grid", "--bpm", bpm, "--bars", 1, "--out", Path(self.tmp) / "slow.mid")
+            self.assertEqual(rc, 2, out)
+            self.assertIn(f"[error] bpm must be {M.BPM_RANGE[0]}..{M.BPM_RANGE[1]}", out)
+            self.assertNotIn("Traceback", out)
+        self.assertEqual(len(M.conductor(M.BPM_RANGE[0])[0][2]), 6)                   # the slowest tempo still fits
         bad = Path(self.tmp) / "bad.mid"
         bad.write_bytes(b"RIFF....")
         rc, out = self.run_tool("dump", bad)

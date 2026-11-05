@@ -105,11 +105,12 @@ python tools/audio/wavesmith/wavesmith.py daw reaper --reexport assets_src/daw/f
 python tools/audio/wavesmith/wavesmith.py daw export explore build/daw_explore     # any other DAW: stems, MIDI, markers
 python tools/audio/wavesmith/wavesmith.py daw import build/daw_explore --daw "FL Studio"   # renders/<name>.wav back
 ```
-- REAPER is found from `REAPER_BIN`, `--reaper` or its default install folder. The re-export runs it headless
+- REAPER is found from `--reaper`, `REAPER_BIN` or its default install folder. The re-export runs it headless
   (`-renderproject`) with a throwaway `-cfgfile` folder in the temp folder, so your own REAPER settings are never
   touched. Tested with REAPER 7.84 on Windows 11 (about 15 s a render); macOS and Linux are untested (verify).
 - The working folder (`assets_src/daw/<name>`) holds the project, copies of the sounds and `<name>/wavesmith_daw.json`,
   all with relative paths: it can be committed. The .gitignore leaves out REAPER's backups, peak files and render/.
+  Run `--reexport` and `import` from the game root (or pass `--root`).
 - A sound whose audio did not change keeps its file byte for byte. A changed one is levelled to its bus (music: the
   stems together, by their mix) and logged. A file changed in the game meanwhile, a renamed region and an unknown
   render are refused and named.
@@ -140,5 +141,5 @@ python tools/audio/wavesmith/wavesmith.py daw import build/daw_explore --daw "FL
 ## Exams
 `wavesmith.py test` runs every `test_*.py` in this folder in its own process, one line each, and exits 1 if any
 failed. `test_daw.py` uses a stand-in REAPER; with `REAPER_BIN` set it also runs the real one (`ReaperLiveExam`,
-about 2 minutes; skipped without it). `wavesmith.py test music dialogue` runs just those exams. Each exam also runs
+about 3.5 minutes; skipped without it). `wavesmith.py test music dialogue` runs just those exams. Each exam also runs
 on its own: `python tools/audio/wavesmith/test_music.py`.

@@ -420,12 +420,17 @@ python tools/audio/wavesmith/wavesmith.py daw reaper --reexport assets_src/daw/f
 - `--reexport` renders the project headless: `reaper -newinst -nosplash -ignoreerrors -cfgfile <temp>/reaper.ini
   -renderproject <copy>.rpp` (E145). The copy carries Wavesmith's render settings (24-bit WAV at the sounds' rate, no
   dither, no normalization; each region of the master mix, or each stem track through the master), so render
-  settings you changed while editing do not matter. The `-cfgfile` folder is a new temporary folder each run, with
+  settings you changed while editing do not matter. Sounds at another sample rate than the project (it runs at
+  the most common one) play resampled while you edit and render in a pass of their own at their own rate, so they
+  come back sample for sample (a music track's stems must share one rate). Run it, and `daw import`, from the game
+  root the project was made from (or pass `--root`). The `-cfgfile` folder is a new temporary folder each run, with
   only Dummy Audio set (`[audioconfig] mode=4`), deleted afterwards: your own REAPER settings are never read or
   written. A run takes about 15 s on the test machine (REAPER 7.84 on Windows 11, E146), most of it REAPER scanning
-  its plug-ins in the fresh folder. REAPER is found from `REAPER_BIN`, `--reaper`, or its default install folder.
+  its plug-ins in the fresh folder. REAPER is found from `--reaper`, `REAPER_BIN`, or its default install folder.
 - What comes back: a render whose audio matches the original (same length and channels, every sample within 2.5
-  steps of 16-bit) leaves the game's file untouched byte for byte. An edited sound is set to its bus level by the
+  steps of 16-bit; compared with the working folder's copy while it still has the SHA-256 it was made with, else
+  with the game's file, and an edit saved into the copy itself is said and counts as an edit) leaves the game's file
+  untouched byte for byte. An edited sound is set to its bus level by the
   sound sets rules (loudest 400 ms for one-shots, integrated for loops, true peak at most -1 dBTP), its loop point
   kept when the length is the same (else put back on the bar grid for music, or the whole file for loops, with a
   warning), and a mono sound stays mono. Music stems are levelled together, by the mix of all of them, so the
@@ -451,7 +456,9 @@ python tools/audio/wavesmith/wavesmith.py daw import build/daw_footsteps --daw "
 - `export` writes WAV stems (`stems/<name>.wav`), for a sound set `<name>_sequence.wav` (every sound end to end, 1 s
   apart), `<folder>/markers.csv` (REAPER's region list columns, verify the import in your DAW) and
   `<folder>/markers.txt` (an Audacity label track: File > Import > Labels) naming each sound on that timeline, for
-  music `<name>.mid`, and HOW_TO.txt.
+  music `<name>.mid`, and HOW_TO.txt. An OGG or FLAC sound goes out as a WAV stem (an OGG loop's LOOPSTART /
+  LOOPLENGTH as the stem's loop) and its own bytes are kept in `originals/`, so an edit you undo puts the exact
+  file back.
 - `import` takes the renders by name (a name that differs only in letter case, spaces or dashes is accepted with a
   note; anything else is extra and named, never guessed), keeps every sound you did not render, and does the same
   levelling, checks and logging as `--reexport`. A DAW's dither (within 2 steps of 16-bit) does not count as an edit.
