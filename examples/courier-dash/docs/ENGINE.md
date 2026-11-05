@@ -29,7 +29,8 @@ dist/               production build (git-ignored)
 
 ## Conventions
 - Units are meters, +Y is up, right-handed (Three.js defaults; Blender's glTF export already converts).
-- Models: glTF binary (`.glb`) prepared by `tools/blender/prep_export.py`, loaded with `import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"`.
+- Models: glTF binary (`.glb`) prepared by `tools/blender/prep_export.py` or made by `tools/meshwright/meshwright.py` (its
+  default folder here is `public/assets/models/`; a Meshwright model loaded in the smoke run, K01), loaded with `import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"`.
 - One `update(dt)` per frame; dt in seconds from `THREE.Timer`, clamped. Never assume 60 fps.
 - Tunables in one module or JSON in public/assets/data, never literals inside logic.
 - Load assets with relative paths (`assets/models/<name>.glb`), never `/assets/...` (breaks itch.io and GitHub Pages subfolders).

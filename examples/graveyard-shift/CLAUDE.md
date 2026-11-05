@@ -68,6 +68,7 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 | Language models in the game (talking NPCs, local models) | `docs/sop/SOP-15-ai-features.md` |
 | 2D exports (GIMP, Inkscape, sprite sheets) | `docs/sop/SOP-16-2d-art-pipeline.md` |
 | Pixel art on this machine's GPU (GDD "Art source": Dotwork) | `tools/art/dotwork/README.md` via `/dotwork` |
+| 3D models from a picture or a prompt on this machine's GPU (Meshwright) | `tools/meshwright/README.md` via `/model-pipeline` |
 | Generated levels, seeds, "a new level every run" | `docs/sop/SOP-17-procedural-generation.md` via `/procgen` |
 | Screen shake, hitstop, easing, camera feel ("juice") | `docs/sop/SOP-18-game-feel.md` via `/game-feel` |
 | Menus, settings, saves, rebinding, gamepad prompts, localization, crash logs | `docs/sop/SOP-19-front-end-and-settings.md` via `/game-shell` |

@@ -46,6 +46,8 @@ and a clear spec for the Blueprint child.
 - Logging: `DEFINE_LOG_CATEGORY` per system, `UE_LOG(LogMyGame, Warning, TEXT("..."))`. No `GEngine->AddOnScreenDebugMessage` in committed logic except behind a debug cvar.
 - Debug toggles: console variables (`TAutoConsoleVariable`) or `exec` console commands.
 - Tests: Automation Spec or simple automation tests for engine-light logic (see ENGINE_FLOW).
+- 3D models from `tools/meshwright/meshwright.py` land in `SourceArt/Models/` (outside `Content/`): import the `.glb` as a
+  static mesh (`SM_` prefix) with the editor's glTF import (Interchange) **(verify for your version)**.
 - Juice and shell (SOP-18, SOP-19): screen shake, hitstop, easing, camera follow, input buffer, coyote time, springs,
   the flash limiter, settings, rebinding, glyphs, saves and localization are already written in `Plugins/GameKitShell`
   (plain C++, `GameKit::` and `FGameKit*`). Enable it in the `.uproject` and use it instead of writing them again.

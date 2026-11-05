@@ -12,7 +12,7 @@
 | Music | `incompetech.com` (CC BY), make it in `LMMS` / `BeepBox`, or write a chiptune with `tools/audio/wavesmith/chiptune.py` | Big catalog, easy attribution, or zero license questions | `resources/audio.md` |
 | SFX | `kenney.nl` audio (CC0), retro: `tools/audio/wavesmith/sfx_synth.py` or `jsfxr` | Safe license, instant results | `resources/audio.md` |
 | 2D art | `kenney.nl` (CC0), palettes from `lospec.com` | Consistent style for prototypes | `resources/art.md` |
-| 3D art | `kenney.nl`, `quaternius.com`, `polyhaven.com` (all CC0) | Kits that match each other | `resources/art.md` |
+| 3D art | `kenney.nl`, `quaternius.com`, `polyhaven.com` (all CC0); on your own GPU: `tools/meshwright/` | Kits that match each other; a one-off prop from a picture | `resources/art.md` |
 | Fonts | `fonts.google.com` (mostly OFL) | Ship the license file | `resources/art.md` |
 | UI and icons | Kenney UI (CC0), `game-icons.net` (CC BY) | Credit game-icons | `resources/art.md` |
 | Real terrain, roads, rivers | National elevation portal + OpenStreetMap (attribution) | Real landscape as a height grid | `resources/world-and-levels.md` |

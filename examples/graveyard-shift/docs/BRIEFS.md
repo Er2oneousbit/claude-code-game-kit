@@ -74,10 +74,12 @@ Direct sprite-sheet prompts failed for days. What worked, in order:
 Input: one clean front-view concept image (plain background, neutral pose), or: "[SUBJECT], game asset, [ART_STYLE], neutral pose, no base, no background"
 ```
 - Treat output as a **draft**: expect to retopologize, fix UVs, and rebuild materials (`SOP-11`).
-- Local image-to-3D on your own GPU was tested and is not recommended yet: TRELLIS needed changes to run offline on a
-  16 GB card and its shapes from pixel art were wrong, TRELLIS.2 needs 24 GB, and Hunyuan3D 2.0's licence excludes
-  the EU, UK and South Korea (E109, E111, E112; `tools/art/dotwork/README.md` "Image to 3D"). For 2.5D, use
-  Dotwork's `diorama` lane.
+- Local image-to-3D on your own GPU: Meshwright (`tools/meshwright/meshwright.py make <name> --prompt "..."`, or
+  `--image` with a picture from this brief) runs TRELLIS.2 through ComfyUI on a 16 GB card (E150). For its reference
+  picture: one object, whole, three-quarter view from slightly above, plain white background, soft even light, no cast
+  shadow; characters full body, front view, A-pose. Audition pictures with `--reference-only` (seconds) before a 3D
+  run (minutes). Hunyuan3D 2.0's licence excludes the EU, UK and South Korea (E111). For 2.5D, use Dotwork's
+  `diorama` lane.
 - Decide poly target and format before generating. Export glTF/GLB when offered.
 - Reject if: baked lighting in textures, non-manifold or messy topology, wrong scale or pivot, fused limbs.
 - Kit pieces: generate PARTS (walls, towers, flags, banners as separate pieces) and assemble in Blender, instead of whole buildings. Flags separate so team color is a material swap **(one video, E16)**.

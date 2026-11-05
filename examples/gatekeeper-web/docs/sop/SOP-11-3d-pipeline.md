@@ -18,7 +18,8 @@ Tip (F13, grade C): simple stylized shapes plus good lighting beat a failed "rea
 ## Pipeline stages
 1. **Style bible** in `docs/CONCEPTS.md` and the GDD art section: poly budget per class, texel density, palette, references, scale (1 unit = 1 m), axes.
 2. **Source the base.** CC0 kits first (`docs/resources/art.md`). Generated meshes are drafts: log them as AI-assisted in `ASSET_LOG.md`
-   with the generator plan or tier, since commercial rights can depend on it. Prompts via `/gen-brief`.
+   with the generator plan or tier, since commercial rights can depend on it. Prompts via `/gen-brief`. On your own GPU:
+   Meshwright (next section) makes, cleans, checks and logs a mesh from a picture or a prompt.
 3. **Build or modify by script.** Claude writes `tools/blender/*.py`, run headless: `blender -b --python-exit-code 1 -P tools/blender/<script>.py -- <args>`.
    Scripts take args, print what they did, are idempotent. Fix the script, never the exported mesh (F8).
    Keep `--python-exit-code 1` before `-P`: without it Blender exits 0 after a script's traceback, so a crashed run
@@ -32,6 +33,22 @@ Tip (F13, grade C): simple stylized shapes plus good lighting beat a failed "rea
    missing, because the export would drop the texture without a word.
 6. **Import** with the engine settings in `docs/ENGINE_FLOW.md`. Check scale, materials, collision, LODs in a test level or preview scene.
 7. **Log and credit** every asset (`/asset-intake`).
+
+## Local generation: Meshwright
+`python tools/meshwright/meshwright.py make <name> --image <ref.png> --class <class>` (or `--prompt "..."`) runs
+stages 2 to 5 and 7 on your own GPU: TRELLIS.2 4B in a local ComfyUI makes a textured mesh from one picture, then
+Blender merges it, drops fragments, decimates it to the class budget, scales it to a height (prop 1 m, hero 1.8 m by
+default), sets the pivot, exports it with the kit's one preset and LODs, and `validate_asset.py --class` decides
+whether it reaches the game. It writes the asset log row (pre-generated AI, models, seed, prompt) and a turntable
+preview; `check` says what is missing. Setup, options and limits: `tools/meshwright/README.md`.
+- What to expect (K01, a 16 GB RTX 5060 Ti): about 5 minutes per model once warm, peak about 14 GB of VRAM; props from
+  a clean picture come out right, under budget, with a baked texture. The hidden sides are invented, thin parts merge
+  or vanish, the UVs pass coverage but warn on texel density, characters have no rig. Treat every result as a draft.
+- Give it one object, whole, on a plain background, in a three-quarter view (characters: front view, A-pose). Audition
+  pictures first (`--prompt ... --reference-only`, seconds each); a 3D run costs minutes. Try two or three seeds.
+- Licences: TRELLIS.2 and BiRefNet are MIT; DINOv3 (its image encoder) has a use-restriction list (military, weapons)
+  whose reach over game props is an open question to settle before you ship such a model (`tools/meshwright/LICENSES.md`).
+  Upstream TRELLIS.2's RMBG-2.0 and nvdiffrast are non-commercial and never loaded (E147, E148, E149).
 
 ## Claude and Blender
 - Default: headless scripts in `tools/blender/`. Diffable, repeatable, reviewable.
