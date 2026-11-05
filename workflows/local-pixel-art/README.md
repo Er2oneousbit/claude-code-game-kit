@@ -102,26 +102,31 @@ dotwork.py verify                                 # load every Dotwork asset in 
   a fireball loop, an explosion, a grass and cobble TileSet, and a dialog panel and button; 141 manifest rows,
   verify passed.
 
-**The duelist from the party example** (`party_member.json` in Dotwork's examples), re-rendered 2026-11-04 with
-the shipped Dotwork: no style reference, the shipped palettes, one take per clip except three retakes by seed
-(`clip_fix`; the west attack was retaken for a strike that reads west from wind-up to lunge). Every clip but the back idle (a code-drawn bob) is driven by the skeleton (`skeleton`, the pose tier):
-walk, run, idle, an attack with a wind-up (`anticipation`), its wind-up and impact frames held (`holds`, the
-hit-stop; the smear stays off on the west strike, where it dragged the coat: issue #187), and a cast. 19 Wan clips (about 135 s each, one more for a
-retake) plus a rotation, nine battle poses and a portrait with expressions: about an hour of GPU time on the 16 GB
-card, verify passed. Shown at 3x on a light backing, every frame at 120 ms (the game plays the holds; a GIF shows each frame once):
+**The dwarf from the dwarf example** (`dwarf.json` in Dotwork's examples), made 2026-11-04 with the shipped Dotwork:
+no style reference, the shipped palettes, one take per clip. It was picked from seven trial designs, each a
+rotation, an east walk and a west attack (about 7 minutes of GPU each): a knight with a sword and shield, a mage
+with a staff, two axe adventurers, a knight with a broad sword and two dwarves with hammers. Most weapons vanished in
+the side views: an east view faces right, so a right-hand weapon is on the far side of the body (the sword trailed
+behind, the axe sat behind the head, the staff turned into a brown tail), and asking for the left hand did not
+change which hand the model drew. The dwarf's hammer, held up high, stayed in sight above his helmet. On the
+skeleton his attack swung an empty arm while the hammer stayed behind his head; as a free Wan clip the hammer comes
+down in front of him, so the example drives the walk with the skeleton (`skeleton: ["walk"]`, feet that alternate)
+and leaves the attack free. idle, walk and attack in 4 directions (west mirrored from east), the wind-up and
+hit-stop held (`holds`; the smear was skipped on every attack, the body made most of the change), nine battle poses
+and a portrait with expressions: 8 Wan clips plus a rotation, about 25 minutes of GPU on the 16 GB card, verify
+passed. Shown at 3x on a light backing, every frame at 120 ms (the game plays the holds; a GIF shows each frame
+once):
 
-![The duelist walking south, walking east, and attacking west with a wind-up](media/dotwork_duelist.gif)
+![The dwarf walking south, walking east, and smashing his hammer down in front of him facing west](media/dotwork_dwarf.gif)
 
-![The duelist walking south, east, north and west](media/dotwork_duelist_walk.gif)
+![The dwarf's nine battle poses facing left and his portrait with five expressions, a talking frame and a blink](media/dotwork_dwarf_stills.png)
 
-![The duelist's nine battle poses facing left and his portrait with five expressions, a talking frame and a blink](media/dotwork_duelist_stills.png)
-
-What its review caught: the first north attack drew a grey sword fragment beside the shoulder on its impact frame
-(new seed), the first kneeling pose lost the hat (new seed), the hurt, defend and jump poses dropped the rapier until
-their wording named it (`pose_text`), the cast smears dragged the sinking coat hem into a checker at the feet (so the
-example smears the attack only), and the front and back attacks move less than the side views, as the skeleton
-notes say. The run also found a Dotwork bug, fixed in 0.8.3: the battle set's `cast` pose replaced the `cast` clip
-facing west.
+What its review caught: the turned-around check flagged the east and west attacks from frame 2, a false alarm (the
+hammer swinging from behind his head to in front of him changes the head's colours; every frame faces the right
+way), the south attack sweeps the hammer across his front, the back attack moves less than the side views, and in
+the east idle the hammer drifts from behind his head to in front of his body. The run also found a Dotwork bug,
+fixed in 0.8.3: the mirrored west attack held other frames than the east one (odd-width frames were centred 1 px
+off their mirror).
 
 ![Fireball loop](media/dotwork_fx_fireball.gif) ![Explosion, 3 frames kept, then a dithered fade](media/dotwork_fx_explosion.gif)
 
@@ -357,7 +362,7 @@ After Dotwork moved into the kit (2026-10-30), a Claude Code session re-made one
 reference, the shipped palettes, the Apache klein VAE. Every PNG was re-saved with image chunks only. Lanes with a
 verified sample: a mount (steam walker, idle and walk in 4 directions), props, icons, a portrait, three spells, hit
 sparks and slashes, five fonts, window skins, balloons, symbols, a mine tunnel with rails, a lever, a party member
-with its battle set (the duelist above), a battle background and two enemies, three scenes, and image to pixel art.
+with its battle set (`party_member.json`), a battle background and two enemies, three scenes, and image to pixel art.
 
 ![The steam walker's south walk, from the mount example](media/dotwork_kit_mount_walk_s.gif)
 ![A summon blast from the spells example](media/dotwork_kit_summon.gif)
