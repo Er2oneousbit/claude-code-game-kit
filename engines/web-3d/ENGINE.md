@@ -31,6 +31,8 @@ dist/               production build (git-ignored)
 - Units are meters, +Y is up, right-handed (Three.js defaults; Blender's glTF export already converts).
 - Models: glTF binary (`.glb`) prepared by `tools/blender/prep_export.py` or made by `tools/bozzetto/bozzetto.py` (its
   default folder here is `public/assets/models/`; a Bozzetto model loaded in the smoke run, K01), loaded with `import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"`.
+  A vertex-coloured model (`--material vertex`, glTF `COLOR_0`) needs nothing extra: GLTFLoader turns `vertexColors` on
+  by itself when a mesh has colours (three r186 source).
 - One `update(dt)` per frame; dt in seconds from `THREE.Timer`, clamped. Never assume 60 fps.
 - Tunables in one module or JSON in public/assets/data, never literals inside logic.
 - Load assets with relative paths (`assets/models/<name>.glb`), never `/assets/...` (breaks itch.io and GitHub Pages subfolders).

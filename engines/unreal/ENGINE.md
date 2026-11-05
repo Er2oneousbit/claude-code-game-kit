@@ -48,6 +48,8 @@ and a clear spec for the Blueprint child.
 - Tests: Automation Spec or simple automation tests for engine-light logic (see ENGINE_FLOW).
 - 3D models from `tools/bozzetto/bozzetto.py` land in `SourceArt/Models/` (outside `Content/`): import the `.glb` as a
   static mesh (`SM_` prefix) with the editor's glTF import (Interchange) **(verify for your version)**.
+  A `--material vertex` model keeps its colours in glTF `COLOR_0`: Unreal imports vertex colours, but a material shows
+  them only through a Vertex Color node; check that it is not white (Godot ignores them by default, #202) **(verify)**.
 - Juice and shell (SOP-18, SOP-19): screen shake, hitstop, easing, camera follow, input buffer, coyote time, springs,
   the flash limiter, settings, rebinding, glyphs, saves and localization are already written in `Plugins/GameKitShell`
   (plain C++, `GameKit::` and `FGameKit*`). Enable it in the `.uproject` and use it instead of writing them again.
