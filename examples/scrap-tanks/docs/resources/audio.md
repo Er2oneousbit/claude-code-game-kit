@@ -267,7 +267,9 @@ track on the sample the plan names.
 - `sfxr` / `jsfxr` (browser), `Bfxr`, `ChipTone`, `LabChirp`. Output is yours to use.
 
 **Edit and process**
-- `Audacity` (free), `Reaper`, `Ocenaudio`. Normalize, trim silence, add tiny fades to avoid clicks.
+- `Audacity` (free), `Reaper`, `Ocenaudio`. Normalize, trim silence, add tiny fades to avoid clicks. For a game's
+  sounds, go through `wavesmith.py daw` (see "Editing by hand in a DAW" below): they come back at their bus level and
+  logged as edited.
 - Formats: every Wavesmith tool that reads audio (loudness, events audit, dialogue, music, sets) reads WAV (mono or
   stereo, 8 / 16 / 24 / 32-bit PCM or 32 / 64-bit float, plain or extensible header), FLAC and OGG Vorbis with nothing
   installed, and MP3, Opus, AAC or anything else ffmpeg reads when ffmpeg is installed (on PATH, or
@@ -392,6 +394,73 @@ one go and checks it as one. Describe the sets in data/sound_sets.json (you crea
   more apart) count as one, so the heel and toe of one step stay one step. It flags takes to listen to; it does not
   hear. Crunchy surfaces (snow, gravel) can flag a single step: listen, and if the step is single, raise that set's
   `attack_gap_s` rather than deleting good takes.
+
+## Editing by hand in a DAW: REAPER, or any DAW through stems
+When a sound needs a human touch (a longer tail, a fade, a layer, EQ, a better mix of the music stems), take it to a
+DAW and bring it back with Wavesmith, so it returns at its bus level, nothing else in the game moves, and the asset
+log says it was edited. `tools/audio/wavesmith/daw.py`, through `wavesmith.py daw`. The source is a set in
+data/sound_sets.json, a track in data/music.json (stems under `--audio-root`, default assets/audio) or a folder of
+sounds (`--bus` says which bus they play on).
+
+**REAPER** (a full project both ways, one command each):
+```
+python tools/audio/wavesmith/wavesmith.py daw reaper footsteps                     # a sound set
+python tools/audio/wavesmith/wavesmith.py daw reaper explore --song assets/audio/src/explore.song.json   # music
+python tools/audio/wavesmith/wavesmith.py daw reaper assets/audio/ui --bus ui      # a folder
+#   ... open assets_src/daw/<name>/<name>.rpp in REAPER, edit, save ...
+python tools/audio/wavesmith/wavesmith.py daw reaper --reexport assets_src/daw/footsteps
+```
+- The project is plain text: one track with one named region per sound (1 s apart), or for music one track per
+  stem, all at bar 1, with the piece's tempo and time signature, one region over the piece and markers at the loop
+  start and end. The project notes list each bus's loudness target and which region becomes which file. The sounds
+  are copied into `media/` beside it, and no path in the folder is absolute, so `assets_src/daw/` can be committed
+  (assets_src/.gdignore keeps it out of Godot). Keep each region's (music: each track's) name: it is the file it
+  becomes. A music piece also gets `<name>.mid`: the chiptune song's notes with `--song`, else the tempo and a marker
+  on every bar.
+- `--reexport` renders the project headless: `reaper -newinst -nosplash -ignoreerrors -cfgfile <temp>/reaper.ini
+  -renderproject <copy>.rpp` (E145). The copy carries Wavesmith's render settings (24-bit WAV at the sounds' rate, no
+  dither, no normalization; each region of the master mix, or each stem track through the master), so render
+  settings you changed while editing do not matter. The `-cfgfile` folder is a new temporary folder each run, with
+  only Dummy Audio set (`[audioconfig] mode=4`), deleted afterwards: your own REAPER settings are never read or
+  written. A run takes about 15 s on the test machine (REAPER 7.84 on Windows 11, E146), most of it REAPER scanning
+  its plug-ins in the fresh folder. REAPER is found from `REAPER_BIN`, `--reaper`, or its default install folder.
+- What comes back: a render whose audio matches the original (same length and channels, every sample within 2.5
+  steps of 16-bit) leaves the game's file untouched byte for byte. An edited sound is set to its bus level by the
+  sound sets rules (loudest 400 ms for one-shots, integrated for loops, true peak at most -1 dBTP), its loop point
+  kept when the length is the same (else put back on the bar grid for music, or the whole file for loops, with a
+  warning), and a mono sound stays mono. Music stems are levelled together, by the mix of all of them, so the
+  balance you set stays: when the mix lands within 2 LU of the music level nothing moves, otherwise every stem gets
+  the same gain (worked out from the renders, so running the re-export again lands on the same bytes). Each written
+  file gets a `hand_edits` entry in its sidecar and the working folder one ASSET_LOG row (`Modified? yes`, the
+  edited files, a docs/licenses/A-NNNN.txt evidence file with the SHA-256 before and after), updated on later runs
+  instead of added again. An edit you undo in the DAW puts the original file back (and takes its `hand_edits` entry
+  out). `--dry-run` says what would be written.
+- It refuses, with exit 1: a region renamed or removed (that file stays as it is; a near miss is named), a render
+  with a name no sound has, and a game file that changed since the project was made by anything else (`--force`
+  overwrites it). A media file missing from the project stops it before REAPER runs (exit 2). A dialog REAPER shows
+  anyway stops the run after `--timeout` seconds (default 300).
+- REAPER's evaluation licence ran these renders without its nag window in the way (E146). The evaluation is a
+  trial: keep a licence for continued use (REAPER's terms, verify).
+
+**Every other DAW** (FL Studio, Ableton Live, Bitwig, Ardour, LMMS, Audacity, ...):
+```
+python tools/audio/wavesmith/wavesmith.py daw export footsteps build/daw_footsteps
+#   ... edit; render each changed sound to build/daw_footsteps/renders/<name>.wav ...
+python tools/audio/wavesmith/wavesmith.py daw import build/daw_footsteps --daw "FL Studio"
+```
+- `export` writes WAV stems (`stems/<name>.wav`), for a sound set `<name>_sequence.wav` (every sound end to end, 1 s
+  apart), `<folder>/markers.csv` (REAPER's region list columns, verify the import in your DAW) and
+  `<folder>/markers.txt` (an Audacity label track: File > Import > Labels) naming each sound on that timeline, for
+  music `<name>.mid`, and HOW_TO.txt.
+- `import` takes the renders by name (a name that differs only in letter case, spaces or dashes is accepted with a
+  note; anything else is extra and named, never guessed), keeps every sound you did not render, and does the same
+  levelling, checks and logging as `--reexport`. A DAW's dither (within 2 steps of 16-bit) does not count as an edit.
+- FL Studio: its `.flp` project is a closed binary format and its Python scripting drives MIDI controllers and the
+  piano roll, not projects or rendering, so the stems route is the way (verify). Ableton Live: its `.als` is gzipped
+  XML a tool could write, but it has no documented headless render, so stems again (verify). Audacity: Export
+  Multiple, split by labels, names the files by label (verify the menu names in your version).
+- `wavesmith.py daw check` (and `wavesmith.py check`) says whether REAPER was found; `daw export` and `daw import`
+  need nothing.
 
 ## Loudness: measure, check the mix, normalize
 How loud a game sounds is measured, not guessed. `tools/audio/wavesmith/loudness.py` (no installs) gives the numbers the

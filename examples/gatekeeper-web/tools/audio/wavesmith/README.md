@@ -7,6 +7,7 @@ Wavesmith does every audio job a game needs from one front door, `tools/audio/wa
 - build subtitles and captions for dialogue
 - voice lines on your own GPU
 - make sound effects from code or from a local model
+- edit sounds by hand in a DAW and bring them back levelled and logged (REAPER, or any DAW through stems)
 
 It is Dotwork's audio sibling (`tools/art/dotwork/`). Claude (or you) orchestrates; the tools do the measuring and
 the making.
@@ -24,9 +25,10 @@ numbers describe that setup and are not promises. The standard-library tools als
 2. [Subcommands](#subcommands)
 3. [Data files a game writes](#data-files-a-game-writes)
 4. [The engines' side](#the-engines-side)
-5. [GPU tools: setup](#gpu-tools-setup)
-6. [Licences](#licences)
-7. [Exams](#exams)
+5. [Editing in a DAW](#editing-in-a-daw)
+6. [GPU tools: setup](#gpu-tools-setup)
+7. [Licences](#licences)
+8. [Exams](#exams)
 
 ## First run (no GPU)
 ```
@@ -56,6 +58,8 @@ question.
 | `eleven` | eleven_audio.py | ElevenLabs: sound effects and music. Paid, your API key | `eleven sfx --text "..." --out x.wav` |
 | `fish` | fish_tts.py | Fish Audio text to speech. Paid, your API key | `fish say --voice <id> --text "..." --out x.wav` |
 | `wav` | wavfile.py | WAV helpers: stats, normalize to a peak, seamless loops | `wav loop raw.wav --crossfade 2 --out loop.wav` |
+| `daw` | daw.py | The DAW round trip: a REAPER project per set, music track or folder, rendered back headless; WAV stems, MIDI and markers for any other DAW, imported back by name. Unchanged sounds keep their bytes, edited ones are levelled to their bus and logged (Modified? yes) | `daw reaper footsteps`, then `daw reaper --reexport assets_src/daw/footsteps` |
+| `midi` | midifile.py | Standard MIDI files: a chiptune song's notes (one track per channel, drums on channel 10), or a tempo and bar grid | `midi song theme.song.json --out build/theme.mid` |
 | `formats` | audioio.py | Read WAV (8 to 32-bit PCM, float, extensible headers), FLAC and OGG Vorbis with nothing installed (flacfile.py, oggvorbis.py), MP3 / Opus / AAC through ffmpeg if installed; convert to WAV, or to OGG with ffmpeg (loop points kept) | `formats convert theme.ogg --out theme.wav` |
 
 `wavesmith.py <subcommand> --help` lists that tool's options. Exit codes are the subcommand's own:
@@ -94,6 +98,24 @@ access rules, with their golden tests:
 - RPG Maker MZ: game/js/plugins/GameAudio.js, an engine-free plugin with all three, tested with Node against the
   golden files (the overlay itself is a proof of concept: everything that touches MZ says verify in RPG Maker MZ).
 
+## Editing in a DAW
+```
+python tools/audio/wavesmith/wavesmith.py daw reaper footsteps                     # a set: one region per sound
+python tools/audio/wavesmith/wavesmith.py daw reaper --reexport assets_src/daw/footsteps   # after editing in REAPER
+python tools/audio/wavesmith/wavesmith.py daw export explore build/daw_explore     # any other DAW: stems, MIDI, markers
+python tools/audio/wavesmith/wavesmith.py daw import build/daw_explore --daw "FL Studio"   # renders/<name>.wav back
+```
+- REAPER is found from `REAPER_BIN`, `--reaper` or its default install folder. The re-export runs it headless
+  (`-renderproject`) with a throwaway `-cfgfile` folder in the temp folder, so your own REAPER settings are never
+  touched. Tested with REAPER 7.84 on Windows 11 (about 15 s a render); macOS and Linux are untested (verify).
+- The working folder (`assets_src/daw/<name>`) holds the project, copies of the sounds and `<name>/wavesmith_daw.json`,
+  all with relative paths: it can be committed. The .gitignore leaves out REAPER's backups, peak files and render/.
+- A sound whose audio did not change keeps its file byte for byte. A changed one is levelled to its bus (music: the
+  stems together, by their mix) and logged. A file changed in the game meanwhile, a renamed region and an unknown
+  render are refused and named.
+- The details, and what FL Studio and Ableton can and cannot do: `docs/resources/audio.md`, "Editing by hand in a
+  DAW".
+
 ## GPU tools: setup
 - `voice` runs Qwen3-TTS in its own Python environment, so Wavesmith stays standard-library only. Setup steps are in
   `docs/resources/audio.md` (Voice).
@@ -117,5 +139,6 @@ access rules, with their golden tests:
 
 ## Exams
 `wavesmith.py test` runs every `test_*.py` in this folder in its own process, one line each, and exits 1 if any
-failed. `wavesmith.py test music dialogue` runs just those exams. Each exam also runs on its own:
-`python tools/audio/wavesmith/test_music.py`.
+failed. `test_daw.py` uses a stand-in REAPER; with `REAPER_BIN` set it also runs the real one (`ReaperLiveExam`,
+about 2 minutes; skipped without it). `wavesmith.py test music dialogue` runs just those exams. Each exam also runs
+on its own: `python tools/audio/wavesmith/test_music.py`.

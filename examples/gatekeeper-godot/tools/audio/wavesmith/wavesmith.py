@@ -4,7 +4,8 @@
 # Purpose : Wavesmith, the kit's audio tool: one front door for every audio job in a game. Measure and check
 #           loudness, describe sound events and music as data, make and check whole sound sets, build dialogue
 #           subtitles and captions, voice lines on your own GPU, make sound effects from code or from a local model,
-#           and run the exams. Each subcommand is a module in this folder that also runs on its own.
+#           edit sounds by hand in a DAW and bring them back (REAPER, or any DAW through stems), and run the exams.
+#           Each subcommand is a module in this folder that also runs on its own.
 # Usage   : python tools/audio/wavesmith/wavesmith.py list                       # every subcommand, one line each
 #           python tools/audio/wavesmith/wavesmith.py check                      # what is ready on this machine
 #           python tools/audio/wavesmith/wavesmith.py test                       # every exam (standard library only)
@@ -16,12 +17,15 @@
 #           every subcommand; docs/resources/audio.md has the background and the evidence. Exit codes are the
 #           subcommand's own: 0 ok, 1 the task failed (or a check found problems), 2 environment or usage.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): daw (the DAW round trip, #191) and midi; check says
+#           whether REAPER is here
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
 #   argv[0] names a subcommand -> import its module from this folder -> module.main(rest of argv) -> its exit code
 #   list:  the table below
-#   check: Python version; the GPU tools' own check commands (voice, sfx), each reported, none required
+#   check: Python version; REAPER for the DAW round trip; the GPU tools' own check commands (voice, sfx), each
+#          reported, none required
 #   test:  every test_*.py in this folder in its own process (same Python) -> one line each -> exit 1 if any failed
 import importlib
 import os
@@ -55,6 +59,9 @@ SUBCOMMANDS = {
     "wav":      ("wavfile", "WAV helpers: stats, normalize to a peak, seamless loops"),
     "formats":  ("audioio", "read WAV / FLAC / OGG Vorbis with nothing installed, MP3 / Opus with ffmpeg; convert, "
                             "write OGG (ffmpeg)"),
+    "daw":      ("daw", "edit sounds by hand in a DAW and bring them back levelled and logged: REAPER projects "
+                        "rendered back headless; stems, MIDI and markers for any other DAW"),
+    "midi":     ("midifile", "Standard MIDI files: a chiptune song's notes, or a tempo and bar grid"),
 }
 GPU_CHECKS = (("voice", ["check"]), ("sfx", ["check"]))
 TEST_TIMEOUT_S = 900
@@ -78,6 +85,9 @@ def cmd_check():
     ok = sys.version_info >= (3, 8)
     print(f"[{' OK ' if ok else 'FAIL'}] Python {sys.version.split()[0]} (Wavesmith needs 3.8 or newer)")
     print("[ OK ] standard-library tools ready: " + ", ".join(n for n in SUBCOMMANDS if n not in ("voice", "sfx")))
+    import daw
+    for ready, line in daw.readiness():                 # REAPER is optional: every other DAW works through stems
+        print(f"[{' OK ' if ready else 'note'}] {line}")
     for name, args in GPU_CHECKS:
         print(f"[....] {name}: running `{name} {' '.join(args)}` (optional: only for that tool)")
         try:

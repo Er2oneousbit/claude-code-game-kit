@@ -26,6 +26,7 @@ To generate instead of find, hand off to `/gen-brief`, then come back here to lo
 3. Import using the naming conventions in `docs/ENGINE.md` or `docs/ENGINE_FLOW.md` ("Assets and audio"); 3D names are in SOP-11.
 4. Mark temporary or NC assets `PLACEHOLDER` in Notes.
 5. A Dotwork pack (`tools/art/dotwork/`) logs itself: `python tools/art/dotwork/dotwork.py log --pack NAME --dry-run`, then without `--dry-run`, writes the row and the evidence file from its manifest (models, licenses, seeds). Check the row, do not retype it.
-6. Report the row you added and any attribution that must appear in credits.
+6. A sound edited by hand in a DAW through Wavesmith (`python tools/audio/wavesmith/wavesmith.py daw reaper --reexport <folder>` or `daw import <folder>`) logs itself too: one row per working folder with `Modified? yes`, updated on later runs, plus the evidence file. Check it; do not add a second row for the same files.
+7. Report the row you added and any attribution that must appear in credits.
 
 If the license check cannot be completed (site unreachable, ambiguous), say what is unknown and ask the user to decide.

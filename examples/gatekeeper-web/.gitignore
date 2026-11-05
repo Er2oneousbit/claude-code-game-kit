@@ -59,3 +59,9 @@ captures/
 # ---- Claude Code Game Kit 0.8.2: rules added by --upgrade ----
 *.aseprite.bak
 *.pxo.bak
+
+# ---- Claude Code Game Kit 0.8.2: rules added by --upgrade ----
+*.rpp-bak
+*.rpp.bak
+*.reapeaks
+assets_src/daw/*/render/

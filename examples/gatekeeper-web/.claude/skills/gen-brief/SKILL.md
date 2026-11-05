@@ -18,6 +18,7 @@ If the user runs ComfyUI locally (SOP-16 "Generating pixel art locally"), offer 
    - Include a short "reject if" checklist (what a bad result looks like) so review is fast.
 5. **Batch consistency:** for sets (a character's 12 voice lines, 20 UI icons, 15 footsteps), generate a numbered table with the shared prefix once and only the varying part per row.
 6. **After generation:** when the user brings results back, review against the "reject if" list, suggest prompt tweaks (one change at a time), and when something is accepted run `/asset-intake` to log it as AI-assisted with tool, account tier or plan, date, and the prompt used.
+   A sound that is nearly right (a tail too short, a click, a stem too loud in the music) can be touched up by hand: `python tools/audio/wavesmith/wavesmith.py daw reaper <set|track|folder>` for REAPER, `daw export` for any other DAW (`docs/resources/audio.md`, "Editing by hand in a DAW"). It comes back at its bus level and logged as modified.
 7. **Save winners:** add prompts that worked to the Prompt Library table in `docs/BRIEFS.md`.
 
 Rules:
