@@ -6,14 +6,14 @@
 # Usage   : attach to the root Node3D of scenes/showcase.tscn; make that the main scene; then
 #           python tools/dev.py smoke --record captures/frames   (and tools/art/frames_to_gif.py)
 # Notes   : Models are Bozzetto output (glTF, metres, +Y up, front +Z, pivot at the bottom). The character's clips
-#           (idle, wave, walk) come from animate_rig.py; glTF clips import without looping, so they are set to loop
+#           (idle, wave, walk) come from bozzetto.py rig (rig_finish.py); glTF clips import without looping, so they are set to loop
 #           here. Timings are in seconds of game time.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 extends Node3D
 
 const TREE := "res://assets/models/kit_tree.glb"
-const HERO := "res://assets/models/npc_beekeeper_animated.glb"
+const HERO := "res://assets/models/npc_beekeeper_rigged.glb"   # bozzetto.py rig make npc_beekeeper
 const TREE_SPOTS := [  # x, z, turn (deg), scale
 	[-3.2, -2.5, 0.0, 1.0], [3.4, -3.0, 140.0, 1.15], [-5.5, -6.0, 70.0, 0.9],
 	[5.8, -7.0, 220.0, 1.25], [0.6, -8.5, 300.0, 1.1], [-1.8, -11.0, 30.0, 1.3],

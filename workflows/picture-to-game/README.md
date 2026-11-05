@@ -13,8 +13,7 @@ Machine: Windows 11, RTX 5060 Ti 16 GB (Blackwell), 64 GB RAM, ComfyUI 0.43.0, B
 |---|---|---|---|
 | Picture | FLUX.2 klein 4B (Bozzetto `--reference-only`) | 3 seeds, about 10 s each | 6 seeds, two rounds |
 | Mesh, cleanup, budget check, asset log | Bozzetto (`tools/bozzetto/`) | 173 s, passed | failed twice, passed with `--material vertex` |
-| Skeleton and skin weights | UniRig (`src/run_unirig.sh`) | n/a | 81 s |
-| Animation: idle, wave, walk | Claude-written Blender script (`src/animate_rig.py`) | n/a | a few seconds |
+| Skeleton, skin weights, Mixamo names, idle/wave/walk | `bozzetto.py rig make` (UniRig, then `rig_finish.py`) | n/a | about 85 s |
 | In the engine | Godot (`src/showcase.gd`) | 6 trees placed | plays the three clips |
 
 ## The commands
@@ -28,17 +27,16 @@ python tools/bozzetto/bozzetto.py make npc_beekeeper --class npc --prompt "a sty
 python tools/bozzetto/bozzetto.py make kit_tree --class kit --image assets_src/bozzetto/kit_tree/reference_seed31.png --seed 31
 python tools/bozzetto/bozzetto.py make npc_beekeeper --class npc --image assets_src/bozzetto/npc_beekeeper/reference_seed52.png --seed 53 --material vertex
 
-# rig (free ComfyUI's VRAM first: UniRig needs nearly all 16 GB), then animate
-curl -X POST http://127.0.0.1:8188/free -H "Content-Type: application/json" -d "{\"unload_models\": true, \"free_memory\": true}"
-UNIRIG_DIR=<your UniRig checkout> bash src/run_unirig.sh assets/models/npc_beekeeper.glb beekeeper
-blender -b --python-exit-code 1 -P src/animate_rig.py -- <UniRig>/results/beekeeper/rigged.glb --out assets/models/npc_beekeeper_animated.glb --sheet clips.png
+# rig and animate (UNIRIG_DIR: a UniRig checkout set up as in tools/bozzetto/README.md "Rig a character")
+python tools/bozzetto/bozzetto.py rig make npc_beekeeper            # -> assets/models/npc_beekeeper_rigged.glb
 
 # into the engine (showcase.gd on a Node3D scene made the main scene)
 python tools/dev.py import
 python tools/dev.py smoke --frames 660 --record captures/frames
 python tools/art/frames_to_gif.py captures/frames in_engine_godot.gif --fps 15 --width 480
 ```
-`src/` paths are this folder's; copy the three files into the game (or run them from here).
+`src/showcase.gd` is this folder's; copy it into the game. The showcase was first built from scratch scripts; those
+became the kit's `bozzetto.py rig` (0.12.0), which is what the commands above use.
 
 ## The tree: kit_tree
 ![The chosen picture](media/tree_reference.jpg)
@@ -88,11 +86,11 @@ credit it, as `docs/licenses/` and `tools/credits.py` do for Bozzetto's models).
 but adds training data from VRoid Hub and ModelsResource (models taken from commercial games), so it is not used here.
 
 Setup, in its own Python env (never ComfyUI's), with **standard wheels only**: no flash_attn, no Triton, no
-community builds. `src/patch_unirig.py` makes four small changes to the checkout so it runs without them (the header
-lists them; it is safe to run twice, and `--check` only reports):
+community builds. `tools/bozzetto/rig/patch_unirig.py` makes four small changes to the checkout so it runs without
+them (the header lists them; it is safe to run twice, and `--check` only reports):
 ```
 git clone https://github.com/VAST-AI-Research/UniRig && cd UniRig
-python <this folder>/src/patch_unirig.py .
+python <game>/tools/bozzetto/rig/patch_unirig.py .
 uv venv --python 3.11 .venv          # bpy 4.2 pins Python 3.11
 uv pip install torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu128   # cu128: first CUDA with Blackwell
 uv pip install torch_scatter torch_cluster -f https://data.pyg.org/whl/torch-2.7.0+cu128.html
@@ -102,7 +100,7 @@ uv pip install -r requirements.txt numpy==1.26.4    # remove its flash_attn line
 Tested on a fresh clone (UniRig 6793c66) with that env: the beekeeper rigged in 82 s, peak 15.6 GB, every vertex
 weighted. The flash_attn-free path matches the flash one: the same 45 joints exactly, and skin weights as close as two
 runs of the flash env are to each other (GPU scatter and sparse convolution are not bit-for-bit repeatable: mean
-difference 0.0004 both ways, the same strongest bone for 99% of points). `src/mha_sdpa.py` is the stand-in for
+difference 0.0004 both ways, the same strongest bone for 99% of points). `tools/bozzetto/rig/mha_sdpa.py` is the stand-in for
 flash_attn's attention class: same weights, outputs within 1e-7.
 
 How it got there. The first working env used a community flash_attn wheel and `triton-windows`, and three things
@@ -132,7 +130,8 @@ head_dim-16 bug cannot happen: the setup above.
 
 ### Animation: written, not generated
 No local tool makes game animation you can ship (pose-from-video tools build on SMPL-X, which is non-commercial), so
-Claude wrote it: `src/animate_rig.py` finds the body from the skeleton's shape and keys three loops.
+Claude wrote it: `tools/bozzetto/rig_finish.py` (first a script in this folder) finds the body from the
+skeleton's shape and keys three loops.
 - **Spine and head**: the path from the root to the highest bone tip.
 - **Limbs**: everything hanging off the spine. The two reaching the floor are legs, the two reaching farthest out
   sideways are arms; left and right by the sign of X. A third limb on the floor stops it: quadrupeds need their own

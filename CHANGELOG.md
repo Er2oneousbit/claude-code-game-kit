@@ -4,6 +4,15 @@
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
 ## 0.12.0 (unreleased)
+- `bozzetto.py rig`: a skeleton, skin weights and clips for a character in the game, logged as "rig of A-NNNN".
+  `rig make <name>` uses UniRig on your own GPU (free; a checkout patched by `tools/bozzetto/rig/patch_unirig.py` runs on standard
+  wheels, no flash_attn or Triton) or `--with tripo` (paid API credits, quoted and checked against `--max-credits`
+  and the balance before anything is uploaded). Both go through `rig_finish.py`: a weight check that fails the rigs
+  that came back with exit 0 here (unweighted, NaN, everything on glTF's placeholder bone or on one bone), Mixamo
+  bone names found by the skeleton's shape (`mixamorig:Hips` ...), Tripo's 1.0 m output scaled back, and for UniRig
+  three looping clips (idle, wave, walk). `rig check` says which route is ready. Exam `test_rig.py` (15 cases: stand-in
+  UniRig and Tripo, rigs built in Blender). Tested live: UniRig 85 s, Tripo 29 s and 45 credits (K01, E152, E153)
+  (#199, #205 part 2).
 - `make-a-game`: the art-source question (8b) is asked for 3D games too, with 3D options (shapes in code plus packs,
   their own models, Bozzetto with its 16 GB card and statue-only characters said plainly, paid 3D services), and a new
   sound-source question (8c: Wavesmith in code, their own, local AI, paid). The interview is 15 questions; the plan, the
@@ -12,14 +21,14 @@
   (#204: the flagship game is made through this interview like any user's).
 - `workflows/picture-to-game/`: one generated picture each to a tree (Bozzetto, a grove of six in Godot) and to a
   character that walks in, waves and idles in Godot: Bozzetto for the mesh, UniRig for the skeleton and skin weights
-  (`workflows/picture-to-game/src/run_unirig.sh`), and `workflows/picture-to-game/src/animate_rig.py`, a Blender
+  (first a scratch runner, now `bozzetto.py rig`), and a Blender
   script that finds spine, legs and arms in an unlabelled
   auto-rig from its shape and keys idle, wave and walk loops. Failures shown: a look-alike first prompt, the budget
   check refusing the textured character twice (UV coverage 51%, 53%), three UniRig problems on a Blackwell GPU
   (Triton on Windows, a pickled class in the checkpoint, flash_attn wrong at head_dim 16 giving a rig that deforms
   nothing with exit 0), and a vertex-coloured model rendering white in Godot. EVIDENCE E151 (UniRig and its data),
   E152 (the runs) (#199, #202, #203).
-- `workflows/picture-to-game/src/patch_unirig.py` and `mha_sdpa.py`: UniRig runs on standard wheels only (no flash_attn,
+- `tools/bozzetto/rig/patch_unirig.py` and `mha_sdpa.py` (first in the showcase's `src/`): UniRig runs on standard wheels only (no flash_attn,
   no Triton, no community builds): a PyTorch SDPA stand-in for flash_attn's attention class (same weights, within 1e-7),
   `sdpa` for the skeleton model, PTv3's own attention, and a weights-only allowlist for the skin checkpoint. Same
   skeleton, skin weights within run-to-run noise, tested on a fresh clone (#199).

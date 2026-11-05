@@ -16,8 +16,9 @@ that machine needed, not promises.
 3. [What lands where](#what-lands-where)
 4. [What to expect](#what-to-expect)
 5. [In the engine](#in-the-engine)
-6. [Licences](#licences)
-7. [Exams](#exams)
+6. [Rig a character](#rig-a-character)
+7. [Licences](#licences)
+8. [Exams](#exams)
 
 ## Setup
 1. **ComfyUI 0.43.0 or newer** (TRELLIS.2's nodes are built in: no custom node pack). Dotwork's README has the install
@@ -127,13 +128,67 @@ model, PBR textures embedded. The game's ENGINE.md (in docs/) has the import lin
 - Unity, Unreal, Bevy: see the ENGINE.md of that engine.
 - 2D engines: render it to a sprite sheet (`--sprites`, or `tools/blender/render_sprites.py`).
 
+## Rig a character
+`make` gives a character as a statue. `rig` gives it a skeleton, skin weights and clips, checks that the rig really
+deforms, and names the bones the way engines and animation packs expect (Mixamo's `mixamorig:Hips` ...):
+```
+python tools/bozzetto/bozzetto.py rig check                                  # which routes are ready
+python tools/bozzetto/bozzetto.py rig make npc_guard                         # UniRig: free, your GPU
+python tools/bozzetto/bozzetto.py rig make npc_guard --with tripo --clips idle,walk,run   # Tripo: paid credits
+```
+The input is the model `make` placed (`<models>/<name>.glb`, or `--input` any `.glb`); the result is
+`<models>/<name>_rigged.glb`, with its sources and reports in `assets_src/bozzetto/<name>/rig/<route>/` and its own
+asset log row ("rig of A-NNNN").
+
+| | UniRig (`--with unirig`, the default) | Tripo (`--with tripo`) |
+|---|---|---|
+| Cost | free | about 25 credits ($0.25) to rig, 10 a clip; the quote is printed and checked first |
+| Needs | an NVIDIA GPU (peak 15.6 GB measured), a UniRig checkout and its Python env | `TRIPO_API_KEY` with API credits (a Tripo Studio plan does not add them) |
+| Clips | `--animate idle,wave,walk` (default) or `none`: keyed by `rig_finish.py`, game-jam quality | `--clips` up to 5 of Tripo's presets (`idle`, `walk`, `run`, `jump`, `turn`, ...): mocap-like |
+| Time (K01) | about 85 s | about 30 s |
+| Terms | UniRig MIT; trained on Articulation-XL2.0 (CC-BY-4.0: credited in the log) | outputs are yours on paid credits (Tripo terms 5.2.2), not on free ones |
+
+**UniRig setup**, once, standard wheels only (no flash_attn, no Triton, no community builds):
+```
+git clone https://github.com/VAST-AI-Research/UniRig && cd UniRig
+python <game>/tools/bozzetto/rig/patch_unirig.py .    # four small changes; safe to run twice; --check reports
+uv venv --python 3.11 .venv                           # bpy 4.2 pins Python 3.11
+uv pip install torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu128
+uv pip install torch_scatter torch_cluster -f https://data.pyg.org/whl/torch-2.7.0+cu128.html
+uv pip install spconv-cu126
+uv pip install -r requirements.txt numpy==1.26.4      # remove its flash_attn line first
+```
+Then set `UNIRIG_DIR` to the checkout (`UNIRIG_PY` if its Python lives elsewhere). cu128 is the first CUDA build with
+Blackwell (RTX 50) GPUs; older cards work with it too. The patch: flash_attn's attention class swapped for a PyTorch
+stand-in with the same weights (`rig/mha_sdpa.py`, outputs within 1e-7), `sdpa` for the skeleton model, the skin
+model's point encoder on its own attention (flash_attn returned wrong values at head size 16 on a Blackwell card,
+which made a rig that deformed nothing), and a weights-only allowlist for one class in the skin checkpoint (instead of
+the unsafe `weights_only=False`). The details and how they were found: `workflows/picture-to-game/`.
+
+**What every rig is checked for** (`rig_finish.py`, both routes), because broken rigs here came back with exit 0:
+vertices with no weight, NaN weights, vertices only on glTF's placeholder bone (`neutral_bone`), one bone holding
+most of the mesh, too few bones in use. A failed check ships nothing. It also removes a mesh nothing skins (both
+routes leave a stray `Icosphere`) and scales Tripo's 1.0 m output back to the model's height.
+
+**Bone names:** UniRig's bones are `bone_0` ... `bone_N`. `rig_finish.py` finds the body by shape (the spine runs from
+the root to the highest bone; of the limbs off it, the two reaching the floor are legs, the two reaching farthest
+sideways are arms; left is +X) and renames hips, spine, neck, head, legs and arms to Mixamo's names (`--names keep`
+skips it). Fingers keep their own names. Tripo's rig already has Mixamo names. Bipeds only: a third limb on the floor
+stops it.
+
+In the engine: the rigged `.glb` carries its clips as glTF animations. Godot: an AnimationPlayer in the imported scene;
+glTF clips import without looping, so set `loop_mode` (the showcase does). Unity: set the model's rig to Humanoid; the
+Mixamo names should map without hand work, so Mixamo-style clips play on it **(verify: not yet tested in Unity)**.
+
 ## Licences
 `LICENSES.md` has the register. In short: TRELLIS.2 and BiRefNet are MIT; DINOv3, TRELLIS.2's image encoder, has
 its own licence: worldwide and royalty-free, but with a list of prohibited uses (military, weapons, ITAR) whose reach
 over game props such as swords and guns is an **open question** you decide for your game. RMBG-2.0 and nvdiffrast,
 which upstream TRELLIS.2 uses, are non-commercial and never loaded (`make` refuses a workflow that names them).
-Hunyuan3D 2.x (region exclusions) and Stable Fast 3D (revenue cap) were ruled out. Paid 3D services (Meshy, Tripo
-and others) are not wired in: `docs/resources/ai-tools.md` lists them.
+Hunyuan3D 2.x (region exclusions) and Stable Fast 3D (revenue cap) were ruled out. Rigging: UniRig is MIT, its
+checkpoint was trained on Articulation-XL2.0 (CC-BY-4.0, credited); its successor SkinTokens is not used (trained on
+models from commercial games and VRoid Hub). Tripo is wired in for rigging only (`rig --with tripo`); other paid 3D
+services (Meshy and others) are not: `docs/resources/ai-tools.md` lists them.
 
 The tool was first called Meshwright and renamed before release: that name, and Polywright, Whittle and Plinth, were
 already taken by other 3D projects. A web search on 2026-11-05 found no software named "Bozzetto" **(verify)** before
@@ -146,5 +201,7 @@ python tools/bozzetto/test_bozzetto.py          # offline: a stand-in ComfyUI an
                                                     # for real when Blender (or bpy) is found (about 20 s)
 uv run --python 3.13 --with bpy python tools/bozzetto/test_bozzetto.py   # the same on the bpy module
 python tools/bozzetto/test_bozzetto_live.py     # one real run on the GPU (about 5 min); skips without one
+python tools/bozzetto/test_rig.py               # rig, offline: stand-in UniRig and Tripo; rig_finish.py on rigs
+                                                    # built in Blender when it is found (about 25 s)
 python tools/bozzetto/bozzetto.py test [--live] # the above in one go
 ```

@@ -72,8 +72,8 @@ C. **Look and feel**
        - **Bozzetto, AI on this computer**: a picture or a sentence to a game-ready model with its budget checked and
          logged, free per model, about 5 minutes each. Needs an NVIDIA graphics card with 16 GB of video memory,
          ComfyUI, about 8 GB of model downloads and Blender. Results are drafts: the hidden sides are invented, and
-         characters come out as statues with no skeleton, so a moving character still needs an animated pack model
-         or hand work (`workflows/picture-to-game/` shows a working route, not yet a kit command).
+         characters come out as statues; `bozzetto.py rig` then gives them a skeleton and simple clips (free on the
+         same card, or through Tripo's paid API), good for prototypes and background characters, not mocap.
        - **A paid AI 3D service** (Meshy, Tripo and others): not wired into the kit; their account, terms and costs.
        Several at once is fine ("Dotwork for characters, packs for tiles"). Record the answer as the plan's Art source.
    8c. Where should the sound come from? Same as art: the first build may have none, so this is about later. Options:

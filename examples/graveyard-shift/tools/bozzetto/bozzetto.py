@@ -12,6 +12,8 @@
 #           python tools/bozzetto/bozzetto.py make prop_chest --prompt "a wooden chest with iron bands" --seed 11
 #           python tools/bozzetto/bozzetto.py make prop_chest --prompt "..." --reference-only --seed 12  # image only
 #           python tools/bozzetto/bozzetto.py make npc_guard --image ref.png --class npc --lods 0.5 --sprites assets/art/guard.png
+#           python tools/bozzetto/bozzetto.py rig check            # the rig routes: UniRig (local) and Tripo (paid)
+#           python tools/bozzetto/bozzetto.py rig make npc_guard   # skeleton, skin weights, Mixamo names, clips
 #           Options for make: --class prop|kit|hero|npc, --seed N, --out <models folder>, --lods 0.5,0.25|none,
 #           --height M, --turn DEG, --quality normal|high, --material texture|vertex, --no-log, --overwrite, --debug
 # Needs   : Python 3.8+ (standard library). For make: a running ComfyUI 0.43.0+ (TRELLIS.2 nodes are built in) with
@@ -23,7 +25,8 @@
 #           -> cleanup.py in Blender -> tools/blender/prep_export.py (the one glTF preset, LODs) ->
 #           tools/blender/validate_asset.py --class -> files into --out -> ASSET_LOG row + evidence + the model
 #           licence texts in docs/licenses/ (first time) -> turntable.py preview; with --sprites, render_sprites.py
-#           runs before the log, so the sheet gets its row and hash.
+#           runs before the log, so the sheet gets its row and hash. rig (rig.py, rig_finish.py) gives a model
+#           a skeleton: UniRig on your GPU or the Tripo3D API, then a weight check, Mixamo bone names and clips.
 #           Sources and records stay in assets_src/bozzetto/<name>/ (reference, raw mesh, reports, preview).
 #           Nothing reaches --out unless the budget check passes. Files are never replaced without --overwrite.
 #           Licences: TRELLIS.2 and BiRefNet are MIT, DINOv3 (TRELLIS.2's image encoder) has its own licence with a
@@ -69,7 +72,7 @@ import fetch_asset  # noqa: E402  (ASSET_LOG helpers)
 import validate_asset as va  # noqa: E402  (class budgets; its bpy import is lazy)
 
 TOOL = "Bozzetto"                 # the one place the name is spelled for people: a rename starts here
-VERSION = "0.11.0"
+VERSION = "0.12.0"
 SRC_ROOT = Path("assets_src") / TOOL.lower()   # per model: reference, raw mesh, reports, preview
 DEFAULT_OUT = "assets/models"
 # where models go when --out is not given, by the engine in the game's .game-kit.json (its assets folder + models;
@@ -874,7 +877,7 @@ def cmd_list(args):
 
 
 def cmd_test(args):
-    exams = [HERE / "test_bozzetto.py"] + ([HERE / "test_bozzetto_live.py"] if args.live else [])
+    exams = [HERE / "test_bozzetto.py", HERE / "test_rig.py"] + ([HERE / "test_bozzetto_live.py"] if args.live else [])
     failed = 0
     for exam in exams:
         t0 = time.monotonic()
@@ -895,7 +898,8 @@ def build_parser():
                     "(TRELLIS.2 in a local ComfyUI, cleanup and checks in Blender).",
         epilog="Exit: 0 ok, 1 the job or the budget check failed, 2 usage, environment, missing models or files in "
                f"the way.\nEnv: {cl.URL_ENV} (default {cl.DEFAULT_URL}), {BLENDER_ENV} (blender executable), "
-               "COMFYUI_ROOT (check --hash).\nREADME.md in this folder walks through setup and every option.")
+               "COMFYUI_ROOT (check --hash); rig: UNIRIG_DIR, UNIRIG_PY, TRIPO_API_KEY.\nREADME.md in this folder "
+               "walks through setup and every option.")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--url", help=f"ComfyUI address (default {cl.URL_ENV} or {cl.DEFAULT_URL})")
     common.add_argument("--allow-remote", action="store_true", help="allow a ComfyUI that is not on this machine")
@@ -941,6 +945,9 @@ def build_parser():
     p.add_argument("--overwrite", action="store_true", help="replace this model's files from an earlier run")
     p.add_argument("--wait", type=int, default=WAIT_S, help=f"seconds to wait for each ComfyUI job (default {WAIT_S})")
     p.set_defaults(fn=cmd_make)
+    import rig as rig_mod   # noqa: E402  (rig.py: the rig subcommand)
+    rig_mod.bind(sys.modules[__name__])
+    rig_mod.add_parser(sub, common)
     return ap
 
 

@@ -127,7 +127,9 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
 - **Bozzetto:** a `--material vertex` model renders white in Godot until `vertex_color_use_as_albedo` is set
   ([#202](https://github.com/Er2oneousbit/claude-code-game-kit/issues/202)); TRELLIS.2 characters with baked textures
   landed under the `npc` class's 55% UV coverage floor on two seeds
-  ([#203](https://github.com/Er2oneousbit/claude-code-game-kit/issues/203)).
+  ([#203](https://github.com/Er2oneousbit/claude-code-game-kit/issues/203)). `rig`: bipeds only; the Unity Humanoid
+  route is untested; Mixamo and Quaternius are named as sources but no pack is tested
+  ([#205](https://github.com/Er2oneousbit/claude-code-game-kit/issues/205)).
 
 ## The examples
 None of the example games has been played by a human tester; the bots and tests are the only proof they play as

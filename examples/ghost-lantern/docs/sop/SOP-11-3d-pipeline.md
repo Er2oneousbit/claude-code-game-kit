@@ -15,8 +15,9 @@ as well on a model you made, bought or downloaded.
 | Make any model engine-ready (transforms, pivot, names, LODs, `.glb`) | `tools/blender/prep_export.py` | Stage 5 below |
 | A 2D sprite sheet from a 3D model | `tools/blender/render_sprites.py` (or `bozzetto.py make --sprites`) | [3D source, 2D game](#3d-source-2d-game-sprite-sheets) |
 | Procedural props, kits, shaders, batch jobs | Claude-written scripts in `tools/blender/` | [Claude and Blender](#claude-and-blender) |
-| Rig, animate, retarget | No kit tool: guidance and scripts | [Animation](#animation), `docs/resources/pipelines.md` |
-| Paid generators (Tripo, Meshy and others) | Not wired in | `docs/resources/ai-tools.md` |
+| Rig a character (skeleton, skin weights, Mixamo bone names, clips) | `python tools/bozzetto/bozzetto.py rig make <name>` (UniRig, free, your GPU; or `--with tripo`, paid) | `tools/bozzetto/README.md` "Rig a character" |
+| Animate beyond that, retarget, creatures | Guidance and scripts | [Animation](#animation), `docs/resources/pipelines.md` |
+| Paid generators (Meshy and others; Tripo for rigging only) | Not wired in (Tripo: `rig --with tripo`) | `docs/resources/ai-tools.md` |
 | Log and credit an asset | `/asset-intake` | Stage 7 below |
 | Ask Claude for any of it | the `model-pipeline` skill | Follows this SOP |
 

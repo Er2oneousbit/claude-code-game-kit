@@ -39,6 +39,8 @@ ProjectSettings/         project config (text, edit with care)
 - Assembly definitions (`.asmdef`) per folder group for fast compile and test isolation.
 - 3D models from `tools/bozzetto/bozzetto.py` land in `Assets/Models/` as `.glb`: Unity needs a glTF importer package
   for them (glTFast, `com.unity.cloud.gltfast`), or export FBX from Blender instead **(verify for your Unity version)**.
+  A rigged character from `bozzetto.py rig make` has Mixamo bone names: set its rig to Humanoid so Unity maps them
+  and Mixamo-style clips play on it **(verify: not yet tested in Unity)**.
   A `--material vertex` model keeps its colours in glTF `COLOR_0`: check that it is not white, because Godot ignores
   them by default (#202) and whether glTFast's materials use them is not tested here **(verify)**.
 

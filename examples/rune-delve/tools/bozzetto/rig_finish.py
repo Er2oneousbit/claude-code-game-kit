@@ -1,0 +1,453 @@
+#!/usr/bin/env python3
+# ---------------------------------------------------------------------------
+# rig_finish.py
+# Purpose : Finish an auto-rigged character in Blender and prove the rig works: drop meshes nothing skins, put the
+#           model back at its real size, check the skin weights (the failures that pass with exit 0 elsewhere), give
+#           the bones Mixamo names so engines and animation packs recognise them, optionally key three looping clips
+#           (idle, wave, walk), and write one .glb plus a JSON report.
+# Usage   : Inside Blender (any OS):
+#             blender -b --python-exit-code 1 -P tools/bozzetto/rig_finish.py -- <rigged.glb> --out <out.glb> [options]
+#           With the bpy module:  python tools/bozzetto/rig_finish.py <rigged.glb> --out <out.glb> [options]
+#           Options: --scale 1.8 (multiply the size: Tripo returns 1.0 m tall), --names mixamo|keep,
+#                    --animate idle,wave,walk|none, --report r.json, --sheet clips.png, --check-only
+# Needs   : Blender 4.2+ or the bpy module
+# Exit    : 0 written (or --check-only passed), 1 the rig failed a check (or is not a biped when names or clips need
+#           one), 2 usage or environment
+# Notes   : bozzetto.py rig make runs this after UniRig or Tripo; it also runs on its own.
+#           The weight checks, on every skinned mesh: vertices with no weight; NaN weights; weights that do not sum to
+#           1; vertices on glTF's placeholder bone (`neutral_bone`, what an importer uses for a vertex with no real
+#           joint: UniRig's NaN skin weights became exactly that, a rig that deforms nothing); one bone holding most
+#           vertices; too few bones holding any. Limits are the constants below.
+#           Biped mapping, without names (UniRig's bones are bone_0 ... bone_N): the spine is the path from the root
+#           to the highest bone tip; limbs hang off it; the two reaching the floor are legs, the two reaching
+#           farthest out sideways are arms; left is +X (the character faces -Y in Blender, glTF's +Z front). A third
+#           limb on the floor stops it: quadrupeds need their own gaits.
+#           Clips are keyed in the character's frame (side X, front -Y, up Z) and converted into each bone's frame,
+#           so arbitrary bone rolls never flip a swing. Arms drop from the A-pose to a relaxed angle measured from
+#           their own rest pose. Game-jam quality, not mocap. Each clip is its own action, exported with
+#           export_animation_mode ACTIONS (no NLA strips: Blender 5.2's slot-less strips baked to the rest pose).
+#           A model that already has animations (Tripo's) keeps them; --animate adds clips only to one without.
+# Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# ---------------------------------------------------------------------------
+#
+# Pseudocode
+#   import -> one armature, else exit 1 -> remove meshes without an Armature modifier -> --scale on the top objects
+#   weights per skinned mesh (placeholder bone counts as unweighted) -> any limit broken: report, exit 1
+#   names or clips wanted -> map the biped (spine, legs, arms) or exit 1 -> rename to mixamorig:* -> key the clips
+#   -> export .glb (clips as glTF animations) -> report JSON -> --sheet: 4 frames per clip
+import argparse
+import json
+import math
+import sys
+from pathlib import Path
+
+import bpy
+from mathutils import Quaternion, Vector
+
+# --- tunables -------------------------------------------------------------------------------------------------
+MAX_UNWEIGHTED = 0.005      # share of vertices allowed without a real bone
+MAX_ONE_BONE = 0.60         # share of vertices one bone may dominate (a rig with everything on one bone is broken)
+MIN_BONES_USED = 4          # bones that must dominate at least one vertex
+SUM_TOLERANCE = 0.02        # weights of a vertex must sum to 1 within this
+PLACEHOLDER = "neutral_bone"
+FPS = 24
+IDLE_FRAMES, WAVE_FRAMES, WALK_FRAMES = 48, 48, 24
+IDLE_BREATH_DEG, IDLE_NOD_DEG, IDLE_ARM_DEG = 2.5, 3.0, 4.0
+WAVE_RAISE_DEG, WAVE_SWING_DEG = 105.0, 28.0
+RELAX_BELOW_DEG = 70.0      # idle and walk: arms hang this far under horizontal instead of the A-pose
+WALK_THIGH_DEG, WALK_KNEE_DEG, WALK_ARM_DEG = 24.0, 38.0, 18.0
+WALK_BOB, WALK_TWIST_DEG = 0.025, 4.0
+SIDE, FRONT, UP = Vector((1, 0, 0)), Vector((0, -1, 0)), Vector((0, 0, 1))
+MIXAMO = "mixamorig:"
+CLIPS_KNOWN = ("idle", "wave", "walk")
+
+
+class RigFail(Exception):
+    pass
+
+
+def parse():
+    argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:]
+    ap = argparse.ArgumentParser(prog="rig_finish.py", description="Finish and check an auto-rigged character.")
+    ap.add_argument("rigged", help="rigged .glb (UniRig or Tripo output)")
+    ap.add_argument("--out", help="the finished .glb (required unless --check-only)")
+    ap.add_argument("--scale", type=float, default=1.0, help="multiply the model's size (Tripo returns 1.0 m tall)")
+    ap.add_argument("--names", choices=("mixamo", "keep"), default="mixamo", help="bone names (default mixamo)")
+    ap.add_argument("--animate", default="none", help="clips to key: idle,wave,walk or none (default none)")
+    ap.add_argument("--report", help="write the JSON report here")
+    ap.add_argument("--sheet", help="render 4 frames of each clip into this PNG")
+    ap.add_argument("--check-only", action="store_true", help="only the weight checks, nothing written but --report")
+    a = ap.parse_args(argv)
+    clips = [] if a.animate.strip().lower() in ("", "none") else [c.strip() for c in a.animate.split(",")]
+    bad = [c for c in clips if c not in CLIPS_KNOWN]
+    if bad:
+        ap.error(f"unknown clip {bad[0]!r}: choose from {', '.join(CLIPS_KNOWN)}")
+    if not a.out and not a.check_only:
+        ap.error("--out is required (or --check-only)")
+    a.clips = clips
+    return a
+
+
+# --- weights -------------------------------------------------------------------------------------------------
+def check_weights(arm, meshes):
+    bones = {b.name for b in arm.data.bones if b.name != PLACEHOLDER}
+    total = unweighted = on_placeholder = nan = badsum = 0
+    dominant = {}
+    for m in meshes:
+        names = {g.index: g.name for g in m.vertex_groups}
+        for v in m.data.vertices:
+            total += 1
+            gs = [(names.get(g.group), g.weight) for g in v.groups if g.weight > 0]
+            real = [(n, w) for n, w in gs if n in bones]
+            if any(math.isnan(w) for _, w in gs):
+                nan += 1
+            if any(n == PLACEHOLDER for n, _ in gs) and not real:
+                on_placeholder += 1
+            if not real:
+                unweighted += 1
+                continue
+            if abs(sum(w for _, w in real) - 1.0) > SUM_TOLERANCE:
+                badsum += 1
+            top = max(real, key=lambda t: t[1])[0]
+            dominant[top] = dominant.get(top, 0) + 1
+    top_bone, top_count = max(dominant.items(), key=lambda t: t[1]) if dominant else (None, 0)
+    rep = {"vertices": total, "unweighted": unweighted, "on_placeholder_bone": on_placeholder, "nan": nan,
+           "sum_not_1": badsum, "bones": len(bones), "bones_used": len(dominant),
+           "top_bone": top_bone, "top_bone_share": round(top_count / total, 3) if total else 0}
+    fails = []
+    if total == 0:
+        fails.append("no skinned vertices")
+    else:
+        if on_placeholder:
+            fails.append(f"{on_placeholder} vertices sit only on glTF's placeholder bone ({PLACEHOLDER}): the skin "
+                         "weights were empty or NaN when the file was written")
+        if unweighted / total > MAX_UNWEIGHTED:
+            fails.append(f"{unweighted} of {total} vertices have no weight")
+        if nan:
+            fails.append(f"{nan} vertices have NaN weights")
+        if top_count / total > MAX_ONE_BONE:
+            fails.append(f"bone {top_bone} holds {100 * top_count / total:.0f}% of the vertices")
+        if len(dominant) < MIN_BONES_USED:
+            fails.append(f"only {len(dominant)} bones hold any vertex")
+    if badsum and total and badsum / total > MAX_UNWEIGHTED:
+        fails.append(f"{badsum} vertices have weights that do not sum to 1")
+    rep["failures"] = fails
+    return rep
+
+
+# --- biped mapping -------------------------------------------------------------------------------------------
+def reach(bone):
+    return bone.length + max((reach(c) for c in bone.children), default=0.0)
+
+
+def main_chain(bone):
+    chain = [bone]
+    while bone.children:
+        bone = max(bone.children, key=reach)
+        chain.append(bone)
+    return chain
+
+
+def subtree(bone):
+    out = [bone]
+    for c in bone.children:
+        out += subtree(c)
+    return out
+
+
+def map_biped(arm):
+    bones = [b for b in arm.data.bones if b.name != PLACEHOLDER]
+    roots = [b for b in bones if b.parent is None]
+    if len(roots) != 1:
+        raise RigFail(f"expected one root bone, found {len(roots)}")
+    root = roots[0]
+    lo = min(min(b.head_local.z, b.tail_local.z) for b in bones)
+    hi = max(max(b.head_local.z, b.tail_local.z) for b in bones)
+    height = hi - lo
+    spine, b = [], max(bones, key=lambda x: x.tail_local.z)
+    while b is not None:
+        spine.insert(0, b)
+        b = b.parent
+    on_spine = set(spine)
+    limbs = [c for s in spine for c in s.children if c not in on_spine]
+    if len(limbs) < 4:
+        raise RigFail(f"not a biped: {len(limbs)} limbs off the spine (2 legs and 2 arms needed)")
+
+    def low(l): return min(min(x.head_local.z, x.tail_local.z) for x in subtree(l))
+    def side(l): return max((x.tail_local.x for x in subtree(l)), key=abs)
+
+    by_low = sorted(limbs, key=low)
+    legs = by_low[:2]
+    if any(low(l) - lo > 0.25 * height for l in legs):
+        raise RigFail("not a standing biped: no two limbs reach the floor")
+    if len(by_low) > 2 and low(by_low[2]) - lo < 0.25 * height:
+        raise RigFail("more than two limbs reach the floor: a quadruped or a creature, not a biped")
+    arms = sorted([l for l in limbs if l not in legs], key=lambda l: -abs(side(l)))[:2]
+    for pair, what in ((arms, "arm"), (legs, "leg")):
+        if (side(pair[0]) > 0) == (side(pair[1]) > 0):
+            raise RigFail(f"both {what} candidates are on the same side")
+    m = {"leg_r": main_chain(min(legs, key=side)), "leg_l": main_chain(max(legs, key=side)),
+         "arm_r": main_chain(min(arms, key=side)), "arm_l": main_chain(max(arms, key=side))}
+    m["root"], m["spine"], m["head"] = root, spine[:-1], [spine[-1]]
+    m["height"] = height
+    return m
+
+
+def rename_mixamo(arm, m):
+    """mixamorig:* names by role (Unity's Humanoid and Mixamo-style packs map these). Extra bones keep their names."""
+    names = {}
+
+    def put(bone, name):   # first role wins: a bone is never renamed twice
+        if bone is not None and bone.name not in names:
+            names[bone.name] = MIXAMO + name
+    put(m["root"], "Hips")
+    # compare by name: bpy hands out a new Python object on every access, so `is` never matches
+    mid = [b for b in m["spine"] if b.name != m["root"].name]
+    if mid:
+        put(mid[-1], "Neck") if len(mid) >= 2 else None
+        for b, n in zip(mid[:-1] if len(mid) >= 2 else mid, ("Spine", "Spine1", "Spine2")):
+            put(b, n)
+    put(m["head"][0], "Head")
+    for side, s in (("leg_l", "Left"), ("leg_r", "Right")):
+        for b, n in zip(m[side], ("UpLeg", "Leg", "Foot", "ToeBase", "Toe_End")):
+            put(b, s + n)
+    for side, s in (("arm_l", "Left"), ("arm_r", "Right")):
+        c = m[side]
+        parts = ("Shoulder", "Arm", "ForeArm", "Hand") if len(c) >= 4 else ("Arm", "ForeArm", "Hand")
+        for b, n in zip(c, parts):
+            put(b, s + n)
+    for old, new in names.items():      # bone renames carry the vertex groups with them
+        arm.data.bones[old].name = new
+    return len(names)
+
+
+# --- clips ---------------------------------------------------------------------------------------------------
+def local_rot(bone, axis, deg):
+    rest = bone.matrix_local.to_quaternion()
+    return rest.inverted() @ Quaternion(axis, math.radians(deg)) @ rest
+
+
+def local_q(bone, q_arm):
+    rest = bone.matrix_local.to_quaternion()
+    return rest.inverted() @ q_arm @ rest
+
+
+def upper_of(chain):
+    return chain[1] if len(chain) >= 4 else chain[0]
+
+
+def outward(chain):
+    return 1 if chain[-1].tail_local.x > 0 else -1
+
+
+def relax(bone, sgn):
+    d = (bone.tail_local - bone.head_local).normalized()
+    below = -math.degrees(math.asin(max(-1.0, min(1.0, d.z))))
+    return Quaternion(FRONT, math.radians(-sgn * max(0.0, RELAX_BELOW_DEG - below)))   # -sgn lowers, +sgn raises
+
+
+def key_rot(pose, bone, frame, q):
+    pb = pose.bones[bone.name]
+    pb.rotation_mode = "QUATERNION"
+    pb.rotation_quaternion = q
+    pb.keyframe_insert("rotation_quaternion", frame=frame)
+
+
+def key_loc(pose, bone, frame, offset):
+    pb = pose.bones[bone.name]
+    pb.location = bone.matrix_local.to_quaternion().inverted() @ offset
+    pb.keyframe_insert("location", frame=frame)
+
+
+def new_action(arm, name):
+    act = bpy.data.actions.new(name)
+    arm.animation_data_create()
+    arm.animation_data.action = act
+    for pb in arm.pose.bones:
+        pb.rotation_mode = "QUATERNION"
+        pb.rotation_quaternion = Quaternion()
+        pb.location = Vector()
+    return act
+
+
+def finish_action(arm, act, frames, made):
+    act.use_fake_user = True
+    act["clip_frames"] = frames
+    made.append(act)
+    arm.animation_data.action = None
+
+
+def clip_idle(arm, m, made):
+    act, P = new_action(arm, "idle"), arm.pose
+    for f in range(0, IDLE_FRAMES + 1, 6):
+        t = 2 * math.pi * f / IDLE_FRAMES
+        for s in m["spine"][1:]:
+            key_rot(P, s, f + 1, local_rot(s, SIDE, IDLE_BREATH_DEG * math.sin(t) / max(1, len(m["spine"]) - 1)))
+        key_rot(P, m["head"][0], f + 1, local_rot(m["head"][0], SIDE, IDLE_NOD_DEG * math.sin(t + 0.6)))
+        for k in ("arm_l", "arm_r"):
+            c = m[k]; up = upper_of(c); sgn = outward(c)
+            sway = Quaternion(FRONT, math.radians(sgn * IDLE_ARM_DEG * math.sin(t + 1.2)))
+            key_rot(P, up, f + 1, local_q(up, sway @ relax(up, sgn)))
+    finish_action(arm, act, IDLE_FRAMES, made)
+
+
+def clip_wave(arm, m, made):
+    act, P = new_action(arm, "wave"), arm.pose
+    c, other = m["arm_r"], m["arm_l"]
+    upper = upper_of(c)
+    fore = c[c.index(upper) + 1] if c.index(upper) + 1 < len(c) else None
+    sgn = outward(c)
+    for f in range(0, WAVE_FRAMES + 1, 3):
+        u = f / WAVE_FRAMES
+        key_rot(P, upper, f + 1, local_rot(upper, FRONT, sgn * WAVE_RAISE_DEG))   # held up all loop: no seam pop
+        if fore is not None:
+            key_rot(P, fore, f + 1, local_rot(fore, FRONT, sgn * WAVE_SWING_DEG * math.sin(2 * math.pi * 3 * u)))
+        ou = upper_of(other)
+        key_rot(P, ou, f + 1, local_q(ou, relax(ou, outward(other))))
+        key_rot(P, m["head"][0], f + 1, local_rot(m["head"][0], FRONT, sgn * 5))
+    finish_action(arm, act, WAVE_FRAMES, made)
+
+
+def clip_walk(arm, m, made):
+    act, P = new_action(arm, "walk"), arm.pose
+    for f in range(0, WALK_FRAMES + 1, 2):
+        t = 2 * math.pi * f / WALK_FRAMES
+        for k, ph in (("leg_l", 0.0), ("leg_r", math.pi)):
+            c = m[k]
+            key_rot(P, c[0], f + 1, local_rot(c[0], SIDE, -WALK_THIGH_DEG * math.sin(t + ph)))   # + about X: backward
+            if len(c) > 1:
+                key_rot(P, c[1], f + 1, local_rot(c[1], SIDE, WALK_KNEE_DEG * max(0.0, math.sin(t + ph + math.pi / 2))))
+        for k, ph in (("arm_l", math.pi), ("arm_r", 0.0)):
+            c = m[k]; up = upper_of(c)
+            swing = Quaternion(SIDE, math.radians(-WALK_ARM_DEG * math.sin(t + ph)))
+            key_rot(P, up, f + 1, local_q(up, swing @ relax(up, outward(c))))
+        key_loc(P, m["root"], f + 1, Vector((0, 0, WALK_BOB * m["height"] * abs(math.cos(t)))))
+        if len(m["spine"]) > 1:
+            s = m["spine"][1]
+            key_rot(P, s, f + 1, local_rot(s, UP, WALK_TWIST_DEG * math.sin(t)))
+    finish_action(arm, act, WALK_FRAMES, made)
+
+
+# --- preview -------------------------------------------------------------------------------------------------
+def render_sheet(arm, meshes, clips, path):
+    sc = bpy.context.scene
+    pts = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]
+    lo = Vector([min(p[i] for p in pts) for i in range(3)])
+    hi = Vector([max(p[i] for p in pts) for i in range(3)])
+    mid, size = (lo + hi) / 2, max(hi - lo)
+    cam = bpy.data.objects.new("rig_cam", bpy.data.cameras.new("rig_cam"))
+    sc.collection.objects.link(cam)
+    cam.location = mid + Vector((size * 0.9, -size * 1.9, size * 0.25))
+    cam.rotation_euler = (mid - cam.location).to_track_quat("-Z", "Y").to_euler()
+    sc.camera = cam
+    sc.render.engine = "BLENDER_WORKBENCH"
+    textured = any(n.type == "TEX_IMAGE" for o in meshes for s in o.material_slots
+                   if s.material and s.material.node_tree for n in s.material.node_tree.nodes)
+    sc.display.shading.color_type = "VERTEX" if (not textured and any(len(o.data.color_attributes) for o in meshes)) \
+        else "TEXTURE"
+    sc.world = sc.world or bpy.data.worlds.new("preview")
+    sc.world.color = (0.82, 0.82, 0.82)
+    W = 256
+    sc.render.resolution_x = sc.render.resolution_y = W
+    tmp = Path(path).with_suffix("")
+    tmp.mkdir(parents=True, exist_ok=True)
+    rows = max(1, len(clips))
+    px = [1.0] * (W * 4 * W * rows * 4)
+    for r, act in enumerate(clips):
+        arm.animation_data.action = act
+        f0, f1 = (int(x) for x in act.frame_range)
+        for i in range(4):
+            sc.frame_set(f0 + i * max(1, f1 - f0) // 4)
+            sc.render.filepath = str(tmp / f"{r}_{i}.png")
+            bpy.ops.render.render(write_still=True)
+            src = list(bpy.data.images.load(sc.render.filepath).pixels)
+            row = rows - 1 - r
+            for y in range(W):
+                o = ((row * W + y) * W * 4 + i * W) * 4
+                px[o:o + W * 4] = src[y * W * 4:(y + 1) * W * 4]
+    arm.animation_data.action = None
+    img = bpy.data.images.new("rig_sheet", W * 4, W * rows)
+    img.pixels = px
+    img.filepath_raw = str(path)
+    img.file_format = "PNG"
+    img.save()
+    for f in tmp.glob("*.png"):
+        f.unlink()
+    tmp.rmdir()
+    print(f"[ OK ] preview {path} (one row per clip, 4 frames each)")
+
+
+def main():
+    a = parse()
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.ops.import_scene.gltf(filepath=a.rigged)
+    arms = [o for o in bpy.data.objects if o.type == "ARMATURE"]
+    if len(arms) != 1:
+        print(f"[FAIL] expected one armature, found {len(arms)}")
+        return 1
+    arm = arms[0]
+    meshes = [o for o in bpy.data.objects if o.type == "MESH" and any(md.type == "ARMATURE" for md in o.modifiers)]
+    dropped = []
+    for o in [o for o in bpy.data.objects if o.type == "MESH" and o not in meshes]:
+        dropped.append(f"{o.name} ({len(o.data.vertices)} vertices)")
+        bpy.data.objects.remove(o)
+    for d in dropped:
+        print(f"[ OK ] removed a mesh nothing skins: {d}")
+    rep = check_weights(arm, meshes)
+    rep["dropped_meshes"] = dropped
+    print(f"[{'FAIL' if rep['failures'] else ' OK '}] weights: {rep['vertices']} vertices, {rep['bones']} bones, "
+          f"{rep['bones_used']} in use, unweighted {rep['unweighted']}, NaN {rep['nan']}, top bone "
+          f"{rep['top_bone_share'] * 100:.0f}%")
+    for f in rep["failures"]:
+        print(f"[FAIL] {f}")
+    existing = [x for x in bpy.data.actions]
+    rep["clips_in_file"] = [x.name for x in existing]
+    code = 1 if rep["failures"] else 0
+    if code == 0 and not a.check_only:
+        made = []
+        try:
+            already = any(b.name.startswith(MIXAMO) for b in arm.data.bones)
+            if (a.names == "mixamo" and not already) or (a.clips and not existing):
+                m = map_biped(arm)
+                rep["biped"] = {k: len(m[k]) for k in ("spine", "leg_l", "leg_r", "arm_l", "arm_r")}
+                if a.names == "mixamo" and not already:
+                    rep["renamed"] = rename_mixamo(arm, m)
+                    print(f"[ OK ] {rep['renamed']} bones renamed to Mixamo names (mixamorig:Hips ...)")
+                if a.clips and not existing:
+                    bpy.context.scene.render.fps = FPS
+                    for c in a.clips:
+                        {"idle": clip_idle, "wave": clip_wave, "walk": clip_walk}[c](arm, m, made)
+                    print(f"[ OK ] clips keyed: {', '.join(a.clips)}")
+            elif already:
+                print("[ OK ] bones already have Mixamo names")
+            if a.clips and existing:
+                print(f"[ OK ] the file has clips already ({', '.join(rep['clips_in_file'])}); --animate adds none")
+        except RigFail as e:
+            rep["failures"].append(str(e))
+            print(f"[FAIL] {e}")
+            code = 1
+        if code == 0:
+            if a.scale != 1.0:
+                for o in [o for o in bpy.data.objects if o.parent is None]:
+                    o.scale = o.scale * a.scale
+                print(f"[ OK ] scaled by {a.scale:g}")
+            clips = made or existing
+            bpy.ops.export_scene.gltf(filepath=a.out, export_format="GLB", export_yup=True,
+                                      export_animations=bool(clips), export_animation_mode="ACTIONS")
+            rep["clips"] = [x.name for x in clips]
+            print(f"[ OK ] wrote {a.out}" + (f" with clips {', '.join(rep['clips'])}" if clips else ""))
+            if a.sheet and clips:
+                render_sheet(arm, meshes, clips, a.sheet)
+    if a.report:
+        Path(a.report).write_text(json.dumps(rep, indent=2) + "\n", encoding="utf-8")
+    return code
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except SystemExit:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        print(f"[error] {exc!r}")
+        sys.exit(2)

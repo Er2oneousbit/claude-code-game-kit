@@ -1,0 +1,12 @@
+Articulation-XL2.0 (attribution notice)
+
+UniRig's released skeleton and skin checkpoint (VAST-AI/UniRig on Hugging Face) was trained on the
+Articulation-XL2.0 dataset by Seed3D, which its dataset card lists under the Creative Commons Attribution 4.0
+International licence (CC-BY-4.0).
+
+Dataset: https://huggingface.co/datasets/Seed3D/Articulation-XL2.0
+Licence: https://creativecommons.org/licenses/by/4.0/
+Paper:   MagicArticulate: Make Your 3D Models Articulation-Ready (arXiv 2502.12135)
+
+Articulation-XL2.0 was filtered from Objaverse-XL's GitHub and Sketchfab subsets; the terms of the individual source
+models are not restated by the dataset card. Read 2026-11-05.

@@ -27,6 +27,17 @@ Decide it for your game (and ask a lawyer if it matters) before you ship such a 
 "Built with DINOv3" in its attribution column; that wording comes from the research notes, the licence text read on
 2026-11-04 does not demand it **(verify)**.
 
+## Rigging (`rig`, optional)
+| Route | What | Licence | Commercial use |
+|---|---|---|---|
+| UniRig (`--with unirig`) | VAST-AI-Research/UniRig code, and the VAST-AI/UniRig skeleton and skin checkpoint, downloaded by UniRig itself | MIT (code LICENSE; the model card's metadata) | yes |
+| (its training data) | Seed3D/Articulation-XL2.0, which the checkpoint was trained on | CC-BY-4.0: credit it (the asset log row and `docs/licenses/bozzetto-rig-*` do) | yes, with attribution |
+| Tripo3D API (`--with tripo`) | rig, rig check and clip retargeting, run on Tripo's servers | Tripo's terms: outputs from paid credits are the user's and are not used for training (5.2.2); outputs from free credits stay Tripo's (5.2.1) | on paid credits |
+
+Not used: SkinTokens (UniRig's successor, MIT) adds training data from VRoid Hub and ModelsResource (models taken
+from commercial games); Puppeteer is pinned to CUDA 11.8. Read 2026-11-05 (E151, E153). `rig/licenses/` holds the
+UniRig licence and the Articulation-XL2.0 notice; the first UniRig `rig make` copies them into the game.
+
 ## Never loaded
 | Piece | Why |
 |---|---|
