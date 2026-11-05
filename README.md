@@ -205,6 +205,15 @@ What Wavesmith makes and checks, rebuilt by one script from Wavesmith commands: 
 adaptive music as the engines play it, voices made on your own GPU with the typewriter and subtitles timed to them,
 and the loudness of every asset and of the whole mix.
 
+**Listen (plays in the browser, phones included):**
+[sound from code (video)](https://cdn.jsdelivr.net/gh/Er2oneousbit/claude-code-game-kit@526a8a6/workflows/wavesmith-showcase/media/wavesmith_code.mp4) ·
+[adaptive music (video)](https://cdn.jsdelivr.net/gh/Er2oneousbit/claude-code-game-kit@526a8a6/workflows/wavesmith-showcase/media/wavesmith_music.mp4) ·
+[voices and dialogue (video)](https://cdn.jsdelivr.net/gh/Er2oneousbit/claude-code-game-kit@526a8a6/workflows/wavesmith-showcase/media/wavesmith_dialogue.mp4) ·
+[a voice line](https://cdn.jsdelivr.net/gh/Er2oneousbit/claude-code-game-kit@526a8a6/workflows/wavesmith-showcase/media/voice_guide_1.mp3) ·
+[the chase loop](https://cdn.jsdelivr.net/gh/Er2oneousbit/claude-code-game-kit@526a8a6/workflows/wavesmith-showcase/media/chiptune_chase.mp3) ·
+[every sound](workflows/wavesmith-showcase/README.md#listen).
+GitHub serves repository files as downloads, so these go through jsDelivr, a free CDN that serves them as audio and video.
+
 ![Sound from code: eleven effects from synth presets and seeds, and a chiptune loop, each as a spectrogram over its waveform](workflows/wavesmith-showcase/media/wavesmith_code_sheet.png)
 
 ![Adaptive music: a drums layer on the next bar, a beat-quantized change to the chase with a stinger, a bar-quantized fade back](workflows/wavesmith-showcase/media/wavesmith_music.png)
