@@ -882,7 +882,8 @@ def bring_back(args, work, man, renders, daw, strict, extras=()):
         allowed = {it["sha256"], (man.get("written") or {}).get(it["file"])}
         if before[it["file"]] == new_sha:
             tmp.unlink()
-            kept.append(f"{it['name']}: edited, and the game already has this version (an earlier re-export)")
+            what = "moved with the mix" if it["name"] in levelled_only else "edited"
+            kept.append(f"{it['name']}: {what}, and the game already has this version (an earlier re-export)")
             continue
         if before[it["file"]] not in allowed and not args.force:
             tmp.unlink()
