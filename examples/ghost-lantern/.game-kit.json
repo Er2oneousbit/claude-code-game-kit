@@ -1369,6 +1369,12 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.1",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1783,9 +1789,9 @@
     "tools/test_issues.py": "259047c45802fd775bc0a39b327135b2abd4e45a22a8d859fb5e9601acf5f1c4",
     "tools/test_publish_check.py": "1c7492fb70cfa23ab08959d8868ae7d60822fb0ea3430d129ed8dff6f60e8f84",
     "tools/test_second_opinion.py": "3a3dada4f6c3032d61ef535663d350d23c13963c1a49eed7368dbf4de03bb72a",
-    "tools/test_token_audit.py": "2f3340478fdbe5aa1909dbe29b6c369e2839c372fb3704803db6368fd2772446",
+    "tools/test_token_audit.py": "8be4deeedc4b063bc0c1758f74970aa4fb1d21f7442d7ebf8ae09e9df9d4def2",
     "tools/test_yt_transcript.py": "5078a90625d20be03bd2c04ca9d48a13e603c19d08560506b9963eac6f13e744",
-    "tools/token_audit.py": "177644aad21f69ad2585a63d1107486a9956b41af963e10286c6dc38e5e5d2eb",
+    "tools/token_audit.py": "553f9c7d4af332a45e11dc1ca9dadfd030cd841b9439b73b1f71a2bff2fbb048",
     "tools/yt_transcript.py": "1c03846e65f4d228d921a2217f2df0fa206aaf4caafa5ac0c04ff66045f457e7",
     "tsconfig.json": "0a3ad10b54f64f31b59a9b990743b37102491a127710bc78f4fb5d90dc888b4b",
     "vite.config.ts": "f3cb804791cc8cf0770d6f49a5ec584ffd9f106c0d92973d6eaf07d8657451f5",

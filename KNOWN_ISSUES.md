@@ -142,6 +142,11 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
   ([#214](https://github.com/Er2oneousbit/claude-code-game-kit/issues/214)); the patcher's `--check` trusts a comment
   ([#215](https://github.com/Er2oneousbit/claude-code-game-kit/issues/215)); bone mapping guesses on unusual skeletons
   ([#216](https://github.com/Er2oneousbit/claude-code-game-kit/issues/216)).
+- **`tools/token_audit.py` review findings (FIXED in 0.13.1, kept here until the issues close on main):** values could
+  leak through error text and the config-dir path ([#217](https://github.com/Er2oneousbit/claude-code-game-kit/issues/217));
+  a wrongly shaped settings file aborted the audit ([#218](https://github.com/Er2oneousbit/claude-code-game-kit/issues/218));
+  `@~/` imports resolved against the wrong folder ([#219](https://github.com/Er2oneousbit/claude-code-game-kit/issues/219));
+  huge log lines, folded YAML descriptions and the exam's isolation ([#220](https://github.com/Er2oneousbit/claude-code-game-kit/issues/220)).
 
 ## The examples
 None of the example games has been played by a human tester; the bots and tests are the only proof they play as

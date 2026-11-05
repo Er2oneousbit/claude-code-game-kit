@@ -50,6 +50,7 @@ from pathlib import Path
 
 # --- constants -------------------------------------------------------------------------------------------------
 CHARS_PER_TOKEN = 4                 # rough English average; an estimate, /context has the real number
+MAX_LINE_BYTES = 64 * 2**20         # a session-log record over this is skipped unread (a huge tool output, #220)
 FILE_FLAG_TOKENS = 5000             # E154 tip: flag one memory file over this many tokens
 TOTAL_FLAG_TOKENS = 10000           # E154 tip: flag a memory total over this many tokens
 CACHE_GREEN_PCT = 80.0              # kit heuristic: cache reads at least this share of the input side is healthy
@@ -93,6 +94,16 @@ def debug(msg):
 
 
 # --- small helpers ---------------------------------------------------------------------------------------------
+def count(v):
+    """A usage number, or None when the field is not a non-negative number (missing counts as 0). Never int() on a
+    string: its error message would print the value (#217)."""
+    if v is None:
+        return 0
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v or v < 0 or v == float("inf"):
+        return None
+    return int(v)
+
+
 def est_tokens(chars):
     return int(math.ceil(chars / float(CHARS_PER_TOKEN)))
 
@@ -200,25 +211,37 @@ def summarize_settings(path, scope):
     data, error = read_json(path)
     if data is None:
         return {"path": str(path), "scope": scope, "exists": path.is_file(), "error": error}
+    if not isinstance(data, dict):   # valid JSON of the wrong shape is a per-file error, never an abort (#218)
+        return {"path": str(path), "scope": scope, "exists": True,
+                "error": f"not a JSON object (a {type(data).__name__})"}
+
+    def obj(key):
+        v = data.get(key)
+        return v if isinstance(v, dict) else {}
+
+    def scalar(key):
+        v = data.get(key)
+        return v if isinstance(v, (str, int, float, bool)) or v is None else None
     hooks = []
-    for event, groups in (data.get("hooks") or {}).items():
+    for event, groups in obj("hooks").items():
         for group in groups if isinstance(groups, list) else []:
             if not isinstance(group, dict):
                 continue
-            n = len(group.get("hooks") or [])
-            hooks.append({"event": event, "matcher": group.get("matcher") or "(any)", "count": n})
-    env_names = sorted((data.get("env") or {}).keys()) if isinstance(data.get("env"), dict) else []
+            inner = group.get("hooks")
+            matcher = group.get("matcher")
+            hooks.append({"event": str(event), "matcher": matcher if isinstance(matcher, str) and matcher else "(any)",
+                          "count": len(inner) if isinstance(inner, list) else 0})
     per_model = {}
-    for model, cfg in (data.get("modelSettings") or {}).items():
-        if isinstance(cfg, dict) and "effortLevel" in cfg:
-            per_model[model] = cfg["effortLevel"]
+    for model, cfg in obj("modelSettings").items():
+        if isinstance(cfg, dict) and isinstance(cfg.get("effortLevel"), str):
+            per_model[str(model)] = cfg["effortLevel"]
+    servers = data.get("enabledMcpjsonServers")
     return {"path": str(path), "scope": scope, "exists": True, "error": None,
-            "model": data.get("model"), "effortLevel": data.get("effortLevel"), "modelEffort": per_model,
-            "hooks": hooks, "env_names": env_names,
-            "enabledMcpjsonServers": list(data.get("enabledMcpjsonServers") or []),
-            "enabledPlugins": sorted(k for k, v in (data.get("enabledPlugins") or {}).items() if v)
-            if isinstance(data.get("enabledPlugins"), dict) else [],
-            "enableAllProjectMcpServers": data.get("enableAllProjectMcpServers")}
+            "model": scalar("model"), "effortLevel": scalar("effortLevel"), "modelEffort": per_model,
+            "hooks": hooks, "env_names": sorted(str(k) for k in obj("env")),
+            "enabledMcpjsonServers": [s for s in servers if isinstance(s, str)] if isinstance(servers, list) else [],
+            "enabledPlugins": sorted(str(k) for k, v in obj("enabledPlugins").items() if v),
+            "enableAllProjectMcpServers": scalar("enableAllProjectMcpServers")}
 
 
 def settings_report(root, claude, env):
@@ -226,7 +249,10 @@ def settings_report(root, claude, env):
              summarize_settings(root / ".claude" / "settings.local.json", "project local"),
              summarize_settings(claude / "settings.json", "user")]
     mcp, mcp_error = read_json(root / ".mcp.json")
-    servers = sorted((mcp or {}).get("mcpServers", {}).keys()) if isinstance(mcp, dict) else []
+    mcp_servers = mcp.get("mcpServers") if isinstance(mcp, dict) else None
+    servers = sorted(str(k) for k in mcp_servers) if isinstance(mcp_servers, dict) else []
+    if mcp is not None and not isinstance(mcp, dict):
+        mcp_error = f"not a JSON object (a {type(mcp).__name__})"
     watched = PROXY_VARS + GATEWAY_VARS
     flagged = []
     for f in files:
@@ -247,13 +273,23 @@ def frontmatter(text):
     lines = text.replace("\r\n", "\n").split("\n")
     if not lines or lines[0].strip() != "---":
         return {}
-    out = {}
+    out, key, block = {}, None, None
     for line in lines[1:]:
         if line.strip() == "---":
             break
-        if ":" in line and not line.startswith((" ", "\t")):
+        if line.startswith((" ", "\t")) and key is not None:
+            # a continuation line: a folded (>) or literal (|) block, or a plain value wrapped onto the next line;
+            # it was dropped before, so a long description was counted as one token (#220)
+            part = line.strip()
+            if part:
+                sep = "\n" if block == "|" else " "
+                out[key] = (out[key] + sep + part) if out[key] else part
+            continue
+        if ":" in line:
             key, _, value = line.partition(":")
-            out[key.strip()] = value.strip().strip("\"'")
+            key, value = key.strip(), value.strip()
+            block = value[:1] if value[:1] in (">", "|") and value.strip(">|+-0123456789") == "" else None
+            out[key] = "" if block else value.strip("\"'")
     return out
 
 
@@ -291,11 +327,25 @@ def parse_log(path):
     Pseudocode: for each line that names "assistant": parse -> skip non-assistant, no usage, <synthetic> ->
     turns[id] = usage (a later line with the same id replaces it) -> sum, first/last, models, efforts.
     """
-    turns, order, bad, lines = {}, [], 0, 0
-    with open(path, encoding="utf-8", errors="replace") as fh:
-        for n, line in enumerate(fh):
-            if '"assistant"' not in line:              # cheap pre-filter: the log can be hundreds of MB
+    turns, order, bad, lines, oversized = {}, [], 0, 0, 0
+    with open(path, "rb") as fh:
+        n = -1
+        while True:
+            raw = fh.readline(MAX_LINE_BYTES)
+            if not raw:
+                break
+            n += 1
+            if not raw.endswith(b"\n") and len(raw) == MAX_LINE_BYTES:
+                # one record over the limit (a huge tool output): skip the rest of it unread, never hold it (#220)
+                while True:
+                    more = fh.readline(MAX_LINE_BYTES)
+                    if not more or more.endswith(b"\n"):
+                        break
+                oversized += 1
                 continue
+            if b'"assistant"' not in raw:              # cheap pre-filter: the log can be hundreds of MB
+                continue
+            line = raw.decode("utf-8", errors="replace")
             try:
                 rec = json.loads(line)
             except ValueError:
@@ -307,16 +357,25 @@ def parse_log(path):
             usage = msg.get("usage")
             if not isinstance(usage, dict) or msg.get("model") == "<synthetic>":
                 continue
+            cache = usage.get("cache_creation") if isinstance(usage.get("cache_creation"), dict) else {}
+            nums = {f: count(usage.get(f)) for f in USAGE_FIELDS}
+            nums["ttl_5m"] = count(cache.get("ephemeral_5m_input_tokens"))
+            nums["ttl_1h"] = count(cache.get("ephemeral_1h_input_tokens"))
+            if None in nums.values():
+                # not a number: a malformed line, counted and never shown (int() would print the value, #217)
+                bad += 1
+                continue
             lines += 1
-            key = msg.get("id") or f"line-{n}"
+            key = msg.get("id") if isinstance(msg.get("id"), str) else f"line-{n}"
             if key not in turns:
                 order.append(key)
-            cache = usage.get("cache_creation") if isinstance(usage.get("cache_creation"), dict) else {}
-            turns[key] = {"usage": {f: int(usage.get(f) or 0) for f in USAGE_FIELDS},
-                          "ttl_5m": int(cache.get("ephemeral_5m_input_tokens") or 0),
-                          "ttl_1h": int(cache.get("ephemeral_1h_input_tokens") or 0),
-                          "model": msg.get("model") or "unknown", "effort": rec.get("effort")}
-    debug(f"{path}: {lines} usage lines, {len(order)} responses, {bad} unreadable lines")
+            model = msg.get("model") if isinstance(msg.get("model"), str) else "unknown"
+            effort = rec.get("effort") if isinstance(rec.get("effort"), str) else None
+            turns[key] = {"usage": {f: nums[f] for f in USAGE_FIELDS}, "ttl_5m": nums["ttl_5m"],
+                          "ttl_1h": nums["ttl_1h"], "model": model, "effort": effort}
+    debug(f"{path.name}: {lines} usage lines, {len(order)} responses, {bad} unreadable lines, "
+          f"{oversized} over {MAX_LINE_BYTES // 2**20} MiB skipped")
+    bad += oversized
     totals = {f: 0 for f in USAGE_FIELDS}
     models, efforts, switches, switch_writes, ttl = {}, {}, 0, 0, {"5m": 0, "1h": 0}
     prev = None
@@ -598,7 +657,8 @@ def render(rep):
 def audit(root, home=None, env=None, log=None, stop_at=None):
     env = os.environ if env is None else env
     claude = claude_home(home, env)
-    home_dir = Path(home) if home is not None else claude.parent
+    # @~/ imports are relative to the user's home, wherever CLAUDE_CONFIG_DIR puts .claude (#219)
+    home_dir = Path(home) if home is not None else Path.home()
     rep = {"root": str(root), "claude_dir": str(claude),
            "memory": memory_files(root, home_dir, claude, stop_at),
            "settings": settings_report(root, claude, env),
@@ -648,9 +708,18 @@ def main(argv=None):
     except Exception as exc:  # noqa: BLE001 - last line of defense, traceback only with --debug
         if DEBUG:
             traceback.print_exc()
-        print(f"[error] {exc}", file=sys.stderr)
+        # the type only: an exception's text can quote what it failed on, a value from a file (#217)
+        print(f"[error] unexpected failure ({type(exc).__name__}); re-run with --debug for the traceback",
+              file=sys.stderr)
         return 2
-    print(json.dumps(rep, indent=2) if args.json else render(rep))
+    text = json.dumps(rep, indent=2) if args.json else render(rep)
+    cfg = os.environ.get("CLAUDE_CONFIG_DIR")
+    if cfg and args.home is None:
+        # environment variables are reported by name only: the folder it names is shown as $CLAUDE_CONFIG_DIR (#217)
+        real = str(claude_home(None, os.environ))
+        for form in {real, real.replace("\\", "/"), real.replace("\\", "\\\\"), cfg}:
+            text = text.replace(form, "$CLAUDE_CONFIG_DIR")
+    print(text)
     return 0
 
 

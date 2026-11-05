@@ -3,9 +3,20 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig` from a second-model review
-A Kimi K3.1 Pro review of 0.13.0 (`tools/second_opinion.py`), each finding checked against the code; one more was
-found by the real run that verified the fixes.
+## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig` and `tools/token_audit.py` from second-model reviews
+Kimi K3.1 Pro reviews of 0.13.0 (`tools/second_opinion.py`), each finding checked against the code; one more was
+found by the real run that verified the rig fixes.
+- `tools/token_audit.py`: a non-number in a session log's usage field went through `int()`, whose error message printed
+  the value; such a line now counts as malformed and nothing of it is shown, and an unexpected error prints only its
+  type (`--debug` keeps the traceback). The folder `CLAUDE_CONFIG_DIR` names is shown as `$CLAUDE_CONFIG_DIR`, so the
+  promise "environment variables by name only" holds for it too (#217).
+- `tools/token_audit.py`: a settings file of valid JSON but the wrong shape (`[]`, numbers where objects go) aborted
+  the whole audit; it is now a per-file error like broken JSON (#218). `@~/` imports resolve against the user's home,
+  not the parent of `CLAUDE_CONFIG_DIR` (#219). A session-log record over 64 MiB is skipped unread instead of held in
+  memory; folded and literal YAML descriptions (`description: >-`) are counted in full (#220).
+- `test_token_audit.py`: 27 cases (was 20), one per fix (each fails on 0.13.0's code), plus a check that no socket is
+  opened and no file changes; every CLI call now stays inside the fake tree (five could read parent `CLAUDE.md` files
+  above it) (#220).
 - The weight check never caught NaN weights: they were filtered out (`NaN > 0` is false) before the check. NaN,
   infinite and negative weights now fail the rig (#208).
 - Tripo: each step's actual cost is checked against `--max-credits` and the balance before the next paid call, not

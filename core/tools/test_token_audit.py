@@ -121,6 +121,8 @@ class Fake:
         return token_audit.audit(self.root, home=self.home, env=env or {}, log=log, stop_at=self.work)
 
     def cli(self, *args, env=None):
+        """main() in a clean environment; never searches parent CLAUDE.md files above the fake tree (#220)."""
+        args = list(args) + ([] if "--stop-at" in [str(a) for a in args] else ["--stop-at", self.work])
         out, err = io.StringIO(), io.StringIO()
         clean = {k: v for k, v in os.environ.items()
                  if k not in token_audit.PROXY_VARS + token_audit.GATEWAY_VARS + ("CLAUDE_CONFIG_DIR",)}
@@ -310,8 +312,88 @@ class TokenAudit(unittest.TestCase):
                                    env={"CLAUDE_CONFIG_DIR": str(other)})
         self.assertEqual(code, 0, err)
         rep = json.loads(js)
-        self.assertEqual(rep["claude_dir"], str(other))
-        self.assertIn(str(other / "CLAUDE.md"), [m["path"] for m in rep["memory"]])
+        # the folder it points at is read, but shown by the variable's name, never its value (#217)
+        self.assertEqual(rep["claude_dir"], "$CLAUDE_CONFIG_DIR")
+        self.assertIn(str(Path("$CLAUDE_CONFIG_DIR") / "CLAUDE.md"), [m["path"] for m in rep["memory"]])
+        self.assertNotIn(str(other), js + err)
+        code, out, err = self.f.cli("--root", self.f.root, env={"CLAUDE_CONFIG_DIR": str(other)})
+        self.assertNotIn(str(other), out + err)
+
+    def test_home_imports_ignore_the_config_dir(self):
+        """#219: @~/ resolves against the user's home even when CLAUDE_CONFIG_DIR moves .claude elsewhere."""
+        other = self.f.tmp / "cfg"
+        self.f.write(other / "CLAUDE.md", "c" * 8)
+        with mock.patch.object(token_audit.Path, "home", classmethod(lambda cls: self.f.home)):
+            rep = token_audit.audit(self.f.root, home=None, env={"CLAUDE_CONFIG_DIR": str(other)}, stop_at=self.f.work)
+        shared = [m for m in rep["memory"] if m["path"].endswith("shared.md")]
+        self.assertEqual(len(shared), 1)
+        self.assertTrue(shared[0]["exists"] if "exists" in shared[0] else shared[0]["bytes"] == 40, shared[0])
+
+    # --- the review fixes (#217, #218, #220) ---
+    def test_a_value_in_a_malformed_usage_field_is_never_printed(self):
+        """#217: a string where a token count should be is a malformed line; its value never reaches any output."""
+        bad = json.loads(assistant("m9", usage(1, 1, 1, 1)))
+        bad["message"]["usage"]["input_tokens"] = SECRET
+        self.f.add_log("s.jsonl", LOG_LINES + [json.dumps(bad)])
+        for extra in ([], ["--json"], ["--debug"]):
+            code, out, err = self.f.cli("--root", self.f.root, "--home", self.f.home, *extra)
+            self.assertEqual(code, 0, err)
+            self.assertNotIn(SECRET, out + err, extra)
+        self.assertEqual(self.f.audit()["session"]["unreadable_lines"], 2)    # the old broken line and this one
+
+    def test_unexpected_errors_print_the_type_only(self):
+        """#217: the last-resort handler never echoes an exception's text (it can quote a file's contents)."""
+        with mock.patch.object(token_audit, "audit", side_effect=ValueError("quoted " + SECRET)):
+            code, out, err = self.f.cli("--root", self.f.root, "--home", self.f.home)
+        self.assertEqual(code, 2)
+        self.assertIn("ValueError", err)
+        self.assertNotIn(SECRET, out + err)
+
+    def test_settings_of_the_wrong_shape_are_reported_not_fatal(self):
+        """#218: valid JSON of the wrong shape (a list, numbers where objects go) is a per-file error."""
+        self.f.write(self.f.root / ".claude" / "settings.local.json", "[]")
+        self.f.write(self.f.claude / "settings.json", json.dumps(
+            {"hooks": {"Stop": [{"hooks": 1}], "Odd": 5}, "modelSettings": [1], "env": "x", "enabledPlugins": 3}))
+        self.f.write(self.f.root / ".mcp.json", "[1, 2]")
+        code, out, err = self.f.cli("--root", self.f.root, "--home", self.f.home)
+        self.assertEqual(code, 0, err)
+        rep = self.f.audit()
+        self.assertIn("not a JSON object", rep["settings"]["files"][1]["error"])
+        self.assertEqual(rep["settings"]["files"][2]["hooks"], [{"event": "Stop", "matcher": "(any)", "count": 0}])
+        self.assertIn("not a JSON object", rep["settings"]["mcp_json_error"])
+
+    def test_an_oversized_log_record_is_skipped_unread(self):
+        """#220: a record over the line limit is skipped, the rest of the log still counts."""
+        huge = '{"type": "assistant", "pad": "' + "x" * 5000 + '"}'
+        self.f.add_log("s.jsonl", [huge] + LOG_LINES)
+        with mock.patch.object(token_audit, "MAX_LINE_BYTES", 1024):
+            log = self.f.audit()["session"]
+        self.assertEqual(log["totals"], EXPECTED)
+        self.assertEqual(log["unreadable_lines"], 2)
+
+    def test_folded_and_literal_descriptions_are_counted(self):
+        """#220: description: >- (or |) with indented lines is the whole text, not '>-'."""
+        for marker in (">-", "|"):
+            self.f.write(self.f.root / ".claude" / "skills" / "demo" / "SKILL.md",
+                         f"---\nname: demo\ndescription: {marker}\n  " + "a" * 40 + "\n  " + "b" * 40 + "\n---\nbody\n")
+            skill = self.f.audit()["skills"][0]
+            self.assertEqual(skill["description_chars"], 81, marker)
+        meta = token_audit.frontmatter("---\nname: x\ndescription: plain start\n  wrapped end\n---\n")
+        self.assertEqual(meta["description"], "plain start wrapped end")
+
+    def test_no_network_and_no_writes(self):
+        """The promises in the header: no socket is opened and no file under the fake tree changes."""
+        self.f.add_log("s.jsonl", LOG_LINES)
+        before = {p: (p.stat().st_mtime_ns, p.stat().st_size) for p in self.f.tmp.rglob("*") if p.is_file()}
+
+        def no_net(*a, **k):
+            raise AssertionError("token_audit opened a socket")
+        with mock.patch("socket.socket", no_net), mock.patch("socket.create_connection", no_net):
+            for extra in ([], ["--json"]):
+                code, out, err = self.f.cli("--root", self.f.root, "--home", self.f.home, *extra)
+                self.assertEqual(code, 0, err)
+        after = {p: (p.stat().st_mtime_ns, p.stat().st_size) for p in self.f.tmp.rglob("*") if p.is_file()}
+        self.assertEqual(before, after)
 
     def test_unknowns_and_help(self):
         code, out, _ = self.f.cli("--root", self.f.root, "--home", self.f.home)
