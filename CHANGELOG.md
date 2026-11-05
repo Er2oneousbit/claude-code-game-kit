@@ -3,9 +3,21 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig` and `tools/token_audit.py` from second-model reviews
+## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig`, `tools/token_audit.py` and `tools/fetch_asset.py` from second-model reviews
 Kimi K3.1 Pro reviews of 0.13.0 (`tools/second_opinion.py`), each finding checked against the code; one more was
 found by the real run that verified the rig fixes.
+- `tools/fetch_asset.py` (a security review: it takes any URL and any archive): downloads are HTTPS only (`--allow-http`,
+  and `--allow-local` for a `file://` pack already on this computer), never follow a redirect from HTTPS down to HTTP,
+  stop at `--max-mb` (default 4096) and 1800 s, and record the final URL; a ZIP is refused before unpacking past 20,000
+  entries, 16 GB unpacked or a 200:1 entry; the cache folder is the URL's full SHA-256 (10 hex digits of SHA-1 could be
+  made to collide) (#225). A pack whose own licence file says all rights reserved, non-commercial, no derivatives or
+  personal use only is refused against a free `--license` unless `--license-mismatch "why"` (logged); "not CC0" and
+  "MIT; no resale" are no longer read as plain licences (#226). Two ZIP entries that land on one file are refused (#227).
+  `--page` loses its login and its query and fragment (tokens) unless `--keep-page-query`; a local `file://` path
+  never reaches the records; every line separator, CR included, is a space in a log cell; IDs keep counting past
+  A-9999; an absolute `--to` is logged project-relative (#228). If writing the evidence or the log fails, the files the
+  run copied are removed again, and the log is replaced in one step (#229). The asset-intake skill now names the tool
+  and says when an unclear licence may come in as a PLACEHOLDER. `test_fetch_asset.py` 39 cases (was 30).
 - Bozzetto docs-versus-code review: a Tripo task the last run left running was paid for again on a re-run; it is now
   asked for its result first, and a run stops rather than pay twice while it is still running (#221). `rig check`
   said ready with a refused Tripo key, and `rig make --wait` did not reach UniRig's steps (#222). `rig` now bends

@@ -18,10 +18,18 @@ To generate instead of find, hand off to `/gen-brief`, then come back here to lo
 ## B. Vetting (before download is used)
 1. Open the specific asset page and read its license. Quote the key terms in your notes, never assume from site reputation.
 2. Check: commercial use, modification, redistribution inside a game, attribution wording, AI-training clauses, platform restrictions.
-3. Unknown or unclear license: do not import. Tell the user why.
+3. Unknown or unclear license: do not import for release. Tell the user why. Only for a throwaway prototype, and only
+   if the user agrees, it may come in as a `PLACEHOLDER` (`fetch_asset.py --placeholder`) that `/release-check` flags and
+   that is replaced before release.
 
 ## C. Logging
-1. Add a row to `docs/ASSET_LOG.md` (next free `A-NNNN` ID): type, repo path, source URL, author, license, attribution text, AI-assisted (`no`, `dev-only`, `pre-generated`, `live`; see SOP-04), modified yes/no, date, notes.
+0. A downloaded pack goes through `tools/fetch_asset.py`, which downloads (HTTPS only), unpacks safely, copies the
+   picked files and writes the row and the evidence file in one step: `python tools/fetch_asset.py --url <download>
+   --list`, then `--url <download> --page <license page> --author <name> --license "<as read>" --take "<path or glob>"
+   --to <folder> --type <type>` (`--dry-run` first). It refuses a pack whose own licence file contradicts `--license`
+   (all rights reserved, NC, ND): read it; `--license-mismatch "why"` only when the page's licence really applies. A
+   pack already on this computer: `--url file:///... --allow-local`. Check the row; do not retype it.
+1. Otherwise (no tool for that source), add a row to `docs/ASSET_LOG.md` (next free `A-NNNN` ID): type, repo path, source URL, author, license, attribution text, AI-assisted (`no`, `dev-only`, `pre-generated`, `live`; see SOP-04), modified yes/no, date, notes.
 2. Save license evidence in `docs/licenses/A-NNNN.txt` (text of the license or page summary with URL and date).
 3. Import using the naming conventions in `docs/ENGINE.md` or `docs/ENGINE_FLOW.md` ("Assets and audio"); 3D names are in SOP-11.
 4. Mark temporary or NC assets `PLACEHOLDER` in Notes.

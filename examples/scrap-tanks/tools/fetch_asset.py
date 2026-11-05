@@ -65,7 +65,17 @@ RESTORE_HINT = f"python <kit>/scripts/new_game.py --dest . --upgrade --restore {
 LICENSE_DIR = Path("docs/licenses")
 USER_AGENT = "Mozilla/5.0 (compatible; claude-code-game-kit fetch_asset.py)"  # some hosts reject the urllib default
 RETRIES = 3
-TIMEOUT = 120
+TIMEOUT = 120                       # seconds per network read
+DEADLINE = 1800                     # seconds for a whole download, however slowly it trickles in (#225)
+MAX_DOWNLOAD_MB = 4096              # default --max-mb: a bigger body is cut off and refused (#225)
+MAX_MEMBERS = 20000                 # ZIP entries; more is refused before anything is unpacked (#225)
+MAX_UNPACKED_MB = 16384             # all ZIP entries together, unpacked
+MAX_RATIO = 200                     # unpacked / packed size of one entry over 1 MiB: a ZIP bomb past this
+NEGATION = re.compile(r"\b(not|no|non|except|without|excluding)\b", re.I)   # "not CC0", "MIT; no resale" (#226)
+# what a pack's own licence file says that no --license claiming a free licence may contradict (#226)
+PACK_FORBIDS = (("all rights reserved", "all rights reserved"), ("noncommercial", "non-commercial"),
+                ("non-commercial", "non-commercial"), ("no derivatives", "no derivatives"),
+                ("noderivatives", "no derivatives"), ("personal use only", "personal use only"))
 ALLOWED = ("CC0", "PUBLIC DOMAIN", "CC BY", "CC-BY", "OFL", "SIL OPEN FONT", "MIT", "APACHE", "BSD", "ZLIB", "UNLICENSE",
            "EUPL", "MPL", "LGPL")   # weak copyleft (plugins, libraries): changes to THAT component must be shared
 REFUSED = ("NC", "ND", "NONCOMMERCIAL", "NON-COMMERCIAL", "NODERIVATIVES", "UNKNOWN", "?")
@@ -78,7 +88,7 @@ TYPES = ("art", "sprite", "tileset", "ui", "font", "music", "sfx", "voice", "3d"
 WINDOWS_BAD_CHARS = re.compile(r'[<>:"|?*\x00-\x1f]')   # cannot be stored on Windows (":" also opens an NTFS stream)
 WINDOWS_DEVICES = {"con", "prn", "aux", "nul"} | {f"{p}{i}" for p in ("com", "lpt") for i in range(1, 10)}
 URL_LOGIN = re.compile(r"^(\s*[A-Za-z][A-Za-z0-9+.-]*://)[^/?#]*@")   # scheme:// then user:password@ (last @ wins)
-ROW_ID = re.compile(r"^\|\s*A-(\d{4})\s*\|", re.M)
+ROW_ID = re.compile(r"^\|\s*A-(\d{4,})\s*\|", re.M)    # any width: A-10000 follows A-9999 (#228)
 EMPTY_TEMPLATE_ROW = re.compile(r"^\|\s*A-0001\s*\|\s*\|\s*\|.*$", re.M)
 
 
@@ -99,6 +109,11 @@ def judge_license(text, placeholder):
             return "placeholder"
         raise FetchError(f"license '{text}' does not allow a release (NC/ND or unknown). Use --placeholder "
                          "to import it as a PLACEHOLDER you replace before release.")
+    if NEGATION.search(text):
+        if placeholder:
+            return "placeholder"
+        raise FetchError(f"license '{text}' has a negation or an extra restriction; read it by hand, then pass just "
+                         "the licence's name (CC0, CC BY 4.0, MIT, ...), or --placeholder")
     # Whole words in order, not substrings: "MIT" must not match "perMITted", nor "MPL" "siMPLe"
     tokens = re.findall(r"[A-Z0-9.]+", text.upper())
     for allowed in ALLOWED:
@@ -118,38 +133,89 @@ def judge_license(text, placeholder):
 def redact_url(url):
     """url as it may be written down: no user:password@, no query string, no fragment (signed links put keys there)."""
     parts = urllib.parse.urlsplit(url)
+    if parts.scheme.lower() == "file":      # a local path never goes into the project's records (#228)
+        return "local file " + (Path(urllib.parse.unquote(parts.path)).name or "(unnamed)")
     netloc = parts.netloc.rpartition("@")[2]
     return urllib.parse.urlunsplit((parts.scheme, netloc, parts.path, "", ""))
 
 
-def redact_page(page):
-    """--page as it may be written down: no user:password@, query string and fragment kept (a license page may need
-    them to show the right license). Everything else stays exactly as typed, text that is not a URL included."""
-    return URL_LOGIN.sub(r"\1", page or "")
+def redact_page(page, keep_query=False):
+    """--page as it may be written down: no user:password@, and no query string or fragment (a signed or session link
+    keeps its token there, #228) unless --keep-page-query. Text that is not a URL stays exactly as typed."""
+    page = (page or "").strip()
+    if not re.match(r"^([A-Za-z][A-Za-z0-9+.-]*:)?//", page):
+        return page
+    parts = urllib.parse.urlsplit(page)
+    netloc = parts.netloc.rpartition("@")[2]
+    query, frag = (parts.query, parts.fragment) if keep_query else ("", "")
+    return urllib.parse.urlunsplit((parts.scheme, netloc, parts.path, query, frag))
 
 
-def download(url, cache):
-    """Fetch url into cache/<file name> (reused if present). Returns the path."""
+def check_scheme(url, allow_http, allow_local):
+    """HTTPS only, unless asked: plain HTTP with --allow-http, a local file:// with --allow-local (#225)."""
+    scheme = urllib.parse.urlsplit(url).scheme.lower()
+    if scheme == "https" or (scheme == "http" and allow_http) or (scheme == "file" and allow_local):
+        return
+    hint = {"http": " (pass --allow-http to accept plain HTTP)",
+            "file": " (pass --allow-local to import a file already on this computer)"}.get(scheme, "")
+    raise UsageError(f"refusing a {scheme or 'scheme-less'} URL: {redact_url(url)}{hint}")
+
+
+class _Redirects(urllib.request.HTTPRedirectHandler):
+    """Follow redirects, but never from HTTPS down to plain HTTP or to another scheme (#225)."""
+
+    def __init__(self, allow_http):
+        super().__init__()
+        self.allow_http = allow_http
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        old, new = urllib.parse.urlsplit(req.full_url).scheme, urllib.parse.urlsplit(newurl).scheme
+        if new not in ("https", "http") or (old == "https" and new == "http" and not self.allow_http):
+            raise FetchError(f"refusing a redirect from {old} to {new}: {redact_url(newurl)}")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def download(url, cache, max_bytes=MAX_DOWNLOAD_MB * 2**20, allow_http=False, allow_local=False):
+    """Fetch url into cache/<file name> (reused if present). Returns (path, final URL after redirects)."""
+    check_scheme(url, allow_http, allow_local)
     name = Path(urllib.parse.unquote(urllib.parse.urlparse(url).path)).name or "download"
-    # One folder per URL: two packs both called pack.zip must not share a cache entry, and the file keeps its own
-    # name (a single-file asset is picked with --take <its name>)
-    cache = cache / hashlib.sha1(url.encode("utf-8")).hexdigest()[:10]
+    # One folder per URL, named by the URL's full SHA-256: two packs both called pack.zip never share a cache entry,
+    # and no two URLs can be made to collide (10 hex digits of SHA-1 could, #225)
+    cache = cache / hashlib.sha256(url.encode("utf-8")).hexdigest()
     dest = cache / name
+    final_note = cache / ".final_url"
     if dest.is_file() and dest.stat().st_size > 0:
         print(f"[info] using cached {dest.as_posix()}")
-        return dest
+        return dest, (final_note.read_text(encoding="utf-8").strip() if final_note.is_file() else url)
     cache.mkdir(parents=True, exist_ok=True)
+    opener = urllib.request.build_opener(_Redirects(allow_http))
     last = None
     for attempt in range(1, RETRIES + 1):
+        tmp = dest.with_name(dest.name + ".part")
         try:
             req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-            with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-                tmp = dest.with_name(dest.name + ".part")
+            t0, got = time.monotonic(), 0
+            with opener.open(req, timeout=TIMEOUT) as resp:
+                final = resp.geturl() or url
                 with open(tmp, "wb") as fh:
-                    shutil.copyfileobj(resp, fh)
+                    while True:
+                        chunk = resp.read(1 << 20)
+                        if not chunk:
+                            break
+                        got += len(chunk)
+                        if got > max_bytes:
+                            raise FetchError(f"the download passed --max-mb {max_bytes // 2**20}; refused")
+                        if time.monotonic() - t0 > DEADLINE:
+                            raise FetchError(f"the download took over {DEADLINE} s; refused")
+                        fh.write(chunk)
             tmp.replace(dest)
+            final_note.write_text(redact_url(final), encoding="utf-8")
             print(f"[ OK ] downloaded {dest.name} ({dest.stat().st_size // 1024} KB)")
-            return dest
+            return dest, final
+        except FetchError:
+            if tmp.exists():
+                tmp.unlink()
+            raise
         except (urllib.error.URLError, OSError) as exc:
             last = exc
             if attempt < RETRIES:
@@ -176,7 +242,19 @@ def unpack(archive, cache):
         return archive.parent, [archive.name]
     root = cache / (archive.stem + "_files")
     with zipfile.ZipFile(archive) as zf:
-        names = [n for n in zf.namelist() if not n.endswith("/")]
+        infos = [i for i in zf.infolist() if not i.filename.endswith("/")]
+        # limits from the ZIP's own directory, before a byte is unpacked (zipfile never writes more than an entry's
+        # declared size, so these numbers hold) (#225)
+        if len(infos) > MAX_MEMBERS:
+            raise FetchError(f"the pack has {len(infos)} files, over {MAX_MEMBERS}; refused")
+        total = sum(i.file_size for i in infos)
+        if total > MAX_UNPACKED_MB * 2**20:
+            raise FetchError(f"the pack unpacks to {total // 2**20} MB, over {MAX_UNPACKED_MB} MB; refused")
+        for i in infos:
+            if i.file_size > 2**20 and i.file_size > MAX_RATIO * max(i.compress_size, 1):
+                raise FetchError(f"{i.filename!r} unpacks {i.file_size // max(i.compress_size, 1)}x its packed size "
+                                 f"(over {MAX_RATIO}x: a ZIP bomb?); refused")
+        names = [i.filename for i in infos]
         for n in names:
             # zipfile drops ".." while extracting, so "x/../../a" would land at "a" while --base keeps the "..":
             # refuse the pack before anything is written instead of trying to line the two up
@@ -188,6 +266,15 @@ def unpack(archive, cache):
             target = os.path.normpath(os.path.join(base, n))
             if not target.startswith(base + os.sep):
                 raise FetchError(f"zip entry escapes the cache folder, refusing the pack: {n}")
+        # two entries that land on one file (a repeated name, or names equal ignoring case on Windows and macOS)
+        # would overwrite each other while unpacking: refuse the pack (#227)
+        seen = {}
+        for n in names:
+            key = os.path.normpath(n).casefold()
+            if key in seen:
+                raise FetchError(f"the pack has two entries for one file (ignoring case): {seen[key]!r} and {n!r}; "
+                                 "refused")
+            seen[key] = n
         if not root.is_dir():
             # names Windows cannot store would crash the extract there; they are refused at --take anyway
             zf.extractall(root, members=[n for n in names if not windows_unsafe(n)])
@@ -216,7 +303,8 @@ def next_asset_id(log_text):
 
 
 def md_cell(text):
-    return text.replace("|", "\\|").replace("\n", " ").strip()
+    """One Markdown table cell: pipes escaped, every kind of line break a space (CR too, #228)."""
+    return re.sub(r"[\r\n\x0b\x0c\x85\u2028\u2029]+", " ", text).replace("|", "\\|").strip()
 
 
 def windows_unsafe(name):
@@ -257,7 +345,7 @@ def run(args):
     if not args.list and not log_path.is_file():
         raise UsageError(f"{ASSET_LOG.as_posix()} not found under {root_dir}: run from the project root (or pass --root)")
     cache = root_dir / CACHE_DIR
-    archive = download(args.url, cache)
+    archive, final_url = download(args.url, cache, args.max_mb * 2**20, args.allow_http, args.allow_local)
     pack_root, files = unpack(archive, cache)
     if args.list:
         for f in files:
@@ -308,20 +396,37 @@ def run(args):
     asset_id = f"A-{num:04d}"
     today = datetime.date.today().isoformat()
     lic_rel, lic_text = find_license_text(pack_root, files, args.license_file)
-    sha = hashlib.sha256(archive.read_bytes()).hexdigest()
-    page = redact_page(args.page)
+    override = ""
+    if lic_text and status in ("ok", "sharealike"):
+        # the pack's own licence file must not say the opposite of --license (#226)
+        low = re.sub(r"\s+", " ", lic_text.lower())
+        said = sorted({label for needle, label in PACK_FORBIDS if needle in low})
+        if said and not args.license_mismatch:
+            raise FetchError(f"the pack's {lic_rel} says {', '.join(said)}, but --license is {args.license!r}. Read it; "
+                             "if the page's licence really applies, pass --license-mismatch \"why\" (logged)")
+        if said:
+            override = f"LICENSE MISMATCH ({lic_rel} says {', '.join(said)}): {args.license_mismatch}"
+    digest = hashlib.sha256()
+    with open(archive, "rb") as fh:                       # streamed: never the whole pack in memory (#225)
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    sha = digest.hexdigest()
+    page = redact_page(args.page, args.keep_page_query)
     evidence = (f"{asset_id}  {args.type}  fetched {today} with tools/fetch_asset.py\n"
-                f"Download : {redact_url(args.url)}\nPage     : {page}\nAuthor   : {args.author}\nLicense  : {args.license}\n"
+                f"Download : {redact_url(args.url)}\n"
+                + (f"Redirect : {redact_url(final_url)}\n" if redact_url(final_url) != redact_url(args.url) else "")
+                + f"Page     : {page}\nAuthor   : {args.author}\nLicense  : {args.license}\n"
                 f"SHA-256  : {sha}\nFiles    : {', '.join(taken)}\n\n"
                 + (f"---- {lic_rel} (from the pack) ----\n{lic_text}" if lic_text else
                    "No license file in the pack: the license above was read on the asset page. Save a screenshot too.\n"))
     # names come from the pack: escape them so a "|" or a newline cannot break the table, a backtick the code span
     def code(text):
         return "`" + md_cell(text).replace("`", "'") + "`"
-    rel_files = ", ".join(code((Path(args.to) / n).as_posix()) for n in names) if len(names) <= 3 else \
-        f"{code(Path(args.to).as_posix() + '/')} ({len(names)} files)"
+    to_rel = to_dir.relative_to(root_dir).as_posix()      # never an absolute local path in the log (#228)
+    rel_files = ", ".join(code(f"{to_rel}/{n}") for n in names) if len(names) <= 3 else \
+        f"{code(to_rel + '/')} ({len(names)} files)"
     marker = {"placeholder": "PLACEHOLDER", "sharealike": "SHAREALIKE"}.get(status, "")
-    notes = "; ".join(x for x in [marker, args.notes] if x)
+    notes = "; ".join(x for x in [marker, override, args.notes] if x)
     row = (f"| {asset_id} | {md_cell(args.type)} | {rel_files} | {md_cell(page or redact_url(args.url))} | {md_cell(args.author)} | "
            f"{md_cell(args.license)} | {md_cell(args.attribution)} | {args.ai} | {args.modified} | {today} | {md_cell(notes)} |")
 
@@ -333,13 +438,32 @@ def run(args):
         return 0
     # Work out the new log first: if it cannot be written, nothing in the project has changed yet
     log_text = add_log_row(log_text, row, fill_template)
-    to_dir.mkdir(parents=True, exist_ok=True)
-    for src, dst in plans:
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dst)
-    (root_dir / LICENSE_DIR).mkdir(parents=True, exist_ok=True)
-    (root_dir / LICENSE_DIR / f"{asset_id}.txt").write_bytes((evidence).encode("utf-8"))
-    log_path.write_bytes((log_text).encode("utf-8"))
+    evidence_path = root_dir / LICENSE_DIR / f"{asset_id}.txt"
+    if evidence_path.exists():
+        raise UsageError(f"{evidence_path.relative_to(root_dir).as_posix()} already exists; the log and docs/licenses/ "
+                         "disagree, fix that first")
+    made = []          # everything this run creates, removed again if any later step fails (#229)
+    try:
+        to_dir.mkdir(parents=True, exist_ok=True)
+        for src, dst in plans:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            made.append(dst)
+        (root_dir / LICENSE_DIR).mkdir(parents=True, exist_ok=True)
+        evidence_path.write_bytes(evidence.encode("utf-8"))
+        made.append(evidence_path)
+        tmp_log = log_path.with_name(log_path.name + ".tmp")
+        tmp_log.write_bytes(log_text.encode("utf-8"))
+        made.append(tmp_log)
+        tmp_log.replace(log_path)         # the log changes in one step, last
+        made.remove(tmp_log)
+    except BaseException:
+        for f in reversed(made):
+            try:
+                f.unlink()
+            except OSError:
+                pass
+        raise
     print(f"[ OK ] {asset_id}: {len(plans)} file(s) into {Path(args.to).as_posix()}, license evidence in "
           f"{(LICENSE_DIR / (asset_id + '.txt')).as_posix()}, row added to {ASSET_LOG.as_posix()}")
     if status == "placeholder":
@@ -368,7 +492,15 @@ def build_parser():
     ap.add_argument("--ai", choices=("no", "dev-only", "pre-generated", "live"), default="no", help="AI-assisted? (SOP-04)")
     ap.add_argument("--modified", choices=("no", "yes"), default="no", help="did you change the files?")
     ap.add_argument("--notes", default="", help="free text for the Notes column")
-    ap.add_argument("--placeholder", action="store_true", help="allow NC/unknown licenses, logged as PLACEHOLDER")
+    ap.add_argument("--placeholder", action="store_true",
+                    help="prototype only: allow an NC/ND or unclear licence, logged as PLACEHOLDER to replace before release")
+    ap.add_argument("--license-mismatch", default="", metavar="WHY",
+                    help="the pack's licence file contradicts --license and you checked that --license applies: why")
+    ap.add_argument("--keep-page-query", action="store_true",
+                    help="keep --page's query string and fragment in the log (default: dropped, they can hold tokens)")
+    ap.add_argument("--allow-http", action="store_true", help="accept a plain-HTTP URL or redirect (default: HTTPS only)")
+    ap.add_argument("--allow-local", action="store_true", help="accept a file:// URL: a pack already on this computer")
+    ap.add_argument("--max-mb", type=int, default=MAX_DOWNLOAD_MB, help=f"largest download (default {MAX_DOWNLOAD_MB})")
     ap.add_argument("--root", default=".", help="project root (default: current folder)")
     ap.add_argument("--dry-run", action="store_true", help="show what would happen, change nothing in the project")
     ap.add_argument("--debug", action="store_true", help="print a traceback on unexpected errors")

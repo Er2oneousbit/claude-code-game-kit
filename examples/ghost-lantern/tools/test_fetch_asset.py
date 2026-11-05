@@ -56,7 +56,7 @@ class FetchAssetExam(unittest.TestCase):
     def fetch(self, *extra):
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            rc = fetch_asset.main(["--url", self.url, "--root", str(self.root), *extra])
+            rc = fetch_asset.main(["--url", self.url, "--root", str(self.root), "--allow-local", *extra])
         return rc, out.getvalue() + err.getvalue()
 
     def good(self, *extra):
@@ -279,7 +279,8 @@ class FetchAssetExam(unittest.TestCase):
 
     def test_url_credentials_and_query_not_recorded(self):
         real = fetch_asset.download
-        fetch_asset.download = lambda url, cache: real(self.zip.as_uri(), cache)   # stand-in host, offline
+        # stand-in host, offline: the bytes come from the local pack, the URL stays the HTTPS one
+        fetch_asset.download = lambda url, cache, *a, **k: (real(self.zip.as_uri(), cache, allow_local=True)[0], url)
         try:
             self.url = "https://user:hunter2@cdn.example/dl/pack.zip?X-Amz-Signature=SECRETSIG#frag"
             rc, out = self.fetch("--author", "K", "--license", "CC0", "--to", "assets/art",
@@ -294,17 +295,21 @@ class FetchAssetExam(unittest.TestCase):
         self.assertIn("Download : https://cdn.example/dl/pack.zip\n", evidence)
         self.assertIn("| https://cdn.example/dl/pack.zip |", self.log())
 
-    def test_page_recorded_without_login_but_with_query(self):
-        page = "https://me:hunter2@store.example/asset?id=42&lang=en#license"
+    def test_page_recorded_without_login_query_or_fragment(self):
+        """#228: a page's query and fragment can hold a session or signed token: dropped unless --keep-page-query;
+        a login is always dropped, also from a protocol-relative //user:pass@host link."""
+        page = "https://me:hunter2@store.example/asset?id=42&token=SECRETTOKEN#license"
         rc, out = self.fetch("--page", page, "--author", "K", "--license", "CC0", "--to", "assets/art",
                              "--take", "Tiles/tile_0001.png")
         self.assertEqual(rc, 0, out)
         evidence = (self.root / "docs/licenses/A-0001.txt").read_text(encoding="utf-8")
         for text in (evidence, self.log(), out):
-            self.assertNotIn("hunter2", text)
-            self.assertNotIn("me:", text)
-        self.assertIn("Page     : https://store.example/asset?id=42&lang=en#license\n", evidence)
-        self.assertIn("| https://store.example/asset?id=42&lang=en#license |", self.log())
+            for secret in ("hunter2", "me:", "SECRETTOKEN", "#license"):
+                self.assertNotIn(secret, text)
+        self.assertIn("Page     : https://store.example/asset\n", evidence)
+        self.assertEqual(fetch_asset.redact_page("//me:pw@store.example/p?x=1"), "//store.example/p")
+        self.assertEqual(fetch_asset.redact_page("https://store.example/a?id=42#l", keep_query=True),
+                         "https://store.example/a?id=42#l")
         self.assertEqual(fetch_asset.redact_page("the itch.io page, see notes"), "the itch.io page, see notes")
 
     def test_names_windows_cannot_store_refused(self):
@@ -341,6 +346,119 @@ class FetchAssetExam(unittest.TestCase):
         self.assertEqual(rc, 1, out)
         self.assertIn("share a name (ignoring case)", out)
         self.assertFalse((self.root / "assets").exists(), "refused before copying")
+
+    # --- review fixes (#225 to #229) ---
+    def test_https_only_unless_asked(self):
+        """#225: plain HTTP and file:// URLs are refused without --allow-http or --allow-local."""
+        for url, says in (("http://example.org/p.zip", "--allow-http"), (self.zip.as_uri(), "--allow-local"),
+                          ("ftp://example.org/p.zip", "refusing a ftp URL")):
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                rc = fetch_asset.main(["--url", url, "--root", str(self.root), "--list"])
+            self.assertEqual(rc, 2, url)
+            self.assertIn(says, out.getvalue() + err.getvalue())
+
+    def test_no_redirect_from_https_down_to_http(self):
+        """#225: a redirect from HTTPS to plain HTTP (or another scheme) is refused."""
+        import urllib.request
+        h = fetch_asset._Redirects(allow_http=False)
+        req = urllib.request.Request("https://cdn.example/p.zip")
+        for target in ("http://cdn.example/p.zip", "file:///etc/passwd"):
+            with self.assertRaises(fetch_asset.FetchError):
+                h.redirect_request(req, None, 302, "Found", {}, target)
+        self.assertIsNotNone(h.redirect_request(req, None, 302, "Found", {}, "https://mirror.example/p.zip"))
+
+    def test_download_size_cap_and_full_cache_key(self):
+        """#225: a body over the cap is refused and leaves no file; the cache folder is the URL's full SHA-256."""
+        cache = Path(self.tmp.name) / "cache"
+        with self.assertRaises(fetch_asset.FetchError):
+            fetch_asset.download(self.zip.as_uri(), cache, max_bytes=10, allow_local=True)
+        self.assertEqual([p.name for p in cache.rglob("*") if p.is_file()], [])
+        dest, _ = fetch_asset.download(self.zip.as_uri(), cache, allow_local=True)
+        self.assertEqual(len(dest.parent.name), 64)
+
+    def test_zip_bomb_and_member_limits(self):
+        """#225: too many entries, too much unpacked, or one entry packed too tightly is refused before unpacking."""
+        bomb = Path(self.tmp.name) / "bomb.zip"
+        with zipfile.ZipFile(bomb, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("License.txt", "CC0")
+            zf.writestr("big.bin", b"\0" * (3 * 2**20))          # zeros deflate about 1000:1
+        self.url = bomb.as_uri()
+        rc, out = self.fetch("--list")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("ZIP bomb", out)
+        many = Path(self.tmp.name) / "many.zip"
+        with zipfile.ZipFile(many, "w") as zf:
+            for name, data in [("License.txt", "CC0")] + [(f"f{i}.txt", "x") for i in range(5)]:
+                zf.writestr(name, data)
+        self.url = many.as_uri()
+        old = fetch_asset.MAX_MEMBERS
+        fetch_asset.MAX_MEMBERS = 3
+        try:
+            rc, out = self.fetch("--list")
+        finally:
+            fetch_asset.MAX_MEMBERS = old
+        self.assertEqual(rc, 1, out)
+        self.assertIn("over 3", out)
+
+    def test_entries_that_collide_are_refused_even_when_one_is_picked(self):
+        """#227: Tiles/a.png and Tiles/A.PNG unpack onto one file on Windows: refused, whichever is picked."""
+        self.evil_pack([("License.txt", "CC0"), ("Tiles/a.png", b"FIRST"), ("Tiles/A.PNG", b"SECOND")])
+        rc, out = self.good("--take", "Tiles/a.png")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("two entries for one file", out)
+        self.assertFalse((self.root / "assets").exists())
+
+    def test_pack_licence_must_not_contradict_the_claim(self):
+        """#226: the pack's License.txt says all rights reserved; --license CC0 is refused unless overridden, and
+        the override is logged."""
+        self.evil_pack([("License.txt", "Copyright Someone. All rights reserved."), ("Tiles/a.png", b"x")])
+        rc, out = self.good("--take", "Tiles/a.png")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("all rights reserved", out)
+        rc, out = self.good("--take", "Tiles/a.png", "--license-mismatch", "the page grants CC0 to this build")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("LICENSE MISMATCH", self.log())
+
+    def test_negated_licence_text_is_not_a_licence(self):
+        """#226: 'not CC0' and 'MIT; no resale' are not plain licences."""
+        for text in ("not CC0", "MIT License; no resale", "CC0 except the logo"):
+            with self.assertRaises(fetch_asset.FetchError, msg=text):
+                fetch_asset.judge_license(text, False)
+            self.assertEqual(fetch_asset.judge_license(text, True), "placeholder")
+        self.assertEqual(fetch_asset.judge_license("CC0", False), "ok")
+
+    def test_cells_ids_and_paths(self):
+        """#228: every line separator is a space in a cell; IDs past A-9999 keep counting; the log never holds an
+        absolute path even when --to is given as one."""
+        self.assertNotIn("\r", fetch_asset.md_cell("a\r| A-9999 | x y"))
+        self.assertEqual(fetch_asset.next_asset_id("| A-9999 | x |\n| A-10000 | y |\n"), (10001, False))
+        rc, out = self.good("--take", "Tiles/tile_0001.png", "--to", str(self.root / "assets" / "art"))
+        self.assertEqual(rc, 0, out)
+        row = [l for l in self.log().splitlines() if l.startswith("| A-0001")][0]
+        self.assertIn("`assets/art/tile_0001.png`", row)
+        self.assertNotIn(str(self.root), self.log())
+        self.assertNotIn(str(self.root), (self.root / "docs/licenses/A-0001.txt").read_text(encoding="utf-8"))
+
+    def test_a_failure_after_copying_leaves_nothing_behind(self):
+        """#229: if the log cannot be written, the copied files and the evidence file are removed again."""
+        self.assertEqual(self.good("--take", "Tiles/tile_0001.png", "--dry-run")[0], 0)     # cache the pack
+        real = fetch_asset.Path.replace
+
+        def fail_log(self_, target):
+            if str(self_).endswith("ASSET_LOG.md.tmp"):
+                raise OSError("disk full")
+            return real(self_, target)
+        fetch_asset.Path.replace = fail_log
+        try:
+            rc, out = self.good("--take", "Tiles/tile_0001.png")
+        finally:
+            fetch_asset.Path.replace = real
+        self.assertNotEqual(rc, 0, out)
+        self.assertFalse((self.root / "assets/art/tile_0001.png").exists())
+        self.assertFalse((self.root / "docs/licenses/A-0001.txt").exists())
+        self.assertFalse((self.root / "docs/ASSET_LOG.md.tmp").exists())
+        self.assertEqual(self.log(), LOG)
 
 
 if __name__ == "__main__":

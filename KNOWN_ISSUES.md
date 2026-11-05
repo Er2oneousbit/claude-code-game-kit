@@ -152,6 +152,12 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
   ready with a bad key, `--wait` ignored by UniRig ([#222](https://github.com/Er2oneousbit/claude-code-game-kit/issues/222));
   no real deformation check ([#223](https://github.com/Er2oneousbit/claude-code-game-kit/issues/223)); README gaps
   ([#224](https://github.com/Er2oneousbit/claude-code-game-kit/issues/224)).
+- **`tools/fetch_asset.py` security review (FIXED in 0.13.1, kept here until the issues close on main):** download
+  limits, schemes, redirects, cache key ([#225](https://github.com/Er2oneousbit/claude-code-game-kit/issues/225)); a
+  pack's licence contradicting `--license` ([#226](https://github.com/Er2oneousbit/claude-code-game-kit/issues/226));
+  colliding ZIP entries ([#227](https://github.com/Er2oneousbit/claude-code-game-kit/issues/227)); tokens, CR and paths in
+  the log ([#228](https://github.com/Er2oneousbit/claude-code-game-kit/issues/228)); no rollback after a failed log
+  write ([#229](https://github.com/Er2oneousbit/claude-code-game-kit/issues/229)).
 
 ## The examples
 None of the example games has been played by a human tester; the bots and tests are the only proof they play as

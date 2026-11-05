@@ -1342,6 +1342,12 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.1",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1351,7 +1357,7 @@
     ".claude/agents/playtest-analyst.md": "a08d7508bf73ead452aca2a9064939e8092357620fda97900eab1fecdb393c9e",
     ".claude/agents/researcher.md": "968499c48e4f712ab133a63cfdb8cbbb1df437aedb709dab336e76c578248717",
     ".claude/skills/adr/SKILL.md": "9818145a803852e50d0914259603266a09cb372e4e2cde373c89f4a7087e5929",
-    ".claude/skills/asset-intake/SKILL.md": "1e2c96683da03987135c7f05c32cdbaaac72536452332b953ed70351f0fbc61f",
+    ".claude/skills/asset-intake/SKILL.md": "24dcc8dcc64750e3523e8f57b77dc09bf9e51b5d7768b3a34a57d55d82df3fd0",
     ".claude/skills/bug-hunt/SKILL.md": "32eb54a040e066c1a94efdf2a2bdd026490f2800d2dd4fa24af63c7b74f4508d",
     ".claude/skills/dotwork/SKILL.md": "8f50f20868c409e45e8957611bcc2881f139daa4b060fb6f367d96c62f427009",
     ".claude/skills/end-session/SKILL.md": "1140a97cbba9b4372141ab11ad01fb04a58e763af924b627244f7f7de0724ad8",
@@ -1738,7 +1744,7 @@
     "tools/credits.py": "15b4ac5af145517cb91f8eb7101271861c8c8ccedd4f83d59bc35cd04e4e831e",
     "tools/dev.py": "30c4d16a2af787248bd3252af9ab9a0e8fedb9b9198587755f34ec4c9e0e4642",
     "tools/doctor.py": "b410d757ec13b38800a46525f6ef1ebb5c2e264dbe1fa2f14dce73f0f42535b8",
-    "tools/fetch_asset.py": "6882e35fb6a64c5ee7a12529f10eac6c1b7424ac815733a74507fded758d9eea",
+    "tools/fetch_asset.py": "1de5a3bcb972d97fbb94e6f32ab4fa6b9d021e90d93b4f1c46c4f9063c2e710a",
     "tools/golden_vectors.py": "5368a2d52b2a9c837ee42cc974ef1085e1b8d018be7343069027eed1736f8b95",
     "tools/hooks/session_context.py": "8b3e3734fcaeb5d0b97ba5350ff380e9758174c7c5afb162a5735e93f28b9133",
     "tools/image_diff.py": "e4aa63680093e09e8a48c48996c4a1fbc75404d72312ccb0faee7a7068abe430",
@@ -1750,7 +1756,7 @@
     "tools/test_check_links.py": "768e36f642e0f3bbbbf87a800095a51a9f5ea0353de240ed26fc88aa6633fff7",
     "tools/test_credits.py": "658632b9464bc769df0497a32b7018b8e9c063a4a0b10eb18d246bda1883b91e",
     "tools/test_doctor.py": "b357dfa088ce609991ca5c88d6139c71122412b0163a80b1494bfb1f1e662a1b",
-    "tools/test_fetch_asset.py": "970d61f9afad4a7b42e52bb462fe31eeb30718e2a831d4125c0b995ea290c461",
+    "tools/test_fetch_asset.py": "f1f32bc39fa40fbd934a8deab5d383a95acd46cdb8dcfea3f0f833f85ec91455",
     "tools/test_golden_vectors.py": "ae987f692dc728be23b98d2822531685f9487524a6a59305fa24e825717ca61d",
     "tools/test_image_diff.py": "0584beab2542496e4acd12f0365d304226897e18a77a0a76dffb7b54361ec11b",
     "tools/test_issues.py": "259047c45802fd775bc0a39b327135b2abd4e45a22a8d859fb5e9601acf5f1c4",
