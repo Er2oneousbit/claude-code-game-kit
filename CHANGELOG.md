@@ -35,12 +35,27 @@
   Checked against Pixelorama 1.2.4 (the live exam has it save tilemaps and edit a cell and a tile: only the atlas, the
   map and the manifest change) and Godot 4.7.2 (a Movie Maker capture of both kinds of map equals Dotwork's drawing
   on every opaque pixel).
+- Dotwork: a Dotwork panel inside Pixelorama 1.2.4 (an extension, source in `tools/art/dotwork/pixelorama_extension/`).
+  `dotwork.py pixelorama --install-extension` copies it into Pixelorama's extensions folder and writes a small config
+  beside it (which Python, `dotwork.py` and game folder to use, and Godot for `verify`; one row per game; Pixelorama's
+  own settings are not touched), and you enable it once in Edit > Preferences > Extensions. For the `.pxo` open in
+  Pixelorama the Dotwork tab shows which game asset it is, its game files, Dotwork's QA notes on it, why a re-export
+  would stop and whether the file holds a folder of your machine (`dotwork.py pixelorama --info`); Re-export to game
+  saves the file with its export folder blank and runs `pixelorama --reexport --clear-export-path` in the background,
+  then shows the result; Next asset and Show in game folder do what they say. A missing config, a Python or game
+  folder that moved, or a `.pxo` from elsewhere gets a message saying what to run. The live exam installs the panel
+  into its own user folder, sets a pixel in Pixelorama and drives the panel's refresh and re-export: the game changes
+  exactly as with the command line (with real `verify` when `GODOT_BIN` is set); the panel's text helpers run under
+  plain Godot offline. The tab's look and its clicks in Pixelorama's window still need a look by eye.
 - Dotwork: `dotwork.py log` no longer logs hand work as AI output. Every row said "Dotwork (local ComfyUI)" and
   "generated locally", so a tilemap drawn in Pixelorama or a frame added in Aseprite read as model output in
   `ASSET_LOG.md` and the credits. A file's origin now comes from its manifest row (models, or no model and a
   Pixelorama or Aseprite source, workflow or polish note, or drawn in code), and the Source, Author, License and
   AI-assisted cells name only the origins the pack holds: a pack you drew is "drawn by hand in Pixelorama", "own
-  work" and AI-assisted `no`; a pack of model output with a frame you added stays `pre-generated` and names both.
+  work" and AI-assisted `no`; a pack of model output with a frame you added stays `pre-generated` and names both. A
+  code-drawn frame you touched up stays "drawn in code" (its Modified? column says `yes`).
+- Godot: `dev.py check` skips folders Godot ignores (a `.gdignore` in them, as `tools/art/dotwork/` has). It compiled
+  Dotwork's Pixelorama extension, whose scripts use Pixelorama's classes, and failed every new Godot game.
 
 ## 0.8.3 (unreleased)
 - Gatekeeper (Godot): "Start over" resets the game in place, so the loaded model stays and a reply still on its way

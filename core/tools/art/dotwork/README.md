@@ -151,7 +151,7 @@ or usage (the `[error]` line says what to fix). `preview KIND --help` lists each
 | `verify` | load every Dotwork asset of this game in Godot (shader materials compiled, held frames counted) and run its smoke test |
 | `qa pack [--json OUT] [--lineup OUT.png]` | style check over every PNG the game's manifests list (not sheets, normal maps, or store art, the game icon and boot splash, which are scaled up on purpose), read only: pixel scale, each lane's palette lock (the table under Palettes), outline colour and thickness, light side, figure height in tiles, contrast on the ground tiles, colour-blind separation of gauge fills, status marks, button states and palette swaps (Machado 2009 simulation); `--lineup` draws every character and prop at game scale on a ground tile; exit 1 on findings |
 | `aseprite [--reexport] [--overwrite]` | editable `.aseprite` sources (frames timed by their holds); push hand-polished files back |
-| `pixelorama [--reexport] [--overwrite] [--clear-export-path]` | the same round trip with Pixelorama `.pxo` files, no install needed, plus tilemaps (yours into a TileSet and maps; the game's maps and TileSets into tilemap projects and back); `--clear-export-path` blanks the local export folder Pixelorama saves in each file ([Hand polish](#hand-polish-aseprite-or-pixelorama)) |
+| `pixelorama [--reexport] [--overwrite] [--clear-export-path]` | the same round trip with Pixelorama `.pxo` files, no install needed, plus tilemaps (yours into a TileSet and maps; the game's maps and TileSets into tilemap projects and back); `--clear-export-path` blanks the local export folder Pixelorama saves in each file; `--install-extension` puts the Dotwork panel into Pixelorama (`--info PXO` is what it asks) ([Hand polish](#hand-polish-aseprite-or-pixelorama)) |
 | `preview battle\|title\|attack ...` | mock screens composed from the game's art (review only) |
 | `capture --scene S [--frames N] [--fps F] [--size WxH] [--gif]` | record any scene with Godot's Movie Maker: a fixed frame rate, every frame written as PNG (trailer cuts, side-by-side reviews), a contact strip and an optional GIF; a window opens for the capture |
 | `log --pack NAME [--dry-run]` | `docs/ASSET_LOG.md` row + evidence file for a pack |
@@ -490,6 +490,42 @@ the path comes back on every save: clear it again before you commit. Aseprite 1.
 with every file unchanged, a character with clips of two sizes included; an edit made in Aseprite's window is not
 tested yet.
 
+**The Dotwork panel in Pixelorama.** A Pixelorama extension (source in `pixelorama_extension/`) adds a tab named
+Dotwork. For the `.pxo` open in Pixelorama it shows which game asset it is (character, effect, image or tilemap), its
+game files, the QA notes Dotwork made for it (a turned-around clip, smear and drift notes), why a re-export would stop
+before you try (a layer effect, a character with no tags, a tile with no atlas slot) and whether the file holds a
+folder of your machine. **Re-export to game** saves the `.pxo` and runs `dotwork.py pixelorama --reexport
+--clear-export-path` for the game (the same command you would type: every Dotwork `.pxo`, untouched ones change no
+file, and every export folder blanked), then shows Dotwork's result lines. **Next asset** opens the game's next
+Dotwork `.pxo`; **Show in game folder** opens the asset's shipped files in your file manager. A first time, from the
+game folder:
+
+1. `python tools/art/dotwork/dotwork.py pixelorama` (once, so there are `.pxo` files to open).
+2. `python tools/art/dotwork/dotwork.py pixelorama --install-extension`, with the Python you run Dotwork with and
+   `GODOT_BIN` set (the panel's re-export runs `verify` in Godot; Pixelorama started from a menu does not see your
+   shell's variables, so the install records it). This copies `DotworkPanel.zip` into Pixelorama's extensions folder
+   (`%APPDATA%\pixelorama\extensions` on Windows, `~/.local/share/pixelorama/extensions` on Linux,
+   `~/Library/Application Support/pixelorama/extensions` on macOS; `--pixelorama-user DIR` for another, such as a
+   portable Pixelorama **(verify)**) and writes its config, dotwork_panel.json, beside it: which Python, `dotwork.py` and game
+   folder to use, full paths on your machine that stay in Pixelorama's folder, never in the game. It changes none of
+   Pixelorama's settings. Run it again from each game you polish (one row per game) and after you move a game or
+   change Python.
+3. Restart Pixelorama, then Edit > Preferences > Extensions: select **Dotwork panel**, press Enable and confirm (once;
+   Pixelorama remembers it). The tab joins the panel beside the tools; Window > Panels shows or hides it, and Window >
+   Layouts moves it like any other panel.
+4. Open a `.pxo` from `<src_dir>/pixelorama/`, polish, press **Re-export to game**, read the result, then **Next
+   asset**.
+
+Dotwork runs in the background, so Pixelorama stays usable; the buttons wait until it finishes (a re-export with
+`verify` takes a few seconds to a minute). A `.pxo` from somewhere else, a Python or game folder that moved, or a
+missing config gets a message in the panel that says what to run. Pixelorama checks the extension's API version: the
+panel declares API 10 (Pixelorama 1.2.4) and a later Pixelorama that changes the API says so instead of loading it.
+To remove it, Edit > Preferences > Extensions > Uninstall. Tested with Pixelorama 1.2.4 on Windows, headless: the live
+exam installs the panel into a user folder of its own, opens a `.pxo`, sets a pixel and drives the panel's own
+refresh and re-export, and the game changes exactly as the command-line path changes it (real `verify` in Godot
+4.7.2 when `GODOT_BIN` is set); the panel's text helpers run under plain Godot. How the tab looks and the buttons'
+clicks in Pixelorama's window are not tested by a program: give it a look.
+
 ## Store art (Steam sizes)
 What the `store` lane writes to `assets_src/store/<name>/steam/`, checked against the Steamworks documentation on
 2026-11-01 (pages: store/assets/standard, store/assets/libraryassets, store/assets/rules, store/assets,
@@ -599,14 +635,18 @@ re-export that changes no file, an edit and a new hold reaching the game, layers
 clipping masks and groups within two steps of its windowed composite), every refused layer feature stopping before a
 file is written, `pxo_version` 8 cels and the fields Pixelorama 1.2.3 and 1.2.4 save, and tilemaps (every flip and transpose drawn as
 Pixelorama draws it, your own tilemaps into an atlas, a TileSet, scenes and a JSON map, a game's map and TileSets
-into tilemap projects and back after Pixelorama renumbered their tiles);
+into tilemap projects and back after Pixelorama renumbered their tiles), the Dotwork panel (its package, the install
+writing only the zip and its config, `--info` for every kind of source; with `GODOT_BIN`, its text helpers under
+Godot);
 Aseprite's frame times in the build list and through a re-export rounded to milliseconds (its script runs stubbed).
 Two live exams run only when their editor is set: `ASEPRITE_BIN` runs the export script in Aseprite, and
 `PIXELORAMA_BIN` (about 13 s) has Pixelorama open, save and export Dotwork's `.pxo` files headless, through a small
 extension installed in a user folder of the exam's own (your Pixelorama settings are not touched), then re-exports
 them: no file changes, a pixel set in Pixelorama changes only its frame, and partly clear layers with cel, layer and
 animated opacity in groups come out of Pixelorama's export equal to Dotwork's, byte for byte; tilemaps saved there
-round trip unchanged, and a cell and a tile edited there change only the atlas and the map. With
+round trip unchanged, and a cell and a tile edited there change only the atlas and the map; the Dotwork panel,
+installed there by `--install-extension`, names the asset and its QA notes and its re-export changes the game as the
+command line does. With
 `PIXELORAMA_WINDOW=1` as well, one case opens Pixelorama's window for a few seconds and compares its GPU export of
 blend modes, a clipping mask and a blending group with Dotwork's (within two steps; #66).
 

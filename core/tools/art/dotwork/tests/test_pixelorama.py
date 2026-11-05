@@ -30,6 +30,8 @@
 # Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): blend modes, clipping masks, groups and animated
 #           opacity against Pixelorama's own composites (#66)
 # Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): tilemap layers and tilemap projects
+# Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): the Dotwork panel (PanelExam offline; the live exam
+#           installs it, drives its refresh and re-export in Pixelorama 1.2.4 and compares with the command line)
 # ---------------------------------------------------------------------------
 import base64
 import contextlib
@@ -2143,7 +2145,9 @@ PXO_EXT = "DotworkLive"    # the exam's Pixelorama extension, installed only in 
 # tile, x, y, r, g, b, a]]}]), it opens each .pxo with OpenSave.open_pxo_file, sets the pixels (canvas coordinates,
 # layer 1; the cel grows as a pencil stroke grows it), places tiles (frame 1, canvas cells, as the tile tool's
 # set_index does) and draws into tiles (then every tilemap cel is redrawn from its tiles), saves with
-# OpenSave.save_pxo_file and quits. Exports use Pixelorama's own CLI (--export --output).
+# OpenSave.save_pxo_file and quits. Exports use Pixelorama's own CLI (--export --output). An item with "panel": true
+# is not saved by the job: the Dotwork panel (pixelorama_extension/, installed by dotwork.py pixelorama
+# --install-extension) is asked what it shows, then its Re-export to game saves and runs Dotwork.
 PXO_EXT_GD = '''extends Node
 
 func _ready() -> void:
@@ -2173,14 +2177,263 @@ func _ready() -> void:
                 for c in frame.cels:
                     if c is CelTileMap:
                         c.update_cel_portions()
+        if item.get("panel", false):
+            await _panel()
+            continue
         var ok := OpenSave.save_pxo_file(item["out"], false, project)
         print("DOTWORK_PXO saved %s %s" % [item["out"], ok])
     print("DOTWORK_PXO_OK")
     get_tree().quit()
+
+
+# the Dotwork panel (pixelorama_extension/Main.gd), as its buttons drive it: what it shows for the open project,
+# then Re-export to game (it saves the project itself)
+func _panel() -> void:
+    var nodes := ExtensionsApi.get_main_nodes("DotworkPanel")
+    if nodes.is_empty():
+        print("DOTWORK_PANEL_MISSING")
+        return
+    var panel = nodes[0]
+    while panel.busy:
+        await get_tree().process_frame
+    var got := []
+    panel.info_ready.connect(func(a): got.append(a), CONNECT_ONE_SHOT)
+    panel.refresh()
+    while got.is_empty():
+        await get_tree().process_frame
+    print("DOTWORK_PANEL_INFO " + JSON.stringify(got[0]))
+    print("DOTWORK_PANEL_SHOWS " + JSON.stringify([panel.title_label.text, panel.body_label.text]))
+    var done := []
+    panel.finished.connect(func(r): done.append(r), CONNECT_ONE_SHOT)
+    panel.reexport()
+    while done.is_empty():
+        await get_tree().process_frame
+    print("DOTWORK_PANEL_RESULT " + JSON.stringify(done[0]))
+    while panel.busy:
+        await get_tree().process_frame
+    print("DOTWORK_PANEL_STATUS " + JSON.stringify(panel.status_text.text))
 '''
 PXO_EXT_TSCN = ('[gd_scene load_steps=2 format=3]\n\n[ext_resource type="Script" '
                 f'path="res://src/Extensions/{PXO_EXT}/live.gd" id="1"]\n\n[node name="{PXO_EXT}" type="Node"]\n'
                 'script = ExtResource("1")\n')
+
+
+# panel_logic.gd under plain Godot (no Pixelorama): every helper the panel uses, on made-up rows and output
+LOGIC_EXAM_GD = r'''extends SceneTree
+
+var failures := PackedStringArray()
+
+
+func check(ok: bool, what: String) -> void:
+	if not ok:
+		failures.append(what)
+
+
+func _init() -> void:
+	var L = load("res://panel_logic.gd")
+	check(L.norm("C:\\Games\\Hero\\", true) == "c:/games/hero", "norm folds case and separators")
+	check(L.norm("/home/a/Hero/", false) == "/home/a/Hero", "norm keeps case off Windows")
+	var config := {"games": [
+		{"project": "C:/g/hero", "sources": "C:/g/hero/assets_src/pixelorama", "python": "p", "dotwork": "d"},
+		{"project": "C:/g/hero/sub", "sources": "C:/g/hero/sub/assets_src/pixelorama"},
+		"not a row"]}
+	check(L.find_game(config, "c:\\G\\Hero\\assets_src\\pixelorama\\characters\\knight.pxo", true).get("project")
+		== "C:/g/hero", "a .pxo finds its game")
+	check(L.find_game(config, "C:/g/hero/sub/assets_src/pixelorama/fx/a.pxo", true).get("project")
+		== "C:/g/hero/sub", "the longest sources folder wins")
+	check(L.find_game(config, "C:/g/hero/assets_src/pixelorama_old/a.pxo", true).is_empty(),
+		"a sibling folder is not it")
+	check(L.find_game(config, "C:/g/HERO/assets_src/pixelorama/a.pxo", false).is_empty(), "case counts off Windows")
+	var args: PackedStringArray = L.reexport_args({"dotwork": "d.py", "project": "C:/g"})
+	check(args == PackedStringArray(["d.py", "pixelorama", "--reexport", "--clear-export-path", "--project", "C:/g"]),
+		"re-export command line")
+	check(L.info_args({"dotwork": "d.py", "project": "C:/g"}, "C:/g/x.pxo")[3] == "C:/g/x.pxo", "info command line")
+	var info: Dictionary = L.parse_info("2026-11-04 10:00:00 log\nDOTWORK_PANEL {\"ok\": true, \"what\": \"a\"}\n")
+	check(info.get("what") == "a", "parse_info reads the marker line")
+	check(L.parse_info("[error] no\n").is_empty(), "no marker line: {}")
+	var r: Dictionary = L.summarize(0, "2026-11-04 10:00:00 pixelorama reexport character knight: 7 frames\n"
+		+ "2026-11-04 10:00:00 hand polish: other\n[ OK ] re-exported and verified (2 files changed)\r\n")
+	check(r["ok"] and r["changed"] == 2, "summarize reads the changed count")
+	check(r["lines"] == PackedStringArray(["pixelorama reexport character knight: 7 frames",
+		"[ OK ] re-exported and verified (2 files changed)"]), "summarize keeps marked and re-export lines: %s" % r)
+	r = L.summarize(-1, "", "C:/py/python.exe")
+	check(not r["ok"] and "C:/py/python.exe" in r["lines"][0], "a Python that cannot start is named")
+	r = L.summarize(2, "Traceback\nboom\n")
+	check(not r["ok"] and r["lines"] == PackedStringArray(["Traceback", "boom"]), "unmarked output is shown")
+	check(L.summarize(1, "")["lines"][0].begins_with("[error]"), "silence still says something")
+	check("install-extension" in L.load_config("res://nothing.json")["error"], "a missing config says how to install")
+	var f := FileAccess.open("res://bad.json", FileAccess.WRITE)
+	f.store_string("[1, 2]")
+	f.close()
+	check(L.load_config("res://bad.json").has("error"), "a config without games is refused")
+	check("Python" in L.check_game({"python": "C:/nowhere/python.exe", "dotwork": "x", "project": "y"}),
+		"a missing Python is named")
+	var text: Array = L.describe({"ok": true, "what": "character knight", "file": "k.pxo", "position": "1 of 3",
+		"files": ["a", "b"], "file_count": 2, "qa": ["attack_e: turned around"], "refused": "a layer effect",
+		"notes": [], "export_folder": "C:/Users/x"})
+	check(text[0] == "character knight" and "turned around" in text[1] and "a layer effect" in text[1]
+		and "C:/Users/x" in text[1], "describe shows QA notes, refusals and a local folder")
+	check(L.describe({"ok": false, "error": "not one"})[1] == "not one", "describe shows why it is no asset")
+	print("LOGIC_FAILURES " + JSON.stringify(failures))
+	print("LOGIC_DONE")
+	quit(0 if failures.is_empty() else 1)
+'''
+
+
+class PanelExam(unittest.TestCase):
+    """The Dotwork panel inside Pixelorama, offline: the extension package Pixelorama loads (its files, its
+    extension.json, the scene's script path, the header block), dotwork.py pixelorama --install-extension (the zip
+    and the panel config in the user folder it is given, nothing else; once per game, rows of other games kept), and
+    --info for each kind of source (the asset, its game files, QA notes, refusals, the next source). With GODOT_BIN
+    set, panel_logic.gd runs under plain Godot (every helper the panel uses); the panel itself runs in the live
+    exam."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="dotwork_panel_")
+        self.s = make_game(self.tmp)
+        import pixelorama
+        import pxo_panel
+        self.px, self.panel = pixelorama, pxo_panel
+        self.px.build(self.s.project, self.s.conf)
+        self.src = os.path.join(self.tmp, "assets_src", "pixelorama")
+        self.user = os.path.join(self.tmp, "pixelorama_user")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def dotwork(self, *args, project=None):
+        import dotwork
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            code = dotwork.main(list(args) + ["--project", project or self.tmp])
+        return code, out.getvalue()
+
+    def answer(self, pxo):
+        code, out = self.dotwork("pixelorama", "--info", pxo)
+        self.assertEqual(code, 0, out)
+        lines = [x for x in out.splitlines() if x.startswith(self.panel.MARKER)]
+        self.assertEqual(len(lines), 1, out)
+        return json.loads(lines[0][len(self.panel.MARKER):])
+
+    def test_the_extension_package_is_what_pixelorama_loads(self):
+        blob = self.panel.extension_zip()
+        self.assertEqual(blob, self.panel.extension_zip())                 # the same bytes every time
+        base = f"src/Extensions/{self.panel.EXTENSION}/"
+        with zipfile.ZipFile(io.BytesIO(blob)) as z:
+            names = z.namelist()
+            self.assertEqual(sorted(names), sorted(base + f for f in self.panel.EXTENSION_FILES))
+            meta = json.loads(z.read(base + "extension.json"))
+            files = {n[len(base):]: z.read(n).decode("utf-8") for n in names}
+        # HandleExtensions.gd (1.2.4): the folder is the extension's name, nodes are scenes in it, API version 10
+        self.assertEqual(meta["name"], self.panel.EXTENSION)
+        self.assertIn(10, meta["supported_api_versions"])
+        for node in meta["nodes"]:
+            self.assertIn(node, files)
+        self.assertIn(f'path="res://{base}Main.gd"', files["Main.tscn"])
+        self.assertIn(f'preload("res://{base}panel_logic.gd")', files["Main.gd"])
+        for name, text in files.items():
+            self.assertNotIn("\r", text, name)
+            if name.endswith(".gd"):
+                for field in ("# Purpose :", "# Usage   :", "# Notes   :",
+                              "# Authored: Written with Claude (Opus 5.5, claude-opus-5-5)"):
+                    self.assertIn(field, text, name)
+                self.assertNotIn("Made with", text, name)                # kit tools carry no footer
+                code = [ln for ln in text.splitlines() if ln and not ln.startswith("#")]
+                self.assertFalse([ln for ln in code if ln.startswith(" ")], name)   # GDScript indents with tabs
+
+    def test_install_writes_only_the_zip_and_the_panel_config(self):
+        code, out = self.dotwork("pixelorama", "--install-extension", "--pixelorama-user", self.user)
+        self.assertEqual(code, 0, out)
+        self.assertIn("Edit > Preferences > Extensions", out)
+        found = sorted(os.path.relpath(os.path.join(d, f), self.user).replace(os.sep, "/")
+                       for d, _, fs in os.walk(self.user) for f in fs)
+        self.assertEqual(found, ["dotwork_panel.json", f"extensions/{self.panel.EXTENSION}.zip"])  # no config.ini
+        with open(os.path.join(self.user, "extensions", self.panel.EXTENSION + ".zip"), "rb") as f:
+            self.assertEqual(f.read(), self.panel.extension_zip())
+        with open(os.path.join(self.user, "dotwork_panel.json"), encoding="utf-8") as f:
+            (row,) = json.load(f)["games"]
+        self.assertEqual(row["project"], os.path.abspath(self.tmp).replace(os.sep, "/"))
+        self.assertEqual(row["sources"], self.src.replace(os.sep, "/"))
+        self.assertTrue(os.path.isfile(row["python"]))
+        self.assertTrue(row["dotwork"].endswith("/dotwork.py") and os.path.isfile(row["dotwork"]))
+        # again: nothing new; a second game gets its own row and the first stays
+        code, out = self.dotwork("pixelorama", "--install-extension", "--pixelorama-user", self.user)
+        self.assertIn("already current", out)
+        other = os.path.join(self.tmp, "other_game")
+        os.makedirs(other)
+        make_game(other)
+        self.assertEqual(self.dotwork("pixelorama", "--install-extension", "--pixelorama-user", self.user,
+                                      project=other)[0], 0)
+        with open(os.path.join(self.user, "dotwork_panel.json"), encoding="utf-8") as f:
+            self.assertEqual(len(json.load(f)["games"]), 2)
+        with open(os.path.join(self.user, "dotwork_panel.json"), "w", encoding="utf-8") as f:
+            f.write("{broken")
+        self.assertEqual(self.dotwork("pixelorama", "--install-extension", "--pixelorama-user", self.user)[0], 0)
+        with open(os.path.join(self.user, "dotwork_panel.json"), encoding="utf-8") as f:
+            self.assertEqual(len(json.load(f)["games"]), 1)
+        self.assertEqual(self.dotwork("pixelorama", "--install-extension", "--reexport")[0], 2)
+
+    def test_info_names_the_asset_its_files_and_its_notes(self):
+        man = os.path.join(self.tmp, "assets_src", "dotwork", "manifest_knights.json")
+        with open(man, encoding="utf-8") as f:
+            data = json.load(f)
+        next(r for r in data["assets"] if r["kind"] == "sheet" and r["animation"] == "attack_e")["qa"] = [
+            "turned around: attack_e faces west from frame 2"]
+        with open(man, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        knight, spark, barrel = (os.path.join(self.src, k, n + ".pxo") for k, n in
+                                 (("characters", "knight"), ("fx", "spark"), ("single", "barrel")))
+        a = self.answer(knight)
+        self.assertEqual((a["ok"], a["kind"], a["what"], a["position"], a["refused"]),
+                         (True, "characters", "character knight", "1 of 3", ""))
+        self.assertIn("assets/art/characters/knight/knight_frames.tres", a["files"])
+        self.assertEqual((a["file_count"], a["home"]), (12, "assets/art/characters/knight/"))
+        self.assertEqual(a["qa"], ["attack_e: turned around: attack_e faces west from frame 2"])
+        self.assertEqual(a["folder"], os.path.join(self.tmp, "assets", "art", "characters", "knight").replace(
+            os.sep, "/"))
+        self.assertEqual(a["next"], spark.replace(os.sep, "/"))
+        self.assertEqual(self.answer("assets_src/pixelorama/fx/spark.pxo")["what"], "effect spark")   # relative
+        b = self.answer(barrel)
+        self.assertEqual((b["what"], b["position"], b["next"]), ("image barrel", "3 of 3", knight.replace(os.sep, "/")))
+        self.assertTrue(b["folder"].endswith(".png") and b["file_count"] == 1)
+        # what a re-export would refuse, and a local export folder, are said before you press the button
+        rewrite_pxo(knight, lambda d, bufs: d["layers"][0].update(effects=[{"name": "Outline", "enabled": True}]))
+        self.assertIn("effect", self.answer(knight)["refused"])
+        rewrite_pxo(spark, lambda d, bufs: d.update(export_profile={"directory_path": "C:/Users/someone/Desktop"}))
+        self.assertEqual(self.answer(spark)["export_folder"], "C:/Users/someone/Desktop")
+        # a file that is not one of the game's sources is an answer, not an error (the panel shows it)
+        stray = os.path.join(self.tmp, "stray.pxo")
+        shutil.copy(barrel, stray)
+        c = self.answer(stray)
+        self.assertFalse(c["ok"])
+        self.assertIn("not one of this game's Dotwork sources", c["error"])
+
+    def test_info_on_a_tilemap_of_your_own(self):
+        ts, layers = own_map(np.random.default_rng(5))
+        p = write_own(self.tmp, "meadow", ts, layers)
+        with stub_verify():
+            self.px.reexport(self.s.project, self.s.conf)
+        a = self.answer(p)
+        self.assertEqual((a["kind"], a["what"], a["refused"]), ("tilemaps", "tilemap meadow", ""))
+        self.assertIn("assets/art/tilemaps/meadow/meadow.tscn", a["files"])
+
+    @unittest.skipUnless(os.environ.get("GODOT_BIN") and os.path.isfile(os.environ.get("GODOT_BIN", "")),
+                         "set GODOT_BIN to run panel_logic.gd under Godot")
+    def test_panel_logic_under_godot(self):
+        proj = os.path.join(self.tmp, "logic_exam")
+        os.makedirs(proj)
+        with open(os.path.join(proj, "project.godot"), "w", encoding="utf-8") as f:
+            f.write("config_version=5\n")
+        shutil.copy(os.path.join(self.panel.EXTENSION_SRC, "panel_logic.gd"), proj)
+        with open(os.path.join(proj, "exam.gd"), "w", encoding="utf-8", newline="\n") as f:
+            f.write(LOGIC_EXAM_GD)
+        p = subprocess.run([os.environ["GODOT_BIN"], "--headless", "--path", proj, "-s", "res://exam.gd"],
+                           capture_output=True, encoding="utf-8", errors="replace", timeout=PXO_TIMEOUT)
+        log = p.stdout + p.stderr
+        self.assertIn("LOGIC_DONE", log, log[-3000:])
+        self.assertIn("LOGIC_FAILURES []", log, log[-3000:])
+        self.assertNotIn("SCRIPT ERROR", log, log[-3000:])
+        self.assertEqual(p.returncode, 0, log[-3000:])
 
 
 @unittest.skipUnless(LIVE_PIXELORAMA and os.path.isfile(LIVE_PIXELORAMA),
@@ -2473,6 +2726,61 @@ class PixeloramaLiveExam(unittest.TestCase):
         self.assertEqual(tuple(water[1, 1]), (250, 0, 250, 255))
         with open(t["scene"], encoding="utf-8") as f:
             self.assertIn((4, 2, 0, 1, 0, 0), godot_cells(f.read(), "Base"))
+
+    def test_the_dotwork_panel_shows_the_asset_and_reexports_like_the_command_line(self):
+        # the Dotwork panel (pixelorama_extension/), installed by the command line into this exam's user folder and
+        # driven through its own buttons' methods: it names the asset and its QA notes, then Re-export to game saves
+        # the .pxo and runs dotwork.py: the game changes exactly as test_a_pixel_set_in_pixelorama_lands_only_in_its_
+        # frame's command-line path changes it. Verify runs in Godot when GODOT_BIN is set; without it the panel
+        # shows Dotwork's own message after the files are written.
+        import dotwork
+        import pxo_panel
+        user = os.path.join(self.user, "pixelorama")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(dotwork.main(["pixelorama", "--install-extension", "--pixelorama-user", user,
+                                           "--project", self.tmp]), 0, out.getvalue())
+        with open(os.path.join(user, "config.ini"), "w", encoding="utf-8") as f:
+            f.write(f"[extensions]\n\n{PXO_EXT}=true\n{pxo_panel.EXTENSION}=true\n")
+        man = os.path.join(self.tmp, "assets_src", "dotwork", "manifest_knights.json")
+        with open(man, encoding="utf-8") as f:
+            data = json.load(f)
+        note = "turned around: attack_e faces west from frame 2"
+        next(r for r in data["assets"] if r["kind"] == "sheet" and r["animation"] == "attack_e")["qa"] = [note]
+        with open(man, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=1)
+        before = snapshot(self.tmp)
+        knight = self.sources[0].replace(os.sep, "/")
+        log = self.pixelorama([], {"files": [{"src": knight, "out": knight, "edits": [[1, 0, 0, 200, 60, 50, 255]],
+                                              "panel": True}]})
+        self.assertIn("DOTWORK_PXO_OK", log, log[-3000:])
+        self.assertNotIn("SCRIPT ERROR", log, log[-3000:])
+        self.assertNotIn("Parse Error", log, log[-3000:])
+
+        def line(tag):
+            return json.loads(next(x for x in log.splitlines() if x.startswith(tag + " "))[len(tag) + 1:])
+        info, shows, result = line("DOTWORK_PANEL_INFO"), line("DOTWORK_PANEL_SHOWS"), line("DOTWORK_PANEL_RESULT")
+        self.assertEqual((info["what"], info["position"]), ("character knight", "1 of 3"))
+        self.assertTrue(info["next"].endswith("/fx/spark.pxo"))
+        self.assertEqual(shows[0], "character knight")
+        self.assertIn(note, shows[1])
+        k = "assets/art/characters/knight/"
+        # (a verify in Godot imports the game: its .import files are Godot's, not the re-export's)
+        self.assertEqual([p for p in changed(before, snapshot(self.tmp)) if not p.endswith(".import")],
+                         [k + "frames/spr_knight_attack_e_01.png", k + "knight_attack_e_sheet.png",
+                          "assets_src/dotwork/manifest_knights.json", "assets_src/dotwork/manifest_knights_old.json"])
+        new = np.array(Image.open(os.path.join(self.tmp, k, "frames", "spr_knight_attack_e_01.png")).convert("RGBA"))
+        self.assertEqual(tuple(new[0, 0]), (200, 60, 50, 255))
+        self.assertEqual(self.px.export_folder(self.sources[0]), "")   # the panel saved it with the folder blank
+        status = line("DOTWORK_PANEL_STATUS")
+        self.assertIn("pixelorama reexport character knight: 7 frames", status)
+        if os.environ.get("GODOT_BIN"):
+            self.assertTrue(result["ok"], result)
+            self.assertEqual(result["changed"], 2)
+            self.assertIn("re-exported and verified", status)
+        else:
+            self.assertFalse(result["ok"], result)
+            self.assertIn("GODOT_BIN", status)
 
 
 if __name__ == "__main__":
