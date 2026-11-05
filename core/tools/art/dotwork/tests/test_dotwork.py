@@ -724,6 +724,48 @@ class DotworkExam(unittest.TestCase):
             row = next(ln for ln in out.splitlines() if ln.startswith("| A-0001 "))
             self.assertEqual(row.split("|")[9].strip(), want, note)
 
+    def test_log_hand_drawn_rows_not_logged_as_ai(self):
+        # a tilemap drawn in Pixelorama (pxo_tiles.OwnRows) and a pack of model output with a frame added in Aseprite:
+        # every row used to say "Dotwork (local ComfyUI) ... generated locally", hand work included
+        make_project(self.tmp, {"comfyui": {"url": self.url}})
+        os.makedirs(os.path.join(self.tmp, "docs"))
+        with open(os.path.join(self.tmp, "docs", "ASSET_LOG.md"), "w", encoding="utf-8") as f:
+            f.write("| ID | Type | File(s) in repo | Source / URL | Author | License | Attribution text (if required) | "
+                    "AI-assisted? | Modified? | Date added | Notes |\n|---|---|---|---|---|---|---|---|---|---|---|\n"
+                    "| A-0001 | | | | | | | no | no | {{DATE}} | |\n")
+        folder = os.path.join(self.tmp, "assets_src", "dotwork")
+        os.makedirs(folder, exist_ok=True)
+        own = "Pixelorama tilemap (drawn by hand), re-exported by Dotwork"
+        packs = {
+            "pixelorama": [{"file": "assets/art/tilemaps/yard/yard_atlas.png", "kind": "tile_atlas", "models": [],
+                            "workflow": own, "source": "assets_src/pixelorama/tilemaps/yard.pxo", "sha256": "0" * 64},
+                           {"file": "assets/art/tilemaps/yard/yard.tres", "kind": "tileset", "models": [],
+                            "workflow": own, "source": "assets_src/pixelorama/tilemaps/yard.pxo", "sha256": "1" * 64}],
+            "hero": [{"file": "assets/art/characters/hero/frames/spr_hero_walk_s_00.png", "kind": "frame",
+                      "models": ["flux-2-klein-4b.safetensors"], "sha256": "2" * 64},
+                     {"file": "assets/art/characters/hero/frames/spr_hero_wave_s_00.png", "kind": "frame",
+                      "models": [], "note": "hand-polished in Aseprite", "sha256": "3" * 64}]}
+        for name, rows in packs.items():
+            with open(os.path.join(folder, f"manifest_{name}.json"), "w", encoding="utf-8") as f:
+                json.dump({"pack": name, "tool": "dotwork", "assets": rows, "assumptions": []}, f)
+        cells = {}
+        for name in packs:
+            code, out = self.run_dotwork("log", "--pack", name, "--project", self.tmp, "--dry-run")
+            self.assertEqual(code, 0, out)
+            row = next(ln for ln in out.splitlines() if ln.startswith("| A-0001 "))
+            cells[name] = [c.strip() for c in row.split("|")]
+            self.assertIn("File     :", out)
+        hand = cells["pixelorama"]          # | id | type | files | source | author | licence | attr | ai | modified |
+        self.assertNotIn("ComfyUI", hand[4])
+        self.assertIn("drawn by hand in Pixelorama", hand[4])
+        self.assertNotIn("generated", hand[5])
+        self.assertIn("own work", hand[6])
+        self.assertEqual((hand[8], hand[9]), ("no", "no"))
+        mixed = cells["hero"]               # model output ships, so the pack stays pre-generated and says both origins
+        self.assertIn("Dotwork (local ComfyUI)", mixed[4])
+        self.assertIn("drawn by hand in Aseprite", mixed[4])
+        self.assertEqual((mixed[8], mixed[9]), ("pre-generated", "yes"))
+
     def test_engine_none_drops_godot_rows(self):
         make_project(self.tmp, {"comfyui": {"url": self.url}})
         spec = self.ui_spec(self.tmp)

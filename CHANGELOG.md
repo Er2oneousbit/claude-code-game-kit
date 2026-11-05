@@ -35,6 +35,12 @@
   Checked against Pixelorama 1.2.4 (the live exam has it save tilemaps and edit a cell and a tile: only the atlas, the
   map and the manifest change) and Godot 4.7.2 (a Movie Maker capture of both kinds of map equals Dotwork's drawing
   on every opaque pixel).
+- Dotwork: `dotwork.py log` no longer logs hand work as AI output. Every row said "Dotwork (local ComfyUI)" and
+  "generated locally", so a tilemap drawn in Pixelorama or a frame added in Aseprite read as model output in
+  `ASSET_LOG.md` and the credits. A file's origin now comes from its manifest row (models, or no model and a
+  Pixelorama or Aseprite source, workflow or polish note, or drawn in code), and the Source, Author, License and
+  AI-assisted cells name only the origins the pack holds: a pack you drew is "drawn by hand in Pixelorama", "own
+  work" and AI-assisted `no`; a pack of model output with a frame you added stays `pre-generated` and names both.
 
 ## 0.8.3 (unreleased)
 - Gatekeeper (Godot): "Start over" resets the game in place, so the loaded model stays and a reply still on its way
