@@ -14,7 +14,7 @@ upstream. Not legal advice (SOP-04, SOP-21).
 | Reference image (`--prompt` only) | flux-2-klein-4b.safetensors, qwen_3_4b.safetensors, flux2-vae-klein.safetensors | as in Dotwork's `models.lock.json` | black-forest-labs/FLUX.2-klein-4B | Apache-2.0 | yes |
 
 The licence texts are in `licenses/` next to this file. The first `make` that writes the asset log copies them into
-the game's `docs/licenses/` as `meshwright-*`, so `tools/credits.py` puts them in `THIRD_PARTY_LICENSES.md`.
+the game's `docs/licenses/` as `meshwright-*`, so `tools/credits.py` puts them in THIRD_PARTY_LICENSES.md.
 
 ## DINOv3: read this one
 TRELLIS.2 conditions on DINOv3 image features, so every model Meshwright makes passes through DINOv3. Its licence is

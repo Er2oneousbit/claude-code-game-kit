@@ -68,7 +68,11 @@ import validate_asset as va  # noqa: E402  (class budgets; its bpy import is laz
 TOOL = "Meshwright"                 # the one place the name is spelled for people: a rename starts here
 VERSION = "0.11.0"
 SRC_ROOT = Path("assets_src") / TOOL.lower()   # per model: reference, raw mesh, reports, preview
-DEFAULT_OUT = Path("assets") / "models"
+DEFAULT_OUT = "assets/models"
+# where models go when --out is not given, by the engine in the game's .game-kit.json (its assets folder + models;
+# Unreal imports a .glb through its own importer, so the file waits outside Content/)
+ENGINE_OUT = {"web": "public/assets/models", "web-3d": "public/assets/models", "unity": "Assets/Models",
+              "unreal": "SourceArt/Models"}
 WORKFLOW_3D = HERE / "workflows" / "trellis2_image_to_3d.api.json"
 WORKFLOW_REF = HERE / "workflows" / "klein_reference.api.json"
 LOCK = HERE / "models.lock.json"
@@ -345,6 +349,15 @@ def rel(root, p):
         return Path(p).name
 
 
+def default_out(root):
+    """The models folder for this game's engine (.game-kit.json), else assets/models."""
+    try:
+        engine = json.loads((root / ".game-kit.json").read_text(encoding="utf-8")).get("engine", "")
+    except (OSError, ValueError):
+        engine = ""
+    return ENGINE_OUT.get(engine, DEFAULT_OUT)
+
+
 def parse_lods(text, asset_class):
     if text is None:
         return list(CLASS_SETTINGS[asset_class]["lods"])
@@ -381,7 +394,8 @@ class Plan:
         self.faces = int(self.budget["max_tris"] * FACE_SHARE)
         self.lods = parse_lods(args.lods, self.cls)
         self.src = self.root / SRC_ROOT / self.name
-        self.out_dir = (self.root / args.out) if not Path(args.out).is_absolute() else Path(args.out)
+        out = args.out or default_out(self.root)
+        self.out_dir = (self.root / out) if not Path(out).is_absolute() else Path(out)
         self.main = self.out_dir / f"{self.name}.glb"
         self.lod_files = [self.out_dir / f"{self.name}_LOD{i}.glb" for i in range(1, len(self.lods) + 1)]
         self.log = not args.no_log and not args.reference_only
@@ -420,7 +434,7 @@ def preflight(args, plan):
         try:
             plan.main.resolve().relative_to(plan.root)
         except ValueError:
-            raise ToolError(f"--out {args.out} is outside the project; the asset log is for files that ship in it "
+            raise ToolError(f"--out {plan.out_dir} is outside the project; the asset log is for files that ship in it "
                             "(pass --no-log for a scratch run)")
     blender = None
     if not args.reference_only:
@@ -864,7 +878,8 @@ def build_parser():
     p.add_argument("--class", dest="asset_class", choices=sorted(CLASS_SETTINGS), default="prop",
                    help="budget class from SOP-11 (default prop)")
     p.add_argument("--seed", type=int, help="seed for every sampler (default: from the clock, printed)")
-    p.add_argument("--out", default=DEFAULT_OUT.as_posix(), help=f"models folder in the game (default {DEFAULT_OUT.as_posix()})")
+    p.add_argument("--out", help=f"models folder in the game (default {DEFAULT_OUT}; web and web-3d "
+                                 "public/assets/models, Unity Assets/Models, Unreal SourceArt/Models)")
     p.add_argument("--project", default=".", help="the game's root folder (default: the current folder)")
     p.add_argument("--lods", help="LOD ratios, e.g. 0.5,0.25, or none (default per class: `list`)")
     p.add_argument("--height", type=float, help="height in metres (default per class: prop 1.0, kit 3.0, hero/npc 1.8)")

@@ -488,6 +488,13 @@ class MakeRun(Base):
                                "meshwright-TRELLIS.2-LICENSE.txt"])
         self.no_local_paths()
 
+    def test_models_folder_follows_the_engine(self):
+        (self.root / ".game-kit.json").write_text(json.dumps({"engine": "web-3d"}), encoding="utf-8")
+        rc, out = self.make()
+        self.assertEqual(rc, 0, out)
+        self.assertTrue((self.root / "public" / "assets" / "models" / "prop_crate.glb").is_file())
+        self.assertIn("`public/assets/models/prop_crate.glb`", (self.root / "docs/ASSET_LOG.md").read_text(encoding="utf-8"))
+
     def test_class_and_quality_settings_reach_the_job(self):
         rc, out = self.make("--image", "art_src/crate.png", "--seed", "3", "--class", "hero", "--quality", "high",
                             "--no-preview", name="chr_test")
