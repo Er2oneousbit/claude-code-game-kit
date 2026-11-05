@@ -35,6 +35,9 @@ tools/                   dev.py and helpers
 - Player files (settings, saves, logs, crashes) live in `Shell.data_dir` (user://, or `--data-dir`); write them with `AtomicFile`/`SaveStore`.
 - Pure logic goes in `RefCounted` classes under `scripts/core/` or `scripts/game/logic/` so GUT can test it without scenes.
 - Logging via the `Log` autoload (`Log.info("physics", "msg")`), never bare `print` in committed code.
+- 3D models: `.glb` under `assets/models/` (what `tools/blender/prep_export.py` and `tools/meshwright/meshwright.py` write:
+  metres, +Y up, pivot at the bottom centre) import on their own (`python tools/dev.py import` headless); instance one with
+  `load("res://assets/models/<name>.glb").instantiate()`. Tested with a Meshwright model: import, check, smoke, a GUT load (K01).
 
 ## Gotchas (Claude: read before editing)
 1. **Never hand-edit** `.godot/`, `*.import`, or generated `.uid` files. Commit the `.uid` files that Godot creates (Godot 4.4 and later, **verify for your version**), they keep references stable.

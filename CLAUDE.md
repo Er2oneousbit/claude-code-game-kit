@@ -75,6 +75,10 @@ python core/tools/audio/wavesmith/test_eleven_audio.py  # offline (canned API re
 python core/tools/audio/wavesmith/test_daw.py        # offline (a stand-in REAPER); with REAPER_BIN set, ReaperLiveExam runs the real one (about 2 minutes)
 python core/tools/audio/wavesmith/test_midifile.py   # standard library only
 python core/tools/art/test_pixellab.py                   # offline (canned API responses)
+python core/tools/meshwright/test_meshwright.py          # offline (a stand-in ComfyUI, a canned mesh); its Blender part runs
+                                                         # when Blender or bpy is found (MESHWRIGHT_TEST_BLENDER=skip|bpy|<path>)
+uv run --python 3.13 --with bpy python core/tools/meshwright/test_meshwright.py   # the Blender part on the bpy module
+python core/tools/meshwright/test_meshwright_live.py     # one real TRELLIS.2 run (about 5 min); exit 0 with SKIP without ComfyUI
 python core/tools/art/test_comfy_local.py                # offline (a stand-in ComfyUI server on 127.0.0.1)
 python core/tools/art/dotwork/tests/test_dotwork.py          # offline, needs Pillow + numpy (the ComfyUI venv has both)
 python core/tools/audio/wavesmith/test_fish_tts.py   # offline (canned API responses)

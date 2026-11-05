@@ -3,6 +3,30 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.11.0 (unreleased)
+- Meshwright, the kit's local 3D asset lane (`tools/meshwright/`, in every game): `meshwright.py make <name> --image
+  <picture>` or `--prompt "..."` (FLUX.2 klein 4B draws the picture first, as Dotwork loads it) makes a textured mesh
+  with TRELLIS.2 4B through a local ComfyUI 0.43.0+ (built-in nodes, BiRefNet background removal inside the shipped
+  workflow), then cleanup.py in Blender (merge, loose fragments, normals, decimation to the class budget, height in
+  metres, pivot at the bottom centre), `tools/blender/prep_export.py` (the one glTF preset, LODs per class) and
+  `validate_asset.py --class`: nothing reaches the models folder unless the budget passes. It writes the ASSET_LOG row
+  (pre-generated AI, models, seed, prompt, "Built with DINOv3"), the evidence file and, the first time, the model
+  licence texts into `docs/licenses/`; sources, reports, a record and a turntable preview stay in
+  `assets_src/meshwright/<name>/`; `--sprites` renders a sheet for 2D games; `--reference-only` auditions pictures for
+  seconds each. The models folder follows the engine (`public/assets/models` on web and web-3d). `check` lists what is
+  missing (nodes, model files with pinned URLs, Blender or the bpy module); every check runs before GPU time. Pinned
+  register `models.lock.json` and `LICENSES.md` (MIT; the DINOv3 licence's use list is flagged as an open question;
+  RMBG-2.0 and nvdiffrast are refused). Live on a 16 GB RTX 5060 Ti (K01, E150): about 5 minutes a model warm (#193).
+- Meshwright: turntable.py renders a contact sheet (and frames for a GIF) with render_sprites.py's camera and light.
+  Exams: test_meshwright.py offline (a stand-in ComfyUI and a canned mesh; the Blender part runs on Blender or the
+  bpy module) and test_meshwright_live.py (one real run; it skips without a GPU setup) (#193).
+- comfy_local.py reads ComfyUI's "3d" outputs and saves `.glb` with the glTF extras removed (Save 3D Model writes the
+  whole prompt, local paths included, there); `strip` does the same by hand (#193).
+- Docs: SOP-11 "Local generation", the `/model-pipeline`, `/gen-brief` and `/asset-intake` skills, BRIEFS (the
+  earlier "not recommended" note replaced), the resources pages, EVIDENCE E147 to E150, import notes in the Godot,
+  web-3d, Unity, Unreal and Bevy ENGINE.md (Unity, Unreal and Bevy marked verify), and
+  `workflows/meshwright-showcase/` (a prop and a character from prompt to engine, failures included) (#193).
+
 ## 0.10.0 (unreleased)
 - Wavesmith: the DAW round trip (`wavesmith.py daw`, daw.py). `daw reaper <set|track|folder>` writes a plain-text
   REAPER project in `assets_src/daw/<name>/`: one named region per sound (a set from data/sound_sets.json, or a
