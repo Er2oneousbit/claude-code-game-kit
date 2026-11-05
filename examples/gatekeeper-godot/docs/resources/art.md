@@ -51,8 +51,8 @@ Asset libraries and tools. AI generators are in `ai-tools.md`, prompt patterns i
 - Tools: `Blender`, `Material Maker`, `Substance` (paid), `Cascadeur`.
 
 **3D generators (AI drafts, not final assets)** **(verify all: sources are third-party reviews, mid-2026)**
-- **Meshwright** (in the kit, `tools/meshwright/`, tested here): one picture or a prompt to a textured `.glb` on your own
-  GPU with TRELLIS.2 (MIT; its DINOv3 encoder has its own licence, see `tools/meshwright/LICENSES.md`), cleaned, budgeted,
+- **Bozzetto** (in the kit, `tools/bozzetto/`, tested here): one picture or a prompt to a textured `.glb` on your own
+  GPU with TRELLIS.2 (MIT; its DINOv3 encoder has its own licence, see `tools/bozzetto/LICENSES.md`), cleaned, budgeted,
   validated and logged. No account, no credits; 16 GB of VRAM, about 5 minutes a model. No rigging.
 - **Tripo AI** (`tripo3d.ai`): text-to-3D and single-image-to-3D, smart retopology, auto-rigging with skin weights, PBR texturing,
   export to GLB, FBX, OBJ, USD, STL, 3MF. Has a credit-based API, an MCP server, and plugins for Blender, Unity, Unreal, Godot, ComfyUI.

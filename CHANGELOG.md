@@ -4,7 +4,7 @@
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
 ## 0.11.0 (unreleased)
-- Meshwright, the kit's local 3D asset lane (`tools/meshwright/`, in every game): `meshwright.py make <name> --image
+- Bozzetto, the kit's local 3D asset lane (`tools/bozzetto/`, in every game): `bozzetto.py make <name> --image
   <picture>` or `--prompt "..."` (FLUX.2 klein 4B draws the picture first, as Dotwork loads it) makes a textured mesh
   with TRELLIS.2 4B through a local ComfyUI 0.43.0+ (built-in nodes, BiRefNet background removal inside the shipped
   workflow), then cleanup.py in Blender (merge, loose fragments, normals, decimation to the class budget, height in
@@ -12,30 +12,30 @@
   `validate_asset.py --class`: nothing reaches the models folder unless the budget passes. It writes the ASSET_LOG row
   (pre-generated AI, models, seed, prompt, "Built with DINOv3"), the evidence file and, the first time, the model
   licence texts into `docs/licenses/`; sources, reports, a record and a turntable preview stay in
-  `assets_src/meshwright/<name>/`; `--sprites` renders a sheet for 2D games; `--reference-only` auditions pictures for
+  `assets_src/bozzetto/<name>/`; `--sprites` renders a sheet for 2D games; `--reference-only` auditions pictures for
   seconds each. The models folder follows the engine (`public/assets/models` on web and web-3d). `check` lists what is
   missing (nodes, model files with pinned URLs, Blender or the bpy module); every check runs before GPU time. Pinned
   register `models.lock.json` and `LICENSES.md` (MIT; the DINOv3 licence's use list is flagged as an open question;
   RMBG-2.0 and nvdiffrast are refused). Live on a 16 GB RTX 5060 Ti (K01, E150): about 5 minutes a model warm (#193).
-- Meshwright: turntable.py renders a contact sheet (and frames for a GIF) with render_sprites.py's camera and light.
-  Exams: test_meshwright.py offline (a stand-in ComfyUI and a canned mesh; the Blender part runs on Blender or the
-  bpy module) and test_meshwright_live.py (one real run; it skips without a GPU setup) (#193).
+- Bozzetto: turntable.py renders a contact sheet (and frames for a GIF) with render_sprites.py's camera and light.
+  Exams: test_bozzetto.py offline (a stand-in ComfyUI and a canned mesh; the Blender part runs on Blender or the
+  bpy module) and test_bozzetto_live.py (one real run; it skips without a GPU setup) (#193).
 - comfy_local.py reads ComfyUI's "3d" outputs and saves `.glb` with the glTF extras removed (Save 3D Model writes the
   whole prompt, local paths included, there); `strip` does the same by hand (#193).
 - Docs: SOP-11 "Local generation", the `/model-pipeline`, `/gen-brief` and `/asset-intake` skills, BRIEFS (the
   earlier "not recommended" note replaced), the resources pages, EVIDENCE E147 to E150, import notes in the Godot,
   web-3d, Unity, Unreal and Bevy ENGINE.md (Unity, Unreal and Bevy marked verify), and
-  `workflows/meshwright-showcase/` (a prop and a character from prompt to engine, failures included) (#193).
-- Meshwright: a validator that crashes (any exit but 0, 1 and 2, or no report) stops make before anything is copied
+  `workflows/bozzetto-showcase/` (a prop and a character from prompt to engine, failures included) (#193).
+- Bozzetto: a validator that crashes (any exit but 0, 1 and 2, or no report) stops make before anything is copied
   or logged, and an old validation report from an earlier run is removed first, so it can never pass a model (#193).
-- Meshwright: the `--sprites` sheet is rendered before the asset log is written, so it gets its place in the row,
+- Bozzetto: the `--sprites` sheet is rendered before the asset log is written, so it gets its place in the row,
   the record and the evidence file with its hash (it shipped unlogged); its layout `.json` counts as a file in the
   way (#193).
-- Meshwright: a `--image` reference loses its metadata before it is stored or sent to ComfyUI: EXIF (a photo's GPS
+- Bozzetto: a `--image` reference loses its metadata before it is stored or sent to ComfyUI: EXIF (a photo's GPS
   position), XMP, IPTC and comments from JPEG and WebP (`comfy_local.strip_jpeg`, `strip_webp`, `strip_picture`), and
   `strip_png` now also drops eXIf and tIME, for Dotwork's saved PNGs too. JPEG and WebP references were copied byte
   for byte, and a PNG kept its EXIF (#193).
-- Meshwright: `--material vertex` works. TRELLIS.2's vertex-colour mesh has no UV map, so validate_asset.py failed
+- Bozzetto: `--material vertex` works. TRELLIS.2's vertex-colour mesh has no UV map, so validate_asset.py failed
   every one after the GPU run; cleanup.py now adds one (Smart UV Project) to a mesh without, and the colours survive
   export. Each job queues only the branch it saves, so a vertex job no longer runs the unwrap and the bakes, and a
   texture job no longer paints vertex colours it throws away (#193).

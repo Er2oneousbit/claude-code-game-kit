@@ -458,7 +458,7 @@ class ComfyLocalExam(unittest.TestCase):
     # ---- 3D jobs (Save 3D Model writes the prompt into the glTF asset extras)
     def test_3d_job_saves_glb_without_extras_and_same_mesh(self):
         STATE.files = []
-        STATE.models = [{"filename": "textured_00001_.glb", "subfolder": "meshwright", "type": "output"}]
+        STATE.models = [{"filename": "textured_00001_.glb", "subfolder": "bozzetto", "type": "output"}]
         rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o")
         self.assertEqual(rc, 0, out)
         saved = (self.root / "o" / "textured_00001_.glb").read_bytes()

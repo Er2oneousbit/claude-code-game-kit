@@ -34,9 +34,9 @@
 # Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): an interrupted or dequeued job raises JobCancelled
 #           (a JobError), so a caller can tell a cancel from a failure
 #           2026-11-05 with Claude (Opus 5.5, claude-opus-5-5): 3D outputs (the "3d" history key, .glb saved with its
-#           glTF "extras" removed: ComfyUI's SaveGLB writes the whole prompt there), for Meshwright
+#           glTF "extras" removed: ComfyUI's SaveGLB writes the whole prompt there), for Bozzetto
 #           2026-11-05 with Claude (Opus 5.5, claude-opus-5-5): strip_png also drops EXIF (eXIf: GPS, camera) and
-#           tIME; strip_jpeg / strip_webp / strip_picture clean a reference picture a user supplies (Meshwright)
+#           tIME; strip_jpeg / strip_webp / strip_picture clean a reference picture a user supplies (Bozzetto)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode

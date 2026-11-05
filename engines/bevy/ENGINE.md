@@ -44,7 +44,7 @@ target/            build output (git-ignored)
 - Errors: `Result` and `?` in helpers; systems log with `error!`/`warn!` and carry on. `unwrap()` only where a failure
   is a bug (and say why in a comment): a panic kills the game.
 - Tests name the behavior they guard; count `SimTick`, never frames.
-- 3D models: a `.glb` from `tools/meshwright/meshwright.py` (in `assets/models/`) loads with the default features:
+- 3D models: a `.glb` from `tools/bozzetto/bozzetto.py` (in `assets/models/`) loads with the default features:
   `SceneRoot(asset_server.load("models/<name>.glb#Scene0"))` (ENGINE_FLOW; the starter itself is 2D) **(verify)**.
 
 ## Gotchas (Claude: read before editing)

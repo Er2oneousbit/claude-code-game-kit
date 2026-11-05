@@ -1,0 +1,175 @@
+{
+ "1": {
+  "class_type": "UNETLoader",
+  "_meta": {
+   "title": "FLUX.2 klein 4B"
+  },
+  "inputs": {
+   "unet_name": "flux-2-klein-4b.safetensors",
+   "weight_dtype": "default"
+  }
+ },
+ "2": {
+  "class_type": "CLIPLoader",
+  "_meta": {
+   "title": "Qwen3 4B text encoder"
+  },
+  "inputs": {
+   "clip_name": "qwen_3_4b.safetensors",
+   "type": "flux2",
+   "device": "default"
+  }
+ },
+ "3": {
+  "class_type": "VAELoader",
+  "_meta": {
+   "title": "klein VAE"
+  },
+  "inputs": {
+   "vae_name": "flux2-vae-klein.safetensors"
+  }
+ },
+ "4": {
+  "class_type": "CLIPTextEncode",
+  "_meta": {
+   "title": "Prompt"
+  },
+  "inputs": {
+   "text": "a wooden barrel",
+   "clip": [
+    "2",
+    0
+   ]
+  }
+ },
+ "5": {
+  "class_type": "ConditioningZeroOut",
+  "_meta": {
+   "title": "No negative"
+  },
+  "inputs": {
+   "conditioning": [
+    "4",
+    0
+   ]
+  }
+ },
+ "6": {
+  "class_type": "EmptyFlux2LatentImage",
+  "_meta": {
+   "title": "Size"
+  },
+  "inputs": {
+   "width": 1024,
+   "height": 1024,
+   "batch_size": 1
+  }
+ },
+ "7": {
+  "class_type": "Flux2Scheduler",
+  "_meta": {
+   "title": "Steps"
+  },
+  "inputs": {
+   "steps": 4,
+   "width": 1024,
+   "height": 1024
+  }
+ },
+ "8": {
+  "class_type": "RandomNoise",
+  "_meta": {
+   "title": "SEED"
+  },
+  "inputs": {
+   "noise_seed": 1
+  }
+ },
+ "9": {
+  "class_type": "CFGGuider",
+  "_meta": {
+   "title": "Guider"
+  },
+  "inputs": {
+   "model": [
+    "1",
+    0
+   ],
+   "positive": [
+    "4",
+    0
+   ],
+   "negative": [
+    "5",
+    0
+   ],
+   "cfg": 1.0
+  }
+ },
+ "10": {
+  "class_type": "KSamplerSelect",
+  "_meta": {
+   "title": "Sampler"
+  },
+  "inputs": {
+   "sampler_name": "euler"
+  }
+ },
+ "11": {
+  "class_type": "SamplerCustomAdvanced",
+  "_meta": {
+   "title": "Sample"
+  },
+  "inputs": {
+   "noise": [
+    "8",
+    0
+   ],
+   "guider": [
+    "9",
+    0
+   ],
+   "sampler": [
+    "10",
+    0
+   ],
+   "sigmas": [
+    "7",
+    0
+   ],
+   "latent_image": [
+    "6",
+    0
+   ]
+  }
+ },
+ "12": {
+  "class_type": "VAEDecode",
+  "_meta": {
+   "title": "Decode"
+  },
+  "inputs": {
+   "samples": [
+    "11",
+    0
+   ],
+   "vae": [
+    "3",
+    0
+   ]
+  }
+ },
+ "13": {
+  "class_type": "SaveImage",
+  "_meta": {
+   "title": "OUTPUT reference"
+  },
+  "inputs": {
+   "images": [
+    "12",
+    0
+   ],
+   "filename_prefix": "bozzetto/reference"
+  }
+ }
+}

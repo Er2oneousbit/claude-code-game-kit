@@ -37,7 +37,7 @@ ProjectSettings/         project config (text, edit with care)
 - Logging: a small `Log` wrapper with channels, no stray `Debug.Log` in committed code.
 - Use `Time.deltaTime` in `Update`, `Time.fixedDeltaTime` in `FixedUpdate`. Physics in `FixedUpdate`.
 - Assembly definitions (`.asmdef`) per folder group for fast compile and test isolation.
-- 3D models from `tools/meshwright/meshwright.py` land in `Assets/Models/` as `.glb`: Unity needs a glTF importer package
+- 3D models from `tools/bozzetto/bozzetto.py` land in `Assets/Models/` as `.glb`: Unity needs a glTF importer package
   for them (glTFast, `com.unity.cloud.gltfast`), or export FBX from Blender instead **(verify for your Unity version)**.
 
 ## Gotchas (Claude: read before editing)

@@ -74,7 +74,7 @@ Direct sprite-sheet prompts failed for days. What worked, in order:
 Input: one clean front-view concept image (plain background, neutral pose), or: "[SUBJECT], game asset, [ART_STYLE], neutral pose, no base, no background"
 ```
 - Treat output as a **draft**: expect to retopologize, fix UVs, and rebuild materials (`SOP-11`).
-- Local image-to-3D on your own GPU: Meshwright (`tools/meshwright/meshwright.py make <name> --prompt "..."`, or
+- Local image-to-3D on your own GPU: Bozzetto (`tools/bozzetto/bozzetto.py make <name> --prompt "..."`, or
   `--image` with a picture from this brief) runs TRELLIS.2 through ComfyUI on a 16 GB card (E150). For its reference
   picture: one object, whole, three-quarter view from slightly above, plain white background, soft even light, no cast
   shadow; characters full body, front view, A-pose. Audition pictures with `--reference-only` (seconds) before a 3D

@@ -36,8 +36,8 @@ Playwright Chromium) for smoke. The boot marker is logged by `src/main.ts` after
    the bottom center, one glTF preset, LODs if asked, validated (SOP-11).
 3. Load: `new GLTFLoader().loadAsync("assets/models/<name>.glb")`; add `gltf.scene` to your scene.
    Animations: `THREE.AnimationMixer` on `gltf.animations`, `mixer.update(dt)` each frame.
-   A model from a picture or a prompt instead of step 2: `python tools/meshwright/meshwright.py make <name> --image <ref.png>`
-   writes it to `public/assets/models/` already cleaned, exported and validated (`tools/meshwright/README.md`).
+   A model from a picture or a prompt instead of step 2: `python tools/bozzetto/bozzetto.py make <name> --image <ref.png>`
+   writes it to `public/assets/models/` already cleaned, exported and validated (`tools/bozzetto/README.md`).
 4. Compressed models (Draco, Meshopt) need their decoders copied into `public/` **(verify the current loader setup)**.
 
 ## Assets and audio

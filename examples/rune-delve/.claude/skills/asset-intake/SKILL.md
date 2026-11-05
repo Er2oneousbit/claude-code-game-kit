@@ -27,7 +27,7 @@ To generate instead of find, hand off to `/gen-brief`, then come back here to lo
 4. Mark temporary or NC assets `PLACEHOLDER` in Notes.
 5. A Dotwork pack (`tools/art/dotwork/`) logs itself: `python tools/art/dotwork/dotwork.py log --pack NAME --dry-run`, then without `--dry-run`, writes the row and the evidence file from its manifest (models, licenses, seeds). Check the row, do not retype it.
 6. A sound edited by hand in a DAW through Wavesmith (`python tools/audio/wavesmith/wavesmith.py daw reaper --reexport <folder>` or `daw import <folder>`) logs itself too: one row per working folder with `Modified? yes`, updated on later runs, plus the evidence file. Check it; do not add a second row for the same files.
-6b. A Meshwright model (`tools/meshwright/meshwright.py make`) logs itself as it is made (pre-generated AI, models, seed, prompt, the "Built with DINOv3" credit) and copies the model licence texts into `docs/licenses/` the first time; a re-run with `--overwrite` updates the same row. Check it; do not add another.
+6b. A Bozzetto model (`tools/bozzetto/bozzetto.py make`) logs itself as it is made (pre-generated AI, models, seed, prompt, the "Built with DINOv3" credit) and copies the model licence texts into `docs/licenses/` the first time; a re-run with `--overwrite` updates the same row. Check it; do not add another.
 7. Report the row you added and any attribution that must appear in credits.
 
 If the license check cannot be completed (site unreachable, ambiguous), say what is unknown and ask the user to decide.
