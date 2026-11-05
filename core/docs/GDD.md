@@ -78,10 +78,12 @@ These live in data, not code. File: `<path to tuning data>`
 ## Art and audio direction
 - Style, tone, and the kinds of enemies/NPCs the player sees: 
 - Art source (who or what makes the finished art; the toy uses art drawn in code): code-drawn / free packs / own art /
-  paid AI service (which) / Dotwork (local AI, `/dotwork`): 
+  paid AI service (which) / Dotwork (local AI 2D, `/dotwork`) / Bozzetto (local AI 3D, `/model-pipeline`): 
 - Palette / resolution / camera: 
 - Music mood and references (see `RESOURCES.md`): 
 - SFX style: 
+- Sound source (who or what makes the finished sound): made in code (Wavesmith) / free packs / own recordings /
+  local AI (Wavesmith `sfx`, `voice`) / paid AI service (which): 
 - Fill the style fragments in `BRIEFS.md` from this section.
 
 ## First-time user experience (FTUE, from E05 in `docs/EVIDENCE.md`)

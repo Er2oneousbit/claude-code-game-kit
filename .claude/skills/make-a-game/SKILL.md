@@ -36,7 +36,7 @@ The plan has the shape of the game's `docs/GDD.md` template (read `core/docs/GDD
 the order below, **one question at a time**. If your tools include a multiple-choice question prompt
 (AskUserQuestion in Claude Code), use it: 3 or 4 short options fitted to what they said so far (each a label plus a
 one-line description; a "You decide" option where it helps; mark one "(Recommended)" when you have a reason), and say
-"Q4 of 13" in the question (14 when question 8b applies). The prompt always offers a free-text "Other", so they can answer in their own words.
+"Q4 of 15" in the question. The prompt always offers a free-text "Other", so they can answer in their own words.
 Without the prompt, ask one question per message with two or three examples. Reflect back in one line after every
 three or so answers ("So: a top-down stealth game about a lighthouse keeper.").
 "You decide" means: pick something that fits, say what you picked, and mark it *(Claude's pick)* in the plan.
@@ -52,8 +52,9 @@ B. **The play**
 C. **Look and feel**
    7.* 2D or 3D, and seen from where (side, top-down, angled, first or third person)? (Default: 2D.)
    8. What should it look and sound like? (pixel art, cartoon, low-poly, dark, cozy, retro chiptune...)
-   8b. *Only for a 2D game* (ask right after 8; it adds one to the question count): where should the finished art
-       come from? Say first that the first build always uses simple art drawn in code, so this is about later. Options:
+   8b. Where should the finished art come from? Say first that the first build always uses simple art made in code,
+       so this is about later. Offer the options for their answer to 7.
+       *A 2D game:*
        - **Drawn in code plus free packs** *(Recommended for a first game)*: no cost, no setup; Claude draws simple
          sprites in code, and free packs (Kenney and others) fill in, each license checked.
        - **My own art**: they draw it (Aseprite, Pixelorama, Krita...) or already have sprites; Claude wires it in.
@@ -62,8 +63,31 @@ C. **Look and feel**
        - **Dotwork, AI on this computer**: free per image, but needs an NVIDIA graphics card (8 GB of video memory for
          sprites, 16 GB for animation), 15 to 78 GB of downloads and an hour of setup. Makes ready-to-use assets for
          Godot; other engines get image files.
+       *A 3D game:*
+       - **Shapes in code plus free packs** *(Recommended for a first game)*: no cost, no setup; Claude builds simple
+         models from shapes, and free packs (Kenney, Quaternius, Poly Haven and others, many with animated
+         characters) fill in, each license checked.
+       - **My own models**: they model in Blender (or have models); Claude checks them against the budgets and wires
+         them in.
+       - **Bozzetto, AI on this computer**: a picture or a sentence to a game-ready model with its budget checked and
+         logged, free per model, about 5 minutes each. Needs an NVIDIA graphics card with 16 GB of video memory,
+         ComfyUI, about 8 GB of model downloads and Blender. Results are drafts: the hidden sides are invented, and
+         characters come out as statues with no skeleton, so a moving character still needs an animated pack model
+         or hand work (`workflows/picture-to-game/` shows a working route, not yet a kit command).
+       - **A paid AI 3D service** (Meshy, Tripo and others): not wired into the kit; their account, terms and costs.
        Several at once is fine ("Dotwork for characters, packs for tiles"). Record the answer as the plan's Art source.
-   8c. *Only if the game is set in a real place* (their town, a real city or region): say once that real map data
+   8c. Where should the sound come from? Same as art: the first build may have none, so this is about later. Options:
+       - **Made in code plus free packs** *(Recommended for a first game)*: the kit's Wavesmith makes retro sound
+         effects and chiptune music in code, no GPU and nothing to install; free packs fill in, each license checked.
+         Either way Wavesmith checks loudness and logs every sound.
+       - **My own sounds or music**: recorded or composed by them; Wavesmith levels and logs them (and brings sounds
+         back from a DAW such as REAPER).
+       - **AI on this computer**: Wavesmith's `sfx` (sound effects and ambience) and `voice` (spoken lines) run on an
+         NVIDIA graphics card through ComfyUI or a local model; free per sound, setup and downloads first.
+       - **A paid AI service**: ElevenLabs (effects; music on paid plans) or Fish Audio (voices). Their API key, a cost
+         per request; Claude runs them only with their go-ahead per job.
+       Record the answer as the plan's Sound source.
+   8d. *Only if the game is set in a real place* (their town, a real city or region): say once that real map data
        can shape its levels: streets and buildings from OpenStreetMap, terrain from a national elevation portal
        (`core/docs/resources/world-and-levels.md`). Record it in the plan as an option to try, not a decision; the
        licence check comes before anything ships. No extra question when the setting is made up.
@@ -81,7 +105,7 @@ Keyboard, gamepad or touch comes from their answers; ask only if it is unclear.
 From the answers, draft and show the plan in the chat, one short screen, under the GDD's headings: Working title,
 One-line pitch, Genre, Perspective, Reference games, The twist, **three Pillars** (you propose them from the answers:
 each a short phrase plus what it rules out), Core loop (`action -> feedback -> reward -> new decision`), Player fantasy
-and audience, Art and audio direction (with the Art source from 8b), Controls, Toy scope (question 11), Out of scope (question 12), two or three
+and audience, Art and audio direction (with the Art source from 8b and the Sound source from 8c), Controls, Toy scope (question 11), Out of scope (question 12), two or three
 **Assumptions to test** with how you will know, and the Author (question 13). Mark every *(Claude's pick)*.
 Right under the plan, before asking for the yes, show this warning in a box of its own (your words, same points):
 > ⚠️ **The first version will look crude, on purpose.** Simple placeholder characters made in code (2D: pixel-art figures with a walk and an action; 3D: figures
@@ -124,6 +148,9 @@ Run these and report in plain words what is there and what is missing:
   Windows and Linux: `nvidia-smi --query-gpu=name,memory.total --format=csv,noheader`. Report the card and its memory
   in plain words; no NVIDIA card or under 8 GB means Dotwork will not run there, so offer to switch the art source.
   Also say how much free disk the models will need (15 GB for sprites, about 78 GB for everything).
+- Art source Bozzetto, or Sound source AI on this computer: the same graphics-card check, nothing installed now.
+  Bozzetto needs 16 GB of video memory; under that, offer to switch the art source. Wavesmith's `sfx` and `voice` say
+  what they need when the game's Claude runs `python tools/audio/wavesmith/wavesmith.py check` later.
 - LÖVE: LÖVE 11.5 from https://love2d.org (Windows: the 64-bit zip, unzip to a simple folder); later, inside the game folder, set `LOVE_BIN` to its `love.exe` for them (ask first).
 - Unity, Unreal, C++: follow that engine's `engines/<id>/ENGINE.md` "Version and setup"; walk them through it step by step.
 Missing pieces: give the link and the one setting that matters, offer to install with the system package manager
@@ -159,7 +186,10 @@ interview did not cover as the template has them, and keep the *(Claude's pick)*
 to confirm). Set "Current tier" to Toy, and copy the toy scope into the Toy row. Then set `docs/HANDOFF.md` "Next step"
 to: "Fast lane in docs/FIRST_HOUR.md: make the toy in docs/GDD.md playable (<the toy, one line>)." The game's own
 Claude reads both on its first session. The Art source line tells it which route to take once the toy is fun:
-`/dotwork` for Dotwork, `/gen-brief` for a paid service, `/asset-intake` for packs and their own art.
+`/dotwork` for Dotwork, `/model-pipeline` for Bozzetto and their own 3D models, `/gen-brief` for a paid service,
+`/asset-intake` for packs and their own art. The Sound source line does the same for audio: Wavesmith
+(`tools/audio/wavesmith/`) for sounds made in code, their own and local AI, `/gen-brief` for a paid service,
+`/asset-intake` for packs.
 
 ## 9. Hand over (the part people miss)
 Explain in two sentences: Claude Code works in one folder at a time, and the game folder has its own Claude setup

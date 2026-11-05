@@ -1286,6 +1286,14 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.8.2",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": [
+        "docs/GDD.md"
+      ]
     }
   ],
   "files": {
@@ -1341,7 +1349,7 @@
     "docs/ENGINE_FLOW.md": "7c3765bd0f0a78c16982da6044aba7e3fd5d94e2ea6d089ac92ceeee429f8faa",
     "docs/EVIDENCE.md": "5a7078e87541bb31d65e256acfc29d6eed4d152b24e138bdd43a6c65d6f4169e",
     "docs/FIRST_HOUR.md": "e3c2b06bbdeea3b2e04be57de54b092bb749a4a45a13a5330c8819bd766e4f49",
-    "docs/GDD.md": "0bbb9e847f729a90f165f7739ea6cb8cb317463dcb8b5c4a8736a43f27b88856",
+    "docs/GDD.md": "99fe2e2d133e882034cbefcb3751dae4763b03bb060370736a186b694f3f5ad8",
     "docs/HANDOFF.md": "3124d0370759299ac022f9a08c1ddccfc85291b52be010fcffe1582dd4aa1945",
     "docs/LEGAL.md": "400bc823b074530b35a1213c880cf5eacee63c7df4e67b84783ec8f911153e9e",
     "docs/PLAYTEST_LOG.md": "98a4d24a1202736904b70a05cfecdd8f1389315b3483bf08a3539302ec8ece5d",

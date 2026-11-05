@@ -4,6 +4,12 @@
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
 ## 0.12.0 (unreleased)
+- `make-a-game`: the art-source question (8b) is asked for 3D games too, with 3D options (shapes in code plus packs,
+  their own models, Bozzetto with its 16 GB card and statue-only characters said plainly, paid 3D services), and a new
+  sound-source question (8c: Wavesmith in code, their own, local AI, paid). The interview is 15 questions; the plan, the
+  install check (the graphics card for Bozzetto and local audio) and the hand-over carry both answers, and the GDD
+  template has a Sound source line. Before, a 3D game was never offered Bozzetto and no game was asked about sound
+  (#204: the flagship game is made through this interview like any user's).
 - `workflows/picture-to-game/`: one generated picture each to a tree (Bozzetto, a grove of six in Godot) and to a
   character that walks in, waves and idles in Godot: Bozzetto for the mesh, UniRig for the skeleton and skin weights
   (`workflows/picture-to-game/src/run_unirig.sh`), and `workflows/picture-to-game/src/animate_rig.py`, a Blender
