@@ -714,8 +714,10 @@ def cmd_make(args):
     print(f"[ OK ] {plan.name}: {files[0]['triangles']:,} triangles, {plan.height} m tall, "
           f"{len(placed)} file(s) in {rel(plan.root, plan.out_dir)}, {time.monotonic() - t0:.0f} s in all"
           + (f"; {warns} validator warning(s) in {rel(plan.root, plan.src / 'validate.json')}" if warns else ""))
+    godot = (plan.root / "project.godot").is_file()
     print(f"[next] look at {rel(plan.root, plan.src / 'turntable.png')}, then import it in the engine "
-          "(docs/ENGINE.md); a generated mesh is a draft (SOP-11)")
+          + ("(`python tools/dev.py import`: check, test and smoke re-import only when class names change)"
+             if godot else "(docs/ENGINE.md)") + "; a generated mesh is a draft (SOP-11)")
     return 0
 
 

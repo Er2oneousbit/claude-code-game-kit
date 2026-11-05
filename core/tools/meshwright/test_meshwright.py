@@ -495,6 +495,12 @@ class MakeRun(Base):
         self.assertTrue((self.root / "public" / "assets" / "models" / "prop_crate.glb").is_file())
         self.assertIn("`public/assets/models/prop_crate.glb`", (self.root / "docs/ASSET_LOG.md").read_text(encoding="utf-8"))
 
+    def test_godot_game_is_told_to_import(self):
+        (self.root / "project.godot").write_text("", encoding="utf-8")
+        rc, out = self.make()
+        self.assertEqual(rc, 0, out)
+        self.assertIn("python tools/dev.py import", out)
+
     def test_class_and_quality_settings_reach_the_job(self):
         rc, out = self.make("--image", "art_src/crate.png", "--seed", "3", "--class", "hero", "--quality", "high",
                             "--no-preview", name="chr_test")

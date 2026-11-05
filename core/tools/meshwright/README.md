@@ -115,7 +115,8 @@ From the kit's own runs (K01, `workflows/meshwright-showcase/`):
 ## In the engine
 A `.glb` from Meshwright is glTF 2.0, metres, +Y up, front +Z, pivot at the bottom centre, one mesh named after the
 model, PBR textures embedded. The game's ENGINE.md (in docs/) has the import line for your engine.
-- **Godot 4**: put it under `assets/` (the default) and the editor imports it (`python tools/dev.py import` headless);
+- **Godot 4**: put it under `assets/` (the default) and the editor imports it; headless, run `python tools/dev.py import`
+  once after a new model (`test` and `smoke` re-import only when class names change, so they would not see it);
   instance it as a scene (`load("res://assets/models/prop_chest.glb").instantiate()`). Tested: import, `check`,
   `smoke`, and a GUT test that loads it and measures its size (K01).
 - **web-3d (Three.js)**: `public/assets/models/` (the default for web games); load it with `GLTFLoader` from
