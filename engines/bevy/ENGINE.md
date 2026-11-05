@@ -46,6 +46,8 @@ target/            build output (git-ignored)
 - Tests name the behavior they guard; count `SimTick`, never frames.
 - 3D models: a `.glb` from `tools/bozzetto/bozzetto.py` (in `assets/models/`) loads with the default features:
   `SceneRoot(asset_server.load("models/<name>.glb#Scene0"))` (ENGINE_FLOW; the starter itself is 2D) **(verify)**.
+  A `--material vertex` model keeps its colours in glTF `COLOR_0`: check that it is not white, because Godot ignores
+  them by default (#202) and Bevy is not tested here **(verify)**.
 
 ## Gotchas (Claude: read before editing)
 1. **Your Bevy memory is probably from an older version.** Bevy breaks its API every release (about every three

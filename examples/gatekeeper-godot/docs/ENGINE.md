@@ -37,6 +37,18 @@ tools/                   dev.py and helpers
   metres, +Y up, pivot at the bottom centre) import in the editor; headless, run `python tools/dev.py import` after adding
   one (`check`, `test` and `smoke` re-import by themselves only when `class_name` scripts change); instance one with
   `load("res://assets/models/<name>.glb").instantiate()`. Tested with a Bozzetto model: import, check, smoke, a GUT load (K01).
+- A vertex-coloured model (`bozzetto.py make --material vertex`, colours in glTF `COLOR_0`) renders **white**: Godot 4.7
+  imports the colours but leaves the material's `vertex_color_use_as_albedo` off (K01, #202). Turn it on after
+  instancing:
+  ```gdscript
+  for mi in model.find_children("*", "MeshInstance3D", true, false):
+      for s in mi.mesh.get_surface_count():
+          var mat: Material = mi.get_active_material(s)
+          if mat is StandardMaterial3D:
+              mat = mat.duplicate()
+              mat.vertex_color_use_as_albedo = true
+              mi.set_surface_override_material(s, mat)
+  ```
 
 ## Gotchas (Claude: read before editing)
 1. **Never hand-edit** `.godot/`, `*.import`, or generated `.uid` files. Commit the `.uid` files that Godot creates (Godot 4.4 and later, **verify for your version**), they keep references stable.

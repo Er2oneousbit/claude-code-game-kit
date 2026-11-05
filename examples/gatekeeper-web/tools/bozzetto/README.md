@@ -64,7 +64,7 @@ python tools/bozzetto/bozzetto.py make prop_lamp --image ref.png --sprites asset
 | `--turn DEG` | Turn around the up axis when the model's front is not glTF's front (+Z). TRELLIS.2 put the reference's front there in every run so far. |
 | `--lods 0.5,0.25` or `none` | LOD files `<name>_LOD1.glb` ... (Blender's Decimate: check them by eye). |
 | `--quality normal\|high` | TRELLIS.2's grid: 1024 (about 5 min warm) or 1536 (about 19 min). |
-| `--material texture\|vertex` | Baked PBR textures (base colour, metallic-roughness, normal, AO), or vertex colours only (small, no textures). A vertex job queues only its own branch, so the UV unwrap and the bakes do not run; TRELLIS.2's vertex-colour mesh has no UV map, so cleanup.py adds one (Smart UV Project) for lightmaps and the budget check. |
+| `--material texture\|vertex` | Baked PBR textures (base colour, metallic-roughness, normal, AO), or vertex colours only (small, no textures). A vertex job queues only its own branch, so the UV unwrap and the bakes do not run; TRELLIS.2's vertex-colour mesh has no UV map, so cleanup.py adds one (Smart UV Project) for lightmaps and the budget check. In Godot such a model renders white until one material flag is set ("In the engine" below, #202). |
 | `--texture 512\|1024\|2048` | Baked texture size. |
 | `--out DIR` | Models folder. Default from the game's engine: `assets/models`, web and web-3d `public/assets/models`, Unity `Assets/Models`, Unreal `SourceArt/Models` (import from there). |
 | `--sprites FILE` | Also an 8-direction sprite sheet (tools/blender/render_sprites.py, with its layout in a .json of the same name beside it) for a 2D game. The sheet goes into the same asset log row and the record, with its hash. |
@@ -118,9 +118,12 @@ model, PBR textures embedded. The game's ENGINE.md (in docs/) has the import lin
 - **Godot 4**: put it under `assets/` (the default) and the editor imports it; headless, run `python tools/dev.py import`
   once after a new model (`test` and `smoke` re-import only when class names change, so they would not see it);
   instance it as a scene (`load("res://assets/models/prop_chest.glb").instantiate()`). Tested: import, `check`,
-  `smoke`, and a GUT test that loads it and measures its size (K01).
+  `smoke`, and a GUT test that loads it and measures its size (K01). A `--material vertex` model renders white until
+  its materials get `vertex_color_use_as_albedo = true`: Godot 4.7 imports the colours but leaves that off (K01, #202;
+  the loop is in the Godot ENGINE.md).
 - **web-3d (Three.js)**: `public/assets/models/` (the default for web games); load it with `GLTFLoader` from
-  "three/addons/loaders/GLTFLoader.js" and add `gltf.scene`. Tested in the headless smoke run (K01).
+  "three/addons/loaders/GLTFLoader.js" and add `gltf.scene`. Tested in the headless smoke run (K01). Vertex colours
+  need nothing extra: GLTFLoader turns `vertexColors` on by itself.
 - Unity, Unreal, Bevy: see the ENGINE.md of that engine.
 - 2D engines: render it to a sprite sheet (`--sprites`, or `tools/blender/render_sprites.py`).
 

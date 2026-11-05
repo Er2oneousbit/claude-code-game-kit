@@ -415,6 +415,12 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.8.2",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -468,7 +474,7 @@
     "docs/ASSET_LOG.md": "af3af10acfe99ab015a2a03ddcf96f3fd332cfe341e0e6e965b22da8960d94b7",
     "docs/BRIEFS.md": "d1b3129db07f1aa5d2b46ba1f8f68c650e415153fc8bae6da8ebfea3b516ba4b",
     "docs/CONCEPTS.md": "baebf11d6c2505229cb89057d0105a2083808bcff807ba15ddfcddac256e81fa",
-    "docs/ENGINE.md": "dbcd6571bd40e3e5ad47aefd40a6265bc3cbba96f36cde6d5d61a1cb1fcd96c0",
+    "docs/ENGINE.md": "72023236b18ea07657284f67b50fef08bc3118f79473dd23f0d5300392fb9aab",
     "docs/ENGINE_FLOW.md": "2515a577c8f5ca67b76bf1542f95e4fc3bfecea04e6e5c0de5b850dbcf659ef5",
     "docs/EVIDENCE.md": "0008f382dc277b69caedbfa505312a98c333dfcb455a39798e0e1da951d2d825",
     "docs/FIRST_HOUR.md": "e3c2b06bbdeea3b2e04be57de54b092bb749a4a45a13a5330c8819bd766e4f49",
@@ -760,7 +766,7 @@
     "tools/blender/test_validate_asset.py": "bba9994de9138a7e51d1ed6f48f9bf1eea96b22da087116b06c911ed14397387",
     "tools/blender/validate_asset.py": "0e775dbdfc1d66eea178dda181b889366afcd4ae47ef68c829244c74a9bc7eb0",
     "tools/bozzetto/LICENSES.md": "93201bc78edf482d08b2185d83d550d3a4cc456fd3176c1c9019cc5a461c0f07",
-    "tools/bozzetto/README.md": "5d734b2243ab4b1d688e29526758eac4f89d27b6f6bdafe0d474b2da3c3aba27",
+    "tools/bozzetto/README.md": "18c317aae749a9b8e299c7859b9cfcae233791c76c754eb601a6aace4d5ad70a",
     "tools/bozzetto/bozzetto.py": "5bda55f9b38ae790c5c4600d509f4e6c9f02896f6e72a151fe2f5210ea353c4e",
     "tools/bozzetto/cleanup.py": "f1fdf0a0a12eacc52a88e0d06889d4e3335a311b81c00e47dc3cf03c5f9f3865",
     "tools/bozzetto/licenses/BiRefNet-LICENSE.txt": "92a7089e0915fc32bc40067560b398f1e6a7a5958abd7d04eda393629a5acefb",
