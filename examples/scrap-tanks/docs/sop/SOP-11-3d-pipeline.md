@@ -3,6 +3,23 @@
 ## Goal
 Consistent, engine-ready 3D content, with Claude doing scripting and automation and a human making the judgment calls.
 
+## Which tool for which job
+The 3D tools are separate primitives, not one suite: Bozzetto calls the Blender tools, and the Blender tools work just
+as well on a model you made, bought or downloaded.
+| Job | Tool | More |
+|---|---|---|
+| A model from a picture or a sentence, on your own GPU | `python tools/bozzetto/bozzetto.py make <name> --image <ref.png>` (or `--prompt "..."`) | [Local generation](#local-generation-bozzetto), `tools/bozzetto/README.md` |
+| Clean a raw generated mesh (merge, fragments, decimate, height, pivot) | `tools/bozzetto/cleanup.py`, in Blender | `tools/bozzetto/README.md` "What lands where" |
+| Look at a model from every side | `tools/bozzetto/turntable.py`, in Blender | `tools/bozzetto/README.md` |
+| Check a model against its class budget | `tools/blender/validate_asset.py <file.glb> --class <class>` | Stage 4 below |
+| Make any model engine-ready (transforms, pivot, names, LODs, `.glb`) | `tools/blender/prep_export.py` | Stage 5 below |
+| A 2D sprite sheet from a 3D model | `tools/blender/render_sprites.py` (or `bozzetto.py make --sprites`) | [3D source, 2D game](#3d-source-2d-game-sprite-sheets) |
+| Procedural props, kits, shaders, batch jobs | Claude-written scripts in `tools/blender/` | [Claude and Blender](#claude-and-blender) |
+| Rig, animate, retarget | No kit tool: guidance and scripts | [Animation](#animation), `docs/resources/pipelines.md` |
+| Paid generators (Tripo, Meshy and others) | Not wired in | `docs/resources/ai-tools.md` |
+| Log and credit an asset | `/asset-intake` | Stage 7 below |
+| Ask Claude for any of it | the `model-pipeline` skill | Follows this SOP |
+
 ## Honest division of labor
 | Claude is good at | You still own |
 |---|---|

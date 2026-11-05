@@ -409,6 +409,12 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.8.2",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -497,7 +503,7 @@
     "docs/sop/SOP-08-scope-control.md": "329743dd4b6e14cb70b831f5183d17fa6613f3d48f97e1a2a988b51b4826ab04",
     "docs/sop/SOP-09-testing.md": "6b261c975c9f602dc38c2d6a5d50b5355b3c28af688cb259d51022ddfabad120",
     "docs/sop/SOP-10-performance.md": "4ed22383e9c56b3e30e65d3046b27f626252e701d1420c70ef08af9b36f6d60d",
-    "docs/sop/SOP-11-3d-pipeline.md": "fe8f77ab1f1e7a4e9dc80f572b9849fcb6e0ff20202b2abeddc968d0178486cd",
+    "docs/sop/SOP-11-3d-pipeline.md": "470a0ef07e025985a06282366f94ea088e01b0d7c6b78bf41696ef41a425fd7a",
     "docs/sop/SOP-12-job-plan-and-model-roles.md": "a086aa585b9ba404055c0f83eebab6c198db469f3ba00e3983c9435d71101c7e",
     "docs/sop/SOP-13-publish-to-github.md": "0b3c430b934db860e96d1bbcc43edf6ed72ac93bb95ae39bb4e8e1f3508d5a56",
     "docs/sop/SOP-14-game-ai.md": "3ebe3c69c88fd758d97558d51d534a7a0b9a2f3dbff1892c805d748c3f0aac86",
