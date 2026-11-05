@@ -22,6 +22,19 @@
   effects still stop the re-export, now saying they run only on the GPU. Offline, a fixture of small projects
   Pixelorama itself composited pins both; the live exam checks the headless one exactly and, with
   `PIXELORAMA_WINDOW=1`, the windowed one (fixes #66).
+- Dotwork: Pixelorama tilemap layers. A visible tilemap layer no longer stops a re-export: it is drawn from its tiles
+  and cells, every flip and transpose as Pixelorama draws them, and composited like a pixel layer. A tilemap project
+  of your own in `<src_dir>/pixelorama/tilemaps/` re-exports to `<art_dir>/tilemaps/<name>/`: the tileset atlas at
+  its tile size, a TileSet from Dotwork's writer (terrains, peering bits, probabilities, a `surface` custom data layer
+  and full-tile collision from each tile's user data), a TileMapLayer scene per frame and a JSON map for every engine
+  (with `--engine none`, the PNG and the JSON). `dotwork.py pixelorama` also builds a tilemap project from each map
+  scene mapbuild painted and each square TileSet no map uses; each tile carries its atlas slot, so after Pixelorama
+  renumbers its tiles an edited tile still lands in its slot and an edited cell in the map scene (only its
+  `tile_map_data` lines), and the TileSet is never rewritten. A tile Pixelorama added (Auto or Stack tile mode) stops
+  the re-export and says to draw in Manual mode. `verify` now checks that every TileMapLayer cell finds its tile.
+  Checked against Pixelorama 1.2.4 (the live exam has it save tilemaps and edit a cell and a tile: only the atlas, the
+  map and the manifest change) and Godot 4.7.2 (a Movie Maker capture of both kinds of map equals Dotwork's drawing
+  on every opaque pixel).
 
 ## 0.8.3 (unreleased)
 - Gatekeeper (Godot): "Start over" resets the game in place, so the loaded model stays and a reply still on its way

@@ -18,8 +18,9 @@
 #           opacity; groups add nothing of their own), and Dotwork matches that byte for byte; with a window it blends
 #           on the GPU (BlendLayers.gdshader), the only place blend modes, clipping masks and groups that blend their
 #           own layers exist, and Dotwork follows that shader within two 8-bit steps (the GPU rounds near a half step
-#           its own way). A project uses the second only when it has one of those. Layer effects (GPU shaders only),
-#           3D and tilemap layers stop the re-export when the layer is visible.
+#           its own way). A project uses the second only when it has one of those. Layer effects (GPU shaders only)
+#           and 3D layers stop the re-export when the layer is visible; a tilemap layer is drawn from its tiles and
+#           cells (pxo_tiles.py), and a tilemap project under tilemaps/ becomes a TileSet and maps (pxo_tiles.py).
 #           Pixelorama saves the folder you last exported to, a full path on your machine, in every .pxo
 #           (export_profile.directory_path): both commands warn about it, and only --clear-export-path rewrites the
 #           file to blank it (the frames and every other entry stay).
@@ -30,6 +31,8 @@
 #           1.2.4 (#67)
 # Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): blend modes, clipping masks, groups that blend, and
 #           animated opacity carried over; the headless composite matched exactly, the windowed one measured (#66)
+# Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): tilemap layers drawn and composited; tilemap projects
+#           (yours, and the game's maps and TileSets) built and re-exported through pxo_tiles.py
 # ---------------------------------------------------------------------------
 import glob
 import io
@@ -65,7 +68,8 @@ PALETTE_MAX = 256                  # colours: a frame set with more gets no proj
 PALETTE_WIDTH = 8                  # Pixelorama's default palette grid width
 DEFAULT_FPS = 6.0                  # Pixelorama's default when data.json has no fps
 LAYER_PIXEL, LAYER_GROUP, LAYER_3D, LAYER_TILEMAP, LAYER_AUDIO = 0, 1, 2, 3, 4   # Global.LayerTypes
-LAYER_NAMES = {LAYER_3D: "a 3D layer", LAYER_TILEMAP: "a tilemap layer"}
+LAYER_NAMES = {LAYER_3D: "a 3D layer"}
+PAINTED = (LAYER_PIXEL, LAYER_TILEMAP)   # layers with a cel image of their own (a tilemap's is drawn from its tiles)
 RGBA8, INDEXED = 5, -1             # colour_mode: Godot Image.FORMAT_RGBA8; indexed mode still stores RGBA8 cels
 BLEND_NORMAL, BLEND_PASS = 0, -2   # BaseLayer.BlendModes NORMAL and PASS_THROUGH (groups only)
 BLEND_INTERSECT, BLEND_MATCH = 21, 22   # BaseLayer.BlendModes INTERSECTION and MATCH_COLORS
@@ -74,7 +78,8 @@ TRANS_LINEAR, TRANS_CONSTANT, EASE_IN = 0, 999, 0   # a keyframe's transition an
 TAG_COLOURS = ("c38ce1ff", "f5a677ff", "77c341ff", "6fb7e8ff", "e8d06fff", "e86f8aff")
 ZIP_TIME = (1980, 1, 1, 0, 0, 0)   # a fixed date: the same frames always give the same .pxo bytes
 MIMETYPE = b"application/x-pixelorama"
-SOURCE_KINDS = ("characters", "fx", "single")   # the folders under the pixelorama sources (handpolish.write_back)
+SOURCE_KINDS = ("characters", "fx", "single", "tilemaps")   # the folders under the pixelorama sources (handpolish.write_back;
+#                                                            tilemaps: pxo_tiles)
 # An absolute path as a Godot program on Windows, Linux or macOS writes it: C:/ or C:\, /home/..., \\server\...
 ABSOLUTE = re.compile(r"^(?:[A-Za-z]:[\\/]|[\\/]|~(?:[\\/]|$))")
 
@@ -734,20 +739,16 @@ def _texture(what, cel, shape):
     return np.zeros(shape, np.float32)
 
 
-def read_pxo(path):
-    """{"size": (w, h), "fps", "frames": [H x W x 4 uint8, the visible layers composited], "seconds": [how long each
-    frame shows], "tags": [(name, first, last) numbered from 0], "windowed": True when a layer needs the windowed
-    composite}. Refuses, naming the layer, anything it cannot reproduce.
-    Two composites, as Pixelorama 1.2.4 has two: a project of Normal layers (pass-through groups, cel and layer
-    opacity, animated opacity) composites as Pixelorama's own export does without a window (_headless), exactly; one
-    that uses a blend mode, a clipping mask or a group that blends its own layers, which only Pixelorama's windowed
-    GPU composite applies (its command-line export leaves them out), composites as that shader does (_shade)."""
+def open_project(path):
+    """(open zip, data.json as a dict, path relative to the game, pxo_version, width, height) of a .pxo, with the
+    checks every reader needs first: a Pixelorama 1.2 project of a size, frame and layer count Dotwork reads, whose
+    layer parents are group layers of the project. The caller closes the zip."""
     rel = os.path.relpath(path, core.PROJECT)
     try:
         z = zipfile.ZipFile(path)
     except (zipfile.BadZipFile, OSError) as e:
         _fail(rel, f"not a Pixelorama 1.x project ({e}); files saved by Pixelorama 0.x are not read")
-    with z:
+    try:
         try:
             info = z.getinfo("data.json")
         except KeyError:
@@ -768,7 +769,6 @@ def read_pxo(path):
         h = int(_number(d.get("size_y"), rel, "size_y", 1, MAX_SIDE))
         if d.get("color_mode", RGBA8) not in (RGBA8, INDEXED):
             _fail(rel, f"colour mode {d.get('color_mode')!r}: Dotwork reads RGBA and indexed projects")
-        fps = float(_number(d.get("fps", DEFAULT_FPS), rel, "fps", 0.001, 1000))
         layers, frames = d.get("layers"), d.get("frames")
         if not isinstance(layers, list) or not layers or not isinstance(frames, list) or not frames:
             _fail(rel, "no layers or no frames")
@@ -786,6 +786,40 @@ def read_pxo(path):
             if not (p == -1 or (isinstance(p, int) and not isinstance(p, bool) and 0 <= p < len(layers) and p != i
                                 and isinstance(layers[p], dict) and layers[p].get("type") == LAYER_GROUP)):
                 _fail(rel, f"layer {ly.get('name', i + 1)!r}: parent {p!r} is not a group layer of this project")
+    except BaseException:
+        z.close()
+        raise
+    return z, d, rel, version, w, h
+
+
+def visible_in(layers, i, rel):
+    """True when layer i and every group above it are visible (a loop in the parents is refused)."""
+    seen = []
+    while i != -1:
+        if i in seen:
+            _fail(rel, f"layer {layers[i].get('name', i + 1)!r}: its groups contain each other")
+        seen.append(i)
+        if not layers[i].get("visible", True):
+            return False
+        i = layers[i].get("parent", -1)
+    return True
+
+
+def read_pxo(path):
+    """{"size": (w, h), "fps", "frames": [H x W x 4 uint8, the visible layers composited], "seconds": [how long each
+    frame shows], "tags": [(name, first, last) numbered from 0], "windowed": True when a layer needs the windowed
+    composite}. Refuses, naming the layer, anything it cannot reproduce.
+    Two composites, as Pixelorama 1.2.4 has two: a project of Normal layers (pass-through groups, cel and layer
+    opacity, animated opacity) composites as Pixelorama's own export does without a window (_headless), exactly; one
+    that uses a blend mode, a clipping mask or a group that blends its own layers, which only Pixelorama's windowed
+    GPU composite applies (its command-line export leaves them out), composites as that shader does (_shade).
+    A tilemap layer is drawn from its tiles and cells, as Pixelorama draws it when it opens the file (pxo_tiles), and
+    then composites like a pixel layer."""
+    import pxo_tiles
+    z, d, rel, version, w, h = open_project(path)
+    with z:
+        fps = float(_number(d.get("fps", DEFAULT_FPS), rel, "fps", 0.001, 1000))
+        layers, frames = d["layers"], d["frames"]
 
         def name_of(i):
             return repr(layers[i].get("name") or f"layer {i + 1}")
@@ -812,9 +846,9 @@ def read_pxo(path):
                         if visible[i] else 0.0)
             if not visible[i] or kind == LAYER_AUDIO:
                 continue                       # hidden layers and sound never reach the frames
-            if kind in LAYER_NAMES or kind not in (LAYER_PIXEL, LAYER_GROUP):
+            if kind in LAYER_NAMES or kind not in (LAYER_PIXEL, LAYER_GROUP, LAYER_TILEMAP):
                 _fail(rel, f"layer {name_of(i)} is {LAYER_NAMES.get(kind, f'of type {kind!r}')}: Dotwork re-exports "
-                           "pixel layers and groups (merge it down or hide it)")
+                           "pixel, tilemap and group layers (merge it down or hide it)")
             b = blends[i]
             if isinstance(b, bool) or not isinstance(b, int) or not (
                     BLEND_NORMAL <= b <= BLEND_LAST or (kind == LAYER_GROUP and b == BLEND_PASS)):
@@ -824,13 +858,26 @@ def read_pxo(path):
                            "window, on the GPU (its own command-line export leaves them out), and Dotwork cannot run "
                            "them; press Apply on each in the layer's effects, or turn them off")
             keys[i] = _opacity_keys(ly, rel, name_of(i))
+        # tilemap layers: their tilesets, read when the first tilemap cel is needed (a visible layer's checked now)
+        sets, tileset_of = [], {}
+        tilemap_cels = {}                      # (frame, layer): (offset, cells) of each tilemap cel that is drawn
+
+        def tileset_for(li):
+            if not sets:
+                sets.append(pxo_tiles.tilesets(z, d, rel))
+            if li not in tileset_of:
+                tileset_of[li] = sets[0][pxo_tiles.layer_tileset(layers[li], sets[0], rel, name_of(li))]
+            return tileset_of[li]
+        for i in range(len(layers)):
+            if visible[i] and kinds[i] == LAYER_TILEMAP:
+                tileset_for(i)
 
         def mode_of(li):
             """The blend mode the shader reads: a pass-through group's (or a hidden layer's odd value) as Normal."""
             b = blends[li]
             return b if isinstance(b, int) and not isinstance(b, bool) and BLEND_NORMAL <= b <= BLEND_LAST else 0
-        windowed = any(visible[i] and kinds[i] in (LAYER_PIXEL, LAYER_GROUP) and (
-            (kinds[i] == LAYER_GROUP and blends[i] != BLEND_PASS) or (kinds[i] == LAYER_PIXEL and blends[i])
+        windowed = any(visible[i] and kinds[i] in (LAYER_PIXEL, LAYER_GROUP, LAYER_TILEMAP) and (
+            (kinds[i] == LAYER_GROUP and blends[i] != BLEND_PASS) or (kinds[i] in PAINTED and blends[i])
             or layers[i].get("clipping_mask")) for i in range(len(layers)))
         if windowed and d.get("color_mode") == INDEXED and any(
                 visible[i] and kinds[i] == LAYER_GROUP and blends[i] != BLEND_PASS for i in range(len(layers))):
@@ -865,7 +912,12 @@ def read_pxo(path):
                 if (fi, li) in sizes:
                     return
                 cel = cels[li]
-                if version >= 8 and "image_size" in cel:
+                if kinds[li] == LAYER_TILEMAP:   # drawn on the whole canvas from its tiles
+                    tileset_for(li)
+                    tilemap_cels[(fi, li)] = pxo_tiles.cells_of(cel, rel, f"frame {fi + 1} {name_of(li)}")
+                    sizes[(fi, li)] = None
+                    unpacked += w * h * 4
+                elif version >= 8 and "image_size" in cel:
                     cw, ch = _vec2i(cel["image_size"], rel, f"frame {fi + 1} {name_of(li)} image_size")
                     ox, oy = _vec2i(cel.get("offset", "(0, 0)"), rel, f"frame {fi + 1} {name_of(li)} offset")
                     if cw < 0 or ch < 0:
@@ -879,7 +931,7 @@ def read_pxo(path):
             if not windowed:
                 plan = []                  # (layer, opacity): DrawingAlgos.blend_layers_headless, in draw order
                 for li in order:
-                    if visible[li] and kinds[li] == LAYER_PIXEL:
+                    if visible[li] and kinds[li] in PAINTED:
                         k = final(li)
                         if k > 0:
                             plan.append((li, k))
@@ -891,12 +943,12 @@ def read_pxo(path):
                 """One layer of a GPU blend: (what it draws, opacity as the shader reads it, blend mode, clipped)."""
                 if kinds[li] == LAYER_GROUP and blends[li] != BLEND_PASS:
                     what = ("group", li, group(li))
-                elif kinds[li] == LAYER_PIXEL:
+                elif kinds[li] in PAINTED:
                     what = ("cel", li)
                 elif kinds[li] == LAYER_GROUP:
                     what = ("clear", li)       # a pass-through group draws nothing of its own
                 else:
-                    what = ("other", li)       # hidden: a 3D, tilemap or audio layer
+                    what = ("other", li)       # hidden: a 3D or audio layer
                 return (what, k, mode, clip)
 
             def group(g):
@@ -908,7 +960,7 @@ def read_pxo(path):
                 def add(li):
                     k = _rgh(final(li)) if visible[li] else np.float32(0)
                     items.append(node(li, k, mode_of(li), False))
-                    if k > 0 and kinds[li] == LAYER_PIXEL:
+                    if k > 0 and kinds[li] in PAINTED:
                         need(li)
 
                 def open_up(g2):
@@ -936,7 +988,7 @@ def read_pxo(path):
                 clip = bool(layers[li].get("clipping_mask")) and not blended[li] and bool(top)
                 top.append(node(li, k, mode_of(li), clip))
                 if k > 0:
-                    if kinds[li] == LAYER_PIXEL:
+                    if kinds[li] in PAINTED:
                         need(li)
                     if clip:                   # the shader clips to the raw layer under it, shown or not
                         under = top[-2][0]
@@ -970,7 +1022,9 @@ def read_pxo(path):
                 """Cel li of this frame on the whole canvas (a version 8 cel placed at its offset)."""
                 if li not in cache:
                     name, part = f"image_data/frames/{fi + 1}/layer_{li + 1}", sizes[(fi, li)]
-                    if part:
+                    if (fi, li) in tilemap_cels:
+                        img = pxo_tiles.render(tileset_of[li], *tilemap_cels[(fi, li)], w, h)
+                    elif part:
                         cw, ch, ox, oy = part
                         img = np.zeros((h, w, 4), np.uint8)
                         if cw and ch:
@@ -1071,6 +1125,7 @@ def build(pack, conf, overwrite=False):
         jobs.append((os.path.join(src, "single", os.path.basename(f)[:-4] + ".pxo"),
                      [("", None, os.path.join(pack, f))], 8))
     done = {"written": [], "unchanged": [], "kept": [], "backups": []}
+    _build_tilemaps(pack, conf, overwrite, done)
     for out, items, proj_fps in jobs:
         rel = os.path.relpath(out, pack)
         frames = [np.array(Image.open(p).convert("RGBA")) for _, _, p in items]
@@ -1113,6 +1168,59 @@ def build(pack, conf, overwrite=False):
         core.log(f"pixelorama build {rel}: {len(frames)} frames, {len(_runs(items))} tags, "
                  f"{len(colours or [])} colours, {proj_fps} fps")
     return done
+
+
+def _build_tilemaps(pack, conf, overwrite, done):
+    """<src_dir>/pixelorama/tilemaps/<map>.pxo for each Dotwork map scene, and <tileset>.pxo for each TileSet no map
+    uses (pxo_tiles.dotwork_jobs). An existing file that holds no edits (pxo_tiles.polished) is rebuilt when the game
+    changed; one with edits is kept unless overwrite (then backed up as .bak, as build does)."""
+    import pxo_tiles
+    for out, blob, _ in pxo_tiles.dotwork_jobs(pack, conf):
+        rel = os.path.relpath(out, pack)
+        if os.path.exists(out):
+            with open(out, "rb") as fh:
+                old = fh.read()
+            if old == blob or not pxo_tiles.polished(out) and _same_tilemap(out, blob):
+                done["unchanged"].append(out)
+                continue
+            if pxo_tiles.polished(out):
+                if not overwrite:
+                    done["kept"].append(out)
+                    core.log(f"pixelorama build {rel}: kept (it holds edits not re-exported yet; --overwrite "
+                             "replaces it)")
+                    continue
+                with open(core.safe_dest(out + ".bak"), "wb") as fh:
+                    fh.write(old)
+                done["backups"].append(out + ".bak")
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        with open(core.safe_dest(out), "wb") as fh:
+            fh.write(blob)
+        done["written"].append(out)
+        core.log(f"pixelorama build {rel}: tilemap project written")
+
+
+def _same_tilemap(path, blob):
+    """True when the tilemap .pxo at path shows what blob would (its tiles, their data and the cells), whatever
+    Pixelorama added on save."""
+    import pxo_tiles
+    tmp = os.path.join(core.WORK, "pxo_compare.pxo")
+    os.makedirs(core.WORK, exist_ok=True)
+    with open(tmp, "wb") as fh:
+        fh.write(blob)
+    try:
+        a, b = pxo_tiles.project(path), pxo_tiles.project(tmp)
+    except core.ToolError:
+        return False
+    finally:
+        os.remove(tmp)
+
+    def look(tm):
+        ts = tm["tilesets"][0] if tm["tilesets"] else {"tiles": [], "data": []}
+        tw, th = ts.get("size", (1, 1))
+        return ([pxo_tiles._hash(t) for t in ts["tiles"]], [t["user_data"] for t in ts["data"]], tm["meta"],
+                [(L["name"], sorted(((x + L["frames"][0][0][0] // tw, y + L["frames"][0][0][1] // th), c)
+                                    for (x, y), c in L["frames"][0][1].items())) for L in tm["layers"]])
+    return look(a) == look(b)
 
 
 # -------------------------------------------------- the export folder Pixelorama keeps in each .pxo
@@ -1223,4 +1331,11 @@ def reexport(pack, conf):
             Image.fromarray(frames[i], "RGBA").save(os.path.join(tmp, fn))
         return sorted(os.path.join(tmp, fn) for fn in named), {fn: secs[i] for fn, i in named.items()}
 
-    return handpolish.write_back(pack, conf, core.src(conf, "pixelorama"), ".pxo", export, "Pixelorama")
+    import pxo_tiles
+    tiles = pxo_tiles.reexport(pack, conf)       # tilemap projects first: they may make the first manifest
+    if tiles:
+        core.log(f"pixelorama reexport tilemaps: {len(tiles)} files changed ({', '.join(tiles[:8])}"
+                 f"{' ...' if len(tiles) > 8 else ''})")
+    r = handpolish.write_back(pack, conf, core.src(conf, "pixelorama"), ".pxo", export, "Pixelorama")
+    r["changed"] = r.get("changed", 0) + len(tiles)
+    return r

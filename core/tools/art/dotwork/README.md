@@ -151,7 +151,7 @@ or usage (the `[error]` line says what to fix). `preview KIND --help` lists each
 | `verify` | load every Dotwork asset of this game in Godot (shader materials compiled, held frames counted) and run its smoke test |
 | `qa pack [--json OUT] [--lineup OUT.png]` | style check over every PNG the game's manifests list (not sheets, normal maps, or store art, the game icon and boot splash, which are scaled up on purpose), read only: pixel scale, each lane's palette lock (the table under Palettes), outline colour and thickness, light side, figure height in tiles, contrast on the ground tiles, colour-blind separation of gauge fills, status marks, button states and palette swaps (Machado 2009 simulation); `--lineup` draws every character and prop at game scale on a ground tile; exit 1 on findings |
 | `aseprite [--reexport] [--overwrite]` | editable `.aseprite` sources (frames timed by their holds); push hand-polished files back |
-| `pixelorama [--reexport] [--overwrite] [--clear-export-path]` | the same round trip with Pixelorama `.pxo` files, no install needed; `--clear-export-path` blanks the local export folder Pixelorama saves in each file ([Hand polish](#hand-polish-aseprite-or-pixelorama)) |
+| `pixelorama [--reexport] [--overwrite] [--clear-export-path]` | the same round trip with Pixelorama `.pxo` files, no install needed, plus tilemaps (yours into a TileSet and maps; the game's maps and TileSets into tilemap projects and back); `--clear-export-path` blanks the local export folder Pixelorama saves in each file ([Hand polish](#hand-polish-aseprite-or-pixelorama)) |
 | `preview battle\|title\|attack ...` | mock screens composed from the game's art (review only) |
 | `capture --scene S [--frames N] [--fps F] [--size WxH] [--gif]` | record any scene with Godot's Movie Maker: a fixed frame rate, every frame written as PNG (trailer cuts, side-by-side reviews), a contact strip and an optional GIF; a window opens for the capture |
 | `log --pack NAME [--dry-run]` | `docs/ASSET_LOG.md` row + evidence file for a pack |
@@ -293,6 +293,7 @@ Honest list: these are the failure modes seen in testing and what Dotwork does a
 | fonts (accents) | A 9-row font has no room above a capital for an accent, and a missing glyph shows as a gap in game | `glyphs/dialogue_latin.txt` and `glyphs/title_brass_latin.txt` add Latin-1 Supplement and Latin Extended-A (French, Italian, German, Spanish, Portuguese, Polish, Czech, Hungarian, Turkish) with 2 (title: 3) rows above the capitals for accents, so their line is taller; their ASCII glyphs are the old ones, unchanged. The title font is capitals only: with `caps_only` accented lowercase uses its capital, but ß and ı have none. `"check": ["assets/i18n/strings.csv"]` on a font entry (paths in the game, like `glyphs`; or `dotwork.py fonts-check`) lists every character the game's strings use that the font lacks, with its language and string ids, and fails the pack (exit 1) after building every font |
 | battle backgrounds / scenes | 320x128 / 320x180 art shown at 2x (chunkier than 1x sprites) | Same exact-2x scale everywhere it is used |
 | battle backgrounds (moving sky) | Cutting the painted sky off at the horizon and scrolling it split mountain peaks (the tip drifted away from its base) | `"scroll": -4` keeps the picture whole and adds two cloud layers drawn in code in its own lightest sky colours (far: small, half speed; near: bigger, full speed) that tile sideways; `horizon` sets how far down they reach, `clouds` how many. They drift over far mountains, which reads as nearer clouds; leave `scroll` off for caves and interiors |
+| pixelorama tilemaps | Pixelorama keeps one flat list of square tiles with no animation, collision or custom data, and its Auto and Stack tile modes add and renumber tiles as you draw | Your own tilemaps: collision and surface come from each tile's user data (`solid`, a surface name), terrains and probabilities carry over. A game's map edited there keeps its TileSet: each tile carries its atlas slot, so a renumbered tile still lands in its slot, and a tile Pixelorama added stops the re-export with the fix (draw in Manual mode); an animated tile's other frames stay as they are |
 | lighting (normal maps, no model) | A normal map guessed from one picture cannot know the real shape: it reads a rounded rim from the alpha edge (`bevel` px) and small relief from brightness (`detail` px), so dark paint reads as a dent and a flat-coloured cloak reads flat; an atlas tile cannot see its neighbours | Opaque tiles get no rim at their borders and the brightness relief wraps inside each tile, so Dotwork's seamless tiles stay seamless (a tile whose opposite edge is clear repeats its own edge instead). Occluders are the largest opaque region only, `base` (default) spans the feet of the bottom quarter, `full` the whole outline, at most `occluder_points` corners, never self-crossing (a crossing outline falls back to its convex hull). A sprite node that is scaled, flipped or nested in its own scene gets a fresh lit scene instead of a copy. Headless Godot renders nothing: `verify` proves the lit resources are wired (both textures, same size, normals that decode with z > 0, occluder polygons, cells on lit tiles), not how the light looks; judge `assets_src/art/lit/<name>/<name>_review.png` and the demo scene in the editor |
 | `--engine none` | Maps, TileSets, scenes, SpriteFrames and the damage-flash and dissolve shaders are Godot resources | PNGs, sprite sheets + their JSON (with any hold `durations`), BMFont `.fnt` fonts, 9-slice margins (in the manifest) and the manifest still ship; maps and the shaders are skipped with a log line; the hand-polish round trip (`aseprite`, `pixelorama`, `--reexport`) works the same, with no `verify` |
 
@@ -439,7 +440,7 @@ re-export with the frame's name. An effect's frames must all be one size.
 | Needs | `ASEPRITE_BIN`: Aseprite runs headless for both directions | nothing: Dotwork reads and writes `.pxo` in Python |
 | Versions | Lua scripting (`--script`); run with Aseprite 1.3.18 on Windows | writes `pxo_version` 7 (Pixelorama 1.2.0 to 1.2.3 write it; 1.2.3 and 1.2.4 opened, exported and saved Dotwork's files); reads 7 and 8 (Pixelorama 1.2.4, where a cel keeps its own size and offset; a file 1.2.4 saved, with a pixel edited in it, re-exported exactly). Dotwork keeps writing 7: 1.2.3 reads every cel as a whole canvas, so a cropped version 8 file would load wrong there, and 1.2.4 opens 7 as it is |
 | The file | indexed on the asset's own colours when that loses nothing (at most 255 opaque colours, no partly clear pixels); RGB otherwise, such as a portrait of 1,800 colours | RGBA in one layer `art`, the asset's own colours as the project palette; the project's frame rate is the one most of the character's frames play at, and other clips carry per-frame durations |
-| Layers you add | flattened by Aseprite on export | composited as Pixelorama 1.2.4 does (below): cel, layer and animated opacity (every keyframe curve), z-index, pass-through groups, every blend mode, clipping masks and groups that blend their own layers (with their opacity); a visible layer with layer effects, or a visible 3D or tilemap layer, stops the re-export with its name (apply the effects, merge it down or hide it); hidden layers are ignored |
+| Layers you add | flattened by Aseprite on export | composited as Pixelorama 1.2.4 does (below): cel, layer and animated opacity (every keyframe curve), z-index, pass-through groups, every blend mode, clipping masks and groups that blend their own layers (with their opacity); a tilemap layer is drawn from its tiles (see Tilemaps below); a visible layer with layer effects, or a visible 3D layer, stops the re-export with its name (apply the effects, merge it down or hide it); hidden layers are ignored |
 | A file that exists | kept when it differs from the game's frames (Aseprite exports it to compare the tags, frames and frame times; one that still matches is left as it is); `--overwrite` replaces it and keeps the old file as `<name>.aseprite.bak` | kept when it differs from the game's frames (Dotwork reads it to compare the tags, frames and frame times; one that still matches, such as a file Pixelorama only opened and saved, is left as it is); `--overwrite` replaces it and keeps the old file as `<name>.pxo.bak` |
 | Size | read by Aseprite | a project whose frames would take over 512 MB, whose visible cels would unpack to over 1 GB, or with over 256 layers is refused before any image is read |
 
@@ -455,6 +456,29 @@ holds an all but clear pixel over a partly clear one land further off). A frame 
 shape Dotwork writes, is copied as it is, so an untouched trip changes no file (Pixelorama's export can make a partly
 clear pixel of it one step darker). Layer effects are shaders too, run only with a window: apply them first. #66 has
 the measurements.
+
+**Tilemaps.** Pixelorama's tilemap layers (square tiles) go both ways. A `.pxo` of your own with tilemap layers, put
+in `<src_dir>/pixelorama/tilemaps/<name>.pxo`, re-exports to `<art_dir>/tilemaps/<name>/`: `tiles_<name>.png` (the
+tileset at its own tile size; Pixelorama's tile N sits at slot N - 1, 16 to a row, so a tile you add moves no other),
+`<name>_tileset.tres` (Dotwork's TileSet writer, as the ground lane uses it: each tile's terrain and peering bits and
+its probability; its user data names its `surface`, the custom data the terrain lanes write, and the word `solid`
+there gives it a full-tile collision box), `<name>.tscn` (a Node2D with one TileMapLayer per visible tilemap layer,
+first layer drawn first, every cell flipped and transposed as in Pixelorama; a project of several frames gets
+`<name>_NN.tscn` per frame) and `<name>_map.json` for every engine (cells as `[x, y, tile, flags]`, flags 1 flip_h,
+2 flip_v, 4 transpose). With `--engine none`, the PNG and the JSON. `dotwork.py pixelorama` also opens the game's own
+maps in Pixelorama: one tilemap project per map scene mapbuild painted (one layer per TileMapLayer), and one per
+square TileSet no map uses (its tiles where they sit in its atlas). Each tile names its atlas slot in its user data:
+leave that as it is. On `--reexport`, an edited tile goes back into its slot in the atlas PNG and an edited cell into
+the map scene, where only the `tile_map_data` lines change; the TileSet itself is never rewritten. So draw in
+Pixelorama's Manual tile mode: Auto and Stack add a new tile when you draw on one that several cells use, a new tile
+has no atlas slot, and the re-export stops and says so. Only an animated tile's first frame is in the project. Two
+projects that change one tile differently stop the re-export; a project with no edits is rebuilt when the game's
+map changes, one with edits is kept (`--overwrite` keeps a `.bak`). Isometric and hexagonal tilemaps, a tilemap layer
+with a blend mode or a clipping mask, and one moved off the tile grid are refused. Checked with Pixelorama 1.2.4 (its
+own drawing of every flip and transpose equals Dotwork's; a cell and a tile edited there change only the atlas, the
+map and the manifest) and Godot 4.7.2 (a Movie Maker capture of both kinds of map equals Dotwork's drawing on every
+opaque pixel). Pixelorama's command-line export draws tilemap layers empty (it exports before they are redrawn from
+their tiles); its window and the files it saves draw them.
 
 Pixelorama stores the folder you last exported to, a full path on your machine, in every `.pxo` it saves: in a public
 repository, that path is public too. `pixelorama` and `pixelorama --reexport` name each `.pxo` that holds one (a
@@ -573,13 +597,16 @@ old fonts' output against golden hashes.
 re-export that changes no file, an edit and a new hold reaching the game, layers composited against what Pixelorama
 1.2.4 itself made from small projects (`tests/fixtures/pixelorama_composites.json`: headless exactly, the blend modes,
 clipping masks and groups within two steps of its windowed composite), every refused layer feature stopping before a
-file is written, `pxo_version` 8 cels and the fields Pixelorama 1.2.3 and 1.2.4 save;
+file is written, `pxo_version` 8 cels and the fields Pixelorama 1.2.3 and 1.2.4 save, and tilemaps (every flip and transpose drawn as
+Pixelorama draws it, your own tilemaps into an atlas, a TileSet, scenes and a JSON map, a game's map and TileSets
+into tilemap projects and back after Pixelorama renumbered their tiles);
 Aseprite's frame times in the build list and through a re-export rounded to milliseconds (its script runs stubbed).
 Two live exams run only when their editor is set: `ASEPRITE_BIN` runs the export script in Aseprite, and
 `PIXELORAMA_BIN` (about 13 s) has Pixelorama open, save and export Dotwork's `.pxo` files headless, through a small
 extension installed in a user folder of the exam's own (your Pixelorama settings are not touched), then re-exports
 them: no file changes, a pixel set in Pixelorama changes only its frame, and partly clear layers with cel, layer and
-animated opacity in groups come out of Pixelorama's export equal to Dotwork's, byte for byte. With
+animated opacity in groups come out of Pixelorama's export equal to Dotwork's, byte for byte; tilemaps saved there
+round trip unchanged, and a cell and a tile edited there change only the atlas and the map. With
 `PIXELORAMA_WINDOW=1` as well, one case opens Pixelorama's window for a few seconds and compares its GPU export of
 blend modes, a clipping mask and a blending group with Dotwork's (within two steps; #66).
 
