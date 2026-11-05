@@ -6,6 +6,14 @@
 ## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig` and `tools/token_audit.py` from second-model reviews
 Kimi K3.1 Pro reviews of 0.13.0 (`tools/second_opinion.py`), each finding checked against the code; one more was
 found by the real run that verified the rig fixes.
+- Bozzetto docs-versus-code review: a Tripo task the last run left running was paid for again on a re-run; it is now
+  asked for its result first, and a run stops rather than pay twice while it is still running (#221). `rig check`
+  said ready with a refused Tripo key, and `rig make --wait` did not reach UniRig's steps (#222). `rig` now bends
+  every bone and fails a mesh that does not move, so "checks that the rig really deforms" is true (#223). README:
+  the ComfyUI address options (`COMFYUI_URL`, `--url`, `--allow-remote`), every timeout, the Tripo defaults (45
+  credits, `--max-credits` 100), Ctrl-C leaving a ComfyUI job queued, the missing make and rig options, what `--hash`
+  covers, the class, quality and material defaults, `.jpeg` references, the 9.0 GB download (8.3 GiB), unvalidated
+  LODs, the full list of rig checks (#224). `test_rig.py` 32 cases; each new one fails on the code before it.
 - `tools/token_audit.py`: a non-number in a session log's usage field went through `int()`, whose error message printed
   the value; such a line now counts as malformed and nothing of it is shown, and an unexpected error prints only its
   type (`--debug` keeps the traceback). The folder `CLAUDE_CONFIG_DIR` names is shown as `$CLAUDE_CONFIG_DIR`, so the

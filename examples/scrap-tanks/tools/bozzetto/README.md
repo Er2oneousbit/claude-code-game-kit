@@ -22,8 +22,9 @@ that machine needed, not promises.
 
 ## Setup
 1. **ComfyUI 0.43.0 or newer** (TRELLIS.2's nodes are built in: no custom node pack). Dotwork's README has the install
-   steps (`tools/art/dotwork/README.md`, Setup 1). Bozzetto talks to it over HTTP on 127.0.0.1 only.
-2. **Model files**, 8.3 GB, each pinned by commit and SHA-256 in `models.lock.json`. Download each into the ComfyUI
+   steps (`tools/art/dotwork/README.md`, Setup 1). Bozzetto talks to it over HTTP, on this machine by default (`http://127.0.0.1:8188`; another address with
+   `COMFYUI_URL` or `--url`, and a ComfyUI on another computer only with `--allow-remote`).
+2. **Model files**, about 9.0 GB (8.3 GiB), each pinned by commit and SHA-256 in `models.lock.json`. Download each into the ComfyUI
    `models/` folder named here, then restart ComfyUI:
 
    | File | Folder | Size | From |
@@ -41,7 +42,8 @@ that machine needed, not promises.
    Python with the `bpy` module works: `uv run --python 3.13 --with bpy python tools/bozzetto/bozzetto.py ...`.
 4. Run the check from the game's root folder:
    ```
-   python tools/bozzetto/bozzetto.py check          # --hash also checks every file's SHA-256 (COMFYUI_ROOT)
+   python tools/bozzetto/bozzetto.py check          # --hash also checks the five files' SHA-256 (needs COMFYUI_ROOT;
+                                                    # Dotwork's FLUX.2 klein files are not hashed here)
    ```
 Hardware: an NVIDIA GPU with 16 GB of VRAM (ComfyUI fills most of it; peak about 14 GB measured) and 32 GB of RAM.
 Upstream TRELLIS.2 asks for 24 GB (E109); ComfyUI's int8 build of it runs in 16 (K01).
@@ -59,27 +61,31 @@ python tools/bozzetto/bozzetto.py make prop_lamp --image ref.png --sprites asset
 | `--image FILE` | Your reference: one object, whole, on a plain background, no cast shadow. BiRefNet cuts it out. |
 | `--prompt "..."` | FLUX.2 klein 4B draws the reference first (about 10 s). Bozzetto adds "one single object ... plain white background" (props, kits) or "full body ... A-pose, front view" (hero, npc); `--raw-prompt` sends yours as written. |
 | `--reference-only` | Stop after the picture (`reference_seed<N>.png`). Audition a few seeds for seconds each, then `make --image` the one you like: a 3D run costs minutes. |
-| `--class prop\|kit\|hero\|npc` | The SOP-11 budget (`list` shows them). Sets the triangle target, the default height (prop 1.0 m, kit 3.0, hero and npc 1.8), the texture size (1024 or 2048) and the default LODs (hero 0.5,0.25; kit and npc 0.5). |
+| `--class prop\|kit\|hero\|npc` | Default `prop` (a name prefix such as `npc_` does not pick the class). The SOP-11 budget (`list` shows them). Sets the triangle target, the default height (prop 1.0 m, kit 3.0, hero and npc 1.8), the texture size (1024 or 2048) and the default LODs (hero 0.5,0.25; kit and npc 0.5). |
 | `--seed N` | One seed for every sampler. Without it the clock picks one and prints it. Shapes change between seeds: try two or three. |
 | `--height M` | Height in metres after cleanup. |
 | `--turn DEG` | Turn around the up axis when the model's front is not glTF's front (+Z). TRELLIS.2 put the reference's front there in every run so far. |
 | `--lods 0.5,0.25` or `none` | LOD files `<name>_LOD1.glb` ... (Blender's Decimate: check them by eye). |
-| `--quality normal\|high` | TRELLIS.2's grid: 1024 (about 5 min warm) or 1536 (about 19 min). |
-| `--material texture\|vertex` | Baked PBR textures (base colour, metallic-roughness, normal, AO), or vertex colours only (small, no textures). A vertex job queues only its own branch, so the UV unwrap and the bakes do not run; TRELLIS.2's vertex-colour mesh has no UV map, so cleanup.py adds one (Smart UV Project) for lightmaps and the budget check. In Godot such a model renders white until one material flag is set ("In the engine" below, #202). |
+| `--quality normal\|high` | Default `normal`. TRELLIS.2's grid: 1024 (about 5 min warm) or 1536 (about 19 min). |
+| `--material texture\|vertex` | Default `texture`: baked PBR textures (base colour, metallic-roughness, normal, AO), or vertex colours only (small, no textures). A vertex job queues only its own branch, so the UV unwrap and the bakes do not run; TRELLIS.2's vertex-colour mesh has no UV map, so cleanup.py adds one (Smart UV Project) for lightmaps and the budget check. In Godot such a model renders white until one material flag is set ("In the engine" below, #202). |
 | `--texture 512\|1024\|2048` | Baked texture size. |
 | `--out DIR` | Models folder. Default from the game's engine: `assets/models`, web and web-3d `public/assets/models`, Unity `Assets/Models`, Unreal `SourceArt/Models` (import from there). |
 | `--sprites FILE` | Also an 8-direction sprite sheet (tools/blender/render_sprites.py, with its layout in a .json of the same name beside it) for a 2D game. The sheet goes into the same asset log row and the record, with its hash. |
 | `--no-log`, `--no-preview`, `--overwrite` | Scratch runs; skip the turntable; make the same name again (the asset log row is updated, not doubled). |
+| `--wait S` | Seconds to wait for each ComfyUI job (default 3600). Each Blender step has its own fixed 3600 s limit. |
+| `--project DIR`, `--blender PATH\|bpy`, `--workflow FILE`, `--debug` | The game's root (default: the current folder); the Blender to use (default: `BLENDER_BIN`, PATH, the default install, then the bpy module); a different API-format TRELLIS.2 workflow with the same node titles; full Blender output and tracebacks. |
+| `--url URL`, `--allow-remote` | Another ComfyUI address (default `COMFYUI_URL`, else `http://127.0.0.1:8188`); allow one on another computer. |
 
 Exit codes: 0 ok, 1 the job or the budget check failed, 2 usage, environment, missing models or files in the way.
+Ctrl-C stops `make` but not a job already queued in ComfyUI: cancel that one in ComfyUI (its queue panel).
 Every check that can fail (names, files in the way, the asset log, Blender, ComfyUI, nodes, model files) runs before
 the GPU starts.
 
 ## What lands where
 | Path | What |
 |---|---|
-| `<models>/<name>.glb`, `<name>_LOD1.glb` ... | The model, only when it passed `validate_asset.py --class`. |
-| `assets_src/bozzetto/<name>/reference.png` | The picture the mesh was made from (`.jpg` or `.webp` when your `--image` was one). Metadata is removed from the copy and from what ComfyUI gets: EXIF (a photo's GPS position, the camera), XMP, IPTC, text chunks, comments and ComfyUI's embedded prompt; the pixels and the colour profile stay. |
+| `<models>/<name>.glb`, `<name>_LOD1.glb` ... | The model, only when it passed `validate_asset.py --class`; the LODs are made from that validated model and copied with it (they are not validated on their own). |
+| `assets_src/bozzetto/<name>/reference.png` | The picture the mesh was made from (`.jpg`, `.jpeg` or `.webp` when your `--image` was one). Metadata is removed from the copy and from what ComfyUI gets: EXIF (a photo's GPS position, the camera), XMP, IPTC, text chunks, comments and ComfyUI's embedded prompt; the pixels and the colour profile stay. |
 | `assets_src/bozzetto/<name>/raw.glb` | TRELLIS.2's own output, before cleanup (its embedded ComfyUI prompt removed: it holds local paths). |
 | `.../clean.glb`, `export/` | After cleanup.py, after prep_export.py. A model that fails the budget stays here. |
 | `.../cleanup.json`, `.../validate.json` | The numbers: triangles in and out, vertices merged, fragments dropped, size; the validator's findings. |
@@ -138,11 +144,11 @@ python tools/bozzetto/bozzetto.py rig make npc_guard --with tripo --clips idle,w
 ```
 The input is the model `make` placed (`<models>/<name>.glb`, or `--input` any `.glb`); the result is
 `<models>/<name>_rigged.glb`, with its sources and reports in `assets_src/bozzetto/<name>/rig/<route>/` and its own
-asset log row ("rig of A-NNNN").
+asset log row: "rig of A-NNNN" when the input has a row of its own (a Bozzetto model does), else "rig of <its path>".
 
 | | UniRig (`--with unirig`, the default) | Tripo (`--with tripo`) |
 |---|---|---|
-| Cost | free | about 25 credits ($0.25) to rig, 10 a clip; the quote is printed and checked first |
+| Cost | free | about 25 credits ($0.25) to rig, 10 a clip; the default `--clips idle,walk` makes 45. The quote is printed and checked first, and each step's actual cost before the next; `--max-credits` (default 100) caps one run |
 | Needs | an NVIDIA GPU (peak 15.6 GB measured), a UniRig checkout and its Python env | `TRIPO_API_KEY` with API credits (a Tripo Studio plan does not add them) |
 | Clips | `--animate idle,wave,walk` (default) or `none`: keyed by `rig_finish.py`, game-jam quality | `--clips` up to 5 of Tripo's presets (`idle`, `walk`, `run`, `jump`, `turn`, ...): mocap-like |
 | Time (K01) | about 85 s | about 30 s |
@@ -166,8 +172,9 @@ which made a rig that deformed nothing), and a weights-only allowlist for one cl
 the unsafe `weights_only=False`). The details and how they were found: `workflows/picture-to-game/`.
 
 **What every rig is checked for** (`rig_finish.py`, both routes), because broken rigs here came back with exit 0:
-vertices with no weight, NaN weights, vertices only on glTF's placeholder bone (`neutral_bone`), one bone holding
-most of the mesh, too few bones in use. A failed check ships nothing. It also removes a mesh nothing skins (both
+vertices with no weight, NaN, infinite or negative weights, weights that do not sum to 1, vertices only on glTF's
+placeholder bone (`neutral_bone`), one bone holding most of the mesh, too few bones in use, and, by bending every
+bone 15 degrees, a mesh that does not move (the rig must deform). A failed check ships nothing. It also removes a mesh nothing skins (both
 routes leave a stray `Icosphere`) and scales Tripo's 1.0 m output back to the model's height.
 
 **Bone names:** UniRig's bones are `bone_0` ... `bone_N`. `rig_finish.py` finds the body by shape (the spine runs from
@@ -180,8 +187,12 @@ Mixamo-named (`--names keep` rigs those with their own names), and when a third 
 
 **Tripo's journal:** every paid task is written to `assets_src/bozzetto/<name>/rig/tripo/tasks.json` as it is created and when it finishes, and
 each step's actual cost is checked against `--max-credits` and the balance before the next paid call. If a run fails
-after paying (a lost download, a missing link), run it again: finished tasks for the same model and clips are
-reused, with a fresh download link, and nothing is paid twice (`--no-reuse` pays for new ones).
+after paying (a lost download, a missing link, a timeout), run it again: tasks for the same model and clips are
+reused, with a fresh download link. A task the last run left running is asked for its result first; if it is
+still running the run stops rather than pay for a second one (`--no-reuse` pays for new ones).
+
+Other `rig make` options: `--wait S` (each UniRig step's and Tripo task's limit, default 1800), `--out`,
+`--project`, `--no-preview`, `--no-log` and `--overwrite` as for `make`; `--input FILE` rigs another `.glb`.
 
 **One GPU at a time:** UniRig peaks near 15.6 GB. With another program holding the card (ComfyUI, a local LLM
 runner) it still finished here, but took 562 s instead of about 85: close them first.

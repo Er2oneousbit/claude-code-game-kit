@@ -30,6 +30,8 @@ import sys
 import tempfile
 import textwrap
 import unittest
+import urllib.error
+from unittest import mock
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -291,6 +293,19 @@ class UniRigExam(Base):
         self.assertEqual(code, 2)
         self.assertIn("not found", out)
 
+    def test_wait_reaches_the_unirig_steps(self):
+        """#222: rig make --wait is each UniRig step's limit too, not only Tripo's."""
+        real = subprocess.run
+        seen = []
+
+        def spy(*a, **k):
+            if "timeout" in k and any("src.data.extract" in str(x) or "run.py" in str(x) for x in (a[0] if a else [])):
+                seen.append(k["timeout"])
+            return real(*a, **k)
+        with mock.patch.object(rig.subprocess, "run", spy):
+            self.assertEqual(run_main(["rig", "make", "npc_guard", "--wait", "77"])[0], 0)
+        self.assertEqual(seen, [77] * 4)          # extract, skeleton, extract, skin (merge runs src.inference)
+
     def test_unpatched_checkout_is_named(self):
         (self.unirig / "src/model/unirig_skin.py").write_text(UNIRIG_ORIGINALS["src/model/unirig_skin.py"],
                                                               encoding="utf-8")
@@ -305,6 +320,8 @@ class FakeTripo:
         self.calls, self.balance, self.riggable, self.rig_type = [], balance, riggable, rig_type
         self.rig_cost, self.no_url = rig_cost, no_url      # Tripo charging more than its table; a lost URL
         self.tasks = {}
+        self.status = {}          # task id -> status reported instead of success (a task still running, failed)
+        self.bad_key = False
 
     def posts(self, kind):
         return [k for k, _ in self.tasks.values() if k == kind]
@@ -316,6 +333,8 @@ class FakeTripo:
         if url.startswith("https://dl.example/"):
             return io.BytesIO(b"glTF-tripo")
         body = json.loads(req.data) if req.data and req.headers.get("Content-type") == "application/json" else {}
+        if self.bad_key:
+            raise urllib.error.HTTPError(url, 401, "Unauthorized", {}, io.BytesIO(b"{}"))
         if path == "/account/balance":
             data = {"balance": self.balance, "frozen": 0}
         elif path == "/files":
@@ -334,7 +353,8 @@ class FakeTripo:
             else:
                 out = {} if self.no_url else {"model_url": "https://dl.example/anim.glb"}
                 cost = 10 * len(sent["animations"])
-            data = {"status": "success", "output": out, "credits_consumed": cost}
+            tid_ = path.rsplit("/", 1)[1]
+            data = {"status": self.status.get(tid_, "success"), "output": out, "credits_consumed": cost}
         return io.BytesIO(json.dumps({"code": 0, "data": data}).encode())
 
 
@@ -414,6 +434,49 @@ class TripoExam(Base):
         self.assertEqual(code, 0, out)
         self.assertEqual(len(fake.posts("/animations/rig")) + len(fake.posts("/animations/retarget")), paid)
         self.assertTrue((self.root / "assets/models/npc_guard_rigged.glb").is_file())
+
+    def journal(self, tasks):
+        j = self.root / "assets_src/bozzetto/npc_guard/rig/tripo/tasks.json"
+        j.parent.mkdir(parents=True, exist_ok=True)
+        sha = bz.sha256_bytes((self.root / "assets/models/npc_guard.glb").read_bytes())
+        j.write_text(json.dumps({"input_sha256": sha, "clips": ["idle", "walk"], "rig_model": rig.TRIPO_RIG_MODEL,
+                                 "tasks": tasks}), encoding="utf-8")
+
+    def test_a_task_left_running_is_adopted_not_paid_again(self):
+        """#221: the journal says a paid rig task was running when the last run stopped; it finished since."""
+        rig.OPENER = fake = FakeTripo()
+        fake.tasks["t99"] = ("/animations/rig", {})
+        self.journal({"rig": {"id": "t99", "status": "running"}})
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(fake.posts("/animations/rig"), ["/animations/rig"], "a second rig was paid for")
+        self.assertEqual(len(fake.posts("/animations/retarget")), 1)
+
+    def test_a_task_still_running_stops_the_run_without_paying(self):
+        """#221: a journalled task still running after --wait must not be replaced by a new paid one."""
+        rig.OPENER = fake = FakeTripo()
+        fake.tasks["t99"] = ("/animations/rig", {})
+        fake.status["t99"] = "running"
+        self.journal({"rig": {"id": "t99", "status": "running"}})
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk", "--wait", "1"])
+        self.assertEqual(code, 2, out)
+        self.assertIn("still running", out)
+        self.assertEqual(len(fake.posts("/animations/rig")), 1)          # only the journalled one, nothing new
+        fake.status["t99"] = "failed"                                     # it failed after all: a new one is made
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(fake.posts("/animations/rig")), 2)
+
+    def test_a_bad_key_is_not_ready(self):
+        """#222: with no UniRig and a Tripo key that is refused, rig check exits 2."""
+        os.environ.pop(rig.UNIRIG_ENV)
+        rig.OPENER = fake = FakeTripo()
+        fake.bad_key = True
+        code, out = run_main(["rig", "check"])
+        self.assertEqual(code, 2, out)
+        self.assertIn("not ready", out)
+        fake.bad_key = False
+        self.assertEqual(run_main(["rig", "check"])[0], 0)
 
     def test_unknown_or_too_many_clips_exit_2(self):
         rig.OPENER = FakeTripo()
@@ -611,6 +674,32 @@ class FinishExam(unittest.TestCase):
         p, rep = self.finish("partial")
         self.assertEqual(p.returncode, 1)
         self.assertTrue(any("partly Mixamo-named" in f for f in rep["failures"]), rep)
+
+    def test_the_rig_is_bent_and_must_move_the_mesh(self):
+        """#223: rig_finish poses the rig; a skinned mesh that does not follow the bones fails."""
+        p, rep_ = self.finish("biped")
+        self.assertEqual(p.returncode, 0, p.stdout[-2000:])
+        self.assertGreater(rep_["deform_max_share"], 0.02)
+        probe = self.d / "deform.py"
+        probe.write_text(textwrap.dedent(f'''
+            import sys, json, bpy
+            sys.path.insert(0, {str(HERE)!r})
+            import rig_finish as rf
+            bpy.ops.wm.read_factory_settings(use_empty=True)
+            bpy.ops.import_scene.gltf(filepath={str(self.d / "biped.glb")!r})
+            arm = [o for o in bpy.data.objects if o.type == "ARMATURE"][0]
+            meshes = [o for o in bpy.data.objects if o.type == "MESH"]
+            on = rf.deform_check(arm, meshes)
+            for o in meshes:
+                for md in o.modifiers:
+                    md.show_viewport = False          # the armature no longer moves the mesh
+            off = rf.deform_check(arm, meshes)
+            print("D" + json.dumps([on, off]))
+        '''), encoding="utf-8")
+        q = blender_run(probe, [])
+        on, off = json.loads(next(l for l in q.stdout.splitlines() if l.startswith("D"))[1:])
+        self.assertGreater(on, 0.02)
+        self.assertLess(off, 0.001)
 
     def test_nan_and_negative_weights_fail(self):
         """#208: NaN, infinite and negative weights fail (Blender clamps weights it stores, so the check is driven

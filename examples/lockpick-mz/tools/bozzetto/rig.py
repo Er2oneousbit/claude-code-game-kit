@@ -133,7 +133,7 @@ def unirig_problems(probe=None):
     return out
 
 
-def run_unirig(inp, work, log, root):
+def run_unirig(inp, work, log, root, wait=STEP_WAIT_S):
     """UniRig's own steps, called directly (its bash launchers do not run on Windows). Returns (rigged.glb, timings,
     VRAM peak MiB or None). Earlier outputs are removed first and every step must write its own file, so a step that
     exits 0 without output can never pass an older run's file along (#212). The log has local paths redacted (#211)."""
@@ -182,9 +182,9 @@ def run_unirig(inp, work, log, root):
                 try:
                     proc = subprocess.run([py] + argv, cwd=str(d), env=env, stdout=subprocess.PIPE,
                                           stderr=subprocess.STDOUT, encoding="utf-8", errors="replace",
-                                          timeout=STEP_WAIT_S)
+                                          timeout=wait)
                 except subprocess.TimeoutExpired:
-                    raise bz.JobError(f"UniRig {what} did not finish in {STEP_WAIT_S} s (log: {log.name})")
+                    raise bz.JobError(f"UniRig {what} did not finish in {wait} s (--wait; log: {log.name})")
                 out = redact(proc.stdout or "", hide)
                 fh.write(out)
                 fh.flush()
@@ -313,6 +313,29 @@ def run_tripo(args, inp, work, clips, input_sha):
     def done(step):
         return (tasks.get(step) or {}).get("status") == "success"
 
+    # a task journalled as running (the last run timed out or was interrupted while it was paid for): ask Tripo how
+    # it ended before paying for another one (#221)
+    for step in ("rig", "retarget"):
+        entry = tasks.get(step) or {}
+        if entry.get("status") == "running" and entry.get("id"):
+            st = t.call("GET", f"/tasks/{entry['id']}").get("status")
+            if st in ("failed", "cancelled", "banned", "expired"):
+                print(f"[info] the last run's {step} task {entry['id']} ended {st}; a new one will be made")
+                del tasks[step]
+                save()
+                continue
+            try:
+                d = t.wait_for(entry["id"], f"{step} (from the last run)", args.wait)
+            except bz.JobError:
+                # still running after --wait: never pay for a second one while the first may still finish
+                raise bz.ToolError(f"the last run's {step} task {entry['id']} is still running at Tripo; run again "
+                                   f"later (it is kept in {JOURNAL}), or pass --no-reuse to pay for a new one")
+            else:
+                tasks[step] = {"id": entry["id"], "status": "success", "credits": float(d.get("credits_consumed") or 0)}
+                if step == "rig":
+                    tasks[step]["normalize_scale"] = (d.get("output") or {}).get("normalize_scale")
+            save()
+
     spent = sum(float(v.get("credits") or 0) for v in tasks.values())
     todo = ([] if done("rig") else ["rig"]) + ([] if (done("retarget") or not clips) else ["retarget"])
     quote = (TRIPO_COST["rig"] if "rig" in todo else 0) + (TRIPO_COST["clip"] * len(clips) if "retarget" in todo else 0)
@@ -397,14 +420,16 @@ def cmd_rig_check(args):
     print(f"[{' OK ' if not probs else 'MISS'}] UniRig route (free, local GPU)" + ("" if probs else f": {unirig_dir()}"))
     for p in probs:
         print(f"       {p}")
+    tripo_ok = False                 # ready only when the key works, not merely when it is set (#222)
     if os.environ.get(TRIPO_ENV):
         try:
             print(f"[ OK ] Tripo route (paid): balance {Tripo(os.environ[TRIPO_ENV]).balance():g} credits")
+            tripo_ok = True
         except (bz.ToolError, bz.JobError) as e:
             print(f"[FAIL] Tripo route: {e}")
     else:
         print(f"[MISS] Tripo route (paid): {TRIPO_ENV} is not set (optional)")
-    ready = blender is not None and (not probs or bool(os.environ.get(TRIPO_ENV)))
+    ready = blender is not None and (not probs or tripo_ok)
     print("[ OK ] ready" if ready else "[FAIL] not ready: a route needs Blender plus UniRig or a Tripo key")
     return 0 if ready else 2
 
@@ -474,7 +499,7 @@ def cmd_rig_make(args):
             bz.free_vram(bz.comfy_base(args))      # UniRig needs nearly all of a 16 GB card
         except bz.ToolError:
             pass                                   # no ComfyUI running: nothing to free
-        rigged, times, peak = run_unirig(inp, work, work / "unirig.log", root)
+        rigged, times, peak = run_unirig(inp, work, work / "unirig.log", root, args.wait)
         scale, finish_clips = 1.0, ",".join(clips_unirig) or "none"
         record.update({"unirig_steps_s": times, "vram_peak_mib": peak, "clips": clips_unirig})
     else:

@@ -147,6 +147,11 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
   a wrongly shaped settings file aborted the audit ([#218](https://github.com/Er2oneousbit/claude-code-game-kit/issues/218));
   `@~/` imports resolved against the wrong folder ([#219](https://github.com/Er2oneousbit/claude-code-game-kit/issues/219));
   huge log lines, folded YAML descriptions and the exam's isolation ([#220](https://github.com/Er2oneousbit/claude-code-game-kit/issues/220)).
+- **Bozzetto docs-versus-code review (FIXED in 0.13.1, kept here until the issues close on main):** a Tripo task left
+  running was paid for again ([#221](https://github.com/Er2oneousbit/claude-code-game-kit/issues/221)); `rig check`
+  ready with a bad key, `--wait` ignored by UniRig ([#222](https://github.com/Er2oneousbit/claude-code-game-kit/issues/222));
+  no real deformation check ([#223](https://github.com/Er2oneousbit/claude-code-game-kit/issues/223)); README gaps
+  ([#224](https://github.com/Er2oneousbit/claude-code-game-kit/issues/224)).
 
 ## The examples
 None of the example games has been played by a human tester; the bots and tests are the only proof they play as

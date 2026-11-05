@@ -49,6 +49,8 @@ MAX_UNWEIGHTED = 0.005      # share of vertices allowed without a real bone
 MAX_ONE_BONE = 0.60         # share of vertices one bone may dominate (a rig with everything on one bone is broken)
 MIN_BONES_USED = 4          # bones that must dominate at least one vertex
 SUM_TOLERANCE = 0.02        # weights of a vertex must sum to 1 within this
+DEFORM_DEG = 15.0           # the deformation check bends every bone by this much
+MIN_DEFORM = 0.02           # ... and the mesh must then move at least this share of the model's height
 PLACEHOLDER = "neutral_bone"
 FPS = 24
 IDLE_FRAMES, WAVE_FRAMES, WALK_FRAMES = 48, 48, 24
@@ -137,6 +139,37 @@ def check_weights(arm, meshes):
         fails.append(f"{badsum} vertices have weights that do not sum to 1")
     rep["failures"] = fails
     return rep
+
+
+def deform_check(arm, meshes):
+    """Bend every bone and measure how far the skinned mesh moves, as a share of its height; then restore the pose.
+    The weight checks are static: this is the proof that the rig deforms (#223), the failure the spike first met."""
+    def coords():
+        dg = bpy.context.evaluated_depsgraph_get()
+        pts = []
+        for m in meshes:
+            ev = m.evaluated_get(dg)
+            me = ev.to_mesh()
+            pts += [m.matrix_world @ v.co for v in me.vertices]
+            ev.to_mesh_clear()
+        return pts
+    rest = coords()
+    if not rest:
+        return 0.0
+    height = (max(p.z for p in rest) - min(p.z for p in rest)) or 1.0
+    saved = {pb.name: (pb.rotation_mode, pb.rotation_quaternion.copy(), pb.rotation_euler.copy())
+             for pb in arm.pose.bones}
+    for pb in arm.pose.bones:
+        pb.rotation_mode = "XYZ"
+        pb.rotation_euler = (math.radians(DEFORM_DEG), 0.0, math.radians(DEFORM_DEG / 2))
+    bpy.context.view_layer.update()
+    bent = coords()
+    for pb in arm.pose.bones:
+        mode, q, e = saved[pb.name]
+        pb.rotation_mode = mode
+        pb.rotation_quaternion, pb.rotation_euler = q, e
+    bpy.context.view_layer.update()
+    return max((a - b).length for a, b in zip(rest, bent)) / height
 
 
 # --- biped mapping -------------------------------------------------------------------------------------------
@@ -422,8 +455,17 @@ def main():
     print(f"[{'FAIL' if rep['failures'] else ' OK '}] weights: {rep['vertices']} vertices, {rep['bones']} bones, "
           f"{rep['bones_used']} in use, unweighted {rep['unweighted']}, NaN {rep['nan']}, top bone "
           f"{rep['top_bone_share'] * 100:.0f}%")
+    if not rep["failures"]:
+        moved = deform_check(arm, meshes)
+        rep["deform_max_share"] = round(moved, 3)
+        print(f"[{' OK ' if moved >= MIN_DEFORM else 'FAIL'}] deforms: bending every bone {DEFORM_DEG:g} degrees moves "
+              f"the mesh up to {moved * 100:.0f}% of its height")
+        if moved < MIN_DEFORM:
+            rep["failures"].append(f"the rig does not deform the mesh (bending every bone moves it {moved * 100:.1f}% "
+                                   f"of its height, under {MIN_DEFORM * 100:.0f}%)")
     for f in rep["failures"]:
-        print(f"[FAIL] {f}")
+        if not f.startswith("the rig does not deform"):
+            print(f"[FAIL] {f}")
     existing = [x for x in bpy.data.actions]
     rep["clips_in_file"] = [x.name for x in existing]
     code = 1 if rep["failures"] else 0
