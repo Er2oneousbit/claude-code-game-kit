@@ -302,7 +302,8 @@ def _stream_via_ffmpeg(path, kind):
 
 def write_audio(path, channels, rate, loop=None, quality=OGG_QUALITY):
     """Writes channels (lists in -1..1) to path: .wav natively (16-bit, loop chunk kept), anything else through
-    ffmpeg (OGG as libvorbis; the loop as LOOPSTART / LOOPLENGTH comments). Returns the samples clipped."""
+    ffmpeg (OGG as libvorbis; the loop as LOOPSTART / LOOPLENGTH comments; the same samples give the same bytes).
+    Returns the samples clipped."""
     path = Path(path)
     frames = len(channels[0]) if channels else 0
     interleaved = [s for frame in zip(*channels) for s in frame] if len(channels) > 1 else list(channels[0])
@@ -321,6 +322,9 @@ def write_audio(path, channels, rate, loop=None, quality=OGG_QUALITY):
             if loop:
                 start, end = loop
                 cmd += ["-metadata", f"LOOPSTART={start}", "-metadata", f"LOOPLENGTH={end - start + 1}"]
+        # bitexact: a fixed OGG stream serial (else random) and no ffmpeg version tag, so the same audio written
+        # twice is the same bytes (the DAW round trip tells "already in the game" by its SHA-256)
+        cmd += ["-fflags", "+bitexact", "-flags:a", "+bitexact"]
         cmd.append(str(path.resolve()))
         dbg(" ".join(cmd))
         try:

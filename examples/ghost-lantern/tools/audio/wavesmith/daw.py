@@ -19,9 +19,12 @@
 #           since the project was made, REAPER rendered nothing), 2 usage, an unreadable file or REAPER not found
 # Notes   : The working folder (default assets_src/daw/<name>, kept out of Godot's import by assets_src/.gdignore)
 #           holds the project, a copy of every sound under media/, and wavesmith_daw.json: which region or track is
-#           which game file, its bus, kind, SHA-256, length, channels and loop. Nothing in it holds an absolute path
-#           (media and the game root are relative to the folder), so it can be committed.
-#           The REAPER render: `reaper -newinst -nosplash -cfgfile <temp>/reaper.ini -renderproject <copy>.rpp`.
+#           which game file, its bus, kind, SHA-256 (and its copy's), length, channels and loop (WAV smpl chunk, OGG
+#           LOOPSTART / LOOPLENGTH). Nothing in it holds an absolute path (media and the game root are relative to
+#           the folder, which must be inside the game), so it can be committed. --reexport and import run from the
+#           game root it was made from (or --root).
+#           The REAPER render: `reaper -newinst -nosplash -cfgfile <temp>/reaper.ini -renderproject <copy>.rpp`,
+#           once per sample rate when the sounds have several (each at its own rate, so none is resampled).
 #           The copy is the project with Wavesmith's render settings put back (24-bit WAV at the sounds' rate, no
 #           dither, no normalization; sounds: master mix of every region, named $region; music: each stem track
 #           through the master, named $track) so a render setting changed while editing cannot break the round trip.
@@ -29,8 +32,10 @@
 #           Audio: no device opens and REAPER does not ask for one), and is deleted afterwards: your own REAPER
 #           settings, in %APPDATA%/REAPER or ~/Library/Application Support/REAPER, are never read or written. REAPER
 #           takes about 13 s per render on the test machine, most of it scanning its plug-ins in the fresh folder.
-#           Back in the game: a render whose audio matches the original (same length and channels, every sample
-#           within 2.5 steps of 16-bit) leaves the game's file untouched, byte for byte. A changed one is set to its
+#           Back in the game (compared with the folder's copy while it has its recorded SHA-256, else with the
+#           game's file while it is the original): a render whose audio matches the original (same length and
+#           channels, every sample within 2.5 steps of 16-bit) leaves the game's file untouched, byte for byte. A
+#           changed one is set to its
 #           bus's house level (sound_sets.py rules: loudest 400 ms for one-shots, integrated for loops, true peak at
 #           most -1 dBTP); music stems are levelled together, by the mix of all their renders, so their balance
 #           stays as you set it and a second run lands on the same bytes. An edit undone in the DAW puts the
@@ -57,6 +62,7 @@ import datetime
 import difflib
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -83,10 +89,12 @@ DEFAULT_SETS = "data/sound_sets.json"
 DEFAULT_MUSIC = "data/music.json"
 DEFAULT_AUDIO_ROOT = "assets/audio"     # what music.json's stem paths are relative to (music validate --root)
 MEDIA_DIR, RENDER_DIR, STEMS_DIR, RENDERS_DIR = "media", "render", "stems", "renders"
+ORIGINALS_DIR = "originals"             # daw export: the game's own OGG / FLAC bytes, for putting an undone edit back
 RENDER_COPY = "_wavesmith_render.rpp"   # the project with our render settings, deleted after each render
 GAP_S = 1.0                             # silence between sounds on the timeline
 SAME_TOL = 2.5 / 32768                  # a render within this of the original, every sample, is the same audio
 AUDIO_EXT = (".wav", ".flac", ".ogg")
+UP_ONLY = re.compile(r"^(\.|\.\.(/\.\.)*)$")   # a manifest's root: the game root is this folder or above it
 NAME_OK = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")   # region / track / file names that survive every DAW
 REAPER_ENV = "REAPER_BIN"
 REAPER_TIMEOUT_S = 300
@@ -99,7 +107,7 @@ REAPER_CANDIDATES = (                   # where REAPER installs by default (the 
 TOP_LEVEL_RENDER = ("RENDER_FILE", "RENDER_PATTERN", "RENDER_FMT", "RENDER_1X", "RENDER_RANGE", "RENDER_RESAMPLE",
                     "RENDER_ADDTOPROJ", "RENDER_STEMS", "RENDER_DITHER", "RENDER_TRIM", "RENDER_NORMALIZE",
                     "RENDER_SRATE", "SAMPLERATE")
-REGION = re.compile(r"^MARKER\s+\d+\s+\S+\s+(\"[^\"]*\"|'[^']*'|`[^`]*`|\S+)\s+(\d+)")   # name, flags (1 = region)
+REGION = re.compile(r"^MARKER\s+(\d+)\s+\S+\s+(\"[^\"]*\"|'[^']*'|`[^`]*`|\S+)\s+(\d+)")   # index, name, flags
 MEDIA_FILE = re.compile(r'^\s*FILE\s+("[^"\r\n]*"|\'[^\'\r\n]*\'|`[^`\r\n]*`|\S+)', re.M)   # a SOURCE's file
 ABS_PATH = re.compile(r'(?:^|["\s])((?:[A-Za-z]:[\\/]|\\\\|/(?:Users|home|Volumes)/)[^"\r\n]*)')
 CODE_TOOLS = (None, "sfx_synth", "chiptune", "babble")   # sidecar tools that use no model
@@ -133,16 +141,33 @@ def posix_rel(path, start):
 
 
 def read_any(path):
-    """(channels as lists, rate, loop or None) from WAV (loop chunk kept), FLAC or OGG."""
+    """(channels as lists, rate, loop or None) from WAV (its loop chunk), FLAC or OGG (its LOOPSTART / LOOPLENGTH
+    comments, the kit's OGG loop: audioio.write_audio)."""
     path = Path(path)
     try:
         if path.suffix.lower() == ".wav":
             samples, rate, loop, ch = read_wav_channels(path)
             return [samples[c::ch] for c in range(ch)], rate, loop
         chans, rate = audioio.read_audio(path)
-        return [list(c) for c in chans], rate, None
+        chans = [list(c) for c in chans]
+        return chans, rate, ogg_loop(path, len(chans[0])) if path.suffix.lower() == ".ogg" else None
     except (ValueError, audioio.AudioIOError) as exc:
         raise ToolError(f"{path.as_posix()}: {exc}")
+
+
+def ogg_loop(path, frames):
+    """(start, end) from an OGG Vorbis file's LOOPSTART / LOOPLENGTH comments, or None (no tags, or tags that do not
+    fit the file)."""
+    mod = audioio.oggvorbis_module()
+    if mod is None:
+        return None
+    try:
+        _, comments, _ = mod.stream(Path(path).read_bytes())      # the headers only: nothing is decoded
+        tags = {k.upper(): v for k, v in comments}
+        start, length = int(tags["LOOPSTART"]), int(tags.get("LOOPLENGTH", frames - int(tags["LOOPSTART"])))
+    except Exception:              # no tags, a tag that is not a number, or one of the decoder's own error classes
+        return None
+    return (start, start + length - 1) if 0 <= start and length > 0 and start + length <= frames else None
 
 
 # ---- what to edit ------------------------------------------------------------------------------------------------
@@ -205,6 +230,11 @@ def collect(args, root):
     if in_music:
         t = tracks["tracks"][src]
         items = [item_for(stem, root / args.audio_root / f, root, "music", "stem") for stem, f in t["stems"].items()]
+        rates = sorted({it["rate"] for it in items})
+        if len(rates) > 1:
+            raise ToolError(f"the stems of {src} are at {', '.join(f'{r} Hz' for r in rates)}: a track's stems share "
+                            f"one sample rate (they play together; `music validate --root .` says the same), resample "
+                            f"them first")
         meta = {"kind": "music", "name": args.name or src, "target": args.target, "source": f"{args.music} track {src}",
                 "music": {k: t.get(k, d) for k, d in (("bpm", None), ("beats_per_bar", 4), ("bars", None),
                                                       ("loop_start_bar", 0))}}
@@ -228,21 +258,37 @@ def check_items(items):
         seen[low] = it["file"]
 
 
-def project_shape(items):
+def project_shape(items, route):
     """(rate, channels) of the project: the most common rate (ties: the higher), the most channels."""
     rates = collections.Counter(it["rate"] for it in items)
     rate = max(rates, key=lambda r: (rates[r], r))
     for it in items:
-        if it["rate"] != rate:
-            print(f"[warn] {it['file']} is {it['rate']} Hz and the project runs at {rate} Hz: REAPER resamples it, "
-                  f"and an edited version comes back at {rate} Hz")
+        if it["rate"] != rate and route == "reaper":
+            print(f"[note] {it['file']} is {it['rate']} Hz and the project runs at {rate} Hz: REAPER plays it "
+                  f"resampled while you edit, and --reexport renders it back at {it['rate']} Hz (a render of its own)")
     return rate, max(it["channels"] for it in items)
 
 
+def align_frames(rate, rates):
+    """Project frames each sound's start is a multiple of: 1 when every sound has the project's rate, else a whole
+    number of milliseconds that is a whole number of samples at every rate (44.1 and 48 kHz: 10 ms), so a sound
+    rendered at its own rate starts on one of its own samples."""
+    if set(rates) == {rate}:
+        return 1
+    ms = 1
+    for r in rates:
+        need = 1000 // math.gcd(int(r), 1000)
+        ms = ms * need // math.gcd(ms, need)
+    return rate * ms // 1000
+
+
 def lay_out(meta, items, rate):
-    """Sets each item's start frame: sounds end to end with GAP_S between them, music stems all at 0."""
+    """Sets each item's start frame: sounds end to end with GAP_S between them (each start on align_frames), music
+    stems all at 0."""
     at, gap = 0, int(round(GAP_S * rate))
+    step = align_frames(rate, [it["rate"] for it in items])
     for it in items:
+        at = -(-at // step) * step
         it["start"] = 0 if meta["kind"] == "music" else at
         at += int(round(it["frames"] * rate / it["rate"])) + gap
 
@@ -250,6 +296,14 @@ def lay_out(meta, items, rate):
 def seconds(frames, rate):
     s = f"{frames / rate:.12f}".rstrip("0").rstrip(".")
     return s or "0"
+
+
+def item_end(it, rate):
+    """(length, end) in seconds of an item on a timeline at rate: its own length, exact at its own rate."""
+    if it["rate"] == rate:
+        n = int(round(it["frames"] * rate / it["rate"]))
+        return seconds(n, rate), seconds(it["start"] + n, rate)
+    return seconds(it["frames"], it["rate"]), seconds(it["start"] * it["rate"] + it["frames"] * rate, rate * it["rate"])
 
 
 def targets(meta, items):
@@ -311,17 +365,15 @@ def rpp_text(meta, items, rate, channels, work_rel):
         out.append(f"  MARKER 3 {seconds(music.bar_sample(m['bars'], m, rate), rate)} {q('loop end')} 0 0 1 R")
     else:
         for k, it in enumerate(items, 1):
-            n = int(round(it["frames"] * rate / it["rate"]))
             out += [f"  MARKER {k} {seconds(it['start'], rate)} {q(it['name'])} 1 0 1 R",
-                    f"  MARKER {k} {seconds(it['start'] + n, rate)} \"\" 1"]
+                    f"  MARKER {k} {item_end(it, rate)[1]} \"\" 1"]
     groups = [(it["name"], [it]) for it in items] if meta["kind"] == "music" else [(meta["name"], items)]
     for track, members in groups:
         out += ["  <TRACK", f"    NAME {q(track)}", "    VOLPAN 1 0 -1 -1 1", "    MUTESOLO 0 0 0",
                 f"    SEL {1 if meta['kind'] == 'music' else 0}", "    NCHAN 2", "    MAINSEND 1 0"]
         for it in members:
-            n = int(round(it["frames"] * rate / it["rate"]))
-            out += ["    <ITEM", f"      POSITION {seconds(it['start'], rate)}", f"      LENGTH {seconds(n, rate)}",
-                    f"      LOOP {1 if it['kind'] in ('loop', 'stem') else 0}",
+            out += ["    <ITEM", f"      POSITION {seconds(it['start'], rate)}",
+                    f"      LENGTH {item_end(it, rate)[0]}", f"      LOOP {1 if it['kind'] in ('loop', 'stem') else 0}",
                     "      FADEIN 1 0 0 1 0 0 0", "      FADEOUT 1 0 0 1 0 0 0",
                     f"      NAME {q(it['name'])}", "      VOLPAN 1 0 1 -1", "      SOFFS 0",
                     f"      <SOURCE {SOURCE_TYPE[Path(it['media']).suffix.lower()]}",
@@ -346,11 +398,22 @@ def top_level(lines):
     return out
 
 
-def render_copy_text(text, man):
-    """The user's project with Wavesmith's render settings: top-level RENDER_* / SAMPLERATE lines and the RENDER_CFG
-    block replaced; for music, the stem tracks selected (and only those), since REAPER renders selected tracks."""
+def render_copy_text(text, man, rate=None, keep_region=None):
+    """The user's project with Wavesmith's render settings at rate (default the project's): top-level RENDER_* /
+    SAMPLERATE lines and the RENDER_CFG block replaced; for music, the stem tracks selected (and only those), since
+    REAPER renders selected tracks. keep_region(name) False leaves that region out (it renders at another rate);
+    None when that leaves no region."""
     lines = text.replace("\r\n", "\n").split("\n")
     depths = top_level(lines)
+    regions = [m for i, d in depths if d == 1 for m in [REGION.match(lines[i].strip())] if m
+               and int(m.group(3)) & 1 and m.group(2).strip("\"'`")]
+    if lines[0].startswith("<REAPER_PROJECT") and not regions:
+        raise ToolError("the project has no named regions left: nothing would render (REAPER would stop at a "
+                        "'Nothing to render' dialog)")
+    # a region is two MARKER lines with the same index: its start (named) and its end (no name)
+    drop = {m.group(1) for m in regions if keep_region and not keep_region(m.group(2).strip("\"'`"))}
+    if regions and drop == {m.group(1) for m in regions}:
+        return None
     keep, skip_until = [], None
     track_start, stems = None, {it["name"] for it in man["items"]}
     tracks = []                                  # (start, end) of each depth-1 <TRACK block
@@ -362,6 +425,10 @@ def render_copy_text(text, man):
             continue
         if d == 1 and s.split(" ")[0] in TOP_LEVEL_RENDER:
             continue
+        if d == 1 and drop:
+            m = REGION.match(s)
+            if m and int(m.group(3)) & 1 and m.group(1) in drop:
+                continue
         if d == 1 and s.startswith("<RENDER_CFG"):
             skip_until = next(j for j, dj in depths[i + 1:] if dj == 1 and lines[j].strip() == ">")
             continue
@@ -373,11 +440,6 @@ def render_copy_text(text, man):
             track_start = None
     if not keep or not keep[0].startswith("<REAPER_PROJECT"):
         raise ToolError("the .rpp does not start with <REAPER_PROJECT: not a REAPER project")
-    regions = [m for i, d in depths if d == 1 for m in [REGION.match(lines[i].strip())] if m
-               and int(m.group(2)) & 1 and m.group(1).strip("\"'`")]
-    if not regions:
-        raise ToolError("the project has no named regions left: nothing would render (REAPER would stop at a "
-                        "'Nothing to render' dialog)")
     if man["kind"] == "music":
         for start, end in reversed(tracks):      # from the end, so an inserted line moves no block still to do
             block = keep[start:end + 1]
@@ -390,7 +452,7 @@ def render_copy_text(text, man):
                 keep.insert(start + 1, sel)
             else:
                 keep[start + j] = sel
-    out = [keep[0]] + render_block(man, man["rate"], man["channels"]) + keep[1:]
+    out = [keep[0]] + render_block(man, rate or man["rate"], man["channels"]) + keep[1:]
     return "\n".join(out)
 
 
@@ -499,16 +561,34 @@ def load_manifest(where):
         raise ToolError(f"{(work / MANIFEST).as_posix()} is not a version {VERSION} Wavesmith DAW manifest")
     # a manifest is a tracked file a pull request can carry: every path in it must stay inside the game
     for it in man["items"]:
-        for key in ("file", "media"):
+        for key in ("file", "media") + (("original",) if "original" in it else ()):
             v = it.get(key)
             if not isinstance(v, str) or not v or v.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", v) \
                     or ".." in re.split(r"[\\/]", v):
                 raise ToolError(f"{MANIFEST}: {key} {v!r} must be a plain relative path inside the game")
+    if not isinstance(man.get("root"), str) or not UP_ONLY.match(man["root"]):
+        raise ToolError(f"{MANIFEST}: root {man.get('root')!r} must be . or ../.. (the game root above this folder)")
     return work, man
 
 
+def game_root(args, work, man):
+    """The game root for --reexport and import: --root, else the current folder, which must be the root the project
+    was made from (so neither a wrong folder nor an edited manifest can move where the game's files are written)."""
+    if args.root:
+        return Path(args.root)
+    made = (work / man["root"]).resolve()
+    if made != Path(".").resolve():
+        raise ToolError(f"{(work / MANIFEST).as_posix()} was made from the game root {made.as_posix()}, not this "
+                        f"folder: run it from the game root, or pass --root")
+    return Path(".")
+
+
 def start_manifest(args, root, work, meta, items, route):
-    rate, channels = project_shape(items)
+    up = posix_rel(root, work)
+    if not UP_ONLY.match(up):
+        raise ToolError(f"{work.as_posix()} is not inside the game root {root.as_posix()}: keep the working folder "
+                        f"inside the game (its manifest names the root as a path up from it)")
+    rate, channels = project_shape(items, route)
     lay_out(meta, items, rate)
     media = work / (MEDIA_DIR if route == "reaper" else STEMS_DIR)
     # never emptied: REAPER records into "Media" beside the project by default, and on Windows that is this folder
@@ -522,8 +602,13 @@ def start_manifest(args, root, work, meta, items, route):
             dst = media / (it["name"] + ".wav")
             chans, r, loop = read_any(src)
             audioio.write_audio(dst, chans, r, loop=loop)
+            keep = work / ORIGINALS_DIR / (it["name"] + Path(it["file"]).suffix.lower())
+            keep.parent.mkdir(exist_ok=True)
+            shutil.copyfile(src, keep)
+            it["original"] = keep.relative_to(work).as_posix()
         it["media"] = dst.relative_to(work).as_posix()
-    man = dict(meta, version=VERSION, route=route, root=posix_rel(root, work), rate=rate, channels=channels,
+        it["media_sha256"] = sha256(dst)        # the baseline a render is compared with: checked on the way back
+    man = dict(meta, version=VERSION, route=route, root=up, rate=rate, channels=channels,
                items=items, logged=[], written={})
     man["about"] = ("Wavesmith DAW round trip (tools/audio/wavesmith/daw.py): which region or track is which game "
                     "file. Paths are relative: root from this folder, file from the root, media from this folder.")
@@ -595,7 +680,7 @@ def cmd_export(args):
         write_midi(args, man, work)
     else:
         for it in items:
-            rows.append((it["name"], it["start"] / rate, (it["start"] + it["frames"]) / rate))
+            rows.append((it["name"], it["start"] / rate, it["start"] / rate + it["frames"] / it["rate"]))
         if all(it["rate"] == rate for it in items):
             seq = [[0.0] * (items[-1]["start"] + items[-1]["frames"]) for _ in range(man["channels"])]
             for it in items:
@@ -675,22 +760,37 @@ def reexport(args):
     renders = work / RENDER_DIR
     for old in (renders.glob("*.wav") if renders.is_dir() else []):     # last run's renders, so none is taken twice
         old.unlink()
-    copy = work / RENDER_COPY
-    copy.write_bytes(render_copy_text(text, man).encode("utf-8"))
-    try:
-        rc = run_reaper(exe, copy, args.timeout)
-    finally:
+    copy, codes = work / RENDER_COPY, []
+    for rate, keep in render_passes(man):
+        body = render_copy_text(text, man, rate, keep)
+        if body is None:                         # every region of this rate renamed or removed: nothing to render
+            continue
+        copy.write_bytes(body.encode("utf-8"))
         try:
-            copy.unlink()
-        except OSError:
-            pass
+            codes.append(run_reaper(exe, copy, args.timeout))
+        finally:
+            discard(copy)
     got = {p.stem: p for p in sorted(renders.glob("*.wav"))} if renders.is_dir() else {}
-    print(f"[ OK ] REAPER rendered {len(got)} file(s) (exit {rc})")
+    print(f"[ OK ] REAPER rendered {len(got)} file(s) (exit {', '.join(str(c) for c in codes)})")
     if not got:
         print(f"[FAIL] REAPER rendered nothing into {RENDER_DIR}/: open {rpp.name} in REAPER and check its regions "
               f"{'and tracks ' if man['kind'] == 'music' else ''}are still there")
         return 1
     return bring_back(args, work, man, got, "REAPER", strict=True)
+
+
+def render_passes(man):
+    """[(rate, keep_region)]: one REAPER render per sample rate, so a sound at another rate than the project comes
+    back at its own rate, sample for sample, instead of resampled. The project's rate goes first and also renders
+    regions no sound is called (so they are reported as extra)."""
+    if man["kind"] == "music":
+        return [(man["rate"], None)]
+    at = {it["name"]: it["rate"] for it in man["items"]}
+    others = sorted({r for r in at.values() if r != man["rate"]})
+    if not others:
+        return [(man["rate"], None)]
+    return [(man["rate"], lambda n: at.get(n, man["rate"]) == man["rate"])] + \
+        [(r, lambda n, r=r: at.get(n) == r) for r in others]
 
 
 def norm_name(name):
@@ -731,6 +831,26 @@ def cmd_import(args):
     for n in notes:
         print(n)
     return bring_back(args, work, man, found, args.daw, strict=False, extras=extras)
+
+
+def baseline(work, root, it, game_sha):
+    """(channels, rate) of the original a render is compared with: the working folder's copy (media/ or stems/)
+    while it is as it was made, else the game's file while it is the original; None when neither is (then any
+    render counts as an edit). A copy changed since (an edit saved over it) is said."""
+    media = work / it["media"]
+    want = it.get("media_sha256")
+    if media.is_file() and (not want or sha256(media) == want):
+        return read_any(media)[:2]
+    print(f"[note] {it['media']} " + ("changed since the project was made (an edit saved into the copy itself): "
+                                      "the render counts as an edit" if media.is_file() else "is gone"))
+    return read_any(root / it["file"])[:2] if game_sha == it["sha256"] else None
+
+
+def original_copy(work, it):
+    """The working folder's copy of the original game file (originals/ for an OGG or FLAC exported as a WAV stem,
+    else media/ or stems/), or None when it is gone or no longer the original's bytes."""
+    p = work / it.get("original", it["media"])
+    return p if p.is_file() and sha256(p) == it["sha256"] else None
 
 
 def same_audio(a, ra, b, rb):
@@ -791,10 +911,33 @@ def loop_for(it, frames, man):
     return None, None
 
 
+def discard(path):
+    try:
+        Path(path).unlink()
+    except OSError:
+        pass
+
+
+def land(make, tmp, game):
+    """tmp in place of game (make() writes tmp first, when given): None, or why not. tmp never stays behind."""
+    try:
+        if make:
+            make()
+        os.replace(str(tmp), str(game))
+        return None
+    except OSError as exc:
+        discard(tmp)
+        return exc.strerror or str(exc)
+
+
+def cannot_write(it, why):
+    return f"{it['file']}: could not be written ({why}): close whatever holds it (the game, an editor) and run again"
+
+
 def bring_back(args, work, man, renders, daw, strict, extras=()):
     """Renders -> the game's files. strict (REAPER): a missing region is a problem; otherwise a sound not rendered
     is simply kept."""
-    root = Path(args.root) if args.root else work / man["root"]
+    root = game_root(args, work, man)
     problems, kept, pending = [], [], []
     before = {}
     for it in man["items"]:
@@ -812,9 +955,8 @@ def bring_back(args, work, man, renders, daw, strict, extras=()):
         if it["channels"] == 1 and len(chans) == 2 and all(abs(x - y) <= SAME_TOL for x, y in zip(*chans)):
             chans = chans[:1]                              # a mono sound rendered on a stereo bus: mono again
         audio[it["name"]] = (chans, rate)
-        orig_path = work / it["media"]
-        orig, orate, _ = read_any(orig_path) if orig_path.is_file() else read_any(root / it["file"])
-        if same_audio(orig, orate, chans, rate):
+        base = baseline(work, root, it, before[it["file"]])
+        if base is not None and same_audio(base[0], base[1], chans, rate):
             same.append(it)
         else:
             pending.append((it, chans, rate))
@@ -841,67 +983,81 @@ def bring_back(args, work, man, renders, daw, strict, extras=()):
         for it, _, _ in pending:
             gains[it["name"]] = (g, note)
     written, report = [], []
-    # rendered as they were: kept; or, when an earlier round trip wrote an edit that is now undone, the original back
-    for it in same:
-        cur, game, media = before[it["file"]], root / it["file"], work / it["media"]
-        if cur == it["sha256"]:
-            kept.append(f"{it['name']}: unchanged")
-        elif cur == (man.get("written") or {}).get(it["file"]) and media.suffix.lower() == game.suffix.lower() \
-                and media.is_file():
-            if args.dry_run:
-                report.append(f"[dry ] {it['file']}: the original would be put back (the edit was undone)")
+    try:   # a run stopped part-way still records the files it wrote, so the next run does not refuse them
+        # rendered as they were: kept; or, when an earlier round trip wrote an edit now undone, the original back
+        for it in same:
+            cur, game = before[it["file"]], root / it["file"]
+            if cur == it["sha256"]:
+                kept.append(f"{it['name']}: unchanged")
+            elif cur == (man.get("written") or {}).get(it["file"]) and not original_copy(work, it):
+                kept.append(f"{it['name']}: rendered as the original, but the working folder's copy of the original "
+                            f"is gone or changed: the game keeps the last edit")
+            elif cur == (man.get("written") or {}).get(it["file"]):
+                if args.dry_run:
+                    report.append(f"[dry ] {it['file']}: the original would be put back (the edit was undone)")
+                    continue
+                tmp = game.with_name(game.stem + ".daw_tmp" + game.suffix)
+                failed = land(lambda: shutil.copyfile(original_copy(work, it), tmp), tmp, game)
+                if failed:
+                    problems.append(cannot_write(it, failed))
+                    continue
+                written.append({"item": it, "sha256": sha256(game), "gain_db": 0.0, "before": cur,
+                                "note": f"the edit was undone in {daw}: the original put back",
+                                "frames": it["frames"], "channels": it["channels"]})
+                report.append(f"[ OK ] {it['file']}: the edit was undone in {daw}, the original is back")
+            else:
+                kept.append(f"{it['name']}: unchanged in {daw} (the game's file changed elsewhere and is left as "
+                            f"it is)")
+        for it, chans, rate in pending:
+            try:
+                if it["name"] not in gains:
+                    gains[it["name"]] = gain_for(chans, rate, it["kind"], it["bus"], man["target"])
+            except ToolError as exc:
+                problems.append(f"{it['name']}: {exc}")
                 continue
+            g, note = gains[it["name"]]
+            k = 10 ** (g / 20)
+            out = [[s * k for s in c] for c in chans]
+            loop, warn = loop_for(it, len(out[0]), man)
+            game = root / it["file"]
             tmp = game.with_name(game.stem + ".daw_tmp" + game.suffix)
-            shutil.copyfile(media, tmp)
-            os.replace(str(tmp), str(game))
-            written.append({"item": it, "sha256": sha256(game), "gain_db": 0.0, "before": cur,
-                            "note": f"the edit was undone in {daw}: the original put back",
-                            "frames": it["frames"], "channels": it["channels"]})
-            report.append(f"[ OK ] {it['file']}: the edit was undone in {daw}, the original is back")
-        else:
-            kept.append(f"{it['name']}: unchanged in {daw} (the game's file changed elsewhere and is left as it is)")
-    for it, chans, rate in pending:
-        try:
-            if it["name"] not in gains:
-                gains[it["name"]] = gain_for(chans, rate, it["kind"], it["bus"], man["target"])
-        except ToolError as exc:
-            problems.append(f"{it['name']}: {exc}")
-            continue
-        g, note = gains[it["name"]]
-        k = 10 ** (g / 20)
-        out = [[s * k for s in c] for c in chans]
-        loop, warn = loop_for(it, len(out[0]), man)
-        game = root / it["file"]
-        tmp = game.with_name(game.stem + ".daw_tmp" + game.suffix)
-        try:
-            audioio.write_audio(tmp, out, rate, loop=loop)
-        except audioio.AudioIOError as exc:
-            problems.append(f"{it['name']}: {exc}")
-            continue
-        new_sha = sha256(tmp)
-        allowed = {it["sha256"], (man.get("written") or {}).get(it["file"])}
-        if before[it["file"]] == new_sha:
-            tmp.unlink()
-            what = "moved with the mix" if it["name"] in levelled_only else "edited"
-            kept.append(f"{it['name']}: {what}, and the game already has this version (an earlier re-export)")
-            continue
-        if before[it["file"]] not in allowed and not args.force:
-            tmp.unlink()
-            problems.append(f"{it['file']} changed in the game since the project was made (not by this round trip): "
-                            f"not overwritten (--force replaces it)")
-            continue
-        if args.dry_run:
-            tmp.unlink()
-            report.append(f"[dry ] {it['file']}: would be written ({note})")
-            continue
-        os.replace(str(tmp), str(game))
-        written.append({"item": it, "sha256": new_sha, "gain_db": round(g, 2),
-                        "note": note + ("; not edited, moved with the mix" if it["name"] in levelled_only else ""),
-                        "before": before[it["file"]], "frames": len(out[0]), "channels": len(out)})
-        how = "not edited, moved with the mix" if it["name"] in levelled_only else f"hand-edited in {daw}"
-        report.append(f"[ OK ] {it['file']}: {how}, {g:+.2f} dB ({note})")
-        if warn:
-            report.append(f"[warn] {it['file']}: {warn}")
+            try:
+                audioio.write_audio(tmp, out, rate, loop=loop)
+            except (audioio.AudioIOError, OSError) as exc:
+                discard(tmp)
+                problems.append(f"{it['name']}: {exc}")
+                continue
+            new_sha = sha256(tmp)
+            allowed = {it["sha256"], (man.get("written") or {}).get(it["file"])}
+            if before[it["file"]] == new_sha:
+                discard(tmp)
+                what = "moved with the mix" if it["name"] in levelled_only else "edited"
+                kept.append(f"{it['name']}: {what}, and the game already has this version (an earlier re-export)")
+                continue
+            if before[it["file"]] not in allowed and not args.force:
+                discard(tmp)
+                problems.append(f"{it['file']} changed in the game since the project was made (not by this round "
+                                f"trip): not overwritten (--force replaces it)")
+                continue
+            if args.dry_run:
+                discard(tmp)
+                report.append(f"[dry ] {it['file']}: would be written ({note})")
+                continue
+            failed = land(None, tmp, game)
+            if failed:
+                problems.append(cannot_write(it, failed))
+                continue
+            written.append({"item": it, "sha256": new_sha, "gain_db": round(g, 2),
+                            "note": note + ("; not edited, moved with the mix" if it["name"] in levelled_only else ""),
+                            "before": before[it["file"]], "frames": len(out[0]), "channels": len(out)})
+            how = "not edited, moved with the mix" if it["name"] in levelled_only else f"hand-edited in {daw}"
+            report.append(f"[ OK ] {it['file']}: {how}, {g:+.2f} dB ({note})")
+            if warn:
+                report.append(f"[warn] {it['file']}: {warn}")
+    except BaseException:
+        if written:
+            stamp(work, man, written, daw, root)
+        raise
     for ln in report:
         print(ln)
     for ln in kept:
@@ -1042,8 +1198,8 @@ def build_parser():
         epilog=f"Ready here: {ready}. Exit codes: 0 ok, 1 something came back wrong, 2 usage or REAPER missing.")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--debug", action="store_true", help="tracebacks and the REAPER command line")
-    common.add_argument("--root", help="the game's root folder (default: here; for --reexport and import: the "
-                                       "one the project was made from)")
+    common.add_argument("--root", help="the game's root folder (default: here; --reexport and import check that "
+                                       "the project was made from here)")
     src = argparse.ArgumentParser(add_help=False)
     src.add_argument("--sets", default=DEFAULT_SETS, help=f"sound sets file under the root ({DEFAULT_SETS})")
     src.add_argument("--music", default=DEFAULT_MUSIC, help=f"music file under the root ({DEFAULT_MUSIC})")

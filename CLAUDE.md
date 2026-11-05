@@ -54,7 +54,7 @@ python scripts/test_new_game.py                      # standard library only (a 
 python scripts/test_codename.py                      # standard library only
 python scripts/test_dev_py.py                        # standard library only (every engine's dev.py, engine calls faked)
 python scripts/test_kit_docs.py                      # standard library only (the docs' claims against the kit tree)
-python core/tools/audio/wavesmith/wavesmith.py test  # every audio exam at once (about 2 minutes)
+python core/tools/audio/wavesmith/wavesmith.py test  # every audio exam at once (about 3 minutes)
 python core/tools/audio/wavesmith/test_wavesmith.py  # the front door: subcommands, --help, check
 python core/tools/audio/wavesmith/test_sfx_synth.py  # standard library only
 python core/tools/audio/wavesmith/test_chiptune.py
@@ -72,7 +72,7 @@ python core/tools/audio/wavesmith/test_audioio.py    # offline (a stand-in ffmpe
 python core/tools/audio/wavesmith/test_local_sfx.py  # offline (a stand-in ComfyUI)
 python core/tools/audio/wavesmith/test_local_tts.py  # offline (a fake TTS worker)
 python core/tools/audio/wavesmith/test_eleven_audio.py  # offline (canned API responses)
-python core/tools/audio/wavesmith/test_daw.py        # offline (a stand-in REAPER); with REAPER_BIN set, ReaperLiveExam runs the real one (about 2 minutes)
+python core/tools/audio/wavesmith/test_daw.py        # offline (a stand-in REAPER); with REAPER_BIN set, ReaperLiveExam runs the real one (about 3.5 minutes)
 python core/tools/audio/wavesmith/test_midifile.py   # standard library only
 python core/tools/art/test_pixellab.py                   # offline (canned API responses)
 python core/tools/meshwright/test_meshwright.py          # offline (a stand-in ComfyUI, a canned mesh); its Blender part runs
