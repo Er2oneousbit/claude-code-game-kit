@@ -87,6 +87,7 @@ RENDER_COPY = "_wavesmith_render.rpp"   # the project with our render settings, 
 GAP_S = 1.0                             # silence between sounds on the timeline
 SAME_TOL = 2.5 / 32768                  # a render within this of the original, every sample, is the same audio
 AUDIO_EXT = (".wav", ".flac", ".ogg")
+UP_ONLY = re.compile(r"^(\.|\.\.(/\.\.)*)$")   # a manifest's root: the game root is this folder or above it
 NAME_OK = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")   # region / track / file names that survive every DAW
 REAPER_ENV = "REAPER_BIN"
 REAPER_TIMEOUT_S = 300
@@ -504,10 +505,28 @@ def load_manifest(where):
             if not isinstance(v, str) or not v or v.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", v) \
                     or ".." in re.split(r"[\\/]", v):
                 raise ToolError(f"{MANIFEST}: {key} {v!r} must be a plain relative path inside the game")
+    if not isinstance(man.get("root"), str) or not UP_ONLY.match(man["root"]):
+        raise ToolError(f"{MANIFEST}: root {man.get('root')!r} must be . or ../.. (the game root above this folder)")
     return work, man
 
 
+def game_root(args, work, man):
+    """The game root for --reexport and import: --root, else the current folder, which must be the root the project
+    was made from (so neither a wrong folder nor an edited manifest can move where the game's files are written)."""
+    if args.root:
+        return Path(args.root)
+    made = (work / man["root"]).resolve()
+    if made != Path(".").resolve():
+        raise ToolError(f"{(work / MANIFEST).as_posix()} was made from the game root {made.as_posix()}, not this "
+                        f"folder: run it from the game root, or pass --root")
+    return Path(".")
+
+
 def start_manifest(args, root, work, meta, items, route):
+    up = posix_rel(root, work)
+    if not UP_ONLY.match(up):
+        raise ToolError(f"{work.as_posix()} is not inside the game root {root.as_posix()}: keep the working folder "
+                        f"inside the game (its manifest names the root as a path up from it)")
     rate, channels = project_shape(items)
     lay_out(meta, items, rate)
     media = work / (MEDIA_DIR if route == "reaper" else STEMS_DIR)
@@ -523,7 +542,7 @@ def start_manifest(args, root, work, meta, items, route):
             chans, r, loop = read_any(src)
             audioio.write_audio(dst, chans, r, loop=loop)
         it["media"] = dst.relative_to(work).as_posix()
-    man = dict(meta, version=VERSION, route=route, root=posix_rel(root, work), rate=rate, channels=channels,
+    man = dict(meta, version=VERSION, route=route, root=up, rate=rate, channels=channels,
                items=items, logged=[], written={})
     man["about"] = ("Wavesmith DAW round trip (tools/audio/wavesmith/daw.py): which region or track is which game "
                     "file. Paths are relative: root from this folder, file from the root, media from this folder.")
@@ -794,7 +813,7 @@ def loop_for(it, frames, man):
 def bring_back(args, work, man, renders, daw, strict, extras=()):
     """Renders -> the game's files. strict (REAPER): a missing region is a problem; otherwise a sound not rendered
     is simply kept."""
-    root = Path(args.root) if args.root else work / man["root"]
+    root = game_root(args, work, man)
     problems, kept, pending = [], [], []
     before = {}
     for it in man["items"]:
@@ -1042,8 +1061,8 @@ def build_parser():
         epilog=f"Ready here: {ready}. Exit codes: 0 ok, 1 something came back wrong, 2 usage or REAPER missing.")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--debug", action="store_true", help="tracebacks and the REAPER command line")
-    common.add_argument("--root", help="the game's root folder (default: here; for --reexport and import: the "
-                                       "one the project was made from)")
+    common.add_argument("--root", help="the game's root folder (default: here; --reexport and import check that "
+                                       "the project was made from here)")
     src = argparse.ArgumentParser(add_help=False)
     src.add_argument("--sets", default=DEFAULT_SETS, help=f"sound sets file under the root ({DEFAULT_SETS})")
     src.add_argument("--music", default=DEFAULT_MUSIC, help=f"music file under the root ({DEFAULT_MUSIC})")

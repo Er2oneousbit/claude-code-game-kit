@@ -530,6 +530,35 @@ class ReexportExam(GameDir):
             self.assertEqual(rc, 2, bad)
             self.assertIn("plain relative path", out)
 
+    def test_a_tampered_root_cannot_move_the_writes(self):
+        self.assertEqual(run("reaper", "blips")[0], 0)
+        self.edit_rpp("blips", lambda t: self.item_line(t, "blips_high", "FADEOUT", "FADEOUT 1 0.15 0 1 0 0 0"))
+        man_path = self.rpp().parent / daw.MANIFEST
+        good = json.loads(man_path.read_text(encoding="utf-8"))
+        outside = self.tmp / "outside"
+        outside.mkdir()
+        for bad in (outside.as_posix(), "../../../..", "../../../../outside", "/outside"):
+            man_path.write_bytes(json.dumps(dict(good, root=bad)).encode("utf-8"))
+            rc, out = run("reaper", "--reexport", "assets_src/daw/blips", "--force")
+            self.assertEqual(rc, 2, f"{bad}: {out}")
+            self.assertIn("[error]", out)
+            self.assertEqual([p for p in self.tmp.rglob("*.wav") if self.root not in p.parents], [], bad)
+        # the real root, but run from somewhere else: refused without --root, fine with it
+        man_path.write_bytes(json.dumps(good).encode("utf-8"))
+        os.chdir(self.root / "docs")
+        rc, out = run("reaper", "--reexport", "../assets_src/daw/blips")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("--root", out)
+        rc, out = run("reaper", "--reexport", "../assets_src/daw/blips", "--root", "..")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("1 file(s) written", out)
+
+    def test_a_working_folder_outside_the_game_is_refused(self):
+        rc, out = run("reaper", "blips", "--out", self.tmp / "elsewhere")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("inside the game", out)
+        self.assertFalse((self.tmp / "elsewhere" / daw.MANIFEST).exists())
+
 
 class RenderCopyExam(unittest.TestCase):
     MAN = {"kind": "music", "rate": RATE, "channels": 2, "items": [{"name": "lead"}, {"name": "bass"}]}
