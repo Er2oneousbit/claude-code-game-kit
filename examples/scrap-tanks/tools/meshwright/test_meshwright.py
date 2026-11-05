@@ -40,7 +40,7 @@ sys.path.insert(0, str(HERE))
 import meshwright as mw  # noqa: E402
 cl = mw.cl
 
-EMBEDDED_PATH = "C:/Users/you/ComfyUI/input/private_reference.png"   # stands in for what SaveGLB embeds
+EMBEDDED_PATH = "X:/someone/ComfyUI/input/private_reference.png"   # stands in for what SaveGLB embeds
 LOG = """# Asset Log
 
 | ID | Type | File(s) in repo | Source / URL | Author | License | Attribution text (if required) | AI-assisted? | Modified? | Date added | Notes |

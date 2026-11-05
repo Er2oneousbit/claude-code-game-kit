@@ -1289,6 +1289,12 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.8.2",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1677,7 +1683,7 @@
     "tools/meshwright/licenses/TRELLIS.2-LICENSE.txt": "d9a1b1e30d633d5732ea18e3cba9538d293ebc53e1a9e4e96ab739e0c5c4f1cb",
     "tools/meshwright/meshwright.py": "90d6242d91a44e7d2e0f7264ab8624761de799135f7a2eb48989e12b4d873ca6",
     "tools/meshwright/models.lock.json": "9b422ad070e7c480be1a1dbd1cccf0e6eeb1e9512a773d39c85958e8544bb654",
-    "tools/meshwright/test_meshwright.py": "3098f725f0fe8f36987b1e749b1dd89f8bb47834912543663ebd7523ad0b5133",
+    "tools/meshwright/test_meshwright.py": "f558250aadff738c8df09076ec0df03c8b68beca9e0de3453baa52d37eb5ef38",
     "tools/meshwright/test_meshwright_live.py": "5424000ac1451543af013854e5486fe863f05775cb6903585ee99e9c75e94559",
     "tools/meshwright/turntable.py": "d7c0acced01f963f217e66d227eac20be8a670687b50794e423fbd489015bdb9",
     "tools/meshwright/workflows/klein_reference.api.json": "ec7c8120f135808ef4d1bd877ac563a6c1b735b48856d7278ea7382ad8b4da0e",
