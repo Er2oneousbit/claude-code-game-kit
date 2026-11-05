@@ -4,6 +4,9 @@
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
 ## 0.8.3 (unreleased)
+- Real-world maps: when a game is set in a real place, its CLAUDE.md and the make-a-game interview now offer
+  OpenStreetMap and national elevation data (already listed in `docs/resources/world-and-levels.md`) once, as an
+  option; the tooling is planned (#192).
 - Gatekeeper (Godot): "Start over" resets the game in place, so the loaded model stays and a reply still on its way
   is dropped; both start buttons wait for a model load, which gives one intro instead of two (#1).
 - Gatekeeper (Godot): a line typed while the guard is still thinking (or after the game ended) stays in the box

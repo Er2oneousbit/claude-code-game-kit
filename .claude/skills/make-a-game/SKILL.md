@@ -63,6 +63,10 @@ C. **Look and feel**
          sprites, 16 GB for animation), 15 to 78 GB of downloads and an hour of setup. Makes ready-to-use assets for
          Godot; other engines get image files.
        Several at once is fine ("Dotwork for characters, packs for tiles"). Record the answer as the plan's Art source.
+   8c. *Only if the game is set in a real place* (their town, a real city or region): say once that real map data
+       can shape its levels: streets and buildings from OpenStreetMap, terrain from a national elevation portal
+       (`core/docs/resources/world-and-levels.md`). Record it in the plan as an option to try, not a decision; the
+       licence check comes before anything ships. No extra question when the setting is made up.
    9. Who is it for, and how should the player feel? ("me and my kids; clever", "horror fans; tense")
 D. **Size and setup**
    10.* Where should it run: in a web browser (easy to share a link) or as a downloadable program? Any engine
