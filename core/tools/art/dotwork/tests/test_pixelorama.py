@@ -15,12 +15,17 @@
 #           scan that makes no deprecated Pillow call (issue #185). No Pixelorama, Aseprite,
 #           ComfyUI or Godot needed: verify is stubbed, Aseprite's script runs are stubbed (AsepriteLiveExam runs
 #           the real one when ASEPRITE_BIN is set). PixeloramaLiveExam (only when PIXELORAMA_BIN is set) has the real
-#           Pixelorama open, save and export Dotwork's files headless, then re-exports them (#67).
+#           Pixelorama open, save and export Dotwork's files headless, then re-exports them (#67), and compares its
+#           layer composite with Pixelorama's own; PixeloramaCompositeExam does that offline, against what Pixelorama
+#           1.2.4 made from small projects (fixtures/pixelorama_composites.json) headless and with a window (#66).
 # Usage   : python tools/art/dotwork/tests/test_pixelorama.py   (test_dotwork.py runs it too)
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): the shape Pixelorama 1.2.4 saves, and the live exam (#67)
+# Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): blend modes, clipping masks, groups and animated
+#           opacity against Pixelorama's own composites (#66)
 # ---------------------------------------------------------------------------
+import base64
 import contextlib
 import glob
 import io
@@ -492,14 +497,23 @@ class PixeloramaExam(unittest.TestCase):
         rewrite_pxo(self.knight, edit)
         base = self.frame("walk_e", 2)
         pj = self.px.read_pxo(self.knight)
+        self.assertFalse(pj["windowed"])              # a hidden layer's blend mode changes nothing
         got = pj["frames"][6]
         mask = np.ones((H, W), bool)
         mask[1, 1] = False
-        self.assertTrue(np.array_equal(got[mask], base[mask]))     # the hidden white layer never shows
-        a0 = base[1, 1, 3] / 255.0
-        ra = 0.5 + a0 * 0.5
-        want_rgb = (255 * 0.5 + base[1, 1, :3] * a0 * 0.5) / ra
-        self.assertEqual(tuple(got[1, 1]), tuple(int(v) for v in np.rint(list(want_rgb) + [ra * 255])))
+        # the hidden white layer never shows (the colour under clear pixels is not kept: Pixelorama writes 0 there)
+        self.assertTrue(np.array_equal(got[..., 3][mask], base[..., 3][mask]))
+        seen = mask & (base[..., 3] > 0)
+        self.assertTrue(np.array_equal(got[seen], base[seen]))
+        # the glaze, as Pixelorama 1.2.4 composites it headless: alpha x opacity stored back to 8 bits (truncated),
+        # then Color.blend in 32-bit floats over the art, the result truncated to 8 bits (#66)
+        f = np.float32
+        a1 = f(np.trunc(float(f(f(255 / 255.0) * 0.5)) * 255.0) / 255.0)
+        dst = [f(v / 255.0) for v in base[1, 1]]
+        sa = f(1) - a1
+        ra = dst[3] * sa + a1
+        rgb = [(dst[c] * dst[3] * sa + f(1) * a1) / ra for c in range(3)]
+        self.assertEqual(tuple(got[1, 1]), tuple(int(np.trunc(float(v) * 255.0)) for v in rgb + [ra]))
 
     def test_refused_features_stop_before_writing(self):
         self.build()
@@ -509,13 +523,46 @@ class PixeloramaExam(unittest.TestCase):
 
         def layer(**kw):
             return lambda d, b: d["layers"][0].update(**kw)
+
+        def keyframe(**kw):
+            kf = dict({"ease": 0, "id": 0, "trans": 0, "value": 0.5}, **kw)
+            return layer(animated_params='Dictionary[String, Dictionary]({\n"opacity": {\n3: {\n%s\n}\n}\n})' % (
+                ",\n".join('"%s": %s' % kv for kv in kf.items())))
+
+        def under(kind):
+            """A hidden layer of this type under a clipping mask: the shader would clip to what it draws."""
+            def edit(d, b):
+                d["layers"].insert(0, dict(d["layers"][0], name="under", visible=False, type=kind))
+                d["layers"][1].update(clipping_mask=True)
+                for fr in d["frames"]:
+                    fr["cels"].insert(0, {"opacity": 1.0, "z_index": 0})
+                for fi in range(len(d["frames"])):
+                    b[f"image_data/frames/{fi + 1}/layer_2"] = b.pop(f"image_data/frames/{fi + 1}/layer_1")
+            return edit
+
+        def blending_group(d, b):
+            d["layers"].append({"name": "g", "visible": True, "blend_mode": 0, "opacity": 1.0, "parent": -1,
+                                "type": 1, "expanded": True})
+            d["layers"][0]["parent"] = 1
+            d["color_mode"] = -1
+            for fr in d["frames"]:
+                fr["cels"].append({"opacity": 1.0, "z_index": 0})
         cases = {
-            "blend mode": layer(blend_mode=3),
-            "clipping mask": layer(clipping_mask=True),
+            "unknown blend mode": layer(blend_mode=23),
+            "pass-through pixel layer": layer(blend_mode=-2),
+            "clipping mask on a 3D layer": under(2),
+            "indexed project with a blending group": blending_group,
             "3D layer": layer(type=2),
             "tilemap layer": layer(type=3),
             "layer effect": layer(effects=[{"name": "Outline", "enabled": True}]),
-            "animated opacity": layer(animated_params='Dictionary[String, Dictionary]({\n"opacity": {3: 0.5}\n})'),
+            "unreadable animated opacity": layer(
+                animated_params='Dictionary[String, Dictionary]({\n"opacity": {3: 0.5}\n})'),
+            "animated opacity of no frame": layer(
+                animated_params='Dictionary[String, Dictionary]({\n"opacity": {"x": {}}\n})'),
+            "unknown transition": keyframe(trans=12),
+            "unknown ease": keyframe(ease=4),
+            "keyframe value not a number": keyframe(value='"half"'),
+            "animated opacity cut short": layer(animated_params='Dictionary[String, Dictionary]({\n"opacity": {'),
             "newer pxo": lambda d, b: d.update(pxo_version=9),
             "older pxo": lambda d, b: d.update(pxo_version=5),
             "short buffer": lambda d, b: b.update({"image_data/frames/1/layer_1": b"\0" * 10}),
@@ -759,6 +806,159 @@ class PixeloramaExam(unittest.TestCase):
         code = subprocess.run([sys.executable, os.path.join(DOTWORK, "dotwork.py"), "--help"], capture_output=True,
                               text=True, timeout=120)
         self.assertIn("pixelorama", code.stdout)
+
+
+COMPOSITES = os.path.join(HERE, "fixtures", "pixelorama_composites.json")
+HEADLESS_CASES = ("normal", "animated", "pass_through_group")
+
+
+def composite_pxo(path, case, size):
+    """A .pxo (version 7) from a case of fixtures/pixelorama_composites.json: its layers and its cels (opacity,
+    RGBA8 base64 or None for a group)."""
+    w, h = size
+    layers = []
+    for ly in case["layers"]:
+        d = {"name": "l", "visible": True, "locked": False, "blend_mode": 0, "clipping_mask": False, "opacity": 1.0,
+             "parent": -1, "type": 0, "new_cels_linked": False, "effects": []}
+        d.update(ly)
+        if d["type"] == 1:
+            d.setdefault("expanded", True)
+        layers.append(d)
+    data = {"pxo_version": 7, "size_x": w, "size_y": h, "color_mode": 5, "fps": 6.0, "layers": layers, "tags": [],
+            "frames": [{"cels": [{"opacity": op, "z_index": 0} for op, _ in fr], "duration": 1.0}
+                       for fr in case["frames"]]}
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("data.json", json.dumps(data))
+        for fi, fr in enumerate(case["frames"]):
+            for li, (_, buf) in enumerate(fr):
+                if buf is not None:
+                    z.writestr(f"image_data/frames/{fi + 1}/layer_{li + 1}", base64.b64decode(buf))
+    return path
+
+
+def steps_apart(a, b):
+    """Per pixel, how many 8-bit steps two RGBA frames differ by: alpha, and colour weighted by alpha (a colour
+    under a pixel that is all but clear barely shows)."""
+    a, b = a.astype(np.float64), b.astype(np.float64)
+    da = np.abs(a[..., 3] - b[..., 3])
+    dc = np.abs(a[..., :3] * a[..., 3:4] - b[..., :3] * b[..., 3:4]).max(-1) / 255.0
+    return np.maximum(da, dc)
+
+
+class PixeloramaCompositeExam(unittest.TestCase):
+    """Dotwork's layer composite against what Pixelorama 1.2.4 itself made from the same small projects
+    (fixtures/pixelorama_composites.json: blend modes, clipping masks, groups that blend, pass-through groups, cel,
+    layer and animated opacity), headless and with a window. Headless (its command-line export) blends Normal
+    layers only, and Dotwork matches it exactly; the blend modes, clipping masks and blending groups exist only in
+    its windowed GPU composite, which Dotwork follows within two steps in nearly every pixel (#66)."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(COMPOSITES, encoding="utf-8") as f:
+            cls.fixture = json.load(f)
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="dotwork_pxocomp_")
+        make_game(self.tmp)                          # binds the project the error messages name files from
+        import pixelorama
+        self.px = pixelorama
+        self.w, self.h = self.fixture["size"]
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def frames(self, case, which):
+        return [np.frombuffer(base64.b64decode(s), np.uint8).reshape(self.h, self.w, 4)
+                for s in self.fixture["cases"][case][which]]
+
+    def read(self, case):
+        return self.px.read_pxo(composite_pxo(os.path.join(self.tmp, case + ".pxo"), self.fixture["cases"][case],
+                                              (self.w, self.h)))
+
+    def test_normal_layers_equal_pixelorama_headless_exactly(self):
+        # partly clear layers at cel and layer opacity under 100 %, opacity keyframes (linear, eased, constant;
+        # frames before, between and after them), a pass-through group whose own opacity Pixelorama ignores
+        for case in HEADLESS_CASES:
+            pj = self.read(case)
+            self.assertFalse(pj["windowed"], case)
+            want = self.frames(case, "headless")
+            self.assertEqual(len(pj["frames"]), len(want), case)
+            for i, (have, theirs) in enumerate(zip(pj["frames"], want)):
+                self.assertTrue(np.array_equal(have, theirs), f"{case} frame {i}")
+
+    def test_blend_modes_clipping_and_groups_follow_the_windowed_composite(self):
+        windowed = [c for c in self.fixture["cases"] if c not in HEADLESS_CASES]
+        self.assertEqual(len(windowed), 26)          # 22 blend modes, two group layouts, two clipping layouts
+        total = same = near = 0
+        for case in windowed:
+            pj = self.read(case)
+            self.assertTrue(pj["windowed"], case)
+            for have, gpu, cli in zip(pj["frames"], self.frames(case, "windowed"), self.frames(case, "headless")):
+                d = steps_apart(have, gpu)
+                shown = (have[..., 3] > 0) | (gpu[..., 3] > 0)
+                total += shown.sum()
+                same += (shown & (d == 0)).sum()
+                near += (shown & (d <= 2)).sum()
+                self.assertGreaterEqual((shown & (d <= 2)).sum(), 0.95 * shown.sum(), case)
+                if case == "mode_3":                 # Multiply: Pixelorama's command-line export leaves it out
+                    self.assertFalse(np.array_equal(gpu, cli))
+        self.assertGreaterEqual(near, 0.99 * total)
+        self.assertGreaterEqual(same, 0.8 * total)
+
+    def test_white_and_black_in_the_hsl_modes(self):
+        # the GPU's own order of operations makes the saturation of white and black 0 / 0 there: the blend comes out
+        # black where an exact reading of the shader gives white (pixels 0 and 1 of the base are white and black)
+        for mode in (17, 18, 19, 20):
+            have = self.read(f"mode_{mode}")["frames"][0]
+            gpu = self.frames(f"mode_{mode}", "windowed")[0]
+            self.assertLessEqual(float(steps_apart(have[0, :2], gpu[0, :2]).max()), 2, mode)
+
+    def test_the_windowed_composite_is_the_same_in_bands(self):
+        whole = self.read("nested_groups")["frames"]
+        real = self.px.BAND_PIXELS
+        try:
+            for band in (1, self.w * 4):
+                self.px.BAND_PIXELS = band
+                for a, b in zip(whole, self.read("nested_groups")["frames"]):
+                    self.assertTrue(np.array_equal(a, b), band)
+        finally:
+            self.px.BAND_PIXELS = real
+
+    def test_godot_values_as_pixelorama_writes_them(self):
+        g = self.px._gvalue
+        self.assertEqual(g('Dictionary[String, Dictionary]({\n"opacity": {}\n})'), {"opacity": {}})
+        self.assertEqual(g('Dictionary[String, Variant]({\n"offset": Vector2(13, 0),\n"on": false,\n"n": &"x",\n'
+                           '"c": Color(0.91764706, 1, 0.2, 1),\n"a": Array[int]([1, -2])\n})'),
+                         {"offset": ("Vector2", [13, 0]), "on": False, "n": "x",
+                          "c": ("Color", [0.91764706, 1, 0.2, 1]), "a": [1, -2]})
+        self.assertEqual(g('{\n0: {\n"ease": 2,\n"trans": 4,\n"value": 0.5\n}\n}'),
+                         {0: {"ease": 2, "trans": 4, "value": 0.5}})
+        for bad in ('{', 'Dictionary(', '{"a": 1} 2', '{"a" 1}', 'what', '"open', '[' * 40 + ']' * 40):
+            with self.assertRaises(ValueError, msg=bad):
+                g(bad)
+
+    def test_opacity_keyframes_as_pixelorama_reads_them(self):
+        def keys(*kf):
+            return {f: (v, t, e) for f, v, t, e in kf}
+        at = self.px._layer_opacity
+        k = keys((2, 0.2, 0, 0), (6, 1.0, 0, 0))
+        self.assertEqual([at(0.7, k, f) for f in range(9)],
+                         [0.2, 0.2, 0.2, 0.2 + 0.25 * 0.8, 0.2 + 0.5 * 0.8, 0.2 + 0.75 * 0.8, 1.0, 1.0, 1.0])
+        self.assertEqual(at(0.7, {}, 3), 0.7)                                       # no keyframes: the layer's own
+        self.assertEqual(at(0.7, keys((4, 0.3, 0, 0)), 0), 0.3)                     # one keyframe holds everywhere
+        self.assertEqual(at(0.7, keys((0, 0.3, 999, 0), (4, 0.9, 0, 0)), 3), 0.3)   # constant until the next one
+        quad = keys((0, 0.0, 4, 2), (4, 1.0, 0, 0))
+        self.assertAlmostEqual(at(1, quad, 1), 0.125, places=6)                     # Quad in-out
+        self.assertAlmostEqual(at(1, quad, 2), 0.5, places=6)
+        sine = keys((0, 0.0, 1, 0), (2, 1.0, 0, 0))
+        self.assertAlmostEqual(at(1, sine, 1), 1 - np.cos(np.pi / 4), places=6)    # Sine in
+        back = keys((0, 0.0, 10, 1), (10, 1.0, 0, 0))
+        self.assertGreater(max(at(1, back, f) for f in range(10)), 1.0)             # Back out overshoots
+        for trans in self.px.EASINGS:
+            for ease in range(4):
+                k = keys((0, 0.25, trans, ease), (8, 0.75, 0, 0))
+                self.assertAlmostEqual(at(1, k, 0), 0.25)
+                self.assertTrue(all(np.isfinite(at(1, k, f)) for f in range(9)), (trans, ease))
 
 
 def manifest_rows(tmp):
@@ -1446,8 +1646,9 @@ class PixeloramaLiveExam(unittest.TestCase):
     """Dotwork's .pxo files opened, saved and exported by a real Pixelorama (headless; checked with 1.2.4 on
     Windows), then re-exported by Dotwork; skipped without PIXELORAMA_BIN. Pixelorama runs with its user folder in the
     exam's temp folder (APPDATA, XDG_DATA_HOME), so your own settings, recent files and extensions are not touched.
-    Headless, Pixelorama blends layers on the CPU (DrawingAlgos.blend_layers_headless): its GPU shader is not
-    exercised here (#66)."""
+    Headless, Pixelorama blends layers on the CPU (DrawingAlgos.blend_layers_headless), Normal layers only; with
+    PIXELORAMA_WINDOW=1 as well, one case opens Pixelorama's window for a few seconds to export through its GPU
+    shader, the only composite that applies blend modes, clipping masks and groups that blend (#66)."""
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="dotwork_pxolive_")
@@ -1475,12 +1676,14 @@ class PixeloramaLiveExam(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def pixelorama(self, args, job=None):
+    def pixelorama(self, args, job=None, window=False):
+        """Pixelorama's output (its exit code is not used: with a window, 1.2.4 crashes on --quit after exporting)."""
         env = dict(os.environ, APPDATA=self.user, XDG_DATA_HOME=self.user)
         env.pop("DOTWORK_PXO_JOB", None)
         if job is not None:
             env["DOTWORK_PXO_JOB"] = json.dumps(job)
-        p = subprocess.run([LIVE_PIXELORAMA, "--headless"] + args, env=env, capture_output=True, encoding="utf-8",
+        p = subprocess.run([LIVE_PIXELORAMA] + ([] if window else ["--headless"]) + args, env=env,
+                           capture_output=True, encoding="utf-8",
                            errors="replace", timeout=PXO_TIMEOUT)
         return p.stdout + p.stderr
 
@@ -1492,12 +1695,12 @@ class PixeloramaLiveExam(unittest.TestCase):
         self.assertIn("DOTWORK_PXO_OK", log, log[-2000:])
         self.assertEqual(log.count(" true\n"), len(files), log[-2000:])
 
-    def export(self, pxo):
+    def export(self, pxo, window=False):
         """Pixelorama's own CLI export of every frame: [H x W x 4 uint8], in frame order."""
-        folder = os.path.join(self.tmp, "pxo_export_" + os.path.basename(pxo)[:-4])
+        folder = os.path.join(self.tmp, "pxo_export_" + os.path.basename(pxo)[:-4] + ("_window" if window else ""))
         os.makedirs(folder)
         self.pixelorama(["--quit", "--", pxo.replace(os.sep, "/"), "--export", "--output",
-                         folder.replace(os.sep, "/") + "/f.png"])
+                         folder.replace(os.sep, "/") + "/f.png"], window=window)
         return [np.array(Image.open(p).convert("RGBA")) for p in sorted(glob.glob(os.path.join(folder, "*.png")))]
 
     def reexport(self):
@@ -1530,30 +1733,112 @@ class PixeloramaLiveExam(unittest.TestCase):
         done = self.px.build(self.s.project, self.s.conf)
         self.assertEqual((done["kept"], len(done["unchanged"])), ([], 3))
 
-    def test_partly_clear_layers_composite_within_one_step_of_pixelorama(self):
-        # #66, the headless half: a glaze layer of partly clear pixels at layer and cel opacity below 100 %, over the
-        # art, composited by Dotwork and by Pixelorama's CPU blend (the windowed GPU shader is not reached headless).
-        # Measured with 1.2.4 (2026-11-04): Pixelorama works in float32, truncates alpha x opacity to 8 bits, blends
-        # (Color.blend) and truncates the result; Dotwork rounds, so about 30 % of the blended pixels differ by one
-        # step in a channel. Which rounding the windowed shader uses is not known yet, so this pins "at most one".
+    def test_normal_layers_and_animated_opacity_equal_pixelorama_exactly(self):
+        # #66, the headless half: layers of partly clear pixels at layer and cel opacity below 100 %, opacity
+        # keyframes (linear, Quad in-out, Sine out, constant), a pass-through group at 40 % (Pixelorama ignores a
+        # pass-through group's own opacity), a hidden layer in it and a cel moved under the art by its z-index.
+        # Pixelorama works in 32-bit floats, truncates alpha x opacity to 8 bits, blends (Color.blend) and truncates
+        # the result: so does Dotwork, and every frame comes out the same, byte for byte.
         rng = np.random.default_rng(66)
+        keys = [(0, 0.2, 0, 0), (3, 0.9, 4, 2), (5, 0.4, 1, 1), (6, 0.66, 999, 0)]
+        anim = 'Dictionary[String, Dictionary]({\n"opacity": {\n%s\n}\n})' % ",\n".join(
+            '%d: {\n"ease": %d,\n"id": %d,\n"trans": %d,\n"value": %r\n}' % (f, e, i, t, v)
+            for i, (f, v, t, e) in enumerate(keys))
 
-        def glaze(d, b):
-            d["layers"].append(dict(d["layers"][0], name="glaze", opacity=0.5))
+        def partly_clear():
+            a = rng.integers(0, 256, (H, W, 4), dtype=np.uint8)
+            a[..., 3] = rng.choice([0, 1, 64, 128, 200, 254, 255], (H, W))
+            return a
+
+        def layers(d, b):
+            art = d["layers"][0]
+            d["layers"] += [dict(art, name="glaze", opacity=0.5),
+                            dict(art, name="pulse", parent=4, animated_params=anim),
+                            dict(art, name="hidden", parent=4, visible=False),
+                            dict(art, name="group", type=1, blend_mode=-2, opacity=0.4, expanded=True)]
             for fi, fr in enumerate(d["frames"]):
-                fr["cels"].append({"opacity": 0.8 if fi == 0 else 1.0, "z_index": 0})
-                a = rng.integers(0, 256, (H, W, 4), dtype=np.uint8)
-                a[..., 3] = rng.choice([0, 1, 64, 128, 200, 254, 255], (H, W))
-                b[f"image_data/frames/{fi + 1}/layer_2"] = a.tobytes()
+                fr["cels"] += [{"opacity": 0.8 if fi == 0 else 1.0, "z_index": -1 if fi == 2 else 0},
+                               {"opacity": 0.9 if fi == 4 else 1.0, "z_index": 0},
+                               {"opacity": 1.0, "z_index": 0}, {"opacity": 1.0, "z_index": 0}]
+                for li in (2, 3):
+                    b[f"image_data/frames/{fi + 1}/layer_{li}"] = partly_clear().tobytes()
+                b[f"image_data/frames/{fi + 1}/layer_4"] = np.full((H, W, 4), 255, np.uint8).tobytes()
         knight = self.sources[0]
-        rewrite_pxo(knight, glaze)
+        rewrite_pxo(knight, layers)
+        pj = self.px.read_pxo(knight)
+        self.assertFalse(pj["windowed"])
+        theirs = self.export(knight)
+        self.assertEqual(len(theirs), len(pj["frames"]))
+        for i, (a, b) in enumerate(zip(pj["frames"], theirs)):
+            self.assertTrue(np.array_equal(a, b), i)
+
+    def test_one_layer_comes_back_as_it_is(self):
+        # A frame of one layer at full opacity (what Dotwork writes) is copied as it is, so an untouched trip changes
+        # no file. Pixelorama's own export blends even that layer over a clear canvas (Color.blend, truncated): a
+        # partly clear pixel can come out one step darker there, never anything else.
+        rng = np.random.default_rng(67)
+
+        def edges(d, b):
+            for fi in range(len(d["frames"])):
+                a = np.frombuffer(b[f"image_data/frames/{fi + 1}/layer_1"], np.uint8).reshape(H, W, 4).copy()
+                a[..., 3][a[..., 3] > 0] = rng.choice([3, 40, 128, 201, 255], int((a[..., 3] > 0).sum()))
+                b[f"image_data/frames/{fi + 1}/layer_1"] = a.tobytes()
+        knight = self.sources[0]
+        rewrite_pxo(knight, edges)
+        with zipfile.ZipFile(knight) as z:
+            cels = [np.frombuffer(z.read(f"image_data/frames/{i + 1}/layer_1"), np.uint8).reshape(H, W, 4)
+                    for i in range(7)]
         have = self.px.read_pxo(knight)["frames"]
         theirs = self.export(knight)
-        self.assertEqual(len(theirs), len(have))
-        for i, (a, b) in enumerate(zip(have, theirs)):
-            vis = (a[..., 3] > 0) | (b[..., 3] > 0)
-            self.assertEqual(np.array_equal(a[..., 3] > 0, b[..., 3] > 0), True, i)    # the same pixels show
-            self.assertLessEqual(int(np.abs(a[vis].astype(int) - b[vis]).max()), 1, i)
+        darker = 0
+        for cel, a, b in zip(cels, have, theirs):
+            self.assertTrue(np.array_equal(a, cel))
+            self.assertTrue(np.array_equal(a[..., 3], b[..., 3]))
+            seen = a[..., 3] > 0
+            diff = b[seen].astype(int) - a[seen]
+            self.assertTrue(set(np.unique(diff).tolist()) <= {-1, 0})
+            darker += int((diff != 0).any(-1).sum())
+        self.assertGreater(darker, 0)                # the case is real: some pixels did come out darker
+
+    @unittest.skipUnless(os.environ.get("PIXELORAMA_WINDOW") == "1",
+                         "set PIXELORAMA_WINDOW=1 to export through Pixelorama's window (it opens for a few seconds)")
+    def test_blend_modes_clipping_and_groups_follow_pixelorama_with_a_window(self):
+        # #66, the windowed half: Pixelorama applies blend modes, clipping masks and groups that blend only on the
+        # GPU. Dotwork follows its shader in 32-bit floats; the GPU rounds values near a half step its own way, so a
+        # pixel can land a step or two off. Its command-line export (headless) leaves these features out altogether.
+        rng = np.random.default_rng(68)
+
+        def partly_clear():
+            a = rng.integers(0, 256, (H, W, 4), dtype=np.uint8)
+            a[..., 3] = rng.choice([0, 64, 128, 200, 255, 255], (H, W))
+            return a
+
+        def layers(d, b):
+            art = d["layers"][0]
+            d["layers"] += [dict(art, name="shade", blend_mode=3, opacity=0.8),          # Multiply
+                            dict(art, name="rim", clipping_mask=True),                  # clipped to the shade
+                            dict(art, name="g1", parent=5),
+                            dict(art, name="g2", parent=5, blend_mode=7, opacity=0.7),   # Screen, in the group
+                            dict(art, name="group", type=1, blend_mode=0, opacity=0.6, expanded=True),
+                            dict(art, name="tint", blend_mode=19)]                      # Color
+            for fi, fr in enumerate(d["frames"]):
+                fr["cels"] += [{"opacity": 0.9 if fi == 1 else 1.0, "z_index": 0} for _ in range(6)]
+                for li in (2, 3, 4, 5, 7):
+                    b[f"image_data/frames/{fi + 1}/layer_{li}"] = partly_clear().tobytes()
+        knight = self.sources[0]
+        rewrite_pxo(knight, layers)
+        pj = self.px.read_pxo(knight)
+        self.assertTrue(pj["windowed"])
+        gpu, cli = self.export(knight, window=True), self.export(knight)
+        self.assertEqual(len(gpu), len(pj["frames"]))
+        total = same = near = 0
+        for a, b in zip(pj["frames"], gpu):
+            d = steps_apart(a, b)
+            shown = (a[..., 3] > 0) | (b[..., 3] > 0)
+            total, same, near = total + shown.sum(), same + (shown & (d == 0)).sum(), near + (shown & (d <= 2)).sum()
+        self.assertGreaterEqual(near, 0.99 * total)
+        self.assertGreaterEqual(same, 0.8 * total)
+        self.assertFalse(all(np.array_equal(a, b) for a, b in zip(gpu, cli)))
 
     def test_a_pixel_set_in_pixelorama_lands_only_in_its_frame(self):
         k = "assets/art/characters/knight/"

@@ -12,17 +12,24 @@
 #           numbered from 1. Written as pxo_version 7 (what Pixelorama 1.2.0 to 1.2.3 write; 1.2.3 and 1.2.4 open
 #           it); read: 7, and 8 (Pixelorama 1.2.4, where a cel stores its own size and offset; checked against the
 #           released 1.2.4 by the live exam). 7 stays the written version: 1.2.3 has no version check and reads
-#           every cel as a whole canvas, so a cropped version 8 cel would load wrong there. Layer
-#           features Dotwork cannot reproduce exactly (blend modes, clipping masks, layer effects, animated opacity,
-#           3D and tilemap layers, group opacity) stop the re-export when the layer is visible, instead of shipping
-#           frames that differ from what the editor shows. Pixelorama saves the folder you last exported to, a
-#           full path on your machine, in every .pxo (export_profile.directory_path): both commands warn about it,
-#           and only --clear-export-path rewrites the file to blank it (the frames and every other entry stay).
+#           every cel as a whole canvas, so a cropped version 8 cel would load wrong there.
+#           Layers composite as Pixelorama 1.2.4 does, and it has two composites: without a window (its command-line
+#           export) it blends Normal layers on the CPU (DrawingAlgos.blend_layers_headless: cel, layer and animated
+#           opacity; groups add nothing of their own), and Dotwork matches that byte for byte; with a window it blends
+#           on the GPU (BlendLayers.gdshader), the only place blend modes, clipping masks and groups that blend their
+#           own layers exist, and Dotwork follows that shader within two 8-bit steps (the GPU rounds near a half step
+#           its own way). A project uses the second only when it has one of those. Layer effects (GPU shaders only),
+#           3D and tilemap layers stop the re-export when the layer is visible.
+#           Pixelorama saves the folder you last exported to, a full path on your machine, in every .pxo
+#           (export_profile.directory_path): both commands warn about it, and only --clear-export-path rewrites the
+#           file to blank it (the frames and every other entry stay).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): a character whose clips have different sizes gets one
 #           canvas, each clip centred on its bottom edge; the re-export crops each back (#82)
 # Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): version 8 checked against the released Pixelorama
 #           1.2.4 (#67)
+# Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): blend modes, clipping masks, groups that blend, and
+#           animated opacity carried over; the headless composite matched exactly, the windowed one measured (#66)
 # ---------------------------------------------------------------------------
 import glob
 import io
@@ -61,6 +68,9 @@ LAYER_PIXEL, LAYER_GROUP, LAYER_3D, LAYER_TILEMAP, LAYER_AUDIO = 0, 1, 2, 3, 4  
 LAYER_NAMES = {LAYER_3D: "a 3D layer", LAYER_TILEMAP: "a tilemap layer"}
 RGBA8, INDEXED = 5, -1             # colour_mode: Godot Image.FORMAT_RGBA8; indexed mode still stores RGBA8 cels
 BLEND_NORMAL, BLEND_PASS = 0, -2   # BaseLayer.BlendModes NORMAL and PASS_THROUGH (groups only)
+BLEND_INTERSECT, BLEND_MATCH = 21, 22   # BaseLayer.BlendModes INTERSECTION and MATCH_COLORS
+BLEND_LAST = 22                    # Pixelorama 1.2.4 has blend modes 0 (Normal) to 22 (Match colors)
+TRANS_LINEAR, TRANS_CONSTANT, EASE_IN = 0, 999, 0   # a keyframe's transition and ease (Tween; AnimatableObject)
 TAG_COLOURS = ("c38ce1ff", "f5a677ff", "77c341ff", "6fb7e8ff", "e8d06fff", "e86f8aff")
 ZIP_TIME = (1980, 1, 1, 0, 0, 0)   # a fixed date: the same frames always give the same .pxo bytes
 MIMETYPE = b"application/x-pixelorama"
@@ -152,11 +162,356 @@ def _vec2i(v, rel, what):
     return int(_number(int(x), rel, what, -MAX_SIDE, MAX_SIDE)), int(_number(int(y), rel, what, -MAX_SIDE, MAX_SIDE))
 
 
-def _animated(v):
-    """True when a layer's animated_params (var_to_str of a Dictionary) holds any keyframe."""
-    s = re.sub(r"\s", "", str(v or ""))
-    s = re.sub(r"^Dictionary\[[^\]]*\]\((.*)\)$", r"\1", s)
-    return not re.fullmatch(r'\{("[^"]*":\{\},?)*\}|', s)
+# -------------------------------------------------- animated opacity (AnimatableObject.gd, Godot's Tween)
+_TOKEN = re.compile(r'\s*(?:(?P<s>"(?:[^"\\]|\\.)*")|(?P<n>[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)|'
+                    r'(?P<i>[A-Za-z_][A-Za-z_0-9]*)|(?P<p>[{}\[\]():,&^]))')
+
+
+def _gvalue(text):
+    """A Godot value as var_to_str writes it (the subset a layer's animated_params uses): dictionaries (any keys),
+    arrays, strings, numbers, true/false/null; a typed container's type list is skipped, and any other constructor
+    such as Vector2(1, 2) comes back as (name, [arguments]). Raises ValueError on anything else."""
+    toks, pos = [], 0
+    while pos < len(text):
+        m = _TOKEN.match(text, pos)
+        if not m:
+            if text[pos:].strip():
+                raise ValueError(f"unexpected {text[pos:pos + 12]!r}")
+            break
+        pos = m.end()
+        toks.append((m.lastgroup, m.group(m.lastgroup)))
+    at = [0]
+
+    def peek():
+        return toks[at[0]] if at[0] < len(toks) else ("", "")
+
+    def take(want=None):
+        t = peek()
+        if want is not None and t[1] != want:
+            raise ValueError(f"expected {want!r}, found {t[1]!r}")
+        at[0] += 1
+        return t
+
+    def items(close, depth):
+        out = []
+        while peek()[1] != close:
+            if not peek()[0]:
+                raise ValueError("the text ends early")
+            out.append(value(depth))
+            if peek()[1] == ",":
+                take()
+        take(close)
+        return out
+
+    def value(depth):
+        if depth > 32:
+            raise ValueError("nested too deep")
+        kind, tok = take()
+        if kind == "s":
+            return json.loads(tok)
+        if kind == "n":
+            return float(tok) if re.search(r"[.eE]", tok) else int(tok)
+        if tok in ("&", "^"):                  # StringName (&"x") and NodePath (^"x")
+            return value(depth + 1)
+        if tok == "{":
+            out = {}
+            while peek()[1] != "}":
+                if not peek()[0]:
+                    raise ValueError("the text ends early")
+                k = value(depth + 1)
+                take(":")
+                out[tuple(k) if isinstance(k, list) else k] = value(depth + 1)
+                if peek()[1] == ",":
+                    take()
+            take("}")
+            return out
+        if tok == "[":
+            return items("]", depth + 1)
+        if kind == "i":
+            if tok in ("true", "false", "null"):
+                return {"true": True, "false": False, "null": None}[tok]
+            if peek()[1] == "[":               # Dictionary[String, Dictionary](...): the types are not needed
+                take()
+                while peek()[0] in ("i", "p") and peek()[1] not in ("]", "(", "{"):
+                    take()                     # type names and the commas between them
+                take("]")
+            take("(")
+            args = items(")", depth + 1)
+            if tok in ("Dictionary", "Array") and len(args) == 1:
+                return args[0]
+            return (tok, args)
+        raise ValueError(f"unexpected {tok!r}")
+
+    v = value(0)
+    if at[0] != len(toks):
+        raise ValueError("text after the value")
+    return v
+
+
+def _opacity_keys(ly, rel, name):
+    """The layer's opacity keyframes: {frame index from 0: (value, trans, ease)}, {} when it has none. Pixelorama
+    keeps them in animated_params (var_to_str of a Dictionary); a layer animates nothing but its opacity."""
+    text = ly.get("animated_params")
+    if text in (None, ""):
+        return {}
+    try:
+        params = _gvalue(text) if isinstance(text, str) else text
+    except (ValueError, RecursionError) as e:
+        _fail(rel, f"layer {name}: its animated properties cannot be read ({e})")
+    if not isinstance(params, dict):
+        _fail(rel, f"layer {name}: its animated properties are not a dictionary")
+    keys = params.get("opacity") or {}
+    if not isinstance(keys, dict):
+        _fail(rel, f"layer {name}: its opacity keyframes are not a dictionary")
+    out = {}
+    for fi, kf in keys.items():
+        if not isinstance(fi, int) or isinstance(fi, bool) or not isinstance(kf, dict):
+            _fail(rel, f"layer {name}: opacity keyframe {fi!r} is not a frame number with its settings")
+        v = _number(kf.get("value", 1.0), rel, f"layer {name} opacity keyframe {fi}")
+        trans, ease = kf.get("trans", TRANS_LINEAR), kf.get("ease", EASE_IN)
+        if (trans not in EASINGS and trans != TRANS_CONSTANT) or ease not in (0, 1, 2, 3):
+            _fail(rel, f"layer {name}: opacity keyframe {fi} has transition {trans!r} and ease {ease!r}, which "
+                       "Pixelorama 1.2.4 does not have")
+        out[fi] = (float(v), trans, ease)
+    return out
+
+
+def _f(x):
+    """A value stored in a 32-bit float (Godot's real_t and Color)."""
+    return float(np.float32(x))
+
+
+def _ease_fns():
+    """Godot 4.7's easing equations (scene/animation/easing_equations.h, after Robert Penner's): t from 0 to d,
+    from b to b + c. Godot computes them in 32-bit floats (real_t), and in doubles from where an expression meets one
+    (Math::PI, 0.001, the sine of a double): each step here is rounded the same way. pow and sqrt of floats come
+    from Python's math rounded to a float, where Godot calls the C library's float versions, which may differ in the
+    last bit."""
+    import math
+    f, pi = _f, math.pi
+    f3 = np.float32
+
+    def lin(t, b, c, d):
+        return f(f(c * t) / d + b)
+
+    # where Godot's expression meets a double (Math::PI, 0.001, sin of a double), the rest of it is in doubles
+    def sine_in(t, b, c, d):
+        return f(-c * math.cos(f(t / d) * (pi / 2)) + c + b)
+
+    def sine_out(t, b, c, d):
+        return f(c * math.sin(f(t / d) * (pi / 2)) + b)
+
+    def sine_io(t, b, c, d):
+        return f(f(-c / 2) * (math.cos(pi * t / d) - 1) + b)
+
+    def pw(x, n):
+        return f(math.pow(x, n))
+
+    def poly(n):
+        def ein(t, b, c, d):
+            return f(f(c * pw(f(t / d), n)) + b)
+
+        def eout(t, b, c, d):
+            if n == 5:
+                return f(f(c * f(pw(f(f(t / d) - 1), n) + 1)) + b)
+            return f(f(-c * f(pw(f(f(t / d) - 1), n) - 1)) + b)
+
+        def eio(t, b, c, d):
+            t = f(f(t / d) * 2)
+            if t < 1:
+                return f(f(f(c / 2) * pw(t, n)) + b)
+            if n == 5:
+                return f(f(f(c / 2) * f(pw(f(t - 2), n) + 2)) + b)
+            return f(f(f(-c / 2) * f(pw(f(t - 2), n) - 2)) + b)
+        return ein, eout, eio
+
+    def quad_out(t, b, c, d):
+        t = f(t / d)
+        return f(f(f(-c * t) * f(t - 2)) + b)
+
+    def quad_io(t, b, c, d):
+        t = f(f(t / d) * 2)
+        if t < 1:
+            return f(f(f(c / 2) * pw(t, 2)) + b)
+        return f(f(f(-c / 2) * f(f(f(t - 1) * f(t - 3)) - 1)) + b)
+
+    def expo_in(t, b, c, d):
+        return b if t == 0 else f(f(f(c * pw(2, f(10 * f(f(t / d) - 1)))) + b) - c * 0.001)
+
+    def expo_out(t, b, c, d):
+        return f(b + c) if t == d else f(c * 1.001 * f(-pw(2, f(f(-10 * t) / d)) + 1) + b)
+
+    def expo_io(t, b, c, d):
+        if t == 0:
+            return b
+        if t == d:
+            return f(b + c)
+        t = f(f(t / d) * 2)
+        if t < 1:
+            return f(f(f(f(c / 2) * pw(2, f(10 * f(t - 1)))) + b) - c * 0.0005)
+        return f(f(c / 2) * 1.0005 * f(-pw(2, f(-10 * f(t - 1))) + 2) + b)
+
+    def el(kind):
+        def fn(t, b, c, d):
+            if t == 0:
+                return b
+            if kind == "io":
+                t = f(t / f(d / 2))
+                if t == 2:
+                    return f(b + c)
+                p = f(d * f(f3(0.3) * f3(1.5)))
+            else:
+                t = f(t / d)
+                if t == 1:
+                    return f(b + c)
+                p = f(d * f3(0.3))
+            s = f(p / 4)
+
+            def wave(t):
+                return math.sin(f(f(t * d) - s) * (2 * pi) / p)
+            if kind == "in":
+                t = f(t - 1)
+                a = f(c * pw(2, f(10 * t)))
+                return f(-(a * wave(t)) + b)
+            if kind == "out":
+                return f(f(c * pw(2, f(-10 * t))) * wave(t) + c + b)
+            if t < 1:
+                t = f(t - 1)
+                a = f(c * pw(2, f(10 * t)))
+                return f(-0.5 * (a * wave(t)) + b)
+            t = f(t - 1)
+            a = f(c * pw(2, f(-10 * t)))
+            return f(a * wave(t) * 0.5 + c + b)
+        return fn
+
+    def cubic_in(t, b, c, d):
+        t = f(t / d)
+        return f(f(f(f(c * t) * t) * t) + b)
+
+    def cubic_out(t, b, c, d):
+        t = f(f(t / d) - 1)
+        return f(f(c * f(f(f(t * t) * t) + 1)) + b)
+
+    def cubic_io(t, b, c, d):
+        t = f(t / f(d / 2))
+        if t < 1:
+            return f(f(f(f(f(c / 2) * t) * t) * t) + b)
+        t = f(t - 2)
+        return f(f(f(c / 2) * f(f(f(t * t) * t) + 2)) + b)
+
+    def root(x):
+        return f(math.sqrt(x)) if x >= 0 else float("nan")
+
+    def circ_in(t, b, c, d):
+        t = f(t / d)
+        return f(f(-c * f(root(f(1 - f(t * t))) - 1)) + b)
+
+    def circ_out(t, b, c, d):
+        t = f(f(t / d) - 1)
+        return f(f(c * root(f(1 - f(t * t)))) + b)
+
+    def circ_io(t, b, c, d):
+        t = f(t / f(d / 2))
+        if t < 1:
+            return f(f(f(-c / 2) * f(root(f(1 - f(t * t))) - 1)) + b)
+        t = f(t - 2)
+        return f(f(f(c / 2) * f(root(f(1 - f(t * t))) + 1)) + b)
+
+    def bounce_out(t, b, c, d):
+        t = f(t / d)
+        k = f(f3(7.5625))
+        if t < f(1 / f3(2.75)):
+            return f(f(c * f(f(k * t) * t)) + b)
+        if t < f(2 / f3(2.75)):
+            t = f(t - f(f3(1.5) / f3(2.75)))
+            return f(f(c * f(f(f(k * t) * t) + 0.75)) + b)
+        if t < 2.5 / 2.75:
+            t = f(t - f(f3(2.25) / f3(2.75)))
+            return f(f(c * f(f(f(k * t) * t) + 0.9375)) + b)
+        t = f(t - f(f3(2.625) / f3(2.75)))
+        return f(f(c * f(f(f(k * t) * t) + 0.984375)) + b)
+
+    def bounce_in(t, b, c, d):
+        return f(f(c - bounce_out(f(d - t), 0.0, c, d)) + b)
+
+    s1, s2 = f(f3(1.70158)), f(f3(1.70158) * f3(1.525))
+
+    def back_in(t, b, c, d):
+        t = f(t / d)
+        return f(f(f(f(c * t) * t) * f(f(f(s1 + 1) * t) - s1)) + b)
+
+    def back_out(t, b, c, d):
+        t = f(f(t / d) - 1)
+        return f(f(c * f(f(f(t * t) * f(f(f(s1 + 1) * t) + s1)) + 1)) + b)
+
+    def back_io(t, b, c, d):
+        t = f(t / f(d / 2))
+        if t < 1:
+            return f(f(f(c / 2) * f(f(t * t) * f(f(f(s2 + 1) * t) - s2))) + b)
+        t = f(t - 2)
+        return f(f(f(c / 2) * f(f(f(t * t) * f(f(f(s2 + 1) * t) + s2)) + 2)) + b)
+
+    def spring_out(t, b, c, d):
+        t = f(t / d)
+        s = f(1.0 - t)
+        t = f((math.sin(t * pi * (0.2 + 2.5 * t * t * t)) * pw(s, f(f3(2.2))) + t) * (1.0 + (1.2 * s)))
+        return f(f(c * t) + b)
+
+    def spring_in(t, b, c, d):
+        return f(f(c - spring_out(f(d - t), 0.0, c, d)) + b)
+
+    def halves(first, second):
+        """Godot's in_out / out_in for the curves built from two halves."""
+        def fn(t, b, c, d):
+            if t < f(d / 2):
+                return first(f(t * 2), b, f(c / 2), d)
+            h = f(c / 2)
+            return second(f(f(t * 2) - d), f(b + h), h, d)
+        return fn
+
+    def four(ein, eout, eio):
+        return (ein, eout, eio, halves(eout, ein))
+
+    return {   # Tween.TransitionType: (EASE_IN, EASE_OUT, EASE_IN_OUT, EASE_OUT_IN)
+        0: (lin, lin, lin, lin),
+        1: four(sine_in, sine_out, sine_io),
+        2: four(*poly(5)), 3: four(*poly(4)),
+        4: four(poly(2)[0], quad_out, quad_io),
+        5: four(expo_in, expo_out, expo_io),
+        6: four(el("in"), el("out"), el("io")),
+        7: four(cubic_in, cubic_out, cubic_io),
+        8: four(circ_in, circ_out, circ_io),
+        9: (bounce_in, bounce_out, halves(bounce_in, bounce_out), halves(bounce_out, bounce_in)),
+        10: four(back_in, back_out, back_io),
+        11: (spring_in, spring_out, halves(spring_in, spring_out), halves(spring_out, spring_in)),
+    }
+
+
+EASINGS = _ease_fns()
+
+
+def _layer_opacity(opacity, keys, fi):
+    """BaseLayer.get_opacity(frame): the layer's own opacity, or its keyframes at frame fi
+    (AnimatableObject.get_animated_property and Tween.interpolate_value; a frame before the first keyframe or after
+    the last takes that keyframe's value)."""
+    if not keys:
+        return opacity
+    if fi in keys:
+        return keys[fi][0]
+    ks = sorted(keys)
+    lo, hi = ks[0], ks[-1]
+    if len(ks) > 1:
+        for k in ks:                             # AnimatableObject.find_frame_edges
+            if lo < k <= fi:
+                lo = k
+            if fi <= k < hi:
+                hi = k
+    a, trans, ease = keys[lo]
+    if trans == TRANS_CONSTANT:
+        return a
+    b, d = a + (keys[hi][0] - a), _f(hi - lo)
+    w = 1.0 if d == 0 else EASINGS[trans][ease](_f(fi - lo), 0.0, 1.0, d)   # Tween.run_equation
+    return a + _f(w) * (b - a)                    # Math::lerp, in doubles
 
 
 def _buffer(z, name, w, h, rel):
@@ -176,37 +531,217 @@ def _buffer(z, name, w, h, rel):
     return np.frombuffer(data, np.uint8).reshape(h, w, 4)
 
 
-def _over(base, top, k):
-    """Normal blending of top (straight alpha) over base, both H x W x 4 uint8, with top's alpha times k (cel and
-    layer opacity). Pixels top leaves fully clear keep base untouched, colour under its transparency included.
-    Blended in bands of rows (BAND_PIXELS at a time): the float arrays take about 80 bytes a pixel, 5 GB on a whole
-    8192 x 8192 canvas."""
-    out = base
-    step = max(1, BAND_PIXELS // base.shape[1])
-    for y in range(0, base.shape[0], step):
-        t, b = top[y:y + step], base[y:y + step]
-        a = t[..., 3:4].astype(np.float64) / 255.0 * k
-        hit = a[..., 0] > 0
-        if not hit.any():
-            continue
-        if out is base:
-            out = base.copy()
-        da = b[..., 3:4].astype(np.float64) / 255.0
-        ra = a + da * (1.0 - a)
-        rgb = (t[..., :3] * a + b[..., :3] * da * (1.0 - a)) / np.maximum(ra, 1e-12)
-        px = np.concatenate([np.rint(rgb), np.rint(ra * 255.0)], axis=-1).clip(0, 255).astype(np.uint8)
-        out[y:y + step][hit] = px[hit]
+# -------------------------------------------------- compositing (DrawingAlgos.gd, BlendLayers.gdshader)
+def _unit(b):
+    """Image.get_pixel: bytes as the 32-bit floats Godot keeps (byte / 255.0)."""
+    return (b.astype(np.float64) / 255.0).astype(np.float32)
+
+
+def _byte(x):
+    """Image.set_pixel: uint8(CLAMP(x * 255.0, 0, 255)) of a 32-bit float, which truncates."""
+    return np.clip(np.trunc(x.astype(np.float32).astype(np.float64) * 255.0), 0, 255).astype(np.uint8)
+
+
+def _blend_rect(img, src):
+    """Image.blend_rect: Color.blend of src over img, in 32-bit floats, wherever src is not fully clear; both
+    H x W x 4 uint8."""
+    hit = src[..., 3] != 0
+    if not hit.any():
+        return img
+    d, s = _unit(img[hit]), _unit(src[hit])
+    sa = np.float32(1) - s[:, 3]
+    ra = d[:, 3] * sa + s[:, 3]
+    px = np.empty_like(d)
+    px[:, 3] = ra
+    for c in range(3):
+        px[:, c] = (d[:, c] * d[:, 3] * sa + s[:, c] * s[:, 3]) / ra
+    out = img.copy()
+    out[hit] = _byte(px)
     return out
+
+
+def _headless(cels, shape):
+    """DrawingAlgos.blend_layers_headless, the composite Pixelorama's own export makes without a window (its
+    command-line export): each cel's alpha times its opacity, stored back to 8 bits when the opacity is under 1,
+    then Image.blend_rect over the frame so far, from a clear canvas. cels: [(H x W x 4 uint8, opacity)]."""
+    img = np.zeros(shape, np.uint8)
+    for cel, k in cels:
+        if k < 1.0:
+            cel = cel.copy()
+            cel[..., 3] = _byte((_unit(cel[..., 3]).astype(np.float64) * k).astype(np.float32))
+        img = _blend_rect(img, cel)
+    return img
+
+
+# The windowed composite (BlendLayers.gdshader): Pixelorama blends on the GPU with this shader whenever it has a
+# window, in its canvas and its export alike, and only there does it apply blend modes, clipping masks and groups that
+# blend their own layers. Ported here in 32-bit floats, with the opacities as the shader reads them (stored in an R8
+# texture at the top, a half-float one inside a group). The GPU writes its result as 8-bit colour, rounded; its own
+# rounding of values within about 0.06 of a half step differs from exact rounding (measured on one test machine), so
+# such a composite lands within two steps of Pixelorama's in a few pixels.
+def _r8(k):
+    """An opacity through Pixelorama's R8 metadata texture: uint8(k * 255), truncated, read back as byte / 255."""
+    return np.float32(np.clip(np.trunc(float(np.float32(k)) * 255.0), 0, 255) / 255.0)
+
+
+def _rgh(k):
+    """An opacity through a half-float metadata texture (Math::make_half_float: the mantissa truncated, values
+    under 2^-14 zero)."""
+    bits = int(np.float32(k).view(np.uint32))
+    if bits & 0x7F800000 <= 0x38000000:
+        return np.float32(0)
+    return np.uint32(bits & ~0x1FFF).view(np.float32)
+
+
+def _mix(x, y, a):
+    return x * (np.float32(1) - a) + y * a
+
+
+def _hsl(rgb):
+    """rgb_to_hsl of the shader (via HCV, after Sam Hocevar and Emil Persson)."""
+    f = np.float32
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    gb = (g < b)[..., None]
+    p = np.where(gb, np.stack([b, g, np.full_like(r, -1), np.full_like(r, f(2 / 3))], -1),
+                 np.stack([g, b, np.zeros_like(r), np.full_like(r, f(-1 / 3))], -1))
+    rl = (r < p[..., 0])[..., None]
+    q = np.where(rl, np.stack([p[..., 0], p[..., 1], p[..., 3], r], -1),
+                 np.stack([r, p[..., 1], p[..., 2], p[..., 0]], -1))
+    c = q[..., 0] - np.minimum(q[..., 3], q[..., 1])
+    h = np.abs((q[..., 3] - q[..., 1]) / (f(6) * c + f(1e-10)) + q[..., 2])
+    lum = q[..., 0] - c * f(0.5)
+    # the shader adds 1e-10 to 1 - |2L - 1|; the GPU's compiler (GLSL may reorder) adds it to the 1 first, where it
+    # vanishes, so white and black come out 0 / 0 here: NaN, and the blend gives black there (measured, 1.2.4)
+    s = c / ((f(1) + f(1e-10)) - np.abs(lum * f(2) - f(1)))
+    return np.stack([h, s, lum], -1)
+
+
+def _rgb(hsl):
+    """hsl_to_rgb of the shader."""
+    f = np.float32
+    h = hsl[..., 0]
+    rgb = np.clip(np.stack([np.abs(h * f(6) - f(3)) - f(1), f(2) - np.abs(h * f(6) - f(2)),
+                            f(2) - np.abs(h * f(6) - f(4))], -1), 0, 1).astype(f)
+    c = (f(1) - np.abs(f(2) * hsl[..., 2] - f(1))) * hsl[..., 1]
+    return (rgb - f(0.5)) * c[..., None] + hsl[..., 2:3]
+
+
+def _shade(mode, cur, prev, k):
+    """The shader's blend(): cur (this layer, its clipping applied) over prev (the frame so far), both H x W x 4
+    float32 straight alpha, with this layer's opacity k."""
+    f, one, two = np.float32, np.float32(1), np.float32(2)
+    cur, prev = cur.copy(), prev.copy()
+    cur[..., 3] *= k
+    keep = cur[..., 3] <= f(0.001)                  # nothing to blend: the frame so far stays
+    if mode in (BLEND_INTERSECT, BLEND_MATCH) and k > f(0.001):
+        keep[:] = False
+    c, p = cur[..., :3], prev[..., :3]
+    res = np.zeros_like(cur)
+    alpha = True
+    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+        if mode == 1:                                # Erase
+            res = prev.copy()
+            res[..., 3] -= cur[..., 3]
+            cur[..., 3] = 0
+            alpha = False
+        elif mode in (17, 18, 19, 20):               # Hue, Saturation, Color, Luminosity
+            ch, ph = _hsl(c), _hsl(p)
+            pick = {17: (ch, ph, ph), 18: (ph, ch, ph), 19: (ch, ch, ph), 20: (ph, ph, ch)}[mode]
+            res[..., :3] = _rgb(np.stack([pick[0][..., 0], pick[1][..., 1], pick[2][..., 2]], -1))
+        elif mode == BLEND_INTERSECT:
+            res[..., :3] = c
+            gone = cur[..., 3] * prev[..., 3] <= f(0.001)
+            cur[..., 3][gone] = 0
+            prev[..., 3][gone] = 0
+        elif mode == BLEND_MATCH:
+            res = cur.copy()
+            differ = ~(np.abs(cur - prev) <= f(0.001)).all(-1)
+            prev[..., 3][differ] = 0
+            cur[differ] = 0
+            alpha = False
+        else:
+            res[..., :3] = {
+                0: lambda: c,
+                2: lambda: np.minimum(p, c),
+                3: lambda: p * c,
+                4: lambda: one - (one - p) / c,
+                5: lambda: p + c - one,
+                6: lambda: np.maximum(p, c),
+                7: lambda: one - (one - p) * (one - c),
+                8: lambda: p / (one - c),
+                9: lambda: p + c,
+                10: lambda: _mix(two * p * c, one - two * (one - c) * (one - p), np.rint(p)),
+                11: lambda: _mix(two * p * c + p * p * (one - two * c),
+                                 np.sqrt(p) * (two * c - one) + (two * p) * (one - c), np.rint(p)),
+                12: lambda: _mix(two * p * c, one - two * (one - c) * (one - p), np.rint(c)),
+                13: lambda: np.abs(p - c),
+                14: lambda: p + c - two * p * c,
+                15: lambda: p - c,
+                16: lambda: p / c,
+            }[mode]()
+        res[..., :3] = _mix(prev[..., :3], res[..., :3], cur[..., 3:4])
+        if alpha:
+            res[..., 3] = prev[..., 3] * (one - cur[..., 3]) + cur[..., 3]
+        # a division by zero gives inf (clamped) or NaN, which the GPU's clamp turns to 0
+        res = np.clip(np.nan_to_num(res, nan=0.0, posinf=1.0, neginf=0.0), 0, 1).astype(f)
+        out = _mix(cur, res, prev[..., 3:4])        # "proportional to how much previous color had alpha"
+    out[keep] = prev[keep]
+    return out
+
+
+def _gpu_bytes(x):
+    """What the GPU writes for the shader's result: 8-bit colour, rounded to the nearest step."""
+    return np.clip(np.rint(x.astype(np.float64) * 255.0), 0, 255).astype(np.uint8)
 
 
 def _mb(n):
     return f"{n / (1024 * 1024):.0f} MB"
 
 
+def _gpu_blend(items, cel, shape):
+    """The shader's fragment() over items [(what, opacity, blend mode, clipped)] in draw order: the first drawn as it
+    is (its opacity only), each next one blended over the result; a clipped one takes the alpha of the layer just
+    under it in the list, shown or not. A group's own result goes back through 8 bits before its parent blends it.
+    cel(layer) is that cel's band of rows (uint8) or None when it was not read (nothing of it shows)."""
+    res, under = None, None
+    for n, (what, k, mode, clip) in enumerate(items):
+        clipped_next = n + 1 < len(items) and items[n + 1][3]
+        if k > 0 or clipped_next or res is None:
+            tex = _texture(what, cel, shape) if (k > 0 or clipped_next) else np.zeros(shape, np.float32)
+        else:
+            tex = None                         # nothing of it shows, and no clipping mask needs it
+        if res is None:
+            res = tex.copy()
+            res[..., 3] *= k
+        elif tex is not None:
+            cur = tex
+            if clip:
+                cur = tex.copy()
+                cur[..., 3] *= under[..., 3] if under is not None else 0
+            res = _shade(mode, cur, res, k)
+        under = tex
+    return res if res is not None else np.zeros(shape, np.float32)
+
+
+def _texture(what, cel, shape):
+    """A layer as the shader samples it, float32: a cel, a group's own blend (8-bit, as the GPU wrote it), or clear."""
+    if what[0] == "cel":
+        b = cel(what[1])
+        if b is not None:
+            return _unit(b)
+    elif what[0] == "group" and what[2]:
+        return _unit(_gpu_bytes(_gpu_blend(what[2], cel, shape)))
+    return np.zeros(shape, np.float32)
+
+
 def read_pxo(path):
     """{"size": (w, h), "fps", "frames": [H x W x 4 uint8, the visible layers composited], "seconds": [how long each
-    frame shows], "tags": [(name, first, last) numbered from 0]}. Refuses, naming the layer, anything it cannot
-    reproduce exactly."""
+    frame shows], "tags": [(name, first, last) numbered from 0], "windowed": True when a layer needs the windowed
+    composite}. Refuses, naming the layer, anything it cannot reproduce.
+    Two composites, as Pixelorama 1.2.4 has two: a project of Normal layers (pass-through groups, cel and layer
+    opacity, animated opacity) composites as Pixelorama's own export does without a window (_headless), exactly; one
+    that uses a blend mode, a clipping mask or a group that blends its own layers, which only Pixelorama's windowed
+    GPU composite applies (its command-line export leaves them out), composites as that shader does (_shade)."""
     rel = os.path.relpath(path, core.PROJECT)
     try:
         z = zipfile.ZipFile(path)
@@ -265,29 +800,44 @@ def read_pxo(path):
                 i = layers[i].get("parent", -1)
             return seen
 
+        kinds = [ly.get("type", LAYER_PIXEL) for ly in layers]
+        blends = [ly.get("blend_mode", BLEND_NORMAL) for ly in layers]   # a group without one blends (deserialize)
         visible = [all(layers[j].get("visible", True) for j in chain(i)) for i in range(len(layers))]
+        # BaseLayer.is_blended_by_ancestor: a group above it that is not pass-through draws it
+        blended = [any(blends[j] != BLEND_PASS for j in chain(i)[1:]) for i in range(len(layers))]
+        keys, opac = {}, []
         for i, ly in enumerate(layers):
-            kind = ly.get("type", LAYER_PIXEL)
+            kind = kinds[i]
+            opac.append(float(_number(ly.get("opacity", 1.0), rel, f"layer {name_of(i)} opacity", 0, 1))
+                        if visible[i] else 0.0)
             if not visible[i] or kind == LAYER_AUDIO:
                 continue                       # hidden layers and sound never reach the frames
             if kind in LAYER_NAMES or kind not in (LAYER_PIXEL, LAYER_GROUP):
                 _fail(rel, f"layer {name_of(i)} is {LAYER_NAMES.get(kind, f'of type {kind!r}')}: Dotwork re-exports "
                            "pixel layers and groups (merge it down or hide it)")
-            blend = ly.get("blend_mode", BLEND_NORMAL)
-            if blend != BLEND_NORMAL and not (kind == LAYER_GROUP and blend == BLEND_PASS):
-                _fail(rel, f"layer {name_of(i)} uses blend mode {blend}: Dotwork re-exports Normal layers only "
-                           "(merge it down or set it to Normal)")
-            if ly.get("clipping_mask"):
-                _fail(rel, f"layer {name_of(i)} is a clipping mask: merge it down first")
+            b = blends[i]
+            if isinstance(b, bool) or not isinstance(b, int) or not (
+                    BLEND_NORMAL <= b <= BLEND_LAST or (kind == LAYER_GROUP and b == BLEND_PASS)):
+                _fail(rel, f"layer {name_of(i)} has blend mode {b!r}, which Pixelorama 1.2.4 does not have")
             if any(isinstance(e, dict) and e.get("enabled", True) for e in ly.get("effects") or []):
-                _fail(rel, f"layer {name_of(i)} has layer effects: apply them (or turn them off) first")
-            if _animated(ly.get("animated_params")):
-                _fail(rel, f"layer {name_of(i)} has animated properties: Dotwork reads one opacity per layer")
-            op = _number(ly.get("opacity", 1.0), rel, f"layer {name_of(i)} opacity", 0, 1)
-            if kind == LAYER_GROUP and op != 1:
-                _fail(rel, f"group {name_of(i)} has opacity {op}: Dotwork reads groups at 100 % only")
+                _fail(rel, f"layer {name_of(i)} has layer effects: they are shaders Pixelorama runs only with a "
+                           "window, on the GPU (its own command-line export leaves them out), and Dotwork cannot run "
+                           "them; press Apply on each in the layer's effects, or turn them off")
+            keys[i] = _opacity_keys(ly, rel, name_of(i))
 
-        plans, seconds, unpacked = [], [], 0
+        def mode_of(li):
+            """The blend mode the shader reads: a pass-through group's (or a hidden layer's odd value) as Normal."""
+            b = blends[li]
+            return b if isinstance(b, int) and not isinstance(b, bool) and BLEND_NORMAL <= b <= BLEND_LAST else 0
+        windowed = any(visible[i] and kinds[i] in (LAYER_PIXEL, LAYER_GROUP) and (
+            (kinds[i] == LAYER_GROUP and blends[i] != BLEND_PASS) or (kinds[i] == LAYER_PIXEL and blends[i])
+            or layers[i].get("clipping_mask")) for i in range(len(layers)))
+        if windowed and d.get("color_mode") == INDEXED and any(
+                visible[i] and kinds[i] == LAYER_GROUP and blends[i] != BLEND_PASS for i in range(len(layers))):
+            _fail(rel, "an indexed project with a group that blends its layers: Pixelorama maps that group to the "
+                       "palette, which Dotwork does not; set the group to pass-through or the project to RGBA")
+
+        plans, seconds, unpacked, sizes = [], [], 0, {}
         for fi, fr in enumerate(frames):
             cels = fr.get("cels") if isinstance(fr, dict) else None
             if not isinstance(cels, list) or len(cels) != len(layers):
@@ -303,25 +853,99 @@ def read_pxo(path):
                   for c in cels]
             # draw order as Pixelorama sorts it (Project._z_index_sort): layer index plus the cel's z-index, then z
             order = sorted(range(len(layers)), key=lambda i: (i + zs[i], zs[i]))
-            plan = []                  # (buffer name, opacity, (cel w, cel h, x, y) or None for a whole-canvas cel)
-            for li in order:
-                if not visible[li] or layers[li].get("type", LAYER_PIXEL) != LAYER_PIXEL:
-                    continue
+
+            def final(li):
+                """BaseCel.get_final_opacity: the layer's opacity at this frame (keyframes too) times the cel's."""
+                k = _number(cels[li].get("opacity", 1.0), rel, f"frame {fi + 1} cel opacity", 0, 1)
+                return _layer_opacity(opac[li], keys.get(li), fi) * k
+
+            def need(li):
+                """Note that cel li of this frame is read (its buffer and its size, checked now)."""
+                nonlocal unpacked
+                if (fi, li) in sizes:
+                    return
                 cel = cels[li]
-                k = (_number(cel.get("opacity", 1.0), rel, f"frame {fi + 1} cel opacity", 0, 1)
-                     * _number(layers[li].get("opacity", 1.0), rel, "layer opacity", 0, 1))
-                name = f"image_data/frames/{fi + 1}/layer_{li + 1}"
                 if version >= 8 and "image_size" in cel:
                     cw, ch = _vec2i(cel["image_size"], rel, f"frame {fi + 1} {name_of(li)} image_size")
                     ox, oy = _vec2i(cel.get("offset", "(0, 0)"), rel, f"frame {fi + 1} {name_of(li)} offset")
                     if cw < 0 or ch < 0:
                         _fail(rel, f"frame {fi + 1} {name_of(li)}: negative cel size")
-                    plan.append((name, k, (cw, ch, ox, oy)))
+                    sizes[(fi, li)] = (cw, ch, ox, oy)
                     unpacked += cw * ch * 4
                 else:
-                    plan.append((name, k, None))
+                    sizes[(fi, li)] = None
                     unpacked += w * h * 4
-            plans.append(plan)
+
+            if not windowed:
+                plan = []                  # (layer, opacity): DrawingAlgos.blend_layers_headless, in draw order
+                for li in order:
+                    if visible[li] and kinds[li] == LAYER_PIXEL:
+                        k = final(li)
+                        if k > 0:
+                            plan.append((li, k))
+                            need(li)
+                plans.append(plan)
+                continue
+
+            def node(li, k, mode, clip):
+                """One layer of a GPU blend: (what it draws, opacity as the shader reads it, blend mode, clipped)."""
+                if kinds[li] == LAYER_GROUP and blends[li] != BLEND_PASS:
+                    what = ("group", li, group(li))
+                elif kinds[li] == LAYER_PIXEL:
+                    what = ("cel", li)
+                elif kinds[li] == LAYER_GROUP:
+                    what = ("clear", li)       # a pass-through group draws nothing of its own
+                else:
+                    what = ("other", li)       # hidden: a 3D, tilemap or audio layer
+                return (what, k, mode, clip)
+
+            def group(g):
+                """GroupLayer.blend_children: the group's own layers in timeline order (not sorted by z-index),
+                pass-through groups inside it opened up, each opacity in a half-float texture. Clipping masks do
+                nothing inside a group that blends (Pixelorama marks every layer there as one to skip)."""
+                items, width = [], 0
+
+                def add(li):
+                    k = _rgh(final(li)) if visible[li] else np.float32(0)
+                    items.append(node(li, k, mode_of(li), False))
+                    if k > 0 and kinds[li] == LAYER_PIXEL:
+                        need(li)
+
+                def open_up(g2):
+                    nonlocal width
+                    for c in [i for i in range(g2) if layers[i].get("parent", -1) == g2]:
+                        if kinds[c] == LAYER_GROUP and blends[c] == BLEND_PASS:
+                            open_up(c)
+                        else:
+                            if kinds[c] != LAYER_GROUP:
+                                width += 1     # the metadata grows by one for each such layer, not for a group
+                            add(c)
+                children = [i for i in range(g) if layers[i].get("parent", -1) == g]
+                width = len(children)
+                for c in children:
+                    if kinds[c] == LAYER_GROUP and blends[c] == BLEND_PASS:
+                        open_up(c)
+                    else:
+                        add(c)
+                return items[:width]           # layers past the metadata's width are not drawn
+
+            top = []
+            for li in order:                   # DrawingAlgos.blend_layers: every layer has its place, shown or not
+                shown = visible[li] and not blended[li]
+                k = _r8(final(li)) if shown else np.float32(0)
+                clip = bool(layers[li].get("clipping_mask")) and not blended[li] and bool(top)
+                top.append(node(li, k, mode_of(li), clip))
+                if k > 0:
+                    if kinds[li] == LAYER_PIXEL:
+                        need(li)
+                    if clip:                   # the shader clips to the raw layer under it, shown or not
+                        under = top[-2][0]
+                        if under[0] == "cel":
+                            need(under[1])
+                        elif under[0] == "other":
+                            _fail(rel, f"frame {fi + 1}: clipping mask {name_of(li)} sits on {name_of(under[1])}, "
+                                       "which is not a pixel layer or a group (merge it down or move it)")
+            plans.append(top)
         if unpacked > MAX_UNPACKED:
             _fail(rel, f"its visible cels would unpack to {_mb(unpacked)} (over {_mb(MAX_UNPACKED)}): merge or hide "
                        "layers, or split the project")
@@ -337,27 +961,49 @@ def read_pxo(path):
             a = int(_number(t.get("from"), rel, f"tag {name} from", 1, len(frames)))
             b = int(_number(t.get("to"), rel, f"tag {name} to", a, len(frames)))
             tags.append((name, a - 1, b - 1))
+
         out = []
-        for plan in plans:
-            img, first = np.zeros((h, w, 4), np.uint8), True
-            for name, k, part in plan:
-                if part:
-                    cw, ch, ox, oy = part
-                    layer = np.zeros((h, w, 4), np.uint8)
-                    if cw and ch:
-                        cel = _buffer(z, name, cw, ch, rel)
-                        x0, y0, x1, y1 = max(ox, 0), max(oy, 0), min(ox + cw, w), min(oy + ch, h)
-                        if x1 > x0 and y1 > y0:
-                            layer[y0:y1, x0:x1] = cel[y0 - oy:y1 - oy, x0 - ox:x1 - ox]
-                else:
-                    layer = _buffer(z, name, w, h, rel)
-                if first and k == 1:
-                    img = layer.copy()     # copied as it is: an untouched frame comes back byte for byte
-                elif k > 0:
-                    img = _over(img, layer, k)
-                first = False
+        for fi, plan in enumerate(plans):
+            cache = {}
+
+            def cel(li):
+                """Cel li of this frame on the whole canvas (a version 8 cel placed at its offset)."""
+                if li not in cache:
+                    name, part = f"image_data/frames/{fi + 1}/layer_{li + 1}", sizes[(fi, li)]
+                    if part:
+                        cw, ch, ox, oy = part
+                        img = np.zeros((h, w, 4), np.uint8)
+                        if cw and ch:
+                            buf = _buffer(z, name, cw, ch, rel)
+                            x0, y0, x1, y1 = max(ox, 0), max(oy, 0), min(ox + cw, w), min(oy + ch, h)
+                            if x1 > x0 and y1 > y0:
+                                img[y0:y1, x0:x1] = buf[y0 - oy:y1 - oy, x0 - ox:x1 - ox]
+                    else:
+                        img = _buffer(z, name, w, h, rel)
+                    cache[li] = img
+                return cache[li]
+
+            if not windowed:
+                if len(plan) == 1 and plan[0][1] >= 1.0:
+                    # one layer as it is: an untouched frame comes back byte for byte
+                    out.append(cel(plan[0][0]).copy())
+                    continue
+                img = np.zeros((h, w, 4), np.uint8)
+                step = max(1, BAND_PIXELS // w)       # in bands of rows: the float work stays near 80 MB
+                cels = [(cel(li), k) for li, k in plan]
+                for y in range(0, h, step):
+                    img[y:y + step] = _headless([(c[y:y + step], k) for c, k in cels], img[y:y + step].shape)
+                out.append(img)
+                continue
+            img = np.zeros((h, w, 4), np.uint8)
+            step = max(1, BAND_PIXELS // w)
+            for y in range(0, h, step):
+                rows = slice(y, y + step)
+                res = _gpu_blend(plan, lambda li: cel(li)[rows] if (fi, li) in sizes else None,
+                                 (min(h, y + step) - y, w, 4))
+                img[rows] = _blend_rect(img[rows], _gpu_bytes(res))   # Image.blend_rect over a clear canvas
             out.append(img)
-    return {"size": (w, h), "fps": fps, "frames": out, "seconds": seconds, "tags": tags}
+    return {"size": (w, h), "fps": fps, "frames": out, "seconds": seconds, "tags": tags, "windowed": windowed}
 
 
 # -------------------------------------------------- the round trip

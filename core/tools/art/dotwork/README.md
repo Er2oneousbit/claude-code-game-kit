@@ -439,9 +439,22 @@ re-export with the frame's name. An effect's frames must all be one size.
 | Needs | `ASEPRITE_BIN`: Aseprite runs headless for both directions | nothing: Dotwork reads and writes `.pxo` in Python |
 | Versions | Lua scripting (`--script`); run with Aseprite 1.3.18 on Windows | writes `pxo_version` 7 (Pixelorama 1.2.0 to 1.2.3 write it; 1.2.3 and 1.2.4 opened, exported and saved Dotwork's files); reads 7 and 8 (Pixelorama 1.2.4, where a cel keeps its own size and offset; a file 1.2.4 saved, with a pixel edited in it, re-exported exactly). Dotwork keeps writing 7: 1.2.3 reads every cel as a whole canvas, so a cropped version 8 file would load wrong there, and 1.2.4 opens 7 as it is |
 | The file | indexed on the asset's own colours when that loses nothing (at most 255 opaque colours, no partly clear pixels); RGB otherwise, such as a portrait of 1,800 colours | RGBA in one layer `art`, the asset's own colours as the project palette; the project's frame rate is the one most of the character's frames play at, and other clips carry per-frame durations |
-| Layers you add | flattened by Aseprite on export | visible pixel layers and groups are composited (Normal blending, cel and layer opacity); a visible layer with another blend mode, a clipping mask, layer effects, animated opacity, a 3D or tilemap layer, or a group below 100 % stops the re-export with its name (merge it down or hide it); hidden layers are ignored |
+| Layers you add | flattened by Aseprite on export | composited as Pixelorama 1.2.4 does (below): cel, layer and animated opacity (every keyframe curve), z-index, pass-through groups, every blend mode, clipping masks and groups that blend their own layers (with their opacity); a visible layer with layer effects, or a visible 3D or tilemap layer, stops the re-export with its name (apply the effects, merge it down or hide it); hidden layers are ignored |
 | A file that exists | kept when it differs from the game's frames (Aseprite exports it to compare the tags, frames and frame times; one that still matches is left as it is); `--overwrite` replaces it and keeps the old file as `<name>.aseprite.bak` | kept when it differs from the game's frames (Dotwork reads it to compare the tags, frames and frame times; one that still matches, such as a file Pixelorama only opened and saved, is left as it is); `--overwrite` replaces it and keeps the old file as `<name>.pxo.bak` |
 | Size | read by Aseprite | a project whose frames would take over 512 MB, whose visible cels would unpack to over 1 GB, or with over 256 layers is refused before any image is read |
+
+Pixelorama 1.2.4 has two layer composites, and they do not agree. Without a window (its command-line export) it
+blends Normal layers on the CPU and leaves blend modes, clipping masks and a group's own blending out; with a window
+(its canvas and File > Export) it blends on the GPU with a shader that applies them all, and a partly clear pixel over
+another partly clear one comes out differently there (the shader weighs the layer by how opaque the pixels under it
+are). Dotwork picks per project: one of Normal layers composites as the command-line export does, equal byte for
+byte; one that uses a blend mode, a clipping mask or a group that blends composites as the shader does, in 32-bit
+floats like the GPU. The GPU rounds values near a half step its own way, so there 85 to 94 % of pixels come out equal
+to Pixelorama's and nearly all the rest one or two steps off (measured on one machine: a few pixels where a group
+holds an all but clear pixel over a partly clear one land further off). A frame of one layer at full opacity, the
+shape Dotwork writes, is copied as it is, so an untouched trip changes no file (Pixelorama's export can make a partly
+clear pixel of it one step darker). Layer effects are shaders too, run only with a window: apply them first. #66 has
+the measurements.
 
 Pixelorama stores the folder you last exported to, a full path on your machine, in every `.pxo` it saves: in a public
 repository, that path is public too. `pixelorama` and `pixelorama --reexport` name each `.pxo` that holds one (a
@@ -557,15 +570,18 @@ accents drawn over unchanged base letters), the coverage check (JSON, CSV, PO, t
 old fonts' output against golden hashes.
 `python tools/art/dotwork/tests/test_pixelorama.py` - offline, seconds: both hand-polish round trips. `.pxo` files
 (tags, frame durations from holds, palette, the same bytes on every build, polish never overwritten), an untouched
-re-export that changes no file, an edit and a new hold reaching the game, layers composited, every refused layer
-feature stopping before a file is written, `pxo_version` 8 cels and the fields Pixelorama 1.2.3 and 1.2.4 save;
+re-export that changes no file, an edit and a new hold reaching the game, layers composited against what Pixelorama
+1.2.4 itself made from small projects (`tests/fixtures/pixelorama_composites.json`: headless exactly, the blend modes,
+clipping masks and groups within two steps of its windowed composite), every refused layer feature stopping before a
+file is written, `pxo_version` 8 cels and the fields Pixelorama 1.2.3 and 1.2.4 save;
 Aseprite's frame times in the build list and through a re-export rounded to milliseconds (its script runs stubbed).
 Two live exams run only when their editor is set: `ASEPRITE_BIN` runs the export script in Aseprite, and
 `PIXELORAMA_BIN` (about 13 s) has Pixelorama open, save and export Dotwork's `.pxo` files headless, through a small
 extension installed in a user folder of the exam's own (your Pixelorama settings are not touched), then re-exports
-them: no file changes, and a pixel set in Pixelorama changes only its frame. Headless, Pixelorama blends layers on
-the CPU: a partly clear pixel over the art comes out within one step a channel of Dotwork's composite (Pixelorama
-truncates where Dotwork rounds); its windowed GPU blend is not compared (#66).
+them: no file changes, a pixel set in Pixelorama changes only its frame, and partly clear layers with cel, layer and
+animated opacity in groups come out of Pixelorama's export equal to Dotwork's, byte for byte. With
+`PIXELORAMA_WINDOW=1` as well, one case opens Pixelorama's window for a few seconds and compares its GPU export of
+blend modes, a clipping mask and a blending group with Dotwork's (within two steps; #66).
 
 ## Troubleshooting
 | Symptom | Fix |

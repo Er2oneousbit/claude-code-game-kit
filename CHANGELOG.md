@@ -11,8 +11,17 @@
   file, and a pixel set in Pixelorama changes only its frame, its sheet and the manifests. The reader needed no change;
   an offline exam pins the shape 1.2.4 saves. Dotwork keeps writing version 7 (1.2.3 reads every cel as a whole
   canvas). The README now says Pixelorama refills a blank export folder with the file's own folder (#67).
-- Dotwork: the live exam also composites a partly clear layer: Pixelorama's headless CPU blend truncates where
-  Dotwork rounds, at most one step a channel; its windowed GPU blend is still not compared (refs #66).
+- Dotwork: a Pixelorama re-export carries blend modes (all 22), clipping masks, groups that blend their own layers
+  (with their opacity) and animated layer opacity (every keyframe curve) instead of stopping. Pixelorama 1.2.4 has two
+  composites that disagree: its command-line export blends Normal layers on the CPU and leaves those features out,
+  its window blends on the GPU with a shader that applies them. A project of Normal layers now composites as the
+  command-line export does, byte for byte (Godot's float math, alpha x opacity and the result truncated to 8 bits,
+  where Dotwork rounded before); one with a blend mode, a clipping mask or a blending group composites as the shader
+  does, which lands 85 to 94 % of pixels equal to Pixelorama's window and nearly all the rest one or two steps off
+  (the GPU rounds near a half step its own way). A frame of one layer at full opacity is still copied as it is. Layer
+  effects still stop the re-export, now saying they run only on the GPU. Offline, a fixture of small projects
+  Pixelorama itself composited pins both; the live exam checks the headless one exactly and, with
+  `PIXELORAMA_WINDOW=1`, the windowed one (fixes #66).
 
 ## 0.8.3 (unreleased)
 - Gatekeeper (Godot): "Start over" resets the game in place, so the loaded model stays and a reply still on its way
