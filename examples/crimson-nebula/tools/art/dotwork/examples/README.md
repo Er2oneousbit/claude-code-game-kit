@@ -36,6 +36,7 @@ change a seed to get a different take.
 | `mount.json` | a rideable walker, idle + walk in 4 directions | sprites, rotate, animate |
 | `npcs.json` | two townsfolk (walk clips, code-drawn idles) and three palette variants of them (no render) | sprites, rotate, animate |
 | `party_member.json` | a party member: 4-direction idle, walk and run, an attack with a wind-up, holds and a smear, and a cast, all driven by the skeleton; the hit-flash and dissolve shaders; the battle pose set; a portrait with five expressions and talking frames | sprites, rotate, animate, pose |
+| `dwarf.json` | a party member built to read at small size (the showcase): 4-direction idle, walk and attack, the walk driven by the skeleton, the attack a free Wan clip with holds (a hammer brought down in front of him); the hit-flash and dissolve shaders; the battle pose set; a portrait with five expressions and talking frames | sprites, rotate, animate, pose |
 | `tools.json` | instruction edits, an inpaint and a normal map on one of your sprites | sprites |
 | `img2px.json` | concept art or a photo to pixel art at a set width | sprites |
 | `lighting.json` | normal maps, CanvasTextures and light occluders for the party member, the street TileSet and the props; a lit demo scene (CanvasModulate + PointLight2D with shadows) | none (needs the art of `party_member.json`, `town.json` and `props_icons.json` in the game) |

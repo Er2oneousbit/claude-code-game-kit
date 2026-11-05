@@ -275,6 +275,34 @@ class AnimPolish(unittest.TestCase):
         self.assertIn("mostly the body", info)
 
     # ---- 4. holds land in the SpriteFrames (and the sheet JSON, for other engines)
+    def test_mirrored_west_matches_east(self):
+        # a symmetric character's west clip is its east clip flipped, so it must ship as the exact mirror with the
+        # same holds. The export centred every frame with (W - width) // 2, which rounds toward the left in both
+        # views: an odd-width west frame sat 1 px off the mirror of its east twin, and the peak measure, sensitive
+        # to that pixel, put the holds on the other smash. fixtures/dwarf_smash.png: the showcase dwarf's east
+        # attack (Dotwork's own output, a free Wan clip with two smashes; frames 0, 1, 5 and 6 have odd widths),
+        # whose first export held frames 0 and 2 east but 4 and 6 west
+        from PIL import ImageOps
+        s = self.bind()
+        strip = Image.open(os.path.join(HERE, "fixtures", "dwarf_smash.png")).convert("RGBA")
+        east = [strip.crop((i * 72, 0, (i + 1) * 72, 72)) for i in range(8)]
+        clips = {("attack", "e"): (east, []), ("attack", "w"): ([ImageOps.mirror(f) for f in east], [])}
+        entry = {"name": "dwarf", "actions": ["attack"], "directions": ["e", "w"], "holds": True}
+        c, man, rot = self.character(s, entry, clips)
+        got = durations_of(c.export(clips, rot)[0])
+        self.assertEqual(got["attack_w"], got["attack_e"])
+        for i in range(8):
+            e = Image.open(os.path.join(c.out, "frames", f"spr_dwarf_attack_e_{i:02d}.png")).convert("RGBA")
+            w = Image.open(os.path.join(c.out, "frames", f"spr_dwarf_attack_w_{i:02d}.png")).convert("RGBA")
+            self.assertEqual(ImageOps.mirror(e).tobytes(), w.tobytes(), f"frame {i}")
+        # an asymmetric character's west is its own render: centred as before
+        entry = dict(entry, asymmetric=True)
+        c, man, rot = self.character(s, entry, clips)
+        c.export(clips, rot)
+        w = Image.open(os.path.join(c.out, "frames", "spr_dwarf_attack_w_00.png")).convert("RGBA")
+        b = east[0].getbbox()
+        self.assertEqual(w.getbbox()[0], (72 - (b[2] - b[0])) // 2)
+
     def test_holds_in_the_spriteframes(self):
         import animpolish
         import godot

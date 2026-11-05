@@ -632,11 +632,16 @@ class Character:
             fps = acts.get(action, {}).get("fps", 8)
             loop = acts.get(action, {}).get("loop", action in ("idle", "walk", "run"))
             cans = []
+            flipped = direction in MIRRORED and self.mirror
             for i, f in enumerate(fr):
                 bb = f.getbbox()
                 f = f.crop(bb)
                 can = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-                can.alpha_composite(f, ((W - f.width) // 2, H - f.height - lifts[(action, direction)][i]))
+                # an odd-width frame cannot sit dead centre: east rounds left, so its mirrored west twin rounds right
+                # and ships as the exact mirror. Rounding both left put the west frame 1 px off, and the peak measure
+                # moved the holds to another frame
+                x = (W - f.width) // 2
+                can.alpha_composite(f, (W - f.width - x if flipped else x, H - f.height - lifts[(action, direction)][i]))
                 cans.append(can)
             # polish on the placed frames, as the game shows them: the peak is measured where the player sees the
             # motion, and a smear stays inside the shared canvas (cropped, its frame would re-centre)

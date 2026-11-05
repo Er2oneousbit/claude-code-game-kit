@@ -1,0 +1,48 @@
+{
+ "name": "dwarf",
+ "_comment": "A party member designed to read at small size: a stout dwarf with a big hammer, short clothing, mid-value colours. idle, walk and attack in 4 directions (west mirrored from east), the walk driven by the skeleton (the pose tier) so the feet alternate, the attack a free Wan clip: on the skeleton the hammer stayed behind the head and the arm swung empty, while the free clip brings it down in front of him twice (two smashes in 8 frames). holds put the wind-up and the hit-stop on the measured peak; the hit-flash and dissolve shaders; the battle pose set facing left (pose_text names the hammer in five of them) and a portrait with five expressions and talking frames. Chosen from seven trial designs (each a rotation, an east walk and a west attack): a right-hand weapon sits on the far side of an east view and vanished behind the body (a knight's sword and shield, an axe, a mage's staff), the hammer held up high stayed in sight. Review notes: the attack's turned-around QA line is a false alarm here (the hammer swinging from behind the head to in front changes the head signature; every frame faces the right way), the south attack sweeps the hammer across the front, the back attack moves less, and the prompt's 'left hand' was not followed (no prompt sets the hand reliably). No smear: the QA skipped it on every attack, the body made most of the change. About 25 minutes on a 16 GB card (a rotation, 8 clips, 9 poses, a portrait). Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "design": {
+  "setting": "classic fantasy"
+ },
+ "characters": [
+  {
+   "name": "dwarf",
+   "prompt": "a stout dwarf warrior with a big braided orange beard, a round steel helmet, a short green tunic with a brown belt and brown boots, holding an enormous war hammer with a long wooden handle and a huge square iron head in his left hand",
+   "seed": 5211,
+   "seeds": 2,
+   "actions": [
+    "idle",
+    "walk",
+    "attack"
+   ],
+   "skeleton": [
+    "walk"
+   ],
+   "holds": true,
+   "shaders": true,
+   "motions": {
+    "attack": "swings the huge hammer from over his shoulder forward and down in front of him in one heavy overhead smash, then lifts it back"
+   },
+   "poses": "battle",
+   "pose_dirs": [
+    "w"
+   ],
+   "pose_text": {
+    "ready": "the character takes a wide fighting stance: feet apart, knees bent, the huge war hammer held in both hands across the body, the body and head still in side profile facing left",
+    "victory": "the character raises the huge war hammer high above his head in victory with a big grin, facing left",
+    "hurt": "the character flinches in pain: the upper body tilts back a little, head ducked, eyes squeezed shut, the war hammer still in his hand, both feet still on the ground, side profile facing left",
+    "defend": "the character hunches forward behind the handle of the war hammer held up across his face in both hands, side profile facing left",
+    "jump": "the character leaps high into the air with both knees tucked up and both feet off the ground, the war hammer raised in his hand, side profile facing left"
+   }
+  }
+ ],
+ "portraits": [
+  {
+   "name": "dwarf",
+   "prompt": "a stout dwarf warrior with a big braided orange beard and a round steel helmet",
+   "seed": 6200,
+   "expressions": true,
+   "talking": true
+  }
+ ]
+}
