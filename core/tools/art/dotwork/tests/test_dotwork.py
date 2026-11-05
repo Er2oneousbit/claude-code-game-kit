@@ -744,7 +744,11 @@ class DotworkExam(unittest.TestCase):
             "hero": [{"file": "assets/art/characters/hero/frames/spr_hero_walk_s_00.png", "kind": "frame",
                       "models": ["flux-2-klein-4b.safetensors"], "sha256": "2" * 64},
                      {"file": "assets/art/characters/hero/frames/spr_hero_wave_s_00.png", "kind": "frame",
-                      "models": [], "note": "hand-polished in Aseprite", "sha256": "3" * 64}]}
+                      "models": [], "note": "hand-polished in Aseprite", "sha256": "3" * 64}],
+            # a code-drawn effect touched up in Pixelorama keeps its workflow: still drawn in code, and modified
+            "spark": [{"file": "assets/art/fx/spark/spr_fx_spark_00.png", "kind": "fx_frame", "models": [],
+                       "workflow": "Dotwork hitfx spark (drawn in code)", "note": "hand-polished in Pixelorama",
+                       "sha256": "4" * 64}]}
         for name, rows in packs.items():
             with open(os.path.join(folder, f"manifest_{name}.json"), "w", encoding="utf-8") as f:
                 json.dump({"pack": name, "tool": "dotwork", "assets": rows, "assumptions": []}, f)
@@ -765,6 +769,9 @@ class DotworkExam(unittest.TestCase):
         self.assertIn("Dotwork (local ComfyUI)", mixed[4])
         self.assertIn("drawn by hand in Aseprite", mixed[4])
         self.assertEqual((mixed[8], mixed[9]), ("pre-generated", "yes"))
+        code = cells["spark"]
+        self.assertEqual((code[4].split(",")[0], code[5], code[8], code[9]),
+                         ("Dotwork (drawn in code)", "drawn in code", "no", "yes"))
 
     def test_engine_none_drops_godot_rows(self):
         make_project(self.tmp, {"comfyui": {"url": self.url}})

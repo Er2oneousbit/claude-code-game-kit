@@ -8,9 +8,9 @@
 # Notes   : One row per pack: the files are listed as their common folder + count when there are many. The licence
 #           cell names each model's licence from models.lock.json; check them before shipping (README: Licences).
 #           A file's origin comes from its manifest row: model output (models listed), drawn by hand (no model and a
-#           Pixelorama or Aseprite source, workflow or polish note: a tilemap you drew, a frame you added) or drawn in
-#           code (no model, nothing else). The Source, Author, Licence and AI-assisted cells name only the origins the
-#           pack holds, so a hand-drawn pack is never logged as AI output.
+#           Pixelorama or Aseprite source or hand workflow, or a polish note on a row with no workflow: a tilemap you
+#           drew, a frame you added) or drawn in code (no model, nothing else). The Source, Author, Licence and
+#           AI-assisted cells name only the origins the pack holds, so a hand-drawn pack is never logged as AI output.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): hand-drawn rows are logged as hand work, not as
 #           AI output
@@ -37,7 +37,9 @@ def origin(r):
     if r.get("models"):
         return "ai"
     src, flow, note = (r.get("source") or "").lower(), r.get("workflow") or "", r.get("note") or ""
-    if src.endswith(HAND_SOURCES) or HAND_WORKFLOW in flow or POLISH_NOTE in note:
+    # a polish note alone marks a file the editor made (no workflow of its own); a code-drawn frame touched up there
+    # keeps its workflow and stays "drawn in code", its polish shown by the Modified? column
+    if src.endswith(HAND_SOURCES) or HAND_WORKFLOW in flow or (POLISH_NOTE in note and not flow):
         return "hand"
     return "code"
 
