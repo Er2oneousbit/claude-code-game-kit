@@ -132,7 +132,7 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
   ([#203](https://github.com/Er2oneousbit/claude-code-game-kit/issues/203)). `rig`: bipeds only; the Unity Humanoid
   route is untested; Mixamo and Quaternius are named as sources but no pack is tested
   ([#205](https://github.com/Er2oneousbit/claude-code-game-kit/issues/205)).
-- **`bozzetto.py rig` review findings (open, from a second-model review of 0.13.0):** the NaN weight check never fires
+- **`bozzetto.py rig` review findings (FIXED in 0.13.1, kept here until the issues close on main):** the NaN weight check never fires
   ([#208](https://github.com/Er2oneousbit/claude-code-game-kit/issues/208)); Tripo spend is not rechecked after each
   paid step ([#209](https://github.com/Er2oneousbit/claude-code-game-kit/issues/209)) and a failure after paying loses
   the task IDs ([#210](https://github.com/Er2oneousbit/claude-code-game-kit/issues/210)); `unirig.log` holds absolute

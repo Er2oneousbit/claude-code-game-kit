@@ -67,8 +67,12 @@ def main():
         for rel, old, new in CHANGES:
             p = root / rel
             text = p.read_text(encoding="utf-8")
-            if MARK in text:
+            if new in text:      # the full patched text, not just the marker comment (#215)
                 print(f"[ OK ] {rel}: already patched")
+            elif MARK in text:
+                print(f"[FAIL] {rel}: the patch marker is there but the patched code is not (reverted by hand?); "
+                      "restore the file from git, then run this again")
+                missing += 1
             elif text.count(old) != 1:
                 print(f"[FAIL] {rel}: the expected line is not there (UniRig changed?): {old.strip()!r}")
                 missing += 1

@@ -3,6 +3,34 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig` from a second-model review
+A Kimi K3.1 Pro review of 0.13.0 (`tools/second_opinion.py`), each finding checked against the code; one more was
+found by the real run that verified the fixes.
+- The weight check never caught NaN weights: they were filtered out (`NaN > 0` is false) before the check. NaN,
+  infinite and negative weights now fail the rig (#208).
+- Tripo: each step's actual cost is checked against `--max-credits` and the balance before the next paid call, not
+  only the printed quote (#209). Every paid task goes into `assets_src/bozzetto/<name>/rig/tripo/tasks.json` as it is created and as it
+  finishes; a run that fails after paying keeps them, and a re-run reuses them (a fresh download link, nothing paid
+  twice; `--no-reuse` to pay again) (#210).
+- `unirig.log` held absolute local paths (UniRig's arguments and output) in `assets_src/`, which is committed; the
+  project, the UniRig checkout and the home folder are now `<project>`, `<unirig>` and `~` there (#211).
+- A step that exits 0 without its output fails the run; earlier outputs are removed first, so `--overwrite` can
+  never pass an older model's rig along (#212).
+- UniRig wrote `raw_data.npz` next to the input model, in the game's models folder (its extract joins the output
+  folder with the absolute input path, and `join` keeps only the second). UniRig now works on a copy of the input
+  in the work folder, and the models folder stays clean. Found by the real run that verified these fixes.
+- Checked before any GPU or paid work: `--animate` clip names, a positive `--wait`, an `--out` outside the project
+  (refused with logging on, as `make` does); a relative `UNIRIG_DIR` now works on Linux and macOS (#213).
+- Asset log: the source is found by its Path cell only, so a re-rigged unlogged input is never named as its own
+  source; `--names keep` is logged as "bone names kept", not "Mixamo names" (#214).
+- `rig/patch_unirig.py --check` requires the patched code itself, not just its marker comment (#215).
+- Bone mapping refuses instead of guessing: the hips are the bone both legs hang from (a ground root keeps its
+  name); a model facing sideways or backward, an arm under 3 bones and a partly Mixamo-named rig are refused with
+  the fix to make (#216).
+- `test_rig.py`: 27 cases (was 15): one per fix, including NaN and negative weights, a lost Tripo result fetched
+  again without paying, a stale rig, and the five new skeleton shapes. Real run: UniRig on the beekeeper passed
+  with every fix (562 s with a local LLM runner holding the GPU, about 85 s without).
+
 ## 0.13.0 (2026-11-05): /token-audit, what a project's Claude Code sessions spend tokens on
 - **`/token-audit`** (22 skills) and **`tools/token_audit.py`**: a read-only audit of what a project's Claude Code
   sessions spend tokens on, after a video's audit prompt (E154, description only, grade D). The tool reads files,

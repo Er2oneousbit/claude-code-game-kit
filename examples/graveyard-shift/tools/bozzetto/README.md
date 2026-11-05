@@ -173,8 +173,18 @@ routes leave a stray `Icosphere`) and scales Tripo's 1.0 m output back to the mo
 **Bone names:** UniRig's bones are `bone_0` ... `bone_N`. `rig_finish.py` finds the body by shape (the spine runs from
 the root to the highest bone; of the limbs off it, the two reaching the floor are legs, the two reaching farthest
 sideways are arms; left is +X) and renames hips, spine, neck, head, legs and arms to Mixamo's names (`--names keep`
-skips it). Fingers keep their own names. Tripo's rig already has Mixamo names. Bipeds only: a third limb on the floor
-stops it.
+skips it). Fingers keep their own names. Tripo's rig already has Mixamo names. The hips are the bone both legs hang
+from, so a ground-level root above them keeps its name. It refuses, rather than guesses, when the model faces
+sideways or backward (turn it with `make ... --turn`), when an arm has fewer than 3 bones or the rig is partly
+Mixamo-named (`--names keep` rigs those with their own names), and when a third limb reaches the floor (bipeds only).
+
+**Tripo's journal:** every paid task is written to `assets_src/bozzetto/<name>/rig/tripo/tasks.json` as it is created and when it finishes, and
+each step's actual cost is checked against `--max-credits` and the balance before the next paid call. If a run fails
+after paying (a lost download, a missing link), run it again: finished tasks for the same model and clips are
+reused, with a fresh download link, and nothing is paid twice (`--no-reuse` pays for new ones).
+
+**One GPU at a time:** UniRig peaks near 15.6 GB. With another program holding the card (ComfyUI, a local LLM
+runner) it still finished here, but took 562 s instead of about 85: close them first.
 
 In the engine: the rigged `.glb` carries its clips as glTF animations. Godot: an AnimationPlayer in the imported scene;
 glTF clips import without looping, so set `loop_mode` (the showcase does). Unity: set the model's rig to Humanoid; the

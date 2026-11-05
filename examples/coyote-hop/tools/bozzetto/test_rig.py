@@ -57,12 +57,22 @@ STUB_STEP = textwrap.dedent('''
     from pathlib import Path
     args = dict(a.split("=", 1) for a in sys.argv[1:] if a.startswith("--") and "=" in a)
     Path("calls.log").open("a", encoding="utf-8").write(json.dumps([STEP, args]) + "\\n")
+    print("stand-in", STEP, "reading", args.get("--input", ""))   # the real UniRig prints absolute paths too
     if Path("FAIL_" + STEP).exists():
         sys.exit(3)
+    if Path("SILENT_" + STEP).exists():
+        sys.exit(0)                     # exit 0 without writing its output (#212)
     out = args.get("--output")
     if out:
         Path(out).parent.mkdir(parents=True, exist_ok=True)
-        Path(out).write_bytes(b"glTF-stand-in " + STEP.encode())
+        Path(out).write_bytes(b"glTF-stand-in " + STEP.encode() + Path(args.get("--input", "x")).name.encode())
+    if args.get("--output_dir"):
+        # as UniRig's extract.py does: os.path.join(output_dir, <input without suffix>), which an absolute input
+        # path turns into a folder next to the input itself
+        import os
+        dest = os.path.join(args["--output_dir"], os.path.splitext(args["--input"])[0])
+        os.makedirs(dest, exist_ok=True)
+        Path(dest, "raw_data.npz").write_bytes(b"npz")
 ''')
 
 
@@ -81,8 +91,9 @@ def fake_unirig(root):
         (root / rel_path).write_text(text, encoding="utf-8")
     subprocess.run([sys.executable, str(PATCHER), str(root)], capture_output=True, check=True)
     task_step = 'import sys\nSTEP = "skin" if "unirig_skin" in " ".join(sys.argv) else "skeleton"\n'
-    # the patch marker only (the real patch imports torch and python-box, which this exam's Python lacks)
-    (root / "run.py").write_text("# kit patch (#199)\n" + task_step + STUB_STEP, encoding="utf-8")
+    # the patched text sits in a string, so --check sees it but this exam's Python never imports torch or python-box
+    patched = (root / "run.py").read_text(encoding="utf-8")
+    (root / "run.py").write_text('PATCHED = """\n' + patched + '"""\n' + task_step + STUB_STEP, encoding="utf-8")
     for mod, step in (("src/data/extract.py", "extract"), ("src/inference/merge.py", "merge")):
         (root / mod).parent.mkdir(parents=True, exist_ok=True)
         (root / mod).write_text(f'STEP = "{step}"\n' + STUB_STEP, encoding="utf-8")
@@ -162,6 +173,19 @@ class PatchExam(Base):
         self.assertEqual(p.returncode, 1)
         self.assertIn("UniRig changed?", p.stdout)
 
+    def test_a_marker_without_the_patched_code_is_not_patched(self):
+        """#215: the marker comment alone (the code reverted by hand) must not pass --check."""
+        d = Path(self.tmp.name) / "reverted"
+        for rel_path, text in UNIRIG_ORIGINALS.items():
+            (d / rel_path).parent.mkdir(parents=True, exist_ok=True)
+            (d / rel_path).write_text(text, encoding="utf-8")
+        subprocess.run([sys.executable, str(PATCHER), str(d)], capture_output=True, check=True)
+        skin = d / "src/model/unirig_skin.py"
+        skin.write_text("# kit patch (#199)\n" + UNIRIG_ORIGINALS["src/model/unirig_skin.py"], encoding="utf-8")
+        p = subprocess.run([sys.executable, str(PATCHER), str(d), "--check"], capture_output=True, encoding="utf-8")
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("patched code is not", p.stdout)
+
 
 class UniRigExam(Base):
     def test_unirig_route_end_to_end(self):
@@ -170,7 +194,10 @@ class UniRigExam(Base):
         calls = [json.loads(l) for l in (self.unirig / "calls.log").read_text(encoding="utf-8").splitlines()]
         self.assertEqual([c[0] for c in calls], ["extract", "skeleton", "extract", "skin", "merge"])
         self.assertIn("quick_inference_unirig_skin", json.dumps(calls[3]))
-        self.assertTrue(calls[4][1]["--target"].endswith("npc_guard.glb"))
+        self.assertTrue(calls[4][1]["--target"].endswith("input.glb"))
+        # UniRig writes next to its input: it must work on a copy, so nothing lands in the game's models folder
+        models = self.root / "assets/models"
+        self.assertEqual(sorted(p.name for p in models.iterdir()), ["npc_guard.glb", "npc_guard_rigged.glb"])
         self.assertEqual((self.root / "assets/models/npc_guard_rigged.glb").read_bytes(), b"glTF-finished")
         self.assertEqual(self.finish_calls[0][self.finish_calls[0].index("--animate") + 1], "idle,wave,walk")
         self.assertEqual(self.finish_calls[0][self.finish_calls[0].index("--names") + 1], "mixamo")
@@ -182,8 +209,54 @@ class UniRigExam(Base):
         self.assertTrue((self.root / "docs/licenses/A-0002.txt").is_file())
         rec = json.loads((self.root / "assets_src/bozzetto/npc_guard/rig/unirig/rig.json").read_text(encoding="utf-8"))
         self.assertEqual(rec["route"], "unirig")
-        for f in [self.root / "docs/ASSET_LOG.md", self.root / "docs/licenses/A-0002.txt"]:
-            self.assertNotIn(str(self.root.parent), f.read_text(encoding="utf-8"), f"local path in {f.name}")
+        work = self.root / "assets_src/bozzetto/npc_guard/rig/unirig"
+        for f in [self.root / "docs/ASSET_LOG.md", self.root / "docs/licenses/A-0002.txt", work / "rig.json",
+                  work / "unirig.log"]:     # #211: the UniRig log, with UniRig's own output in it, too
+            text = f.read_text(encoding="utf-8")
+            for local in (str(self.root.parent), str(self.root.parent).replace("\\", "/"), str(self.unirig)):
+                self.assertNotIn(local, text, f"local path in {f.name}")
+        self.assertIn("<project>", (work / "unirig.log").read_text(encoding="utf-8"))
+
+    def test_a_step_that_writes_nothing_never_ships_an_older_rig(self):
+        """#212: after a good run, a re-run whose merge exits 0 without output must fail, not reuse the old file."""
+        self.assertEqual(run_main(["rig", "make", "npc_guard"])[0], 0)
+        (self.unirig / "SILENT_merge").touch()
+        code, out = run_main(["rig", "make", "npc_guard", "--overwrite"])
+        self.assertEqual(code, 1, out)
+        self.assertIn("no rigged.glb written", out)
+        self.assertEqual(len(self.finish_calls), 1, "rig_finish ran on a stale file")
+
+    def test_options_are_checked_before_any_gpu_step(self):
+        """#213: a bad --animate or --wait, or an --out outside the project, stops before UniRig runs."""
+        for argv, says in ((["--animate", "dance"], "no clip 'dance'"), (["--wait", "0"], "--wait"),
+                           (["--input", "assets/models/npc_guard.glb", "--out", str(Path(self.tmp.name) / "elsewhere")],
+                            "outside the project")):
+            code, out = run_main(["rig", "make", "npc_guard"] + argv)
+            self.assertEqual(code, 2, argv)
+            self.assertIn(says, out)
+        self.assertFalse((self.unirig / "calls.log").exists(), "UniRig ran before the options were checked")
+        self.assertEqual(run_main(["rig", "make", "npc_guard", "--input", "assets/models/npc_guard.glb", "--no-log",
+                                   "--out", str(Path(self.tmp.name) / "elsewhere")])[0], 0)
+
+    def test_a_relative_unirig_dir_works(self):
+        """#213: UNIRIG_DIR given relative to the current folder."""
+        os.environ[rig.UNIRIG_ENV] = os.path.relpath(self.unirig, self.root)
+        os.environ.pop(rig.UNIRIG_PY_ENV)
+        subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(self.unirig / ".venv")], check=True)
+        code, out = run_main(["rig", "make", "npc_guard"])
+        self.assertEqual(code, 0, out)
+
+    def test_log_rows_name_the_source_and_the_naming(self):
+        """#214: --names keep is logged as such; re-rigging an unlogged input never names its own row as source."""
+        (self.root / "assets/models/odd.glb").write_bytes(b"glTF-odd")
+        self.assertEqual(run_main(["rig", "make", "odd", "--names", "keep"])[0], 0)
+        self.assertEqual(run_main(["rig", "make", "odd", "--names", "keep", "--overwrite"])[0], 0)
+        row = [l for l in (self.root / "docs/ASSET_LOG.md").read_text(encoding="utf-8").splitlines()
+               if "odd_rigged" in l][0]
+        aid = row.split("|")[1].strip()
+        self.assertIn("rig of `assets/models/odd.glb`", row)
+        self.assertNotIn(f"rig of {aid}", row)
+        self.assertIn("bone names kept", row)
 
     def test_rerun_needs_overwrite_and_keeps_one_row(self):
         self.assertEqual(run_main(["rig", "make", "npc_guard", "--animate", "none"])[0], 0)
@@ -228,9 +301,13 @@ class UniRigExam(Base):
 class FakeTripo:
     """Canned Tripo v3 answers keyed by path; records every call."""
 
-    def __init__(self, balance=500.0, riggable=True, rig_type="biped"):
+    def __init__(self, balance=500.0, riggable=True, rig_type="biped", rig_cost=25, no_url=False):
         self.calls, self.balance, self.riggable, self.rig_type = [], balance, riggable, rig_type
+        self.rig_cost, self.no_url = rig_cost, no_url      # Tripo charging more than its table; a lost URL
         self.tasks = {}
+
+    def posts(self, kind):
+        return [k for k, _ in self.tasks.values() if k == kind]
 
     def __call__(self, req, timeout=0):
         url = req.full_url
@@ -253,9 +330,10 @@ class FakeTripo:
             if kind.endswith("rig-check"):
                 out = {"riggable": self.riggable, "rig_type": self.rig_type, "normalize_scale": 0.5}
             elif kind.endswith("/rig"):
-                out, cost = {"model_url": "https://dl.example/rig.glb", "normalize_scale": 0.5}, 25
+                out, cost = {"model_url": "https://dl.example/rig.glb", "normalize_scale": 0.5}, self.rig_cost
             else:
-                out, cost = {"model_url": "https://dl.example/anim.glb"}, 10 * len(sent["animations"])
+                out = {} if self.no_url else {"model_url": "https://dl.example/anim.glb"}
+                cost = 10 * len(sent["animations"])
             data = {"status": "success", "output": out, "credits_consumed": cost}
         return io.BytesIO(json.dumps({"code": 0, "data": data}).encode())
 
@@ -275,7 +353,7 @@ class TripoExam(Base):
         rig.OPENER = fake = FakeTripo(balance=20)
         code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo"])
         self.assertEqual(code, 2)
-        self.assertIn("under the quote", out)
+        self.assertIn("under the next step", out)
         self.assertNotIn(("POST", "/files"), fake.calls)
 
     def test_not_a_biped_stops_before_a_paid_call(self):
@@ -303,6 +381,40 @@ class TripoExam(Base):
         self.assertIn("45 credits", row)
         self.assertFalse((self.root / "docs/licenses/bozzetto-rig-UniRig-LICENSE.txt").exists())
 
+    def test_actual_cost_is_checked_before_the_next_paid_call(self):
+        """#209: the rig costs more than the table; the clips step must not push spend past --max-credits. A re-run
+        with a higher limit reuses the paid rig and pays only for the clips (#210)."""
+        rig.OPENER = fake = FakeTripo(rig_cost=70)
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk",
+                              "--max-credits", "80"])
+        self.assertEqual(code, 2, out)
+        self.assertIn("over --max-credits 80", out)
+        self.assertEqual(fake.posts("/animations/retarget"), [])
+        journal = json.loads((self.root / "assets_src/bozzetto/npc_guard/rig/tripo/tasks.json").read_text(encoding="utf-8"))
+        self.assertEqual(journal["tasks"]["rig"]["status"], "success")
+        rig.OPENER = fake2 = FakeTripo()
+        fake2.tasks.update(fake.tasks)          # the same server still knows the paid rig task
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk",
+                              "--max-credits", "200"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("reusing paid Tripo work", out)
+        self.assertEqual(len(fake2.posts("/animations/rig")), 1, "the rig was paid for twice")   # the old one only
+        self.assertEqual(len(fake2.posts("/animations/retarget")), 1)
+
+    def test_a_lost_result_is_fetched_again_without_paying(self):
+        """#210: rig and clips succeed but the model URL is missing: the run fails, the journal keeps the paid
+        tasks, and a re-run downloads the result with no new paid call."""
+        rig.OPENER = fake = FakeTripo(no_url=True)
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
+        self.assertEqual(code, 1, out)
+        self.assertIn("a re-run fetches it again without paying", out)
+        fake.no_url = False
+        paid = len(fake.posts("/animations/rig")) + len(fake.posts("/animations/retarget"))
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(fake.posts("/animations/rig")) + len(fake.posts("/animations/retarget")), paid)
+        self.assertTrue((self.root / "assets/models/npc_guard_rigged.glb").is_file())
+
     def test_unknown_or_too_many_clips_exit_2(self):
         rig.OPENER = FakeTripo()
         self.assertEqual(run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "moonwalk"])[0], 2)
@@ -323,19 +435,28 @@ BUILD = textwrap.dedent('''
         b = arm_data.edit_bones.new(name); b.head, b.tail = Vector(head), Vector(tail)
         if parent: b.parent = arm_data.edit_bones[parent]
         return name
-    bone("b0", (0, 0, 0.9), (0, 0, 1.1)); bone("b1", (0, 0, 1.1), (0, 0, 1.35), "b0")
+    if kind == "ground":                  # a ground-level root above the pelvis (#216)
+        bone("g", (0, 0, 0), (0, 0, 0.1))
+    bone("b0", (0, 0, 0.9), (0, 0, 1.1), "g" if kind == "ground" else None); bone("b1", (0, 0, 1.1), (0, 0, 1.35), "b0")
     bone("b2", (0, 0, 1.35), (0, 0, 1.5), "b1"); bone("b3", (0, 0, 1.5), (0, 0, 1.8), "b2")
     legs = [("L", 0.12), ("R", -0.12)] + ([("BL", 0.12), ("BR", -0.12)] if kind == "quad" else [])
+    toe = 0.15 if kind == "backward" else -0.15           # toes point -Y (front) unless the model faces backward
     for s, x in legs:
         y = 0.3 if s.startswith("B") else 0.0
         bone("t" + s, (x, y, 0.9), (x, y, 0.5), "b0"); bone("s" + s, (x, y, 0.5), (x, y, 0.08), "t" + s)
-        bone("f" + s, (x, y, 0.08), (x, y - 0.15, 0.0), "s" + s)
+        bone("f" + s, (x, y, 0.08), (x, y + toe, 0.0), "s" + s)
     if kind != "quad":
         for s, x in (("L", 1), ("R", -1)):
-            bone("c" + s, (0.05 * x, 0, 1.45), (0.18 * x, 0, 1.45), "b2"); bone("u" + s, (0.18 * x, 0, 1.45), (0.45 * x, 0, 1.25), "c" + s)
-            bone("o" + s, (0.45 * x, 0, 1.25), (0.7 * x, 0, 1.05), "u" + s); bone("h" + s, (0.7 * x, 0, 1.05), (0.8 * x, 0, 0.98), "o" + s)
+            P = (lambda a, z: (0, a, z)) if kind == "sideways" else (lambda a, z: (a, 0, z))   # arms along Y or X
+            if kind == "short":           # a 2-bone arm: upper arm and hand only (#216)
+                bone("u" + s, P(0.05 * x, 1.45), P(0.45 * x, 1.25), "b2"); bone("h" + s, P(0.45 * x, 1.25), P(0.8 * x, 0.98), "u" + s)
+                continue
+            bone("c" + s, P(0.05 * x, 1.45), P(0.18 * x, 1.45), "b2"); bone("u" + s, P(0.18 * x, 1.45), P(0.45 * x, 1.25), "c" + s)
+            bone("o" + s, P(0.45 * x, 1.25), P(0.7 * x, 1.05), "u" + s); bone("h" + s, P(0.7 * x, 1.05), P(0.8 * x, 0.98), "o" + s)
     if kind == "neutral":
         bone("neutral_bone", (0, 0, 0), (0, 0, 0.1))
+    if kind == "partial":                 # one Mixamo name, the rest generic (#216)
+        arm_data.edit_bones["b0"].name = "mixamorig:Hips"
     bpy.ops.object.mode_set(mode="OBJECT")
     names = [b.name for b in arm_data.bones]
     mesh_objs = []
@@ -380,7 +501,7 @@ class FinishExam(unittest.TestCase):
         cls.d = Path(cls.tmp.name)
         builder = cls.d / "build.py"
         builder.write_text(BUILD, encoding="utf-8")
-        for kind in ("biped", "one_bone", "neutral", "quad"):
+        for kind in ("biped", "one_bone", "neutral", "quad", "ground", "backward", "sideways", "short", "partial"):
             p = blender_run(builder, [cls.d / f"{kind}.glb", kind])
             assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
 
@@ -447,6 +568,83 @@ class FinishExam(unittest.TestCase):
         p, rep = self.finish("quad", "--animate", "walk")
         self.assertEqual(p.returncode, 1)
         self.assertTrue(any("quadruped" in f or "biped" in f for f in rep["failures"]), rep)
+
+    def names_of(self, glb):
+        probe = self.d / "names.py"
+        probe.write_text(textwrap.dedent('''
+            import sys, json, bpy
+            bpy.ops.wm.read_factory_settings(use_empty=True)
+            bpy.ops.import_scene.gltf(filepath=sys.argv[sys.argv.index("--") + 1])
+            arm = [o for o in bpy.data.objects if o.type == "ARMATURE"][0]
+            print("NAMES" + json.dumps({b.name: round(b.head_local.z, 2) for b in arm.data.bones}))
+        '''), encoding="utf-8")
+        q = blender_run(probe, [glb])
+        return json.loads(next(l for l in q.stdout.splitlines() if l.startswith("NAMES"))[5:])
+
+    def test_hips_are_the_pelvis_not_a_ground_root(self):
+        """#216: the bone both legs hang from is Hips; a ground-level root above it keeps its own name."""
+        p, rep = self.finish("ground")
+        self.assertEqual(p.returncode, 0, p.stdout[-2000:])
+        names = self.names_of(self.d / "ground_out.glb")
+        self.assertEqual(names["mixamorig:Hips"], 0.9)          # the pelvis bone's head, not the ground root's
+        self.assertIn("g", names)
+
+    def test_backward_or_sideways_models_are_refused(self):
+        """#216: a model facing backward would swap left and right; one facing sideways spreads its arms along Y."""
+        p, rep = self.finish("backward")
+        self.assertEqual(p.returncode, 1)
+        self.assertTrue(any("feet point +Y" in f for f in rep["failures"]), rep)
+        p, rep = self.finish("sideways")
+        self.assertEqual(p.returncode, 1)
+        self.assertTrue(any("spread along Y" in f for f in rep["failures"]), rep)
+
+    def test_a_short_arm_is_refused_for_mixamo_names_only(self):
+        """#216: a 2-bone arm gets no guessed Mixamo roles; --names keep still rigs it."""
+        p, rep = self.finish("short")
+        self.assertEqual(p.returncode, 1)
+        self.assertTrue(any("upper arm, forearm and hand" in f for f in rep["failures"]), rep)
+        p, rep = self.finish("short", "--names", "keep")
+        self.assertEqual(p.returncode, 0, p.stdout[-2000:])
+
+    def test_a_partly_mixamo_named_rig_is_refused(self):
+        """#216: one mixamorig: bone does not make the rig Mixamo-named."""
+        p, rep = self.finish("partial")
+        self.assertEqual(p.returncode, 1)
+        self.assertTrue(any("partly Mixamo-named" in f for f in rep["failures"]), rep)
+
+    def test_nan_and_negative_weights_fail(self):
+        """#208: NaN, infinite and negative weights fail (Blender clamps weights it stores, so the check is driven
+        with stand-in mesh data in Blender's Python)."""
+        probe = self.d / "weights.py"
+        probe.write_text(textwrap.dedent(f'''
+            import sys, json
+            sys.path.insert(0, {str(HERE)!r})
+            import rig_finish as rf
+            class G:
+                def __init__(s, i, w): s.group, s.weight = i, w
+            class V:
+                def __init__(s, gs): s.groups = gs
+            class VG:
+                def __init__(s, i, n): s.index, s.name = i, n
+            class Mesh:
+                def __init__(s, verts): s.vertex_groups = [VG(i, f"b{{i}}") for i in range(5)]; s.data = type("D", (), {{"vertices": verts}})
+            class Bone:
+                def __init__(s, n): s.name = n
+            arm = type("A", (), {{"data": type("AD", (), {{"bones": [Bone(f"b{{i}}") for i in range(5)]}})}})
+            out = {{}}
+            for label, extra in (("nan", float("nan")), ("neg", -0.5), ("inf", float("inf")), ("ok", None)):
+                verts = [V([G(i % 5, 1.0)] + ([G((i + 1) % 5, extra)] if extra is not None else [])) for i in range(50)]
+                rep = rf.check_weights(arm, [Mesh(verts)])
+                out[label] = [rep["nan"], rep["failures"]]
+            print("W" + json.dumps(out))
+        '''), encoding="utf-8")
+        q = blender_run(probe, [])
+        res = json.loads(next(l for l in q.stdout.splitlines() if l.startswith("W"))[1:])
+        for label in ("nan", "neg", "inf"):
+            self.assertEqual(res[label][0], 50, label)
+            self.assertTrue(any("NaN, infinite or negative" in f for f in res[label][1]), (label, res[label]))
+        self.assertEqual(res["ok"][0], 0)
+        self.assertEqual(res["ok"][1], [])
 
 
 if __name__ == "__main__":

@@ -57,6 +57,7 @@ TRIPO_RIG_MODEL = "v3.0-20260909"
 TRIPO_COST = {"rig": 25, "clip": 10}          # credits (1 credit = $0.01), read 2026-11-05
 TRIPO_CLIPS = ("idle", "walk", "run", "dive", "climb", "jump", "slash", "shoot", "hurt", "fall", "turn")
 CLIPS_DEFAULT = "idle,wave,walk"
+UNIRIG_CLIPS = ("idle", "wave", "walk")      # what rig_finish.py can key (CLIPS_KNOWN there)
 SUFFIXES = "obj,fbx,FBX,dae,glb,gltf,vrm"
 STEP_WAIT_S = 1800
 POLL_S = 3
@@ -76,18 +77,29 @@ def bind(module):
 
 # ---- UniRig ---------------------------------------------------------------------------------------------------
 def unirig_dir():
+    """The UniRig checkout, absolute (a relative path broke the venv Python on Linux and macOS: it was started with
+    cwd set to the checkout, so the relative executable path pointed inside itself, #213)."""
     d = os.environ.get(UNIRIG_ENV)
-    return Path(d) if d else None
+    return Path(d).resolve() if d else None
 
 
 def unirig_python(d):
     env = os.environ.get(UNIRIG_PY_ENV)
     if env:
-        return Path(env)
+        return Path(env).resolve()
     for p in (d / ".venv" / "Scripts" / "python.exe", d / ".venv" / "bin" / "python"):
         if p.is_file():
-            return p
+            return p.resolve()
     return None
+
+
+def redact(text, pairs):
+    """Replace local absolute paths (both slash styles) with placeholders, for logs that may be committed (#211)."""
+    for real, label in pairs:
+        for form in {real, real.replace("\\", "/"), real.replace("/", "\\")}:
+            if form:
+                text = text.replace(form, label)
+    return text
 
 
 def unirig_problems(probe=None):
@@ -121,14 +133,30 @@ def unirig_problems(probe=None):
     return out
 
 
-def run_unirig(inp, work, log):
+def run_unirig(inp, work, log, root):
     """UniRig's own steps, called directly (its bash launchers do not run on Windows). Returns (rigged.glb, timings,
-    VRAM peak MiB or None)."""
+    VRAM peak MiB or None). Earlier outputs are removed first and every step must write its own file, so a step that
+    exits 0 without output can never pass an older run's file along (#212). The log has local paths redacted (#211)."""
     d = unirig_dir()
     py = str(unirig_python(d))
     stamp = time.strftime("%Y_%m_%d_%H_%M_%S")
     npz = work / "npz"
     skel, skin, merged = work / "skeleton.fbx", work / "skin.fbx", work / "rigged.glb"
+    # UniRig's extract writes raw_data.npz to os.path.join(output_dir, <input path without suffix>): an absolute input
+    # path makes join drop output_dir, so the file landed next to the input, in the game's models folder. UniRig works
+    # on a copy inside the work folder instead, so everything it writes stays here.
+    src = work / "input.glb"
+    for f in (skel, skin, merged, src):
+        if f.exists():
+            f.unlink()
+    for d_ in (npz, work / "input", work / "skeleton"):
+        if d_.exists():
+            shutil.rmtree(d_)
+    shutil.copyfile(inp, src)
+    inp = src
+    expect = {"extract mesh": work / "input" / "raw_data.npz", "skeleton": skel,
+              "extract skeleton": work / "skeleton" / "raw_data.npz", "skin": skin, "merge": merged}
+    hide = [(str(root), "<project>"), (str(d), "<unirig>"), (str(Path.home()), "~")]
     extract = ["-m", "src.data.extract", "--config=configs/data/quick_inference.yaml", f"--require_suffix={SUFFIXES}",
                "--force_override=true", "--num_runs=1", "--id=0", f"--time={stamp}", "--faces_target_count=50000",
                f"--output_dir={npz}"]
@@ -150,26 +178,31 @@ def run_unirig(inp, work, log):
         with open(log, "w", encoding="utf-8") as fh:
             for what, argv in steps:
                 t0 = time.monotonic()
-                fh.write(f"### {what}: {' '.join(argv)}\n")
-                fh.flush()
+                fh.write(redact(f"### {what}: {' '.join(argv)}\n", hide))
                 try:
-                    proc = subprocess.run([py] + argv, cwd=str(d), env=env, stdout=fh, stderr=subprocess.STDOUT,
+                    proc = subprocess.run([py] + argv, cwd=str(d), env=env, stdout=subprocess.PIPE,
+                                          stderr=subprocess.STDOUT, encoding="utf-8", errors="replace",
                                           timeout=STEP_WAIT_S)
                 except subprocess.TimeoutExpired:
                     raise bz.JobError(f"UniRig {what} did not finish in {STEP_WAIT_S} s (log: {log.name})")
+                out = redact(proc.stdout or "", hide)
+                fh.write(out)
+                fh.flush()
                 times[what] = round(time.monotonic() - t0, 1)
-                print(f"[ OK ] UniRig {what}: {times[what]:.0f} s" if proc.returncode == 0 else
-                      f"[FAIL] UniRig {what}: exit {proc.returncode}", flush=True)
-                if proc.returncode != 0:
-                    tail = log.read_text(encoding="utf-8", errors="replace").splitlines()[-12:]
-                    print("\n".join("       " + l for l in tail))
-                    raise bz.JobError(f"UniRig {what} failed (exit {proc.returncode}); the whole log is "
-                                      f"{log.as_posix()}")
+                made = expect[what]
+                wrote = made.is_file()
+                ok = proc.returncode == 0 and wrote
+                print(f"[ OK ] UniRig {what}: {times[what]:.0f} s" if ok else
+                      f"[FAIL] UniRig {what}: " + (f"exit {proc.returncode}" if proc.returncode else
+                                                   f"exit 0 but no {made.name} written"), flush=True)
+                if not ok:
+                    print("\n".join("       " + l for l in out.splitlines()[-12:]))
+                    raise bz.JobError(f"UniRig {what} failed ("
+                                      + (f"exit {proc.returncode}" if proc.returncode else f"no {made.name} written")
+                                      + f"); the whole log is {bz.rel(root, log)}")
     finally:
         sampler.stop.set()
         sampler.join(15)
-    if not merged.is_file():
-        raise bz.JobError("UniRig's merge wrote no rigged.glb")
     return merged, times, sampler.peak
 
 
@@ -212,22 +245,28 @@ class Tripo:
             raise bz.JobError("Tripo's upload returned no file_token")
         return tok
 
-    def task(self, path, body, what, wait):
+    def task(self, path, body, what, wait, on_created=None):
         tid = self.call("POST", path, body=body).get("task_id")
         if not tid:
             raise bz.JobError(f"Tripo {what}: no task id")
+        if on_created:
+            on_created(tid)          # journal the paid task before anything else can fail (#210)
+        return tid, self.wait_for(tid, what, wait)
+
+    def wait_for(self, tid, what, wait):
         t0 = time.monotonic()
         while True:
             d = self.call("GET", f"/tasks/{tid}")
             st = d.get("status")
             if st == "success":
-                print(f"[ OK ] Tripo {what}: {time.monotonic() - t0:.0f} s, {d.get('credits_consumed', 0):g} credits",
-                      flush=True)
-                return tid, d
+                print(f"[ OK ] Tripo {what}: task {tid}, {time.monotonic() - t0:.0f} s, "
+                      f"{float(d.get('credits_consumed') or 0):g} credits", flush=True)
+                return d
             if st in ("failed", "cancelled", "banned", "expired"):
-                raise bz.JobError(f"Tripo {what}: {st}")
+                raise bz.JobError(f"Tripo {what}: {st} (task {tid})")
             if time.monotonic() - t0 > wait:
-                raise bz.JobError(f"Tripo {what} did not finish in {wait} s (task {tid})")
+                raise bz.JobError(f"Tripo {what} did not finish in {wait} s (task {tid}; a re-run picks it up from "
+                                  "tasks.json without paying again)")
             bz.SLEEP(POLL_S)
 
     def download(self, url, dst):
@@ -250,41 +289,101 @@ def tripo_clips(text):
     return clips
 
 
-def run_tripo(args, inp, work, clips):
-    """Quote, then upload -> rig-check -> rig -> retarget. Returns (rigged .glb, scale to apply, credits, tasks)."""
+JOURNAL = "tasks.json"   # Tripo: every paid task, written as it is created and as it finishes (#210)
+
+
+def run_tripo(args, inp, work, clips, input_sha):
+    """Quote, then upload -> rig-check -> rig -> retarget -> download, with a journal so paid work survives a
+    failure: a re-run for the same input and clips reuses finished tasks (fetching a fresh model URL) instead of
+    paying again. Actual credits are checked against --max-credits and the balance before each paid call (#209).
+    Returns (rigged .glb, scale to apply, credits spent in total, tasks)."""
     t = Tripo(os.environ[TRIPO_ENV], getattr(args, "tripo_url", None) or TRIPO_BASE)
-    quote = TRIPO_COST["rig"] + TRIPO_COST["clip"] * len(clips)
+    jpath = work / JOURNAL
+    want = {"input_sha256": input_sha, "clips": clips, "rig_model": TRIPO_RIG_MODEL}
+    try:
+        old = json.loads(jpath.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        old = {}
+    j = old if (not args.no_reuse and all(old.get(k) == v for k, v in want.items())) else dict(want, tasks={})
+    tasks = j.setdefault("tasks", {})
+
+    def save():
+        jpath.write_text(json.dumps(j, indent=2) + "\n", encoding="utf-8")
+
+    def done(step):
+        return (tasks.get(step) or {}).get("status") == "success"
+
+    spent = sum(float(v.get("credits") or 0) for v in tasks.values())
+    todo = ([] if done("rig") else ["rig"]) + ([] if (done("retarget") or not clips) else ["retarget"])
+    quote = (TRIPO_COST["rig"] if "rig" in todo else 0) + (TRIPO_COST["clip"] * len(clips) if "retarget" in todo else 0)
     bal = t.balance()
-    print(f"[info] Tripo quote: {quote} credits (rig {TRIPO_COST['rig']} + {len(clips)} clip(s) x "
+    if done("rig"):
+        print(f"[ OK ] reusing paid Tripo work from {JOURNAL}: " + ", ".join(
+            f"{k} task {v['id']}" for k, v in tasks.items() if v.get("status") == "success") + " (no new credits)")
+    print(f"[info] Tripo quote: {quote} credits still to spend (rig {TRIPO_COST['rig']}, {len(clips)} clip(s) x "
           f"{TRIPO_COST['clip']}); balance {bal:g}; limit --max-credits {args.max_credits}")
-    if quote > args.max_credits:
-        raise bz.ToolError(f"the quote ({quote} credits) is over --max-credits {args.max_credits}")
-    if quote > bal:
-        raise bz.ToolError(f"the Tripo balance ({bal:g} credits) is under the quote ({quote}); API credits are bought "
-                           "separately from a Tripo Studio plan")
-    tok = t.upload(inp)
-    _, chk = t.task("/animations/rig-check", {"input": tok}, "rig check (free)", args.wait)
-    out = chk.get("output") or {}
-    if not out.get("riggable") or out.get("rig_type") != "biped":
-        raise bz.JobError(f"Tripo says this model is not a riggable biped (riggable={out.get('riggable')}, "
-                          f"type={out.get('rig_type')})")
-    rig_id, rig = t.task("/animations/rig", {"input": tok, "model": TRIPO_RIG_MODEL, "rig_type": "biped",
-                                             "spec": "mixamo"}, "rig (Mixamo bones)", args.wait)
-    spent = float(rig.get("credits_consumed") or 0)
-    tasks = {"rig_check": "free", "rig": rig_id}
-    final = rig
-    if clips:
-        anim_id, final = t.task("/animations/retarget", {"input": rig_id, "animations": [f"preset:{c}" for c in clips],
-                                                         "animate_in_place": True}, "clips", args.wait)
-        spent += float(final.get("credits_consumed") or 0)
-        tasks["retarget"] = anim_id
-    url = (final.get("output") or {}).get("model_url")
+
+    def afford(more):
+        """Refuse a paid call that would take actual spend past --max-credits or the balance."""
+        if spent + more > args.max_credits:
+            raise bz.ToolError(f"spending {more} more credits would make {spent + more:g} in all, over --max-credits "
+                               f"{args.max_credits}; finished tasks are kept in {JOURNAL} for a re-run")
+        if more > bal:
+            raise bz.ToolError(f"the Tripo balance ({bal:g} credits) is under the next step ({more}); API credits are "
+                               "bought separately from a Tripo Studio plan")
+
+    afford(quote)
+    rig = None
+    if "rig" in todo:
+        tok = t.upload(inp)
+        chk = t.wait_for(t.call("POST", "/animations/rig-check", body={"input": tok}).get("task_id"),
+                         "rig check (free)", args.wait)
+        out = chk.get("output") or {}
+        if not out.get("riggable") or out.get("rig_type") != "biped":
+            raise bz.JobError(f"Tripo says this model is not a riggable biped (riggable={out.get('riggable')}, "
+                              f"type={out.get('rig_type')})")
+        afford(TRIPO_COST["rig"] + (TRIPO_COST["clip"] * len(clips) if clips else 0))
+
+        def created(tid):
+            tasks["rig"] = {"id": tid, "status": "running"}
+            save()
+            print(f"[info] Tripo rig task {tid} (journal: {JOURNAL})", flush=True)
+        rig_id, rig = t.task("/animations/rig", {"input": tok, "model": TRIPO_RIG_MODEL, "rig_type": "biped",
+                                                 "spec": "mixamo"}, "rig (Mixamo bones)", args.wait, created)
+        cost = float(rig.get("credits_consumed") or 0)
+        tasks["rig"] = {"id": rig_id, "status": "success", "credits": cost,
+                        "normalize_scale": (rig.get("output") or {}).get("normalize_scale")
+                        or out.get("normalize_scale")}
+        spent += cost
+        save()
+        bal -= cost
+    final_step = "retarget" if clips else "rig"
+    if "retarget" in todo:
+        afford(TRIPO_COST["clip"] * len(clips))     # with the rig's actual cost now counted
+
+        def created(tid):
+            tasks["retarget"] = {"id": tid, "status": "running"}
+            save()
+            print(f"[info] Tripo clips task {tid} (journal: {JOURNAL})", flush=True)
+        anim_id, anim = t.task("/animations/retarget", {"input": tasks["rig"]["id"],
+                                                        "animations": [f"preset:{c}" for c in clips],
+                                                        "animate_in_place": True}, "clips", args.wait, created)
+        cost = float(anim.get("credits_consumed") or 0)
+        tasks["retarget"] = {"id": anim_id, "status": "success", "credits": cost}
+        spent += cost
+        save()
+    # the finished task is queried again for its model URL (URLs expire after 5 minutes; a reused task needs a new one)
+    fin = t.wait_for(tasks[final_step]["id"], f"{final_step} result", args.wait)
+    url = (fin.get("output") or {}).get("model_url")
     if not url:
-        raise bz.JobError("Tripo returned no model URL")
+        raise bz.JobError(f"Tripo returned no model URL for task {tasks[final_step]['id']}; it is kept in {JOURNAL}, "
+                          "a re-run fetches it again without paying")
     dst = work / "tripo.glb"
+    if dst.exists():
+        dst.unlink()
     t.download(url, dst)
-    norm = (rig.get("output") or {}).get("normalize_scale") or (chk.get("output") or {}).get("normalize_scale") or 1.0
-    return dst, 1.0 / float(norm), spent, tasks
+    norm = tasks["rig"].get("normalize_scale") or 1.0
+    return dst, 1.0 / float(norm), spent, {k: v["id"] for k, v in tasks.items()}
 
 
 # ---- commands -------------------------------------------------------------------------------------------------
@@ -330,14 +429,29 @@ def resolve(args):
 def cmd_rig_make(args):
     root, out_dir, inp, dst, work = resolve(args)
     route = args.backend
-    clips_unirig = [] if args.animate.strip().lower() == "none" else [c.strip() for c in args.animate.split(",")]
+    # every option is checked here, before GPU time or a paid call (#213)
+    clips_unirig = [] if args.animate.strip().lower() in ("", "none") else \
+        [c.strip().lower() for c in args.animate.split(",") if c.strip()]
+    bad = [c for c in clips_unirig if c not in UNIRIG_CLIPS]
+    if bad:
+        raise bz.ToolError(f"--animate has no clip {bad[0]!r}: choose from {', '.join(UNIRIG_CLIPS)}, or none")
     clips_tripo = tripo_clips(args.clips) if route == "tripo" else []
+    if args.wait <= 0:
+        raise bz.ToolError("--wait must be a positive number of seconds")
+    if args.max_credits <= 0 and route == "tripo":
+        raise bz.ToolError("--max-credits must be a positive number")
     if dst.exists() and not args.overwrite:
         raise bz.ToolError(f"{bz.rel(root, dst)} exists; pass --overwrite to rig it again")
     log_path = root / bz.fetch_asset.ASSET_LOG
-    if not args.no_log and not log_path.is_file():
-        raise bz.ToolError(f"{bz.fetch_asset.ASSET_LOG.as_posix()} not found under {root}: run from the game's root "
-                           "folder (or --project), or pass --no-log")
+    if not args.no_log:
+        if not log_path.is_file():
+            raise bz.ToolError(f"{bz.fetch_asset.ASSET_LOG.as_posix()} not found under {root}: run from the game's "
+                               "root folder (or --project), or pass --no-log")
+        try:
+            dst.resolve().relative_to(root)
+        except ValueError:
+            raise bz.ToolError(f"--out {out_dir} is outside the project; the asset log is for files that ship in it "
+                               "(pass --no-log for a scratch run)")
     blender = bz.find_blender(args.blender)
     if blender is None:
         raise bz.ToolError(f"Blender not found (set {bz.BLENDER_ENV}); rig_finish.py runs in it")
@@ -351,17 +465,20 @@ def cmd_rig_make(args):
     t0 = time.monotonic()
     record = {"tool": f"tools/{bz.TOOL.lower()}/{bz.TOOL.lower()}.py rig {bz.VERSION}", "route": route,
               "input": bz.rel(root, inp), "input_sha256": bz.sha256_bytes(inp.read_bytes()),
-              "date": time.strftime("%Y-%m-%d")}
+              "names": args.names, "date": time.strftime("%Y-%m-%d")}
+    for stale in (work / "finished.glb", work / "rig_finish.json", work / "clips.png"):
+        if stale.exists():
+            stale.unlink()                         # never let an older run's result stand in for this one (#212)
     if route == "unirig":
         try:
             bz.free_vram(bz.comfy_base(args))      # UniRig needs nearly all of a 16 GB card
         except bz.ToolError:
             pass                                   # no ComfyUI running: nothing to free
-        rigged, times, peak = run_unirig(inp, work, work / "unirig.log")
+        rigged, times, peak = run_unirig(inp, work, work / "unirig.log", root)
         scale, finish_clips = 1.0, ",".join(clips_unirig) or "none"
         record.update({"unirig_steps_s": times, "vram_peak_mib": peak, "clips": clips_unirig})
     else:
-        rigged, scale, spent, tasks = run_tripo(args, inp, work, clips_tripo)
+        rigged, scale, spent, tasks = run_tripo(args, inp, work, clips_tripo, record["input_sha256"])
         finish_clips = "none"
         record.update({"tripo_credits": spent, "tripo_tasks": tasks, "clips": clips_tripo,
                        "tripo_rig_model": TRIPO_RIG_MODEL})
@@ -396,9 +513,14 @@ def write_rig_log(root, log_path, dst, work, record, route):
     fa = bz.fetch_asset
     text = log_path.read_text(encoding="utf-8")
     main_rel = bz.rel(root, dst)
-    base_row = next((l for l in text.splitlines() if l.startswith("| A-") and f"`{record['input']}`" in l), None)
+    def path_cell(line):
+        cells = line.split("|")
+        return cells[3] if len(cells) > 3 else ""
+    rows = [l for l in text.splitlines() if l.startswith("| A-")]
+    existing = [l for l in rows if f"`{main_rel}`" in path_cell(l)]
+    # the source is matched by its Path cell only, never Notes, and never the rigged file's own row (#214)
+    base_row = next((l for l in rows if f"`{record['input']}`" in path_cell(l) and l not in existing), None)
     base_id = base_row.split("|")[1].strip() if base_row else None
-    existing = [l for l in text.splitlines() if l.startswith("| A-") and f"`{main_rel}`" in l]
     if existing:
         aid, fill = existing[0].split("|")[1].strip(), None
     else:
@@ -412,7 +534,8 @@ def write_rig_log(root, log_path, dst, work, record, route):
             "Tripo3D terms (paid output)", CREDIT_TRIPO
     clips = record["output"]["clips"]
     notes = "; ".join(x for x in [f"rig of {base_id}" if base_id else f"rig of `{record['input']}`",
-                                  f"{record['output']['bones']} bones, Mixamo names",
+                                  f"{record['output']['bones']} bones, "
+                                  + ("Mixamo names" if record.get("names") == "mixamo" else "bone names kept"),
                                   f"clips: {', '.join(clips)}" if clips else "no clips",
                                   f"{record['tripo_credits']:g} credits" if route == "tripo" else "",
                                   f"record `{bz.rel(root, work / RECORD)}`"] if x)
@@ -454,7 +577,10 @@ def add_parser(sub, common):
     m.add_argument("--clips", default="idle,walk",
                    help=f"Tripo: preset clips, up to 5 ({','.join(TRIPO_CLIPS)}) or none; 10 credits each "
                         "(default idle,walk)")
-    m.add_argument("--max-credits", type=int, default=100, help="Tripo: refuse a run quoted above this (default 100)")
+    m.add_argument("--max-credits", type=int, default=100,
+                   help="Tripo: never spend more than this in one run, counting actual charges (default 100)")
+    m.add_argument("--no-reuse", action="store_true",
+                   help="Tripo: ignore finished paid tasks in tasks.json and pay for new ones")
     m.add_argument("--names", choices=("mixamo", "keep"), default="mixamo",
                    help="bone names: mixamo (default; engines' humanoid setups and animation packs map them) or keep")
     m.add_argument("--out", help="models folder (default: the engine's, as for make)")

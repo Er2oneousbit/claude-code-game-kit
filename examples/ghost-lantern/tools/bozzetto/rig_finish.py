@@ -59,6 +59,7 @@ WALK_THIGH_DEG, WALK_KNEE_DEG, WALK_ARM_DEG = 24.0, 38.0, 18.0
 WALK_BOB, WALK_TWIST_DEG = 0.025, 4.0
 SIDE, FRONT, UP = Vector((1, 0, 0)), Vector((0, -1, 0)), Vector((0, 0, 1))
 MIXAMO = "mixamorig:"
+MIXAMO_CORE = ("Hips", "Spine", "Head", "LeftUpLeg", "RightUpLeg", "LeftArm", "RightArm", "LeftHand", "RightHand")
 CLIPS_KNOWN = ("idle", "wave", "walk")
 
 
@@ -97,10 +98,13 @@ def check_weights(arm, meshes):
         names = {g.index: g.name for g in m.vertex_groups}
         for v in m.data.vertices:
             total += 1
-            gs = [(names.get(g.group), g.weight) for g in v.groups if g.weight > 0]
-            real = [(n, w) for n, w in gs if n in bones]
-            if any(math.isnan(w) for _, w in gs):
+            raw = [(names.get(g.group), g.weight) for g in v.groups]
+            # read every raw weight first: `NaN > 0` is false, so filtering on > 0 used to drop NaN weights before
+            # this check could see them (#208); negative and infinite weights are broken too
+            if any(not math.isfinite(w) or w < 0 for _, w in raw):
                 nan += 1
+            gs = [(n, w) for n, w in raw if math.isfinite(w) and w > 0]
+            real = [(n, w) for n, w in gs if n in bones]
             if any(n == PLACEHOLDER for n, _ in gs) and not real:
                 on_placeholder += 1
             if not real:
@@ -124,7 +128,7 @@ def check_weights(arm, meshes):
         if unweighted / total > MAX_UNWEIGHTED:
             fails.append(f"{unweighted} of {total} vertices have no weight")
         if nan:
-            fails.append(f"{nan} vertices have NaN weights")
+            fails.append(f"{nan} vertices have NaN, infinite or negative weights")
         if top_count / total > MAX_ONE_BONE:
             fails.append(f"bone {top_bone} holds {100 * top_count / total:.0f}% of the vertices")
         if len(dominant) < MIN_BONES_USED:
@@ -183,12 +187,29 @@ def map_biped(arm):
     if len(by_low) > 2 and low(by_low[2]) - lo < 0.25 * height:
         raise RigFail("more than two limbs reach the floor: a quadruped or a creature, not a biped")
     arms = sorted([l for l in limbs if l not in legs], key=lambda l: -abs(side(l)))[:2]
+    # facing (#216): arms must spread along X (the character faces -Y in Blender, glTF's +Z front)
+    tips = [x.tail_local for a in arms for x in subtree(a)]
+    span_x = max(abs(p.x) for p in tips)
+    span_y = max(abs(p.y) for p in tips)
+    if span_y > span_x:
+        raise RigFail("the arms spread along Y, not X: the model faces sideways. Turn it to face front (glTF +Z, "
+                      "Blender -Y), e.g. `bozzetto.py make ... --turn 90`, then rig again")
     for pair, what in ((arms, "arm"), (legs, "leg")):
         if (side(pair[0]) > 0) == (side(pair[1]) > 0):
             raise RigFail(f"both {what} candidates are on the same side")
+    # toes point forward: a foot pointing +Y means the model faces backward, and left and right would swap (#216)
+    toe_y = sum((main_chain(l)[-1].tail_local - main_chain(l)[-1].head_local).y for l in legs)
+    if toe_y > 0.02 * height:
+        raise RigFail("the feet point +Y: the model faces backward, so left and right would swap. Turn it 180 "
+                      "degrees (`bozzetto.py make ... --turn 180`), then rig again")
+    # the hips are the spine bone both legs hang from; a ground-level root below it is not renamed (#216)
+    hips = legs[0].parent
+    if hips is None or legs[1].parent is None or legs[1].parent.name != hips.name:
+        raise RigFail("the legs do not hang from one spine bone, so the hips are unclear")
+    at = next(i for i, s in enumerate(spine) if s.name == hips.name)
     m = {"leg_r": main_chain(min(legs, key=side)), "leg_l": main_chain(max(legs, key=side)),
          "arm_r": main_chain(min(arms, key=side)), "arm_l": main_chain(max(arms, key=side))}
-    m["root"], m["spine"], m["head"] = root, spine[:-1], [spine[-1]]
+    m["root"], m["spine"], m["head"] = hips, spine[at:-1], [spine[-1]]
     m["height"] = height
     return m
 
@@ -213,6 +234,9 @@ def rename_mixamo(arm, m):
             put(b, s + n)
     for side, s in (("arm_l", "Left"), ("arm_r", "Right")):
         c = m[side]
+        if len(c) < 3:   # Mixamo (and Unity's Humanoid) need upper arm, forearm and hand: do not guess (#216)
+            raise RigFail(f"the {s.lower()} arm has {len(c)} bone(s); Mixamo names need upper arm, forearm and hand. "
+                          "Pass --names keep to rig it with its own names")
         parts = ("Shoulder", "Arm", "ForeArm", "Hand") if len(c) >= 4 else ("Arm", "ForeArm", "Hand")
         for b, n in zip(c, parts):
             put(b, s + n)
@@ -406,7 +430,13 @@ def main():
     if code == 0 and not a.check_only:
         made = []
         try:
-            already = any(b.name.startswith(MIXAMO) for b in arm.data.bones)
+            # a rig counts as Mixamo-named only with every core role; a partly renamed one is refused (#216)
+            have = {b.name for b in arm.data.bones}
+            core = {MIXAMO + n for n in MIXAMO_CORE}
+            already = core <= have
+            if not already and a.names == "mixamo" and any(n.startswith(MIXAMO) for n in have):
+                raise RigFail(f"the rig is partly Mixamo-named (missing {', '.join(sorted(core - have))}); fix the "
+                              "names or pass --names keep")
             if (a.names == "mixamo" and not already) or (a.clips and not existing):
                 m = map_biped(arm)
                 rep["biped"] = {k: len(m[k]) for k in ("spine", "leg_l", "leg_r", "arm_l", "arm_r")}
