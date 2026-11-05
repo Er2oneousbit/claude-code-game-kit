@@ -7,6 +7,8 @@
 - Real-world maps: when a game is set in a real place, its CLAUDE.md and the make-a-game interview now offer
   OpenStreetMap and national elevation data (already listed in `docs/resources/world-and-levels.md`) once, as an
   option; the tooling is planned (#192).
+- `docs/resources/world-and-levels.md` lists elevation sources by region (US, European national portals, global),
+  with the surface-versus-bare-earth and non-commercial traps; every licence there is marked (verify).
 - Gatekeeper (Godot): "Start over" resets the game in place, so the loaded model stays and a reply still on its way
   is dropped; both start buttons wait for a model load, which gives one intro instead of two (#1).
 - Gatekeeper (Godot): a line typed while the guard is still thinking (or after the game ended) stays in the box
