@@ -5,8 +5,9 @@
 #           Python steps UniRig's own bash launchers chain, so it also runs on Windows (Git Bash). Logs each step's
 #           time and the GPU's peak VRAM. A showcase recipe for #199, not a kit tool yet.
 # Usage   : UNIRIG_DIR=<UniRig checkout with its .venv> bash run_unirig.sh <input.glb> <name>
+#           UNIRIG_PY=<python> picks another env's interpreter (default: the checkout's .venv)
 #           -> $UNIRIG_DIR/results/<name>/rigged.glb (plus skeleton.fbx, skin.fbx, run.log, vram_peak.txt)
-# Notes   : Setup and the two local changes UniRig needed on a Blackwell GPU are in ../README.md ("Rigging").
+# Notes   : Setup (standard wheels only) is in ../README.md ("Rigging"); run patch_unirig.py on the checkout first.
 #           The input should already be a Bozzetto model (decimated, metres, pivot at the bottom). Exit 0 ok,
 #           1 a step failed (the last lines of run.log are shown), 2 usage.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -15,7 +16,7 @@ set -u
 [ $# -eq 2 ] && [ -n "${UNIRIG_DIR:-}" ] || { echo "usage: UNIRIG_DIR=<dir> bash run_unirig.sh <input.glb> <name>"; exit 2; }
 IN="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"; NAME="$2"
 cd "$UNIRIG_DIR" || exit 2
-PY=.venv/Scripts/python; [ -x "$PY" ] || PY=.venv/bin/python
+PY=${UNIRIG_PY:-.venv/Scripts/python}; [ -x "$PY" ] || PY=.venv/bin/python   # UNIRIG_PY: another env
 SUF="obj,fbx,FBX,dae,glb,gltf,vrm"
 OUT=results/$NAME; mkdir -p "$OUT" tmp
 LOG="$OUT/run.log"; : > "$LOG"

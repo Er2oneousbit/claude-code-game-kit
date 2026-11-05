@@ -13,6 +13,10 @@
   (Triton on Windows, a pickled class in the checkpoint, flash_attn wrong at head_dim 16 giving a rig that deforms
   nothing with exit 0), and a vertex-coloured model rendering white in Godot. EVIDENCE E151 (UniRig and its data),
   E152 (the runs) (#199, #202, #203).
+- `workflows/picture-to-game/src/patch_unirig.py` and `mha_sdpa.py`: UniRig runs on standard wheels only (no flash_attn,
+  no Triton, no community builds): a PyTorch SDPA stand-in for flash_attn's attention class (same weights, within 1e-7),
+  `sdpa` for the skeleton model, PTv3's own attention, and a weights-only allowlist for the skin checkpoint. Same
+  skeleton, skin weights within run-to-run noise, tested on a fresh clone (#199).
 
 ## 0.11.0 (unreleased)
 - Bozzetto, the kit's local 3D asset lane (`tools/bozzetto/`, in every game): `bozzetto.py make <name> --image

@@ -87,21 +87,26 @@ Licences: code MIT; the released checkpoint's card says MIT and it was trained o
 credit it, as `docs/licenses/` and `tools/credits.py` do for Bozzetto's models). Its successor SkinTokens rigs better
 but adds training data from VRoid Hub and ModelsResource (models taken from commercial games), so it is not used here.
 
-Setup on this machine (Windows, Blackwell GPU), in its own Python env, never ComfyUI's:
+Setup, in its own Python env (never ComfyUI's), with **standard wheels only**: no flash_attn, no Triton, no
+community builds. `src/patch_unirig.py` makes four small changes to the checkout so it runs without them (the header
+lists them; it is safe to run twice, and `--check` only reports):
 ```
 git clone https://github.com/VAST-AI-Research/UniRig && cd UniRig
+python <this folder>/src/patch_unirig.py .
 uv venv --python 3.11 .venv          # bpy 4.2 pins Python 3.11
 uv pip install torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu128   # cu128: first CUDA with Blackwell
-uv pip install <flash_attn 2.8.3+cu128torch2.7.0 cp311 win_amd64 wheel>   # no official Windows build: a community wheel
-uv pip install "triton-windows>=3.3,<3.4"                                  # transformers imports flash_attn's Triton code
 uv pip install torch_scatter torch_cluster -f https://data.pyg.org/whl/torch-2.7.0+cu128.html
 uv pip install spconv-cu126
-uv pip install -r requirements.txt numpy==1.26.4    # without its flash_attn line
+uv pip install -r requirements.txt numpy==1.26.4    # remove its flash_attn line first
 ```
-The two community binaries (flash_attn and Triton for Windows) are not from those projects' own releases. This run
-used them in a throwaway env on a test machine, by choice; decide for yourself before you install them.
+Tested on a fresh clone (UniRig 6793c66) with that env: the beekeeper rigged in 82 s, peak 15.6 GB, every vertex
+weighted. The flash_attn-free path matches the flash one: the same 45 joints exactly, and skin weights as close as two
+runs of the flash env are to each other (GPU scatter and sparse convolution are not bit-for-bit repeatable: mean
+difference 0.0004 both ways, the same strongest bone for 99% of points). `src/mha_sdpa.py` is the stand-in for
+flash_attn's attention class: same weights, outputs within 1e-7.
 
-Three things broke, each silently or nearly:
+How it got there. The first working env used a community flash_attn wheel and `triton-windows`, and three things
+broke, each silently or nearly:
 1. **Triton.** Not a UniRig bug: `transformers` imports flash_attn's rotary layer whenever flash_attn is installed,
    and that needs Triton, which PyTorch does not ship on Windows. Fix: `triton-windows`.
 2. **The skin checkpoint would not load.** It pickles a python-box `Box`, and PyTorch 2.6+ loads weights only. The
@@ -119,6 +124,11 @@ Three things broke, each silently or nearly:
    (PTv3's own attention path).
    It costs memory: the 15.9 GB peak above. Check every rig: a vertex count per bone, not just "weighted" (a check that
    counts the placeholder bone as a bone passes this broken rig).
+
+Then the question was whether flash_attn was needed at all. UniRig's skin model builds flash_attn's attention class
+with its defaults, and those run plain PyTorch, not flash kernels; the skeleton model's transformer accepts PyTorch's
+own `sdpa`. With a stand-in class and one config line, nothing needs flash_attn, so nothing needs Triton, and the
+head_dim-16 bug cannot happen: the setup above.
 
 ### Animation: written, not generated
 No local tool makes game animation you can ship (pose-from-video tools build on SMPL-X, which is non-commercial), so
