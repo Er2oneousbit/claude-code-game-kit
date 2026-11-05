@@ -846,6 +846,12 @@
       "date": "2026-11-04",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.8.2",
+      "date": "2026-11-04",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -917,7 +923,7 @@
     "docs/resources/learning-and-release.md": "8e08ccf6f94762135717225f46113807154511de562cffc87b209aa6908a8057",
     "docs/resources/licenses.md": "6584c21e9e295cbbdd2f338911963cde92bdc56aed8a691bce079533d39ca90e",
     "docs/resources/pipelines.md": "c36f860a00743f20eeff0b068ceefbb4f2a2134b36da9393a3a2ca19b8cfdc35",
-    "docs/resources/world-and-levels.md": "f7b16c7cc08284e7f12eb11b0541362e89d180a16f471405294b8ad4d257ca92",
+    "docs/resources/world-and-levels.md": "b63113feea320e0b49cb81434e4b14a09dde078d9651c32e4b7857f9f149f1e7",
     "docs/sop/README.md": "1162c8d5b1e605df8042cc713c4ac3cffc129ce441cda2d89a68df8cb822661f",
     "docs/sop/SOP-01-feature-workflow.md": "e34b37388cbe6323cc1463218be129f2202034dc99a73d84f043ff6809c0def8",
     "docs/sop/SOP-02-bug-workflow.md": "ad6236e4581de16eec6df30504eca4143bdd3bb7f6c0a2d03ab42374d40110f2",
