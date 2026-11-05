@@ -67,7 +67,7 @@ python tools/meshwright/meshwright.py make prop_lamp --image ref.png --sprites a
 | `--material texture\|vertex` | Baked PBR textures (base colour, metallic-roughness, normal, AO), or vertex colours only (small, no textures). |
 | `--texture 512\|1024\|2048` | Baked texture size. |
 | `--out DIR` | Models folder. Default from the game's engine: `assets/models`, web and web-3d `public/assets/models`, Unity `Assets/Models`, Unreal `SourceArt/Models` (import from there). |
-| `--sprites FILE` | Also an 8-direction sprite sheet (tools/blender/render_sprites.py) for a 2D game. |
+| `--sprites FILE` | Also an 8-direction sprite sheet (tools/blender/render_sprites.py, its layout in `FILE.json` beside it) for a 2D game. The sheet goes into the same asset log row and the record, with its hash. |
 | `--no-log`, `--no-preview`, `--overwrite` | Scratch runs; skip the turntable; make the same name again (the asset log row is updated, not doubled). |
 
 Exit codes: 0 ok, 1 the job or the budget check failed, 2 usage, environment, missing models or files in the way.

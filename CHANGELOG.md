@@ -28,6 +28,9 @@
   `workflows/meshwright-showcase/` (a prop and a character from prompt to engine, failures included) (#193).
 - Meshwright: a validator that crashes (any exit but 0, 1 and 2, or no report) stops make before anything is copied
   or logged, and an old `validate.json` from an earlier run is removed first, so it can never pass a model (#193).
+- Meshwright: the `--sprites` sheet is rendered before the asset log is written, so it gets its place in the row,
+  the record and the evidence file with its hash (it shipped unlogged); its layout `.json` counts as a file in the
+  way (#193).
 
 ## 0.10.0 (unreleased)
 - Wavesmith: the DAW round trip (`wavesmith.py daw`, daw.py). `daw reaper <set|track|folder>` writes a plain-text

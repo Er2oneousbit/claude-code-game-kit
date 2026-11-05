@@ -22,7 +22,8 @@
 #           API (BiRefNet removes the background inside the workflow; ComfyUI's prompt is stripped from the .glb)
 #           -> cleanup.py in Blender -> tools/blender/prep_export.py (the one glTF preset, LODs) ->
 #           tools/blender/validate_asset.py --class -> files into --out -> ASSET_LOG row + evidence + the model
-#           licence texts in docs/licenses/ (first time) -> turntable.py preview -> render_sprites.py on request.
+#           licence texts in docs/licenses/ (first time) -> turntable.py preview; with --sprites, render_sprites.py
+#           runs before the log, so the sheet gets its row and hash.
 #           Sources and records stay in assets_src/meshwright/<name>/ (reference, raw mesh, reports, preview).
 #           Nothing reaches --out unless the budget check passes. Files are never replaced without --overwrite.
 #           Licences: TRELLIS.2 and BiRefNet are MIT, DINOv3 (TRELLIS.2's image encoder) has its own licence with a
@@ -40,7 +41,8 @@
 #          reference: --image copied (PNG text stripped) | --prompt -> klein job -> free VRAM [-> --reference-only stop]
 #          TRELLIS.2 job (image, seed, resolution, face target, texture size) -> fetch the .glb (extras stripped)
 #          cleanup.py -> prep_export.py --no-validate -> validate_asset.py --json -> fail: stop, exit 1
-#          copy the .glb and LODs into --out -> record JSON -> ASSET_LOG row (updated on a re-run) -> turntable
+#          copy the .glb and LODs into --out -> --sprites sheet -> record JSON -> ASSET_LOG row (updated on a
+#          re-run; the sheet is in it) -> turntable
 import argparse
 import datetime
 import functools
@@ -416,7 +418,8 @@ class Plan:
         """Files this run would replace (refused without --overwrite)."""
         if args.reference_only:
             return [p for p in [self.src / f"reference_seed{args.seed}.png"] if p.exists()]
-        paths = [self.main] + self.lod_files + [self.src / RECORD] + ([self.sprites] if self.sprites else [])
+        paths = [self.main] + self.lod_files + [self.src / RECORD] + (
+            [self.sprites, self.sprites.with_suffix(".json")] if self.sprites else [])
         return [p for p in paths if p.exists()]
 
 
@@ -647,7 +650,8 @@ def write_log(plan, record):
           f"Credit   : {ATTRIBUTION}",
           f"Licences : texts in {fetch_asset.LICENSE_DIR.as_posix()}/{TOOL.lower()}-*; the DINOv3 License restricts "
           "some uses (its section 1.b.v): read it before you ship"]
-    ev += [f"File     : {f['file']}  SHA-256 {f['sha256']}  {f['triangles']} triangles" for f in files]
+    ev += [f"File     : {f['file']}  SHA-256 {f['sha256']}  "
+           + (f"{f['triangles']} triangles" if "triangles" in f else f.get("kind", "")) for f in files]
     new = text.replace(existing[0], row, 1) if existing else fetch_asset.add_log_row(text, row, fill)
     plan.log_path.write_bytes(new.encode("utf-8"))
     lic = plan.root / fetch_asset.LICENSE_DIR
@@ -659,20 +663,28 @@ def write_log(plan, record):
     return aid
 
 
-def previews(args, plan, blender):
-    """Turntable sheet in the source folder; a sprite sheet with --sprites. A failure here is a warning."""
+def sprites(args, plan, blender):
+    """The --sprites sheet (and its layout .json), rendered from the installed model before the log is written, so
+    the sheet gets its row and hash. Returns an error message for the end of the run, or None."""
+    if not plan.sprites:
+        return None
+    rc, _ = run_bpy(blender, TOOLS / "blender" / "render_sprites.py",
+                    [plan.main, "--out", plan.sprites, "--directions", "8", "--size", "128"]
+                    + (["--overwrite"] if args.overwrite else []), "render_sprites")
+    if rc != 0 or not plan.sprites.is_file():
+        return (f"render_sprites.py failed (exit {rc}); the model is in place and logged, run it again by hand "
+                "(SOP-11 'sprite sheets')")
+    print(f"[ OK ] {rel(plan.root, plan.sprites)} (sprite sheet, layout in {plan.sprites.with_suffix('.json').name})")
+    return None
+
+
+def turntable(args, plan, blender):
+    """Turntable sheet in the source folder. A failure here is a warning."""
     if not args.no_preview:
         rc, _ = run_bpy(blender, HERE / "turntable.py",
                         [plan.main, "--out", plan.src / "turntable.png", "--overwrite"], "turntable")
         if rc != 0:
             print(f"[warn] turntable preview failed (exit {rc}); the model itself is fine")
-    if plan.sprites:
-        rc, _ = run_bpy(blender, TOOLS / "blender" / "render_sprites.py",
-                        [plan.main, "--out", plan.sprites, "--directions", "8", "--size", "128"]
-                        + (["--overwrite"] if args.overwrite else []), "render_sprites")
-        if rc != 0:
-            raise JobError(f"render_sprites.py failed (exit {rc}); the model is in place, run it again by hand "
-                           "(SOP-11 'sprite sheets')")
 
 
 def cmd_make(args):
@@ -695,11 +707,15 @@ def cmd_make(args):
     raw, job = make_mesh(args, plan, base, wf3d, reference)
     export, lods, cleanup, validation = blender_steps(args, plan, blender, raw)
     placed = install(plan, export, lods, args.overwrite)
+    sprite_error = sprites(args, plan, blender)
     files = []
     for p in placed:
         data = p.read_bytes()
         files.append({"file": rel(plan.root, p), "sha256": sha256_bytes(data),
                       "triangles": glb_triangles(cl.read_glb(data)[0])})
+    if plan.sprites and not sprite_error:   # the sheet ships in the game too: it gets its hash and the log row
+        files.append({"file": rel(plan.root, plan.sprites), "sha256": sha256_bytes(plan.sprites.read_bytes()),
+                      "kind": "sprite sheet"})
     record = {"tool": f"{TOOL} {VERSION}", "date": datetime.date.today().isoformat(), "name": plan.name,
               "class": plan.cls, "budget": plan.budget, "height_m": plan.height, "seed": args.seed,
               "quality": args.quality, "material": args.material, "texture_px": plan.texture, "lods": plan.lods,
@@ -714,7 +730,9 @@ def cmd_make(args):
     write_new(plan.src / RECORD, json.dumps(record, indent=2, ensure_ascii=False).encode("utf-8"), True)
     if plan.log:
         write_log(plan, record)
-    previews(args, plan, blender)
+    turntable(args, plan, blender)
+    if sprite_error:
+        raise JobError(sprite_error)
     warns = len(validation.get("warnings") or [])
     print(f"[ OK ] {plan.name}: {files[0]['triangles']:,} triangles, {plan.height} m tall, "
           f"{len(placed)} file(s) in {rel(plan.root, plan.out_dir)}, {time.monotonic() - t0:.0f} s in all"

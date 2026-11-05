@@ -248,6 +248,11 @@ class FakeBlender:
             return self.validate_rc, ""
         elif name == "turntable.py":
             Path(argv[2]).write_bytes(png(text=False))
+        elif name == "render_sprites.py":
+            out = Path(argv[2])
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(png(16, 8, (20, 200, 60), text=False))
+            out.with_suffix(".json").write_text(json.dumps({"cell": 128}), encoding="utf-8")
         return 0, ""
 
 
@@ -588,6 +593,24 @@ class MakeRun(Base):
         self.assertEqual(rc, 1, out)
         self.assertIn("out of memory", out)
         self.assertFalse((self.root / "assets" / "models" / "prop_crate.glb").exists())
+
+    def test_sprite_sheet_is_logged_with_its_hash(self):
+        # a 2D game ships the sheet, not the .glb: it is AI-derived art and needs its row, record entry and hash
+        rc, out = self.make("--image", "art_src/crate.png", "--seed", "7", "--sprites", "assets/art/crate_sheet.png")
+        self.assertEqual(rc, 0, out)
+        sheet = self.root / "assets" / "art" / "crate_sheet.png"
+        self.assertTrue(sheet.is_file())
+        digest = mw.sha256_bytes(sheet.read_bytes())
+        rec = json.loads((self.root / "assets_src/meshwright/prop_crate/meshwright.json").read_text(encoding="utf-8"))
+        self.assertIn({"file": "assets/art/crate_sheet.png", "sha256": digest, "kind": "sprite sheet"}, rec["files"])
+        self.assertEqual(rec["tris"], rec["files"][0]["triangles"])
+        row = [l for l in (self.root / "docs/ASSET_LOG.md").read_text(encoding="utf-8").splitlines()
+               if l.startswith("| A-0001")][0]
+        self.assertIn("`assets/art/crate_sheet.png`", row)
+        self.assertIn(digest, (self.root / "docs" / "licenses" / "A-0001.txt").read_text(encoding="utf-8"))
+        rc, out = self.make("--image", "art_src/crate.png", "--seed", "7", "--sprites", "assets/art/crate_sheet.png")
+        self.assertEqual(rc, 2, "a second run without --overwrite stops before the GPU")
+        self.no_local_paths()
 
     def test_vertex_material_takes_the_other_output(self):
         STATE.mesh = canned_glb(8, 2)
