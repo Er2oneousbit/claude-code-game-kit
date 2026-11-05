@@ -74,6 +74,10 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
   beyond the demo palettes [#169](https://github.com/Er2oneousbit/claude-code-game-kit/issues/169).
 - **RPG Maker MZ and web-3d:** the juice and shell modules the other overlays ship
   ([#175](https://github.com/Er2oneousbit/claude-code-game-kit/issues/175)).
+- **More local 3D lanes after Bozzetto:** auto-rigging for characters, UniRig the candidate
+  ([#199](https://github.com/Er2oneousbit/claude-code-game-kit/issues/199)); tiling PBR materials on FLUX.2 klein
+  ([#200](https://github.com/Er2oneousbit/claude-code-game-kit/issues/200)); motion reference video with Wan 2.2 in place of Seedance
+  ([#201](https://github.com/Er2oneousbit/claude-code-game-kit/issues/201)).
 
 ### Never run or not run end to end
 - **macOS and Linux:** untested throughout (the scaffolder ran on Linux in an earlier version only). Tool and binary
