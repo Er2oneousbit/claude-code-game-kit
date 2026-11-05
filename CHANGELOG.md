@@ -26,6 +26,8 @@
   earlier "not recommended" note replaced), the resources pages, EVIDENCE E147 to E150, import notes in the Godot,
   web-3d, Unity, Unreal and Bevy ENGINE.md (Unity, Unreal and Bevy marked verify), and
   `workflows/meshwright-showcase/` (a prop and a character from prompt to engine, failures included) (#193).
+- Meshwright: a validator that crashes (any exit but 0, 1 and 2, or no report) stops make before anything is copied
+  or logged, and an old `validate.json` from an earlier run is removed first, so it can never pass a model (#193).
 
 ## 0.10.0 (unreleased)
 - Wavesmith: the DAW round trip (`wavesmith.py daw`, daw.py). `daw reaper <set|track|folder>` writes a plain-text
