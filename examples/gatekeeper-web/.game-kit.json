@@ -1262,6 +1262,12 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.8.2",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1634,7 +1640,7 @@
     "tools/blender/test_validate_asset.py": "bba9994de9138a7e51d1ed6f48f9bf1eea96b22da087116b06c911ed14397387",
     "tools/blender/validate_asset.py": "0e775dbdfc1d66eea178dda181b889366afcd4ae47ef68c829244c74a9bc7eb0",
     "tools/bozzetto/LICENSES.md": "93201bc78edf482d08b2185d83d550d3a4cc456fd3176c1c9019cc5a461c0f07",
-    "tools/bozzetto/README.md": "b8b6586ff69adef5a0cd863c4882e09c3fc3c213d54e71c9d7a36439de92e8e3",
+    "tools/bozzetto/README.md": "5d734b2243ab4b1d688e29526758eac4f89d27b6f6bdafe0d474b2da3c3aba27",
     "tools/bozzetto/bozzetto.py": "5bda55f9b38ae790c5c4600d509f4e6c9f02896f6e72a151fe2f5210ea353c4e",
     "tools/bozzetto/cleanup.py": "f1fdf0a0a12eacc52a88e0d06889d4e3335a311b81c00e47dc3cf03c5f9f3865",
     "tools/bozzetto/licenses/BiRefNet-LICENSE.txt": "92a7089e0915fc32bc40067560b398f1e6a7a5958abd7d04eda393629a5acefb",

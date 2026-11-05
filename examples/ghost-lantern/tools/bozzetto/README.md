@@ -132,8 +132,10 @@ which upstream TRELLIS.2 uses, are non-commercial and never loaded (`make` refus
 Hunyuan3D 2.x (region exclusions) and Stable Fast 3D (revenue cap) were ruled out. Paid 3D services (Meshy, Tripo
 and others) are not wired in: `docs/resources/ai-tools.md` lists them.
 
-The name "Bozzetto" is used by two other GitHub projects (a 3D-print mesh repair tool and an agent 3D stack); it is
-spelled in one constant (`TOOL` in `bozzetto.py`), this folder's name and the docs, so a rename stays cheap.
+The tool was first called Meshwright and renamed before release: that name, and Polywright, Whittle and Plinth, were
+already taken by other 3D projects. A web search on 2026-11-05 found no software named "Bozzetto" **(verify)** before
+a release. The name is spelled in one constant (`TOOL` in `bozzetto.py`), this folder's name and the docs, so a
+rename stays cheap.
 
 ## Exams
 ```
