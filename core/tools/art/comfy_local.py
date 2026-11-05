@@ -22,7 +22,8 @@
 #           unless --allow-remote. Free per image; the cost is GPU time (each run prints it).
 #           ComfyUI writes the full prompt and workflow (local paths included) into every PNG and FLAC it saves;
 #           this tool removes those text chunks (PNG) and tag blocks (FLAC) before writing, and `strip` does the
-#           same for files saved by hand. Audio jobs (Save Audio nodes) are saved like images. Other formats
+#           same for files saved by hand. Audio jobs (Save Audio nodes) are saved like images. 3D jobs (Save 3D Model,
+#           history key "3d") save .glb files with the prompt in the glTF "extras": those are removed too. Other formats
 #           (GIF, WebP, video, MP3, Opus) are saved as they come, with a warning: check them before sharing.
 #           Licensing: each model and LoRA has its own license; --log lists the models the workflow names so you
 #           can check every model card before shipping (some are non-commercial).
@@ -31,6 +32,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): an interrupted or dequeued job raises JobCancelled
 #           (a JobError), so a caller can tell a cancel from a failure
+#           2026-11-05 with Claude (Opus 5.5, claude-opus-5-5): 3D outputs (the "3d" history key, .glb saved with its
+#           glTF "extras" removed: ComfyUI's SaveGLB writes the whole prompt there), for Meshwright
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -39,7 +42,8 @@
 #   run:   load the API-format workflow -> apply --image (POST /upload/image), --set NODE.INPUT=VALUE, --seed
 #          -> missing nodes? stop -> dry run? print the graph, stop
 #          -> POST /prompt -> poll GET /history/<id> until it has a status -> error? print ComfyUI's message
-#          -> each output image: GET /view -> PNG: drop tEXt/iTXt/zTXt chunks -> write under --out (no overwrite)
+#          -> each output image: GET /view -> PNG: drop tEXt/iTXt/zTXt chunks, GLB: drop every glTF "extras"
+#          -> write under --out (no overwrite)
 #          -> comfy_local.gen.json (workflow SHA-256, settings, models, files) -> --log: ASSET_LOG row + evidence
 #   strip: each PNG or FLAC -> same chunk / block filter -> in place (--overwrite) or into --out
 import argparse
@@ -77,7 +81,9 @@ TEXT_CHUNKS = {b"tEXt", b"iTXt", b"zTXt"}   # where ComfyUI stores "prompt" and 
 FLAC_MAGIC = b"fLaC"
 FLAC_KEEP_BLOCKS = {0, 3, 5}            # STREAMINFO, SEEKTABLE, CUESHEET; tags (VORBIS_COMMENT, where ComfyUI puts
                                         # the prompt and workflow), PICTURE, APPLICATION and PADDING are dropped
-SAVE_EXTENSIONS = {".png", ".gif", ".webp", ".jpg", ".jpeg", ".mp4", ".webm", ".flac", ".mp3", ".opus", ".wav"}
+GLB_MAGIC = b"glTF"
+SAVE_EXTENSIONS = {".png", ".gif", ".webp", ".jpg", ".jpeg", ".mp4", ".webm", ".flac", ".mp3", ".opus", ".wav", ".glb"}
+OUTPUT_KEYS = ("images", "gifs", "videos", "animated", "audio", "3d")   # /history output lists that hold files
 MODEL_EXTENSIONS = (".safetensors", ".gguf", ".ckpt", ".pt", ".pth", ".bin", ".sft")
 PROMPT_INPUTS = ("text", "prompt", "positive", "text_g", "text_l")   # inputs that usually hold the prompt
 SEED_INPUTS = ("seed", "noise_seed")
@@ -367,7 +373,7 @@ def wait_history(base, prompt_id, limit):
 def output_files(entry, include_temp):
     files = []
     for nid, out in (entry.get("outputs") or {}).items():
-        for key in ("images", "gifs", "videos", "animated", "audio"):
+        for key in OUTPUT_KEYS:
             for item in out.get(key) or []:
                 if isinstance(item, dict) and item.get("filename") and \
                         (item.get("type") == "output" or (include_temp and item.get("type") == "temp")):
@@ -423,13 +429,72 @@ def strip_flac(data):
     return FLAC_MAGIC + b"".join(bytes(b) for b in kept) + data[pos:]
 
 
+def _drop_extras(node):
+    """Remove every "extras" key from a glTF JSON tree, in place. Returns how many went."""
+    gone = 0
+    if isinstance(node, dict):
+        if "extras" in node:
+            del node["extras"]
+            gone += 1
+        for value in node.values():
+            gone += _drop_extras(value)
+    elif isinstance(node, list):
+        for value in node:
+            gone += _drop_extras(value)
+    return gone
+
+
+def read_glb(data):
+    """(glTF JSON dict, binary chunk bytes or b"") of a .glb. Raises ToolError when it is not one."""
+    if not data.startswith(GLB_MAGIC) or len(data) < 20:
+        raise ToolError("not a GLB file")
+    version, length = struct.unpack_from("<II", data, 4)
+    if version != 2 or length > len(data):
+        raise ToolError("GLB is truncated or not glTF 2.0")
+    size, kind = struct.unpack_from("<I4s", data, 12)
+    if kind != b"JSON" or 20 + size > length:
+        raise ToolError("GLB does not start with its JSON chunk")
+    try:
+        doc = json.loads(data[20:20 + size].decode("utf-8"))
+    except ValueError:
+        raise ToolError("GLB JSON chunk does not parse")
+    pos, binary = 20 + size, b""
+    if pos + 8 <= length:
+        bsize, bkind = struct.unpack_from("<I4s", data, pos)
+        if bkind == b"BIN\x00":
+            binary = data[pos + 8:pos + 8 + bsize]
+    return doc, binary
+
+
+def write_glb(doc, binary):
+    """A .glb from a glTF JSON dict and its binary chunk (chunks padded to 4 bytes as the spec asks)."""
+    js = json.dumps(doc, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    js += b" " * (-len(js) % 4)
+    chunks = struct.pack("<I4s", len(js), b"JSON") + js
+    if binary:
+        binary = binary + b"\x00" * (-len(binary) % 4)
+        chunks += struct.pack("<I4s", len(binary), b"BIN\x00") + binary
+    return GLB_MAGIC + struct.pack("<II", 2, 12 + len(chunks)) + chunks
+
+
+def strip_glb(data):
+    """The GLB without any glTF "extras" (ComfyUI's SaveGLB puts the whole prompt, local paths included, in
+    asset.extras.prompt); meshes, buffers and textures are untouched. Raises ToolError when it is not a GLB."""
+    doc, binary = read_glb(data)
+    if not _drop_extras(doc):
+        return data
+    return write_glb(doc, binary)
+
+
 def strip_embedded(data):
-    """PNG or FLAC without embedded prompt and workflow; anything else is a ToolError."""
+    """PNG, FLAC or GLB without embedded prompt and workflow; anything else is a ToolError."""
     if data.startswith(PNG_MAGIC):
         return strip_png(data)
     if data.startswith(FLAC_MAGIC):
         return strip_flac(data)
-    raise ToolError("not a PNG or FLAC file")
+    if data.startswith(GLB_MAGIC):
+        return strip_glb(data)
+    raise ToolError("not a PNG, FLAC or GLB file")
 
 
 def safe_name(name):
@@ -535,7 +600,7 @@ def cmd_run(args):
     entry, seconds = wait_history(base, prompt_id, args.wait)
     items = output_files(entry, args.include_temp)
     if not items:
-        raise JobError("the job finished but saved no images or audio (does the workflow end in a Save node?)")
+        raise JobError("the job finished but saved no images, audio or 3D models (does the workflow end in a Save node?)")
     fetched = []
     for item in items:
         query = urllib.parse.urlencode({"filename": item["filename"], "subfolder": item.get("subfolder", ""),
@@ -549,10 +614,10 @@ def cmd_run(args):
             print(f"[skip] {item['filename']}: {ext or 'no extension'} is not an image, video or audio type this "
                   "tool saves")
             continue
-        if ext in (".png", ".flac"):
+        if ext in (".png", ".flac", ".glb"):
             data = strip_embedded(data)
         elif ext != ".wav":   # ComfyUI writes no workflow into WAV, so there is nothing to strip or warn about
-            print(f"[warn] {name}: {ext} files can carry the workflow too; this tool strips PNGs and FLACs only")
+            print(f"[warn] {name}: {ext} files can carry the workflow too; this tool strips PNGs, FLACs and GLBs only")
         fetched.append((out_dir / name, data))
     if not fetched:
         raise JobError("nothing was saved")
@@ -637,8 +702,9 @@ def build_parser():
     p.add_argument("--notes", default="", help="extra text for the ASSET_LOG Notes column")
     p.set_defaults(fn=cmd_run)
 
-    p = sub.add_parser("strip", parents=[common], help="remove embedded prompt and workflow text from PNG and FLAC files")
-    p.add_argument("files", nargs="+", help="PNG or FLAC files")
+    p = sub.add_parser("strip", parents=[common],
+                       help="remove embedded prompt and workflow text from PNG, FLAC and GLB files")
+    p.add_argument("files", nargs="+", help="PNG, FLAC or GLB files")
     p.add_argument("--out", help="write clean copies into this folder")
     p.add_argument("--overwrite", action="store_true", help="clean in place, or replace existing copies in --out")
     p.set_defaults(fn=cmd_strip)

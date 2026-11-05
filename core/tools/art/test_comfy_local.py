@@ -79,6 +79,19 @@ def flac_with_tags():
     return data[:4] + streaminfo + tags + data[8 + info_len:]
 
 
+def glb_with_extras():
+    """A one-triangle GLB with ComfyUI-style asset.extras.prompt (SaveGLB writes the whole prompt there)."""
+    binary = struct.pack("<9f", 0, 0, 0, 1, 0, 0, 0, 1, 0)
+    doc = {"asset": {"version": "2.0", "generator": "ComfyUI", "extras": {"prompt": json.dumps({"path": EMBEDDED_PATH})}},
+           "buffers": [{"byteLength": len(binary)}],
+           "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": len(binary)}],
+           "accessors": [{"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3",
+                          "min": [0, 0, 0], "max": [1, 1, 0]}],
+           "meshes": [{"primitives": [{"attributes": {"POSITION": 0}}], "extras": {"workflow": "{}"}}],
+           "nodes": [{"mesh": 0}], "scenes": [{"nodes": [0]}], "scene": 0}
+    return cl.write_glb(doc, binary)
+
+
 class State:
     def __init__(self):
         self.reset()
@@ -96,6 +109,7 @@ class State:
         self.files = [{"filename": "kit_00001_.png", "subfolder": "", "type": "output"},
                       {"filename": "kit_preview.png", "subfolder": "", "type": "temp"}]
         self.audio = []              # Save Audio node outputs (history key "audio")
+        self.models = []             # Save 3D Model node outputs (history key "3d")
 
 
 STATE = State()
@@ -135,7 +149,8 @@ class FakeComfy(http.server.BaseHTTPRequestHandler):
                 return self.send(200, {pid: {"outputs": {}, "status": {"status_str": "error", "completed": False,
                                        "messages": [["execution_error", {"node_id": "3", "node_type": "KSampler",
                                                                          "exception_message": STATE.fail}]]}}})
-            return self.send(200, {pid: {"outputs": {"9": {"images": STATE.files}, "10": {"audio": STATE.audio}},
+            return self.send(200, {pid: {"outputs": {"9": {"images": STATE.files}, "10": {"audio": STATE.audio},
+                                                     "11": {"3d": STATE.models}},
                                          "status": {"status_str": "success", "completed": True, "messages": []}}})
         if url.path == "/queue":
             STATE.queue_polls += 1
@@ -148,6 +163,8 @@ class FakeComfy(http.server.BaseHTTPRequestHandler):
                 return self.send(200, png_with_text(), "image/png")
             if name.endswith(".flac"):
                 return self.send(200, flac_with_tags(), "audio/flac")
+            if name.endswith(".glb"):
+                return self.send(200, glb_with_extras(), "model/gltf-binary")
             if name.endswith(".mp3"):
                 return self.send(200, b"ID3 fake mp3", "audio/mpeg")
             return self.send(200, b"GIF89a fake", "image/gif")
@@ -437,6 +454,33 @@ class ComfyLocalExam(unittest.TestCase):
         rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o")
         self.assertEqual(rc, 0, out)
         self.assertIn("[warn] sfx_00001_.mp3", out)
+
+    # ---- 3D jobs (Save 3D Model writes the prompt into the glTF asset extras)
+    def test_3d_job_saves_glb_without_extras_and_same_mesh(self):
+        STATE.files = []
+        STATE.models = [{"filename": "textured_00001_.glb", "subfolder": "meshwright", "type": "output"}]
+        rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o")
+        self.assertEqual(rc, 0, out)
+        saved = (self.root / "o" / "textured_00001_.glb").read_bytes()
+        self.assertIn(EMBEDDED_PATH.encode(), glb_with_extras(), "the stand-in must carry the path to begin with")
+        self.assertNotIn(EMBEDDED_PATH.encode(), saved)
+        self.assertNotIn(b"extras", saved)
+        doc, binary = cl.read_glb(saved)
+        before = cl.read_glb(glb_with_extras())
+        self.assertEqual(binary, before[1], "stripping changed the mesh data")
+        self.assertEqual(doc["accessors"], before[0]["accessors"])
+        self.assertEqual(len(saved) % 4, 0, "GLB length must stay a multiple of 4")
+        self.assertNotIn("[warn]", out)
+
+    def test_strip_glb_by_hand_and_refuse_a_cut_one(self):
+        (self.root / "m.glb").write_bytes(glb_with_extras())
+        rc, out = self.run_tool("strip", "m.glb", "--out", "clean", url=False)
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn(EMBEDDED_PATH.encode(), (self.root / "clean" / "m.glb").read_bytes())
+        (self.root / "cut.glb").write_bytes(glb_with_extras()[:30])
+        rc, out = self.run_tool("strip", "cut.glb", "--out", "c2", url=False)
+        self.assertEqual(rc, 2, out)
+        self.assertFalse((self.root / "c2" / "cut.glb").exists())
 
     def test_strip_flac_by_hand(self):
         (self.root / "take.flac").write_bytes(flac_with_tags())
