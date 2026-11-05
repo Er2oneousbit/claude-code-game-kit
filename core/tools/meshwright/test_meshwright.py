@@ -239,6 +239,8 @@ class FakeBlender:
                 for i, _ in enumerate(argv[argv.index("--lods") + 1].split(","), 1):
                     out.with_name(f"{out.stem}_LOD{i}.glb").write_bytes(out.read_bytes())
         elif name == "validate_asset.py":
+            if self.validate_rc not in (0, 1):   # a crash: Blender dies before the report is written
+                return self.validate_rc, "Segmentation fault"
             report = {"asset": str(Path(argv[0]).resolve()), "total_tris": 2600, "objects": [],
                       "failures": ["prop_x: largest side 5.00 m is over 3.0 m"] if self.validate_rc else [],
                       "warnings": ["texel density varies 3.0x"], "notes": []}
@@ -554,6 +556,20 @@ class MakeRun(Base):
         self.assertNotIn("| model |", (self.root / "docs" / "ASSET_LOG.md").read_text(encoding="utf-8"))
         self.assertTrue((self.root / "assets_src/meshwright/prop_crate/export/prop_crate.glb").is_file(),
                         "the failed files stay in the source folder to look at")
+
+    def test_validator_crash_ships_nothing_even_with_an_old_report(self):
+        # an earlier passing run left validate.json behind; this run's validator crashes (a Windows access
+        # violation): nothing may reach the models folder or the log on the strength of the old report
+        src = self.root / "assets_src" / "meshwright" / "prop_crate"
+        src.mkdir(parents=True)
+        (src / "validate.json").write_text(json.dumps({"failures": [], "warnings": [], "notes": []}), encoding="utf-8")
+        self.fake.validate_rc = 3221225477
+        rc, out = self.make()
+        self.assertEqual(rc, 1, out)
+        self.assertIn("validate_asset.py did not finish (exit 3221225477)", out)
+        self.assertFalse((self.root / "assets" / "models" / "prop_crate.glb").exists(), "an unchecked model shipped")
+        self.assertNotIn("| model |", (self.root / "docs" / "ASSET_LOG.md").read_text(encoding="utf-8"))
+        self.assertFalse((src / "validate.json").exists(), "the stale report must go")
 
     def test_rerun_needs_overwrite_and_updates_the_same_row(self):
         self.assertEqual(self.make()[0], 0)

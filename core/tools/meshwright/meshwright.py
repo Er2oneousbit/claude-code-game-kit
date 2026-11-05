@@ -559,11 +559,16 @@ def blender_steps(args, plan, blender, raw):
     if rc != 0:
         raise (JobError if rc == 1 else ToolError)(f"prep_export.py failed (exit {rc})")
     report = plan.src / "validate.json"
+    if report.exists():                  # a report from an earlier run must never stand in for this one
+        report.unlink()
     rc, _ = run_bpy(blender, TOOLS / "blender" / "validate_asset.py",
                     [export, "--class", plan.cls, "--json", report], "validate_asset")
     if rc == 2:
         raise ToolError("validate_asset.py could not run (exit 2)")
-    validation = json.loads(report.read_text(encoding="utf-8")) if report.is_file() else {}
+    if rc not in (0, 1) or not report.is_file():   # a crash (any other code) or no report: nothing is checked
+        raise JobError(f"validate_asset.py did not finish (exit {rc}{', no report' if rc in (0, 1) else ''}); "
+                       f"nothing was copied into {rel(plan.root, plan.out_dir)}. --debug shows Blender's output")
+    validation = json.loads(report.read_text(encoding="utf-8"))
     validation["asset"] = rel(plan.root, export)   # the validator writes the path it was given (absolute)
     report.write_text(json.dumps(validation, indent=2), encoding="utf-8")
     cleanup = json.loads((plan.src / "cleanup.json").read_text(encoding="utf-8"))
