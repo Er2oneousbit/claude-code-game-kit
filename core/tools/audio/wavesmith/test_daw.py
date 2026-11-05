@@ -716,6 +716,20 @@ class UniversalExam(GameDir):
         self.assertIn("hum: edited, and the game already has this version", out)
         self.assertEqual(self.changed(before), [])
 
+    @unittest.skipUnless(audioio.find_ffmpeg(), "writing OGG needs ffmpeg")
+    def test_an_edited_ogg_loop_keeps_its_loop_point(self):
+        game, n = self.make_ogg()
+        self.assertEqual(run("export", "assets/audio/amb", "build/daw_amb", "--bus", "ambience")[0], 0)
+        man = json.loads((self.root / "build/daw_amb" / daw.MANIFEST).read_text(encoding="utf-8"))
+        self.assertEqual((man["items"][0]["loop"], man["items"][0]["kind"]), ([4410, n - 1], "loop"))
+        self.assertEqual(read_wav_channels(self.root / "build/daw_amb/stems/hum.wav")[2], (4410, n - 1))
+        self.render_hum(0.5)
+        rc, out = run("import", "build/daw_amb")
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn("length changed", out)
+        tags = dict(audioio.oggvorbis_module().decode(game.read_bytes())[2])
+        self.assertEqual((tags.get("LOOPSTART"), tags.get("LOOPLENGTH")), ("4410", str(n - 4410)))
+
     def test_import_of_a_reaper_folder_and_reexport_of_an_export_are_refused(self):
         self.assertEqual(run("export", "blips", "build/daw_blips")[0], 0)
         rc, out = run("reaper", "--reexport", "build/daw_blips")

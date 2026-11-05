@@ -134,16 +134,33 @@ def posix_rel(path, start):
 
 
 def read_any(path):
-    """(channels as lists, rate, loop or None) from WAV (loop chunk kept), FLAC or OGG."""
+    """(channels as lists, rate, loop or None) from WAV (its loop chunk), FLAC or OGG (its LOOPSTART / LOOPLENGTH
+    comments, the kit's OGG loop: audioio.write_audio)."""
     path = Path(path)
     try:
         if path.suffix.lower() == ".wav":
             samples, rate, loop, ch = read_wav_channels(path)
             return [samples[c::ch] for c in range(ch)], rate, loop
         chans, rate = audioio.read_audio(path)
-        return [list(c) for c in chans], rate, None
+        chans = [list(c) for c in chans]
+        return chans, rate, ogg_loop(path, len(chans[0])) if path.suffix.lower() == ".ogg" else None
     except (ValueError, audioio.AudioIOError) as exc:
         raise ToolError(f"{path.as_posix()}: {exc}")
+
+
+def ogg_loop(path, frames):
+    """(start, end) from an OGG Vorbis file's LOOPSTART / LOOPLENGTH comments, or None (no tags, or tags that do not
+    fit the file)."""
+    mod = audioio.oggvorbis_module()
+    if mod is None:
+        return None
+    try:
+        _, comments, _ = mod.stream(Path(path).read_bytes())      # the headers only: nothing is decoded
+        tags = {k.upper(): v for k, v in comments}
+        start, length = int(tags["LOOPSTART"]), int(tags.get("LOOPLENGTH", frames - int(tags["LOOPSTART"])))
+    except Exception:              # no tags, a tag that is not a number, or one of the decoder's own error classes
+        return None
+    return (start, start + length - 1) if 0 <= start and length > 0 and start + length <= frames else None
 
 
 # ---- what to edit ------------------------------------------------------------------------------------------------
