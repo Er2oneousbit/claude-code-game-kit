@@ -198,10 +198,11 @@ autoplay exit leak (#6).
   decides ([#7](https://github.com/Er2oneousbit/claude-code-game-kit/issues/7)).
 
 ### Graveyard Shift (Unity)
-- The bot trio is not quite repeatable: two ghosts close together can part by a millimeter between runs, so
-  always-lit's hand-made catches read 12 or 14 (cause not found; probably not physics timing or job threads;
-  [#160](https://github.com/Er2oneousbit/claude-code-game-kit/issues/160)). Careful and
-  always-dark now replay exactly, so `Smoke_D` at the 104 cap no longer flakes (#9, fixed in 0.8.3).
+- **Bot trio repeatability (NOT REPRODUCED in 0.13.1, kept here until the issue closes on main):** the always-lit
+  bot's "12 or 14 catches" did not happen again in eleven runs, every frame identical, nor on the code where it was
+  seen; most likely it came from a run with altered physics settings during the #9 work. `Smoke_R10` and `Smoke_R11`
+  now fail on any difference ([#160](https://github.com/Er2oneousbit/claude-code-game-kit/issues/160)). Careful and
+  always-dark replay exactly too (#9, fixed in 0.8.3).
 - Generated nights are easier than the hand-made yard (the dark bot escapes 6 of 8 generated against 2 of 8).
 - A low rock the ghosts' NavMesh climbs (0.75 m) blocks the keeper's CharacterController (0.3 m); the fix moved the
   tuned balance and was reverted. Both wait for a balance decision ([#10](https://github.com/Er2oneousbit/claude-code-game-kit/issues/10)).
