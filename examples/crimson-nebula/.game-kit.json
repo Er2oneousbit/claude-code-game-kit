@@ -501,6 +501,12 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.1",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -875,7 +881,7 @@
     "tools/hooks/session_context.py": "8b3e3734fcaeb5d0b97ba5350ff380e9758174c7c5afb162a5735e93f28b9133",
     "tools/image_diff.py": "e4aa63680093e09e8a48c48996c4a1fbc75404d72312ccb0faee7a7068abe430",
     "tools/issues.py": "bb8f2116b28d48a0ff1cbe65852c2525fafc7b344db16304fcee057d1c581587",
-    "tools/publish_check.py": "71cc744deac862966e2c5c7ad077e30945f63fdba469ad172e2dcb27d9bf4f6a",
+    "tools/publish_check.py": "618a3c32bba757406947bf23a7e9c3768893f882e18a2ec37916ff5ab57f0098",
     "tools/second_opinion.py": "66f4bccb61c430c38cec8568f9407695f241322cf60d54599e23fded9dc651ea",
     "tools/second_opinion/kimi-agent.md": "972813c8257a14c102575088e5e96243e049656609105098a341169798416aec",
     "tools/test_check_links.py": "768e36f642e0f3bbbbf87a800095a51a9f5ea0353de240ed26fc88aa6633fff7",
@@ -885,7 +891,7 @@
     "tools/test_golden_vectors.py": "ae987f692dc728be23b98d2822531685f9487524a6a59305fa24e825717ca61d",
     "tools/test_image_diff.py": "0584beab2542496e4acd12f0365d304226897e18a77a0a76dffb7b54361ec11b",
     "tools/test_issues.py": "259047c45802fd775bc0a39b327135b2abd4e45a22a8d859fb5e9601acf5f1c4",
-    "tools/test_publish_check.py": "1c7492fb70cfa23ab08959d8868ae7d60822fb0ea3430d129ed8dff6f60e8f84",
+    "tools/test_publish_check.py": "d7962a26e30ef59dc589187af502db745b8232cc1627564469f77e4a0055c550",
     "tools/test_second_opinion.py": "3a3dada4f6c3032d61ef535663d350d23c13963c1a49eed7368dbf4de03bb72a",
     "tools/test_token_audit.py": "8be4deeedc4b063bc0c1758f74970aa4fb1d21f7442d7ebf8ae09e9df9d4def2",
     "tools/test_yt_transcript.py": "5078a90625d20be03bd2c04ca9d48a13e603c19d08560506b9963eac6f13e744",

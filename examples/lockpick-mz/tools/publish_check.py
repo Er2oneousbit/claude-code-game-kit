@@ -27,6 +27,7 @@
 import argparse
 import fnmatch
 import json
+import os
 import re
 import subprocess
 import sys
@@ -59,13 +60,21 @@ TOKEN_PATTERNS = [
                                      r"(?:api[_-]?key|secret|token|passw(?:or)?d)(?:[_-][A-Za-z0-9]*)*"
                                      r"\s*(?::=|[:=])\s*[\"'](?![A-Za-z][A-Za-z0-9+.-]*://)[^\"'\s<>{}]{16,}[\"']")),
 ]
+# The same names with an unquoted value, as INI, .env, YAML and credentials files write them
+# (aws_secret_access_key = wJal...). Only in config-type files: in code an unquoted value is a name, not a secret.
+# The value needs a digit and either both letter cases or one of / + = (a key, not a constant like API_KEY_V2_NAME).
+UNQUOTED_SECRET = re.compile(r"(?i)^\s*(?:export\s+)?(?:[A-Za-z0-9]*[_-])*"
+                             r"(?:api[_-]?key|secret|token|passw(?:or)?d)(?:[_-][A-Za-z0-9]*)*"
+                             r"\s*[:=]\s*(?![A-Za-z][A-Za-z0-9+.-]*://)([^\s\"'#;<>{}$()\[\],]{16,})\s*(?:[#;].*)?$")
+CONFIG_EXTS = {".ini", ".cfg", ".conf", ".toml", ".properties", ".yaml", ".yml", ".env", ".config", ""}
 # A real user's home folder (not a <name> placeholder or a generic example)
 HOME_PATH = re.compile(r"(?i)\b[A-Z]:[\\/]+Users[\\/]+(?!<|\{|Public\b|Default\b|you\b|name\b|USERNAME\b)[^\\/\s\"'`<>]+"
-                       r"|/(?:Users|home)/(?!<|\{|you\b|name\b|runner\b|user\b)[A-Za-z0-9._-]+(?=[/\s\"'`]|$)")
+                       r"|/(?:Users|home)/(?!<|\{|you\b|name\b|runner\b|user\b)[A-Za-z0-9][A-Za-z0-9._-]*(?![A-Za-z0-9._-])")
 # Pixelorama keeps the folder a .pxo was last exported to in its zipped data.json (export_profile.directory_path,
 # written as Godot's var_to_str, so the text sits in double quotes): an absolute one names a folder on your machine
 PXO_ABSOLUTE = re.compile(r'^"?(?:[A-Za-z]:[\\/]|[\\/]|~(?:[\\/]|"?$))')
 PXO_MAX_JSON = 8 * 1024 * 1024          # a bigger data.json is not read (a real one is well under 1 MB)
+PXO_UNREADABLE = "\0unreadable"         # pxo_export_folder's answer for a .pxo whose data.json cannot be read
 NOREPLY = re.compile(r"(?i)@users\.noreply\.github\.com$|^noreply@|@noreply\.")
 GITHUB_HARD_LIMIT = 100 * 1024 * 1024   # GitHub rejects pushes with a file over 100 MB
 GITHUB_WARN_LIMIT = 50 * 1024 * 1024    # and warns over 50 MB
@@ -99,7 +108,9 @@ def git(root, *args, check=True):
 def publishable_files(root):
     """Paths (relative, forward slashes) that `git add -A` and a push would publish."""
     out = git(root, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
-    return sorted({p for p in out.decode("utf-8", "replace").split("\0") if p})
+    # surrogateescape, not "replace": a name that is not UTF-8 (.env.\xff on Linux) must stay the real file's name,
+    # or it is skipped as missing, secret-name check included (#238)
+    return sorted({p for p in out.decode("utf-8", "surrogateescape").split("\0") if p})
 
 
 def lfs_paths(root, paths):
@@ -107,9 +118,16 @@ def lfs_paths(root, paths):
     if not paths:
         return set()
     r = subprocess.run(["git", "-C", str(root), "check-attr", "-z", "--stdin", "filter"], capture_output=True,
-                       input="\0".join(paths).encode("utf-8") + b"\0", timeout=120)
-    fields = r.stdout.decode("utf-8", "replace").split("\0")
+                       input="\0".join(paths).encode("utf-8", "surrogateescape") + b"\0", timeout=120)
+    fields = r.stdout.decode("utf-8", "surrogateescape").split("\0")
     return {fields[i] for i in range(0, len(fields) - 2, 3) if fields[i + 2] == "lfs"}
+
+
+def lfs_ready(root):
+    """True when Git LFS's clean filter is configured: without it, `filter=lfs` in .gitattributes does nothing and
+    `git add` stores the raw file, which GitHub rejects over 100 MB (#239)."""
+    r = git(root, "config", "--get", "filter.lfs.clean", check=False)
+    return bool(r.strip())
 
 
 def is_secret_name(rel):
@@ -117,14 +135,19 @@ def is_secret_name(rel):
     return base not in SECRET_ALLOW and any(fnmatch.fnmatch(base, g) for g in SECRET_GLOBS)
 
 
+class Unreadable(Exception):
+    """A file that could not be read: reported, never taken as clean (#239)."""
+
+
 def scan_text(path):
-    """Return (token findings, home-path findings) for one file, or ([], []) for binary or large files."""
+    """Return (token findings, home-path findings) for one file, or ([], []) for binary or large files. Raises
+    Unreadable when the file cannot be read."""
     try:
         if path.stat().st_size > MAX_TEXT_SCAN:
             return [], []
         data = path.read_bytes()
-    except OSError:
-        return [], []
+    except OSError as exc:
+        raise Unreadable(exc.strerror or exc.__class__.__name__)
     codec = next((c for bom, c in BOMS if data.startswith(bom)), None)
     if codec:
         text = data.decode(codec, "replace")
@@ -132,11 +155,21 @@ def scan_text(path):
         return [], []
     else:
         text = data.decode("utf-8", "replace")
+    return scan_lines(text, config=path.suffix.lower() in CONFIG_EXTS or path.name.lower().startswith(".env"))
+
+
+def scan_lines(text, config=False):
+    """(token findings, home-path findings) in text; config: also unquoted secret values (an INI, a .env)."""
     tokens, homes = [], []
     for lineno, line in enumerate(text.splitlines(), 1):
         for label, pat in TOKEN_PATTERNS:
             if pat.search(line):
                 tokens.append(f"line {lineno}: looks like a {label}")
+        m = UNQUOTED_SECRET.match(line) if config else None
+        if m and not any(f"line {lineno}:" in x for x in tokens):
+            v = m.group(1)
+            if re.search(r"\d", v) and ((re.search(r"[a-z]", v) and re.search(r"[A-Z]", v)) or re.search(r"[/+=]", v)):
+                tokens.append(f"line {lineno}: looks like a hard-coded secret (unquoted)")
         m = HOME_PATH.search(line)
         if m:
             homes.append(f"line {lineno}: {m.group(0)}")
@@ -167,6 +200,9 @@ def pxo_export_folder(path):
             d = json.loads(z.read("data.json").decode("utf-8"))
     except (KeyError, OSError, ValueError, RecursionError, zipfile.BadZipFile, zlib.error):
         return ""
+    except (RuntimeError, NotImplementedError, EOFError):
+        # encrypted (RuntimeError) or a compression zipfile cannot read: not a git problem, and not clean (#239)
+        return PXO_UNREADABLE
     prof = d.get("export_profile") if isinstance(d, dict) else None
     v = prof.get("directory_path") if isinstance(prof, dict) else None
     return v.strip('"') if isinstance(v, str) and PXO_ABSOLUTE.match(v) else ""
@@ -219,8 +255,24 @@ def run(root):
     if not any(f.lower() in LICENSE_NAMES for f in files):
         fails.append("no LICENSE file at the root: without one, nobody may legally reuse the code (SOP-13 step 1)")
     lfs = lfs_paths(root, files)
+    if lfs and not lfs_ready(root):
+        warns.append(f"{len(lfs)} file(s) have filter=lfs in .gitattributes, but Git LFS is not set up here "
+                     "(`git lfs install`): they would be committed as they are, so their sizes are checked")
+        lfs = set()
     for rel in files:
         path = root / rel
+        if os.path.islink(path):
+            # git publishes the link's own text (where it points), not the file behind it: check that text, and
+            # the name; a dangling link is published too (#238)
+            if is_secret_name(rel):
+                fails.append(f"{rel}: secret-type file would be published (remove it and add it to .gitignore)")
+            try:
+                tokens, homes = scan_lines(os.readlink(path))
+            except OSError:
+                tokens, homes = [], []
+            fails += [f"{rel} (symlink) {x}" for x in tokens]
+            warns += [f"{rel} (symlink) {h} (a personal path; it names your account)" for h in homes]
+            continue
         if not path.is_file():
             continue                                  # deleted in the working tree but still in the index
         if is_secret_name(rel):
@@ -232,11 +284,18 @@ def run(root):
             warns.append(f"{rel}: {size // 2**20} MB and not in LFS; GitHub warns over 50 MB")
         if unscanned_text(path):                      # check it by hand for tokens and personal paths
             warns.append(f"not content-scanned (over {MAX_TEXT_SCAN // 2**20} MB): {rel}")
-        tokens, homes = scan_text(path)
+        try:
+            tokens, homes = scan_text(path)
+        except Unreadable as exc:
+            warns.append(f"{rel}: could not be read ({exc}), so it was not scanned: check it by hand")
+            tokens, homes = [], []
         fails += [f"{rel} {t}" for t in tokens]
         warns += [f"{rel} {h} (a personal path; it names your account)" for h in homes]
         folder = pxo_export_folder(path) if rel.lower().endswith(".pxo") else ""
-        if folder:
+        if folder == PXO_UNREADABLE:
+            warns.append(f"{rel}: its data.json cannot be read (encrypted, or an unsupported compression), so its "
+                         "export folder was not checked: open it in Pixelorama and save it again")
+        elif folder:
             warns.append(f"{rel}: Pixelorama saved the folder you last exported to in it, {folder} (a path on your "
                          "machine); blank it with `python tools/art/dotwork/dotwork.py pixelorama --clear-export-path`")
     for email in history_emails(root):

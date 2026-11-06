@@ -116,11 +116,13 @@ class PublishCheckExam(unittest.TestCase):
 
     def test_home_path_warns(self):
         home = "C:" + "\\Users\\alex"
-        (self.root / "notes.md").write_text(f"built in {home}\\proj, see C:\\Users\\<you>\\x\n", encoding="utf-8")
+        (self.root / "notes.md").write_text(f"built in {home}\\proj\n", encoding="utf-8")
+        # the placeholder on its own line: one search per line stopped at alex, so it was never tested (#239)
+        (self.root / "howto.md").write_text("see C:\\Users\\<you>\\x\n", encoding="utf-8")
         warns = self.results()[1]
         self.assertIn("notes.md line 1", warns)
         self.assertIn("alex", warns)
-        self.assertNotIn("<you>", warns)
+        self.assertNotIn("howto.md", warns)
 
     def test_posix_home_path_warns_without_a_trailing_slash(self):
         lines = {"a.sh": "cd /home/" + "alice", "b.md": "see `/Users/" + "alice` here", "c.txt": "x='/home/" + "alice'",
@@ -193,6 +195,93 @@ class PublishCheckExam(unittest.TestCase):
     def test_not_a_repo_exits_2(self):
         with tempfile.TemporaryDirectory() as plain:
             self.assertEqual(publish_check.main(["--root", plain]), 2)
+
+    # ---- review fixes (#238, #239) --------------------------------------------------------------------------
+    def test_an_unquoted_secret_in_a_config_file_fails(self):
+        """#238: the secret rule needed a quoted value; an AWS credentials file passed."""
+        aws = (self.root / ".aws")
+        aws.mkdir()
+        (aws / "credentials").write_text("[default]\naws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCY"
+                                         "EXAMPLEKEY\n", encoding="utf-8")
+        (self.root / "app.ini").write_text("token = ${TOKEN_FROM_THE_ENVIRONMENT}\npassword = changeme\n",
+                                           encoding="utf-8")
+        (self.root / "main.py").write_text("api_key = API_KEY_V2_SETTINGS_NAME\n", encoding="utf-8")
+        fails = self.results()[0]
+        self.assertIn(".aws/credentials line 2: looks like a hard-coded secret (unquoted)", fails)
+        self.assertNotIn("app.ini", fails)
+        self.assertNotIn("main.py", fails)
+
+    def test_a_home_path_before_punctuation_warns(self):
+        """#238: the user name had to end at /, a space or a quote: [x](/home/<name>) and /home/<name>, passed."""
+        (self.root / "a.md").write_text("[built](/home/" + "alice)\n", encoding="utf-8")
+        (self.root / "b.md").write_text("from /home/" + "alice, then\n", encoding="utf-8")
+        warns = self.results()[1]
+        self.assertIn("a.md line 1", warns)
+        self.assertIn("b.md line 1", warns)
+
+    def test_a_symlinks_own_text_is_checked(self):
+        """#238: a dangling symlink was skipped, yet git publishes the path it points at."""
+        import os
+        link = self.root / "notes.md"
+        try:
+            os.symlink("/home/" + "alice/private/notes.md", str(link))
+        except (OSError, NotImplementedError):
+            self.skipTest("cannot make a symlink here")
+        warns = self.results()[1]
+        self.assertIn("notes.md (symlink)", warns)
+
+    @unittest.skipIf(sys.platform == "win32", "file names are UTF-16 on Windows")
+    def test_a_file_name_that_is_not_utf8_is_still_checked(self):
+        """#238: names were decoded with "replace", so .env.\\xff became a path that does not exist."""
+        import os
+        name = os.fsdecode(b".env.\xff")
+        try:
+            (self.root / name).write_text("X=1\n", encoding="utf-8")
+        except OSError:
+            self.skipTest("the file system refuses the name")
+        self.assertIn("secret-type file", self.results()[0])
+
+    def test_lfs_without_git_lfs_is_size_checked(self):
+        """#239: filter=lfs alone waived the 100 MB check; without Git LFS the raw file is committed."""
+        (self.root / ".gitattributes").write_text("*.bin filter=lfs diff=lfs merge=lfs -text\n", encoding="utf-8")
+        with open(self.root / "big.bin", "wb") as fh:
+            fh.truncate(publish_check.GITHUB_HARD_LIMIT + 1024)
+        self.git("config", "filter.lfs.clean", "")
+        fails, warns, _ = self.results()
+        self.assertIn("big.bin: 100 MB and not in LFS", fails)
+        self.assertIn("Git LFS is not set up", warns)
+        self.git("config", "filter.lfs.clean", "git-lfs clean -- %f")
+        self.assertNotIn("big.bin", self.results()[0])
+
+    def test_an_unreadable_file_is_reported_not_passed(self):
+        """#239: a file that could not be read scanned as clean."""
+        (self.root / "config.ini").write_text('api_key = "' + 'abcdefghijklmnop"\n', encoding="utf-8")
+        real = Path.read_bytes
+
+        def deny(path):
+            if path.name == "config.ini":
+                raise PermissionError(13, "Permission denied")
+            return real(path)
+        Path.read_bytes = deny
+        try:
+            warns = self.results()[1]
+        finally:
+            Path.read_bytes = real
+        self.assertIn("config.ini: could not be read", warns)
+
+    def test_an_encrypted_pxo_is_a_warning_not_exit_2(self):
+        """#239: an encrypted data.json raised RuntimeError, and main() said "not a usable git repository", exit 2."""
+        import io
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("data.json", json.dumps({"export_profile": {"directory_path": '"exports"'}}))
+        raw = bytearray(buf.getvalue())
+        for sig, off in ((b"PK\x03\x04", 6), (b"PK\x01\x02", 8)):   # set the "encrypted" bit in both headers
+            i = raw.index(sig)
+            raw[i + off] |= 1
+        (self.root / "art.pxo").write_bytes(bytes(raw))
+        self.assertIn("art.pxo: its data.json cannot be read", self.results()[1])
+        self.assertIn(publish_check.main(["--root", str(self.root)]), (0, 1))
 
 
 if __name__ == "__main__":

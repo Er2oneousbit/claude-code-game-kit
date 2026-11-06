@@ -3,9 +3,15 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig`, `tools/token_audit.py`, `tools/fetch_asset.py`, the scaffolder and the paid PixelLab and ElevenLabs clients from second-model reviews
+## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig`, `tools/token_audit.py`, `tools/fetch_asset.py`, the scaffolder, the paid PixelLab and ElevenLabs clients and `tools/publish_check.py` from second-model reviews
 Kimi K3.1 Pro reviews of 0.13.0 (`tools/second_opinion.py`), each finding checked against the code; one more was
 found by the real run that verified the rig fixes.
+- `tools/publish_check.py`: an unquoted secret in a config-type file (`aws_secret_access_key = wJal...` in
+  `.aws/credentials`, an INI, a .env) fails; a file name that is not UTF-8 keeps its real name and is checked; a
+  symlink's own text (what git publishes) is checked, dangling ones too; `/home/<name>` before `)`, `,` or `]` warns
+  (#238). `filter=lfs` waives the 100 MB check only when Git LFS is set up; a file that cannot be read is reported,
+  not passed; an encrypted `.pxo` is a warning, not exit 2; the placeholder exam tests the placeholder (#239). Same
+  results as before on the kit's own tree. `test_publish_check.py` 24 cases (was 17; two run on Linux and macOS only).
 - The paid clients (`tools/art/pixellab.py`, `tools/audio/wavesmith/eleven_audio.py`): a PixelLab job that
   outlives `--wait`, or whose download fails, is kept beside `--out` (`.<out>.pixellab-job.json`), and the same command
   picks it up instead of paying for a second generation (the old advice was "rerun"); a connection that drops during
