@@ -461,5 +461,44 @@ class FetchAssetExam(unittest.TestCase):
         self.assertEqual(self.log(), LOG)
 
 
+class LogLockExam(unittest.TestCase):
+    """#237: two runs at once could both take the next ID; the log is now held by one run at a time."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        (self.root / "docs").mkdir()
+        self.lock = self.root / "docs" / "ASSET_LOG.md.lock"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_one_holder_at_a_time(self):
+        with fetch_asset.log_lock(self.root):
+            self.assertTrue(self.lock.is_file())
+            with self.assertRaises(fetch_asset.UsageError):
+                with fetch_asset.log_lock(self.root, wait=0):
+                    pass
+        self.assertFalse(self.lock.exists(), "released")
+        with fetch_asset.log_lock(self.root, wait=0):
+            pass
+
+    def test_a_crashed_runs_lock_is_taken_over(self):
+        import os
+        import time
+        self.lock.write_bytes(b"123\n")
+        old = time.time() - fetch_asset.LOCK_STALE_S - 5
+        os.utime(self.lock, (old, old))
+        with fetch_asset.log_lock(self.root, wait=0):
+            pass
+
+    def test_evidence_is_never_overwritten(self):
+        f = self.root / "docs" / "licenses" / "A-0001.txt"
+        fetch_asset.write_new(f, b"first")
+        with self.assertRaises(fetch_asset.UsageError):
+            fetch_asset.write_new(f, b"second")
+        self.assertEqual(f.read_bytes(), b"first")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

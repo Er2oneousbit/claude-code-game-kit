@@ -21,6 +21,7 @@ import sys
 import tempfile
 import threading
 import unittest
+import urllib.error
 import urllib.request
 import zipfile
 import zlib
@@ -836,6 +837,130 @@ class PixelLabExam(unittest.TestCase):
         rc, out = self.run_tool("image", "--text", "x", "--out", "b.png", fake=Fake(image_bytes=None))
         self.assertEqual(rc, 1, out)
         self.assertIn("broken base64", out)
+
+
+# ---- review fixes (#234, #237) --------------------------------------------------------------------------------
+class ReviewFixesExam(unittest.TestCase):
+    setUp, tearDown, run_tool = PixelLabExam.setUp, PixelLabExam.tearDown, PixelLabExam.run_tool
+
+    @staticmethod
+    def posts(fake):
+        return [c for c in fake.calls if c[0] == "POST"]
+
+    def test_a_timed_out_job_is_picked_up_not_paid_again(self):
+        """#234: a slow job said "Rerun with a longer --wait", and the rerun paid for a second generation."""
+        rc, out = self.run_tool("character", "--text", "x", "--out", "c", "--wait", "0", fake=Fake(polls=99))
+        self.assertEqual(rc, 1, out)
+        self.assertNotIn("Rerun with a longer", out)
+        self.assertIn("instead of paying again", out)
+        again = Fake(polls=0)
+        rc, out = self.run_tool("character", "--text", "x", "--out", "c", fake=again)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(self.posts(again), [], "the rerun paid again")
+        self.assertIn("not paid again", out)
+        self.assertFalse(pl.job_journal(Path("c")).exists(), "the kept job outlived its saved files")
+        third = Fake(polls=0)                         # done: the same request now is a new generation
+        rc, out = self.run_tool("character", "--text", "x", "--out", "c", "--overwrite", fake=third)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(len(self.posts(third)), 1)
+
+    def test_a_dropped_paid_request_says_it_may_be_charged(self):
+        """#234: a timeout after the POST read "could not reach ...", as if nothing had happened."""
+        import socket
+        real_opener = pl.OPENER
+
+        class Opener:
+            def open(self, req, timeout=None):
+                if req.get_method() == "POST":
+                    raise socket.timeout("timed out")
+                balance = json.dumps({"subscription": {"plan": "Apprentice", "status": "active"}}).encode()
+
+                class Resp:                           # GET /balance answers, so the run reaches the paid POST
+                    status, headers = 200, {}
+
+                    def read(self, n=-1):
+                        return balance
+
+                    def __enter__(self):
+                        return self
+
+                    def __exit__(self, *a):
+                        return False
+                return Resp()
+        rc, out = self._run_real("image", "--text", "x", "--out", "d.png", opener=Opener())
+        self.assertIs(pl.OPENER, real_opener)
+        self.assertEqual(rc, 1, out)
+        self.assertIn("may have started it and charged it", out)
+
+    def _run_real(self, *argv, opener):
+        real_http, real_opener = pl.http, pl.OPENER
+        pl.http, pl.OPENER = self.real[0], opener
+        try:
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                rc = pl.main(list(argv))
+            return rc, out.getvalue() + err.getvalue()
+        finally:
+            pl.http, pl.OPENER = real_http, real_opener
+
+    def test_summed_cost_never_hides_a_known_charge(self):
+        """#237: one job without a cost made the known 3 generations disappear; mixed units showed the last only."""
+        g = lambda n: {"type": "generations", "generations": n}  # noqa: E731
+        self.assertEqual(pl.summed_cost([g(3), g(2)]), "5 generations (2 jobs)")
+        self.assertIn("3 generations", pl.summed_cost([g(3), None]))
+        self.assertIn("1 of 2 jobs reported no cost", pl.summed_cost([g(3), None]))
+        self.assertEqual(pl.summed_cost([g(3), {"type": "usd", "usd": 0.5}]), "3 generations + $0.50")
+        self.assertEqual(pl.summed_cost([None, None]), "")
+
+    def test_odd_success_json_does_not_lose_the_paid_image(self):
+        """#237: "generations": "1" (text) crashed in the cost line before the image was saved; [] crashed too."""
+        class TextCount(Fake):
+            def __call__(self, method, url, key, body=None):
+                if url.endswith("/create-image-pixflux"):
+                    self.calls.append((method, url, key, body))
+                    return 200, {}, json.dumps({"usage": {"type": "generations", "generations": "1"},
+                                                "image": b64img()}).encode()
+                return super().__call__(method, url, key, body)
+        rc, out = self.run_tool("image", "--text", "x", "--out", "t.png", fake=TextCount())
+        self.assertEqual(rc, 0, out)
+        self.assertTrue((self.root / "t.png").is_file())
+
+        class ListAnswer(Fake):
+            def __call__(self, method, url, key, body=None):
+                if url.endswith("/create-image-pixflux"):
+                    return 200, {}, b"[]"
+                return super().__call__(method, url, key, body)
+        rc, out = self.run_tool("image", "--text", "x", "--out", "l.png", fake=ListAnswer())
+        self.assertEqual(rc, 1, out)
+        self.assertIn("unexpected shape", out)
+
+    def test_a_token_echoed_by_the_server_is_not_printed(self):
+        """#237: the server's error text went into the message as it was (run_tool also checks the token)."""
+        body = json.dumps({"detail": f"bad token {KEY}"}).encode()
+        rc, out = self.run_tool("image", "--text", "x", "--out", "k.png", fake=Fake(status=422, body=body))
+        self.assertEqual(rc, 2, out)
+        self.assertIn("<key>", out)
+
+    def test_windows_device_names_and_case_twins_are_refused(self):
+        """#237: CON.png passed the name check; south.png and SOUTH.png overwrote each other on Windows."""
+        for members in ({"rotations/CON.png": PNG}, {"rotations/south.png": PNG, "rotations/SOUTH.png": PNG},
+                        {"aux/south.png": PNG}):
+            rc, out = self.run_tool("character", "--text", "x", "--out", "w", "--overwrite",
+                                    fake=Fake(polls=0, zip_members=members))
+            self.assertEqual(rc, 1, (members, out))
+            self.assertIn("refusing zip", out)
+            pl.job_journal(Path("w")).unlink()        # each case is a fresh request
+
+    def test_an_existing_evidence_file_is_never_overwritten(self):
+        """#237: the evidence file was written over whatever had the same ID."""
+        (self.root / "docs" / "licenses").mkdir()
+        evidence = self.root / "docs" / "licenses" / "A-0001.txt"
+        evidence.write_bytes(b"someone else's")
+        before = (self.root / "docs" / "ASSET_LOG.md").read_text(encoding="utf-8")
+        rc, out = self.run_tool("image", "--text", "x", "--out", "assets/e.png", "--log")
+        self.assertEqual(rc, 2, out)
+        self.assertEqual(evidence.read_bytes(), b"someone else's")
+        self.assertEqual((self.root / "docs" / "ASSET_LOG.md").read_text(encoding="utf-8"), before)
 
 
 if __name__ == "__main__":

@@ -53,6 +53,8 @@
 #           Download links on PixelLab's storage get no token: it is sent only to the API host, and a redirect
 #           keeps it only on the same https host and port (anywhere else it is dropped; https to http is refused).
 #           Names from a response (object directions) must be plain names, so nothing is written outside --out.
+#           A submitted job is kept in .<out>.pixellab-job.json beside --out until its files are saved: when a
+#           run times out or a download fails, the same command picks the job up instead of paying again.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
@@ -104,6 +106,10 @@ MAX_ZIP_TOTAL = 500_000_000           # bytes: everything one zip may unpack to
 SAFE_EXTENSIONS = {".png", ".gif", ".json", ".zip", ".ttf", ".txt", ".webp"}   # what a result may write to disk
 MAX_NAME = 100                        # characters in a downloaded file name
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+# Windows device names: a file called CON.png (or con.txt, COM1.json ...) cannot be written there (#237)
+WINDOWS_DEVICES = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+CHARGED = ("PixelLab may have started it and charged it: `pixellab.py check` shows what is left, and your "
+           "pixellab.ai history shows the job. Do not resend it blindly")
 LICENSE = "PixelLab: commercial use allowed; do not train AI models on the output (FAQ 2026-10, verify the terms)"
 TERMS_URL = "https://www.pixellab.ai"
 USER_AGENT = "claude-code-game-kit pixellab.py"
@@ -196,8 +202,14 @@ def http(method, url, key, body=None):
     except urllib.error.HTTPError as exc:
         return exc.code, dict(exc.headers or {}), exc.read(64_000) or b""
     except http_client.HTTPException as exc:
+        if method == "POST":
+            raise ServiceError(f"the connection to PixelLab broke mid-answer ({exc.__class__.__name__}). " + CHARGED)
         raise ServiceError(f"the connection to PixelLab broke mid-answer ({exc.__class__.__name__}); try again")
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        if method == "POST":
+            # the request may have reached PixelLab before the line dropped: never sound like nothing happened (#234)
+            raise ServiceError(f"the connection to {API} failed during the request "
+                               f"({getattr(exc, 'reason', None) or exc.__class__.__name__}). " + CHARGED)
         raise ToolError(f"could not reach {API} ({getattr(exc, 'reason', exc)})")
 
 
@@ -212,21 +224,32 @@ def error_detail(raw):
     return str(detail)[:500]
 
 
+def redact(text, key):
+    """text with the token (and its URL-encoded form) blanked: a server message may echo it back (#237)."""
+    if key:
+        for form in {key, urllib.parse.quote(key, safe=""), urllib.parse.quote_plus(key)}:
+            text = text.replace(form, "<key>")
+    return text
+
+
 def call(method, path, key, body=None, raw=False, pending_ok=False):
     """One API request. Returns parsed JSON (or bytes with raw=True); maps failures to the exit codes.
     pending_ok: a 423 ("still being generated", seen live on GET /map-objects/{id}) returns {"status": "processing"}."""
     dbg(f"{method} {API}{path}")
     status, headers, data = http(method, API + path, key, body)
     if status == 423 and pending_ok:
-        return {"status": "processing", "detail": error_detail(data)}
+        return {"status": "processing", "detail": redact(error_detail(data), key)}
     if status in (200, 201, 202):
         if raw:
             return data
         try:
-            return json.loads(data.decode("utf-8"))
+            got = json.loads(data.decode("utf-8"))
         except ValueError:
             raise ServiceError(f"PixelLab answered {path} with something that is not JSON")
-    detail = error_detail(data)
+        if not isinstance(got, dict):         # every answer this tool reads is an object (#237)
+            raise ServiceError(f"PixelLab answered {path} with JSON of an unexpected shape ({type(got).__name__})")
+        return got
+    detail = redact(error_detail(data), key)
     if status in (401, 403):
         raise ToolError(f"PixelLab rejected the token ({status}: {detail}). Check {KEY_ENV}.")
     if status == 402:
@@ -243,10 +266,12 @@ def cost_text(usage):
     """'1 generation' / '$0.02' / '' from a response's usage."""
     if not isinstance(usage, dict):
         return ""
-    if usage.get("type") == "generations" and usage.get("generations") is not None:
+    def number(v):                         # a string or a bool here must not crash after paying (#237)
+        return isinstance(v, (int, float)) and not isinstance(v, bool)
+    if usage.get("type") == "generations" and number(usage.get("generations")):
         g = usage["generations"]
         return f"{g:g} generation{'s' if g != 1 else ''}"
-    if usage.get("usd") is not None:
+    if number(usage.get("usd")):
         return f"${usage['usd']:.2f}"
     return ""
 
@@ -270,14 +295,16 @@ def wait_job(key, job_id, limit):
         job = call("GET", f"/background-jobs/{job_id}", key)
         status = job.get("status")
         last = job.get("last_response") or {}
+        if not isinstance(last, dict):
+            last = {}
         if status == "completed":
             return last, job.get("usage")
         if status == "failed":
             raise ServiceError(f"PixelLab job {job_id} failed: {last.get('detail') or last.get('error') or 'no reason given'}")
         waited = time.monotonic() - start
         if waited >= limit:
-            raise ServiceError(f"job {job_id} still {status} after {limit} s (it keeps running on PixelLab's side; "
-                               "it may still be charged). Rerun with a longer --wait.")
+            raise ServiceError(f"job {job_id} still {status} after {limit} s (it keeps running on PixelLab's side "
+                               "and is charged when it finishes).")
         if waited - said >= 15:
             where = f", queue position {last['queue_position']}" if isinstance(last, dict) and "queue_position" in last else ""
             print(f"[info] job {status}{where}, {int(waited)} s so far ...")
@@ -366,12 +393,17 @@ def extract_zip(data, out_dir):
         members = [i for i in zf.infolist() if not i.is_dir()]
         if sum(i.file_size for i in members) > MAX_ZIP_TOTAL or any(i.file_size > MAX_DOWNLOAD for i in members):
             raise ServiceError("PixelLab's zip would unpack to more than the size limit; refusing it")
+        seen = set()
         for info in members:
             target = (out_dir / info.filename).resolve()
             if out_dir not in target.parents:
                 raise ServiceError(f"refusing zip member outside {out_dir}: {info.filename}")
-            if not allowed_name(target.name):
+            if not allowed_name(target.name) or not all(windows_safe(p) for p in target.relative_to(out_dir).parts):
                 raise ServiceError(f"refusing zip member with an unexpected name or type: {info.filename}")
+            fold = target.relative_to(out_dir).as_posix().casefold()
+            if fold in seen:                  # south.png and SOUTH.png are one file on Windows and macOS (#237)
+                raise ServiceError(f"refusing zip: two members land on one file ignoring case: {info.filename}")
+            seen.add(fold)
             body = zf.read(info)
             check_bytes(body, target.name)      # a zip member is a download too
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -380,10 +412,17 @@ def extract_zip(data, out_dir):
     return files
 
 
+def windows_safe(part):
+    """False for a name Windows cannot hold: a device (CON, NUL, COM1 ..., with any extension) or a trailing dot or
+    space (#237)."""
+    return part.split(".")[0].strip().upper() not in WINDOWS_DEVICES and not part.endswith((".", " "))
+
+
 def allowed_name(name):
-    """A result file name the tool will write: an expected type, no stream (':'), not hidden, not too long."""
+    """A result file name the tool will write: an expected type, no stream (':'), not hidden, not too long, not a
+    Windows device name."""
     return (Path(name).suffix.lower() in SAFE_EXTENSIONS and ":" not in name and not name.startswith(".")
-            and len(name) <= MAX_NAME)
+            and len(name) <= MAX_NAME and windows_safe(name))
 
 
 def plain_name(text):
@@ -474,8 +513,7 @@ def poll_resource(key, path, limit, done=("completed",), failed=("failed", "erro
             raise ServiceError(f"PixelLab says {path} {status}: {res.get('detail') or res.get('error') or 'no reason given'}")
         waited = time.monotonic() - start
         if waited >= limit:
-            raise ServiceError(f"{path} still {status} after {limit} s (it may still finish and be charged). "
-                               "Rerun with a longer --wait.")
+            raise ServiceError(f"{path} still {status} after {limit} s (it may still finish and be charged).")
         if waited - said >= 15:
             print(f"[info] {status or 'working'}, {int(waited)} s so far ...")
             said = waited
@@ -732,6 +770,11 @@ def write_log(args, kind, files, meta):
             rels.append((Path.cwd() / f).resolve().relative_to(root).as_posix())
         except ValueError:
             raise ToolError(f"{f} is outside the project {root}; --log is for files that ship in the project")
+    with fetch_asset.log_lock(root):
+        _write_log(args, kind, meta, root, log_path, rels)
+
+
+def _write_log(args, kind, meta, root, log_path, rels):
     log_text = log_path.read_text(encoding="utf-8")
     num, fill = fetch_asset.next_asset_id(log_text)
     asset_id = f"A-{num:04d}"
@@ -754,10 +797,9 @@ def write_log(args, kind, files, meta):
                 f"Terms    : {TERMS_URL} (read the terms of service and save a screenshot when you ship)\n"
                 f"Request  : {json.dumps(meta['request'], ensure_ascii=False)}\n"
                 + "".join(f"File     : {r}  SHA-256 {h}\n" for r, h in zip(rels, meta["sha256"])))
-    log_path.write_bytes((fetch_asset.add_log_row(log_text, row, fill)).encode("utf-8"))
-    lic_dir = root / fetch_asset.LICENSE_DIR
-    lic_dir.mkdir(parents=True, exist_ok=True)
-    (lic_dir / f"{asset_id}.txt").write_bytes((evidence).encode("utf-8"))
+    new_log = fetch_asset.add_log_row(log_text, row, fill)
+    fetch_asset.write_new(root / fetch_asset.LICENSE_DIR / f"{asset_id}.txt", evidence.encode("utf-8"))
+    log_path.write_bytes(new_log.encode("utf-8"))
     print(f"[ OK ] {asset_id} added to {fetch_asset.ASSET_LOG.as_posix()}, evidence in "
           f"{(fetch_asset.LICENSE_DIR / (asset_id + '.txt')).as_posix()}")
 
@@ -776,9 +818,35 @@ SYNC_IMAGE = {"image", "pixelate"}                       # the POST answers with
 FILE_KINDS = {"image", "prop", "ui", "edit", "pixelate", "fix"}   # --out is one .png file; the rest write folders
 
 
+def job_journal(out):
+    """Where a submitted job is kept until its files are saved: beside --out, never inside it (--overwrite clears
+    the folder, and the job must survive that)."""
+    return out.parent / f".{out.name}.pixellab-job.json"
+
+
+def submit(kind, key, endpoint, body, out):
+    """POST the request, or pick up the job an earlier run of the same request left unfinished (#234): a timeout
+    or a dropped download used to end with "rerun", and the rerun paid for a second generation."""
+    journal = job_journal(out)
+    want = hashlib.sha256(json.dumps([kind, endpoint, body], sort_keys=True).encode("utf-8")).hexdigest()
+    try:
+        rec = json.loads(journal.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        rec = None
+    if isinstance(rec, dict) and rec.get("request") == want and isinstance(rec.get("first"), dict):
+        print(f"[info] picking up the job an earlier run started ({journal.name}): not paid again")
+        return rec["first"]
+    first = call("POST", endpoint, key, body)
+    if not (first.get("image") or first.get("images")):   # the answer is a job: keep it until the files are saved
+        journal.parent.mkdir(parents=True, exist_ok=True)
+        journal.write_text(json.dumps({"request": want, "kind": kind, "endpoint": endpoint, "first": first,
+                                       "date": datetime.date.today().isoformat()}, indent=2) + "\n", encoding="utf-8")
+    return first
+
+
 def run_job(kind, key, endpoint, body, out, args):
     """Submit, wait, save. Returns (files, cost text, extra metadata)."""
-    first = call("POST", endpoint, key, body)
+    first = submit(kind, key, endpoint, body, out)
     cost = cost_text(first.get("usage"))
     if first.get("quoted_generations") is not None and not cost:
         cost = f"{cost_text({'type': 'generations', 'generations': first['quoted_generations']})} (quoted)"
@@ -830,8 +898,10 @@ def run_job(kind, key, endpoint, body, out, args):
             return files, cost or job_cost(key, first, args.wait), {"object_id": obj, "review": len(files)}
         rot = {d: u for d, u in (res.get("rotation_urls") or {}).items() if u}
         for d in rot:                     # the API's keys become file names: a plain name only, never a path
-            if not plain_name(d):
+            if not plain_name(d) or not windows_safe(d):
                 raise ServiceError(f"refusing direction {str(d)[:40]!r} from PixelLab: not a plain name")
+        if len({d.casefold() for d in rot}) != len(rot):
+            raise ServiceError("refusing directions from PixelLab that differ only in case (one file on Windows)")
         links = [(f"{d}.png", u) for d, u in rot.items()] or \
                 [(f"frame_{i:02d}.png", u) for i, u in enumerate(res.get("frame_urls") or [])] or \
                 [(f"image_{i:02d}.png", u) for i, u in enumerate(url_values(res.get("storage_urls")))]
@@ -968,11 +1038,18 @@ def after_fix(args, out):
 
 def summed_cost(usages):
     """Cost of several jobs (one per direction): the sum when they share a unit, else the last one's."""
-    gens = [u.get("generations") for u in usages if isinstance(u, dict) and u.get("type") == "generations"]
-    if gens and len(gens) == len(usages) and all(g is not None for g in gens):
-        text = cost_text({"type": "generations", "generations": sum(gens)})
-        return f"{text} ({len(gens)} jobs)" if len(gens) > 1 else text
-    return cost_text(usages[-1]) if usages else ""
+    parts = [(u, cost_text(u)) for u in usages]
+    known = [(u, t) for u, t in parts if t]
+    if not known:
+        return ""
+    partial = f", {len(usages) - len(known)} of {len(usages)} jobs reported no cost" if len(known) < len(usages) else ""
+    if all(u.get("type") == "generations" for u, _ in known):
+        text = cost_text({"type": "generations", "generations": sum(u["generations"] for u, _ in known)})
+        jobs = f"{len(known)} jobs" if len(known) > 1 else ""
+        note = ", ".join(x for x in (jobs, partial.lstrip(", ")) if x)
+        return f"{text} ({note})" if note else text
+    # mixed units (generations and dollars): every known part, never just the last one (#237)
+    return " + ".join(t for _, t in known) + (f" ({partial.lstrip(', ')})" if partial else "")
 
 
 def character_zip(key, character_id, limit):
@@ -1111,7 +1188,15 @@ def cmd_generate(args, kind):
         out = base if variants == 1 else base.with_name(f"{base.stem}_{n}{base.suffix}")
         if out.is_dir() and args.overwrite:
             clear_previous(out)
-        files, cost, extra = run_job(kind, key, endpoint, body, out, args)
+        try:
+            files, cost, extra = run_job(kind, key, endpoint, body, out, args)
+        except ServiceError as exc:
+            if job_journal(out).is_file():
+                again = "the same command again" if variants == 1 else \
+                    f"it again for this file with --variants 1 --out {out}"
+                raise ServiceError(f"{exc} The job is kept in {job_journal(out)}: run {again} (a longer --wait if it "
+                                   "was slow) and it picks the job up instead of paying again")
+            raise
         pngs = [f for f in files if f.suffix.lower() == ".png"]
         meta = {"tool": "pixellab", "endpoint": endpoint, "request": shown, "date": datetime.date.today().isoformat(),
                 "plan": plan, "cost": cost,
@@ -1120,6 +1205,10 @@ def cmd_generate(args, kind):
         meta.update({k: v for k, v in extra.items() if v})
         side = out.with_suffix(".gen.json") if kind in FILE_KINDS else out / "pixellab.gen.json"
         side.write_text(json.dumps(meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        try:
+            job_journal(out).unlink()          # saved: a later run of the same request is a new generation
+        except OSError:
+            pass
         print(f"[ OK ] {out}: {len(pngs)} PNG(s)" + (f", cost {cost}" if cost else ""))
         if kind == "animate":
             print(f"[info] preview: python tools/art/frames_to_gif.py {out} {out}.gif   (needs Pillow)")
@@ -1296,7 +1385,7 @@ def main(argv=None):
     DEBUG = args.debug
     try:
         return args.fn(args)
-    except ToolError as exc:
+    except (ToolError, fetch_asset.FetchError) as exc:   # FetchError: the asset log (its lock, its evidence files)
         print(f"[error] {exc}", file=sys.stderr)
         return 2
     except ServiceError as exc:

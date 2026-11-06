@@ -44,6 +44,7 @@ import re
 import struct
 import sys
 import traceback
+import http.client as http_client   # not `http`: that name is this module's request function
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -69,6 +70,15 @@ PCM_CHANNELS = 2                      # measured 2026-10-22: the API's pcm_* is 
 FREE_ATTRIBUTION = "Created in collaboration with ElevenLabs (elevenlabs.io)"
 TERMS_URL = "https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform"
 USER_AGENT = "claude-code-game-kit eleven_audio.py"
+MAX_AUDIO_BYTES = 256 * 1024 * 1024   # 10 min of 48 kHz stereo PCM is about 115 MB; more than this is refused
+MAX_ERROR_BYTES = 64_000              # an error body is read this far
+# Tiers that may use the output commercially. Anything else (a new tier name, or none in the answer) needs --plan:
+# guessing "paid" would log a commercial licence the plan may not give (#236). Names (verify) against
+# elevenlabs.io/pricing; "free" is the only tier the docs make non-commercial.
+PAID_TIERS = {"starter", "creator", "pro", "scale", "business", "growing_business", "enterprise",
+              "independent_publisher"}
+CHARGED = ("ElevenLabs may have made it and taken the credits: check `eleven_audio.py check` and your history at "
+           "elevenlabs.io before running it again")
 DEBUG = False
 
 
@@ -151,11 +161,19 @@ def http(method, url, key, body=None):
                                           "User-Agent": USER_AGENT})
     try:
         with OPENER.open(req, timeout=TIMEOUT_S) as resp:
-            return resp.status, dict(resp.headers), resp.read()
+            data = resp.read(MAX_AUDIO_BYTES + 1)          # bounded: an endless answer must not eat the memory (#235)
+            if len(data) > MAX_AUDIO_BYTES:
+                raise ServiceError(f"ElevenLabs sent more than {MAX_AUDIO_BYTES // 2**20} MB; refusing it. " + CHARGED)
+            return resp.status, dict(resp.headers), data
     except urllib.error.HTTPError as exc:
-        return exc.code, dict(exc.headers or {}), exc.read() or b""
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise ToolError(f"could not reach {API} ({getattr(exc, 'reason', exc)})")
+        return exc.code, dict(exc.headers or {}), exc.read(MAX_ERROR_BYTES) or b""
+    except (http_client.HTTPException, urllib.error.URLError, TimeoutError, OSError) as exc:
+        why = getattr(exc, "reason", None) or exc.__class__.__name__
+        if method == "POST":
+            # the paid request may have reached the service before the line dropped: never sound like nothing
+            # happened, or a blind re-run pays twice (#234)
+            raise ServiceError(f"the connection to {API} failed during the request ({why}). " + CHARGED)
+        raise ToolError(f"could not reach {API} ({why})")
 
 
 def error_detail(raw):
@@ -171,13 +189,21 @@ def error_detail(raw):
     return str(detail)
 
 
+def redact(text, key):
+    """text with the key (and its URL-encoded form) blanked: a server message may echo it back (#237)."""
+    if key:
+        for form in {key, urllib.parse.quote(key, safe=""), urllib.parse.quote_plus(key)}:
+            text = text.replace(form, "<key>")
+    return text
+
+
 def call(method, path, key, body=None, query=None):
     url = API + path + ("?" + urllib.parse.urlencode(query) if query else "")
     dbg(f"{method} {url}")
     status, headers, raw = http(method, url, key, body)
     if status == 200:
         return headers, raw
-    detail = error_detail(raw)
+    detail = redact(error_detail(raw), key)
     if status == 401:
         raise KeyRejected(f"the API key was rejected ({detail}). Check {KEY_ENV}, and that the key has the permission "
                           "for this request", b"missing_permissions" in (raw or b""))
@@ -216,7 +242,13 @@ def license_for(plan_arg, info):
         if not info:
             raise ToolError("could not read your plan (the key may lack the User read permission). "
                             "Pass --plan paid or --plan free")
-        free = str(info.get("tier", "")).lower() == "free" or str(info.get("status", "")).lower().startswith("free")
+        tier = str(info.get("tier") or "").lower()
+        free = tier == "free" or str(info.get("status") or "").lower().startswith("free")
+        if not free and tier not in PAID_TIERS:
+            # fail closed: an unknown or missing tier is not taken as a commercial licence (#236)
+            raise ToolError(f"your plan's tier ({tier or 'none given'}) is not one this tool knows, so it cannot tell "
+                            "whether the output may be used commercially. Check your plan, then pass --plan paid "
+                            "or --plan free")
         plan_arg = "free" if free else "paid"
     if plan_arg == "paid":
         return True, "ElevenLabs paid plan: commercial use allowed (per plan terms)", "", False
@@ -238,6 +270,14 @@ def build_request(kind, args):
     if not fmt.startswith("pcm_") and (args.mono or getattr(args, "loop_crossfade", None)):
         raise ToolError("--mono and --loop-crossfade need a .wav --out (MP3 is saved as the service sends it, "
                         "and its padding at the ends stops a clean loop)")
+    fade = getattr(args, "loop_crossfade", None)
+    if fade is not None:
+        # checked before the paid request: a fade the clip cannot hold used to fail after paying (#235)
+        if not fade > 0:
+            raise ToolError("--loop-crossfade must be more than 0 seconds")
+        if args.seconds is not None and 2 * fade >= args.seconds:
+            raise ToolError(f"--loop-crossfade {fade:g} is too long for {args.seconds:g} s: it must be under half "
+                            "of --seconds")
     if kind == "sfx":
         if not args.text:
             raise ToolError("sfx needs --text, a description of the sound")
@@ -284,16 +324,29 @@ def save(raw, out, fmt, crossfade, mono=False):
         if crossfade:
             try:
                 samples = crossfade_loop(samples, rate, crossfade, channels)
+                loop = (0, len(samples) // channels - 1)
             except ValueError as exc:
-                raise ToolError(f"--loop-crossfade: {exc}")
-            loop = (0, len(samples) // channels - 1)
+                # the audio is paid for: keep it without the loop rather than throw it away (#235)
+                print(f"[warn] --loop-crossfade: {exc}; saved without a loop (wavesmith's loop command can add one)")
         write_wav(out, samples, rate, loop, channels)
         return (f"{len(samples) / channels / rate:.2f} s {'mono' if channels == 1 else 'stereo'} WAV at {rate} Hz"
                 + (", loops" if loop else ""))
     if mono:
         raise ToolError("--mono needs a .wav --out (MP3 is saved as the service sends it)")
+    if not (raw[:3] == b"ID3" or (len(raw) > 1 and raw[0] == 0xFF and raw[1] & 0xE0 == 0xE0)):
+        raise ServiceError("ElevenLabs answered with something that is not MP3 audio. " + CHARGED)
     out.write_bytes(raw)
     return f"{len(raw) // 1024} KB {fmt.split('_')[0].upper()}"
+
+
+def check_audio(raw, headers):
+    """Refuse an empty or non-audio success answer before anything is written or logged (#235)."""
+    if not raw:
+        raise ServiceError("ElevenLabs answered with no audio. " + CHARGED)
+    ctype = headers.get("content-type", "").lower()
+    if "json" in ctype or ctype.startswith("text/"):
+        detail = raw[:300].decode("utf-8", "replace").strip()
+        raise ServiceError(f"ElevenLabs answered with {ctype.split(';')[0]}, not audio ({detail}). " + CHARGED)
 
 
 def outputs(args):
@@ -326,6 +379,11 @@ def log_targets(args, files):
 def write_log(args, kind, files, meta, lic):
     """ASSET_LOG row + docs/licenses/A-NNNN.txt evidence, using fetch_asset's helpers."""
     root, log_path, rels = log_targets(args, files)
+    with fetch_asset.log_lock(root):
+        _write_log(args, kind, meta, lic, root, log_path, rels)
+
+
+def _write_log(args, kind, meta, lic, root, log_path, rels):
     log_text = log_path.read_text(encoding="utf-8")
     num, fill = fetch_asset.next_asset_id(log_text)
     asset_id = f"A-{num:04d}"
@@ -344,10 +402,9 @@ def write_log(args, kind, files, meta, lic):
                 + f"Terms    : {TERMS_URL} (read and save a screenshot when you ship)\n"
                 f"Request  : {json.dumps(meta['request'], ensure_ascii=False)}\n"
                 + "".join(f"File     : {r.strip('`')}  SHA-256 {h}\n" for r, h in zip(rels, meta["sha256"])))
-    log_path.write_bytes((fetch_asset.add_log_row(log_text, row, fill)).encode("utf-8"))
-    lic_dir = root / fetch_asset.LICENSE_DIR
-    lic_dir.mkdir(parents=True, exist_ok=True)
-    (lic_dir / f"{asset_id}.txt").write_bytes((evidence).encode("utf-8"))
+    new_log = fetch_asset.add_log_row(log_text, row, fill)
+    fetch_asset.write_new(root / fetch_asset.LICENSE_DIR / f"{asset_id}.txt", evidence.encode("utf-8"))
+    log_path.write_bytes(new_log.encode("utf-8"))
     print(f"[ OK ] {asset_id} added to {fetch_asset.ASSET_LOG.as_posix()}, evidence in "
           f"{(fetch_asset.LICENSE_DIR / (asset_id + '.txt')).as_posix()}")
     if placeholder:
@@ -364,7 +421,12 @@ def cmd_check(args):
         print("[ OK ] the key is set; it may not read the account (no User read permission), so the plan is unknown. "
               "Generation still works if the key allows it; pass --plan with --log")
         return 0
-    paid = license_for("auto", info)[0]
+    try:
+        paid = license_for("auto", info)[0]
+    except ToolError as exc:
+        print(f"[ OK ] key works: plan {info['tier']} ({info['status']}), {info['used']} of {info['limit']} credits used")
+        print(f"[warn] {exc}")
+        return 0
     print(f"[ OK ] key works: plan {info['tier']} ({info['status']}), {info['used']} of {info['limit']} credits used"
           + (f", resets {info['reset']}" if info["reset"] else ""))
     print("       license: " + ("paid plan, commercial use allowed" if paid else
@@ -395,26 +457,43 @@ def cmd_generate(args, kind):
     if not key:
         raise ToolError(missing_key_help())
     info = plan_info(key)
-    lic = license_for(args.plan, info) if (args.log or args.plan != "auto" or info) else None
+    try:
+        lic = license_for(args.plan, info) if (args.log or args.plan != "auto" or info) else None
+    except ToolError:
+        if args.log:                      # a log row needs a licence it can stand behind: stop before paying
+            raise
+        lic = None                        # not logging: the sidecar says "unknown", the run goes on
     meta = {"tool": "eleven_audio", "service": "ElevenLabs", "endpoint": path, "model_id": body["model_id"],
             "request": dict(body, output_format=query["output_format"]), "date": datetime.date.today().isoformat(),
             "plan": f"{info['tier']} ({info['status']})" if info else None, "sha256": [],
             "license": lic[1] if lic else "unknown: check your plan", "text": body.get("text"),
             "prompt": body.get("prompt")}
-    for f in files:
-        headers, raw = call("POST", path, key, body, query)
-        dbg("response headers: " + ", ".join(sorted(headers)))
-        what = save(raw, f, query["output_format"], getattr(args, "loop_crossfade", None), args.mono)
-        sha = hashlib.sha256(f.read_bytes()).hexdigest()
-        meta["sha256"].append(sha)
-        h = {k.lower(): v for k, v in headers.items()}
-        cost = h.get("character-cost")                 # credits this request spent (seen 2026-10-22)
-        side = dict(meta, sha256=sha, request_id=h.get("x-trace-id") or h.get("request-id"), credits=cost)
-        side.pop("text"), side.pop("prompt")
-        f.with_suffix(".gen.json").write_bytes((json.dumps(side, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
-        print(f"[ OK ] {f}: {what}" + (f", cost {cost} credits" if cost else ""))
-    if args.log:
-        write_log(args, kind, files, meta, lic)
+    saved, failure = [], None
+    try:
+        for f in files:
+            headers, raw = call("POST", path, key, body, query)
+            dbg("response headers: " + ", ".join(sorted(headers)))
+            h = {k.lower(): v for k, v in headers.items()}
+            check_audio(raw, h)
+            what = save(raw, f, query["output_format"], getattr(args, "loop_crossfade", None), args.mono)
+            sha = hashlib.sha256(f.read_bytes()).hexdigest()
+            meta["sha256"].append(sha)
+            cost = h.get("character-cost")                 # credits this request spent (seen 2026-10-22)
+            side = dict(meta, sha256=sha, request_id=h.get("x-trace-id") or h.get("request-id"), credits=cost)
+            side.pop("text"), side.pop("prompt")
+            f.with_suffix(".gen.json").write_bytes((json.dumps(side, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
+            print(f"[ OK ] {f}: {what}" + (f", cost {cost} credits" if cost else ""))
+            saved.append(f)
+    except (ToolError, ServiceError) as exc:
+        failure = exc
+    # every saved, paid file is logged, also when a later variant failed (#235)
+    if args.log and saved:
+        write_log(args, kind, saved, meta, lic)
+    if failure is not None:
+        if saved:
+            print(f"[info] {len(saved)} of {len(files)} saved" + (" and logged" if args.log else "")
+                  + " before the failure")
+        raise failure
     elif lic and lic[3]:
         print("[warn] free plan: these files are non-commercial and need credit (log them with --log)")
     return 0

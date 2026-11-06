@@ -3,9 +3,22 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig`, `tools/token_audit.py`, `tools/fetch_asset.py` and the scaffolder from second-model reviews
+## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig`, `tools/token_audit.py`, `tools/fetch_asset.py`, the scaffolder and the paid PixelLab and ElevenLabs clients from second-model reviews
 Kimi K3.1 Pro reviews of 0.13.0 (`tools/second_opinion.py`), each finding checked against the code; one more was
 found by the real run that verified the rig fixes.
+- The paid clients (`tools/art/pixellab.py`, `tools/audio/wavesmith/eleven_audio.py`): a PixelLab job that
+  outlives `--wait`, or whose download fails, is kept beside `--out` (`.<out>.pixellab-job.json`), and the same command
+  picks it up instead of paying for a second generation (the old advice was "rerun"); a connection that drops during
+  a paid request says it may have been charged, in both clients (#234). ElevenLabs: `--loop-crossfade` is checked
+  before paying, and a fade the answer cannot hold keeps the audio unlooped instead of throwing it away; an empty,
+  JSON or HTML answer is refused before anything is saved or logged; answers are capped at 256 MB; variants saved
+  before a later one fails are logged (#235). An unknown or missing plan tier is no longer logged as a paid,
+  commercial licence: `--log` stops and asks for `--plan` (#236). PixelLab's summed cost shows every known charge
+  and says when a job reported none; a cost given as text or a success answer that is not an object no longer
+  crashes after paying; a key echoed in a server message is printed as `<key>`; Windows device names and names that
+  differ only in case are refused before writing; the asset log has one writer at a time (`fetch_asset.log_lock`,
+  also used by `fetch_asset.py`) and an evidence file is never overwritten (#237). Exams: `test_pixellab.py` 57
+  (was 50), `test_eleven_audio.py` 31 (was 23), `test_fetch_asset.py` 42 (was 39).
 - `scripts/new_game.py`, the scaffolder: every write goes through a new, unique temp file (a fixed
   `<file>.newgame-tmp` destroyed a user file of that name); a symlinked kit file or folder is left alone and reported,
   never written through or replaced, and settings.json, .gitignore and the record refuse to write through one (#230). A

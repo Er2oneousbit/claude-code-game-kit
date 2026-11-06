@@ -162,6 +162,13 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
   symlinks followed ([#230](https://github.com/Er2oneousbit/claude-code-game-kit/issues/230)); a newer kit's record accepted, record shape unchecked
   ([#231](https://github.com/Er2oneousbit/claude-code-game-kit/issues/231)); no baseline for settings.json and .gitignore merges ([#232](https://github.com/Er2oneousbit/claude-code-game-kit/issues/232)); binary
   detection, `<` `>` in names, case-only renames, sync copy-back ([#233](https://github.com/Er2oneousbit/claude-code-game-kit/issues/233)).
+- **Paid PixelLab and ElevenLabs clients review (FIXED in 0.13.1, kept here until the issues close on main):** a
+  slow or dropped job paid for again ([#234](https://github.com/Er2oneousbit/claude-code-game-kit/issues/234)); ElevenLabs checks after paying ([#235](https://github.com/Er2oneousbit/claude-code-game-kit/issues/235)); an
+  unknown plan logged as commercial ([#236](https://github.com/Er2oneousbit/claude-code-game-kit/issues/236)); costs, odd JSON, key echo, names, log lock ([#237](https://github.com/Er2oneousbit/claude-code-game-kit/issues/237)).
+- **`tools/publish_check.py` review (open):** missed secrets and paths ([#238](https://github.com/Er2oneousbit/claude-code-game-kit/issues/238)); LFS, unreadable files, an
+  encrypted `.pxo` ([#239](https://github.com/Er2oneousbit/claude-code-game-kit/issues/239)).
+- **SessionStart hook and `tools/second_opinion.py` review (open):** reviewer confinement, prompt injection,
+  orphaned children ([#240](https://github.com/Er2oneousbit/claude-code-game-kit/issues/240)); the hook's stdin wait, long lines, heading prefixes ([#241](https://github.com/Er2oneousbit/claude-code-game-kit/issues/241)).
 
 ## The examples
 None of the example games has been played by a human tester; the bots and tests are the only proof they play as

@@ -43,6 +43,7 @@
 #   license evidence -> docs/licenses/A-NNNN.txt (pack license file + URL, page, date, sha256)
 #   ASSET_LOG row A-NNNN (fill the empty template row if it is still there)
 import argparse
+import contextlib
 import datetime
 import fnmatch
 import hashlib
@@ -63,6 +64,8 @@ ASSET_LOG = Path("docs/ASSET_LOG.md")
 # the kit's own copy is a template (scaffold-time placeholders in its sample row): the scaffolder puts it back rendered
 RESTORE_HINT = f"python <kit>/scripts/new_game.py --dest . --upgrade --restore {ASSET_LOG.as_posix()}"
 LICENSE_DIR = Path("docs/licenses")
+LOCK_WAIT_S = 60                       # how long a run waits for another to finish writing the asset log
+LOCK_STALE_S = 600                     # a lock this old is a crashed run's, and is taken over
 USER_AGENT = "Mozilla/5.0 (compatible; claude-code-game-kit fetch_asset.py)"  # some hosts reject the urllib default
 RETRIES = 3
 TIMEOUT = 120                       # seconds per network read
@@ -294,6 +297,48 @@ def find_license_text(root, files, explicit):
     return "", ""
 
 
+@contextlib.contextmanager
+def log_lock(root_dir, wait=None):
+    """Hold docs/ASSET_LOG.md for one run: two runs at once could both take the next ID, and one evidence file
+    would overwrite the other (#237). The lock is a file created exclusively beside the log."""
+    lock = Path(root_dir) / ASSET_LOG.with_name(ASSET_LOG.name + ".lock")
+    deadline = time.monotonic() + (LOCK_WAIT_S if wait is None else wait)
+    while True:
+        try:
+            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, f"{os.getpid()}\n".encode("ascii"))
+            os.close(fd)
+            break
+        except FileExistsError:
+            try:
+                if time.time() - lock.stat().st_mtime > LOCK_STALE_S:
+                    lock.unlink()                # a crashed run's lock
+                    continue
+            except OSError:
+                continue                         # it was just released
+            if time.monotonic() >= deadline:
+                raise UsageError(f"{lock.relative_to(root_dir).as_posix()} is held by another run writing the asset "
+                                 "log; wait for it, or delete the file if no run is going")
+            time.sleep(0.2)
+    try:
+        yield
+    finally:
+        try:
+            lock.unlink()
+        except OSError:
+            pass
+
+
+def write_new(path, data):
+    """Write bytes to a file that must not exist yet (an evidence file is never overwritten, #237)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(path, "xb") as fh:
+            fh.write(data)
+    except FileExistsError:
+        raise UsageError(f"{path.as_posix()} already exists; the log and docs/licenses/ disagree, fix that first")
+
+
 def next_asset_id(log_text):
     ids = [int(m) for m in ROW_ID.findall(log_text)]
     template_only = EMPTY_TEMPLATE_ROW.search(log_text) is not None
@@ -337,7 +382,7 @@ def add_log_row(log_text, row, fill_template):
     return "\n".join(lines)
 
 
-def run(args):
+def run(args, stack=None):
     status = judge_license(args.license, args.placeholder) if not args.list else "ok"
     root_dir = Path(args.root).resolve()
     log_path = root_dir / ASSET_LOG
@@ -389,6 +434,8 @@ def run(args):
     if len({n.casefold() for n in names}) != len(names):
         raise FetchError("two picked files share a name (ignoring case); pick fewer or fetch them into different --to folders")
 
+    if stack is not None and not args.dry_run:
+        stack.enter_context(log_lock(root_dir))      # held until the row is written (#237)
     log_text = log_path.read_text(encoding="utf-8")
     if not log_text.strip():
         raise UsageError(f"{ASSET_LOG.as_posix()} is empty (put the kit's log back with `{RESTORE_HINT}`)")
@@ -522,7 +569,8 @@ def main(argv=None):
         if not args.page:
             print("[warn] no --page: the log will point at the download URL, not the license page")
     try:
-        return run(args)
+        with contextlib.ExitStack() as stack:
+            return run(args, stack)
     except UsageError as exc:
         print(f"[error] {exc}", file=sys.stderr)
         return 2

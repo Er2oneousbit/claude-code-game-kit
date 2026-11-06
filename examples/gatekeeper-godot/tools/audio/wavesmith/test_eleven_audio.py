@@ -363,5 +363,139 @@ class ElevenAudioExam(unittest.TestCase):
             self.assertEqual(rc, 2, args)
 
 
+# ---- review fixes (#234-#237) ---------------------------------------------------------------------------------
+class Opener:
+    """Stands in for eleven_audio.OPENER: raises, or answers with a body, for the real http()."""
+
+    def __init__(self, exc=None, body=b""):
+        self.exc, self.body = exc, body
+
+    def open(self, req, timeout=None):
+        if self.exc is not None:
+            raise self.exc
+        body = self.body
+
+        class Resp:
+            status, headers = 200, {}
+
+            def read(self, n=-1):
+                return body if n < 0 else body[:n]
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+        return Resp()
+
+
+class ReviewFixesExam(unittest.TestCase):
+    run_tool = ElevenAudioExam.run_tool
+
+    def setUp(self):
+        ElevenAudioExam.setUp(self)
+        self.real_opener, self.real_max = ea.OPENER, getattr(ea, "MAX_AUDIO_BYTES", None)
+
+    def tearDown(self):
+        ea.OPENER, ea.MAX_AUDIO_BYTES = self.real_opener, self.real_max
+        ElevenAudioExam.tearDown(self)
+
+    def posts(self, fake):
+        return [c for c in fake.calls if c[0] == "POST"]
+
+    def test_a_bad_loop_fade_is_refused_before_paying(self):
+        """#235: --loop-crossfade was checked only after the paid request; the audio was then thrown away."""
+        for fade in ("2", "-1", "0"):
+            fake = Fake(audio=tone_pcm(3.0, 24000))
+            rc, out = self.run_tool(fake, "music", "--prompt", "x", "--seconds", 3, "--format", "pcm_24000",
+                                    "--out", f"m/a{fade}.wav", "--loop-crossfade", fade)
+            self.assertEqual(rc, 2, out)
+            self.assertEqual(self.posts(fake), [], f"fade {fade}: no credits spent")
+
+    def test_a_fade_the_answer_cannot_hold_keeps_the_audio(self):
+        """#235: with no --seconds the length is known only after paying; the audio is now kept, unlooped."""
+        fake = Fake(audio=tone_pcm(2.0, 24000))
+        rc, out = self.run_tool(fake, "music", "--prompt", "x", "--format", "pcm_24000", "--out", "m/b.wav",
+                                "--loop-crossfade", 1.5)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("without a loop", out)
+        self.assertTrue((self.root / "m/b.wav").is_file())
+
+    def test_empty_or_non_audio_answers_are_refused(self):
+        """#235: a 200 with no body, JSON or HTML was saved as the MP3 and reported [ OK ]."""
+        class Typed(Fake):
+            def __init__(self, audio, ctype=""):
+                super().__init__(audio=audio)
+                self.ctype = ctype
+
+            def __call__(self, method, url, key, body=None):
+                st, h, data = super().__call__(method, url, key, body)
+                return st, (dict(h, **{"Content-Type": self.ctype}) if method == "POST" and self.ctype else h), data
+        for n, fake in enumerate([Typed(b""), Typed(b'{"detail": "busy"}', "application/json"), Typed(b"<html>x")]):
+            rc, out = self.run_tool(fake, "sfx", "--text", "x", "--out", f"e/{n}.mp3", "--log", "--plan", "paid")
+            self.assertEqual(rc, 1, out)
+            self.assertFalse((self.root / f"e/{n}.mp3").exists(), out)
+            self.assertNotIn("e/", (self.root / "docs" / "ASSET_LOG.md").read_text(encoding="utf-8"))
+
+    def test_an_unknown_plan_is_not_a_commercial_licence(self):
+        """#236: a subscription answer without a tier, or with a tier the tool does not know, logged 'paid'."""
+        for tier in (None, "mystery_tier"):
+            fake = Fake(tier=tier)
+            rc, out = self.run_tool(fake, "sfx", "--text", "x", "--out", "u/x.mp3", "--log")
+            self.assertEqual(rc, 2, out)
+            self.assertIn("--plan", out)
+            self.assertEqual(self.posts(fake), [], "stopped before paying")
+        rc, out = self.run_tool(Fake(tier=None), "sfx", "--text", "x", "--out", "u/y.mp3")
+        self.assertEqual(rc, 0, out)
+        side = json.loads((self.root / "u/y.gen.json").read_text(encoding="utf-8"))
+        self.assertIn("unknown", side["license"])
+
+    def test_variants_saved_before_a_failure_are_logged(self):
+        """#235: a failure on variant 2 left variant 1 saved and paid for, but never logged."""
+        class SecondFails(Fake):
+            def __call__(self, method, url, key, body=None):
+                if method == "POST" and len(self.posts()) == 1:
+                    self.calls.append((method, url, key, body))
+                    return 500, {}, b"oops"
+                return super().__call__(method, url, key, body)
+
+            def posts(self):
+                return [c for c in self.calls if c[0] == "POST"]
+        rc, out = self.run_tool(SecondFails(), "sfx", "--text", "x", "--variants", 3, "--out", "v/hit.mp3", "--log")
+        self.assertEqual(rc, 1, out)
+        log = (self.root / "docs" / "ASSET_LOG.md").read_text(encoding="utf-8")
+        self.assertIn("v/hit_1.mp3", log)
+        self.assertNotIn("v/hit_2.mp3", log)
+        self.assertIn("1 of 3 saved and logged", out)
+
+    def test_a_dropped_paid_request_says_it_may_be_charged(self):
+        """#234: a timeout after the POST read "could not reach"; IncompleteRead was an unexpected failure."""
+        import http.client
+        import socket
+        for exc in (http.client.IncompleteRead(b"ID3"), socket.timeout("timed out")):
+            ea.OPENER = Opener(exc=exc)
+            rc, out = self.run_tool(self.real_http, "sfx", "--text", "x", "--out", "d/x.mp3", "--plan", "paid")
+            self.assertEqual(rc, 1, out)
+            self.assertIn("may have made it", out)
+            self.assertNotIn("unexpected", out)
+
+    def test_an_oversized_answer_is_refused(self):
+        """#235: the answer was read without a bound."""
+        ea.MAX_AUDIO_BYTES = 10
+        ea.OPENER = Opener(body=b"ID3" + b"x" * 50)
+        rc, out = self.run_tool(self.real_http, "sfx", "--text", "x", "--out", "o/x.mp3", "--plan", "paid")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("more than", out)
+        self.assertFalse((self.root / "o/x.mp3").exists())
+
+    def test_a_key_echoed_by_the_server_is_not_printed(self):
+        """#237: the server's error text went into the message as it was."""
+        body = json.dumps({"detail": {"message": f"invalid key {KEY}"}}).encode()
+        rc, out = self.run_tool(Fake(gen_status=422, gen_body=body), "sfx", "--text", "x", "--out", "k/x.mp3")
+        self.assertEqual(rc, 2, out)
+        self.assertNotIn(KEY, out)
+        self.assertIn("<key>", out)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
