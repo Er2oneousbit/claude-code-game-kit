@@ -11,6 +11,7 @@
 #           this exam checks what can be checked without them.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
+import json
 import re
 import sys
 import tempfile
@@ -50,6 +51,22 @@ class ShaderPortsExam(unittest.TestCase):
         self.assertEqual(sg.to_hlsl("x = mix(a, b, 0.5);"), "x = lerp(a, b, 0.5);")
         self.assertEqual(sg.to_wgsl("vec3 n = vec3(1.0);"), "var n: vec3<f32> = vec3<f32>(1.0);")
         self.assertEqual(sg.to_wgsl("float k = u_amount;"), "var k: f32 = params.amount;")
+
+    def test_mz_plugin_shape(self):
+        # RPG Maker MZ's plugin: an MZ annotation, the two JSON blocks tools/shader_render.mjs and
+        # tools/shader_compile.mjs read, and every filter scaled by PIXI's padded input
+        text = sg.files_for("rpgmaker-mz", sg.load())["KitShaders.js"]
+        self.assertIn("@target MZ", text)
+        blocks = {}
+        for name in ("KIT_SHADERS", "KIT_FRAGMENTS"):
+            m = re.search(name + r" = (\{[\s\S]*?\n\});", text)
+            self.assertIsNotNone(m, name)
+            blocks[name] = json.loads(m.group(1))
+        self.assertEqual(sorted(blocks["KIT_SHADERS"]), sorted(blocks["KIT_FRAGMENTS"]))
+        for name, src in blocks["KIT_FRAGMENTS"].items():
+            with self.subTest(recipe=name):
+                self.assertIn("p * outputFrame.zw * inputSize.zw", src)
+                self.assertIn("vTextureCoord * inputSize.xy / outputFrame.zw", src)
 
     def test_check_reports_stale_files(self):
         with tempfile.TemporaryDirectory() as d:

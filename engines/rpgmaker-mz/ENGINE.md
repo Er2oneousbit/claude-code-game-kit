@@ -21,6 +21,8 @@ game/                     the RPG Maker MZ project: open its .rmmzproject file i
 game/js/plugins/GameCore.js   engine-free rules: no $game*, Scene_*, Window_*. Tested in Node. Yours.
 game/js/plugins/GameAudio.js  the kit's audio rules (sound events, music, access), engine-free, golden-tested in Node.
 game/js/plugins/GameMain.js   MZ glue: plugin commands, scene hooks, the BOOT_OK marker. Yours.
+game/js/plugins/KitShaders.js the kit's shader recipes as PIXI filters (generated: tools/shaders/; turn it on in
+                          the Plugin Manager to use it)
 game/js/plugins.js        the Plugin Manager's list (the editor writes it; setup adds the game's plugins)
 game/data/*.json          the database and maps (the editor writes them; see gotcha 1)
 game/img, audio, ...      art and sound (MZ's defaults plus yours; docs/ASSET_LOG.md for yours)
@@ -43,6 +45,12 @@ No juice or shell module ships here: MZ has its own screens, settings, saves, sh
 - **Plugin parameters and command arguments are strings:** convert with `Number(...)`, `=== "true"`, `JSON.parse(...)`.
 - **Version:** the `version` in package.json (SOP-06); show it where you like (a title-screen plugin line is enough).
 - Errors at runtime: `console.error` reaches the smoke test, which fails on it.
+- **Shaders:** turn on KitShaders in the Plugin Manager, then in a plugin `sprite.filters = [KitShaders.filter("flash",
+  { amount: 1 })]` (a second picture, such as dissolve's noise: `KitShaders.filter(name, {}, PIXI.Texture.from(...))`).
+  Coordinates run 0 to 1 over the sprite: set `filter.uniforms.u_texel` to one over its texture size (the default
+  suits a 32-pixel picture) and `u_canvas` to the size pixel parameters such as `light_pos` are given in. `check` compiles the filters; `smoke --shaders` renders each one the way PIXI hands a
+  filter its padded input and compares it with the golden image, before you have an MZ project. **(verify one filter
+  in a real MZ game: the check emulates PIXI's filter uniforms, it is not PIXI)**
 
 ## Gotchas (Claude: read before editing)
 1. **The editor keeps the database in memory.** Edits to `game/data/*.json` or `js/plugins.js` made while the project is
@@ -63,5 +71,6 @@ No juice or shell module ships here: MZ has its own screens, settings, saves, sh
    meant. Only `smoke` (or the editor's Playtest) proves MZ agrees.
 
 ## Generated (do not hand-edit)
-`node_modules/`, `build/`, `package-lock.json`, `game/save/`. The editor writes `game/data/*.json` and
+`node_modules/`, `build/`, `package-lock.json`, `game/save/`, the KitShaders plugin (edit
+`tools/shaders/ksl/`, then `python tools/shaders/shader_gen.py`). The editor writes `game/data/*.json` and
 `game/js/plugins.js`: edit them only with the project closed (gotcha 1).

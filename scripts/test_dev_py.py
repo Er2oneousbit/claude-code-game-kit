@@ -857,6 +857,87 @@ class PosixKillTree(unittest.TestCase):
         self.assertEqual(dev.descendants(3), [7, 8, 9])
 
 
+# ---- #249: RPG Maker MZ shader recipes ---------------------------------------------
+class MzShaders(TempRoot):
+    """check compiles the KitShaders.js filters, smoke --shaders renders and compares them, even before
+    `setup --from` (the render needs no MZ project)."""
+
+    def dev(self, results):
+        dev = load("rpgmaker-mz")
+        dev.ROOT = self.root
+        plugin = self.root / "game" / "js" / "plugins" / "KitShaders.js"
+        plugin.parent.mkdir(parents=True, exist_ok=True)
+        plugin.write_text("// generated\n", encoding="utf-8")
+        dev.node_problem = lambda: None
+        dev.deps_stale = lambda: False
+        dev.check_plugins = lambda g, problems: 1
+        self.calls = []
+
+        def fake_run(cmd, **kwargs):
+            line = " ".join(str(c) for c in cmd)
+            self.calls.append(line)
+            for key, result in results.items():
+                if key in line:
+                    return result
+            return 0, ""
+        dev.run = fake_run
+        return dev
+
+    def smoke(self, dev, **opts):
+        args = argparse.Namespace(frames=1, query="", until="", fail_on="", timeout=1, screenshot="", record="",
+                                  record_every=66, headed=False, shaders=True)
+        for k, v in opts.items():
+            setattr(args, k, v)
+        return quiet(dev.cmd_smoke, args)
+
+    def test_smoke_shaders_runs_without_a_project(self):
+        dev = self.dev({"shader_ref.py": (0, "[ OK ] all 11 effect(s) match the reference")})
+        rc, text = self.smoke(dev)
+        self.assertEqual(rc, 0, text)
+        self.assertTrue(any("shader_render.mjs" in c for c in self.calls), self.calls)
+        self.assertTrue(any("shader_ref.py compare" in c for c in self.calls), self.calls)
+        self.assertIn("only the shaders were checked", text)
+
+    def test_a_differing_recipe_fails_smoke(self):
+        dev = self.dev({"shader_ref.py": (1, "[FAIL] flash: 9 pixel(s) past 2")})
+        rc, text = self.smoke(dev)
+        self.assertEqual(rc, 1, text)
+        self.assertIn("differs from its golden image", text)
+
+    def test_a_render_without_playwright_is_an_environment_problem(self):
+        dev = self.dev({"shader_render.mjs": (2, "[error] playwright is not installed")})
+        self.assertEqual(self.smoke(dev)[0], 2)
+        self.assertFalse(any("shader_ref.py" in c for c in self.calls))
+
+    def check(self, dev, **opts):
+        args = argparse.Namespace(no_shaders=False)
+        for k, v in opts.items():
+            setattr(args, k, v)
+        return quiet(dev.cmd_check, args)
+
+    def test_check_compiles_the_plugin_it_checks(self):
+        dev = self.dev({"shader_compile.mjs": (0, "[ OK ] 11 shader recipe(s) compile")})
+        rc, text = self.check(dev)
+        self.assertEqual(rc, 0, text)
+        plugins = str(self.root / "game" / "js" / "plugins")
+        gen = next(c for c in self.calls if "shader_gen.py" in c)
+        self.assertIn("--check", gen)
+        self.assertIn(f"--out {plugins}", gen)
+        self.assertIn(f"--file {plugins}", next(c for c in self.calls if "shader_compile.mjs" in c))
+
+    def test_a_filter_that_does_not_compile_fails_check(self):
+        dev = self.dev({"shader_compile.mjs": (1, "[FAIL] shader flash:\n  ERROR: 0:12: syntax error")})
+        rc, text = self.check(dev)
+        self.assertEqual(rc, 1, text)
+        self.assertIn("shader flash", text)
+        self.assertEqual(self.check(self.dev({"shader_gen.py": (1, "[FAIL] stale")}))[0], 1)
+
+    def test_no_shaders_skips_the_compile(self):
+        dev = self.dev({"shader_compile.mjs": (1, "[FAIL] shader flash")})
+        self.assertEqual(self.check(dev, no_shaders=True)[0], 0)
+        self.assertFalse(any("shader" in c for c in self.calls), self.calls)
+
+
 if __name__ == "__main__":
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):

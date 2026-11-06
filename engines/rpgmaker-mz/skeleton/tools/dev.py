@@ -7,10 +7,12 @@
 #             setup    npm install + the headless browser; --from <MZ project> copies RPG Maker MZ's own files
 #                      into game/ (never over yours) and registers the game's plugins
 #             check    syntax of every plugin, the game's plugin annotations against its commands, the
-#                      database JSON, and js/plugins.js (registered, ordered, files present)
+#                      database JSON, and js/plugins.js (registered, ordered, files present); the kit's
+#                      shader recipes (KitShaders.js current, every filter compiles; --no-shaders skips)
 #             test     unit tests (Node's test runner: tests/**/*.test.js)
 #             smoke    boot game/ in headless Chromium; fail on errors (--query, --until, --fail-on,
-#                      --screenshot, --record as on the web overlay)
+#                      --screenshot, --record as on the web overlay); --shaders also renders every kit
+#                      shader recipe as a PIXI filter and compares it with its golden image (no MZ project needed)
 #             build    a web-browser copy of the game in build/web/ (a plain copy: see ENGINE_FLOW "Packaging")
 #             run      serve game/ on localhost and open the browser (--editor opens RPG Maker MZ instead)
 #             clean    remove build/ (--deep also removes node_modules/)
@@ -27,7 +29,8 @@
 #   check: node --check each plugin; parse each own plugin's /*: block, compare @command with registerCommand;
 #          json.load every data file (database arrays start with null); read $plugins from js/plugins.js
 #   test: node --test over tests/**/*.test.js, parse the TAP totals
-#   smoke: node tools/smoke.mjs (serve, Chromium, wait for BOOT_OK)
+#   smoke: node tools/smoke.mjs (serve, Chromium, wait for BOOT_OK); --shaders first runs
+#          tools/shader_render.mjs, then tools/shaders/shader_ref.py compare build/shader_check
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
@@ -39,6 +42,8 @@
 #           job object (WinJob), so a timeout also ends a grandchild whose parent already exited
 # Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Linux and macOS, killing an untimed command
 #           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
+# Updated : 2026-11-06 with Claude (Opus 5.5, claude-opus-5-5): the kit's shader recipes (KitShaders.js): `check`
+#           compiles them, `smoke --shaders` renders and compares them
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -73,6 +78,9 @@ TEST_TIMEOUT_S = 600
 INSTALL_TIMEOUT_S = 900
 KILL_TIMEOUT_S = 10                       # after a timeout: seconds to wait for the killed tree's pipe
 PLAYWRIGHT_CLI = "node_modules/playwright/cli.js"
+SHADER_PLUGIN = "js/plugins/KitShaders.js"   # the kit's shader recipes as PIXI filters (tools/shaders/shader_gen.py)
+SHADER_OUT = "build/shader_check"          # smoke --shaders renders land here, compared by tools/shaders/shader_ref.py
+SHADER_TIMEOUT_S = 180
 NO_EXEC = (126, 127)
 DEBUG = False
 
@@ -542,6 +550,9 @@ def cmd_check(args):
     project = not missing_core(g)
     if project:
         check_plugins_js(g, problems)
+    shader_rc = 0
+    if (g / SHADER_PLUGIN).is_file() and not getattr(args, "no_shaders", False):
+        shader_rc = shader_compile(g, problems)
     for p in problems:
         print(f"[FAIL] {p}")
     if problems:
@@ -549,11 +560,58 @@ def cmd_check(args):
             print(f"[info] the kit put the game's plugins in {GAME_DIR}/js/plugins/ and your MZ project is at the root: "
                   f"move the project into {GAME_DIR}/ (docs/ENGINE_FLOW.md > Adopting an existing project)")
         print(f"[FAIL] check: {len(problems)} problem(s)")
-        return 1
+        return 2 if shader_rc == 2 else 1
     print(f"[ OK ] checked {n_plugins} plugin(s) and {n_data} data file(s)")
     if not project:
         print(f"[WARN] no RPG Maker MZ project in {rel(g)}/ yet (only the game's plugins were checked): "
               "python tools/dev.py setup --from <a new MZ project>")
+    return 0
+
+
+def shader_compile(g, problems):
+    """The shader plugin current with its recipes, and every filter compiles in headless Chromium. Returns 0, 1 or 2."""
+    rc, out = run([sys.executable, ROOT / "tools" / "shaders" / "shader_gen.py", "--check",
+                   "--out", (g / SHADER_PLUGIN).parent], capture=True, timeout=60)
+    if rc != 0:
+        problems.append(f"{rel(g / SHADER_PLUGIN)} is older than its recipes: python tools/shaders/shader_gen.py\n"
+                        f"{out.strip()}")
+        return 1
+    if deps_stale():
+        rc = npm_install()
+        if rc:
+            problems.append("the shader compile needs the dependencies (npm install did not finish)")
+            return rc
+    rc, out = run([shutil.which("node") or "node", ROOT / "tools" / "shader_compile.mjs", "--file", g / SHADER_PLUGIN],
+                  capture=True, timeout=120)
+    if rc == 0:
+        print(out.rstrip())
+        return 0
+    problems.append(out.strip() or "the shader compile failed")
+    return 2 if rc == 2 or rc in NO_EXEC else 1
+
+
+def shader_pass(g):
+    """smoke --shaders: render every recipe (tools/shader_render.mjs), then compare. Returns 0, 1 or 2."""
+    plugin = g / SHADER_PLUGIN
+    if not plugin.is_file():
+        print(f"[error] {rel(plugin)} not found: python tools/shaders/shader_gen.py writes it", file=sys.stderr)
+        return 2
+    node = shutil.which("node") or "node"
+    rc, out = run([node, ROOT / "tools" / "shader_render.mjs", "--file", plugin, "--out", ROOT / SHADER_OUT],
+                  capture=True, timeout=SHADER_TIMEOUT_S)
+    print(out.rstrip())
+    if rc == 124:
+        print(f"[FAIL] the shader render did not finish within {SHADER_TIMEOUT_S} s")
+        return 1
+    if rc:
+        return 2 if rc == 2 or rc in NO_EXEC else 1
+    rc, out = run([sys.executable, ROOT / "tools" / "shaders" / "shader_ref.py", "compare", ROOT / SHADER_OUT],
+                  capture=True, timeout=SHADER_TIMEOUT_S)
+    print(out.rstrip())
+    if rc:
+        print("[FAIL] a shader recipe differs from its golden image (see the lines above)" if rc == 1 else
+              "[error] shader_ref.py compare could not run")
+        return 1 if rc == 1 else 2
     return 0
 
 
@@ -603,6 +661,19 @@ def cmd_smoke(args):
     if err:
         print(f"[error] {err}", file=sys.stderr)
         return 2
+    shader_rc = 0
+    if args.shaders:
+        if deps_stale():
+            rc = npm_install()
+            if rc:
+                return rc
+        shader_rc = shader_pass(game_dir())
+        if shader_rc == 2:
+            return 2
+        if missing_core(game_dir()):
+            print(f"[WARN] no RPG Maker MZ project in {rel(game_dir())}/ yet: only the shaders were checked "
+                  "(python tools/dev.py setup --from <a new MZ project>)")
+            return shader_rc
     g = need_project()
     if g is None:
         return 2
@@ -628,7 +699,7 @@ def cmd_smoke(args):
         return 2
     if rc != 0 or "[ OK ]" not in out:
         return 1
-    return 0
+    return shader_rc
 
 
 def cmd_build(args):
@@ -802,7 +873,9 @@ def build_parser():
     p = sub.add_parser("setup", help="install dependencies and the headless browser; --from copies MZ's files in")
     p.add_argument("--from", dest="source", default="", help="a new RPG Maker MZ project folder to copy MZ's own files from")
     p.set_defaults(fn=cmd_setup)
-    sub.add_parser("check", help="plugin syntax and annotations, database JSON, js/plugins.js").set_defaults(fn=cmd_check)
+    p = sub.add_parser("check", help="plugin syntax and annotations, database JSON, js/plugins.js, shader compile")
+    p.add_argument("--no-shaders", action="store_true", help="skip the shader compile (headless Chromium)")
+    p.set_defaults(fn=cmd_check)
     sub.add_parser("test", help="unit tests (node --test)").set_defaults(fn=cmd_test)
     p = sub.add_parser("smoke", help="boot the game in headless Chromium for N frames; fail on errors")
     p.add_argument("--frames", type=positive_int, default=SMOKE_FRAMES,
@@ -815,6 +888,9 @@ def build_parser():
     p.add_argument("--record", default="", help="save PNG frames to this folder (GIF: tools/art/frames_to_gif.py)")
     p.add_argument("--record-every", type=positive_int, default=66, help="milliseconds between recorded frames (default 66)")
     p.add_argument("--headed", action="store_true", help="visible browser window (real GPU)")
+    p.add_argument("--shaders", action="store_true",
+                   help="also render every kit shader recipe as a PIXI filter and compare it with its golden image "
+                        "(tools/shaders/; runs without an MZ project)")
     p.set_defaults(fn=cmd_smoke)
     sub.add_parser("build", help="a web-browser copy of the game in build/web/").set_defaults(fn=cmd_build)
     p = sub.add_parser("run", help="serve the game and open your browser (--editor: open RPG Maker MZ)")

@@ -41,7 +41,7 @@ ENGINE_DIRS = {
     "godot": "shaders/kit",
     "web": "src/shaders/kit",
     "web-3d": "src/shaders/kit",
-    "rpgmaker-mz": "game/js/plugins/kit_shaders",
+    "rpgmaker-mz": "game/js/plugins",
     "love2d": "shaders/kit",
     "bevy": "assets/shaders/kit",
     "unity": "Assets/Shaders/Kit",
@@ -190,6 +190,8 @@ def js_module(recipes, flip, kind):
         frags = {r["name"]: glsl_es1(r, flip, "#pragma phaserTemplate(shaderName)\n", "uMainSampler", "uAuxSampler",
                                       "gl_FragColor = kit_effect(KIT_FLIP(outTexCoord));", "outTexCoord")
                  for r in recipes}
+    elif kind == "pixi":
+        frags = {r["name"]: pixi(r) for r in recipes}
     else:
         frags = {r["name"]: glsl_es1(r, flip, "", "uMainSampler", "uAuxSampler",
                                       "gl_FragColor = kit_effect(KIT_FLIP(vTextureCoord));", "vTextureCoord")
@@ -201,6 +203,62 @@ def js_module(recipes, flip, kind):
     return (head + f"export const KIT_SHADER_FLIP_Y = {str(flip).lower()};\n"
             f"export const KIT_SHADERS = {json.dumps(meta, indent=1)};\n"
             f"export const KIT_FRAGMENTS = {json.dumps(frags, indent=1)};\n")
+
+
+def pixi(r):
+    """GLSL for a PIXI 5 filter (RPG Maker MZ): the input is uSampler, and vTextureCoord covers the filter frame,
+    which PIXI pads to its texture size: image space is vTextureCoord * inputSize.xy / outputFrame.zw."""
+    uniforms = "\n".join(f"uniform {t} u_{k};" for k, t, v in r["params"])
+    aux = "uniform sampler2D uAuxSampler;\n" if r["aux"] else ""
+    helpers = ("vec4 SAMPLE_MAIN(vec2 p) { return texture2D(uSampler, p * outputFrame.zw * inputSize.zw); }\n"
+               + ("vec4 SAMPLE_AUX(vec2 p) { return texture2D(uAuxSampler, p); }\n" if r["aux"] else ""))
+    return (f"precision highp float;\n// {HEADER_NOTE.format(name=r['name'])}\n"
+            f"uniform sampler2D uSampler;\nuniform vec4 inputSize;\nuniform vec4 outputFrame;\n{aux}{uniforms}\n"
+            f"varying vec2 vTextureCoord;\n{helpers}\n"
+            f"vec4 kit_effect(vec2 uv) {{\n{indent(r['body'])}\n}}\n\n"
+            "void main() {\n    gl_FragColor = kit_effect(vTextureCoord * inputSize.xy / outputFrame.zw);\n}\n")
+
+
+MZ_RUNTIME = """
+(() => {
+  "use strict";
+  const uniformsOf = (name, params) => {
+    const all = Object.assign({}, KIT_SHADERS[name].params, params || {});
+    const out = {};
+    for (const [k, v] of Object.entries(all)) out["u_" + k] = Array.isArray(v) ? new Float32Array(v) : v;
+    return out;
+  };
+  /**
+   * A PIXI filter running one kit recipe. KitShaders.filter("flash", { amount: 1 }) on a sprite:
+   *   sprite.filters = [KitShaders.filter("flash")]; later filter.uniforms.u_amount = 0;
+   * A second input (dissolve's noise, palette_swap's palette, ...) is a PIXI texture: KitShaders.filter(name, {}, tex)
+   */
+  const filter = (name, params, auxTexture) => {
+    if (!KIT_FRAGMENTS[name]) throw new Error("KitShaders: no recipe " + name);
+    const uniforms = uniformsOf(name, params);
+    if (auxTexture) uniforms.uAuxSampler = auxTexture;
+    return new PIXI.Filter(null, KIT_FRAGMENTS[name], uniforms);
+  };
+  window.KitShaders = { filter, recipes: KIT_SHADERS, fragments: KIT_FRAGMENTS };
+})();
+"""
+
+
+def mz_plugin(recipes):
+    """RPG Maker MZ plugin: every recipe's PIXI filter GLSL and default parameters, and KitShaders.filter()."""
+    meta = {r["name"]: {"group": r["group"], "main": r["main"], "aux": r["aux"],
+                        "params": {k: v for k, _, v in r["params"]}} for r in recipes}
+    frags = {r["name"]: pixi(r) for r in recipes}
+    return ("//=============================================================================\n"
+            "// KitShaders.js\n"
+            f"// {HEADER_NOTE.format(name='*')}\n"
+            "//=============================================================================\n"
+            "/*:\n * @target MZ\n * @plugindesc The kit's shader recipes as PIXI filters (KitShaders.filter).\n"
+            " * @help Generated: edit tools/shaders/ksl and run python tools/shaders/shader_gen.py.\n"
+            " * Usage in a script or another plugin: sprite.filters = [KitShaders.filter(\"flash\", { amount: 1 })];\n"
+            " * Checked against the recipes' golden images by: python tools/dev.py smoke --shaders\n */\n"
+            f"const KIT_SHADERS = {json.dumps(meta, indent=1)};\n"
+            f"const KIT_FRAGMENTS = {json.dumps(frags, indent=1)};\n" + MZ_RUNTIME)
 
 
 def love(r):
@@ -367,7 +425,7 @@ def files_for(engine, recipes):
     if engine == "web-3d":
         return {"kitShaders.ts": js_module(recipes, True, "three")}   # Three's uv and flipY textures run bottom-up
     if engine == "rpgmaker-mz":
-        return {"kit_shaders_glsl.js": js_module(recipes, False, "pixi").replace("export const ", "window.")}
+        return {"KitShaders.js": mz_plugin(recipes)}   # PIXI textures run top-down: no flip
     if engine == "love2d":
         out = {f"{r['name']}.glsl": love(r) for r in recipes}
         out["params.lua"] = love_params(recipes)

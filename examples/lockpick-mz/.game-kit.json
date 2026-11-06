@@ -1064,6 +1064,18 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1134,7 +1146,7 @@
     "docs/ASSET_LOG.md": "1ab9bdeb04db4a9a7465d9012cfe9b9dea36eb887d5e872a00d0bd0046986dd7",
     "docs/BRIEFS.md": "98974df72f0247bac1a40b8a4aba6ccbeb6566fde4ff4bc543b63d191a465436",
     "docs/CONCEPTS.md": "d8e0ea2634118c73ee67b998979867a14757b24dbb0f2936ba5e327e9bdcb005",
-    "docs/ENGINE.md": "ee9d51e30d8a9766db920744bd442891dc4ec7913218f66593b25e6d431790c4",
+    "docs/ENGINE.md": "e6fb0a2ca8f6252dc9ba3a5708453cfdb845f13c327aa472aeeb442e2c41493c",
     "docs/ENGINE_FLOW.md": "44e02ad98d5ddc370d3eaa20ecce32f66b70020d37ebac8629e25d9076029141",
     "docs/EVIDENCE.md": "3e7459a8ca21ff45af359c157a0d0ed9b62497e93e5b0cd1d82c576c9fd6dc3a",
     "docs/FIRST_HOUR.md": "e3c2b06bbdeea3b2e04be57de54b092bb749a4a45a13a5330c8819bd766e4f49",
@@ -1186,6 +1198,7 @@
     "game/js/plugins/GameAudio.js": "a262337fe31285b15aaafded88499afde360a5def4f8e151691faedb6b12f284",
     "game/js/plugins/GameCore.js": "0113ef7d8d1b8686f9286679269042a119b0b85237cce7032333a41853633fa3",
     "game/js/plugins/GameMain.js": "d11a7abcfd890b2d18c39b483dc32eebd2d2bf0b7760054d7fd0afe3fd79ac14",
+    "game/js/plugins/KitShaders.js": "1dd05cee26d46a0cb3ec436caf73ac3fa8dd5f57da25102b8047d0a9a757df58",
     "package.json": "f61bfad56662356b27d89b04f243d00b1c4b7a326692db4b515520ae78d55387",
     "tests/gameAudio.test.js": "6a17b0d6ac9f67f2f791714aced1c2cbe76039325bb6540abc50a88b7ca2edbb",
     "tests/gameCore.test.js": "292e78fe7d8f15a776dd10641cc6c9440c4e37b966e627285647d2b6a6cfba2e",
@@ -1430,7 +1443,7 @@
     "tools/bozzetto/workflows/trellis2_image_to_3d.api.json": "c18a577cf62b2f12a9689760edfdc89ef671d0b996a5b063343461c505a113f3",
     "tools/check_links.py": "35d811faa47c297fd63e78f2958ef6abe1c742d73994857d58a99a4356792d5c",
     "tools/credits.py": "d598a841eb67130a1a22f100535dbf4b8964a937db74792252eb5db619dc379c",
-    "tools/dev.py": "33027d43372d0a09d7f91262b428bdf734b1073f49465a6d20ee35859615b75b",
+    "tools/dev.py": "fd446bb563b2e691f85e7cc7b84ddf890f80908e67e05d3d3e2ff86c4b3e4353",
     "tools/doctor.py": "7635f687e4476700a424187beeff24022a01d260ccb158faf7e9eec69599c85a",
     "tools/fetch_asset.py": "4c3f351d98ed01dd27c9dc68ec0f3b9242045c16d1b2dde292cf44fb3d127d7d",
     "tools/golden_vectors.py": "5368a2d52b2a9c837ee42cc974ef1085e1b8d018be7343069027eed1736f8b95",
@@ -1441,6 +1454,8 @@
     "tools/second_opinion.py": "31527022bde8f6ff9e5d3afce18277498627041cfb46026d9f2f8aa742893c66",
     "tools/second_opinion/kimi-agent.md": "9a1838d60f30abb8ea3438e6a6493a3fd789aaf4987d2bbc998de20ec1df95a8",
     "tools/serve.mjs": "ac665b92558d5024bfe26d7688b95a0e0d7f5a66f60c056eec57b49ca9b8d069",
+    "tools/shader_compile.mjs": "e46ad48965ebc3383bef2181140a907b6d54471238388b66e2aa3cb3fc0a48c5",
+    "tools/shader_render.mjs": "e4f8830704700116b011c100094157174f1b0a35ede89fd8638ff55896201fc4",
     "tools/shaders/ksl/colorblind.ksl": "50319bbe8fd706c806feef6462e5faf15c065e4c108a1417ddd32ec4969507f2",
     "tools/shaders/ksl/crt.ksl": "d914adf8e486f1a0781c886c57561099be6b6577b87774c4e8998b86fe51bea8",
     "tools/shaders/ksl/dissolve.ksl": "1790bc49d3cbc22e3ad2ba0fc72a662c34ceb5ea8945b9878793bb414576910f",
@@ -1453,7 +1468,7 @@
     "tools/shaders/ksl/triplanar.ksl": "05d03cd7a4c2f2910a1bf0cefdeac529cbcf53b005990b63287df2c1ea08c02f",
     "tools/shaders/ksl/vignette.ksl": "5a82293feaa105d1cdc07a97800496aa6c59227087fa432967ba2b068bcda19e",
     "tools/shaders/recipes.json": "656135c0b0a65c9a456089d9e098f6606bd7a007dd066c830598e6a16b56dd16",
-    "tools/shaders/shader_gen.py": "24549012aec400ba3bb0173a3e6a9737245b6ace9bc8743b0706956339faaa9d",
+    "tools/shaders/shader_gen.py": "c457c200d852718f44e7c4b959257d784dd6f39e67e019444de166614cbed7e9",
     "tools/shaders/shader_ref.py": "f21cf06f0dde7851fc00178b838d1ab5b16201b7e7ce6f8283ba478f884d1d2a",
     "tools/shaders/test_shader_ref.py": "612934104e181e0091e3bd3b4cddaed13e11d66c9846bbc534ed658b961225e1",
     "tools/smoke.mjs": "993d9d0c33c79425ef4a778b1fdad40439d06e80e5dcc73d0fc4545ffa9d7fc8",
@@ -1472,7 +1487,7 @@
     "tools/token_audit.py": "553f9c7d4af332a45e11dc1ca9dadfd030cd841b9439b73b1f71a2bff2fbb048",
     "tools/yt_transcript.py": "7ae8657734eb805db92c7fc5b9dae3e99c6533a0083724da8df59206bd729e9f"
   },
-  "last_upgrade": "2026-11-05",
+  "last_upgrade": "2026-11-06",
   "slug": "lockpick_mz",
   "kit_settings": {
     "permissions": {
