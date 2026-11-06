@@ -22,6 +22,8 @@ The shell (`SOP-19`) has the settings; this SOP is what they must do.
 | Flashes | At most three full-screen flashes in any one second, or below the thresholds; remove triggers rather than warn. The limiter is always on; the setting only makes flashes gentler | `flash_limit` (on by default: tones flashes down) | F34 |
 | Difficulty | A wide choice of difficulty, changeable during play; assist options where the game allows (slower game speed, more health, skip a section) | `difficulty`, `game_speed` | E69 |
 | Saving | Settings always saved; autosave plus manual save | (shell) | E69 |
+| Keeping track | A reminder of the current goal during play; every line said can be read again; text waits for the player instead of leaving on a timer; an easily readable font as an option | "What now?" and "Dialogue history" on the pause menu (the game calls `set_objective`), `subtitle_hold`, `readable_font` (Atkinson Hyperlegible), `line_spacing` | E69 |
+| Hands and timing | Controls as simple as possible: no required button-mashing, no required holds, timing that is not precise; a layout for one hand (the kit's take on simpler controls: no guideline names it) | `auto_repeat` (a held button repeats), `hold_to_toggle`, `timing_scale` (input buffer and coyote time, longer), one-handed layouts in Settings > Controls (`data/input/presets.json`) | E69 |
 
 ## 2. Steps
 1. **At the GDD stage**, note which of the needs above the game touches (a rhythm game leans on audio, a puzzle game on

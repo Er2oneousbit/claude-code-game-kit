@@ -53,7 +53,11 @@ keyboard and gamepad reach every control, and the focused one has an outline.
   read by `AccessColours` and checked by `tools/access/colour_check.py`; the full-screen `ColorFilter` runs only when
   that file sets `"filter": true`, #169), reduce motion and shake strength (`Shell.effective_shake()`), soften flashes (the `FlashLimiter`
   always applies; this setting also tones flashes down), toggle instead of hold, game speed (scales game time),
-  difficulty (stored for the game to read).
+  difficulty (stored for the game to read), the readable font and line spacing (`UiTheme.make`), subtitles that wait
+  for accept (`subtitle_hold`), longer timing windows (`timing_scale`) and hold to mash (`AutoRepeat`, #166, #167).
+- **Keeping track** (#167): the pause menu's "What now?" (`HelpScreen`: the goal from `Shell.set_objective()`, the
+  last line, the controls) and "Dialogue history" (`HistoryScreen`, from `Shell.history`, which `SubtitleBar` fills).
+  Settings > Controls offers one-handed layouts (`data/input/presets.json`, #166).
 - **Subtitles**: `SubtitleBar` reads `data/dialogue/sample.built.json` (format v0 of Wavesmith's dialogue
   subcommand, tools/audio/wavesmith: cues for a classic bar, per-character reveal times for a typewriter; unknown fields are ignored).
   A caption marked `"directional": true` gets an arrow while its source is off screen: `bar.caption(id, {"dx": .., "dy": .., "half_w": .., "half_h": ..})`.

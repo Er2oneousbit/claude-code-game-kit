@@ -1515,6 +1515,12 @@
       "date": "2026-11-06",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.14.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1623,7 +1629,7 @@
     "docs/CONCEPTS.md": "c0dd1ec23634f973bbfc650fa84931a7b87243966d58c397a95f5ef73d788397",
     "docs/ENGINE.md": "a85849c5bf80d4ce2c156e5c8eadd3bb202e859557b1ec271672959473ea3935",
     "docs/ENGINE_FLOW.md": "36185db57e3dd9e482bc1ff7a6e7c012f5027915575dcf89e827fd953c5d1466",
-    "docs/EVIDENCE.md": "0158638d71137edaf1aa34db93e143b5b925c00bb71c0572f99ac62cc8ce14c6",
+    "docs/EVIDENCE.md": "6da73bf56ff6d6b4dbbdb70d4101cffe93fa47be88b2dbe969e1f3d09e072861",
     "docs/FIRST_HOUR.md": "e3c2b06bbdeea3b2e04be57de54b092bb749a4a45a13a5330c8819bd766e4f49",
     "docs/GDD.md": "af22f3fedbf8332f02cbf0a9b0f496332cf42257554541daa449e4f6d768684f",
     "docs/HANDOFF.md": "9c4e829c214d0c8bb645db91c2b6c5c6851643f311187a3c43c989028ee7a4dc",
@@ -1665,7 +1671,7 @@
     "docs/sop/SOP-17-procedural-generation.md": "26c19ef440ac07273c6e0742c88e89020b7457582f6d61a3ea1fd660b6ae3907",
     "docs/sop/SOP-18-game-feel.md": "e6315b60ce7e7342dd73fece5afd2b7298601184ed4e04b51c5358b03e84c66e",
     "docs/sop/SOP-19-front-end-and-settings.md": "53531dd58339e6cd422e37c2e034fd913d766ecfb92fa368aa98f2840da0b0d1",
-    "docs/sop/SOP-20-accessibility.md": "3b7affd962fbdaf1ff8b9e0238ecef96dbf8f62643f63f57fb580dbcb8f8c0e0",
+    "docs/sop/SOP-20-accessibility.md": "e473111dba92e7532487b9e38d4be29a1bca5e49267a0542f3fc91c1c1b138c9",
     "docs/sop/SOP-21-ship-on-steam-and-itch.md": "8096e0dec71745ecf691c2e5140366e954c1aeae126a68a40ff7da540da793e0",
     "docs/sop/SOP-22-balancing-and-economy.md": "248365f65f715b43cb4417a73793ace4d8e8d98e6f3f94617a9af4149ccf6d32",
     "docs/sop/SOP-23-marketing.md": "8d70dffbb5ba5ce486d5c93c2117880a8fd19cd651a0a1a7dfae29c65fb3fc9b",

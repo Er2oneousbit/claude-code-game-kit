@@ -56,7 +56,10 @@ a list that may be empty so it writes back as `[]`.
 ## The runtime shell (src/shell/)
 boot > title (press any key; asks for telemetry consent once per run while it is unset) > main menu (Play, Settings,
 Credits, Quit, and Juice demo in a debug build = a run from the source folder) > loading (progress bar) > play
-(`src/game/game.lua`) > pause (Resume, Settings, Quit to title; on the `pause` action and on focus loss).
+(`src/game/game.lua`) > pause (Resume, What now?, Dialogue history, Settings, Quit to title; on the `pause` action and
+on focus loss). "What now?" shows the goal from `app:set_objective()`, the last line and the controls; the history is
+`app.history`, filled by `app:say()` (#167). Settings > Controls offers one-handed layouts (`data/input/presets.json`,
+#166); `readable_font`, `line_spacing`, `subtitle_hold`, `timing_scale` and `auto_repeat` work as SOP-20 says.
 - **Input:** keyboard and gamepad everywhere (`ui_up/down/left/right/accept/cancel`; cancel goes back one screen;
   the left stick works as the d-pad). The focused item has an outline and a `>` marker, not just a colour.
 - **Settings** (tabs Display, Audio, Controls, Accessibility, Language): every field of the schema in

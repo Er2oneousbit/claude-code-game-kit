@@ -42,6 +42,11 @@ examples were built and tested on one Windows 11 machine.
   screenshots is still needed; a real Steam Deck (Proton, on-screen keyboard, suspend) is not tried
   ([#91](https://github.com/Er2oneousbit/claude-code-game-kit/issues/91),
   [#85](https://github.com/Er2oneousbit/claude-code-game-kit/issues/85)).
+- **Cognitive and motor settings** work in Godot, LÖVE and web; Unity, Unreal, Bevy and C++ store them but show no
+  screens yet ([#168](https://github.com/Er2oneousbit/claude-code-game-kit/issues/168)); the LÖVE French strings
+  for Settings > Accessibility are English (that section was never translated); the auto-repeat delay and interval
+  (0.35 s, 0.15 s) are the kit's starting point, not from a source; the one-handed layouts are not tried with
+  players who play one-handed.
 - **Second-model reviews still owed:** Wavesmith's WAV, FLAC and Ogg Vorbis code, `check_links.py`, `credits.py`,
   `image_diff.py`, the golden vectors, `comfy_local.py`, `pixel_sprite.py`, `chroma_key.py` and four more Wavesmith
   modules have never been reviewed by a second model; the reviewer's weekly quota ran out first

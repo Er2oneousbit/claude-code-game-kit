@@ -49,6 +49,7 @@ python core/tools/test_golden_vectors.py             # the juice and shell refer
 python core/tools/test_image_diff.py                 # standard library only (visual regression)
 python core/tools/access/test_colour.py              # standard library only (colour-blind pairs, CIEDE2000, WCAG contrast)
 python core/tools/access/test_sweep.py               # standard library only (the accessibility sweep's rules, canned drive logs)
+python core/tools/access/test_presets.py             # standard library only (the one-handed layouts: complete, no conflicts, one side)
 python core/tools/test_credits.py                    # standard library only
 python core/tools/test_yt_transcript.py              # offline (canned WebVTT, faked caption methods)
 python core/tools/test_token_audit.py                # standard library only (a fake home, project and session log)

@@ -67,7 +67,10 @@ Tiled (mapeditor.org, free) exports JSON that Phaser loads with `this.load.tilem
 The skeleton ships a complete front end around the game: boot, title ("press any key or button"), main menu (Play,
 Settings, Credits, Quit, plus "Juice demo" in debug builds: the dev server or `?debug`), settings, credits (scrolls
 `CREDITS.md` from the project root when it exists), a loading bar, the game, a pause menu (the `pause` action, and
-automatically when the window loses focus), quit and crash screens.
+automatically when the window loses focus; it also opens "What now?": the goal from `shell.setObjective()`, the last
+line and the controls, and "Dialogue history" from `shell.history`, #167), quit and crash screens. Settings > Controls
+offers one-handed layouts (`data/input/presets.json`, #166); `readable_font`, `line_spacing`, `subtitle_hold`,
+`timing_scale` and `auto_repeat` work as SOP-20 says.
 - **Where:** `src/shell/` (screens, input, subtitles, the smoke driver), `src/core/` (the engine-free logic: settings,
   bindings and glyphs, saves, i18n, juice), `data/i18n/<locale>.json` (strings), `data/dialogue/*.built.json`
   (subtitles in the dialogue format v0 of Wavesmith's dialogue subcommand). Scenes read `shell.settings`,
