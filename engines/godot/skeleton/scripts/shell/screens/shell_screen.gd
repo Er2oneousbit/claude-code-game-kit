@@ -93,7 +93,11 @@ func label(text: String, font_scale: float = 1.0, node_name: String = "") -> Lab
 	l.text = text
 	if node_name != "":
 		l.name = node_name
-	if font_scale != 1.0:
+	if font_scale == UiTheme.HEADING_FONT:
+		l.theme_type_variation = UiTheme.HEADING_TYPE # follows text_scale live (ui_theme.gd)
+	elif font_scale == UiTheme.TITLE_FONT:
+		l.theme_type_variation = UiTheme.TITLE_TYPE
+	elif font_scale != 1.0:
 		l.add_theme_font_size_override("font_size", roundi(get_theme_default_font_size() * font_scale))
 	return l
 

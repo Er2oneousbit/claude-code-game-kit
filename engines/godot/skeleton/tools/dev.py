@@ -10,7 +10,8 @@
 #             smoke    boot the game headless for N frames, fail on errors; --screenshot FILE and --record DIR then
 #                      capture it in a real window (tools/capture.gd; GIF: tools/art/frames_to_gif.py);
 #                      --drive SCENARIO runs a scripted visit of the menus (menus, crash, pseudo, pseudo-plant,
-#                      show:<title|settings|pause|subtitle|juice>), --locale pseudo checks every label,
+#                      show:<title|settings|pause|subtitle|juice>, access[:res=WxH][,scale=N][,pad] for
+#                      tools/access/sweep.py), --locale pseudo checks every label,
 #                      --data-dir DIR keeps the game's files there, --compare BASE.png diffs the screenshot
 #             run      launch the game window (--data-dir, --locale as for smoke)
 #             build    export a release build (--preset Windows Desktop|Linux|Web, from the shipped export_presets.cfg)
@@ -114,7 +115,11 @@ DRIVE_FPS = 60                           # drives run with --fixed-fps: every fr
 DRIVE_MAX_FRAMES = 1000000               # backstop only: headless fixed-fps frames run far faster than real time,
                                          # so the drive's own real-time waits and DRIVE_TIMEOUT_S end a stuck run
 DRIVE_TIMEOUT_S = 180                    # a drive (headless, or the windowed capture) must finish within this
-MARKERS = ("DRIVE_", "SETTINGS_", "CRASH_WRITTEN", "PSEUDO_", "TELEMETRY_FILE", "BUG_REPORT")  # echoed lines
+MARKERS = ("DRIVE_", "SETTINGS_", "CRASH_WRITTEN", "PSEUDO_", "TELEMETRY_FILE", "BUG_REPORT",
+           "ACCESS_")  # echoed lines (ACCESS_*: the access drive's report, read by tools/access/sweep.py)
+# smoke --drive access[:res=WxH][,scale=N][,pad] (the drive sets the window: headless Godot ignores --resolution)
+ACCESS_DRIVE = re.compile(r"access(:(res=[1-9]\d{2,4}x[1-9]\d{2,4}|scale=\d+(\.\d+)?|pad)"
+                          r"(,(res=[1-9]\d{2,4}x[1-9]\d{2,4}|scale=\d+(\.\d+)?|pad))*)?")
 IMAGE_DIFF = "tools/image_diff.py"       # smoke --compare runs it: exit 0 same, 1 different, 2 usage
 NO_EXEC = (126, 127)                     # run() codes: not executable / not found -> exit 2
 # build: what must never ship in the .pck (the kit's bookkeeping and dev-only folders; export_presets.cfg excludes
@@ -943,7 +948,10 @@ def drive_name(text):
     """argparse type: a smoke --drive scenario ("" = none; argparse also runs this on the default)."""
     if text == "" or text in DRIVES or (text.startswith("show:") and text[5:] in SHOW_TARGETS):
         return text
-    raise argparse.ArgumentTypeError(f"{text!r}: use {', '.join(DRIVES)} or show:<{'|'.join(SHOW_TARGETS)}>")
+    if ACCESS_DRIVE.fullmatch(text):
+        return text
+    raise argparse.ArgumentTypeError(f"{text!r}: use {', '.join(DRIVES)}, access[:res=WxH][,scale=N][,pad] or "
+                                     f"show:<{'|'.join(SHOW_TARGETS)}>")
 
 
 def channel_tolerance(text):
@@ -1034,7 +1042,9 @@ def build_parser():
                    help="scripted run of the front end: menus (change two settings, Back, check settings.json), "
                         "crash (a script error: crash file, exit 1), pseudo (every screen; use --locale pseudo), "
                         "pseudo-plant (plus one label too small: exit 1), show:<title|settings|pause|subtitle|juice> "
-                        "(open that screen; with --screenshot, photograph it). Runs at --fixed-fps 60")
+                        "(open that screen; with --screenshot, photograph it), access[:res=WxH][,scale=N][,pad] (report "
+                        "every screen for tools/access/sweep.py at that window size and text scale; pad presses with "
+                        "gamepad events only). Runs at --fixed-fps 60")
     p.add_argument("--data-dir", default="", metavar="DIR",
                    help=f"the game's data folder (settings, saves, logs, crashes, telemetry), relative to the project; "
                         f"default: a fresh {SMOKE_DATA}/ each run")

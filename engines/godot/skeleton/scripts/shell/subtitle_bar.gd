@@ -122,6 +122,12 @@ func is_fully_shown() -> bool:
 	return is_playing() and DialogueData.revealed(_line, _t) >= str(_line.get("text", "")).length()
 
 
+## What the bar shows now: {"visible", "speaker", "text", "id"} (the access sweep checks it against the line).
+func shown() -> Dictionary:
+	return {"visible": _panel.is_visible_in_tree(), "speaker": _speaker.text if _speaker.visible else "",
+			"text": _text.text, "id": str(_line.get("id", ""))}
+
+
 func _process(delta: float) -> void:
 	if _caption_left > 0.0:
 		_caption_left -= delta

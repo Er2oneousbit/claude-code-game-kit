@@ -51,9 +51,12 @@ func _init(p_front: FrontEnd) -> void:
 func build() -> void:
 	var col: VBoxContainer = margin_box()
 	col.add_child(label(Shell.t("settings.title"), UiTheme.HEADING_FONT, "Heading"))
-	var tabs: HBoxContainer = HBoxContainer.new()
+	# a flow, not a row: at 200 % text the six tabs wrap to a second line instead of pushing the screen wider
+	# (tools/access/sweep.py found "Privacy" and the title off screen, #91)
+	var tabs: HFlowContainer = HFlowContainer.new()
 	tabs.name = "Tabs"
-	tabs.add_theme_constant_override("separation", 4)
+	tabs.add_theme_constant_override("h_separation", 4)
+	tabs.add_theme_constant_override("v_separation", 4)
 	col.add_child(tabs)
 	_tab_buttons.clear()
 	for tab: String in TABS:
@@ -65,6 +68,10 @@ func build() -> void:
 		b.pressed.connect(_select_tab.bind(tab))
 		tabs.add_child(b)
 		_tab_buttons[tab] = b
+	for i: int in TABS.size(): # left and right walk the tabs in order, also across a wrap
+		var b: Button = _tab_buttons[TABS[i]]
+		b.focus_neighbor_right = NodePath("../Tab_" + TABS[(i + 1) % TABS.size()])
+		b.focus_neighbor_left = NodePath("../Tab_" + TABS[(i - 1 + TABS.size()) % TABS.size()])
 	var scroll: ScrollContainer = ScrollContainer.new()
 	scroll.name = "Scroll"
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL

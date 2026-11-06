@@ -19,6 +19,8 @@ const BASE_FONT_SIZE: int = 12
 const MIN_FONT_SIZE: int = 6
 const TITLE_FONT: float = 2.5 # title size as a multiple of the body font
 const HEADING_FONT: float = 1.5
+const HEADING_TYPE: StringName = &"HeadingLabel" # theme variations carrying those sizes
+const TITLE_TYPE: StringName = &"TitleLabel"
 const BG: Color = Color(0.08, 0.09, 0.15)
 const PANEL: Color = Color(0.12, 0.14, 0.22, 0.96)
 const BUTTON: Color = Color(0.17, 0.19, 0.31)
@@ -55,6 +57,11 @@ static func make(text_scale: float) -> Theme:
 		theme = plain()
 	var base: int = theme.default_font_size if theme.has_default_font_size() else BASE_FONT_SIZE
 	theme.default_font_size = maxi(MIN_FONT_SIZE, roundi(base * text_scale))
+	# headings and titles are theme variations, so a text-size change resizes them on the open screen too (a size
+	# fixed when the label was built stayed small: tools/access/sweep.py, #91)
+	for variation: Array in [[HEADING_TYPE, HEADING_FONT], [TITLE_TYPE, TITLE_FONT]]:
+		theme.set_type_variation(variation[0], "Label")
+		theme.set_font_size("font_size", variation[0], roundi(theme.default_font_size * float(variation[1])))
 	return theme
 
 

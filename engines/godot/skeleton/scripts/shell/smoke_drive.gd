@@ -8,6 +8,7 @@
 #           python tools/dev.py smoke --drive pseudo-plant --locale pseudo  # plus one label too small: exit 1
 #           python tools/dev.py smoke --drive show:settings --screenshot captures/settings.png
 #           (show: title, settings, pause, subtitle, juice)
+#           python tools/dev.py smoke --drive access:res=1280x800,scale=2,pad   # every screen (tools/access/sweep.py)
 # Notes   : Markers: DRIVE_DONE <scenario>, DRIVE_FAIL <why>, SETTINGS_BEFORE / SETTINGS_WRITTEN <path> ...,
 #           CRASH_WRITTEN <path> (from Shell), PSEUDO_FAIL / PSEUDO_OK. Navigation goes through the real input
 #           path (Viewport.push_input of InputEventAction), so a broken focus chain fails the run. Under
@@ -32,9 +33,16 @@ const JUICE_SHOT_FRAMES: int = 1 # frames after the hit; capture adds 3, still i
 const PLANTED_NAME: String = "PlantedTooSmall"
 const PLANTED_WIDTH: float = 24.0
 const SHOW_TARGETS: PackedStringArray = ["title", "settings", "pause", "subtitle", "juice"]
+# the access sweep: the actions the shell's navigation needs on both devices, and the demo's control hints
+const ACCESS_ACTIONS: PackedStringArray = ["ui_up", "ui_down", "ui_left", "ui_right", "ui_accept", "ui_cancel",
+		"pause"]
+const PROMPT_ACTIONS: PackedStringArray = ["move_left", "move_right", "jump", "attack", "interact", "pause"]
 
 var front: FrontEnd
 var scenario: String
+var _pad: bool = false # access drive: press with gamepad events instead of actions
+var _text_scale: float = 1.0
+var _window: Vector2i = Vector2i.ZERO # access drive: the window size to lay the screens out for
 
 
 func _init(p_front: FrontEnd) -> void:
@@ -58,9 +66,11 @@ func _run() -> void:
 		await _pseudo(scenario == "pseudo-plant")
 	elif scenario.begins_with("show:") and SHOW_TARGETS.has(scenario.trim_prefix("show:")):
 		await _show(scenario.trim_prefix("show:"))
+	elif scenario == "access" or scenario.begins_with("access:"):
+		await _access(scenario.trim_prefix("access").trim_prefix(":"))
 	else:
-		_fail("unknown scenario '%s' (menus, crash, pseudo, pseudo-plant, show:<%s>)" % [scenario,
-				"|".join(SHOW_TARGETS)])
+		_fail("unknown scenario '%s' (menus, crash, pseudo, pseudo-plant, access[:scale=N][,pad], show:<%s>)"
+				% [scenario, "|".join(SHOW_TARGETS)])
 
 
 # ---- scenarios ------------------------------------------------------------------
@@ -218,6 +228,109 @@ func _show(target: String) -> void:
 	_done(0)
 
 
+# ---- the accessibility sweep (#91, #85) ------------------------------------------
+
+## access[:res=WxH][,scale=<text scale>][,pad]: every screen reported for tools/access/sweep.py (ACCESS_* lines)
+## at that window size; with pad, every press is a gamepad button or stick event (a Steam Deck run), so a screen the
+## gamepad cannot reach fails.
+func _access(options: String) -> void:
+	for part: String in options.split(",", false):
+		if part == "pad":
+			_pad = true
+		elif part.begins_with("scale="):
+			_text_scale = float(part.trim_prefix("scale="))
+		elif part.begins_with("res="):
+			var wh: PackedStringArray = part.trim_prefix("res=").split("x")
+			_window = Vector2i(int(wh[0]), int(wh[1]))
+	Log.raw("ACCESS_INPUT " + JSON.stringify({"pad": _pad, "text_scale": _text_scale,
+			"actions": AccessAudit.input_report(ACCESS_ACTIONS)}))
+	if not await _wait_screen("title"):
+		return
+	if _window != Vector2i.ZERO:
+		get_tree().root.size = _window # the stretch (integer scale, expand) follows it, as on that screen
+		await _frames(2)
+	if _text_scale != 1.0:
+		Shell.set_value("access", "text_scale", _text_scale)
+	await _frames(SETTLE_FRAMES)
+	_report("title")
+	await _dismiss_consent()
+	await _frames(2)
+	await _press("ui_accept")
+	if not await _wait_screen("main_menu"):
+		return
+	await _frames(3)
+	_report("main_menu")
+	if not await _nav_to("Settings", "ui_down") or not await _accept("settings"):
+		return
+	for tab: String in SettingsScreen.TABS:
+		if not await _nav_to("Tab_" + tab, "ui_right"):
+			return
+		await _frames(3)
+		_report("settings/" + tab)
+	await _press("ui_cancel")
+	if not await _wait_screen("main_menu"):
+		return
+	if not await _nav_to("Credits", "ui_down") or not await _accept("credits"):
+		return
+	await _frames(3)
+	_report("credits")
+	await _press("ui_cancel")
+	if not await _wait_screen("main_menu"):
+		return
+	if not await _nav_to("JuiceDemo", "ui_up") or not await _accept("juice"):
+		return
+	var demo: JuiceDemo = front.world_node as JuiceDemo
+	for i: int in WAIT_FRAMES:
+		if demo.subtitles.is_fully_shown():
+			break
+		await _frames(1)
+	await _frames(3)
+	_report("juice")
+	Log.raw("ACCESS_SUBTITLE " + JSON.stringify(demo.subtitles.shown()))
+	_report_prompts()
+	await _press("pause")
+	if not await _wait_screen("pause"):
+		return
+	await _frames(3)
+	_report("pause")
+	if not await _nav_to("QuitToTitle", "ui_down"):
+		return
+	await _press("ui_accept")
+	if not await _wait_screen("title"):
+		return
+	Log.raw("DRIVE_DONE " + scenario)
+	_done(0)
+
+
+func _report(where: String) -> void:
+	Log.raw("ACCESS_SCREEN " + JSON.stringify(AccessAudit.screen(get_tree().root, where)))
+
+
+## The demo's control hints: for each action, the keyboard text and the text shown now, on the device in use.
+func _report_prompts() -> void:
+	var rows: Dictionary = {}
+	for action: String in PROMPT_ACTIONS:
+		var key: String = Bindings.prompt_binding(Shell.bindings(), action, "keyboard")
+		rows[action] = {"keyboard": Shell.binding_text(key, "keyboard"), "shown": Shell.binding_text(Shell.prompt_for(action))}
+	Log.raw("ACCESS_PROMPTS " + JSON.stringify({"device": Shell.last_device, "glyphs": Shell.glyph_set(),
+			"actions": rows}))
+
+
+## The gamepad event for an action (its first button, or its first stick direction), or null.
+func _pad_event(action: String, pressed: bool) -> InputEvent:
+	for e: InputEvent in InputMap.action_get_events(action):
+		if e is InputEventJoypadButton:
+			var b: InputEventJoypadButton = (e as InputEventJoypadButton).duplicate()
+			b.pressed = pressed
+			b.device = 0
+			return b
+		if e is InputEventJoypadMotion:
+			var m: InputEventJoypadMotion = (e as InputEventJoypadMotion).duplicate()
+			m.axis_value = (1.0 if (e as InputEventJoypadMotion).axis_value > 0 else -1.0) if pressed else 0.0
+			m.device = 0
+			return m
+	return null
+
 # ---- steps --------------------------------------------------------------------
 
 func _to_main_menu() -> bool:
@@ -253,7 +366,18 @@ func _accept(next_screen: String) -> bool:
 
 
 func _press(action: String) -> void:
-	# Through the viewport, like a key press: focused control first, then focus navigation, then _unhandled_input
+	# Through the viewport, like a key press: focused control first, then focus navigation, then _unhandled_input.
+	# In a pad access run, the action's own gamepad event (an action without one fails the run)
+	if _pad:
+		var pad_down: InputEvent = _pad_event(action, true)
+		if pad_down == null:
+			_fail("%s has no gamepad binding: a gamepad-only player cannot press it" % action)
+			return
+		get_viewport().push_input(pad_down)
+		await _frames(1)
+		get_viewport().push_input(_pad_event(action, false))
+		await _frames(1)
+		return
 	var down: InputEventAction = InputEventAction.new()
 	down.action = action
 	down.pressed = true
