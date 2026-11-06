@@ -4,6 +4,10 @@
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
 ## 0.13.2 (unreleased): fixes from Fable reviews of the Pixelorama lane, the engine wrappers and the shipped tools
+- Example `examples/lockpick-mz`: `GameAudio.js` was hidden by the repo's `.gitignore` (only GameCore and GameMain
+  were allowed past the rule that keeps MZ's own files out), so in a fresh clone `check` failed and the audio tests
+  could not load it. It is in the repo now, and `scripts/test_kit_docs.py` fails when any file an example's
+  `.game-kit.json` lists is git-ignored (#259).
 - Engine wrappers (web, web-3d, RPG Maker MZ, Bevy, LÖVE): `smoke --data-dir` no longer rewrites a file that is
   not UTF-8 text (a binary save came back as replacement characters, or was deleted): such files are left out and
   left alone, and a project folder (`src/`, `assets/`, `public/`, `dist/` ...) is refused as the data dir. The wait

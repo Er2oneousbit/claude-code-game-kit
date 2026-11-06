@@ -12,13 +12,19 @@
 #           - every source ID the shipped docs cite (E##, F##, K##) has a row in EVIDENCE.md (#120)
 #           - README's SOP count, START_HERE's example count and README's "one game per engine" match the tree, and
 #             every skill is named in the SOP index (in the row of the SOP it follows) (#121)
+#           - no kit file an example's .game-kit.json lists is hidden by the repo's .gitignore (the MZ example's
+#             GameAudio.js never reached the repo, so a fresh clone's `check` failed) (#259)
 # Usage   : python scripts/test_kit_docs.py
 # Exit    : 0 all pass, 1 a case failed
-# Notes   : Standard library only, offline, reads the kit tree read-only. The engines and their doc names are in the
+# Notes   : Standard library only, offline, reads the kit tree read-only (the .gitignore case asks git, skipped
+#           without it). The engines and their doc names are in the
 #           constants block: a new overlay adds a row there, and these cases then say which docs still miss it.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
+import json
 import re
+import shutil
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -270,6 +276,22 @@ class CountExam(unittest.TestCase):
                     wrong_row.append("%s (follows %s)" % (name, sop))
         self.assertEqual(unlisted, [], "skills no SOP index row names")
         self.assertEqual(wrong_row, [], "skills missing from the row of the SOP they follow")
+
+
+@unittest.skipUnless(shutil.which("git") and (KIT / ".git").exists(), "needs git and the kit's own clone")
+class ExampleTrackingExam(unittest.TestCase):
+    def test_no_kit_file_of_an_example_is_git_ignored(self):
+        # #259: examples/lockpick-mz/game/** was ignored but for two plugins, so GameAudio.js (a kit file since 0.8)
+        # was never committed and a fresh clone of the MZ example failed `check`
+        hidden = []
+        for manifest in sorted((KIT / "examples").glob("*/.game-kit.json")):
+            files = json.loads(manifest.read_text(encoding="utf-8")).get("files", {})
+            paths = [(manifest.parent / f).relative_to(KIT).as_posix() for f in files]
+            r = subprocess.run(["git", "check-ignore", "-z", "--stdin"], cwd=KIT, input="\0".join(paths).encode("utf-8"),
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertIn(r.returncode, (0, 1), r.stderr.decode("utf-8", "replace"))
+            hidden += [h for h in r.stdout.decode("utf-8", "replace").split("\0") if h]
+        self.assertEqual(hidden, [], "kit files the root .gitignore keeps out of the repo")
 
 
 if __name__ == "__main__":
