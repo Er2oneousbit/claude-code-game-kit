@@ -3,7 +3,9 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## Unreleased: cloud deploy with OpenTofu (#252)
+## 0.14.1 (2026-11-06): cloud deploy with OpenTofu (#252), the part of the 0.14 plan held back from 0.14.0
+A new feature under a patch number, by choice: it completes 0.14.0's scope. Nothing changes for existing projects
+until `--upgrade` adds `tools/cloud/`, the `ship` command and its ask rules.
 - **`dev.py ship`** puts a game online on AWS, Azure, Google Cloud, Linode (Akamai) or DigitalOcean with OpenTofu:
   `--kind static` publishes a web build over HTTPS (S3 + CloudFront, an Azure storage static website, Cloud Storage,
   Linode Object Storage, Spaces + CDN), `--kind container` runs one public image behind HTTPS (Lightsail, Container
@@ -32,7 +34,7 @@
 
 ## 0.14.0 (2026-11-06): shaders in all nine engines, the C++ overlay on SDL3, and fixes from second-model reviews
 **Cloud deploy is not in this release.** The OpenTofu modules and `dev.py ship` (#252) were planned for 0.14.0, but
-OpenTofu was not installed on the build machine, so they move to a later release; only the guardrail that needs no
+OpenTofu was not installed on the build machine, so they shipped in 0.14.1; only the guardrail that needs no
 OpenTofu shipped (`publish_check` knows Azure and GCP keys). Nothing here has been run against a cloud provider.
 **Upgrade note (C++):** the C++ overlay is SDL3 now (it was SDL2). `--upgrade` replaces the kit files you never edited;
 your own code moves by hand, following docs/ENGINE_FLOW.md "Upgrading from SDL2" (the renames the kit's starter and

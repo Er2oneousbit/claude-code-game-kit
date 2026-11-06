@@ -28,7 +28,7 @@ examples were built and tested on one Windows 11 machine.
   in either editor's window is not tried yet ([#65](https://github.com/Er2oneousbit/claude-code-game-kit/issues/65)); spells, VFX, status marks, animated props, balloons and vehicles have no hand-polish path
   ([#68](https://github.com/Er2oneousbit/claude-code-game-kit/issues/68)).
 
-### 0.14.0 follow-ups (shaders, C++ on SDL3)
+### 0.14 follow-ups (shaders, C++ on SDL3, cloud deploy)
 - **Shader recipes** match their golden images in all nine engines on one Windows machine; not checked: C++ on Metal
   and Linux, Unreal's translucent `M_Kit_*` assets and a Post Process variant, KitShaders.js inside a real RPG Maker MZ
   game, Unity HDRP, other GPUs, web exports of Godot and Bevy:
