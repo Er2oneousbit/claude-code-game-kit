@@ -21,7 +21,7 @@
 - Shipped tools: `credits.py` splits ASSET_LOG rows on unescaped pipes only (an author "Ana \| Band" shifted
   every later column and credited the wrong licence) and says plainly when the log is not UTF-8 (exit 2, was a
   traceback). `image_diff.py` reports a cut PNG as unreadable (exit 2) and makes the `--diff` folder. `doctor.py`
-  checks required files with their exact letter case (on Windows `docs/gdd.md` passed for `docs/GDD.md`), reads
+  checks required files with their exact letter case (on Windows a lower-case gdd.md passed for the GDD), reads
   UTF-16 and cp1252 files for placeholders, and documents exit 2. `check_links.py` checks markdown that is not UTF-8,
   skips a fence indented in a list item, and no longer reads `[Bug]: crash on load` as a reference definition; its
   `read_text` is shared with the doctor (#247).
