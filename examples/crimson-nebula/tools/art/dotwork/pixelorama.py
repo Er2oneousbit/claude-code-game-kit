@@ -147,8 +147,14 @@ def _fail(rel, msg):
 
 
 def _number(v, rel, what, lo=None, hi=None):
-    if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
         _fail(rel, f"{what} is not a number ({v!r})")
+    try:
+        finite = math.isfinite(v)
+    except OverflowError:                 # a JSON integer too large for a float (10**1000): second-model review
+        finite = False
+    if not finite:
+        _fail(rel, f"{what} is not a usable number ({str(v)[:40]})")
     if (lo is not None and v < lo) or (hi is not None and v > hi):
         _fail(rel, f"{what} {v} is outside {lo} to {hi}")
     return v
@@ -1171,13 +1177,11 @@ def build(pack, conf, overwrite=False):
                 core.log(f"pixelorama build {rel}: kept (it differs from the game's frames; --overwrite replaces it)")
                 continue
             # the file being replaced may hold polish that was never re-exported: keep it beside the new one
-            with open(core.safe_dest(out + ".bak"), "wb") as fh:
-                fh.write(old)
+            core.write_atomic(out + ".bak", old)
             done["backups"].append(out + ".bak")
             core.log(f"pixelorama build {rel}: the file it replaces is kept as {os.path.basename(out)}.bak")
         os.makedirs(os.path.dirname(out), exist_ok=True)
-        with open(core.safe_dest(out), "wb") as fh:
-            fh.write(blob)
+        core.write_atomic(out, blob)
         done["written"].append(out)
         core.log(f"pixelorama build {rel}: {len(frames)} frames, {len(_runs(items))} tags, "
                  f"{len(colours or [])} colours, {proj_fps} fps")
@@ -1203,12 +1207,10 @@ def _build_tilemaps(pack, conf, overwrite, done):
                     core.log(f"pixelorama build {rel}: kept (it holds edits not re-exported yet; --overwrite "
                              "replaces it)")
                     continue
-                with open(core.safe_dest(out + ".bak"), "wb") as fh:
-                    fh.write(old)
+                core.write_atomic(out + ".bak", old)
                 done["backups"].append(out + ".bak")
         os.makedirs(os.path.dirname(out), exist_ok=True)
-        with open(core.safe_dest(out), "wb") as fh:
-            fh.write(blob)
+        core.write_atomic(out, blob)
         done["written"].append(out)
         core.log(f"pixelorama build {rel}: tilemap project written")
 
@@ -1275,9 +1277,15 @@ def clear_export_folder(path):
     copied as it was, in the same order and compression; data.json changes only in that one value."""
     with zipfile.ZipFile(path) as z:
         d = _data(z)
+        if d is None:
+            return False
+        # every member is read back into memory: a crafted member that unpacks to gigabytes is refused before any
+        # is read (zipfile stops a member at its declared size; second-model review)
+        total = sum(info.file_size for info in z.infolist())
+        if total > MAX_UNPACKED + MAX_JSON:
+            _fail(os.path.basename(path), f"its members unpack to {_mb(total)} (over {_mb(MAX_UNPACKED + MAX_JSON)}), "
+                                          "so its export folder is not cleared")
         entries = [(info, z.read(info.filename)) for info in z.infolist()]
-    if d is None:
-        return False
     prof = d["export_profile"]
     prof["directory_path"] = '""' if prof["directory_path"].startswith('"') else ""
     buf = io.BytesIO()
@@ -1286,10 +1294,7 @@ def clear_export_folder(path):
             if info.filename == "data.json":
                 data = json.dumps(d, ensure_ascii=False).encode("utf-8")
             out.writestr(info, data)
-    tmp = path + ".tmp"
-    with open(core.safe_dest(tmp), "wb") as fh:
-        fh.write(buf.getvalue())
-    os.replace(tmp, path)
+    core.write_atomic(path, buf.getvalue())
     return True
 
 

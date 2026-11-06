@@ -23,6 +23,7 @@ import json
 import os
 import platform
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -385,6 +386,30 @@ def safe_dest(path):
         return path
     if is_link(full) or not _within(os.path.realpath(full), os.path.realpath(PROJECT)):
         raise ToolError(f"refusing to write {path}: it is a link, or resolves outside the game folder")
+    return path
+
+
+def write_atomic(path, data):
+    """bytes to path through a temporary file beside it, then os.replace: a write that fails half way (a full disk)
+    leaves the old file whole and no temporary behind (second-model review: .pxo builds, map scenes and the
+    Pixelorama panel files were opened in place and could be left truncated). The file keeps its old permissions."""
+    safe_dest(path)
+    folder = os.path.dirname(os.path.abspath(path))
+    fd, tmp = tempfile.mkstemp(prefix="." + os.path.basename(path) + ".", suffix=".tmp", dir=folder)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        if os.path.exists(path):
+            shutil.copymode(path, tmp)
+        else:
+            os.chmod(tmp, 0o644)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
     return path
 
 

@@ -477,7 +477,10 @@ Pixelorama's Manual tile mode: Auto and Stack add a new tile when you draw on on
 has no atlas slot, and the re-export stops and says so. Only an animated tile's first frame is in the project. Two
 projects that change one tile differently stop the re-export; a project with no edits is rebuilt when the game's
 map changes, one with edits is kept (`--overwrite` keeps a `.bak`). Isometric and hexagonal tilemaps, a tilemap layer
-with a blend mode or a clipping mask, and one moved off the tile grid are refused. Checked with Pixelorama 1.2.4 (its
+with a blend mode, a clipping mask, layer effects or a cel z-index, one inside a group that blends its layers or is
+not at 100% opacity, and one moved off the tile grid are refused; so is an opacity change in a map Dotwork built (set
+it on the TileMapLayer in Godot), and two maps or TileSets with one file name (both would be `<name>.pxo`). A map whose
+layers no longer match stops the re-export before any atlas is written. Checked with Pixelorama 1.2.4 (its
 own drawing of every flip and transpose equals Dotwork's; a cell and a tile edited there change only the atlas, the
 map and the manifest) and Godot 4.7.2 (a Movie Maker capture of both kinds of map equals Dotwork's drawing on every
 opaque pixel). Pixelorama's command-line export draws tilemap layers empty (it exports before they are redrawn from

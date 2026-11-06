@@ -232,6 +232,25 @@ def project(path):
                 continue
             if ly.get("blend_mode", 0) or ly.get("clipping_mask"):
                 px._fail(rel, f"tilemap layer {name!r}: a blend mode or clipping mask (a TileMapLayer draws Normal)")
+            # second-model review: what Pixelorama applies above the layer was dropped, so the scene drew it
+            # differently. A group that blends its layers, a group's opacity and layer effects are refused.
+            gi = ly.get("parent", -1)
+            while gi != -1:
+                g = layers[gi]
+                gname = str(g.get("name") or f"layer {gi + 1}")
+                if g.get("blend_mode", px.BLEND_NORMAL) != px.BLEND_PASS:
+                    px._fail(rel, f"tilemap layer {name!r} is in group {gname!r}, which blends its layers: set the "
+                                  "group to Pass through (a TileMapLayer cannot be blended as a group)")
+                if float(px._number(g.get("opacity", 1.0), rel, f"group {gname!r} opacity", 0, 1)) != 1.0 or \
+                        px._opacity_keys(g, rel, repr(gname)):
+                    px._fail(rel, f"tilemap layer {name!r} is in group {gname!r}, whose opacity is not 100%: set the "
+                                  "opacity on the tilemap layer instead")
+                if px.visible_in(layers, gi, rel) and any(
+                        isinstance(e, dict) and e.get("enabled", True) for e in (g.get("effects") or [])):
+                    px._fail(rel, f"tilemap layer {name!r} is in group {gname!r}, which has layer effects")
+                gi = g.get("parent", -1)
+            if any(isinstance(e, dict) and e.get("enabled", True) for e in (ly.get("effects") or [])):
+                px._fail(rel, f"tilemap layer {name!r} has layer effects (a TileMapLayer has none)")
             ti = layer_tileset(ly, sets, rel, repr(name))
             keys = px._opacity_keys(ly, rel, repr(name))
             opacity = float(px._number(ly.get("opacity", 1.0), rel, f"layer {name!r} opacity", 0, 1))
@@ -241,6 +260,9 @@ def project(path):
                 if not isinstance(cels, list) or len(cels) != len(layers) or not isinstance(cels[li], dict):
                     px._fail(rel, f"frame {fi + 1} has no cel for layer {name!r}")
                 off, cells = cells_of(cels[li], rel, f"frame {fi + 1} {name!r}")
+                if px._number(cels[li].get("z_index", 0), rel, f"frame {fi + 1} {name!r} z_index") != 0:
+                    px._fail(rel, f"frame {fi + 1}: the cel of tilemap layer {name!r} has a z-index, which moves it "
+                                  "in the draw order: set it to 0 and order the layers instead")
                 k = px._number(cels[li].get("opacity", 1.0), rel, f"frame {fi + 1} cel opacity", 0, 1)
                 fr.append((off, cells, px._layer_opacity(opacity, keys, fi) * k))
             out.append({"name": name, "tileset": ti, "frames": fr})
@@ -765,6 +787,16 @@ def dotwork_jobs(pack, conf):
             core.log(f"pixelorama build: {r['file']} is not a square TileSet of atlas sources (skipped)")
             continue
         jobs.append((os.path.join(src, os.path.basename(r["file"])[:-5] + ".pxo"), ts, "", None))
+    # second-model review: maps/one/town.tscn and maps/two/town.tscn both made tilemaps/town.pxo, the second
+    # replacing the first unbacked; two sources for one project stop the build before anything is written
+    seen = {}
+    for path, ts, scene_res, _ in jobs:
+        what = scene_res or ts["res"]
+        key = os.path.normcase(os.path.abspath(path))
+        if key in seen:
+            raise core.ToolError(f"{seen[key]} and {what} would both become {os.path.relpath(path, pack)}: rename "
+                                 "one of them (Pixelorama projects are named after the map or TileSet file)")
+        seen[key] = what
     out = []
     for path, ts, scene_res, layers in jobs:
         tileset, where = _tileset_of(ts)
@@ -846,7 +878,10 @@ def _edits(tm):
     layers = []
     tw, th = ts["size"]
     for L in tm["layers"]:
-        off, cells, _ = L["frames"][0]
+        off, cells, alpha = L["frames"][0]
+        if alpha != 1.0:     # second-model review: an opacity edit was neither re-exported nor seen as an edit
+            raise core.ToolError(f"{tm['rel']}: layer {L['name']!r} is at {round(alpha * 100)}% opacity; a map Dotwork "
+                                 "built keeps its layers at 100% (set the opacity on the TileMapLayer in Godot)")
         if off[0] % tw or off[1] % th:
             raise core.ToolError(f"{tm['rel']}: layer {L['name']!r} is moved off the tile grid (offset {off[0]}, "
                                  f"{off[1]}): move it by whole tiles")
@@ -889,6 +924,20 @@ def reexport_dotwork(items, man, touched):
             edits[key] = (t, tm["rel"], ts)
         if meta.get("scene") and _cells_hash(layers) != meta.get("cells"):
             maps.append((tm, meta, layers))
+    # second-model review: a map whose layers no longer match failed after the atlases were written; every map is
+    # checked first, so a re-export that stops has changed nothing
+    checked = []
+    for tm, meta, layers in maps:
+        text, nodes = read_map(meta["scene"], meta["tileset"])
+        names = [L["name"] for L in nodes]
+        if sorted(n for n, _ in layers) != sorted(names):
+            raise core.ToolError(f"{tm['rel']}: its tilemap layers ({', '.join(n for n, _ in layers)}) are not the "
+                                 f"map's ({', '.join(names)}): keep one layer per TileMapLayer, named like it")
+        new = dict(layers)
+        for L in nodes:
+            if L["line"] is None and new[L["name"]] and sorted(L["cells"]) != sorted(new[L["name"]]):
+                raise core.ToolError(f"{meta['scene']}: layer {L['name']} has no tile_map_data line to write")
+        checked.append((tm, meta, text, nodes, new))
     # tiles -> atlases, one write per atlas
     atlases = {}
     for (tres, si, x, y), (t, _, ts) in sorted(edits.items(), key=lambda kv: kv[0]):
@@ -907,14 +956,8 @@ def reexport_dotwork(items, man, touched):
         if changed:
             touched.append(os.path.relpath(p, core.PROJECT).replace(os.sep, "/"))
     # cells -> map scenes
-    for tm, meta, layers in maps:
-        text, nodes = read_map(meta["scene"], meta["tileset"])
-        names = [L["name"] for L in nodes]
-        if sorted(n for n, _ in layers) != sorted(names):
-            raise core.ToolError(f"{tm['rel']}: its tilemap layers ({', '.join(n for n, _ in layers)}) are not the "
-                                 f"map's ({', '.join(names)}): keep one layer per TileMapLayer, named like it")
+    for tm, meta, text, nodes, new in checked:
         lines = text.split("\n")
-        new = dict(layers)
         for L in nodes:
             if sorted(L["cells"]) == sorted(new[L["name"]]) or L["line"] is None:
                 if L["line"] is None and new[L["name"]]:
@@ -926,8 +969,7 @@ def reexport_dotwork(items, man, touched):
         p = _abs_res(meta["scene"], "map scene")
         changed = body != text
         if changed:
-            with open(core.safe_dest(p), "w", encoding="utf-8", newline="") as f:
-                f.write(body)
+            core.write_atomic(p, body.encode("utf-8"))
             touched.append(os.path.relpath(p, core.PROJECT).replace(os.sep, "/"))
         man.record(p, "scene", NOTE, changed)
 

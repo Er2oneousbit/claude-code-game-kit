@@ -7,6 +7,20 @@
 - Kit exams: `scripts/test_shader_ports.py` skipped an engine whose whole shader folder was missing, so deleting
   Godot's ports still passed; a missing folder now fails (second-model review of the shader tooling, which found no
   translation or compare bugs in `shader_gen.py` and `shader_ref.py`).
+- Dotwork's Pixelorama round trip, from a second-model review (Kimi K3.1 Pro; each finding reproduced by an exam that
+  failed on the old code, `core/tools/art/dotwork/tests/test_pixelorama.py`, 91 cases, the live Pixelorama 1.2.4 ones included):
+  - Tilemap projects: a tilemap layer inside a group at under 100% or one that blends its layers, with layer effects,
+    or with a cel z-index looked different in Pixelorama than in the exported scene; they are refused with the fix.
+    An opacity change in a map Dotwork built was neither re-exported nor counted as an edit (a later build could
+    replace it with no `.bak`); it is refused. Two maps or TileSets with one file name both became `<name>.pxo`, the
+    second replacing the first; the build stops first. A map whose layers no longer matched the scene stopped the
+    re-export after the edited tiles were written into their atlas; every map is checked first now.
+  - Writes: `.pxo` builds and their `.bak`, map scenes, and the panel's extension zip and config (every game's row)
+    were opened in place, so a full disk left them truncated; they go through a temporary file now
+    (`fcore.write_atomic`).
+  - Crafted files: `--clear-export-path` read every zip member whole, past the size limits a read keeps (a small
+    `.pxo` could unpack to gigabytes); a JSON integer too large for a float (`10**1000`) was a traceback, not a clear
+    error.
 
 ## 0.14.1 (2026-11-06): cloud deploy with OpenTofu (#252), the part of the 0.14 plan held back from 0.14.0
 A new feature under a patch number, by choice: it completes 0.14.0's scope. Nothing changes for existing projects

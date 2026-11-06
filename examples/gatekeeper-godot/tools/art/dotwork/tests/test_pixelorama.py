@@ -975,6 +975,45 @@ class PixeloramaCompositeExam(unittest.TestCase):
 TILE = 8   # px: the tilemap exams' tile size
 
 
+@contextlib.contextmanager
+def full_disk():
+    """Every file opened for writing takes its open (and its truncation) but fails its first write, as on a full
+    disk."""
+    import builtins
+    real_open, real_fdopen = builtins.open, os.fdopen
+
+    class Full:
+        def __init__(self, f):
+            self.f = f
+
+        def write(self, data):
+            raise OSError(28, "No space left on device")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self.f.close()
+            return False
+
+        def __getattr__(self, name):
+            return getattr(self.f, name)
+
+    def wrap(f, mode):
+        return Full(f) if any(c in mode for c in "wax+") else f
+
+    builtins.open = lambda file, mode="r", *a, **k: wrap(real_open(file, mode, *a, **k), mode)
+    os.fdopen = lambda fd, mode="r", *a, **k: wrap(real_fdopen(fd, mode, *a, **k), mode)
+    try:
+        yield
+    finally:
+        builtins.open, os.fdopen = real_open, real_fdopen
+
+
+def leftovers(folder):
+    return [f for f in os.listdir(folder) if f.endswith(".tmp")]
+
+
 def tiles_of(rng, n, size=(TILE, TILE), name="Ground"):
     """A Pixelorama tileset for pxo_tiles.pxo_bytes: the empty tile, then n tiles of random pixels (some clear)."""
     tw, th = size
@@ -1330,6 +1369,40 @@ class TilemapExam(unittest.TestCase):
             self.pt.decode_cells("PackedByteArray(1, 0)")
 
 
+    def own_with(self, edit):
+        p = write_own(self.tmp, "meadow", *own_map(np.random.default_rng(3)))
+        rewrite_pxo(p, edit)
+        return p
+
+    @staticmethod
+    def in_group(d, b, **group):
+        d["layers"].append(dict({"name": "g", "visible": True, "opacity": 1.0, "parent": -1, "type": 1}, **group))
+        d["layers"][1]["parent"] = len(d["layers"]) - 1
+        for fr in d["frames"]:
+            fr["cels"].append({"opacity": 1.0, "z_index": 0})
+
+    def test_what_pixelorama_applies_above_a_tilemap_layer_is_refused_not_dropped(self):
+        # second-model review: the group's opacity and blending, layer effects and a cel's z-index changed what
+        # Pixelorama shows, and the exported scene drew the layer without them
+        cases = [
+            ("group at 50%", lambda d, b: self.in_group(d, b, opacity=0.5, blend_mode=-2), "opacity"),
+            ("group that blends", lambda d, b: self.in_group(d, b, blend_mode=0), "Pass through"),
+            ("group without a blend mode", lambda d, b: self.in_group(d, b), "Pass through"),
+            ("group with an effect", lambda d, b: self.in_group(d, b, blend_mode=-2, effects=[{"enabled": True}]),
+             "effects"),
+            ("layer effect", lambda d, b: d["layers"][1].update(effects=[{"enabled": True}]), "effects"),
+            ("cel z-index", lambda d, b: d["frames"][0]["cels"][1].update(z_index=-2), "z-index"),
+        ]
+        for what, edit, said in cases:
+            with self.subTest(case=what):
+                p = self.own_with(edit)
+                with self.assertRaises(fcore.ToolError) as e:
+                    self.pt.project(p)
+                self.assertIn(said, str(e.exception))
+        # a pass-through group at 100% with a disabled effect draws its layers as they are: still exported
+        p = self.own_with(lambda d, b: self.in_group(d, b, blend_mode=-2, effects=[{"enabled": False}]))
+        self.assertEqual([L["name"] for L in self.pt.project(p)["layers"]], ["ground", "top"])
+
 class EngineNoneTilemapExam(unittest.TestCase):
     """#245: a re-export with --engine none deleted the TileSet and scenes a Godot re-export had written (as stale),
     and said "0 files changed"."""
@@ -1580,6 +1653,68 @@ class DotworkTilemapExam(unittest.TestCase):
         self.assertEqual(done["written"], [self.town])
         self.assertEqual(done["backups"], [])
 
+
+    def test_an_opacity_edit_is_an_edit_and_is_refused_not_lost(self):
+        # second-model review: a layer set to 50% was not seen as an edit (a build could replace it unbacked) and the
+        # re-export dropped it
+        self.build()
+        before = snapshot(self.tmp)
+        rewrite_pxo(self.town, lambda d, b: d["layers"][0].update(opacity=0.5))
+        self.assertTrue(self.pt.polished(self.town))
+        with self.assertRaises(fcore.ToolError) as e:
+            self.reexport()
+        self.assertIn("50% opacity", str(e.exception))
+        self.assertEqual(changed(before, snapshot(self.tmp)), [])
+        self.assertEqual(self.build()["kept"], [self.town])
+
+    def test_a_map_that_stops_the_re_export_stops_it_before_any_atlas_is_written(self):
+        # second-model review: the layer-name check ran after the edited tiles were saved into their atlas
+        self.build()
+
+        def tile_and_cell(d, b):
+            t = np.frombuffer(b["tilesets/0/5"], np.uint8).reshape(TILE, TILE, 4).copy()
+            t[1, 1] = (250, 0, 250, 255)
+            b["tilesets/0/5"] = t.tobytes()
+            d["frames"][0]["cels"][0]["cell_data"]["(4, 2)"] = {"index": 2, "flip_h": False, "flip_v": False,
+                                                                "transpose": False}
+        rewrite_pxo(self.town, tile_and_cell)
+        with open(self.t["scene"], encoding="utf-8") as f:
+            text = f.read()
+        with open(self.t["scene"], "w", encoding="utf-8", newline="\n") as f:
+            f.write(text.replace('[node name="Water"', '[node name="Lake"'))
+        before = snapshot(self.tmp)
+        with self.assertRaises(fcore.ToolError) as e:
+            self.reexport()
+        self.assertIn("named like it", str(e.exception))
+        self.assertEqual(changed(before, snapshot(self.tmp)), [])
+
+    def test_two_maps_of_one_name_stop_the_build_before_either_is_written(self):
+        # second-model review: maps/town.tscn and maps/old/town.tscn both became tilemaps/town.pxo
+        twin = os.path.join(os.path.dirname(self.t["scene"]), "old", "town.tscn")
+        os.makedirs(os.path.dirname(twin))
+        shutil.copy(self.t["scene"], twin)
+        man = fcore.Manifest(self.s, "town")
+        man.add(twin, "scene", node="Node2D + TileMapLayers",
+                tileset=fcore.res(self.s.conf, "tiles", "town") + "/ground_town_tileset.tres",
+                layers={"Base": {"cells": 15, "mismatches": 0}})
+        man.save()
+        with self.assertRaises(fcore.ToolError) as e:
+            self.build()
+        self.assertIn("would both become", str(e.exception))
+        self.assertFalse(os.path.exists(self.town))
+
+    def test_a_full_disk_leaves_the_map_scene_whole(self):
+        # second-model review: the scene was opened in place, so a failed write left it truncated
+        self.build()
+        rewrite_pxo(self.town, lambda d, b: d["frames"][0]["cels"][0]["cell_data"].update(
+            {"(4, 2)": {"index": 2, "flip_h": False, "flip_v": False, "transpose": False}}))
+        with open(self.t["scene"], "rb") as f:
+            scene = f.read()
+        with full_disk(), self.assertRaises(OSError):
+            self.reexport()
+        with open(self.t["scene"], "rb") as f:
+            self.assertEqual(f.read(), scene)
+        self.assertEqual(leftovers(os.path.dirname(self.t["scene"])), [])
 
 def manifest_rows(tmp):
     out = {}
@@ -2526,6 +2661,28 @@ class PanelExam(unittest.TestCase):
         self.assertEqual(p.returncode, 0, log[-3000:])
 
 
+    def test_a_full_disk_leaves_the_panel_files_whole(self):
+        # second-model review: the extension zip and the panel config (every game's row) were opened in place
+        self.panel.install(self.s, self.user)
+        zpath = os.path.join(self.user, "extensions", self.panel.EXTENSION + ".zip")
+        cpath = os.path.join(self.user, self.panel.CONFIG_NAME)
+        with open(zpath, "rb") as f:
+            zbytes = f.read()
+        with open(cpath, "rb") as f:
+            cbytes = f.read()
+        real = self.panel.extension_zip
+        self.panel.extension_zip = lambda: real() + b"newer"
+        try:
+            with full_disk(), self.assertRaises(OSError):
+                self.panel.install(self.s, self.user)
+        finally:
+            self.panel.extension_zip = real
+        with open(zpath, "rb") as f:
+            self.assertEqual(f.read(), zbytes)
+        with open(cpath, "rb") as f:
+            self.assertEqual(f.read(), cbytes)
+        self.assertEqual(leftovers(os.path.dirname(zpath)) + leftovers(self.user), [])
+
 @unittest.skipUnless(LIVE_PIXELORAMA and os.path.isfile(LIVE_PIXELORAMA),
                      "set PIXELORAMA_BIN to run the .pxo round trip in a real Pixelorama")
 class PixeloramaLiveExam(unittest.TestCase):
@@ -2989,6 +3146,35 @@ class CraftedPxoExam(unittest.TestCase):
                 self.reset()
                 rewrite_pxo(self.knight, lambda d, b, kw=kw: tilemap(d, b, **kw))
                 self.no_crash(what, lambda: px.read_pxo(self.knight))
+
+
+    def test_a_huge_integer_is_a_clear_error(self):
+        # second-model review: math.isfinite(10**1000) raised OverflowError past the ToolError handling
+        for field in ("size_x", "fps"):
+            with self.subTest(field=field):
+                self.reset()
+                rewrite_pxo(self.knight, lambda d, b: d.update({field: 10 ** 1000}))
+                self.no_crash(field, lambda: self.px.read_pxo(self.knight))
+
+    def test_clearing_the_export_folder_refuses_a_member_that_unpacks_too_far(self):
+        # second-model review: --clear-export-path read every member whole, past the limits read_pxo keeps
+        rewrite_pxo(self.knight, lambda d, b: (
+            d.update(export_profile={"directory_path": "C:/Users/someone/art", "file_name": "knight"}),
+            b.update({"junk.bin": b"\0" * (3 * 1024 * 1024)})))
+        saved = (self.px.MAX_UNPACKED, self.px.MAX_JSON)
+        self.px.MAX_UNPACKED, self.px.MAX_JSON = 1024 * 1024, 1024 * 1024
+        try:
+            with self.assertRaises(fcore.ToolError) as e:
+                self.px.clear_export_folder(self.knight)
+        finally:
+            self.px.MAX_UNPACKED, self.px.MAX_JSON = saved
+        self.assertIn("unpack", str(e.exception))
+        self.assertEqual(self.px.export_folder(self.knight), "C:/Users/someone/art")   # left as it was
+        self.reset()
+        rewrite_pxo(self.knight, lambda d, b: d.update(
+            export_profile={"directory_path": "C:/Users/someone/art", "file_name": "knight"}))
+        self.assertTrue(self.px.clear_export_folder(self.knight))                     # a normal one still clears
+        self.assertEqual(self.px.export_folder(self.knight), "")
 
 
 if __name__ == "__main__":

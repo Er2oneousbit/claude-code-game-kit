@@ -96,8 +96,7 @@ def install(settings, user_dir=None):
         with open(zpath, "rb") as f:
             old = f.read()
     if old != data:
-        with open(zpath, "wb") as f:
-            f.write(data)
+        core.write_atomic(zpath, data)
     cpath = os.path.join(user, CONFIG_NAME)
     conf = {"games": []}
     if os.path.isfile(cpath):
@@ -113,8 +112,7 @@ def install(settings, user_dir=None):
     conf["games"].append(entry)
     conf["note"] = ("Written by dotwork.py pixelorama --install-extension for the Dotwork panel (one row per game, "
                     "full paths on this machine). Run it again from a game to add or update that game.")
-    with open(cpath, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(conf, f, indent=1)
+    core.write_atomic(cpath, json.dumps(conf, indent=1).encode("utf-8"))
     return {"zip": zpath, "config": cpath, "changed": old != data, "entry": entry}
 
 
