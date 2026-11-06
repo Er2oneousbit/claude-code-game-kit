@@ -109,10 +109,44 @@ def turned_any(frames, own, refs, margin=0.9):
     return None
 
 
-def turned_around(frames, ref_same, ref_opposite, margin=0.9):
-    """v2 (character-agnostic): first frame index that looks more like the OPPOSITE direction's sprite than its
-    own direction's sprite (Wan turns characters around at the end of attacks). v1 used skin color to tell
-    facing and failed on characters with skin-colored hair or brass. None if the clip is consistent."""
+def expected_face(direction):
+    """'right' for an east-facing view (e, ne, se), 'left' for a west-facing one, None for n and s."""
+    d = (direction or "").lower()
+    return "right" if "e" in d and "w" not in d else "left" if "w" in d and "e" not in d else None
+
+
+def turned_around(frames, ref_same, ref_opposite, margin=0.9, direction=None):
+    """v3: first frame index of a run (two or more) that faces the OPPOSITE way (Wan turns characters around at the
+    end of attacks, or a whole clip comes out mirrored). None if the clip is consistent.
+
+    Where a face shows, the face decides (face_side: where the light skin sits across the head). Measured
+    2026-11-05 on the showcase frames: the head signature (v2) missed a mirrored attack_w on the asymmetric duelist
+    (0.033 own against 0.034 opposite, #188) and flagged the dwarf's attack_e from frame 2 because the hammer swings
+    across the head (#190), while face_side read every one of those frames right. The way the clip should face comes
+    from its own rotation view, else from `direction`. A frame with no face, or a face to the front, neither starts
+    nor breaks a run. With no face in the clip (helmets, back views, machines) the head signature decides, as in v2."""
+    want = None
+    side = face_side(ref_same)[0]
+    if side in ("left", "right"):
+        want = side
+    elif face_side(ref_opposite)[0] in ("left", "right"):
+        want = "left" if face_side(ref_opposite)[0] == "right" else "right"
+    else:
+        want = expected_face(direction)
+    sides = [face_side(f)[0] for f in frames]
+    if want is not None and sum(s in ("left", "right") for s in sides) * 2 >= len(frames):
+        start, run = None, 0
+        for i, s in enumerate(sides):
+            if s not in ("left", "right"):
+                continue                    # no verdict: neither starts nor breaks a run
+            if s != want:
+                start = i if run == 0 else start
+                run += 1
+                if run >= 2:
+                    return start
+            else:
+                start, run = None, 0
+        return None
     s_same, s_opp = _sig(ref_same), _sig(ref_opposite)
     flags = []
     for f in frames:

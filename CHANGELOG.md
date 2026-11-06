@@ -13,6 +13,13 @@ found by the real run that verified the rig fixes.
   `setup --check` reads ComfyUI's V3 loader lists (`["COMBO", {"options": ...}]`) through one
   `comfy_local.loader_options`, shared with Bozzetto (#197). `comfy_local.py` strips EXIF and XMP from WebP and
   JPEG outputs as it does from uploads (ComfyUI's WebP node writes the workflow there) (#198).
+- Dotwork character QA: the turned-around check decides by where the face sits (`qa.face_side`) whenever a
+  face shows, keeping the head signature for faceless characters. On the showcase frames it now flags a mirrored
+  attack on the asymmetric duelist (missed before, #188) and no longer calls the dwarf's hammer swing a turn, while
+  catching the dwarf's mirrored clip it used to miss (#190). The smear skips a part low on the figure that is still
+  attached to the body (a swinging coat hem, 81 % down the duelist's front cast); a hand at the hip (67 %) is still
+  smeared, and across all 258 duelist and dwarf frames only the hem frame changed (#189). New fixtures
+  `dwarf_rot_ew.png` and `duelist_hem.png` from the showcase output.
 - The Wavesmith DAW round trip (`tools/audio/wavesmith/daw.py`): names that a DAW could turn into one another
   (`foo-bar` and `foo_bar`) and two sounds on one game file are refused, also in an edited manifest; a REAPER that
   exits non-zero brings nothing back; a music render at another rate than its track is refused; when the mix gain

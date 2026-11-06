@@ -579,7 +579,7 @@ class Character:
         # or the whole clip comes out mirrored). Checked on the frames as they ship, from frame 0, so the frame number
         # is the file's. The head signature leaves out a blade held back in a wind-up (the duelist's attack_w points
         # the rapier east for half the strike while the head faces west): only the head decides
-        back = qa.turned_around(fr, refs[direction], refs[TWIN[direction]]) \
+        back = qa.turned_around(fr, refs[direction], refs[TWIN[direction]], direction=direction) \
             if direction in TWIN and TWIN[direction] in refs else None
         if back is not None:
             src = f"{action}_{src_dir}"

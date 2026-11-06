@@ -46,6 +46,9 @@ SMEAR_MIN_PX = 6        # px that must arrive and leave between two frames befor
 # strike frames (72 px): the lunges that smeared the coat had 55-66 % of their moved pixels in the body, the
 # blade swings 0-4 %, a front-view cast 8-14 %. The feet are the bottom FEET_SHARE of the figure: a step moves them
 SMEAR_BODY = 0.5        # share of the moved pixels in the body at which the smear is skipped (a step or a lunge)
+SMEAR_HEM = 0.75        # a part whose middle is this far down the figure (0 top, 1 feet) and that touches the body is
+                        # the coat or skirt swinging, not a hand or a prop: no smear (#189). Measured 2026-11-05 on
+                        # the showcase duelist: its front-cast hem 0.81, a hand at the hip in a back view 0.67-0.69
 BODY_PX = 7             # px: thinner than this is a part (a blade, an arm), not the body
 FEET_SHARE = 0.12       # the bottom share of the figure's height that is feet, never a part to smear
 PART_GAP = 3            # px between two pieces of one moving part (a blade split by the hand that holds it)
@@ -327,6 +330,16 @@ def smear(frames, k, max_len=SMEAR_MAX, min_px=SMEAR_MIN_PX):
         return None, (f"under {min_px} px of a part moved clear of the body between frames {(k - 1) % n} and {k} "
                       "(the rest is the body or the feet)")
     arrived = _main_part(arrived)
+    # #189: in a front or back view a swinging hem moves sideways under the body, clear of its thick mass, so the
+    # body rule above lets it through and the smear trails the coat. A part low on the figure that is still attached
+    # to the body is that hem
+    ys = np.nonzero(now)[0]
+    py0 = np.nonzero(arrived)[0]
+    if len(ys) and len(py0):
+        low = (py0.mean() - ys.min()) / max(1, ys.max() - ys.min())
+        if low >= SMEAR_HEM and (_grow(arrived, 2) & body_now).any():
+            return None, (f"the part that moved between frames {(k - 1) % n} and {k} is the lower body's edge "
+                          f"({low:.0%} down the figure, attached to it: a swinging hem, not a hand or a prop)")
     if left.sum() < min_px:
         left = was & ~now & ~body_was & ~feet
         if not left.any():

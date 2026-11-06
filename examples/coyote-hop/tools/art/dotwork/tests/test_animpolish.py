@@ -273,6 +273,16 @@ class AnimPolish(unittest.TestCase):
         img, info = animpolish.smear(fr, 1)
         self.assertIsNone(img, info)
         self.assertIn("mostly the body", info)
+        # #189: a front view. fixtures/duelist_hem.png holds the showcase duelist's cast_s frames 2 and 3 (the coat hem
+        # swings sideways under the body, 81 % down the figure: the smear added a 19 px trail there), then its
+        # attack_n frames 3 and 4 (a hand at the hip, 67 % down: a real part, still smeared)
+        strip = Image.open(os.path.join(HERE, "fixtures", "duelist_hem.png")).convert("RGBA")
+        tiles = [strip.crop((i * 72, 0, i * 72 + 72, 72)) for i in range(4)]
+        img, info = animpolish.smear(tiles[0:2], 1)
+        self.assertIsNone(img, info)
+        self.assertIn("swinging hem", info)
+        img, info = animpolish.smear(tiles[2:4], 1)
+        self.assertIsNotNone(img, info)
 
     # ---- 4. holds land in the SpriteFrames (and the sheet JSON, for other engines)
     def test_mirrored_west_matches_east(self):

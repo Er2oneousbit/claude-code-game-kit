@@ -1639,6 +1639,20 @@ class DotworkExam(unittest.TestCase):
         # a symmetric character: west is the mirror of east, and a west clip drawn from the east view is caught
         self.assertEqual(qa.turned_around([rot_e] * 4, ImageOps.mirror(rot_e), rot_e), 0)
         self.assertIsNone(qa.turned_around([ImageOps.mirror(rot_e)] * 4, ImageOps.mirror(rot_e), rot_e))
+        # #188: the duelist is asymmetric, and its mirrored wind-up (the whole clip facing east) was not flagged:
+        # the head signature measured 0.033 own against 0.034 opposite. face_side reads it: flagged from frame 0
+        self.assertEqual(qa.turned_around([ImageOps.mirror(f) for f in windup], rot_w, rot_e, direction="w"), 0)
+        # #190: the showcase dwarf's east attack (fixtures/dwarf_smash.png, its rotation views in dwarf_rot_ew.png,
+        # which face_side reads as front). The hammer swings from behind the head to in front of the body: the head
+        # signature called it a turn from frame 2 though the face points east in every frame. The mirrored clip is
+        # a real turn, and was missed
+        smash = Image.open(os.path.join(HERE, "fixtures", "dwarf_smash.png")).convert("RGBA")
+        dwarf = [smash.crop((i * 72, 0, i * 72 + 72, 72)) for i in range(8)]
+        views = Image.open(os.path.join(HERE, "fixtures", "dwarf_rot_ew.png")).convert("RGBA")
+        d_e, d_w = views.crop((0, 0, 72, 72)), views.crop((72, 0, 144, 72))
+        self.assertIsNone(qa.turned_around(dwarf, d_e, d_w, direction="e"))
+        self.assertEqual(qa.turned_around([ImageOps.mirror(f) for f in dwarf], d_e, d_w, direction="e"), 0)
+        self.assertIsNone(qa.turned_around([ImageOps.mirror(f) for f in dwarf], d_w, d_e, direction="w"))
 
         def lane(entry, clip, frames):
             man = fcore.Manifest(s, "turn")
