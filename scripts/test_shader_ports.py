@@ -68,6 +68,28 @@ class ShaderPortsExam(unittest.TestCase):
                 self.assertIn("p * outputFrame.zw * inputSize.zw", src)
                 self.assertIn("vTextureCoord * inputSize.xy / outputFrame.zw", src)
 
+    def test_bevy_wesl_and_rust_agree(self):
+        # Bevy 0.20 has no naga_oil: WESL with its imports first, constants:: for the bind group; the Rust params
+        # struct must list the WESL struct's fields in the same order (encase lays it out from the Rust side)
+        recipes = sg.load()
+        files = sg.files_for("bevy", recipes)
+        rust = files["src/kit_shaders.rs"]
+        for r in recipes:
+            with self.subTest(recipe=r["name"]):
+                wesl = files[f"assets/shaders/kit/{r['name']}.wesl"]
+                self.assertTrue(wesl.startswith("import bevy_sprite_render::mesh2d::vertex_output::VertexOutput;"))
+                self.assertNotIn("#import", wesl)
+                self.assertNotIn("#{", wesl)
+                wesl_fields = re.findall(r"^    (\w+): ", re.search(r"struct KitParams \{\n(.*?)\n\}", wesl, re.S).group(1),
+                                         re.M)
+                camel = "".join(part.capitalize() for part in r["name"].split("_"))
+                body = re.search(r"pub struct %sParams \{\n(.*?)\n\}" % camel, rust, re.S).group(1)
+                self.assertEqual(re.findall(r"pub (\w+): ", body), wesl_fields)
+                self.assertIn(f'"shaders/kit/{r["name"]}.wesl".into()', rust)
+                self.assertIn(f"Material2dPlugin::<{camel}Material>::default()", rust)
+                self.assertEqual("pub aux: Handle<Image>" in re.search(
+                    r"pub struct %sMaterial \{(.*?)\n\}" % camel, rust, re.S).group(1), bool(r["aux"]))
+
     def test_check_reports_stale_files(self):
         with tempfile.TemporaryDirectory() as d:
             out = Path(d)

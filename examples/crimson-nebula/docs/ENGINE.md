@@ -27,6 +27,8 @@ src/logic/         engine-free rules and helpers (math, seeded Rng). Plain Rust,
                    audio: audio_director (events, voices, ducking), music_director, audio_access (sliders, arrows)
 src/game/mod.rs    GamePlugin: components, resources (ScreenShake), FixedUpdate systems. Must run headless
 src/game/present.rs PresentPlugin: camera (+ shake), sprites, meshes, audio, keyboard -> Intent. Window only
+src/kit_shaders.rs the kit's shader recipes as typed 2D materials (generated, with assets/shaders/kit/*.wesl)
+examples/shader_check.rs renders every recipe on the GPU for `smoke --shaders`
 tests/             integration tests: drive the real GamePlugin headless with app.update()
 tests/golden.rs    the juice, shell and audio modules against data/golden/*.json (the kit's shared vectors)
 data/golden/       golden vectors from tools/golden_vectors.py and tools/audio/wavesmith/; never edit by hand
@@ -48,6 +50,15 @@ target/            build output (git-ignored)
   `SceneRoot(asset_server.load("models/<name>.glb#Scene0"))` (ENGINE_FLOW; the starter itself is 2D) **(verify)**.
   A `--material vertex` model keeps its colours in glTF `COLOR_0`: check that it is not white, because Godot ignores
   them by default (#202) and Bevy is not tested here **(verify)**.
+- **Shaders:** add `kit_shaders::KitShadersPlugin`, then give an entity `Mesh2d(meshes.add(Rectangle::new(w, h)))` and
+  `MeshMaterial2d(materials.add(FlashMaterial { params: FlashParams { amount: 1.0, ..default() }, main: texture }))`
+  (`ResMut<Assets<FlashMaterial>>`; recipes with a second picture take `aux`). Tween a parameter through
+  `materials.get_mut(&handle)`. Coordinates run 0 to 1 over the mesh's UVs: `params.texel` is one over the picture's
+  size in texels, `params.canvas` the size pixel parameters (`light_pos`) are given in. Textures want
+  `ImageSampler::nearest()` for pixel art. Post effects (`crt`, `vignette`, `colorblind`) go on a full-screen quad
+  showing a render-target image of the scene. Bevy 0.20 shaders are WESL (naga_oil and `#import` are gone);
+  Bevy compiles them only when it builds a pipeline, so `check` checks the generated files and `smoke --shaders`
+  compiles and renders them.
 
 ## Gotchas (Claude: read before editing)
 1. **Your Bevy memory is probably from an older version.** Bevy breaks its API every release (about every three
@@ -73,4 +84,5 @@ target/            build output (git-ignored)
 9. **Do not edit** `target/` or `Cargo.lock` by hand (cargo writes it; `cargo update` changes it, which asks first).
 
 ## Generated (do not hand-edit)
-`target/`, `Cargo.lock` (cargo maintains it; commit it).
+`target/`, `Cargo.lock` (cargo maintains it; commit it), the kit_shaders module and `assets/shaders/kit/` (edit
+`tools/shaders/ksl/`, then `python tools/shaders/shader_gen.py`).

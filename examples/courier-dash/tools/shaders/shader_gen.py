@@ -43,7 +43,7 @@ ENGINE_DIRS = {
     "web-3d": "src/shaders/kit",
     "rpgmaker-mz": "game/js/plugins",
     "love2d": "shaders/kit",
-    "bevy": "assets/shaders/kit",
+    "bevy": ".",                    # assets/shaders/kit/*.wesl and src/kit_shaders.rs
     "unity": "Assets/Shaders/Kit",
     "unreal": "Content/Python/kit_shaders",
     "cpp-sdl2": "shaders/kit",
@@ -140,7 +140,7 @@ def to_hlsl(body):
 
 
 # Bevy's material bind group, built so this file holds no double-brace name, which the scaffolder reads as a placeholder
-BIND = "#" + "{MATERIAL_BIND_GROUP}"
+BIND = "constants::MATERIAL_BIND_GROUP"   # Bevy 0.20 WESL: the material bind group index
 WGSL_TYPES = {"float": "f32", "vec2": "vec2<f32>", "vec3": "vec3<f32>", "vec4": "vec4<f32>"}
 
 
@@ -360,34 +360,108 @@ def unreal_module(recipes):
 
 
 def bevy(r):
+    """Bevy 0.20 WESL fragment shader for a Material2d (naga_oil and its #import are gone in 0.20)."""
     fields = "\n".join(f"    {k}: {WGSL_TYPES[t]}," for k, t, v in r["params"])
-    aux = ("@group(#{MATERIAL_BIND_GROUP}) @binding(3) var aux_tex: texture_2d<f32>;\n"
-           "@group(#{MATERIAL_BIND_GROUP}) @binding(4) var aux_samp: sampler;\n"
-           "fn SAMPLE_AUX(p: vec2<f32>) -> vec4<f32> { return textureSampleLevel(aux_tex, aux_samp, p, 0.0); }\n"
+    aux = (f"@group({BIND}) @binding(3) var aux_tex: texture_2d<f32>;\n"
+           f"@group({BIND}) @binding(4) var aux_samp: sampler;\n"
+           f"fn SAMPLE_AUX(p: vec2<f32>) -> vec4<f32> {{ return textureSampleLevel(aux_tex, aux_samp, p, 0.0); }}\n"
            if r["aux"] else "")
-    return f"""// {HEADER_NOTE.format(name=r['name'])}
-// {r['summary']}
-#import bevy_sprite::mesh2d_vertex_output::VertexOutput
+    return (f"import bevy_sprite_render::mesh2d::vertex_output::VertexOutput;\n\n"
+            f"// {HEADER_NOTE.format(name=r['name'])}\n// {r['summary']}\n\n"
+            f"struct KitParams {{\n{fields}\n}}\n\n"
+            f"@group({BIND}) @binding(0) var<uniform> params: KitParams;\n"
+            f"@group({BIND}) @binding(1) var main_tex: texture_2d<f32>;\n"
+            f"@group({BIND}) @binding(2) var main_samp: sampler;\n"
+            f"{aux}fn SAMPLE_MAIN(p: vec2<f32>) -> vec4<f32> {{ return textureSampleLevel(main_tex, main_samp, p, 0.0); }}\n\n"
+            f"fn kit_effect(uv: vec2<f32>) -> vec4<f32> {{\n{indent(to_wgsl(r['body']))}\n}}\n\n"
+            f"@fragment\nfn fragment(in: VertexOutput) -> @location(0) vec4<f32> {{\n    return kit_effect(in.uv);\n}}\n")
 
-struct KitParams {{
-{fields}
-}}
 
-@group({BIND}) @binding(0) var<uniform> params: KitParams;
-@group({BIND}) @binding(1) var main_tex: texture_2d<f32>;
-@group({BIND}) @binding(2) var main_samp: sampler;
-{aux}fn SAMPLE_MAIN(p: vec2<f32>) -> vec4<f32> {{ return textureSampleLevel(main_tex, main_samp, p, 0.0); }}
+RUST_TYPES = {"float": "f32", "vec2": "Vec2", "vec3": "Vec3", "vec4": "Vec4"}
 
-fn kit_effect(uv: vec2<f32>) -> vec4<f32> {{
-{indent(to_wgsl(r['body']))}
-}}
 
-@fragment
-fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {{
-    return kit_effect(in.uv);
-}}
-"""
+def _camel(name):
+    return "".join(part.capitalize() for part in name.split("_"))
 
+
+def _rust_value(t, v):
+    if t == "float":
+        return _num(v)
+    return f"{RUST_TYPES[t]}::new({', '.join(_num(x) for x in v)})"
+
+
+def bevy_rust(recipes):
+    """src/kit_shaders.rs: per recipe a params struct (encase lays it out as the WESL struct), a Material2d, and the
+    plugin that registers them all; spawn_recipe() serves the shader check."""
+    out = [f"// {HEADER_NOTE.format(name='*')}",
+           "// The kit's shader recipes as Bevy 2D materials: add KitShadersPlugin, then",
+           "//   MeshMaterial2d(materials.add(FlashMaterial { params: FlashParams { amount: 1.0, ..default() }, main: tex }))",
+           "// on an entity with Mesh2d(meshes.add(Rectangle::new(w, h))). Shaders: assets/shaders/kit/<name>.wesl.",
+           "#![allow(clippy::all)]",
+           "use bevy::prelude::*;",
+           "use bevy::render::render_resource::{AsBindGroup, ShaderType};",
+           "use bevy::shader::ShaderRef;",
+           "use bevy::sprite_render::{AlphaMode2d, Material2d, Material2dPlugin};",
+           "",
+           "/// (name, main input, aux input) of every recipe, in recipes.json order.",
+           "pub const KIT_RECIPES: &[(&str, &str, Option<&str>)] = &["]
+    for r in recipes:
+        aux = f'Some("{r["aux"]}")' if r["aux"] else "None"
+        out.append(f'    ("{r["name"]}", "{r["main"]}", {aux}),')
+    out += ["];", ""]
+    for r in recipes:
+        c = _camel(r["name"])
+        blend = "Blend" if r["group"] in ("sprite", "lighting") else "Opaque"
+        out += [f"/// {r['summary']}",
+                "#[derive(Clone, Copy, Debug, ShaderType)]",
+                f"pub struct {c}Params {{"]
+        out += [f"    pub {k}: {RUST_TYPES[t]}," for k, t, v in r["params"]]
+        out += ["}", "",
+                f"impl Default for {c}Params {{",
+                "    fn default() -> Self {",
+                "        Self {"]
+        out += [f"            {k}: {_rust_value(t, v)}," for k, t, v in r["params"]]
+        out += ["        }", "    }", "}", "",
+                "#[derive(Asset, TypePath, AsBindGroup, Clone, Debug)]",
+                f"pub struct {c}Material {{",
+                "    #[uniform(0)]",
+                f"    pub params: {c}Params,",
+                "    #[texture(1)]",
+                "    #[sampler(2)]",
+                "    pub main: Handle<Image>,"]
+        if r["aux"]:
+            out += ["    #[texture(3)]", "    #[sampler(4)]", "    pub aux: Handle<Image>,"]
+        out += ["}", "",
+                f"impl Material2d for {c}Material {{",
+                "    fn fragment_shader() -> ShaderRef {",
+                f'        "shaders/kit/{r["name"]}.wesl".into()',
+                "    }",
+                "",
+                "    fn alpha_mode(&self) -> AlphaMode2d {",
+                f"        AlphaMode2d::{blend}",
+                "    }",
+                "}", ""]
+    out += ["/// Registers every recipe's material.",
+            "pub struct KitShadersPlugin;",
+            "",
+            "impl Plugin for KitShadersPlugin {",
+            "    fn build(&self, app: &mut App) {"]
+    out += [f"        app.add_plugins(Material2dPlugin::<{_camel(r['name'])}Material>::default());" for r in recipes]
+    out += ["    }", "}", "",
+            "/// Spawn `bundle` with recipe `name`'s material at its default parameters. False for an unknown name.",
+            "pub fn spawn_recipe(world: &mut World, name: &str, main: Handle<Image>, aux: Option<Handle<Image>>,",
+            "                    bundle: impl Bundle) -> bool {",
+            "    match name {"]
+    for r in recipes:
+        c = _camel(r["name"])
+        aux = " aux: aux.unwrap_or_default()," if r["aux"] else ""
+        out += [f'        "{r["name"]}" => {{',
+                f"            let m = world.resource_mut::<Assets<{c}Material>>()",
+                f"                .add({c}Material {{ params: {c}Params::default(), main,{aux} }});",
+                "            world.spawn((bundle, MeshMaterial2d(m)));",
+                "        }"]
+    out += ["        _ => return false,", "    }", "    true", "}", ""]
+    return "\n".join(out)
 
 def sdl3(r):
     """HLSL for SDL3's GPU API (compiled to DXIL / SPIR-V): textures in space2, uniforms in space3 (SDL's layout)."""
@@ -435,7 +509,9 @@ def files_for(engine, recipes):
     if engine == "unreal":
         return {"kit_recipes.py": unreal_module(recipes)}
     if engine == "bevy":
-        return {f"{r['name']}.wgsl": bevy(r) for r in recipes}
+        out = {f"assets/shaders/kit/{r['name']}.wesl": bevy(r) for r in recipes}
+        out["src/kit_shaders.rs"] = bevy_rust(recipes)
+        return out
     if engine == "cpp-sdl2":
         return {f"{r['name']}.frag.hlsl": sdl3(r) for r in recipes}
     raise ToolError(f"no shader port for engine {engine!r}: {', '.join(ENGINE_DIRS)}")

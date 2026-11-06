@@ -1021,6 +1021,69 @@ class LoveShaders(TempRoot):
         self.assertFalse(self.calls)
 
 
+# ---- #249: Bevy shader recipes ------------------------------------------------------
+class BevyShaders(TempRoot):
+    """smoke --shaders builds and runs examples/shader_check.rs and compares its pictures; a logged pipeline error
+    fails it although the example exits 0 (Bevy logs a broken shader and draws nothing); check checks the
+    generated files."""
+    SMOKE = "BOOT_OK x 0.1.0\nSMOKE_DONE frames=5\n"
+    ALL_OK = "SHADER_OK flash\nSHADER_CHECK_DONE 1 0\n"
+
+    def dev(self, results):
+        dev = load("bevy")
+        dev.ROOT = self.root
+        (self.root / "src").mkdir(exist_ok=True)
+        (self.root / "src" / "kit_shaders.rs").write_text("// generated\n", encoding="utf-8")
+        dev.preflight = lambda: None
+        dev.cargo = lambda: "cargo"
+        self.calls, self.builds = [], []
+        dev.build = lambda args, extra=(): self.builds.append(list(extra)) or 0
+
+        def fake_run(cmd, **kwargs):
+            line = " ".join(str(c) for c in cmd)
+            self.calls.append(line)
+            for key, result in results.items():
+                if key in line:
+                    return result
+            return 0, self.SMOKE
+        dev.run = fake_run
+        return dev
+
+    def smoke(self, dev, **opts):
+        args = argparse.Namespace(frames=5, screenshot="", record="", record_every=4, record_from=1, game_args=[],
+                                  timeout=60, until="", fail_on="", release=False, shaders=True)
+        for k, v in opts.items():
+            setattr(args, k, v)
+        return quiet(dev.cmd_smoke, args)
+
+    def test_smoke_shaders_runs_the_example_and_compares(self):
+        dev = self.dev({"--example": (0, self.ALL_OK), "shader_ref.py": (0, "[ OK ] all 1 effect(s) match")})
+        rc, text = self.smoke(dev)
+        self.assertEqual(rc, 0, text)
+        self.assertIn(["--example", "shader_check"], self.builds)
+        self.assertTrue(any("shader_ref.py compare" in c for c in self.calls), self.calls)
+
+    def test_a_logged_shader_error_fails_although_the_example_exits_0(self):
+        broken = "2026-11-06T06:41:35Z ERROR bevy_render::render_resource::pipeline_cache: failed to process shader\n"
+        dev = self.dev({"--example": (0, broken + self.ALL_OK)})
+        rc, text = self.smoke(dev)
+        self.assertEqual(rc, 1, text)
+        self.assertIn("failed to process shader", text)
+        self.assertFalse(any("shader_ref.py" in c for c in self.calls))
+
+    def test_a_differing_picture_fails(self):
+        dev = self.dev({"--example": (0, self.ALL_OK), "shader_ref.py": (1, "[FAIL] flash: 9 pixel(s) past 2")})
+        self.assertEqual(self.smoke(dev)[0], 1)
+
+    def test_check_checks_the_generated_files(self):
+        dev = self.dev({"shader_gen.py": (1, "[FAIL] stale: src/kit_shaders.rs")})
+        rc, text = quiet(dev.cmd_check, argparse.Namespace(release=False, no_shaders=False))
+        self.assertEqual(rc, 1, text)
+        self.assertIn("do not match their recipes", text)
+        dev = self.dev({"shader_gen.py": (1, "[FAIL] stale")})
+        self.assertEqual(quiet(dev.cmd_check, argparse.Namespace(release=False, no_shaders=True))[0], 0)
+
+
 if __name__ == "__main__":
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
