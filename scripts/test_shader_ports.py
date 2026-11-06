@@ -27,15 +27,13 @@ import shader_gen as sg  # noqa: E402
 
 class ShaderPortsExam(unittest.TestCase):
     def test_skeleton_ports_are_current(self):
-        checked = 0
+        # second-model review: an engine whose whole output folder was gone was skipped, so deleting Godot's ports
+        # still passed; every engine ships its ports, so a missing folder is a failure
         for engine, rel in sg.ENGINE_DIRS.items():
             folder = KIT / "engines" / engine / "skeleton" / rel
-            if not folder.is_dir():
-                continue
             with self.subTest(engine=engine):
+                self.assertTrue(folder.is_dir(), f"{folder} is missing: run shader_gen.py --engine {engine}")
                 self.assertEqual(sg.write_or_check(engine, folder, True), [], f"run shader_gen.py --engine {engine}")
-                checked += 1
-        self.assertGreater(checked, 0)
 
     def test_every_engine_generates(self):
         recipes = sg.load()

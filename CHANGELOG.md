@@ -3,6 +3,11 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## Unreleased
+- Kit exams: `scripts/test_shader_ports.py` skipped an engine whose whole shader folder was missing, so deleting
+  Godot's ports still passed; a missing folder now fails (second-model review of the shader tooling, which found no
+  translation or compare bugs in `shader_gen.py` and `shader_ref.py`).
+
 ## 0.14.1 (2026-11-06): cloud deploy with OpenTofu (#252), the part of the 0.14 plan held back from 0.14.0
 A new feature under a patch number, by choice: it completes 0.14.0's scope. Nothing changes for existing projects
 until `--upgrade` adds `tools/cloud/`, the `ship` command and its ask rules.
