@@ -1460,6 +1460,12 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1915,7 +1921,7 @@
     "tools/shaders/ksl/triplanar.ksl": "05d03cd7a4c2f2910a1bf0cefdeac529cbcf53b005990b63287df2c1ea08c02f",
     "tools/shaders/ksl/vignette.ksl": "5a82293feaa105d1cdc07a97800496aa6c59227087fa432967ba2b068bcda19e",
     "tools/shaders/recipes.json": "656135c0b0a65c9a456089d9e098f6606bd7a007dd066c830598e6a16b56dd16",
-    "tools/shaders/shader_gen.py": "24549012aec400ba3bb0173a3e6a9737245b6ace9bc8743b0706956339faaa9d",
+    "tools/shaders/shader_gen.py": "c457c200d852718f44e7c4b959257d784dd6f39e67e019444de166614cbed7e9",
     "tools/shaders/shader_ref.py": "f21cf06f0dde7851fc00178b838d1ab5b16201b7e7ce6f8283ba478f884d1d2a",
     "tools/shaders/test_shader_ref.py": "612934104e181e0091e3bd3b4cddaed13e11d66c9846bbc534ed658b961225e1",
     "tools/test_check_links.py": "db6fc4b54978282095e1af3737c1164ae0316c8a3ffbe75b414d79e17363bb31",
@@ -1933,7 +1939,7 @@
     "tools/token_audit.py": "553f9c7d4af332a45e11dc1ca9dadfd030cd841b9439b73b1f71a2bff2fbb048",
     "tools/yt_transcript.py": "7ae8657734eb805db92c7fc5b9dae3e99c6533a0083724da8df59206bd729e9f"
   },
-  "last_upgrade": "2026-11-05",
+  "last_upgrade": "2026-11-06",
   "slug": "coyote_hop",
   "kit_settings": {
     "permissions": {
