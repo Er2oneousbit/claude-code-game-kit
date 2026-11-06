@@ -19,3 +19,5 @@ export const PALETTES: Record<string, Palette> = Object.fromEntries(
     Object.fromEntries(Object.entries(colours).map(([k, v]) => [k, parseInt(v.replace("#", ""), 16)])) as Palette,
   ]),
 );
+
+// {{FOOTER}}

@@ -365,6 +365,15 @@ async function access(shell: Shell, d: Driver, options: string): Promise<void> {
                 shown: glyphText(shell.i18n, glyphName(set, promptBinding(b, a, set))) };
   }
   Log.info("drive", "ACCESS_PROMPTS " + JSON.stringify({ device: shell.input.lastDevice, glyphs: set, actions: rows }));
+  // subtitle_hold (#167), live: a finished line stays until accept, then goes
+  shell.settings.access.subtitle_hold = true;
+  shell.subtitles.dismiss();
+  shell.subtitles.say("demo.welcome");
+  await waitFor("the line to finish", () => shell.subtitles.holding(), 20000);
+  const held = shell.subtitles.holding();
+  await d.press("ui_accept");
+  Log.info("drive", "ACCESS_HOLD " + JSON.stringify({ held, dismissed: !shell.subtitles.holding() && shell.subtitles.shown().text === "" }));
+  shell.settings.access.subtitle_hold = false;
   await d.press("pause");
   await d.screen("pause");
   await report(shell, d, "pause");

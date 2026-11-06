@@ -24,6 +24,8 @@
 -- ---------------------------------------------------------------------------
 local Dialogue = {}
 
+local HOLD_BEFORE_END_S = 0.01            -- subtitle_hold parks a line this far before its end
+
 -- ---- Tunables ----------------------------------------------------------------
 Dialogue.SCHEMA_VERSION = 1
 Dialogue.DEFAULT_CPS = 30                -- characters per second for a line without a reveal list
@@ -117,17 +119,30 @@ function Track:play(id, settings)
     local mine, theirs = line.priority or Dialogue.DEFAULT_PRIORITY, cur.priority or Dialogue.DEFAULT_PRIORITY
     if mode == "never" or (mode == "lower" and mine <= theirs) then return false end
   end
-  self.playing, self.t = line, 0
+  self.playing, self.t, self.held = line, 0, false
   self.last_played[id] = self.clock
   return true
 end
 
-function Track:update(dt)
+-- hold = access.subtitle_hold (#167): a finished line stays on its last words until dismiss() or the next line
+function Track:update(dt, hold)
   self.clock = self.clock + dt
   if not self.playing then return end
   self.t = self.t + dt
-  if self.t >= Dialogue.duration(self.playing) then self.playing = nil end
+  local d = Dialogue.duration(self.playing)
+  if self.t >= d then
+    if hold then
+      self.t, self.held = math.max(0, d - HOLD_BEFORE_END_S), true
+    else
+      self.playing, self.held = nil, false
+    end
+  end
 end
+
+-- true while a finished line waits for the player (subtitle_hold)
+function Track:holding() return self.held == true and self.playing ~= nil end
+
+function Track:dismiss() self.playing, self.held = nil, false end
 
 function Track:current()
   if not self.playing then return nil end

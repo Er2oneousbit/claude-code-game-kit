@@ -25,13 +25,15 @@ import { FlashLimiter } from "../core/flashLimiter";
 import { FollowCamera } from "../core/followCamera";
 import { Hitstop } from "../core/hitstop";
 import { HoldToggle } from "../core/holdToggle";
-import { InputBuffer } from "../core/inputBuffer";
+import { AutoRepeat } from "../core/autoRepeat";
+import { INPUT_BUFFER_S, InputBuffer } from "../core/inputBuffer";
 import { effectiveShake } from "../core/settings";
 import { Shake } from "../core/shake";
 import { Spring, squash } from "../core/spring";
 import { shell } from "../shell/app";
 
 // ---- Tunables ----------------------------------------------------------------
+const COYOTE_S = 0.1; // coyote time before access.timing_scale
 const WORLD_W = 1600;
 const GROUND_Y = 300;
 const PLAYER_SIZE = 20;
@@ -64,6 +66,8 @@ export class JuiceScene extends Phaser.Scene {
   private follow = new FollowCamera();
   private buffer = new InputBuffer();
   private coyote = new CoyoteTimer();
+  private timingK = 1; // the access.timing_scale the windows were made for (#166)
+  private attackRepeat = new AutoRepeat(); // access.auto_repeat: a held attack repeats
   private guard = new HoldToggle();
   private vx = 0;
   private vy = 0;
@@ -114,9 +118,16 @@ export class JuiceScene extends Phaser.Scene {
     const dt = this.hitstop.scaledDt(realDt) * s.access.game_speed;
     const input = shell.input;
 
+    // access.timing_scale (#166): every timing window, longer by the player's factor
+    if (s.access.timing_scale !== this.timingK) {
+      this.timingK = s.access.timing_scale;
+      this.buffer = new InputBuffer(INPUT_BUFFER_S * this.timingK);
+      this.coyote = new CoyoteTimer(COYOTE_S * this.timingK);
+    }
     // input: presses are buffered, so a jump pressed just before landing still happens
     if (input.takePress("jump")) this.buffer.press("jump");
-    if (input.takePress("attack") && Math.abs(this.player.x - this.box.x) < REACH) this.hit();
+    const repeat = this.attackRepeat.update(dt, input.isDown("attack")) && s.access.auto_repeat;
+    if ((input.takePress("attack") || repeat) && Math.abs(this.player.x - this.box.x) < REACH) this.hit();
     this.buffer.update(dt);
     const guarding = this.guard.update(input.isDown("interact"), s.access.hold_to_toggle);
 

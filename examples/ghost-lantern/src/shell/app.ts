@@ -311,6 +311,11 @@ export class Shell {
     const s = this.top;
     if (!s) return;
     if (s.onAnyPress?.(binding)) return;
+    // accept first dismisses a subtitle line waiting for the player (access.subtitle_hold, #167)
+    if (actions.includes("ui_accept") && this.subtitles.holding()) {
+      this.subtitles.dismiss();
+      return;
+    }
     for (const a of actions) {
       if (s.onAction?.(a)) return;
       if (s.menu?.handle(a)) return;

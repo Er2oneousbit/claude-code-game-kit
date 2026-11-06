@@ -36,6 +36,7 @@ const SHOW_TARGETS: PackedStringArray = ["title", "settings", "pause", "subtitle
 # the access sweep: the actions the shell's navigation needs on both devices, and the demo's control hints
 const ACCESS_ACTIONS: PackedStringArray = ["ui_up", "ui_down", "ui_left", "ui_right", "ui_accept", "ui_cancel",
 		"pause"]
+const HOLD_WAIT_FRAMES: int = 600 # frames past a subtitle line's end (10 s at 60): it must still be up when held
 const PROMPT_ACTIONS: PackedStringArray = ["move_left", "move_right", "jump", "attack", "interact", "pause"]
 
 var front: FrontEnd
@@ -294,6 +295,7 @@ func _access(options: String) -> void:
 	_report("juice")
 	Log.raw("ACCESS_SUBTITLE " + JSON.stringify(demo.subtitles.shown()))
 	_report_prompts()
+	await _check_hold(demo.subtitles)
 	await _press("pause")
 	if not await _wait_screen("pause"):
 		return
@@ -306,6 +308,27 @@ func _access(options: String) -> void:
 		return
 	Log.raw("DRIVE_DONE " + scenario)
 	_done(0)
+
+
+## subtitle_hold (#167), live: a finished line stays until accept, then goes.
+func _check_hold(bar: SubtitleBar) -> void:
+	Shell.set_value("access", "subtitle_hold", true)
+	bar.play("guide.intro")
+	for i: int in HOLD_WAIT_FRAMES:
+		await _frames(1)
+	var held: bool = bar.is_playing()
+	# a real press: it reaches Input before the next frame's _process, as a player's key does
+	var press: InputEventAction = InputEventAction.new()
+	press.action = "ui_accept"
+	press.pressed = true
+	Input.parse_input_event(press)
+	await _frames(2)
+	var release: InputEventAction = InputEventAction.new()
+	release.action = "ui_accept"
+	Input.parse_input_event(release)
+	await _frames(2)
+	Log.raw("ACCESS_HOLD " + JSON.stringify({"held": held, "dismissed": not bar.is_playing()}))
+	Shell.set_value("access", "subtitle_hold", false)
 
 
 func _report(where: String) -> void:

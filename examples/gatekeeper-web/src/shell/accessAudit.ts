@@ -99,21 +99,32 @@ function fits(e: HTMLElement, box: number[]): string {
   if (s.overflow !== "visible" && (e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1)) {
     return `text ${e.scrollWidth}x${e.scrollHeight} px does not fit its ${e.clientWidth}x${e.clientHeight} px box`;
   }
-  if (box.length === 4 && (box[0] < -1 || box[1] < -1 || box[0] + box[2] > innerWidth + 1 || box[1] + box[3] > innerHeight + 1)) {
+  if (box.length !== 4) return "";
+  const scroller = scrollParent(e);
+  if (scroller) {
+    // in a scroll area, text above or below the fold is what scrolling is for; sideways it must fit (as the
+    // pseudo check and the other engines' reports treat it)
+    const r = scroller.getBoundingClientRect();
+    return box[0] < r.left - 1 || box[0] + box[2] > r.right + 1 ? "wider than its scroll area" : "";
+  }
+  if (box[0] < -1 || box[1] < -1 || box[0] + box[2] > innerWidth + 1 || box[1] + box[3] > innerHeight + 1) {
     return "runs past the window";
   }
   return "";
 }
 
-function scrolledOut(e: HTMLElement, box: number[]): boolean {
+function scrollParent(e: HTMLElement): HTMLElement | null {
   for (let n = e.parentElement; n; n = n.parentElement) {
-    const s = getComputedStyle(n);
-    if (/(auto|scroll)/.test(s.overflowY) && box.length === 4) {
-      const r = n.getBoundingClientRect();
-      return box[1] + box[3] < r.top || box[1] > r.bottom;
-    }
+    if (/(auto|scroll)/.test(getComputedStyle(n).overflowY)) return n;
   }
-  return false;
+  return null;
+}
+
+function scrolledOut(e: HTMLElement, box: number[]): boolean {
+  const n = scrollParent(e);
+  if (!n || box.length !== 4) return false;
+  const r = n.getBoundingClientRect();
+  return box[1] + box[3] < r.top || box[1] > r.bottom;
 }
 
 function rectOf(e: Element): number[] {

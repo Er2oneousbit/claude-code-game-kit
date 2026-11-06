@@ -23,7 +23,9 @@ const SIDE_MARGIN: int = 48
 const BOTTOM_MARGIN: int = 14
 const CAPTION_MIN_S: float = 1.0
 
+const HOLD_BEFORE_END_S: float = 0.01 # subtitle_hold parks a line this far before its end (its last cue)
 var typewriter: bool = false
+var _held: bool = false # a finished line kept on screen by access.subtitle_hold
 var dialogue: Dictionary = {}
 var _line: Dictionary = {}
 var _t: float = 0.0
@@ -84,6 +86,7 @@ func play(id: String) -> bool:
 		return false
 	_line = entry
 	_t = 0.0
+	_held = false # a new line replaces a held one
 	_restyle()
 	_update()
 	_panel.show()
@@ -135,8 +138,19 @@ func _process(delta: float) -> void:
 			_caption.hide()
 	if _line.is_empty():
 		return
+	if _held: # access.subtitle_hold (#167): a finished line waits on its last words until accept
+		if Input.is_action_just_pressed("ui_accept") or not bool(Shell.access("subtitle_hold")):
+			_held = false
+			_line = {}
+			_panel.hide()
+		return
 	_t += delta
 	if DialogueData.finished(_line, _t):
+		if bool(Shell.access("subtitle_hold")):
+			_held = true
+			_t = maxf(0.0, DialogueData.duration(_line) - HOLD_BEFORE_END_S)
+			_update()
+			return
 		_line = {}
 		_panel.hide()
 		return

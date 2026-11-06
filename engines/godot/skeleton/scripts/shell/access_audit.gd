@@ -332,3 +332,5 @@ static func _style_key(box: StyleBox) -> String:
 				f.border_width_left + f.border_width_top + f.border_width_right + f.border_width_bottom,
 				f.expand_margin_left]
 	return "%s %s" % [box.get_class(), box.get_instance_id()]
+
+# {{FOOTER}}

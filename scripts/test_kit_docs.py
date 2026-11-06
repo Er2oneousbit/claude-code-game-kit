@@ -48,7 +48,7 @@ SKIP_DIRS = {"node_modules", "target", "Library", "build", "dist"}
 WEB_CORE_WORDS = {
     "log": "log", "shake": "shake", "hitstop": "hitstop", "ease": "ease", "followCamera": "follow",
     "follow": "follow spring", "inputBuffer": "buffer", "coyoteTimer": "coyote", "spring": "spring",
-    "flashLimiter": "flash limiter", "holdToggle": "hold toggle", "settings": "settings", "bindings": "bindings",
+    "flashLimiter": "flash limiter", "holdToggle": "hold toggle", "autoRepeat": "auto repeat", "settings": "settings", "bindings": "bindings",
     "saveStore": "saves", "i18n": "i18n", "userData": "user data", "dialogue": "dialogue",
     "audioDirector": "audio director", "musicDirector": "music director", "audioAccess": "audio access",
     "atomicFile": None, "textStore": None, "jsonUtil": None,

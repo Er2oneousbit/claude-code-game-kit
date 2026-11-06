@@ -41,9 +41,12 @@ function loadDialogue(): { lines: Record<string, DialogueLine>; captions: Record
   return out;
 }
 
+const HOLD_BEFORE_END_S = 0.01; // subtitle_hold parks a line this far before its end (its last cue)
+
 export class SubtitleBar {
   private readonly data = loadDialogue();
   private showing: Showing | null = null;
+  private held = false; // a finished line kept by access.subtitle_hold
   private readonly captions: { root: HTMLElement; left: number }[] = [];
   /** While true no time passes for lines and captions: nothing types on, nothing leaves (finish() still works). */
   holdTime = false;
@@ -82,6 +85,7 @@ export class SubtitleBar {
     root.append(body);
     this.host.append(root);
     this.showing = { line, t: 0, typewriter: opts.typewriter ?? true, root, body, chars: Array.from(this.text(line.text)), full: false };
+    this.held = false; // a new line ends any held one
     this.draw();
     return true;
   }
@@ -138,11 +142,30 @@ export class SubtitleBar {
     if (!s) return;
     s.t += dt;
     if (s.t >= lineLife(s.line)) {
+      // access.subtitle_hold (#167): the line waits on its last words until the player presses accept
+      if (this.shell.settings.access.subtitle_hold) {
+        s.t = Math.max(0, s.line.durationS - HOLD_BEFORE_END_S);
+        this.held = true;
+        this.draw();
+        return;
+      }
       s.root.remove();
       this.showing = null;
       return;
     }
     this.draw();
+  }
+
+  /** True while a finished line waits for the player (subtitle_hold). */
+  holding(): boolean {
+    return this.held && this.showing !== null;
+  }
+
+  /** Ends a held line (the player pressed accept). */
+  dismiss(): void {
+    this.showing?.root.remove();
+    this.showing = null;
+    this.held = false;
   }
 
   private draw(): void {

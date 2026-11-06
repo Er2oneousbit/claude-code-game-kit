@@ -66,6 +66,7 @@ var hitstop: Hitstop = Hitstop.new()
 var follow: FollowCamera = FollowCamera.new(64.0, 48.0, 0.25, 8.0, PLAYER_START.x, PLAYER_START.y - CAMERA_LIFT)
 var buffer: InputBuffer = InputBuffer.new(BUFFER_S)
 var coyote: CoyoteTimer = CoyoteTimer.new(COYOTE_S)
+var attack_repeat: AutoRepeat = AutoRepeat.new() # access.auto_repeat: a held attack repeats (#166)
 var box_spring: Spring = Spring.new(4.0, 0.3)
 var player_spring: Spring = Spring.new(5.0, 0.5)
 var limiter: FlashLimiter = FlashLimiter.new()
@@ -96,6 +97,7 @@ func _ready() -> void:
 	name = "JuiceDemo"
 	_build_world()
 	_recolour()
+	_apply_timing()
 	_build_hud()
 	relabel()
 	Shell.locale_changed.connect(relabel)
@@ -150,7 +152,8 @@ func _physics_process(delta: float) -> void:
 	follow.update(dt, _pos.x, _pos.y - CAMERA_LIFT, _vel.x, 0.0)
 	shake.update(dt, Shell.effective_shake())
 	# After the updates: the full kick is drawn and then held by the hitstop freeze
-	if Input.is_action_just_pressed("attack") and absf(_pos.x - BOX_POS.x) <= HIT_RANGE:
+	var repeat: bool = attack_repeat.update(dt, Input.is_action_pressed("attack")) and bool(Shell.access("auto_repeat"))
+	if (Input.is_action_just_pressed("attack") or repeat) and absf(_pos.x - BOX_POS.x) <= HIT_RANGE:
 		hit()
 	_flash_alpha *= exp(-delta / FLASH_FADE_S) # real time: the flash fades even while the hit freezes the game
 	_draw_state()
@@ -177,6 +180,14 @@ func _on_device_changed(_device: String) -> void:
 func _on_settings_changed(_section: String, _key: String) -> void:
 	relabel()
 	_recolour()
+	_apply_timing()
+
+
+## access.timing_scale (#166): every timing window of the demo, longer by the player's factor.
+func _apply_timing() -> void:
+	var k: float = float(Shell.access("timing_scale"))
+	buffer.window = BUFFER_S * k
+	coyote.window = COYOTE_S * k
 
 
 func _recolour() -> void:

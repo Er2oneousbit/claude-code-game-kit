@@ -1208,6 +1208,12 @@
       "date": "2026-11-06",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.14.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1341,9 +1347,9 @@
     "tests/support/mzFake.js": "772cc3af530fbe2dd933189c27a4b9b555410df734d7799e9b1b1e172e6e81a9",
     "tools/access/colour.py": "c6b75b175ab6cd2439878b0e90c6372850cd7ff4478fbc42343f141bcbe7c299",
     "tools/access/colour_check.py": "1afe545d6e0f4a745af6f6fd3ee1c03fc73f91cc8046ff9a105a7962520e1b3d",
-    "tools/access/sweep.py": "d3874081da84513dae59302ba84aee9725bd2298cfca9af07533fa04bf41b635",
+    "tools/access/sweep.py": "ee5396ac8afbf3749f1c604adcd9951fe5f90542dbd96a9b6bf3fad7a0beacfb",
     "tools/access/test_colour.py": "67c23d5ed4b24a1b84cb942cadd3375f2be7147443f8dddd0b2b4b159f0f49a3",
-    "tools/access/test_sweep.py": "72a1b01eb6510969defb702b179947e4fa6eae320f9ab5fefd48004a0afaabce",
+    "tools/access/test_sweep.py": "6484f95825eb4eb5b0095804440341c50d7ff97b0d95272de60a34072e2429fc",
     "tools/art/chroma_key.py": "1586d6918743890fb7a977b3020a8d99828c63153827904273114aef1cac8aa7",
     "tools/art/comfy_local.py": "ab2863b60191ac55b651e672ca8000f827f89930502ab838732f4b3b546f457e",
     "tools/art/dotwork/.gdignore": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",

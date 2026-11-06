@@ -437,6 +437,19 @@ local function access_tour(d, options)
     rows[a] = { keyboard = app:binding_label(Bindings.glyph_name("keyboard", kb)), shown = shown }
   end
   print("ACCESS_PROMPTS " .. Json.encode({ device = app.input.last_device, glyphs = app:glyph_set(), actions = rows }))
+  -- subtitle_hold (#167), live: a finished line stays until accept, then goes
+  app.settings.access.subtitle_hold = true
+  app.track:dismiss()
+  app.track.last_played["guide.welcome"] = nil          -- the demo just played it: its cooldown would refuse it
+  if not app:say("guide.welcome") then error("the hold check could not play guide.welcome", 0) end
+  for _ = 1, 6000 do                                     -- headless frames can be shorter than 1/60 s
+    if app.track:holding() then break end
+    d:frames(1)
+  end
+  local held = app.track:holding()
+  d:press("ui_accept")
+  print("ACCESS_HOLD " .. Json.encode({ held = held, dismissed = app.track:current() == nil }))
+  app.settings.access.subtitle_hold = false
   d:press("pause")
   d:wait_screen("pause")
   d:access_screen("pause")

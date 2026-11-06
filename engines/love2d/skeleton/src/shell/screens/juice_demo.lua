@@ -18,6 +18,7 @@ local Shake = require("src.core.shake")
 local Hitstop = require("src.core.hitstop")
 local FollowCamera = require("src.core.follow_camera")
 local InputBuffer = require("src.core.input_buffer")
+local AutoRepeat = require("src.core.auto_repeat")
 local CoyoteTimer = require("src.core.coyote_timer")
 local Spring = require("src.core.spring")
 local FlashLimiter = require("src.core.flash_limiter")
@@ -26,6 +27,7 @@ local Ease = require("src.core.ease")
 local Demo = { pausable = true }
 
 -- ---- Tunables ----------------------------------------------------------------
+local COYOTE_S = 0.1                     -- coyote time before access.timing_scale
 local WORLD_W = 1600
 local FLOOR_Y = 300
 local PLAYER = 20
@@ -51,7 +53,8 @@ function Demo:enter()
   self.cam = FollowCamera.new({ deadzone_w = 96, deadzone_h = 64, lookahead = 0.2, smoothing = 6,
                                 x = self.player.x, y = FLOOR_Y - 80 })
   self.buffer = InputBuffer.new()
-  self.coyote = CoyoteTimer.new(0.1)
+  self.coyote = CoyoteTimer.new(COYOTE_S)
+  self.attack_repeat = AutoRepeat.new()                  -- access.auto_repeat: a held attack repeats (#166)
   self.spring = Spring.new(4.0, 0.35)
   self.limiter = FlashLimiter.new()
   self.real_time, self.flash, self.flash_peak = 0, 0, 0
@@ -104,6 +107,10 @@ function Demo:update(real_dt)
   p.y = p.y + p.vy * dt
   local on_floor = p.y >= FLOOR_Y - PLAYER
   if on_floor then p.y, p.vy = FLOOR_Y - PLAYER, 0 end
+  -- access.timing_scale (#166): every timing window, longer by the player's factor
+  local k = app.settings.access.timing_scale or 1
+  self.buffer.window, self.coyote.window = InputBuffer.WINDOW_S * k, COYOTE_S * k
+  if app.settings.access.auto_repeat and self.attack_repeat:update(dt, app.input:is_down("attack")) then self:hit() end
   self.coyote:update(dt, on_floor)
   self.buffer:update(dt)
   if self.coyote:can_jump() and self.buffer:consume("jump") then

@@ -51,6 +51,7 @@
   padding: 1em 1.4em;
   width: min(94vw, 52em);
   max-height: 92vh;
+  overflow-y: auto; /* at 200 % text a tall dialog scrolls (focus scrolls into view) instead of running off the window */
   box-sizing: border-box;
   display: flex;
   flex-direction: column;

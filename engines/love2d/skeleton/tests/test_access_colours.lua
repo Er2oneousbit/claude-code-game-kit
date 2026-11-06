@@ -41,3 +41,5 @@ function T.test_a_missing_mode_or_colour_falls_back()
 end
 
 return T
+
+-- {{FOOTER}}

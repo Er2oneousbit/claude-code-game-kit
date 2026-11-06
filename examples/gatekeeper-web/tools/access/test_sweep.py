@@ -31,6 +31,7 @@ GOOD = {
                  "focus": {"start": "/root/Play", "controls": 1, "reached": 1, "unreached": [], "focus_like_hover": []}}],
     "subtitle": {"visible": True, "speaker": "Guide", "text": "Hello there.", "id": "guide.intro"},
     "prompts": {"device": "pad_other", "actions": {"jump": {"keyboard": "Space", "shown": "South"}}},
+    "hold": {"held": True, "dismissed": True},
     "done": True,
 }
 
@@ -49,7 +50,8 @@ def as_log(log):
     """The parsed form back to drive output lines."""
     lines = ["ACCESS_INPUT " + json.dumps(log["input"])]
     lines += ["ACCESS_SCREEN " + json.dumps(s) for s in log["screens"]]
-    lines += ["ACCESS_SUBTITLE " + json.dumps(log["subtitle"]), "ACCESS_PROMPTS " + json.dumps(log["prompts"])]
+    lines += ["ACCESS_SUBTITLE " + json.dumps(log["subtitle"]), "ACCESS_PROMPTS " + json.dumps(log["prompts"]),
+              "ACCESS_HOLD " + json.dumps(log["hold"])]
     if log["done"]:
         lines.append("DRIVE_DONE access:res=1920x1080")
     return "\n".join("  " + line for line in lines) + "\n"
@@ -158,6 +160,14 @@ class SweepExam(unittest.TestCase):
         log["prompts"]["device"] = "keyboard"
         self.assertIn("device is 'keyboard'", check(log, "1280x800", pad=True)[0][0])
 
+    def test_a_held_subtitle_must_wait_and_then_go(self):
+        # #167, found live: Godot's bar kept the line but missed the accept the drive pressed
+        log = copy.deepcopy(GOOD)
+        log["hold"] = {"held": True, "dismissed": False}
+        self.assertIn("subtitle_hold", check(log)[0][0])
+        log["hold"] = {"held": False, "dismissed": True}
+        self.assertIn("held False", check(log)[0][0])
+
     def test_a_drive_that_did_not_finish_fails(self):
         log = copy.deepcopy(GOOD)
         log["done"] = False
@@ -172,6 +182,25 @@ class SweepExam(unittest.TestCase):
             with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(sweep.main(["--runs", "pc", "--root", d]), 2)
             self.assertIn("never started", err.getvalue())
+
+    def test_every_run_starts_from_a_fresh_data_folder(self):
+        # found live on web: the drive saves settings, and the next run started at the last run's text size, so
+        # the "100 %" run checked 200 % text and missed every row scrolled out of view
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "tools").mkdir()
+            (Path(d) / "tools" / "dev.py").write_text(
+                "import sys, pathlib\n"
+                "i = sys.argv.index('--data-dir')\n"
+                "folder = pathlib.Path(sys.argv[i + 1])\n"
+                "with open('runs.txt', 'a') as f: f.write(sys.argv[i + 1] + ' ' + str(folder.exists()) + '\\n')\n"
+                "folder.mkdir(parents=True, exist_ok=True)\n"
+                "(folder / 'settings.json').write_text('{}')\n", encoding="utf-8")
+            with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+                sweep.main(["--runs", "pc", "--root", d])       # exits 2 (no drive): the folders are what counts
+                sweep.main(["--runs", "pc", "--root", d])       # again: the folder from the first time must go
+            runs = (Path(d) / "runs.txt").read_text(encoding="utf-8").split()
+            self.assertEqual(runs[0], "build/access/pc")
+            self.assertEqual(runs[1:4:2], ["False", "False"])    # never an old folder, even on the second sweep
 
     def test_browser_console_lines_are_read(self):
         # the web shell's lines arrive with the browser's own prefix

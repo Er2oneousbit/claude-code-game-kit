@@ -34,3 +34,5 @@ func test_a_missing_file_gives_an_empty_palette() -> void:
 	var data: Dictionary = AccessColours.load_data("res://no/such/colours.json")
 	assert_eq(AccessColours.palette(data, "none"), {})
 	assert_eq(AccessColours.filter_mode(data, "protanopia"), "none")
+
+# {{FOOTER}}

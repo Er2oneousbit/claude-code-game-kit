@@ -27,6 +27,7 @@ import glob
 import json
 import math
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -51,6 +52,7 @@ RUNS = {                 # name: (resolution, text scale, gamepad only, drive ex
 RUN_SETS = {"pc": ("pc", "pc-200", "pc-read"), "deck": ("deck", "deck-200"), "all": tuple(RUNS)}
 DIALOGUE_GLOB = "data/dialogue/*.built.json"
 DRIVE_TIMEOUT_S = 600
+DATA_DIR = "build/access"   # one fresh data folder per run, inside the game's build folder
 MARKER = re.compile(r"\b(ACCESS_[A-Z]+) (.*)$")
 OVERLAP_SLACK = 1        # px two glyph boxes may share (antialiasing, rounding) before it counts as overlap
 
@@ -62,7 +64,7 @@ class UsageError(Exception):
 # -------------------------------------------------- reading a drive log
 def parse(text):
     """{"input": {...}, "screens": [...], "subtitle": {...} or None, "prompts": {...} or None, "done": bool}."""
-    out = {"input": None, "screens": [], "subtitle": None, "prompts": None, "done": False}
+    out = {"input": None, "screens": [], "subtitle": None, "prompts": None, "hold": None, "done": False}
     for raw in text.splitlines():
         line = raw.strip()
         if "DRIVE_DONE access" in line:
@@ -83,6 +85,8 @@ def parse(text):
             out["subtitle"] = data
         elif tag == "ACCESS_PROMPTS":
             out["prompts"] = data
+        elif tag == "ACCESS_HOLD":
+            out["hold"] = data
     return out
 
 
@@ -185,6 +189,10 @@ def check_run(log, resolution, pad, root):
             problems.append("subtitles: the demo's line is not on screen with subtitles on")
         elif sub.get("id") in lines and lines[sub["id"]] != sub["text"]:
             problems.append(f"subtitles: shows {sub['text']!r}, the dialogue file says {lines[sub['id']]!r}")
+    hold = log.get("hold")
+    if hold is not None and not (hold.get("held") and hold.get("dismissed")):
+        problems.append("subtitles: with subtitle_hold on, a finished line must stay until accept and then go "
+                        f"(held {hold.get('held')}, dismissed {hold.get('dismissed')})")
     pr = log["prompts"]
     if pad and pr is not None:
         if not str(pr.get("device", "")).startswith("pad"):
@@ -235,7 +243,12 @@ def run_drive(root, name, debug):
     resolution, scale, pad, extra = RUNS[name]
     opts = ",".join([f"res={resolution}"] + ([f"scale={scale:g}"] if scale != 1.0 else []) + (["pad"] if pad else [])
                     + ([extra] if extra else []))
-    cmd = [sys.executable, "tools/dev.py", "smoke", "--drive", "access:" + opts]
+    # a fresh data folder per run: the drive saves settings on the way out of the settings screen, and the next run
+    # must not start from the last one's text size, font or spacing (web reuses its default folder)
+    data = Path(root) / DATA_DIR / name
+    if data.exists():
+        shutil.rmtree(data)
+    cmd = [sys.executable, "tools/dev.py", "smoke", "--drive", "access:" + opts, "--data-dir", data.relative_to(root).as_posix()]
     if debug:
         print(f"[debug] {' '.join(cmd)}", file=sys.stderr)
     try:

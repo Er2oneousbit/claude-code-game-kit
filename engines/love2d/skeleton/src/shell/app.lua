@@ -320,6 +320,8 @@ end
 
 -- ---- Input ---------------------------------------------------------------------------------------------------
 function App:dispatch(action)
+  -- accept first dismisses a subtitle line waiting for the player (access.subtitle_hold, #167)
+  if action == "ui_accept" and self.track:holding() then self.track:dismiss() return true end
   local top = self:top()
   if top and top.action then return top:action(action) == true end
   return false
@@ -332,7 +334,13 @@ function App:binding_pressed(binding, isrepeat)
   end
   local top = self:top()
   if not isrepeat and top and top.raw and top:raw(binding) then return end
-  for _, action in ipairs(InputMap.actions_for(self.settings.input.bindings, binding)) do
+  local actions = InputMap.actions_for(self.settings.input.bindings, binding)
+  -- a held subtitle line (#167) takes the accept first: on a gamepad, south is accept and jump, and the line must go
+  -- before the game jumps (found by the access sweep's gamepad run)
+  for _, action in ipairs(actions) do
+    if action == "ui_accept" and self.track:holding() then self.track:dismiss() return end
+  end
+  for _, action in ipairs(actions) do
     if not isrepeat or action:sub(1, 3) == "ui_" then
       if self:dispatch(action) then return end
     end
@@ -411,7 +419,7 @@ function App:update(dt)
   if self.drive then self.drive:update(dt) end
   local top = self:top()
   if top and top.update then top:update(dt) end
-  self.track:update(dt)
+  self.track:update(dt, self.settings.access.subtitle_hold)
   self.subtitles:update(dt)
   if self.music then self.music:update() end
   for i = #self.toasts, 1, -1 do

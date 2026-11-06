@@ -45,3 +45,5 @@ static func filter_mode(data: Dictionary, mode: String) -> String:
 	if not bool(data.get("filter", false)) or data.get("palettes", {}).has(mode):
 		return "none"
 	return mode
+
+# {{FOOTER}}
