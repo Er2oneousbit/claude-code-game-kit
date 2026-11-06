@@ -375,12 +375,13 @@ local function access_tour(d, options)
     if mode == "fill" then app.ui:note_fill(x, y, w, h) end
     return rectangle(mode, x, y, w, h, ...)
   end
-  local scale, res = 1, nil
+  local scale, res, read = 1, nil, false
   for part in (options or ""):gmatch("[^,]+") do
     if part == "pad" then d.pad = true
+    elseif part == "read" then read = true                -- the readable font and double line spacing (#167)
     elseif part:match("^scale=") then scale = tonumber(part:sub(7))
     elseif part:match("^res=") then local w, h = part:match("^res=(%d+)x(%d+)$"); res = { tonumber(w), tonumber(h) }
-    else error("unknown access option " .. part .. " (res=WxH, scale=N, pad)", 0) end
+    else error("unknown access option " .. part .. " (res=WxH, scale=N, pad, read)", 0) end
   end
   local actions = {}
   for _, a in ipairs(ACCESS_ACTIONS) do
@@ -398,8 +399,9 @@ local function access_tour(d, options)
     love.window.setMode(res[1], res[2], flags)          -- the whole-number scale follows the window (app:transform)
     d:frames(2)
   end
-  if scale ~= 1 then
+  if scale ~= 1 or read then
     app.settings.access.text_scale = scale
+    if read then app.settings.access.readable_font, app.settings.access.line_spacing = true, 2.0 end
     app:apply_settings()
     d:frames(2)
   end

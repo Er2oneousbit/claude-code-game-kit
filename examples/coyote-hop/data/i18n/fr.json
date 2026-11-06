@@ -33,5 +33,10 @@
  "binding.key.escape": "Échap",
  "binding.key.enter": "Entrée",
  "demo.hits.one": "{n} coup",
- "demo.hits.other": "{n} coups"
+ "demo.hits.other": "{n} coups",
+ "setting.access.readable_font": "Police lisible",
+ "setting.access.line_spacing": "Interligne",
+ "setting.access.subtitle_hold": "Les sous-titres attendent",
+ "setting.access.timing_scale": "Fenêtres de timing",
+ "setting.access.auto_repeat": "Maintenir pour répéter"
 }

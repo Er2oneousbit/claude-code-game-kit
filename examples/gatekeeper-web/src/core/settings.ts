@@ -38,7 +38,8 @@ export interface Settings {
     text_scale: number; subtitles: boolean; subtitle_size: string; subtitle_background: number;
     speaker_names: boolean; subtitle_barks: boolean; captions_sfx: boolean; colorblind: string;
     reduce_motion: boolean; shake_scale: number; flash_limit: boolean; hold_to_toggle: boolean;
-    difficulty: string; game_speed: number; [k: string]: unknown;
+    difficulty: string; game_speed: number; readable_font: boolean; line_spacing: number;
+    subtitle_hold: boolean; timing_scale: number; auto_repeat: boolean; [k: string]: unknown;
   };
   input: { bindings: Bindings; deadzone: number; invert_y: boolean; glyphs: string; [k: string]: unknown };
   telemetry: { consent: string; [k: string]: unknown };
@@ -54,6 +55,7 @@ const DEFAULTS: Settings = {
     text_scale: 1.0, subtitles: true, subtitle_size: "medium", subtitle_background: 0.6, speaker_names: true,
     subtitle_barks: false, captions_sfx: false, colorblind: "none", reduce_motion: false, shake_scale: 1.0,
     flash_limit: true, hold_to_toggle: false, difficulty: "normal", game_speed: 1.0,
+    readable_font: false, line_spacing: 1.0, subtitle_hold: false, timing_scale: 1.0, auto_repeat: false,
   },
   input: { bindings: deepCopy(DEFAULT_BINDINGS) as Bindings, deadzone: 0.2, invert_y: false, glyphs: "auto" },
   telemetry: { consent: "unset" },
@@ -77,6 +79,7 @@ export const SCHEMA: Record<string, Record<string, Rule>> = {
     text_scale: num(0.75, 2.0), subtitles: bool, subtitle_size: choice(SUB_SIZES), subtitle_background: num(0, 1),
     speaker_names: bool, subtitle_barks: bool, captions_sfx: bool, colorblind: choice(COLORBLIND), reduce_motion: bool,
     shake_scale: num(0, 1), flash_limit: bool, hold_to_toggle: bool, difficulty: choice(DIFFICULTIES), game_speed: num(0.5, 1.0),
+    readable_font: bool, line_spacing: num(1, 2), subtitle_hold: bool, timing_scale: num(1, 3), auto_repeat: bool,
   },
   input: { deadzone: num(0, 0.9), invert_y: bool, glyphs: choice(GLYPH_SETS) },
   telemetry: { consent: choice(CONSENT) },

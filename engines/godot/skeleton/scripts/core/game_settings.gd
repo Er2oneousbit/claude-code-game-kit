@@ -41,7 +41,8 @@ const DEFAULT_SETTINGS: Dictionary = {
 	"access": {"text_scale": 1.0, "subtitles": true, "subtitle_size": "medium", "subtitle_background": 0.6,
 			"speaker_names": true, "subtitle_barks": false, "captions_sfx": false, "colorblind": "none",
 			"reduce_motion": false, "shake_scale": 1.0, "flash_limit": true, "hold_to_toggle": false,
-			"difficulty": "normal", "game_speed": 1.0},
+			"difficulty": "normal", "game_speed": 1.0, "readable_font": false, "line_spacing": 1.0,
+			"subtitle_hold": false, "timing_scale": 1.0, "auto_repeat": false},
 	"input": {"bindings": Bindings.DEFAULT_BINDINGS, "deadzone": 0.2, "invert_y": false, "glyphs": "auto"},
 	"telemetry": {"consent": "unset"},
 }
@@ -57,7 +58,9 @@ const SCHEMA: Dictionary = {
 			"subtitle_background": ["num", 0.0, 1.0], "speaker_names": ["bool"], "subtitle_barks": ["bool"],
 			"captions_sfx": ["bool"], "colorblind": ["enum", COLORBLIND], "reduce_motion": ["bool"],
 			"shake_scale": ["num", 0.0, 1.0], "flash_limit": ["bool"], "hold_to_toggle": ["bool"],
-			"difficulty": ["enum", DIFFICULTIES], "game_speed": ["num", 0.5, 1.0]},
+			"difficulty": ["enum", DIFFICULTIES], "game_speed": ["num", 0.5, 1.0], "readable_font": ["bool"],
+			"line_spacing": ["num", 1.0, 2.0], "subtitle_hold": ["bool"], "timing_scale": ["num", 1.0, 3.0],
+			"auto_repeat": ["bool"]},
 	"input": {"deadzone": ["num", 0.0, 0.9], "invert_y": ["bool"], "glyphs": ["enum", GLYPH_SETS]},
 	"telemetry": {"consent": ["enum", CONSENT]},
 }

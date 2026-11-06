@@ -75,7 +75,9 @@ const std::vector<Section>& schema() {
                     num("subtitle_background", 0.0, 1.0), flag("speaker_names"), flag("subtitle_barks"),
                     flag("captions_sfx"), one_of("colorblind", choices(kColorblindModes)), flag("reduce_motion"),
                     num("shake_scale", 0.0, 1.0), flag("flash_limit"), flag("hold_to_toggle"),
-                    one_of("difficulty", choices(kDifficulties)), num("game_speed", 0.5, 1.0)}},
+                    one_of("difficulty", choices(kDifficulties)), num("game_speed", 0.5, 1.0),
+                    flag("readable_font"), num("line_spacing", 1.0, 2.0), flag("subtitle_hold"),
+                    num("timing_scale", 1.0, 3.0), flag("auto_repeat")}},
         {"input", {num("deadzone", 0.0, 0.9), flag("invert_y"), one_of("glyphs", choices(kGlyphSets))}},
         {"telemetry", {one_of("consent", choices(kConsentValues))}},
     };
@@ -184,6 +186,11 @@ json default_settings() {
     access["hold_to_toggle"] = false;
     access["difficulty"] = "normal";
     access["game_speed"] = 1.0;
+    access["readable_font"] = false;
+    access["line_spacing"] = 1.0;
+    access["subtitle_hold"] = false;
+    access["timing_scale"] = 1.0;
+    access["auto_repeat"] = false;
     json& input = s["input"];
     input["bindings"] = bindings_to_json(default_bindings());
     input["deadzone"] = 0.2;

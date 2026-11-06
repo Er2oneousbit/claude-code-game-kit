@@ -59,17 +59,26 @@ end
 function UI:font(px, unscaled)
   local k = unscaled and 1 or self.scale
   px = math.max(6, math.floor((px or Style.FONT_PX) * k + 0.5))
-  if not self.fonts[px] then
-    self.fonts[px] = love.graphics.newFont(px)
-    self.fonts[px]:setFilter("nearest", "nearest")
-    self.font_px[self.fonts[px]] = px
+  local key = (self.readable and "r" or "d") .. px
+  if not self.fonts[key] then
+    -- the readable-font option (#167): Atkinson Hyperlegible (src/shell/fonts, SIL OFL 1.1)
+    local font = self.readable and love.graphics.newFont(Style.READABLE_FONT, px) or love.graphics.newFont(px)
+    font:setFilter("nearest", "nearest")
+    self.fonts[key] = font
+    self.font_px[font] = px
   end
-  return self.fonts[px]
+  self.fonts[key]:setLineHeight(self.line_spacing or 1)
+  return self.fonts[key]
 end
 
-function UI:set_scale(scale)
+function UI:set_scale(scale, readable, line_spacing)
   self.scale = scale
+  self.readable = readable or false
+  self.line_spacing = line_spacing or 1
 end
+
+-- the height a line of wrapped text takes (the font's own height times the player's line spacing)
+function UI:line_h(font) font = font or self:font(); return font:getHeight() * font:getLineHeight() end
 
 function UI:row_h(font) return (font or self:font()):getHeight() + Style.ROW_PAD * 2 end
 
@@ -139,7 +148,7 @@ function UI:label(id, text, x, y, w, h, opts)
   if self.recording then                                 -- where the glyphs land (the access sweep's overlap check)
     if opts.wrap then
       local widest, lines = font:getWrap(text, w)
-      ink = window_box(x, y, math.min(widest, w), #lines * font:getHeight())
+      ink = window_box(x, y, math.min(widest, w), #lines * font:getHeight() * font:getLineHeight())
     else
       local tw = font:getWidth(text)
       local tx = opts.align == "center" and x + (w - tw) / 2 or opts.align == "right" and x + w - tw or x
@@ -242,6 +251,7 @@ local function problems_of(self, label)
   local font, lh = label.font, label.font:getHeight()
   if label.wrap then
     local _, lines = font:getWrap(label.text, label.w)
+    lh = lh * font:getLineHeight()                       -- the player's line spacing (#167)
     if #lines * lh > label.h + SLACK_PX then
       out[#out + 1] = string.format("wraps to %d lines, the box holds %d", #lines, math.floor(label.h / lh))
     end

@@ -161,6 +161,12 @@ function section(c: Ctx, tab: (typeof TABS)[number]): void {
       for (const k of ["flash_limit", "hold_to_toggle"] as const) boolRow(c, `access.${k}`, (s) => a(s)[k], (s, v) => (a(s)[k] = v));
       choiceRow(c, "access.difficulty", DIFFICULTIES, (s) => a(s).difficulty, (s, v) => (a(s).difficulty = v), (v) => `opt.diff.${v}`);
       numRow(c, "access.game_speed", (s) => a(s).game_speed, (s, v) => (a(s).game_speed = v), 0.5, 1.0, 0.1, pct);
+      // #167 cognitive and #166 motor access
+      boolRow(c, "access.readable_font", (s) => a(s).readable_font, (s, v) => (a(s).readable_font = v));
+      numRow(c, "access.line_spacing", (s) => a(s).line_spacing, (s, v) => (a(s).line_spacing = v), 1, 2, 0.25, times);
+      boolRow(c, "access.subtitle_hold", (s) => a(s).subtitle_hold, (s, v) => (a(s).subtitle_hold = v));
+      numRow(c, "access.timing_scale", (s) => a(s).timing_scale, (s, v) => (a(s).timing_scale = v), 1, 3, 0.5, times);
+      boolRow(c, "access.auto_repeat", (s) => a(s).auto_repeat, (s, v) => (a(s).auto_repeat = v));
       break;
     }
     case "language": {

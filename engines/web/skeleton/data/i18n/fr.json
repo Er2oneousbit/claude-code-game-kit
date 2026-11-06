@@ -21,5 +21,10 @@
  "pause.title": "Pause",
  "pause.resume": "Reprendre",
  "pause.settings": "Paramètres",
- "pause.quit": "Retour au titre"
+ "pause.quit": "Retour au titre",
+ "access.readable_font": "Police lisible",
+ "access.line_spacing": "Interligne",
+ "access.subtitle_hold": "Les sous-titres attendent",
+ "access.timing_scale": "Fenêtres de timing",
+ "access.auto_repeat": "Maintenir pour répéter"
 }

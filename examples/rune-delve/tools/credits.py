@@ -10,7 +10,8 @@
 #           python tools/credits.py --out build/windows # write the two files next to a build
 # Exit    : 0 ok, 1 an asset cannot ship or --check found the files stale, 2 usage problem (no asset log)
 # Notes   : Reads the ASSET_LOG table (ID, Type, File(s), Source, Author, License, Attribution text, AI-assisted,
-#           Modified, Date, Notes); empty template rows are skipped. The engine credit comes from .game-kit.json. The
+#           Modified, Date, Notes); empty template rows are skipped. Third-party files the kit ships in a shell
+#           (KIT_ASSETS: the readable font) are credited when the game still has them. The engine credit comes from .game-kit.json. The
 #           files are generated: edit the asset log, not them. Not legal advice: SOP-21 step 6. Standard library only.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
@@ -35,6 +36,33 @@ for _stream in (sys.stdout, sys.stderr):
 
 ROOT = Path(__file__).resolve().parents[1]
 LOG = "docs/ASSET_LOG.md"
+# Third-party files the kit itself ships in some engines' shells: credited when the game still has them, so a game
+# never has to log them by hand and an engine without them never credits them (#167)
+KIT_ASSETS = [
+    {"id": "K-0001", "type": "font", "find": "AtkinsonHyperlegible-Regular.ttf",
+     "source": "https://github.com/googlefonts/atkinson-hyperlegible", "author": "Braille Institute of America",
+     "license": "OFL-1.1",
+     "attribution": "Atkinson Hyperlegible, Copyright 2020 Braille Institute of America, Inc. (SIL Open Font License 1.1)",
+     "ai": "no", "modified": "no", "date": "", "notes": "kit: the shell's readable-font setting"},
+]
+SKIP_DIRS = {".git", "node_modules", ".godot", "build", "dist", "Library", "Temp", "Intermediate", "Saved", "target"}
+
+
+def kit_rows(root, rows):
+    """The KIT_ASSETS rows whose file is in the game (outside build and tool folders) and not logged already."""
+    logged = " ".join(r.get("files", "") + " " + r.get("source", "") for r in rows)
+    out = []
+    for asset in KIT_ASSETS:
+        if asset["find"] in logged or asset["source"] in logged:
+            continue
+        for path in Path(root).rglob(asset["find"]):
+            rel = path.relative_to(root)
+            if not SKIP_DIRS.intersection(rel.parts[:-1]):
+                row = {k: v for k, v in asset.items() if k != "find"}
+                row["files"] = rel.parent.as_posix() + "/" + asset["find"]
+                out.append(row)
+                break
+    return out
 LICENSES = "docs/licenses"
 COLUMNS = ["id", "type", "files", "source", "author", "license", "attribution", "ai", "modified", "date", "notes"]
 UNKNOWN = {"", "?", "unknown", "n/a", "tbd", "none"}
@@ -167,6 +195,7 @@ def main(argv=None):
             rows = parse_log(log.read_text(encoding="utf-8-sig"))   # a BOM hid the table (#258)
         except UnicodeDecodeError:   # a log saved as cp1252 or UTF-16 was a traceback, exit 1 (#247)
             raise ToolError(f"{log} is not UTF-8 text: save it as UTF-8 (in VS Code: the encoding in the status bar)")
+        rows += kit_rows(root, rows)
         bad = problems(rows, args.allow_placeholders)
         files = {"CREDITS.md": credits_md(rows, root), "THIRD_PARTY_LICENSES.md": licenses_md(rows, root)}
     except (ToolError, OSError) as exc:

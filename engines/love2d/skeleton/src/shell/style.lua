@@ -18,6 +18,7 @@ local Style = {}
 -- ---- Tunables ----------------------------------------------------------------
 Style.BASE_W, Style.BASE_H = 640, 360
 Style.FONT_PX = 12                       -- UI text at text_scale 1
+Style.READABLE_FONT = "src/shell/fonts/AtkinsonHyperlegible-Regular.ttf"   -- access.readable_font (#167)
 Style.TITLE_PX = 28
 Style.SMALL_PX = 10
 Style.SUBTITLE_PX = { small = 10, medium = 12, large = 16, xl = 20 }

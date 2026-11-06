@@ -42,6 +42,7 @@ var front: FrontEnd
 var scenario: String
 var _pad: bool = false # access drive: press with gamepad events instead of actions
 var _text_scale: float = 1.0
+var _read: bool = false # access drive: readable font and double line spacing
 var _window: Vector2i = Vector2i.ZERO # access drive: the window size to lay the screens out for
 
 
@@ -237,6 +238,8 @@ func _access(options: String) -> void:
 	for part: String in options.split(",", false):
 		if part == "pad":
 			_pad = true
+		elif part == "read": # the readable font and double line spacing (#167)
+			_read = true
 		elif part.begins_with("scale="):
 			_text_scale = float(part.trim_prefix("scale="))
 		elif part.begins_with("res="):
@@ -251,6 +254,9 @@ func _access(options: String) -> void:
 		await _frames(2)
 	if _text_scale != 1.0:
 		Shell.set_value("access", "text_scale", _text_scale)
+	if _read:
+		Shell.set_value("access", "readable_font", true)
+		Shell.set_value("access", "line_spacing", 2.0)
 	await _frames(SETTLE_FRAMES)
 	_report("title")
 	await _dismiss_consent()

@@ -3,20 +3,25 @@
   {
    "expect": {
     "access": {
+     "auto_repeat": false,
      "captions_sfx": false,
      "colorblind": "none",
      "difficulty": "normal",
      "flash_limit": true,
      "game_speed": 1.0,
      "hold_to_toggle": false,
+     "line_spacing": 1.0,
+     "readable_font": false,
      "reduce_motion": false,
      "shake_scale": 1.0,
      "speaker_names": true,
      "subtitle_background": 0.6,
      "subtitle_barks": false,
+     "subtitle_hold": false,
      "subtitle_size": "medium",
      "subtitles": true,
-     "text_scale": 1.0
+     "text_scale": 1.0,
+     "timing_scale": 1.0
     },
     "audio": {
      "master": 1.0,
@@ -112,20 +117,25 @@
    "effective_shake": 1.0,
    "expect": {
     "access": {
+     "auto_repeat": false,
      "captions_sfx": false,
      "colorblind": "none",
      "difficulty": "normal",
      "flash_limit": true,
      "game_speed": 1.0,
      "hold_to_toggle": false,
+     "line_spacing": 1.0,
+     "readable_font": false,
      "reduce_motion": false,
      "shake_scale": 1.0,
      "speaker_names": true,
      "subtitle_background": 0.6,
      "subtitle_barks": false,
+     "subtitle_hold": false,
      "subtitle_size": "medium",
      "subtitles": true,
-     "text_scale": 1.0
+     "text_scale": 1.0,
+     "timing_scale": 1.0
     },
     "audio": {
      "master": 1.0,
@@ -224,20 +234,25 @@
    "effective_shake": 1.0,
    "expect": {
     "access": {
+     "auto_repeat": false,
      "captions_sfx": false,
      "colorblind": "none",
      "difficulty": "normal",
      "flash_limit": true,
      "game_speed": 1.0,
      "hold_to_toggle": false,
+     "line_spacing": 1.0,
+     "readable_font": false,
      "reduce_motion": false,
      "shake_scale": 1.0,
      "speaker_names": true,
      "subtitle_background": 0.6,
      "subtitle_barks": false,
+     "subtitle_hold": false,
      "subtitle_size": "medium",
      "subtitles": true,
-     "text_scale": 1.0
+     "text_scale": 1.0,
+     "timing_scale": 1.0
     },
     "audio": {
      "master": 1.0,
@@ -336,20 +351,25 @@
    "effective_shake": 1.0,
    "expect": {
     "access": {
+     "auto_repeat": false,
      "captions_sfx": false,
      "colorblind": "none",
      "difficulty": "normal",
      "flash_limit": true,
      "game_speed": 1.0,
      "hold_to_toggle": false,
+     "line_spacing": 1.0,
+     "readable_font": false,
      "reduce_motion": false,
      "shake_scale": 1.0,
      "speaker_names": true,
      "subtitle_background": 0.6,
      "subtitle_barks": false,
+     "subtitle_hold": false,
      "subtitle_size": "medium",
      "subtitles": true,
-     "text_scale": 1.0
+     "text_scale": 1.0,
+     "timing_scale": 1.0
     },
     "audio": {
      "master": 1.0,
@@ -448,20 +468,25 @@
    "effective_shake": 1.0,
    "expect": {
     "access": {
+     "auto_repeat": false,
      "captions_sfx": false,
      "colorblind": "none",
      "difficulty": "normal",
      "flash_limit": true,
      "game_speed": 1.0,
      "hold_to_toggle": false,
+     "line_spacing": 1.0,
+     "readable_font": false,
      "reduce_motion": false,
      "shake_scale": 1.0,
      "speaker_names": true,
      "subtitle_background": 0.6,
      "subtitle_barks": false,
+     "subtitle_hold": false,
      "subtitle_size": "medium",
      "subtitles": true,
-     "text_scale": 1.0
+     "text_scale": 1.0,
+     "timing_scale": 1.0
     },
     "audio": {
      "master": 1.0,
@@ -550,7 +575,7 @@
     },
     "version": 1
    },
-   "input": "{\"version\": 1, \"display\": {\"mode\": \"windowed\", \"vsync\": true, \"frame_cap\": 0, \"resolution\": [1920, 1080], \"ui_scale\": 1.0}, \"audio\": {\"master\": 1.0, \"music\": 0.8, \"sfx\": 1.0, \"ui\": 1.0, \"voice\": 1.0, \"mono\": false}, \"language\": \"en\", \"access\": {\"text_scale\": 1.0, \"subtitles\": true, \"subtitle_size\": \"medium\", \"subtitle_background\": 0.6, \"speaker_names\": true, \"subtitle_barks\": false, \"captions_sfx\": false, \"colorblind\": \"none\", \"reduce_motion\": false, \"shake_scale\": 1.0, \"flash_limit\": true, \"hold_to_toggle\": false, \"difficulty\": \"normal\", \"game_speed\": 1.0}, \"input\": {\"bindings\": {\"ui_up\": [\"key:up\", \"pad:dpad_up\"], \"ui_down\": [\"key:down\", \"pad:dpad_down\"], \"ui_left\": [\"key:left\", \"pad:dpad_left\"], \"ui_right\": [\"key:right\", \"pad:dpad_right\"], \"ui_accept\": [\"key:enter\", \"pad:south\"], \"ui_cancel\": [\"key:escape\", \"pad:east\"], \"move_left\": [\"key:a\", \"pad:dpad_left\"], \"move_right\": [\"key:d\", \"pad:dpad_right\"], \"move_up\": [\"key:w\", \"pad:dpad_up\"], \"move_down\": [\"key:s\", \"pad:dpad_down\"], \"jump\": [\"key:space\", \"pad:south\"], \"attack\": [\"key:j\", \"pad:west\"], \"interact\": [\"key:e\", \"pad:north\"], \"pause\": [\"key:escape\", \"pad:start\"]}, \"deadzone\": 0.2, \"invert_y\": false, \"glyphs\": \"auto\"}, \"telemetry\": {\"consent\": \"unset\"}}",
+   "input": "{\"version\": 1, \"display\": {\"mode\": \"windowed\", \"vsync\": true, \"frame_cap\": 0, \"resolution\": [1920, 1080], \"ui_scale\": 1.0}, \"audio\": {\"master\": 1.0, \"music\": 0.8, \"sfx\": 1.0, \"ui\": 1.0, \"voice\": 1.0, \"mono\": false}, \"language\": \"en\", \"access\": {\"text_scale\": 1.0, \"subtitles\": true, \"subtitle_size\": \"medium\", \"subtitle_background\": 0.6, \"speaker_names\": true, \"subtitle_barks\": false, \"captions_sfx\": false, \"colorblind\": \"none\", \"reduce_motion\": false, \"shake_scale\": 1.0, \"flash_limit\": true, \"hold_to_toggle\": false, \"difficulty\": \"normal\", \"game_speed\": 1.0, \"readable_font\": false, \"line_spacing\": 1.0, \"subtitle_hold\": false, \"timing_scale\": 1.0, \"auto_repeat\": false}, \"input\": {\"bindings\": {\"ui_up\": [\"key:up\", \"pad:dpad_up\"], \"ui_down\": [\"key:down\", \"pad:dpad_down\"], \"ui_left\": [\"key:left\", \"pad:dpad_left\"], \"ui_right\": [\"key:right\", \"pad:dpad_right\"], \"ui_accept\": [\"key:enter\", \"pad:south\"], \"ui_cancel\": [\"key:escape\", \"pad:east\"], \"move_left\": [\"key:a\", \"pad:dpad_left\"], \"move_right\": [\"key:d\", \"pad:dpad_right\"], \"move_up\": [\"key:w\", \"pad:dpad_up\"], \"move_down\": [\"key:s\", \"pad:dpad_down\"], \"jump\": [\"key:space\", \"pad:south\"], \"attack\": [\"key:j\", \"pad:west\"], \"interact\": [\"key:e\", \"pad:north\"], \"pause\": [\"key:escape\", \"pad:start\"]}, \"deadzone\": 0.2, \"invert_y\": false, \"glyphs\": \"auto\"}, \"telemetry\": {\"consent\": \"unset\"}}",
    "name": "all defaults",
    "problems": 0,
    "telemetry_allowed": false,
@@ -560,20 +585,25 @@
    "effective_shake": 0.0,
    "expect": {
     "access": {
+     "auto_repeat": false,
      "captions_sfx": false,
      "colorblind": "none",
      "difficulty": "normal",
      "flash_limit": true,
      "game_speed": 1.0,
      "hold_to_toggle": false,
+     "line_spacing": 1.0,
+     "readable_font": false,
      "reduce_motion": true,
      "shake_scale": 0.25,
      "speaker_names": true,
      "subtitle_background": 0.6,
      "subtitle_barks": false,
+     "subtitle_hold": false,
      "subtitle_size": "medium",
      "subtitles": true,
-     "text_scale": 2.0
+     "text_scale": 2.0,
+     "timing_scale": 1.0
     },
     "audio": {
      "master": 1.0,
@@ -672,20 +702,25 @@
    "effective_shake": 1.0,
    "expect": {
     "access": {
+     "auto_repeat": false,
      "captions_sfx": false,
      "colorblind": "none",
      "difficulty": "normal",
      "flash_limit": true,
      "game_speed": 1.0,
      "hold_to_toggle": false,
+     "line_spacing": 1.0,
+     "readable_font": false,
      "reduce_motion": false,
      "shake_scale": 1.0,
      "speaker_names": true,
      "subtitle_background": 0.6,
      "subtitle_barks": false,
+     "subtitle_hold": false,
      "subtitle_size": "medium",
      "subtitles": true,
-     "text_scale": 1.0
+     "text_scale": 1.0,
+     "timing_scale": 1.0
     },
     "audio": {
      "master": 0.5,
@@ -788,20 +823,25 @@
    "effective_shake": 1.0,
    "expect": {
     "access": {
+     "auto_repeat": false,
      "captions_sfx": false,
      "colorblind": "none",
      "difficulty": "normal",
      "flash_limit": true,
      "game_speed": 1.0,
      "hold_to_toggle": false,
+     "line_spacing": 1.0,
+     "readable_font": false,
      "reduce_motion": false,
      "shake_scale": 1.0,
      "speaker_names": true,
      "subtitle_background": 0.6,
      "subtitle_barks": false,
+     "subtitle_hold": false,
      "subtitle_size": "medium",
      "subtitles": true,
-     "text_scale": 1.0
+     "text_scale": 1.0,
+     "timing_scale": 1.0
     },
     "audio": {
      "master": 1.0,
@@ -903,20 +943,25 @@
    "effective_shake": 1.0,
    "expect": {
     "access": {
+     "auto_repeat": false,
      "captions_sfx": false,
      "colorblind": "none",
      "difficulty": "normal",
      "flash_limit": true,
      "game_speed": 1.0,
      "hold_to_toggle": false,
+     "line_spacing": 1.0,
+     "readable_font": false,
      "reduce_motion": false,
      "shake_scale": 1.0,
      "speaker_names": true,
      "subtitle_background": 0.6,
      "subtitle_barks": false,
+     "subtitle_hold": false,
      "subtitle_size": "medium",
      "subtitles": true,
-     "text_scale": 1.0
+     "text_scale": 1.0,
+     "timing_scale": 1.0
     },
     "audio": {
      "master": 1.0,
@@ -1015,20 +1060,25 @@
    "effective_shake": 1.0,
    "expect": {
     "access": {
+     "auto_repeat": false,
      "captions_sfx": false,
      "colorblind": "none",
      "difficulty": "normal",
      "flash_limit": true,
      "game_speed": 1.0,
      "hold_to_toggle": false,
+     "line_spacing": 1.0,
+     "readable_font": false,
      "reduce_motion": false,
      "shake_scale": 1.0,
      "speaker_names": true,
      "subtitle_background": 0.6,
      "subtitle_barks": false,
+     "subtitle_hold": false,
      "subtitle_size": "medium",
      "subtitles": true,
-     "text_scale": 1.0
+     "text_scale": 1.0,
+     "timing_scale": 1.0
     },
     "audio": {
      "master": 1.0,
@@ -1127,20 +1177,25 @@
    "effective_shake": 1.0,
    "expect": {
     "access": {
+     "auto_repeat": false,
      "captions_sfx": false,
      "colorblind": "none",
      "difficulty": "normal",
      "flash_limit": true,
      "game_speed": 1.0,
      "hold_to_toggle": false,
+     "line_spacing": 1.0,
+     "readable_font": false,
      "reduce_motion": false,
      "shake_scale": 1.0,
      "speaker_names": true,
      "subtitle_background": 0.6,
      "subtitle_barks": false,
+     "subtitle_hold": false,
      "subtitle_size": "medium",
      "subtitles": true,
-     "text_scale": 1.0
+     "text_scale": 1.0,
+     "timing_scale": 1.0
     },
     "audio": {
      "master": 1.0,
@@ -1239,20 +1294,25 @@
    "effective_shake": 1.0,
    "expect": {
     "access": {
+     "auto_repeat": false,
      "captions_sfx": false,
      "colorblind": "none",
      "difficulty": "normal",
      "flash_limit": true,
      "game_speed": 1.0,
      "hold_to_toggle": false,
+     "line_spacing": 1.0,
+     "readable_font": false,
      "reduce_motion": false,
      "shake_scale": 1.0,
      "speaker_names": true,
      "subtitle_background": 0.6,
      "subtitle_barks": false,
+     "subtitle_hold": false,
      "subtitle_size": "medium",
      "subtitles": true,
-     "text_scale": 1.0
+     "text_scale": 1.0,
+     "timing_scale": 1.0
     },
     "audio": {
      "master": 1.0,
@@ -1351,20 +1411,25 @@
    "effective_shake": 1.0,
    "expect": {
     "access": {
+     "auto_repeat": false,
      "captions_sfx": false,
      "colorblind": "none",
      "difficulty": "normal",
      "flash_limit": true,
      "game_speed": 1.0,
      "hold_to_toggle": false,
+     "line_spacing": 1.0,
+     "readable_font": false,
      "reduce_motion": false,
      "shake_scale": 1.0,
      "speaker_names": true,
      "subtitle_background": 0.6,
      "subtitle_barks": false,
+     "subtitle_hold": false,
      "subtitle_size": "medium",
      "subtitles": true,
-     "text_scale": 1.0
+     "text_scale": 1.0,
+     "timing_scale": 1.0
     },
     "audio": {
      "master": 1.0,

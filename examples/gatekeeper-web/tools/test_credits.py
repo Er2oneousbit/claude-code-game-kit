@@ -101,6 +101,27 @@ class Credits(unittest.TestCase):
             encoding="utf-8"))
         self.assertEqual(rows, [])
 
+    def test_the_kits_readable_font_is_credited_when_the_game_has_it(self):
+        # #167: the shells of some engines ship Atkinson Hyperlegible; a game that keeps it credits it without a row,
+        # a game (or engine) without it never does, and a game that logged it is not credited twice
+        root = self.game("")
+        fonts = root / "scripts" / "shell" / "fonts"
+        fonts.mkdir(parents=True)
+        self.assertEqual(credits.kit_rows(root, []), [])
+        (fonts / "AtkinsonHyperlegible-Regular.ttf").write_bytes(b"\0")
+        rows = credits.kit_rows(root, [])
+        self.assertEqual([(r["id"], r["license"], r["files"]) for r in rows],
+                         [("K-0001", "OFL-1.1", "scripts/shell/fonts/AtkinsonHyperlegible-Regular.ttf")])
+        self.assertEqual(self.run_cli("--root", str(root))[0], 0)
+        self.assertIn("Braille Institute", (root / "CREDITS.md").read_text(encoding="utf-8"))
+        logged = [{"files": "scripts/shell/fonts/AtkinsonHyperlegible-Regular.ttf", "source": ""}]
+        self.assertEqual(credits.kit_rows(root, logged), [])
+        build = root / "node_modules" / "x"                      # a copy in a tool folder does not count
+        build.mkdir(parents=True)
+        (fonts / "AtkinsonHyperlegible-Regular.ttf").unlink()
+        (build / "AtkinsonHyperlegible-Regular.ttf").write_bytes(b"\0")
+        self.assertEqual(credits.kit_rows(root, []), [])
+
 
 class CreditsReviewFixes(Credits):
     """#247: an escaped pipe shifted every later column; a log that is not UTF-8 was a traceback."""

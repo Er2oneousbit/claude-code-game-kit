@@ -192,7 +192,7 @@ function Demo:draw_hud(ui)
     shake = string.format("%.2f", Settings.effective_shake(app.settings)),
     refused = self.refused, speed = math.floor(app:game_speed() * 100 + 0.5) })
   local _, stat_lines = font:getWrap(stats, Style.BASE_W - 24)
-  local stats_h = #stat_lines * font:getHeight()
+  local stats_h = #stat_lines * ui:line_h(font)
   ui:label("juice.stats", stats, 12, self.hud_bottom, Style.BASE_W - 24, stats_h,
            { font = font, color = Style.color.dim, wrap = true, outline = black })
   if self.guard then

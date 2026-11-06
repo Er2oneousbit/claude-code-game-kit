@@ -328,6 +328,8 @@ export class Shell {
     const css = document.documentElement.style;
     css.setProperty("--ui-scale", String(s.display.ui_scale));
     css.setProperty("--text-scale", String(s.access.text_scale));
+    css.setProperty("--line-spacing", String(s.access.line_spacing)); // #167
+    document.getElementById("shell")?.classList.toggle("readable", !!s.access.readable_font);
     css.setProperty("--sub-size", String(SUB_SIZE_EM[s.access.subtitle_size] ?? 1.1));
     css.setProperty("--sub-bg", String(s.access.subtitle_background));
     document.documentElement.classList.toggle("reduce-motion", s.access.reduce_motion);

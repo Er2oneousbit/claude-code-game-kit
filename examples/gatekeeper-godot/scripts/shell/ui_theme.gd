@@ -20,6 +20,11 @@ const MIN_FONT_SIZE: int = 6
 const TITLE_FONT: float = 2.5 # title size as a multiple of the body font
 const HEADING_FONT: float = 1.5
 const HEADING_TYPE: StringName = &"HeadingLabel" # theme variations carrying those sizes
+# the readable-font option (#167): Atkinson Hyperlegible, by the Braille Institute for low-vision readers (SIL OFL
+# 1.1, scripts/shell/fonts/OFL.txt)
+const READABLE_FONT: String = "res://scripts/shell/fonts/AtkinsonHyperlegible-Regular.ttf"
+const LINE_SPACING_BASE: int = 3 # Godot's own Label line_spacing
+const LINE_HEIGHT: float = 1.2 # a line is about this many font sizes tall
 const TITLE_TYPE: StringName = &"TitleLabel"
 const BG: Color = Color(0.08, 0.09, 0.15)
 const PANEL: Color = Color(0.12, 0.14, 0.22, 0.96)
@@ -46,7 +51,8 @@ static func find_theme_file() -> String:
 	return found[0] if not found.is_empty() else ""
 
 
-static func make(text_scale: float) -> Theme:
+## readable: the clearer font (Atkinson Hyperlegible, #167); line_spacing: 1.0 = the font's own, 2.0 = double.
+static func make(text_scale: float, readable: bool = false, line_spacing: float = 1.0) -> Theme:
 	var theme: Theme = null
 	var file: String = find_theme_file()
 	if file != "":
@@ -62,6 +68,14 @@ static func make(text_scale: float) -> Theme:
 	for variation: Array in [[HEADING_TYPE, HEADING_FONT], [TITLE_TYPE, TITLE_FONT]]:
 		theme.set_type_variation(variation[0], "Label")
 		theme.set_font_size("font_size", variation[0], roundi(theme.default_font_size * float(variation[1])))
+	if readable:
+		var font: Font = load(READABLE_FONT) as Font
+		if font != null:
+			theme.default_font = font
+	# extra pixels between lines: the font's height times (line_spacing - 1), on every text control
+	var extra: int = roundi(theme.default_font_size * (line_spacing - 1.0) * LINE_HEIGHT)
+	for type: String in ["Label", "RichTextLabel", "Button"]:
+		theme.set_constant("line_spacing", type, LINE_SPACING_BASE + extra)
 	return theme
 
 

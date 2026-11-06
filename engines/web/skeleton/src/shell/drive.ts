@@ -310,10 +310,12 @@ async function report(shell: Shell, d: Driver, name: string): Promise<void> {
 
 async function access(shell: Shell, d: Driver, options: string): Promise<void> {
   let scale = 1;
+  let read = false;
   for (const part of options.split(",").filter(Boolean)) {
     if (part === "pad") d.pad = true;
+    else if (part === "read") read = true; // the readable font and double line spacing (#167)
     else if (part.startsWith("scale=")) scale = Number(part.slice(6));
-    else if (!part.startsWith("res=")) throw new Error(`unknown access option ${part} (res=WxH, scale=N, pad)`);
+    else if (!part.startsWith("res=")) throw new Error(`unknown access option ${part} (res=WxH, scale=N, pad, read)`);
   }
   const actions: Record<string, { keyboard: boolean; gamepad: boolean }> = {};
   for (const a of ACCESS_ACTIONS) {
@@ -322,8 +324,12 @@ async function access(shell: Shell, d: Driver, options: string): Promise<void> {
   }
   Log.info("drive", "ACCESS_INPUT " + JSON.stringify({ pad: d.pad, text_scale: scale, actions }));
   await waitFor("title", () => ["title", "consent"].includes(shell.topId));
-  if (scale !== 1) {
+  if (scale !== 1 || read) {
     shell.settings.access.text_scale = scale;
+    if (read) {
+      shell.settings.access.readable_font = true;
+      shell.settings.access.line_spacing = 2;
+    }
     shell.apply();
   }
   await report(shell, d, shell.topId);

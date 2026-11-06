@@ -125,7 +125,7 @@ function Subtitles:draw(ui)
     local inner = BAR_W - PAD * 2
     local _, lines = font:getWrap(text, inner)
     local name_h = access.speaker_names and cur.line.name and lh or 0
-    local h = #lines * lh + name_h + PAD * 2
+    local h = #lines * ui:line_h(font) + name_h + PAD * 2   -- wrapped lines take the line spacing (#167)
     local x, y = (Style.BASE_W - BAR_W) / 2, bottom - h
     love.graphics.setColor(0, 0, 0, access.subtitle_background)
     ui.in_ui = true                                      -- the bar is the shell's, not the game's (access report)
@@ -137,7 +137,7 @@ function Subtitles:draw(ui)
       ui:label("subtitle.speaker", app:t("subtitle.speaker", { name = cur.line.name }), x + PAD, y + PAD, inner, lh,
                { font = font, color = hex_color(cur.line.color), outline = { 0, 0, 0 } })
     end
-    ui:label("subtitle.text", text, x + PAD, y + PAD + name_h, inner, #lines * lh,
+    ui:label("subtitle.text", text, x + PAD, y + PAD + name_h, inner, #lines * ui:line_h(font),
              { font = font, wrap = true, shown = shown, outline = { 0, 0, 0 } })
     bottom = y - 4
   end

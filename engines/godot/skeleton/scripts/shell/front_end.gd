@@ -235,17 +235,19 @@ func _on_focus_lost() -> void:
 
 
 func _on_settings_changed(_section: String, key: String) -> void:
-	if key == "text_scale" or key == "ui_scale":
+	if key in ["text_scale", "ui_scale", "readable_font", "line_spacing"]:
 		_apply_look()
 
 
 func _apply_look() -> void:
 	var text_scale: float = float(Shell.access("text_scale"))
-	var look: String = "%s|%s" % [text_scale, Shell.settings["display"]["ui_scale"]]
+	var readable: bool = bool(Shell.access("readable_font"))
+	var spacing: float = float(Shell.access("line_spacing"))
+	var look: String = "%s|%s|%s|%s" % [text_scale, Shell.settings["display"]["ui_scale"], readable, spacing]
 	if look == _look:
 		return
 	_look = look
-	ui_theme = UiTheme.make(text_scale)
+	ui_theme = UiTheme.make(text_scale, readable, spacing)
 	ui_root.theme = ui_theme
 	if world_node != null and world_node.has_method("apply_theme"):
 		world_node.apply_theme(ui_theme)

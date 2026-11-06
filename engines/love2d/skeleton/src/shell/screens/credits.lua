@@ -50,7 +50,7 @@ function Credits:draw(ui)
   ui:label("credits.title", app:t("credits.title"), 0, 14, Style.BASE_W, 32,
            { align = "center", font = ui:font(Style.TITLE_PX * 0.75), color = Style.color.accent })
   local font = ui:font()
-  local lh = font:getHeight() + 2
+  local lh = ui:line_h(font) + 2                          -- rows follow the line spacing (#167)
   if not self.lines then                   -- no CREDITS.md yet: a placeholder, no scrolling
     ui:label("credits.placeholder", app:t("credits.placeholder"), AREA_X, AREA_Y + 30, AREA_W, AREA_H - 90,
              { wrap = true, align = "center" })

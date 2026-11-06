@@ -193,7 +193,7 @@ end
 -- ---- Settings ------------------------------------------------------------------------------------------------
 function App:apply_settings()
   local s = self.settings
-  self.ui:set_scale(s.access.text_scale * s.display.ui_scale)
+  self.ui:set_scale(s.access.text_scale * s.display.ui_scale, s.access.readable_font, s.access.line_spacing)
   self.i18n:set_locale(self.kit.locale or s.language)
   if love.audio then love.audio.setVolume(self.kit.automated and 0 or s.audio.master) end
   self.bus_gains = self.buses and AudioAccess.user_bus_gains(self.buses, s.audio) or nil

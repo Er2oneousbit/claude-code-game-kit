@@ -58,6 +58,11 @@
   "settings.access.shake_scale": "Screen shake",
   "settings.access.flash_limit": "Gentle flashes",
   "settings.access.hold_to_toggle": "Hold actions toggle",
+  "settings.access.readable_font": "Readable font",
+  "settings.access.line_spacing": "Line spacing",
+  "settings.access.subtitle_hold": "Subtitles wait for you",
+  "settings.access.timing_scale": "Timing windows",
+  "settings.access.auto_repeat": "Hold to repeat presses",
   "settings.access.difficulty": "Difficulty",
   "settings.access.game_speed": "Game speed",
 

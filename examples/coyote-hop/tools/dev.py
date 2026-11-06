@@ -118,8 +118,8 @@ DRIVE_TIMEOUT_S = 180                    # a drive (headless, or the windowed ca
 MARKERS = ("DRIVE_", "SETTINGS_", "CRASH_WRITTEN", "PSEUDO_", "TELEMETRY_FILE", "BUG_REPORT",
            "ACCESS_")  # echoed lines (ACCESS_*: the access drive's report, read by tools/access/sweep.py)
 # smoke --drive access[:res=WxH][,scale=N][,pad] (the drive sets the window: headless Godot ignores --resolution)
-ACCESS_DRIVE = re.compile(r"access(:(res=[1-9]\d{2,4}x[1-9]\d{2,4}|scale=\d+(\.\d+)?|pad)"
-                          r"(,(res=[1-9]\d{2,4}x[1-9]\d{2,4}|scale=\d+(\.\d+)?|pad))*)?")
+ACCESS_DRIVE = re.compile(r"access(:(res=[1-9]\d{2,4}x[1-9]\d{2,4}|scale=\d+(\.\d+)?|pad|read)"
+                          r"(,(res=[1-9]\d{2,4}x[1-9]\d{2,4}|scale=\d+(\.\d+)?|pad|read))*)?")
 IMAGE_DIFF = "tools/image_diff.py"       # smoke --compare runs it: exit 0 same, 1 different, 2 usage
 NO_EXEC = (126, 127)                     # run() codes: not executable / not found -> exit 2
 # build: what must never ship in the .pck (the kit's bookkeeping and dev-only folders; export_presets.cfg excludes

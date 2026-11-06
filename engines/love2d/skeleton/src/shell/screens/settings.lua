@@ -212,6 +212,11 @@ function SettingsScreen:access_rows()
     f("hold_to_toggle", "toggle"),
     f("difficulty", "choice", Settings.DIFFICULTIES),
     f("game_speed", "slider", 0.5, 1.0, 0.1),
+    f("readable_font", "toggle"),                      -- #167: cognitive access
+    f("line_spacing", "slider", 1.0, 2.0, 0.25),
+    f("subtitle_hold", "toggle"),
+    f("timing_scale", "slider", 1.0, 3.0, 0.5),        -- #166: motor access
+    f("auto_repeat", "toggle"),
     self:back_row(),
   }
 end

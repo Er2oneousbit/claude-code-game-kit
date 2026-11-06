@@ -41,13 +41,14 @@ DECK_GOOD_PX = 12        # E75: recommended at 1280x800
 CONTRAST = 4.5           # E158: text
 CONTRAST_LARGE = 3.0     # E158: large text
 LARGE_EM = 1.5           # E158: large text is 18 pt, about 1.5 em: here 1.5 times the screen's body (smallest) text
-RUNS = {                 # name: (resolution, text scale, gamepad only)
-    "pc": ("1920x1080", 1.0, False),
-    "pc-200": ("1920x1080", 2.0, False),
-    "deck": ("1280x800", 1.0, True),
-    "deck-200": ("1280x800", 2.0, True),
+RUNS = {                 # name: (resolution, text scale, gamepad only, drive extras)
+    "pc": ("1920x1080", 1.0, False, ""),
+    "pc-200": ("1920x1080", 2.0, False, ""),
+    "pc-read": ("1920x1080", 1.0, False, "read"),   # the readable font and double line spacing (#167)
+    "deck": ("1280x800", 1.0, True, ""),
+    "deck-200": ("1280x800", 2.0, True, ""),
 }
-RUN_SETS = {"pc": ("pc", "pc-200"), "deck": ("deck", "deck-200"), "all": tuple(RUNS)}
+RUN_SETS = {"pc": ("pc", "pc-200", "pc-read"), "deck": ("deck", "deck-200"), "all": tuple(RUNS)}
 DIALOGUE_GLOB = "data/dialogue/*.built.json"
 DRIVE_TIMEOUT_S = 600
 MARKER = re.compile(r"\b(ACCESS_[A-Z]+) (.*)$")
@@ -231,8 +232,9 @@ def overlaps(screen, texts):
 
 # -------------------------------------------------- running the game
 def run_drive(root, name, debug):
-    resolution, scale, pad = RUNS[name]
-    opts = ",".join([f"res={resolution}"] + ([f"scale={scale:g}"] if scale != 1.0 else []) + (["pad"] if pad else []))
+    resolution, scale, pad, extra = RUNS[name]
+    opts = ",".join([f"res={resolution}"] + ([f"scale={scale:g}"] if scale != 1.0 else []) + (["pad"] if pad else [])
+                    + ([extra] if extra else []))
     cmd = [sys.executable, "tools/dev.py", "smoke", "--drive", "access:" + opts]
     if debug:
         print(f"[debug] {' '.join(cmd)}", file=sys.stderr)
@@ -267,7 +269,8 @@ def main(argv=None):
         epilog="Exit codes: 0 pass, 1 a check failed, 2 the drive could not run or a usage problem. SOP-20 has the "
                "rules and their sources; SOP-19 the Steam Deck checklist a program cannot do.")
     p.add_argument("--runs", choices=sorted(RUN_SETS), default="all",
-                   help="pc (1920x1080 at 100 and 200 %% text), deck (1280x800, gamepad only), or all (default)")
+                   help="pc (1920x1080 at 100 and 200 %% text, and with the readable font and double line spacing), "
+                        "deck (1280x800, gamepad only), or all (default)")
     p.add_argument("--report", default="", help="also write the results as Markdown to this file")
     p.add_argument("--log", default="", help="check a saved `smoke --drive access` log instead of running the game")
     p.add_argument("--resolution", default="1920x1080", help="with --log: the window size it ran at")
@@ -286,7 +289,8 @@ def main(argv=None):
                 raise UsageError(f"{root}: no tools/dev.py (run this in a game folder)")
             for name in RUN_SETS[args.runs]:
                 print(f"[info] {name}: {RUNS[name][0]}, text {RUNS[name][1]:g}x"
-                      f"{', gamepad only' if RUNS[name][2] else ''} ...", flush=True)
+                      f"{', gamepad only' if RUNS[name][2] else ''}"
+                      f"{', readable font, double line spacing' if RUNS[name][3] == 'read' else ''} ...", flush=True)
                 out, resolution, pad = run_drive(root, name, args.debug)
                 log = parse(out)
                 if log["input"] is None:
