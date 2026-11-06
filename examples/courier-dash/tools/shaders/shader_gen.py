@@ -267,7 +267,7 @@ def love(r):
     body = r["body"].replace("SAMPLE_MAIN(", "Texel(main_tex, ").replace("SAMPLE_AUX(", "Texel(kit_aux, ")
     return (f"// {HEADER_NOTE.format(name=r['name'])}\n// {r['summary']}\n{aux}{uniforms}\n\n"
             f"vec4 kit_effect(vec2 uv, Image main_tex) {{\n{indent(body)}\n}}\n\n"
-            "vec4 effect(vec4 color, Image tex, vec2 tc, vec2 sc) {\n    return kit_effect(tc, tex);\n}\n")
+            "vec4 effect(vec4 color, Image tex, vec2 tc, vec2 sc) {\n    return kit_effect(tc, tex) * color;   // love.graphics.setColor tints it, as for any LOVE sprite\n}\n")
 
 
 def love_params(recipes):

@@ -28,8 +28,9 @@ src/game/           gameplay; game.lua is what the play screen runs
 assets/             art, audio, fonts (see docs/ASSET_LOG.md); assets/ui/glyphs/<name>.png = button prompts
 data/               tunables and tables; i18n/<locale>.json strings, dialogue/*.built.json subtitles;
                     data/golden/ is test data, not packaged
+shaders/kit/        the kit's shader recipes as LÖVE pixel shaders, *.glsl + params.lua (generated)
 tests/              runner.lua, assert.lua, helpers/, test_*.lua
-tools/              dev.py, lovecheck/ (the syntax checker)
+tools/              dev.py, lovecheck/ (the syntax checker), shadercheck/ (compiles and draws the shader recipes)
 build/              .love and the fused Windows exe (git-ignored)
 ```
 
@@ -46,6 +47,13 @@ build/              .love and the fused Windows exe (git-ignored)
   rebinding in Settings just works. Every visible string goes through `app:t("key")` (`data/i18n/en.json`).
 - User data (settings, saves, logs, crashes, telemetry) only through `src/core/text_store.lua` and
   `atomic_file.lua`, never `love.filesystem.write` directly: `--data-dir` and crash safety depend on it.
+- **Shaders:** `local fx = love.graphics.newShader("shaders/kit/flash.glsl")`, then `fx:send("u_amount", 1)` and
+  `love.graphics.setShader(fx)` around the draw; `require("shaders.kit.params")` holds each recipe's defaults (send
+  every one: GLSL leaves them at zero). A second picture goes in as `fx:send("kit_aux", image)`, `setColor` tints
+  the result. Coordinates run 0 to 1 over the drawn image: `u_texel` is one over its size in texels, `u_canvas` the
+  size pixel parameters (`light_pos`) are given in. Post effects (`crt`, `vignette`, `colorblind`) draw a Canvas of
+  the whole frame through them. `check` compiles them and `smoke --shaders` compares each with its golden image;
+  both open a small window off-screen (`--headless` cannot draw shaders).
 
 ## Gotchas (Claude: read before editing)
 1. **LÖVE's error screen waits for a key, even with no window.** conf.lua replaces `love.errorhandler` so automated
@@ -76,4 +84,5 @@ build/              .love and the fused Windows exe (git-ignored)
    0..255). Check `lovec --version` and the matching wiki page (love2d.org/wiki) before using an unfamiliar API.
 
 ## Generated or binary (do not hand-edit)
-`build/` (the .love and the fused exe), anything under the save folder.
+`build/` (the .love and the fused exe), anything under the save folder, `shaders/kit/` (edit
+`tools/shaders/ksl/`, then `python tools/shaders/shader_gen.py`).

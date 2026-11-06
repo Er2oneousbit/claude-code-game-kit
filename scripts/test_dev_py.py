@@ -19,6 +19,7 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 import argparse
+import base64
 import importlib.util
 import io
 import os
@@ -936,6 +937,88 @@ class MzShaders(TempRoot):
         dev = self.dev({"shader_compile.mjs": (1, "[FAIL] shader flash")})
         self.assertEqual(self.check(dev, no_shaders=True)[0], 0)
         self.assertFalse(any("shader" in c for c in self.calls), self.calls)
+
+
+# ---- #249: LÖVE shader recipes -----------------------------------------------------
+class LoveShaders(TempRoot):
+    """check compiles shaders/kit through tools/shadercheck; smoke --shaders writes its SHADER_PNG pictures to
+    build/shader_check/ and compares them; --headless cannot draw shaders."""
+    PNG = base64.b64encode(b"\x89PNG fake").decode("ascii")
+
+    def dev(self, results):
+        dev = load("love2d")
+        dev.ROOT = self.root
+        (self.root / "shaders" / "kit").mkdir(parents=True, exist_ok=True)
+        dev.compile_check = lambda love, files: ([], True, 0)
+        dev.lua_files = lambda paths=None: [self.root / "main.lua"]
+        self.calls = []
+
+        def fake_run(cmd, **kwargs):
+            line = " ".join(str(c) for c in cmd)
+            self.calls.append(line)
+            for key, result in results.items():
+                if key in line:
+                    return result
+            return 0, "BOOT_OK\nSMOKE_DONE 120\n"
+        dev.run = fake_run
+        return dev
+
+    def check(self, dev, **opts):
+        args = argparse.Namespace(files=[], no_shaders=False)
+        for k, v in opts.items():
+            setattr(args, k, v)
+        return quiet(dev.cmd_check, args, "love")
+
+    def smoke(self, dev, **opts):
+        args = argparse.Namespace(frames=120, headless=False, screenshot="", record="", record_every=66, drive="",
+                                  locale="", data_dir="", debug=False, game_args=[], compare="", tolerance=0,
+                                  shaders=True)
+        for k, v in opts.items():
+            setattr(args, k, v)
+        return quiet(dev.cmd_smoke, args, "love")
+
+    def test_check_compiles_the_shaders(self):
+        dev = self.dev({"shadercheck": (0, "SHADER_OK flash\nSHADER_CHECK_DONE 1 0\n")})
+        rc, text = self.check(dev)
+        self.assertEqual(rc, 0, text)
+        self.assertIn("1 shader recipe(s) compile", text)
+        line = next(c for c in self.calls if "shadercheck" in c)
+        self.assertNotIn("--render", line)
+
+    def test_a_shader_that_does_not_compile_fails_check(self):
+        dev = self.dev({"shadercheck": (1, "SHADER_FAIL flash Line 10: syntax error\nSHADER_CHECK_DONE 1 1\n")})
+        rc, text = self.check(dev)
+        self.assertEqual(rc, 1, text)
+        self.assertIn("shader flash Line 10", text)
+        self.assertEqual(self.check(self.dev({"shader_gen.py": (1, "[FAIL] stale")}))[0], 1)
+
+    def test_no_shaders_and_named_files_skip_the_shaders(self):
+        for opts in ({"no_shaders": True}, {"files": ["main.lua"]}):
+            with self.subTest(**opts):
+                dev = self.dev({"shadercheck": (1, "SHADER_CHECK_DONE 1 1\n")})
+                self.assertEqual(self.check(dev, **opts)[0], 0)
+                self.assertFalse(any("shader" in c for c in self.calls), self.calls)
+
+    def test_smoke_shaders_writes_and_compares_the_pictures(self):
+        dev = self.dev({"shadercheck": (0, f"SHADER_OK flash\nSHADER_PNG flash {self.PNG}\nSHADER_CHECK_DONE 1 0\n"),
+                        "shader_ref.py": (0, "[ OK ] all 1 effect(s) match the reference")})
+        rc, text = self.smoke(dev)
+        self.assertEqual(rc, 0, text)
+        self.assertEqual((self.root / "build" / "shader_check" / "flash.png").read_bytes(), b"\x89PNG fake")
+        self.assertIn("--render", next(c for c in self.calls if "shadercheck" in c))
+        self.assertTrue(any("shader_ref.py compare" in c for c in self.calls), self.calls)
+
+    def test_a_differing_picture_fails_smoke(self):
+        dev = self.dev({"shadercheck": (0, f"SHADER_PNG flash {self.PNG}\nSHADER_CHECK_DONE 1 0\n"),
+                        "shader_ref.py": (1, "[FAIL] flash: 9 pixel(s) past 2")})
+        rc, text = self.smoke(dev)
+        self.assertEqual(rc, 1, text)
+        self.assertIn("differs from its golden image", text)
+
+    def test_headless_cannot_draw_shaders(self):
+        rc, text = self.smoke(self.dev({}), headless=True)
+        self.assertEqual(rc, 2, text)
+        self.assertFalse(self.calls)
 
 
 if __name__ == "__main__":
