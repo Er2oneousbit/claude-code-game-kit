@@ -26,6 +26,7 @@ import argparse
 import glob
 import json
 import math
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -49,6 +50,7 @@ RUNS = {                 # name: (resolution, text scale, gamepad only)
 RUN_SETS = {"pc": ("pc", "pc-200"), "deck": ("deck", "deck-200"), "all": tuple(RUNS)}
 DIALOGUE_GLOB = "data/dialogue/*.built.json"
 DRIVE_TIMEOUT_S = 600
+MARKER = re.compile(r"\b(ACCESS_[A-Z]+) (.*)$")
 OVERLAP_SLACK = 1        # px two glyph boxes may share (antialiasing, rounding) before it counts as overlap
 
 
@@ -62,11 +64,12 @@ def parse(text):
     out = {"input": None, "screens": [], "subtitle": None, "prompts": None, "done": False}
     for raw in text.splitlines():
         line = raw.strip()
-        if line.startswith("DRIVE_DONE access"):
+        if "DRIVE_DONE access" in line:
             out["done"] = True
-        if not line.startswith("ACCESS_"):
+        m = MARKER.search(line)      # anywhere on the line: a browser's console adds its own prefix
+        if not m:
             continue
-        tag, _, body = line.partition(" ")
+        tag, body = m.group(1), m.group(2)
         try:
             data = json.loads(body)
         except ValueError:

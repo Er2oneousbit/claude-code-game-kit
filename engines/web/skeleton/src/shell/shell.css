@@ -54,8 +54,9 @@
 .panel > * { flex-shrink: 0; } /* a long list scrolls; headings, tabs and buttons never get squeezed */
 .panel > .list { flex: 1 1 auto; }
 
-.heading { font-size: calc(1.6em * var(--text-scale)); font-weight: 700; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bigtitle { font-size: calc(3em * var(--text-scale)); font-weight: 800; text-align: center; letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 94vw; }
+/* headings wrap rather than end in an ellipsis: the consent title was cut at every size (tools/access/sweep.py, #91) */
+.heading { font-size: calc(1.6em * var(--text-scale)); font-weight: 700; text-align: center; overflow-wrap: anywhere; }
+.bigtitle { font-size: calc(3em * var(--text-scale)); font-weight: 800; text-align: center; letter-spacing: 0.04em; overflow-wrap: anywhere; max-width: 94vw; }
 .text { font-size: calc(1em * var(--text-scale)); overflow-wrap: anywhere; }
 .muted { color: var(--muted); }
 .press { font-size: calc(1.3em * var(--text-scale)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 94vw; }
@@ -83,7 +84,8 @@
 .item.button { justify-content: center; }
 .item.disabled { opacity: 0.55; }
 
-.label { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* a long label wraps to a second line instead of losing its end to an ellipsis (a longer language, 200 % text) */
+.label { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .item.button .label { flex: 0 1 auto; }
 .value { flex: 0 0 auto; display: flex; align-items: center; gap: 0.4em; white-space: nowrap; }
 .arrow { color: var(--muted); }
@@ -100,7 +102,7 @@
   padding: 0 0.35em;
   border: 2px solid var(--muted);
   border-radius: 0.25em;
-  font-size: 0.85em;
+  font-size: 0.95em; /* in the HUD bar (0.85em) that is about 20 px at 1080p: at least 18 (F36, #91) */
   white-space: nowrap;
 }
 .keycap.active { border-color: var(--fg); }

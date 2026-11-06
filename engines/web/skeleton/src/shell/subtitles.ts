@@ -103,6 +103,14 @@ export class SubtitleBar {
     return true;
   }
 
+  /** What the bar shows now (the access sweep checks it against the dialogue file). */
+  shown(): { visible: boolean; speaker: string; text: string; id: string } {
+    const s = this.showing;
+    if (!s) return { visible: false, speaker: "", text: "", id: "" };
+    return { visible: s.root.isConnected && s.root.getClientRects().length > 0, speaker: s.line.name,
+             text: this.text(s.line.text), id: s.line.id };
+  }
+
   /** Reveals the current line completely (a screenshot or a skip button). */
   finish(): void {
     if (!this.showing) return;

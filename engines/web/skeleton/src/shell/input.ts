@@ -138,6 +138,17 @@ export class ShellInput {
     return true;
   }
 
+  /** Presses and releases the action's gamepad binding, as a gamepad-only player would (the access drive, #85).
+   * False when the action has none. */
+  injectPad(action: string): boolean {
+    const binding = (this.bindings()[action] ?? []).find((b) => b.startsWith("pad:") || b.startsWith("pad_axis:"));
+    if (!binding) return false;
+    this.lastDevice = padDevice("");
+    this.press(binding);
+    this.release(binding);
+    return true;
+  }
+
   /** Reads gamepads (call once per frame): new button and stick presses become bindings. */
   poll(): void {
     const pads = typeof navigator !== "undefined" && navigator.getGamepads ? navigator.getGamepads() : [];
