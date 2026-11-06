@@ -21,7 +21,7 @@ found by the real run that verified the rig fixes.
   does (`ARDGameMode::FinishNavBuild`); and an orc's movement component ticks after its path following (the engine
   orders neither, so now and then the movement ticked first, braked for one frame without a request, and the delve
   played out differently). New: `-tracedelve` logs one line per frame (positions, health, orc states)
-  and `tools/unreal/replay_check.py` runs a seed rendered and under `-nullrhi` and reports the first frame that
+  and `examples/rune-delve/tools/unreal/replay_check.py` runs a seed rendered and under `-nullrhi` and reports the first frame that
   differs. Found by a Fable 5.1 agent; checked here on weaver seed 6 and masher seed 4 (identical traces). The delves
   changed (no bolt holes, no random brakes): alone, the pair fell one under both pillar thresholds (weaver 61, masher
   52, clears 2/8). With #140, an open gate now joins two rooms for sight and hearing (`FRDLevel::SensesInto`): a mage
@@ -144,12 +144,12 @@ found by the real run that verified the rig fixes.
   again without paying, a stale rig, and the five new skeleton shapes. Real run: UniRig on the beekeeper passed
   with every fix (562 s with a local LLM runner holding the GPU, about 85 s without).
 - Graveyard Shift (Unity): the always-lit bot's "12 or 14 catches between runs" (#160) was not reproduced: a
-  frame-by-frame record of every bot night (`Assets/Tests/PlayMode/FrameTrace.cs`, `GRAVEYARD_FRAMETRACE=<dir>`)
+  frame-by-frame record of every bot night (`examples/graveyard-shift/Assets/Tests/PlayMode/FrameTrace.cs`, `GRAVEYARD_FRAMETRACE=<dir>`)
   matched to the last digit over eleven process runs of the eight lit nights (144,000 frames each; alone, in
   parallel, with a graphics device, inside the full smoke), and over three runs of the 11-02 code where it was seen.
   No game code changed. Two new smoke tests guard the replay: `Smoke_R10` plays the lit bot's closest-pass night
   twice and compares every frame and the catches, `Smoke_R11` walks two ghosts head-on through each other's
-  avoidance four times (`ReplayTests.cs`). 26 smoke tests (was 24; HANDOFF said 23).
+  avoidance four times (`examples/graveyard-shift/Assets/Tests/PlayMode/ReplayTests.cs`). 26 smoke tests (was 24; HANDOFF said 23).
 
 ## 0.13.0 (2026-11-05): /token-audit, what a project's Claude Code sessions spend tokens on
 - **`/token-audit`** (22 skills) and **`tools/token_audit.py`**: a read-only audit of what a project's Claude Code
