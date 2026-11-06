@@ -62,7 +62,8 @@ std::unique_ptr<KitShader> KitShader::load(SDL_Renderer* renderer, const std::st
     }
     SDL_GPUShader*& shader = shader_cache()[std::make_tuple(device, name, aux != nullptr)];
     if (!shader) {
-        const std::string path = std::string(SDL_GetBasePath()) + kShaderFolder + name + ".frag." + format->extension;
+        const char* base = SDL_GetBasePath();   // owned by SDL; nullptr when the platform cannot say
+        const std::string path = std::string(base ? base : "") + kShaderFolder + name + ".frag." + format->extension;
         size_t size = 0;
         void* code = SDL_LoadFile(path.c_str(), &size);
         if (!code) {

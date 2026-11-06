@@ -1516,6 +1516,12 @@
       "date": "2026-11-06",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1682,10 +1688,10 @@
     "src/core/Spring.hpp": "a2f4082a441e9a1a8555a8798e1e319ca4b3668915db83bc3e986f7dc5c8861c",
     "src/game/Game.cpp": "0279a6bdfff8704094cc98de97a65bc57c80e1de985f411f48f2659e5788714c",
     "src/game/Game.hpp": "1ffaf06189b9a4fa8dca1c39b75b8e48b0432714d32b6e7fcafa658f3ed02f3b",
-    "src/gfx/KitShaders.cpp": "78da10b0e613814660233935acaa4171a82b4e50a7b98f96cafa02fd5c76a501",
+    "src/gfx/KitShaders.cpp": "0f693cd95cdfdd1939105835371a4f2b2f7932b01ac84a0661f3082f7d169ae9",
     "src/gfx/KitShaders.hpp": "e5491473b84dc3e06e909288976e848e100e41725f303eee5faa30eae27bfc49",
     "src/main.cpp": "c687d9827be93e3f50d9b4a6c2749d69a9582381adb9eb6de5d50ee07e2bb016",
-    "src/tools/kit_shader_check.cpp": "8d18a933996a434260a11d3c099a2690b35109c69895712643c050f5881fbc39",
+    "src/tools/kit_shader_check.cpp": "39db6ef9eb861d8005505a61b6211343429ca26f6661a185ca962aa4017fb9d0",
     "tests/test_fixed_timestep.cpp": "2daf1fc1544886fe6472d9af99b6d065a5a7f28d9ab6a0f3a1b7dffbb2f1e2c3",
     "tests/test_golden_audio.cpp": "835ffbe391a33b5a375ce56a3218c1018be1778ad1e778c403639371cf5e2c5e",
     "tests/test_golden_vectors.cpp": "84015300121c49b17950f587e7156ee80d82bd08b5b19143a2f7151f13007b07",

@@ -38,6 +38,13 @@ example needed). The engine id stays `cpp-sdl2`.
   `recipes.json` printed a traceback (one `[error]` line, exit 2, now); every `dev.py` took that exit 2 for stale
   files (exit 1); `shader_ref.py compare` called a missing golden image a differing render (exit 2 now); Godot's
   check without a window, which draws nothing, is exit 2 (an environment problem), not 1.
+- A second review of the per-engine harnesses: the C++ check tool checks every render call (a failed draw left the
+  cleared target, saved as a picture), frees its inputs when one fails to load, and takes UTF-8 paths (a project
+  folder named with "ö" or "Í" on Windows; checked live); KitShaders copes with SDL_GetBasePath returning nothing;
+  LÖVE's harness says SHADER_OK only once the picture exists; Unity's fails when it finds no recipes (it passed with
+  0 of 0) and destroys every texture, material and render target it makes. Three findings did not hold up and were
+  left: Unreal's read-back is floats (measured), its texture settings reach the shader (every picture matched), and
+  Bevy's harness verdict is backed by the logged-error scan and the compare.
 - `tools/publish_check.py` knows Azure and GCP keys (#252's guardrail, ahead of the cloud work): Azure client secrets,
   storage account keys and SAS tokens, GCP service account key files and Google OAuth client secrets. The Azure secret
   and Google OAuth shapes follow public scanners (TruffleHog, GitGuardian), not a vendor spec.

@@ -1511,6 +1511,12 @@
       "date": "2026-11-06",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1551,7 +1557,7 @@
     "Assets/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "Assets/Editor/GameKitBuild.cs": "648db4a44943b2877d8eb00943d0992bc9c0ba9a1613faf59e5bc15ab7180ec1",
     "Assets/Editor/GameKitScenes.cs": "19e5e4ef2b41410b826d0fe34580f97b9f53b4cafb56b9c02f7b1a95685b2642",
-    "Assets/Editor/GameKitShaders.cs": "09aafef66a6b4148d38d83dfc924f0323ccfe75e35805acec1a724ef04651738",
+    "Assets/Editor/GameKitShaders.cs": "3de81c6f59ad710c2c5c44cccbdcd524ad48c385c9341aa94b94f0815af30144",
     "Assets/Scripts/Core/AtomicFile.cs": "bfa7aeba7c875e1a0703b3efa78361843a7b6fb9199ab32241a4113b781a654a",
     "Assets/Scripts/Core/AudioAccess.cs": "92829baa658bc8ce3d23d035d7e5d2b62cc37594041cf613bb909bf2e33c8b50",
     "Assets/Scripts/Core/AudioDirector.cs": "fa543e6b35a943a5c86c81e624d36d905160f69707b3755db9a50a6fe6e95c74",

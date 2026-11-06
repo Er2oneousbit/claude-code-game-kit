@@ -114,19 +114,29 @@ public static class GameKitShaders
         var inputs = Regex.Match(File.ReadAllText(path), @"^// kit-inputs: (\w+) (\S+)", RegexOptions.Multiline);
         if (!inputs.Success)
             throw new InvalidOperationException("no // kit-inputs: line (regenerate with tools/shaders/shader_gen.py)");
-        var material = new Material(shader);
-        material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.One);
-        material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.Zero);
-        var main = Input(inputs.Groups[1].Value);
-        if (inputs.Groups[2].Value != "-")
-            material.SetTexture("_AuxTex", Input(inputs.Groups[2].Value));
-        var target = new RenderTexture(Size, Size, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
+        // Everything made here is destroyed again (an editor session can run the check many times)
+        var made = new System.Collections.Generic.List<UnityEngine.Object>();
         var previous = RenderTexture.active;
+        RenderTexture target = null;
         try
         {
+            var material = new Material(shader);
+            made.Add(material);
+            material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.One);
+            material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.Zero);
+            var main = Input(inputs.Groups[1].Value);
+            made.Add(main);
+            if (inputs.Groups[2].Value != "-")
+            {
+                var aux = Input(inputs.Groups[2].Value);
+                made.Add(aux);
+                material.SetTexture("_AuxTex", aux);
+            }
+            target = new RenderTexture(Size, Size, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
             Graphics.Blit(main, target, material);
             RenderTexture.active = target;
             var read = new Texture2D(Size, Size, TextureFormat.RGBA32, false, true);
+            made.Add(read);
             read.ReadPixels(new Rect(0, 0, Size, Size), 0, 0);
             read.Apply();
             return read.EncodeToPNG();
@@ -134,7 +144,13 @@ public static class GameKitShaders
         finally
         {
             RenderTexture.active = previous;
-            target.Release();
+            if (target != null)
+            {
+                target.Release();
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+            foreach (var o in made)
+                UnityEngine.Object.DestroyImmediate(o);
         }
     }
 
@@ -154,6 +170,12 @@ public static class GameKitShaders
 
     static void Done(int count, int failed)
     {
+        if (count == 0)
+        {
+            // No recipes found is not a pass: the folder is missing or the editor runs in another project
+            Debug.Log($"SHADER_FAIL * no shader recipes in {ShaderFolder} (python tools/shaders/shader_gen.py)");
+            failed = 1;
+        }
         Debug.Log($"SHADER_CHECK_DONE {count} {failed}");
         if (Application.isBatchMode)
             EditorApplication.Exit(failed > 0 ? 1 : 0);

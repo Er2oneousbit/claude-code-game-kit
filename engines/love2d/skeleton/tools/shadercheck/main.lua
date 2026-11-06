@@ -127,16 +127,16 @@ function love.load(args)
     if not ok then
       failed = failed + 1
       print("SHADER_FAIL " .. name .. " " .. tostring(shader):gsub("\n", " | "))
-    else
+    elseif not draw then
       print("SHADER_OK " .. name)
-      if draw then
-        local okr, png = pcall(render, root, shader, recipes[name])
-        if okr then
-          print("SHADER_PNG " .. name .. " " .. png)
-        else
-          failed = failed + 1
-          print("SHADER_FAIL " .. name .. " " .. tostring(png):gsub("\n", " | "))
-        end
+    else
+      local okr, png = pcall(render, root, shader, recipes[name])
+      if okr then
+        print("SHADER_OK " .. name)            -- only once the picture exists
+        print("SHADER_PNG " .. name .. " " .. png)
+      else
+        failed = failed + 1
+        print("SHADER_FAIL " .. name .. " " .. tostring(png):gsub("\n", " | "))
       end
     end
   end

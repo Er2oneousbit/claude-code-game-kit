@@ -52,6 +52,8 @@ std::string draw(SDL_Renderer* renderer, const kit_shaders::Recipe& recipe, cons
     SDL_Texture* main = load_input(renderer, recipe.main);
     SDL_Texture* aux = recipe.aux ? load_input(renderer, recipe.aux) : nullptr;
     if (!main || (recipe.aux && !aux)) {
+        if (main) SDL_DestroyTexture(main);
+        if (aux) SDL_DestroyTexture(aux);
         return "cannot load its input pictures";
     }
     std::string why;
@@ -64,20 +66,26 @@ std::string draw(SDL_Renderer* renderer, const kit_shaders::Recipe& recipe, cons
     } else if (!shader->set_params(recipe.defaults, recipe.size)) {
         why = std::string("parameters: ") + SDL_GetError();
     } else {
-        SDL_SetRenderTarget(renderer, target);
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
-        SDL_RenderClear(renderer);
-        shader->begin(renderer);
+        // Every call is checked: a draw that failed would leave the cleared target, which must not pass as a picture
         const SDL_FRect whole{0.0f, 0.0f, static_cast<float>(kSize), static_cast<float>(kSize)};
-        SDL_RenderTexture(renderer, main, nullptr, &whole);
-        gfx::KitShader::end(renderer);
-        SDL_Surface* pixels = SDL_RenderReadPixels(renderer, nullptr);
+        bool drawn = SDL_SetRenderTarget(renderer, target) && SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0) &&
+                     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE) && SDL_RenderClear(renderer);
+        if (drawn) {
+            shader->begin(renderer);
+            drawn = SDL_RenderTexture(renderer, main, nullptr, &whole);
+            gfx::KitShader::end(renderer);
+        }
+        SDL_Surface* pixels = drawn ? SDL_RenderReadPixels(renderer, nullptr) : nullptr;
+        if (!drawn) {
+            why = std::string("draw: ") + SDL_GetError();
+        }
         SDL_SetRenderTarget(renderer, nullptr);
-        if (!pixels) {
+        if (drawn && !pixels) {
             why = std::string("read back: ") + SDL_GetError();
-        } else {
-            const std::string file = (std::filesystem::path(out) / (std::string(recipe.name) + ".png")).string();
+        } else if (drawn) {
+            // UTF-8 paths both ways (a project folder named José on Windows)
+            const std::string file =
+                (std::filesystem::u8path(out) / (std::string(recipe.name) + ".png")).u8string();
             if (!SDL_SavePNG(pixels, file.c_str())) {
                 why = std::string("cannot write ") + file + ": " + SDL_GetError();
             }
@@ -99,7 +107,7 @@ int main(int argc, char** argv) {
         return 2;
     }
     std::error_code ec;
-    std::filesystem::create_directories(argv[1], ec);
+    std::filesystem::create_directories(std::filesystem::u8path(argv[1]), ec);
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         std::printf("[error] SDL_Init failed: %s\n", SDL_GetError());
         return 2;
