@@ -3,7 +3,7 @@
 shader_type canvas_item;
 
 uniform sampler2D kit_aux : filter_nearest, repeat_disable;
-uniform float u_scale = 2.0;
+uniform float u_scale = 1.9;
 uniform float u_sharpness = 4.0;
 uniform vec2 u_canvas = vec2(64.0, 64.0);
 uniform vec2 u_texel = vec2(0.03125, 0.03125);

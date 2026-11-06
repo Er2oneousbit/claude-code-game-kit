@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "The kit's shader recipes (tools/shaders/). Each recipe is one effect, defined here in engine-neutral terms and rendered by shader_ref.py into data/golden/shaders/<name>.png. Every engine's port renders the same 64x64 check image from the same inputs and parameters and is compared with the golden image (tolerance per channel, plus the share of pixels allowed past it: GPUs round sin, pow and normalize differently). Coordinates are image space: origin top-left, x right, y down, pixel centres at +0.5. Inputs are sampled nearest-neighbour and wrap only where a recipe says so.",
+  "about": "The kit's shader recipes (tools/shaders/). Each recipe is one effect, defined here in engine-neutral terms and rendered by shader_ref.py into data/golden/shaders/<name>.png. Every engine's port renders the same 64x64 check image from the same inputs and parameters and is compared with the golden image (tolerance per channel, plus the share of pixels allowed past it: GPUs round sin, pow and normalize differently). Coordinates are image space: origin top-left, x right, y down, pixel centres at +0.5. Inputs are sampled nearest-neighbour and wrap only where a recipe says so. The check parameters keep every sample off a texel edge: an exact edge is a coin toss in float rounding, and GPUs toss differently (a triplanar scale of 2.0 put every sample on one).",
   "canvas": [64, 64],
   "inputs": {
     "sprite": "data/shaders/inputs/sprite.png",
@@ -71,16 +71,16 @@
     },
     "scroll_water": {
       "group": "surface",
-      "summary": "Scrolling, wavy texture (water, clouds, lava): the tile repeated twice, shifted by time * speed and bent by a sine wave. Checked at time = 0.25.",
+      "summary": "Scrolling, wavy texture (water, clouds, lava): the tile repeated twice, shifted by time * speed and bent by a sine wave. Checked at time = 0.27.",
       "inputs": ["tile"],
-      "params": {"time": 0.25, "speed": [0.5, 0.25], "amplitude": 0.06, "frequency": 2.0},
+      "params": {"time": 0.27, "speed": [0.5, 0.25], "amplitude": 0.06, "frequency": 2.0},
       "tolerance": 2, "max_share": 0.03
     },
     "triplanar": {
       "group": "surface",
       "summary": "Triplanar mapping (for generated models with poor UVs): the tile projected along x, y and z, blended by |normal|^4. Checked on a unit sphere; the 3D port uses world position and normal.",
       "inputs": ["sphere", "tile"],
-      "params": {"scale": 2.0, "sharpness": 4.0},
+      "params": {"scale": 1.9, "sharpness": 4.0},
       "tolerance": 3, "max_share": 0.04
     },
     "sprite_light": {

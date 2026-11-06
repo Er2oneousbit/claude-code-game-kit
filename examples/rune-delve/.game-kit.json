@@ -1357,6 +1357,12 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1435,10 +1441,10 @@
     "data/golden/shaders/flash.png": "82927339f5aba31976db9ef974ae8b9c1fdf8490a35264f97f34af14e97230cd",
     "data/golden/shaders/outline.png": "831140ee2ca19e7485fe365c15c24886d71fdf18d64ee9e859af7cc1a3682fea",
     "data/golden/shaders/palette_swap.png": "cd56758577b672517cad767d051bf11467005b93b1b0a3886f5815fbf3c77f5b",
-    "data/golden/shaders/scroll_water.png": "08d19bdc95c69f3fc581fa49a9c0f9b7ad1a9556a26905f7ef1bd4512621fc02",
+    "data/golden/shaders/scroll_water.png": "06be04eae8c117b801f500b6d4bc2013c0f01cefc0d059c1221721b79201cb19",
     "data/golden/shaders/sprite_light.png": "9a46b56e1d4baff1d370ccac49aa8894a256c5f8c56ccd42c07d94a8222ca972",
     "data/golden/shaders/toon_rim.png": "a0fef4efaa17b9b5004d20709a4f01987a066486398892185f8592d181134738",
-    "data/golden/shaders/triplanar.png": "c099f3f56298b3b5a9c9648d4358c2d734812e2d15594652645b47c271da4be0",
+    "data/golden/shaders/triplanar.png": "630536c558e7f701a129ce9636b09b32a1ca1f6498623c733d81906c54c14bf9",
     "data/golden/shaders/vignette.png": "f4203815b5fd6e272093257d19c49a8182eed3b85396847865531afebfe82d4a",
     "data/golden/shell.json": "2f54f9e02ad51f435a8065600b7c66c4fe6edb67831779958eaf9585753b79ca",
     "data/golden/telemetry.json": "4473a81b2860d90ddf06dd0cfe99968eaa00c792f9ab6726ae046be7fdd43560",
@@ -1763,8 +1769,8 @@
     "tools/shaders/ksl/toon_rim.ksl": "05482fdc6c01cbd111b603adfe4bba3842050d456faee0f708937e50dcbe3d08",
     "tools/shaders/ksl/triplanar.ksl": "05d03cd7a4c2f2910a1bf0cefdeac529cbcf53b005990b63287df2c1ea08c02f",
     "tools/shaders/ksl/vignette.ksl": "5a82293feaa105d1cdc07a97800496aa6c59227087fa432967ba2b068bcda19e",
-    "tools/shaders/recipes.json": "d6b45c851b567218afb661c063579dc80c69d66b61261427cd97a07ababde934",
-    "tools/shaders/shader_gen.py": "3cc61ce4d60dd6873217ef534679bb6aff7cad060d51b16274437b758667b94a",
+    "tools/shaders/recipes.json": "656135c0b0a65c9a456089d9e098f6606bd7a007dd066c830598e6a16b56dd16",
+    "tools/shaders/shader_gen.py": "24549012aec400ba3bb0173a3e6a9737245b6ace9bc8743b0706956339faaa9d",
     "tools/shaders/shader_ref.py": "f21cf06f0dde7851fc00178b838d1ab5b16201b7e7ce6f8283ba478f884d1d2a",
     "tools/shaders/test_shader_ref.py": "612934104e181e0091e3bd3b4cddaed13e11d66c9846bbc534ed658b961225e1",
     "tools/test_check_links.py": "db6fc4b54978282095e1af3737c1164ae0316c8a3ffbe75b414d79e17363bb31",

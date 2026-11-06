@@ -76,6 +76,10 @@ const COMPARE = opt("--compare", "") && resolve(ROOT, opt("--compare", ""));
 const TOLERANCE = opt("--tolerance", "0");
 const PYTHON = opt("--python", process.env.PYTHON || (process.platform === "win32" ? "python" : "python3"));
 const VERBOSE = args.includes("--verbose");
+// --shaders: the page renders every kit shader recipe (?shadercheck=1, src/shaders/shaderCheck.ts) and hands back
+// each picture; they land in build/shader_check/ and tools/shaders/shader_ref.py compares them with the golden images
+const SHADERS = args.includes("--shaders");
+const SHADER_OUT = resolve(ROOT, "build", "shader_check");
 const HEADED = args.includes("--headed");
 const GPU_ARGS = args.includes("--gpu") ? ["--enable-unsafe-webgpu", "--enable-features=Vulkan", "--use-angle=vulkan"] : [];
 const SEED_MAX_BYTES = 1024 * 1024; // a data-dir file bigger than this is not loaded into localStorage
@@ -250,6 +254,7 @@ try {
     }, { prefix: DATA_PREFIX, files: seeded });
   }
   const boot = waiter(MARKER);
+  const shaderDone = SHADERS ? waiter("SHADER_CHECK_DONE") : null;
   const until = UNTIL ? waiter(UNTIL) : null;
   const abort = ABORTS.length ? waiter(...ABORTS) : null;
   page.on("console", (msg) => {
@@ -260,6 +265,7 @@ try {
     const w = WRITTEN.exec(msg.text());
     if (w) written.push([w[1], w[2]]);
     boot.check(msg.text());
+    shaderDone?.check(msg.text());
     until?.check(msg.text());
     abort?.check(msg.text());
   });
@@ -276,6 +282,7 @@ try {
   const extra = new URLSearchParams();
   if (DRIVE && !QUERY_ARGS.has("drive")) extra.set("drive", DRIVE);
   if (LOCALE) extra.set("locale", LOCALE);
+  if (SHADERS) extra.set("shadercheck", "1");
   if (DATA_PREFIX && !QUERY_ARGS.has("data-dir")) extra.set("data-dir", DATA_PREFIX);
   const query = [QUERY, extra.toString()].filter(Boolean).join("&");
   await page.goto(query ? `${base}?${query}` : base, { waitUntil: "load", timeout: TIMEOUT_MS });
@@ -317,6 +324,25 @@ try {
         timeout(frameMs),
       ]);
       if (!ran) errors.push(`[smoke] ${FRAMES} frames did not run within ${frameMs} ms (the page froze?)`);
+    }
+    if (shaderDone) {
+      const ok = await Promise.race([shaderDone.promise, timeout(TIMEOUT_MS * 4)]);
+      if (!ok) errors.push(`[shaders] the shader check did not finish within ${TIMEOUT_MS * 4} ms`);
+      else {
+        rmSync(SHADER_OUT, { recursive: true, force: true });
+        mkdirSync(SHADER_OUT, { recursive: true });
+        let n = 0;
+        for (const l of lines) {
+          const m = /SHADER_PNG (\w+) data:image\/png;base64,(\S+)/.exec(l);
+          if (m) {
+            writeFileSync(join(SHADER_OUT, `${m[1]}.png`), Buffer.from(m[2], "base64"));
+            n += 1;
+          }
+          const done = /SHADER_CHECK_DONE failed=(\d+)/.exec(l);
+          if (done && done[1] !== "0") errors.push(`[shaders] ${done[1]} recipe(s) could not be rendered`);
+        }
+        console.log(`[info] ${n} shader picture(s) in ${SHADER_OUT}`);
+      }
     }
     if (recorder) clearInterval(recorder);
     recorder = null;
@@ -373,7 +399,20 @@ if (COMPARE && SCREENSHOT && existsSync(SCREENSHOT)) {
   else console.log(`[ OK ] screenshot matches ${COMPARE} (tolerance ${TOLERANCE})`);
 }
 
-if (VERBOSE || errors.length) for (const l of lines) console.log(l);
+if (SHADERS && !errors.length) {
+  const r = spawnSync(PYTHON, [join(ROOT, "tools", "shaders", "shader_ref.py"), "compare", SHADER_OUT], { encoding: "utf-8" });
+  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
+  if (r.error || r.status === 2 || r.status === null) {
+    console.error(`[error] shader_ref.py could not run (${r.error?.message ?? out}); set --python or PYTHON`);
+    process.exit(2);
+  }
+  console.log(out);
+  if (r.status === 1) errors.push("[shaders] a recipe differs from its golden image (see the lines above)");
+}
+
+// a shader picture is a long data URL: never print it whole
+const shown = (l) => (l.includes("SHADER_PNG ") ? `${l.slice(0, 80)}...` : l);
+if (VERBOSE || errors.length) for (const l of lines) console.log(shown(l));
 else for (const l of lines) if (NOTE.test(l)) console.log(l);
 if (errors.length) {
   console.log("[FAIL] errors during smoke:");

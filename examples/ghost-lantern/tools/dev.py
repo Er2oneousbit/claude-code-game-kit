@@ -336,6 +336,17 @@ def cmd_check(args):
         print(f"[FAIL] type check: {len(errors) or 'unknown number of'} error(s)")
         return 1
     print("[ OK ] type check passed")
+    if (ROOT / "src" / "shaders" / "kit").is_dir() and not getattr(args, "no_shaders", False):
+        # the kit's shader recipes: the generated files current, and every fragment shader compiles (headless Chromium)
+        rc, out = run([sys.executable, ROOT / "tools" / "shaders" / "shader_gen.py", "--check"], capture=True, timeout=60)
+        if rc != 0:
+            print(out.rstrip())
+            print("[FAIL] the shader files are older than their recipes: python tools/shaders/shader_gen.py")
+            return 1
+        rc, out = run([shutil.which("node") or "node", ROOT / "tools" / "shader_compile.mjs"], capture=True, timeout=120)
+        print(out.rstrip())
+        if rc:
+            return 2 if rc == 2 else 1
     return 0
 
 
@@ -392,8 +403,10 @@ def cmd_smoke(args):
                         ("--compare", args.compare), ("--tolerance", str(args.tolerance) if args.compare else "")):
         if value:
             cmd += [flag, value]
-    if args.compare:
-        cmd += ["--python", sys.executable]           # tools/image_diff.py runs on this same Python
+    if args.shaders:
+        cmd += ["--shaders"]
+    if args.compare or args.shaders:
+        cmd += ["--python", sys.executable]           # tools/image_diff.py and shader_ref.py run on this Python
     cmd += (["--headed"] if args.headed else []) + (["--gpu"] if args.gpu else [])
     limit = SMOKE_TIMEOUT_S + args.timeout + args.frames // SMOKE_MIN_FPS   # a long --frames gets the time it needs
     rc, out = run(cmd, capture=True, timeout=limit)
@@ -526,7 +539,9 @@ def build_parser():
     sub = ap.add_subparsers(dest="command", metavar="<command>")
     sub.required = True
     sub.add_parser("setup", help="install dependencies and the headless browser (first run)").set_defaults(fn=cmd_setup)
-    sub.add_parser("check", help="TypeScript type check").set_defaults(fn=cmd_check)
+    p = sub.add_parser("check", help="TypeScript type check, and compile the kit's shader recipes (headless Chromium)")
+    p.add_argument("--no-shaders", action="store_true", help="skip the shader compile")
+    p.set_defaults(fn=cmd_check)
     sub.add_parser("test", help="unit tests (Vitest)").set_defaults(fn=cmd_test)
     p = sub.add_parser("smoke", help="build, then boot in headless Chromium for N frames; fail on errors")
     p.add_argument("--frames", type=positive_int, default=SMOKE_FRAMES,
@@ -543,6 +558,8 @@ def build_parser():
     p.add_argument("--locale", default="", metavar="ID", help=LOCALE_HELP)
     p.add_argument("--compare", default="", metavar="PNG", help="compare the --screenshot with this baseline (tools/image_diff.py); exit 1 when it differs")
     p.add_argument("--tolerance", type=channel_delta, default=0, help="--compare: per-channel difference allowed, 0-255 (default 0)")
+    p.add_argument("--shaders", action="store_true",
+                   help="also render every kit shader recipe and compare it with its golden image (tools/shaders/)")
     p.add_argument("--headed", action="store_true", help="visible browser window (real GPU: WebGPU, local AI models)")
     p.add_argument("--gpu", action="store_true", help="headless with Chrome's WebGPU flags (may not work on every machine)")
     p.set_defaults(fn=cmd_smoke)

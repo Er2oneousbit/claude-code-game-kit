@@ -19,6 +19,11 @@ const MAX_DT = 0.1; // s
 window.addEventListener("error", (e) => Log.error("core", `uncaught: ${e.message}`));
 window.addEventListener("unhandledrejection", (e) => Log.error("core", `unhandled promise: ${String(e.reason)}`));
 
+// ?shadercheck=1 (python tools/dev.py smoke --shaders): render every kit shader recipe for the golden-image check
+if (new URLSearchParams(location.search).has("shadercheck")) {
+  void import("./shaders/shaderCheck").then((m) => m.runShaderCheck());
+}
+
 const host = document.getElementById("game")!;
 let renderer: THREE.WebGLRenderer;
 try {

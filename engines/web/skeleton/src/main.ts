@@ -28,4 +28,9 @@ export const game = new Phaser.Game({
   callbacks: { postBoot: (g) => shell.start(g) },
 });
 
+// ?shadercheck=1 (python tools/dev.py smoke --shaders): render every kit shader recipe for the golden-image check
+if (new URLSearchParams(location.search).has("shadercheck")) {
+  void import("./shaders/shaderCheck").then((m) => m.runShaderCheck());
+}
+
 // {{FOOTER}}

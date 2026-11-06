@@ -365,7 +365,7 @@ def files_for(engine, recipes):
     if engine == "web":
         return {"kitShaders.ts": js_module(recipes, True, "phaser")}
     if engine == "web-3d":
-        return {"kitShaders.ts": js_module(recipes, False, "three")}
+        return {"kitShaders.ts": js_module(recipes, True, "three")}   # Three's uv and flipY textures run bottom-up
     if engine == "rpgmaker-mz":
         return {"kit_shaders_glsl.js": js_module(recipes, False, "pixi").replace("export const ", "window.")}
     if engine == "love2d":
