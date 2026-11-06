@@ -20,6 +20,8 @@
 # Updated : 2026-10-20 with Claude (Opus 5.5, claude-opus-5-5): UTF-8 output, "unknown"
 #           instead of "0" when git fails, real untracked file count, source-aware reminder
 # Updated : 2026-10-28 with Claude (Opus 5.5, claude-opus-5-5): current tier and production backlog count
+# Updated : 2026-11-05 with Claude (Opus 5.5, claude-opus-5-5): stdin read with a deadline, docs read with a size
+#           cap and long lines cut, headings matched by their whole name (a review, #241)
 #
 # Pseudocode (tier and backlog)
 #   GDD: first line starting "Current tier:" -> text after it, first **bold** part if any
@@ -30,6 +32,7 @@ import json
 import re
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 # Repo root = two levels up from tools/hooks/
@@ -37,6 +40,10 @@ ROOT = Path(__file__).resolve().parents[2]
 NOW_LINES = 8                               # ROADMAP "Now" lines to show
 QUIET_SOURCES = {"compact", "resume"}       # mid-task restarts: no /start-session nudge
 TIER_MAX = 80                               # longest tier text to show
+STDIN_WAIT_S = 2.0                          # the hook input is a small JSON object: never wait longer for it
+STDIN_MAX = 1024 * 1024                     # bytes of hook input read at most
+DOC_MAX = 2 * 1024 * 1024                   # bytes of a doc read at most (a real one is a few KB)
+LINE_MAX = 200                              # characters of a ROADMAP line shown
 
 
 def run_git(*args):
@@ -53,38 +60,69 @@ def run_git(*args):
 
 
 def session_source():
-    """Read the SessionStart source (startup, resume, clear, compact) from stdin JSON, or ''."""
+    """Read the SessionStart source (startup, resume, clear, compact) from stdin JSON, or ''. Stops as soon as the
+    JSON is whole, and after STDIN_WAIT_S at most: a writer that keeps the pipe open must not stall the session
+    (#241)."""
     try:
         if sys.stdin is None or sys.stdin.isatty():
             return ""                       # run by hand: no hook input
-        return str(json.loads(sys.stdin.read() or "{}").get("source", ""))
     except Exception:
         return ""
+    got = {}
+
+    def reader():
+        buf = b""
+        try:
+            stream = getattr(sys.stdin, "buffer", None)
+            read = getattr(getattr(stream, "raw", None), "read", None) or (stream.read1 if stream else None)
+            while read is not None and len(buf) < STDIN_MAX:
+                chunk = read(65536)         # returns what is there, without waiting for the pipe to close
+                if not chunk:
+                    break
+                buf += chunk
+                try:
+                    got["data"] = json.loads(buf.decode("utf-8", "replace"))
+                    return
+                except ValueError:
+                    continue                # not whole yet
+            got["data"] = json.loads(buf.decode("utf-8", "replace") or "{}")
+        except Exception:
+            pass
+    worker = threading.Thread(target=reader, daemon=True)
+    worker.start()
+    worker.join(STDIN_WAIT_S)
+    data = got.get("data")
+    return str(data.get("source", "")) if isinstance(data, dict) else ""
+
+
+def heading(line, name):
+    """True for a '## <name>' heading, with an optional note after it ('## Now (max 3 items)'), but not a longer
+    name that starts the same ('## Nowhere', '## Backlog archive', #241)."""
+    if not line.startswith("## "):
+        return False
+    text = re.sub(r"\s*[(:].*$", "", line[3:]).strip().lower()
+    return text == name
 
 
 def roadmap_now():
     """Return the lines under '## Now' in docs/ROADMAP.md (up to the next '## ')."""
-    path = ROOT / "docs" / "ROADMAP.md"
-    try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except Exception:
-        return []
     section, active = [], False
-    for line in lines:
+    for line in read_doc("ROADMAP.md"):
         if line.startswith("## "):
             if active:
                 break
-            active = line.strip().lower().startswith("## now")
+            active = heading(line.strip(), "now")
             continue
         if active and line.strip():
-            section.append(line)
+            section.append(line if len(line) <= LINE_MAX else line[:LINE_MAX] + " ...")
     return section
 
 
 def read_doc(name):
-    """Return the lines of docs/<name>, or [] when it is missing or unreadable."""
+    """Return the lines of docs/<name> (its first DOC_MAX bytes), or [] when it is missing or unreadable."""
     try:
-        return (ROOT / "docs" / name).read_text(encoding="utf-8", errors="replace").splitlines()
+        with open(ROOT / "docs" / name, "rb") as fh:
+            return fh.read(DOC_MAX).decode("utf-8", "replace").splitlines()
     except Exception:
         return []
 
@@ -105,7 +143,7 @@ def backlog_progress():
     active = False
     for line in read_doc("PRODUCTION.md"):
         if line.startswith("## "):
-            active = line.strip().lower().startswith("## backlog")
+            active = heading(line.strip(), "backlog")
             continue
         if not active or not line.startswith("|"):
             continue

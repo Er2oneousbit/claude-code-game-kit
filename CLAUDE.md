@@ -50,6 +50,7 @@ python core/tools/test_image_diff.py                 # standard library only (vi
 python core/tools/test_credits.py                    # standard library only
 python core/tools/test_yt_transcript.py              # offline (canned WebVTT, faked caption methods)
 python core/tools/test_token_audit.py                # standard library only (a fake home, project and session log)
+python core/tools/test_session_context.py            # standard library only (the SessionStart hook, as Claude Code runs it)
 python scripts/test_sync_examples.py                 # standard library only (a fake kit and example in a temp folder)
 python scripts/test_new_game.py                      # standard library only (a fake kit in a temp folder)
 python scripts/test_codename.py                      # standard library only

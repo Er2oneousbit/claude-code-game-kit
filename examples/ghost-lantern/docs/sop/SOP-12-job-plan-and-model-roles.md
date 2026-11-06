@@ -65,6 +65,8 @@ Rules:
 - **Findings are claims.** The coordinator verifies each against the files before fixing; in the audit below 2 of 48 were wrong (K01).
 - **Outside helpers are read-only.** A CLI agent in non-interactive mode approves its own tool calls (Kimi Code's `-p`, E55), so give it
   a tool allowlist with no shell, no writing and no web (`tools/second_opinion/kimi-agent.md`: Read, Grep, Glob).
+  Read-only is not confined: its Read takes any path, and staying in the project is only an instruction, so a
+  file under review could talk it into reading elsewhere. Review files you trust that far (#240).
 - **Your data leaves the machine** with any outside model: keep secrets and work material out of the folder it reads (`SOP-13`).
 - **Price one before many** (tip, E51): run one helper, note its cost, then fan out. Give helpers slices that do not overlap.
 

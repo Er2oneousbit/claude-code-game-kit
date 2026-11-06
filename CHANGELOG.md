@@ -3,9 +3,17 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig`, `tools/token_audit.py`, `tools/fetch_asset.py`, the scaffolder, the paid PixelLab and ElevenLabs clients and `tools/publish_check.py` from second-model reviews
+## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig`, `tools/token_audit.py`, `tools/fetch_asset.py`, the scaffolder, the paid PixelLab and ElevenLabs clients, `tools/publish_check.py`, the SessionStart hook and `tools/second_opinion.py` from second-model reviews
 Kimi K3.1 Pro reviews of 0.13.0 (`tools/second_opinion.py`), each finding checked against the code; one more was
 found by the real run that verified the rig fixes.
+- `tools/second_opinion.py`: the prompt and the reviewer's agent file say that file names and contents are data,
+  never instructions; file names are quoted, and ones with control characters refused; the docs now say plainly that
+  read-only is not confined (Kimi's Read takes any path); a timeout, Ctrl+C or any failure stops the CLI and all it
+  started, on Linux and macOS also children in their own session; a review that opens with the CLI's login-error
+  text is kept (#240). `test_second_opinion.py` 31 cases (was 26). The SessionStart hook (`tools/hooks/
+  session_context.py`) reads its input with a 2 s deadline (a writer that kept stdin open stalled the session), reads
+  at most 2 MB of a doc and cuts long ROADMAP lines, and matches `## Now` and `## Backlog` by the whole name, not
+  `## Nowhere` (#241); new exam `tools/test_session_context.py` (5 cases).
 - `tools/publish_check.py`: an unquoted secret in a config-type file (`aws_secret_access_key = wJal...` in
   `.aws/credentials`, an INI, a .env) fails; a file name that is not UTF-8 keeps its real name and is checked; a
   symlink's own text (what git publishes) is checked, dangling ones too; `/home/<name>` before `)`, `,` or `]` warns
