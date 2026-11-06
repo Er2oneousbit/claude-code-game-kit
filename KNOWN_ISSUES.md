@@ -125,53 +125,13 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
 ### Bugs and doubts
 - **Docs marked (verify):** facts about outside services (prices, plans, menu paths, license terms) that were not
   checked live. They are the most likely to be out of date.
-- **Tools without an exam:** `core/.claude/hooks/session_context.py`, `tools/art/frames_to_gif.py` and several Dotwork helpers ([#14](https://github.com/Er2oneousbit/claude-code-game-kit/issues/14)).
+- **Tools without an exam:** `tools/art/frames_to_gif.py` and several Dotwork helpers (the SessionStart hook has one since 0.13.1) ([#14](https://github.com/Er2oneousbit/claude-code-game-kit/issues/14)).
 - **Bozzetto:** a `--material vertex` model renders white in Godot until `vertex_color_use_as_albedo` is set
   ([#202](https://github.com/Er2oneousbit/claude-code-game-kit/issues/202)); TRELLIS.2 characters with baked textures
   landed under the `npc` class's 55% UV coverage floor on two seeds
   ([#203](https://github.com/Er2oneousbit/claude-code-game-kit/issues/203)). `rig`: bipeds only; the Unity Humanoid
   route is untested; Mixamo and Quaternius are named as sources but no pack is tested
   ([#205](https://github.com/Er2oneousbit/claude-code-game-kit/issues/205)).
-- **`bozzetto.py rig` review findings (FIXED in 0.13.1, kept here until the issues close on main):** the NaN weight check never fires
-  ([#208](https://github.com/Er2oneousbit/claude-code-game-kit/issues/208)); Tripo spend is not rechecked after each
-  paid step ([#209](https://github.com/Er2oneousbit/claude-code-game-kit/issues/209)) and a failure after paying loses
-  the task IDs ([#210](https://github.com/Er2oneousbit/claude-code-game-kit/issues/210)); `unirig.log` holds absolute
-  local paths ([#211](https://github.com/Er2oneousbit/claude-code-game-kit/issues/211)); `--overwrite` can ship a stale
-  rig ([#212](https://github.com/Er2oneousbit/claude-code-game-kit/issues/212)); option checks come after GPU or paid
-  work ([#213](https://github.com/Er2oneousbit/claude-code-game-kit/issues/213)); log-row errors
-  ([#214](https://github.com/Er2oneousbit/claude-code-game-kit/issues/214)); the patcher's `--check` trusts a comment
-  ([#215](https://github.com/Er2oneousbit/claude-code-game-kit/issues/215)); bone mapping guesses on unusual skeletons
-  ([#216](https://github.com/Er2oneousbit/claude-code-game-kit/issues/216)).
-- **`tools/token_audit.py` review findings (FIXED in 0.13.1, kept here until the issues close on main):** values could
-  leak through error text and the config-dir path ([#217](https://github.com/Er2oneousbit/claude-code-game-kit/issues/217));
-  a wrongly shaped settings file aborted the audit ([#218](https://github.com/Er2oneousbit/claude-code-game-kit/issues/218));
-  `@~/` imports resolved against the wrong folder ([#219](https://github.com/Er2oneousbit/claude-code-game-kit/issues/219));
-  huge log lines, folded YAML descriptions and the exam's isolation ([#220](https://github.com/Er2oneousbit/claude-code-game-kit/issues/220)).
-- **Bozzetto docs-versus-code review (FIXED in 0.13.1, kept here until the issues close on main):** a Tripo task left
-  running was paid for again ([#221](https://github.com/Er2oneousbit/claude-code-game-kit/issues/221)); `rig check`
-  ready with a bad key, `--wait` ignored by UniRig ([#222](https://github.com/Er2oneousbit/claude-code-game-kit/issues/222));
-  no real deformation check ([#223](https://github.com/Er2oneousbit/claude-code-game-kit/issues/223)); README gaps
-  ([#224](https://github.com/Er2oneousbit/claude-code-game-kit/issues/224)).
-- **`tools/fetch_asset.py` security review (FIXED in 0.13.1, kept here until the issues close on main):** download
-  limits, schemes, redirects, cache key ([#225](https://github.com/Er2oneousbit/claude-code-game-kit/issues/225)); a
-  pack's licence contradicting `--license` ([#226](https://github.com/Er2oneousbit/claude-code-game-kit/issues/226));
-  colliding ZIP entries ([#227](https://github.com/Er2oneousbit/claude-code-game-kit/issues/227)); tokens, CR and paths in
-  the log ([#228](https://github.com/Er2oneousbit/claude-code-game-kit/issues/228)); no rollback after a failed log
-  write ([#229](https://github.com/Er2oneousbit/claude-code-game-kit/issues/229)).
-- **`scripts/new_game.py` review (FIXED in 0.13.1, kept here until the issues close on main):** a fixed temp name and
-  symlinks followed ([#230](https://github.com/Er2oneousbit/claude-code-game-kit/issues/230)); a newer kit's record accepted, record shape unchecked
-  ([#231](https://github.com/Er2oneousbit/claude-code-game-kit/issues/231)); no baseline for settings.json and .gitignore merges ([#232](https://github.com/Er2oneousbit/claude-code-game-kit/issues/232)); binary
-  detection, `<` `>` in names, case-only renames, sync copy-back ([#233](https://github.com/Er2oneousbit/claude-code-game-kit/issues/233)).
-- **Paid PixelLab and ElevenLabs clients review (FIXED in 0.13.1, kept here until the issues close on main):** a
-  slow or dropped job paid for again ([#234](https://github.com/Er2oneousbit/claude-code-game-kit/issues/234)); ElevenLabs checks after paying ([#235](https://github.com/Er2oneousbit/claude-code-game-kit/issues/235)); an
-  unknown plan logged as commercial ([#236](https://github.com/Er2oneousbit/claude-code-game-kit/issues/236)); costs, odd JSON, key echo, names, log lock ([#237](https://github.com/Er2oneousbit/claude-code-game-kit/issues/237)).
-- **`tools/publish_check.py` review (FIXED in 0.13.1, kept here until the issues close on main):** missed secrets and paths ([#238](https://github.com/Er2oneousbit/claude-code-game-kit/issues/238)); LFS, unreadable files, an
-  encrypted `.pxo` ([#239](https://github.com/Er2oneousbit/claude-code-game-kit/issues/239)).
-- **SessionStart hook and `tools/second_opinion.py` review (FIXED in 0.13.1, kept here until the issues close on main):** reviewer confinement, prompt injection,
-  orphaned children ([#240](https://github.com/Er2oneousbit/claude-code-game-kit/issues/240)); the hook's stdin wait, long lines, heading prefixes ([#241](https://github.com/Er2oneousbit/claude-code-game-kit/issues/241)).
-- **Wavesmith DAW round trip review (FIXED in 0.13.1, kept here until the issues close on main):** wrong or
-  partial results ([#242](https://github.com/Er2oneousbit/claude-code-game-kit/issues/242)); user audio lost ([#243](https://github.com/Er2oneousbit/claude-code-game-kit/issues/243)); raw path text and device names
-  ([#244](https://github.com/Er2oneousbit/claude-code-game-kit/issues/244)).
 
 ## The examples
 None of the example games has been played by a human tester; the bots and tests are the only proof they play as
@@ -191,18 +151,10 @@ autoplay exit leak (#6).
   `.gdextension` library export and the model load from there are (verify)).
 
 ### Rune Delve (Unreal)
-- **Balance (FIXED in 0.13.1, kept here until the issues close on main):** replays now match with and without a
-  renderer ([#8](https://github.com/Er2oneousbit/claude-code-game-kit/issues/8)) and an open gate joins two rooms for
-  sight and hearing ([#140](https://github.com/Er2oneousbit/claude-code-game-kit/issues/140)); the bot pair measures
-  weaver 73, masher 47 of 80, clears 6 of 8 against 0. The ward window is still tuned by bots only: a human playtest
-  decides ([#7](https://github.com/Er2oneousbit/claude-code-game-kit/issues/7)).
+- Nothing known broken. The ward window (0.45 s) is tuned by bots only: a human playtest decides
+  ([#7](https://github.com/Er2oneousbit/claude-code-game-kit/issues/7)).
 
 ### Graveyard Shift (Unity)
-- **Bot trio repeatability (NOT REPRODUCED in 0.13.1, kept here until the issue closes on main):** the always-lit
-  bot's "12 or 14 catches" did not happen again in eleven runs, every frame identical, nor on the code where it was
-  seen; most likely it came from a run with altered physics settings during the #9 work. `Smoke_R10` and `Smoke_R11`
-  now fail on any difference ([#160](https://github.com/Er2oneousbit/claude-code-game-kit/issues/160)). Careful and
-  always-dark replay exactly too (#9, fixed in 0.8.3).
 - Generated nights are easier than the hand-made yard (the dark bot escapes 6 of 8 generated against 2 of 8).
 - A low rock the ghosts' NavMesh climbs (0.75 m) blocks the keeper's CharacterController (0.3 m); the fix moved the
   tuned balance and was reverted. Both wait for a balance decision ([#10](https://github.com/Er2oneousbit/claude-code-game-kit/issues/10)).
