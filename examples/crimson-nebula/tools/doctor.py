@@ -162,7 +162,7 @@ def check_assets(warnings, assets_dir, debug):
     # .uasset/.umap are left out on purpose: every Unreal Blueprint, map and material is one
     files = [p for p, _ in check_links.walk(d) if p.suffix.lower() in MEDIA_EXT]
     # errors="replace": one cp1252/UTF-16 save must not crash the whole health check
-    rows = [l for l in log_file.read_text(encoding="utf-8", errors="replace").splitlines() if l.startswith("| A-")]
+    rows = [l for l in check_links.read_text(log_file).splitlines() if l.startswith("| A-")]   # UTF-16 too (#258)
     # A row counts once its "File(s) in repo" column is filled, so filling the sample A-0001 row works
     filled = [r for r in rows if len(r.split("|")) > 3 and r.split("|")[3].strip()]
     log(debug, f"{len(files)} media files, {len(filled)} filled asset log rows")

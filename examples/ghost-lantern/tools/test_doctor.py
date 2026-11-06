@@ -118,5 +118,15 @@ class DoctorReviewFixes(DoctorExam):
         self.assertIn("in scripts/wide.gd", self.doctor())
 
 
+class DoctorKimiFixes(DoctorExam):
+    """#258: a UTF-16 asset log read as having no rows."""
+
+    def test_a_utf16_asset_log_is_read(self):
+        self.put("assets/art/hero.png", "x")
+        (self.root / "docs" / "ASSET_LOG.md").write_bytes(
+            (LOG_HEAD + "| A-0001 | hero | assets/art/hero.png | CC0 |\n").encode("utf-16"))
+        self.assertNotIn("media file(s) under", self.doctor())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

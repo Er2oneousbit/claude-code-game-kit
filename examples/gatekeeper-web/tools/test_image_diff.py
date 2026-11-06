@@ -157,5 +157,38 @@ class ImageDiffReviewFixes(ImageDiff):
         self.assertTrue((self.tmp / "out" / "deep" / "d.png").is_file())
 
 
+class ImageDiffKimiFixes(unittest.TestCase):
+    """#258: palette PNGs of 16 bit divided by zero; tRNS of grey and RGB images was ignored; no IEND passed."""
+
+    def png(self, ctype, depth, raw, extra=b"", end=True, w=2, h=1):
+        import struct
+        import zlib
+
+        def chunk(kind, body):
+            return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF)
+        data = (idf.PNG_SIG + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, depth, ctype, 0, 0, 0)) + extra
+                + chunk(b"IDAT", zlib.compress(raw)) + (chunk(b"IEND", b"") if end else b""))
+        path = Path(tempfile.mkdtemp()) / "x.png"
+        path.write_bytes(data)
+        return path, chunk
+
+    def test_palette_16_bit_is_refused(self):
+        path, _ = self.png(3, 16, b"\x00" + b"\x00" * 4)
+        with self.assertRaises(idf.ImageError):
+            idf.read_png(path)
+
+    def test_a_png_without_iend_is_refused(self):
+        path, _ = self.png(0, 8, b"\x00\x10\x20", end=False)
+        with self.assertRaises(idf.ImageError):
+            idf.read_png(path)
+
+    def test_grey_trns_makes_the_key_clear(self):
+        _, chunk = self.png(0, 8, b"")
+        path, _ = self.png(0, 8, b"\x00\x10\x20", extra=chunk(b"tRNS", b"\x00\x10"))
+        rows = idf.read_png(path)[2]
+        self.assertEqual(rows[0][3], 0)          # grey 0x10 is the transparent key
+        self.assertEqual(rows[0][7], 255)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

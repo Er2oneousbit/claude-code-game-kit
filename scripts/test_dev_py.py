@@ -268,7 +268,41 @@ class GodotCaptureFiles(TempRoot):
         self.assertIn("frame.png", left)
         self.assertNotIn("f00003.png", left)
         self.assertNotIn("f00003.png.import", left)
-        self.assertIn(".gdignore", left)
+        self.assertNotIn(".gdignore", left, "#257: a folder with files of the game's own gets no .gdignore")
+
+    def test_a_gdignore_only_in_a_folder_of_captures(self):
+        """#257: --screenshot assets/shot.png wrote assets/.gdignore and hid every asset from Godot."""
+        dev = load("godot")
+        dev.ROOT = self.root
+        dev.run = lambda cmd, **kw: (0, "CAPTURE_DONE frames=1 saved=0\n")
+        (self.root / "assets").mkdir()
+        (self.root / "assets" / "hero.png").write_bytes(b"x")
+        args = argparse.Namespace(drive="", record_every=66, screenshot="assets/shot.png", record="")
+        quiet(dev.capture, args, "godot", 1, [])
+        self.assertFalse((self.root / "assets" / ".gdignore").exists())
+        args = argparse.Namespace(drive="", record_every=66, screenshot="captures/shot.png", record="captures/rec")
+        quiet(dev.capture, args, "godot", 1, [])
+        self.assertTrue((self.root / "captures" / ".gdignore").exists())
+        self.assertTrue((self.root / "captures" / "rec" / ".gdignore").exists())
+
+    def test_a_change_just_after_an_import_is_seen(self):
+        """#257: a one-second grace hid an asset changed right after the last import."""
+        import os
+        dev = load("godot")
+        dev.ROOT = self.root
+        (self.root / ".godot").mkdir()
+        art = self.root / "assets" / "a.png"
+        art.parent.mkdir()
+        art.write_bytes(b"x")
+        side = self.root / "assets" / "a.png.import"
+        side.write_bytes(b"x")
+        stamp = self.root / dev.CLASS_STAMP
+        stamp.write_text("", encoding="utf-8")
+        t0 = time.time() - 100
+        for p in (side, stamp):
+            os.utime(p, (t0, t0))
+        os.utime(art, (t0 + 0.5, t0 + 0.5))
+        self.assertEqual(dev.unimported_assets(), ["assets/a.png"])
 
     def test_a_touched_but_imported_asset_is_not_imported_again(self):
         import os
@@ -576,6 +610,25 @@ class WebSmokeReviewFixes(WebSmokeRecord):
                                    cwd=root, capture_output=True, encoding="utf-8", errors="replace", timeout=60)
                 self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
                 self.assertEqual((root / "src" / "main.ts").read_text(), "x")
+
+    def test_the_data_dir_guard_ignores_letter_case_and_hangs_on_nothing(self):
+        """#256: --data-dir SRC passed on Windows; a frozen page still hung on the localStorage read-back."""
+        import os
+        for engine in ("web", "web-3d"):
+            with self.subTest(engine=engine):
+                root = self.project(engine)
+                (root / "src").mkdir()
+                (root / "src" / "main.ts").write_text("x")
+                if (root / "SRC").exists():               # a case-insensitive file system: SRC is src/
+                    r = subprocess.run([NODE, str(root / "tools" / "smoke.mjs"), "--data-dir", "SRC", "--frames", "1"],
+                                       cwd=root, capture_output=True, encoding="utf-8", errors="replace", timeout=60)
+                    self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+                    self.assertEqual((root / "src" / "main.ts").read_text(), "x")
+                env = dict(os.environ, FAKE_FREEZE="1")
+                r = subprocess.run([NODE, str(root / "tools" / "smoke.mjs"), "--frames", "1", "--timeout-ms", "1000",
+                                    "--data-dir", "build/sd"], cwd=root, capture_output=True, encoding="utf-8",
+                                   errors="replace", timeout=60, env=env)
+                self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
 
     def test_a_frozen_page_fails_instead_of_hanging(self):
         import os

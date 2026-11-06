@@ -187,7 +187,7 @@ def exact_exists(base, target):
         if part not in names:
             return False
         cur = cur / part
-    return True
+    return cur.exists()                                 # #258: a dangling symlink has a name but no file
 
 
 def resolves(kind, target, md_file, bases, all_names):

@@ -110,6 +110,21 @@ class CheckLinksReviewFixes(CheckLinksExam):
         self.assertIn("link: docs/ALSO_NOPE.md", self.scan_text("[ref]: docs/ALSO_NOPE.md \"t\"\n")["README.md"])
 
 
+class CheckLinksKimiFixes(unittest.TestCase):
+    """#258: a dangling symlink counted as an existing file."""
+
+    def test_a_dangling_symlink_is_not_a_file(self):
+        import os
+        root = Path(tempfile.mkdtemp())
+        try:
+            os.symlink(str(root / "gone.md"), str(root / "GDD.md"))
+        except (OSError, NotImplementedError):
+            self.skipTest("cannot make a symlink here")
+        self.assertFalse(check_links.exact_exists(root, "GDD.md"))
+        (root / "gone.md").write_text("x", encoding="utf-8")
+        self.assertTrue(check_links.exact_exists(root, "GDD.md"))
+
+
 if __name__ == "__main__":
     result = unittest.main(exit=False, verbosity=1).result
     sys.exit(0 if result.wasSuccessful() else 1)

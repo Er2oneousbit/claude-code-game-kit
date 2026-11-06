@@ -121,5 +121,16 @@ class CreditsReviewFixes(Credits):
         self.assertIn("not UTF-8", out)
 
 
+class CreditsKimiFixes(Credits):
+    """#258: a UTF-8 byte order mark hid the asset table."""
+
+    def test_a_bom_before_the_table(self):
+        root = self.game(GOOD)
+        log = root / "docs" / "ASSET_LOG.md"
+        log.write_bytes(b"\xef\xbb\xbf" + (HEADER + GOOD).encode("utf-8"))
+        code, out = self.run_cli("--root", root)
+        self.assertNotEqual(code, 2, out)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

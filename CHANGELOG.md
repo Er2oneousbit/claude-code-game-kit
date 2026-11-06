@@ -18,6 +18,15 @@
   capture folders inside the project get a `.gdignore`. Godot `check <file>` resolves the file against the project
   and refuses one outside it (exit 2). Godot `build` and Unreal `build`, `package` and `genproj` stop after 4 hours
   (they had no timeout); Unity `check` names a timeout as one (#250).
+- A second-model review of these fixes (Kimi K3.1 Pro) found more, now fixed: the web smoke's `--data-dir` guards
+  look at the real folder (a symlink to `src/` passed) and ignore letter case (`SRC` passed on Windows), symlinks
+  inside the data dir are never read or written through, and the localStorage read-back has a deadline (#256);
+  Godot's `.gdignore` goes only into a folder of captures (`--screenshot assets/shot.png` hid every asset), an asset
+  changed within a second of an import is seen, and with `--engine none` every scene and TileSet an earlier Godot
+  re-export wrote is kept, whatever the frame count now names them; a terrain added in Pixelorama is an edit (#257);
+  `image_diff` refuses 16-bit palette PNGs (a ZeroDivisionError) and PNGs without IEND and applies grey and RGB
+  transparency, `check_links`/`doctor` count a dangling symlink as missing, the doctor and `credits.py` read UTF-16
+  and BOM asset logs, and `comfy_local` strips APP and COM segments between a progressive JPEG's scans (#258).
 - `comfy_local.py`: two outputs with one name in different ComfyUI subfolders are both kept (one replaced the
   other, or the run stopped half saved); a long name keeps its extension (every output was skipped after the GPU
   time); redirects are never followed (the local-only check covered only the first address); a JPEG loses anything

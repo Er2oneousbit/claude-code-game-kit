@@ -659,6 +659,25 @@ class ComfyReviewFixes(ComfyLocalExam):
         self.assertIn("`assets/art/` (4 files)", log)
 
 
+class ComfyKimiFixes(unittest.TestCase):
+    """#258: a progressive JPEG kept APP and COM segments between its scans."""
+
+    def test_metadata_between_scans_is_dropped(self):
+        def seg(marker, body):
+            return bytes((0xFF, marker)) + (len(body) + 2).to_bytes(2, "big") + body
+        sos = seg(0xDA, b"\x01\x01\x00\x00\x3f\x00")
+        data = (b"\xff\xd8" + seg(0xE0, b"JFIF\x00\x01\x01") + sos + b"\x12\xff\x00\x34"
+                + seg(0xE1, b"http://ns.adobe.com/xap/1.0/\x00GPS-SECRET") + seg(0xFE, b"comment")
+                + sos + b"\x56\xff\xd0\x78" + b"\xff\xd9" + b"TRAILER")
+        out = cl.strip_jpeg(data)
+        self.assertNotIn(b"GPS-SECRET", out)
+        self.assertNotIn(b"comment", out)
+        self.assertNotIn(b"TRAILER", out)
+        self.assertIn(b"\x12\xff\x00\x34", out)
+        self.assertIn(b"\x56\xff\xd0\x78", out)
+        self.assertTrue(out.endswith(b"\xff\xd9"))
+
+
 if __name__ == "__main__":
     for stream in (sys.stdout, sys.stderr):
         try:

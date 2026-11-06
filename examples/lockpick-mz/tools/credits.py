@@ -164,7 +164,7 @@ def main(argv=None):
         if not log.is_file():
             raise ToolError(f"{log} not found (run from the game's root or pass --root)")
         try:
-            rows = parse_log(log.read_text(encoding="utf-8"))
+            rows = parse_log(log.read_text(encoding="utf-8-sig"))   # a BOM hid the table (#258)
         except UnicodeDecodeError:   # a log saved as cp1252 or UTF-16 was a traceback, exit 1 (#247)
             raise ToolError(f"{log} is not UTF-8 text: save it as UTF-8 (in VS Code: the encoding in the status bar)")
         bad = problems(rows, args.allow_placeholders)

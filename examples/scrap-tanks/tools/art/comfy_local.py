@@ -473,12 +473,23 @@ def strip_jpeg(data):
         if not drop:
             out.append(bytes((0xFF, marker)) + data[pos:end])
         pos = end
-        if marker == 0xDA:                              # start of scan: the image data, kept whole up to EOI
-            # FF D9 cannot appear inside entropy-coded data (FF is stuffed as FF 00): anything after the first one is
-            # a trailer, such as a motion photo's MP4 and XMP, which kept personal data (#248)
-            eoi = data.find(b"\xff\xd9", pos)
-            out.append(data[pos:eoi + 2] if eoi >= 0 else data[pos:])
-            return b"".join(out)
+        if marker == 0xDA:
+            # the scan's entropy-coded data runs to the next marker (an FF not followed by 00 or a restart marker).
+            # Then the segment loop goes on: a progressive JPEG has more scans, and APP/COM segments between them
+            # are dropped too (#258). Anything after EOI is a trailer, such as a motion photo's MP4 and XMP (#248)
+            i = pos
+            while True:
+                i = data.find(b"\xff", i)
+                if i < 0 or i + 1 >= len(data):
+                    out.append(data[pos:])               # no EOI: keep the scan as it is
+                    return b"".join(out)
+                nxt = data[i + 1]
+                if nxt == 0x00 or 0xD0 <= nxt <= 0xD7 or nxt == 0xFF:
+                    i += 1 if nxt == 0xFF else 2
+                    continue
+                break
+            out.append(data[pos:i])
+            pos = i
 
 
 def strip_webp(data):

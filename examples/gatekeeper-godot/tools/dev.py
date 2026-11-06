@@ -376,7 +376,7 @@ def unimported_assets():
             # Godot rewrites <file>.import only when the content changed: a touched or re-saved file stays newer than
             # its sidecar. Anything older than the last import's stamp was seen by that import (#250)
             seen = max(side.stat().st_mtime, stamp) if side.is_file() else None
-            if seen is None or p.stat().st_mtime > seen + 1:
+            if seen is None or p.stat().st_mtime > seen:   # no grace: a change a second after an import counts
                 stale.append(rel.as_posix())
         except OSError:
             continue
@@ -607,14 +607,25 @@ def cmd_smoke(args, godot):
     return 0
 
 
-def gdignore(folder):
-    """A .gdignore in a capture folder inside the project, so Godot does not import the pictures (#250)."""
+def gdignore(folder, own=(), own_dirs=()):
+    """A .gdignore in a capture folder inside the project, so Godot does not import the pictures (#250). Only in a
+    folder that holds nothing but captures (frames, the screenshot, their .import files): a .gdignore in assets/
+    hid every asset of the game from Godot (#257)."""
     try:
         folder.relative_to(ROOT)
     except ValueError:
         return
     if folder == ROOT:
         return                                  # never ignore the whole project
+    if folder.is_dir():
+        for p in folder.iterdir():
+            name = p.name[:-len(".import")] if p.name.endswith(".import") else p.name
+            if p.is_dir() and p.resolve() in own_dirs:
+                continue                        # the --record folder inside the --screenshot one
+            if p.is_dir() or not (FRAME_NAME.fullmatch(name) or name in own or name == ".gdignore"):
+                print(f"[info] {folder.relative_to(ROOT).as_posix()}/ holds game files: no .gdignore there, so "
+                      "Godot imports the captures (use a folder of their own, such as captures/)")
+                return
     folder.mkdir(parents=True, exist_ok=True)
     mark = folder / ".gdignore"
     if not mark.exists():
@@ -628,7 +639,7 @@ def capture(args, godot, frames, user):
     shot = (ROOT / args.screenshot).resolve() if args.screenshot else None
     rec = (ROOT / args.record).resolve() if args.record else None
     for folder in {p for p in (shot.parent if shot else None, rec) if p}:
-        gdignore(folder)                        # #250: Godot must not import captures (each run re-triggered it)
+        gdignore(folder, {shot.name} if shot else (), {rec} if rec else ())   # #250: no import of captures
     if shot:
         if shot.is_file():
             shot.unlink()                       # a picture from an earlier run must not pass for this one

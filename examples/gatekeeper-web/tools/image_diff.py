@@ -55,6 +55,7 @@ def read_png(path):
         raise ImageError(f"{path}: not a PNG")
     pos, idat, palette, trns = 8, [], None, None
     width = height = depth = ctype = None
+    ended = False
     while pos + 8 <= len(data):
         length, kind = struct.unpack(">I4s", data[pos:pos + 8])
         body = data[pos + 8:pos + 8 + length]
@@ -63,7 +64,8 @@ def read_png(path):
             width, height, depth, ctype, _, _, interlace = struct.unpack(">IIBBBBB", body)
             if interlace:
                 raise ImageError(f"{path}: interlaced PNGs are not supported (save without interlacing)")
-            if ctype not in CHANNELS or depth not in (8, 16) and not (ctype == 3 and depth in (1, 2, 4, 8)):
+            # palette images: 1, 2, 4 or 8 bit only (16 passed and divided by zero, #258); the others 8 or 16
+            if ctype not in CHANNELS or (depth not in (1, 2, 4, 8) if ctype == 3 else depth not in (8, 16)):
                 raise ImageError(f"{path}: unsupported PNG (colour type {ctype}, {depth} bit)")
         elif kind == b"PLTE":
             palette = body
@@ -72,9 +74,12 @@ def read_png(path):
         elif kind == b"IDAT":
             idat.append(body)
         elif kind == b"IEND":
+            ended = True
             break
     if width is None or not idat:
         raise ImageError(f"{path}: no image data")
+    if not ended:                                       # #258: a file cut before IEND passed as whole
+        raise ImageError(f"{path}: no IEND chunk (the file is cut short)")
     try:
         raw = zlib.decompress(b"".join(idat))
     except zlib.error as exc:
@@ -109,6 +114,15 @@ def read_png(path):
     return width, height, rows
 
 
+def _key_alpha(line, x, n, step, trns):
+    """A grey or RGB image's tRNS names one colour (2 bytes per sample) that is fully clear (#258: it was ignored)."""
+    if not trns or len(trns) < 2 * n:
+        return 255
+    key = [int.from_bytes(trns[2 * k:2 * k + 2], "big") for k in range(n)]
+    have = [int.from_bytes(bytes(line[(x * n + k) * step:(x * n + k) * step + step]), "big") for k in range(n)]
+    return 0 if have == key else 255
+
+
 def _to_rgba(line, width, ctype, depth, palette, trns):
     out = bytearray(width * 4)
     if ctype == 3:
@@ -125,11 +139,11 @@ def _to_rgba(line, width, ctype, depth, palette, trns):
     for x in range(width):
         s = [line[(x * n + k) * step] for k in range(n)]
         if ctype == 0:
-            px = (s[0], s[0], s[0], 255)
+            px = (s[0], s[0], s[0], _key_alpha(line, x, 1, step, trns))
         elif ctype == 4:
             px = (s[0], s[0], s[0], s[1])
         elif ctype == 2:
-            px = (s[0], s[1], s[2], 255)
+            px = (s[0], s[1], s[2], _key_alpha(line, x, 3, step, trns))
         else:
             px = tuple(s)
         out[x * 4:x * 4 + 4] = bytes(px)

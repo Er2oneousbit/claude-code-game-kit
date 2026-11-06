@@ -45,7 +45,7 @@
 //           data-dir scenario checks (the refusal is its one error)
 // ---------------------------------------------------------------------------
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
 const args = process.argv.slice(2);
@@ -97,10 +97,20 @@ if (DATA_DIR && (DATA_DIR === ROOT || DATA_DIR === dirname(DATA_DIR) || existsSy
 }
 // #251: a folder of the project's own (src, assets, public, dist, tools) would have every file rewritten after the run
 // and seeded files the game clears deleted: the data dir is a folder for user data, under build/ by default
-if (DATA_DIR && (DATA_DIR + sep).startsWith(ROOT + sep)) {
-  const top = relative(ROOT, DATA_DIR).split(sep)[0];
-  if (["src", "assets", "public", "dist", "tools", "tests", "docs", "node_modules", "data"].includes(top)) {
-    fail2(`--data-dir ${relative(ROOT, DATA_DIR)} is inside the project's ${top}/: use a folder of its own (build/smoke-data)`);
+// #256: the guards look at where the folder really is (a symlink to src/ passed as build/...), and compare names
+// without letter case (SRC is src/ on Windows and macOS)
+const realOf = (p) => {
+  try { return realpathSync.native(p); } catch { return resolve(p); }
+};
+if (DATA_DIR) {
+  const real = realOf(DATA_DIR), root = realOf(ROOT);
+  const inside = (real + sep).toLowerCase().startsWith((root + sep).toLowerCase());
+  if (real.toLowerCase() === root.toLowerCase() || real === dirname(real)) fail2(`--data-dir ${DATA_ARG} is the project or a drive root`);
+  if (inside) {
+    const top = relative(root, real).split(sep)[0].toLowerCase();
+    if (["src", "assets", "public", "dist", "tools", "tests", "docs", "node_modules", "data"].includes(top)) {
+      fail2(`--data-dir ${DATA_ARG} is inside the project's ${top}/: use a folder of its own (build/smoke-data)`);
+    }
   }
 }
 
@@ -132,6 +142,10 @@ function readTree(dir) {
     for (const e of readdirSync(d, { withFileTypes: true })) {
       const full = join(d, e.name);
       if (Object.keys(out).length > SEED_MAX_FILES) fail2(`--data-dir ${dir} holds more than ${SEED_MAX_FILES} files: is it the right folder?`);
+      if (e.isSymbolicLink()) {
+        console.log(`[smoke] --data-dir: ${relative(dir, full)} is a symlink; left out (and left alone)`);   // #256
+        continue;
+      }
       if (e.isDirectory()) walk(full);
       else if (statSync(full).size <= SEED_MAX_BYTES) {
         const name = relative(dir, full).split(sep).join("/");
@@ -156,11 +170,26 @@ function writeTree(dir, files, seeded) {
   for (const [name, text] of Object.entries(files)) {
     const path = resolve(dir, name);
     if (!(path + sep).startsWith(dir + sep) && path !== dir) continue; // never outside the data dir
+    if (linkOnPath(dir, path)) continue; // #256: never write through a symlink (it could point anywhere)
     mkdirSync(dirname(path), { recursive: true });
     const m = /^data:image\/png;base64,(.*)$/s.exec(text);
     writeFileSync(path, m ? Buffer.from(m[1], "base64") : text);
   }
-  for (const name of Object.keys(seeded)) if (!(name in files)) rmSync(resolve(dir, name), { force: true });
+  for (const name of Object.keys(seeded)) if (!(name in files) && !linkOnPath(dir, resolve(dir, name))) rmSync(resolve(dir, name), { force: true });
+}
+
+/** True when path, or a folder between dir and it, is a symlink. */
+function linkOnPath(dir, path) {
+  let p = dir;
+  for (const part of relative(dir, path).split(sep)) {
+    p = join(p, part);
+    try {
+      if (lstatSync(p).isSymbolicLink()) return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
 }
 
 /** What a --drive scenario must leave in the data dir. Returns error strings. */
@@ -302,15 +331,22 @@ try {
     if (SCREENSHOT && !(existsSync(SCREENSHOT) && statSync(SCREENSHOT).size > 0)) errors.push(`[screenshot] no picture written to ${SCREENSHOT}`);
   }
   if (DATA_DIR) {
-    await page.evaluate(() => new Promise((r) => setTimeout(r, 50))); // let a pending log flush land
-    const files = await page.evaluate((prefix) => {
-      const out = {};
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && k.startsWith(prefix)) out[k.slice(prefix.length)] = localStorage.getItem(k);
-      }
-      return out;
-    }, DATA_PREFIX);
+    // #256: raced against a deadline: a frozen page never answers, and the run must end with a failure, not hang
+    const files = await Promise.race([
+      (async () => {
+        await page.evaluate(() => new Promise((r) => setTimeout(r, 50))); // let a pending log flush land
+        return page.evaluate((prefix) => {
+          const out = {};
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith(prefix)) out[k.slice(prefix.length)] = localStorage.getItem(k);
+          }
+          return out;
+        }, DATA_PREFIX);
+      })(),
+      timeout(TIMEOUT_MS),
+    ]);
+    if (files === false) throw new Error(`the page did not hand back its user data within ${TIMEOUT_MS} ms (frozen?)`);
     writeTree(DATA_DIR, files, seeded);
     console.log(`[info] user data (${Object.keys(files).length} file(s)) in ${DATA_DIR}`);
     for (const [marker, name] of written) console.log(`${marker} ${resolve(DATA_DIR, name)}`);

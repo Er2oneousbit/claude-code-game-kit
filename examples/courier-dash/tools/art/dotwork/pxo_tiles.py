@@ -647,7 +647,11 @@ def export_own(tm, name, conf, rows, touched):
     physics = any(t.get("solid_rects") for s in sources for t in s["tiles"])
     tres = os.path.join(out, f"{name}_tileset.tres")
     if not godot.ENABLED:
-        written.add(rel(tres))   # #245: without Godot the TileSet is not written, and must not count as stale
+        # #245, #257: without Godot no TileSet or scene is written, so every one an earlier Godot re-export of this
+        # project wrote is kept, whatever the frame count now names them
+        written.add(rel(tres))
+        written.update(r["file"] for r in rows.man.data["assets"]
+                       if r.get("source") == source and r.get("kind") in ("tileset", "scene"))
     if godot.ENABLED:
         done(tres, "tileset", _same_bytes(tres, lambda: godot.tileset_layers(
             tres, (tw, th), sources, terrains, custom=custom, physics=physics, mode="match_corners_and_sides",
@@ -717,12 +721,14 @@ def _tile_data(user, probability=1.0, center=-1, peers=None):
     return {"probability": probability, "user_data": user, "center": center, "peers": peers or [-1] * 16}
 
 
-def _data_hash(data):
-    """A tileset's tile data as built (probability, user data, terrain centre and peering bits per tile), hashed: a
-    terrain painted in Pixelorama is an edit as much as a pixel is (#245)."""
+def _data_hash(data, terrains=()):
+    """A tileset's tile data as built (probability, user data, terrain centre and peering bits per tile) and its
+    terrain definitions, hashed: a terrain painted or added in Pixelorama is an edit as much as a pixel is (#245,
+    #257)."""
     norm = [[round(float(d["probability"]), 6), str(d["user_data"]), int(d["center"]),
              [int(b) for b in d["peers"]] + [-1] * (16 - len(d["peers"]))] for d in data]
-    return hashlib.sha256(json.dumps(norm).encode("ascii")).hexdigest()[:16]
+    norm.append([[str(n), [int(c) for c in rgb]] for n, rgb in terrains])
+    return hashlib.sha256(json.dumps(norm, ensure_ascii=True).encode("ascii")).hexdigest()[:16]
 
 
 def _cells_hash(layers):
@@ -793,7 +799,7 @@ def dotwork_jobs(pack, conf):
                      f"{_px().MAX_SIDE}; skipped")
             continue
         meta = {"tileset": ts["res"], "scene": scene_res, "layers": [n for n, _ in named],
-                "cells": _cells_hash(built) if layers is not None else "", "data": _data_hash(tileset["data"])}
+                "cells": _cells_hash(built) if layers is not None else "", "data": _data_hash(tileset["data"], tileset["terrains"])}
         out.append((path, pxo_bytes(size, tileset, named, meta), meta))
     return out
 
@@ -810,7 +816,7 @@ def polished(path):
     if tm.get("other") or tm["frames"] > 1:
         return True               # #245: a pixel layer or a frame the user added (a build makes one frame of tiles)
     want = tm["meta"].get("data")
-    if want is not None and (len(tm["tilesets"]) != 1 or _data_hash(tm["tilesets"][0]["data"]) != want):
+    if want is not None and (len(tm["tilesets"]) != 1 or _data_hash(tm["tilesets"][0]["data"], tm["tilesets"][0]["terrains"]) != want):
         return True               # #245: terrain bits, probability or user data changed in Pixelorama
     try:
         edits, layers = _edits(tm)

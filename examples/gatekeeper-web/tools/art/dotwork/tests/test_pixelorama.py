@@ -1353,6 +1353,10 @@ class EngineNoneTilemapExam(unittest.TestCase):
             s.conf["engine"] = s.conf["fixed"]["engine"] = "none"
             pixelorama.reexport(s.project, s.conf)
             self.assertEqual(sorted(os.listdir(out)), before)
+            # #257: a second frame names the scenes meadow_00/_01; meadow.tscn must still be kept without Godot
+            rewrite_pxo(os.path.join(tmp, "assets_src", "pixelorama", "tilemaps", "meadow.pxo"), _add_frame)
+            pixelorama.reexport(s.project, s.conf)
+            self.assertIn("meadow.tscn", os.listdir(out))
         finally:
             godot.ENABLED = enabled
             shutil.rmtree(tmp, ignore_errors=True)
@@ -1380,6 +1384,11 @@ def _add_frame(d, b):
 
 def _set_terrain(d, b):
     d["tilesets"][0]["tile_data"]["1"]["terrain_center_bit"] = 1
+
+
+def _add_terrain(d, b):
+    d["tilesets"][0]["terrain_data"] = list(d["tilesets"][0].get("terrain_data") or []) + [
+        {"name": "snow", "color": "Color(0.9, 0.9, 1, 1)"}]   # #257: a terrain no tile uses yet
 
 
 class DotworkTilemapExam(unittest.TestCase):
@@ -1533,7 +1542,7 @@ class DotworkTilemapExam(unittest.TestCase):
         """#245: a pixel layer, a frame or a tile's terrain added in Pixelorama was not an edit, so the next build
         after the game's map changed rebuilt the project without them and without a .bak."""
         import pxo_tiles
-        for edit in (_add_pixel_layer, _add_frame, _set_terrain):
+        for edit in (_add_pixel_layer, _add_frame, _set_terrain, _add_terrain):
             with self.subTest(edit=edit.__name__):
                 self.build()
                 rewrite_pxo(self.town, edit)
