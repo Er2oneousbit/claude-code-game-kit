@@ -18,6 +18,13 @@
   capture folders inside the project get a `.gdignore`. Godot `check <file>` resolves the file against the project
   and refuses one outside it (exit 2). Godot `build` and Unreal `build`, `package` and `genproj` stop after 4 hours
   (they had no timeout); Unity `check` names a timeout as one (#250).
+- Shipped tools: `credits.py` splits ASSET_LOG rows on unescaped pipes only (an author "Ana \| Band" shifted
+  every later column and credited the wrong licence) and says plainly when the log is not UTF-8 (exit 2, was a
+  traceback). `image_diff.py` reports a cut PNG as unreadable (exit 2) and makes the `--diff` folder. `doctor.py`
+  checks required files with their exact letter case (on Windows `docs/gdd.md` passed for `docs/GDD.md`), reads
+  UTF-16 and cp1252 files for placeholders, and documents exit 2. `check_links.py` checks markdown that is not UTF-8,
+  skips a fence indented in a list item, and no longer reads `[Bug]: crash on load` as a reference definition; its
+  `read_text` is shared with the doctor (#247).
 - Dotwork Pixelorama: a corrupt or crafted `.pxo` is refused with a message naming the field, not a Python
   exception: an encrypted or unknown-compression member, a member cut short, `tags` or layer `effects` that are not
   lists, animated opacity with list or dict keys or a list transition, a v8 `image_size` of non-numbers, a tilemap

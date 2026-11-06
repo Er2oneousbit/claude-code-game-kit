@@ -141,5 +141,21 @@ class ImageDiff(unittest.TestCase):
         self.assertEqual(self.run_cli(p, self.base)[0], 2)
 
 
+class ImageDiffReviewFixes(ImageDiff):
+    """#247: a cut PNG raised struct.error (a traceback, exit 1); --diff into a missing folder too."""
+
+    def test_a_cut_png_is_exit_2(self):
+        cut = self.tmp / "cut.png"
+        cut.write_bytes(self.base.read_bytes()[:20])
+        code, out = self.run_cli(cut, self.base)
+        self.assertEqual(code, 2, out)
+
+    def test_diff_into_a_new_folder(self):
+        new = self.planted()
+        code, out = self.run_cli(new, self.base, "--diff", self.tmp / "out" / "deep" / "d.png")
+        self.assertEqual(code, 1, out)
+        self.assertTrue((self.tmp / "out" / "deep" / "d.png").is_file())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

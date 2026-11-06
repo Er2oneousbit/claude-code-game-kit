@@ -50,7 +50,9 @@ IGNORE_FILE = "tools/check_links.ignore"   # optional: one glob per line, a fold
 URI = re.compile(r"^[a-z][a-z0-9+.-]*:", re.I)          # http:, res://, user://, mailto:, ...
 # [text](dest) or [text](<dest with spaces>), with an optional "title"
 MD_LINK = re.compile(r"\[[^\]]*\]\(\s*(<[^>\n]*>|[^)\s]+)(?:\s+(?:\"[^\"]*\"|'[^']*'))?\s*\)")
-MD_REF_DEF = re.compile(r"^\s{0,3}\[[^\]]+\]:\s*(<[^>\n]*>|\S+)", re.M)   # [ref]: dest
+# [ref]: dest, with nothing after it but an optional title: "[Bug]: crash on load" is prose, not a definition (#247)
+MD_REF_DEF = re.compile(r"^\s{0,3}\[[^\]]+\]:[ \t]*(<[^>\n]*>|\S+)(?:[ \t]+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^)\n]*\)))?[ \t]*$",
+                        re.M)
 BACKTICK = re.compile(r"`([^`\n]+)`")
 PATHY_EXT = (".md", ".py", ".json", ".txt", ".cfg", ".gd", ".cs", ".cpp", ".hpp")
 # Files the docs mention on purpose before they exist (generated at release time, personal, or engine-made).
@@ -101,9 +103,27 @@ def walk(root, extra_globs=()):
             yield p, p.relative_to(root).as_posix()
 
 
+def read_text(path):
+    """A text file as str whatever it was saved as: a UTF-8, UTF-16 or UTF-32 byte order mark is honoured, and
+    anything else is UTF-8 with bad bytes replaced. Links and placeholders are ASCII, so a cp1252 file is still
+    checked (it was skipped silently, its broken links passing, #247)."""
+    raw = Path(path).read_bytes()
+    for bom, codec in ((b"\xef\xbb\xbf", "utf-8-sig"), (b"\xff\xfe\x00\x00", "utf-32"), (b"\x00\x00\xfe\xff", "utf-32"),
+                       (b"\xff\xfe", "utf-16"), (b"\xfe\xff", "utf-16")):
+        if raw.startswith(bom):
+            return _lf(raw.decode(codec, "replace"))
+    return _lf(raw.decode("utf-8", "replace"))
+
+
+def _lf(text):
+    """Windows and old Mac line ends as LF (read_text(encoding=) did this; the $ anchors need it)."""
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
 def strip_code(text):
-    """Remove fenced blocks (``` and ~~~) and inline code spans: they hold examples, not links."""
-    text = re.sub(r"^(```|~~~).*?^\1", "", text, flags=re.S | re.M)
+    """Remove fenced blocks (``` and ~~~) and inline code spans: they hold examples, not links. A fence may be
+    indented (inside a list item, #247)."""
+    text = re.sub(r"^[ \t]*(```|~~~).*?^[ \t]*\1", "", text, flags=re.S | re.M)
     return text
 
 
@@ -196,8 +216,8 @@ def scan(root, also, ignore, skip_dirs=()):
         if md.suffix.lower() != ".md":
             continue
         try:
-            text = md.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as exc:
+            text = read_text(md)
+        except OSError as exc:
             dbg(f"skip {md}: {exc}")
             continue
         for kind, target in references(text):

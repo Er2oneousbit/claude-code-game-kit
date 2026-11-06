@@ -102,5 +102,24 @@ class Credits(unittest.TestCase):
         self.assertEqual(rows, [])
 
 
+class CreditsReviewFixes(Credits):
+    """#247: an escaped pipe shifted every later column; a log that is not UTF-8 was a traceback."""
+
+    def test_an_escaped_pipe_stays_in_its_cell(self):
+        row = ("| A-0002 | Music | assets/audio/x.ogg | https://example.org/x | Ana \\| Band | CC-BY 4.0 | "
+               "\"X\" by Ana | no | no | 2026-11-01 | |\n")
+        rows = credits.parse_log(HEADER + row)
+        self.assertEqual(rows[0]["author"], "Ana | Band")
+        self.assertEqual(rows[0]["license"], "CC-BY 4.0")
+
+    def test_a_log_that_is_not_utf8_is_exit_2(self):
+        root = self.game(GOOD)
+        log = root / "docs" / "ASSET_LOG.md"
+        log.write_bytes(log.read_text(encoding="utf-8").encode("cp1252", "replace"))
+        code, out = self.run_cli("--root", root)
+        self.assertEqual(code, 2, out)
+        self.assertIn("not UTF-8", out)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

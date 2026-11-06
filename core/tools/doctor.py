@@ -5,7 +5,7 @@
 #           no unresolved {{PLACEHOLDERS}}, HANDOFF not stale, ASSET_LOG matches
 #           the assets folder (basic check), Claude config present.
 # Usage   : python tools/doctor.py [--debug] [--strict] [--assets-dir DIR]
-#           Exit code 0 = healthy, 1 = problems found (or warnings with --strict).
+#           Exit code 0 = healthy, 1 = problems found (or warnings with --strict), 2 = a check itself failed.
 # Notes   : Engine-environment checks (is Godot installed, etc.) live in
 #           tools/dev.py doctor. This one is engine-agnostic.
 #           Standard library only, Python 3.8+.
@@ -93,8 +93,10 @@ def log(debug, msg):
 
 def check_required(problems):
     for rel in REQUIRED:
-        if not (ROOT / rel).exists():
-            problems.append(f"MISSING required file: {rel}")
+        # exact letter case: on Windows docs/gdd.md passed for docs/GDD.md and broke on Linux and CI (#247)
+        if not check_links.exact_exists(ROOT, rel):
+            problems.append(f"MISSING required file: {rel}" + (" (it exists with other letter case)"
+                                                               if (ROOT / rel).exists() else ""))
     check_claude_settings(problems)
 
 
@@ -121,8 +123,8 @@ def check_placeholders(problems, debug, ignore):
         if rel in PLACEHOLDER_ALLOWED or path.name.startswith("doctor.py"):
             continue
         try:
-            text = path.read_text(encoding="utf-8")
-        except Exception as exc:
+            text = check_links.read_text(path)   # UTF-16 and cp1252 files are read too (#247: they were skipped)
+        except OSError as exc:
             log(debug, f"skip unreadable {rel}: {exc}")
             continue
         hits = PLACEHOLDER_RE.findall(text)
@@ -246,7 +248,8 @@ def check_doc_links(warnings, debug, ignore):
 def main():
     ap = argparse.ArgumentParser(
         description="Engine-agnostic project health check for the Claude game dev scaffold.",
-        epilog="Exit 0 = healthy, 1 = problems. Warnings only fail with --strict.",
+        epilog="Exit 0 = healthy, 1 = problems, 2 = a check itself failed (a bug: rerun with --debug). Warnings "
+               "only fail with --strict.",
     )
     ap.add_argument("--debug", action="store_true", help="print extra detail about what is being checked")
     ap.add_argument("--strict", action="store_true", help="treat warnings as failures")

@@ -100,5 +100,23 @@ class DoctorExam(unittest.TestCase):
         self.assertIn("1 media file(s) under other/", self.doctor("--assets-dir", "other"))
 
 
+class DoctorReviewFixes(DoctorExam):
+    """#247: Path.exists() ignores case on Windows; a UTF-16 file was skipped, so its placeholder passed."""
+
+    def test_a_required_file_in_the_wrong_case_is_missing(self):
+        import doctor
+        self.put("docs/gdd.md", "# GDD\n")
+        if not (self.root / "docs" / "GDD.md").exists():
+            self.skipTest("case-sensitive file system: the bug cannot happen here")
+        self.assertIn("other letter case", self.doctor())
+
+    def test_a_utf16_file_is_scanned(self):
+        footer = "{{" + "FOOTER}}"
+        path = self.root / "scripts" / "wide.gd"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(f"extends Node\n# {footer}\n".encode("utf-16"))
+        self.assertIn("in scripts/wide.gd", self.doctor())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

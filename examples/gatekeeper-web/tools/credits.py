@@ -22,6 +22,7 @@
 #   --check: compare with what is on disk; otherwise write (LF, UTF-8)
 import argparse
 import json
+import re
 import sys
 import traceback
 from pathlib import Path
@@ -59,7 +60,9 @@ def parse_log(text):
     """The asset rows of the first table whose header starts with ID."""
     rows, in_table = [], False
     for line in text.splitlines():
-        cells = [c.strip() for c in line.strip().strip("|").split("|")] if line.strip().startswith("|") else None
+        # split on unescaped pipes only: logs write a pipe inside a cell as \| (fetch_asset.md_cell, #247)
+        cells = [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", line.strip().strip("|"))] \
+            if line.strip().startswith("|") else None
         if cells is None:
             if in_table and line.strip():
                 break                                       # a heading or prose ends the table; blank lines do not
@@ -160,7 +163,10 @@ def main(argv=None):
         log = root / LOG
         if not log.is_file():
             raise ToolError(f"{log} not found (run from the game's root or pass --root)")
-        rows = parse_log(log.read_text(encoding="utf-8"))
+        try:
+            rows = parse_log(log.read_text(encoding="utf-8"))
+        except UnicodeDecodeError:   # a log saved as cp1252 or UTF-16 was a traceback, exit 1 (#247)
+            raise ToolError(f"{log} is not UTF-8 text: save it as UTF-8 (in VS Code: the encoding in the status bar)")
         bad = problems(rows, args.allow_placeholders)
         files = {"CREDITS.md": credits_md(rows, root), "THIRD_PARTY_LICENSES.md": licenses_md(rows, root)}
     except (ToolError, OSError) as exc:

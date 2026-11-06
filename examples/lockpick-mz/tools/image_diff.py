@@ -137,7 +137,8 @@ def _to_rgba(line, width, ctype, depth, palette, trns):
 
 
 def write_png(path, width, height, rows):
-    """RGBA rows -> PNG (filter 0); used for --diff and by the exam."""
+    """RGBA rows -> PNG (filter 0); used for --diff and by the exam. Makes the folder (#247)."""
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
     raw = b"".join(b"\x00" + bytes(r) for r in rows)
 
     def chunk(kind, body):
@@ -206,7 +207,7 @@ def main(argv=None):
         return 2
     try:
         a, b = read_png(args.new), read_png(args.baseline)
-    except (OSError, ImageError) as exc:
+    except (OSError, ImageError, struct.error, ValueError) as exc:   # a cut PNG raised struct.error (#247)
         print(f"[error] {exc}")
         if args.debug:
             traceback.print_exc()

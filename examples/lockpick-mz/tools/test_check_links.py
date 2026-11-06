@@ -93,6 +93,23 @@ class CheckLinksExam(unittest.TestCase):
         self.assertEqual(broken, {"README.md": ["path: ./docs/NOPE.md"]})
 
 
+class CheckLinksReviewFixes(CheckLinksExam):
+    """#247: a markdown file that is not UTF-8 was skipped; an indented fence was read as prose; "[Bug]: crash" was
+    a reference definition."""
+
+    def test_a_cp1252_file_is_checked(self):
+        (self.root / "README.md").write_bytes("caf\u00e9 [x](docs/NOPE.md)\n".encode("cp1252"))
+        self.assertIn("link: docs/NOPE.md", check_links.scan(self.root, [], []).get("README.md", []))
+
+    def test_an_indented_fence_holds_examples(self):
+        text = "- step one:\n\n   ```\n   [x](docs/NOPE.md) `docs/NOPE2.md`\n   ```\n"
+        self.assertEqual(self.scan_text(text), {})
+
+    def test_a_bracketed_label_in_prose_is_not_a_definition(self):
+        self.assertEqual(self.scan_text("[Bug]: crash on load\n"), {})
+        self.assertIn("link: docs/ALSO_NOPE.md", self.scan_text("[ref]: docs/ALSO_NOPE.md \"t\"\n")["README.md"])
+
+
 if __name__ == "__main__":
     result = unittest.main(exit=False, verbosity=1).result
     sys.exit(0 if result.wasSuccessful() else 1)
