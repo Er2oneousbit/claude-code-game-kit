@@ -79,6 +79,7 @@ UK must opt in before anything is sent **(verify with current GDPR guidance for 
 | `smoke --drive crash` | exits 1 on purpose: a script error writes `crashes/crash_<time>.txt` and prints `CRASH_WRITTEN <path>` |
 | `smoke --drive pseudo --locale pseudo` | every screen and settings tab is shown and no label is untranslated, clipped or off screen (`PSEUDO_OK`) |
 | `smoke --drive pseudo-plant --locale pseudo` | exits 1 on purpose, naming a planted label that is too small (`PSEUDO_FAIL`) |
+| `smoke --drive access[:res=WxH][,scale=N][,pad]` | every screen reported as `ACCESS_*` lines for `tools/access/sweep.py` (`AccessAudit`): texts with size, colour, background, fit and where they land, the focus graph, the subtitle and the prompts; the drive sets the window size itself (headless Godot ignores `--resolution`), `pad` presses with gamepad events only |
 | `smoke --drive show:<title\|settings\|pause\|subtitle\|juice> --screenshot captures/x.png` | opens that screen (settings with a control focused) and photographs it in a window |
 | `... --screenshot new.png --compare base.png [--tolerance N]` | `tools/image_diff.py` finds no difference (exit 1 when it does) |
 Any run with `--locale pseudo` checks each screen as it appears. The windowed capture ignores the mouse, so a cursor

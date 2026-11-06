@@ -37,6 +37,11 @@ examples were built and tested on one Windows 11 machine.
   only, never applied to a real account; Linode and DigitalOcean have no budget API (set an alert by hand); the
   least-privilege logins in `tools/cloud/README.md` are unchecked
   ([#252](https://github.com/Er2oneousbit/claude-code-game-kit/issues/252)).
+- **Accessibility sweep** (`tools/access/sweep.py`): runs on Godot, LÖVE and web only (the other engines get their
+  screens in #168); the "play" placeholder scene is not in its tour; it checks what the engine reports, so a look at
+  screenshots is still needed; a real Steam Deck (Proton, on-screen keyboard, suspend) is not tried
+  ([#91](https://github.com/Er2oneousbit/claude-code-game-kit/issues/91),
+  [#85](https://github.com/Er2oneousbit/claude-code-game-kit/issues/85)).
 - **Second-model reviews still owed:** Wavesmith's WAV, FLAC and Ogg Vorbis code, `check_links.py`, `credits.py`,
   `image_diff.py`, the golden vectors, `comfy_local.py`, `pixel_sprite.py`, `chroma_key.py` and four more Wavesmith
   modules have never been reviewed by a second model; the reviewer's weekly quota ran out first

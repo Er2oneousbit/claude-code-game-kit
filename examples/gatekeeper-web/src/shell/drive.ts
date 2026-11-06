@@ -3,6 +3,7 @@
 // Purpose : Scripted runs for `dev.py smoke --drive <scenario>`: the game plays itself through the real input
 //           path (injected actions, the same route a key press takes) and logs markers smoke waits for.
 // Usage   : ?drive=menus | crash | pseudo | pseudo-plant | show:<title|settings|pause|subtitle|juice>
+//           | access[:res=WxH][,scale=N][,pad] (every screen reported for tools/access/sweep.py)
 //           (dev.py smoke --drive X adds it to the URL; --locale pseudo adds ?locale=pseudo)
 // Notes   : Browser only. Every scenario ends with DRIVE_DONE <scenario>; a failed step logs DRIVE_ABORT (an
 //           error, so smoke exits 1). Markers: SETTINGS_WRITTEN <file> (menus), CRASH_WRITTEN <file> (crash),
@@ -26,14 +27,17 @@
 //   show  : open one screen, settle, freeze the game, SHOWN <screen> (smoke takes the screenshot)
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
+import { glyphName, glyphSet, promptBinding } from "../core/bindings";
 import { PSEUDO_LOCALE } from "../core/i18n";
 import { Log } from "../core/log";
 import { settingsLoad } from "../core/settings";
 import { DATA_DIR_PARAM, dataPrefix } from "../core/textStore";
+import { accessScreen } from "./accessAudit";
 import type { Shell } from "./app";
 import { MAX_SLIDER_STEPS, MENU_TARGET, slideAction } from "./driveLogic";
 import { SETTINGS_FILE } from "./meta";
 import { TABS } from "./settingsScreen";
+import { glyphText } from "./ui";
 
 // ---- Tunables ----------------------------------------------------------------
 const WAIT_MS = 8000; // longest wait for one screen
@@ -69,10 +73,15 @@ async function waitFor(what: string, ok: () => boolean, ms = WAIT_MS): Promise<v
 }
 
 class Driver {
+  /** The access drive's gamepad-only run: every press is the action's gamepad binding. */
+  pad = false;
+
   constructor(private readonly shell: Shell) {}
 
   async press(action: string): Promise<void> {
-    if (!this.shell.input.inject(action)) throw new Error(`action ${action} has no binding`);
+    if (this.pad) {
+      if (!this.shell.input.injectPad(action)) throw new Error(`${action} has no gamepad binding: a gamepad-only player cannot press it`);
+    } else if (!this.shell.input.inject(action)) throw new Error(`action ${action} has no binding`);
     await frames(STEP_FRAMES);
   }
 
@@ -272,6 +281,91 @@ async function show(shell: Shell, d: Driver, what: string): Promise<void> {
 }
 
 /** Runs one scenario; resolves after DRIVE_DONE (or throws, and the caller logs DRIVE_ABORT). */
+// ---- the accessibility sweep (#91, #85): access[:res=WxH][,scale=N][,pad] -------------------------------------
+const ACCESS_ACTIONS = ["ui_up", "ui_down", "ui_left", "ui_right", "ui_accept", "ui_cancel", "pause"];
+const PROMPT_ACTIONS = ["move_left", "move_right", "jump", "attack", "interact", "pause"];
+const OVER_GAME = ["play", "juice", "pause"];
+
+async function reach(shell: Shell, d: Driver): Promise<Record<string, unknown>> {
+  const menu = shell.top?.menu;
+  if (!menu) return { start: "", controls: 0, reached: 0, unreached: [], focus_like_hover: [] };
+  const want = menu.items.map((i) => i.id);
+  const start = menu.focused?.id ?? "";
+  const seen = new Set<string>();
+  for (let n = 0; n <= want.length; n++) {
+    if (menu.focused) seen.add(menu.focused.id);
+    await d.press("ui_down");
+  }
+  return { start, controls: want.length, reached: want.filter((id) => seen.has(id)).length,
+           unreached: want.filter((id) => !seen.has(id)), focus_like_hover: [] };
+}
+
+async function report(shell: Shell, d: Driver, name: string): Promise<void> {
+  await frames(STEP_FRAMES);
+  const root = document.getElementById("shell") ?? document.body;
+  const r = accessScreen(root, name, OVER_GAME.includes(shell.topId));
+  r.focus = await reach(shell, d);
+  Log.info("drive", "ACCESS_SCREEN " + JSON.stringify(r));
+}
+
+async function access(shell: Shell, d: Driver, options: string): Promise<void> {
+  let scale = 1;
+  for (const part of options.split(",").filter(Boolean)) {
+    if (part === "pad") d.pad = true;
+    else if (part.startsWith("scale=")) scale = Number(part.slice(6));
+    else if (!part.startsWith("res=")) throw new Error(`unknown access option ${part} (res=WxH, scale=N, pad)`);
+  }
+  const actions: Record<string, { keyboard: boolean; gamepad: boolean }> = {};
+  for (const a of ACCESS_ACTIONS) {
+    const list = shell.settings.input.bindings[a] ?? [];
+    actions[a] = { keyboard: list.some((b) => b.startsWith("key:")), gamepad: list.some((b) => b.startsWith("pad")) };
+  }
+  Log.info("drive", "ACCESS_INPUT " + JSON.stringify({ pad: d.pad, text_scale: scale, actions }));
+  await waitFor("title", () => ["title", "consent"].includes(shell.topId));
+  if (scale !== 1) {
+    shell.settings.access.text_scale = scale;
+    shell.apply();
+  }
+  await report(shell, d, shell.topId);
+  await d.pastConsent();
+  await d.press("ui_accept");
+  await d.screen("menu");
+  await report(shell, d, "main_menu");
+  await d.choose("menu", "menu.settings");
+  await d.screen("settings");
+  for (const t of TABS) {
+    await d.tab(t);
+    await report(shell, d, "settings/" + t);
+  }
+  await d.press("ui_cancel");
+  await d.screen("menu");
+  await d.toastsGone();
+  await d.choose("menu", "menu.credits");
+  await d.screen("credits");
+  await report(shell, d, "credits");
+  await d.press("ui_cancel");
+  await d.screen("menu");
+  await d.game("juice");
+  shell.subtitles.say("demo.welcome");
+  shell.subtitles.finish();
+  await frames(STEP_FRAMES);
+  await report(shell, d, "juice");
+  Log.info("drive", "ACCESS_SUBTITLE " + JSON.stringify(shell.subtitles.shown()));
+  const set = glyphSet(shell.settings.input.glyphs, shell.input.lastDevice);
+  const rows: Record<string, { keyboard: string; shown: string }> = {};
+  for (const a of PROMPT_ACTIONS) {
+    const b = shell.settings.input.bindings;
+    rows[a] = { keyboard: glyphText(shell.i18n, glyphName("keyboard", promptBinding(b, a, "keyboard"))),
+                shown: glyphText(shell.i18n, glyphName(set, promptBinding(b, a, set))) };
+  }
+  Log.info("drive", "ACCESS_PROMPTS " + JSON.stringify({ device: shell.input.lastDevice, glyphs: set, actions: rows }));
+  await d.press("pause");
+  await d.screen("pause");
+  await report(shell, d, "pause");
+  await d.choose("pause", "pause.quit");
+  await d.pastConsent();
+}
+
 export async function runDrive(shell: Shell, scenario: string): Promise<void> {
   const d = new Driver(shell);
   Log.info("drive", `DRIVE_START ${scenario}`);
@@ -279,6 +373,7 @@ export async function runDrive(shell: Shell, scenario: string): Promise<void> {
   else if (scenario === "crash") return crash(shell, d);
   else if (scenario === "pseudo" || scenario === "pseudo-plant") await pseudoTour(shell, d);
   else if (scenario.startsWith("show:")) await show(shell, d, scenario.slice(5));
-  else throw new Error(`unknown scenario "${scenario}" (menus, crash, pseudo, pseudo-plant, show:<screen>)`);
+  else if (scenario === "access" || scenario.startsWith("access:")) await access(shell, d, scenario.slice(7));
+  else throw new Error(`unknown scenario "${scenario}" (menus, crash, pseudo, pseudo-plant, access[:...], show:<screen>)`);
   Log.info("drive", `DRIVE_DONE ${scenario}`);
 }

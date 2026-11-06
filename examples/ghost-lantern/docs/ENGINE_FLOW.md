@@ -83,7 +83,7 @@ automatically when the window loses focus), quit and crash screens.
 - **Settings** apply live and save on Back (`settings.json`, atomic, with `.bak`). A browser cannot apply
   `display.vsync` (it always syncs) or `display.resolution` (the canvas follows the window): they are kept in the
   file but not shown. Fullscreen and borderless both use the browser's Fullscreen API. The colorblind option recolors
-  the juice demo's palette only (`src/shell/palettes.ts`, from `data/access/colours.json`, which
+  the juice demo's palette only (the shell's `palettes.ts`, from `data/access/colours.json`, which
   `tools/access/colour_check.py` checks; a real game declares its own pairs there). Mono audio downmixes Web Audio output.
 - **Juice timing:** the FlashLimiter is always on (at most 3 full-screen flashes per real second); the
   `access.flash_limit` setting only makes each flash gentler. Hitstop and the FlashLimiter take real time; shake,
@@ -159,6 +159,9 @@ None recorded yet. Add notes from videos, forums or your own runs here, with an 
     clipped or untranslated. Subtitles stand still during the tour, so the label count is the same on a slow
     machine. `pseudo-plant` adds one label that is too small: it must exit 1 naming it.
   - `show:title|settings|pause|subtitle|juice` (with `--screenshot`): opens that screen, freezes it, captures it.
+  - `access[:res=WxH][,scale=N][,pad]`: every screen reported as `ACCESS_*` lines for `tools/access/sweep.py`
+    (computed colours, font sizes, text boxes and what covers them, `accessAudit.ts`); `smoke.mjs` opens the page at
+    the `res=` size, `pad` presses with gamepad bindings only.
 - `--data-dir DIR` maps the game's user-data folder (localStorage) onto a real folder: its files are loaded under
   the key prefix `DIR/` (`?data-dir=DIR`) before the page starts and written back afterwards, so a test reads
   `settings.json`, the game log, the crash files and `telemetry.csv` as files (and can seed a damaged `settings.json`

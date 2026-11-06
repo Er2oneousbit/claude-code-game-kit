@@ -93,7 +93,11 @@ func label(text: String, font_scale: float = 1.0, node_name: String = "") -> Lab
 	l.text = text
 	if node_name != "":
 		l.name = node_name
-	if font_scale != 1.0:
+	if font_scale == UiTheme.HEADING_FONT:
+		l.theme_type_variation = UiTheme.HEADING_TYPE # follows text_scale live (ui_theme.gd)
+	elif font_scale == UiTheme.TITLE_FONT:
+		l.theme_type_variation = UiTheme.TITLE_TYPE
+	elif font_scale != 1.0:
 		l.add_theme_font_size_override("font_size", roundi(get_theme_default_font_size() * font_scale))
 	return l
 
@@ -107,15 +111,23 @@ func button(text: String, node_name: String, on_press: Callable) -> Button:
 	return b
 
 
-func centered_column() -> VBoxContainer:
+## A column in the middle of the screen; on_panel puts it on the theme's panel (a menu over the game, so the game's
+## HUD never shows through behind its text: tools/access/sweep.py, #91).
+func centered_column(on_panel: bool = false) -> VBoxContainer:
 	var center: CenterContainer = CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(center)
+	var parent: Control = center
+	if on_panel:
+		var panel: PanelContainer = PanelContainer.new()
+		panel.name = "Panel"
+		center.add_child(panel)
+		parent = panel
 	var col: VBoxContainer = VBoxContainer.new()
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_theme_constant_override("separation", COLUMN_SEPARATION)
-	center.add_child(col)
+	parent.add_child(col)
 	return col
 
 

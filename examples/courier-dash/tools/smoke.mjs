@@ -63,7 +63,9 @@ const UNTIL = opt("--until", "") || (DRIVE ? "DRIVE_DONE" : "");
 const ABORTS = DRIVE ? ["DRIVE_ABORT", "DRIVE_IGNORED"] : []; // a failed step, or the game refused the scenario
 const FAIL_ON = [...opt("--fail-on", "").split(","), ...ABORTS].filter(Boolean);
 const LOCALE = opt("--locale", "");
-const [VW, VH] = opt("--viewport", "1280x720").split("x").map(Number);
+// the access drive names its window size (access:res=1280x800,...): tools/access/sweep.py runs it per screen size
+const ACCESS_RES = /^access:(?:.*,)?res=(\d+x\d+)/.exec(DRIVE)?.[1];
+const [VW, VH] = opt("--viewport", ACCESS_RES ?? "1280x720").split("x").map(Number);
 const ROOT = resolve(import.meta.dirname, "..");
 const SCREENSHOT = opt("--screenshot", "") && resolve(ROOT, opt("--screenshot", ""));
 const RECORD = opt("--record", "") && resolve(ROOT, opt("--record", ""));
@@ -84,7 +86,7 @@ const HEADED = args.includes("--headed");
 const GPU_ARGS = args.includes("--gpu") ? ["--enable-unsafe-webgpu", "--enable-features=Vulkan", "--use-angle=vulkan"] : [];
 const SEED_MAX_BYTES = 1024 * 1024; // a data-dir file bigger than this is not loaded into localStorage
 const SEED_MAX_FILES = 1000; // more than this is not a game's user-data folder: refuse it
-const NOTE = /\b(DRIVE_[A-Z]+|PSEUDO_[A-Z]+|SHOWN|[A-Z]+_WRITTEN|QUIT)\b/; // printed even without --verbose
+const NOTE = /\b(DRIVE_[A-Z]+|PSEUDO_[A-Z]+|ACCESS_[A-Z]+|SHOWN|[A-Z]+_WRITTEN|QUIT)\b/; // printed even without --verbose
 const WRITTEN = /\b([A-Z]+_WRITTEN) (\S+)/;
 
 const fail2 = (msg) => {

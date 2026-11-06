@@ -163,6 +163,21 @@ class SweepExam(unittest.TestCase):
         log["done"] = False
         self.assertIn("did not finish", check(log)[0][0])
 
+    def test_a_game_without_the_shells_screens_is_a_clear_exit_2(self):
+        # two Godot examples build their own main scene: the drive never starts, which is not a failed check
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "tools").mkdir()
+            (Path(d) / "tools" / "dev.py").write_text("print('BOOT_OK my game')\n", encoding="utf-8")
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(sweep.main(["--runs", "pc", "--root", d]), 2)
+            self.assertIn("never started", err.getvalue())
+
+    def test_browser_console_lines_are_read(self):
+        # the web shell's lines arrive with the browser's own prefix
+        text = "".join("[console.info] [INFO][drive] " + line.strip() + "\n" for line in as_log(GOOD).splitlines())
+        self.assertEqual(sweep.parse(text), GOOD)
+
     def test_parse_and_the_command_line(self):
         self.assertEqual(sweep.parse(as_log(GOOD)), GOOD)
         with self.assertRaises(sweep.UsageError):

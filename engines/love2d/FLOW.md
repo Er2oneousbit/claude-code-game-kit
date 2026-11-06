@@ -96,6 +96,7 @@ Credits, Quit, and Juice demo in a debug build = a run from the source folder) >
 | `crash` | raises an error in a frame: prints `CRASH_WRITTEN <path>`, exits 1 (expected) |
 | `pseudo` | with `--locale pseudo`: visits every screen (each settings tab, top and scrolled), checks every visible label (wider than its box, past the screen edge, or not through `t()` = no leading `[`): `PSEUDO_FAIL` lines and exit 1, or `PSEUDO_PASS` |
 | `pseudo-plant` | the same with one planted label too small for its text: must exit 1 naming `plant.too_small` |
+| `access[:res=WxH][,scale=N][,pad]` | every screen reported as `ACCESS_*` lines for `tools/access/sweep.py`: ui.lua records each label's colour, size and glyph box and every filled rectangle under it (the drive hooks `love.graphics.rectangle`), and which rows `ui_down` reaches; `pad` presses with gamepad buttons only |
 | `bug` | presses F8 on the menu and checks the `bug_<timestamp>/` files: `DRIVE_BUG <path>` |
 | `show:<screen>` | `title`, `settings` (a slider focused), `pause`, `subtitle`, `juice`: opens it and ends; add `--screenshot captures/<screen>.png` |
 

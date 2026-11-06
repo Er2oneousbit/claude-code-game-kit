@@ -80,7 +80,11 @@ values in `data/golden/shell.json` that every port's tests check (K01).
   at 1280x800 on Steam Deck, 12 px recommended (F36). Scale UI and text to 200 % (`ui_scale`, `text_scale`).
 - Focus loss pauses the game (and mutes it if the player chose that); alt-tab must not lose input or crash.
 - Steam Deck review: controller works by default with no settings change, matching glyphs, 1280x800, the
-  on-screen keyboard for text entry, no launcher, 30 fps at 800p (E75).
+  on-screen keyboard for text entry, no launcher, 30 fps at 800p (E75). `python tools/access/sweep.py --runs deck`
+  checks what a program can on the shell's screens: every screen reached and left with gamepad events only at
+  1280x800, no keyboard glyphs while the gamepad is in use, text at least 9 px (a warning under 12). A real Deck is
+  still the check for Proton, the on-screen keyboard when text is typed, suspend and resume, and 30 fps
+  **(verify against Valve's current Deck Verified criteria)**.
 
 ## 7. Logs, crashes and bug reports (standard practice)
 - A log file per run (logs/game.log in the user-data folder), first line the game version and the date; keep the last five.

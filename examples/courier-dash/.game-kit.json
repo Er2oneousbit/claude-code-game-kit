@@ -1601,6 +1601,18 @@
       "date": "2026-11-06",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.14.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.14.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1638,7 +1650,7 @@
     ".github/workflows/audio.yml": "22b141d57622ae23ad4800f675eeadf45647069f6f5283b36d205b0d5782d01e",
     ".github/workflows/ci.yml": "e5c6f4db19a2fe1c43b2ea57d116e3695de906b1776b087a23d3478f29600a58",
     ".gitleaks.toml": "d8f6978ff742ff6d0cbf93e64cbab0a2d607cbae5029d1c34619451bf1521670",
-    "CLAUDE.md": "91aa325e457376d53a4bde1163eff3cb86cf9c17bbbb92fc8c8a94991e53c76f",
+    "CLAUDE.md": "957bc6f6f44df1a6d647da66dda72ea578b158123026f1550c941ee86fc0c1fd",
     "README.md": "2540bcfcc73b1afabdfc481b1d31092b90924b610327210375a4232c3fa9988a",
     "data/access/colours.json": "143240c33d376aec48fd9d6b80e499dd3c92c1a3b5073f74569bdfede72bae8e",
     "data/golden/access.json": "f83c639bffc09117f6258c8d00e02829db101f9cd7ad78b8f4cf363a251b8407",
@@ -1716,8 +1728,8 @@
     "docs/sop/SOP-16-2d-art-pipeline.md": "98732efbde75b61d2055db12dbbeae8a00a02daf89e20b80673eff1eb5dd96bd",
     "docs/sop/SOP-17-procedural-generation.md": "26c19ef440ac07273c6e0742c88e89020b7457582f6d61a3ea1fd660b6ae3907",
     "docs/sop/SOP-18-game-feel.md": "e6315b60ce7e7342dd73fece5afd2b7298601184ed4e04b51c5358b03e84c66e",
-    "docs/sop/SOP-19-front-end-and-settings.md": "8fd538c08162c281e9ac70d74c78dcc6181b728a8995a319e725bedfb9ccb074",
-    "docs/sop/SOP-20-accessibility.md": "43599d3bdf9db607f2c7a60368af679aa71e63f64c73f0f52844dd355bf4a612",
+    "docs/sop/SOP-19-front-end-and-settings.md": "53531dd58339e6cd422e37c2e034fd913d766ecfb92fa368aa98f2840da0b0d1",
+    "docs/sop/SOP-20-accessibility.md": "3b7affd962fbdaf1ff8b9e0238ecef96dbf8f62643f63f57fb580dbcb8f8c0e0",
     "docs/sop/SOP-21-ship-on-steam-and-itch.md": "8096e0dec71745ecf691c2e5140366e954c1aeae126a68a40ff7da540da793e0",
     "docs/sop/SOP-22-balancing-and-economy.md": "248365f65f715b43cb4417a73793ace4d8e8d98e6f3f94617a9af4149ccf6d32",
     "docs/sop/SOP-23-marketing.md": "8d70dffbb5ba5ce486d5c93c2117880a8fd19cd651a0a1a7dfae29c65fb3fc9b",
@@ -1769,7 +1781,9 @@
     "tests/telemetry.golden.test.ts": "dec6b077141686da17347c5e0584fe21aa6ffea860920d1e3f25b244b3097834",
     "tools/access/colour.py": "c6b75b175ab6cd2439878b0e90c6372850cd7ff4478fbc42343f141bcbe7c299",
     "tools/access/colour_check.py": "1afe545d6e0f4a745af6f6fd3ee1c03fc73f91cc8046ff9a105a7962520e1b3d",
+    "tools/access/sweep.py": "d7b475f9f37d2ea8afac301e359591fe4839ea5b07c0a21a0846a36037633354",
     "tools/access/test_colour.py": "67c23d5ed4b24a1b84cb942cadd3375f2be7147443f8dddd0b2b4b159f0f49a3",
+    "tools/access/test_sweep.py": "72a1b01eb6510969defb702b179947e4fa6eae320f9ab5fefd48004a0afaabce",
     "tools/art/chroma_key.py": "1586d6918743890fb7a977b3020a8d99828c63153827904273114aef1cac8aa7",
     "tools/art/comfy_local.py": "ab2863b60191ac55b651e672ca8000f827f89930502ab838732f4b3b546f457e",
     "tools/art/dotwork/.gdignore": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -2048,7 +2062,7 @@
     "tools/shaders/shader_gen.py": "a2d028a956ccabac945df6a612407b22eea3d9a4cc7d275a4cefae3aa4ad592d",
     "tools/shaders/shader_ref.py": "da67644c7e4807791d334517a65e5066f2ed370ea6c2581d3ed113d8d90d94ec",
     "tools/shaders/test_shader_ref.py": "3630673dba353772b9a6bc56ab5240e2cc0950010e9662fc45f0e72bc892426b",
-    "tools/smoke.mjs": "6012746fb21bbe22ba7b97c1ed6d1271a131bfa84ddce7526e115dfa2693d66e",
+    "tools/smoke.mjs": "78f62499225a95c6bda8ff2d844bf89bcc2b2594fcbcb9d2563f7584b5cae4c2",
     "tools/test_check_links.py": "db6fc4b54978282095e1af3737c1164ae0316c8a3ffbe75b414d79e17363bb31",
     "tools/test_credits.py": "e1947385bb1d2a5e62518ebd9ac80f074304936eecc56b12b847e7f898c56234",
     "tools/test_doctor.py": "cbd85c47c0a105db44b063b535ae50cc99c7eb4fee05bfd659746821e5314833",

@@ -288,7 +288,12 @@ def main(argv=None):
                 print(f"[info] {name}: {RUNS[name][0]}, text {RUNS[name][1]:g}x"
                       f"{', gamepad only' if RUNS[name][2] else ''} ...", flush=True)
                 out, resolution, pad = run_drive(root, name, args.debug)
-                results[name] = check_run(parse(out), resolution, pad, root)
+                log = parse(out)
+                if log["input"] is None:
+                    raise UsageError(f"{name}: the access drive never started: the game's main scene does not run the "
+                                     "kit's front end (the shell's screens), so there is nothing for the sweep to "
+                                     "walk; check your own screens by hand against SOP-20")
+                results[name] = check_run(log, resolution, pad, root)
     except (UsageError, OSError) as e:
         print(f"[error] {e}", file=sys.stderr)
         return 2

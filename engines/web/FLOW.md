@@ -159,6 +159,9 @@ None recorded yet. Add notes from videos, forums or your own runs here, with an 
     clipped or untranslated. Subtitles stand still during the tour, so the label count is the same on a slow
     machine. `pseudo-plant` adds one label that is too small: it must exit 1 naming it.
   - `show:title|settings|pause|subtitle|juice` (with `--screenshot`): opens that screen, freezes it, captures it.
+  - `access[:res=WxH][,scale=N][,pad]`: every screen reported as `ACCESS_*` lines for `tools/access/sweep.py`
+    (computed colours, font sizes, text boxes and what covers them, `accessAudit.ts`); `smoke.mjs` opens the page at
+    the `res=` size, `pad` presses with gamepad bindings only.
 - `--data-dir DIR` maps the game's user-data folder (localStorage) onto a real folder: its files are loaded under
   the key prefix `DIR/` (`?data-dir=DIR`) before the page starts and written back afterwards, so a test reads
   `settings.json`, the game log, the crash files and `telemetry.csv` as files (and can seed a damaged `settings.json`

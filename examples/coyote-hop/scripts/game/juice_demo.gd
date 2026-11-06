@@ -54,6 +54,7 @@ const FLASH_LAYER: int = 6
 const HUD_MARGIN: int = 10
 const SKY: Color = Color(0.10, 0.12, 0.20)
 const GROUND: Color = Color(0.20, 0.24, 0.33)
+const HUD_OUTLINE: int = 4 # px outline on the HUD text, which sits over the moving game
 const PILLAR: Color = Color(0.14, 0.17, 0.27)
 const PILLAR_EVERY: float = 90.0
 # the player, the box, the ground and the hit flash come from Shell.palette() (data/access/colours.json), so the
@@ -287,6 +288,9 @@ func _build_hud() -> void:
 	_guard_label.name = "Guarding"
 	_guard_label.visible = false
 	col.add_child(_guard_label)
+	for l: Label in [_title, _hits_label, _hint, _guard_label]: # readable over any part of the game (#91)
+		l.add_theme_constant_override("outline_size", HUD_OUTLINE)
+		l.add_theme_color_override("font_outline_color", Color.BLACK)
 	subtitles = SubtitleBar.new()
 	_hud_root.add_child(subtitles)
 	var flash_layer: CanvasLayer = CanvasLayer.new()

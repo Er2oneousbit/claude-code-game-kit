@@ -17,6 +17,22 @@
   relied on the filter over its own art sets `"filter": true` in `data/access/colours.json`. Godot exports now
   include `data/access/*`.
 - SOP-20: text contrast 4.5:1 (3:1 large, E158), the colour-pairs step, and why to swap palettes rather than filter.
+- **The accessibility sweep (#91) and the Steam Deck pass (#85):** `tools/access/sweep.py` runs `dev.py smoke --drive
+  access` at 1920x1080 and at 1280x800 with gamepad events only, at 100 % and 200 % text, and checks every screen:
+  text size (18 px at 1080p, 9 at 1280x800 with 12 recommended: F36, E75), contrast (4.5:1, 3:1 large: E158; text
+  over the game against its panel or outline over both a black and a white game), clipped, off-screen or colliding
+  text, controls the arrow keys or the gamepad cannot reach, focus that looks like hover, actions missing a keyboard
+  or gamepad binding, the subtitle against the dialogue line, and keyboard glyphs during gamepad play. Godot, LÖVE
+  and web each report their screens (`AccessAudit`, ui.lua, `accessAudit.ts`). SOP-19 lists what still needs a real
+  Deck. What the sweep found and the kit fixed:
+  - Godot: the demo's HUD text sat on the game with no outline; the settings tabs ran off the screen at 200 % text
+    (they wrap now); headings kept their size when the text size changed on an open screen (they are theme
+    variations now); the pause menu had no panel, so the HUD showed through behind "Paused" at 200 %.
+  - LÖVE: HUD and subtitle text had no outline (`UI:label` takes one now); the HUD rows and the consent dialog had
+    fixed heights and ran into each other at 200 % text.
+  - Web: headings and long labels ended in an ellipsis (the consent title at every size, three settings rows in the
+    pseudo locale, which made `smoke --drive pseudo --locale pseudo` fail on a new project); keycaps in the HUD were
+    just under 18 px at 1080p.
 
 ## 0.14.2 (2026-11-06): fixes to Dotwork's Pixelorama round trip and its panel, from a second-model review and #255
 - Dotwork's Pixelorama panel: closing Pixelorama (or turning the extension off) during a re-export waited for Dotwork
