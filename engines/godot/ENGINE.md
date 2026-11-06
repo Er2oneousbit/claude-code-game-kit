@@ -7,7 +7,7 @@
 - **Binary:** set env var `GODOT_BIN` to the Godot executable, or put `godot` on PATH. `python tools/dev.py doctor` verifies.
 - **Language:** typed GDScript. No C# in this project unless an ADR says so.
 - **Unit tests:** GUT addon in `addons/gut/` (install from the Godot Asset Library or GitHub). Version recorded in the ADR when chosen.
-- **Import cache:** `python tools/dev.py import` builds `.godot/`. `check`, `test` and `smoke` re-run it automatically on a fresh clone and whenever a `class_name` script is added, renamed or removed (Godot only learns new class names on import). Run it by hand after adding assets.
+- **Import cache:** `python tools/dev.py import` builds `.godot/`. `check`, `test` and `smoke` re-run it automatically on a fresh clone, whenever a `class_name` script is added, renamed or removed (Godot only learns new class names on import), and when an asset is new or changed (no `<file>.import` beside it, or newer than it).
 
 ## Layout
 ```
@@ -36,8 +36,8 @@ tools/                   dev.py and helpers
 - Pure logic goes in `RefCounted` classes under `scripts/core/` or `scripts/game/logic/` so GUT can test it without scenes.
 - Logging via the `Log` autoload (`Log.info("physics", "msg")`), never bare `print` in committed code.
 - 3D models: `.glb` under `assets/models/` (what `tools/blender/prep_export.py` and `tools/bozzetto/bozzetto.py` write:
-  metres, +Y up, pivot at the bottom centre) import in the editor; headless, run `python tools/dev.py import` after adding
-  one (`check`, `test` and `smoke` re-import by themselves only when `class_name` scripts change); instance one with
+  metres, +Y up, pivot at the bottom centre) import in the editor; headless, `check`, `test` and `smoke` import a new one first
+  (or run `python tools/dev.py import`); instance one with
   `load("res://assets/models/<name>.glb").instantiate()`. Tested with a Bozzetto model: import, check, smoke, a GUT load (K01).
 - A vertex-coloured model (`bozzetto.py make --material vertex`, colours in glTF `COLOR_0`) renders **white**: Godot 4.7
   imports the colours but leaves the material's `vertex_color_use_as_albedo` off (K01, #202). Turn it on after

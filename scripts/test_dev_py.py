@@ -21,6 +21,7 @@
 import argparse
 import importlib.util
 import io
+import os
 import re
 import shutil
 import subprocess
@@ -256,6 +257,44 @@ class GodotCheckFiles(TempRoot):
         finally:
             dev.ROOT = old
         self.assertEqual(got, ["scripts/player.gd", "tools/capture.gd"])
+
+
+class GodotImport(TempRoot):
+    """#195: ensure_imported looked at class_name scripts only, so a new asset was not imported before test/smoke."""
+
+    def setup_game(self):
+        dev = load("godot")
+        dev.ROOT = self.root
+        calls = []
+        dev.cmd_import = lambda args, godot: calls.append(godot) or 0
+        (self.root / ".godot").mkdir()
+        (self.root / dev.CLASS_STAMP).write_text(dev.class_names(), encoding="utf-8")
+        return dev, calls
+
+    def test_a_new_asset_is_imported_first(self):
+        dev, calls = self.setup_game()
+        self.assertEqual(quiet(dev.ensure_imported, "godot")[0], 0)
+        self.assertEqual(calls, [], "nothing new: no import")
+        (self.root / "assets").mkdir()
+        (self.root / "assets" / "hero.png").write_bytes(b"\x89PNG")
+        rc, text = quiet(dev.ensure_imported, "godot")
+        self.assertEqual(calls, ["godot"], text)
+        self.assertIn("assets/hero.png", text)
+
+    def test_imported_ignored_and_hidden_assets_are_left_alone(self):
+        dev, calls = self.setup_game()
+        for rel in ("assets/a.png", "assets/a.png.import", "assets_src/.gdignore", "assets_src/raw.png",
+                    ".hidden/x.wav", "build/web/icon.png", "docs/notes.txt"):
+            (self.root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (self.root / rel).write_bytes(b"x")
+        old = (self.root / "assets" / "a.png").stat().st_mtime - 60
+        os.utime(self.root / "assets" / "a.png", (old, old))
+        self.assertEqual(dev.unimported_assets(), [])
+        quiet(dev.ensure_imported, "godot")
+        self.assertEqual(calls, [])
+        new = (self.root / "assets" / "a.png.import").stat().st_mtime + 30   # changed after its last import
+        os.utime(self.root / "assets" / "a.png", (new, new))
+        self.assertEqual(dev.unimported_assets(), ["assets/a.png"])
 
 
 class GodotPck(TempRoot):

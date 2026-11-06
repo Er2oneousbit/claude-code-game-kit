@@ -112,10 +112,8 @@ def run(settings, a):
             models = [m for m in lock["models"] if m["tier"] in (t,)]
             miss = []
             for m in models:
-                node = info.get(m["loader"], {})
-                opts = (node.get("input", {}).get("required", {}).get(m["input"]) or [[]])[0]
-                opts = opts if isinstance(opts, list) else []
-                if m["file"] not in [str(o).replace("\\", "/").split("/")[-1] for o in opts]:
+                # both /object_info styles: [[names]] and V3 ["COMBO", {"options": [...]}] (#197)
+                if m["file"] not in engine.cl.loader_options(info, m["loader"], m["input"]):
                     miss.append(m)
             tinfo = lock["tiers"][t]
             if miss:

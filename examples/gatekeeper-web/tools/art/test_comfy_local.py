@@ -165,6 +165,8 @@ class FakeComfy(http.server.BaseHTTPRequestHandler):
                 return self.send(200, flac_with_tags(), "audio/flac")
             if name.endswith(".glb"):
                 return self.send(200, glb_with_extras(), "model/gltf-binary")
+            if name.endswith(".webp"):
+                return self.send(200, webp_with_exif()[0], "image/webp")
             if name.endswith(".mp3"):
                 return self.send(200, b"ID3 fake mp3", "audio/mpeg")
             return self.send(200, b"GIF89a fake", "image/gif")
@@ -392,6 +394,17 @@ class ComfyLocalExam(unittest.TestCase):
         self.assertEqual(rc, 0, out)
         self.assertIn("[warn] walk.gif", out)
 
+    def test_webp_output_loses_its_exif_and_xmp(self):
+        """#198: a WebP that ComfyUI returned was saved with its EXIF and XMP (the workflow), only warned about."""
+        STATE.files = [{"filename": "kit_00001_.webp", "subfolder": "", "type": "output"}]
+        rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o")
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn("[warn] kit_00001_.webp", out)
+        saved = (self.root / "o" / "kit_00001_.webp").read_bytes()
+        for gone in (GPS, b"EXIF", b"xmpmeta"):
+            self.assertNotIn(gone, saved)
+        self.assertIn(webp_with_exif()[1], saved, "the image itself is kept")
+
     def test_hostile_file_name_stays_in_out(self):
         STATE.files = [{"filename": "../../evil.png", "subfolder": "", "type": "output"}]
         rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o")
@@ -574,6 +587,18 @@ class PictureMetadata(unittest.TestCase):
         for bad in (data[:40], b"\xff\xd8\x00\x00"):
             with self.assertRaises(cl.ToolError):
                 cl.strip_jpeg(bad)
+
+    def test_loader_options_reads_both_object_info_styles(self):
+        """#197: Dotwork's setup_check read only [[names]]; ComfyUI's V3 nodes answer ["COMBO", {"options": ...}]."""
+        info = {"Old": {"input": {"required": {"f": [["a/x.safetensors", "y.safetensors"], {}]}}},
+                "V3": {"input": {"required": {"f": ["COMBO", {"options": ["sub\\z.safetensors"]}]}}},
+                "Odd": {"input": {"required": {"f": "INT"}}}}
+        self.assertEqual(cl.loader_options(info, "Old", "f"), {"x.safetensors", "y.safetensors"})
+        self.assertEqual(cl.loader_options(info, "V3", "f"), {"z.safetensors"})
+        self.assertEqual(cl.loader_options(info, "Odd", "f"), set())
+        self.assertEqual(cl.loader_options(info, "Gone", "f"), set())
+        setup = (Path(__file__).resolve().parent / "dotwork" / "setup_check.py").read_text(encoding="utf-8")
+        self.assertIn("cl.loader_options(", setup, "Dotwork's setup check reads models through the shared reader")
 
     def test_webp_loses_exif_and_xmp_and_their_flags(self):
         data, image = webp_with_exif()

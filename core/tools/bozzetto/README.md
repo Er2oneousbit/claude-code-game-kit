@@ -122,8 +122,8 @@ From the kit's own runs (K01, `workflows/bozzetto-showcase/`):
 ## In the engine
 A `.glb` from Bozzetto is glTF 2.0, metres, +Y up, front +Z, pivot at the bottom centre, one mesh named after the
 model, PBR textures embedded. The game's ENGINE.md (in docs/) has the import line for your engine.
-- **Godot 4**: put it under `assets/` (the default) and the editor imports it; headless, run `python tools/dev.py import`
-  once after a new model (`test` and `smoke` re-import only when class names change, so they would not see it);
+- **Godot 4**: put it under `assets/` (the default) and the editor imports it; headless, `check`, `test` and `smoke`
+  import a new or changed model first (or run `python tools/dev.py import`);
   instance it as a scene (`load("res://assets/models/prop_chest.glb").instantiate()`). Tested: import, `check`,
   `smoke`, and a GUT test that loads it and measures its size (K01). A `--material vertex` model renders white until
   its materials get `vertex_color_use_as_albedo = true`: Godot 4.7 imports the colours but leaves that off (K01, #202;

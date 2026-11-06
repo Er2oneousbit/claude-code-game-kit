@@ -1032,11 +1032,12 @@ def bring_back(args, work, man, renders, daw, strict, extras=()):
                                               if strict else ", kept as it is"))
             continue
         chans, rate, _ = read_any(r)
-        if man["kind"] == "music" and rate != man["rate"]:
-            # stems play together at the track's rate: a render at another one would be measured, looped and
-            # written at the wrong rate (#242)
-            problems.append(f"{it['name']}: rendered at {rate} Hz, the track is {man['rate']} Hz: render it at "
-                            f"{man['rate']} Hz")
+        want = man["rate"] if man["kind"] == "music" else it["rate"]
+        if rate != want:
+            # stems play together at the track's rate (#242), and a sound keeps its own: a render at another rate
+            # would be taken as an edit and written at the wrong rate (#194). REAPER renders each rate on its own.
+            problems.append(f"{it['name']}: rendered at {rate} Hz, the game's file is {want} Hz: render it at "
+                            f"{want} Hz (the game's file is kept)")
             continue
         if it["channels"] == 1 and len(chans) == 2 and all(abs(x - y) <= SAME_TOL for x, y in zip(*chans)):
             chans = chans[:1]                              # a mono sound rendered on a stereo bus: mono again

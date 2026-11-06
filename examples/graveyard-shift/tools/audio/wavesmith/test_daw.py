@@ -949,6 +949,18 @@ class ReviewFixesExam(GameDir):
         self.assertIn("rendered at 48000 Hz", out)
         self.assertEqual(self.changed(before), [])
 
+    def test_a_sound_rendered_at_another_rate_is_refused_on_import(self):
+        """#194: daw import took a render at another rate than its sound as an edit and wrote it at that rate."""
+        self.assertEqual(run("export", "blips", "build/daw_blips")[0], 0)
+        work = self.root / "build" / "daw_blips"
+        samples, rate, _, channels = read_wav_channels(work / "stems" / "blips_high.wav")
+        write_wav(work / daw.RENDERS_DIR / "blips_high.wav", samples, 48000, channels=channels)
+        before = self.snapshot()
+        rc, out = run("import", "build/daw_blips")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("rendered at 48000 Hz, the game's file is 44100 Hz", out)
+        self.assertEqual(self.changed(before), [])
+
     def test_a_mix_gain_with_a_stem_missing_writes_no_stem(self):
         self.make_music()
         self.assertEqual(run("export", "explore", "build/daw_explore")[0], 0)

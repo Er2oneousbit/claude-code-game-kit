@@ -84,6 +84,10 @@ CHECK_BATCH = 200                        # files per Godot launch (Windows comma
 PRESERVE_ON_DEEP_CLEAN = [".godot/export_credentials.cfg"]  # secrets Godot stores inside the cache dir
 MIN_GODOT = (4, 3)                       # older 4.x lack --import or exit 1 after a clean quit
 CLASS_STAMP = ".godot/dev_class_names.txt"  # class_name set at the last import (stale cache detection)
+# Files Godot imports (it writes <file>.import beside each): one without that file, or newer than it, needs an
+# import before test or smoke can load it (#195)
+IMPORTABLE = {".png", ".jpg", ".jpeg", ".webp", ".svg", ".bmp", ".tga", ".exr", ".hdr", ".wav", ".ogg", ".mp3",
+              ".glb", ".gltf", ".fbx", ".obj", ".ttf", ".otf", ".woff", ".woff2"}
 GUT_NOTHING_RAN = [                      # GUT exits 0 on these, so they must be caught by text
     r"\[GUT ERROR\]", r"Nothing was run", r"Could not find script matching",
     r"Ignoring script .* does not extend GutTest", r"have not been imported", r"SCRIPT ERROR", r"Parse Error",
@@ -349,18 +353,44 @@ def class_names():
     return "\n".join(sorted(found))
 
 
+def unimported_assets():
+    """Importable files Godot has not imported yet (no <file>.import beside them) or that changed since (newer than
+    it), as project paths. Hidden folders and folders with a .gdignore are skipped, as Godot skips them."""
+    ignored = {p.parent for p in ROOT.rglob(".gdignore")}
+    stale = []
+    for p in ROOT.rglob("*"):
+        if p.suffix.lower() not in IMPORTABLE or not p.is_file():
+            continue
+        rel = p.relative_to(ROOT)
+        if any(part.startswith(".") for part in rel.parts[:-1]) or rel.parts[0] == "build" \
+                or any(d in ignored for d in p.parents):
+            continue
+        side = p.with_name(p.name + ".import")
+        try:
+            if not side.is_file() or p.stat().st_mtime > side.stat().st_mtime + 1:
+                stale.append(rel.as_posix())
+        except OSError:
+            continue
+    return sorted(stale)
+
+
 def ensure_imported(godot):
-    """Re-run import when the cache is missing or the class_name set changed since the last import.
+    """Re-run import when the cache is missing, the class_name set changed since the last import, or an asset is
+    new or changed.
 
     Godot resolves class_name globals from .godot/global_script_class_cache.cfg, which only an
     import rebuilds; without this, a new class makes `check` fail on valid code and `test` skip files.
+    A new .png, .wav or .glb is loadable only once imported: test and smoke failed on it until `dev.py import` (#195).
     Returns 0 when the cache is current, else the import's exit code.
     """
     stamp = ROOT / CLASS_STAMP
     current = class_names()
-    if stamp.is_file() and stamp.read_text(encoding="utf-8") == current:
+    assets = unimported_assets() if (ROOT / ".godot").is_dir() else []
+    if stamp.is_file() and stamp.read_text(encoding="utf-8") == current and not assets:
         return 0
-    why = "no import cache yet" if not (ROOT / ".godot").is_dir() else "class_name scripts changed"
+    why = "no import cache yet" if not (ROOT / ".godot").is_dir() else \
+        "class_name scripts changed" if not (stamp.is_file() and stamp.read_text(encoding="utf-8") == current) else \
+        f"{len(assets)} new or changed asset(s) ({', '.join(assets[:3])}{' ...' if len(assets) > 3 else ''})"
     print(f"[info] {why}: running `dev.py import` first")
     return cmd_import(None, godot)
 

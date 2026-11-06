@@ -148,16 +148,7 @@ def klein_models():
     return [m for m in lock.get("models", []) if "klein" in m.get("routes", []) and m.get("loader") != "LoraLoaderModelOnly"]
 
 
-def loader_options(info, loader, field):
-    """The file names a loader node offers, from /object_info: old style [[names]] or V3 ["COMBO", {"options"}]."""
-    spec = ((info.get(loader) or {}).get("input") or {}).get("required", {}).get(field)
-    if isinstance(spec, list) and spec and isinstance(spec[0], list):
-        names = spec[0]
-    elif isinstance(spec, list) and len(spec) > 1 and isinstance(spec[1], dict):
-        names = spec[1].get("options") or []
-    else:
-        names = []
-    return {str(n).replace("\\", "/").split("/")[-1] for n in names}
+loader_options = cl.loader_options      # both /object_info styles; shared with Dotwork (#197)
 
 
 def missing_models(info, models):
@@ -762,7 +753,7 @@ def cmd_make(args):
           + (f"; {warns} validator warning(s) in {rel(plan.root, plan.src / 'validate.json')}" if warns else ""))
     godot = (plan.root / "project.godot").is_file()
     print(f"[next] look at {rel(plan.root, plan.src / 'turntable.png')}, then import it in the engine "
-          + ("(`python tools/dev.py import`: check, test and smoke re-import only when class names change)"
+          + ("(`python tools/dev.py import`, or let check, test or smoke import it: they import new assets)"
              if godot else "(docs/ENGINE.md)") + "; a generated mesh is a draft (SOP-11)")
     return 0
 

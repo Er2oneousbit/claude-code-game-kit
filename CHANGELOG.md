@@ -3,9 +3,16 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig`, `tools/token_audit.py`, `tools/fetch_asset.py`, the scaffolder, the paid PixelLab and ElevenLabs clients, `tools/publish_check.py`, the SessionStart hook, `tools/second_opinion.py` and the Wavesmith DAW round trip from second-model reviews
+## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig`, `tools/token_audit.py`, `tools/fetch_asset.py`, the scaffolder, the paid PixelLab and ElevenLabs clients, `tools/publish_check.py`, the SessionStart hook, `tools/second_opinion.py` and the Wavesmith DAW round trip from second-model reviews, and four older tool bugs
 Kimi K3.1 Pro reviews of 0.13.0 (`tools/second_opinion.py`), each finding checked against the code; one more was
 found by the real run that verified the rig fixes.
+- Older open bugs: `daw import` refuses a render at another sample rate than its sound, naming the rate the game
+  expects (it was taken as an edit and written at the render's rate) (#194). Godot's `dev.py` imports before `test`,
+  `smoke` and `check` when an asset is new or changed (no `<file>.import`, or newer than it), not only when class
+  names change; checked with Godot 4.7.2: a new .svg is imported once, the next run is quiet (#195). Dotwork's
+  `setup --check` reads ComfyUI's V3 loader lists (`["COMBO", {"options": ...}]`) through one
+  `comfy_local.loader_options`, shared with Bozzetto (#197). `comfy_local.py` strips EXIF and XMP from WebP and
+  JPEG outputs as it does from uploads (ComfyUI's WebP node writes the workflow there) (#198).
 - The Wavesmith DAW round trip (`tools/audio/wavesmith/daw.py`): names that a DAW could turn into one another
   (`foo-bar` and `foo_bar`) and two sounds on one game file are refused, also in an edited manifest; a REAPER that
   exits non-zero brings nothing back; a music render at another rate than its track is refused; when the mix gain

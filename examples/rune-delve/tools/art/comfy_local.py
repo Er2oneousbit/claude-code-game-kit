@@ -24,8 +24,8 @@
 #           this tool removes those text chunks (and EXIF, PNG) and tag blocks (FLAC) before writing, and `strip`
 #           does the same for files saved by hand. Audio jobs (Save Audio nodes) are saved like images. 3D jobs
 #           (Save 3D Model, history key "3d") save .glb files with the prompt in the glTF "extras": those are removed
-#           too. Other formats (GIF, WebP, video, MP3, Opus) are saved as they come, with a warning: check them before
-#           sharing.
+#           too. WebP and JPEG outputs lose their EXIF and XMP (where ComfyUI's WebP node puts the workflow, #198).
+#           Other formats (GIF, video, MP3, Opus) are saved as they come, with a warning: check them before sharing.
 #           Licensing: each model and LoRA has its own license; --log lists the models the workflow names so you
 #           can check every model card before shipping (some are non-commercial).
 #           Existing files are never replaced without --overwrite.
@@ -291,6 +291,20 @@ def apply_images(base, wf, images, dry_run):
         wf[nid]["inputs"]["image"] = name
         done.append(f"{nid}.image={name}")
     return done
+
+
+def loader_options(info, loader, field):
+    """The file names a loader node offers, from /object_info: old style [[names]] or ComfyUI's V3 schema
+    ["COMBO", {"options": [names]}] (TRELLIS.2's nodes use it). Folders are dropped: names only. Shared by Bozzetto
+    and Dotwork's setup_check (#197)."""
+    spec = ((info.get(loader) or {}).get("input") or {}).get("required", {}).get(field)
+    if isinstance(spec, list) and spec and isinstance(spec[0], list):
+        names = spec[0]
+    elif isinstance(spec, list) and len(spec) > 1 and isinstance(spec[1], dict):
+        names = spec[1].get("options") or []
+    else:
+        names = []
+    return {str(n).replace("\\", "/").split("/")[-1] for n in names}
 
 
 def missing_nodes(wf, object_info):
@@ -575,14 +589,16 @@ def strip_glb(data):
 
 
 def strip_embedded(data):
-    """PNG, FLAC or GLB without embedded prompt and workflow; anything else is a ToolError."""
+    """PNG, JPEG, WebP, FLAC or GLB without embedded prompt and workflow; anything else is a ToolError."""
     if data.startswith(PNG_MAGIC):
         return strip_png(data)
     if data.startswith(FLAC_MAGIC):
         return strip_flac(data)
     if data.startswith(GLB_MAGIC):
         return strip_glb(data)
-    raise ToolError("not a PNG, FLAC or GLB file")
+    if data.startswith(JPEG_MAGIC) or (data[:4] == b"RIFF" and data[8:12] == b"WEBP"):
+        return strip_picture(data)          # ComfyUI's WebP node writes the workflow into EXIF and XMP (#198)
+    raise ToolError("not a PNG, JPEG, WebP, FLAC or GLB file")
 
 
 def safe_name(name):
@@ -702,10 +718,11 @@ def cmd_run(args):
             print(f"[skip] {item['filename']}: {ext or 'no extension'} is not an image, video or audio type this "
                   "tool saves")
             continue
-        if ext in (".png", ".flac", ".glb"):
+        if ext in (".png", ".flac", ".glb", ".webp", ".jpg", ".jpeg"):
             data = strip_embedded(data)
         elif ext != ".wav":   # ComfyUI writes no workflow into WAV, so there is nothing to strip or warn about
-            print(f"[warn] {name}: {ext} files can carry the workflow too; this tool strips PNGs, FLACs and GLBs only")
+            print(f"[warn] {name}: {ext} files can carry the workflow too; this tool strips PNG, JPEG, WebP, FLAC "
+                  "and GLB only")
         fetched.append((out_dir / name, data))
     if not fetched:
         raise JobError("nothing was saved")
