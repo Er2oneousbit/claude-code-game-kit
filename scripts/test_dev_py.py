@@ -224,6 +224,91 @@ class UnrealAutomation(TempRoot):
         rc, text = self.automation(0, "Test Completed. Result={Success} Name={A}\n")
         self.assertEqual(rc, 0, text)
 
+    def test_a_crash_after_some_passed_tests_fails(self):
+        """#250: a non-zero exit counted only when no test had passed: a crash after two passes was [ OK ]."""
+        log = ("Test Completed. Result={Success} Name={A}\nTest Completed. Result={Success} Name={B}\n"
+               "LogWindows: Error: Unhandled Exception: EXCEPTION_ACCESS_VIOLATION\n")
+        rc, text = self.automation(3, log)
+        self.assertEqual(rc, 1, text)
+        self.assertIn("after 2 test(s) passed", text)
+
+    def test_a_test_named_test_failed_is_not_a_failure(self):
+        """#250: the pattern \\bTest Failed\\b matched a passing test's own name."""
+        rc, text = self.automation(0, "Test Completed. Result={Success} Name={Test Failed Handling}\n")
+        self.assertEqual(rc, 0, text)
+
+
+class UnrealRunTeeTimeout(TempRoot):
+    def test_a_hung_build_is_stopped(self):
+        """#250: build, package and project files had no timeout; run_tee now stops a hang."""
+        dev = load("unreal")
+        dev.ROOT = self.root
+        start = time.monotonic()
+        rc, _ = quiet(dev.run_tee, [sys.executable, "-c", "import time; print('x', flush=True); time.sleep(60)"],
+                      timeout=2)[0]
+        self.assertEqual(rc, 124)
+        self.assertLess(time.monotonic() - start, 30)
+
+
+class GodotCaptureFiles(TempRoot):
+    """#250: --record deleted every f*.png in its folder; capture folders were imported by Godot on every run."""
+
+    def test_only_the_tools_own_frames_are_cleared_and_the_folder_is_ignored(self):
+        dev = load("godot")
+        dev.ROOT = self.root
+        rec = self.root / "captures"
+        rec.mkdir()
+        for name in ("fox.png", "f00003.png", "frame.png", "f00003.png.import"):
+            (rec / name).write_bytes(b"x")
+        dev.run = lambda cmd, **kw: (0, "CAPTURE_DONE frames=1 saved=0\n")
+        args = argparse.Namespace(drive="", record_every=66, screenshot="", record="captures")
+        quiet(dev.capture, args, "godot", 1, [])
+        left = sorted(p.name for p in rec.iterdir())
+        self.assertIn("fox.png", left)
+        self.assertIn("frame.png", left)
+        self.assertNotIn("f00003.png", left)
+        self.assertNotIn("f00003.png.import", left)
+        self.assertIn(".gdignore", left)
+
+    def test_a_touched_but_imported_asset_is_not_imported_again(self):
+        import os
+        dev = load("godot")
+        dev.ROOT = self.root
+        (self.root / ".godot").mkdir()
+        art = self.root / "assets" / "a.png"
+        art.parent.mkdir()
+        art.write_bytes(b"x")
+        (self.root / "assets" / "a.png.import").write_bytes(b"x")
+        old = time.time() - 600
+        os.utime(self.root / "assets" / "a.png.import", (old, old))
+        self.assertEqual(dev.unimported_assets(), ["assets/a.png"])     # newer than its sidecar, no stamp yet
+        (self.root / dev.CLASS_STAMP).write_text("", encoding="utf-8")   # an import ran after the touch
+        self.assertEqual(dev.unimported_assets(), [])
+
+    def test_check_resolves_files_against_the_project(self):
+        dev = load("godot")
+        dev.ROOT = self.root
+        (self.root / "scripts").mkdir()
+        (self.root / "scripts" / "a.gd").write_text("extends Node\n", encoding="utf-8")
+        seen = []
+        dev.ensure_imported = lambda godot: 0
+        dev.run = lambda cmd, **kw: seen.append(cmd) or (0, "CHECK_DONE\n")
+        args = argparse.Namespace(files=["scripts/a.gd"])
+        sub = self.root / "tools"
+        sub.mkdir()
+        cwd = Path.cwd()
+        import os
+        os.chdir(sub)                                    # run from tools/, as the review did
+        try:
+            rc, text = quiet(dev.cmd_check, args, "godot")
+            rc_out, text_out = quiet(dev.cmd_check, argparse.Namespace(files=[str(self.tmp.name) + "/../x.gd"]),
+                                     "godot")
+        finally:
+            os.chdir(cwd)
+        self.assertEqual(rc, 0, text)
+        self.assertIn("res://scripts/a.gd", " ".join(" ".join(map(str, c)) for c in seen))
+        self.assertEqual(rc_out, 2, text_out)
+
 
 # ---- #161: Godot build lists the .pck ------------------------------------------
 def fake_pck(paths, fmt=4, res_prefix=False):

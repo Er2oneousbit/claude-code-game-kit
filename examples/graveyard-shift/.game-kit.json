@@ -1395,6 +1395,12 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1771,7 +1777,7 @@
     "tools/bozzetto/workflows/trellis2_image_to_3d.api.json": "c18a577cf62b2f12a9689760edfdc89ef671d0b996a5b063343461c505a113f3",
     "tools/check_links.py": "ef9d576ead241adce8f3c40b0ba853990e6a31fd55f7f33ecd4b91301a3ca952",
     "tools/credits.py": "15b4ac5af145517cb91f8eb7101271861c8c8ccedd4f83d59bc35cd04e4e831e",
-    "tools/dev.py": "610a5309b5076336252f18b97b0b8c84525deedce5bd9b01f6d56f043068b632",
+    "tools/dev.py": "9668fa4fe8a85c9d8318c2e6de342e7cb92a57875d7b549e3f7adb15e747c8ed",
     "tools/doctor.py": "b410d757ec13b38800a46525f6ef1ebb5c2e264dbe1fa2f14dce73f0f42535b8",
     "tools/fetch_asset.py": "4c3f351d98ed01dd27c9dc68ec0f3b9242045c16d1b2dde292cf44fb3d127d7d",
     "tools/golden_vectors.py": "5368a2d52b2a9c837ee42cc974ef1085e1b8d018be7343069027eed1736f8b95",

@@ -81,12 +81,14 @@ SYSTEM = platform.system()  # Windows, Linux, Darwin
 # ---- Tunables / constants (edit if your UE version differs) -------------------
 SMOKE_GROUP_SUFFIX = "Smoke"                  # tests named <Game>.Smoke.* are the smoke group
 TEST_TIMEOUT_S = 1800
-FAIL_PATTERNS = [r"Result=\{Fail\}", r"Fatal error", r"LogAutomationController: Error", r"\bTest Failed\b"]
+# Result={Fail} covers every failed test; "Test Failed" alone also matched a test named "Test Failed Handling" (#250)
+FAIL_PATTERNS = [r"Result=\{Fail\}", r"Fatal error", r"LogAutomationController: Error"]
 OK_PATTERN = r"Result=\{Success\}"
 NO_TESTS_PATTERN = r"No automation tests matched"  # logged before the editor exits 255 (UE 5.8)
 AUTOMATION_LOG = ROOT / "Saved" / "Logs" / "dev_automation.log"  # UnrealEditor-Cmd does not log to stdout
 EXEC_LOG = ROOT / "Saved" / "Logs" / "dev_exec.log"
 EXEC_TIMEOUT_S = 3600                         # a first import of many assets is slow; a hang still ends
+BUILD_TIMEOUT_S = 4 * 3600                    # build, package, project files: longer than this is a hang (#250)
 KILL_TIMEOUT_S = 10                           # after a timeout: seconds to wait for the killed tree's pipe
 PYTHON_ERROR_PATTERN = r"\]LogPython: Error"
 # Engine plugins' own Python start-up chatter, not the script's output
@@ -375,8 +377,9 @@ def run(cmd, capture=False, timeout=None):
     return proc.returncode, (out or "")
 
 
-def run_tee(cmd):
-    """Run cmd, streaming its output live AND keeping a copy. Returns (returncode, output)."""
+def run_tee(cmd, timeout=None):
+    """Run cmd, streaming its output live AND keeping a copy. Returns (returncode, output); 124 when it ran past
+    timeout seconds (the tree is stopped)."""
     dbg("run: " + " ".join(str(c) for c in cmd))
     sys.stdout.flush()
     try:
@@ -389,16 +392,33 @@ def run_tee(cmd):
         print(f"[error] cannot execute {cmd[0]}: {exc.strerror or exc} (not a file, or not executable: chmod +x)",
               file=sys.stderr)
         return 126, ""
-    lines = []
+    lines, expired = [], []
+    watchdog = None
+    if timeout:
+        import threading
+
+        def stop():
+            expired.append(True)
+            kill_tree(proc)
+        watchdog = threading.Timer(timeout, stop)
+        watchdog.daemon = True
+        watchdog.start()
     try:
         for line in proc.stdout:
             print(line, end="", flush=True)    # live, even when piped
             lines.append(line)
-        return proc.wait(), "".join(lines)
+        rc = proc.wait()
+        if expired:
+            print(f"[FAIL] no exit after {timeout} s (a hang): {' '.join(str(c) for c in cmd[:1])} ...")
+            return 124, "".join(lines)
+        return rc, "".join(lines)
     except KeyboardInterrupt:              # Ctrl+C: stop UBT and its compilers too, then let main() report it
         kill_tree(proc)
         reap(proc)
         raise
+    finally:
+        if watchdog:
+            watchdog.cancel()
 
 
 def preflight(need_uproject=True):
@@ -480,7 +500,7 @@ def cmd_check(args):
     missing = missing_tool(bf)
     if missing:
         return missing
-    rc, out = run_tee(cmd)
+    rc, out = run_tee(cmd, timeout=BUILD_TIMEOUT_S)
     if rc in NO_EXEC:
         return 2
     if rc != 0 and re.search(LONG_PATH_PATTERN, out):
@@ -548,10 +568,12 @@ def run_automation(filter_, args, until=None, fail_on=None):
             print("  " + l)
         print(f"[FAIL] {len(fails)} failure line(s), {oks} passing")
         return 1
-    if oks == 0 and rc != 0 and not re.search(NO_TESTS_PATTERN, out):
-        # The editor died before any result line: a crash is a task failure (exit 1), not an empty filter
-        # (an empty filter also exits non-zero, 255 on UE 5.8, but logs NO_TESTS_PATTERN first)
-        print(f"[FAIL] the editor exited with code {rc} before any test finished; the log is in {AUTOMATION_LOG}")
+    if rc != 0 and not re.search(NO_TESTS_PATTERN, out):
+        # The editor died: a crash is a task failure (exit 1), not an empty filter (an empty filter also exits
+        # non-zero, 255 on UE 5.8, but logs NO_TESTS_PATTERN first). Also after some tests passed: the ones that
+        # never ran leave no result line (#250)
+        done = "before any test finished" if oks == 0 else f"after {oks} test(s) passed"
+        print(f"[FAIL] the editor exited with code {rc} {done}; the log is in {AUTOMATION_LOG}")
         return 1
     if oks == 0:
         # Nothing ran: a setup gap (no such tests yet), not a failing test. Same rule as Unity and Godot.
@@ -674,7 +696,7 @@ def cmd_package(args):
     cmd = [uat, "BuildCookRun", f"-project={find_uproject()}", "-noP4",
            f"-platform={platform_name(args.platform)}", f"-clientconfig={args.config}",
            "-build", "-cook", "-stage", "-pak", "-archive", f"-archivedirectory={out_dir}"]
-    rc, _ = run(cmd)
+    rc, _ = run(cmd, timeout=BUILD_TIMEOUT_S)
     print(f"[{' OK ' if rc == 0 else 'FAIL'}] package {'written to Packaged/' if rc == 0 else 'failed'}")
     return 2 if rc in NO_EXEC else 0 if rc == 0 else 1
 
@@ -694,7 +716,7 @@ def cmd_genproj(args):
         cmd.append("-rocket")
     if args.vscode:
         cmd.append("-VSCode")
-    rc, _ = run(cmd)
+    rc, _ = run(cmd, timeout=BUILD_TIMEOUT_S)
     print(f"[{' OK ' if rc == 0 else 'FAIL'}] project files {'generated' if rc == 0 else 'failed'}")
     return 2 if rc in NO_EXEC else 0 if rc == 0 else 1
 

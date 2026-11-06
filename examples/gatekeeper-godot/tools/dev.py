@@ -98,6 +98,8 @@ SMOKE_MIN_FPS = 60                       # headless frames are uncapped; --frame
 TEST_TIMEOUT_S = 900
 CHECK_TIMEOUT_S = 600                    # per batch of CHECK_BATCH files
 IMPORT_TIMEOUT_S = 1800                  # first import of a big project is slow
+BUILD_TIMEOUT_S = 4 * 3600               # an export that runs longer than this is a hang
+FRAME_NAME = re.compile(r"f\d{5}\.png")   # what tools/capture.gd names its frames (only these are cleared)
 KILL_TIMEOUT_S = 10                      # after a timeout: seconds to wait for the killed tree's pipe
 SMOKE_DATA = "build/smoke-data"          # the game's data folder in a smoke run without --data-dir (wiped each run)
 DRIVES = ("menus", "crash", "pseudo", "pseudo-plant")   # smoke --drive scenarios (scripts/shell/smoke_drive.gd)
@@ -357,6 +359,10 @@ def unimported_assets():
     """Importable files Godot has not imported yet (no <file>.import beside them) or that changed since (newer than
     it), as project paths. Hidden folders and folders with a .gdignore are skipped, as Godot skips them."""
     ignored = {p.parent for p in ROOT.rglob(".gdignore")}
+    try:
+        stamp = (ROOT / CLASS_STAMP).stat().st_mtime   # written after each successful import
+    except OSError:
+        stamp = 0.0
     stale = []
     for p in ROOT.rglob("*"):
         if p.suffix.lower() not in IMPORTABLE or not p.is_file():
@@ -367,7 +373,10 @@ def unimported_assets():
             continue
         side = p.with_name(p.name + ".import")
         try:
-            if not side.is_file() or p.stat().st_mtime > side.stat().st_mtime + 1:
+            # Godot rewrites <file>.import only when the content changed: a touched or re-saved file stays newer than
+            # its sidecar. Anything older than the last import's stamp was seen by that import (#250)
+            seen = max(side.stat().st_mtime, stamp) if side.is_file() else None
+            if seen is None or p.stat().st_mtime > seen + 1:
                 stale.append(rel.as_posix())
         except OSError:
             continue
@@ -435,7 +444,21 @@ def cmd_check(args, godot):
     autoload use fails with "Identifier not found" (Godot 4.7.2).
     """
     if args.files:
-        files = [Path(f) for f in args.files]
+        # #250: a file is the project's path (or one the shell can reach), never resolved against another folder
+        files = []
+        for f in args.files:
+            p = Path(f)
+            cand = [p] if p.is_absolute() else [ROOT / p, Path.cwd() / p]
+            hit = next((c.resolve() for c in cand if c.is_file()), None)
+            if hit is None:
+                print(f"[error] not found: {f} (give a path inside the project)", file=sys.stderr)
+                return 2
+            try:
+                hit.relative_to(ROOT)
+            except ValueError:
+                print(f"[error] {f} is outside the project {ROOT}", file=sys.stderr)
+                return 2
+            files.append(hit)
     else:
         files = game_scripts()
         if not (ROOT / GUT_CMDLN).exists():
@@ -584,19 +607,37 @@ def cmd_smoke(args, godot):
     return 0
 
 
+def gdignore(folder):
+    """A .gdignore in a capture folder inside the project, so Godot does not import the pictures (#250)."""
+    try:
+        folder.relative_to(ROOT)
+    except ValueError:
+        return
+    if folder == ROOT:
+        return                                  # never ignore the whole project
+    folder.mkdir(parents=True, exist_ok=True)
+    mark = folder / ".gdignore"
+    if not mark.exists():
+        mark.write_bytes(b"")
+
+
 def capture(args, godot, frames, user):
     """Run the game in a real window (headless has no renderer) and save a screenshot and/or a frame burst."""
     cmd = [godot, "--path", "."] + (["--fixed-fps", str(DRIVE_FPS)] if args.drive else [])
     cmd += ["-s", "res://tools/capture.gd", "--", "--frames", str(frames), "--every-ms", str(args.record_every)]
     shot = (ROOT / args.screenshot).resolve() if args.screenshot else None
     rec = (ROOT / args.record).resolve() if args.record else None
+    for folder in {p for p in (shot.parent if shot else None, rec) if p}:
+        gdignore(folder)                        # #250: Godot must not import captures (each run re-triggered it)
     if shot:
         if shot.is_file():
             shot.unlink()                       # a picture from an earlier run must not pass for this one
         cmd += ["--shot", shot.as_posix()]
     if rec:
-        for old in rec.glob("f*.png"):          # frames from an earlier run would end up in the GIF
-            old.unlink()
+        for old in rec.glob("f*.png"):          # frames from an earlier run would end up in the GIF; only the
+            if FRAME_NAME.fullmatch(old.name):  # tool's own names (#250: a captures/fox.png went too)
+                old.unlink()
+                old.with_name(old.name + ".import").unlink() if old.with_name(old.name + ".import").exists() else None
         cmd += ["--record", rec.as_posix()]
     cmd += user + ["--capture"]
     limit = DRIVE_TIMEOUT_S if args.drive else SMOKE_TIMEOUT_S + frames // SMOKE_MIN_FPS
@@ -611,7 +652,7 @@ def capture(args, godot, frames, user):
         if DEBUG:
             print(out[-2000:])
         return 1
-    count = len(list(rec.glob("f*.png"))) if rec else 0
+    count = len([p for p in rec.glob("f*.png") if FRAME_NAME.fullmatch(p.name)]) if rec else 0
     rc = 0
     if shot and not (shot.is_file() and shot.stat().st_size > 0):
         print(f"[FAIL] capture finished but wrote no screenshot to {shot}")
@@ -690,7 +731,8 @@ def cmd_build(args, godot):
     if not out_path.is_absolute():
         out_path = ROOT / out_path          # Godot resolves relative paths inside the project, not our cwd
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    rc, _ = run([godot, "--headless", "--path", ".", "--export-release", args.preset, str(out_path)])
+    rc, _ = run([godot, "--headless", "--path", ".", "--export-release", args.preset, str(out_path)],
+                timeout=BUILD_TIMEOUT_S)
     print(f"[{' OK ' if rc == 0 else 'FAIL'}] export {'done: ' + str(out_path) if rc == 0 else 'failed'}")
     if rc != 0:
         return 2 if rc in NO_EXEC else 1

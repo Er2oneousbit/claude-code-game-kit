@@ -1399,6 +1399,12 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1799,7 +1805,7 @@
     "tools/check_links.py": "ef9d576ead241adce8f3c40b0ba853990e6a31fd55f7f33ecd4b91301a3ca952",
     "tools/check_scripts.gd": "6f2923361ac70766d165e52b86f65aff2cb96868a1a7516a3bb312cb5eda497a",
     "tools/credits.py": "15b4ac5af145517cb91f8eb7101271861c8c8ccedd4f83d59bc35cd04e4e831e",
-    "tools/dev.py": "78e0451cd1a35d06375b77fb1b4559e7ff8b4735cfc721ca8125d7662249f6a5",
+    "tools/dev.py": "6ffbc35685feab6d01b743759aef6cc28a9ca75aa5d86df9d586248e3d760149",
     "tools/doctor.py": "b410d757ec13b38800a46525f6ef1ebb5c2e264dbe1fa2f14dce73f0f42535b8",
     "tools/fetch_asset.py": "4c3f351d98ed01dd27c9dc68ec0f3b9242045c16d1b2dde292cf44fb3d127d7d",
     "tools/golden_vectors.py": "5368a2d52b2a9c837ee42cc974ef1085e1b8d018be7343069027eed1736f8b95",

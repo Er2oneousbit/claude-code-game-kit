@@ -319,6 +319,9 @@ def cmd_check(args):
         print(f"[error] {why}", file=sys.stderr)
         return 2
     errs = compile_errors(log)
+    if rc == 124 and not errs:
+        print("[FAIL] the editor did not finish in time (a hang, or an import that needs longer)")
+        return 1
     if rc != 0 or errs:
         for e in errs[:15]:
             print("  " + e)
@@ -418,8 +421,9 @@ def cmd_smoke(args):
         env["GAMEKIT_SCREENSHOT"] = str(shot)
     if rec:
         rec.mkdir(parents=True, exist_ok=True)
-        for old in rec.glob("frame_*.png"):  # frames from an earlier run would end up in the GIF
-            old.unlink()
+        for old in rec.glob("frame_*.png"):  # frames from an earlier run would end up in the GIF: only the
+            if re.fullmatch(r"frame_\d{6}\.png", old.name):   # capture's own names (#250)
+                old.unlink()
         env["GAMEKIT_RECORD_DIR"] = str(rec)
         env["GAMEKIT_RECORD_EVERY"] = str(args.record_every)
     graphics = args.graphics or bool(env)
@@ -433,7 +437,7 @@ def cmd_smoke(args):
         rc = 1
     elif shot:
         print(f"[ OK ] screenshot: {shot}")
-    n = len(list(rec.glob("frame_*.png"))) if rec else 0
+    n = len([p for p in rec.glob("frame_*.png") if re.fullmatch(r"frame_\d{6}\.png", p.name)]) if rec else 0
     if rec and n == 0:
         print(f"[FAIL] no frames recorded in {rec}: the test must call GameKitCapture.Attach() after its scene loads")
         rc = 1
