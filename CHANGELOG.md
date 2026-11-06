@@ -6,8 +6,8 @@
 ## 0.13.2 (unreleased): fixes from Fable reviews of the Pixelorama lane, the engine wrappers and the shipped tools
 - Engine wrappers (Godot, Unity, Unreal): Unreal `test`/`smoke` fail when the editor exits non-zero after some
   tests passed (a crash after two passes was `[ OK ]`), and a test named "Test Failed ..." is no longer a failure.
-  Godot `smoke --record` deletes only its own `f00000.png` frames (and their `.import`), not every `f*.png` (a
-  `captures/fox.png` went); Unity only `frame_000000.png`. Godot's import-before-check (0.13.1, #195) compares with
+  Godot `smoke --record` deletes only its own `f00000.png` frames (and their `.import`), not every `f*.png` (a picture
+  of yours named fox.png went); Unity only `frame_000000.png`. Godot's import-before-check (0.13.1, #195) compares with
   the last import, so a touched or re-saved asset is imported once, not on every command (checked with Godot 4.7.2);
   capture folders inside the project get a `.gdignore`. Godot `check <file>` resolves the file against the project
   and refuses one outside it (exit 2). Godot `build` and Unreal `build`, `package` and `genproj` stop after 4 hours
