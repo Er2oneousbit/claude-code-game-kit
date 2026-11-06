@@ -277,6 +277,16 @@ class CountExam(unittest.TestCase):
         self.assertEqual(unlisted, [], "skills no SOP index row names")
         self.assertEqual(wrong_row, [], "skills missing from the row of the SOP they follow")
 
+    def test_a_check_that_compiles_shaders_names_the_bevy_exception(self):
+        # second-model review: SOP-24 and /shader said `check` compiles every recipe, but Bevy compiles WESL only
+        # when it builds a pipeline (`smoke --shaders`), as Bevy's ENGINE.md and SOP-24 section 3 say
+        unqualified = []
+        for doc in ("core/docs/sop/SOP-24-shaders.md", "core/.claude/skills/shader/SKILL.md"):
+            for para in re.split(r"\n\s*\n|\n(?=\s*\d+\. )", read(doc)):
+                if "dev.py check" in para and "compil" in para and "Bevy" not in para:
+                    unqualified.append("%s: %s" % (doc, para.strip()[:80]))
+        self.assertEqual(unqualified, [], "says `check` compiles the shaders without Bevy's exception")
+
 
 @unittest.skipUnless(shutil.which("git") and (KIT / ".git").exists(), "needs git and the kit's own clone")
 class ExampleTrackingExam(unittest.TestCase):
