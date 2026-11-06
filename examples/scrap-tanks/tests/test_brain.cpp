@@ -73,6 +73,24 @@ TEST_CASE("COVER: reloading in the player's sight sends it to a hidden spot") {
     CHECK(core::hidden_from_all(s.sim, s.raider->control.goal, {s.sim.player().pos}));
 }
 
+namespace {
+// Whether a raider of this spec is ever alive and below the retreat line, taking only player shells one at a time
+bool can_retreat(const tuning::TankSpec& spec) {
+    for (double hp = spec.max_hp - tuning::kPlayer.damage; hp > 0.0; hp -= tuning::kPlayer.damage)
+        if (hp / spec.max_hp < tuning::kRetreatBelow) return true;
+    return false;
+}
+}  // namespace
+
+TEST_CASE("RETREAT is the heavy's; scouts fight to the end (#152)") {
+    // The docs once said every raider may retreat, but with the shipped numbers a scout (40 hp) is at 0.375 after
+    // one player shell and dies to the next. Letting scouts retreat broke pillar 1 in every tuning tried (0.4:
+    // cover 28/40, charging 25/40), so this is the design, pinned: a tuning change that makes the heavy unable to
+    // retreat, or scouts able to, must update the README, the GDD and the scenario numbers too
+    CHECK(can_retreat(tuning::kHeavy));
+    CHECK_FALSE(can_retreat(tuning::kScout));
+}
+
 TEST_CASE("RETREAT: badly hurt, it hides and heals out of sight, once per life") {
     Setup s;
     s.in_the_open();

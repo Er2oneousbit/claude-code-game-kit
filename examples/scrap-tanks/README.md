@@ -3,7 +3,7 @@
 ![Scrap Tanks: the cover-using bot clears three waves of raiders](docs/scrap-tanks.gif)
 
 A one-screen tank brawl in a scrapyard: your tractor-tank against raiders whose behavior tree you can read over their
-heads (FLANK, FIRE, COVER, RETREAT). Shells stop at crates, rocks and trees, so where you stand matters more than how fast
+heads (FLANK, FIRE, COVER, and RETREAT for the heavy; scouts fight to the end). Shells stop at crates, rocks and trees, so where you stand matters more than how fast
 you click. Made with the [Claude Code Game Kit](../../README.md) as its **C++ / SDL2 example**, built only with what the
 kit provides: Kenney CC0 3D models rendered into sprite sheets with the kit's Blender tools, a behavior tree built by
 SOP-14, and a scenario pair that proved the main pillar wrong three times before it held. Step by step:

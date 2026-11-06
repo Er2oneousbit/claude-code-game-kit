@@ -13,6 +13,10 @@ found by the real run that verified the rig fixes.
   `setup --check` reads ComfyUI's V3 loader lists (`["COMBO", {"options": ...}]`) through one
   `comfy_local.loader_options`, shared with Bozzetto (#197). `comfy_local.py` strips EXIF and XMP from WebP and
   JPEG outputs as it does from uploads (ComfyUI's WebP node writes the workflow there) (#198).
+- Scrap Tanks example: RETREAT is now documented as the heavy's alone (the README, GDD and HANDOFF said every raider
+  could retreat, but a scout is at 0.375 hp after one player shell and dies to the next). Every tuning that let scouts
+  retreat broke the scenario pair (retreat line 0.4: cover 28/40, charging 25/40; 60 hp scouts: 4/40 and 4/40; 15
+  damage shells: 6/40 and 4/40; shipped: 30/40 and 13/40), so a new exam pins the design instead (#152).
 - Dotwork character QA: the turned-around check decides by where the face sits (`qa.face_side`) whenever a
   face shows, keeping the head signature for faceless characters. On the showcase frames it now flags a mirrored
   attack on the asymmetric duelist (missed before, #188) and no longer calls the dwarf's hammer swing a turn, while

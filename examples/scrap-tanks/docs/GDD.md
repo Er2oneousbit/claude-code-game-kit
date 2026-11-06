@@ -14,7 +14,7 @@
 ## Pillars (3 max)
 Pillars decide arguments. If a feature does not serve one, it goes to the Parking lot.
 1. **Cover is life**: shells stop at crates, rocks and trees; positioning beats twitch aim. Rules out hitscan weapons and see-through cover.
-2. **Read the raiders**: each enemy shows its current intent (FLANK, FIRE, COVER, RETREAT) and only shoots what it can see. Rules out hidden aimbots.
+2. **Read the raiders**: each enemy shows its current intent (FLANK, FIRE, COVER, and RETREAT for the heavy: scouts fight to the end, #152) and only shoots what it can see. Rules out hidden aimbots.
 3. **Short and replayable**: three waves, two to three minutes, R restarts. Rules out menus, upgrades and saves.
 
 ## Core loop

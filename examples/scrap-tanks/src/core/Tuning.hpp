@@ -42,7 +42,10 @@ constexpr TankSpec kHeavy{100.0, 2.6, 1.8, 6.0, 1.4, 2.0, 2.2, 13.0, 22.0, 12.0}
 
 // Raider behavior tree thresholds (ADR 0002)
 constexpr double kSightRange = 22.0;         // m; tanks see all around, cover blocks the view
-constexpr double kRetreatBelow = 0.35;       // fraction of max hp that starts a retreat
+constexpr double kRetreatBelow = 0.35;       // fraction of max hp that starts a retreat. Only the heavy can
+                                             // reach it (after its third player shell); a scout is at 0.375 after
+                                             // one and dies to the next, by design: every tuning that let scouts
+                                             // retreat broke pillar 1 (#152; 0.4: cover 28/40, charging 25/40)
 constexpr double kRecoverTo = 0.7;           // ... and the fraction that ends it
 constexpr double kRegenPerSecond = 9.0;      // hp/s while retreating out of sight
 constexpr double kAimTolerance = 5.0 * kDeg; // fire when the turret is this close to the target
