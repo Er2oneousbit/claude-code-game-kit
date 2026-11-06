@@ -1522,6 +1522,12 @@
       "date": "2026-11-06",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1956,7 +1962,7 @@
     "tools/check_links.py": "35d811faa47c297fd63e78f2958ef6abe1c742d73994857d58a99a4356792d5c",
     "tools/check_scripts.gd": "6f2923361ac70766d165e52b86f65aff2cb96868a1a7516a3bb312cb5eda497a",
     "tools/credits.py": "1b9ef614e62225a68dcba33dd04f4decc62672a3d532da6857baa5e7fff506a8",
-    "tools/dev.py": "e68b5de961f047ee698e68527228fecee861ef0b32d81cd5ae1dff6ad1289cce",
+    "tools/dev.py": "4610b82702af4eab187f4d2e1b1767b25c042e3baa012ff3dfd54dc7c7178142",
     "tools/doctor.py": "7635f687e4476700a424187beeff24022a01d260ccb158faf7e9eec69599c85a",
     "tools/fetch_asset.py": "4c3f351d98ed01dd27c9dc68ec0f3b9242045c16d1b2dde292cf44fb3d127d7d",
     "tools/golden_vectors.py": "5368a2d52b2a9c837ee42cc974ef1085e1b8d018be7343069027eed1736f8b95",
@@ -1979,9 +1985,9 @@
     "tools/shaders/ksl/triplanar.ksl": "05d03cd7a4c2f2910a1bf0cefdeac529cbcf53b005990b63287df2c1ea08c02f",
     "tools/shaders/ksl/vignette.ksl": "5a82293feaa105d1cdc07a97800496aa6c59227087fa432967ba2b068bcda19e",
     "tools/shaders/recipes.json": "656135c0b0a65c9a456089d9e098f6606bd7a007dd066c830598e6a16b56dd16",
-    "tools/shaders/shader_gen.py": "f9e5b7aacb13d241a246ef59499ed1754245a1c4dbc7b493dd39824c0cbf34f9",
-    "tools/shaders/shader_ref.py": "f21cf06f0dde7851fc00178b838d1ab5b16201b7e7ce6f8283ba478f884d1d2a",
-    "tools/shaders/test_shader_ref.py": "612934104e181e0091e3bd3b4cddaed13e11d66c9846bbc534ed658b961225e1",
+    "tools/shaders/shader_gen.py": "a2d028a956ccabac945df6a612407b22eea3d9a4cc7d275a4cefae3aa4ad592d",
+    "tools/shaders/shader_ref.py": "da67644c7e4807791d334517a65e5066f2ed370ea6c2581d3ed113d8d90d94ec",
+    "tools/shaders/test_shader_ref.py": "3630673dba353772b9a6bc56ab5240e2cc0950010e9662fc45f0e72bc892426b",
     "tools/test_check_links.py": "db6fc4b54978282095e1af3737c1164ae0316c8a3ffbe75b414d79e17363bb31",
     "tools/test_credits.py": "e1947385bb1d2a5e62518ebd9ac80f074304936eecc56b12b847e7f898c56234",
     "tools/test_doctor.py": "cbd85c47c0a105db44b063b535ae50cc99c7eb4fee05bfd659746821e5314833",

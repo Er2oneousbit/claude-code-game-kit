@@ -938,6 +938,9 @@ class MzShaders(TempRoot):
         self.assertEqual(self.check(dev, no_shaders=True)[0], 0)
         self.assertFalse(any("shader" in c for c in self.calls), self.calls)
 
+    def test_unreadable_recipes_are_an_environment_problem(self):
+        self.assertEqual(self.check(self.dev({"shader_gen.py": (2, "[error] recipes.json is malformed")}))[0], 2)
+
 
 # ---- #249: LÖVE shader recipes -----------------------------------------------------
 class LoveShaders(TempRoot):
@@ -1020,6 +1023,9 @@ class LoveShaders(TempRoot):
         self.assertEqual(rc, 2, text)
         self.assertFalse(self.calls)
 
+    def test_unreadable_recipes_are_an_environment_problem(self):
+        self.assertEqual(self.check(self.dev({"shader_gen.py": (2, "[error] recipes.json is malformed")}))[0], 2)
+
 
 # ---- #249: Bevy shader recipes ------------------------------------------------------
 class BevyShaders(TempRoot):
@@ -1082,6 +1088,10 @@ class BevyShaders(TempRoot):
         self.assertIn("do not match their recipes", text)
         dev = self.dev({"shader_gen.py": (1, "[FAIL] stale")})
         self.assertEqual(quiet(dev.cmd_check, argparse.Namespace(release=False, no_shaders=True))[0], 0)
+
+    def test_unreadable_recipes_are_an_environment_problem(self):
+        dev = self.dev({"shader_gen.py": (2, "[error] recipes.json is malformed")})
+        self.assertEqual(quiet(dev.cmd_check, argparse.Namespace(release=False, no_shaders=False))[0], 2)
 
 
 # ---- #249: Unity shader recipes -----------------------------------------------------
@@ -1159,6 +1169,9 @@ class UnityShaders(TempRoot):
         rc, text = self.smoke(dev)
         self.assertEqual(rc, 1, text)
         self.assertIn("differs from its golden image", text)
+
+    def test_unreadable_recipes_are_an_environment_problem(self):
+        self.assertEqual(self.check(self.dev(self.OK_LOG, {"shader_gen.py": (2, "[error] recipes.json is malformed")}))[0], 2)
 
 
 # ---- #249: Unreal shader recipes ----------------------------------------------------
@@ -1255,6 +1268,9 @@ class UnrealShaders(TempRoot):
         self.assertEqual(rc, 1, text)
         self.assertIn("differs from its golden image", text)
 
+    def test_unreadable_recipes_are_an_environment_problem(self):
+        self.assertEqual(self.check(self.dev(self.OK, {"shader_gen.py": (2, "[error] recipes.json is malformed")}))[0], 2)
+
 
 # ---- #249: C++ / SDL3 shader recipes --------------------------------------------------
 class CppShaders(TempRoot):
@@ -1320,6 +1336,36 @@ class CppShaders(TempRoot):
         self.assertEqual(rc, 1, text)
         self.assertIn("do not match their recipes", text)
         self.assertEqual(built, [])
+
+    def test_unreadable_recipes_are_an_environment_problem(self):
+        dev = self.dev({"shader_gen.py": (2, "[error] recipes.json is malformed")})
+        self.assertEqual(quiet(dev.cmd_check, argparse.Namespace(preset="debug"))[0], 2)
+
+
+# ---- #249 review: Godot's shader check without a window -----------------------------
+class GodotShaderWindow(TempRoot):
+    """A shader check that drew nothing at all (no window, no desktop session) is an environment problem (exit 2);
+    one that drew some recipes and then failed is a task failure (exit 1)."""
+
+    def shader_pass(self, check_out, gen=(0, "")):
+        dev = load("godot")
+        dev.ROOT = self.root
+        (self.root / "shaders" / "kit").mkdir(parents=True)
+
+        def fake_run(cmd, **kwargs):
+            line = " ".join(str(c) for c in cmd)
+            return gen if "shader_gen.py" in line else (1, check_out)
+        dev.run = fake_run
+        return quiet(dev.shader_pass, "godot", False)
+
+    def test_nothing_drawn_is_exit_2(self):
+        self.assertEqual(self.shader_pass("")[0], 2)
+
+    def test_a_partial_run_is_exit_1(self):
+        self.assertEqual(self.shader_pass("SHADER_OK flash\n")[0], 1)
+
+    def test_unreadable_recipes_are_exit_2(self):
+        self.assertEqual(self.shader_pass("", gen=(2, "[error] malformed"))[0], 2)
 
 
 if __name__ == "__main__":

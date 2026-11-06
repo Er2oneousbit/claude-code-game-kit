@@ -425,9 +425,13 @@ def cmd_compare(args):
             missing.append(name)
             print(f"[FAIL] {name}: no render at {got_path.as_posix()}")
             continue
+        golden = GOLDEN_DIR / f"{name}.png"
+        try:
+            want = image_diff.read_png(golden)
+        except (OSError, image_diff.ImageError) as exc:   # the reference itself: an environment problem (exit 2)
+            raise ToolError(f"cannot read the golden image {golden.as_posix()}: {exc} (shader_ref.py golden --write)")
         try:
             got = image_diff.read_png(got_path)
-            want = image_diff.read_png(GOLDEN_DIR / f"{name}.png")
             bad, worst = differences(got, want, recipe["tolerance"])
         except (OSError, image_diff.ImageError, ToolError) as exc:
             failed.append(name)

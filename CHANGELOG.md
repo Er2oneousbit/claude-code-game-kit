@@ -32,6 +32,12 @@ example needed). The engine id stays `cpp-sdl2`.
   did that by itself). The example Scrap Tanks moved too (SDL3_image, SDL3_ttf, SDL3_mixer, gamepads); its 66 test
   cases, both scenario pillars and `smoke --shaders` pass. The vcpkg `sdl3-image` port has no image formats by
   default: a game names `png` (ENGINE_FLOW says how).
+- A second-model review of the shader lane (Kimi K3.1 Pro) found, now fixed: a recipe file left over from a removed
+  recipe passed `shader_gen.py --check` (it is stale now, and a write removes it; hand-written files are never
+  touched); `vec2 (0.5)` or `mix (a, b, t)` (a space before the bracket) slipped past the translators; a malformed
+  `recipes.json` printed a traceback (one `[error]` line, exit 2, now); every `dev.py` took that exit 2 for stale
+  files (exit 1); `shader_ref.py compare` called a missing golden image a differing render (exit 2 now); Godot's
+  check without a window, which draws nothing, is exit 2 (an environment problem), not 1.
 - `tools/publish_check.py` knows Azure and GCP keys (#252's guardrail, ahead of the cloud work): Azure client secrets,
   storage account keys and SAS tokens, GCP service account key files and Google OAuth client secrets. The Azure secret
   and Google OAuth shapes follow public scanners (TruffleHog, GitGuardian), not a vendor spec.

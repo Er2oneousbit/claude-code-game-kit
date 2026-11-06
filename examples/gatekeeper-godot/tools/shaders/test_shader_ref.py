@@ -115,6 +115,20 @@ class ShaderRefExam(unittest.TestCase):
             self.assertEqual(code, 1, text)
             self.assertIn("no render", text)
 
+    def test_a_missing_golden_image_is_an_environment_problem(self):
+        # second-model review: a reference that cannot be read is exit 2, not "the render differs" (exit 1)
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as g:
+            out = Path(d)
+            shutil.copy2(sr.GOLDEN_DIR / "flash.png", out / "flash.png")
+            saved = sr.GOLDEN_DIR
+            sr.GOLDEN_DIR = Path(g)                                     # an empty golden folder
+            try:
+                code, text = run("compare", out, "--only", "flash")
+            finally:
+                sr.GOLDEN_DIR = saved
+            self.assertEqual(code, 2, text)
+            self.assertIn("golden image", text)
+
     def test_render_and_usage(self):
         with tempfile.TemporaryDirectory() as d:
             code, text = run("render", "vignette", "--out", Path(d) / "v.png")

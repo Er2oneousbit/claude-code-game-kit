@@ -628,6 +628,9 @@ def shader_pass(godot, compare):
     rc, out = run([sys.executable, "tools/shaders/shader_gen.py", "--check"], echo="never", timeout=60)
     if rc != 0:
         print(out.strip())
+        if rc == 2:                       # the recipes themselves cannot be read: not a stale file
+            print("[error] tools/shaders/shader_gen.py could not read the recipes (see above)")
+            return 2
         print("[FAIL] the shader files are older than their recipes: python tools/shaders/shader_gen.py")
         return 1
     out_dir = ROOT / SHADER_OUT
@@ -646,6 +649,8 @@ def shader_pass(godot, compare):
         else:
             print(f"[FAIL] the shader check did not finish (exit {rc}): it needs a window, so run it from a desktop "
                   "session (check --no-shaders skips it)")
+            if "SHADER_OK " not in out:
+                return 2                        # nothing was drawn at all: no window here, not a broken recipe
         return 1
     if not compare:
         print(f"[ OK ] {out.count('SHADER_OK ')} shader recipe(s) compile")

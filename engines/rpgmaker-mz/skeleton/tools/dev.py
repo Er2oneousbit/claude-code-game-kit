@@ -575,7 +575,7 @@ def shader_compile(g, problems):
     if rc != 0:
         problems.append(f"{rel(g / SHADER_PLUGIN)} is older than its recipes: python tools/shaders/shader_gen.py\n"
                         f"{out.strip()}")
-        return 1
+        return 2 if rc == 2 else 1   # 2: the recipes cannot be read
     if deps_stale():
         rc = npm_install()
         if rc:

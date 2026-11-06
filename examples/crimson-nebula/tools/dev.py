@@ -364,6 +364,9 @@ def cmd_check(args):
                       timeout=60)
         if rc != 0:
             print(out.rstrip())
+            if rc == 2:                       # the recipes themselves cannot be read: not a stale file
+                print("[error] tools/shaders/shader_gen.py could not read the recipes (see above)")
+                return 2
             print("[FAIL] the shader files do not match their recipes: python tools/shaders/shader_gen.py")
             return 1
         print("[ OK ] shader files current (their WESL compiles in smoke --shaders)")

@@ -11,6 +11,8 @@
 #           this exam checks what can be checked without them.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
+import contextlib
+import io
 import json
 import re
 import sys
@@ -132,6 +134,45 @@ class ShaderPortsExam(unittest.TestCase):
             self.assertEqual(sg.write_or_check("godot", out, True), [])
             (out / "flash.gdshader").write_text("changed", encoding="utf-8")
             self.assertEqual([p.name for p in sg.write_or_check("godot", out, True)], ["flash.gdshader"])
+
+    def test_a_removed_recipes_file_is_stale_and_goes(self):
+        # second-model review: a file from a recipe that no longer exists passed --check
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            sg.write_or_check("godot", out, False)
+            old = out / "sepia.gdshader"
+            old.write_text("// " + sg.HEADER_NOTE.format(name="sepia") + "\nshader_type canvas_item;\n", encoding="utf-8")
+            mine = out / "my_effect.gdshader"                         # hand-written: never touched
+            mine.write_text("shader_type canvas_item;\n", encoding="utf-8")
+            self.assertEqual([p.name for p in sg.write_or_check("godot", out, True)], ["sepia.gdshader"])
+            sg.write_or_check("godot", out, False)
+            self.assertFalse(old.exists())
+            self.assertTrue(mine.exists())
+            self.assertEqual(sg.write_or_check("godot", out, True), [])
+
+    def test_space_before_a_call_translates(self):
+        # second-model review: "vec2 (0.5)" and "mix (a, b, t)" are valid GLSL but slipped past the translators
+        self.assertEqual(sg.CALL_SPACE.sub(r"\1(", "vec2 p = vec2 (0.5); x = mix (a, b, 0.5); if (k) {}"),
+                         "vec2 p = vec2(0.5); x = mix(a, b, 0.5); if (k) {}")
+        body = sg.CALL_SPACE.sub(r"\1(", "vec3 n = vec3 (1.0);\nreturn vec4(mix (n, n, 0.5), 1.0);")
+        self.assertEqual(sg.to_wgsl(body).splitlines()[0], "var n: vec3<f32> = vec3<f32>(1.0);")
+        self.assertIn("lerp(", sg.to_hlsl(body))
+
+    def test_malformed_recipes_are_one_error_line(self):
+        with tempfile.TemporaryDirectory() as d:
+            bad = Path(d) / "recipes.json"
+            bad.write_text("{", encoding="utf-8")
+            saved = sg.RECIPES
+            sg.RECIPES = bad
+            buf = io.StringIO()
+            try:
+                with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+                    code = sg.main(["--engine", "godot", "--check", "--out", d])
+            finally:
+                sg.RECIPES = saved
+            self.assertEqual(code, 2, buf.getvalue())
+            self.assertIn("[error]", buf.getvalue())
+            self.assertNotIn("Traceback", buf.getvalue())
 
 
 if __name__ == "__main__":

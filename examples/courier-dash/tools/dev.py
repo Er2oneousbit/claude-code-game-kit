@@ -342,6 +342,9 @@ def cmd_check(args):
         rc, out = run([sys.executable, ROOT / "tools" / "shaders" / "shader_gen.py", "--check"], capture=True, timeout=60)
         if rc != 0:
             print(out.rstrip())
+            if rc == 2:                       # the recipes themselves cannot be read: not a stale file
+                print("[error] tools/shaders/shader_gen.py could not read the recipes (see above)")
+                return 2
             print("[FAIL] the shader files are older than their recipes: python tools/shaders/shader_gen.py")
             return 1
         rc, out = run([shutil.which("node") or "node", ROOT / "tools" / "shader_compile.mjs"], capture=True, timeout=120)
