@@ -3,7 +3,42 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## 0.13.2 (unreleased): fixes from Fable reviews of the Pixelorama lane, the engine wrappers and the shipped tools
+## 0.14.0 (unreleased): shaders in all nine engines, the C++ overlay on SDL3, and fixes from second-model reviews
+**Upgrade note (C++):** the C++ overlay is SDL3 now (it was SDL2). `--upgrade` replaces the kit files you never edited;
+your own code moves by hand, following docs/ENGINE_FLOW.md "Upgrading from SDL2" (the renames the kit's starter and
+example needed). The engine id stays `cpp-sdl2`.
+
+- **Shaders (#249):** eleven effects as recipes in `tools/shaders/`: hit flash, dissolve, outline, palette swap
+  (sprites); colour-blind filter, CRT scanlines, vignette (screen); toon shading with a rim light, scrolling water,
+  triplanar mapping (surfaces); normal-mapped sprite lighting. Each is one engine-free body (`ksl/<name>.ksl`, a GLSL
+  subset) and an entry in `recipes.json`; `shader_ref.py` is a standard-library reference renderer that writes the
+  golden images (`data/golden/shaders/`), and `shader_gen.py` writes every engine's port from the same body: Godot
+  `.gdshader`, Phaser 4 filters, Three.js `ShaderMaterial`s, PIXI filters in an RPG Maker MZ plugin (KitShaders.js),
+  LÖVE pixel shaders, Bevy 0.20 WESL with a typed `Material2d` per recipe, Unity unlit `.shader` files, Unreal
+  materials around a Custom node (built by editor Python), and HLSL for SDL3's GPU renderer. In every engine
+  `dev.py check` compiles them and `dev.py smoke --shaders` draws each on the GPU and compares it with its golden
+  image. All eleven matched in all nine engines on one Windows machine (versions and graphics APIs in the README's
+  test table). New: SOP-24 and the `/shader` skill. The Godot shell's colour-blind filter is the `colorblind` recipe
+  now, and Dotwork's Godot-only flash and dissolve point at the recipes for other engines.
+- Engine details found on the way, each in the engine's ENGINE.md: Bevy 0.20 dropped naga_oil, so custom shaders are
+  WESL; Unreal's pythonscript commandlet runs on the Null RHI and `-ExecutePythonScript` quits before materials compile
+  (the check starts the full editor off-screen with `-ExecCmds=py`); a Unity unlit pass without a `LightMode` tag draws
+  in the Built-in pipeline and in URP (checked through a URP camera too); RPG Maker MZ's PIXI pads a filter's input, so
+  the MZ check emulates that padding; SDL 3.4.12's GPU renderer caches pipelines by shader address, so a released
+  shader's address reused by a new one drew the old effect (the C++ loader keeps each shader for the device's life).
+- **C++ overlay on SDL3:** SDL3 3.4 from vcpkg, the GPU renderer outside smoke runs (custom render states for the
+  shaders), shadercross (a vcpkg host tool) compiling the recipes to SPIR-V, DXIL and MSL at build time, `src/gfx/`
+  (KitShaders) and the `kit_shader_check` tool. main.cpp converts events to render coordinates (SDL2's logical size
+  did that by itself). The example Scrap Tanks moved too (SDL3_image, SDL3_ttf, SDL3_mixer, gamepads); its 66 test
+  cases, both scenario pillars and `smoke --shaders` pass. The vcpkg `sdl3-image` port has no image formats by
+  default: a game names `png` (ENGINE_FLOW says how).
+- Unreal's generated `kit_recipes.py` was JSON pasted into Python (`"aux": null`, a NameError on import); it is Python
+  literals now, and an exam runs every generated Python file.
+- Example Rune Delve (Unreal): its own `.gitignore` kept all of `Content/` out (the map and assets are built by a
+  script), which would have hidden the kit's `Content/Python/kit_shaders/`; it lets `Content/Python/` through now.
+  #259's exam caught it before the commit.
+
+Fixes (developed as 0.13.2), from Fable reviews of the Pixelorama lane, the engine wrappers and the shipped tools:
 - Example `examples/lockpick-mz`: `GameAudio.js` was hidden by the repo's `.gitignore` (only GameCore and GameMain
   were allowed past the rule that keeps MZ's own files out), so in a fresh clone `check` failed and the audio tests
   could not load it. It is in the repo now, and `scripts/test_kit_docs.py` fails when any file an example's

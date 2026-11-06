@@ -20,6 +20,7 @@ src/game/           scenes and game objects (Phaser lives here): main (play), ju
 data/               i18n/<locale>.json strings, dialogue/*.built.json subtitles, golden/ test vectors
 tests/              Vitest tests for src/core and pure parts of src/game (*.test.ts)
 public/assets/      images, audio, fonts, tilemaps: served as-is at assets/... (see docs/ASSET_LOG.md)
+src/shaders/        the kit's shader recipes (kit/ generated from tools/shaders/) and their glue
 tools/              dev.py, smoke.mjs and helpers
 dist/               production build (git-ignored): what you upload
 ```
@@ -34,6 +35,12 @@ dist/               production build (git-ignored): what you upload
 - Use the `dt` from `update(time, delta)` (milliseconds, convert to seconds and clamp), never assume 60 fps.
 - Errors: `Log.error` for anything wrong at runtime. It reaches the console, and `smoke` fails on console errors.
 
+- **Shaders:** `addKitFilter(sprite, "flash")` (src/shaders/kitFilter.ts) puts a recipe on a game object or a camera
+  (`addKitFilter(this.cameras.main, "vignette", { strength: 0.4 })`) and returns a controller: tween
+  `controller.params.amount`. A second picture is a texture key (`addKitFilter(sprite, "dissolve", {}, "noise")`) that
+  must line up with the object (same size, `pixelArt: true`). `check` compiles every recipe in headless Chromium and
+  `smoke --shaders` renders each and compares it with its golden image.
+
 ## Gotchas (Claude: read before editing)
 1. **Phaser 4, not 3.** Many APIs moved or changed (pipelines became render nodes, FX and masks became filters, some game objects were removed, the Canvas renderer is deprecated). Verify against `node_modules/phaser/skills/` or `node_modules/phaser/types/phaser.d.ts`, never memory.
 2. **Import style:** `import * as Phaser from "phaser"` (the package exports a namespace).
@@ -45,4 +52,5 @@ dist/               production build (git-ignored): what you upload
 8. **Do not edit** `node_modules/` or `dist/`. Do not run `npm install <pkg>` without an ADR (`/adr`): every dependency ships to players.
 
 ## Generated (do not hand-edit)
-`node_modules/`, `dist/`, `package-lock.json` (written by npm; commit it, never edit it).
+`node_modules/`, `dist/`, `package-lock.json` (written by npm; commit it, never edit it),
+`src/shaders/kit/` (edit `tools/shaders/ksl/`, then `python tools/shaders/shader_gen.py`).

@@ -21,6 +21,7 @@ data/                    tunables (.tres or .json), levels; i18n/ string tables,
 assets/                  art, audio, fonts (see docs/ASSET_LOG.md)
 tests/                   GUT tests, files named test_*.gd
 addons/                  third-party addons (GUT, etc.), never edit by hand
+shaders/kit/             the kit's shader recipes, one .gdshader each (generated: tools/shaders/)
 tools/                   dev.py and helpers
 ```
 
@@ -51,6 +52,12 @@ tools/                   dev.py and helpers
               mat.vertex_color_use_as_albedo = true
               mi.set_surface_override_material(s, mat)
   ```
+- **Shaders:** a `ShaderMaterial` with `res://shaders/kit/<name>.gdshader` on a CanvasItem (Sprite2D, TextureRect):
+  `mat.set_shader_parameter("u_amount", 1.0)`, a second picture as `kit_aux` (dissolve's noise, the palette, the normal
+  map). Post effects (`crt`, `vignette`, `colorblind`) read the screen (`hint_screen_texture`): put them on a full-screen
+  ColorRect in a CanvasLayer above the game; the shell's colour-blind setting already does (`color_filter.gd`). Give
+  each sprite its own material (`material.duplicate()`). `check` compiles them and `smoke --shaders` draws each in a
+  window and compares it with its golden image (headless Godot has no renderer).
 
 ## Gotchas (Claude: read before editing)
 1. **Never hand-edit** `.godot/`, `*.import`, or generated `.uid` files. Commit the `.uid` files that Godot creates (Godot 4.4 and later, **verify for your version**), they keep references stable.
@@ -68,7 +75,8 @@ tools/                   dev.py and helpers
 11. **Crash files need Godot 4.5+** (the `Logger` hook in `scripts/shell/crash_hook.gd`); older versions run the game without them.
 
 ## Generated or binary (do not hand-edit)
-`.godot/`, `*.import`, `*.uid` (commit, but do not edit), exported builds in `build/`, `*.translation`.
+`.godot/`, `*.import`, `*.uid` (commit, but do not edit), exported builds in `build/`, `*.translation`,
+`shaders/kit/` (edit `tools/shaders/ksl/`, then `python tools/shaders/shader_gen.py`).
 
 ## Optional tooling
 - A Godot MCP server or editor plugin can let Claude inspect and edit scenes. If used, record it in an ADR and note start instructions here.

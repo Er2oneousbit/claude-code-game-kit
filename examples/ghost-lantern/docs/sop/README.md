@@ -27,6 +27,7 @@ Short, followable, engine-agnostic. Engine specifics are in `docs/ENGINE_FLOW.md
 | SOP-21 Ship on Steam and itch | Store page and assets, SteamPipe and butler uploads, achievements, cloud, demos, signing, CI, the legal checklist | `/release-check` |
 | SOP-22 Balancing and economy | Numbers in data, a balance sheet, sources and sinks, curves, bots and playtests that measure | (manual) |
 | SOP-23 Marketing | Coming Soon early, capsules and screenshots, trailer, press kit, devlog, the wishlist beat plan | (manual) |
+| SOP-24 Shaders | GPU effects as the kit's recipes: flash, dissolve, outline, palette swap, colour-blind, CRT, vignette, toon, water, triplanar, sprite lighting; reference first, every port checked against golden images | `/shader` |
 
 Every SOP starts with a **Goal**, gives the procedure, and ends with **Done when** and **Common mistakes** (SOP-08 calls them Warning signs).
 

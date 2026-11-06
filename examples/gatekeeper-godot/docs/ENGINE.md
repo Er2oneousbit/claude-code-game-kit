@@ -7,7 +7,7 @@
 - **Binary:** set env var `GODOT_BIN` to the Godot executable, or put `godot` on PATH. `python tools/dev.py doctor` verifies.
 - **Language:** typed GDScript. No C# in this project unless an ADR says so.
 - **Unit tests:** GUT addon in `addons/gut/` (install from the Godot Asset Library or GitHub). Version recorded in the ADR when chosen.
-- **Import cache:** `python tools/dev.py import` builds `.godot/`. `check`, `test` and `smoke` re-run it automatically on a fresh clone and whenever a `class_name` script is added, renamed or removed (Godot only learns new class names on import). Run it by hand after adding assets.
+- **Import cache:** `python tools/dev.py import` builds `.godot/`. `check`, `test` and `smoke` re-run it automatically on a fresh clone, whenever a `class_name` script is added, renamed or removed (Godot only learns new class names on import), and when an asset is new or changed (no `<file>.import` beside it, or newer than it).
 
 ## Layout
 ```
@@ -15,12 +15,13 @@ project.godot            engine config (edit via editor or carefully by hand)
 scenes/                  .tscn scenes (main.tscn is the entry)
 scripts/core/            engine-agnostic helpers: log, timers, juice (shake, hitstop, springs...), settings,
                          bindings, saves, i18n (no gameplay knowledge; tested against data/golden/)
-scripts/shell/           the kit's front end: Shell autoload, screens (title, menus, settings, pause...), smoke drive
+scripts/shell/           the front end: Shell autoload, screens (title, menus, settings, pause...), smoke drive
 scripts/game/            gameplay scripts, one per scene or entity
 data/                    tunables (.tres or .json), levels; i18n/ string tables, dialogue/, golden/ test vectors
 assets/                  art, audio, fonts (see docs/ASSET_LOG.md)
 tests/                   GUT tests, files named test_*.gd
 addons/                  third-party addons (GUT, etc.), never edit by hand
+shaders/kit/             the kit's shader recipes, one .gdshader each (generated: tools/shaders/)
 tools/                   dev.py and helpers
 ```
 
@@ -31,11 +32,13 @@ tools/                   dev.py and helpers
 - Physics code in `_physics_process(delta)`, visuals/UI in `_process(delta)`. Always multiply by `delta`.
 - Prefer signals ("call down, signal up"). Node paths with `%UniqueName` over long relative paths.
 - Autoloads: max 3: Log, Shell (settings, strings, data folder, crash files) and one for game state. Each documented in `ARCHITECTURE.md`.
+- Every visible string goes through `Shell.t("key")` (tables in `data/i18n/`); `smoke --locale pseudo` fails on any that does not.
+- Player files (settings, saves, logs, crashes) live in `Shell.data_dir` (user://, or `--data-dir`); write them with `AtomicFile`/`SaveStore`.
 - Pure logic goes in `RefCounted` classes under `scripts/core/` or `scripts/game/logic/` so GUT can test it without scenes.
 - Logging via the `Log` autoload (`Log.info("physics", "msg")`), never bare `print` in committed code.
 - 3D models: `.glb` under `assets/models/` (what `tools/blender/prep_export.py` and `tools/bozzetto/bozzetto.py` write:
-  metres, +Y up, pivot at the bottom centre) import in the editor; headless, run `python tools/dev.py import` after adding
-  one (`check`, `test` and `smoke` re-import by themselves only when `class_name` scripts change); instance one with
+  metres, +Y up, pivot at the bottom centre) import in the editor; headless, `check`, `test` and `smoke` import a new one first
+  (or run `python tools/dev.py import`); instance one with
   `load("res://assets/models/<name>.glb").instantiate()`. Tested with a Bozzetto model: import, check, smoke, a GUT load (K01).
 - A vertex-coloured model (`bozzetto.py make --material vertex`, colours in glTF `COLOR_0`) renders **white**: Godot 4.7
   imports the colours but leaves the material's `vertex_color_use_as_albedo` off (K01, #202). Turn it on after
@@ -49,6 +52,12 @@ tools/                   dev.py and helpers
               mat.vertex_color_use_as_albedo = true
               mi.set_surface_override_material(s, mat)
   ```
+- **Shaders:** a `ShaderMaterial` with `res://shaders/kit/<name>.gdshader` on a CanvasItem (Sprite2D, TextureRect):
+  `mat.set_shader_parameter("u_amount", 1.0)`, a second picture as `kit_aux` (dissolve's noise, the palette, the normal
+  map). Post effects (`crt`, `vignette`, `colorblind`) read the screen (`hint_screen_texture`): put them on a full-screen
+  ColorRect in a CanvasLayer above the game; the shell's colour-blind setting already does (`color_filter.gd`). Give
+  each sprite its own material (`material.duplicate()`). `check` compiles them and `smoke --shaders` draws each in a
+  window and compares it with its golden image (headless Godot has no renderer).
 
 ## Gotchas (Claude: read before editing)
 1. **Never hand-edit** `.godot/`, `*.import`, or generated `.uid` files. Commit the `.uid` files that Godot creates (Godot 4.4 and later, **verify for your version**), they keep references stable.
@@ -66,7 +75,8 @@ tools/                   dev.py and helpers
 11. **Crash files need Godot 4.5+** (the `Logger` hook in `scripts/shell/crash_hook.gd`); older versions run the game without them.
 
 ## Generated or binary (do not hand-edit)
-`.godot/`, `*.import`, `*.uid` (commit, but do not edit), exported builds in `build/`, `*.translation`.
+`.godot/`, `*.import`, `*.uid` (commit, but do not edit), exported builds in `build/`, `*.translation`,
+`shaders/kit/` (edit `tools/shaders/ksl/`, then `python tools/shaders/shader_gen.py`).
 
 ## Optional tooling
 - A Godot MCP server or editor plugin can let Claude inspect and edit scenes. If used, record it in an ADR and note start instructions here.

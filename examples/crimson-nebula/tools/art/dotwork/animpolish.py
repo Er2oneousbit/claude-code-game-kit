@@ -499,7 +499,8 @@ def write_shaders(conf, man, kinds):
     (shared by every character that asks, like the spells' mat_additive.tres). Returns the files written; --engine none
     writes nothing (Godot shaders)."""
     if not godot.ENABLED:
-        core.log(f"shaders {', '.join(kinds)}: skipped (--engine none: they are Godot shaders)")
+        core.log(f"shaders {', '.join(kinds)}: skipped (--engine none: they are Godot shaders; the kit's own flash and "
+                 "dissolve recipes run in every engine: tools/shaders/, python tools/shaders/shader_gen.py)")
         return []
     import lane_hitfx   # the flash shader's one source
     art = core.art(conf, "fx", "shaders")

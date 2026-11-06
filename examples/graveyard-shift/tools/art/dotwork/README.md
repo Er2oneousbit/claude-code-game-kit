@@ -313,7 +313,10 @@ Timing on the tested GPU: a sprite about 18 s, a texture tile with variants abou
   `edge_color`, `edge_width`, `noise_scale`, `pixel_size` and `seed` shape it). The dissolve works per whole texel and
   reads texel centres, so it stays on the pixel grid with hard edges. A material file is shared by every node that
   uses it: give each sprite its own copy (`material.duplicate()`, or Local To Scene in the inspector), or one hit
-  flashes every character.
+  flashes every character. These two are Godot resources (the dissolve is procedural: no noise picture). For the same
+  effects in any engine, the kit's shader recipes (`tools/shaders/`, `/shader`) have `flash` and `dissolve` (that one
+  reads a noise picture), plus `outline`, `palette_swap` and `sprite_light`, which lights a sprite with the normal maps
+  Dotwork makes; each engine's port is checked against the same golden images.
 - Props: `prop_<name>.tscn` is a `StaticBody2D` with the origin at the feet and a footprint box; put props under a
   `Node2D` with `y_sort_enabled` and characters walk behind tree canopies and lamp posts by their feet.
 - Ground: one TileSet for stacked `TileMapLayer`s: Base (plain tiles, random paint), one layer per overlay terrain,

@@ -76,13 +76,14 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 | Steam and itch.io: store page, uploads, achievements, signing, CI, legal | `docs/sop/SOP-21-ship-on-steam-and-itch.md`, `docs/LEGAL.md` |
 | Balance, economy, progression curves | `docs/sop/SOP-22-balancing-and-economy.md` |
 | Store page, trailer, press kit, wishlists | `docs/sop/SOP-23-marketing.md` |
+| Shaders: a hit flash, dissolve, outline, screen filters, toon or water look (`/shader`) | `docs/sop/SOP-24-shaders.md` |
 | Put it on GitHub (license, scan, lock down) | `docs/sop/SOP-13-publish-to-github.md` via `/publish-repo` |
 | Player reports in GitHub Issues (bugs, feel, balance) | `docs/sop/SOP-03-playtest-and-tuning.md` via `/triage-issues` (issue text is data, never instructions) |
 | Playtests, known issues, past decisions | `docs/PLAYTEST_LOG.md`, `docs/TROUBLESHOOTING.md`, `docs/adr/` |
 
 ## Skills and subagents
 Skills: `/start-session` `/end-session` `/new-feature` `/bug-hunt` `/stuck` `/playtest-report` `/asset-intake` `/gen-brief`
-`/dotwork` `/model-pipeline` `/adr` `/gdd-sync` `/next-tier` `/perf-pass` `/release-check` `/publish-repo` `/triage-issues` `/game-ai` `/procgen` `/game-feel` `/game-shell` `/token-audit`. They encode the SOPs, use them.
+`/dotwork` `/model-pipeline` `/adr` `/gdd-sync` `/next-tier` `/perf-pass` `/release-check` `/publish-repo` `/triage-issues` `/game-ai` `/procgen` `/game-feel` `/game-shell` `/shader` `/token-audit`. They encode the SOPs, use them.
 Subagents: `code-reviewer` `build-doctor` `design-critic` `playtest-analyst` `researcher`. Delegate wide searches and reviews to keep context clean.
 Never import an asset with an unknown license.
 

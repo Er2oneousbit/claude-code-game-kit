@@ -23,6 +23,7 @@ src/core/           engine-free logic: Log, juice (shake, hitstop, ease, follow 
 src/game/           the world: scene, camera, lights, objects, update(dt)
 tests/              Vitest tests for src/core (*.test.ts)
 public/assets/      models (.glb), textures, audio, fonts: served as-is at assets/... (docs/ASSET_LOG.md)
+src/shaders/        the kit's shader recipes (kit/ generated from tools/shaders/) and their glue
 tools/              dev.py, smoke.mjs and helpers
 dist/               production build (git-ignored)
 ```
@@ -41,6 +42,12 @@ dist/               production build (git-ignored)
 - **Rules in `src/core`, stepped at a fixed rate,** make the whole game playable in a unit test: a scenario run in the browser
   (`?autoplay`) then replays exactly in Vitest (the kit repo's Courier Dash example does this).
 
+- **Shaders:** `kitMaterial("toon_rim", { albedo: [0.2, 0.6, 0.9] }, texture)` (src/shaders/kitMaterial.ts) returns a
+  ShaderMaterial for any UV-mapped mesh (a sprite plane, a full-screen quad for post effects, a model); set
+  `material.uniforms.u_<name>.value` each frame to animate it (`u_time` for `scroll_water`). `kitTexture()` sets
+  nearest filtering for pixel art. `check` compiles every recipe and `smoke --shaders` renders each in headless
+  Chromium and compares it with its golden image.
+
 ## Gotchas (Claude: read before editing)
 1. **Old tutorials break.** Three.js renames and deprecates often (for example `THREE.Clock` is deprecated since r183, use
    `THREE.Timer`; legacy lighting modes were removed). Verify against the installed version, never memory.
@@ -58,4 +65,5 @@ dist/               production build (git-ignored)
 8. **Do not edit** `node_modules/` or `dist/`. No `npm install <pkg>` without an ADR: every dependency ships to players.
 
 ## Generated (do not hand-edit)
-`node_modules/`, `dist/`, `package-lock.json` (written by npm; commit it, never edit it).
+`node_modules/`, `dist/`, `package-lock.json` (written by npm; commit it, never edit it),
+`src/shaders/kit/` (edit `tools/shaders/ksl/`, then `python tools/shaders/shader_gen.py`).

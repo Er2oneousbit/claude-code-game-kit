@@ -105,7 +105,8 @@ def run(entries, pack, man, conf):
         kind = e.get("kind", "spark")
         if kind == "flash":
             if not godot.ENABLED:
-                core.log(f"hitfx {name}: skipped (--engine none: the damage flash is a Godot shader)")
+                core.log(f"hitfx {name}: skipped (--engine none: the damage flash is a Godot shader; the kit's flash recipe "
+                         "runs in every engine: tools/shaders/)")
                 continue
             sp = os.path.join(art, "shaders", "damage_flash.gdshader")
             os.makedirs(os.path.dirname(sp), exist_ok=True)
