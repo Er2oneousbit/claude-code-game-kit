@@ -78,6 +78,28 @@ class PublishCheckExam(unittest.TestCase):
         self.assertIn("config.gd line 1: looks like a GitHub token", fails)
         self.assertIn("id.txt line 1: looks like a private key block", fails)
 
+    def test_cloud_key_shapes_caught(self):
+        # #252: Azure and GCP keys (built from parts here, so this file itself holds none)
+        b64 = "Ab0+/" * 17 + "x"                       # 86 base64 characters
+        cases = {
+            "az1.txt": ("abc" + "7Q~" + "d" * 32, "Azure client secret"),
+            "az2.txt": ("DefaultEndpointsProtocol=https;AccountName=game;AccountKey=" + b64 + "==;", "Azure storage account key"),
+            "az3.txt": ("https://g.blob.core.windows.net/c?sv=2024-11-04&ss=b&srt=o&sp=r&sig=" + "aB3%2F" * 8, "Azure SAS token"),
+            "gc1.json": ('{"type": "service_account", "private_key_id": "' + "0a" * 20 + '"}', "GCP service account key"),
+            "gc2.json": ('{"client_secret": "' + "GOCSPX" + "-" + "Ab_9" * 7 + '"}', "Google OAuth client secret"),
+        }
+        for name, (text, _) in cases.items():
+            (self.root / name).write_text(text + "\n", encoding="utf-8")
+        fails = self.results()[0]
+        for name, (_, label) in cases.items():
+            with self.subTest(name=name):
+                self.assertIn(f"{name} line 1: looks like a {label}", fails)
+
+    def test_cloud_shapes_spare_prose(self):
+        (self.root / "notes.md").write_text("Azure secrets contain Q~ and Google ones start GOCSPX-; set AccountKey= "
+                                            "in the portal, never here.\n", encoding="utf-8")
+        self.assertNotIn("notes.md", self.results()[0])
+
     def test_hard_coded_secret_caught_but_placeholder_not(self):
         (self.root / "a.py").write_text('api_key = "' + "q" * 24 + '"\n', encoding="utf-8")
         (self.root / "b.py").write_text('api_key = "<your key here>"\n', encoding="utf-8")

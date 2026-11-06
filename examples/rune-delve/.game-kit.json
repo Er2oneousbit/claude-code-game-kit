@@ -1419,6 +1419,12 @@
       "date": "2026-11-06",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1818,7 +1824,7 @@
     "tools/hooks/session_context.py": "4e5f75ee1c8db72edf92e8d929b962998a9e3edec9135cb0759d994917d5e8c1",
     "tools/image_diff.py": "646939883ec4f4b702c2dee2f5517f10683bee9014f89338ed2762512c37b649",
     "tools/issues.py": "8d1dd70eb3988e69b29d8da39e25d718f69a46ea1bf36f98a74c4f23a058487b",
-    "tools/publish_check.py": "618a3c32bba757406947bf23a7e9c3768893f882e18a2ec37916ff5ab57f0098",
+    "tools/publish_check.py": "5668955bc0b135f923053ccff1f3f6a8293ac87ed176b8ebf8e5113aa2c323dc",
     "tools/second_opinion.py": "31527022bde8f6ff9e5d3afce18277498627041cfb46026d9f2f8aa742893c66",
     "tools/second_opinion/kimi-agent.md": "9a1838d60f30abb8ea3438e6a6493a3fd789aaf4987d2bbc998de20ec1df95a8",
     "tools/shaders/ksl/colorblind.ksl": "50319bbe8fd706c806feef6462e5faf15c065e4c108a1417ddd32ec4969507f2",
@@ -1843,7 +1849,7 @@
     "tools/test_golden_vectors.py": "ae987f692dc728be23b98d2822531685f9487524a6a59305fa24e825717ca61d",
     "tools/test_image_diff.py": "c5c25a5f63593e3285650090c3949a9b710d6059638889846b144b51a3abbd53",
     "tools/test_issues.py": "54292e633824e75f3a80fc8c88c9d5de8fd253db7d79998a32ac71b328ae698b",
-    "tools/test_publish_check.py": "d7962a26e30ef59dc589187af502db745b8232cc1627564469f77e4a0055c550",
+    "tools/test_publish_check.py": "2778d2e29745671d1bec8f8e0506f80e7060cc1225b6c42b26d83ef71d4944fd",
     "tools/test_second_opinion.py": "e88ec9ed4b29cfb52374e897708c144c73fe64a36904600327090c31557fdf76",
     "tools/test_session_context.py": "9136bfcbb0a105659f1a1bba72d9af3d3084ff921a49842752162f644732d730",
     "tools/test_token_audit.py": "8be4deeedc4b063bc0c1758f74970aa4fb1d21f7442d7ebf8ae09e9df9d4def2",

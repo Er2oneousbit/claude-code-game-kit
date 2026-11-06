@@ -49,6 +49,14 @@ TOKEN_PATTERNS = [
     ("Anthropic API key", re.compile(r"\bsk-ant-[A-Za-z0-9_-]{30,}")),
     ("OpenAI-style API key", re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{32,}")),
     ("Google API key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")),
+    # Cloud shapes (#252). Azure client secret and Google OAuth secret: the formats public scanners (TruffleHog,
+    # GitGuardian) match, not a vendor spec (verify against a real key before trusting a miss)
+    ("Google OAuth client secret", re.compile(r"\bGOCSPX-[A-Za-z0-9_-]{28}(?![A-Za-z0-9_-])")),
+    ("GCP service account key", re.compile(r'"private_key_id"\s*:\s*"[0-9a-f]{40}"')),
+    ("Azure client secret", re.compile(r"(?<![A-Za-z0-9_~.-])[A-Za-z0-9_~.-]{3}\dQ~[A-Za-z0-9_~.-]{31,34}"
+                                       r"(?![A-Za-z0-9_~.-])")),
+    ("Azure storage account key", re.compile(r"\bAccountKey=[A-Za-z0-9+/]{86}==")),
+    ("Azure SAS token", re.compile(r"\bsv=\d{4}-\d{2}-\d{2}&[^\s\"'<>]*?\bsig=[A-Za-z0-9%+/]{30,}")),
     ("Slack token", re.compile(r"\bxox[abpors]-[A-Za-z0-9-]{10,}")),
     ("Stripe live key", re.compile(r"\b[rs]k_live_[A-Za-z0-9]{20,}")),
     ("Discord webhook", re.compile(r"https://(?:\w+\.)?discord(?:app)?\.com/api/webhooks/\d+/[\w-]{20,}")),

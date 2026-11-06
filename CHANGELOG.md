@@ -32,6 +32,9 @@ example needed). The engine id stays `cpp-sdl2`.
   did that by itself). The example Scrap Tanks moved too (SDL3_image, SDL3_ttf, SDL3_mixer, gamepads); its 66 test
   cases, both scenario pillars and `smoke --shaders` pass. The vcpkg `sdl3-image` port has no image formats by
   default: a game names `png` (ENGINE_FLOW says how).
+- `tools/publish_check.py` knows Azure and GCP keys (#252's guardrail, ahead of the cloud work): Azure client secrets,
+  storage account keys and SAS tokens, GCP service account key files and Google OAuth client secrets. The Azure secret
+  and Google OAuth shapes follow public scanners (TruffleHog, GitGuardian), not a vendor spec.
 - Unreal's generated `kit_recipes.py` was JSON pasted into Python (`"aux": null`, a NameError on import); it is Python
   literals now, and an exam runs every generated Python file.
 - Example Rune Delve (Unreal): its own `.gitignore` kept all of `Content/` out (the map and assets are built by a
