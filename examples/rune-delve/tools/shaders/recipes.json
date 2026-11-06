@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "about": "The kit's shader recipes (tools/shaders/). Each recipe is one effect, defined here in engine-neutral terms and rendered by shader_ref.py into data/golden/shaders/<name>.png. Every engine's port renders the same 64x64 check image from the same inputs and parameters and is compared with the golden image (tolerance per channel, plus the share of pixels allowed past it: GPUs round sin, pow and normalize differently). Coordinates are image space: origin top-left, x right, y down, pixel centres at +0.5. Inputs are sampled nearest-neighbour and wrap only where a recipe says so.",
+  "canvas": [64, 64],
+  "inputs": {
+    "sprite": "data/shaders/inputs/sprite.png",
+    "indexed": "data/shaders/inputs/indexed.png",
+    "palette": "data/shaders/inputs/palette.png",
+    "noise": "data/shaders/inputs/noise.png",
+    "scene": "data/shaders/inputs/scene.png",
+    "sphere": "data/shaders/inputs/sphere_normal.png",
+    "tile": "data/shaders/inputs/tile.png",
+    "sprite_normal": "data/shaders/inputs/sprite_normal.png"
+  },
+  "recipes": {
+    "flash": {
+      "group": "sprite",
+      "summary": "Hit flash: the sprite mixed toward a flat colour, alpha kept. Tween amount 1 -> 0 on a hit.",
+      "inputs": ["sprite"],
+      "params": {"amount": 0.6, "flash_color": [1.0, 1.0, 1.0]},
+      "tolerance": 2, "max_share": 0.0
+    },
+    "dissolve": {
+      "group": "sprite",
+      "summary": "Dissolve: texels whose noise is under progress vanish, a band of edge_color above them. Tween progress 0 -> 1 for a defeat.",
+      "inputs": ["sprite", "noise"],
+      "params": {"progress": 0.5, "edge_width": 0.125, "edge_color": [1.0, 0.85, 0.4]},
+      "tolerance": 2, "max_share": 0.0
+    },
+    "outline": {
+      "group": "sprite",
+      "summary": "Outline: a one-texel ring of outline_color around the sprite's opaque texels (4-neighbours).",
+      "inputs": ["sprite"],
+      "params": {"outline_color": [0.1, 0.05, 0.2]},
+      "tolerance": 2, "max_share": 0.0
+    },
+    "palette_swap": {
+      "group": "sprite",
+      "summary": "Palette swap: an indexed sprite (index = red channel / 16) coloured from a 16 x 1 palette texture; swap the palette for team colours or damage states.",
+      "inputs": ["indexed", "palette"],
+      "params": {},
+      "tolerance": 2, "max_share": 0.0
+    },
+    "colorblind": {
+      "group": "post",
+      "summary": "Colour-blind filter (daltonization, LMS matrices of Fidaner, Lin and Ozguven): mode 1 protanopia, 2 deuteranopia, 3 tritanopia. The Godot shell's ColorFilter math.",
+      "inputs": ["scene"],
+      "params": {"mode": 2},
+      "tolerance": 3, "max_share": 0.0
+    },
+    "crt": {
+      "group": "post",
+      "summary": "CRT scanlines: every second row (counted from the top) darkened by scanline.",
+      "inputs": ["scene"],
+      "params": {"scanline": 0.35},
+      "tolerance": 2, "max_share": 0.0
+    },
+    "vignette": {
+      "group": "post",
+      "summary": "Vignette: darkened toward the corners, smoothstep(radius, 1, distance from the centre / 0.7071) times strength.",
+      "inputs": ["scene"],
+      "params": {"strength": 0.6, "radius": 0.4},
+      "tolerance": 3, "max_share": 0.0
+    },
+    "toon_rim": {
+      "group": "surface",
+      "summary": "Toon shading with a rim light, from a normal (n.z toward the viewer): three light bands from dot(n, light_dir) plus rim = smoothstep(0.55, 0.75, 1 - n.z) * rim_strength. Checked on a sphere's normal map; the 3D port uses the same function on the surface normal.",
+      "inputs": ["sphere"],
+      "params": {"albedo": [0.8, 0.3, 0.2], "light_dir": [-0.5, -0.6, 0.62], "rim_strength": 0.4},
+      "tolerance": 3, "max_share": 0.03
+    },
+    "scroll_water": {
+      "group": "surface",
+      "summary": "Scrolling, wavy texture (water, clouds, lava): the tile repeated twice, shifted by time * speed and bent by a sine wave. Checked at time = 0.25.",
+      "inputs": ["tile"],
+      "params": {"time": 0.25, "speed": [0.5, 0.25], "amplitude": 0.06, "frequency": 2.0},
+      "tolerance": 2, "max_share": 0.03
+    },
+    "triplanar": {
+      "group": "surface",
+      "summary": "Triplanar mapping (for generated models with poor UVs): the tile projected along x, y and z, blended by |normal|^4. Checked on a unit sphere; the 3D port uses world position and normal.",
+      "inputs": ["sphere", "tile"],
+      "params": {"scale": 2.0, "sharpness": 4.0},
+      "tolerance": 3, "max_share": 0.04
+    },
+    "sprite_light": {
+      "group": "lighting",
+      "summary": "Normal-mapped sprite lighting: albedo * (ambient + max(dot(n, L), 0) * light_color), L from the pixel to a light at light_pos (canvas pixels) and light_height above the plane. Uses the normal maps Dotwork and PixelLab make.",
+      "inputs": ["sprite", "sprite_normal"],
+      "params": {"light_pos": [16.0, 12.0], "light_height": 24.0, "light_color": [1.0, 0.95, 0.8], "ambient": 0.25},
+      "tolerance": 3, "max_share": 0.02
+    }
+  }
+}

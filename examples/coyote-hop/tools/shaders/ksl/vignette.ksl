@@ -1,0 +1,4 @@
+vec4 c = SAMPLE_MAIN(uv);
+float d = length(uv - vec2(0.5, 0.5)) / 0.70710678;
+float f = 1.0 - u_strength * smoothstep(u_radius, 1.0, d);
+return vec4(c.rgb * f, 1.0);

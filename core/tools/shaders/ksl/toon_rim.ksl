@@ -1,0 +1,9 @@
+vec4 s = SAMPLE_MAIN(uv);
+if (s.a < 0.5) { return vec4(0.0); }
+vec3 n = normalize(s.rgb * 2.0 - vec3(1.0));
+float ndl = dot(n, normalize(u_light_dir));
+float band = 0.3;
+if (ndl > 0.0) { band = 0.6; }
+if (ndl > 0.5) { band = 1.0; }
+float rim = smoothstep(0.55, 0.75, 1.0 - n.z) * u_rim_strength;
+return vec4(clamp(u_albedo * band + vec3(rim), vec3(0.0), vec3(1.0)), 1.0);

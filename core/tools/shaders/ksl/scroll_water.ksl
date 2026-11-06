@@ -1,0 +1,3 @@
+float u = uv.x * 2.0 + u_time * u_speed.x;
+float v = uv.y * 2.0 + u_time * u_speed.y + u_amplitude * sin(6.2831853 * (uv.x * u_frequency + u_time));
+return vec4(SAMPLE_MAIN(fract(vec2(u, v))).rgb, 1.0);

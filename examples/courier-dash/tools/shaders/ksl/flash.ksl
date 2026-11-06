@@ -1,0 +1,3 @@
+vec4 c = SAMPLE_MAIN(uv);
+if (c.a < 0.5) { return vec4(0.0); }
+return vec4(mix(c.rgb, u_flash_color, u_amount), c.a);

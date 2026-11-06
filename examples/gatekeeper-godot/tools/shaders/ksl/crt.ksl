@@ -1,0 +1,4 @@
+vec4 c = SAMPLE_MAIN(uv);
+float row = floor(uv.y * u_canvas.y);
+float odd = row - 2.0 * floor(row / 2.0);
+return vec4(c.rgb * (1.0 - u_scanline * odd), 1.0);

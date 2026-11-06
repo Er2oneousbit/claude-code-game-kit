@@ -1,0 +1,6 @@
+vec4 c = SAMPLE_MAIN(uv);
+if (c.a < 0.5) { return vec4(0.0); }
+float n = SAMPLE_AUX(uv).r;
+if (n < u_progress) { return vec4(0.0); }
+if (n < u_progress + u_edge_width) { return vec4(u_edge_color, c.a); }
+return c;

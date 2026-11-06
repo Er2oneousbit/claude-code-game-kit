@@ -1,0 +1,4 @@
+vec4 c = SAMPLE_MAIN(uv);
+if (c.a < 0.5) { return vec4(0.0); }
+float index = floor(c.r * 255.0 / 16.0 + 0.5);
+return vec4(SAMPLE_AUX(vec2((index + 0.5) / 16.0, 0.5)).rgb, 1.0);

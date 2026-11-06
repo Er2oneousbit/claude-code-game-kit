@@ -1,0 +1,11 @@
+vec4 s = SAMPLE_MAIN(uv);
+if (s.a < 0.5) { return vec4(0.0); }
+vec3 n = normalize(s.rgb * 2.0 - vec3(1.0));
+vec2 q = uv * 2.0 - vec2(1.0);
+float pz = sqrt(max(0.0, 1.0 - dot(q, q)));
+vec3 w = pow(abs(n), vec3(u_sharpness));
+w = w / (w.x + w.y + w.z);
+vec3 tx = SAMPLE_AUX(fract(vec2(q.y, pz) * u_scale)).rgb;
+vec3 ty = SAMPLE_AUX(fract(vec2(q.x, pz) * u_scale)).rgb;
+vec3 tz = SAMPLE_AUX(fract(q * u_scale)).rgb;
+return vec4(clamp(w.x * tx + w.y * ty + w.z * tz, vec3(0.0), vec3(1.0)), 1.0);

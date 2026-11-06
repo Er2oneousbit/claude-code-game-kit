@@ -1,0 +1,17 @@
+vec3 c = SAMPLE_MAIN(uv).rgb;
+float l = dot(vec3(17.8824, 43.5161, 4.11935), c);
+float m = dot(vec3(3.45565, 27.1554, 3.86714), c);
+float s = dot(vec3(0.0299566, 0.184309, 1.46709), c);
+float sl = l;
+float sm = m;
+float ss = s;
+if (u_mode > 0.5) {
+    if (u_mode < 1.5) { sl = 2.02344 * m - 2.52581 * s; } else {
+        if (u_mode < 2.5) { sm = 0.494207 * l + 1.24827 * s; } else { ss = -0.395913 * l + 0.801109 * m; }
+    }
+}
+vec3 sim = vec3(sl, sm, ss);
+vec3 back = vec3(dot(vec3(0.0809444479, -0.130504409, 0.116721066), sim), dot(vec3(-0.0102485335, 0.0540193266, -0.113614708), sim), dot(vec3(-0.000365296938, -0.00412161469, 0.693511405), sim));
+vec3 err = c - back;
+vec3 shift = vec3(0.0, 0.7 * err.r + err.g, 0.7 * err.r + err.b);
+return vec4(clamp(c + shift, vec3(0.0), vec3(1.0)), 1.0);

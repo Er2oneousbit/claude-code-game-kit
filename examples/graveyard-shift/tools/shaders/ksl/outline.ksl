@@ -1,0 +1,8 @@
+vec4 c = SAMPLE_MAIN(uv);
+if (c.a >= 0.5) { return c; }
+float right = SAMPLE_MAIN(uv + vec2(u_texel.x, 0.0)).a * step(uv.x + u_texel.x, 1.0);
+float left = SAMPLE_MAIN(uv - vec2(u_texel.x, 0.0)).a * step(0.0, uv.x - u_texel.x);
+float down = SAMPLE_MAIN(uv + vec2(0.0, u_texel.y)).a * step(uv.y + u_texel.y, 1.0);
+float up = SAMPLE_MAIN(uv - vec2(0.0, u_texel.y)).a * step(0.0, uv.y - u_texel.y);
+if (max(max(right, left), max(down, up)) >= 0.5) { return vec4(u_outline_color, 1.0); }
+return vec4(0.0);
