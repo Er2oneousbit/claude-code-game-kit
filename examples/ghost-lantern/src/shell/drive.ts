@@ -347,6 +347,14 @@ async function access(shell: Shell, d: Driver, options: string): Promise<void> {
   for (const t of TABS) {
     await d.tab(t);
     await report(shell, d, "settings/" + t);
+    if (t === "controls") { // the one-handed layout (#166), live, then reset
+      await d.focus("controls.preset.one_hand_left");
+      await d.press("ui_accept");
+      const applied = shell.settings.input.bindings.attack[0] === "key:f";
+      await d.focus("controls.reset");
+      await d.press("ui_accept");
+      Log.info("drive", "ACCESS_PRESET " + JSON.stringify({ applied, reset: shell.settings.input.bindings.attack[0] === "key:j" }));
+    }
   }
   await d.press("ui_cancel");
   await d.screen("menu");

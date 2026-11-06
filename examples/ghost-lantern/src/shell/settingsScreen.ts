@@ -14,6 +14,7 @@
 //   back: save -> previous screen
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
+import presetData from "../../data/input/presets.json";
 import { DEFAULT_BINDINGS, GLYPH_SETS, findConflicts, glyphName, glyphSet, rebind } from "../core/bindings";
 import { PSEUDO_LOCALE } from "../core/i18n";
 import { COLORBLIND, CONSENT, DIFFICULTIES, DISPLAY_MODES, FRAME_CAPS, SUB_SIZES, type Settings } from "../core/settings";
@@ -127,6 +128,17 @@ function controls(c: Ctx): void {
     c.status.replaceChildren();
     drawActions();
   })).el);
+  // one-handed layouts (#166, motor access), from data/input/presets.json
+  const presets = presetData.presets as Record<string, { bindings: Record<string, string[]> }>;
+  for (const name of Object.keys(presets)) {
+    c.list.append(c.menu.add(buttonItem(shell.i18n, `controls.preset.${name}`, () => {
+      const b = structuredClone(DEFAULT_BINDINGS) as Record<string, string[]>;
+      for (const [action, pair] of Object.entries(presets[name].bindings)) b[action] = [...pair];
+      shell.settings.input.bindings = b as Settings["input"]["bindings"];
+      c.status.replaceChildren(tl(shell.i18n, "controls.preset_done", "text"));
+      drawActions();
+    })).el);
+  }
   drawActions();
 }
 

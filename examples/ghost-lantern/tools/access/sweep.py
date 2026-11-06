@@ -64,7 +64,8 @@ class UsageError(Exception):
 # -------------------------------------------------- reading a drive log
 def parse(text):
     """{"input": {...}, "screens": [...], "subtitle": {...} or None, "prompts": {...} or None, "done": bool}."""
-    out = {"input": None, "screens": [], "subtitle": None, "prompts": None, "hold": None, "done": False}
+    out = {"input": None, "screens": [], "subtitle": None, "prompts": None, "hold": None, "preset": None,
+           "done": False}
     for raw in text.splitlines():
         line = raw.strip()
         if "DRIVE_DONE access" in line:
@@ -87,6 +88,8 @@ def parse(text):
             out["prompts"] = data
         elif tag == "ACCESS_HOLD":
             out["hold"] = data
+        elif tag == "ACCESS_PRESET":
+            out["preset"] = data
     return out
 
 
@@ -193,6 +196,10 @@ def check_run(log, resolution, pad, root):
     if hold is not None and not (hold.get("held") and hold.get("dismissed")):
         problems.append("subtitles: with subtitle_hold on, a finished line must stay until accept and then go "
                         f"(held {hold.get('held')}, dismissed {hold.get('dismissed')})")
+    preset = log.get("preset")
+    if preset is not None and not (preset.get("applied") and preset.get("reset")):
+        problems.append("controls: the one-handed layout must apply from Settings > Controls and reset to the "
+                        f"defaults (applied {preset.get('applied')}, reset {preset.get('reset')})")
     pr = log["prompts"]
     if pad and pr is not None:
         if not str(pr.get("device", "")).startswith("pad"):

@@ -1656,6 +1656,15 @@
         "src/shell/screens.ts",
         "src/shell/shell.css"
       ]
+    },
+    {
+      "version": "0.14.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": [
+        "data/i18n/en.json",
+        "src/shell/drive.ts"
+      ]
     }
   ],
   "files": {
@@ -1716,8 +1725,9 @@
     "data/golden/shaders/vignette.png": "f4203815b5fd6e272093257d19c49a8182eed3b85396847865531afebfe82d4a",
     "data/golden/shell.json": "f10b2e537a307d14d853db8d6f8f9d4b17d752a3d224628e17884e85ce90813a",
     "data/golden/telemetry.json": "4473a81b2860d90ddf06dd0cfe99968eaa00c792f9ab6726ae046be7fdd43560",
-    "data/i18n/en.json": "8887944a974fad0ffddef850a0ca3a6e4307dfcd6944d1fba114f701643adc9c",
-    "data/i18n/fr.json": "727eebe7737b7b125f58c521324698cdaa91889dbddfa76389a7d3cc571e527d",
+    "data/i18n/en.json": "5fa66e6d070aa1a030453da5ebd9b23154ce90f613318aacaa206fd4ae3acdf1",
+    "data/i18n/fr.json": "462d60cea854ace6efe69700d92cbda7578210ad8cdb247a9e26f8604a10d46f",
+    "data/input/presets.json": "87d3b53e7156fef3d0697a5d4479ee4f42309cd1e2d936943288639247de7ec0",
     "data/shaders/.gdignore": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "data/shaders/inputs/indexed.png": "f843d4f80861c8a20188e08ae401aaac2337990683abb123311cd44f812c211f",
     "data/shaders/inputs/noise.png": "54d614b70ea5fe6c5f8f9b8a5e5b19dfaac9799a3ae0b84e7fa7205a63dea780",
@@ -1816,7 +1826,7 @@
     "src/shell/accessAudit.ts": "2226a1a33f33d257e2e5c803f67ccf622e89535a2e20d995f501805453647847",
     "src/shell/app.ts": "412e157f5441123a327c0de6a8b6745bea49cb0d288d71233c3ab6441108a755",
     "src/shell/audioPlayer.ts": "9366a18bd3eefaeb8cb8fe30982f9617320e7d08c3cb65b809f7037f5e37d1d1",
-    "src/shell/drive.ts": "05db929f62e877898ac249557a28b90bc6278ae34f3a9b51bcfada20591941ef",
+    "src/shell/drive.ts": "a9b7902a6b1c5d18ae0d3b57f2e3133a8103d4767f871a2df16a8cf611e4ec87",
     "src/shell/driveLogic.ts": "52fe04cc020a22a0b456fc060233ee7ecb052b31301ba4183f8bd7568dc0fd8d",
     "src/shell/fonts/AtkinsonHyperlegible-Bold.ttf": "5a3b0c8cc8ca545155150b4512a1fa248298df121c50d6557e651e61fbdab92f",
     "src/shell/fonts/AtkinsonHyperlegible-Regular.ttf": "7fb917c89019896d0b52ee84b7cbb3304c18cb90b19a62f5e32712bd23e97669",
@@ -1827,7 +1837,7 @@
     "src/shell/palettes.ts": "b7a9bca13ba2bef70f5ce4d1a145f3e96a51f15577a05bf45c1ad53c44a4761e",
     "src/shell/pseudoCheck.ts": "f646ae5175d1dfa91b41e785faeac6e14ef69666925198124ffa11b3733b1000",
     "src/shell/screens.ts": "15f552fd4f05e0dcabc51585fe10571df84b10ae37026b14db8b6bc74100fa71",
-    "src/shell/settingsScreen.ts": "4e66fc634af107eb8d91afce6a41cbf91d9d465908078655a0a40207a5083855",
+    "src/shell/settingsScreen.ts": "bc259cfd42617ca6722cd13815735d63c2935ec8e192c246799db107288c1620",
     "src/shell/shell.css": "495b625255ad6d6488d4cdf7d73f445cce52a66a5aa6cca55200c4cd84e3628f",
     "src/shell/subtitles.ts": "8ad53dd75fd8b19a5be5f91120ca932f47b7c17ce3c0454f63e506249576843c",
     "src/shell/ui.ts": "aa09216e3235626d06d810db28e02aac459bd4382082ff96339bbe5cb525a342",
@@ -1850,9 +1860,10 @@
     "tests/telemetry.golden.test.ts": "dec6b077141686da17347c5e0584fe21aa6ffea860920d1e3f25b244b3097834",
     "tools/access/colour.py": "c6b75b175ab6cd2439878b0e90c6372850cd7ff4478fbc42343f141bcbe7c299",
     "tools/access/colour_check.py": "1afe545d6e0f4a745af6f6fd3ee1c03fc73f91cc8046ff9a105a7962520e1b3d",
-    "tools/access/sweep.py": "ee5396ac8afbf3749f1c604adcd9951fe5f90542dbd96a9b6bf3fad7a0beacfb",
+    "tools/access/sweep.py": "3032de1058c8d6df7d0a715994ef9b9613c44bf55353420147c72b18abf7cabe",
     "tools/access/test_colour.py": "67c23d5ed4b24a1b84cb942cadd3375f2be7147443f8dddd0b2b4b159f0f49a3",
-    "tools/access/test_sweep.py": "6484f95825eb4eb5b0095804440341c50d7ff97b0d95272de60a34072e2429fc",
+    "tools/access/test_presets.py": "fd470d84f37c85675dabe2fb03323a40aa5c0026c7cee8689e16241d85ed93d8",
+    "tools/access/test_sweep.py": "90ba4699472a223aaf716f63fd82b1c46876c6897ec4170544c3336dbc75a90f",
     "tools/art/chroma_key.py": "1586d6918743890fb7a977b3020a8d99828c63153827904273114aef1cac8aa7",
     "tools/art/comfy_local.py": "ab2863b60191ac55b651e672ca8000f827f89930502ab838732f4b3b546f457e",
     "tools/art/dotwork/.gdignore": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",

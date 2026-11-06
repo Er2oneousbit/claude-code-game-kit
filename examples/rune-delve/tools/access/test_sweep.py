@@ -32,6 +32,7 @@ GOOD = {
     "subtitle": {"visible": True, "speaker": "Guide", "text": "Hello there.", "id": "guide.intro"},
     "prompts": {"device": "pad_other", "actions": {"jump": {"keyboard": "Space", "shown": "South"}}},
     "hold": {"held": True, "dismissed": True},
+    "preset": {"applied": True, "reset": True},
     "done": True,
 }
 
@@ -51,7 +52,7 @@ def as_log(log):
     lines = ["ACCESS_INPUT " + json.dumps(log["input"])]
     lines += ["ACCESS_SCREEN " + json.dumps(s) for s in log["screens"]]
     lines += ["ACCESS_SUBTITLE " + json.dumps(log["subtitle"]), "ACCESS_PROMPTS " + json.dumps(log["prompts"]),
-              "ACCESS_HOLD " + json.dumps(log["hold"])]
+              "ACCESS_HOLD " + json.dumps(log["hold"]), "ACCESS_PRESET " + json.dumps(log["preset"])]
     if log["done"]:
         lines.append("DRIVE_DONE access:res=1920x1080")
     return "\n".join("  " + line for line in lines) + "\n"
@@ -167,6 +168,11 @@ class SweepExam(unittest.TestCase):
         self.assertIn("subtitle_hold", check(log)[0][0])
         log["hold"] = {"held": False, "dismissed": True}
         self.assertIn("held False", check(log)[0][0])
+
+    def test_the_one_handed_layout_must_apply_and_reset(self):
+        log = copy.deepcopy(GOOD)
+        log["preset"] = {"applied": False, "reset": True}
+        self.assertIn("one-handed layout", check(log)[0][0])
 
     def test_a_drive_that_did_not_finish_fails(self):
         log = copy.deepcopy(GOOD)

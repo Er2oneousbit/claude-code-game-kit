@@ -414,6 +414,14 @@ local function access_tour(d, options)
   for _, tab in ipairs({ "display", "audio", "controls", "access", "language" }) do
     d:to_tab(tab)
     d:access_screen("settings/" .. tab)
+    if tab == "controls" then                            -- the one-handed layout (#166), live, then reset
+      d:focus("controls.preset_one_hand_left")
+      d:press("ui_accept")
+      local applied = app.settings.input.bindings.attack[1] == "key:f"
+      d:focus("controls.reset")
+      d:press("ui_accept")
+      print("ACCESS_PRESET " .. Json.encode({ applied = applied, reset = app.settings.input.bindings.attack[1] == "key:j" }))
+    end
   end
   d:press("ui_cancel")
   d:wait_screen("main_menu")

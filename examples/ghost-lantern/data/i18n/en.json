@@ -132,5 +132,8 @@
  "help.controls": "Controls",
  "history.title": "Dialogue history",
  "history.empty": "Nobody has said anything yet.",
- "demo.objective": "Hit the box and feel the juice."
+ "demo.objective": "Hit the box and feel the juice.",
+ "controls.preset.one_hand_left": "One hand (left)",
+ "controls.preset.one_hand_right": "One hand (right)",
+ "controls.preset_done": "One-handed layout set. You can still rebind anything."
 }

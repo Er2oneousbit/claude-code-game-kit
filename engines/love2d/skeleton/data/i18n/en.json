@@ -157,5 +157,8 @@
   "history.title": "Dialogue history",
   "history.empty": "Nobody has said anything yet.",
   "juice.objective": "Hit the box and feel the juice.",
-  "page.hint": "Up / down: scroll   Enter or Esc: back"
+  "page.hint": "Up / down: scroll   Enter or Esc: back",
+  "controls.preset.one_hand_left": "One hand (left)",
+  "controls.preset.one_hand_right": "One hand (right)",
+  "controls.preset_done": "One-handed layout set. You can still rebind anything."
 }

@@ -1,0 +1,127 @@
+{
+ "note": "One-handed control layouts (#166, motor access): every action on one side of the keyboard and of the gamepad, offered in Settings > Controls next to Reset to defaults. Each action is [keyboard, gamepad]; the player can still rebind any of them. Buttons only: no stick directions, which not every engine binds. Checked by tools/access/test_presets.py.",
+ "presets": {
+  "one_hand_left": {
+   "label": "controls.preset.one_hand_left",
+   "bindings": {
+    "ui_up": [
+     "key:w",
+     "pad:dpad_up"
+    ],
+    "ui_down": [
+     "key:s",
+     "pad:dpad_down"
+    ],
+    "ui_left": [
+     "key:a",
+     "pad:dpad_left"
+    ],
+    "ui_right": [
+     "key:d",
+     "pad:dpad_right"
+    ],
+    "ui_accept": [
+     "key:space",
+     "pad:l1"
+    ],
+    "ui_cancel": [
+     "key:escape",
+     "pad:l2"
+    ],
+    "move_left": [
+     "key:a",
+     "pad:dpad_left"
+    ],
+    "move_right": [
+     "key:d",
+     "pad:dpad_right"
+    ],
+    "move_up": [
+     "key:w",
+     "pad:dpad_up"
+    ],
+    "move_down": [
+     "key:s",
+     "pad:dpad_down"
+    ],
+    "jump": [
+     "key:space",
+     "pad:l1"
+    ],
+    "attack": [
+     "key:f",
+     "pad:l2"
+    ],
+    "interact": [
+     "key:e",
+     "pad:l3"
+    ],
+    "pause": [
+     "key:escape",
+     "pad:select"
+    ]
+   }
+  },
+  "one_hand_right": {
+   "label": "controls.preset.one_hand_right",
+   "bindings": {
+    "ui_up": [
+     "key:i",
+     "pad:north"
+    ],
+    "ui_down": [
+     "key:k",
+     "pad:south"
+    ],
+    "ui_left": [
+     "key:j",
+     "pad:west"
+    ],
+    "ui_right": [
+     "key:l",
+     "pad:east"
+    ],
+    "ui_accept": [
+     "key:enter",
+     "pad:r1"
+    ],
+    "ui_cancel": [
+     "key:p",
+     "pad:r2"
+    ],
+    "move_left": [
+     "key:j",
+     "pad:west"
+    ],
+    "move_right": [
+     "key:l",
+     "pad:east"
+    ],
+    "move_up": [
+     "key:i",
+     "pad:north"
+    ],
+    "move_down": [
+     "key:k",
+     "pad:south"
+    ],
+    "jump": [
+     "key:space",
+     "pad:r1"
+    ],
+    "attack": [
+     "key:u",
+     "pad:r2"
+    ],
+    "interact": [
+     "key:o",
+     "pad:r3"
+    ],
+    "pause": [
+     "key:p",
+     "pad:start"
+    ]
+   }
+  }
+ }
+}

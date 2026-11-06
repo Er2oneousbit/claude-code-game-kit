@@ -1595,6 +1595,12 @@
       "date": "2026-11-06",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.14.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1706,6 +1712,7 @@
     "data/golden/shaders/vignette.png": "f4203815b5fd6e272093257d19c49a8182eed3b85396847865531afebfe82d4a",
     "data/golden/shell.json": "f10b2e537a307d14d853db8d6f8f9d4b17d752a3d224628e17884e85ce90813a",
     "data/golden/telemetry.json": "4473a81b2860d90ddf06dd0cfe99968eaa00c792f9ab6726ae046be7fdd43560",
+    "data/input/presets.json": "87d3b53e7156fef3d0697a5d4479ee4f42309cd1e2d936943288639247de7ec0",
     "data/shaders/.gdignore": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "data/shaders/inputs/indexed.png": "f843d4f80861c8a20188e08ae401aaac2337990683abb123311cd44f812c211f",
     "data/shaders/inputs/noise.png": "54d614b70ea5fe6c5f8f9b8a5e5b19dfaac9799a3ae0b84e7fa7205a63dea780",
@@ -1770,9 +1777,10 @@
     "docs/sop/SOP-24-shaders.md": "d8438acf84ec2c090b242175bf8dd8b8a45deb8c17ef68f7e638c979d2894bd6",
     "tools/access/colour.py": "c6b75b175ab6cd2439878b0e90c6372850cd7ff4478fbc42343f141bcbe7c299",
     "tools/access/colour_check.py": "1afe545d6e0f4a745af6f6fd3ee1c03fc73f91cc8046ff9a105a7962520e1b3d",
-    "tools/access/sweep.py": "ee5396ac8afbf3749f1c604adcd9951fe5f90542dbd96a9b6bf3fad7a0beacfb",
+    "tools/access/sweep.py": "3032de1058c8d6df7d0a715994ef9b9613c44bf55353420147c72b18abf7cabe",
     "tools/access/test_colour.py": "67c23d5ed4b24a1b84cb942cadd3375f2be7147443f8dddd0b2b4b159f0f49a3",
-    "tools/access/test_sweep.py": "6484f95825eb4eb5b0095804440341c50d7ff97b0d95272de60a34072e2429fc",
+    "tools/access/test_presets.py": "fd470d84f37c85675dabe2fb03323a40aa5c0026c7cee8689e16241d85ed93d8",
+    "tools/access/test_sweep.py": "90ba4699472a223aaf716f63fd82b1c46876c6897ec4170544c3336dbc75a90f",
     "tools/art/chroma_key.py": "1586d6918743890fb7a977b3020a8d99828c63153827904273114aef1cac8aa7",
     "tools/art/comfy_local.py": "ab2863b60191ac55b651e672ca8000f827f89930502ab838732f4b3b546f457e",
     "tools/art/dotwork/.gdignore": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",

@@ -274,6 +274,10 @@ func _access(options: String) -> void:
 			return
 		await _frames(3)
 		_report("settings/" + tab)
+		if tab == "controls" and not await _check_preset():
+			return
+		if tab == "controls" and not await _nav_to("Tab_controls", "ui_up"):
+			return
 	await _press("ui_cancel")
 	if not await _wait_screen("main_menu"):
 		return
@@ -316,6 +320,22 @@ func _access(options: String) -> void:
 		return
 	Log.raw("DRIVE_DONE " + scenario)
 	_done(0)
+
+
+## The one-handed layout (#166), live: reached with the run's device, applied, then reset to the defaults.
+func _check_preset() -> bool:
+	if not await _nav_to("ResetBindings", "ui_down") or not await _nav_to("Preset_one_hand_left", "ui_right"):
+		return false
+	await _press("ui_accept")
+	await _frames(2)
+	var applied: bool = str(Shell.bindings()["attack"][0]) == "key:f"
+	if not await _nav_to("ResetBindings", "ui_left"):
+		return false
+	await _press("ui_accept")
+	await _frames(2)
+	Log.raw("ACCESS_PRESET " + JSON.stringify({"applied": applied,
+			"reset": str(Shell.bindings()["attack"][0]) == "key:j"}))
+	return true
 
 
 ## subtitle_hold (#167), live: a finished line stays until accept, then goes.

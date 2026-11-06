@@ -33,6 +33,8 @@ const TIMES_FIELDS: PackedStringArray = ["display.ui_scale", "access.text_scale"
 const RESOLUTIONS: Array = [[1280, 720], [1600, 900], [1920, 1080], [2560, 1440], [3840, 2160]]
 const REBIND_TIMEOUT_S: float = 6.0
 
+const PRESETS_FILE: String = "res://data/input/presets.json" # the one-handed layouts (#166)
+const PRESET_NAMES: PackedStringArray = ["one_hand_left", "one_hand_right"]
 var _tab: String = "display"
 var _tab_buttons: Dictionary = {}
 var _content: VBoxContainer
@@ -283,11 +285,17 @@ func _add_bindings() -> void:
 			_watch_focus(b, row)
 			slots.append(b)
 		_grid.append(slots)
-	var reset_row: HBoxContainer = HBoxContainer.new()
+	var reset_row: HFlowContainer = HFlowContainer.new() # wraps at 200 % text
 	_content.add_child(reset_row)
 	var reset: Button = button(Shell.t("controls.reset"), "ResetBindings", _reset_bindings)
 	reset_row.add_child(reset)
-	_grid.append([reset])
+	# one-handed layouts (#166, motor access), from data/input/presets.json
+	var row: Array = [reset]
+	for preset: String in PRESET_NAMES:
+		var b: Button = button(Shell.t("controls.preset." + preset), "Preset_" + preset, _apply_preset.bind(preset))
+		reset_row.add_child(b)
+		row.append(b)
+	_grid.append(row)
 
 
 func _glyph_view(binding: String, gset: String) -> Control:
@@ -339,6 +347,22 @@ func _end_capture(binding: String) -> void:
 							"binding": Shell.binding_text(binding)})
 	_fill_tab()
 	_focus_named("Bind_%s_%d" % [action, slot])
+
+
+## Every action from the preset, the rest from the defaults; the player can rebind anything after.
+func _apply_preset(preset: String) -> void:
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(PRESETS_FILE))
+	if typeof(parsed) != TYPE_DICTIONARY or not (parsed.get("presets", {}) as Dictionary).has(preset):
+		push_warning("%s has no preset %s" % [PRESETS_FILE, preset])
+		return
+	var bindings: Dictionary = Bindings.defaults()
+	var chosen: Dictionary = parsed["presets"][preset]["bindings"]
+	for action: String in chosen:
+		bindings[action] = (chosen[action] as Array).duplicate()
+	Shell.set_bindings(bindings)
+	_status_text = Shell.t("controls.preset_done")
+	_fill_tab()
+	_focus_named("Preset_" + preset)
 
 
 func _reset_bindings() -> void:

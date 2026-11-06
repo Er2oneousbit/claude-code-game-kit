@@ -14,11 +14,14 @@
 local Style = require("src.shell.style")
 local Widgets = require("src.shell.widgets")
 local Settings = require("src.core.settings")
+local Json = require("src.core.json")
 local Bindings = require("src.core.bindings")
 
 local SettingsScreen = {}
 
 -- ---- Tunables ----------------------------------------------------------------
+local PRESETS_FILE = "data/input/presets.json"   -- the one-handed layouts (#166)
+local PRESET_NAMES = { "one_hand_left", "one_hand_right" }
 SettingsScreen.TABS = { "display", "audio", "controls", "access", "language" }
 local RESOLUTIONS = { { 1280, 720 }, { 1600, 900 }, { 1920, 1080 }, { 2560, 1440 }, { 3840, 2160 } }
 local CONTENT_X, CONTENT_W = 44, 552
@@ -191,6 +194,20 @@ function SettingsScreen:controls_rows()
     self.dirty = true
     self:say(app:t("controls.reset_done"))
   end)
+  -- one-handed layouts (#166, motor access), from data/input/presets.json
+  for _, preset in ipairs(PRESET_NAMES) do
+    rows[#rows + 1] = Widgets.button("preset_" .. preset, function() return app:t("controls.preset." .. preset) end,
+      function()
+        local ok, data = Json.try_decode(love.filesystem.read(PRESETS_FILE) or "")
+        local chosen = ok and type(data) == "table" and data.presets and data.presets[preset]
+        if not chosen then return end
+        local bindings = Bindings.defaults()
+        for action, pair in pairs(chosen.bindings) do bindings[action] = { pair[1], pair[2] } end
+        app.settings.input.bindings = bindings
+        self.dirty = true
+        self:say(app:t("controls.preset_done"))
+      end)
+  end
   rows[#rows + 1] = self:back_row()
   return rows
 end

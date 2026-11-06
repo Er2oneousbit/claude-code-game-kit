@@ -36,5 +36,8 @@
  "help.controls": "Commandes",
  "history.title": "Historique des dialogues",
  "history.empty": "Personne n'a encore parlé.",
- "demo.objective": "Frappe la boîte et sens le jus."
+ "demo.objective": "Frappe la boîte et sens le jus.",
+ "controls.preset.one_hand_left": "Une main (gauche)",
+ "controls.preset.one_hand_right": "Une main (droite)",
+ "controls.preset_done": "Disposition à une main choisie. Tout reste modifiable."
 }
