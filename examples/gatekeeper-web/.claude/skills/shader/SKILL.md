@@ -16,7 +16,7 @@ Follow `docs/sop/SOP-24-shaders.md`.
    `python tools/shaders/shader_ref.py golden --write` and show the user the new picture in
    `data/golden/shaders/`; then `python tools/shaders/shader_gen.py`. Never hand-edit a generated file, and never
    rewrite a golden image to make a port pass.
-4. **Prove it:** `python tools/dev.py check` (the engine compiles every recipe) and
+4. **Prove it:** `python tools/dev.py check` (the engine compiles every recipe; Bevy's only in `smoke`) and
    `python tools/dev.py smoke --shaders` (each drawn on the GPU and compared with its golden image). Then a capture of
    the effect in the game (`smoke --screenshot` or `--record`), looked at before posting.
 5. **Report:** the recipe and parameters used, where they are set in the game, the check results, and anything

@@ -28,7 +28,8 @@ where and how to use it). A new effect starts as a question: can a recipe with o
    golden --write` and look at the new picture in `data/golden/shaders/`.
 2. Regenerate the port: `python tools/shaders/shader_gen.py` (your engine, from `.game-kit.json`). Never edit the
    generated files: the next run overwrites them, and `dev.py check` fails while they differ from the recipes.
-3. `python tools/dev.py check` (compiles the shaders, with each engine's own compiler) and
+3. `python tools/dev.py check` (compiles the shaders with the engine's own compiler; Bevy compiles them only in
+   `smoke`, so its `check` checks the files) and
    `python tools/dev.py smoke --shaders` (draws every recipe on the GPU and compares it with its golden image).
 4. Keep the check parameters off texel edges: a sample that lands exactly between two texels is a coin toss in float
    rounding, and GPUs toss differently (a triplanar scale of 2.0 put every sample on one edge and failed on WebGL;

@@ -675,6 +675,12 @@
       "date": "2026-11-06",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.14.0",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -701,7 +707,7 @@
     ".claude/skills/procgen/SKILL.md": "6635ea611509784d582efa7c518c487cb0dcecffac31ed02ed4dd6821bd1a43d",
     ".claude/skills/publish-repo/SKILL.md": "2ca0994ab9941d3ac7fb20300cadf9b275804f63bea522f65910dedb29477fc9",
     ".claude/skills/release-check/SKILL.md": "4198391c8a1d0a85d82e23ee28ca19f0a9d796c4efd435e0dba64d9cb0897bc1",
-    ".claude/skills/shader/SKILL.md": "a2128ab4802dd4c9692b62ea8e0f39a9239b0a668de2091410fe87e6f30a749f",
+    ".claude/skills/shader/SKILL.md": "af53db1438c1de9c4406d107523694d09995e0464916cd177ccc35ceb6490db9",
     ".claude/skills/start-session/SKILL.md": "d789b92825fc7a407031ba2141fae9b105c4edc7d4907ec7f8848a2162684f58",
     ".claude/skills/stuck/SKILL.md": "fe59d6e17f913b66be950d0094d98d08a04da0013c53c0a81a1eb4905adb5304",
     ".claude/skills/token-audit/SKILL.md": "4cf47bbae4bc21507166107c56a3b217930f82c75aee353ba1e7ee2b06982a62",
@@ -810,7 +816,7 @@
     "docs/sop/SOP-21-ship-on-steam-and-itch.md": "8096e0dec71745ecf691c2e5140366e954c1aeae126a68a40ff7da540da793e0",
     "docs/sop/SOP-22-balancing-and-economy.md": "248365f65f715b43cb4417a73793ace4d8e8d98e6f3f94617a9af4149ccf6d32",
     "docs/sop/SOP-23-marketing.md": "8d70dffbb5ba5ce486d5c93c2117880a8fd19cd651a0a1a7dfae29c65fb3fc9b",
-    "docs/sop/SOP-24-shaders.md": "d75878531f03e48e43f6c3c60cde02533ce56cde705e9741b31d4f7fa924b272",
+    "docs/sop/SOP-24-shaders.md": "d8438acf84ec2c090b242175bf8dd8b8a45deb8c17ef68f7e638c979d2894bd6",
     "examples/shader_check.rs": "e49427d2abc3ba104c8a4e144733a96e899274d49d18019c05a34fcf5ab896d9",
     "rustfmt.toml": "f677df637eb20ebd317781d458f2ab6949e7d9e34a1341b491ebdcff93554395",
     "src/app.rs": "cdd4c7c7a26aa686b32458be872336cef0753b6669c993ed7b6ddb30698ed978",

@@ -26,6 +26,9 @@
   (OpenTofu 1.13.2), and the steps are tested with a stand-in. Nothing has been applied to a real account; each
   provider stays (verify) until its first live run. SOP-06 "Putting it online" and `tools/cloud/README.md` (with a
   least-privilege login per target, unchecked) document it.
+- Docs: SOP-24 and `/shader` said `dev.py check` compiles every recipe; on Bevy it only checks the files and `smoke
+  --shaders` compiles them (second-model review of the shader docs; `test_kit_docs.py` holds it). The SDL3 port's
+  review found nothing real.
 
 ## 0.14.0 (2026-11-06): shaders in all nine engines, the C++ overlay on SDL3, and fixes from second-model reviews
 **Cloud deploy is not in this release.** The OpenTofu modules and `dev.py ship` (#252) were planned for 0.14.0, but
