@@ -87,6 +87,7 @@ func play(id: String) -> bool:
 	_line = entry
 	_t = 0.0
 	_held = false # a new line replaces a held one
+	Shell.record_line(str(entry.get("name", "")), str(entry.get("text", ""))) # the history (#167)
 	_restyle()
 	_update()
 	_panel.show()

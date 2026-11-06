@@ -121,6 +121,7 @@
 .fill { height: 100%; width: 0; background: var(--focus); }
 
 .credits { height: 50vh; overflow: hidden; position: relative; }
+.pagebox { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 0.4em; } /* What now?, history (#167) */
 .credits-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: calc(1em * var(--text-scale)); }
 
 .hudbar { margin: 0.6em; padding: 0.3em 0.6em; background: rgba(0, 0, 0, 0.55); border-radius: 0.3em; display: flex; flex-wrap: wrap; gap: 0.3em 1em; font-size: calc(0.85em * var(--text-scale)); max-width: 92vw; }

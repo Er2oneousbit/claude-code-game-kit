@@ -64,6 +64,8 @@ function App.is_debug_build()
   return not source:lower():match("%.love$")
 end
 
+App.MAX_HISTORY = 50                    -- lines the dialogue history keeps (#167)
+
 function App.new(kit)
   return setmetatable({ kit = kit, stack = {}, toasts = {}, sounds = {}, debug_build = App.is_debug_build(),
                         finish_request = nil, plant = false, time = 0, asked_consent = false,
@@ -159,6 +161,7 @@ function App:load()
                                  Telemetry.new_session(love.math.random))
   self.dialogue = load_dialogue()
   self.track = Dialogue.track(self.dialogue)
+  self.objective, self.history = "", {}                  -- cognitive access (#167)
   self.ui = UI.new(self)
   self.input = Input.new(self)
   self.subtitles = Subtitles.new(self)
@@ -388,7 +391,18 @@ function App:play_music(track)
 end
 
 -- Shows a dialogue line as a subtitle (respects subtitles / barks settings, priority and cooldown).
-function App:say(id) return self.track:play(id, self.settings) end
+function App:say(id)
+  local ok = self.track:play(id, self.settings)
+  if ok then                                             -- the history for "What now?" and the history page (#167)
+    local line = self.track:current().line
+    self.history[#self.history + 1] = { name = line.name or "", text = self.subtitles:text_of(line) }
+    if #self.history > App.MAX_HISTORY then table.remove(self.history, 1) end
+  end
+  return ok
+end
+
+-- the goal "What now?" shows on the pause menu (#167); "" clears it. Pass translated text (app:t()).
+function App:set_objective(text) self.objective = text or "" end
 
 function App:game_speed() return self.settings.access.game_speed end
 

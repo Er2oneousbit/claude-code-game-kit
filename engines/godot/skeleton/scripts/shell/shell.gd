@@ -66,6 +66,10 @@ var last_device: String = "keyboard"
 var smoke: bool = false
 var capture: bool = false
 var drive: String = ""
+# cognitive access (#167): the goal the game sets for "What now?", and every subtitle line shown (newest last)
+const MAX_HISTORY: int = 50
+var objective: String = ""
+var history: Array[Dictionary] = []
 var capture_ready: bool = false # set by the smoke drive when the screen to photograph is up
 var run_seed: int = -1 # set it when a run uses a seed: crash files then name it
 var current_screen: String = ""
@@ -287,6 +291,18 @@ func apply_all() -> void:
 
 func access(key: String) -> Variant:
 	return (settings["access"] as Dictionary).get(key)
+
+
+## The goal "What now?" shows on the pause menu (#167); "" clears it. Pass translated text (Shell.t()).
+func set_objective(text: String) -> void:
+	objective = text
+
+
+## Records a line the player saw, for "Dialogue history" and "What now?" (the subtitle bar calls it).
+func record_line(speaker: String, text: String) -> void:
+	history.append({"name": speaker, "text": text})
+	if history.size() > MAX_HISTORY:
+		history.pop_front()
 
 
 ## The game's important colours for the current colour-blind setting ({name: Color}, data/access/colours.json).

@@ -146,5 +146,16 @@
   "juice.guard": "Guarding",
 
   "apples.one": "{n} apple",
-  "apples.other": "{n} apples"
+  "apples.other": "{n} apples",
+  "pause.help": "What now?",
+  "pause.history": "Dialogue history",
+  "help.title": "What now?",
+  "help.objective": "Goal: {text}",
+  "help.no_objective": "No goal set yet.",
+  "help.last_line": "{name}: {text}",
+  "help.controls": "Controls",
+  "history.title": "Dialogue history",
+  "history.empty": "Nobody has said anything yet.",
+  "juice.objective": "Hit the box and feel the juice.",
+  "page.hint": "Up / down: scroll   Enter or Esc: back"
 }

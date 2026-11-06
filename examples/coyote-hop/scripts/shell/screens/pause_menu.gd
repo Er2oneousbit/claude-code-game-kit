@@ -28,6 +28,8 @@ func build() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(title)
 	col.add_child(button(Shell.t("pause.resume"), "Resume", front.resume))
+	col.add_child(button(Shell.t("pause.help"), "Help", front.open_help)) # #167: what now, and what was said
+	col.add_child(button(Shell.t("pause.history"), "History", front.open_history))
 	col.add_child(button(Shell.t("menu.settings"), "Settings", front.open_settings))
 	col.add_child(button(Shell.t("pause.quit_to_title"), "QuitToTitle", front.quit_to_title))
 

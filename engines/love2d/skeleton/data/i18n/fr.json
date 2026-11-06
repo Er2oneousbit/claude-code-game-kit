@@ -34,5 +34,16 @@
   "pause.quit": "Retour au titre",
 
   "apples.one": "{n} pomme",
-  "apples.other": "{n} pommes"
+  "apples.other": "{n} pommes",
+  "pause.help": "Et maintenant ?",
+  "pause.history": "Historique des dialogues",
+  "help.title": "Et maintenant ?",
+  "help.objective": "Objectif : {text}",
+  "help.no_objective": "Pas encore d'objectif.",
+  "help.last_line": "{name} : {text}",
+  "help.controls": "Commandes",
+  "history.title": "Historique des dialogues",
+  "history.empty": "Personne n'a encore parlé.",
+  "juice.objective": "Frappe la boîte et sens le jus.",
+  "page.hint": "Haut / bas : défiler   Entrée ou Échap : retour"
 }

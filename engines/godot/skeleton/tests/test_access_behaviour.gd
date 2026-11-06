@@ -57,4 +57,19 @@ func test_a_held_subtitle_waits_for_accept() -> void:
 	bar._process(5.0)
 	assert_false(bar.is_playing(), "gone once the setting is off")
 
+
+func test_the_history_keeps_the_newest_lines_and_the_goal_is_the_games() -> void:
+	var saved: Array[Dictionary] = Shell.history.duplicate()
+	var saved_goal: String = Shell.objective
+	Shell.history.clear()
+	for i: int in Shell.MAX_HISTORY + 5:
+		Shell.record_line("Guide", "line %d" % i)
+	assert_eq(Shell.history.size(), Shell.MAX_HISTORY, "capped")
+	assert_eq(Shell.history.back()["text"], "line %d" % (Shell.MAX_HISTORY + 4), "newest last")
+	assert_eq(Shell.history[0]["text"], "line 5", "the oldest go first")
+	Shell.set_objective("Find the key")
+	assert_eq(Shell.objective, "Find the key")
+	Shell.history = saved
+	Shell.set_objective(saved_goal)
+
 # {{FOOTER}}

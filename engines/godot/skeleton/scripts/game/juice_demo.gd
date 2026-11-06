@@ -98,6 +98,7 @@ func _ready() -> void:
 	_build_world()
 	_recolour()
 	_apply_timing()
+	Shell.set_objective(Shell.t("demo.objective")) # what "What now?" on the pause menu says (#167)
 	_build_hud()
 	relabel()
 	Shell.locale_changed.connect(relabel)

@@ -60,6 +60,7 @@ function Demo:enter()
   self.real_time, self.flash, self.flash_peak = 0, 0, 0
   self.hits, self.refused, self.pop = 0, 0, 0
   self.guard, self.offset = false, { 0, 0, 0 }
+  app:set_objective(app:t("juice.objective"))            -- what "What now?" on the pause menu says (#167)
   app:say(INTRO_LINE)
 end
 

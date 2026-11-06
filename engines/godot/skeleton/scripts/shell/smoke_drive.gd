@@ -301,6 +301,14 @@ func _access(options: String) -> void:
 		return
 	await _frames(3)
 	_report("pause")
+	for item: Array in [["Help", "help"], ["History", "history"]]: # #167: both reachable and readable
+		if not await _nav_to(item[0], "ui_down") or not await _accept(item[1]):
+			return
+		await _frames(3)
+		_report(item[1])
+		await _press("ui_cancel")
+		if not await _wait_screen("pause"):
+			return
 	if not await _nav_to("QuitToTitle", "ui_down"):
 		return
 	await _press("ui_accept")

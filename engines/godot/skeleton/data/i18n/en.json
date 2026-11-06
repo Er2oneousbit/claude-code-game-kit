@@ -126,5 +126,15 @@
  "demo.hint": "{left} {right}: move   {jump}: jump   {attack}: hit the box   {guard}: guard   {pause}: pause",
  "demo.hits.one": "{n} hit",
  "demo.hits.other": "{n} hits",
- "demo.guarding": "Guarding"
+ "demo.guarding": "Guarding",
+ "pause.help": "What now?",
+ "pause.history": "Dialogue history",
+ "help.title": "What now?",
+ "help.objective": "Goal: {text}",
+ "help.no_objective": "No goal set yet.",
+ "help.last_line": "{name}: {text}",
+ "help.controls": "Controls",
+ "history.title": "Dialogue history",
+ "history.empty": "Nobody has said anything yet.",
+ "demo.objective": "Hit the box and feel the juice."
 }

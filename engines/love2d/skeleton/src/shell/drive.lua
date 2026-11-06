@@ -453,6 +453,12 @@ local function access_tour(d, options)
   d:press("pause")
   d:wait_screen("pause")
   d:access_screen("pause")
+  for _, page in ipairs({ "help", "history" }) do       -- #167: both reachable and readable
+    d:open(page, page)
+    d:access_screen(page)
+    d:press("ui_cancel")
+    d:wait_screen("pause")
+  end
   d:open("quit", "title")
   d:done(0)
 end

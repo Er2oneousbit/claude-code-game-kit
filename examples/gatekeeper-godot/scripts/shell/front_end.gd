@@ -137,6 +137,14 @@ func open_credits() -> void:
 	push(CreditsScreen.new(self))
 
 
+func open_help() -> void:
+	push(HelpScreen.new(self))
+
+
+func open_history() -> void:
+	push(HistoryScreen.new(self))
+
+
 func start_play() -> void:
 	replace(LoadingScreen.new(self, PLAY_SCENE))
 

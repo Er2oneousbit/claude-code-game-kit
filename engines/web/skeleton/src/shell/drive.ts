@@ -377,6 +377,13 @@ async function access(shell: Shell, d: Driver, options: string): Promise<void> {
   await d.press("pause");
   await d.screen("pause");
   await report(shell, d, "pause");
+  for (const page of ["help", "history"]) { // #167: both reachable and readable
+    await d.choose("pause", `pause.${page}`);
+    await d.screen(page);
+    await report(shell, d, page);
+    await d.press("ui_cancel");
+    await d.screen("pause");
+  }
   await d.choose("pause", "pause.quit");
   await d.pastConsent();
 }

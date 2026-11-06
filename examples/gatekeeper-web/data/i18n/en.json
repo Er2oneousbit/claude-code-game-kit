@@ -118,5 +118,15 @@
  "toast.saved": "Settings saved",
  "toast.repaired": "Settings file repaired ({n} fixes)",
  "toast.bug": "Bug report saved: {dir}",
- "toast.fullscreen": "The browser blocked fullscreen. Try again, or press F11."
+ "toast.fullscreen": "The browser blocked fullscreen. Try again, or press F11.",
+ "pause.help": "What now?",
+ "pause.history": "Dialogue history",
+ "help.title": "What now?",
+ "help.objective": "Goal: {text}",
+ "help.no_objective": "No goal set yet.",
+ "help.last_line": "{name}: {text}",
+ "help.controls": "Controls",
+ "history.title": "Dialogue history",
+ "history.empty": "Nobody has said anything yet.",
+ "demo.objective": "Hit the box and feel the juice."
 }

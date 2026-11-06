@@ -43,6 +43,7 @@ export const SAVE_SLOT = 1;
 const THEME_FILE = "theme_default.css"; // public/assets/ui/<this>, loaded after the built-in style when present
 const LOG_FLUSH_MS = 1000;
 const TOAST_MS = 3500;
+const MAX_HISTORY = 50; // subtitle lines the dialogue history keeps (#167)
 const MAX_CRASH_FILES = 3; // per page load: a crash loop must not fill the storage
 const MAX_DT = 0.1;
 export const SUB_SIZE_EM: Record<string, number> = { small: 0.9, medium: 1.1, large: 1.4, xl: 1.8 };
@@ -111,6 +112,20 @@ export class Shell {
   readonly telemetry: Telemetry;
   readonly saves: SaveStore;
   readonly subtitles: SubtitleBar;
+  /** Cognitive access (#167): the goal "What now?" shows, and every subtitle line shown (newest last). */
+  objective = "";
+  readonly history: { name: string; text: string }[] = [];
+
+  /** The goal "What now?" on the pause menu shows; "" clears it. Pass translated text (i18n.t). */
+  setObjective(text: string): void {
+    this.objective = text;
+  }
+
+  /** Records a line the player saw (the subtitle bar calls it), for the history and "What now?". */
+  recordLine(name: string, text: string): void {
+    this.history.push({ name, text });
+    if (this.history.length > MAX_HISTORY) this.history.shift();
+  }
   settings: Settings;
   game: PhaserNS.Game | null = null;
   /** The running gameplay scene ("main" or "juice"), if any. */

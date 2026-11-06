@@ -79,6 +79,7 @@ export class JuiceScene extends Phaser.Scene {
   }
 
   create(): void {
+    shell.setObjective(shell.i18n.t("demo.objective")); // what "What now?" on the pause menu says (#167)
     const { width, height } = this.scale;
     const pal = shell.palette();
     this.shake = new Shake();

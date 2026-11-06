@@ -86,6 +86,7 @@ export class SubtitleBar {
     this.host.append(root);
     this.showing = { line, t: 0, typewriter: opts.typewriter ?? true, root, body, chars: Array.from(this.text(line.text)), full: false };
     this.held = false; // a new line ends any held one
+    this.shell.recordLine(line.name, this.text(line.text)); // the history (#167)
     this.draw();
     return true;
   }
