@@ -15,6 +15,13 @@
   tokens is refused, HTTPS only and no SSH, a budget alert on AWS, Azure and GCP (`--budget`, `--alert-email`; a
   warning on Linode and DigitalOcean, whose APIs have none), the state git-ignored in `deploy/`, `game-kit=<slug>`
   tags, and ask rules for `dev.py *ship*`, `tools/cloud/ship.py` and `tofu` (with PowerShell twins).
+- A second-model review (Kimi K3.1 Pro) of the cloud lane found, fixed before release: `--destroy` after a `--check`
+  with another region or project could refresh the wrong place and drop a running resource from the state (it uses
+  the applied configuration now); a site changed by a build running alongside could publish unscanned files (the
+  plan scans and publishes a copy); a plan `tofu show` could not read was kept and could be applied; DigitalOcean App
+  Platform got the Spaces region `nyc3` (its default is `nyc`); GCP budgets named the project by ID, not number, and
+  a new project lacked the APIs; Linode's site URL was built from the region instead of the bucket's host; a Linode
+  server never printed the address its domain must point at; `dev.py ship --site=DIR` lost to the default.
 - **Offline only:** all ten modules and every generated deployment pass `tofu validate` and `tofu fmt -check`
   (OpenTofu 1.13.2), and the steps are tested with a stand-in. Nothing has been applied to a real account; each
   provider stays (verify) until its first live run. SOP-06 "Putting it online" and `tools/cloud/README.md` (with a

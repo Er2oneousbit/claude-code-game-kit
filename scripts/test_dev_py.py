@@ -1424,6 +1424,14 @@ class ShipCommand(TempRoot):
         self.assertEqual(dev.split_ship(parser, ["--preset", "release", "ship", "--plan"]),
                          (["--preset", "release", "ship"], ["--plan"]))
 
+    def test_the_equals_spellings_are_understood(self):
+        # second-model review: "--site=custom" got the engine's default appended after it, which argparse let win
+        rc, text, calls = self.ship("web", "ship", "--target", "do", "--kind=static", "--plan", "--site=custom")
+        self.assertEqual(rc, 0, text)
+        self.assertEqual(calls[0][2:], ["--target", "do", "--kind=static", "--plan", "--site=custom"])
+        rc, text, calls = self.ship("web", "ship", "--target", "do", "--kind=static", "--plan")
+        self.assertEqual(calls[0][-2:], ["--site", str(self.root / "dist")])
+
 
 if __name__ == "__main__":
     for stream in (sys.stdout, sys.stderr):

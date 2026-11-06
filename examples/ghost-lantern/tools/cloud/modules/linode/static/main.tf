@@ -55,5 +55,5 @@ resource "linode_object_storage_object" "file" {
 }
 
 output "url" {
-  value = "https://${linode_object_storage_bucket.site.label}.${var.region}.linodeobjects.com/index.html"
+  value = "https://${linode_object_storage_bucket.site.hostname}/index.html" # the provider's own host name for the bucket
 }

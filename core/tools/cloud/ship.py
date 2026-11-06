@@ -27,11 +27,16 @@
 #             --check: the --plan steps up to `tofu validate`, which needs no account (offline)
 #             --plan: check options and the site (index.html, no secret-type files, no tokens) -> write
 #                     deploy/<target>-<kind>/ (main.tf calling tools/cloud/modules/<target>/<kind>, terraform.tfvars.json,
-#                     ship.json) -> tofu init, tofu plan -out=plan.tfplan -> list what it would make -> record the plan
-#                     file's and the site's digests
-#             --apply: the plan exists and nothing changed since (plan file, site, options) -> confirm -> tofu apply
-#                      plan.tfplan -> print the URL
-#             --destroy: confirm -> tofu destroy -> tofu state list must be empty
+#                     ship.json, and site/: a copy of the web build, scanned and published from there, so a build
+#                     running alongside cannot change what was checked) -> tofu init, tofu plan -out=plan.tfplan ->
+#                     list what it would make (a plan that cannot be read is refused) -> record the plan's and the
+#                     copy's digests
+#             --apply: the plan exists and nothing changed since (plan file, site copy) -> confirm -> tofu apply
+#                      plan.tfplan -> keep main.tf and terraform.tfvars.json as applied.* -> print the URL (and the
+#                      address a Linode server's domain must point at)
+#             --destroy: confirm -> put the applied main.tf and terraform.tfvars.json back (a later --check or --plan
+#                        with other options must not point destroy at another region or project) -> tofu destroy ->
+#                        tofu state list must be empty
 #           The state (terraform.tfstate) stays in deploy/<target>-<kind>/ on this machine: it can hold generated
 #           secrets, so deploy/ is git-ignored. Lose it and destroy cannot find what it made (every resource the
 #           provider can tag carries game-kit=<slug> for finding it by hand). No provider was used for real yet: the
@@ -59,6 +64,9 @@ import publish_check  # noqa: E402  (the secret-file and token rules, one copy)
 TARGETS = ("aws", "azure", "gcp", "linode", "do")
 KINDS = ("static", "container")
 DEFAULT_REGION = {"aws": "us-east-1", "azure": "eastus", "gcp": "us-central1", "linode": "us-east", "do": "nyc3"}
+# DigitalOcean names regions per product: Spaces "nyc3", App Platform "nyc" (verify the list on DigitalOcean's docs)
+DEFAULT_REGION_BY_KIND = {("do", "container"): "nyc"}
+APPLIED = ("main.tf", "terraform.tfvars.json")      # kept as applied.<name> after an apply, for destroy
 BUDGET_TARGETS = ("aws", "azure", "gcp")              # the others have no budget API: the user sets one by hand
 DEFAULT_BUDGET_USD = 10
 PRICING = {                                           # where the real prices are (estimates are not guessed here)
@@ -172,7 +180,7 @@ def module_inputs(a, slug):
     if t != "aws":
         v[region_key] = a.region
     if k == "static":
-        v["site_dir"] = Path(a.site).resolve().as_posix()
+        v["site_dir"] = a.site_copy.as_posix()
     else:
         if t == "do":
             v["registry_type"], v["registry"], v["repository"], v["tag"] = split_image(a.image)
@@ -204,7 +212,9 @@ def root_module(a, slug, inputs, deploy):
     return (f"# Written by tools/cloud/ship.py: change the options and plan again rather than editing this file.\n"
             f"terraform {{\n  required_providers {{\n    {req}\n  }}\n}}\n\n{prov}\n\n{variables}\n\n"
             f'module "deploy" {{\n  source = "{src}"\n{args}\n}}\n\n'
-            'output "url" {\n  value = module.deploy.url\n}\n')
+            'output "url" {\n  value = module.deploy.url\n}\n'
+            + ('\noutput "address" {\n  value = module.deploy.address\n}\n'
+               if (a.target, a.kind) == ("linode", "container") else ""))
 
 
 # ---- Running OpenTofu -----------------------------------------------------------------
@@ -285,14 +295,21 @@ def check_options(a):
 
 
 def write_deployment(a, slug, deploy, exe):
-    """Options and site checked, deploy/<target>-<kind>/ written, tofu init and validate run. Returns the inputs."""
+    """Options and site checked, deploy/<target>-<kind>/ written, tofu init and validate run. Returns the inputs.
+    A static site is copied into deploy/<target>-<kind>/site/ first and everything (the scan, the digest, the upload)
+    uses that copy: a build that changes the original meanwhile cannot slip unscanned files in."""
     check_options(a)
+    deploy.mkdir(parents=True, exist_ok=True)
     if a.kind == "static":
-        problems = site_problems(Path(a.site))
+        a.site_copy = deploy / "site"
+        if a.site_copy.exists():
+            shutil.rmtree(a.site_copy)
+        shutil.copytree(a.site, a.site_copy, symlinks=True)
+        problems = site_problems(a.site_copy)
         if problems:
+            shutil.rmtree(a.site_copy)
             raise Refused("the site folder is not safe to publish:\n  " + "\n  ".join(problems[:20]))
     inputs = module_inputs(a, slug)
-    deploy.mkdir(parents=True, exist_ok=True)
     write_lf(deploy / "main.tf", root_module(a, slug, inputs, deploy))
     write_lf(deploy / "terraform.tfvars.json", json.dumps(inputs, indent=2) + "\n")
     if (deploy / "plan.tfplan").exists():
@@ -322,13 +339,16 @@ def cmd_plan(a, slug, deploy, exe):
         raise failed("plan", out, a.target)
     rc, shown = tofu(exe, deploy, "show", "-json", "plan.tfplan")
     try:
-        changes = json.loads(shown).get("resource_changes", []) if rc == 0 else []
-    except ValueError:
-        changes = []
+        changes = json.loads(shown)["resource_changes"] if rc == 0 else None
+    except (ValueError, KeyError, TypeError):
+        changes = None
+    if changes is None:                     # a plan nobody could read must not be applied
+        (deploy / "plan.tfplan").unlink()
+        raise Refused(f"tofu show could not read the plan (exit {rc}), so it was deleted: plan again")
     made = [c["address"] for c in changes if "create" in c.get("change", {}).get("actions", [])]
     gone = [c["address"] for c in changes if "delete" in c.get("change", {}).get("actions", [])]
     state = {"target": a.target, "kind": a.kind, "inputs": inputs, "plan": file_digest(deploy / "plan.tfplan"),
-             "site": site_digest(Path(a.site)) if a.kind == "static" else None,
+             "site": site_digest(a.site_copy) if a.kind == "static" else None,
              "planned": datetime.datetime.now(datetime.timezone.utc).isoformat()}
     write_lf(deploy / "ship.json", json.dumps(state, indent=2) + "\n")
     print(f"[ OK ] plan for {a.target} {a.kind}: {len(made)} to make, {len(gone)} to remove "
@@ -361,19 +381,23 @@ def cmd_apply(a, slug, deploy, exe):
     if state["kind"] == "static":
         site = Path(state["inputs"]["site_dir"])
         if not site.is_dir() or site_digest(site) != state["site"]:
-            raise Refused(f"the site folder changed since the plan ({site}): plan again, so you apply what you read")
+            raise Refused(f"the site copy changed since the plan ({site}): plan again, so you apply what you read")
     confirm(a, "apply", slug)
     rc, out = tofu(exe, deploy, "apply", "-input=false", "-no-color", "plan.tfplan")
     if plan.exists():
         plan.unlink()                       # a plan is applied once: the next apply needs a fresh --plan
     if rc != 0:
         raise failed("apply", out, a.target)
+    for name in APPLIED:                    # what destroy must use, whatever --check or --plan writes later
+        shutil.copy2(deploy / name, deploy / f"applied.{name}")
     rc, out = tofu(exe, deploy, "output", "-json")
     try:
-        url = json.loads(out)["url"]["value"] if rc == 0 else "?"
-    except (ValueError, KeyError, TypeError):
-        url = "?"
-    print(f"[ OK ] {a.target} {a.kind} is up: {url}")
+        outputs = {k: v["value"] for k, v in json.loads(out).items()} if rc == 0 else {}
+    except (ValueError, KeyError, TypeError, AttributeError):
+        outputs = {}
+    print(f"[ OK ] {a.target} {a.kind} is up: {outputs.get('url', '?')}")
+    if "address" in outputs:
+        print(f"[info] point the domain's DNS A record at {outputs['address']}: HTTPS starts once it resolves there")
     print(f"[info] the state is {deploy.relative_to(ROOT).as_posix()}/terraform.tfstate: keep it (destroy needs it), "
           "never commit it (deploy/ is git-ignored)")
     return 0
@@ -384,6 +408,11 @@ def cmd_destroy(a, slug, deploy, exe):
         raise Refused(f"no state in {deploy.relative_to(ROOT).as_posix()}: nothing this tool made is known here "
                       f"(find leftovers by the game-kit={slug} tag in the {a.target} console)")
     confirm(a, "destroy", slug)
+    for name in APPLIED:
+        kept = deploy / f"applied.{name}"
+        if kept.is_file() and (not (deploy / name).is_file() or file_digest(kept) != file_digest(deploy / name)):
+            shutil.copy2(kept, deploy / name)
+            print(f"[info] destroy uses the applied {name} (a later --check or --plan had rewritten it)")
     rc, out = tofu(exe, deploy, "destroy", "-input=false", "-no-color", "-auto-approve")
     if rc != 0:
         raise failed("destroy", out, a.target)
@@ -391,6 +420,10 @@ def cmd_destroy(a, slug, deploy, exe):
     left = [l for l in out.splitlines() if l.strip()] if rc == 0 else ["(tofu state list failed)"]
     if left:
         raise Refused("destroy finished but the state still lists:\n  " + "\n  ".join(left[:20]))
+    for name in APPLIED:
+        kept = deploy / f"applied.{name}"
+        if kept.is_file():
+            kept.unlink()
     print(f"[ OK ] destroyed everything ship.py made on {a.target} for {slug} (the state is empty)")
     if a.target not in BUDGET_TARGETS:
         print(f"[info] remove the billing alert you set by hand in the {a.target} control panel, if you no longer want it")
@@ -434,7 +467,7 @@ def main(argv=None):
             pass
     a = build_parser().parse_args(argv)
     DEBUG = a.debug
-    a.region = a.region or DEFAULT_REGION[a.target]
+    a.region = a.region or DEFAULT_REGION_BY_KIND.get((a.target, a.kind), DEFAULT_REGION[a.target])
     try:
         slug = game_slug()
         exe = tofu_exe(a)

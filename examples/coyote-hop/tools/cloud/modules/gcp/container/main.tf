@@ -26,6 +26,7 @@ variable "budget_usd" { type = number }
 variable "alert_email" { type = string }
 
 resource "google_cloud_run_v2_service" "server" {
+  depends_on          = [google_project_service.api]
   name                = lower(var.name)
   project             = var.project
   location            = var.location
@@ -55,19 +56,35 @@ resource "google_cloud_run_v2_service_iam_member" "public" {
   member   = "allUsers"
 }
 
+# The APIs these resources need, switched on (a new project has them off). Left on at destroy: other things in the
+# project may use them.
+resource "google_project_service" "api" {
+  for_each           = toset(["run.googleapis.com", "monitoring.googleapis.com", "billingbudgets.googleapis.com"])
+  project            = var.project
+  service            = each.value
+  disable_on_destroy = false
+}
+
+# Budget filters name the project by its number, not its ID
+data "google_project" "current" {
+  project_id = var.project
+}
+
 resource "google_monitoring_notification_channel" "alert" {
   project      = var.project
   display_name = "${var.name} budget"
   type         = "email"
   labels       = { email_address = var.alert_email }
+  depends_on   = [google_project_service.api]
 }
 
 resource "google_billing_budget" "deploy" {
   billing_account = var.billing_account
+  depends_on      = [google_project_service.api]
   display_name    = "${var.name}-server-budget"
 
   budget_filter {
-    projects = ["projects/${var.project}"]
+    projects = ["projects/${data.google_project.current.number}"]
   }
 
   amount {

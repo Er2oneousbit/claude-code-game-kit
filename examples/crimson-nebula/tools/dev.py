@@ -688,8 +688,11 @@ def cmd_ship(args, *_):
         print(f"[error] {SHIP_TOOL} is missing (python scripts/new_game.py --upgrade adds it)", file=sys.stderr)
         return 2
     rest = list(getattr(args, "ship_args", []))
-    kind = rest[rest.index("--kind") + 1] if "--kind" in rest[:-1] else ""
-    if kind == "static" and "--site" not in rest:
+    kind = next((r.split("=", 1)[1] for r in rest if r.startswith("--kind=")), "")
+    if "--kind" in rest[:-1]:
+        kind = rest[rest.index("--kind") + 1]
+    has_site = any(r == "--site" or r.startswith("--site=") for r in rest)   # both spellings argparse takes
+    if kind == "static" and not has_site:
         if SHIP_SITE is None:
             print("[error] this engine makes no web build of its own: pass --site <a web build folder>", file=sys.stderr)
             return 2

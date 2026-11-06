@@ -35,9 +35,12 @@ class FakeTofu:
     """Stands in for OpenTofu: records each call and acts out init, validate, plan, show, apply, output, destroy and
     state list on the deploy folder, the way the real one leaves files behind."""
 
-    def __init__(self, plan_rc=0, plan_out="", destroy_leaves=()):
+    def __init__(self, plan_rc=0, plan_out="", destroy_leaves=(), show_out=None, outputs=None):
         self.calls = []
         self.plan_rc, self.plan_out, self.destroy_leaves = plan_rc, plan_out, list(destroy_leaves)
+        self.show_out = show_out
+        self.outputs = outputs or {"url": {"value": "https://d111.cloudfront.net/"}}
+        self.destroyed_with = None          # the terraform.tfvars.json destroy ran with
 
     def __call__(self, exe, deploy, *args, capture=True):
         self.calls.append(args[0] if args[0] != "state" else "state list")
@@ -46,6 +49,8 @@ class FakeTofu:
             (deploy / "plan.tfplan").write_bytes(b"plan v1")    # the real one writes even when it then fails
             return self.plan_rc, self.plan_out
         if cmd == "show":
+            if self.show_out is not None:
+                return self.show_out
             return 0, json.dumps({"resource_changes": [
                 {"address": "module.deploy.aws_s3_bucket.site", "change": {"actions": ["create"]}},
                 {"address": "module.deploy.aws_budgets_budget.deploy", "change": {"actions": ["create"]}}]})
@@ -53,8 +58,10 @@ class FakeTofu:
             (deploy / "terraform.tfstate").write_text('{"resources": [1]}', encoding="utf-8")
             return 0, "Apply complete!"
         if cmd == "output":
-            return 0, json.dumps({"url": {"value": "https://d111.cloudfront.net/"}})
+            return 0, json.dumps(self.outputs)
         if cmd == "destroy":
+            tfvars = deploy / "terraform.tfvars.json"
+            self.destroyed_with = json.loads(tfvars.read_text(encoding="utf-8")) if tfvars.is_file() else None
             return 0, "Destroy complete!"
         if cmd == "state":
             return 0, "\n".join(self.destroy_leaves)
@@ -148,10 +155,11 @@ class ShipGuardrails(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("no plan to apply", out)
         self.assertEqual(self.plan()[0], 0)
-        (self.g.site / "index.html").write_text("<html>changed</html>\n", encoding="utf-8")
+        # what goes up is the copy taken at plan time (deploy/<target>-<kind>/site): changing it refuses the apply
+        (self.g.deploy("aws-static") / "site" / "index.html").write_text("<html>changed</html>\n", encoding="utf-8")
         code, out = self.g.run("--target", "aws", "--kind", "static", "--apply", "--yes", fake=self.fake)
         self.assertEqual(code, 1, out)
-        self.assertIn("the site folder changed since the plan", out)
+        self.assertIn("the site copy changed since the plan", out)
         self.assertEqual(self.plan()[0], 0)
         (self.g.deploy("aws-static") / "plan.tfplan").write_bytes(b"someone else's plan")
         code, out = self.g.run("--target", "aws", "--kind", "static", "--apply", "--yes", fake=self.fake)
@@ -236,6 +244,69 @@ class ShipGuardrails(unittest.TestCase):
         self.assertIn("Log in for aws first", out)
         self.assertFalse((self.g.deploy("aws-static") / "plan.tfplan").exists())
         self.assertFalse((self.g.deploy("aws-static") / "ship.json").exists())
+
+    # ---- second-model review of the cloud lane ----
+    def test_a_plan_nobody_can_read_is_not_applied(self):
+        for show in ((1, "Error: plan file corrupt"), (0, "not json"), (0, "{}")):
+            with self.subTest(show=show):
+                code, out = self.plan(fake=FakeTofu(show_out=show))
+                self.assertEqual(code, 1, out)
+                self.assertIn("could not read the plan", out)
+                self.assertFalse((self.g.deploy("aws-static") / "plan.tfplan").exists())
+
+    def test_the_site_is_published_from_the_copy_that_was_scanned(self):
+        self.assertEqual(self.plan()[0], 0)
+        copy = self.g.deploy("aws-static") / "site"
+        self.assertTrue((copy / "index.html").is_file())
+        inputs = json.loads((self.g.deploy("aws-static") / "terraform.tfvars.json").read_text(encoding="utf-8"))
+        self.assertEqual(Path(inputs["site_dir"]), copy)
+        # a build running alongside writes a token into the original: the copy, scanned and planned, is what goes up
+        (self.g.site / "config.js").write_text('const k = "ghp_' + "a" * 36 + '";\n', encoding="utf-8")
+        self.assertFalse((copy / "config.js").exists())
+        code, out = self.g.run("--target", "aws", "--kind", "static", "--apply", "--yes", fake=self.fake)
+        self.assertEqual(code, 0, out)
+        # the copy itself is guarded by its digest
+        self.assertEqual(self.plan()[0], 1)                     # the token is in the original now: refused
+        (self.g.site / "config.js").unlink()
+        self.assertEqual(self.plan()[0], 0)
+        (copy / "extra.js").write_text("x\n", encoding="utf-8")
+        code, out = self.g.run("--target", "aws", "--kind", "static", "--apply", "--yes", fake=self.fake)
+        self.assertEqual(code, 1, out)
+        self.assertIn("the site copy changed since the plan", out)
+
+    def test_destroy_uses_the_applied_configuration(self):
+        fake = FakeTofu()
+        self.assertEqual(self.g.run("--target", "aws", "--kind", "container", "--plan", "--image", "me/s:1",
+                                    "--port", 80, "--alert-email", "me@example.com", fake=fake)[0], 0)
+        self.assertEqual(self.g.run("--target", "aws", "--kind", "container", "--apply", "--yes", fake=fake)[0], 0)
+        # a later check with another budget rewrites the deployment without applying it
+        self.assertEqual(self.g.run("--target", "aws", "--kind", "container", "--check", "--image", "me/s:2",
+                                    "--port", 80, "--alert-email", "me@example.com", "--budget", 99, fake=fake)[0], 0)
+        code, out = self.g.run("--target", "aws", "--kind", "container", "--destroy", "--yes", fake=fake)
+        self.assertEqual(code, 0, out)
+        self.assertIn("destroy uses the applied", out)
+        self.assertEqual(fake.destroyed_with["image"], "me/s:1")
+        self.assertEqual(fake.destroyed_with["budget_usd"], 10)
+
+    def test_digitalocean_names_regions_per_product(self):
+        self.assertEqual(self.g.run("--target", "do", "--kind", "container", "--check", "--image", "me/s:1",
+                                    "--port", 80, fake=self.fake)[0], 0)
+        self.assertEqual(json.loads((self.g.deploy("do-container") / "terraform.tfvars.json")
+                                    .read_text(encoding="utf-8"))["region"], "nyc")
+        self.assertEqual(self.g.run("--target", "do", "--kind", "static", "--check", "--site", self.g.site,
+                                    fake=self.fake)[0], 0)
+        self.assertEqual(json.loads((self.g.deploy("do-static") / "terraform.tfvars.json")
+                                    .read_text(encoding="utf-8"))["region"], "nyc3")
+
+    def test_a_linode_server_prints_the_address_its_domain_needs(self):
+        fake = FakeTofu(outputs={"url": {"value": "https://game.example.com/"}, "address": {"value": "192.0.2.7"}})
+        args = ("--target", "linode", "--kind", "container")
+        self.assertEqual(self.g.run(*args, "--plan", "--image", "me/s:1", "--port", 80, "--domain",
+                                    "game.example.com", fake=fake)[0], 0)
+        self.assertIn('output "address"', (self.g.deploy("linode-container") / "main.tf").read_text(encoding="utf-8"))
+        code, out = self.g.run(*args, "--apply", "--yes", fake=fake)
+        self.assertEqual(code, 0, out)
+        self.assertIn("A record at 192.0.2.7", out)
 
     def test_no_opentofu_is_an_environment_problem(self):
         with unittest.mock.patch.dict(os.environ, {"TOFU_BIN": ""}), \

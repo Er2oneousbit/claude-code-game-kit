@@ -25,7 +25,7 @@ real apply on each provider is still to come (verify), and it costs money: read 
 |---|---|---|---|---|
 | `aws` | private S3 bucket behind CloudFront (origin access control) | Lightsail container service, nano | AWS Budgets, 80 % of `--budget` | `aws configure` or `AWS_PROFILE` |
 | `azure` | storage account static website (TLS 1.2, no public containers) | Container App, 0 to 1 replica, external HTTPS only | consumption budget on the resource group | `az login`, `ARM_SUBSCRIPTION_ID` |
-| `gcp` | Cloud Storage bucket, public read, `storage.googleapis.com` | Cloud Run, 0 to 1 instance, public | billing budget filtered to `--project`, emails `--alert-email` | `gcloud auth application-default login` |
+| `gcp` | Cloud Storage bucket, public read, `storage.googleapis.com` (the recipes switch on the APIs they use) | Cloud Run, 0 to 1 instance, public | billing budget filtered to `--project`, emails `--alert-email` | `gcloud auth application-default login` |
 | `linode` | Object Storage bucket, public-read objects | Nanode VM: Docker + Caddy (HTTPS for `--domain`), firewall 80/443 only | **none in Linode's API**: set one by hand | `LINODE_TOKEN` |
 | `do` | Spaces bucket, public-read objects, Spaces CDN | App Platform, one smallest instance | **none in DigitalOcean's API**: set one by hand | `DIGITALOCEAN_TOKEN` (+ `SPACES_ACCESS_KEY_ID` / `SPACES_SECRET_ACCESS_KEY` for static) |
 
@@ -36,12 +36,14 @@ Default regions: aws us-east-1, azure eastus, gcp us-central1, linode us-east, d
   since; a plan is applied once. `--apply` and `--destroy` ask for the game's slug in a terminal and
   need `--yes` anywhere else. Claude Code asks before any `ship` or `tofu` command (the project's ask rules).
 - **No credentials in the project.** Each provider's own login; nothing the kit writes holds a key (an exam checks).
-- **Nothing secret goes up.** A static site is refused if it holds a secret-type file (`.env`, `*.pem`, ...) or a
-  token (the same rules as `tools/publish_check.py`), a symlink, or no `index.html`.
+- **Nothing secret goes up.** `--plan` copies the site into `deploy/<target>-<kind>/site/` and scans and publishes
+  that copy, so a build running alongside cannot slip files in. It is refused if it holds a secret-type file (`.env`,
+  `*.pem`, ...) or a token (the same rules as `tools/publish_check.py`), a symlink, or no `index.html`.
 - **HTTPS only, no SSH.** Every endpoint is HTTPS; nothing opens port 22 (the Linode VM's firewall drops it).
 - **A budget alert on every deployment** where the provider's API has one (AWS, Azure, GCP); on Linode and
   DigitalOcean `--plan` warns you to set a billing alert in the control panel first.
-- **Destroy checks.** `--destroy` removes everything in the state and fails if `tofu state list` is not empty after.
+- **Destroy checks.** `--destroy` runs with the configuration last applied (a later `--check` or `--plan` with another
+  region or project cannot point it elsewhere), and fails if `tofu state list` is not empty after.
   Every resource that takes tags carries `game-kit=<slug>`, for finding leftovers by hand.
 - **The state stays on your machine** in `deploy/<target>-<kind>/` (git-ignored: it can hold generated secrets).
   Back it up; without it `--destroy` cannot know what was made.

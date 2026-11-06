@@ -43,6 +43,7 @@ resource "random_string" "suffix" {
 }
 
 resource "google_storage_bucket" "site" {
+  depends_on                  = [google_project_service.api]
   name                        = "${lower(var.name)}-site-${random_string.suffix.result}"
   project                     = var.project
   location                    = var.location
@@ -69,19 +70,35 @@ resource "google_storage_bucket_object" "file" {
   content_type = lookup(local.types, lower(reverse(split(".", each.value))[0]), "application/octet-stream")
 }
 
+# The APIs these resources need, switched on (a new project has them off). Left on at destroy: other things in the
+# project may use them.
+resource "google_project_service" "api" {
+  for_each           = toset(["storage.googleapis.com", "monitoring.googleapis.com", "billingbudgets.googleapis.com"])
+  project            = var.project
+  service            = each.value
+  disable_on_destroy = false
+}
+
+# Budget filters name the project by its number, not its ID
+data "google_project" "current" {
+  project_id = var.project
+}
+
 resource "google_monitoring_notification_channel" "alert" {
   project      = var.project
   display_name = "${var.name} budget"
   type         = "email"
   labels       = { email_address = var.alert_email }
+  depends_on   = [google_project_service.api]
 }
 
 resource "google_billing_budget" "deploy" {
   billing_account = var.billing_account
+  depends_on      = [google_project_service.api]
   display_name    = "${var.name}-site-budget"
 
   budget_filter {
-    projects = ["projects/${var.project}"]
+    projects = ["projects/${data.google_project.current.number}"]
   }
 
   amount {
