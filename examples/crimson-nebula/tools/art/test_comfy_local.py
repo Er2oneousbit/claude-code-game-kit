@@ -110,6 +110,7 @@ class State:
                       {"filename": "kit_preview.png", "subfolder": "", "type": "temp"}]
         self.audio = []              # Save Audio node outputs (history key "audio")
         self.models = []             # Save 3D Model node outputs (history key "3d")
+        self.redirect = None         # /system_stats answers 302 to this address (#248)
 
 
 STATE = State()
@@ -129,6 +130,12 @@ class FakeComfy(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         url = urllib.parse.urlsplit(self.path)
+        if url.path == "/system_stats" and STATE.redirect:
+            self.send_response(302)
+            self.send_header("Location", STATE.redirect)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if url.path == "/system_stats":
             return self.send(200, {"system": {"comfyui_version": "0.43.0", "python_version": "3.12.12 (main)"},
                                    "devices": [{"name": "cuda:0 Test GPU", "vram_total": 16 * 1024 ** 3,
@@ -615,6 +622,41 @@ class PictureMetadata(unittest.TestCase):
             cl.strip_webp(data[:-20])
         with self.assertRaises(cl.ToolError):
             cl.strip_picture(b"GIF89a" + bytes(20))
+
+
+class ComfyReviewFixes(ComfyLocalExam):
+    """#248: same-name outputs collided, long names lost their extension, redirects left localhost, JPEG trailers
+    survived, and the log row used backslashes on Windows."""
+
+    def test_same_name_outputs_in_two_subfolders_are_both_kept(self):
+        STATE.files = [{"filename": "kit_00001_.png", "subfolder": "front", "type": "output"},
+                       {"filename": "kit_00001_.png", "subfolder": "side", "type": "output"}]
+        rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "o")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(len([p for p in (self.root / "o").glob("*.png")]), 2, out)
+
+    def test_a_long_name_keeps_its_extension(self):
+        self.assertTrue(cl.safe_name("x" * 90 + "_ComfyUI_00001_.png").endswith(".png"))
+        self.assertLessEqual(len(cl.safe_name("x" * 300 + ".png")), 100)
+
+    def test_a_redirect_is_not_followed(self):
+        STATE.redirect = "http://192.0.2.1:9/system_stats"     # TEST-NET: never reached
+        rc, out = self.run_tool("check")
+        self.assertNotEqual(rc, 0, out)
+        self.assertIn("302", out)
+
+    def test_a_jpeg_trailer_is_cut(self):
+        data, scan = jpeg_with_exif()
+        out = cl.strip_jpeg(data + b"MOTION-PHOTO-TRAILER with GPS")
+        self.assertNotIn(b"MOTION-PHOTO", out)
+        self.assertTrue(out.endswith(b"\xff\xd9"))
+
+    def test_the_log_row_uses_forward_slashes(self):
+        STATE.files = [{"filename": f"kit_0000{i}_.png", "subfolder": "", "type": "output"} for i in range(1, 5)]
+        rc, out = self.run_tool("run", "--workflow", "wf.api.json", "--out", "assets/art", "--log", "--type", "sprite")
+        self.assertEqual(rc, 0, out)
+        log = (self.root / "docs" / "ASSET_LOG.md").read_text(encoding="utf-8")
+        self.assertIn("`assets/art/` (4 files)", log)
 
 
 if __name__ == "__main__":

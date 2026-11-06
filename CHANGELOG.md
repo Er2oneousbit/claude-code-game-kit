@@ -18,6 +18,12 @@
   capture folders inside the project get a `.gdignore`. Godot `check <file>` resolves the file against the project
   and refuses one outside it (exit 2). Godot `build` and Unreal `build`, `package` and `genproj` stop after 4 hours
   (they had no timeout); Unity `check` names a timeout as one (#250).
+- `comfy_local.py`: two outputs with one name in different ComfyUI subfolders are both kept (one replaced the
+  other, or the run stopped half saved); a long name keeps its extension (every output was skipped after the GPU
+  time); redirects are never followed (the local-only check covered only the first address); a JPEG loses anything
+  after its end-of-image marker (a motion photo's video and XMP survived the strip); the log row's folder uses
+  forward slashes on Windows. `yt_transcript.py` gives yt-dlp a time limit; `issues.py` fences issue titles with the
+  run's nonce like bodies (#248).
 - Shipped tools: `credits.py` splits ASSET_LOG rows on unescaped pipes only (an author "Ana \| Band" shifted
   every later column and credited the wrong licence) and says plainly when the log is not UTF-8 (exit 2, was a
   traceback). `image_diff.py` reports a cut PNG as unreadable (exit 2) and makes the `--diff` folder. `doctor.py`

@@ -1034,6 +1034,12 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1141,7 +1147,7 @@
     "tests/gameMain.test.js": "343d6b87478387cef1afef7f1e3a3172f81cc2e839ed049ec4b4f6aa95ffb41b",
     "tests/support/mzFake.js": "772cc3af530fbe2dd933189c27a4b9b555410df734d7799e9b1b1e172e6e81a9",
     "tools/art/chroma_key.py": "1586d6918743890fb7a977b3020a8d99828c63153827904273114aef1cac8aa7",
-    "tools/art/comfy_local.py": "87fc07b2d018e4d619f52f37eac44896a3011e8d1c3d138d897d08efe21674b0",
+    "tools/art/comfy_local.py": "f19ee9157904a944e5272df60e4dc21e52ff6a744907f2f3c187d50bb4a197e7",
     "tools/art/dotwork/.gdignore": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "tools/art/dotwork/LICENSES.md": "bd4c59c845392ba4010b1ce8527e037eca96656058f9ae025afdf79dee43d756",
     "tools/art/dotwork/README.md": "49939389dbc19ead59429b8a074019d4b6bfce1b9cabdf136b84588039130fc3",
@@ -1284,7 +1290,7 @@
     "tools/art/sprites/example_hero.py": "0369455134242fb0df4e707adbea5e0d485f9d4e9454794e02cf79f147922cbc",
     "tools/art/svg_export.py": "d8bd686502502db3a0c99187a6037434d330d913182ddbc7b367120c9d03cc4e",
     "tools/art/test_chroma_key.py": "29aab6598ebe56866e4fe9365fff9b52749bbf1f6666b64a6612e2b2d4420cfc",
-    "tools/art/test_comfy_local.py": "b7dd8bfe935c353511f7a993463650f5462e972ffc605290868412cacf8a3067",
+    "tools/art/test_comfy_local.py": "5d2856107679fba65aa77105b1b67df0a8a4fdc93ea59834d8cf248ec8ff2b47",
     "tools/art/test_gimp_batch.py": "013e7976ccd1652a52e8c850f6c5877a9ad0fbd5553650e8eec8e17dbe76c3cc",
     "tools/art/test_pixel_sprite.py": "16b5f7fd815d5f41f1cc2d358635cdffc6b1720902baff2fb51db5fa71c1f0dc",
     "tools/art/test_pixellab.py": "2903027c58129682fe51f664885322fef97522611fc69970d2eaa6e8bda9d4f9",
@@ -1385,7 +1391,7 @@
     "tools/golden_vectors.py": "5368a2d52b2a9c837ee42cc974ef1085e1b8d018be7343069027eed1736f8b95",
     "tools/hooks/session_context.py": "4e5f75ee1c8db72edf92e8d929b962998a9e3edec9135cb0759d994917d5e8c1",
     "tools/image_diff.py": "c0a64e1ecff25470feca2a08baea381b66c704dfd030b95ef60ed997538a7328",
-    "tools/issues.py": "bb8f2116b28d48a0ff1cbe65852c2525fafc7b344db16304fcee057d1c581587",
+    "tools/issues.py": "8d1dd70eb3988e69b29d8da39e25d718f69a46ea1bf36f98a74c4f23a058487b",
     "tools/publish_check.py": "618a3c32bba757406947bf23a7e9c3768893f882e18a2ec37916ff5ab57f0098",
     "tools/second_opinion.py": "31527022bde8f6ff9e5d3afce18277498627041cfb46026d9f2f8aa742893c66",
     "tools/second_opinion/kimi-agent.md": "9a1838d60f30abb8ea3438e6a6493a3fd789aaf4987d2bbc998de20ec1df95a8",
@@ -1397,14 +1403,14 @@
     "tools/test_fetch_asset.py": "e0698eda1bd0bcaa5adc95a20d58efbc71ed6bd3d96889e5d5045ffdd15d54db",
     "tools/test_golden_vectors.py": "ae987f692dc728be23b98d2822531685f9487524a6a59305fa24e825717ca61d",
     "tools/test_image_diff.py": "9feb840899e287d8af16e803c0c06b30d4d24ef48af016833ab616c786af5738",
-    "tools/test_issues.py": "259047c45802fd775bc0a39b327135b2abd4e45a22a8d859fb5e9601acf5f1c4",
+    "tools/test_issues.py": "54292e633824e75f3a80fc8c88c9d5de8fd253db7d79998a32ac71b328ae698b",
     "tools/test_publish_check.py": "d7962a26e30ef59dc589187af502db745b8232cc1627564469f77e4a0055c550",
     "tools/test_second_opinion.py": "e88ec9ed4b29cfb52374e897708c144c73fe64a36904600327090c31557fdf76",
     "tools/test_session_context.py": "9136bfcbb0a105659f1a1bba72d9af3d3084ff921a49842752162f644732d730",
     "tools/test_token_audit.py": "8be4deeedc4b063bc0c1758f74970aa4fb1d21f7442d7ebf8ae09e9df9d4def2",
-    "tools/test_yt_transcript.py": "5078a90625d20be03bd2c04ca9d48a13e603c19d08560506b9963eac6f13e744",
+    "tools/test_yt_transcript.py": "ba9b66a47bc27d2a2b1198776c934f30a5f56c64f5599c5258c9869c103d5130",
     "tools/token_audit.py": "553f9c7d4af332a45e11dc1ca9dadfd030cd841b9439b73b1f71a2bff2fbb048",
-    "tools/yt_transcript.py": "1c03846e65f4d228d921a2217f2df0fa206aaf4caafa5ac0c04ff66045f457e7"
+    "tools/yt_transcript.py": "7ae8657734eb805db92c7fc5b9dae3e99c6533a0083724da8df59206bd729e9f"
   },
   "last_upgrade": "2026-11-05",
   "slug": "lockpick_mz",

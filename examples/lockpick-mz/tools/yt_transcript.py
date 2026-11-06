@@ -40,6 +40,8 @@ from pathlib import Path
 WHISPER_MODELS = ("tiny", "base", "small", "medium")    # bigger = slower and more accurate
 YOUTUBE_HOSTS = ("youtube.com", "youtu.be", "youtube-nocookie.com")
 
+SUBS_TIMEOUT_S = 600                     # subtitles are small: longer than this is a stalled download
+AUDIO_TIMEOUT_S = 3600                   # an hour of audio on a slow line still fits
 DEBUG = False
 
 
@@ -92,7 +94,11 @@ def via_ytdlp_subs(vid, lang, tmp):
            "--sub-langs", lang, "--sub-format", "vtt", "-o", str(tmp / "%(id)s.%(ext)s"),
            f"https://www.youtube.com/watch?v={vid}"]
     dbg(" ".join(cmd))
-    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           timeout=SUBS_TIMEOUT_S)
+    except subprocess.TimeoutExpired:     # #248: a stalled download hung the tool
+        return None, f"yt-dlp subtitles: no answer in {SUBS_TIMEOUT_S} s"
     files = list(tmp.glob("*.vtt"))
     if not files:
         return None, f"yt-dlp subtitles: {last_error(r.stderr) or f'no {lang} captions'}"
@@ -133,8 +139,12 @@ def via_whisper(vid, lang, tmp, device, model_name):
            f"https://www.youtube.com/watch?v={vid}"]
     dbg(" ".join(cmd))
     # Progress goes to stderr under --debug, never to stdout (stdout is the transcript)
-    r = subprocess.run(cmd, stdout=sys.stderr if DEBUG else subprocess.PIPE, stderr=None if DEBUG else subprocess.PIPE,
-                       text=True, encoding="utf-8", errors="replace")
+    try:
+        r = subprocess.run(cmd, stdout=sys.stderr if DEBUG else subprocess.PIPE,
+                           stderr=None if DEBUG else subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+                           timeout=AUDIO_TIMEOUT_S)
+    except subprocess.TimeoutExpired:     # #248
+        return None, f"yt-dlp audio download: not done in {AUDIO_TIMEOUT_S} s"
     audio = next(iter(tmp.glob("audio.*")), None)
     if r.returncode != 0 or not audio:
         return None, f"yt-dlp audio download: {last_error(r.stderr) if not DEBUG else 'see the log above'}"

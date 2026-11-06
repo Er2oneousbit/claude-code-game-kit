@@ -55,6 +55,7 @@ import hashlib
 import ipaddress
 import json
 import os
+import posixpath
 import re
 import struct
 import sys
@@ -103,7 +104,16 @@ USER_AGENT = "claude-code-game-kit comfy_local.py"
 GEN_FILE = "comfy_local.gen.json"
 DEBUG = False
 SLEEP = time.sleep                      # the exam replaces it
-OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))   # never send local traffic through a proxy
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """ComfyUI never redirects: a 3xx comes back as its status, never followed. The local-only check covers the
+    address asked for; a redirect to another host would have been followed and trusted (#248)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+# never send local traffic through a proxy, and never follow a redirect
+OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
 
 
 class ToolError(Exception):
@@ -463,8 +473,11 @@ def strip_jpeg(data):
         if not drop:
             out.append(bytes((0xFF, marker)) + data[pos:end])
         pos = end
-        if marker == 0xDA:                              # start of scan: the rest is image data, kept whole
-            out.append(data[pos:])
+        if marker == 0xDA:                              # start of scan: the image data, kept whole up to EOI
+            # FF D9 cannot appear inside entropy-coded data (FF is stuffed as FF 00): anything after the first one is
+            # a trailer, such as a motion photo's MP4 and XMP, which kept personal data (#248)
+            eoi = data.find(b"\xff\xd9", pos)
+            out.append(data[pos:eoi + 2] if eoi >= 0 else data[pos:])
             return b"".join(out)
 
 
@@ -602,8 +615,13 @@ def strip_embedded(data):
 
 
 def safe_name(name):
+    """A plain file name of at most 100 characters; a long one loses part of its stem, never its extension (#248:
+    a long prefix cut the suffix, and every output was skipped as "no extension" after the GPU time)."""
     base = re.sub(r"[^\w.\-]+", "_", Path(name.replace("\\", "/")).name).strip("._") or "image"
-    return base[:100]
+    if len(base) <= 100:
+        return base
+    suffix = Path(base).suffix if len(Path(base).suffix) <= 10 else ""
+    return base[:100 - len(suffix)].rstrip("._") + suffix
 
 
 def write_new(path, data, overwrite):
@@ -633,7 +651,7 @@ def write_log(args, files, meta):
     log_text = log_path.read_text(encoding="utf-8")
     num, fill = fetch_asset.next_asset_id(log_text)
     asset_id = f"A-{num:04d}"
-    folder = os.path.commonpath(rels) if len(rels) > 1 else ""
+    folder = posixpath.commonpath(rels) if len(rels) > 1 else ""   # #248: os.path gave assets\\art/ on Windows
     shown = f"`{folder}/` ({len(rels)} files)" if folder and len(rels) > 3 else ", ".join(f"`{r}`" for r in rels)
     notes = "; ".join(x for x in [f"prompt: {meta['prompt'][:160]}" if meta["prompt"] else "",
                                   f"seed {meta['seed']}" if meta["seed"] is not None else "",
@@ -713,6 +731,14 @@ def cmd_run(args):
         if status != 200:
             raise JobError(f"could not fetch {item['filename']} (HTTP {status})")
         name = safe_name((args.prefix + "_" if args.prefix else "") + item["filename"])
+        if name.casefold() in {p.name.casefold() for p, _ in fetched}:
+            # two Save nodes with one filename_prefix write one name into two subfolders: keep both (#248)
+            sub = re.sub(r"[^\w.\-]+", "_", str(item.get("subfolder") or "")).strip("._") or "dup"
+            name = safe_name(f"{sub}_{name}")
+            n = 2
+            while name.casefold() in {p.name.casefold() for p, _ in fetched}:
+                name = safe_name(f"{Path(name).stem}_{n}{Path(name).suffix}")
+                n += 1
         ext = Path(name).suffix.lower()
         if ext not in SAVE_EXTENSIONS:
             print(f"[skip] {item['filename']}: {ext or 'no extension'} is not an image, video or audio type this "

@@ -127,6 +127,22 @@ class WhisperFallback(unittest.TestCase):
         self.assertIn("--whisper", err)
 
 
+class YtReviewFixes(unittest.TestCase):
+    """#248: yt-dlp ran with no timeout, so a stalled download hung the tool."""
+
+    def test_a_stalled_download_ends(self):
+        patch = Patch(self)
+
+        def stall(cmd, **kwargs):
+            self.assertIn("timeout", kwargs)
+            raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+        patch(yt.subprocess, "run", stall)
+        with tempfile.TemporaryDirectory() as d:
+            text, why = yt.via_ytdlp_subs(VID, "en", Path(d))
+        self.assertIsNone(text)
+        self.assertIn("no answer", why)
+
+
 if __name__ == "__main__":
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
