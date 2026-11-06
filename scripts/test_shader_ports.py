@@ -80,6 +80,29 @@ class ShaderPortsExam(unittest.TestCase):
                 self.assertIn("p * outputFrame.zw * inputSize.zw", src)
                 self.assertIn("vTextureCoord * inputSize.xy / outputFrame.zw", src)
 
+    def test_sdl3_hlsl_and_cpp_agree(self):
+        # SDL3: every parameter in its own float4 slot (one layout under DXIL, SPIR-V and MSL), the C++ struct lists
+        # the same parameters in slot order, the fragment input is the GPU renderer's vertex output, and the CMake
+        # list names every recipe
+        recipes = sg.load()
+        files = sg.files_for("cpp-sdl2", recipes)
+        header = files["kit_shaders.hpp"]
+        self.assertIn(" ".join(r["name"] for r in recipes), files["kit_shaders.cmake"])
+        for r in recipes:
+            with self.subTest(recipe=r["name"]):
+                hlsl = files[f"{r['name']}.frag.hlsl"]
+                slots = re.findall(r"^#define u_(\w+) kit_p(\d+)", hlsl, re.M)
+                self.assertEqual([int(i) for _, i in slots], list(range(len(r["params"]))))
+                camel = "".join(part.capitalize() for part in r["name"].split("_"))
+                body = re.search(r"struct %sParams \{\n(.*?)\n\};" % camel, header, re.S).group(1)
+                self.assertEqual(re.findall(r"Float4 (\w+)\{", body), [k for k, _ in slots])
+                self.assertIn("float4 v_color : COLOR0;", hlsl)
+                self.assertIn("float2 v_uv : TEXCOORD0;", hlsl)
+                self.assertEqual("register(t1, space2)" in hlsl, bool(r["aux"]))
+                aux = f'"{r["aux"]}"' if r["aux"] else "nullptr"
+                self.assertIn(f'{{"{r["name"]}", "{r["main"]}", {aux}, &k{camel}Defaults, sizeof({camel}Params)}}',
+                              header)
+
     def test_bevy_wesl_and_rust_agree(self):
         # Bevy 0.20 has no naga_oil: WESL with its imports first, constants:: for the bind group; the Rust params
         # struct must list the WESL struct's fields in the same order (encase lays it out from the Rust side)

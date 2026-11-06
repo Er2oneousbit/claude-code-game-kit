@@ -1,10 +1,12 @@
-# C++ / SDL2 Flow
+# C++ / SDL3 Flow
 
-Engine-specific workflow for a custom C++ engine on SDL2. Universal process lives in `docs/sop/`.
+Engine-specific workflow for a custom C++ engine on SDL3. Universal process lives in `docs/sop/`.
 
-> **Tested.** On Windows (2026-10-20) with VS 2022 Build Tools 17.14 (MSVC 14.44), its bundled CMake 3.31 and vcpkg, SDL2 2.32.10
-> and doctest 2.5.3: `doctor`, `check`, `test`, `smoke`, `build --preset release`, `clean` all ran, and a planted compile error, failing
-> test and boot-time `LOG_ERROR` each failed the right command. `run` (opens a window) and Linux/macOS are untested.
+> **Tested.** On Windows (2026-11-06) with VS 2022 Build Tools 17.14 (MSVC 14.44), its bundled CMake 3.31 and vcpkg, SDL3 3.4.12,
+> sdl3-shadercross 3.0.0-preview2 and doctest 2.5.3: `doctor`, `check`, `test`, `smoke`, `smoke --shaders` (every recipe matched its
+> golden image on Vulkan and on Direct3D 12), `build --preset release`. Before the SDL3 move (SDL2 2.32.10, 2026-10-20) a planted
+> compile error, failing test and boot-time `LOG_ERROR` each failed the right command. `run` (opens a window), Metal (MSL) and
+> Linux/macOS are untested.
 > Anything marked **(verify)** is the likeliest to need tweaks. Paste errors to Claude verbatim.
 
 ## One-time setup
@@ -16,7 +18,8 @@ Engine-specific workflow for a custom C++ engine on SDL2. Universal process live
    library versions, replace the hash with a newer vcpkg release commit and rebuild.
 4. Keep the project path short (for example `D:\games\my_game`). vcpkg builds dependencies deep inside `build\`, and a project path much over
    100 characters hits the Windows 260-character limit (`fatal error C1083: Cannot open compiler generated file: '': Invalid argument`).
-5. `python tools/dev.py doctor`. The first `check` builds SDL2 and doctest from source (about 3 minutes), later builds reuse vcpkg's binary cache.
+5. `python tools/dev.py doctor`. The first `check` builds SDL3, sdl3-shadercross (with SPIRV-Cross, and Microsoft's DXC
+   release, which vcpkg downloads) and doctest (a few minutes); later builds reuse vcpkg's binary cache.
 
 ## Daily loop
 ```
@@ -33,6 +36,7 @@ python tools/dev.py build --preset release
 | `check` | `cmake --preset <p>` then `cmake --build --preset <p>` |
 | `test` | build, then `ctest --preset <p> --output-on-failure` |
 | `smoke` | runs `<exe> --smoke 120` with dummy SDL drivers, checks exit code and output |
+| `smoke --shaders` | also runs `kit_shader_check <build>/shader_check` (GPU renderer, hidden window), then `tools/shaders/shader_ref.py compare` |
 | `run` | runs the built exe from the project root so `assets/` paths resolve |
 | `build` | same steps as check; add `--preset release` for the shipping build (global options work before or after the command) |
 | `clean` | removes `build/` |
@@ -48,10 +52,12 @@ Recommended extensions: C/C++ (ms-vscode.cpptools), CMake Tools (ms-vscode.cmake
 2. Add the `.cpp` to `GAME_SOURCES` in `CMakeLists.txt` (explicit list on purpose: no surprise globbing).
 3. `python tools/dev.py check`.
 
-## Adding a dependency (SDL2_image, SDL2_ttf, SDL2_mixer, others)
-1. Add the vcpkg **port** name to `vcpkg.json` dependencies (`sdl2-image`, `sdl2-ttf`, `sdl2-mixer`; ports are lowercase with
-   hyphens, not the CMake names), write an `/adr`.
-2. Uncomment the matching `find_package(SDL2_image CONFIG REQUIRED)` line in `CMakeLists.txt` and link the target.
+## Adding a dependency (SDL3_image, SDL3_ttf, SDL3_mixer, others)
+1. Add the vcpkg **port** name to `vcpkg.json` dependencies (`sdl3-image`, `sdl3-ttf`, `sdl3-mixer`; ports are lowercase with
+   hyphens, not the CMake names), write an `/adr`. `sdl3-image` has no image formats by default: name them,
+   `{ "name": "sdl3-image", "features": ["png"] }` (without it every PNG fails with "Unsupported image format").
+2. Uncomment the matching `find_package(SDL3_image CONFIG REQUIRED)` line in `CMakeLists.txt` and link the target
+   (`SDL3_image::SDL3_image`).
 3. Rebuild. First build after a new dependency is slow (vcpkg compiles it).
 
 ## Testing
@@ -66,7 +72,7 @@ Recommended extensions: C/C++ (ms-vscode.cpptools), CMake Tools (ms-vscode.cmake
 - Crashes: build `debug`, run under debugger, read the call stack top frame in **your** code first.
 
 ## Assets and audio
-- SDL2_mixer or miniaudio for audio **(your ADR)**. Load assets from `assets/...` relative to the working directory: `dev.py run`, `smoke` and the VS Code launch config all start
+- SDL3_mixer or miniaudio for audio **(your ADR)**. Load assets from `assets/...` relative to the working directory: `dev.py run`, `smoke` and the VS Code launch config all start
   the game from the project root. For a shipped build, put `assets/` next to the exe (Packaging step 2), and the game runs from there.
 - Naming: `spr_player_idle.png`, `sfx_jump_01.wav`, `mus_level1.ogg`, `fnt_ui.ttf`.
 - Sources and licenses: `docs/RESOURCES.md`, `docs/ASSET_LOG.md`.
@@ -77,21 +83,46 @@ Recommended extensions: C/C++ (ms-vscode.cpptools), CMake Tools (ms-vscode.cmake
 
 ## Packaging (release)
 1. `python tools/dev.py build --preset release`.
-2. Package: exe, DLLs (vcpkg app-local copies), `assets/`, license files. Zip or installer.
+2. Package: exe, DLLs (vcpkg app-local copies), the `shaders/` folder next to the exe (the compiled recipes), `assets/`,
+   license files. Zip or installer.
 3. Run from a clean folder on a machine without the dev tools to catch missing DLLs (SOP-06).
 
 ## Common errors
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | CMake: `Could not find toolchain file` | `VCPKG_ROOT` unset | Set env var, restart terminal/VS Code |
-| `find_package(SDL2)` fails | vcpkg manifest not run | Configure with the preset (it passes the toolchain) |
+| `find_package(SDL3)` fails | vcpkg manifest not run | Configure with the preset (it passes the toolchain) |
+| `Could not find SHADERCROSS` | the host tool did not install | `vcpkg.json` lists `sdl3-shadercross` with `"host": true`; delete `build/` and configure again |
+| A shader recipe fails the build | an edit in `tools/shaders/ksl/` that HLSL rejects | the shadercross line names the file and line; fix the `.ksl`, run `shader_gen.py` |
+| `shader ...: not the GPU renderer` warning | software or another renderer (smoke, no GPU) | expected in smoke; elsewhere check the GPU driver (`SDL_GPU_DRIVER=vulkan` or `direct3d12`) |
 | Window opens then closes instantly | event loop not pumping, or `quit` set early | Check `Game::handle_event` and loop |
 | Smoke: `Couldn't create renderer` | hardware renderer under dummy driver | Use software renderer in smoke mode (already default in `main.cpp`) |
-| `SDL2.dll not found` on launch | running exe outside build output | Run via `dev.py run` or copy DLLs |
-| Linker: `undefined reference to WinMain` | missing `SDL2::SDL2main` | Link it as in `CMakeLists.txt` |
+| `SDL3.dll not found` on launch | running exe outside build output | Run via `dev.py run` or copy DLLs |
+| Linker: `undefined reference to WinMain` | main.cpp lacks `#include <SDL3/SDL_main.h>` | Include it there, once |
 | `this vcpkg instance requires a manifest with a specified baseline` | `builtin-baseline` removed from `vcpkg.json` | Put a vcpkg release commit hash back |
 | `"my_game" is not a valid package name` | a `name` field with underscores in `vcpkg.json` | Remove `name` (not needed for a project manifest) or use lowercase-with-hyphens |
 | `fatal error C1083: Cannot open compiler generated file: ''` | project path too long for vcpkg's nested build folders | Move the project to a short path |
+
+## Upgrading from SDL2 (games made before kit 0.14)
+`new_game.py --upgrade` replaces the kit's files you never edited (CMakeLists.txt, vcpkg.json, main.cpp when unchanged)
+and leaves `.gold` copies beside the ones you changed. Your own code moves to SDL3 by hand; SDL's migration guide (README-migration.md in SDL's docs folder)
+lists every rename, and these are the ones the kit's starter and example hit:
+- Headers: `#include <SDL3/SDL.h>`, and `#include <SDL3/SDL_main.h>` once, in main.cpp. CMake: `find_package(SDL3)`, link
+  `SDL3::SDL3`; there is no SDL2main.
+- Return values: most functions return `bool` (true = success); `SDL_Init(...) == 0` becomes `SDL_Init(...)`.
+- Window and renderer: `SDL_CreateWindow(title, w, h, flags)` (no position), `SDL_CreateRenderer(window, name)` (a driver
+  name or nullptr, no flags; vsync is `SDL_SetRenderVSync`), `SDL_RenderSetLogicalSize` is
+  `SDL_SetRenderLogicalPresentation(r, w, h, SDL_LOGICAL_PRESENTATION_LETTERBOX)`.
+- Drawing takes floats: `SDL_RenderCopy`/`SDL_RenderCopyF` are `SDL_RenderTexture` with `SDL_FRect`, `SDL_RenderDrawLineF`
+  is `SDL_RenderLine`, `SDL_RenderFillRectF` is `SDL_RenderFillRect`, `SDL_RenderDrawRectF` is `SDL_RenderRect`.
+- Surfaces: `SDL_FreeSurface` is `SDL_DestroySurface`; `SDL_RenderReadPixels(r, rect)` returns a new surface.
+- Events: `SDL_QUIT` is `SDL_EVENT_QUIT`, `SDL_KEYDOWN` is `SDL_EVENT_KEY_DOWN`, `event.key.keysym.sym` is `event.key.key`,
+  `SDL_MOUSEBUTTONDOWN` is `SDL_EVENT_MOUSE_BUTTON_DOWN`.
+- Game controllers are gamepads: `SDL_GameController*` is `SDL_Gamepad*`, `SDL_INIT_GAMECONTROLLER` is `SDL_INIT_GAMEPAD`,
+  `SDL_CONTROLLERDEVICEADDED` is `SDL_EVENT_GAMEPAD_ADDED`, `SDL_GameControllerGetAxis` is `SDL_GetGamepadAxis`.
+- Scale modes: `SDL_ScaleModeLinear` is `SDL_SCALEMODE_LINEAR` (and `SDL_SCALEMODE_PIXELART` is new in 3.4).
+Then `python tools/dev.py check`, `test`, `smoke` and `smoke --shaders`. The kit's own example `examples/scrap-tanks` made
+the same move in 0.14; its diff is a worked example.
 
 ## Field notes (reported, unverified)
 None recorded yet. Add notes from videos, forums or your own runs here, with an `E##` id in `docs/EVIDENCE.md`.

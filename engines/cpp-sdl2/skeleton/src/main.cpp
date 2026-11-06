@@ -5,11 +5,13 @@
 //             --debug     verbose logging (LOG_DEBUG lines)
 //             --smoke N   run N frames headless (dummy video/audio, software
 //                         renderer), print BOOT_OK and exit 0. Used by dev.py smoke.
+//                         Outside smoke runs the renderer is SDL's GPU renderer, which runs the kit's
+//                         shader recipes (src/gfx/KitShaders.hpp); without a GPU backend, the default one.
 //             --screenshot FILE  save the last frame as BMP;  --record DIR  save every Nth frame
 //                         (--record-every N, default 4) as BMP for tools/art/frames_to_gif.py
 //             --          everything after it goes to Game::configure() (autoplay, cheats, seeds),
 //                         so games add their own options without editing this file
-// Notes   : Must be `int main(int, char**)` and include <SDL.h> here so SDL's
+// Notes   : Must be `int main(int, char**)` and include <SDL3/SDL_main.h> here so SDL's
 //           main redirection works on Windows. RAII wrappers below guarantee
 //           destroy order: renderer, window, then SDL_Quit.
 //
@@ -25,8 +27,10 @@
 //           in smoke mode, MSVC assert/CRT reports go to stderr instead of a modal dialog
 // Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): a failed --record frame is an error; an
 //           early quit in smoke mode says so ("smoke ended early"), for dev.py's end-of-run check
+// Updated : 2026-11-06 with Claude (Opus 5.5, claude-opus-5-5): SDL3 (was SDL2); the GPU renderer outside smoke
 // ---------------------------------------------------------------------------
-#include <SDL.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
 
 #include <cerrno>
 #include <cstdio>
@@ -45,6 +49,7 @@
 #include "core/FixedTimestep.hpp"
 #include "core/Log.hpp"
 #include "game/Game.hpp"
+#include "gfx/KitShaders.hpp"
 
 namespace {
 
@@ -55,14 +60,21 @@ constexpr double kTickSeconds = 1.0 / 60.0;
 
 // RAII deleters so SDL objects are always destroyed, even on early return.
 struct WindowDeleter   { void operator()(SDL_Window* w) const   { if (w) SDL_DestroyWindow(w); } };
-struct RendererDeleter { void operator()(SDL_Renderer* r) const { if (r) SDL_DestroyRenderer(r); } };
+struct RendererDeleter {
+    void operator()(SDL_Renderer* r) const {
+        if (r) {
+            gfx::release_kit_shaders(r);   // the kit's shaders go before their device (gfx/KitShaders.hpp)
+            SDL_DestroyRenderer(r);
+        }
+    }
+};
 using WindowPtr   = std::unique_ptr<SDL_Window, WindowDeleter>;
 using RendererPtr = std::unique_ptr<SDL_Renderer, RendererDeleter>;
 
 // Keeps SDL_Quit() last: declared first in main, so destroyed last.
 struct SdlSession {
     bool ok = false;
-    explicit SdlSession(Uint32 flags) : ok(SDL_Init(flags) == 0) {}
+    explicit SdlSession(SDL_InitFlags flags) : ok(SDL_Init(flags)) {}
     ~SdlSession() { if (ok) SDL_Quit(); }
 };
 
@@ -153,24 +165,16 @@ void route_crash_reports_to_stderr() {
 // Saves what the renderer drew this frame as a BMP (call before SDL_RenderPresent). SDL alone writes BMP;
 // tools/art/frames_to_gif.py reads it.
 bool save_frame(SDL_Renderer* renderer, const std::string& path) {
-    int w = 0;
-    int h = 0;
-    if (SDL_GetRendererOutputSize(renderer, &w, &h) != 0) {
-        return false;
-    }
-    SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_ARGB8888);
-    if (!surface) {
-        return false;
-    }
-    // Read in output pixels: switch off the logical scaling for the read, then restore it
+    // Read in output pixels: switch off the logical presentation for the read, then restore it
     int lw = 0;
     int lh = 0;
-    SDL_RenderGetLogicalSize(renderer, &lw, &lh);
-    SDL_RenderSetLogicalSize(renderer, 0, 0);
-    const bool ok = SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_ARGB8888, surface->pixels, surface->pitch) == 0
-                    && SDL_SaveBMP(surface, path.c_str()) == 0;
-    SDL_RenderSetLogicalSize(renderer, lw, lh);
-    SDL_FreeSurface(surface);
+    SDL_RendererLogicalPresentation mode = SDL_LOGICAL_PRESENTATION_DISABLED;
+    SDL_GetRenderLogicalPresentation(renderer, &lw, &lh, &mode);
+    SDL_SetRenderLogicalPresentation(renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+    SDL_Surface* surface = SDL_RenderReadPixels(renderer, nullptr);
+    const bool ok = surface && SDL_SaveBMP(surface, path.c_str());
+    SDL_SetRenderLogicalPresentation(renderer, lw, lh, mode);
+    SDL_DestroySurface(surface);
     return ok;
 }
 
@@ -213,23 +217,30 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    WindowPtr window(SDL_CreateWindow("{{GAME_NAME}}", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                      kWindowWidth, kWindowHeight, SDL_WINDOW_RESIZABLE));
+    WindowPtr window(SDL_CreateWindow("{{GAME_NAME}}", kWindowWidth, kWindowHeight, SDL_WINDOW_RESIZABLE));
     if (!window) {
         LOG_ERROR("core", "SDL_CreateWindow failed: " << SDL_GetError());
         return 1;
     }
 
-    // Hardware renderer fails under the dummy driver, so smoke uses software.
-    const Uint32 renderer_flags = smoke ? SDL_RENDERER_SOFTWARE
-                                        : (SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    RendererPtr renderer(SDL_CreateRenderer(window.get(), -1, renderer_flags));
+    // Hardware renderers fail under the dummy driver, so smoke uses software. Otherwise the GPU renderer (the
+    // kit's shaders need it), else whatever SDL picks.
+    RendererPtr renderer(smoke ? SDL_CreateRenderer(window.get(), SDL_SOFTWARE_RENDERER)
+                               : gfx::create_gpu_renderer(window.get()));
+    if (!renderer && !smoke) {
+        LOG_WARN("core", "no GPU renderer (" << SDL_GetError() << "), so no shaders: using SDL's default");
+        renderer.reset(SDL_CreateRenderer(window.get(), nullptr));
+        if (renderer) {
+            SDL_SetRenderVSync(renderer.get(), 1);
+        }
+    }
     if (!renderer) {
         LOG_ERROR("core", "SDL_CreateRenderer failed: " << SDL_GetError());
         return 1;
     }
     // Game logic runs in its own logical space (Game::kWidth x kHeight), SDL scales it to the window.
-    SDL_RenderSetLogicalSize(renderer.get(), game::Game::kWidth, game::Game::kHeight);
+    SDL_SetRenderLogicalPresentation(renderer.get(), game::Game::kWidth, game::Game::kHeight,
+                                     SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
     game::Game game;
     if (!game.configure(opts.game_args)) {
@@ -250,6 +261,8 @@ int main(int argc, char** argv) {
     while (!game.quit_requested()) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
+            // Mouse positions in the game's logical space (SDL2's logical size did this by itself; SDL3 asks)
+            SDL_ConvertEventToRenderCoordinates(renderer.get(), &event);
             game.handle_event(event);
         }
 

@@ -25,11 +25,11 @@ const char* Game::options_help() {
 
 void Game::handle_event(const SDL_Event& event) {
     switch (event.type) {
-        case SDL_QUIT:
+        case SDL_EVENT_QUIT:
             quit_ = true;
             break;
-        case SDL_KEYDOWN:
-            if (event.key.keysym.sym == SDLK_ESCAPE) {
+        case SDL_EVENT_KEY_DOWN:
+            if (event.key.key == SDLK_ESCAPE) {
                 quit_ = true;
             }
             break;
@@ -53,7 +53,7 @@ void Game::render(SDL_Renderer* renderer) const {
     SDL_RenderClear(renderer);
 
     SDL_SetRenderDrawColor(renderer, 240, 200, 80, 255);
-    const SDL_Rect box{static_cast<int>(x_), static_cast<int>(y_), kBoxSize, kBoxSize};
+    const SDL_FRect box{static_cast<float>(x_), static_cast<float>(y_), kBoxSize, kBoxSize};
     SDL_RenderFillRect(renderer, &box);
 }
 

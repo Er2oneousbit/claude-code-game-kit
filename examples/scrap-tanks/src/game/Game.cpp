@@ -52,15 +52,15 @@ SDL_FRect cell_rect(view::Point at, int cell) {
 }
 
 void blit_row(SDL_Renderer* r, const Sheet& s, int row, view::Point at) {
-    const SDL_Rect src{0, row * s.cell, s.cell, s.cell};
+    const SDL_FRect src{0.0f, static_cast<float>(row * s.cell), static_cast<float>(s.cell), static_cast<float>(s.cell)};
     const SDL_FRect dst = cell_rect(at, s.cell);
-    SDL_RenderCopyF(r, s.texture.get(), &src, &dst);
+    SDL_RenderTexture(r, s.texture.get(), &src, &dst);
 }
 
 void fill(SDL_Renderer* r, SDL_Color c, float x, float y, float w, float h) {
     SDL_SetRenderDrawColor(r, c.r, c.g, c.b, c.a);
     const SDL_FRect rect{x, y, w, h};
-    SDL_RenderFillRectF(r, &rect);
+    SDL_RenderFillRect(r, &rect);
 }
 
 bool is_attack(const std::string& intent) { return intent == "FIRE" || intent == "FLANK"; }
@@ -68,13 +68,13 @@ bool is_attack(const std::string& intent) { return intent == "FIRE" || intent ==
 }  // namespace
 
 Game::Game() {
-    SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER);  // hot-plug events arrive as SDL_CONTROLLERDEVICEADDED
+    SDL_InitSubSystem(SDL_INIT_GAMEPAD);  // hot-plug events arrive as SDL_EVENT_GAMEPAD_ADDED
 }
 
 Game::~Game() {
     assets_.reset();  // free textures and close audio before the controller subsystem
-    if (pad_) SDL_GameControllerClose(pad_);
-    SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
+    if (pad_) SDL_CloseGamepad(pad_);
+    SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
 }
 
 const char* Game::options_help() {
@@ -137,34 +137,34 @@ void Game::restart() {
 
 void Game::handle_event(const SDL_Event& event) {
     switch (event.type) {
-        case SDL_QUIT:
+        case SDL_EVENT_QUIT:
             quit_ = true;
             break;
-        case SDL_KEYDOWN:
-            if (event.key.keysym.sym == SDLK_ESCAPE) quit_ = true;
-            if (event.key.keysym.sym == SDLK_r && !event.key.repeat) restart();
+        case SDL_EVENT_KEY_DOWN:
+            if (event.key.key == SDLK_ESCAPE) quit_ = true;
+            if (event.key.key == SDLK_R && !event.key.repeat) restart();
             break;
-        case SDL_MOUSEMOTION:  // logical coordinates: SDL scales mouse events with the logical size
+        case SDL_EVENT_MOUSE_MOTION:  // logical coordinates: main.cpp converts every event to the render space
             mouse_x_ = event.motion.x;
             mouse_y_ = event.motion.y;
             pad_used_ = false;
             break;
-        case SDL_MOUSEBUTTONDOWN:
-        case SDL_MOUSEBUTTONUP:
-            if (event.button.button == SDL_BUTTON_LEFT) mouse_fire_ = event.type == SDL_MOUSEBUTTONDOWN;
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+            if (event.button.button == SDL_BUTTON_LEFT) mouse_fire_ = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN;
             break;
-        case SDL_CONTROLLERDEVICEADDED:
-            if (!pad_) pad_ = SDL_GameControllerOpen(event.cdevice.which);
+        case SDL_EVENT_GAMEPAD_ADDED:
+            if (!pad_) pad_ = SDL_OpenGamepad(event.gdevice.which);
             break;
-        case SDL_CONTROLLERDEVICEREMOVED:
-            if (pad_ && SDL_GameControllerGetAttached(pad_) == SDL_FALSE) {
-                SDL_GameControllerClose(pad_);
+        case SDL_EVENT_GAMEPAD_REMOVED:
+            if (pad_ && !SDL_GamepadConnected(pad_)) {
+                SDL_CloseGamepad(pad_);
                 pad_ = nullptr;
             }
             break;
-        case SDL_CONTROLLERBUTTONDOWN:
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
             pad_used_ = true;
-            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_START) restart();
+            if (event.gbutton.button == SDL_GAMEPAD_BUTTON_START) restart();
             break;
         default:
             break;
@@ -174,7 +174,7 @@ void Game::handle_event(const SDL_Event& event) {
 core::Control Game::read_controls() const {
     const core::Tank& me = sim_->player();
     core::Control c;
-    const Uint8* keys = SDL_GetKeyboardState(nullptr);
+    const bool* keys = SDL_GetKeyboardState(nullptr);
     c.throttle = (keys[SDL_SCANCODE_W] || keys[SDL_SCANCODE_UP] ? 1.0 : 0.0) -
                  (keys[SDL_SCANCODE_S] || keys[SDL_SCANCODE_DOWN] ? 1.0 : 0.0);
     c.turn = (keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_RIGHT] ? 1.0 : 0.0) -
@@ -182,22 +182,22 @@ core::Control Game::read_controls() const {
     c.aim = view::to_world(mouse_x_, mouse_y_ + kTurretMountHeight * view::kHeight * view::kPixelsPerMeter);
     c.fire = mouse_fire_ || keys[SDL_SCANCODE_SPACE];
     if (pad_) {
-        const auto axis = [this](SDL_GameControllerAxis a) {
-            const int v = SDL_GameControllerGetAxis(pad_, a);
+        const auto axis = [this](SDL_GamepadAxis a) {
+            const int v = SDL_GetGamepadAxis(pad_, a);
             return std::abs(v) < kPadDeadZone ? 0.0 : v / 32767.0;
         };
-        const double lx = axis(SDL_CONTROLLER_AXIS_LEFTX);
-        const double ly = axis(SDL_CONTROLLER_AXIS_LEFTY);
+        const double lx = axis(SDL_GAMEPAD_AXIS_LEFTX);
+        const double ly = axis(SDL_GAMEPAD_AXIS_LEFTY);
         if (lx != 0.0 || ly != 0.0) {
             c.turn = lx;
             c.throttle = -ly;
         }
-        const double rx = axis(SDL_CONTROLLER_AXIS_RIGHTX);
-        const double ry = axis(SDL_CONTROLLER_AXIS_RIGHTY);
+        const double rx = axis(SDL_GAMEPAD_AXIS_RIGHTX);
+        const double ry = axis(SDL_GAMEPAD_AXIS_RIGHTY);
         if (rx != 0.0 || ry != 0.0) c.aim = me.pos + core::normalized({rx, ry / view::kDepth}) * 8.0;
         else if (pad_used_) c.aim = me.pos + core::from_angle(me.turret) * 8.0;  // keep the gun where it is
-        c.fire = c.fire || SDL_GameControllerGetAxis(pad_, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 16000 ||
-                 SDL_GameControllerGetButton(pad_, SDL_CONTROLLER_BUTTON_A);
+        c.fire = c.fire || SDL_GetGamepadAxis(pad_, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 16000 ||
+                 SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_SOUTH);
     }
     return c;
 }
@@ -267,8 +267,9 @@ void Game::draw_world(SDL_Renderer* r) {
     // Ground: the tile seen from above, squashed into the camera's depth
     const Sheet& ground = assets_->sheet("ground");
     // Only the tile's inner area: its beveled rim would draw a dark grid when scaled down
-    const SDL_Rect inner{kGroundInset, kGroundInset, ground.cell - 2 * kGroundInset, ground.cell - 2 * kGroundInset};
-    SDL_SetTextureScaleMode(ground.texture.get(), SDL_ScaleModeLinear);
+    const SDL_FRect inner{static_cast<float>(kGroundInset), static_cast<float>(kGroundInset),
+                          static_cast<float>(ground.cell - 2 * kGroundInset), static_cast<float>(ground.cell - 2 * kGroundInset)};
+    SDL_SetTextureScaleMode(ground.texture.get(), SDL_SCALEMODE_LINEAR);
     // Integer edges taken from the next tile's position, so neighbours always meet (no 1 px seams)
     for (int y = 0; y < static_cast<int>(arena.bounds.max_y); ++y) {
         for (int x = 0; x < static_cast<int>(arena.bounds.max_x); ++x) {
@@ -276,8 +277,10 @@ void Game::draw_world(SDL_Renderer* r) {
             const view::Point b = view::to_screen({x + 1.0, y + 1.0});
             const int x0 = static_cast<int>(std::floor(a.x));
             const int y0 = static_cast<int>(std::floor(a.y));
-            const SDL_Rect dst{x0, y0, static_cast<int>(std::floor(b.x)) - x0, static_cast<int>(std::floor(b.y)) - y0};
-            SDL_RenderCopy(r, ground.texture.get(), &inner, &dst);
+            const SDL_FRect dst{static_cast<float>(x0), static_cast<float>(y0),
+                                static_cast<float>(static_cast<int>(std::floor(b.x)) - x0),
+                                static_cast<float>(static_cast<int>(std::floor(b.y)) - y0)};
+            SDL_RenderTexture(r, ground.texture.get(), &inner, &dst);
         }
     }
 
@@ -327,10 +330,10 @@ void Game::draw_world(SDL_Renderer* r) {
         SDL_SetRenderDrawColor(r, kWhite.r, kWhite.g, kWhite.b, 200);
         const float mx = static_cast<float>(mouse_x_);
         const float my = static_cast<float>(mouse_y_);
-        SDL_RenderDrawLineF(r, mx - 9, my, mx - 3, my);
-        SDL_RenderDrawLineF(r, mx + 3, my, mx + 9, my);
-        SDL_RenderDrawLineF(r, mx, my - 9, mx, my - 3);
-        SDL_RenderDrawLineF(r, mx, my + 3, mx, my + 9);
+        SDL_RenderLine(r, mx - 9, my, mx - 3, my);
+        SDL_RenderLine(r, mx + 3, my, mx + 9, my);
+        SDL_RenderLine(r, mx, my - 9, mx, my - 3);
+        SDL_RenderLine(r, mx, my + 3, mx, my + 9);
     }
 }
 
@@ -404,20 +407,20 @@ void Game::draw_debug(SDL_Renderer* r) {
         view::Point a = view::to_screen(t.pos);
         for (const core::Vec2& p : t.path) {
             const view::Point b = view::to_screen(p);
-            SDL_RenderDrawLineF(r, static_cast<float>(a.x), static_cast<float>(a.y), static_cast<float>(b.x), static_cast<float>(b.y));
+            SDL_RenderLine(r, static_cast<float>(a.x), static_cast<float>(a.y), static_cast<float>(b.x), static_cast<float>(b.y));
             a = b;
         }
         if (t.has_spot) {
             const view::Point s = view::to_screen(t.spot);
             const SDL_FRect box{static_cast<float>(s.x) - 4, static_cast<float>(s.y) - 4, 8, 8};
-            SDL_RenderDrawRectF(r, &box);
+            SDL_RenderRect(r, &box);
         }
         // Who can hit the player right now
         if (sim_->can_hit(t.pos, me.pos)) {
             SDL_SetRenderDrawColor(r, kAttack.r, kAttack.g, kAttack.b, 160);
             const view::Point p = view::to_screen(t.pos, 1.0);
             const view::Point q = view::to_screen(me.pos, 1.0);
-            SDL_RenderDrawLineF(r, static_cast<float>(p.x), static_cast<float>(p.y), static_cast<float>(q.x), static_cast<float>(q.y));
+            SDL_RenderLine(r, static_cast<float>(p.x), static_cast<float>(p.y), static_cast<float>(q.x), static_cast<float>(q.y));
         }
     }
     if (bot_) {
@@ -439,7 +442,7 @@ void Game::draw_text(SDL_Renderer* r, const std::string& s, int size, SDL_Color 
     if (!t.texture) return;
     const float left = static_cast<float>(centered ? x - t.w / 2.0 : x);
     const SDL_FRect dst{left, static_cast<float>(y), static_cast<float>(t.w), static_cast<float>(t.h)};
-    SDL_RenderCopyF(r, t.texture.get(), nullptr, &dst);
+    SDL_RenderTexture(r, t.texture.get(), nullptr, &dst);
 }
 
 }  // namespace game

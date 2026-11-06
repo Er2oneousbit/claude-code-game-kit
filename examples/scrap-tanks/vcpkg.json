@@ -1,10 +1,19 @@
 {
   "builtin-baseline": "9e593bb18ea69cc5095e012465dcd675a822ed0d",
   "dependencies": [
-    "sdl2",
-    "sdl2-image",
-    "sdl2-ttf",
-    "sdl2-mixer",
+    "sdl3",
+    {
+      "name": "sdl3-image",
+      "features": [
+        "png"
+      ]
+    },
+    "sdl3-ttf",
+    "sdl3-mixer",
+    {
+      "name": "sdl3-shadercross",
+      "host": true
+    },
     "doctest",
     "nlohmann-json"
   ]

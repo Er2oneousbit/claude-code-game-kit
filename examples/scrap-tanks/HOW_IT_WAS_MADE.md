@@ -1,6 +1,6 @@
 # How Scrap Tanks was made
 
-The kit's C++ / SDL2 example, and its third "only what is in the kit" run (after ghost-lantern and courier-dash). One
+The kit's C++ / SDL2 example (SDL3 since kit 0.14: the port is in the git history and ADR 0001's update), and its third "only what is in the kit" run (after ghost-lantern and courier-dash). One
 Claude Code session (Claude Opus 5.5) on Windows 11 with Visual Studio 2022 Build Tools (MSVC 14.44, bundled CMake and
 vcpkg), 2026-10-21. The user picked the concept; Claude did the rest by following the kit's documents and tools, and
 recorded every place the kit fell short. Each gap was fixed **in the kit** and pulled in with `new_game.py --upgrade`.

@@ -1256,6 +1256,72 @@ class UnrealShaders(TempRoot):
         self.assertIn("differs from its golden image", text)
 
 
+# ---- #249: C++ / SDL3 shader recipes --------------------------------------------------
+class CppShaders(TempRoot):
+    """check fails on stale shader files before building; smoke --shaders runs kit_shader_check after the smoke and
+    compares; a machine without a GPU renderer is an environment problem (exit 2), not a failed recipe."""
+    SMOKE = "[INFO][core] BOOT_OK Test v0.1.0\n[INFO][core] smoke complete after 120 frames\n"
+    CHECK = "[info] GPU driver: vulkan\nSHADER_OK flash\nSHADER_CHECK_DONE 1 0\n"
+
+    def dev(self, results):
+        dev = load("cpp-sdl2")
+        dev.ROOT = self.root
+        (self.root / "shaders" / "kit").mkdir(parents=True, exist_ok=True)
+        dev.preflight = lambda: None
+        dev.configure_and_build = lambda preset: 0
+        dev.find_exe = lambda preset, name=None: (name or "game") + ".exe"
+        self.calls = []
+
+        def fake_run(cmd, env=None, capture=False, timeout=None):
+            line = " ".join(str(c) for c in cmd)
+            self.calls.append(line)
+            for key, result in results.items():
+                if key in line:
+                    return result
+            return 0, self.SMOKE
+        dev.run = fake_run
+        return dev
+
+    def smoke(self, dev, **opts):
+        args = argparse.Namespace(preset="debug", frames=120, screenshot=None, record=None, record_every=4,
+                                  game_args=[], timeout=60, until=None, fail_on=None, shaders=True)
+        for k, v in opts.items():
+            setattr(args, k, v)
+        return quiet(dev.cmd_smoke, args)
+
+    def test_smoke_shaders_runs_the_check_tool_and_compares(self):
+        dev = self.dev({"kit_shader_check": (0, self.CHECK), "shader_ref.py": (0, "[ OK ] all 1 effect(s) match")})
+        rc, text = self.smoke(dev)
+        self.assertEqual(rc, 0, text)
+        self.assertIn("GPU driver: vulkan", text)
+        tool = next(c for c in self.calls if "kit_shader_check" in c)
+        self.assertIn(str(self.root / "build" / "debug" / "shader_check"), tool)
+        self.assertTrue(any("shader_ref.py compare" in c for c in self.calls), self.calls)
+
+    def test_no_gpu_renderer_is_an_environment_problem(self):
+        dev = self.dev({"kit_shader_check": (2, "[error] no GPU renderer on this machine\n")})
+        rc, text = self.smoke(dev)
+        self.assertEqual(rc, 2, text)
+        self.assertIn("no GPU renderer", text)
+
+    def test_a_failed_recipe_or_picture_fails_smoke(self):
+        dev = self.dev({"kit_shader_check": (1, "SHADER_FAIL flash the shader did not load\nSHADER_CHECK_DONE 1 1\n")})
+        rc, text = self.smoke(dev)
+        self.assertEqual(rc, 1, text)
+        self.assertIn("shader flash the shader did not load", text)
+        dev = self.dev({"kit_shader_check": (0, self.CHECK), "shader_ref.py": (1, "[FAIL] flash: 9 pixel(s) past 2")})
+        self.assertEqual(self.smoke(dev)[0], 1)
+
+    def test_check_refuses_stale_shader_files_before_building(self):
+        dev = self.dev({"shader_gen.py": (1, "[FAIL] stale: shaders/kit/flash.frag.hlsl")})
+        built = []
+        dev.configure_and_build = lambda preset: built.append(preset) or 0
+        rc, text = quiet(dev.cmd_check, argparse.Namespace(preset="debug"))
+        self.assertEqual(rc, 1, text)
+        self.assertIn("do not match their recipes", text)
+        self.assertEqual(built, [])
+
+
 if __name__ == "__main__":
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):

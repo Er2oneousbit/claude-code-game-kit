@@ -13,7 +13,7 @@ examples were built and tested on one Windows 11 machine.
 - **Godot shell:** crash files need Godot 4.5+, untested on 4.3 and 4.4: [#46](https://github.com/Er2oneousbit/claude-code-game-kit/issues/46).
 - **Unreal:** the GameKitShell plugin builds and passes its tests in a Blueprint-only project (headless), but turning
   it on from the editor's Plugins window is not tried: [#47](https://github.com/Er2oneousbit/claude-code-game-kit/issues/47).
-- **Shell screens** ship for Godot, LÖVE and web only; Unity, Unreal, Bevy, C++/SDL2 and web-3d ship the tested
+- **Shell screens** ship for Godot, LÖVE and web only; Unity, Unreal, Bevy, C++/SDL3 and web-3d ship the tested
   logic and the screens are built in the engine; RPG Maker MZ keeps MZ's own screens and ships no juice or shell
   port (its ENGINE_FLOW maps the rules onto MZ). Display settings the browser cannot apply (vsync, resolution) are stored only.
 
@@ -35,7 +35,7 @@ engine: web [#55](https://github.com/Er2oneousbit/claude-code-game-kit/issues/55
 [#56](https://github.com/Er2oneousbit/claude-code-game-kit/issues/56), Unity
 [#57](https://github.com/Er2oneousbit/claude-code-game-kit/issues/57), Unreal
 [#58](https://github.com/Er2oneousbit/claude-code-game-kit/issues/58), Bevy
-[#59](https://github.com/Er2oneousbit/claude-code-game-kit/issues/59), C++/SDL2
+[#59](https://github.com/Er2oneousbit/claude-code-game-kit/issues/59), C++/SDL3
 [#60](https://github.com/Er2oneousbit/claude-code-game-kit/issues/60), LÖVE
 [#61](https://github.com/Er2oneousbit/claude-code-game-kit/issues/61), RPG Maker MZ
 [#62](https://github.com/Er2oneousbit/claude-code-game-kit/issues/62). The umbrella, a manifest spec with golden
@@ -160,7 +160,7 @@ autoplay exit leak (#6).
   tuned balance and was reverted. Both wait for a balance decision ([#10](https://github.com/Er2oneousbit/claude-code-game-kit/issues/10)).
 - Built with Mono only; IL2CPP builds were not made or compared.
 
-### Scrap Tanks (C++/SDL2)
+### Scrap Tanks (C++/SDL3)
 - Scouts can never reach their RETREAT branch: one hit leaves them above the threshold and a second destroys them.
   Raising the threshold or lowering damage moved the cover-against-charging balance the pillar test checks, so it
   waits for a balance decision ([#152](https://github.com/Er2oneousbit/claude-code-game-kit/issues/152)).

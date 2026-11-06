@@ -91,7 +91,7 @@ access rules, with their golden tests:
 - LÖVE: src/core/audio_director.lua, music_director.lua and audio_access.lua, with src/shell/music_player.lua and
   the subtitles' arrows.
 - Bevy: src/logic/audio_director.rs, music_director.rs and audio_access.rs (logic only).
-- C++/SDL2: src/core/AudioDirector.hpp, MusicDirector.hpp and AudioAccess.hpp (logic only).
+- C++/SDL3: src/core/AudioDirector.hpp, MusicDirector.hpp and AudioAccess.hpp (logic only).
 - Unreal: the GameKitShell plugin's GameKitAudioDirector.h, GameKitMusicDirector.h and GameKitAudioAccess.h (logic
   only; the plugin ships disabled, engines/unreal FLOW.md says how to turn it on).
 

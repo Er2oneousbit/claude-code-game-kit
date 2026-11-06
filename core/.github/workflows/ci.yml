@@ -3,10 +3,10 @@
 # Purpose : Continuous integration for this game: every push and pull request runs `python tools/dev.py check` and
 #           `test` on a GitHub-hosted Linux runner, plus the golden-vector and credits checks, so a broken build or a
 #           stale credits file is caught before anyone ships it (docs/sop/SOP-21 step 7).
-# Notes   : The engine comes from .game-kit.json. Godot, LÖVE, web, web-3d, Bevy and C++/SDL2 are set up here. Unity,
+# Notes   : The engine comes from .game-kit.json. Godot, LÖVE, web, web-3d, Bevy and C++/SDL3 are set up here. Unity,
 #           Unreal and RPG Maker MZ need a license or an editor install that a hosted runner does not have: the job
 #           says so and runs only the engine-free checks (use a self-hosted runner for their tests). Godot runs
-#           `test` only when addons/gut is committed. C++/SDL2 uses the runner's preinstalled vcpkg and builds SDL2
+#           `test` only when addons/gut is committed. C++/SDL3 uses the runner's preinstalled vcpkg and builds SDL3
 #           on every run (slow; add a vcpkg binary cache if it matters). Written by the kit and checked as YAML, not
 #           yet run on GitHub by the kit itself (verify on your first push). The publish check (secrets, personal
 #           data, LICENSE) belongs before a repo goes public: python tools/publish_check.py (docs/sop/SOP-13), not
@@ -75,7 +75,7 @@ jobs:
               rustup toolchain install stable --profile minimal
               ;;
             cpp-sdl2)
-              # SDL2 from vcpkg needs the X11 and audio headers on Linux (verify the list on your first run)
+              # SDL3 from vcpkg needs the X11/Wayland and audio headers on Linux (verify the list on your first run)
               sudo apt-get update
               sudo apt-get install -y ninja-build pkg-config libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
                 libxi-dev libxss-dev libxinerama-dev libasound2-dev libpulse-dev autoconf automake libtool

@@ -28,3 +28,8 @@ Option 1. It is the shortest path to sprites, text and sound with code that matc
 Versions resolved by vcpkg at the pinned baseline, **verified** in the first build on 2026-10-21: sdl2-image 2.8.12,
 sdl2-ttf 2.24.0, sdl2-mixer 2.8.2 (with libvorbis 1.3.7 and libogg 1.3.6). All zlib-licensed (SDL libraries) **(verify the
 dependency licenses before release: freetype is FTL or GPLv2, libpng and libvorbis are BSD-style)**.
+
+## Update (kit 0.14, 2026-11-06)
+The kit's C++ overlay moved to SDL3, and the game with it: SDL3_image (PNG named as a vcpkg feature: the `sdl3-image`
+port has no formats by default), SDL3_ttf (float point sizes, `TTF_RenderText_Blended`) and SDL3_mixer (a mixer device,
+`MIX_Audio` and a pool of tracks for per-sound gain, where SDL2_mixer had channels). Same option, same reasons.

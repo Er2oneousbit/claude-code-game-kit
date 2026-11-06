@@ -5,7 +5,7 @@
 // Notes   : No UnityEngine types, so EditMode tests run instantly. Frame time is clamped,
 //           steps per frame are capped, backlog is dropped instead of spiraling.
 //
-// Pseudocode (same as the C++ twin in the C++/SDL2 overlay):
+// Pseudocode (same as the C++ twin in the C++/SDL3 overlay):
 //   frame_dt = min(frame_dt, max_frame), and 0 for negative or NaN input
 //   accumulator += frame_dt
 //   steps = 0

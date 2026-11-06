@@ -33,7 +33,7 @@ KIT = Path(__file__).resolve().parents[1]
 # engine id -> the regex that finds the name the docs use for it ("web" must not match "web-3d")
 ENGINE_NAMES = {
     "bevy": r"Bevy",
-    "cpp-sdl2": r"C\+\+/SDL2",
+    "cpp-sdl2": r"C\+\+/SDL3",
     "godot": r"Godot",
     "love2d": r"LÖVE",
     "rpgmaker-mz": r"RPG Maker MZ",

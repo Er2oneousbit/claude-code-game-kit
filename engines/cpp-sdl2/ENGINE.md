@@ -1,4 +1,4 @@
-# Engine: C++17 + SDL2 (custom engine)
+# Engine: C++17 + SDL3 (custom engine)
 
 > Imported into CLAUDE.md. Keep it short. Long-form flow is in `docs/ENGINE_FLOW.md`.
 
@@ -7,8 +7,19 @@
 - **Build system:** CMake 3.21+ with `CMakePresets.json`. **Dependencies:** vcpkg manifest mode (`vcpkg.json`).
 - **Env var:** `VCPKG_ROOT` must point at vcpkg (the presets use `$env{VCPKG_ROOT}`). On Windows the copy inside VS Build Tools works. `vcpkg.json` is pinned with `builtin-baseline`; keep it.
 - **Path length:** keep the project at a short path on Windows; deep paths break vcpkg's dependency builds (see `docs/ENGINE_FLOW.md`).
-- **Libraries:** SDL2 (window, input, renderer, audio). Optional add-ons are commented `find_package` lines in `CMakeLists.txt`;
-  to enable one, add its vcpkg port to `vcpkg.json` (`sdl2-image`, `sdl2-ttf`, `sdl2-mixer`: lowercase with hyphens) and write an ADR.
+- **Libraries:** SDL3 3.4 (window, input, renderer, audio). The overlay was SDL2 until kit 0.14: an older game moves with
+  ENGINE_FLOW's "Upgrading from SDL2". Optional add-ons are commented `find_package` lines in `CMakeLists.txt`; to
+  enable one, add its vcpkg port to `vcpkg.json` (`sdl3-image`, `sdl3-ttf`, `sdl3-mixer`: lowercase with hyphens) and write
+  an ADR. The engine id stays `cpp-sdl2` (existing games' `.game-kit.json` name it).
+- **Shaders:** the kit's recipes (`shaders/kit/*.frag.hlsl`, generated) run on SDL's GPU renderer as custom render states.
+  KitShaders (in src/gfx): `auto fx = gfx::KitShader::load(renderer, "flash");` (`nullptr` without a GPU renderer: smoke
+  runs use the software one), `kit_shaders::FlashParams p; p.amount.x = 1.0f; fx->set_params(&p, sizeof p);`, then
+  `fx->begin(renderer)` ... draw ... `gfx::KitShader::end(renderer)`. A second picture goes in at load
+  (`KitShader::load(renderer, "dissolve", noise)`), `SDL_SetTextureColorMod` tints the result. Coordinates run 0 to 1 over
+  the drawn texture: `u_texel` (`p.texel`) is one over its size in texels, `canvas` the size pixel parameters are given in.
+  Post effects (`crt`, `vignette`, `colorblind`) draw the frame into a target texture, then that texture through the
+  recipe. The build compiles every recipe with shadercross (vcpkg host tool) to SPIR-V, DXIL and MSL into `shaders/kit/`
+  next to the exe; `smoke --shaders` draws each with `kit_shader_check` and compares it with its golden image.
 - **Tests:** doctest, built as `unit_tests`, one CTest test per `TEST_CASE`. `tests/test_golden_vectors.cpp` holds
   `src/core` to the kit's reference logic: it reads `data/golden/juice.json` and `shell.json` at test time (path from
   the `GOLDEN_DIR` compile definition); never copy their expected values into code.
@@ -28,6 +39,9 @@ CMakeLists.txt, CMakePresets.json, vcpkg.json
 src/core/        SDL-free, unit tested: Log, FixedTimestep; juice (Shake, Hitstop, Ease, FollowCamera, InputBuffer,
                  CoyoteTimer, Spring, FlashLimiter); shell logic (Settings, Bindings, SaveStore, I18n, AtomicFile)
 src/game/        gameplay: Game class, entities, systems. Talks to SDL only through thin wrappers.
+src/gfx/         KitShaders: the kit's shader recipes on SDL's GPU renderer
+src/tools/       kit_shader_check (dev.py smoke --shaders), not shipped
+shaders/kit/     the recipes: *.frag.hlsl, kit_shaders.hpp (parameter structs), kit_shaders.cmake (generated)
 src/main.cpp     startup, arg parsing, main loop
 tests/           doctest tests for src/core and engine-free parts of src/game
 assets/          art, audio, fonts (see docs/ASSET_LOG.md)
@@ -46,15 +60,21 @@ build/           build output (git-ignored): build/<preset>/
 - Warnings are on (`-Wall -Wextra`, `/W4`). Fix them, do not silence them without a comment.
 
 ## Gotchas (Claude: read before editing)
-1. **`main` must be `int main(int, char**)`** and `#include <SDL.h>` must be in that translation unit. On Windows SDL redefines `main` to `SDL_main`.
+1. **`main` must be `int main(int, char**)`** and `#include <SDL3/SDL_main.h>` must be in that translation unit (once in
+   the program). SDL3 functions return `bool` (true = success), not 0: `if (!SDL_Init(...))`.
 2. **SDL_Quit order:** destroy renderer, then window, then `SDL_Quit()`. RAII wrappers must be destroyed before `SDL_Quit`.
 3. **Event loop must pump events** every frame (`SDL_PollEvent`), or the window freezes.
 4. **Time:** use `SDL_GetPerformanceCounter()`/`SDL_GetPerformanceFrequency()` for deltas, clamp huge deltas (debugger pauses) to avoid the spiral of death.
-5. **Headless/smoke runs** use `SDL_VIDEODRIVER=dummy` and `SDL_AUDIODRIVER=dummy` and a software renderer. Hardware renderer creation fails under the dummy driver.
+5. **Headless/smoke runs** use `SDL_VIDEODRIVER=dummy` and `SDL_AUDIODRIVER=dummy` and the software renderer, which has no
+   shaders: code must cope with `KitShader::load` returning `nullptr`. Outside smoke main.cpp asks for the GPU renderer.
+10. **Load each shader recipe once and keep it** (or let KitShaders' cache do it): SDL 3.4.12's GPU renderer caches pipelines
+    by shader address, so a shader released and another created at the same address drew the old effect in the kit's own
+    check. `release_kit_shaders(renderer)` frees them before the renderer goes (main.cpp's renderer deleter calls it).
 6. **Windows DLLs:** vcpkg copies dependency DLLs next to the exe at build time. If the exe cannot start, check the build output folder.
 7. **vcpkg baseline:** `vcpkg.json` ships pinned to vcpkg release 2026.07.29 (tested). Never remove `builtin-baseline` (the vcpkg bundled with Visual Studio refuses a manifest without one). To upgrade libraries, swap in a newer vcpkg release commit.
 8. **Do not edit** `build/`, `vcpkg_installed/`, or generated CMake files.
 9. **Include hygiene:** SDL headers only in `src/game/` and `src/main.cpp`, not in `src/core/`, so core stays unit-testable.
 
 ## Generated (do not hand-edit)
-`build/`, `vcpkg_installed/`, `CMakeUserPresets.json` (local overrides, git-ignored).
+`build/`, `vcpkg_installed/`, `CMakeUserPresets.json` (local overrides, git-ignored), `shaders/kit/` (edit
+`tools/shaders/ksl/`, then `python tools/shaders/shader_gen.py`).

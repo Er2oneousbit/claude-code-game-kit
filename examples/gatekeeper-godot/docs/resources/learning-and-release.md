@@ -9,7 +9,7 @@ Books, docs, talks, and where to show the game.
 ## Learning and reference
 - *Game Programming Patterns* (free online, Robert Nystrom). Game loop, state, object pool, command.
 - *Game Feel* (Steve Swink) and the talk "Juice it or Lose it". For making things feel good.
-- Godot docs (`docs.godotengine.org`), Unreal docs (`dev.epicgames.com/documentation`), Lazy Foo SDL2 tutorials,
+- Godot docs (`docs.godotengine.org`), Unreal docs (`dev.epicgames.com/documentation`), Lazy Foo SDL2 (SDL3 renamed much of the API: SDL's migration guide maps it) tutorials,
   SDL wiki (`wiki.libsdl.org`), Learn OpenGL, Handmade Hero for low-level inspiration.
 - Bevy: the official examples (`bevy.org/examples`, each one matches a release), docs.rs for the exact version,
   the migration guides on `bevy.org/learn/migration-guides` (one per release), and the Bevy Cheat Book (community; check

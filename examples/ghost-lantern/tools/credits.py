@@ -45,7 +45,7 @@ ENGINE_CREDITS = {
     "web": "Phaser (MIT license), Phaser Studio Inc: https://phaser.io",
     "web-3d": "Three.js (MIT license), three.js authors: https://threejs.org",
     "bevy": "Bevy Engine (MIT or Apache-2.0), Bevy contributors: https://bevy.org",
-    "cpp-sdl2": "SDL2 (zlib license), Sam Lantinga and SDL contributors: https://libsdl.org",
+    "cpp-sdl2": "SDL3 (zlib license), Sam Lantinga and SDL contributors: https://libsdl.org",
     "unity": "Made with Unity: follow the Unity terms for your plan (splash screen and credit rules) (verify)",
     "unreal": "Unreal Engine: follow the Unreal Engine EULA's credit and notice rules (verify)",
     "rpgmaker-mz": "RPG Maker MZ (Gotcha Gotcha Games, KADOKAWA): follow the RPG Maker MZ EULA (verify)",

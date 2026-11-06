@@ -466,30 +466,75 @@ def bevy_rust(recipes):
     return "\n".join(out)
 
 def sdl3(r):
-    """HLSL for SDL3's GPU API (compiled to DXIL / SPIR-V): textures in space2, uniforms in space3 (SDL's layout)."""
-    fields = "\n".join(f"    {to_hlsl(t)} u_{k};" for k, t, v in r["params"])
-    aux = ("Texture2D<float4> AuxTex : register(t1, space2);\nSamplerState AuxSampler : register(s1, space2);\n"
-           "float4 SAMPLE_AUX(float2 p) { return AuxTex.SampleLevel(AuxSampler, p, 0); }\n" if r["aux"] else "")
-    return f"""// {HEADER_NOTE.format(name=r['name'])}
-// {r['summary']}
-Texture2D<float4> MainTex : register(t0, space2);
-SamplerState MainSampler : register(s0, space2);
-{aux}cbuffer KitParams : register(b0, space3)
-{{
-{fields}
-}};
-float4 SAMPLE_MAIN(float2 p) {{ return MainTex.SampleLevel(MainSampler, p, 0); }}
+    """HLSL for an SDL3 GPU renderer custom state (SDL_GPURenderState, SDL 3.4): the renderer's texture is t0/s0 in
+    space2, an aux picture t1/s1, the uniforms one float4 per parameter in b0 space3 (one layout under DXIL, SPIR-V
+    and MSL alike), the input is the renderer's vertex output. shadercross compiles it at build time."""
+    slots = "\n".join(f"    float4 kit_p{i};" for i in range(len(r["params"])))
+    swiz = {"float": ".x", "vec2": ".xy", "vec3": ".xyz", "vec4": ""}
+    defines = "\n".join(f"#define u_{k} kit_p{i}{swiz[t]}" for i, (k, t, v) in enumerate(r["params"]))
+    aux = (f"Texture2D<float4> AuxTex : register(t1, space2);\nSamplerState AuxSampler : register(s1, space2);\n"
+           f"float4 SAMPLE_AUX(float2 p) {{ return AuxTex.SampleLevel(AuxSampler, p, 0); }}\n" if r["aux"] else "")
+    return (f"// {HEADER_NOTE.format(name=r['name'])}\n// {r['summary']}\n"
+            f"Texture2D<float4> MainTex : register(t0, space2);\nSamplerState MainSampler : register(s0, space2);\n"
+            f"{aux}cbuffer KitParams : register(b0, space3)\n{{\n{slots}\n}};\n{defines}\n"
+            f"float4 SAMPLE_MAIN(float2 p) {{ return MainTex.SampleLevel(MainSampler, p, 0); }}\n\n"
+            f"float4 kit_effect(float2 uv)\n{{\n{indent(to_hlsl(r['body']))}\n}}\n\n"
+            f"struct PSInput {{\n    float4 v_color : COLOR0;\n    float2 v_uv : TEXCOORD0;\n}};\n\n"
+            f"float4 main(PSInput input) : SV_Target0\n{{\n"
+            f"    return kit_effect(input.v_uv) * input.v_color;   // SDL_SetTextureColorMod tints it\n}}\n")
 
-float4 kit_effect(float2 uv)
-{{
-{indent(to_hlsl(r['body']))}
-}}
 
-float4 main(float2 uv : TEXCOORD0) : SV_Target0
-{{
-    return kit_effect(uv);
-}}
-"""
+def _cpp_float(x):
+    return _num(x) + "f"
+
+
+def sdl3_header(recipes):
+    """kit_shaders.hpp: per recipe a parameter struct laid out as its cbuffer (one Float4 per parameter), and the
+    recipe table the shader check walks."""
+    out = [f"// {HEADER_NOTE.format(name='*')}",
+           "// The kit's shader recipes for SDL3 (src/gfx/KitShaders.hpp loads them): per recipe a <Name>Params struct to",
+           "// pass to KitShader::set_params(), laid out as the shader's cbuffer (one Float4 per parameter).",
+           "#pragma once",
+           "",
+           "namespace kit_shaders {",
+           "",
+           "struct Float4 {",
+           "    float x = 0.0f, y = 0.0f, z = 0.0f, w = 0.0f;",
+           "};",
+           ""]
+    for r in recipes:
+        c = _camel(r["name"])
+        out.append(f"// {r['summary']}")
+        out.append(f"struct {c}Params {{")
+        for k, t, v in r["params"]:
+            vals = list(v) if isinstance(v, list) else [v]
+            vals += [0.0] * (4 - len(vals))
+            out.append(f"    Float4 {k}{{{', '.join(_cpp_float(x) for x in vals)}}};")
+        out += ["};", ""]
+    out += ["struct Recipe {",
+            "    const char* name;",
+            "    const char* main;   // the check's input picture (data/shaders/inputs)",
+            "    const char* aux;    // nullptr when the recipe has no second picture",
+            "    const void* defaults;",
+            "    unsigned size;",
+            "};",
+            ""]
+    for r in recipes:
+        out.append(f"inline const {_camel(r['name'])}Params k{_camel(r['name'])}Defaults{{}};")
+    out += ["", "inline const Recipe kRecipes[] = {"]
+    for r in recipes:
+        c = _camel(r["name"])
+        aux = f'"{r["aux"]}"' if r["aux"] else "nullptr"
+        out.append(f'    {{"{r["name"]}", "{r["main"]}", {aux}, &k{c}Defaults, sizeof({c}Params)}},')
+    out += ["};", "", "}  // namespace kit_shaders", ""]
+    return "\n".join(out)
+
+
+def sdl3_cmake(recipes):
+    """kit_shaders.cmake: the recipe names for CMakeLists.txt (it compiles each with shadercross)."""
+    names = " ".join(r["name"] for r in recipes)
+    return (f"# {HEADER_NOTE.format(name='*')}\n# The kit's shader recipes, compiled by CMakeLists.txt with shadercross.\n"
+            f"set(KIT_SHADER_NAMES {names})\n")
 
 
 # ---- engines: {relative file: text} -------------------------------------------------------------------------------------
@@ -515,7 +560,10 @@ def files_for(engine, recipes):
         out["src/kit_shaders.rs"] = bevy_rust(recipes)
         return out
     if engine == "cpp-sdl2":
-        return {f"{r['name']}.frag.hlsl": sdl3(r) for r in recipes}
+        out = {f"{r['name']}.frag.hlsl": sdl3(r) for r in recipes}
+        out["kit_shaders.hpp"] = sdl3_header(recipes)
+        out["kit_shaders.cmake"] = sdl3_cmake(recipes)
+        return out
     raise ToolError(f"no shader port for engine {engine!r}: {', '.join(ENGINE_DIRS)}")
 
 

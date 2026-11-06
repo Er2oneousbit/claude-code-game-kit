@@ -15,7 +15,7 @@ Everything that decides anything lives in `src/core/` and never includes SDL; th
 1. **Game**: gameplay rules, entities, levels, content
 2. **Systems**: input, physics helpers, audio, UI, save, camera
 3. **Core**: logging, time, math, events, config, RNG
-4. **Engine/platform**: provided by C++17 + SDL2 (CMake, vcpkg)
+4. **Engine/platform**: provided by C++17 + SDL3 (CMake, vcpkg)
 
 Rule: Core knows nothing about Game. Pure logic in Core and Game should be testable without the engine.
 

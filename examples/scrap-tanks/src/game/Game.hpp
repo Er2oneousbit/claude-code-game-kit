@@ -10,7 +10,7 @@
 // ---------------------------------------------------------------------------
 #pragma once
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #include <cstdint>
 #include <memory>
@@ -80,7 +80,7 @@ private:
     double mouse_y_ = kHeight / 2.0;
     bool mouse_fire_ = false;
     bool pad_used_ = false;
-    SDL_GameController* pad_ = nullptr;
+    SDL_Gamepad* pad_ = nullptr;
 };
 
 }  // namespace game

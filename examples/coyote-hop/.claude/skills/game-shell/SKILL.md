@@ -8,7 +8,7 @@ description: Build or fix the game's shell - title screen, main menu, settings, 
 Follow `docs/sop/SOP-19-front-end-and-settings.md` (and `docs/sop/SOP-20-accessibility.md` for what the settings must do).
 
 1. **See what is there:** the overlay's shell (`docs/ENGINE.md`, `docs/ENGINE_FLOW.md`): Godot, LÖVE and web ship
-   working screens; Unity, Unreal, Bevy, C++/SDL2 and web-3d ship the logic with tests, and the screens are built in
+   working screens; Unity, Unreal, Bevy, C++/SDL3 and web-3d ship the logic with tests, and the screens are built in
    the engine on top of it; RPG Maker MZ keeps MZ's own screens and settings, and ENGINE_FLOW maps the rules onto
    them. Never write a second settings or save system next to the kit's.
 2. **Scope:** which parts the request needs (screens, settings, saves, input, localization, logs, telemetry). Confirm it

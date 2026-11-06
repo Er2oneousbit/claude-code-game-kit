@@ -1,6 +1,6 @@
 # ---------------------------------------------------------------------------
 # CMakeLists.txt
-# Purpose : Build definition for Scrap Tanks (C++17 + SDL2).
+# Purpose : Build definition for Scrap Tanks (C++17 + SDL3).
 # Usage   : cmake --preset debug && cmake --build --preset debug
 #           (or just: python tools/dev.py check)
 # Notes   : Explicit source lists (no file(GLOB)) so adds/removes show up in diffs.
@@ -10,6 +10,8 @@
 # Authored: Written with Claude (Sonnet 5.5, claude-sonnet-5-5)
 # Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): the kit's juice and shell logic in core
 #           (nlohmann-json), its golden-vector and file tests
+# Updated : 2026-11-06 with Claude (Opus 5.5, claude-opus-5-5): SDL3 and SDL3_image/ttf/mixer (was SDL2), the kit's
+#           shader recipes compiled with shadercross, src/gfx (KitShaders), the kit_shader_check tool
 # ---------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.21)
 project(scrap_tanks VERSION 0.2.0 LANGUAGES CXX)
@@ -60,21 +62,53 @@ target_link_libraries(core PUBLIC project_warnings nlohmann_json::nlohmann_json)
 target_compile_definitions(core PUBLIC GAME_VERSION="${PROJECT_VERSION}")
 
 # ---- game_lib: gameplay code that talks to SDL ----
-find_package(SDL2 CONFIG REQUIRED)
+find_package(SDL3 CONFIG REQUIRED)
 # SDL companion libraries for PNG sprites, the HUD font and WAV sounds (docs/adr/0001-sdl-companion-libraries.md)
-find_package(SDL2_image CONFIG REQUIRED)
-find_package(SDL2_ttf CONFIG REQUIRED)
-find_package(SDL2_mixer CONFIG REQUIRED)
+find_package(SDL3_image CONFIG REQUIRED)
+find_package(SDL3_ttf CONFIG REQUIRED)
+find_package(SDL3_mixer CONFIG REQUIRED)
 
 set(GAME_SOURCES
   src/game/Game.cpp
   src/game/Assets.cpp
+  src/gfx/KitShaders.cpp
 )
 add_library(game_lib STATIC ${GAME_SOURCES})
-target_link_libraries(game_lib PUBLIC core SDL2::SDL2
-  $<IF:$<TARGET_EXISTS:SDL2_image::SDL2_image>,SDL2_image::SDL2_image,SDL2_image::SDL2_image-static>
-  $<IF:$<TARGET_EXISTS:SDL2_ttf::SDL2_ttf>,SDL2_ttf::SDL2_ttf,SDL2_ttf::SDL2_ttf-static>
-  $<IF:$<TARGET_EXISTS:SDL2_mixer::SDL2_mixer>,SDL2_mixer::SDL2_mixer,SDL2_mixer::SDL2_mixer-static>)
+target_link_libraries(game_lib PUBLIC core SDL3::SDL3 SDL3_image::SDL3_image SDL3_ttf::SDL3_ttf
+  SDL3_mixer::SDL3_mixer)
+target_include_directories(game_lib PUBLIC ${CMAKE_SOURCE_DIR}/shaders/kit)   # kit_shaders.hpp
+
+# ---- the kit's shader recipes: HLSL -> SPIR-V, DXIL, MSL with shadercross (vcpkg host tool) ----
+include(${CMAKE_SOURCE_DIR}/shaders/kit/kit_shaders.cmake)   # KIT_SHADER_NAMES (generated)
+find_program(SHADERCROSS shadercross
+  HINTS "${VCPKG_INSTALLED_DIR}/${VCPKG_HOST_TRIPLET}/tools/sdl3-shadercross" REQUIRED)
+set(KIT_SHADER_OUT ${CMAKE_BINARY_DIR}/shaders/kit)
+set(KIT_SHADER_FILES)
+foreach(name IN LISTS KIT_SHADER_NAMES)
+  set(src ${CMAKE_SOURCE_DIR}/shaders/kit/${name}.frag.hlsl)
+  foreach(pair "SPIRV;spv" "DXIL;dxil" "MSL;msl")
+    list(GET pair 0 format)
+    list(GET pair 1 ext)
+    set(out ${KIT_SHADER_OUT}/${name}.frag.${ext})
+    add_custom_command(OUTPUT ${out}
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${KIT_SHADER_OUT}
+      COMMAND ${SHADERCROSS} ${src} -s HLSL -d ${format} -t fragment -e main -o ${out}
+      DEPENDS ${src}
+      COMMENT "shader ${name} -> ${format}"
+      VERBATIM)
+    list(APPEND KIT_SHADER_FILES ${out})
+  endforeach()
+endforeach()
+add_custom_target(kit_shaders ALL DEPENDS ${KIT_SHADER_FILES})
+
+# Copies the compiled recipes next to an executable target (shaders/kit/), so a shipped build finds them
+function(copy_kit_shaders target)
+  add_dependencies(${target} kit_shaders)
+  add_custom_command(TARGET ${target} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${KIT_SHADER_OUT} $<TARGET_FILE_DIR:${target}>/shaders/kit
+    VERBATIM)
+endfunction()
+
 
 # ---- executable ----
 add_executable(scrap_tanks src/main.cpp)
@@ -82,9 +116,13 @@ add_executable(scrap_tanks src/main.cpp)
 # Debug keeps the console for logs and for dev.py smoke, which reads stdout.
 set_target_properties(scrap_tanks PROPERTIES WIN32_EXECUTABLE $<CONFIG:Release>)
 target_link_libraries(scrap_tanks PRIVATE game_lib)
-if(TARGET SDL2::SDL2main)
-  target_link_libraries(scrap_tanks PRIVATE SDL2::SDL2main)
-endif()
+copy_kit_shaders(scrap_tanks)
+
+# ---- kit_shader_check: draws every recipe for `dev.py smoke --shaders` (a kit tool, not shipped) ----
+add_executable(kit_shader_check src/tools/kit_shader_check.cpp)
+target_link_libraries(kit_shader_check PRIVATE game_lib)
+target_compile_definitions(kit_shader_check PRIVATE KIT_INPUT_DIR="${CMAKE_SOURCE_DIR}/data/shaders/inputs")
+copy_kit_shaders(kit_shader_check)
 
 # ---- tests ----
 if(BUILD_TESTS)

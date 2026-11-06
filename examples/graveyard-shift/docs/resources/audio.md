@@ -49,7 +49,7 @@ Libraries, generators, editors, and implementation hints. Prompts for AI audio t
   license, platforms, soundtrack release rights.
 
 **Implementation**
-- Godot: `AudioStreamPlayer` plus buses. Unreal: MetaSounds. C++/SDL2: `SDL_mixer` or `miniaudio` or `OpenAL Soft`.
+- Godot: `AudioStreamPlayer` plus buses. Unreal: MetaSounds. C++/SDL3: `SDL_mixer` or `miniaudio` or `OpenAL Soft`.
   Bevy: built-in `AudioPlayer` (OGG, WAV); more control from an audio crate such as bevy_kira_audio **(verify its Bevy version)**.
 - Adaptive music middleware: `FMOD Studio`, `Wwise`. Both have indie-friendly tiers. **(verify current terms)**
 

@@ -8,7 +8,7 @@
 - [ ] Every shipped asset has a row in `docs/ASSET_LOG.md` with a known license; `python tools/credits.py --check` passes.
 - [ ] CREDITS.md and THIRD_PARTY_LICENSES.md ship inside the build folder or the game's About screen.
 - [ ] The engine's own notice ships (LÖVE's license.txt, Godot's MIT notice, Unity and Unreal splash and credit rules,
-      SDL2 and other library notices) (verify per engine version).
+      SDL3 and other library notices) (verify per engine version).
 - [ ] Fonts: the font license allows embedding in a game; OFL fonts keep their license file.
 
 ## 2. Privacy policy (needed as soon as anything about a player leaves their machine)

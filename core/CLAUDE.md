@@ -108,7 +108,7 @@ this game's character. `pixel_sprite.py check` must pass on every character and 
 Watching a wall of text is no fun. While you build, give one short line per step of your plan; details only when
 something went wrong or {{AUTHOR}} asks. After each step that changes what is on screen, and before the hand-off below:
 1. Capture it: `python tools/dev.py smoke --screenshot captures/progress/<NN>-<what>.png` (numbered, e.g.
-   `03-costume-picker.png`; use the file type `smoke -h` names: C++/SDL2 saves `.bmp`). If `python tools/dev.py smoke -h` lists no `--screenshot`, this engine cannot capture
+   `03-costume-picker.png`; use the file type `smoke -h` names: C++/SDL3 saves `.bmp`). If `python tools/dev.py smoke -h` lists no `--screenshot`, this engine cannot capture
    yet: say so once and skip the pictures.
    **Anything that moves (an attack, a jump, a walk cycle): record a burst instead of a still**, `smoke --record
    captures/frames-<NN>` then `tools/art/frames_to_gif.py` into `captures/progress/<NN>-<what>.gif`, and look at the

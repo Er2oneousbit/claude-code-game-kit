@@ -4,14 +4,14 @@
 
 A one-screen tank brawl in a scrapyard: your tractor-tank against raiders whose behavior tree you can read over their
 heads (FLANK, FIRE, COVER, and RETREAT for the heavy; scouts fight to the end). Shells stop at crates, rocks and trees, so where you stand matters more than how fast
-you click. Made with the [Claude Code Game Kit](../../README.md) as its **C++ / SDL2 example**, built only with what the
+you click. Made with the [Claude Code Game Kit](../../README.md) as its **C++ / SDL3 example** (SDL2 until kit 0.14), built only with what the
 kit provides: Kenney CC0 3D models rendered into sprite sheets with the kit's Blender tools, a behavior tree built by
 SOP-14, and a scenario pair that proved the main pillar wrong three times before it held. Step by step:
 [HOW_IT_WAS_MADE.md](HOW_IT_WAS_MADE.md).
 
 ## Play it
 Needs CMake 3.21+, a C++17 compiler and vcpkg (on Windows, Visual Studio 2022 Build Tools include all three), and Python
-3.8+. Set `VCPKG_ROOT` and put CMake on `PATH` (`docs/ENGINE.md`). The first build fetches SDL2 and its image, font and
+3.8+. Set `VCPKG_ROOT` and put CMake on `PATH` (`docs/ENGINE.md`). The first build fetches SDL3 and its image, font and
 sound libraries (a few minutes).
 ```
 python tools/dev.py run
@@ -31,7 +31,7 @@ chosen spots, who can hit you, the tree).
 | Cover and firing spots, aim leading, grid A* | `src/core/Tactics.cpp`, `src/core/Nav.cpp` |
 | Autoplay bots: `skilled` hides by exposure count, `reckless` charges | `src/core/Bot.cpp` |
 | The camera and which of 32 sprite rows faces where | `src/core/View.hpp` |
-| SDL side: sprites, labels, HUD, sound, input (ADR 0001: SDL2_image, SDL2_ttf, SDL2_mixer) | `src/game/` |
+| SDL side: sprites, labels, HUD, sound, input (ADR 0001: SDL3_image, SDL3_ttf, SDL3_mixer) | `src/game/` |
 | Kenney 3D models to sprite sheets, one table | `tools/make_sprites.py` |
 
 ## Checks
@@ -47,4 +47,4 @@ python tools/dev.py smoke --frames 30000 --timeout 900 --until PLAYER_DESTROYED 
 - 3D models (rendered to sprites) and font: [Kenney](https://kenney.nl) (Car Kit, Tower Defense Kit, Kenney Fonts), CC0.
   Details and license copies: `docs/ASSET_LOG.md`, `docs/licenses/`.
 - Sound effects and the scrapyard wind: Created in collaboration with ElevenLabs (elevenlabs.io) (generated with the kit's `tools/audio/wavesmith/eleven_audio.py` under non-commercial terms, so **non-commercial**: marked PLACEHOLDER in `docs/ASSET_LOG.md`, replace or regenerate under a license that allows commercial use before any commercial use). Earlier builds used Kenney Sci-fi Sounds (CC0).
-- Libraries: SDL2, SDL2_image, SDL2_ttf, SDL2_mixer (zlib), doctest (MIT), via vcpkg.
+- Libraries: SDL3, SDL3_image, SDL3_ttf, SDL3_mixer (zlib), doctest (MIT), via vcpkg.
