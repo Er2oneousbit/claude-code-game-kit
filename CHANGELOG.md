@@ -3,7 +3,7 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## Unreleased
+## 0.14.2 (2026-11-06): fixes to Dotwork's Pixelorama round trip and its panel, from a second-model review and #255
 - Dotwork's Pixelorama panel: closing Pixelorama (or turning the extension off) during a re-export waited for Dotwork
   with no time limit; with a hung run Pixelorama hung too (119.7 s in the live exam, the whole hung run), and killing
   it left Python and Godot running (#255). A run now polls with a limit (15 minutes for a re-export, 2 for the
