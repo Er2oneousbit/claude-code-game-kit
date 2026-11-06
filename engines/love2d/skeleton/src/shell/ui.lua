@@ -16,7 +16,11 @@
 -- ---------------------------------------------------------------------------
 local Style = require("src.shell.style")
 
+local Json = require("src.core.json")
+
 local UI = {}
+
+local OUTLINE_STEPS = { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 }, { -1, -1 }, { 1, 1 }, { -1, 1 }, { 1, -1 } }
 UI.__index = UI
 
 -- ---- Tunables ----------------------------------------------------------------
@@ -46,7 +50,8 @@ end
 
 function UI.new(app)
   return setmetatable({ app = app, fonts = {}, glyphs = {}, labels = {}, pending_check = nil,
-                        check_result = nil, scale = 1 }, UI)
+                        check_result = nil, scale = 1, font_px = {}, fills = {}, order = 0, recording = false,
+                        in_ui = false, pending_access = nil, access_result = nil }, UI)
 end
 
 -- The UI font at size px * the player's text scale (whole pixels); unscaled = true skips the text scale
@@ -57,6 +62,7 @@ function UI:font(px, unscaled)
   if not self.fonts[px] then
     self.fonts[px] = love.graphics.newFont(px)
     self.fonts[px]:setFilter("nearest", "nearest")
+    self.font_px[self.fonts[px]] = px
   end
   return self.fonts[px]
 end
@@ -69,14 +75,39 @@ function UI:row_h(font) return (font or self:font()):getHeight() + Style.ROW_PAD
 
 function UI:begin_frame()
   self.labels = {}
+  self.fills, self.order = {}, 0
+  self.recording = self.pending_access ~= nil
 end
 
--- Draws text inside the box (x, y, w, h), vertically centred; opts: align, font, color, raw, wrap, id_screen.
+-- a box in window pixels, through the current transform (the frame's scale and offset, a list's scroll)
+local function window_box(x, y, w, h)
+  local x1, y1 = love.graphics.transformPoint(x, y)
+  local x2, y2 = love.graphics.transformPoint(x + w, y + h)
+  return { x1, y1, x2 - x1, y2 - y1 }
+end
+
+-- the access drive's hook on love.graphics.rectangle: every fill of a recorded frame, in drawing order
+function UI:note_fill(x, y, w, h)
+  if not self.recording then return end
+  self.order = self.order + 1
+  local r, g, b, a = love.graphics.getColor()
+  self.fills[#self.fills + 1] = { box = window_box(x, y, w, h), color = { r, g, b, a }, order = self.order,
+                                  ui = self.in_ui }
+end
+
+-- Draws text inside the box (x, y, w, h), vertically centred; opts: align, font, color, raw, wrap, id_screen,
+-- outline (a colour: the text drawn under itself one pixel each way, so it reads over any game, #91).
 function UI:label(id, text, x, y, w, h, opts)
   opts = opts or {}
   local font = opts.font or self:font()
   text = tostring(text or "")
   love.graphics.setFont(font)
+  if opts.outline then
+    local plain = {}
+    for k, v in pairs(opts) do plain[k] = v end
+    plain.outline, plain.color, plain.no_record = nil, opts.outline, true
+    for _, d in ipairs(OUTLINE_STEPS) do self:label(id, text, x + d[1], y + d[2], w, h, plain) end
+  end
   love.graphics.setColor(opts.color or Style.color.text)
   if opts.wrap then
     -- opts.shown: draw only this much (a typewriter), but lay out and check the whole text
@@ -101,13 +132,31 @@ function UI:label(id, text, x, y, w, h, opts)
     local ty = y + (h - font:getHeight()) / 2
     love.graphics.print(text, math.floor(tx), math.floor(ty))
   end
+  if opts.no_record then return end                     -- an outline pass: the label itself is recorded once
+  local colour = opts.color or Style.color.text
+  self.order = self.order + 1
+  local ink = nil
+  if self.recording then                                 -- where the glyphs land (the access sweep's overlap check)
+    if opts.wrap then
+      local widest, lines = font:getWrap(text, w)
+      ink = window_box(x, y, math.min(widest, w), #lines * font:getHeight())
+    else
+      local tw = font:getWidth(text)
+      local tx = opts.align == "center" and x + (w - tw) / 2 or opts.align == "right" and x + w - tw or x
+      ink = window_box(tx, y + (h - font:getHeight()) / 2, tw, font:getHeight())
+    end
+  end
   self.labels[#self.labels + 1] = { id = id, text = text, x = x, y = y, w = w, h = h, font = font,
-                                    raw = opts.raw, wrap = opts.wrap }
+                                    raw = opts.raw, wrap = opts.wrap, color = { colour[1], colour[2], colour[3] },
+                                    box = self.recording and window_box(x, y, w, h) or nil, order = self.order,
+                                    ink = ink, outline = opts.outline }
 end
 
 function UI:panel(x, y, w, h, color)
   love.graphics.setColor(color or Style.color.panel)
+  self.in_ui = true                                   -- the access report tells UI panels from the game world
   love.graphics.rectangle("fill", x, y, w, h, 4, 4)
+  self.in_ui = false
   love.graphics.setColor(Style.color.panel_edge)
   love.graphics.setLineWidth(1)
   love.graphics.rectangle("line", x + 0.5, y + 0.5, w - 1, h - 1, 4, 4)
@@ -116,7 +165,9 @@ end
 -- The focused item: a lighter fill, a white outline and a ">" marker (never colour alone).
 function UI:focus_box(x, y, w, h)
   love.graphics.setColor(Style.color.row_focus)
+  self.in_ui = true
   love.graphics.rectangle("fill", x, y, w, h, 3, 3)
+  self.in_ui = false
   love.graphics.setColor(Style.color.focus)
   love.graphics.setLineWidth(Style.FOCUS_LINE)
   love.graphics.rectangle("line", x + 1, y + 1, w - 2, h - 2, 3, 3)
@@ -178,7 +229,7 @@ function UI:glyph_cell(id, gname, label, x, y, h, opts)
   love.graphics.setLineWidth(1)
   love.graphics.rectangle("line", math.floor(x) + 0.5, math.floor(cy) + 0.5, w, ch, 3, 3)
   self:label(id, label, x + KEYCAP_PAD, cy, w - KEYCAP_PAD * 2 + 1, ch, { font = font,
-             color = (opts and opts.warn) and Style.color.warn or Style.color.text })
+             color = (opts and opts.warn) and Style.color.warn or Style.color.text, outline = opts and opts.outline })
   return w
 end
 
@@ -208,6 +259,95 @@ local function problems_of(self, label)
   return out
 end
 
+-- ---- The access report (tools/access/sweep.py, #91) -----------------------------------------------------------
+local function hex(c) return string.format("#%02x%02x%02x", math.floor(c[1] * 255 + 0.5),
+                                           math.floor(c[2] * 255 + 0.5), math.floor(c[3] * 255 + 0.5)) end
+
+-- The colour under a label: every earlier fill covering its centre, blended in drawing order over the cleared black.
+-- world = a screen drawn over the game: only UI panels count, and text with no opaque panel is "over the game".
+local function background(self, label, world)
+  local cx, cy = label.box[1] + label.box[3] / 2, label.box[2] + label.box[4] / 2
+  local c, layers, opaque = { 0, 0, 0 }, {}, false
+  for _, f in ipairs(self.fills) do
+    local b = f.box
+    if f.order < label.order and cx >= b[1] and cx <= b[1] + b[3] and cy >= b[2] and cy <= b[2] + b[4] then
+      local a = f.color[4]
+      c = { c[1] + (f.color[1] - c[1]) * a, c[2] + (f.color[2] - c[2]) * a, c[3] + (f.color[3] - c[3]) * a }
+      if f.ui then
+        table.insert(layers, 1, { hex(f.color), math.floor(a * 1000 + 0.5) / 1000 })
+        if a >= 0.999 then layers, opaque = {}, true end
+      end
+    end
+  end
+  if world and not opaque then
+    local over = {}
+    for i, l in ipairs(layers) do over[i] = Json.array(l) end
+    return nil, Json.array(over)
+  end
+  return hex(c), nil
+end
+
+-- Asks for the access report of the next drawn frame; world = a screen over the game. Result: self.access_result.
+function UI:request_access(screen, world)
+  self.pending_access = { screen = screen, world = world }
+  self.access_result = nil
+end
+
+-- true when an opaque UI panel drawn after the label covers its middle (a dialog over a screen): not visible
+local COVER_ALPHA = 0.9                           -- a panel this opaque hides what is under it
+local function covered(self, label)
+  local cx, cy = label.box[1] + label.box[3] / 2, label.box[2] + label.box[4] / 2
+  for _, f in ipairs(self.fills) do
+    local b = f.box
+    if f.ui and f.order > label.order and f.color[4] >= COVER_ALPHA and cx >= b[1] and cx <= b[1] + b[3]
+       and cy >= b[2] and cy <= b[2] + b[4] then
+      return true
+    end
+  end
+  return false
+end
+
+-- the panel the label sits on: the last opaque UI fill drawn before it under its middle ({} on the bare screen)
+local function card(self, label)
+  local cx, cy = label.box[1] + label.box[3] / 2, label.box[2] + label.box[4] / 2
+  local best = nil
+  for _, f in ipairs(self.fills) do
+    local b = f.box
+    if f.ui and f.order < label.order and f.color[4] >= COVER_ALPHA and cx >= b[1] and cx <= b[1] + b[3]
+       and cy >= b[2] and cy <= b[2] + b[4] then
+      best = f
+    end
+  end
+  if not best then return Json.object({}) end
+  return { order = best.order, rect = Json.array({ best.box[1], best.box[2], best.box[3], best.box[4] }) }
+end
+
+local function access_report(self)
+  local req = self.pending_access
+  local texts = {}
+  for _, label in ipairs(self.labels) do
+    if label.text ~= "" and label.box then
+      local bg, over = background(self, label, req.world)
+      local problems = {}
+      for _, why in ipairs(problems_of(self, label)) do
+        -- a single line taller than its box is drawn centred on it: harmless unless it hits other text, which
+        -- the sweep checks from the ink boxes
+        if why ~= "box is shorter than one line (clipped)" then problems[#problems + 1] = why end
+      end
+      texts[#texts + 1] = { node = label.id, text = label.text:sub(1, 60), state = "",
+                            outline = label.outline and hex(label.outline) or nil,
+                            ink = Json.array({ label.ink[1], label.ink[2], label.ink[3], label.ink[4] }),
+                            px = self.font_px[label.font] or Style.FONT_PX, fg = hex(label.color), bg = bg,
+                            over_game = over, fits = #problems == 0, covered = covered(self, label),
+                            card = card(self, label),
+                            why = #problems > 0 and problems[1] or nil }
+    end
+  end
+  self.access_result = { screen = req.screen, design = Json.array({ Style.BASE_W, Style.BASE_H }),
+                         scaling = "integer", texts = Json.array(texts) }
+  self.pending_access, self.recording = nil, false
+end
+
 -- Asks for a check of the labels of the next frame; the result lands in self.check_result.
 function UI:request_check(screen)
   self.pending_check = screen
@@ -215,6 +355,7 @@ function UI:request_check(screen)
 end
 
 function UI:end_frame()
+  if self.pending_access and self.recording then access_report(self) end
   if not self.pending_check then return end
   local result = { screen = self.pending_check, labels = #self.labels, problems = {} }
   for _, label in ipairs(self.labels) do

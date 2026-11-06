@@ -23,7 +23,7 @@ func build() -> void:
 	shade.color = Color(0, 0, 0, BACKDROP_ALPHA)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(shade)
-	var col: VBoxContainer = centered_column()
+	var col: VBoxContainer = centered_column(true)
 	var title: Label = label(Shell.t("pause.title"), UiTheme.HEADING_FONT, "Heading")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(title)

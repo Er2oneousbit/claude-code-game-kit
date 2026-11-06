@@ -19,13 +19,26 @@ extends RefCounted
 const BUTTON_STATES: PackedStringArray = ["normal", "focus"] # the states a player reads a button in
 const SIDES: Array[Side] = [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]
 const MAX_FOCUS: int = 400 # focus graph walk limit (a screen with more controls is reported, not walked)
+const COVER_ALPHA: float = 0.9 # a panel this opaque hides the text under it (a dialog over a screen)
+
+static var _order: int = 0 # drawing order of the walk (later = on top within a canvas layer)
+static var _panels: Array = [] # opaque panels met so far: what can cover a text drawn before it
 
 
 ## The report for the screen under root: {"screen", "base", "texts": [...], "focus": {...}}.
 static func screen(root: Node, where: String) -> Dictionary:
 	var texts: Array = []
 	var focusable: Array[Control] = []
+	_order = 0
+	_panels.clear()
 	_walk(root, texts, focusable)
+	for t: Dictionary in texts:
+		t["covered"] = _covered(t)
+		t["card"] = _card(t)
+		t.erase("_order")
+		t.erase("_layer")
+		t.erase("_centre")
+		t.erase("_chain")
 	var vp: Vector2 = root.get_viewport().get_visible_rect().size
 	var win: Vector2i = root.get_tree().root.size
 	return {"screen": where, "visible": [vp.x, vp.y], "window": [win.x, win.y],
@@ -55,15 +68,19 @@ static func _walk(node: Node, texts: Array, focusable: Array[Control]) -> void:
 		return
 	if node is CanvasLayer and not (node as CanvasLayer).visible:
 		return
+	_order += 1
 	if node is Control:
 		var c: Control = node
+		var own: Variant = _own_background(c, "")
+		if own != null and (own as Color).a >= COVER_ALPHA and not c is Button:
+			_panels.append({"order": _order, "layer": _layer_of(c), "rect": _rect(c), "node": c})
 		if c.focus_mode == Control.FOCUS_ALL:
 			focusable.append(c)
 		if c is Button and (c as Button).text.strip_edges() != "":
 			for state: String in BUTTON_STATES:
-				texts.append(_text(c, (c as Button).text, state))
+				texts.append(_tag(_text(c, (c as Button).text, state), c))
 		elif c is Label and (c as Label).text.strip_edges() != "" and (c as Label).visible_ratio > 0.0:
-			texts.append(_text(c, (c as Label).text, ""))
+			texts.append(_tag(_text(c, (c as Label).text, ""), c))
 	for child: Node in node.get_children():
 		_walk(child, texts, focusable)
 
@@ -81,6 +98,7 @@ static func _text(c: Control, text: String, state: String) -> Dictionary:
 		"bg": null if bg == null else "#" + (bg as Color).to_html(false),
 		"outline": "#" + c.get_theme_color("font_outline_color").to_html(false) if outline > 0 else null,
 		"fits": _fits(c, text),
+		"ink": _ink(c, text, state),
 	}
 	if bg == null: # over the game: what lies between the text and the world, top first, for a worst-case check
 		var layers: Array = []
@@ -150,14 +168,52 @@ static func _own_background(node: Node, state: String) -> Variant:
 	return null
 
 
-## True when the text is part of the menus (a front-end screen), not a HUD drawn over the game.
+## True when the text is on an opaque front-end screen; a see-through one (pause) shows the game behind it, so its
+## text is checked like a HUD's: against its panel layers over any game.
 static func _is_menu(c: Control) -> bool:
 	var node: Node = c
 	while node != null:
 		if node is ShellScreen:
-			return true
+			return (node as ShellScreen).opaque
 		node = node.get_parent()
 	return false
+
+
+## Where the text's glyphs land, in canvas pixels: the control's box narrowed to the text (aligned as drawn).
+static func _ink(c: Control, text: String, state: String) -> Array:
+	if state == "focus":
+		return [] # the same place as the normal state: compared once
+	var box: Rect2 = c.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, c.size)
+	var node: Node = c.get_parent()
+	while node != null and not node is ScrollContainer:
+		node = node.get_parent()
+	if node != null: # scrolled out of its list: not drawn, so it runs into nothing
+		var area: Rect2 = (node as Control).get_global_transform_with_canvas() * Rect2(Vector2.ZERO, (node as Control).size)
+		if not area.grow(0.5).encloses(box):
+			return []
+	var font: Font = c.get_theme_font("font")
+	var size: int = c.get_theme_font_size("font_size")
+	var w: float = 0.0
+	for line: String in text.split("\n"):
+		w = maxf(w, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x)
+	w = minf(w, box.size.x)
+	var x: float = box.position.x
+	var align: int = HORIZONTAL_ALIGNMENT_LEFT
+	if c is Label:
+		align = (c as Label).horizontal_alignment
+	elif c is Button:
+		align = (c as Button).alignment
+	if align == HORIZONTAL_ALIGNMENT_CENTER:
+		x += (box.size.x - w) / 2.0
+	elif align == HORIZONTAL_ALIGNMENT_RIGHT:
+		x += box.size.x - w
+	var h: float = minf(box.size.y, font.get_height(size) * maxf(1.0, float(text.count("\n") + 1)))
+	if c is Label and (c as Label).autowrap_mode != TextServer.AUTOWRAP_OFF:
+		h = box.size.y
+		w = box.size.x
+		x = box.position.x
+	var y: float = box.position.y + (box.size.y - h) / 2.0
+	return [x, y, w, h]
 
 
 static func _fits(c: Control, text: String) -> bool:
@@ -182,6 +238,59 @@ static func _fits(c: Control, text: String) -> bool:
 		var area: Rect2 = scroll.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, scroll.size)
 		return box.position.x >= area.position.x - 0.5 and box.end.x <= area.end.x + 0.5
 	return c.get_viewport_rect().grow(0.5).encloses(box)
+
+
+# ---- what covers what --------------------------------------------------------------
+
+static func _rect(c: Control) -> Rect2:
+	return c.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, c.size)
+
+
+static func _layer_of(c: Node) -> int:
+	var node: Node = c
+	while node != null:
+		if node is CanvasLayer:
+			return (node as CanvasLayer).layer
+		node = node.get_parent()
+	return 0
+
+
+static func _tag(row: Dictionary, c: Control) -> Dictionary:
+	row["_order"] = _order
+	row["_layer"] = _layer_of(c)
+	row["_centre"] = _rect(c).get_center()
+	var chain: Array = []
+	var node: Node = c
+	while node != null:
+		chain.append(node)
+		node = node.get_parent()
+	row["_chain"] = chain
+	return row
+
+
+## The panel the text sits on (its nearest opaque ancestor): {"order", "rect"}; {} on the bare screen. The sweep
+## ignores an overlap between texts on different cards when the later card hides the spot (a dialog over a HUD).
+static func _card(t: Dictionary) -> Dictionary:
+	var best: Dictionary = {}
+	for p: Dictionary in _panels:
+		if (t["_chain"] as Array).has(p["node"]) and (best.is_empty() or int(p["order"]) > int(best["order"])):
+			best = p
+	if best.is_empty():
+		return {}
+	var r: Rect2 = best["rect"]
+	return {"order": int(best["order"]) + 100000 * int(best["layer"]), "rect": [r.position.x, r.position.y,
+			r.size.x, r.size.y]}
+
+
+## True when an opaque panel drawn after the text, on its layer or a higher one, covers its centre (a dialog over
+## the screen): the player cannot see it, so the sweep does not check it.
+static func _covered(t: Dictionary) -> bool:
+	for p: Dictionary in _panels:
+		var later: bool = int(p["layer"]) > int(t["_layer"]) or (int(p["layer"]) == int(t["_layer"])
+				and int(p["order"]) > int(t["_order"]))
+		if later and not (t["_chain"] as Array).has(p["node"]) and (p["rect"] as Rect2).has_point(t["_centre"]):
+			return true
+	return false
 
 
 # ---- focus ----------------------------------------------------------------------

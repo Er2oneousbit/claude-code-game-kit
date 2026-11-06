@@ -94,6 +94,29 @@ class SweepExam(unittest.TestCase):
     def test_clipped_text(self):
         # the Godot settings tabs ran off the screen at 200 % text before they wrapped
         self.assertIn("clipped or off screen", check(with_text(fits=False))[0][0])
+        self.assertIn("(wraps to 5 lines", check(with_text(fits=False, why="wraps to 5 lines, the box holds 2"))[0][0])
+
+    def two_texts(self, ink_b, card_a=None, card_b=None, covered_b=False):
+        log = with_text(ink=[0, 0, 100, 20], node="a", card=card_a or {})
+        log["screens"][0]["texts"].append(dict(GOOD_TEXT, text="Other", node="b", ink=ink_b, card=card_b or {},
+                                               covered=covered_b))
+        return log
+
+    def test_text_that_runs_into_other_text(self):
+        # LÖVE's demo HUD rows collided at 200 % text before their height followed the font
+        self.assertIn("runs into", check(self.two_texts([50, 10, 100, 20]))[0][0])
+        self.assertEqual(check(self.two_texts([0, 20, 100, 20]))[0], [])          # touching rows: fine
+        self.assertEqual(check(self.two_texts([50, 10, 100, 20], covered_b=True))[0], [])   # hidden: not checked
+        # the HUD under a pause panel: the later panel covers the spot, so nothing collides on screen
+        panel = {"order": 9, "rect": [40, 0, 200, 100]}
+        self.assertEqual(check(self.two_texts([50, 10, 100, 20], card_b=panel))[0], [])
+        # the same texts beside the panel: a real collision
+        self.assertIn("runs into", check(self.two_texts([50, 10, 100, 20],
+                                                        card_b={"order": 9, "rect": [500, 0, 10, 10]}))[0][0])
+
+    def test_covered_text_is_skipped(self):
+        # text under a dialog cannot be seen: no contrast, size or fit check for it
+        self.assertEqual(check(with_text(px=1, fg="#000000", bg="#000000", fits=False, covered=True))[0], [])
 
     def test_focus(self):
         log = copy.deepcopy(GOOD)

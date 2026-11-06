@@ -169,27 +169,35 @@ end
 function Demo:draw_hud(ui)
   local app = self.app
   local font = ui:font(Style.SMALL_PX)
-  ui:label("juice.title", app:t("juice.title"), 12, 8, 300, 20, { color = Style.color.accent })
-  -- the controls with their prompts, wrapping to a second row when a language makes them long
-  local x, y = 12, 30
+  local black = { 0, 0, 0 }                              -- HUD text is outlined: it reads over any part of the game
+  local title_h = ui:font():getHeight()
+  ui:label("juice.title", app:t("juice.title"), 12, 8, 300, title_h, { color = Style.color.accent, outline = black })
+  -- the controls with their prompts, wrapping to another row when a language or a large text size makes them long;
+  -- rows are as tall as the text (#91: fixed 22 px rows ran into each other at 200 % text)
+  local row = math.max(20, font:getHeight() + 4)
+  local x, y = 12, 8 + title_h + 4
   for _, action in ipairs({ "move_left", "move_right", "jump", "attack", "interact", "pause" }) do
     local gname, label = app:prompt(action)
     local text = app:t("action." .. action)
     local tw = font:getWidth(text)
     local need = font:getWidth(label) + 8 + tw + 6
-    if x + need > Style.BASE_W - 12 then x, y = 12, y + 22 end
-    local w = ui:glyph_cell("juice.glyph." .. action, gname, label, x, y, 20)
-    ui:label("juice.action." .. action, text, x + w + 4, y, tw + 2, 20, { font = font, color = Style.color.dim })
+    if x + need > Style.BASE_W - 12 and x > 12 then x, y = 12, y + row + 2 end
+    local w = ui:glyph_cell("juice.glyph." .. action, gname, label, x, y, row, { outline = black })
+    ui:label("juice.action." .. action, text, x + w + 4, y, tw + 2, row,
+             { font = font, color = Style.color.dim, outline = black })
     x = x + w + tw + 16
   end
-  self.hud_bottom = y + 24
+  self.hud_bottom = y + row + 4
   local stats = app:t("juice.stats", { hits = self.hits, trauma = string.format("%.2f", self.shake.trauma),
     shake = string.format("%.2f", Settings.effective_shake(app.settings)),
     refused = self.refused, speed = math.floor(app:game_speed() * 100 + 0.5) })
-  ui:label("juice.stats", stats, 12, self.hud_bottom, Style.BASE_W - 24, 18, { font = font, color = Style.color.dim })
+  local _, stat_lines = font:getWrap(stats, Style.BASE_W - 24)
+  local stats_h = #stat_lines * font:getHeight()
+  ui:label("juice.stats", stats, 12, self.hud_bottom, Style.BASE_W - 24, stats_h,
+           { font = font, color = Style.color.dim, wrap = true, outline = black })
   if self.guard then
-    ui:label("juice.guard", app:t("juice.guard"), 12, self.hud_bottom + 18, 300, 18,
-             { font = font, color = Style.color.accent })
+    ui:label("juice.guard", app:t("juice.guard"), 12, self.hud_bottom + stats_h, 300, font:getHeight(),
+             { font = font, color = Style.color.accent, outline = black })
   end
 end
 

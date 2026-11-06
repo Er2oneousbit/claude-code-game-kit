@@ -16,6 +16,8 @@
 --           hanging. Add a scenario: a function in SCENARIOS, then document it in docs/ENGINE_FLOW.md.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- ---------------------------------------------------------------------------
+local Bindings = require("src.core.bindings")
+local InputMap = require("src.core.input_map")
 local Json = require("src.core.json")
 local Log = require("src.core.log")
 local Settings = require("src.core.settings")
@@ -38,6 +40,13 @@ function Drive.slide_action(now, target)
   return now > target and "ui_left" or "ui_right"
 end
 
+local function pad_binding(app, action)
+  for _, b in ipairs(app.settings.input.bindings[action] or {}) do
+    if type(b) == "string" and b:sub(1, 4) == "pad:" then return b end
+  end
+  return nil
+end
+
 -- ---- Helpers (inside the coroutine) ------------------------------------------------------------------------
 function Drive:frames(n)
   for _ = 1, n or 1 do coroutine.yield() end
@@ -58,7 +67,14 @@ function Drive:wait_screen(name)
 end
 
 function Drive:press(action)
-  self.app:inject(action)
+  if self.pad then                                       -- the access drive's gamepad-only run: the action's pad button
+    local b = pad_binding(self.app, action)
+    local button = b and InputMap.love_button(b)
+    if not button then error(action .. " has no gamepad button: a gamepad-only player cannot press it", 0) end
+    self.app.input:button(nil, button)
+  else
+    self.app:inject(action)
+  end
   self:frames(PRESS_GAP)
 end
 
@@ -311,11 +327,128 @@ function SHOW.juice(d)
   d:frames(1)
 end
 
+-- ---- The accessibility sweep (#91, #85): access[:res=WxH][,scale=N][,pad] -----------------------------------
+local ACCESS_ACTIONS = { "ui_up", "ui_down", "ui_left", "ui_right", "ui_accept", "ui_cancel", "pause" }
+local PROMPT_ACTIONS = { "move_left", "move_right", "jump", "attack", "interact", "pause" }
+local WORLD_SCREENS = { juice_demo = true, play = true }
+
+
+-- which controls ui_down reaches on the screen's list (every enabled row must come round)
+function Drive:reach()
+  local t = self:top()
+  local list = t and (t.list or (t.lists and t.lists[t.tab]))
+  local out = { start = self:focus_id() or "", controls = 0, reached = 0, unreached = Json.array({}),
+                focus_like_hover = Json.array({}) }
+  if not list then return out end
+  local prefix = t.lists and (t.tab .. ".") or ""
+  local want, seen = {}, {}
+  for _, row in ipairs(list.rows) do
+    if not row.enabled or row.enabled() then want[#want + 1] = prefix .. tostring(row.id) end
+  end
+  for _ = 1, #list.rows + 1 do
+    local id = self:focus_id()
+    if id then seen[id] = true end
+    self:press("ui_down")
+  end
+  out.controls = #want
+  for _, id in ipairs(want) do
+    if seen[id] then out.reached = out.reached + 1 else out.unreached[#out.unreached + 1] = id end
+  end
+  return out
+end
+
+function Drive:access_screen(name)
+  local ui = self.app.ui
+  ui:request_access(name, WORLD_SCREENS[self:top().name] or false)
+  self:wait_for(function() return ui.access_result ~= nil end, "a drawn frame (does the run have a window?)")
+  local r = ui.access_result
+  ui.access_result = nil
+  r.focus = self:reach()
+  print("ACCESS_SCREEN " .. Json.encode(r))
+end
+
+local function access_tour(d, options)
+  local app = d.app
+  -- every filled rectangle of a recorded frame goes to the UI's list (what lies under each text)
+  local rectangle = love.graphics.rectangle
+  love.graphics.rectangle = function(mode, x, y, w, h, ...)
+    if mode == "fill" then app.ui:note_fill(x, y, w, h) end
+    return rectangle(mode, x, y, w, h, ...)
+  end
+  local scale, res = 1, nil
+  for part in (options or ""):gmatch("[^,]+") do
+    if part == "pad" then d.pad = true
+    elseif part:match("^scale=") then scale = tonumber(part:sub(7))
+    elseif part:match("^res=") then local w, h = part:match("^res=(%d+)x(%d+)$"); res = { tonumber(w), tonumber(h) }
+    else error("unknown access option " .. part .. " (res=WxH, scale=N, pad)", 0) end
+  end
+  local actions = {}
+  for _, a in ipairs(ACCESS_ACTIONS) do
+    local kb, pad = false, false
+    for _, b in ipairs(app.settings.input.bindings[a] or {}) do
+      kb = kb or (type(b) == "string" and b:sub(1, 4) == "key:")
+      pad = pad or (type(b) == "string" and b:sub(1, 4) == "pad:")
+    end
+    actions[a] = { keyboard = kb, gamepad = pad }
+  end
+  print("ACCESS_INPUT " .. Json.encode({ pad = d.pad or false, text_scale = scale, actions = actions }))
+  d:wait_screen("title")
+  if res then
+    local _, _, flags = love.window.getMode()
+    love.window.setMode(res[1], res[2], flags)          -- the whole-number scale follows the window (app:transform)
+    d:frames(2)
+  end
+  if scale ~= 1 then
+    app.settings.access.text_scale = scale
+    app:apply_settings()
+    d:frames(2)
+  end
+  d:access_screen("title")
+  if d:top().consent then d:press("ui_cancel") end
+  d:press("ui_accept")
+  d:wait_screen("main_menu")
+  d:access_screen("main_menu")
+  d:open("settings", "settings")
+  for _, tab in ipairs({ "display", "audio", "controls", "access", "language" }) do
+    d:to_tab(tab)
+    d:access_screen("settings/" .. tab)
+  end
+  d:press("ui_cancel")
+  d:wait_screen("main_menu")
+  d:open("credits", "credits")
+  d:access_screen("credits")
+  d:press("ui_cancel")
+  d:wait_screen("main_menu")
+  d:focus("juice")
+  d:press("ui_accept")
+  d:wait_screen("juice_demo")
+  d:frames(40)
+  d:access_screen("juice")
+  local cur = app.track:current()
+  print("ACCESS_SUBTITLE " .. Json.encode({ visible = cur ~= nil and app.settings.access.subtitles == true,
+                                            text = cur and app.subtitles:text_of(cur.line) or "",
+                                            speaker = cur and cur.line.name or "", id = cur and cur.id or "" }))
+  local rows = {}
+  for _, a in ipairs(PROMPT_ACTIONS) do
+    local kb = Bindings.prompt_binding(app.settings.input.bindings, a, "keyboard")
+    local _, shown = app:prompt(a)
+    rows[a] = { keyboard = app:binding_label(Bindings.glyph_name("keyboard", kb)), shown = shown }
+  end
+  print("ACCESS_PROMPTS " .. Json.encode({ device = app.input.last_device, glyphs = app:glyph_set(), actions = rows }))
+  d:press("pause")
+  d:wait_screen("pause")
+  d:access_screen("pause")
+  d:open("quit", "title")
+  d:done(0)
+end
+
 -- ---- The driver ----------------------------------------------------------------------------------------------
 function Drive.new(app, name)
   local self = setmetatable({ app = app, name = name or "default", frame = 0, exit_code = 0, checked = 0,
                               labels = 0, problems = 0 }, Drive)
   local fn = SCENARIOS[self.name]
+  local access = self.name == "access" and "" or self.name:match("^access:(.+)$")
+  if access then fn = function(d) access_tour(d, access) end end
   local show = self.name:match("^show:(.+)$")
   if show then
     if not SHOW[show] then error("unknown --drive show:" .. show .. " (title, settings, pause, subtitle, juice)", 0) end

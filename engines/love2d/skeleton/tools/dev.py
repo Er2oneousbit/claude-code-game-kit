@@ -464,7 +464,7 @@ def cmd_smoke(args, love):
     if rc in NO_EXEC:
         return 2
     for line in out.splitlines():                    # the proof lines the shell scenarios print
-        if line.startswith(("SETTINGS_WRITTEN", "CRASH_WRITTEN", "PSEUDO_", "DRIVE_")):
+        if line.startswith(("SETTINGS_WRITTEN", "CRASH_WRITTEN", "PSEUDO_", "DRIVE_", "ACCESS_")):
             print(line)
     errors = scan_errors(out)
     booted, done = BOOT_MARKER in out, SMOKE_DONE in out or "DRIVE_DONE" in out

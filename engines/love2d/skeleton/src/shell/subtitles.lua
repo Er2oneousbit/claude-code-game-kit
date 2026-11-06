@@ -128,13 +128,17 @@ function Subtitles:draw(ui)
     local h = #lines * lh + name_h + PAD * 2
     local x, y = (Style.BASE_W - BAR_W) / 2, bottom - h
     love.graphics.setColor(0, 0, 0, access.subtitle_background)
+    ui.in_ui = true                                      -- the bar is the shell's, not the game's (access report)
     love.graphics.rectangle("fill", x, y, BAR_W, h, 4, 4)
+    ui.in_ui = false
+    -- outlined, so the line reads at any background opacity the player picks (#91: a 60 % bar over a white game
+    -- left the speaker's colour under 4.5:1)
     if name_h > 0 then
       ui:label("subtitle.speaker", app:t("subtitle.speaker", { name = cur.line.name }), x + PAD, y + PAD, inner, lh,
-               { font = font, color = hex_color(cur.line.color) })
+               { font = font, color = hex_color(cur.line.color), outline = { 0, 0, 0 } })
     end
     ui:label("subtitle.text", text, x + PAD, y + PAD + name_h, inner, #lines * lh,
-             { font = font, wrap = true, shown = shown })
+             { font = font, wrap = true, shown = shown, outline = { 0, 0, 0 } })
     bottom = y - 4
   end
   local font = ui:font(Style.SMALL_PX)

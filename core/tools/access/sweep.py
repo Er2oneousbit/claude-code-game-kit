@@ -49,6 +49,7 @@ RUNS = {                 # name: (resolution, text scale, gamepad only)
 RUN_SETS = {"pc": ("pc", "pc-200"), "deck": ("deck", "deck-200"), "all": tuple(RUNS)}
 DIALOGUE_GLOB = "data/dialogue/*.built.json"
 DRIVE_TIMEOUT_S = 600
+OVERLAP_SLACK = 1        # px two glyph boxes may share (antialiasing, rounding) before it counts as overlap
 
 
 class UsageError(Exception):
@@ -132,8 +133,9 @@ def check_run(log, resolution, pad, root):
         name = scr.get("screen", "?")
         design = scr.get("design") or scr.get("base") or [640, 360]
         s = scale_for(resolution, design, scr.get("scaling", "integer"))
-        body = min([float(t.get("px", 0)) for t in scr.get("texts", [])] or [0])
-        for t in scr.get("texts", []):
+        shown = [t for t in scr.get("texts", []) if not t.get("covered")]   # under a dialog: not visible
+        body = min([float(t.get("px", 0)) for t in shown] or [0])
+        for t in shown:
             what = f"{name}: {t.get('text', '')[:40]!r}" + (f" ({t['state']})" if t.get("state") else "")
             px = float(t.get("px", 0)) * s
             smallest = px if smallest is None else min(smallest, px)
@@ -161,7 +163,8 @@ def check_run(log, resolution, pad, root):
             if ratio is not None and ratio < need:
                 problems.append(f"{what}: contrast {ratio:.2f}:1 against {where} (needs {need:g}:1, E158)")
             if not t.get("fits", True):
-                problems.append(f"{what}: clipped or off screen")
+                problems.append(f"{what}: clipped or off screen" + (f" ({t['why']})" if t.get("why") else ""))
+        problems += overlaps(name, shown)
         focus = scr.get("focus") or {}
         for path in focus.get("unreached", []):
             problems.append(f"{name}: {path} cannot be reached with the arrow keys or the gamepad")
@@ -189,6 +192,38 @@ def check_run(log, resolution, pad, root):
     stats = {"screens": len(log["screens"]), "texts": sum(len(s.get("texts", [])) for s in log["screens"]),
              "smallest_px": smallest}
     return problems, warnings, stats
+
+
+def _hidden(a, b, ra, rb):
+    """True when the two texts sit on different panels and the later panel covers the spot where they meet (a
+    dialog over the HUD: the text underneath is hidden there, so nothing collides on screen)."""
+    ca, cb = a.get("card") or {}, b.get("card") or {}
+    if ca.get("order") == cb.get("order"):
+        return False
+    top = max((c for c in (ca, cb) if c.get("rect")), key=lambda c: c.get("order", -1), default=None)
+    if top is None:
+        return False
+    cx = (max(ra[0], rb[0]) + min(ra[0] + ra[2], rb[0] + rb[2])) / 2
+    cy = (max(ra[1], rb[1]) + min(ra[1] + ra[3], rb[1] + rb[3])) / 2
+    x, y, w, h = top["rect"]
+    return x <= cx <= x + w and y <= cy <= y + h
+
+
+def overlaps(screen, texts):
+    """Texts on one screen whose glyph boxes cross (more than OVERLAP_SLACK px each way): lines that run into each
+    other, which a box check alone misses (a centred line can stick out of its box without hitting anything)."""
+    boxes = [(t, t["ink"]) for t in texts if isinstance(t.get("ink"), list) and len(t["ink"]) == 4
+             and t.get("state", "") in ("", "normal")]
+    out = []
+    for i, (a, ra) in enumerate(boxes):
+        for b, rb in boxes[i + 1:]:
+            if a.get("node") == b.get("node"):
+                continue
+            dx = min(ra[0] + ra[2], rb[0] + rb[2]) - max(ra[0], rb[0])
+            dy = min(ra[1] + ra[3], rb[1] + rb[3]) - max(ra[1], rb[1])
+            if dx > OVERLAP_SLACK and dy > OVERLAP_SLACK and not _hidden(a, b, ra, rb):
+                out.append(f"{screen}: {a.get('text', '')[:30]!r} runs into {b.get('text', '')[:30]!r}")
+    return out
 
 
 # -------------------------------------------------- running the game

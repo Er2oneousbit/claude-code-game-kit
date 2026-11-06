@@ -16,7 +16,8 @@ local Title = {}
 
 -- ---- Tunables ----------------------------------------------------------------
 local BLINK_S = 0.6
-local CONSENT_W, CONSENT_H = 420, 190
+local CONSENT_W, CONSENT_H = 420, 190         -- the dialog; it grows taller when the text needs it
+local CONSENT_PAD = 10
 
 function Title:enter()
   self.t = 0
@@ -86,13 +87,22 @@ function Title:draw(ui)
   if self.consent then
     love.graphics.setColor(Style.color.overlay)
     love.graphics.rectangle("fill", 0, 0, W, H)
-    local x, y = (W - CONSENT_W) / 2, (H - CONSENT_H) / 2
-    ui:panel(x, y, CONSENT_W, CONSENT_H)
-    ui:label("consent.title", app:t("consent.title"), x + 16, y + 10, CONSENT_W - 32, 22,
+    -- every height from the text it holds, so the dialog grows with the text size instead of overflowing (#91: at
+    -- 200 % the body ran into the buttons)
+    local title_h = ui:font():getHeight()
+    local small = ui:font(Style.SMALL_PX)
+    local _, body_lines = small:getWrap(app:t("consent.body"), CONSENT_W - 32)
+    local body_h = #body_lines * small:getHeight()
+    local list_h = #self.consent.rows * (ui:row_h() + 2)
+    local ch = math.max(CONSENT_H, CONSENT_PAD + title_h + 4 + body_h + 8 + list_h + CONSENT_PAD)
+    local x, y = (W - CONSENT_W) / 2, math.max(4, (H - ch) / 2)
+    ui:panel(x, y, CONSENT_W, ch)
+    ui:label("consent.title", app:t("consent.title"), x + 16, y + CONSENT_PAD, CONSENT_W - 32, title_h,
              { color = Style.color.accent })
-    ui:label("consent.body", app:t("consent.body"), x + 16, y + 34, CONSENT_W - 32, 48,
-             { wrap = true, font = ui:font(Style.SMALL_PX) })
-    self.consent:draw(ui, x + 110, y + 84, CONSENT_W - 220, { prefix = "consent", center = true })
+    ui:label("consent.body", app:t("consent.body"), x + 16, y + CONSENT_PAD + title_h + 4, CONSENT_W - 32, body_h,
+             { wrap = true, font = small })
+    self.consent:draw(ui, x + 110, y + CONSENT_PAD + title_h + 4 + body_h + 8, CONSENT_W - 220,
+                      { prefix = "consent", center = true })
   end
 end
 
