@@ -47,6 +47,8 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 
 	ARDMage* GetMage() const;
+	/** True when an orc of room OrcRoom can see or hear the point P (FRDLevel::SensesInto, the open gates now). */
+	bool OrcSenses(int32 OrcRoom, const FVector2D& P) const;
 	const TArray<TObjectPtr<ARDOrc>>& GetOrcs() const { return Orcs; }
 	ERDOutcome GetOutcome() const { return Outcome; }
 	int32 RoomsCleared() const;

@@ -44,6 +44,25 @@ int32 FRDLevel::GateOf(const FVector2D& P)
 	return -1;
 }
 
+bool FRDLevel::SensesInto(int32 OrcRoom, const FVector2D& P, const bool bGateOpen[RoomCount - 1])
+{
+	const int32 R = RoomOf(P);
+	if (R == OrcRoom)
+	{
+		return true;
+	}
+	const int32 G = GateOf(P);
+	if (G >= 0)   // standing in a doorway: open by definition (a closed gate blocks the tile), next to rooms G, G + 1
+	{
+		return G == OrcRoom || G + 1 == OrcRoom;
+	}
+	if (R >= 0 && FMath::Abs(R - OrcRoom) == 1)
+	{
+		return bGateOpen[FMath::Min(R, OrcRoom)];
+	}
+	return false;
+}
+
 FBox2D FRDLevel::RoomInterior(int32 R)
 {
 	// Tiles 10R+1 .. 10R+9 and -3 .. 3, measured to their outer edges

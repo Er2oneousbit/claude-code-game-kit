@@ -192,6 +192,23 @@ bool FRDLevelTest::RunTest(const FString&)
 	TestEqual(TEXT("gate 1's outer tile is a doorway"), FRDLevel::GateOf(FRDLevel::TileToWorld(20, 1)), 1);
 	TestEqual(TEXT("a room centre is no doorway"), FRDLevel::GateOf(FRDLevel::RoomInterior(1).GetCenter()), -1);
 	TestEqual(TEXT("a wall beside a gate is no doorway"), FRDLevel::GateOf(FRDLevel::TileToWorld(10, 2)), -1);
+	// #140: an orc of room 1 senses the mage in room 1, in either doorway next to it, and in room 0 only once gate 0
+	// is open; never in room 2 through a closed gate 1, nor in room 0 two rooms from an orc of room 2
+	{
+		const bool Shut[2] = {false, false};
+		const bool Open0[2] = {true, false};
+		const FVector2D In0 = FRDLevel::RoomInterior(0).GetCenter();
+		const FVector2D In2 = FRDLevel::RoomInterior(2).GetCenter();
+		TestTrue(TEXT("same room"), FRDLevel::SensesInto(1, FRDLevel::RoomInterior(1).GetCenter(), Shut));
+		TestTrue(TEXT("the doorway of gate 0 is next to room 1"), FRDLevel::SensesInto(1, FRDLevel::GateCenter(0), Open0));
+		TestTrue(TEXT("the doorway of gate 1 is next to room 1"), FRDLevel::SensesInto(1, FRDLevel::GateCenter(1), Shut));
+		TestFalse(TEXT("room 0 through a shut gate"), FRDLevel::SensesInto(1, In0, Shut));
+		TestTrue(TEXT("room 0 through open gate 0"), FRDLevel::SensesInto(1, In0, Open0));
+		TestFalse(TEXT("room 2 through shut gate 1"), FRDLevel::SensesInto(1, In2, Open0));
+		const bool BothOpen[2] = {true, true};
+		TestFalse(TEXT("two rooms away"), FRDLevel::SensesInto(2, In0, BothOpen));
+		TestFalse(TEXT("gate 0's doorway is not next to room 2"), FRDLevel::SensesInto(2, FRDLevel::GateCenter(0), BothOpen));
+	}
 	const FBox Nav = FRDLevel::NavBounds();
 	TestTrue(TEXT("nav bounds cover the far wall"), Nav.Max.X > FRDLevel::TileToWorld(30, 0).X);
 

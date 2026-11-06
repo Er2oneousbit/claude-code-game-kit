@@ -20,8 +20,10 @@ tunables) and from `Config/DefaultEngine.ini`.
 ## Consequences
 - Good: sight respects the same box colliders that block bolts and walking; bolts make real noise
   (`UAISense_Hearing::ReportNoiseEvent`); opening a gate updates the NavMesh (`UpdateComponentInNavOctree`).
-- Bad / costs: perception only counts inside the orc's own room (a rule in `ARDOrc`), so hearing does not wake the next
-  room through a wall; the NavMesh builds a moment after the map loads (the boot smoke test waits for it).
+- Bad / costs: perception only counts inside the orc's own room, a doorway next to it, or the room next door once the
+  gate between them is open (`FRDLevel::SensesInto`, used by `ARDOrc`): hearing does not wake the next room through a
+  wall or a shut gate. Until 2026-11-05 it was the own room only, so a mage in the doorway could pull a room's
+  sleeping orcs one at a time (#140). The NavMesh builds a moment after the map loads (the boot smoke test waits for it).
 - The NavMesh builds its tiles on worker threads, in real time, which is not deterministic: replays under `-fixedfps`
   finish every pending tile before the actors of a frame tick (`ARDGameMode::FinishNavBuild`), and nothing that moves
   during a delve may affect navigation (the bolt does not; `docs/TROUBLESHOOTING.md`, #8). Path following and the

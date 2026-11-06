@@ -12,6 +12,7 @@
 // Updated : 2026-10-26 review fixes: being hurt wakes the orc even when the mage is outside its room (a bolt
 //           through an open gate could kill a sleeping orc that never woke); the attack clip is timed so its
 //           contact frame lands with the damage (the hit used to land on the clip's first frame)
+// Updated : 2026-11-05 (issue #140): an open gate joins two rooms for sight and hearing (GameMode::OrcSenses)
 // Updated : 2026-11-03 (issue #149): the brain hears whether the mage is alive, so orcs stand down when it falls;
 //           a hunting orc plays walk only while it moves (it walked in place when blocked or with the mage down)
 // ---------------------------------------------------------------------------
@@ -83,7 +84,9 @@ void ARDOrc::Tick(float DeltaSeconds)
 		return;
 	}
 	const bool bWasDead = Brain->GetState() == ERDOrcState::Dead;
-	const bool bMageHere = Mage->IsAlive() && FRDLevel::RoomOf(Mage->Ground()) == Room;
+	// #140: the mage counts as here in this room, in a doorway next to it, or next door through an open gate.
+	// Same-room only let a mage in the doorway pull a room's sleeping orcs one at a time: only the one hit woke
+	const bool bMageHere = Mage->IsAlive() && Game->OrcSenses(Room, Mage->Ground());
 	const float Dist = FVector2D::Distance(Ground(), Mage->Ground());
 	// The room gate is for sight and hearing only: damage always wakes the orc, wherever the shooter stands
 	const bool bSenses = (bSensedThisTick && bMageHere) || bHurtThisTick;

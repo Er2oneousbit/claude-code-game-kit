@@ -19,8 +19,9 @@ Not yet played by a human.
   every pending NavMesh tile before the actors tick (`ARDGameMode::FinishNavBuild`), and an orc's movement ticks after
   its path following (it braked for a frame on a random frame). `-tracedelve` logs one line per
   frame; `tools/unreal/replay_check.py` runs a seed both ways and diffs them. Two `smoke` runs now print the same 16
-  delves. The deterministic pair measures weaver 61, masher 52, clears 2/8 against 0/8: one under both thresholds, so
-  `RuneDelve.Smoke.Pair` fails until a retune (#7)
+  delves. On its own this fix left the pair one under both thresholds (weaver 61, masher 52, clears 2/8); together
+  with #140 (an open gate joins two rooms for sight and hearing, so a doorway shot wakes the whole room) the pair
+  measures weaver 73, masher 47 of 80, clears 6/8 against 0/8 and passes
 
 ## Current task
 - None. Next decision is the user's: playtest by hand.
@@ -32,9 +33,7 @@ Not yet played by a human.
 - 
 
 ## Known broken or flaky
-- Balance under its limit: with the delves deterministic (#8) the weaver gets 61 of 80 against the masher's 52 and clears
-  2/8 against 0/8, one point under both pillar thresholds, so `RuneDelve.Smoke.Pair` fails and says so (`[test] pair:
-  margin ...` reads -1 and -1). The thresholds stay; retuning the ward waits for a human playtest (#7).
+- Nothing known. The ward window (0.45 s) is still tuned by bots only: is it fair by eye? A human playtest decides (#7).
 
 ## Commands that matter right now
 ```

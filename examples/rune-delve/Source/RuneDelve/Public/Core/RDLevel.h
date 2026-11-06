@@ -57,6 +57,10 @@ struct RUNEDELVE_API FRDLevel
 	static int32 RoomOf(const FVector2D& P);
 	/** The gate opening (0 or 1) that contains P, or -1. Gate G joins room G and room G + 1. */
 	static int32 GateOf(const FVector2D& P);
+	/** True when an orc of room OrcRoom can sense something at P: P is in that room, in a doorway next to it, or in
+	 *  the room next door with the gate between them open (bGateOpen[G] for gates 0 and 1). An open gate is not a
+	 *  wall: a bolt fired from the doorway wakes the room it is fired into, not only the orc it hits (#140). */
+	static bool SensesInto(int32 OrcRoom, const FVector2D& P, const bool bGateOpen[RoomCount - 1]);
 	/** Floor area of room R in cm (tile edges, not centres). */
 	static FBox2D RoomInterior(int32 R);
 	/** Centre of gate G (between room G and G + 1). */

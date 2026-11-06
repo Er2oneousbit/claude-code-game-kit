@@ -89,10 +89,10 @@
   tile a frame started is finished before the first actor of that frame paths on it. `ARDOrcController::OnPossess`
   makes the orc's movement component tick after its path following (`AddTickPrerequisiteComponent`), so the move
   request always lands before the move that uses it. Side effect worth knowing: the
-  delves changed (no bolt holes for the orcs to path around, no random brakes), and the deterministic pair measures
-  weaver 61, masher 52 of 80, clears 2/8 against 0/8 (was 65/55 and 3/8): one point under both pillar thresholds, so
-  `RuneDelve.Smoke.Pair` fails (margin -1 and -1) until the ward is retuned from a human playtest (#7). The thresholds
-  are the pillar, not the measurement, and stay as they are
+  delves changed (no bolt holes for the orcs to path around, no random brakes). Alone, this fix measured weaver 61,
+  masher 52 of 80, clears 2/8 against 0/8 (was 65/55 and 3/8), one point under both pillar thresholds; with #140 (an
+  open gate joins two rooms for perception) the pair measures weaver 73, masher 47, clears 6/8 against 0/8 and passes.
+  The thresholds are the pillar, not the measurement, and stayed as they are
 - How to verify: `python tools/unreal/replay_check.py --seed 6` (and `--seed 4`, `--bot masher`) runs the seed
   rendered and under `-nullrhi` and diffs the two `[trace]` streams; `[ OK ] ... identical`. Before the fix it reported
   frame 5 for seed 6. Two `python tools/dev.py smoke --filter Pair` runs in a row print the same 16 `[test]` lines

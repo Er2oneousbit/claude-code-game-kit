@@ -254,6 +254,16 @@ void ARDGameMode::ShowToast(const FString& Text)
 	ToastLeft = ToastSeconds;
 }
 
+bool ARDGameMode::OrcSenses(int32 OrcRoom, const FVector2D& P) const
+{
+	bool bOpen[FRDLevel::RoomCount - 1];
+	for (int32 G = 0; G < FRDLevel::RoomCount - 1; ++G)
+	{
+		bOpen[G] = Dungeon && Dungeon->IsGateOpen(G);
+	}
+	return FRDLevel::SensesInto(OrcRoom, P, bOpen);
+}
+
 FRDBotSnapshot ARDGameMode::BotSnapshot() const
 {
 	FRDBotSnapshot S;

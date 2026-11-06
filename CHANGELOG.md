@@ -3,20 +3,6 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## 0.13.2 (unreleased): Rune Delve replays match with and without a renderer
-- Rune Delve (Unreal): a bot delve under `-fixedfps` now plays the same with a renderer and under `-nullrhi` (#8). The
-  runtime NavMesh builds its tiles on worker threads and the engine picks the finished ones up on whichever frame they
-  are done in, real time, while the orcs already path on it (the first differing frame was frame 5); the flying bolt
-  also counted for navigation, so it rebuilt its tile every frame it flew. Fix: the bolt is off the NavMesh, and under
-  `-fixedfps` the game mode finishes every pending tile right after the navigation system ticks and before any actor
-  does (`ARDGameMode::FinishNavBuild`); and an orc's movement component ticks after its path following (the engine
-  orders neither, so now and then the movement ticked first, braked for one frame without a request, and the delve
-  played out differently). New: `-tracedelve` logs one line per frame (positions, health, orc states)
-  and `tools/unreal/replay_check.py` runs a seed rendered and under `-nullrhi` and reports the first frame that
-  differs. The delves changed (no bolt holes, no random brakes), and the deterministic pair measures weaver 61, masher
-  52 of 80 and clears 2/8 against 0/8 (was 65/55 and 3/8): one point under both pillar thresholds, so
-  `RuneDelve.Smoke.Pair` fails until the ward is retuned from a human playtest (#7). The thresholds are not loosened.
-
 ## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig`, `tools/token_audit.py`, `tools/fetch_asset.py`, the scaffolder, the paid PixelLab and ElevenLabs clients, `tools/publish_check.py`, the SessionStart hook, `tools/second_opinion.py` and the Wavesmith DAW round trip from second-model reviews, and four older tool bugs
 Kimi K3.1 Pro reviews of 0.13.0 (`tools/second_opinion.py`), each finding checked against the code; one more was
 found by the real run that verified the rig fixes.
@@ -27,6 +13,21 @@ found by the real run that verified the rig fixes.
   `setup --check` reads ComfyUI's V3 loader lists (`["COMBO", {"options": ...}]`) through one
   `comfy_local.loader_options`, shared with Bozzetto (#197). `comfy_local.py` strips EXIF and XMP from WebP and
   JPEG outputs as it does from uploads (ComfyUI's WebP node writes the workflow there) (#198).
+- Rune Delve (Unreal): a bot delve under `-fixedfps` now plays the same with a renderer and under `-nullrhi` (#8). The
+  runtime NavMesh builds its tiles on worker threads and the engine picks the finished ones up on whichever frame they
+  are done in, real time, while the orcs already path on it (the first differing frame was frame 5); the flying bolt
+  also counted for navigation, so it rebuilt its tile every frame it flew. Fix: the bolt is off the NavMesh, and under
+  `-fixedfps` the game mode finishes every pending tile right after the navigation system ticks and before any actor
+  does (`ARDGameMode::FinishNavBuild`); and an orc's movement component ticks after its path following (the engine
+  orders neither, so now and then the movement ticked first, braked for one frame without a request, and the delve
+  played out differently). New: `-tracedelve` logs one line per frame (positions, health, orc states)
+  and `tools/unreal/replay_check.py` runs a seed rendered and under `-nullrhi` and reports the first frame that
+  differs. Found by a Fable 5.1 agent; checked here on weaver seed 6 and masher seed 4 (identical traces). The delves
+  changed (no bolt holes, no random brakes): alone, the pair fell one under both pillar thresholds (weaver 61, masher
+  52, clears 2/8). With #140, an open gate now joins two rooms for sight and hearing (`FRDLevel::SensesInto`): a mage
+  in the doorway used to pull a room's sleeping orcs one at a time, since only the orc a bolt hit woke; a core test and
+  a regression stage (every room 1 orc awake 10 frames after a doorway shot) pin it. Together the pair measures weaver
+  73, masher 47 of 80, clears 6/8 against 0/8 and passes (margins 16 and 3); the thresholds are unchanged.
 - Scrap Tanks example: RETREAT is now documented as the heavy's alone (the README, GDD and HANDOFF said every raider
   could retreat, but a scout is at 0.375 hp after one player shell and dies to the next). Every tuning that let scouts
   retreat broke the scenario pair (retreat line 0.4: cover 28/40, charging 25/40; 60 hp scouts: 4/40 and 4/40; 15

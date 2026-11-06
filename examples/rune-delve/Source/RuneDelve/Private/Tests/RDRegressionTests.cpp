@@ -51,6 +51,7 @@ namespace
 	constexpr int32 RegressionSeed = 7;
 	constexpr double WallTimeoutSeconds = 300.0;   // real time for the whole session
 	constexpr int32 StageTimeoutFrames = 900;      // 15 s of game time for any one stage
+	constexpr int32 RoomWakeFrames = 10;           // frames after the doorway hit by which the whole room is awake
 	constexpr float FrameSeconds = 1.f / 60.f;
 	constexpr float DashToleranceCm = 2.f;
 	constexpr float SwingToleranceSeconds = 2.5f * FrameSeconds;   // the test reads the clip a frame after the hit
@@ -388,7 +389,8 @@ bool FRDRegressionSmoke::RunTest(const FString&)
 			S->Target = OrcNear(Game, FRDLevel::TileToWorld(15, 0));
 			S->Go(ERDRegStage::Doorway, Frame);
 			return false;
-		case ERDRegStage::Doorway:   // shoot a sleeping room 1 grunt from room 0: it must wake and come
+		case ERDRegStage::Doorway:   // shoot a sleeping room 1 grunt from room 0: it must wake and come, and the
+		                             // bolt's noise through the open gate wakes the rest of room 1 too (#140)
 		{
 			ARDOrc* O = S->Target.Get();
 			if (!T.TestNotNull(TEXT("doorway: the grunt on tile (15,0)"), O))
@@ -416,6 +418,17 @@ bool FRDRegressionSmoke::RunTest(const FString&)
 			if (S->HitFrame >= 0 && S->WakeFrame < 0 && O->GetState() != ERDOrcState::Sleep)
 			{
 				S->WakeFrame = InStage;
+			}
+			if (S->HitFrame >= 0 && InStage == S->HitFrame + RoomWakeFrames)
+			{
+				// #140: only the orc the bolt hit used to wake, so a room could be pulled one orc at a time
+				int32 Asleep = 0;
+				for (const TObjectPtr<ARDOrc>& Entry : Game.GetOrcs())
+				{
+					const ARDOrc* Other = Entry.Get();
+					Asleep += Other && Other->IsAlive() && Other->GetRoom() == 1 && Other->GetState() == ERDOrcState::Sleep;
+				}
+				T.TestEqual(TEXT("doorway: every room 1 orc wakes to the bolt fired through the open gate"), Asleep, 0);
 			}
 			const float Moved = FVector2D::Distance(S->TargetStart, O->Ground());
 			if (S->WakeFrame >= 0 && Moved >= WakeMoveCm)
