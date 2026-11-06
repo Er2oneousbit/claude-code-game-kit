@@ -3,6 +3,23 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## Unreleased: cloud deploy with OpenTofu (#252)
+- **`dev.py ship`** puts a game online on AWS, Azure, Google Cloud, Linode (Akamai) or DigitalOcean with OpenTofu:
+  `--kind static` publishes a web build over HTTPS (S3 + CloudFront, an Azure storage static website, Cloud Storage,
+  Linode Object Storage, Spaces + CDN), `--kind container` runs one public image behind HTTPS (Lightsail, Container
+  Apps, Cloud Run, a Linode VM with Caddy and a firewall, App Platform). Every engine's `dev.py ship` forwards to
+  `tools/cloud/ship.py`; web, web-3d, Godot and RPG Maker MZ add their web build as the site.
+- Steps: `--check` (write and validate, offline, no login), `--plan` (what it would make), `--apply --yes` (exactly
+  that plan, once; refused if the plan file or the site changed), `--destroy --yes` (and a check that the state is
+  empty after). Guardrails: no credential in any file (each provider's own login), a site with secret files or
+  tokens is refused, HTTPS only and no SSH, a budget alert on AWS, Azure and GCP (`--budget`, `--alert-email`; a
+  warning on Linode and DigitalOcean, whose APIs have none), the state git-ignored in `deploy/`, `game-kit=<slug>`
+  tags, and ask rules for `dev.py *ship*`, `tools/cloud/ship.py` and `tofu` (with PowerShell twins).
+- **Offline only:** all ten modules and every generated deployment pass `tofu validate` and `tofu fmt -check`
+  (OpenTofu 1.13.2), and the steps are tested with a stand-in. Nothing has been applied to a real account; each
+  provider stays (verify) until its first live run. SOP-06 "Putting it online" and `tools/cloud/README.md` (with a
+  least-privilege login per target, unchecked) document it.
+
 ## 0.14.0 (2026-11-06): shaders in all nine engines, the C++ overlay on SDL3, and fixes from second-model reviews
 **Cloud deploy is not in this release.** The OpenTofu modules and `dev.py ship` (#252) were planned for 0.14.0, but
 OpenTofu was not installed on the build machine, so they move to a later release; only the guardrail that needs no

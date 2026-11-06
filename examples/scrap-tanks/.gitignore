@@ -79,3 +79,6 @@ captures/
 *.rpp.bak
 *.reapeaks
 assets_src/daw/*/render/
+
+# ---- Claude Code Game Kit 0.14.0: rules added by --upgrade ----
+/deploy/

@@ -1368,6 +1368,63 @@ class GodotShaderWindow(TempRoot):
         self.assertEqual(self.shader_pass("", gen=(2, "[error] malformed"))[0], 2)
 
 
+# ---- #252: dev.py ship forwards to tools/cloud/ship.py --------------------------------
+class ShipCommand(TempRoot):
+    """Every engine's `dev.py ship ...` hands its arguments to tools/cloud/ship.py untouched (its own --target, --plan
+    would trip dev.py's parser), adds the engine's web build as --site for a static site, and needs no engine."""
+    WEB_BUILDS = {"web": "dist", "web-3d": "dist", "godot": "build/web", "rpgmaker-mz": "build/web"}
+
+    def ship(self, engine, *argv):
+        dev = load(engine)
+        dev.ROOT = self.root
+        tool = self.root / "tools" / "cloud" / "ship.py"
+        tool.parent.mkdir(parents=True, exist_ok=True)
+        tool.write_text("# stand-in\n", encoding="utf-8")
+        calls = []
+        dev.subprocess.call, saved = (lambda cmd, cwd=None: calls.append([str(c) for c in cmd]) or 0), dev.subprocess.call
+        for name in ("find_godot", "find_love"):                 # ship must not need the engine
+            if hasattr(dev, name):
+                setattr(dev, name, lambda *a, **k: None)
+        try:
+            rc, text = quiet(dev.main, list(argv))
+        finally:
+            dev.subprocess.call = saved
+        return rc, text, calls
+
+    def test_every_engine_forwards_ship(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                rc, text, calls = self.ship(engine, "ship", "--target", "aws", "--kind", "container", "--plan",
+                                            "--image", "me/server:1", "--port", "8080")
+                self.assertEqual(rc, 0, text)
+                self.assertEqual(len(calls), 1, text)
+                self.assertTrue(calls[0][1].endswith("ship.py"))
+                self.assertEqual(calls[0][2:], ["--target", "aws", "--kind", "container", "--plan", "--image",
+                                                "me/server:1", "--port", "8080"])
+
+    def test_a_static_site_defaults_to_the_engines_web_build(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                rc, text, calls = self.ship(engine, "--debug", "ship", "--target", "do", "--kind", "static", "--plan")
+                if engine in self.WEB_BUILDS:
+                    self.assertEqual(rc, 0, text)
+                    self.assertEqual(calls[0][-2:], ["--site", str(self.root / self.WEB_BUILDS[engine])])
+                else:
+                    self.assertEqual(rc, 2, text)                 # no web build of its own: --site is required
+                    self.assertIn("pass --site", text)
+                    self.assertEqual(calls, [])
+                rc, text, calls = self.ship(engine, "ship", "--target", "do", "--kind", "static", "--plan",
+                                            "--site", "my/site")
+                self.assertEqual(calls[0][-2:], ["--site", "my/site"])   # an explicit --site wins
+
+    def test_ship_is_not_taken_from_another_commands_value(self):
+        dev = load("cpp-sdl2")
+        parser = dev.build_parser()
+        self.assertEqual(dev.split_ship(parser, ["smoke", "--until", "ship"]), (["smoke", "--until", "ship"], []))
+        self.assertEqual(dev.split_ship(parser, ["--preset", "release", "ship", "--plan"]),
+                         (["--preset", "release", "ship"], ["--plan"]))
+
+
 if __name__ == "__main__":
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):

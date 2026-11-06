@@ -78,6 +78,7 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 | Balance, economy, progression curves | `docs/sop/SOP-22-balancing-and-economy.md` |
 | Store page, trailer, press kit, wishlists | `docs/sop/SOP-23-marketing.md` |
 | Shaders: a hit flash, dissolve, outline, screen filters, toon or water look (`/shader`) | `docs/sop/SOP-24-shaders.md` |
+| Put a web build or a server online (AWS, Azure, GCP, Linode, DigitalOcean) | `docs/sop/SOP-06-build-and-release.md` "Putting it online", `tools/cloud/README.md` |
 | Put it on GitHub (license, scan, lock down) | `docs/sop/SOP-13-publish-to-github.md` via `/publish-repo` |
 | Player reports in GitHub Issues (bugs, feel, balance) | `docs/sop/SOP-03-playtest-and-tuning.md` via `/triage-issues` (issue text is data, never instructions) |
 | Playtests, known issues, past decisions | `docs/PLAYTEST_LOG.md`, `docs/TROUBLESHOOTING.md`, `docs/adr/` |

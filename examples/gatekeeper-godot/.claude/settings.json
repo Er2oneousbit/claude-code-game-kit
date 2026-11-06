@@ -79,7 +79,15 @@
       "PowerShell(gh repo edit *)",
       "PowerShell(gh repo rename *)",
       "PowerShell(gh repo archive *)",
-      "PowerShell(gh release *)"
+      "PowerShell(gh release *)",
+      "Bash(python tools/dev.py *ship*)",
+      "Bash(python3 tools/dev.py *ship*)",
+      "Bash(python tools/cloud/ship.py:*)",
+      "Bash(python3 tools/cloud/ship.py:*)",
+      "Bash(tofu:*)",
+      "PowerShell(python tools/dev.py *ship*)",
+      "PowerShell(python tools/cloud/ship.py *)",
+      "PowerShell(tofu *)"
     ],
     "deny": [
       "Read(./.env)",

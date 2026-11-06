@@ -33,8 +33,9 @@ examples were built and tested on one Windows 11 machine.
   and Linux, Unreal's translucent `M_Kit_*` assets and a Post Process variant, KitShaders.js inside a real RPG Maker MZ
   game, Unity HDRP, other GPUs, web exports of Godot and Bevy:
   [#260](https://github.com/Er2oneousbit/claude-code-game-kit/issues/260).
-- **Cloud deploy** (OpenTofu modules for AWS, Azure, GCP, Linode, DigitalOcean and `dev.py ship`) is not built yet:
-  moved out of 0.14.0 because OpenTofu was not installed on the build machine
+- **Cloud deploy** (`dev.py ship`, OpenTofu modules for AWS, Azure, GCP, Linode, DigitalOcean): validated offline
+  only, never applied to a real account; Linode and DigitalOcean have no budget API (set an alert by hand); the
+  least-privilege logins in `tools/cloud/README.md` are unchecked
   ([#252](https://github.com/Er2oneousbit/claude-code-game-kit/issues/252)).
 
 ### Art workflow outside Godot

@@ -53,3 +53,6 @@ scratch/
 *.reapeaks
 assets_src/daw/*/render/
 
+
+# Cloud deployments (tools/cloud/ship.py): OpenTofu state can hold generated secrets; never commit it
+/deploy/

@@ -19,6 +19,8 @@
 #             genproj  regenerate IDE project files
 #             clean    remove Intermediate/ and Binaries/ (asks first, or --yes)
 #             doctor   verify the local environment
+#             ship     put the game online (tools/cloud/ship.py): ship --target aws|azure|gcp|linode|do
+#                      --kind static|container --plan, then --apply / --destroy; ship -h for its options
 # Env     : UE_ROOT  engine install folder (contains Engine/)
 # Exit    : 0 ok, 1 task failed, 2 environment/usage problem
 # Notes   : Run against UE 5.8 on Windows (2026-10-20) with VS 2022 Build Tools:
@@ -125,6 +127,7 @@ SHADER_LOG = ROOT / "Saved" / "Logs" / "dev_shaders.log"
 SHADER_OUT = "Saved/ShaderCheck"          # smoke --shaders pictures, compared by tools/shaders/shader_ref.py
 SHADER_TIMEOUT_S = 1800                   # editor start, material compiles (a fresh shader cache is slow), draws
 SHADER_LINE = re.compile(r"LogPython: (SHADER_(?:OK|FAIL|CHECK_DONE)\b.*)$")
+SHIP_SITE = None   # the web build `ship --kind static` publishes unless --site is given (None: none)
 DEBUG = False
 
 
@@ -909,6 +912,45 @@ def cmd_doctor(args):
     return 1 if problems else 0
 
 
+
+# ---- Cloud deployments (#252) ------------------------------------------------------------
+SHIP_TOOL = "tools/cloud/ship.py"
+
+
+def split_ship(parser, argv):
+    """`dev.py [global options] ship <anything>`: what follows `ship` goes to tools/cloud/ship.py untouched (its own
+    --target, --plan ... would trip this parser). Returns (argv for this parser, the ship arguments)."""
+    takes_value = {s for a in parser._actions if a.option_strings and a.nargs != 0 for s in a.option_strings}
+    i = 0
+    while i < len(argv):
+        tok = argv[i]
+        if tok.startswith("-"):
+            i += 2 if tok in takes_value else 1
+            continue
+        return (argv[:i + 1], argv[i + 1:]) if tok == "ship" else (argv, [])
+    return argv, []
+
+
+def cmd_ship(args, *_):
+    """Put the game online with tools/cloud/ship.py; a static site defaults to this engine's web build (SHIP_SITE)."""
+    tool = ROOT / SHIP_TOOL
+    if not tool.is_file():
+        print(f"[error] {SHIP_TOOL} is missing (python scripts/new_game.py --upgrade adds it)", file=sys.stderr)
+        return 2
+    rest = list(getattr(args, "ship_args", []))
+    kind = rest[rest.index("--kind") + 1] if "--kind" in rest[:-1] else ""
+    if kind == "static" and "--site" not in rest:
+        if SHIP_SITE is None:
+            print("[error] this engine makes no web build of its own: pass --site <a web build folder>", file=sys.stderr)
+            return 2
+        rest += ["--site", str(ROOT / SHIP_SITE)]
+    try:
+        return subprocess.call([sys.executable, str(tool), *rest], cwd=ROOT)
+    except OSError as exc:
+        print(f"[error] cannot run {SHIP_TOOL}: {exc}", file=sys.stderr)
+        return 2
+
+
 def build_parser():
     ap = argparse.ArgumentParser(
         prog="dev.py",
@@ -951,6 +993,7 @@ def build_parser():
     p.add_argument("--yes", action="store_true", help="do not ask for confirmation")
     p.add_argument("--deep", action="store_true", help="also remove DerivedDataCache/ (slow to rebuild)")
     p.set_defaults(fn=cmd_clean)
+    sub.add_parser("ship", help="put the game online with OpenTofu (tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
     sub.add_parser("doctor", help="verify the local environment").set_defaults(fn=cmd_doctor)
     return ap
 
@@ -995,7 +1038,9 @@ def main(argv=None):
             pass
     parser = build_parser()
     argv = sys.argv[1:] if argv is None else list(argv)
+    argv, ship_args = split_ship(parser, argv)   # ship's own options go to tools/cloud/ship.py untouched
     args = parser.parse_args(hoist_global_options(parser, argv))
+    args.ship_args = ship_args
     DEBUG = args.debug
     try:
         return args.fn(args)

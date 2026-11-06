@@ -53,6 +53,14 @@ Rules:
 
 Publishing and store uploads (Steam, Roblox, itch) often need your own logged-in clicks. Claude can prepare builds, checklists and text, but expect to press the final buttons yourself. Key art and thumbnails come from an image generator, with Claude writing the brief.
 
+## Putting it online (a web build or a server)
+`python tools/dev.py ship --target aws|azure|gcp|linode|do --kind static|container` deploys with OpenTofu
+(`tools/cloud/README.md`): `--check` validates offline, `--plan` shows what it would make, `--apply --yes` applies
+exactly that plan, `--destroy --yes` removes everything it made. Read the plan before applying (it costs money), set
+the budget alert (`--budget`, `--alert-email`; by hand on Linode and DigitalOcean), keep the state in `deploy/` (it is
+git-ignored, and destroy needs it), and use a deploy login with only the rights the recipe needs. The recipes are
+validated offline and not yet run against a real account **(verify on the first apply)**.
+
 ## After launch (standard practice)
 - **Hotfix flow:** a crash or a save-breaking bug gets a PATCH release (versioning above) from a branch off the release
   tag, with only that fix, the same release check, then a merge back. Upload to a beta branch first (SteamPipe `SetLive`,
