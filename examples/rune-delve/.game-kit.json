@@ -1321,6 +1321,12 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1547,7 +1553,7 @@
     "tools/art/dotwork/palettes/dotwork_default_env.hex": "1fd1b45b45e589665df3952bc83b53d6260a7dbde34c4568596850002ae4e29b",
     "tools/art/dotwork/palettes/dotwork_default_env_swatch.png": "6387f86c5b6f0af2429fff53d93852559bbefcdbd75f1ba99eade61420440399",
     "tools/art/dotwork/palettes/dotwork_default_swatch.png": "593f44c0db3cf0e455e8689a7b8ff522385483811a673b633d8c4094b14011f6",
-    "tools/art/dotwork/pixelorama.py": "55c86e4c31dce5f0ed0f3242fea84a7760a42f23dfaf14a7cc7a1685ce0f86bd",
+    "tools/art/dotwork/pixelorama.py": "20f9eba38eb331e88ecbfda4337d538338d2a43bb685ccfae59f80a43c1ecaea",
     "tools/art/dotwork/pixelorama_extension/Main.gd": "f99bcedf3023e6957c840bd6b13e9c5e6762604e4fc0b6c39a60115ff1db5a0a",
     "tools/art/dotwork/pixelorama_extension/Main.tscn": "a4e365493fc73f459906b69665dac669d081d27293ca760625d005059e043d62",
     "tools/art/dotwork/pixelorama_extension/extension.json": "743e0d68686a0d938cc8bc9fde1607bbf4680f4b6fac0937cfa58e9a0f2ddfc8",
@@ -1555,7 +1561,7 @@
     "tools/art/dotwork/pose.py": "d621abf5b24223aaf80e57ac3ae79db0cca8907ee948c0c43a914157a2ac07d2",
     "tools/art/dotwork/pxclean.py": "22fd2738b998520799bab93e60191c39f1a17b7351063e8702effd1790a14575",
     "tools/art/dotwork/pxo_panel.py": "c9038c206f541790e8e753566eb84658349662c75b93c0a3e813b8a2a50373ad",
-    "tools/art/dotwork/pxo_tiles.py": "c64d39a4db323463fcc39ae25e1219396a98b1f4acc2e53bdce0e10103dcc3fe",
+    "tools/art/dotwork/pxo_tiles.py": "1819e3bb7c68a817c18a89703dfb9be869e5173266f3fa24e466d3d9e54ea925",
     "tools/art/dotwork/qa.py": "428d566b97cb64d1f30f972fcef30aacbf39430a1813afeaaf1f1b65fd4071f2",
     "tools/art/dotwork/qa_pack.py": "cccf8dd17a6541eedc6ac19215e08b34df91eaa49b8908182b225968a772e51c",
     "tools/art/dotwork/recolor.py": "f4bb889ca52be6dfc111e3be5d81dcbe002d4748438492d2e6291c2464d3ee8c",
@@ -1574,7 +1580,7 @@
     "tools/art/dotwork/tests/test_dotwork.py": "9718a0d0e352d4c0cd47f15ddbba52755a2881e23dfa99c805b945b901489295",
     "tools/art/dotwork/tests/test_fonts.py": "1f5adf0fa58566578f930d989acf38399a90e0159808aac69fbae02c0536efd0",
     "tools/art/dotwork/tests/test_lighting.py": "e6c3d72dc5de07fb5995861d55b206b84e6780174f169d7c151ed40f7f609306",
-    "tools/art/dotwork/tests/test_pixelorama.py": "58f1de7e31fb0fa77996ac9dabb6830407e006fe2d8bb1e3e79a2bde215539f4",
+    "tools/art/dotwork/tests/test_pixelorama.py": "bad83b0fb39ed19e7fd1a34e7f8d57a23c77b93761a45a6adb6a393a13fe0974",
     "tools/art/dotwork/tests/test_qapack.py": "16d299aa12c714cc6646104755f45bbd2c7bb842b1d7e29fdc234f782de57ca4",
     "tools/art/dotwork/tests/test_screens.py": "c92bdfa6cb2a60854436c45ccd87c2b0f6d7fe624fbead85769b5a6195a5dede",
     "tools/art/dotwork/tests/test_shipped.py": "e001f5aeef678e377af055ffc36c8db43d1bbbbc5d26d58936cda8b9da3d0efd",

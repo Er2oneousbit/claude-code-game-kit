@@ -18,6 +18,11 @@
   capture folders inside the project get a `.gdignore`. Godot `check <file>` resolves the file against the project
   and refuses one outside it (exit 2). Godot `build` and Unreal `build`, `package` and `genproj` stop after 4 hours
   (they had no timeout); Unity `check` names a timeout as one (#250).
+- Dotwork Pixelorama: a corrupt or crafted `.pxo` is refused with a message naming the field, not a Python
+  exception: an encrypted or unknown-compression member, a member cut short, `tags` or layer `effects` that are not
+  lists, animated opacity with list or dict keys or a list transition, a v8 `image_size` of non-numbers, a tilemap
+  cell index of infinity or NaN, tile data or terrain data of the wrong type; an unreadable terrain colour falls
+  back to Pixelorama's default (#246). The extension's exit wait (found by inspection) is #255.
 - Dotwork Pixelorama: a re-export with `--engine none` kept the tilemap's TileSet and scenes out of the files it
   wrote, so it deleted them as stale (and said "0 files changed"); they are now kept, and a deleted file counts as a
   change. A tilemap `.pxo` with a pixel layer, a frame or a tile's terrain added in Pixelorama is an edit now: kept

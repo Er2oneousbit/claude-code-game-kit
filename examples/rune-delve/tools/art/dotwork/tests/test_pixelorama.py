@@ -2864,6 +2864,124 @@ class PixeloramaLiveExam(unittest.TestCase):
             self.assertIn("GODOT_BIN", status)
 
 
+class CraftedPxoExam(unittest.TestCase):
+    """#246: corrupt or crafted .pxo content ended in a Python exception ("unexpected failure"), and one such file
+    stopped a whole build. Each case must now be a clear ToolError, or be read safely."""
+
+    def setUp(self):
+        import pixelorama
+        self.px = pixelorama
+        self.tmp = tempfile.mkdtemp(prefix="dotwork_pxocraft_")
+        self.s = make_game(self.tmp)
+        pixelorama.build(self.s.project, self.s.conf)
+        self.knight = os.path.join(self.tmp, "assets_src", "pixelorama", "characters", "knight.pxo")
+        with open(self.knight, "rb") as f:
+            self.clean = f.read()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def reset(self):
+        with open(self.knight, "wb") as f:
+            f.write(self.clean)
+
+    def no_crash(self, what, fn):
+        try:
+            fn()
+        except fcore.ToolError:
+            pass
+        except Exception as e:   # noqa: BLE001 - the point of the exam
+            self.fail(f"{what}: {type(e).__name__}: {e}")
+
+    def patched_zip(self, flags=None, method=None):
+        """knight.pxo with data.json stored first, its zip flags or compression method patched."""
+        import io
+        import struct
+        with zipfile.ZipFile(self.knight) as z:
+            data = {n: z.read(n) for n in z.namelist()}
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr(zipfile.ZipInfo("data.json"), data["data.json"])
+            for n, b in data.items():
+                if n != "data.json":
+                    z.writestr(n, b, zipfile.ZIP_DEFLATED)
+        raw = bytearray(buf.getvalue())
+        cd = raw.find(b"PK\x01\x02")
+        if flags is not None:
+            struct.pack_into("<H", raw, cd + 8, flags)
+            struct.pack_into("<H", raw, 6, flags)
+        if method is not None:
+            struct.pack_into("<H", raw, cd + 10, method)
+            struct.pack_into("<H", raw, 8, method)
+        with open(self.knight, "wb") as f:
+            f.write(raw)
+
+    def test_zip_members_that_cannot_be_read(self):
+        px = self.px
+        self.patched_zip(flags=1)                       # encrypted data.json
+        self.no_crash("encrypted read", lambda: px.read_pxo(self.knight))
+        self.no_crash("encrypted export_folder", lambda: px.export_folder(self.knight))
+        self.no_crash("encrypted build", lambda: px.build(self.s.project, self.s.conf))
+        self.reset()
+        self.patched_zip(method=99)                     # a compression zipfile does not know
+        self.no_crash("compression 99", lambda: px.read_pxo(self.knight))
+
+    def test_fields_of_the_wrong_type(self):
+        px = self.px
+        cases = [
+            ("tags = 5", lambda d, b: d.update(tags=5)),
+            ("effects = 5", lambda d, b: d["layers"][0].update(effects=5)),
+            ("trans [1] in Godot text", lambda d, b: d["layers"][0].update(
+                animated_params='Dictionary[String, Dictionary]({"opacity": {3: {"value": 0.5, "trans": [1], '
+                                '"ease": 0}}})')),
+            ("a Vector2 key", lambda d, b: d["layers"][0].update(animated_params="{Vector2(1, 2): 1}")),
+            ("a dict key", lambda d, b: d["layers"][0].update(animated_params="{{}: 1}")),
+            ("v8 image_size of text", lambda d, b: (d.update(pxo_version=8),
+                                                    d["frames"][0]["cels"][0].update(image_size=["a", "b"]))),
+            ("v8 image_size with None", lambda d, b: (d.update(pxo_version=8),
+                                                      d["frames"][0]["cels"][0].update(image_size=[None, 1]))),
+        ]
+        for what, edit in cases:
+            with self.subTest(case=what):
+                self.reset()
+                rewrite_pxo(self.knight, edit)
+                self.no_crash(what, lambda: px.read_pxo(self.knight))
+
+    def test_tilemap_fields_of_the_wrong_type(self):
+        px = self.px
+
+        def tilemap(d, b, cell=None, tile_data=None, terrain=None):
+            d["layers"].insert(0, {"name": "floor", "visible": True, "opacity": 1.0, "parent": -1, "type": 3,
+                                   "blend_mode": 0, "tileset_index": 0, "tile_shape": 0, "tile_size": "(8, 8)"})
+            ts = {"name": "f", "tile_size": "(8, 8)", "tile_amount": 2, "tile_shape": 0, "tile_data": {},
+                  "terrain_data": []}
+            if tile_data is not None:
+                ts["tile_data"] = tile_data
+            if terrain is not None:
+                ts["terrain_data"] = terrain
+            d["tilesets"] = [ts]
+            for fr in d["frames"]:
+                fr["cels"].insert(0, {"opacity": 1.0, "z_index": 0, "offset": "(0, 0)",
+                                      "cell_data": cell if cell is not None else {"(0, 0)": {"index": 1}}})
+            for fi in range(len(d["frames"])):
+                b[f"image_data/frames/{fi + 1}/layer_2"] = b.pop(f"image_data/frames/{fi + 1}/layer_1")
+                b[f"image_data/frames/{fi + 1}/layer_1"] = b"\0" * (W * H * 4)
+            for j in range(2):
+                b[f"tilesets/0/{j}"] = b"\x10" * (8 * 8 * 4)
+        cases = [
+            ("index 1e999", dict(cell={"(0, 0)": {"index": 1e999}})),
+            ("index NaN", dict(cell={"(0, 0)": {"index": float("nan")}})),
+            ("tile_data entry a list", dict(tile_data={"1": [1, 2]})),
+            ("terrain colour Color(e, e, e, 1)", dict(terrain=[{"name": "t", "color": "Color(e, e, e, 1)"}])),
+            ("terrain_data = 7", dict(terrain=7)),
+        ]
+        for what, kw in cases:
+            with self.subTest(case=what):
+                self.reset()
+                rewrite_pxo(self.knight, lambda d, b, kw=kw: tilemap(d, b, **kw))
+                self.no_crash(what, lambda: px.read_pxo(self.knight))
+
+
 if __name__ == "__main__":
     result = unittest.main(exit=False, verbosity=1).result
     sys.exit(0 if result.wasSuccessful() else 1)

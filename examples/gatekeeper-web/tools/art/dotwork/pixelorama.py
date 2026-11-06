@@ -164,7 +164,11 @@ def _vec2i(v, rel, what):
         if not m:
             _fail(rel, f"{what} {v!r} is not a pair of whole numbers")
         x, y = m.groups()
-    return int(_number(int(x), rel, what, -MAX_SIDE, MAX_SIDE)), int(_number(int(y), rel, what, -MAX_SIDE, MAX_SIDE))
+    try:
+        x, y = int(x), int(y)
+    except (TypeError, ValueError, OverflowError):
+        _fail(rel, f"{what} {v!r} is not a pair of whole numbers")   # #246: ["a", "b"] or [None, 1] crashed
+    return int(_number(x, rel, what, -MAX_SIDE, MAX_SIDE)), int(_number(y, rel, what, -MAX_SIDE, MAX_SIDE))
 
 
 # -------------------------------------------------- animated opacity (AnimatableObject.gd, Godot's Tween)
@@ -225,7 +229,10 @@ def _gvalue(text):
                     raise ValueError("the text ends early")
                 k = value(depth + 1)
                 take(":")
-                out[tuple(k) if isinstance(k, list) else k] = value(depth + 1)
+                try:
+                    out[tuple(k) if isinstance(k, list) else k] = value(depth + 1)
+                except TypeError:
+                    raise ValueError(f"{k!r} cannot be a key")   # #246: a list or dict key crashed
                 if peek()[1] == ",":
                     take()
             take("}")
@@ -261,7 +268,7 @@ def _opacity_keys(ly, rel, name):
         return {}
     try:
         params = _gvalue(text) if isinstance(text, str) else text
-    except (ValueError, RecursionError) as e:
+    except (ValueError, RecursionError, TypeError) as e:
         _fail(rel, f"layer {name}: its animated properties cannot be read ({e})")
     if not isinstance(params, dict):
         _fail(rel, f"layer {name}: its animated properties are not a dictionary")
@@ -274,7 +281,8 @@ def _opacity_keys(ly, rel, name):
             _fail(rel, f"layer {name}: opacity keyframe {fi!r} is not a frame number with its settings")
         v = _number(kf.get("value", 1.0), rel, f"layer {name} opacity keyframe {fi}")
         trans, ease = kf.get("trans", TRANS_LINEAR), kf.get("ease", EASE_IN)
-        if (trans not in EASINGS and trans != TRANS_CONSTANT) or ease not in (0, 1, 2, 3):
+        whole = all(isinstance(x, int) and not isinstance(x, bool) for x in (trans, ease))   # #246: [1] crashed
+        if not whole or (trans not in EASINGS and trans != TRANS_CONSTANT) or ease not in (0, 1, 2, 3):
             _fail(rel, f"layer {name}: opacity keyframe {fi} has transition {trans!r} and ease {ease!r}, which "
                        "Pixelorama 1.2.4 does not have")
         out[fi] = (float(v), trans, ease)
@@ -529,7 +537,7 @@ def _buffer(z, name, w, h, rel):
         _fail(rel, f"{name} holds {info.file_size} bytes, not the {w * h * 4} of a {w}x{h} RGBA image")
     try:
         data = z.read(name)
-    except (zipfile.BadZipFile, zlib.error, OSError) as e:
+    except (zipfile.BadZipFile, zlib.error, OSError, RuntimeError, NotImplementedError, EOFError) as e:   # encrypted, unknown compression, cut short (#246)
         _fail(rel, f"{name} cannot be read ({e})")
     if len(data) != w * h * 4:
         _fail(rel, f"{name} unpacked to {len(data)} bytes, not {w * h * 4}")
@@ -757,7 +765,8 @@ def open_project(path):
             _fail(rel, f"data.json is {info.file_size} bytes (over {MAX_JSON})")
         try:
             d = json.loads(z.read("data.json").decode("utf-8"))
-        except (ValueError, UnicodeDecodeError, RecursionError, zipfile.BadZipFile, zlib.error) as e:
+        except (ValueError, UnicodeDecodeError, RecursionError, zipfile.BadZipFile, zlib.error, RuntimeError,
+                NotImplementedError, EOFError) as e:   # #246: an encrypted data.json crashed
             _fail(rel, f"data.json cannot be read ({e})")
         if not isinstance(d, dict):
             _fail(rel, "data.json is not an object")
@@ -853,7 +862,10 @@ def read_pxo(path):
             if isinstance(b, bool) or not isinstance(b, int) or not (
                     BLEND_NORMAL <= b <= BLEND_LAST or (kind == LAYER_GROUP and b == BLEND_PASS)):
                 _fail(rel, f"layer {name_of(i)} has blend mode {b!r}, which Pixelorama 1.2.4 does not have")
-            if any(isinstance(e, dict) and e.get("enabled", True) for e in ly.get("effects") or []):
+            effects = ly.get("effects") or []
+            if not isinstance(effects, list):
+                _fail(rel, f"layer {name_of(i)}: its effects are not a list")   # #246
+            if any(isinstance(e, dict) and e.get("enabled", True) for e in effects):
                 _fail(rel, f"layer {name_of(i)} has layer effects: they are shaders Pixelorama runs only with a "
                            "window, on the GPU (its own command-line export leaves them out), and Dotwork cannot run "
                            "them; press Apply on each in the layer's effects, or turn them off")
@@ -1002,6 +1014,8 @@ def read_pxo(path):
             _fail(rel, f"its visible cels would unpack to {_mb(unpacked)} (over {_mb(MAX_UNPACKED)}): merge or hide "
                        "layers, or split the project")
         tags = []
+        if not isinstance(d.get("tags") or [], list):
+            _fail(rel, "its tags are not a list")   # #246: "tags": 5 crashed
         if len(d.get("tags") or []) > MAX_FRAMES:
             _fail(rel, f"{len(d['tags'])} tags (over {MAX_FRAMES})")
         for t in d.get("tags") or []:
@@ -1237,7 +1251,8 @@ def _data(z):
         if z.getinfo("data.json").file_size > MAX_JSON:
             return None
         d = json.loads(z.read("data.json").decode("utf-8"))
-    except (KeyError, ValueError, UnicodeDecodeError, RecursionError, zipfile.BadZipFile, zlib.error):
+    except (KeyError, ValueError, UnicodeDecodeError, RecursionError, zipfile.BadZipFile, zlib.error, RuntimeError,
+            NotImplementedError, EOFError, OSError):
         return None
     return d if isinstance(d, dict) else None
 

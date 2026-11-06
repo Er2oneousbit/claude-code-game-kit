@@ -30,6 +30,7 @@ import glob
 import hashlib
 import io
 import json
+import math
 import os
 import re
 import struct
@@ -97,6 +98,8 @@ def tilesets(z, d, rel):
         for j in range(ts.pop("amount")):
             ts["tiles"].append(px._buffer(z, f"tilesets/{i}/{j}", tw, th, rel))
             td = data.get(str(j)) or {}
+            if not isinstance(td, dict):
+                px._fail(rel, f"tileset {i} tile {j}: its data is not an object")   # #246
             peers = td.get("terrain_peering_bits") or [-1] * 16
             if not isinstance(peers, list) or len(peers) > 16:
                 px._fail(rel, f"tileset {i} tile {j}: terrain_peering_bits is not a list of 16")
@@ -109,6 +112,8 @@ def tilesets(z, d, rel):
                 "peers": [int(px._number(b, rel, f"tileset {i} tile {j} peering bit", -1, 255)) for b in peers]
                 + [-1] * (16 - len(peers))})
         terrains = []
+        if not isinstance(t.get("terrain_data") or [], list):
+            px._fail(rel, f"tileset {i}: terrain_data is not a list")   # #246
         for k, tr in enumerate(t.get("terrain_data") or []):
             if not isinstance(tr, dict):
                 px._fail(rel, f"tileset {i}: terrain {k} is not an object")
@@ -124,7 +129,13 @@ def _colour(text):
                      str(text or ""))
     if not m:
         return (128, 88, 64)
-    return tuple(int(round(min(max(float(v), 0.0), 1.0) * 255)) for v in m.groups())
+    try:
+        vals = [float(v) for v in m.groups()]
+    except ValueError:                      # #246: "Color(e, e, e, 1)" passed the pattern
+        return (128, 88, 64)
+    if not all(math.isfinite(v) for v in vals):
+        return (128, 88, 64)
+    return tuple(int(round(min(max(v, 0.0), 1.0) * 255)) for v in vals)
 
 
 def layer_tileset(ly, sets, rel, name):
@@ -158,7 +169,8 @@ def cells_of(cel, rel, where):
         if not isinstance(v, dict):
             px._fail(rel, f"{where}: cell {k} is not an object")
         idx = v.get("index", 0)
-        if isinstance(idx, bool) or not isinstance(idx, (int, float)) or idx != int(idx) or idx < 0:
+        if isinstance(idx, bool) or not isinstance(idx, (int, float)) or not math.isfinite(idx) or idx != int(idx) \
+                or idx < 0:   # #246: 1e999 and NaN crashed
             px._fail(rel, f"{where}: cell {k} has tile {idx!r}")
         if int(idx) == 0:
             continue
