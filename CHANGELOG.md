@@ -3,6 +3,12 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.13.2 (unreleased): fixes from Fable reviews of the Pixelorama lane, the engine wrappers and the shipped tools
+- Dotwork Pixelorama: a re-export with `--engine none` kept the tilemap's TileSet and scenes out of the files it
+  wrote, so it deleted them as stale (and said "0 files changed"); they are now kept, and a deleted file counts as a
+  change. A tilemap `.pxo` with a pixel layer, a frame or a tile's terrain added in Pixelorama is an edit now: kept
+  when the game's map changes, not rebuilt without them (the build record hashes the tile data) (#245).
+
 ## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig`, `tools/token_audit.py`, `tools/fetch_asset.py`, the scaffolder, the paid PixelLab and ElevenLabs clients, `tools/publish_check.py`, the SessionStart hook, `tools/second_opinion.py` and the Wavesmith DAW round trip from second-model reviews, and four older tool bugs
 Kimi K3.1 Pro reviews of 0.13.0 (`tools/second_opinion.py`), each finding checked against the code; one more was
 found by the real run that verified the rig fixes.

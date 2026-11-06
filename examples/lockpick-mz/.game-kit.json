@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.13.1",
+  "kit_version": "0.13.2",
   "author": "the user",
   "profile": {
     "author": "",
@@ -1010,6 +1010,12 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1225,7 +1231,7 @@
     "tools/art/dotwork/pose.py": "d621abf5b24223aaf80e57ac3ae79db0cca8907ee948c0c43a914157a2ac07d2",
     "tools/art/dotwork/pxclean.py": "22fd2738b998520799bab93e60191c39f1a17b7351063e8702effd1790a14575",
     "tools/art/dotwork/pxo_panel.py": "c9038c206f541790e8e753566eb84658349662c75b93c0a3e813b8a2a50373ad",
-    "tools/art/dotwork/pxo_tiles.py": "9ff51c629e08b604412f7f1b7d6e6ee977e1b82c90d21c12a682be84c17b3976",
+    "tools/art/dotwork/pxo_tiles.py": "c64d39a4db323463fcc39ae25e1219396a98b1f4acc2e53bdce0e10103dcc3fe",
     "tools/art/dotwork/qa.py": "428d566b97cb64d1f30f972fcef30aacbf39430a1813afeaaf1f1b65fd4071f2",
     "tools/art/dotwork/qa_pack.py": "cccf8dd17a6541eedc6ac19215e08b34df91eaa49b8908182b225968a772e51c",
     "tools/art/dotwork/recolor.py": "f4bb889ca52be6dfc111e3be5d81dcbe002d4748438492d2e6291c2464d3ee8c",
@@ -1244,7 +1250,7 @@
     "tools/art/dotwork/tests/test_dotwork.py": "c8f9b226f2eefbf4b706a0322d661b437b41a417de0ac12b2b0875113c87b16d",
     "tools/art/dotwork/tests/test_fonts.py": "1f5adf0fa58566578f930d989acf38399a90e0159808aac69fbae02c0536efd0",
     "tools/art/dotwork/tests/test_lighting.py": "e6c3d72dc5de07fb5995861d55b206b84e6780174f169d7c151ed40f7f609306",
-    "tools/art/dotwork/tests/test_pixelorama.py": "0f2ff65fb46cad538d1674cd4369a087283385c977f45a83cb7827c7a8f367df",
+    "tools/art/dotwork/tests/test_pixelorama.py": "58f1de7e31fb0fa77996ac9dabb6830407e006fe2d8bb1e3e79a2bde215539f4",
     "tools/art/dotwork/tests/test_qapack.py": "16d299aa12c714cc6646104755f45bbd2c7bb842b1d7e29fdc234f782de57ca4",
     "tools/art/dotwork/tests/test_screens.py": "c92bdfa6cb2a60854436c45ccd87c2b0f6d7fe624fbead85769b5a6195a5dede",
     "tools/art/dotwork/tests/test_shipped.py": "e001f5aeef678e377af055ffc36c8db43d1bbbbc5d26d58936cda8b9da3d0efd",

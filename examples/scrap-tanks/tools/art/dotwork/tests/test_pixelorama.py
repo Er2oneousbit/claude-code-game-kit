@@ -1330,6 +1330,58 @@ class TilemapExam(unittest.TestCase):
             self.pt.decode_cells("PackedByteArray(1, 0)")
 
 
+class EngineNoneTilemapExam(unittest.TestCase):
+    """#245: a re-export with --engine none deleted the TileSet and scenes a Godot re-export had written (as stale),
+    and said "0 files changed"."""
+
+    def test_engine_none_keeps_the_godot_files(self):
+        import godot
+        import pixelorama
+        tmp = tempfile.mkdtemp(prefix="dotwork_pxonone_")
+        enabled = godot.ENABLED
+        try:
+            s = make_game(tmp)
+            ts, layers = own_map(np.random.default_rng(7))
+            write_own(tmp, "meadow", ts, layers)
+            out = os.path.join(tmp, "assets", "art", "tilemaps", "meadow")
+            with stub_verify():
+                pixelorama.reexport(s.project, s.conf)
+            before = sorted(os.listdir(out))
+            self.assertIn("meadow_tileset.tres", before)
+            self.assertIn("meadow.tscn", before)
+            godot.ENABLED = False
+            s.conf["engine"] = s.conf["fixed"]["engine"] = "none"
+            pixelorama.reexport(s.project, s.conf)
+            self.assertEqual(sorted(os.listdir(out)), before)
+        finally:
+            godot.ENABLED = enabled
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _add_pixel_layer(d, b):
+    w, h = d["size_x"], d["size_y"]
+    d["layers"].append({"name": "notes", "visible": True, "locked": False, "blend_mode": 0, "clipping_mask": False,
+                        "opacity": 1.0, "parent": -1, "type": 0, "new_cels_linked": False})
+    for fi, fr in enumerate(d["frames"]):
+        fr["cels"].append({"opacity": 1.0, "z_index": 0})
+        a = np.zeros((h, w, 4), np.uint8)
+        a[0:4, 0:4] = (255, 0, 0, 255)
+        b[f"image_data/frames/{fi + 1}/layer_{len(d['layers'])}"] = a.tobytes()
+
+
+def _add_frame(d, b):
+    fr = json.loads(json.dumps(d["frames"][0]))
+    fr["cels"][0]["cell_data"] = {"(0, 0)": {"index": 2}}
+    d["frames"].append(fr)
+    n = len(d["frames"])
+    for li in range(len(d["layers"])):
+        b[f"image_data/frames/{n}/layer_{li + 1}"] = b[f"image_data/frames/1/layer_{li + 1}"]
+
+
+def _set_terrain(d, b):
+    d["tilesets"][0]["tile_data"]["1"]["terrain_center_bit"] = 1
+
+
 class DotworkTilemapExam(unittest.TestCase):
     """A game's own map and TileSets into Pixelorama tilemap projects (dotwork.py pixelorama) and back: edited tiles
     land in their atlas slots, edited cells in the map scene; the TileSet is never rewritten."""
@@ -1476,6 +1528,35 @@ class DotworkTilemapExam(unittest.TestCase):
         with self.assertRaises(fcore.ToolError):
             self.reexport()
         self.assertEqual(changed(before, snapshot(self.tmp)), [])
+
+    def test_added_layers_frames_and_terrain_are_edits(self):
+        """#245: a pixel layer, a frame or a tile's terrain added in Pixelorama was not an edit, so the next build
+        after the game's map changed rebuilt the project without them and without a .bak."""
+        import pxo_tiles
+        for edit in (_add_pixel_layer, _add_frame, _set_terrain):
+            with self.subTest(edit=edit.__name__):
+                self.build()
+                rewrite_pxo(self.town, edit)
+                with open(self.town, "rb") as f:
+                    edited = f.read()
+                self.assertTrue(pxo_tiles.polished(self.town))
+                with open(self.t["scene"], encoding="utf-8") as f:
+                    text = f.read()
+                _, layers = pxo_tiles.read_map("res://assets/maps/town.tscn",
+                                               "res://assets/art/tiles/town/ground_town_tileset.tres")
+                base = next(L for L in layers if L["name"] == "Base")
+                lines = text.split("\n")
+                lines[base["line"]] = "tile_map_data = " + pxo_tiles.encode_cells(base["cells"] + [(6, 0, 0, 1, 0, 0)],
+                                                                                   True)
+                with open(self.t["scene"], "w", encoding="utf-8", newline="") as f:
+                    f.write("\n".join(lines))
+                done = self.build()
+                self.assertIn(self.town, done["kept"])
+                with open(self.town, "rb") as f:
+                    self.assertEqual(f.read(), edited)
+                with open(self.t["scene"], "w", encoding="utf-8", newline="") as f:
+                    f.write(text)
+                os.remove(self.town)
 
     def test_a_project_without_edits_follows_the_game(self):
         # the ground lane ran again (new grass): an untouched project is rebuilt, and its re-export keeps the new art

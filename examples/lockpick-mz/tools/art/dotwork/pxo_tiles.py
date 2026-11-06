@@ -241,7 +241,7 @@ def project(path):
         except ValueError:
             meta = None
         return {"rel": rel, "size": (w, h), "tilesets": sets, "frames": len(frames), "layers": out,
-                "meta": meta if isinstance(meta, dict) else None}
+                "other": other, "meta": meta if isinstance(meta, dict) else None}
 
 
 # -------------------------------------------------- writing a tilemap .pxo
@@ -536,8 +536,9 @@ class OwnRows:
         self.dirty = True
 
     def stale(self, source, keep):
-        """Files an earlier re-export of this source wrote that this one did not: deleted with their rows."""
-        gone = 0
+        """Files an earlier re-export of this source wrote that this one did not: deleted with their rows. Returns
+        their project paths."""
+        gone = []
         for r in list(self.man.data["assets"]):
             if r.get("source") == source and r["file"] not in keep:
                 # a manifest is a tracked file a pull request can carry: a row never deletes outside the game
@@ -545,7 +546,7 @@ class OwnRows:
                 if os.path.isfile(p):
                     os.remove(core.safe_dest(p))
                 self.man.data["assets"].remove(r)
-                gone += 1
+                gone.append(r["file"])
         self.dirty = self.dirty or bool(gone)
         return gone
 
@@ -633,6 +634,8 @@ def export_own(tm, name, conf, rows, touched):
     custom = "surface" if any(t.get("custom") for s in sources for t in s["tiles"]) else None
     physics = any(t.get("solid_rects") for s in sources for t in s["tiles"])
     tres = os.path.join(out, f"{name}_tileset.tres")
+    if not godot.ENABLED:
+        written.add(rel(tres))   # #245: without Godot the TileSet is not written, and must not count as stale
     if godot.ENABLED:
         done(tres, "tileset", _same_bytes(tres, lambda: godot.tileset_layers(
             tres, (tw, th), sources, terrains, custom=custom, physics=physics, mode="match_corners_and_sides",
@@ -642,6 +645,7 @@ def export_own(tm, name, conf, rows, touched):
     for fi, layers in enumerate(frames):
         scene = os.path.join(out, f"{name}_{fi:02d}.tscn" if multi else f"{name}.tscn")
         if not godot.ENABLED:
+            written.add(rel(scene))   # #245: kept as the last Godot re-export wrote it
             continue
         taken, nodes = set(), []
         for L, cells, alpha in layers:
@@ -665,7 +669,9 @@ def export_own(tm, name, conf, rows, touched):
                        for L, cells, alpha in layers] for layers in frames]}
     jp = os.path.join(out, f"{name}_map.json")
     done(jp, "map_data", handpolish.write_if_changed(jp, json.dumps(doc, indent=1)), frames=len(frames))
-    gone = rows.stale(source, written)
+    removed = rows.stale(source, written)
+    touched.extend(removed)       # a deleted file is a change too (#245: "0 files changed" hid it)
+    gone = len(removed)
     core.log(f"pixelorama reexport tilemap {name}: {sum(len(s['tiles']) for s in sources)} tiles, "
              f"{len(tm['layers'])} layers, {len(frames)} frames" + (f", {gone} stale files removed" if gone else ""))
 
@@ -697,6 +703,14 @@ def _tileset_of(ts):
 
 def _tile_data(user, probability=1.0, center=-1, peers=None):
     return {"probability": probability, "user_data": user, "center": center, "peers": peers or [-1] * 16}
+
+
+def _data_hash(data):
+    """A tileset's tile data as built (probability, user data, terrain centre and peering bits per tile), hashed: a
+    terrain painted in Pixelorama is an edit as much as a pixel is (#245)."""
+    norm = [[round(float(d["probability"]), 6), str(d["user_data"]), int(d["center"]),
+             [int(b) for b in d["peers"]] + [-1] * (16 - len(d["peers"]))] for d in data]
+    return hashlib.sha256(json.dumps(norm).encode("ascii")).hexdigest()[:16]
 
 
 def _cells_hash(layers):
@@ -767,7 +781,7 @@ def dotwork_jobs(pack, conf):
                      f"{_px().MAX_SIDE}; skipped")
             continue
         meta = {"tileset": ts["res"], "scene": scene_res, "layers": [n for n, _ in named],
-                "cells": _cells_hash(built) if layers is not None else ""}
+                "cells": _cells_hash(built) if layers is not None else "", "data": _data_hash(tileset["data"])}
         out.append((path, pxo_bytes(size, tileset, named, meta), meta))
     return out
 
@@ -781,6 +795,11 @@ def polished(path):
         return True
     if not tm["meta"]:
         return True
+    if tm.get("other") or tm["frames"] > 1:
+        return True               # #245: a pixel layer or a frame the user added (a build makes one frame of tiles)
+    want = tm["meta"].get("data")
+    if want is not None and (len(tm["tilesets"]) != 1 or _data_hash(tm["tilesets"][0]["data"]) != want):
+        return True               # #245: terrain bits, probability or user data changed in Pixelorama
     try:
         edits, layers = _edits(tm)
     except core.ToolError:
