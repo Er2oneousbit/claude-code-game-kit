@@ -5,6 +5,7 @@
 //           compares them (pillar 1: timing beats spam).
 // Usage   : python tools/dev.py smoke                      (all RuneDelve.Smoke.*, headless)
 //           RUNEDELVE_SEEDS=3 python tools/dev.py smoke    (one seed: report only, no judgement)
+//           RUNEDELVE_TRACE=1 adds the -tracedelve line per frame to the log (diff two runs of a seed)
 // Notes   : Every frame is 1/60 s of game time and the engine runs flat out (FRDLaunchOptions bFixedFps),
 //           so a delve takes seconds and replays exactly. Each run reopens the map (fresh PIE world).
 //           Assert a gap over seeds, never one outcome (SOP-14). The review regressions are in RDRegressionTests.cpp.
@@ -141,6 +142,7 @@ public:
 			O.Bot = Bot;
 			O.Seed = Seed;
 			O.bFixedFps = true;
+			O.bTrace = !FPlatformMisc::GetEnvironmentVariable(TEXT("RUNEDELVE_TRACE")).IsEmpty();
 			FRDLaunchOptions::SetTestOverride(O);
 			FRequestPlaySessionParams Params;
 			Settings = NewObject<ULevelEditorPlaySettings>();

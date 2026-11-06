@@ -2,7 +2,7 @@
 // RDCommon.cpp
 // Purpose : Launch options from the command line, and the test override.
 // Notes   : Flags (after the map, or after `--` with dev.py): -autoplay=weaver|masher -seed=N -god -debugai
-//           -fixedfps -quitatend -record=<dir> -recordevery=N -maxseconds=N
+//           -fixedfps -quitatend -tracedelve -record=<dir> -recordevery=N -maxseconds=N
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 #include "Game/RDCommon.h"
@@ -33,6 +33,7 @@ namespace
 		O.bDebugAI = FParse::Param(Cmd, TEXT("debugai"));
 		O.bFixedFps = FParse::Param(Cmd, TEXT("fixedfps"));
 		O.bQuitAtEnd = FParse::Param(Cmd, TEXT("quitatend"));
+		O.bTrace = FParse::Param(Cmd, TEXT("tracedelve"));
 		O.RecordEvery = FMath::Max(1, O.RecordEvery);
 		return O;
 	}

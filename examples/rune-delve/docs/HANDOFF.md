@@ -3,7 +3,7 @@
 > Rewritten at the end of every session by `/end-session`. Read first by `/start-session`.
 > Keep under ~60 lines. It is a baton, not a diary.
 
-**Last updated:** 2026-10-22
+**Last updated:** 2026-11-05
 **Branch / commit:** main (example in the kit repo)
 **Engine version:** see `docs/ENGINE.md`
 
@@ -15,7 +15,12 @@ Packaged build verified (2026-10-26, after the review fixes).
 Not yet played by a human.
 
 ## What changed last session
-- 
+- `-nullrhi` replays match rendered runs (#8): the bolt is off the NavMesh, under `-fixedfps` the game mode finishes
+  every pending NavMesh tile before the actors tick (`ARDGameMode::FinishNavBuild`), and an orc's movement ticks after
+  its path following (it braked for a frame on a random frame). `-tracedelve` logs one line per
+  frame; `tools/unreal/replay_check.py` runs a seed both ways and diffs them. Two `smoke` runs now print the same 16
+  delves. The deterministic pair measures weaver 61, masher 52, clears 2/8 against 0/8: one under both thresholds, so
+  `RuneDelve.Smoke.Pair` fails until a retune (#7)
 
 ## Current task
 - None. Next decision is the user's: playtest by hand.
@@ -27,8 +32,9 @@ Not yet played by a human.
 - 
 
 ## Known broken or flaky
-- Balance at its limit: weaver clears 3/8 against the masher's 0/8, and the pair test passes exactly on its thresholds (it logs `[test] pair: margin ...` and warns at zero). Tuning waits for a human playtest.
-- `-nullrhi` replays differ from rendered runs: the runtime NavMesh rebuilds on every bolt, in real time (`docs/TROUBLESHOOTING.md`).
+- Balance under its limit: with the delves deterministic (#8) the weaver gets 61 of 80 against the masher's 52 and clears
+  2/8 against 0/8, one point under both pillar thresholds, so `RuneDelve.Smoke.Pair` fails and says so (`[test] pair:
+  margin ...` reads -1 and -1). The thresholds stay; retuning the ward waits for a human playtest (#7).
 
 ## Commands that matter right now
 ```
@@ -37,6 +43,7 @@ python tools/dev.py exec tools/unreal/build_content.py   # then, and after addin
 python tools/dev.py test
 python tools/dev.py smoke                                 # boot, regressions, 16 bot delves, about 3.5 minutes
 python tools/dev.py package && Packaged/Windows/RuneDelve.exe -autoplay=weaver -seed=6 -fixedfps -quitatend
+python tools/unreal/replay_check.py --seed 6             # the same seed rendered and under -nullrhi, diffed per frame
 ```
 
 ## Context a fresh Claude needs

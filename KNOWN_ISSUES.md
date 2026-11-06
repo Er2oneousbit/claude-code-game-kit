@@ -191,13 +191,10 @@ autoplay exit leak (#6).
   `.gdextension` library export and the model load from there are (verify)).
 
 ### Rune Delve (Unreal)
-- **Balance at its limit:** after the review fixes the weaver bot clears 3 of 8 dungeons (was 5) against the
-  masher's 0; the pair test passes exactly on its thresholds and now says so (a margin line and a warning). Retuning
-  the ward waits for a human playtest ([#7](https://github.com/Er2oneousbit/claude-code-game-kit/issues/7)).
-- Replays under `-nullrhi` (no renderer) differ from rendered runs, and two `-nullrhi` runs can differ: every bolt
-  dirties the runtime NavMesh, which rebuilds in real time. Taking bolts off the NavMesh made rendered and `-nullrhi`
-  runs match on 8 seeds but made the editor's bot pair vary from run to run, so it is not in
-  (`docs/TROUBLESHOOTING.md`, [#8](https://github.com/Er2oneousbit/claude-code-game-kit/issues/8)).
+- **Balance under its limit:** with the delves deterministic (#8) the weaver bot gets 61 of 80 against the masher's
+  52 and clears 2 of 8 dungeons against 0 (3 of 8 before), one point under both pillar thresholds, so the pair test
+  fails and says so (`[test] pair: margin ...` reads -1 and -1). The thresholds stay; retuning the ward waits for a
+  human playtest ([#7](https://github.com/Er2oneousbit/claude-code-game-kit/issues/7)).
 - Sight and bolt noise never cross an open gate, so the next room's orcs sleep through a fight at its door. Letting
   them through moved the bot pair from weaver 65 / masher 55 (3 of 8 clears against 0) to 77 / 52 (7 against 0),
   so it waits for a balance decision ([#140](https://github.com/Er2oneousbit/claude-code-game-kit/issues/140)).

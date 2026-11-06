@@ -26,6 +26,7 @@ struct RUNEDELVE_API FRDLaunchOptions
 	bool bDebugAI = false;
 	bool bFixedFps = false;       // 1/60 s per frame, as fast as the machine allows: runs replay exactly
 	bool bQuitAtEnd = false;      // packaged autoplay: exit 0 on a full clear, 3 otherwise
+	bool bTrace = false;          // one [trace] line per frame: positions, health, orc states (diff two runs)
 	FString RecordDir;            // screenshots every RecordEvery frames (needs a real renderer)
 	int32 RecordEvery = 6;
 	float MaxSeconds = 300.f;     // a stuck delve ends as a timeout instead of hanging a test

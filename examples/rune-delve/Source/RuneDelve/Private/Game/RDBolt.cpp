@@ -3,6 +3,7 @@
 // Purpose : See RDBolt.h.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-10-26 review fix: the caster ignores its bolt both ways (the mage adds it, EndPlay removes it)
+//           2026-11-05 (Claude Fable 5.1) the bolt no longer affects navigation (#8)
 // ---------------------------------------------------------------------------
 #include "Game/RDBolt.h"
 
@@ -27,6 +28,9 @@ ARDBolt::ARDBolt()
 	Collision->SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
 	Collision->SetNotifyRigidBodyCollision(true);
 	Collision->CanCharacterStepUpOn = ECB_No;
+	// A flying bolt is not part of the level: with the default (affects navigation) every frame of its flight dirtied
+	// the runtime NavMesh and started a rebuild, whose tiles the orcs' paths then observed on a real-time schedule (#8)
+	Collision->SetCanEverAffectNavigation(false);
 	RootComponent = Collision;
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> Sphere(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
@@ -35,6 +39,7 @@ ARDBolt::ARDBolt()
 	Orb->SetStaticMesh(Sphere.Object);
 	Orb->SetRelativeScale3D(FVector(0.22f));
 	Orb->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Orb->SetCanEverAffectNavigation(false);
 
 	Glow = CreateDefaultSubobject<UPointLightComponent>(TEXT("Glow"));
 	Glow->SetupAttachment(Collision);

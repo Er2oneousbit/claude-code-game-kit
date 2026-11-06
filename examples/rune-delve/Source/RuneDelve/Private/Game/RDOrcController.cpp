@@ -5,12 +5,17 @@
 //           that already sees the mage keeps reporting it every frame (the brain only needs it once, but
 //           a mage who walks out of the room and back must be seen again).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-05 (Claude Fable 5.1) the orc's movement ticks after its path following (a one-frame brake on a
+//           random frame otherwise); -tracedelve logs every move that ends, with its result code (#8)
 // ---------------------------------------------------------------------------
 #include "Game/RDOrcController.h"
 
 #include "Game/RDMage.h"
 #include "Game/RDOrc.h"
 #include "Game/RDTuning.h"
+#include "Game/RDCommon.h"
+#include "GameFramework/PawnMovementComponent.h"
+#include "Navigation/PathFollowingComponent.h"
 #include "Perception/AIPerceptionComponent.h"
 #include "Perception/AISenseConfig_Hearing.h"
 #include "Perception/AISenseConfig_Sight.h"
@@ -36,6 +41,15 @@ ARDOrcController::ARDOrcController()
 void ARDOrcController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
+	// Path following asks the movement component for this frame's velocity; both tick in the same group and the engine
+	// sets no order between them, so once in a while the movement ticked first, braked for a frame without a request,
+	// and the delve played out differently from the same seed (#8). The request must land before the move that uses it.
+	UPathFollowingComponent* Follow = GetPathFollowingComponent();
+	UPawnMovementComponent* Move = InPawn ? InPawn->GetMovementComponent() : nullptr;
+	if (Follow && Move)
+	{
+		Move->AddTickPrerequisiteComponent(Follow);
+	}
 	const FRDNumbers N = GetDefault<URDTuning>()->Numbers();
 	Sight->SightRadius = N.OrcSight;
 	Sight->LoseSightRadius = N.OrcSight + 200.f;
@@ -72,5 +86,15 @@ void ARDOrcController::Tick(float DeltaSeconds)
 		{
 			Orc->NotifySensed();
 		}
+	}
+}
+
+void ARDOrcController::OnMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result)
+{
+	Super::OnMoveCompleted(RequestID, Result);
+	if (FRDLaunchOptions::Get().bTrace)
+	{
+		UE_LOG(LogRuneDelve, Display, TEXT("[trace-move] t=%.4f %s done code=%d flags=%d"), GetWorld()->GetTimeSeconds(),
+		       *GetNameSafe(GetPawn()), (int32)Result.Code, (int32)Result.Flags);
 	}
 }

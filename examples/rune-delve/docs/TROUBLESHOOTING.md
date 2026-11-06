@@ -65,16 +65,35 @@
 - First seen: 2026-10-26
 - Symptom: weaver seed 6 cleared in 44.6 s with 10 wards in the packaged game (the smoke test: 44.5 s, 10 wards) but in
   46.3 s with 11 wards when `-nullrhi` was added; seed 4 also diverged (39.5 s against 36.7 s)
-- Root cause (2026-11-02): the runtime NavMesh. A bolt's collision sphere counts for navigation, so every cast
-  dirties the NavMesh and starts a rebuild on worker threads (logged: a build every 0.4 s, the bolt cooldown). The
-  rebuild takes real time, so how many fixed 1/60 s frames the bots and orcs path on the old NavMesh depends on how
-  fast frames run; without a renderer they run faster. Two `-nullrhi` runs of seed 6 differed from each other too
-  (43.0 s and 44.6 s)
-- Tried: `SetCanEverAffectNavigation(false)` on the bolt's sphere. Packaged rendered and `-nullrhi` runs then
-  matched on all 8 weaver seeds, but the editor's bot pair varied between runs (67/53, 68/51, 71/53 of 80) where
-  the old code repeats 65/55: the rebuilds at the start and at each gate still run in real time. Pausing the world
-  while the NavMesh builds stalled the regression test. Neither is in; the next try is a NavMesh that never
-  rebuilds during a delve (gates off the NavMesh, the start held until the first build is done)
-- Fix: none yet; compare replays with a renderer (a small window is enough: `-windowed -resx=640 -resy=360`)
-- How to verify: run the same seed with and without `-nullrhi` and compare the `DELVE_COMPLETE` or `MAGE_DOWN` line
+- Root cause (2026-11-05, measured with `-tracedelve`, one line per frame): the runtime NavMesh builds its tiles on
+  worker threads and the navigation system picks the finished ones up at the start of whichever frame they are done
+  in, real time, while the orcs (and the weaver's path) already walk on it. The first frame that differed between a
+  rendered and a `-nullrhi` run of weaver seed 6 was frame 5 (0.083 s): the two room-1 orcs were hunting from frame 3
+  with the NavMesh still building, and by frame 5 they stood a few millimetres apart in the two runs (different partial
+  tiles, different first paths). Two things kept the build going all delve long: the bolt's collision sphere and orb
+  counted for navigation, so every frame of a bolt's flight dirtied its tile and started a rebuild (16 rebuilds in the
+  first 45 frames); and a tile that happens to finish inside the navigation system's own tick is announced to the
+  paths crossing it (`OnNavMeshTilesUpdated`, a repath that costs the orc a frame of speed), one that finishes
+  elsewhere is not, so even with the tiles landing on a fixed frame the orcs could repath on random frames. With both
+  gone, one divergence was left, rarer (6 of 16 delves in the editor pair, none in four `-game` pairs): on one random
+  frame an orc's speed dropped from 420 to 273.9 and climbed back by 34.1 a frame. That is exactly one frame of
+  `UCharacterMovementComponent` braking (ground friction 8 times the braking factor 2, deceleration 2048) followed by
+  re-acceleration at 2048/60: the movement component ticked *before* the orc's `UPathFollowingComponent` that frame,
+  so it had no move request, braked, and got the request a frame late. Both tick in `TG_PrePhysics` and the engine
+  sets no order between them. The earlier guesses (2026-11-02: every bolt rebuilds the NavMesh in real time; the bolt
+  alone, which made the editor pair vary between runs) were half right
+- Fix: three changes. `ARDBolt` takes its sphere and orb off navigation (a flying bolt is not level geometry), so the
+  NavMesh now rebuilds three times per delve: at the start and when each gate opens. Under `-fixedfps`,
+  `ARDGameMode::FinishNavBuild` runs on `FWorldDelegates::OnWorldPreActorTick` (after the navigation system ticks,
+  before any actor does) and calls `EnsureBuildCompletion` on the NavMesh whenever a build is in progress, so every
+  tile a frame started is finished before the first actor of that frame paths on it. `ARDOrcController::OnPossess`
+  makes the orc's movement component tick after its path following (`AddTickPrerequisiteComponent`), so the move
+  request always lands before the move that uses it. Side effect worth knowing: the
+  delves changed (no bolt holes for the orcs to path around, no random brakes), and the deterministic pair measures
+  weaver 61, masher 52 of 80, clears 2/8 against 0/8 (was 65/55 and 3/8): one point under both pillar thresholds, so
+  `RuneDelve.Smoke.Pair` fails (margin -1 and -1) until the ward is retuned from a human playtest (#7). The thresholds
+  are the pillar, not the measurement, and stay as they are
+- How to verify: `python tools/unreal/replay_check.py --seed 6` (and `--seed 4`, `--bot masher`) runs the seed
+  rendered and under `-nullrhi` and diffs the two `[trace]` streams; `[ OK ] ... identical`. Before the fix it reported
+  frame 5 for seed 6. Two `python tools/dev.py smoke --filter Pair` runs in a row print the same 16 `[test]` lines
 - Related: #8

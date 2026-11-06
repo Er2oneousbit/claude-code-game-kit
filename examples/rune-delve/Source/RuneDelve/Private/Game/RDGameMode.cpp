@@ -11,10 +11,13 @@
 // Updated : 2026-10-26 review fix: the bots saw orcs by spawn room, so an orc that chased the mage through a
 //           gate was invisible to them; they now see orcs by the room (or doorway) the orc stands in
 //           2026-11-02 -quitatend exits 3 on a loss or timeout: a clean exit always returned 0 (#8)
+//           2026-11-05 (Claude Fable 5.1) -fixedfps finishes the NavMesh's pending tiles before the actors tick, and
+//           -tracedelve logs one line per frame, so rendered and -nullrhi replays match (#8)
 // ---------------------------------------------------------------------------
 #include "Game/RDGameMode.h"
 
 #include "Abilities/RDEffects.h"
+#include "AIController.h"
 #include "Abilities/RDTags.h"
 #include "Engine/Engine.h"
 #include "Game/RDCommon.h"
@@ -30,6 +33,8 @@
 #include "Misc/CoreDelegates.h"
 #include "Misc/OutputDeviceRedirector.h"
 #include "Misc/Paths.h"
+#include "NavigationData.h"
+#include "NavigationSystem.h"
 #include "UnrealClient.h"
 
 ARDGameMode::ARDGameMode()
@@ -48,6 +53,11 @@ void ARDGameMode::StartPlay()
 		FApp::SetUseFixedTimeStep(true);
 		FApp::SetFixedDeltaTime(1.0 / 60.0);
 		FApp::SetBenchmarking(true);   // do not wait for real time between frames
+		NavSyncHandle = FWorldDelegates::OnWorldPreActorTick.AddUObject(this, &ARDGameMode::FinishNavBuild);
+	}
+	if (O.bTrace)
+	{
+		TraceHandle = FWorldDelegates::OnWorldPostActorTick.AddUObject(this, &ARDGameMode::Trace);
 	}
 	Dungeon = GetWorld()->SpawnActor<ARDDungeon>();
 	Dungeon->Build();
@@ -55,6 +65,35 @@ void ARDGameMode::StartPlay()
 	Super::StartPlay();
 	RD_MARK(TEXT("READY %s"), *FString(FApp::GetProjectName()));
 	RD_MARK(TEXT("DELVE_START seed %d bot %s"), O.Seed, RDBot::Name(O.Bot));
+}
+
+void ARDGameMode::EndPlay(const EEndPlayReason::Type Reason)
+{
+	FWorldDelegates::OnWorldPreActorTick.Remove(NavSyncHandle);
+	FWorldDelegates::OnWorldPostActorTick.Remove(TraceHandle);
+	Super::EndPlay(Reason);
+}
+
+/** -fixedfps only. The runtime NavMesh builds its tiles on worker threads, and the navigation system picks the
+ *  finished ones up at the start of whichever frame they are done in: real time, so the orcs and the bot path on the
+ *  old tiles for more or fewer fixed frames depending on how fast frames run (a renderer makes them slower). Right
+ *  after the navigation system ticks and before any actor does, finish every pending tile, so the NavMesh an actor
+ *  sees on a given frame is the same in every run (#8). */
+void ARDGameMode::FinishNavBuild(UWorld* World, ELevelTick, float)
+{
+	if (World != GetWorld())
+	{
+		return;
+	}
+	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	if (Nav && Nav->IsNavigationBuildInProgress())
+	{
+		if (ANavigationData* Data = Nav->GetDefaultNavDataInstance(FNavigationSystem::DontCreate))
+		{
+			Data->EnsureBuildCompletion();
+			++NavSyncBuilds;
+		}
+	}
 }
 
 void ARDGameMode::SpawnOrcs()
@@ -247,6 +286,36 @@ FRDBotSnapshot ARDGameMode::BotSnapshot() const
 		}
 	}
 	return S;
+}
+
+/** -tracedelve: one line per frame with everything the bots and orcs decide on, so two runs can be diffed
+ *  (tools/unreal/replay_check.py). After every actor has ticked: actors in one tick group do not always tick in the
+ *  same order, so a line written from Tick could show an orc before or after its move, a difference that is not one. */
+void ARDGameMode::Trace(UWorld* World, ELevelTick, float)
+{
+	if (World != GetWorld())
+	{
+		return;
+	}
+	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	const ARDMage* Mage = GetMage();
+	FString Line = FString::Printf(TEXT("[trace] f=%d t=%.4f nav=%d%d ns=%d"), TraceFrame++, Elapsed,
+	                               Nav && Nav->IsNavigationBuildInProgress() ? 1 : 0, Nav && Nav->HasDirtyAreasQueued() ? 1 : 0, NavSyncBuilds);
+	if (Mage)
+	{
+		Line += FString::Printf(TEXT(" mage=(%.2f,%.2f) hp=%.2f mp=%.2f b=%d w=%d k=%d"), Mage->Ground().X, Mage->Ground().Y,
+		                        Mage->GetHealth(), Mage->GetMana(), Mage->BoltsCast, Mage->WardsCast, Mage->WardBlocks);
+	}
+	for (const ARDOrc* O : Orcs)
+	{
+		if (O)
+		{
+			const AAIController* Ai = Cast<AAIController>(O->GetController());
+			Line += FString::Printf(TEXT(" |(%.2f,%.2f)s%dh%.0fm%dv%.1f"), O->Ground().X, O->Ground().Y, (int32)O->GetState(), O->GetHealth(),
+			                        Ai ? (int32)Ai->GetMoveStatus() : -1, O->GetVelocity().Size2D());
+		}
+	}
+	UE_LOG(LogRuneDelve, Display, TEXT("%s"), *Line);
 }
 
 void ARDGameMode::Record()

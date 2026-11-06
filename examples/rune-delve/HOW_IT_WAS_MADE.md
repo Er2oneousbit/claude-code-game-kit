@@ -148,7 +148,8 @@ them, so the multi-block ward is the likely cause (not split out fix by fix). Th
 retuned. The masher never blocks, so its runs did not change at all. Verified: `check`, `test --filter RuneDelve.Core`
 (5 groups), `smoke` (boot, regressions, 16 delves, 3.5 minutes), `package`, and the packaged weaver on seed 6
 (`DELVE_COMPLETE`, 44.6 s against 44.5 s in the smoke test, the same counts). Found on the way: the packaged replay only
-matches with a renderer (`-nullrhi` plays a different delve, `docs/TROUBLESHOOTING.md`).
+matched with a renderer (`-nullrhi` played a different delve), fixed on 2026-11-05 once a per-frame trace showed the
+first differing frame (the runtime NavMesh finishing its tiles on a real-time schedule; `docs/TROUBLESHOOTING.md`).
 
 ## 9. Outside the kit (be honest)
 - Three throwaway `exec` probes (asset sizes, animation names, the gate) were deleted after use; what they found is

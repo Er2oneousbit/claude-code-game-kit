@@ -22,4 +22,9 @@ tunables) and from `Config/DefaultEngine.ini`.
   (`UAISense_Hearing::ReportNoiseEvent`); opening a gate updates the NavMesh (`UpdateComponentInNavOctree`).
 - Bad / costs: perception only counts inside the orc's own room (a rule in `ARDOrc`), so hearing does not wake the next
   room through a wall; the NavMesh builds a moment after the map loads (the boot smoke test waits for it).
+- The NavMesh builds its tiles on worker threads, in real time, which is not deterministic: replays under `-fixedfps`
+  finish every pending tile before the actors of a frame tick (`ARDGameMode::FinishNavBuild`), and nothing that moves
+  during a delve may affect navigation (the bolt does not; `docs/TROUBLESHOOTING.md`, #8). Path following and the
+  character movement tick in the same group with no order between them in the engine; the orc controller pins the
+  order (path following first), or the orc brakes for a frame now and then.
 - What we would need to see to revisit this: none expected.

@@ -40,6 +40,7 @@ reason), `-record=<dir> -recordevery=N` (screenshots for a GIF).
 | Orc senses (AI Perception) and NavMesh chase (ADR 0002) | `Source/RuneDelve/Private/Game/RDOrc.cpp`, `RDOrcController.cpp` |
 | Every number | `Config/DefaultGame.ini` (the RDTuning section) |
 | All content, made headless (ADR 0003) | `tools/unreal/build_content.py` |
+| The same seed rendered and under `-nullrhi`, diffed frame by frame | `tools/unreal/replay_check.py` |
 
 Everything in `Core/` is plain C++ with unit tests; the rest is the Unreal side. No Blueprints, no input or effect
 assets: input actions and mappings are built in C++ at runtime.

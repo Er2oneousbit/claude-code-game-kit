@@ -6,7 +6,9 @@
 //           the NavMesh bounds (tools/unreal/build_content.py)
 // Notes   : Markers: READY, DELVE_START, ORC_ALERT, WARD_BLOCK, ORC_DOWN, ROOM_CLEARED n/3, MAGE_DOWN,
 //           DELVE_COMPLETE, TIMEOUT. -fixedfps makes every frame 1/60 s and lets the engine run flat out,
-//           so a packaged autoplay run and the smoke test play the same delve.
+//           so a packaged autoplay run and the smoke test play the same delve; it also finishes the runtime
+//           NavMesh's pending tiles before the actors of a frame tick (FinishNavBuild, #8). -tracedelve logs one
+//           [trace] line per frame for tools/unreal/replay_check.py.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 #pragma once
@@ -42,6 +44,7 @@ public:
 	ARDGameMode();
 	virtual void StartPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 
 	ARDMage* GetMage() const;
 	const TArray<TObjectPtr<ARDOrc>>& GetOrcs() const { return Orcs; }
@@ -65,8 +68,10 @@ private:
 	void UpdateRooms();
 	void Finish(ERDOutcome Result, const TCHAR* Marker);
 	void Record();
+	void Trace(UWorld* World, ELevelTick TickType, float DeltaSeconds);
 	void ShowToast(const FString& Text);
 	void QuitAtEnd(uint8 ExitCode);
+	void FinishNavBuild(UWorld* World, ELevelTick TickType, float DeltaSeconds);
 
 	UPROPERTY() TObjectPtr<ARDDungeon> Dungeon;
 	UPROPERTY() TArray<TObjectPtr<ARDOrc>> Orcs;
@@ -79,6 +84,10 @@ private:
 	float EndTimer = 0.f;
 	bool bQuitRequested = false;
 	int32 Frame = 0;
+	int32 TraceFrame = 0;
+	int32 NavSyncBuilds = 0;      // -fixedfps: frames on which FinishNavBuild had tiles to finish
+	FDelegateHandle NavSyncHandle;
+	FDelegateHandle TraceHandle;
 	FString Toast;
 	float ToastLeft = 0.f;
 };

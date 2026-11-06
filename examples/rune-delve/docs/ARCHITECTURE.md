@@ -43,6 +43,7 @@ Engine-specific folder layout is documented in `docs/ENGINE.md`. Universal folde
 | Dungeon | Builds rooms at runtime; gates open on clear | `Game/RDDungeon` | `RuneDelve.Smoke.Boot` |
 | Delve | Rooms, outcome, markers, restart, recording | `Game/RDGameMode` | `RuneDelve.Smoke.*` |
 | Content | Imports and the map, headless (ADR 0003) | `tools/unreal/build_content.py` | `dev.py exec` |
+| Replay | A seed plays the same with and without a renderer | `tools/unreal/replay_check.py` | itself (`--seed N`) |
 
 ## Data flow and events
 Direct calls. Damage always goes through GAS (an effect spec into `URDAttributeSet`), which calls back the character
@@ -55,8 +56,12 @@ Direct calls. Damage always goes through GAS (an effect spec into `URDAttributeS
 ## Determinism and randomness
 - `-seed=N` moves the orcs (`FRDLevel::Orcs`, one `FRandomStream` per room). `-fixedfps` makes every frame 1/60 s and runs
   flat out: the smoke tests and the packaged game play the same delve (2026-10-26: seed 6 has the same counts, 44.5 s
-  against 44.6 s, and seed 4 36.6 s against 36.7 s). Only with a renderer: the packaged game with `-nullrhi` played a
-  different delve on both seeds (the runtime NavMesh rebuilds on every bolt, in real time: `docs/TROUBLESHOOTING.md`).
+  against 44.6 s, and seed 4 36.6 s against 36.7 s). With or without a renderer since 2026-11-05: the runtime NavMesh
+  builds on worker threads, so under `-fixedfps` the game mode finishes every pending tile before the actors of a frame
+  tick (`ARDGameMode::FinishNavBuild`), bolts no longer touch the NavMesh, and an orc's movement ticks after its path
+  following (the engine orders neither; `docs/TROUBLESHOOTING.md`, #8).
+  `-tracedelve` writes one line per frame (positions, health, orc states) after every actor has ticked;
+  `tools/unreal/replay_check.py` runs a seed rendered and under `-nullrhi` and reports the first frame that differs.
 
 ## Budgets
 | Budget | Target | Measured on | Last measured |
