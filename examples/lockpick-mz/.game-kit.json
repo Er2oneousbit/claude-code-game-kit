@@ -1016,6 +1016,12 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1361,7 +1367,7 @@
     "tools/bozzetto/workflows/trellis2_image_to_3d.api.json": "c18a577cf62b2f12a9689760edfdc89ef671d0b996a5b063343461c505a113f3",
     "tools/check_links.py": "ef9d576ead241adce8f3c40b0ba853990e6a31fd55f7f33ecd4b91301a3ca952",
     "tools/credits.py": "15b4ac5af145517cb91f8eb7101271861c8c8ccedd4f83d59bc35cd04e4e831e",
-    "tools/dev.py": "d7452b8fc33f1ee8b70b43c5dc8c31d5bd3242cee13eeed597302c539b5f079e",
+    "tools/dev.py": "33027d43372d0a09d7f91262b428bdf734b1073f49465a6d20ee35859615b75b",
     "tools/doctor.py": "b410d757ec13b38800a46525f6ef1ebb5c2e264dbe1fa2f14dce73f0f42535b8",
     "tools/fetch_asset.py": "4c3f351d98ed01dd27c9dc68ec0f3b9242045c16d1b2dde292cf44fb3d127d7d",
     "tools/golden_vectors.py": "5368a2d52b2a9c837ee42cc974ef1085e1b8d018be7343069027eed1736f8b95",
@@ -1372,7 +1378,7 @@
     "tools/second_opinion.py": "31527022bde8f6ff9e5d3afce18277498627041cfb46026d9f2f8aa742893c66",
     "tools/second_opinion/kimi-agent.md": "9a1838d60f30abb8ea3438e6a6493a3fd789aaf4987d2bbc998de20ec1df95a8",
     "tools/serve.mjs": "ac665b92558d5024bfe26d7688b95a0e0d7f5a66f60c056eec57b49ca9b8d069",
-    "tools/smoke.mjs": "3220aba83f624ac0b61280213d6e94d8689a58f1e9b46e18f5ac33ac7c4394d7",
+    "tools/smoke.mjs": "993d9d0c33c79425ef4a778b1fdad40439d06e80e5dcc73d0fc4545ffa9d7fc8",
     "tools/test_check_links.py": "768e36f642e0f3bbbbf87a800095a51a9f5ea0353de240ed26fc88aa6633fff7",
     "tools/test_credits.py": "658632b9464bc769df0497a32b7018b8e9c063a4a0b10eb18d246bda1883b91e",
     "tools/test_doctor.py": "b357dfa088ce609991ca5c88d6139c71122412b0163a80b1494bfb1f1e662a1b",

@@ -480,7 +480,10 @@ export const chromium = {
             }, 10);
           },
           async screenshot({ path }) { writeFileSync(path, "new"); },
-          async evaluate() { await new Promise((r) => setTimeout(r, 300)); return {}; },
+          async evaluate() {
+            if (process.env.FAKE_FREEZE) { setInterval(() => {}, 1000); return new Promise(() => {}); }   // #251
+            await new Promise((r) => setTimeout(r, 300)); return {};
+          },
         };
       },
       async close() {},
@@ -543,6 +546,102 @@ class WebSmokeRecord(TempRoot):
                 self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
                 self.assertIn("DRIVE_ABORT menus", r.stdout)
                 self.assertNotIn("[drive menus]", r.stdout)
+
+
+@unittest.skipUnless(NODE, "node is not on PATH")
+class WebSmokeReviewFixes(WebSmokeRecord):
+    """#251: --data-dir rewrote binary files as UTF-8 text (or deleted them), a project folder could be the data dir,
+    and the wait for N frames had no timeout."""
+
+    def test_a_binary_file_in_the_data_dir_is_left_alone(self):
+        for engine in ("web", "web-3d"):
+            with self.subTest(engine=engine):
+                root = self.project(engine)
+                data = root / "build" / "sd"
+                data.mkdir(parents=True)
+                blob = bytes([0xFF, 0xFE, 0x80, 0x00, 0x01, 0xC3, 0x28])
+                (data / "save.bin").write_bytes(blob)
+                subprocess.run([NODE, str(root / "tools" / "smoke.mjs"), "--data-dir", "build/sd", "--frames", "1"],
+                               cwd=root, capture_output=True, encoding="utf-8", errors="replace", timeout=60)
+                self.assertTrue((data / "save.bin").is_file(), "the binary file was deleted")
+                self.assertEqual((data / "save.bin").read_bytes(), blob)
+
+    def test_a_project_folder_is_refused_as_the_data_dir(self):
+        for engine in ("web", "web-3d"):
+            with self.subTest(engine=engine):
+                root = self.project(engine)
+                (root / "src").mkdir()
+                (root / "src" / "main.ts").write_text("x")
+                r = subprocess.run([NODE, str(root / "tools" / "smoke.mjs"), "--data-dir", "src", "--frames", "1"],
+                                   cwd=root, capture_output=True, encoding="utf-8", errors="replace", timeout=60)
+                self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+                self.assertEqual((root / "src" / "main.ts").read_text(), "x")
+
+    def test_a_frozen_page_fails_instead_of_hanging(self):
+        import os
+        for engine in ("web", "web-3d", "rpgmaker-mz"):
+            with self.subTest(engine=engine):
+                root = self.project(engine)
+                env = dict(os.environ, FAKE_FREEZE="1")
+                r = subprocess.run([NODE, str(root / "tools" / "smoke.mjs"), "--frames", "1", "--timeout-ms", "1000"],
+                                   cwd=root, capture_output=True, encoding="utf-8", errors="replace", timeout=60,
+                                   env=env)
+                self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+                self.assertIn("did not run within", r.stdout + r.stderr)
+
+
+class CaptureChecks(TempRoot):
+    """#251: Bevy and LOVE passed a stale screenshot; Bevy counted old frames, LOVE passed a recording of none."""
+
+    def bevy(self, **opts):
+        dev = load("bevy")
+        dev.ROOT = self.root
+        dev.preflight = lambda: None
+        dev.build = lambda args: 0
+        dev.run = lambda cmd, **kw: (0, "BOOT_OK x 0.1.0\nSMOKE_DONE frames=5\n")
+        args = argparse.Namespace(frames=5, screenshot="", record="", record_every=66, record_from=0, game_args=[],
+                                  timeout=60, until="", fail_on="", release=False)
+        for k, v in opts.items():
+            setattr(args, k, v)
+        return quiet(dev.cmd_smoke, args)
+
+    def love(self, **opts):
+        dev = load("love2d")
+        dev.ROOT = self.root
+        dev.compile_check = lambda love, files: ([], True, [])
+        dev.run = lambda cmd, **kw: (0, "BOOT_OK\nSMOKE_DONE 120\n")
+        args = argparse.Namespace(frames=120, headless=False, screenshot="", record="", record_every=66, drive="",
+                                  locale="", data_dir="", debug=False, game_args=[], compare="", tolerance=0)
+        for k, v in opts.items():
+            setattr(args, k, v)
+        return quiet(dev.cmd_smoke, args, "love")
+
+    def test_bevy_stale_captures_fail(self):
+        (self.root / "cap").mkdir()
+        (self.root / "cap" / "s.png").write_bytes(b"old picture")
+        for i in range(30):
+            (self.root / "cap" / f"frame_{i:05d}.png").write_bytes(b"old")
+        rc, text = self.bevy(screenshot="cap/s.png")
+        self.assertEqual(rc, 1, text)
+        self.assertIn("no screenshot", text)
+        rc, text = self.bevy(record="cap")
+        self.assertEqual(rc, 1, text)
+        self.assertIn("no frames recorded", text)
+
+    def test_love_stale_screenshot_and_empty_recording_fail(self):
+        (self.root / "cap").mkdir()
+        (self.root / "cap" / "s.png").write_bytes(b"old picture")
+        rc, text = self.love(screenshot="cap/s.png")
+        self.assertEqual(rc, 1, text)
+        rc, text = self.love(record="rec")
+        self.assertEqual(rc, 1, text)
+        self.assertIn("no frames recorded", text)
+
+    def test_mz_port_out_of_range_is_a_usage_error(self):
+        dev = load("rpgmaker-mz")
+        with self.assertRaises(argparse.ArgumentTypeError):
+            dev.port_number("70000")
+        self.assertEqual(dev.port_number("8080"), 8080)
 
 
 class WebDriveHelp(unittest.TestCase):

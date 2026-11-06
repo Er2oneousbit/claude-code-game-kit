@@ -770,6 +770,14 @@ def cmd_doctor(args):
     return 1 if problems else 0
 
 
+def port_number(text):
+    """A TCP port: 1..65535 (#251: 70000 reached Node as a stack trace, exit 1)."""
+    value = positive_int(text)
+    if value > 65535:
+        raise argparse.ArgumentTypeError(f"{text} is not a port (1-65535)")
+    return value
+
+
 def positive_int(text):
     """argparse type: 1..100000, so a typo cannot ask for a smoke run that never ends."""
     try:
@@ -810,7 +818,7 @@ def build_parser():
     p.set_defaults(fn=cmd_smoke)
     sub.add_parser("build", help="a web-browser copy of the game in build/web/").set_defaults(fn=cmd_build)
     p = sub.add_parser("run", help="serve the game and open your browser (--editor: open RPG Maker MZ)")
-    p.add_argument("--port", type=positive_int, default=8080, help="local port (default 8080)")
+    p.add_argument("--port", type=port_number, default=8080, help="local port, 1-65535 (default 8080)")
     p.add_argument("--editor", action="store_true", help="open the project in RPG Maker MZ (needs RPGMZ_EXE)")
     p.set_defaults(fn=cmd_run)
     p = sub.add_parser("clean", help="remove build/")

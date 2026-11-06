@@ -4,6 +4,12 @@
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
 ## 0.13.2 (unreleased): fixes from Fable reviews of the Pixelorama lane, the engine wrappers and the shipped tools
+- Engine wrappers (web, web-3d, RPG Maker MZ, Bevy, LÖVE): `smoke --data-dir` no longer rewrites a file that is
+  not UTF-8 text (a binary save came back as replacement characters, or was deleted): such files are left out and
+  left alone, and a project folder (`src/`, `assets/`, `public/`, `dist/` ...) is refused as the data dir. The wait
+  for N frames is raced against a timeout, so a page that freezes after booting fails instead of hanging. Bevy and
+  LÖVE delete a stale screenshot and their own old frames before a capture run and fail on a missing screenshot or
+  an empty recording (both were `[ OK ]`). RPG Maker MZ `run --port` takes 1-65535 (a usage error, exit 2) (#251).
 - Engine wrappers (Godot, Unity, Unreal): Unreal `test`/`smoke` fail when the editor exits non-zero after some
   tests passed (a crash after two passes was `[ OK ]`), and a test named "Test Failed ..." is no longer a failure.
   Godot `smoke --record` deletes only its own `f00000.png` frames (and their `.import`), not every `f*.png` (a picture

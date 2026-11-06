@@ -393,13 +393,19 @@ def cmd_smoke(args):
     if rc != 0:
         return rc
     game = ["--smoke", str(args.frames)]
+    shot = rec = None
     if args.screenshot:
         shot = (ROOT / args.screenshot).resolve()
         shot.parent.mkdir(parents=True, exist_ok=True)
+        if shot.is_file():
+            shot.unlink()                   # #251: a picture from an earlier run must not pass for this one
         game += ["--screenshot", str(shot)]
     if args.record:
         rec = (ROOT / args.record).resolve()
         rec.mkdir(parents=True, exist_ok=True)
+        for old in rec.glob("frame_*.png"):  # frames from an earlier run would end up in the GIF (only the
+            if re.fullmatch(r"frame_\d{5}\.png", old.name):   # game's own names)
+                old.unlink()
         game += ["--record", str(rec), "--record-every", str(args.record_every), "--record-from", str(args.record_from)]
     if args.game_args:
         game += ["--"] + args.game_args
@@ -434,12 +440,18 @@ def cmd_smoke(args):
             print(f"[FAIL] exit code {rc}")
         return 1
     what = f"marker {args.until!r} reached" if args.until else f"{args.frames} frames"
+    frames = [p for p in rec.glob("frame_*.png") if re.fullmatch(r"frame_\d{5}\.png", p.name)] if rec else []
+    if shot and not (shot.is_file() and shot.stat().st_size > 0):
+        print(f"[FAIL] no screenshot was written to {shot}")
+        return 1
+    if rec and not frames:
+        print(f"[FAIL] no frames recorded in {rec}")
+        return 1
     print(f"[ OK ] smoke passed ({what})")
-    if args.screenshot:
-        print(f"[ OK ] screenshot: {(ROOT / args.screenshot).resolve()}")
-    if args.record:
-        n = len(list((ROOT / args.record).glob("*.png")))
-        print(f"[ OK ] {n} frame(s) in {(ROOT / args.record).resolve()} (GIF: python tools/art/frames_to_gif.py <dir> out.gif)")
+    if shot:
+        print(f"[ OK ] screenshot: {shot}")
+    if rec:
+        print(f"[ OK ] {len(frames)} frame(s) in {rec} (GIF: python tools/art/frames_to_gif.py <dir> out.gif)")
     return 0
 
 

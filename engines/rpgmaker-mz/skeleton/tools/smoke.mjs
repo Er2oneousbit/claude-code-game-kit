@@ -147,14 +147,20 @@ try {
         await timeout(500); // let the result screen draw for the screenshot or recording
       }
     } else {
-      await page.evaluate(
-        (n) => new Promise((done) => {
-          let left = n;
-          const tick = () => (--left <= 0 ? done() : requestAnimationFrame(tick));
-          requestAnimationFrame(tick);
-        }),
-        FRAMES,
-      );
+      // raced against a timeout (#251): a page whose main thread freezes after the boot marker never resolves this
+      const frameMs = TIMEOUT_MS + Math.ceil((FRAMES * 1000) / 20);
+      const ran = await Promise.race([
+        page.evaluate(
+          (n) => new Promise((done) => {
+            let left = n;
+            const tick = () => (--left <= 0 ? done(true) : requestAnimationFrame(tick));
+            requestAnimationFrame(tick);
+          }),
+          FRAMES,
+        ),
+        timeout(frameMs),
+      ]);
+      if (!ran) errors.push(`[smoke] ${FRAMES} frames did not run within ${frameMs} ms (the page froze?)`);
     }
     if (recorder) clearInterval(recorder);
     recorder = null;

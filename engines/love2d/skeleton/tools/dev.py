@@ -378,11 +378,14 @@ def cmd_smoke(args, love):
     rec = (ROOT / args.record).resolve() if args.record else None
     if shot:
         shot.parent.mkdir(parents=True, exist_ok=True)
+        if shot.is_file():
+            shot.unlink()                   # #251: a picture from an earlier run must not pass for this one
         cmd += ["--shot", shot.as_posix()]
     if rec:
         rec.mkdir(parents=True, exist_ok=True)
         for old in rec.glob("f*.png"):
-            old.unlink()
+            if re.fullmatch(r"f\d{5}\.png", old.name):   # only the game's own frame names
+                old.unlink()
         cmd += ["--record", rec.as_posix(), "--every-ms", str(args.record_every)]
     for flag, value in (("--drive", args.drive), ("--locale", args.locale)):
         if value:
@@ -429,7 +432,10 @@ def cmd_smoke(args, love):
             return 1
         print(f"[ OK ] screenshot: {shot} ({shot.stat().st_size} bytes)")
     if rec:
-        count = len(list(rec.glob("f*.png")))
+        count = len([p for p in rec.glob("f*.png") if re.fullmatch(r"f\d{5}\.png", p.name)])
+        if count == 0:
+            print(f"[FAIL] no frames recorded in {rec} (#251: this was [ OK ] with 0 frames)")
+            return 1
         print(f"[ OK ] {count} frame(s) in {rec} (GIF: python tools/art/frames_to_gif.py {args.record} out.gif)")
     if args.compare:
         return compare(args, shot)
