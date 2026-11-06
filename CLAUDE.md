@@ -102,7 +102,7 @@ Order in `new_game.py` (later steps win):
 2. Write the engine's ENGINE.md and FLOW.md into the game's docs folder as ENGINE.md and ENGINE_FLOW.md. The generated CLAUDE.md `@`-imports the first.
 3. Copy `engines/<id>/skeleton/` on top. A skeleton file at the same path overrides the core file within the same run.
 4. Create `<assets_dir>/.gitkeep`, except when `assets_dir` is `Content` (Unreal).
-5. `.gitignore` = `core/.gitignore` + `gitignore.append` under a marker line, appended once in adopt mode. `.claude/settings.json` = `deep_merge(core, settings.patch.json)` (lists unioned, dicts recursive, scalars patch-wins), then merged with any existing file in adopt mode. Both are skipped by the tree copy.
+5. `.gitignore` = `core/.gitignore` + `gitignore.append` under a marker line, appended once in adopt mode. `.claude/settings.json` = `deep_merge(core, settings.patch.json)` (lists unioned, dicts recursive, scalars patch-wins), then merged into any existing file in adopt or upgrade mode three ways (`merge_user`) against the kit settings and .gitignore rules recorded in `.game-kit.json` (`kit_settings`, `kit_gitignore`): the user's values and deletions stay, rules the kit removed go, only new kit entries are added. Both are skipped by the tree copy.
 6. Write `.game-kit.json` (version, profile, history, per-file hashes; a pre-0.3.0 `.gold-standard.json` is read and replaced), optional `git init` (never commits).
 7. Scan output for unresolved `{{...}}`. The generated doctor.py is exempt because it contains the pattern on purpose.
 

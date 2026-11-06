@@ -34,10 +34,12 @@
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 KIT = Path(__file__).resolve().parents[1]
@@ -85,16 +87,14 @@ def sync_one(src, work):
     for rel, recorded in upgraded["files"].items():
         a, b = tmp / rel, src / rel
         if a.is_file() and file_hash(a) == recorded and (not b.is_file() or file_hash(b) != recorded):
-            b.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(a, b)
+            copy_back(a, b)
             synced.append(rel)
     # .gitignore is not hash-tracked (core part + the engine's lines); settings.json neither: the upgrade merges the
-    # kit's rules into the game's file (lists unioned, the game's own rules kept). Each comes back when it changed.
+    # kit's rules into the game's file (three ways, the game's own values and deletions kept). Each comes back when it changed.
     for rel in (".gitignore", ".claude/settings.json"):
         a, b = tmp / rel, src / rel
         if a.is_file() and (not b.is_file() or file_hash(a) != file_hash(b)):
-            b.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(a, b)
+            copy_back(a, b)
             synced.append(rel)
     # .gold, .gold2, ... (the scaffolder numbers a new copy when an older one is mid-merge); not e.g. x.golden.png
     golds = sorted(p.relative_to(tmp).as_posix() for p in tmp.rglob("*.gold*")
@@ -102,8 +102,21 @@ def sync_one(src, work):
     # The upgrade always appends a history entry. Bring the file back only when the sync did something, a conflict
     # needs recording, or the recorded state moved; otherwise every no-op run would grow every example's history.
     if synced or golds or recorded_state(upgraded) != recorded_state(meta):
-        shutil.copy2(tmp / ".game-kit.json", src / ".game-kit.json")
+        copy_back(tmp / ".game-kit.json", src / ".game-kit.json")
     return synced, golds
+
+
+def copy_back(a, b):
+    """Copy a onto b through a temp file next to b and a rename: a crash mid-copy never leaves b truncated (#233)."""
+    b.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=f".{b.name}.", suffix=".sync-tmp", dir=str(b.parent))
+    os.close(fd)
+    try:
+        shutil.copy2(a, tmp)
+        os.replace(tmp, b)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
 
 
 def main(argv=None):

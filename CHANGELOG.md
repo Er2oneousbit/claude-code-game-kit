@@ -3,9 +3,21 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig`, `tools/token_audit.py` and `tools/fetch_asset.py` from second-model reviews
+## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig`, `tools/token_audit.py`, `tools/fetch_asset.py` and the scaffolder from second-model reviews
 Kimi K3.1 Pro reviews of 0.13.0 (`tools/second_opinion.py`), each finding checked against the code; one more was
 found by the real run that verified the rig fixes.
+- `scripts/new_game.py`, the scaffolder: every write goes through a new, unique temp file (a fixed
+  `<file>.newgame-tmp` destroyed a user file of that name); a symlinked kit file or folder is left alone and reported,
+  never written through or replaced, and settings.json, .gitignore and the record refuse to write through one (#230). A
+  record made by a newer kit is refused (an older kit's `--upgrade` downgraded untouched files; `--force` to do it on
+  purpose); the record's shape is checked before any write; `.gold-standard.json` is deleted only when it was the
+  record read (#231). `.game-kit.json` now keeps the kit's own settings and .gitignore rules, and `--adopt` and
+  `--upgrade` merge against them three ways: your values stay yours (the kit's `model` no longer overwrote yours),
+  a rule the kit removed is removed, a rule or key you deleted stays deleted, only what is new in the kit is added
+  (#232). A file with NUL bytes or a binary type is copied byte for byte even when it decodes as UTF-8; `<` and `>`
+  are refused in names (they reach the web overlays' `<title>`); a case-only kit rename on Windows or macOS upgrades
+  instead of leaving a `.gold`; `sync_examples.py` copies back through a temp file (#233). `test_new_game.py` 26
+  cases (was 15).
 - `tools/fetch_asset.py` (a security review: it takes any URL and any archive): downloads are HTTPS only (`--allow-http`,
   and `--allow-local` for a `file://` pack already on this computer), never follow a redirect from HTTPS down to HTTP,
   stop at `--max-mb` (default 4096) and 1800 s, and record the final URL; a ZIP is refused before unpacking past 20,000

@@ -9,7 +9,9 @@
 #           settings keeping the project's rules, a second adopt adds nothing. Upgrade: replaces untouched kit files,
 #           keeps edited ones (.gold), leaves out files the project deleted, adds new kit files, a second upgrade is
 #           quiet, the recorded name, slug and engine are reused and a different one is refused, --restore puts a
-#           deleted kit file back rendered, a corrupt record stops the run. Exit codes: 1 for an unresolved placeholder, 2 for every refusal; --dry-run writes nothing.
+#           deleted kit file back rendered, a corrupt record stops the run. Review fixes: a unique temp file, no writes
+#           through symlinks, a newer kit's record or a wrong record shape refused, three-way settings and
+#           .gitignore merges, binaries by NUL bytes, no < > in names, case-only renames. Exit codes: 1 for an unresolved placeholder, 2 for every refusal; --dry-run writes nothing.
 # Usage   : python scripts/test_new_game.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline. The real engines are checked by scaffolding them (CLAUDE.md, "Verify a
@@ -363,6 +365,146 @@ class NewGameExam(unittest.TestCase):
         self.assertEqual(ignore.count("*.tmp"), 1)
         self.ng("--upgrade")
         self.assertEqual(self.text(".gitignore"), ignore, "a second upgrade appended again")
+
+    # ---- review fixes (#230-#233) -------------------------------------------
+    def test_a_user_file_named_like_the_temp_file_survives(self):
+        """#230: the temp file was always <target>.newgame-tmp, opened "wb": a user file of that name was destroyed."""
+        self.new()
+        write(self.dest / "tools" / "kit_tool.py.newgame-tmp", "mine\n")
+        write(self.kit / "core" / "tools" / "kit_tool.py", "print('kit tool v2')\n")
+        code, out = self.ng("--upgrade")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.text("tools/kit_tool.py"), "print('kit tool v2')\n")
+        self.assertEqual(self.text("tools/kit_tool.py.newgame-tmp"), "mine\n")
+
+    def link_folder(self, link, target):
+        """A symlinked folder, or a junction on Windows without the symlink right; None when neither can be made."""
+        target.mkdir(parents=True, exist_ok=True)
+        try:
+            link.symlink_to(target, target_is_directory=True)
+            return link
+        except (OSError, NotImplementedError):
+            pass
+        if sys.platform == "win32":
+            r = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(target)], capture_output=True)
+            if r.returncode == 0:
+                return link
+        return None
+
+    def test_a_symlinked_folder_is_not_written_through(self):
+        """#230: --upgrade wrote through a symlinked folder into the folder it points at, outside the project."""
+        self.new()
+        shared = self.root / "shared_tools"
+        shutil.rmtree(self.dest / "tools")
+        if self.link_folder(self.dest / "tools", shared) is None:
+            self.skipTest("cannot make a symlink or junction here")
+        write(shared / "kit_tool.py", "print('kit tool v1')\n")       # the untouched kit file, but in a shared folder
+        write(self.kit / "core" / "tools" / "kit_tool.py", "print('kit tool v2')\n")
+        code, out = self.ng("--upgrade")
+        self.assertEqual(code, 0, out)
+        self.assertEqual((shared / "kit_tool.py").read_text(encoding="utf-8"), "print('kit tool v1')\n")
+        self.assertIn("symlink", out)
+
+    def test_a_newer_kits_record_is_refused(self):
+        """#231: an older kit's --upgrade replaced a newer kit's untouched files with older ones, silently."""
+        self.new()
+        meta = self.meta()
+        meta["kit_version"] = "99.0.0"
+        write(self.dest / ".game-kit.json", json.dumps(meta))
+        write(self.kit / "core" / "tools" / "kit_tool.py", "print('kit tool v0')\n")
+        code, out = self.ng("--upgrade")
+        self.assertEqual(code, 2, out)
+        self.assertIn("newer", out)
+        self.assertEqual(self.text("tools/kit_tool.py"), "print('kit tool v1')\n")
+        code, out = self.ng("--upgrade", "--force")
+        self.assertEqual(code, 0, out)
+
+    def test_a_wrong_record_shape_stops_before_any_write(self):
+        """#231: "files": [] crashed with an AttributeError partway, after some files were written."""
+        self.new()
+        meta = self.meta()
+        meta["files"] = []
+        write(self.dest / ".game-kit.json", json.dumps(meta))
+        write(self.kit / "core" / "tools" / "kit_tool.py", "print('kit tool v2')\n")
+        code, out = self.ng("--upgrade")
+        self.assertEqual(code, 2, out)
+        self.assertIn("'files'", out)
+        self.assertNotIn("unexpected", out)
+        self.assertEqual(self.text("tools/kit_tool.py"), "print('kit tool v1')\n")
+
+    def test_an_old_record_beside_the_current_one_is_left_alone(self):
+        """#231: .gold-standard.json was deleted even when .game-kit.json was the record read."""
+        self.new()
+        write(self.dest / ".gold-standard.json", "{}")
+        code, out = self.ng("--upgrade")
+        self.assertEqual(code, 0, out)
+        self.assertTrue((self.dest / ".gold-standard.json").is_file())
+
+    def test_settings_merge_three_ways(self):
+        """#232: scalars went to the kit on every run, removed kit rules stayed forever, deleted ones came back."""
+        self.new()
+        settings = json.loads(self.text(".claude/settings.json"))
+        settings["model"] = "mine"
+        settings["permissions"]["allow"].append("Bash(my-tool)")
+        settings["permissions"]["deny"].remove("Read(.env)")              # the user dropped a kit rule on purpose
+        write(self.dest / ".claude" / "settings.json", json.dumps(settings, indent=2))
+        patch = json.loads(json.dumps(PATCH))
+        patch["permissions"]["allow"] = ["Bash(python tools/dev.py check)", "Bash(fake-engine2 *)"]  # a rule replaced
+        write(self.kit / "engines" / "fake" / "settings.patch.json", json.dumps(patch, indent=2))
+        code, out = self.ng("--upgrade")
+        self.assertEqual(code, 0, out)
+        got = json.loads(self.text(".claude/settings.json"))
+        self.assertEqual(got["model"], "mine")
+        self.assertIn("Bash(my-tool)", got["permissions"]["allow"])
+        self.assertIn("Bash(fake-engine2 *)", got["permissions"]["allow"])
+        self.assertNotIn("Bash(fake-engine *)", got["permissions"]["allow"], "a rule the kit removed stayed")
+        self.assertNotIn("Read(.env)", got["permissions"]["deny"], "a rule the user deleted came back")
+
+    def test_merge_user_rules(self):
+        """#232: the three-way merge on its own (absent before the fix)."""
+        mu = new_game.merge_user
+        self.assertEqual(mu({"m": "a"}, {"m": "a"}, {"m": "b"}), {"m": "b"}, "kit value moves where the user kept it")
+        self.assertEqual(mu({"m": "u"}, {"m": "a"}, {"m": "b"}), {"m": "u"})
+        self.assertEqual(mu({"m": "u"}, None, {"m": "b"}), {"m": "u"}, "no baseline: the user's value wins")
+        self.assertEqual(mu({"l": [1, 9]}, None, {"l": [1, 2]}), {"l": [1, 9, 2]}, "no baseline: lists unioned")
+        self.assertEqual(mu({"l": [1, 9]}, {"l": [1, 3]}, {"l": [1, 2]}), {"l": [1, 9, 2]})
+        self.assertEqual(mu({"x": 1}, {"x": 1, "k": 2}, {"x": 1, "k": 2}), {"x": 1}, "a deleted key stays deleted")
+
+    def test_a_deleted_gitignore_rule_stays_deleted(self):
+        """#232: a kit rule the user removed from .gitignore was appended again by every --upgrade."""
+        self.new()
+        write(self.dest / ".gitignore", self.text(".gitignore").replace("*.tmp\n", ""))
+        code, out = self.ng("--upgrade")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("*.tmp", self.text(".gitignore"))
+
+    def test_a_binary_that_decodes_as_utf8_is_copied_verbatim(self):
+        """#233: a NUL-holding file that decodes as UTF-8 got placeholders filled and CRLF folded."""
+        blob = b"{{GAME_NAME}}\x00\r\n"
+        (self.kit / "core" / "data").mkdir(parents=True)
+        (self.kit / "core" / "data" / "blob.dat").write_bytes(blob)
+        self.new()
+        self.assertEqual((self.dest / "data" / "blob.dat").read_bytes(), blob)
+
+    def test_html_characters_in_the_name_are_refused(self):
+        """#233: < and > reached the web overlays' <title> as they were."""
+        code, out = self.ng(name="Fake <b>Game</b>")
+        self.assertEqual(code, 2, out)
+        self.assertIn("< or >", out)
+
+    def test_a_case_only_rename_upgrades_quietly(self):
+        """#233: on a case-insensitive file system the renamed, untouched file became a .gold conflict."""
+        if not getattr(new_game, "case_insensitive", lambda p: sys.platform == "win32")(self.root):
+            self.skipTest("case-sensitive file system")
+        self.new()
+        (self.kit / "core" / "tools" / "kit_tool.py").unlink()
+        write(self.kit / "core" / "tools" / "Kit_Tool.py", "print('kit tool v2')\n")
+        code, out = self.ng("--upgrade")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(list((self.dest / "tools").glob("*.gold*")), [], out)
+        files = self.meta()["files"]
+        self.assertIn("tools/Kit_Tool.py", files)
+        self.assertNotIn("tools/kit_tool.py", files)
 
 
 if __name__ == "__main__":

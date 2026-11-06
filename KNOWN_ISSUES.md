@@ -158,6 +158,10 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
   colliding ZIP entries ([#227](https://github.com/Er2oneousbit/claude-code-game-kit/issues/227)); tokens, CR and paths in
   the log ([#228](https://github.com/Er2oneousbit/claude-code-game-kit/issues/228)); no rollback after a failed log
   write ([#229](https://github.com/Er2oneousbit/claude-code-game-kit/issues/229)).
+- **`scripts/new_game.py` review (FIXED in 0.13.1, kept here until the issues close on main):** a fixed temp name and
+  symlinks followed ([#230](https://github.com/Er2oneousbit/claude-code-game-kit/issues/230)); a newer kit's record accepted, record shape unchecked
+  ([#231](https://github.com/Er2oneousbit/claude-code-game-kit/issues/231)); no baseline for settings.json and .gitignore merges ([#232](https://github.com/Er2oneousbit/claude-code-game-kit/issues/232)); binary
+  detection, `<` `>` in names, case-only renames, sync copy-back ([#233](https://github.com/Er2oneousbit/claude-code-game-kit/issues/233)).
 
 ## The examples
 None of the example games has been played by a human tester; the bots and tests are the only proof they play as

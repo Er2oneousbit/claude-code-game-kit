@@ -45,8 +45,10 @@ import hashlib
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
+import tempfile
 import traceback
 import unicodedata
 from pathlib import Path
@@ -61,6 +63,12 @@ GOLD_SUFFIX = ".gold"                     # x.gd -> x.gd.gold: engines do not co
 META_FILE = ".game-kit.json"             # version, profile, history and per-file hashes for --upgrade
 LEGACY_META_FILE = ".gold-standard.json" # same file before the 0.3.0 rename; read, then replaced
 PROFILES_DIR = REPO_ROOT / "profiles"
+UMASK = os.umask(0)
+os.umask(UMASK)                           # read once (os.umask can only be read by setting it)
+# Valid-UTF-8 files of these types are still binary: no placeholder substitution, no line-ending changes (#233)
+BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico", ".wav", ".ogg", ".mp3", ".flac", ".ttf",
+                   ".otf", ".woff", ".woff2", ".zip", ".glb", ".fbx", ".blend", ".uasset", ".umap", ".dll", ".exe",
+                   ".so", ".dylib", ".pck", ".npz", ".bin", ".pdf"}
 FOOTER_LINE = re.compile(r"^(?P<indent>[ \t]*)(?P<mark>#|//|--)[ \t]*\{\{FOOTER\}\}[ \t]*$", re.M)
 FOOTER_GONE = re.compile(r"(?:^[ \t]*\n)?^[ \t]*(?:#|//|--)[ \t]*\{\{FOOTER\}\}[ \t]*(?:\n|\Z)", re.M)
 STYLE_LINE = re.compile(r"^[ \t]*\{\{PROFILE_STYLE\}\}[ \t]*\n?", re.M)
@@ -172,6 +180,8 @@ def validate_name(name):
     if not name or not name.strip():
         raise ScaffoldError("--name must not be empty")
     validate_text_arg("--name", name)
+    if any(ch in name for ch in "<>"):
+        raise ScaffoldError("--name must not contain < or > (the name lands in HTML, e.g. the web overlays' <title>)")
     if any(ch in name for ch in '"\\{}'):
         raise ScaffoldError('--name must not contain quotes, backslashes, or braces (they break generated config files)')
     if "`" in name:
@@ -241,6 +251,21 @@ def iter_files(base):
         yield rel, p
 
 
+def case_insensitive(folder):
+    """True when the file system under folder ignores case (Windows, default macOS). Probed with a real file."""
+    while not folder.is_dir() and folder.parent != folder:   # probe the nearest existing folder: never create dest
+        folder = folder.parent
+    try:
+        fd, probe = tempfile.mkstemp(prefix=".newgame-Case-", dir=str(folder))
+        os.close(fd)
+        try:
+            return os.path.exists(os.path.join(str(folder), os.path.basename(probe).swapcase()))
+        finally:
+            os.unlink(probe)
+    except OSError:
+        return os.name == "nt"
+
+
 def deep_merge(base, patch):
     """Merge patch into base. Lists are unioned (order kept), dicts merged recursively, scalars: patch wins."""
     if isinstance(base, dict) and isinstance(patch, dict):
@@ -261,16 +286,40 @@ def digest(data):
 
 
 def atomic_write(path, data):
-    """Write bytes via a temp file + rename, so a kill or full disk never leaves a half-written file."""
+    """Write bytes via a temp file + rename, so a kill or full disk never leaves a half-written file. The temp file is
+    new and unique (created exclusively next to the target): a fixed name could truncate a file of the user's that
+    happened to have it, or write through a symlink of that name (#230)."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".newgame-tmp")
+    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".newgame-tmp", dir=str(path.parent))
     try:
-        with open(tmp, "wb") as fh:
+        with os.fdopen(fd, "wb") as fh:
             fh.write(data)
+        # mkstemp makes the file 0600: give it the replaced file's mode, or what a plain open() would have
+        try:
+            mode = stat.S_IMODE(os.stat(str(path)).st_mode)
+        except OSError:
+            mode = 0o666 & ~UMASK
+        os.chmod(tmp, mode)
         os.replace(tmp, path)
     finally:
-        if tmp.exists():
-            tmp.unlink()
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def linked(dest, rel):
+    """True when the target or a folder between dest and it is a symlink (or junction): the kit never writes through
+    one, nor replaces one with a file (#230)."""
+    p = dest
+    for part in Path(rel).parts:
+        p = p / part
+        try:
+            st = os.lstat(str(p))
+        except OSError:
+            return False                    # nothing there yet (so nothing below it either)
+        # a symlink, or a Windows junction (a mount-point reparse tag; OneDrive's placeholders are other tags)
+        if stat.S_ISLNK(st.st_mode) or getattr(st, "st_reparse_tag", 0) == 0xA0000003:
+            return True
+    return False
 
 
 def gold_name(rel, dest, data, is_text):
@@ -312,9 +361,16 @@ class Writer:
         self.kept_deleted = []      # --upgrade: kit files the project deleted on purpose, left out
         self.restored = []          # --restore: kit files put back on request
         self.written = []           # every path this run wrote (listed by --debug)
+        self.case_insensitive = case_insensitive(dest)
+        self.case_map = {k.casefold(): k for k in prev_hashes}
+        self.retired = set()        # recorded keys replaced by a case-only rename
 
     def _write(self, rel, data):
         dbg(f"write {rel}")
+        if linked(self.dest, rel):
+            # settings.json, .gitignore, a .gold copy: never written through a symlink (#230)
+            raise ScaffoldError(f"{Path(rel).as_posix()} is a symlink or inside a symlinked folder: the kit does not "
+                                "write through links. Replace it with a real file or folder, then re-run.")
         if not self.dry_run:
             atomic_write(self.dest / rel, data)
         self.written.append(rel.as_posix())
@@ -325,6 +381,18 @@ class Writer:
         key = rel.as_posix()
         target = self.dest / rel
         new_hash = digest(data)
+        if linked(self.dest, rel):
+            self.skipped.append(f"{key} (a symlink, or inside a symlinked folder: left alone)")
+            if key in self.prev_hashes:
+                self.hashes[key] = self.prev_hashes[key]
+            return
+        if key not in self.prev_hashes and self.case_insensitive:
+            # a case-only rename by the kit (Tools/Foo.py -> tools/foo.py): on this file system the file on disk is
+            # the recorded one, so it carries that record's hash; the old key is retired (#233)
+            old_key = self.case_map.get(key.casefold())
+            if old_key is not None:
+                self.prev_hashes = {**self.prev_hashes, key: self.prev_hashes[old_key]}
+                self.retired.add(old_key)
         if key in self.restore:
             # Asked for by name: the rendered kit version (a file copied from the kit by hand is a raw template)
             self._write(rel, data)
@@ -383,6 +451,10 @@ def plan_tree(plan, base, mapping, label):
         if key in (".gitignore", ".claude/settings.json"):
             continue  # merged separately
         raw = src.read_bytes()
+        # a valid-UTF-8 binary (NUL bytes, or a known binary type) must not get placeholders or CRLF folding (#233)
+        if b"\0" in raw or Path(key).suffix.lower() in BINARY_SUFFIXES:
+            plan[key] = (raw, False)
+            continue
         try:
             text = raw.decode("utf-8")
         except UnicodeDecodeError:
@@ -395,7 +467,12 @@ def plan_tree(plan, base, mapping, label):
         plan[key] = (substitute(text.replace("\r\n", "\n"), mapping).encode("utf-8"), True)
 
 
-def merge_gitignore(writer, core_text, engine_text):
+def kit_rules(block):
+    """The rule lines of a kit .gitignore block (no comments, no blanks)."""
+    return [l.strip() for l in block.splitlines() if l.strip() and not l.lstrip().startswith("#")]
+
+
+def merge_gitignore(writer, core_text, engine_text, base_rules=None):
     """Compose the .gitignore: universal + engine block. In adopt mode append once to an existing file."""
     block = f"{GITIGNORE_MARKER}\n{core_text.rstrip()}\n\n{engine_text.strip()}\n" if engine_text else f"{GITIGNORE_MARKER}\n{core_text.rstrip()}\n"
     block = block.replace("\r\n", "\n")
@@ -409,7 +486,10 @@ def merge_gitignore(writer, core_text, engine_text):
             # The kit block is there. --upgrade appends only the rules a newer kit added (never removes or reorders);
             # --adopt leaves the file alone, so a rule the user deleted on purpose stays deleted.
             have = {l.strip() for l in existing.decode("utf-8", "replace").splitlines()}
-            missing = [l.strip() for l in block.splitlines() if l.strip() and not l.lstrip().startswith("#") and l.strip() not in have]
+            # a rule the kit wrote last time (base_rules) and the user then deleted stays deleted; only rules new to
+            # the kit are appended (#232). Without a recorded baseline (older records), every missing rule is added.
+            base = set(base_rules) if base_rules is not None else set()
+            missing = [r for r in kit_rules(block) if r not in have and r not in base]
             if writer.mode != "upgrade" or not missing:
                 writer.skipped.append(".gitignore (already has the kit block)")
                 return
@@ -428,24 +508,56 @@ def merge_gitignore(writer, core_text, engine_text):
     writer.created.append(".gitignore")
 
 
-def merge_settings(writer, core_settings, patch):
-    """Compose .claude/settings.json from core + engine patch (+ existing file when adopting)."""
+def merge_user(user, base, kit):
+    """Merge the kit's settings into the user's, three ways (#232). base is what the kit wrote last time (None when the
+    record has none). Dicts: key by key. Lists: the user's entries, minus ones the kit wrote before and has dropped
+    since, plus the kit's new ones (an entry the user deleted stays deleted). Scalars: the kit's value only where the
+    user still has the kit's previous one; with no baseline the user's value always wins."""
+    if isinstance(user, dict) and isinstance(kit, dict):
+        base = base if isinstance(base, dict) else None
+        out = {}
+        for k in list(user) + [k for k in kit if k not in user]:
+            if k in user and k in kit:
+                out[k] = merge_user(user[k], None if base is None else base.get(k), kit[k])
+            elif k in user:                 # not in the kit now: drop it only if the kit wrote it and the user kept it
+                if not (base is not None and k in base and base[k] == user[k]):
+                    out[k] = user[k]
+            elif base is None or k not in base:   # new in the kit (a key the user deleted stays deleted)
+                out[k] = kit[k]
+        return out
+    if isinstance(user, list) and isinstance(kit, list):
+        old = base if isinstance(base, list) else []
+        out = [x for x in user if not (x in old and x not in kit)]
+        out.extend(x for x in kit if x not in out and x not in old)
+        return out
+    if base is not None and user == base:
+        return kit
+    return user
+
+
+def merge_settings(writer, core_settings, patch, base=None):
+    """Compose .claude/settings.json from core + engine patch (+ existing file when adopting). Returns the kit's own
+    settings, recorded as the next run's baseline."""
     merged = deep_merge(core_settings, patch) if patch else core_settings
+    kit = merged
     target = writer.dest / ".claude" / "settings.json"
     if target.exists() and writer.mode in ("adopt", "upgrade"):
         try:
             existing = json.loads(target.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise ScaffoldError(f"existing .claude/settings.json is not valid JSON ({exc}). Fix it, then re-run.")
-        merged = deep_merge(existing, merged)
+        if not isinstance(existing, dict):
+            raise ScaffoldError("existing .claude/settings.json is not a JSON object. Fix it, then re-run.")
+        merged = merge_user(existing, base, merged)
         if merged == existing:
             writer.skipped.append(".claude/settings.json (already has every kit rule)")
-            return
+            return kit
         writer.overridden.append(".claude/settings.json (kit rules merged into yours)")
     elif target.exists() and not writer.force:
         raise ScaffoldError(".claude/settings.json already exists. Use --adopt or --force.")
     writer._write(Path(".claude/settings.json"), (json.dumps(merged, indent=2) + "\n").encode("utf-8"))
     writer.created.append(".claude/settings.json")
+    return kit
 
 
 def verify_no_placeholders(plan):
@@ -485,8 +597,38 @@ def load_meta(dest):
                                 "every file that differs)")
         if not isinstance(data, dict):
             raise ScaffoldError(f"{name} does not hold a JSON object: fix it, or delete it to start the record again")
+        validate_meta(name, data)
+        data["_read_from"] = name
         return data
     return {}
+
+
+def validate_meta(name, data):
+    """The record's shape, checked before anything is written (a wrong shape used to crash midway, #231)."""
+    def bad(what):
+        raise ScaffoldError(f"{name}: {what}. Fix it (git can show the last good version), or delete it to start the "
+                            "record again")
+    files = data.get("files", {})
+    if not isinstance(files, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in files.items()):
+        bad("'files' must map paths to hashes")
+    if not isinstance(data.get("history", []), list) or not all(isinstance(h, dict) for h in data.get("history", [])):
+        bad("'history' must be a list of entries")
+    prof = data.get("profile")
+    if prof is not None and (not isinstance(prof, dict) or not isinstance(prof.get("style", []), list)
+                             or not all(isinstance(prof.get(k, ""), str) for k in ("author", "footer"))):
+        bad("'profile' must hold author, footer and style")
+    for k in ("kit_version", "game_name", "slug", "engine", "author", "scaffolded"):
+        if k in data and not isinstance(data[k], str):
+            bad(f"'{k}' must be text")
+    if "kit_settings" in data and not isinstance(data["kit_settings"], dict):
+        bad("'kit_settings' must be an object")
+    if "kit_gitignore" in data and not (isinstance(data["kit_gitignore"], list)
+                                        and all(isinstance(r, str) for r in data["kit_gitignore"])):
+        bad("'kit_gitignore' must be a list of rules")
+
+
+def version_tuple(v):
+    return tuple(int(x) for x in re.findall(r"\d+", v)[:3]) or (0,)
 
 
 def restore_key(path):
@@ -605,6 +747,12 @@ def scaffold(args):
         raise ScaffoldError(f"--{mode} needs an existing folder, {dest} does not exist (omit --{mode} for a new project)")
 
     old = load_meta(dest) if mode != "new" else {}
+    read_from = old.pop("_read_from", None)
+    recorded = old.get("kit_version")
+    if recorded and version_tuple(recorded) > version_tuple(KIT_VERSION) and not args.force:
+        # an older kit would replace a newer kit's untouched files with older ones (#231)
+        raise ScaffoldError(f"this project was made or upgraded with kit {recorded}, newer than this kit "
+                            f"({KIT_VERSION}). Use the newer kit; --force downgrades on purpose.")
     name, slug, engine_id = settle_identity(args, old, derived, engines)
     meta = engines[engine_id]
     prev_hashes = old.get("files", {})
@@ -673,11 +821,11 @@ def scaffold(args):
     core_ignore = (CORE_DIR / ".gitignore").read_text(encoding="utf-8")
     ignore_extra = edir / meta.get("gitignore_append", "gitignore.append")
     engine_ignore = ignore_extra.read_text(encoding="utf-8") if ignore_extra.is_file() else ""
-    merge_gitignore(writer, core_ignore, engine_ignore)
+    merge_gitignore(writer, core_ignore, engine_ignore, old.get("kit_gitignore"))
     core_settings = json.loads((CORE_DIR / ".claude" / "settings.json").read_text(encoding="utf-8"))
     patch_file = edir / meta.get("settings_patch", "settings.patch.json")
     patch = json.loads(patch_file.read_text(encoding="utf-8")) if patch_file.is_file() else {}
-    merge_settings(writer, core_settings, patch)
+    kit_settings = merge_settings(writer, core_settings, patch, old.get("kit_settings"))
 
     # 6) Metadata: kept and extended, never reset (the hashes drive the next --upgrade)
     info = dict(old)
@@ -698,10 +846,15 @@ def scaffold(args):
     history.append({"version": KIT_VERSION, "date": today, "mode": mode,
                     "unmerged": sorted(o for o, _, _ in writer.conflicts)})
     info["history"] = history
-    info["files"] = dict(sorted({**prev_hashes, **writer.hashes}.items()))
+    kept = {k: v for k, v in prev_hashes.items() if k not in writer.retired}     # a case-only rename retires the old key
+    info["files"] = dict(sorted({**kept, **writer.hashes}.items()))
+    # the next run's baselines for the three-way merges (#232)
+    info["kit_settings"] = kit_settings
+    info["kit_gitignore"] = kit_rules(core_ignore + "\n" + engine_ignore)
     writer._write(Path(META_FILE), (json.dumps(info, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
     legacy = dest / LEGACY_META_FILE
-    if legacy.is_file() and not args.dry_run:
+    # only when the old record was the one read and migrated: one kept beside a current record is left alone (#231)
+    if read_from == LEGACY_META_FILE and legacy.is_file() and not args.dry_run:
         legacy.unlink()                     # its content now lives in .game-kit.json
         writer.overridden.append(f"{LEGACY_META_FILE} replaced by {META_FILE}")
 
