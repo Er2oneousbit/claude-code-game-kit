@@ -25,6 +25,7 @@ import math
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -152,6 +153,8 @@ for name, a, b in regions.values():
                 write24(os.path.join(out_dir, t["name"] + ".wav"), render([t], a, b))
     else:
         write24(os.path.join(out_dir, name + ".wav"), render(tracks, a, b))
+if os.environ.get("WAVESMITH_FAKE_REAPER") == "fail":
+    sys.exit(7)
 '''
 
 
@@ -274,7 +277,6 @@ class ProjectExam(GameDir):
         self.assertEqual(run("export", "blips", "build/daw_blips")[0], 0)
         self.assertEqual(run("export", "explore", "build/daw_explore")[0], 0)
         leaks = [str(self.tmp), str(self.tmp).replace("\\", "/"), str(Path.home()), Path.home().as_posix()]
-        user = Path.home().name
         texts = [p for p in self.root.rglob("*") if p.suffix in (".rpp", ".json", ".txt", ".csv")
                  and ("assets_src" in p.parts or "build" in p.parts)]
         self.assertGreaterEqual(len(texts), 8)
@@ -284,7 +286,6 @@ class ProjectExam(GameDir):
             self.assertIsNone(re.search(r"(^|[\s\"'(])(/Users/|/home/|\\\\)", t), p)
             for leak in leaks:
                 self.assertNotIn(leak, t, p)
-            self.assertIsNone(re.search(rf"\b{re.escape(user)}\b", t), f"{p} names the user folder {user}")
 
     def test_existing_project_needs_overwrite_and_keeps_a_bak(self):
         self.assertEqual(run("reaper", "blips")[0], 0)
@@ -899,6 +900,140 @@ def appdata_snapshot():
     if not folder.is_dir():
         return {}
     return {str(p): (p.stat().st_size, p.stat().st_mtime_ns) for p in folder.rglob("*")}
+
+
+class ReviewFixesExam(GameDir):
+    """The fixes from a review of the round trip (#242, #243, #244), each failing on the code before them."""
+
+    def edited_blips(self):
+        self.assertEqual(run("reaper", "blips")[0], 0)
+        self.edit_rpp("blips", lambda t: self.item_line(t, "blips_high", "FADEOUT", "FADEOUT 1 0.15 0 1 0 0 0"))
+
+    # ---- #242 -------------------------------------------------------------------------------------------------
+    def test_names_that_a_daw_could_merge_are_refused(self):
+        folder = self.root / "assets" / "audio" / "twins"
+        folder.mkdir(parents=True)
+        write_wav(folder / "foo-bar.wav", tone(0.1, 880), RATE)
+        write_wav(folder / "foo_bar.wav", tone(0.1, 440), RATE)
+        rc, out = run("reaper", "assets/audio/twins", "--bus", "sfx")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("names must differ", out)
+
+    def test_two_stems_on_one_file_are_refused(self):
+        self.make_music()
+        data = json.loads((self.root / "data" / "music.json").read_text(encoding="utf-8"))
+        data["tracks"]["explore"]["stems"]["bass"] = "music/explore_lead.wav"
+        (self.root / "data" / "music.json").write_bytes(json.dumps(data).encode("utf-8"))
+        rc, out = run("reaper", "explore")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("one game file, one sound", out)
+
+    def test_a_failed_reaper_brings_nothing_back(self):
+        self.edited_blips()
+        before = self.snapshot()
+        os.environ["WAVESMITH_FAKE_REAPER"] = "fail"
+        rc, out = run("reaper", "--reexport", "assets_src/daw/blips")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("REAPER exited 7", out)
+        self.assertEqual(self.changed(before), [])
+
+    def test_a_music_render_at_another_rate_is_refused(self):
+        self.make_music()
+        self.assertEqual(run("export", "explore", "build/daw_explore")[0], 0)
+        work = self.root / "build" / "daw_explore"
+        samples, rate, _, channels = read_wav_channels(work / "stems" / "lead.wav")
+        write_wav(work / daw.RENDERS_DIR / "lead.wav", samples, 48000, channels=channels)
+        before = self.snapshot()
+        rc, out = run("import", "build/daw_explore")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("rendered at 48000 Hz", out)
+        self.assertEqual(self.changed(before), [])
+
+    def test_a_mix_gain_with_a_stem_missing_writes_no_stem(self):
+        self.make_music()
+        self.assertEqual(run("export", "explore", "build/daw_explore")[0], 0)
+        work = self.root / "build" / "daw_explore"
+        samples, rate, _, channels = read_wav_channels(work / "stems" / "lead.wav")
+        write_wav(work / daw.RENDERS_DIR / "lead.wav", [s * 0.01 for s in samples], rate, channels=channels)
+        before = self.snapshot()
+        rc, out = run("import", "build/daw_explore")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("bass: no render, but the mix moved", out)
+        self.assertEqual(self.changed(before), [], "half the mix was moved")
+
+    # ---- #243 -------------------------------------------------------------------------------------------------
+    def test_a_user_file_named_like_the_old_temp_file_survives(self):
+        self.edited_blips()
+        mine = self.root / "assets" / "audio" / "blips" / "blips_high.daw_tmp.wav"
+        write_wav(mine, tone(0.3, 220), RATE)
+        kept = mine.read_bytes()
+        rc, out = run("reaper", "--reexport", "assets_src/daw/blips")
+        self.assertEqual(rc, 0, out)
+        self.assertTrue(mine.is_file(), "the user's file was moved onto the game file")
+        self.assertEqual(mine.read_bytes(), kept)
+        self.assertEqual(list((self.root / "assets" / "audio" / "blips").glob(".*daw_tmp*")), [], "temp file left")
+
+    def test_overwrite_keeps_media_edited_in_place(self):
+        self.assertEqual(run("reaper", "blips")[0], 0)
+        media = self.rpp().parent / "media" / "blips_high.wav"
+        write_wav(media, tone(0.2, 333), RATE)                           # edited in place, as import allows
+        edited = media.read_bytes()
+        rc, out = run("reaper", "blips", "--overwrite")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("edited working copy kept", out)
+        backups = list((self.rpp().parent / daw.BACKUP_DIR).rglob("blips_high.wav"))
+        self.assertEqual(len(backups), 1, out)
+        self.assertEqual(backups[0].read_bytes(), edited)
+
+    def test_a_symlinked_sound_folder_is_not_written_through(self):
+        self.edited_blips()
+        blips = self.root / "assets" / "audio" / "blips"
+        outside = self.tmp / "shared_blips"
+        shutil.copytree(blips, outside)
+        shutil.rmtree(blips)
+        try:
+            blips.symlink_to(outside, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            r = subprocess.run(["cmd", "/c", "mklink", "/J", str(blips), str(outside)], capture_output=True) \
+                if sys.platform == "win32" else None
+            if r is None or r.returncode != 0:
+                self.skipTest("cannot make a symlink or junction here")
+        kept = (outside / "blips_high.wav").read_bytes()
+        rc, out = run("reaper", "--reexport", "assets_src/daw/blips")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("outside the game root", out)
+        self.assertEqual((outside / "blips_high.wav").read_bytes(), kept)
+
+    # ---- #244 -------------------------------------------------------------------------------------------------
+    def test_windows_device_names_are_refused(self):
+        for bad in ("CON", "nul.x", "foo."):
+            rc, out = run("reaper", "blips", "--name", bad)
+            self.assertEqual(rc, 2, (bad, out))
+
+    def test_line_breaks_never_reach_the_project(self):
+        with self.assertRaises(daw.ToolError):
+            daw.no_breaks("assets/a\n  >\n/beep.wav", "the path")
+        self.assertEqual(daw.no_breaks("assets/audio/beep.wav", "the path"), "assets/audio/beep.wav")
+
+    @unittest.skipIf(sys.platform == "win32", "Windows file names cannot hold a line break")
+    def test_a_folder_with_a_line_break_is_refused(self):
+        folder = self.root / "assets" / "audio" / "a\n  >"
+        folder.mkdir(parents=True)
+        write_wav(folder / "beep.wav", tone(0.1, 880), RATE)
+        rc, out = run("reaper", str(folder), "--bus", "sfx", "--name", "nl")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("line break", out)
+
+    def test_log_cells_are_escaped(self):
+        self.assertEqual(run("reaper", "blips")[0], 0)
+        man = json.loads((self.rpp().parent / daw.MANIFEST).read_text(encoding="utf-8"))
+        man["logged"] = ["assets/audio/a|b/beep.wav"]
+        daw.log_row(Path("."), "assets_src/daw/x|y", man, [], "REAPER", "2026-11-05")
+        row = [ln for ln in (self.root / "docs/ASSET_LOG.md").read_text(encoding="utf-8").splitlines()
+               if ln.startswith("| A-0001")][0]
+        self.assertIn("a\\|b", row)
+        self.assertIn("x\\|y", row)
+        self.assertEqual(row.count("|") - row.count("\\|"), 12, row)
 
 
 @unittest.skipUnless(LIVE_REAPER and os.path.isfile(LIVE_REAPER),

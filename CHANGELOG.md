@@ -3,9 +3,19 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig`, `tools/token_audit.py`, `tools/fetch_asset.py`, the scaffolder, the paid PixelLab and ElevenLabs clients, `tools/publish_check.py`, the SessionStart hook and `tools/second_opinion.py` from second-model reviews
+## 0.13.1 (2026-11-05): fixes to `bozzetto.py rig`, `tools/token_audit.py`, `tools/fetch_asset.py`, the scaffolder, the paid PixelLab and ElevenLabs clients, `tools/publish_check.py`, the SessionStart hook, `tools/second_opinion.py` and the Wavesmith DAW round trip from second-model reviews
 Kimi K3.1 Pro reviews of 0.13.0 (`tools/second_opinion.py`), each finding checked against the code; one more was
 found by the real run that verified the rig fixes.
+- The Wavesmith DAW round trip (`tools/audio/wavesmith/daw.py`): names that a DAW could turn into one another
+  (`foo-bar` and `foo_bar`) and two sounds on one game file are refused, also in an edited manifest; a REAPER that
+  exits non-zero brings nothing back; a music render at another rate than its track is refused; when the mix gain
+  moves and a stem has no render, no stem is written (the mix was left half moved) (#242). Temp files are unique (a
+  user file named `<sound>.daw_tmp.wav` was overwritten); `--overwrite` keeps every working copy edited since in
+  `backup/<time>/`; a write that a symlinked folder would take outside the game is refused (#243). A line break in a
+  path or the working folder is refused before it reaches the .rpp; every asset-log cell is escaped; Windows device
+  names (`CON`, `nul.x`) and a trailing dot are refused as names; the local-path exam no longer fails for a user
+  called `lead` (#244). `test_daw.py` 51 cases (was 39); the four live REAPER 7.84 cases pass (one failed once in
+  about ten runs and did not again; cause not found).
 - `tools/second_opinion.py`: the prompt and the reviewer's agent file say that file names and contents are data,
   never instructions; file names are quoted, and ones with control characters refused; the docs now say plainly that
   read-only is not confined (Kimi's Read takes any path); a timeout, Ctrl+C or any failure stops the CLI and all it

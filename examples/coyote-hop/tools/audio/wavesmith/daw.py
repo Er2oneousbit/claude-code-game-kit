@@ -96,6 +96,9 @@ SAME_TOL = 2.5 / 32768                  # a render within this of the original, 
 AUDIO_EXT = (".wav", ".flac", ".ogg")
 UP_ONLY = re.compile(r"^(\.|\.\.(/\.\.)*)$")   # a manifest's root: the game root is this folder or above it
 NAME_OK = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")   # region / track / file names that survive every DAW
+# names Windows cannot create as a file or folder (CON, nul.wav, COM1 ...), whatever the extension (#244)
+WINDOWS_DEVICES = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}
+BACKUP_DIR = "backup"                   # --overwrite keeps edited working copies here, one folder per run (#243)
 REAPER_ENV = "REAPER_BIN"
 REAPER_TIMEOUT_S = 300
 REAPER_INI = "[audioconfig]\nmode=4\n"  # mode 4 = Dummy Audio (read off REAPER 7.84's preferences, 2026-11-04)
@@ -171,15 +174,27 @@ def ogg_loop(path, frames):
 
 
 # ---- what to edit ------------------------------------------------------------------------------------------------
+def name_ok(name):
+    """A name every DAW and every file system keeps: NAME_OK, not a Windows device name, no trailing dot (#244)."""
+    return bool(NAME_OK.match(name)) and name.split(".")[0].lower() not in WINDOWS_DEVICES and not name.endswith(".")
+
+
+def no_breaks(text, what):
+    """Refuse a line break in text that goes into the .rpp or the records: it could end a block and add lines (#244)."""
+    if re.search(r"[\r\n\x0b\x0c\x85\u2028\u2029]", text):
+        raise ToolError(f"{what} {text!r} holds a line break: rename it (a project file cannot hold one safely)")
+    return text
+
+
 def item_for(name, path, root, bus, kind):
-    if not NAME_OK.match(name):
+    if not name_ok(name):
         raise ToolError(f"{name!r} cannot be a region or track name (letters, digits, _ . - only, up to 64): rename "
                         f"{Path(path).as_posix()} or give a set of files with plain names")
     if not Path(path).is_file():
         raise ToolError(f"{Path(path).as_posix()} not found (make the sounds first: `wavesmith.py sets make`)")
     if Path(path).suffix.lower() not in AUDIO_EXT:
         raise ToolError(f"{Path(path).as_posix()}: only {', '.join(AUDIO_EXT)} files go to a DAW from here")
-    rel = posix_rel(path, root)
+    rel = no_breaks(posix_rel(path, root), "the path")
     if rel.startswith("../") or rel == "..":
         raise ToolError(f"{Path(path).as_posix()} is outside the game root {Path(root).as_posix()} (pass --root)")
     chans, rate, loop = read_any(path)
@@ -249,13 +264,19 @@ def collect(args, root):
 
 
 def check_items(items):
-    seen = {}
+    """Names that stay apart however a DAW renames a render (case, spaces, dashes), and one sound per game file:
+    otherwise a render could come back as the wrong file, or two edits land on one (#242)."""
+    seen, files = {}, {}
     for it in items:
-        low = it["name"].lower()
+        low = norm_name(it["name"])
         if low in seen:
-            raise ToolError(f"two sounds are called {it['name']!r} ({seen[low]} and {it['file']}): names must differ "
-                            f"(also in letter case: Windows file names ignore it)")
+            raise ToolError(f"two sounds are called {it['name']!r} ({seen[low]} and {it['file']}): names must differ, "
+                            f"also in letter case and in - against _ (a render's name may come back changed in those)")
         seen[low] = it["file"]
+        target = it["file"].casefold()
+        if target in files:
+            raise ToolError(f"{files[target]} and {it['name']} are both {it['file']}: one game file, one sound")
+        files[target] = it["name"]
 
 
 def project_shape(items, route):
@@ -531,7 +552,7 @@ def readiness():
 
 # ---- writing the working folder ------------------------------------------------------------------------------------
 def check_name(name):
-    if not NAME_OK.match(name):
+    if not name_ok(name):
         raise ToolError(f"{name!r} cannot name a project (letters, digits, _ . - only, up to 64): pass --name")
 
 
@@ -568,6 +589,10 @@ def load_manifest(where):
                 raise ToolError(f"{MANIFEST}: {key} {v!r} must be a plain relative path inside the game")
     if not isinstance(man.get("root"), str) or not UP_ONLY.match(man["root"]):
         raise ToolError(f"{MANIFEST}: root {man.get('root')!r} must be . or ../.. (the game root above this folder)")
+    try:   # an edited manifest gets the same checks as a new project (#242)
+        check_items(man["items"])
+    except (KeyError, TypeError, AttributeError):
+        raise ToolError(f"{(work / MANIFEST).as_posix()}: an item lacks its name or file")
     return work, man
 
 
@@ -593,6 +618,7 @@ def start_manifest(args, root, work, meta, items, route):
     media = work / (MEDIA_DIR if route == "reaper" else STEMS_DIR)
     # never emptied: REAPER records into "Media" beside the project by default, and on Windows that is this folder
     media.mkdir(parents=True, exist_ok=True)
+    keep_edited_copies(work)
     for it in items:
         src = root / it["file"]
         if route == "reaper" or Path(it["file"]).suffix.lower() == ".wav":
@@ -615,6 +641,35 @@ def start_manifest(args, root, work, meta, items, route):
     return man
 
 
+def keep_edited_copies(work):
+    """Before --overwrite copies the originals in again: every working copy the old project recorded that has
+    changed since (a sound edited in place in media/, a stem, an original) goes to backup/<time>/ (#243)."""
+    try:
+        old = json.loads((work / MANIFEST).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    changed = []
+    for it in old.get("items", []) if isinstance(old, dict) else []:
+        if not isinstance(it, dict):
+            continue
+        for key, want in (("media", it.get("media_sha256")), ("original", it.get("sha256"))):
+            rel = it.get(key)
+            if not isinstance(rel, str) or ".." in re.split(r"[\\/]", rel) or Path(rel).is_absolute():
+                continue
+            f = work / rel
+            if f.is_file() and (not want or sha256(f) != want):
+                changed.append(rel)
+    if not changed:
+        return
+    dest = work / BACKUP_DIR / datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    for rel in changed:
+        (dest / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(work / rel, dest / rel)
+    print(f"[note] {len(changed)} edited working cop{'y' if len(changed) == 1 else 'ies'} kept in "
+          f"{posix_rel(dest, work)}/ before the originals were copied in again: {', '.join(changed[:3])}"
+          + (" ..." if len(changed) > 3 else ""))
+
+
 def cmd_reaper(args):
     if args.reexport:
         return reexport(args)
@@ -629,7 +684,8 @@ def cmd_reaper(args):
         shutil.copyfile(rpp, rpp.with_name(rpp.name + ".bak"))
     man = start_manifest(args, root, work, meta, items, "reaper")
     man["project"] = rpp.name
-    work_rel = posix_rel(work, root)
+    work_rel = no_breaks(posix_rel(work, root), "the working folder")
+    no_breaks(meta["source"], "the source")
     rpp.write_bytes(rpp_text(man, items, man["rate"], man["channels"], work_rel).encode("utf-8"))
     if meta["kind"] == "music":
         write_midi(args, man, work)
@@ -771,6 +827,11 @@ def reexport(args):
         finally:
             discard(copy)
     got = {p.stem: p for p in sorted(renders.glob("*.wav"))} if renders.is_dir() else {}
+    if any(c != 0 for c in codes):
+        # a REAPER that failed may have rendered only part, or half a file: nothing of it goes into the game (#242)
+        print(f"[FAIL] REAPER exited {', '.join(str(c) for c in codes)} (rendered {len(got)} file(s)): nothing was "
+              f"brought back. Open {rpp.name} in REAPER and render once to see what it says")
+        return 1
     print(f"[ OK ] REAPER rendered {len(got)} file(s) (exit {', '.join(str(c) for c in codes)})")
     if not got:
         print(f"[FAIL] REAPER rendered nothing into {RENDER_DIR}/: open {rpp.name} in REAPER and check its regions "
@@ -794,7 +855,7 @@ def render_passes(man):
 
 
 def norm_name(name):
-    return re.sub(r"[\s\-]+", "_", name.strip().lower())
+    return re.sub(r"[\s\-_]+", "_", name.strip().lower())
 
 
 def match_renders(man, folder):
@@ -918,6 +979,22 @@ def discard(path):
         pass
 
 
+def temp_beside(game):
+    """A new, unique, empty temp file next to game (a fixed name could be a user's file, #243)."""
+    fd, tmp = tempfile.mkstemp(prefix=f".{game.stem}.", suffix=".daw_tmp" + game.suffix, dir=str(game.parent))
+    os.close(fd)
+    return Path(tmp)
+
+
+def inside_game(root, game):
+    """True when game, with every symlink resolved, is still under the game root (#243)."""
+    try:
+        game.resolve().relative_to(Path(root).resolve())
+        return True
+    except (ValueError, OSError):
+        return False
+
+
 def land(make, tmp, game):
     """tmp in place of game (make() writes tmp first, when given): None, or why not. tmp never stays behind."""
     try:
@@ -946,12 +1023,21 @@ def bring_back(args, work, man, renders, daw, strict, extras=()):
     audio, same = {}, []                               # name -> (render channels, rate); names rendered as they were
     for it in man["items"]:
         r = renders.get(it["name"])
+        if r is not None and not inside_game(root, root / it["file"]):
+            problems.append(f"{it['file']}: a symlinked folder takes it outside the game root: not written")
+            continue
         if r is None:
             (problems if strict else kept).append(
                 f"{it['name']}: no render" + (" (its region was renamed or removed? the game's file is kept)"
                                               if strict else ", kept as it is"))
             continue
         chans, rate, _ = read_any(r)
+        if man["kind"] == "music" and rate != man["rate"]:
+            # stems play together at the track's rate: a render at another one would be measured, looped and
+            # written at the wrong rate (#242)
+            problems.append(f"{it['name']}: rendered at {rate} Hz, the track is {man['rate']} Hz: render it at "
+                            f"{man['rate']} Hz")
+            continue
         if it["channels"] == 1 and len(chans) == 2 and all(abs(x - y) <= SAME_TOL for x, y in zip(*chans)):
             chans = chans[:1]                              # a mono sound rendered on a stereo bus: mono again
         audio[it["name"]] = (chans, rate)
@@ -978,8 +1064,13 @@ def bring_back(args, work, man, renders, daw, strict, extras=()):
                 pending.append((it,) + audio[it["name"]])
                 levelled_only.add(it["name"])
                 same.remove(it)
-            problems += [f"{it['name']}: no render, but the mix moved by {g:+.2f} dB: render it too, or its level "
-                         f"no longer matches" for it in man["items"] if it["name"] not in audio]
+            missing = [it for it in man["items"] if it["name"] not in audio]
+            if missing:
+                # one gain for the whole mix: written to some stems only, the mix would be left half moved (#242)
+                problems += [f"{it['name']}: no render, but the mix moved by {g:+.2f} dB: render it too; no stem "
+                             f"was written" for it in missing]
+                kept += [f"{it['name']}: not written (the mix needs every stem)" for it, _, _ in pending]
+                pending = []
         for it, _, _ in pending:
             gains[it["name"]] = (g, note)
     written, report = [], []
@@ -996,7 +1087,7 @@ def bring_back(args, work, man, renders, daw, strict, extras=()):
                 if args.dry_run:
                     report.append(f"[dry ] {it['file']}: the original would be put back (the edit was undone)")
                     continue
-                tmp = game.with_name(game.stem + ".daw_tmp" + game.suffix)
+                tmp = temp_beside(game)
                 failed = land(lambda: shutil.copyfile(original_copy(work, it), tmp), tmp, game)
                 if failed:
                     problems.append(cannot_write(it, failed))
@@ -1020,8 +1111,8 @@ def bring_back(args, work, man, renders, daw, strict, extras=()):
             out = [[s * k for s in c] for c in chans]
             loop, warn = loop_for(it, len(out[0]), man)
             game = root / it["file"]
-            tmp = game.with_name(game.stem + ".daw_tmp" + game.suffix)
             try:
+                tmp = temp_beside(game)
                 audioio.write_audio(tmp, out, rate, loop=loop)
             except (audioio.AudioIOError, OSError) as exc:
                 discard(tmp)
@@ -1136,7 +1227,7 @@ def log_row(root, work_rel, man, written, daw, today):
               f"edit by hand: Modified? yes)")
         return
     text = log_path.read_text(encoding="utf-8")
-    key = f"{LOG_KEY} `{work_rel}`"
+    key = f"{LOG_KEY} `{fetch_asset.md_cell(work_rel)}`"
     existing = [ln for ln in text.splitlines() if ln.startswith("| A-") and key in ln]
     if existing:
         aid, fill = existing[0].split("|")[1].strip(), False
@@ -1145,7 +1236,9 @@ def log_row(root, work_rel, man, written, daw, today):
         aid = f"A-{num:04d}"
     files = man["logged"]
     folder = os.path.commonpath(files).replace("\\", "/") if len(files) > 1 else ""
-    shown = f"`{folder}/` ({len(files)} files)" if folder and len(files) > 3 else ", ".join(f"`{f}`" for f in files)
+    cell = fetch_asset.md_cell
+    shown = f"`{cell(folder)}/` ({len(files)} files)" if folder and len(files) > 3 else \
+        ", ".join(f"`{cell(f)}`" for f in files)
     kind = "music" if man["kind"] == "music" else ("voice" if all(it["bus"] == "dialogue" for it in man["items"])
                                                    else "sfx")
     origins = {f: read_sidecar(root / f) for f in files}

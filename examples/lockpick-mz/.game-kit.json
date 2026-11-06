@@ -992,6 +992,12 @@
       "date": "2026-11-05",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.1",
+      "date": "2026-11-05",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1270,7 +1276,7 @@
     "tools/audio/wavesmith/audioio.py": "1f6a372cc7d1402819403ae2447c345c530b66909a77ad7ecfe797280186e0de",
     "tools/audio/wavesmith/babble.py": "cd33ea7ea6588b74f2054d37647e5a34c114610b2e30459e6aff9e08db59550b",
     "tools/audio/wavesmith/chiptune.py": "3d6370c457946262206f42a6bb32815a023c9f6bdf79bd67015a8cada9de800a",
-    "tools/audio/wavesmith/daw.py": "e8d6bb5712b71faa5e9886fbd342d46a344dfa3a9a2d38e7740957374257fc39",
+    "tools/audio/wavesmith/daw.py": "c99e97c6393857cf0009e94f816100a53114dca2afa744495cab0aa794879eb2",
     "tools/audio/wavesmith/dialogue.py": "99264e66089b1d8abf99bb44d821c48050f812d325f640ffbd64077c27448473",
     "tools/audio/wavesmith/eleven_audio.py": "65b6be5e6c0006f125b9f81349bbd5663cc10c5901839b401aebcc85f3d13058",
     "tools/audio/wavesmith/fish_tts.py": "a420dde29e7dc3b13d45d118fa6923729527710b6179951cc37f126d98eba72a",
@@ -1289,7 +1295,7 @@
     "tools/audio/wavesmith/test_audioio.py": "f00b3a7f726a68b39fbc0258bb29dd58c9ca8223d114dc01499cc2aec4020f73",
     "tools/audio/wavesmith/test_babble.py": "075362b460ca2f69e52882feb103a36aa5aec7589c1eb23a58c22fa9c266d7d9",
     "tools/audio/wavesmith/test_chiptune.py": "3ba448048673e043fbf53637f4166322d334e3f379a99bc16cd879ec0656b8d9",
-    "tools/audio/wavesmith/test_daw.py": "485893825138034919f0edfb1a660301a92856011417d66dd1cbc81e8df2b50a",
+    "tools/audio/wavesmith/test_daw.py": "73a811c8d105a4243466ff263660f434b51aadb0c3d468669c11321aa426e620",
     "tools/audio/wavesmith/test_dialogue.py": "7ea7f265bd28ceed0c74acffa56cb14e348dedc1915d1746cbc240f60ab223d0",
     "tools/audio/wavesmith/test_eleven_audio.py": "e53b39e8e873a19567afafcd1ee59296423715ec8b012071cbe7ae395dd76b36",
     "tools/audio/wavesmith/test_fish_tts.py": "687d701fd0f48544e73b0ee9d75f54bb3113ecac168323b80bbf42f9ce64e323",

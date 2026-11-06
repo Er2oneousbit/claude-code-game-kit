@@ -169,6 +169,9 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
   encrypted `.pxo` ([#239](https://github.com/Er2oneousbit/claude-code-game-kit/issues/239)).
 - **SessionStart hook and `tools/second_opinion.py` review (FIXED in 0.13.1, kept here until the issues close on main):** reviewer confinement, prompt injection,
   orphaned children ([#240](https://github.com/Er2oneousbit/claude-code-game-kit/issues/240)); the hook's stdin wait, long lines, heading prefixes ([#241](https://github.com/Er2oneousbit/claude-code-game-kit/issues/241)).
+- **Wavesmith DAW round trip review (FIXED in 0.13.1, kept here until the issues close on main):** wrong or
+  partial results ([#242](https://github.com/Er2oneousbit/claude-code-game-kit/issues/242)); user audio lost ([#243](https://github.com/Er2oneousbit/claude-code-game-kit/issues/243)); raw path text and device names
+  ([#244](https://github.com/Er2oneousbit/claude-code-game-kit/issues/244)).
 
 ## The examples
 None of the example games has been played by a human tester; the bots and tests are the only proof they play as
