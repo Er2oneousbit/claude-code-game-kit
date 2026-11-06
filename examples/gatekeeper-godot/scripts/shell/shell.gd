@@ -75,6 +75,7 @@ var active: bool = true # false while the engine runs a tool script (GUT, check)
 var _crash_file: String = ""
 var _missing_keys: Dictionary = {}
 var _color_filter: ColorFilter = null
+var colours: Dictionary = {} # data/access/colours.json (AccessColours)
 
 
 func _ready() -> void:
@@ -96,6 +97,7 @@ func _ready() -> void:
 	if not CrashHook.install():
 		Log.warn("shell", "no crash hook on this Godot version (needs 4.5+): crash files are not written")
 	load_settings()
+	colours = AccessColours.load_data()
 	_color_filter = ColorFilter.new()
 	add_child(_color_filter)
 	if settings_source != "none":
@@ -287,6 +289,11 @@ func access(key: String) -> Variant:
 	return (settings["access"] as Dictionary).get(key)
 
 
+## The game's important colours for the current colour-blind setting ({name: Color}, data/access/colours.json).
+func palette() -> Dictionary:
+	return AccessColours.palette(colours, str(access("colorblind")))
+
+
 func effective_shake() -> float:
 	return GameSettings.effective_shake(settings)
 
@@ -442,8 +449,8 @@ func _apply_input() -> void:
 
 
 func _apply_access() -> void:
-	if _color_filter != null:
-		_color_filter.set_mode(str(access("colorblind")))
+	if _color_filter != null:   # only when colours.json asks for the filter (#169: it hurt the demo's pairs)
+		_color_filter.set_mode(AccessColours.filter_mode(colours, str(access("colorblind"))))
 
 
 func _update_locale(emit: bool) -> void:

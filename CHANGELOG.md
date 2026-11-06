@@ -3,6 +3,21 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## Unreleased: accessibility (0.14.3: #169, #91, #85, #167, #166, #165, #168)
+- **Colour-blind pairs (#169):** `tools/access/colour_check.py pairs` checks the colours a game tells apart (declared in
+  `data/access/colours.json`: the pairs, and the palette each colour-blind setting switches to) as a protanope,
+  deuteranope and tritanope sees them (Machado et al. 2009, in linear RGB, E157) and fails a pair whose CIEDE2000
+  difference (Sharma et al. 2005, E159) is under the file's `min_delta_e` (20: a tip, no published pass mark exists);
+  `colour_check.py image <png>` writes a screenshot as each player sees it. `tools/access/colour.py` also has WCAG
+  2.2 contrast (E158). Godot, web and LÖVE draw their demo palettes from that file, each with a test.
+- **Godot's colour-blind mode swaps the demo palette instead of filtering the screen.** The check showed the
+  full-screen daltonization filter pulling the demo's player and box together for protan and deutan players
+  (CIEDE2000 22.3 to 12.5 and 24.3 to 7.0); with palettes they stay 42 or more apart. The filter still runs when
+  `colours.json` sets `"filter": true` (and has no palette for the mode). **Upgrade note (Godot):** a game that
+  relied on the filter over its own art sets `"filter": true` in `data/access/colours.json`. Godot exports now
+  include `data/access/*`.
+- SOP-20: text contrast 4.5:1 (3:1 large, E158), the colour-pairs step, and why to swap palettes rather than filter.
+
 ## 0.14.2 (2026-11-06): fixes to Dotwork's Pixelorama round trip and its panel, from a second-model review and #255
 - Dotwork's Pixelorama panel: closing Pixelorama (or turning the extension off) during a re-export waited for Dotwork
   with no time limit; with a hung run Pixelorama hung too (119.7 s in the live exam, the whole hung run), and killing

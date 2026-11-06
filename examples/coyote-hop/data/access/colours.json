@@ -1,0 +1,49 @@
+{
+ "note": "The colours your game tells apart and what the colour-blind setting switches them to. python tools/access/colour_check.py pairs checks every pair under protanopia, deuteranopia and tritanopia (SOP-20). min_delta_e: CIEDE2000 a pair needs as that player sees it (20 is the kit's starting point, a tip: raise it if playtesters mix pairs up). filter: true when a mode has no palette here and the game runs the kit's colour-blind filter over the screen instead. Colour is never the only cue: add a shape, icon or label.",
+ "min_delta_e": 20,
+ "filter": false,
+ "pairs": [
+  [
+   "player",
+   "target"
+  ],
+  [
+   "player",
+   "ground"
+  ],
+  [
+   "target",
+   "ground"
+  ],
+  [
+   "hit",
+   "ground"
+  ]
+ ],
+ "palettes": {
+  "none": {
+   "player": "#73d9bf",
+   "target": "#f28c4d",
+   "ground": "#333d54",
+   "hit": "#ffffff"
+  },
+  "protanopia": {
+   "player": "#56b4e9",
+   "target": "#e69f00",
+   "ground": "#333d54",
+   "hit": "#ffffff"
+  },
+  "deuteranopia": {
+   "player": "#56b4e9",
+   "target": "#e69f00",
+   "ground": "#333d54",
+   "hit": "#ffffff"
+  },
+  "tritanopia": {
+   "player": "#33bfbf",
+   "target": "#f25966",
+   "ground": "#333d54",
+   "hit": "#ffffff"
+  }
+ }
+}

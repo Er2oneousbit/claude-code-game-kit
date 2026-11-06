@@ -1595,6 +1595,12 @@
       "date": "2026-11-06",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.14.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1632,8 +1638,9 @@
     ".github/workflows/audio.yml": "22b141d57622ae23ad4800f675eeadf45647069f6f5283b36d205b0d5782d01e",
     ".github/workflows/ci.yml": "e5c6f4db19a2fe1c43b2ea57d116e3695de906b1776b087a23d3478f29600a58",
     ".gitleaks.toml": "d8f6978ff742ff6d0cbf93e64cbab0a2d607cbae5029d1c34619451bf1521670",
-    "CLAUDE.md": "43cb96f03b0470b8dc6a5fcac976d34678b8572f42c58733ca9355e329df0941",
+    "CLAUDE.md": "91aa325e457376d53a4bde1163eff3cb86cf9c17bbbb92fc8c8a94991e53c76f",
     "README.md": "2540bcfcc73b1afabdfc481b1d31092b90924b610327210375a4232c3fa9988a",
+    "data/access/colours.json": "143240c33d376aec48fd9d6b80e499dd3c92c1a3b5073f74569bdfede72bae8e",
     "data/golden/access.json": "f83c639bffc09117f6258c8d00e02829db101f9cd7ad78b8f4cf363a251b8407",
     "data/golden/audio.json": "4749dbbf68633336ba62cb0821e9463ca07b3ea7c96bb90e95e4bfd037cf8d71",
     "data/golden/dialogue.json": "f4ac2a03424b2ddd137bd8368d601591c1a4f2fa95e452c4a2b6c95a573d5ecd",
@@ -1668,7 +1675,7 @@
     "docs/CONCEPTS.md": "d58ca9426877811564a704ca240d797d22877e8ee5aadd3d052c652bcc188e9a",
     "docs/ENGINE.md": "5770447fbd4bdd43cf20664efc73434320d1e1822fead0f49790eac65e27f0fd",
     "docs/ENGINE_FLOW.md": "59a9c61570e7d4bb92aae545b911d3601873106d268e7b3fc6757cf77239a3be",
-    "docs/EVIDENCE.md": "617568d92273fb2f601688288c03e70534c9d8c85d2a283f423d93a574a11cf1",
+    "docs/EVIDENCE.md": "0158638d71137edaf1aa34db93e143b5b925c00bb71c0572f99ac62cc8ce14c6",
     "docs/FIRST_HOUR.md": "e3c2b06bbdeea3b2e04be57de54b092bb749a4a45a13a5330c8819bd766e4f49",
     "docs/GDD.md": "5b387325c80ad86fcdc4a9e259564d72250f51f323916381a464f507a9bd9464",
     "docs/HANDOFF.md": "3124d0370759299ac022f9a08c1ddccfc85291b52be010fcffe1582dd4aa1945",
@@ -1710,7 +1717,7 @@
     "docs/sop/SOP-17-procedural-generation.md": "26c19ef440ac07273c6e0742c88e89020b7457582f6d61a3ea1fd660b6ae3907",
     "docs/sop/SOP-18-game-feel.md": "e6315b60ce7e7342dd73fece5afd2b7298601184ed4e04b51c5358b03e84c66e",
     "docs/sop/SOP-19-front-end-and-settings.md": "8fd538c08162c281e9ac70d74c78dcc6181b728a8995a319e725bedfb9ccb074",
-    "docs/sop/SOP-20-accessibility.md": "1923775e72d74c90a279e0f58e9af111d24a472adc75f67f83aa2c80da6d5ffc",
+    "docs/sop/SOP-20-accessibility.md": "43599d3bdf9db607f2c7a60368af679aa71e63f64c73f0f52844dd355bf4a612",
     "docs/sop/SOP-21-ship-on-steam-and-itch.md": "8096e0dec71745ecf691c2e5140366e954c1aeae126a68a40ff7da540da793e0",
     "docs/sop/SOP-22-balancing-and-economy.md": "248365f65f715b43cb4417a73793ace4d8e8d98e6f3f94617a9af4149ccf6d32",
     "docs/sop/SOP-23-marketing.md": "8d70dffbb5ba5ce486d5c93c2117880a8fd19cd651a0a1a7dfae29c65fb3fc9b",
@@ -1760,6 +1767,9 @@
     "tests/shell.golden.test.ts": "2013be5db90445782f5f8fce8aac21e788d9ae303d755c3ef45b8ecdad84a26d",
     "tests/shellLogic.test.ts": "8ac75404d2f9d394e6e2e3c2d6533f74b0625c13ceda29910747f2ac2d372083",
     "tests/telemetry.golden.test.ts": "dec6b077141686da17347c5e0584fe21aa6ffea860920d1e3f25b244b3097834",
+    "tools/access/colour.py": "c6b75b175ab6cd2439878b0e90c6372850cd7ff4478fbc42343f141bcbe7c299",
+    "tools/access/colour_check.py": "1afe545d6e0f4a745af6f6fd3ee1c03fc73f91cc8046ff9a105a7962520e1b3d",
+    "tools/access/test_colour.py": "67c23d5ed4b24a1b84cb942cadd3375f2be7147443f8dddd0b2b4b159f0f49a3",
     "tools/art/chroma_key.py": "1586d6918743890fb7a977b3020a8d99828c63153827904273114aef1cac8aa7",
     "tools/art/comfy_local.py": "ab2863b60191ac55b651e672ca8000f827f89930502ab838732f4b3b546f457e",
     "tools/art/dotwork/.gdignore": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",

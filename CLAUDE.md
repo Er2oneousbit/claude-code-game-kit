@@ -47,6 +47,7 @@ python core/tools/test_second_opinion.py             # offline (canned CLI resul
 python core/tools/test_issues.py                     # offline (canned gh output)
 python core/tools/test_golden_vectors.py             # the juice and shell reference; data/golden/*.json must be current
 python core/tools/test_image_diff.py                 # standard library only (visual regression)
+python core/tools/access/test_colour.py              # standard library only (colour-blind pairs, CIEDE2000, WCAG contrast)
 python core/tools/test_credits.py                    # standard library only
 python core/tools/test_yt_transcript.py              # offline (canned WebVTT, faked caption methods)
 python core/tools/test_token_audit.py                # standard library only (a fake home, project and session log)

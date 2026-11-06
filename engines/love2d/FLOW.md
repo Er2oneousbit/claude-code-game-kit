@@ -69,7 +69,8 @@ Credits, Quit, and Juice demo in a debug build = a run from the source folder) >
   the game), window mode, size, vsync, frame cap (never in automated runs), master volume and the sfx / ui buses.
   Stored only: `audio.mono` (LÖVE cannot downmix a stereo source; ship mono sources if you need it), and `voice`
   until the game plays voice; `music` drives the music player when data/music.json exists. `colorblind` swaps
-  the juice demo's palette only (`src/shell/style.lua`), not a full-screen filter.
+  the juice demo's palette only (`src/shell/style.lua`, from `data/access/colours.json`, which
+  `tools/access/colour_check.py` checks), not a full-screen filter.
 - **User data** in one folder: the save folder (`love.filesystem.getSaveDirectory()`), or `--data-dir <dir>`:
   `settings.json` (+ `.bak`), `save_<slot>.json` (+ `.bak`; the play screen saves slot 1 when you leave),
   logs/game.log (name, version and UTC time on line 1; 5 older logs as `game.1.log`..`game.5.log`),

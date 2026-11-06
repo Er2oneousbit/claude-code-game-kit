@@ -16,7 +16,7 @@ The shell (`SOP-19`) has the settings; this SOP is what they must do.
 | Subtitles | On by default (or chosen before any sound plays), every important line, speaker named when it changes, at most two lines of about 40 characters, a solid background with adjustable opacity, size up to 200 % | `access.subtitles`, `subtitle_size`, `subtitle_background`, `speaker_names` | F35 |
 | Captions | Important sounds that are not shown on screen get a caption, with a direction arrow when the source is off-screen; barks and ambient captions can be turned on and off apart from dialogue | `captions_sfx`, `subtitle_barks` | F35 |
 | Text | Smallest body text 18 px at 1080p on PC, 9 px at 1280x800 on Steam Deck (12 recommended); scalable to 200 % | `text_scale`, `display.ui_scale` | F36 |
-| Colour | No information by colour alone (add a shape, icon or label); high contrast for text and UI; a colour-blind option where colour carries meaning | `colorblind` | E69 |
+| Colour | No information by colour alone (add a shape, icon or label); text at least 4.5:1 against its background (3:1 when large); a colour-blind option where colour carries meaning, and the pairs that matter (player vs enemy, hazard vs floor) declared in `data/access/colours.json` and kept apart for protan, deutan and tritan players (`python tools/access/colour_check.py pairs`) | `colorblind` | E69, E157, E158 |
 | Controls | Every action remappable; the whole UI reachable with the gameplay input; no required button holds (toggle option); separate volume per bus and a mono switch | `input.bindings`, `hold_to_toggle`, `audio.*`, `audio.mono` | F37, E69 |
 | Motion | Shake, bob and full-screen effects can be turned off (an intensity slider, as in the guideline's examples); reduce motion turns them off; nothing auto-scrolls without a way to pause it | `shake_scale`, `reduce_motion` | F33 |
 | Flashes | At most three full-screen flashes in any one second, or below the thresholds; remove triggers rather than warn. The limiter is always on; the setting only makes flashes gentler | `flash_limit` (on by default: tones flashes down) | F34 |
@@ -34,15 +34,17 @@ The shell (`SOP-19`) has the settings; this SOP is what they must do.
    reduce motion on. Record a burst (`dev.py smoke --record`) and count flashes per second for anything bright; that is
    the first check, not proof. Bright, red or striped effects that stay in the game get a flash analysis tool run on a
    recording before release (E73, E74), or are softened until they need none.
-5. **Test with the settings at their extremes:** text 200 %, subtitles largest with full background, colour-blind modes,
+5. **Check the colour pairs** whenever a palette changes: `python tools/access/colour_check.py pairs` simulates each pair as a protanope, deuteranope and tritanope sees it, in the palette the colour-blind setting switches to, and fails a pair that comes too close (CIEDE2000, E159). The pass mark is the file's `min_delta_e`: no published rule sets one for game art, so the kit's 20 is a tip; raise it if colour-blind playtesters still mix a pair up. `colour_check.py image <screenshot>` writes the picture as each player sees it, for a look.
+6. **Test with the settings at their extremes:** text 200 %, subtitles largest with full background, colour-blind modes,
    gamepad only, keyboard only, mono, reduce motion. Run the pseudo-locale smoke at text 200 % too: it catches clipping.
    For mono, `python tools/audio/wavesmith/wavesmith.py loudness mono <stereo files>` finds sounds that cancel out when summed (K01).
-6. **Playtest with the players it is for** when you can, and ask one question (SOP-03): could you finish it?
-7. **Describe it on the store page**: list the options; players look for them.
+7. **Playtest with the players it is for** when you can, and ask one question (SOP-03): could you finish it?
+8. **Describe it on the store page**: list the options; players look for them.
 
 ## 3. Notes
 - Many colour-blind players can tell red and green apart by brightness: a shape or label is still the fix that works for
   everyone (standard practice).
+- Swap the palette of the important colours rather than filter the whole screen. The kit's full-screen colour-blind filter (daltonization, the `colorblind` shader) pulled the Godot demo's player and box closer together for protan and deutan players (CIEDE2000 22.3 to 12.5 and 24.3 to 7.0, K01), so the shells swap palettes and the filter runs only when `colours.json` sets `"filter": true`.
 - A photosensitivity warning screen does not replace removing the trigger (E73 says removal is preferred).
 
 ## Done when

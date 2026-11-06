@@ -56,8 +56,8 @@ const SKY: Color = Color(0.10, 0.12, 0.20)
 const GROUND: Color = Color(0.20, 0.24, 0.33)
 const PILLAR: Color = Color(0.14, 0.17, 0.27)
 const PILLAR_EVERY: float = 90.0
-const PLAYER_COLOR: Color = Color(0.45, 0.85, 0.75)
-const BOX_COLOR: Color = Color(0.95, 0.55, 0.30)
+# the player, the box, the ground and the hit flash come from Shell.palette() (data/access/colours.json), so the
+# colour-blind setting swaps them and tools/access/colour_check.py checks them (#169)
 const SHIELD_COLOR: Color = Color(0.55, 0.75, 1.0, 0.8)
 
 var shake: Shake = Shake.new()
@@ -80,6 +80,8 @@ var _flash_alpha: float = 0.0
 var _camera: Camera2D
 var _player: ColorRect
 var _box: ColorRect
+var _ground: ColorRect
+var _hit_colour: Color = Color.WHITE
 var _shield: Line2D
 var _hud_root: Control
 var _title: Label
@@ -92,6 +94,7 @@ var _flash: ColorRect
 func _ready() -> void:
 	name = "JuiceDemo"
 	_build_world()
+	_recolour()
 	_build_hud()
 	relabel()
 	Shell.locale_changed.connect(relabel)
@@ -172,6 +175,15 @@ func _on_device_changed(_device: String) -> void:
 
 func _on_settings_changed(_section: String, _key: String) -> void:
 	relabel()
+	_recolour()
+
+
+func _recolour() -> void:
+	var pal: Dictionary = Shell.palette()
+	_player.color = pal.get("player", Color(0.45, 0.85, 0.75))
+	_box.color = pal.get("target", Color(0.95, 0.55, 0.30))
+	_ground.color = pal.get("ground", GROUND)
+	_hit_colour = pal.get("hit", Color.WHITE)
 
 
 func _update_guard() -> void:
@@ -192,7 +204,7 @@ func _draw_state() -> void:
 	_camera.position = follow.position()
 	_camera.offset = shake.offset()
 	_camera.rotation = shake.angle
-	_flash.color = Color(1, 1, 1, _flash_alpha)
+	_flash.color = Color(_hit_colour, _flash_alpha)
 	_flash.visible = _flash_alpha > 0.01
 
 
@@ -210,21 +222,18 @@ func _build_world() -> void:
 		pillar.size = Vector2(18, 120)
 		add_child(pillar)
 		x += PILLAR_EVERY
-	var ground: ColorRect = ColorRect.new()
-	ground.color = GROUND
-	ground.position = Vector2(WORLD_LEFT - 400, GROUND_Y)
-	ground.size = Vector2(WORLD_RIGHT - WORLD_LEFT + 800, 200)
-	add_child(ground)
+	_ground = ColorRect.new()
+	_ground.position = Vector2(WORLD_LEFT - 400, GROUND_Y)
+	_ground.size = Vector2(WORLD_RIGHT - WORLD_LEFT + 800, 200)
+	add_child(_ground)
 	_box = ColorRect.new()
 	_box.name = "Box"
-	_box.color = BOX_COLOR
 	_box.size = BOX_SIZE
 	_box.position = BOX_POS - Vector2(BOX_SIZE.x / 2.0, BOX_SIZE.y)
 	_box.pivot_offset = Vector2(BOX_SIZE.x / 2.0, BOX_SIZE.y) # squash from the floor up
 	add_child(_box)
 	_player = ColorRect.new()
 	_player.name = "Player"
-	_player.color = PLAYER_COLOR
 	_player.size = PLAYER_SIZE
 	_player.pivot_offset = Vector2(PLAYER_SIZE.x / 2.0, PLAYER_SIZE.y)
 	add_child(_player)

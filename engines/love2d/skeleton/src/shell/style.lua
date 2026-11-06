@@ -11,6 +11,8 @@
 --           later.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- ---------------------------------------------------------------------------
+local Json = require("src.core.json")
+
 local Style = {}
 
 -- ---- Tunables ----------------------------------------------------------------
@@ -38,21 +40,49 @@ Style.color = {
   overlay = { 0.0, 0.0, 0.0, 0.62 },
 }
 
--- demo palettes: player, target, hit (the flash and the hit marker), floor, deadzone
-local PALETTES = {
-  none = { player = { 0.95, 0.75, 0.30 }, target = { 0.35, 0.80, 0.45 }, hit = { 1.0, 0.30, 0.25 },
-           floor = { 0.25, 0.27, 0.32 }, deadzone = { 0.5, 0.6, 0.9, 0.35 } },
-  -- red and green look alike: blue against orange
-  protanopia = { player = { 0.95, 0.70, 0.20 }, target = { 0.25, 0.55, 0.95 }, hit = { 1.0, 1.0, 1.0 },
-                 floor = { 0.25, 0.27, 0.32 }, deadzone = { 0.6, 0.6, 0.6, 0.35 } },
-  deuteranopia = { player = { 0.95, 0.70, 0.20 }, target = { 0.25, 0.55, 0.95 }, hit = { 1.0, 1.0, 1.0 },
-                   floor = { 0.25, 0.27, 0.32 }, deadzone = { 0.6, 0.6, 0.6, 0.35 } },
-  -- blue and yellow look alike: red against teal
-  tritanopia = { player = { 0.95, 0.35, 0.40 }, target = { 0.20, 0.75, 0.75 }, hit = { 1.0, 1.0, 1.0 },
-                 floor = { 0.25, 0.27, 0.32 }, deadzone = { 0.6, 0.6, 0.6, 0.35 } },
-}
+-- demo palettes (player, target, hit: the flash and the hit marker, floor) from data/access/colours.json, which
+-- tools/access/colour_check.py checks (#169); the deadzone overlay is not an important colour and stays here
+Style.COLOURS_FILE = "data/access/colours.json"
+local DEADZONE = { none = { 0.5, 0.6, 0.9, 0.35 }, other = { 0.6, 0.6, 0.6, 0.35 } }
+local FALLBACK = { player = { 0.95, 0.75, 0.30 }, target = { 0.35, 0.80, 0.45 }, hit = { 1.0, 0.30, 0.25 },
+                   floor = { 0.25, 0.27, 0.32 } }
 
-function Style.palette(mode) return PALETTES[mode] or PALETTES.none end
+local function hex(s)
+  local r, g, b = tostring(s):match("^#?(%x%x)(%x%x)(%x%x)$")
+  if not r then return nil end
+  return { tonumber(r, 16) / 255, tonumber(g, 16) / 255, tonumber(b, 16) / 255 }
+end
+
+-- {mode: {name: {r, g, b}}} from a decoded colours.json (pure: the tests call it without LÖVE)
+function Style.palettes_from(data)
+  local out = {}
+  for mode, colours in pairs(type(data) == "table" and type(data.palettes) == "table" and data.palettes or {}) do
+    local p = {}
+    for name, value in pairs(colours) do p[name] = hex(value) end
+    p.deadzone = DEADZONE[mode] or DEADZONE.other
+    out[mode] = p
+  end
+  if not out.none then out.none = { deadzone = DEADZONE.none } end
+  for _, p in pairs(out) do   -- a colour a mode leaves out comes from "none", then the built-in one
+    for k, v in pairs(FALLBACK) do
+      if p[k] == nil then p[k] = out.none[k] or v end
+    end
+  end
+  return out
+end
+
+local PALETTES
+local function palettes()
+  if not PALETTES then
+    local text = love and love.filesystem and love.filesystem.read(Style.COLOURS_FILE)
+    local ok, data = false, nil
+    if text then ok, data = Json.try_decode(text) end
+    PALETTES = Style.palettes_from(ok and data or nil)
+  end
+  return PALETTES
+end
+
+function Style.palette(mode) local p = palettes() return p[mode] or p.none end
 
 return Style
 

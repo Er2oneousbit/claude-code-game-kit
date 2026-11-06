@@ -49,8 +49,9 @@ keyboard and gamepad reach every control, and the focused one has an outline.
   lane, makes one), else a plain built-in theme. Prompt art: `assets/ui/glyphs/<glyph_name>.png` at 1x, shown in whole
   multiples with nearest filtering; a missing file shows the binding as text.
 - **Accessibility** applied live: text size (theme font), menu size (UI layer scale), subtitles (on, size,
-  background, speaker names, barks, sound captions), colour-blind filter (`ColorFilter`, a daltonization shader over
-  everything), reduce motion and shake strength (`Shell.effective_shake()`), soften flashes (the `FlashLimiter`
+  background, speaker names, barks, sound captions), colour-blind mode (swaps the demo palette from `data/access/colours.json`,
+  read by `AccessColours` and checked by `tools/access/colour_check.py`; the full-screen `ColorFilter` runs only when
+  that file sets `"filter": true`, #169), reduce motion and shake strength (`Shell.effective_shake()`), soften flashes (the `FlashLimiter`
   always applies; this setting also tones flashes down), toggle instead of hold, game speed (scales game time),
   difficulty (stored for the game to read).
 - **Subtitles**: `SubtitleBar` reads `data/dialogue/sample.built.json` (format v0 of Wavesmith's dialogue

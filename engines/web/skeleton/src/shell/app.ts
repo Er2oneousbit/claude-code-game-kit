@@ -46,13 +46,8 @@ const TOAST_MS = 3500;
 const MAX_CRASH_FILES = 3; // per page load: a crash loop must not fill the storage
 const MAX_DT = 0.1;
 export const SUB_SIZE_EM: Record<string, number> = { small: 0.9, medium: 1.1, large: 1.4, xl: 1.8 };
-/** Demo colors per colorblind setting (web applies the option to the juice demo palette only). */
-export const PALETTES: Record<string, { player: number; target: number; hit: number; ground: number; accent: number }> = {
-  none: { player: 0x29adff, target: 0xff004d, hit: 0xffec27, ground: 0x5f574f, accent: 0x00e436 },
-  protanopia: { player: 0x0072b2, target: 0xe69f00, hit: 0xf0e442, ground: 0x5f574f, accent: 0x56b4e9 },
-  deuteranopia: { player: 0x0072b2, target: 0xd55e00, hit: 0xf0e442, ground: 0x5f574f, accent: 0x56b4e9 },
-  tritanopia: { player: 0x009e73, target: 0xcc79a7, hit: 0xffffff, ground: 0x5f574f, accent: 0xd55e00 },
-};
+export { PALETTES } from "./palettes";
+import { PALETTES } from "./palettes";
 
 export type Screen = {
   id: string;
