@@ -33,6 +33,9 @@ examples were built and tested on one Windows 11 machine.
   and Linux, Unreal's translucent `M_Kit_*` assets and a Post Process variant, KitShaders.js inside a real RPG Maker MZ
   game, Unity HDRP, other GPUs, web exports of Godot and Bevy:
   [#260](https://github.com/Er2oneousbit/claude-code-game-kit/issues/260).
+- **Cloud deploy** (OpenTofu modules for AWS, Azure, GCP, Linode, DigitalOcean and `dev.py ship`) is not built yet:
+  moved out of 0.14.0 because OpenTofu was not installed on the build machine
+  ([#252](https://github.com/Er2oneousbit/claude-code-game-kit/issues/252)).
 
 ### Art workflow outside Godot
 Dotwork is Godot-first: other engines get PNGs, sheets with their JSON, `.fnt` fonts and a manifest, and no overlay

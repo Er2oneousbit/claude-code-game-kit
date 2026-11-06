@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.13.2",
+  "kit_version": "0.14.0",
   "author": "the user",
   "profile": {
     "author": "",
@@ -1544,6 +1544,12 @@
     },
     {
       "version": "0.13.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.14.0",
       "date": "2026-11-06",
       "mode": "upgrade",
       "unmerged": []

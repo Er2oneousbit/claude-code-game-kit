@@ -3,7 +3,10 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## 0.14.0 (unreleased): shaders in all nine engines, the C++ overlay on SDL3, and fixes from second-model reviews
+## 0.14.0 (2026-11-06): shaders in all nine engines, the C++ overlay on SDL3, and fixes from second-model reviews
+**Cloud deploy is not in this release.** The OpenTofu modules and `dev.py ship` (#252) were planned for 0.14.0, but
+OpenTofu was not installed on the build machine, so they move to a later release; only the guardrail that needs no
+OpenTofu shipped (`publish_check` knows Azure and GCP keys). Nothing here has been run against a cloud provider.
 **Upgrade note (C++):** the C++ overlay is SDL3 now (it was SDL2). `--upgrade` replaces the kit files you never edited;
 your own code moves by hand, following docs/ENGINE_FLOW.md "Upgrading from SDL2" (the renames the kit's starter and
 example needed). The engine id stays `cpp-sdl2`.
