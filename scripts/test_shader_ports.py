@@ -45,6 +45,18 @@ class ShaderPortsExam(unittest.TestCase):
                     self.assertIsNone(re.search(r"\{\{[A-Z_]+\}\}", text), "placeholder-looking text")
                     self.assertEqual(text.count("("), text.count(")"))
 
+    def test_generated_python_runs(self):
+        # Unreal's kit_recipes.py was JSON pasted into Python ("aux": null): a NameError on import in the editor
+        recipes = sg.load()
+        for engine in sg.ENGINE_DIRS:
+            for rel, text in sg.files_for(engine, recipes).items():
+                if not rel.endswith(".py"):
+                    continue
+                with self.subTest(file=rel):
+                    ns = {}
+                    exec(compile(text, rel, "exec"), ns)
+                    self.assertEqual(sorted(ns["RECIPES"]), sorted(r["name"] for r in recipes))
+
     def test_translations(self):
         self.assertEqual(sg.to_hlsl("vec3 a = vec3(1.0);"), "float3 a = ((float3)(1.0));")
         self.assertEqual(sg.to_hlsl("vec2 p = fract(vec2(u, v));"), "float2 p = frac(float2(u, v));")

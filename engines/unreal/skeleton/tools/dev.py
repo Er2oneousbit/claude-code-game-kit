@@ -5,12 +5,14 @@
 #           engine in the Claude Code Game Kit, so humans and Claude never guess flags.
 # Usage   : python tools/dev.py <command> [--config Development] [--platform Win64]
 #             check    compile the editor target (UnrealBuildTool); in a Blueprint-only project, only the
-#                      project's code plugins (GameKitShell), through the engine's UnrealEditor target
+#                      project's code plugins (GameKitShell), through the engine's UnrealEditor target; then the
+#                      kit's shader recipes as materials (the full editor off-screen; --no-shaders skips)
 #             build    same as check (kept for command-contract parity)
 #             test     run automation tests headless (--filter, default "<Game>", plus "GameKit." when the
 #                      kit's GameKitShell plugin is enabled)
 #             smoke    run automation tests named <Game>.Smoke (--filter, --until, --fail-on for scenario runs;
-#                      screenshots need a renderer, so capture from the game itself, e.g. a -record= option)
+#                      screenshots need a renderer, so capture from the game itself, e.g. a -record= option);
+#                      --shaders first draws every kit shader recipe and compares it with its golden image
 #             exec     run an editor Python script headless (asset imports, maps)
 #             run      open the project in the editor
 #             package  BuildCookRun a packaged build into Packaged/
@@ -57,6 +59,9 @@
 #           job object (WinJob), so a timeout also ends a grandchild whose parent already exited
 # Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Linux and macOS, killing an untimed command
 #           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
+# Updated : 2026-11-06 with Claude (Opus 5.5, claude-opus-5-5): the kit's shader recipes
+#           (Content/Python/kit_shaders): `check` compiles them as materials, `smoke --shaders` draws and compares
+#           them, both in the full editor off-screen (the pythonscript commandlet has only the Null RHI)
 # Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): check builds an enabled GameKitShell in a
 #           Blueprint-only project (the UnrealEditor target with -Project puts it in the plugin's Binaries/)
 #           instead of refusing it; test/smoke/exec exit 2 with "run check first" while its module is missing
@@ -115,6 +120,11 @@ CMD_METACHARS = '&|<>^%!"'                   # cmd.exe syntax characters, unsafe
 KIT_PLUGIN = "GameKitShell"                   # Plugins/GameKitShell: the kit's juice and shell logic (opt-in)
 KIT_TEST_PREFIX = "GameKit."                  # its automation tests; `test` runs them with the game's own
 KIT_OK_PATTERN = r"Result=\{Success\} Name=\{[^}]*\} Path=\{GameKit\."
+SHADER_SCRIPT = "Content/Python/kit_shaders/shader_check.py"   # the kit's shader recipes as materials
+SHADER_LOG = ROOT / "Saved" / "Logs" / "dev_shaders.log"
+SHADER_OUT = "Saved/ShaderCheck"          # smoke --shaders pictures, compared by tools/shaders/shader_ref.py
+SHADER_TIMEOUT_S = 1800                   # editor start, material compiles (a fresh shader cache is slow), draws
+SHADER_LINE = re.compile(r"LogPython: (SHADER_(?:OK|FAIL|CHECK_DONE)\b.*)$")
 DEBUG = False
 
 
@@ -342,7 +352,7 @@ def reap(proc):
     return out
 
 
-def run(cmd, capture=False, timeout=None):
+def run(cmd, capture=False, timeout=None, env=None):
     """Run a command in the project root. 124 = timed out (output so far is returned), 126 = not executable,
     127 = not found."""
     dbg("run: " + " ".join(str(c) for c in cmd))
@@ -350,7 +360,7 @@ def run(cmd, capture=False, timeout=None):
     try:
         proc = subprocess.Popen(
             [str(c) for c in cmd], cwd=ROOT, text=True, encoding="utf-8", errors="replace",
-            stdin=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL, env=dict(os.environ, **env) if env else None,
             stdout=subprocess.PIPE if capture else None,
             stderr=subprocess.STDOUT if capture else None,
             start_new_session=NEW_SESSION and timeout is not None,
@@ -488,7 +498,7 @@ def cmd_check(args):
         if kit_plugin_state() != "enabled":
             # Blueprint-only project: the engine's prebuilt editor runs it, there is no C++ to compile
             print("[ OK ] Blueprint-only project (no Source/), nothing to compile. `test` loads the project.")
-            return 0
+            return check_shaders(args)
         # Blueprint-only with the kit's C++ plugin: the engine's editor target compiles just the project's plugins
         # into Plugins/<name>/Binaries/ (the engine itself is prebuilt). Needs the same C++ toolchain as a C++ project.
         print(f"[info] Blueprint-only project with the {KIT_PLUGIN} plugin enabled: building its C++ "
@@ -516,10 +526,104 @@ def cmd_check(args):
               "workload (MSVC + Windows SDK) and the .NET Framework 4.8 SDK component. See docs/ENGINE.md.", file=sys.stderr)
         return 2
     print("[ OK ] compiled" if rc == 0 else "[FAIL] build failed")
-    return 0 if rc == 0 else 1
+    if rc != 0:
+        return 1
+    return check_shaders(args)
 
 
-cmd_build = cmd_check
+def check_shaders(args):
+    """check: the kit's shader recipes current with their files and compiling as materials. 0 when there are none."""
+    if not (ROOT / SHADER_SCRIPT).is_file() or getattr(args, "no_shaders", False):
+        return 0
+    rc, out = run_tool([sys.executable, ROOT / "tools" / "shaders" / "shader_gen.py", "--check"])
+    if rc != 0:
+        print(out.rstrip())
+        print("[FAIL] the shader files do not match their recipes: python tools/shaders/shader_gen.py")
+        return 1
+    return shader_editor(args, "compile")
+
+
+def shader_editor(args, mode, out_dir=None):
+    """Run SHADER_SCRIPT in the full editor, off-screen (mode compile or render). Returns 0, 1 or 2."""
+    exe = editor_cmd(platform_name(args.platform))
+    missing = missing_tool(exe)
+    if missing:
+        return missing
+    script = (ROOT / SHADER_SCRIPT).as_posix()
+    if any(c in script for c in ',;"'):
+        # -ExecCmds splits commands on , and ; and a quote ends the argument
+        print(f"[error] the project path may not contain , ; or \" for the shader check: {script}", file=sys.stderr)
+        return 2
+    SHADER_LOG.parent.mkdir(parents=True, exist_ok=True)
+    if SHADER_LOG.exists():
+        SHADER_LOG.unlink()
+    env = {"GAMEKIT_SHADER_MODE": mode, "GAMEKIT_SHADER_OUT": str(out_dir) if out_dir else ""}
+    # -ExecCmds=py, not -ExecutePythonScript: that one quits a frame after the script returns, before the
+    # materials finish compiling (seen on UE 5.8); the script quits the editor itself when it is done
+    cmd = [exe, find_uproject(), f"-ExecCmds=py {script}", "-unattended", "-nopause", "-nosplash", "-RenderOffScreen",
+           f"-abslog={SHADER_LOG}"]
+    rc, out = run(cmd, capture=True, timeout=SHADER_TIMEOUT_S, env=env)
+    log = SHADER_LOG.read_text(encoding="utf-8", errors="ignore") if SHADER_LOG.exists() else ""
+    if DEBUG:
+        print(log[-6000:])
+    if rc in NO_EXEC:
+        return 2
+    if rc == 124:
+        print(f"[FAIL] the editor hung during the shader check; the log so far is in {SHADER_LOG}")
+        return 1
+    why = module_missing(log + out)
+    if why:
+        print(f"[error] {why}", file=sys.stderr)
+        return 2
+    lines = [m.group(1) for m in map(SHADER_LINE.search, log.splitlines()) if m]
+    done = [l for l in lines if l.startswith("SHADER_CHECK_DONE")]
+    fails = [l[len("SHADER_FAIL "):] for l in lines if l.startswith("SHADER_FAIL ")]
+    for line in fails:
+        print("[FAIL] shader " + line)
+    if fails:
+        hlsl = [l.strip() for l in log.splitlines() if re.search(r"Material\.ush:\d+:\d+: error", l)]
+        for line in list(dict.fromkeys(hlsl))[:10]:
+            print("  " + line)
+    if not done:
+        print(f"[FAIL] the shader check did not report (editor exit {rc}); is the PythonScriptPlugin enabled? "
+              f"Log: {SHADER_LOG}")
+        return 1
+    if fails or done[-1].split()[-1] != "0":
+        return 1
+    if mode == "compile":
+        print(f"[ OK ] {done[-1].split()[1]} shader recipe(s) compile as materials")
+    return 0
+
+
+def shader_pass(args):
+    """smoke --shaders: draw every recipe in the editor, then compare with the golden images. Returns 0, 1 or 2."""
+    out_dir = ROOT / SHADER_OUT
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+    out_dir.mkdir(parents=True)
+    rc = shader_editor(args, "render", out_dir)
+    if rc:
+        return rc
+    rc, out = run_tool([sys.executable, ROOT / "tools" / "shaders" / "shader_ref.py", "compare", out_dir])
+    print(out.rstrip())
+    if rc:
+        print("[FAIL] a shader recipe differs from its golden image (see the lines above)" if rc == 1 else
+              "[error] shader_ref.py compare could not run")
+    return rc
+
+
+def run_tool(cmd):
+    """A captured run of one of the kit's Python tools. Returns (rc, output); 2 when it cannot run."""
+    try:
+        r = subprocess.run([str(c) for c in cmd], cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace",
+                           timeout=300)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return 2, str(exc)
+    return r.returncode, r.stdout + r.stderr
+
+
+def cmd_build(args):
+    return cmd_check(args)
 
 
 def run_automation(filter_, args, until=None, fail_on=None):
@@ -608,6 +712,14 @@ def cmd_test(args):
 
 def cmd_smoke(args):
     fail_on = [m for m in (args.fail_on or "").split(",") if m]
+    if getattr(args, "shaders", False):
+        err = preflight()
+        if err:
+            print(f"[error] {err}", file=sys.stderr)
+            return 2
+        rc = shader_pass(args)
+        if rc:
+            return rc
     return run_automation(f"{game_name()}.{SMOKE_GROUP_SUFFIX}" + (f".{args.filter}" if args.filter else ""), args,
                           until=args.until, fail_on=fail_on)
 
@@ -806,8 +918,12 @@ def build_parser():
     ap.add_argument("--platform", choices=PLATFORMS, help="target platform (default: this OS)")
     sub = ap.add_subparsers(dest="command", metavar="<command>")
     sub.required = True
-    sub.add_parser("check", help="compile the editor target").set_defaults(fn=cmd_check)
-    sub.add_parser("build", help="same as check").set_defaults(fn=cmd_build)
+    p = sub.add_parser("check", help="compile the editor target, then the kit's shader recipes as materials")
+    p.add_argument("--no-shaders", action="store_true", help="skip the shader recipes (they start the editor)")
+    p.set_defaults(fn=cmd_check)
+    p = sub.add_parser("build", help="same as check")
+    p.add_argument("--no-shaders", action="store_true", help="skip the shader recipes")
+    p.set_defaults(fn=cmd_build)
     p = sub.add_parser("test", help="run automation tests headless")
     p.add_argument("--filter", help='automation filter, e.g. "MyGame.Logic" (default: the game name, plus GameKit. '
                                     'when the GameKitShell plugin is enabled)')
@@ -816,6 +932,9 @@ def build_parser():
     p.add_argument("--filter", help="only <Game>.Smoke.<filter>, e.g. Boot")
     p.add_argument("--until", help="a marker your Smoke tests must log (e.g. DELVE_COMPLETE)")
     p.add_argument("--fail-on", help="comma-separated markers that fail the run (e.g. MAGE_DOWN)")
+    p.add_argument("--shaders", action="store_true",
+                   help="first draw every kit shader recipe in the editor (off-screen, a GPU) and compare it with its "
+                        "golden image (tools/shaders/)")
     p.set_defaults(fn=cmd_smoke)
     p = sub.add_parser("exec", help="run an editor Python script headless (imports, maps; needs PythonScriptPlugin)")
     p.add_argument("script", help="path to the .py script, relative to the project (e.g. tools/unreal/build_content.py)")

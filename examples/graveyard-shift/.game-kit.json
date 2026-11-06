@@ -1461,6 +1461,20 @@
       "date": "2026-11-06",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": [
+        "docs/ENGINE.md"
+      ]
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1500,6 +1514,7 @@
     "Assets/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "Assets/Editor/GameKitBuild.cs": "648db4a44943b2877d8eb00943d0992bc9c0ba9a1613faf59e5bc15ab7180ec1",
     "Assets/Editor/GameKitScenes.cs": "19e5e4ef2b41410b826d0fe34580f97b9f53b4cafb56b9c02f7b1a95685b2642",
+    "Assets/Editor/GameKitShaders.cs": "09aafef66a6b4148d38d83dfc924f0323ccfe75e35805acec1a724ef04651738",
     "Assets/Scripts/Core/AtomicFile.cs": "bfa7aeba7c875e1a0703b3efa78361843a7b6fb9199ab32241a4113b781a654a",
     "Assets/Scripts/Core/AudioAccess.cs": "92829baa658bc8ce3d23d035d7e5d2b62cc37594041cf613bb909bf2e33c8b50",
     "Assets/Scripts/Core/AudioDirector.cs": "fa543e6b35a943a5c86c81e624d36d905160f69707b3755db9a50a6fe6e95c74",
@@ -1522,6 +1537,17 @@
     "Assets/Scripts/Core/Spring.cs": "c779909bba2450ad986536a3a43a3acbbdecbf2d50bb268ce955a993b44c81b3",
     "Assets/Scripts/Game/AudioEventPlayer.cs": "919035049d5be3db13b3dd83c988fc0829eded74d747f0e020cdcb3cd11b686a",
     "Assets/Scripts/Game/MusicPlayer.cs": "1e16d45da933b069d1e20f54ac0c9612f3e7bbac08fc2afbdf52b1ebc24418cc",
+    "Assets/Shaders/Kit/colorblind.shader": "a85b7cf6d5e2e002f21387e1476ffcb4cc21565943e8ee94948ae4b57c4ba32f",
+    "Assets/Shaders/Kit/crt.shader": "e716560b8b788f33df75f3addb3d3ff6e015740ed106fa19472d83225c1cbb2a",
+    "Assets/Shaders/Kit/dissolve.shader": "bae0f77e9469392e401aa5381f2c54442d575ad9973f24ffbce4bc19a36351ea",
+    "Assets/Shaders/Kit/flash.shader": "86a94ea71faf9eff2a507975715b36cd768fb4a26c75d173e84aee4f724d455a",
+    "Assets/Shaders/Kit/outline.shader": "7a591ad90dae8cc1332d3cf7ec6f8460c83c61c02610e3ac1a4780544e7fc234",
+    "Assets/Shaders/Kit/palette_swap.shader": "7e0ccb8180ecd482b35c522f9d98a9f05ba93d14b97ba6df531140f687977850",
+    "Assets/Shaders/Kit/scroll_water.shader": "9ce8eab510c7963c5d27708395deb07e10b44ca9f038e9d46abfd445ab8290be",
+    "Assets/Shaders/Kit/sprite_light.shader": "3547215f5ffd9c1a32b9933a284e7e8b8b6ac8b6bedf4b3f3b4e888e8087f87a",
+    "Assets/Shaders/Kit/toon_rim.shader": "41312846cb5d91ab5f93f6775e9ba241fb7e50bae780f621d87eb4e4b07588c5",
+    "Assets/Shaders/Kit/triplanar.shader": "46e7ed770d1a90f80455e64a7e0c07792067cea9d87a91488e694f0bf561b95f",
+    "Assets/Shaders/Kit/vignette.shader": "224f164bb8eb4e3f0b9cc46f5e272d78202683b345f29a343217fe9492dd8f7a",
     "Assets/Tests/EditMode/AccessVectorTests.cs": "aa36542f6c511449dd2777434e483efa8e12ca7d9a5ba070ef04979acb0e9790",
     "Assets/Tests/EditMode/AtomicFileTests.cs": "500ca0098e5f81be62746dfe9defed2b96bd68778f58e60a9547a1a5104eab55",
     "Assets/Tests/EditMode/AudioVectorTests.cs": "a7cd42406d23a04125b631884ba2650f524e8e6ce5d96917b9ff02123dae4a34",
@@ -1571,7 +1597,7 @@
     "docs/ASSET_LOG.md": "88351348aca95381f08d8f6ef45f5fbdaf0e8521ec61c1d63a190426245e0bf6",
     "docs/BRIEFS.md": "040224667feef4f1cc7c6cc73803e3aa836025cda118f5c786c6da4e48fcd042",
     "docs/CONCEPTS.md": "d58ca9426877811564a704ca240d797d22877e8ee5aadd3d052c652bcc188e9a",
-    "docs/ENGINE.md": "eb4689a5f160fde984600f5666085a8fe9614023ded6f4978d267d2941fedb9d",
+    "docs/ENGINE.md": "7ff320ea4fc61a88a637cf623ffc77d1a7e7eebd7e8fc14b91461fb94238ba3b",
     "docs/ENGINE_FLOW.md": "8a0b16a0ed2adf4edc63eb642cf21abdbe37498bbde03f8a713fe16f5badb70b",
     "docs/EVIDENCE.md": "3e7459a8ca21ff45af359c157a0d0ed9b62497e93e5b0cd1d82c576c9fd6dc3a",
     "docs/FIRST_HOUR.md": "e3c2b06bbdeea3b2e04be57de54b092bb749a4a45a13a5330c8819bd766e4f49",
@@ -1858,7 +1884,7 @@
     "tools/bozzetto/workflows/trellis2_image_to_3d.api.json": "c18a577cf62b2f12a9689760edfdc89ef671d0b996a5b063343461c505a113f3",
     "tools/check_links.py": "35d811faa47c297fd63e78f2958ef6abe1c742d73994857d58a99a4356792d5c",
     "tools/credits.py": "d598a841eb67130a1a22f100535dbf4b8964a937db74792252eb5db619dc379c",
-    "tools/dev.py": "9668fa4fe8a85c9d8318c2e6de342e7cb92a57875d7b549e3f7adb15e747c8ed",
+    "tools/dev.py": "c3144847997ec6c88687c88de09412014564ee2b8339a5ab49b41acb4b4c849a",
     "tools/doctor.py": "7635f687e4476700a424187beeff24022a01d260ccb158faf7e9eec69599c85a",
     "tools/fetch_asset.py": "4c3f351d98ed01dd27c9dc68ec0f3b9242045c16d1b2dde292cf44fb3d127d7d",
     "tools/golden_vectors.py": "5368a2d52b2a9c837ee42cc974ef1085e1b8d018be7343069027eed1736f8b95",
@@ -1880,7 +1906,7 @@
     "tools/shaders/ksl/triplanar.ksl": "05d03cd7a4c2f2910a1bf0cefdeac529cbcf53b005990b63287df2c1ea08c02f",
     "tools/shaders/ksl/vignette.ksl": "5a82293feaa105d1cdc07a97800496aa6c59227087fa432967ba2b068bcda19e",
     "tools/shaders/recipes.json": "656135c0b0a65c9a456089d9e098f6606bd7a007dd066c830598e6a16b56dd16",
-    "tools/shaders/shader_gen.py": "636c555000fd86daed9fa47e929f0f96c4863f62b4452a64199a6267b390fef6",
+    "tools/shaders/shader_gen.py": "38252094927d5a904d88b637ea7fb874d8a1febd6660be7cd7fb495bf8e85ce5",
     "tools/shaders/shader_ref.py": "f21cf06f0dde7851fc00178b838d1ab5b16201b7e7ce6f8283ba478f884d1d2a",
     "tools/shaders/test_shader_ref.py": "612934104e181e0091e3bd3b4cddaed13e11d66c9846bbc534ed658b961225e1",
     "tools/test_check_links.py": "db6fc4b54978282095e1af3737c1164ae0316c8a3ffbe75b414d79e17363bb31",

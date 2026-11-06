@@ -1381,6 +1381,20 @@
       "date": "2026-11-06",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": [
+        "docs/ENGINE.md"
+      ]
     }
   ],
   "files": {
@@ -1418,6 +1432,11 @@
     ".github/workflows/ci.yml": "b9b6e8c4c416f0f3e531510a54b0113682d696c602ca893365ab04b5a555ab74",
     ".gitleaks.toml": "d8f6978ff742ff6d0cbf93e64cbab0a2d607cbae5029d1c34619451bf1521670",
     "CLAUDE.md": "b307d2ad4156c520f0d4ce1dd8c37971fcd611fc413bdcacbfd1a9c0aeae93be",
+    "Content/Python/kit_shaders/__init__.py": "e28a4a56a0e55f933d307a4aa0031f17fb1ab92f8e3e51d51164ed42bdb32246",
+    "Content/Python/kit_shaders/kit_materials.py": "ef01f46797c4085f05322d8d49cc1e23bc1e0ad400d6f049bc6937ffc9ad1d42",
+    "Content/Python/kit_shaders/kit_recipes.py": "1d621e08efeebbffb2eec45b8ada2a53064c143acc508f683d946a8642016b6b",
+    "Content/Python/kit_shaders/make_materials.py": "c5650baabb9257c34832b59e72b6a9187a1b6be6c630c008e36ac81a84205541",
+    "Content/Python/kit_shaders/shader_check.py": "0505937d6b2603ca75f098ec6ff888b8d1a35a40136b202aacdc301b9609c298",
     "Plugins/GameKitShell/GameKitShell.uplugin": "01839feccd2f96ffafd0b8a78dfe922fc7323817d05abb781c8d9be6b1e89b71",
     "Plugins/GameKitShell/Source/GameKitShell/GameKitShell.Build.cs": "648b3bfd4afd28f3cbf57663506f5000b9043316d08466f4212bb0dc26c3fac7",
     "Plugins/GameKitShell/Source/GameKitShell/Private/GameKitAtomicFile.cpp": "6210558e5203aef56c11f415fa73190969e5e710fdff0a4d7404e203eb958754",
@@ -1479,7 +1498,7 @@
     "docs/ASSET_LOG.md": "96dab0423e329d0874aa9802a12c0b4f5cd33f337bdba7de4bf49788e1ef9523",
     "docs/BRIEFS.md": "b9493983029603a9b96077715d8a6a573338c63b4af55391262faa34e950e3aa",
     "docs/CONCEPTS.md": "c0dd1ec23634f973bbfc650fa84931a7b87243966d58c397a95f5ef73d788397",
-    "docs/ENGINE.md": "bdb72ead296c5557e2629644dfd837b811c4f6136d8a29984d5706446409e6db",
+    "docs/ENGINE.md": "a85849c5bf80d4ce2c156e5c8eadd3bb202e859557b1ec271672959473ea3935",
     "docs/ENGINE_FLOW.md": "36185db57e3dd9e482bc1ff7a6e7c012f5027915575dcf89e827fd953c5d1466",
     "docs/EVIDENCE.md": "3e7459a8ca21ff45af359c157a0d0ed9b62497e93e5b0cd1d82c576c9fd6dc3a",
     "docs/FIRST_HOUR.md": "e3c2b06bbdeea3b2e04be57de54b092bb749a4a45a13a5330c8819bd766e4f49",
@@ -1766,7 +1785,7 @@
     "tools/bozzetto/workflows/trellis2_image_to_3d.api.json": "c18a577cf62b2f12a9689760edfdc89ef671d0b996a5b063343461c505a113f3",
     "tools/check_links.py": "35d811faa47c297fd63e78f2958ef6abe1c742d73994857d58a99a4356792d5c",
     "tools/credits.py": "d598a841eb67130a1a22f100535dbf4b8964a937db74792252eb5db619dc379c",
-    "tools/dev.py": "8b2d9ddb32acde3bea332c49d3778a2f8f7c99c7856c703ca92998505b6832b4",
+    "tools/dev.py": "c2a3d0222744c2302e4b76b7eb4edf5cb3003312ded7ad3449ab9df0dc4d4e2a",
     "tools/doctor.py": "7635f687e4476700a424187beeff24022a01d260ccb158faf7e9eec69599c85a",
     "tools/fetch_asset.py": "4c3f351d98ed01dd27c9dc68ec0f3b9242045c16d1b2dde292cf44fb3d127d7d",
     "tools/golden_vectors.py": "5368a2d52b2a9c837ee42cc974ef1085e1b8d018be7343069027eed1736f8b95",
@@ -1788,7 +1807,7 @@
     "tools/shaders/ksl/triplanar.ksl": "05d03cd7a4c2f2910a1bf0cefdeac529cbcf53b005990b63287df2c1ea08c02f",
     "tools/shaders/ksl/vignette.ksl": "5a82293feaa105d1cdc07a97800496aa6c59227087fa432967ba2b068bcda19e",
     "tools/shaders/recipes.json": "656135c0b0a65c9a456089d9e098f6606bd7a007dd066c830598e6a16b56dd16",
-    "tools/shaders/shader_gen.py": "636c555000fd86daed9fa47e929f0f96c4863f62b4452a64199a6267b390fef6",
+    "tools/shaders/shader_gen.py": "38252094927d5a904d88b637ea7fb874d8a1febd6660be7cd7fb495bf8e85ce5",
     "tools/shaders/shader_ref.py": "f21cf06f0dde7851fc00178b838d1ab5b16201b7e7ce6f8283ba478f884d1d2a",
     "tools/shaders/test_shader_ref.py": "612934104e181e0091e3bd3b4cddaed13e11d66c9846bbc534ed658b961225e1",
     "tools/test_check_links.py": "db6fc4b54978282095e1af3737c1164ae0316c8a3ffbe75b414d79e17363bb31",

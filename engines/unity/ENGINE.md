@@ -21,7 +21,8 @@ Assets/Scripts/Core/     engine-agnostic logic (no UnityEngine types where possi
                          (GameSettings, Bindings, SaveStore, I18n, AtomicFile, Json) and audio decisions
                          (AudioDirector, MusicDirector, AudioAccess), checked against data/golden/*.json
 Assets/Scripts/Game/     gameplay MonoBehaviours and ScriptableObjects; AudioEventPlayer, MusicPlayer play the audio decisions
-Assets/Editor/           editor-only code (GameKitBuild.cs lives here)
+Assets/Editor/           editor-only code (GameKitBuild.cs; GameKitShaders.cs checks the shader recipes)
+Assets/Shaders/Kit/      the kit's shader recipes as unlit shaders, Kit/<name> (generated)
 Assets/Tests/EditMode/   EditMode tests (own assembly definition)
 Assets/Tests/PlayMode/   PlayMode tests, incl. BootSmokeTests (what `dev.py smoke` runs) and AudioPlayModeTests
                          (AudioEventPlayer on real AudioSources: `dev.py test --mode PlayMode --filter Audio`)
@@ -43,6 +44,14 @@ ProjectSettings/         project config (text, edit with care)
   and Mixamo-style clips play on it **(verify: not yet tested in Unity)**.
   A `--material vertex` model keeps its colours in glTF `COLOR_0`: check that it is not white, because Godot ignores
   them by default (#202) and whether glTFast's materials use them is not tested here **(verify)**.
+- **Shaders:** `new Material(Shader.Find("Kit/flash"))` (or a material asset using it) on a SpriteRenderer, a quad or
+  any UV-mapped mesh; `material.SetFloat("u_amount", 1f)`, vectors with `SetVector("u_flash_color", ...)`, a second
+  picture as `_AuxTex`. Coordinates run 0 to 1 over the UVs: `u_texel` is one over the picture's size in texels,
+  `u_canvas` the size pixel parameters (`u_light_pos`) are given in. Post effects (`crt`, `vignette`, `colorblind`)
+  are `Graphics.Blit(source, destination, material)` (Built-in) or a full-screen pass (URP). Textures want Filter
+  Mode Point for pixel art. They are plain unlit passes, drawn by the Built-in pipeline and by URP (both checked);
+  HDRP is not checked. `check` compiles them (`ShaderUtil`), `smoke --shaders` draws each and compares it with its
+  golden image (a graphics device: no `-nographics`).
 
 ## Gotchas (Claude: read before editing)
 1. **Never hand-edit** `Library/`, `Temp/`, `Logs/`, generated `.csproj`/`.sln`/`.slnx`. (`Logs/` is ignored by git, so `dev.py smoke` captures go there.)
@@ -60,4 +69,5 @@ ProjectSettings/         project config (text, edit with care)
     every batchmode command (`check`, `test`, `smoke`, `build`, `exec`) ran fine; sign in to Unity Hub once before `run` (K01).
 
 ## Generated or binary (do not hand-edit)
-`Library/`, `Temp/`, `Logs/`, `UserSettings/`, `*.csproj`, `*.sln`, `*.slnx` (Unity 6.6 writes the new solution format), built players in `Build/`.
+`Library/`, `Temp/`, `Logs/`, `UserSettings/`, `*.csproj`, `*.sln`, `*.slnx` (Unity 6.6 writes the new solution format), built players in `Build/`, the kit's shaders in
+`Assets/Shaders/Kit/` (edit `tools/shaders/ksl/`, then `python tools/shaders/shader_gen.py`).

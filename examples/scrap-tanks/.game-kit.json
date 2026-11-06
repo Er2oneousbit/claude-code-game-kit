@@ -1449,6 +1449,18 @@
       "date": "2026-11-06",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
+    },
+    {
+      "version": "0.13.2",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1867,7 +1879,7 @@
     "tools/shaders/ksl/triplanar.ksl": "05d03cd7a4c2f2910a1bf0cefdeac529cbcf53b005990b63287df2c1ea08c02f",
     "tools/shaders/ksl/vignette.ksl": "5a82293feaa105d1cdc07a97800496aa6c59227087fa432967ba2b068bcda19e",
     "tools/shaders/recipes.json": "656135c0b0a65c9a456089d9e098f6606bd7a007dd066c830598e6a16b56dd16",
-    "tools/shaders/shader_gen.py": "636c555000fd86daed9fa47e929f0f96c4863f62b4452a64199a6267b390fef6",
+    "tools/shaders/shader_gen.py": "38252094927d5a904d88b637ea7fb874d8a1febd6660be7cd7fb495bf8e85ce5",
     "tools/shaders/shader_ref.py": "f21cf06f0dde7851fc00178b838d1ab5b16201b7e7ce6f8283ba478f884d1d2a",
     "tools/shaders/test_shader_ref.py": "612934104e181e0091e3bd3b4cddaed13e11d66c9846bbc534ed658b961225e1",
     "tools/test_check_links.py": "db6fc4b54978282095e1af3737c1164ae0316c8a3ffbe75b414d79e17363bb31",

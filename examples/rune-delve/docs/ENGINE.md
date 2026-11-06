@@ -23,6 +23,8 @@ Config/                  .ini settings (text, editable with care)
 Plugins/                 project plugins (including MCP if used)
 Plugins/GameKitShell/    the kit's juice and shell logic in C++ (opt-in: docs/ENGINE_FLOW.md "Juice and shell plugin")
 data/golden/             the kit's golden vectors, read by the plugin's GameKit.* tests
+Content/Python/kit_shaders/  the kit's shader recipes: kit_recipes.py (generated HLSL), kit_materials.py (builds
+                         them as materials), make_materials.py, shader_check.py
 Tools/ or tools/         dev.py and helpers
 ```
 
@@ -53,6 +55,17 @@ and a clear spec for the Blueprint child.
 - Juice and shell (SOP-18, SOP-19): screen shake, hitstop, easing, camera follow, input buffer, coyote time, springs,
   the flash limiter, settings, rebinding, glyphs, saves and localization are already written in `Plugins/GameKitShell`
   (plain C++, `GameKit::` and `FGameKit*`). Enable it in the `.uproject` and use it instead of writing them again.
+- **Shaders:** `python tools/dev.py exec Content/Python/kit_shaders/make_materials.py` builds every kit recipe as a
+  material in `/Game/KitShaders/` (`M_Kit_<name>`: an Unlit material whose Custom node holds the recipe's HLSL;
+  sprites and lighting Translucent, the rest Opaque). Make a material instance per use, set `MainTex` (and `AuxTex`)
+  and the `u_<name>` parameters; tween them from C++ or Blueprints through a dynamic material instance. Coordinates
+  are the mesh's UVs (top-left origin, as the recipes): `u_texel` is one over the picture's size in texels,
+  `u_canvas` the size pixel parameters (`u_light_pos`) are given in. Import pixel art as linear, Nearest, no mips
+  (`kit_materials.import_texture` does it). `check` compiles the recipes as materials and `smoke --shaders` draws each
+  into a render target and compares it with its golden image, both in the full editor off-screen (a GPU; about a
+  minute each). Those runs draw opaque check variants built from the same graph; the translucent `M_Kit_` assets and
+  post effects in a Post Process material (PostProcessInput0 in place of `MainTex`) are **(verify)** in your game.
+  Python needs the PythonScriptPlugin enabled in the `.uproject`.
 
 ## Gotchas (Claude: read before editing)
 1. **Header changes require a full editor restart or a Live Coding-incompatible rebuild.** Prefer building with `dev.py check` and restarting the editor after header/reflection changes. Live Coding handles function body edits only.
@@ -71,4 +84,5 @@ and a clear spec for the Blueprint child.
     commandlets (`dev.py exec`). Load in `BeginPlay` (or use `ConstructorHelpers` only for assets that always exist, such as engine ones).
 
 ## Generated or binary (do not hand-edit)
-`Content/**/*.uasset`, `*.umap`, `Intermediate/`, `Binaries/`, `Saved/`, `DerivedDataCache/`, `.vs/`, `*.sln`, `*.generated.h`.
+`Content/**/*.uasset`, `*.umap`, `Intermediate/`, `Binaries/`, `Saved/`, `DerivedDataCache/`, `.vs/`, `*.sln`, `*.generated.h`, the kit's generated recipes
+(edit `tools/shaders/ksl/`, then `python tools/shaders/shader_gen.py` and `make_materials.py`).

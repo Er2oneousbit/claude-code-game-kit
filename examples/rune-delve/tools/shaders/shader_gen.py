@@ -26,6 +26,7 @@
 #   -> wrap it in the engine's file format -> write, or with --check compare with what is on disk
 import argparse
 import json
+import pprint
 import re
 import sys
 from pathlib import Path
@@ -299,6 +300,7 @@ def unity(r):
     body = _close_lod(body)
     return f"""// {HEADER_NOTE.format(name=r['name'])}
 // {r['summary']}
+// kit-inputs: {r['main']} {r['aux'] or '-'}
 Shader "Kit/{r['name']}"
 {{
     Properties
@@ -356,7 +358,7 @@ def unreal_module(recipes):
                         "params": {k: v for k, _, v in r["params"]}} for r in recipes}
     return (f"# {HEADER_NOTE.format(name='*')}\n# The kit's shader recipes as Unreal material Custom node HLSL: inputs uv "
             "(image space), MainTex, AuxTex and one input per parameter (u_<name>).\n"
-            f"RECIPES = {json.dumps(meta, indent=1)}\n")
+            f"RECIPES = {pprint.pformat(meta, indent=1, width=118, sort_dicts=False)}\n")   # Python literals (None)
 
 
 def bevy(r):

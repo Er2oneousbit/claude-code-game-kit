@@ -1084,6 +1084,178 @@ class BevyShaders(TempRoot):
         self.assertEqual(quiet(dev.cmd_check, argparse.Namespace(release=False, no_shaders=True))[0], 0)
 
 
+# ---- #249: Unity shader recipes -----------------------------------------------------
+class UnityShaders(TempRoot):
+    """check runs GameKitShaders.Check in its editor run and fails on a SHADER_FAIL line; smoke --shaders runs
+    GameKitShaders.Render with a graphics device after the Smoke tests, then the compare."""
+    OK_LOG = "SHADER_OK flash\nUnityEngine.Debug:Log (object)\nSHADER_CHECK_DONE 1 0\n"
+
+    def dev(self, log, tool=None):
+        dev = load("unity")
+        dev.ROOT = self.root
+        (self.root / "Assets" / "Shaders" / "Kit").mkdir(parents=True, exist_ok=True)
+        dev.preflight = lambda: None
+        self.unity, self.tools = [], []
+
+        def fake_unity(extra, label, graphics=False, env=None):
+            self.unity.append((list(extra), graphics))
+            return 0, log
+        dev.run_unity = fake_unity
+
+        def fake_tool(cmd):
+            line = " ".join(str(c) for c in cmd)
+            self.tools.append(line)
+            for key, result in (tool or {}).items():
+                if key in line:
+                    return result
+            return 0, ""
+        dev.run_tool = fake_tool
+        dev.run_tests = lambda *a, **kw: 0
+        return dev
+
+    def check(self, dev, **opts):
+        args = argparse.Namespace(no_shaders=False)
+        for k, v in opts.items():
+            setattr(args, k, v)
+        return quiet(dev.cmd_check, args)
+
+    def smoke(self, dev):
+        args = argparse.Namespace(screenshot=None, record=None, record_every=6, graphics=False, fail_on=None,
+                                  until=None, filter="Smoke", shaders=True)
+        return quiet(dev.cmd_smoke, args)
+
+    def test_check_runs_the_shader_check_in_the_same_editor_run(self):
+        dev = self.dev(self.OK_LOG)
+        rc, text = self.check(dev)
+        self.assertEqual(rc, 0, text)
+        self.assertEqual(self.unity, [(["-quit", "-executeMethod", "GameKitShaders.Check"], False)])
+        self.assertTrue(any("shader_gen.py --check" in c for c in self.tools), self.tools)
+
+    def test_a_shader_error_fails_check(self):
+        dev = self.dev("SHADER_FAIL flash line 12: syntax error\nSHADER_CHECK_DONE 1 1\n")
+        rc, text = self.check(dev)
+        self.assertEqual(rc, 1, text)
+        self.assertIn("shader flash line 12", text)
+        self.assertEqual(self.check(self.dev("no report at all\n"))[0], 1)
+        self.assertEqual(self.check(self.dev(self.OK_LOG, {"shader_gen.py": (1, "[FAIL] stale")}))[0], 1)
+
+    def test_no_shaders_is_a_plain_compile(self):
+        dev = self.dev("")
+        self.assertEqual(self.check(dev, no_shaders=True)[0], 0)
+        self.assertEqual(self.unity, [(["-quit"], False)])
+
+    def test_smoke_shaders_draws_with_graphics_and_compares(self):
+        dev = self.dev(self.OK_LOG, {"shader_ref.py": (0, "[ OK ] all 1 effect(s) match")})
+        rc, text = self.smoke(dev)
+        self.assertEqual(rc, 0, text)
+        extra, graphics = self.unity[-1]
+        self.assertTrue(graphics)
+        self.assertIn("GameKitShaders.Render", extra)
+        self.assertEqual(extra[extra.index("-shaderOut") + 1], str(self.root / "Logs" / "shader_check"))
+        self.assertTrue(any("shader_ref.py compare" in c for c in self.tools), self.tools)
+
+    def test_a_differing_picture_fails_smoke(self):
+        dev = self.dev(self.OK_LOG, {"shader_ref.py": (1, "[FAIL] flash: 9 pixel(s) past 2")})
+        rc, text = self.smoke(dev)
+        self.assertEqual(rc, 1, text)
+        self.assertIn("differs from its golden image", text)
+
+
+# ---- #249: Unreal shader recipes ----------------------------------------------------
+class UnrealShaders(TempRoot):
+    """The shader check runs in the full editor through -ExecCmds=py (the pythonscript commandlet has the Null RHI,
+    and -ExecutePythonScript quits before the materials compile); the log's SHADER_ lines decide."""
+    OK = "[2026.11.06][  2]LogPython: SHADER_OK flash\n[2026.11.06][  2]LogPython: SHADER_CHECK_DONE 1 0\n"
+    BROKEN = ("[2026.11.06][  2]LogShaderCompilers: Warning: Failed to compile Material /Game/KitShaders/Check/M\n"
+              "\t/Engine/Generated/Material.ush:3749:59: error: expected expression\n"
+              "[2026.11.06][502]LogPython: SHADER_FAIL flash the material did not compile\n"
+              "[2026.11.06][502]LogPython: SHADER_CHECK_DONE 1 1\n")
+
+    def dev(self, log, tool=None, automation=0):
+        dev = load("unreal")
+        dev.ROOT = self.root
+        dev.SHADER_LOG = self.root / "Saved" / "Logs" / "dev_shaders.log"
+        script = self.root / "Content" / "Python" / "kit_shaders" / "shader_check.py"
+        script.parent.mkdir(parents=True, exist_ok=True)
+        script.write_text("# check\n", encoding="utf-8")
+        exe = self.root / "UnrealEditor-Cmd.exe"
+        exe.write_bytes(b"")
+        dev.preflight = lambda *a, **kw: None
+        dev.editor_cmd = lambda plat: exe
+        dev.find_uproject = lambda: self.root / "Test.uproject"
+        dev.kit_plugin_state = lambda: "absent"
+        self.editor, self.tools = [], []
+
+        def fake_run(cmd, capture=False, timeout=None, env=None):
+            self.editor.append(([str(c) for c in cmd], env))
+            dev.SHADER_LOG.parent.mkdir(parents=True, exist_ok=True)
+            dev.SHADER_LOG.write_text(log, encoding="utf-8")
+            return 0, ""
+        dev.run = fake_run
+
+        def fake_tool(cmd):
+            line = " ".join(str(c) for c in cmd)
+            self.tools.append(line)
+            for key, result in (tool or {}).items():
+                if key in line:
+                    return result
+            return 0, ""
+        dev.run_tool = fake_tool
+        dev.run_automation = lambda *a, **kw: automation
+        return dev
+
+    def check(self, dev, **opts):
+        args = argparse.Namespace(config="Development", platform=None, no_shaders=False)
+        for k, v in opts.items():
+            setattr(args, k, v)
+        return quiet(dev.cmd_check, args)
+
+    def test_a_blueprint_project_still_checks_its_shaders(self):
+        dev = self.dev(self.OK)
+        rc, text = self.check(dev)
+        self.assertEqual(rc, 0, text)
+        self.assertIn("1 shader recipe(s) compile as materials", text)
+        cmd, env = self.editor[0]
+        self.assertIn("-ExecCmds=py " + (self.root / "Content/Python/kit_shaders/shader_check.py").as_posix(), cmd)
+        self.assertIn("-RenderOffScreen", cmd)
+        self.assertNotIn("-run=pythonscript", cmd)
+        self.assertNotIn("-NullRHI", cmd)
+        self.assertEqual(env["GAMEKIT_SHADER_MODE"], "compile")
+
+    def test_a_material_that_does_not_compile_fails_check(self):
+        rc, text = self.check(self.dev(self.BROKEN))
+        self.assertEqual(rc, 1, text)
+        self.assertIn("shader flash the material did not compile", text)
+        self.assertIn("Material.ush:3749:59: error: expected expression", text)
+        self.assertEqual(self.check(self.dev("no shader lines\n"))[0], 1)
+        self.assertEqual(self.check(self.dev(self.OK, {"shader_gen.py": (1, "[FAIL] stale")}))[0], 1)
+
+    def test_no_shaders_skips_the_editor(self):
+        dev = self.dev(self.BROKEN)
+        self.assertEqual(self.check(dev, no_shaders=True)[0], 0)
+        self.assertEqual(self.editor, [])
+
+    def smoke(self, dev):
+        args = argparse.Namespace(config="Development", platform=None, filter=None, until=None, fail_on=None,
+                                  shaders=True)
+        return quiet(dev.cmd_smoke, args)
+
+    def test_smoke_shaders_renders_then_runs_the_smoke_tests(self):
+        dev = self.dev(self.OK, {"shader_ref.py": (0, "[ OK ] all 1 effect(s) match")})
+        rc, text = self.smoke(dev)
+        self.assertEqual(rc, 0, text)
+        cmd, env = self.editor[0]
+        self.assertEqual(env["GAMEKIT_SHADER_MODE"], "render")
+        self.assertEqual(env["GAMEKIT_SHADER_OUT"], str(self.root / "Saved" / "ShaderCheck"))
+        self.assertTrue(any("shader_ref.py compare" in c for c in self.tools), self.tools)
+
+    def test_a_differing_picture_fails_before_the_smoke_tests(self):
+        dev = self.dev(self.OK, {"shader_ref.py": (1, "[FAIL] flash: 9 pixel(s) past 2")}, automation=0)
+        rc, text = self.smoke(dev)
+        self.assertEqual(rc, 1, text)
+        self.assertIn("differs from its golden image", text)
+
+
 if __name__ == "__main__":
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
