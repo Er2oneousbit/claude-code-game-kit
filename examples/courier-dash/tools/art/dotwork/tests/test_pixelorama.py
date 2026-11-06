@@ -1010,6 +1010,19 @@ def full_disk():
         builtins.open, os.fdopen = real_open, real_fdopen
 
 
+def process_alive(pid):
+    """True while a process with this id runs (Windows: tasklist; elsewhere: signal 0)."""
+    if os.name == "nt":
+        out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, encoding="utf-8",
+                             errors="replace").stdout
+        return str(pid) in out.split()
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
 def leftovers(folder):
     return [f for f in os.listdir(folder) if f.endswith(".tmp")]
 
@@ -2405,6 +2418,9 @@ func _ready() -> void:
         if item.get("panel", false):
             await _panel()
             continue
+        if item.has("panel_close"):
+            await _panel_close(item["panel_close"])
+            continue
         var ok := OpenSave.save_pxo_file(item["out"], false, project)
         print("DOTWORK_PXO saved %s %s" % [item["out"], ok])
     print("DOTWORK_PXO_OK")
@@ -2437,6 +2453,30 @@ func _panel() -> void:
     while panel.busy:
         await get_tree().process_frame
     print("DOTWORK_PANEL_STATUS " + JSON.stringify(panel.status_text.text))
+
+
+# #255: the panel goes away (Pixelorama closing, the extension turned off) while its Dotwork run hangs with a child
+# of its own (as verify runs Godot): _exit_tree must return at once and the run's processes must end
+func _panel_close(job: Dictionary) -> void:
+    var nodes := ExtensionsApi.get_main_nodes("DotworkPanel")
+    if nodes.is_empty():
+        print("DOTWORK_PANEL_MISSING")
+        return
+    var panel = nodes[0]
+    while panel.busy:
+        await get_tree().process_frame
+    var hang := ("import subprocess, sys, time; c = subprocess.Popen([sys.executable, '-c', 'import time; "
+        + "time.sleep(120)']); open(sys.argv[1], 'w').write(str(c.pid)); time.sleep(120)")
+    panel._run({"python": job["python"]}, PackedStringArray(["-c", hang, job["pid_file"]]), func(c, o, g): pass)
+    var waited := 0
+    while not FileAccess.file_exists(job["pid_file"]) and waited < 600:
+        await get_tree().process_frame
+        waited += 1
+    OS.delay_msec(300)
+    var t0 := Time.get_ticks_msec()
+    panel.get_parent().remove_child(panel)
+    print("DOTWORK_PANEL_CLOSED " + str(Time.get_ticks_msec() - t0))
+    panel.queue_free()
 '''
 PXO_EXT_TSCN = ('[gd_scene load_steps=2 format=3]\n\n[ext_resource type="Script" '
                 f'path="res://src/Extensions/{PXO_EXT}/live.gd" id="1"]\n\n[node name="{PXO_EXT}" type="Node"]\n'
@@ -2501,6 +2541,57 @@ func _init() -> void:
 	check(L.describe({"ok": false, "error": "not one"})[1] == "not one", "describe shows why it is no asset")
 	print("LOGIC_FAILURES " + JSON.stringify(failures))
 	print("LOGIC_DONE")
+	quit(0 if failures.is_empty() else 1)
+'''
+
+
+RUN_EXAM_GD = r'''extends SceneTree
+
+# #255: a Dotwork run ends at its limit or on a stop, killing what it started; a normal run keeps its output and
+# exit code. EXAM_PYTHON names the Python to run.
+
+var failures := PackedStringArray()
+
+
+func check(ok: bool, what: String) -> void:
+	if not ok:
+		failures.append(what)
+
+
+func _init() -> void:
+	var L = load("res://panel_logic.gd")
+	var py := OS.get_environment("EXAM_PYTHON")
+	var r: Dictionary = L.run_process(py, PackedStringArray(["-c",
+		"import sys; print('out line'); sys.stderr.write('err line' + chr(10)); sys.exit(3)"]), 30.0, [false])
+	check(r["code"] == 3 and not r["timed_out"] and not r["stopped"], "a normal run keeps its exit code: %s" % r)
+	check("out line" in r["output"] and "err line" in r["output"], "stdout and stderr are both read: %s" % r)
+	# a Python that starts a child (as Dotwork starts Godot) and both hang: stopped at the limit, the child too
+	var hang := ("import subprocess, sys, time; c = subprocess.Popen([sys.executable, '-c', 'import time; "
+		+ "time.sleep(120)']); print('CHILD', c.pid, flush=True); time.sleep(120)")
+	var t0 := Time.get_ticks_msec()
+	r = L.run_process(py, PackedStringArray(["-c", hang]), 3.0, [false])
+	var took := Time.get_ticks_msec() - t0
+	check(r["timed_out"] and r["code"] == -1, "a hung run is stopped at its limit: %s" % r)
+	check(took < 15000, "and soon after it (%d ms)" % took)
+	check("[error]" in r["output"] and "stopped" in r["output"], "the panel is told why: %s" % r["output"])
+	for line in r["output"].split("\n"):
+		if line.begins_with("CHILD "):
+			print("CHILD_PID " + line.substr(6).strip_edges())
+	# a stop (Pixelorama closing) ends the run within a poll
+	var stop := [false]
+	t0 = Time.get_ticks_msec()
+	var th := Thread.new()
+	th.start(func(): return L.run_process(py, PackedStringArray(["-c", "import time; time.sleep(120)"]), 600.0, stop))
+	OS.delay_msec(1500)
+	stop[0] = true
+	r = th.wait_to_finish()
+	took = Time.get_ticks_msec() - t0
+	check(r["stopped"] and not r["timed_out"], "a stop ends the run: %s" % r)
+	check(took < 10000, "within moments (%d ms)" % took)
+	var none: Dictionary = L.run_process("C:/nowhere/python.exe", PackedStringArray(["-c", "1"]), 5.0, [false])
+	check(none["code"] == -1, "a Python that cannot start is exit -1: %s" % none)
+	print("RUN_FAILURES " + JSON.stringify(failures))
+	print("RUN_DONE")
 	quit(0 if failures.is_empty() else 1)
 '''
 
@@ -2659,6 +2750,40 @@ class PanelExam(unittest.TestCase):
         self.assertIn("LOGIC_FAILURES []", log, log[-3000:])
         self.assertNotIn("SCRIPT ERROR", log, log[-3000:])
         self.assertEqual(p.returncode, 0, log[-3000:])
+
+    def test_the_panel_never_waits_on_dotwork_without_a_limit(self):
+        # #255: _exit_tree waited on a thread running OS.execute with no time limit; closing Pixelorama during a hung
+        # re-export hung Pixelorama. The run goes through Logic.run_process (a limit and a stop) and the panel sets
+        # the stop before it waits.
+        with open(os.path.join(self.panel.EXTENSION_SRC, "Main.gd"), encoding="utf-8") as f:
+            main = f.read()
+        self.assertNotIn("OS.execute(", main)
+        self.assertIn("Logic.run_process(", main)
+        exit_tree = main.split("func _exit_tree()", 1)[1].split("\nfunc ", 1)[0]
+        self.assertLess(exit_tree.index("_stop[0] = true"), exit_tree.index("wait_to_finish()"))
+
+    @unittest.skipUnless(os.environ.get("GODOT_BIN") and os.path.isfile(os.environ.get("GODOT_BIN", "")),
+                         "set GODOT_BIN to run panel_logic.gd under Godot")
+    def test_a_dotwork_run_has_a_limit_and_a_stop_under_godot(self):
+        proj = os.path.join(self.tmp, "run_exam")
+        os.makedirs(proj)
+        with open(os.path.join(proj, "project.godot"), "w", encoding="utf-8") as f:
+            f.write("config_version=5\n")
+        shutil.copy(os.path.join(self.panel.EXTENSION_SRC, "panel_logic.gd"), proj)
+        with open(os.path.join(proj, "exam.gd"), "w", encoding="utf-8", newline="\n") as f:
+            f.write(RUN_EXAM_GD)
+        env = dict(os.environ, EXAM_PYTHON=sys.executable.replace(os.sep, "/"))
+        p = subprocess.run([os.environ["GODOT_BIN"], "--headless", "--path", proj, "-s", "res://exam.gd"],
+                           capture_output=True, encoding="utf-8", errors="replace", timeout=PXO_TIMEOUT, env=env)
+        log = p.stdout + p.stderr
+        self.assertIn("RUN_DONE", log, log[-3000:])
+        self.assertIn("RUN_FAILURES []", log, log[-3000:])
+        self.assertNotIn("SCRIPT ERROR", log, log[-3000:])
+        self.assertEqual(p.returncode, 0, log[-3000:])
+        # the hung run's own child (Dotwork's Godot, in the panel) is gone too
+        child = [int(l.split()[1]) for l in log.splitlines() if l.startswith("CHILD_PID ")]
+        self.assertEqual(len(child), 1, log[-3000:])
+        self.assertFalse(process_alive(child[0]), f"the child process {child[0]} was left running")
 
 
     def test_a_full_disk_leaves_the_panel_files_whole(self):
@@ -3028,6 +3153,31 @@ class PixeloramaLiveExam(unittest.TestCase):
         else:
             self.assertFalse(result["ok"], result)
             self.assertIn("GODOT_BIN", status)
+
+    def test_closing_pixelorama_while_dotwork_hangs_does_not_wait_for_it(self):
+        # #255: the panel's _exit_tree waited on a Dotwork run with no time limit, so closing Pixelorama (or turning
+        # the extension off) during a hung re-export hung Pixelorama, and killing it left Python and Godot running
+        import dotwork
+        import pxo_panel
+        user = os.path.join(self.user, "pixelorama")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(dotwork.main(["pixelorama", "--install-extension", "--pixelorama-user", user,
+                                           "--project", self.tmp]), 0, out.getvalue())
+        with open(os.path.join(user, "config.ini"), "w", encoding="utf-8") as f:
+            f.write(f"[extensions]\n\n{PXO_EXT}=true\n{pxo_panel.EXTENSION}=true\n")
+        knight = self.sources[0].replace(os.sep, "/")
+        pid_file = os.path.join(self.tmp, "child.pid").replace(os.sep, "/")
+        log = self.pixelorama([], {"files": [{"src": knight, "out": knight, "panel_close": {
+            "python": sys.executable.replace(os.sep, "/"), "pid_file": pid_file}}]})
+        self.assertIn("DOTWORK_PXO_OK", log, log[-3000:])
+        self.assertNotIn("SCRIPT ERROR", log, log[-3000:])
+        closed = [int(x.split()[1]) for x in log.splitlines() if x.startswith("DOTWORK_PANEL_CLOSED ")]
+        self.assertEqual(len(closed), 1, log[-3000:])
+        self.assertLess(closed[0], 10000, "closing the panel waited for the hung Dotwork run")
+        with open(pid_file, encoding="utf-8") as f:
+            child = int(f.read())
+        self.assertFalse(process_alive(child), f"the run's child {child} (Godot, in a real re-export) was left running")
 
 
 class CraftedPxoExam(unittest.TestCase):

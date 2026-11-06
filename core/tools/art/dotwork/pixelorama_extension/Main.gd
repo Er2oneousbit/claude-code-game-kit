@@ -8,8 +8,10 @@
 # Usage   : python tools/art/dotwork/dotwork.py pixelorama --install-extension (in the game folder), restart
 #           Pixelorama, Edit > Preferences > Extensions > Dotwork panel > Enable. Window > Panels shows or hides it.
 # Notes   : Which Python runs Dotwork, where dotwork.py and the game are: user://dotwork_panel.json, written by the
-#           install (one row per game; the .pxo's folder picks the row). Dotwork runs in a thread (OS.execute), so
-#           Pixelorama stays responsive while it works; a second click waits for the first run. The panel never
+#           install (one row per game; the .pxo's folder picks the row). Dotwork runs in a thread
+#           (Logic.run_process), so Pixelorama stays responsive while it works; a second click waits for the first run.
+#           A run has a time limit, and closing Pixelorama (or turning the extension off) kills it rather than waiting
+#           (#255). The panel never
 #           edits a game file itself: everything goes through the same command line you would type.
 #           The exams drive it through reexport() and the finished signal (tests/test_pixelorama.py).
 #           Before saving, the project's export folder is blanked: Pixelorama would write this machine's folder
@@ -38,6 +40,7 @@ var refresh_button: Button
 var answer: Dictionary = {}
 var busy := false
 var _thread: Thread
+var _stop := [false]  # set when the panel goes away: the running Dotwork is killed, not waited for (#255)
 var _fold_case := OS.get_name() == "Windows"
 
 
@@ -53,6 +56,7 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	ExtensionsApi.signals.signal_project_switched(refresh, true)
 	ExtensionsApi.signals.signal_project_saved(_on_saved, true)
+	_stop[0] = true  # #255: the run kills Dotwork (and its Godot) within a poll, so this wait is short
 	if _thread and _thread.is_started():
 		_thread.wait_to_finish()
 	if is_instance_valid(panel):
@@ -249,9 +253,11 @@ func _run(game: Dictionary, args: PackedStringArray, done: Callable) -> void:
 
 
 func _execute(game: Dictionary, args: PackedStringArray, done: Callable) -> void:
-	var output := []
-	var code := OS.execute(game["python"], args, output, true, false)
-	_finish.call_deferred(code, "".join(PackedStringArray(output)), game, done)
+	var limit := Logic.RUN_LIMIT_S if "--reexport" in args else Logic.INFO_LIMIT_S
+	var r: Dictionary = Logic.run_process(game["python"], args, limit, _stop)
+	if r["stopped"]:
+		return  # the panel is going away: nothing to show
+	_finish.call_deferred(r["code"], r["output"], game, done)
 
 
 func _finish(code: int, output: String, game: Dictionary, done: Callable) -> void:

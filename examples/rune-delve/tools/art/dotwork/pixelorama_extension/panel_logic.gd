@@ -20,6 +20,10 @@ const INSTALL_HINT := "run  python tools/art/dotwork/dotwork.py pixelorama --ins
 const LOG_TIME := 20  # characters of "YYYY-MM-DD HH:MM:SS " before a Dotwork log line's message
 const MAX_LINES := 12  # lines of Dotwork's output shown when it printed none of its marked lines
 const FILES_SHOWN := 6  # game files the panel lists by name (the count is always shown)
+const RUN_LIMIT_S := 900.0  # seconds a Dotwork run may take before it is stopped (a re-export with verify: minutes)
+const INFO_LIMIT_S := 120.0  # seconds for --info (no Godot)
+const POLL_MS := 50  # how often a run checks for its end, its limit and a stop
+const READ_CHUNK := 65536  # bytes read from Dotwork's output at a time
 
 
 ## The config as a Dictionary, or {"error": why} when it is missing or broken.
@@ -165,3 +169,58 @@ static func describe(answer: Dictionary) -> Array:
 	if str(answer.get("export_folder", "")) != "":
 		body.append("This .pxo holds a folder of this machine (%s); the re-export blanks it." % answer["export_folder"])
 	return [str(answer.get("what", "Dotwork asset")), "\n".join(body)]
+
+
+## Run python with args and wait for it, at most limit_s seconds, checking stop[0] as it runs: {"code", "output"
+## (stdout and stderr), "timed_out", "stopped"}. A run past its limit, or stopped (Pixelorama closing, the extension
+## turned off), is killed with the processes it started (#255: OS.execute waited with no limit, so closing
+## Pixelorama during a hung re-export hung Pixelorama). code is -1 when Python cannot start or was killed.
+static func run_process(python: String, args: PackedStringArray, limit_s: float, stop: Array) -> Dictionary:
+	var p := OS.execute_with_pipe(python, args, false)
+	if p.is_empty():
+		return {"code": -1, "output": "", "timed_out": false, "stopped": false}
+	var pid: int = p["pid"]
+	var out := PackedByteArray()
+	var start := Time.get_ticks_msec()
+	var timed_out := false
+	var stopped := false
+	while OS.is_process_running(pid):
+		out.append_array(_drain(p))
+		if not stop.is_empty() and stop[0]:
+			stopped = true
+		elif Time.get_ticks_msec() - start > limit_s * 1000.0:
+			timed_out = true
+		if stopped or timed_out:
+			kill_tree(pid)
+			break
+		OS.delay_msec(POLL_MS)
+	out.append_array(_drain(p))
+	var output := out.get_string_from_utf8()
+	if timed_out:
+		output += ("\n[error] Dotwork ran for over %d s and was stopped (a hung Godot verify?): run the same "
+			+ "command in a terminal to see where it waits\n") % int(limit_s)
+	var code := OS.get_process_exit_code(pid) if not (timed_out or stopped) else -1
+	return {"code": code, "output": output, "timed_out": timed_out, "stopped": stopped}
+
+
+static func _drain(p: Dictionary) -> PackedByteArray:
+	var got := PackedByteArray()
+	for key in ["stdio", "stderr"]:
+		var f: FileAccess = p[key]
+		while true:
+			var chunk := f.get_buffer(READ_CHUNK)
+			if chunk.is_empty():
+				break
+			got.append_array(chunk)
+	return got
+
+
+## Kill a process and the ones it started: Dotwork runs Godot for verify. Windows: taskkill /T; elsewhere its direct
+## children (pkill -P), then it (checked on Windows only, verify on Linux and macOS).
+static func kill_tree(pid: int) -> void:
+	if OS.get_name() == "Windows":
+		OS.execute("taskkill", PackedStringArray(["/T", "/F", "/PID", str(pid)]), [], false, false)
+	else:
+		OS.execute("pkill", PackedStringArray(["-KILL", "-P", str(pid)]), [], false, false)
+	if OS.is_process_running(pid):
+		OS.kill(pid)

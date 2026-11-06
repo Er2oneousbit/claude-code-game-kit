@@ -4,6 +4,12 @@
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
 ## Unreleased
+- Dotwork's Pixelorama panel: closing Pixelorama (or turning the extension off) during a re-export waited for Dotwork
+  with no time limit; with a hung run Pixelorama hung too (119.7 s in the live exam, the whole hung run), and killing
+  it left Python and Godot running (#255). A run now polls with a limit (15 minutes for a re-export, 2 for the
+  panel's question about the open file) and a stop: leaving kills it with the processes it started (Windows:
+  `taskkill /T`; Linux and macOS: its direct children, (verify)). Live in Pixelorama 1.2.4: the panel leaves at once
+  and the run's child is gone; the limit and the stop also run under plain Godot 4.7.2.
 - Kit exams: `scripts/test_shader_ports.py` skipped an engine whose whole shader folder was missing, so deleting
   Godot's ports still passed; a missing folder now fails (second-model review of the shader tooling, which found no
   translation or compare bugs in `shader_gen.py` and `shader_ref.py`).

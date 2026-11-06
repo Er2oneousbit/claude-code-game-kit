@@ -523,13 +523,16 @@ game folder:
    asset**.
 
 Dotwork runs in the background, so Pixelorama stays usable; the buttons wait until it finishes (a re-export with
-`verify` takes a few seconds to a minute). A `.pxo` from somewhere else, a Python or game folder that moved, or a
+`verify` takes a few seconds to a minute). A run that takes over 15 minutes (2 for the panel's question about the
+open file) is stopped and the panel says so, and closing Pixelorama or turning the extension off during a run stops
+it at once, with the Godot it started (on Windows; Linux and macOS stop its direct children, **(verify)**). A `.pxo`
+from somewhere else, a Python or game folder that moved, or a
 missing config gets a message in the panel that says what to run. Pixelorama checks the extension's API version: the
 panel declares API 10 (Pixelorama 1.2.4) and a later Pixelorama that changes the API says so instead of loading it.
 To remove it, Edit > Preferences > Extensions > Uninstall. Tested with Pixelorama 1.2.4 on Windows, headless: the live
 exam installs the panel into a user folder of its own, opens a `.pxo`, sets a pixel and drives the panel's own
 refresh and re-export, and the game changes exactly as the command-line path changes it (real `verify` in Godot
-4.7.2 when `GODOT_BIN` is set); the panel's text helpers run under plain Godot. How the tab looks and the buttons'
+4.7.2 when `GODOT_BIN` is set), and the panel taken away during a hung run returns at once and leaves no process behind; the panel's text helpers and its time limit run under plain Godot. How the tab looks and the buttons'
 clicks in Pixelorama's window are not tested by a program: give it a look.
 
 ## Store art (Steam sizes)

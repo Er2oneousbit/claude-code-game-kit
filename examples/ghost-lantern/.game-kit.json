@@ -1587,6 +1587,12 @@
       "date": "2026-11-06",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.14.1",
+      "date": "2026-11-06",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1774,7 +1780,7 @@
     "tools/art/comfy_local.py": "ab2863b60191ac55b651e672ca8000f827f89930502ab838732f4b3b546f457e",
     "tools/art/dotwork/.gdignore": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "tools/art/dotwork/LICENSES.md": "bd4c59c845392ba4010b1ce8527e037eca96656058f9ae025afdf79dee43d756",
-    "tools/art/dotwork/README.md": "1eefd0dde3740f72d573dfad89c2b99d026bd1e5ed7782feca90fb3e6387cdbd",
+    "tools/art/dotwork/README.md": "1356d2ba672c0b7a0c30acd86c3f81f3ef394d30628cbd4b8ab71fbc5e84b47a",
     "tools/art/dotwork/animpolish.py": "3828e3da68f4f1395ee2accb4aeb929144297832e7b25a9d9ae1db36c434be88",
     "tools/art/dotwork/aseprite.py": "fc18e9ab10d84a5e2a8a53ca997671be45ae60c6d8d5b99cdb676cee32d22d73",
     "tools/art/dotwork/asset_log.py": "ffe19e605ab3bf51dad549db1174245279833b46565f91b691e39997069536a4",
@@ -1872,10 +1878,10 @@
     "tools/art/dotwork/palettes/dotwork_default_env_swatch.png": "6387f86c5b6f0af2429fff53d93852559bbefcdbd75f1ba99eade61420440399",
     "tools/art/dotwork/palettes/dotwork_default_swatch.png": "593f44c0db3cf0e455e8689a7b8ff522385483811a673b633d8c4094b14011f6",
     "tools/art/dotwork/pixelorama.py": "bfe3c137653e6a58bbfb47804728906feb289c8322c15389ddb5243d4624d396",
-    "tools/art/dotwork/pixelorama_extension/Main.gd": "f99bcedf3023e6957c840bd6b13e9c5e6762604e4fc0b6c39a60115ff1db5a0a",
+    "tools/art/dotwork/pixelorama_extension/Main.gd": "d903abf030efe154f8b5dd79bda40680105715608980cfc2f95979f2815067ef",
     "tools/art/dotwork/pixelorama_extension/Main.tscn": "a4e365493fc73f459906b69665dac669d081d27293ca760625d005059e043d62",
     "tools/art/dotwork/pixelorama_extension/extension.json": "743e0d68686a0d938cc8bc9fde1607bbf4680f4b6fac0937cfa58e9a0f2ddfc8",
-    "tools/art/dotwork/pixelorama_extension/panel_logic.gd": "10c2e9708cba027b71f36522658f06091afa311f9ff893e684e6da213fcc60e3",
+    "tools/art/dotwork/pixelorama_extension/panel_logic.gd": "536a5aee4a6b5a979069f4e68ba7083f78437755559ea4a1ec5416b3e90952dc",
     "tools/art/dotwork/pose.py": "d621abf5b24223aaf80e57ac3ae79db0cca8907ee948c0c43a914157a2ac07d2",
     "tools/art/dotwork/pxclean.py": "22fd2738b998520799bab93e60191c39f1a17b7351063e8702effd1790a14575",
     "tools/art/dotwork/pxo_panel.py": "6087e77fbb9fd61a2e944d3090dd8340aa5b613a92d8853df54997251dc14cd8",
@@ -1898,7 +1904,7 @@
     "tools/art/dotwork/tests/test_dotwork.py": "9d9729ab7232a422536828a2a2574ca0e22bf01f134ba78cb2def9881ab0df31",
     "tools/art/dotwork/tests/test_fonts.py": "1f5adf0fa58566578f930d989acf38399a90e0159808aac69fbae02c0536efd0",
     "tools/art/dotwork/tests/test_lighting.py": "e6c3d72dc5de07fb5995861d55b206b84e6780174f169d7c151ed40f7f609306",
-    "tools/art/dotwork/tests/test_pixelorama.py": "da5176f845a3d82449e9acbfaa0829b1147e59cf71674f25c98149820f44fb54",
+    "tools/art/dotwork/tests/test_pixelorama.py": "500ffebbbfc62497266c6361c3e146a631e85988dbd595b5a7302af2e95e80a5",
     "tools/art/dotwork/tests/test_qapack.py": "16d299aa12c714cc6646104755f45bbd2c7bb842b1d7e29fdc234f782de57ca4",
     "tools/art/dotwork/tests/test_screens.py": "c92bdfa6cb2a60854436c45ccd87c2b0f6d7fe624fbead85769b5a6195a5dede",
     "tools/art/dotwork/tests/test_shipped.py": "e001f5aeef678e377af055ffc36c8db43d1bbbbc5d26d58936cda8b9da3d0efd",
