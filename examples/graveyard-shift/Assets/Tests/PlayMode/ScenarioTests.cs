@@ -14,15 +14,17 @@
 //           GRAVEYARD_SEEDS=6 python tools/dev.py smoke --filter Smoke_C --record Logs/frames   (a GIF)
 //           GRAVEYARD_SEEDS=6258 python tools/dev.py smoke --filter Smoke_J --screenshot Logs/yard.png
 // Notes   : Time.captureFramerate fixes every frame at 1/60 s of game time, so a night runs as fast as the
-//           machine allows and replays (careful and always-dark exactly since issue #9; two ghosts close together
-//           can still part by a millimeter between runs, so always-lit's catches read 12 or 14). Assert a gap over
+//           machine allows and replays: every bot, every frame to the last digit (careful and always-dark since
+//           issue #9; always-lit checked in eleven process runs for issue #160, ReplayTests.cs). Assert a gap over
 //           seeds, not one outcome (SOP-14).
 //           Saves go to a temp file, never yours. GRAVEYARD_TRACE=1 logs the bot every half second;
+//           GRAVEYARD_FRAMETRACE=Logs/trace writes every bot night frame by frame (FrameTrace.cs), for a diff of two runs;
 //           GRAVEYARD_SEEDS=0 limits a run to those seeds (for captures; generated tests take them as night seeds).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-10-26 review fix (Claude Opus 5.5): Smoke_K also pushes through the gate as a catch shuts it (the
 //           leaves used to swing for 1.6 s while a lit keeper ran out and was locked outside).
 // Updated : 2026-11-02 (Claude Opus 5.5): Smoke_D's numbers after the start-of-night physics fix (issue #9).
+// Updated : 2026-11-05 (Claude Fable 5.1): the per-frame trace hook (issue #160).
 // ---------------------------------------------------------------------------
 using System.Collections;
 using System.Collections.Generic;
@@ -89,10 +91,12 @@ namespace graveyard_shift.Tests
             yield return SceneManager.LoadSceneAsync(Scene);
             GameKitCapture.Attach();
             int frames = 0;
+            var trace = FrameTrace.Begin($"{(generated ? "gen" : "hand")}-{mode}-{difficulty}-seed{seed}");
             while (GraveyardGame.Current == null || GraveyardGame.Current.Night == null ||
                    GraveyardGame.Current.Outcome == Outcome.Playing)
             {
                 if (++frames > MaxFrames) break;
+                if (GraveyardGame.Current?.Night != null && GraveyardGame.Current.Keeper != null) trace.Frame(GraveyardGame.Current);
                 if (Trace && frames % (Fps / 2) == 0 && GraveyardGame.Current?.Keeper != null)
                 {
                     var g = GraveyardGame.Current;
@@ -102,6 +106,7 @@ namespace graveyard_shift.Tests
                 }
                 yield return null;
             }
+            trace.End();
             for (int i = 0; i < EndFrames; i++) yield return null;
             GameKitCapture.Finish();
             var game = GraveyardGame.Current;

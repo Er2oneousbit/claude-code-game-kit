@@ -143,6 +143,13 @@ found by the real run that verified the rig fixes.
 - `test_rig.py`: 27 cases (was 15): one per fix, including NaN and negative weights, a lost Tripo result fetched
   again without paying, a stale rig, and the five new skeleton shapes. Real run: UniRig on the beekeeper passed
   with every fix (562 s with a local LLM runner holding the GPU, about 85 s without).
+- Graveyard Shift (Unity): the always-lit bot's "12 or 14 catches between runs" (#160) was not reproduced: a
+  frame-by-frame record of every bot night (`Assets/Tests/PlayMode/FrameTrace.cs`, `GRAVEYARD_FRAMETRACE=<dir>`)
+  matched to the last digit over eleven process runs of the eight lit nights (144,000 frames each; alone, in
+  parallel, with a graphics device, inside the full smoke), and over three runs of the 11-02 code where it was seen.
+  No game code changed. Two new smoke tests guard the replay: `Smoke_R10` plays the lit bot's closest-pass night
+  twice and compares every frame and the catches, `Smoke_R11` walks two ghosts head-on through each other's
+  avoidance four times (`ReplayTests.cs`). 26 smoke tests (was 24; HANDOFF said 23).
 
 ## 0.13.0 (2026-11-05): /token-audit, what a project's Claude Code sessions spend tokens on
 - **`/token-audit`** (22 skills) and **`tools/token_audit.py`**: a read-only audit of what a project's Claude Code

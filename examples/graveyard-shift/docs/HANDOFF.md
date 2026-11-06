@@ -3,7 +3,7 @@
 > Rewritten at the end of every session by `/end-session`. Read first by `/start-session`.
 > Keep under ~60 lines. It is a baton, not a diary.
 
-**Last updated:** 2026-10-21
+**Last updated:** 2026-11-05
 **Branch / commit:** main (example in the kit repo)
 **Engine version:** see `docs/ENGINE.md`
 
@@ -11,8 +11,8 @@
 v0.2.0. Vertical slice "One Night" done: the scene is built by `SceneBuilder.Build`, the level and NavMesh at runtime,
 ghosts on a tested FSM (one per patrol loop plus the difficulty's extras), lantern stealth, souls, gate, saves with a migration, HUD, sounds, keyboard and gamepad.
 Every night after the first is a generated yard (`Assets/Scripts/Core/LevelGenerator.cs`, SOP-17; HOW_IT_WAS_MADE "Later: a new graveyard
-every night"). 112 EditMode tests (a 250-seed property test among them); 23 PlayMode smoke tests (boot, no way out of the yard and the gate shutting, the keeper's lantern and legs, the bot trio on
-the hand-made yard and on 8 generated nights, the NavMesh check, a yard from above, eight review-fix regressions).
+every night"). 112 EditMode tests (a 250-seed property test among them); 26 PlayMode smoke tests (boot, no way out of the yard and the gate shutting, the keeper's lantern and legs, the bot trio on
+the hand-made yard and on 8 generated nights, the NavMesh check, a yard from above, nine review-fix regressions, two replay checks).
 Review fixes 2026-10-26 (HOW_IT_WAS_MADE "Later: review fixes"). `Smoke_D`'s careful >= always-dark sits at the 104
 cap; its one failure was a night starting a frame late, fixed 2026-11-02 (issue #9, "Later: a night that started a
 frame late"). The built player replays a test night. Played once by the user (docs/PLAYTEST_LOG.md).
@@ -31,8 +31,9 @@ frame late"). The built player replays a test night. Played once by the user (do
 - 
 
 ## Known broken or flaky
-- Two ghosts close together can part by a millimeter between runs: always-lit's hand-made catches read 12 or 14.
-  Careful and always-dark replay exactly since issue #9, so `Smoke_D` (both at the 104 cap) no longer flakes.
+- Nothing known to flake: every bot night replays frame for frame (issue #9 for careful and always-dark; issue #160
+  could not reproduce always-lit's 12 or 14 in eleven runs, see HOW_IT_WAS_MADE "Later: the night that replays after
+  all"). `Smoke_R10` and `Smoke_R11` (`ReplayTests.cs`) fail the moment a night stops replaying.
 - Generated nights are easier than the hand-made yard (dark bot escapes 6/8 against 2/8): a playtest question.
 - A low rock the ghosts' NavMesh climbs (0.75 m) blocks the keeper (CharacterController 0.3 m); the fix moved the balance and was reverted.
 - Built with Mono only; IL2CPP not built or compared.

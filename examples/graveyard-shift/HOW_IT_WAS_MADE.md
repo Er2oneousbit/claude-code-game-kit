@@ -29,6 +29,7 @@ words, or a check that failed), what changed, and what proved it. Details in the
 | 15 | 10-23 | A second opinion from another vendor's model (Kimi K3.1 Pro) | A read-only Kimi audit of this game: 10 findings, 9 confirmed, all fixed ("Later: a second opinion"); the trio's lantern tests moved to Easy | 101 tests, 15 smoke; careful 104 = dark 104 on the hand-made yard at Easy |
 | 16 | 10-26 | A review (Fable) that proved ten bugs with tests in a scratch copy | All ten fixed, plus one the fixes exposed ("Later: review fixes") | 112 tests, 20 smoke; careful still escapes far more than always-lit on both kinds of night |
 | 17 | 11-02 | Issue #9: `Smoke_D` failed once at the 104 cap | The cause found and fixed: a night could start a frame late ("Later: a night that started a frame late") | 21 smoke; careful and always-dark identical in ten runs in a row |
+| 18 | 11-05 | Issue #160: always-lit's catches read 12 or 14 between runs | A frame-by-frame record of every bot night and a diff of runs; nothing found to fix ("Later: the night that replays after all") | 26 smoke; 11 runs, 144,000 frames each, identical to the last digit; `Smoke_R10` and `R11` guard the replay |
 | next | | The Suno win music and loss stings | Slots ready (`win_music_a/b`, `loss_sting_a/b`), silent until the files arrive | |
 
 What the timeline shows: the plan never said "add a narrator" or "the dawn chorus opens the ending". Those came from a
@@ -134,7 +135,7 @@ the game into the kit). **Kit gap U8:** once, Unity's Package Manager server did
 | Check | Result |
 |---|---|
 | `python tools/dev.py check` / `test` | compiles / 112 EditMode tests in 136 s (2026-10-26, after the review fixes; 101 before, measured at 146 s) (perception, every FSM transition, night rules, saves and their migration, ghost starts, level checks on the hand-made and generated yards, the 250-seed property test, a broken yard for each invariant, pinned yards, measured footprints, audio wiring, music, world sounds, the end sequence, voices) (2026-10-23) |
-| `python tools/dev.py smoke` | 21 tests, 80 bot nights, 673 s (2026-11-02, after issue #9). 20 tests, 779 to 1047 s (2026-10-26, after the review fixes; 15 tests in 812 s before; `Smoke_D` failed once at the 104 cap, see "Later: review fixes"). Before that: 15 tests pass (2026-10-23, after the Kimi audit; the trio at Easy, `Smoke_N` at Normal logged): boot, the trio on the hand-made yard (24 nights), the walk grid against the NavMesh on 9 yards, the trio on 8 generated nights, no way out and the gate shutting, every difficulty, the keeper's lantern and legs, a yard from above |
+| `python tools/dev.py smoke` | 26 tests, 82 bot nights, 979 s with two other editors running (2026-11-05, after issue #160: two replay checks; 24 after issues #147 to #179). 21 tests, 80 bot nights, 673 s (2026-11-02, after issue #9). 20 tests, 779 to 1047 s (2026-10-26, after the review fixes; 15 tests in 812 s before; `Smoke_D` failed once at the 104 cap, see "Later: review fixes"). Before that: 15 tests pass (2026-10-23, after the Kimi audit; the trio at Easy, `Smoke_N` at Normal logged): boot, the trio on the hand-made yard (24 nights), the walk grid against the NavMesh on 9 yards, the trio on 8 generated nights, no way out and the gate shutting, every difficulty, the keeper's lantern and legs, a yard from above |
 | `python tools/dev.py build` | a Windows player in `Build/` (about 45 s) |
 | The built player, `--autoplay careful --seed 6 --fixed-fps` (before the generator; now `--handmade --seed 6`) | escapes at 65.2 s with exit 0, the same as the test; rechecked 2026-10-23 with `--handmade`, and a generated night (`--seed 6258`) escapes at 102.3 s like its test |
 | The README steps in a fresh copy inside the kit repo (no `Library/`) | import, `check`, 34 tests, `smoke` 5 tests in 103 s with the same trio numbers |
@@ -492,10 +493,34 @@ Which loads were unlucky depended on real time spent loading, so it moved betwee
   experiments below): careful 104 (8 escapes, 5 catches) and always-dark 104 (8, 0) every time, identical night by
   night; always-lit 86 (0 escapes) with 12 or 14 catches. The full smoke: 21 passed in 673 s; generated nights careful
   96 (5, 22), dark 103 (7, 6), lit 43 (0, 13).
-- **Still open:** always-lit's 12 or 14 comes from two ghosts passing close (under a meter apart) that part by a
-  millimeter between runs. Physics once a frame (simulation mode Update) and no job worker threads gave the same two
-  outcomes, so probably neither is the cause (neither setting was checked to have taken effect) **(verify the cause)**.
-  Nothing asserted depends on it.
+- Left open then as issue #160: always-lit's 12 or 14 was put down to two ghosts passing close (under a meter apart)
+  that part by a millimeter between runs. Physics once a frame (simulation mode Update) and no job worker threads gave
+  the same two outcomes, so probably neither was the cause (neither setting was checked to have taken effect).
+  Nothing asserted depended on it. Looked into on 2026-11-05: "Later: the night that replays after all".
+
+### Later: the night that replays after all (issue #160, 2026-11-05)
+A per-frame record of every bot night (`FrameTrace.cs`, `GRAVEYARD_FRAMETRACE=<dir>`: the keeper, every ghost's
+position with every digit, state, path state and velocity) and a script that diffs two runs to the first frame that
+differs. Eleven process runs of `Smoke_A` (8 always-lit hand-made nights, 144,000 frames each run) on this code:
+two alone one after the other, four in parallel on two copies of the project (CPU contention, if a thread race was
+the cause), the same night three times in one process, one with a graphics device, and one inside the full smoke
+with the review-fix tests before it. Every run: progress 85, 11 catches, and every one of the 144,000 frames
+identical to the last digit, although the physics clock's phase against the frames differed between runs (Time.time
+at the night's first frame 0.1599 against 0.1292). The code of 2026-11-02 (before the catching ghost went home,
+issue #147), where the 12 or 14 was seen: three runs (two alone, one full smoke), 14 catches every time, every frame
+identical. A lab for the suspected trigger, two ghosts walking a 13 m patrol leg head-on so the agents' avoidance has
+to decide who steps aside (they pass at 0.901 m, their radii touching): four passes in one process and two more
+processes, identical. So on 6000.6.6f1 with AI Navigation 2.0.16 the trio replays, avoidance included, and the
+12 was not reproduced; the closest ghost pass on tonight's lit nights is 0.913 m (seed 7, frame 17956). What is
+left: whichever of the ten runs of 11-02 read 12 is not recorded, so it may have been one of the six experiment
+runs with physics settings changed, not chance. Ruled out as causes: NavMeshAgent avoidance (the lab), the physics
+step phase, thread timing under load, a graphics device, the tests run before, the same process versus a new one.
+
+- No game code changed: nothing was shown wrong. `Smoke_R10` plays the always-lit bot twice on seed 7 (the night
+  with the closest ghost pass) and compares every frame and the catches; `Smoke_R11` is the head-on lab, four passes
+  compared. Both pass; either fails the moment a night stops replaying.
+- Ghost bodies carry no collider (`addCollider` off in the import), so the keeper never pushes against one; the
+  ghosts move by NavMeshAgent alone, which makes the avoidance the only place two ghosts affect each other.
 
 ## 9. Outside the kit (be honest)
 - The Behavior package was installed only to read its source (gap U3), then removed.
