@@ -146,7 +146,7 @@ function Widgets.slider(id, text, get, set, lo, hi, step, format)
     set(math.min(hi, math.max(lo, v)))
   end
   return {
-    id = id, kind = "slider", text = text,
+    id = id, kind = "slider", text = text, value = function() return format(get()) end,   -- narration (#165)
     left = function() nudge(-1) end, right = function() nudge(1) end,
     draw_value = function(ui, x, y, w, h, focused, lid)
       local tw = SLIDER_TEXT_W * ui.scale                -- the value text grows with the text size
@@ -162,6 +162,7 @@ function Widgets.toggle(id, text, get, set, on_off)
   local function flip() set(not get()) end
   return {
     id = id, kind = "toggle", text = text, accept = flip, left = flip, right = flip,
+    value = function() return on_off(get()) end,
     draw_value = function(ui, x, y, w, h, focused, lid)
       arrows(ui, x, y, w, h, focused)
       value_text(ui, lid, on_off(get()), x, y, w, h)
@@ -178,7 +179,7 @@ function Widgets.choice(id, text, options, get, set, show)
     set(list[(idx - 1 + d) % #list + 1])
   end
   return {
-    id = id, kind = "choice", text = text,
+    id = id, kind = "choice", text = text, value = function() return show(get()) end,
     left = function() step(-1) end, right = function() step(1) end, accept = function() step(1) end,
     draw_value = function(ui, x, y, w, h, focused, lid)
       arrows(ui, x, y, w, h, focused)

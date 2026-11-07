@@ -37,6 +37,8 @@
   line-height: calc(1.35 * var(--line-spacing, 1));
   z-index: 10;
 }
+/* the narrator's live region (#165): read by screen readers, never seen */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 #shell.readable { font-family: "Atkinson Hyperlegible", system-ui, sans-serif; }
 
 .screen { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: auto; }

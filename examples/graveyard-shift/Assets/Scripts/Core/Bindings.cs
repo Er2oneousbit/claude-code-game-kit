@@ -210,5 +210,17 @@ namespace graveyard_shift.Core
             int slot = glyphSet == "keyboard" ? KEYBOARD_SLOT : PAD_SLOT;
             return slot < slots.Count ? slots[slot] : UNBOUND;
         }
+
+        /// <summary>What the narration says for one control (#165): "Music volume, slider, 70 percent"; no label says "unlabelled".</summary>
+        public static string NarrationLine(string label, string role, string value = "")
+        {
+            var parts = new List<string> { OneLine(label) != "" ? OneLine(label) : "unlabelled" };
+            if (OneLine(role) != "") parts.Add(OneLine(role));
+            if (OneLine(value) != "") parts.Add(OneLine(value));
+            return string.Join(", ", parts);
+        }
+
+        static string OneLine(string text) =>
+            string.Join(" ", (text ?? "").Split((char[])null, System.StringSplitOptions.RemoveEmptyEntries));
     }
 }

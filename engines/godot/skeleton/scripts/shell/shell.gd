@@ -69,6 +69,7 @@ var drive: String = ""
 # cognitive access (#167): the goal the game sets for "What now?", and every subtitle line shown (newest last)
 const MAX_HISTORY: int = 50
 var objective: String = ""
+var last_narration: String = "" # the line the narrator last worked out (#165), spoken or not
 var history: Array[Dictionary] = []
 var capture_ready: bool = false # set by the smoke drive when the screen to photograph is up
 var run_seed: int = -1 # set it when a run uses a seed: crash files then name it

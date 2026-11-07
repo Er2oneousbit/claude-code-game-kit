@@ -8,7 +8,7 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 import { describe, expect, it } from "vitest";
-import { glyphName, glyphSet, promptBinding, rebind } from "../src/core/bindings";
+import { glyphName, glyphSet, promptBinding, rebind, narrationLine } from "../src/core/bindings";
 import { plural, pseudo, tr, trPlural } from "../src/core/i18n";
 import { SAVE_VERSION, saveLoad } from "../src/core/saveStore";
 import { defaultSettings, effectiveShake, settingsLoad, telemetryAllowed } from "../src/core/settings";
@@ -34,6 +34,9 @@ const RUNNERS: Record<string, Runner> = {
   },
   glyph_set: (c) => {
     c.points.forEach(([setting, dev, want]: string[], i: number) => expectClose(glyphSet(setting, dev), want, TOL, `point ${i}`));
+  },
+  narration: (c) => {
+    c.points.forEach(([label, role, value, want]: string[], i: number) => expectClose(narrationLine(label, role, value), want, TOL, `point ${i}`));
   },
   glyph_name: (c) => {
     c.points.forEach(([gset, b, want]: string[], i: number) => expectClose(glyphName(gset, b), want, TOL, `point ${i} ${gset} ${b}`));

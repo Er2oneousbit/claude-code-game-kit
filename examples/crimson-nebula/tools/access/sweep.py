@@ -179,6 +179,9 @@ def check_run(log, resolution, pad, root):
         focus = scr.get("focus") or {}
         for path in focus.get("unreached", []):
             problems.append(f"{name}: {path} cannot be reached with the arrow keys or the gamepad")
+        for path, line in sorted((focus.get("narration") or {}).items()):
+            if not line or line.startswith("unlabelled"):
+                problems.append(f"{name}: {path} says {line!r} when it gets focus: give it a label (#165)")
         for path in focus.get("focus_like_hover", []):
             problems.append(f"{name}: {path} looks the same focused as hovered")
         if focus.get("controls", 0) and not focus.get("start"):

@@ -339,6 +339,12 @@ void check_plural(const json& c) {
     }
 }
 
+void check_narration(const json& c) {
+    for (const json& p : c.at("points")) {
+        expect_same(core::narration_line(text(p[0]), text(p[1]), text(p[2])), p[3], "narration" + p.dump());
+    }
+}
+
 void check_pseudo(const json& c) {
     for (const json& p : c.at("points")) {
         expect_same(core::pseudo(text(p[0])), p[1], "pseudo" + p.dump());
@@ -397,6 +403,7 @@ TEST_CASE("golden vectors: shell.json") {
         {"defaults", check_defaults}, {"settings_load", check_settings_load}, {"rebind", check_rebind},
         {"glyph_set", check_glyph_set}, {"glyph_name", check_glyph_name}, {"prompt_binding", check_prompt_binding},
         {"save_load", check_save_load}, {"tr", check_tr}, {"plural", check_plural}, {"pseudo", check_pseudo},
+        {"narration", check_narration},
     });
 }
 

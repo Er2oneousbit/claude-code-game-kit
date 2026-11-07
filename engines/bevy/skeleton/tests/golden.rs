@@ -50,7 +50,7 @@ const JUICE_TYPES: [&str; 10] = [
     "squash",
     "flash_limiter",
 ];
-const SHELL_TYPES: [&str; 10] = [
+const SHELL_TYPES: [&str; 11] = [
     "defaults",
     "settings_load",
     "rebind",
@@ -61,6 +61,7 @@ const SHELL_TYPES: [&str; 10] = [
     "tr",
     "plural",
     "pseudo",
+    "narration",
 ];
 const AUDIO_TYPES: [&str; 1] = ["audio_director"];
 const MUSIC_TYPES: [&str; 2] = ["music_grid", "music_plan"];
@@ -206,6 +207,7 @@ fn check_case(kind: &str, case: &Value, exam: &mut Exam) {
         "tr" => tr(case, exam),
         "plural" => plural(case, exam),
         "pseudo" => pseudo(case, exam),
+        "narration" => narration(case, exam),
         "audio_director" => audio_director_steps(case, exam),
         "music_grid" => music_grid_steps(case, exam),
         "music_plan" => music_plan_steps(case, exam),
@@ -477,6 +479,14 @@ fn plural(case: &Value, exam: &mut Exam) {
         let (locale, n) = (s(&p[0]), i(&p[1]));
         let got = json!([i18n::plural(locale, n), i18n::tr_plural(&t, locale, PLURAL_KEY, n, &[])]);
         exam.check(&format!("plural({}, {})", p[0], p[1]), got, &json!([p[2], p[3]]));
+    }
+}
+
+fn narration(case: &Value, exam: &mut Exam) {
+    for p in arr(&case["points"]) {
+        let p = arr(p);
+        let got = bindings::narration_line(s(&p[0]), s(&p[1]), s(&p[2]));
+        exam.check(&format!("narration({})", p[0]), json!(got), &p[3]);
     }
 }
 

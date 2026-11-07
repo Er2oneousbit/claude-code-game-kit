@@ -139,5 +139,13 @@
  "demo.objective": "Hit the box and feel the juice.",
  "controls.preset.one_hand_left": "One hand (left)",
  "controls.preset.one_hand_right": "One hand (right)",
- "controls.preset_done": "One-handed layout set. You can still rebind anything."
+ "controls.preset_done": "One-handed layout set. You can still rebind anything.",
+ "setting.access.narration": "Narrate menus",
+ "narrate.button": "button",
+ "narrate.toggle": "toggle",
+ "narrate.slider": "slider",
+ "narrate.choice": "choice",
+ "narrate.screen": "screen",
+ "narrate.on": "on",
+ "narrate.off": "off"
 }

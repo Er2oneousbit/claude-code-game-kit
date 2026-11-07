@@ -49,7 +49,7 @@ local function defaults_table()
                            speaker_names = true, subtitle_barks = false, captions_sfx = false, colorblind = "none",
                            reduce_motion = false, shake_scale = 1.0, flash_limit = true, hold_to_toggle = false,
                            difficulty = "normal", game_speed = 1.0, readable_font = false, line_spacing = 1.0,
-                           subtitle_hold = false, timing_scale = 1.0, auto_repeat = false }),
+                           subtitle_hold = false, timing_scale = 1.0, auto_repeat = false, narration = false }),
     input = Json.object({ bindings = Bindings.defaults(), deadzone = 0.2, invert_y = false, glyphs = "auto" }),
     telemetry = Json.object({ consent = "unset" }),
   })
@@ -68,7 +68,7 @@ Settings.SCHEMA = {
              shake_scale = { "num", 0, 1 }, flash_limit = { "bool" }, hold_to_toggle = { "bool" },
              difficulty = { "enum", Settings.DIFFICULTIES }, game_speed = { "num", 0.5, 1.0 },
              readable_font = { "bool" }, line_spacing = { "num", 1.0, 2.0 }, subtitle_hold = { "bool" },
-             timing_scale = { "num", 1.0, 3.0 }, auto_repeat = { "bool" } },
+             timing_scale = { "num", 1.0, 3.0 }, auto_repeat = { "bool" }, narration = { "bool" } },
   input = { deadzone = { "num", 0, 0.9 }, invert_y = { "bool" }, glyphs = { "enum", Bindings.GLYPH_SETS } },
   telemetry = { consent = { "enum", Settings.CONSENT } },
 }

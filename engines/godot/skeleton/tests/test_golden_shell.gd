@@ -14,7 +14,7 @@ extends GutTest
 const Golden = preload("res://tests/golden_util.gd")
 const FILE: String = "shell.json"
 const KNOWN_TYPES: PackedStringArray = ["defaults", "settings_load", "rebind", "glyph_set", "glyph_name",
-		"prompt_binding", "save_load", "tr", "plural", "pseudo"]
+		"prompt_binding", "save_load", "tr", "plural", "pseudo", "narration"]
 const PLURAL_KEY: String = "apples" # as in tools/golden_vectors.py build_shell()
 
 var _file: Dictionary = {}
@@ -93,6 +93,14 @@ func test_glyph_set() -> void:
 		for p: Array in c["points"]:
 			_check(Bindings.glyph_set(p[0], p[1]), p[2], "%s %s" % [c["name"], p])
 	_report("glyph_set", cases.size())
+
+
+func test_narration() -> void:
+	var cases: Array = _cases("narration")
+	for c: Dictionary in cases:
+		for p: Array in c["points"]:
+			_check(Bindings.narration_line(p[0], p[1], p[2]), p[3], "%s %s" % [c["name"], p])
+	_report("narration", cases.size())
 
 
 func test_glyph_name() -> void:

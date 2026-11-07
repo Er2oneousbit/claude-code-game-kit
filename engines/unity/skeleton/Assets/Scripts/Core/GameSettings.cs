@@ -77,7 +77,7 @@ namespace {{GAME_SLUG}}.Core
                     { "shake_scale", 1.0 }, { "flash_limit", true }, { "hold_to_toggle", false },
                     { "difficulty", "normal" }, { "game_speed", 1.0 }, { "readable_font", false },
                     { "line_spacing", 1.0 }, { "subtitle_hold", false }, { "timing_scale", 1.0 },
-                    { "auto_repeat", false },
+                    { "auto_repeat", false }, { "narration", false },
                 }
             },
             { "input", new Dictionary<string, object>
@@ -134,7 +134,7 @@ namespace {{GAME_SLUG}}.Core
             Num("access", "shake_scale", 0.0, 1.0), Flag("access", "flash_limit"), Flag("access", "hold_to_toggle"),
             OneOf("access", "difficulty", DIFFICULTIES), Num("access", "game_speed", 0.5, 1.0),
             Flag("access", "readable_font"), Num("access", "line_spacing", 1.0, 2.0), Flag("access", "subtitle_hold"),
-            Num("access", "timing_scale", 1.0, 3.0), Flag("access", "auto_repeat"),
+            Num("access", "timing_scale", 1.0, 3.0), Flag("access", "auto_repeat"), Flag("access", "narration"),
             Num("input", "deadzone", 0.0, 0.9), Flag("input", "invert_y"), OneOf("input", "glyphs", Bindings.GLYPH_SETS),
             OneOf("telemetry", "consent", CONSENT),
         };

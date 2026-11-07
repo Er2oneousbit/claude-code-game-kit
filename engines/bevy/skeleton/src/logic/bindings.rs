@@ -165,6 +165,19 @@ pub fn prompt_binding<'a>(bindings: &'a Bindings, action: &str, gset: &str) -> &
         .map_or("", String::as_str)
 }
 
+/// What the narration says for one control (#165): "Music volume, slider, 70 percent"; no label says "unlabelled".
+pub fn narration_line(label: &str, role: &str, value: &str) -> String {
+    let one_line = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut parts = vec![if one_line(label).is_empty() { "unlabelled".to_string() } else { one_line(label) }];
+    if !one_line(role).is_empty() {
+        parts.push(one_line(role));
+    }
+    if !one_line(value).is_empty() {
+        parts.push(one_line(value));
+    }
+    parts.join(", ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

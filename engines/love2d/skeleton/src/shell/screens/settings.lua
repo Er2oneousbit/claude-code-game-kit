@@ -234,6 +234,7 @@ function SettingsScreen:access_rows()
     f("subtitle_hold", "toggle"),
     f("timing_scale", "slider", 1.0, 3.0, 0.5),        -- #166: motor access
     f("auto_repeat", "toggle"),
+    f("narration", "toggle"),                          -- #165: menu narration
     self:back_row(),
   }
 end

@@ -96,6 +96,7 @@ const SCHEMA: &[(&str, &[(&str, Rule)])] = &[
             ("subtitle_hold", Rule::Bool),
             ("timing_scale", Rule::Num(1.0, 3.0)),
             ("auto_repeat", Rule::Bool),
+            ("narration", Rule::Bool),
         ],
     ),
     (
@@ -120,7 +121,7 @@ pub fn defaults() -> Value {
                    "speaker_names": true, "subtitle_barks": false, "captions_sfx": false, "colorblind": "none",
                    "reduce_motion": false, "shake_scale": 1.0, "flash_limit": true, "hold_to_toggle": false,
                    "difficulty": "normal", "game_speed": 1.0, "readable_font": false, "line_spacing": 1.0,
-                   "subtitle_hold": false, "timing_scale": 1.0, "auto_repeat": false},
+                   "subtitle_hold": false, "timing_scale": 1.0, "auto_repeat": false, "narration": false},
         "input": {"bindings": bindings_value(&bindings::default_bindings()), "deadzone": 0.2, "invert_y": false,
                   "glyphs": "auto"},
         "telemetry": {"consent": "unset"},

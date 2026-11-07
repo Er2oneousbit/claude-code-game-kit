@@ -299,7 +299,9 @@ DEFAULT_SETTINGS = {
                "readable_font": False, "line_spacing": 1.0, "subtitle_hold": False,
                # #166 motor: every timing window (input buffer, coyote time, double press, hold) times this, and
                # holding a button repeats its press ("hold to mash")
-               "timing_scale": 1.0, "auto_repeat": False},
+               "timing_scale": 1.0, "auto_repeat": False,
+               # #165: every focus change, value change and screen is spoken (the OS speech or a screen reader)
+               "narration": False},
     "input": {"bindings": DEFAULT_BINDINGS, "deadzone": 0.2, "invert_y": False, "glyphs": "auto"},
     "telemetry": {"consent": "unset"},
 }
@@ -315,7 +317,7 @@ SCHEMA = {
                "shake_scale": ("num", 0.0, 1.0), "flash_limit": ("bool",), "hold_to_toggle": ("bool",),
                "difficulty": ("enum", DIFFICULTIES), "game_speed": ("num", 0.5, 1.0),
                "readable_font": ("bool",), "line_spacing": ("num", 1.0, 2.0), "subtitle_hold": ("bool",),
-               "timing_scale": ("num", 1.0, 3.0), "auto_repeat": ("bool",)},
+               "timing_scale": ("num", 1.0, 3.0), "auto_repeat": ("bool",), "narration": ("bool",)},
     "input": {"deadzone": ("num", 0.0, 0.9), "invert_y": ("bool",), "glyphs": ("enum", GLYPH_SETS)},
     "telemetry": {"consent": ("enum", CONSENT)},
 }
@@ -408,6 +410,20 @@ def settings_load(text):
                 sec["bindings"] = copy.deepcopy(DEFAULT_BINDINGS)
         out[section] = sec
     return out, problems
+
+
+def narration_line(label, role, value=""):
+    """What the narration says for one control (#165): "Music volume, slider, 70 percent". The label and the value
+    lose their line breaks and doubled spaces; a control with no label says "unlabelled" so it is never silent; the
+    role word comes translated from the caller."""
+    label = " ".join(str(label).split())
+    parts = [label or "unlabelled"]
+    if role:
+        parts.append(" ".join(str(role).split()))
+    value = " ".join(str(value).split())
+    if value:
+        parts.append(value)
+    return ", ".join(parts)
 
 
 def effective_shake(settings):
@@ -854,6 +870,11 @@ def build_shell():
         for n in (0, 1, 2, 5):
             pts.append([loc, n, plural(loc, n), tr_plural(TABLES, loc, "apples", n)])
     cases.append({"type": "plural", "name": "one and other", "key": "apples", "tables": TABLES, "points": pts})
+    cases.append({"type": "narration", "name": "what a focused control says", "points": [
+        [label, role, value, narration_line(label, role, value)] for label, role, value in [
+            ("Music volume", "slider", "70 percent"), ("Play", "button", ""), ("Subtitles", "toggle", "on"),
+            ("  Window\nmode ", "choice", "Full  screen"), ("", "button", ""), ("Settings", "screen", ""),
+            ("Back", "", ""), ("Volume", "slider", "  ")]]})
     cases.append({"type": "pseudo", "name": "pseudo-locale", "points": [
         [t, pseudo(t)] for t in ("Play", "Hello, {name}!", "Score: %d%%", "", "OK", "A long settings label",
                                  "{a}{b}", "50% off")]})

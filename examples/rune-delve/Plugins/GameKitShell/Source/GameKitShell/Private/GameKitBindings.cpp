@@ -234,6 +234,22 @@ namespace GameKit
 		return Out;
 	}
 
+	static FString OneLine(const FString& Text)
+	{
+		TArray<FString> Words;
+		Text.ParseIntoArrayWS(Words);
+		return FString::Join(Words, TEXT(" "));
+	}
+
+	FString NarrationLine(const FString& Label, const FString& Role, const FString& Value)
+	{
+		TArray<FString> Parts;
+		Parts.Add(OneLine(Label).IsEmpty() ? FString(TEXT("unlabelled")) : OneLine(Label));
+		if (!OneLine(Role).IsEmpty()) { Parts.Add(OneLine(Role)); }
+		if (!OneLine(Value).IsEmpty()) { Parts.Add(OneLine(Value)); }
+		return FString::Join(Parts, TEXT(", "));
+	}
+
 	TSharedRef<FJsonObject> BindingsToJson(const FGameKitBindings& Bindings)
 	{
 		TSharedRef<FJsonObject> Out = MakeShared<FJsonObject>();

@@ -48,5 +48,10 @@
   "page.hint": "Haut / bas : défiler   Entrée ou Échap : retour",
   "controls.preset.one_hand_left": "Une main (gauche)",
   "controls.preset.one_hand_right": "Une main (droite)",
-  "controls.preset_done": "Disposition à une main choisie. Tout reste modifiable."
+  "controls.preset_done": "Disposition à une main choisie. Tout reste modifiable.",
+  "narrate.button": "bouton",
+  "narrate.toggle": "interrupteur",
+  "narrate.slider": "curseur",
+  "narrate.choice": "choix",
+  "narrate.screen": "écran"
 }

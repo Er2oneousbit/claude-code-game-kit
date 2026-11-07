@@ -8,6 +8,8 @@
 // ---------------------------------------------------------------------------
 #include "core/Bindings.hpp"
 
+#include <sstream>
+
 namespace core {
 
 namespace {
@@ -165,6 +167,19 @@ nlohmann::json bindings_to_json(const Bindings& bindings) {
         j[action] = names;
     }
     return j;
+}
+
+std::string narration_line(const std::string& label, const std::string& role, const std::string& value) {
+    auto one_line = [](const std::string& s) {
+        std::istringstream in(s);
+        std::string word, out;
+        while (in >> word) out += (out.empty() ? "" : " ") + word;
+        return out;
+    };
+    std::string line = one_line(label).empty() ? "unlabelled" : one_line(label);
+    if (!one_line(role).empty()) line += ", " + one_line(role);
+    if (!one_line(value).empty()) line += ", " + one_line(value);
+    return line;
 }
 
 }  // namespace core

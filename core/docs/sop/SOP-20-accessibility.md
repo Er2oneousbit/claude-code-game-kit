@@ -23,6 +23,7 @@ The shell (`SOP-19`) has the settings; this SOP is what they must do.
 | Difficulty | A wide choice of difficulty, changeable during play; assist options where the game allows (slower game speed, more health, skip a section) | `difficulty`, `game_speed` | E69 |
 | Saving | Settings always saved; autosave plus manual save | (shell) | E69 |
 | Keeping track | A reminder of the current goal during play; every line said can be read again; text waits for the player instead of leaving on a timer; an easily readable font as an option | "What now?" and "Dialogue history" on the pause menu (the game calls `set_objective`), `subtitle_hold`, `readable_font` (Atkinson Hyperlegible), `line_spacing` | E69 |
+| Narration | Every menu control, value and screen says what it is ("Music volume, slider, 70 percent"); no control is unlabelled; a screen reader can follow the menus | `narration` (spoken through the system's speech; the web page always updates an ARIA live region) | E69 |
 | Hands and timing | Controls as simple as possible: no required button-mashing, no required holds, timing that is not precise; a layout for one hand (the kit's take on simpler controls: no guideline names it) | `auto_repeat` (a held button repeats), `hold_to_toggle`, `timing_scale` (input buffer and coyote time, longer), one-handed layouts in Settings > Controls (`data/input/presets.json`) | E69 |
 
 ## 2. Steps
@@ -43,7 +44,8 @@ The shell (`SOP-19`) has the settings; this SOP is what they must do.
    checked against its panel or outline over both a black and a white game), text clipped, off screen or running
    into other text, a control the arrow keys or the gamepad cannot reach, focus that looks like hover, an action
    with no keyboard or no gamepad binding, a subtitle that is not the dialogue line, and keyboard glyphs while the
-   gamepad is in use (E75). It reads what the engine reports (`dev.py smoke --drive access`), so how a screen
+   gamepad is in use (E75), and a control whose narration would be "unlabelled" (#165). It reads what the engine
+   reports (`dev.py smoke --drive access`), so how a screen
    looks still needs a look (`smoke --drive show:<screen> --screenshot`).
 7. **Test with the settings at their extremes:** text 200 %, subtitles largest with full background, colour-blind modes,
    gamepad only, keyboard only, mono, reduce motion. Run the pseudo-locale smoke at text 200 % too: it catches clipping.

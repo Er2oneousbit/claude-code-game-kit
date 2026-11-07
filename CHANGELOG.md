@@ -27,10 +27,16 @@
   held button repeats: hold to mash), and one-handed layouts for the left and the right hand, keyboard and gamepad
   (`data/input/presets.json`, `tools/access/test_presets.py`), offered in Settings > Controls; the sweep applies one
   and resets it with the run's own device. SOP-20 has rows for both, from the Game Accessibility Guidelines (E69).
+- **Menu narration (#165):** every focus change, value change and screen says a short line ("Music volume, slider,
+  70 percent", built the same way in all eight ports from a new golden case set, `narration_line`), spoken with the
+  new `narration` setting: Godot's text to speech, the browser's speech plus an ARIA live region a screen reader
+  announces (always on), and LÖVE through the operating system's speech from a background thread (Windows' speech
+  synthesizer via PowerShell, macOS `say`, Linux `spd-say`). The access report lists every control's line, and the
+  sweep fails one that would say "unlabelled". SOP-20 has a Narration row (E69: screen reader support for menus).
 - Found by the sweep and fixed: a LÖVE gamepad's south button jumped instead of dismissing a held subtitle; web
   dialogs ran off the window at 200 % text (panels scroll now); LÖVE's pause panel was too narrow for its labels at
   200 %; the sweep's runs shared one data folder, so a run could start from the last one's text size.
-- **Upgrade note:** the settings file gains five `access` fields (old files load with the defaults); a game with its
+- **Upgrade note:** the settings file gains six `access` fields (old files load with the defaults); a game with its
   own settings screen adds the rows it wants.
 - **The accessibility sweep (#91) and the Steam Deck pass (#85):** `tools/access/sweep.py` runs `dev.py smoke --drive
   access` at 1920x1080 and at 1280x800 with gamepad events only, at 100 % and 200 % text, and checks every screen:

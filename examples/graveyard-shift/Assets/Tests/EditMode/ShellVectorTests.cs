@@ -23,7 +23,7 @@ namespace graveyard_shift.Tests
         private static readonly string[] REQUIRED_TYPES =
         {
             "defaults", "settings_load", "rebind", "glyph_set", "glyph_name", "prompt_binding", "save_load", "tr",
-            "plural", "pseudo",
+            "plural", "pseudo", "narration",
         };
 
         public static IEnumerable<TestCaseData> Cases()
@@ -84,6 +84,9 @@ namespace graveyard_shift.Tests
                 case "plural": RunPlural(c, tol, where); break;
                 case "pseudo":
                     Points(c, tol, where, pt => I18n.Pseudo((string)pt[0]), 1);
+                    break;
+                case "narration":
+                    Points(c, tol, where, pt => Bindings.NarrationLine((string)pt[0], (string)pt[1], (string)pt[2]), 3);
                     break;
                 default:
                     Assert.Fail($"unknown case type '{type}' in {FILE}: add a runner for it here");

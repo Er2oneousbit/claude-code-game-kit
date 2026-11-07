@@ -138,3 +138,17 @@ static func prompt_binding(bindings: Dictionary, action: String, gset: String) -
 
 static func _same(value: Variant, binding: String) -> bool:
 	return typeof(value) == TYPE_STRING and value == binding
+
+
+## What the narration says for one control (#165): "Music volume, slider, 70 percent"; no label says "unlabelled".
+static func narration_line(label: String, role: String, value: String = "") -> String:
+	var parts: PackedStringArray = [_one_line(label) if _one_line(label) != "" else "unlabelled"]
+	if _one_line(role) != "":
+		parts.append(_one_line(role))
+	if _one_line(value) != "":
+		parts.append(_one_line(value))
+	return ", ".join(parts)
+
+
+static func _one_line(text: String) -> String:
+	return " ".join(text.replace("\n", " ").replace("\t", " ").replace("\r", " ").split(" ", false))

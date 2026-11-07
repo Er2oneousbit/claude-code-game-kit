@@ -48,10 +48,15 @@ export function val(text: string, cls = "", id = ""): HTMLElement {
 export type Item = {
   id: string;
   el: HTMLElement;
+  /** What narration calls it (#165): button, toggle, slider or choice. */
+  role?: string;
   accept?: () => void;
   left?: () => void;
   right?: () => void;
 };
+
+/** Called with the focused item when focus moves or its value changes (the narrator, #165). */
+export const focusHooks: ((item: Item) => void)[] = [];
 
 /** A vertical list of focusable items. Up/down move (wrapping), left/right change values, accept activates. */
 export class Menu {
@@ -104,11 +109,13 @@ export class Menu {
         if (it?.left) it.left();
         else if (this.horizontal) this.move(-1);
         else return false;
+        this.announce();
         return true;
       case "ui_right":
         if (it?.right) it.right();
         else if (this.horizontal) this.move(1);
         else return false;
+        this.announce();
         return true;
       case "ui_accept":
         if (it?.accept) it.accept();
@@ -125,6 +132,13 @@ export class Menu {
       it.el.setAttribute("aria-selected", String(on));
       if (on && typeof it.el.scrollIntoView === "function") it.el.scrollIntoView({ block: "nearest" });
     });
+    this.announce();
+  }
+
+  /** Tells the narrator about the focused item (it skips a line it just said). */
+  private announce(): void {
+    const it = this.focused;
+    if (it) queueMicrotask(() => focusHooks.forEach((hook) => hook(it))); // after the value text is redrawn
   }
 }
 

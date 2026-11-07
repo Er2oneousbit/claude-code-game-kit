@@ -29,12 +29,13 @@ import { defaultSettings, settingsLoad, settingsText, telemetryAllowed, type Set
 import { DEFAULT_DATA_PREFIX, MemoryStore, WebStorageStore, dataPrefix, type TextStore } from "../core/textStore";
 import { GameLog, Telemetry, TAIL_LINES, stamp, writeCrash } from "../core/userData";
 import { DRIVE_PARAM, driveRequest, runDrive } from "./drive";
+import { Narrator } from "./narrator";
 import { ShellInput } from "./input";
 import { checkScreen } from "./pseudoCheck";
 import * as screens from "./screens";
 import { SubtitleBar } from "./subtitles";
 import { GAME_NAME, GAME_SLUG, GAME_VERSION, SETTINGS_FILE } from "./meta";
-import { el, hasUiFile, tl } from "./ui";
+import { el, hasUiFile, tl, focusHooks } from "./ui";
 import "./shell.css";
 
 // ---- Tunables ----------------------------------------------------------------
@@ -114,6 +115,9 @@ export class Shell {
   readonly subtitles: SubtitleBar;
   /** Cognitive access (#167): the goal "What now?" shows, and every subtitle line shown (newest last). */
   objective = "";
+  /** The line the narrator last worked out (#165), spoken or not. */
+  lastNarration = "";
+  narrator!: Narrator;
   readonly history: { name: string; text: string }[] = [];
 
   /** The goal "What now?" on the pause menu shows; "" clears it. Pass translated text (i18n.t). */
@@ -185,6 +189,8 @@ export class Shell {
     document.body.append(root);
     this.rootEl = root;
     this.subtitles = new SubtitleBar(this, subs);
+    this.narrator = new Narrator(this); // menu narration (#165)
+    focusHooks.push((item) => this.narrator.focus(item));
     if (hasUiFile(THEME_FILE)) {
       const link = el("link");
       link.rel = "stylesheet";
@@ -279,6 +285,7 @@ export class Shell {
 
   /** After a screen appears or redraws: telemetry, and the pseudo-locale check. */
   shown(s: Screen): void {
+    this.narrator?.screen(s.root.querySelector(".heading, .bigtitle")?.textContent ?? s.id);
     this.telemetry.event("screen", s.id);
     Log.debug("core", `screen ${s.id}`);
     this.checkLayout(s);

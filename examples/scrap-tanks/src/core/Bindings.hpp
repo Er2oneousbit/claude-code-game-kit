@@ -77,4 +77,7 @@ std::string prompt_binding(const Bindings& bindings, const std::string& action, 
 Bindings bindings_from_json(const nlohmann::json& j);
 nlohmann::json bindings_to_json(const Bindings& bindings);
 
+// What the narration says for one control (#165): "Music volume, slider, 70 percent"; no label says "unlabelled".
+std::string narration_line(const std::string& label, const std::string& role, const std::string& value = "");
+
 }  // namespace core

@@ -14,6 +14,10 @@ config/name="Coyote Hop"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7")
 
+[audio]
+
+general/text_to_speech=true
+
 [autoload]
 
 Log="*res://scripts/core/log.gd"

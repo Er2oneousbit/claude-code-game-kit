@@ -56,6 +56,7 @@ func _ready() -> void:
 	Shell.focus_lost.connect(_on_focus_lost)
 	screen_shown.connect(_on_screen_shown)
 	show_title()
+	add_child(Narrator.new(self)) # menu narration (#165): every focus change and screen says a line
 	if Shell.drive != "":
 		add_child(SmokeDrive.new(self))
 

@@ -38,12 +38,13 @@ function numRow(c: Ctx, key: string, get: (s: Settings) => number, set: (s: Sett
     draw();
   };
   const row = valueRow(c.shell.i18n, key, () => change(-step), () => change(step));
+  row.item.role = "slider"; // narration (#165)
   const draw = () => row.set(fmt(get(c.shell.settings)), false);
   draw();
   c.list.append(c.menu.add(row.item).el);
 }
 
-function choiceRow<T extends string | number>(c: Ctx, key: string, values: readonly T[], get: (s: Settings) => T, set: (s: Settings, v: T) => void, label: (v: T) => Label, after?: () => void): void {
+function choiceRow<T extends string | number>(c: Ctx, key: string, values: readonly T[], get: (s: Settings) => T, set: (s: Settings, v: T) => void, label: (v: T) => Label, after?: () => void, role = "choice"): void {
   const change = (d: number) => {
     const i = values.indexOf(get(c.shell.settings));
     set(c.shell.settings, values[(i + d + values.length) % values.length]);
@@ -52,6 +53,7 @@ function choiceRow<T extends string | number>(c: Ctx, key: string, values: reado
     after?.();
   };
   const row = valueRow(c.shell.i18n, key, () => change(-1), () => change(1));
+  row.item.role = role;
   const draw = () => {
     const l = label(get(c.shell.settings));
     row.set(typeof l === "string" ? c.shell.i18n.t(l) : c.shell.i18n.t(l[0], l[1]), true);
@@ -61,7 +63,7 @@ function choiceRow<T extends string | number>(c: Ctx, key: string, values: reado
 }
 
 function boolRow(c: Ctx, key: string, get: (s: Settings) => boolean, set: (s: Settings, v: boolean) => void): void {
-  choiceRow(c, key, [false, true].map(String), (s) => String(get(s)), (s, v) => set(s, v === "true"), (v) => (v === "true" ? "opt.on" : "opt.off"));
+  choiceRow(c, key, [false, true].map(String), (s) => String(get(s)), (s, v) => set(s, v === "true"), (v) => (v === "true" ? "opt.on" : "opt.off"), undefined, "toggle");
 }
 
 const pct = (v: number) => `${Math.round(v * 100)} %`;
@@ -179,6 +181,7 @@ function section(c: Ctx, tab: (typeof TABS)[number]): void {
       boolRow(c, "access.subtitle_hold", (s) => a(s).subtitle_hold, (s, v) => (a(s).subtitle_hold = v));
       numRow(c, "access.timing_scale", (s) => a(s).timing_scale, (s, v) => (a(s).timing_scale = v), 1, 3, 0.5, times);
       boolRow(c, "access.auto_repeat", (s) => a(s).auto_repeat, (s, v) => (a(s).auto_repeat = v));
+      boolRow(c, "access.narration", (s) => a(s).narration, (s, v) => (a(s).narration = v)); // #165
       break;
     }
     case "language": {

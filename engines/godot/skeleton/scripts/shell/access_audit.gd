@@ -318,8 +318,11 @@ static func _focus(root: Node, focusable: Array[Control]) -> Dictionary:
 	for c: Control in focusable:
 		if c is BaseButton and _style_key(c.get_theme_stylebox("focus")) == _style_key(c.get_theme_stylebox("hover")):
 			same_as_hover.append(str(c.get_path()))
+	var lines: Dictionary = {} # what each control says when it gets focus (#165)
+	for c: Control in focusable:
+		lines[str(c.get_path())] = Narrator.describe(c)
 	return {"start": str(start.get_path()) if start != null else "", "controls": focusable.size(),
-			"reached": reached.size(), "unreached": missed, "focus_like_hover": same_as_hover}
+			"reached": reached.size(), "unreached": missed, "focus_like_hover": same_as_hover, "narration": lines}
 
 
 ## What a style box draws, as a comparable value (an empty box draws nothing: a focus that looks like nothing).

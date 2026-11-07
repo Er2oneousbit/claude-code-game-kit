@@ -71,6 +71,8 @@ automatically when the window loses focus; it also opens "What now?": the goal f
 line and the controls, and "Dialogue history" from `shell.history`, #167), quit and crash screens. Settings > Controls
 offers one-handed layouts (`data/input/presets.json`, #166); `readable_font`, `line_spacing`, `subtitle_hold`,
 `timing_scale` and `auto_repeat` work as SOP-20 says.
+- **Narration** (#165): the shell's `narrator.ts` puts a line for every focus change, value change and screen into
+  an ARIA live region (always) and speaks it with `speechSynthesis` when `access.narration` is on.
 - **Where:** `src/shell/` (screens, input, subtitles, the smoke driver), `src/core/` (the engine-free logic: settings,
   bindings and glyphs, saves, i18n, juice), `data/i18n/<locale>.json` (strings), `data/dialogue/*.built.json`
   (subtitles in the dialogue format v0 of Wavesmith's dialogue subcommand). Scenes read `shell.settings`,

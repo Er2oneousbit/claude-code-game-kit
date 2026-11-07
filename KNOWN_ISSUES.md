@@ -47,6 +47,10 @@ examples were built and tested on one Windows 11 machine.
   for Settings > Accessibility are English (that section was never translated); the auto-repeat delay and interval
   (0.35 s, 0.15 s) are the kit's starting point, not from a source; the one-handed layouts are not tried with
   players who play one-handed.
+- **Narration** (#165): the lines are checked, the speaking is not: no screen reader has been tried with the web page
+  or Godot's AccessKit support (Godot 4.5+), and LÖVE's `say` and `spd-say` routes are untried on macOS and Linux;
+  on Windows LÖVE opens PowerShell for each line, which can flash a console window
+  ([#165](https://github.com/Er2oneousbit/claude-code-game-kit/issues/165)).
 - **Second-model reviews still owed:** Wavesmith's WAV, FLAC and Ogg Vorbis code, `check_links.py`, `credits.py`,
   `image_diff.py`, the golden vectors, `comfy_local.py`, `pixel_sprite.py`, `chroma_key.py` and four more Wavesmith
   modules have never been reviewed by a second model; the reviewer's weekly quota ran out first

@@ -122,4 +122,14 @@ export function findConflicts(bindings: Bindings): Conflict[] {
   return [...seen.values()].filter((list) => list.length > 1).flat();
 }
 
+const oneLine = (text: string) => String(text ?? "").split(/\s+/).filter(Boolean).join(" ");
+
+/** What the narration says for one control (#165): "Music volume, slider, 70 percent"; no label says "unlabelled". */
+export function narrationLine(label: string, role: string, value = ""): string {
+  const parts = [oneLine(label) || "unlabelled"];
+  if (oneLine(role)) parts.push(oneLine(role));
+  if (oneLine(value)) parts.push(oneLine(value));
+  return parts.join(", ");
+}
+
 // {{FOOTER}}

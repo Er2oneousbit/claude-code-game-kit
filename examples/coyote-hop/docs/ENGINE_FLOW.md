@@ -58,6 +58,9 @@ keyboard and gamepad reach every control, and the focused one has an outline.
 - **Keeping track** (#167): the pause menu's "What now?" (`HelpScreen`: the goal from `Shell.set_objective()`, the
   last line, the controls) and "Dialogue history" (`HistoryScreen`, from `Shell.history`, which `SubtitleBar` fills).
   Settings > Controls offers one-handed layouts (`data/input/presets.json`, #166).
+- **Narration** (#165): `Narrator` (made by `FrontEnd`) says a line for every focus change, value change and screen
+  (`Narrator.describe()`, `Bindings.narration_line()`), through `DisplayServer.tts_speak` when `access.narration` is
+  on (`project.godot` turns on `audio/general/text_to_speech`); `Shell.last_narration` holds the last line.
 - **Subtitles**: `SubtitleBar` reads `data/dialogue/sample.built.json` (format v0 of Wavesmith's dialogue
   subcommand, tools/audio/wavesmith: cues for a classic bar, per-character reveal times for a typewriter; unknown fields are ignored).
   A caption marked `"directional": true` gets an arrow while its source is off screen: `bar.caption(id, {"dx": .., "dy": .., "half_w": .., "half_h": ..})`.

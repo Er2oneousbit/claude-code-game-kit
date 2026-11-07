@@ -82,6 +82,12 @@ function handlers.plural(case, tol, where)
   return #case.points * 2
 end
 
+function handlers.narration(case, tol, where)
+  for i, p in ipairs(case.points) do
+    Golden.expect(Bindings.narration_line(p[1], p[2], p[3]), p[4], tol, where .. " (" .. i .. ")")
+  end
+end
+
 function handlers.pseudo(case, tol, where)
   for i, p in ipairs(case.points) do
     Golden.expect(I18n.pseudo(p[1]), p[2], tol, where .. " " .. string.format("%q", p[1]) .. " (" .. i .. ")")

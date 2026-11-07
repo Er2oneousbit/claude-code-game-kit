@@ -77,7 +77,7 @@ const std::vector<Section>& schema() {
                     num("shake_scale", 0.0, 1.0), flag("flash_limit"), flag("hold_to_toggle"),
                     one_of("difficulty", choices(kDifficulties)), num("game_speed", 0.5, 1.0),
                     flag("readable_font"), num("line_spacing", 1.0, 2.0), flag("subtitle_hold"),
-                    num("timing_scale", 1.0, 3.0), flag("auto_repeat")}},
+                    num("timing_scale", 1.0, 3.0), flag("auto_repeat"), flag("narration")}},
         {"input", {num("deadzone", 0.0, 0.9), flag("invert_y"), one_of("glyphs", choices(kGlyphSets))}},
         {"telemetry", {one_of("consent", choices(kConsentValues))}},
     };
@@ -191,6 +191,7 @@ json default_settings() {
     access["subtitle_hold"] = false;
     access["timing_scale"] = 1.0;
     access["auto_repeat"] = false;
+    access["narration"] = false;
     json& input = s["input"];
     input["bindings"] = bindings_to_json(default_bindings());
     input["deadzone"] = 0.2;

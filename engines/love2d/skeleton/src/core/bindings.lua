@@ -139,6 +139,16 @@ function Bindings.prompt_binding(bindings, action, gset)
   return list[slot + 1] or ""
 end
 
+local function one_line(text) return (tostring(text or ""):gsub("%s+", " "):match("^%s*(.-)%s*$")) end
+
+-- What the narration says for one control (#165): "Music volume, slider, 70 percent"; no label says "unlabelled".
+function Bindings.narration_line(label, role, value)
+  local parts = { one_line(label) ~= "" and one_line(label) or "unlabelled" }
+  if one_line(role) ~= "" then parts[#parts + 1] = one_line(role) end
+  if one_line(value) ~= "" then parts[#parts + 1] = one_line(value) end
+  return table.concat(parts, ", ")
+end
+
 return Bindings
 
 -- {{FOOTER}}

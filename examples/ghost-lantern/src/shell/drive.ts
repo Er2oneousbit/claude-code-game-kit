@@ -34,6 +34,7 @@ import { Log } from "../core/log";
 import { settingsLoad } from "../core/settings";
 import { DATA_DIR_PARAM, dataPrefix } from "../core/textStore";
 import { accessScreen } from "./accessAudit";
+import { describe } from "./narrator";
 import type { Shell } from "./app";
 import { MAX_SLIDER_STEPS, MENU_TARGET, slideAction } from "./driveLogic";
 import { SETTINGS_FILE } from "./meta";
@@ -301,8 +302,9 @@ async function reach(shell: Shell, d: Driver): Promise<Record<string, unknown>> 
     if (menu.focused) seen.add(menu.focused.id);
     await d.press("ui_down");
   }
+  const narration = Object.fromEntries(menu.items.map((it) => [it.id, describe(shell, it)])); // #165
   return { start, controls: want.length, reached: want.filter((id) => seen.has(id)).length,
-           unreached: want.filter((id) => !seen.has(id)), focus_like_hover: [] };
+           unreached: want.filter((id) => !seen.has(id)), focus_like_hover: [], narration };
 }
 
 async function report(shell: Shell, d: Driver, name: string): Promise<void> {

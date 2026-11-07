@@ -565,6 +565,15 @@ namespace GameKitGoldenTests
 		}
 	}
 
+	void CheckNarration(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case)
+	{
+		for (const TSharedPtr<FJsonValue>& P : Run.List(Case, TEXT("points")))
+		{
+			Run.SameText(GameKit::NarrationLine(Run.TextAt(P, 0), Run.TextAt(P, 1), Run.TextAt(P, 2)), Run.At(P, 3),
+				TEXT("narration ") + Write(P, 0));
+		}
+	}
+
 	void CheckPseudo(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case)
 	{
 		for (const TSharedPtr<FJsonValue>& P : Run.List(Case, TEXT("points")))
@@ -707,6 +716,7 @@ namespace GameKitGoldenTests
 		{TEXT("defaults"), CheckDefaults}, {TEXT("settings_load"), CheckSettingsLoad}, {TEXT("rebind"), CheckRebind},
 		{TEXT("glyph_set"), CheckGlyphSet}, {TEXT("glyph_name"), CheckGlyphName}, {TEXT("prompt_binding"), CheckPromptBinding},
 		{TEXT("save_load"), CheckSaveLoad}, {TEXT("tr"), CheckTr}, {TEXT("plural"), CheckPlural}, {TEXT("pseudo"), CheckPseudo},
+		{TEXT("narration"), CheckNarration},
 	};
 
 	const FGoldenType AudioTypes[] = {{TEXT("audio_director"), CheckAudioDirector}};

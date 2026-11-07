@@ -76,6 +76,9 @@ namespace GameKit
 	/** The binding to show for Action: slot 0 for the keyboard set, slot 1 otherwise; "" when there is none. */
 	GAMEKITSHELL_API FString PromptBinding(const FGameKitBindings& Bindings, const FString& Action, const FString& Set);
 
+	/** What the narration says for one control (#165): "Music volume, slider, 70 percent"; no label says "unlabelled". */
+	GAMEKITSHELL_API FString NarrationLine(const FString& Label, const FString& Role, const FString& Value = FString());
+
 	/** From settings input.bindings (an object of string arrays); anything else in it is skipped. */
 	GAMEKITSHELL_API FGameKitBindings BindingsFromJson(const TSharedPtr<FJsonObject>& Object);
 	GAMEKITSHELL_API TSharedRef<FJsonObject> BindingsToJson(const FGameKitBindings& Bindings);

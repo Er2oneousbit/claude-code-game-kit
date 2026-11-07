@@ -90,6 +90,8 @@ on focus loss). "What now?" shows the goal from `app:set_objective()`, the last 
   priority, interrupt, cooldown, reveal times and cues; captions by sound event; unknown fields ignored).
   `app:say("guide.welcome")` shows a line; barks only with subtitle barks on. The typewriter reveals by the file's
   reveal times (`Subtitles.TYPEWRITER = false` shows the cue chunks instead).
+Narration (#165): the shell's `narrator.lua` says a line for every focus change, value change and screen
+(`Bindings.narration_line`), spoken with `access.narration` on through the system's speech from a thread.
 
 ## Smoke scenarios (`python tools/dev.py smoke --drive <scenario>`)
 | Scenario | What it proves |

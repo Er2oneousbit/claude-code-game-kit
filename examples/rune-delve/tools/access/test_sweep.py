@@ -169,6 +169,14 @@ class SweepExam(unittest.TestCase):
         log["hold"] = {"held": False, "dismissed": True}
         self.assertIn("held False", check(log)[0][0])
 
+    def test_every_focusable_control_says_something(self):
+        # #165: a control with no label would be narrated as "unlabelled, button"
+        log = copy.deepcopy(GOOD)
+        log["screens"][0]["focus"]["narration"] = {"/root/Play": "Play, button"}
+        self.assertEqual(check(log)[0], [])
+        log["screens"][0]["focus"]["narration"]["/root/Icon"] = "unlabelled, button"
+        self.assertIn("give it a label", check(log)[0][0])
+
     def test_the_one_handed_layout_must_apply_and_reset(self):
         log = copy.deepcopy(GOOD)
         log["preset"] = {"applied": False, "reset": True}

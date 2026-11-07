@@ -16,6 +16,10 @@ run/main_scene="res://scenes/main.tscn"
 ; SET your exact Godot version here after opening the project once (the editor will rewrite this line).
 config/features=PackedStringArray("4.3")
 
+[audio]
+
+general/text_to_speech=true
+
 [autoload]
 
 Log="*res://scripts/core/log.gd"

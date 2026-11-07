@@ -141,6 +141,7 @@ namespace GameKit
 					SchemaFlag(TEXT("subtitle_hold"), false),
 					SchemaNum(TEXT("timing_scale"), 1.0, 1.0, 3.0),
 					SchemaFlag(TEXT("auto_repeat"), false),
+					SchemaFlag(TEXT("narration"), false),
 				}});
 				S.Add({TEXT("input"), {   // input.bindings is handled on its own (FixBindings)
 					SchemaNum(TEXT("deadzone"), 0.2, 0.0, 0.9),

@@ -19,6 +19,7 @@
 local Bindings = require("src.core.bindings")
 local InputMap = require("src.core.input_map")
 local Json = require("src.core.json")
+local Narrator = require("src.shell.narrator")
 local Log = require("src.core.log")
 local Settings = require("src.core.settings")
 
@@ -351,6 +352,8 @@ function Drive:reach()
     self:press("ui_down")
   end
   out.controls = #want
+  out.narration = {}                                     -- what each row says when it gets focus (#165)
+  for _, row in ipairs(list.rows) do out.narration[prefix .. tostring(row.id)] = Narrator.describe(self.app, row) end
   for _, id in ipairs(want) do
     if seen[id] then out.reached = out.reached + 1 else out.unreached[#out.unreached + 1] = id end
   end
