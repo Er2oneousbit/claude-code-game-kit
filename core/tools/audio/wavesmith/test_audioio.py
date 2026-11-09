@@ -45,6 +45,9 @@ if "pcm_s16le" in args:
 elif out.endswith(".ogg"):
     with open(out, "wb") as fh:
         fh.write(b"OggS" + b"\0" * 24 + b"\x01vorbis" + b"\0" * 20)
+    if os.environ.get("STUB_FAIL_AFTER_WRITE"):      # what ffmpeg does on a full disk or a kill: a part-file stays
+        sys.stderr.write("stub: no space left on device\n")
+        sys.exit(1)
 else:
     sys.stderr.write("stub: cannot write " + out + "\n")
     sys.exit(1)
@@ -298,6 +301,30 @@ class AudioIOExam(unittest.TestCase):
             self.assertFalse(tmp.exists(), f"{tmp}: ffmpeg's temporary WAV must go when the process ends")
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_a_failed_encode_leaves_no_file_and_keeps_the_old_one(self):
+        # ffmpeg wrote straight onto the destination: a run that died part-way (a timeout, a full disk) left a
+        # broken file there, and with --overwrite replaced a good file with it
+        decoded = self.dir / "decoded_by_stub.wav"
+        write_wav(decoded, tone(), RATE)
+        self.stub_ffmpeg(decoded)
+        os.environ["STUB_FAIL_AFTER_WRITE"] = "1"
+        src = self.dir / "s.wav"
+        write_wav(src, tone(), RATE)
+        out = self.dir / "theme.ogg"
+        rc, text = self.run_tool("convert", src, "--out", out)
+        self.assertEqual(rc, 2, text)
+        self.assertIn("could not write", text)
+        self.assertFalse(out.exists(), "a failed encode leaves nothing behind")
+        out.write_bytes(b"the good file")
+        rc, text = self.run_tool("convert", src, "--out", out, "--overwrite")
+        self.assertEqual(rc, 2, text)
+        self.assertEqual(out.read_bytes(), b"the good file", "a failed encode never replaces the file that was there")
+        self.assertEqual([p.name for p in self.dir.glob("*.ogg*")], ["theme.ogg"], "no staged file next to it")
+        del os.environ["STUB_FAIL_AFTER_WRITE"]
+        rc, text = self.run_tool("convert", src, "--out", out, "--overwrite")
+        self.assertEqual(rc, 0, text)
+        self.assertTrue(out.read_bytes().startswith(b"OggS"), "a good encode lands on the destination")
 
     # ---- a real ffmpeg, when there is one
     @unittest.skipUnless(shutil.which("ffmpeg"), "no ffmpeg on PATH: the real round trip is skipped")

@@ -337,15 +337,27 @@ def write_audio(path, channels, rate, loop=None, quality=OGG_QUALITY):
         # bitexact: a fixed OGG stream serial (else random) and no ffmpeg version tag, so the same audio written
         # twice is the same bytes (the DAW round trip tells "already in the game" by its SHA-256)
         cmd += ["-fflags", "+bitexact", "-flags:a", "+bitexact"]
-        cmd.append(str(path.resolve()))
+        # ffmpeg writes next to its input in the temp folder (the suffix still picks the format); the destination
+        # changes only once the run has succeeded, so a run that dies part-way leaves no broken file there and
+        # never replaces a good one
+        staged = Path(tmp) / ("encoded" + path.suffix)
+        cmd.append(str(staged))
         dbg(" ".join(cmd))
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
                                timeout=FFMPEG_TIMEOUT_S)
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise AudioIOError(f"{path}: ffmpeg did not run: {exc}")
-        if r.returncode != 0 or not path.is_file():
+        if r.returncode != 0 or not staged.is_file():
             raise AudioIOError(f"{path}: ffmpeg could not write it: {(r.stderr or '').strip()[-300:]}")
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                os.replace(str(staged), str(path))
+            except OSError:                         # another drive: the temp folder is seldom the game's
+                shutil.copyfile(str(staged), str(path))
+        except OSError as exc:
+            raise AudioIOError(f"{path}: cannot write it: {exc}")
     dbg(f"{path}: {frames} frames written")
     return clipped
 
