@@ -305,6 +305,10 @@ def _frame(data, pos, info):
     if nch != info["channels"]:
         raise FlacCorrupt(f"a frame has {nch} channels, STREAMINFO says {info['channels']}")
     chans = [_subframe(br, block, bps + (1 if c == side else 0)) for c in range(nch)]
+    for c in chans:
+        if len(c) != block:                         # a predictor or partition order the block size does not fit
+            raise FlacCorrupt(f"a subframe decodes to {len(c)} samples in a block of {block} at byte {pos} "
+                              f"(corrupt file)")
     if layout == 8:                                 # left / side
         chans[1] = [a - b for a, b in zip(chans[0], chans[1])]
     elif layout == 9:                               # side / right

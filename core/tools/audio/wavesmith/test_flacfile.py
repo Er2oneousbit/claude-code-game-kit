@@ -324,6 +324,16 @@ class FlacExam(unittest.TestCase):
         _, chans, _ = flacfile.decode(streaminfo(44100, 1, 16, 8) + hand_frame(8, [constant(5, wasted=3)]))
         self.assertEqual(chans[0], [40] * 8, "a legal count still shifts the samples back up")
 
+    def test_a_subframe_that_does_not_fill_its_block_is_corrupt_not_a_crash(self):
+        # a partition order the block size does not divide (200 >> 4 = 12 x 16 = 192) leaves a channel short: in
+        # stereo the MD5 packing got 384 values for 400 (struct.error); in mono the frame passed with 192 samples
+        short = fixed0([1] * 200, raw_bits=4, parts=4)
+        self.hostile("short_right.flac", streaminfo(44100, 2, 16, 200) + hand_frame(200, [fixed0([1] * 200, 4), short], 1),
+                     "192 samples in a block of 200")
+        self.hostile("short_mono.flac", streaminfo(44100, 1, 16, 0) + hand_frame(200, [short]), "block of 200")
+        _, chans, _ = flacfile.decode(streaminfo(44100, 1, 16, 192) + hand_frame(192, [fixed0([1] * 192, 4, parts=4)]))
+        self.assertEqual(len(chans[0]), 192, "an order the block size divides still decodes")
+
     def test_cli_exit_codes(self):
         bad, corrupt = self.dir / "bad.flac", self.dir / "corrupt.flac"
         bad.write_bytes(b"not flac at all")
