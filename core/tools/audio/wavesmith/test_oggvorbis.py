@@ -948,6 +948,25 @@ class OggVorbisExam(unittest.TestCase):
         with self.assertRaises(oggvorbis.VorbisError):
             oggvorbis.identification(self.data("opus"))
 
+    def test_a_sample_rate_the_wav_cannot_hold_is_an_error_not_a_traceback(self):
+        # the identification header's rate is 32 untrusted bits; towav handed 0xFFFFFFFF to write_wav, whose
+        # byte-rate field overflowed as struct.error (a raw traceback)
+        data = bytearray(hand_stream(1, 1))
+        end = self.page_offsets(bytes(data))[1]
+        struct.pack_into("<I", data, 28 + 12, 0xFFFFFFFF)      # page header 27 + 1 lacing byte, then \x01vorbis + version + channels
+        data[22:26] = b"\0\0\0\0"
+        struct.pack_into("<I", data, 22, oggvorbis.ogg_crc(bytes(data[:end])))
+        self.assertEqual(oggvorbis.identification(bytes(data))["rate"], 0xFFFFFFFF)
+        src = self.dir / "hz.ogg"
+        src.write_bytes(bytes(data))
+        rc, out = self.run_tool("info", src)
+        self.assertEqual(rc, 0, out)
+        rc, out = self.run_tool("towav", src, "--out", self.dir / "hz.wav")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("[error]", out)
+        self.assertNotIn("Traceback", out)
+        self.assertFalse((self.dir / "hz.wav").exists())
+
     def test_crc_mismatch_and_missing_page_fail(self):
         data = bytearray(self.data("mono22k"))
         data[len(data) // 2] ^= 0x10

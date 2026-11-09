@@ -228,6 +228,26 @@ class WavfileExam(unittest.TestCase):
             self.assertEqual(rc, 2, out)
             self.assertNotIn("Traceback", out)
 
+    def test_a_sample_rate_the_header_cannot_hold_is_an_error_not_a_traceback(self):
+        # the rate field is 32 bits and reads fine near its top, but rate x block align no longer fits the
+        # byte-rate field: write_wav raised struct.error from normalize and loop, a raw traceback
+        fmt = struct.pack("<HHIIHH", 1, 1, 0xFFFFFFFF, 0xFFFFFFFF, 2, 16)
+        path = self.dir / "hz.wav"
+        path.write_bytes(raw_wav(fmt, struct.pack("<16h", *([100] * 16))))
+        rc, out = self.cli("stats", path)
+        self.assertEqual(rc, 0, out)
+        for name, args in (("n.wav", ("normalize",)), ("l.wav", ("loop", "--crossfade", "1e-9"))):
+            rc, out = self.cli(*args, path, "--out", self.dir / name)
+            self.assertEqual(rc, 2, out)
+            self.assertIn("[error]", out)
+            self.assertIn("cannot be written", out)
+            self.assertNotIn("Traceback", out)
+            self.assertFalse((self.dir / name).exists())
+        for rate in (0xFFFFFFFF, 0x40000000, 0):
+            with self.assertRaises(ValueError):
+                wavfile.write_wav(self.dir / "x.wav", [0.0] * 4, rate, channels=2)
+        wavfile.write_wav(self.dir / "ok.wav", [0.0] * 4, 384000, channels=2)     # the highest real rate is fine
+
     def test_fix_stream_sizes_sets_placeholder_sizes_to_the_real_ones(self):
         # #178: a streamed WAV says 0xFFFFFFxx for the RIFF and data sizes; only those two fields change
         fmt = struct.pack("<HHIIHH", 1, 1, RATE, RATE * 2, 2, 16)

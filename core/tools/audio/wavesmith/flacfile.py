@@ -432,7 +432,7 @@ def main(argv=None):
         if DEBUG:
             traceback.print_exc()
         return 1
-    except (FlacError, WavNameError, OSError) as exc:
+    except (FlacError, ValueError, OSError) as exc:   # ValueError: WavNameError, or a rate the WAV cannot hold
         print(f"[error] {exc}", file=sys.stderr)
         if DEBUG:
             traceback.print_exc()

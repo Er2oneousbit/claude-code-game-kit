@@ -300,6 +300,14 @@ def _stream_via_ffmpeg(path, kind):
     return rate, nch, ffmpeg_chunks
 
 
+def _write_wav(path, interleaved, rate, loop=None, channels=1):
+    """write_wav with its ValueError (a rate the header cannot hold, a wrong suffix) as an AudioIOError."""
+    try:
+        return write_wav(path, interleaved, rate, loop=loop, channels=channels)
+    except ValueError as exc:
+        raise AudioIOError(str(exc)) from None
+
+
 def write_audio(path, channels, rate, loop=None, quality=OGG_QUALITY):
     """Writes channels (lists in -1..1) to path: .wav natively (16-bit, loop chunk kept), anything else through
     ffmpeg (OGG as libvorbis; the loop as LOOPSTART / LOOPLENGTH comments; the same samples give the same bytes).
@@ -308,14 +316,14 @@ def write_audio(path, channels, rate, loop=None, quality=OGG_QUALITY):
     frames = len(channels[0]) if channels else 0
     interleaved = [s for frame in zip(*channels) for s in frame] if len(channels) > 1 else list(channels[0])
     if path.suffix.lower() == ".wav":
-        return write_wav(path, interleaved, rate, loop=loop, channels=len(channels))
+        return _write_wav(path, interleaved, rate, loop=loop, channels=len(channels))
     ff = find_ffmpeg()
     if not ff:
         raise AudioIOError(f"writing {path.suffix or 'that format'} needs ffmpeg (https://ffmpeg.org; PATH or "
                            f"{FFMPEG_ENV}); without it, write a .wav (every engine imports WAV)")
     with tempfile.TemporaryDirectory() as tmp:
         src = Path(tmp) / "source.wav"
-        clipped = write_wav(src, interleaved, rate, channels=len(channels))
+        clipped = _write_wav(src, interleaved, rate, channels=len(channels))
         cmd = [ff, "-nostdin", "-v", "error", "-y", "-protocol_whitelist", "file", "-i", str(src)]
         if path.suffix.lower() == ".ogg":
             cmd += ["-c:a", "libvorbis", "-q:a", str(quality)]

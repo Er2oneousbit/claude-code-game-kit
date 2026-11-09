@@ -158,6 +158,24 @@ class AudioIOExam(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertNotIn("Traceback", out)
 
+    def test_a_sample_rate_the_wav_cannot_hold_is_an_error_not_a_traceback(self):
+        # a WAV (or Vorbis) header can say 0xFFFFFFFF Hz; convert read it and write_wav's byte-rate field
+        # overflowed as struct.error, a raw traceback instead of [error]
+        self.no_ffmpeg()
+        fmt = struct.pack("<HHIIHH", 1, 1, 0xFFFFFFFF, 0xFFFFFFFF, 2, 16)
+        data = struct.pack("<8h", *([100] * 8))
+        body = b"WAVE" + b"fmt " + struct.pack("<I", 16) + fmt + b"data" + struct.pack("<I", len(data)) + data
+        src = self.dir / "hz.wav"
+        src.write_bytes(b"RIFF" + struct.pack("<I", len(body)) + body)
+        rc, out = self.run_tool("info", src)
+        self.assertEqual(rc, 0, out)
+        rc, out = self.run_tool("convert", src, "--out", self.dir / "hz16.wav")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("[error]", out)
+        self.assertNotIn("Traceback", out)
+        with self.assertRaises(audioio.AudioIOError):
+            audioio.write_audio(self.dir / "w.wav", [[0.0] * 4], 0xFFFFFFFF)
+
     def adpcm_wav(self):
         """A WAV in a sample format wavfile.py does not read (IMA ADPCM, tag 0x11)."""
         fmt = struct.pack("<HHIIHH", 0x11, 1, RATE, RATE // 2, 256, 4)
