@@ -28,7 +28,9 @@
 #           holding only another codec (Opus, FLAC, Speex) are refused by name, never guessed.
 #           Limits: a page CRC proves nothing (anyone can recompute it), so a setup header may ask for at most
 #           65536 entries and 1M VQ values per codebook and 262144 entries and 2M values in all (real libvorbis
-#           files peak at 6561, 52488, 13411 and 61254), and a file may decode to at most 16384 samples per byte
+#           files peak at 6561, 52488, 13411 and 61254), one packet may span at most 4 MB of pages (the bit
+#           reader keeps 45 bytes per packet byte; the exam's libvorbis fixtures peak at 3.9 KB per packet), and
+#           a file may decode to at most 16384 samples per byte
 #           of file (at least 4M; digital 5.1 silence, the most compressible real file measured, is about 1600).
 #           Past a limit: VorbisLimit (exit 2), naming it; decode(data, max_values=N) raises the output limit.
 #           Accuracy: within 5e-7 of ffmpeg's decoder on every sample of a 47-file libvorbis corpus (q-1 to
@@ -76,6 +78,7 @@ MAX_SETUP_ENTRIES = 1 << 18
 MAX_SETUP_VALUES = 1 << 21
 MAX_VALUES_PER_BYTE = 1 << 14
 MIN_VALUES_ALLOWED = 1 << 22
+MAX_PACKET_BYTES = 1 << 22      # BitReader keeps one 8-byte int per byte offset (45x the packet in memory, measured)
 DEBUG = False
 
 
@@ -202,6 +205,10 @@ def read_packets(data, warnings=None):
             if partial is None:
                 partial = bytearray()
             partial += data[p:p + lv]
+            if len(partial) > MAX_PACKET_BYTES:
+                raise VorbisLimit(f"a packet of over {MAX_PACKET_BYTES} bytes at byte {here}: over this decoder's "
+                                  f"limit (real Vorbis packets stay under a few kilobytes); convert it with ffmpeg "
+                                  f"if it is genuine")
             p += lv
             if lv < 255:                            # a segment under 255 bytes ends the packet
                 packets.append([bytes(partial), None, False])
