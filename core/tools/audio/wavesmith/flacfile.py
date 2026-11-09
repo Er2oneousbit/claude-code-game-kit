@@ -176,6 +176,8 @@ def read_streaminfo(data):
             break
     if info is None:
         raise FlacCorrupt("no STREAMINFO block")
+    if info["rate"] == 0:                           # 20 untrusted bits: 0 would reach `samples / rate` later
+        raise FlacCorrupt("STREAMINFO says the sample rate is 0 Hz (corrupt file)")
     if info["bits"] not in SUPPORTED_BITS:
         raise FlacError(f"{info['bits']}-bit FLAC is not supported (this decoder reads 16- and 24-bit)")
     if info["channels"] not in SUPPORTED_CHANNELS:

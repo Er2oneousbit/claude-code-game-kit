@@ -80,31 +80,61 @@ class BitWriter:
         return self.value.to_bytes(self.n // 8, "big")
 
 
-def streaminfo(rate, channels, bits, total, md5):
+def streaminfo(rate, channels, bits, total, md5=bytes(16)):
     packed = (rate << 44) | ((channels - 1) << 41) | ((bits - 1) << 36) | total
     body = struct.pack(">HH", 4096, 4096) + b"\0" * 6 + packed.to_bytes(8, "big") + md5
     return b"fLaC" + bytes([0x80, 0, 0, len(body)]) + body
 
 
-def escape_frame(samples):
-    """One mono 16-bit frame: FIXED order 0 subframe whose single residual partition is escape-coded (raw)."""
+def hand_frame(block, subframes, channels_code=0):
+    """One 16-bit frame (44.1 kHz, frame number 0, block size in 8 bits) from subframe writers, each a function
+    that writes one channel's subframe into a BitWriter; channels_code is the header's channel layout code
+    (0 mono, 1 independent stereo). Both CRCs are right, so only what the subframes say can be wrong."""
     head = BitWriter()
     head.put(14, 0x3FFE); head.put(1, 0); head.put(1, 0)     # sync, reserved, fixed block size
     head.put(4, 6); head.put(4, 9)                          # block size in 8 bits at the end, 44.1 kHz
-    head.put(4, 0); head.put(3, 4); head.put(1, 0)          # mono, 16-bit, reserved
+    head.put(4, channels_code); head.put(3, 4); head.put(1, 0)   # channels, 16-bit, reserved
     head.put(8, 0)                                          # frame number 0
-    head.put(8, len(samples) - 1)
+    head.put(8, block - 1)
     hb = head.bytes()
     frame = BitWriter()
     frame.value, frame.n = int.from_bytes(hb + bytes([flacfile.crc8(hb)]), "big"), (len(hb) + 1) * 8
-    frame.put(1, 0); frame.put(6, 8); frame.put(1, 0)       # subframe: FIXED order 0, no wasted bits
-    frame.put(2, 0); frame.put(4, 0); frame.put(4, 15)      # rice, 1 partition, escape
-    frame.put(5, 16)
-    for s in samples:
-        frame.put(16, s)
+    for write in subframes:
+        write(frame)
     frame.pad()
     fb = frame.bytes()
     return fb + flacfile.crc16(fb).to_bytes(2, "big")
+
+
+def fixed0(samples, raw_bits=16, parts=0):
+    """A FIXED order 0 subframe whose 2 ** parts residual partitions are all escape-coded (raw_bits raw bits
+    each): the samples go in verbatim, so a frame can say anything, in range or not."""
+    def write(frame):
+        frame.put(1, 0); frame.put(6, 8); frame.put(1, 0)   # FIXED order 0, no wasted bits
+        frame.put(2, 0); frame.put(4, parts)                # rice, partition order
+        n = len(samples) >> parts
+        for p in range(1 << parts):
+            frame.put(4, 15); frame.put(5, raw_bits)        # escape: raw_bits per residual
+            for s in samples[p * n:(p + 1) * n]:
+                frame.put(raw_bits, s)
+    return write
+
+
+def constant(value, wasted=0):
+    """A CONSTANT subframe, optionally with wasted bits (a unary count, then the value in the bits left)."""
+    def write(frame):
+        frame.put(1, 0); frame.put(6, 0)
+        if wasted:
+            frame.put(1, 1); frame.put(wasted, 1)           # wasted - 1 zeros, then the 1: the count
+            frame.put(max(16 - wasted, 0), value)
+        else:
+            frame.put(1, 0); frame.put(16, value)
+    return write
+
+
+def escape_frame(samples):
+    """One mono 16-bit frame: FIXED order 0 subframe whose single residual partition is escape-coded (raw)."""
+    return hand_frame(len(samples), [fixed0(samples)])
 
 
 def md5_16(chans):
@@ -262,6 +292,29 @@ class FlacExam(unittest.TestCase):
                     audioio.read_audio(path)
                 with self.assertRaises(audioio.AudioIOError):
                     audioio.stream_audio(path)
+
+    def hostile(self, name, data, word, audioio_too=True):
+        """A crafted file is FlacCorrupt everywhere it can be read: decode(), the CLI (exit 1, no traceback), and
+        audioio's read and stream paths (AudioIOError, never a raw exception)."""
+        with self.assertRaises(flacfile.FlacCorrupt) as ctx:
+            flacfile.decode(data)
+        self.assertIn(word, str(ctx.exception))
+        path = self.dir / name
+        path.write_bytes(data)
+        rc, out = self.run_tool("info", path)
+        self.assertEqual(rc, 1, out)
+        self.assertNotIn("Traceback", out)
+        if audioio_too:
+            import audioio
+            with self.assertRaises(audioio.AudioIOError):
+                audioio.read_audio(path)
+            with self.assertRaises(audioio.AudioIOError):      # from the header, or from inside chunks()
+                list(audioio.stream_audio(path)[2]())
+
+    def test_a_zero_sample_rate_is_corrupt_not_a_crash(self):
+        # the STREAMINFO rate is 20 untrusted bits: 0 reached `samples / rate` in the CLI and in audioio's convert
+        data = streaminfo(0, 1, 16, 8) + escape_frame([1] * 8)
+        self.hostile("rate0.flac", data, "0 Hz")
 
     def test_cli_exit_codes(self):
         bad, corrupt = self.dir / "bad.flac", self.dir / "corrupt.flac"
