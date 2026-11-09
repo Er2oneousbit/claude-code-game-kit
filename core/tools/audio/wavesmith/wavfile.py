@@ -114,6 +114,7 @@ def read_wav_channels(path):
     channels, rate, bits, is_float = fmt
     samples = _decode(data, bits, is_float)
     frames = len(samples) // channels
+    samples = samples[:frames * channels]            # a partial last frame goes the way of a partial sample
     if loop:
         # some writers store the frame count as the loop end (the spec says last frame): clamp, never index past
         start, end = loop[0], min(loop[1], frames - 1)

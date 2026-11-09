@@ -248,6 +248,19 @@ class WavfileExam(unittest.TestCase):
                 wavfile.write_wav(self.dir / "x.wav", [0.0] * 4, rate, channels=2)
         wavfile.write_wav(self.dir / "ok.wav", [0.0] * 4, 384000, channels=2)     # the highest real rate is fine
 
+    def test_a_partial_last_frame_is_dropped_like_a_partial_sample(self):
+        # a stereo data chunk of 5 samples (2.5 frames) gave the left channel 3 samples and the right 2, while
+        # wav_stream reads 2 whole frames: every reader must agree
+        fmt = struct.pack("<HHIIHH", 1, 2, RATE, RATE * 4, 4, 16)
+        path = self.dir / "odd.wav"
+        path.write_bytes(raw_wav(fmt, struct.pack("<5h", 1, 2, 3, 4, 5)))
+        samples, rate, loop, ch = wavfile.read_wav_channels(path)
+        self.assertEqual((ch, len(samples)), (2, 4))
+        self.assertEqual(wavfile.wav_stream(path)[2], 2)
+        import audioio
+        chans, _ = audioio.read_audio(path)
+        self.assertEqual([len(c) for c in chans], [2, 2])
+
     def test_fix_stream_sizes_sets_placeholder_sizes_to_the_real_ones(self):
         # #178: a streamed WAV says 0xFFFFFFxx for the RIFF and data sizes; only those two fields change
         fmt = struct.pack("<HHIIHH", 1, 1, RATE, RATE * 2, 2, 16)
