@@ -35,67 +35,23 @@ everywhere. A `[warn] ... .gold` line means the game edited that file: merge the
 
 Verify a change by scaffolding every affected engine into a scratch dir outside this repo, then inside each output run `python tools/doctor.py` (also runs the link check) and `python tools/dev.py -h` (paths relative to the generated project). A second `--adopt` run on the same output must produce no conflicts.
 
-Tool exams (run from the repo root). Before a release, run the standard-library ones again on the oldest supported
-Python (`uv run --python 3.8 python core/tools/test_<name>.py`): `Path.write_text(newline=)` and `Path.resolve()` on
-missing relative paths behave differently there, and 0.7.2 shipped broken on 3.8 and 3.9 because only 3.14 was run.
+Tool exams: `scripts/run_exams.py` runs every `test_*.py` under `core/tools` and `scripts` from one table (the source
+of truth for what each exam needs beyond the standard library: Pillow and numpy, bpy on uv's Python 3.13, git, GIMP 3,
+Inkscape 1.x, a REAPER_BIN or ASEPRITE_BIN) and prints one line per exam: pass/fail/skipped (a missing tool is a skip
+naming the tool, never a fail), unique tests (never unittest's `Ran N`), time. Before a release, run it again on the
+oldest supported Python: `Path.write_text(newline=)` and `Path.resolve()` on missing relative paths behave differently
+there, and 0.7.2 shipped broken on 3.8 and 3.9 because only 3.14 was run. An exam file without a row makes `--list`
+and every run print a warning: add it to the table. Any single exam still runs on its own (`python <path>`).
 ```
-python core/tools/test_check_links.py
-python core/tools/test_doctor.py                     # standard library only (the asset-log check per overlay layout)
-python core/tools/test_publish_check.py              # needs git
-python core/tools/test_fetch_asset.py                # offline (file:// URLs)
-python core/tools/test_second_opinion.py             # offline (canned CLI results)
-python core/tools/test_issues.py                     # offline (canned gh output)
-python core/tools/test_golden_vectors.py             # the juice and shell reference; data/golden/*.json must be current
-python core/tools/test_image_diff.py                 # standard library only (visual regression)
-python core/tools/access/test_colour.py              # standard library only (colour-blind pairs, CIEDE2000, WCAG contrast)
-python core/tools/access/test_sweep.py               # standard library only (the accessibility sweep's rules, canned drive logs)
-python core/tools/access/test_presets.py             # standard library only (the one-handed layouts: complete, no conflicts, one side)
-python core/tools/test_credits.py                    # standard library only
-python core/tools/test_yt_transcript.py              # offline (canned WebVTT, faked caption methods)
-python core/tools/test_token_audit.py                # standard library only (a fake home, project and session log)
-python core/tools/test_session_context.py            # standard library only (the SessionStart hook, as Claude Code runs it)
-python core/tools/cloud/test_ship.py                # standard library only; real-OpenTofu cases when TOFU_BIN/tofu is found
-python core/tools/shaders/test_shader_ref.py         # standard library only (the shader recipes' reference; data/golden/shaders must be current)
-python scripts/test_shader_ports.py                  # standard library only (every engine's generated shader files current)
-python scripts/test_sync_examples.py                 # standard library only (a fake kit and example in a temp folder)
-python scripts/test_new_game.py                      # standard library only (a fake kit in a temp folder)
-python scripts/test_codename.py                      # standard library only
-python scripts/test_dev_py.py                        # standard library only (every engine's dev.py, engine calls faked)
-python scripts/test_kit_docs.py                      # standard library only (the docs' claims against the kit tree)
-python core/tools/audio/wavesmith/wavesmith.py test  # every audio exam at once (about 3 minutes)
-python core/tools/audio/wavesmith/test_wavesmith.py  # the front door: subcommands, --help, check
-python core/tools/audio/wavesmith/test_sfx_synth.py  # standard library only
-python core/tools/audio/wavesmith/test_chiptune.py
-python core/tools/audio/wavesmith/test_wavfile.py
-python core/tools/audio/wavesmith/test_babble.py     # standard library only
-python core/tools/audio/wavesmith/test_loudness.py   # standard library only (EBU Tech 3341/3342 cases, about a minute)
-python core/tools/audio/wavesmith/test_audio_events.py  # standard library only; also checks data/golden/audio.json is current
-python core/tools/audio/wavesmith/test_dialogue.py   # standard library only
-python core/tools/audio/wavesmith/test_sound_sets.py  # standard library only
-python core/tools/audio/wavesmith/test_music.py      # standard library only; also checks data/golden/music.json is current
-python core/tools/audio/wavesmith/test_access.py     # standard library only; also checks data/golden/access.json is current
-python core/tools/audio/wavesmith/test_flacfile.py   # standard library only (real encoder fixtures)
-python core/tools/audio/wavesmith/test_oggvorbis.py  # standard library only (libvorbis fixtures, hand-built streams)
-python core/tools/audio/wavesmith/test_audioio.py    # offline (a stand-in ffmpeg; the real round trip runs when ffmpeg is on PATH)
-python core/tools/audio/wavesmith/test_local_sfx.py  # offline (a stand-in ComfyUI)
-python core/tools/audio/wavesmith/test_local_tts.py  # offline (a fake TTS worker)
-python core/tools/audio/wavesmith/test_eleven_audio.py  # offline (canned API responses)
-python core/tools/audio/wavesmith/test_daw.py        # offline (a stand-in REAPER); with REAPER_BIN set, ReaperLiveExam runs the real one (about 3.5 minutes)
-python core/tools/audio/wavesmith/test_midifile.py   # standard library only
-python core/tools/art/test_pixellab.py                   # offline (canned API responses)
-python core/tools/bozzetto/test_bozzetto.py          # offline (a stand-in ComfyUI, a canned mesh); its Blender part runs
-                                                         # when Blender or bpy is found (BOZZETTO_TEST_BLENDER=skip|bpy|<path>)
-uv run --python 3.13 --with bpy python core/tools/bozzetto/test_bozzetto.py   # the Blender part on the bpy module
-python core/tools/bozzetto/test_bozzetto_live.py     # one real TRELLIS.2 run (about 5 min); exit 0 with SKIP without ComfyUI
-python core/tools/art/test_comfy_local.py                # offline (a stand-in ComfyUI server on 127.0.0.1)
-python core/tools/art/dotwork/tests/test_dotwork.py          # offline, needs Pillow + numpy (the ComfyUI venv has both)
-python core/tools/audio/wavesmith/test_fish_tts.py   # offline (canned API responses)
-python core/tools/art/test_chroma_key.py                 # needs Pillow
-python core/tools/art/test_pixel_sprite.py               # standard library only
-python core/tools/art/test_gimp_batch.py                 # needs GIMP 3 (exit 2 when missing)
-python core/tools/art/test_svg_export.py                 # needs Inkscape 1.x (exit 2 when missing)
-uv run --python 3.13 --with bpy python core/tools/blender/test_validate_asset.py   # bpy wheels lag the newest Python
-(same for test_prep_export.py and test_render_sprites.py; the sprite exam renders with Cycles on the CPU, a few minutes)
+python scripts/run_exams.py --list                   # the table: name, path, needs, note
+python scripts/run_exams.py                          # the default set on this Python (about 15 minutes)
+python scripts/run_exams.py --python 3.8,3.14        # once per version through `uv run --python` (this Python without uv)
+python scripts/run_exams.py --only doctor --only new_game
+python scripts/run_exams.py --changed main           # just the exams covering files changed since that ref
+python scripts/run_exams.py --live                   # also the live exams (a real ComfyUI/TRELLIS, a Cycles render) and the
+                                                     # live parts (REAPER_BIN, ASEPRITE_BIN, PIXELORAMA_BIN: hidden without --live)
+python scripts/run_exams.py --jobs 4                 # exams at once; exit 0 all passed, 1 an exam failed, 2 setup problem
+python core/tools/audio/wavesmith/wavesmith.py test  # the Wavesmith rows on their own (about 3 minutes)
 python core/tools/check_links.py --root . --also core --also core/docs --skip-dir examples   # kit root; 165 hits at 0.8.1 (scaffold-time paths and history), compare before/after
 git ls-files -coz --exclude-standard -- core engines scripts profiles examples '*.md' | grep -zv /licenses/ | LC_ALL=C.UTF-8 xargs -0 grep -nIP "\x{2014}"   # em dash check, must print nothing: tracked and new files only (a plain grep -r also reads the examples' node_modules and Library), -I skips binaries, docs/licenses/ holds verbatim third-party license texts
 ```
