@@ -337,12 +337,18 @@ def stream(data):
     def frames():
         pos, done, total = start, 0, info["total"]
         width = info["bits"] // 8
+        low, high = -(1 << (info["bits"] - 1)), (1 << (info["bits"] - 1)) - 1
         md5 = hashlib.md5()
         while pos < len(data) and (not total or done < total):
+            at = pos
             chans, pos = _frame(data, pos, info)
             if total and done + len(chans[0]) > total:
                 chans = [c[:total - done] for c in chans]
             done += len(chans[0])
+            for c in chans:                     # residuals are unbounded: a predictor can leave the range
+                if c and (min(c) < low or max(c) > high):
+                    raise FlacCorrupt(f"a frame at byte {at} decodes to a sample outside the {info['bits']}-bit "
+                                      f"range (corrupt file)")
             if width == 2:
                 md5.update(struct.pack(f"<{len(chans[0]) * len(chans)}h", *(s for f in zip(*chans) for s in f)))
             else:

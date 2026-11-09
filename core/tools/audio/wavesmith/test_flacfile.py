@@ -334,6 +334,17 @@ class FlacExam(unittest.TestCase):
         _, chans, _ = flacfile.decode(streaminfo(44100, 1, 16, 192) + hand_frame(192, [fixed0([1] * 192, 4, parts=4)]))
         self.assertEqual(len(chans[0]), 192, "an order the block size divides still decodes")
 
+    def test_a_sample_outside_the_bit_depth_is_corrupt_not_a_crash(self):
+        # residuals are unbounded Rice or escape codes, so a 16-bit frame can decode to 40000: the MD5 packing
+        # raised struct.error ('h' format requires -32768 <= number <= 32767), a raw traceback
+        self.hostile("loud.flac", streaminfo(44100, 1, 16, 8) + hand_frame(8, [fixed0([40000] * 8, raw_bits=20)]),
+                     "outside the 16-bit range")
+        self.hostile("low.flac", streaminfo(44100, 1, 16, 8) + hand_frame(8, [fixed0([-32769] * 8, raw_bits=20)]),
+                     "outside the 16-bit range")
+        edge = [32767, -32768] * 4                  # the range itself is fine
+        _, chans, _ = flacfile.decode(streaminfo(44100, 1, 16, 8) + hand_frame(8, [fixed0(edge, raw_bits=20)]))
+        self.assertEqual(chans[0], edge)
+
     def test_cli_exit_codes(self):
         bad, corrupt = self.dir / "bad.flac", self.dir / "corrupt.flac"
         bad.write_bytes(b"not flac at all")
