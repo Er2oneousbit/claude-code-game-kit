@@ -8,6 +8,7 @@
 //           Release builds on Windows hide the console window (windows_subsystem); dev.py still reads the
 //           output, because it passes its own pipes.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): the smoke run's drive (--drive needs --smoke)
 // ---------------------------------------------------------------------------
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -15,7 +16,7 @@ use std::process::ExitCode;
 
 use bevy::app::AppExit;
 
-use {{GAME_SLUG}}::{app, cli, game};
+use {{GAME_SLUG}}::{app, cli, game, shell};
 
 fn main() -> ExitCode {
     let cli = match cli::parse(std::env::args().skip(1)) {
@@ -33,14 +34,30 @@ fn main() -> ExitCode {
         println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
         return ExitCode::SUCCESS;
     }
-    let cfg = match game::configure(&cli.game_args) {
+    let mut cfg = match game::configure(&cli.game_args) {
         Ok(cfg) => cfg,
         Err(msg) => {
             eprintln!("[error] {msg}");
             return ExitCode::from(2);
         }
     };
-    match app::build(&cli, cfg).run() {
+    cfg.automated = cli.smoke.is_some();
+    // a smoke run follows a scripted scenario (the default one walks into the game); a drive needs --smoke
+    let drive = match (&cli.smoke, &cfg.drive) {
+        (None, Some(name)) => {
+            eprintln!("[error] --drive {name} needs --smoke N (python tools/dev.py smoke --drive {name})");
+            return ExitCode::from(2);
+        }
+        (None, None) => None,
+        (Some(_), name) => match shell::drive::Drive::new(name.as_deref().unwrap_or("default")) {
+            Ok(d) => Some(d),
+            Err(msg) => {
+                eprintln!("[error] {msg}");
+                return ExitCode::from(2);
+            }
+        },
+    };
+    match app::build(&cli, cfg, drive).run() {
         AppExit::Success => ExitCode::SUCCESS,
         AppExit::Error(code) => ExitCode::from(code.get()),
     }

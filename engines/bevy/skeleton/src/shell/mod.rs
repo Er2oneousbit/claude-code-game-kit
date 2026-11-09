@@ -254,13 +254,8 @@ impl Shell {
     }
 
     // ---- Text ------------------------------------------------------------------------------------------------
-    pub fn locale(&self) -> &str {
-        self.locale_override
-            .as_deref()
-            .unwrap_or_else(|| settings::text(&self.settings, "", "language").max(""))
-    }
-
-    fn language(&self) -> String {
+    /// The language in use: --locale, else the settings.
+    pub fn language(&self) -> String {
         match &self.locale_override {
             Some(l) => l.clone(),
             None => self.settings["language"].as_str().unwrap_or("en").to_string(),
@@ -807,7 +802,11 @@ fn write_intent(shell: Res<Shell>, cfg: Res<GameConfig>, mut intent: ResMut<Inte
         intent.pressed.clear();
         return; // bots win: a stray key cannot disturb a recorded scenario
     }
-    intent.dir = if shell.game_active() { shell.held_dir() } else { Vec2::ZERO };
+    intent.dir = if shell.game_active() {
+        shell.held_dir()
+    } else {
+        Vec2::ZERO
+    };
     intent.pressed = shell.game_pressed.clone();
 }
 

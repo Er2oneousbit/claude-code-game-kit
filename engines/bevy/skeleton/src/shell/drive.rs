@@ -25,7 +25,7 @@ use serde_json::{Value, json};
 
 use super::screens::TABS;
 use super::view::AccessReport;
-use super::{ScreenName, Shell, input};
+use super::{ScreenName, Shell};
 use crate::app::Smoke;
 use crate::logic::bindings;
 
@@ -43,9 +43,26 @@ pub const TARGET_MASTER: f64 = 0.5;
 /// Presses a slider gets to reach its target (0..1 is 10 steps of 0.1).
 const MAX_SLIDER_STEPS: u32 = 40;
 const SLIDER_EPS: f64 = 1e-6;
-pub const SHOW_TARGETS: [&str; 8] = ["title", "main_menu", "settings", "pause", "help", "history", "credits", "subtitle"];
+pub const SHOW_TARGETS: [&str; 8] = [
+    "title",
+    "main_menu",
+    "settings",
+    "pause",
+    "help",
+    "history",
+    "credits",
+    "subtitle",
+];
 pub const SCENARIOS: [&str; 2] = ["menus", "access"];
-const ACCESS_ACTIONS: [&str; 7] = ["ui_up", "ui_down", "ui_left", "ui_right", "ui_accept", "ui_cancel", "pause"];
+const ACCESS_ACTIONS: [&str; 7] = [
+    "ui_up",
+    "ui_down",
+    "ui_left",
+    "ui_right",
+    "ui_accept",
+    "ui_cancel",
+    "pause",
+];
 const PROMPT_ACTIONS: [&str; 6] = ["move_left", "move_right", "jump", "attack", "interact", "pause"];
 
 type StepFn = Box<dyn FnMut(&mut World, &mut Drive) -> Result<bool, String> + Send + Sync>;
@@ -70,6 +87,8 @@ pub struct Drive {
     /// The access report of the screen being checked, waiting for its focus walk.
     report: Option<Value>,
     reach_seen: Vec<String>,
+    /// Facts one step leaves for a later one (the preset applied before the reset).
+    scratch: BTreeMap<String, Value>,
 }
 
 /// The press that moves a slider from now towards target ("" once it is there).
@@ -92,10 +111,7 @@ pub fn validate(name: &str) -> Result<(), String> {
         if SHOW_TARGETS.contains(&target) {
             return Ok(());
         }
-        return Err(format!(
-            "unknown --drive show:{target} ({})",
-            SHOW_TARGETS.join(", ")
-        ));
+        return Err(format!("unknown --drive show:{target} ({})", SHOW_TARGETS.join(", ")));
     }
     Err(format!(
         "unknown --drive {name:?} ({}, access:<opts>, show:<screen>)",
@@ -121,6 +137,7 @@ impl Drive {
             finished: false,
             report: None,
             reach_seen: Vec::new(),
+            scratch: BTreeMap::new(),
         };
         scenario(&mut d)?;
         if name != "default" {
@@ -140,47 +157,61 @@ impl Drive {
     // ---- Steps -------------------------------------------------------------------------------------------------
     fn frames(&mut self, n: u32) {
         let mut left = n;
-        self.add(&format!("{n} frames"), n + 2, Box::new(move |_, _| {
-            left = left.saturating_sub(1);
-            Ok(left == 0)
-        }));
+        self.add(
+            &format!("{n} frames"),
+            n + 2,
+            Box::new(move |_, _| {
+                left = left.saturating_sub(1);
+                Ok(left == 0)
+            }),
+        );
     }
 
     /// Injects an action (through its pad binding in a pad run), then waits PRESS_GAP frames.
     fn press(&mut self, action: &str) {
         let action = action.to_string();
         let mut state = 0u32;
-        self.add(&format!("press {action}"), PRESS_GAP + 2, Box::new(move |world, d| {
-            if state == 0 {
-                press_now(world, d, &action)?;
-            }
-            state += 1;
-            Ok(state > PRESS_GAP)
-        }));
+        self.add(
+            &format!("press {action}"),
+            PRESS_GAP + 2,
+            Box::new(move |world, d| {
+                if state == 0 {
+                    press_now(world, d, &action)?;
+                }
+                state += 1;
+                Ok(state > PRESS_GAP)
+            }),
+        );
     }
 
     fn wait_screen(&mut self, name: ScreenName) {
-        self.add(&format!("screen {}", name.as_str()), WAIT_LIMIT, Box::new(move |world, _| {
-            Ok(world.resource::<Shell>().top_name() == Some(name))
-        }));
+        self.add(
+            &format!("screen {}", name.as_str()),
+            WAIT_LIMIT,
+            Box::new(move |world, _| Ok(world.resource::<Shell>().top_name() == Some(name))),
+        );
     }
 
     /// Presses `step` until the focused item is `id`.
     fn focus_with(&mut self, id: &str, step: &str) {
         let (id, step) = (id.to_string(), step.to_string());
         let mut presses = 0u32;
-        self.add(&format!("focus {id}"), FOCUS_LIMIT * 2 + 4, Box::new(move |world, d| {
-            let now = world.resource::<Shell>().focus_id();
-            if now == id {
-                return Ok(true);
-            }
-            if presses >= FOCUS_LIMIT {
-                return Err(format!("could not focus {id} (focused: {now:?})"));
-            }
-            presses += 1;
-            press_now(world, d, &step)?;
-            Ok(false)
-        }));
+        self.add(
+            &format!("focus {id}"),
+            FOCUS_LIMIT * 2 + 4,
+            Box::new(move |world, d| {
+                let now = world.resource::<Shell>().focus_id();
+                if now == id {
+                    return Ok(true);
+                }
+                if presses >= FOCUS_LIMIT {
+                    return Err(format!("could not focus {id} (focused: {now:?})"));
+                }
+                presses += 1;
+                press_now(world, d, &step)?;
+                Ok(false)
+            }),
+        );
     }
 
     fn focus(&mut self, id: &str) {
@@ -210,37 +241,45 @@ impl Drive {
     /// Settings: from the rows back up to the tab bar, then to a tab.
     fn to_tab(&mut self, tab: &str) {
         let mut presses = 0u32;
-        self.add("back to the tab bar", FOCUS_LIMIT * 2 + 4, Box::new(move |world, d| {
-            let shell = world.resource::<Shell>();
-            if shell.focus_id().starts_with("tabs.") {
-                return Ok(true);
-            }
-            if presses >= FOCUS_LIMIT {
-                return Err("could not get back to the tab bar".into());
-            }
-            presses += 1;
-            press_now(world, d, "ui_up")?;
-            Ok(false)
-        }));
+        self.add(
+            "back to the tab bar",
+            FOCUS_LIMIT * 2 + 4,
+            Box::new(move |world, d| {
+                let shell = world.resource::<Shell>();
+                if shell.focus_id().starts_with("tabs.") {
+                    return Ok(true);
+                }
+                if presses >= FOCUS_LIMIT {
+                    return Err("could not get back to the tab bar".into());
+                }
+                presses += 1;
+                press_now(world, d, "ui_up")?;
+                Ok(false)
+            }),
+        );
         self.focus_with(&format!("tabs.{tab}"), "ui_right");
     }
 
     /// Presses left or right on the focused slider until the setting equals target, from any start value.
     fn slide_to(&mut self, section: &'static str, name: &'static str, target: f64) {
         let mut presses = 0u32;
-        self.add(&format!("slide {section}.{name} to {target}"), MAX_SLIDER_STEPS * 2 + 4, Box::new(move |world, d| {
-            let now = world.resource::<Shell>().num(section, name);
-            let action = slide_action(now, target);
-            if action.is_empty() {
-                return Ok(true);
-            }
-            if presses >= MAX_SLIDER_STEPS {
-                return Err(format!("{section}.{name} did not reach {target} (is {now})"));
-            }
-            presses += 1;
-            press_now(world, d, action)?;
-            Ok(false)
-        }));
+        self.add(
+            &format!("slide {section}.{name} to {target}"),
+            MAX_SLIDER_STEPS * 2 + 4,
+            Box::new(move |world, d| {
+                let now = world.resource::<Shell>().num(section, name);
+                let action = slide_action(now, target);
+                if action.is_empty() {
+                    return Ok(true);
+                }
+                if presses >= MAX_SLIDER_STEPS {
+                    return Err(format!("{section}.{name} did not reach {target} (is {now})"));
+                }
+                presses += 1;
+                press_now(world, d, action)?;
+                Ok(false)
+            }),
+        );
     }
 
     /// A one-shot check or change.
@@ -265,42 +304,50 @@ impl Drive {
             report.request(&name, world_screen);
             Ok(())
         });
-        self.add(&format!("the report of {screen}"), WAIT_LIMIT, Box::new(|world, d| {
-            let mut report = world.resource_mut::<AccessReport>();
-            match report.result.take() {
-                Some(r) => {
-                    d.report = Some(r);
-                    Ok(true)
+        self.add(
+            &format!("the report of {screen}"),
+            WAIT_LIMIT,
+            Box::new(|world, d| {
+                let mut report = world.resource_mut::<AccessReport>();
+                match report.result.take() {
+                    Some(r) => {
+                        d.report = Some(r);
+                        Ok(true)
+                    }
+                    None => Ok(false),
                 }
-                None => Ok(false),
-            }
-        }));
+            }),
+        );
         // which controls ui_down reaches (every enabled row must come round)
         let mut state: Option<(usize, Vec<String>, String)> = None; // (presses left, wanted ids, start)
-        self.add(&format!("walk the list of {screen}"), FOCUS_LIMIT * 2 + 4, Box::new(move |world, d| {
-            let shell = world.resource::<Shell>();
-            if state.is_none() {
-                let rows = shell.rows();
-                let prefix = match shell.top() {
-                    Some(t) if t.name == ScreenName::Settings => format!("{}.", TABS[t.tab.min(TABS.len() - 1)]),
-                    _ => String::new(),
-                };
-                let want: Vec<String> = rows.iter().map(|r| format!("{prefix}{}", r.id)).collect();
-                d.reach_seen.clear();
-                state = Some((rows.len() + 1, want, shell.focus_id()));
-            }
-            let (left, _, _) = state.as_mut().unwrap();
-            let id = shell.focus_id();
-            if !id.is_empty() {
-                d.reach_seen.push(id);
-            }
-            if *left == 0 {
-                return Ok(true);
-            }
-            *left -= 1;
-            press_now(world, d, "ui_down")?;
-            Ok(false)
-        }));
+        self.add(
+            &format!("walk the list of {screen}"),
+            FOCUS_LIMIT * 2 + 4,
+            Box::new(move |world, d| {
+                let shell = world.resource::<Shell>();
+                if state.is_none() {
+                    let rows = shell.rows();
+                    let prefix = match shell.top() {
+                        Some(t) if t.name == ScreenName::Settings => format!("{}.", TABS[t.tab.min(TABS.len() - 1)]),
+                        _ => String::new(),
+                    };
+                    let want: Vec<String> = rows.iter().map(|r| format!("{prefix}{}", r.id)).collect();
+                    d.reach_seen.clear();
+                    state = Some((rows.len() + 1, want, shell.focus_id()));
+                }
+                let (left, _, _) = state.as_mut().unwrap();
+                let id = shell.focus_id();
+                if !id.is_empty() {
+                    d.reach_seen.push(id);
+                }
+                if *left == 0 {
+                    return Ok(true);
+                }
+                *left -= 1;
+                press_now(world, d, "ui_down")?;
+                Ok(false)
+            }),
+        );
         let screen_name = screen.to_string();
         self.run(&format!("print the report of {screen}"), move |world, d| {
             let shell = world.resource::<Shell>();
@@ -314,10 +361,20 @@ impl Drive {
             let mut narration = BTreeMap::new();
             for row in &rows {
                 let role = shell.t(super::role_key(row.kind));
-                narration.insert(format!("{prefix}{}", row.id), super::narrator::Narrator::describe(&row.label, &role, &row.value));
+                narration.insert(
+                    format!("{prefix}{}", row.id),
+                    super::narrator::Narrator::describe(&row.label, &role, &row.value),
+                );
             }
-            let start = if want.is_empty() { String::new() } else { d.reach_seen.first().cloned().unwrap_or_default() };
-            let mut r = d.report.take().unwrap_or_else(|| json!({"screen": screen_name, "texts": []}));
+            let start = if want.is_empty() {
+                String::new()
+            } else {
+                d.reach_seen.first().cloned().unwrap_or_default()
+            };
+            let mut r = d
+                .report
+                .take()
+                .unwrap_or_else(|| json!({"screen": screen_name, "texts": []}));
             r["focus"] = json!({
                 "start": start,
                 "controls": want.len(),
@@ -370,7 +427,11 @@ fn finish(world: &mut World, d: &mut Drive, code: u8) {
         smoke.finish_now(); // the next frame is the smoke run's last: screenshot, SMOKE_DONE, exit 0
         return;
     }
-    world.write_message(if code == 0 { AppExit::Success } else { AppExit::from_code(code) });
+    world.write_message(if code == 0 {
+        AppExit::Success
+    } else {
+        AppExit::from_code(code)
+    });
 }
 
 fn fail(world: &mut World, d: &mut Drive, msg: &str) {
@@ -491,7 +552,9 @@ fn show(d: &mut Drive, target: &str) {
                 Ok(())
             });
             d.frames(10);
-            d.wait_for("the blinking prompt", WAIT_LIMIT, |world| world.resource::<Shell>().blink_on);
+            d.wait_for("the blinking prompt", WAIT_LIMIT, |world| {
+                world.resource::<Shell>().blink_on
+            });
         }
         "main_menu" => d.to_menu(),
         "settings" => {
@@ -510,7 +573,9 @@ fn show(d: &mut Drive, target: &str) {
         }
         "subtitle" => {
             d.run("speaker names on", |world, _| {
-                world.resource_mut::<Shell>().set("access", "speaker_names", json!(true));
+                world
+                    .resource_mut::<Shell>()
+                    .set("access", "speaker_names", json!(true));
                 Ok(())
             });
             to_play(d);
@@ -568,7 +633,10 @@ fn access(d: &mut Drive, options: &str) -> Result<(), String> {
                 }),
             );
         }
-        println!("ACCESS_INPUT {}", json!({"pad": pad, "text_scale": scale, "actions": actions}));
+        println!(
+            "ACCESS_INPUT {}",
+            json!({"pad": pad, "text_scale": scale, "actions": actions})
+        );
         Ok(())
     });
     d.wait_screen(ScreenName::Title);
@@ -616,20 +684,18 @@ fn access(d: &mut Drive, options: &str) -> Result<(), String> {
             // the one-handed layout (#166), live, then reset
             d.focus("controls.preset_one_hand_left");
             d.press("ui_accept");
-            d.run("the layout applied", |world, _| {
-                let applied = world.resource::<Shell>().bindings()["attack"].first().is_some_and(|b| b == "key:f");
-                world.resource_mut::<Shell>().toasts.push((format!("ACCESS_PRESET_APPLIED {applied}"), 0.0));
+            d.run("the layout applied", |world, d| {
+                let applied = world.resource::<Shell>().bindings()["attack"]
+                    .first()
+                    .is_some_and(|b| b == "key:f");
+                d.scratch.insert("preset_applied".into(), json!(applied));
                 Ok(())
             });
             d.focus("controls.reset");
             d.press("ui_accept");
-            d.run("ACCESS_PRESET", |world, _| {
-                let mut shell = world.resource_mut::<Shell>();
-                let applied = shell
-                    .toasts
-                    .iter()
-                    .any(|(t, _)| t == "ACCESS_PRESET_APPLIED true");
-                shell.toasts.retain(|(t, _)| !t.starts_with("ACCESS_PRESET_APPLIED"));
+            d.run("ACCESS_PRESET", |world, d| {
+                let shell = world.resource::<Shell>();
+                let applied = d.scratch.get("preset_applied") == Some(&json!(true));
                 let reset = shell.bindings()["attack"].first().is_some_and(|b| b == "key:j");
                 println!("ACCESS_PRESET {}", json!({"applied": applied, "reset": reset}));
                 Ok(())
@@ -689,7 +755,9 @@ fn access(d: &mut Drive, options: &str) -> Result<(), String> {
         }
         Ok(())
     });
-    d.wait_for("the line to finish and hold", WAIT_LIMIT, |world| world.resource::<Shell>().subtitle_holding());
+    d.wait_for("the line to finish and hold", WAIT_LIMIT, |world| {
+        world.resource::<Shell>().subtitle_holding()
+    });
     d.press("ui_accept");
     d.run("ACCESS_HOLD", |world, _| {
         let mut shell = world.resource_mut::<Shell>();
@@ -711,12 +779,6 @@ fn access(d: &mut Drive, options: &str) -> Result<(), String> {
     d.open("quit", ScreenName::Title);
     d.done(0);
     Ok(())
-}
-
-/// The actions the access report lists per screen, for tests: the shell's row ids with the settings tab prefix.
-pub fn input_bindings_summary(shell: &Shell) -> Value {
-    let b = shell.bindings();
-    json!(input::actions_for(&b, "key:escape"))
 }
 
 // {{FOOTER}}

@@ -347,11 +347,33 @@ fn spawn_row(
                             BackgroundColor(ACCENT),
                         ));
                     });
-                    label(r, style, &format!("{id}.value"), &row.value, BODY_PX, TEXT, false, Some(bg), &[], clip);
+                    label(
+                        r,
+                        style,
+                        &format!("{id}.value"),
+                        &row.value,
+                        BODY_PX,
+                        TEXT,
+                        false,
+                        Some(bg),
+                        &[],
+                        clip,
+                    );
                 }
                 RowKind::Toggle | RowKind::Choice => {
                     let text = format!("< {} >", row.value);
-                    label(r, style, &format!("{id}.value"), &text, BODY_PX, TEXT, false, Some(bg), &[], clip);
+                    label(
+                        r,
+                        style,
+                        &format!("{id}.value"),
+                        &text,
+                        BODY_PX,
+                        TEXT,
+                        false,
+                        Some(bg),
+                        &[],
+                        clip,
+                    );
                 }
                 RowKind::Binding => {
                     for slot in 0..2 {
@@ -371,10 +393,32 @@ fn spawn_row(
                         ))
                         .with_children(|c| {
                             let colour = if clash { WARN } else { TEXT };
-                            label(c, style, &format!("{id}.slot{slot}"), cell_label, BODY_PX, colour, false, Some(bg), &[], clip);
+                            label(
+                                c,
+                                style,
+                                &format!("{id}.slot{slot}"),
+                                cell_label,
+                                BODY_PX,
+                                colour,
+                                false,
+                                Some(bg),
+                                &[],
+                                clip,
+                            );
                             if clash {
                                 let t = shell.t("controls.conflict");
-                                label(c, style, &format!("{id}.slot{slot}.conflict"), &t, SMALL_PX, WARN, false, Some(bg), &[], clip);
+                                label(
+                                    c,
+                                    style,
+                                    &format!("{id}.slot{slot}.conflict"),
+                                    &t,
+                                    SMALL_PX,
+                                    WARN,
+                                    false,
+                                    Some(bg),
+                                    &[],
+                                    clip,
+                                );
                             }
                         });
                     }
@@ -448,8 +492,19 @@ fn bottom_hint(parent: &mut ChildSpawnerCommands, style: &Style, id: &str, text:
 }
 
 /// A text page: a heading, the visible lines, a hint.
-fn spawn_page(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shell, title: &str, lines: &[String], prefix: &str, win: Vec2) {
-    let scroll = shell.top().map_or(0, |t| t.scroll).min(lines.len().saturating_sub(PAGE_LINES));
+fn spawn_page(
+    parent: &mut ChildSpawnerCommands,
+    style: &Style,
+    shell: &Shell,
+    title: &str,
+    lines: &[String],
+    prefix: &str,
+    win: Vec2,
+) {
+    let scroll = shell
+        .top()
+        .map_or(0, |t| t.scroll)
+        .min(lines.len().saturating_sub(PAGE_LINES));
     heading(parent, style, &format!("{prefix}.title"), title, HEADING_PX);
     let width = (win.x - 40.0).min(LIST_MAX_W);
     parent.spawn(panel(Val::Px(width), PANEL)).with_children(|p| {
@@ -460,11 +515,26 @@ fn spawn_page(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shell, t
                 ..default()
             },))
                 .with_children(|l| {
-                    label(l, style, &format!("{prefix}.line{i}"), text, BODY_PX, TEXT, false, Some(PANEL), &[], None);
+                    label(
+                        l,
+                        style,
+                        &format!("{prefix}.line{i}"),
+                        text,
+                        BODY_PX,
+                        TEXT,
+                        false,
+                        Some(PANEL),
+                        &[],
+                        None,
+                    );
                 });
         }
     });
-    let hint_key = if prefix == "credits" { "credits.hint" } else { "page.hint" };
+    let hint_key = if prefix == "credits" {
+        "credits.hint"
+    } else {
+        "page.hint"
+    };
     bottom_hint(parent, style, &format!("{prefix}.hint"), &shell.t(hint_key), DIM);
 }
 
@@ -474,15 +544,50 @@ fn spawn_title(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shell, 
     if shell.top().is_some_and(|t| t.consent) {
         let rows = shell.rows();
         let focus = shell.top().map_or(0, |t| t.focus);
-        parent.spawn(panel(Val::Px((win.x - 80.0).min(760.0)), PANEL)).with_children(|p| {
-            label(p, style, "consent.title", &shell.t("consent.title"), HEADING_PX, ACCENT, true, Some(PANEL), &[], None);
-            label(p, style, "consent.body", &shell.t("consent.body"), BODY_PX, TEXT, false, Some(PANEL), &[], None);
-            for (i, row) in rows.iter().enumerate() {
-                spawn_row(p, style, shell, row, "", focus == i, 0, None);
-            }
-        });
+        parent
+            .spawn(panel(Val::Px((win.x - 80.0).min(760.0)), PANEL))
+            .with_children(|p| {
+                label(
+                    p,
+                    style,
+                    "consent.title",
+                    &shell.t("consent.title"),
+                    HEADING_PX,
+                    ACCENT,
+                    true,
+                    Some(PANEL),
+                    &[],
+                    None,
+                );
+                label(
+                    p,
+                    style,
+                    "consent.body",
+                    &shell.t("consent.body"),
+                    BODY_PX,
+                    TEXT,
+                    false,
+                    Some(PANEL),
+                    &[],
+                    None,
+                );
+                for (i, row) in rows.iter().enumerate() {
+                    spawn_row(p, style, shell, row, "", focus == i, 0, None);
+                }
+            });
     } else if shell.blink_on {
-        label(parent, style, "title.press_any", &shell.t("title.press_any"), BODY_PX, TEXT, false, Some(BG), &[], None);
+        label(
+            parent,
+            style,
+            "title.press_any",
+            &shell.t("title.press_any"),
+            BODY_PX,
+            TEXT,
+            false,
+            Some(BG),
+            &[],
+            None,
+        );
     }
     let version = shell.t_args("title.version", &[("version", env!("CARGO_PKG_VERSION"))]);
     bottom_hint(parent, style, "title.version", &version, DIM);
@@ -531,7 +636,18 @@ fn spawn_settings(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shel
                 ))
                 .with_children(|t| {
                     let text = shell.t(&format!("settings.tab.{tab}"));
-                    label(t, style, &format!("settings.tab.{tab}"), &text, SMALL_PX, if selected { TEXT } else { DIM }, false, Some(bg), &[], None);
+                    label(
+                        t,
+                        style,
+                        &format!("settings.tab.{tab}"),
+                        &text,
+                        SMALL_PX,
+                        if selected { TEXT } else { DIM },
+                        false,
+                        Some(bg),
+                        &[],
+                        None,
+                    );
                 });
             }
         });
@@ -540,31 +656,86 @@ fn spawn_settings(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shel
     let used = TITLE_PX * style.scale * 1.5 + SMALL_PX * style.scale * 2.0 + 90.0;
     let max_h = (win.y - used).max(style.row_h() * 2.0);
     let focus = if top.on_tabs { None } else { Some(top.focus) };
-    spawn_list(parent, style, shell, &rows, &prefix, focus, top.cell, max_h, (win.x - 40.0).min(LIST_MAX_W));
+    spawn_list(
+        parent,
+        style,
+        shell,
+        &rows,
+        &prefix,
+        focus,
+        top.cell,
+        max_h,
+        (win.x - 40.0).min(LIST_MAX_W),
+    );
     let (hint, colour) = match &shell.message {
         Some((m, _)) => (m.clone(), ACCENT),
         None => (shell.t("settings.hint"), DIM),
     };
     bottom_hint(parent, style, "settings.hint", &hint, colour);
     if let Some((action, slot)) = &shell.capturing {
-        let key = if *slot == 0 { "controls.press_key" } else { "controls.press_button" };
+        let key = if *slot == 0 {
+            "controls.press_key"
+        } else {
+            "controls.press_button"
+        };
         let action_label = shell.t(&format!("action.{action}"));
         parent.spawn(full_screen(OVERLAY)).with_children(|o| {
-            o.spawn(panel(Val::Px(520.0_f32.min(win.x - 40.0)), PANEL)).with_children(|p| {
-                label(p, style, "settings.capture", &shell.t_args(key, &[("action", &action_label)]), BODY_PX, TEXT, false, Some(PANEL), &[], None);
-                label(p, style, "settings.capture.hint", &shell.t("controls.capture_cancel"), SMALL_PX, DIM, false, Some(PANEL), &[], None);
-            });
+            o.spawn(panel(Val::Px(520.0_f32.min(win.x - 40.0)), PANEL))
+                .with_children(|p| {
+                    label(
+                        p,
+                        style,
+                        "settings.capture",
+                        &shell.t_args(key, &[("action", &action_label)]),
+                        BODY_PX,
+                        TEXT,
+                        false,
+                        Some(PANEL),
+                        &[],
+                        None,
+                    );
+                    label(
+                        p,
+                        style,
+                        "settings.capture.hint",
+                        &shell.t("controls.capture_cancel"),
+                        SMALL_PX,
+                        DIM,
+                        false,
+                        Some(PANEL),
+                        &[],
+                        None,
+                    );
+                });
         });
     }
 }
 
-fn spawn_menu(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shell, title: &str, title_id: &str, prefix: &str, win: Vec2) {
+fn spawn_menu(
+    parent: &mut ChildSpawnerCommands,
+    style: &Style,
+    shell: &Shell,
+    title: &str,
+    title_id: &str,
+    prefix: &str,
+    win: Vec2,
+) {
     heading(parent, style, title_id, title, HEADING_PX);
     let rows = shell.rows();
     let focus = shell.top().map_or(0, |t| t.focus);
     let widest = rows.iter().map(|r| r.label.chars().count()).max().unwrap_or(10) as f32;
     let width = (widest * BODY_PX * style.scale * 0.62 + 120.0).clamp(320.0, win.x - 40.0);
-    spawn_list(parent, style, shell, &rows, prefix, Some(focus), 0, win.y - 160.0, width);
+    spawn_list(
+        parent,
+        style,
+        shell,
+        &rows,
+        prefix,
+        Some(focus),
+        0,
+        win.y - 160.0,
+        width,
+    );
 }
 
 fn spawn_play_hud(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shell) {
@@ -583,7 +754,18 @@ fn spawn_play_hud(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shel
             BackgroundColor(PANEL),
         ))
         .with_children(|h| {
-            label(h, style, "hud.pause_hint", &text, SMALL_PX, TEXT, false, Some(PANEL), &[], None);
+            label(
+                h,
+                style,
+                "hud.pause_hint",
+                &text,
+                SMALL_PX,
+                TEXT,
+                false,
+                Some(PANEL),
+                &[],
+                None,
+            );
         });
 }
 
@@ -592,7 +774,10 @@ fn spawn_subtitle(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shel
         return;
     };
     let size = shell.text("access", "subtitle_size");
-    let px = SUBTITLE_PX.iter().find(|(n, _)| *n == size).map_or(BODY_PX, |(_, p)| *p);
+    let px = SUBTITLE_PX
+        .iter()
+        .find(|(n, _)| *n == size)
+        .map_or(BODY_PX, |(_, p)| *p);
     let alpha = shell.num("access", "subtitle_background") as f32;
     let bg = SUBTITLE_BG.with_alpha(alpha);
     let over = [(SUBTITLE_BG, alpha)];
@@ -616,7 +801,11 @@ fn spawn_subtitle(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shel
                 let name = shell.t_args("subtitle.speaker", &[("name", &sub.speaker)]);
                 label(s, style, "subtitle.speaker", &name, px, ACCENT, true, None, &over, None);
             }
-            let text = if sub.holding { format!("{} \u{25BC}", sub.text) } else { sub.text.clone() };
+            let text = if sub.holding {
+                format!("{} \u{25BC}", sub.text)
+            } else {
+                sub.text.clone()
+            };
             label(s, style, "subtitle.text", &text, px, TEXT, false, None, &over, None);
         });
 }
@@ -635,7 +824,18 @@ fn spawn_toasts(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shell)
                 BackgroundColor(PANEL),
             ))
             .with_children(|t| {
-                label(t, style, &format!("toast.{i}"), text, BODY_PX, TEXT, false, Some(PANEL), &[], None);
+                label(
+                    t,
+                    style,
+                    &format!("toast.{i}"),
+                    text,
+                    BODY_PX,
+                    TEXT,
+                    false,
+                    Some(PANEL),
+                    &[],
+                    None,
+                );
             });
     }
 }
@@ -649,7 +849,10 @@ fn rebuild_ui(
     windows: Query<&Window, With<PrimaryWindow>>,
     roots: Query<Entity, With<UiRoot>>,
 ) {
-    let win = windows.single().map(|w| Vec2::new(w.resolution.width(), w.resolution.height())).unwrap_or(Vec2::new(1280.0, 720.0));
+    let win = windows
+        .single()
+        .map(|w| Vec2::new(w.resolution.width(), w.resolution.height()))
+        .unwrap_or(Vec2::new(1280.0, 720.0));
     let key = shell.version ^ ((win.x as u64) << 40) ^ ((win.y as u64) << 52);
     if *last == Some(key) {
         return;
@@ -672,7 +875,18 @@ fn rebuild_ui(
     commands.spawn(full_screen(bg)).with_children(|root| match top.name {
         ScreenName::Boot => {}
         ScreenName::Loading => {
-            label(root, &style, "loading.title", &shell.t("loading.title"), HEADING_PX, DIM, false, Some(BG), &[], None);
+            label(
+                root,
+                &style,
+                "loading.title",
+                &shell.t("loading.title"),
+                HEADING_PX,
+                DIM,
+                false,
+                Some(BG),
+                &[],
+                None,
+            );
         }
         ScreenName::Title => spawn_title(root, &style, &shell, win),
         ScreenName::MainMenu => {
@@ -682,9 +896,33 @@ fn rebuild_ui(
             bottom_hint(root, &style, "menu.hint", &hint, DIM);
         }
         ScreenName::Settings => spawn_settings(root, &style, &shell, win),
-        ScreenName::Credits => spawn_page(root, &style, &shell, &shell.t("credits.title"), &screens::lines_for(&shell), "credits", win),
-        ScreenName::Help => spawn_page(root, &style, &shell, &shell.t("help.title"), &screens::lines_for(&shell), "help", win),
-        ScreenName::History => spawn_page(root, &style, &shell, &shell.t("history.title"), &screens::lines_for(&shell), "history", win),
+        ScreenName::Credits => spawn_page(
+            root,
+            &style,
+            &shell,
+            &shell.t("credits.title"),
+            &screens::lines_for(&shell),
+            "credits",
+            win,
+        ),
+        ScreenName::Help => spawn_page(
+            root,
+            &style,
+            &shell,
+            &shell.t("help.title"),
+            &screens::lines_for(&shell),
+            "help",
+            win,
+        ),
+        ScreenName::History => spawn_page(
+            root,
+            &style,
+            &shell,
+            &shell.t("history.title"),
+            &screens::lines_for(&shell),
+            "history",
+            win,
+        ),
         ScreenName::Pause => spawn_menu(root, &style, &shell, &shell.t("pause.title"), "pause.title", "", win),
         ScreenName::Play => {
             spawn_play_hud(root, &style, &shell);
@@ -692,7 +930,9 @@ fn rebuild_ui(
         }
     });
     if !shell.toasts.is_empty() {
-        commands.spawn(full_screen(Color::NONE)).with_children(|root| spawn_toasts(root, &style, &shell));
+        commands
+            .spawn(full_screen(Color::NONE))
+            .with_children(|root| spawn_toasts(root, &style, &shell));
     }
 }
 
@@ -726,7 +966,14 @@ fn inside(inner: [f32; 4], outer: [f32; 4], slack: f32) -> bool {
 fn report_access(
     mut report: ResMut<AccessReport>,
     windows: Query<&Window, With<PrimaryWindow>>,
-    labels: Query<(&UiLabel, &ComputedNode, &UiGlobalTransform, &TextLayoutInfo, &TextColor, &InheritedVisibility)>,
+    labels: Query<(
+        &UiLabel,
+        &ComputedNode,
+        &UiGlobalTransform,
+        &TextLayoutInfo,
+        &TextColor,
+        &InheritedVisibility,
+    )>,
     clips: Query<(&ComputedNode, &UiGlobalTransform), With<ScrollList>>,
 ) {
     let Some((screen, world, frames)) = report.pending.as_mut() else {
@@ -751,7 +998,12 @@ fn report_access(
         }
         let rect = rect_of(node, transform);
         let ink_size = layout.size / layout.scale_factor.max(0.001);
-        let ink = [rect[0] + (rect[2] - ink_size.x) / 2.0, rect[1] + (rect[3] - ink_size.y) / 2.0, ink_size.x, ink_size.y];
+        let ink = [
+            rect[0] + (rect[2] - ink_size.x) / 2.0,
+            rect[1] + (rect[3] - ink_size.y) / 2.0,
+            ink_size.x,
+            ink_size.y,
+        ];
         let covered = meta
             .clip
             .and_then(|c| clips.get(c).ok())
@@ -782,7 +1034,12 @@ fn report_access(
         if let Some(bg) = meta.bg {
             entry["bg"] = json!(hex(bg));
         } else if !meta.over_game.is_empty() {
-            entry["over_game"] = json!(meta.over_game.iter().map(|(c, a)| json!([hex(*c), a])).collect::<Vec<_>>());
+            entry["over_game"] = json!(
+                meta.over_game
+                    .iter()
+                    .map(|(c, a)| json!([hex(*c), a]))
+                    .collect::<Vec<_>>()
+            );
         }
         texts.push(entry);
     }

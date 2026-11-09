@@ -89,7 +89,10 @@ fn button(id: &str, label: String, act: impl Fn(&mut Shell) + 'static) -> Row {
 
 // ---- Settings rows ---------------------------------------------------------------------------------------------
 fn percent(shell: &Shell, v: f64) -> String {
-    shell.t_args("value.percent", &[("n", &format!("{}", (v * 100.0 + 0.5).floor() as i64))])
+    shell.t_args(
+        "value.percent",
+        &[("n", &format!("{}", (v * 100.0 + 0.5).floor() as i64))],
+    )
 }
 
 fn times(shell: &Shell, v: f64) -> String {
@@ -228,7 +231,11 @@ fn pad_set(shell: &Shell) -> String {
 }
 
 fn binding_row(shell: &Shell, action: &'static str, cell: usize) -> Row {
-    let mut row = Row::new(&format!("bind_{action}"), RowKind::Binding, shell.t(&format!("action.{action}")));
+    let mut row = Row::new(
+        &format!("bind_{action}"),
+        RowKind::Binding,
+        shell.t(&format!("action.{action}")),
+    );
     let all = shell.bindings();
     let list = all.get(action).cloned().unwrap_or_default();
     let pads = pad_set(shell);
@@ -316,13 +323,7 @@ fn access_rows(shell: &Shell) -> Vec<Row> {
 
 fn language_rows(shell: &Shell) -> Vec<Row> {
     let mut lang = Row::new("language", RowKind::Choice, shell.t("settings.language.language"));
-    let locales = shell.locales();
-    let now = shell.locale_override.clone().unwrap_or_else(|| shell.text("", "language"));
-    let now = if now.is_empty() {
-        shell.settings["language"].as_str().unwrap_or("en").to_string()
-    } else {
-        now
-    };
+    let now = shell.language();
     lang.value = match shell.tables.get(&now).and_then(|t| t.get("language.name")) {
         Some(name) => shell.tv(name),
         None if now == "pseudo" => shell.tv("Pseudo"),
@@ -333,7 +334,7 @@ fn language_rows(shell: &Shell) -> Vec<Row> {
         if list.is_empty() {
             return;
         }
-        let now = s.locale_override.clone().unwrap_or_else(|| s.settings["language"].as_str().unwrap_or("en").to_string());
+        let now = s.language();
         let idx = list.iter().position(|l| *l == now).unwrap_or(0) as i64;
         let next = list[(idx + dir).rem_euclid(list.len() as i64) as usize].clone();
         s.locale_override = None; // the player's choice beats --locale from here on
@@ -343,7 +344,6 @@ fn language_rows(shell: &Shell) -> Vec<Row> {
     lang.on_left = Some(Box::new(move |s| turn(s, -1)));
     lang.on_right = Some(Box::new(move |s| turn(s, 1)));
     lang.on_accept = Some(Box::new(move |s| turn(s, 1)));
-    let _ = locales;
     vec![
         lang,
         choice(shell, "telemetry", "consent", settings::CONSENT),
@@ -371,7 +371,9 @@ pub fn rows_for(shell: &Shell) -> Vec<Row> {
         ScreenName::Title if top.consent => vec![
             button("consent.yes", shell.t("consent.yes"), |s| answer_consent(s, "yes")),
             button("consent.no", shell.t("consent.no"), |s| answer_consent(s, "no")),
-            button("consent.later", shell.t("consent.later"), |s| answer_consent(s, "unset")),
+            button("consent.later", shell.t("consent.later"), |s| {
+                answer_consent(s, "unset")
+            }),
         ],
         ScreenName::MainMenu => vec![
             button("play", shell.t("menu.play"), |s| s.push(ScreenName::Loading)),
@@ -413,7 +415,10 @@ pub fn lines_for(shell: &Shell) -> Vec<String> {
                 .and_then(|d| d.parent().map(|p| p.join("CREDITS.md")))
                 .and_then(|p| std::fs::read_to_string(p).ok());
             let mut lines: Vec<String> = match text {
-                Some(t) => t.lines().map(|l| l.trim_start_matches('#').trim().to_string()).collect(),
+                Some(t) => t
+                    .lines()
+                    .map(|l| l.trim_start_matches('#').trim().to_string())
+                    .collect(),
                 None => vec![shell.t("credits.placeholder")],
             };
             lines.push(String::new());

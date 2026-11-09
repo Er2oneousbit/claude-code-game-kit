@@ -8,6 +8,7 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a smoke budget of N frames runs N ticks
 //           2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): the goal adds screen shake trauma
+//           2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): GameConfig grew the shell's options
 // ---------------------------------------------------------------------------
 use bevy::prelude::*;
 
@@ -38,6 +39,7 @@ fn each_frame_runs_one_fixed_tick() {
 fn the_bot_moves_the_player_at_its_speed() {
     let mut app = test_app(GameConfig {
         autoplay: Some(Autoplay::Right),
+        ..GameConfig::default()
     });
     for _ in 0..31 {
         app.update();
@@ -79,6 +81,7 @@ fn diagonal_input_is_not_faster() {
 fn reaching_the_goal_shakes_the_screen() {
     let mut app = test_app(GameConfig {
         autoplay: Some(Autoplay::Right),
+        ..GameConfig::default()
     });
     for _ in 0..61 {
         app.update(); // 60 ticks at PLAYER_SPEED pass GOAL_X

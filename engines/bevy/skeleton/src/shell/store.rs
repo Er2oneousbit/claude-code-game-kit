@@ -83,7 +83,9 @@ pub fn user_data_dir(game: &str) -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."));
     let base = if cfg!(target_os = "windows") {
-        std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(|| home.join("AppData").join("Roaming"))
+        std::env::var_os("APPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join("AppData").join("Roaming"))
     } else if cfg!(target_os = "macos") {
         home.join("Library").join("Application Support")
     } else {

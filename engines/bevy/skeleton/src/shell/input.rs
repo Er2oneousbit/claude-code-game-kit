@@ -151,7 +151,10 @@ mod tests {
         assert_eq!(key_name(key_code("space").unwrap()), Some("space"));
         assert_eq!(pad_name(pad_button("dpad_up").unwrap()), Some("dpad_up"));
         assert_eq!(key_code("hyperkey"), None);
-        assert_eq!(actions_for(&default_bindings(), "key:escape"), vec!["pause", "ui_cancel"]);
+        assert_eq!(
+            actions_for(&default_bindings(), "key:escape"),
+            vec!["pause", "ui_cancel"]
+        );
     }
 }
 
