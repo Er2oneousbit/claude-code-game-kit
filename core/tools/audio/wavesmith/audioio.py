@@ -29,6 +29,7 @@
 #   ffmpeg read : ffmpeg -nostdin -v error -i <file> -c:a pcm_s16le <tmp.wav> -> wavfile -> channels
 #   write       : .wav -> wavfile (16-bit, loop kept); other suffix -> tmp WAV -> ffmpeg (OGG: libvorbis, loop tags)
 import argparse
+import atexit
 import os
 import shutil
 import subprocess
@@ -280,6 +281,9 @@ def _stream_via_ffmpeg(path, kind):
         raise AudioIOError(f"{path} is {kind}: reading it needs ffmpeg (https://ffmpeg.org; put it on PATH or set "
                            f"{FFMPEG_ENV}), or convert it to WAV, FLAC or OGG Vorbis first")
     tmp = Path(tempfile.mkdtemp(prefix="wavesmith_"))
+    # chunks() deletes the folder when it ends; a caller that never starts it (an error between the two calls)
+    # would leave ffmpeg's WAV behind for good, so the process end is the backstop
+    atexit.register(shutil.rmtree, str(tmp), ignore_errors=True)
     try:
         out = _ffmpeg_to_wav(ff, path, tmp)
         rate, nch, _, chunks = wav_stream(out, CHUNK_FRAMES)

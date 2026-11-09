@@ -19,6 +19,7 @@ import math
 import os
 import shutil
 import struct
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -273,6 +274,30 @@ class AudioIOExam(unittest.TestCase):
         self.assertEqual([s for p in parts for s in p[0]], audioio.read_audio(mp3)[0][0])
         self.assertEqual(len(made), 1)
         self.assertFalse(Path(made[0]).exists(), "ffmpeg's temporary WAV is deleted once read")
+
+    def test_ffmpegs_wav_is_deleted_even_when_the_chunks_are_never_read(self):
+        # a caller that stops between stream_audio() and iterating chunks() (an error in between) never ran the
+        # generator's finally, so ffmpeg's decoded WAV stayed in the temp folder for good; only the process
+        # ending can prove the backstop, so this runs in one
+        decoded = self.dir / "decoded_by_stub.wav"
+        write_wav(decoded, tone(seconds=0.5, amp=0.25), RATE)
+        self.stub_ffmpeg(decoded)
+        mp3 = self.dir / "drop.mp3"
+        mp3.write_bytes(b"ID3\x04" + b"\0" * 200)
+        script = (f"import sys, tempfile; sys.path.insert(0, {str(HERE)!r})\n"
+                  "import audioio\n"
+                  "made, real = [], tempfile.mkdtemp\n"
+                  "tempfile.mkdtemp = lambda *a, **k: made.append(real(*a, **k)) or made[-1]\n"
+                  f"rate, nch, chunks = audioio.stream_audio({str(mp3)!r})\n"
+                  "print(made[0])\n")
+        r = subprocess.run([sys.executable, "-B", "-c", script], capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        tmp = Path(r.stdout.strip().splitlines()[-1])
+        try:
+            self.assertFalse(tmp.exists(), f"{tmp}: ffmpeg's temporary WAV must go when the process ends")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
     # ---- a real ffmpeg, when there is one
     @unittest.skipUnless(shutil.which("ffmpeg"), "no ffmpeg on PATH: the real round trip is skipped")
