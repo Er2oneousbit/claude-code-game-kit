@@ -1,0 +1,77 @@
+// ---------------------------------------------------------------------------
+// GameKitShellCapture.cpp
+// Purpose : The render-target capture behind GameKitShellCapture.h.
+// Usage   : compiled into the GameKitShellUI module.
+// Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// ---------------------------------------------------------------------------
+#include "GameKitShellCapture.h"
+
+#include "Engine/TextureRenderTarget2D.h"
+#include "Framework/Application/SlateApplication.h"
+#include "ImageUtils.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "RHI.h"
+#include "RenderingThread.h"
+#include "Slate/WidgetRenderer.h"
+#include "TextureResource.h"
+#include "Widgets/SWidget.h"
+
+namespace GameKit::ShellCapture
+{
+	// ---- Tunables ----
+	constexpr float CaptureDeltaS = 1.f / 60.f;   // the frame time each draw pass advances the widget by
+
+	bool CanCapture()
+	{
+		return GIsRHIInitialized && !GUsingNullRHI && FSlateApplication::IsInitialized();
+	}
+
+	bool SavePng(const TSharedRef<SWidget>& Widget, const FIntPoint& Size, const FString& Path, FString& OutError)
+	{
+		if (!CanCapture())
+		{
+			OutError = TEXT("no renderer: start the editor without -NullRHI (dev.py adds -RenderOffScreen for --screenshot)");
+			return false;
+		}
+		if (Size.X < 1 || Size.Y < 1)
+		{
+			OutError = FString::Printf(TEXT("bad capture size %d x %d"), Size.X, Size.Y);
+			return false;
+		}
+		FWidgetRenderer Renderer(/*bUseGammaCorrection*/ true, /*bClearTarget*/ true);
+		UTextureRenderTarget2D* Target = Renderer.DrawWidget(Widget, FVector2D(Size));   // pass 1: layout
+		if (!Target)
+		{
+			OutError = TEXT("FWidgetRenderer gave no render target");
+			return false;
+		}
+		Target->AddToRoot();
+		Renderer.DrawWidget(Target, Widget, FVector2D(Size), CaptureDeltaS);             // pass 2: the laid-out frame
+		FlushRenderingCommands();
+		TArray<FColor> Pixels;
+		FTextureRenderTargetResource* Resource = Target->GameThread_GetRenderTargetResource();
+		const bool bRead = Resource && Resource->ReadPixels(Pixels);
+		Target->RemoveFromRoot();
+		if (!bRead || Pixels.Num() != Size.X * Size.Y)
+		{
+			OutError = TEXT("could not read the render target back");
+			return false;
+		}
+		for (FColor& C : Pixels)
+		{
+			C.A = 255;   // the overlay's own alpha is not what a screenshot should carry
+		}
+		IFileManager::Get().MakeDirectory(*FPaths::GetPath(Path), /*Tree*/ true);
+		TArray64<uint8> Png;
+		FImageUtils::PNGCompressImageArray(Size.X, Size.Y, Pixels, Png);
+		if (Png.IsEmpty() || !FFileHelper::SaveArrayToFile(Png, *Path))
+		{
+			OutError = TEXT("could not write ") + Path;
+			return false;
+		}
+		return true;
+	}
+}
+
+// {{FOOTER}}

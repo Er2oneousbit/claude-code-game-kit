@@ -12,7 +12,9 @@
 #                      kit's GameKitShell plugin is enabled)
 #             smoke    run automation tests named <Game>.Smoke (--filter, --until, --fail-on for scenario runs;
 #                      screenshots need a renderer, so capture from the game itself, e.g. a -record= option);
-#                      --shaders first draws every kit shader recipe and compares it with its golden image
+#                      --shaders first draws every kit shader recipe and compares it with its golden image;
+#                      --drive menus|access|show:<screen> walks the kit's shell screens instead (the GameKitShell
+#                      plugin), --screenshot FILE draws a show:<screen>, --data-dir and --locale set its run
 #             exec     run an editor Python script headless (asset imports, maps)
 #             run      open the project in the editor
 #             package  BuildCookRun a packaged build into Packaged/
@@ -69,6 +71,10 @@
 #           instead of refusing it; test/smoke/exec exit 2 with "run check first" while its module is missing
 # Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): test/smoke exit 1 when the editor exits non-zero
 #           before any test passed (a crash), instead of exit 2 "no tests matched"
+# Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): the shell's screens (#168): smoke --drive runs the
+#           plugin's GameKit.Screens.Drive test with -GameKitDrive=, echoes its proof lines (SETTINGS_WRITTEN,
+#           ACCESS_*, DRIVE_DONE) and fails without DRIVE_DONE; --screenshot runs GameKit.Screens.Show with a
+#           renderer (-RenderOffScreen); --data-dir and --locale
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -632,10 +638,12 @@ def cmd_build(args):
     return cmd_check(args)
 
 
-def run_automation(filter_, args, until=None, fail_on=None):
+def run_automation(filter_, args, until=None, fail_on=None, extra_args=None, markers=False, render=False):
     """Run automation tests matching filter_, parse the log for pass/fail.
 
-    until / fail_on: scenario markers (e.g. DELVE_COMPLETE, MAGE_DOWN) your Smoke tests log; checked in the same log."""
+    until / fail_on: scenario markers (e.g. DELVE_COMPLETE, MAGE_DOWN) your Smoke tests log; checked in the same log.
+    extra_args go on the editor's command line (the shell drive's -GameKit*= options); markers echoes the drive's
+    proof lines; render keeps a renderer (-RenderOffScreen instead of -NullRHI) so a screenshot can be drawn."""
     err = preflight()
     if err:
         print(f"[error] {err}", file=sys.stderr)
@@ -654,14 +662,16 @@ def run_automation(filter_, args, until=None, fail_on=None):
         AUTOMATION_LOG.unlink()
     cmd = [exe, find_uproject(),
            f'-ExecCmds=Automation RunTests {filter_}; Quit',
-           "-unattended", "-nopause", "-NullRHI", "-nosplash", f"-abslog={AUTOMATION_LOG}",
-           "-TestExit=Automation Test Queue Empty"]
+           "-unattended", "-nopause", "-RenderOffScreen" if render else "-NullRHI", "-nosplash", f"-abslog={AUTOMATION_LOG}",
+           "-TestExit=Automation Test Queue Empty"] + list(extra_args or [])
     rc, out = run(cmd, capture=True, timeout=TEST_TIMEOUT_S)
     # Test results only reach the log file, not stdout (verified on UE 5.8)
     if AUTOMATION_LOG.exists():
         out += AUTOMATION_LOG.read_text(encoding="utf-8", errors="ignore")
     if DEBUG:
         print(out)
+    if markers:
+        echo_markers(out)
     fails = [l for l in out.splitlines() if any(re.search(p, l) for p in FAIL_PATTERNS)]
     oks = len(re.findall(OK_PATTERN, out))
     if rc == 124:
@@ -726,8 +736,88 @@ def cmd_smoke(args):
         rc = shader_pass(args)
         if rc:
             return rc
+    if getattr(args, "screenshot", "") and not getattr(args, "drive", ""):
+        print("[error] --screenshot needs --drive show:<screen> (the kit's shell draws the screen; your own Smoke tests "
+              "capture from the game, e.g. a -record= option)", file=sys.stderr)
+        return 2
+    if getattr(args, "drive", ""):
+        return drive_run(args)
     return run_automation(f"{game_name()}.{SMOKE_GROUP_SUFFIX}" + (f".{args.filter}" if args.filter else ""), args,
                           until=args.until, fail_on=fail_on)
+
+
+# ---- The shell's scripted runs (#168): smoke --drive, --screenshot, --data-dir ---------------------------
+DRIVE_TEST = "GameKit.Screens.Drive"        # the plugin's automation test that runs a drive on the headless model
+SHOW_TEST = "GameKit.Screens.Show"          # the one that also draws the screen to a PNG (needs a renderer)
+DRIVE_PATTERN = r"[A-Za-z0-9_:=,.-]+"        # menus, show:settings, access:res=1280x800,scale=2,pad
+SMOKE_DATA = "Saved/GameKitSmoke"           # the drive's own settings folder (never the player's Saved/GameKit)
+MARKER_LINE = re.compile(r"\b((?:DRIVE_[A-Z]+|SETTINGS_WRITTEN|SCREENSHOT_WRITTEN|ACCESS_[A-Z]+|PSEUDO_[A-Z]+)\b.*)$")
+UNSAFE_VALUE_CHARS = '";,'                 # a quote ends an Unreal argument; ; and , split -ExecCmds
+
+
+def drive_run(args):
+    """`smoke --drive <name>`: GameKit.Screens.Drive (or .Show with --screenshot) presses through the shell's
+    screens on the kit's model, headless; the proof lines it logs (SETTINGS_WRITTEN, ACCESS_*, DRIVE_DONE) are
+    echoed. Exit 1 when the drive fails or never finishes, 2 when the plugin is off or an argument is unsafe."""
+    err = preflight()
+    if err:
+        print(f"[error] {err}", file=sys.stderr)
+        return 2
+    if kit_plugin_state() != "enabled":
+        print(f"[error] --drive needs the {KIT_PLUGIN} plugin enabled in the .uproject (its GameKitShellUI module holds "
+              "the shell's screens: docs/ENGINE_FLOW.md \"Shell screens\")", file=sys.stderr)
+        return 2
+    if not re.fullmatch(DRIVE_PATTERN, args.drive):
+        print(f"[error] drive name {args.drive!r} may only contain letters, digits and _ : = , . -", file=sys.stderr)
+        return 2
+    shot = (ROOT / args.screenshot).resolve() if args.screenshot else None
+    if shot and shot.suffix.lower() != ".png":
+        print("[error] --screenshot writes PNG: name the file .png", file=sys.stderr)
+        return 2
+    if shot and not args.drive.startswith("show:"):
+        print("[error] --screenshot goes with --drive show:<screen>", file=sys.stderr)
+        return 2
+    data = Path(args.data_dir) if args.data_dir else ROOT / SMOKE_DATA
+    data = (data if data.is_absolute() else ROOT / data).resolve()
+    if not args.data_dir and data.exists():
+        shutil.rmtree(data, ignore_errors=True)   # a fresh folder per run; --data-dir is kept as given
+    data.mkdir(parents=True, exist_ok=True)
+    extra = [f"-GameKitDrive={args.drive}", f"-GameKitDataDir={data.as_posix()}"]
+    if args.locale:
+        extra.append(f"-GameKitLocale={args.locale}")
+    if shot:
+        shot.parent.mkdir(parents=True, exist_ok=True)
+        if shot.is_file():
+            shot.unlink()                   # a picture from an earlier run must not pass for this one
+        extra.append(f"-GameKitScreenshot={shot.as_posix()}")
+    for value in extra:
+        bad = sorted(set(UNSAFE_VALUE_CHARS) & set(value)) or ([" "] if " " in value else [])
+        if bad:
+            print(f"[error] {value.split('=', 1)[0]} holds {' '.join(bad)!r}, which Unreal's command line cannot carry: "
+                  "use a path without spaces, quotes, ; or , (verify: a quoted path may work on your version)", file=sys.stderr)
+            return 2
+    rc = run_automation(SHOW_TEST if shot else DRIVE_TEST, args, extra_args=extra, markers=True, render=bool(shot))
+    if rc:
+        return rc
+    text = AUTOMATION_LOG.read_text(encoding="utf-8", errors="ignore") if AUTOMATION_LOG.exists() else ""
+    if "DRIVE_DONE" not in text:
+        print(f"[FAIL] the drive {args.drive!r} did not finish (no DRIVE_DONE in {AUTOMATION_LOG})")
+        return 1
+    print(f"[ OK ] drive {args.drive} (data in {data})")
+    if shot:
+        if not shot.is_file():
+            print(f"[FAIL] no screenshot was written to {shot}")
+            return 1
+        print(f"[ OK ] screenshot: {shot} ({shot.stat().st_size} bytes)")
+    return 0
+
+
+def echo_markers(text):
+    """Prints the drive's proof lines from the editor log, without the log's own prefix."""
+    for line in text.splitlines():
+        m = MARKER_LINE.search(line)
+        if m and "LogGameKitShell" in line:
+            print(m.group(1))
 
 
 def cmd_exec(args):
@@ -983,6 +1073,16 @@ def build_parser():
     p.add_argument("--shaders", action="store_true",
                    help="first draw every kit shader recipe in the editor (off-screen, a GPU) and compare it with its "
                         "golden image (tools/shaders/)")
+    p.add_argument("--drive", default="", metavar="SCENARIO",
+                   help="instead of the Smoke tests, run a scripted path through the kit's shell screens (the GameKitShell "
+                        "plugin): menus (settings changed and saved), access[:res=WxH,scale=N,pad,read] (the "
+                        "accessibility sweep's tour, tools/access/sweep.py), show:<screen> (title, main_menu, settings, "
+                        "pause, help, history, credits, loading, subtitle; add --screenshot)")
+    p.add_argument("--screenshot", default="", help="with --drive show:<screen>: save the screen as this PNG (relative to the "
+                                                   "project; the editor draws it off-screen, a GPU)")
+    p.add_argument("--data-dir", default="", help="with --drive: the settings folder the run reads and writes (default: a fresh "
+                                                 f"{SMOKE_DATA})")
+    p.add_argument("--locale", default="", help="with --drive: the language the screens show (a data/i18n/<tag>.json)")
     p.set_defaults(fn=cmd_smoke)
     p = sub.add_parser("exec", help="run an editor Python script headless (imports, maps; needs PythonScriptPlugin)")
     p.add_argument("script", help="path to the .py script, relative to the project (e.g. tools/unreal/build_content.py)")

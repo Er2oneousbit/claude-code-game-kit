@@ -22,6 +22,8 @@ Content/                 binary assets (.uasset, .umap): NEVER hand-edit, LFS tr
 Config/                  .ini settings (text, editable with care)
 Plugins/                 project plugins (including MCP if used)
 Plugins/GameKitShell/    the kit's juice and shell logic in C++ (opt-in: docs/ENGINE_FLOW.md "Juice and shell plugin")
+                         and, in its GameKitShellUI module, the shell's screens in Slate ("Shell screens")
+data/i18n/               the screens' strings per locale (en.json, fr.json), data/input/presets.json the one-handed layouts
 data/golden/             the kit's golden vectors, read by the plugin's GameKit.* tests
 Content/Python/kit_shaders/  the kit's shader recipes: kit_recipes.py (generated HLSL), kit_materials.py (builds
                          them as materials), make_materials.py, shader_check.py
@@ -55,6 +57,15 @@ and a clear spec for the Blueprint child.
 - Juice and shell (SOP-18, SOP-19): screen shake, hitstop, easing, camera follow, input buffer, coyote time, springs,
   the flash limiter, settings, rebinding, glyphs, saves and localization are already written in `Plugins/GameKitShell`
   (plain C++, `GameKit::` and `FGameKit*`). Enable it in the `.uproject` and use it instead of writing them again.
+- **Shell screens (SOP-19, SOP-20):** the plugin's `GameKitShellUI` module draws the title, main menu, settings
+  (Display, Audio, Controls with rebinding and the one-handed layouts, Accessibility, Language), loading, pause
+  with "What now?" and the dialogue history, and credits in **Slate from C++** (no `.uasset` widgets to hand-edit;
+  builds in a Blueprint-only project). Turn them on in `Config/DefaultGame.ini`
+  (`[/Script/GameKitShellUI.GameKitShellSettings]` `bShowScreens=True`) or with `-GameKitShell`; the subsystem
+  `UGameKitShellSubsystem` puts them over your map and fires `OnShellEvent` ("play", "resume", "quit_title",
+  "settings_changed"). Strings in `data/i18n/<locale>.json`, credits from `CREDITS.md`. `python tools/dev.py smoke
+  --drive menus` and `--drive show:<screen> --screenshot captures/x.png` walk and picture them (docs/ENGINE_FLOW.md
+  "Shell screens"); `python tools/access/sweep.py` runs the accessibility sweep on them.
 - **Shaders:** `python tools/dev.py exec Content/Python/kit_shaders/make_materials.py` builds every kit recipe as a
   material in `/Game/KitShaders/` (`M_Kit_<name>`: an Unlit material whose Custom node holds the recipe's HLSL;
   sprites and lighting Translucent, the rest Opaque). Make a material instance per use, set `MainTex` (and `AuxTex`)

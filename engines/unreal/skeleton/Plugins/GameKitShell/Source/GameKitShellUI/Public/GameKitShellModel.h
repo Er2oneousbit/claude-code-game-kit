@@ -119,7 +119,9 @@ public:
 	static constexpr int32 LoadingFillerSteps = 4;    // placeholder steps so the bar visibly moves
 	static constexpr double SubtitleSecondsPerChar = 0.06;   // a line without its own time: reading pace
 	static constexpr double SubtitleMinS = 1.5;
-	static constexpr double TextScaleMin = 0.75, TextScaleMax = 2.0, TextScaleStep = 0.25;
+	static constexpr double TextScaleMin = 0.75;
+	static constexpr double TextScaleMax = 2.0;
+	static constexpr double TextScaleStep = 0.25;
 	static const TCHAR* const SettingsFile;           // "settings.json" in DataDir
 	static const TCHAR* const PresetsFile;            // "data/input/presets.json" under ProjectDir
 	static const TCHAR* const ColoursFile;            // "data/access/colours.json"

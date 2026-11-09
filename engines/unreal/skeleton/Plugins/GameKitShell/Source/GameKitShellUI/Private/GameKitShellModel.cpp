@@ -176,7 +176,7 @@ void FGameKitShellModel::LoadTables()
 		{
 			if (Is(Pair.Value, EJson::String))
 			{
-				Table.Add(Pair.Key, Pair.Value->AsString());
+				Table.Add(FString(*Pair.Key), Pair.Value->AsString());
 			}
 		}
 		Tables.Add(FPaths::GetBaseFilename(File), MoveTemp(Table));
@@ -514,7 +514,7 @@ void FGameKitShellModel::ApplyPreset(const FString& Preset)
 		{
 			Slots.Add(Is(V, EJson::String) ? V->AsString() : FString());
 		}
-		B.Add(Pair.Key, Slots);
+		B.Add(FString(*Pair.Key), Slots);
 	}
 	SetBindings(B);
 	Message = T(TEXT("controls.preset_done"));

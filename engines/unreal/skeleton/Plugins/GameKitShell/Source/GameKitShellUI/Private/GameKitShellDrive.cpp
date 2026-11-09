@@ -25,11 +25,19 @@ namespace
 {
 	using namespace GameKit::Json;
 
+	/** Placeholder arguments for Tr: one {name} -> value pair. */
+	FGameKitTrArgs Args(const TCHAR* K, const FString& V)
+	{
+		FGameKitTrArgs M;
+		M.Add(K, V);
+		return M;
+	}
+
 	// the demo line the access tour shows as a subtitle (the kit's juice demo says it on the other engines)
 	const TCHAR* DemoSpeaker = TEXT("Guide");
 	const TCHAR* DemoLineKey = TEXT("juice.objective");
 
-	TSharedPtr<FJsonValue> Text(const FString& S, float Px, const FColor& Fg, const FColor& Bg, bool bFits, const FString& Node,
+	TSharedPtr<FJsonValue> TextEntry(const FString& S, float Px, const FColor& Fg, const FColor& Back, bool bFits, const FString& Node,
 	                            const TArray<TPair<FColor, double>>* OverGame = nullptr)
 	{
 		TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
@@ -49,7 +57,7 @@ namespace
 		}
 		else
 		{
-			O->SetStringField(TEXT("bg"), GameKitTheme::Hex(Bg));
+			O->SetStringField(TEXT("bg"), GameKitTheme::Hex(Back));
 		}
 		O->SetBoolField(TEXT("fits"), bFits);
 		O->SetBoolField(TEXT("covered"), false);
@@ -378,11 +386,11 @@ TArray<TSharedPtr<FJsonValue>> FGameKitShellDrive::Texts() const
 		const float Measured = Measure(Str, Font(Px * Scale, bReadable));
 		return Measured < 0.f || Measured <= Width;
 	};
-	auto Add = [&](const FString& Str, float Px, const FColor& Fg, const FColor& Bg, float Width, const FString& Node)
+	auto Add = [&](const FString& Str, float Px, const FColor& Fg, const FColor& Back, float Width, const FString& Node)
 	{
 		if (!Str.IsEmpty())
 		{
-			Out.Add(Text(Str, Px * Scale, Fg, Bg, Fits(Str, Px, Width), Node));
+			Out.Add(TextEntry(Str, Px * Scale, Fg, Back, Fits(Str, Px, Width), Node));
 		}
 	};
 	const float Wide = DesignW - 2 * PageMargin;
@@ -393,21 +401,21 @@ TArray<TSharedPtr<FJsonValue>> FGameKitShellDrive::Texts() const
 		{
 			const FGameKitRow& R = List[I];
 			const bool bFocus = I == Focused;
-			const FColor Bg = bFocus ? RowFocus : Base;
+			const FColor Back = bFocus ? Colour::RowFocus : Base;
 			const FString Node = Prefix + R.Id;
-			Add(R.Label ? R.Label() : FString(), BodyPx, bFocus ? Accent : Text, Bg, LabelWidth - 2 * RowPadX - MarkerW, Node + TEXT(".label"));
+			Add(R.Label ? R.Label() : FString(), BodyPx, bFocus ? Colour::Accent : Colour::Text, Back, LabelWidth - 2 * RowPadX - MarkerW, Node + TEXT(".label"));
 			const float ValueW = ListWidth - LabelWidth - 2 * RowPadX;
 			if (R.Kind == EGameKitRowKind::Binding && R.CellText)
 			{
 				for (int32 Cell = 0; Cell < 2; ++Cell)
 				{
-					Add(R.CellText(Cell), BodyPx, R.CellWarn && R.CellWarn(Cell) ? Warn : Text, Bg, (ValueW - RowGap) / 2,
+					Add(R.CellText(Cell), BodyPx, R.CellWarn && R.CellWarn(Cell) ? Colour::Warn : Colour::Text, Back, (ValueW - RowGap) / 2,
 					    Node + FString::Printf(TEXT(".slot%d"), Cell));
 				}
 			}
 			else if (R.Value)
 			{
-				Add(R.Value(), BodyPx, Text, Bg, ValueW, Node + TEXT(".value"));
+				Add(R.Value(), BodyPx, Colour::Text, Back, ValueW, Node + TEXT(".value"));
 			}
 		}
 	};
@@ -415,66 +423,67 @@ TArray<TSharedPtr<FJsonValue>> FGameKitShellDrive::Texts() const
 	const FString Heading = Model->Heading(*S);
 	if (Name == TEXT("title"))
 	{
-		Add(Heading, TitlePx, Accent, Bg, Wide, TEXT("title.name"));
-		Add(Model->T(TEXT("title.press_any")), BodyPx, Text, Bg, Wide, TEXT("title.prompt"));
-		Add(Model->T(TEXT("title.version"), {{TEXT("version"), Model->Options().Version}}), SmallPx, Dim, Bg, Wide, TEXT("title.version"));
+		Add(Heading, TitlePx, Colour::Accent, Colour::Bg, Wide, TEXT("title.name"));
+		Add(Model->T(TEXT("title.press_any")), BodyPx, Colour::Text, Colour::Bg, Wide, TEXT("title.prompt"));
+		Add(Model->T(TEXT("title.version"), Args(TEXT("version"), Model->Options().Version)), SmallPx, Colour::Dim, Colour::Bg, Wide, TEXT("title.version"));
 		if (S->Dialog.Num())
 		{
-			Add(Model->T(TEXT("consent.title")), HeadingPx, Text, Panel, ConsentW - 2 * PanelPad, TEXT("consent.title"));
-			Out.Add(Text(Model->T(TEXT("consent.body")), BodyPx * Scale, Text, Panel, true, TEXT("consent.body")));   // wrapped
-			Rows(S->Dialog, S->DialogFocus, ConsentW / 3, ConsentW / 3, Panel, TEXT("consent."));
+			Add(Model->T(TEXT("consent.title")), HeadingPx, Colour::Text, Colour::Panel, ConsentW - 2 * PanelPad, TEXT("consent.title"));
+			Out.Add(TextEntry(Model->T(TEXT("consent.body")), BodyPx * Scale, Colour::Text, Colour::Panel, true, TEXT("consent.body")));   // wrapped
+			Rows(S->Dialog, S->DialogFocus, ConsentW / 3, ConsentW / 3, Colour::Panel, TEXT("consent."));
 		}
 	}
 	else if (Name == TEXT("main_menu"))
 	{
-		Add(Heading, HeadingPx, Accent, Bg, Wide, TEXT("menu.title"));
-		Rows(S->Rows, S->Focus, MenuW, MenuW, Row, TEXT("menu."));
+		Add(Heading, HeadingPx, Colour::Accent, Colour::Bg, Wide, TEXT("menu.title"));
+		Rows(S->Rows, S->Focus, MenuW, MenuW, Colour::Row, TEXT("menu."));
 		FString Glyph, Label;
 		Model->Prompt(TEXT("ui_accept"), Glyph, Label);
-		Add(Label + TEXT("  ") + Model->T(TEXT("hint.select")), SmallPx, Dim, Bg, Wide, TEXT("menu.hint"));
+		Add(Label + TEXT("  ") + Model->T(TEXT("hint.select")), SmallPx, Colour::Dim, Colour::Bg, Wide, TEXT("menu.hint"));
 	}
 	else if (Name == TEXT("settings"))
 	{
-		Add(Heading, HeadingPx, Accent, Bg, Wide, TEXT("settings.title"));
+		Add(Heading, HeadingPx, Colour::Accent, Colour::Bg, Wide, TEXT("settings.title"));
 		for (const FString& Tab : S->Tabs)
 		{
 			const bool bSelected = Tab == S->Tab();
-			Add(Model->T(TEXT("settings.tab.") + Tab), SmallPx, bSelected ? Text : Dim, bSelected ? RowFocus : Row, Wide / 5, TEXT("settings.tab.") + Tab);
+			Add(Model->T(TEXT("settings.tab.") + Tab), SmallPx, bSelected ? Colour::Text : Colour::Dim, bSelected ? Colour::RowFocus : Colour::Row, Wide / 5, TEXT("settings.tab.") + Tab);
 		}
-		Rows(S->Rows, S->bOnTabs ? -1 : S->Focus, ListW, LabelW, Row, TEXT("settings.") + S->Tab() + TEXT("."));
-		Add(Model->Message.IsEmpty() ? Model->T(TEXT("settings.hint")) : Model->Message, SmallPx, Model->Message.IsEmpty() ? Dim : Accent, Bg, Wide,
+		Rows(S->Rows, S->bOnTabs ? -1 : S->Focus, ListW, LabelW, Colour::Row, TEXT("settings.") + S->Tab() + TEXT("."));
+		Add(Model->Message.IsEmpty() ? Model->T(TEXT("settings.hint")) : Model->Message, SmallPx, Model->Message.IsEmpty() ? Colour::Dim : Colour::Accent, Colour::Bg, Wide,
 		    TEXT("settings.hint"));
 	}
 	else if (Name == TEXT("pause"))
 	{
-		Add(Heading, HeadingPx, Accent, Panel, MenuW, TEXT("pause.title"));
-		Rows(S->Rows, S->Focus, MenuW, MenuW, Panel, TEXT("pause."));
+		Add(Heading, HeadingPx, Colour::Accent, Colour::Panel, MenuW, TEXT("pause.title"));
+		Rows(S->Rows, S->Focus, MenuW, MenuW, Colour::Panel, TEXT("pause."));
 	}
 	else if (Name == TEXT("loading"))
 	{
-		Add(Heading, BodyPx, Text, Bg, Wide, TEXT("loading.title"));
-		Add(Model->T(TEXT("value.percent"), {{TEXT("n"), TEXT("0")}}), SmallPx, Dim, Bg, Wide, TEXT("loading.percent"));
+		Add(Heading, BodyPx, Colour::Text, Colour::Bg, Wide, TEXT("loading.title"));
+		Add(Model->T(TEXT("value.percent"), Args(TEXT("n"), TEXT("0"))), SmallPx, Colour::Dim, Colour::Bg, Wide, TEXT("loading.percent"));
 	}
 	else if (Name == TEXT("help") || Name == TEXT("history") || Name == TEXT("credits"))
 	{
-		Add(Heading, HeadingPx, Accent, Bg, Wide, Name + TEXT(".title"));
+		Add(Heading, HeadingPx, Colour::Accent, Colour::Bg, Wide, Name + TEXT(".title"));
 		for (int32 I = 0; I < S->Lines.Num(); ++I)
 		{
 			if (!S->Lines[I].IsEmpty())
 			{
-				Out.Add(Text(S->Lines[I], BodyPx * Scale, Text, Bg, true, FString::Printf(TEXT("%s.line%d"), *Name, I + 1)));   // wrapped
+				Out.Add(TextEntry(S->Lines[I], BodyPx * Scale, Colour::Text, Colour::Bg, true, FString::Printf(TEXT("%s.line%d"), *Name, I + 1)));   // wrapped
 			}
 		}
-		Add(Model->T(TEXT("page.hint")), SmallPx, Dim, Bg, Wide, Name + TEXT(".hint"));
+		Add(Model->T(TEXT("page.hint")), SmallPx, Colour::Dim, Colour::Bg, Wide, Name + TEXT(".hint"));
 	}
 	if (Model->HasSubtitle() && Model->Flag(TEXT("access"), TEXT("subtitles")))
 	{
 		const FString Size = Model->Str(TEXT("access"), TEXT("subtitle_size"));
-		const int32 Index = FMath::Max(0, StaticCast<int32>(TArray<FString>({TEXT("small"), TEXT("medium"), TEXT("large"), TEXT("xl")}).IndexOfByKey(Size)));
-		const TArray<TPair<FColor, double>> Layers = {{Panel, Model->Num(TEXT("access"), TEXT("subtitle_background"))}};
+		const int32 Index = FMath::Max(0, static_cast<int32>(TArray<FString>({TEXT("small"), TEXT("medium"), TEXT("large"), TEXT("xl")}).IndexOfByKey(Size)));
+		TArray<TPair<FColor, double>> Layers;
+		Layers.Emplace(Colour::Panel, Model->Num(TEXT("access"), TEXT("subtitle_background")));
 		const FGameKitSaidLine& Line = Model->CurrentSubtitle();
 		const FString Shown = (Model->Flag(TEXT("access"), TEXT("speaker_names")) && !Line.Speaker.IsEmpty() ? Line.Speaker + TEXT(": ") : FString()) + Line.Text;
-		Out.Add(Text(Shown, SubtitlePx[Index] * Scale, Text, Panel, true, TEXT("subtitle.text"), &Layers));
+		Out.Add(TextEntry(Shown, SubtitlePx[Index] * Scale, Colour::Text, Colour::Panel, true, TEXT("subtitle.text"), &Layers));
 	}
 	return Out;
 }

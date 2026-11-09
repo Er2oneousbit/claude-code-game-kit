@@ -11,7 +11,8 @@
 #           web, web-3d and RPG Maker MZ smoke.mjs --record leaves only this run's frames (#134; needs node), a
 #           refused --drive is one error (#135), web-3d's -h says its --drive aborts (#135), and RPG Maker MZ's
 #           setup names the project file it copied (#136), and that Unreal's test/smoke exit 1 when the editor
-#           crashes before any result, not 2 "no tests matched" (#176).
+#           crashes before any result, not 2 "no tests matched" (#176), and that Unreal's smoke --drive runs the
+#           shell's Drive test, echoes its markers and fails without DRIVE_DONE (#168).
 # Usage   : python scripts/test_dev_py.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, no engine needed. The live checks (a real smoke with each toolchain) are
@@ -249,6 +250,106 @@ class UnrealRunTeeTimeout(TempRoot):
                       timeout=2)[0]
         self.assertEqual(rc, 124)
         self.assertLess(time.monotonic() - start, 30)
+
+
+# ---- #168: Unreal smoke --drive runs the shell's screens through the plugin's Drive test ----------
+class UnrealDrive(TempRoot):
+    def drive(self, log, rc=0, plugin="enabled", writes=(), **opts):
+        dev = load("unreal")
+        dev.ROOT = self.root
+        dev.AUTOMATION_LOG = self.root / "Saved" / "Logs" / "dev_automation.log"
+        exe = self.root / "UnrealEditor-Cmd.exe"
+        exe.write_bytes(b"")
+        dev.preflight = lambda *a, **kw: None
+        dev.editor_cmd = lambda plat: exe
+        dev.find_uproject = lambda: self.root / "Test.uproject"
+        dev.kit_plugin_state = lambda: plugin
+        seen = {}
+
+        def fake_run(cmd, **kwargs):
+            seen["cmd"] = [str(c) for c in cmd]
+            dev.AUTOMATION_LOG.parent.mkdir(parents=True, exist_ok=True)
+            dev.AUTOMATION_LOG.write_text(log, encoding="utf-8")
+            for rel in writes:
+                p = self.root / rel
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(b"\x89PNG fake")
+            return rc, ""
+        dev.run = fake_run
+        args = argparse.Namespace(platform=None, filter=None, until=None, fail_on=None, shaders=False, drive="menus",
+                                  screenshot="", data_dir="", locale="")
+        for k, v in opts.items():
+            setattr(args, k, v)
+        result, text = quiet(dev.cmd_smoke, args)
+        return result, text, seen.get("cmd", [])
+
+    PASS = ("[2026.11.09-10.00.00:000][  0]LogGameKitShell: Display: SETTINGS_WRITTEN D:/x/Saved/GameKitSmoke/settings.json\n"
+            "[2026.11.09-10.00.00:000][  0]LogGameKitShell: Display: DRIVE_DONE menus\n"
+            "Test Completed. Result={Success} Name={Drive} Path={GameKit.Screens.Drive}\n")
+
+    def test_the_drive_test_runs_with_the_name_and_echoes_markers(self):
+        rc, text, cmd = self.drive(self.PASS)
+        self.assertEqual(rc, 0, text)
+        self.assertIn("Automation RunTests GameKit.Screens.Drive;", " ".join(cmd))
+        self.assertIn("-GameKitDrive=menus", cmd)
+        self.assertTrue(any(c.startswith("-GameKitDataDir=") and c.endswith("Saved/GameKitSmoke") for c in cmd), cmd)
+        self.assertIn("-NullRHI", cmd)
+        self.assertIn("SETTINGS_WRITTEN D:/x/Saved/GameKitSmoke/settings.json\n", text)
+        self.assertIn("DRIVE_DONE menus\n", text)
+        self.assertNotIn("LogGameKitShell", text, "the log prefix is stripped from the echoed lines")
+
+    def test_no_drive_done_fails(self):
+        rc, text, _ = self.drive("Test Completed. Result={Success} Name={Drive}\n")
+        self.assertEqual(rc, 1, text)
+        self.assertIn("did not finish", text)
+
+    def test_a_failed_drive_fails(self):
+        log = "LogGameKitShell: Display: DRIVE_FAIL could not focus quit\nLogGameKitShell: Display: DRIVE_DONE menus\nResult={Fail} Name={Drive}\n"
+        rc, text, _ = self.drive(log, rc=255)
+        self.assertEqual(rc, 1, text)
+
+    def test_the_plugin_must_be_enabled(self):
+        rc, text, cmd = self.drive(self.PASS, plugin="disabled")
+        self.assertEqual(rc, 2, text)
+        self.assertEqual(cmd, [], "the editor is never started")
+        self.assertIn("GameKitShell plugin enabled", text)
+
+    def test_unsafe_names_are_refused(self):
+        rc, text, cmd = self.drive(self.PASS, drive="menus; Quit")
+        self.assertEqual(rc, 2, text)
+        self.assertEqual(cmd, [])
+
+    def test_a_screenshot_runs_the_show_test_with_a_renderer(self):
+        log = "LogGameKitShell: Display: DRIVE_DONE show:settings\nResult={Success} Name={Show}\n"
+        rc, text, cmd = self.drive(log, drive="show:settings", screenshot="captures/s.png", writes=["captures/s.png"])
+        self.assertEqual(rc, 0, text)
+        self.assertIn("Automation RunTests GameKit.Screens.Show;", " ".join(cmd))
+        self.assertIn("-RenderOffScreen", cmd)
+        self.assertNotIn("-NullRHI", cmd)
+        self.assertTrue(any(c.startswith("-GameKitScreenshot=") and c.endswith("captures/s.png") for c in cmd), cmd)
+        self.assertIn("screenshot:", text)
+
+    def test_a_missing_screenshot_fails(self):
+        log = "LogGameKitShell: Display: DRIVE_DONE show:settings\nResult={Success} Name={Show}\n"
+        rc, text, _ = self.drive(log, drive="show:settings", screenshot="captures/s.png")
+        self.assertEqual(rc, 1, text)
+        self.assertIn("no screenshot was written", text)
+
+    def test_a_screenshot_needs_a_show_drive(self):
+        rc, text, cmd = self.drive(self.PASS, drive="menus", screenshot="captures/s.png")
+        self.assertEqual(rc, 2, text)
+        self.assertEqual(cmd, [])
+        rc, text, cmd = self.drive(self.PASS, drive="", screenshot="captures/s.png")
+        self.assertEqual(rc, 2, text)
+
+    def test_a_stale_screenshot_is_removed_first(self):
+        shot = self.root / "captures" / "s.png"
+        shot.parent.mkdir()
+        shot.write_bytes(b"old")
+        log = "LogGameKitShell: Display: DRIVE_DONE show:title\nResult={Success} Name={Show}\n"
+        rc, text, _ = self.drive(log, drive="show:title", screenshot="captures/s.png")
+        self.assertEqual(rc, 1, text)
+        self.assertFalse(shot.exists())
 
 
 class GodotCaptureFiles(TempRoot):

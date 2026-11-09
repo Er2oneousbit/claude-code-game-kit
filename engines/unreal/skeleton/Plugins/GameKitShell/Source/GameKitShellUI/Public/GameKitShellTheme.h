@@ -5,7 +5,7 @@
 //           checks is what the screen draws. Fonts: the engine's default, or Atkinson Hyperlegible (OFL, in
 //           Plugins/GameKitShell/Resources/Fonts) with access.readable_font on.
 // Usage   : SNew(STextBlock).Font(GameKitTheme::Font(GameKitTheme::BodyPx * Scale, bReadable))
-//           GameKitTheme::Hex(GameKitTheme::Text)   // "#ebedf5", what the access report prints
+//           GameKitTheme::Hex(GameKitTheme::Colour::Text)   // "#ebedf5", what the access report prints
 // Notes   : The design is 1920x1080; SGameKitShell scales it to the window (SDPIScaler), so every size here is
 //           in design pixels. Body text is 22 px (18 px is the floor at 1080p, F36) and the smallest text 18 px,
 //           which lands on 12 px at 1280x800, the Steam Deck recommendation (E75). Colours are sRGB bytes (as
@@ -42,6 +42,8 @@ namespace GameKitTheme
 	constexpr float PointsPerPixel = 72.f / 96.f;   // Slate font sizes are points at 96 dpi
 
 	// sRGB, as the LÖVE and Godot shells define them
+	namespace Colour
+	{
 	const FColor Bg(18, 20, 28);
 	const FColor Panel(33, 38, 51);
 	const FColor PanelEdge(77, 87, 107);
@@ -54,6 +56,7 @@ namespace GameKitTheme
 	const FColor Warn(255, 115, 89);
 	const FColor Bar(102, 179, 255);
 	const FColor Overlay(0, 0, 0, 158);  // 0.62 alpha
+	}
 
 	/** A theme colour for Slate (linear space). */
 	inline FLinearColor Linear(const FColor& C) { return FLinearColor(C); }
