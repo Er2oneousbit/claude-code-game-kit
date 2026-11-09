@@ -210,6 +210,8 @@ def _subframe(br, block, bps):
     wasted = 0
     if br.read(1):
         wasted = br.unary() + 1
+        if wasted >= bps:                           # unary, so unbounded: a negative width would reach signed()
+            raise FlacCorrupt(f"a subframe wastes {wasted} of its {bps} bits (corrupt file)")
         bps -= wasted
     if kind == 0:                                   # CONSTANT
         s = [br.signed(bps)] * block

@@ -316,6 +316,14 @@ class FlacExam(unittest.TestCase):
         data = streaminfo(0, 1, 16, 8) + escape_frame([1] * 8)
         self.hostile("rate0.flac", data, "0 Hz")
 
+    def test_wasted_bits_past_the_sample_depth_are_corrupt_not_a_crash(self):
+        # a subframe's wasted-bits count is unary, so it can exceed the depth: 17 of 16 bits left a negative width
+        # that read(n) widened the cache with and signed(n) shifted by (ValueError: negative shift count)
+        self.hostile("wasted17.flac", streaminfo(44100, 1, 16, 8) + hand_frame(8, [constant(1, wasted=17)]), "wastes 17")
+        self.hostile("wasted16.flac", streaminfo(44100, 1, 16, 8) + hand_frame(8, [constant(0, wasted=16)]), "wastes 16")
+        _, chans, _ = flacfile.decode(streaminfo(44100, 1, 16, 8) + hand_frame(8, [constant(5, wasted=3)]))
+        self.assertEqual(chans[0], [40] * 8, "a legal count still shifts the samples back up")
+
     def test_cli_exit_codes(self):
         bad, corrupt = self.dir / "bad.flac", self.dir / "corrupt.flac"
         bad.write_bytes(b"not flac at all")
