@@ -55,10 +55,16 @@ ProjectSettings/         project config (text, edit with care)
   limit settings, `timing_scale` / `auto_repeat` (`ShellInput` repeats a held action) / `subtitle_hold`, menu
   narration (the system's speech: PowerShell on Windows, `say`, `spd-say`), "What now?" and "Dialogue history" on
   the pause menu (`Shell.I.SetObjective`, lines recorded by the subtitle bar).
-- Input: `ShellInput` reads the player's bindings through the Input Manager (the default of a `-createProject`
-  project); with only the Input System package active, UI Toolkit's navigation events drive the menus and custom pad
-  bindings are not read **(verify)**. Gamepad buttons follow the Windows XInput order; the d-pad reads the default
-  `Horizontal`/`Vertical` axes (so the left stick moves the menus too); triggers need axes 9 and 10 added **(verify)**.
+- Input: `ShellInput` reads the player's bindings through the Input System package when it is installed and active
+  (Active Input Handling "Input System Package (New)" or "Both"), else through the Input Manager (the default of a
+  `-createProject` project). The package is optional: `Game.Shell.asmdef` sets `GAMEKIT_INPUT_SYSTEM` from its
+  `versionDefines` only when `com.unity.inputsystem` is in the project. On the Input System every binding works on any
+  pad it knows (`Gamepad.current`). On the Input Manager gamepad buttons follow the Windows XInput order, the left
+  stick reads the default `Horizontal`/`Vertical` axes, and the d-pad and the triggers read the axes
+  `GameKitScenes.CreateShellScene` adds (`exec GameKitScenes.AddInputAxes` on its own: joystick axes 6, 7, 9 and 10,
+  the Windows layout **(verify on other platforms and with a physical pad)**). Triggers (`pad:l2`, `pad:r2`) are axes,
+  pressed past half way, on both. Active Input Handling set to the Input System without the package installed falls
+  back to UI Toolkit's events: the menus work, custom pad bindings are not read.
 - Line spacing adds space between the menus' lines and paragraphs: UI Toolkit has no line-height, so lines inside one
   wrapped paragraph keep the font's spacing **(verify: a later Unity may add it)**.
 - Not here yet (Godot, LÖVE and web have them): crash files, telemetry rows, the pseudo-locale drive, the bug report
