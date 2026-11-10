@@ -129,7 +129,8 @@ falls back to the `.bak`, a newer game's save is never overwritten). Keep `data/
   wrote survive.
 - Wire the values to the engine yourself: `UGameUserSettings` for window mode, resolution and vsync, Sound Classes or
   submixes for the volumes, your Enhanced Input mapping for the binding strings (`key:space`, `pad:south`), and
-  `EffectiveShake` into your camera shake. Menus (UMG) are yours to build; the plugin is the logic under them.
+  `EffectiveShake` into your camera shake. The menus come with the plugin's GameKitShellUI module ("Shell screens"
+  below); the logic module is what runs under them.
 - Differences from the reference: keys of `TMap` and `FJsonObject` are case-insensitive (two actions or table keys
   that differ only in case collapse into one), and Unreal's JSON reader needs an object or array at the top level.
 - Change the logic: edit the plugin, keep `test` green; when the kit's reference changes, the vectors change with it.
@@ -141,6 +142,63 @@ falls back to the `.bak`, a newer game's save is never overwritten). Keep `data/
   Linux and macOS are untested, and so is turning the plugin on from the editor's Plugins window (Edit > Plugins,
   then restart); in a Blueprint-only project run `check` before opening the editor, or it reports the module as
   missing **(verify)**.
+
+## Shell screens (GameKitShellUI)
+The plugin's second module draws the shell's screens over your game, the same set as the Godot, LÖVE and web
+overlays (SOP-19, SOP-20): title with the telemetry question, main menu, settings with the tabs Display, Audio,
+Controls (rebinding with swaps, "press a key", the one-handed layouts of `data/input/presets.json`, reset),
+Accessibility (text size, subtitles and their size, background and speaker names, barks and sound captions, the
+colour-blind palette, reduce motion, shake, gentle flashes, hold to toggle, difficulty, game speed, readable font,
+line spacing, subtitles that wait, timing windows, hold to repeat, menu narration), Language (and the telemetry
+consent), loading, play, pause with Resume, "What now?", Dialogue history, Settings and Quit to title, credits from
+`CREDITS.md`, and the subtitle bar.
+
+**Why Slate from C++, not UMG assets:** a `WBP_` widget is a binary `.uasset` Claude cannot edit and the kit cannot
+ship as text; Slate widgets are C++ in the plugin, build in a Blueprint-only project through `check`, run headless
+in the automation tests, and draw to a PNG without a game window. UMG is only a dependency for that capture
+(`FWidgetRenderer`). Your own HUD can still be UMG; the shell sits above it (Z order 100).
+
+Turn it on: enable the plugin (above), then either `Config/DefaultGame.ini`
+```
+[/Script/GameKitShellUI.GameKitShellSettings]
+bShowScreens=True
+```
+or `-GameKitShell` on the command line for one run. `UGameKitShellSubsystem` (a game-instance subsystem) adds the
+widget to the viewport after the first map loads, gives it keyboard focus and sets the first player controller to
+Game and UI input **(verify in your project: a game that sets its own input mode afterwards must leave the widget
+focused)**. Wire the game to it:
+- `GetGameInstance()->GetSubsystem<UGameKitShellSubsystem>()->OnShellEvent.AddUObject(this, &AMyGame::OnShell)`:
+  "play" (the loading screen is over: start or unpause), "resume", "quit_title" (reset the level), "quit",
+  "settings_changed" (read the settings again: `GetModel()->Settings`, `UGameUserSettings` for the window,
+  Sound Classes for the volumes, `access.timing_scale` into your buffers), "consent".
+- `Say(Speaker, Text)` shows a subtitle and records it for "What now?" and the history; `SetObjective(Text)` sets the
+  goal "What now?" shows (#167). Both are `BlueprintCallable`, as are `SettingNumber`/`SettingFlag` and `TopScreen`,
+  so a Blueprint-only project reads `access.auto_repeat` or `audio.music` without C++.
+- While the top screen is "play" the widget draws nothing but subtitles; `pause` (Escape, Start) opens the pause menu.
+- Menu narration (#165): every focus, value and screen change makes a line (`GetModel()->LastNarration`); with
+  `access.narration` on the model calls `OnNarrate`, which logs it. Speak it through Unreal's TextToSpeech plugin or
+  the platform's voice **(verify: not wired, no voice on the test machine)**.
+- `FGameKitAutoRepeat` (GameKitAutoRepeat.h) is "hold to mash" for `access.auto_repeat`, as on the other engines.
+- Keys arrive as binding strings (`GameKitShellInput.h`: SpaceBar is `key:space`, the bottom face button `pad:south`);
+  Unreal cannot tell an Xbox pad from a PlayStation one without a platform plugin, so prompts use the generic set
+  unless `input.glyphs` picks one. Sticks are not read as directions; the D-pad is.
+- Strings: `data/i18n/en.json` and `fr.json` (the LÖVE shell's tables); add a locale by adding a file. The version on
+  the title is the project version from Project Settings.
+
+Scripted runs (the plugin's `GameKit.Screens.Drive` and `.Show` tests, headless on the model):
+```
+python tools/dev.py smoke --drive menus                                # settings changed and saved: SETTINGS_WRITTEN
+python tools/dev.py smoke --drive show:settings --screenshot captures/settings.png   # a picture (the editor off-screen, a GPU)
+python tools/dev.py smoke --drive access:res=1280x800,scale=2,pad      # the sweep's tour: ACCESS_* lines
+python tools/access/sweep.py                                            # runs the tour at both sizes and checks it
+python tools/dev.py test --filter GameKit.Screens                       # the screens' own tests (rows, keys, rebinding, hold ...)
+```
+`--data-dir` keeps a settings folder between runs (default: a fresh `Saved/GameKitSmoke`), `--locale fr` shows another
+language. Screens for `show:`: title, main_menu, settings, pause, help, history, credits, loading, subtitle. The
+access report describes the 1920x1080 design (scaling "exact": the view scales it to the window), each text's size,
+colours and whether it fits its column (measured with Slate's font service), and which rows the arrow keys reach; a
+`res=` option is noted, not applied. Paths given to `--screenshot` and `--data-dir` may not contain spaces or quotes
+(Unreal's command line reads a `-Name=value` up to the next space) **(verify: a quoted path may work on your version)**.
 
 ## Source control (Git + LFS)
 - `.gitattributes` in this repo routes `.uasset`, `.umap`, textures, audio, and meshes through LFS. Run `git lfs install` before the first commit.
