@@ -9,7 +9,8 @@
 //           (core::SettingsMenu) is built when the settings screen opens and dropped when it closes.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): analog input (#274); crash context, F8 bug report,
-//           pseudo locale, juice demo (#275)
+//           pseudo locale, juice demo (#275); data/ and CREDITS.md from game_dir() (next to the exe when the working
+//           directory has no data/, so a shipped build runs from any folder)
 // ---------------------------------------------------------------------------
 #include "shell/Shell.hpp"
 
@@ -96,6 +97,25 @@ std::string speech_command(const std::string& text) {
 #endif
 }
 
+// Where data/ and CREDITS.md are: the working directory when it has data/i18n (dev.py run and smoke start the game
+// from the project root, so an edit to data/ shows without a rebuild), else the exe's folder, where the build copies
+// them (cmake/copy_game_data.cmake), so a shipped game started from another folder still finds its strings.
+// Neither: the working directory, and load_tables() warns.
+fs::path find_game_dir() {
+    std::error_code ec;
+    if (fs::is_directory(core::path_from_utf8(kI18nDir), ec)) {
+        return fs::path();
+    }
+    const char* base = SDL_GetBasePath();   // owned by SDL; nullptr when the platform cannot say
+    if (base) {
+        const fs::path exe_dir = core::path_from_utf8(base);
+        if (fs::is_directory(exe_dir / core::path_from_utf8(kI18nDir), ec)) {
+            return exe_dir;
+        }
+    }
+    return fs::path();
+}
+
 }  // namespace
 
 const char* screen_name(ScreenId id) {
@@ -152,7 +172,8 @@ json Shell::load_json(const fs::path& file, const char* what) {
 void Shell::load_tables() {
     json all = json::object();
     std::error_code ec;
-    for (const auto& entry : fs::directory_iterator(core::path_from_utf8(kI18nDir), ec)) {
+    const fs::path dir = game_dir_ / core::path_from_utf8(kI18nDir);
+    for (const auto& entry : fs::directory_iterator(dir, ec)) {
         if (!entry.is_regular_file() || entry.path().extension() != ".json") {
             continue;
         }
@@ -163,14 +184,20 @@ void Shell::load_tables() {
     }
     tables_ = core::string_tables_from_json(all);
     if (tables_.empty()) {
-        LOG_WARN("shell", "no string tables in " << kI18nDir << ": labels show their keys");
+        LOG_WARN("shell", "no string tables in " << core::path_to_utf8(dir) << ": labels show their keys");
+        return;
     }
+    std::string names;
+    for (const auto& table : tables_) {
+        names += (names.empty() ? "" : ", ") + table.first;
+    }
+    LOG_INFO("shell", "string tables " << names << " from " << core::path_to_utf8(fs::absolute(dir, ec)));
 }
 
 void Shell::load_dialogue() {
     std::error_code ec;
     std::vector<fs::path> files;
-    for (const auto& entry : fs::directory_iterator(core::path_from_utf8(kDialogueDir), ec)) {
+    for (const auto& entry : fs::directory_iterator(game_dir_ / core::path_from_utf8(kDialogueDir), ec)) {
         if (entry.is_regular_file() && core::path_to_utf8(entry.path().filename()).find(".built.json") != std::string::npos) {
             files.push_back(entry.path());
         }
@@ -213,9 +240,10 @@ bool Shell::init(SDL_Window* window, SDL_Renderer* renderer) {
     crash.info = [this] { return run_info(); };
     crash.settings = [this] { return settings_text(settings_); };
     core::set_crash_context(std::move(crash));
+    game_dir_ = find_game_dir();
     load_tables();
-    presets_ = load_json(core::path_from_utf8(kPresetsFile), "presets");
-    colours_ = load_json(core::path_from_utf8(kColoursFile), "colours");
+    presets_ = load_json(game_dir_ / core::path_from_utf8(kPresetsFile), "presets");
+    colours_ = load_json(game_dir_ / core::path_from_utf8(kColoursFile), "colours");
     load_dialogue();
     apply_settings();
     if (settings_existed_) {
@@ -483,7 +511,7 @@ Screen Shell::make_screen(ScreenId id) {
             break;
         }
         case ScreenId::Credits: {
-            const std::optional<std::string> text = core::read_file(core::path_from_utf8(kCreditsFile));
+            const std::optional<std::string> text = core::read_file(game_dir_ / core::path_from_utf8(kCreditsFile));
             if (text) {
                 s.credits = core::credits_lines(*text);
             }

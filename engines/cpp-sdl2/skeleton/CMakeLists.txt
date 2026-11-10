@@ -11,11 +11,13 @@
 #           Dependencies come from vcpkg.json via the toolchain file in CMakePresets.json.
 #           Each doctest TEST_CASE is its own CTest test (doctest_discover_tests), so `dev.py test` lists them;
 #           the golden-vector tests read data/golden/*.json through the GOLDEN_DIR definition.
+#           Every build copies data/ (without golden/ and shaders/) and CREDITS.md next to the exe (game_data).
 # Authored: Written with Claude (Sonnet 5.5, claude-sonnet-5-5)
 # Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): core is a static library (juice and shell
 #           logic, nlohmann-json), golden-vector and file tests, one CTest test per doctest case
 # Updated : 2026-11-06 with Claude (Opus 5.5, claude-opus-5-5): SDL3 (was SDL2), the kit's shader recipes compiled
 #           with shadercross, src/gfx (KitShaders), the kit_shader_check tool
+# Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the game_data target (data/ next to the exe)
 # ---------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.21)
 project({{GAME_SLUG}} VERSION 0.1.0 LANGUAGES CXX)
@@ -119,6 +121,16 @@ add_executable({{GAME_SLUG}} src/main.cpp)
 set_target_properties({{GAME_SLUG}} PROPERTIES WIN32_EXECUTABLE $<CONFIG:Release>)
 target_link_libraries({{GAME_SLUG}} PRIVATE game_lib)
 copy_kit_shaders({{GAME_SLUG}})
+
+# ---- the game's data next to the exe: data/ (minus the kit's test folders) and CREDITS.md ----
+# The shell reads them from the working directory when it has data/, else from the exe's folder, so a shipped
+# build started from anywhere finds its strings, presets, colours and dialogue. A custom target runs on every
+# build (a POST_BUILD step would only run when the exe relinks), so an edit to data/ alone is copied too.
+add_custom_target(game_data ALL
+  COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_SOURCE_DIR} -DDST=$<TARGET_FILE_DIR:{{GAME_SLUG}}>
+          -P ${CMAKE_SOURCE_DIR}/cmake/copy_game_data.cmake
+  COMMENT "game data -> next to the exe"
+  VERBATIM)
 
 # ---- kit_shader_check: draws every recipe for `dev.py smoke --shaders` (a kit tool, not shipped) ----
 add_executable(kit_shader_check src/tools/kit_shader_check.cpp)

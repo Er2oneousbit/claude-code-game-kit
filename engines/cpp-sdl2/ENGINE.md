@@ -90,7 +90,9 @@ src/shell/       the shell's screens on SDL: Shell (stack, input, settings appli
 src/game/        gameplay: Game class (owns the shell, fills in the play screen), entities, systems
 src/gfx/         KitShaders: the kit's shader recipes on SDL's GPU renderer
 data/            i18n/en.json (every label), dialogue/sample.built.json (lines and captions), access/colours.json
-                 (the colour-blind palettes), input/presets.json, golden/ (the test vectors)
+                 (the colour-blind palettes), input/presets.json, golden/ (the test vectors); every build copies
+                 it next to the exe without golden/ and shaders/ (docs/ENGINE_FLOW.md "Packaging")
+cmake/           copy_game_data.cmake (that copy)
 src/tools/       kit_shader_check (dev.py smoke --shaders), not shipped
 shaders/kit/     the recipes: *.frag.hlsl, kit_shaders.hpp (parameter structs), kit_shaders.cmake (generated)
 src/main.cpp     startup, arg parsing, main loop
