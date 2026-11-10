@@ -176,6 +176,8 @@ def read_streaminfo(data):
             break
     if info is None:
         raise FlacCorrupt("no STREAMINFO block")
+    if info["rate"] == 0:                           # 20 untrusted bits: 0 would reach `samples / rate` later
+        raise FlacCorrupt("STREAMINFO says the sample rate is 0 Hz (corrupt file)")
     if info["bits"] not in SUPPORTED_BITS:
         raise FlacError(f"{info['bits']}-bit FLAC is not supported (this decoder reads 16- and 24-bit)")
     if info["channels"] not in SUPPORTED_CHANNELS:
@@ -208,6 +210,8 @@ def _subframe(br, block, bps):
     wasted = 0
     if br.read(1):
         wasted = br.unary() + 1
+        if wasted >= bps:                           # unary, so unbounded: a negative width would reach signed()
+            raise FlacCorrupt(f"a subframe wastes {wasted} of its {bps} bits (corrupt file)")
         bps -= wasted
     if kind == 0:                                   # CONSTANT
         s = [br.signed(bps)] * block
@@ -301,6 +305,10 @@ def _frame(data, pos, info):
     if nch != info["channels"]:
         raise FlacCorrupt(f"a frame has {nch} channels, STREAMINFO says {info['channels']}")
     chans = [_subframe(br, block, bps + (1 if c == side else 0)) for c in range(nch)]
+    for c in chans:
+        if len(c) != block:                         # a predictor or partition order the block size does not fit
+            raise FlacCorrupt(f"a subframe decodes to {len(c)} samples in a block of {block} at byte {pos} "
+                              f"(corrupt file)")
     if layout == 8:                                 # left / side
         chans[1] = [a - b for a, b in zip(chans[0], chans[1])]
     elif layout == 9:                               # side / right
@@ -329,12 +337,18 @@ def stream(data):
     def frames():
         pos, done, total = start, 0, info["total"]
         width = info["bits"] // 8
+        low, high = -(1 << (info["bits"] - 1)), (1 << (info["bits"] - 1)) - 1
         md5 = hashlib.md5()
         while pos < len(data) and (not total or done < total):
+            at = pos
             chans, pos = _frame(data, pos, info)
             if total and done + len(chans[0]) > total:
                 chans = [c[:total - done] for c in chans]
             done += len(chans[0])
+            for c in chans:                     # residuals are unbounded: a predictor can leave the range
+                if c and (min(c) < low or max(c) > high):
+                    raise FlacCorrupt(f"a frame at byte {at} decodes to a sample outside the {info['bits']}-bit "
+                                      f"range (corrupt file)")
             if width == 2:
                 md5.update(struct.pack(f"<{len(chans[0]) * len(chans)}h", *(s for f in zip(*chans) for s in f)))
             else:
@@ -418,7 +432,7 @@ def main(argv=None):
         if DEBUG:
             traceback.print_exc()
         return 1
-    except (FlacError, WavNameError, OSError) as exc:
+    except (FlacError, ValueError, OSError) as exc:   # ValueError: WavNameError, or a rate the WAV cannot hold
         print(f"[error] {exc}", file=sys.stderr)
         if DEBUG:
             traceback.print_exc()

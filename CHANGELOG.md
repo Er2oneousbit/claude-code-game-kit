@@ -3,7 +3,7 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## Unreleased: accessibility (0.14.3: #169, #91, #85, #167, #166, #165, #168)
+## 0.14.3 (2026-11-10): accessibility in every engine with a shell (#169, #91, #85, #167, #166, #165, #168), second-model reviews of the kit tools (#261) and the exam runner (#158)
 - **Colour-blind pairs (#169):** `tools/access/colour_check.py pairs` checks the colours a game tells apart (declared in
   `data/access/colours.json`: the pairs, and the palette each colour-blind setting switches to) as a protanope,
   deuteranope and tritanope sees them (Machado et al. 2009, in linear RGB, E157) and fails a pair whose CIEDE2000
@@ -92,9 +92,11 @@
   (two new shell files were not rustfmt-formatted); Bevy's narration started the system's speech in automated runs
   (smoke, the sweep) when the setting was on, as C++ already did not; Bevy's `narration` golden cases were listed but
   never ran under `cargo test` (`shell_narration` runs them now). The two new `settings_load` cases pass on all eight
-  ports; RPG Maker MZ has no shell port.
-
-## Unreleased: second-model reviews (#261) and the exam runner (#158)
+  ports; RPG Maker MZ has no shell port. Found when the examples were moved onto the shell: Bevy's `default` drive
+  never finished, so a `smoke` longer than its 6000-frame limit (a whole race in the Bevy example) failed.
+- **Examples:** the Bevy and C++ examples (Crimson Nebula, Scrap Tanks) now boot through the shell's screens; Escape
+  pauses instead of quitting, and their controls are rebindable. Crimson Nebula's gas and steering are digital now
+  (the shell's `Intent` carries no analog axes yet).
 - **`scripts/run_exams.py` (#158):** every tool exam from one table of needs (Pillow, numpy, bpy on uv's Python 3.13,
   git, GIMP 3, Inkscape 1.x, the `REAPER_BIN` / `ASEPRITE_BIN` / `PIXELORAMA_BIN` live parts), one line per exam
   (pass, fail, or skipped naming the missing tool, unique tests, time), `--python 3.8,3.14` through `uv run`,

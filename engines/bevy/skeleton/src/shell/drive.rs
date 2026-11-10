@@ -467,6 +467,10 @@ pub fn drive_update(world: &mut World) {
             }
         } else if drive.ends_run {
             finish(world, &mut drive, 0);
+        } else {
+            // The default drive is through once the game is up: stop counting, or a run longer than DRIVE_LIMIT
+            // frames (a whole race is about 7,500) fails as "did not finish"
+            drive.finished = true;
         }
     }
     world.insert_resource(drive);

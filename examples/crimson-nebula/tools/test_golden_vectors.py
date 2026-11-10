@@ -44,6 +44,24 @@ class VectorFiles(unittest.TestCase):
             worst = max(abs(f32(v) - v) for v in values)
             self.assertGreater(worst, tol, f"{kind}: a float32 port would pass at tolerance {tol}")
 
+    def test_the_shell_vectors_pin_a_missing_file_and_a_foreign_version(self):
+        """#261: every port documents "no file: the defaults, no problems" and "version = 1 whatever the file said",
+        and no vector held either, so a port could drift on both and still pass."""
+        loads = [c for c in json.loads(gv.render(gv.build_shell()))["cases"] if c["type"] == "settings_load"]
+        missing = [c for c in loads if c["input"] is None]
+        self.assertEqual([(c["problems"], c["expect"]) for c in missing], [(0, gv.DEFAULT_SETTINGS)])
+        def version_of(text):
+            try:
+                raw = json.loads(text) if text else {}
+            except ValueError:                           # the "not json" case
+                return None
+            return raw.get("version") if isinstance(raw, dict) else None
+        foreign = [c for c in loads if version_of(c["input"]) not in (None, 1)]
+        self.assertTrue(foreign, "no settings_load case carries a version other than 1")
+        for c in foreign:
+            self.assertEqual(c["expect"]["version"], 1, c["name"])
+            self.assertGreater(c["problems"], 0, "the foreign-version case should also carry wrongly typed fields")
+
     def test_every_case_has_a_type_and_name(self):
         for build in (gv.build_juice, gv.build_shell, gv.build_telemetry):
             data = json.loads(gv.render(build()))

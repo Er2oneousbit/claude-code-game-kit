@@ -146,7 +146,7 @@ def read_png(path):
         return _read_png(path)
     except SpriteError:
         raise
-    except (struct.error, zlib.error, IndexError, TypeError, ValueError, KeyError) as exc:
+    except (struct.error, zlib.error, IndexError, TypeError, ValueError, KeyError, OSError) as exc:
         raise SpriteError(f"{path} is not a readable PNG ({exc.__class__.__name__}: {exc})") from None
 
 
@@ -154,7 +154,7 @@ def _read_png(path):
     data = Path(path).read_bytes()
     if data[:8] != b"\x89PNG\r\n\x1a\n":
         raise SpriteError(f"{path} is not a PNG")
-    pos, idat, plte, trns = 8, b"", None, None
+    pos, idat, plte, trns = 8, [], None, None          # IDAT pieces, joined once (#261: += copied them per chunk)
     w = h = depth = ctype = interlace = None
     while pos < len(data):
         (length,) = struct.unpack(">I", data[pos:pos + 4])
@@ -170,7 +170,8 @@ def _read_png(path):
         elif tag == b"tRNS":
             trns = body
         elif tag == b"IDAT":
-            idat += body
+            idat.append(body)
+    idat = b"".join(idat)
     if depth != 8 or interlace != 0 or ctype not in (0, 2, 3, 4, 6):
         raise SpriteError(f"{path}: only 8-bit, non-interlaced PNGs are supported (depth {depth}, type {ctype})")
     if not w or not h or w * h > MAX_PIXELS:
@@ -403,7 +404,20 @@ def cmd_check(args):
     cell = args.cell
     js = path.with_suffix(".json")
     if cell is None and js.is_file():
-        cell = json.loads(js.read_text(encoding="utf-8")).get("cell")
+        # the layout beside the atlas may be hand-edited: anything but an object with a whole cell size over 0 is a
+        # usage error, not a traceback (#261: "32", a list or broken JSON crashed)
+        try:
+            layout = json.loads(js.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError) as exc:
+            raise SpriteError(f"{js.name} beside the atlas is not readable JSON ({exc}); fix it or pass --cell")
+        if not isinstance(layout, dict):
+            raise SpriteError(f"{js.name} beside the atlas is not a layout object; fix it or pass --cell")
+        cell = layout.get("cell")
+        if cell is not None and (isinstance(cell, bool) or not isinstance(cell, int) or cell <= 0):
+            raise SpriteError(f"{js.name} beside the atlas has cell {cell!r}; it must be a whole number of pixels over 0, "
+                              "or pass --cell")
+    if cell is not None and cell <= 0:
+        raise SpriteError(f"--cell must be over 0, got {cell}")
     return print_check(check_atlas(read_png(path), cell or DEFAULT_CELL), path.name)
 
 

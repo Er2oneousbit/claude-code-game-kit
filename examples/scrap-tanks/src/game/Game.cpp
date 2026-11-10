@@ -2,16 +2,23 @@
 // Game.cpp
 // Purpose : Implementation of game::Game (see Game.hpp).
 // Usage   : created once in main.cpp; main feeds it events, fixed-step update() calls and render().
-// Notes   : Console markers for dev.py smoke: WAVE_START, RAIDER_DESTROYED, RUN_WON, PLAYER_DESTROYED.
+// Notes   : Console markers for dev.py smoke: RUN_START, WAVE_START, RAIDER_DESTROYED, RUN_WON, PLAYER_DESTROYED.
 //           With --autoplay the game quits a moment after the fight ends, so a smoke run stops by itself.
+//           The shell owns the screens: a new fight starts each time the play screen is entered (play_enter),
+//           Escape and Start pause (the shell's "pause" action), R or the pad's Back button restart a fight.
 //
 // Pseudocode (one frame):
-//   update: control = bot or (keyboard + mouse + gamepad) -> sim.step -> sounds and log lines
-//   render: ground tiles -> cover, scrap, wrecks and tanks sorted by depth (hull + turret rows from the
-//           sprite sheets) -> shells -> intent labels and hp bars over raiders -> HUD -> debug overlay
+//   update: shell.update -> (play screen on top) play_update: control = bot or (keyboard + mouse + gamepad)
+//           -> sim.step, once per update at game speed 1 (speed_acc_ owes whole steps below that)
+//           -> sounds, captions and log lines
+//   render: shell.render -> (play screen) play_draw: logical presentation to 1280x720 -> ground tiles -> cover,
+//           scrap, wrecks and tanks sorted by depth (hull + turret rows from the sprite sheets) -> shells ->
+//           intent labels and hp bars over raiders -> HUD -> debug overlay -> presentation back to the shell's
 // Authored: Written with Claude (Sonnet 5.5, claude-sonnet-5-5)
 // Updated : 2026-10-21 with Claude (Opus 5.5, claude-opus-5-5): Scrap Tanks (sim, bots, sprites, HUD)
 // Updated : 2026-10-26 with Claude (Opus 5.5, claude-opus-5-5): --seed rejects negative and out-of-range numbers
+// Updated : 2026-11-10 with Claude (Fable 5.1, claude-fable-5-1): the shell's screens (#168): the fight behind the
+//           title and menus, the shell's options, game speed, the attack binding, sound captions, the welcome line
 // ---------------------------------------------------------------------------
 #include "game/Game.hpp"
 
@@ -31,6 +38,8 @@ namespace {
 
 // Tunables: presentation only (gameplay numbers live in src/core/Tuning.hpp)
 constexpr double kEndPause = 1.5;           // s an autoplay run lingers on the result before quitting
+constexpr int kHudLeft = 200;               // px: the HUD starts right of the shell's "Pause" hint
+constexpr int kMessageBottom = 215;         // px above the bottom for the big message, clear of the subtitles
 constexpr double kTurretMountHeight = 1.4;  // m: the turret sits on the tractor's cab roof
 constexpr double kTurretMountBack = 0.35;   // m behind the hull's origin
 constexpr double kShellHeight = 1.0;        // m above ground where shells fly
@@ -68,27 +77,42 @@ bool is_attack(const std::string& intent) { return intent == "FIRE" || intent ==
 }  // namespace
 
 Game::Game() {
-    SDL_InitSubSystem(SDL_INIT_GAMEPAD);  // hot-plug events arrive as SDL_EVENT_GAMEPAD_ADDED
+    // main.cpp starts SDL's gamepad subsystem; hot-plug events arrive as SDL_EVENT_GAMEPAD_ADDED
+    options_.game_name = "Scrap Tanks";
+    options_.game_slug = "scrap_tanks";
+    options_.version = GAME_VERSION;
 }
 
 Game::~Game() {
-    assets_.reset();  // free textures and close audio before the controller subsystem
+    assets_.reset();  // free textures and close audio while SDL is still up
     if (pad_) SDL_CloseGamepad(pad_);
-    SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
 }
 
 const char* Game::options_help() {
     return "  --autoplay skilled|reckless  a bot plays (scenario checks: skilled fights from cover, reckless charges)\n"
            "  --seed N                     fight number N (raider spawns); same seed, same fight\n"
            "  --god                        the player takes no damage\n"
-           "  --debug-ai                   draw raider paths, chosen spots, who can hit you, and the bot's reason\n";
+           "  --debug-ai                   draw raider paths, chosen spots, who can hit you, and the bot's reason\n"
+           "  --drive SCENARIO   (smoke) a scripted path through the shell: menus, access[:res=WxH,scale=N,pad,read],\n"
+           "                     show:<title|menu|settings|pause|subtitle|play>; dev.py smoke --drive passes it\n"
+           "  --data-dir DIR     keep settings.json in this folder (default: the user's preferences folder)\n"
+           "  --locale LANG      language for the run (data/i18n/<LANG>.json)\n";
 }
 
 bool Game::configure(const std::vector<std::string>& args) {
     for (size_t i = 0; i < args.size(); ++i) {
         const std::string& a = args[i];
         const bool has_value = i + 1 < args.size();
-        if (a == "--autoplay" && has_value) {
+        // the shell's options first (the kit's), then the game's
+        std::string* shell_opt = a == "--drive" ? &options_.drive : a == "--data-dir" ? &options_.data_dir
+                               : a == "--locale" ? &options_.locale : nullptr;
+        if (shell_opt) {
+            if (!has_value) {
+                LOG_ERROR("game", a << " needs a value (see --help)");
+                return false;
+            }
+            *shell_opt = args[++i];
+        } else if (a == "--autoplay" && has_value) {
             const std::string& m = args[++i];
             if (m == "skilled") {
                 autoplay_ = core::BotMode::Skilled;
@@ -119,8 +143,33 @@ bool Game::configure(const std::vector<std::string>& args) {
             return false;
         }
     }
-    restart();
+    if (!options_.drive.empty() && !options_.automated) {
+        LOG_ERROR("game", "--drive runs only in a smoke run (python tools/dev.py smoke --drive " << options_.drive << ")");
+        return false;
+    }
     return true;
+}
+
+bool Game::init(SDL_Window* window, SDL_Renderer* renderer) {
+    renderer_ = renderer;
+    shell_ = std::make_unique<shell::Shell>(options_);
+    shell_->play.enter = [this] { play_enter(); };
+    shell_->play.update = [this](double dt) { play_update(dt); };
+    shell_->play.draw = [this](shell::Draw& draw) { play_draw(draw); };
+    shell_->play.action = [this](const std::string& action) { return play_action(action); };
+    return shell_->init(window, renderer);
+}
+
+bool Game::playing() const {
+    const shell::Screen* top = shell_ ? shell_->top() : nullptr;
+    return top && top->id == shell::ScreenId::Play;
+}
+
+// Entering the play screen (from the main menu, each time) starts a fresh fight
+void Game::play_enter() {
+    shell_->set_objective(shell_->t("play.objective"));   // "What now?" on the pause menu
+    shell_->say_line("yard.welcome");                      // the radio's welcome: a subtitle, and the history
+    restart();
 }
 
 void Game::restart() {
@@ -136,24 +185,26 @@ void Game::restart() {
 }
 
 void Game::handle_event(const SDL_Event& event) {
+    // The shell first: quit, its menus, pause (Escape, Start) and the bindings (shell_->is_down)
+    if (shell_) {
+        shell_->handle_event(event);
+    } else if (event.type == SDL_EVENT_QUIT) {
+        quit_ = true;
+    }
     switch (event.type) {
-        case SDL_EVENT_QUIT:
-            quit_ = true;
-            break;
         case SDL_EVENT_KEY_DOWN:
-            if (event.key.key == SDLK_ESCAPE) quit_ = true;
-            if (event.key.key == SDLK_R && !event.key.repeat) restart();
+            if (event.key.key == SDLK_R && !event.key.repeat && playing()) restart();
             break;
-        case SDL_EVENT_MOUSE_MOTION:  // logical coordinates: main.cpp converts every event to the render space
-            mouse_x_ = event.motion.x;
-            mouse_y_ = event.motion.y;
+        case SDL_EVENT_MOUSE_MOTION:  // main.cpp converts every event to the shell's render space; the fight's is 2x
+            mouse_x_ = event.motion.x * kViewScale;
+            mouse_y_ = event.motion.y * kViewScale;
             pad_used_ = false;
             break;
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         case SDL_EVENT_MOUSE_BUTTON_UP:
             if (event.button.button == SDL_BUTTON_LEFT) mouse_fire_ = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN;
             break;
-        case SDL_EVENT_GAMEPAD_ADDED:
+        case SDL_EVENT_GAMEPAD_ADDED:  // the shell opens it too: SDL counts the opens, so both closes are needed
             if (!pad_) pad_ = SDL_OpenGamepad(event.gdevice.which);
             break;
         case SDL_EVENT_GAMEPAD_REMOVED:
@@ -164,11 +215,17 @@ void Game::handle_event(const SDL_Event& event) {
             break;
         case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
             pad_used_ = true;
-            if (event.gbutton.button == SDL_GAMEPAD_BUTTON_START) restart();
+            // Start is the shell's pause; Back restarts the fight
+            if (event.gbutton.button == SDL_GAMEPAD_BUTTON_BACK && playing()) restart();
             break;
         default:
             break;
     }
+}
+
+bool Game::play_action(const std::string& action) {
+    (void)action;   // the fight reads its controls each step (read_controls); nothing is used as a press
+    return false;
 }
 
 core::Control Game::read_controls() const {
@@ -180,7 +237,7 @@ core::Control Game::read_controls() const {
     c.turn = (keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_RIGHT] ? 1.0 : 0.0) -
              (keys[SDL_SCANCODE_A] || keys[SDL_SCANCODE_LEFT] ? 1.0 : 0.0);
     c.aim = view::to_world(mouse_x_, mouse_y_ + kTurretMountHeight * view::kHeight * view::kPixelsPerMeter);
-    c.fire = mouse_fire_ || keys[SDL_SCANCODE_SPACE];
+    c.fire = mouse_fire_ || keys[SDL_SCANCODE_SPACE] || shell_->is_down("attack");   // the rebindable attack too
     if (pad_) {
         const auto axis = [this](SDL_GamepadAxis a) {
             const int v = SDL_GetGamepadAxis(pad_, a);
@@ -203,14 +260,24 @@ core::Control Game::read_controls() const {
 }
 
 void Game::update(double dt) {
+    if (shell_) shell_->update(dt);   // runs play_update while the play screen is on top
+}
+
+void Game::play_update(double dt) {
     if (!sim_) restart();
     if (sim_->outcome() != core::Outcome::Playing) {
         end_timer_ += dt;
         if (autoplay_ && end_timer_ >= kEndPause) quit_ = true;  // smoke runs stop by themselves
         return;
     }
-    const core::Control control = bot_ ? bot_->think(*sim_) : read_controls();
-    on_events(sim_->step(control));
+    // The sim's step is fixed, so a slower game speed (access.game_speed, 0.5 to 1) skips whole steps: at 1 it
+    // is exactly one step per update, as before the shell
+    speed_acc_ += shell_->game_speed();
+    while (speed_acc_ >= 1.0 && sim_->outcome() == core::Outcome::Playing) {
+        speed_acc_ -= 1.0;
+        const core::Control control = bot_ ? bot_->think(*sim_) : read_controls();
+        on_events(sim_->step(control));
+    }
 }
 
 void Game::on_events(const std::vector<core::Event>& events) {
@@ -221,17 +288,21 @@ void Game::on_events(const std::vector<core::Event>& events) {
                 break;
             case core::EventType::Fire:
                 if (assets_) assets_->play(e.team == core::Team::Player ? "fire_player" : "fire_raider", 40);
+                shell_->caption(e.team == core::Team::Player ? "fire_player" : "fire_raider");   // with captions_sfx on
                 break;
             case core::EventType::Hit:
                 if (assets_) assets_->play("hit", 50);
+                shell_->caption("hit");
                 LOG_DEBUG("game", "hit tank " << e.a);
                 break;
             case core::EventType::TankDestroyed:
                 if (assets_) assets_->play("destroyed", 70);
+                shell_->caption("destroyed");
                 if (e.team == core::Team::Raider) LOG_INFO("game", "RAIDER_DESTROYED id=" << e.a << " left=" << sim_->raiders_alive());
                 break;
             case core::EventType::Pickup:
                 if (assets_) assets_->play("pickup", 60);
+                shell_->caption("pickup");
                 LOG_INFO("game", "SCRAP_PICKUP hp=" << static_cast<int>(sim_->player().hp));
                 break;
             case core::EventType::RunWon:
@@ -246,20 +317,32 @@ void Game::on_events(const std::vector<core::Event>& events) {
 }
 
 void Game::render(SDL_Renderer* r) {
-    if (!assets_ && !assets_failed_) {
+    if (!assets_ && !assets_failed_) {   // on the first frame, so a missing file fails the boot, not the first fight
         assets_ = std::make_unique<Assets>();
         if (!assets_->load(r)) {
             assets_failed_ = true;
             quit_ = true;  // Assets logged what is missing
         }
     }
+    if (shell_) shell_->render(r);   // the screens; the play screen calls play_draw
+}
+
+// The play screen: the fight in its own 1280x720 space, then the presentation goes back to the shell's 640x360
+// for the pause hint, subtitles and the pause menu drawn over it. The shell's Draw records nothing here: the
+// fight is game content, not a panel (the access sweep sees the shell's outlined hint).
+void Game::play_draw(shell::Draw& draw) {
+    (void)draw;
+    SDL_Renderer* r = renderer_;
+    SDL_SetRenderLogicalPresentation(r, kViewW, kViewH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, 47, 58, 44, 255);
     SDL_RenderClear(r);
-    if (!sim_ || !assets_ || !assets_->loaded()) return;
-    draw_world(r);
-    if (debug_ai_) draw_debug(r);
-    draw_hud(r);
+    if (sim_ && assets_ && assets_->loaded()) {
+        draw_world(r);
+        if (debug_ai_) draw_debug(r);
+        draw_hud(r);
+    }
+    SDL_SetRenderLogicalPresentation(r, kWidth, kHeight, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 }
 
 void Game::draw_world(SDL_Renderer* r) {
@@ -359,21 +442,23 @@ void Game::draw_tank(SDL_Renderer* r, const core::Tank& t) {
 }
 
 void Game::draw_hud(SDL_Renderer* r) {
-    fill(r, {kInk.r, kInk.g, kInk.b, 215}, 0, 0, kWidth, 44);
+    // The bar's left end is the shell's: it draws "Esc  Pause" there (over the game, outlined)
+    fill(r, {kInk.r, kInk.g, kInk.b, 215}, 0, 0, kViewW, 44);
     const core::Tank& me = sim_->player();
-    draw_text(r, "HP", 22, kWhite, 20, 9, false);
-    fill(r, {60, 66, 80, 255}, 64, 15, 220, 14);
+    const float x0 = kHudLeft;
+    draw_text(r, "HP", 22, kWhite, x0, 9, false);
+    fill(r, {60, 66, 80, 255}, x0 + 44, 15, 220, 14);
     const double f = me.hp / me.spec->max_hp;
-    fill(r, f > 0.35 ? kGold : kAttack, 64, 15, static_cast<float>(220 * f), 14);
+    fill(r, f > 0.35 ? kGold : kAttack, x0 + 44, 15, static_cast<float>(220 * f), 14);
     std::ostringstream wave;
     wave << "WAVE " << std::max(1, sim_->wave()) << "/" << core::Sim::waves_total() << "    RAIDERS " << sim_->raiders_alive();
-    draw_text(r, wave.str(), 22, kWhite, 310, 9, false);
+    draw_text(r, wave.str(), 22, kWhite, x0 + 290, 9, false);
     if (best_time_) {
         std::ostringstream best;
         best << "BEST " << static_cast<int>(*best_time_) << " S";
-        draw_text(r, best.str(), 16, kGold, 700, 13, false);
+        draw_text(r, best.str(), 16, kGold, x0 + 680, 13, false);
     }
-    draw_text(r, std::string("v") + GAME_VERSION, 16, kWhite, kWidth - 70, 13, false);
+    draw_text(r, std::string("v") + GAME_VERSION, 16, kWhite, kViewW - 70, 13, false);
 
     std::string msg;
     std::string sub;
@@ -391,10 +476,11 @@ void Game::draw_hud(SDL_Renderer* r) {
     } else if (sim_->raiders_alive() == 0 && sim_->wave() < core::Sim::waves_total()) {
         msg = "NEXT WAVE INCOMING";
     }
-    if (!msg.empty()) {
-        fill(r, {kInk.r, kInk.g, kInk.b, 200}, kWidth / 2.0f - 380, kHeight - 104, 760, 84);
-        draw_text(r, msg, 34, kWhite, kWidth / 2.0, kHeight - 98, true);
-        if (!sub.empty()) draw_text(r, sub, 16, kWhite, kWidth / 2.0, kHeight - 52, true);
+    if (!msg.empty()) {   // above the shell's subtitle strip at the bottom
+        const float top = kViewH - kMessageBottom;
+        fill(r, {kInk.r, kInk.g, kInk.b, 200}, kViewW / 2.0f - 380, top, 760, 84);
+        draw_text(r, msg, 34, kWhite, kViewW / 2.0, top + 6, true);
+        if (!sub.empty()) draw_text(r, sub, 16, kWhite, kViewW / 2.0, top + 52, true);
     }
 }
 

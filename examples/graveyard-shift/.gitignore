@@ -89,3 +89,8 @@ assets_src/daw/*/render/
 
 # ---- Claude Code Game Kit 0.14.0: rules added by --upgrade ----
 /deploy/
+
+# ---- Claude Code Game Kit 0.14.3: rules added by --upgrade ----
+/[Aa]ssets/StreamingAssets/data/
+/[Aa]ssets/StreamingAssets/data.meta
+/[Aa]ssets/StreamingAssets/CREDITS.md*

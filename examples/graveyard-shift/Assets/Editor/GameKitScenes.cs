@@ -1,9 +1,11 @@
 // ---------------------------------------------------------------------------
 // GameKitScenes.cs
-// Purpose : Create scenes from code, headless: the starter scene that the boot smoke test needs, and
-//           the helper a game's own scene builder uses to register scenes in Build Settings.
+// Purpose : Create scenes from code, headless: the starter scene that the boot smoke test needs, the shell
+//           scene (the kit's title, settings, pause and credits screens on the FrontEnd component), and the
+//           helper a game's own scene builder uses to register scenes in Build Settings.
 // Usage   : python tools/dev.py exec GameKitScenes.CreateStarterScene
-//           (or the menu Tools > Game Kit > Create Starter Scene)
+//           python tools/dev.py exec GameKitScenes.CreateShellScene     (first in Build Settings: the game opens on it)
+//           (or the menu Tools > Game Kit > Create Starter Scene / Create Shell Scene)
 // Notes   : Scenes and prefabs are YAML that is fragile to hand-edit (docs/ENGINE.md). Building them in an
 //           editor script keeps every structural change in reviewable C#, and lets Claude make a scene
 //           without the editor UI. Pattern for a game: write `public static void Build()` in an Editor
@@ -11,16 +13,44 @@
 //           AddToBuildSettings; run it with `dev.py exec YourBuilder.Build`. Idempotent: run it again any time.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): a failed SaveScene throws (it was ignored)
+// Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): CreateShellScene (#168)
 // ---------------------------------------------------------------------------
 using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public static class GameKitScenes
 {
     public const string StarterScenePath = "Assets/Scenes/Main.unity";
+    public const string ShellScenePath = graveyard_shift.Shell.FrontEnd.SCENE_PATH;
+
+    [MenuItem("Tools/Game Kit/Create Shell Scene")]
+    public static void CreateShellScene()
+    {
+        if (!File.Exists(ShellScenePath))
+        {
+            // A camera (the game's picture) and the front end: the shell builds every screen in code
+            Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var cam = new GameObject("Main Camera") { tag = "MainCamera" };
+            var camera = cam.AddComponent<Camera>();
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = new Color(0.10f, 0.11f, 0.16f);
+            cam.AddComponent<AudioListener>();
+            var front = new GameObject("FrontEnd");
+            front.AddComponent<graveyard_shift.Shell.Shell>();
+            front.AddComponent<graveyard_shift.Shell.FrontEnd>();
+            Directory.CreateDirectory(Path.GetDirectoryName(ShellScenePath));
+            if (!EditorSceneManager.SaveScene(scene, ShellScenePath))
+            {
+                throw new IOException($"could not save {ShellScenePath} (read-only folder, or a file in the way?)");
+            }
+            Debug.Log($"[INFO][scenes] created {ShellScenePath}");
+        }
+        AddToBuildSettings(ShellScenePath, first: true);
+    }
 
     [MenuItem("Tools/Game Kit/Create Starter Scene")]
     public static void CreateStarterScene()

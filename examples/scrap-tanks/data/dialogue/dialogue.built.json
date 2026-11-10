@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "locale": "en",
+  "built_by": "hand (Scrap Tanks' lines and sound captions in the dialogue.built.json v0 shape; the shell loads the first *.built.json by name, so this one, not the kit's sample)",
+  "source_sha256": "",
+  "style": {"max_chars_per_line": 40, "max_lines": 2, "min_cue_s": 0.833, "max_cps": 20},
+  "lines": {
+    "yard.welcome": {
+      "speaker": "radio", "name": "Radio", "color": "#F2C14E",
+      "text": "Three waves of raiders inbound. Stay in cover and read their labels.",
+      "kind": "line", "priority": 50, "interrupt": "lower", "cooldown_s": 0,
+      "duration_s": 4.5,
+      "reveal_source": "text",
+      "cues": [
+        {"start": 0.0, "end": 2.0, "lines": ["Three waves of raiders inbound."]},
+        {"start": 2.0, "end": 4.5, "lines": ["Stay in cover and read their labels."]}
+      ]
+    }
+  },
+  "captions": {
+    "fire_player": {"text": "[your cannon fires]", "priority": 30, "min_s": 1.0},
+    "fire_raider": {"text": "[a raider fires]", "priority": 30, "min_s": 1.0},
+    "hit": {"text": "[clang]", "priority": 35, "min_s": 1.0},
+    "destroyed": {"text": "[explosion]", "priority": 40, "min_s": 1.5},
+    "pickup": {"text": "[scrap welded on]", "priority": 30, "min_s": 1.0}
+  },
+  "sequences": {"intro": [{"line": "yard.welcome", "start": 0.0, "end": 4.5}]}
+}

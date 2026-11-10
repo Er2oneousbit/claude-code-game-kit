@@ -153,5 +153,16 @@ class CreditsKimiFixes(Credits):
         self.assertNotEqual(code, 2, out)
 
 
+class CreditsSecondModelFixes(Credits):
+    """#261: a .game-kit.json that is not an object (or whose engine is not a string) was a traceback."""
+
+    def test_a_game_kit_json_that_is_not_an_object_gives_no_engine_line(self):
+        root = self.game(GOOD)
+        for body in ("[]", "\"godot\"", "{\"engine\": [\"godot\"]}", "{\"engine\": null}"):
+            (root / ".game-kit.json").write_text(body, encoding="utf-8")
+            self.assertEqual(credits.engine_line(root), "", body)
+            self.assertEqual(self.run_cli("--root", root)[0], 0, body)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

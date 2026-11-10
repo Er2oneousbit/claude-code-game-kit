@@ -190,5 +190,45 @@ class ImageDiffKimiFixes(unittest.TestCase):
         self.assertEqual(rows[0][7], 255)
 
 
+class ImageDiffSecondModelFixes(ImageDiffKimiFixes):
+    """#261: a header claiming a huge picture allocated gigabytes before the data was checked; a small file holding
+    a zlib bomb was decompressed whole (a 254 KB file took 557 MB)."""
+
+    def peak_mb(self, fn):
+        import tracemalloc
+        tracemalloc.start()
+        try:
+            fn()
+        finally:
+            peak = tracemalloc.get_traced_memory()[1]
+            tracemalloc.stop()
+        return peak / (1 << 20)
+
+    def test_a_huge_header_is_refused_without_allocating(self):
+        path, _ = self.png(6, 8, b"\x00" + b"\x00" * 4, w=0x10000000, h=0x10000000)   # claims 2^56 pixels
+
+        def read():
+            with self.assertRaises(idf.ImageError):
+                idf.read_png(path)
+        self.assertLess(self.peak_mb(read), 64)
+
+    def test_a_zlib_bomb_reads_only_the_picture(self):
+        import zlib
+        co = zlib.compressobj(9)
+        bomb = b"".join(co.compress(b"\x00" * (1 << 20)) for _ in range(256)) + co.flush()   # 256 MB of zeros
+        path, _ = self.png(6, 8, b"", w=1, h=1)
+        data = bytearray(path.read_bytes())
+        head = data.index(b"IDAT") - 4
+        tail = data.index(b"IEND") - 4
+        path.write_bytes(bytes(data[:head]) + self.png(6, 8, b"")[1](b"IDAT", bomb) + bytes(data[tail:]))
+        self.assertLess(path.stat().st_size, 1 << 20)
+        out = {}
+
+        def read():
+            out["rows"] = idf.read_png(path)[2]
+        self.assertLess(self.peak_mb(read), 64)
+        self.assertEqual(bytes(out["rows"][0]), b"\x00\x00\x00\x00")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

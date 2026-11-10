@@ -145,5 +145,18 @@ namespace graveyard_shift.Core
             int k = CaptionDirection(dx, dy, halfW, halfH);
             return k < 0 ? "" : ARROWS[k];
         }
+
+        // The arrows that go before the caption text (the sound is to the left): left, up-left, down-left
+        private static readonly string[] LEFT_ARROWS = { "←", "↖", "↙" };
+
+        /// <summary>The caption with its arrow on the side the sound comes from ("" arrow: the text alone).</summary>
+        public static string WithArrow(string text, string arrow)
+        {
+            if (string.IsNullOrEmpty(arrow))
+            {
+                return text;
+            }
+            return Array.IndexOf(LEFT_ARROWS, arrow) >= 0 ? arrow + " " + text : text + " " + arrow;
+        }
     }
 }

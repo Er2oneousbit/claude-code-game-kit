@@ -58,6 +58,8 @@ if mode == "hang":
     open(os.environ["FAKE_TTS_LOG"] + ".survived", "w").close(); sys.exit(0)
 if mode == "error":
     out({"error": "RuntimeError: CUDA error: device-side assert"}); sys.exit(1)
+if mode == "listreply":
+    out([1, 2]); sys.exit(0)
 if req["op"] == "check":
     out({"ok": True, "torch": "2.14.1+cu130", "cuda": "13.0", "gpu": "Test GPU" if device == "cuda" else "none (CPU)",
          "device": device, "qwen_tts": "0.1.1", "python": "3.12.12"})
@@ -183,6 +185,36 @@ class LocalTtsExam(unittest.TestCase):
         self.assertEqual(metas[1]["text"], "Two coins, please.")
         self.assertEqual(metas[0]["voice"]["origin"], "designed from text")
         self.assertIn("baker", metas[0]["voice"]["persona"])
+
+    # ---- #261 (second-model review) -----------------------------------------------------------------------------
+    def test_a_lines_file_with_a_bom_or_in_cp1252(self):
+        # Notepad saves UTF-8 with a byte order mark: it was spoken as part of the first line; a cp1252 file was
+        # the codec's own message
+        ref = self.design()
+        (self.root / "bom.txt").write_bytes(b"\xef\xbb\xbfHello there\nSecond line\n")
+        rc, out = self.run_tool("say", "--ref", ref, "--lines", "bom.txt", "--out", "b.wav")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual([l["text"] for l in self.requests()[-1]["lines"]], ["Hello there", "Second line"])
+        (self.root / "cp.txt").write_bytes("Ísla ”quoted”\n".encode("cp1252"))
+        rc, out = self.run_tool("say", "--ref", ref, "--lines", "cp.txt", "--out", "c.wav")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("UTF-8", out)
+
+    def test_a_broken_gen_json_beside_the_reference_is_a_usage_error(self):
+        ref = self.design()
+        side = ref.with_suffix(".gen.json")
+        for body in ("[]", json.dumps({"tool": "local_tts", "op": "design"}), json.dumps({"tool": "local_tts", "op": "design", "ref_text": 5})):
+            side.write_text(body, encoding="utf-8")
+            rc, out = self.run_tool("say", "--ref", ref, "Hi", "--out", "x.wav")
+            self.assertEqual(rc, 2, f"{body}: {out}")
+            self.assertIn("[error]", out, body)
+            self.assertIn(side.name, out, body)
+
+    def test_a_worker_reply_that_is_not_an_object_is_exit_1(self):
+        os.environ["FAKE_TTS_MODE"] = "listreply"
+        rc, out = self.run_tool("check")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("[FAIL]", out)
 
     def test_post_trims_and_normalizes(self):
         ref = self.design()

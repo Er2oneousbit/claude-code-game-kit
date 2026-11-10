@@ -71,6 +71,7 @@ LICENSE = ("Stability AI Community License: free under USD 1M annual revenue, en
 LOOP_MARGIN_S = 2.0           # loops: Stable Audio leaves up to about 1.7 s of silent tail (live check); trim eats it
 MIN_GEN_S = 1.5               # ComfyUI's floor is 1 s; shorter requests come out as padded noise, trim does the rest
 MAX_GEN_S = 120.0
+MAX_VARIANTS = 64             # takes per run; a typo like 1000000000 built the seed list first (MemoryError, #261)
 SILENCE_DB = -50.0            # below the take's own peak: what counts as silence when trimming
 LEAD_KEEP_S = 0.005
 TAIL_KEEP_S = 0.05
@@ -289,6 +290,8 @@ def cmd_make(args):
         raise ToolError(f"--seconds must be 0.05..{MAX_GEN_S}")
     if args.keep < 1 or args.variants < args.keep:
         raise ToolError("--keep must be 1 or more and no more than --variants")
+    if args.variants > MAX_VARIANTS:
+        raise ToolError(f"--variants is at most {MAX_VARIANTS} (that many takes is already a long GPU session)")
     if args.loop and args.crossfade <= 0:
         raise ToolError("--loop needs a --crossfade above 0 s")
     if args.rank not in RANKERS:

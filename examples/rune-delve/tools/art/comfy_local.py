@@ -199,8 +199,8 @@ def load_workflow(path):
     if not p.is_file():
         raise ToolError(f"workflow {p} not found")
     try:
-        wf = json.loads(p.read_text(encoding="utf-8"))
-    except ValueError as exc:
+        wf = json.loads(p.read_text(encoding="utf-8-sig"))   # utf-8-sig: Notepad adds a byte order mark (#261)
+    except (OSError, ValueError) as exc:
         raise ToolError(f"workflow {p} is not valid JSON: {exc}")
     if isinstance(wf, dict) and "nodes" in wf and "links" in wf:
         raise ToolError(f"{p} is in ComfyUI's normal save format. Open it in ComfyUI and save it in API format "

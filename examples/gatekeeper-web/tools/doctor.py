@@ -21,6 +21,8 @@
 #           profile tokens ({{FOOTER}} and the like) as well
 # Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): web games get a warning when src/shell/app.ts is
 #           present but src/main.ts never reaches it through its imports (the shell sits there unused)
+# Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): the kit's own resources under the media folder (a
+#           GameKit folder: the Unity shell's font) are not the game's media (#168)
 # ---------------------------------------------------------------------------
 import argparse
 import datetime
@@ -70,6 +72,7 @@ HANDOFF_STALE_DAYS = 14
 # Where each overlay keeps its media (assets_dir in engines/*/engine.json): Godot, Bevy, C++, LÖVE; Unity; Unreal;
 # web and web-3d; RPG Maker MZ. The first one present is checked when --assets-dir is not given
 ASSET_DIRS = ("assets", "Assets", "Content", "public/assets", "game/img")
+KIT_RESOURCE_DIR = "GameKit"   # the kit's own shipped resources under the media folder (Unity: Assets/Resources/GameKit, #168)
 MEDIA_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".tga", ".psd", ".aseprite", ".pxo", ".ogg", ".wav", ".mp3",
              ".flac", ".aif", ".aiff", ".ttf", ".otf", ".woff", ".woff2", ".glb", ".gltf", ".fbx", ".obj", ".blend"}
 # Template files legitimately mention placeholders in prose (they document them).
@@ -159,8 +162,10 @@ def check_assets(warnings, assets_dir, debug):
     if not d.exists() or not log_file.exists():
         log(debug, f"assets dir {d} or asset log missing, skipping asset check")
         return
-    # .uasset/.umap are left out on purpose: every Unreal Blueprint, map and material is one
-    files = [p for p, _ in check_links.walk(d) if p.suffix.lower() in MEDIA_EXT]
+    # .uasset/.umap are left out on purpose: every Unreal Blueprint, map and material is one; the kit's own
+    # resources (a GameKit folder: the shell's readable font, OFL, credited by tools/credits.py) are not the game's
+    files = [p for p, _ in check_links.walk(d) if p.suffix.lower() in MEDIA_EXT
+             and KIT_RESOURCE_DIR not in p.relative_to(d).parts]
     # errors="replace": one cp1252/UTF-16 save must not crash the whole health check
     rows = [l for l in check_links.read_text(log_file).splitlines() if l.startswith("| A-")]   # UTF-16 too (#258)
     # A row counts once its "File(s) in repo" column is filled, so filling the sample A-0001 row works

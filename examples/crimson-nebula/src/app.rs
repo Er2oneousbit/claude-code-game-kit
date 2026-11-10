@@ -20,6 +20,8 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): the smoke budget skips the clock-priming
 //           update (--smoke 120 ran 119 ticks); smoke_test_app for the headless test of that
+//           2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): the shell (ShellPlugin always, ShellViewPlugin
+//           with a window), the drive in smoke runs, a drive may end the run early (Smoke::finish_now)
 // ---------------------------------------------------------------------------
 use std::path::PathBuf;
 use std::time::Duration;
@@ -34,6 +36,9 @@ use bevy::window::WindowResolution;
 
 use crate::cli::Cli;
 use crate::game::{GameConfig, GamePlugin, PresentPlugin, TITLE};
+use crate::shell::ShellPlugin;
+use crate::shell::drive::Drive;
+use crate::shell::view::ShellViewPlugin;
 
 // ---- Tunables ------------------------------------------------------------------
 pub const TICK_HZ: f64 = 60.0;
@@ -49,7 +54,7 @@ pub fn tick() -> Duration {
 
 /// The smoke run's frame budget and capture requests.
 #[derive(Resource, Debug)]
-struct Smoke {
+pub struct Smoke {
     frames: u32,
     /// The first update only starts the clock (zero delta, no fixed tick): it is not a smoke frame.
     primed: bool,
@@ -62,7 +67,9 @@ struct Smoke {
     grace: u32,
 }
 
-pub fn build(cli: &Cli, cfg: GameConfig) -> App {
+/// The App for this command line. `drive` is the scripted scenario a smoke run follows ("default" walks into the
+/// game); a window opens for a normal run, a capture, and a drive that measures or pictures the screen.
+pub fn build(cli: &Cli, cfg: GameConfig, drive: Option<Drive>) -> App {
     let mut app = App::new();
     let log = LogPlugin {
         filter: format!(
@@ -72,7 +79,8 @@ pub fn build(cli: &Cli, cfg: GameConfig) -> App {
         ),
         ..default()
     };
-    if cli.wants_window() {
+    let window = cli.wants_window() || cfg.needs_window();
+    if window {
         let window = Window {
             title: TITLE.into(),
             resolution: WindowResolution::new(WINDOW_SIZE.0, WINDOW_SIZE.1),
@@ -86,7 +94,7 @@ pub fn build(cli: &Cli, cfg: GameConfig) -> App {
                 })
                 .set(log),
         )
-        .add_plugins(PresentPlugin);
+        .add_plugins((PresentPlugin, ShellViewPlugin));
     } else {
         app.add_plugins((
             MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::ZERO)),
@@ -96,6 +104,10 @@ pub fn build(cli: &Cli, cfg: GameConfig) -> App {
         ));
     }
     add_game(&mut app, cfg);
+    app.add_plugins(ShellPlugin);
+    if let Some(drive) = drive {
+        app.insert_resource(drive);
+    }
     if let Some(frames) = cli.smoke {
         app.insert_resource(TimeUpdateStrategy::ManualDuration(tick()));
         add_smoke(
@@ -129,7 +141,24 @@ pub fn smoke_test_app(cfg: GameConfig, frames: u32) -> App {
     app
 }
 
+/// test_app plus the shell (headless: the screens, settings and drives without a window), for tests/shell.rs.
+/// With a drive name the scenario runs and its DRIVE_DONE ends the run through a smoke budget of `frames`.
+pub fn shell_test_app(cfg: GameConfig, drive: Option<(&str, u32)>) -> App {
+    let mut app = test_app(cfg);
+    app.add_plugins(ShellPlugin);
+    if let Some((name, frames)) = drive {
+        app.insert_resource(Drive::new(name).expect("a known drive"));
+        add_smoke(&mut app, Smoke::budget(frames));
+    }
+    app
+}
+
 impl Smoke {
+    /// A drive finished: the next frame is the run's last (its screenshot, SMOKE_DONE, exit 0).
+    pub fn finish_now(&mut self) {
+        self.frames = self.done + 1;
+    }
+
     fn budget(frames: u32) -> Self {
         Smoke {
             frames,

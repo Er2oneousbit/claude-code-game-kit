@@ -122,11 +122,14 @@ def problems(rows, allow_placeholders):
 
 
 def engine_line(root):
+    """The engine credit, or "" when .game-kit.json is missing, not JSON, not an object or names no engine string
+    (a list or a quoted string there was a traceback, #261)."""
     try:
-        engine = json.loads((root / ".game-kit.json").read_text(encoding="utf-8")).get("engine", "")
+        meta = json.loads((root / ".game-kit.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        engine = ""
-    return ENGINE_CREDITS.get(engine, "")
+        meta = {}
+    engine = meta.get("engine", "") if isinstance(meta, dict) else ""
+    return ENGINE_CREDITS.get(engine, "") if isinstance(engine, str) else ""
 
 
 def credits_md(rows, root):

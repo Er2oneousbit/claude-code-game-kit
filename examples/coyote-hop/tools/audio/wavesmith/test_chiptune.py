@@ -201,5 +201,34 @@ class ChiptuneExam(unittest.TestCase):
         self.assertTrue(math.isclose(max(s[1000:6000]), 1.0, abs_tol=0.01))
 
 
+class ChiptuneSecondModelFixes(ChiptuneExam):
+    """#261: a song's length was unbounded (an order of 200000 patterns at 20 bpm asked for 10^14 samples: a
+    MemoryError traceback), --rate was not range-checked like the song's own rate, and a byte order mark was
+    "not valid JSON"."""
+
+    def test_a_song_past_the_length_cap_is_a_song_error(self):
+        slow = song({"A": {"lead": " ".join(["C4"] * 64)}}, order=["A"] * 200000, bpm=20, steps_per_beat=1,
+                    channels={"lead": {"wave": "square"}})
+        rc, out = self.render(slow)
+        self.assertEqual(rc, 2, out)
+        self.assertIn("[error]", out)
+        self.assertIn(str(chiptune.MAX_SONG_S), out)
+        self.assertFalse((self.dir / "out.wav").exists())
+
+    def test_rate_flag_is_range_checked(self):
+        rc, out = self.render(song({"A": {"lead": "C4 . . ."}}), "--rate", "100000000000")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("[error]", out)
+        self.assertIn("--rate", out)
+
+    def test_a_song_file_with_a_bom_loads(self):
+        path = self.dir / "bom.json"
+        path.write_bytes(b"\xef\xbb\xbf" + json.dumps(song({"A": {"lead": "C4 . . ."}})).encode("utf-8"))
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            rc = chiptune.main([str(path), "--check"])
+        self.assertEqual(rc, 0, out.getvalue() + err.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

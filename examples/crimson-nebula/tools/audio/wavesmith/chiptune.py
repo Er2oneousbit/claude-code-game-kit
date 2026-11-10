@@ -54,7 +54,10 @@ CHANNEL_DEFAULTS = {"wave": "square", "duty": 0.5, "volume": 0.3, "attack": 0.00
                     "sustain": 0.7, "release": 0.04, "vibrato": None, "octave": 0}
 CHANNEL_RANGES = {"duty": (0.01, 0.99), "volume": (0, 1), "attack": (0, 10), "decay": (0, 10), "sustain": (0, 1),
                   "release": (0, 10), "octave": (-4, 4)}
-SONG_RANGES = (("bpm", 20, 400), ("steps_per_beat", 1, 16), ("rate", 8000, 96000), ("seed", 0, 2 ** 31))
+RATE_RANGE = (8000, 96000)   # the song's "rate" and --rate alike (#261: --rate 1e11 was a MemoryError traceback)
+SONG_RANGES = (("bpm", 20, 400), ("steps_per_beat", 1, 16), ("rate",) + RATE_RANGE, ("seed", 0, 2 ** 31))
+MAX_SONG_S = 1200         # the longest song rendered: the mix is one Python list, and an "order" of 200000 patterns
+                          # at 20 bpm asked for 10^14 samples (#261); a chiptune loop is seconds to minutes
 DRUM_TAIL_S = 1.0         # the longest drum (crash) rings this long
 DEBUG = False
 
@@ -87,7 +90,7 @@ def check_number(where, value, low, high, whole=False):
 
 def load_song(path):
     try:
-        song = json.loads(Path(path).read_text(encoding="utf-8"))
+        song = json.loads(Path(path).read_text(encoding="utf-8-sig"))   # utf-8-sig: Notepad adds a byte order mark
     except json.JSONDecodeError as exc:
         raise SongError(f"{path}: not valid JSON ({exc})")
     if not isinstance(song, dict):
@@ -147,6 +150,10 @@ def load_song(path):
             detail = ", ".join(f"{c}={len([t for t in x.split() if t != '|'])}" for c, x in pat.items())
             raise SongError(f"pattern {pname!r}: channels have different step counts ({detail})")
         steps[pname] = lengths.pop() if lengths else 0
+    seconds = sum(steps[p] for p in song["order"]) * 60.0 / song["bpm"] / song.get("steps_per_beat", 4)
+    if seconds > MAX_SONG_S:
+        raise SongError(f"the song is {seconds:.0f} s long; this tool renders up to {MAX_SONG_S} s (shorten \"order\" "
+                        "or raise the tempo)")
     song["_channels"], song["_steps"] = channels, steps
     return song
 
@@ -323,6 +330,7 @@ def main(argv=None):
         if out.exists() and not args.overwrite:
             raise SongError(f"{out} exists (use --overwrite)")
         rate = args.rate or song.get("rate", DEFAULT_RATE)
+        check_number("--rate", rate, *RATE_RANGE, whole=True)
         samples, loop, info = render_song(song, rate, args.solo)
         if not samples or max(abs(v) for v in samples) < 0.01:
             print(f"[FAIL] {out}: silent (no notes?)")

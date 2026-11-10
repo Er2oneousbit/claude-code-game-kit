@@ -125,6 +125,28 @@ class CheckLinksKimiFixes(unittest.TestCase):
         self.assertTrue(check_links.exact_exists(root, "GDD.md"))
 
 
+class CheckLinksSecondModelFixes(CheckLinksExam):
+    """#261: a crafted file hung the link regexes (quadratic in the file size); a path written with backslashes
+    passed on Windows and failed on Linux and GitHub."""
+
+    def test_a_crafted_file_is_scanned_in_bounded_time(self):
+        import time
+        # 20000 unclosed "[a](" with no ")" or space: the destination class ate the rest of the file and backtracked
+        # once per link (a minute at 80 KB, hours at 1 MB); the same for a "[" label that ran across lines
+        for text in ("[a](" * 20000, "[x\n" * 60000):
+            started = time.perf_counter()
+            list(check_links.references(text))
+            self.assertLess(time.perf_counter() - started, 5.0, "the regexes are quadratic again")
+
+    def test_a_link_text_wrapped_over_two_lines_is_still_checked(self):
+        self.assertIn("link: docs/NOPE.md", self.scan_text("see [the design\ndocument](docs/NOPE.md) first")["README.md"])
+
+    def test_a_backslash_path_is_broken_everywhere(self):
+        # GitHub and Linux read "docs\GDD.md" as one file name, so it is broken there whatever Windows thinks
+        broken = self.scan_text("see `docs\\GDD.md` and [x](docs\\GDD.md)")
+        self.assertEqual(sorted(broken.get("README.md", [])), ["link: docs\\GDD.md", "path: docs\\GDD.md"])
+
+
 if __name__ == "__main__":
     result = unittest.main(exit=False, verbosity=1).result
     sys.exit(0 if result.wasSuccessful() else 1)

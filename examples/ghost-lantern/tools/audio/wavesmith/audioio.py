@@ -29,6 +29,7 @@
 #   ffmpeg read : ffmpeg -nostdin -v error -i <file> -c:a pcm_s16le <tmp.wav> -> wavfile -> channels
 #   write       : .wav -> wavfile (16-bit, loop kept); other suffix -> tmp WAV -> ffmpeg (OGG: libvorbis, loop tags)
 import argparse
+import atexit
 import os
 import shutil
 import subprocess
@@ -280,6 +281,9 @@ def _stream_via_ffmpeg(path, kind):
         raise AudioIOError(f"{path} is {kind}: reading it needs ffmpeg (https://ffmpeg.org; put it on PATH or set "
                            f"{FFMPEG_ENV}), or convert it to WAV, FLAC or OGG Vorbis first")
     tmp = Path(tempfile.mkdtemp(prefix="wavesmith_"))
+    # chunks() deletes the folder when it ends; a caller that never starts it (an error between the two calls)
+    # would leave ffmpeg's WAV behind for good, so the process end is the backstop
+    atexit.register(shutil.rmtree, str(tmp), ignore_errors=True)
     try:
         out = _ffmpeg_to_wav(ff, path, tmp)
         rate, nch, _, chunks = wav_stream(out, CHUNK_FRAMES)
@@ -300,6 +304,14 @@ def _stream_via_ffmpeg(path, kind):
     return rate, nch, ffmpeg_chunks
 
 
+def _write_wav(path, interleaved, rate, loop=None, channels=1):
+    """write_wav with its ValueError (a rate the header cannot hold, a wrong suffix) as an AudioIOError."""
+    try:
+        return write_wav(path, interleaved, rate, loop=loop, channels=channels)
+    except ValueError as exc:
+        raise AudioIOError(str(exc)) from None
+
+
 def write_audio(path, channels, rate, loop=None, quality=OGG_QUALITY):
     """Writes channels (lists in -1..1) to path: .wav natively (16-bit, loop chunk kept), anything else through
     ffmpeg (OGG as libvorbis; the loop as LOOPSTART / LOOPLENGTH comments; the same samples give the same bytes).
@@ -308,14 +320,14 @@ def write_audio(path, channels, rate, loop=None, quality=OGG_QUALITY):
     frames = len(channels[0]) if channels else 0
     interleaved = [s for frame in zip(*channels) for s in frame] if len(channels) > 1 else list(channels[0])
     if path.suffix.lower() == ".wav":
-        return write_wav(path, interleaved, rate, loop=loop, channels=len(channels))
+        return _write_wav(path, interleaved, rate, loop=loop, channels=len(channels))
     ff = find_ffmpeg()
     if not ff:
         raise AudioIOError(f"writing {path.suffix or 'that format'} needs ffmpeg (https://ffmpeg.org; PATH or "
                            f"{FFMPEG_ENV}); without it, write a .wav (every engine imports WAV)")
     with tempfile.TemporaryDirectory() as tmp:
         src = Path(tmp) / "source.wav"
-        clipped = write_wav(src, interleaved, rate, channels=len(channels))
+        clipped = _write_wav(src, interleaved, rate, channels=len(channels))
         cmd = [ff, "-nostdin", "-v", "error", "-y", "-protocol_whitelist", "file", "-i", str(src)]
         if path.suffix.lower() == ".ogg":
             cmd += ["-c:a", "libvorbis", "-q:a", str(quality)]
@@ -325,15 +337,27 @@ def write_audio(path, channels, rate, loop=None, quality=OGG_QUALITY):
         # bitexact: a fixed OGG stream serial (else random) and no ffmpeg version tag, so the same audio written
         # twice is the same bytes (the DAW round trip tells "already in the game" by its SHA-256)
         cmd += ["-fflags", "+bitexact", "-flags:a", "+bitexact"]
-        cmd.append(str(path.resolve()))
+        # ffmpeg writes next to its input in the temp folder (the suffix still picks the format); the destination
+        # changes only once the run has succeeded, so a run that dies part-way leaves no broken file there and
+        # never replaces a good one
+        staged = Path(tmp) / ("encoded" + path.suffix)
+        cmd.append(str(staged))
         dbg(" ".join(cmd))
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
                                timeout=FFMPEG_TIMEOUT_S)
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise AudioIOError(f"{path}: ffmpeg did not run: {exc}")
-        if r.returncode != 0 or not path.is_file():
+        if r.returncode != 0 or not staged.is_file():
             raise AudioIOError(f"{path}: ffmpeg could not write it: {(r.stderr or '').strip()[-300:]}")
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                os.replace(str(staged), str(path))
+            except OSError:                         # another drive: the temp folder is seldom the game's
+                shutil.copyfile(str(staged), str(path))
+        except OSError as exc:
+            raise AudioIOError(f"{path}: cannot write it: {exc}")
     dbg(f"{path}: {frames} frames written")
     return clipped
 

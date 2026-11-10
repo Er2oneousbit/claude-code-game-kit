@@ -678,6 +678,15 @@ class ComfyKimiFixes(unittest.TestCase):
         self.assertTrue(out.endswith(b"\xff\xd9"))
 
 
+class ComfySecondModelFixes(unittest.TestCase):
+    """#261: a workflow re-saved by Notepad (a UTF-8 byte order mark) was refused as "not valid JSON"."""
+
+    def test_a_workflow_with_a_bom_loads(self):
+        p = Path(tempfile.mkdtemp()) / "wf.api.json"
+        p.write_bytes(b"\xef\xbb\xbf" + json.dumps(WORKFLOW).encode("utf-8"))
+        self.assertEqual(sorted(cl.load_workflow(p)), sorted(WORKFLOW))
+
+
 if __name__ == "__main__":
     for stream in (sys.stdout, sys.stderr):
         try:

@@ -807,6 +807,12 @@ def build_shell():
         # the defaults with one problem (a port whose reader refuses them reports "unreadable", also one problem)
         ("non-finite resolution", '{"display": {"resolution": [Infinity, 720]}}'),
         ("NaN resolution", '{"display": {"resolution": [1280, NaN]}}'),
+        # #261: two claims every port documents that no vector held. No file (null, not "") is the defaults with no
+        # problem; and the version is 1 after a load whatever the file said, while a wrongly typed value is a problem
+        # even when it spells a valid one ("true", "60": a loose port that coerces strings would pass them)
+        ("no file", None),
+        ("foreign version and spelled-out values", json.dumps({"version": 7, "future": True, "display": {
+            "vsync": "true", "frame_cap": "60"}})),
     ]
     for name, text in inputs:
         s, problems = settings_load(text)

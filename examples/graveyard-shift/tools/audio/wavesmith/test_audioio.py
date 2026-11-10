@@ -19,6 +19,7 @@ import math
 import os
 import shutil
 import struct
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -44,6 +45,9 @@ if "pcm_s16le" in args:
 elif out.endswith(".ogg"):
     with open(out, "wb") as fh:
         fh.write(b"OggS" + b"\0" * 24 + b"\x01vorbis" + b"\0" * 20)
+    if os.environ.get("STUB_FAIL_AFTER_WRITE"):      # what ffmpeg does on a full disk or a kill: a part-file stays
+        sys.stderr.write("stub: no space left on device\n")
+        sys.exit(1)
 else:
     sys.stderr.write("stub: cannot write " + out + "\n")
     sys.exit(1)
@@ -158,6 +162,24 @@ class AudioIOExam(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertNotIn("Traceback", out)
 
+    def test_a_sample_rate_the_wav_cannot_hold_is_an_error_not_a_traceback(self):
+        # a WAV (or Vorbis) header can say 0xFFFFFFFF Hz; convert read it and write_wav's byte-rate field
+        # overflowed as struct.error, a raw traceback instead of [error]
+        self.no_ffmpeg()
+        fmt = struct.pack("<HHIIHH", 1, 1, 0xFFFFFFFF, 0xFFFFFFFF, 2, 16)
+        data = struct.pack("<8h", *([100] * 8))
+        body = b"WAVE" + b"fmt " + struct.pack("<I", 16) + fmt + b"data" + struct.pack("<I", len(data)) + data
+        src = self.dir / "hz.wav"
+        src.write_bytes(b"RIFF" + struct.pack("<I", len(body)) + body)
+        rc, out = self.run_tool("info", src)
+        self.assertEqual(rc, 0, out)
+        rc, out = self.run_tool("convert", src, "--out", self.dir / "hz16.wav")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("[error]", out)
+        self.assertNotIn("Traceback", out)
+        with self.assertRaises(audioio.AudioIOError):
+            audioio.write_audio(self.dir / "w.wav", [[0.0] * 4], 0xFFFFFFFF)
+
     def adpcm_wav(self):
         """A WAV in a sample format wavfile.py does not read (IMA ADPCM, tag 0x11)."""
         fmt = struct.pack("<HHIIHH", 0x11, 1, RATE, RATE // 2, 256, 4)
@@ -255,6 +277,54 @@ class AudioIOExam(unittest.TestCase):
         self.assertEqual([s for p in parts for s in p[0]], audioio.read_audio(mp3)[0][0])
         self.assertEqual(len(made), 1)
         self.assertFalse(Path(made[0]).exists(), "ffmpeg's temporary WAV is deleted once read")
+
+    def test_ffmpegs_wav_is_deleted_even_when_the_chunks_are_never_read(self):
+        # a caller that stops between stream_audio() and iterating chunks() (an error in between) never ran the
+        # generator's finally, so ffmpeg's decoded WAV stayed in the temp folder for good; only the process
+        # ending can prove the backstop, so this runs in one
+        decoded = self.dir / "decoded_by_stub.wav"
+        write_wav(decoded, tone(seconds=0.5, amp=0.25), RATE)
+        self.stub_ffmpeg(decoded)
+        mp3 = self.dir / "drop.mp3"
+        mp3.write_bytes(b"ID3\x04" + b"\0" * 200)
+        script = (f"import sys, tempfile; sys.path.insert(0, {str(HERE)!r})\n"
+                  "import audioio\n"
+                  "made, real = [], tempfile.mkdtemp\n"
+                  "tempfile.mkdtemp = lambda *a, **k: made.append(real(*a, **k)) or made[-1]\n"
+                  f"rate, nch, chunks = audioio.stream_audio({str(mp3)!r})\n"
+                  "print(made[0])\n")
+        r = subprocess.run([sys.executable, "-B", "-c", script], capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        tmp = Path(r.stdout.strip().splitlines()[-1])
+        try:
+            self.assertFalse(tmp.exists(), f"{tmp}: ffmpeg's temporary WAV must go when the process ends")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_a_failed_encode_leaves_no_file_and_keeps_the_old_one(self):
+        # ffmpeg wrote straight onto the destination: a run that died part-way (a timeout, a full disk) left a
+        # broken file there, and with --overwrite replaced a good file with it
+        decoded = self.dir / "decoded_by_stub.wav"
+        write_wav(decoded, tone(), RATE)
+        self.stub_ffmpeg(decoded)
+        os.environ["STUB_FAIL_AFTER_WRITE"] = "1"
+        src = self.dir / "s.wav"
+        write_wav(src, tone(), RATE)
+        out = self.dir / "theme.ogg"
+        rc, text = self.run_tool("convert", src, "--out", out)
+        self.assertEqual(rc, 2, text)
+        self.assertIn("could not write", text)
+        self.assertFalse(out.exists(), "a failed encode leaves nothing behind")
+        out.write_bytes(b"the good file")
+        rc, text = self.run_tool("convert", src, "--out", out, "--overwrite")
+        self.assertEqual(rc, 2, text)
+        self.assertEqual(out.read_bytes(), b"the good file", "a failed encode never replaces the file that was there")
+        self.assertEqual([p.name for p in self.dir.glob("*.ogg*")], ["theme.ogg"], "no staged file next to it")
+        del os.environ["STUB_FAIL_AFTER_WRITE"]
+        rc, text = self.run_tool("convert", src, "--out", out, "--overwrite")
+        self.assertEqual(rc, 0, text)
+        self.assertTrue(out.read_bytes().startswith(b"OggS"), "a good encode lands on the destination")
 
     # ---- a real ffmpeg, when there is one
     @unittest.skipUnless(shutil.which("ffmpeg"), "no ffmpeg on PATH: the real round trip is skipped")

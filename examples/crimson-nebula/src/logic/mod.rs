@@ -12,6 +12,7 @@
 //           only decide (which file, pitch, gain, duck, when the music changes); a Bevy audio system plays it.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): the kit's juice and shell modules
+//           2026-11-10 with Claude (Fable 5.1, claude-fable-5-1): auto_repeat (hold to mash, #166)
 // ---------------------------------------------------------------------------
 pub mod bots;
 pub mod kart;
@@ -33,6 +34,7 @@ pub mod spring;
 
 // Shell: settings, input, saves, text (kit modules)
 pub mod atomic_file;
+pub mod auto_repeat;
 pub mod bindings;
 pub mod i18n;
 pub mod save_store;

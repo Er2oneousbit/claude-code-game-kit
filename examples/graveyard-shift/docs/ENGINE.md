@@ -18,18 +18,56 @@
 ```
 Assets/Scripts/Core/     engine-agnostic logic (no UnityEngine types where possible), unit tested: juice (Shake, Hitstop,
                          Ease, FollowCamera, InputBuffer, CoyoteTimer, Spring, FlashLimiter), shell logic
-                         (GameSettings, Bindings, SaveStore, I18n, AtomicFile, Json) and audio decisions
+                         (GameSettings, Bindings, SaveStore, I18n, AtomicFile, Json, DialogueData) and audio decisions
                          (AudioDirector, MusicDirector, AudioAccess), checked against data/golden/*.json
+Assets/Scripts/Shell/    the front end on UI Toolkit (Game.Shell assembly): Shell (settings, strings, data folder),
+                         FrontEnd (the screen flow), Screens/ (title, main menu, settings, pause, What now?, history,
+                         credits, loading), SubtitleBar, PlayWorld (the placeholder game), Narrator, ShellInput,
+                         AccessAudit and SmokeDrive (`dev.py smoke --drive`)
 Assets/Scripts/Game/     gameplay MonoBehaviours and ScriptableObjects; AudioEventPlayer, MusicPlayer play the audio decisions
-Assets/Editor/           editor-only code (GameKitBuild.cs; GameKitShaders.cs checks the shader recipes)
+Assets/Editor/           editor-only code (GameKitBuild.cs; GameKitScenes.cs builds the starter and shell scenes;
+                         GameKitShaders.cs checks the shader recipes)
+Assets/Resources/GameKit/  the shell's panel theme (.tss) and the readable font (Atkinson Hyperlegible, OFL)
 Assets/Shaders/Kit/      the kit's shader recipes as unlit shaders, Kit/<name> (generated)
 Assets/Tests/EditMode/   EditMode tests (own assembly definition)
-Assets/Tests/PlayMode/   PlayMode tests, incl. BootSmokeTests (what `dev.py smoke` runs) and AudioPlayModeTests
-                         (AudioEventPlayer on real AudioSources: `dev.py test --mode PlayMode --filter Audio`)
-Assets/Art, Audio, Prefabs, Scenes/   content (see docs/ASSET_LOG.md)
+Assets/Tests/PlayMode/   PlayMode tests, incl. BootSmokeTests and ShellSmokeTests (what `dev.py smoke` runs; the second
+                         also runs `--drive` scenarios) and AudioPlayModeTests (AudioEventPlayer on real AudioSources:
+                         `dev.py test --mode PlayMode --filter Audio`)
+Assets/Art, Audio, Prefabs, Scenes/   content (see docs/ASSET_LOG.md); Scenes/Shell.unity is the kit's front end
+data/                    i18n/ string tables (en, fr), input/presets.json (one-handed layouts), access/colours.json,
+                         dialogue/sample.built.json, golden/ test vectors; a build copies the first four into
+                         Assets/StreamingAssets/ (GameKitBuild.SyncData), which is generated: do not edit it
 Packages/manifest.json   package list (edit through the Package Manager or with care)
 ProjectSettings/         project config (text, edit with care)
 ```
+
+## The shell (the kit's screens, #168)
+- **This game keeps its own boot:** `Assets/Scenes/Graveyard.unity` (built by `SceneBuilder.Build`) stays the only
+  scene in Build Settings, with the game's own IMGUI title and difficulty screen (`Hud.cs`). The shell code compiles
+  alongside it (`Game.Shell`, referenced by the PlayMode tests) but `CreateShellScene` has not been run, so
+  `Smoke_ShellDrive` reports Ignored under `dev.py smoke` and `smoke --drive` is not available. Run the line below
+  only if the game is to adopt the kit's screens: it puts `Shell.unity` first and the game would open on its title.
+- `python tools/dev.py exec GameKitScenes.CreateShellScene` makes the shell scene (`Shell.unity` under `Assets/Scenes/`:
+  a camera and the FrontEnd component) and puts it first in Build Settings: the game opens on the title. Until then
+  `smoke --drive` exits 2 and says so. Every screen is built in
+  code on a UI Toolkit panel (1280x720 reference, scaled so the smaller side fits), so there is no UXML or USS to
+  keep in step; the panel theme is Unity's default runtime theme (`Assets/Resources/GameKit/GameKitTheme.tss`).
+- Settings rows come from `GameSettings.Fields(section)` (the schema): a new field needs its `setting.<section>.<field>`
+  string in `data/i18n/en.json` (and `value.<field>.<choice>` for a choice) and shows up on its tab.
+- The accessibility baseline (SOP-20) is in place: subtitles (size, background, speaker names, barks, captions,
+  wait-for-accept), text scale, the readable font and line spacing, the colour-blind palette (`Shell.I.Palette()`,
+  `data/access/colours.json`), remapping with conflict swaps and the one-handed layouts, reduce motion and the flash
+  limit settings, `timing_scale` / `auto_repeat` (`ShellInput` repeats a held action) / `subtitle_hold`, menu
+  narration (the system's speech: PowerShell on Windows, `say`, `spd-say`), "What now?" and "Dialogue history" on
+  the pause menu (`Shell.I.SetObjective`, lines recorded by the subtitle bar).
+- Input: `ShellInput` reads the player's bindings through the Input Manager (the default of a `-createProject`
+  project); with only the Input System package active, UI Toolkit's navigation events drive the menus and custom pad
+  bindings are not read **(verify)**. Gamepad buttons follow the Windows XInput order; the d-pad reads the default
+  `Horizontal`/`Vertical` axes (so the left stick moves the menus too); triggers need axes 9 and 10 added **(verify)**.
+- Line spacing adds space between the menus' lines and paragraphs: UI Toolkit has no line-height, so lines inside one
+  wrapped paragraph keep the font's spacing **(verify: a later Unity may add it)**.
+- Not here yet (Godot, LÖVE and web have them): crash files, telemetry rows, the pseudo-locale drive, the bug report
+  key, a juice demo. `--locale pseudo` still runs the pseudo-locale on every string.
 
 ## Conventions
 - C# standard style: `PascalCase` types and methods, `_camelCase` private fields, `[SerializeField] private` over public fields.

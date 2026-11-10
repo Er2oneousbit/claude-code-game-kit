@@ -36,7 +36,8 @@ def dbg(msg):
 def parse_hex(s):
     """'FF00FF' or '#ff00ff' -> (255, 0, 255). Raises ValueError on bad input."""
     s = s.lstrip("#")
-    if len(s) != 6:
+    # every character checked: int("+F", 16) and int(" F", 16) are 15, so "+F00FF" keyed another color (#261)
+    if len(s) != 6 or any(c not in "0123456789abcdefABCDEF" for c in s):
         raise ValueError(f"key color must be 6 hex digits, got '{s}'")
     return tuple(int(s[i:i + 2], 16) for i in (0, 2, 4))
 

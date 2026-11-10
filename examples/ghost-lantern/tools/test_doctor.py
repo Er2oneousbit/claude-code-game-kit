@@ -60,6 +60,13 @@ class DoctorExam(unittest.TestCase):
         self.put("docs/ASSET_LOG.md", LOG_HEAD + "| A-0001 | hero | public/assets/art/hero.png | CC0 |\n")
         self.assertNotIn("media file(s) under", self.doctor())
 
+    def test_the_kits_own_resources_are_not_the_games_media(self):
+        """#168: the Unity shell ships its readable font under Assets/Resources/GameKit; a fresh project stays quiet."""
+        self.put("Assets/Resources/GameKit/Fonts/AtkinsonHyperlegible-Regular.ttf", "not really a font")
+        self.assertNotIn("media file(s) under", self.doctor())
+        self.put("Assets/Art/hero.png", "x")
+        self.assertIn("1 media file(s) under Assets/", self.doctor())
+
     def test_raw_templates_in_source_files_are_caught(self):
         """#122: only .md .json .py ... were scanned, and only the six name tokens (not the profile ones)."""
         footer, name = "{{" + "FOOTER}}", "{{" + "GAME_NAME}}"      # split: this exam ships into games itself

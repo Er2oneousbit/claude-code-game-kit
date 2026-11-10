@@ -60,8 +60,12 @@ def check_wav_name(path):
 
 def write_wav(path, samples, rate, loop=None, channels=1):
     """Write a 16-bit WAV (stereo: samples interleaved L R L R). loop=(start, end) in frames adds a forward
-    'smpl' loop (end inclusive). Returns the number of clipped samples. The path must end in .wav."""
+    'smpl' loop (end inclusive). Returns the number of clipped samples. The path must end in .wav. ValueError for
+    a rate the header cannot hold (a WAV or Vorbis header can say 0xFFFFFFFF Hz: the byte-rate field is 32 bits)."""
     check_wav_name(path)
+    if not 1 <= rate <= 0xFFFFFFFF // (2 * channels):
+        raise ValueError(f"{path}: a sample rate of {rate} Hz cannot be written to a WAV (the header's byte-rate "
+                         f"field is 32 bits; a source that says this is broken)")
     data, clipped = to_pcm16(samples)
     fmt = struct.pack("<HHIIHH", 1, channels, rate, rate * 2 * channels, 2 * channels, 16)
     chunks = b"fmt " + struct.pack("<I", len(fmt)) + fmt
@@ -110,6 +114,7 @@ def read_wav_channels(path):
     channels, rate, bits, is_float = fmt
     samples = _decode(data, bits, is_float)
     frames = len(samples) // channels
+    samples = samples[:frames * channels]            # a partial last frame goes the way of a partial sample
     if loop:
         # some writers store the frame count as the loop end (the spec says last frame): clamp, never index past
         start, end = loop[0], min(loop[1], frames - 1)
@@ -319,11 +324,11 @@ def main(argv=None):
         last = int(args.end * rate) * channels if args.end else len(samples)
         try:
             looped = crossfade_loop(samples[first:last], rate, args.crossfade, channels)
-        except ValueError as exc:
+            frames = len(looped) // channels
+            write_wav(args.out or args.wav, looped, rate, (0, frames - 1), channels)
+        except ValueError as exc:                   # a fade too long, or a rate the header cannot hold
             print(f"[error] {exc}", file=sys.stderr)
             return 2
-        frames = len(looped) // channels
-        write_wav(args.out or args.wav, looped, rate, (0, frames - 1), channels)
         print(f"[ OK ] {args.out or args.wav}: {frames / rate:.2f} s loop ({args.crossfade} s crossfade), loop points written")
         return 0
     peak = max((abs(s) for s in samples), default=0.0)
@@ -331,7 +336,11 @@ def main(argv=None):
         print(f"[FAIL] {args.wav} is silent, nothing to normalize")
         return 1
     gain = 10 ** (args.peak / 20) / peak
-    write_wav(args.out or args.wav, [s * gain for s in samples], rate, loop, channels)
+    try:
+        write_wav(args.out or args.wav, [s * gain for s in samples], rate, loop, channels)
+    except ValueError as exc:
+        print(f"[error] {exc}", file=sys.stderr)
+        return 2
     print(f"[ OK ] {args.out or args.wav}: gain {20 * math.log10(gain):+.1f} dB, peak now {args.peak} dBFS")
     return 0
 

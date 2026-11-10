@@ -75,13 +75,15 @@ Claude scopes work by this line (SOP-08 "Tiers"). Move it with `/next-tier` when
 | Unlocks, menus, music, more items | | no |
 
 ## Controls
+Through the kit's shell (rebindable in Settings > Controls; the kit's `move_*`, `jump` and `attack` actions):
+
 | Action | Keyboard/Mouse | Gamepad |
 |---|---|---|
-| Accelerate | W / Up | Right trigger *(Claude's pick)* |
-| Brake / reverse | S / Down | Left trigger |
-| Steer | A D / Left Right | Left stick |
-| Drift (hold) | Shift | Right bumper |
-| Use item | Space | A (south button) |
+| Accelerate | W | D-pad up / left stick up |
+| Brake / reverse | S | D-pad down / left stick down |
+| Steer | A D | D-pad / left stick left and right |
+| Drift (hold) | Space (`jump`) | A (south button) |
+| Use item | J (`attack`) | X (west button) |
 
 ## Tunables that define feel
 Kart top speed, acceleration, steering rate, grip, drift charge, boost strength and time, AI speed spread, warning

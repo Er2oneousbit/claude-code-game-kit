@@ -101,6 +101,19 @@ class AccessExam(unittest.TestCase):
         rc, out = self.run_tool("arrow", "--dx", -900, "--dy", 0, "--half-w", 320, "--half-h", 180)
         self.assertIn("← (direction 4)", out)
 
+    def test_a_golden_file_that_is_not_utf8_is_a_usage_error(self):
+        """#261: vectors --check decoded the file on disk strictly, so bad bytes were a UnicodeDecodeError traceback."""
+        golden = A.GOLDEN
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                A.GOLDEN = Path(tmp) / "access.json"
+                A.GOLDEN.write_bytes(b"\xff\xfe\x00bad")
+                rc, out = self.run_tool("vectors", "--check")
+                self.assertEqual(rc, 2, out)
+                self.assertIn("[error]", out)
+        finally:
+            A.GOLDEN = golden
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

@@ -195,6 +195,9 @@ def main(argv=None):
     except ToolError as exc:
         print(f"[error] {exc}", file=sys.stderr)
         return 2
+    except (OSError, ValueError) as exc:     # #261: a golden file with bad bytes was a UnicodeDecodeError traceback
+        print(f"[error] {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

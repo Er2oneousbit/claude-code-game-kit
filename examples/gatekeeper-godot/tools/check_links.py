@@ -23,6 +23,7 @@
 #           addons/Plugins/Packages and tools/check_links.ignore skipped, URI schemes, anchors, %20, <...>,
 #           titles, reference links, ~~~ fences and inline code handled, links resolve from their own file,
 #           exact letter case enforced
+#           2026-11-09 (#261): the link regexes are bounded (a crafted file hung them), a backslash path is broken
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -48,10 +49,13 @@ SKIP_PREFIXES = ("cmake-build-",)
 VENDOR_GLOBS = ("addons/*", "Plugins/*", "Packages/*")
 IGNORE_FILE = "tools/check_links.ignore"   # optional: one glob per line, a folder to skip or a target to never report
 URI = re.compile(r"^[a-z][a-z0-9+.-]*:", re.I)          # http:, res://, user://, mailto:, ...
-# [text](dest) or [text](<dest with spaces>), with an optional "title"
-MD_LINK = re.compile(r"\[[^\]]*\]\(\s*(<[^>\n]*>|[^)\s]+)(?:\s+(?:\"[^\"]*\"|'[^']*'))?\s*\)")
+# [text](dest) or [text](<dest with spaces>), with an optional "title". The text (two lines at most, wrapped docs),
+# the destination (2048 characters) and a definition's label (one line) are bounded: unbounded, 20000 unclosed
+# "[a](" made the engine eat the rest of the file and backtrack once per link, a minute at 80 KB and hours at 1 MB
+# (#261); no real path is that long
+MD_LINK = re.compile(r"\[[^\]\n]*(?:\n[^\]\n]*)?\]\(\s*(<[^>\n]*>|[^)\s]{1,2048})(?:\s+(?:\"[^\"]*\"|'[^']*'))?\s*\)")
 # [ref]: dest, with nothing after it but an optional title: "[Bug]: crash on load" is prose, not a definition (#247)
-MD_REF_DEF = re.compile(r"^\s{0,3}\[[^\]]+\]:[ \t]*(<[^>\n]*>|\S+)(?:[ \t]+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^)\n]*\)))?[ \t]*$",
+MD_REF_DEF = re.compile(r"^\s{0,3}\[[^\]\n]+\]:[ \t]*(<[^>\n]*>|\S+)(?:[ \t]+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^)\n]*\)))?[ \t]*$",
                         re.M)
 BACKTICK = re.compile(r"`([^`\n]+)`")
 PATHY_EXT = (".md", ".py", ".json", ".txt", ".cfg", ".gd", ".cs", ".cpp", ".hpp")
@@ -172,9 +176,10 @@ def references(text):
 
 
 def exact_exists(base, target):
-    """exists() with the exact letter case: NTFS and APFS ignore case, Linux, CI and GitHub do not."""
+    """exists() with the exact letter case: NTFS and APFS ignore case, Linux, CI and GitHub do not. Only "/" splits
+    the target: a backslash is part of the name on Linux and GitHub, so "docs\\GDD.md" is broken everywhere (#261)."""
     cur = base
-    for part in Path(target).parts:
+    for part in target.split("/"):
         if part in ("", "."):
             continue
         if part == "..":

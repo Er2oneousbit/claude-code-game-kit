@@ -72,7 +72,8 @@ Mark which ones the **vertical slice** needs. Everything marked "no" waits, othe
 | Drive (tank controls) | W/S forward and back, A/D turn | Left stick |
 | Aim turret | Mouse | Right stick |
 | Fire | Left mouse or Space | Right trigger or A |
-| Restart | R | Start |
+| Restart | R | Back |
+| Pause (the kit's shell) | Escape | Start |
 
 ## Tunables that define feel
 List the numbers that make the game feel right (gravity, jump height, coyote time, hit stop, camera lag).

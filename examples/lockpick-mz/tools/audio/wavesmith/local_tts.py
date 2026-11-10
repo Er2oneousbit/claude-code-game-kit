@@ -168,6 +168,8 @@ def read_replies(proc, lines, err_tail, timeout, on_reply):
             reply = json.loads(line)
         except ValueError:
             raise JobError(f"the TTS worker sent something that is not JSON: {line.strip()[:200]!r}")
+        if not isinstance(reply, dict):           # #261: a list or a number was an AttributeError traceback
+            raise JobError(f"the TTS worker sent something that is not a JSON object: {line.strip()[:200]!r}")
         if reply.get("ok") is False:
             raise ToolError(not_ready_text(reply))
         if "error" in reply:
@@ -257,9 +259,17 @@ def ref_provenance(args):
             meta = json.loads(side.read_text(encoding="utf-8"))
         except ValueError:
             raise ToolError(f"{side} is not valid JSON")
+        # the record may have been edited by hand (#261: a list was an AttributeError, a missing ref_text a KeyError)
+        if not isinstance(meta, dict):
+            raise ToolError(f"{side.name} beside the reference is not a JSON object; fix it, or delete it and pass "
+                            "--ref-text and --ref-origin")
         if meta.get("tool") == "local_tts" and meta.get("op") == "design":
-            return meta["ref_text"], {"origin": "designed from text", "persona": meta.get("persona"),
-                                      "reference": shown_path(ref), "reference_sha256": sha256_file(ref)}
+            ref_text = meta.get("ref_text")
+            if not isinstance(ref_text, str) or not ref_text.strip():
+                raise ToolError(f"{side.name} beside the reference has no ref_text (the words spoken in it); design "
+                                "the voice again, or pass --ref-text and --ref-origin")
+            return ref_text, {"origin": "designed from text", "persona": meta.get("persona"),
+                              "reference": shown_path(ref), "reference_sha256": sha256_file(ref)}
     if not args.ref_text or not args.ref_origin:
         raise ToolError(f"{ref} was not designed by local_tts.py, so say what it is: --ref-text \"<exact words "
                         "spoken in it>\" and --ref-origin self (your own voice) or permission (the speaker gave "
@@ -372,10 +382,13 @@ def cmd_say(args):
     if bool(args.text) == bool(args.lines):
         raise ToolError("give the text or --lines FILE (one of them)")
     if args.lines:
-        try:
-            texts = [l.strip() for l in Path(args.lines).read_text(encoding="utf-8").splitlines() if l.strip()]
+        try:   # utf-8-sig: Notepad's byte order mark was spoken as part of the first line (#261)
+            texts = [l.strip() for l in Path(args.lines).read_text(encoding="utf-8-sig").splitlines() if l.strip()]
         except OSError as exc:
             raise ToolError(f"cannot read --lines: {exc}")
+        except UnicodeDecodeError:
+            raise ToolError(f"{args.lines} is not UTF-8 text: save it as UTF-8 (in VS Code: the encoding in the "
+                            "status bar)")
         if not texts:
             raise ToolError(f"{args.lines} has no lines")
     else:

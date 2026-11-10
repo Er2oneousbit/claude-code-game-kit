@@ -351,6 +351,16 @@ class LocalSfxExam(unittest.TestCase):
         self.assertEqual(rc, 2, out)
         self.assertEqual(STATE.prompts, [])
 
+    def test_variants_are_capped(self):
+        """#261: --variants had no ceiling, so a typo built a seed list of a billion ints (MemoryError) before the
+        dry run or any check; the cap is a usage error and nothing is sent."""
+        rc, out = self.make("--variants", local_sfx.MAX_VARIANTS + 1, "--keep", 1, "--dry-run")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("--variants", out)
+        self.assertEqual(STATE.prompts, [])
+        rc, out = self.make("--variants", local_sfx.MAX_VARIANTS, "--keep", 1, "--dry-run")
+        self.assertEqual(rc, 0, out)
+
     def test_usage_errors(self):
         for args in (("make", "x", "--seconds", 1, "--out", "x.wav", "--keep", 4, "--variants", 3),
                      ("make", "x", "--seconds", 1, "--out", "x.mp3"),

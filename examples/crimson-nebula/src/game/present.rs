@@ -1,21 +1,28 @@
 // ---------------------------------------------------------------------------
 // game/present.rs
-// Purpose : Everything the player sees and touches: the neon 3D track built from the race's own geometry, kart
-//           models made of simple shapes, the changing sections (walls that open, barriers that rise), item boxes,
-//           a chase camera with bloom, the HUD and results, keyboard and gamepad input. Window only: headless runs
-//           and tests never add this plugin.
+// Purpose : Everything the player sees: the neon 3D track built from the race's own geometry, kart models made of
+//           simple shapes, the changing sections (walls that open, barriers that rise), item boxes, a chase camera
+//           with bloom (and the bump shake), the HUD and results. Window only: headless runs and tests never add
+//           this plugin. Input is the shell's job (src/shell/view.rs polls keys and pads through the player's
+//           bindings and writes game::Intent), so rebinding and the one-handed layouts reach the kart without a
+//           line here; Escape pauses through the shell too.
 // Usage   : app.add_plugins(PresentPlugin);
 // Notes   : Map (x, y) in logic is world (x, 0, -y), so counterclockwise stays counterclockwise seen from above, and
 //           a heading h is a rotation of h about +Y (models face +X). Neon = emissive materials plus the camera's
 //           Bloom on an Hdr camera. Placeholder art on purpose (GDD: crude first build): no assets are loaded.
-//           Pillar 3, "neon tells you everything": red = closing, cyan = opening, gold = items.
+//           Pillar 3, "neon tells you everything": red = closing, cyan = opening, gold = items. With a colour-blind
+//           mode on (Settings > Access) the closing and opening tells take the palette's "hit" and "target" colours
+//           (data/access/colours.json) at neon intensity; the default mode keeps the game's own neon.
 //
 // Pseudocode:
 //   startup: ground grid, road ribbons, edge walls (inner wall pieces that cover a shortcut's mouth are tagged with
 //            that shortcut), shortcut walls, barrier blocks per closure, item boxes, karts, camera, HUD
-//   every frame: input -> PlayerInput; karts and boxes follow the race; change visuals follow the schedule
-//            (pulse while warning, solid when live); chase camera; HUD text; Enter restarts after the race
+//   every frame: karts and boxes follow the race; change visuals follow the schedule (pulse while warning, solid
+//            when live, palette colours in a colour-blind mode); chase camera plus the screen shake; HUD text with
+//            the shell's prompts for "race again" and pause
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-10 with Claude (Fable 5.1, claude-fable-5-1): input, Escape and the restart moved to the shell
+//           and game/mod.rs (#168); the bump shake on the chase camera; colour-blind palettes on the two tells
 // ---------------------------------------------------------------------------
 use bevy::asset::RenderAssetUsages;
 use bevy::camera::Hdr;
@@ -23,11 +30,12 @@ use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 
-use super::{KARTS, NAMES, PlayerInput, RaceRes, fresh_seed, new_race};
-use crate::logic::kart::{Item, KartInput};
+use super::{DRIFT_ACTION, KARTS, NAMES, Palette, RaceRes, ScreenShake};
+use crate::logic::kart::Item;
 use crate::logic::race::{ChangeState, Phase, Race};
 use crate::logic::track::{ChangeKind, Strip};
 use crate::logic::tuning::*;
+use crate::shell::Shell;
 
 // ---- Look ----------------------------------------------------------------------
 const SKY: Color = Color::srgb(0.008, 0.006, 0.02);
@@ -45,6 +53,8 @@ const KART_GLOW: [LinearRgba; KARTS] = [
     LinearRgba::rgb(1.2, 5.0, 0.6),
     LinearRgba::rgb(5.0, 1.6, 0.2),
 ];
+/// Neon intensity for a palette colour (an sRGB value from colours.json) standing in for a tell.
+const PALETTE_GLOW: f32 = 5.0;
 // ---- Camera --------------------------------------------------------------------
 const CAM_BACK: f32 = 6.5;
 const CAM_UP: f32 = 3.0;
@@ -52,6 +62,8 @@ const CAM_LOOK_AHEAD: f32 = 7.0;
 const CAM_FOLLOW: f32 = 14.0;
 const FOV: f32 = 70.0;
 const FOV_BOOST: f32 = 82.0;
+/// World metres per shake unit (logic::shake works in 2D pixels: 8 at full trauma).
+const SHAKE_METRES: f32 = 0.04;
 
 pub struct PresentPlugin;
 
@@ -64,21 +76,7 @@ impl Plugin for PresentPlugin {
                 ..default()
             })
             .add_systems(Startup, (setup_world, setup_hud))
-            .add_systems(
-                RunFixedMainLoop,
-                read_input.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
-            )
-            .add_systems(
-                Update,
-                (
-                    sync_karts,
-                    sync_items,
-                    show_changes,
-                    chase_camera,
-                    update_hud,
-                    restart_or_quit,
-                ),
-            );
+            .add_systems(Update, (sync_karts, sync_items, show_changes, chase_camera, update_hud));
     }
 }
 
@@ -496,8 +494,9 @@ fn setup_hud(mut commands: Commands) {
         width: Val::Percent(100.0),
         ..default()
     };
-    commands.spawn((Text::new(""), text(30.0), at(Some(24.0), None, 18.0), Hud::Lap));
-    commands.spawn((Text::new(""), text(30.0), at(Some(24.0), None, 56.0), Hud::Place));
+    // Top-left starts at 52: the shell's pause hint sits above it
+    commands.spawn((Text::new(""), text(30.0), at(Some(24.0), None, 52.0), Hud::Lap));
+    commands.spawn((Text::new(""), text(30.0), at(Some(24.0), None, 90.0), Hud::Place));
     commands.spawn((Text::new(""), text(30.0), at(None, Some(24.0), 18.0), Hud::Item));
     commands.spawn((
         Text::new(""),
@@ -526,43 +525,9 @@ fn setup_hud(mut commands: Commands) {
 }
 
 // ---- Every frame ---------------------------------------------------------------------
-/// Keyboard and gamepad -> PlayerInput, right before this frame's fixed ticks.
-fn read_input(keys: Res<ButtonInput<KeyCode>>, pads: Query<&Gamepad>, mut input: ResMut<PlayerInput>) {
-    let mut throttle: f32 = 0.0;
-    let mut steer: f32 = 0.0;
-    if keys.any_pressed([KeyCode::KeyW, KeyCode::ArrowUp]) {
-        throttle += 1.0;
-    }
-    if keys.any_pressed([KeyCode::KeyS, KeyCode::ArrowDown]) {
-        throttle -= 1.0;
-    }
-    if keys.any_pressed([KeyCode::KeyA, KeyCode::ArrowLeft]) {
-        steer += 1.0;
-    }
-    if keys.any_pressed([KeyCode::KeyD, KeyCode::ArrowRight]) {
-        steer -= 1.0;
-    }
-    let mut drift = keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]);
-    let mut use_item = keys.pressed(KeyCode::Space);
-    for pad in &pads {
-        let gas = pad.get(GamepadButton::RightTrigger2).unwrap_or(0.0);
-        let brake = pad.get(GamepadButton::LeftTrigger2).unwrap_or(0.0);
-        if gas > 0.05 || brake > 0.05 {
-            throttle = gas - brake;
-        }
-        let stick = pad.get(GamepadAxis::LeftStickX).unwrap_or(0.0);
-        if stick.abs() > 0.12 {
-            steer = -stick;
-        }
-        drift |= pad.pressed(GamepadButton::RightTrigger);
-        use_item |= pad.pressed(GamepadButton::South);
-    }
-    input.0 = KartInput {
-        throttle: throttle.clamp(-1.0, 1.0),
-        steer: steer.clamp(-1.0, 1.0),
-        drift,
-        use_item,
-    };
+/// A palette colour at neon intensity.
+fn neon(c: Color) -> LinearRgba {
+    c.to_linear() * PALETTE_GLOW
 }
 
 fn sync_karts(
@@ -608,12 +573,23 @@ fn show_changes(
     time: Res<Time>,
     race: Res<RaceRes>,
     mats: Res<ChangeMaterials>,
+    shell: Res<Shell>,
+    palette: Res<Palette>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut mouths: Query<(&MouthWall, &mut Visibility), Without<BarrierBlock>>,
     mut blocks: Query<(&BarrierBlock, &mut Transform, &mut Visibility), Without<MouthWall>>,
 ) {
     let track = &race.0.track;
     let pulse = 0.5 + 0.5 * (time.elapsed_secs() * 10.0).sin();
+    // The two tells in the colour-blind palette when one is on; the game's own neon otherwise
+    let (red, cyan) = if shell.text("access", "colorblind") == "none" {
+        (RED, CYAN)
+    } else {
+        (
+            neon(palette.get("hit", Color::srgb(1.0, 0.3, 0.3))),
+            neon(palette.get("target", Color::srgb(0.2, 0.7, 1.0))),
+        )
+    };
     let mut shortcut_state = vec![ChangeState::Pending; track.shortcuts.len()];
     let mut closure_state = vec![ChangeState::Pending; track.closures.len()];
     for sc in &race.0.schedule {
@@ -624,9 +600,9 @@ fn show_changes(
     }
     for (i, state) in shortcut_state.iter().enumerate() {
         let (wall, road) = match state {
-            ChangeState::Warning(_) => (CYAN * (0.3 + 1.2 * pulse), CYAN * (0.05 + 0.15 * pulse)),
-            ChangeState::Live => (CYAN, CYAN * 0.06),
-            _ => (CYAN * 0.12, LinearRgba::BLACK),
+            ChangeState::Warning(_) => (cyan * (0.3 + 1.2 * pulse), cyan * (0.05 + 0.15 * pulse)),
+            ChangeState::Live => (cyan, cyan * 0.06),
+            _ => (cyan * 0.12, LinearRgba::BLACK),
         };
         if let Some(mut m) = materials.get_mut(&mats.shortcut_walls[i]) {
             m.emissive = wall;
@@ -645,8 +621,8 @@ fn show_changes(
     for (i, state) in closure_state.iter().enumerate() {
         if let Some(mut m) = materials.get_mut(&mats.barriers[i]) {
             m.emissive = match state {
-                ChangeState::Warning(_) => RED * (0.4 + 1.6 * pulse),
-                _ => RED,
+                ChangeState::Warning(_) => red * (0.4 + 1.6 * pulse),
+                _ => red,
             };
         }
     }
@@ -666,9 +642,13 @@ fn show_changes(
     }
 }
 
+/// The chase camera, then this frame's screen shake on top of it. `eye` is the camera's own position without
+/// the shake, so the follow lerp never chases last frame's rattle.
 fn chase_camera(
     time: Res<Time>,
     race: Res<RaceRes>,
+    mut shake: ResMut<ScreenShake>,
+    mut eye: Local<Option<Vec3>>,
     mut cam: Query<(&mut Transform, &mut Projection), With<ChaseCam>>,
 ) {
     let Ok((mut tf, mut proj)) = cam.single_mut() else {
@@ -678,15 +658,22 @@ fn chase_camera(
     let fwd = world(kart.forward(), 0.0);
     let want_eye = world(kart.pos, CAM_UP) - fwd * CAM_BACK;
     let k = 1.0 - (-CAM_FOLLOW * time.delta_secs()).exp();
-    tf.translation = tf.translation.lerp(want_eye, k);
+    let at = eye.unwrap_or(tf.translation).lerp(want_eye, k);
+    *eye = Some(at);
+    tf.translation = at;
     tf.look_at(world(kart.pos, 1.0) + fwd * CAM_LOOK_AHEAD, Vec3::Y);
+    let intensity = shake.intensity;
+    let (x, y, roll) = shake.shake.update(time.delta_secs_f64(), intensity);
+    let (right, up) = (tf.right().as_vec3(), tf.up().as_vec3());
+    tf.translation += (right * x as f32 + up * y as f32) * SHAKE_METRES;
+    tf.rotate_local_z(roll as f32);
     if let Projection::Perspective(p) = proj.as_mut() {
         let want = if kart.boost > 0.0 { FOV_BOOST } else { FOV };
         p.fov += (want.to_radians() - p.fov) * k;
     }
 }
 
-fn update_hud(race: Res<RaceRes>, mut hud: Query<(&Hud, &mut Text)>) {
+fn update_hud(race: Res<RaceRes>, shell: Res<Shell>, mut hud: Query<(&Hud, &mut Text)>) {
     let r = &race.0;
     let me = &r.racers[0];
     let banner = r
@@ -721,7 +708,10 @@ fn update_hud(race: Res<RaceRes>, mut hud: Query<(&Hud, &mut Text)>) {
             lines.push(format!("{}. {}   {}", place + 1, NAMES[k], time));
         }
         lines.push(String::new());
-        lines.push(format!("Track seed {}   Enter: race again   Esc: quit", r.seed));
+        // The prompts follow the player's bindings and glyph set (the shell's job, SOP-19)
+        let (_, again) = shell.prompt(DRIFT_ACTION);
+        let (_, pause) = shell.prompt("pause");
+        lines.push(format!("Track seed {}   {again}: race again   {pause}: menu", r.seed));
         lines.join("\n")
     } else {
         String::new()
@@ -731,63 +721,12 @@ fn update_hud(race: Res<RaceRes>, mut hud: Query<(&Hud, &mut Text)>) {
             Hud::Lap => format!("LAP {}/{}", r.lap_of(0), LAPS),
             Hud::Place => format!("POS {}/{}", r.place_of(0), r.racers.len()),
             Hud::Item => match me.kart.item {
-                Some(Item::Boost) => "[ BOOST ]  Space".into(),
+                Some(Item::Boost) => format!("[ BOOST ]  {}", shell.prompt(super::ITEM_ACTION).1),
                 None => "[  --  ]".into(),
             },
             Hud::Banner => banner.clone(),
             Hud::Center => center.clone(),
             Hud::Results => results.clone(),
         };
-    }
-}
-
-fn restart_or_quit(
-    keys: Res<ButtonInput<KeyCode>>,
-    pads: Query<&Gamepad>,
-    race: Res<RaceRes>,
-    mut commands: Commands,
-    mut exit: MessageWriter<AppExit>,
-) {
-    if keys.just_pressed(KeyCode::Escape) {
-        exit.write(AppExit::Success);
-    }
-    let again = keys.just_pressed(KeyCode::Enter) || pads.iter().any(|p| p.just_pressed(GamepadButton::Start));
-    // Also under --autoplay: the results offer Enter in every mode, and the bot drives the new race too
-    if again && race.0.phase == Phase::Over {
-        commands.insert_resource(new_race(fresh_seed()));
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::game::GameConfig;
-    use crate::logic::bots::Style;
-    use bevy::ecs::message::Messages;
-    use bevy::ecs::system::RunSystemOnce;
-
-    #[test]
-    fn enter_on_the_results_starts_a_new_race_also_under_autoplay() {
-        // #142: the results line says "Enter: race again" whoever drives, so Enter must work with a bot driving
-        for autoplay in [None, Some(Style::Reader)] {
-            let mut world = World::new();
-            let mut keys = ButtonInput::<KeyCode>::default();
-            keys.press(KeyCode::Enter);
-            world.insert_resource(keys);
-            world.init_resource::<Messages<AppExit>>();
-            world.insert_resource(GameConfig {
-                autoplay,
-                seed: Some(3),
-            });
-            let mut race = Race::new(3, KARTS);
-            race.phase = Phase::Over;
-            world.insert_resource(RaceRes(race));
-            world.run_system_once(restart_or_quit).expect("the system runs");
-            assert_eq!(
-                world.resource::<RaceRes>().0.phase,
-                Phase::Countdown,
-                "autoplay {autoplay:?}"
-            );
-        }
     }
 }

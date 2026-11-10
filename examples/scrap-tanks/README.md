@@ -16,8 +16,10 @@ sound libraries (a few minutes).
 ```
 python tools/dev.py run
 ```
-WASD to drive (tank controls), mouse to aim, left click or Space to fire, R to restart. Gamepad: left stick drives, right
-stick aims, right trigger or A fires, Start restarts. Red labels are coming for you; blue ones are hiding.
+The kit's shell (kit 0.14.3: title, main menu, settings with rebinding, pause, credits) wraps the fight. WASD to drive
+(tank controls), mouse to aim, left click, Space or the bound attack key to fire, R to restart, Escape to pause. Gamepad:
+left stick drives, right stick aims, right trigger or A fires, Back restarts, Start pauses. Red labels are coming for
+you; blue ones are hiding.
 
 Game options go after `--`, for example `build/debug/bin/Debug/scrap_tanks.exe -- --debug-ai`:
 `--autoplay skilled|reckless` (a bot plays), `--seed N` (same seed, same fight), `--god`, `--debug-ai` (raider paths,
@@ -36,9 +38,11 @@ chosen spots, who can hit you, the tree).
 
 ## Checks
 ```
-python tools/dev.py check && python tools/dev.py test      # 66 test cases (29 are the kit's: fixed timestep, golden vectors, audio and shell files), the pillar check plays 80 fights
+python tools/dev.py check && python tools/dev.py test      # 89 test cases (51 are the kit's: fixed timestep, golden vectors, audio, shell files and menus), the pillar check plays 80 fights
 python tools/dev.py smoke --frames 30000 --timeout 900 --until RUN_WON --fail-on PLAYER_DESTROYED -- --autoplay skilled --seed 7
 python tools/dev.py smoke --frames 30000 --timeout 900 --until PLAYER_DESTROYED --fail-on RUN_WON -- --autoplay reckless --seed 7
+python tools/dev.py smoke --drive menus                   # the shell: settings changed, saved, quit
+python tools/access/sweep.py                              # the accessibility sweep over the shell's screens
 ```
 
 ## Credits and licenses

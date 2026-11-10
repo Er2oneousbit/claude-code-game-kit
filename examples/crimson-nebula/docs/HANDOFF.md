@@ -3,8 +3,8 @@
 > Rewritten at the end of every session by `/end-session`. Read first by `/start-session`.
 > Keep under ~60 lines. It is a baton, not a diary.
 
-**Last updated:** 2026-10-28
-**Branch / commit:** kept in the kit repo as `examples/crimson-nebula` (kit 0.5.0)
+**Last updated:** 2026-11-10 (kit 0.14.3 upgrade: the shell)
+**Branch / commit:** kept in the kit repo as `examples/crimson-nebula` (kit 0.14.3)
 **Engine version:** see `docs/ENGINE.md` (Bevy 0.20.0, Rust 1.99.1)
 
 ## Where we are
@@ -12,8 +12,14 @@ The toy is playable (M0): one neon loop, you vs Vex (reader), Nova (late) and Ro
 lap 2, any change on lap 3, item boxes give a boost. Waiting for the user's first playtest.
 
 ## What changed last session
+- Kit 0.14.3: the game boots to the kit's shell (`src/shell/`, kit files): title, menu, settings with rebinding,
+  Esc pauses. The race ticks only in Play (`GameActive`); input comes through the kit's `Intent` (W/S/A/D or
+  d-pad and stick as `move_*`, Space/A held = drift, J/X = item, any of jump/attack/interact on the results = race
+  again, also under `--autoplay`); `src/game/mod.rs` maps it. Lost on the way: analog triggers and stick (the kit's
+  `Intent.dir` is digital), Shift as drift, arrows for driving (arrows are the menu keys now). A bump rattles the
+  chase camera (`ScreenShake`, off with reduce motion); the closing and opening tells take the colour-blind palette.
 - Race logic in `src/logic/` (track, kart, race, bots, tuning) with 36 unit tests and 4 headless race tests.
-- 3D view in `src/game/present.rs`: shapes only, neon via emissive + bloom, chase camera, HUD, results, Enter restarts.
+- 3D view in `src/game/present.rs`: shapes only, neon via emissive + bloom, chase camera, HUD, results, a press restarts.
 - Tuning found by bot runs: barriers taper in and zap (speed x0.45), shortcuts peel off the loop (no 90 degree
   corners), bots brake for bends and pass each other. Reading the changes wins 20 of 20 seeds by 0.6 to 1.9 s.
 - Became the kit's Bevy example: README, `HOW_IT_WAS_MADE.md`, `docs/crimson-nebula.gif`, ASSET_LOG row for Bevy's
@@ -35,7 +41,7 @@ lap 2, any change on lap 3, item boxes give a boost. Waiting for the user's firs
 
 ## Commands that matter right now
 ```
-python tools/dev.py run                                   # play (W/S or triggers, A/D or stick, Shift drift, Space boost)
+python tools/dev.py run                                   # play (W/S or stick, A/D, Space drift, J boost, Esc pause)
 python tools/dev.py test
 python tools/dev.py smoke --frames 9000 --until RACE_OVER -- --autoplay reader --seed 3
 cargo test --lib balance_report -- --ignored --nocapture  # how much reading the changes gains, per seed

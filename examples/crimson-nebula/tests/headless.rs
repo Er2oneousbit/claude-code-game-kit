@@ -4,17 +4,20 @@
 //           set the player's input, call app.update() frame by frame, read the race. No window or GPU needed.
 // Usage   : python tools/dev.py test   (or cargo test --test headless)
 // Notes   : One frame = one 1/60 s fixed tick here (app::test_app), so a full 3-lap race is about 7,500 frames.
-//           Each test names the behavior it guards.
+//           Each test names the behavior it guards. The last test adds the shell (app::shell_test_app) and walks
+//           its menus into Play, the way a player does.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-10 with Claude (Fable 5.1, claude-fable-5-1): Intent replaces PlayerInput; GameConfig grew the
+//           shell's options; the "race again" guard (#142) goes through the shell now
 // ---------------------------------------------------------------------------
 use bevy::prelude::*;
 
-use project_crimson_nebula::app::{smoke_test_app, test_app};
-use project_crimson_nebula::game::{GameConfig, PlayerInput, RaceRes, SimTick};
+use project_crimson_nebula::app::{shell_test_app, smoke_test_app, test_app};
+use project_crimson_nebula::game::{GameConfig, Intent, RaceRes, SimTick};
 use project_crimson_nebula::logic::bots::Style;
-use project_crimson_nebula::logic::kart::KartInput;
 use project_crimson_nebula::logic::race::Phase;
 use project_crimson_nebula::logic::tuning::{COUNTDOWN, RACE_TIME_LIMIT};
+use project_crimson_nebula::shell::{ScreenName, Shell};
 
 fn race(app: &App) -> &project_crimson_nebula::logic::race::Race {
     &app.world().resource::<RaceRes>().0
@@ -38,6 +41,7 @@ fn a_bot_driven_player_finishes_a_whole_race() {
     let mut app = test_app(GameConfig {
         autoplay: Some(Style::Reader),
         seed: Some(3),
+        ..default()
     });
     let max_frames = (RACE_TIME_LIMIT * 60.0) as usize;
     for _ in 0..max_frames {
@@ -58,6 +62,7 @@ fn the_same_seed_replays_the_same_race() {
         let mut app = test_app(GameConfig {
             autoplay: Some(Style::Late),
             seed: Some(11),
+            ..default()
         });
         for _ in 0..3000 {
             app.update();
@@ -75,10 +80,7 @@ fn player_input_drives_the_players_kart_after_the_countdown() {
     });
     app.update(); // startup creates the race
     let start = race(&app).racers[0].kart.pos;
-    app.world_mut().resource_mut::<PlayerInput>().0 = KartInput {
-        throttle: 1.0,
-        ..default()
-    };
+    app.world_mut().resource_mut::<Intent>().dir = Vec2::Y; // the held move_up action: full gas
     for _ in 0..(COUNTDOWN * 60.0) as usize - 2 {
         app.update();
     }
@@ -101,4 +103,74 @@ fn a_smoke_budget_of_n_frames_runs_n_ticks() {
         assert!(updates <= N + 10, "the smoke budget never exited");
     }
     assert_eq!(app.world().resource::<SimTick>().0, u64::from(N));
+}
+
+/// Injects one shell action and lets it land (the shell reads presses one frame after they are queued).
+fn inject(app: &mut App, action: &str) {
+    app.world_mut().resource_mut::<Shell>().inject(action);
+    app.update();
+    app.update();
+}
+
+fn until_screen(app: &mut App, name: ScreenName) {
+    for _ in 0..600 {
+        if app.world().resource::<Shell>().top_name() == Some(name) {
+            return;
+        }
+        app.update();
+    }
+    panic!("screen {} never came up", name.as_str());
+}
+
+#[test]
+fn the_race_waits_in_the_menus_and_a_press_on_the_results_starts_a_new_one_also_under_autoplay() {
+    // #142: the results say "race again" whoever drives. The shell drops presses from Intent while a bot drives,
+    // so the game reads that one press from the shell itself; this walks the real menus to prove the whole path.
+    for autoplay in [None, Some(Style::Reader)] {
+        let dir = std::env::temp_dir().join(format!(
+            "{}-restart-{}-{}",
+            env!("CARGO_PKG_NAME"),
+            autoplay.is_some(),
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut app = shell_test_app(
+            GameConfig {
+                autoplay,
+                seed: Some(3),
+                data_dir: Some(dir.clone()),
+                automated: true,
+                ..default()
+            },
+            None,
+        );
+        until_screen(&mut app, ScreenName::Title);
+        if app.world().resource::<Shell>().top().is_some_and(|t| t.consent) {
+            inject(&mut app, "ui_cancel"); // the play statistics question: later
+        }
+        inject(&mut app, "ui_accept");
+        until_screen(&mut app, ScreenName::MainMenu);
+        for _ in 0..60 {
+            app.update();
+        }
+        assert_eq!(
+            app.world().resource::<SimTick>().0,
+            0,
+            "the race never ticks under the menus"
+        );
+        while app.world().resource::<Shell>().focus_id() != "play" {
+            inject(&mut app, "ui_down");
+        }
+        inject(&mut app, "ui_accept");
+        until_screen(&mut app, ScreenName::Play);
+        assert_eq!(race(&app).seed, 3, "Play starts the race asked for with --seed");
+        for _ in 0..30 {
+            app.update();
+        }
+        assert!(app.world().resource::<SimTick>().0 >= 30, "the race ticks in Play");
+        app.world_mut().resource_mut::<RaceRes>().0.phase = Phase::Over;
+        inject(&mut app, "jump");
+        assert_eq!(race(&app).phase, Phase::Countdown, "autoplay {autoplay:?}: a new race");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

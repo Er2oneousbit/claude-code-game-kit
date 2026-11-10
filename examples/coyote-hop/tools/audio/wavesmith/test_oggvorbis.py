@@ -894,6 +894,38 @@ class OggVorbisExam(unittest.TestCase):
         with self.assertRaises(oggvorbis.VorbisLimit):
             oggvorbis.decode(self.data("mono22k"), max_values=5000)
 
+    def test_a_giant_packet_is_refused_before_it_is_built(self):
+        # a packet is joined from lacing segments across pages with no size limit, and BitReader then keeps one
+        # 8-byte int per byte offset (45x the packet, measured): a single-packet file of 100 MB asked for 4.5 GB
+        head = hand_stream(1, 1)
+        pages = [head[:self.page_offsets(head)[2]]]
+        left, seq, flags = oggvorbis.MAX_PACKET_BYTES + 1, 2, 0
+        while left > 0:
+            n = min(left, 255 * 255)
+            lacing = [255] * (n // 255) + ([n % 255] if n == left else [])    # the last page ends the packet
+            if n == left:
+                flags |= 4
+            page = bytearray(b"OggS" + bytes([0, flags]) + struct.pack("<qIII", 0 if n == left else -1, 7, seq, 0)
+                             + bytes([len(lacing)] + lacing) + bytes(n))
+            struct.pack_into("<I", page, 22, oggvorbis.ogg_crc(bytes(page)))
+            pages.append(bytes(page))
+            left, seq, flags = left - n, seq + 1, 1
+        data = b"".join(pages)
+        self.assertGreater(len(data), oggvorbis.MAX_PACKET_BYTES)
+        t = time.time()
+        with self.assertRaises(oggvorbis.VorbisLimit) as ctx:
+            oggvorbis.read_packets(data)                    # refused while the pages are read, before any decoding
+        self.assertLess(time.time() - t, 15.0)
+        self.assertIn("packet", str(ctx.exception))
+        with self.assertRaises(oggvorbis.VorbisLimit):
+            oggvorbis.decode(data)
+        src = self.dir / "giant.ogg"
+        src.write_bytes(data)
+        rc, out = self.run_tool("info", src)
+        self.assertEqual(rc, 2, out)
+        self.assertIn("[error]", out)
+        self.assertNotIn("Traceback", out)
+
     def test_truncated_streams_fail(self):
         data = self.data("stereo44k")
         with self.assertRaises(oggvorbis.VorbisCorrupt) as ctx:
@@ -947,6 +979,25 @@ class OggVorbisExam(unittest.TestCase):
         self.assertEqual(oggvorbis.identification(self.data("theora11k"))["rate"], 11025, "skips the video header")
         with self.assertRaises(oggvorbis.VorbisError):
             oggvorbis.identification(self.data("opus"))
+
+    def test_a_sample_rate_the_wav_cannot_hold_is_an_error_not_a_traceback(self):
+        # the identification header's rate is 32 untrusted bits; towav handed 0xFFFFFFFF to write_wav, whose
+        # byte-rate field overflowed as struct.error (a raw traceback)
+        data = bytearray(hand_stream(1, 1))
+        end = self.page_offsets(bytes(data))[1]
+        struct.pack_into("<I", data, 28 + 12, 0xFFFFFFFF)      # page header 27 + 1 lacing byte, then \x01vorbis + version + channels
+        data[22:26] = b"\0\0\0\0"
+        struct.pack_into("<I", data, 22, oggvorbis.ogg_crc(bytes(data[:end])))
+        self.assertEqual(oggvorbis.identification(bytes(data))["rate"], 0xFFFFFFFF)
+        src = self.dir / "hz.ogg"
+        src.write_bytes(bytes(data))
+        rc, out = self.run_tool("info", src)
+        self.assertEqual(rc, 0, out)
+        rc, out = self.run_tool("towav", src, "--out", self.dir / "hz.wav")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("[error]", out)
+        self.assertNotIn("Traceback", out)
+        self.assertFalse((self.dir / "hz.wav").exists())
 
     def test_crc_mismatch_and_missing_page_fail(self):
         data = bytearray(self.data("mono22k"))

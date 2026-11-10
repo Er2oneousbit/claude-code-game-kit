@@ -38,7 +38,7 @@ The shell (`SOP-19`) has the settings; this SOP is what they must do.
    the first check, not proof. Bright, red or striped effects that stay in the game get a flash analysis tool run on a
    recording before release (E73, E74), or are softened until they need none.
 5. **Check the colour pairs** whenever a palette changes: `python tools/access/colour_check.py pairs` simulates each pair as a protanope, deuteranope and tritanope sees it, in the palette the colour-blind setting switches to, and fails a pair that comes too close (CIEDE2000, E159). The pass mark is the file's `min_delta_e`: no published rule sets one for game art, so the kit's 20 is a tip; raise it if colour-blind playtesters still mix a pair up. `colour_check.py image <screenshot>` writes the picture as each player sees it, for a look.
-6. **Run the sweep** on the engines with the shell's screens (Godot, LÖVE, web): `python tools/access/sweep.py` drives every screen
+6. **Run the sweep** on the engines with the shell's screens (Godot, LÖVE, web, Unity, Unreal, Bevy, C++/SDL3): `python tools/access/sweep.py` drives every screen
    at 1920x1080 and at 1280x800 (gamepad only), at 100 % and 200 % text, and fails text under 18 px at 1080p or 9 px
    at 1280x800 (F36), text under 4.5:1 against what is behind it (3:1 for large text, E158; text over the game is
    checked against its panel or outline over both a black and a white game), text clipped, off screen or running

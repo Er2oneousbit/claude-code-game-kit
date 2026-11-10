@@ -21,6 +21,8 @@
 //   per schema section: a non-object section counts as one problem ; per field: missing -> default,
 //   present -> Fix (bool | number clamp | choice | resolution) ; input.bindings: lists of strings only
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): Fields(section) hands the schema to the settings
+//           screen (#168), so a new field shows up there without a second list
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -138,6 +140,43 @@ namespace graveyard_shift.Core
             Num("input", "deadzone", 0.0, 0.9), Flag("input", "invert_y"), OneOf("input", "glyphs", Bindings.GLYPH_SETS),
             OneOf("telemetry", "consent", CONSENT),
         };
+
+        // ---- The schema, read-only, for a settings screen (#168) ------------------------
+
+        /// <summary>One field as a settings screen needs it: "bool", "num" (Lo..Hi), "enum" (Choices) or "res".</summary>
+        public sealed class FieldInfo
+        {
+            public string Section;
+            public string Field;
+            public string Kind;
+            public double Lo;
+            public double Hi;
+            public object[] Choices;
+        }
+
+        /// <summary>The fields of one section in schema order (empty for a section the kit does not define).</summary>
+        public static List<FieldInfo> Fields(string section)
+        {
+            var fields = new List<FieldInfo>();
+            foreach (Rule rule in FIELDS)
+            {
+                if (rule.Section != section)
+                {
+                    continue;
+                }
+                string kind = rule.Kind == Kind.Bool ? "bool" : rule.Kind == Kind.Number ? "num"
+                            : rule.Kind == Kind.Choice ? "enum" : "res";
+                object[] choices = null;
+                if (rule.Choices != null)
+                {
+                    choices = new object[rule.Choices.Length];
+                    Array.Copy(rule.Choices, choices, choices.Length);
+                }
+                fields.Add(new FieldInfo { Section = section, Field = rule.Field, Kind = kind, Lo = rule.Lo, Hi = rule.Hi,
+                                           Choices = choices });
+            }
+            return fields;
+        }
 
         // ---- Defaults ----------------------------------------------------------------
 

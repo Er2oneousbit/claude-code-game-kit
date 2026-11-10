@@ -51,6 +51,13 @@ def main():
         checks.append(("missing input exits 2", rc_bad == 2))
         rc_key = ck.main([str(d / "s.png"), "--key", "XYZ"])
         checks.append(("bad key exits 2", rc_key == 2))
+        # #261: int(" F", 16) and int("+F", 16) are 15, so "+F00FF" keyed (15, 0, 255) without a word
+        for bad in ("+F00FF", " F00FF", "FF-0FF"):
+            try:
+                ck.parse_hex(bad)
+                checks.append((f"key {bad!r} is refused", False))
+            except ValueError:
+                checks.append((f"key {bad!r} is refused", True))
 
         # despill: a pink fringe on a red sprite loses its pink but keeps its red; green fringe likewise
         r, g, b = ck.despill_pixel((220, 40, 180), (255, 0, 255))

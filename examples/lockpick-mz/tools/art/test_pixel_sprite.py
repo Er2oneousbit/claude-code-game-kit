@@ -221,6 +221,30 @@ def draw(pose, direction, frame):
         code, out = run("build", str(mine), "--out", str(self.dir / "m"), "--preview-scale", "0")
         self.assertNotIn("[WARN]", out)
 
+    # ---- #261 (second-model review) ---------------------------------------------------------------------------
+    def test_a_png_in_many_small_idat_chunks_reads_in_bounded_time(self):
+        import time
+        # 40000 IDAT chunks of 200 bytes (8 MB): joined with bytes += they were copied once per chunk, 27 s
+        def chunk(tag, data):
+            return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+        p = self.dir / "many.png"
+        p.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
+                      + b"".join(chunk(b"IDAT", b"\x00" * 200) for _ in range(40000)) + chunk(b"IEND", b""))
+        started = time.perf_counter()
+        with self.assertRaises(ps.SpriteError):                  # the data is not the 5 bytes a 1x1 picture needs
+            ps.read_png(p)
+        self.assertLess(time.perf_counter() - started, 3.0, "IDAT chunks are joined quadratically again")
+
+    def test_a_hand_edited_layout_json_is_a_usage_error_not_a_traceback(self):
+        atlas = self.dir / "hero.png"
+        ps.write_png(atlas, [[(0, 0, 0, 255)] * 32 for _ in range(32)], True)
+        for body in ('{"cell": "32"}', "[1]", "nope", '{"cell": 0}', '{"cell": -8}'):
+            (self.dir / "hero.json").write_text(body, encoding="utf-8")
+            code, out = run("check", str(atlas))
+            self.assertEqual(code, 2, f"{body}: {out}")
+            self.assertIn("[error]", out, body)
+            self.assertIn("hero.json", out, body)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

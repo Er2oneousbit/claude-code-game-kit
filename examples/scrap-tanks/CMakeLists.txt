@@ -12,6 +12,8 @@
 #           (nlohmann-json), its golden-vector and file tests
 # Updated : 2026-11-06 with Claude (Opus 5.5, claude-opus-5-5): SDL3 and SDL3_image/ttf/mixer (was SDL2), the kit's
 #           shader recipes compiled with shadercross, src/gfx (KitShaders), the kit_shader_check tool
+# Updated : 2026-11-10 with Claude (Fable 5.1, claude-fable-5-1): the kit's shell screens (#168): Menu and ShellLogic in
+#           core, src/shell in game_lib, tests/test_menu.cpp
 # ---------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.21)
 project(scrap_tanks VERSION 0.2.0 LANGUAGES CXX)
@@ -40,8 +42,8 @@ else()
 endif()
 
 # ---- core: SDL-free simulation, AI and bots, unit tested (the whole fight runs in tests) ----
-# The kit's juice headers and shell logic (settings, saves, bindings, i18n) live here too; the game does not use
-# them yet, the golden-vector tests keep them honest.
+# The kit's juice headers and shell logic (settings, saves, bindings, i18n, the menus) live here too; the shell's
+# screens (src/shell) use them, the golden-vector and menu tests keep them honest.
 find_package(nlohmann_json CONFIG REQUIRED)
 
 add_library(core STATIC
@@ -53,8 +55,10 @@ add_library(core STATIC
   src/core/AtomicFile.cpp
   src/core/Bindings.cpp
   src/core/I18n.cpp
+  src/core/Menu.cpp
   src/core/SaveStore.cpp
   src/core/Settings.cpp
+  src/core/ShellLogic.cpp
 )
 target_include_directories(core PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(core PUBLIC project_warnings nlohmann_json::nlohmann_json)
@@ -72,6 +76,9 @@ set(GAME_SOURCES
   src/game/Game.cpp
   src/game/Assets.cpp
   src/gfx/KitShaders.cpp
+  src/shell/Draw.cpp
+  src/shell/Drive.cpp
+  src/shell/Shell.cpp
 )
 add_library(game_lib STATIC ${GAME_SOURCES})
 target_link_libraries(game_lib PUBLIC core SDL3::SDL3 SDL3_image::SDL3_image SDL3_ttf::SDL3_ttf
@@ -142,6 +149,7 @@ if(BUILD_TESTS)
     tests/test_regressions.cpp
     tests/test_golden_vectors.cpp
     tests/test_golden_audio.cpp
+    tests/test_menu.cpp
     tests/test_shell_files.cpp
   )
   target_link_libraries(unit_tests PRIVATE core doctest::doctest)

@@ -28,6 +28,8 @@
 // Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): a failed --record frame is an error; an
 //           early quit in smoke mode says so ("smoke ended early"), for dev.py's end-of-run check
 // Updated : 2026-11-06 with Claude (Opus 5.5, claude-opus-5-5): SDL3 (was SDL2); the GPU renderer outside smoke
+// Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): gamepads; the game learns about a smoke run and is
+//           set up after the renderer exists (the shell's screens, #168)
 // ---------------------------------------------------------------------------
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -211,7 +213,7 @@ int main(int argc, char** argv) {
         set_env("SDL_AUDIODRIVER", "dummy");
     }
 
-    SdlSession sdl(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
+    SdlSession sdl(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_GAMEPAD);
     if (!sdl.ok) {
         LOG_ERROR("core", "SDL_Init failed: " << SDL_GetError());
         return 1;
@@ -243,8 +245,12 @@ int main(int argc, char** argv) {
                                      SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
     game::Game game;
+    game.set_automated(smoke);
     if (!game.configure(opts.game_args)) {
         return 2;  // Game::configure logged what was wrong
+    }
+    if (!game.init(window.get(), renderer.get())) {
+        return 1;  // the shell logged what was wrong (settings folder, data files)
     }
     if (!opts.record_dir.empty()) {
         std::error_code ec;

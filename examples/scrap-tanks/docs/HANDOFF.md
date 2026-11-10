@@ -15,6 +15,10 @@ including the scenario pair.
 Bot-verified: fighting from cover wins 30 of 40 seeds, charging 13 of 40. Not yet played by a human.
 
 ## What changed last session
+- 2026-11-10 (kit 0.14.3): the game now runs inside the kit's shell (title, menus, settings, pause with "What now?",
+  subtitles and captions; `smoke --drive menus` and `tools/access/sweep.py` pass). Escape and Start pause instead of
+  quitting or restarting; R and the pad's Back restart; HUD and message panel moved for the shell's hint and
+  subtitles. `HOW_IT_WAS_MADE.md` and the README gif still show the layout from before the shell.
 - Built the slice per SOP-01 and SOP-14; the scenario pair refuted pillar 1 three times before it held (`docs/TROUBLESHOOTING.md`).
 - 2026-10-26 review fixes (`HOW_IT_WAS_MADE.md` "Later: review fixes"): spot pickers skip nav islands, a tank with no
   path drives straight at its goal, cover hit first stops a shell, `--seed` rejects negatives. Smoke seed is now 7.

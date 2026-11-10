@@ -15,7 +15,7 @@
 # Usage   : python scripts/test_run_exams.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline. Never runs the kit's real exams: EXAMS, KIT and UV are swapped for the
-#           fake kit's for each case. About 15 s (the timeout case waits for its 1 s limit).
+#           fake kit's for each case. About 25 s (the timeout case waits for its SLOW_LIMIT_S limit).
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 # ---------------------------------------------------------------------------
 #
@@ -85,7 +85,8 @@ class Peek(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main(verbosity=1)
 """
-SLOW = "import time\ntime.sleep(5)\n"
+SLOW_LIMIT_S = 8                         # the default-run case's limit; quick fake exams must finish well under it
+SLOW = "import time\ntime.sleep(60)\n"   # far past SLOW_LIMIT_S, so the timeout case is never close
 # `uv run --no-project --python X [--with M]... python ARGS...`: log the call, then run ARGS on this interpreter
 FAKE_UV = """\
 import json, subprocess, sys
@@ -155,7 +156,9 @@ class RunExamsExam(unittest.TestCase):
 
     # ---- the default run ----------------------------------------------------
     def test_default_run_judges_every_kind_of_exam(self):
-        rx.TIMEOUT_S = 1
+        # The limit covers every fake exam in this run, not only the slow one: 1 s failed a quick exam on a busy
+        # machine (1.1 s while engine builds ran), so it leaves room for a loaded Python start.
+        rx.TIMEOUT_S = SLOW_LIMIT_S
         rx.EXAMS = self.rows + [rx.Exam("fake/test_slow.py", "sleeps past the limit")]
         code, out = self.run_main()
         self.assertEqual(code, 1, out)
@@ -172,7 +175,7 @@ class RunExamsExam(unittest.TestCase):
         self.assertRegex(self.line_for(out, "test_envpeek.py"), r"^\[ OK \]")
         self.assertRegex(self.line_for(out, "test_nomodule.py"), r"^\[SKIP\].*needs nosuchpackage_xyz")
         self.assertRegex(self.line_for(out, "test_notool.py"), r"^\[SKIP\].*needs no_such_tool_xyz \(not on PATH\)")
-        self.assertRegex(self.line_for(out, "test_slow.py"), r"^\[FAIL\].*timed out after 1 s")
+        self.assertRegex(self.line_for(out, "test_slow.py"), r"^\[FAIL\].*timed out after %d s" % SLOW_LIMIT_S)
         self.assertRegex(out, r"\[FAIL\] Python \d+\.\d+: 11 exams, 3 passed, 3 failed, 5 skipped; 6 unique tests")
 
     def test_lines_come_in_table_order_with_jobs(self):
