@@ -1,11 +1,14 @@
 {
   "name": "Game.Tests.PlayMode",
   "rootNamespace": "{{GAME_SLUG}}.Tests",
-  "references": ["Game.Core", "Game.Shell", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
+  "references": ["Game.Core", "Game.Shell", "UnityEngine.TestRunner", "UnityEditor.TestRunner", "Unity.InputSystem"],
   "includePlatforms": [],
   "excludePlatforms": [],
   "overrideReferences": true,
   "precompiledReferences": ["nunit.framework.dll"],
   "defineConstraints": ["UNITY_INCLUDE_TESTS"],
-  "autoReferenced": false
+  "autoReferenced": false,
+  "versionDefines": [
+    { "name": "com.unity.inputsystem", "expression": "1.0.0", "define": "GAMEKIT_INPUT_SYSTEM" }
+  ]
 }
