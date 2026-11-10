@@ -24,8 +24,10 @@
   automated runs. A panic writes `crashes/crash_<time>.txt` in the user-data folder (version, screen, error,
   backtrace, settings, log tail; `src/shell/crash.rs`). Debug builds add F8 (a `bug_<time>/` folder with a screenshot,
   the log tail, the settings and an info file), the pseudo language and "Juice demo" on the main menu
-  (`src/shell/juice.rs`: every juice primitive and the access settings, live).
-  `smoke --drive show:<screen> --screenshot build/x.png` pictures a screen; `python tools/access/sweep.py` runs the
+  (`src/shell/juice.rs`: every juice primitive and the access settings, live). The demo uses nothing from `src/game/`:
+  it brings its own 2D camera on its own render layer and switches the game's cameras off while it is up, so it works
+  over a 2D or 3D game; give the game's HUD and other UI `shell::HideUnderJuice` (or `#[require(HideUnderJuice)]`)
+  and they hide meanwhile. `smoke --drive show:<screen> --screenshot build/x.png` pictures a screen; `python tools/access/sweep.py` runs the
   access drive. The readable font is Atkinson Hyperlegible (`src/shell/fonts/`, OFL, compiled into the exe).
 - **Verify:** `python tools/dev.py doctor`.
 

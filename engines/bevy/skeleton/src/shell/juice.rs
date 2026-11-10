@@ -12,14 +12,21 @@
 //           The limiter is always on (at most 3 flashes per real second); access.flash_limit only tones each flash
 //           down to FLASH_GENTLE. Shake intensity is settings::effective_shake (0 with reduce motion). The logic
 //           (Demo) is plain data the headless shell steps, so tests/shell.rs checks it without a GPU; the window
-//           side (JuiceViewPlugin, added by ShellViewPlugin) draws it with sprites and gizmos and owns the camera
-//           while the demo is up. World units: x right, y up, the floor's top at y = 0.
+//           side (JuiceViewPlugin, added by ShellViewPlugin) draws it with sprites and gizmos.
+//           The demo needs nothing from the game (src/game/ can be any shape, 2D or 3D): it brings its own 2D camera
+//           on its own render layer (JUICE_LAYER), above every camera of the game's, which it switches off while it
+//           is up; the game's world stays out of the demo's picture without a tag. Tag the game's HUD and other UI
+//           with HideUnderJuice (the demo's camera draws the UI meanwhile): it hides while the demo is up. Leaving
+//           puts back each camera's is_active and IsDefaultUiCamera and each tagged entity's Visibility as they were.
+//           World units: x right, y up, the floor's top at y = 0.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): no import from game (HideUnderJuice, the demo's
+//           own camera and layer), so a game that reshapes its game module keeps compiling
 // ---------------------------------------------------------------------------
+use bevy::camera::visibility::{RenderLayers, VisibilitySystems};
 use bevy::prelude::*;
 
 use super::{ScreenName, Shell, view};
-use crate::game::{Goal, Player};
 use crate::logic::auto_repeat::AutoRepeat;
 use crate::logic::coyote::Coyote;
 use crate::logic::ease;
@@ -316,6 +323,128 @@ pub fn frame(shell: &mut Shell, dt: f64) {
     }
 }
 
+// ---- The stage: the demo's own camera and layer, and what it hides (runs headless too) ----------------------------
+/// The render layer the demo's sprites, gizmos and camera share: the game's world (layer 0 unless it says otherwise)
+/// never shows in the demo's picture, and the demo never shows in the game's cameras.
+pub const JUICE_LAYER: usize = 30;
+
+/// Tag anything of the game's that must not show while the juice demo is up: its HUD and other UI (the demo's camera
+/// is the UI camera meanwhile), or anything the game put on JUICE_LAYER. The demo sets it Hidden and puts its own
+/// Visibility back when it leaves. Requires Visibility, so a tagged entity always has one to hide.
+#[derive(Component, Debug, Clone, Copy, Default)]
+#[require(Visibility)]
+pub struct HideUnderJuice;
+
+/// The demo's 2D camera: spawned when the demo comes up (order above every camera of the game's, JUICE_LAYER only,
+/// the default UI camera), despawned when it leaves.
+#[derive(Component, Debug)]
+pub struct JuiceCamera;
+
+/// A game camera the demo switched off, with what to put back when it leaves.
+#[derive(Component, Debug)]
+struct JuiceStash {
+    active: bool,
+    default_ui: bool,
+}
+
+/// A tagged entity's Visibility before the demo hid it.
+#[derive(Component, Debug)]
+struct JuiceHidden(Visibility);
+
+/// The demo's camera and hiding, without a renderer: JuiceViewPlugin adds it with a window, tests/shell.rs adds it to
+/// a headless app to prove the demo comes and goes in a game that tags nothing.
+pub struct JuiceStagePlugin;
+
+impl Plugin for JuiceStagePlugin {
+    fn build(&self, app: &mut App) {
+        // PostUpdate, before the transforms propagate: nothing the game does to cameras in Update can move ours
+        app.add_systems(
+            PostUpdate,
+            stage
+                .before(TransformSystems::Propagate)
+                .before(VisibilitySystems::VisibilityPropagate),
+        );
+    }
+}
+
+fn up(shell: &Shell) -> bool {
+    shell.juice.is_some() && shell.find(ScreenName::Juice).is_some()
+}
+
+/// While the demo is up: its camera exists, every game camera is off (and gives up IsDefaultUiCamera), every
+/// HideUnderJuice entity is Hidden (checked each frame, so one spawned or shown meanwhile hides too). When it leaves:
+/// the camera goes and the game's cameras and entities get back exactly what they had.
+#[allow(clippy::type_complexity)]
+fn stage(
+    mut commands: Commands,
+    shell: Res<Shell>,
+    juice_cams: Query<Entity, With<JuiceCamera>>,
+    mut game_cams: Query<(Entity, &mut Camera, Has<IsDefaultUiCamera>, Option<&JuiceStash>), Without<JuiceCamera>>,
+    mut marked: Query<
+        (Entity, &mut Visibility, Has<HideUnderJuice>, Option<&JuiceHidden>),
+        Or<(With<HideUnderJuice>, With<JuiceHidden>)>,
+    >,
+) {
+    if up(&shell) {
+        if juice_cams.is_empty() {
+            let order = game_cams
+                .iter()
+                .map(|(_, cam, ..)| cam.order)
+                .max()
+                .map_or(0, |o| o + 1);
+            commands.spawn((
+                Camera2d,
+                Camera { order, ..default() },
+                RenderLayers::layer(JUICE_LAYER),
+                IsDefaultUiCamera,
+                JuiceCamera,
+            ));
+        }
+        for (e, mut cam, default_ui, stash) in &mut game_cams {
+            if stash.is_none() {
+                commands.entity(e).insert(JuiceStash {
+                    active: cam.is_active,
+                    default_ui,
+                });
+            }
+            if default_ui {
+                commands.entity(e).remove::<IsDefaultUiCamera>(); // one default UI camera at a time: ours
+            }
+            if cam.is_active {
+                cam.is_active = false;
+            }
+        }
+        for (e, mut vis, tagged, saved) in &mut marked {
+            if !tagged {
+                continue;
+            }
+            if saved.is_none() {
+                commands.entity(e).insert(JuiceHidden(*vis));
+            }
+            vis.set_if_neq(Visibility::Hidden);
+        }
+        return;
+    }
+    for e in &juice_cams {
+        commands.entity(e).despawn();
+    }
+    for (e, mut cam, _, stash) in &mut game_cams {
+        if let Some(stash) = stash {
+            cam.is_active = stash.active;
+            if stash.default_ui {
+                commands.entity(e).insert(IsDefaultUiCamera);
+            }
+            commands.entity(e).remove::<JuiceStash>();
+        }
+    }
+    for (e, mut vis, _, saved) in &mut marked {
+        if let Some(saved) = saved {
+            *vis = saved.0;
+            commands.entity(e).remove::<JuiceHidden>();
+        }
+    }
+}
+
 // ---- The window side ------------------------------------------------------------------------------------------------
 /// One sprite of the demo's world.
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
@@ -331,11 +460,24 @@ pub enum JuicePart {
 #[derive(Component)]
 pub struct JuiceFlash;
 
+/// The demo's gizmos (the guard ring, the hit ring, the deadzone box), drawn on JUICE_LAYER only.
+#[derive(Default, Reflect, GizmoConfigGroup)]
+pub struct JuiceGizmos;
+
 pub struct JuiceViewPlugin;
 
 impl Plugin for JuiceViewPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (spawn_or_clear, draw).chain().after(view::rebuild_ui));
+        app.add_plugins(JuiceStagePlugin)
+            .insert_gizmo_config(
+                JuiceGizmos,
+                GizmoConfig {
+                    render_layers: RenderLayers::layer(JUICE_LAYER),
+                    ..default()
+                },
+            )
+            .add_systems(Update, spawn_or_clear.after(view::rebuild_ui))
+            .add_systems(PostUpdate, draw.after(stage).before(TransformSystems::Propagate));
     }
 }
 
@@ -343,29 +485,17 @@ const MARK_EVERY: f64 = 80.0;
 const MARK: Color = Color::srgb(0.32, 0.35, 0.45);
 const DEADZONE: Color = Color::srgba(0.8, 0.82, 0.9, 0.6);
 
-fn up(shell: &Shell) -> bool {
-    shell.juice.is_some() && shell.find(ScreenName::Juice).is_some()
-}
-
-/// The demo's sprites exist while it is on the stack; the prototype's player and goal hide meanwhile.
+/// The demo's sprites exist while it is on the stack, on JUICE_LAYER (the stage gives them a camera).
 fn spawn_or_clear(
     mut commands: Commands,
     shell: Res<Shell>,
     parts: Query<Entity, With<JuicePart>>,
     flashes: Query<Entity, With<JuiceFlash>>,
-    mut proto: Query<&mut Visibility, Or<(With<Player>, With<Goal>)>>,
 ) {
     let want = up(&shell);
     let have = !parts.is_empty();
     if want == have {
         return;
-    }
-    for mut vis in &mut proto {
-        *vis = if want {
-            Visibility::Hidden
-        } else {
-            Visibility::Inherited
-        };
     }
     if !want {
         for e in parts.iter().chain(flashes.iter()) {
@@ -373,36 +503,27 @@ fn spawn_or_clear(
         }
         return;
     }
-    let sprite = |colour: Color| Sprite::from_color(colour, Vec2::ONE);
-    commands.spawn((
-        JuicePart::Background,
-        sprite(view::BG),
-        Transform::from_xyz(0.0, 0.0, -20.0),
-    ));
-    commands.spawn((
-        JuicePart::Floor,
-        sprite(Color::BLACK),
-        Transform::from_xyz(0.0, 0.0, -10.0),
-    ));
+    let mut part = |part: JuicePart, colour: Color, at: Transform| {
+        commands.spawn((
+            part,
+            Sprite::from_color(colour, Vec2::ONE),
+            at,
+            RenderLayers::layer(JUICE_LAYER),
+        ));
+    };
+    part(JuicePart::Background, view::BG, Transform::from_xyz(0.0, 0.0, -20.0));
+    part(JuicePart::Floor, Color::BLACK, Transform::from_xyz(0.0, 0.0, -10.0));
     let mut gx = 0.0;
     while gx <= WORLD_W {
-        commands.spawn((
+        part(
             JuicePart::Mark,
-            sprite(MARK),
+            MARK,
             Transform::from_xyz((gx + 1.0) as f32, -10.0, -9.0).with_scale(Vec3::new(2.0, 8.0, 1.0)),
-        ));
+        );
         gx += MARK_EVERY;
     }
-    commands.spawn((
-        JuicePart::Target,
-        sprite(Color::BLACK),
-        Transform::from_xyz(0.0, 0.0, -5.0),
-    ));
-    commands.spawn((
-        JuicePart::Player,
-        sprite(Color::BLACK),
-        Transform::from_xyz(0.0, 0.0, -4.0),
-    ));
+    part(JuicePart::Target, Color::BLACK, Transform::from_xyz(0.0, 0.0, -5.0));
+    part(JuicePart::Player, Color::BLACK, Transform::from_xyz(0.0, 0.0, -4.0));
     commands.spawn((
         Node {
             position_type: PositionType::Absolute,
@@ -416,24 +537,18 @@ fn spawn_or_clear(
     ));
 }
 
-/// Places the sprites, the camera (follow plus shake) and the gizmo outlines, and fades the flash.
+/// Places the sprites, the demo's camera (follow plus shake) and the gizmo outlines, and fades the flash.
+/// The game's own cameras are never moved.
 fn draw(
     shell: Res<Shell>,
-    mut parts: Query<(&JuicePart, &mut Transform, &mut Sprite), Without<Camera2d>>,
-    mut cameras: Query<&mut Transform, With<Camera2d>>,
+    mut parts: Query<(&JuicePart, &mut Transform, &mut Sprite), Without<JuiceCamera>>,
+    mut cameras: Query<&mut Transform, With<JuiceCamera>>,
     mut flashes: Query<&mut BackgroundColor, With<JuiceFlash>>,
-    mut gizmos: Gizmos,
-    mut was_up: Local<bool>,
+    mut gizmos: Gizmos<JuiceGizmos>,
 ) {
     let Some(demo) = shell.juice.as_ref().filter(|_| up(&shell)) else {
-        if std::mem::take(&mut *was_up) {
-            for mut cam in &mut cameras {
-                *cam = Transform::default(); // the game's camera as it was
-            }
-        }
         return;
     };
-    *was_up = true;
     let pal = shell.palette();
     let colour = |name: &str, fallback: Color| pal.get(name).copied().unwrap_or(fallback);
     let (floor, target, player, hit) = (

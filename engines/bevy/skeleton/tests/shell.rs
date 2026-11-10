@@ -6,27 +6,35 @@
 //           Intent carries the analog stick, triggers and held actions (#265), the display settings reach a window
 //           outside automated runs (#268), the `menus` drive finishes with the file it promises, the juice demo
 //           answers its actions and F8 writes a bug report (SOP-19, SOP-20; #165, #166, #167, #168, #275), and a
-//           drive ignores the real keyboard that normal play reads (#276).
+//           drive ignores the real keyboard that normal play reads (#276), and the demo needs nothing from the game
+//           module: in a game with no Player or Goal it brings its own camera and puts the game's cameras and HUD
+//           back when it leaves.
 // Usage   : python tools/dev.py test   (or cargo test --test shell)
 // Notes   : app::shell_test_app builds the real ShellPlugin on the headless test App; every test gets its own data
 //           folder under the system temp dir, so no test touches another's settings.json or the player's.
 //           Actions are injected as a key press would be (shell.inject) and take effect on the next update.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): real input during a drive (#276)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the juice demo in a game without the starter's
+//           entities (bare_game_app)
 // ---------------------------------------------------------------------------
 use std::path::PathBuf;
 
+use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
+use bevy::state::app::StatesPlugin;
+use bevy::time::TimeUpdateStrategy;
 use bevy::window::{
     Monitor, MonitorSelection, PresentMode, PrimaryMonitor, PrimaryWindow, WindowMode, WindowResolution,
 };
 use serde_json::{Value, json};
 
-use {{GAME_SLUG}}::app::shell_test_app;
+use {{GAME_SLUG}}::app::{shell_test_app, tick};
 use {{GAME_SLUG}}::game::{AccessRules, GameActive, GameConfig, Intent, Palette, ScreenShake};
 use {{GAME_SLUG}}::shell::display::FrameLimit;
+use {{GAME_SLUG}}::shell::juice::{JUICE_LAYER, JuiceCamera, JuiceStagePlugin};
 use {{GAME_SLUG}}::shell::view::ShellInputPlugin;
-use {{GAME_SLUG}}::shell::{PadAxes, ScreenName, Shell};
+use {{GAME_SLUG}}::shell::{HideUnderJuice, PadAxes, ScreenName, Shell, ShellPlugin};
 
 /// A data folder of this test's own under the system temp dir, removed when the test ends.
 struct TempDir(PathBuf);
@@ -532,16 +540,25 @@ fn the_menus_drive_finishes_and_writes_the_settings_it_promises() {
 fn the_juice_demo_lands_hits_toggles_the_guard_and_leaves_with_its_screen() {
     let dir = TempDir::new("shell-juice");
     let mut app = shell_test_app(cfg(&dir), None);
+    app.add_plugins(JuiceStagePlugin);
     to_menu(&mut app);
+    let tagged = tagged_visibility(&mut app);
     // the demo is on the menu of debug builds (cargo test builds one), right before Quit
     let ids: Vec<String> = shell(&app).rows().iter().map(|r| r.id.clone()).collect();
     assert_eq!(ids, ["play", "settings", "credits", "juice", "quit"]);
     focus(&mut app, "juice");
     press(&mut app, "ui_accept");
     until_screen(&mut app, ScreenName::Juice);
+    frames(&mut app, 1);
     assert!(
         !app.world().resource::<GameActive>().0,
         "the game itself does not run under the demo"
+    );
+    assert!(
+        tagged_visibility(&mut app)
+            .iter()
+            .all(|(_, v)| *v == Visibility::Hidden),
+        "everything tagged HideUnderJuice hides under the demo"
     );
     assert_eq!(shell(&app).history.len(), 1, "the guide's line is in the history");
     press(&mut app, "attack");
@@ -575,6 +592,115 @@ fn the_juice_demo_lands_hits_toggles_the_guard_and_leaves_with_its_screen() {
     until_screen(&mut app, ScreenName::Title);
     frames(&mut app, 1);
     assert!(shell(&app).juice.is_none());
+    assert_eq!(tagged, tagged_visibility(&mut app), "back as they were");
+}
+
+/// The Visibility of everything the game tagged HideUnderJuice (the starter: its Player and Goal), in entity order.
+/// By the tag, not the types: this file must not depend on the shape of src/game/.
+fn tagged_visibility(app: &mut App) -> Vec<(Entity, Visibility)> {
+    let world = app.world_mut();
+    let mut q = world.query_filtered::<(Entity, &Visibility), With<HideUnderJuice>>();
+    let mut out: Vec<_> = q.iter(world).map(|(e, v)| (e, *v)).collect();
+    out.sort_by_key(|(e, _)| *e);
+    out
+}
+
+/// The shell over a game that has none of the starter's entities: the kit's resources only, no GamePlugin (so no
+/// Player, no Goal), plus the juice demo's stage (its camera and hiding; the sprites need a window).
+fn bare_game_app(dir: &TempDir) -> App {
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, StatesPlugin, TransformPlugin))
+        .insert_resource(TimeUpdateStrategy::ManualDuration(tick()))
+        .insert_resource(cfg(dir))
+        .init_resource::<Intent>()
+        .init_resource::<GameActive>()
+        .init_resource::<AccessRules>()
+        .init_resource::<Palette>()
+        .init_resource::<ScreenShake>()
+        .add_plugins((ShellPlugin, JuiceStagePlugin));
+    app
+}
+
+#[test]
+fn the_juice_demo_needs_nothing_from_the_game_and_puts_its_cameras_and_hud_back() {
+    // #275 imported the starter's Player and Goal: a game that reshaped src/game/ stopped compiling
+    let source = include_str!("../src/shell/juice.rs");
+    assert!(
+        !source.contains("crate::game"),
+        "shell/juice.rs uses nothing from the game module"
+    );
+    let dir = TempDir::new("shell-juice-bare");
+    let mut app = bare_game_app(&dir);
+    // a 3D game's camera that is also the UI camera, its HUD (one line tagged, one it hid itself), and an untagged thing
+    let world = app.world_mut();
+    let game_cam = world
+        .spawn((Camera3d::default(), Camera { order: 2, ..default() }, IsDefaultUiCamera))
+        .id();
+    let hud = world.spawn((HideUnderJuice, Visibility::Visible)).id();
+    let hud_off = world.spawn((HideUnderJuice, Visibility::Hidden)).id();
+    let other = world.spawn(Visibility::Visible).id();
+    to_menu(&mut app);
+    focus(&mut app, "juice");
+    press(&mut app, "ui_accept");
+    until_screen(&mut app, ScreenName::Juice);
+    frames(&mut app, 2);
+
+    let world = app.world_mut();
+    let mut juice = world.query_filtered::<(&Camera, &RenderLayers, Has<IsDefaultUiCamera>), With<JuiceCamera>>();
+    let cams: Vec<_> = juice
+        .iter(world)
+        .map(|(c, l, ui)| (c.order, c.is_active, l.clone(), ui))
+        .collect();
+    assert_eq!(cams.len(), 1, "one demo camera");
+    let (order, active, layers, default_ui) = cams[0].clone();
+    assert_eq!(order, 3, "above the game's camera");
+    assert!(active && default_ui, "the demo's camera draws, the UI included");
+    assert_eq!(
+        layers,
+        RenderLayers::layer(JUICE_LAYER),
+        "the game's world stays out of the demo"
+    );
+    let cam = world.get::<Camera>(game_cam).unwrap();
+    assert!(!cam.is_active, "the game's camera is off under the demo");
+    assert!(
+        world.get::<IsDefaultUiCamera>(game_cam).is_none(),
+        "one default UI camera at a time"
+    );
+    let vis = |w: &World, e: Entity| *w.get::<Visibility>(e).unwrap();
+    assert_eq!(vis(world, hud), Visibility::Hidden, "a tagged HUD hides");
+    assert_eq!(vis(world, hud_off), Visibility::Hidden);
+    assert_eq!(vis(world, other), Visibility::Visible, "untagged things are left alone");
+
+    press(&mut app, "attack");
+    assert_eq!(
+        shell(&app).juice.as_ref().unwrap().hits,
+        1,
+        "the demo runs without the starter's entities"
+    );
+
+    press(&mut app, "pause");
+    until_screen(&mut app, ScreenName::Pause);
+    focus(&mut app, "quit");
+    press(&mut app, "ui_accept");
+    until_screen(&mut app, ScreenName::Title);
+    frames(&mut app, 2);
+    let world = app.world_mut();
+    let mut juice = world.query_filtered::<Entity, With<JuiceCamera>>();
+    assert_eq!(juice.iter(world).count(), 0, "the demo's camera leaves with it");
+    assert!(
+        world.get::<Camera>(game_cam).unwrap().is_active,
+        "the game's camera is back on"
+    );
+    assert!(
+        world.get::<IsDefaultUiCamera>(game_cam).is_some(),
+        "and the UI camera again"
+    );
+    assert_eq!(vis(world, hud), Visibility::Visible, "the HUD comes back as it was");
+    assert_eq!(
+        vis(world, hud_off),
+        Visibility::Hidden,
+        "a line the game had hidden stays hidden"
+    );
 }
 
 #[test]
