@@ -182,6 +182,7 @@ EXAMS = [
     Exam("core/tools/blender/test_render_sprites.py", "renders with Cycles on the CPU, a few minutes", live=True, **BPY),
     # scripts (the kit's own)
     Exam("scripts/test_sync_examples.py", "a fake kit and example in a temp folder", covers=("scripts/sync_examples.py", "scripts/new_game.py")),
+    Exam("scripts/test_check_examples.py", "fake examples in a temp git repo", needs=(tool("git"),), covers=("scripts/check_examples.py", "engines/*/skeleton/tools/dev.py")),
     Exam("scripts/test_new_game.py", "a fake kit in a temp folder", covers=("scripts/new_game.py", "core/", "engines/", "profiles/")),
     Exam("scripts/test_codename.py", covers=("scripts/codename.py",)),
     Exam("scripts/test_dev_py.py", "every engine's dev.py, engine calls faked", covers=("engines/",)),
