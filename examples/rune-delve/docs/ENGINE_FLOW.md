@@ -42,7 +42,8 @@ Verified on UE 5.8 (launcher install, Windows, VS 2022 Build Tools 17.14 / MSVC 
 `check` compiles (about 1 minute) and fails on a planted compile error; `test` runs the project's tests and fails on a planted
 `Result={Fail}`; `smoke` runs only `<Game>.Smoke.*`; `package` wrote the game exe under Packaged/ (about 4 minutes); `clean` works.
 A Blueprint-only project also ran `test --filter System.Core.Math` (40 engine tests). Packaging a Blueprint-only project failed in UAT
-("does not look like uproject file but no targets have been found") on a machine without the Windows SDK; not retested since **(verify)**.
+("does not look like uproject file but no targets have been found") on a machine without the Windows SDK; with the SDK and the
+GameKitShell plugin enabled, `package` of the Blank Blueprint template wrote the game exe under Packaged/ (2026-11-10, "Packaging" below).
 
 ## The Claude + Unreal division of labor
 - **Claude edits:** C++ (`Source/`), Build.cs, Config/*.ini (carefully), docs, tools, test code, CSV/JSON that feed DataTables.
@@ -180,25 +181,61 @@ focused)**. Wire the game to it:
   the platform's voice **(verify: not wired, no voice on the test machine)**.
 - `FGameKitAutoRepeat` (GameKitAutoRepeat.h) is "hold to mash" for `access.auto_repeat`, as on the other engines.
 - Keys arrive as binding strings (`GameKitShellInput.h`: SpaceBar is `key:space`, the bottom face button `pad:south`);
-  Unreal cannot tell an Xbox pad from a PlayStation one without a platform plugin, so prompts use the generic set
-  unless `input.glyphs` picks one. Sticks are not read as directions; the D-pad is.
-- Strings: `data/i18n/en.json` and `fr.json` (the LÖVE shell's tables); add a locale by adding a file. The version on
-  the title is the project version from Project Settings.
+  the pad's make comes from the name its input plugin registers for the device (`FInputDeviceRegistry`), with the
+  C++ shell's hints plus Nintendo ones: `pad_xbox`, `pad_playstation`, `pad_switch` or `pad_other`, and `auto`
+  prompts follow it (Switch and unknown pads get the generic positional set). What a pad is called depends on the
+  plugin: on Windows, XInput and GameInput report every pad as an Xbox one (Steam Input and DS4Windows present a
+  PlayStation pad as one too), the WinDualShock plugin reports Sony pads, Linux passes SDL's pad names
+  **(verify: only the name-to-make mapping is tested, no pad on the test machine)**. The left stick moves the focus
+  like the D-pad, with hysteresis (pressed past 0.5 or `input.deadzone`, let go under 0.3), one step per push.
+- Analog input through the shell (#274, as Bevy's `Intent`): `GetStick()` is the left stick with the player's
+  `input.deadzone` (radial, then rescaled from 0, so a stick just past it gives a small value) and `input.invert_y`
+  (up is +Y), `GetTrigger(bRight)` a trigger from 0 to 1 (a 0.05 rest deadzone removed), `IsActionHeld(Action)` and
+  `GetHeldActions()` the game actions held now (keys and buttons, plus the `move_*` the stick leans past the deadzone,
+  at least 0.2). All `BlueprintPure`, all zero outside play, so a menu never leaks a held trigger into the game; the
+  maths is `GameKitAnalog.h`. The widget lets the stick, the triggers and the keys through to your own input as well
+  **(verify with a pad: only the model is tested, no pad on the test machine)**.
+- Debug builds (not Shipping) add the **juice demo** to the main menu (a box to hit: trauma shake, hitstop, squash
+  spring, gentle flashes through the limiter, follow camera with its deadzone drawn, buffered jump with coyote time,
+  a guard on `interact` that honours hold to toggle, moving by held keys or the stick), the **pseudo** language in the
+  Language tab, and the **F8 bug report**: `bug_<time>/` in the data folder with `bug_<time>/info.txt`,
+  `bug_<time>/log_tail.txt` (the last 200 log lines), `settings.json` and `screenshot.png` (the viewport, a frame
+  later), and a toast.
+- **Crash files:** while the screens run, a fatal error writes `crashes/crash_<time>.txt` in the data folder (version,
+  engine, OS, the error, the last 60 log lines, the settings) from `FCoreDelegates::OnHandleSystemError`, before
+  Unreal's own crash reporter; nothing leaves the machine. `smoke --drive crash` proves the writer with a planted error
+  through the same handler and does not crash the editor (an unattended editor crash may be sent to Epic by its crash
+  reporter) **(verify: the handler on a real fatal error in a packaged game is not tried)**.
+- Strings: `data/i18n/en.json` and `fr.json` (the LÖVE shell's tables); add a locale by adding a file (`package` ships
+  the whole `data/` folder: "Packaging"). The version on the title is the project version from Project Settings.
 
 Scripted runs (the plugin's `GameKit.Screens.Drive` and `.Show` tests, headless on the model):
 ```
 python tools/dev.py smoke --drive menus                                # settings changed and saved: SETTINGS_WRITTEN
+python tools/dev.py smoke --drive crash                                # exit 1 on purpose: CRASH_WRITTEN <file>
+python tools/dev.py smoke --drive bug                                  # F8 on the menu: DRIVE_BUG <folder> (a GPU, for the picture)
+python tools/dev.py smoke --drive pseudo --locale pseudo               # every screen: PSEUDO_PASS, or PSEUDO_FAIL lines
+python tools/dev.py smoke --drive pseudo-plant --locale pseudo         # exit 1 on purpose, naming plant.too_small
+python tools/dev.py smoke --drive show:juice --screenshot captures/juice.png   # the box hit: DRIVE_JUICE
 python tools/dev.py smoke --drive show:settings --screenshot captures/settings.png   # a picture (the editor off-screen, a GPU)
 python tools/dev.py smoke --drive access:res=1280x800,scale=2,pad      # the sweep's tour: ACCESS_* lines
 python tools/access/sweep.py                                            # runs the tour at both sizes and checks it
 python tools/dev.py test --filter GameKit.Screens                       # the screens' own tests (rows, keys, rebinding, hold ...)
 ```
-`--data-dir` keeps a settings folder between runs (default: a fresh `Saved/GameKitSmoke`), `--locale fr` shows another
-language. Screens for `show:`: title, main_menu, settings, pause, help, history, credits, loading, subtitle. The
+`--data-dir` keeps a settings folder between runs (default: a fresh `Saved/GameKitSmoke`; one inside `Packaged/`,
+`Saved/StagedBuilds/` or `Binaries/` is refused, exit 2), `--locale fr` shows another
+language. Screens for `show:`: title, main_menu, settings, pause, help, history, credits, loading, subtitle, juice
+(the box just hit, inside the hitstop; `DRIVE_JUICE` lists hits, trauma, frozen, squash, flash and the ring, and the
+drive fails unless every one took). The pseudo drive checks each screen, each settings tab at its top and its end,
+the "press a key" prompt, the juice demo and the pause pages: a text wider than its column, or not through `T()` (no
+leading `[`), is a `PSEUDO_FAIL` line (without `--locale pseudo` it switches and says so). The
 access report describes the 1920x1080 design (scaling "exact": the view scales it to the window), each text's size,
 colours and whether it fits its column (measured with Slate's font service), and which rows the arrow keys reach; a
-`res=` option is noted, not applied. Paths given to `--screenshot` and `--data-dir` may not contain spaces or quotes
-(Unreal's command line reads a `-Name=value` up to the next space) **(verify: a quoted path may work on your version)**.
+`res=` option is noted, not applied. Paths given to `--screenshot` and `--data-dir` may contain spaces, and so may
+the project folder: dev.py passes every path the editor gets (`-abslog=`, `-script=`, the drive's) as `-Name="a b"`
+with forward slashes, the form Unreal's command line reads whole, and the shader check names its script by its
+place on the editor's Python path (kit_shaders/shader_check.py under `Content/Python/`), so no path sits inside
+`-ExecCmds` (K01: UE 5.8 on Windows, 2026-11-10, `check`, `test`, `exec` and the drives from a folder with a space); a double quote is refused.
 
 ## Source control (Git + LFS)
 - `.gitattributes` in this repo routes `.uasset`, `.umap`, textures, audio, and meshes through LFS. Run `git lfs install` before the first commit.
@@ -221,6 +258,18 @@ colours and whether it fits its column (measured with Slate's font service), and
 ## Packaging
 1. Set the default map and startup settings in Project Settings > Maps & Modes.
 2. `python tools/dev.py package --config Shipping --platform Win64` (output in Packaged/, which git ignores). Verified with the default Development config on UE 5.8.
+   With the GameKitShell plugin enabled the package also carries, as loose files: `data/` (the string tables, input
+   presets, colour palettes and your own data files, at `Packaged/<Platform>/<Project>/data/`, where
+   `FPaths::ProjectDir()` points in the packaged game as in the editor), staged by the plugin's
+   `Plugins/GameKitShell/Config/Game.ini` (`+DirectoriesToAlwaysStageAsNonUFS=(Path="../data")` under `ProjectPackagingSettings`; Unreal layers an enabled
+   plugin's Game.ini over your DefaultGame.ini, so there is nothing to merge), and the readable font under the
+   plugin's `Resources/Fonts` (a `RuntimeDependencies` line in `GameKitShellUI.Build.cs`). `data/golden/` and
+   `data/shaders/` (test files, about 200 KB) go along: Unreal stages a folder whole. Without `data/` the menus show
+   their keys (`menu.play`); the log names the folder it read (`i18n: string tables en, fr from ...`). K01: a
+   Blueprint-only project with the plugin packaged in about 4 minutes on UE 5.8 (Windows, 2026-11-10); its exe, started
+   from another folder with `-GameKitShell -GameKitLocale=fr`, read `data/i18n` and narrated in French, and the
+   plugin's `GameKit.Screens` tests passed inside it (`-ExecCmds="Automation RunTests GameKit.Screens; Quit"`).
+   `CREDITS.md` is not staged yet: the packaged credits screen shows its placeholder **(verify, kit issue)**.
 3. Test the packaged build on a clean machine (SOP-06). Check logs under `Saved/Logs/` of the packaged game.
 
 ## Common errors

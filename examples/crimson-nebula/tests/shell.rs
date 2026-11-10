@@ -2,22 +2,43 @@
 // tests/shell.rs
 // Purpose : The shell's screens, headless: the title, menu and settings answer the ui_* actions, settings edits save
 //           to the run's own data folder, the one-handed layouts apply and reset, a rebind swaps, pause shows "What
-//           now?" and the dialogue history, subtitle_hold waits for accept, auto_repeat repeats a held action, and
-//           the `menus` drive finishes with the file it promises (SOP-19, SOP-20; #165, #166, #167, #168).
+//           now?" and the dialogue history, subtitle_hold waits for accept, auto_repeat repeats a held action, the
+//           Intent carries the analog stick, triggers and held actions (#265), the display settings reach a window
+//           outside automated runs (#268), the `menus` drive finishes with the file it promises, the juice demo
+//           answers its actions and F8 writes a bug report (SOP-19, SOP-20; #165, #166, #167, #168, #275), and a
+//           drive ignores the real keyboard that normal play reads (#276), the shell's font has a glyph for every
+//           string table and the pseudo-locale, and the demo needs nothing from the game module: in a game with no
+//           Player or Goal it brings its own camera and puts the game's cameras and HUD back when it leaves.
 // Usage   : python tools/dev.py test   (or cargo test --test shell)
 // Notes   : app::shell_test_app builds the real ShellPlugin on the headless test App; every test gets its own data
 //           folder under the system temp dir, so no test touches another's settings.json or the player's.
 //           Actions are injected as a key press would be (shell.inject) and take effect on the next update.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): real input during a drive (#276)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): glyph coverage of the shell's font
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the juice demo in a game without the starter's
+//           entities (bare_game_app)
 // ---------------------------------------------------------------------------
 use std::path::PathBuf;
 
+use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
+use bevy::state::app::StatesPlugin;
+use bevy::time::TimeUpdateStrategy;
+use bevy::window::{
+    Monitor, MonitorSelection, PresentMode, PrimaryMonitor, PrimaryWindow, WindowMode, WindowResolution,
+};
 use serde_json::{Value, json};
 
-use project_crimson_nebula::app::shell_test_app;
+use project_crimson_nebula::app::{shell_test_app, tick};
 use project_crimson_nebula::game::{AccessRules, GameActive, GameConfig, Intent, Palette, ScreenShake};
-use project_crimson_nebula::shell::{ScreenName, Shell};
+use project_crimson_nebula::logic::audio_access::ARROWS;
+use project_crimson_nebula::logic::charmap::CharMap;
+use project_crimson_nebula::logic::i18n::pseudo;
+use project_crimson_nebula::shell::display::FrameLimit;
+use project_crimson_nebula::shell::juice::{JUICE_LAYER, JuiceCamera, JuiceStagePlugin};
+use project_crimson_nebula::shell::view::{DEFAULT_FONT, READABLE_FONT, ShellInputPlugin};
+use project_crimson_nebula::shell::{HideUnderJuice, PadAxes, ScreenName, Shell, ShellPlugin};
 
 /// A data folder of this test's own under the system temp dir, removed when the test ends.
 struct TempDir(PathBuf);
@@ -324,6 +345,185 @@ fn auto_repeat_repeats_a_held_action_only_when_on() {
 }
 
 #[test]
+fn the_intent_carries_the_analog_stick_triggers_and_held_actions() {
+    let dir = TempDir::new("shell-analog");
+    let mut app = shell_test_app(cfg(&dir), None);
+    // in the menus a leaning stick and a held trigger never reach the game
+    to_menu(&mut app);
+    shell_mut(&mut app).pad = PadAxes {
+        left: Vec2::new(0.6, 0.0),
+        left_trigger: 1.0,
+        right_trigger: 0.525,
+    };
+    app.update();
+    assert_eq!(
+        *app.world().resource::<Intent>(),
+        Intent::default(),
+        "menus: an empty Intent"
+    );
+    focus(&mut app, "play");
+    press(&mut app, "ui_accept");
+    until_screen(&mut app, ScreenName::Play);
+    shell_mut(&mut app).held.insert("drift".into());
+    shell_mut(&mut app).held.insert("ui_accept".into());
+    app.update();
+    let intent = app.world().resource::<Intent>().clone();
+    // deadzone 0.2 (the default), radial and rescaled: 0.6 -> 0.5
+    assert!(
+        (intent.stick - Vec2::new(0.5, 0.0)).length() < 1e-5,
+        "{:?}",
+        intent.stick
+    );
+    assert!(
+        (intent.dir - intent.stick).length() < 1e-5,
+        "the stick alone steers dir at half speed"
+    );
+    assert_eq!(intent.left_trigger, 1.0);
+    assert!((intent.right_trigger - 0.5).abs() < 1e-5, "{}", intent.right_trigger);
+    assert!(intent.is_held("drift"), "a game action held through its binding");
+    assert!(
+        intent.is_held("move_right"),
+        "the stick past the deadzone holds move_right"
+    );
+    assert!(!intent.is_held("ui_accept"), "ui_* actions never reach the game");
+    // keyboard only: dir is a unit direction, the analog fields stay zero
+    shell_mut(&mut app).pad = PadAxes::default();
+    shell_mut(&mut app).held.insert("move_up".into());
+    app.update();
+    let intent = app.world().resource::<Intent>().clone();
+    assert_eq!(intent.dir, Vec2::Y);
+    assert_eq!(
+        (intent.stick, intent.left_trigger, intent.right_trigger),
+        (Vec2::ZERO, 0.0, 0.0)
+    );
+    // invert_y and a bigger deadzone come from the settings
+    shell_mut(&mut app).held.clear();
+    shell_mut(&mut app).set("input", "invert_y", json!(true));
+    shell_mut(&mut app).set("input", "deadzone", json!(0.5));
+    shell_mut(&mut app).pad.left = Vec2::new(0.0, 0.4);
+    app.update();
+    assert_eq!(
+        app.world().resource::<Intent>().stick,
+        Vec2::ZERO,
+        "inside the 0.5 deadzone"
+    );
+    shell_mut(&mut app).pad.left = Vec2::new(0.0, 1.0);
+    app.update();
+    let intent = app.world().resource::<Intent>().clone();
+    assert!((intent.stick - Vec2::NEG_Y).length() < 1e-5, "{:?}", intent.stick);
+    assert!(intent.is_held("move_down") && !intent.is_held("move_up"));
+}
+
+/// A primary window and a 2560x1440 primary monitor in the headless world, as winit would spawn them.
+fn spawn_window(app: &mut App) -> Entity {
+    app.world_mut().spawn((
+        Monitor {
+            name: None,
+            physical_height: 1440,
+            physical_width: 2560,
+            physical_position: IVec2::ZERO,
+            refresh_rate_millihertz: None,
+            scale_factor: 1.0,
+            video_modes: Vec::new(),
+        },
+        PrimaryMonitor,
+    ));
+    let window = Window {
+        resolution: WindowResolution::new(1280, 720).with_scale_factor_override(1.0),
+        ..default()
+    };
+    app.world_mut().spawn((window, PrimaryWindow)).id()
+}
+
+#[test]
+fn display_settings_reach_the_window_but_never_in_automated_runs() {
+    let dir = TempDir::new("shell-display");
+    let mut app = shell_test_app(
+        GameConfig {
+            automated: false,
+            ..cfg(&dir)
+        },
+        None,
+    );
+    let win = spawn_window(&mut app);
+    let window = |app: &App| app.world().get::<Window>(win).unwrap().clone();
+    app.update();
+    // the defaults: windowed 1920x1080 (fits the monitor), vsync, no cap
+    let w = window(&app);
+    assert_eq!(w.mode, WindowMode::Windowed);
+    assert_eq!(w.present_mode, PresentMode::AutoVsync);
+    assert_eq!((w.physical_width(), w.physical_height()), (1920, 1080));
+    {
+        let mut s = shell_mut(&mut app);
+        s.set("display", "mode", json!("borderless"));
+        s.set("display", "vsync", json!(false));
+        s.set("display", "frame_cap", json!(120));
+    }
+    app.update();
+    let w = window(&app);
+    assert_eq!(w.mode, WindowMode::BorderlessFullscreen(MonitorSelection::Current));
+    assert_eq!(w.present_mode, PresentMode::AutoNoVsync);
+    assert_eq!(
+        app.world().resource::<FrameLimit>().frame_time,
+        Some(std::time::Duration::from_secs_f64(1.0 / 120.0))
+    );
+    {
+        let mut s = shell_mut(&mut app);
+        s.set("display", "mode", json!("windowed"));
+        s.set("display", "resolution", json!([3840, 2160]));
+        s.set("display", "frame_cap", json!(0));
+    }
+    app.update();
+    let w = window(&app);
+    assert_eq!(w.mode, WindowMode::Windowed);
+    assert_eq!(
+        (w.physical_width(), w.physical_height()),
+        (2560, 1440),
+        "a size bigger than the monitor is clamped to it"
+    );
+    assert_eq!(app.world().resource::<FrameLimit>().frame_time, None);
+
+    // an automated run (dev.py smoke, captures, the sweep) leaves the window as the run made it
+    let dir = TempDir::new("shell-display-auto");
+    let mut app = shell_test_app(cfg(&dir), None);
+    let win = spawn_window(&mut app);
+    shell_mut(&mut app).set("display", "mode", json!("fullscreen"));
+    frames(&mut app, 2);
+    let w = app.world().get::<Window>(win).unwrap();
+    assert_eq!(w.mode, WindowMode::Windowed);
+    assert_eq!((w.physical_width(), w.physical_height()), (1280, 720));
+}
+
+/// The shell plus its real-input polling (as a windowed run has it), and a real key held down on the keyboard the
+/// way winit reports it (ButtonInput<KeyCode>), for one update.
+fn hold_real_key(app: &mut App, key: KeyCode) {
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(key);
+    app.update();
+}
+
+#[test]
+fn a_drive_ignores_the_real_keyboard_and_normal_play_reads_it() {
+    // #276: a stray key or a virtual pad on a shared machine opened extra screens during a windowed access drive
+    for (drive, read) in [(None, true), (Some("menus"), false)] {
+        let dir = TempDir::new(&format!("shell-real-input-{read}"));
+        let mut app = shell_test_app(cfg(&dir), drive.map(|name| (name, 5000)));
+        app.add_plugins(ShellInputPlugin)
+            .init_resource::<ButtonInput<KeyCode>>();
+        frames(&mut app, 2);
+        shell_mut(&mut app).last_device = "pad_xbox".into();
+        hold_real_key(&mut app, KeyCode::KeyD); // move_right's key
+        let s = shell(&app);
+        let what = if read { "normal play" } else { "a drive" };
+        assert_eq!(s.held.contains("move_right"), read, "{what}: the held D key");
+        assert_eq!(
+            s.last_device == "keyboard",
+            read,
+            "{what}: the device the prompts follow"
+        );
+    }
+}
+
+#[test]
 fn the_menus_drive_finishes_and_writes_the_settings_it_promises() {
     let dir = TempDir::new("shell-drive-menus");
     let mut app = shell_test_app(cfg(&dir), Some(("menus", 5000)));
@@ -338,6 +538,198 @@ fn the_menus_drive_finishes_and_writes_the_settings_it_promises() {
     assert_eq!(file["audio"]["master"], json!(0.5));
     assert_eq!(file["access"]["reduce_motion"], json!(true));
     assert!(shell(&app).quit_requested);
+}
+
+#[test]
+fn the_juice_demo_lands_hits_toggles_the_guard_and_leaves_with_its_screen() {
+    let dir = TempDir::new("shell-juice");
+    let mut app = shell_test_app(cfg(&dir), None);
+    app.add_plugins(JuiceStagePlugin);
+    to_menu(&mut app);
+    let tagged = tagged_visibility(&mut app);
+    // the demo is on the menu of debug builds (cargo test builds one), right before Quit
+    let ids: Vec<String> = shell(&app).rows().iter().map(|r| r.id.clone()).collect();
+    assert_eq!(ids, ["play", "settings", "credits", "juice", "quit"]);
+    focus(&mut app, "juice");
+    press(&mut app, "ui_accept");
+    until_screen(&mut app, ScreenName::Juice);
+    frames(&mut app, 1);
+    assert!(
+        !app.world().resource::<GameActive>().0,
+        "the game itself does not run under the demo"
+    );
+    assert!(
+        tagged_visibility(&mut app)
+            .iter()
+            .all(|(_, v)| *v == Visibility::Hidden),
+        "everything tagged HideUnderJuice hides under the demo"
+    );
+    assert_eq!(shell(&app).history.len(), 1, "the guide's line is in the history");
+    press(&mut app, "attack");
+    let demo = shell(&app).juice.clone().expect("the demo's state");
+    assert_eq!(demo.hits, 1, "the player starts in reach of the box");
+    assert!(demo.shake.trauma > 0.0 && demo.spring.x != 0.0);
+    assert_eq!(
+        shell(&app).history.len(),
+        1,
+        "barks are off by default: no subtitle, no history line"
+    );
+    shell_mut(&mut app).set("access", "subtitle_barks", json!(true));
+    press(&mut app, "attack");
+    assert_eq!(shell(&app).history.len(), 2, "with barks on the box says something");
+    // hold_to_toggle: interact flips the guard instead of holding it
+    shell_mut(&mut app).set("access", "hold_to_toggle", json!(true));
+    press(&mut app, "interact");
+    assert!(shell(&app).juice.as_ref().unwrap().guard);
+    // pause freezes it; quitting to the title drops it
+    press(&mut app, "pause");
+    until_screen(&mut app, ScreenName::Pause);
+    let t = shell(&app).juice.as_ref().unwrap().real_time;
+    frames(&mut app, 10);
+    assert_eq!(
+        shell(&app).juice.as_ref().unwrap().real_time,
+        t,
+        "paused: the demo's clock stops"
+    );
+    focus(&mut app, "quit");
+    press(&mut app, "ui_accept");
+    until_screen(&mut app, ScreenName::Title);
+    frames(&mut app, 1);
+    assert!(shell(&app).juice.is_none());
+    assert_eq!(tagged, tagged_visibility(&mut app), "back as they were");
+}
+
+/// The Visibility of everything the game tagged HideUnderJuice (the starter: its Player and Goal), in entity order.
+/// By the tag, not the types: this file must not depend on the shape of src/game/.
+fn tagged_visibility(app: &mut App) -> Vec<(Entity, Visibility)> {
+    let world = app.world_mut();
+    let mut q = world.query_filtered::<(Entity, &Visibility), With<HideUnderJuice>>();
+    let mut out: Vec<_> = q.iter(world).map(|(e, v)| (e, *v)).collect();
+    out.sort_by_key(|(e, _)| *e);
+    out
+}
+
+/// The shell over a game that has none of the starter's entities: the kit's resources only, no GamePlugin (so no
+/// Player, no Goal), plus the juice demo's stage (its camera and hiding; the sprites need a window).
+fn bare_game_app(dir: &TempDir) -> App {
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, StatesPlugin, TransformPlugin))
+        .insert_resource(TimeUpdateStrategy::ManualDuration(tick()))
+        .insert_resource(cfg(dir))
+        .init_resource::<Intent>()
+        .init_resource::<GameActive>()
+        .init_resource::<AccessRules>()
+        .init_resource::<Palette>()
+        .init_resource::<ScreenShake>()
+        .add_plugins((ShellPlugin, JuiceStagePlugin));
+    app
+}
+
+#[test]
+fn the_juice_demo_needs_nothing_from_the_game_and_puts_its_cameras_and_hud_back() {
+    // #275 imported the starter's Player and Goal: a game that reshaped src/game/ stopped compiling
+    let source = include_str!("../src/shell/juice.rs");
+    assert!(
+        !source.contains("crate::game"),
+        "shell/juice.rs uses nothing from the game module"
+    );
+    let dir = TempDir::new("shell-juice-bare");
+    let mut app = bare_game_app(&dir);
+    // a 3D game's camera that is also the UI camera, its HUD (one line tagged, one it hid itself), and an untagged thing
+    let world = app.world_mut();
+    let game_cam = world
+        .spawn((Camera3d::default(), Camera { order: 2, ..default() }, IsDefaultUiCamera))
+        .id();
+    let hud = world.spawn((HideUnderJuice, Visibility::Visible)).id();
+    let hud_off = world.spawn((HideUnderJuice, Visibility::Hidden)).id();
+    let other = world.spawn(Visibility::Visible).id();
+    to_menu(&mut app);
+    focus(&mut app, "juice");
+    press(&mut app, "ui_accept");
+    until_screen(&mut app, ScreenName::Juice);
+    frames(&mut app, 2);
+
+    let world = app.world_mut();
+    let mut juice = world.query_filtered::<(&Camera, &RenderLayers, Has<IsDefaultUiCamera>), With<JuiceCamera>>();
+    let cams: Vec<_> = juice
+        .iter(world)
+        .map(|(c, l, ui)| (c.order, c.is_active, l.clone(), ui))
+        .collect();
+    assert_eq!(cams.len(), 1, "one demo camera");
+    let (order, active, layers, default_ui) = cams[0].clone();
+    assert_eq!(order, 3, "above the game's camera");
+    assert!(active && default_ui, "the demo's camera draws, the UI included");
+    assert_eq!(
+        layers,
+        RenderLayers::layer(JUICE_LAYER),
+        "the game's world stays out of the demo"
+    );
+    let cam = world.get::<Camera>(game_cam).unwrap();
+    assert!(!cam.is_active, "the game's camera is off under the demo");
+    assert!(
+        world.get::<IsDefaultUiCamera>(game_cam).is_none(),
+        "one default UI camera at a time"
+    );
+    let vis = |w: &World, e: Entity| *w.get::<Visibility>(e).unwrap();
+    assert_eq!(vis(world, hud), Visibility::Hidden, "a tagged HUD hides");
+    assert_eq!(vis(world, hud_off), Visibility::Hidden);
+    assert_eq!(vis(world, other), Visibility::Visible, "untagged things are left alone");
+
+    press(&mut app, "attack");
+    assert_eq!(
+        shell(&app).juice.as_ref().unwrap().hits,
+        1,
+        "the demo runs without the starter's entities"
+    );
+
+    press(&mut app, "pause");
+    until_screen(&mut app, ScreenName::Pause);
+    focus(&mut app, "quit");
+    press(&mut app, "ui_accept");
+    until_screen(&mut app, ScreenName::Title);
+    frames(&mut app, 2);
+    let world = app.world_mut();
+    let mut juice = world.query_filtered::<Entity, With<JuiceCamera>>();
+    assert_eq!(juice.iter(world).count(), 0, "the demo's camera leaves with it");
+    assert!(
+        world.get::<Camera>(game_cam).unwrap().is_active,
+        "the game's camera is back on"
+    );
+    assert!(
+        world.get::<IsDefaultUiCamera>(game_cam).is_some(),
+        "and the UI camera again"
+    );
+    assert_eq!(vis(world, hud), Visibility::Visible, "the HUD comes back as it was");
+    assert_eq!(
+        vis(world, hud_off),
+        Visibility::Hidden,
+        "a line the game had hidden stays hidden"
+    );
+}
+
+#[test]
+fn f8_writes_a_bug_report_folder() {
+    let dir = TempDir::new("shell-bug");
+    let mut app = shell_test_app(cfg(&dir), None);
+    to_menu(&mut app);
+    shell_mut(&mut app).bug_key();
+    frames(&mut app, 2);
+    let folder = shell(&app).last_bug_report.clone().expect("a report folder");
+    assert!(
+        folder.starts_with(&dir.0),
+        "in the run's data folder: {}",
+        folder.display()
+    );
+    let info = std::fs::read_to_string(folder.join("info.txt")).unwrap();
+    assert!(info.contains("screen: main_menu"), "{info}");
+    let settings: Value =
+        serde_json::from_str(&std::fs::read_to_string(folder.join("settings.json")).unwrap()).unwrap();
+    assert!(settings["audio"].is_object());
+    assert!(folder.join("log_tail.txt").is_file());
+    assert!(
+        !folder.join("screenshot.png").exists(),
+        "headless: no window, no screenshot"
+    );
 }
 
 #[test]
@@ -360,15 +752,64 @@ fn the_pseudo_locale_brackets_every_label_and_french_falls_back_to_english() {
     }
     shell_mut(&mut app).locale_override = Some("fr".into());
     assert_eq!(shell(&app).t("menu.play"), "Jouer");
+    // fr.json is complete (#270); the fallback to en for a missing key is in the i18n golden vectors (tests/golden.rs)
     assert_eq!(
         shell(&app).t("settings.access.narration"),
-        "Narrate menus",
-        "a key fr lacks comes from en"
+        "Lire les menus à voix haute",
+        "the accessibility rows are French too"
     );
     frames(&mut app, 1);
     assert_eq!(
         shell(&app).narrator.last_line,
         "Jouer, bouton",
         "the focused row is narrated in the new language"
+    );
+}
+
+/// Every string in a JSON value, nested ones included.
+fn strings_in(value: &Value, out: &mut Vec<String>) {
+    match value {
+        Value::String(s) => out.push(s.clone()),
+        Value::Array(items) => items.iter().for_each(|v| strings_in(v, out)),
+        Value::Object(map) => map.values().for_each(|v| strings_in(v, out)),
+        _ => {}
+    }
+}
+
+#[test]
+fn the_shell_font_has_a_glyph_for_every_string_table_and_the_pseudo_locale() {
+    // Bevy's built-in font is an ASCII-only subset: French and the pseudo-locale drew empty boxes and every check
+    // passed. Add a language the font cannot draw (Cyrillic needs a font with it) and this test names the characters.
+    let regular = CharMap::parse(DEFAULT_FONT).expect("the default font has a character map");
+    let readable = CharMap::parse(READABLE_FONT).expect("the readable font has a character map");
+    let folder = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("data").join("i18n");
+    let mut texts = Vec::new();
+    for entry in std::fs::read_dir(&folder).expect("data/i18n") {
+        let path = entry.expect("a string table").path();
+        if path.extension().is_some_and(|e| e == "json") {
+            let table: Value = serde_json::from_str(&std::fs::read_to_string(&path).expect("readable"))
+                .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            let mut found = Vec::new();
+            strings_in(&table, &mut found);
+            if path.file_stem().is_some_and(|s| s == "en") {
+                texts.extend(found.iter().map(|s| pseudo(s)));
+            }
+            texts.extend(found);
+        }
+    }
+    // what the shell draws itself: the held subtitle's marker and the sound captions' direction arrows
+    texts.push("\u{25BC}".into());
+    texts.extend(ARROWS.iter().map(|a| a.to_string()));
+    for text in &texts {
+        // the default font draws everything; the readable stack falls back to it
+        assert!(
+            regular.missing(text).is_empty(),
+            "{text:?} misses {:?}",
+            regular.missing(text)
+        );
+    }
+    assert!(
+        readable.covers('é') && !readable.covers('\u{25BC}'),
+        "the stack is still needed behind Atkinson"
     );
 }

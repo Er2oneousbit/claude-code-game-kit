@@ -43,6 +43,8 @@
 //           first, so it holds this run's frames only
 // Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): a DRIVE_ABORT or DRIVE_IGNORED run skips the
 //           data-dir scenario checks (the refusal is its one error)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the "--drive crash fails on purpose" note prints
+//           only when a crash file was written (it also followed a refused drive or a crash hook that wrote nothing)
 // ---------------------------------------------------------------------------
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -419,7 +421,10 @@ else for (const l of lines) if (NOTE.test(l)) console.log(l);
 if (errors.length) {
   console.log("[FAIL] errors during smoke:");
   for (const e of errors.slice(0, 20)) console.log(`  ${e}`);
-  if (DRIVE === "crash") console.log("[info] --drive crash fails on purpose: the planted error must reach the crash hook (exit 1 is the pass)");
+  // only with the proof: a crash hook that wrote nothing, or a game that refused the drive (DRIVE_ABORT, web-3d's
+  // skeleton), is a real failure and must not read as the expected one
+  const crashProof = written.some(([m]) => m === "CRASH_WRITTEN") && !errors.some((e) => e.startsWith("[drive crash]"));
+  if (DRIVE === "crash" && crashProof) console.log("[info] --drive crash fails on purpose: the CRASH_WRITTEN file above is the proof (exit 1 is the pass)");
   code = 1;
 } else {
   const what = UNTIL ? `marker ${JSON.stringify(UNTIL)} reached` : `${FRAMES} frames`;

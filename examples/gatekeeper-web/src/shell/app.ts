@@ -19,6 +19,8 @@
 //   every press: the top screen gets it (its own handler, then its menu, then ui_cancel = back)
 //   every screen shown: telemetry "screen" event (if allowed), pseudo-locale check (if locale is pseudo)
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a drive is the only input; the real keyboard, mouse
+//           and pads are ignored while one runs (input.scripted, #276)
 // ---------------------------------------------------------------------------
 import type * as PhaserNS from "phaser";
 import { atomicWrite } from "../core/atomicFile";
@@ -170,7 +172,12 @@ export class Shell {
       queueMicrotask(() => this.toast("toast.repaired", { n: problems.length }));
     }
 
-    this.input = new ShellInput(() => this.settings.input.bindings, () => this.settings.input.deadzone);
+    this.input = new ShellInput(
+      () => this.settings.input.bindings,
+      () => this.settings.input.deadzone,
+      () => this.settings.input.invert_y,
+    );
+    this.input.scripted = this.drive !== ""; // only the drive presses: no real keyboard, mouse or pad (#276)
     this.input.onPress = (binding, actions) => this.route(binding, actions);
     this.input.onRawKey = (code) => {
       if (code === "F8" && this.debugBuild) this.bugReport();

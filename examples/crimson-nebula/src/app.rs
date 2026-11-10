@@ -22,6 +22,10 @@
 //           update (--smoke 120 ran 119 ticks); smoke_test_app for the headless test of that
 //           2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): the shell (ShellPlugin always, ShellViewPlugin
 //           with a window), the drive in smoke runs, a drive may end the run early (Smoke::finish_now)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the log keeps a tail for crash files and bug
+//           reports (shell/crash.rs, #275)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a failed drive still gets its --screenshot, of the
+//           frame it stopped on (Smoke::finish_failed, #276)
 // ---------------------------------------------------------------------------
 use std::path::PathBuf;
 use std::time::Duration;
@@ -65,6 +69,8 @@ pub struct Smoke {
     record_from: u32,
     pending: u32,
     grace: u32,
+    /// The run's exit code once the last frame is through: 0, or a failed drive's (finish_failed).
+    exit_code: u8,
 }
 
 /// The App for this command line. `drive` is the scripted scenario a smoke run follows ("default" walks into the
@@ -77,6 +83,7 @@ pub fn build(cli: &Cli, cfg: GameConfig, drive: Option<Drive>) -> App {
             env!("CARGO_CRATE_NAME"),
             if cli.debug { "debug" } else { "info" }
         ),
+        custom_layer: crate::shell::crash::log_layer, // the last lines, for crash files and F8 bug reports
         ..default()
     };
     let window = cli.wants_window() || cfg.needs_window();
@@ -159,6 +166,18 @@ impl Smoke {
         self.frames = self.done + 1;
     }
 
+    /// A drive failed with `code`: when a screenshot was asked for, the next frame is still the run's last, so the
+    /// picture shows where the drive stopped (#276), then the run exits with `code`. False (nothing changed) when
+    /// there is no picture to take: the caller exits now.
+    pub fn finish_failed(&mut self, code: u8) -> bool {
+        if self.screenshot.is_none() {
+            return false;
+        }
+        self.exit_code = code;
+        self.finish_now();
+        true
+    }
+
     fn budget(frames: u32) -> Self {
         Smoke {
             frames,
@@ -170,6 +189,7 @@ impl Smoke {
             record_from: 1,
             pending: 0,
             grace: 0,
+            exit_code: 0,
         }
     }
 }
@@ -224,6 +244,10 @@ fn smoke_budget(
         exit.write(AppExit::from_code(1));
         return;
     }
+    if smoke.exit_code != 0 {
+        exit.write(AppExit::from_code(smoke.exit_code)); // a failed drive's last frame, pictured (#276)
+        return;
+    }
     println!("SMOKE_DONE frames={}", smoke.frames);
     exit.write(AppExit::Success);
 }
@@ -236,4 +260,21 @@ fn request_screenshot(commands: &mut Commands, smoke: &mut Smoke, path: PathBuf)
         .observe(|_: On<ScreenshotCaptured>, mut smoke: ResMut<Smoke>| {
             smoke.pending = smoke.pending.saturating_sub(1);
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_failed_drive_gets_its_screenshot_frame_only_when_one_was_asked_for() {
+        // #276: the sweep keeps a failed run's last frame; a run without --screenshot still exits at once
+        let mut smoke = Smoke::budget(6000);
+        smoke.done = 40;
+        assert!(!smoke.finish_failed(1), "no --screenshot: the caller exits now");
+        assert_eq!((smoke.frames, smoke.exit_code), (6000, 0));
+        smoke.screenshot = Some(PathBuf::from("last.png"));
+        assert!(smoke.finish_failed(1));
+        assert_eq!((smoke.frames, smoke.exit_code), (41, 1), "one more frame, then exit 1");
+    }
 }

@@ -1,21 +1,35 @@
 // ---------------------------------------------------------------------------
 // shell/drive.rs
 // Purpose : Scripted smoke scenarios (`python tools/dev.py smoke --drive <name>`): they press the same actions a
-//           player would, frame by frame, and print proof lines dev.py echoes (SETTINGS_WRITTEN, ACCESS_*, DRIVE_*).
-//           Without --drive, a smoke run walks title -> menu -> play and lets the game run.
+//           player would, frame by frame, and print proof lines dev.py echoes (SETTINGS_WRITTEN, PSEUDO_*, ACCESS_*,
+//           DRIVE_*; CRASH_WRITTEN comes from the panic hook, crash.rs). Without --drive, a smoke run walks
+//           title -> menu -> play and lets the game run.
 // Usage   : menus          title -> settings: master volume 0.5 (left or right from whatever the data folder held),
 //                          reduce motion on -> back (saves) -> quit; prints SETTINGS_WRITTEN <path> once the file
 //                          holds the new values. Headless.
-//           show:<screen>  title | main_menu | settings | pause | help | history | credits | subtitle: opens it, then
-//                          ends (add --screenshot). Opens a window.
+//           crash          a planted panic on the main menu: the hook writes the crash file (CRASH_WRITTEN <path>)
+//                          and the run fails on purpose (exit 101). Headless.
+//           pseudo         (with --locale pseudo) visits every screen and checks every visible label: not in
+//                          brackets (untranslated), wider than its box (truncated) or past the window's edge:
+//                          PSEUDO_SCREEN per screen, PSEUDO_FAIL per problem, then PSEUDO_PASS or PSEUDO_FAILED
+//                          (exit 1). Opens a window (it measures the drawn text).
+//           pseudo-plant   the same plus one label too small for its text: must fail and name plant.too_small
+//           bug            presses F8 on the main menu and checks the bug_<time>/ folder: DRIVE_BUG <path>. Window.
+//           show:<screen>  title | main_menu | settings | pause | help | history | credits | subtitle | juice: opens
+//                          it, then ends (add --screenshot; juice lands a hit first). Opens a window.
 //           access[:opts]  the accessibility sweep's tour (tools/access/sweep.py): res=WxH, scale=N, pad, read.
 //                          Opens a window (it measures the drawn text).
 // Notes   : A scenario is a list of steps; each step runs once a frame until it reports done, and every step has a
 //           frame limit, so a broken menu fails instead of hanging. Steps run in an exclusive system (they need the
 //           whole World: the shell, the window, the access report). A failure logs an ERROR line (dev.py fails on it)
-//           and exits 1; done prints DRIVE_DONE <name> and hands the smoke budget its last frame (the screenshot).
+//           and exits 1 (after the screenshot of where it stopped, with --screenshot: #276); done prints DRIVE_DONE
+//           <name> and hands the smoke budget its last frame (the screenshot). While a drive runs, the window's real
+//           keyboard and pads are not read at all (view.rs ShellInputPlugin, #276): only the drive presses.
 //           Add a scenario: a function in scenario(), then document it in docs/ENGINE_FLOW.md.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): crash, pseudo, pseudo-plant, bug and show:juice;
+//           the access tour visits the juice demo in debug builds (#275)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a failed drive's screenshot (#276)
 // ---------------------------------------------------------------------------
 use std::collections::{BTreeMap, VecDeque};
 
@@ -43,7 +57,11 @@ pub const TARGET_MASTER: f64 = 0.5;
 /// Presses a slider gets to reach its target (0..1 is 10 steps of 0.1).
 const MAX_SLIDER_STEPS: u32 = 40;
 const SLIDER_EPS: f64 = 1e-6;
-pub const SHOW_TARGETS: [&str; 8] = [
+/// Frames into the juice demo before show:juice attacks (the guide's line has settled), then frames after the hit
+/// before the picture (still inside the hitstop, the flash and the ring).
+const JUICE_HIT_FRAME: u32 = 40;
+const JUICE_SHOT_FRAMES: u32 = 1;
+pub const SHOW_TARGETS: [&str; 9] = [
     "title",
     "main_menu",
     "settings",
@@ -52,8 +70,11 @@ pub const SHOW_TARGETS: [&str; 8] = [
     "history",
     "credits",
     "subtitle",
+    "juice",
 ];
-pub const SCENARIOS: [&str; 2] = ["menus", "access"];
+pub const SCENARIOS: [&str; 6] = ["menus", "crash", "pseudo", "pseudo-plant", "bug", "access"];
+/// Drives that measure or picture the drawn screen, so they open a window.
+const WINDOW_SCENARIOS: [&str; 4] = ["pseudo", "pseudo-plant", "bug", "access"];
 const ACCESS_ACTIONS: [&str; 7] = [
     "ui_up",
     "ui_down",
@@ -89,6 +110,10 @@ pub struct Drive {
     reach_seen: Vec<String>,
     /// Facts one step leaves for a later one (the preset applied before the reset).
     scratch: BTreeMap<String, Value>,
+    /// The pseudo drive's tally: screens checked, labels seen, problems found.
+    checked: u32,
+    labels: u64,
+    problems: u32,
 }
 
 /// The press that moves a slider from now towards target ("" once it is there).
@@ -119,9 +144,10 @@ pub fn validate(name: &str) -> Result<(), String> {
     ))
 }
 
-/// Does this drive need a window? (show: captures a picture, access measures drawn text.)
+/// Does this drive need a window? (show: captures a picture; access and pseudo measure drawn text; bug's report
+/// has a screenshot.)
 pub fn needs_window(name: &str) -> bool {
-    name.starts_with("show:") || name == "access" || name.starts_with("access:")
+    name.starts_with("show:") || WINDOW_SCENARIOS.contains(&name) || name.starts_with("access:")
 }
 
 impl Drive {
@@ -138,6 +164,9 @@ impl Drive {
             report: None,
             reach_seen: Vec::new(),
             scratch: BTreeMap::new(),
+            checked: 0,
+            labels: 0,
+            problems: 0,
         };
         scenario(&mut d)?;
         if name != "default" {
@@ -388,6 +417,43 @@ impl Drive {
         });
     }
 
+    /// The pseudo check of the screen on top: PSEUDO_SCREEN, a PSEUDO_FAIL line per problem, counted for the end.
+    fn check(&mut self, screen: &str) {
+        let name = screen.to_string();
+        self.run(&format!("request the check of {screen}"), move |world, _| {
+            let Some(mut report) = world.get_resource_mut::<AccessReport>() else {
+                return Err("the pseudo drive needs a window: it measures the drawn text".into());
+            };
+            report.request_check(&name);
+            Ok(())
+        });
+        let name = screen.to_string();
+        self.add(
+            &format!("the check of {screen}"),
+            WAIT_LIMIT,
+            Box::new(move |world, d| {
+                let Some(r) = world.resource_mut::<AccessReport>().result.take() else {
+                    return Ok(false);
+                };
+                let problems = r["problems"].as_array().cloned().unwrap_or_default();
+                let labels = r["labels"].as_u64().unwrap_or(0);
+                println!("PSEUDO_SCREEN {name} labels {labels} problems {}", problems.len());
+                for p in &problems {
+                    println!(
+                        "PSEUDO_FAIL {name} label {}: {} ({:?})",
+                        p["id"].as_str().unwrap_or("?"),
+                        p["why"].as_str().unwrap_or("?"),
+                        p["text"].as_str().unwrap_or("")
+                    );
+                }
+                d.checked += 1;
+                d.labels += labels;
+                d.problems += problems.len() as u32;
+                Ok(true)
+            }),
+        );
+    }
+
     fn done(&mut self, code: u8) {
         self.run("done", move |world, d| {
             finish(world, d, code);
@@ -438,7 +504,13 @@ fn fail(world: &mut World, d: &mut Drive, msg: &str) {
     error!("drive {}: {msg}", d.name);
     d.finished = true;
     d.steps.clear();
-    world.write_message(AppExit::from_code(1));
+    // with --screenshot, one more frame for the picture of where the drive stopped (#276); else exit now
+    if !world
+        .get_resource_mut::<Smoke>()
+        .is_some_and(|mut smoke| smoke.finish_failed(1))
+    {
+        world.write_message(AppExit::from_code(1));
+    }
 }
 
 /// Runs the current step once a frame (an exclusive system: steps need the whole World).
@@ -486,6 +558,10 @@ fn scenario(d: &mut Drive) -> Result<(), String> {
             d.wait_screen(ScreenName::Play);
         }
         "menus" => menus(d),
+        "crash" => crash(d),
+        "pseudo" => pseudo(d, false),
+        "pseudo-plant" => pseudo(d, true),
+        "bug" => bug(d),
         _ if name.starts_with("show:") => show(d, &name[5..]),
         _ if name == "access" || name.starts_with("access:") => access(d, name.strip_prefix("access:").unwrap_or(""))?,
         _ => return validate(&name),
@@ -539,6 +615,169 @@ fn menus(d: &mut Drive) {
     d.done(0);
 }
 
+fn crash(d: &mut Drive) {
+    d.menu_from_title();
+    d.frames(2);
+    d.run("the planted panic", |_, _| {
+        panic!("drive crash: a planted panic to prove the crash file (expected)");
+    });
+}
+
+/// Esc on the "press a key" prompt: the capture ends without a change (view.rs does this for a real key).
+fn cancel_capture(world: &mut World, _: &mut Drive) -> Result<(), String> {
+    world.resource_mut::<Shell>().capture("");
+    Ok(())
+}
+
+/// The pseudo-locale tour: every screen, each settings tab at its top and scrolled to its end.
+fn pseudo(d: &mut Drive, plant: bool) {
+    d.run("the pseudo-locale", move |world, _| {
+        let mut shell = world.resource_mut::<Shell>();
+        shell.plant = plant; // view.rs draws one label too small for its text on the main menu
+        if !shell.is_pseudo() {
+            shell.locale_override = Some("pseudo".into());
+            shell.changed();
+            println!("DRIVE_NOTE the pseudo drive switched the locale to pseudo (pass --locale pseudo next time)");
+        }
+        Ok(())
+    });
+    d.wait_screen(ScreenName::Title);
+    d.frames(PRESS_GAP);
+    // the consent question when it shows (a first start: a fresh data folder), then the title itself
+    d.check("title.first");
+    d.run("dismiss consent", |world, d| {
+        if world.resource::<Shell>().top().is_some_and(|t| t.consent) {
+            press_now(world, d, "ui_cancel")?;
+        }
+        Ok(())
+    });
+    d.frames(PRESS_GAP);
+    d.wait_for("the blinking prompt", WAIT_LIMIT, |world| {
+        world.resource::<Shell>().blink_on
+    });
+    d.check("title");
+    d.press("ui_accept");
+    d.wait_screen(ScreenName::MainMenu);
+    d.check("main_menu");
+    d.open("settings", ScreenName::Settings);
+    for tab in TABS {
+        d.open_tab(tab);
+        d.check(&format!("settings.{tab}"));
+        d.press("ui_down");
+        d.focus(&format!("{tab}.back")); // scrolled to the end: the rows below the fold
+        d.check(&format!("settings.{tab}.end"));
+        if tab == "controls" {
+            d.focus("controls.bind_jump");
+            d.press("ui_accept"); // the "press a key" prompt
+            d.check("settings.capture");
+            d.run("cancel the capture", cancel_capture);
+            d.frames(PRESS_GAP);
+        }
+    }
+    d.press("ui_cancel");
+    d.wait_screen(ScreenName::MainMenu);
+    d.open("credits", ScreenName::Credits);
+    d.check("credits");
+    d.press("ui_cancel");
+    d.wait_screen(ScreenName::MainMenu);
+    if cfg!(debug_assertions) {
+        // the juice demo (debug builds), a hit in it, and the pause menu over it
+        d.run("barks on", |world, _| {
+            world
+                .resource_mut::<Shell>()
+                .set("access", "subtitle_barks", json!(true));
+            Ok(())
+        });
+        d.open("juice", ScreenName::Loading);
+        d.check("loading");
+        d.wait_screen(ScreenName::Juice);
+        d.frames(20);
+        d.check("juice");
+        d.press("attack");
+        d.frames(3);
+        d.check("juice.hit");
+        d.press("pause");
+        d.wait_screen(ScreenName::Pause);
+        d.check("pause");
+        d.open("quit", ScreenName::Title);
+        d.press("ui_accept");
+        d.wait_screen(ScreenName::MainMenu);
+        d.open("play", ScreenName::Loading);
+    } else {
+        d.open("play", ScreenName::Loading);
+        d.check("loading");
+    }
+    d.wait_screen(ScreenName::Play);
+    d.frames(5);
+    d.check("play");
+    d.press("pause");
+    d.wait_screen(ScreenName::Pause);
+    d.check("pause.play");
+    for (item, screen) in [("help", ScreenName::Help), ("history", ScreenName::History)] {
+        d.open(item, screen);
+        d.check(item);
+        d.press("ui_cancel");
+        d.wait_screen(ScreenName::Pause);
+    }
+    d.open("quit", ScreenName::Title);
+    d.run("the verdict", |world, d| {
+        if d.problems == 0 {
+            println!(
+                "PSEUDO_PASS {} screens, {} labels, nothing truncated or untranslated",
+                d.checked, d.labels
+            );
+            finish(world, d, 0);
+        } else {
+            println!("PSEUDO_FAILED {} problem(s) on {} screens", d.problems, d.checked);
+            error!("pseudo: {} label problem(s); see the PSEUDO_FAIL lines", d.problems);
+            finish(world, d, 1);
+        }
+        Ok(())
+    });
+}
+
+/// F8 on the main menu, then the report's four files on disk.
+fn bug(d: &mut Drive) {
+    d.menu_from_title();
+    d.run("press F8", |world, _| {
+        let mut shell = world.resource_mut::<Shell>();
+        if !shell.debug_build {
+            return Err("the bug report key works in debug builds only (drop --release)".into());
+        }
+        shell.bug_key();
+        Ok(())
+    });
+    d.wait_for("the bug report", WAIT_LIMIT, |world| {
+        world.resource::<Shell>().last_bug_report.is_some()
+    });
+    d.run("DRIVE_BUG", |world, _| {
+        let dir = world.resource::<Shell>().last_bug_report.clone().unwrap_or_default();
+        for f in super::bug_report::FILES {
+            let path = dir.join(f);
+            if !path.is_file() || std::fs::metadata(&path).map_or(0, |m| m.len()) == 0 {
+                return Err(format!("the bug report lacks {f} ({})", dir.display()));
+            }
+        }
+        println!("DRIVE_BUG {}", dir.display());
+        Ok(())
+    });
+    d.done(0);
+}
+
+/// Main menu > Juice demo (debug builds only).
+fn to_juice(d: &mut Drive) {
+    d.menu_from_title();
+    d.run("a debug build", |world, _| {
+        if world.resource::<Shell>().debug_build {
+            Ok(())
+        } else {
+            Err("the juice demo is in debug builds only (drop --release)".into())
+        }
+    });
+    d.open("juice", ScreenName::Loading);
+    d.wait_screen(ScreenName::Juice);
+}
+
 fn to_play(d: &mut Drive) {
     d.menu_from_title();
     d.open("play", ScreenName::Loading);
@@ -574,6 +813,12 @@ fn show(d: &mut Drive, target: &str) {
             d.menu_from_title();
             d.open("credits", ScreenName::Credits);
             d.frames(5);
+        }
+        "juice" => {
+            to_juice(d);
+            d.frames(JUICE_HIT_FRAME); // the guide's line is up, the camera settled
+            d.press("attack");
+            d.frames(JUICE_SHOT_FRAMES); // the picture: the hit's flash, ring and squash
         }
         "subtitle" => {
             d.run("speaker names on", |world, _| {
@@ -712,6 +957,18 @@ fn access(d: &mut Drive, options: &str) -> Result<(), String> {
     d.access_screen("credits");
     d.press("ui_cancel");
     d.wait_screen(ScreenName::MainMenu);
+    if cfg!(debug_assertions) {
+        // the juice demo (debug builds): its HUD over the world, like play's
+        d.open("juice", ScreenName::Loading);
+        d.wait_screen(ScreenName::Juice);
+        d.frames(30);
+        d.access_screen("juice");
+        d.press("pause");
+        d.wait_screen(ScreenName::Pause);
+        d.open("quit", ScreenName::Title);
+        d.press("ui_accept");
+        d.wait_screen(ScreenName::MainMenu);
+    }
     d.open("play", ScreenName::Loading);
     d.wait_screen(ScreenName::Play);
     d.frames(40);

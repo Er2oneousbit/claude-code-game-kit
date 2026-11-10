@@ -28,7 +28,7 @@ namespace graveyard_shift.Shell.Screens
         protected override void BuildContent()
         {
             VisualElement col = Column(true);
-            Label title = Heading(col, S.T("game.title"), "Title", UiTheme.TITLE);
+            Label title = Heading(col, S.GameTitle(), "Title", UiTheme.TITLE);
             title.style.unityTextAlign = UnityEngine.TextAnchor.MiddleCenter;
             Label press = Text(col, S.T("title.press_any"), "PressAny");
             press.style.unityTextAlign = UnityEngine.TextAnchor.MiddleCenter;

@@ -6,9 +6,10 @@
 // Usage   : app.add_plugins(GamePlugin);   game options: configure(&args) -> GameConfig
 //           smoke scenario: dev.py smoke --frames 9000 --until RACE_OVER -- --autoplay reader --seed 3
 // Notes   : Visuals live in present.rs, which reads RaceRes. Input arrives only through the Intent resource: the
-//           shell (src/shell/) fills `dir` and `pressed` from the player's bindings (move_* for gas and steering,
-//           jump held = drift, attack = use the item); shell_intent below adds what the kit's Intent does not carry
-//           (the held drift, a new race when Play is entered or the results get a press). The race ticks only while
+//           shell (src/shell/) fills it from the player's bindings and the pad (#265): the right and left triggers
+//           are analog gas and brake, the left stick steers by how far it leans, the keys and d-pad (move_*) are
+//           the digital fallback, jump held = drift, attack = use the item. race_requests below asks for a new race
+//           (RestartRequest) when Play is entered or the results get a press. The race ticks only while
 //           GameActive is true (Play on top of the shell: never under the title, the menus or the pause screen).
 //           AccessRules.game_speed scales the tick (SOP-20); Palette and ScreenShake follow the settings (present.rs
 //           reads them). Markers (info! lines, one word first): RACE_SEED, RACE_GO, LAP, CHANGE_WARN, CHANGE_LIVE,
@@ -17,10 +18,13 @@
 // Updated : 2026-11-10 with Claude (Fable 5.1, claude-fable-5-1): the kit's shell (#168): Intent replaces
 //           PlayerInput, GameActive gates the race, AccessRules, Palette, ScreenShake (a bonk rattles the camera),
 //           the shell's options (--drive, --data-dir, --locale), the restart moved here from present.rs
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): kit 0.14.4: analog gas, brake and steering from the
+//           kit's Intent (stick, triggers, held actions, #265); the restart is its own resource (RestartRequest);
+//           the new drives (crash, pseudo, pseudo-plant, bug, show:juice)
 // ---------------------------------------------------------------------------
 pub mod present;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use bevy::prelude::*;
@@ -44,14 +48,16 @@ pub const RIVALS: [Style; 3] = [Style::Reader, Style::Late, Style::Ignorer];
 pub const NAMES: [&str; KARTS] = ["You", "Vex", "Nova", "Rook"];
 
 // ---- Input mapping (the kit's actions -> the kart) -----------------------------
-/// The held game action that drifts (Space, pad south by default; rebindable in Settings > Controls).
+/// The held game action that drifts (Space, pad south by default; rebindable in Settings > Controls): read with
+/// Intent::is_held.
 pub const DRIFT_ACTION: &str = "jump";
 /// The pressed game action that uses the item (J, pad west by default).
 pub const ITEM_ACTION: &str = "attack";
 /// Any of these on the results screen starts a new race.
 pub const RESTART_ACTIONS: [&str; 3] = ["jump", "attack", "interact"];
-/// Intent.dir is a unit vector (a diagonal is 0.707 per axis): anything past this counts as the full axis, so
-/// gas and steering stay digital like the keys they come from.
+/// Intent.dir from the keys or d-pad is a unit vector (a diagonal is 0.707 per axis): anything past this counts as
+/// the full axis, so key gas and steering stay digital like the keys they come from. The stick and the triggers
+/// are read as they are (analog).
 const AXIS_ON: f32 = 0.3;
 /// Trauma a bump adds to the screen shake (present.rs rattles the chase camera by it; 0 with reduce motion).
 pub const BONK_TRAUMA: f64 = 0.35;
@@ -63,7 +69,8 @@ pub struct GameConfig {
     pub autoplay: Option<Style>,
     /// Track-change schedule seed; None picks one from the clock (a new race each time).
     pub seed: Option<u64>,
-    /// A scripted smoke scenario (shell/drive.rs): menus, access[:opts], show:<screen>.
+    /// A scripted smoke scenario (shell/drive.rs): menus, crash, pseudo, pseudo-plant, bug, access[:opts],
+    /// show:<screen>.
     pub drive: Option<String>,
     /// Where settings and saves go (dev.py smoke always sets it, so a test never touches the player's files).
     pub data_dir: Option<PathBuf>,
@@ -84,8 +91,9 @@ pub const OPTIONS_HELP: &str = "\
 Game options (after --):
   --autoplay STYLE     a bot drives your kart: reader | late | ignorer
   --seed N             replay the track changes of race N (shown on the results screen)
-  --drive NAME         with --smoke: a scripted path through the shell (menus, access[:res=WxH,scale=N,pad,read],
-                       show:<title|main_menu|settings|pause|help|history|credits|subtitle>); dev.py smoke --drive
+  --drive NAME         with --smoke: a scripted path through the shell (menus, crash, pseudo, pseudo-plant, bug,
+                       access[:res=WxH,scale=N,pad,read],
+                       show:<title|main_menu|settings|pause|help|history|credits|subtitle|juice>); dev.py smoke --drive
   --data-dir DIR       settings and saves go here (dev.py smoke passes a fresh build/smoke-data)
   --locale LANG        language for the run (pseudo = the pseudo-locale)
 ";
@@ -130,26 +138,60 @@ pub fn configure(args: &[String]) -> Result<GameConfig, String> {
 pub struct RaceRes(pub Race);
 
 /// What the player wants this tick. The shell (from the bindings) or a bot writes it; the simulation only reads it.
+/// Everything is zero or empty while the game is not active (menus, pause).
 #[derive(Resource, Debug, Default, Clone, PartialEq)]
 pub struct Intent {
-    /// Desired direction, length 0 to 1 (the shell: the held move_* actions). Up is gas, down is brake, x steers.
+    /// Desired direction, length 0 to 1: the held move_* actions (keys, d-pad) plus the analog `stick`, so keyboard
+    /// play gives unit directions and a half-leaned stick gives half. Up is gas, down is brake, x steers.
     pub dir: Vec2,
     /// Game actions pressed this frame (jump, attack, interact), auto-repeats included.
     pub pressed: Vec<String>,
-    /// The drift action is held (shell_intent reads it from the shell; the kit's Intent carries no held actions).
-    pub drift: bool,
-    /// Start a new race (entering Play from the menus, or a press on the results): acted on once per rising edge.
-    pub restart: bool,
+    /// Game actions held right now (no ui_*): the drift button. The left stick past the deadzone also holds
+    /// move_left/right/up/down here, invert_y honoured.
+    pub held: BTreeSet<String>,
+    /// The left stick, deadzone (input.deadzone, radial, rescaled) and input.invert_y applied: each axis -1 to 1,
+    /// up is +y. Zero without a pad.
+    pub stick: Vec2,
+    /// The analog triggers, 0 at rest to 1 fully in (logic::analog::TRIGGER_DEADZONE applied): brake and gas.
+    pub left_trigger: f32,
+    pub right_trigger: f32,
 }
 
 impl Intent {
-    /// The kart input the intent asks for: digital gas and steering, a held drift, the item on its press.
+    /// Is this game action held right now?
+    pub fn is_held(&self, action: &str) -> bool {
+        self.held.contains(action)
+    }
+
+    /// Was this game action pressed this frame?
+    pub fn just_pressed(&self, action: &str) -> bool {
+        self.pressed.iter().any(|a| a == action)
+    }
+
+    /// The kart input the intent asks for. Gas is the right trigger, brake the left one, each at least what the
+    /// keys, d-pad or stick ask (a held key counts as fully in); throttle = gas - brake, so both at once coast.
+    /// Steering follows the stick's lean while it leans (analog), else the keys or d-pad (full lock). Drift is
+    /// held, the item goes on its press.
     pub fn kart_input(&self) -> KartInput {
+        // per axis: the stick while it leans on that axis, else dir (keys and d-pad, or a writer that sets only
+        // dir, like the headless tests) made digital
+        let y = if self.stick.y != 0.0 {
+            self.stick.y
+        } else {
+            axis(self.dir.y)
+        };
+        let gas = self.right_trigger.max(y.max(0.0));
+        let brake = self.left_trigger.max((-y).max(0.0));
+        let steer = if self.stick.x != 0.0 {
+            -self.stick.x
+        } else {
+            -axis(self.dir.x)
+        };
         KartInput {
-            throttle: axis(self.dir.y),
-            steer: axis(-self.dir.x),
-            drift: self.drift,
-            use_item: self.pressed.iter().any(|a| a == ITEM_ACTION),
+            throttle: (gas - brake).clamp(-1.0, 1.0),
+            steer: steer.clamp(-1.0, 1.0),
+            drift: self.is_held(DRIFT_ACTION),
+            use_item: self.just_pressed(ITEM_ACTION),
         }
     }
 }
@@ -163,6 +205,11 @@ fn axis(v: f32) -> f32 {
         0.0
     }
 }
+
+/// Start a new race (entering Play from the menus, or a press on the results): acted on once per rising edge.
+/// race_requests sets it from the shell every frame; nothing sets it without the shell (the headless tests).
+#[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct RestartRequest(pub bool);
 
 /// Fixed ticks run so far: tests count ticks, never frames.
 #[derive(Resource, Debug, Default)]
@@ -239,6 +286,7 @@ impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<GameConfig>()
             .init_resource::<Intent>()
+            .init_resource::<RestartRequest>()
             .init_resource::<SimTick>()
             .init_resource::<GameActive>()
             .init_resource::<AccessRules>()
@@ -247,7 +295,7 @@ impl Plugin for GamePlugin {
             .add_systems(PreStartup, start_race)
             .add_systems(
                 RunFixedMainLoop,
-                shell_intent.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
+                race_requests.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
             )
             .add_systems(FixedUpdate, (restart_race, race_tick.run_if(game_active)).chain());
     }
@@ -275,31 +323,30 @@ fn start_race(mut commands: Commands, cfg: Res<GameConfig>) {
     commands.insert_resource(new_race(cfg.seed.unwrap_or_else(fresh_seed)));
 }
 
-/// What the kit's Intent does not carry, read from the shell (absent in the headless tests): the held drift, and
-/// a restart when Play is being entered from the menus (Loading on top) or the results get a press. The press is
-/// read from the shell itself, so it works under --autoplay too (the shell drops presses from Intent for bots).
-fn shell_intent(shell: Option<Res<Shell>>, race: Res<RaceRes>, mut intent: ResMut<Intent>) {
+/// A restart, read from the shell (absent in the headless tests): when Play is being entered from the menus
+/// (Loading on top) or the results get a press. The press is read from the shell itself, so it works under
+/// --autoplay too (the shell drops presses from Intent for bots).
+fn race_requests(shell: Option<Res<Shell>>, race: Res<RaceRes>, mut restart: ResMut<RestartRequest>) {
     let Some(shell) = shell else {
         return;
     };
-    intent.drift = shell.held.contains(DRIFT_ACTION);
     let entering_play = shell.top_name() == Some(ScreenName::Loading);
     let again = race.0.phase == Phase::Over && shell.game_pressed.iter().any(|a| RESTART_ACTIONS.contains(&a.as_str()));
-    intent.restart = entering_play || again;
+    restart.0 = entering_play || again;
 }
 
-/// A rising edge of Intent.restart starts a new race: on the seed asked for when Play is entered from the menus
+/// A rising edge of RestartRequest starts a new race: on the seed asked for when Play is entered from the menus
 /// (so --seed N replays race N each time), on a fresh seed after the results ("race again"). Not gated on
 /// GameActive: the Loading screen is where the menus' restart happens.
 fn restart_race(
     mut was: Local<bool>,
-    intent: Res<Intent>,
+    restart: Res<RestartRequest>,
     cfg: Res<GameConfig>,
     race: Res<RaceRes>,
     mut commands: Commands,
 ) {
-    let rising = intent.restart && !*was;
-    *was = intent.restart;
+    let rising = restart.0 && !*was;
+    *was = restart.0;
     if !rising {
         return;
     }
@@ -396,18 +443,31 @@ mod tests {
         assert_eq!(cfg.locale.as_deref(), Some("pseudo"));
         assert!(!cfg.needs_window(), "menus runs headless");
         assert!(configure(&args(&["--drive", "show:settings"])).unwrap().needs_window());
+        for (drive, window) in [
+            ("crash", false),
+            ("pseudo", true),
+            ("pseudo-plant", true),
+            ("bug", true),
+        ] {
+            assert_eq!(
+                configure(&args(&["--drive", drive])).unwrap().needs_window(),
+                window,
+                "{drive}"
+            );
+        }
+        assert!(configure(&args(&["--drive", "show:juice"])).is_ok());
         assert!(configure(&args(&["--drive", "dance"])).is_err());
         assert!(configure(&args(&["--drive", "show:kitchen"])).is_err());
     }
 
     #[test]
-    fn the_intent_maps_to_digital_gas_and_steering_with_drift_and_item() {
+    fn keys_give_digital_gas_and_steering_with_drift_and_item() {
         // a held W and A: the shell's unit direction is (-0.707, 0.707), which must still be full gas, full left
         let intent = Intent {
             dir: Vec2::new(-1.0, 1.0).normalize(),
             pressed: vec![ITEM_ACTION.to_string()],
-            drift: true,
-            restart: false,
+            held: BTreeSet::from([DRIFT_ACTION.to_string(), "move_up".into(), "move_left".into()]),
+            ..Intent::default()
         };
         assert_eq!(
             intent.kart_input(),
@@ -425,5 +485,50 @@ mod tests {
         let k = brake_right.kart_input();
         assert_eq!((k.throttle, k.steer, k.drift, k.use_item), (-1.0, -1.0, false, false));
         assert_eq!(Intent::default().kart_input(), KartInput::default());
+    }
+
+    #[test]
+    fn triggers_are_analog_gas_and_brake_and_the_stick_steers_by_its_lean() {
+        // half the right trigger: half gas; the left trigger on top takes it back down
+        let half_gas = Intent {
+            right_trigger: 0.5,
+            ..Intent::default()
+        };
+        assert_eq!(half_gas.kart_input().throttle, 0.5);
+        let both = Intent {
+            right_trigger: 0.75,
+            left_trigger: 0.25,
+            ..Intent::default()
+        };
+        assert_eq!(both.kart_input().throttle, 0.5);
+        let brake = Intent {
+            left_trigger: 0.4,
+            ..Intent::default()
+        };
+        assert_eq!(brake.kart_input().throttle, -0.4);
+        // a held gas key counts as a fully pressed trigger: max(trigger, key), never less
+        let key_and_trigger = Intent {
+            dir: Vec2::Y,
+            right_trigger: 0.3,
+            ..Intent::default()
+        };
+        assert_eq!(key_and_trigger.kart_input().throttle, 1.0);
+        // the stick leaned 40% right (dir carries it too, and the stick holds move_right): 40% lock, not full lock
+        let lean = Intent {
+            dir: Vec2::new(0.4, 0.0),
+            stick: Vec2::new(0.4, 0.0),
+            held: BTreeSet::from(["move_right".to_string()]),
+            right_trigger: 1.0,
+            ..Intent::default()
+        };
+        let k = lean.kart_input();
+        assert_eq!((k.throttle, k.steer), (1.0, -0.4));
+        // a stick leaned forward is analog gas as well
+        let stick_gas = Intent {
+            dir: Vec2::new(0.0, 0.6),
+            stick: Vec2::new(0.0, 0.6),
+            ..Intent::default()
+        };
+        assert_eq!(stick_gas.kart_input().throttle, 0.6);
     }
 }

@@ -7,17 +7,27 @@
 //           value are always what the settings hold now (no copies to keep in step). The settings rows
 //           follow the LÖVE shell's settings.lua one for one (same tabs, same order, same steps), so the
 //           golden settings schema (GameKitSettings.cpp) is what the menu offers.
-// Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Authored: Written with Claude (Fable 5.1, claude-fable-5-1); analog input (#274), the juice demo, the bug report,
+//           crash files and the pseudo locale (#275) by Claude (Opus 5.5, claude-opus-5-5); the i18n log line
+//           (where the string tables came from, or that there were none) by Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 #include "GameKitShellModel.h"
 
+#include "GameKitAnalog.h"
 #include "GameKitAtomicFile.h"
 #include "GameKitJson.h"
+#include "GameKitJuiceDemo.h"
 #include "GameKitSettings.h"
 #include "GameKitShellLog.h"
+#include "GameKitShellReport.h"
 #include "HAL/FileManager.h"
+#include "HAL/PlatformMisc.h"
+#include "Misc/DateTime.h"
+#include "Misc/EngineVersion.h"
 #include "Misc/Paths.h"
 
+const TCHAR* const FGameKitShellModel::BugKey = TEXT("key:f8");
+const TCHAR* const FGameKitShellModel::PseudoLocale = TEXT("pseudo");
 const TCHAR* const FGameKitShellModel::SettingsFile = TEXT("settings.json");
 const TCHAR* const FGameKitShellModel::PresetsFile = TEXT("data/input/presets.json");
 const TCHAR* const FGameKitShellModel::ColoursFile = TEXT("data/access/colours.json");
@@ -157,6 +167,14 @@ FGameKitShellModel::FGameKitShellModel(const FOptions& InOptions)
 	}
 }
 
+FGameKitShellModel::~FGameKitShellModel()
+{
+	if (bCrashArmed)
+	{
+		GameKit::ShellReport::ClearCrashTarget(this);
+	}
+}
+
 void FGameKitShellModel::LoadTables()
 {
 	TArray<FString> Files;
@@ -181,6 +199,17 @@ void FGameKitShellModel::LoadTables()
 		}
 		Tables.Add(FPaths::GetBaseFilename(File), MoveTemp(Table));
 	}
+	// Say where the strings came from: a packaged game without data/ (Config/Game.ini stages it) shows keys
+	const FString FullDir = FPaths::ConvertRelativePathToFull(Dir);
+	if (Tables.Num() == 0)
+	{
+		UE_LOG(LogGameKitShell, Warning, TEXT("i18n: no string tables in %s: labels show their keys"), *FullDir);
+		return;
+	}
+	TArray<FString> Names;
+	Tables.GetKeys(Names);
+	Names.Sort();
+	UE_LOG(LogGameKitShell, Log, TEXT("i18n: string tables %s from %s"), *FString::Join(Names, TEXT(", ")), *FullDir);
 }
 
 // ---- Settings ----------------------------------------------------------------------------------------------------
@@ -256,6 +285,10 @@ FString FGameKitShellModel::SaveSettings()
 void FGameKitShellModel::Changed()
 {
 	++Version;
+	if (bCrashArmed)
+	{
+		GameKit::ShellReport::UpdateCrashSettings(this, Write(Settings));   // a crash file shows the settings of now
+	}
 	Event(TEXT("settings_changed"));
 }
 
@@ -272,6 +305,19 @@ FString FGameKitShellModel::Locale() const
 
 FString FGameKitShellModel::T(const FString& Key, const FGameKitTrArgs& Args) const
 {
+	if (IsPseudo())
+	{
+		// the English text through Pseudo(), placeholders kept, then filled: "{name}" stays a name, not accented
+		const FGameKitStringTable* English = Tables.Find(GameKit::FallbackLocale);
+		const FString* Text = English ? English->Find(Key) : nullptr;
+		if (!Text)
+		{
+			return Key;   // unbracketed on purpose: the pseudo check flags a missing string
+		}
+		FGameKitStringTables One;
+		One.Add(PseudoLocale).Add(Key, GameKit::Pseudo(*Text));
+		return GameKit::Tr(One, PseudoLocale, Key, Args);
+	}
 	return GameKit::Tr(Tables, Locale(), Key, Args);
 }
 
@@ -330,6 +376,10 @@ TArray<FString> FGameKitShellModel::Locales() const
 	{
 		Out.Add(GameKit::FallbackLocale);
 	}
+	if (Opt.bDebugBuild)
+	{
+		Out.AddUnique(PseudoLocale);   // a tester picks it in the Language tab, as on the other shells
+	}
 	return Out;
 }
 
@@ -345,6 +395,20 @@ void FGameKitShellModel::Push(const FString& Name)
 	++Version;
 	UE_LOG(LogGameKitShell, Log, TEXT("screen %s"), *Name);
 	NarrateScreen(Stack.Last());
+	ScreenOpened(Name);
+}
+
+void FGameKitShellModel::ScreenOpened(const FString& Name)
+{
+	if (Name == TEXT("juice_demo"))
+	{
+		JuiceDemo = MakeUnique<FGameKitJuiceDemo>();
+		JuiceDemo->Enter(*this);
+	}
+	else if (JuiceDemo.IsValid() && !Stack.ContainsByPredicate([](const FGameKitScreen& S) { return S.Name == TEXT("juice_demo"); }))
+	{
+		JuiceDemo.Reset();   // the demo left the stack (quit to title)
+	}
 }
 
 void FGameKitShellModel::Pop()
@@ -356,6 +420,10 @@ void FGameKitShellModel::Pop()
 		if (Stack.Num())
 		{
 			NarrateScreen(Stack.Last());
+		}
+		if (JuiceDemo.IsValid() && !Stack.ContainsByPredicate([](const FGameKitScreen& S) { return S.Name == TEXT("juice_demo"); }))
+		{
+			JuiceDemo.Reset();
 		}
 	}
 }
@@ -647,7 +715,7 @@ void FGameKitShellModel::BuildTab(FGameKitScreen& Screen)
 		Lang.Value = [this]
 		{
 			const FString Loc = Locale();
-			const FString Name = GameKit::Tr(Tables, Loc, TEXT("language.name"));
+			const FString Name = Loc == PseudoLocale ? Loc : GameKit::Tr(Tables, Loc, TEXT("language.name"));
 			return Content(Name == TEXT("language.name") ? Loc : Name);
 		};
 		auto CycleLang = [this](int32 Dir)
@@ -708,6 +776,14 @@ FGameKitScreen FGameKitShellModel::Build(const FString& Name)
 		}));
 		S.Rows.Add(ButtonRow(TEXT("settings"), TEXT("menu.settings"), [this] { Push(TEXT("settings")); }));
 		S.Rows.Add(ButtonRow(TEXT("credits"), TEXT("menu.credits"), [this] { Push(TEXT("credits")); }));
+		if (Opt.bDebugBuild)
+		{
+			S.Rows.Add(ButtonRow(TEXT("juice"), TEXT("menu.juice"), [this]   // #275: the juice demo, debug builds only
+			{
+				Push(TEXT("loading"));
+				Top()->Next = TEXT("juice_demo");
+			}));
+		}
 		S.Rows.Add(ButtonRow(TEXT("quit"), TEXT("menu.quit"), [this]
 		{
 			bQuitRequested = true;
@@ -753,6 +829,10 @@ FGameKitScreen FGameKitShellModel::Build(const FString& Name)
 	{
 		S.HeadingKey = TEXT("credits.title");
 		S.Lines = CreditsLines();
+	}
+	else if (Name == TEXT("juice_demo"))
+	{
+		S.HeadingKey = TEXT("juice.title");   // ScreenOpened starts the demo itself
 	}
 	else if (Name != TEXT("play"))
 	{
@@ -830,6 +910,7 @@ void FGameKitShellModel::CancelCapture()
 bool FGameKitShellModel::KeyPressed(const FString& Binding, const FString& Device)
 {
 	LastDevice = Device;
+	HeldBindings.Add(Binding);   // held until KeyReleased: the game's held actions (#274)
 	if (IsCapturing())
 	{
 		if (Binding == TEXT("key:escape") || Binding == TEXT("pad:east"))
@@ -858,6 +939,11 @@ bool FGameKitShellModel::KeyPressed(const FString& Binding, const FString& Devic
 			}
 			MessageT = MessageS;
 		}
+		return true;
+	}
+	if (Opt.bDebugBuild && Binding == BugKey)
+	{
+		BugReport();   // F8 on any screen, in debug builds (#275); never "any key" on the title
 		return true;
 	}
 	const FGameKitScreen* TopScreen = Top();
@@ -895,6 +981,184 @@ bool FGameKitShellModel::KeyPressed(const FString& Binding, const FString& Devic
 		}
 	}
 	return false;
+}
+
+bool FGameKitShellModel::StickMoved(const FString& Axis, double Value, const FString& Device)
+{
+	const bool bX = Axis == TEXT("x");
+	if (!bX && Axis != TEXT("y"))
+	{
+		return false;
+	}
+	(bX ? RawStick.X : RawStick.Y) = GameKit::AnalogFinite(Value);   // the game's analog stick (#274), shaped in Stick()
+	static const TCHAR* const Dirs[4] = {TEXT("dpad_up"), TEXT("dpad_down"), TEXT("dpad_left"), TEXT("dpad_right")};
+	const double Deadzone = FMath::Max(Num(TEXT("input"), TEXT("deadzone")), 0.05);
+	const double V = FMath::Abs(Value) < Deadzone ? 0.0 : Value;
+	const double On = FMath::Max(StickOn, Deadzone);
+	bool bUsed = false;
+	const auto Edge = [&](int32 Dir, bool bActive)
+	{
+		if (bActive && !StickHeld[Dir])
+		{
+			StickHeld[Dir] = true;
+			const FString Binding = TEXT("pad:") + FString(Dirs[Dir]);
+			const bool bPadHeld = HeldBindings.Contains(Binding);
+			bUsed = KeyPressed(Binding, Device) || bUsed;
+			if (!bPadHeld)
+			{
+				HeldBindings.Remove(Binding);   // a menu press, not a held d-pad: the stick holds move_* itself (StickActions)
+			}
+		}
+		else if (!bActive && StickHeld[Dir])
+		{
+			StickHeld[Dir] = false;
+		}
+	};
+	const int32 Neg = bX ? 2 : 1;   // left, or down (Unreal's LeftY is positive up)
+	const int32 Pos = bX ? 3 : 0;   // right, or up
+	Edge(Neg, V < -On || (StickHeld[Neg] && V < -StickOff));
+	Edge(Pos, V > On || (StickHeld[Pos] && V > StickOff));
+	return bUsed;
+}
+
+// ---- Analog input for the game (#274) ------------------------------------------------------------------------------
+void FGameKitShellModel::KeyReleased(const FString& Binding)
+{
+	HeldBindings.Remove(Binding);
+}
+
+void FGameKitShellModel::ReleaseAll()
+{
+	HeldBindings.Empty();
+	RawStick = FVector2D::ZeroVector;
+	RawTrigger[0] = RawTrigger[1] = 0.0;
+}
+
+void FGameKitShellModel::TriggerMoved(bool bRight, double Value)
+{
+	RawTrigger[bRight ? 1 : 0] = FMath::Clamp(GameKit::AnalogFinite(Value), 0.0, 1.0);
+}
+
+bool FGameKitShellModel::GameActive() const
+{
+	const FString Name = TopName();
+	return Name == TEXT("play") || Name == TEXT("juice_demo");
+}
+
+FVector2D FGameKitShellModel::Stick() const
+{
+	if (!GameActive())
+	{
+		return FVector2D::ZeroVector;
+	}
+	return GameKit::AnalogStick(RawStick.X, RawStick.Y, Num(TEXT("input"), TEXT("deadzone")), Flag(TEXT("input"), TEXT("invert_y")));
+}
+
+double FGameKitShellModel::Trigger(bool bRight) const
+{
+	return GameActive() ? GameKit::AnalogTrigger(RawTrigger[bRight ? 1 : 0]) : 0.0;
+}
+
+TArray<FString> FGameKitShellModel::StickActions() const
+{
+	TArray<FString> Out;
+	const double On = FMath::Max(Num(TEXT("input"), TEXT("deadzone")), StickHoldMin);
+	const double X = RawStick.X;
+	const double Y = Flag(TEXT("input"), TEXT("invert_y")) ? -RawStick.Y : RawStick.Y;
+	const TPair<const TCHAR*, double> Leans[] = {{TEXT("move_left"), -X}, {TEXT("move_right"), X}, {TEXT("move_up"), Y}, {TEXT("move_down"), -Y}};
+	for (const TPair<const TCHAR*, double>& Lean : Leans)
+	{
+		if (Lean.Value > On)
+		{
+			Out.Add(Lean.Key);
+		}
+	}
+	return Out;
+}
+
+TArray<FString> FGameKitShellModel::HeldActions() const
+{
+	TArray<FString> Out;
+	if (!GameActive())
+	{
+		return Out;
+	}
+	for (const auto& Pair : Bindings())
+	{
+		if (Pair.Key.StartsWith(TEXT("ui_")))
+		{
+			continue;
+		}
+		for (const FString& Slot : Pair.Value)
+		{
+			if (!Slot.IsEmpty() && HeldBindings.Contains(Slot))
+			{
+				Out.AddUnique(Pair.Key);
+			}
+		}
+	}
+	for (const FString& Action : StickActions())
+	{
+		Out.AddUnique(Action);
+	}
+	Out.Sort();
+	return Out;
+}
+
+bool FGameKitShellModel::IsHeld(const FString& Action) const
+{
+	return HeldActions().Contains(Action);
+}
+
+// ---- Bug report and crash files (#275) -----------------------------------------------------------------------------
+void FGameKitShellModel::ShowToast(const FString& Text)
+{
+	Toast = Text;
+	ToastT = ToastS;
+	++Version;
+}
+
+void FGameKitShellModel::ArmCrashReports()
+{
+	GameKit::ShellReport::FCrashTarget Target;
+	Target.DataDir = Opt.DataDir;
+	Target.GameName = Opt.GameName;
+	Target.Version = Opt.Version;
+	Target.SettingsJson = Write(Settings);
+	GameKit::ShellReport::SetCrashTarget(this, Target);
+	bCrashArmed = true;
+}
+
+FString FGameKitShellModel::BugReport()
+{
+	using namespace GameKit::ShellReport;
+	IFileManager::Get().MakeDirectory(*Opt.DataDir, /*Tree*/ true);
+	const FString Dir = FPaths::ConvertRelativePathToFull(UniquePath(Opt.DataDir, TEXT("bug_"), Stamp(), FString()));
+	TArray<FString> Info;
+	Info.Add(Opt.GameName + TEXT(" ") + Opt.Version);
+	Info.Add(TEXT("time: ") + FDateTime::UtcNow().ToIso8601());
+	Info.Add(TEXT("screen: ") + (TopName().IsEmpty() ? FString(TEXT("none")) : TopName()));
+	Info.Add(TEXT("locale: ") + Locale());
+	Info.Add(TEXT("device: ") + LastDevice);
+	Info.Add(TEXT("engine: ") + FEngineVersion::Current().ToString());
+	Info.Add(TEXT("os: ") + FPlatformMisc::GetOSVersion());
+	FString Error;
+	const bool bOk = GameKit::WriteFileAtomic(FPaths::Combine(Dir, TEXT("info.txt")), FString::Join(Info, TEXT("\n")) + TEXT("\n"), &Error)
+	                 && GameKit::WriteFileAtomic(FPaths::Combine(Dir, TEXT("log_tail.txt")), LogTail(BugTailLines) + TEXT("\n"), &Error)
+	                 && GameKit::WriteFileAtomic(FPaths::Combine(Dir, TEXT("settings.json")), Write(Settings) + TEXT("\n"), &Error);
+	if (!bOk)
+	{
+		UE_LOG(LogGameKitShell, Error, TEXT("bug report not saved: %s"), *Error);
+		return FString();
+	}
+	if (OnScreenshot)
+	{
+		OnScreenshot(FPaths::Combine(Dir, TEXT("screenshot.png")));   // the game viewport may write it a frame later
+	}
+	LastBugReport = Dir;
+	UE_LOG(LogGameKitShell, Display, TEXT("BUG_REPORT %s"), *Dir);
+	ShowToast(T(TEXT("toast.bug_saved")));
+	return Dir;
 }
 
 bool FGameKitShellModel::RowAction(FGameKitScreen& Screen, TArray<FGameKitRow>& Rows, int32& Focus, const FString& Action)
@@ -1040,6 +1304,15 @@ bool FGameKitShellModel::Dispatch(const FString& Action)
 		}
 		return false;
 	}
+	if (Name == TEXT("juice_demo"))
+	{
+		if (Action == TEXT("pause"))
+		{
+			Push(TEXT("pause"));
+			return true;
+		}
+		return JuiceDemo.IsValid() && JuiceDemo->Action(Action, *this);
+	}
 	if (Name == TEXT("pause"))
 	{
 		if (Action == TEXT("pause") || Action == TEXT("ui_cancel"))
@@ -1086,6 +1359,19 @@ void FGameKitShellModel::Update(double Dt)
 			Message.Empty();
 			++Version;
 		}
+	}
+	if (ToastT > 0.0)
+	{
+		ToastT -= Dt;
+		if (ToastT <= 0.0)
+		{
+			Toast.Empty();
+			++Version;
+		}
+	}
+	if (JuiceDemo.IsValid() && TopName() == TEXT("juice_demo"))
+	{
+		JuiceDemo->Update(Dt, *this);   // paused under the pause menu: only the top screen runs; the view paints it live
 	}
 	if (FGameKitScreen* S = Top())
 	{

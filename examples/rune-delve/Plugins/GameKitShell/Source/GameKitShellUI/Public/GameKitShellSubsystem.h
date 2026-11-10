@@ -15,8 +15,12 @@
 //           (read the settings again: window mode, volumes, timing_scale ...), "consent". The subsystem gives
 //           the widget keyboard focus and sets the first player controller's input mode to Game and UI; while
 //           the model's top screen is "play" the widget draws nothing but subtitles and lets input through.
-//           Settings live in Saved/GameKit/settings.json (DataFolder changes that).
-// Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+//           Settings live in Saved/GameKit/settings.json (DataFolder changes that). Analog input (#274): Get Stick,
+//           Get Trigger, Is Action Held, Get Held Actions read what the shell's widget sees, shaped by the player's
+//           settings. A fatal error while the screens run writes <DataFolder>/crashes/crash_<time>.txt; in a
+//           debug build F8 saves bug_<time>/ there with a screenshot of the viewport (#275).
+// Authored: Written with Claude (Fable 5.1, claude-fable-5-1); analog input, crash files and the bug report by
+//           Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -86,6 +90,24 @@ public:
 	/** The screen on top ("title", "main_menu", "settings", "play", "pause" ...). */
 	UFUNCTION(BlueprintPure, Category = "Game Kit Shell")
 	FString TopScreen() const;
+
+	// ---- Analog input through the shell (#274): zero outside play, so a menu never leaks into the game ----
+
+	/** The left stick after the player's deadzone (radial, rescaled) and invert_y: each axis -1..1, up is +Y. */
+	UFUNCTION(BlueprintPure, Category = "Game Kit Shell|Input")
+	FVector2D GetStick() const;
+
+	/** A trigger's travel, 0 at rest to 1 fully in (a small rest deadzone removed). */
+	UFUNCTION(BlueprintPure, Category = "Game Kit Shell|Input")
+	float GetTrigger(bool bRight) const;
+
+	/** True while a key or button bound to Action (jump, attack, move_left ...) is held, or the stick leans that way. */
+	UFUNCTION(BlueprintPure, Category = "Game Kit Shell|Input")
+	bool IsActionHeld(const FString& Action) const;
+
+	/** Every game action held right now, sorted (no ui_* actions). */
+	UFUNCTION(BlueprintPure, Category = "Game Kit Shell|Input")
+	TArray<FString> GetHeldActions() const;
 
 private:
 	TSharedPtr<FGameKitShellModel> Model;

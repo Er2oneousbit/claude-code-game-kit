@@ -15,13 +15,16 @@
 //           <scenario> (SmokeDrive), GAMEKIT_SMOKE=1 / --smoke. Files in the data folder: settings.json (+ .bak).
 //           Audio: the master slider sets AudioListener.volume; the other sliders are for your AudioMixer (the Core
 //           AudioAccess.UserBusGains gives the gain per bus). Display settings apply only in a player (not in the
-//           editor or batchmode). No telemetry or crash files yet on this engine (Godot, LÖVE and web have them).
+//           editor or batchmode). Crash files (crashes/crash_<time>.txt) and the F8 bug report (bug_<time>/) are
+//           ShellReports' (#275); no telemetry file yet on this engine (Godot, LÖVE and web have one).
 //
 // Pseudocode:
 //   boot: options -> data folder -> settings.json (GameSettings fixes it, .bak recovers it) -> string tables
 //         (data/i18n/*.json) -> colours -> apply look, input, audio, display, language
 //   SetValue: change the tree -> apply that section -> SettingsChanged (FrontEnd rebuilds what the look touches)
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): crash files and the bug report (ShellReports, #275),
+//           the stick's deadzone and invert_y for ShellInput's analog values (#274)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -34,6 +37,7 @@ namespace graveyard_shift.Shell
     public sealed class Shell : MonoBehaviour
     {
         // ---- Tunables ------------------------------------------------------------
+        public const string GAME_NAME = "Graveyard Shift";   // the game's name (the scaffolder fills it); game.title shows it
         public const string SETTINGS_FILE = "settings.json";
         public const string I18N_DIR = "data/i18n";
         public const string DIALOGUE_FILE = "data/dialogue/sample.built.json";
@@ -103,6 +107,7 @@ namespace graveyard_shift.Shell
             I = this;
             Version = Application.version;
             ParseOptions();
+            ShellReports.Install(DataDir);       // crash files from here on (an error while loading settings included)
             try
             {
                 Directory.CreateDirectory(DataDir);
@@ -116,6 +121,11 @@ namespace graveyard_shift.Shell
             Colours = AccessColours.LoadData();
             ApplyAll();
             Debug.Log($"[INFO][shell] data folder: {DataDir}");
+        }
+
+        private void Update()
+        {
+            ShellReports.Tick();
         }
 
         private void OnDestroy()
@@ -217,6 +227,13 @@ namespace graveyard_shift.Shell
             SettingsChanged?.Invoke("language", "language");
         }
 
+        /// <summary>This run's language without touching the saved setting (--locale; the pseudo drive switches to pseudo).</summary>
+        public void OverrideLocale(string code)
+        {
+            LocaleOverride = code ?? "";
+            UpdateLocale();
+        }
+
         public void SetBindings(Dictionary<string, object> bindings)
         {
             ((Dictionary<string, object>)Settings["input"])["bindings"] = bindings;
@@ -306,6 +323,13 @@ namespace graveyard_shift.Shell
                 return key;
             }
             return I18n.Fill(found, args);
+        }
+
+        /// <summary>The game's name on the title and the main menu: game.title is "{name}" in every table, so a
+        /// translation can frame it but the name is never a string to translate (check_i18n.py).</summary>
+        public string GameTitle()
+        {
+            return T("game.title", new Dictionary<string, object> { { "name", GAME_NAME } });
         }
 
         public string Tn(string key, double n, IDictionary<string, object> args = null)
@@ -413,6 +437,7 @@ namespace graveyard_shift.Shell
         private void ApplyInput()
         {
             ShellInput.Configure(BindingsMap(), AccessOn("auto_repeat"));
+            ShellInput.ConfigureAnalog(GameSettings.Number(Settings, "input", "deadzone"), GameSettings.Bool(Settings, "input", "invert_y"));
         }
 
         private void ApplyAudio()

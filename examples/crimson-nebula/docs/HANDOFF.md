@@ -3,8 +3,8 @@
 > Rewritten at the end of every session by `/end-session`. Read first by `/start-session`.
 > Keep under ~60 lines. It is a baton, not a diary.
 
-**Last updated:** 2026-11-10 (kit 0.14.3 upgrade: the shell)
-**Branch / commit:** kept in the kit repo as `examples/crimson-nebula` (kit 0.14.3)
+**Last updated:** 2026-11-10 (kit 0.14.4 upgrade: analog input back, crash files, F8, juice demo)
+**Branch / commit:** kept in the kit repo as `examples/crimson-nebula` (kit 0.14.4)
 **Engine version:** see `docs/ENGINE.md` (Bevy 0.20.0, Rust 1.99.1)
 
 ## Where we are
@@ -12,11 +12,20 @@ The toy is playable (M0): one neon loop, you vs Vex (reader), Nova (late) and Ro
 lap 2, any change on lap 3, item boxes give a boost. Waiting for the user's first playtest.
 
 ## What changed last session
+- 2026-11-10, kit 0.14.4: analog driving is back through the kit's `Intent` (#265): right/left trigger = analog
+  gas/brake (a held W/S or d-pad counts as fully in, both at once coast), the left stick steers by its lean
+  (keys and d-pad stay full lock), drift via `intent.is_held("jump")`; the restart is its own `RestartRequest`
+  resource. Kit shell additions: display settings applied to the window, crash files, F8 bug reports, the pseudo
+  and juice demo in debug builds (the demo brings its own camera and render layer and switches the chase camera
+  off while it is up; the race `Hud` carries `shell::HideUnderJuice`, so it hides under the demo). The shell's
+  text is the full Fira Mono (`src/shell/fonts/`), checked against every `data/i18n/` table.
+  Checked: fmt, `check`, 141 tests, smoke, `--drive menus`, `--drive pseudo`, `show:juice`, the race smoke, the
+  access sweep.
 - Kit 0.14.3: the game boots to the kit's shell (`src/shell/`, kit files): title, menu, settings with rebinding,
   Esc pauses. The race ticks only in Play (`GameActive`); input comes through the kit's `Intent` (W/S/A/D or
   d-pad and stick as `move_*`, Space/A held = drift, J/X = item, any of jump/attack/interact on the results = race
-  again, also under `--autoplay`); `src/game/mod.rs` maps it. Lost on the way: analog triggers and stick (the kit's
-  `Intent.dir` is digital), Shift as drift, arrows for driving (arrows are the menu keys now). A bump rattles the
+  again, also under `--autoplay`); `src/game/mod.rs` maps it. Lost on the way: Shift as drift, arrows for driving
+  (arrows are the menu keys now); analog came back in 0.14.4. A bump rattles the
   chase camera (`ScreenShake`, off with reduce motion); the closing and opening tells take the colour-blind palette.
 - Race logic in `src/logic/` (track, kart, race, bots, tuning) with 36 unit tests and 4 headless race tests.
 - 3D view in `src/game/present.rs`: shapes only, neon via emissive + bloom, chase camera, HUD, results, a press restarts.
@@ -41,7 +50,7 @@ lap 2, any change on lap 3, item boxes give a boost. Waiting for the user's firs
 
 ## Commands that matter right now
 ```
-python tools/dev.py run                                   # play (W/S or stick, A/D, Space drift, J boost, Esc pause)
+python tools/dev.py run                                   # play (W/S or triggers, A/D or stick, Space drift, J boost, Esc pause)
 python tools/dev.py test
 python tools/dev.py smoke --frames 9000 --until RACE_OVER -- --autoplay reader --seed 3
 cargo test --lib balance_report -- --ignored --nocapture  # how much reading the changes gains, per seed

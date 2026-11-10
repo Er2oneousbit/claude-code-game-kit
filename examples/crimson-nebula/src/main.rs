@@ -9,6 +9,7 @@
 //           output, because it passes its own pipes.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): the smoke run's drive (--drive needs --smoke)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the panic hook that writes crash files (#275)
 // ---------------------------------------------------------------------------
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -57,7 +58,10 @@ fn main() -> ExitCode {
             }
         },
     };
-    match app::build(&cli, cfg, drive).run() {
+    let mut game = app::build(&cli, cfg, drive);
+    // after the App is built, so the crash file hook wraps any hook a plugin set (shell/crash.rs)
+    shell::crash::install_panic_hook();
+    match game.run() {
         AppExit::Success => ExitCode::SUCCESS,
         AppExit::Error(code) => ExitCode::from(code.get()),
     }

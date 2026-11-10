@@ -32,6 +32,10 @@ Exit codes: 0 ok, 1 unresolved placeholders in output, 2 usage or environment er
 After changing anything that ships into games, bring the examples up to date (copies outside the repo, content-based):
 `python scripts/sync_examples.py <scratch>/<fresh>` then again into another fresh folder, which must report "0 synced"
 everywhere. A `[warn] ... .gold` line means the game edited that file: merge the kit's version in by hand.
+Then `python scripts/check_examples.py` runs doctor, check, test and smoke in every example (engine env vars as the
+`dev.py` files document them, `GUT_DIR` pointing at a GUT 9.x `addons/gut/` for the Godot ones; a missing toolchain is
+skipped by name) and fails if the run leaves tracked changes in `examples/`. Examples catch what the kit's own tests
+miss: kit code that leans on the starter's types or claims a common name, and fonts that cannot draw a language.
 
 Verify a change by scaffolding every affected engine into a scratch dir outside this repo, then inside each output run `python tools/doctor.py` (also runs the link check) and `python tools/dev.py -h` (paths relative to the generated project). A second `--adopt` run on the same output must produce no conflicts.
 

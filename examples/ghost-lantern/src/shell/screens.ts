@@ -14,7 +14,7 @@
 import { glyphName, glyphSet, promptBinding } from "../core/bindings";
 import { DIFFICULTIES } from "../core/settings";
 import type { Screen, Shell } from "./app";
-import { GAME_VERSION } from "./meta";
+import { GAME_NAME, GAME_VERSION } from "./meta";
 import { settingsScreen } from "./settingsScreen";
 import { Menu, buttonItem, el, glyph, glyphText, tl, val, valueRow } from "./ui";
 
@@ -61,7 +61,7 @@ export function title(shell: Shell): Screen {
   const s = built("title", "", (root) => {
     const col = el("div", "");
     col.style.textAlign = "center";
-    col.append(tl(shell.i18n, "game.title", "bigtitle", {}, "div"), tl(shell.i18n, "title.press", "press blink", {}, "div"));
+    col.append(tl(shell.i18n, "game.title", "bigtitle", { name: GAME_NAME }, "div"), tl(shell.i18n, "title.press", "press blink", {}, "div"));
     root.append(col, tl(shell.i18n, "version", "corner", { v: GAME_VERSION }, "div"));
     root.addEventListener("click", () => shell.topId === "title" && shell.replace(menu(shell)));
   }, {
@@ -126,7 +126,7 @@ export function menu(shell: Shell): Screen {
   let leave = () => {};
   return built("menu", "dim", (root, m) => {
     const p = panel("narrow");
-    p.append(tl(shell.i18n, "game.title", "heading", {}, "div"));
+    p.append(tl(shell.i18n, "game.title", "heading", { name: GAME_NAME }, "div"));
     const list = el("div", "list");
     const add = (key: string, fn: () => void) => list.append(m.add(buttonItem(shell.i18n, key, fn)).el);
     add("menu.play", () => shell.startGame("main"));

@@ -12,8 +12,12 @@
 //           display.ui_scale; access.readable_font swaps every font for Atkinson Hyperlegible and
 //           access.line_spacing stretches wrapped lines. Focus is never colour alone: the focused row gets a
 //           ">" marker and a brighter row. Hover does nothing (keys and pad only; a click counts as "any key"
-//           on the title). The widget ticks the model (Update) each frame.
-// Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+//           on the title). The widget ticks the model (Update) each frame. It also tells the model which keys are
+//           held and where the left stick and the triggers are (#274), letting them through to the game; losing
+//           focus lets everything go. The juice demo's world is painted live from the model (no rebuild per frame).
+//           A model a drive presses for (bScripted, #276) takes no real keys, sticks or clicks from the widget.
+// Authored: Written with Claude (Fable 5.1, claude-fable-5-1); analog input, the juice demo and the toast by
+//           Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -38,6 +42,9 @@ public:
 	virtual void Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime) override;
 	virtual bool SupportsKeyboardFocus() const override { return true; }
 	virtual FReply OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent) override;
+	virtual FReply OnKeyUp(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent) override;
+	virtual void OnFocusLost(const FFocusEvent& InFocusEvent) override;
+	virtual FReply OnAnalogValueChanged(const FGeometry& MyGeometry, const FAnalogInputEvent& InAnalogInputEvent) override;
 	virtual FReply OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
 	virtual FReply OnFocusReceived(const FGeometry& MyGeometry, const FFocusEvent& InFocusEvent) override;
 
@@ -73,5 +80,7 @@ private:
 	TSharedRef<SWidget> TextPage(const FGameKitScreen& S);
 	TSharedRef<SWidget> Subtitle();
 	TSharedRef<SWidget> CapturePrompt();
+	TSharedRef<SWidget> JuiceDemo(const FGameKitScreen& S);
+	TSharedRef<SWidget> ToastWidget();
 	FSlateColor BlinkColour() const;
 };

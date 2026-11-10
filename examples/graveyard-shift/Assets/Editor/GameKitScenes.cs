@@ -4,7 +4,8 @@
 //           scene (the kit's title, settings, pause and credits screens on the FrontEnd component), and the
 //           helper a game's own scene builder uses to register scenes in Build Settings.
 // Usage   : python tools/dev.py exec GameKitScenes.CreateStarterScene
-//           python tools/dev.py exec GameKitScenes.CreateShellScene     (first in Build Settings: the game opens on it)
+//           python tools/dev.py exec GameKitScenes.CreateShellScene     (first in Build Settings: the game opens on it;
+//                                                               also runs AddInputAxes, the shell's pad axes)
 //           (or the menu Tools > Game Kit > Create Starter Scene / Create Shell Scene)
 // Notes   : Scenes and prefabs are YAML that is fragile to hand-edit (docs/ENGINE.md). Building them in an
 //           editor script keeps every structural change in reviewable C#, and lets Claude make a scene
@@ -14,6 +15,8 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): a failed SaveScene throws (it was ignored)
 // Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): CreateShellScene (#168)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): AddInputAxes, the shell's d-pad and trigger axes (#266)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the left stick's axes for analog input (#274)
 // ---------------------------------------------------------------------------
 using System.IO;
 using System.Linq;
@@ -50,6 +53,69 @@ public static class GameKitScenes
             Debug.Log($"[INFO][scenes] created {ShellScenePath}");
         }
         AddToBuildSettings(ShellScenePath, first: true);
+        AddInputAxes();
+    }
+
+    // The Input Manager axes the shell reads for the d-pad, the triggers (#266) and the analog left stick (#274), as
+    // joystick axis numbers of the Windows XInput layout (verify on other platforms): name, 1-based axis, dead zone,
+    // inverted. The stick axes have no dead zone of their own (Core/Analog applies the player's) and Y is inverted so
+    // up is +.
+    private static readonly (string name, int axis, float dead, bool invert)[] INPUT_AXES =
+    {
+        (graveyard_shift.Shell.ShellInput.AXIS_DPAD_X, 6, 0.19f, false),
+        (graveyard_shift.Shell.ShellInput.AXIS_DPAD_Y, 7, 0.19f, false),
+        (graveyard_shift.Shell.ShellInput.AXIS_L2, 9, 0.001f, false),
+        (graveyard_shift.Shell.ShellInput.AXIS_R2, 10, 0.001f, false),
+        (graveyard_shift.Shell.ShellInput.AXIS_LEFT_X, 1, 0.001f, false),
+        (graveyard_shift.Shell.ShellInput.AXIS_LEFT_Y, 2, 0.001f, true),
+    };
+
+    /// <summary>Adds the shell's gamepad axes (d-pad, triggers, left stick) to Project Settings > Input Manager, once. Harmless
+    /// when the project uses only the Input System package (the shell reads the pad through it then).</summary>
+    [MenuItem("Tools/Game Kit/Add Input Axes")]
+    public static void AddInputAxes()
+    {
+        Object[] assets = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/InputManager.asset");
+        if (assets == null || assets.Length == 0)
+        {
+            throw new IOException("ProjectSettings/InputManager.asset not found");
+        }
+        var so = new SerializedObject(assets[0]);
+        SerializedProperty axes = so.FindProperty("m_Axes");
+        int added = 0;
+        foreach ((string name, int axis, float dead, bool invert) in INPUT_AXES)
+        {
+            bool present = false;
+            for (int i = 0; i < axes.arraySize && !present; i++)
+            {
+                present = axes.GetArrayElementAtIndex(i).FindPropertyRelative("m_Name").stringValue == name;
+            }
+            if (present)
+            {
+                continue;
+            }
+            axes.arraySize++;
+            SerializedProperty a = axes.GetArrayElementAtIndex(axes.arraySize - 1);
+            a.FindPropertyRelative("m_Name").stringValue = name;
+            a.FindPropertyRelative("descriptiveName").stringValue = "Game Kit shell (ShellInput)";
+            a.FindPropertyRelative("descriptiveNegativeName").stringValue = "";
+            a.FindPropertyRelative("negativeButton").stringValue = "";
+            a.FindPropertyRelative("positiveButton").stringValue = "";
+            a.FindPropertyRelative("altNegativeButton").stringValue = "";
+            a.FindPropertyRelative("altPositiveButton").stringValue = "";
+            a.FindPropertyRelative("gravity").floatValue = 0f;
+            a.FindPropertyRelative("dead").floatValue = dead;
+            a.FindPropertyRelative("sensitivity").floatValue = 1f;
+            a.FindPropertyRelative("snap").boolValue = false;
+            a.FindPropertyRelative("invert").boolValue = invert;
+            a.FindPropertyRelative("type").intValue = 2;           // joystick axis
+            a.FindPropertyRelative("axis").intValue = axis - 1;    // stored 0-based
+            a.FindPropertyRelative("joyNum").intValue = 0;         // every joystick
+            added++;
+        }
+        so.ApplyModifiedPropertiesWithoutUndo();
+        AssetDatabase.SaveAssets();
+        Debug.Log($"[INFO][scenes] input axes: {added} added, {INPUT_AXES.Length - added} already there");
     }
 
     [MenuItem("Tools/Game Kit/Create Starter Scene")]

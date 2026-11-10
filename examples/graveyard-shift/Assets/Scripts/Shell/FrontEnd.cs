@@ -1,19 +1,26 @@
 // ---------------------------------------------------------------------------
 // FrontEnd.cs
-// Purpose : The screen flow on a UI Toolkit panel: boot -> title -> main menu -> settings / credits / play (through
-//           the loading screen), pause over play with What now?, Dialogue history and settings, quit to title.
+// Purpose : The screen flow on a UI Toolkit panel: boot -> title -> main menu -> settings / credits / play or the
+//           juice demo (through the loading screen), pause over either with What now?, Dialogue history and settings,
+//           quit to title. F8 saves a bug report (editor and development builds).
 //           Reads the menu actions once a frame (ShellInput), moves focus on the top screen, narrates, and runs the
 //           smoke drive when dev.py asks.
 // Usage   : a scene with a Camera and one GameObject carrying FrontEnd (GameKitScenes.CreateShellScene makes it);
-//           from code: FrontEnd.I.Pause(), FrontEnd.I.World.Subtitles.Play("line.id")
+//           from code: FrontEnd.I.Pause(), FrontEnd.I.World.Subtitles.Play("line.id"),
+//           FrontEnd.I.StartWorld(() => new MyGame(FrontEnd.I))   // your ShellWorld instead of PlayWorld
 // Notes   : The panel scales the 1280x720 reference to the window so the smallest side fits (PanelScreenMatchMode
 //           .Shrink: the same min(w/W, h/H) rule the access sweep uses). In batchmode and for captures the panel
 //           draws into a RenderTexture (GameKitCapture composes it over the camera's picture) of the drive's size.
 //           UI Toolkit's own navigation events are stopped at the root: the shell moves focus from the player's
-//           bindings instead, so a remapped ui_accept works in the menus too; without the Input Manager those
-//           events are turned into the menu actions (see ShellInput). Time.timeScale is 0 while paused and
+//           bindings instead, so a remapped ui_accept works in the menus too; when ShellInput cannot poll (ui_events)
+//           those events are turned into the menu actions (see ShellInput). Time.timeScale is 0 while paused and
 //           access.game_speed otherwise; the menus run on unscaled time. Replace PlayWorld with your game.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the UI Toolkit fallback only when ShellInput cannot poll (#266)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): worlds (ShellWorld: play, the juice demo), the F8 bug
+//           report, the crash drive's planted error (#275)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a drive sets ShellInput.Scripted, and UI Toolkit's key
+//           and navigation events are dropped meanwhile (#276)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -42,7 +49,9 @@ namespace graveyard_shift.Shell
         public event Action<string> ScreenShown;
         public bool ConsentAsked;
         public bool QuitRequested { get; private set; }
-        public PlayWorld World { get; private set; }
+        public ShellWorld World { get; private set; }
+        /// <summary>The crash drive sets it: the next frame throws, as an unhandled bug in a game would (#275).</summary>
+        public bool PlantCrash;
         public SmokeDrive Drive { get; private set; }
         public Narrator Narrator { get; } = new Narrator();
         public RenderTexture UiTexture { get; private set; }
@@ -55,6 +64,7 @@ namespace graveyard_shift.Shell
         private PanelSettings _panel;
         private bool _paused;
         private int _loadingFrames = -1;
+        private Func<ShellWorld> _nextWorld;
 
         // ---- life cycle ----------------------------------------------------------------
 
@@ -74,6 +84,7 @@ namespace graveyard_shift.Shell
             if (DriveArmed && !string.IsNullOrEmpty(Shell.I.Drive))
             {
                 Drive = new SmokeDrive(this, Shell.I.Drive);
+                ShellInput.Scripted = true;   // only the drive presses: no real keyboard, mouse or pad (#276)
                 StartCoroutine(Drive.Run());
             }
         }
@@ -90,6 +101,10 @@ namespace graveyard_shift.Shell
                 UiTexture.Release();
             }
             Time.timeScale = 1f;
+            if (Drive != null)
+            {
+                ShellInput.Scripted = false;  // the next scene (a test's, a player's) reads the devices again
+            }
             if (I == this)
             {
                 I = null;
@@ -100,6 +115,15 @@ namespace graveyard_shift.Shell
         {
             float dt = Time.unscaledDeltaTime;
             ShellInput.Begin(dt);
+            if (PlantCrash)
+            {
+                PlantCrash = false;
+                throw new InvalidOperationException("drive crash: a planted error to prove the crash file (expected)");
+            }
+            if (ShellReports.BugKeyEnabled && ShellInput.KeyDown(ShellReports.BUG_REPORT_KEY))
+            {
+                ShellReports.BugReport(this);
+            }
             if (_loadingFrames >= 0 && --_loadingFrames < 0)
             {
                 EnterWorld();
@@ -233,31 +257,39 @@ namespace graveyard_shift.Shell
 
         private void OnKeyDown(KeyDownEvent evt)
         {
-#if !ENABLE_LEGACY_INPUT_MANAGER
-            // No Input Manager to poll: keyboard bindings come from the panel's key events
-            Dictionary<string, object> bindings = Shell.I.BindingsMap();
-            foreach (string action in bindings.Keys)
+            if (ShellInput.Scripted)
             {
-                foreach (string b in Bindings.Of(bindings, action))
+                evt.StopPropagation();        // a real key during a drive reaches nothing (#276)
+                return;
+            }
+            if (!ShellInput.Polls && evt.keyCode == KeyCode.F8 && ShellReports.BugKeyEnabled)
+            {
+                ShellReports.BugReport(this);
+            }
+            if (!ShellInput.Polls)
+            {
+                // Nothing to poll (the Input System without its package): keyboard bindings come from the panel's key events
+                Dictionary<string, object> bindings = Shell.I.BindingsMap();
+                foreach (string action in bindings.Keys)
                 {
-                    if (ShellInput.KindOf(b) == "key" && ShellInput.ParseKey(ShellInput.NameOf(b)) == evt.keyCode)
+                    foreach (string b in Bindings.Of(bindings, action))
                     {
-                        ShellInput.Inject(action, "keyboard");
+                        if (ShellInput.KindOf(b) == "key" && ShellInput.ParseKey(ShellInput.NameOf(b)) == evt.keyCode)
+                        {
+                            ShellInput.Inject(action, "keyboard");
+                        }
                     }
                 }
             }
-#endif
             evt.StopPropagation();
         }
 
         private void Swallow(EventBase evt, string action)
         {
-#if !ENABLE_LEGACY_INPUT_MANAGER
-            if (action != null)
+            if (action != null && !ShellInput.Polls && !ShellInput.Scripted)   // UI Toolkit's events are real input (#276)
             {
                 ShellInput.Inject(action, action == "ui_accept" || action == "ui_cancel" ? "pad_other" : null);
             }
-#endif
             evt.StopPropagation();
             _root.focusController?.IgnoreEvent(evt);
         }
@@ -272,7 +304,7 @@ namespace graveyard_shift.Shell
         public string CurrentName()
         {
             ShellScreen top = Top();
-            return top != null ? top.Name : World != null ? "play" : "";
+            return top != null ? top.Name : World != null ? World.Name : "";
         }
 
         public void Push(ShellScreen screen)
@@ -377,20 +409,40 @@ namespace graveyard_shift.Shell
         /// <summary>Play: the loading screen for a few frames, then the world with no screen over it.</summary>
         public void StartPlay()
         {
+            StartWorld(() => new PlayWorld(this));
+        }
+
+        /// <summary>The juice demo (main menu, editor and development builds): hit the box (#275).</summary>
+        public void StartJuice()
+        {
+            StartWorld(() => new JuiceWorld(this));
+        }
+
+        /// <summary>Any world through the loading screen: make is called once the loading frames are over.</summary>
+        public void StartWorld(Func<ShellWorld> make)
+        {
             Replace(new LoadingScreen(this));
+            _nextWorld = make;
             _loadingFrames = LOADING_FRAMES;
         }
 
         private void EnterWorld()
         {
             ClearStack();
+            Func<ShellWorld> make = _nextWorld ?? (() => new PlayWorld(this));
             ClearWorld();
-            World = new PlayWorld(this);
+            World = make();
             World.Build(_worldLayer);
             _paused = false;
             Time.timeScale = Shell.I.GameSpeed();
-            ScreenShown?.Invoke("play");
-            Debug.Log("[INFO][shell] screen: play");
+            WorldShown();
+        }
+
+        private void WorldShown()
+        {
+            ShellReports.CurrentScreen = World.Name;
+            ScreenShown?.Invoke(World.Name);
+            Debug.Log($"[INFO][shell] screen: {World.Name}");
         }
 
         public void Pause()
@@ -409,7 +461,11 @@ namespace graveyard_shift.Shell
             ClearStack();
             _paused = false;
             Time.timeScale = World != null ? Shell.I.GameSpeed() : 1f;
-            ScreenShown?.Invoke("play");
+            if (World != null)
+            {
+                ShellReports.CurrentScreen = World.Name;
+                ScreenShown?.Invoke(World.Name);
+            }
         }
 
         public void QuitToTitle()
@@ -446,6 +502,7 @@ namespace graveyard_shift.Shell
         private void Shown(ShellScreen screen)
         {
             Debug.Log($"[INFO][shell] screen: {screen.Name}");
+            ShellReports.CurrentScreen = screen.Name;
             ScreenShown?.Invoke(screen.Name);
             Narrator.OnScreen(screen);
             if (screen.Focused != null)
@@ -478,6 +535,7 @@ namespace graveyard_shift.Shell
         private void ClearWorld()
         {
             _loadingFrames = -1;
+            _nextWorld = null;
             if (World != null)
             {
                 World.Dispose();

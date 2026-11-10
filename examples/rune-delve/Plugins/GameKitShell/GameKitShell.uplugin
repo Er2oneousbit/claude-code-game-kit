@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "0.15.0",
 	"FriendlyName": "Game Kit Shell",
-	"Description": "Engine-free game logic from the Claude Code Game Kit: juice (screen shake, hitstop, easing, camera follow, input buffer, coyote time, spring and squash, flash limiter) and the shell (settings, rebinding, button glyphs, save migration with crash-safe files, localization, pseudo-locale). Plain C++ on Unreal's Json module, tested against data/golden/*.json. The GameKitShellUI module adds the shell's screens (title, main menu, settings, pause with What now? and the dialogue history, credits, loading) in Slate, driven by that logic, with the accessibility settings of SOP-20.",
+	"Description": "Engine-free game logic from the Claude Code Game Kit: juice (screen shake, hitstop, easing, camera follow, input buffer, coyote time, spring and squash, flash limiter) and the shell (settings, rebinding, button glyphs, save migration with crash-safe files, localization, pseudo-locale). Plain C++ on Unreal's Json module, tested against data/golden/*.json. The GameKitShellUI module adds the shell's screens (title, main menu, settings, pause with What now? and the dialogue history, credits, loading) in Slate, driven by that logic, with the accessibility settings of SOP-20, analog stick and trigger input for the game, crash files, and in debug builds the juice demo, the pseudo language and the F8 bug report.",
 	"Category": "Gameplay",
 	"CreatedBy": "Claude Code Game Kit",
 	"CanContainContent": false,

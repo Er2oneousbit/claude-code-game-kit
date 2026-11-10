@@ -4,6 +4,7 @@
 // Usage   : compiled into the `core` library; call through ShellLogic.hpp.
 // Notes   : The name tables are the tunables: a key SDL names differently on your platform gets an alias here.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): admits_device_event, no real input in a drive (#276)
 // ---------------------------------------------------------------------------
 #include "core/ShellLogic.hpp"
 
@@ -190,6 +191,22 @@ std::string glyph_fallback_label(const std::string& glyph_name) {
     return name;
 }
 
+// ---- The pseudo-locale layout check (#275) ------------------------------------------------------------------
+std::string label_problem(const DrawnLabel& label, double screen_w, double screen_h, bool pseudo) {
+    constexpr double kSlack = 0.5;   // rounding of design pixels
+    if (!label.fits) {
+        return label.why.empty() ? "cut off" : label.why;
+    }
+    if (label.x < -kSlack || label.y < -kSlack || label.x + label.w > screen_w + kSlack ||
+        label.y + label.h > screen_h + kSlack) {
+        return "past the screen edge";
+    }
+    if (pseudo && !label.raw && !label.text.empty() && label.text.front() != '[') {
+        return "not through t() (untranslated)";
+    }
+    return "";
+}
+
 // ---- Keeping track (#167) -----------------------------------------------------------------------------------
 void LineHistory::record(const std::string& name, const std::string& text) {
     entries_.push_back({name, text});
@@ -315,6 +332,25 @@ void SubtitleTrack::update(double dt, bool hold) {
 void SubtitleTrack::dismiss() {
     current_.reset();
     holding_ = false;
+}
+
+// ---- Scripted runs (#276) -----------------------------------------------------------------------------------
+bool admits_device_event(ShellDeviceEvent kind, bool scripted) {
+    switch (kind) {
+        case ShellDeviceEvent::Key:
+        case ShellDeviceEvent::MouseButton:
+        case ShellDeviceEvent::MouseMotion:
+        case ShellDeviceEvent::PadButton:
+        case ShellDeviceEvent::PadAxis:
+            return !scripted;   // the player's input: only outside a drive
+        case ShellDeviceEvent::PadAdded:
+        case ShellDeviceEvent::PadRemoved:
+        case ShellDeviceEvent::Quit:
+        case ShellDeviceEvent::FocusLost:
+        case ShellDeviceEvent::Other:
+            break;
+    }
+    return true;
 }
 
 }  // namespace core

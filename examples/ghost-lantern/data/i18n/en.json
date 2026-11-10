@@ -1,5 +1,5 @@
 {
- "game.title": "Ghost Lantern",
+ "game.title": "{name}",
  "version": "Version {v}",
  "boot.loading": "Starting up",
  "title.press": "Press any key or button",

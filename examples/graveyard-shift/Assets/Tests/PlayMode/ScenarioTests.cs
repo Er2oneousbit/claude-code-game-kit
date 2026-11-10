@@ -164,21 +164,25 @@ namespace graveyard_shift.Tests
             GraveyardGame.Options = null;
         }
 
+        // 8 nights take 70 to 160 s alone, past NUnit's default 3 minutes on a busy machine (two timed out while other
+        // engines built, 2026-11-10); the nights replay frame for frame, so the longer limit only stops load from failing them
+        const int NightsTimeoutMs = 600000;
+
         // Each bot plays its nights; the comparison tests follow (NUnit runs these in name order, A to J).
         // A to D: the hand-made yard, the baseline measured before the generator existed.
-        [UnityTest]
+        [UnityTest, Timeout(NightsTimeoutMs)]
         public IEnumerator Smoke_A_AlwaysLitNights()
         {
             yield return Nights(BotMode.AlwaysLit, false);
         }
 
-        [UnityTest]
+        [UnityTest, Timeout(NightsTimeoutMs)]
         public IEnumerator Smoke_B_AlwaysDarkNights()
         {
             yield return Nights(BotMode.AlwaysDark, false);
         }
 
-        [UnityTest]
+        [UnityTest, Timeout(NightsTimeoutMs)]
         public IEnumerator Smoke_C_CarefulNights()
         {
             yield return Nights(BotMode.Careful, false);
@@ -257,19 +261,19 @@ namespace graveyard_shift.Tests
         }
 
         // F to I: the first 8 generated nights a player gets (SeedForNight 1..8)
-        [UnityTest]
+        [UnityTest, Timeout(NightsTimeoutMs)]
         public IEnumerator Smoke_F_GeneratedAlwaysLitNights()
         {
             yield return Nights(BotMode.AlwaysLit, true);
         }
 
-        [UnityTest]
+        [UnityTest, Timeout(NightsTimeoutMs)]
         public IEnumerator Smoke_G_GeneratedAlwaysDarkNights()
         {
             yield return Nights(BotMode.AlwaysDark, true);
         }
 
-        [UnityTest]
+        [UnityTest, Timeout(NightsTimeoutMs)]
         public IEnumerator Smoke_H_GeneratedCarefulNights()
         {
             yield return Nights(BotMode.Careful, true);

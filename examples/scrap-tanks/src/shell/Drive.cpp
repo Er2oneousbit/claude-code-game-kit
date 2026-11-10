@@ -6,14 +6,17 @@
 //           directly, and presses actions through Shell::inject (or, gamepad-only, through the action's pad
 //           button). Proof lines go to stdout as one line each so dev.py and tools/access/sweep.py can read them.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): crash, pseudo, pseudo-plant, bug, show:juice (#275)
 // ---------------------------------------------------------------------------
 #include "shell/Drive.hpp"
 
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <optional>
 #include <set>
+#include <stdexcept>
 #include <utility>
 
 #include "core/AtomicFile.hpp"
@@ -31,7 +34,8 @@ namespace {
 
 const char* kAccessActions[] = {"ui_up", "ui_down", "ui_left", "ui_right", "ui_accept", "ui_cancel", "pause"};
 const char* kPromptActions[] = {"move_left", "move_right", "jump", "attack", "interact", "pause"};
-const char* kShowScreens = "title, menu, settings, pause, subtitle, play";
+const char* kShowScreens = "title, menu, settings, pause, subtitle, play, juice";
+const char* kBugFiles[] = {"info.txt", "log_tail.txt", "settings.json", "screenshot.bmp"};
 
 bool starts_with(const std::string& s, const std::string& prefix) {
     return s.compare(0, prefix.size(), prefix) == 0;
@@ -49,6 +53,12 @@ Drive::Drive(Shell& shell, std::string name) : shell_(shell), name_(std::move(na
         build_default();
     } else if (name_ == "menus") {
         build_menus();
+    } else if (name_ == "crash") {
+        build_crash();
+    } else if (name_ == "pseudo" || name_ == "pseudo-plant") {
+        build_pseudo(name_ == "pseudo-plant");
+    } else if (name_ == "bug") {
+        build_bug();
     } else if (starts_with(name_, "show:")) {
         if (!build_show(name_.substr(5))) {
             fail("unknown --drive " + name_ + " (show:<" + kShowScreens + ">)");
@@ -56,7 +66,8 @@ Drive::Drive(Shell& shell, std::string name) : shell_(shell), name_(std::move(na
     } else if (name_ == "access" || starts_with(name_, "access:")) {
         build_access(name_ == "access" ? "" : name_.substr(7));
     } else {
-        fail("unknown --drive " + name_ + " (menus, access[:res=WxH,scale=N,pad,read], show:<screen>)");
+        fail("unknown --drive " + name_ +
+             " (menus, crash, pseudo, pseudo-plant, bug, access[:res=WxH,scale=N,pad,read], show:<screen>)");
     }
     building_ = false;
     if (name_ != "default") {
@@ -283,6 +294,63 @@ void Drive::access_screen(const std::string& name) {
          }});
 }
 
+// The pseudo-locale layout check (#275) of the next drawn frame: every recorded label through core::label_problem
+void Drive::check(const std::string& name) {
+    add({"check " + name, [this, name](Step& s) {
+             if (s.counter++ == 0) {
+                 const Screen* top = shell_.top();
+                 shell_.draw_->request_access(name, top && (top->id == ScreenId::Play || top->id == ScreenId::Juice));
+                 return false;
+             }
+             std::optional<json> report = shell_.draw_->take_access_report();
+             if (!report) {
+                 if (s.counter > kWaitLimit) {
+                     fail("no drawn frame for the layout check of " + name);
+                 }
+                 return false;
+             }
+             const bool pseudo = shell_.locale_ == core::kPseudoLocale;
+             int labels = 0;
+             int problems = 0;
+             for (const json& t : (*report)["texts"]) {
+                 core::DrawnLabel l;
+                 l.id = t.value("node", "");
+                 l.text = t.value("text", "");
+                 l.fits = t.value("fits", true);
+                 l.why = t.value("why", "");
+                 l.raw = t.value("raw", false);
+                 if (t.contains("ink") && t["ink"].is_array() && t["ink"].size() == 4) {
+                     l.x = t["ink"][0].get<double>();
+                     l.y = t["ink"][1].get<double>();
+                     l.w = t["ink"][2].get<double>();
+                     l.h = t["ink"][3].get<double>();
+                 }
+                 ++labels;
+                 const std::string why = core::label_problem(l, style::kBaseW, style::kBaseH, pseudo);
+                 if (!why.empty()) {
+                     ++problems;
+                     std::cout << "PSEUDO_FAIL " << name << " label " << l.id << ": " << why << " ("
+                               << json(l.text).dump(-1, ' ', false, json::error_handler_t::replace) << ")\n";
+                 }
+             }
+             ++checked_;
+             labels_ += labels;
+             problems_ += problems;
+             std::cout << "PSEUDO_SCREEN " << name << " labels " << labels << " problems " << problems << "\n" << std::flush;
+             return true;
+         }});
+}
+
+// main menu -> the juice demo (debug builds)
+void Drive::to_juice() {
+    if constexpr (!kDebugBuild) {
+        fail("the juice demo is in debug builds only (smoke builds the debug preset unless --preset release)");
+    } else {
+        to_menu();
+        open("juice", "juice_demo");
+    }
+}
+
 // ---- Scenarios -------------------------------------------------------------------------------------------------
 // no --drive: walk into the game and stay there (main.cpp ends the run after --smoke N frames)
 void Drive::build_default() {
@@ -324,6 +392,121 @@ void Drive::build_menus() {
     press("ui_accept");                                   // Shell::quit ends the run with DRIVE_DONE
     frames(10);
     then("quit did not end the run", [this] { fail("quit did not end the run"); });
+}
+
+// crash: an exception in a frame. main.cpp catches it at the top of the loop, writes crashes/crash_<time>.txt and
+// prints CRASH_WRITTEN <path>; the run exits 1 on purpose (dev.py says so)
+void Drive::build_crash() {
+    to_menu();
+    frames(2);
+    then("throw", [] { throw std::runtime_error("drive crash: a planted error to prove the crash file (expected)"); });
+}
+
+// pseudo: every screen in the pseudo locale, every visible label checked (plant: one label too small on the menu)
+void Drive::build_pseudo(bool plant) {
+    then("pseudo locale", [this, plant] {
+        shell_.plant_ = plant;
+        if (shell_.locale_ != core::kPseudoLocale) {
+            shell_.opts_.locale = core::kPseudoLocale;
+            shell_.apply_settings();
+            std::cout << "DRIVE_NOTE the pseudo drive switched the locale to pseudo (pass --locale pseudo next time)\n";
+        }
+    });
+    wait_screen("title");
+    then("consent", [this] {
+        if (shell_.top() && shell_.top()->consent) {
+            check("consent");
+            press("ui_cancel");
+        }
+    });
+    check("title");
+    press("ui_accept");
+    wait_screen("main_menu");
+    check("main_menu");
+    open("settings", "settings");
+    for (const char* tab : core::SettingsMenu::kTabs) {
+        const std::string name(tab);
+        to_tab(name);
+        check("settings." + name);
+        press("ui_down");
+        focus(name + ".back");                               // scrolled to the end: the rows below the fold
+        check("settings." + name + ".end");
+        if (name == "controls") {
+            focus("controls.bind_jump");
+            press("ui_accept");                              // the "press a key" prompt
+            check("settings.capture");
+            then("cancel the capture", [this] { shell_.key_down("key:escape", false); });
+            frames(kPressGap);
+        }
+    }
+    press("ui_cancel");
+    wait_screen("main_menu");
+    open("credits", "credits");
+    check("credits");
+    press("ui_cancel");
+    wait_screen("main_menu");
+    if constexpr (kDebugBuild) {
+        then("bark and caption on", [this] {
+            shell_.settings_["access"]["subtitle_barks"] = true;   // the hit's bark and caption show too
+            shell_.settings_["access"]["captions_sfx"] = true;
+        });
+        focus("juice");
+        press("ui_accept");
+        wait_screen("loading");
+        check("loading");
+        wait_screen("juice_demo");
+        frames(20);
+        check("juice_demo");
+        press("attack");
+        frames(3);
+        check("juice_demo.hit");
+        press("pause");
+        wait_screen("pause");
+        check("pause");
+        open("quit", "title");
+        press("ui_accept");
+        wait_screen("main_menu");
+    }
+    open("play", "play");
+    frames(5);
+    check("play");
+    press("pause");
+    wait_screen("pause");
+    check("pause.play");
+    open("quit", "title");
+    then("verdict", [this] {
+        if (problems_ == 0) {
+            std::cout << "PSEUDO_PASS " << checked_ << " screens, " << labels_ << " labels, nothing truncated or untranslated\n";
+            done(0);
+            return;
+        }
+        std::cout << "PSEUDO_FAILED " << problems_ << " problem(s) on " << checked_ << " screens\n";
+        LOG_ERROR("pseudo", problems_ << " label problem(s); see the PSEUDO_FAIL lines");
+        done(1);
+    });
+}
+
+// bug: F8 on the main menu, then the report's files must all be there
+void Drive::build_bug() {
+    if constexpr (!kDebugBuild) {
+        fail("the bug report is in debug builds only");
+    } else {
+        to_menu();
+        then("F8", [this] { shell_.key_down("key:f8", false); });
+        wait_for("the bug report", [this] { return !shell_.last_bug_report_.empty(); });
+        then("check the files", [this] {
+            const std::filesystem::path dir = core::path_from_utf8(shell_.last_bug_report_);
+            for (const char* f : kBugFiles) {
+                std::error_code ec;
+                if (!std::filesystem::is_regular_file(dir / f, ec)) {
+                    fail("the bug report lacks " + std::string(f) + ": " + shell_.last_bug_report_);
+                    return;
+                }
+            }
+            std::cout << "DRIVE_BUG " << shell_.last_bug_report_ << "\n" << std::flush;
+            done(0);
+        });
+    }
 }
 
 // show:<screen>: open it, let it settle, end (main.cpp saves --screenshot)
@@ -368,6 +551,11 @@ bool Drive::build_show(const std::string& screen) {
         to_menu();
         open("play", "play");
         frames(60);
+    } else if (screen == "juice") {
+        to_juice();
+        frames(90);                                     // the intro line is under way, the camera settled
+        press("attack");                                // a hit: shake, squash, the ring, a (gentle) flash
+        frames(1);
     } else {
         return false;
     }

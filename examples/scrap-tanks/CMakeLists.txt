@@ -7,6 +7,8 @@
 #           Layering: `core` (no SDL) <- `game_lib` (SDL) <- exe. Tests link `core` only.
 #           Dependencies come from vcpkg.json via the toolchain file in CMakePresets.json.
 #           The kit's golden-vector tests read data/golden/*.json through the GOLDEN_DIR definition.
+#           Every build copies data/ (without golden/ and shaders/) next to the exe (game_data); the sprites, font
+#           and sounds are found in assets/ from the working directory or the exe's folder (src/game/Assets.cpp).
 # Authored: Written with Claude (Sonnet 5.5, claude-sonnet-5-5)
 # Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): the kit's juice and shell logic in core
 #           (nlohmann-json), its golden-vector and file tests
@@ -14,6 +16,8 @@
 #           shader recipes compiled with shadercross, src/gfx (KitShaders), the kit_shader_check tool
 # Updated : 2026-11-10 with Claude (Fable 5.1, claude-fable-5-1): the kit's shell screens (#168): Menu and ShellLogic in
 #           core, src/shell in game_lib, tests/test_menu.cpp
+# Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): kit 0.14.4: Report (crash files), JuiceDemo, the analog,
+#           motor-access and report tests, the game_data target (data/ next to the exe)
 # ---------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.21)
 project(scrap_tanks VERSION 0.2.0 LANGUAGES CXX)
@@ -56,6 +60,7 @@ add_library(core STATIC
   src/core/Bindings.cpp
   src/core/I18n.cpp
   src/core/Menu.cpp
+  src/core/Report.cpp
   src/core/SaveStore.cpp
   src/core/Settings.cpp
   src/core/ShellLogic.cpp
@@ -78,6 +83,7 @@ set(GAME_SOURCES
   src/gfx/KitShaders.cpp
   src/shell/Draw.cpp
   src/shell/Drive.cpp
+  src/shell/JuiceDemo.cpp
   src/shell/Shell.cpp
 )
 add_library(game_lib STATIC ${GAME_SOURCES})
@@ -125,6 +131,16 @@ set_target_properties(scrap_tanks PROPERTIES WIN32_EXECUTABLE $<CONFIG:Release>)
 target_link_libraries(scrap_tanks PRIVATE game_lib)
 copy_kit_shaders(scrap_tanks)
 
+# ---- the game's data next to the exe: data/ (minus the kit's test folders) and CREDITS.md ----
+# The shell reads them from the working directory when it has data/, else from the exe's folder, so a shipped
+# build started from anywhere finds its strings, presets, colours and dialogue. A custom target runs on every
+# build (a POST_BUILD step would only run when the exe relinks), so an edit to data/ alone is copied too.
+add_custom_target(game_data ALL
+  COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_SOURCE_DIR} -DDST=$<TARGET_FILE_DIR:scrap_tanks>
+          -P ${CMAKE_SOURCE_DIR}/cmake/copy_game_data.cmake
+  COMMENT "game data -> next to the exe"
+  VERBATIM)
+
 # ---- kit_shader_check: draws every recipe for `dev.py smoke --shaders` (a kit tool, not shipped) ----
 add_executable(kit_shader_check src/tools/kit_shader_check.cpp)
 target_link_libraries(kit_shader_check PRIVATE game_lib)
@@ -137,6 +153,7 @@ if(BUILD_TESTS)
   find_package(doctest CONFIG REQUIRED)
   add_executable(unit_tests
     tests/test_main.cpp
+    tests/test_analog.cpp
     tests/test_fixed_timestep.cpp
     tests/test_math_geom.cpp
     tests/test_nav.cpp
@@ -150,6 +167,8 @@ if(BUILD_TESTS)
     tests/test_golden_vectors.cpp
     tests/test_golden_audio.cpp
     tests/test_menu.cpp
+    tests/test_motor_access.cpp
+    tests/test_reports.cpp
     tests/test_shell_files.cpp
   )
   target_link_libraries(unit_tests PRIVATE core doctest::doctest)

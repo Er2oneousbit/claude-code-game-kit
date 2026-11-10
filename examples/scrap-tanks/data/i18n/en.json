@@ -14,6 +14,7 @@
   "menu.play": "Play",
   "menu.settings": "Settings",
   "menu.credits": "Credits",
+  "menu.juice": "Juice demo",
   "menu.quit": "Quit",
 
   "hint.select": "Select",
@@ -137,6 +138,11 @@
   "toast.settings_failed": "Settings could not be saved (see the log).",
   "toast.bug_saved": "Bug report saved.",
   "toast.save_newer": "This save is from a newer version: it will not be overwritten.",
+
+  "juice.title": "Juice demo",
+  "juice.stats": "Hits {hits}   trauma {trauma}   shake {shake}   flashes held back {refused}   speed {speed}%",
+  "juice.guard": "Guarding",
+  "juice.objective": "Hit the box and feel the juice.",
 
   "subtitle.speaker": "{name}:",
 

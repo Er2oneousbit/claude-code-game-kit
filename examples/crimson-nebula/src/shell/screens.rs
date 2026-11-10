@@ -11,6 +11,8 @@
 //           shell that built it. Focus starts on the settings tab bar: left/right switch tabs, down enters the rows,
 //           up from the first row returns to the tabs. Back (or cancel) saves settings.json.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): "Juice demo" on the main menu of debug builds, the
+//           demo's actions (juice.rs), the text pages say which lines are raw (credits names, #275)
 // ---------------------------------------------------------------------------
 use serde_json::json;
 
@@ -375,12 +377,19 @@ pub fn rows_for(shell: &Shell) -> Vec<Row> {
                 answer_consent(s, "unset")
             }),
         ],
-        ScreenName::MainMenu => vec![
-            button("play", shell.t("menu.play"), |s| s.push(ScreenName::Loading)),
-            button("settings", shell.t("menu.settings"), |s| s.push(ScreenName::Settings)),
-            button("credits", shell.t("menu.credits"), |s| s.push(ScreenName::Credits)),
-            button("quit", shell.t("menu.quit"), |s| s.quit()),
-        ],
+        ScreenName::MainMenu => {
+            let mut rows = vec![
+                button("play", shell.t("menu.play"), |s| s.load(ScreenName::Play)),
+                button("settings", shell.t("menu.settings"), |s| s.push(ScreenName::Settings)),
+                button("credits", shell.t("menu.credits"), |s| s.push(ScreenName::Credits)),
+            ];
+            if shell.debug_build {
+                // the juice demo (juice.rs): debug builds only, like the pseudo-locale and the bug report key
+                rows.push(button("juice", shell.t("menu.juice"), |s| s.load(ScreenName::Juice)));
+            }
+            rows.push(button("quit", shell.t("menu.quit"), |s| s.quit()));
+            rows
+        }
         ScreenName::Settings => settings_rows(shell, top.tab),
         ScreenName::Pause => vec![
             button("resume", shell.t("pause.resume"), |s| {
@@ -406,6 +415,12 @@ fn answer_consent(shell: &mut Shell, value: &str) {
 
 /// The lines of a text page (credits, "What now?", the dialogue history); empty for other screens.
 pub fn lines_for(shell: &Shell) -> Vec<String> {
+    page_lines(shell).into_iter().map(|(line, _)| line).collect()
+}
+
+/// The lines of a text page with whether each is raw: names from CREDITS.md are shown as written, so the pseudo
+/// drive does not expect them in brackets.
+pub fn page_lines(shell: &Shell) -> Vec<(String, bool)> {
     match shell.top_name() {
         Some(ScreenName::Credits) => {
             let text = shell
@@ -414,15 +429,15 @@ pub fn lines_for(shell: &Shell) -> Vec<String> {
                 .as_ref()
                 .and_then(|d| d.parent().map(|p| p.join("CREDITS.md")))
                 .and_then(|p| std::fs::read_to_string(p).ok());
-            let mut lines: Vec<String> = match text {
+            let mut lines: Vec<(String, bool)> = match text {
                 Some(t) => t
                     .lines()
-                    .map(|l| l.trim_start_matches('#').trim().to_string())
+                    .map(|l| (l.trim_start_matches('#').trim().to_string(), true))
                     .collect(),
-                None => vec![shell.t("credits.placeholder")],
+                None => vec![(shell.t("credits.placeholder"), false)],
             };
-            lines.push(String::new());
-            lines.push(shell.t("credits.engine"));
+            lines.push((String::new(), false));
+            lines.push((shell.t("credits.engine"), false));
             lines
         }
         Some(ScreenName::Help) => {
@@ -439,7 +454,7 @@ pub fn lines_for(shell: &Shell) -> Vec<String> {
                 let (_, label) = shell.prompt(action);
                 lines.push(format!("{}: {label}", shell.t(&format!("action.{action}"))));
             }
-            lines
+            lines.into_iter().map(|l| (l, false)).collect()
         }
         Some(ScreenName::History) => {
             let lines: Vec<String> = shell
@@ -447,11 +462,12 @@ pub fn lines_for(shell: &Shell) -> Vec<String> {
                 .iter()
                 .map(|(name, text)| shell.t_args("help.last_line", &[("name", name), ("text", text)]))
                 .collect();
-            if lines.is_empty() {
+            let lines = if lines.is_empty() {
                 vec![shell.t("history.empty")]
             } else {
                 lines
-            }
+            };
+            lines.into_iter().map(|l| (l, false)).collect()
         }
         _ => Vec::new(),
     }
@@ -643,6 +659,7 @@ pub fn action(shell: &mut Shell, action: &str) -> bool {
             }
             false
         }
+        ScreenName::Juice => super::juice::action(shell, action),
         ScreenName::Pause => {
             if action == "pause" || action == "ui_cancel" {
                 shell.pop();

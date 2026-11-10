@@ -101,8 +101,13 @@ func test_string_tables_cover_english_and_fall_back() -> void:
 	for key: String in tables["fr"]:
 		if not key.begins_with("binding."):
 			assert_true((tables["en"] as Dictionary).has(key), "fr has '%s' but en does not" % key)
+	for key: String in tables["en"]:
+		assert_true((tables["fr"] as Dictionary).has(key), "fr lacks '%s' (tools/check_i18n.py lists them all)" % key)
 	assert_eq(I18n.translate(tables, "fr", "menu.play"), "Jouer")
-	assert_eq(I18n.translate(tables, "fr", "menu.juice"), tables["en"]["menu.juice"], "missing French falls back")
+	# the shipped fr.json is complete (#272), so a partial table stands in for a translation in progress
+	var partial: Dictionary = {"en": tables["en"], "fr": {"menu.play": tables["fr"]["menu.play"]}}
+	assert_eq(I18n.translate(partial, "fr", "menu.play"), "Jouer")
+	assert_eq(I18n.translate(partial, "fr", "menu.juice"), tables["en"]["menu.juice"], "missing French falls back")
 
 
 func test_bindings_round_trip_through_input_events() -> void:

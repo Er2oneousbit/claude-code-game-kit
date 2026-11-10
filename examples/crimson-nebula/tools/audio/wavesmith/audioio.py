@@ -12,7 +12,8 @@
 # Needs   : Python 3.8+ only; ffmpeg (optional: https://ffmpeg.org, found on PATH or in WAVESMITH_FFMPEG) for MP3,
 #           Opus and AAC input and for writing OGG
 # Exit    : 0 ok, 1 a conversion failed, 2 usage, unreadable file or a format that needs ffmpeg when it is missing
-# Notes   : Files are recognised by their first bytes, not their names. ffmpeg runs as a separate program on local
+# Notes   : Files are recognised by their first bytes, not their names (an Ogg also by its other BOS pages, so
+#           Vorbis next to a Skeleton or Theora stream is read natively). ffmpeg runs as a separate program on local
 #           files only (-protocol_whitelist file: a playlist-style input cannot make it open a URL), with -nostdin,
 #           decoding to a temporary 16-bit WAV that wavfile.py reads, so no
 #           output parsing depends on ffmpeg's version (16 bits is plenty for lossy sources). A WAV whose sample
@@ -26,6 +27,8 @@
 #
 # Pseudocode
 #   sniff the first bytes: RIFF/WAVE -> wavfile; fLaC -> flacfile; OggS + vorbis -> oggvorbis; anything else -> ffmpeg
+#   an Ogg whose first BOS page is another codec (Skeleton, Theora): oggvorbis.identification scans the BOS pages
+#     (they all come before any data page); a Vorbis one among them -> oggvorbis, none -> ffmpeg
 #   ffmpeg read : ffmpeg -nostdin -v error -i <file> -c:a pcm_s16le <tmp.wav> -> wavfile -> channels
 #   write       : .wav -> wavfile (16-bit, loop kept); other suffix -> tmp WAV -> ffmpeg (OGG: libvorbis, loop tags)
 import argparse
@@ -48,6 +51,9 @@ CHUNK_FRAMES = 48000         # stream_audio: frames per channel handed out at a 
 NATIVE = ("WAV (8 / 16 / 24 / 32-bit PCM, 32 / 64-bit float)", "FLAC", "OGG Vorbis")
 OGG_QUALITY = 6              # libvorbis -q:a: 6 is about 192 kbit/s stereo, transparent for game music
 FFMPEG_TIMEOUT_S = 600
+SNIFF_BYTES = 64             # enough for the first page header and the start of its packet
+OGG_BOS_SCAN_BYTES = 1 << 20 # stream_audio / info: how far to look for a Vorbis BOS page behind other streams'
+                             # (each BOS page holds one header packet; 1 MiB covers more streams than any file has)
 DEBUG = False
 
 
@@ -91,6 +97,32 @@ def sniff(data):
             return "ogg-opus"
         return "ogg"
     return "other"
+
+
+def sniff_ogg(data, kind):
+    """kind from sniff(), refined for an Ogg whose first BOS page is not Vorbis (a Skeleton or Theora header): the
+    decoder's own BOS scan finds a Vorbis stream further on ('ogg-vorbis'), or there is none ('ogg', ffmpeg's)."""
+    if kind != "ogg":
+        return kind
+    mod = oggvorbis_module()
+    if mod is None:
+        return kind
+    try:
+        mod.identification(data)
+    except Exception as exc:          # not Vorbis, or the scan ran off the data: ffmpeg's file
+        dbg(f"no Vorbis stream among the BOS pages: {exc}")
+        return kind
+    return "ogg-vorbis"
+
+
+def sniff_file(path):
+    """sniff() of a file from its first bytes, reading on through the BOS pages only for an Ogg that needs it."""
+    with Path(path).open("rb") as f:
+        head = f.read(SNIFF_BYTES)
+        kind = sniff(head)
+        if kind == "ogg":
+            kind = sniff_ogg(head + f.read(OGG_BOS_SCAN_BYTES), kind)
+    return kind
 
 
 def _from_flac(data, path):
@@ -172,7 +204,7 @@ def read_audio(path):
         data = path.read_bytes()
     except OSError as exc:
         raise AudioIOError(f"cannot read {path}: {exc}")
-    kind = sniff(data)
+    kind = sniff_ogg(data, sniff(data))
     dbg(f"{path}: {kind}")
     if kind == "wav":
         return _from_wav(path)
@@ -213,11 +245,9 @@ def stream_audio(path, via_ffmpeg=False):
     the Vorbis decoder's output limit stops it: retry with via_ffmpeg)."""
     path = Path(path)
     try:
-        with path.open("rb") as f:
-            head = f.read(64)
+        kind = sniff_file(path)
     except OSError as exc:
         raise AudioIOError(f"cannot read {path}: {exc}")
-    kind = sniff(head)
     mod = oggvorbis_module() if kind == "ogg-vorbis" else None
     if via_ffmpeg or kind not in ("wav", "flac") and mod is None:
         names = {"ogg-vorbis": "OGG Vorbis", "ogg-opus": "OGG Opus", "ogg": "an OGG file that is not Vorbis",
@@ -379,7 +409,7 @@ def cmd_check(args):
 def cmd_info(args):
     path = Path(args.file)
     try:
-        kind = sniff(path.read_bytes()[:64])
+        kind = sniff_file(path)
     except OSError as exc:
         raise AudioIOError(f"cannot read {path}: {exc}")
     chans, rate = read_audio(path)

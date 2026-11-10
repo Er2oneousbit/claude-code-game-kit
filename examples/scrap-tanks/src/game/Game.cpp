@@ -6,10 +6,17 @@
 //           With --autoplay the game quits a moment after the fight ends, so a smoke run stops by itself.
 //           The shell owns the screens: a new fight starts each time the play screen is entered (play_enter),
 //           Escape and Start pause (the shell's "pause" action), R or the pad's Back button restart a fight.
+//           Motor access (#166, #269): fire is held, or toggled with access.hold_to_toggle (auto-fire), and a tap
+//           made while the gun reloads waits kInputBufferWindow times access.timing_scale for the next shot. The
+//           fight has no other timing windows. The left stick goes through shell_->stick() (the player's
+//           deadzone and invert_y, #274). The bots' controls skip all of this.
 //
 // Pseudocode (one frame):
-//   update: shell.update -> (play screen on top) play_update: control = bot or (keyboard + mouse + gamepad)
+//   update: shell.update -> (play screen on top) play_update: control = bot or player_controls (keyboard + mouse
+//           + gamepad, then fire: buffer.update; firing = fire_hold.update(held, hold_to_toggle);
+//           a new press -> buffer it when firing, else clear; fire = firing or a buffered tap)
 //           -> sim.step, once per update at game speed 1 (speed_acc_ owes whole steps below that)
+//           -> a player shot uses up the buffered tap
 //           -> sounds, captions and log lines
 //   render: shell.render -> (play screen) play_draw: logical presentation to 1280x720 -> ground tiles -> cover,
 //           scrap, wrecks and tanks sorted by depth (hull + turret rows from the sprite sheets) -> shells ->
@@ -19,6 +26,9 @@
 // Updated : 2026-10-26 with Claude (Opus 5.5, claude-opus-5-5): --seed rejects negative and out-of-range numbers
 // Updated : 2026-11-10 with Claude (Fable 5.1, claude-fable-5-1): the shell's screens (#168): the fight behind the
 //           title and menus, the shell's options, game speed, the attack binding, sound captions, the welcome line
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): kit 0.14.4: fire uses hold_to_toggle and
+//           timing_scale (#269), the left stick and right trigger go through the shell's analog input (#274), the
+//           seed is named in crash files, the new drives in --help (#275)
 // ---------------------------------------------------------------------------
 #include "game/Game.hpp"
 
@@ -30,6 +40,7 @@
 
 #include "core/EnemyBrain.hpp"
 #include "core/Log.hpp"
+#include "core/Tuning.hpp"
 #include "core/View.hpp"
 
 namespace game {
@@ -44,7 +55,8 @@ constexpr double kTurretMountHeight = 1.4;  // m: the turret sits on the tractor
 constexpr double kTurretMountBack = 0.35;   // m behind the hull's origin
 constexpr double kShellHeight = 1.0;        // m above ground where shells fly
 constexpr double kLabelHeight = 2.6;        // m above a raider for its intent label
-constexpr int kPadDeadZone = 8000;
+constexpr int kPadDeadZone = 8000;          // the right stick (aim); the left stick uses the player's deadzone
+constexpr double kTriggerFire = 0.5;        // right trigger travel (0..1, past its own deadzone) that fires
 constexpr double kWreckStay = 3.0;         // s a wreck stays fully visible
 constexpr double kWreckFade = 2.0;         // s it takes to fade out
 constexpr int kGroundInset = 10;          // px trimmed from each side of the 64 px ground tile
@@ -93,8 +105,9 @@ const char* Game::options_help() {
            "  --seed N                     fight number N (raider spawns); same seed, same fight\n"
            "  --god                        the player takes no damage\n"
            "  --debug-ai                   draw raider paths, chosen spots, who can hit you, and the bot's reason\n"
-           "  --drive SCENARIO   (smoke) a scripted path through the shell: menus, access[:res=WxH,scale=N,pad,read],\n"
-           "                     show:<title|menu|settings|pause|subtitle|play>; dev.py smoke --drive passes it\n"
+           "  --drive SCENARIO   (smoke) a scripted path through the shell: menus, crash, pseudo, pseudo-plant, bug,\n"
+           "                     access[:res=WxH,scale=N,pad,read], show:<title|menu|settings|pause|subtitle|play|juice>;\n"
+           "                     dev.py smoke --drive passes it\n"
            "  --data-dir DIR     keep settings.json in this folder (default: the user's preferences folder)\n"
            "  --locale LANG      language for the run (data/i18n/<LANG>.json)\n";
 }
@@ -179,6 +192,10 @@ void Game::restart() {
     bot_.reset();
     if (autoplay_) bot_.emplace(*autoplay_);
     end_timer_ = 0.0;
+    fire_hold_.reset();                    // a new fight starts with the gun quiet, even with auto-fire on
+    fire_buffer_.clear();
+    fire_was_held_ = false;
+    shell_->set_run_seed(std::to_string(seed));   // named in crash files and bug reports (#275)
     ++runs_;
     LOG_INFO("game", "RUN_START seed=" << seed << (autoplay_ ? (*autoplay_ == core::BotMode::Skilled ? " autoplay=skilled" : " autoplay=reckless") : "")
                                        << (god_ ? " god" : ""));
@@ -238,24 +255,47 @@ core::Control Game::read_controls() const {
              (keys[SDL_SCANCODE_A] || keys[SDL_SCANCODE_LEFT] ? 1.0 : 0.0);
     c.aim = view::to_world(mouse_x_, mouse_y_ + kTurretMountHeight * view::kHeight * view::kPixelsPerMeter);
     c.fire = mouse_fire_ || keys[SDL_SCANCODE_SPACE] || shell_->is_down("attack");   // the rebindable attack too
+    // Left stick: the shell's analog input (#274), so the Stick deadzone and Invert vertical stick settings apply.
+    // Its length is 0..1 past the deadzone: half a lean drives and turns at half speed. +y is down (forward is up).
+    const core::analog::Vec2 stick = shell_->stick();   // the kit's analog type, not the game's core::Vec2
+    if (stick.x != 0.0 || stick.y != 0.0) {
+        c.turn = stick.x;
+        c.throttle = -stick.y;
+    }
+    c.fire = c.fire || shell_->right_trigger() > kTriggerFire;
     if (pad_) {
         const auto axis = [this](SDL_GamepadAxis a) {
             const int v = SDL_GetGamepadAxis(pad_, a);
             return std::abs(v) < kPadDeadZone ? 0.0 : v / 32767.0;
         };
-        const double lx = axis(SDL_GAMEPAD_AXIS_LEFTX);
-        const double ly = axis(SDL_GAMEPAD_AXIS_LEFTY);
-        if (lx != 0.0 || ly != 0.0) {
-            c.turn = lx;
-            c.throttle = -ly;
-        }
         const double rx = axis(SDL_GAMEPAD_AXIS_RIGHTX);
         const double ry = axis(SDL_GAMEPAD_AXIS_RIGHTY);
         if (rx != 0.0 || ry != 0.0) c.aim = me.pos + core::normalized({rx, ry / view::kDepth}) * 8.0;
         else if (pad_used_) c.aim = me.pos + core::from_angle(me.turret) * 8.0;  // keep the gun where it is
-        c.fire = c.fire || SDL_GetGamepadAxis(pad_, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 16000 ||
-                 SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_SOUTH);
+        c.fire = c.fire || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_SOUTH);
     }
+    return c;
+}
+
+// The player's controls for one sim step: the devices, then motor access on fire (#166, #269).
+//   Hold mode (default): fire while the button is held, as before; a tap made while the gun reloads still fires
+//   when it is ready, if that is within the buffer window (kInputBufferWindow times access.timing_scale).
+//   Toggle mode (access.hold_to_toggle): one press starts auto-fire, the next stops it.
+core::Control Game::player_controls() {
+    core::Control c = read_controls();
+    const bool held = c.fire;
+    fire_buffer_.set_window(core::scaled_window(core::kInputBufferWindow, shell_->timing_scale()));
+    fire_buffer_.update(tuning::kStep);    // the buffer runs on sim time, like the reload it waits for
+    const bool firing = fire_hold_.update(held, shell_->access_flag("hold_to_toggle"));
+    if (held && !fire_was_held_) {
+        if (firing) {
+            fire_buffer_.press("fire");
+        } else {
+            fire_buffer_.clear();          // the press that toggled auto-fire off: no stray shot after it
+        }
+    }
+    fire_was_held_ = held;
+    c.fire = firing || fire_buffer_.pending("fire");
     return c;
 }
 
@@ -275,7 +315,7 @@ void Game::play_update(double dt) {
     speed_acc_ += shell_->game_speed();
     while (speed_acc_ >= 1.0 && sim_->outcome() == core::Outcome::Playing) {
         speed_acc_ -= 1.0;
-        const core::Control control = bot_ ? bot_->think(*sim_) : read_controls();
+        const core::Control control = bot_ ? bot_->think(*sim_) : player_controls();
         on_events(sim_->step(control));
     }
 }
@@ -287,6 +327,7 @@ void Game::on_events(const std::vector<core::Event>& events) {
                 LOG_INFO("game", "WAVE_START " << e.a << "/" << core::Sim::waves_total() << " raiders=" << sim_->raiders_alive());
                 break;
             case core::EventType::Fire:
+                if (e.team == core::Team::Player) fire_buffer_.consume("fire");   // the buffered tap is spent
                 if (assets_) assets_->play(e.team == core::Team::Player ? "fire_player" : "fire_raider", 40);
                 shell_->caption(e.team == core::Team::Player ? "fire_player" : "fire_raider");   // with captions_sfx on
                 break;

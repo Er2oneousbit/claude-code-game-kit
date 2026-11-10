@@ -16,10 +16,12 @@ sound libraries (a few minutes).
 ```
 python tools/dev.py run
 ```
-The kit's shell (kit 0.14.3: title, main menu, settings with rebinding, pause, credits) wraps the fight. WASD to drive
+The kit's shell (kit 0.14.4: title, main menu, settings with rebinding, pause, credits) wraps the fight. WASD to drive
 (tank controls), mouse to aim, left click, Space or the bound attack key to fire, R to restart, Escape to pause. Gamepad:
-left stick drives, right stick aims, right trigger or A fires, Back restarts, Start pauses. Red labels are coming for
-you; blue ones are hiding.
+left stick drives (how far it leans sets the speed; the Stick deadzone and Invert vertical stick settings apply), right
+stick aims, right trigger or A fires, Back restarts, Start pauses. Red labels are coming for you; blue ones are hiding.
+A tap of fire while the gun reloads still fires when it is ready (longer with Accessibility > Timing windows), and
+Accessibility > Hold actions toggle makes fire an auto-fire switch: press once to keep firing, again to stop.
 
 Game options go after `--`, for example `build/debug/bin/Debug/scrap_tanks.exe -- --debug-ai`:
 `--autoplay skilled|reckless` (a bot plays), `--seed N` (same seed, same fight), `--god`, `--debug-ai` (raider paths,
@@ -38,10 +40,12 @@ chosen spots, who can hit you, the tree).
 
 ## Checks
 ```
-python tools/dev.py check && python tools/dev.py test      # 89 test cases (51 are the kit's: fixed timestep, golden vectors, audio, shell files and menus), the pillar check plays 80 fights
+python tools/dev.py check && python tools/dev.py test      # 110 test cases (72 are the kit's: fixed timestep, golden vectors, audio, shell files, menus, analog input, motor access, crash and bug reports), the pillar check plays 80 fights
 python tools/dev.py smoke --frames 30000 --timeout 900 --until RUN_WON --fail-on PLAYER_DESTROYED -- --autoplay skilled --seed 7
 python tools/dev.py smoke --frames 30000 --timeout 900 --until PLAYER_DESTROYED --fail-on RUN_WON -- --autoplay reckless --seed 7
 python tools/dev.py smoke --drive menus                   # the shell: settings changed, saved, quit
+python tools/dev.py smoke --drive pseudo --locale pseudo  # every shell label bracketed and 40 % longer: nothing clipped or untranslated
+python tools/dev.py smoke --drive crash                   # exit 1 on purpose: CRASH_WRITTEN names the crash file
 python tools/access/sweep.py                              # the accessibility sweep over the shell's screens
 ```
 

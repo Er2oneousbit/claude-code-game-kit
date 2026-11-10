@@ -4,7 +4,8 @@
 // Usage   : Registered in src/main.ts as "main"; the shell (src/shell/app.ts) starts, pauses and stops it.
 // Notes   : PROTOTYPE: a box bouncing around proves the loop and rendering work. Replace it with your game.
 //           Read the player's settings through shell.settings (game_speed scales dt here) and input through
-//           shell.input (isDown / takePress with action names from settings.input.bindings).
+//           shell.input (isDown / takePress with action names from settings.input.bindings; stick() and
+//           triggers() for analog control, heldActions() for everything held).
 //           BOOT_OK is logged by the shell once the title screen is up (dev.py smoke waits for it).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------

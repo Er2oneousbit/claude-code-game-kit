@@ -3,7 +3,7 @@
 > Imported into CLAUDE.md. Keep it short. Long-form flow is in `docs/ENGINE_FLOW.md`.
 
 ## Version and setup
-- **Godot version:** 4.7.2 (latest stable when built), standard build, not .NET. The AI guard's NobodyWho plugin needs 4.5 or later; the scripted guard runs on 4.3+. Older 4.x lack `--import` or exit 1 after a clean quit, so `dev.py` cannot judge them, and `doctor` fails below 4.3.
+- **Godot version:** 4.7.2 (latest stable when built), standard build, not .NET. The AI guard's NobodyWho plugin needs 4.5 or later, so the kit's floor covers it. 4.6 is the floor, not the target: the shell's scripts use APIs new in 4.6 (`Control.has_focus(true)`) and 4.5 (the `Logger` crash hook), so on an older Godot they do not compile, and every `dev.py` command but `clean` and `ship` refuses it with exit 2 (`MIN_GODOT` in `tools/dev.py`).
 - **Binary:** set env var `GODOT_BIN` to the Godot executable, or put `godot` on PATH. `python tools/dev.py doctor` verifies.
 - **Language:** typed GDScript. No C# in this project unless an ADR says so.
 - **Unit tests:** GUT addon in `addons/gut/` (install from the Godot Asset Library or GitHub). Version recorded in the ADR when chosen.
@@ -16,7 +16,7 @@ scenes/                  .tscn scenes (main.tscn is the entry)
 scripts/core/            engine-agnostic helpers: log, timers, juice (shake, hitstop, springs...), settings,
                          bindings, saves, i18n (no gameplay knowledge; tested against data/golden/)
 scripts/shell/           the front end: Shell autoload, screens (title, menus, settings, pause...), smoke drive
-scripts/game/            gameplay scripts, one per scene or entity
+scripts/game/            gameplay scripts, one per scene or entity (play.gd is the placeholder game)
 data/                    tunables (.tres or .json), levels; i18n/ string tables, dialogue/, golden/ test vectors
 assets/                  art, audio, fonts (see docs/ASSET_LOG.md)
 tests/                   GUT tests, files named test_*.gd
@@ -33,6 +33,9 @@ tools/                   dev.py and helpers
 - Prefer signals ("call down, signal up"). Node paths with `%UniqueName` over long relative paths.
 - Autoloads: max 3: Log, Shell (settings, strings, data folder, crash files) and one for game state. Each documented in `ARCHITECTURE.md`.
 - Every visible string goes through `Shell.t("key")` (tables in `data/i18n/`); `smoke --locale pseudo` fails on any that does not.
+- Movement: `Shell.move_vector()` (keys, d-pad and the left stick: the shell binds the stick to `move_*` on top of the
+  player's bindings, with their radial deadzone, invert_y on the stick only). Analog: `Shell.stick()`, `Shell.triggers()`
+  (x left, y right, 0 to 1), `Shell.held_actions()`; `Input.is_action_pressed()` works as usual.
 - Player files (settings, saves, logs, crashes) live in `Shell.data_dir` (user://, or `--data-dir`); write them with `AtomicFile`/`SaveStore`.
 - Pure logic goes in `RefCounted` classes under `scripts/core/` or `scripts/game/logic/` so GUT can test it without scenes.
 - Logging via the `Log` autoload (`Log.info("physics", "msg")`), never bare `print` in committed code.
@@ -60,7 +63,7 @@ tools/                   dev.py and helpers
   window and compares it with its golden image (headless Godot has no renderer).
 
 ## Gotchas (Claude: read before editing)
-1. **Never hand-edit** `.godot/`, `*.import`, or generated `.uid` files. Commit the `.uid` files that Godot creates (Godot 4.4 and later, **verify for your version**), they keep references stable.
+1. **Never hand-edit** `.godot/`, `*.import`, or generated `.uid` files. Commit the `.uid` files that Godot creates (every supported version writes them), they keep references stable.
 2. **`.tscn` and `.tres` are text but fragile.** Make minimal edits, never reorder `[ext_resource]` ids, never invent uids. Prefer building scenes in code or asking the user to do structural scene edits in the editor, then read the result.
 3. **Signals and `queue_free()`:** freed nodes referenced elsewhere cause "previously freed" errors. Check `is_instance_valid()` for stored node references.
 4. **`@onready` runs after `_init`**, before `_ready`. Do not touch `@onready` vars in `_init`.
@@ -72,7 +75,11 @@ tools/                   dev.py and helpers
 8. **Physics determinism:** do not rely on `_process` for gameplay timing. Use `_physics_process` or your own fixed-step logic.
 9. **API verification:** Godot 4.x changes between minor versions. Check `godot --version` and the matching docs before using unfamiliar APIs.
 10. **Comparing different types is an error** (`1.0 == "a"` is a SCRIPT ERROR on 4.7.2), and JSON numbers are always floats. Check `typeof()` first when a value can be anything (settings, saves, JSON).
-11. **Crash files need Godot 4.5+** (the `Logger` hook in `scripts/shell/crash_hook.gd`); older versions run the game without them.
+11. **Crash files come from a `Logger`** (`scripts/shell/crash_hook.gd`, `OS.add_logger`): it sees every script error, on any thread, and the Shell writes the file on the main thread.
+12. **The windowed shader check can crash under GPU load.** Godot 4.7.2 died twice in five `check` runs (exit
+    3221226356, 0xC0000374, heap corruption) during a SubViewport readback while other programs used the GPU; never
+    seen with Godot alone. `dev.py` then says "Godot crashed after N recipe(s)": rerun it, or use `check --no-shaders`
+    and let `smoke --shaders` cover them later. "It needs a window" means nothing was drawn at all.
 
 ## Generated or binary (do not hand-edit)
 `.godot/`, `*.import`, `*.uid` (commit, but do not edit), exported builds in `build/`, `*.translation`,

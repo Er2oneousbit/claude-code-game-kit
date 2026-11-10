@@ -2,7 +2,8 @@
 # ---------------------------------------------------------------------------
 # test_audioio.py
 # Purpose : Exam for audioio.py: formats are recognised by their bytes; WAV reads with nothing installed; without
-#           ffmpeg, OGG Vorbis still reads (oggvorbis.py) while MP3 / Opus input and OGG output stop with the fix
+#           ffmpeg, OGG Vorbis still reads (oggvorbis.py), also behind a Skeleton or Theora page (#262), while MP3 /
+#           Opus input (and an Ogg with no Vorbis stream) and OGG output stop with the fix
 #           named; a source above full scale warns and exits 1; with a stand-in ffmpeg the decode and
 #           encode command lines are right (the OGG loop as LOOPSTART / LOOPLENGTH); the tools that read audio
 #           (loudness, dialogue, music) go through it; and, when a real ffmpeg is installed, a WAV -> OGG -> read
@@ -125,6 +126,77 @@ class AudioIOExam(unittest.TestCase):
         rc, out = self.run_tool("info", f)
         self.assertEqual(rc, 0, out)
         self.assertIn("read by oggvorbis.py", out)
+
+    def hide_ffmpeg(self):
+        """No ffmpeg anywhere: WAVESMITH_FFMPEG names a missing file and PATH holds only the empty temp folder."""
+        self.no_ffmpeg()
+        os.environ["PATH"] = str(self.dir)
+
+    def muxed_ogg(self, first_bos, vorbis=True):
+        """A hand-built Ogg whose first BOS page carries first_bos (a Skeleton or Theora header) on its own serial.
+        vorbis=True: the libvorbis fixture follows, its BOS page second, the other stream's EOS page after it.
+        vorbis=False: an Opus BOS page follows instead (a video with Opus sound: no Vorbis anywhere)."""
+        from test_oggvorbis import FIXTURES, ogg_page
+        other = ogg_page(0x5EED, 0, 0, 2, [first_bos])
+        if not vorbis:
+            opus = ogg_page(0x0805, 0, 0, 2, [b"OpusHead\x01\x01\x38\x01\x80\xbb\0\0\0\0\0"])
+            return other + opus + ogg_page(0x5EED, 1, 0, 4, [b""]) + ogg_page(0x0805, 1, 0, 4, [b""])
+        src = base64.b64decode(FIXTURES["mono22k"])
+        nseg = src[26]
+        cut = 27 + nseg + sum(src[27:27 + nseg])          # the end of the Vorbis BOS page
+        return other + src[:cut] + ogg_page(0x5EED, 1, 0, 4, [b""]) + src[cut:]
+
+    @unittest.skipUnless((HERE / "oggvorbis.py").is_file(), "oggvorbis.py is not installed next to audioio.py")
+    def test_vorbis_behind_a_skeleton_or_theora_page_reads_with_nothing_installed(self):
+        # #262: sniff saw only the first BOS page, so a Vorbis stream behind a Skeleton or Theora header went to
+        # ffmpeg, and without ffmpeg the file was refused although oggvorbis.py reads it
+        self.hide_ffmpeg()
+        heads = {"skeleton": b"fishead\0" + struct.pack("<HH", 3, 0) + b"\0" * 52,
+                 "theora": b"\x80theora\x03\x02\x01" + b"\0" * 33}
+        for name, head in heads.items():
+            f = self.dir / f"{name}.ogg"
+            f.write_bytes(self.muxed_ogg(head))
+            with self.subTest(name):
+                chans, rate = audioio.read_audio(f)
+                self.assertEqual((len(chans), rate, len(chans[0])), (1, 22050, 11025))
+                srate, nch, chunks = audioio.stream_audio(f)
+                self.assertEqual((srate, nch), (22050, 1))
+                self.assertEqual([s for p in chunks() for s in p[0]], chans[0])
+                rc, out = self.run_tool("info", f)
+                self.assertEqual(rc, 0, out)
+                self.assertIn("ogg-vorbis", out)
+                self.assertIn("read by oggvorbis.py", out)
+                # the fixture peaks a hair above full scale, so convert warns and exits 1 (its own exam): what
+                # matters here is that it decoded natively and wrote the WAV
+                rc, out = self.run_tool("convert", f, "--out", self.dir / f"{name}.wav")
+                self.assertNotIn("needs ffmpeg", out)
+                self.assertTrue((self.dir / f"{name}.wav").is_file(), out)
+
+    def test_an_ogg_without_vorbis_still_goes_to_ffmpeg(self):
+        # #262's other side: an Ogg with no Vorbis stream (Opus first, or Opus behind a Theora page) is ffmpeg's
+        from test_oggvorbis import ogg_page
+        muxed = self.dir / "video-with-opus.ogg"
+        muxed.write_bytes(self.muxed_ogg(b"\x80theora\x03\x02\x01" + b"\0" * 33, vorbis=False))
+        opus = self.dir / "voice.opus"
+        opus.write_bytes(ogg_page(7, 0, 0, 2, [b"OpusHead\x01\x01\x38\x01\x80\xbb\0\0\0\0\0"])
+                         + ogg_page(7, 1, 0, 4, [b"OpusTags\0\0\0\0\0\0\0\0"]))
+        self.hide_ffmpeg()
+        for f in (muxed, opus):
+            with self.subTest(f.name):
+                for read in (audioio.read_audio, audioio.stream_audio):
+                    with self.assertRaises(audioio.AudioIOError) as ctx:
+                        read(f)
+                    self.assertIn("needs ffmpeg", str(ctx.exception), read.__name__)
+        decoded = self.dir / "decoded_by_stub.wav"
+        write_wav(decoded, tone(), RATE)
+        self.stub_ffmpeg(decoded)
+        for f in (muxed, opus):
+            with self.subTest(f.name):
+                before = len(self.stub_calls())
+                self.assertEqual(audioio.read_audio(f)[1], RATE)
+                rate, _, chunks = audioio.stream_audio(f)
+                list(chunks())
+                self.assertEqual(len(self.stub_calls()) - before, 2, "both reads went through ffmpeg")
 
     def test_a_source_above_full_scale_warns_and_exits_1(self):
         self.no_ffmpeg()

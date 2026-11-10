@@ -3,7 +3,7 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## Unreleased: 0.14.4, fixes and shell parity after 0.14.3 (#262 to #276, #159)
+## 0.14.4 (2026-11-10): fixes and shell parity after 0.14.3 (#262 to #276, #159)
 - **Wavesmith (#262):** an Ogg whose Vorbis stream follows a Skeleton or Theora page (a video with Vorbis sound) is
   read by `oggvorbis.py` instead of being sent to ffmpeg, so reading, streaming, `formats info` and `formats convert`
   work on it with nothing installed. The routing uses the decoder's own header scan, so a damaged Vorbis stream
@@ -87,6 +87,18 @@
   (`engines/bevy/skeleton/src/logic/charmap.rs` reads the font's character map), and a test checks every `data/i18n/` table against the font.
 - **`scripts/check_examples.py` (#159):** doctor, check, test and smoke across every example, with toolchains
   skipped by name when missing, known gaps recorded, and a final check that the run left `examples/` untouched.
+- **Kit code leaves the game's names alone** (found by moving the examples onto 0.14.4): Bevy's juice demo imported
+  the starter's `game::{Goal, Player}`, so a game that reshaped `src/game/` stopped compiling; it now uses nothing from
+  the game, brings its own 2D camera on its own render layer (so it works over a 3D game), switches the game's cameras
+  off while it is up and never moves them, and hides what the game tags `shell::HideUnderJuice`. The C++ kit's new
+  helpers claimed `core::Vec2` and other common names in the `core` namespace games share; they live in
+  `core::analog`, `core::report` and `core::ShellDeviceEvent` now, with a test that a game's own `core::Vec2` still
+  compiles.
+- **Examples:** Crimson Nebula (Bevy) reads gas, brake and steering from the analog `Intent` again; Scrap Tanks (C++)
+  honours `timing_scale` (a buffered fire tap) and `hold_to_toggle` (auto-fire) and steers with the analog stick; both
+  and the Godot, web, Unity and Unreal examples carry the shell's 0.14.4 files. Two long example tests made robust
+  against a busy machine: Coyote Hop's camera checks wait an idle frame, Graveyard Shift's 8-night bot smokes get a
+  10-minute limit (they replay frame for frame, so only load could fail them).
 - **Upgrade notes:** Godot games need Godot 4.6 or newer. A Unity game's code that stores `FrontEnd.World` as a
   `PlayWorld` changes the type to `ShellWorld` (the new base the juice demo shares). A Unity game reruns `python
   tools/dev.py exec GameKitScenes.AddInputAxes` for the new stick axes.

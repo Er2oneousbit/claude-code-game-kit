@@ -23,6 +23,8 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-10 with Claude (Fable 5.1, claude-fable-5-1): input, Escape and the restart moved to the shell
 //           and game/mod.rs (#168); the bump shake on the chase camera; colour-blind palettes on the two tells
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the race HUD hides under the kit's juice demo
+//           (debug builds) with shell::HideUnderJuice; the demo brings its own camera
 // ---------------------------------------------------------------------------
 use bevy::asset::RenderAssetUsages;
 use bevy::camera::Hdr;
@@ -35,7 +37,7 @@ use crate::logic::kart::Item;
 use crate::logic::race::{ChangeState, Phase, Race};
 use crate::logic::track::{ChangeKind, Strip};
 use crate::logic::tuning::*;
-use crate::shell::Shell;
+use crate::shell::{HideUnderJuice, Shell};
 
 // ---- Look ----------------------------------------------------------------------
 const SKY: Color = Color::srgb(0.008, 0.006, 0.02);
@@ -102,7 +104,9 @@ struct BarrierBlock(usize);
 #[derive(Component)]
 struct ChaseCam;
 
+/// The race HUD; the shell's juice demo (debug builds) hides it while it is up.
 #[derive(Component)]
+#[require(HideUnderJuice)]
 enum Hud {
     Lap,
     Place,

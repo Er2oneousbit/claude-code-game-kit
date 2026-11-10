@@ -1,9 +1,12 @@
 {
   "name": "Game.Shell",
   "rootNamespace": "graveyard_shift.Shell",
-  "references": ["Game.Core"],
+  "references": ["Game.Core", "Unity.InputSystem"],
   "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,
-  "autoReferenced": true
+  "autoReferenced": true,
+  "versionDefines": [
+    { "name": "com.unity.inputsystem", "expression": "1.0.0", "define": "GAMEKIT_INPUT_SYSTEM" }
+  ]
 }

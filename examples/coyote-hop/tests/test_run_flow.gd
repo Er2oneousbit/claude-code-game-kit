@@ -129,6 +129,9 @@ func test_restart_does_not_pan_the_camera() -> void:
 	await _ticks(SETTLE_TICKS)
 	assert_gt(cam.get_screen_center_position().x, home.x + 500.0, "the camera followed the player away")
 	await _press_restart()
+	# reset_smoothing() shows on the next idle frame; under load Godot runs several physics steps per idle frame, so
+	# waiting on physics alone read the camera before it moved (1 run in 9 on a busy machine)
+	await get_tree().process_frame
 	assert_almost_eq(cam.get_screen_center_position().x, home.x, CAMERA_SNAP_PX, "the camera is home as soon as R is handled")
 
 
@@ -140,6 +143,7 @@ func test_fall_respawn_does_not_pan_the_camera() -> void:
 	player.global_position = Vector2(FAR_X, Tuning.FALL_LIMIT_Y + 1.0)
 	await _ticks(2)
 	assert_eq(main.falls, 1, "the fall was counted")
+	await get_tree().process_frame                     # the camera reset shows on the next idle frame (see above)
 	assert_almost_eq(cam.get_screen_center_position().x, home.x, CAMERA_SNAP_PX, "the camera is home right after the respawn")
 
 

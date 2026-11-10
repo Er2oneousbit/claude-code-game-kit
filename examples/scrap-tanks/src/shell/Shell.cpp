@@ -4,15 +4,21 @@
 //           narration.
 // Usage   : compiled into game_lib; the game drives it through Shell.hpp.
 // Notes   : Layout numbers are design pixels (640x360) and tunables at the top. Every visible string goes through
-//           t(), so a translation (data/i18n/<locale>.json) changes it. The settings menu (core::SettingsMenu) is
-//           built when the settings screen opens and dropped when it closes.
+//           t(), so a translation (data/i18n/<locale>.json) changes it; text that is not UI copy (key names,
+//           CREDITS.md, arrows) is drawn raw, which the pseudo-locale check skips. The settings menu
+//           (core::SettingsMenu) is built when the settings screen opens and dropped when it closes.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): analog input (#274); crash context, F8 bug report,
+//           pseudo locale, juice demo (#275); data/ and CREDITS.md from game_dir() (next to the exe when the working
+//           directory has no data/, so a shipped build runs from any folder)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): no real keyboard, mouse or pad in a drive (#276)
 // ---------------------------------------------------------------------------
 #include "shell/Shell.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <ctime>
 #include <iostream>
 #include <iterator>
 #include <system_error>
@@ -22,6 +28,7 @@
 #include "core/Log.hpp"
 #include "core/Settings.hpp"
 #include "shell/Drive.hpp"
+#include "shell/JuiceDemo.hpp"
 
 namespace shell {
 
@@ -57,7 +64,15 @@ constexpr double kCellGap = 8;
 const char* kAnyKeyExcept[] = {"key:escape", "pad:east"};   // these do not count as "press any key"
 const char* kControlActions[] = {"move_left", "move_right", "jump", "attack", "interact", "pause"};
 const char* kScreenTitleKeys[] = {"", "", "settings.title", "credits.title", "loading.title", "", "pause.title",
-                                  "help.title", "history.title"};   // by ScreenId, for the narration
+                                  "help.title", "history.title", "juice.title"};   // by ScreenId, for the narration
+const char* kBugKey = "key:f8";               // the bug report (debug builds)
+constexpr double kNoticeS = 3.0;              // a notice ("Bug report saved.") stays this long
+const char* kMoveActions[] = {"move_left", "move_right", "move_up", "move_down"};
+
+// settings.json's text for a report: never throws (a crash file must not fail on a broken string)
+std::string settings_text(const json& settings) {
+    return settings.dump(2, ' ', false, json::error_handler_t::replace);
+}
 
 std::string speech_command(const std::string& text) {
 #ifdef _WIN32
@@ -83,6 +98,25 @@ std::string speech_command(const std::string& text) {
 #endif
 }
 
+// Where data/ and CREDITS.md are: the working directory when it has data/i18n (dev.py run and smoke start the game
+// from the project root, so an edit to data/ shows without a rebuild), else the exe's folder, where the build copies
+// them (cmake/copy_game_data.cmake), so a shipped game started from another folder still finds its strings.
+// Neither: the working directory, and load_tables() warns.
+fs::path find_game_dir() {
+    std::error_code ec;
+    if (fs::is_directory(core::path_from_utf8(kI18nDir), ec)) {
+        return fs::path();
+    }
+    const char* base = SDL_GetBasePath();   // owned by SDL; nullptr when the platform cannot say
+    if (base) {
+        const fs::path exe_dir = core::path_from_utf8(base);
+        if (fs::is_directory(exe_dir / core::path_from_utf8(kI18nDir), ec)) {
+            return exe_dir;
+        }
+    }
+    return fs::path();
+}
+
 }  // namespace
 
 const char* screen_name(ScreenId id) {
@@ -96,6 +130,7 @@ const char* screen_name(ScreenId id) {
         case ScreenId::Pause: return "pause";
         case ScreenId::Help: return "help";
         case ScreenId::History: return "history";
+        case ScreenId::Juice: return "juice_demo";
     }
     return "?";
 }
@@ -103,6 +138,7 @@ const char* screen_name(ScreenId id) {
 Shell::Shell(RunOptions options) : opts_(std::move(options)) {}
 
 Shell::~Shell() {
+    core::report::clear_crash_callbacks();   // a crash after this point must not call into a shell that is gone
     {
         std::lock_guard<std::mutex> lock(speech_mutex_);
         speech_stop_ = true;
@@ -137,7 +173,8 @@ json Shell::load_json(const fs::path& file, const char* what) {
 void Shell::load_tables() {
     json all = json::object();
     std::error_code ec;
-    for (const auto& entry : fs::directory_iterator(core::path_from_utf8(kI18nDir), ec)) {
+    const fs::path dir = game_dir_ / core::path_from_utf8(kI18nDir);
+    for (const auto& entry : fs::directory_iterator(dir, ec)) {
         if (!entry.is_regular_file() || entry.path().extension() != ".json") {
             continue;
         }
@@ -148,14 +185,20 @@ void Shell::load_tables() {
     }
     tables_ = core::string_tables_from_json(all);
     if (tables_.empty()) {
-        LOG_WARN("shell", "no string tables in " << kI18nDir << ": labels show their keys");
+        LOG_WARN("shell", "no string tables in " << core::path_to_utf8(dir) << ": labels show their keys");
+        return;
     }
+    std::string names;
+    for (const auto& table : tables_) {
+        names += (names.empty() ? "" : ", ") + table.first;
+    }
+    LOG_INFO("shell", "string tables " << names << " from " << core::path_to_utf8(fs::absolute(dir, ec)));
 }
 
 void Shell::load_dialogue() {
     std::error_code ec;
     std::vector<fs::path> files;
-    for (const auto& entry : fs::directory_iterator(core::path_from_utf8(kDialogueDir), ec)) {
+    for (const auto& entry : fs::directory_iterator(game_dir_ / core::path_from_utf8(kDialogueDir), ec)) {
         if (entry.is_regular_file() && core::path_to_utf8(entry.path().filename()).find(".built.json") != std::string::npos) {
             files.push_back(entry.path());
         }
@@ -191,9 +234,17 @@ bool Shell::init(SDL_Window* window, SDL_Renderer* renderer) {
     for (const std::string& p : loaded.problems) {
         LOG_WARN("settings", "fixed " << p);
     }
+    // crash files from here on land in the data folder and name the screen, locale and settings (#275)
+    core::report::CrashContext crash;
+    crash.data_dir = data_dir_;
+    crash.base = run_info();
+    crash.info = [this] { return run_info(); };
+    crash.settings = [this] { return settings_text(settings_); };
+    core::report::set_crash_context(std::move(crash));
+    game_dir_ = find_game_dir();
     load_tables();
-    presets_ = load_json(core::path_from_utf8(kPresetsFile), "presets");
-    colours_ = load_json(core::path_from_utf8(kColoursFile), "colours");
+    presets_ = load_json(game_dir_ / core::path_from_utf8(kPresetsFile), "presets");
+    colours_ = load_json(game_dir_ / core::path_from_utf8(kColoursFile), "colours");
     load_dialogue();
     apply_settings();
     if (settings_existed_) {
@@ -249,7 +300,37 @@ core::Bindings Shell::bindings() const {
 
 // ---- Text ----------------------------------------------------------------------------------------------------
 std::string Shell::t(const std::string& key, const core::TrArgs& args) const {
+    if (locale_ == core::kPseudoLocale) {
+        return core::tr_pseudo(tables_, key, args);   // the ASCII pseudo form: the 8x8 font has no accents
+    }
     return core::tr(tables_, locale_, key, args);
+}
+
+// A dialogue line's text: dialogue.<id> from the string table when it has one, else the file's own text (pseudo-ised
+// in the pseudo locale, so the layout check sees it as translated content)
+std::string Shell::line_text(const core::SubtitleLine& line) const {
+    const std::string key = "dialogue." + line.id;
+    if (has_text(key)) {
+        return t(key);
+    }
+    return locale_ == core::kPseudoLocale ? core::pseudo_ascii(line.text) : line.text;
+}
+
+core::report::RunInfo Shell::run_info() const {
+    core::report::RunInfo info;
+    info.game = opts_.game_name;
+    info.version = opts_.version;
+    info.build = kDebugBuild ? "debug" : "release";
+    info.os = SDL_GetPlatform();
+    info.screen = top() ? screen_name(top()->id) : "";
+    info.locale = locale_;
+    info.seed = seed_;
+    return info;
+}
+
+void Shell::notice(const std::string& text) {
+    notice_ = text;
+    notice_t_ = kNoticeS;
 }
 
 bool Shell::has_text(const std::string& key) const {
@@ -330,7 +411,7 @@ bool Shell::say_line(const std::string& id) {
     if (!core::subtitle_allowed(*line, settings_) || !track_.play(*line, time_)) {
         return false;
     }
-    history_.record(line->name, line->text);   // for "What now?" and the history page (#167)
+    history_.record(line->name, line_text(*line));   // for "What now?" and the history page (#167)
     return true;
 }
 
@@ -341,7 +422,10 @@ bool Shell::caption(const std::string& event_id) {
     }
     const json& c = dialogue_["captions"][event_id];
     const std::string key = "caption." + event_id;
-    const std::string text = has_text(key) ? t(key) : (c.contains("text") && c["text"].is_string() ? c["text"].get<std::string>() : "");
+    std::string text = has_text(key) ? t(key) : (c.contains("text") && c["text"].is_string() ? c["text"].get<std::string>() : "");
+    if (!has_text(key) && locale_ == core::kPseudoLocale) {
+        text = core::pseudo_ascii(text);
+    }
     const double min_s = c.contains("min_s") && c["min_s"].is_number() ? c["min_s"].get<double>() : kCaptionMinS;
     captions_[event_id] = {text, std::max(min_s, kCaptionMinS)};
     return true;
@@ -377,14 +461,22 @@ Screen Shell::make_screen(ScreenId id) {
                 s.consent->focus("later");
             }
             break;
-        case ScreenId::MainMenu:
-            s.list = core::MenuList({
+        case ScreenId::MainMenu: {
+            std::vector<core::Row> rows = {
                 core::button_row("play", label("menu.play"), [this] { push(ScreenId::Loading); }),
                 core::button_row("settings", label("menu.settings"), [this] { push(ScreenId::Settings); }),
                 core::button_row("credits", label("menu.credits"), [this] { push(ScreenId::Credits); }),
-                core::button_row("quit", label("menu.quit"), [this] { quit(); }),
-            });
+            };
+            if constexpr (kDebugBuild) {   // the juice demo (#275): debug builds only
+                rows.push_back(core::button_row("juice", label("menu.juice"), [this] {
+                    loading_next_ = ScreenId::Juice;
+                    push(ScreenId::Loading);
+                }));
+            }
+            rows.push_back(core::button_row("quit", label("menu.quit"), [this] { quit(); }));
+            s.list = core::MenuList(std::move(rows));
             break;
+        }
         case ScreenId::Settings: {
             core::SettingsHooks hooks;
             hooks.tr = [this](const std::string& key, const core::TrArgs& args) { return t(key, args); };
@@ -415,24 +507,29 @@ Screen Shell::make_screen(ScreenId id) {
                 pop();
             };
             hooks.presets = presets_;
-            hooks.debug_build = false;   // the debug font cannot draw the pseudo-locale's accented letters
+            hooks.debug_build = kDebugBuild;   // the pseudo locale in the language list (its ASCII form, #275)
             settings_menu_ = std::make_unique<core::SettingsMenu>(settings_, std::move(hooks));
             break;
         }
         case ScreenId::Credits: {
-            const std::optional<std::string> text = core::read_file(core::path_from_utf8(kCreditsFile));
+            const std::optional<std::string> text = core::read_file(game_dir_ / core::path_from_utf8(kCreditsFile));
             if (text) {
                 s.credits = core::credits_lines(*text);
             }
             break;
         }
         case ScreenId::Loading:
-            s.next = ScreenId::Play;
+            s.next = loading_next_;
+            loading_next_ = ScreenId::Play;
             break;
         case ScreenId::Play:
             if (play.enter) {
                 play.enter();
             }
+            break;
+        case ScreenId::Juice:
+            juice_ = std::make_unique<JuiceDemo>(*this);   // a fresh demo each visit
+            juice_->enter();
             break;
         case ScreenId::Pause:
             s.transparent = true;
@@ -475,6 +572,9 @@ void Shell::pop() {
     if (stack_.back().id == ScreenId::Settings) {
         settings_menu_.reset();
         capturing_.reset();
+    }
+    if (stack_.back().id == ScreenId::Juice) {
+        juice_.reset();
     }
     stack_.pop_back();
 }
@@ -548,7 +648,33 @@ std::string Shell::focus_id() const {
 }
 
 // ---- Input ---------------------------------------------------------------------------------------------------
+namespace {
+// SDL's event types as the kinds core::admits_device_event knows
+core::ShellDeviceEvent device_event_kind(Uint32 type) {
+    switch (type) {
+        case SDL_EVENT_KEY_DOWN:
+        case SDL_EVENT_KEY_UP: return core::ShellDeviceEvent::Key;
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_UP: return core::ShellDeviceEvent::MouseButton;
+        case SDL_EVENT_MOUSE_MOTION: return core::ShellDeviceEvent::MouseMotion;
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        case SDL_EVENT_GAMEPAD_BUTTON_UP: return core::ShellDeviceEvent::PadButton;
+        case SDL_EVENT_GAMEPAD_AXIS_MOTION: return core::ShellDeviceEvent::PadAxis;
+        case SDL_EVENT_GAMEPAD_ADDED: return core::ShellDeviceEvent::PadAdded;
+        case SDL_EVENT_GAMEPAD_REMOVED: return core::ShellDeviceEvent::PadRemoved;
+        case SDL_EVENT_QUIT: return core::ShellDeviceEvent::Quit;
+        case SDL_EVENT_WINDOW_FOCUS_LOST: return core::ShellDeviceEvent::FocusLost;
+        default: return core::ShellDeviceEvent::Other;
+    }
+}
+}  // namespace
+
 void Shell::handle_event(const SDL_Event& event) {
+    // #276: a smoke run follows a drive, which presses through key_down / press_binding itself; the real keyboard,
+    // mouse and pads (a stray key, a virtual pad on a shared machine) must not reach the screens meanwhile
+    if (!core::admits_device_event(device_event_kind(event.type), opts_.automated)) {
+        return;
+    }
     switch (event.type) {
         case SDL_EVENT_QUIT:
             quit_ = true;
@@ -586,7 +712,7 @@ void Shell::handle_event(const SDL_Event& event) {
             last_device_ = "mouse";
             break;
         case SDL_EVENT_WINDOW_FOCUS_LOST:
-            if (!opts_.automated && top() && top()->id == ScreenId::Play) {
+            if (!opts_.automated && top() && (top()->id == ScreenId::Play || top()->id == ScreenId::Juice)) {
                 LOG_INFO("shell", "focus lost: paused");
                 push(ScreenId::Pause);
             }
@@ -602,9 +728,13 @@ void Shell::key_event(const SDL_KeyboardEvent& e, bool down) {
         held_.erase(binding);
         return;
     }
+    key_down(binding, e.repeat);
+}
+
+void Shell::key_down(const std::string& binding, bool repeat) {
     last_device_ = "keyboard";
     if (capturing_) {
-        if (e.repeat) {
+        if (repeat) {
             return;
         }
         if (binding == "key:escape") {
@@ -614,10 +744,16 @@ void Shell::key_event(const SDL_KeyboardEvent& e, bool down) {
         }
         return;
     }
-    if (!e.repeat) {
+    if constexpr (kDebugBuild) {   // F8: reserved for the bug report in debug builds (#275)
+        if (binding == kBugKey) {
+            bug_requested_ = bug_requested_ || !repeat;
+            return;
+        }
+    }
+    if (!repeat) {
         held_.insert(binding);
     }
-    binding_pressed(binding, e.repeat);
+    binding_pressed(binding, repeat);
 }
 
 void Shell::pad_button_event(const SDL_GamepadButtonEvent& e, bool down) {
@@ -641,21 +777,25 @@ void Shell::pad_button_event(const SDL_GamepadButtonEvent& e, bool down) {
     binding_pressed(binding, false);
 }
 
+// The axes as presses: the left stick as d-pad presses for the menus (hysteresis; not held: the game reads the stick
+// itself through stick() and held_actions()), each trigger as pad:l2 / pad:r2 past half travel (held, like a button).
+// The analog values themselves are polled in poll_pads().
 void Shell::pad_axis_event(const SDL_GamepadAxisEvent& e) {
-    const double value = e.value / 32767.0;
-    const json& dz = settings_["input"]["deadzone"];
-    const double deadzone = std::max(dz.is_number() ? dz.get<double>() : 0.2, 0.05);
+    const double value = core::analog::axis_from_raw(e.value);
+    const double deadzone = std::max(input_number("deadzone", 0.2), 0.05);
     auto device = [this, &e] {
         const char* pad_name = SDL_GetGamepadNameForID(e.which);
         last_device_ = core::device_of_pad(pad_name ? pad_name : "");
     };
-    auto edge = [this, &device](const std::string& name, bool active) {
+    auto edge = [this, &device](const std::string& name, bool active, bool hold) {
         const std::string binding = "pad:" + name;
         const bool was = stick_dirs_[name];
         if (active && !was) {
             stick_dirs_[name] = true;
             device();
-            held_.insert(binding);
+            if (hold) {
+                held_.insert(binding);
+            }
             if (capturing_) {
                 if (capturing_->slot == core::kPadSlot) {
                     finish_capture(binding);
@@ -670,14 +810,8 @@ void Shell::pad_axis_event(const SDL_GamepadAxisEvent& e) {
     };
     if (e.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER || e.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) {
         const std::string name = e.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER ? "l2" : "r2";
-        const bool on = triggers_[name];
-        if (value > kTriggerOn && !on) {
-            triggers_[name] = true;
-            edge(name, true);
-        } else if (value < kTriggerOff && on) {
-            triggers_[name] = false;
-            edge(name, false);
-        }
+        triggers_[name] = core::analog::hysteresis(value, triggers_[name], kTriggerOn, kTriggerOff);
+        edge(name, triggers_[name], true);
         return;
     }
     if (e.axis != SDL_GAMEPAD_AXIS_LEFTX && e.axis != SDL_GAMEPAD_AXIS_LEFTY) {
@@ -688,8 +822,119 @@ void Shell::pad_axis_event(const SDL_GamepadAxisEvent& e) {
     const bool horizontal = e.axis == SDL_GAMEPAD_AXIS_LEFTX;
     const std::string neg = horizontal ? "dpad_left" : "dpad_up";
     const std::string pos = horizontal ? "dpad_right" : "dpad_down";
-    edge(neg, v < -on || (stick_dirs_[neg] && v < -kStickOff));
-    edge(pos, v > on || (stick_dirs_[pos] && v > kStickOff));
+    edge(neg, core::analog::hysteresis(-v, stick_dirs_[neg], on, kStickOff), false);
+    edge(pos, core::analog::hysteresis(v, stick_dirs_[pos], on, kStickOff), false);
+}
+
+// The pads' analog state for the game: the stick that leans furthest and the deepest trigger across all pads
+void Shell::poll_pads() {
+    if (pad_override_) {
+        pad_ = *pad_override_;
+        return;
+    }
+    PadAxes p;
+    if (opts_.automated) {   // a drive's run reads no real stick or trigger (#276): at rest unless it sets them
+        pad_ = p;
+        return;
+    }
+    for (SDL_Gamepad* pad : gamepads_) {
+        const double x = core::analog::axis_from_raw(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX));
+        const double y = core::analog::axis_from_raw(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY));
+        if (x * x + y * y > p.lx * p.lx + p.ly * p.ly) {
+            p.lx = x;
+            p.ly = y;
+        }
+        p.lt = std::max(p.lt, core::analog::axis_from_raw(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER)));
+        p.rt = std::max(p.rt, core::analog::axis_from_raw(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)));
+    }
+    pad_ = p;
+}
+
+double Shell::input_number(const char* key, double fallback) const {
+    const auto in = settings_.find("input");
+    if (in == settings_.end() || !in->is_object()) {
+        return fallback;
+    }
+    const auto v = in->find(key);
+    return v != in->end() && v->is_number() ? v->get<double>() : fallback;
+}
+
+bool Shell::input_flag(const char* key) const {
+    const auto in = settings_.find("input");
+    if (in == settings_.end() || !in->is_object()) {
+        return false;
+    }
+    const auto v = in->find(key);
+    return v != in->end() && v->is_boolean() && v->get<bool>();
+}
+
+core::analog::Vec2 Shell::stick() const {
+    return core::analog::stick(pad_.lx, pad_.ly, input_number("deadzone", 0.2), input_flag("invert_y"));
+}
+
+double Shell::left_trigger() const {
+    return core::analog::trigger(pad_.lt);
+}
+
+double Shell::right_trigger() const {
+    return core::analog::trigger(pad_.rt);
+}
+
+// The move_* actions the stick holds: a raw lean past the deadzone (at least kStickHoldMin), invert_y honoured
+std::vector<std::string> Shell::stick_actions() const {
+    const double on = std::max(input_number("deadzone", 0.2), core::analog::kStickHoldMin);
+    const double x = pad_.lx;
+    const double y = input_flag("invert_y") ? -pad_.ly : pad_.ly;
+    std::vector<std::string> out;
+    const double leans[] = {-x, x, -y, y};   // in kMoveActions' order: left, right, up (-y), down (+y)
+    for (std::size_t i = 0; i < std::size(kMoveActions); ++i) {
+        if (leans[i] > on) {
+            out.emplace_back(kMoveActions[i]);
+        }
+    }
+    return out;
+}
+
+std::set<std::string> Shell::held_actions() const {
+    std::set<std::string> out;
+    for (const auto& [action, slots] : bindings()) {
+        if (action.compare(0, 3, "ui_") == 0) {
+            continue;
+        }
+        for (const std::string& b : slots) {
+            if (!b.empty() && held_.count(b)) {
+                out.insert(action);
+            }
+        }
+    }
+    for (const std::string& a : stick_actions()) {
+        out.insert(a);
+    }
+    return out;
+}
+
+core::analog::Vec2 Shell::move_vector() const {
+    // the held move_* actions from keys and buttons only (the stick comes in as its analog value)
+    const core::Bindings b = bindings();
+    auto held = [this, &b](const char* action) {
+        const auto it = b.find(action);
+        if (it == b.end()) {
+            return 0.0;
+        }
+        for (const std::string& binding : it->second) {
+            if (!binding.empty() && held_.count(binding)) {
+                return 1.0;
+            }
+        }
+        return 0.0;
+    };
+    core::analog::Vec2 dir{held("move_right") - held("move_left"), held("move_down") - held("move_up")};
+    const double len = dir.length();
+    if (len > 0) {
+        dir.x /= len;
+        dir.y /= len;
+    }
+    return core::analog::move_vector(dir, stick());
 }
 
 // drives and tests: as if the key or button of binding was pressed on device
@@ -752,15 +997,15 @@ bool Shell::dispatch(const std::string& action) {
 bool Shell::is_down(const std::string& action) const {
     const core::Bindings b = bindings();
     const auto it = b.find(action);
-    if (it == b.end()) {
-        return false;
-    }
-    for (const std::string& binding : it->second) {
-        if (!binding.empty() && held_.count(binding)) {
-            return true;
+    if (it != b.end()) {
+        for (const std::string& binding : it->second) {
+            if (!binding.empty() && held_.count(binding)) {
+                return true;
+            }
         }
     }
-    return false;
+    const std::vector<std::string> stick = stick_actions();   // the stick holds move_* (#274)
+    return std::find(stick.begin(), stick.end(), action) != stick.end();
 }
 
 void Shell::begin_capture(const std::string& action, std::size_t slot) {
@@ -848,6 +1093,12 @@ bool Shell::screen_action(Screen& s, const std::string& action) {
                 return true;
             }
             return play.action && play.action(action);
+        case ScreenId::Juice:
+            if (action == "pause") {
+                push(ScreenId::Pause);
+                return true;
+            }
+            return juice_ && juice_->action(action);
         case ScreenId::Pause:
             if (action == "pause" || action == "ui_cancel") {
                 pop();
@@ -861,6 +1112,13 @@ bool Shell::screen_action(Screen& s, const std::string& action) {
 // ---- Frame ---------------------------------------------------------------------------------------------------
 void Shell::update(double dt) {
     time_ += dt;
+    poll_pads();
+    if (notice_t_ > 0) {
+        notice_t_ -= dt;
+        if (notice_t_ <= 0) {
+            notice_.clear();
+        }
+    }
     if (drive_) {
         drive_->update();
     }
@@ -904,6 +1162,11 @@ void Shell::update_screen(Screen& s, double dt) {
                 play.update(dt);
             }
             break;
+        case ScreenId::Juice:
+            if (juice_) {
+                juice_->update(dt);
+            }
+            break;
         default:
             break;
     }
@@ -923,7 +1186,59 @@ void Shell::render(SDL_Renderer* renderer) {
         draw_screen(stack_[i]);
     }
     draw_subtitles();
+    draw_notice();
+    if (plant_ && top() && top()->id == ScreenId::MainMenu) {   // --drive pseudo-plant: a label too small for its text
+        draw_->text("plant.too_small", t("menu.settings"), 8, 8, 30, 18);
+    }
     draw_->end_frame();
+    if (bug_requested_) {
+        write_bug_report();   // the frame is drawn, not yet presented: its screenshot is this frame
+    }
+}
+
+void Shell::draw_notice() {
+    if (notice_.empty()) {
+        return;
+    }
+    Draw& d = *draw_;
+    const double w = std::min(static_cast<double>(style::kBaseW) - 16, d.text_width(notice_) + 24);
+    const double h = d.row_h();
+    const double x = (style::kBaseW - w) / 2;
+    d.panel(x, 6, w, h);
+    TextOpts o;
+    o.align = Align::Center;
+    o.color = style::kAccent;
+    d.text("notice", notice_, x + 8, 6, w - 16, h, o);
+}
+
+// F8 (#275): bug_<time>/ in the user-data folder with the frame just drawn, the log tail, the settings and the run's
+// details, for a tester to attach to an issue. Nothing leaves the machine.
+void Shell::write_bug_report() {
+    bug_requested_ = false;
+    const std::time_t now = std::time(nullptr);
+    namespace report = core::report;
+    const std::optional<fs::path> dir = report::free_path(data_dir_, "bug", report::file_stamp(now), "");
+    if (!dir) {
+        LOG_ERROR("bug", "report not saved: too many reports in one second");
+        return;
+    }
+    std::string error;
+    const std::string info = report::bug_info(run_info(), report::utc_iso(now));
+    const bool ok = core::write_file_atomic(*dir / "info.txt", info, &error) &&
+                    core::write_file_atomic(*dir / "log_tail.txt", core::Log::tail(report::kBugLogLines), &error) &&
+                    core::write_file_atomic(*dir / "settings.json", settings_text(settings_) + "\n", &error);
+    if (!ok) {
+        LOG_ERROR("bug", "report not saved: " << error);
+        return;
+    }
+    const std::string path = core::path_to_utf8(*dir);
+    if (!renderer_ || !save_frame(renderer_, core::path_to_utf8(*dir / "screenshot.bmp"))) {
+        LOG_WARN("bug", "the report has no screenshot: " << SDL_GetError());
+    }
+    last_bug_report_ = path;
+    LOG_INFO("bug", "report saved to " << path);
+    std::cout << "BUG_REPORT " << path << "\n" << std::flush;
+    notice(t("toast.bug_saved"));
 }
 
 void Shell::draw_screen(Screen& s) {
@@ -937,6 +1252,11 @@ void Shell::draw_screen(Screen& s) {
         case ScreenId::Pause: draw_pause(s); break;
         case ScreenId::Help: draw_text_page(s, "help.title", help_page_lines(), "help"); break;
         case ScreenId::History: draw_text_page(s, "history.title", history_page_lines(), "history"); break;
+        case ScreenId::Juice:
+            if (juice_) {
+                juice_->draw(*draw_);
+            }
+            break;
     }
 }
 
@@ -1006,6 +1326,7 @@ void Shell::draw_value(const core::Row& row, double x, double y, double w, doubl
             if (focused) {
                 TextOpts arrow;
                 arrow.color = style::kAccent;
+                arrow.raw = true;   // a symbol, not UI copy
                 d.text(lid + ".left", "<", x, y, kArrowW, h, arrow);
                 arrow.align = Align::Right;
                 d.text(lid + ".right", ">", x + w - kArrowW, y, kArrowW, h, arrow);
@@ -1015,11 +1336,15 @@ void Shell::draw_value(const core::Row& row, double x, double y, double w, doubl
             break;
         }
         case core::RowKind::Slider: {
-            const double tw = kSliderTextChars * d.char_w();
+            // the number's room: kSliderTextChars, or more when a language writes it longer (the pseudo drive's
+            // "[100%~]"; the widest percentage keeps the bars of one tab the same length), at most half the row
+            const std::string text = row.value ? row.value() : "";
+            const double widest = std::max(d.text_width(text), d.text_width(t("value.percent", {{"n", "100"}})));
+            const double tw = std::min(w / 2, std::max(kSliderTextChars * d.char_w(), widest));
             const double bw = w - tw;
             d.bar(x, y + (h - 6) / 2, bw - 8, 6, row.fraction ? row.fraction() : 0.0);
             o.align = Align::Right;
-            d.text(lid + ".value", row.value(), x + bw, y, tw, h, o);
+            d.text(lid + ".value", text, x + bw, y, tw, h, o);
             break;
         }
         case core::RowKind::Binding: {
@@ -1039,6 +1364,7 @@ void Shell::draw_value(const core::Row& row, double x, double y, double w, doubl
                     d.rect(cx, y + 2, cw, h - 4, style::kFocus);
                 }
                 o.align = Align::Center;
+                o.raw = !binding.empty();   // a key or button name; "None" is UI copy
                 d.text(lid + ".slot" + std::to_string(slot), text, cx + 4, y, cw - 8, h, o);
             }
             break;
@@ -1115,11 +1441,22 @@ void Shell::draw_main_menu(Screen& s) {
     }
     w = std::min(w, W - 16);
     draw_list(list, (W - w) / 2, 40 + d.line_h(mult) + 30, w, 0, style::kBaseH - 40 - d.line_h(mult) - 30 - 40, "menu", true);
-    const auto [gname, label] = prompt("ui_accept");
     TextOpts hint;
     hint.color = style::kDim;
-    const std::string text = label + "  " + t("hint.select");
-    d.text("menu.hint", text, 16, style::kBaseH - d.line_h() - 10, W - 32, d.line_h(), hint);
+    draw_hint("menu.hint", "ui_accept", "hint.select", 16, style::kBaseH - d.line_h() - 10, W - 32, hint);
+}
+
+// A prompt and what it does: the key's name (raw: not UI copy), two spaces, then the hint text through t()
+void Shell::draw_hint(const std::string& id, const std::string& action, const std::string& hint_key, double x, double y,
+                      double w, TextOpts o) {
+    Draw& d = *draw_;
+    const std::string key = prompt(action).second;
+    const double kw = std::min(w, d.text_width(key));
+    TextOpts k = o;
+    k.raw = true;
+    d.text(id + ".key", key, x, y, kw + 1, d.line_h(), k);
+    const double gap = 2 * d.char_w();
+    d.text(id, t(hint_key), x + kw + gap, y, std::max(1.0, w - kw - gap), d.line_h(), o);
 }
 
 void Shell::draw_settings() {
@@ -1241,6 +1578,7 @@ void Shell::draw_credits(const Screen& s) {
         if (y >= kAreaY && y + lh <= kAreaY + kAreaH) {
             TextOpts o;
             o.align = Align::Center;
+            o.raw = i + 1 != rows.size();   // CREDITS.md is content, not UI copy; the engine line is
             d.text("credits.line" + std::to_string(i), rows[i], kAreaX, y, kAreaW, lh, o);
         } else {
             // half scrolled out: drawn, not a layout problem (an empty id keeps it out of the record)
@@ -1273,10 +1611,9 @@ void Shell::draw_play() {
         play.draw(d);
     }
     // the HUD hint, outlined: it sits over the game
-    const auto [gname, label] = prompt("pause");
     TextOpts hint;
     hint.outline = true;
-    d.text("play.hint", label + "  " + t("hint.pause"), 12, 8, style::kBaseW - 24, d.line_h(), hint);
+    draw_hint("play.hint", "pause", "hint.pause", 12, 8, style::kBaseW - 24, hint);
 }
 
 void Shell::draw_pause(Screen& s) {
@@ -1374,7 +1711,8 @@ void Shell::draw_subtitles() {
                           : size == "xl" ? style::kSubtitleMult[3] : style::kSubtitleMult[1];
         const double inner = kSubtitleW - kSubtitlePad * 2;
         const std::size_t fit = static_cast<std::size_t>(std::max(1, d.chars_fit(inner, mult)));
-        const auto lines = core::wrap_chars(cur->text, fit);
+        const std::string said = line_text(*cur);
+        const auto lines = core::wrap_chars(said, fit);
         const double lh = d.line_h(mult);
         const bool names = access_flag("speaker_names") && !cur->name.empty();
         const double h = static_cast<double>(lines.size()) * lh + (names ? lh : 0) + kSubtitlePad * 2;
@@ -1394,7 +1732,7 @@ void Shell::draw_subtitles() {
             ty += lh;
         }
         o.wrap = true;
-        d.text("subtitle.text", cur->text, x + kSubtitlePad, ty, inner, static_cast<double>(lines.size()) * lh, o);
+        d.text("subtitle.text", said, x + kSubtitlePad, ty, inner, static_cast<double>(lines.size()) * lh, o);
         bottom = y - 4;
     }
     for (const auto& [id, c] : captions_) {

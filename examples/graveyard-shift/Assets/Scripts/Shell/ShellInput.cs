@@ -8,25 +8,59 @@
 //           ShellInput.Begin(Time.unscaledDeltaTime);     // once a frame, first (FrontEnd does it)
 //           if (ShellInput.JustPressed("ui_accept")) ...
 //           string b = ShellInput.CaptureBinding(slot);   // "key:k", "mouse:left", "pad:south"; null = nothing yet
-// Notes   : Polling uses Unity's Input Manager (the default of a project made with -createProject, Active Input
-//           Handling "Input Manager (Old)" or "Both"). With only the Input System package active (ENABLE_INPUT_SYSTEM
-//           alone) nothing polls: FrontEnd then feeds the keyboard from UI Toolkit's KeyDownEvent and the gamepad from
-//           its navigation events (fixed: d-pad or stick moves, south submits, east cancels), so custom pad bindings
-//           and pad capture need the Input Manager (verify: only the Input Manager path was run). Gamepad buttons
-//           follow the Windows XInput order (PAD_BUTTONS: 0 south ... 9 r3); the d-pad and sticks read the Input
-//           Manager's default "Horizontal" and "Vertical" axes, so a stick also moves the menus and pad:dpad_* fires
-//           from it; l2 and r2 (triggers) are axes without default entries and never fire (add axes 9 and 10 in
-//           Project Settings > Input Manager to use them, verify). The arrow keys share the default axes with the
-//           stick, so the device is "keyboard" whenever a key was down this frame.
+//           ShellInput.Backend                            // "input_system", "input_manager" or "ui_events"
+//           Vector2 move = ShellInput.MoveVector();       // analog (#274): held move_* keys plus the shaped stick, length <= 1
+//           ShellInput.Stick / LeftTrigger / RightTrigger // the left stick (deadzone, invert_y) and triggers 0..1
+//           if (ShellInput.IsGameHeld("attack")) ...      // held game actions (no ui_*), the stick's move_* included
+// Notes   : Three backends, picked at compile time (#266):
+//           - "input_system": the Input System package is installed (Game.Shell.asmdef's versionDefines set
+//             GAMEKIT_INPUT_SYSTEM) and active (Player Settings > Active Input Handling "Input System Package (New)"
+//             or "Both": ENABLE_INPUT_SYSTEM). Reads Keyboard.current, Mouse.current and Gamepad.current by control
+//             (buttonSouth, leftTrigger, dpad...), so every binding name and pad capture work on any pad the Input
+//             System knows. Preferred when both handlers are on.
+//           - "input_manager": the old Input Manager (a -createProject default). Gamepad buttons follow the Windows
+//             XInput order (PAD_BUTTONS: 0 south ... 9 r3); the left stick and the keyboard arrows read the default
+//             "Horizontal"/"Vertical" axes; the d-pad and the triggers read the axes GameKitScenes.AddInputAxes adds
+//             (GameKit DPad X/Y = joystick axes 6 and 7, GameKit L2/R2 = axes 9 and 10, the Windows XInput layout,
+//             verify on other platforms). A missing axis reads as released.
+//           - "ui_events": the Input System is active but its package is missing (nothing to poll): FrontEnd feeds
+//             the keyboard from UI Toolkit's KeyDownEvent and the pad from its navigation events (fixed: d-pad or
+//             stick moves, south submits, east cancels); custom pad bindings are not read. Install the package.
+//           The package is never a hard dependency: the asmdef references Unity.InputSystem by name (ignored when the
+//           package is absent) and the code that names its types compiles only under GAMEKIT_INPUT_SYSTEM.
+//           Triggers (pad:l2, pad:r2) are axes on both polling backends: pressed past AXIS_PRESS.
+//           Analog (#274, Bevy's Intent rules, Core/Analog.cs): the raw left stick and triggers are read on both
+//           polling backends (the Input System's unprocessed values, so only the player's deadzone applies; on the
+//           Input Manager the GameKit Left X/Y and L2/R2 axes AddInputAxes adds) and shaped with input.deadzone and
+//           input.invert_y (Shell calls ConfigureAnalog). The ui_events backend has no analog values. Drives and
+//           tests can hold a stick and triggers with InjectAnalog (replaces the device until cleared).
+//           Scripted (#276): while a smoke drive runs nothing real is read, only what the drive injects.
 //
 // Pseudocode (Begin):
-//   pressed = injected ; for each action: held = any binding held ; new hold -> pressed, else repeat timer
-//   (ui_* always repeats while held, game actions only with auto_repeat) ; device = key > mouse > pad of what fired
+//   held = the backend's snapshot of every binding held now (key:*, mouse:*, pad:*, pad_axis:*; none while Scripted)
+//   + the injected keys ; down = held - last
+//   pressed = injected ; for each action: held = any binding held ; new hold or a binding down -> pressed, else
+//   repeat timer (ui_* always repeats while held, game actions only with auto_repeat) ; device = key > mouse > pad
+//   of what went down ; raw stick and triggers (or the injected ones) -> Analog.Stick / Trigger / StickActions
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the Input System backend, triggers and the d-pad as
+//           axes, held-set snapshots with edges, capture skips the press that started it (#266)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): analog stick, triggers and held game actions (#274);
+//           single keys for the bug-report key (KeyDown, InjectKey)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): Scripted, no real device while a drive runs (#276)
 // ---------------------------------------------------------------------------
+#if GAMEKIT_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
+#define SHELL_INPUT_SYSTEM
+#elif ENABLE_LEGACY_INPUT_MANAGER
+#define SHELL_INPUT_MANAGER
+#endif
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+#if SHELL_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
+#endif
 using graveyard_shift.Core;
 
 namespace graveyard_shift.Shell
@@ -34,21 +68,27 @@ namespace graveyard_shift.Shell
     public static class ShellInput
     {
         // ---- Tunables ------------------------------------------------------------
-        public const float AXIS_PRESS = 0.5f;        // a stick or d-pad axis past this counts as pressed
+        public const float AXIS_PRESS = 0.5f;        // a stick, d-pad or trigger axis past this counts as pressed
         public const float REPEAT_DELAY_S = 0.4f;    // a held action repeats after this
         public const float REPEAT_RATE_S = 0.1f;     // and then this often
-        public const int PAD_BUTTON_COUNT = 20;      // KeyCode.JoystickButton0 .. 19
+        public const int PAD_BUTTON_COUNT = 20;      // KeyCode.JoystickButton0 .. 19 (Input Manager)
+        // Input Manager axes GameKitScenes.AddInputAxes adds (joystick axis numbers of the Windows XInput layout)
+        public const string AXIS_DPAD_X = "GameKit DPad X";
+        public const string AXIS_DPAD_Y = "GameKit DPad Y";
+        public const string AXIS_L2 = "GameKit L2";
+        public const string AXIS_R2 = "GameKit R2";
+        public const string AXIS_LEFT_X = "GameKit Left X";    // the left stick, unsmoothed, no dead zone (Analog applies the player's)
+        public const string AXIS_LEFT_Y = "GameKit Left Y";    // inverted in the Input Manager, so up is +
         public static readonly string[] PAD_PLAYSTATION = { "playstation", "dualshock", "dualsense", "sony", "ps3", "ps4", "ps5" };
         public static readonly string[] PAD_XBOX = { "xbox", "xinput" };
         // Windows XInput button order (Unity's Input Manager numbers them this way on Windows; other platforms differ)
         public static readonly string[] PAD_BUTTONS = { "south", "east", "west", "north", "l1", "r1", "select", "start", "l3", "r3" };
-        private static readonly Dictionary<string, (string axis, float sign)> PAD_AXES = new Dictionary<string, (string, float)>
-        {
-            { "dpad_left", ("Horizontal", -1f) }, { "dpad_right", ("Horizontal", 1f) },
-            { "dpad_up", ("Vertical", 1f) }, { "dpad_down", ("Vertical", -1f) },
-            { "leftx-", ("Horizontal", -1f) }, { "leftx+", ("Horizontal", 1f) },
-            { "lefty-", ("Vertical", 1f) }, { "lefty+", ("Vertical", -1f) },
+        // What a pad capture can return, in the order it looks (buttons first, then triggers, then the d-pad)
+        private static readonly string[] PAD_CAPTURE = {
+            "south", "east", "west", "north", "l1", "r1", "select", "start", "l3", "r3", "l2", "r2",
+            "dpad_left", "dpad_right", "dpad_up", "dpad_down",
         };
+        private static readonly string[] STICK_NAMES = { "leftx-", "leftx+", "lefty-", "lefty+", "rightx-", "rightx+", "righty-", "righty+" };
         private static readonly Dictionary<KeyCode, string> KEY_NAMES = new Dictionary<KeyCode, string>
         {
             { KeyCode.Space, "space" }, { KeyCode.Return, "enter" }, { KeyCode.KeypadEnter, "enter" }, { KeyCode.Escape, "escape" },
@@ -65,8 +105,28 @@ namespace graveyard_shift.Shell
             { "pageup", "Page Up" }, { "pagedown", "Page Down" },
         };
 
+#if SHELL_INPUT_SYSTEM
+        public const string Backend = "input_system";
+#elif SHELL_INPUT_MANAGER
+        public const string Backend = "input_manager";
+#else
+        public const string Backend = "ui_events";
+#endif
+        /// <summary>True when ShellInput reads the devices itself; false when FrontEnd feeds it UI Toolkit events.</summary>
+        public static bool Polls => Backend != "ui_events";
+
         public static string LastDevice { get; private set; } = "keyboard";
         public static event Action<string> DeviceChanged;
+
+        /// <summary>A smoke drive runs (FrontEnd sets it with the drive, #276): the real keyboard, mouse and pads are
+        /// not read, and FrontEnd drops the UI Toolkit key and navigation events, so a stray key or a virtual pad on a
+        /// shared machine cannot open screens the tour does not expect. Inject, InjectKey and InjectAnalog still
+        /// count: only the drive presses.</summary>
+        public static bool Scripted { get; set; }
+
+        /// <summary>Tests: stands in for the hardware read (the backend's snapshot of every binding held now). Null
+        /// reads the real devices.</summary>
+        public static Action<HashSet<string>> DeviceSnapshot { get; set; }
 
         private static Dictionary<string, List<string>> _bindings = new Dictionary<string, List<string>>();
         private static bool _autoRepeat;
@@ -75,9 +135,24 @@ namespace graveyard_shift.Shell
         private static readonly Dictionary<string, float> _heldFor = new Dictionary<string, float>();
         private static readonly Dictionary<string, float> _nextRepeat = new Dictionary<string, float>();
         private static readonly List<(string action, string device)> _injected = new List<(string, string)>();
-        private static readonly Dictionary<string, bool> _axisWas = new Dictionary<string, bool>();
+        private static HashSet<string> _heldNow = new HashSet<string>();       // bindings held at this Begin
+        private static HashSet<string> _heldLast = new HashSet<string>();      // and at the one before
+        private static readonly HashSet<string> _downNow = new HashSet<string>();   // held now, not last time
+        private static int _begins;                  // Begin() calls so far
+        private static int _captureSeen = -2;        // the Begin count of the last CaptureBinding call
         private static KeyCode[] _keyboardKeys;
         private static Dictionary<string, KeyCode> _keyByName;
+        private static readonly List<string> _injectedKeys = new List<string>();   // bindings held for one Begin (InjectKey)
+        // analog (#274): the raw pad values of this Begin, the player's shaping, and what a drive or test holds
+        private static Vector2 _rawStick;
+        private static float _rawL2, _rawR2;
+        private static double _deadzone = 0.2;
+        private static bool _invertY;
+        private static (Vector2 stick, float l2, float r2)? _analogHeld;
+        private static readonly SortedSet<string> _gameHeld = new SortedSet<string>(StringComparer.Ordinal);
+#if SHELL_INPUT_MANAGER
+        private static readonly HashSet<string> _missingAxes = new HashSet<string>();
+#endif
 
         /// <summary>The bindings to read (the settings' "input.bindings" tree) and whether held game actions repeat.</summary>
         public static void Configure(Dictionary<string, object> bindings, bool autoRepeat)
@@ -96,12 +171,39 @@ namespace graveyard_shift.Shell
         /// <summary>Once a frame, before any read: polls the devices and works out presses and repeats.</summary>
         public static void Begin(float dt)
         {
+            _begins++;
             _pressed.Clear();
-            string device = null;
+            (_heldLast, _heldNow) = (_heldNow, _heldLast);
+            _heldNow.Clear();
+            _rawStick = Vector2.zero;
+            _rawL2 = _rawR2 = 0f;
+            // a drive's run reads no real device: nothing held, the stick and triggers at rest (#276)
+            if (!Scripted && DeviceSnapshot != null)
+            {
+                DeviceSnapshot(_heldNow);
+            }
+            else if (!Scripted)
+            {
+                Snapshot(_heldNow);
+            }
+            foreach (string key in _injectedKeys)
+            {
+                _heldNow.Add(key);
+            }
+            _injectedKeys.Clear();
+            _downNow.Clear();
             bool keyDown = false, padDown = false, mouseDown = false;
-#if ENABLE_LEGACY_INPUT_MANAGER
-            keyDown = AnyKeyboardKeyDown();
-#endif
+            foreach (string b in _heldNow)
+            {
+                if (!_heldLast.Contains(b))
+                {
+                    _downNow.Add(b);
+                    string kind = KindOf(b);
+                    keyDown |= kind == "key";
+                    mouseDown |= kind == "mouse";
+                    padDown |= kind == "pad" || kind == "pad_axis";
+                }
+            }
             foreach (KeyValuePair<string, List<string>> entry in _bindings)
             {
                 string action = entry.Key;
@@ -112,15 +214,9 @@ namespace graveyard_shift.Shell
                     {
                         continue;
                     }
-                    bool h = BindingHeld(binding);
-                    held |= h;
-                    if (h && BindingDown(binding))
-                    {
-                        down = true;
-                        string kind = KindOf(binding);
-                        mouseDown |= kind == "mouse";
-                        padDown |= kind == "pad" || kind == "pad_axis";
-                    }
+                    string b = Canonical(binding);
+                    held |= _heldNow.Contains(b);
+                    down |= _downNow.Contains(b);
                 }
                 bool wasHeld = _held.Contains(action);
                 if (held && (!wasHeld || down))
@@ -148,18 +244,7 @@ namespace graveyard_shift.Shell
                     _held.Remove(action);
                 }
             }
-            if (keyDown)
-            {
-                device = "keyboard";
-            }
-            else if (mouseDown)
-            {
-                device = "mouse";
-            }
-            else if (padDown)
-            {
-                device = PadDevice();
-            }
+            string device = keyDown ? "keyboard" : mouseDown ? "mouse" : padDown ? PadDevice() : null;
             foreach ((string action, string dev) in _injected)
             {
                 _pressed.Add(action);
@@ -174,6 +259,109 @@ namespace graveyard_shift.Shell
                 LastDevice = device;
                 DeviceChanged?.Invoke(device);
             }
+            ShapeAnalog();
+        }
+
+        // ---- analog (#274) -----------------------------------------------------------------
+
+        /// <summary>The player's stick shaping: input.deadzone (radial, rescaled) and input.invert_y.</summary>
+        public static void ConfigureAnalog(double deadzone, bool invertY)
+        {
+            _deadzone = deadzone;
+            _invertY = invertY;
+        }
+
+        /// <summary>The left stick for gameplay, input.deadzone and input.invert_y applied: each axis -1..1, up is +y,
+        /// length 0..1. Zero without a pad (and on the ui_events backend).</summary>
+        public static Vector2 Stick { get; private set; }
+
+        /// <summary>The left stick as the device reports it this frame (or as InjectAnalog holds it), up is +y.</summary>
+        public static Vector2 RawStick => _analogHeld.HasValue ? _analogHeld.Value.stick : _rawStick;
+
+        /// <summary>The triggers, 0 at rest to 1 fully in (Analog.TRIGGER_DEADZONE applied): gas and brake.</summary>
+        public static float LeftTrigger { get; private set; }
+        public static float RightTrigger { get; private set; }
+
+        /// <summary>True when this backend can read the stick and the triggers as values (on the Input Manager: the
+        /// axes GameKitScenes.AddInputAxes adds exist).</summary>
+        public static bool AnalogReadable
+        {
+            get
+            {
+#if SHELL_INPUT_MANAGER
+                return AxisExists(AXIS_LEFT_X) && AxisExists(AXIS_LEFT_Y) && AxisExists(AXIS_L2) && AxisExists(AXIS_R2);
+#else
+                return Polls;
+#endif
+            }
+        }
+
+        /// <summary>Game actions held right now (no ui_*): their bindings, plus the move_* actions the stick leans
+        /// past the deadzone (invert_y honoured). Sorted.</summary>
+        public static IReadOnlyCollection<string> HeldGameActions => _gameHeld;
+
+        /// <summary>Is this game action held, by a binding or (move_*) by the stick?</summary>
+        public static bool IsGameHeld(string action)
+        {
+            return _gameHeld.Contains(action);
+        }
+
+        /// <summary>The direction the player asks for: the held move_* bindings (unit length) plus the shaped stick,
+        /// clamped to length 1. Up is +y.</summary>
+        public static Vector2 MoveVector()
+        {
+            (double x, double y) = Analog.MoveVector(_held.Contains("move_left"), _held.Contains("move_right"),
+                                                     _held.Contains("move_up"), _held.Contains("move_down"), Stick.x, Stick.y);
+            return new Vector2((float)x, (float)y);
+        }
+
+        /// <summary>Holds the stick and triggers at these raw values from the next Begin until ClearAnalog (drives,
+        /// tests); the device is not read meanwhile.</summary>
+        public static void InjectAnalog(Vector2 stick, float leftTrigger, float rightTrigger)
+        {
+            _analogHeld = (stick, leftTrigger, rightTrigger);
+        }
+
+        public static void ClearAnalog()
+        {
+            _analogHeld = null;
+        }
+
+        private static void ShapeAnalog()
+        {
+            Vector2 raw = RawStick;
+            float l2 = _analogHeld.HasValue ? _analogHeld.Value.l2 : _rawL2;
+            float r2 = _analogHeld.HasValue ? _analogHeld.Value.r2 : _rawR2;
+            (double sx, double sy) = Analog.Stick(raw.x, raw.y, _deadzone, _invertY);
+            Stick = new Vector2((float)sx, (float)sy);
+            LeftTrigger = (float)Analog.Trigger(l2, Analog.TRIGGER_DEADZONE);
+            RightTrigger = (float)Analog.Trigger(r2, Analog.TRIGGER_DEADZONE);
+            _gameHeld.Clear();
+            foreach (string action in _held)
+            {
+                if (!action.StartsWith("ui_", StringComparison.Ordinal))
+                {
+                    _gameHeld.Add(action);
+                }
+            }
+            foreach (string action in Analog.StickActions(raw.x, raw.y, _deadzone, _invertY))
+            {
+                _gameHeld.Add(action);
+            }
+        }
+
+        // ---- single keys (the bug-report key) ------------------------------------------------
+
+        /// <summary>True when this key (a binding name: "f8") went down at this frame's Begin, bound or not.</summary>
+        public static bool KeyDown(string name)
+        {
+            return _downNow.Contains("key:" + name);
+        }
+
+        /// <summary>Holds a key ("key:f8") for the next Begin only, as a tap of a real key would (drives).</summary>
+        public static void InjectKey(string binding)
+        {
+            _injectedKeys.Add(binding);
         }
 
         public static bool JustPressed(string action)
@@ -203,39 +391,82 @@ namespace graveyard_shift.Shell
             return _bindings.TryGetValue(action, out List<string> b) && b.Exists(s => KindOf(s) == "pad" || KindOf(s) == "pad_axis");
         }
 
-        /// <summary>Rebinding: the key or mouse button (slot 0) or pad button (slot 1) pressed this frame, else null.</summary>
+        /// <summary>Whether this backend can read a binding at all (a name it knows; on the Input Manager, its axis
+        /// exists). The same binding can still be unpressable when no such device is connected.</summary>
+        public static bool CanRead(string binding)
+        {
+            if (string.IsNullOrEmpty(binding))
+            {
+                return false;
+            }
+            string kind = KindOf(binding), name = NameOf(binding);
+            switch (Canonical(binding) == binding ? kind : "pad_axis")
+            {
+                case "key":
+                    return ParseKey(name) != KeyCode.None;
+                case "mouse":
+                    return name == "left" || name == "right" || name == "middle";
+                case "pad_axis":
+#if SHELL_INPUT_MANAGER
+                    return name.StartsWith("left", StringComparison.Ordinal) && Array.IndexOf(STICK_NAMES, name) >= 0;
+#else
+                    return Polls && Array.IndexOf(STICK_NAMES, name) >= 0;
+#endif
+                case "pad":
+#if SHELL_INPUT_MANAGER
+                    if (name == "l2") return AxisExists(AXIS_L2);
+                    if (name == "r2") return AxisExists(AXIS_R2);
+                    return Array.IndexOf(PAD_CAPTURE, name) >= 0
+                           || (name.StartsWith("button", StringComparison.Ordinal) && int.TryParse(name.Substring(6), out int n) && n < PAD_BUTTON_COUNT);
+#else
+                    return Polls && Array.IndexOf(PAD_CAPTURE, name) >= 0;
+#endif
+            }
+            return false;
+        }
+
+        /// <summary>Rebinding: the key or mouse button (slot 0) or pad button, trigger or d-pad direction (slot 1)
+        /// that went down at this frame's Begin, else null. The first call of a capture returns null, so the press
+        /// that opened the capture (ui_accept on the binding row) is never taken as the new binding.</summary>
         public static string CaptureBinding(int slot)
         {
-#if ENABLE_LEGACY_INPUT_MANAGER
-            if (slot == Bindings.KEYBOARD_SLOT)
+            bool continuing = _captureSeen == _begins || _captureSeen == _begins - 1;
+            _captureSeen = _begins;
+            if (!continuing)
             {
-                foreach (KeyCode key in KeyboardKeys())
-                {
-                    if (Input.GetKeyDown(key))
-                    {
-                        return "key:" + KeyName(key);
-                    }
-                }
-                if (Input.GetMouseButtonDown(0)) return "mouse:left";
-                if (Input.GetMouseButtonDown(1)) return "mouse:right";
-                if (Input.GetMouseButtonDown(2)) return "mouse:middle";
                 return null;
             }
-            for (int i = 0; i < PAD_BUTTON_COUNT; i++)
+            if (slot == Bindings.KEYBOARD_SLOT)
             {
-                if (Input.GetKeyDown(KeyCode.JoystickButton0 + i))
+                string mouse = null;
+                foreach (string b in _downNow)
                 {
-                    return "pad:" + (i < PAD_BUTTONS.Length ? PAD_BUTTONS[i] : "button" + i);
+                    string kind = KindOf(b);
+                    if (kind == "key")
+                    {
+                        return b;
+                    }
+                    if (kind == "mouse" && mouse == null)
+                    {
+                        mouse = b;
+                    }
                 }
+                return mouse;
             }
-            foreach (string name in new[] { "dpad_left", "dpad_right", "dpad_up", "dpad_down" })
+            foreach (string name in PAD_CAPTURE)
             {
-                if (AxisDown(name))
+                if (_downNow.Contains("pad:" + name))
                 {
                     return "pad:" + name;
                 }
             }
-#endif
+            foreach (string b in _downNow)
+            {
+                if (b.StartsWith("pad:button", StringComparison.Ordinal))
+                {
+                    return b;
+                }
+            }
             return null;
         }
 
@@ -336,97 +567,15 @@ namespace graveyard_shift.Shell
             return string.Join(" ", words);
         }
 
-        private static bool BindingHeld(string binding)
+        // The form a snapshot holds a binding in: pad:leftx- (a stick named as a pad binding) is pad_axis:leftx-
+        private static string Canonical(string binding)
         {
-#if ENABLE_LEGACY_INPUT_MANAGER
-            string kind = KindOf(binding), name = NameOf(binding);
-            switch (kind)
+            if (binding.StartsWith("pad:", StringComparison.Ordinal) && Array.IndexOf(STICK_NAMES, NameOf(binding)) >= 0)
             {
-                case "key":
-                    KeyCode key = ParseKey(name);
-                    return key != KeyCode.None && Input.GetKey(key);
-                case "mouse":
-                    int button = name == "left" ? 0 : name == "right" ? 1 : name == "middle" ? 2 : -1;
-                    return button >= 0 && Input.GetMouseButton(button);
-                case "pad":
-                    int idx = Array.IndexOf(PAD_BUTTONS, name);
-                    if (idx >= 0)
-                    {
-                        return Input.GetKey(KeyCode.JoystickButton0 + idx);
-                    }
-                    return PAD_AXES.ContainsKey(name) && AxisHeld(name);
-                case "pad_axis":
-                    return PAD_AXES.ContainsKey(name) && AxisHeld(name);
+                return "pad_axis:" + NameOf(binding);
             }
-#endif
-            return false;
+            return binding;
         }
-
-        private static bool BindingDown(string binding)
-        {
-#if ENABLE_LEGACY_INPUT_MANAGER
-            string kind = KindOf(binding), name = NameOf(binding);
-            switch (kind)
-            {
-                case "key":
-                    KeyCode key = ParseKey(name);
-                    return key != KeyCode.None && Input.GetKeyDown(key);
-                case "mouse":
-                    int button = name == "left" ? 0 : name == "right" ? 1 : name == "middle" ? 2 : -1;
-                    return button >= 0 && Input.GetMouseButtonDown(button);
-                case "pad":
-                    int idx = Array.IndexOf(PAD_BUTTONS, name);
-                    if (idx >= 0)
-                    {
-                        return Input.GetKeyDown(KeyCode.JoystickButton0 + idx);
-                    }
-                    return PAD_AXES.ContainsKey(name) && AxisDown(name);
-                case "pad_axis":
-                    return PAD_AXES.ContainsKey(name) && AxisDown(name);
-            }
-#endif
-            return false;
-        }
-
-#if ENABLE_LEGACY_INPUT_MANAGER
-        private static bool AxisHeld(string name)
-        {
-            (string axis, float sign) = PAD_AXES[name];
-            try
-            {
-                return Input.GetAxisRaw(axis) * sign >= AXIS_PRESS;
-            }
-            catch (ArgumentException)
-            {
-                return false;                  // the project removed the default axis
-            }
-        }
-
-        // An axis edge: held now and not at the last Begin (per direction name)
-        private static bool AxisDown(string name)
-        {
-            bool now = AxisHeld(name);
-            bool was = _axisWas.TryGetValue(name, out bool w) && w;
-            _axisWas[name] = now;
-            return now && !was;
-        }
-
-        private static bool AnyKeyboardKeyDown()
-        {
-            if (!Input.anyKeyDown)
-            {
-                return false;
-            }
-            foreach (KeyCode key in KeyboardKeys())
-            {
-                if (Input.GetKeyDown(key))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-#endif
 
         private static KeyCode[] KeyboardKeys()
         {
@@ -445,20 +594,195 @@ namespace graveyard_shift.Shell
             return _keyboardKeys;
         }
 
+        // Adds the directions an x/y pair (stick or d-pad) points past AXIS_PRESS; y is up-positive
+        private static void AddDirections(HashSet<string> held, string prefix, string stick, float x, float y)
+        {
+            if (x <= -AXIS_PRESS) held.Add(prefix + (stick != null ? stick + "x-" : "dpad_left"));
+            if (x >= AXIS_PRESS) held.Add(prefix + (stick != null ? stick + "x+" : "dpad_right"));
+            if (y >= AXIS_PRESS) held.Add(prefix + (stick != null ? stick + "y-" : "dpad_up"));
+            if (y <= -AXIS_PRESS) held.Add(prefix + (stick != null ? stick + "y+" : "dpad_down"));
+        }
+
+#if SHELL_INPUT_SYSTEM
+        // ---- backend: the Input System package ----------------------------------------------
+
+        private static void Snapshot(HashSet<string> held)
+        {
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard != null && keyboard.anyKey.isPressed)
+            {
+                foreach (KeyControl k in keyboard.allKeys)
+                {
+                    if (k != null && k.isPressed)
+                    {
+                        string name = InputSystemKeyName(k.keyCode);
+                        if (name != null)
+                        {
+                            held.Add("key:" + name);
+                        }
+                    }
+                }
+            }
+            Mouse mouse = Mouse.current;
+            if (mouse != null)
+            {
+                if (mouse.leftButton.isPressed) held.Add("mouse:left");
+                if (mouse.rightButton.isPressed) held.Add("mouse:right");
+                if (mouse.middleButton.isPressed) held.Add("mouse:middle");
+            }
+            Gamepad pad = Gamepad.current;
+            if (pad == null)
+            {
+                return;
+            }
+            if (pad.buttonSouth.isPressed) held.Add("pad:south");
+            if (pad.buttonEast.isPressed) held.Add("pad:east");
+            if (pad.buttonWest.isPressed) held.Add("pad:west");
+            if (pad.buttonNorth.isPressed) held.Add("pad:north");
+            if (pad.leftShoulder.isPressed) held.Add("pad:l1");
+            if (pad.rightShoulder.isPressed) held.Add("pad:r1");
+            if (pad.selectButton.isPressed) held.Add("pad:select");
+            if (pad.startButton.isPressed) held.Add("pad:start");
+            if (pad.leftStickButton.isPressed) held.Add("pad:l3");
+            if (pad.rightStickButton.isPressed) held.Add("pad:r3");
+            if (pad.leftTrigger.ReadValue() >= AXIS_PRESS) held.Add("pad:l2");      // triggers are axes
+            if (pad.rightTrigger.ReadValue() >= AXIS_PRESS) held.Add("pad:r2");
+            Vector2 dpad = pad.dpad.ReadValue();
+            Vector2 left = pad.leftStick.ReadValue();
+            Vector2 right = pad.rightStick.ReadValue();
+            // analog (#274): unprocessed, so the Input System's own stick deadzone does not stack on the player's
+            _rawStick = pad.leftStick.ReadUnprocessedValue();
+            _rawL2 = pad.leftTrigger.ReadUnprocessedValue();
+            _rawR2 = pad.rightTrigger.ReadUnprocessedValue();
+            AddDirections(held, "pad:", null, dpad.x, dpad.y);
+            AddDirections(held, "pad:", null, left.x, left.y);       // the left stick moves the menus too
+            AddDirections(held, "pad_axis:", "left", left.x, left.y);
+            AddDirections(held, "pad_axis:", "right", right.x, right.y);
+        }
+
+        // The binding name of an Input System key, the same name KeyName gives the Input Manager's KeyCode
+        private static string InputSystemKeyName(Key key)
+        {
+            switch (key)
+            {
+                case Key.None: return null;
+                case Key.Enter: case Key.NumpadEnter: return "enter";
+                case Key.Escape: return "escape";
+                case Key.Space: return "space";
+                case Key.UpArrow: return "up";
+                case Key.DownArrow: return "down";
+                case Key.LeftArrow: return "left";
+                case Key.RightArrow: return "right";
+                case Key.LeftShift: case Key.RightShift: return "shift";
+                case Key.LeftCtrl: case Key.RightCtrl: return "ctrl";
+                case Key.LeftAlt: case Key.RightAlt: return "alt";
+            }
+            if (key >= Key.Digit1 && key <= Key.Digit9)
+            {
+                return ((char)('1' + (key - Key.Digit1))).ToString();
+            }
+            if (key == Key.Digit0)
+            {
+                return "0";
+            }
+            string name = key.ToString().ToLowerInvariant();
+            return name.StartsWith("numpad", StringComparison.Ordinal) ? "keypad" + name.Substring(6) : name;
+        }
+
         private static string PadDevice()
         {
-#if ENABLE_LEGACY_INPUT_MANAGER
+            Gamepad pad = Gamepad.current;
+            string words = pad == null ? "" : $"{pad.layout} {pad.description.manufacturer} {pad.description.product} {pad.displayName}".ToLowerInvariant();
+            return PadBrand(words);
+        }
+#elif SHELL_INPUT_MANAGER
+        // ---- backend: the Input Manager --------------------------------------------------------
+
+        private static void Snapshot(HashSet<string> held)
+        {
+            if (Input.anyKey)          // the keyboard scan (about 150 keys) only when something is down
+            {
+                foreach (KeyCode key in KeyboardKeys())
+                {
+                    if (Input.GetKey(key))
+                    {
+                        held.Add("key:" + KeyName(key));
+                    }
+                }
+            }
+            if (Input.GetMouseButton(0)) held.Add("mouse:left");
+            if (Input.GetMouseButton(1)) held.Add("mouse:right");
+            if (Input.GetMouseButton(2)) held.Add("mouse:middle");
+            for (int i = 0; i < PAD_BUTTON_COUNT; i++)
+            {
+                if (Input.GetKey(KeyCode.JoystickButton0 + i))
+                {
+                    held.Add("pad:" + (i < PAD_BUTTONS.Length ? PAD_BUTTONS[i] : "button" + i));
+                }
+            }
+            _rawL2 = Axis(AXIS_L2);
+            _rawR2 = Axis(AXIS_R2);
+            _rawStick = new Vector2(Axis(AXIS_LEFT_X), Axis(AXIS_LEFT_Y));        // analog (#274); 0 when the axes are missing
+            if (_rawL2 >= AXIS_PRESS) held.Add("pad:l2");                          // triggers are axes
+            if (_rawR2 >= AXIS_PRESS) held.Add("pad:r2");
+            float h = Axis("Horizontal"), v = Axis("Vertical");
+            AddDirections(held, "pad:", null, Axis(AXIS_DPAD_X), Axis(AXIS_DPAD_Y));
+            AddDirections(held, "pad:", null, h, v);           // the stick (and the arrow keys) move the menus too
+            AddDirections(held, "pad_axis:", "left", h, v);
+        }
+
+        // An Input Manager axis, 0 when the project does not have it (looked up once, then remembered as missing)
+        private static float Axis(string name)
+        {
+            if (_missingAxes.Contains(name))
+            {
+                return 0f;
+            }
+            try
+            {
+                return Input.GetAxisRaw(name);
+            }
+            catch (ArgumentException)
+            {
+                _missingAxes.Add(name);
+                return 0f;
+            }
+        }
+
+        private static bool AxisExists(string name)
+        {
+            Axis(name);
+            return !_missingAxes.Contains(name);
+        }
+
+        private static string PadDevice()
+        {
             string[] names = Input.GetJoystickNames();
-            string pad = names.Length > 0 ? (names[0] ?? "").ToLowerInvariant() : "";
+            return PadBrand(names.Length > 0 ? (names[0] ?? "").ToLowerInvariant() : "");
+        }
+#else
+        // ---- backend: none (FrontEnd injects UI Toolkit events) -----------------------------------
+
+        private static void Snapshot(HashSet<string> held)
+        {
+        }
+
+        private static string PadDevice()
+        {
+            return "pad_other";
+        }
+#endif
+
+        private static string PadBrand(string words)
+        {
             foreach (string word in PAD_PLAYSTATION)
             {
-                if (pad.Contains(word)) return "pad_playstation";
+                if (words.Contains(word)) return "pad_playstation";
             }
             foreach (string word in PAD_XBOX)
             {
-                if (pad.Contains(word)) return "pad_xbox";
+                if (words.Contains(word)) return "pad_xbox";
             }
-#endif
             return "pad_other";
         }
     }

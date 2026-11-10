@@ -19,7 +19,7 @@
 #             doctor   verify the local environment
 #             ship     put the game online (tools/cloud/ship.py): ship --target aws|azure|gcp|linode|do
 #                      --kind static|container --plan, then --apply / --destroy; ship -h for its options
-# Env     : GODOT_BIN  path to the Godot executable (else `godot` on PATH)
+# Env     : GODOT_BIN  path to the Godot executable (else `godot` on PATH), Godot 4.6 or newer
 # Exit    : 0 ok, 1 task failed, 2 environment/usage problem
 # Notes   : Flags mirror the Godot 4 CLI; every command was run against Godot 4.7.2 (see the change log below; build
 #           exported Windows, Linux and Web); if a flag errors on another version, run `godot --help` and adjust
@@ -57,6 +57,8 @@
 #           .game-kit.json or a dev-only folder (PCK_FORBIDDEN)
 # Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): check skips folders Godot ignores (.gdignore), such
 #           as Dotwork's Pixelorama extension, whose scripts belong to Pixelorama, not the game
+# Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the floor is Godot 4.6 (MIN_GODOT); every command
+#           but clean and ship exits 2 on an older Godot, doctor too, instead of failing on parse errors
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -85,7 +87,11 @@ DEFAULT_PRESET = {"Windows": "Windows Desktop", "Linux": "Linux"}
 CHECKER = "res://tools/check_scripts.gd" # loads scripts inside the project so autoloads resolve
 CHECK_BATCH = 200                        # files per Godot launch (Windows command line limit)
 PRESERVE_ON_DEEP_CLEAN = [".godot/export_credentials.cfg"]  # secrets Godot stores inside the cache dir
-MIN_GODOT = (4, 3)                       # older 4.x lack --import or exit 1 after a clean quit
+# Oldest Godot the project compiles on: 4.6 added Control.has_focus(ignore_hidden_focus) (the shell's FocusSlider);
+# 4.5 added the Logger crash hook, 4.4 AudioStreamGenerator.MIX_RATE_OUTPUT, 4.3 --import and a clean exit code.
+# Every command but clean and ship refuses an older one (exit 2). Keep project.godot's config/features in step.
+MIN_GODOT = (4, 6)
+MIN_GODOT_WHY = "the shell's scripts use Control.has_focus(true), new in 4.6"
 CLASS_STAMP = ".godot/dev_class_names.txt"  # class_name set at the last import (stale cache detection)
 # Files Godot imports (it writes <file>.import beside each): one without that file, or newer than it, needs an
 # import before test or smoke can load it (#195)
@@ -542,6 +548,123 @@ def cmd_test(args, godot):
     return 0
 
 
+def build_outputs():
+    """The folders exports land in (#263): each preset's export_path folder, or the kit's three when there is no
+    export_presets.cfg yet."""
+    try:
+        outs = {Path(p).parent.as_posix() for p in export_presets().values() if p}
+    except OSError:
+        outs = set()
+    return sorted(outs - {"", "."}) or ["build/windows", "build/linux", "build/web"]
+
+
+def data_dir_in_build(given):
+    """#263: print an error and return True when --data-dir lies inside an export folder, where its files would ship
+    with the next export. Letter case is ignored (build/ and Build/ are one folder on Windows and macOS)."""
+    if not given:
+        return False
+    p = Path(given)
+    where = os.path.realpath(str(p if p.is_absolute() else ROOT / p)).lower()
+    for out in build_outputs():
+        folder = os.path.realpath(str(ROOT / out)).lower()
+        if where == folder or where.startswith(folder.rstrip("\\/") + os.sep):
+            print(f"[error] --data-dir {given} is inside {out}/, where exports land: its files would ship with the "
+                  f"game. Use a folder of its own, e.g. captures/{p.name or 'run'}", file=sys.stderr)
+            return True
+    return False
+
+
+# #271: files the shell writes in its data folder, tried against the export filters (one per kind of file)
+DATA_DIR_PROBES = ("settings.json", "save_1.json", "logs/game.log", "crashes/crash_1.txt", "telemetry.csv",
+                   "bug_1/info.txt")
+
+
+def export_filters():
+    """#271: [(preset name, include patterns, exclude patterns)] from export_presets.cfg, split on commas as Godot
+    splits include_filter and exclude_filter. Empty when the file cannot be read."""
+    presets, cur = [], None
+    try:
+        text = (ROOT / "export_presets.cfg").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("["):
+            cur = [line, [], []] if re.fullmatch(r"\[preset\.\d+\]", line) else None
+            if cur:
+                presets.append(cur)
+            continue
+        m = re.fullmatch(r'(name|include_filter|exclude_filter)="(.*)"', line)
+        if m and cur:
+            if m.group(1) == "name":
+                cur[0] = m.group(2)
+            else:
+                cur[1 if m.group(1) == "include_filter" else 2] = [f.strip() for f in m.group(2).split(",")
+                                                                  if f.strip()]
+    return [tuple(p) for p in presets]
+
+
+def godot_filter_match(rel, pattern):
+    """True when a project path matches an export filter as Godot matches it: case-insensitive, `*` also crosses
+    folders, tried with and without res://. Brackets are literal in Godot, so they are escaped for fnmatch."""
+    import fnmatch
+    pat = pattern.lower().replace("[", "[[]")
+    rel = rel.lower()
+    return fnmatch.fnmatchcase(rel, pat) or fnmatch.fnmatchcase("res://" + rel, pat)
+
+
+def data_dir_in_pack(given):
+    """#271: print an error and return True when the files the shell writes in --data-dir (DATA_DIR_PROBES) would go
+    into an export: an include_filter in export_presets.cfg takes them and no exclude_filter drops them. Only paths
+    inside the project count (an export packs nothing else)."""
+    if not given:
+        return False
+    p = Path(given)
+    where = os.path.realpath(str(p if p.is_absolute() else ROOT / p))
+    try:
+        rel = Path(os.path.relpath(where, os.path.realpath(str(ROOT)))).as_posix()
+    except ValueError:
+        return False                                  # another drive on Windows
+    if rel == ".." or rel.startswith("../"):
+        return False
+    for name, include, exclude in export_filters():
+        for probe in DATA_DIR_PROBES:
+            path = probe if rel == "." else f"{rel}/{probe}"
+            hit = next((f for f in include if godot_filter_match(path, f)), None)
+            if hit and not any(godot_filter_match(path, f) for f in exclude):
+                print(f"[error] --data-dir {given} is taken by the include_filter {hit!r} of the export preset {name!r} "
+                      f"(export_presets.cfg): its files would ship with the game. Use a folder of its own, e.g. "
+                      f"captures/{p.name or 'run'}", file=sys.stderr)
+                return True
+    return False
+
+
+# #271: files that make a folder part of the game for Godot (scripts, scenes, resources, imported assets)
+GODOT_OWN_SUFFIXES = (".gd", ".tscn", ".scn", ".tres", ".res", ".import", ".gdshader", ".uid", ".godot", ".cs")
+
+
+def keep_out_of_export(folder):
+    """#271: a .gdignore in a smoke run's data folder inside the project. The presets export all_resources, and Godot
+    4.7.2 put build/smoke-data/settings.json and captures/<x>/settings.json into the .pck (a .json is a resource);
+    with a .gdignore Godot neither imports nor exports the folder, and the game still reads and writes it. Never in
+    a folder holding Godot's own files (GODOT_OWN_SUFFIXES): there it would hide the game's scenes and assets."""
+    try:
+        rel = folder.resolve().relative_to(ROOT.resolve())
+    except ValueError:
+        return                                        # outside the project: never exported
+    if not rel.parts or not folder.is_dir():
+        return
+    own = next((p for p in folder.rglob("*") if p.suffix.lower() in GODOT_OWN_SUFFIXES), None)
+    if own:
+        print(f"[warn] {rel.as_posix()}/ holds files of the game ({own.relative_to(folder).as_posix()}): no .gdignore "
+              "there, so an export ships this run's .json files with them. Use a folder of its own, e.g. "
+              "captures/<name>")
+        return
+    mark = folder / ".gdignore"
+    if not mark.exists():
+        mark.write_bytes(b"")
+
+
 def smoke_data_dir(args):
     """The game's data folder for this smoke run: --data-dir as given (never wiped), else a fresh build/smoke-data/."""
     if args.data_dir:
@@ -569,6 +692,10 @@ def game_args(args, data_dir):
 
 
 def cmd_smoke(args, godot):
+    if data_dir_in_build(args.data_dir):
+        return 2
+    if data_dir_in_pack(args.data_dir):   # #271: a folder the export's include_filter takes
+        return 2
     if args.compare and not args.screenshot:
         print("[error] --compare needs --screenshot (the new picture to compare)", file=sys.stderr)
         return 2
@@ -580,6 +707,7 @@ def cmd_smoke(args, godot):
     if rc:
         return rc
     data_dir = smoke_data_dir(args)
+    keep_out_of_export(data_dir)   # #271: all_resources would ship its .json files
     dbg(f"data folder {data_dir}")
     user = game_args(args, data_dir)
     if args.drive:
@@ -652,12 +780,18 @@ def shader_pass(godot, compare):
         return 2
     errors = [l for l in out.splitlines() if "SHADER ERROR" in l or any(re.search(p, l) for p in ERROR_PATTERNS)]
     if rc != 0 or errors or "SHADER_CHECK_DONE failed=0" not in out:
+        drawn = out.count("SHADER_OK ")
         if errors:
             print("[FAIL] shader errors:\n  " + "\n  ".join(errors[:12]))
+        elif drawn and rc != 0 and "SHADER_CHECK_DONE" not in out:
+            # #264: the window opened and drew some recipes, then Godot died (seen as heap corruption under GPU
+            # load from other programs): a crash, not a missing display
+            code = f"{rc} = 0x{rc:08X}" if rc > 255 else str(rc)      # Windows status codes read better in hex
+            print(f"[FAIL] Godot crashed after {drawn} recipe(s) (exit {code}); rerun, or check --no-shaders")
         else:
             print(f"[FAIL] the shader check did not finish (exit {rc}): it needs a window, so run it from a desktop "
                   "session (check --no-shaders skips it)")
-            if "SHADER_OK " not in out:
+            if not drawn:
                 return 2                        # nothing was drawn at all: no window here, not a broken recipe
         return 1
     if not compare:
@@ -759,6 +893,10 @@ def compare(args):
 
 
 def cmd_run(args, godot):
+    if data_dir_in_build(args.data_dir):
+        return 2
+    if data_dir_in_pack(args.data_dir):   # #271: a folder the export's include_filter takes
+        return 2
     cmd = [godot, "--path", "."]
     user = ["--debug"] if args.debug else []   # picked up by Log autoload
     if args.data_dir:
@@ -907,17 +1045,50 @@ def cmd_clean(args, godot):
     return 1 if failed else 0
 
 
+def godot_version(godot):
+    """Ask godot for its version. Returns (rc, (major, minor) or None, the version text).
+    `godot --version` prints one line like 4.7.2.stable.official.ed1daf0bf; a build that prints something else
+    gives None (unknown: not refused)."""
+    rc, out = run([godot, "--version"], echo="never", timeout=60)
+    found = re.search(r"^(\d+)\.(\d+)\b", out, re.M)
+    text = found.string[found.start():].splitlines()[0].strip() if found else out.strip()
+    return rc, (tuple(int(n) for n in found.groups()) if found else None), text
+
+
+def too_old_message(text):
+    """The refusal for a Godot older than MIN_GODOT (exit 2)."""
+    need = f"{MIN_GODOT[0]}.{MIN_GODOT[1]}"
+    return (f"Godot {text} is too old: this project needs Godot {need} or newer ({MIN_GODOT_WHY}). Install the "
+            f"latest 4.x stable (standard build) from https://godotengine.org/download and point GODOT_BIN at it.")
+
+
+def check_godot_version(godot):
+    """main(): 0 when godot is new enough (or its version is unknown), 2 when it is older than MIN_GODOT or will
+    not run. Older builds fail to compile the shell, so every command would fail with confusing parse errors."""
+    rc, ver, text = godot_version(godot)
+    if rc in NO_EXEC:
+        return 2                            # run() already printed why
+    if ver is None:
+        dbg(f"godot --version said {text!r}: version unknown, not checked")
+        return 0
+    if ver < MIN_GODOT:
+        print(f"[error] {too_old_message(text)}", file=sys.stderr)
+        return 2
+    dbg(f"godot {text} (needs {MIN_GODOT[0]}.{MIN_GODOT[1]}+)")
+    return 0
+
+
 def cmd_doctor(args, godot):
     problems = 0
+    too_old = False
     print(f"[info] python {sys.version.split()[0]}")
     if godot:
-        rc, out = run([godot, "--version"], echo="never", timeout=60)
-        ver = tuple(int(n) for n in re.findall(r"^(\d+)\.(\d+)", out.strip())[0]) if re.match(r"\d+\.\d+", out.strip()) else None
+        rc, ver, text = godot_version(godot)
         if ver and ver < MIN_GODOT:
-            print(f"[FAIL] godot {out.strip()} is older than {MIN_GODOT[0]}.{MIN_GODOT[1]} (import and smoke hang or misreport)")
-            problems += 1
+            print(f"[FAIL] {too_old_message(text)}")
+            too_old = True
         else:
-            print(f"[ OK ] godot: {godot} ({out.strip() or 'version unknown'})")
+            print(f"[ OK ] godot: {godot} ({text or 'version unknown'})")
     else:
         print("[FAIL] godot not found. Set GODOT_BIN or add godot to PATH.")
         problems += 1
@@ -930,7 +1101,7 @@ def cmd_doctor(args, godot):
     if doctor.exists():
         rc, _ = run([sys.executable, doctor], capture=False)
         problems += 1 if rc else 0
-    return 1 if problems else 0
+    return 2 if too_old else 1 if problems else 0   # a too old Godot is an environment problem, like elsewhere
 
 
 def positive_int(text):
@@ -1011,7 +1182,9 @@ def build_parser():
     ap = argparse.ArgumentParser(
         prog="dev.py",
         description="Project command wrapper (Godot 4). Same commands on every engine in the Claude Code Game Kit.",
-        epilog="Set GODOT_BIN to your Godot executable. Exit codes: 0 ok, 1 failed, 2 environment/usage problem.",
+        epilog=f"Set GODOT_BIN to your Godot executable ({MIN_GODOT[0]}.{MIN_GODOT[1]} or newer: older ones are "
+               f"refused with exit 2). "
+               "Exit codes: 0 ok, 1 failed, 2 environment/usage problem.",
     )
     ap.add_argument("--debug", action="store_true", help="verbose output; for `run`, also enables in-game debug logging")
     ap.add_argument("--godot", metavar="PATH", help="path to Godot executable (overrides GODOT_BIN)")
@@ -1126,6 +1299,10 @@ def main(argv=None):
         print("[error] Godot executable not found. Set GODOT_BIN or use --godot PATH.", file=sys.stderr)
         return 2
     try:
+        if needs_godot and args.command != "doctor":   # doctor reports the version itself (and still exits 2)
+            rc = check_godot_version(godot)
+            if rc:
+                return rc
         return args.fn(args, godot)
     except KeyboardInterrupt:
         print("\n[abort] interrupted")

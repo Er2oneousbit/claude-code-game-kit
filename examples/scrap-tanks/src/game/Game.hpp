@@ -14,6 +14,10 @@
 // Updated : 2026-10-21 with Claude (Opus 5.5, claude-opus-5-5): Scrap Tanks (sim, bots, sprites, HUD)
 // Updated : 2026-11-10 with Claude (Fable 5.1, claude-fable-5-1): the shell's screens (#168): the fight is the play
 //           screen behind the title, menus and pause; the settings' game speed, attack binding and captions apply
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): kit 0.14.4: fire honours access.hold_to_toggle
+//           (auto-fire) and buffers a tap made while reloading for kInputBufferWindow times access.timing_scale
+//           (#269); the left stick drives through shell_->stick() (the player's deadzone and invert_y, #274); the
+//           run's seed goes into crash files and bug reports (#275)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -26,6 +30,8 @@
 #include <vector>
 
 #include "core/Bot.hpp"
+#include "core/InputBuffer.hpp"
+#include "core/MotorAccess.hpp"
 #include "core/Sim.hpp"
 #include "game/Assets.hpp"
 #include "shell/Shell.hpp"
@@ -71,7 +77,8 @@ public:
 private:
     void restart();
     bool playing() const;                 // the play screen is on top (no menu over it)
-    core::Control read_controls() const;
+    core::Control read_controls() const;  // the devices as they are now (keyboard, mouse, pad)
+    core::Control player_controls();      // read_controls plus motor access on fire (toggle, buffered tap)
     void on_events(const std::vector<core::Event>& events);
     void play_enter();
     void play_update(double dt);
@@ -109,6 +116,12 @@ private:
     bool mouse_fire_ = false;
     bool pad_used_ = false;
     SDL_Gamepad* pad_ = nullptr;
+
+    // Motor access on fire (#166, #269): held, or toggled on and off with access.hold_to_toggle (auto-fire); a tap
+    // made while the gun reloads is kept for kInputBufferWindow times access.timing_scale and fires when it can
+    core::HeldAction fire_hold_;
+    core::InputBuffer fire_buffer_;
+    bool fire_was_held_ = false;          // the devices' fire last sim step, to find a new press
 };
 
 }  // namespace game

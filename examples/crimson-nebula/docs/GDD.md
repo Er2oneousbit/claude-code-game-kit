@@ -79,11 +79,15 @@ Through the kit's shell (rebindable in Settings > Controls; the kit's `move_*`, 
 
 | Action | Keyboard/Mouse | Gamepad |
 |---|---|---|
-| Accelerate | W | D-pad up / left stick up |
-| Brake / reverse | S | D-pad down / left stick down |
-| Steer | A D | D-pad / left stick left and right |
+| Accelerate | W | Right trigger (analog) / d-pad up / left stick up |
+| Brake / reverse | S | Left trigger (analog) / d-pad down / left stick down |
+| Steer | A D | Left stick (analog, by its lean) / d-pad left and right |
 | Drift (hold) | Space (`jump`) | A (south button) |
 | Use item | J (`attack`) | X (west button) |
+
+Gas and brake are the larger of the trigger and the key or d-pad (a held key is a trigger fully in); throttle is gas
+minus brake, so both at once coast. Steering follows the stick's lean while it leans, else the keys or d-pad at full
+lock (`Intent::kart_input` in `src/game/mod.rs`).
 
 ## Tunables that define feel
 Kart top speed, acceleration, steering rate, grip, drift charge, boost strength and time, AI speed spread, warning

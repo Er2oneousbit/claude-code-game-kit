@@ -11,9 +11,10 @@
 # Exit    : 0 ok, 1 an asset cannot ship or --check found the files stale, 2 usage problem (no asset log)
 # Notes   : Reads the ASSET_LOG table (ID, Type, File(s), Source, Author, License, Attribution text, AI-assisted,
 #           Modified, Date, Notes); empty template rows are skipped. Third-party files the kit ships in a shell
-#           (KIT_ASSETS: the readable font) are credited when the game still has them. The engine credit comes from .game-kit.json. The
+#           (KIT_ASSETS: the readable font, Bevy's text font) are credited when the game still has them. The engine credit comes from .game-kit.json. The
 #           files are generated: edit the asset log, not them. Not legal advice: SOP-21 step 6. Standard library only.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): K-0002, the Fira Mono font Bevy's shell ships
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -44,6 +45,12 @@ KIT_ASSETS = [
      "license": "OFL-1.1",
      "attribution": "Atkinson Hyperlegible, Copyright 2020 Braille Institute of America, Inc. (SIL Open Font License 1.1)",
      "ai": "no", "modified": "no", "date": "", "notes": "kit: the shell's readable-font setting"},
+    {"id": "K-0002", "type": "font", "find": "FiraMono-Medium.ttf",
+     "source": "https://github.com/mozilla/Fira", "author": "The Mozilla Foundation and Telefonica S.A.",
+     "license": "OFL-1.1",
+     "attribution": "Fira Mono, Copyright (c) 2012-2015, The Mozilla Foundation and Telefonica S.A. "
+                    "(SIL Open Font License 1.1)",
+     "ai": "no", "modified": "no", "date": "", "notes": "kit: the shell's text font (Bevy)"},
 ]
 SKIP_DIRS = {".git", "node_modules", ".godot", "build", "dist", "Library", "Temp", "Intermediate", "Saved", "target"}
 

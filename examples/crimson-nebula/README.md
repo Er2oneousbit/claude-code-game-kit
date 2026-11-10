@@ -21,14 +21,15 @@ them rebindable in Settings > Controls (the one-handed layouts work too):
 
 | Action | Keyboard | Gamepad |
 |---|---|---|
-| Gas / brake | W / S | D-pad or left stick up / down |
-| Steer | A / D | D-pad or left stick left / right |
+| Gas / brake | W / S | Right / left trigger (analog), or d-pad or left stick up / down |
+| Steer | A / D | Left stick (analog: lean a little, turn a little) or d-pad |
 | Drift (hold) | Space | A (south) |
 | Use the boost | J | X (west) |
 | After the race | Space: race again on a new seed, Esc: pause menu | A, Start |
 
 Game options go after `--`: `python tools/dev.py run -- --seed 3` replays a race, `--autoplay reader|late|ignorer`
-lets a bot drive your kart.
+lets a bot drive your kart. The triggers are analog: half the right trigger is half gas, both triggers at once
+coast; a held W or d-pad up counts as the trigger fully in. The stick's deadzone and invert Y are in Settings > Controls.
 
 ## How it is built
 | Piece | File |

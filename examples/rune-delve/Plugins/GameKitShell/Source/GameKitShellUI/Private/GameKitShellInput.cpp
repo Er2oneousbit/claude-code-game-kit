@@ -2,9 +2,12 @@
 // GameKitShellInput.cpp
 // Purpose : The key table behind GameKitShellInput.h.
 // Usage   : compiled into the GameKitShellUI module.
-// Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Notes   : PadBrand reads the name FInputDeviceRegistry holds for the device (see GameKitShellInput.h).
+// Authored: Written with Claude (Fable 5.1, claude-fable-5-1); pad makes by Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 #include "GameKitShellInput.h"
+
+#include "GenericPlatform/InputDeviceRegistry.h"
 
 namespace GameKit::ShellInput
 {
@@ -38,6 +41,13 @@ namespace GameKit::ShellInput
 			{TEXT("Gamepad_LeftThumbstick"), TEXT("pad:l3")}, {TEXT("Gamepad_RightThumbstick"), TEXT("pad:r3")},
 			{TEXT("Gamepad_Special_Right"), TEXT("pad:start")}, {TEXT("Gamepad_Special_Left"), TEXT("pad:select")},
 		};
+
+		// ---- Tunables: pad name hints (lower case, matched anywhere in the name) ----
+		const TCHAR* const XboxHints[] = {TEXT("xbox"), TEXT("xinput"), TEXT("x-box")};
+		const TCHAR* const SwitchHints[] = {TEXT("nintendo"), TEXT("switch"), TEXT("joy-con"), TEXT("joycon"),
+		                                    TEXT("pro controller")};
+		const TCHAR* const PlayStationHints[] = {TEXT("playstation"), TEXT("dualshock"), TEXT("dualsense"), TEXT("ps3"),
+		                                         TEXT("ps4"), TEXT("ps5"), TEXT("wireless controller")};
 	}
 
 	FString BindingOf(const FKey& Key)
@@ -65,11 +75,57 @@ namespace GameKit::ShellInput
 		return TEXT("key:") + Name.ToLower();   // letters, F1..F12 and the rest by their key name
 	}
 
-	FString DeviceOf(const FKey& Key)
+	FString PadBrand(const FString& PadName)
+	{
+		const FString Lower = PadName.ToLower();
+		const auto Has = [&Lower](const TCHAR* const* Hints, int32 N)
+		{
+			for (int32 I = 0; I < N; ++I)
+			{
+				if (Lower.Contains(Hints[I], ESearchCase::CaseSensitive))
+				{
+					return true;
+				}
+			}
+			return false;
+		};
+		// Xbox first: "Xbox Wireless Controller" is Microsoft's name, "Wireless Controller" alone is Sony's
+		if (Has(XboxHints, UE_ARRAY_COUNT(XboxHints)))
+		{
+			return TEXT("pad_xbox");
+		}
+		if (Has(SwitchHints, UE_ARRAY_COUNT(SwitchHints)))
+		{
+			return TEXT("pad_switch");
+		}
+		if (Has(PlayStationHints, UE_ARRAY_COUNT(PlayStationHints)))
+		{
+			return TEXT("pad_playstation");
+		}
+		return TEXT("pad_other");
+	}
+
+	FString PadName(FInputDeviceId DeviceId)
+	{
+		if (!DeviceId.IsValid())
+		{
+			return FString();
+		}
+		const TOptional<FInputDeviceDescriptor> Desc = FInputDeviceRegistry::FindDescriptor(DeviceId);
+		if (!Desc.IsSet())
+		{
+			return FString();
+		}
+		const FString Interface = Desc->InputDeviceName.IsNone() ? FString() : Desc->InputDeviceName.ToString();
+		const FString Hardware = Desc->HardwareDeviceIdentifier.IsNone() ? FString() : Desc->HardwareDeviceIdentifier.ToString();
+		return (Interface + TEXT(" ") + Hardware).TrimStartAndEnd();
+	}
+
+	FString DeviceOf(const FKey& Key, FInputDeviceId DeviceId)
 	{
 		if (Key.IsGamepadKey())
 		{
-			return TEXT("pad");
+			return PadBrand(PadName(DeviceId));
 		}
 		if (Key.IsMouseButton())
 		{

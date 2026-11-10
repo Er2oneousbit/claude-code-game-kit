@@ -43,6 +43,8 @@ namespace graveyard_shift.Shell
         public const float CONTROL_WIDTH = 220f; // a slider or choice control's width
         public const float VALUE_WIDTH = 80f;
         public const float TRACK_HEIGHT = 10f;
+        public const string CHOICE_LEFT = "<  ";      // the arrows around a choice's value (the pseudo check looks inside)
+        public const string CHOICE_RIGHT = "  >";
 
         public readonly string Name;
         public bool Opaque = true;               // draws the backdrop (a see-through screen shows the game: pause)
@@ -394,7 +396,7 @@ namespace graveyard_shift.Shell
             text.style.unityTextAlign = TextAnchor.MiddleCenter;
             void Refresh()
             {
-                text.text = "<  " + (index < names.Count ? names[index] : "") + "  >";
+                text.text = CHOICE_LEFT + (index < names.Count ? names[index] : "") + CHOICE_RIGHT;
             }
             Refresh();
             var c = new Control { Kind = "choice", Label = rowLabel, Value = () => index < names.Count ? names[index] : "" };

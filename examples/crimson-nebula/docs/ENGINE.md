@@ -18,9 +18,20 @@
   loading, pause with "What now?" and the dialogue history, subtitles and menu narration, on bevy_ui. The model is
   headless (`dev.py smoke --drive menus` saves settings.json without a GPU; `tests/shell.rs` drives it); only
   `src/shell/view.rs` draws. The game runs only while Play is on top (`GameActive`), reads input from `Intent` (the shell
-  fills it from the player's bindings) and its accessibility rules from `AccessRules` and `Palette`.
-  `smoke --drive show:<screen> --screenshot build/x.png` pictures a screen; `python tools/access/sweep.py` runs the
-  access drive. The readable font is Atkinson Hyperlegible (`src/shell/fonts/`, OFL, compiled into the exe).
+  fills it from the player's bindings: `dir`, `pressed` and `held` actions, the analog `stick` with the player's deadzone
+  and invert_y, and `left_trigger`/`right_trigger`) and its accessibility rules from `AccessRules` and `Palette`. The
+  display settings (mode, vsync, frame cap, window size) go to the window through `src/shell/display.rs`, never in
+  automated runs. A panic writes `crashes/crash_<time>.txt` in the user-data folder (version, screen, error,
+  backtrace, settings, log tail; `src/shell/crash.rs`). Debug builds add F8 (a `bug_<time>/` folder with a screenshot,
+  the log tail, the settings and an info file), the pseudo language and "Juice demo" on the main menu
+  (`src/shell/juice.rs`: every juice primitive and the access settings, live). The demo uses nothing from `src/game/`:
+  it brings its own 2D camera on its own render layer and switches the game's cameras off while it is up, so it works
+  over a 2D or 3D game; give the game's HUD and other UI `shell::HideUnderJuice` (or `#[require(HideUnderJuice)]`)
+  and they hide meanwhile. `smoke --drive show:<screen> --screenshot build/x.png` pictures a screen; `python
+  tools/access/sweep.py` runs the access drive. Text is Fira Mono Medium in full and the readable font Atkinson
+  Hyperlegible with Fira Mono behind it (`src/shell/fonts/`, OFL, compiled into the exe); Bevy's own built-in font is
+  ASCII only, so a font you swap in must cover your languages: the pseudo drive fails a character no font in the stack
+  has, and a test checks every `data/i18n/` table against the font.
 - **Verify:** `python tools/dev.py doctor`.
 
 ## Layout
@@ -31,17 +42,20 @@ src/app.rs         plugin sets per run mode (window, headless smoke, capture, te
 src/cli.rs         the program's own options (--smoke, --screenshot, ...)
 src/logic/         engine-free rules and helpers (math, seeded Rng). Plain Rust, unit tested
                    juice: shake, hitstop, ease, follow, input_buffer, coyote, spring (+ squash), flash_limiter
-                   shell: settings, bindings (+ glyphs), save_store, i18n (+ pseudo-locale), atomic_file, auto_repeat
+                   shell: settings, bindings (+ glyphs), save_store, i18n (+ pseudo-locale), atomic_file, auto_repeat,
+                   charmap (which characters a font can draw)
                    audio: audio_director (events, voices, ducking), music_director, audio_access (sliders, arrows)
 src/game/mod.rs    GamePlugin: components, resources (ScreenShake, GameActive, AccessRules, Palette), FixedUpdate
                    systems. Must run headless
 src/game/present.rs PresentPlugin: camera (+ shake), sprites in the palette's colours, meshes, audio. Window only
 src/shell/mod.rs   ShellPlugin: the screen stack, settings applied live, subtitles, history, narration. Headless
 src/shell/screens.rs the rows and actions of every screen; view.rs draws them with bevy_ui and polls keys and pads;
-                   drive.rs the scripted smoke runs; input.rs key names; store.rs the data folder; narrator.rs speech
+                   drive.rs the scripted smoke runs; input.rs key names; store.rs the data folder; narrator.rs speech;
+                   crash.rs crash files and the log tail; bug_report.rs F8; juice.rs the juice demo (debug builds)
 data/i18n/         string tables (en, fr; compiled in, a new file here is picked up at start)
 data/access/colours.json the colour-blind palettes;  data/input/presets.json the one-handed layouts (from the kit)
-src/shell/fonts/   Atkinson Hyperlegible (the readable font, OFL; compiled in with include_bytes!)
+src/shell/fonts/   Fira Mono Medium (the text font) and Atkinson Hyperlegible (the readable font), both OFL; compiled
+                   in with include_bytes!
 src/kit_shaders.rs the kit's shader recipes as typed 2D materials (generated, with assets/shaders/kit/*.wesl)
 examples/shader_check.rs renders every recipe on the GPU for `smoke --shaders`
 tests/             integration tests: drive the real GamePlugin headless with app.update()
