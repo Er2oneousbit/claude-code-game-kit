@@ -9,8 +9,9 @@
 # Exit    : 0 same within the tolerance, 1 different (or a different size), 2 usage problem or unreadable file
 # Notes   : A pixel differs when any channel (R, G, B, A) differs by more than --tolerance (0-255). The run fails when
 #           more than --max-pixels pixels differ. --diff writes a picture: differing pixels red over a dimmed copy of
-#           the baseline. Reads non-interlaced PNGs (8 and 16 bit, gray, RGB, palette, with or without alpha), which
-#           covers what Godot, LÖVE, Chromium, Unity and Unreal save. Standard library only, Python 3.8+.
+#           the baseline. Reads non-interlaced PNGs (8 and 16 bit, gray, RGB, palette, with or without alpha) up to
+#           8192x8192 (MAX_PIXELS), which covers what Godot, LÖVE, Chromium, Unity and Unreal save. Standard library
+#           only, Python 3.8+.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
@@ -34,6 +35,10 @@ for _stream in (sys.stdout, sys.stderr):
 
 PNG_SIG = b"\x89PNG\r\n\x1a\n"
 CHANNELS = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}       # PNG colour type -> samples per pixel
+# The largest picture read: 8192 x 8192 (a 4K screenshot is 8.3 M pixels). A header claiming more is refused before
+# anything is allocated: one claiming 2^56 pixels made a 1 GB scanline buffer, and the image data is only inflated
+# as far as the picture needs, so a 254 KB file holding 256 MB of zeros no longer costs 557 MB (#261).
+MAX_PIXELS = 8192 * 8192
 
 
 class ImageError(Exception):
@@ -80,18 +85,21 @@ def read_png(path):
         raise ImageError(f"{path}: no image data")
     if not ended:                                       # #258: a file cut before IEND passed as whole
         raise ImageError(f"{path}: no IEND chunk (the file is cut short)")
-    try:
-        raw = zlib.decompress(b"".join(idat))
-    except zlib.error as exc:
-        raise ImageError(f"{path}: damaged image data ({exc})")
+    if width * height > MAX_PIXELS:
+        raise ImageError(f"{path}: {width}x{height} is larger than this tool reads ({MAX_PIXELS} pixels)")
     n = CHANNELS[ctype]
     bits = n * depth
     stride = (width * bits + 7) // 8
     bpp = max(1, bits // 8)
+    need = height * (1 + stride)                        # a filter byte and the samples per row, nothing more
+    try:                                                # max_length 0 would mean "no limit": an empty picture reads nothing
+        raw = zlib.decompressobj().decompress(b"".join(idat), need) if need else b""   # a bomb past the picture stays packed
+    except zlib.error as exc:
+        raise ImageError(f"{path}: damaged image data ({exc})")
+    if len(raw) < need:
+        raise ImageError(f"{path}: image data ends early")
     rows, prev, p = [], bytearray(stride), 0
     for _ in range(height):
-        if p + 1 + stride > len(raw):
-            raise ImageError(f"{path}: image data ends early")
         f = raw[p]
         line = bytearray(raw[p + 1:p + 1 + stride])
         p += 1 + stride
