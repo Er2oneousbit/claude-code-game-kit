@@ -198,8 +198,9 @@ focused)**. Wire the game to it:
 - Debug builds (not Shipping) add the **juice demo** to the main menu (a box to hit: trauma shake, hitstop, squash
   spring, gentle flashes through the limiter, follow camera with its deadzone drawn, buffered jump with coyote time,
   a guard on `interact` that honours hold to toggle, moving by held keys or the stick), the **pseudo** language in the
-  Language tab, and the **F8 bug report**: `bug_<time>/` in the data folder with `info.txt`, `log_tail.txt` (the last
-  200 log lines), `settings.json` and `screenshot.png` (the viewport, a frame later), and a toast.
+  Language tab, and the **F8 bug report**: `bug_<time>/` in the data folder with `bug_<time>/info.txt`,
+  `bug_<time>/log_tail.txt` (the last 200 log lines), `settings.json` and `screenshot.png` (the viewport, a frame
+  later), and a toast.
 - **Crash files:** while the screens run, a fatal error writes `crashes/crash_<time>.txt` in the data folder (version,
   engine, OS, the error, the last 60 log lines, the settings) from `FCoreDelegates::OnHandleSystemError`, before
   Unreal's own crash reporter; nothing leaves the machine. `smoke --drive crash` proves the writer with a planted error
@@ -233,8 +234,8 @@ colours and whether it fits its column (measured with Slate's font service), and
 `res=` option is noted, not applied. Paths given to `--screenshot` and `--data-dir` may contain spaces, and so may
 the project folder: dev.py passes every path the editor gets (`-abslog=`, `-script=`, the drive's) as `-Name="a b"`
 with forward slashes, the form Unreal's command line reads whole, and the shader check names its script by its
-place on the editor's Python path (`kit_shaders/shader_check.py`), so no path sits inside `-ExecCmds` (K01: UE 5.8 on
-Windows, 2026-11-10, `check`, `test`, `exec` and the drives from a folder with a space); a double quote is refused.
+place on the editor's Python path (kit_shaders/shader_check.py under `Content/Python/`), so no path sits inside
+`-ExecCmds` (K01: UE 5.8 on Windows, 2026-11-10, `check`, `test`, `exec` and the drives from a folder with a space); a double quote is refused.
 
 ## Source control (Git + LFS)
 - `.gitattributes` in this repo routes `.uasset`, `.umap`, textures, audio, and meshes through LFS. Run `git lfs install` before the first commit.
@@ -259,8 +260,8 @@ Windows, 2026-11-10, `check`, `test`, `exec` and the drives from a folder with a
 2. `python tools/dev.py package --config Shipping --platform Win64` (output in Packaged/, which git ignores). Verified with the default Development config on UE 5.8.
    With the GameKitShell plugin enabled the package also carries, as loose files: `data/` (the string tables, input
    presets, colour palettes and your own data files, at `Packaged/<Platform>/<Project>/data/`, where
-   `FPaths::ProjectDir()` points in the packaged game as in the editor), staged by the plugin's `Config/Game.ini`
-   (`+DirectoriesToAlwaysStageAsNonUFS=(Path="../data")` under `ProjectPackagingSettings`; Unreal layers an enabled
+   `FPaths::ProjectDir()` points in the packaged game as in the editor), staged by the plugin's
+   `Plugins/GameKitShell/Config/Game.ini` (`+DirectoriesToAlwaysStageAsNonUFS=(Path="../data")` under `ProjectPackagingSettings`; Unreal layers an enabled
    plugin's Game.ini over your DefaultGame.ini, so there is nothing to merge), and the readable font under the
    plugin's `Resources/Fonts` (a `RuntimeDependencies` line in `GameKitShellUI.Build.cs`). `data/golden/` and
    `data/shaders/` (test files, about 200 KB) go along: Unreal stages a folder whole. Without `data/` the menus show
