@@ -10,8 +10,8 @@
 #             smoke    run the game headless for N frames, fail on errors; scenario runs:
 #                      smoke --frames 20000 --until RUN_WON --fail-on CAUGHT -- --autoplay careful
 #                      (after `--`: arguments for the game; --screenshot / --record capture frames);
-#                      --drive SCENARIO runs a scripted path through the shell's screens (menus, access,
-#                      show:<screen>) with --data-dir DIR and --locale LANG; without --drive the run walks
+#                      --drive SCENARIO runs a scripted path through the shell's screens (menus, crash, pseudo,
+#                      bug, access, show:<screen>) with --data-dir DIR and --locale LANG; without --drive the run walks
 #                      title -> menu -> play; settings always go to a smoke data folder, never the player's;
 #                      --shaders also draws every kit shader recipe on the GPU (kit_shader_check) and compares
 #                      it with its golden image (SDL_GPU_DRIVER=vulkan|direct3d12|metal picks the backend)
@@ -51,6 +51,8 @@
 # Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): smoke --drive / --data-dir / --locale for the shell's
 #           screens (#168), passed to the game after `--`; the proof lines (SETTINGS_WRITTEN, DRIVE_, ACCESS_) are
 #           echoed; a drive ends at DRIVE_DONE, so --until defaults to it
+# Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the crash, pseudo, pseudo-plant and bug drives and
+#           show:juice (#275); CRASH_WRITTEN, PSEUDO_ and BUG_REPORT lines are echoed
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -76,7 +78,8 @@ SHADER_DIR = "shaders/kit"                # the kit's shader recipes, generated 
 SHADER_CHECK_EXE = "kit_shader_check"     # built with the game; draws every recipe
 SHADER_TIMEOUT_S = 120
 SMOKE_DATA = "build/smoke-data"           # a smoke run's settings folder (wiped each run) unless --data-dir is given
-PROOF_PREFIXES = ("SETTINGS_WRITTEN", "DRIVE_", "ACCESS_")   # the shell scenarios' proof lines, echoed
+PROOF_PREFIXES = ("SETTINGS_WRITTEN", "DRIVE_", "ACCESS_", "CRASH_WRITTEN", "PSEUDO_",
+                  "BUG_REPORT")         # the shell scenarios' proof lines, echoed
 DRIVE_DONE = "DRIVE_DONE"                 # a drive's last line (--until defaults to it)
 KILL_TIMEOUT_S = 10                      # after a timeout: seconds to wait for the killed tree's pipe
 NO_EXEC = (126, 127)                     # run() codes: not executable / not found -> environment problem (exit 2)
@@ -437,6 +440,10 @@ def cmd_smoke(args):
             print(f"[FAIL] {p}")
         if rc != 0:
             print(f"[FAIL] exit code {rc}")
+        if drive == "crash" and "CRASH_WRITTEN" in out:
+            print("[info] --drive crash fails on purpose: the CRASH_WRITTEN file above is the proof")
+        if drive == "pseudo-plant" and "PSEUDO_FAIL" in out:
+            print("[info] --drive pseudo-plant fails on purpose: the PSEUDO_FAIL line names the planted label")
         return 1
     what = f"drive {drive}" if drive and not args.until else f"marker {until!r} reached" if until else f"{args.frames} frames"
     print(f"[ OK ] smoke passed ({what}; data in {data})")
@@ -737,9 +744,12 @@ def build_parser():
     p.add_argument("--record-every", type=positive_int, default=4, help="record every Nth frame (default 4)")
     p.add_argument("--drive", default="", metavar="SCENARIO",
                    help="a scripted path through the shell's screens: menus (change two settings, save, quit; prints "
-                        "SETTINGS_WRITTEN), access[:res=WxH,scale=N,pad,read] (the accessibility sweep's tour, "
-                        "tools/access/sweep.py), show:<title|menu|settings|pause|subtitle|play> (opens that screen; "
-                        "add --screenshot); the run ends at DRIVE_DONE")
+                        "SETTINGS_WRITTEN), crash (a planted exception: CRASH_WRITTEN, exit 1 on purpose), pseudo (with "
+                        "--locale pseudo: every label on every screen, PSEUDO_PASS or PSEUDO_FAIL), pseudo-plant (plus "
+                        "one label too small: exit 1), bug (F8: the bug report, DRIVE_BUG), "
+                        "access[:res=WxH,scale=N,pad,read] (the accessibility sweep's tour, tools/access/sweep.py), "
+                        "show:<title|menu|settings|pause|subtitle|play|juice> (opens that screen; add --screenshot); "
+                        "the run ends at DRIVE_DONE")
     p.add_argument("--data-dir", default="", help="keep settings.json in this folder (relative to the project; kept "
                    f"between runs); default: a fresh {SMOKE_DATA}/ each run, never the player's own folder")
     p.add_argument("--locale", default="", help="language for the run (data/i18n/<LANG>.json)")

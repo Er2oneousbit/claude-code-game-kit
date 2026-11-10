@@ -14,7 +14,8 @@
 #           crashes before any result, not 2 "no tests matched" (#176), and that smoke --drive runs the shell's
 #           drive on Unity (the drive test, run options in the environment), Bevy and Unreal (the Drive test),
 #           echoes its markers and fails without DRIVE_DONE (#168), and on C++ (the scenario, data folder and
-#           locale after `--`, the drive's frame budget; #269), that Unreal's --screenshot and --data-dir reach the
+#           locale after `--`, the drive's frame budget; #269; the crash, pseudo and bug drives' lines, #275), that
+#           Unreal's --screenshot and --data-dir reach the
 #           editor quoted when the path has a space (#267), and that every smoke refuses a --data-dir inside its
 #           player or build output (#263), or inside a folder its build packs into the game (#271).
 # Usage   : python scripts/test_dev_py.py
@@ -210,6 +211,65 @@ class CppDrive(TempRoot):
         self.assertEqual(cmd[2], str(dev.SMOKE_FRAMES))
         self.assertNotIn("--drive", cmd)
         self.assertEqual(self.game_options(cmd)[0], "--data-dir", "a plain smoke has its own data folder too")
+
+
+# ---- #275: C++ crash files, the F8 bug report and the pseudo locale -------------------
+class CppReports(TempRoot):
+    """The #275 drives on C++: their proof lines are echoed, crash and pseudo-plant fail on purpose and say so, a
+    pseudo pass and a bug report pass."""
+    BOOT = "[INFO][core] BOOT_OK Test v0.1.0\n"
+    drive = CppDrive.drive                     # the same faked build and game as CppDrive
+    game_options = CppDrive.game_options
+
+    def test_crash_echoes_the_file_and_fails_on_purpose(self):
+        out = (self.BOOT + "CRASH_WRITTEN D:/x/build/smoke-data/crashes/crash_20261110_101500.txt\n"
+               "[ERROR][core] the game stopped: exception: drive crash (expected)\n")
+        rc, text, cmd, _ = self.drive(out, rc=1, drive="crash")
+        self.assertEqual(rc, 1, text)
+        self.assertEqual(self.game_options(cmd)[2:4], ["--drive", "crash"])
+        self.assertIn("CRASH_WRITTEN D:/x/build/smoke-data/crashes/crash_20261110_101500.txt\n", text)
+        self.assertIn("fails on purpose", text)
+
+    def test_a_crash_in_another_drive_is_not_called_on_purpose(self):
+        out = self.BOOT + "CRASH_WRITTEN D:/x/crashes/crash_1.txt\n[ERROR][core] the game stopped: exception: oops\n"
+        rc, text, _, _ = self.drive(out, rc=1, drive="menus")
+        self.assertEqual(rc, 1, text)
+        self.assertIn("CRASH_WRITTEN D:/x/crashes/crash_1.txt", text)
+        self.assertNotIn("on purpose", text)
+
+    def test_pseudo_pass_and_the_planted_failure(self):
+        ok = (self.BOOT + "PSEUDO_SCREEN title labels 3 problems 0\nPSEUDO_PASS 21 screens, 389 labels, nothing truncated"
+              " or untranslated\nDRIVE_DONE pseudo\n")
+        rc, text, cmd, _ = self.drive(ok, drive="pseudo", locale="pseudo")
+        self.assertEqual(rc, 0, text)
+        self.assertEqual(self.game_options(cmd)[2:], ["--drive", "pseudo", "--locale", "pseudo"])
+        self.assertIn("PSEUDO_PASS 21 screens", text)
+        planted = (self.BOOT + 'PSEUDO_FAIL main_menu label plant.too_small: wider than its box ("[Settings~~~~]")\n'
+                   "PSEUDO_FAILED 1 problem(s) on 21 screens\n[ERROR][pseudo] 1 label problem(s)\nDRIVE_DONE pseudo-plant\n")
+        rc, text, _, _ = self.drive(planted, drive="pseudo-plant", locale="pseudo")
+        self.assertEqual(rc, 1, text)
+        self.assertIn("PSEUDO_FAIL main_menu label plant.too_small", text)
+        self.assertIn("fails on purpose", text)
+
+    def test_the_bug_report_lines_are_echoed(self):
+        out = (self.BOOT + "BUG_REPORT D:/x/build/smoke-data/bug_20261110_101500\n"
+               "DRIVE_BUG D:/x/build/smoke-data/bug_20261110_101500\nDRIVE_DONE bug\n")
+        rc, text, _, _ = self.drive(out, drive="bug")
+        self.assertEqual(rc, 0, text)
+        self.assertIn("BUG_REPORT D:/x/build/smoke-data/bug_20261110_101500\n", text)
+        self.assertIn("DRIVE_BUG D:/x/build/smoke-data/bug_20261110_101500\n", text)
+
+    def test_help_names_the_new_drives(self):
+        dev = load("cpp-sdl2")
+        buf = io.StringIO()
+        with redirect_stdout(buf), redirect_stderr(buf):
+            try:
+                dev.build_parser().parse_args(["smoke", "-h"])
+            except SystemExit:
+                pass
+        text = " ".join(buf.getvalue().split())
+        for name in ("crash (", "pseudo (", "pseudo-plant (", "bug (", "show:<title|menu|settings|pause|subtitle|play|juice>"):
+            self.assertIn(name, text)
 
 
 # ---- #33: Unity smoke ---------------------------------------------------------

@@ -9,20 +9,33 @@
 //           then shell.handle_event(e), shell.update(dt), shell.render(renderer); shell.quit_requested()
 //           the game: shell.settings()["access"]["game_speed"], shell.say_line("guide.welcome"),
 //           shell.set_objective(shell.t("play.objective")), shell.is_down("attack"), shell.palette("player")
+//           analog (#274): shell.stick() (deadzone, invert_y), shell.right_trigger() (0..1), shell.held_actions(),
+//           shell.move_vector() (held move_* plus the stick, length <= 1)
 // Notes   : Only the top screen updates and gets input; the pause menu draws over the frozen play screen. Actions
 //           go to the top screen in sorted order until one is used, so Escape (ui_cancel and pause) backs out of
 //           a menu but pauses the game. Automated runs (dev.py smoke) never change the window mode, never pause
 //           on focus loss and never speak; the drive scripts press the same actions a player would. Text is SDL's
 //           built-in 8x8 font (shell/Draw.hpp): ASCII only, so the shell ships English only; a translation with
-//           accents needs sdl3-ttf (docs/ENGINE.md).
+//           accents needs sdl3-ttf (docs/ENGINE.md). The pseudo locale (#275) is the ASCII form for that reason:
+//           bracketed and 40 % longer, no accents.
+//           The left stick works two ways: as d-pad presses with hysteresis for the menus (the pad:dpad_* bindings),
+//           and as an analog vector for the game (stick(), held_actions()); triggers likewise press pad:l2 / pad:r2
+//           past half travel and give 0..1 through left_trigger() / right_trigger(). Axes follow SDL: +y is down.
+//           Debug builds (no NDEBUG) add the juice demo to the main menu, the pseudo locale to the language list
+//           and F8, the bug report: bug_<time>/ in the user-data folder (screenshot.bmp, log_tail.txt,
+//           settings.json, info.txt), printed as BUG_REPORT <folder>. The shell also keeps the crash context
+//           (core/Report.hpp) current, so main.cpp's crash file names the screen, locale and settings.
 //
 // Pseudocode:
 //   event -> binding string (core::key_binding / pad_binding) -> capturing? rebind : actions_for(bindings)
 //     -> a held subtitle line takes ui_accept first -> top screen's action handler
-//   update: drive step -> top screen -> subtitle track (subtitle_hold) -> narration -> captions
+//   update: poll the pads' axes -> drive step -> top screen -> subtitle track (subtitle_hold) -> narration
+//     -> captions, notice
 //   render: Draw frame (text scale, readable font, line spacing) -> screens from the last opaque one up
-//     -> subtitles and captions -> (access sweep) the frame's text report
+//     -> subtitles and captions -> notice -> (access sweep) the frame's text report -> (F8) the bug report
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): analog stick and triggers for the game (#274); crash
+//           context, F8 bug report, pseudo locale, juice demo screen (#275)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -44,14 +57,24 @@
 
 #include <nlohmann/json.hpp>
 
+#include "core/Analog.hpp"
 #include "core/I18n.hpp"
 #include "core/Menu.hpp"
+#include "core/Report.hpp"
 #include "core/ShellLogic.hpp"
 #include "shell/Draw.hpp"
 
 namespace shell {
 
 class Drive;
+class JuiceDemo;
+
+// Debug builds get the juice demo, the pseudo locale in the language list and the F8 bug report.
+#ifdef NDEBUG
+constexpr bool kDebugBuild = false;
+#else
+constexpr bool kDebugBuild = true;
+#endif
 
 struct RunOptions {
     bool automated = false;      // a smoke run: scripted input, no window changes, no speech
@@ -71,9 +94,9 @@ struct PlayHooks {
     std::function<bool(const std::string& action)> action;   // true when the game used the action
 };
 
-enum class ScreenId { Title, MainMenu, Settings, Credits, Loading, Play, Pause, Help, History };
+enum class ScreenId { Title, MainMenu, Settings, Credits, Loading, Play, Pause, Help, History, Juice };
 
-const char* screen_name(ScreenId id);   // "title", "main_menu", "settings", ...
+const char* screen_name(ScreenId id);   // "title", "main_menu", "settings", ..., "juice_demo"
 
 struct Screen {
     ScreenId id = ScreenId::Title;
@@ -112,7 +135,15 @@ public:
     double access_number(const char* key, double fallback) const;
     double game_speed() const { return access_number("game_speed", 1.0); }
     double timing_scale() const { return access_number("timing_scale", 1.0); }
-    bool is_down(const std::string& action) const;    // a bound key or button of the action is held
+    bool is_down(const std::string& action) const;    // a bound key or button of the action is held (or the stick: move_*)
+    // analog input (#274), zero without a pad
+    core::Vec2 stick() const;                         // the left stick: deadzone (radial, rescaled), invert_y; +y down
+    double left_trigger() const;                      // 0 at rest .. 1 fully in
+    double right_trigger() const;
+    std::set<std::string> held_actions() const;       // game actions held now (no ui_*), the stick's move_* included
+    core::Vec2 move_vector() const;                   // the held move_* actions plus the stick, length 0..1
+    void set_run_seed(const std::string& seed) { seed_ = seed; }   // named in crash files and bug reports
+    void notice(const std::string& text);             // a short message over any screen ("Bug report saved.")
     Rgb palette(const std::string& name, Rgb fallback) const;   // data/access/colours.json for the colour-blind mode
     bool say_line(const std::string& id);             // a dialogue line as a subtitle (settings permitting)
     bool caption(const std::string& event_id);        // a sound caption ("[thud]") with captions_sfx on
@@ -170,10 +201,26 @@ private:
     std::vector<StackOp> pending_ops_;
 
     std::string last_device_ = "keyboard";
-    std::set<std::string> held_;          // bindings held right now
-    std::map<std::string, bool> stick_dirs_;
+    std::set<std::string> held_;          // bindings held right now (keys, buttons, triggers past half travel)
+    std::map<std::string, bool> stick_dirs_;   // the stick as d-pad presses for the menus (not in held_)
     std::map<std::string, bool> triggers_;
     std::vector<SDL_Gamepad*> gamepads_;
+    struct PadAxes {
+        double lx = 0, ly = 0;            // the left stick, -1..1, +y down (SDL)
+        double lt = 0, rt = 0;            // the triggers, 0..1
+    };
+    PadAxes pad_;                         // raw, polled every update: the furthest stick, the deepest triggers
+    std::optional<PadAxes> pad_override_; // drives and tests set the pad's axes here
+
+    // debug builds and reports (#275)
+    std::unique_ptr<JuiceDemo> juice_;
+    ScreenId loading_next_ = ScreenId::Play;   // what the next loading screen opens
+    std::string seed_;
+    std::string notice_;
+    double notice_t_ = 0.0;
+    bool bug_requested_ = false;          // F8: the report is written once the frame is drawn
+    std::string last_bug_report_;
+    bool plant_ = false;                  // drive pseudo-plant: one label too small for its text on the main menu
 
     core::SubtitleTrack track_;
     core::LineHistory history_;
@@ -206,6 +253,14 @@ private:
 
     // input
     void key_event(const SDL_KeyboardEvent& e, bool down);
+    void key_down(const std::string& binding, bool repeat);   // a key went down (drives press keys through it)
+    void poll_pads();
+    double input_number(const char* key, double fallback) const;   // settings.input.<key>
+    bool input_flag(const char* key) const;
+    std::vector<std::string> stick_actions() const;
+    core::RunInfo run_info() const;
+    void write_bug_report();
+    std::string line_text(const core::SubtitleLine& line) const;   // through the string table, pseudo-aware
     void pad_button_event(const SDL_GamepadButtonEvent& e, bool down);
     void pad_axis_event(const SDL_GamepadAxisEvent& e);
     void binding_pressed(const std::string& binding, bool repeat);
@@ -242,6 +297,9 @@ private:
     void draw_value(const core::Row& row, double x, double y, double w, double h, bool focused,
                     const std::string& lid);
     void draw_subtitles();
+    void draw_notice();
+    void draw_hint(const std::string& id, const std::string& action, const std::string& hint_key, double x, double y,
+                   double w, TextOpts o);
 
     // narration
     void narrate_update();

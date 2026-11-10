@@ -51,6 +51,7 @@ set(CORE_SOURCES
   src/core/Bindings.cpp
   src/core/I18n.cpp
   src/core/Menu.cpp
+  src/core/Report.cpp
   src/core/SaveStore.cpp
   src/core/Settings.cpp
   src/core/ShellLogic.cpp
@@ -73,6 +74,7 @@ set(GAME_SOURCES
   src/gfx/KitShaders.cpp
   src/shell/Draw.cpp
   src/shell/Drive.cpp
+  src/shell/JuiceDemo.cpp
   src/shell/Shell.cpp
 )
 add_library(game_lib STATIC ${GAME_SOURCES})
@@ -130,11 +132,13 @@ if(BUILD_TESTS)
   find_package(doctest CONFIG REQUIRED)
   add_executable(unit_tests
     tests/test_main.cpp
+    tests/test_analog.cpp
     tests/test_fixed_timestep.cpp
     tests/test_golden_vectors.cpp
     tests/test_golden_audio.cpp
     tests/test_menu.cpp
     tests/test_motor_access.cpp
+    tests/test_reports.cpp
     tests/test_shell_files.cpp
   )
   target_link_libraries(unit_tests PRIVATE core doctest::doctest)

@@ -19,7 +19,10 @@
 //           -> set render scale k = text_scale * mult -> SDL_RenderDebugText(x / k, y / k) (twice when bold)
 //           -> record {id, text, px, fg, bg or outline or over_game, ink box, fits}
 //   access_report(): the texts with the fill under each (the last opaque UI fill before it under its middle)
+//     (the pseudo-locale drive reads the same report: fits, ink box, raw)
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): raw labels for the pseudo check, circle(), save_frame()
+//           (#275)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -72,10 +75,15 @@ struct TextOpts {
     Rgb color = style::kText;
     bool outline = false;         // black outline: text over the game
     bool wrap = false;            // word-wrap inside the box (else one line, cut when too long)
+    bool raw = false;             // not UI copy (a key name, CREDITS.md, an arrow): the pseudo check skips its "["
 };
 
 std::string hex_of(Rgb c);
 std::optional<Rgb> rgb_from_hex(const std::string& hex);   // "#rrggbb"
+
+// Saves what the renderer drew this frame as a BMP (call before SDL_RenderPresent), in output pixels. SDL alone
+// writes BMP; tools/art/frames_to_gif.py reads it. main.cpp (--screenshot, --record) and the F8 bug report use it.
+bool save_frame(SDL_Renderer* renderer, const std::string& path);
 
 class Draw {
 public:
@@ -99,6 +107,7 @@ public:
     void panel(double x, double y, double w, double h);
     void focus_box(double x, double y, double w, double h);
     void bar(double x, double y, double w, double h, double fraction, Rgb c = style::kBar);
+    void circle(double cx, double cy, double r, Rgb c, double line = 1.0);   // an outline (the juice demo's rings)
     void clip(double x, double y, double w, double h);
     void unclip();
 
@@ -126,6 +135,7 @@ private:
         Rgb fg;
         bool outline;
         bool fits;
+        bool raw;
         std::string why;
         double ink[4];
         int order;

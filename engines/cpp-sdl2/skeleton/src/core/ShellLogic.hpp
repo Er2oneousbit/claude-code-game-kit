@@ -18,7 +18,10 @@
 //   wrap_chars: words joined while the line stays within max_chars; a word longer than that is cut
 //   SubtitleTrack::update: t += dt; past duration -> holding when hold is on and not dismissed, else gone
 //   AutoRepeat::update(dt, held): held for DELAY, then true every INTERVAL
+//   label_problem: cut off -> its reason; outside the screen -> "past the screen edge"; pseudo, not raw and no
+//     leading "[" -> untranslated
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the pseudo-locale layout check (#275)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -56,6 +59,20 @@ std::vector<std::string> wrap_chars(const std::string& text, std::size_t max_cha
 std::vector<std::string> credits_lines(const std::string& markdown);
 // "key_space" -> "Space", "xbox_a" -> "A", "pad_dpad_up" -> "Dpad up" (the glyph table's own text wins in the shell)
 std::string glyph_fallback_label(const std::string& glyph_name);
+
+// ---- The pseudo-locale layout check (#275) ------------------------------------------------------------------
+// One label as drawn: its text, whether it fit its box (and why not), its ink box in design pixels, and raw = not
+// UI copy (a key name, CREDITS.md, an arrow), which is exempt from the "went through t()" rule.
+struct DrawnLabel {
+    std::string id;
+    std::string text;
+    bool fits = true;
+    std::string why;
+    double x = 0, y = 0, w = 0, h = 0;
+    bool raw = false;
+};
+// What is wrong with a label ("" = nothing): cut off, past the screen edge, or (pseudo) not starting with "[".
+std::string label_problem(const DrawnLabel& label, double screen_w, double screen_h, bool pseudo);
 
 // ---- Keeping track (#167) -----------------------------------------------------------------------------------
 struct HistoryEntry {

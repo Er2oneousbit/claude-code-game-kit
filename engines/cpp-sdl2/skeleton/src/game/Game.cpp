@@ -14,7 +14,8 @@
 //   coyote.update(on floor); buffer.update; can jump and a buffered jump -> jump
 // Authored: Written with Claude (Sonnet 5.5, claude-sonnet-5-5)
 // Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): the shell's screens (#168)
-// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): jump and guard use timing_scale and hold_to_toggle (#269)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): jump and guard use timing_scale and hold_to_toggle (#269);
+//           the new drives in --help (#275)
 // ---------------------------------------------------------------------------
 #include "game/Game.hpp"
 
@@ -65,8 +66,9 @@ bool Game::configure(const std::vector<std::string>& args) {
 }
 
 const char* Game::options_help() {
-    return "  --drive SCENARIO   (smoke) a scripted path through the shell: menus, access[:res=WxH,scale=N,pad,read],\n"
-           "                     show:<title|menu|settings|pause|subtitle|play>; dev.py smoke --drive passes it\n"
+    return "  --drive SCENARIO   (smoke) a scripted path through the shell: menus, crash, pseudo, pseudo-plant, bug,\n"
+           "                     access[:res=WxH,scale=N,pad,read], show:<title|menu|settings|pause|subtitle|play|juice>;\n"
+           "                     dev.py smoke --drive passes it\n"
            "  --data-dir DIR     keep settings.json in this folder (default: the user's preferences folder)\n"
            "  --locale LANG      language for the run (data/i18n/<LANG>.json)\n"
            "  (the game's own options go in Game::configure)\n";
