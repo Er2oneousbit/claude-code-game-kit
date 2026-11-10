@@ -18,7 +18,10 @@
   loading, pause with "What now?" and the dialogue history, subtitles and menu narration, on bevy_ui. The model is
   headless (`dev.py smoke --drive menus` saves settings.json without a GPU; `tests/shell.rs` drives it); only
   `src/shell/view.rs` draws. The game runs only while Play is on top (`GameActive`), reads input from `Intent` (the shell
-  fills it from the player's bindings) and its accessibility rules from `AccessRules` and `Palette`.
+  fills it from the player's bindings: `dir`, `pressed` and `held` actions, the analog `stick` with the player's deadzone
+  and invert_y, and `left_trigger`/`right_trigger`) and its accessibility rules from `AccessRules` and `Palette`. The
+  display settings (mode, vsync, frame cap, window size) go to the window through `src/shell/display.rs`, never in
+  automated runs.
   `smoke --drive show:<screen> --screenshot build/x.png` pictures a screen; `python tools/access/sweep.py` runs the
   access drive. The readable font is Atkinson Hyperlegible (`src/shell/fonts/`, OFL, compiled into the exe).
 - **Verify:** `python tools/dev.py doctor`.

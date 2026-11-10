@@ -13,11 +13,12 @@
 //
 // Pseudocode:
 //   PreUpdate poll_input: every known key and pad button -> just pressed: finish a capture or queue its actions;
-//   held: the actions bound to it -> Shell.held
+//   held: the actions bound to it -> Shell.held; the leaning-most left stick and the deepest triggers -> Shell.pad
 //   Update rebuild_ui (version moved): despawn the root -> spawn the top screen's nodes, each text tagged UiLabel
 //   Last report_access (a report was asked for two frames ago): every UiLabel's size, position, colours and
 //   whether it fits -> AccessReport.result
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the raw stick and triggers go to Shell.pad (#265)
 // ---------------------------------------------------------------------------
 use std::collections::BTreeSet;
 
@@ -30,7 +31,7 @@ use bevy::window::PrimaryWindow;
 use serde_json::{Value, json};
 
 use super::screens::{self, PAGE_LINES, RowKind, TABS};
-use super::{ScreenName, Shell, input};
+use super::{PadAxes, ScreenName, Shell, input};
 
 // ---- Tunables ------------------------------------------------------------------
 pub const TITLE_PX: f32 = 44.0;
@@ -47,8 +48,6 @@ pub const READABLE_FONT: &[u8] = include_bytes!("fonts/AtkinsonHyperlegible-Regu
 pub const READABLE_BOLD: &[u8] = include_bytes!("fonts/AtkinsonHyperlegible-Bold.ttf");
 /// Frames between an access report request and the measurement (one to rebuild, one to lay out).
 const REPORT_DELAY: u32 = 2;
-/// Stick deflection that counts as a direction.
-const STICK_DEADZONE_MIN: f32 = 0.2;
 
 // Colours (contrast on PANEL: TEXT 13:1, DIM 7:1, ACCENT 9:1; all above 4.5:1, E158)
 pub const BG: Color = Color::srgb(0.078, 0.086, 0.118);
@@ -131,11 +130,12 @@ fn device_name(pad: &Gamepad) -> &'static str {
     }
 }
 
-/// Keys and pad buttons -> the shell: presses as action groups (or a capture), held keys as held actions.
+/// Keys and pad buttons -> the shell: presses as action groups (or a capture), held keys as held actions, and the
+/// pad's raw stick and triggers (the shell applies the deadzone and invert_y).
 fn poll_input(keys: Res<ButtonInput<KeyCode>>, pads: Query<&Gamepad>, mut shell: ResMut<Shell>) {
     let bindings = shell.bindings();
     let mut held = BTreeSet::new();
-    let deadzone = (shell.num("input", "deadzone") as f32).max(STICK_DEADZONE_MIN);
+    let mut axes = PadAxes::default();
     let capture_slot = shell.capturing.as_ref().map(|(_, slot)| *slot);
     for (name, key) in input::all_keys() {
         let binding = format!("key:{name}");
@@ -167,23 +167,27 @@ fn poll_input(keys: Res<ButtonInput<KeyCode>>, pads: Query<&Gamepad>, mut shell:
                 held.extend(input::actions_for(&bindings, &binding));
             }
         }
-        // the left stick moves like the d-pad
-        let x = pad.get(GamepadAxis::LeftStickX).unwrap_or(0.0);
-        let y = pad.get(GamepadAxis::LeftStickY).unwrap_or(0.0);
-        if x < -deadzone {
-            held.insert("move_left".into());
+        // analog: the stick that leans furthest across all pads, the deepest trigger press
+        let stick = pad.left_stick();
+        if stick.length_squared() > axes.left.length_squared() {
+            axes.left = stick;
         }
-        if x > deadzone {
-            held.insert("move_right".into());
-        }
-        if y > deadzone {
-            held.insert("move_up".into());
-        }
-        if y < -deadzone {
-            held.insert("move_down".into());
-        }
+        axes.left_trigger = axes
+            .left_trigger
+            .max(trigger_value(pad, GamepadButton::LeftTrigger2, GamepadAxis::LeftZ));
+        axes.right_trigger =
+            axes.right_trigger
+                .max(trigger_value(pad, GamepadButton::RightTrigger2, GamepadAxis::RightZ));
     }
     shell.held = held;
+    shell.pad = axes;
+}
+
+/// One trigger's travel, 0 to 1: the analog button value, or the Z axis on pads that report triggers as an axis.
+fn trigger_value(pad: &Gamepad, button: GamepadButton, axis: GamepadAxis) -> f32 {
+    let from_button = pad.get(button).unwrap_or(0.0);
+    let from_axis = pad.get(axis).unwrap_or(0.0);
+    from_button.max(from_axis).clamp(0.0, 1.0)
 }
 
 // ---- Drawing -----------------------------------------------------------------------------------------------

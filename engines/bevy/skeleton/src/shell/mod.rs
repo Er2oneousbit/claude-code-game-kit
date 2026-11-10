@@ -6,7 +6,8 @@
 // Usage   : app.add_plugins(ShellPlugin) (app.rs does it for every run; tests use app::shell_test_app)
 //           shell.push(ScreenName::Settings); shell.inject("ui_down"); shell.t("menu.play"); shell.say("Guide", "...")
 //           shell.set_objective(text); shell.focus_id()
-// Notes   : Headless by design: this module touches no window, renderer or ButtonInput, so `dev.py smoke --drive menus`
+// Notes   : Headless by design: this module touches no renderer or ButtonInput, and a window only when one exists
+//           outside an automated run (display.rs), so `dev.py smoke --drive menus`
 //           walks the menus and saves settings.json without a GPU, and tests/shell.rs drives it with app.update().
 //           The screens' rows are rebuilt from the settings each time they are needed (screens.rs): the stack only
 //           keeps focus, tab and scroll. Drawing lives in view.rs (added with a window), which rebuilds its bevy_ui
@@ -17,10 +18,15 @@
 // Pseudocode:
 //   each frame: tick timers (boot and loading advance, blink, subtitle, messages) -> for each pending press group:
 //   a held subtitle takes ui_accept first, else the top screen's action() -> auto-repeat held game actions -> write
-//   Intent (held move_* -> dir, presses) -> GameActive = Play on top -> narrator line for the focused row ->
-//   when the settings changed: ScreenShake, Palette, AccessRules, UiScale follow them
+//   Intent (held move_* + shaped stick -> dir, presses, held game actions, stick, triggers; all zero outside Play)
+//   -> GameActive = Play on top -> narrator line for the focused row ->
+//   when the settings changed: ScreenShake, Palette, AccessRules, UiScale follow them, and the display settings
+//   go to the primary window (display.rs, never in automated runs)
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): analog stick, triggers and held actions in the
+//           Intent (#265); display settings applied to the window (#268)
 // ---------------------------------------------------------------------------
+pub mod display;
 pub mod drive;
 pub mod input;
 pub mod narrator;
@@ -35,6 +41,7 @@ use bevy::prelude::*;
 use serde_json::{Value, json};
 
 use crate::game::{AccessRules, GameActive, GameConfig, Intent, Palette, ScreenShake};
+use crate::logic::analog;
 use crate::logic::auto_repeat::AutoRepeat;
 use crate::logic::bindings::{self, Bindings};
 use crate::logic::i18n::{self, Tables};
@@ -64,6 +71,19 @@ pub const MOVE_ACTIONS: [(&str, Vec2); 4] = [
     ("move_up", Vec2::Y),
     ("move_down", Vec2::NEG_Y),
 ];
+/// Raw stick deflection that also holds a move_* action (Intent.held); never below the player's deadzone.
+pub const STICK_HOLD_MIN: f32 = 0.2;
+
+/// The pad's analog inputs as the hardware reports them (view.rs polls them; tests and drives may set them).
+/// The shell shapes them into the Intent with the player's deadzone and invert_y.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct PadAxes {
+    /// Left stick, -1..1 each, up is +y.
+    pub left: Vec2,
+    /// Triggers, 0 at rest to 1.
+    pub left_trigger: f32,
+    pub right_trigger: f32,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ScreenName {
@@ -173,8 +193,11 @@ pub struct Shell {
     pub stack: Vec<ScreenState>,
     /// Presses waiting for this frame: each entry is the actions one key is bound to, in sorted order.
     pub pending: Vec<Vec<String>>,
-    /// Game actions held right now (the view polls them; drives set them).
+    /// Game actions held right now through their bindings (the view polls them; drives set them). The stick's own
+    /// move_* holds are added in held_actions().
     pub held: BTreeSet<String>,
+    /// The pad's analog inputs, raw (view.rs writes them every frame).
+    pub pad: PadAxes,
     /// Game actions pressed this frame, auto-repeats included; the Intent takes them.
     pub game_pressed: Vec<String>,
     repeaters: BTreeMap<String, AutoRepeat>,
@@ -219,6 +242,7 @@ impl Shell {
             stack: Vec::new(),
             pending: Vec::new(),
             held: BTreeSet::new(),
+            pad: PadAxes::default(),
             game_pressed: Vec::new(),
             repeaters: BTreeMap::new(),
             history: Vec::new(),
@@ -684,6 +708,50 @@ impl Shell {
         dir.normalize_or_zero()
     }
 
+    /// The left stick for gameplay: input.deadzone (radial, rescaled) and input.invert_y applied (#265).
+    pub fn stick(&self) -> Vec2 {
+        let (x, y) = analog::stick(
+            self.pad.left.x,
+            self.pad.left.y,
+            self.num("input", "deadzone") as f32,
+            self.flag("input", "invert_y"),
+        );
+        Vec2::new(x, y)
+    }
+
+    /// (left, right) trigger, 0 to 1, past analog::TRIGGER_DEADZONE.
+    pub fn triggers(&self) -> (f32, f32) {
+        (
+            analog::trigger(self.pad.left_trigger, analog::TRIGGER_DEADZONE),
+            analog::trigger(self.pad.right_trigger, analog::TRIGGER_DEADZONE),
+        )
+    }
+
+    /// The move_* actions the stick holds: a raw lean past the deadzone (at least STICK_HOLD_MIN), invert_y honoured.
+    pub fn stick_actions(&self) -> Vec<&'static str> {
+        let on = (self.num("input", "deadzone") as f32).max(STICK_HOLD_MIN);
+        let x = self.pad.left.x;
+        let y = if self.flag("input", "invert_y") {
+            -self.pad.left.y
+        } else {
+            self.pad.left.y
+        };
+        let mut out = Vec::new();
+        for (action, lean) in [("move_left", -x), ("move_right", x), ("move_up", y), ("move_down", -y)] {
+            if lean > on {
+                out.push(action);
+            }
+        }
+        out
+    }
+
+    /// The game actions held right now (no ui_*): the bindings' holds plus the stick's move_* holds.
+    pub fn held_actions(&self) -> BTreeSet<String> {
+        let mut out: BTreeSet<String> = self.held.iter().filter(|a| !a.starts_with("ui_")).cloned().collect();
+        out.extend(self.stick_actions().into_iter().map(str::to_string));
+        out
+    }
+
     fn narrate(&mut self) {
         let changed = std::mem::take(&mut self.screen_changed);
         let Some(top) = self.top() else {
@@ -773,10 +841,13 @@ impl Plugin for ShellPlugin {
     fn build(&self, app: &mut App) {
         let cfg = app.world().get_resource::<GameConfig>().cloned().unwrap_or_default();
         app.insert_resource(Shell::new(&cfg))
+            .init_resource::<display::FrameLimit>()
             .add_systems(
                 Update,
                 (shell_frame, drive::drive_update, sync_settings, quit_when_asked).chain(),
             )
+            .add_systems(Update, display::apply_display.after(sync_settings))
+            .add_systems(Last, display::limit_frame_rate)
             .add_systems(
                 RunFixedMainLoop,
                 write_intent.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
@@ -798,18 +869,35 @@ fn shell_frame(time: Res<Time>, mut shell: ResMut<Shell>, mut active: ResMut<Gam
     }
 }
 
-/// The held move actions and this frame's presses become the Intent, right before the fixed ticks.
+/// The held actions, the stick, the triggers and this frame's presses become the Intent, right before the fixed
+/// ticks. Outside Play everything is zero, so a menu never leaks a held trigger into the game.
 fn write_intent(shell: Res<Shell>, cfg: Res<GameConfig>, mut intent: ResMut<Intent>) {
     if cfg.autoplay.is_some() {
-        intent.pressed.clear();
-        return; // bots win: a stray key cannot disturb a recorded scenario
+        // bots win: a stray key or stick cannot disturb a recorded scenario (the bot sets dir itself)
+        let dir = intent.dir;
+        *intent = Intent {
+            dir,
+            ..Intent::default()
+        };
+        return;
     }
-    intent.dir = if shell.game_active() {
-        shell.held_dir()
-    } else {
-        Vec2::ZERO
+    if !shell.game_active() {
+        *intent = Intent {
+            pressed: shell.game_pressed.clone(),
+            ..Intent::default()
+        };
+        return;
+    }
+    let stick = shell.stick();
+    let (left_trigger, right_trigger) = shell.triggers();
+    *intent = Intent {
+        dir: (shell.held_dir() + stick).clamp_length_max(1.0),
+        pressed: shell.game_pressed.clone(),
+        held: shell.held_actions(),
+        stick,
+        left_trigger,
+        right_trigger,
     };
-    intent.pressed = shell.game_pressed.clone();
 }
 
 /// The game follows the settings: shake, the colour-blind palette, the access rules, the interface scale.
