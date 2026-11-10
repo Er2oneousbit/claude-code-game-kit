@@ -52,7 +52,8 @@ RUNS = {                 # name: (resolution, text scale, gamepad only, drive ex
 RUN_SETS = {"pc": ("pc", "pc-200", "pc-read"), "deck": ("deck", "deck-200"), "all": tuple(RUNS)}
 DIALOGUE_GLOB = "data/dialogue/*.built.json"
 DRIVE_TIMEOUT_S = 600
-DATA_DIR = "build/access"   # one fresh data folder per run, inside the game's build folder
+DATA_DIR = "captures/access"   # one fresh data folder per run; never under build/ (#263: on Windows and macOS that
+                               # is Unity's player folder Build/, and the runs' settings shipped next to game.exe)
 MARKER = re.compile(r"\b(ACCESS_[A-Z]+) (.*)$")
 OVERLAP_SLACK = 1        # px two glyph boxes may share (antialiasing, rounding) before it counts as overlap
 

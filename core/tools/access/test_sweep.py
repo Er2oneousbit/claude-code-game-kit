@@ -213,7 +213,7 @@ class SweepExam(unittest.TestCase):
                 sweep.main(["--runs", "pc", "--root", d])       # exits 2 (no drive): the folders are what counts
                 sweep.main(["--runs", "pc", "--root", d])       # again: the folder from the first time must go
             runs = (Path(d) / "runs.txt").read_text(encoding="utf-8").split()
-            self.assertEqual(runs[0], "build/access/pc")
+            self.assertEqual(runs[0], "captures/access/pc")
             self.assertEqual(runs[1:4:2], ["False", "False"])    # never an old folder, even on the second sweep
 
     def test_browser_console_lines_are_read(self):
@@ -239,6 +239,32 @@ class SweepExam(unittest.TestCase):
             with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(sweep.main(["--root", d]), 2)          # no tools/dev.py here
             self.assertIn("[error]", err.getvalue())
+
+
+class SweepDataOutsideThePlayer(unittest.TestCase):
+    """#263: the runs' settings folders went to build/access/, which on Windows and macOS is Unity's player folder
+    Build/, so a shipped Build/ carried Build/access/<run>/settings.json next to game.exe."""
+
+    def test_a_unity_player_folder_gets_none_of_the_runs_data(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "Build").mkdir()
+            (root / "Build" / "game.exe").write_bytes(b"MZ player")
+            (root / "tools").mkdir()
+            (root / "tools" / "dev.py").write_text(       # a stand-in dev.py: records the folder, writes settings
+                "import sys, pathlib\n"
+                "folder = pathlib.Path(sys.argv[sys.argv.index('--data-dir') + 1])\n"
+                "with open('runs.txt', 'a') as f: f.write(folder.as_posix() + '\\n')\n"
+                "folder.mkdir(parents=True, exist_ok=True)\n"
+                "(folder / 'settings.json').write_text('{}')\n"
+                "print('ACCESS_INPUT {\"actions\": {}}')\n", encoding="utf-8")
+            with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+                sweep.main(["--runs", "all", "--root", d])       # the checks fail (no screens): where the data went counts
+            runs = (root / "runs.txt").read_text(encoding="utf-8").split()
+            self.assertEqual(len(runs), len(sweep.RUNS))
+            for run in runs:                                    # build/ and Build/ are one folder on Windows
+                self.assertNotEqual(Path(run).parts[0].lower(), "build", run)
+            self.assertEqual(sorted(p.name for p in (root / "Build").iterdir()), ["game.exe"])
 
 
 if __name__ == "__main__":
