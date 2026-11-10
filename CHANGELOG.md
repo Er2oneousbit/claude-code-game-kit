@@ -76,6 +76,9 @@
   ignore the real keyboard, mouse and gamepads and take only the drive's own presses, so a stray key or a virtual pad
   on a busy machine cannot break a tour. The sweep keeps every run's output in `captures/access/<run>/smoke.log` (and `last.png` where the
   engine can capture) and prints the path when a run fails.
+- **Web and web-3d `smoke --drive crash`:** the "fails on purpose" note prints only after a crash file was written,
+  as on the other engines; it also followed a crash hook that wrote nothing and web-3d's refused drive (`DRIVE_ABORT`),
+  so a real failure read as the expected one.
 - **`scripts/check_examples.py` (#159):** doctor, check, test and smoke across every example, with toolchains
   skipped by name when missing, known gaps recorded, and a final check that the run left `examples/` untouched.
 - **Upgrade notes:** Godot games need Godot 4.6 or newer. A Unity game's code that stores `FrontEnd.World` as a
