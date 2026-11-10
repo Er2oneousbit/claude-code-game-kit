@@ -3,7 +3,8 @@
 // Purpose : Tests the shell's SDL-free logic: the menu list (focus, wrap, disabled rows), the row builders (slider
 //           steps, choice wrap, toggles), the settings menu over the settings JSON (tabs, every schema field has a
 //           row, rebinding capture, the one-handed presets), and the helpers (key names, wrapping, credits, the
-//           dialogue history, hold-to-mash, palettes, subtitle hold).
+//           dialogue history, hold-to-mash, palettes, subtitle hold), and which device events a drive's run takes
+//           (#276).
 // Usage   : python tools/dev.py test     (ctest lists one test per TEST_CASE)
 // Notes   : No SDL: the rows are driven with the ui_* action names a player's key or button turns into.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
@@ -405,6 +406,23 @@ TEST_CASE("a held subtitle stays until accept and then goes (#167)") {
     CHECK(track.play(*ouch, 2.0));
     CHECK_FALSE(track.play(*ouch, 3.0));          // inside its cooldown
     CHECK(track.play(*ouch, 5.5));
+}
+
+// #276. No ";" in a test name: CTest cuts the name there, and the cut name matches no test, so it "passes" empty
+TEST_CASE("a drive run ignores the real keyboard and mouse and pads while normal play reads them") {
+    using core::DeviceEvent;
+    // the player's input: read in play, dropped while a drive presses (a stray key, a virtual pad)
+    for (const DeviceEvent kind : {DeviceEvent::Key, DeviceEvent::MouseButton, DeviceEvent::MouseMotion,
+                                   DeviceEvent::PadButton, DeviceEvent::PadAxis}) {
+        CHECK(core::admits_device_event(kind, false));
+        CHECK_FALSE(core::admits_device_event(kind, true));
+    }
+    // the window and the devices themselves: always (quit still quits, a pad plugged in is still opened)
+    for (const DeviceEvent kind : {DeviceEvent::PadAdded, DeviceEvent::PadRemoved, DeviceEvent::Quit,
+                                   DeviceEvent::FocusLost, DeviceEvent::Other}) {
+        CHECK(core::admits_device_event(kind, false));
+        CHECK(core::admits_device_event(kind, true));
+    }
 }
 
 // {{FOOTER}}

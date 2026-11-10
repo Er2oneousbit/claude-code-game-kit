@@ -14,9 +14,10 @@
 // Notes   : Only the top screen updates and gets input; the pause menu draws over the frozen play screen. Actions
 //           go to the top screen in sorted order until one is used, so Escape (ui_cancel and pause) backs out of
 //           a menu but pauses the game. Automated runs (dev.py smoke) never change the window mode, never pause
-//           on focus loss and never speak; the drive scripts press the same actions a player would. Text is SDL's
-//           built-in 8x8 font (shell/Draw.hpp): ASCII only, so the shell ships English only; a translation with
-//           accents needs sdl3-ttf (docs/ENGINE.md). The pseudo locale (#275) is the ASCII form for that reason:
+//           on focus loss and never speak; the drive scripts press the same actions a player would, and the real
+//           keyboard, mouse and pads are not read (#276: handle_event drops them, the stick and triggers rest).
+//           Text is SDL's built-in 8x8 font (shell/Draw.hpp): ASCII only, so the shell ships English only; a
+//           translation with accents needs sdl3-ttf (docs/ENGINE.md). The pseudo locale (#275) is the ASCII form for that reason:
 //           bracketed and 40 % longer, no accents.
 //           The left stick works two ways: as d-pad presses with hysteresis for the menus (the pad:dpad_* bindings),
 //           and as an analog vector for the game (stick(), held_actions()); triggers likewise press pad:l2 / pad:r2
