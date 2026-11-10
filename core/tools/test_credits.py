@@ -122,6 +122,20 @@ class Credits(unittest.TestCase):
         (build / "AtkinsonHyperlegible-Regular.ttf").write_bytes(b"\0")
         self.assertEqual(credits.kit_rows(root, []), [])
 
+    def test_bevys_text_font_is_credited_next_to_the_readable_one(self):
+        # Bevy's shell compiles in Fira Mono in full (its built-in font is an ASCII-only subset): both kit fonts
+        # are credited, each once
+        root = self.game("")
+        fonts = root / "src" / "shell" / "fonts"
+        fonts.mkdir(parents=True)
+        for name in ("AtkinsonHyperlegible-Regular.ttf", "FiraMono-Medium.ttf"):
+            (fonts / name).write_bytes(b"\0")
+        self.assertEqual([(r["id"], r["files"]) for r in credits.kit_rows(root, [])],
+                         [("K-0001", "src/shell/fonts/AtkinsonHyperlegible-Regular.ttf"),
+                          ("K-0002", "src/shell/fonts/FiraMono-Medium.ttf")])
+        self.assertEqual(self.run_cli("--root", str(root))[0], 0)
+        self.assertIn("Mozilla Foundation", (root / "CREDITS.md").read_text(encoding="utf-8"))
+
 
 class CreditsReviewFixes(Credits):
     """#247: an escaped pipe shifted every later column; a log that is not UTF-8 was a traceback."""

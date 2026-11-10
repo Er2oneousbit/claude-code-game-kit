@@ -76,6 +76,12 @@
   ignore the real keyboard, mouse and gamepads and take only the drive's own presses, so a stray key or a virtual pad
   on a busy machine cannot break a tour. The sweep keeps every run's output in `captures/access/<run>/smoke.log` (and `last.png` where the
   engine can capture) and prints the path when a run fails.
+- **Bevy text in every language:** the shell drew every accented letter as an empty box (all of French, every label
+  of the pseudo-locale), because Bevy's built-in font is an ASCII-only subset of Fira Mono, and the pseudo drive still
+  printed `PSEUDO_PASS`. The shell now compiles in Fira Mono Medium in full (the same face, OFL, `src/shell/fonts/`,
+  credited by `tools/credits.py` as K-0002), the readable font falls back to it for the arrows and the held-subtitle
+  marker Atkinson Hyperlegible lacks, the pseudo check fails a label with a character no font in its stack can draw
+  (`engines/bevy/skeleton/src/logic/charmap.rs` reads the font's character map), and a test checks every `data/i18n/` table against the font.
 - **`scripts/check_examples.py` (#159):** doctor, check, test and smoke across every example, with toolchains
   skipped by name when missing, known gaps recorded, and a final check that the run left `examples/` untouched.
 - **Upgrade notes:** Godot games need Godot 4.6 or newer. A Unity game's code that stores `FrontEnd.World` as a
