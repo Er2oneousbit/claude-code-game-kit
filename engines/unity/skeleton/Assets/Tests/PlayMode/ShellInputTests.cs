@@ -13,6 +13,8 @@
 //           exist and rest at 0, and the shaping path is fed through InjectAnalog (both backends run that one).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): analog stick, triggers and held game actions (#274)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a drive (Scripted) reads no real device (#276), the
+//           hardware stood in for by ShellInput.DeviceSnapshot
 // ---------------------------------------------------------------------------
 using System.Collections.Generic;
 using NUnit.Framework;
@@ -43,6 +45,9 @@ namespace {{GAME_SLUG}}.Tests
             ShellInput.Configure(Bindings.Defaults(), false);
             ShellInput.ConfigureAnalog(0.2, false);
             ShellInput.ClearAnalog();
+            ShellInput.Scripted = false;
+            ShellInput.DeviceSnapshot = null;
+            ShellInput.Begin(DT);                               // nothing held over into the next test
         }
 
         [Test]
@@ -56,6 +61,30 @@ namespace {{GAME_SLUG}}.Tests
             Assert.AreEqual("ui_events", ShellInput.Backend, "the Input System is active without its package");
 #endif
             Assert.AreEqual(ShellInput.Backend != "ui_events", ShellInput.Polls);
+        }
+
+        [Test]
+        public void Scripted_ADriveReadsNoRealDeviceButNormalPlayDoes()
+        {
+            // #276: a stray key or a virtual pad on a shared machine opened screens during a windowed drive. The
+            // stand-in snapshot is what the backend reads from the hardware: D (move_right) and pad south (ui_accept)
+            // held down, as a player or a stray device holds them.
+            ShellInput.Configure(Bindings.Defaults(), false);
+            ShellInput.DeviceSnapshot = held => { held.Add("key:d"); held.Add("pad:south"); };
+            ShellInput.Inject("ui_down", "pad_xbox");          // the drive's own press: the prompts on a pad
+            ShellInput.Scripted = true;
+            ShellInput.Begin(DT);
+            Assert.IsTrue(ShellInput.JustPressed("ui_down"), "the drive's press counts");
+            Assert.IsFalse(ShellInput.IsHeld("move_right"), "the real D key holds nothing during a drive");
+            Assert.IsFalse(ShellInput.JustPressed("ui_accept"), "the real pad button presses nothing");
+            Assert.AreEqual("pad_xbox", ShellInput.LastDevice, "the prompts stay on the drive's device");
+            ShellInput.Begin(DT);
+            Assert.IsFalse(ShellInput.IsHeld("move_right"));
+            ShellInput.Scripted = false;                         // normal play: the same hardware is read
+            ShellInput.Begin(DT);
+            Assert.IsTrue(ShellInput.IsHeld("move_right"));
+            Assert.IsTrue(ShellInput.JustPressed("ui_accept"));
+            Assert.AreEqual("keyboard", ShellInput.LastDevice);
         }
 
         [Test]
