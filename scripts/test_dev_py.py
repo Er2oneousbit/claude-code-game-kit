@@ -19,7 +19,7 @@
 #           editor path from a project folder with a space too (#273), that Unreal's crash and pseudo-plant drives
 #           exit 1 on purpose with their proof checked and its bug drive gets a renderer (#275), and that every smoke
 #           refuses a --data-dir inside its player or build output (#263), or inside a folder its build packs into
-#           the game (#271).
+#           the game (#271), and that Godot's dev.py refuses a Godot older than its 4.6 floor with exit 2.
 # Usage   : python scripts/test_dev_py.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, no engine needed. The live checks (a real smoke with each toolchain) are
@@ -980,6 +980,74 @@ class GodotPck(TempRoot):
         self.assertEqual(len(filters), 3)
         for line in filters:
             self.assertIn(".game-kit.json", line)
+
+
+class GodotVersionFloor(TempRoot):
+    """The floor is MIN_GODOT (4.6): 4.3 to 4.5 do not compile the shell (Control.has_focus(true) is new in 4.6), so
+    every command but clean and ship, and doctor, must exit 2 with a clear message instead of parse errors."""
+
+    def setup_dev(self, version_text):
+        dev = load("godot")
+        dev.ROOT = self.root
+        dev.find_godot = lambda cli=None: "godot"
+        calls = []
+
+        def fake_run(cmd, capture=True, echo="fail", timeout=None):
+            calls.append([str(c) for c in cmd])
+            return (0, version_text) if cmd[1:] == ["--version"] else (0, "")
+        dev.run = fake_run
+        ran = []
+        for name in ("cmd_check", "cmd_test", "cmd_smoke", "cmd_clean"):
+            setattr(dev, name, lambda args, godot, name=name: ran.append(name) or 0)
+        return dev, calls, ran
+
+    def test_the_floor_is_4_6_and_project_godot_agrees(self):
+        dev = load("godot")
+        self.assertEqual(dev.MIN_GODOT, (4, 6))
+        cfg = (KIT / "engines" / "godot" / "skeleton" / "project.godot").read_text(encoding="utf-8")
+        self.assertIn('config/features=PackedStringArray("4.6")', cfg)
+
+    def test_older_godot_is_refused_with_exit_2(self):
+        for text in ("4.5.stable.official.876b29033\n", "4.4.stable.official.4c311cbee\n", "4.3.stable.official.77dcf97d8"):
+            dev, calls, ran = self.setup_dev(text)
+            for command in ("check", "test", "smoke"):
+                rc, out = quiet(dev.main, [command])
+                self.assertEqual(rc, 2, (text, command, out))
+                self.assertIn("too old: this project needs Godot 4.6 or newer", out)
+                self.assertIn(text.strip(), out)
+                self.assertNotIn("Traceback", out)
+            self.assertEqual(ran, [], "no command ran on a too old Godot")
+
+    def test_supported_and_unknown_versions_run(self):
+        for text in ("4.6.stable.official.89cea1439\n", "4.7.2.stable.official.ed1daf0bf\n", "5.0.dev1.custom\n",
+                     "some custom build\n", ""):
+            dev, calls, ran = self.setup_dev(text)
+            rc, out = quiet(dev.main, ["smoke"])
+            self.assertEqual((rc, ran), (0, ["cmd_smoke"]), (text, out))
+
+    def test_version_after_other_lines_is_still_read(self):
+        dev, calls, ran = self.setup_dev("Godot Engine v4.5.stable - https://godotengine.org\n4.5.stable.official\n")
+        self.assertEqual(quiet(dev.check_godot_version, "godot")[0], 2)
+
+    def test_clean_does_not_ask_godot(self):
+        dev, calls, ran = self.setup_dev("4.3.stable.official\n")
+        rc, out = quiet(dev.main, ["clean", "--yes"])
+        self.assertEqual((rc, ran, calls), (0, ["cmd_clean"], []), out)
+
+    def test_doctor_reports_and_exits_2(self):
+        dev, calls, ran = self.setup_dev("4.4.stable.official.4c311cbee\n")
+        (self.root / "project.godot").write_text("", encoding="utf-8")
+        rc, out = quiet(dev.main, ["doctor"])
+        self.assertEqual(rc, 2, out)
+        self.assertIn("[FAIL] Godot 4.4.stable.official.4c311cbee is too old", out)
+        self.assertIn("project.godot", out, "doctor still reports the rest")
+        dev, calls, ran = self.setup_dev("4.6.stable.official.89cea1439\n")
+        (self.root / "addons" / "gut").mkdir(parents=True)
+        (self.root / dev.GUT_CMDLN).write_text("", encoding="utf-8")
+        (self.root / ".godot").mkdir()
+        rc, out = quiet(dev.main, ["doctor"])
+        self.assertEqual(rc, 0, out)
+        self.assertIn("[ OK ] godot: godot (4.6.stable.official.89cea1439)", out)
 
 
 # ---- #33: `run` with a missing launcher ---------------------------------------

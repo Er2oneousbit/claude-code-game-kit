@@ -19,7 +19,7 @@
 #             doctor   verify the local environment
 #             ship     put the game online (tools/cloud/ship.py): ship --target aws|azure|gcp|linode|do
 #                      --kind static|container --plan, then --apply / --destroy; ship -h for its options
-# Env     : GODOT_BIN  path to the Godot executable (else `godot` on PATH)
+# Env     : GODOT_BIN  path to the Godot executable (else `godot` on PATH), Godot 4.6 or newer
 # Exit    : 0 ok, 1 task failed, 2 environment/usage problem
 # Notes   : Flags mirror the Godot 4 CLI; every command was run against Godot 4.7.2 (see the change log below; build
 #           exported Windows, Linux and Web); if a flag errors on another version, run `godot --help` and adjust
@@ -57,6 +57,8 @@
 #           .game-kit.json or a dev-only folder (PCK_FORBIDDEN)
 # Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): check skips folders Godot ignores (.gdignore), such
 #           as Dotwork's Pixelorama extension, whose scripts belong to Pixelorama, not the game
+# Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the floor is Godot 4.6 (MIN_GODOT); every command
+#           but clean and ship exits 2 on an older Godot, doctor too, instead of failing on parse errors
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -85,7 +87,11 @@ DEFAULT_PRESET = {"Windows": "Windows Desktop", "Linux": "Linux"}
 CHECKER = "res://tools/check_scripts.gd" # loads scripts inside the project so autoloads resolve
 CHECK_BATCH = 200                        # files per Godot launch (Windows command line limit)
 PRESERVE_ON_DEEP_CLEAN = [".godot/export_credentials.cfg"]  # secrets Godot stores inside the cache dir
-MIN_GODOT = (4, 3)                       # older 4.x lack --import or exit 1 after a clean quit
+# Oldest Godot the project compiles on: 4.6 added Control.has_focus(ignore_hidden_focus) (the shell's FocusSlider);
+# 4.5 added the Logger crash hook, 4.4 AudioStreamGenerator.MIX_RATE_OUTPUT, 4.3 --import and a clean exit code.
+# Every command but clean and ship refuses an older one (exit 2). Keep project.godot's config/features in step.
+MIN_GODOT = (4, 6)
+MIN_GODOT_WHY = "the shell's scripts use Control.has_focus(true), new in 4.6"
 CLASS_STAMP = ".godot/dev_class_names.txt"  # class_name set at the last import (stale cache detection)
 # Files Godot imports (it writes <file>.import beside each): one without that file, or newer than it, needs an
 # import before test or smoke can load it (#195)
@@ -1039,17 +1045,50 @@ def cmd_clean(args, godot):
     return 1 if failed else 0
 
 
+def godot_version(godot):
+    """Ask godot for its version. Returns (rc, (major, minor) or None, the version text).
+    `godot --version` prints one line like 4.7.2.stable.official.ed1daf0bf; a build that prints something else
+    gives None (unknown: not refused)."""
+    rc, out = run([godot, "--version"], echo="never", timeout=60)
+    found = re.search(r"^(\d+)\.(\d+)\b", out, re.M)
+    text = found.string[found.start():].splitlines()[0].strip() if found else out.strip()
+    return rc, (tuple(int(n) for n in found.groups()) if found else None), text
+
+
+def too_old_message(text):
+    """The refusal for a Godot older than MIN_GODOT (exit 2)."""
+    need = f"{MIN_GODOT[0]}.{MIN_GODOT[1]}"
+    return (f"Godot {text} is too old: this project needs Godot {need} or newer ({MIN_GODOT_WHY}). Install the "
+            f"latest 4.x stable (standard build) from https://godotengine.org/download and point GODOT_BIN at it.")
+
+
+def check_godot_version(godot):
+    """main(): 0 when godot is new enough (or its version is unknown), 2 when it is older than MIN_GODOT or will
+    not run. Older builds fail to compile the shell, so every command would fail with confusing parse errors."""
+    rc, ver, text = godot_version(godot)
+    if rc in NO_EXEC:
+        return 2                            # run() already printed why
+    if ver is None:
+        dbg(f"godot --version said {text!r}: version unknown, not checked")
+        return 0
+    if ver < MIN_GODOT:
+        print(f"[error] {too_old_message(text)}", file=sys.stderr)
+        return 2
+    dbg(f"godot {text} (needs {MIN_GODOT[0]}.{MIN_GODOT[1]}+)")
+    return 0
+
+
 def cmd_doctor(args, godot):
     problems = 0
+    too_old = False
     print(f"[info] python {sys.version.split()[0]}")
     if godot:
-        rc, out = run([godot, "--version"], echo="never", timeout=60)
-        ver = tuple(int(n) for n in re.findall(r"^(\d+)\.(\d+)", out.strip())[0]) if re.match(r"\d+\.\d+", out.strip()) else None
+        rc, ver, text = godot_version(godot)
         if ver and ver < MIN_GODOT:
-            print(f"[FAIL] godot {out.strip()} is older than {MIN_GODOT[0]}.{MIN_GODOT[1]} (import and smoke hang or misreport)")
-            problems += 1
+            print(f"[FAIL] {too_old_message(text)}")
+            too_old = True
         else:
-            print(f"[ OK ] godot: {godot} ({out.strip() or 'version unknown'})")
+            print(f"[ OK ] godot: {godot} ({text or 'version unknown'})")
     else:
         print("[FAIL] godot not found. Set GODOT_BIN or add godot to PATH.")
         problems += 1
@@ -1062,7 +1101,7 @@ def cmd_doctor(args, godot):
     if doctor.exists():
         rc, _ = run([sys.executable, doctor], capture=False)
         problems += 1 if rc else 0
-    return 1 if problems else 0
+    return 2 if too_old else 1 if problems else 0   # a too old Godot is an environment problem, like elsewhere
 
 
 def positive_int(text):
@@ -1143,7 +1182,9 @@ def build_parser():
     ap = argparse.ArgumentParser(
         prog="dev.py",
         description="Project command wrapper (Godot 4). Same commands on every engine in the Claude Code Game Kit.",
-        epilog="Set GODOT_BIN to your Godot executable. Exit codes: 0 ok, 1 failed, 2 environment/usage problem.",
+        epilog=f"Set GODOT_BIN to your Godot executable ({MIN_GODOT[0]}.{MIN_GODOT[1]} or newer: older ones are "
+               f"refused with exit 2). "
+               "Exit codes: 0 ok, 1 failed, 2 environment/usage problem.",
     )
     ap.add_argument("--debug", action="store_true", help="verbose output; for `run`, also enables in-game debug logging")
     ap.add_argument("--godot", metavar="PATH", help="path to Godot executable (overrides GODOT_BIN)")
@@ -1258,6 +1299,10 @@ def main(argv=None):
         print("[error] Godot executable not found. Set GODOT_BIN or use --godot PATH.", file=sys.stderr)
         return 2
     try:
+        if needs_godot and args.command != "doctor":   # doctor reports the version itself (and still exits 2)
+            rc = check_godot_version(godot)
+            if rc:
+                return rc
         return args.fn(args, godot)
     except KeyboardInterrupt:
         print("\n[abort] interrupted")
