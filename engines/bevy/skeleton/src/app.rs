@@ -22,6 +22,8 @@
 //           update (--smoke 120 ran 119 ticks); smoke_test_app for the headless test of that
 //           2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): the shell (ShellPlugin always, ShellViewPlugin
 //           with a window), the drive in smoke runs, a drive may end the run early (Smoke::finish_now)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the log keeps a tail for crash files and bug
+//           reports (shell/crash.rs, #275)
 // ---------------------------------------------------------------------------
 use std::path::PathBuf;
 use std::time::Duration;
@@ -77,6 +79,7 @@ pub fn build(cli: &Cli, cfg: GameConfig, drive: Option<Drive>) -> App {
             env!("CARGO_CRATE_NAME"),
             if cli.debug { "debug" } else { "info" }
         ),
+        custom_layer: crate::shell::crash::log_layer, // the last lines, for crash files and F8 bug reports
         ..default()
     };
     let window = cli.wants_window() || cfg.needs_window();

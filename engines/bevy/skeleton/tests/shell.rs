@@ -4,8 +4,8 @@
 //           to the run's own data folder, the one-handed layouts apply and reset, a rebind swaps, pause shows "What
 //           now?" and the dialogue history, subtitle_hold waits for accept, auto_repeat repeats a held action, the
 //           Intent carries the analog stick, triggers and held actions (#265), the display settings reach a window
-//           outside automated runs (#268), and the `menus` drive finishes with the file it promises (SOP-19, SOP-20;
-//           #165, #166, #167, #168).
+//           outside automated runs (#268), the `menus` drive finishes with the file it promises, the juice demo
+//           answers its actions and F8 writes a bug report (SOP-19, SOP-20; #165, #166, #167, #168, #275).
 // Usage   : python tools/dev.py test   (or cargo test --test shell)
 // Notes   : app::shell_test_app builds the real ShellPlugin on the headless test App; every test gets its own data
 //           folder under the system temp dir, so no test touches another's settings.json or the player's.
@@ -494,6 +494,80 @@ fn the_menus_drive_finishes_and_writes_the_settings_it_promises() {
     assert_eq!(file["audio"]["master"], json!(0.5));
     assert_eq!(file["access"]["reduce_motion"], json!(true));
     assert!(shell(&app).quit_requested);
+}
+
+#[test]
+fn the_juice_demo_lands_hits_toggles_the_guard_and_leaves_with_its_screen() {
+    let dir = TempDir::new("shell-juice");
+    let mut app = shell_test_app(cfg(&dir), None);
+    to_menu(&mut app);
+    // the demo is on the menu of debug builds (cargo test builds one), right before Quit
+    let ids: Vec<String> = shell(&app).rows().iter().map(|r| r.id.clone()).collect();
+    assert_eq!(ids, ["play", "settings", "credits", "juice", "quit"]);
+    focus(&mut app, "juice");
+    press(&mut app, "ui_accept");
+    until_screen(&mut app, ScreenName::Juice);
+    assert!(
+        !app.world().resource::<GameActive>().0,
+        "the game itself does not run under the demo"
+    );
+    assert_eq!(shell(&app).history.len(), 1, "the guide's line is in the history");
+    press(&mut app, "attack");
+    let demo = shell(&app).juice.clone().expect("the demo's state");
+    assert_eq!(demo.hits, 1, "the player starts in reach of the box");
+    assert!(demo.shake.trauma > 0.0 && demo.spring.x != 0.0);
+    assert_eq!(
+        shell(&app).history.len(),
+        1,
+        "barks are off by default: no subtitle, no history line"
+    );
+    shell_mut(&mut app).set("access", "subtitle_barks", json!(true));
+    press(&mut app, "attack");
+    assert_eq!(shell(&app).history.len(), 2, "with barks on the box says something");
+    // hold_to_toggle: interact flips the guard instead of holding it
+    shell_mut(&mut app).set("access", "hold_to_toggle", json!(true));
+    press(&mut app, "interact");
+    assert!(shell(&app).juice.as_ref().unwrap().guard);
+    // pause freezes it; quitting to the title drops it
+    press(&mut app, "pause");
+    until_screen(&mut app, ScreenName::Pause);
+    let t = shell(&app).juice.as_ref().unwrap().real_time;
+    frames(&mut app, 10);
+    assert_eq!(
+        shell(&app).juice.as_ref().unwrap().real_time,
+        t,
+        "paused: the demo's clock stops"
+    );
+    focus(&mut app, "quit");
+    press(&mut app, "ui_accept");
+    until_screen(&mut app, ScreenName::Title);
+    frames(&mut app, 1);
+    assert!(shell(&app).juice.is_none());
+}
+
+#[test]
+fn f8_writes_a_bug_report_folder() {
+    let dir = TempDir::new("shell-bug");
+    let mut app = shell_test_app(cfg(&dir), None);
+    to_menu(&mut app);
+    shell_mut(&mut app).bug_key();
+    frames(&mut app, 2);
+    let folder = shell(&app).last_bug_report.clone().expect("a report folder");
+    assert!(
+        folder.starts_with(&dir.0),
+        "in the run's data folder: {}",
+        folder.display()
+    );
+    let info = std::fs::read_to_string(folder.join("info.txt")).unwrap();
+    assert!(info.contains("screen: main_menu"), "{info}");
+    let settings: Value =
+        serde_json::from_str(&std::fs::read_to_string(folder.join("settings.json")).unwrap()).unwrap();
+    assert!(settings["audio"].is_object());
+    assert!(folder.join("log_tail.txt").is_file());
+    assert!(
+        !folder.join("screenshot.png").exists(),
+        "headless: no window, no screenshot"
+    );
 }
 
 #[test]
