@@ -21,6 +21,8 @@
 --           before. data/music.json (if present) plays through src/shell/music_player.lua on the music bus; neither
 --           file ships with the skeleton, and automated runs never open the music output.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a smoke run's drive is the only input; the real
+--           keyboard, mouse and pads go through input:real_* and are ignored there (#276)
 -- ---------------------------------------------------------------------------
 local Json = require("src.core.json")
 local Log = require("src.core.log")
@@ -191,6 +193,7 @@ function App:load()
     self:finish("DRIVE_IGNORED " .. kit.drive, 1)
   elseif kit.mode == "smoke" then
     self.drive = Drive.new(self, kit.drive)
+    self.input.scripted = true   -- only the drive presses: no real keyboard, mouse or pad (#276)
   end
   self:push("boot")
 end
@@ -355,10 +358,11 @@ end
 -- drives and tests: as if a bound key was pressed
 function App:inject(action) return self:dispatch(action) end
 
-function App:keypressed(key, _, isrepeat) self.input:key(key, isrepeat) end
-function App:gamepadpressed(joystick, button) self.input:button(joystick, button) end
-function App:gamepadaxis(joystick, axis, value) self.input:axis(joystick, axis, value) end
-function App:mousemoved() self.input:mouse() end
+-- the real devices (main.lua's callbacks): ignored while a drive runs (#276)
+function App:keypressed(key, _, isrepeat) self.input:real_key(key, isrepeat) end
+function App:gamepadpressed(joystick, button) self.input:real_button(joystick, button) end
+function App:gamepadaxis(joystick, axis, value) self.input:real_axis(joystick, axis, value) end
+function App:mousemoved() self.input:real_mouse() end
 
 function App:focus(focused)
   if focused or self.kit.automated then return end
