@@ -17,15 +17,21 @@ examples were built and tested on one Windows 11 machine.
   the screens are built in the engine; RPG Maker MZ keeps MZ's own screens and ships no juice or shell port (its
   ENGINE_FLOW maps the rules onto MZ). Display settings the browser cannot apply (vsync, resolution) are stored only.
   The four new shells (#168) were checked by their drives, tests, sweep and screenshots, never played by hand: no
-  real gamepad pressed, no narration heard, no `dev.py run` session; Unity ran on the Input Manager only (an Input
-  System-only project does not read custom pad bindings, triggers need Input Manager axes) and has no line spacing
-  inside one wrapped paragraph; Unreal's screens were not tried in a running game or PIE (viewport focus, input mode,
-  Quit), every pad shows generic glyphs, sticks do not move focus, and nothing speaks its narration lines yet;
-  Bevy stores the display settings without applying them to the window; C++/SDL3's text is SDL's 8x8 ASCII font
-  (English only, `readable_font` is bold, non-integer text sizes look uneven), and its starter does not yet apply
-  `timing_scale` or `hold_to_toggle`. None of the four has crash files, the F8 bug report, the juice demo or a
-  pseudo-locale layout drive
+  real gamepad pressed, no narration heard, no `dev.py run` session. Unity reads bindings on both the Input Manager
+  and the Input System (0.14.4), but the Input Manager's d-pad and trigger axes (6, 7, 9, 10) are the Windows layout
+  (verify), and there is no line spacing inside one wrapped paragraph; Unreal's screens were not tried in a running
+  game or PIE (viewport focus, input mode, Quit), on Windows every pad reports as an Xbox one (XInput or GameInput;
+  PlayStation glyphs need the WinDualShock plugin), and nothing speaks its narration lines yet; Bevy's exclusive
+  fullscreen keeps the monitor's video mode instead of `display.resolution`; C++/SDL3's text is SDL's 8x8 ASCII font
+  (English only, `readable_font` is bold, non-integer text sizes look uneven). None of the four has crash files, the
+  F8 bug report, the juice demo or a pseudo-locale layout drive
   ([#168](https://github.com/Er2oneousbit/claude-code-game-kit/issues/168)).
+- **Analog input through the shell:** only Bevy's `Intent` carries the stick and the triggers (0.14.4); the web,
+  web-3d, C++ and LÖVE shells read the triggers as on or off, web, web-3d and C++ read the stick as a d-pad, and Unity
+  and Unreal have no analog accessor in the shell (the engine's own input still works)
+  ([#274](https://github.com/Er2oneousbit/claude-code-game-kit/issues/274)).
+- **French tables:** Godot's and web's are still partial (they test the fallback to English); `tools/check_i18n.py`
+  lists them as exceptions ([#272](https://github.com/Er2oneousbit/claude-code-game-kit/issues/272)).
 
 ### 0.8.1 follow-ups (Dotwork)
 - **Cyrillic glyph font** not made (the `bdf` lane may already cover it with an OFL font, untried):
@@ -52,8 +58,7 @@ examples were built and tested on one Windows 11 machine.
   screenshots is still needed; a real Steam Deck (Proton, on-screen keyboard, suspend) is not tried
   ([#91](https://github.com/Er2oneousbit/claude-code-game-kit/issues/91),
   [#85](https://github.com/Er2oneousbit/claude-code-game-kit/issues/85)).
-- **Cognitive and motor settings** have screens in all seven engines with a shell (see Shell screens above); the LÖVE French strings
-  for Settings > Accessibility are English (that section was never translated); the auto-repeat delay and interval
+- **Cognitive and motor settings** have screens in all seven engines with a shell (see Shell screens above); the auto-repeat delay and interval
   (0.35 s, 0.15 s) are the kit's starting point, not from a source; the one-handed layouts are not tried with
   players who play one-handed.
 - **Narration** (#165): the lines are checked, the speaking is not: no screen reader has been tried with the web page
@@ -61,16 +66,16 @@ examples were built and tested on one Windows 11 machine.
   on Windows LÖVE opens PowerShell for each line, which can flash a console window
   ([#165](https://github.com/Er2oneousbit/claude-code-game-kit/issues/165)).
 - **Second-model reviews** of Wavesmith's codecs and the tools listed in
-  [#261](https://github.com/Er2oneousbit/claude-code-game-kit/issues/261) are done; the two new golden settings
-  cases were run on every port after the merge. One finding is left open: `audioio.sniff` sends an Ogg whose Vorbis
-  stream sits behind a Theora or Skeleton header to ffmpeg, although `oggvorbis.py` decodes it, so without ffmpeg
-  such a file is refused ([#262](https://github.com/Er2oneousbit/claude-code-game-kit/issues/262)).
-- **Sweep data in Unity's player folder:** `tools/access/sweep.py` writes its runs' settings to `build/access/`, which
-  on Windows and macOS is Unity's `Build/`, so a shipped build can carry them; delete `Build/access/` before you ship
-  ([#263](https://github.com/Er2oneousbit/claude-code-game-kit/issues/263)).
-- **Godot shader check under GPU load:** Godot 4.7.2 crashed in 2 of 5 windowed shader checks while other engines
-  used the GPU (never alone), and `dev.py` blames a missing window; rerun, or `check --no-shaders`
-  ([#264](https://github.com/Er2oneousbit/claude-code-game-kit/issues/264)).
+  [#261](https://github.com/Er2oneousbit/claude-code-game-kit/issues/261) are done.
+- **`--data-dir` in a folder the build packs:** `dev.py smoke` refuses a data folder inside the build's output
+  (0.14.4), but not inside the folders a build copies in (LÖVE's `src/` and `data/`, Godot's export include filters,
+  Unity's `GameKitBuild` data folders), so one there would still ship
+  ([#271](https://github.com/Er2oneousbit/claude-code-game-kit/issues/271)).
+- **Unreal project folder with a space:** `--screenshot` and `--data-dir` values with a space work (0.14.4), but a
+  project whose own path has a space still breaks `-abslog` and the other paths `dev.py` builds
+  ([#273](https://github.com/Er2oneousbit/claude-code-game-kit/issues/273)).
+- **Godot under GPU load:** Godot 4.7.2 crashed in 2 of 5 windowed shader checks, and once in a font reimport, while
+  other engines used the GPU (never alone); `dev.py` now says so; rerun, or `check --no-shaders`.
 
 ### Art workflow outside Godot
 Dotwork is Godot-first: other engines get PNGs, sheets with their JSON, `.fnt` fonts and a manifest, and no overlay

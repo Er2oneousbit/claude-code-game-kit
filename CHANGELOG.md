@@ -3,6 +3,43 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## Unreleased: 0.14.4, fixes to the 0.14.3 shells and tools (#262 to #270)
+- **Wavesmith (#262):** an Ogg whose Vorbis stream follows a Skeleton or Theora page (a video with Vorbis sound) is
+  read by `oggvorbis.py` instead of being sent to ffmpeg, so reading, streaming, `formats info` and `formats convert`
+  work on it with nothing installed. The routing uses the decoder's own header scan, so a damaged Vorbis stream
+  reports its real error; an Ogg with no Vorbis stream (Opus, Theora with Opus) still goes to ffmpeg.
+- **The access sweep's data (#263):** each run's data goes to `captures/access/<run>/`, not `build/access/`, which on
+  Windows and macOS was Unity's player folder `Build/`, so a shipped build carried the runs' settings files. Every
+  engine's `dev.py smoke` also refuses a `--data-dir` inside its player or build output (exit 2): Godot's export
+  folders (`run` too), Unity's `Build/`, Unreal's `Packaged/`, `Saved/StagedBuilds/` and `Binaries/`, the C++
+  `build/<preset>/`, Bevy's cargo target folder, LÖVE's `build/windows/`, web and web-3d `dist/`; RPG Maker MZ has no
+  `--data-dir`.
+- **Godot (#264):** a crash during the windowed shader check after some recipes says "Godot crashed after N
+  recipe(s) (exit X); rerun, or check --no-shaders" instead of "it needs a window" (ENGINE.md gotcha 12).
+- **Bevy (#265, #268):** the shell's `Intent` carries analog input: `stick` (the left stick with the player's radial
+  deadzone, rescaled, and `invert_y`), `left_trigger` and `right_trigger` (0 to 1) and `held` (game actions held now;
+  the stick holds `move_*` too); `dir` adds the stick to the keys, so keyboard play is unchanged; all of it is empty
+  outside Play. Display settings (mode, vsync, frame cap, window size) now reach the window when they change, never in
+  automated runs; the size is clamped to the monitor and the frame cap is a frame limiter.
+- **Unity (#266):** with the Input System package installed and active, the shell reads keyboard, mouse and gamepad
+  bindings and press-a-key capture through it; the package stays optional (`versionDefines` in `Game.Shell.asmdef`).
+  Triggers (`pad:l2`, `pad:r2`) work as bindings on both input paths, and on the Input Manager the d-pad works at all
+  (it was read from the stick's axes): `GameKitScenes.CreateShellScene` adds the four axes it needs (`exec
+  GameKitScenes.AddInputAxes` on its own). Rebinding no longer captures the press that opened it. PlayMode
+  `ShellInputTests` per input path.
+- **Unreal (#267):** a pad's make comes from the device name its input plugin registers, so prompts show Xbox or
+  PlayStation glyphs (Switch and unknown pads: generic, `pad_other` like the other engines); the left stick moves menu
+  focus like the d-pad, with hysteresis; `smoke --screenshot` and `--data-dir` take paths with spaces. Two new
+  `GameKit.Screens` tests.
+- **C++/SDL3 (#269):** the starter's jump input buffer and coyote time scale with `access.timing_scale` (never
+  shorter), and its guard follows `access.hold_to_toggle` (`engines/cpp-sdl2/skeleton/src/core/MotorAccess.hpp`,
+  doctest cases);
+  `scripts/test_dev_py.py` covers `smoke --drive` on C++.
+- **French (#270):** the LÖVE, Unity, Unreal and Bevy French tables translate every key (about 98 per table were
+  missing and fell back to English, not only Settings > Accessibility). `tools/check_i18n.py` fails a table with a
+  missing key, an English value or different `{placeholders}` (a short list of words that are the same in French,
+  `--same` for a game's own); its exam checks the overlays' tables.
+
 ## 0.14.3 (2026-11-10): accessibility in every engine with a shell (#169, #91, #85, #167, #166, #165, #168), second-model reviews of the kit tools (#261) and the exam runner (#158)
 - **Colour-blind pairs (#169):** `tools/access/colour_check.py pairs` checks the colours a game tells apart (declared in
   `data/access/colours.json`: the pairs, and the palette each colour-blind setting switches to) as a protanope,
