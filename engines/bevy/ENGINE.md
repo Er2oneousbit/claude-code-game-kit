@@ -24,12 +24,14 @@
   automated runs. A panic writes `crashes/crash_<time>.txt` in the user-data folder (version, screen, error,
   backtrace, settings, log tail; `src/shell/crash.rs`). Debug builds add F8 (a `bug_<time>/` folder with a screenshot,
   the log tail, the settings and an info file), the pseudo language and "Juice demo" on the main menu
-  (`src/shell/juice.rs`: every juice primitive and the access settings, live).
-  `smoke --drive show:<screen> --screenshot build/x.png` pictures a screen; `python tools/access/sweep.py` runs the
-  access drive. Text is Fira Mono Medium in full and the readable font Atkinson Hyperlegible with Fira Mono behind it
-  (`src/shell/fonts/`, OFL, compiled into the exe); Bevy's own built-in font is ASCII only, so a font you swap in must
-  cover your languages: the pseudo drive fails a character no font in the stack has, and a test checks every
-  `data/i18n/` table against the font.
+  (`src/shell/juice.rs`: every juice primitive and the access settings, live). The demo uses nothing from `src/game/`:
+  it brings its own 2D camera on its own render layer and switches the game's cameras off while it is up, so it works
+  over a 2D or 3D game; give the game's HUD and other UI `shell::HideUnderJuice` (or `#[require(HideUnderJuice)]`)
+  and they hide meanwhile. `smoke --drive show:<screen> --screenshot build/x.png` pictures a screen; `python
+  tools/access/sweep.py` runs the access drive. Text is Fira Mono Medium in full and the readable font Atkinson
+  Hyperlegible with Fira Mono behind it (`src/shell/fonts/`, OFL, compiled into the exe); Bevy's own built-in font is
+  ASCII only, so a font you swap in must cover your languages: the pseudo drive fails a character no font in the stack
+  has, and a test checks every `data/i18n/` table against the font.
 - **Verify:** `python tools/dev.py doctor`.
 
 ## Layout

@@ -45,6 +45,8 @@ use std::path::PathBuf;
 use bevy::prelude::*;
 use serde_json::{Value, json};
 
+pub use juice::HideUnderJuice;
+
 use crate::game::{AccessRules, GameActive, GameConfig, Intent, Palette, ScreenShake};
 use crate::logic::analog;
 use crate::logic::auto_repeat::AutoRepeat;

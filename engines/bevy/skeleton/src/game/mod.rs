@@ -19,6 +19,8 @@
 //           2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): GameActive, AccessRules, Palette, Intent.pressed,
 //           the shell's options (--drive, --data-dir, --locale)
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): Intent.held, stick and triggers (analog input, #265)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): Player and Goal carry shell::HideUnderJuice (the
+//           juice demo no longer imports them)
 // ---------------------------------------------------------------------------
 pub mod present;
 
@@ -28,6 +30,7 @@ use std::path::PathBuf;
 use bevy::prelude::*;
 
 use crate::logic::shake::Shake;
+use crate::shell::HideUnderJuice;
 
 pub use present::PresentPlugin;
 
@@ -138,11 +141,15 @@ impl Intent {
     }
 }
 
+/// The prototype's square. HideUnderJuice: hidden while the shell's juice demo (debug builds) is up; tag your HUD and
+/// any other UI the same way (the demo's own camera and render layer keep the game's world out of its picture).
 #[derive(Component, Debug)]
+#[require(HideUnderJuice)]
 pub struct Player;
 
 /// The goal line of the prototype (present.rs dresses it in the palette's "target" colour).
 #[derive(Component, Debug)]
+#[require(HideUnderJuice)]
 pub struct Goal;
 
 /// Fixed ticks run so far: tests and bots count ticks, never frames.
