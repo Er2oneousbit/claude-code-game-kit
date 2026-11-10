@@ -1,5 +1,5 @@
 {
- "game.title": "{{GAME_NAME}}",
+ "game.title": "{name}",
  "title.press_any": "Press any key or button",
  "title.version": "v{version}",
  "consent.title": "Play statistics",
@@ -8,6 +8,7 @@
  "consent.no": "No",
  "consent.unset": "Later",
  "menu.play": "Play",
+ "menu.juice": "Juice demo",
  "menu.settings": "Settings",
  "menu.credits": "Credits",
  "menu.quit": "Quit",
@@ -142,5 +143,9 @@
  "narrate.screen": "screen",
  "narrate.on": "on",
  "narrate.off": "off",
- "play.hint": "{left} {right}: move   {jump}: jump   {attack}: attack   {interact}: interact   {pause}: pause"
+ "play.hint": "{left} {right}: move   {jump}: jump   {attack}: attack   {interact}: interact   {pause}: pause",
+ "juice.title": "Juice demo",
+ "juice.stats": "Hits {hits}   trauma {trauma}   shake {shake}   flashes held back {refused}   speed {speed}%",
+ "juice.guard": "Guarding",
+ "juice.objective": "Hit the box and feel the juice."
 }

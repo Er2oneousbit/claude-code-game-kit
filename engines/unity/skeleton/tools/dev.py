@@ -10,9 +10,10 @@
 #             smoke    PlayMode tests named Smoke (you write them); --filter, --graphics, --screenshot,
 #                      --record, --until, --fail-on for scenario runs (frames via GameKitCapture); --shaders
 #                      also draws every kit shader recipe (GameKitShaders.Render) and compares it with its golden;
-#                      --drive SCENARIO runs a scripted visit of the shell's screens (menus, access[:res=WxH]
-#                      [,scale=N][,pad][,read], show:<title|settings|pause|subtitle>) through the Smoke_ShellDrive
-#                      PlayMode test, with --data-dir and --locale for that run (Assets/Scripts/Shell/SmokeDrive.cs)
+#                      --drive SCENARIO runs a scripted visit of the shell's screens (menus, crash, pseudo,
+#                      pseudo-plant, bug, access[:res=WxH][,scale=N][,pad][,read],
+#                      show:<title|settings|pause|subtitle|juice>) through the Smoke_ShellDrive PlayMode test, with
+#                      --data-dir and --locale for that run (Assets/Scripts/Shell/SmokeDrive.cs)
 #             exec     run a static editor method headless (scene builders: exec GameKitScenes.CreateStarterScene)
 #             build    headless player build via Assets/Editor/GameKitBuild.cs
 #             run      open the project in the editor
@@ -51,6 +52,9 @@
 # Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): smoke --drive / --data-dir / --locale for the
 #           shell's screens (#168), passed to the PlayMode run as GAMEKIT_* variables; the drive's marker lines
 #           (DRIVE_*, SETTINGS_*, ACCESS_*) are echoed from the Unity log for tools/access/sweep.py
+# Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): --drive crash, pseudo, pseudo-plant, bug and
+#           show:juice (#275); CRASH_WRITTEN, PSEUDO_* and BUG_REPORT echoed; the two drives that fail on purpose
+#           (crash, pseudo-plant) say so, and fail when their proof line is missing
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -85,13 +89,16 @@ SHADER_DIR = "Assets/Shaders/Kit"        # the kit's shader recipes, generated b
 SHADER_OUT = "Logs/shader_check"         # smoke --shaders pictures, compared by tools/shaders/shader_ref.py
 SHADER_TIMEOUT_S = 300
 # smoke --drive (#168): the shell's scripted runs (Assets/Scripts/Shell/SmokeDrive.cs), through one PlayMode test
-DRIVES = ("menus",)
-SHOW_TARGETS = ("title", "settings", "pause", "subtitle")      # smoke --drive show:<target>
+DRIVES = ("menus", "crash", "pseudo", "pseudo-plant", "bug")
+SHOW_TARGETS = ("title", "settings", "pause", "subtitle", "juice")   # smoke --drive show:<target>
+# Drives that fail on purpose (#275), with the line that proves the failure was the planted one
+EXPECTED_FAIL = {"crash": "CRASH_WRITTEN", "pseudo-plant": "PSEUDO_FAIL"}
 ACCESS_DRIVE = re.compile(r"access(:(res=[1-9]\d{2,4}x[1-9]\d{2,4}|scale=\d+(\.\d+)?|pad|read)"
                           r"(,(res=[1-9]\d{2,4}x[1-9]\d{2,4}|scale=\d+(\.\d+)?|pad|read))*)?$")
 DRIVE_TEST = "Smoke_ShellDrive"          # the test that runs a drive (Assets/Tests/PlayMode/ShellSmokeTests.cs)
 SMOKE_DATA = "Logs/smoke_data"           # a fresh settings folder per smoke run unless --data-dir names one
-MARKERS = ("DRIVE_", "SETTINGS_", "ACCESS_", "BOOT_OK")   # the shell's proof lines, echoed from the Unity log
+MARKERS = ("DRIVE_", "SETTINGS_", "ACCESS_", "BOOT_OK", "CRASH_WRITTEN", "PSEUDO_", "BUG_REPORT")   # the shell's
+                                         # proof lines, echoed from the Unity log
 
 
 def dbg(msg):
@@ -542,7 +549,9 @@ def cmd_smoke(args):
         until = until or f"DRIVE_DONE {drive}"
         fail_on.append("DRIVE_FAIL")
     rc = run_tests("PlayMode", filt, graphics=graphics, env=env, until=until, fail_on=fail_on)
-    echo_markers()
+    seen = echo_markers()
+    if drive in EXPECTED_FAIL:
+        return expected_failure(drive, rc, seen)
     if rc != 0:
         return rc
     if shot and not (shot.is_file() and shot.stat().st_size > 0):
@@ -617,12 +626,27 @@ def smoke_data_dir(args):
 
 
 def echo_markers():
-    """Print the shell's proof lines from the Unity log (the drive and the access sweep read them)."""
+    """Print the shell's proof lines from the Unity log (the drive and the access sweep read them). Returns them."""
     if not LOG_FILE.exists():
-        return
-    for line in LOG_FILE.read_text(encoding="utf-8", errors="ignore").splitlines():
-        if line.startswith(MARKERS):
-            print(line)
+        return []
+    lines = [l for l in LOG_FILE.read_text(encoding="utf-8", errors="ignore").splitlines() if l.startswith(MARKERS)]
+    for line in lines:
+        print(line)
+    return lines
+
+
+def expected_failure(drive, rc, lines):
+    """A drive that fails on purpose (crash, pseudo-plant): exit 1 either way, with the reason. Exit 2 (an environment
+    problem) passes through."""
+    if rc == 2:
+        return 2
+    proof = EXPECTED_FAIL[drive]
+    if any(l.startswith(proof) for l in lines):
+        what = "the CRASH_WRITTEN file above" if drive == "crash" else "the PSEUDO_FAIL line naming the planted label"
+        print(f"[info] --drive {drive} fails on purpose: {what} is the proof")
+    else:
+        print(f"[FAIL] --drive {drive} printed no {proof} line: the planted failure was not caught")
+    return 1
 
 
 def drive_name(text):
@@ -828,7 +852,9 @@ def build_parser():
                    help="also draw every kit shader recipe (a graphics device) and compare it with its golden image")
     p.add_argument("--drive", default="", type=drive_name, metavar="SCENARIO",
                    help="a scripted path through the shell's screens (needs the shell scene: exec GameKitScenes.CreateShellScene): "
-                        "menus (change two settings, save, quit; prints SETTINGS_WRITTEN), "
+                        "menus (change two settings, save, quit; prints SETTINGS_WRITTEN), crash (a planted exception: "
+                        "CRASH_WRITTEN, exit 1), pseudo (with --locale pseudo: checks every label on every screen), "
+                        "pseudo-plant (the same plus a label too small: must fail), bug (F8 bug report), "
                         "access[:res=WxH][,scale=N][,pad][,read] (every screen reported for tools/access/sweep.py), "
                         f"show:<{'|'.join(SHOW_TARGETS)}> (opens that screen; add --screenshot)")
     p.add_argument("--data-dir", default="", help="keep settings for the run in this folder (relative to the project; kept "

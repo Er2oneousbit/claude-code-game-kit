@@ -4,15 +4,23 @@
 //           player would (ui_down, ui_accept, ...) and prints markers dev.py, the tests and tools/access/sweep.py read.
 // Usage   : python tools/dev.py smoke --drive menus                 # change two settings, Back, check the file
 //           python tools/dev.py smoke --drive show:settings --screenshot Logs/settings.png
-//           (show: title, settings, pause, subtitle)
+//           (show: title, settings, pause, subtitle, juice)
 //           python tools/dev.py smoke --drive access:res=1280x800,scale=2,pad   # every screen (tools/access/sweep.py)
+//           python tools/dev.py smoke --drive pseudo --locale pseudo  # every label on every screen (pseudo-plant: must fail)
+//           python tools/dev.py smoke --drive crash                   # a planted exception: CRASH_WRITTEN, exit 1 on purpose
+//           python tools/dev.py smoke --drive bug                     # F8 on the main menu: the bug_<time>/ folder
 // Notes   : Markers: DRIVE_DONE <scenario>, DRIVE_FAIL <scenario>: <why>, DRIVE_SHOWN <target>, SETTINGS_BEFORE /
-//           SETTINGS_WRITTEN <path> ..., ACCESS_* JSON lines. Presses go through ShellInput.Inject, the path a key
+//           SETTINGS_WRITTEN <path> ..., ACCESS_* JSON lines, PSEUDO_SCREEN / PSEUDO_FAIL / PSEUDO_PASS / PSEUDO_FAILED
+//           (the lines and rules of LÖVE's pseudo drive), CRASH_WRITTEN <path> and BUG_REPORT <dir> (ShellReports),
+//           DRIVE_BUG <dir>. Presses go through ShellInput.Inject, the path a key
 //           or button takes, so a broken grid fails the run; in a pad run an action without a gamepad binding fails
 //           it. Screen waits use real time (WAIT_MS): a PlayMode run's frame rate is whatever the machine gives.
 //           Runs under the Smoke_ShellDrive PlayMode test (Assets/Tests/PlayMode/ShellSmokeTests.cs), which waits for
-//           Finished and fails on Failed. No crash and pseudo drives on this engine yet (Godot, LÖVE and web have them).
+//           Finished and fails on Failed. The crash drive ends without DRIVE_DONE: its logged exception fails the
+//           test on purpose (dev.py says so), and the crash file is the proof. The pseudo drive switches the run to
+//           the pseudo locale when --locale pseudo was not given (DRIVE_NOTE).
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): crash, pseudo, pseudo-plant, bug and show:juice (#275)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections;
@@ -32,7 +40,10 @@ namespace {{GAME_SLUG}}.Shell
         public const int SETTLE_FRAMES = 20;         // frames a screen gets before it is photographed
         public const double TARGET_MASTER = 0.5;     // menus drives the master volume here from whatever the data folder held
         public const int MAX_SLIDER_STEPS = 40;
-        public static readonly string[] SHOW_TARGETS = { "title", "settings", "pause", "subtitle" };
+        public const int JUICE_SETTLE_FRAMES = 40;   // frames into the juice demo before a drive attacks
+        public const float PLANT_WIDTH = 40f;        // pseudo-plant: a label this narrow cannot hold its text
+        public static readonly string[] SHOW_TARGETS = { "title", "settings", "pause", "subtitle", "juice" };
+        public static readonly string[] BUG_FILES = { "info.txt", "log_tail.txt", "settings.json" };
         public static readonly string[] ACCESS_ACTIONS = { "ui_up", "ui_down", "ui_left", "ui_right", "ui_accept", "ui_cancel", "pause" };
         public static readonly string[] PROMPT_ACTIONS = { "move_left", "move_right", "jump", "attack", "interact", "pause" };
 
@@ -46,6 +57,7 @@ namespace {{GAME_SLUG}}.Shell
         private float _textScale = 1f;
         private bool _read;                // access drive: readable font and double line spacing
         private Vector2Int _window;        // access drive: the window size to lay the screens out for
+        private int _checked, _labels, _problems;   // pseudo drive: screens and labels checked, problems found
 
         public SmokeDrive(FrontEnd front, string scenario)
         {
@@ -71,9 +83,22 @@ namespace {{GAME_SLUG}}.Shell
             {
                 yield return Access(_scenario.Length > 7 ? _scenario.Substring(7) : "");
             }
+            else if (_scenario == "crash")
+            {
+                yield return Crash();
+            }
+            else if (_scenario == "pseudo" || _scenario == "pseudo-plant")
+            {
+                yield return Pseudo(_scenario == "pseudo-plant");
+            }
+            else if (_scenario == "bug")
+            {
+                yield return Bug();
+            }
             else
             {
-                Fail($"unknown scenario '{_scenario}' (menus, access[:res=WxH][,scale=N][,pad][,read], show:<{string.Join("|", SHOW_TARGETS)}>)");
+                Fail($"unknown scenario '{_scenario}' (menus, crash, pseudo, pseudo-plant, bug, "
+                     + $"access[:res=WxH][,scale=N][,pad][,read], show:<{string.Join("|", SHOW_TARGETS)}>)");
             }
         }
 
@@ -163,9 +188,231 @@ namespace {{GAME_SLUG}}.Shell
                     if (Failed) yield break;
                     yield return Frames(SETTLE_FRAMES);
                     break;
+                case "juice":
+                    yield return ToJuice();
+                    if (Failed) yield break;
+                    yield return Frames(JUICE_SETTLE_FRAMES);
+                    yield return Press("attack");          // the hit: shake, squash, flash and the bark in the picture
+                    break;
             }
             Shell.Raw("DRIVE_SHOWN " + target);
             Done();
+        }
+
+        // ---- crash files, the bug report, the pseudo-locale check (#275) ---------------------
+
+        /// <summary>An unhandled exception in a frame, as a bug would throw: the crash file must be written.</summary>
+        private IEnumerator Crash()
+        {
+            yield return ToMainMenu();
+            if (Failed) yield break;
+            yield return Frames(2);
+            Debug.Log("[INFO][drive] planting an unhandled exception (expected): the crash file is the proof");
+            _front.PlantCrash = true;
+            float start = Time.realtimeSinceStartup;
+            while (ShellReports.CrashFile == "" && Time.realtimeSinceStartup - start < WAIT_S)
+            {
+                yield return null;
+            }
+            yield return Frames(2);                // ShellReports.Tick logs CRASH_WRITTEN
+            if (ShellReports.CrashFile == "" || !System.IO.File.Exists(ShellReports.CrashFile))
+            {
+                Fail("no crash file was written for the planted exception");
+                yield break;
+            }
+            Finished = true;                       // no DRIVE_DONE: a crash run fails on purpose
+        }
+
+        /// <summary>F8 on the main menu: bug_<time>/ with the info, log tail and settings (and a screenshot when the
+        /// run has a graphics device).</summary>
+        private IEnumerator Bug()
+        {
+            yield return ToMainMenu();
+            if (Failed) yield break;
+            ShellInput.InjectKey("key:" + ShellReports.BUG_REPORT_KEY);
+            float start = Time.realtimeSinceStartup;
+            while (ShellReports.LastBugReport == "" && Time.realtimeSinceStartup - start < WAIT_S)
+            {
+                yield return null;
+            }
+            yield return Frames(2);
+            string dir = ShellReports.LastBugReport;
+            if (dir == "")
+            {
+                Fail("F8 saved no bug report (the key works in the editor and development builds only)");
+                yield break;
+            }
+            var want = new List<string>(BUG_FILES);
+            if (SystemInfo.graphicsDeviceType != UnityEngine.Rendering.GraphicsDeviceType.Null)
+            {
+                want.Add("screenshot.png");
+            }
+            foreach (string f in want)
+            {
+                if (!System.IO.File.Exists(System.IO.Path.Combine(dir, f)))
+                {
+                    Fail($"the bug report lacks {f}: {dir}");
+                    yield break;
+                }
+            }
+            Shell.Raw("DRIVE_BUG " + dir);
+            Done();
+        }
+
+        /// <summary>Every screen in the pseudo locale, every visible label checked (AccessAudit.PseudoProblems).
+        /// plant: one label on the main menu too narrow for its text, which the check must name.</summary>
+        private IEnumerator Pseudo(bool plant)
+        {
+            if (S.Locale != Shell.PSEUDO_LOCALE)
+            {
+                S.OverrideLocale(Shell.PSEUDO_LOCALE);
+                Shell.Raw("DRIVE_NOTE the pseudo drive switched the locale to pseudo (pass --locale pseudo next time)");
+            }
+            yield return WaitScreen("title");
+            if (Failed) yield break;
+            yield return Frames(3);
+            if (_front.Top() is TitleScreen title && title.ConsentOpen)
+            {
+                Check("consent");
+                yield return DismissConsent();
+                yield return Frames(3);
+            }
+            Check("title");
+            yield return Press("ui_accept");
+            yield return WaitScreen("main_menu");
+            if (Failed) yield break;
+            if (plant)
+            {
+                var planted = new UnityEngine.UIElements.Label(S.T("menu.settings")) { name = "PlantedLabel" };
+                UiTheme.Text(planted, 1.0f, UiTheme.TEXT, false);
+                planted.style.position = UnityEngine.UIElements.Position.Absolute;
+                planted.style.left = 8;
+                planted.style.top = 8;
+                planted.style.width = PLANT_WIDTH;
+                planted.style.overflow = UnityEngine.UIElements.Overflow.Hidden;
+                _front.Top().Root.Add(planted);
+            }
+            yield return Frames(3);
+            Check("main_menu");
+            yield return NavTo("Settings", "ui_down");
+            if (Failed) yield break;
+            yield return Accept("settings");
+            if (Failed) yield break;
+            foreach (string tab in SettingsScreen.TABS)
+            {
+                yield return NavTo("Tab_" + tab, "ui_right");
+                if (Failed) yield break;
+                yield return Frames(3);
+                Check("settings." + tab);
+                if (tab == "controls")
+                {
+                    yield return NavTo("Bind_jump_0", "ui_down");
+                    if (Failed) yield break;
+                    yield return Press("ui_accept");        // the "press a key" prompt
+                    yield return Frames(3);
+                    Check("settings.capture");
+                    ShellInput.InjectKey("key:escape");     // cancels the capture
+                    yield return Frames(3);
+                    yield return NavTo("Tab_controls", "ui_up");
+                    if (Failed) yield break;
+                }
+            }
+            yield return Press("ui_cancel");
+            yield return WaitScreen("main_menu");
+            if (Failed) yield break;
+            yield return NavTo("Credits", "ui_down");
+            if (Failed) yield break;
+            yield return Accept("credits");
+            if (Failed) yield break;
+            yield return Frames(3);
+            Check("credits");
+            yield return Press("ui_cancel");
+            yield return WaitScreen("main_menu");
+            if (Failed) yield break;
+            if (JuiceWorld.Available)
+            {
+                yield return NavTo("JuiceDemo", "ui_up");
+                if (Failed) yield break;
+                yield return Press("ui_accept");
+                if (_front.CurrentName() == "loading")
+                {
+                    Check("loading");
+                }
+                yield return WaitScreen("juice");
+                if (Failed) yield break;
+                yield return Frames(JUICE_SETTLE_FRAMES);
+                Check("juice");
+                yield return Press("attack");
+                yield return Frames(3);
+                Check("juice.hit");
+                yield return Press("pause");
+                yield return WaitScreen("pause");
+                if (Failed) yield break;
+                yield return Frames(3);
+                Check("pause.juice");
+                yield return NavTo("QuitToTitle", "ui_down");
+                if (Failed) yield break;
+                yield return Press("ui_accept");
+                yield return WaitScreen("title");
+                if (Failed) yield break;
+                yield return Press("ui_accept");
+                yield return WaitScreen("main_menu");
+                if (Failed) yield break;
+            }
+            yield return NavTo("Play", "ui_up");
+            if (Failed) yield break;
+            yield return Accept("play");
+            if (Failed) yield break;
+            yield return WaitSubtitle();
+            if (Failed) yield break;
+            yield return Frames(3);
+            Check("play");
+            yield return Press("pause");
+            yield return WaitScreen("pause");
+            if (Failed) yield break;
+            yield return Frames(3);
+            Check("pause");
+            foreach ((string button, string screen) in new[] { ("Help", "help"), ("History", "history") })
+            {
+                yield return NavTo(button, "ui_down");
+                if (Failed) yield break;
+                yield return Accept(screen);
+                if (Failed) yield break;
+                yield return Frames(3);
+                Check(screen);
+                yield return Press("ui_cancel");
+                yield return WaitScreen("pause");
+                if (Failed) yield break;
+            }
+            yield return NavTo("QuitToTitle", "ui_down");
+            if (Failed) yield break;
+            yield return Press("ui_accept");
+            yield return WaitScreen("title");
+            if (Failed) yield break;
+            if (_problems == 0)
+            {
+                Shell.Raw($"PSEUDO_PASS {_checked} screens, {_labels} labels, nothing truncated or untranslated");
+                Done();
+            }
+            else
+            {
+                Shell.Raw($"PSEUDO_FAILED {_problems} problem(s) on {_checked} screens");
+                Fail($"{_problems} label problem(s); see the PSEUDO_FAIL lines");
+            }
+        }
+
+        /// <summary>The pseudo check of what is on screen now: PSEUDO_SCREEN, then a PSEUDO_FAIL line per problem.</summary>
+        private void Check(string where)
+        {
+            List<(string Node, string Text, string Why)> problems = AccessAudit.PseudoProblems(_front, out int labels);
+            _checked++;
+            _labels += labels;
+            Shell.Raw($"PSEUDO_SCREEN {where} labels {labels} problems {problems.Count}");
+            foreach ((string node, string text, string why) in problems)
+            {
+                _problems++;
+                Shell.Raw($"PSEUDO_FAIL {where} label {node}: {why} ({Json.Stringify(text)})");
+            }
         }
 
         // ---- the accessibility sweep (#91, #85) ----------------------------------------
@@ -372,6 +619,21 @@ namespace {{GAME_SLUG}}.Shell
             yield return Frames(2);
             yield return Press("ui_accept");      // "press any key"
             yield return WaitScreen("main_menu");
+        }
+
+        private IEnumerator ToJuice()
+        {
+            yield return ToMainMenu();
+            if (Failed) yield break;
+            if (!JuiceWorld.Available)
+            {
+                Fail("the juice demo is on the main menu in the editor and development builds only");
+                yield break;
+            }
+            yield return NavTo("JuiceDemo", "ui_down");
+            if (Failed) yield break;
+            yield return Press("ui_accept");
+            yield return WaitScreen("juice");
         }
 
         private IEnumerator ToPlay()

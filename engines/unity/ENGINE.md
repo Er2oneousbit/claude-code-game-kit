@@ -19,10 +19,12 @@
 Assets/Scripts/Core/     engine-agnostic logic (no UnityEngine types where possible), unit tested: juice (Shake, Hitstop,
                          Ease, FollowCamera, InputBuffer, CoyoteTimer, Spring, FlashLimiter), shell logic
                          (GameSettings, Bindings, SaveStore, I18n, AtomicFile, Json, DialogueData) and audio decisions
-                         (AudioDirector, MusicDirector, AudioAccess), checked against data/golden/*.json
+                         (AudioDirector, MusicDirector, AudioAccess), checked against data/golden/*.json; Analog
+                         (stick and trigger shaping) and CrashText (crash file text, log tail)
 Assets/Scripts/Shell/    the front end on UI Toolkit (Game.Shell assembly): Shell (settings, strings, data folder),
                          FrontEnd (the screen flow), Screens/ (title, main menu, settings, pause, What now?, history,
-                         credits, loading), SubtitleBar, PlayWorld (the placeholder game), Narrator, ShellInput,
+                         credits, loading), SubtitleBar, ShellWorld with PlayWorld (the placeholder game) and
+                         JuiceWorld (the juice demo), Narrator, ShellInput, ShellReports (crash files, F8 bug report),
                          AccessAudit and SmokeDrive (`dev.py smoke --drive`)
 Assets/Scripts/Game/     gameplay MonoBehaviours and ScriptableObjects; AudioEventPlayer, MusicPlayer play the audio decisions
 Assets/Editor/           editor-only code (GameKitBuild.cs; GameKitScenes.cs builds the starter and shell scenes;
@@ -60,15 +62,28 @@ ProjectSettings/         project config (text, edit with care)
   `-createProject` project). The package is optional: `Game.Shell.asmdef` sets `GAMEKIT_INPUT_SYSTEM` from its
   `versionDefines` only when `com.unity.inputsystem` is in the project. On the Input System every binding works on any
   pad it knows (`Gamepad.current`). On the Input Manager gamepad buttons follow the Windows XInput order, the left
-  stick reads the default `Horizontal`/`Vertical` axes, and the d-pad and the triggers read the axes
-  `GameKitScenes.CreateShellScene` adds (`exec GameKitScenes.AddInputAxes` on its own: joystick axes 6, 7, 9 and 10,
-  the Windows layout **(verify on other platforms and with a physical pad)**). Triggers (`pad:l2`, `pad:r2`) are axes,
+  stick moves the menus through the default `Horizontal`/`Vertical` axes, and the d-pad, the triggers and the analog
+  stick read the axes `GameKitScenes.CreateShellScene` adds (`exec GameKitScenes.AddInputAxes` on its own: joystick
+  axes 6, 7, 9 and 10, and 1 and 2 for the stick, the Windows layout **(verify on other platforms and with a physical
+  pad)**). Triggers (`pad:l2`, `pad:r2`) are axes,
   pressed past half way, on both. Active Input Handling set to the Input System without the package installed falls
   back to UI Toolkit's events: the menus work, custom pad bindings are not read.
+- Analog input for the game (#274, the rules of Bevy's `Intent`): `ShellInput.MoveVector()` (held move keys plus the
+  stick, length at most 1), `ShellInput.Stick` (radial deadzone from `input.deadzone`, rescaled from 0, `invert_y`
+  applied, up is +y), `LeftTrigger` / `RightTrigger` (0 to 1) and `HeldGameActions` / `IsGameHeld` (held game actions,
+  the stick's `move_*` included). The Input System's own stick deadzone is bypassed (unprocessed values), so only the
+  player's applies. None of it on the UI Toolkit fallback. Tests and drives hold a stick with `ShellInput.InjectAnalog`.
 - Line spacing adds space between the menus' lines and paragraphs: UI Toolkit has no line-height, so lines inside one
   wrapped paragraph keep the font's spacing **(verify: a later Unity may add it)**.
-- Not here yet (Godot, LÖVE and web have them): crash files, telemetry rows, the pseudo-locale drive, the bug report
-  key, a juice demo. `--locale pseudo` still runs the pseudo-locale on every string.
+- Crash files and the bug report (#275): the first unhandled exception of a launch writes
+  `crashes/crash_<time>.txt` in the data folder (version, error, stack, settings, log tail) and logs
+  `CRASH_WRITTEN <path>`; Unity keeps running (a player started with `--smoke` quits with exit 1). F8 in the editor and
+  development builds saves `bug_<time>/` (info, log tail, settings, a screenshot when there is a graphics device) and
+  logs `BUG_REPORT <dir>`.
+- The juice demo (#275, main menu in the editor and development builds): hit the box for shake, hitstop, squash on a
+  spring and a rate-limited flash, a follow camera with its deadzone drawn, a buffered jump with coyote time, a held
+  guard, a line, a bark and a caption, analog movement. UI Toolkit elements only, so it needs no assets.
+- Not here yet (Godot, LÖVE and web have it): telemetry rows.
 
 ## Conventions
 - C# standard style: `PascalCase` types and methods, `_camelCase` private fields, `[SerializeField] private` over public fields.

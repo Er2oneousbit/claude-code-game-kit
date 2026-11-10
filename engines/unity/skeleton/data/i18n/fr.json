@@ -1,5 +1,5 @@
 {
- "game.title": "{{GAME_NAME}}",
+ "game.title": "{name}",
  "title.press_any": "Appuyez sur une touche",
  "title.version": "v{version}",
  "consent.title": "Statistiques de jeu",
@@ -8,6 +8,7 @@
  "consent.no": "Non",
  "consent.unset": "Plus tard",
  "menu.play": "Jouer",
+ "menu.juice": "Démo du jus",
  "menu.settings": "Paramètres",
  "menu.credits": "Crédits",
  "menu.quit": "Quitter",
@@ -145,5 +146,9 @@
  "play.hint": "{left} {right} : se déplacer   {jump} : sauter   {attack} : attaquer   {interact} : interagir   {pause} : pause",
  "binding.key.space": "Espace",
  "binding.key.escape": "Échap",
- "binding.key.enter": "Entrée"
+ "binding.key.enter": "Entrée",
+ "juice.title": "Démo du jus",
+ "juice.stats": "Coups {hits}   trauma {trauma}   secousse {shake}   flashs retenus {refused}   vitesse {speed} %",
+ "juice.guard": "En garde",
+ "juice.objective": "Frappe la boîte et sens le jus."
 }

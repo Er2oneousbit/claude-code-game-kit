@@ -16,6 +16,7 @@
 // Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): a failed SaveScene throws (it was ignored)
 // Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): CreateShellScene (#168)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): AddInputAxes, the shell's d-pad and trigger axes (#266)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the left stick's axes for analog input (#274)
 // ---------------------------------------------------------------------------
 using System.IO;
 using System.Linq;
@@ -55,17 +56,21 @@ public static class GameKitScenes
         AddInputAxes();
     }
 
-    // The Input Manager axes the shell reads for the d-pad and the triggers (#266), as joystick axis numbers of the
-    // Windows XInput layout (verify on other platforms): name, 1-based axis, dead zone
-    private static readonly (string name, int axis, float dead)[] INPUT_AXES =
+    // The Input Manager axes the shell reads for the d-pad, the triggers (#266) and the analog left stick (#274), as
+    // joystick axis numbers of the Windows XInput layout (verify on other platforms): name, 1-based axis, dead zone,
+    // inverted. The stick axes have no dead zone of their own (Core/Analog applies the player's) and Y is inverted so
+    // up is +.
+    private static readonly (string name, int axis, float dead, bool invert)[] INPUT_AXES =
     {
-        ({{GAME_SLUG}}.Shell.ShellInput.AXIS_DPAD_X, 6, 0.19f),
-        ({{GAME_SLUG}}.Shell.ShellInput.AXIS_DPAD_Y, 7, 0.19f),
-        ({{GAME_SLUG}}.Shell.ShellInput.AXIS_L2, 9, 0.001f),
-        ({{GAME_SLUG}}.Shell.ShellInput.AXIS_R2, 10, 0.001f),
+        ({{GAME_SLUG}}.Shell.ShellInput.AXIS_DPAD_X, 6, 0.19f, false),
+        ({{GAME_SLUG}}.Shell.ShellInput.AXIS_DPAD_Y, 7, 0.19f, false),
+        ({{GAME_SLUG}}.Shell.ShellInput.AXIS_L2, 9, 0.001f, false),
+        ({{GAME_SLUG}}.Shell.ShellInput.AXIS_R2, 10, 0.001f, false),
+        ({{GAME_SLUG}}.Shell.ShellInput.AXIS_LEFT_X, 1, 0.001f, false),
+        ({{GAME_SLUG}}.Shell.ShellInput.AXIS_LEFT_Y, 2, 0.001f, true),
     };
 
-    /// <summary>Adds the shell's gamepad axes (d-pad, triggers) to Project Settings > Input Manager, once. Harmless
+    /// <summary>Adds the shell's gamepad axes (d-pad, triggers, left stick) to Project Settings > Input Manager, once. Harmless
     /// when the project uses only the Input System package (the shell reads the pad through it then).</summary>
     [MenuItem("Tools/Game Kit/Add Input Axes")]
     public static void AddInputAxes()
@@ -78,7 +83,7 @@ public static class GameKitScenes
         var so = new SerializedObject(assets[0]);
         SerializedProperty axes = so.FindProperty("m_Axes");
         int added = 0;
-        foreach ((string name, int axis, float dead) in INPUT_AXES)
+        foreach ((string name, int axis, float dead, bool invert) in INPUT_AXES)
         {
             bool present = false;
             for (int i = 0; i < axes.arraySize && !present; i++)
@@ -102,7 +107,7 @@ public static class GameKitScenes
             a.FindPropertyRelative("dead").floatValue = dead;
             a.FindPropertyRelative("sensitivity").floatValue = 1f;
             a.FindPropertyRelative("snap").boolValue = false;
-            a.FindPropertyRelative("invert").boolValue = false;
+            a.FindPropertyRelative("invert").boolValue = invert;
             a.FindPropertyRelative("type").intValue = 2;           // joystick axis
             a.FindPropertyRelative("axis").intValue = axis - 1;    // stored 0-based
             a.FindPropertyRelative("joyNum").intValue = 0;         // every joystick

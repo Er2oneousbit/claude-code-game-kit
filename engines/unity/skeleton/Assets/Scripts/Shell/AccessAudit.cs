@@ -14,6 +14,7 @@
 //           screen's own grid (the shell moves focus along it): a focusable element outside the grid is unreached.
 //           Hover is not styled by the shell, so no control can look the same focused as hovered.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): PseudoProblems, the pseudo-locale drive's check (#275)
 // ---------------------------------------------------------------------------
 using System.Collections.Generic;
 using UnityEngine;
@@ -83,6 +84,59 @@ namespace {{GAME_SLUG}}.Shell
                 };
             }
             return output;
+        }
+
+        // ---- the pseudo-locale check (#275) ------------------------------------------------
+
+        /// <summary>The pseudo-locale layout check of what is on the panel now (run with --locale pseudo, where every
+        /// string is bracketed and about 40 % longer): each visible text must start with "[" (it went through the
+        /// string tables), end with "]" (not cut) and fit its box (Fits, the access report's rule). Returns one
+        /// (node, text, why) per problem; labels counts the texts checked. The same rules as LÖVE's and Godot's.</summary>
+        public static List<(string Node, string Text, string Why)> PseudoProblems(FrontEnd front, out int labels)
+        {
+            var problems = new List<(string, string, string)>();
+            labels = 0;
+            PseudoWalk(front.Root, problems, ref labels);
+            return problems;
+        }
+
+        private static void PseudoWalk(VisualElement e, List<(string, string, string)> problems, ref int labels)
+        {
+            if (e.resolvedStyle.display == DisplayStyle.None || e.resolvedStyle.visibility == Visibility.Hidden
+                || e.resolvedStyle.opacity <= 0f)
+            {
+                return;
+            }
+            if (e is TextElement t && !string.IsNullOrWhiteSpace(t.text))
+            {
+                labels++;
+                string shown = t.text.Trim();
+                if (ControlOf(t)?.Kind == "choice" && shown.StartsWith(ShellScreen.CHOICE_LEFT.Trim(), System.StringComparison.Ordinal)
+                    && shown.EndsWith(ShellScreen.CHOICE_RIGHT.Trim(), System.StringComparison.Ordinal))
+                {
+                    shown = shown.Substring(1, shown.Length - 2).Trim();   // a choice's arrows are drawn around its value
+                }
+                string why = !shown.StartsWith("[", System.StringComparison.Ordinal) ? "not passed through Shell.T (or the key is missing)"
+                           : !shown.EndsWith("]", System.StringComparison.Ordinal) ? "cut at the end"
+                           : !Fits(t) ? Clipped(t) : null;
+                if (why != null)
+                {
+                    problems.Add((PathOf(t), shown.Length > 60 ? shown.Substring(0, 60) : shown, why));
+                }
+            }
+            foreach (VisualElement child in e.Children())
+            {
+                PseudoWalk(child, problems, ref labels);
+            }
+        }
+
+        private static string Clipped(TextElement t)
+        {
+            bool wrapped = t.resolvedStyle.whiteSpace == WhiteSpace.Normal;
+            Vector2 need = Measure(t, wrapped);
+            Rect box = t.worldBound;
+            return wrapped ? $"clipped (needs {Mathf.CeilToInt(need.y)} px high, has {Mathf.FloorToInt(box.height)} px)"
+                           : $"clipped (needs {Mathf.CeilToInt(need.x)} px, has {Mathf.FloorToInt(box.width)} px)";
         }
 
         // ---- texts ------------------------------------------------------------------------

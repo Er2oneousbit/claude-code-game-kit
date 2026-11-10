@@ -1,11 +1,13 @@
 // ---------------------------------------------------------------------------
 // FrontEnd.cs
-// Purpose : The screen flow on a UI Toolkit panel: boot -> title -> main menu -> settings / credits / play (through
-//           the loading screen), pause over play with What now?, Dialogue history and settings, quit to title.
+// Purpose : The screen flow on a UI Toolkit panel: boot -> title -> main menu -> settings / credits / play or the
+//           juice demo (through the loading screen), pause over either with What now?, Dialogue history and settings,
+//           quit to title. F8 saves a bug report (editor and development builds).
 //           Reads the menu actions once a frame (ShellInput), moves focus on the top screen, narrates, and runs the
 //           smoke drive when dev.py asks.
 // Usage   : a scene with a Camera and one GameObject carrying FrontEnd (GameKitScenes.CreateShellScene makes it);
-//           from code: FrontEnd.I.Pause(), FrontEnd.I.World.Subtitles.Play("line.id")
+//           from code: FrontEnd.I.Pause(), FrontEnd.I.World.Subtitles.Play("line.id"),
+//           FrontEnd.I.StartWorld(() => new MyGame(FrontEnd.I))   // your ShellWorld instead of PlayWorld
 // Notes   : The panel scales the 1280x720 reference to the window so the smallest side fits (PanelScreenMatchMode
 //           .Shrink: the same min(w/W, h/H) rule the access sweep uses). In batchmode and for captures the panel
 //           draws into a RenderTexture (GameKitCapture composes it over the camera's picture) of the drive's size.
@@ -15,6 +17,8 @@
 //           access.game_speed otherwise; the menus run on unscaled time. Replace PlayWorld with your game.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the UI Toolkit fallback only when ShellInput cannot poll (#266)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): worlds (ShellWorld: play, the juice demo), the F8 bug
+//           report, the crash drive's planted error (#275)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -43,7 +47,9 @@ namespace {{GAME_SLUG}}.Shell
         public event Action<string> ScreenShown;
         public bool ConsentAsked;
         public bool QuitRequested { get; private set; }
-        public PlayWorld World { get; private set; }
+        public ShellWorld World { get; private set; }
+        /// <summary>The crash drive sets it: the next frame throws, as an unhandled bug in a game would (#275).</summary>
+        public bool PlantCrash;
         public SmokeDrive Drive { get; private set; }
         public Narrator Narrator { get; } = new Narrator();
         public RenderTexture UiTexture { get; private set; }
@@ -56,6 +62,7 @@ namespace {{GAME_SLUG}}.Shell
         private PanelSettings _panel;
         private bool _paused;
         private int _loadingFrames = -1;
+        private Func<ShellWorld> _nextWorld;
 
         // ---- life cycle ----------------------------------------------------------------
 
@@ -101,6 +108,15 @@ namespace {{GAME_SLUG}}.Shell
         {
             float dt = Time.unscaledDeltaTime;
             ShellInput.Begin(dt);
+            if (PlantCrash)
+            {
+                PlantCrash = false;
+                throw new InvalidOperationException("drive crash: a planted error to prove the crash file (expected)");
+            }
+            if (ShellReports.BugKeyEnabled && ShellInput.KeyDown(ShellReports.BUG_REPORT_KEY))
+            {
+                ShellReports.BugReport(this);
+            }
             if (_loadingFrames >= 0 && --_loadingFrames < 0)
             {
                 EnterWorld();
@@ -234,6 +250,10 @@ namespace {{GAME_SLUG}}.Shell
 
         private void OnKeyDown(KeyDownEvent evt)
         {
+            if (!ShellInput.Polls && evt.keyCode == KeyCode.F8 && ShellReports.BugKeyEnabled)
+            {
+                ShellReports.BugReport(this);
+            }
             if (!ShellInput.Polls)
             {
                 // Nothing to poll (the Input System without its package): keyboard bindings come from the panel's key events
@@ -272,7 +292,7 @@ namespace {{GAME_SLUG}}.Shell
         public string CurrentName()
         {
             ShellScreen top = Top();
-            return top != null ? top.Name : World != null ? "play" : "";
+            return top != null ? top.Name : World != null ? World.Name : "";
         }
 
         public void Push(ShellScreen screen)
@@ -377,20 +397,40 @@ namespace {{GAME_SLUG}}.Shell
         /// <summary>Play: the loading screen for a few frames, then the world with no screen over it.</summary>
         public void StartPlay()
         {
+            StartWorld(() => new PlayWorld(this));
+        }
+
+        /// <summary>The juice demo (main menu, editor and development builds): hit the box (#275).</summary>
+        public void StartJuice()
+        {
+            StartWorld(() => new JuiceWorld(this));
+        }
+
+        /// <summary>Any world through the loading screen: make is called once the loading frames are over.</summary>
+        public void StartWorld(Func<ShellWorld> make)
+        {
             Replace(new LoadingScreen(this));
+            _nextWorld = make;
             _loadingFrames = LOADING_FRAMES;
         }
 
         private void EnterWorld()
         {
             ClearStack();
+            Func<ShellWorld> make = _nextWorld ?? (() => new PlayWorld(this));
             ClearWorld();
-            World = new PlayWorld(this);
+            World = make();
             World.Build(_worldLayer);
             _paused = false;
             Time.timeScale = Shell.I.GameSpeed();
-            ScreenShown?.Invoke("play");
-            Debug.Log("[INFO][shell] screen: play");
+            WorldShown();
+        }
+
+        private void WorldShown()
+        {
+            ShellReports.CurrentScreen = World.Name;
+            ScreenShown?.Invoke(World.Name);
+            Debug.Log($"[INFO][shell] screen: {World.Name}");
         }
 
         public void Pause()
@@ -409,7 +449,11 @@ namespace {{GAME_SLUG}}.Shell
             ClearStack();
             _paused = false;
             Time.timeScale = World != null ? Shell.I.GameSpeed() : 1f;
-            ScreenShown?.Invoke("play");
+            if (World != null)
+            {
+                ShellReports.CurrentScreen = World.Name;
+                ScreenShown?.Invoke(World.Name);
+            }
         }
 
         public void QuitToTitle()
@@ -446,6 +490,7 @@ namespace {{GAME_SLUG}}.Shell
         private void Shown(ShellScreen screen)
         {
             Debug.Log($"[INFO][shell] screen: {screen.Name}");
+            ShellReports.CurrentScreen = screen.Name;
             ScreenShown?.Invoke(screen.Name);
             Narrator.OnScreen(screen);
             if (screen.Focused != null)
@@ -478,6 +523,7 @@ namespace {{GAME_SLUG}}.Shell
         private void ClearWorld()
         {
             _loadingFrames = -1;
+            _nextWorld = null;
             if (World != null)
             {
                 World.Dispose();
