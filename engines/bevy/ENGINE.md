@@ -21,7 +21,10 @@
   fills it from the player's bindings: `dir`, `pressed` and `held` actions, the analog `stick` with the player's deadzone
   and invert_y, and `left_trigger`/`right_trigger`) and its accessibility rules from `AccessRules` and `Palette`. The
   display settings (mode, vsync, frame cap, window size) go to the window through `src/shell/display.rs`, never in
-  automated runs.
+  automated runs. A panic writes `crashes/crash_<time>.txt` in the user-data folder (version, screen, error,
+  backtrace, settings, log tail; `src/shell/crash.rs`). Debug builds add F8 (a `bug_<time>/` folder with a screenshot,
+  the log tail, the settings and an info file), the pseudo language and "Juice demo" on the main menu
+  (`src/shell/juice.rs`: every juice primitive and the access settings, live).
   `smoke --drive show:<screen> --screenshot build/x.png` pictures a screen; `python tools/access/sweep.py` runs the
   access drive. The readable font is Atkinson Hyperlegible (`src/shell/fonts/`, OFL, compiled into the exe).
 - **Verify:** `python tools/dev.py doctor`.
@@ -41,7 +44,8 @@ src/game/mod.rs    GamePlugin: components, resources (ScreenShake, GameActive, A
 src/game/present.rs PresentPlugin: camera (+ shake), sprites in the palette's colours, meshes, audio. Window only
 src/shell/mod.rs   ShellPlugin: the screen stack, settings applied live, subtitles, history, narration. Headless
 src/shell/screens.rs the rows and actions of every screen; view.rs draws them with bevy_ui and polls keys and pads;
-                   drive.rs the scripted smoke runs; input.rs key names; store.rs the data folder; narrator.rs speech
+                   drive.rs the scripted smoke runs; input.rs key names; store.rs the data folder; narrator.rs speech;
+                   crash.rs crash files and the log tail; bug_report.rs F8; juice.rs the juice demo (debug builds)
 data/i18n/         string tables (en, fr; compiled in, a new file here is picked up at start)
 data/access/colours.json the colour-blind palettes;  data/input/presets.json the one-handed layouts (from the kit)
 src/shell/fonts/   Atkinson Hyperlegible (the readable font, OFL; compiled in with include_bytes!)
