@@ -225,7 +225,7 @@ impl Drive {
     }
 
     /// Title (answers the consent question with Later) -> main menu.
-    fn to_menu(&mut self) {
+    fn menu_from_title(&mut self) {
         self.wait_screen(ScreenName::Title);
         self.run("dismiss consent", |world, d| {
             if world.resource::<Shell>().top().is_some_and(|t| t.consent) {
@@ -239,7 +239,7 @@ impl Drive {
     }
 
     /// Settings: from the rows back up to the tab bar, then to a tab.
-    fn to_tab(&mut self, tab: &str) {
+    fn open_tab(&mut self, tab: &str) {
         let mut presses = 0u32;
         self.add(
             "back to the tab bar",
@@ -477,7 +477,7 @@ fn scenario(d: &mut Drive) -> Result<(), String> {
     let name = d.name.clone();
     match name.as_str() {
         "default" => {
-            d.to_menu();
+            d.menu_from_title();
             d.open("play", ScreenName::Loading);
             d.wait_screen(ScreenName::Play);
         }
@@ -490,13 +490,13 @@ fn scenario(d: &mut Drive) -> Result<(), String> {
 }
 
 fn menus(d: &mut Drive) {
-    d.to_menu();
+    d.menu_from_title();
     d.open("settings", ScreenName::Settings);
-    d.to_tab("audio");
+    d.open_tab("audio");
     d.press("ui_down");
     d.focus("audio.master");
     d.slide_to("audio", "master", TARGET_MASTER);
-    d.to_tab("access");
+    d.open_tab("access");
     d.press("ui_down");
     d.focus("access.reduce_motion");
     d.run("reduce motion on", |world, d| {
@@ -536,7 +536,7 @@ fn menus(d: &mut Drive) {
 }
 
 fn to_play(d: &mut Drive) {
-    d.to_menu();
+    d.menu_from_title();
     d.open("play", ScreenName::Loading);
     d.wait_screen(ScreenName::Play);
 }
@@ -556,18 +556,18 @@ fn show(d: &mut Drive, target: &str) {
                 world.resource::<Shell>().blink_on
             });
         }
-        "main_menu" => d.to_menu(),
+        "main_menu" => d.menu_from_title(),
         "settings" => {
-            d.to_menu();
+            d.menu_from_title();
             d.open("settings", ScreenName::Settings);
-            d.to_tab("audio");
+            d.open_tab("audio");
             d.press("ui_down");
             d.focus("audio.master");
             d.press("ui_left");
             d.frames(5);
         }
         "credits" => {
-            d.to_menu();
+            d.menu_from_title();
             d.open("credits", ScreenName::Credits);
             d.frames(5);
         }
@@ -678,7 +678,7 @@ fn access(d: &mut Drive, options: &str) -> Result<(), String> {
     d.access_screen("main_menu");
     d.open("settings", ScreenName::Settings);
     for tab in TABS {
-        d.to_tab(tab);
+        d.open_tab(tab);
         d.access_screen(&format!("settings/{tab}"));
         if tab == "controls" {
             // the one-handed layout (#166), live, then reset

@@ -156,7 +156,7 @@ fn choice(shell: &Shell, section: &'static str, name: &'static str, options: &'s
 }
 
 fn back_row(shell: &Shell) -> Row {
-    button("back", shell.t("settings.back"), |s| close_settings(s))
+    button("back", shell.t("settings.back"), close_settings)
 }
 
 fn close_settings(shell: &mut Shell) {

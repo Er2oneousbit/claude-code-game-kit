@@ -17,10 +17,10 @@
   settings schema, rebinding with conflict swaps, the one-handed layouts from `data/input/presets.json`), credits,
   loading, pause with "What now?" and the dialogue history, subtitles and menu narration, on bevy_ui. The model is
   headless (`dev.py smoke --drive menus` saves settings.json without a GPU; `tests/shell.rs` drives it); only
-  `shell/view.rs` draws. The game runs only while Play is on top (`GameActive`), reads input from `Intent` (the shell
+  `src/shell/view.rs` draws. The game runs only while Play is on top (`GameActive`), reads input from `Intent` (the shell
   fills it from the player's bindings) and its accessibility rules from `AccessRules` and `Palette`.
   `smoke --drive show:<screen> --screenshot build/x.png` pictures a screen; `python tools/access/sweep.py` runs the
-  access drive. The readable font is Atkinson Hyperlegible (`assets/fonts/`, OFL).
+  access drive. The readable font is Atkinson Hyperlegible (`src/shell/fonts/`, OFL, compiled into the exe).
 - **Verify:** `python tools/dev.py doctor`.
 
 ## Layout
@@ -41,7 +41,7 @@ src/shell/screens.rs the rows and actions of every screen; view.rs draws them wi
                    drive.rs the scripted smoke runs; input.rs key names; store.rs the data folder; narrator.rs speech
 data/i18n/         string tables (en, fr; compiled in, a new file here is picked up at start)
 data/access/colours.json the colour-blind palettes;  data/input/presets.json the one-handed layouts (from the kit)
-assets/fonts/      Atkinson Hyperlegible (the readable font, OFL)
+src/shell/fonts/   Atkinson Hyperlegible (the readable font, OFL; compiled in with include_bytes!)
 src/kit_shaders.rs the kit's shader recipes as typed 2D materials (generated, with assets/shaders/kit/*.wesl)
 examples/shader_check.rs renders every recipe on the GPU for `smoke --shaders`
 tests/             integration tests: drive the real GamePlugin headless with app.update()
@@ -56,7 +56,7 @@ target/            build output (git-ignored)
   most of it: `dev.py check` runs both).
 - **Simulation in `FixedUpdate`** (60 Hz, `app.rs` `TICK_HZ`), reading input only from a resource such as `Intent`
   (`dir` from the held move actions, `pressed` for jump, attack, interact; the shell fills both from the bindings).
-  Visuals and audio in `present.rs`, raw keys and pads in `shell/view.rs`. That split is what lets smoke runs, bots
+  Visuals and audio in `present.rs`, raw keys and pads in `src/shell/view.rs`. That split is what lets smoke runs, bots
   and tests run without a GPU. Say a line with `shell.say(speaker, text, bark)` (subtitles, the history), set the
   goal "What now?" shows with `shell.set_objective(text)`.
 - One plugin per feature (`impl Plugin`), registered in `GamePlugin` or `PresentPlugin`. Tunables as `const` at the
@@ -93,7 +93,7 @@ target/            build output (git-ignored)
    to queries in the same system. Use observers or the next tick.
 5. **Headless means no renderer:** `GamePlugin` and `ShellPlugin` must not use `Assets<Mesh>`, `Sprite`, cameras,
    `ButtonInput` or audio. Smoke runs and tests would panic on the missing resource. Put those in `present.rs` or
-   `shell/view.rs`. `bevy_ui` nodes exist only with a window: `dev.py smoke --drive show:...` and `--drive access`
+   `src/shell/view.rs`. `bevy_ui` nodes exist only with a window: `dev.py smoke --drive show:...` and `--drive access`
    open one on their own.
 6. **`--features dev` (dynamic linking) is for development only:** it speeds up rebuilds, but a shipped exe needs the
    Bevy DLL next to it. `dev.py build` never uses it.

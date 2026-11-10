@@ -62,6 +62,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # ---- Tunables / constants ----------------------------------------------------
 SMOKE_FRAMES = 120
+DRIVE_FRAMES = 20000                       # a drive ends the run itself (DRIVE_DONE); its own limit is 6000 frames
+DRIVE_TIMEOUT_S = 600                      # a window drive runs at the display's rate: the access tour takes a while
 BOOT_MARKER = "BOOT_OK"
 DONE_MARKER = "SMOKE_DONE"                 # the game prints it after its last frame: proof the frames ran
 DRIVE_DONE = "DRIVE_DONE"                  # a scripted run (--drive) prints it when its scenario is through
@@ -460,7 +462,11 @@ def cmd_smoke(args):
     rc = build(args)
     if rc != 0:
         return rc
-    game = ["--smoke", str(args.frames)]
+    drive = getattr(args, "drive", "") or ""
+    # a drive ends the run when its scenario is through, so it gets a budget it never reaches
+    frames = args.frames if args.frames is not None else (DRIVE_FRAMES if drive else SMOKE_FRAMES)
+    timeout = max(args.timeout, DRIVE_TIMEOUT_S) if drive else args.timeout
+    game = ["--smoke", str(frames)]
     shot = rec = None
     if args.screenshot:
         shot = (ROOT / args.screenshot).resolve()
@@ -476,7 +482,6 @@ def cmd_smoke(args):
                 old.unlink()
         game += ["--record", str(rec), "--record-every", str(args.record_every), "--record-from", str(args.record_from)]
     # the shell's scripted runs (#168): the drive, its data folder and language are game options after `--`
-    drive = getattr(args, "drive", "") or ""
     shell_args = ["--drive", drive] if drive else []
     try:
         data = smoke_data_dir(args)
@@ -489,13 +494,13 @@ def cmd_smoke(args):
         shell_args += ["--locale", args.locale]
     game += ["--"] + shell_args + list(args.game_args or [])
     cmd = [cargo(), "run", "--quiet", *profile_flags(args), "--"] + game
-    rc, out = run(cmd, env=quiet_env(), capture=True, timeout=args.timeout)
+    rc, out = run(cmd, env=quiet_env(), capture=True, timeout=timeout)
     if DEBUG or rc != 0:
         print(out)
     if rc in NO_EXEC:
         return 2
     if rc == 124:
-        print(f"[FAIL] game did not exit within {args.timeout} s (a hang, or raise --timeout)")
+        print(f"[FAIL] game did not exit within {timeout} s (a hang, or raise --timeout)")
         return 1
     if rc == 2 and BOOT_MARKER not in out:
         print("[error] the game refused its command line (see its message above): a usage problem, not a bug")
@@ -515,7 +520,7 @@ def cmd_smoke(args):
         if bad:
             print("[FAIL] --fail-on marker seen:\n  " + "\n  ".join(bad[:5]))
         if missing_until:
-            print(f"[FAIL] marker {args.until!r} not seen within {args.frames} frames")
+            print(f"[FAIL] marker {args.until!r} not seen within {frames} frames")
         for marker in (BOOT_MARKER, DONE_MARKER):
             if marker not in out:
                 print(f"[FAIL] marker {marker!r} not seen")
@@ -524,7 +529,7 @@ def cmd_smoke(args):
         if rc != 0:
             print(f"[FAIL] exit code {rc}")
         return 1
-    what = f"marker {args.until!r} reached" if args.until else f"drive {drive}" if drive else f"{args.frames} frames"
+    what = f"marker {args.until!r} reached" if args.until else f"drive {drive}" if drive else f"{frames} frames"
     frames = [p for p in rec.glob("frame_*.png") if re.fullmatch(r"frame_\d{5}\.png", p.name)] if rec else []
     if shot and not (shot.is_file() and shot.stat().st_size > 0):
         print(f"[FAIL] no screenshot was written to {shot}")
@@ -766,8 +771,9 @@ def build_parser():
     sub.add_parser("test", help="build then run cargo test").set_defaults(fn=cmd_test)
     p = sub.add_parser("smoke", help="run the game headless for N frames; fail on errors",
                        epilog="Arguments after `--` go to the game, e.g. smoke --until GOAL_REACHED -- --autoplay right")
-    p.add_argument("--frames", type=positive_int, default=SMOKE_FRAMES,
-                   help=f"frames to run, 1 to 100000 (default {SMOKE_FRAMES}); one 1/60 s game tick per frame")
+    p.add_argument("--frames", type=positive_int, default=None,
+                   help=f"frames to run, 1 to 100000 (default {SMOKE_FRAMES}; a --drive ends the run itself); "
+                        "one 1/60 s game tick per frame")
     p.add_argument("--until", help="fail unless the game prints this marker (scenario runs, e.g. GOAL_REACHED)")
     p.add_argument("--fail-on", help="comma-separated markers that fail the run (e.g. CRASHED,TIME_UP)")
     p.add_argument("--timeout", type=positive_int, default=SMOKE_TIMEOUT_S,

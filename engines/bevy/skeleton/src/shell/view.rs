@@ -7,7 +7,7 @@
 // Notes   : The tree is rebuilt from scratch whenever Shell.version moves (a press, a timer, a new screen): a few
 //           dozen nodes, so a rebuild is cheap and nothing can go stale. Text sizes are the kit's (SOP-20: body text
 //           at least 18 px at 1080p) times access.text_scale; access.readable_font swaps in Atkinson Hyperlegible
-//           (assets/fonts/, OFL) and access.line_spacing sets the line height. The focused row gets a lighter fill,
+//           (src/shell/fonts/, OFL, compiled into the exe) and access.line_spacing sets the line height. The focused row gets a lighter fill,
 //           a white border and a ">" marker, never colour alone. Text over the game (the HUD hint, subtitles) sits on
 //           a panel, so its contrast does not depend on what is behind it. Pad prompts follow the last device used.
 //
@@ -42,8 +42,9 @@ pub const SUBTITLE_PX: [(&str, f32); 4] = [("small", 18.0), ("medium", 22.0), ("
 pub const LIST_MAX_W: f32 = 1100.0;
 pub const PANEL_PAD: f32 = 16.0;
 pub const ROW_PAD: f32 = 7.0;
-pub const READABLE_FONT: &str = "fonts/AtkinsonHyperlegible-Regular.ttf";
-pub const READABLE_BOLD: &str = "fonts/AtkinsonHyperlegible-Bold.ttf";
+/// Atkinson Hyperlegible (OFL, src/shell/fonts/OFL.txt), compiled in so a shipped exe needs no font file.
+pub const READABLE_FONT: &[u8] = include_bytes!("fonts/AtkinsonHyperlegible-Regular.ttf");
+pub const READABLE_BOLD: &[u8] = include_bytes!("fonts/AtkinsonHyperlegible-Bold.ttf");
 /// Frames between an access report request and the measurement (one to rebuild, one to lay out).
 const REPORT_DELAY: u32 = 2;
 /// Stick deflection that counts as a direction.
@@ -116,9 +117,9 @@ impl Plugin for ShellViewPlugin {
     }
 }
 
-fn load_fonts(mut fonts: ResMut<Fonts>, assets: Res<AssetServer>) {
-    fonts.readable = assets.load(READABLE_FONT);
-    fonts.readable_bold = assets.load(READABLE_BOLD);
+fn load_fonts(mut fonts: ResMut<Fonts>, mut assets: ResMut<Assets<Font>>) {
+    fonts.readable = assets.add(Font::from_bytes(READABLE_FONT.to_vec()));
+    fonts.readable_bold = assets.add(Font::from_bytes(READABLE_BOLD.to_vec()));
 }
 
 // ---- Input -------------------------------------------------------------------------------------------------
@@ -539,9 +540,8 @@ fn spawn_page(
 }
 
 fn spawn_title(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shell, win: Vec2) {
-    let name = shell.t_args("title.name", &[("name", crate::game::TITLE)]);
-    heading(parent, style, "title.name", &name, TITLE_PX);
     if shell.top().is_some_and(|t| t.consent) {
+        // the consent question is the whole screen (the name and version wait), so it fits 200 % text at 1280x800
         let rows = shell.rows();
         let focus = shell.top().map_or(0, |t| t.focus);
         parent
@@ -564,7 +564,7 @@ fn spawn_title(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shell, 
                     style,
                     "consent.body",
                     &shell.t("consent.body"),
-                    BODY_PX,
+                    SMALL_PX,
                     TEXT,
                     false,
                     Some(PANEL),
@@ -575,7 +575,11 @@ fn spawn_title(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shell, 
                     spawn_row(p, style, shell, row, "", focus == i, 0, None);
                 }
             });
-    } else if shell.blink_on {
+        return;
+    }
+    let name = shell.t_args("title.name", &[("name", crate::game::TITLE)]);
+    heading(parent, style, "title.name", &name, TITLE_PX);
+    if shell.blink_on {
         label(
             parent,
             style,
@@ -594,16 +598,9 @@ fn spawn_title(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shell, 
 }
 
 fn spawn_settings(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shell, win: Vec2) {
-    let top = shell.top().cloned().unwrap_or_else(|| super::ScreenState {
-        name: ScreenName::Settings,
-        focus: 0,
-        tab: 0,
-        on_tabs: true,
-        cell: 0,
-        scroll: 0,
-        consent: false,
-        t: 0.0,
-    });
+    let Some(top) = shell.top().cloned() else {
+        return;
+    };
     heading(parent, style, "settings.title", &shell.t("settings.title"), HEADING_PX);
     // the tab bar: the open tab is tinted and underlined, the focused tab gets the white border too
     parent
@@ -798,8 +795,9 @@ fn spawn_subtitle(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shel
         ))
         .with_children(|s| {
             if shell.flag("access", "speaker_names") && !sub.speaker.is_empty() {
+                // bold, not a colour: the accent falls under 4.5:1 over the translucent panel on a bright game
                 let name = shell.t_args("subtitle.speaker", &[("name", &sub.speaker)]);
-                label(s, style, "subtitle.speaker", &name, px, ACCENT, true, None, &over, None);
+                label(s, style, "subtitle.speaker", &name, px, TEXT, true, None, &over, None);
             }
             let text = if sub.holding {
                 format!("{} \u{25BC}", sub.text)
@@ -997,10 +995,25 @@ fn report_access(
             continue;
         }
         let rect = rect_of(node, transform);
-        let ink_size = layout.size / layout.scale_factor.max(0.001);
+        let sf = layout.scale_factor.max(0.001);
+        let block = layout.size / sf;
+        // the ink is the glyphs' own box, not the layout's: a wrapped line's trailing space counts in the
+        // layout width but draws nothing (an empty label has no glyphs: its box is the block)
+        let (mut lo, mut hi) = (Vec2::splat(f32::MAX), Vec2::splat(f32::MIN));
+        for g in &layout.glyphs {
+            let half = g.atlas_info.rect.size() / 2.0;
+            lo = lo.min(g.position - half);
+            hi = hi.max(g.position + half);
+        }
+        let (ink_min, ink_size) = if layout.glyphs.is_empty() {
+            (Vec2::ZERO, block)
+        } else {
+            (lo / sf, (hi - lo) / sf)
+        };
+        let block_at = Vec2::new(rect[0] + (rect[2] - block.x) / 2.0, rect[1] + (rect[3] - block.y) / 2.0);
         let ink = [
-            rect[0] + (rect[2] - ink_size.x) / 2.0,
-            rect[1] + (rect[3] - ink_size.y) / 2.0,
+            block_at.x + ink_min.x,
+            block_at.y + ink_min.y,
             ink_size.x,
             ink_size.y,
         ];

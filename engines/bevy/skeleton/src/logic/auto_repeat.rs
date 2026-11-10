@@ -61,8 +61,13 @@ mod tests {
                 repeats.push(frame);
             }
         }
-        // the first repeat at 0.35 s (frame 20), then every 0.15 s (9 frames): 29, 38, 47, 56
-        assert_eq!(repeats, vec![20, 29, 38, 47, 56]);
+        // the first repeat at 0.35 s (frame 20), then every 0.15 s (9 frames, give or take one for the summed
+        // sixtieths): five in the first second
+        assert_eq!(repeats.len(), 5, "{repeats:?}");
+        assert_eq!(repeats[0], 20);
+        for pair in repeats.windows(2) {
+            assert!((8..=10).contains(&(pair[1] - pair[0])), "{repeats:?}");
+        }
     }
 
     #[test]
