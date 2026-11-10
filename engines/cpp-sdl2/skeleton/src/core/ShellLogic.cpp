@@ -190,6 +190,22 @@ std::string glyph_fallback_label(const std::string& glyph_name) {
     return name;
 }
 
+// ---- The pseudo-locale layout check (#275) ------------------------------------------------------------------
+std::string label_problem(const DrawnLabel& label, double screen_w, double screen_h, bool pseudo) {
+    constexpr double kSlack = 0.5;   // rounding of design pixels
+    if (!label.fits) {
+        return label.why.empty() ? "cut off" : label.why;
+    }
+    if (label.x < -kSlack || label.y < -kSlack || label.x + label.w > screen_w + kSlack ||
+        label.y + label.h > screen_h + kSlack) {
+        return "past the screen edge";
+    }
+    if (pseudo && !label.raw && !label.text.empty() && label.text.front() != '[') {
+        return "not through t() (untranslated)";
+    }
+    return "";
+}
+
 // ---- Keeping track (#167) -----------------------------------------------------------------------------------
 void LineHistory::record(const std::string& name, const std::string& text) {
     entries_.push_back({name, text});

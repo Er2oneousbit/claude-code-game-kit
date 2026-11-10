@@ -18,7 +18,9 @@
 //   tr: the first table in the chain that has key, with {name} replaced from args; else key
 //   pseudo: every character -> accented look-alike, placeholders ({x} %s %d %i %f %%) unchanged,
 //           then ceil(visible characters * kPseudoGrowth) tildes, all inside [ ]
+//   pseudo_ascii: the same with every character kept (no accents); tr_pseudo: English -> pseudo_ascii -> fill
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): pseudo_ascii and tr_pseudo for the 8x8 font (#275)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -38,6 +40,7 @@ using TrArgs = std::map<std::string, std::string>;        // placeholder name ->
 
 // ---- Tunables ----
 constexpr const char* kFallbackLocale = "en";
+constexpr const char* kPseudoLocale = "pseudo";   // the layout-test locale (dev.py smoke --drive pseudo --locale pseudo)
 constexpr double kPseudoGrowth = 0.40;  // pseudo text is 40 % longer (translated English runs about that long, SOP-19)
 
 // Number of characters (code points) in UTF-8 text.
@@ -59,6 +62,14 @@ std::string tr_plural(const StringTables& tables, const std::string& locale, con
 
 // The pseudo-locale version of text (see Notes).
 std::string pseudo(const std::string& text);
+
+// The same without accents (#275): bracketed and 40 % longer, ASCII kept ASCII. The shell's 8x8 debug font draws
+// ASCII only, so its pseudo locale uses this form: it still finds clipped and untranslated text, not missing glyphs.
+std::string pseudo_ascii(const std::string& text);
+
+// The pseudo locale's tr(): the English text through pseudo_ascii(), then the placeholders filled (their values stay
+// as they are). A key English lacks comes back bare, without brackets, so a layout check flags it.
+std::string tr_pseudo(const StringTables& tables, const std::string& key, const TrArgs& args = {});
 
 // From JSON {"en": {"menu.play": "Play", ...}, "fr": {...}}; non-string entries are skipped.
 StringTables string_tables_from_json(const nlohmann::json& j);

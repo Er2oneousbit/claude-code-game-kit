@@ -127,7 +127,10 @@ std::string tr_plural(const StringTables& tables, const std::string& locale, con
     return tr(tables, locale, key + "." + plural(locale, n), a);
 }
 
-std::string pseudo(const std::string& text) {
+namespace {
+
+// pseudo() and pseudo_ascii(): the same walk, with or without the accented look-alikes.
+std::string pseudo_text(const std::string& text, bool accents) {
     std::string out = "[";
     std::size_t visible = 0;
     std::size_t i = 0;
@@ -146,7 +149,7 @@ std::string pseudo(const std::string& text) {
             i += 2;
             continue;
         }
-        if (const char* look_alike = pseudo_char(c)) {
+        if (const char* look_alike = accents ? pseudo_char(c) : nullptr) {
             out += look_alike;
         } else {
             out += c;
@@ -158,6 +161,28 @@ std::string pseudo(const std::string& text) {
     out.append(static_cast<std::size_t>(std::ceil(static_cast<double>(visible) * kPseudoGrowth)), '~');
     out += "]";
     return out;
+}
+
+}  // namespace
+
+std::string pseudo(const std::string& text) {
+    return pseudo_text(text, true);
+}
+
+std::string pseudo_ascii(const std::string& text) {
+    return pseudo_text(text, false);
+}
+
+std::string tr_pseudo(const StringTables& tables, const std::string& key, const TrArgs& args) {
+    const auto table = tables.find(kFallbackLocale);
+    if (table == tables.end()) {
+        return key;
+    }
+    const auto entry = table->second.find(key);
+    if (entry == table->second.end()) {
+        return key;   // missing: shown bare, so the layout check flags it as untranslated
+    }
+    return fill(pseudo_ascii(entry->second), args);
 }
 
 StringTables string_tables_from_json(const nlohmann::json& j) {
