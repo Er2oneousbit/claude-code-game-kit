@@ -6,13 +6,15 @@
 //           Intent carries the analog stick, triggers and held actions (#265), the display settings reach a window
 //           outside automated runs (#268), the `menus` drive finishes with the file it promises, the juice demo
 //           answers its actions and F8 writes a bug report (SOP-19, SOP-20; #165, #166, #167, #168, #275), and a
-//           drive ignores the real keyboard that normal play reads (#276).
+//           drive ignores the real keyboard that normal play reads (#276), and the shell's font has a glyph for
+//           every string table and the pseudo-locale.
 // Usage   : python tools/dev.py test   (or cargo test --test shell)
 // Notes   : app::shell_test_app builds the real ShellPlugin on the headless test App; every test gets its own data
 //           folder under the system temp dir, so no test touches another's settings.json or the player's.
 //           Actions are injected as a key press would be (shell.inject) and take effect on the next update.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): real input during a drive (#276)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): glyph coverage of the shell's font
 // ---------------------------------------------------------------------------
 use std::path::PathBuf;
 
@@ -24,8 +26,11 @@ use serde_json::{Value, json};
 
 use {{GAME_SLUG}}::app::shell_test_app;
 use {{GAME_SLUG}}::game::{AccessRules, GameActive, GameConfig, Intent, Palette, ScreenShake};
+use {{GAME_SLUG}}::logic::audio_access::ARROWS;
+use {{GAME_SLUG}}::logic::charmap::CharMap;
+use {{GAME_SLUG}}::logic::i18n::pseudo;
 use {{GAME_SLUG}}::shell::display::FrameLimit;
-use {{GAME_SLUG}}::shell::view::ShellInputPlugin;
+use {{GAME_SLUG}}::shell::view::{DEFAULT_FONT, READABLE_FONT, ShellInputPlugin};
 use {{GAME_SLUG}}::shell::{PadAxes, ScreenName, Shell};
 
 /// A data folder of this test's own under the system temp dir, removed when the test ends.
@@ -633,6 +638,54 @@ fn the_pseudo_locale_brackets_every_label_and_french_falls_back_to_english() {
         shell(&app).narrator.last_line,
         "Jouer, bouton",
         "the focused row is narrated in the new language"
+    );
+}
+
+/// Every string in a JSON value, nested ones included.
+fn strings_in(value: &Value, out: &mut Vec<String>) {
+    match value {
+        Value::String(s) => out.push(s.clone()),
+        Value::Array(items) => items.iter().for_each(|v| strings_in(v, out)),
+        Value::Object(map) => map.values().for_each(|v| strings_in(v, out)),
+        _ => {}
+    }
+}
+
+#[test]
+fn the_shell_font_has_a_glyph_for_every_string_table_and_the_pseudo_locale() {
+    // Bevy's built-in font is an ASCII-only subset: French and the pseudo-locale drew empty boxes and every check
+    // passed. Add a language the font cannot draw (Cyrillic needs a font with it) and this test names the characters.
+    let regular = CharMap::parse(DEFAULT_FONT).expect("the default font has a character map");
+    let readable = CharMap::parse(READABLE_FONT).expect("the readable font has a character map");
+    let folder = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("data").join("i18n");
+    let mut texts = Vec::new();
+    for entry in std::fs::read_dir(&folder).expect("data/i18n") {
+        let path = entry.expect("a string table").path();
+        if path.extension().is_some_and(|e| e == "json") {
+            let table: Value = serde_json::from_str(&std::fs::read_to_string(&path).expect("readable"))
+                .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            let mut found = Vec::new();
+            strings_in(&table, &mut found);
+            if path.file_stem().is_some_and(|s| s == "en") {
+                texts.extend(found.iter().map(|s| pseudo(s)));
+            }
+            texts.extend(found);
+        }
+    }
+    // what the shell draws itself: the held subtitle's marker and the sound captions' direction arrows
+    texts.push("\u{25BC}".into());
+    texts.extend(ARROWS.iter().map(|a| a.to_string()));
+    for text in &texts {
+        // the default font draws everything; the readable stack falls back to it
+        assert!(
+            regular.missing(text).is_empty(),
+            "{text:?} misses {:?}",
+            regular.missing(text)
+        );
+    }
+    assert!(
+        readable.covers('é') && !readable.covers('\u{25BC}'),
+        "the stack is still needed behind Atkinson"
     );
 }
 

@@ -6,8 +6,10 @@
 // Usage   : app.add_plugins(ShellViewPlugin) (app.rs adds it with a window; headless runs never load this)
 // Notes   : The tree is rebuilt from scratch whenever Shell.version moves (a press, a timer, a new screen): a few
 //           dozen nodes, so a rebuild is cheap and nothing can go stale. Text sizes are the kit's (SOP-20: body text
-//           at least 18 px at 1080p) times access.text_scale; access.readable_font swaps in Atkinson Hyperlegible
-//           (src/shell/fonts/, OFL, compiled into the exe) and access.line_spacing sets the line height. The focused row gets a lighter fill,
+//           at least 18 px at 1080p) times access.text_scale. Text is Fira Mono in full (Bevy's built-in font is
+//           its ASCII-only subset: every accent showed as an empty box); access.readable_font swaps in Atkinson
+//           Hyperlegible with Fira Mono behind it (both in src/shell/fonts/, OFL, compiled into the exe) and
+//           access.line_spacing sets the line height. The focused row gets a lighter fill,
 //           a white border and a ">" marker, never colour alone. Text over the game (the HUD hint, subtitles) sits on
 //           a panel, so its contrast does not depend on what is behind it. Pad prompts follow the last device used.
 //           A scripted run (a Drive resource: every smoke run) reads no real keyboard or pad at all (#276).
@@ -19,19 +21,22 @@
 //   Update rebuild_ui (version moved): despawn the root -> spawn the top screen's nodes, each text tagged UiLabel
 //   Last report_access (a report was asked for two frames ago): every UiLabel's size, position, colours and
 //   whether it fits -> AccessReport.result; for the pseudo drive's check: every visible label that is not in
-//   brackets (did not go through t()), wider than its box or past the window's edge -> the problems
+//   brackets (did not go through t()), wider than its box, past the window's edge or with a character no font in
+//   its stack has (logic/charmap.rs) -> the problems
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the raw stick and triggers go to Shell.pad (#265)
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): F8 (the bug report), the juice demo's HUD, the
 //           pseudo-locale label check and the planted label of --drive pseudo-plant (#275)
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): no real input while a drive runs (#276)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): Fira Mono in full instead of Bevy's ASCII subset,
+//           a font stack behind the readable font, missing glyphs fail the pseudo check
 // ---------------------------------------------------------------------------
 use std::collections::BTreeSet;
 
 use bevy::input::InputSystems;
 use bevy::input::gamepad::Gamepad;
 use bevy::prelude::*;
-use bevy::text::{LineBreak, LineHeight, TextLayoutInfo};
+use bevy::text::{FontSource, LineBreak, LineHeight, TextLayoutInfo};
 use bevy::ui::UiGlobalTransform;
 use bevy::window::PrimaryWindow;
 use serde_json::{Value, json};
@@ -39,6 +44,7 @@ use serde_json::{Value, json};
 use super::drive::Drive;
 use super::screens::{self, HELP_ACTIONS, PAGE_LINES, RowKind, TABS};
 use super::{PadAxes, ScreenName, Shell, input};
+use crate::logic::charmap::CharMap;
 
 // ---- Tunables ------------------------------------------------------------------
 pub const TITLE_PX: f32 = 44.0;
@@ -50,6 +56,9 @@ pub const SUBTITLE_PX: [(&str, f32); 4] = [("small", 18.0), ("medium", 22.0), ("
 pub const LIST_MAX_W: f32 = 1100.0;
 pub const PANEL_PAD: f32 = 16.0;
 pub const ROW_PAD: f32 = 7.0;
+/// Fira Mono Medium in full (OFL, src/shell/fonts/OFL-FiraMono.txt), the face Bevy's built-in font is an ASCII-only
+/// subset of: the same look, with accents, arrows and the subtitle marker. Compiled in like the readable font.
+pub const DEFAULT_FONT: &[u8] = include_bytes!("fonts/FiraMono-Medium.ttf");
 /// Atkinson Hyperlegible (OFL, src/shell/fonts/OFL.txt), compiled in so a shipped exe needs no font file.
 pub const READABLE_FONT: &[u8] = include_bytes!("fonts/AtkinsonHyperlegible-Regular.ttf");
 pub const READABLE_BOLD: &[u8] = include_bytes!("fonts/AtkinsonHyperlegible-Bold.ttf");
@@ -73,11 +82,26 @@ pub const FOCUS: Color = Color::WHITE;
 pub const OVERLAY: Color = Color::srgba(0.0, 0.0, 0.0, 0.6);
 pub const SUBTITLE_BG: Color = Color::BLACK;
 
-/// The fonts: Bevy's built-in one by default, Atkinson Hyperlegible when access.readable_font is on.
+/// The fonts: Fira Mono by default, Atkinson Hyperlegible when access.readable_font is on (with Fira Mono behind it
+/// for the characters Atkinson lacks: arrows, the subtitle marker). The character maps feed the pseudo check.
 #[derive(Resource, Default)]
 pub struct Fonts {
+    pub regular: Handle<Font>,
     pub readable: Handle<Font>,
     pub readable_bold: Handle<Font>,
+    pub regular_map: CharMap,
+    pub readable_map: CharMap,
+}
+
+impl Fonts {
+    /// The characters of `text` no font in the stack can draw (they would show as empty boxes).
+    pub fn missing(&self, text: &str, readable: bool) -> Vec<char> {
+        let mut miss = self.regular_map.missing(text);
+        if readable {
+            miss.retain(|c| !self.readable_map.covers(*c));
+        }
+        miss
+    }
 }
 
 /// The root of the shell's UI tree; despawned and rebuilt when the shell changes.
@@ -149,8 +173,11 @@ impl Plugin for ShellViewPlugin {
 }
 
 fn load_fonts(mut fonts: ResMut<Fonts>, mut assets: ResMut<Assets<Font>>) {
+    fonts.regular = assets.add(Font::from_bytes(DEFAULT_FONT.to_vec()));
     fonts.readable = assets.add(Font::from_bytes(READABLE_FONT.to_vec()));
     fonts.readable_bold = assets.add(Font::from_bytes(READABLE_BOLD.to_vec()));
+    fonts.regular_map = CharMap::parse(DEFAULT_FONT).unwrap_or_default();
+    fonts.readable_map = CharMap::parse(READABLE_FONT).unwrap_or_default();
 }
 
 // ---- Input -------------------------------------------------------------------------------------------------
@@ -250,6 +277,7 @@ struct Style {
     scale: f32,
     readable: bool,
     line_spacing: f32,
+    default: Handle<Font>,
     regular: Handle<Font>,
     bold: Handle<Font>,
 }
@@ -260,6 +288,7 @@ impl Style {
             scale: shell.num("access", "text_scale") as f32,
             readable: shell.flag("access", "readable_font"),
             line_spacing: shell.num("access", "line_spacing") as f32,
+            default: fonts.regular.clone(),
             regular: fonts.readable.clone(),
             bold: fonts.readable_bold.clone(),
         }
@@ -268,9 +297,14 @@ impl Style {
     fn font(&self, px: f32, bold: bool) -> (TextFont, LineHeight) {
         let mut font = TextFont::from_font_size(px * self.scale);
         if self.readable {
-            font.font = if bold { self.bold.clone() } else { self.regular.clone() }.into();
-        } else if bold {
-            font.weight = bevy::text::FontWeight::BOLD;
+            // a font stack: a character Atkinson lacks comes from Fira Mono instead of an empty box
+            let face = if bold { self.bold.clone() } else { self.regular.clone() };
+            font.font = FontSource::list([face, self.default.clone()]);
+        } else {
+            font.font = self.default.clone().into();
+            if bold {
+                font.weight = bevy::text::FontWeight::BOLD;
+            }
         }
         (font, LineHeight::RelativeToFont(1.2 * self.line_spacing))
     }
@@ -1164,6 +1198,7 @@ fn inside(inner: [f32; 4], outer: [f32; 4], slack: f32) -> bool {
 fn report_access(
     mut report: ResMut<AccessReport>,
     shell: Res<Shell>,
+    fonts: Res<Fonts>,
     windows: Query<&Window, With<PrimaryWindow>>,
     labels: Query<(
         &UiLabel,
@@ -1194,6 +1229,7 @@ fn report_access(
     let window = [0.0, 0.0, win_w, win_h];
     let check = std::mem::take(&mut report.check);
     let pseudo = shell.is_pseudo();
+    let readable = shell.flag("access", "readable_font");
     let (mut count, mut problems) = (0usize, Vec::new());
     let mut texts = Vec::new();
     for (meta, node, transform, layout, colour, visible, text, raw) in &labels {
@@ -1240,6 +1276,14 @@ fn report_access(
             }
             if !covered && !inside(ink, window, SLACK_PX) {
                 why.push("runs past the screen edge (clipped)".into());
+            }
+            let miss = fonts.missing(&text.0, readable);
+            if !miss.is_empty() {
+                let list: Vec<String> = miss.iter().map(|c| format!("U+{:04X} {c}", *c as u32)).collect();
+                why.push(format!(
+                    "no glyph in the font for {} (drawn as empty boxes)",
+                    list.join(", ")
+                ));
             }
             for w in why {
                 problems.push(json!({"id": meta.id, "text": text.0, "why": w}));

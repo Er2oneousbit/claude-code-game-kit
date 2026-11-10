@@ -15,6 +15,7 @@
 //           2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): audio director, music director, audio access
 //           2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): auto_repeat (hold to mash, #166)
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): analog (stick and trigger shaping, #265)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): charmap (which characters a font can draw)
 // ---------------------------------------------------------------------------
 pub mod math;
 pub mod rng;
@@ -34,6 +35,7 @@ pub mod analog;
 pub mod atomic_file;
 pub mod auto_repeat;
 pub mod bindings;
+pub mod charmap;
 pub mod i18n;
 pub mod save_store;
 pub mod settings;
