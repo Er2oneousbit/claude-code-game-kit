@@ -50,13 +50,13 @@
   honoured), and `move_vector()` adds the held `move_*` keys to the stick, length 0 to 1 (a half lean walks at half
   speed). `is_down("move_left")` counts the stick too. The menus still get the stick as d-pad presses with hysteresis and
   each trigger as `pad:l2` / `pad:r2` past half travel. The maths is `src/core/Analog.hpp` (`tests/test_analog.cpp`,
-  the same cases as the Bevy shell's `logic/analog.rs`).
+  the same cases as the Bevy shell's analog module).
 - **Crash files and bug reports (#275):** an exception that reaches the top of main.cpp's loop, an uncaught one
   (`std::terminate`) and a fatal signal (a bad pointer, `abort`, a failed assert; best effort) write
   `crashes/crash_<UTC time>.txt` in the user-data folder (game, version, build, OS, screen, locale, seed from
   `shell_->set_run_seed()`, the error, the last 60 log lines, settings.json) and print `CRASH_WRITTEN <path>`; the run
   exits 1, and outside smoke runs a message box names the file. In a debug build (no `NDEBUG`: the `debug` preset) **F8**
-  saves `bug_<UTC time>/` there (`screenshot.bmp` of that frame, `log_tail.txt`, `settings.json`, `info.txt`) and prints
+  saves `bug_<UTC time>/` there (a screenshot.bmp of that frame, log_tail.txt, settings.json, info.txt) and prints
   `BUG_REPORT <folder>`; nothing leaves the machine. The texts are `src/core/Report.hpp` (`tests/test_reports.cpp`).
 - **Pseudo locale (#275):** `--locale pseudo` (or Settings > Language > pseudo in a debug build) shows every string from
   `t()` bracketed and 40 % longer, in an **ASCII form without accents** (`core::pseudo_ascii`): the 8x8 font cannot draw
