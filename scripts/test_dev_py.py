@@ -194,9 +194,9 @@ class UnityDrive(TempRoot):
         self.assertNotIn("noise", text)
 
     def test_data_dir_is_kept_and_relative_to_the_project(self):
-        rc, text, seen = self.drive("access:res=1280x800,pad", data_dir="build/access/deck")
+        rc, text, seen = self.drive("access:res=1280x800,pad", data_dir="captures/access/deck")
         self.assertEqual(rc, 0)
-        self.assertEqual(Path(seen["env"]["GAMEKIT_DATA_DIR"]), (self.root / "build" / "access" / "deck").resolve())
+        self.assertEqual(Path(seen["env"]["GAMEKIT_DATA_DIR"]), (self.root / "captures" / "access" / "deck").resolve())
 
     def test_drive_names_are_checked(self):
         dev = load("unity")
@@ -1586,6 +1586,118 @@ class GodotShaderCrash(TempRoot):
         self.assertEqual(rc, 2, text)
         self.assertIn("it needs a window", text)
         self.assertNotIn("crashed", text)
+
+
+# ---- #263: no engine's smoke keeps its --data-dir inside the player or build output ---------
+class DataDirInBuildOutput(TempRoot):
+    """The access sweep kept its runs' settings in build/access/, which is Unity's Build/ on Windows and macOS, so
+    the player folder shipped them. Every dev.py now refuses such a --data-dir (exit 2) before it runs or builds
+    anything, ignoring letter case, and creates nothing there."""
+
+    def engine(self, name):
+        dev = load(name)
+        dev.ROOT = self.root
+        self.calls = []
+
+        def called(*a, **kw):
+            self.calls.append(a)
+            raise AssertionError("ran past the --data-dir guard")
+        return dev, called
+
+    def refused(self, fn, *args, folder):
+        rc, text = quiet(fn, *args)
+        self.assertEqual(rc, 2, text)
+        self.assertIn("[error] --data-dir", text)
+        self.assertNotIn("Traceback", text)
+        self.assertEqual(self.calls, [])
+        self.assertFalse((self.root / folder).exists(), f"{folder} was created")
+        return text
+
+    def test_godot_refuses_its_export_folders(self):
+        dev, called = self.engine("godot")
+        dev.run = dev.ensure_imported = called
+        shutil.copy2(KIT / "engines" / "godot" / "skeleton" / "export_presets.cfg", self.root / "export_presets.cfg")
+        args = argparse.Namespace(data_dir="BUILD/Windows/access", compare="", screenshot="", drive="", locale="",
+                                  debug=False)
+        self.assertIn("build/windows/", self.refused(dev.cmd_smoke, args, "godot", folder="build/windows"))
+        args.data_dir = "build/web/sd"
+        self.refused(dev.cmd_run, args, "godot", folder="build/web")
+        for ok in ("captures/access/pc", "build/smoke-data", "build/access"):   # not an export folder
+            self.assertFalse(dev.data_dir_in_build(ok), ok)
+
+    def test_unity_refuses_its_player_folder(self):
+        dev, called = self.engine("unity")
+        dev.run_tests = called
+        args = argparse.Namespace(screenshot=None, record=None, record_every=6, graphics=False, fail_on=None,
+                                  until=None, filter="Smoke", drive="access:res=1280x800,pad",
+                                  data_dir="build/access/deck", locale="")
+        self.assertIn("player build folder", self.refused(dev.cmd_smoke, args, folder="build/access"))
+        args.data_dir = str(self.root / "Build" / "access")                      # an absolute path, too
+        self.refused(dev.cmd_smoke, args, folder="Build/access")
+
+    def test_unreal_refuses_packaged_staged_and_binaries(self):
+        dev, called = self.engine("unreal")
+        dev.preflight = lambda *a, **kw: None
+        dev.kit_plugin_state = lambda: "enabled"
+        dev.run_automation = dev.run = called
+        for folder in ("packaged/access", "Saved/StagedBuilds/x", "Binaries/Win64/x"):
+            args = argparse.Namespace(platform=None, filter=None, until=None, fail_on=None, shaders=False,
+                                      drive="menus", screenshot="", data_dir=folder, locale="")
+            self.refused(dev.cmd_smoke, args, folder=folder)
+        self.assertIsNone(dev.build_output_of((self.root / "Saved" / "GameKitSmoke").resolve()))
+
+    def test_cpp_refuses_its_build_trees(self):
+        dev, called = self.engine("cpp-sdl2")
+        dev.cmd_check = called
+        shutil.copy2(KIT / "engines" / "cpp-sdl2" / "skeleton" / "CMakePresets.json", self.root / "CMakePresets.json")
+        args = argparse.Namespace(preset="debug", frames=None, screenshot=None, record=None, record_every=4,
+                                  game_args=[], timeout=60, until=None, fail_on=None, drive="access",
+                                  data_dir="Build/Release/access", locale="")
+        self.refused(dev.cmd_smoke, args, folder="Build/Release/access")
+        for ok in ("build/smoke-data", "captures/access/pc"):
+            self.assertFalse(dev.data_dir_in_build(ok), ok)
+
+    def test_bevy_refuses_cargos_target_folder(self):
+        dev, called = self.engine("bevy")
+        dev.preflight = dev.build = called
+        args = argparse.Namespace(data_dir="target/release/access", drive="access", locale="", frames=None,
+                                  timeout=60, game_args=[])
+        old = os.environ.pop("CARGO_TARGET_DIR", None)
+        try:
+            self.refused(dev.cmd_smoke, args, folder="target")
+            elsewhere = self.root / "shared-target"
+            os.environ["CARGO_TARGET_DIR"] = str(elsewhere)
+            args.data_dir = str(elsewhere / "access")
+            self.refused(dev.cmd_smoke, args, folder="shared-target")
+            self.assertFalse(dev.data_dir_in_build("target/x"))      # target/ is not cargo's folder then
+        finally:
+            os.environ.pop("CARGO_TARGET_DIR", None)
+            if old is not None:
+                os.environ["CARGO_TARGET_DIR"] = old
+
+    def test_love_refuses_its_fused_build(self):
+        dev, called = self.engine("love2d")
+        dev.compile_check = called
+        args = argparse.Namespace(data_dir="build/WINDOWS/access", drive="access", locale="", frames=120,
+                                  headless=True, screenshot="", record="", compare="", debug=False, game_args=[])
+        self.refused(dev.cmd_smoke, args, "love", folder="build/windows")
+        self.assertFalse(dev.data_dir_in_build("build/smoke-data"))
+
+    def test_web_overlays_refuse_dist_before_building(self):
+        for name in ("web", "web-3d"):
+            with self.subTest(engine=name):
+                dev, called = self.engine(name)
+                dev.cmd_build = dev.run = called
+                args = argparse.Namespace(data_dir="Dist/sd", drive="menus", locale="")
+                self.refused(dev.cmd_smoke, args, folder="dist")
+                self.assertFalse(dev.data_dir_in_build("build/smoke-data"))
+
+    def test_rpgmaker_has_no_data_dir_to_misplace(self):
+        # MZ's smoke keeps no user-data folder (no --data-dir): the option is a usage error, not a silent one
+        dev = load("rpgmaker-mz")
+        with self.assertRaises(SystemExit) as cm:
+            quiet(dev.build_parser().parse_args, ["smoke", "--data-dir", "build/web/sd"])
+        self.assertEqual(cm.exception.code, 2)
 
 
 # ---- #252: dev.py ship forwards to tools/cloud/ship.py --------------------------------

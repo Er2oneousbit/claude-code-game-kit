@@ -455,6 +455,8 @@ def cmd_test(args):
 
 
 def cmd_smoke(args):
+    if data_dir_in_build(getattr(args, "data_dir", "")):
+        return 2
     err = preflight()
     if err:
         print(f"[error] {err}", file=sys.stderr)
@@ -545,6 +547,24 @@ def cmd_smoke(args):
     if getattr(args, "shaders", False):
         return shader_pass(args)
     return 0
+
+
+def data_dir_in_build(given):
+    """#263: print an error and return True when --data-dir lies inside cargo's target folder (CARGO_TARGET_DIR, else
+    target/; the release exe there is what ships, and cargo clean wipes it). Letter case is ignored. A target-dir set
+    in .cargo/config.toml is not read here (that needs a cargo call)."""
+    if not given:
+        return False
+    p = Path(given)
+    where = os.path.realpath(str(p if p.is_absolute() else ROOT / p)).lower()
+    out = os.environ.get("CARGO_TARGET_DIR") or "target"
+    folder = os.path.realpath(str(ROOT / out)).lower()
+    if where == folder or where.startswith(folder.rstrip("\\/") + os.sep):
+        print(f"[error] --data-dir {given} is inside cargo's target folder ({out}): its files would sit next to the "
+              f"shipped exe or be wiped by clean. Use a folder of its own, e.g. captures/{p.name or 'run'}",
+              file=sys.stderr)
+        return True
+    return False
 
 
 def smoke_data_dir(args):

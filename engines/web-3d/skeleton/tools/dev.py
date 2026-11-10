@@ -397,7 +397,25 @@ def cmd_build(args):
     return 0
 
 
+def data_dir_in_build(given):
+    """#263: print an error and return True when --data-dir lies inside dist/ (the build `build` writes and players
+    get). Letter case is ignored (DIST is dist/ on Windows and macOS). smoke.mjs also refuses the project's own
+    folders (src/, public/, ...); this check runs before the build."""
+    if not given:
+        return False
+    p = Path(given)
+    where = os.path.realpath(str(p if p.is_absolute() else ROOT / p)).lower()
+    folder = os.path.realpath(str(ROOT / "dist")).lower()
+    if where == folder or where.startswith(folder.rstrip("\\/") + os.sep):
+        print(f"[error] --data-dir {given} is inside dist/, the build output: its files would ship with the game. "
+              f"Use a folder of its own, e.g. build/{p.name or 'run'}", file=sys.stderr)
+        return True
+    return False
+
+
 def cmd_smoke(args):
+    if data_dir_in_build(args.data_dir):
+        return 2
     rc = cmd_build(args)
     if rc:
         return rc

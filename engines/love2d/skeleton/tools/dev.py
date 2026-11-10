@@ -69,6 +69,7 @@ SHADER_OUT = "build/shader_check"        # smoke --shaders pictures, compared by
 SHADER_TIMEOUT_S = 120
 SMOKE_TIMEOUT_S = 90
 SMOKE_DATA = "build/smoke-data"          # the game's data folder in a smoke run without --data-dir (wiped each run)
+BUILD_OUTPUT = "build/windows"           # the fused Windows build; smoke refuses a --data-dir inside it (#263)
 SMOKE_MIN_FPS = 30                       # --frames adds frames/30 s to the limit
 TEST_TIMEOUT_S = 600
 CHECK_TIMEOUT_S = 120
@@ -415,6 +416,8 @@ def cmd_test(args, love):
 
 
 def cmd_smoke(args, love):
+    if data_dir_in_build(getattr(args, "data_dir", "")):
+        return 2
     # a syntax error in conf.lua happens before any handler exists: catch it here, fast and clearly
     boot = [p for p in (ROOT / "conf.lua", ROOT / "main.lua") if p.is_file()]
     failed, ok, unreadable = compile_check(love, boot)
@@ -504,6 +507,22 @@ def cmd_smoke(args, love):
     if getattr(args, "shaders", False):
         return shader_pass(love, True)
     return 0
+
+
+def data_dir_in_build(given):
+    """#263: print an error and return True when --data-dir lies inside build/windows/ (the fused build `build`
+    writes, shipped as a whole folder). Letter case is ignored (build/ and Build/ are one folder on Windows and
+    macOS)."""
+    if not given:
+        return False
+    p = Path(given)
+    where = os.path.realpath(str(p if p.is_absolute() else ROOT / p)).lower()
+    folder = os.path.realpath(str(ROOT / BUILD_OUTPUT)).lower()
+    if where == folder or where.startswith(folder.rstrip("\\/") + os.sep):
+        print(f"[error] --data-dir {given} is inside {BUILD_OUTPUT}/, the build output: its files would ship with the "
+              f"game. Use a folder of its own, e.g. captures/{p.name or 'run'}", file=sys.stderr)
+        return True
+    return False
 
 
 def smoke_data_dir(args):
