@@ -3,7 +3,7 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## Unreleased: 0.14.4, fixes to the 0.14.3 shells and tools (#262 to #270)
+## Unreleased: 0.14.4, fixes and shell parity after 0.14.3 (#262 to #276, #159)
 - **Wavesmith (#262):** an Ogg whose Vorbis stream follows a Skeleton or Theora page (a video with Vorbis sound) is
   read by `oggvorbis.py` instead of being sent to ffmpeg, so reading, streaming, `formats info` and `formats convert`
   work on it with nothing installed. The routing uses the decoder's own header scan, so a damaged Vorbis stream
@@ -39,6 +39,47 @@
   missing and fell back to English, not only Settings > Accessibility). `tools/check_i18n.py` fails a table with a
   missing key, an English value or different `{placeholders}` (a short list of words that are the same in French,
   `--same` for a game's own); its exam checks the overlays' tables.
+- **Analog input in every shell (#274):** the game gets the left stick (the player's radial deadzone, rescaled, and
+  `invert_y`), both triggers (0 to 1) and the game actions held now, as Bevy's `Intent` does: web
+  (`shell.input.stick()`, `triggers()`, `heldActions()`; web-3d gets the same
+  `engines/web-3d/skeleton/src/core/analog.ts` for its own pad code), LÖVE (`move_vector()` is radial and rescaled now, `triggers()`, `held_actions()`), Godot (`Shell.move_vector()`,
+  `stick()`, `triggers()`, `held_actions()`), Unity (`ShellInput.MoveVector()`, `Stick`, `LeftTrigger`/`RightTrigger`,
+  `HeldGameActions`, on both input backends; `CreateShellScene` adds two stick axes for the Input Manager), Unreal
+  (Blueprint-callable `GetStick`, `GetTrigger`, `IsActionHeld`, `GetHeldActions`) and C++/SDL3 (`stick()`,
+  `left_trigger()`, `right_trigger()`, `held_actions()`, `move_vector()`; +y is down there). Fixed on the way: Godot's
+  left stick did not move the player with the default bindings, and its `invert_y` flipped the W and S keys too.
+- **Shell parity (#275):** Unity, Unreal, Bevy and C++/SDL3 gain what Godot, LÖVE and web had: crash files
+  (`crashes/crash_<time>.txt`, `smoke --drive crash`), the F8 bug report in debug builds (`--drive bug`), the
+  pseudo-locale layout drive (`--drive pseudo --locale pseudo`, `pseudo-plant` proves it fails; C++'s pseudo text is
+  ASCII for its font) and the juice demo (`show:juice`, on the main menu in debug builds). The pseudo drives found and
+  the kit fixed: C++ slider numbers cut off, Bevy text longer than its line running out of its box, a jump during a
+  hitstop cancelled in Unreal's demo.
+- **Complete French (#272):** Godot's and web's French tables are complete too, so `tools/check_i18n.py` has no
+  exceptions left; `game.title` is a `{name}` placeholder in Godot, web and Unity (the game's own name was reported as
+  untranslated).
+- **What a build packs (#271):** `dev.py smoke` also refuses a `--data-dir` inside a folder its build copies into the
+  game (LÖVE's packed folders, Godot's export filters, Unity's data folders, Bevy's assets, C++'s `assets/` and
+  `data/`, web's public and globbed folders). Godot exports carried `build/smoke-data/` and `captures/` settings files
+  (the presets export every resource, and `.json` counts): smoke's data folder gets a `.gdignore` now.
+- **Unreal (#273):** every path `dev.py` gives the editor is quoted the same way and the shader check runs its script
+  by name, so a project folder with a space, `,` or `;` works (UE 5.8 already read the old forms; this makes them
+  consistent).
+- **Packaged games ship their data:** an Unreal package now stages `data/` (the plugin's
+  `engines/unreal/skeleton/Plugins/GameKitShell/Config/Game.ini`) and the
+  readable font; before, a packaged shell showed every label as its key. A C++ build copies `data/` and `CREDITS.md`
+  next to the exe, and `Shell::game_dir()` finds them from any working folder.
+- **Godot needs 4.6 (was "4.3"):** the shell never compiled on 4.3 to 4.5 (`Control.has_focus(bool)` is new in 4.6,
+  `MIX_RATE_OUTPUT` in 4.4); `dev.py` and `doctor` now refuse an older Godot with exit 2 instead of failing on parse
+  errors, and the crash hook is a plain `Logger`. Use GUT 9.6.1 on 4.6 (GUT 9.7 needs 4.7).
+- **Scripted drives read no real input (#276):** during any smoke run the shells of Bevy, C++/SDL3, Godot, LÖVE, Unity
+  and Unreal ignore the real keyboard, mouse and gamepads, so a stray key or a virtual pad on a busy machine cannot
+  break a tour. The sweep keeps every run's output in `captures/access/<run>/smoke.log` (and `last.png` where the
+  engine can capture) and prints the path when a run fails.
+- **`scripts/check_examples.py` (#159):** doctor, check, test and smoke across every example, with toolchains
+  skipped by name when missing, known gaps recorded, and a final check that the run left `examples/` untouched.
+- **Upgrade notes:** Godot games need Godot 4.6 or newer. A Unity game's code that stores `FrontEnd.World` as a
+  `PlayWorld` changes the type to `ShellWorld` (the new base the juice demo shares). A Unity game reruns `python
+  tools/dev.py exec GameKitScenes.AddInputAxes` for the new stick axes.
 
 ## 0.14.3 (2026-11-10): accessibility in every engine with a shell (#169, #91, #85, #167, #166, #165, #168), second-model reviews of the kit tools (#261) and the exam runner (#158)
 - **Colour-blind pairs (#169):** `tools/access/colour_check.py pairs` checks the colours a game tells apart (declared in

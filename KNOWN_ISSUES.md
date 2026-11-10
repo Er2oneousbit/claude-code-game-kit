@@ -10,9 +10,12 @@ examples were built and tested on one Windows 11 machine.
 - **CI workflow** not yet run on GitHub-hosted runners (Actions is disabled on this repository, so it cannot run
   until that is turned on): [#40](https://github.com/Er2oneousbit/claude-code-game-kit/issues/40).
 - **LÖVE:** macOS and Linux packaging, LÖVE 11.4 itself and the POSIX save rename not run: [#41](https://github.com/Er2oneousbit/claude-code-game-kit/issues/41).
-- **Godot shell:** crash files need Godot 4.5+, untested on 4.3 and 4.4: [#46](https://github.com/Er2oneousbit/claude-code-game-kit/issues/46).
-- **Unreal:** the GameKitShell plugin builds and passes its tests in a Blueprint-only project (headless), but turning
-  it on from the editor's Plugins window is not tried: [#47](https://github.com/Er2oneousbit/claude-code-game-kit/issues/47).
+- **Unreal:** turning the GameKitShell plugin on the way the Plugins window does (its `.uproject` entry) is verified
+  headless in a Blank Blueprint project on UE 5.8 (`check` builds both modules, `test` passes); the window itself, the
+  restart and the editor's "modules are missing, rebuild?" prompt are not tried
+  ([#47](https://github.com/Er2oneousbit/claude-code-game-kit/issues/47)). A packaged game ships `data/` and the
+  readable font (0.14.4) but not `CREDITS.md`, so its credits screen shows the placeholder
+  ([#278](https://github.com/Er2oneousbit/claude-code-game-kit/issues/278)).
 - **Shell screens** ship for Godot, LÖVE, web, Unity, Unreal, Bevy and C++/SDL3; web-3d ships the tested logic and
   the screens are built in the engine; RPG Maker MZ keeps MZ's own screens and ships no juice or shell port (its
   ENGINE_FLOW maps the rules onto MZ). Display settings the browser cannot apply (vsync, resolution) are stored only.
@@ -23,15 +26,14 @@ examples were built and tested on one Windows 11 machine.
   game or PIE (viewport focus, input mode, Quit), on Windows every pad reports as an Xbox one (XInput or GameInput;
   PlayStation glyphs need the WinDualShock plugin), and nothing speaks its narration lines yet; Bevy's exclusive
   fullscreen keeps the monitor's video mode instead of `display.resolution`; C++/SDL3's text is SDL's 8x8 ASCII font
-  (English only, `readable_font` is bold, non-integer text sizes look uneven). None of the four has crash files, the
-  F8 bug report, the juice demo or a pseudo-locale layout drive
-  ([#168](https://github.com/Er2oneousbit/claude-code-game-kit/issues/168)).
-- **Analog input through the shell:** only Bevy's `Intent` carries the stick and the triggers (0.14.4); the web,
-  web-3d, C++ and LÖVE shells read the triggers as on or off, web, web-3d and C++ read the stick as a d-pad, and Unity
-  and Unreal have no analog accessor in the shell (the engine's own input still works)
-  ([#274](https://github.com/Er2oneousbit/claude-code-game-kit/issues/274)).
-- **French tables:** Godot's and web's are still partial (they test the fallback to English); `tools/check_i18n.py`
-  lists them as exceptions ([#272](https://github.com/Er2oneousbit/claude-code-game-kit/issues/272)).
+  (English only, `readable_font` is bold, its pseudo locale is ASCII, non-integer text sizes look uneven). Since 0.14.4
+  all four have crash files, the F8 bug report, the pseudo-locale drive and the juice demo; Unreal's crash drive plants
+  its error rather than crashing the editor (an unattended editor crash can upload a report to Epic), so the hook has
+  not run on a real fatal error (verify); C++'s juice demo draws no shake angle; Bevy's shell plays no sounds, so its
+  demo has no hit sound or caption ([#168](https://github.com/Er2oneousbit/claude-code-game-kit/issues/168)).
+- **Analog input** reaches the game through the shell in every engine with one since 0.14.4 (#274); it is tested
+  with injected pads and models only, never a physical pad. Unity's `show:` captures darken outlined HUD text and grey
+  the frame under translucent panels ([#277](https://github.com/Er2oneousbit/claude-code-game-kit/issues/277)).
 
 ### 0.8.1 follow-ups (Dotwork)
 - **Cyrillic glyph font** not made (the `bdf` lane may already cover it with an OFL font, untried):
@@ -67,13 +69,6 @@ examples were built and tested on one Windows 11 machine.
   ([#165](https://github.com/Er2oneousbit/claude-code-game-kit/issues/165)).
 - **Second-model reviews** of Wavesmith's codecs and the tools listed in
   [#261](https://github.com/Er2oneousbit/claude-code-game-kit/issues/261) are done.
-- **`--data-dir` in a folder the build packs:** `dev.py smoke` refuses a data folder inside the build's output
-  (0.14.4), but not inside the folders a build copies in (LÖVE's `src/` and `data/`, Godot's export include filters,
-  Unity's `GameKitBuild` data folders), so one there would still ship
-  ([#271](https://github.com/Er2oneousbit/claude-code-game-kit/issues/271)).
-- **Unreal project folder with a space:** `--screenshot` and `--data-dir` values with a space work (0.14.4), but a
-  project whose own path has a space still breaks `-abslog` and the other paths `dev.py` builds
-  ([#273](https://github.com/Er2oneousbit/claude-code-game-kit/issues/273)).
 - **Godot under GPU load:** Godot 4.7.2 crashed in 2 of 5 windowed shader checks, and once in a font reimport, while
   other engines used the GPU (never alone); `dev.py` now says so; rerun, or `check --no-shaders`.
 
