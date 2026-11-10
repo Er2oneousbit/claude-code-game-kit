@@ -16,6 +16,7 @@
 //   compare each result with its "expect" -> collect every mismatch -> fail with the list
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): audio, music and access vectors
+// Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): the narration cases run too
 // ---------------------------------------------------------------------------
 use std::path::Path;
 
@@ -667,6 +668,7 @@ golden! {
     shell_tr: SHELL, "tr";
     shell_plural: SHELL, "plural";
     shell_pseudo: SHELL, "pseudo";
+    shell_narration: SHELL, "narration";
     audio_director: AUDIO, "audio_director";
     music_grid: MUSIC, "music_grid";
     music_plan: MUSIC, "music_plan";

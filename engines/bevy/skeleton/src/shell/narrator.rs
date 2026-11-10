@@ -2,9 +2,10 @@
 // shell/narrator.rs
 // Purpose : Menu narration (#165): every focus change, value change and screen says a short line ("Music volume,
 //           slider, 70 percent"), so a blind or low-vision player can use the title, settings and pause screens.
-// Usage   : narrator.update(&shell_facts)   // once a frame, after the actions ran; shell.last_narration holds the line
+// Usage   : narrator.update(&focus)   // once a frame, after the actions ran; narrator.last_line holds the line
 // Notes   : The line is always worked out (the access drive reports it for every row) and spoken only with
-//           access.narration on. Bevy has no speech of its own, so the operating system's is used from a background
+//           access.narration on and outside automated runs (Focus.enabled, set by Shell::narrate). Bevy has no
+//           speech of its own, so the operating system's is used from a background
 //           thread (the game never waits): Windows' speech synthesizer through PowerShell, macOS `say`, Linux
 //           `spd-say` (speech-dispatcher). Only Windows was tried (verify on macOS and Linux); a line still being
 //           spoken is not cut off. The thread takes one line at a time from a channel, so lines never overlap.
