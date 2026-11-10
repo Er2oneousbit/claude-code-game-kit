@@ -15,8 +15,10 @@
 #           drive on Unity (the drive test, run options in the environment), Bevy and Unreal (the Drive test),
 #           echoes its markers and fails without DRIVE_DONE (#168), and on C++ (the scenario, data folder and
 #           locale after `--`, the drive's frame budget; #269), that Unreal's --screenshot and --data-dir reach the
-#           editor quoted when the path has a space (#267), and that every smoke refuses a --data-dir inside its
-#           player or build output (#263).
+#           editor quoted when the path has a space (#267), and every editor path from a project folder with a space
+#           too (#273), that Unreal's crash and pseudo-plant drives exit 1 on purpose with their proof checked and its
+#           bug drive gets a renderer (#275), and that every smoke refuses a --data-dir inside its player or build
+#           output (#263).
 # Usage   : python scripts/test_dev_py.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, no engine needed. The live checks (a real smoke with each toolchain) are
@@ -492,6 +494,52 @@ class UnrealDrive(TempRoot):
         self.assertEqual(cmd, [])
         rc, text, cmd = self.drive(self.PASS, drive="", screenshot="captures/s.png")
         self.assertEqual(rc, 2, text)
+
+    def test_the_crash_drive_fails_on_purpose_with_its_file(self):
+        """#275: crash exits 1 either way; the crash file named by CRASH_WRITTEN must be on disk to count as proof."""
+        crash = self.root / "Saved" / "GameKitSmoke" / "crashes" / "crash_1.txt"
+        log = (f"LogGameKitShell: Display: CRASH_WRITTEN {crash.as_posix()}\n"
+               "LogGameKitShell: Display: DRIVE_FAIL drive crash: a planted error (expected)\n"
+               "LogGameKitShell: Display: DRIVE_DONE crash\nResult={Fail} Name={Drive}\n"
+               f"LogGameKitShell: Display: CRASH_WRITTEN {crash.as_posix()} [log] \n")   # the automation's echo
+        rc, text, cmd = self.drive(log, rc=255, drive="crash", writes=["Saved/GameKitSmoke/crashes/crash_1.txt"])
+        self.assertEqual(rc, 1, text)
+        self.assertIn("-NullRHI", cmd)
+        self.assertIn("CRASH_WRITTEN ", text)
+        self.assertIn("fails on purpose", text)
+        rc, text, _ = self.drive(log.replace("crash_1", "crash_gone"), rc=255, drive="crash")
+        self.assertEqual(rc, 1, text)
+        self.assertIn("wrote no crash file", text)
+
+    def test_pseudo_plant_must_name_the_planted_label(self):
+        log = ("LogGameKitShell: Display: PSEUDO_FAIL main_menu label plant.too_small: wider than its column\n"
+               "LogGameKitShell: Display: DRIVE_DONE pseudo-plant\nResult={Fail} Name={Drive}\n")
+        rc, text, _ = self.drive(log, rc=255, drive="pseudo-plant", locale="pseudo")
+        self.assertEqual(rc, 1, text)
+        self.assertIn("names the planted label", text)
+        rc, text, _ = self.drive("LogGameKitShell: Display: DRIVE_DONE pseudo-plant\nResult={Fail} Name={Drive}\n", rc=255,
+                                 drive="pseudo-plant", locale="pseudo")
+        self.assertEqual(rc, 1, text)
+        self.assertIn("did not name", text)
+
+    def test_pseudo_passes_and_echoes_its_lines(self):
+        log = ("LogGameKitShell: Display: PSEUDO_SCREEN title labels 3 problems 0\n"
+               "LogGameKitShell: Display: PSEUDO_PASS 20 screens, 300 labels, nothing truncated or untranslated\n"
+               "LogGameKitShell: Display: DRIVE_DONE pseudo\nResult={Success} Name={Drive}\n")
+        rc, text, cmd = self.drive(log, drive="pseudo", locale="pseudo")
+        self.assertEqual(rc, 0, text)
+        self.assertIn("-GameKitLocale=pseudo", cmd)
+        self.assertIn("PSEUDO_PASS 20 screens", text)
+
+    def test_the_bug_drive_gets_a_renderer(self):
+        log = ("LogGameKitShell: Display: BUG_REPORT D:/x/bug_1\nLogGameKitShell: Display: DRIVE_BUG D:/x/bug_1\n"
+               "LogGameKitShell: Display: DRIVE_DONE bug\nResult={Success} Name={Drive}\n")
+        rc, text, cmd = self.drive(log, drive="bug")
+        self.assertEqual(rc, 0, text)
+        self.assertIn("-RenderOffScreen", cmd)
+        self.assertIn("Automation RunTests GameKit.Screens.Drive;", " ".join(cmd))
+        self.assertIn("DRIVE_BUG D:/x/bug_1", text)
+        self.assertIn("BUG_REPORT D:/x/bug_1", text)
 
     def test_a_stale_screenshot_is_removed_first(self):
         shot = self.root / "captures" / "s.png"
