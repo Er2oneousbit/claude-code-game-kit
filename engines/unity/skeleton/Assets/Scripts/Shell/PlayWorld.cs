@@ -8,6 +8,7 @@
 //           after INTRO_DELAY_S; the goal for "What now?" is set on entry (Shell.SetObjective). The world layer is
 //           drawn under the screens; the camera's own picture is behind it (the layer is see-through).
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a ShellWorld (the juice demo is the other one, #275)
 // ---------------------------------------------------------------------------
 using System.Collections.Generic;
 using UnityEngine;
@@ -15,14 +16,13 @@ using UnityEngine.UIElements;
 
 namespace {{GAME_SLUG}}.Shell
 {
-    public sealed class PlayWorld
+    public sealed class PlayWorld : ShellWorld
     {
         // ---- Tunables ------------------------------------------------------------
         public const float INTRO_DELAY_S = 0.5f;       // game seconds before the sample line plays
         public const string INTRO_LINE = "guide.intro";
         public static readonly string[] HINT_ACTIONS = { "move_left", "move_right", "jump", "attack", "interact", "pause" };
 
-        public readonly SubtitleBar Subtitles;
         private readonly FrontEnd _front;
         private VisualElement _root;
         private Label _hint;
@@ -32,10 +32,11 @@ namespace {{GAME_SLUG}}.Shell
         public PlayWorld(FrontEnd front)
         {
             _front = front;
-            Subtitles = new SubtitleBar();
         }
 
-        public void Build(VisualElement layer)
+        public override string Name => "play";
+
+        public override void Build(VisualElement layer)
         {
             Shell s = Shell.I;
             _root = new VisualElement { name = "World", pickingMode = PickingMode.Ignore };
@@ -70,7 +71,7 @@ namespace {{GAME_SLUG}}.Shell
             ShellInput.DeviceChanged += OnDevice;
         }
 
-        public void Dispose()
+        public override void Dispose()
         {
             Shell.I.SettingsChanged -= OnSettingsChanged;
             ShellInput.DeviceChanged -= OnDevice;
@@ -78,8 +79,7 @@ namespace {{GAME_SLUG}}.Shell
             _root = null;
         }
 
-        /// <summary>Once a frame with the game's delta (0 while paused).</summary>
-        public void Tick(float dt)
+        public override void Tick(float dt)
         {
             _t += dt;
             if (!_introPlayed && _t >= INTRO_DELAY_S)

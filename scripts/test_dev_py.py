@@ -289,11 +289,60 @@ class UnityDrive(TempRoot):
 
     def test_drive_names_are_checked(self):
         dev = load("unity")
-        for ok in ("", "menus", "show:settings", "access", "access:res=1920x1080,scale=2,pad,read"):
+        for ok in ("", "menus", "show:settings", "access", "access:res=1920x1080,scale=2,pad,read",
+                   "crash", "pseudo", "pseudo-plant", "bug", "show:juice"):          # #275
             self.assertEqual(dev.drive_name(ok), ok)
-        for bad in ("crash", "show:juice", "access:res=big", "access:pad,"):
+        for bad in ("crashes", "show:nothing", "access:res=big", "access:pad,"):
             with self.assertRaises(argparse.ArgumentTypeError):
                 dev.drive_name(bad)
+
+    # ---- #275: the drives that fail on purpose, the new markers ----
+    def planted(self, drive, log, rc):
+        """cmd_smoke for a drive whose run fails on purpose: the faked test run returns rc and leaves log behind."""
+        dev = load("unity")
+        dev.ROOT = self.root
+        dev.LOG_FILE = self.root / "Logs" / "dev_unity.log"
+
+        def fake_tests(platform, filt, graphics=False, env=None, until=None, fail_on=None):
+            dev.LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+            dev.LOG_FILE.write_text(log, encoding="utf-8")
+            return rc
+        dev.run_tests = fake_tests
+        args = argparse.Namespace(screenshot=None, record=None, record_every=6, graphics=False, fail_on=None,
+                                  until=None, filter="Smoke", drive=drive, data_dir="", locale="")
+        return quiet(dev.cmd_smoke, args)
+
+    def test_the_crash_drive_fails_on_purpose_with_its_proof(self):
+        rc, text = self.planted("crash", "BOOT_OK title\nCRASH_WRITTEN D:/data/crashes/crash_1.txt\n", 1)
+        self.assertEqual(rc, 1)
+        self.assertIn("CRASH_WRITTEN D:/data/crashes/crash_1.txt", text)
+        self.assertIn("fails on purpose", text)
+
+    def test_a_crash_drive_without_a_crash_file_is_a_plain_failure(self):
+        rc, text = self.planted("crash", "BOOT_OK title\n", 1)
+        self.assertEqual(rc, 1)
+        self.assertNotIn("fails on purpose", text)
+        self.assertIn("no CRASH_WRITTEN line", text)
+
+    def test_a_crash_drive_cannot_pass(self):
+        """Even a test run that passed (the exception was not caught as a failure) is exit 1: a crash run proves a crash."""
+        self.assertEqual(self.planted("crash", "CRASH_WRITTEN x\n", 0)[0], 1)
+
+    def test_the_plant_drive_names_its_label_and_an_environment_problem_stays_exit_2(self):
+        rc, text = self.planted("pseudo-plant", "PSEUDO_FAIL main_menu label /Root/PlantedLabel: clipped\n", 1)
+        self.assertEqual(rc, 1)
+        self.assertIn("PSEUDO_FAIL main_menu label /Root/PlantedLabel", text)
+        self.assertIn("fails on purpose", text)
+        self.assertEqual(self.planted("pseudo-plant", "", 2)[0], 2)
+
+    def test_pseudo_and_bug_markers_are_echoed(self):
+        log = ("PSEUDO_SCREEN title labels 3 problems 0\nPSEUDO_PASS 20 screens, 300 labels\nBUG_REPORT D:/d/bug_1\n"
+               "DRIVE_BUG D:/d/bug_1\nDRIVE_DONE bug\nnoise\n")
+        rc, text = self.planted("bug", log, 0)
+        self.assertEqual(rc, 0)
+        for line in ("PSEUDO_SCREEN title", "PSEUDO_PASS 20", "BUG_REPORT D:/d/bug_1", "DRIVE_BUG"):
+            self.assertIn(line, text)
+        self.assertNotIn("noise", text)
 
     def test_a_plain_smoke_keeps_the_old_shape(self):
         dev = load("unity")
