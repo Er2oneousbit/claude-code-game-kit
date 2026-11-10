@@ -35,7 +35,8 @@
 //     -> subtitles and captions -> notice -> (access sweep) the frame's text report -> (F8) the bug report
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): analog stick and triggers for the game (#274); crash
-//           context, F8 bug report, pseudo locale, juice demo screen (#275)
+//           context, F8 bug report, pseudo locale, juice demo screen (#275); data/ found next to the exe when the
+//           working directory has none (game_dir())
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -145,6 +146,10 @@ public:
     void set_run_seed(const std::string& seed) { seed_ = seed; }   // named in crash files and bug reports
     void notice(const std::string& text);             // a short message over any screen ("Bug report saved.")
     Rgb palette(const std::string& name, Rgb fallback) const;   // data/access/colours.json for the colour-blind mode
+    // The folder holding data/ and CREDITS.md: "" (the working directory) when it has data/i18n, as for dev.py run
+    // and smoke, else the exe's folder, where the build copies them (a shipped game started from anywhere). Join
+    // the game's own files to it the same way: shell.game_dir() / "assets/spr_player.png".
+    const std::filesystem::path& game_dir() const { return game_dir_; }
     bool say_line(const std::string& id);             // a dialogue line as a subtitle (settings permitting)
     bool caption(const std::string& event_id);        // a sound caption ("[thud]") with captions_sfx on
     void set_objective(const std::string& text) { objective_ = text; }
@@ -181,6 +186,7 @@ private:
     double time_ = 0.0;
 
     std::filesystem::path data_dir_;
+    std::filesystem::path game_dir_;      // where data/ and CREDITS.md are read from (game_dir())
     nlohmann::json settings_;
     bool settings_existed_ = false;
     core::StringTables tables_;
