@@ -77,6 +77,10 @@
 #           renderer (-RenderOffScreen); --data-dir and --locale
 # Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): --screenshot and --data-dir take a path with a
 #           space (#267): the value goes in quotes, -Key="a b", passed as is on the Windows command line (UnrealValue)
+# Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): every path the editor gets (-abslog=, -script=) goes
+#           through unreal_path (forward slashes, -Key="a b" for a space) and the shader check names its script by
+#           its place on sys.path, so no project path lands inside -ExecCmds (#273); a quote in the project path is
+#           refused up front
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -131,6 +135,7 @@ KIT_PLUGIN = "GameKitShell"                   # Plugins/GameKitShell: the kit's 
 KIT_TEST_PREFIX = "GameKit."                  # its automation tests; `test` runs them with the game's own
 KIT_OK_PATTERN = r"Result=\{Success\} Name=\{[^}]*\} Path=\{GameKit\."
 SHADER_SCRIPT = "Content/Python/kit_shaders/shader_check.py"   # the kit's shader recipes as materials
+SHADER_PY = "kit_shaders/shader_check.py"    # the same file as `py` finds it on sys.path (Content/Python is on it)
 SHADER_LOG = ROOT / "Saved" / "Logs" / "dev_shaders.log"
 SHADER_OUT = "Saved/ShaderCheck"          # smoke --shaders pictures, compared by tools/shaders/shader_ref.py
 SHADER_TIMEOUT_S = 1800                   # editor start, material compiles (a fresh shader cache is slow), draws
@@ -378,6 +383,16 @@ def unreal_arg(key, value):
     return f"-{key}={value}"
 
 
+def unreal_path(key, path):
+    """unreal_arg for a path the editor reads (-abslog=, -script=, -GameKitDataDir=): forward slashes, since inside
+    quotes Unreal reads a backslash as an escape (a folder named rune-delve after one arrived as <CR>une-delve on
+    UE 5.8), then quoted when the path holds a space (#273). A double quote cannot be carried: ValueError."""
+    value = Path(path).as_posix()
+    if '"' in value:
+        raise ValueError(f"-{key} holds a double quote, which Unreal's command line cannot carry: {value}")
+    return unreal_arg(key, value)
+
+
 def run(cmd, capture=False, timeout=None, env=None):
     """Run a command in the project root. 124 = timed out (output so far is returned), 126 = not executable,
     127 = not found."""
@@ -468,6 +483,9 @@ def preflight(need_uproject=True):
         return "UE_ROOT is not set. Point it at your engine folder (the one containing Engine/)."
     if not (ue_root() / "Engine").exists():
         return f"UE_ROOT={ue_root()} has no Engine/ folder."
+    if '"' in str(ROOT):
+        # every path dev.py gives the editor (-abslog=, -script=, -GameKitDataDir=) comes from this folder (#273)
+        return "the project path contains a double quote, which Unreal's command line cannot carry. Move or rename it."
     if SYSTEM == "Windows":
         # The .bat wrappers run under cmd.exe, and subprocess does not escape cmd metacharacters
         bad = sorted(set(CMD_METACHARS) & set(str(ROOT) + str(ue_root())))
@@ -582,19 +600,16 @@ def shader_editor(args, mode, out_dir=None):
     missing = missing_tool(exe)
     if missing:
         return missing
-    script = (ROOT / SHADER_SCRIPT).as_posix()
-    if any(c in script for c in ',;"'):
-        # -ExecCmds splits commands on , and ; and a quote ends the argument
-        print(f"[error] the project path may not contain , ; or \" for the shader check: {script}", file=sys.stderr)
-        return 2
     SHADER_LOG.parent.mkdir(parents=True, exist_ok=True)
     if SHADER_LOG.exists():
         SHADER_LOG.unlink()
     env = {"GAMEKIT_SHADER_MODE": mode, "GAMEKIT_SHADER_OUT": str(out_dir) if out_dir else ""}
     # -ExecCmds=py, not -ExecutePythonScript: that one quits a frame after the script returns, before the
-    # materials finish compiling (seen on UE 5.8); the script quits the editor itself when it is done
-    cmd = [exe, find_uproject(), f"-ExecCmds=py {script}", "-unattended", "-nopause", "-nosplash", "-RenderOffScreen",
-           f"-abslog={SHADER_LOG}"]
+    # materials finish compiling (seen on UE 5.8); the script quits the editor itself when it is done.
+    # The script by its name under Content/Python (on the editor's sys.path, where `py` looks for a relative file):
+    # an absolute path would split at a space in the project folder, and -ExecCmds splits commands on , and ; (#273)
+    cmd = [exe, find_uproject(), f"-ExecCmds=py {SHADER_PY}", "-unattended", "-nopause", "-nosplash", "-RenderOffScreen",
+           unreal_path("abslog", SHADER_LOG)]
     rc, out = run(cmd, capture=True, timeout=SHADER_TIMEOUT_S, env=env)
     log = SHADER_LOG.read_text(encoding="utf-8", errors="ignore") if SHADER_LOG.exists() else ""
     if DEBUG:
@@ -683,7 +698,8 @@ def run_automation(filter_, args, until=None, fail_on=None, extra_args=None, mar
         AUTOMATION_LOG.unlink()
     cmd = [exe, find_uproject(),
            f'-ExecCmds=Automation RunTests {filter_}; Quit',
-           "-unattended", "-nopause", "-RenderOffScreen" if render else "-NullRHI", "-nosplash", f"-abslog={AUTOMATION_LOG}",
+           "-unattended", "-nopause", "-RenderOffScreen" if render else "-NullRHI", "-nosplash",
+           unreal_path("abslog", AUTOMATION_LOG),
            "-TestExit=Automation Test Queue Empty"] + list(extra_args or [])
     rc, out = run(cmd, capture=True, timeout=TEST_TIMEOUT_S)
     # Test results only reach the log file, not stdout (verified on UE 5.8)
@@ -883,10 +899,11 @@ def cmd_exec(args):
     EXEC_LOG.parent.mkdir(parents=True, exist_ok=True)
     if EXEC_LOG.exists():
         EXEC_LOG.unlink()
-    # Forward slashes: in a quoted argument (any path with a space) Unreal reads backslashes as escapes, so a
-    # folder named rune-delve after a backslash arrives as <CR>une-delve, and tools as <TAB>ools (seen on UE 5.8)
-    cmd = [exe, find_uproject(), "-run=pythonscript", f"-script={script.as_posix()}",
-           "-unattended", "-nopause", "-nosplash", f"-abslog={EXEC_LOG}"]
+    # unreal_path: forward slashes (in a quoted argument Unreal reads backslashes as escapes, so a folder named
+    # rune-delve after a backslash arrives as <CR>une-delve, and tools as <TAB>ools, seen on UE 5.8) and quotes
+    # around a path with a space, the form FParse::Value reads whole (#273)
+    cmd = [exe, find_uproject(), "-run=pythonscript", unreal_path("script", script),
+           "-unattended", "-nopause", "-nosplash", unreal_path("abslog", EXEC_LOG)]
     rc, out = run(cmd, capture=True, timeout=EXEC_TIMEOUT_S)
     log = EXEC_LOG.read_text(encoding="utf-8", errors="ignore") if EXEC_LOG.exists() else ""
     if rc == 124:

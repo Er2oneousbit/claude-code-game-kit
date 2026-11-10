@@ -536,6 +536,72 @@ class UnrealSpacedPaths(TempRoot):
         self.assertEqual(cmd, [], "the editor is never started")
         self.assertIn("double quotes", text)
 
+    def spaced_editor(self):
+        """#273: dev.py loaded with its project in a folder holding a space, the editor faked. Returns (dev, calls),
+        calls collecting every command the editor would get."""
+        dev = load("unreal")
+        dev.ROOT = self.root / "g ue"
+        dev.ROOT.mkdir()
+        dev.AUTOMATION_LOG = dev.ROOT / "Saved" / "Logs" / "dev_automation.log"
+        dev.EXEC_LOG = dev.ROOT / "Saved" / "Logs" / "dev_exec.log"
+        dev.SHADER_LOG = dev.ROOT / "Saved" / "Logs" / "dev_shaders.log"
+        exe = dev.ROOT / "UnrealEditor-Cmd.exe"
+        exe.write_bytes(b"")
+        dev.preflight = lambda *a, **kw: None
+        dev.editor_cmd = lambda plat: exe
+        dev.find_uproject = lambda: dev.ROOT / "Test.uproject"
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(list(cmd))
+            log = "Result={Success} Name={A}\nLogPython: SHADER_CHECK_DONE 3 0\n"
+            for path in (dev.AUTOMATION_LOG, dev.EXEC_LOG, dev.SHADER_LOG):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(log, encoding="utf-8")
+            return 0, ""
+        dev.run = fake_run
+        return dev, calls
+
+    def test_every_editor_path_from_a_spaced_project_folder_is_quoted(self):
+        """#273: -abslog= (test, smoke, exec, the shader check) and -script= reach the editor as -Key="a b" with
+        forward slashes; the shader script goes by its name on sys.path, so no absolute path splits -ExecCmds."""
+        dev, calls = self.spaced_editor()
+        root = dev.ROOT.as_posix()
+        args = argparse.Namespace(platform=None)
+        self.assertEqual(quiet(dev.run_automation, "Test", args)[0], 0)
+        script = dev.ROOT / "tools" / "x.py"
+        script.parent.mkdir()
+        script.write_text("print(1)\n", encoding="utf-8")
+        self.assertEqual(quiet(dev.cmd_exec, argparse.Namespace(platform=None, script="tools/x.py"))[0], 0)
+        self.assertEqual(quiet(dev.shader_editor, args, "compile")[0], 0)
+        test_cmd, exec_cmd, shader_cmd = calls
+        self.assertIn(f'-abslog="{root}/Saved/Logs/dev_automation.log"', test_cmd)
+        self.assertIn(f'-abslog="{root}/Saved/Logs/dev_exec.log"', exec_cmd)
+        self.assertIn(f'-script="{root}/tools/x.py"', exec_cmd)
+        self.assertIn(f'-abslog="{root}/Saved/Logs/dev_shaders.log"', shader_cmd)
+        self.assertIn("-ExecCmds=py kit_shaders/shader_check.py", shader_cmd)
+        for cmd in calls:
+            for c in cmd:
+                if str(c).startswith(("-abslog=", "-script=")):
+                    self.assertIsInstance(c, dev.UnrealValue, c)
+                    self.assertNotIn("\\", str(c), "backslashes are escapes inside Unreal's quotes")
+
+    def test_a_plain_project_folder_keeps_plain_paths(self):
+        if re.search(r"\s", str(self.root)):
+            self.skipTest("the temp folder itself holds a space")
+        dev, calls = self.spaced_editor()
+        dev.ROOT = self.root
+        dev.AUTOMATION_LOG = self.root / "Saved" / "Logs" / "dev_automation.log"
+        quiet(dev.run_automation, "Test", argparse.Namespace(platform=None))
+        log = [c for c in calls[0] if str(c).startswith("-abslog=")]
+        self.assertEqual(log, [f"-abslog={dev.AUTOMATION_LOG.as_posix()}"])
+        self.assertNotIsInstance(log[0], dev.UnrealValue)
+
+    def test_a_quote_in_the_project_folder_is_refused(self):
+        dev = load("unreal")
+        with self.assertRaises(ValueError):
+            dev.unreal_path("abslog", 'D:/a"b/x.log')
+
     def test_run_passes_the_quoted_value_as_is(self):
         """The real command line the child sees: on Windows -Key="a b" exactly (no \\" escapes, not the whole
         argument in quotes), elsewhere one argv entry holding the quotes, which BuildFromArgV keeps."""
@@ -1563,7 +1629,7 @@ class UnrealShaders(TempRoot):
         self.assertEqual(rc, 0, text)
         self.assertIn("1 shader recipe(s) compile as materials", text)
         cmd, env = self.editor[0]
-        self.assertIn("-ExecCmds=py " + (self.root / "Content/Python/kit_shaders/shader_check.py").as_posix(), cmd)
+        self.assertIn("-ExecCmds=py kit_shaders/shader_check.py", cmd)   # by its name on sys.path (#273)
         self.assertIn("-RenderOffScreen", cmd)
         self.assertNotIn("-run=pythonscript", cmd)
         self.assertNotIn("-NullRHI", cmd)
