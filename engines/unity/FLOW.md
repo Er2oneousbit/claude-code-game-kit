@@ -15,7 +15,11 @@
 python tools/dev.py check     # batchmode compile, fail on C# errors
 python tools/dev.py test      # EditMode tests (use --mode PlayMode for play tests)
 python tools/dev.py smoke     # PlayMode tests named Smoke (starter: boots the first Build Settings scene)
-python tools/dev.py exec GameKitScenes.CreateStarterScene   # first scene, headless (or your own scene builder)
+python tools/dev.py exec GameKitScenes.CreateShellScene     # the kit's screens (title, settings, pause...), first in Build Settings
+python tools/dev.py smoke --drive menus                     # walk the menus, change two settings, check settings.json
+python tools/dev.py smoke --drive show:settings --screenshot Logs/settings.png
+python tools/access/sweep.py                                # the accessibility sweep over every screen (SOP-20)
+python tools/dev.py exec GameKitScenes.CreateStarterScene   # an empty first scene, headless (or your own scene builder)
 python tools/dev.py build --target StandaloneWindows64
 python tools/dev.py run       # open the project in the editor
 ```
@@ -33,6 +37,10 @@ Close the editor before running batchmode commands (one instance per project).
 | `exec` | `Unity -batchmode -nographics -quit -projectPath . -executeMethod <Class.Method>`: scene builders and asset setup in C# |
 | `smoke --graphics`, `--screenshot`, `--record` | drops `-nographics` so cameras render; `GameKitCapture` (Assets/Tests/PlayMode) writes PNGs. Capture into `Logs/` (`--record Logs/frames`): `build/` is the player's `Build/` folder on Windows, so `smoke` refuses it |
 | `smoke --until M`, `--fail-on M` | scans the Unity log for the markers your scenario test logs |
+| `smoke --drive menus` | the `Smoke_ShellDrive` PlayMode test with `GAMEKIT_DRIVE=menus`: title -> settings -> master volume 0.5 (left or right from whatever the data folder held), reduce motion toggled -> Back -> Quit; prints `SETTINGS_WRITTEN <path>` and the file holds both values |
+| `smoke --drive access[:res=WxH][,scale=N][,pad][,read]` | every screen reported as `ACCESS_*` lines for `tools/access/sweep.py` (`AccessAudit`): texts with size, colour, background, fit and where they land, the controls the grid reaches and what each says, the subtitle, the one-handed layout applied and reset, a held subtitle, the prompts; the panel is laid out for that window size, `pad` presses with the gamepad bindings only |
+| `smoke --drive show:<title\|settings\|pause\|subtitle> --screenshot Logs/x.png` | opens that screen (settings with a control focused) and photographs it: `GameKitCapture` lays the UI panel's texture over the camera's picture |
+| `smoke --data-dir D`, `--locale L` | the run's settings folder (default a fresh `Logs/smoke_data/`) and language (`pseudo` for the pseudo-locale), passed as `GAMEKIT_DATA_DIR` / `GAMEKIT_LOCALE` |
 
 Test results are read from the NUnit XML (`failed="N"`), not the exit code alone. If nothing passed (no test matched, or every test was
 ignored) the command exits 2 and prints the reason, because that is a setup gap, not a failing test.

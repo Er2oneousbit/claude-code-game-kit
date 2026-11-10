@@ -10,8 +10,9 @@
 #           that the Godot build fails on a .pck holding .game-kit.json or a dev-only folder (#161), and that the
 #           web, web-3d and RPG Maker MZ smoke.mjs --record leaves only this run's frames (#134; needs node), a
 #           refused --drive is one error (#135), web-3d's -h says its --drive aborts (#135), and RPG Maker MZ's
-#           setup names the project file it copied (#136), and that Unreal's test/smoke exit 1 when the editor
-#           crashes before any result, not 2 "no tests matched" (#176).
+#           setup names the project file it copied (#136), that Unreal's test/smoke exit 1 when the editor
+#           crashes before any result, not 2 "no tests matched" (#176), and that Unity's smoke --drive runs the
+#           shell's drive test with the run options in the environment and echoes its markers (#168).
 # Usage   : python scripts/test_dev_py.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, no engine needed. The live checks (a real smoke with each toolchain) are
@@ -154,6 +155,67 @@ class UnitySmoke(TempRoot):
 
     def test_failed_tests_pass_through(self):
         self.assertEqual(self.smoke(rc=1, screenshot="Logs/shot.png")[0], 1)
+
+
+# ---- #168: Unity smoke --drive (the shell's screens) ------------------------------
+class UnityDrive(TempRoot):
+    def drive(self, drive, **opts):
+        """cmd_smoke with run_tests faked: returns (rc, text, the run_tests call's keyword arguments)."""
+        dev = load("unity")
+        dev.ROOT = self.root
+        dev.LOG_FILE = self.root / "Logs" / "dev_unity.log"
+        seen = {}
+
+        def fake_tests(platform, filt, graphics=False, env=None, until=None, fail_on=None):
+            seen.update(platform=platform, filt=filt, env=dict(env or {}), until=until, fail_on=list(fail_on or []))
+            dev.LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+            dev.LOG_FILE.write_text(f"noise\nDRIVE_DONE {drive}\nUnityEngine.Debug:Log (object)\n", encoding="utf-8")
+            return 0
+        dev.run_tests = fake_tests
+        args = argparse.Namespace(screenshot=None, record=None, record_every=6, graphics=False, fail_on=None,
+                                  until=None, filter="Smoke", drive=drive, data_dir="", locale="")
+        for k, v in opts.items():
+            setattr(args, k, v)
+        rc, text = quiet(dev.cmd_smoke, args)
+        return rc, text, seen
+
+    def test_a_drive_runs_its_test_with_the_run_options(self):
+        rc, text, seen = self.drive("menus", locale="pseudo")
+        self.assertEqual(rc, 0)
+        self.assertEqual(seen["filt"], "Smoke_ShellDrive")        # not the boot test too (it would run the scene twice)
+        self.assertEqual(seen["env"]["GAMEKIT_DRIVE"], "menus")
+        self.assertEqual(seen["env"]["GAMEKIT_LOCALE"], "pseudo")
+        self.assertEqual(seen["env"]["GAMEKIT_SMOKE"], "1")
+        self.assertTrue((self.root / "Logs" / "smoke_data").is_dir(), "a fresh settings folder for the run")
+        self.assertEqual(seen["until"], "DRIVE_DONE menus")
+        self.assertIn("DRIVE_FAIL", seen["fail_on"])
+        self.assertIn("DRIVE_DONE menus", text)                    # the marker is echoed from the Unity log
+        self.assertNotIn("noise", text)
+
+    def test_data_dir_is_kept_and_relative_to_the_project(self):
+        rc, text, seen = self.drive("access:res=1280x800,pad", data_dir="build/access/deck")
+        self.assertEqual(rc, 0)
+        self.assertEqual(Path(seen["env"]["GAMEKIT_DATA_DIR"]), (self.root / "build" / "access" / "deck").resolve())
+
+    def test_drive_names_are_checked(self):
+        dev = load("unity")
+        for ok in ("", "menus", "show:settings", "access", "access:res=1920x1080,scale=2,pad,read"):
+            self.assertEqual(dev.drive_name(ok), ok)
+        for bad in ("crash", "show:juice", "access:res=big", "access:pad,"):
+            with self.assertRaises(argparse.ArgumentTypeError):
+                dev.drive_name(bad)
+
+    def test_a_plain_smoke_keeps_the_old_shape(self):
+        dev = load("unity")
+        dev.ROOT = self.root
+        dev.LOG_FILE = self.root / "Logs" / "dev_unity.log"
+        seen = {}
+        dev.run_tests = lambda platform, filt, **kw: seen.update(filt=filt, env=kw.get("env")) or 0
+        args = argparse.Namespace(screenshot=None, record=None, record_every=6, graphics=False, fail_on=None,
+                                  until=None, filter="Smoke", drive="", data_dir="", locale="")
+        self.assertEqual(quiet(dev.cmd_smoke, args)[0], 0)
+        self.assertEqual(seen["filt"], "Smoke")
+        self.assertEqual(seen["env"], {})
 
 
 # ---- #33: Godot capture ---------------------------------------------------------

@@ -1,0 +1,4 @@
+/* The shell's UI Toolkit theme: Unity's default runtime theme, nothing else. The shell styles its own
+   elements in code (Assets/Scripts/Shell/UiTheme.cs), so the player's text size, font and spacing settings
+   apply live; this file only gives the panel a font and the default control looks (the kit, #168). */
+@import url("unity-theme://default");

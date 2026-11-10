@@ -27,4 +27,8 @@
 sysinfo.txt
 # Left behind when a PlayMode run (dev.py smoke) is killed
 /[Aa]ssets/InitTestScene*.unity*
+# Copies of data/ and CREDITS.md that GameKitBuild.SyncData makes for a player build (the originals are tracked)
+/[Aa]ssets/StreamingAssets/data/
+/[Aa]ssets/StreamingAssets/data.meta
+/[Aa]ssets/StreamingAssets/CREDITS.md*
 crashlytics-build.properties
