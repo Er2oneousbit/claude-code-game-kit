@@ -4,9 +4,10 @@ Engine-specific workflow for a custom C++ engine on SDL3. Universal process live
 
 > **Tested.** On Windows (2026-11-06) with VS 2022 Build Tools 17.14 (MSVC 14.44), its bundled CMake 3.31 and vcpkg, SDL3 3.4.12,
 > sdl3-shadercross 3.0.0-preview2 and doctest 2.5.3: `doctor`, `check`, `test`, `smoke`, `smoke --shaders` (every recipe matched its
-> golden image on Vulkan and on Direct3D 12), `build --preset release`. Before the SDL3 move (SDL2 2.32.10, 2026-10-20) a planted
-> compile error, failing test and boot-time `LOG_ERROR` each failed the right command. `run` (opens a window), Metal (MSL) and
-> Linux/macOS are untested.
+> golden image on Vulkan and on Direct3D 12), `build --preset release`. The shell's screens (2026-11-09): `smoke`, `smoke --drive
+> menus`, every `show:` capture, `smoke --drive access` and `tools/access/sweep.py` (all five runs pass), `test` (51 cases).
+> Before the SDL3 move (SDL2 2.32.10, 2026-10-20) a planted compile error, failing test and boot-time `LOG_ERROR` each failed
+> the right command. `run` (opens a window), a real gamepad, the spoken narration, Metal (MSL) and Linux/macOS are untested.
 > Anything marked **(verify)** is the likeliest to need tweaks. Paste errors to Claude verbatim.
 
 ## One-time setup
@@ -35,7 +36,8 @@ python tools/dev.py build --preset release
 |---|---|
 | `check` | `cmake --preset <p>` then `cmake --build --preset <p>` |
 | `test` | build, then `ctest --preset <p> --output-on-failure` |
-| `smoke` | runs `<exe> --smoke 120` with dummy SDL drivers, checks exit code and output |
+| `smoke` | runs `<exe> --smoke 120 -- --data-dir build/smoke-data` with dummy SDL drivers (the shell walks title -> menu -> play), checks exit code and output |
+| `smoke --drive <scenario>` | the same with `--drive`, 6000 frames at most, passes when the run prints `DRIVE_DONE`: `menus` (prints `SETTINGS_WRITTEN`), `show:<title|menu|settings|pause|subtitle|play>` (add `--screenshot`), `access[:res=WxH,scale=N,pad,read]` (what `tools/access/sweep.py` runs) |
 | `smoke --shaders` | also runs `kit_shader_check <build>/shader_check` (GPU renderer, hidden window), then `tools/shaders/shader_ref.py compare` |
 | `run` | runs the built exe from the project root so `assets/` paths resolve |
 | `build` | same steps as check; add `--preset release` for the shipping build (global options work before or after the command) |
@@ -51,6 +53,21 @@ Recommended extensions: C/C++ (ms-vscode.cpptools), CMake Tools (ms-vscode.cmake
 1. Create `src/game/Thing.hpp/.cpp` with the standard header (docs/STYLE.md).
 2. Add the `.cpp` to `GAME_SOURCES` in `CMakeLists.txt` (explicit list on purpose: no surprise globbing).
 3. `python tools/dev.py check`.
+
+## The shell's screens (SOP-19, SOP-20)
+- The play screen is yours: `Game::play_enter / play_update / play_draw / play_action` in `src/game/Game.cpp` (the
+  shell calls them through `shell::PlayHooks`). Draw with `shell::Draw` (`fill(..., ui = false)` for game content) or
+  with SDL directly; the shell owns the pause menu, the HUD hint and the subtitles.
+- Settings reach the game through `shell_->game_speed()`, `timing_scale()`, `access_flag("hold_to_toggle")`,
+  `settings()["audio"]["sfx"]`, `palette("player")` (the colour-blind palette from `data/access/colours.json`),
+  `is_down("attack")`; a line says itself with `say_line("guide.welcome")` (subtitles, history, `subtitle_hold`),
+  a sound captions itself with `caption("box_hit")`, the goal for "What now?" with `set_objective(t("..."))`.
+- A new setting: `Settings.cpp` (default and schema rule), `Menu.cpp` (its row), `data/i18n/en.json` (its label), and
+  the kit's reference `tools/golden_vectors.py` when the kit itself changes.
+- A new screen: a `ScreenId`, a case in `Shell::make_screen`, `screen_action` and `draw_screen`; its title key in
+  `kScreenTitleKeys` for the narration; a `show:` entry in `Drive.cpp` if a picture of it should be one command away.
+- Check it: `python tools/dev.py smoke --drive show:settings --screenshot captures/settings.bmp`, then
+  `python tools/access/sweep.py` (text size, contrast, clipping, reach, both devices, at 100 % and 200 % text).
 
 ## Adding a dependency (SDL3_image, SDL3_ttf, SDL3_mixer, others)
 1. Add the vcpkg **port** name to `vcpkg.json` dependencies (`sdl3-image`, `sdl3-ttf`, `sdl3-mixer`; ports are lowercase with

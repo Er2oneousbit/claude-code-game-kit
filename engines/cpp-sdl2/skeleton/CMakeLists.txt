@@ -50,8 +50,10 @@ set(CORE_SOURCES
   src/core/AtomicFile.cpp
   src/core/Bindings.cpp
   src/core/I18n.cpp
+  src/core/Menu.cpp
   src/core/SaveStore.cpp
   src/core/Settings.cpp
+  src/core/ShellLogic.cpp
 )
 add_library(core STATIC ${CORE_SOURCES})
 target_include_directories(core PUBLIC ${CMAKE_SOURCE_DIR}/src)
@@ -69,6 +71,9 @@ find_package(SDL3 CONFIG REQUIRED)
 set(GAME_SOURCES
   src/game/Game.cpp
   src/gfx/KitShaders.cpp
+  src/shell/Draw.cpp
+  src/shell/Drive.cpp
+  src/shell/Shell.cpp
 )
 add_library(game_lib STATIC ${GAME_SOURCES})
 target_link_libraries(game_lib PUBLIC core SDL3::SDL3)
@@ -128,6 +133,7 @@ if(BUILD_TESTS)
     tests/test_fixed_timestep.cpp
     tests/test_golden_vectors.cpp
     tests/test_golden_audio.cpp
+    tests/test_menu.cpp
     tests/test_shell_files.cpp
   )
   target_link_libraries(unit_tests PRIVATE core doctest::doctest)

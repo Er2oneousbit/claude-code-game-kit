@@ -31,15 +31,36 @@
   so a game adds options without touching `main.cpp`. `dev.py smoke` passes them the same way:
   `python tools/dev.py smoke --frames 20000 --until RUN_WON --fail-on CAUGHT -- --autoplay careful`.
   `--screenshot build/shot.bmp` and `--record build/frames` capture frames (BMP; `tools/art/frames_to_gif.py` reads them).
+- **The shell (SOP-19, SOP-20):** `src/shell/` is the front end around the game: title (with the telemetry question), main
+  menu, settings (Display, Audio, Controls with press-a-key rebinding and the one-handed layouts, Accessibility, Language),
+  credits (`CREDITS.md`), loading, pause with "What now?" and "Dialogue history", subtitles and captions
+  (`data/dialogue/*.built.json`), menu narration through the system's speech. The settings are `src/core/Settings`; the
+  menu logic (`src/core/Menu.hpp`, `ShellLogic.hpp`) has no SDL and is doctest-tested (`tests/test_menu.cpp`). The game
+  fills in the play screen through `shell::PlayHooks` (`Game.cpp`) and reads settings through
+  `shell_->game_speed()`, `access_flag("auto_repeat")`, `palette("player")`, `is_down("attack")`, `say_line(id)`,
+  `caption(id)`, `set_objective(text)`. Text is SDL's built-in 8x8 font (`SDL_RenderDebugText`, scaled by
+  `access.text_scale`; `readable_font` draws it bold; `line_spacing` applies): no font file, no SDL3_ttf, **ASCII only**, so
+  the shell ships `data/i18n/en.json` alone. A translation with accents, or a real typeface (the kit's readable font
+  elsewhere is Atkinson Hyperlegible), means adding `sdl3-ttf` (below) and swapping `src/shell/Draw.cpp`'s glyph call.
+- **Smoke scenarios:** `python tools/dev.py smoke --drive menus` (changes two settings, saves, quits; prints
+  `SETTINGS_WRITTEN`), `--drive show:<title|menu|settings|pause|subtitle|play> --screenshot captures/x.bmp`, and
+  `--drive access` (the accessibility sweep's tour; `python tools/access/sweep.py` runs it five ways). `--data-dir` keeps
+  settings.json in a folder of yours (default: a fresh `build/smoke-data/`, never the player's preferences folder),
+  `--locale` picks the language. Scenarios live in `src/shell/Drive.cpp`.
 - **Verify:** `python tools/dev.py doctor`.
 
 ## Layout
 ```
 CMakeLists.txt, CMakePresets.json, vcpkg.json
 src/core/        SDL-free, unit tested: Log, FixedTimestep; juice (Shake, Hitstop, Ease, FollowCamera, InputBuffer,
-                 CoyoteTimer, Spring, FlashLimiter); shell logic (Settings, Bindings, SaveStore, I18n, AtomicFile)
-src/game/        gameplay: Game class, entities, systems. Talks to SDL only through thin wrappers.
+                 CoyoteTimer, Spring, FlashLimiter); shell logic (Settings, Bindings, SaveStore, I18n, AtomicFile,
+                 Menu, ShellLogic)
+src/shell/       the shell's screens on SDL: Shell (stack, input, settings applied), Draw (text, panels, the access
+                 report), Drive (smoke scenarios)
+src/game/        gameplay: Game class (owns the shell, fills in the play screen), entities, systems
 src/gfx/         KitShaders: the kit's shader recipes on SDL's GPU renderer
+data/            i18n/en.json (every label), dialogue/sample.built.json (lines and captions), access/colours.json
+                 (the colour-blind palettes), input/presets.json, golden/ (the test vectors)
 src/tools/       kit_shader_check (dev.py smoke --shaders), not shipped
 shaders/kit/     the recipes: *.frag.hlsl, kit_shaders.hpp (parameter structs), kit_shaders.cmake (generated)
 src/main.cpp     startup, arg parsing, main loop
@@ -73,7 +94,13 @@ build/           build output (git-ignored): build/<preset>/
 6. **Windows DLLs:** vcpkg copies dependency DLLs next to the exe at build time. If the exe cannot start, check the build output folder.
 7. **vcpkg baseline:** `vcpkg.json` ships pinned to vcpkg release 2026.07.29 (tested). Never remove `builtin-baseline` (the vcpkg bundled with Visual Studio refuses a manifest without one). To upgrade libraries, swap in a newer vcpkg release commit.
 8. **Do not edit** `build/`, `vcpkg_installed/`, or generated CMake files.
-9. **Include hygiene:** SDL headers only in `src/game/` and `src/main.cpp`, not in `src/core/`, so core stays unit-testable.
+9. **Include hygiene:** SDL headers only in `src/game/`, `src/shell/`, `src/gfx/` and `src/main.cpp`, not in `src/core/`,
+   so core stays unit-testable.
+11. **A menu row's callback must not tear down its own screen directly:** `Shell::push/pop/replace/reset` called while an
+    action is being dispatched are queued and run after the callback returns (a `std::function` destroyed while it runs
+    is undefined behaviour). Call them freely; just do not expect the stack to have changed on the next line.
+12. **Non-ASCII text draws as nothing** with the debug font (gotcha of `SDL_RenderDebugText`): keep `data/i18n/*.json`
+    and `CREDITS.md` ASCII until the game adds `sdl3-ttf`.
 
 ## Generated (do not hand-edit)
 `build/`, `vcpkg_installed/`, `CMakeUserPresets.json` (local overrides, git-ignored), `shaders/kit/` (edit
