@@ -43,11 +43,39 @@
   `access.text_scale`; `readable_font` draws it bold; `line_spacing` applies): no font file, no SDL3_ttf, **ASCII only**, so
   the shell ships `data/i18n/en.json` alone. A translation with accents, or a real typeface (the kit's readable font
   elsewhere is Atkinson Hyperlegible), means adding `sdl3-ttf` (below) and swapping `src/shell/Draw.cpp`'s glyph call.
+- **Analog input (#274):** `shell_->stick()` is the left stick with the player's `input.deadzone` (radial: the vector's
+  length, rescaled so a lean just past it starts near 0) and `input.invert_y`; axes follow SDL, **+y is down**.
+  `left_trigger()` / `right_trigger()` run 0 to 1 past a small fixed deadzone (`core::kTriggerDeadzone`).
+  `held_actions()` is the set of game actions held now (no `ui_*`; the stick past the deadzone holds `move_*`, invert_y
+  honoured), and `move_vector()` adds the held `move_*` keys to the stick, length 0 to 1 (a half lean walks at half
+  speed). `is_down("move_left")` counts the stick too. The menus still get the stick as d-pad presses with hysteresis and
+  each trigger as `pad:l2` / `pad:r2` past half travel. The maths is `src/core/Analog.hpp` (`tests/test_analog.cpp`,
+  the same cases as the Bevy shell's `logic/analog.rs`).
+- **Crash files and bug reports (#275):** an exception that reaches the top of main.cpp's loop, an uncaught one
+  (`std::terminate`) and a fatal signal (a bad pointer, `abort`, a failed assert; best effort) write
+  `crashes/crash_<UTC time>.txt` in the user-data folder (game, version, build, OS, screen, locale, seed from
+  `shell_->set_run_seed()`, the error, the last 60 log lines, settings.json) and print `CRASH_WRITTEN <path>`; the run
+  exits 1, and outside smoke runs a message box names the file. In a debug build (no `NDEBUG`: the `debug` preset) **F8**
+  saves `bug_<UTC time>/` there (`screenshot.bmp` of that frame, `log_tail.txt`, `settings.json`, `info.txt`) and prints
+  `BUG_REPORT <folder>`; nothing leaves the machine. The texts are `src/core/Report.hpp` (`tests/test_reports.cpp`).
+- **Pseudo locale (#275):** `--locale pseudo` (or Settings > Language > pseudo in a debug build) shows every string from
+  `t()` bracketed and 40 % longer, in an **ASCII form without accents** (`core::pseudo_ascii`): the 8x8 font cannot draw
+  accented letters, so this pseudo locale finds clipped and untranslated text, not missing glyphs. Text that is not UI
+  copy (key names, CREDITS.md, arrows) is drawn with `TextOpts::raw` and skips the "went through t()" rule.
+- **Juice demo (#275):** a debug build's main menu has "Juice demo" (`src/shell/JuiceDemo.cpp`): hit the box for trauma
+  shake, hitstop, a spring squash, a rate-limited flash and an eased ring; a follow camera with its deadzone drawn; a
+  buffered jump with coyote time; the guard (hold or toggle); walking by keys or the analog stick; a line, a bark and a
+  caption. Copy the parts you want into `Game.cpp`. The shake's angle is not drawn (SDL's renderer has no rotated
+  rectangles).
 - **Smoke scenarios:** `python tools/dev.py smoke --drive menus` (changes two settings, saves, quits; prints
-  `SETTINGS_WRITTEN`), `--drive show:<title|menu|settings|pause|subtitle|play> --screenshot captures/x.bmp`, and
+  `SETTINGS_WRITTEN`), `--drive crash` (a planted exception: `CRASH_WRITTEN`, exit 1 on purpose), `--drive pseudo
+  --locale pseudo` (every screen, every label: `PSEUDO_PASS` or `PSEUDO_FAIL` lines and exit 1; `pseudo-plant` must
+  fail on its planted label), `--drive bug` (F8 on the menu: `DRIVE_BUG <folder>`),
+  `--drive show:<title|menu|settings|pause|subtitle|play|juice> --screenshot captures/x.bmp`, and
   `--drive access` (the accessibility sweep's tour; `python tools/access/sweep.py` runs it five ways). `--data-dir` keeps
   settings.json in a folder of yours (default: a fresh `build/smoke-data/`, never the player's preferences folder;
-  one inside a build tree such as `build/debug/` is refused, exit 2), `--locale` picks the language. Scenarios live in `src/shell/Drive.cpp`.
+  one inside a build tree such as `build/debug/` is refused, exit 2), `--locale` picks the language. Scenarios live in
+  `src/shell/Drive.cpp`; the juice demo and the bug drive need the debug preset (smoke's default).
 - **Verify:** `python tools/dev.py doctor`.
 
 ## Layout
@@ -55,9 +83,10 @@
 CMakeLists.txt, CMakePresets.json, vcpkg.json
 src/core/        SDL-free, unit tested: Log, FixedTimestep; juice (Shake, Hitstop, Ease, FollowCamera, InputBuffer,
                  CoyoteTimer, Spring, FlashLimiter); motor access (MotorAccess: timing_scale, hold_to_toggle);
-                 shell logic (Settings, Bindings, SaveStore, I18n, AtomicFile, Menu, ShellLogic)
+                 shell logic (Settings, Bindings, SaveStore, I18n, AtomicFile, Menu, ShellLogic); Analog (stick and
+                 trigger shaping); Report (crash files, bug-report texts)
 src/shell/       the shell's screens on SDL: Shell (stack, input, settings applied), Draw (text, panels, the access
-                 report), Drive (smoke scenarios)
+                 report), Drive (smoke scenarios), JuiceDemo (debug builds)
 src/game/        gameplay: Game class (owns the shell, fills in the play screen), entities, systems
 src/gfx/         KitShaders: the kit's shader recipes on SDL's GPU renderer
 data/            i18n/en.json (every label), dialogue/sample.built.json (lines and captions), access/colours.json

@@ -6,6 +6,8 @@ Engine-specific workflow for a custom C++ engine on SDL3. Universal process live
 > sdl3-shadercross 3.0.0-preview2 and doctest 2.5.3: `doctor`, `check`, `test`, `smoke`, `smoke --shaders` (every recipe matched its
 > golden image on Vulkan and on Direct3D 12), `build --preset release`. The shell's screens (2026-11-09): `smoke`, `smoke --drive
 > menus`, every `show:` capture, `smoke --drive access` and `tools/access/sweep.py` (all five runs pass), `test` (51 cases).
+> Crash files, F8, the pseudo locale and the juice demo (2026-11-10): `smoke --drive crash|bug|pseudo|pseudo-plant`,
+> `show:juice`, `test` (70 cases); a real gamepad's analog stick and triggers are untested (the maths is unit tested).
 > Before the SDL3 move (SDL2 2.32.10, 2026-10-20) a planted compile error, failing test and boot-time `LOG_ERROR` each failed
 > the right command. `run` (opens a window), a real gamepad, the spoken narration, Metal (MSL) and Linux/macOS are untested.
 > Anything marked **(verify)** is the likeliest to need tweaks. Paste errors to Claude verbatim.
@@ -37,7 +39,7 @@ python tools/dev.py build --preset release
 | `check` | `cmake --preset <p>` then `cmake --build --preset <p>` |
 | `test` | build, then `ctest --preset <p> --output-on-failure` |
 | `smoke` | runs `<exe> --smoke 120 -- --data-dir build/smoke-data` with dummy SDL drivers (the shell walks title -> menu -> play), checks exit code and output |
-| `smoke --drive <scenario>` | the same with `--drive`, 6000 frames at most, passes when the run prints `DRIVE_DONE`: `menus` (prints `SETTINGS_WRITTEN`), `show:<title|menu|settings|pause|subtitle|play>` (add `--screenshot`), `access[:res=WxH,scale=N,pad,read]` (what `tools/access/sweep.py` runs) |
+| `smoke --drive <scenario>` | the same with `--drive`, 6000 frames at most, passes when the run prints `DRIVE_DONE`: `menus` (prints `SETTINGS_WRITTEN`), `show:<title|menu|settings|pause|subtitle|play|juice>` (add `--screenshot`), `access[:res=WxH,scale=N,pad,read]` (what `tools/access/sweep.py` runs), `bug` (F8: `DRIVE_BUG`), `pseudo` with `--locale pseudo` (`PSEUDO_PASS`); `crash` (`CRASH_WRITTEN`) and `pseudo-plant` (a `PSEUDO_FAIL` for `plant.too_small`) exit 1 on purpose |
 | `smoke --shaders` | also runs `kit_shader_check <build>/shader_check` (GPU renderer, hidden window), then `tools/shaders/shader_ref.py compare` |
 | `run` | runs the built exe from the project root so `assets/` paths resolve |
 | `build` | same steps as check; add `--preset release` for the shipping build (global options work before or after the command) |
@@ -71,7 +73,14 @@ Recommended extensions: C/C++ (ms-vscode.cpptools), CMake Tools (ms-vscode.cmake
 - A new screen: a `ScreenId`, a case in `Shell::make_screen`, `screen_action` and `draw_screen`; its title key in
   `kScreenTitleKeys` for the narration; a `show:` entry in `Drive.cpp` if a picture of it should be one command away.
 - Check it: `python tools/dev.py smoke --drive show:settings --screenshot captures/settings.bmp`, then
-  `python tools/access/sweep.py` (text size, contrast, clipping, reach, both devices, at 100 % and 200 % text).
+  `python tools/access/sweep.py` (text size, contrast, clipping, reach, both devices, at 100 % and 200 % text), then
+  `python tools/dev.py smoke --drive pseudo --locale pseudo` (every label 40 % longer: nothing cut off, nothing
+  bypassing `t()`; a key name or file content is drawn with `TextOpts::raw`).
+- Analog play (#274): read `shell_->move_vector()` (keys and the stick, length 0 to 1), `stick()`, `right_trigger()` and
+  `held_actions()` in `play_update`; the juice demo walks that way. +y is down, as on SDL's screen.
+- When it breaks (#275): the player's crash file is `crashes/crash_<time>.txt` in the user-data folder (SDL's preferences
+  folder, `%APPDATA%\<game slug>` on Windows (verify); `build/smoke-data/` in a smoke run). In a debug build F8 saves a
+  bug report folder next to it. Name the run's seed with `shell_->set_run_seed()` so both carry it.
 
 ## Adding a dependency (SDL3_image, SDL3_ttf, SDL3_mixer, others)
 1. Add the vcpkg **port** name to `vcpkg.json` dependencies (`sdl3-image`, `sdl3-ttf`, `sdl3-mixer`; ports are lowercase with
