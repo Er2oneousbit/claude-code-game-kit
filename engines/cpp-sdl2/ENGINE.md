@@ -45,8 +45,8 @@
 - **Smoke scenarios:** `python tools/dev.py smoke --drive menus` (changes two settings, saves, quits; prints
   `SETTINGS_WRITTEN`), `--drive show:<title|menu|settings|pause|subtitle|play> --screenshot captures/x.bmp`, and
   `--drive access` (the accessibility sweep's tour; `python tools/access/sweep.py` runs it five ways). `--data-dir` keeps
-  settings.json in a folder of yours (default: a fresh `build/smoke-data/`, never the player's preferences folder),
-  `--locale` picks the language. Scenarios live in `src/shell/Drive.cpp`.
+  settings.json in a folder of yours (default: a fresh `build/smoke-data/`, never the player's preferences folder;
+  one inside a build tree such as `build/debug/` is refused, exit 2), `--locale` picks the language. Scenarios live in `src/shell/Drive.cpp`.
 - **Verify:** `python tools/dev.py doctor`.
 
 ## Layout

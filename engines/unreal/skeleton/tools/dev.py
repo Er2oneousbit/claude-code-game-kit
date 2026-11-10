@@ -751,8 +751,20 @@ DRIVE_TEST = "GameKit.Screens.Drive"        # the plugin's automation test that 
 SHOW_TEST = "GameKit.Screens.Show"          # the one that also draws the screen to a PNG (needs a renderer)
 DRIVE_PATTERN = r"[A-Za-z0-9_:=,.-]+"        # menus, show:settings, access:res=1280x800,scale=2,pad
 SMOKE_DATA = "Saved/GameKitSmoke"           # the drive's own settings folder (never the player's Saved/GameKit)
+BUILD_OUTPUTS = ("Packaged", "Saved/StagedBuilds", "Binaries")   # package, its staging, compiled modules (#263)
 MARKER_LINE = re.compile(r"\b((?:DRIVE_[A-Z]+|SETTINGS_WRITTEN|SCREENSHOT_WRITTEN|ACCESS_[A-Z]+|PSEUDO_[A-Z]+)\b.*)$")
 UNSAFE_VALUE_CHARS = '"'                   # a quote ends an Unreal argument (, and ; only matter inside -ExecCmds)
+
+
+def build_output_of(path):
+    """The build output folder (BUILD_OUTPUTS) an absolute path lies in, or None (#263). Letter case is ignored:
+    Packaged/ and packaged/ are one folder on Windows and macOS."""
+    where = os.path.realpath(str(path)).lower()
+    for out in BUILD_OUTPUTS:
+        folder = os.path.realpath(str(ROOT / out)).lower()
+        if where == folder or where.startswith(folder.rstrip("\\/") + os.sep):
+            return out
+    return None
 
 
 def drive_run(args):
@@ -779,6 +791,11 @@ def drive_run(args):
         return 2
     data = Path(args.data_dir) if args.data_dir else ROOT / SMOKE_DATA
     data = (data if data.is_absolute() else ROOT / data).resolve()
+    out = build_output_of(data) if args.data_dir else None
+    if out:
+        print(f"[error] --data-dir {args.data_dir} is inside {out}/, a build output: its files would ship with or be "
+              f"wiped by the next build. Use a folder of its own, e.g. Saved/{data.name}", file=sys.stderr)
+        return 2
     if not args.data_dir and data.exists():
         shutil.rmtree(data, ignore_errors=True)   # a fresh folder per run; --data-dir is kept as given
     data.mkdir(parents=True, exist_ok=True)

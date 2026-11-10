@@ -498,6 +498,12 @@ def cmd_smoke(args):
             print(f"[error] {path} is inside the player build folder (build/ and Build/ are the same folder on Windows). "
                   f"Capture into Logs/ instead, e.g. --screenshot Logs/shot.png or --record Logs/frames", file=sys.stderr)
             return 2
+    given = getattr(args, "data_dir", "")
+    if given and in_player_folder(given):   # #263: the access sweep's settings landed next to game.exe
+        print(f"[error] --data-dir {given} is inside the player build folder (build/ and Build/ are the same folder on "
+              f"Windows): its files would ship with the game. Use a folder of its own, e.g. Logs/{Path(given).name}",
+              file=sys.stderr)
+        return 2
     shot = (ROOT / args.screenshot).resolve() if args.screenshot else None
     rec = (ROOT / args.record).resolve() if args.record else None
     if shot:

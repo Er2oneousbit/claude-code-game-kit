@@ -107,7 +107,7 @@ Narration (#165): the shell's `narrator.lua` says a line for every focus change,
 
 `dev.py smoke` never uses the real save folder: without `--data-dir` the game's files go to a fresh
 `build/smoke-data/` each run (read its logs and crash files there); `--data-dir captures/run1` keeps a run's files
-between runs. A hand-run `lovec . --smoke 120 --drive menus` with no `--data-dir` stops with `DRIVE_IGNORED`
+between runs (one inside the fused build `build/windows/` is refused, exit 2). A hand-run `lovec . --smoke 120 --drive menus` with no `--data-dir` stops with `DRIVE_IGNORED`
 (exit 1) instead of changing the player's settings. Add
 `--compare <baseline.png> [--tolerance N] [--max-pixels N]` after `--screenshot` for a visual regression check
 (`tools/image_diff.py`; exit 1 on a difference, a `_diff.png` next to the screenshot shows where). A scenario is a

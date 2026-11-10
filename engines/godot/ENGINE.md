@@ -73,6 +73,10 @@ tools/                   dev.py and helpers
 9. **API verification:** Godot 4.x changes between minor versions. Check `godot --version` and the matching docs before using unfamiliar APIs.
 10. **Comparing different types is an error** (`1.0 == "a"` is a SCRIPT ERROR on 4.7.2), and JSON numbers are always floats. Check `typeof()` first when a value can be anything (settings, saves, JSON).
 11. **Crash files need Godot 4.5+** (the `Logger` hook in `scripts/shell/crash_hook.gd`); older versions run the game without them.
+12. **The windowed shader check can crash under GPU load.** Godot 4.7.2 died twice in five `check` runs (exit
+    3221226356, 0xC0000374, heap corruption) during a SubViewport readback while other programs used the GPU; never
+    seen with Godot alone. `dev.py` then says "Godot crashed after N recipe(s)": rerun it, or use `check --no-shaders`
+    and let `smoke --shaders` cover them later. "It needs a window" means nothing was drawn at all.
 
 ## Generated or binary (do not hand-edit)
 `.godot/`, `*.import`, `*.uid` (commit, but do not edit), exported builds in `build/`, `*.translation`,

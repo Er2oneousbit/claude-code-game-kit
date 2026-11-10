@@ -542,6 +542,32 @@ def cmd_test(args, godot):
     return 0
 
 
+def build_outputs():
+    """The folders exports land in (#263): each preset's export_path folder, or the kit's three when there is no
+    export_presets.cfg yet."""
+    try:
+        outs = {Path(p).parent.as_posix() for p in export_presets().values() if p}
+    except OSError:
+        outs = set()
+    return sorted(outs - {"", "."}) or ["build/windows", "build/linux", "build/web"]
+
+
+def data_dir_in_build(given):
+    """#263: print an error and return True when --data-dir lies inside an export folder, where its files would ship
+    with the next export. Letter case is ignored (build/ and Build/ are one folder on Windows and macOS)."""
+    if not given:
+        return False
+    p = Path(given)
+    where = os.path.realpath(str(p if p.is_absolute() else ROOT / p)).lower()
+    for out in build_outputs():
+        folder = os.path.realpath(str(ROOT / out)).lower()
+        if where == folder or where.startswith(folder.rstrip("\\/") + os.sep):
+            print(f"[error] --data-dir {given} is inside {out}/, where exports land: its files would ship with the "
+                  f"game. Use a folder of its own, e.g. captures/{p.name or 'run'}", file=sys.stderr)
+            return True
+    return False
+
+
 def smoke_data_dir(args):
     """The game's data folder for this smoke run: --data-dir as given (never wiped), else a fresh build/smoke-data/."""
     if args.data_dir:
@@ -569,6 +595,8 @@ def game_args(args, data_dir):
 
 
 def cmd_smoke(args, godot):
+    if data_dir_in_build(args.data_dir):
+        return 2
     if args.compare and not args.screenshot:
         print("[error] --compare needs --screenshot (the new picture to compare)", file=sys.stderr)
         return 2
@@ -652,12 +680,18 @@ def shader_pass(godot, compare):
         return 2
     errors = [l for l in out.splitlines() if "SHADER ERROR" in l or any(re.search(p, l) for p in ERROR_PATTERNS)]
     if rc != 0 or errors or "SHADER_CHECK_DONE failed=0" not in out:
+        drawn = out.count("SHADER_OK ")
         if errors:
             print("[FAIL] shader errors:\n  " + "\n  ".join(errors[:12]))
+        elif drawn and rc != 0 and "SHADER_CHECK_DONE" not in out:
+            # #264: the window opened and drew some recipes, then Godot died (seen as heap corruption under GPU
+            # load from other programs): a crash, not a missing display
+            code = f"{rc} = 0x{rc:08X}" if rc > 255 else str(rc)      # Windows status codes read better in hex
+            print(f"[FAIL] Godot crashed after {drawn} recipe(s) (exit {code}); rerun, or check --no-shaders")
         else:
             print(f"[FAIL] the shader check did not finish (exit {rc}): it needs a window, so run it from a desktop "
                   "session (check --no-shaders skips it)")
-            if "SHADER_OK " not in out:
+            if not drawn:
                 return 2                        # nothing was drawn at all: no window here, not a broken recipe
         return 1
     if not compare:
@@ -759,6 +793,8 @@ def compare(args):
 
 
 def cmd_run(args, godot):
+    if data_dir_in_build(args.data_dir):
+        return 2
     cmd = [godot, "--path", "."]
     user = ["--debug"] if args.debug else []   # picked up by Log autoload
     if args.data_dir:

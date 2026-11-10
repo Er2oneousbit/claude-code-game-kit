@@ -46,7 +46,9 @@ The shell (`SOP-19`) has the settings; this SOP is what they must do.
    with no keyboard or no gamepad binding, a subtitle that is not the dialogue line, and keyboard glyphs while the
    gamepad is in use (E75), and a control whose narration would be "unlabelled" (#165). It reads what the engine
    reports (`dev.py smoke --drive access`), so how a screen
-   looks still needs a look (`smoke --drive show:<screen> --screenshot`).
+   looks still needs a look (`smoke --drive show:<screen> --screenshot`). Each run's settings go to a fresh
+   `captures/access/<run>/`, never under `build/` (on Windows and macOS that is Unity's player folder `Build/`); every
+   `dev.py smoke` refuses a `--data-dir` inside its player or build output.
 7. **Test with the settings at their extremes:** text 200 %, subtitles largest with full background, colour-blind modes,
    gamepad only, keyboard only, mono, reduce motion. Run the pseudo-locale smoke at text 200 % too: it catches clipping.
    For mono, `python tools/audio/wavesmith/wavesmith.py loudness mono <stereo files>` finds sounds that cancel out when summed (K01).

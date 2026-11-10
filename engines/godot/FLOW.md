@@ -78,7 +78,8 @@ UK must opt in before anything is sent **(verify with current GDPR guidance for 
 
 ### Smoke scenarios
 `dev.py smoke` without options keeps its old meaning (boot, 120 frames, no errors). Each run uses a fresh
-`build/smoke-data/` unless `--data-dir` names a folder (never wiped). Drives run with `--fixed-fps 60`, so frames are
+`build/smoke-data/` unless `--data-dir` names a folder (never wiped; `smoke` and `run` refuse one inside an export
+folder such as `build/windows/`, exit 2). Drives run with `--fixed-fps 60`, so frames are
 1/60 s of game time and pictures repeat exactly.
 | Command | Passes when |
 |---|---|

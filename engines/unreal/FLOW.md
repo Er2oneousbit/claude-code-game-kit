@@ -193,7 +193,8 @@ python tools/dev.py smoke --drive access:res=1280x800,scale=2,pad      # the swe
 python tools/access/sweep.py                                            # runs the tour at both sizes and checks it
 python tools/dev.py test --filter GameKit.Screens                       # the screens' own tests (rows, keys, rebinding, hold ...)
 ```
-`--data-dir` keeps a settings folder between runs (default: a fresh `Saved/GameKitSmoke`), `--locale fr` shows another
+`--data-dir` keeps a settings folder between runs (default: a fresh `Saved/GameKitSmoke`; one inside `Packaged/`,
+`Saved/StagedBuilds/` or `Binaries/` is refused, exit 2), `--locale fr` shows another
 language. Screens for `show:`: title, main_menu, settings, pause, help, history, credits, loading, subtitle. The
 access report describes the 1920x1080 design (scaling "exact": the view scales it to the window), each text's size,
 colours and whether it fits its column (measured with Slate's font service), and which rows the arrow keys reach; a

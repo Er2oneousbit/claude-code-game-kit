@@ -363,6 +363,8 @@ def cmd_test(args):
 
 
 def cmd_smoke(args):
+    if data_dir_in_build(getattr(args, "data_dir", "")):
+        return 2
     rc = cmd_check(args)
     if rc != 0:
         return rc
@@ -444,6 +446,34 @@ def cmd_smoke(args):
     if getattr(args, "shaders", False):
         return shader_pass(args.preset)
     return 0
+
+
+def build_outputs():
+    """The CMake build trees (#263): build/<preset> for each configure preset in CMakePresets.json (its binaryDir),
+    or build/debug and build/release when the file cannot be read."""
+    import json
+    try:
+        data = json.loads((ROOT / "CMakePresets.json").read_text(encoding="utf-8"))
+        names = [p["name"] for p in data.get("configurePresets", []) if not p.get("hidden")]
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        names = []
+    return ["build/" + n for n in names] or ["build/debug", "build/release"]
+
+
+def data_dir_in_build(given):
+    """#263: print an error and return True when --data-dir lies inside a build tree (build/<preset>/, whose bin/
+    is the shipped game). Letter case is ignored (build/ and Build/ are one folder on Windows and macOS)."""
+    if not given:
+        return False
+    p = Path(given)
+    where = os.path.realpath(str(p if p.is_absolute() else ROOT / p)).lower()
+    for out in build_outputs():
+        folder = os.path.realpath(str(ROOT / out)).lower()
+        if where == folder or where.startswith(folder.rstrip("\\/") + os.sep):
+            print(f"[error] --data-dir {given} is inside {out}/, the build output: its files would ship with the game "
+                  f"or be wiped by clean. Use a folder of its own, e.g. captures/{p.name or 'run'}", file=sys.stderr)
+            return True
+    return False
 
 
 def smoke_data_dir(args):
