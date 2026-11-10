@@ -13,9 +13,19 @@ examples were built and tested on one Windows 11 machine.
 - **Godot shell:** crash files need Godot 4.5+, untested on 4.3 and 4.4: [#46](https://github.com/Er2oneousbit/claude-code-game-kit/issues/46).
 - **Unreal:** the GameKitShell plugin builds and passes its tests in a Blueprint-only project (headless), but turning
   it on from the editor's Plugins window is not tried: [#47](https://github.com/Er2oneousbit/claude-code-game-kit/issues/47).
-- **Shell screens** ship for Godot, LÖVE and web only; Unity, Unreal, Bevy, C++/SDL3 and web-3d ship the tested
-  logic and the screens are built in the engine; RPG Maker MZ keeps MZ's own screens and ships no juice or shell
-  port (its ENGINE_FLOW maps the rules onto MZ). Display settings the browser cannot apply (vsync, resolution) are stored only.
+- **Shell screens** ship for Godot, LÖVE, web, Unity, Unreal, Bevy and C++/SDL3; web-3d ships the tested logic and
+  the screens are built in the engine; RPG Maker MZ keeps MZ's own screens and ships no juice or shell port (its
+  ENGINE_FLOW maps the rules onto MZ). Display settings the browser cannot apply (vsync, resolution) are stored only.
+  The four new shells (#168) were checked by their drives, tests, sweep and screenshots, never played by hand: no
+  real gamepad pressed, no narration heard, no `dev.py run` session; Unity ran on the Input Manager only (an Input
+  System-only project does not read custom pad bindings, triggers need Input Manager axes) and has no line spacing
+  inside one wrapped paragraph; Unreal's screens were not tried in a running game or PIE (viewport focus, input mode,
+  Quit), every pad shows generic glyphs, sticks do not move focus, and nothing speaks its narration lines yet;
+  Bevy stores the display settings without applying them to the window; C++/SDL3's text is SDL's 8x8 ASCII font
+  (English only, `readable_font` is bold, non-integer text sizes look uneven), and its starter does not yet apply
+  `timing_scale` or `hold_to_toggle`. None of the four has crash files, the F8 bug report, the juice demo or a
+  pseudo-locale layout drive
+  ([#168](https://github.com/Er2oneousbit/claude-code-game-kit/issues/168)).
 
 ### 0.8.1 follow-ups (Dotwork)
 - **Cyrillic glyph font** not made (the `bdf` lane may already cover it with an OFL font, untried):
@@ -37,13 +47,12 @@ examples were built and tested on one Windows 11 machine.
   only, never applied to a real account; Linode and DigitalOcean have no budget API (set an alert by hand); the
   least-privilege logins in `tools/cloud/README.md` are unchecked
   ([#252](https://github.com/Er2oneousbit/claude-code-game-kit/issues/252)).
-- **Accessibility sweep** (`tools/access/sweep.py`): runs on Godot, LÖVE and web only (the other engines get their
-  screens in #168); the "play" placeholder scene is not in its tour; it checks what the engine reports, so a look at
+- **Accessibility sweep** (`tools/access/sweep.py`): runs on Godot, LÖVE, web, Unity, Unreal, Bevy and C++/SDL3
+  (Unreal's report is in its 1920x1080 design with measured widths and no overlap boxes); the "play" placeholder scene is not in its tour; it checks what the engine reports, so a look at
   screenshots is still needed; a real Steam Deck (Proton, on-screen keyboard, suspend) is not tried
   ([#91](https://github.com/Er2oneousbit/claude-code-game-kit/issues/91),
   [#85](https://github.com/Er2oneousbit/claude-code-game-kit/issues/85)).
-- **Cognitive and motor settings** work in Godot, LÖVE and web; Unity, Unreal, Bevy and C++ store them but show no
-  screens yet ([#168](https://github.com/Er2oneousbit/claude-code-game-kit/issues/168)); the LÖVE French strings
+- **Cognitive and motor settings** have screens in all seven engines with a shell (see Shell screens above); the LÖVE French strings
   for Settings > Accessibility are English (that section was never translated); the auto-repeat delay and interval
   (0.35 s, 0.15 s) are the kit's starting point, not from a source; the one-handed layouts are not tried with
   players who play one-handed.
@@ -51,10 +60,11 @@ examples were built and tested on one Windows 11 machine.
   or Godot's AccessKit support (Godot 4.5+), and LÖVE's `say` and `spd-say` routes are untried on macOS and Linux;
   on Windows LÖVE opens PowerShell for each line, which can flash a console window
   ([#165](https://github.com/Er2oneousbit/claude-code-game-kit/issues/165)).
-- **Second-model reviews still owed:** Wavesmith's WAV, FLAC and Ogg Vorbis code, `check_links.py`, `credits.py`,
-  `image_diff.py`, the golden vectors, `comfy_local.py`, `pixel_sprite.py`, `chroma_key.py` and four more Wavesmith
-  modules have never been reviewed by a second model; the reviewer's weekly quota ran out first
-  ([#261](https://github.com/Er2oneousbit/claude-code-game-kit/issues/261)).
+- **Second-model reviews** of Wavesmith's codecs and the tools listed in
+  [#261](https://github.com/Er2oneousbit/claude-code-game-kit/issues/261) are done; the two new golden settings
+  cases were run on every port after the merge. One finding is left open: `audioio.sniff` sends an Ogg whose Vorbis
+  stream sits behind a Theora or Skeleton header to ffmpeg, although `oggvorbis.py` decodes it, so without ffmpeg
+  such a file is refused ([#262](https://github.com/Er2oneousbit/claude-code-game-kit/issues/262)).
 
 ### Art workflow outside Godot
 Dotwork is Godot-first: other engines get PNGs, sheets with their JSON, `.fnt` fonts and a manifest, and no overlay

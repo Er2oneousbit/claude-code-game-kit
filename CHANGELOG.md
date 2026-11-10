@@ -54,6 +54,70 @@
   - Web: headings and long labels ended in an ellipsis (the consent title at every size, three settings rows in the
     pseudo locale, which made `smoke --drive pseudo --locale pseudo` fail on a new project); keycaps in the HUD were
     just under 18 px at 1080p.
+- **The shell's screens on Unity, Unreal, Bevy and C++/SDL3 (#168):** title (with the telemetry question), main
+  menu, settings (Display, Audio, Controls with press-a-key rebinding, conflict swaps, reset and the one-handed
+  layouts, Accessibility, Language), credits, loading, pause with "What now?" and "Dialogue history", subtitles with
+  `subtitle_hold` and captions, and menu narration, driven by each engine's tested settings logic. Each engine gets
+  `dev.py smoke --drive menus | show:<screen> | access[:opts]` with `--data-dir` (a fresh `build/smoke-data/` or
+  equivalent by default, never the player's folder) and `--locale`, and `tools/access/sweep.py` passes all five runs
+  on every one. What the sweep found on the way and the kit fixed: Unity's front end could boot a second Shell, so
+  text scale never reached the screens; Unreal dropped drive options after a comma (`FParse::Value` stops at one)
+  and its subtitle was 3.52:1 over a bright game; Bevy's speaker names were 3.83:1 over the panel; layouts that
+  clipped at 200 % text on all four.
+  - **Unity:** UI Toolkit, built in code (no UXML/USS), focus driven by the player's own bindings; Atkinson
+    Hyperlegible and French; `python tools/dev.py exec GameKitScenes.CreateShellScene` adds the scene; a build copies
+    `data/` and `CREDITS.md` into `Assets/StreamingAssets/`; `show:` captures lay the UI panel over the camera. Core
+    gains `DialogueData` (with its golden exam, the port had none) and `GameSettings.Fields(section)`.
+  - **Unreal:** Slate from C++ in the plugin's new `GameKitShellUI` module (no `.uasset` widgets, so it builds in a
+    Blueprint-only project and runs headless); opt-in with `bShowScreens=True` in the GameKitShellSettings section of
+    the game's DefaultGame.ini, or `-GameKitShell`;
+    `UGameKitShellSubsystem` puts the screens over the map, fires `OnShellEvent`, and has Blueprint-callable `Say`,
+    `SetObjective` and `SettingNumber`; `smoke --screenshot` draws off-screen into a float render target. Nine
+    `GameKit.Screens.*` tests (88 `GameKit.*` in all); `FGameKitAutoRepeat` in the logic module.
+  - **Bevy:** bevy_ui, headless where it can be (`src/shell/`); the readable font compiled in; colour-blind palettes
+    swapped live; `game_speed`, `timing_scale` and `auto_repeat` reach play through `AccessRules`, and rebinds reach
+    the game through `Intent`. `smoke --drive menus` runs headless, `show:` and `access` open a window.
+    `engines/bevy/skeleton/tests/shell.rs` (8 tests) and `engines/bevy/skeleton/src/logic/auto_repeat.rs`.
+  - **C++/SDL3:** no new dependency: text is SDL3's built-in 8x8 font scaled by `text_scale` (`readable_font` draws
+    it bold, `line_spacing` honoured), so the shell is ASCII and English only (`engines/cpp-sdl2/skeleton/data/i18n/en.json`; a game that
+    needs more adds sdl3-ttf, docs/ENGINE.md). The menu logic is SDL-free (`src/core/Menu`, `ShellLogic`) with 20
+    doctest cases.
+- **Upgrade note:** the new screens are files a game never had, so `--upgrade` adds them; a Unity game runs
+  `GameKitScenes.CreateShellScene` once, an Unreal game turns them on in `DefaultGame.ini`.
+- `doctor.py`: the kit's own resources in a `GameKit` folder under the media folder (the Unity shell's fonts) are not
+  unlogged media.
+- Fixed: a Bevy project whose crate name sorts before "bevy" (any slug starting with "a") failed `dev.py check` on
+  `engines/bevy/skeleton/examples/shader_check.rs` (rustfmt import order); the game's own import sits in its own group now.
+
+## Unreleased: second-model reviews (#261) and the exam runner (#158)
+- **`scripts/run_exams.py` (#158):** every tool exam from one table of needs (Pillow, numpy, bpy on uv's Python 3.13,
+  git, GIMP 3, Inkscape 1.x, the `REAPER_BIN` / `ASEPRITE_BIN` / `PIXELORAMA_BIN` live parts), one line per exam
+  (pass, fail, or skipped naming the missing tool, unique tests, time), `--python 3.8,3.14` through `uv run`,
+  `--only`, `--changed <ref>`, `--live`, `--jobs`, `--list`; exit 0/1/2. Unique tests come from unittest's verbose
+  names, never `Ran N`; live exams and live parts run only with `--live`. CLAUDE.md's exam list is now a pointer to
+  `--list`; `core/tools/bozzetto/test_rig.py`, which that list never named, is in the table. `scripts/test_run_exams.py` checks
+  it on fake exams and checks the table against the tree. Measured (K01): 57 exams, 1472 unique tests on Python
+  3.14 and 1469 on 3.8, 0 failed.
+- **Wavesmith's audio file code** (reviewed by a second model; every fix has an exam that failed on the old code):
+  a crafted FLAC no longer escapes as a raw traceback (a STREAMINFO rate of 0, wasted bits at or past the sample
+  depth, a subframe that does not fill its block, a decoded sample outside the bit depth are all FlacCorrupt, exit
+  1); `write_wav` refuses a sample rate its 32-bit byte-rate field cannot hold, so `wav normalize`, `wav loop`,
+  `oggvorbis towav` and `formats convert` print `[error]` and exit 2; `read_wav_channels` drops a partial last frame
+  as `wav_stream` did; an Ogg packet over 4 MB is refused while the pages are read (a single-packet file of 100 MB
+  asked for 4.5 GB); `formats convert` through ffmpeg encodes into the temp folder and moves the result into place
+  only on success, so a run that dies part-way never replaces a good file; `stream_audio` deletes ffmpeg's
+  temporary WAV at exit for a caller that never reads the chunks.
+- **The other tools** (same review): `check_links` hung for minutes on a crafted markdown file (bounded link
+  patterns now) and missed a backslash path on Windows that broke on GitHub; `image_diff` allocated gigabytes for a
+  PNG header claiming a huge picture and inflated a zlib bomb whole (pictures over 8192x8192 are refused, data
+  inflates only as far as the picture needs); `pixel_sprite` took half a minute on a PNG of many small chunks;
+  `chroma_key --key +F00FF` keyed another colour without a word; `chiptune` songs over 1200 s and `--rate` outside
+  8000 to 96000 are song errors, not MemoryError; `local_sfx --variants` is at most 64; `comfy_local` and `chiptune`
+  load files saved with a UTF-8 byte order mark, and `local_tts --lines` no longer speaks one; `credits`,
+  `pixel_sprite`, `access` and `local_tts` turn hand-edited or unreadable files into `[error]` lines instead of
+  tracebacks.
+- **Golden vectors:** two `settings_load` cases pin "no file: the defaults, no problems" and "version is 1 after a
+  load, whatever the file said" (every port documented both; none tested them).
 
 ## 0.14.2 (2026-11-06): fixes to Dotwork's Pixelorama round trip and its panel, from a second-model review and #255
 - Dotwork's Pixelorama panel: closing Pixelorama (or turning the extension off) during a re-export waited for Dotwork
