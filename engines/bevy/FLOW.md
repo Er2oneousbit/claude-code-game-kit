@@ -34,7 +34,7 @@ Formatting: `cargo fmt` fixes what `check` complains about.
 |---|---|
 | `check` | `cargo fmt --check`, then `cargo clippy --all-targets` (or `cargo check` without clippy) |
 | `test` | `cargo test --no-run` (shows compile progress), then `cargo test`; counts the `test result` lines |
-| `smoke` | `cargo build`, then `cargo run -- --smoke N [--screenshot F] [--record D] [-- game options]`; needs `BOOT_OK` and `SMOKE_DONE`, fails on ` ERROR ` lines, `panicked at` and a non-zero exit |
+| `smoke` | `cargo build`, then `cargo run -- --smoke N [--screenshot F] [--record D] -- --data-dir build/smoke-data [--drive X] [--locale L] [game options]`; needs `BOOT_OK` and `SMOKE_DONE` (and `DRIVE_DONE` with a drive), fails on ` ERROR ` lines, `panicked at` and a non-zero exit; echoes the drives' proof lines (`SETTINGS_WRITTEN`, `ACCESS_*`) |
 | `build` | `cargo build --release`, prints the exe path |
 | `run` | `cargo build`, then `cargo run [-- game options]` |
 | `clean` | deletes the target folder (asks first when `CARGO_TARGET_DIR` points outside the project) |
@@ -50,6 +50,20 @@ With `--screenshot` or `--record` the run opens a window (it needs the renderer)
 pauses on the last frame, waits for the GPU to hand back the pictures, then exits. Frames are PNG;
 `python tools/art/frames_to_gif.py build/frames out.gif` makes a GIF.
 
+Every smoke run follows a scripted scenario through the shell's screens (`src/shell/drive.rs`); without `--drive` it
+walks title -> menu -> play and lets the game run, so `--until GOAL_REACHED -- --autoplay right` still works. The
+game's files (settings.json) go to a fresh `build/smoke-data/` unless `--data-dir` names a folder, never to the
+player's own. Scenarios:
+
+| `--drive` | What it does | Window |
+|---|---|---|
+| `menus` | title -> settings: master volume 0.5, reduce motion on -> back (saves) -> quit; prints `SETTINGS_WRITTEN <path>` once the file holds the values | no |
+| `show:<screen>` | opens `title`, `main_menu`, `settings`, `pause`, `help`, `history`, `credits` or `subtitle`, then ends; add `--screenshot build/x.png` | yes |
+| `access[:res=WxH,scale=N,pad,read]` | the accessibility sweep's tour: every screen measured (`ACCESS_SCREEN`), the one-handed layout applied and reset, the subtitle hold, the prompts' device; `python tools/access/sweep.py` runs the four standard runs | yes |
+
+A drive that cannot finish (a menu that never opens, an item it cannot focus) logs an `ERROR` line naming the step
+and exits 1. `--locale pseudo` runs the whole shell in the pseudo-locale.
+
 ## Testing
 - `src/logic/`: plain `#[test]` functions next to the code (`#[cfg(test)] mod tests`).
 - `tests/golden.rs`: replays every case in `data/golden/juice.json` and `shell.json` through the juice and shell
@@ -61,7 +75,8 @@ pauses on the last frame, waits for the GPU to hand back the pictures, then exit
   `music vectors --write` and `access vectors --write` the same way.
 - `tests/*.rs`: integration tests that use `app::test_app(GameConfig)`, call `app.update()` and read the world
   (`app.world_mut().query_filtered::<&Transform, With<Player>>()`). Set input by writing the `Intent` resource,
-  or pick a bot through `GameConfig`.
+  or pick a bot through `GameConfig`. `tests/shell.rs` uses `app::shell_test_app` (the shell on the headless App)
+  and `shell.inject("ui_down")` to walk the screens; `GameConfig.data_dir` gives each test its own settings folder.
 - A bot is an `Autoplay` mode: a system that writes `Intent`. Scenario markers (`GOAL_REACHED`) are `info!` lines;
   `dev.py smoke --until` and `--fail-on` look for them (SOP-14 for bot pairs that prove a design idea).
 

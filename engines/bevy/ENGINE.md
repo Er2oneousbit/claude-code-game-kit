@@ -13,6 +13,14 @@
   without touching `main.rs`: `python tools/dev.py smoke --frames 3000 --until GOAL_REACHED -- --autoplay right`.
   `--screenshot build/shot.png` and `--record build/frames` open a window and capture PNGs
   (`--record-from 4200 --record-every 3` films one moment deep into a run).
+- **The shell (SOP-19, SOP-20):** `src/shell/` is the title, main menu, settings (five tabs, every field of the
+  settings schema, rebinding with conflict swaps, the one-handed layouts from `data/input/presets.json`), credits,
+  loading, pause with "What now?" and the dialogue history, subtitles and menu narration, on bevy_ui. The model is
+  headless (`dev.py smoke --drive menus` saves settings.json without a GPU; `tests/shell.rs` drives it); only
+  `src/shell/view.rs` draws. The game runs only while Play is on top (`GameActive`), reads input from `Intent` (the shell
+  fills it from the player's bindings) and its accessibility rules from `AccessRules` and `Palette`.
+  `smoke --drive show:<screen> --screenshot build/x.png` pictures a screen; `python tools/access/sweep.py` runs the
+  access drive. The readable font is Atkinson Hyperlegible (`src/shell/fonts/`, OFL, compiled into the exe).
 - **Verify:** `python tools/dev.py doctor`.
 
 ## Layout
@@ -23,10 +31,17 @@ src/app.rs         plugin sets per run mode (window, headless smoke, capture, te
 src/cli.rs         the program's own options (--smoke, --screenshot, ...)
 src/logic/         engine-free rules and helpers (math, seeded Rng). Plain Rust, unit tested
                    juice: shake, hitstop, ease, follow, input_buffer, coyote, spring (+ squash), flash_limiter
-                   shell: settings, bindings (+ glyphs), save_store, i18n (+ pseudo-locale), atomic_file
+                   shell: settings, bindings (+ glyphs), save_store, i18n (+ pseudo-locale), atomic_file, auto_repeat
                    audio: audio_director (events, voices, ducking), music_director, audio_access (sliders, arrows)
-src/game/mod.rs    GamePlugin: components, resources (ScreenShake), FixedUpdate systems. Must run headless
-src/game/present.rs PresentPlugin: camera (+ shake), sprites, meshes, audio, keyboard -> Intent. Window only
+src/game/mod.rs    GamePlugin: components, resources (ScreenShake, GameActive, AccessRules, Palette), FixedUpdate
+                   systems. Must run headless
+src/game/present.rs PresentPlugin: camera (+ shake), sprites in the palette's colours, meshes, audio. Window only
+src/shell/mod.rs   ShellPlugin: the screen stack, settings applied live, subtitles, history, narration. Headless
+src/shell/screens.rs the rows and actions of every screen; view.rs draws them with bevy_ui and polls keys and pads;
+                   drive.rs the scripted smoke runs; input.rs key names; store.rs the data folder; narrator.rs speech
+data/i18n/         string tables (en, fr; compiled in, a new file here is picked up at start)
+data/access/colours.json the colour-blind palettes;  data/input/presets.json the one-handed layouts (from the kit)
+src/shell/fonts/   Atkinson Hyperlegible (the readable font, OFL; compiled in with include_bytes!)
 src/kit_shaders.rs the kit's shader recipes as typed 2D materials (generated, with assets/shaders/kit/*.wesl)
 examples/shader_check.rs renders every recipe on the GPU for `smoke --shaders`
 tests/             integration tests: drive the real GamePlugin headless with app.update()
@@ -39,8 +54,11 @@ target/            build output (git-ignored)
 ## Conventions
 - `snake_case` functions, modules and files, `PascalCase` types, `SCREAMING_CASE` constants (rustfmt and clippy enforce
   most of it: `dev.py check` runs both).
-- **Simulation in `FixedUpdate`** (60 Hz, `app.rs` `TICK_HZ`), reading input only from a resource such as `Intent`.
-  Visuals, audio and raw input in `present.rs`. That split is what lets smoke runs, bots and tests run without a GPU.
+- **Simulation in `FixedUpdate`** (60 Hz, `app.rs` `TICK_HZ`), reading input only from a resource such as `Intent`
+  (`dir` from the held move actions, `pressed` for jump, attack, interact; the shell fills both from the bindings).
+  Visuals and audio in `present.rs`, raw keys and pads in `src/shell/view.rs`. That split is what lets smoke runs, bots
+  and tests run without a GPU. Say a line with `shell.say(speaker, text, bark)` (subtitles, the history), set the
+  goal "What now?" shows with `shell.set_objective(text)`.
 - One plugin per feature (`impl Plugin`), registered in `GamePlugin` or `PresentPlugin`. Tunables as `const` at the
   top of the module, or a `Resource` when they change at run time.
 - Errors: `Result` and `?` in helpers; systems log with `error!`/`warn!` and carry on. `unwrap()` only where a failure
@@ -73,8 +91,10 @@ target/            build output (git-ignored)
    when one reads what another writes. Unordered systems can run in any order, frame to frame.
 4. **`Commands` apply later**, at the end of the schedule step: an entity spawned with `commands.spawn` is not visible
    to queries in the same system. Use observers or the next tick.
-5. **Headless means no renderer:** `GamePlugin` must not use `Assets<Mesh>`, `Sprite`, cameras, `ButtonInput` or
-   audio. Smoke runs and tests would panic on the missing resource. Put those in `present.rs`.
+5. **Headless means no renderer:** `GamePlugin` and `ShellPlugin` must not use `Assets<Mesh>`, `Sprite`, cameras,
+   `ButtonInput` or audio. Smoke runs and tests would panic on the missing resource. Put those in `present.rs` or
+   `src/shell/view.rs`. `bevy_ui` nodes exist only with a window: `dev.py smoke --drive show:...` and `--drive access`
+   open one on their own.
 6. **`--features dev` (dynamic linking) is for development only:** it speeds up rebuilds, but a shipped exe needs the
    Bevy DLL next to it. `dev.py build` never uses it.
 7. **Long first compile:** `cargo clean` or a new Bevy version means minutes of recompiling. Do not clean to "fix"

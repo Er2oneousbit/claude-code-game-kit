@@ -1155,6 +1155,36 @@ class BevyShaders(TempRoot):
         dev = self.dev({"shader_gen.py": (2, "[error] recipes.json is malformed")})
         self.assertEqual(quiet(dev.cmd_check, argparse.Namespace(release=False, no_shaders=False))[0], 2)
 
+    # ---- #168: the shell's scripted runs ----------------------------------------------
+    def test_smoke_drive_goes_to_the_game_after_the_separator_with_its_own_data_folder(self):
+        drive_out = "BOOT_OK x 0.1.0\nSETTINGS_WRITTEN build/smoke-data/settings.json\nDRIVE_DONE menus\nSMOKE_DONE frames=9\n"
+        dev = self.dev({"--drive menus": (0, drive_out)})
+        rc, text = self.smoke(dev, shaders=False, drive="menus", locale="pseudo", game_args=["--autoplay", "right"])
+        self.assertEqual(rc, 0, text)
+        run = next(c for c in self.calls if "--smoke" in c)
+        tail = run.split(" -- ", 2)[2]           # cargo run ... -- --smoke 5 -- <game options>
+        self.assertTrue(tail.startswith("--drive menus --data-dir "), tail)
+        self.assertIn("smoke-data --locale pseudo --autoplay right", tail)
+        self.assertIn("SETTINGS_WRITTEN", text, "the proof lines are echoed")
+        self.assertTrue((self.root / "build" / "smoke-data").is_dir(), "a fresh data folder of the run's own")
+
+    def test_a_drive_without_drive_done_fails_although_the_frames_ran(self):
+        dev = self.dev({"--drive menus": (0, "BOOT_OK x 0.1.0\nSMOKE_DONE frames=5\n")})
+        rc, text = self.smoke(dev, shaders=False, drive="menus")
+        self.assertEqual(rc, 1, text)
+        self.assertIn("did not finish", text)
+        # a plain run (no drive) still needs only BOOT_OK and SMOKE_DONE
+        self.assertEqual(self.smoke(self.dev({}), shaders=False)[0], 0)
+
+    def test_a_given_data_dir_is_kept_between_runs(self):
+        dev = self.dev({})
+        keep = self.root / "keep"
+        keep.mkdir()
+        (keep / "settings.json").write_text("{}", encoding="utf-8")
+        rc, text = self.smoke(dev, shaders=False, data_dir="keep")
+        self.assertEqual(rc, 0, text)
+        self.assertTrue((keep / "settings.json").is_file(), "--data-dir is never wiped")
+
 
 # ---- #249: Unity shader recipes -----------------------------------------------------
 class UnityShaders(TempRoot):
