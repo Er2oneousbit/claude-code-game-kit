@@ -15,6 +15,7 @@
 //           on the title). The widget ticks the model (Update) each frame. It also tells the model which keys are
 //           held and where the left stick and the triggers are (#274), letting them through to the game; losing
 //           focus lets everything go. The juice demo's world is painted live from the model (no rebuild per frame).
+//           A model a drive presses for (bScripted, #276) takes no real keys, sticks or clicks from the widget.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1); analog input, the juice demo and the toast by
 //           Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------

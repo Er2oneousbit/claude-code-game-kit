@@ -82,6 +82,7 @@ FGameKitShellDrive::FGameKitShellDrive(const TSharedRef<FGameKitShellModel>& InM
 	: Model(InModel)
 	, Print(MoveTemp(InPrint))
 {
+	Model->bScripted = true;   // only the drive presses: a widget on this model ignores the real devices (#276)
 }
 
 bool FGameKitShellDrive::IsKnown(const FString& Name)
