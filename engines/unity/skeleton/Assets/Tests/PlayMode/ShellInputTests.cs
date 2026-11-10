@@ -8,11 +8,15 @@
 //           polling path. The Input Manager cannot be fed fake presses, so there the test rebinds a pad slot and
 //           checks the backend can read it (its trigger axis exists: run GameKitScenes.CreateShellScene or
 //           AddInputAxes first) and that nothing fires while no device is touched. Tests on the other backend are
-//           ignored, not failed.
+//           ignored, not failed. Analog (#274): on the Input System the virtual pad's stick and triggers reach the
+//           game shaped (deadzone, invert_y) with its held buttons; on the Input Manager the stick and trigger axes must
+//           exist and rest at 0, and the shaping path is fed through InjectAnalog (both backends run that one).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): analog stick, triggers and held game actions (#274)
 // ---------------------------------------------------------------------------
 using System.Collections.Generic;
 using NUnit.Framework;
+using UnityEngine;
 using {{GAME_SLUG}}.Core;
 using {{GAME_SLUG}}.Shell;
 #if GAMEKIT_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
@@ -25,6 +29,7 @@ namespace {{GAME_SLUG}}.Tests
     public class ShellInputTests
     {
         private const float DT = 1f / 60f;
+        private const float EPS = 1e-4f;
 
         // The defaults with one slot rebound (a fresh map each time)
         private static Dictionary<string, object> Rebound(string action, int slot, string binding)
@@ -36,6 +41,8 @@ namespace {{GAME_SLUG}}.Tests
         public void Reset()
         {
             ShellInput.Configure(Bindings.Defaults(), false);
+            ShellInput.ConfigureAnalog(0.2, false);
+            ShellInput.ClearAnalog();
         }
 
         [Test]
@@ -70,6 +77,51 @@ namespace {{GAME_SLUG}}.Tests
             Assert.IsFalse(ShellInput.CanRead("pad:nonsense"));
             Assert.IsFalse(ShellInput.CanRead("key:nonsense"));
         }
+
+        [Test]
+        public void Analog_HeldStickAndTriggersAreShapedForTheGame()
+        {
+            if (!ShellInput.Polls)
+            {
+                Assert.Ignore("ui_events backend: no analog values (install the Input System package)");
+            }
+            ShellInput.Configure(Bindings.Defaults(), false);
+            ShellInput.ConfigureAnalog(0.2, false);
+            ShellInput.InjectAnalog(new Vector2(0.6f, 0f), 0.525f, 1f);
+            ShellInput.Begin(DT);
+            Assert.AreEqual(0.5f, ShellInput.Stick.x, EPS, "radial deadzone 0.2, rescaled from 0");
+            Assert.AreEqual(0f, ShellInput.Stick.y, EPS);
+            Assert.AreEqual(0.5f, ShellInput.LeftTrigger, EPS);
+            Assert.AreEqual(1f, ShellInput.RightTrigger, EPS);
+            Assert.IsTrue(ShellInput.IsGameHeld("move_right"), "the stick past the deadzone holds move_right");
+            Assert.AreEqual(0.5f, ShellInput.MoveVector().x, EPS, "a half-leaned stick: half speed");
+            ShellInput.InjectAnalog(new Vector2(0.1f, 0.1f), 0.04f, 0f);
+            ShellInput.Begin(DT);
+            Assert.AreEqual(Vector2.zero, ShellInput.Stick, "inside the deadzone");
+            Assert.AreEqual(0f, ShellInput.LeftTrigger, "inside the trigger's own deadzone");
+            CollectionAssert.IsEmpty(ShellInput.HeldGameActions);
+            ShellInput.ConfigureAnalog(0.2, true);
+            ShellInput.InjectAnalog(new Vector2(0f, 1f), 0f, 0f);
+            ShellInput.Begin(DT);
+            Assert.AreEqual(-1f, ShellInput.Stick.y, EPS, "invert_y");
+            Assert.IsTrue(ShellInput.IsGameHeld("move_down"));
+            Assert.IsFalse(ShellInput.IsGameHeld("move_up"));
+        }
+
+#if !(GAMEKIT_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM) && ENABLE_LEGACY_INPUT_MANAGER
+        [Test]
+        public void InputManager_StickAndTriggerAxesExistAndRestAtZero()
+        {
+            Assert.IsTrue(ShellInput.AnalogReadable,
+                "the Input Manager lacks the GameKit stick or trigger axes: run python tools/dev.py exec GameKitScenes.AddInputAxes");
+            ShellInput.Begin(DT);
+            ShellInput.Begin(DT);
+            Assert.AreEqual(Vector2.zero, ShellInput.Stick, "the stick moved with no pad touched");
+            Assert.AreEqual(0f, ShellInput.LeftTrigger);
+            Assert.AreEqual(0f, ShellInput.RightTrigger);
+            CollectionAssert.IsEmpty(ShellInput.HeldGameActions);
+        }
+#endif
 
 #if GAMEKIT_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
         private Gamepad _pad;
@@ -155,6 +207,39 @@ namespace {{GAME_SLUG}}.Tests
             Pad(new GamepadState(GamepadButton.DpadUp));
             ShellInput.Begin(DT);
             Assert.IsTrue(ShellInput.JustPressed("ui_up"), "dpad up did not fire ui_up");
+        }
+
+        [Test]
+        public void InputSystem_StickTriggersAndHeldActionsReachTheGame()
+        {
+            ShellInput.Configure(Bindings.Defaults(), false);
+            ShellInput.ConfigureAnalog(0.2, false);
+            Assert.IsTrue(ShellInput.AnalogReadable);
+            Settle();
+            Pad(new GamepadState(GamepadButton.West) { leftStick = new Vector2(0.6f, 0f), rightTrigger = 0.525f });
+            ShellInput.Begin(DT);
+            Assert.AreEqual(0.6f, ShellInput.RawStick.x, EPS, "the unprocessed stick (no Input System deadzone on top)");
+            Assert.AreEqual(0.5f, ShellInput.Stick.x, EPS);
+            Assert.AreEqual(0.5f, ShellInput.RightTrigger, EPS);
+            Assert.AreEqual(0f, ShellInput.LeftTrigger, EPS);
+            Assert.IsTrue(ShellInput.IsGameHeld("attack"), "pad west (attack) held");
+            Assert.IsTrue(ShellInput.IsGameHeld("move_right"), "the stick holds move_right");
+            foreach (string action in ShellInput.HeldGameActions)
+            {
+                Assert.IsFalse(action.StartsWith("ui_"), $"{action} is a menu action");
+            }
+            ShellInput.ConfigureAnalog(0.2, true);
+            Pad(new GamepadState { leftStick = new Vector2(0f, 1f) });
+            ShellInput.Begin(DT);
+            Assert.AreEqual(-1f, ShellInput.Stick.y, EPS, "invert_y");
+            Assert.IsTrue(ShellInput.IsGameHeld("move_down"));
+            Assert.IsFalse(ShellInput.IsGameHeld("attack"), "released");
+            Pad(new GamepadState());
+            Keys(Key.D);
+            ShellInput.Begin(DT);
+            Assert.AreEqual(1f, ShellInput.MoveVector().x, EPS, "a held move key gives a unit direction");
+            Assert.AreEqual(Vector2.zero, ShellInput.Stick);
+            Keys();
         }
 
         [Test]
