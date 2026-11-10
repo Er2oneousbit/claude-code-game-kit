@@ -9,8 +9,9 @@
 #           python tools/check_i18n.py --locale fr        # just French
 #           python tools/check_i18n.py --same "Okay"      # an English text that is also right in the other language
 #           python tools/check_i18n.py --dir path/to/i18n --debug
-# Exit    : 0 every table complete, 1 a key missing, untranslated or with other placeholders, 2 usage problem (no
-#           en.json, a table that is not a JSON object of strings)
+# Exit    : 0 every table complete (or the project has no data/i18n/ at all), 1 a key missing, untranslated or with
+#           other placeholders, 2 usage problem (a --dir or data/i18n/ without en.json, a table that is not a JSON
+#           object of strings)
 # Notes   : Plural forms are plain keys (apples.one, apples.other), so they are checked like any other key. A value
 #           made only of placeholders and punctuation ("{name}", "{v}") has nothing to translate. SAME_IN_EVERY_
 #           LANGUAGE lists the English texts the kit's own tables keep as they are: proper names and units; add a
@@ -136,6 +137,11 @@ def main(argv=None):
     args = ap.parse_args(argv)
     DEBUG = args.debug
     folder = Path(args.dir) if args.dir else ROOT / I18N_DIR
+    if not args.dir and not folder.is_dir():
+        # A project with no string tables at all (web-3d, RPG Maker MZ): the tool ships into every game, so the plain
+        # run passes there. A --dir that is wrong or holds no en.json is still a usage problem (exit 2).
+        print(f"[ OK ] no string tables ({I18N_DIR}/ does not exist), nothing to check")
+        return 0
     try:
         result = check_dir(folder, args.locale, set(args.same))
     except ValueError as e:
