@@ -568,6 +568,71 @@ def data_dir_in_build(given):
     return False
 
 
+# #271: files the shell writes in its data folder, tried against the export filters (one per kind of file)
+DATA_DIR_PROBES = ("settings.json", "save_1.json", "logs/game.log", "crashes/crash_1.txt", "telemetry.csv",
+                   "bug_1/info.txt")
+
+
+def export_filters():
+    """#271: [(preset name, include patterns, exclude patterns)] from export_presets.cfg, split on commas as Godot
+    splits include_filter and exclude_filter. Empty when the file cannot be read."""
+    presets, cur = [], None
+    try:
+        text = (ROOT / "export_presets.cfg").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("["):
+            cur = [line, [], []] if re.fullmatch(r"\[preset\.\d+\]", line) else None
+            if cur:
+                presets.append(cur)
+            continue
+        m = re.fullmatch(r'(name|include_filter|exclude_filter)="(.*)"', line)
+        if m and cur:
+            if m.group(1) == "name":
+                cur[0] = m.group(2)
+            else:
+                cur[1 if m.group(1) == "include_filter" else 2] = [f.strip() for f in m.group(2).split(",")
+                                                                  if f.strip()]
+    return [tuple(p) for p in presets]
+
+
+def godot_filter_match(rel, pattern):
+    """True when a project path matches an export filter as Godot matches it: case-insensitive, `*` also crosses
+    folders, tried with and without res://. Brackets are literal in Godot, so they are escaped for fnmatch."""
+    import fnmatch
+    pat = pattern.lower().replace("[", "[[]")
+    rel = rel.lower()
+    return fnmatch.fnmatchcase(rel, pat) or fnmatch.fnmatchcase("res://" + rel, pat)
+
+
+def data_dir_in_pack(given):
+    """#271: print an error and return True when the files the shell writes in --data-dir (DATA_DIR_PROBES) would go
+    into an export: an include_filter in export_presets.cfg takes them and no exclude_filter drops them. Only paths
+    inside the project count (an export packs nothing else)."""
+    if not given:
+        return False
+    p = Path(given)
+    where = os.path.realpath(str(p if p.is_absolute() else ROOT / p))
+    try:
+        rel = Path(os.path.relpath(where, os.path.realpath(str(ROOT)))).as_posix()
+    except ValueError:
+        return False                                  # another drive on Windows
+    if rel == ".." or rel.startswith("../"):
+        return False
+    for name, include, exclude in export_filters():
+        for probe in DATA_DIR_PROBES:
+            path = probe if rel == "." else f"{rel}/{probe}"
+            hit = next((f for f in include if godot_filter_match(path, f)), None)
+            if hit and not any(godot_filter_match(path, f) for f in exclude):
+                print(f"[error] --data-dir {given} is taken by the include_filter {hit!r} of the export preset {name!r} "
+                      f"(export_presets.cfg): its files would ship with the game. Use a folder of its own, e.g. "
+                      f"captures/{p.name or 'run'}", file=sys.stderr)
+                return True
+    return False
+
+
 def smoke_data_dir(args):
     """The game's data folder for this smoke run: --data-dir as given (never wiped), else a fresh build/smoke-data/."""
     if args.data_dir:
@@ -596,6 +661,8 @@ def game_args(args, data_dir):
 
 def cmd_smoke(args, godot):
     if data_dir_in_build(args.data_dir):
+        return 2
+    if data_dir_in_pack(args.data_dir):   # #271: a folder the export's include_filter takes
         return 2
     if args.compare and not args.screenshot:
         print("[error] --compare needs --screenshot (the new picture to compare)", file=sys.stderr)
@@ -794,6 +861,8 @@ def compare(args):
 
 def cmd_run(args, godot):
     if data_dir_in_build(args.data_dir):
+        return 2
+    if data_dir_in_pack(args.data_dir):   # #271: a folder the export's include_filter takes
         return 2
     cmd = [godot, "--path", "."]
     user = ["--debug"] if args.debug else []   # picked up by Log autoload

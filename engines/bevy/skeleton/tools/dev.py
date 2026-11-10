@@ -457,6 +457,8 @@ def cmd_test(args):
 def cmd_smoke(args):
     if data_dir_in_build(getattr(args, "data_dir", "")):
         return 2
+    if data_dir_in_pack(getattr(args, "data_dir", "")):   # #271: the asset folder that ships with the exe
+        return 2
     err = preflight()
     if err:
         print(f"[error] {err}", file=sys.stderr)
@@ -563,6 +565,35 @@ def data_dir_in_build(given):
         print(f"[error] --data-dir {given} is inside cargo's target folder ({out}): its files would sit next to the "
               f"shipped exe or be wiped by clean. Use a folder of its own, e.g. captures/{p.name or 'run'}",
               file=sys.stderr)
+        return True
+    return False
+
+
+def asset_folder():
+    """#271: the folder Bevy loads assets from and a release ships next to the exe: AssetPlugin's file_path when
+    src/ sets one, else Bevy's default assets/."""
+    for rs in sorted((ROOT / "src").rglob("*.rs")):
+        try:
+            m = re.search(r"\bfile_path\s*:\s*\"([^\"]+)\"", rs.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
+        if m:
+            return m.group(1)
+    return "assets"
+
+
+def data_dir_in_pack(given):
+    """#271: print an error and return True when --data-dir lies inside the asset folder (asset_folder()), which
+    ships with the release exe (docs/ENGINE_FLOW.md > Packaging). Letter case is ignored."""
+    if not given:
+        return False
+    p = Path(given)
+    where = os.path.realpath(str(p if p.is_absolute() else ROOT / p)).lower()
+    out = asset_folder()
+    folder = os.path.realpath(str(ROOT / out)).lower()
+    if where == folder or where.startswith(folder.rstrip("\\/") + os.sep):
+        print(f"[error] --data-dir {given} is inside {out}/, the asset folder that ships next to the exe: its files "
+              f"would ship with the game. Use a folder of its own, e.g. captures/{p.name or 'run'}", file=sys.stderr)
         return True
     return False
 
