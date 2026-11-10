@@ -71,6 +71,9 @@ find_package(SDL3 CONFIG REQUIRED)
 set(GAME_SOURCES
   src/game/Game.cpp
   src/gfx/KitShaders.cpp
+  src/shell/Draw.cpp
+  src/shell/Drive.cpp
+  src/shell/Shell.cpp
 )
 add_library(game_lib STATIC ${GAME_SOURCES})
 target_link_libraries(game_lib PUBLIC core SDL3::SDL3)

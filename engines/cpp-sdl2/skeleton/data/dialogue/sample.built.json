@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "locale": "en",
+  "built_by": "hand (a sample in the dialogue.built.json v0 shape; replace it with your game's built dialogue)",
+  "source_sha256": "",
+  "style": {"max_chars_per_line": 40, "max_lines": 2, "min_cue_s": 0.833, "max_cps": 20},
+  "lines": {
+    "guide.welcome": {
+      "speaker": "guide", "name": "Guide", "color": "#E3B04B",
+      "text": "Hit the box to feel the juice. Jump early: the buffer catches it.",
+      "kind": "line", "priority": 50, "interrupt": "lower", "cooldown_s": 0,
+      "duration_s": 4.2,
+      "reveal_source": "text",
+      "reveal": [
+        {"i": 0, "t": 0.0}, {"i": 1, "t": 0.03}, {"i": 2, "t": 0.06}, {"i": 3, "t": 0.09}, {"i": 4, "t": 0.12},
+        {"i": 5, "t": 0.15}, {"i": 6, "t": 0.18}, {"i": 7, "t": 0.21}, {"i": 8, "t": 0.24}, {"i": 9, "t": 0.27},
+        {"i": 10, "t": 0.3}, {"i": 11, "t": 0.33}, {"i": 12, "t": 0.36}, {"i": 13, "t": 0.39}, {"i": 14, "t": 0.42},
+        {"i": 15, "t": 0.45}, {"i": 16, "t": 0.48}, {"i": 17, "t": 0.51}, {"i": 18, "t": 0.54}, {"i": 19, "t": 0.57},
+        {"i": 20, "t": 0.6}, {"i": 21, "t": 0.63}, {"i": 22, "t": 0.66}, {"i": 23, "t": 0.69}, {"i": 24, "t": 0.72},
+        {"i": 25, "t": 0.75}, {"i": 26, "t": 0.78}, {"i": 27, "t": 0.81}, {"i": 28, "t": 0.84}, {"i": 29, "t": 0.87},
+        {"i": 30, "t": 1.17}, {"i": 31, "t": 1.2}, {"i": 32, "t": 1.23}, {"i": 33, "t": 1.26}, {"i": 34, "t": 1.29},
+        {"i": 35, "t": 1.32}, {"i": 36, "t": 1.35}, {"i": 37, "t": 1.38}, {"i": 38, "t": 1.41}, {"i": 39, "t": 1.44},
+        {"i": 40, "t": 1.47}, {"i": 41, "t": 1.5}, {"i": 42, "t": 1.53}, {"i": 43, "t": 1.56}, {"i": 44, "t": 1.59},
+        {"i": 45, "t": 1.62}, {"i": 46, "t": 1.65}, {"i": 47, "t": 1.68}, {"i": 48, "t": 1.71}, {"i": 49, "t": 1.74},
+        {"i": 50, "t": 1.77}, {"i": 51, "t": 1.8}, {"i": 52, "t": 1.83}, {"i": 53, "t": 1.86}, {"i": 54, "t": 1.89},
+        {"i": 55, "t": 1.92}, {"i": 56, "t": 1.95}, {"i": 57, "t": 1.98}, {"i": 58, "t": 2.01}, {"i": 59, "t": 2.04},
+        {"i": 60, "t": 2.07}, {"i": 61, "t": 2.1}, {"i": 62, "t": 2.13}, {"i": 63, "t": 2.16}, {"i": 64, "t": 2.19}
+      ],
+      "cues": [
+        {"start": 0.0, "end": 1.1, "lines": ["Hit the box to feel the juice."]},
+        {"start": 1.1, "end": 4.2, "lines": ["Jump early: the buffer catches it."]}
+      ],
+      "future_field": "readers ignore fields they do not know"
+    },
+    "box.ouch": {
+      "speaker": "box", "name": "Box", "color": "#8FD3FF",
+      "text": "Oof!",
+      "kind": "bark", "priority": 20, "interrupt": "never", "cooldown_s": 3,
+      "duration_s": 0.9,
+      "reveal_source": "text",
+      "reveal": [{"i": 0, "t": 0.0}, {"i": 1, "t": 0.05}, {"i": 2, "t": 0.1}, {"i": 3, "t": 0.15}],
+      "cues": [{"start": 0.0, "end": 0.9, "lines": ["Oof!"]}]
+    }
+  },
+  "captions": {
+    "box_hit": {"text": "[thud]", "priority": 30, "min_s": 1.0}
+  },
+  "sequences": {"intro": [{"line": "guide.welcome", "start": 0.0, "end": 4.2}]}
+}
