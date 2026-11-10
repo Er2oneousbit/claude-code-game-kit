@@ -45,12 +45,13 @@
   elsewhere is Atkinson Hyperlegible), means adding `sdl3-ttf` (below) and swapping `src/shell/Draw.cpp`'s glyph call.
 - **Analog input (#274):** `shell_->stick()` is the left stick with the player's `input.deadzone` (radial: the vector's
   length, rescaled so a lean just past it starts near 0) and `input.invert_y`; axes follow SDL, **+y is down**.
-  `left_trigger()` / `right_trigger()` run 0 to 1 past a small fixed deadzone (`core::kTriggerDeadzone`).
+  `left_trigger()` / `right_trigger()` run 0 to 1 past a small fixed deadzone (`core::analog::kTriggerDeadzone`).
   `held_actions()` is the set of game actions held now (no `ui_*`; the stick past the deadzone holds `move_*`, invert_y
   honoured), and `move_vector()` adds the held `move_*` keys to the stick, length 0 to 1 (a half lean walks at half
   speed). `is_down("move_left")` counts the stick too. The menus still get the stick as d-pad presses with hysteresis and
   each trigger as `pad:l2` / `pad:r2` past half travel. The maths is `src/core/Analog.hpp` (`tests/test_analog.cpp`,
-  the same cases as the Bevy shell's analog module).
+  the same cases as the Bevy shell's analog module), all of it in `core::analog`: `stick()` and `move_vector()` return
+  a `core::analog::Vec2`, so a game's own `core::Vec2` never clashes with it (copy `x` and `y` across).
 - **Crash files and bug reports (#275):** an exception that reaches the top of main.cpp's loop, an uncaught one
   (`std::terminate`) and a fatal signal (a bad pointer, `abort`, a failed assert; best effort) write
   `crashes/crash_<UTC time>.txt` in the user-data folder (game, version, build, OS, screen, locale, seed from

@@ -23,6 +23,8 @@
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the pseudo-locale layout check (#275)
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): admits_device_event, no real input in a drive (#276)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): DeviceEvent is ShellDeviceEvent, leaving the
+//           generic name to games
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -153,13 +155,16 @@ private:
 };
 
 // ---- Scripted runs (#276) -----------------------------------------------------------------------------------
-// The kinds of SDL event the shell handles, without SDL (Shell.cpp sorts SDL's event types into these).
-enum class DeviceEvent { Key, MouseButton, MouseMotion, PadButton, PadAxis, PadAdded, PadRemoved, Quit, FocusLost, Other };
+// The kinds of SDL event the shell handles, without SDL (Shell.cpp sorts SDL's event types into these). Named
+// for the shell: a game's own core::DeviceEvent (an input recorder, a replay) must still compile.
+enum class ShellDeviceEvent {
+    Key, MouseButton, MouseMotion, PadButton, PadAxis, PadAdded, PadRemoved, Quit, FocusLost, Other
+};
 // Does a device event reach the shell? In normal play every one. In a scripted run (a smoke run: every one follows
 // a drive) none of the player's input (keys, mouse, pad buttons and axes): a stray key or a virtual pad on a shared
 // machine must not break the tour, so only the drive's own presses count. The window's events and pads being
 // plugged in or out still do.
-bool admits_device_event(DeviceEvent kind, bool scripted);
+bool admits_device_event(ShellDeviceEvent kind, bool scripted);
 
 }  // namespace core
 

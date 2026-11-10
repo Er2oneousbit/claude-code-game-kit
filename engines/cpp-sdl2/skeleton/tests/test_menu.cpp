@@ -410,16 +410,14 @@ TEST_CASE("a held subtitle stays until accept and then goes (#167)") {
 
 // #276. No ";" in a test name: CTest cuts the name there, and the cut name matches no test, so it "passes" empty
 TEST_CASE("a drive run ignores the real keyboard and mouse and pads while normal play reads them") {
-    using core::DeviceEvent;
+    using Ev = core::ShellDeviceEvent;
     // the player's input: read in play, dropped while a drive presses (a stray key, a virtual pad)
-    for (const DeviceEvent kind : {DeviceEvent::Key, DeviceEvent::MouseButton, DeviceEvent::MouseMotion,
-                                   DeviceEvent::PadButton, DeviceEvent::PadAxis}) {
+    for (const Ev kind : {Ev::Key, Ev::MouseButton, Ev::MouseMotion, Ev::PadButton, Ev::PadAxis}) {
         CHECK(core::admits_device_event(kind, false));
         CHECK_FALSE(core::admits_device_event(kind, true));
     }
     // the window and the devices themselves: always (quit still quits, a pad plugged in is still opened)
-    for (const DeviceEvent kind : {DeviceEvent::PadAdded, DeviceEvent::PadRemoved, DeviceEvent::Quit,
-                                   DeviceEvent::FocusLost, DeviceEvent::Other}) {
+    for (const Ev kind : {Ev::PadAdded, Ev::PadRemoved, Ev::Quit, Ev::FocusLost, Ev::Other}) {
         CHECK(core::admits_device_event(kind, false));
         CHECK(core::admits_device_event(kind, true));
     }

@@ -185,7 +185,7 @@ std::atomic<bool> g_crashing{false};   // one crash file per run: a handler that
 // ("" when no file could be written; the [ERROR] line says why).
 std::string report_crash(const std::string& error) {
     std::string why;
-    const auto file = core::write_crash(error, false, &why);
+    const auto file = core::report::write_crash(error, false, &why);
     if (!file) {
         LOG_ERROR("core", "the game stopped: " << error << " (no crash file: " << why << ")");
         return "";
@@ -219,7 +219,7 @@ void on_fatal_signal(int sig) {
     if (!g_crashing.exchange(true)) {
         const char* name = sig == SIGSEGV ? "SIGSEGV (bad memory access)" : sig == SIGABRT ? "SIGABRT (abort, a failed assert)"
                          : sig == SIGFPE ? "SIGFPE (arithmetic error)" : sig == SIGILL ? "SIGILL (illegal instruction)" : "a signal";
-        const auto file = core::write_crash(std::string("fatal signal ") + name, true);
+        const auto file = core::report::write_crash(std::string("fatal signal ") + name, true);
         if (file) {
             std::fprintf(stdout, "CRASH_WRITTEN %s\n", core::path_to_utf8(*file).c_str());
             std::fflush(stdout);

@@ -77,7 +77,8 @@ Recommended extensions: C/C++ (ms-vscode.cpptools), CMake Tools (ms-vscode.cmake
   `python tools/dev.py smoke --drive pseudo --locale pseudo` (every label 40 % longer: nothing cut off, nothing
   bypassing `t()`; a key name or file content is drawn with `TextOpts::raw`).
 - Analog play (#274): read `shell_->move_vector()` (keys and the stick, length 0 to 1), `stick()`, `right_trigger()` and
-  `held_actions()` in `play_update`; the juice demo walks that way. +y is down, as on SDL's screen.
+  `held_actions()` in `play_update`; the juice demo walks that way. +y is down, as on SDL's screen. The vectors are
+  `core::analog::Vec2`: copy `x` and `y` into the game's own vector type.
 - When it breaks (#275): the player's crash file is `crashes/crash_<time>.txt` in the user-data folder (SDL's preferences
   folder, `%APPDATA%\<game slug>` on Windows (verify); `build/smoke-data/` in a smoke run). In a debug build F8 saves a
   bug report folder next to it. Name the run's seed with `shell_->set_run_seed()` so both carry it.

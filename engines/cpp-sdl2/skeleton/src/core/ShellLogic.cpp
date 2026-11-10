@@ -335,19 +335,19 @@ void SubtitleTrack::dismiss() {
 }
 
 // ---- Scripted runs (#276) -----------------------------------------------------------------------------------
-bool admits_device_event(DeviceEvent kind, bool scripted) {
+bool admits_device_event(ShellDeviceEvent kind, bool scripted) {
     switch (kind) {
-        case DeviceEvent::Key:
-        case DeviceEvent::MouseButton:
-        case DeviceEvent::MouseMotion:
-        case DeviceEvent::PadButton:
-        case DeviceEvent::PadAxis:
+        case ShellDeviceEvent::Key:
+        case ShellDeviceEvent::MouseButton:
+        case ShellDeviceEvent::MouseMotion:
+        case ShellDeviceEvent::PadButton:
+        case ShellDeviceEvent::PadAxis:
             return !scripted;   // the player's input: only outside a drive
-        case DeviceEvent::PadAdded:
-        case DeviceEvent::PadRemoved:
-        case DeviceEvent::Quit:
-        case DeviceEvent::FocusLost:
-        case DeviceEvent::Other:
+        case ShellDeviceEvent::PadAdded:
+        case ShellDeviceEvent::PadRemoved:
+        case ShellDeviceEvent::Quit:
+        case ShellDeviceEvent::FocusLost:
+        case ShellDeviceEvent::Other:
             break;
     }
     return true;

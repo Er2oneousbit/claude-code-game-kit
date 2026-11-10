@@ -138,7 +138,7 @@ const char* screen_name(ScreenId id) {
 Shell::Shell(RunOptions options) : opts_(std::move(options)) {}
 
 Shell::~Shell() {
-    core::clear_crash_callbacks();   // a crash after this point must not call into a shell that is gone
+    core::report::clear_crash_callbacks();   // a crash after this point must not call into a shell that is gone
     {
         std::lock_guard<std::mutex> lock(speech_mutex_);
         speech_stop_ = true;
@@ -235,12 +235,12 @@ bool Shell::init(SDL_Window* window, SDL_Renderer* renderer) {
         LOG_WARN("settings", "fixed " << p);
     }
     // crash files from here on land in the data folder and name the screen, locale and settings (#275)
-    core::CrashContext crash;
+    core::report::CrashContext crash;
     crash.data_dir = data_dir_;
     crash.base = run_info();
     crash.info = [this] { return run_info(); };
     crash.settings = [this] { return settings_text(settings_); };
-    core::set_crash_context(std::move(crash));
+    core::report::set_crash_context(std::move(crash));
     game_dir_ = find_game_dir();
     load_tables();
     presets_ = load_json(game_dir_ / core::path_from_utf8(kPresetsFile), "presets");
@@ -316,8 +316,8 @@ std::string Shell::line_text(const core::SubtitleLine& line) const {
     return locale_ == core::kPseudoLocale ? core::pseudo_ascii(line.text) : line.text;
 }
 
-core::RunInfo Shell::run_info() const {
-    core::RunInfo info;
+core::report::RunInfo Shell::run_info() const {
+    core::report::RunInfo info;
     info.game = opts_.game_name;
     info.version = opts_.version;
     info.build = kDebugBuild ? "debug" : "release";
@@ -650,21 +650,21 @@ std::string Shell::focus_id() const {
 // ---- Input ---------------------------------------------------------------------------------------------------
 namespace {
 // SDL's event types as the kinds core::admits_device_event knows
-core::DeviceEvent device_event_kind(Uint32 type) {
+core::ShellDeviceEvent device_event_kind(Uint32 type) {
     switch (type) {
         case SDL_EVENT_KEY_DOWN:
-        case SDL_EVENT_KEY_UP: return core::DeviceEvent::Key;
+        case SDL_EVENT_KEY_UP: return core::ShellDeviceEvent::Key;
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
-        case SDL_EVENT_MOUSE_BUTTON_UP: return core::DeviceEvent::MouseButton;
-        case SDL_EVENT_MOUSE_MOTION: return core::DeviceEvent::MouseMotion;
+        case SDL_EVENT_MOUSE_BUTTON_UP: return core::ShellDeviceEvent::MouseButton;
+        case SDL_EVENT_MOUSE_MOTION: return core::ShellDeviceEvent::MouseMotion;
         case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-        case SDL_EVENT_GAMEPAD_BUTTON_UP: return core::DeviceEvent::PadButton;
-        case SDL_EVENT_GAMEPAD_AXIS_MOTION: return core::DeviceEvent::PadAxis;
-        case SDL_EVENT_GAMEPAD_ADDED: return core::DeviceEvent::PadAdded;
-        case SDL_EVENT_GAMEPAD_REMOVED: return core::DeviceEvent::PadRemoved;
-        case SDL_EVENT_QUIT: return core::DeviceEvent::Quit;
-        case SDL_EVENT_WINDOW_FOCUS_LOST: return core::DeviceEvent::FocusLost;
-        default: return core::DeviceEvent::Other;
+        case SDL_EVENT_GAMEPAD_BUTTON_UP: return core::ShellDeviceEvent::PadButton;
+        case SDL_EVENT_GAMEPAD_AXIS_MOTION: return core::ShellDeviceEvent::PadAxis;
+        case SDL_EVENT_GAMEPAD_ADDED: return core::ShellDeviceEvent::PadAdded;
+        case SDL_EVENT_GAMEPAD_REMOVED: return core::ShellDeviceEvent::PadRemoved;
+        case SDL_EVENT_QUIT: return core::ShellDeviceEvent::Quit;
+        case SDL_EVENT_WINDOW_FOCUS_LOST: return core::ShellDeviceEvent::FocusLost;
+        default: return core::ShellDeviceEvent::Other;
     }
 }
 }  // namespace
@@ -781,7 +781,7 @@ void Shell::pad_button_event(const SDL_GamepadButtonEvent& e, bool down) {
 // itself through stick() and held_actions()), each trigger as pad:l2 / pad:r2 past half travel (held, like a button).
 // The analog values themselves are polled in poll_pads().
 void Shell::pad_axis_event(const SDL_GamepadAxisEvent& e) {
-    const double value = core::axis_from_raw(e.value);
+    const double value = core::analog::axis_from_raw(e.value);
     const double deadzone = std::max(input_number("deadzone", 0.2), 0.05);
     auto device = [this, &e] {
         const char* pad_name = SDL_GetGamepadNameForID(e.which);
@@ -810,7 +810,7 @@ void Shell::pad_axis_event(const SDL_GamepadAxisEvent& e) {
     };
     if (e.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER || e.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) {
         const std::string name = e.axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER ? "l2" : "r2";
-        triggers_[name] = core::stick_hysteresis(value, triggers_[name], kTriggerOn, kTriggerOff);
+        triggers_[name] = core::analog::hysteresis(value, triggers_[name], kTriggerOn, kTriggerOff);
         edge(name, triggers_[name], true);
         return;
     }
@@ -822,8 +822,8 @@ void Shell::pad_axis_event(const SDL_GamepadAxisEvent& e) {
     const bool horizontal = e.axis == SDL_GAMEPAD_AXIS_LEFTX;
     const std::string neg = horizontal ? "dpad_left" : "dpad_up";
     const std::string pos = horizontal ? "dpad_right" : "dpad_down";
-    edge(neg, core::stick_hysteresis(-v, stick_dirs_[neg], on, kStickOff), false);
-    edge(pos, core::stick_hysteresis(v, stick_dirs_[pos], on, kStickOff), false);
+    edge(neg, core::analog::hysteresis(-v, stick_dirs_[neg], on, kStickOff), false);
+    edge(pos, core::analog::hysteresis(v, stick_dirs_[pos], on, kStickOff), false);
 }
 
 // The pads' analog state for the game: the stick that leans furthest and the deepest trigger across all pads
@@ -838,14 +838,14 @@ void Shell::poll_pads() {
         return;
     }
     for (SDL_Gamepad* pad : gamepads_) {
-        const double x = core::axis_from_raw(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX));
-        const double y = core::axis_from_raw(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY));
+        const double x = core::analog::axis_from_raw(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX));
+        const double y = core::analog::axis_from_raw(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY));
         if (x * x + y * y > p.lx * p.lx + p.ly * p.ly) {
             p.lx = x;
             p.ly = y;
         }
-        p.lt = std::max(p.lt, core::axis_from_raw(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER)));
-        p.rt = std::max(p.rt, core::axis_from_raw(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)));
+        p.lt = std::max(p.lt, core::analog::axis_from_raw(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER)));
+        p.rt = std::max(p.rt, core::analog::axis_from_raw(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)));
     }
     pad_ = p;
 }
@@ -868,21 +868,21 @@ bool Shell::input_flag(const char* key) const {
     return v != in->end() && v->is_boolean() && v->get<bool>();
 }
 
-core::Vec2 Shell::stick() const {
-    return core::analog_stick(pad_.lx, pad_.ly, input_number("deadzone", 0.2), input_flag("invert_y"));
+core::analog::Vec2 Shell::stick() const {
+    return core::analog::stick(pad_.lx, pad_.ly, input_number("deadzone", 0.2), input_flag("invert_y"));
 }
 
 double Shell::left_trigger() const {
-    return core::analog_trigger(pad_.lt);
+    return core::analog::trigger(pad_.lt);
 }
 
 double Shell::right_trigger() const {
-    return core::analog_trigger(pad_.rt);
+    return core::analog::trigger(pad_.rt);
 }
 
 // The move_* actions the stick holds: a raw lean past the deadzone (at least kStickHoldMin), invert_y honoured
 std::vector<std::string> Shell::stick_actions() const {
-    const double on = std::max(input_number("deadzone", 0.2), core::kStickHoldMin);
+    const double on = std::max(input_number("deadzone", 0.2), core::analog::kStickHoldMin);
     const double x = pad_.lx;
     const double y = input_flag("invert_y") ? -pad_.ly : pad_.ly;
     std::vector<std::string> out;
@@ -913,7 +913,7 @@ std::set<std::string> Shell::held_actions() const {
     return out;
 }
 
-core::Vec2 Shell::move_vector() const {
+core::analog::Vec2 Shell::move_vector() const {
     // the held move_* actions from keys and buttons only (the stick comes in as its analog value)
     const core::Bindings b = bindings();
     auto held = [this, &b](const char* action) {
@@ -928,13 +928,13 @@ core::Vec2 Shell::move_vector() const {
         }
         return 0.0;
     };
-    core::Vec2 dir{held("move_right") - held("move_left"), held("move_down") - held("move_up")};
+    core::analog::Vec2 dir{held("move_right") - held("move_left"), held("move_down") - held("move_up")};
     const double len = dir.length();
     if (len > 0) {
         dir.x /= len;
         dir.y /= len;
     }
-    return core::move_vector(dir, stick());
+    return core::analog::move_vector(dir, stick());
 }
 
 // drives and tests: as if the key or button of binding was pressed on device
@@ -1216,14 +1216,16 @@ void Shell::draw_notice() {
 void Shell::write_bug_report() {
     bug_requested_ = false;
     const std::time_t now = std::time(nullptr);
-    const std::optional<fs::path> dir = core::free_path(data_dir_, "bug", core::file_stamp(now), "");
+    namespace report = core::report;
+    const std::optional<fs::path> dir = report::free_path(data_dir_, "bug", report::file_stamp(now), "");
     if (!dir) {
         LOG_ERROR("bug", "report not saved: too many reports in one second");
         return;
     }
     std::string error;
-    const bool ok = core::write_file_atomic(*dir / "info.txt", core::bug_info(run_info(), core::utc_iso(now)), &error) &&
-                    core::write_file_atomic(*dir / "log_tail.txt", core::Log::tail(core::kBugLogLines), &error) &&
+    const std::string info = report::bug_info(run_info(), report::utc_iso(now));
+    const bool ok = core::write_file_atomic(*dir / "info.txt", info, &error) &&
+                    core::write_file_atomic(*dir / "log_tail.txt", core::Log::tail(report::kBugLogLines), &error) &&
                     core::write_file_atomic(*dir / "settings.json", settings_text(settings_) + "\n", &error);
     if (!ok) {
         LOG_ERROR("bug", "report not saved: " << error);

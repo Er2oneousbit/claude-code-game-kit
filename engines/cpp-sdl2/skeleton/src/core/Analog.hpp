@@ -4,31 +4,37 @@
 //           deadzone and invert_y, so a racer steers by how far the stick leans and brakes by how far a trigger is
 //           in; the move direction that adds the held move_* actions to the stick; and the hysteresis that turns a
 //           stick axis into d-pad presses for the menus. The same rules as the Bevy shell's logic/analog.rs.
-// Usage   : const core::Vec2 s = core::analog_stick(raw_x, raw_y, deadzone, invert_y);
-//           const double gas = core::analog_trigger(raw_r2);
-//           const core::Vec2 dir = core::move_vector(held_dir, s);      // length 0..1
-//           on = core::stick_hysteresis(lean, on, std::max(kStickOn, deadzone), kStickOff);
+// Usage   : const core::analog::Vec2 s = core::analog::stick(raw_x, raw_y, deadzone, invert_y);
+//           const double gas = core::analog::trigger(raw_r2);
+//           const core::analog::Vec2 dir = core::analog::move_vector(held_dir, s);   // length 0..1
+//           on = core::analog::hysteresis(lean, on, std::max(kStickOn, deadzone), kStickOff);
 // Notes   : Header-only, no SDL. The stick deadzone is radial (the length of the vector, not each axis), and what is
 //           left is rescaled to 0..1, so a stick just past the deadzone gives a small value instead of jumping to the
 //           deadzone's size; the direction never changes. Axes follow SDL: x grows right, y grows DOWN (the game's
 //           screen space), so a stick pushed up gives a negative y; invert_y flips y. Triggers have their own small
 //           fixed deadzone: input.deadzone is the "Stick deadzone" setting, and a trigger resting at 0.1 would
 //           otherwise lose a fifth of its travel. NaN and infinities (a broken driver) count as 0.
+//           Everything here lives in core::analog, not core: games keep their own code in core:: too, and a game's
+//           own core::Vec2 (a math header) must not collide with the kit's. Convert at the edge if the game has one:
+//           const core::analog::Vec2 s = shell.stick(); core::Vec2 v{s.x, s.y};
 //
 // Pseudocode:
-//   analog_stick(x, y, dz, inv): y = -y if inv -> len = |(x, y)| -> len <= dz: (0, 0)
+//   stick(x, y, dz, inv): y = -y if inv -> len = |(x, y)| -> len <= dz: (0, 0)
 //     -> scale = min((len - dz) / (1 - dz), 1) / len -> (x * scale, y * scale)
-//   analog_trigger(v, dz): v = clamp(v, 0, 1) -> v <= dz: 0 -> (v - dz) / (1 - dz)
+//   trigger(v, dz): v = clamp(v, 0, 1) -> v <= dz: 0 -> (v - dz) / (1 - dz)
 //   move_vector(held, stick): held + stick, cut to length 1
-//   stick_hysteresis(lean, was, on, off): was ? lean > off : lean > on
+//   hysteresis(lean, was, on, off): was ? lean > off : lean > on
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): moved into core::analog (stick, trigger and
+//           hysteresis without the old prefixes, as the Bevy shell's analog::stick / analog::trigger), so a game's
+//           own core::Vec2 still compiles
 // ---------------------------------------------------------------------------
 #pragma once
 
 #include <algorithm>
 #include <cmath>
 
-namespace core {
+namespace core::analog {
 
 // ---- Tunables ----
 constexpr double kTriggerDeadzone = 0.05;  // trigger travel ignored at rest (0 to 1)
@@ -52,7 +58,7 @@ inline double axis_from_raw(int raw) {
 }
 
 // The stick after the radial deadzone and invert_y: each axis -1..1, the vector's length 0..1.
-inline Vec2 analog_stick(double x, double y, double deadzone, bool invert_y) {
+inline Vec2 stick(double x, double y, double deadzone, bool invert_y) {
     x = finite_or_zero(x);
     y = finite_or_zero(y);
     if (invert_y) {
@@ -68,7 +74,7 @@ inline Vec2 analog_stick(double x, double y, double deadzone, bool invert_y) {
 }
 
 // A trigger (0 at rest, 1 fully in) after its deadzone, rescaled to 0..1.
-inline double analog_trigger(double value, double deadzone = kTriggerDeadzone) {
+inline double trigger(double value, double deadzone = kTriggerDeadzone) {
     const double v = std::clamp(finite_or_zero(value), 0.0, 1.0);
     const double dz = std::clamp(finite_or_zero(deadzone), 0.0, kMaxDeadzone);
     return v <= dz ? 0.0 : (v - dz) / (1.0 - dz);
@@ -88,11 +94,11 @@ inline Vec2 move_vector(Vec2 held, Vec2 stick) {
 
 // One stick direction as a d-pad button with hysteresis: it goes on past `on` and off again only below `off`, so a
 // stick resting near the threshold does not flicker. lean is the axis value towards that direction (>= 0 = towards).
-inline bool stick_hysteresis(double lean, bool was_on, double on, double off) {
+inline bool hysteresis(double lean, bool was_on, double on, double off) {
     lean = finite_or_zero(lean);
     return was_on ? lean > off : lean > on;
 }
 
-}  // namespace core
+}  // namespace core::analog
 
 // {{FOOTER}}
