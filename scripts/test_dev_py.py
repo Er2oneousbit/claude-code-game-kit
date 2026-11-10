@@ -1914,6 +1914,34 @@ class DataDirInPackedFolders(TempRoot):
         self.allowed(dev, "tests/sd", "data/golden/sd")     # excluded by every preset
         self.allowed(dev, str(Path(tempfile.gettempdir()) / "elsewhere"))   # outside the project: never exported
 
+    def test_godot_smoke_keeps_its_data_folder_out_of_all_resources(self):
+        # Godot 4.7.2 exported build/smoke-data/settings.json and captures/pc/settings.json (all_resources takes
+        # every .json); a .gdignore keeps a folder out of the import and the export
+        dev = load("godot")
+        dev.ROOT = self.root
+        dev.ensure_imported = lambda godot: 0
+        dev.run = lambda *a, **kw: (1, "")
+        args = argparse.Namespace(data_dir="", compare="", screenshot="", record="", drive="", locale="", frames=10,
+                                  debug=False)
+        quiet(dev.cmd_smoke, args, "godot")
+        self.assertTrue((self.root / "build" / "smoke-data" / ".gdignore").is_file())
+        args.data_dir = "captures/access/pc"
+        quiet(dev.cmd_smoke, args, "godot")
+        self.assertTrue((self.root / "captures" / "access" / "pc" / ".gdignore").is_file())
+        game = self.root / "levels"                          # a folder of the game's own: never hidden
+        game.mkdir()
+        (game / "one.tscn").write_text("[gd_scene]\n", encoding="utf-8")
+        args.data_dir = "levels"
+        _, text = quiet(dev.cmd_smoke, args, "godot")
+        self.assertFalse((game / ".gdignore").exists())
+        self.assertIn("[warn] levels/ holds files of the game (one.tscn)", text)
+        outside = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(outside), True)
+        dev.keep_out_of_export(outside)
+        self.assertFalse((outside / ".gdignore").exists())
+        dev.keep_out_of_export(self.root)                    # never the whole project
+        self.assertFalse((self.root / ".gdignore").exists())
+
     def test_unity_reads_data_dirs_from_gamekitbuild(self):
         dev, called = self.engine("unity")
         dev.run_tests = called

@@ -633,6 +633,32 @@ def data_dir_in_pack(given):
     return False
 
 
+# #271: files that make a folder part of the game for Godot (scripts, scenes, resources, imported assets)
+GODOT_OWN_SUFFIXES = (".gd", ".tscn", ".scn", ".tres", ".res", ".import", ".gdshader", ".uid", ".godot", ".cs")
+
+
+def keep_out_of_export(folder):
+    """#271: a .gdignore in a smoke run's data folder inside the project. The presets export all_resources, and Godot
+    4.7.2 put build/smoke-data/settings.json and captures/<x>/settings.json into the .pck (a .json is a resource);
+    with a .gdignore Godot neither imports nor exports the folder, and the game still reads and writes it. Never in
+    a folder holding Godot's own files (GODOT_OWN_SUFFIXES): there it would hide the game's scenes and assets."""
+    try:
+        rel = folder.resolve().relative_to(ROOT.resolve())
+    except ValueError:
+        return                                        # outside the project: never exported
+    if not rel.parts or not folder.is_dir():
+        return
+    own = next((p for p in folder.rglob("*") if p.suffix.lower() in GODOT_OWN_SUFFIXES), None)
+    if own:
+        print(f"[warn] {rel.as_posix()}/ holds files of the game ({own.relative_to(folder).as_posix()}): no .gdignore "
+              "there, so an export ships this run's .json files with them. Use a folder of its own, e.g. "
+              "captures/<name>")
+        return
+    mark = folder / ".gdignore"
+    if not mark.exists():
+        mark.write_bytes(b"")
+
+
 def smoke_data_dir(args):
     """The game's data folder for this smoke run: --data-dir as given (never wiped), else a fresh build/smoke-data/."""
     if args.data_dir:
@@ -675,6 +701,7 @@ def cmd_smoke(args, godot):
     if rc:
         return rc
     data_dir = smoke_data_dir(args)
+    keep_out_of_export(data_dir)   # #271: all_resources would ship its .json files
     dbg(f"data folder {data_dir}")
     user = game_args(args, data_dir)
     if args.drive:
