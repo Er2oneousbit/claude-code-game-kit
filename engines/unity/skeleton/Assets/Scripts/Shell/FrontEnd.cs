@@ -61,10 +61,7 @@ namespace {{GAME_SLUG}}.Shell
         private void Awake()
         {
             I = this;
-            if (Shell.I == null)
-            {
-                gameObject.AddComponent<Shell>();      // Shell.Awake runs now
-            }
+            Shell.Ensure(gameObject);     // boots the sibling Shell even when its Awake has not run yet
             BuildPanel();
             Shell.I.SettingsChanged += OnSettingsChanged;
             Shell.I.LocaleChanged += RebuildAll;

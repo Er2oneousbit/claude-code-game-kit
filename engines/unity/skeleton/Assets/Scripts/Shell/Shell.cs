@@ -8,7 +8,8 @@
 //           GameSettings.Bool(Shell.I.Settings, "access", "reduce_motion")
 //           Shell.I.SetValue("audio", "master", 0.5);     // applied at once; SaveSettings() writes the file
 //           Shell.I.SetObjective(Shell.I.T("demo.objective"));  Shell.I.RecordLine("Guide", "Hello")
-// Notes   : Run options come from environment variables (dev.py smoke sets them for the PlayMode run) or the
+// Notes   : FrontEnd boots it through Shell.Ensure (Awake order between sibling components is not fixed; a kit
+//           drive once talked to one Shell while the screens listened to another). Run options come from environment variables (dev.py smoke sets them for the PlayMode run) or the
 //           player's command line: GAMEKIT_DATA_DIR / --data-dir <dir> (default Application.persistentDataPath),
 //           GAMEKIT_LOCALE / --locale <code> (this run only; "pseudo" is the test locale), GAMEKIT_DRIVE / --drive
 //           <scenario> (SmokeDrive), GAMEKIT_SMOKE=1 / --smoke. Files in the data folder: settings.json (+ .bak).
@@ -61,9 +62,44 @@ namespace {{GAME_SLUG}}.Shell
         public event Action LocaleChanged;
 
         private readonly HashSet<string> _missingKeys = new HashSet<string>();
+        private bool _booted;
 
         private void Awake()
         {
+            Boot();
+        }
+
+        /// <summary>The scene's Shell, booted: the one on this GameObject, else the first in the scene, else a new
+        /// one. Awake order between components is not fixed, so FrontEnd calls this instead of trusting Shell.I.</summary>
+        public static Shell Ensure(GameObject host)
+        {
+            Shell shell = host.GetComponent<Shell>();
+            if (shell == null)
+            {
+                shell = I != null ? I : FindFirstObjectByType<Shell>();
+            }
+            if (shell == null)
+            {
+                shell = host.AddComponent<Shell>();      // Awake boots it
+            }
+            shell.Boot();
+            return shell;
+        }
+
+        /// <summary>Loads everything once (a second call does nothing); a second Shell in the scene stays passive.</summary>
+        public void Boot()
+        {
+            if (_booted)
+            {
+                return;
+            }
+            _booted = true;
+            if (I != null && I != this)
+            {
+                Debug.LogWarning("[WARN][shell] a second Shell component is in the scene: it is ignored");
+                enabled = false;
+                return;
+            }
             I = this;
             Version = Application.version;
             ParseOptions();
