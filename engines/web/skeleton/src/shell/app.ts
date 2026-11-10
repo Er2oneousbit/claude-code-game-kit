@@ -170,7 +170,11 @@ export class Shell {
       queueMicrotask(() => this.toast("toast.repaired", { n: problems.length }));
     }
 
-    this.input = new ShellInput(() => this.settings.input.bindings, () => this.settings.input.deadzone);
+    this.input = new ShellInput(
+      () => this.settings.input.bindings,
+      () => this.settings.input.deadzone,
+      () => this.settings.input.invert_y,
+    );
     this.input.onPress = (binding, actions) => this.route(binding, actions);
     this.input.onRawKey = (code) => {
       if (code === "F8" && this.debugBuild) this.bugReport();

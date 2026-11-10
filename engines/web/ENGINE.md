@@ -14,7 +14,7 @@ index.html          page shell, loads src/main.ts
 src/main.ts         creates the Phaser.Game (size, scale mode, scene list)
 src/core/           engine-free logic: Log, juice (shake, hitstop, ease, follow, buffer, coyote, spring, flash limiter,
                     hold toggle, auto repeat), settings, bindings, saves, i18n, user data, dialogue, audio director, music director,
-                    audio access. No Phaser import. Unit tested (golden vectors).
+                    audio access, analog (stick and trigger shaping). No Phaser import. Unit tested (golden vectors).
 src/shell/          the front end: HTML screens over the canvas, input, subtitles, smoke driver (no Phaser import)
 src/game/           scenes and game objects (Phaser lives here): main (play), juice (demo), backdrop
 data/               i18n/<locale>.json strings, dialogue/*.built.json subtitles, golden/ test vectors
@@ -34,6 +34,9 @@ dist/               production build (git-ignored): what you upload
 - Tunables in one module (for example `tuning.ts` in src/game) or JSON in public/assets/data, never literals inside logic.
 - Use the `dt` from `update(time, delta)` (milliseconds, convert to seconds and clamp), never assume 60 fps.
 - Errors: `Log.error` for anything wrong at runtime. It reaches the console, and `smoke` fails on console errors.
+- Input: read it through `shell.input`: `isDown(action)` / `takePress(action)` for the player's bindings, `stick()`
+  (the left stick with the player's radial deadzone and invert_y, up is -y), `triggers()` (0 to 1) and `heldActions()`.
+  The stick also holds `move_*`, so digital movement works with it out of the box.
 
 - **Shaders:** `addKitFilter(sprite, "flash")` (src/shaders/kitFilter.ts) puts a recipe on a game object or a camera
   (`addKitFilter(this.cameras.main, "vignette", { strength: 0.4 })`) and returns a controller: tween

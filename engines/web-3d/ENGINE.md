@@ -18,7 +18,8 @@ index.html          full-window page, loads src/main.ts
 src/main.ts         renderer, frame loop (setAnimationLoop + THREE.Timer), resize, BOOT_OK after the first frame
 src/core/           engine-free logic: Log, juice (shake, hitstop, ease, follow camera, follow spring, buffer, coyote,
                     spring, flash limiter, hold toggle), settings, bindings, saves, i18n, user data, dialogue, audio
-                    director, music director, audio access. No three import. Unit tested (golden vectors).
+                    director, music director, audio access, analog (stick deadzone and trigger shaping for
+                    navigator.getGamepads values). No three import. Unit tested (golden vectors).
                     No src/shell/: there are no menu screens, build them on src/core (docs/ENGINE_FLOW.md).
 src/game/           the world: scene, camera, lights, objects, update(dt)
 tests/              Vitest tests for src/core (*.test.ts)
