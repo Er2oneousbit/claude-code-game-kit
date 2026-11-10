@@ -42,8 +42,9 @@ ProjectSettings/         project config (text, edit with care)
 ```
 
 ## The shell (the kit's screens, #168)
-- `python tools/dev.py exec GameKitScenes.CreateShellScene` makes `Assets/Scenes/Shell.unity` (a camera and the
-  FrontEnd component) and puts it first in Build Settings: the game opens on the title. Every screen is built in
+- `python tools/dev.py exec GameKitScenes.CreateShellScene` makes the shell scene (`Shell.unity` under `Assets/Scenes/`:
+  a camera and the FrontEnd component) and puts it first in Build Settings: the game opens on the title. Until then
+  `smoke --drive` exits 2 and says so. Every screen is built in
   code on a UI Toolkit panel (1280x720 reference, scaled so the smaller side fits), so there is no UXML or USS to
   keep in step; the panel theme is Unity's default runtime theme (`Assets/Resources/GameKit/GameKitTheme.tss`).
 - Settings rows come from `GameSettings.Fields(section)` (the schema): a new field needs its `setting.<section>.<field>`
