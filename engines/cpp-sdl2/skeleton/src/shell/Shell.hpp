@@ -138,12 +138,12 @@ public:
     double game_speed() const { return access_number("game_speed", 1.0); }
     double timing_scale() const { return access_number("timing_scale", 1.0); }
     bool is_down(const std::string& action) const;    // a bound key or button of the action is held (or the stick: move_*)
-    // analog input (#274), zero without a pad
-    core::Vec2 stick() const;                         // the left stick: deadzone (radial, rescaled), invert_y; +y down
+    // analog input (#274), zero without a pad; core::analog::Vec2 is the kit's own (core/Analog.hpp)
+    core::analog::Vec2 stick() const;                 // the left stick: deadzone (radial, rescaled), invert_y; +y down
     double left_trigger() const;                      // 0 at rest .. 1 fully in
     double right_trigger() const;
     std::set<std::string> held_actions() const;       // game actions held now (no ui_*), the stick's move_* included
-    core::Vec2 move_vector() const;                   // the held move_* actions plus the stick, length 0..1
+    core::analog::Vec2 move_vector() const;           // the held move_* actions plus the stick, length 0..1
     void set_run_seed(const std::string& seed) { seed_ = seed; }   // named in crash files and bug reports
     void notice(const std::string& text);             // a short message over any screen ("Bug report saved.")
     Rgb palette(const std::string& name, Rgb fallback) const;   // data/access/colours.json for the colour-blind mode
@@ -265,7 +265,7 @@ private:
     double input_number(const char* key, double fallback) const;   // settings.input.<key>
     bool input_flag(const char* key) const;
     std::vector<std::string> stick_actions() const;
-    core::RunInfo run_info() const;
+    core::report::RunInfo run_info() const;
     void write_bug_report();
     std::string line_text(const core::SubtitleLine& line) const;   // through the string table, pseudo-aware
     void pad_button_event(const SDL_GamepadButtonEvent& e, bool down);

@@ -15,7 +15,7 @@
 #include "core/AtomicFile.hpp"
 #include "core/Log.hpp"
 
-namespace core {
+namespace core::report {
 
 namespace fs = std::filesystem;
 
@@ -147,6 +147,6 @@ std::optional<fs::path> write_crash(const std::string& error, bool from_signal, 
     return std::nullopt;
 }
 
-}  // namespace core
+}  // namespace core::report
 
 // {{FOOTER}}

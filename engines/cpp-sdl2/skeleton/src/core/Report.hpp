@@ -3,9 +3,9 @@
 // Purpose : Crash files and bug reports (#275): the text of a crash file (version, time, screen, the error, the log
 //           tail, the settings), the info file of the F8 bug report, free file names per second, and the crash
 //           context that main.cpp's handlers write through when the game stops on an exception or a fatal signal.
-// Usage   : core::set_crash_context({data_dir, base_info, [&]{ return info_now(); }, [&]{ return settings_text(); }});
-//           if (auto file = core::write_crash("std::runtime_error: boom")) std::cout << "CRASH_WRITTEN " << ...;
-//           core::crash_report(info, error, core::utc_iso(now), core::Log::tail(60), settings_text)   // the text
+// Usage   : core::report::set_crash_context({data_dir, base, [&]{ return info_now(); }, [&]{ return settings(); }});
+//           if (auto file = core::report::write_crash("std::runtime_error: boom")) std::cout << "CRASH_WRITTEN " ...;
+//           core::report::crash_report(info, error, core::report::utc_iso(now), core::Log::tail(60), settings_text)
 // Notes   : No SDL: the shell fills the context at boot (the user-data folder, the game's name and version, and
 //           callbacks for the screen, locale and settings) and clears the callbacks when it goes. Before that, or
 //           with no data folder, crash files go to the system's temp folder. A crash file must never hide the crash:
@@ -14,12 +14,16 @@
 //           effort (allocating there is not async-signal-safe, but the process is going down anyway).
 //           File names use UTC: crashes/crash_20261110_101500.txt, then crash_20261110_101500_2.txt in the same
 //           second; bug reports are folders, bug_20261110_101500/.
+//           Everything here lives in core::report, not core: games keep their own code in core:: too, and names
+//           like RunInfo (a roguelike's run) or free_path are ones a game may well have.
 //
 // Pseudocode:
 //   write_crash(error): dir = context.data_dir or temp -> info = context.info() (not from a signal)
 //     -> text = crash_report(info, error, now, Log tail, context.settings()) -> path = free_path(dir/crashes, "crash")
 //     -> write_file_atomic(path, text) -> path
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): moved into core::report, so a game's own core::RunInfo
+//           or core::free_path still compiles
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -30,7 +34,7 @@
 #include <optional>
 #include <string>
 
-namespace core {
+namespace core::report {
 
 // ---- Tunables ----
 constexpr const char* kCrashDir = "crashes";      // inside the user-data folder
@@ -78,6 +82,6 @@ void clear_crash_callbacks();                       // the shell is going: keep 
 std::optional<std::filesystem::path> write_crash(const std::string& error, bool from_signal = false,
                                                  std::string* why = nullptr);
 
-}  // namespace core
+}  // namespace core::report
 
 // {{FOOTER}}

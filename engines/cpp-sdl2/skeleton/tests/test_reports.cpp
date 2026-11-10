@@ -47,19 +47,19 @@ bool contains(const std::string& text, const std::string& part) {
 }  // namespace
 
 TEST_CASE("UTC stamps name the files and date the reports") {
-    CHECK(core::utc_iso(0) == "1970-01-01T00:00:00Z");
-    CHECK(core::file_stamp(86400 + 3661) == "19700102_010101");
+    CHECK(core::report::utc_iso(0) == "1970-01-01T00:00:00Z");
+    CHECK(core::report::file_stamp(86400 + 3661) == "19700102_010101");
 }
 
 TEST_CASE("a crash report names the run, the error, the log tail and the settings") {
-    core::RunInfo info;
+    core::report::RunInfo info;
     info.game = "Test";
     info.version = "0.1.0";
     info.build = "debug";
     info.screen = "play";
     info.locale = "en";
-    const std::string text = core::crash_report(info, "exception: boom", "2026-11-10T10:00:00Z", "[INFO][core] BOOT_OK\n",
-                                                "{\"language\": \"en\"}");
+    const std::string text = core::report::crash_report(info, "exception: boom", "2026-11-10T10:00:00Z",
+                                                        "[INFO][core] BOOT_OK\n", "{\"language\": \"en\"}");
     CHECK(text.rfind("Test crash report\n", 0) == 0);
     CHECK(contains(text, "version: 0.1.0\n"));
     CHECK(contains(text, "screen: play\n"));
@@ -68,55 +68,55 @@ TEST_CASE("a crash report names the run, the error, the log tail and the setting
     CHECK(contains(text, "log tail:\n[INFO][core] BOOT_OK\n"));
     CHECK(contains(text, "settings:\n{\"language\": \"en\"}\n"));
     // before the settings exist, and with no log yet
-    const std::string early = core::crash_report(core::RunInfo{}, "boom", "t", "", "");
+    const std::string early = core::report::crash_report(core::report::RunInfo{}, "boom", "t", "", "");
     CHECK(contains(early, "(no log lines)"));
     CHECK(contains(early, "(not loaded yet)"));
-    CHECK(contains(core::bug_info(info, "t"), "Test bug report\n"));
+    CHECK(contains(core::report::bug_info(info, "t"), "Test bug report\n"));
 }
 
 TEST_CASE("free_path counts up within a second and gives up after the limit") {
     TempDir dir;
-    const auto first = core::free_path(dir.path, "crash", "20261110_100000", ".txt");
+    const auto first = core::report::free_path(dir.path, "crash", "20261110_100000", ".txt");
     REQUIRE(first.has_value());
     CHECK(first->filename() == "crash_20261110_100000.txt");
     REQUIRE(core::write_file_atomic(*first, "x"));
-    const auto second = core::free_path(dir.path, "crash", "20261110_100000", ".txt");
+    const auto second = core::report::free_path(dir.path, "crash", "20261110_100000", ".txt");
     REQUIRE(second.has_value());
     CHECK(second->filename() == "crash_20261110_100000_2.txt");
-    for (int n = 2; n <= core::kMaxSameSecond; ++n) {
+    for (int n = 2; n <= core::report::kMaxSameSecond; ++n) {
         REQUIRE(core::write_file_atomic(dir.path / ("crash_20261110_100000_" + std::to_string(n) + ".txt"), "x"));
     }
-    CHECK_FALSE(core::free_path(dir.path, "crash", "20261110_100000", ".txt").has_value());
+    CHECK_FALSE(core::report::free_path(dir.path, "crash", "20261110_100000", ".txt").has_value());
 }
 
 TEST_CASE("write_crash puts the file in crashes/ of the data folder with the shell's details") {
     TempDir dir;
     LOG_INFO("test", "a line the crash file must carry");
-    core::CrashContext context;
+    core::report::CrashContext context;
     context.data_dir = dir.path;
     context.base.game = "Test";
     context.info = [] {
-        core::RunInfo i;
+        core::report::RunInfo i;
         i.game = "Test";
         i.screen = "juice_demo";
         return i;
     };
     context.settings = [] { return std::string("{\"audio\": {}}"); };
-    core::set_crash_context(context);
+    core::report::set_crash_context(context);
     std::string why;
-    const auto file = core::write_crash("exception: planted", false, &why);
+    const auto file = core::report::write_crash("exception: planted", false, &why);
     REQUIRE_MESSAGE(file.has_value(), why);
-    CHECK(file->parent_path() == dir.path / core::kCrashDir);
+    CHECK(file->parent_path() == dir.path / core::report::kCrashDir);
     const std::string text = core::read_file(*file).value_or("");
     CHECK(contains(text, "screen: juice_demo\n"));
     CHECK(contains(text, "a line the crash file must carry"));
     CHECK(contains(text, "{\"audio\": {}}"));
     // from a signal handler: no callbacks (only the base details), still a file
-    const auto from_signal = core::write_crash("fatal signal SIGSEGV", true, &why);
+    const auto from_signal = core::report::write_crash("fatal signal SIGSEGV", true, &why);
     REQUIRE_MESSAGE(from_signal.has_value(), why);
     CHECK_FALSE(contains(core::read_file(*from_signal).value_or(""), "juice_demo"));
-    core::clear_crash_callbacks();
-    core::set_crash_context({});
+    core::report::clear_crash_callbacks();
+    core::report::set_crash_context({});
 }
 
 TEST_CASE("the log keeps its last lines for crash files and bug reports") {
