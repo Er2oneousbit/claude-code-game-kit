@@ -197,8 +197,8 @@ python tools/dev.py test --filter GameKit.Screens                       # the sc
 language. Screens for `show:`: title, main_menu, settings, pause, help, history, credits, loading, subtitle. The
 access report describes the 1920x1080 design (scaling "exact": the view scales it to the window), each text's size,
 colours and whether it fits its column (measured with Slate's font service), and which rows the arrow keys reach; a
-`res=` option is noted, not applied. Paths given to `--screenshot` and `--data-dir` may not contain spaces, quotes,
-`;` or `,` (Unreal's command line) **(verify)**.
+`res=` option is noted, not applied. Paths given to `--screenshot` and `--data-dir` may not contain spaces or quotes
+(Unreal's command line reads a `-Name=value` up to the next space) **(verify: a quoted path may work on your version)**.
 
 ## Source control (Git + LFS)
 - `.gitattributes` in this repo routes `.uasset`, `.umap`, textures, audio, and meshes through LFS. Run `git lfs install` before the first commit.

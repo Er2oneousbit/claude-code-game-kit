@@ -472,9 +472,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensDriveTest, "GameKit.Screens.Driv
 bool FGameKitScreensDriveTest::RunTest(const FString& Parameters)
 {
 	FString Name = TEXT("menus"), DataDir, Locale;
-	FParse::Value(FCommandLine::Get(), TEXT("GameKitDrive="), Name);
-	FParse::Value(FCommandLine::Get(), TEXT("GameKitDataDir="), DataDir);
-	FParse::Value(FCommandLine::Get(), TEXT("GameKitLocale="), Locale);
+	FParse::Value(FCommandLine::Get(), TEXT("GameKitDrive="), Name, /*bShouldStopOnSeparator*/ false);
+	FParse::Value(FCommandLine::Get(), TEXT("GameKitDataDir="), DataDir, /*bShouldStopOnSeparator*/ false);
+	FParse::Value(FCommandLine::Get(), TEXT("GameKitLocale="), Locale, /*bShouldStopOnSeparator*/ false);
 	if (!FGameKitShellDrive::IsKnown(Name))
 	{
 		AddError(FString::Printf(TEXT("unknown drive %s (%s)"), *Name, *FGameKitShellDrive::KnownNames()));
@@ -507,19 +507,19 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensShowTest, "GameKit.Screens.Show"
 bool FGameKitScreensShowTest::RunTest(const FString& Parameters)
 {
 	FString Shot, Name = TEXT("show:title"), Size;
-	if (!FParse::Value(FCommandLine::Get(), TEXT("GameKitScreenshot="), Shot) || Shot.IsEmpty())
+	if (!FParse::Value(FCommandLine::Get(), TEXT("GameKitScreenshot="), Shot, /*bShouldStopOnSeparator*/ false) || Shot.IsEmpty())
 	{
 		AddInfo(TEXT("no -GameKitScreenshot=<path>: nothing to draw (dev.py smoke --drive show:<screen> --screenshot gives one)"));
 		return true;
 	}
-	FParse::Value(FCommandLine::Get(), TEXT("GameKitDrive="), Name);
+	FParse::Value(FCommandLine::Get(), TEXT("GameKitDrive="), Name, /*bShouldStopOnSeparator*/ false);
 	if (!Name.StartsWith(TEXT("show:")) || !FGameKitShellDrive::IsKnown(Name))
 	{
 		AddError(FString::Printf(TEXT("a screenshot needs -GameKitDrive=show:<screen> (%s)"), *FGameKitShellDrive::KnownNames()));
 		return false;
 	}
 	FIntPoint Dim(DefaultShotW, DefaultShotH);
-	if (FParse::Value(FCommandLine::Get(), TEXT("GameKitSize="), Size))
+	if (FParse::Value(FCommandLine::Get(), TEXT("GameKitSize="), Size, /*bShouldStopOnSeparator*/ false))
 	{
 		FString W, H;
 		if (Size.Split(TEXT("x"), &W, &H))
@@ -538,7 +538,7 @@ bool FGameKitScreensShowTest::RunTest(const FString& Parameters)
 	Opt.DataDir = Temp.Path;
 	Opt.GameName = FApp::GetProjectName();
 	Opt.Version = TEXT("dev");
-	FParse::Value(FCommandLine::Get(), TEXT("GameKitLocale="), Opt.Locale);
+	FParse::Value(FCommandLine::Get(), TEXT("GameKitLocale="), Opt.Locale, /*bShouldStopOnSeparator*/ false);
 	Opt.bAutomated = true;
 	TSharedRef<FGameKitShellModel> M = MakeShared<FGameKitShellModel>(Opt);
 	FGameKitShellDrive Drive(M, &PrintLine);

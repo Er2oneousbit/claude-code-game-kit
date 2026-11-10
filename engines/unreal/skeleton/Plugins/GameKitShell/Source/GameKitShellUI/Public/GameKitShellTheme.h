@@ -56,6 +56,7 @@ namespace GameKitTheme
 	const FColor Warn(255, 115, 89);
 	const FColor Bar(102, 179, 255);
 	const FColor Overlay(0, 0, 0, 158);  // 0.62 alpha
+	const FColor Outline(0, 0, 0);       // around subtitle text, over the game
 	}
 
 	/** A theme colour for Slate (linear space). */

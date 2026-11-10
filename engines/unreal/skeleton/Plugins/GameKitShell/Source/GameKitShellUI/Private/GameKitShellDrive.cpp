@@ -38,7 +38,7 @@ namespace
 	const TCHAR* DemoLineKey = TEXT("juice.objective");
 
 	TSharedPtr<FJsonValue> TextEntry(const FString& S, float Px, const FColor& Fg, const FColor& Back, bool bFits, const FString& Node,
-	                            const TArray<TPair<FColor, double>>* OverGame = nullptr)
+	                            const TArray<TPair<FColor, double>>* OverGame = nullptr, const FColor* Outline = nullptr)
 	{
 		TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
 		O->SetStringField(TEXT("node"), Node);
@@ -58,6 +58,10 @@ namespace
 		else
 		{
 			O->SetStringField(TEXT("bg"), GameKitTheme::Hex(Back));
+		}
+		if (Outline)
+		{
+			O->SetStringField(TEXT("outline"), GameKitTheme::Hex(*Outline));
 		}
 		O->SetBoolField(TEXT("fits"), bFits);
 		O->SetBoolField(TEXT("covered"), false);
@@ -403,7 +407,9 @@ TArray<TSharedPtr<FJsonValue>> FGameKitShellDrive::Texts() const
 			const bool bFocus = I == Focused;
 			const FColor Back = bFocus ? Colour::RowFocus : Base;
 			const FString Node = Prefix + R.Id;
-			Add(R.Label ? R.Label() : FString(), BodyPx, bFocus ? Colour::Accent : Colour::Text, Back, LabelWidth - 2 * RowPadX - MarkerW, Node + TEXT(".label"));
+			const bool bWide = R.Kind == EGameKitRowKind::Button;   // a button's label spans the row (no value column)
+			Add(R.Label ? R.Label() : FString(), BodyPx, bFocus ? Colour::Accent : Colour::Text, Back, (bWide ? ListWidth : LabelWidth) - 2 * RowPadX - MarkerW,
+			    Node + TEXT(".label"));
 			const float ValueW = ListWidth - LabelWidth - 2 * RowPadX;
 			if (R.Kind == EGameKitRowKind::Binding && R.CellText)
 			{
@@ -413,7 +419,7 @@ TArray<TSharedPtr<FJsonValue>> FGameKitShellDrive::Texts() const
 					    Node + FString::Printf(TEXT(".slot%d"), Cell));
 				}
 			}
-			else if (R.Value)
+			else if (R.Value && !bWide)
 			{
 				Add(R.Value(), BodyPx, Colour::Text, Back, ValueW, Node + TEXT(".value"));
 			}
@@ -430,7 +436,7 @@ TArray<TSharedPtr<FJsonValue>> FGameKitShellDrive::Texts() const
 		{
 			Add(Model->T(TEXT("consent.title")), HeadingPx, Colour::Text, Colour::Panel, ConsentW - 2 * PanelPad, TEXT("consent.title"));
 			Out.Add(TextEntry(Model->T(TEXT("consent.body")), BodyPx * Scale, Colour::Text, Colour::Panel, true, TEXT("consent.body")));   // wrapped
-			Rows(S->Dialog, S->DialogFocus, ConsentW / 3, ConsentW / 3, Colour::Panel, TEXT("consent."));
+			Rows(S->Dialog, S->DialogFocus, ConsentW - 2 * PanelPad, ConsentW - 2 * PanelPad, Colour::Panel, TEXT("consent."));
 		}
 	}
 	else if (Name == TEXT("main_menu"))
@@ -483,7 +489,7 @@ TArray<TSharedPtr<FJsonValue>> FGameKitShellDrive::Texts() const
 		Layers.Emplace(Colour::Panel, Model->Num(TEXT("access"), TEXT("subtitle_background")));
 		const FGameKitSaidLine& Line = Model->CurrentSubtitle();
 		const FString Shown = (Model->Flag(TEXT("access"), TEXT("speaker_names")) && !Line.Speaker.IsEmpty() ? Line.Speaker + TEXT(": ") : FString()) + Line.Text;
-		Out.Add(TextEntry(Shown, SubtitlePx[Index] * Scale, Colour::Text, Colour::Panel, true, TEXT("subtitle.text"), &Layers));
+		Out.Add(TextEntry(Shown, SubtitlePx[Index] * Scale, Colour::Text, Colour::Panel, true, TEXT("subtitle.text"), &Layers, &Colour::Outline));
 	}
 	return Out;
 }

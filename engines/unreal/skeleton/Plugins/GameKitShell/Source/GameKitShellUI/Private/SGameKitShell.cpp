@@ -40,6 +40,7 @@ namespace
 	constexpr float TabPadX = 18.f, TabPadY = 8.f;
 	constexpr float ListTop = 24.f;        // gap between the tab bar and the rows
 	constexpr float PageLineGap = 6.f;
+	constexpr int32 SubtitleOutlinePx = 2;
 
 	const FSlateBrush* White() { return FCoreStyle::Get().GetBrush("WhiteBrush"); }
 }
@@ -170,9 +171,12 @@ TSharedRef<SWidget> SGameKitShell::RowWidget(const FGameKitRow& Row, bool bFocus
 	}
 	else
 	{
+		// a button row (Back, Reset, a layout) has no value: its label may take the whole row, so a sentence
+		// still fits at 200 % text (the access sweep found "Reset controls to defaults" clipped in the label column)
+		const bool bWide = Row.Kind == EGameKitRowKind::Button;
 		Line->AddSlot().AutoWidth().VAlign(VAlign_Center)
 		[
-			SNew(SBox).WidthOverride(LabelWidth - MarkerW - 2 * RowPadX)
+			SNew(SBox).WidthOverride((bWide ? ListWidth : LabelWidth) - MarkerW - 2 * RowPadX)
 			[
 				Text(Label, BodyPx, bFocused ? Colour::Accent : Colour::Text, true)
 			]
@@ -201,7 +205,7 @@ TSharedRef<SWidget> SGameKitShell::RowWidget(const FGameKitRow& Row, bool bFocus
 				];
 			}
 		}
-		else if (Row.Value)
+		else if (Row.Value && !bWide)
 		{
 			Line->AddSlot().FillWidth(1.f).VAlign(VAlign_Center)
 			[
@@ -286,14 +290,8 @@ TSharedRef<SWidget> SGameKitShell::Title(const FGameKitScreen& S)
 	];
 	if (S.Dialog.Num())
 	{
-		TSharedRef<SHorizontalBox> Buttons = SNew(SHorizontalBox);
-		for (int32 I = 0; I < S.Dialog.Num(); ++I)
-		{
-			Buttons->AddSlot().FillWidth(1.f).Padding(FMargin(I ? RowGap : 0.f, 0.f, 0.f, 0.f))
-			[
-				RowWidget(S.Dialog[I], I == S.DialogFocus, 0.f, (ConsentW - 2 * PanelPad - 2 * RowGap) / 3, true)
-			];
-		}
+		// the three answers as a column (as the LÖVE shell lists them): side by side they clip at 200 % text
+		TSharedRef<SWidget> Buttons = Rows(S.Dialog, S.DialogFocus, ConsentW - 2 * PanelPad, ConsentW - 2 * PanelPad, true, false);
 		Over->AddSlot().HAlign(HAlign_Center).VAlign(VAlign_Center)
 		[
 			SNew(SBox).WidthOverride(ConsentW)
@@ -458,17 +456,30 @@ TSharedRef<SWidget> SGameKitShell::Subtitle()
 	const float SubPx = SubtitlePx[FMath::Max(0, Sizes.IndexOfByKey(Size))];
 	FLinearColor Back = Linear(Colour::Panel);
 	Back.A = static_cast<float>(Model->Num(TEXT("access"), TEXT("subtitle_background")));
+	// an outline on both texts: the panel's alpha is the player's choice, so over a bright game the outline is
+	// what keeps the words at 4.5:1 (SOP-20, E158; the access report says "outline" for this text)
+	FSlateFontInfo SpeakerFont = Font(SubPx, true), TextFont = Font(SubPx);
+	SpeakerFont.OutlineSettings = FFontOutlineSettings(SubtitleOutlinePx, Linear(Colour::Outline));
+	TextFont.OutlineSettings = SpeakerFont.OutlineSettings;
 	TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox);
 	if (Model->Flag(TEXT("access"), TEXT("speaker_names")) && !Line.Speaker.IsEmpty())
 	{
 		Row->AddSlot().AutoWidth().Padding(FMargin(0.f, 0.f, 12.f, 0.f))
 		[
-			Text(Model->T(TEXT("subtitle.speaker"), Args(TEXT("name"), Line.Speaker)), SubPx, Colour::Accent, false, true)
+			SNew(STextBlock)
+			.Text(FText::FromString(Model->T(TEXT("subtitle.speaker"), Args(TEXT("name"), Line.Speaker))))
+			.Font(SpeakerFont)
+			.ColorAndOpacity(FSlateColor(Linear(Colour::Accent)))
 		];
 	}
 	Row->AddSlot().FillWidth(1.f)
 	[
-		Text(Line.Text, SubPx, Colour::Text, true)
+		SNew(STextBlock)
+		.Text(FText::FromString(Line.Text))
+		.Font(TextFont)
+		.ColorAndOpacity(FSlateColor(Linear(Colour::Text)))
+		.AutoWrapText(true)
+		.LineHeightPercentage(static_cast<float>(Model->LineSpacing()))
 	];
 	return SNew(SBox).HAlign(HAlign_Center).VAlign(VAlign_Bottom).Padding(FMargin(PageMargin, 0.f, PageMargin, 42.f))
 		[

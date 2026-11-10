@@ -60,8 +60,8 @@ and a clear spec for the Blueprint child.
 - **Shell screens (SOP-19, SOP-20):** the plugin's `GameKitShellUI` module draws the title, main menu, settings
   (Display, Audio, Controls with rebinding and the one-handed layouts, Accessibility, Language), loading, pause
   with "What now?" and the dialogue history, and credits in **Slate from C++** (no `.uasset` widgets to hand-edit;
-  builds in a Blueprint-only project). Turn them on in `Config/DefaultGame.ini`
-  (`[/Script/GameKitShellUI.GameKitShellSettings]` `bShowScreens=True`) or with `-GameKitShell`; the subsystem
+  builds in a Blueprint-only project). Turn them on in `Config/DefaultGame.ini` (`bShowScreens=True` under the
+  `GameKitShellUI.GameKitShellSettings` section: docs/ENGINE_FLOW.md has the lines) or with `-GameKitShell`; the subsystem
   `UGameKitShellSubsystem` puts them over your map and fires `OnShellEvent` ("play", "resume", "quit_title",
   "settings_changed"). Strings in `data/i18n/<locale>.json`, credits from `CREDITS.md`. `python tools/dev.py smoke
   --drive menus` and `--drive show:<screen> --screenshot captures/x.png` walk and picture them (docs/ENGINE_FLOW.md

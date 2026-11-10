@@ -752,7 +752,7 @@ SHOW_TEST = "GameKit.Screens.Show"          # the one that also draws the screen
 DRIVE_PATTERN = r"[A-Za-z0-9_:=,.-]+"        # menus, show:settings, access:res=1280x800,scale=2,pad
 SMOKE_DATA = "Saved/GameKitSmoke"           # the drive's own settings folder (never the player's Saved/GameKit)
 MARKER_LINE = re.compile(r"\b((?:DRIVE_[A-Z]+|SETTINGS_WRITTEN|SCREENSHOT_WRITTEN|ACCESS_[A-Z]+|PSEUDO_[A-Z]+)\b.*)$")
-UNSAFE_VALUE_CHARS = '";,'                 # a quote ends an Unreal argument; ; and , split -ExecCmds
+UNSAFE_VALUE_CHARS = '"'                   # a quote ends an Unreal argument (, and ; only matter inside -ExecCmds)
 
 
 def drive_run(args):
@@ -794,7 +794,7 @@ def drive_run(args):
         bad = sorted(set(UNSAFE_VALUE_CHARS) & set(value)) or ([" "] if " " in value else [])
         if bad:
             print(f"[error] {value.split('=', 1)[0]} holds {' '.join(bad)!r}, which Unreal's command line cannot carry: "
-                  "use a path without spaces, quotes, ; or , (verify: a quoted path may work on your version)", file=sys.stderr)
+                  "use a path without spaces or quotes (verify: a quoted path may work on your version)", file=sys.stderr)
             return 2
     rc = run_automation(SHOW_TEST if shot else DRIVE_TEST, args, extra_args=extra, markers=True, render=bool(shot))
     if rc:

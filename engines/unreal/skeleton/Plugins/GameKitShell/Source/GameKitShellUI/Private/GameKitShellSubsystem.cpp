@@ -66,13 +66,13 @@ void UGameKitShellSubsystem::MakeModel()
 	Opt.ProjectDir = FPaths::ProjectDir();
 	Opt.DataDir = Cfg->DataFolder.IsEmpty() ? FPaths::Combine(FPaths::ProjectSavedDir(), DefaultDataFolder) : Cfg->DataFolder;
 	FString DataDir;
-	if (FParse::Value(FCommandLine::Get(), TEXT("GameKitDataDir="), DataDir))
+	if (FParse::Value(FCommandLine::Get(), TEXT("GameKitDataDir="), DataDir, /*bShouldStopOnSeparator*/ false))
 	{
 		Opt.DataDir = DataDir;
 	}
 	Opt.GameName = FApp::GetProjectName();
 	Opt.Version = GetDefault<UGeneralProjectSettings>()->ProjectVersion;
-	FParse::Value(FCommandLine::Get(), TEXT("GameKitLocale="), Opt.Locale);
+	FParse::Value(FCommandLine::Get(), TEXT("GameKitLocale="), Opt.Locale, /*bShouldStopOnSeparator*/ false);
 	Opt.bAutomated = FParse::Param(FCommandLine::Get(), TEXT("unattended"));
 #if !UE_BUILD_SHIPPING
 	Opt.bDebugBuild = true;
