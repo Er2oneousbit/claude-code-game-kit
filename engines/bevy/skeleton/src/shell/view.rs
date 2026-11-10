@@ -16,21 +16,24 @@
 //   held: the actions bound to it -> Shell.held; the leaning-most left stick and the deepest triggers -> Shell.pad
 //   Update rebuild_ui (version moved): despawn the root -> spawn the top screen's nodes, each text tagged UiLabel
 //   Last report_access (a report was asked for two frames ago): every UiLabel's size, position, colours and
-//   whether it fits -> AccessReport.result
+//   whether it fits -> AccessReport.result; for the pseudo drive's check: every visible label that is not in
+//   brackets (did not go through t()), wider than its box or past the window's edge -> the problems
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the raw stick and triggers go to Shell.pad (#265)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): F8 (the bug report), the juice demo's HUD, the
+//           pseudo-locale label check and the planted label of --drive pseudo-plant (#275)
 // ---------------------------------------------------------------------------
 use std::collections::BTreeSet;
 
 use bevy::input::InputSystems;
 use bevy::input::gamepad::Gamepad;
 use bevy::prelude::*;
-use bevy::text::{LineHeight, TextLayoutInfo};
+use bevy::text::{LineBreak, LineHeight, TextLayoutInfo};
 use bevy::ui::UiGlobalTransform;
 use bevy::window::PrimaryWindow;
 use serde_json::{Value, json};
 
-use super::screens::{self, PAGE_LINES, RowKind, TABS};
+use super::screens::{self, HELP_ACTIONS, PAGE_LINES, RowKind, TABS};
 use super::{PadAxes, ScreenName, Shell, input};
 
 // ---- Tunables ------------------------------------------------------------------
@@ -48,6 +51,10 @@ pub const READABLE_FONT: &[u8] = include_bytes!("fonts/AtkinsonHyperlegible-Regu
 pub const READABLE_BOLD: &[u8] = include_bytes!("fonts/AtkinsonHyperlegible-Bold.ttf");
 /// Frames between an access report request and the measurement (one to rebuild, one to lay out).
 const REPORT_DELAY: u32 = 2;
+/// The planted label of --drive pseudo-plant: this narrow, so its text cannot fit.
+const PLANT_W: f32 = 30.0;
+/// Pixels a text may overrun its box before the pseudo check calls it truncated (anti-aliasing, rounding).
+const SLACK_PX: f32 = 1.0;
 
 // Colours (contrast on PANEL: TEXT 13:1, DIM 7:1, ACCENT 9:1; all above 4.5:1, E158)
 pub const BG: Color = Color::srgb(0.078, 0.086, 0.118);
@@ -77,6 +84,10 @@ pub struct UiRoot;
 #[derive(Component)]
 pub struct ScrollList;
 
+/// A text shown as written, not through t() (names from CREDITS.md): the pseudo check expects no brackets on it.
+#[derive(Component)]
+pub struct RawText;
+
 /// What the access report needs to know about one text.
 #[derive(Component, Clone)]
 pub struct UiLabel {
@@ -89,18 +100,35 @@ pub struct UiLabel {
     pub clip: Option<Entity>,
 }
 
-/// The accessibility sweep's measurement of one drawn frame (ACCESS_SCREEN).
+/// The accessibility sweep's measurement of one drawn frame (ACCESS_SCREEN), or the pseudo drive's label check.
 #[derive(Resource, Default)]
 pub struct AccessReport {
     pending: Option<(String, bool, u32)>,
+    /// The pending request is the pseudo check, not an access report.
+    check: bool,
     pub result: Option<Value>,
 }
 
 impl AccessReport {
     pub fn request(&mut self, screen: &str, world: bool) {
         self.pending = Some((screen.to_string(), world, 0));
+        self.check = false;
         self.result = None;
     }
+
+    /// The pseudo-locale check of the next drawn frame: {"screen", "labels": n, "problems": [{id, text, why}]}.
+    pub fn request_check(&mut self, screen: &str) {
+        self.request(screen, false);
+        self.check = true;
+    }
+}
+
+/// A label's text without the shell's decorations: the focus marker ("> "), a choice's "< ... >", the held
+/// subtitle's arrow. What is left is what t() returned (in brackets on a pseudo run) or a raw text.
+pub fn undecorated(text: &str) -> &str {
+    let t = text.trim_start_matches(['>', ' ']).trim_end();
+    let t = t.strip_suffix('\u{25BC}').map_or(t, str::trim_end);
+    t.strip_prefix("< ").and_then(|x| x.strip_suffix(" >")).unwrap_or(t)
 }
 
 pub struct ShellViewPlugin;
@@ -111,6 +139,7 @@ impl Plugin for ShellViewPlugin {
             .init_resource::<AccessReport>()
             .add_systems(Startup, load_fonts)
             .add_systems(PreUpdate, poll_input.after(InputSystems))
+            .add_plugins(super::juice::JuiceViewPlugin)
             .add_systems(Update, rebuild_ui.after(super::sync_settings))
             .add_systems(Last, report_access);
     }
@@ -139,6 +168,13 @@ fn poll_input(keys: Res<ButtonInput<KeyCode>>, pads: Query<&Gamepad>, mut shell:
     let capture_slot = shell.capturing.as_ref().map(|(_, slot)| *slot);
     for (name, key) in input::all_keys() {
         let binding = format!("key:{name}");
+        if key == KeyCode::F8 && shell.debug_build && capture_slot.is_none() {
+            // the bug report key in debug builds (bug_report.rs); it never reaches the bindings there
+            if keys.just_pressed(key) {
+                shell.bug_key();
+            }
+            continue;
+        }
         if keys.just_pressed(key) {
             shell.last_device = "keyboard".into();
             match capture_slot {
@@ -245,6 +281,9 @@ fn label(
             Text::new(text),
             font,
             line_height,
+            // a word longer than its line (a long compound in another language) breaks instead of running out of
+            // its box; the pseudo drive's padded strings found it on the consent text (#275)
+            TextLayout::linebreak(LineBreak::WordOrCharacter),
             TextColor(color),
             UiLabel {
                 id: id.to_string(),
@@ -502,7 +541,7 @@ fn spawn_page(
     style: &Style,
     shell: &Shell,
     title: &str,
-    lines: &[String],
+    lines: &[(String, bool)],
     prefix: &str,
     win: Vec2,
 ) {
@@ -513,14 +552,14 @@ fn spawn_page(
     heading(parent, style, &format!("{prefix}.title"), title, HEADING_PX);
     let width = (win.x - 40.0).min(LIST_MAX_W);
     parent.spawn(panel(Val::Px(width), PANEL)).with_children(|p| {
-        for (i, line) in lines.iter().enumerate().skip(scroll).take(PAGE_LINES) {
+        for (i, (line, raw)) in lines.iter().enumerate().skip(scroll).take(PAGE_LINES) {
             let text = if line.is_empty() { " " } else { line.as_str() };
             p.spawn((Node {
                 width: Val::Percent(100.0),
                 ..default()
             },))
                 .with_children(|l| {
-                    label(
+                    let e = label(
                         l,
                         style,
                         &format!("{prefix}.line{i}"),
@@ -532,6 +571,9 @@ fn spawn_page(
                         &[],
                         None,
                     );
+                    if *raw {
+                        l.commands().entity(e).insert(RawText);
+                    }
                 });
         }
     });
@@ -842,8 +884,136 @@ fn spawn_toasts(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shell)
     }
 }
 
+/// The juice demo's HUD (juice.rs draws the world): the title, each control with its prompt, the numbers, the
+/// guard. One panel at the top left; the controls wrap onto more lines when a language or a big text size needs it.
+fn spawn_juice_hud(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shell, win: Vec2) {
+    let Some(demo) = shell.juice.as_ref() else {
+        return;
+    };
+    parent
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                top: Val::Px(12.0),
+                left: Val::Px(12.0),
+                max_width: Val::Px(win.x - 24.0),
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(6.0),
+                padding: UiRect::axes(Val::Px(12.0), Val::Px(8.0)),
+                border_radius: BorderRadius::all(Val::Px(6.0)),
+                ..default()
+            },
+            BackgroundColor(PANEL),
+        ))
+        .with_children(|h| {
+            let title = shell.t("juice.title");
+            label(
+                h,
+                style,
+                "juice.title",
+                &title,
+                BODY_PX,
+                ACCENT,
+                true,
+                Some(PANEL),
+                &[],
+                None,
+            );
+            h.spawn(Node {
+                flex_direction: FlexDirection::Row,
+                flex_wrap: FlexWrap::Wrap,
+                column_gap: Val::Px(14.0),
+                row_gap: Val::Px(4.0),
+                ..default()
+            })
+            .with_children(|row| {
+                for action in HELP_ACTIONS {
+                    let (_, key) = shell.prompt(action);
+                    let name = shell.t(&format!("action.{action}"));
+                    row.spawn(Node {
+                        column_gap: Val::Px(6.0),
+                        align_items: AlignItems::Center,
+                        ..default()
+                    })
+                    .with_children(|c| {
+                        // the key cap: a bordered cell, like the bindings on the Controls tab
+                        c.spawn((
+                            Node {
+                                padding: UiRect::axes(Val::Px(6.0), Val::Px(1.0)),
+                                border: UiRect::all(Val::Px(1.0)),
+                                border_radius: BorderRadius::all(Val::Px(4.0)),
+                                ..default()
+                            },
+                            BorderColor::all(DIM),
+                        ))
+                        .with_children(|k| {
+                            let id = format!("juice.glyph.{action}");
+                            label(k, style, &id, &key, SMALL_PX, TEXT, false, Some(PANEL), &[], None);
+                        });
+                        let id = format!("juice.action.{action}");
+                        label(c, style, &id, &name, SMALL_PX, DIM, false, Some(PANEL), &[], None);
+                    });
+                }
+            });
+            let stats = demo.stats(shell);
+            label(
+                h,
+                style,
+                "juice.stats",
+                &stats,
+                SMALL_PX,
+                DIM,
+                false,
+                Some(PANEL),
+                &[],
+                None,
+            );
+            if demo.guard {
+                let guard = shell.t("juice.guard");
+                label(
+                    h,
+                    style,
+                    "juice.guard",
+                    &guard,
+                    SMALL_PX,
+                    ACCENT,
+                    false,
+                    Some(PANEL),
+                    &[],
+                    None,
+                );
+            }
+        });
+}
+
+/// --drive pseudo-plant: one label far too narrow for its text, so the pseudo check must fail and name it.
+fn spawn_plant(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shell) {
+    let e = label(
+        parent,
+        style,
+        "plant.too_small",
+        &shell.t("menu.settings"),
+        SMALL_PX,
+        TEXT,
+        false,
+        Some(BG),
+        &[],
+        None,
+    );
+    parent.commands().entity(e).insert((
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(8.0),
+            left: Val::Px(8.0),
+            width: Val::Px(PLANT_W),
+            ..default()
+        },
+        TextLayout::no_wrap(),
+    ));
+}
+
 /// Rebuilds the UI tree when the shell changed.
-fn rebuild_ui(
+pub fn rebuild_ui(
     mut last: Local<Option<u64>>,
     mut commands: Commands,
     shell: Res<Shell>,
@@ -869,7 +1039,7 @@ fn rebuild_ui(
     };
     let bg = if top.name.transparent() {
         OVERLAY
-    } else if top.name == ScreenName::Play {
+    } else if matches!(top.name, ScreenName::Play | ScreenName::Juice) {
         Color::NONE
     } else {
         BG
@@ -896,6 +1066,9 @@ fn rebuild_ui(
             spawn_menu(root, &style, &shell, &name, "menu.title", "", win);
             let hint = format!("{}: {}", shell.prompt("ui_accept").1, shell.t("hint.select"));
             bottom_hint(root, &style, "menu.hint", &hint, DIM);
+            if shell.plant {
+                spawn_plant(root, &style, &shell);
+            }
         }
         ScreenName::Settings => spawn_settings(root, &style, &shell, win),
         ScreenName::Credits => spawn_page(
@@ -903,7 +1076,7 @@ fn rebuild_ui(
             &style,
             &shell,
             &shell.t("credits.title"),
-            &screens::lines_for(&shell),
+            &screens::page_lines(&shell),
             "credits",
             win,
         ),
@@ -912,7 +1085,7 @@ fn rebuild_ui(
             &style,
             &shell,
             &shell.t("help.title"),
-            &screens::lines_for(&shell),
+            &screens::page_lines(&shell),
             "help",
             win,
         ),
@@ -921,13 +1094,17 @@ fn rebuild_ui(
             &style,
             &shell,
             &shell.t("history.title"),
-            &screens::lines_for(&shell),
+            &screens::page_lines(&shell),
             "history",
             win,
         ),
         ScreenName::Pause => spawn_menu(root, &style, &shell, &shell.t("pause.title"), "pause.title", "", win),
         ScreenName::Play => {
             spawn_play_hud(root, &style, &shell);
+            spawn_subtitle(root, &style, &shell, win);
+        }
+        ScreenName::Juice => {
+            spawn_juice_hud(root, &style, &shell, win);
             spawn_subtitle(root, &style, &shell, win);
         }
     });
@@ -964,9 +1141,11 @@ fn inside(inner: [f32; 4], outer: [f32; 4], slack: f32) -> bool {
         && inner[1] + inner[3] <= outer[1] + outer[3] + slack
 }
 
-/// Two frames after a request: every label's size, place and colours, as the sweep reads them.
+/// Two frames after a request: every label's size, place and colours, as the sweep reads them (or, for the pseudo
+/// check, the labels that are untranslated, truncated or off screen).
 fn report_access(
     mut report: ResMut<AccessReport>,
+    shell: Res<Shell>,
     windows: Query<&Window, With<PrimaryWindow>>,
     labels: Query<(
         &UiLabel,
@@ -975,6 +1154,8 @@ fn report_access(
         &TextLayoutInfo,
         &TextColor,
         &InheritedVisibility,
+        &Text,
+        Has<RawText>,
     )>,
     clips: Query<(&ComputedNode, &UiGlobalTransform), With<ScrollList>>,
 ) {
@@ -993,8 +1174,11 @@ fn report_access(
         .map(|w| (w.resolution.width(), w.resolution.height()))
         .unwrap_or((1280.0, 720.0));
     let window = [0.0, 0.0, win_w, win_h];
+    let check = std::mem::take(&mut report.check);
+    let pseudo = shell.is_pseudo();
+    let (mut count, mut problems) = (0usize, Vec::new());
     let mut texts = Vec::new();
-    for (meta, node, transform, layout, colour, visible) in &labels {
+    for (meta, node, transform, layout, colour, visible, text, raw) in &labels {
         if !visible.get() {
             continue;
         }
@@ -1022,6 +1206,28 @@ fn report_access(
             .is_some_and(|(cn, ct)| !inside(rect, rect_of(cn, ct), 1.0));
         let fits_node = ink_size.x <= rect[2] + 1.0 && ink_size.y <= rect[3] + 1.0;
         let fits_window = inside(ink, window, 1.0);
+        if check {
+            // the pseudo check: what a player of a longer language would see broken
+            count += 1;
+            let shown = undecorated(&text.0);
+            let mut why = Vec::new();
+            if pseudo && !raw && !shown.is_empty() && !shown.starts_with('[') {
+                why.push("not passed through t() (no brackets)".to_string());
+            }
+            if !covered && ink_size.x > rect[2] + SLACK_PX {
+                why.push(format!(
+                    "text {:.0} px is wider than its box {:.0} px (truncated)",
+                    ink_size.x, rect[2]
+                ));
+            }
+            if !covered && !inside(ink, window, SLACK_PX) {
+                why.push("runs past the screen edge (clipped)".into());
+            }
+            for w in why {
+                problems.push(json!({"id": meta.id, "text": text.0, "why": w}));
+            }
+            continue;
+        }
         let why = if !fits_node {
             "the text is wider than its box"
         } else if !fits_window {
@@ -1055,6 +1261,10 @@ fn report_access(
         }
         texts.push(entry);
     }
+    if check {
+        report.result = Some(json!({"screen": screen, "labels": count, "problems": problems}));
+        return;
+    }
     report.result = Some(json!({
         "screen": screen,
         "world": world,
@@ -1062,6 +1272,25 @@ fn report_access(
         "scaling": "exact",
         "texts": texts,
     }));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::undecorated;
+
+    #[test]
+    fn the_pseudo_check_sees_through_the_shells_decorations() {
+        assert_eq!(undecorated("> [Pláý~~]"), "[Pláý~~]", "the focus marker");
+        assert_eq!(undecorated("  [Pláý~~]"), "[Pláý~~]", "an unfocused row");
+        assert_eq!(undecorated("< [Óñ~] >"), "[Óñ~]", "a choice's arrows");
+        assert_eq!(undecorated("[Hí~] \u{25BC}"), "[Hí~]", "a held subtitle's arrow");
+        assert_eq!(
+            undecorated("Play"),
+            "Play",
+            "untranslated text stays as it is (and fails the check)"
+        );
+        assert_eq!(undecorated(" "), "", "a blank page line has nothing to check");
+    }
 }
 
 // {{FOOTER}}

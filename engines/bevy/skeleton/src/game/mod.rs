@@ -46,7 +46,8 @@ pub const GOAL_TRAUMA: f64 = 0.5;
 #[derive(Resource, Debug, Clone, Default, PartialEq)]
 pub struct GameConfig {
     pub autoplay: Option<Autoplay>,
-    /// A scripted smoke scenario (shell/drive.rs): menus, access[:opts], show:<screen>.
+    /// A scripted smoke scenario (shell/drive.rs): menus, crash, pseudo, pseudo-plant, bug, access[:opts],
+    /// show:<screen>.
     pub drive: Option<String>,
     /// Where settings and saves go (dev.py smoke always sets it, so a test never touches the player's files).
     pub data_dir: Option<PathBuf>,
@@ -73,8 +74,9 @@ pub enum Autoplay {
 pub const OPTIONS_HELP: &str = "\
 Game options (after --):
   --autoplay right     a bot holds right; prints GOAL_REACHED at the goal
-  --drive NAME         with --smoke: a scripted path through the shell (menus, access[:res=WxH,scale=N,pad,read],
-                       show:<title|main_menu|settings|pause|help|history|credits|subtitle>); dev.py smoke --drive
+  --drive NAME         with --smoke: a scripted path through the shell (menus, crash, pseudo, pseudo-plant, bug,
+                       access[:res=WxH,scale=N,pad,read],
+                       show:<title|main_menu|settings|pause|help|history|credits|subtitle|juice>); dev.py smoke --drive
   --data-dir DIR       settings and saves go here (dev.py smoke passes a fresh build/smoke-data)
   --locale LANG        language for the run (pseudo = the pseudo-locale)
 ";
@@ -312,6 +314,19 @@ mod tests {
         assert_eq!(cfg.locale.as_deref(), Some("pseudo"));
         assert!(!cfg.needs_window(), "menus runs headless");
         assert!(configure(&args(&["--drive", "show:settings"])).unwrap().needs_window());
+        for (drive, window) in [
+            ("crash", false),
+            ("pseudo", true),
+            ("pseudo-plant", true),
+            ("bug", true),
+        ] {
+            assert_eq!(
+                configure(&args(&["--drive", drive])).unwrap().needs_window(),
+                window,
+                "{drive}"
+            );
+        }
+        assert!(configure(&args(&["--drive", "show:juice"])).is_ok());
         assert!(configure(&args(&["--drive", "dance"])).is_err());
         assert!(configure(&args(&["--drive", "show:kitchen"])).is_err());
     }

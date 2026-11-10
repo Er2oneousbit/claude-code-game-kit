@@ -34,7 +34,7 @@ Formatting: `cargo fmt` fixes what `check` complains about.
 |---|---|
 | `check` | `cargo fmt --check`, then `cargo clippy --all-targets` (or `cargo check` without clippy) |
 | `test` | `cargo test --no-run` (shows compile progress), then `cargo test`; counts the `test result` lines |
-| `smoke` | `cargo build`, then `cargo run -- --smoke N [--screenshot F] [--record D] -- --data-dir build/smoke-data [--drive X] [--locale L] [game options]`; needs `BOOT_OK` and `SMOKE_DONE` (and `DRIVE_DONE` with a drive), fails on ` ERROR ` lines, `panicked at` and a non-zero exit; echoes the drives' proof lines (`SETTINGS_WRITTEN`, `ACCESS_*`) |
+| `smoke` | `cargo build`, then `cargo run -- --smoke N [--screenshot F] [--record D] -- --data-dir build/smoke-data [--drive X] [--locale L] [game options]`; needs `BOOT_OK` and `SMOKE_DONE` (and `DRIVE_DONE` with a drive), fails on ` ERROR ` lines, `panicked at` and a non-zero exit; echoes the drives' proof lines (`SETTINGS_WRITTEN`, `CRASH_WRITTEN`, `PSEUDO_*`, `DRIVE_*`, `ACCESS_*`); a panic names its crash file |
 | `build` | `cargo build --release`, prints the exe path |
 | `run` | `cargo build`, then `cargo run [-- game options]` |
 | `clean` | deletes the target folder (asks first when `CARGO_TARGET_DIR` points outside the project) |
@@ -59,11 +59,22 @@ shipped exe lives there. Scenarios:
 | `--drive` | What it does | Window |
 |---|---|---|
 | `menus` | title -> settings: master volume 0.5, reduce motion on -> back (saves) -> quit; prints `SETTINGS_WRITTEN <path>` once the file holds the values | no |
-| `show:<screen>` | opens `title`, `main_menu`, `settings`, `pause`, `help`, `history`, `credits` or `subtitle`, then ends; add `--screenshot build/x.png` | yes |
+| `crash` | a planted panic on the main menu: prints `CRASH_WRITTEN <path>` and fails on purpose (exit 101) | no |
+| `pseudo` | with `--locale pseudo`: visits every screen (each settings tab at its top and scrolled to its end, the rebind prompt, credits, the juice demo and a hit in it, loading, play, pause, "What now?", the history) and checks every visible label: not in brackets (it did not go through `t()`; names from CREDITS.md are exempt), wider than its box, or past the window's edge. `PSEUDO_SCREEN` per screen, `PSEUDO_FAIL` per problem, then `PSEUDO_PASS` or `PSEUDO_FAILED` and exit 1 | yes |
+| `pseudo-plant` | the same with one planted label too small for its text: must fail naming `plant.too_small` | yes |
+| `bug` | presses F8 on the main menu (debug builds) and checks the `bug_<time>/` files: `DRIVE_BUG <path>` | yes |
+| `show:<screen>` | opens `title`, `main_menu`, `settings`, `pause`, `help`, `history`, `credits`, `subtitle` or `juice` (a hit landed: flash, ring, squash), then ends; add `--screenshot build/x.png` | yes |
 | `access[:res=WxH,scale=N,pad,read]` | the accessibility sweep's tour: every screen measured (`ACCESS_SCREEN`), the one-handed layout applied and reset, the subtitle hold, the prompts' device; `python tools/access/sweep.py` runs the four standard runs | yes |
 
 A drive that cannot finish (a menu that never opens, an item it cannot focus) logs an `ERROR` line naming the step
-and exits 1. `--locale pseudo` runs the whole shell in the pseudo-locale.
+and exits 1. `--locale pseudo` runs the whole shell in the pseudo-locale. The juice demo, F8 and the pseudo language
+exist in debug builds only, so `bug` and `show:juice` refuse `--release`; the access tour visits the juice demo in
+debug builds.
+
+The player's files: `settings.json`, `crashes/crash_<time>.txt` (written by the panic hook in `src/shell/crash.rs`:
+version, build, screen, locale, the error and where, the backtrace, the settings, the last 60 log lines) and
+`bug_<time>/` (F8 in a debug build: `bug_<time>/info.txt`, `bug_<time>/log_tail.txt`, the settings and a screenshot; no screenshot
+headless). In a smoke run they land in `build/smoke-data/`.
 
 ## Testing
 - `src/logic/`: plain `#[test]` functions next to the code (`#[cfg(test)] mod tests`).

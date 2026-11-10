@@ -144,6 +144,9 @@
   "juice.title": "Démo du jus",
   "juice.stats": "Coups {hits}   trauma {trauma}   secousse {shake}   flashs retenus {refused}   vitesse {speed} %",
   "juice.guard": "En garde",
+  "juice.welcome": "Va jusqu'à la boîte et frappe-la. Saute, garde-toi, et regarde la caméra suivre.",
+  "juice.box": "Boîte",
+  "juice.ouch": "Aïe !",
 
   "apples.one": "{n} pomme",
   "apples.other": "{n} pommes",

@@ -144,6 +144,9 @@
   "juice.title": "Juice demo",
   "juice.stats": "Hits {hits}   trauma {trauma}   shake {shake}   flashes held back {refused}   speed {speed}%",
   "juice.guard": "Guarding",
+  "juice.welcome": "Walk to the box and hit it. Jump, guard, and watch the camera follow.",
+  "juice.box": "Box",
+  "juice.ouch": "Ouch!",
 
   "apples.one": "{n} apple",
   "apples.other": "{n} apples",

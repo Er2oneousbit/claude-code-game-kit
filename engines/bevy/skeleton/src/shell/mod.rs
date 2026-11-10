@@ -25,10 +25,15 @@
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): analog stick, triggers and held actions in the
 //           Intent (#265); display settings applied to the window (#268)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): crash files, the F8 bug report, the juice demo
+//           screen (debug builds) and the loading screen's next screen (#275)
 // ---------------------------------------------------------------------------
+pub mod bug_report;
+pub mod crash;
 pub mod display;
 pub mod drive;
 pub mod input;
+pub mod juice;
 pub mod narrator;
 pub mod screens;
 pub mod store;
@@ -97,6 +102,8 @@ pub enum ScreenName {
     Pause,
     Help,
     History,
+    /// The juice demo (debug builds; juice.rs).
+    Juice,
 }
 
 impl ScreenName {
@@ -112,6 +119,7 @@ impl ScreenName {
             ScreenName::Pause => "pause",
             ScreenName::Help => "help",
             ScreenName::History => "history",
+            ScreenName::Juice => "juice",
         }
     }
 
@@ -127,6 +135,7 @@ impl ScreenName {
             ScreenName::Pause,
             ScreenName::Help,
             ScreenName::History,
+            ScreenName::Juice,
         ]
         .into_iter()
         .find(|s| s.as_str() == name)
@@ -221,6 +230,16 @@ pub struct Shell {
     screen_changed: bool,
     pub quit_requested: bool,
     pub last_saved: Option<PathBuf>,
+    /// Where the loading screen goes when it is done: Play, or the juice demo.
+    pub loading_next: ScreenName,
+    /// The juice demo's state while its screen is on the stack.
+    pub juice: Option<juice::Demo>,
+    /// F8 was pressed (debug builds): bug_report::capture writes the report next frame.
+    pub bug_requested: bool,
+    /// The last bug report's folder, once all its files are on disk.
+    pub last_bug_report: Option<PathBuf>,
+    /// `--drive pseudo-plant`: view.rs draws one label too small for its text on the main menu.
+    pub plant: bool,
 }
 
 impl Shell {
@@ -262,6 +281,11 @@ impl Shell {
             screen_changed: false,
             quit_requested: false,
             last_saved: None,
+            loading_next: ScreenName::Play,
+            juice: None,
+            bug_requested: false,
+            last_bug_report: None,
+            plant: false,
         };
         if let Some(text) = shell.store.read_data("input/presets.json")
             && let Ok(v) = serde_json::from_str::<Value>(&text)
@@ -629,6 +653,19 @@ impl Shell {
         self.quit_requested = true;
     }
 
+    /// The loading screen, then `next` (Play or the juice demo).
+    pub fn load(&mut self, next: ScreenName) {
+        self.loading_next = next;
+        self.push(ScreenName::Loading);
+    }
+
+    /// The bug-report key (F8): in debug builds the report is written next frame (bug_report.rs).
+    pub fn bug_key(&mut self) {
+        if self.debug_build {
+            self.bug_requested = true;
+        }
+    }
+
     // ---- Frame -------------------------------------------------------------------------------------------------
     /// Timers: the boot and loading screens move on, the title blinks, messages and subtitles run out.
     pub fn tick(&mut self, dt: f64) {
@@ -640,11 +677,13 @@ impl Shell {
                 let next = if name == ScreenName::Boot {
                     ScreenName::Title
                 } else {
-                    ScreenName::Play
+                    self.loading_next
                 };
                 self.replace(next);
-                if next == ScreenName::Play {
-                    screens::start_play(self);
+                match next {
+                    ScreenName::Play => screens::start_play(self),
+                    ScreenName::Juice => juice::start(self),
+                    _ => {}
                 }
             }
         }
@@ -763,6 +802,7 @@ impl Shell {
             ScreenName::Pause => Some("pause.title"),
             ScreenName::Help => Some("help.title"),
             ScreenName::History => Some("history.title"),
+            ScreenName::Juice => Some("juice.title"),
             _ => None,
         };
         let title = title_key.map_or_else(|| top.name.as_str().to_string(), |k| self.t(k));
@@ -846,6 +886,7 @@ impl Plugin for ShellPlugin {
                 Update,
                 (shell_frame, drive::drive_update, sync_settings, quit_when_asked).chain(),
             )
+            .add_systems(Update, (crash::track, bug_report::capture).after(shell_frame))
             .add_systems(Update, display::apply_display.after(sync_settings))
             .add_systems(Last, display::limit_frame_rate)
             .add_systems(
@@ -861,6 +902,7 @@ fn shell_frame(time: Res<Time>, mut shell: ResMut<Shell>, mut active: ResMut<Gam
     shell.game_pressed.clear();
     shell.tick(dt);
     shell.process_pending();
+    juice::frame(&mut shell, dt);
     shell.auto_repeat(dt);
     shell.narrate();
     let now = shell.game_active();
