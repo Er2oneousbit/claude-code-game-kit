@@ -13,7 +13,8 @@
 #           setup names the project file it copied (#136), that Unreal's test/smoke exit 1 when the editor
 #           crashes before any result, not 2 "no tests matched" (#176), and that smoke --drive runs the shell's
 #           drive on Unity (the drive test, run options in the environment), Bevy and Unreal (the Drive test),
-#           echoes its markers and fails without DRIVE_DONE (#168).
+#           echoes its markers and fails without DRIVE_DONE (#168), and on C++ (the scenario, data folder and
+#           locale after `--`, the drive's frame budget; #269).
 # Usage   : python scripts/test_dev_py.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, no engine needed. The live checks (a real smoke with each toolchain) are
@@ -121,6 +122,92 @@ class CppSmoke(TempRoot):
         rc, text = self.smoke(self.FULL, record="frames", writes=["frames/frame_000000.bmp"])
         self.assertEqual(rc, 0)
         self.assertIn("1 frame(s)", text)
+
+
+# ---- #269: C++ smoke --drive (the shell's screens) --------------------------------
+class CppDrive(TempRoot):
+    """smoke --drive on C++: the scenario, the data folder and the locale go to the game after `--` (Game::configure
+    takes them), the run gets the drive's frame budget, the proof lines are echoed and DRIVE_DONE is required."""
+    DONE = ("[INFO][core] BOOT_OK Test v0.1.0\nnoise\nSETTINGS_WRITTEN D:/x/build/smoke-data/settings.json\n"
+            "DRIVE_DONE menus\n[INFO][core] smoke ended early: the game quit after 900 of 6000 frames\n")
+
+    def drive(self, out, rc=0, **opts):
+        """cmd_smoke with the build and the game faked: returns (rc, text, the game's command line)."""
+        dev = load("cpp-sdl2")
+        dev.ROOT = self.root
+        dev.cmd_check = lambda args: 0
+        dev.find_exe = lambda preset: "game.exe"
+        seen = {}
+
+        def fake_run(cmd, **kwargs):
+            seen["cmd"] = [str(c) for c in cmd]
+            seen["env"] = kwargs.get("env") or {}
+            return rc, out
+        dev.run = fake_run
+        args = argparse.Namespace(preset="debug", frames=None, screenshot=None, record=None, record_every=4,
+                                  game_args=[], timeout=60, until=None, fail_on=None, drive="menus", data_dir="",
+                                  locale="")
+        for k, v in opts.items():
+            setattr(args, k, v)
+        result, text = quiet(dev.cmd_smoke, args)
+        return result, text, seen.get("cmd", []), dev
+
+    def game_options(self, cmd):
+        """What the game gets after the `--` separator."""
+        return cmd[cmd.index("--") + 1:]
+
+    def test_the_drive_goes_to_the_game_after_the_separator(self):
+        stale = self.root / "build" / "smoke-data" / "settings.json"
+        stale.parent.mkdir(parents=True)
+        stale.write_text('{"old": true}', encoding="utf-8")
+        rc, text, cmd, dev = self.drive(self.DONE, locale="fr", game_args=["--autoplay", "careful"])
+        self.assertEqual(rc, 0, text)
+        self.assertEqual(cmd[:3], ["game.exe", "--smoke", str(dev.DRIVE_FRAMES)], "a drive gets its own frame budget")
+        data = str((self.root / "build" / "smoke-data").resolve())
+        self.assertEqual(self.game_options(cmd),
+                         ["--data-dir", data, "--drive", "menus", "--locale", "fr", "--autoplay", "careful"])
+        self.assertFalse(stale.exists(), "the run's data folder starts empty")
+        self.assertTrue(stale.parent.is_dir())
+        self.assertIn("SETTINGS_WRITTEN D:/x/build/smoke-data/settings.json\n", text, "proof lines are echoed")
+        self.assertIn("DRIVE_DONE menus\n", text)
+        self.assertNotIn("noise", text)
+        self.assertIn("drive menus", text)
+
+    def test_no_drive_done_fails_although_the_frames_ran(self):
+        out = "[INFO][core] BOOT_OK Test v0.1.0\n[INFO][core] smoke complete after 6000 frames\n"
+        rc, text, _, _ = self.drive(out)
+        self.assertEqual(rc, 1, text)
+        self.assertIn("did not finish", text)
+
+    def test_a_failed_drive_fails(self):
+        out = "[INFO][core] BOOT_OK Test v0.1.0\nDRIVE_FAIL could not focus quit\nDRIVE_DONE menus\n"
+        rc, text, _, _ = self.drive(out, rc=1)
+        self.assertEqual(rc, 1, text)
+        self.assertIn("DRIVE_FAIL could not focus quit", text)
+
+    def test_a_given_data_dir_is_kept_and_relative_to_the_project(self):
+        keep = self.root / "build" / "access" / "deck"
+        keep.mkdir(parents=True)
+        (keep / "settings.json").write_text("{}", encoding="utf-8")
+        rc, text, cmd, _ = self.drive(self.DONE.replace("menus", "access:res=1280x800,pad"),
+                                      drive="access:res=1280x800,pad", data_dir="build/access/deck")
+        self.assertEqual(rc, 0, text)
+        opts = self.game_options(cmd)
+        self.assertEqual(Path(opts[opts.index("--data-dir") + 1]), keep.resolve())
+        self.assertTrue((keep / "settings.json").is_file(), "--data-dir is never wiped")
+
+    def test_an_explicit_until_beats_drive_done(self):
+        out = "[INFO][core] BOOT_OK Test v0.1.0\nRUN_WON\n[INFO][core] smoke ended early: the game quit after 9 of 6000 frames\n"
+        rc, text, _, _ = self.drive(out, until="RUN_WON")
+        self.assertEqual(rc, 0, text)
+
+    def test_a_plain_smoke_has_no_drive(self):
+        out = "[INFO][core] BOOT_OK Test v0.1.0\n[INFO][core] smoke complete after 120 frames\n"
+        rc, text, cmd, dev = self.drive(out, drive="")
+        self.assertEqual(rc, 0, text)
+        self.assertEqual(cmd[2], str(dev.SMOKE_FRAMES))
+        self.assertNotIn("--drive", cmd)
+        self.assertEqual(self.game_options(cmd)[0], "--data-dir", "a plain smoke has its own data folder too")
 
 
 # ---- #33: Unity smoke ---------------------------------------------------------

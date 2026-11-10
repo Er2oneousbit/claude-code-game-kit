@@ -3,9 +3,18 @@
 // Purpose : Implementation of game::Game (see Game.hpp).
 // Usage   : created once in main.cpp; main feeds it events, fixed-step update() calls and render().
 // Notes   : PROTOTYPE bouncing box behind the kit's shell. The shell routes Escape (pause) and the menus; the play
-//           screen gets the game actions (attack flashes the box). Window close quits.
+//           screen gets the game actions (attack flashes the box, jump hops it, interact guards). Window close quits.
+//           Motor access (#166): the jump's input buffer and coyote time are stretched by access.timing_scale, and
+//           the guard is held, or toggled with access.hold_to_toggle (core/MotorAccess.hpp). Everything in the
+//           world, those windows included, runs on game time (dt times access.game_speed).
+//
+// Pseudocode (play_update):
+//   windows = base * timing_scale; guarding = guard.update(interact held, hold_to_toggle)
+//   move sideways, bounce off the walls; fall; land on the floor
+//   coyote.update(on floor); buffer.update; can jump and a buffered jump -> jump
 // Authored: Written with Claude (Sonnet 5.5, claude-sonnet-5-5)
 // Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): the shell's screens (#168)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): jump and guard use timing_scale and hold_to_toggle (#269)
 // ---------------------------------------------------------------------------
 #include "game/Game.hpp"
 
@@ -19,6 +28,7 @@ namespace {
 constexpr shell::Rgb kPlayer{242, 191, 76};
 constexpr shell::Rgb kHit{255, 76, 64};
 constexpr shell::Rgb kFloor{64, 69, 82};
+constexpr shell::Rgb kGuard{89, 204, 115};
 
 }  // namespace
 
@@ -93,6 +103,9 @@ void Game::render(SDL_Renderer* renderer) {
 
 // ---- The play screen (PROTOTYPE) -----------------------------------------------------------------------------
 void Game::play_enter() {
+    jump_buffer_.clear();
+    guard_.reset();
+    guarding_ = false;
     shell_->set_objective(shell_->t("play.objective"));   // "What now?" on the pause menu (#167)
     shell_->say_line("guide.welcome");                     // the sample line: a subtitle, and the history
 }
@@ -106,7 +119,11 @@ bool Game::play_action(const std::string& action) {
         hit();
         return true;
     }
-    return false;
+    if (action == "jump") {
+        jump_buffer_.press("jump");                        // used in play_update once the box can jump
+        return true;
+    }
+    return action == "interact";                           // the guard reads the button itself (play_update)
 }
 
 void Game::play_update(double dt) {
@@ -115,15 +132,34 @@ void Game::play_update(double dt) {
         hit();                                             // hold to mash (#166)
     }
     hit_t_ = std::max(0.0, hit_t_ - dt);
-    // Move, then bounce off the walls by flipping velocity and clamping position.
+    // Motor access (#166): longer timing windows, and the guard held or toggled
+    const double k = shell_->timing_scale();
+    jump_buffer_.set_window(core::scaled_window(core::kInputBufferWindow, k));
+    coyote_.set_window(core::scaled_window(core::kCoyoteWindow, k));
+    guarding_ = guard_.update(shell_->is_down("interact"), shell_->access_flag("hold_to_toggle"));
+    // Move sideways and bounce off the walls; fall and land on the floor.
     x_ += vx_ * step;
+    vy_ += kGravity * step;
     y_ += vy_ * step;
     bool bounced = false;
     const double bottom = Game::kHeight - kFloorH - kBoxSize;
     if (x_ < 0.0) { x_ = 0.0; vx_ = -vx_; bounced = true; }
-    if (y_ < 0.0) { y_ = 0.0; vy_ = -vy_; bounced = true; }
+    if (y_ < 0.0) { y_ = 0.0; vy_ = 0.0; }
     if (x_ > kWidth - kBoxSize) { x_ = kWidth - kBoxSize; vx_ = -vx_; bounced = true; }
-    if (y_ > bottom) { y_ = bottom; vy_ = -vy_; bounced = true; }
+    const bool was_on_floor = on_floor_;
+    on_floor_ = y_ >= bottom;
+    if (on_floor_) {
+        y_ = bottom;
+        vy_ = 0.0;
+        bounced = bounced || !was_on_floor;                // a landing thuds too
+    }
+    // Jump: a press buffered a moment ago, taken while on the floor or just after leaving it
+    coyote_.update(step, on_floor_);
+    jump_buffer_.update(step);
+    if (coyote_.can_jump() && jump_buffer_.consume("jump")) {
+        vy_ = -kJumpSpeed;
+        coyote_.consume();
+    }
     if (bounced) {
         shell_->caption("box_hit");                        // "[thud]" with captions_sfx on
     }
@@ -134,6 +170,10 @@ void Game::play_draw(shell::Draw& draw) {
     draw.fill(0, kHeight - kFloorH, kWidth, kFloorH, shell_->palette("floor", kFloor), 255, false);
     const shell::Rgb box = hit_t_ > 0 ? shell_->palette("hit", kHit) : shell_->palette("player", kPlayer);
     draw.fill(x_, y_, kBoxSize, kBoxSize, box, 255, false);
+    if (guarding_) {                                       // a frame, not only a colour: the guard's shape cue
+        draw.rect(x_ - kGuardGap, y_ - kGuardGap, kBoxSize + 2 * kGuardGap, kBoxSize + 2 * kGuardGap,
+                  shell_->palette("target", kGuard), 2.0);
+    }
 }
 
 }  // namespace game

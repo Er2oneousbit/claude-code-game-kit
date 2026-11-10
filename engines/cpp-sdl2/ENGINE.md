@@ -35,7 +35,8 @@
   menu, settings (Display, Audio, Controls with press-a-key rebinding and the one-handed layouts, Accessibility, Language),
   credits (`CREDITS.md`), loading, pause with "What now?" and "Dialogue history", subtitles and captions
   (`data/dialogue/*.built.json`), menu narration through the system's speech. The settings are `src/core/Settings`; the
-  menu logic (`src/core/Menu.hpp`, `ShellLogic.hpp`) has no SDL and is doctest-tested (`tests/test_menu.cpp`). The game
+  menu logic (`src/core/Menu.hpp`, `ShellLogic.hpp`) has no SDL and is doctest-tested (`tests/test_menu.cpp`), like
+  the motor-access logic (`MotorAccess.hpp`, `tests/test_motor_access.cpp`). The game
   fills in the play screen through `shell::PlayHooks` (`Game.cpp`) and reads settings through
   `shell_->game_speed()`, `access_flag("auto_repeat")`, `palette("player")`, `is_down("attack")`, `say_line(id)`,
   `caption(id)`, `set_objective(text)`. Text is SDL's built-in 8x8 font (`SDL_RenderDebugText`, scaled by
@@ -53,8 +54,8 @@
 ```
 CMakeLists.txt, CMakePresets.json, vcpkg.json
 src/core/        SDL-free, unit tested: Log, FixedTimestep; juice (Shake, Hitstop, Ease, FollowCamera, InputBuffer,
-                 CoyoteTimer, Spring, FlashLimiter); shell logic (Settings, Bindings, SaveStore, I18n, AtomicFile,
-                 Menu, ShellLogic)
+                 CoyoteTimer, Spring, FlashLimiter); motor access (MotorAccess: timing_scale, hold_to_toggle);
+                 shell logic (Settings, Bindings, SaveStore, I18n, AtomicFile, Menu, ShellLogic)
 src/shell/       the shell's screens on SDL: Shell (stack, input, settings applied), Draw (text, panels, the access
                  report), Drive (smoke scenarios)
 src/game/        gameplay: Game class (owns the shell, fills in the play screen), entities, systems

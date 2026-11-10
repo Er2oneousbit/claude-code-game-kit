@@ -73,6 +73,9 @@ values in `data/golden/shell.json` that every port's tests check (K01).
 6. Machine or local-model translations are drafts: a draft keeps exactly the source's placeholders or is rejected,
    and a person reviews it before it ships, with a native reader for languages far from English (K01: a local
    model invented placeholders in its drafts; `docs/resources/audio.md`, "Translations and bark lines").
+7. Before you call a language done, `python tools/check_i18n.py --locale <LANG>` lists every English key the table
+   lacks, still has in English, or has with other placeholders (proper names and units pass; add your own with
+   `--same`). A partial table is fine while you work: missing keys fall back to English.
 
 ## 6. Display and platforms
 - Pixel art: the kit's 640x360 base scales by whole numbers (2x at 720p, 3x at 1080p, 4x at 1440p); letterbox the rest
@@ -107,6 +110,7 @@ privacy policy (`SOP-21` step 6): what is collected, why, for how long, and how 
 - Settings survive a restart; a hand-broken settings file gives defaults and a log line, not a crash.
 - A save from every older version loads (migration tests); a corrupt save falls back to the backup.
 - The pseudo-locale smoke passes; no label is clipped.
+- Every shipped language passes `tools/check_i18n.py`.
 - A planted crash writes a crash file; the shell's tests pass against `data/golden/shell.json`.
 
 ## Common mistakes
