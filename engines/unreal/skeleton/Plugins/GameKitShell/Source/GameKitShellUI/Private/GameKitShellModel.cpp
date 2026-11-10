@@ -8,7 +8,8 @@
 //           follow the LÖVE shell's settings.lua one for one (same tabs, same order, same steps), so the
 //           golden settings schema (GameKitSettings.cpp) is what the menu offers.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1); analog input (#274), the juice demo, the bug report,
-//           crash files and the pseudo locale (#275) by Claude (Opus 5.5, claude-opus-5-5)
+//           crash files and the pseudo locale (#275) by Claude (Opus 5.5, claude-opus-5-5); the i18n log line
+//           (where the string tables came from, or that there were none) by Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 #include "GameKitShellModel.h"
 
@@ -198,6 +199,17 @@ void FGameKitShellModel::LoadTables()
 		}
 		Tables.Add(FPaths::GetBaseFilename(File), MoveTemp(Table));
 	}
+	// Say where the strings came from: a packaged game without data/ (Config/Game.ini stages it) shows keys
+	const FString FullDir = FPaths::ConvertRelativePathToFull(Dir);
+	if (Tables.Num() == 0)
+	{
+		UE_LOG(LogGameKitShell, Warning, TEXT("i18n: no string tables in %s: labels show their keys"), *FullDir);
+		return;
+	}
+	TArray<FString> Names;
+	Tables.GetKeys(Names);
+	Names.Sort();
+	UE_LOG(LogGameKitShell, Log, TEXT("i18n: string tables %s from %s"), *FString::Join(Names, TEXT(", ")), *FullDir);
 }
 
 // ---- Settings ----------------------------------------------------------------------------------------------------

@@ -42,7 +42,8 @@ Verified on UE 5.8 (launcher install, Windows, VS 2022 Build Tools 17.14 / MSVC 
 `check` compiles (about 1 minute) and fails on a planted compile error; `test` runs the project's tests and fails on a planted
 `Result={Fail}`; `smoke` runs only `<Game>.Smoke.*`; `package` wrote the game exe under Packaged/ (about 4 minutes); `clean` works.
 A Blueprint-only project also ran `test --filter System.Core.Math` (40 engine tests). Packaging a Blueprint-only project failed in UAT
-("does not look like uproject file but no targets have been found") on a machine without the Windows SDK; not retested since **(verify)**.
+("does not look like uproject file but no targets have been found") on a machine without the Windows SDK; with the SDK and the
+GameKitShell plugin enabled, `package` of the Blank Blueprint template wrote the game exe under Packaged/ (2026-11-10, "Packaging" below).
 
 ## The Claude + Unreal division of labor
 - **Claude edits:** C++ (`Source/`), Build.cs, Config/*.ini (carefully), docs, tools, test code, CSV/JSON that feed DataTables.
@@ -204,8 +205,8 @@ focused)**. Wire the game to it:
   Unreal's own crash reporter; nothing leaves the machine. `smoke --drive crash` proves the writer with a planted error
   through the same handler and does not crash the editor (an unattended editor crash may be sent to Epic by its crash
   reporter) **(verify: the handler on a real fatal error in a packaged game is not tried)**.
-- Strings: `data/i18n/en.json` and `fr.json` (the LÖVE shell's tables); add a locale by adding a file. The version on
-  the title is the project version from Project Settings.
+- Strings: `data/i18n/en.json` and `fr.json` (the LÖVE shell's tables); add a locale by adding a file (`package` ships
+  the whole `data/` folder: "Packaging"). The version on the title is the project version from Project Settings.
 
 Scripted runs (the plugin's `GameKit.Screens.Drive` and `.Show` tests, headless on the model):
 ```
@@ -256,6 +257,18 @@ Windows, 2026-11-10, `check`, `test`, `exec` and the drives from a folder with a
 ## Packaging
 1. Set the default map and startup settings in Project Settings > Maps & Modes.
 2. `python tools/dev.py package --config Shipping --platform Win64` (output in Packaged/, which git ignores). Verified with the default Development config on UE 5.8.
+   With the GameKitShell plugin enabled the package also carries, as loose files: `data/` (the string tables, input
+   presets, colour palettes and your own data files, at `Packaged/<Platform>/<Project>/data/`, where
+   `FPaths::ProjectDir()` points in the packaged game as in the editor), staged by the plugin's `Config/Game.ini`
+   (`+DirectoriesToAlwaysStageAsNonUFS=(Path="../data")` under `ProjectPackagingSettings`; Unreal layers an enabled
+   plugin's Game.ini over your DefaultGame.ini, so there is nothing to merge), and the readable font under the
+   plugin's `Resources/Fonts` (a `RuntimeDependencies` line in `GameKitShellUI.Build.cs`). `data/golden/` and
+   `data/shaders/` (test files, about 200 KB) go along: Unreal stages a folder whole. Without `data/` the menus show
+   their keys (`menu.play`); the log names the folder it read (`i18n: string tables en, fr from ...`). K01: a
+   Blueprint-only project with the plugin packaged in about 4 minutes on UE 5.8 (Windows, 2026-11-10); its exe, started
+   from another folder with `-GameKitShell -GameKitLocale=fr`, read `data/i18n` and narrated in French, and the
+   plugin's `GameKit.Screens` tests passed inside it (`-ExecCmds="Automation RunTests GameKit.Screens; Quit"`).
+   `CREDITS.md` is not staged yet: the packaged credits screen shows its placeholder **(verify, kit issue)**.
 3. Test the packaged build on a clean machine (SOP-06). Check logs under `Saved/Logs/` of the packaged game.
 
 ## Common errors
