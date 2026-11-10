@@ -74,6 +74,7 @@ set(GAME_SOURCES
   src/gfx/KitShaders.cpp
   src/shell/Draw.cpp
   src/shell/Drive.cpp
+  src/shell/JuiceDemo.cpp
   src/shell/Shell.cpp
 )
 add_library(game_lib STATIC ${GAME_SOURCES})

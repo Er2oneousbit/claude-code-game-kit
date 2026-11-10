@@ -5,14 +5,23 @@
 //           ACCESS_*). Without --drive, a smoke run walks title -> menu -> play and lets the game run.
 // Usage   : menus            title -> settings: master volume to 0.5, reduce motion on -> back (saves) -> quit;
 //                            prints SETTINGS_WRITTEN <path> once the file holds the new values
-//           show:<screen>    title | menu | settings | pause | subtitle | play: opens it, then ends (--screenshot)
+//           crash            throws in a frame: main.cpp writes the crash file, prints CRASH_WRITTEN, exits 1
+//           pseudo           (with --locale pseudo) visits every screen and checks every visible label: cut off,
+//                            past the screen edge, or not through t(): PSEUDO_FAIL lines and exit 1, or PSEUDO_PASS
+//           pseudo-plant     the same plus one label too small for its text: must fail and name plant.too_small
+//           bug              presses F8 on the menu and checks bug_<time>/: DRIVE_BUG <path> (debug builds)
+//           show:<screen>    title | menu | settings | pause | subtitle | play | juice: opens it, then ends
+//                            (--screenshot)
 //           access[:opts]    the accessibility sweep's tour (tools/access/sweep.py): res=WxH, scale=N, pad, read
 //           A scenario ends with DRIVE_DONE <name>; a failure logs [ERROR] first, which fails dev.py smoke.
 // Notes   : A scenario is a queue of small steps run one per frame (press, wait for a screen, move focus to a row,
 //           slide a slider); a step that needs to decide at run time (is the consent question up?) adds steps in
 //           front of the queue. Each wait has a frame limit, so a broken menu fails instead of hanging. Add a
 //           scenario: a builder in Drive.cpp's table, then a line in docs/ENGINE_FLOW.md.
+//           The pseudo check reads the access report of a drawn frame (Draw.hpp) through core::label_problem; the
+//           juice demo and the bug report exist in debug builds only (smoke builds the debug preset).
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): crash, pseudo, pseudo-plant, bug, show:juice (#275)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -59,6 +68,9 @@ private:
     int exit_code_ = 0;
     int frame_ = 0;
     bool pad_ = false;                   // the access drive's gamepad-only run
+    int checked_ = 0;                    // pseudo: screens checked, labels seen, problems found
+    int labels_ = 0;
+    int problems_ = 0;
 
     void add(Step step);
     // building blocks
@@ -73,12 +85,17 @@ private:
     void to_tab(const std::string& tab);
     void slide_to(const std::string& what, std::function<double()> read, double target);
     void access_screen(const std::string& name);
+    void check(const std::string& name);  // the pseudo layout check of the next drawn frame
+    void to_juice();
     void fail(const std::string& why);
     void done(int code = 0);
     nlohmann::json reach();
     // scenarios
     void build_default();
     void build_menus();
+    void build_crash();
+    void build_pseudo(bool plant);
+    void build_bug();
     bool build_show(const std::string& screen);
     void build_access(const std::string& options);
 };

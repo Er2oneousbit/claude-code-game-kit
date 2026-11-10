@@ -118,6 +118,34 @@ void Draw::bar(double x, double y, double w, double h, double fraction, Rgb c) {
     fill(x, y, w * std::min(1.0, std::max(0.0, fraction)), h, c);
 }
 
+void Draw::circle(double cx, double cy, double r, Rgb c, double line) {
+    constexpr int kSegments = 32;
+    constexpr double kTau = 6.28318530717958647692;
+    SDL_SetRenderDrawColor(r_, c.r, c.g, c.b, 255);
+    for (int i = 0; i < static_cast<int>(line); ++i) {
+        SDL_FPoint pts[kSegments + 1];
+        for (int s = 0; s <= kSegments; ++s) {
+            const double a = kTau * s / kSegments;
+            pts[s] = SDL_FPoint{static_cast<float>(cx + (r - i) * std::cos(a)), static_cast<float>(cy + (r - i) * std::sin(a))};
+        }
+        SDL_RenderLines(r_, pts, kSegments + 1);
+    }
+}
+
+bool save_frame(SDL_Renderer* renderer, const std::string& path) {
+    // Read in output pixels: switch off the logical presentation for the read, then restore it
+    int lw = 0;
+    int lh = 0;
+    SDL_RendererLogicalPresentation mode = SDL_LOGICAL_PRESENTATION_DISABLED;
+    SDL_GetRenderLogicalPresentation(renderer, &lw, &lh, &mode);
+    SDL_SetRenderLogicalPresentation(renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+    SDL_Surface* surface = SDL_RenderReadPixels(renderer, nullptr);
+    const bool ok = surface && SDL_SaveBMP(surface, path.c_str());
+    SDL_SetRenderLogicalPresentation(renderer, lw, lh, mode);
+    SDL_DestroySurface(surface);
+    return ok;
+}
+
 void Draw::clip(double x, double y, double w, double h) {
     const SDL_Rect rc{static_cast<int>(x), static_cast<int>(y), static_cast<int>(w), static_cast<int>(h)};
     SDL_SetRenderClipRect(r_, &rc);
@@ -199,6 +227,7 @@ double Draw::text(const std::string& id, const std::string& s, double x, double 
         rec.fg = o.color;
         rec.outline = o.outline;
         rec.fits = fits;
+        rec.raw = o.raw;
         rec.why = why;
         rec.ink[0] = ink_x;
         rec.ink[1] = y + std::max(0.0, (h - block_h) / 2);
@@ -224,6 +253,9 @@ json Draw::text_json(const TextRec& t) const {
                 {"ink", json::array({t.ink[0], t.ink[1], t.ink[2], t.ink[3]})}, {"fits", t.fits}};
     if (!t.why.empty()) {
         out["why"] = t.why;
+    }
+    if (t.raw) {
+        out["raw"] = true;   // not UI copy: the pseudo-locale check skips its "[" (Drive.cpp)
     }
     // the panel under the text: the last opaque UI fill drawn before it under its middle
     const Fill* card = nullptr;
