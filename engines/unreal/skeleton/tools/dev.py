@@ -75,6 +75,8 @@
 #           plugin's GameKit.Screens.Drive test with -GameKitDrive=, echoes its proof lines (SETTINGS_WRITTEN,
 #           ACCESS_*, DRIVE_DONE) and fails without DRIVE_DONE; --screenshot runs GameKit.Screens.Show with a
 #           renderer (-RenderOffScreen); --data-dir and --locale
+# Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): --screenshot and --data-dir take a path with a
+#           space (#267): the value goes in quotes, -Key="a b", passed as is on the Windows command line (UnrealValue)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -361,14 +363,33 @@ def reap(proc):
     return out
 
 
+class UnrealValue(str):
+    """An editor argument already quoted the way Unreal reads it (-Key="a b"): run() puts it on the Windows command
+    line as it is. subprocess would quote the whole argument ("-Key=a b") or escape the inner quotes (\\"), and
+    Unreal's FParse::Value then stops the value at the space or keeps the backslash (#267)."""
+
+
+def unreal_arg(key, value):
+    """-Key=value for the editor's command line; a value with whitespace goes in quotes (-Key="a b"), which is the
+    one form FParse::Value reads whole. On Linux and macOS the quotes reach the editor as they are and its
+    FCommandLine::BuildFromArgV leaves an argument holding a quote alone. The value must not hold a quote."""
+    if re.search(r"\s", value):
+        return UnrealValue(f'-{key}="{value}"')
+    return f"-{key}={value}"
+
+
 def run(cmd, capture=False, timeout=None, env=None):
     """Run a command in the project root. 124 = timed out (output so far is returned), 126 = not executable,
     127 = not found."""
     dbg("run: " + " ".join(str(c) for c in cmd))
     sys.stdout.flush()                     # keep our lines ahead of the child's when piped
+    argv = [str(c) for c in cmd]
+    if sys.platform == "win32" and any(isinstance(c, UnrealValue) for c in cmd):
+        # Windows hands the editor one command line: quote the usual way, but an UnrealValue goes in as it is
+        argv = " ".join(str(c) if isinstance(c, UnrealValue) else subprocess.list2cmdline([str(c)]) for c in cmd)
     try:
         proc = subprocess.Popen(
-            [str(c) for c in cmd], cwd=ROOT, text=True, encoding="utf-8", errors="replace",
+            argv, cwd=ROOT, text=True, encoding="utf-8", errors="replace",
             stdin=subprocess.DEVNULL, env=dict(os.environ, **env) if env else None,
             stdout=subprocess.PIPE if capture else None,
             stderr=subprocess.STDOUT if capture else None,
@@ -799,20 +820,22 @@ def drive_run(args):
     if not args.data_dir and data.exists():
         shutil.rmtree(data, ignore_errors=True)   # a fresh folder per run; --data-dir is kept as given
     data.mkdir(parents=True, exist_ok=True)
-    extra = [f"-GameKitDrive={args.drive}", f"-GameKitDataDir={data.as_posix()}"]
+    values = [("GameKitDrive", args.drive), ("GameKitDataDir", data.as_posix())]
     if args.locale:
-        extra.append(f"-GameKitLocale={args.locale}")
+        values.append(("GameKitLocale", args.locale))
+    if shot:
+        values.append(("GameKitScreenshot", shot.as_posix()))
+    for key, value in values:
+        bad = sorted(set(UNSAFE_VALUE_CHARS) & set(value))
+        if bad:
+            print(f"[error] -{key} holds {' '.join(bad)!r}, which Unreal's command line cannot carry: "
+                  "use a path without double quotes", file=sys.stderr)
+            return 2
     if shot:
         shot.parent.mkdir(parents=True, exist_ok=True)
         if shot.is_file():
             shot.unlink()                   # a picture from an earlier run must not pass for this one
-        extra.append(f"-GameKitScreenshot={shot.as_posix()}")
-    for value in extra:
-        bad = sorted(set(UNSAFE_VALUE_CHARS) & set(value)) or ([" "] if " " in value else [])
-        if bad:
-            print(f"[error] {value.split('=', 1)[0]} holds {' '.join(bad)!r}, which Unreal's command line cannot carry: "
-                  "use a path without spaces or quotes (verify: a quoted path may work on your version)", file=sys.stderr)
-            return 2
+    extra = [unreal_arg(key, value) for key, value in values]   # a path with a space goes in quotes (#267)
     rc = run_automation(SHOW_TEST if shot else DRIVE_TEST, args, extra_args=extra, markers=True, render=bool(shot))
     if rc:
         return rc

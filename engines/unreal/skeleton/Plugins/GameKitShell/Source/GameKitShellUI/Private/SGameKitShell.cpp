@@ -85,12 +85,33 @@ FReply SGameKitShell::OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& In
 	{
 		return FReply::Handled();
 	}
-	const FString Binding = GameKit::ShellInput::BindingOf(InKeyEvent.GetKey());
+	const FKey Key = InKeyEvent.GetKey();
+	if (Key == EKeys::Gamepad_LeftStick_Up || Key == EKeys::Gamepad_LeftStick_Down || Key == EKeys::Gamepad_LeftStick_Left
+	    || Key == EKeys::Gamepad_LeftStick_Right)
+	{
+		return FReply::Unhandled();   // the pad's own stick "buttons": OnAnalogValueChanged moves the focus instead
+	}
+	const FString Binding = GameKit::ShellInput::BindingOf(Key);
 	if (Binding.IsEmpty())
 	{
 		return FReply::Unhandled();
 	}
-	return Model->KeyPressed(Binding, GameKit::ShellInput::DeviceOf(InKeyEvent.GetKey())) ? FReply::Handled() : FReply::Unhandled();
+	const FString Device = GameKit::ShellInput::DeviceOf(InKeyEvent.GetKey(), InKeyEvent.GetInputDeviceId());
+	return Model->KeyPressed(Binding, Device) ? FReply::Handled() : FReply::Unhandled();
+}
+
+FReply SGameKitShell::OnAnalogValueChanged(const FGeometry& MyGeometry, const FAnalogInputEvent& InAnalogInputEvent)
+{
+	// the left stick moves the focus like the d-pad; the model keeps the hysteresis (StickMoved)
+	const FKey Key = InAnalogInputEvent.GetKey();
+	const bool bX = Key == EKeys::Gamepad_LeftX;
+	if (!bX && Key != EKeys::Gamepad_LeftY)
+	{
+		return FReply::Unhandled();
+	}
+	const FString Device = GameKit::ShellInput::DeviceOf(Key, InAnalogInputEvent.GetInputDeviceId());
+	const double Value = InAnalogInputEvent.GetAnalogValue();
+	return Model->StickMoved(bX ? TEXT("x") : TEXT("y"), Value, Device) ? FReply::Handled() : FReply::Unhandled();
 }
 
 FReply SGameKitShell::OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)

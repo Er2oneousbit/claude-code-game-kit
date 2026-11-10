@@ -3,7 +3,8 @@
 // Purpose : Tests of the shell's screens on the headless model (no window): every settings field has a row, the
 //           keys walk the screens, Back saves the file, rebinding swaps, the one-handed layouts apply and reset,
 //           text scale and the readable font take, a held subtitle waits for accept, "What now?" and the
-//           history read back, every control says what it is, every row is reachable, hold-to-repeat timing;
+//           history read back, every control says what it is, every row is reachable, hold-to-repeat timing,
+//           the pad's make from its device name and the left stick as the d-pad (#267);
 //           plus the scripted runs tools/dev.py starts: GameKit.Screens.Drive (--drive) and GameKit.Screens.Show
 //           (--drive show:<screen> --screenshot).
 // Usage   : python tools/dev.py test --filter GameKit.Screens          (or `test` for everything)
@@ -459,6 +460,102 @@ bool FGameKitScreensAutoRepeatTest::RunTest(const FString& Parameters)
 		Early += R.Update(0.01, true) ? 1 : 0;
 	}
 	TestEqual(TEXT("nothing in the first 0.3 s after a release"), Early, 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensPadBrandTest, "GameKit.Screens.PadBrandFromDeviceName", ScreenTestFlags)
+bool FGameKitScreensPadBrandTest::RunTest(const FString& Parameters)
+{
+	using GameKit::ShellInput::PadBrand;
+	struct FCase
+	{
+		const TCHAR* Name;
+		const TCHAR* Device;
+	};
+	// What Unreal's input plugins register (interface name, then hardware id) and SDL's names on Linux (#267)
+	const FCase Cases[] = {
+		{TEXT("XInputInterface XInputController"), TEXT("pad_xbox")},
+		{TEXT("GameInput XboxOne"), TEXT("pad_xbox")},
+		{TEXT("GameInput Xbox360"), TEXT("pad_xbox")},
+		{TEXT("Xbox Wireless Controller"), TEXT("pad_xbox")},   // Microsoft's, despite "wireless controller"
+		{TEXT("WinDualShock DualSense"), TEXT("pad_playstation")},
+		{TEXT("DUALSHOCK 4"), TEXT("pad_playstation")},
+		{TEXT("PS5 Controller"), TEXT("pad_playstation")},
+		{TEXT("Wireless Controller"), TEXT("pad_playstation")},  // Sony's own name for the DualShock 4
+		{TEXT("Nintendo Switch Pro Controller"), TEXT("pad_switch")},
+		{TEXT("Joy-Con (L/R)"), TEXT("pad_switch")},
+		{TEXT("GameInput Hid"), TEXT("pad_other")},
+		{TEXT("8BitDo Pro 2"), TEXT("pad_other")},
+		{TEXT(""), TEXT("pad_other")},                           // a device the registry does not know
+	};
+	for (const FCase& C : Cases)
+	{
+		TestEqual(FString::Printf(TEXT("\"%s\""), C.Name), PadBrand(C.Name), FString(C.Device));
+	}
+	TestEqual(TEXT("an unknown device id has no name"), GameKit::ShellInput::PadName(FInputDeviceId()), FString());
+	TestEqual(TEXT("a pad button from an unknown device is pad_other"),
+	          GameKit::ShellInput::DeviceOf(EKeys::Gamepad_FaceButton_Bottom), FString(TEXT("pad_other")));
+	TestEqual(TEXT("a key stays the keyboard"), GameKit::ShellInput::DeviceOf(EKeys::SpaceBar), FString(TEXT("keyboard")));
+	// the make picks the prompt set
+	FTempFolder Folder;
+	TSharedRef<FGameKitShellModel> M = Fresh(Folder.Path);
+	const FCase Sets[] = {   // Name = the device, Device = the glyph set it shows
+		{TEXT("pad_xbox"), TEXT("xbox")}, {TEXT("pad_playstation"), TEXT("playstation")},
+		{TEXT("pad_switch"), TEXT("generic")}, {TEXT("pad_other"), TEXT("generic")}, {TEXT("keyboard"), TEXT("keyboard")},
+	};
+	for (const FCase& S : Sets)
+	{
+		M->LastDevice = S.Name;
+		TestEqual(FString::Printf(TEXT("%s shows the %s prompts"), S.Name, S.Device), M->GlyphSet(), FString(S.Device));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensStickTest, "GameKit.Screens.LeftStickMovesFocusWithHysteresis", ScreenTestFlags)
+bool FGameKitScreensStickTest::RunTest(const FString& Parameters)
+{
+	FTempFolder Folder;
+	TSharedRef<FGameKitShellModel> M = Fresh(Folder.Path);
+	M->StickMoved(TEXT("y"), -0.9, TEXT("pad_playstation"));   // the title: a push is "any button"
+	TestEqual(TEXT("a stick push leaves the title"), M->TopName(), FString(TEXT("main_menu")));
+	M->StickMoved(TEXT("y"), 0.0, TEXT("pad_playstation"));
+	TestEqual(TEXT("Play has the focus"), M->FocusId(), FString(TEXT("play")));
+	M->StickMoved(TEXT("y"), -0.6, TEXT("pad_playstation"));
+	TestEqual(TEXT("down on the stick moves the focus down"), M->FocusId(), FString(TEXT("settings")));
+	TestEqual(TEXT("the stick's pad picks the prompts"), M->GlyphSet(), FString(TEXT("playstation")));
+	// held, and wavering around the press point: no repeat until it comes back under StickOff
+	for (const double V : {-0.9, -0.45, -0.55, -0.35, -0.6, -0.31, -1.0})
+	{
+		M->StickMoved(TEXT("y"), V, TEXT("pad_playstation"));
+	}
+	TestEqual(TEXT("a held, wavering stick moves once"), M->FocusId(), FString(TEXT("settings")));
+	M->StickMoved(TEXT("y"), -0.25, TEXT("pad_playstation"));   // released
+	M->StickMoved(TEXT("y"), -0.55, TEXT("pad_playstation"));   // pushed again
+	TestNotEqual(TEXT("a second push moves again"), M->FocusId(), FString(TEXT("settings")));
+	M->StickMoved(TEXT("y"), 0.0, TEXT("pad_playstation"));
+	M->StickMoved(TEXT("y"), 0.7, TEXT("pad_playstation"));     // up (Unreal's LeftY is positive up)
+	TestEqual(TEXT("up on the stick moves the focus back"), M->FocusId(), FString(TEXT("settings")));
+	M->StickMoved(TEXT("y"), 0.0, TEXT("pad_playstation"));
+	TestTrue(TEXT("the stick at rest does nothing"), !M->StickMoved(TEXT("y"), 0.1, TEXT("pad_playstation")));
+	// left and right on the settings tabs
+	M->Dispatch(TEXT("ui_accept"));
+	TestEqual(TEXT("settings open on the tab bar"), M->FocusId(), FString(TEXT("tabs.display")));
+	M->StickMoved(TEXT("x"), 0.8, TEXT("pad_xbox"));
+	M->StickMoved(TEXT("x"), 0.4, TEXT("pad_xbox"));
+	M->StickMoved(TEXT("x"), 0.9, TEXT("pad_xbox"));
+	TestEqual(TEXT("right on the stick switches the tab once"), M->FocusId(), FString(TEXT("tabs.audio")));
+	M->StickMoved(TEXT("x"), 0.0, TEXT("pad_xbox"));
+	M->StickMoved(TEXT("x"), -0.8, TEXT("pad_xbox"));
+	TestEqual(TEXT("left on the stick switches back"), M->FocusId(), FString(TEXT("tabs.display")));
+	M->StickMoved(TEXT("x"), 0.0, TEXT("pad_xbox"));
+	// a wide deadzone raises the press point
+	M->SetNum(TEXT("input"), TEXT("deadzone"), 0.8);
+	M->StickMoved(TEXT("x"), 0.7, TEXT("pad_xbox"));
+	TestEqual(TEXT("inside a 0.8 deadzone the stick does nothing"), M->FocusId(), FString(TEXT("tabs.display")));
+	M->StickMoved(TEXT("x"), 0.0, TEXT("pad_xbox"));
+	M->StickMoved(TEXT("x"), 0.85, TEXT("pad_xbox"));
+	TestEqual(TEXT("past the deadzone it moves"), M->FocusId(), FString(TEXT("tabs.audio")));
+	TestFalse(TEXT("the right stick and other axes are not menu input"), M->StickMoved(TEXT("z"), 1.0, TEXT("pad_xbox")));
 	return true;
 }
 

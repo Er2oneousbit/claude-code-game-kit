@@ -897,6 +897,37 @@ bool FGameKitShellModel::KeyPressed(const FString& Binding, const FString& Devic
 	return false;
 }
 
+bool FGameKitShellModel::StickMoved(const FString& Axis, double Value, const FString& Device)
+{
+	const bool bX = Axis == TEXT("x");
+	if (!bX && Axis != TEXT("y"))
+	{
+		return false;
+	}
+	static const TCHAR* const Dirs[4] = {TEXT("dpad_up"), TEXT("dpad_down"), TEXT("dpad_left"), TEXT("dpad_right")};
+	const double Deadzone = FMath::Max(Num(TEXT("input"), TEXT("deadzone")), 0.05);
+	const double V = FMath::Abs(Value) < Deadzone ? 0.0 : Value;
+	const double On = FMath::Max(StickOn, Deadzone);
+	bool bUsed = false;
+	const auto Edge = [&](int32 Dir, bool bActive)
+	{
+		if (bActive && !StickHeld[Dir])
+		{
+			StickHeld[Dir] = true;
+			bUsed = KeyPressed(TEXT("pad:") + FString(Dirs[Dir]), Device) || bUsed;
+		}
+		else if (!bActive && StickHeld[Dir])
+		{
+			StickHeld[Dir] = false;
+		}
+	};
+	const int32 Neg = bX ? 2 : 1;   // left, or down (Unreal's LeftY is positive up)
+	const int32 Pos = bX ? 3 : 0;   // right, or up
+	Edge(Neg, V < -On || (StickHeld[Neg] && V < -StickOff));
+	Edge(Pos, V > On || (StickHeld[Pos] && V > StickOff));
+	return bUsed;
+}
+
 bool FGameKitShellModel::RowAction(FGameKitScreen& Screen, TArray<FGameKitRow>& Rows, int32& Focus, const FString& Action)
 {
 	if (Rows.IsEmpty())

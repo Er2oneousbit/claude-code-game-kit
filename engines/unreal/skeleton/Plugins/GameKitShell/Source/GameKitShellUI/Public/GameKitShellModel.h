@@ -26,6 +26,8 @@
 // Pseudocode:
 //   KeyPressed(binding, device): capture open -> rebind ; title "any key" -> menu ;
 //     else for every action bound to it (sorted): a held subtitle takes ui_accept first, else Top().Action(a)
+//   StickMoved(axis, v, device): |v| under the deadzone = 0 ; a direction not held and past max(StickOn, deadzone)
+//     -> held, KeyPressed("pad:dpad_<dir>") ; a held direction back under StickOff -> released
 //   Dispatch(action): the top screen's rules (tabs, rows, pages, dialogs) -> true when used
 //   Update(dt): loading progress, subtitle timer (held with subtitle_hold), the settings message, blink time
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
@@ -122,6 +124,8 @@ public:
 	static constexpr double TextScaleMin = 0.75;
 	static constexpr double TextScaleMax = 2.0;
 	static constexpr double TextScaleStep = 0.25;
+	static constexpr double StickOn = 0.5;            // the left stick presses a d-pad direction past this
+	static constexpr double StickOff = 0.3;           // and lets it go under this (hysteresis, as the C++ shell)
 	static const TCHAR* const SettingsFile;           // "settings.json" in DataDir
 	static const TCHAR* const PresetsFile;            // "data/input/presets.json" under ProjectDir
 	static const TCHAR* const ColoursFile;            // "data/access/colours.json"
@@ -180,8 +184,13 @@ public:
 	FString Heading(const FGameKitScreen& Screen) const;
 
 	// ---- Input ----
-	/** A key or button as the shell sees it ("key:enter", "pad:south", "mouse:left"); Device: keyboard, mouse, pad. */
+	/** A key or button as the shell sees it ("key:enter", "pad:south", "mouse:left"); Device: keyboard, mouse,
+	 *  pad_xbox, pad_playstation, pad_switch, pad_other (GameKit::ShellInput::DeviceOf). */
 	bool KeyPressed(const FString& Binding, const FString& Device);
+	/** The left stick as the d-pad: Axis "x" (right is +1) or "y" (up is +1, as Unreal's Gamepad_LeftY). Passing
+	 *  StickOn (or input.deadzone, if larger) presses pad:dpad_<dir> once; it is released only under StickOff, so
+	 *  a stick wavering at the edge never repeats. True when the press was used. */
+	bool StickMoved(const FString& Axis, double Value, const FString& Device);
 	/** An action as if a bound key was pressed (drives and tests). True when a screen used it. */
 	bool Dispatch(const FString& Action);
 	FString LastDevice = TEXT("keyboard");
@@ -233,6 +242,7 @@ private:
 	TSharedPtr<FJsonObject> Colours;
 	FString CaptureAction;
 	int32 CaptureSlotIndex = -1;
+	bool StickHeld[4] = {false, false, false, false};   // dpad_up, dpad_down, dpad_left, dpad_right
 	FGameKitSaidLine Subtitle;
 	double SubtitleT = 0.0, SubtitleEnd = 0.0;
 	bool bHeld = false;

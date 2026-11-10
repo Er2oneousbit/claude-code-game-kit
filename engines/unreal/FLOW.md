@@ -180,8 +180,13 @@ focused)**. Wire the game to it:
   the platform's voice **(verify: not wired, no voice on the test machine)**.
 - `FGameKitAutoRepeat` (GameKitAutoRepeat.h) is "hold to mash" for `access.auto_repeat`, as on the other engines.
 - Keys arrive as binding strings (`GameKitShellInput.h`: SpaceBar is `key:space`, the bottom face button `pad:south`);
-  Unreal cannot tell an Xbox pad from a PlayStation one without a platform plugin, so prompts use the generic set
-  unless `input.glyphs` picks one. Sticks are not read as directions; the D-pad is.
+  the pad's make comes from the name its input plugin registers for the device (`FInputDeviceRegistry`), with the
+  C++ shell's hints plus Nintendo ones: `pad_xbox`, `pad_playstation`, `pad_switch` or `pad_other`, and `auto`
+  prompts follow it (Switch and unknown pads get the generic positional set). What a pad is called depends on the
+  plugin: on Windows, XInput and GameInput report every pad as an Xbox one (Steam Input and DS4Windows present a
+  PlayStation pad as one too), the WinDualShock plugin reports Sony pads, Linux passes SDL's pad names
+  **(verify: only the name-to-make mapping is tested, no pad on the test machine)**. The left stick moves the focus
+  like the D-pad, with hysteresis (pressed past 0.5 or `input.deadzone`, let go under 0.3), one step per push.
 - Strings: `data/i18n/en.json` and `fr.json` (the LÖVE shell's tables); add a locale by adding a file. The version on
   the title is the project version from Project Settings.
 
@@ -198,8 +203,9 @@ python tools/dev.py test --filter GameKit.Screens                       # the sc
 language. Screens for `show:`: title, main_menu, settings, pause, help, history, credits, loading, subtitle. The
 access report describes the 1920x1080 design (scaling "exact": the view scales it to the window), each text's size,
 colours and whether it fits its column (measured with Slate's font service), and which rows the arrow keys reach; a
-`res=` option is noted, not applied. Paths given to `--screenshot` and `--data-dir` may not contain spaces or quotes
-(Unreal's command line reads a `-Name=value` up to the next space) **(verify: a quoted path may work on your version)**.
+`res=` option is noted, not applied. Paths given to `--screenshot` and `--data-dir` may contain spaces: dev.py
+passes them as `-Name="a b"`, the form Unreal's command line reads whole (K01: UE 5.8 on Windows, 2026-11-10);
+a double quote is refused.
 
 ## Source control (Git + LFS)
 - `.gitattributes` in this repo routes `.uasset`, `.umap`, textures, audio, and meshes through LFS. Run `git lfs install` before the first commit.
