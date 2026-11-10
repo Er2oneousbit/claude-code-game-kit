@@ -169,7 +169,7 @@ bool FGameKitShellDrive::Press(const FString& Action)
 		{
 			return Fail(Action + TEXT(" has no gamepad button: a gamepad-only player cannot press it"));
 		}
-		Model->KeyPressed(Button, TEXT("pad"));
+		Model->KeyPressed(Button, TEXT("pad_other"));   // a pad of no known make, as on the other engines
 	}
 	else
 	{

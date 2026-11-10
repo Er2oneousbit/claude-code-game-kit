@@ -18,7 +18,7 @@ public class GameKitShellUI : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "Json", "GameKitShell", "Slate", "SlateCore" });
-		PrivateDependencyModuleNames.AddRange(new string[] { "InputCore", "UMG", "RenderCore", "RHI", "Projects", "DeveloperSettings", "EngineSettings" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "ApplicationCore", "InputCore", "UMG", "RenderCore", "RHI", "Projects", "DeveloperSettings", "EngineSettings" });
 	}
 }
 
