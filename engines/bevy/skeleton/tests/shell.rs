@@ -2,8 +2,10 @@
 // tests/shell.rs
 // Purpose : The shell's screens, headless: the title, menu and settings answer the ui_* actions, settings edits save
 //           to the run's own data folder, the one-handed layouts apply and reset, a rebind swaps, pause shows "What
-//           now?" and the dialogue history, subtitle_hold waits for accept, auto_repeat repeats a held action, and
-//           the `menus` drive finishes with the file it promises (SOP-19, SOP-20; #165, #166, #167, #168).
+//           now?" and the dialogue history, subtitle_hold waits for accept, auto_repeat repeats a held action, the
+//           Intent carries the analog stick, triggers and held actions (#265), the display settings reach a window
+//           outside automated runs (#268), and the `menus` drive finishes with the file it promises (SOP-19, SOP-20;
+//           #165, #166, #167, #168).
 // Usage   : python tools/dev.py test   (or cargo test --test shell)
 // Notes   : app::shell_test_app builds the real ShellPlugin on the headless test App; every test gets its own data
 //           folder under the system temp dir, so no test touches another's settings.json or the player's.
@@ -13,11 +15,15 @@
 use std::path::PathBuf;
 
 use bevy::prelude::*;
+use bevy::window::{
+    Monitor, MonitorSelection, PresentMode, PrimaryMonitor, PrimaryWindow, WindowMode, WindowResolution,
+};
 use serde_json::{Value, json};
 
 use {{GAME_SLUG}}::app::shell_test_app;
 use {{GAME_SLUG}}::game::{AccessRules, GameActive, GameConfig, Intent, Palette, ScreenShake};
-use {{GAME_SLUG}}::shell::{ScreenName, Shell};
+use {{GAME_SLUG}}::shell::display::FrameLimit;
+use {{GAME_SLUG}}::shell::{PadAxes, ScreenName, Shell};
 
 /// A data folder of this test's own under the system temp dir, removed when the test ends.
 struct TempDir(PathBuf);
@@ -321,6 +327,156 @@ fn auto_repeat_repeats_a_held_action_only_when_on() {
     shell_mut(&mut app).held.insert("move_right".into());
     app.update();
     assert_eq!(app.world().resource::<Intent>().dir, Vec2::X);
+}
+
+#[test]
+fn the_intent_carries_the_analog_stick_triggers_and_held_actions() {
+    let dir = TempDir::new("shell-analog");
+    let mut app = shell_test_app(cfg(&dir), None);
+    // in the menus a leaning stick and a held trigger never reach the game
+    to_menu(&mut app);
+    shell_mut(&mut app).pad = PadAxes {
+        left: Vec2::new(0.6, 0.0),
+        left_trigger: 1.0,
+        right_trigger: 0.525,
+    };
+    app.update();
+    assert_eq!(
+        *app.world().resource::<Intent>(),
+        Intent::default(),
+        "menus: an empty Intent"
+    );
+    focus(&mut app, "play");
+    press(&mut app, "ui_accept");
+    until_screen(&mut app, ScreenName::Play);
+    shell_mut(&mut app).held.insert("drift".into());
+    shell_mut(&mut app).held.insert("ui_accept".into());
+    app.update();
+    let intent = app.world().resource::<Intent>().clone();
+    // deadzone 0.2 (the default), radial and rescaled: 0.6 -> 0.5
+    assert!(
+        (intent.stick - Vec2::new(0.5, 0.0)).length() < 1e-5,
+        "{:?}",
+        intent.stick
+    );
+    assert!(
+        (intent.dir - intent.stick).length() < 1e-5,
+        "the stick alone steers dir at half speed"
+    );
+    assert_eq!(intent.left_trigger, 1.0);
+    assert!((intent.right_trigger - 0.5).abs() < 1e-5, "{}", intent.right_trigger);
+    assert!(intent.is_held("drift"), "a game action held through its binding");
+    assert!(
+        intent.is_held("move_right"),
+        "the stick past the deadzone holds move_right"
+    );
+    assert!(!intent.is_held("ui_accept"), "ui_* actions never reach the game");
+    // keyboard only: dir is a unit direction, the analog fields stay zero
+    shell_mut(&mut app).pad = PadAxes::default();
+    shell_mut(&mut app).held.insert("move_up".into());
+    app.update();
+    let intent = app.world().resource::<Intent>().clone();
+    assert_eq!(intent.dir, Vec2::Y);
+    assert_eq!(
+        (intent.stick, intent.left_trigger, intent.right_trigger),
+        (Vec2::ZERO, 0.0, 0.0)
+    );
+    // invert_y and a bigger deadzone come from the settings
+    shell_mut(&mut app).held.clear();
+    shell_mut(&mut app).set("input", "invert_y", json!(true));
+    shell_mut(&mut app).set("input", "deadzone", json!(0.5));
+    shell_mut(&mut app).pad.left = Vec2::new(0.0, 0.4);
+    app.update();
+    assert_eq!(
+        app.world().resource::<Intent>().stick,
+        Vec2::ZERO,
+        "inside the 0.5 deadzone"
+    );
+    shell_mut(&mut app).pad.left = Vec2::new(0.0, 1.0);
+    app.update();
+    let intent = app.world().resource::<Intent>().clone();
+    assert!((intent.stick - Vec2::NEG_Y).length() < 1e-5, "{:?}", intent.stick);
+    assert!(intent.is_held("move_down") && !intent.is_held("move_up"));
+}
+
+/// A primary window and a 2560x1440 primary monitor in the headless world, as winit would spawn them.
+fn spawn_window(app: &mut App) -> Entity {
+    app.world_mut().spawn((
+        Monitor {
+            name: None,
+            physical_height: 1440,
+            physical_width: 2560,
+            physical_position: IVec2::ZERO,
+            refresh_rate_millihertz: None,
+            scale_factor: 1.0,
+            video_modes: Vec::new(),
+        },
+        PrimaryMonitor,
+    ));
+    let window = Window {
+        resolution: WindowResolution::new(1280, 720).with_scale_factor_override(1.0),
+        ..default()
+    };
+    app.world_mut().spawn((window, PrimaryWindow)).id()
+}
+
+#[test]
+fn display_settings_reach_the_window_but_never_in_automated_runs() {
+    let dir = TempDir::new("shell-display");
+    let mut app = shell_test_app(
+        GameConfig {
+            automated: false,
+            ..cfg(&dir)
+        },
+        None,
+    );
+    let win = spawn_window(&mut app);
+    let window = |app: &App| app.world().get::<Window>(win).unwrap().clone();
+    app.update();
+    // the defaults: windowed 1920x1080 (fits the monitor), vsync, no cap
+    let w = window(&app);
+    assert_eq!(w.mode, WindowMode::Windowed);
+    assert_eq!(w.present_mode, PresentMode::AutoVsync);
+    assert_eq!((w.physical_width(), w.physical_height()), (1920, 1080));
+    {
+        let mut s = shell_mut(&mut app);
+        s.set("display", "mode", json!("borderless"));
+        s.set("display", "vsync", json!(false));
+        s.set("display", "frame_cap", json!(120));
+    }
+    app.update();
+    let w = window(&app);
+    assert_eq!(w.mode, WindowMode::BorderlessFullscreen(MonitorSelection::Current));
+    assert_eq!(w.present_mode, PresentMode::AutoNoVsync);
+    assert_eq!(
+        app.world().resource::<FrameLimit>().frame_time,
+        Some(std::time::Duration::from_secs_f64(1.0 / 120.0))
+    );
+    {
+        let mut s = shell_mut(&mut app);
+        s.set("display", "mode", json!("windowed"));
+        s.set("display", "resolution", json!([3840, 2160]));
+        s.set("display", "frame_cap", json!(0));
+    }
+    app.update();
+    let w = window(&app);
+    assert_eq!(w.mode, WindowMode::Windowed);
+    assert_eq!(
+        (w.physical_width(), w.physical_height()),
+        (2560, 1440),
+        "a size bigger than the monitor is clamped to it"
+    );
+    assert_eq!(app.world().resource::<FrameLimit>().frame_time, None);
+
+    // an automated run (dev.py smoke, captures, the sweep) leaves the window as the run made it
+    let dir = TempDir::new("shell-display-auto");
+    let mut app = shell_test_app(cfg(&dir), None);
+    let win = spawn_window(&mut app);
+    shell_mut(&mut app).set("display", "mode", json!("fullscreen"));
+    frames(&mut app, 2);
+    let w = app.world().get::<Window>(win).unwrap();
+    assert_eq!(w.mode, WindowMode::Windowed);
+    assert_eq!((w.physical_width(), w.physical_height()), (1280, 720));
 }
 
 #[test]

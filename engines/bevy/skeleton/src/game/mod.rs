@@ -9,7 +9,7 @@
 //           - state changes run in FixedUpdate (one tick = 1/60 s, frame-rate independent, repeatable), and only
 //             while GameActive is true (the shell sets it: Play on top, not paused);
 //           - input arrives only through the Intent resource (the shell writes it from the player's bindings,
-//             bots in autoplay);
+//             bots in autoplay): dir, pressed and held actions, the analog stick and the triggers;
 //           - visuals live in present.rs; this file never spawns sprites, meshes or cameras.
 //           Juice: systems add trauma to the ScreenShake resource; present.rs moves the camera by it.
 //           Accessibility: AccessRules (game speed, timing scale, auto repeat, flash limit) and Palette (the
@@ -18,10 +18,11 @@
 // Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): ScreenShake (logic::shake), the goal shakes it
 //           2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): GameActive, AccessRules, Palette, Intent.pressed,
 //           the shell's options (--drive, --data-dir, --locale)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): Intent.held, stick and triggers (analog input, #265)
 // ---------------------------------------------------------------------------
 pub mod present;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use bevy::prelude::*;
@@ -104,12 +105,35 @@ pub fn configure(args: &[String]) -> Result<GameConfig, String> {
 }
 
 /// What the player wants this tick. The shell (from the bindings) or a bot writes it; the simulation only reads it.
+/// Everything is zero or empty while the game is not active (menus, pause).
 #[derive(Resource, Debug, Default, Clone, PartialEq)]
 pub struct Intent {
-    /// Desired direction, length 0 to 1.
+    /// Desired direction, length 0 to 1: the held move_* actions (keys, d-pad) plus the analog `stick`, so keyboard
+    /// play gives unit directions and a half-leaned stick gives half speed.
     pub dir: Vec2,
     /// Game actions pressed this frame (jump, attack, interact), auto-repeats included.
     pub pressed: Vec<String>,
+    /// Game actions held right now (no ui_*): a drift button, a charge, "hold to sprint". The left stick past the
+    /// deadzone also holds move_left/right/up/down here, invert_y honoured.
+    pub held: BTreeSet<String>,
+    /// The left stick, deadzone (input.deadzone, radial, rescaled) and input.invert_y applied: each axis -1 to 1,
+    /// up is +y. Zero without a pad.
+    pub stick: Vec2,
+    /// The analog triggers, 0 at rest to 1 fully in (logic::analog::TRIGGER_DEADZONE applied): gas and brake.
+    pub left_trigger: f32,
+    pub right_trigger: f32,
+}
+
+impl Intent {
+    /// Is this game action held right now?
+    pub fn is_held(&self, action: &str) -> bool {
+        self.held.contains(action)
+    }
+
+    /// Was this game action pressed this frame?
+    pub fn just_pressed(&self, action: &str) -> bool {
+        self.pressed.iter().any(|a| a == action)
+    }
 }
 
 #[derive(Component, Debug)]
