@@ -16,10 +16,56 @@
 #           quitting. dev.py runs drives with --fixed-fps 60, so every frame is 1/60 s of game time and pictures
 #           repeat; headless, those frames run as fast as the CPU allows, so screen waits use real time (WAIT_MS).
 #           MAX_NAV_STEPS bounds every "press until focused" loop.
+#           While a drive runs, RealInputGuard (the last node under the root, so its _input sees every event first)
+#           drops the real keyboard, mouse and gamepads: their events are marked handled (no Shell device switch, no
+#           focus move, no _unhandled_input) and the actions they pressed in Input are let go; Shell.pad_override
+#           holds the analog values at rest. Only the drive's own events pass: every InputEventAction, and the pad
+#           events it marks (RealInputGuard.mark). A capture run's window and a shared machine's virtual pad cannot
+#           break a tour (#276).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): real input is ignored while a drive runs (#276)
 # ---------------------------------------------------------------------------
 class_name SmokeDrive
 extends Node
+
+
+## #276: while it is in the tree, real devices do not reach the game, the shell or the GUI; the drive's own events
+## (InputEventAction, and pad events passed through mark()) do.
+class RealInputGuard extends Node:
+	const INJECTED: StringName = &"game_kit_drive"
+	var _saved_override: Dictionary = {}
+
+	func _init() -> void:
+		name = "DriveInputGuard"
+		process_mode = Node.PROCESS_MODE_ALWAYS
+
+	func _enter_tree() -> void:
+		_saved_override = Shell.pad_override
+		if Shell.pad_override.is_empty():
+			Shell.pad_override = {"left": Vector2.ZERO} # the real sticks and triggers are not read
+
+	func _exit_tree() -> void:
+		Shell.pad_override = _saved_override
+
+	func _input(event: InputEvent) -> void:
+		if RealInputGuard.injected(event):
+			return
+		RealInputGuard.forget(event)
+		get_viewport().set_input_as_handled()
+
+	## The drive's own device event: marked so the guard lets it through.
+	static func mark(event: InputEvent) -> InputEvent:
+		event.set_meta(INJECTED, true)
+		return event
+
+	static func injected(event: InputEvent) -> bool:
+		return event is InputEventAction or event.has_meta(INJECTED)
+
+	## Input took a real event's state before any node saw it: let go of every action it matches.
+	static func forget(event: InputEvent) -> void:
+		for action: StringName in InputMap.get_actions():
+			if event.is_action(action) and Input.is_action_pressed(action):
+				Input.action_release(action)
 
 const MAX_NAV_STEPS: int = 30
 const WAIT_MS: int = 10000 # real time a screen gets to appear (headless frames run far faster than 60 per second,
@@ -45,6 +91,7 @@ var _pad: bool = false # access drive: press with gamepad events instead of acti
 var _text_scale: float = 1.0
 var _read: bool = false # access drive: readable font and double line spacing
 var _window: Vector2i = Vector2i.ZERO # access drive: the window size to lay the screens out for
+var _guard: Node = null # RealInputGuard while the drive runs (#276)
 
 
 func _init(p_front: FrontEnd) -> void:
@@ -55,7 +102,15 @@ func _init(p_front: FrontEnd) -> void:
 
 
 func _ready() -> void:
+	# the guard goes last under the root, after the main scene and every screen it adds: its _input runs first
+	_guard = RealInputGuard.new()
+	get_tree().root.add_child.call_deferred(_guard)
 	_run.call_deferred()
+
+
+func _exit_tree() -> void:
+	if is_instance_valid(_guard):
+		_guard.queue_free()
 
 
 func _run() -> void:
@@ -124,7 +179,7 @@ func _crash() -> void:
 	_raise_script_error()
 	await _frames(30) # Shell writes the crash file and quits with 1 on the next frame
 	if not CrashHook.installed():
-		_fail("no crash hook on this Godot version (the Logger hook needs 4.5+)")
+		_fail("the crash hook is not installed (the Shell did not boot?)")
 	else:
 		_fail("the crash hook did not write a crash file")
 
@@ -380,12 +435,12 @@ func _pad_event(action: String, pressed: bool) -> InputEvent:
 			var b: InputEventJoypadButton = (e as InputEventJoypadButton).duplicate()
 			b.pressed = pressed
 			b.device = 0
-			return b
+			return RealInputGuard.mark(b)
 		if e is InputEventJoypadMotion:
 			var m: InputEventJoypadMotion = (e as InputEventJoypadMotion).duplicate()
 			m.axis_value = (1.0 if (e as InputEventJoypadMotion).axis_value > 0 else -1.0) if pressed else 0.0
 			m.device = 0
-			return m
+			return RealInputGuard.mark(m)
 	return null
 
 # ---- steps --------------------------------------------------------------------
