@@ -102,8 +102,7 @@ func _ready() -> void:
 	session_id = Telemetry.new_session()
 	DirAccess.make_dir_recursive_absolute(data_dir)
 	Log.open_file(path(LOG_FILE), _log_header())
-	if not CrashHook.install():
-		Log.warn("shell", "no crash hook on this Godot version (needs 4.5+): crash files are not written")
+	CrashHook.install()
 	load_settings()
 	colours = AccessColours.load_data()
 	_color_filter = ColorFilter.new()

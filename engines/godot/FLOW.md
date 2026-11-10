@@ -3,7 +3,7 @@
 Engine-specific workflow for a Godot 4 / GDScript project. Universal process lives in `docs/sop/`.
 
 > **Tested.** Every command ran against Godot 4.7.2 (Windows) with GUT 9.7.1, the test commands including planted failures
-> (`build` exported Windows, Linux and Web; `run` booted the game); an auditor also ran the test commands on 4.3 to 4.6.3. Godot below 4.3 is not supported (see docs/ENGINE.md). Items marked **(verify)** are untested.
+> (`build` exported Windows, Linux and Web; `run` booted the game); the floor, official 4.6-stable with GUT 9.6.1, passed `check`, `test`, `smoke` and the menus and crash drives. Godot below 4.6 is not supported: the shell does not compile there, and `dev.py` refuses it (exit 2; see docs/ENGINE.md). Items marked **(verify)** are untested.
 
 ## Daily loop
 ```
@@ -26,7 +26,7 @@ Hot reload: the editor reloads changed scripts on focus. Running games started b
 | `run` | `godot --path .` |
 | `build` | `godot --headless --path . --export-release "<preset>" <out>`. The skeleton ships `export_presets.cfg` with "Windows Desktop", "Linux" and "Web" (tests, tools and docs excluded); with no options `build` picks this computer's preset and its `export_path` (`build/windows/<game>.exe`). Verified on Godot 4.7.2: all three export from Windows in seconds and the exe boots |
 | `clean` | removes `build/`, and `.godot/` with `--deep` (keeps `.godot/export_credentials.cfg`) |
-| `doctor` | Godot found and 4.3+, GUT and cache present, then `tools/doctor.py` |
+| `doctor` | Godot found and 4.6+ (older: exit 2), GUT and cache present, then `tools/doctor.py` |
 
 `check`, `test` and `smoke` run `import` first when `.godot/` is missing or a `class_name` script was added, renamed or removed:
 Godot only learns class names on import, so without it valid code fails `check` and new test files are skipped.
@@ -95,7 +95,7 @@ resting on the window cannot change the picture.
 
 ## Setting up tests (GUT)
 1. Install GUT into `addons/gut/`. Without the editor: download the release zip for your Godot version from
-   https://github.com/bitwes/Gut/releases (9.7.1 works with Godot 4.7.2) and copy the zip's `addons/gut/` folder into
+   https://github.com/bitwes/Gut/releases (9.7.1 works with Godot 4.7.2; GUT 9.7 does not parse on 4.6, where 9.6.1 works) and copy the zip's `addons/gut/` folder into
    the game's `addons/`. With the editor open: AssetLib tab, search "GUT", Download, Install. The folder must be
    `addons/gut/`, not the GUT files loose in `addons/`. The next `check`/`test` re-imports automatically.
 2. Enable it under Project Settings > Plugins for the editor panel. The headless `dev.py test` works without enabling it.
