@@ -41,7 +41,7 @@
   `caption(id)`, `set_objective(text)`. Text is SDL's built-in 8x8 font (`SDL_RenderDebugText`, scaled by
   `access.text_scale`; `readable_font` draws it bold; `line_spacing` applies): no font file, no SDL3_ttf, **ASCII only**, so
   the shell ships `data/i18n/en.json` alone. A translation with accents, or a real typeface (the kit's readable font
-  elsewhere is Atkinson Hyperlegible), means adding `sdl3-ttf` (below) and swapping `shell/Draw.cpp`'s glyph call.
+  elsewhere is Atkinson Hyperlegible), means adding `sdl3-ttf` (below) and swapping `src/shell/Draw.cpp`'s glyph call.
 - **Smoke scenarios:** `python tools/dev.py smoke --drive menus` (changes two settings, saves, quits; prints
   `SETTINGS_WRITTEN`), `--drive show:<title|menu|settings|pause|subtitle|play> --screenshot captures/x.bmp`, and
   `--drive access` (the accessibility sweep's tour; `python tools/access/sweep.py` runs it five ways). `--data-dir` keeps
