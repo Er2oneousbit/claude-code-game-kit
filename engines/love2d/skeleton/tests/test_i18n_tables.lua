@@ -58,7 +58,8 @@ function T.test_other_languages_use_english_keys()
 end
 
 function T.test_french_falls_back_to_english()
-  local tables = { en = table_of("en"), fr = table_of("fr") }
+  -- the shipped fr.json is complete (#270), so a partial table stands in for a translation in progress
+  local tables = { en = table_of("en"), fr = { ["menu.play"] = table_of("fr")["menu.play"] } }
   local i18n = I18n.new(tables, "fr")
   A.eq(i18n:t("menu.play"), tables.fr["menu.play"])
   A.eq(i18n:t("menu.juice"), tables.en["menu.juice"], "a key fr lacks shows the English text")

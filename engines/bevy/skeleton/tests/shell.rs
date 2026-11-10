@@ -360,10 +360,11 @@ fn the_pseudo_locale_brackets_every_label_and_french_falls_back_to_english() {
     }
     shell_mut(&mut app).locale_override = Some("fr".into());
     assert_eq!(shell(&app).t("menu.play"), "Jouer");
+    // fr.json is complete (#270); the fallback to en for a missing key is in the i18n golden vectors (tests/golden.rs)
     assert_eq!(
         shell(&app).t("settings.access.narration"),
-        "Narrate menus",
-        "a key fr lacks comes from en"
+        "Lire les menus à voix haute",
+        "the accessibility rows are French too"
     );
     frames(&mut app, 1);
     assert_eq!(
