@@ -12,6 +12,8 @@
 #             folder itself) into addons/gut/ and removed afterwards; without GUT_DIR their `test` is SKIP
 #           - an exit recorded in EXPECTED for that example and command (a known gap, such as Lockpick's smoke
 #             without RPG Maker MZ's own files) is shown as expected, not as a failure
+#           - generated content an example does not commit (PREPARE: Rune Delve's map from build_content.py) is made
+#             once, after `check` and before `test`, when its file is missing
 #           - after the run, any change under examples/ that git sees and that was not there before (a modified
 #             tracked file, a new file that is not ignored) fails the run
 # Usage   : python scripts/check_examples.py                          # every example, every command
@@ -42,6 +44,7 @@
 #     Godot: GUT_DIR set -> copy GUT into addons/gut/ (only when the example has none), else test is SKIP
 #     for command in check, test, smoke (no smoke with --skip-smoke):
 #       missing -> SKIP naming the variable; else run python tools/dev.py <command> with the per-command timeout
+#       (before test: the example's PREPARE step when the file it makes is missing)
 #       result = exit code, compared with EXPECTED; keep the last [ OK ] / [FAIL] / [error] line
 #     finally remove the GUT copy
 #   print the table, then the last line of every command that did not pass
@@ -78,6 +81,11 @@ TOOL_HINT = {"cmake": "put cmake on PATH (VS Build Tools ship one: Common7/IDE/C
 # Known gaps: (example, command) -> (exit code, why). Shown as expected instead of failed.
 EXPECTED = {
     ("lockpick-mz", "smoke"): (2, "RPG Maker MZ's own files are not in the repo (dev.py setup --from <an MZ project>)"),
+}
+# Generated content an example does not commit: example -> (file it makes, dev.py arguments that make it). Run after
+# `check` (which compiles what the script needs) and before `test`, only when the file is missing.
+PREPARE = {
+    "rune-delve": ("Content/Maps/Delve.umap", ("exec", "tools/unreal/build_content.py")),
 }
 RESULT_LINE = re.compile(r"^\s*\[( OK |FAIL|error|ERROR|SKIP|WARN)\]")
 ENV_BLOCK = re.compile(r"^#\s*Env\s*:(.*)$")
@@ -276,6 +284,12 @@ def check_example(example, engine, commands, timeout, gut):
             if engine == "godot" and command == "test" and not gut and not (example / GUT_ADDON).exists():
                 cells[command] = Cell("SKIP", line=f"set {GUT_ENV} (a GUT release's addons/gut/)")
                 continue
+            if command == "test" and example.name in PREPARE and not (example / PREPARE[example.name][0]).exists():
+                prep = PREPARE[example.name][1]
+                rc, out, sec = run([sys.executable, "tools/dev.py", *prep], example, timeout)
+                cells["prepare"] = judge(example.name, "prepare", rc, out, sec)
+                print(f"  {example.name:<18} {'prepare':<7} {cells['prepare'].text():<8} {sec:6.0f} s  "
+                      f"dev.py {' '.join(prep)}: {cells['prepare'].line}")
             rc, out, sec = run([sys.executable, "tools/dev.py", command], example, timeout)
             cells[command] = judge(example.name, command, rc, out, sec)
             print(f"  {example.name:<18} {command:<7} {cells[command].text():<8} {sec:6.0f} s  {cells[command].line}")
@@ -333,7 +347,7 @@ def print_table(rows, commands):
     for p, engine, cells in rows:
         print(f"{p.name:<{width}}  {engine:<12}" + "".join(f"{cells[c].text() if c in cells else '-':<10}"
                                                            for c in commands))
-    notes = [(p.name, c, cells[c]) for p, _, cells in rows for c in commands
+    notes = [(p.name, c, cells[c]) for p, _, cells in rows for c in ["prepare"] + list(commands)
              if c in cells and cells[c].status != "OK"]
     if notes:
         print()

@@ -170,6 +170,27 @@ class CheckExamples(unittest.TestCase):
         self.assertEqual(rc, 1, text)                    # the gap closed: EXPECTED is stale, say so
         self.assertIn("[expected exit 2]", text)
 
+    def test_prepare_runs_once_before_test_when_its_file_is_missing(self):
+        made = "build/map.txt"                           # gitignored, like Rune Delve's Content/
+        self.example("delve", behavior={"exec": {"write": made, "line": "[ OK ] map made"},
+                                        "test": {"need": made}})
+        (self.examples / "delve" / "build").mkdir()
+        self.commit()
+        self.mod.PREPARE = {"delve": (made, ("exec", "tools/build_content.py"))}
+        rc, text = self.run_tool()
+        self.assertEqual(rc, 0, text)
+        self.assertIn("prepare 0", " ".join(text.split()))
+        rc, text = self.run_tool()                       # the file is there now: no second run
+        self.assertNotIn("prepare", text)
+        (self.examples / "delve" / made).unlink()
+        spec = json.loads((self.examples / "delve" / "behavior.json").read_text(encoding="utf-8"))
+        spec["exec"] = {"rc": 1, "line": "[FAIL] the script broke"}
+        (self.examples / "delve" / "behavior.json").write_text(json.dumps(spec), encoding="utf-8")
+        git(self.repo, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qam", "broken")
+        rc, text = self.run_tool()
+        self.assertEqual(rc, 1, text)
+        self.assertIn("delve prepare: [FAIL] [FAIL] the script broke", text)
+
     def test_timeout_kills_the_command(self):
         self.example("slow", behavior={"smoke": {"sleep": 60}})
         self.commit()
