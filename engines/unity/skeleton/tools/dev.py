@@ -504,6 +504,8 @@ def cmd_smoke(args):
               f"Windows): its files would ship with the game. Use a folder of its own, e.g. Logs/{Path(given).name}",
               file=sys.stderr)
         return 2
+    if given and data_dir_in_pack(given):   # #271: a folder the build copies into the player
+        return 2
     shot = (ROOT / args.screenshot).resolve() if args.screenshot else None
     rec = (ROOT / args.record).resolve() if args.record else None
     if shot:
@@ -558,6 +560,44 @@ def cmd_smoke(args):
     if rc == 0 and getattr(args, "shaders", False):
         rc = shader_pass()
     return rc
+
+
+BUILD_SCRIPT = "Assets/Editor/GameKitBuild.cs"   # #271: its DATA_DIRS are copied into StreamingAssets by `build`
+PLAYER_DATA = "Assets/StreamingAssets"           # shipped as is with every player
+
+
+def packed_folders():
+    """#271: the folders a player build carries whole: GameKitBuild.DATA_DIRS (read from BUILD_SCRIPT, as the build
+    reads them; none when it cannot be read) and Assets/StreamingAssets."""
+    try:
+        text = (ROOT / BUILD_SCRIPT).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        text = ""
+    m = re.search(r"\bDATA_DIRS\s*=\s*(?:new\s*string\s*\[\s*\]\s*)?\{([^}]*)\}", text)
+    return (re.findall(r'"([^"]+)"', m.group(1)) if m else []) + [PLAYER_DATA]
+
+
+def data_dir_in_pack(given):
+    """#271: print an error and return True when --data-dir lies inside a folder the build copies into the player
+    (packed_folders()) or in a Resources folder under Assets/ (Unity ships those too). Letter case is ignored."""
+    p = Path(given)
+    where = os.path.realpath(str(p if p.is_absolute() else ROOT / p))
+    try:
+        rel = Path(os.path.relpath(where, os.path.realpath(str(ROOT)))).as_posix()
+    except ValueError:
+        return False                                  # another drive on Windows
+    low = rel.lower()
+    hit = next((d for d in packed_folders() if low == d.lower().rstrip("/") or
+                low.startswith(d.lower().rstrip("/") + "/")), None)
+    parts = low.split("/")
+    if hit is None and parts[0] == "assets" and "resources" in parts[1:]:
+        hit = "/".join(rel.split("/")[:parts.index("resources", 1) + 1])
+    if hit is None:
+        return False
+    print(f"[error] --data-dir {given} is inside {hit}/, which the player build carries ({BUILD_SCRIPT} copies its "
+          f"DATA_DIRS into {PLAYER_DATA}/): its files would ship with the game. Use a folder of its own, e.g. "
+          f"Logs/{p.name or 'run'}", file=sys.stderr)
+    return True
 
 
 def smoke_data_dir(args):

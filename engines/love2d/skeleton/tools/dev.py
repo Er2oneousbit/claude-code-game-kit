@@ -418,6 +418,8 @@ def cmd_test(args, love):
 def cmd_smoke(args, love):
     if data_dir_in_build(getattr(args, "data_dir", "")):
         return 2
+    if data_dir_in_pack(getattr(args, "data_dir", "")):   # #271: a folder the .love packs
+        return 2
     # a syntax error in conf.lua happens before any handler exists: catch it here, fast and clearly
     boot = [p for p in (ROOT / "conf.lua", ROOT / "main.lua") if p.is_file()]
     failed, ok, unreadable = compile_check(love, boot)
@@ -523,6 +525,26 @@ def data_dir_in_build(given):
               f"game. Use a folder of its own, e.g. captures/{p.name or 'run'}", file=sys.stderr)
         return True
     return False
+
+
+def data_dir_in_pack(given):
+    """#271: print an error and return True when --data-dir lies inside a folder `build` packs into the .love
+    (LOVE_INCLUDE, less LOVE_EXCLUDE_PATHS, the list love_members() reads), where its files would ship with the next
+    build. Letter case is ignored."""
+    if not given:
+        return False
+    p = Path(given)
+    where = os.path.realpath(str(p if p.is_absolute() else ROOT / p)).lower()
+
+    def inside(rel):
+        folder = os.path.realpath(str(ROOT / rel)).lower()
+        return where == folder or where.startswith(folder.rstrip("\\/") + os.sep)
+    packed = next((rel for rel in LOVE_INCLUDE if inside(rel)), None)
+    if packed is None or any(inside(rel) for rel in LOVE_EXCLUDE_PATHS):
+        return False
+    print(f"[error] --data-dir {given} is inside {packed}/, which `build` packs into the .love: its files would ship "
+          f"with the game. Use a folder of its own, e.g. captures/{p.name or 'run'}", file=sys.stderr)
+    return True
 
 
 def smoke_data_dir(args):

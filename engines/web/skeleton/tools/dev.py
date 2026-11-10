@@ -412,8 +412,64 @@ def data_dir_in_build(given):
     return False
 
 
+VITE_CONFIG = "vite.config.ts"   # #271: its publicDir (default public/) is copied into dist/ as is
+
+
+def packed_folders():
+    """#271: the folders `build` copies into dist/: vite's publicDir (read from VITE_CONFIG; `publicDir: false` turns
+    it off) and the folders src/ reads with import.meta.glob (bundled; each up to its first wildcard)."""
+    folders = []
+    try:
+        config = (ROOT / VITE_CONFIG).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        config = ""
+    m = re.search(r"\bpublicDir\s*:\s*(false\b|[\"'`]([^\"'`]+)[\"'`])", config)
+    if not m:
+        folders.append("public")
+    elif m.group(2):
+        folders.append(m.group(2))
+    sources = sorted((ROOT / "src").rglob("*")) if (ROOT / "src").is_dir() else []
+    for src in sources:
+        if src.suffix not in (".ts", ".tsx", ".js", ".mjs", ".jsx") or not src.is_file():
+            continue
+        text = src.read_text(encoding="utf-8", errors="replace")
+        for pattern in re.findall(r"import\.meta\.glob\s*\(\s*[\"'`]([^\"'`]+)[\"'`]", text):
+            parts = pattern.split("/")
+            fixed = []
+            for part in parts:
+                if any(c in part for c in "*?[{"):
+                    break
+                fixed.append(part)
+            if len(fixed) == len(parts):
+                continue                              # one file, not a folder
+            base = ROOT if pattern.startswith("/") else src.parent
+            folder = os.path.normpath(str(base / "/".join(fixed).lstrip("/")))
+            rel = os.path.relpath(folder, str(ROOT)).replace("\\", "/")
+            if rel != "." and not rel.startswith("../") and rel not in folders:
+                folders.append(rel)
+    return folders
+
+
+def data_dir_in_pack(given):
+    """#271: print an error and return True when --data-dir lies inside a folder `build` copies into dist/
+    (packed_folders()), where its files would ship with the next build. Letter case is ignored."""
+    if not given:
+        return False
+    p = Path(given)
+    where = os.path.realpath(str(p if p.is_absolute() else ROOT / p)).lower()
+    for rel in packed_folders():
+        folder = os.path.realpath(str(ROOT / rel)).lower()
+        if where == folder or where.startswith(folder.rstrip("\\/") + os.sep):
+            print(f"[error] --data-dir {given} is inside {rel}/, which `build` copies into dist/: its files would ship "
+                  f"with the game. Use a folder of its own, e.g. build/{p.name or 'run'}", file=sys.stderr)
+            return True
+    return False
+
+
 def cmd_smoke(args):
     if data_dir_in_build(args.data_dir):
+        return 2
+    if data_dir_in_pack(args.data_dir):   # #271: a folder the build copies into dist/
         return 2
     rc = cmd_build(args)
     if rc:

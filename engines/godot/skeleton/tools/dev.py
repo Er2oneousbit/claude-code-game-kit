@@ -568,6 +568,97 @@ def data_dir_in_build(given):
     return False
 
 
+# #271: files the shell writes in its data folder, tried against the export filters (one per kind of file)
+DATA_DIR_PROBES = ("settings.json", "save_1.json", "logs/game.log", "crashes/crash_1.txt", "telemetry.csv",
+                   "bug_1/info.txt")
+
+
+def export_filters():
+    """#271: [(preset name, include patterns, exclude patterns)] from export_presets.cfg, split on commas as Godot
+    splits include_filter and exclude_filter. Empty when the file cannot be read."""
+    presets, cur = [], None
+    try:
+        text = (ROOT / "export_presets.cfg").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("["):
+            cur = [line, [], []] if re.fullmatch(r"\[preset\.\d+\]", line) else None
+            if cur:
+                presets.append(cur)
+            continue
+        m = re.fullmatch(r'(name|include_filter|exclude_filter)="(.*)"', line)
+        if m and cur:
+            if m.group(1) == "name":
+                cur[0] = m.group(2)
+            else:
+                cur[1 if m.group(1) == "include_filter" else 2] = [f.strip() for f in m.group(2).split(",")
+                                                                  if f.strip()]
+    return [tuple(p) for p in presets]
+
+
+def godot_filter_match(rel, pattern):
+    """True when a project path matches an export filter as Godot matches it: case-insensitive, `*` also crosses
+    folders, tried with and without res://. Brackets are literal in Godot, so they are escaped for fnmatch."""
+    import fnmatch
+    pat = pattern.lower().replace("[", "[[]")
+    rel = rel.lower()
+    return fnmatch.fnmatchcase(rel, pat) or fnmatch.fnmatchcase("res://" + rel, pat)
+
+
+def data_dir_in_pack(given):
+    """#271: print an error and return True when the files the shell writes in --data-dir (DATA_DIR_PROBES) would go
+    into an export: an include_filter in export_presets.cfg takes them and no exclude_filter drops them. Only paths
+    inside the project count (an export packs nothing else)."""
+    if not given:
+        return False
+    p = Path(given)
+    where = os.path.realpath(str(p if p.is_absolute() else ROOT / p))
+    try:
+        rel = Path(os.path.relpath(where, os.path.realpath(str(ROOT)))).as_posix()
+    except ValueError:
+        return False                                  # another drive on Windows
+    if rel == ".." or rel.startswith("../"):
+        return False
+    for name, include, exclude in export_filters():
+        for probe in DATA_DIR_PROBES:
+            path = probe if rel == "." else f"{rel}/{probe}"
+            hit = next((f for f in include if godot_filter_match(path, f)), None)
+            if hit and not any(godot_filter_match(path, f) for f in exclude):
+                print(f"[error] --data-dir {given} is taken by the include_filter {hit!r} of the export preset {name!r} "
+                      f"(export_presets.cfg): its files would ship with the game. Use a folder of its own, e.g. "
+                      f"captures/{p.name or 'run'}", file=sys.stderr)
+                return True
+    return False
+
+
+# #271: files that make a folder part of the game for Godot (scripts, scenes, resources, imported assets)
+GODOT_OWN_SUFFIXES = (".gd", ".tscn", ".scn", ".tres", ".res", ".import", ".gdshader", ".uid", ".godot", ".cs")
+
+
+def keep_out_of_export(folder):
+    """#271: a .gdignore in a smoke run's data folder inside the project. The presets export all_resources, and Godot
+    4.7.2 put build/smoke-data/settings.json and captures/<x>/settings.json into the .pck (a .json is a resource);
+    with a .gdignore Godot neither imports nor exports the folder, and the game still reads and writes it. Never in
+    a folder holding Godot's own files (GODOT_OWN_SUFFIXES): there it would hide the game's scenes and assets."""
+    try:
+        rel = folder.resolve().relative_to(ROOT.resolve())
+    except ValueError:
+        return                                        # outside the project: never exported
+    if not rel.parts or not folder.is_dir():
+        return
+    own = next((p for p in folder.rglob("*") if p.suffix.lower() in GODOT_OWN_SUFFIXES), None)
+    if own:
+        print(f"[warn] {rel.as_posix()}/ holds files of the game ({own.relative_to(folder).as_posix()}): no .gdignore "
+              "there, so an export ships this run's .json files with them. Use a folder of its own, e.g. "
+              "captures/<name>")
+        return
+    mark = folder / ".gdignore"
+    if not mark.exists():
+        mark.write_bytes(b"")
+
+
 def smoke_data_dir(args):
     """The game's data folder for this smoke run: --data-dir as given (never wiped), else a fresh build/smoke-data/."""
     if args.data_dir:
@@ -597,6 +688,8 @@ def game_args(args, data_dir):
 def cmd_smoke(args, godot):
     if data_dir_in_build(args.data_dir):
         return 2
+    if data_dir_in_pack(args.data_dir):   # #271: a folder the export's include_filter takes
+        return 2
     if args.compare and not args.screenshot:
         print("[error] --compare needs --screenshot (the new picture to compare)", file=sys.stderr)
         return 2
@@ -608,6 +701,7 @@ def cmd_smoke(args, godot):
     if rc:
         return rc
     data_dir = smoke_data_dir(args)
+    keep_out_of_export(data_dir)   # #271: all_resources would ship its .json files
     dbg(f"data folder {data_dir}")
     user = game_args(args, data_dir)
     if args.drive:
@@ -794,6 +888,8 @@ def compare(args):
 
 def cmd_run(args, godot):
     if data_dir_in_build(args.data_dir):
+        return 2
+    if data_dir_in_pack(args.data_dir):   # #271: a folder the export's include_filter takes
         return 2
     cmd = [godot, "--path", "."]
     user = ["--debug"] if args.debug else []   # picked up by Log autoload

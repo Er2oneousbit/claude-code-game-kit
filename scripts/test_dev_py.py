@@ -16,7 +16,7 @@
 #           echoes its markers and fails without DRIVE_DONE (#168), and on C++ (the scenario, data folder and
 #           locale after `--`, the drive's frame budget; #269), that Unreal's --screenshot and --data-dir reach the
 #           editor quoted when the path has a space (#267), and that every smoke refuses a --data-dir inside its
-#           player or build output (#263).
+#           player or build output (#263), or inside a folder its build packs into the game (#271).
 # Usage   : python scripts/test_dev_py.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, no engine needed. The live checks (a real smoke with each toolchain) are
@@ -1839,6 +1839,177 @@ class DataDirInBuildOutput(TempRoot):
         with self.assertRaises(SystemExit) as cm:
             quiet(dev.build_parser().parse_args, ["smoke", "--data-dir", "build/web/sd"])
         self.assertEqual(cm.exception.code, 2)
+
+
+# ---- #271: nor inside a folder the build packs into the game ------------------------------------
+class DataDirInPackedFolders(TempRoot):
+    """#263 guarded the build outputs only; folders copied INTO a build were not, so a --data-dir there still shipped
+    (LÖVE packs src/, assets/ and data/ into the .love, Godot's include_filter takes data/access/*, Unity's
+    GameKitBuild copies its DATA_DIRS into StreamingAssets). Every dev.py now refuses those too (exit 2, nothing run
+    or created), read from the place the build reads them."""
+
+    def engine(self, name):
+        dev = load(name)
+        dev.ROOT = self.root
+        self.calls = []
+
+        def called(*a, **kw):
+            self.calls.append(a)
+            raise AssertionError("ran past the --data-dir guard")
+        return dev, called
+
+    def refused(self, fn, *args, folder):
+        rc, text = quiet(fn, *args)
+        self.assertEqual(rc, 2, text)
+        self.assertIn("[error] --data-dir", text)
+        self.assertNotIn("Traceback", text)
+        self.assertEqual(self.calls, [])
+        self.assertFalse((self.root / folder).exists(), f"{folder} was created")
+        return text
+
+    def allowed(self, dev, *paths):
+        for rel in paths:
+            ok, text = quiet(dev.data_dir_in_pack, rel)
+            self.assertFalse(ok, f"{rel} refused: {text}")
+
+    def skeleton(self, engine, *rels):
+        """Copy files or folders of an engine's skeleton into the temp project (the build's own sources)."""
+        for rel in rels:
+            src, dst = KIT / "engines" / engine / "skeleton" / rel, self.root / rel
+            if src.is_dir():
+                shutil.copytree(src, dst)
+            else:
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+
+    def test_love_refuses_what_the_love_packs(self):
+        dev, called = self.engine("love2d")
+        dev.compile_check = called
+        args = argparse.Namespace(data_dir="data/access/deck", drive="access", locale="", frames=120,
+                                  headless=True, screenshot="", record="", compare="", debug=False, game_args=[])
+        self.assertIn("data/", self.refused(dev.cmd_smoke, args, "love", folder="data/access/deck"))
+        for rel in ("SRC/sd", "assets", "lib/x", "shaders/kit/x"):
+            args.data_dir = rel
+            self.refused(dev.cmd_smoke, args, "love", folder=rel)
+        self.allowed(dev, "captures/access/deck", "build/smoke-data", "data/golden/x", "data/shaders/x", "tests/x")
+
+    def test_godot_reads_the_export_filters(self):
+        dev, called = self.engine("godot")
+        dev.run = dev.ensure_imported = called
+        self.skeleton("godot", "export_presets.cfg")
+        args = argparse.Namespace(data_dir="data/access/deck", compare="", screenshot="", drive="", locale="",
+                                  debug=False)
+        text = self.refused(dev.cmd_smoke, args, "godot", folder="data/access/deck")
+        self.assertIn("'data/access/*'", text)
+        args.data_dir = "DATA/I18N/x"
+        self.refused(dev.cmd_run, args, "godot", folder="DATA/I18N/x")
+        self.allowed(dev, "captures/access/pc", "build/smoke-data", "data/golden/x", "data/levels/x")
+        # a game's own filter counts, and an exclude_filter wins over it
+        cfg = self.root / "export_presets.cfg"
+        cfg.write_text(cfg.read_text(encoding="utf-8").replace('include_filter="CREDITS.md,',
+                                                               'include_filter="*.json, CREDITS.md,', 1),
+                       encoding="utf-8")
+        args.data_dir = "captures/pc"
+        self.assertIn("'*.json'", self.refused(dev.cmd_smoke, args, "godot", folder="captures/pc"))
+        self.allowed(dev, "tests/sd", "data/golden/sd")     # excluded by every preset
+        self.allowed(dev, str(Path(tempfile.gettempdir()) / "elsewhere"))   # outside the project: never exported
+
+    def test_godot_smoke_keeps_its_data_folder_out_of_all_resources(self):
+        # Godot 4.7.2 exported build/smoke-data/settings.json and captures/pc/settings.json (all_resources takes
+        # every .json); a .gdignore keeps a folder out of the import and the export
+        dev = load("godot")
+        dev.ROOT = self.root
+        dev.ensure_imported = lambda godot: 0
+        dev.run = lambda *a, **kw: (1, "")
+        args = argparse.Namespace(data_dir="", compare="", screenshot="", record="", drive="", locale="", frames=10,
+                                  debug=False)
+        quiet(dev.cmd_smoke, args, "godot")
+        self.assertTrue((self.root / "build" / "smoke-data" / ".gdignore").is_file())
+        args.data_dir = "captures/access/pc"
+        quiet(dev.cmd_smoke, args, "godot")
+        self.assertTrue((self.root / "captures" / "access" / "pc" / ".gdignore").is_file())
+        game = self.root / "levels"                          # a folder of the game's own: never hidden
+        game.mkdir()
+        (game / "one.tscn").write_text("[gd_scene]\n", encoding="utf-8")
+        args.data_dir = "levels"
+        _, text = quiet(dev.cmd_smoke, args, "godot")
+        self.assertFalse((game / ".gdignore").exists())
+        self.assertIn("[warn] levels/ holds files of the game (one.tscn)", text)
+        outside = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(outside), True)
+        dev.keep_out_of_export(outside)
+        self.assertFalse((outside / ".gdignore").exists())
+        dev.keep_out_of_export(self.root)                    # never the whole project
+        self.assertFalse((self.root / ".gdignore").exists())
+
+    def test_unity_reads_data_dirs_from_gamekitbuild(self):
+        dev, called = self.engine("unity")
+        dev.run_tests = called
+        self.skeleton("unity", "Assets/Editor/GameKitBuild.cs")
+        args = argparse.Namespace(screenshot=None, record=None, record_every=6, graphics=False, fail_on=None,
+                                  until=None, filter="Smoke", drive="access:res=1280x800,pad",
+                                  data_dir="data/access/deck", locale="")
+        self.assertIn("data/access/", self.refused(dev.cmd_smoke, args, folder="data/access/deck"))
+        for rel in ("Data/I18n/x", "Assets/StreamingAssets/sd", "Assets/Art/Resources/sd"):
+            args.data_dir = rel
+            self.refused(dev.cmd_smoke, args, folder=rel)
+        self.allowed(dev, "Logs/access/deck", "data/golden/x", "Assets/Art/sd")
+        build = self.root / "Assets" / "Editor" / "GameKitBuild.cs"   # a game that adds a folder to DATA_DIRS
+        build.write_text(build.read_text(encoding="utf-8").replace('"data/dialogue" }', '"data/dialogue", "data/levels" }'),
+                         encoding="utf-8")
+        args.data_dir = "data/levels/sd"
+        self.refused(dev.cmd_smoke, args, folder="data/levels/sd")
+
+    def test_bevy_refuses_the_asset_folder(self):
+        dev, called = self.engine("bevy")
+        dev.preflight = dev.build = called
+        args = argparse.Namespace(data_dir="Assets/sd", drive="access", locale="", frames=None, timeout=60,
+                                  game_args=[])
+        self.assertIn("assets/", self.refused(dev.cmd_smoke, args, folder="Assets/sd"))
+        self.allowed(dev, "captures/sd", "build/smoke-data", "data/i18n/sd")   # include_str! names files, not folders
+        main = self.root / "src" / "main.rs"
+        main.parent.mkdir(parents=True)
+        main.write_text('fn main() { App::new().add_plugins(DefaultPlugins.set(AssetPlugin { file_path: "content"'
+                        '.into(), ..default() })); }\n', encoding="utf-8")
+        args.data_dir = "content/sd"
+        self.refused(dev.cmd_smoke, args, folder="content/sd")
+        self.allowed(dev, "assets/sd")
+
+    def test_cpp_refuses_assets_and_the_shells_data(self):
+        dev, called = self.engine("cpp-sdl2")
+        dev.cmd_check = called
+        self.skeleton("cpp-sdl2", "src/shell/Shell.cpp")
+        args = argparse.Namespace(preset="debug", frames=None, screenshot=None, record=None, record_every=4,
+                                  game_args=[], timeout=60, until=None, fail_on=None, drive="access",
+                                  data_dir="data/i18n/sd", locale="")
+        self.refused(dev.cmd_smoke, args, folder="data/i18n/sd")
+        for rel in ("assets/sd", "data/access/sd", "Data/Input/sd", "data/dialogue/sd"):
+            args.data_dir = rel
+            self.refused(dev.cmd_smoke, args, folder=rel)
+        self.allowed(dev, "captures/access/pc", "build/smoke-data", "data/golden/sd", "data/shaders/sd")
+
+    def test_web_overlays_refuse_public_and_globbed_folders(self):
+        for name in ("web", "web-3d"):
+            with self.subTest(engine=name):
+                self.tearDown()
+                self.setUp()
+                dev, called = self.engine(name)
+                dev.cmd_build = dev.run = called
+                self.skeleton(name, "src", "vite.config.ts")
+                args = argparse.Namespace(data_dir="Public/sd", drive="menus", locale="")
+                self.assertIn("public/", self.refused(dev.cmd_smoke, args, folder="Public/sd"))
+                args.data_dir = "data/shaders/inputs/sd"           # import.meta.glob in src/shaders/shaderCheck.ts
+                self.refused(dev.cmd_smoke, args, folder="data/shaders/inputs/sd")
+                self.allowed(dev, "build/smoke-data", "build/access/pc")
+                if name == "web":                                    # the 2D shell globs its string tables
+                    args.data_dir = "data/i18n/sd"
+                    self.refused(dev.cmd_smoke, args, folder="data/i18n/sd")
+                cfg = self.root / "vite.config.ts"
+                cfg.write_text(cfg.read_text(encoding="utf-8").replace('base: "./",', 'base: "./", publicDir: "static",'),
+                               encoding="utf-8")
+                args.data_dir = "static/sd"
+                self.refused(dev.cmd_smoke, args, folder="static/sd")
+                self.allowed(dev, "public/sd")
 
 
 # ---- #252: dev.py ship forwards to tools/cloud/ship.py --------------------------------

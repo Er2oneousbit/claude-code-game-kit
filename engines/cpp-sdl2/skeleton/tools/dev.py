@@ -365,6 +365,8 @@ def cmd_test(args):
 def cmd_smoke(args):
     if data_dir_in_build(getattr(args, "data_dir", "")):
         return 2
+    if data_dir_in_pack(getattr(args, "data_dir", "")):   # #271: a folder the packaged game carries
+        return 2
     rc = cmd_check(args)
     if rc != 0:
         return rc
@@ -472,6 +474,43 @@ def data_dir_in_build(given):
         if where == folder or where.startswith(folder.rstrip("\\/") + os.sep):
             print(f"[error] --data-dir {given} is inside {out}/, the build output: its files would ship with the game "
                   f"or be wiped by clean. Use a folder of its own, e.g. captures/{p.name or 'run'}", file=sys.stderr)
+            return True
+    return False
+
+
+SHELL_SOURCE = "src/shell/Shell.cpp"   # #271: its "data/..." paths are the shell's data, read from the game's folder
+
+
+def packed_folders():
+    """#271: the folders a packaged game carries next to the exe: assets/ (docs/ENGINE_FLOW.md > Packaging) and the
+    shell's data folders, read from the "data/..." paths in SHELL_SOURCE (a file's folder for a file path). The CMake
+    build itself copies only inside the build tree (compiled shaders), which data_dir_in_build covers."""
+    folders = ["assets"]
+    try:
+        text = (ROOT / SHELL_SOURCE).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        text = ""
+    for rel in re.findall(r"\"(data/[^\"]+)\"", text):
+        rel = rel.rstrip("/")
+        folder = rel.rsplit("/", 1)[0] if "." in rel.rsplit("/", 1)[-1] else rel
+        if folder not in folders:
+            folders.append(folder)
+    return folders
+
+
+def data_dir_in_pack(given):
+    """#271: print an error and return True when --data-dir lies inside a folder the packaged game carries
+    (packed_folders()). Letter case is ignored."""
+    if not given:
+        return False
+    p = Path(given)
+    where = os.path.realpath(str(p if p.is_absolute() else ROOT / p)).lower()
+    for rel in packed_folders():
+        folder = os.path.realpath(str(ROOT / rel)).lower()
+        if where == folder or where.startswith(folder.rstrip("\\/") + os.sep):
+            print(f"[error] --data-dir {given} is inside {rel}/, which ships next to the exe (docs/ENGINE_FLOW.md > "
+                  f"Packaging): its files would ship with the game. Use a folder of its own, e.g. "
+                  f"captures/{p.name or 'run'}", file=sys.stderr)
             return True
     return False
 
