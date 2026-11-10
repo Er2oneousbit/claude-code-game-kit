@@ -8,6 +8,7 @@
 #           Shell.settings.access.reduce_motion        # read a setting
 #           Shell.set_value("audio", "master", 0.5)    # change one (applied at once; save_settings() writes it)
 #           Shell.effective_shake(); Shell.game_speed(); Shell.telemetry("level_start", "1-2")
+#           Shell.move_vector(); Shell.stick(); Shell.triggers(); Shell.held_actions()   # input for the game (#274)
 # Notes   : User args (after "--"): --data-dir <dir> (default user://), --locale <code> (this run only; "pseudo"
 #           is the test locale), --smoke (a dev.py smoke run: a crash exits 1, no pause on focus loss),
 #           --drive <scenario> (scripts/shell/smoke_drive.gd), --capture (tools/capture.gd is taking a picture).
@@ -81,6 +82,8 @@ var _crash_file: String = ""
 var _missing_keys: Dictionary = {}
 var _color_filter: ColorFilter = null
 var colours: Dictionary = {} # data/access/colours.json (AccessColours)
+## Tests and drives: the pad's analog values to use instead of the hardware's, keys as pad_axes() returns them.
+var pad_override: Dictionary = {}
 
 
 func _ready() -> void:
@@ -386,6 +389,54 @@ func bindings() -> Dictionary:
 	return (settings["input"] as Dictionary)["bindings"]
 
 
+# ---- analog input (#274, the Bevy shell's Intent rules: scripts/core/analog.gd) ------------------------------
+
+## Where the player wants to go: the move_* actions (keys, d-pad and the left stick, which InputBinder binds to them)
+## with the player's radial, rescaled deadzone; invert_y applies to the stick only. Length 0 to 1, up is -y.
+func move_vector() -> Vector2:
+	return Input.get_vector("move_left", "move_right", "move_up", "move_down",
+			float((settings["input"] as Dictionary)["deadzone"]))
+
+
+## The left stick alone: input.deadzone (radial, rescaled) and input.invert_y applied, each axis -1..1, up is -y.
+func stick() -> Vector2:
+	var input: Dictionary = settings["input"]
+	return Analog.stick(pad_axes()["left"], float(input["deadzone"]), bool(input["invert_y"]))
+
+
+## The analog triggers, 0 at rest to 1 fully in (Analog.TRIGGER_DEADZONE applied): x = left, y = right.
+func triggers() -> Vector2:
+	var pad: Dictionary = pad_axes()
+	return Vector2(Analog.trigger(pad["left_trigger"]), Analog.trigger(pad["right_trigger"]))
+
+
+## The game actions (no ui_*) held right now, sorted: a drift button, a charge, "hold to sprint".
+func held_actions() -> PackedStringArray:
+	var out: PackedStringArray = []
+	for action: String in bindings():
+		if not action.begins_with("ui_") and InputMap.has_action(action) and Input.is_action_pressed(action):
+			out.append(action)
+	out.sort()
+	return out
+
+
+## The pads' raw analog values: the left stick of the pad leaning furthest, each trigger from the pad pressed
+## furthest ({"left": Vector2, "left_trigger": float, "right_trigger": float}), or pad_override when set.
+func pad_axes() -> Dictionary:
+	var out: Dictionary = {"left": Vector2.ZERO, "left_trigger": 0.0, "right_trigger": 0.0}
+	if not pad_override.is_empty():
+		out.merge(pad_override, true)
+		return out
+	for device: int in Input.get_connected_joypads():
+		var left: Vector2 = Vector2(Input.get_joy_axis(device, JOY_AXIS_LEFT_X),
+				Input.get_joy_axis(device, JOY_AXIS_LEFT_Y))
+		if left.length() > (out["left"] as Vector2).length():
+			out["left"] = left
+		out["left_trigger"] = maxf(out["left_trigger"], Input.get_joy_axis(device, JOY_AXIS_TRIGGER_LEFT))
+		out["right_trigger"] = maxf(out["right_trigger"], Input.get_joy_axis(device, JOY_AXIS_TRIGGER_RIGHT))
+	return out
+
+
 func prompt_for(action: String) -> String:
 	return Bindings.prompt_binding(bindings(), action, glyph_set())
 
@@ -468,7 +519,7 @@ func _apply_audio() -> void:
 
 func _apply_input() -> void:
 	var input: Dictionary = settings["input"]
-	InputBinder.apply(input["bindings"], float(input["deadzone"]))
+	InputBinder.apply(input["bindings"], float(input["deadzone"]), bool(input["invert_y"]))
 
 
 func _apply_access() -> void:
