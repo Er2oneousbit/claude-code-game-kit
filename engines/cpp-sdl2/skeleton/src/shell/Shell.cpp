@@ -689,9 +689,11 @@ void Shell::key_down(const std::string& binding, bool repeat) {
         }
         return;
     }
-    if (kDebugBuild && binding == kBugKey) {   // F8: reserved for the bug report in debug builds (#275)
-        bug_requested_ = bug_requested_ || !repeat;
-        return;
+    if constexpr (kDebugBuild) {   // F8: reserved for the bug report in debug builds (#275)
+        if (binding == kBugKey) {
+            bug_requested_ = bug_requested_ || !repeat;
+            return;
+        }
     }
     if (!repeat) {
         held_.insert(binding);
