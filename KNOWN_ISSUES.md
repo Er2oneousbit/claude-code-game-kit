@@ -65,6 +65,12 @@ examples were built and tested on one Windows 11 machine.
   cases were run on every port after the merge. One finding is left open: `audioio.sniff` sends an Ogg whose Vorbis
   stream sits behind a Theora or Skeleton header to ffmpeg, although `oggvorbis.py` decodes it, so without ffmpeg
   such a file is refused ([#262](https://github.com/Er2oneousbit/claude-code-game-kit/issues/262)).
+- **Sweep data in Unity's player folder:** `tools/access/sweep.py` writes its runs' settings to `build/access/`, which
+  on Windows and macOS is Unity's `Build/`, so a shipped build can carry them; delete `Build/access/` before you ship
+  ([#263](https://github.com/Er2oneousbit/claude-code-game-kit/issues/263)).
+- **Godot shader check under GPU load:** Godot 4.7.2 crashed in 2 of 5 windowed shader checks while other engines
+  used the GPU (never alone), and `dev.py` blames a missing window; rerun, or `check --no-shaders`
+  ([#264](https://github.com/Er2oneousbit/claude-code-game-kit/issues/264)).
 
 ### Art workflow outside Godot
 Dotwork is Godot-first: other engines get PNGs, sheets with their JSON, `.fnt` fonts and a manifest, and no overlay

@@ -88,6 +88,11 @@
   unlogged media.
 - Fixed: a Bevy project whose crate name sorts before "bevy" (any slug starting with "a") failed `dev.py check` on
   `engines/bevy/skeleton/examples/shader_check.rs` (rustfmt import order); the game's own import sits in its own group now.
+- Found when the merged work was verified on every engine and fixed: Bevy's `dev.py check` failed on a fresh project
+  (two new shell files were not rustfmt-formatted); Bevy's narration started the system's speech in automated runs
+  (smoke, the sweep) when the setting was on, as C++ already did not; Bevy's `narration` golden cases were listed but
+  never ran under `cargo test` (`shell_narration` runs them now). The two new `settings_load` cases pass on all eight
+  ports; RPG Maker MZ has no shell port.
 
 ## Unreleased: second-model reviews (#261) and the exam runner (#158)
 - **`scripts/run_exams.py` (#158):** every tool exam from one table of needs (Pillow, numpy, bpy on uv's Python 3.13,
