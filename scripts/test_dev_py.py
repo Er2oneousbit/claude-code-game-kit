@@ -1428,6 +1428,56 @@ class BevyShaders(TempRoot):
         self.assertTrue((keep / "settings.json").is_file(), "--data-dir is never wiped")
 
 
+# ---- #275: Bevy crash files and the pseudo-locale drives --------------------------------
+class BevyShellDrives(TempRoot):
+    """The crash drive fails on purpose and names its crash file, pseudo-plant fails naming the planted label, the
+    pseudo drive's PSEUDO_ lines are echoed, and a panic in any run points at its crash file."""
+    SMOKE = BevyShaders.SMOKE
+    dev = BevyShaders.dev                   # the same faked cargo, without running the shader cases again
+    smoke = BevyShaders.smoke
+    CRASH = ("BOOT_OK x 0.1.0\nCRASH_WRITTEN build/smoke-data/crashes/crash_20261110_120000.txt\n"
+             "thread 'main' panicked at src/shell/drive.rs:9:9:\ndrive crash: a planted panic\n")
+
+    def drive(self, name, out, rc=0, **opts):
+        dev = self.dev({"--drive " + name: (rc, out)})
+        return self.smoke(dev, shaders=False, drive=name, **opts)
+
+    def test_the_crash_drive_fails_and_names_the_crash_file(self):
+        rc, text = self.drive("crash", self.CRASH, rc=101)
+        self.assertEqual(rc, 1, text)
+        self.assertIn("CRASH_WRITTEN build/smoke-data/crashes/crash_20261110_120000.txt", text, "echoed")
+        self.assertIn("crash report: build/smoke-data/crashes/crash_20261110_120000.txt", text)
+        self.assertIn("fails on purpose", text)
+
+    def test_a_panic_in_a_plain_run_points_at_its_crash_file(self):
+        dev = self.dev({"--smoke": (101, self.CRASH)})
+        rc, text = self.smoke(dev, shaders=False)
+        self.assertEqual(rc, 1, text)
+        self.assertIn("crash report:", text)
+        self.assertNotIn("fails on purpose", text)
+
+    def test_pseudo_lines_are_echoed_and_the_plant_fails_on_purpose(self):
+        ok = "BOOT_OK x\nPSEUDO_SCREEN title labels 3 problems 0\nPSEUDO_PASS 1 screens, 3 labels\nDRIVE_DONE pseudo\nSMOKE_DONE frames=9\n"
+        rc, text = self.drive("pseudo", ok, locale="pseudo")
+        self.assertEqual(rc, 0, text)
+        self.assertIn("PSEUDO_PASS", text)
+        plant = ("BOOT_OK x\nPSEUDO_FAIL main_menu label plant.too_small: text 145 px is wider than its box 30 px\n"
+                 "PSEUDO_FAILED 1 problem(s) on 1 screens\n2026-11-10T00:00:00Z ERROR x: pseudo: 1 label problem(s)\n"
+                 "DRIVE_DONE pseudo-plant\n")
+        rc, text = self.drive("pseudo-plant", plant, rc=1, locale="pseudo")
+        self.assertEqual(rc, 1, text)
+        self.assertIn("plant.too_small", text)
+        self.assertIn("fails on purpose", text)
+
+    def test_the_help_names_the_new_drives(self):
+        dev = load("bevy")
+        p = dev.build_parser()
+        sub = next(a for a in p._actions if isinstance(a, argparse._SubParsersAction)).choices["smoke"]
+        help_text = sub.format_help()
+        for name in ("crash", "pseudo", "pseudo-plant", "bug", "juice"):
+            self.assertIn(name, help_text)
+
+
 # ---- #249: Unity shader recipes -----------------------------------------------------
 class UnityShaders(TempRoot):
     """check runs GameKitShaders.Check in its editor run and fails on a SHADER_FAIL line; smoke --shaders runs
