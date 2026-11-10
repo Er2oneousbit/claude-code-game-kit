@@ -652,12 +652,18 @@ def shader_pass(godot, compare):
         return 2
     errors = [l for l in out.splitlines() if "SHADER ERROR" in l or any(re.search(p, l) for p in ERROR_PATTERNS)]
     if rc != 0 or errors or "SHADER_CHECK_DONE failed=0" not in out:
+        drawn = out.count("SHADER_OK ")
         if errors:
             print("[FAIL] shader errors:\n  " + "\n  ".join(errors[:12]))
+        elif drawn and rc != 0 and "SHADER_CHECK_DONE" not in out:
+            # #264: the window opened and drew some recipes, then Godot died (seen as heap corruption under GPU
+            # load from other programs): a crash, not a missing display
+            code = f"{rc} = 0x{rc:08X}" if rc > 255 else str(rc)      # Windows status codes read better in hex
+            print(f"[FAIL] Godot crashed after {drawn} recipe(s) (exit {code}); rerun, or check --no-shaders")
         else:
             print(f"[FAIL] the shader check did not finish (exit {rc}): it needs a window, so run it from a desktop "
                   "session (check --no-shaders skips it)")
-            if "SHADER_OK " not in out:
+            if not drawn:
                 return 2                        # nothing was drawn at all: no window here, not a broken recipe
         return 1
     if not compare:

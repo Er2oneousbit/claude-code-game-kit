@@ -1561,6 +1561,33 @@ class GodotShaderWindow(TempRoot):
         self.assertEqual(self.shader_pass("", gen=(2, "[error] malformed"))[0], 2)
 
 
+# ---- #264: a Godot crash during the windowed shader check is not "it needs a window" -------
+class GodotShaderCrash(TempRoot):
+    """Godot 4.7.2 died with heap corruption (exit 3221226356) after some SHADER_OK lines while other engines used
+    the GPU; dev.py blamed a missing window and exited 2."""
+
+    def shader_pass(self, rc, check_out):
+        dev = load("godot")
+        dev.ROOT = self.root
+        (self.root / "shaders" / "kit").mkdir(parents=True)
+        dev.run = lambda cmd, **kw: (0, "") if "shader_gen.py" in " ".join(map(str, cmd)) else (rc, check_out)
+        return quiet(dev.shader_pass, "godot", False)
+
+    def test_a_crash_after_some_recipes_names_the_crash(self):
+        out = "Godot Engine v4.7.2.stable\nSHADER_OK flash\nSHADER_OK dissolve\nSHADER_OK palette_swap\n"
+        rc, text = self.shader_pass(3221226356, out)
+        self.assertEqual(rc, 1, text)
+        self.assertIn("Godot crashed after 3 recipe(s) (exit 3221226356 = 0xC0000374)", text)
+        self.assertIn("check --no-shaders", text)
+        self.assertNotIn("needs a window", text)
+
+    def test_a_run_that_never_started_keeps_the_window_message(self):
+        rc, text = self.shader_pass(1, "Godot Engine v4.7.2.stable\n")
+        self.assertEqual(rc, 2, text)
+        self.assertIn("it needs a window", text)
+        self.assertNotIn("crashed", text)
+
+
 # ---- #252: dev.py ship forwards to tools/cloud/ship.py --------------------------------
 class ShipCommand(TempRoot):
     """Every engine's `dev.py ship ...` hands its arguments to tools/cloud/ship.py untouched (its own --target, --plan
