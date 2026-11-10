@@ -12,6 +12,7 @@
 //           analog: input.stick() -> {x, y} ; input.triggers() -> {left, right} ; input.heldActions()
 //           rebinding: input.capture((binding) => ...)     // null when cancelled (Escape) or timed out
 //           smoke driver: input.inject("ui_down")          // presses the action's first binding
+//           (app sets input.scripted while a drive runs: then only inject / injectPad press anything)
 // Notes   : Browser only (window, navigator.getGamepads), no Phaser: Phaser's own keyboard and gamepad
 //           plugins are off in main.ts so nothing reads keys twice. Gamepads use the browser's "standard"
 //           mapping (button 0 = south). keyName / padButtonName / padDevice are pure and unit tested.
@@ -20,7 +21,13 @@
 //           past the deadzone also holds move_left/right/up/down (isDown, heldActions), whatever the bindings say.
 //           With several pads the stick comes from the one leaning furthest and each trigger from the one pressed
 //           furthest. The browser offers no trigger on a pad without the standard mapping (both read 0).
+//           scripted (#276; app sets it while a smoke drive runs): no real device is read, only what the drive
+//           injects. attach() puts a capture-phase guard on the window first, so every real key, mouse, pointer
+//           and touch event stops there (the menus' click and hover handlers, the F8 key, Phaser's pointer too),
+//           and poll() reads no pad (navigator.getGamepads is live in headless Chromium: a real or virtual pad on
+//           the machine would otherwise reach the tour). inject() and injectPad() still land.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): real devices are not read while a drive runs (#276)
 // ---------------------------------------------------------------------------
 import { stick, stickActions, trigger, type Vec2 } from "../core/analog";
 import type { Bindings } from "../core/bindings";
@@ -36,6 +43,13 @@ const PAD_AXES = ["leftx", "lefty", "rightx", "righty"];
 const PAD_TRIGGER = 0.5; // analog buttons (triggers) count as pressed above this
 const PAD_TRIGGER_BUTTONS = { left: 6, right: 7 }; // standard mapping: l2, r2
 const MAX_QUEUED = 3; // gameplay presses remembered per action until a scene takes them
+// The real devices' DOM events: dropped at the window while a drive runs (#276). blur and focus are not input.
+const REAL_EVENTS = [
+  "keydown", "keyup", "keypress",
+  "mousedown", "mouseup", "click", "dblclick", "auxclick", "contextmenu", "mousemove", "mouseover", "mouseenter", "wheel",
+  "pointerdown", "pointerup", "pointermove", "pointerover", "pointerenter",
+  "touchstart", "touchend", "touchmove",
+];
 
 export type Device = "keyboard" | "mouse" | "pad_xbox" | "pad_playstation" | "pad_other";
 
@@ -79,6 +93,8 @@ function connectedPads(): ArrayLike<Gamepad | null> {
 
 export class ShellInput {
   lastDevice: Device = "keyboard";
+  /** A drive runs: the real keyboard, mouse and pads are not read, only inject() / injectPad() (#276). */
+  scripted = false;
   /** Called once per new press with the binding and the actions it maps to (maybe none). */
   onPress: (binding: string, actions: string[]) => void = () => {};
   /** Called for raw key presses before mapping (the shell's F8 bug report key). */
@@ -98,6 +114,12 @@ export class ShellInput {
   ) {}
 
   attach(target: Window): void {
+    // First, and in the capture phase: while a drive runs, a real event stops here, before this class's own
+    // listeners below and before any element's (the window sees every event first, hover and click included).
+    const guard = (e: Event) => {
+      if (this.scripted) e.stopImmediatePropagation();
+    };
+    for (const type of REAL_EVENTS) target.addEventListener(type, guard, { capture: true, passive: true });
     target.addEventListener("keydown", (e) => {
       if (e.repeat) return;
       this.lastDevice = "keyboard";
@@ -188,11 +210,13 @@ export class ShellInput {
   }
 
   /** Reads gamepads (call once per frame): new button and stick presses become bindings, and the analog values
-   * are kept for stick() and triggers(). Tests pass their own pads. */
-  poll(pads: ArrayLike<Gamepad | null> = connectedPads()): void {
+   * are kept for stick() and triggers(). Tests pass their own pads. While scripted no pad is read (not even
+   * passed ones): any pad binding still held is released and the stick and triggers rest. */
+  poll(pads?: ArrayLike<Gamepad | null>): void {
     const now = new Map<string, boolean>();
     const raw = { x: 0, y: 0, left: 0, right: 0 };
-    for (const pad of Array.from(pads)) {
+    const list = this.scripted ? [] : Array.from(pads ?? connectedPads());
+    for (const pad of list) {
       if (!pad || !pad.connected) continue;
       const [x = 0, y = 0] = pad.axes;
       if (Math.hypot(x, y) > Math.hypot(raw.x, raw.y)) Object.assign(raw, { x, y });
