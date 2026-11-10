@@ -34,9 +34,11 @@
 //           Input Manager the GameKit Left X/Y and L2/R2 axes AddInputAxes adds) and shaped with input.deadzone and
 //           input.invert_y (Shell calls ConfigureAnalog). The ui_events backend has no analog values. Drives and
 //           tests can hold a stick and triggers with InjectAnalog (replaces the device until cleared).
+//           Scripted (#276): while a smoke drive runs nothing real is read, only what the drive injects.
 //
 // Pseudocode (Begin):
-//   held = the backend's snapshot of every binding held now (key:*, mouse:*, pad:*, pad_axis:*) ; down = held - last
+//   held = the backend's snapshot of every binding held now (key:*, mouse:*, pad:*, pad_axis:*; none while Scripted)
+//   + the injected keys ; down = held - last
 //   pressed = injected ; for each action: held = any binding held ; new hold or a binding down -> pressed, else
 //   repeat timer (ui_* always repeats while held, game actions only with auto_repeat) ; device = key > mouse > pad
 //   of what went down ; raw stick and triggers (or the injected ones) -> Analog.Stick / Trigger / StickActions
@@ -45,6 +47,7 @@
 //           axes, held-set snapshots with edges, capture skips the press that started it (#266)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): analog stick, triggers and held game actions (#274);
 //           single keys for the bug-report key (KeyDown, InjectKey)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): Scripted, no real device while a drive runs (#276)
 // ---------------------------------------------------------------------------
 #if GAMEKIT_INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
 #define SHELL_INPUT_SYSTEM
@@ -115,6 +118,16 @@ namespace {{GAME_SLUG}}.Shell
         public static string LastDevice { get; private set; } = "keyboard";
         public static event Action<string> DeviceChanged;
 
+        /// <summary>A smoke drive runs (FrontEnd sets it with the drive, #276): the real keyboard, mouse and pads are
+        /// not read, and FrontEnd drops the UI Toolkit key and navigation events, so a stray key or a virtual pad on a
+        /// shared machine cannot open screens the tour does not expect. Inject, InjectKey and InjectAnalog still
+        /// count: only the drive presses.</summary>
+        public static bool Scripted { get; set; }
+
+        /// <summary>Tests: stands in for the hardware read (the backend's snapshot of every binding held now). Null
+        /// reads the real devices.</summary>
+        public static Action<HashSet<string>> DeviceSnapshot { get; set; }
+
         private static Dictionary<string, List<string>> _bindings = new Dictionary<string, List<string>>();
         private static bool _autoRepeat;
         private static readonly HashSet<string> _pressed = new HashSet<string>();
@@ -164,7 +177,15 @@ namespace {{GAME_SLUG}}.Shell
             _heldNow.Clear();
             _rawStick = Vector2.zero;
             _rawL2 = _rawR2 = 0f;
-            Snapshot(_heldNow);
+            // a drive's run reads no real device: nothing held, the stick and triggers at rest (#276)
+            if (!Scripted && DeviceSnapshot != null)
+            {
+                DeviceSnapshot(_heldNow);
+            }
+            else if (!Scripted)
+            {
+                Snapshot(_heldNow);
+            }
             foreach (string key in _injectedKeys)
             {
                 _heldNow.Add(key);

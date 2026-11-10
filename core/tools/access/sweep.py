@@ -6,7 +6,7 @@
 #           checks what every screen reports: text size, text contrast, nothing clipped or off screen, every control
 #           reachable with the arrow keys and the gamepad, focus that looks different from hover, both devices bound,
 #           subtitles showing the dialogue line, and no keyboard glyphs while the gamepad is in use.
-# Usage   : python tools/access/sweep.py                 # all four runs (a few minutes)
+# Usage   : python tools/access/sweep.py                 # all five runs (a few minutes)
 #           python tools/access/sweep.py --runs deck     # only the Steam Deck runs (pc, deck, or both: all)
 #           python tools/access/sweep.py --report captures/access.md   # also write the results as Markdown
 #           python tools/access/sweep.py --log smoke.log --resolution 1280x800   # check a saved drive log
@@ -20,7 +20,11 @@
 #           see (how a screen looks, a real Deck's Proton, on-screen keyboard and suspend) stays a look and a
 #           checklist: SOP-19's Steam Deck list. Exit 0 every run passes, 1 a check failed, 2 the game could not run
 #           the drive (an engine without it, a crash) or a usage problem.
+#           Every run keeps the game's output in captures/access/<run>/smoke.log and, on the engines whose smoke
+#           can capture during a drive (SHOT_FILES: Bevy, C++/SDL3, LÖVE, web), the last frame drawn as last.png
+#           or last.bmp; a failing run prints where they are (#276).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a run's game output and last frame are kept (#276)
 # ---------------------------------------------------------------------------
 import argparse
 import glob
@@ -54,6 +58,12 @@ DIALOGUE_GLOB = "data/dialogue/*.built.json"
 DRIVE_TIMEOUT_S = 600
 DATA_DIR = "captures/access"   # one fresh data folder per run; never under build/ (#263: on Windows and macOS that
                                # is Unity's player folder Build/, and the runs' settings shipped next to game.exe)
+LOG_FILE = "smoke.log"   # the run's game output, next to its data: captures/access/<run>/smoke.log (#276)
+# the engines whose `dev.py smoke --drive access` takes --screenshot and saves the last frame drawn, a failed drive's
+# included (.game-kit.json "engine" -> file name). Godot captures in a second, windowed run, Unity needs --graphics
+# (no -nographics) and Unreal draws only show:<screen>: those three keep the log alone.
+SHOT_FILES = {"bevy": "last.png", "cpp-sdl2": "last.bmp", "love2d": "last.png", "web": "last.png"}
+KIT_FILE = ".game-kit.json"
 MARKER = re.compile(r"\b(ACCESS_[A-Z]+) (.*)$")
 OVERLAP_SLACK = 1        # px two glyph boxes may share (antialiasing, rounding) before it counts as overlap
 
@@ -250,7 +260,38 @@ def overlaps(screen, texts):
 
 
 # -------------------------------------------------- running the game
+def engine_of(root):
+    """The game's engine id from .game-kit.json ("" when it is missing or unreadable)."""
+    try:
+        return str(json.loads((Path(root) / KIT_FILE).read_text(encoding="utf-8")).get("engine", ""))
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+def keep_output(root, name, out):
+    """Writes a run's game output to captures/access/<run>/smoke.log. Returns (log, last frame or None) as paths
+    relative to the game folder, for the message a failed run prints."""
+    folder = Path(root) / DATA_DIR / name
+    folder.mkdir(parents=True, exist_ok=True)
+    log = folder / LOG_FILE
+    log.write_text(out, encoding="utf-8")
+    shot = SHOT_FILES.get(engine_of(root))
+    shot = folder / shot if shot and (folder / shot).is_file() else None
+    return log.relative_to(root).as_posix(), (shot.relative_to(root).as_posix() if shot else None)
+
+
+def print_kept(name, kept):
+    log, shot = kept
+    print(f"  [info] {name}: the game's output is in {log}" + (f", its last frame in {shot}" if shot else ""))
+
+
+def _text(value):
+    """A TimeoutExpired's partial output: str, bytes or None."""
+    return value.decode("utf-8", "replace") if isinstance(value, bytes) else (value or "")
+
+
 def run_drive(root, name, debug):
+    """(output, resolution, pad, kept) for one run; kept is keep_output's (log, last frame)."""
     resolution, scale, pad, extra = RUNS[name]
     opts = ",".join([f"res={resolution}"] + ([f"scale={scale:g}"] if scale != 1.0 else []) + (["pad"] if pad else [])
                     + ([extra] if extra else []))
@@ -260,18 +301,24 @@ def run_drive(root, name, debug):
     if data.exists():
         shutil.rmtree(data)
     cmd = [sys.executable, "tools/dev.py", "smoke", "--drive", "access:" + opts, "--data-dir", data.relative_to(root).as_posix()]
+    shot = SHOT_FILES.get(engine_of(root))
+    if shot:   # #276: the last frame drawn, so a failed run shows where the drive got to
+        cmd += ["--screenshot", (data / shot).relative_to(root).as_posix()]
     if debug:
         print(f"[debug] {' '.join(cmd)}", file=sys.stderr)
     try:
         r = subprocess.run(cmd, cwd=root, capture_output=True, encoding="utf-8", errors="replace",
                            timeout=DRIVE_TIMEOUT_S)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as e:
+        print_kept(name, keep_output(root, name, _text(e.stdout) + _text(e.stderr)))
         raise UsageError(f"{name}: the drive ran over {DRIVE_TIMEOUT_S} s")
     out = r.stdout + r.stderr
+    kept = keep_output(root, name, out)
     if r.returncode == 2 and "ACCESS_" not in out:
+        print_kept(name, kept)
         raise UsageError(f"{name}: this game's dev.py cannot run the access drive (exit 2):\n  "
                          + "\n  ".join(out.strip().splitlines()[-4:]))
-    return out, resolution, pad
+    return out, resolution, pad, kept
 
 
 def report_md(results):
@@ -303,6 +350,7 @@ def main(argv=None):
     p.add_argument("--debug", action="store_true", help="print the commands and tracebacks")
     args = p.parse_args(argv)
     root = Path(args.root)
+    kept = {}   # run name -> (log, last frame) under captures/access/<run>/
     try:
         results = {}
         if args.log:
@@ -315,9 +363,10 @@ def main(argv=None):
                 print(f"[info] {name}: {RUNS[name][0]}, text {RUNS[name][1]:g}x"
                       f"{', gamepad only' if RUNS[name][2] else ''}"
                       f"{', readable font, double line spacing' if RUNS[name][3] == 'read' else ''} ...", flush=True)
-                out, resolution, pad = run_drive(root, name, args.debug)
+                out, resolution, pad, kept[name] = run_drive(root, name, args.debug)
                 log = parse(out)
                 if log["input"] is None:
+                    print_kept(name, kept[name])
                     raise UsageError(f"{name}: the access drive never started: the game's main scene does not run the "
                                      "kit's front end (the shell's screens), so there is nothing for the sweep to "
                                      "walk; check your own screens by hand against SOP-20")
@@ -334,6 +383,8 @@ def main(argv=None):
             print(f"  [FAIL] {msg}")
         for msg in warnings:
             print(f"  [warn] {msg}")
+        if problems and name in kept:
+            print_kept(name, kept[name])
         failed += bool(problems)
     if args.report:
         Path(args.report).parent.mkdir(parents=True, exist_ok=True)

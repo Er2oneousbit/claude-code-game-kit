@@ -10,10 +10,12 @@
 //           (src/shell/fonts/, OFL, compiled into the exe) and access.line_spacing sets the line height. The focused row gets a lighter fill,
 //           a white border and a ">" marker, never colour alone. Text over the game (the HUD hint, subtitles) sits on
 //           a panel, so its contrast does not depend on what is behind it. Pad prompts follow the last device used.
+//           A scripted run (a Drive resource: every smoke run) reads no real keyboard or pad at all (#276).
 //
 // Pseudocode:
-//   PreUpdate poll_input: every known key and pad button -> just pressed: finish a capture or queue its actions;
-//   held: the actions bound to it -> Shell.held; the leaning-most left stick and the deepest triggers -> Shell.pad
+//   PreUpdate poll_input (not while a Drive runs): every known key and pad button -> just pressed: finish a capture
+//   or queue its actions; held: the actions bound to it -> Shell.held; the leaning-most left stick and the deepest
+//   triggers -> Shell.pad
 //   Update rebuild_ui (version moved): despawn the root -> spawn the top screen's nodes, each text tagged UiLabel
 //   Last report_access (a report was asked for two frames ago): every UiLabel's size, position, colours and
 //   whether it fits -> AccessReport.result; for the pseudo drive's check: every visible label that is not in
@@ -22,6 +24,7 @@
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the raw stick and triggers go to Shell.pad (#265)
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): F8 (the bug report), the juice demo's HUD, the
 //           pseudo-locale label check and the planted label of --drive pseudo-plant (#275)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): no real input while a drive runs (#276)
 // ---------------------------------------------------------------------------
 use std::collections::BTreeSet;
 
@@ -33,6 +36,7 @@ use bevy::ui::UiGlobalTransform;
 use bevy::window::PrimaryWindow;
 use serde_json::{Value, json};
 
+use super::drive::Drive;
 use super::screens::{self, HELP_ACTIONS, PAGE_LINES, RowKind, TABS};
 use super::{PadAxes, ScreenName, Shell, input};
 
@@ -138,8 +142,7 @@ impl Plugin for ShellViewPlugin {
         app.init_resource::<Fonts>()
             .init_resource::<AccessReport>()
             .add_systems(Startup, load_fonts)
-            .add_systems(PreUpdate, poll_input.after(InputSystems))
-            .add_plugins(super::juice::JuiceViewPlugin)
+            .add_plugins((ShellInputPlugin, super::juice::JuiceViewPlugin))
             .add_systems(Update, rebuild_ui.after(super::sync_settings))
             .add_systems(Last, report_access);
     }
@@ -156,6 +159,21 @@ fn device_name(pad: &Gamepad) -> &'static str {
         Some(0x045e) => "pad_xbox",
         Some(0x054c) => "pad_playstation",
         _ => "pad_generic",
+    }
+}
+
+/// The real keyboard and pads -> the shell (poll_input), outside scripted runs only (#276): while a Drive runs (every
+/// smoke run has one), a stray key, a virtual pad or another program's window on a shared machine would open
+/// screens the tour does not expect, so only the drive's own presses count and Shell.held and Shell.pad stay as the
+/// drive sets them. ShellViewPlugin adds this; tests add it to the headless shell with a ButtonInput<KeyCode>.
+pub struct ShellInputPlugin;
+
+impl Plugin for ShellInputPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            PreUpdate,
+            poll_input.after(InputSystems).run_if(not(resource_exists::<Drive>)),
+        );
     }
 }
 

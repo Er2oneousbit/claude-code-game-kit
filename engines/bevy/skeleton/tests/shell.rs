@@ -5,12 +5,14 @@
 //           now?" and the dialogue history, subtitle_hold waits for accept, auto_repeat repeats a held action, the
 //           Intent carries the analog stick, triggers and held actions (#265), the display settings reach a window
 //           outside automated runs (#268), the `menus` drive finishes with the file it promises, the juice demo
-//           answers its actions and F8 writes a bug report (SOP-19, SOP-20; #165, #166, #167, #168, #275).
+//           answers its actions and F8 writes a bug report (SOP-19, SOP-20; #165, #166, #167, #168, #275), and a
+//           drive ignores the real keyboard that normal play reads (#276).
 // Usage   : python tools/dev.py test   (or cargo test --test shell)
 // Notes   : app::shell_test_app builds the real ShellPlugin on the headless test App; every test gets its own data
 //           folder under the system temp dir, so no test touches another's settings.json or the player's.
 //           Actions are injected as a key press would be (shell.inject) and take effect on the next update.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): real input during a drive (#276)
 // ---------------------------------------------------------------------------
 use std::path::PathBuf;
 
@@ -23,6 +25,7 @@ use serde_json::{Value, json};
 use {{GAME_SLUG}}::app::shell_test_app;
 use {{GAME_SLUG}}::game::{AccessRules, GameActive, GameConfig, Intent, Palette, ScreenShake};
 use {{GAME_SLUG}}::shell::display::FrameLimit;
+use {{GAME_SLUG}}::shell::view::ShellInputPlugin;
 use {{GAME_SLUG}}::shell::{PadAxes, ScreenName, Shell};
 
 /// A data folder of this test's own under the system temp dir, removed when the test ends.
@@ -477,6 +480,35 @@ fn display_settings_reach_the_window_but_never_in_automated_runs() {
     let w = app.world().get::<Window>(win).unwrap();
     assert_eq!(w.mode, WindowMode::Windowed);
     assert_eq!((w.physical_width(), w.physical_height()), (1280, 720));
+}
+
+/// The shell plus its real-input polling (as a windowed run has it), and a real key held down on the keyboard the
+/// way winit reports it (ButtonInput<KeyCode>), for one update.
+fn hold_real_key(app: &mut App, key: KeyCode) {
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(key);
+    app.update();
+}
+
+#[test]
+fn a_drive_ignores_the_real_keyboard_and_normal_play_reads_it() {
+    // #276: a stray key or a virtual pad on a shared machine opened extra screens during a windowed access drive
+    for (drive, read) in [(None, true), (Some("menus"), false)] {
+        let dir = TempDir::new(&format!("shell-real-input-{read}"));
+        let mut app = shell_test_app(cfg(&dir), drive.map(|name| (name, 5000)));
+        app.add_plugins(ShellInputPlugin)
+            .init_resource::<ButtonInput<KeyCode>>();
+        frames(&mut app, 2);
+        shell_mut(&mut app).last_device = "pad_xbox".into();
+        hold_real_key(&mut app, KeyCode::KeyD); // move_right's key
+        let s = shell(&app);
+        let what = if read { "normal play" } else { "a drive" };
+        assert_eq!(s.held.contains("move_right"), read, "{what}: the held D key");
+        assert_eq!(
+            s.last_device == "keyboard",
+            read,
+            "{what}: the device the prompts follow"
+        );
+    }
 }
 
 #[test]

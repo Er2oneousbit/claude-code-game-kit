@@ -11,6 +11,7 @@
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): analog input (#274); crash context, F8 bug report,
 //           pseudo locale, juice demo (#275); data/ and CREDITS.md from game_dir() (next to the exe when the working
 //           directory has no data/, so a shipped build runs from any folder)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): no real keyboard, mouse or pad in a drive (#276)
 // ---------------------------------------------------------------------------
 #include "shell/Shell.hpp"
 
@@ -647,7 +648,33 @@ std::string Shell::focus_id() const {
 }
 
 // ---- Input ---------------------------------------------------------------------------------------------------
+namespace {
+// SDL's event types as the kinds core::admits_device_event knows
+core::DeviceEvent device_event_kind(Uint32 type) {
+    switch (type) {
+        case SDL_EVENT_KEY_DOWN:
+        case SDL_EVENT_KEY_UP: return core::DeviceEvent::Key;
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_UP: return core::DeviceEvent::MouseButton;
+        case SDL_EVENT_MOUSE_MOTION: return core::DeviceEvent::MouseMotion;
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        case SDL_EVENT_GAMEPAD_BUTTON_UP: return core::DeviceEvent::PadButton;
+        case SDL_EVENT_GAMEPAD_AXIS_MOTION: return core::DeviceEvent::PadAxis;
+        case SDL_EVENT_GAMEPAD_ADDED: return core::DeviceEvent::PadAdded;
+        case SDL_EVENT_GAMEPAD_REMOVED: return core::DeviceEvent::PadRemoved;
+        case SDL_EVENT_QUIT: return core::DeviceEvent::Quit;
+        case SDL_EVENT_WINDOW_FOCUS_LOST: return core::DeviceEvent::FocusLost;
+        default: return core::DeviceEvent::Other;
+    }
+}
+}  // namespace
+
 void Shell::handle_event(const SDL_Event& event) {
+    // #276: a smoke run follows a drive, which presses through key_down / press_binding itself; the real keyboard,
+    // mouse and pads (a stray key, a virtual pad on a shared machine) must not reach the screens meanwhile
+    if (!core::admits_device_event(device_event_kind(event.type), opts_.automated)) {
+        return;
+    }
     switch (event.type) {
         case SDL_EVENT_QUIT:
             quit_ = true;
@@ -806,6 +833,10 @@ void Shell::poll_pads() {
         return;
     }
     PadAxes p;
+    if (opts_.automated) {   // a drive's run reads no real stick or trigger (#276): at rest unless it sets them
+        pad_ = p;
+        return;
+    }
     for (SDL_Gamepad* pad : gamepads_) {
         const double x = core::axis_from_raw(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX));
         const double y = core::axis_from_raw(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY));

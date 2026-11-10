@@ -294,6 +294,10 @@ public:
 	TFunction<void(const FString&)> OnEvent;          // "play", "resume", "quit_title", "quit", "settings_changed", "consent"
 	bool bQuitRequested = false;
 	bool bConsentAsked = false;
+	/** A drive presses for this model (FGameKitShellDrive sets it, #276): a widget showing it takes no real keyboard,
+	 *  mouse or pad input, so a stray key or a virtual pad cannot break the tour. KeyPressed() and Dispatch() still
+	 *  work: they are what the drive calls. */
+	bool bScripted = false;
 	const FOptions& Options() const { return Opt; }
 
 private:

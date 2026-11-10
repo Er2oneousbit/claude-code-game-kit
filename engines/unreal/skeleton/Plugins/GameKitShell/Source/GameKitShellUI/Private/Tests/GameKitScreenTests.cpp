@@ -6,7 +6,7 @@
 //           history read back, every control says what it is, every row is reachable, hold-to-repeat timing,
 //           the pad's make from its device name and the left stick as the d-pad (#267); analog stick, triggers and
 //           held actions for the game (#274); the juice demo, the pseudo locale, the F8 bug report, crash files and
-//           their drives (#275);
+//           their drives (#275); a drive's model ignores the widget's real key and stick events (#276);
 //           plus the scripted runs tools/dev.py starts: GameKit.Screens.Drive (--drive) and GameKit.Screens.Show
 //           (--drive show:<screen> --screenshot).
 // Usage   : python tools/dev.py test --filter GameKit.Screens          (or `test` for everything)
@@ -833,6 +833,44 @@ bool FGameKitScreensNewDrivesTest::RunTest(const FString& Parameters)
 void PrintLine(const FString& Line)
 {
 	UE_LOG(LogGameKitShell, Display, TEXT("%s"), *Line);
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensRealInputTest, "GameKit.Screens.RealInputIgnoredDuringADrive", ScreenTestFlags)
+bool FGameKitScreensRealInputTest::RunTest(const FString& Parameters)
+{
+	// #276: a stray key or a virtual pad on a shared machine must not move a drive's tour; normal play reads them.
+	// The widget's own handlers are the path Slate gives a real device's events.
+	FTempFolder Folder;
+	TSharedRef<FGameKitShellModel> M = Fresh(Folder.Path);
+	ToMenu(*M);
+	TSharedRef<SGameKitShell> W = SNew(SGameKitShell, M);
+	const uint32 User = 0;
+	const FKeyEvent Down(EKeys::Down, FModifierKeysState(), User, false, 0, 0);
+	const FAnalogInputEvent StickDown(EKeys::Gamepad_LeftY, FModifierKeysState(), User, false, 0, 0, -0.9f);
+	const FAnalogInputEvent StickRest(EKeys::Gamepad_LeftY, FModifierKeysState(), User, false, 0, 0, 0.f);
+	const FString Start = M->FocusId();
+
+	FGameKitShellDrive Drive(M, &PrintLine);   // a drive takes the model over (it presses through KeyPressed)
+	TestTrue(TEXT("a drive marks its model scripted"), M->bScripted);
+	W->OnKeyDown(FGeometry(), Down);
+	W->OnKeyUp(FGeometry(), Down);
+	W->OnAnalogValueChanged(FGeometry(), StickDown);
+	W->OnAnalogValueChanged(FGeometry(), StickRest);
+	TestEqual(TEXT("a real Down key and a real stick move nothing during a drive"), M->FocusId(), Start);
+	M->KeyPressed(TEXT("key:down"), TEXT("keyboard"));   // the drive's own press
+	M->KeyReleased(TEXT("key:down"));
+	const FString Driven = M->FocusId();
+	TestNotEqual(TEXT("the drive's press lands"), Driven, Start);
+
+	M->bScripted = false;                              // normal play: the same events move the focus
+	W->OnKeyDown(FGeometry(), Down);
+	W->OnKeyUp(FGeometry(), Down);
+	const FString AfterKey = M->FocusId();
+	TestNotEqual(TEXT("a real Down key moves the focus in play"), AfterKey, Driven);
+	W->OnAnalogValueChanged(FGeometry(), StickDown);
+	W->OnAnalogValueChanged(FGeometry(), StickRest);
+	TestNotEqual(TEXT("a real stick moves the focus in play"), M->FocusId(), AfterKey);
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensDriveTest, "GameKit.Screens.Drive", ScreenTestFlags)

@@ -8,6 +8,8 @@
 //           units scaled to the widget.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1); analog input, the juice demo and the toast by
 //           Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a scripted model's widget ignores the real
+//           keyboard, mouse and pads (#276)
 // ---------------------------------------------------------------------------
 #include "SGameKitShell.h"
 
@@ -187,7 +189,7 @@ void SGameKitShell::Tick(const FGeometry& AllottedGeometry, const double InCurre
 
 FReply SGameKitShell::OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
 {
-	if (InKeyEvent.IsRepeat())
+	if (InKeyEvent.IsRepeat() || Model->bScripted)   // #276: during a drive a real key reaches nothing
 	{
 		return FReply::Handled();
 	}
@@ -208,6 +210,10 @@ FReply SGameKitShell::OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& In
 
 FReply SGameKitShell::OnKeyUp(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
 {
+	if (Model->bScripted)
+	{
+		return FReply::Handled();
+	}
 	const FString Binding = GameKit::ShellInput::BindingOf(InKeyEvent.GetKey());
 	if (!Binding.IsEmpty())
 	{
@@ -225,7 +231,12 @@ void SGameKitShell::OnFocusLost(const FFocusEvent& InFocusEvent)
 FReply SGameKitShell::OnAnalogValueChanged(const FGeometry& MyGeometry, const FAnalogInputEvent& InAnalogInputEvent)
 {
 	// the left stick moves the focus like the d-pad; the model keeps the hysteresis (StickMoved) and the raw value
-	// for the game's Stick() (#274); the triggers feed Trigger(). Both also reach the game (unhandled).
+	// for the game's Stick() (#274); the triggers feed Trigger(). Both also reach the game (unhandled). During a
+	// drive a real stick or trigger reaches nothing (#276).
+	if (Model->bScripted)
+	{
+		return FReply::Handled();
+	}
 	const FKey Key = InAnalogInputEvent.GetKey();
 	if (Key == EKeys::Gamepad_LeftTriggerAxis || Key == EKeys::Gamepad_RightTriggerAxis)
 	{
@@ -244,6 +255,10 @@ FReply SGameKitShell::OnAnalogValueChanged(const FGeometry& MyGeometry, const FA
 
 FReply SGameKitShell::OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
 {
+	if (Model->bScripted)
+	{
+		return FReply::Handled();
+	}
 	const FString Binding = GameKit::ShellInput::BindingOf(MouseEvent.GetEffectingButton());
 	if (!Binding.IsEmpty() && Model->KeyPressed(Binding, TEXT("mouse")))
 	{

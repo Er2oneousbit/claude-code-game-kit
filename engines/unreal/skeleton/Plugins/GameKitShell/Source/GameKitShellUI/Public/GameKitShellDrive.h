@@ -28,8 +28,12 @@
 //           scales the design to the window). The crash drive does not crash the editor: an unattended editor
 //           crash runs Epic's crash reporter, which may send the report, so it calls the handler the engine's
 //           system-error delegate calls (GameKit::ShellReport::WriteCrash) with a planted error instead.
+//           Real input cannot reach a run: the drive presses its own model, which no on-screen widget feeds, and it
+//           marks the model scripted, so even a widget drawn from it (the bug report's screenshot) drops real
+//           keys, sticks and clicks (#276).
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1); crash, bug, pseudo and the juice demo by Claude
 //           (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the model is marked scripted (#276)
 // ---------------------------------------------------------------------------
 #pragma once
 

@@ -5,7 +5,8 @@
 --           captures the next press for "press a key" rebinding, lets a drive script hold actions, and gives the
 --           game the pad's analog values (#274).
 -- Usage   : local Input = require("src.shell.input"); local input = Input.new(app)
---           main.lua events -> app -> input:key(key, isrepeat) / input:button(joystick, button) / input:axis(...)
+--           main.lua events -> app -> input:real_key(key, isrepeat) / real_button(joystick, button) / real_axis(...)
+--           (drives and tests: input:key / button / axis, which a scripted run still takes)
 --           input:is_down("move_left")   input.last_device ("keyboard", "mouse", "pad_xbox", ...)
 --           input:capture("key", function(binding) ... end)   -- nil binding = cancelled (Esc, or Back on a pad)
 --           analog: input:move_vector() -> x, y ; input:triggers() -> left, right ; input:held_actions()
@@ -14,8 +15,10 @@
 --           the stick with the Bevy shell's rules (src/core/analog.lua): a radial, rescaled deadzone from
 --           input.deadzone and input.invert_y, up is -y. Triggers are axes in LÖVE: triggers() reads them 0 to 1,
 --           and past TRIGGER_ON they also press pad:l2 / pad:r2. Key repeat only repeats ui_* actions (holding
---           Down scrolls a menu; holding Space does not jump twice).
+--           Down scrolls a menu; holding Space does not jump twice). With scripted set (a drive runs), the real_*
+--           events and the keyboard and pad polls in is_down are ignored: only the drive presses (#276).
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): real devices are not read while a drive runs (#276)
 -- ---------------------------------------------------------------------------
 local Analog = require("src.core.analog")
 local InputMap = require("src.core.input_map")
@@ -29,7 +32,8 @@ local TRIGGER_ON, TRIGGER_OFF = 0.5, 0.3
 
 function Input.new(app)
   -- raw: the pad's analog values as LÖVE reports them (left stick -1..1, triggers 0..1); tests may set them
-  return setmetatable({ app = app, last_device = "keyboard", capturing = nil, forced = {},
+  -- scripted: a drive runs, so the real devices are not read (#276; app sets it)
+  return setmetatable({ app = app, last_device = "keyboard", capturing = nil, forced = {}, scripted = false,
                         raw = { x = 0, y = 0, l2 = 0, r2 = 0 }, held_dirs = {}, trigger_on = {} }, Input)
 end
 
@@ -71,6 +75,26 @@ end
 
 function Input:mouse()
   self.last_device = "mouse"
+end
+
+-- ---- The real devices (#276) -----------------------------------------------------------------------------------
+-- main.lua's callbacks come in here (through app); drives and tests call key / button / axis themselves. While a
+-- drive runs (scripted: every smoke run has one) the real keyboard, mouse and pads reach nothing, so a stray key or
+-- a virtual pad on a shared machine cannot open screens the tour does not expect.
+function Input:real_key(key, isrepeat)
+  if not self.scripted then self:key(key, isrepeat) end
+end
+
+function Input:real_button(joystick, button)
+  if not self.scripted then self:button(joystick, button) end
+end
+
+function Input:real_axis(joystick, axis, value)
+  if not self.scripted then self:axis(joystick, axis, value) end
+end
+
+function Input:real_mouse()
+  if not self.scripted then self:mouse() end
 end
 
 local function dir_edge(self, name, active)
@@ -115,15 +139,15 @@ end
 
 local function binding_down(self, binding)
   local keys = InputMap.love_keys(binding)
-  if keys then
-    return love.keyboard and love.keyboard.isDown(unpack(keys)) or false
+  if keys then   -- a drive's run never asks the real keyboard (#276)
+    return not self.scripted and love.keyboard and love.keyboard.isDown(unpack(keys)) or false
   end
   local dir = binding:match("^pad:(dpad_%a+)$")
   if dir and self.held_dirs[dir] then return true end
   local trig = binding:match("^pad:([lr]2)$")
   if trig then return self.trigger_on[trig] == true end
   local button = InputMap.love_button(binding)
-  if button and love.joystick then
+  if button and love.joystick and not self.scripted then
     for _, j in ipairs(love.joystick.getJoysticks()) do
       if j:isGamepad() and j:isGamepadDown(button) then return true end
     end

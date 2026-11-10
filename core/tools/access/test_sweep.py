@@ -241,6 +241,75 @@ class SweepExam(unittest.TestCase):
             self.assertIn("[error]", err.getvalue())
 
 
+class SweepKeepsTheGameOutput(unittest.TestCase):
+    """#276: a Bevy run failed once in a sweep ("the drive did not finish" after 18 screens instead of 12) and passed
+    18 times after; the sweep had thrown the game's output away, so the cause could not be proven."""
+
+    STAND_IN = (   # a dev.py that prints a broken tour, writes the --screenshot it is given, and fails
+        "import sys, pathlib\n"
+        "sys.stdout.reconfigure(encoding='utf-8')   # as every dev.py does\n"
+        "args = sys.argv\n"
+        "if '--screenshot' in args:\n"
+        "    shot = pathlib.Path(args[args.index('--screenshot') + 1])\n"
+        "    shot.parent.mkdir(parents=True, exist_ok=True)\n"
+        "    shot.write_bytes(b'last frame')\n"
+        "print('ACCESS_INPUT {\"actions\": {}}')\n"
+        "print('the game said something useful \\u00cd')\n"
+        "print('[FAIL] the drive did not finish', file=sys.stderr)\n"
+        "sys.exit(1)\n")
+
+    def sweep(self, root, engine=None):
+        (root / "tools").mkdir()
+        (root / "tools" / "dev.py").write_text(self.STAND_IN, encoding="utf-8")
+        if engine:
+            (root / ".game-kit.json").write_text(json.dumps({"engine": engine}), encoding="utf-8")
+        out = io.StringIO()
+        with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(out):
+            rc = sweep.main(["--runs", "deck", "--root", str(root)])
+        return rc, out.getvalue()
+
+    def test_a_failed_run_keeps_its_log_and_last_frame_and_says_where(self):
+        with tempfile.TemporaryDirectory() as d:
+            rc, out = self.sweep(Path(d), "bevy")
+            self.assertEqual(rc, 1)
+            for run in ("deck", "deck-200"):
+                folder = Path(d) / "captures" / "access" / run
+                log = (folder / "smoke.log").read_text(encoding="utf-8")
+                self.assertIn("the game said something useful \u00cd", log)
+                self.assertIn("[FAIL] the drive did not finish", log)        # stderr too
+                self.assertEqual((folder / "last.png").read_bytes(), b"last frame")
+                self.assertIn(f"captures/access/{run}/smoke.log, its last frame in captures/access/{run}/last.png", out)
+
+    def test_an_engine_that_cannot_capture_during_a_drive_keeps_the_log(self):
+        # Godot captures in a second, windowed run, Unity needs --graphics, Unreal draws only show:<screen>
+        for engine in ("godot", "unity", "unreal", None):
+            with tempfile.TemporaryDirectory() as d:
+                rc, out = self.sweep(Path(d), engine)
+                self.assertEqual(rc, 1)
+                folder = Path(d) / "captures" / "access" / "deck"
+                self.assertTrue((folder / "smoke.log").is_file(), engine)
+                self.assertEqual([p.name for p in folder.iterdir()], ["smoke.log"], engine)   # no --screenshot asked
+                self.assertIn("captures/access/deck/smoke.log", out)
+                self.assertNotIn("last frame", out)
+
+    def test_each_engine_gets_its_own_picture_format(self):
+        self.assertEqual(sweep.SHOT_FILES["cpp-sdl2"], "last.bmp")   # SDL saves BMP (CLAUDE.md, smoke -h)
+        with tempfile.TemporaryDirectory() as d:
+            self.sweep(Path(d), "cpp-sdl2")
+            self.assertTrue((Path(d) / "captures/access/deck/last.bmp").is_file())
+
+    def test_a_run_that_never_started_still_leaves_its_log(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "tools").mkdir()
+            (Path(d) / "tools" / "dev.py").write_text("print('BOOT_OK my own main scene')\n", encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(out):
+                self.assertEqual(sweep.main(["--runs", "deck", "--root", d]), 2)
+            self.assertIn("BOOT_OK my own main scene",
+                          (Path(d) / "captures/access/deck/smoke.log").read_text(encoding="utf-8"))
+            self.assertIn("captures/access/deck/smoke.log", out.getvalue())
+
+
 class SweepDataOutsideThePlayer(unittest.TestCase):
     """#263: the runs' settings folders went to build/access/, which on Windows and macOS is Unity's player folder
     Build/, so a shipped Build/ carried Build/access/<run>/settings.json next to game.exe."""

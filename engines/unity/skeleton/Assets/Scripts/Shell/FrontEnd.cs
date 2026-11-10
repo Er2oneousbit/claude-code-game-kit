@@ -19,6 +19,8 @@
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the UI Toolkit fallback only when ShellInput cannot poll (#266)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): worlds (ShellWorld: play, the juice demo), the F8 bug
 //           report, the crash drive's planted error (#275)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a drive sets ShellInput.Scripted, and UI Toolkit's key
+//           and navigation events are dropped meanwhile (#276)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -82,6 +84,7 @@ namespace {{GAME_SLUG}}.Shell
             if (DriveArmed && !string.IsNullOrEmpty(Shell.I.Drive))
             {
                 Drive = new SmokeDrive(this, Shell.I.Drive);
+                ShellInput.Scripted = true;   // only the drive presses: no real keyboard, mouse or pad (#276)
                 StartCoroutine(Drive.Run());
             }
         }
@@ -98,6 +101,10 @@ namespace {{GAME_SLUG}}.Shell
                 UiTexture.Release();
             }
             Time.timeScale = 1f;
+            if (Drive != null)
+            {
+                ShellInput.Scripted = false;  // the next scene (a test's, a player's) reads the devices again
+            }
             if (I == this)
             {
                 I = null;
@@ -250,6 +257,11 @@ namespace {{GAME_SLUG}}.Shell
 
         private void OnKeyDown(KeyDownEvent evt)
         {
+            if (ShellInput.Scripted)
+            {
+                evt.StopPropagation();        // a real key during a drive reaches nothing (#276)
+                return;
+            }
             if (!ShellInput.Polls && evt.keyCode == KeyCode.F8 && ShellReports.BugKeyEnabled)
             {
                 ShellReports.BugReport(this);
@@ -274,7 +286,7 @@ namespace {{GAME_SLUG}}.Shell
 
         private void Swallow(EventBase evt, string action)
         {
-            if (action != null && !ShellInput.Polls)
+            if (action != null && !ShellInput.Polls && !ShellInput.Scripted)   // UI Toolkit's events are real input (#276)
             {
                 ShellInput.Inject(action, action == "ui_accept" || action == "ui_cancel" ? "pad_other" : null);
             }

@@ -4,6 +4,7 @@
 // Usage   : compiled into the `core` library; call through ShellLogic.hpp.
 // Notes   : The name tables are the tunables: a key SDL names differently on your platform gets an alias here.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): admits_device_event, no real input in a drive (#276)
 // ---------------------------------------------------------------------------
 #include "core/ShellLogic.hpp"
 
@@ -331,6 +332,25 @@ void SubtitleTrack::update(double dt, bool hold) {
 void SubtitleTrack::dismiss() {
     current_.reset();
     holding_ = false;
+}
+
+// ---- Scripted runs (#276) -----------------------------------------------------------------------------------
+bool admits_device_event(DeviceEvent kind, bool scripted) {
+    switch (kind) {
+        case DeviceEvent::Key:
+        case DeviceEvent::MouseButton:
+        case DeviceEvent::MouseMotion:
+        case DeviceEvent::PadButton:
+        case DeviceEvent::PadAxis:
+            return !scripted;   // the player's input: only outside a drive
+        case DeviceEvent::PadAdded:
+        case DeviceEvent::PadRemoved:
+        case DeviceEvent::Quit:
+        case DeviceEvent::FocusLost:
+        case DeviceEvent::Other:
+            break;
+    }
+    return true;
 }
 
 }  // namespace core
