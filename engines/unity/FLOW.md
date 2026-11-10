@@ -40,7 +40,7 @@ Close the editor before running batchmode commands (one instance per project).
 | `smoke --drive menus` | the `Smoke_ShellDrive` PlayMode test with `GAMEKIT_DRIVE=menus`: title -> settings -> master volume 0.5 (left or right from whatever the data folder held), reduce motion toggled -> Back -> Quit; prints `SETTINGS_WRITTEN <path>` and the file holds both values |
 | `smoke --drive access[:res=WxH][,scale=N][,pad][,read]` | every screen reported as `ACCESS_*` lines for `tools/access/sweep.py` (`AccessAudit`): texts with size, colour, background, fit and where they land, the controls the grid reaches and what each says, the subtitle, the one-handed layout applied and reset, a held subtitle, the prompts; the panel is laid out for that window size, `pad` presses with the gamepad bindings only |
 | `smoke --drive show:<title\|settings\|pause\|subtitle> --screenshot Logs/x.png` | opens that screen (settings with a control focused) and photographs it: `GameKitCapture` lays the UI panel's texture over the camera's picture |
-| `smoke --data-dir D`, `--locale L` | the run's settings folder (default a fresh `Logs/smoke_data/`) and language (`pseudo` for the pseudo-locale), passed as `GAMEKIT_DATA_DIR` / `GAMEKIT_LOCALE` |
+| `smoke --data-dir D`, `--locale L` | the run's settings folder (default a fresh `Logs/smoke_data/`; one inside the player folder `Build/`, any letter case, is refused with exit 2) and language (`pseudo` for the pseudo-locale), passed as `GAMEKIT_DATA_DIR` / `GAMEKIT_LOCALE` |
 
 Test results are read from the NUnit XML (`failed="N"`), not the exit code alone. If nothing passed (no test matched, or every test was
 ignored) the command exits 2 and prints the reason, because that is a setup gap, not a failing test.

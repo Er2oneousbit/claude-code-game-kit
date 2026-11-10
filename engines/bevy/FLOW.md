@@ -53,7 +53,8 @@ pauses on the last frame, waits for the GPU to hand back the pictures, then exit
 Every smoke run follows a scripted scenario through the shell's screens (`src/shell/drive.rs`); without `--drive` it
 walks title -> menu -> play and lets the game run, so `--until GOAL_REACHED -- --autoplay right` still works. The
 game's files (settings.json) go to a fresh `build/smoke-data/` unless `--data-dir` names a folder, never to the
-player's own. Scenarios:
+player's own. A `--data-dir` inside cargo's target folder (`target/` or `CARGO_TARGET_DIR`) is refused (exit 2): the
+shipped exe lives there. Scenarios:
 
 | `--drive` | What it does | Window |
 |---|---|---|

@@ -88,7 +88,8 @@ FlashLimiter take real time; shake, follow, buffer, coyote and spring take game 
 - `--data-dir DIR` maps the game's user-data folder (localStorage) onto a real folder: its files are loaded under
   the key prefix `DIR/` (`?data-dir=DIR`) before the page starts and written back afterwards, so a test reads
   `settings.json`, the game log, the crash files and `telemetry.csv` as files (and can seed a damaged `settings.json`
-  first). A console line `<NAME>_WRITTEN <file>` is printed again with the real path.
+  first). A console line `<NAME>_WRITTEN <file>` is printed again with the real path. A folder inside `dist/` is
+  refused before the build (exit 2), and smoke.mjs refuses the project's own folders (`src/`, `public/`, ...).
 - `--locale ID` sets `?locale=ID` (overrides the language setting; `pseudo` for the layout check).
 - `--compare BASELINE.png [--tolerance N]` runs `tools/image_diff.py` on the `--screenshot` and fails on a
   difference (N = per-channel difference allowed, 0-255). Make a baseline by copying a good screenshot.
