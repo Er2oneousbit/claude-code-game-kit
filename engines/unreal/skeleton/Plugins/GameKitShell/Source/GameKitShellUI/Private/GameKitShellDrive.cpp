@@ -1,21 +1,27 @@
 // ---------------------------------------------------------------------------
 // GameKitShellDrive.cpp
-// Purpose : The scenarios behind GameKitShellDrive.h: menus, show:<screen>, and the accessibility tour.
+// Purpose : The scenarios behind GameKitShellDrive.h: menus, show:<screen>, the accessibility tour, and crash, bug,
+//           pseudo and the juice demo (#275).
 // Usage   : compiled into the GameKitShellUI module; run by the GameKit.Screens.Drive automation test, which
 //           tools/dev.py smoke --drive starts.
 // Notes   : Each helper returns false once the run has failed, and every scenario checks on the way, so a failure
 //           stops the script where it happened and Error names the step. Add a scenario: a method here, its name
-//           in Run() and IsKnown(), then document it in docs/ENGINE_FLOW.md.
-// Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+//           in Run() and IsKnown(), then document it in docs/ENGINE_FLOW.md. The pseudo check reads the same text
+//           list as the access report (Texts()): each text's column width, measured with Slate's font service.
+// Authored: Written with Claude (Fable 5.1, claude-fable-5-1); crash, bug, pseudo and the juice demo by Claude
+//           (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 #include "GameKitShellDrive.h"
 
 #include "GameKitJson.h"
+#include "GameKitJuiceDemo.h"
 #include "GameKitSettings.h"
+#include "GameKitShellReport.h"
 #include "GameKitShellTheme.h"
+#include "Misc/Paths.h"
 
-const TCHAR* FGameKitShellDrive::ShowScreens[9] = {TEXT("title"), TEXT("main_menu"), TEXT("settings"), TEXT("pause"), TEXT("help"),
-                                                   TEXT("history"), TEXT("credits"), TEXT("loading"), TEXT("subtitle")};
+const TCHAR* FGameKitShellDrive::ShowScreens[10] = {TEXT("title"), TEXT("main_menu"), TEXT("settings"), TEXT("pause"), TEXT("help"),
+                                                    TEXT("history"), TEXT("credits"), TEXT("loading"), TEXT("subtitle"), TEXT("juice")};
 const TCHAR* FGameKitShellDrive::AccessActions[7] = {TEXT("ui_up"), TEXT("ui_down"), TEXT("ui_left"), TEXT("ui_right"), TEXT("ui_accept"),
                                                      TEXT("ui_cancel"), TEXT("pause")};
 const TCHAR* FGameKitShellDrive::PromptActions[6] = {TEXT("move_left"), TEXT("move_right"), TEXT("jump"), TEXT("attack"), TEXT("interact"),
@@ -36,6 +42,9 @@ namespace
 	// the demo line the access tour shows as a subtitle (the kit's juice demo says it on the other engines)
 	const TCHAR* DemoSpeaker = TEXT("Guide");
 	const TCHAR* DemoLineKey = TEXT("juice.objective");
+	const TCHAR* PlantedError = TEXT("drive crash: a planted error to prove the crash report (expected)");
+	const TCHAR* const BugFiles[] = {TEXT("info.txt"), TEXT("log_tail.txt"), TEXT("settings.json")};
+	const TCHAR* const PseudoTabs[] = {TEXT("display"), TEXT("audio"), TEXT("controls"), TEXT("access"), TEXT("language")};
 
 	TSharedPtr<FJsonValue> TextEntry(const FString& S, float Px, const FColor& Fg, const FColor& Back, bool bFits, const FString& Node,
 	                            const TArray<TPair<FColor, double>>* OverGame = nullptr, const FColor* Outline = nullptr)
@@ -77,7 +86,8 @@ FGameKitShellDrive::FGameKitShellDrive(const TSharedRef<FGameKitShellModel>& InM
 
 bool FGameKitShellDrive::IsKnown(const FString& Name)
 {
-	if (Name == TEXT("menus") || Name == TEXT("access") || Name.StartsWith(TEXT("access:")))
+	if (Name == TEXT("menus") || Name == TEXT("access") || Name.StartsWith(TEXT("access:")) || Name == TEXT("crash") || Name == TEXT("bug")
+	    || Name == TEXT("pseudo") || Name == TEXT("pseudo-plant"))
 	{
 		return true;
 	}
@@ -102,7 +112,7 @@ FString FGameKitShellDrive::KnownNames()
 	{
 		Shows.Add(S);
 	}
-	return TEXT("menus, access[:res=WxH,scale=N,pad,read], show:<") + FString::Join(Shows, TEXT("|")) + TEXT(">");
+	return TEXT("menus, crash, bug, pseudo, pseudo-plant, access[:res=WxH,scale=N,pad,read], show:<") + FString::Join(Shows, TEXT("|")) + TEXT(">");
 }
 
 // ---- Helpers -----------------------------------------------------------------------------------------------------
@@ -170,6 +180,7 @@ bool FGameKitShellDrive::Press(const FString& Action)
 			return Fail(Action + TEXT(" has no gamepad button: a gamepad-only player cannot press it"));
 		}
 		Model->KeyPressed(Button, TEXT("pad_other"));   // a pad of no known make, as on the other engines
+		Model->KeyReleased(Button);                      // a press, not a hold (#274)
 	}
 	else
 	{
@@ -268,6 +279,18 @@ int32 FGameKitShellDrive::Run(const FString& Name)
 	{
 		bOk = Access(Name.StartsWith(TEXT("access:")) ? Name.Mid(7) : FString());
 	}
+	else if (Name == TEXT("crash"))
+	{
+		bOk = Crash();
+	}
+	else if (Name == TEXT("bug"))
+	{
+		bOk = Bug();
+	}
+	else if (Name == TEXT("pseudo") || Name == TEXT("pseudo-plant"))
+	{
+		bOk = Pseudo(Name == TEXT("pseudo-plant"));
+	}
 	else
 	{
 		Fail(FString::Printf(TEXT("unknown drive %s (%s)"), *Name, *KnownNames()));
@@ -350,6 +373,10 @@ bool FGameKitShellDrive::Show(const FString& Screen)
 	{
 		return ToMenu() && Focus(TEXT("play")) && Press(TEXT("ui_accept")) && WaitScreen(TEXT("loading"));
 	}
+	if (Screen == TEXT("juice"))
+	{
+		return JuiceHit();
+	}
 	// the rest start in play
 	if (!ToMenu() || !Open(TEXT("play"), TEXT("loading")) || !WaitScreen(TEXT("play")) || !Frames(30))
 	{
@@ -371,6 +398,287 @@ bool FGameKitShellDrive::Show(const FString& Screen)
 		return Frames(5);
 	}
 	return Open(Screen, Screen) && Frames(5);   // help or history
+}
+
+// ---- #275: the juice demo, crash files, the bug report, the pseudo locale ------------------------------------------
+bool FGameKitShellDrive::JuiceHit()
+{
+	if (!ToMenu())
+	{
+		return false;
+	}
+	if (!Model->Options().bDebugBuild)
+	{
+		return Fail(TEXT("the juice demo is in debug builds only"));
+	}
+	if (!Open(TEXT("juice"), TEXT("loading")) || !WaitScreen(TEXT("juice_demo")) || !Frames(JuiceSettleFrames))
+	{
+		return false;
+	}
+	if (!Press(TEXT("attack")))   // two frames later: still inside the hitstop, the flash still fading
+	{
+		return false;
+	}
+	const FGameKitJuiceDemo* J = Model->Juice();
+	if (!J)
+	{
+		return Fail(TEXT("the juice demo did not start"));
+	}
+	TSharedRef<FJsonObject> R = MakeShared<FJsonObject>();
+	R->SetNumberField(TEXT("hits"), J->Hits);
+	R->SetNumberField(TEXT("trauma"), J->Shake.GetTrauma());
+	R->SetBoolField(TEXT("frozen"), J->Hitstop.IsFrozen());
+	R->SetNumberField(TEXT("squash"), J->Spring.X);
+	R->SetNumberField(TEXT("flash"), J->Flash);
+	R->SetNumberField(TEXT("ring"), J->Pop);
+	R->SetNumberField(TEXT("camera_x"), J->Cam.GetX());
+	R->SetBoolField(TEXT("on_floor"), J->bOnFloor);
+	Print(TEXT("DRIVE_JUICE ") + Write(R, 0));
+	if (J->Hits != 1 || J->Shake.GetTrauma() <= 0.0 || !J->Hitstop.IsFrozen() || J->Spring.X == 0.0 || J->Flash <= 0.0 || J->Pop <= 0.0)
+	{
+		return Fail(TEXT("the hit did not take: trauma, hitstop, squash, flash and ring must all be on (see DRIVE_JUICE)"));
+	}
+	return true;
+}
+
+bool FGameKitShellDrive::Crash()
+{
+	if (!ToMenu() || !Frames(2))
+	{
+		return false;
+	}
+	if (!GameKit::ShellReport::HasCrashTarget())
+	{
+		return Fail(TEXT("no crash target: the shell did not arm crash reports (FGameKitShellModel::ArmCrashReports)"));
+	}
+	// The handler OnHandleSystemError calls on a fatal error, with a planted one (see the header: no real crash)
+	const FString Path = GameKit::ShellReport::WriteCrash(PlantedError);
+	if (Path.IsEmpty() || !FPaths::FileExists(Path))
+	{
+		return Fail(TEXT("no crash file was written"));
+	}
+	return Fail(PlantedError);   // a crash fails the run, as on the other shells (dev.py says it is expected)
+}
+
+bool FGameKitShellDrive::Bug()
+{
+	if (!ToMenu())
+	{
+		return false;
+	}
+	if (!Model->Options().bDebugBuild)
+	{
+		return Fail(TEXT("the bug report key is in debug builds only"));
+	}
+	Model->LastBugReport.Empty();
+	Model->KeyPressed(FGameKitShellModel::BugKey, TEXT("keyboard"));
+	Model->KeyReleased(FGameKitShellModel::BugKey);
+	if (!Frames(PressGap))
+	{
+		return false;
+	}
+	const FString Dir = Model->LastBugReport;
+	if (Dir.IsEmpty())
+	{
+		return Fail(TEXT("F8 wrote no bug report"));
+	}
+	TArray<FString> Files;
+	for (const TCHAR* F : BugFiles)
+	{
+		Files.Add(F);
+	}
+	if (Model->OnScreenshot)
+	{
+		Files.Add(TEXT("screenshot.png"));   // only when this run can draw (dev.py gives the bug drive a renderer)
+	}
+	for (const FString& F : Files)
+	{
+		if (!FPaths::FileExists(FPaths::Combine(Dir, F)))
+		{
+			return Fail(TEXT("the bug report lacks ") + F + TEXT(": ") + Dir);
+		}
+	}
+	if (Model->Toast.IsEmpty())
+	{
+		return Fail(TEXT("no toast told the player the report was saved"));
+	}
+	Print(TEXT("DRIVE_BUG ") + Dir);
+	return true;
+}
+
+void FGameKitShellDrive::Check(const FString& Name)
+{
+	using namespace GameKitTheme;
+	TArray<TSharedPtr<FJsonValue>> Entries = Texts();
+	if (bPlantLabel && Name == TEXT("main_menu"))
+	{
+		// one label too small for its text, as the LÖVE and Godot drives plant: the check must name it
+		const FString S = Model->T(TEXT("menu.play"));
+		const float W = Measure(S, Font(BodyPx * Model->TextScale(), Model->ReadableFont()));
+		TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
+		O->SetStringField(TEXT("node"), TEXT("plant.too_small"));
+		O->SetStringField(TEXT("text"), S);
+		O->SetBoolField(TEXT("fits"), W >= 0.f && W <= PlantWidth);
+		Entries.Add(MakeObject(O));
+	}
+	int32 Count = 0;
+	TArray<FString> Found;
+	for (const TSharedPtr<FJsonValue>& E : Entries)
+	{
+		const TSharedPtr<FJsonObject> O = E.IsValid() ? E->AsObject() : nullptr;
+		const FString Text = GetString(O, TEXT("text"), FString());
+		if (Text.IsEmpty())
+		{
+			continue;
+		}
+		++Count;
+		const FString Node = GetString(O, TEXT("node"), TEXT("?"));
+		if (!Text.StartsWith(TEXT("[")))
+		{
+			Found.Add(FString::Printf(TEXT("label %s: not passed through T() (\"%s\")"), *Node, *Text));
+		}
+		if (!GetBool(O, TEXT("fits"), true))
+		{
+			Found.Add(FString::Printf(TEXT("label %s: wider than its column (truncated) (\"%s\")"), *Node, *Text));
+		}
+	}
+	++Checked;
+	Labels += Count;
+	Problems += Found.Num();
+	Print(FString::Printf(TEXT("PSEUDO_SCREEN %s labels %d problems %d"), *Name, Count, Found.Num()));
+	for (const FString& F : Found)
+	{
+		Print(FString::Printf(TEXT("PSEUDO_FAIL %s %s"), *Name, *F));
+	}
+}
+
+bool FGameKitShellDrive::Pseudo(bool bPlant)
+{
+	using namespace GameKitTheme;
+	bPlantLabel = bPlant;
+	Checked = Labels = Problems = 0;
+	if (!Model->IsPseudo())
+	{
+		Model->SetLocaleOverride(FGameKitShellModel::PseudoLocale);
+		Print(TEXT("DRIVE_NOTE the pseudo drive switched the locale to pseudo (pass --locale pseudo next time)"));
+	}
+	if (Measure(TEXT("[x]"), Font(BodyPx, false)) < 0.f)
+	{
+		return Fail(TEXT("cannot measure text here (no Slate renderer): run it through dev.py smoke --drive pseudo"));
+	}
+	if (!WaitScreen(TEXT("title")))
+	{
+		return false;
+	}
+	if (Model->Top()->Dialog.Num())
+	{
+		Check(TEXT("consent"));
+		Press(TEXT("ui_cancel"));
+	}
+	Check(TEXT("title"));
+	if (!Press(TEXT("ui_accept")) || !WaitScreen(TEXT("main_menu")))
+	{
+		return false;
+	}
+	Check(TEXT("main_menu"));
+	if (!Open(TEXT("settings"), TEXT("settings")))
+	{
+		return false;
+	}
+	for (const TCHAR* Tab : PseudoTabs)
+	{
+		if (!ToTab(Tab))
+		{
+			return false;
+		}
+		Check(FString(TEXT("settings.")) + Tab);
+		if (!Press(TEXT("ui_down")) || !Focus(FString(Tab) + TEXT(".back")))   // the rows below the fold
+		{
+			return false;
+		}
+		Check(FString(TEXT("settings.")) + Tab + TEXT(".end"));
+		if (FCString::Strcmp(Tab, TEXT("controls")) == 0)
+		{
+			if (!Focus(TEXT("controls.bind_jump")) || !Press(TEXT("ui_accept")))   // the "press a key" prompt
+			{
+				return false;
+			}
+			Check(TEXT("settings.capture"));
+			Model->CancelCapture();
+			Frames(PressGap);
+		}
+	}
+	if (!Press(TEXT("ui_cancel")) || !WaitScreen(TEXT("main_menu")) || !Open(TEXT("credits"), TEXT("credits")))
+	{
+		return false;
+	}
+	Check(TEXT("credits"));
+	if (!Press(TEXT("ui_cancel")) || !WaitScreen(TEXT("main_menu")))
+	{
+		return false;
+	}
+	if (Model->Options().bDebugBuild)
+	{
+		if (!Focus(TEXT("juice")) || !Press(TEXT("ui_accept")) || !WaitScreen(TEXT("loading")))
+		{
+			return false;
+		}
+		Check(TEXT("loading"));
+		if (!WaitScreen(TEXT("juice_demo")) || !Frames(20))
+		{
+			return false;
+		}
+		Check(TEXT("juice_demo"));
+		if (!Press(TEXT("attack")))
+		{
+			return false;
+		}
+		Check(TEXT("juice_demo.hit"));
+		if (!Press(TEXT("pause")) || !WaitScreen(TEXT("pause")))
+		{
+			return false;
+		}
+		Check(TEXT("pause.juice"));
+		if (!Open(TEXT("quit"), TEXT("title")) || !Press(TEXT("ui_accept")) || !WaitScreen(TEXT("main_menu")))
+		{
+			return false;
+		}
+	}
+	if (!Open(TEXT("play"), TEXT("loading")) || !WaitScreen(TEXT("play")) || !Frames(5))
+	{
+		return false;
+	}
+	Model->Say(DemoSpeaker, Model->T(DemoLineKey));   // a subtitle line, so its text is checked too
+	Frames(2);
+	Check(TEXT("play"));
+	if (!Press(TEXT("pause")) || !WaitScreen(TEXT("pause")))
+	{
+		return false;
+	}
+	Check(TEXT("pause"));
+	for (const TCHAR* Page : {TEXT("help"), TEXT("history")})
+	{
+		if (!Open(Page, Page))
+		{
+			return false;
+		}
+		Check(Page);
+		if (!Press(TEXT("ui_cancel")) || !WaitScreen(TEXT("pause")))
+		{
+			return false;
+		}
+	}
+	if (!Open(TEXT("quit"), TEXT("title")))
+	{
+		return false;
+	}
+	if (Problems == 0)
+	{
+		Print(FString::Printf(TEXT("PSEUDO_PASS %d screens, %d labels, nothing truncated or untranslated"), Checked, Labels));
+		return true;
+	}
+	Print(FString::Printf(TEXT("PSEUDO_FAILED %d problem(s) on %d screens"), Problems, Checked));
+	return Fail(FString::Printf(TEXT("%d label problem(s); see the PSEUDO_FAIL lines"), Problems));
 }
 
 // ---- The accessibility sweep (#91, #85) ----------------------------------------------------------------------------
@@ -481,6 +789,33 @@ TArray<TSharedPtr<FJsonValue>> FGameKitShellDrive::Texts() const
 		}
 		Add(Model->T(TEXT("page.hint")), SmallPx, Colour::Dim, Colour::Bg, Wide, Name + TEXT(".hint"));
 	}
+	else if (Name == TEXT("juice_demo") && Model->Juice())
+	{
+		// the demo's HUD (SGameKitShell::JuiceHud): outlined text over the game, the controls and stats wrap
+		const FGameKitJuiceDemo& J = *Model->Juice();
+		TArray<TPair<FColor, double>> Over;
+		Add(Heading, HeadingPx, Colour::Accent, Colour::Bg, Wide, TEXT("juice.title"));
+		for (const TCHAR* A : PromptActions)
+		{
+			FString Glyph, Label;
+			Model->Prompt(A, Glyph, Label);
+			Out.Add(TextEntry(Label, SmallPx * Scale, Colour::Text, Colour::Panel, true, FString(TEXT("juice.glyph.")) + A));
+			Out.Add(TextEntry(Model->T(FString(TEXT("action.")) + A), SmallPx * Scale, Colour::Dim, Colour::Bg, true,
+			                  FString(TEXT("juice.action.")) + A, &Over, &Colour::Outline));
+		}
+		Out.Add(TextEntry(J.Stats(*Model), SmallPx * Scale, Colour::Dim, Colour::Bg, true, TEXT("juice.stats"), &Over, &Colour::Outline));
+		if (J.bGuard)
+		{
+			Out.Add(TextEntry(Model->T(TEXT("juice.guard")), SmallPx * Scale, Colour::Accent, Colour::Bg, true, TEXT("juice.guard"), &Over, &Colour::Outline));
+		}
+	}
+	if (Model->IsCapturing())
+	{
+		const FString Key = Model->CaptureSlot() == 0 ? TEXT("controls.press_key") : TEXT("controls.press_button");
+		Out.Add(TextEntry(Model->T(Key, Args(TEXT("action"), Model->T(TEXT("action.") + Model->Capturing()))), BodyPx * Scale, Colour::Text,
+		                  Colour::Panel, true, TEXT("capture.prompt")));   // wrapped in a panel that grows
+		Add(Model->T(TEXT("controls.capture_cancel")), SmallPx, Colour::Dim, Colour::Panel, ConsentW, TEXT("capture.cancel"));
+	}
 	if (Model->HasSubtitle() && Model->Flag(TEXT("access"), TEXT("subtitles")))
 	{
 		const FString Size = Model->Str(TEXT("access"), TEXT("subtitle_size"));
@@ -488,8 +823,14 @@ TArray<TSharedPtr<FJsonValue>> FGameKitShellDrive::Texts() const
 		TArray<TPair<FColor, double>> Layers;
 		Layers.Emplace(Colour::Panel, Model->Num(TEXT("access"), TEXT("subtitle_background")));
 		const FGameKitSaidLine& Line = Model->CurrentSubtitle();
-		const FString Shown = (Model->Flag(TEXT("access"), TEXT("speaker_names")) && !Line.Speaker.IsEmpty() ? Line.Speaker + TEXT(": ") : FString()) + Line.Text;
+		// the speaker as the view shows it, through subtitle.speaker ("{name}:"), then the line
+		const FString Shown = (Model->Flag(TEXT("access"), TEXT("speaker_names")) && !Line.Speaker.IsEmpty()
+		                           ? Model->T(TEXT("subtitle.speaker"), Args(TEXT("name"), Line.Speaker)) + TEXT(" ") : FString()) + Line.Text;
 		Out.Add(TextEntry(Shown, SubtitlePx[Index] * Scale, Colour::Text, Colour::Panel, true, TEXT("subtitle.text"), &Layers, &Colour::Outline));
+	}
+	if (!Model->Toast.IsEmpty())
+	{
+		Out.Add(TextEntry(Model->Toast, SmallPx * Scale, Colour::Text, Colour::Panel, true, TEXT("toast")));   // a panel that grows
 	}
 	return Out;
 }

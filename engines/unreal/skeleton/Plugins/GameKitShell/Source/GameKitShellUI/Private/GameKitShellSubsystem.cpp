@@ -22,6 +22,7 @@
 #include "Misc/Paths.h"
 #include "SGameKitShell.h"
 #include "GeneralProjectSettings.h"
+#include "UnrealClient.h"
 
 namespace
 {
@@ -92,6 +93,11 @@ void UGameKitShellSubsystem::MakeModel()
 		// Hook a text-to-speech here (Unreal's TextToSpeech plugin, or the platform's); the line is always logged
 		UE_LOG(LogGameKitShell, Log, TEXT("narrate: %s"), *Line);
 	};
+	Model->OnScreenshot = [](const FString& Path)
+	{
+		FScreenshotRequest::RequestScreenshot(Path, /*bShowUI*/ true, /*bAddFilenameSuffix*/ false);   // written next frame
+	};
+	Model->ArmCrashReports();   // a fatal error from here on writes <DataDir>/crashes/crash_<time>.txt (#275)
 	Model->Push(TEXT("title"));
 }
 
@@ -155,6 +161,26 @@ bool UGameKitShellSubsystem::SettingFlag(const FString& Section, const FString& 
 FString UGameKitShellSubsystem::TopScreen() const
 {
 	return Model.IsValid() ? Model->TopName() : FString();
+}
+
+FVector2D UGameKitShellSubsystem::GetStick() const
+{
+	return Model.IsValid() ? Model->Stick() : FVector2D::ZeroVector;
+}
+
+float UGameKitShellSubsystem::GetTrigger(bool bRight) const
+{
+	return Model.IsValid() ? static_cast<float>(Model->Trigger(bRight)) : 0.f;
+}
+
+bool UGameKitShellSubsystem::IsActionHeld(const FString& Action) const
+{
+	return Model.IsValid() && Model->IsHeld(Action);
+}
+
+TArray<FString> UGameKitShellSubsystem::GetHeldActions() const
+{
+	return Model.IsValid() ? Model->HeldActions() : TArray<FString>();
 }
 
 // {{FOOTER}}

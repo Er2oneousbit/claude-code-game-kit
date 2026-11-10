@@ -4,7 +4,9 @@
 //           keys walk the screens, Back saves the file, rebinding swaps, the one-handed layouts apply and reset,
 //           text scale and the readable font take, a held subtitle waits for accept, "What now?" and the
 //           history read back, every control says what it is, every row is reachable, hold-to-repeat timing,
-//           the pad's make from its device name and the left stick as the d-pad (#267);
+//           the pad's make from its device name and the left stick as the d-pad (#267); analog stick, triggers and
+//           held actions for the game (#274); the juice demo, the pseudo locale, the F8 bug report, crash files and
+//           their drives (#275);
 //           plus the scripted runs tools/dev.py starts: GameKit.Screens.Drive (--drive) and GameKit.Screens.Show
 //           (--drive show:<screen> --screenshot).
 // Usage   : python tools/dev.py test --filter GameKit.Screens          (or `test` for everything)
@@ -28,8 +30,12 @@
 #include "GameKitSettings.h"
 #include "GameKitShellCapture.h"
 #include "GameKitShellDrive.h"
+#include "GameKitAtomicFile.h"
+#include "GameKitI18n.h"
+#include "GameKitJuiceDemo.h"
 #include "GameKitShellInput.h"
 #include "GameKitShellLog.h"
+#include "GameKitShellReport.h"
 #include "GameKitShellModel.h"
 #include "GameKitShellTheme.h"
 #include "HAL/FileManager.h"
@@ -559,6 +565,270 @@ bool FGameKitScreensStickTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+/** A model like Fresh(), as a debug build (the juice demo, the pseudo language, F8). */
+TSharedRef<FGameKitShellModel> FreshDebug(const FString& Folder)
+{
+	FGameKitShellModel::FOptions Opt;
+	Opt.ProjectDir = FPaths::ProjectDir();
+	Opt.DataDir = Folder;
+	Opt.GameName = TEXT("Test Game");
+	Opt.Version = TEXT("1.2.3");
+	Opt.bAutomated = true;
+	Opt.bDebugBuild = true;
+	TSharedRef<FGameKitShellModel> M = MakeShared<FGameKitShellModel>(Opt);
+	M->Push(TEXT("title"));
+	if (M->Top()->Dialog.Num())
+	{
+		M->Dispatch(TEXT("ui_cancel"));
+	}
+	return M;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensAnalogTest, "GameKit.Screens.AnalogStickTriggersAndHeldActions", ScreenTestFlags)
+bool FGameKitScreensAnalogTest::RunTest(const FString& Parameters)
+{
+	FTempFolder Folder;
+	TSharedRef<FGameKitShellModel> M = Fresh(Folder.Path);
+	M->SetNum(TEXT("input"), TEXT("deadzone"), 0.2);
+	ToMenu(*M);
+	M->StickMoved(TEXT("x"), 0.6, TEXT("pad_xbox"));        // the main menu: right does nothing on a button row
+	M->TriggerMoved(true, 0.525);
+	M->KeyPressed(TEXT("key:space"), TEXT("keyboard"));   // jump: no menu use, and space stays down
+	TestEqual(TEXT("still the main menu"), M->TopName(), FString(TEXT("main_menu")));
+	TestTrue(TEXT("on the menus the stick reads zero"), M->Stick().IsZero());
+	TestEqual(TEXT("and the triggers"), M->Trigger(true), 0.0);
+	TestEqual(TEXT("and nothing is held for the game"), M->HeldActions().Num(), 0);
+	M->KeyReleased(TEXT("key:space"));
+	M->StickMoved(TEXT("x"), 0.0, TEXT("pad_xbox"));
+	FocusRow(*M, TEXT("play"));
+	M->Dispatch(TEXT("ui_accept"));
+	Frames(*M, 30);
+	TestTrue(TEXT("in play the game has the input"), M->GameActive());
+	M->StickMoved(TEXT("x"), 0.6, TEXT("pad_xbox"));
+	TestEqual(TEXT("0.6 with a 0.2 deadzone is 0.5 (radial, rescaled)"), M->Stick().X, 0.5, 1e-6);
+	M->StickMoved(TEXT("y"), 0.15, TEXT("pad_xbox"));
+	TestTrue(TEXT("the stick's direction is kept"), M->Stick().Y > 0.0 && M->Stick().Y < M->Stick().X);
+	M->SetFlag(TEXT("input"), TEXT("invert_y"), true);
+	TestTrue(TEXT("invert_y flips up"), M->Stick().Y < 0.0);
+	M->SetFlag(TEXT("input"), TEXT("invert_y"), false);
+	TestEqual(TEXT("the right trigger halfway past its deadzone is 0.5"), M->Trigger(true), 0.5, 1e-6);
+	TestEqual(TEXT("the left one rests"), M->Trigger(false), 0.0);
+	TestTrue(TEXT("the stick leaning right holds move_right"), M->IsHeld(TEXT("move_right")));
+	TestFalse(TEXT("a small lean up does not hold move_up"), M->IsHeld(TEXT("move_up")));
+	M->KeyPressed(TEXT("key:space"), TEXT("keyboard"));
+	M->KeyPressed(TEXT("pad:west"), TEXT("pad_xbox"));
+	TArray<FString> Held = M->HeldActions();
+	TestTrue(TEXT("space holds jump: ") + FString::Join(Held, TEXT(",")), Held.Contains(TEXT("jump")));
+	TestFalse(TEXT("no ui_* action is a held game action"), Held.ContainsByPredicate([](const FString& A) { return A.StartsWith(TEXT("ui_")); }));
+	TestTrue(TEXT("sorted"), Held == [&Held] { TArray<FString> S = Held; S.Sort(); return S; }());
+	M->KeyReleased(TEXT("key:space"));
+	TestFalse(TEXT("released, jump is no longer held"), M->IsHeld(TEXT("jump")));
+	// the stick's own d-pad presses (menu focus) never become held d-pad buttons
+	M->StickMoved(TEXT("y"), -0.9, TEXT("pad_xbox"));
+	M->StickMoved(TEXT("y"), 0.0, TEXT("pad_xbox"));
+	M->StickMoved(TEXT("x"), 0.0, TEXT("pad_xbox"));
+	TestFalse(TEXT("a stick back at rest holds no move_down"), M->IsHeld(TEXT("move_down")));
+	M->Dispatch(TEXT("pause"));
+	TestEqual(TEXT("paused: zero again"), M->Trigger(true), 0.0);
+	M->Dispatch(TEXT("pause"));
+	M->ReleaseAll();
+	TestEqual(TEXT("ReleaseAll lets everything go"), M->HeldActions().Num(), 0);
+	TestEqual(TEXT("and the trigger"), M->Trigger(true), 0.0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensJuiceTest, "GameKit.Screens.JuiceDemo", ScreenTestFlags)
+bool FGameKitScreensJuiceTest::RunTest(const FString& Parameters)
+{
+	FTempFolder Folder;
+	TSharedRef<FGameKitShellModel> Release = Fresh(Folder.Path);
+	ToMenu(*Release);
+	TestFalse(TEXT("a release build has no juice demo"), RowIds(*Release).Contains(TEXT("juice")));
+	TSharedRef<FGameKitShellModel> M = FreshDebug(Folder.Path);
+	ToMenu(*M);
+	TestTrue(TEXT("a debug build lists the juice demo"), FocusRow(*M, TEXT("juice")));
+	M->Dispatch(TEXT("ui_accept"));
+	TestEqual(TEXT("through the loading screen"), M->TopName(), FString(TEXT("loading")));
+	Frames(*M, 30);
+	TestEqual(TEXT("into the demo"), M->TopName(), FString(TEXT("juice_demo")));
+	const FGameKitJuiceDemo* J = M->Juice();
+	if (!TestNotNull(TEXT("the demo runs"), J))
+	{
+		return false;
+	}
+	TestEqual(TEXT("its goal is set for What now?"), M->Objective, M->T(TEXT("juice.objective")));
+	TestTrue(TEXT("the guide says it"), M->HasSubtitle());
+	TestTrue(TEXT("attack is the demo's"), M->Dispatch(TEXT("attack")));
+	TestEqual(TEXT("the box was in reach"), J->Hits, 1);
+	TestTrue(TEXT("trauma"), J->Shake.GetTrauma() > 0.0);
+	TestTrue(TEXT("hitstop"), J->Hitstop.IsFrozen());
+	TestTrue(TEXT("squash"), J->Spring.X > 0.0);
+	TestTrue(TEXT("a flash"), J->Flash > 0.0);
+	const double Squash = J->Spring.X;
+	Frames(*M, 2);
+	TestEqual(TEXT("the hitstop freezes game time: the spring waits"), J->Spring.X, Squash, 1e-12);
+	Frames(*M, 30);
+	TestTrue(TEXT("after it the spring moves"), J->Spring.X != Squash);
+	for (int32 I = 0; I < 4; ++I)
+	{
+		M->Dispatch(TEXT("attack"));
+	}
+	TestTrue(TEXT("the flash limiter holds some flashes back"), J->Refused > 0);
+	M->Dispatch(TEXT("jump"));
+	Frames(*M, 15);   // past the last hitstop, still rising
+	TestTrue(TEXT("a buffered jump leaves the floor"), J->Jumps == 1 && !J->bOnFloor);
+	M->KeyPressed(TEXT("key:d"), TEXT("keyboard"));   // move_right held
+	const double X0 = J->PX;
+	Frames(*M, 20);
+	TestTrue(TEXT("a held move_right walks right"), J->PX > X0);
+	M->KeyReleased(TEXT("key:d"));
+	M->SetFlag(TEXT("access"), TEXT("reduce_motion"), true);
+	M->Dispatch(TEXT("attack"));
+	Frames(*M, 10);
+	TestEqual(TEXT("reduce motion: no shake offset"), J->Offset.X, 0.0);
+	M->Dispatch(TEXT("pause"));
+	TestEqual(TEXT("pause opens over the demo"), M->TopName(), FString(TEXT("pause")));
+	const double Frozen = J->RealTime;
+	Frames(*M, 10);
+	TestEqual(TEXT("paused, the demo does not run"), J->RealTime, Frozen);
+	FocusRow(*M, TEXT("quit"));
+	M->Dispatch(TEXT("ui_accept"));
+	TestNull(TEXT("quit to title ends the demo"), M->Juice());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensPseudoTest, "GameKit.Screens.PseudoLocale", ScreenTestFlags)
+bool FGameKitScreensPseudoTest::RunTest(const FString& Parameters)
+{
+	FTempFolder Folder;
+	TSharedRef<FGameKitShellModel> M = FreshDebug(Folder.Path);
+	TestTrue(TEXT("a debug build offers the pseudo language"), M->Locales().Contains(TEXT("pseudo")));
+	TestFalse(TEXT("a release build does not"), Fresh(Folder.Path)->Locales().Contains(TEXT("pseudo")));
+	M->SetLocaleOverride(TEXT("pseudo"));
+	const FString Play = M->T(TEXT("menu.play"));
+	TestTrue(TEXT("in brackets: ") + Play, Play.StartsWith(TEXT("[")) && Play.EndsWith(TEXT("]")));
+	TestEqual(TEXT("GameKit::Pseudo of the English text"), Play, GameKit::Pseudo(TEXT("Play")));
+	const FString Title = M->T(TEXT("title.name"), Arg(TEXT("name"), TEXT("Test Game")));
+	TestTrue(TEXT("a placeholder is filled after, not accented: ") + Title, Title.Contains(TEXT("Test Game")) && Title.StartsWith(TEXT("[")));
+	TestEqual(TEXT("a missing key comes back bare, so the check flags it"), M->T(TEXT("no.such.key")), FString(TEXT("no.such.key")));
+	TestTrue(TEXT("a made-up value is bracketed too"), M->Content(TEXT("42")).StartsWith(TEXT("[")));
+	M->SetLocaleOverride(FString());
+	TestEqual(TEXT("back to English"), M->T(TEXT("menu.play")), FString(TEXT("Play")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensReportTest, "GameKit.Screens.BugReportAndCrashFile", ScreenTestFlags)
+bool FGameKitScreensReportTest::RunTest(const FString& Parameters)
+{
+	using namespace GameKit::ShellReport;
+	FTempFolder Folder;
+	{
+		TSharedRef<FGameKitShellModel> Release = Fresh(Folder.Path);
+		ToMenu(*Release);
+		Release->KeyPressed(FGameKitShellModel::BugKey, TEXT("keyboard"));
+		TestTrue(TEXT("F8 does nothing in a release build"), Release->LastBugReport.IsEmpty());
+	}
+	TSharedRef<FGameKitShellModel> M = FreshDebug(Folder.Path);
+	FString Shot;
+	M->OnScreenshot = [&Shot](const FString& Path) { Shot = Path; };
+	AddLogLine(TEXT("LogTemp: Display: a line before the report"));
+	M->KeyPressed(FGameKitShellModel::BugKey, TEXT("keyboard"));
+	TestEqual(TEXT("F8 is never 'any key' on the title"), M->TopName(), FString(TEXT("title")));
+	const FString Dir = M->LastBugReport;
+	TestTrue(TEXT("a bug_<time> folder in the data folder: ") + Dir, FPaths::GetCleanFilename(Dir).StartsWith(TEXT("bug_")) && FPaths::DirectoryExists(Dir));
+	for (const TCHAR* F : {TEXT("info.txt"), TEXT("log_tail.txt"), TEXT("settings.json")})
+	{
+		TestTrue(FString::Printf(TEXT("it holds %s"), F), FPaths::FileExists(FPaths::Combine(Dir, F)));
+	}
+	TestEqual(TEXT("the screenshot is asked for inside it"), Shot, FPaths::Combine(Dir, TEXT("screenshot.png")));
+	const TOptional<FString> Info = GameKit::ReadTextFile(FPaths::Combine(Dir, TEXT("info.txt")));
+	TestTrue(TEXT("info names the version and the screen"), Info.IsSet() && Info->Contains(TEXT("1.2.3")) && Info->Contains(TEXT("screen: title")));
+	const TOptional<FString> Tail = GameKit::ReadTextFile(FPaths::Combine(Dir, TEXT("log_tail.txt")));
+	TestTrue(TEXT("the log tail holds the line"), Tail.IsSet() && Tail->Contains(TEXT("a line before the report")));
+	TestEqual(TEXT("a toast says so"), M->Toast, M->T(TEXT("toast.bug_saved")));
+	M->KeyPressed(FGameKitShellModel::BugKey, TEXT("keyboard"));
+	TestNotEqual(TEXT("a second report in the same second gets its own folder"), M->LastBugReport, Dir);
+	Frames(*M, 200);
+	TestTrue(TEXT("the toast goes"), M->Toast.IsEmpty());
+	// crash files
+	TestEqual(TEXT("no target, no crash file"), WriteCrash(TEXT("boom")), FString());
+	M->ArmCrashReports();
+	M->SetNum(TEXT("audio"), TEXT("master"), 0.3);   // the snapshot follows the settings
+	const FString Crash = WriteCrash(TEXT("boom"));
+	TestTrue(TEXT("crashes/crash_<time>.txt: ") + Crash, Crash.Contains(TEXT("/crashes/crash_")) && FPaths::FileExists(Crash));
+	const TOptional<FString> Text = GameKit::ReadTextFile(Crash);
+	TestTrue(TEXT("version, error, log tail, settings"), Text.IsSet() && Text->Contains(TEXT("version: 1.2.3")) && Text->Contains(TEXT("error: boom"))
+	                                                     && Text->Contains(TEXT("a line before the report")) && Text->Contains(TEXT("0.3")));
+	TestNotEqual(TEXT("a second crash in the same second gets its own name"), WriteCrash(TEXT("again")), Crash);
+	const FString Pure = CrashText({TEXT("D"), TEXT("Game"), TEXT("9"), TEXT("{}")}, FString(), FString(), TEXT("now"));
+	TestTrue(TEXT("an empty error and tail still read"), Pure.Contains(TEXT("(no log lines)")) && Pure.Contains(TEXT("error: (none given")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensNewDrivesTest, "GameKit.Screens.ScenariosCrashBugJuicePseudo", ScreenTestFlags)
+bool FGameKitScreensNewDrivesTest::RunTest(const FString& Parameters)
+{
+	auto RunDrive = [](const FString& Folder, const FString& Name, TArray<FString>& Lines, bool bArm = true)
+	{
+		TSharedRef<FGameKitShellModel> M = MakeShared<FGameKitShellModel>([&Folder] {
+			FGameKitShellModel::FOptions Opt;
+			Opt.ProjectDir = FPaths::ProjectDir();
+			Opt.DataDir = Folder;
+			Opt.GameName = TEXT("Test Game");
+			Opt.Version = TEXT("1.2.3");
+			Opt.bAutomated = true;
+			Opt.bDebugBuild = true;
+			return Opt;
+		}());
+		if (bArm)
+		{
+			M->ArmCrashReports();
+		}
+		FGameKitShellDrive Drive(M, [&Lines](const FString& L) { Lines.Add(L); });
+		return Drive.Run(Name);
+	};
+	auto Has = [](const TArray<FString>& Lines, const FString& Start)
+	{
+		return Lines.ContainsByPredicate([&Start](const FString& L) { return L.StartsWith(Start); });
+	};
+	FTempFolder Folder;
+	TArray<FString> Lines;
+	TestEqual(TEXT("crash fails on purpose"), RunDrive(Folder.Path, TEXT("crash"), Lines), 1);
+	TestTrue(TEXT("with a crash file"), Has(Lines, TEXT("DRIVE_FAIL drive crash: a planted error")));
+	TArray<FString> Crashes;
+	IFileManager::Get().FindFiles(Crashes, *FPaths::Combine(Folder.Path, TEXT("crashes"), TEXT("crash_*.txt")), true, false);
+	TestEqual(TEXT("one crash file"), Crashes.Num(), 1);
+	Lines.Empty();
+	TestEqual(TEXT("crash without an armed shell names that"), RunDrive(Folder.Path, TEXT("crash"), Lines, false), 1);
+	TestTrue(TEXT("no target"), Has(Lines, TEXT("DRIVE_FAIL no crash target")));
+	Lines.Empty();
+	TestEqual(TEXT("bug passes"), RunDrive(Folder.Path, TEXT("bug"), Lines), 0);
+	TestTrue(TEXT("DRIVE_BUG <folder>"), Has(Lines, TEXT("DRIVE_BUG ")));
+	Lines.Empty();
+	TestEqual(TEXT("show:juice passes"), RunDrive(Folder.Path, TEXT("show:juice"), Lines), 0);
+	TestTrue(TEXT("DRIVE_JUICE"), Has(Lines, TEXT("DRIVE_JUICE {")));
+	if (GameKitTheme::Measure(TEXT("[x]"), GameKitTheme::Font(GameKitTheme::BodyPx, false)) < 0.f)
+	{
+		AddInfo(TEXT("no Slate renderer here: the pseudo drives are checked by dev.py smoke --drive pseudo"));
+		return true;
+	}
+	Lines.Empty();
+	const int32 Pseudo = RunDrive(Folder.Path, TEXT("pseudo"), Lines);
+	for (const FString& L : Lines)
+	{
+		if (L.StartsWith(TEXT("PSEUDO_FAIL")))
+		{
+			AddError(L);
+		}
+	}
+	TestEqual(TEXT("pseudo passes"), Pseudo, 0);
+	TestTrue(TEXT("PSEUDO_PASS"), Has(Lines, TEXT("PSEUDO_PASS ")));
+	Lines.Empty();
+	TestEqual(TEXT("pseudo-plant fails on purpose"), RunDrive(Folder.Path, TEXT("pseudo-plant"), Lines), 1);
+	TestTrue(TEXT("naming the planted label"), Has(Lines, TEXT("PSEUDO_FAIL main_menu label plant.too_small")));
+	return true;
+}
+
 /** The marker lines a drive prints: Display level, so the log holds them for tools/dev.py. */
 void PrintLine(const FString& Line)
 {
@@ -590,7 +860,25 @@ bool FGameKitScreensDriveTest::RunTest(const FString& Parameters)
 	Opt.Version = TEXT("dev");
 	Opt.Locale = Locale;
 	Opt.bAutomated = true;
+	Opt.bDebugBuild = true;   // the juice demo, the pseudo language and F8, as in the editor and development builds
 	TSharedRef<FGameKitShellModel> M = MakeShared<FGameKitShellModel>(Opt);
+	M->ArmCrashReports();     // crash files go to the drive's data folder (#275)
+	if (GameKit::ShellCapture::CanCapture())
+	{
+		// the bug report's screenshot: the shell drawn off-screen (dev.py gives the bug drive a renderer)
+		TWeakPtr<FGameKitShellModel> Weak = M;
+		M->OnScreenshot = [Weak](const FString& Path)
+		{
+			if (const TSharedPtr<FGameKitShellModel> Model = Weak.Pin())
+			{
+				FString Error;
+				if (!GameKit::ShellCapture::SavePng(SNew(SGameKitShell, Model.ToSharedRef()), FIntPoint(DefaultShotW, DefaultShotH), Path, Error))
+				{
+					UE_LOG(LogGameKitShell, Error, TEXT("bug report screenshot: %s"), *Error);
+				}
+			}
+		};
+	}
 	FGameKitShellDrive Drive(M, &PrintLine);
 	const int32 Code = Drive.Run(Name);
 	if (Code != 0)
@@ -637,6 +925,7 @@ bool FGameKitScreensShowTest::RunTest(const FString& Parameters)
 	Opt.Version = TEXT("dev");
 	FParse::Value(FCommandLine::Get(), TEXT("GameKitLocale="), Opt.Locale, /*bShouldStopOnSeparator*/ false);
 	Opt.bAutomated = true;
+	Opt.bDebugBuild = true;   // show:juice
 	TSharedRef<FGameKitShellModel> M = MakeShared<FGameKitShellModel>(Opt);
 	FGameKitShellDrive Drive(M, &PrintLine);
 	if (Drive.Run(Name) != 0)

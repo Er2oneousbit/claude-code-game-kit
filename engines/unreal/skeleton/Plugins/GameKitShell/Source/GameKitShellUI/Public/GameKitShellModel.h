@@ -22,15 +22,25 @@
 //           come from <ProjectDir>/data/input/presets.json, the colour palettes from
 //           data/access/colours.json, the strings from data/i18n/<locale>.json, the credits from CREDITS.md.
 //           Only the top screen takes input; a transparent screen (pause) is drawn over the one below.
+//           Analog input for the game (#274, as the Bevy shell's Intent): Stick() (radial, rescaled deadzone and
+//           invert_y, GameKitAnalog.h), Trigger(), HeldActions(); all zero outside play and the juice demo, so a
+//           menu never leaks a held trigger into the game. Debug builds (FOptions::bDebugBuild) add the juice demo
+//           to the main menu, the pseudo language, and the F8 bug report (#275).
 //
 // Pseudocode:
-//   KeyPressed(binding, device): capture open -> rebind ; title "any key" -> menu ;
-//     else for every action bound to it (sorted): a held subtitle takes ui_accept first, else Top().Action(a)
-//   StickMoved(axis, v, device): |v| under the deadzone = 0 ; a direction not held and past max(StickOn, deadzone)
-//     -> held, KeyPressed("pad:dpad_<dir>") ; a held direction back under StickOff -> released
-//   Dispatch(action): the top screen's rules (tabs, rows, pages, dialogs) -> true when used
-//   Update(dt): loading progress, subtitle timer (held with subtitle_hold), the settings message, blink time
-// Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+//   KeyPressed(binding, device): held += binding ; capture open -> rebind ; F8 (debug) -> bug report ;
+//     title "any key" -> menu ; else for every action bound to it (sorted): a held subtitle takes ui_accept first,
+//     else Top().Action(a)
+//   KeyReleased(binding): held -= binding
+//   StickMoved(axis, v, device): raw stick[axis] = v ; |v| under the deadzone = 0 ; a direction not held and past
+//     max(StickOn, deadzone) -> held, KeyPressed("pad:dpad_<dir>") ; a held direction back under StickOff -> released
+//   HeldActions: game active? the actions of every held binding (no ui_*) + the move_* the stick leans past
+//     max(deadzone, StickHoldMin) ; Stick: game active? AnalogStick(raw, deadzone, invert_y)
+//   Dispatch(action): the top screen's rules (tabs, rows, pages, dialogs, the juice demo) -> true when used
+//   Update(dt): loading progress, the juice demo, subtitle timer (held with subtitle_hold), messages, blink time
+//   T(key): pseudo locale -> Pseudo(English text) with the placeholders filled after ; else the locale chain
+// Authored: Written with Claude (Fable 5.1, claude-fable-5-1); analog input, the juice demo, the bug report and the
+//           pseudo locale by Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -38,6 +48,8 @@
 #include "Dom/JsonObject.h"
 #include "GameKitBindings.h"
 #include "GameKitI18n.h"
+
+struct FGameKitJuiceDemo;
 
 enum class EGameKitRowKind : uint8
 {
@@ -72,7 +84,7 @@ struct FGameKitSaidLine
 /** One screen on the stack. */
 struct GAMEKITSHELLUI_API FGameKitScreen
 {
-	FString Name;                          // title, main_menu, settings, loading, play, pause, help, history, credits
+	FString Name;                          // title, main_menu, settings, loading, play, pause, help, history, credits, juice_demo
 	FString HeadingKey;                    // i18n key of the heading ("" for the game's name)
 	TArray<FGameKitRow> Rows;
 	int32 Focus = 0;
@@ -110,7 +122,7 @@ public:
 		FString Version;                   // shown on the title
 		FString Locale;                    // a locale override (--locale), "" for the setting
 		bool bAutomated = false;           // a smoke run: loading counts frames, nothing blinks
-		bool bDebugBuild = false;          // (reserved for a juice demo entry, as the other shells have)
+		bool bDebugBuild = false;          // the juice demo on the main menu, the pseudo language, F8 bug reports
 	};
 
 	// ---- Tunables ----
@@ -126,6 +138,10 @@ public:
 	static constexpr double TextScaleStep = 0.25;
 	static constexpr double StickOn = 0.5;            // the left stick presses a d-pad direction past this
 	static constexpr double StickOff = 0.3;           // and lets it go under this (hysteresis, as the C++ shell)
+	static constexpr double StickHoldMin = 0.2;       // raw stick lean that also holds a move_* action (#274)
+	static constexpr double ToastS = 3.0;             // a toast ("Bug report saved.") stays this long
+	static const TCHAR* const BugKey;                 // "key:f8": the bug report, in debug builds (#275)
+	static const TCHAR* const PseudoLocale;           // "pseudo": every string accented, longer, in [ ] (debug builds)
 	static const TCHAR* const SettingsFile;           // "settings.json" in DataDir
 	static const TCHAR* const PresetsFile;            // "data/input/presets.json" under ProjectDir
 	static const TCHAR* const ColoursFile;            // "data/access/colours.json"
@@ -137,6 +153,7 @@ public:
 	static const TCHAR* HelpActions[6];               // the controls "What now?" lists
 
 	explicit FGameKitShellModel(const FOptions& InOptions);
+	~FGameKitShellModel();
 
 	// ---- Settings (always valid: GameKit::SettingsLoad fixed the file) ----
 	TSharedRef<FJsonObject> Settings;
@@ -162,7 +179,13 @@ public:
 
 	// ---- Text ----
 	FString Locale() const;
+	/** The pseudo locale is on: T() shows every string through GameKit::Pseudo (a string not in [ ] skipped T()). */
+	bool IsPseudo() const { return Locale() == PseudoLocale; }
+	/** A locale for this run only, as --locale gives (the pseudo drive switches to "pseudo"); "" for the setting. */
+	void SetLocaleOverride(const FString& InLocale) { Opt.Locale = InLocale; ++Version; }
 	FString T(const FString& Key, const FGameKitTrArgs& Args = FGameKitTrArgs()) const;
+	/** A value the game made up (a name, a number) through the "{v}" template, so the pseudo check sees it. */
+	FString Content(const FString& Text) const;
 	/** The label of a binding for a glyph set: glyph.<name> from the tables, or the key's own name ("Space"). */
 	FString BindingLabel(const FString& GlyphName) const;
 	FString GlyphSet() const;
@@ -199,6 +222,44 @@ public:
 	int32 CaptureSlot() const { return CaptureSlotIndex; }
 	bool IsCapturing() const { return !CaptureAction.IsEmpty(); }
 	void CancelCapture();
+
+	// ---- Analog input for the game (#274, the Bevy shell's Intent) ----
+	/** A key or button let go: the actions bound to it are no longer held. */
+	void KeyReleased(const FString& Binding);
+	/** Everything let go (the widget lost focus, a menu opened over the game). */
+	void ReleaseAll();
+	/** A trigger's raw travel, 0 at rest to 1 (bRight: the right trigger). */
+	void TriggerMoved(bool bRight, double Value);
+	/** The game has the input: play, or the juice demo, on top. Outside it every value below is zero. */
+	bool GameActive() const;
+	/** The left stick for gameplay: input.deadzone (radial, rescaled) and input.invert_y applied; up is +Y. */
+	FVector2D Stick() const;
+	/** A trigger, 0 to 1, past GameKit::TriggerDeadzone. */
+	double Trigger(bool bRight) const;
+	/** The game actions held now (no ui_*), sorted: held keys and buttons, plus the move_* the stick leans to. */
+	TArray<FString> HeldActions() const;
+	bool IsHeld(const FString& Action) const;
+	/** The move_* actions the raw stick holds: a lean past max(input.deadzone, StickHoldMin), invert_y honoured. */
+	TArray<FString> StickActions() const;
+	FVector2D RawStick = FVector2D::ZeroVector;       // as the pad reports it: -1..1, up is +Y
+	double RawTrigger[2] = {0.0, 0.0};                // left, right: 0..1
+
+	// ---- The juice demo (debug builds, #275) ----
+	/** The demo while "juice_demo" is on the stack (null otherwise). */
+	FGameKitJuiceDemo* Juice() const { return JuiceDemo.Get(); }
+
+	// ---- Bug report and crash files (#275) ----
+	/** Writes bug_<time>/ in DataDir: info.txt, log_tail.txt, settings.json, and screenshot.png through OnScreenshot.
+	 *  Logs BUG_REPORT <folder> and shows a toast. Returns the folder, "" when it could not be written. */
+	FString BugReport();
+	/** Saves a picture of the screen to the path (the subsystem: the game viewport; the drive: the shell widget). */
+	TFunction<void(const FString&)> OnScreenshot;
+	FString LastBugReport;
+	/** This model's data folder takes the crash file if the game hits a fatal error (GameKitShellReport.h). */
+	void ArmCrashReports();
+	FString Toast;                                    // a short notice over every screen, while ToastT > 0
+	double ToastT = 0.0;
+	void ShowToast(const FString& Text);
 
 	// ---- Frame ----
 	void Update(double Dt);
@@ -243,6 +304,9 @@ private:
 	FString CaptureAction;
 	int32 CaptureSlotIndex = -1;
 	bool StickHeld[4] = {false, false, false, false};   // dpad_up, dpad_down, dpad_left, dpad_right
+	TSet<FString> HeldBindings;                        // keys and buttons down now ("key:a", "pad:south")
+	TUniquePtr<FGameKitJuiceDemo> JuiceDemo;
+	bool bCrashArmed = false;
 	FGameKitSaidLine Subtitle;
 	double SubtitleT = 0.0, SubtitleEnd = 0.0;
 	bool bHeld = false;
@@ -261,7 +325,7 @@ private:
 	void Event(const FString& What);
 	void NarrateFocus();
 	void NarrateScreen(const FGameKitScreen& Screen);
-	FString Content(const FString& Text) const;
+	void ScreenOpened(const FString& Name);
 	TArray<FString> CreditsLines() const;
 	TArray<FString> HelpLines() const;
 	TArray<FString> HistoryLines() const;

@@ -3,14 +3,21 @@
 // Purpose : The Slate widgets behind SGameKitShell.h, one builder per screen.
 // Usage   : compiled into the GameKitShellUI module.
 // Notes   : Every colour and size comes from GameKitShellTheme.h; the access report (GameKitShellDrive.cpp)
-//           describes the same numbers, so keep the two in step when restyling.
-// Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+//           describes the same numbers, so keep the two in step when restyling. The juice demo's world is one leaf
+//           widget (SGameKitJuiceWorld) that paints boxes from the model every frame, in the LÖVE demo's 640x360
+//           units scaled to the widget.
+// Authored: Written with Claude (Fable 5.1, claude-fable-5-1); analog input, the juice demo and the toast by
+//           Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 #include "SGameKitShell.h"
 
 #include "Framework/Application/SlateApplication.h"
+#include "GameKitEase.h"
+#include "GameKitJuiceDemo.h"
 #include "GameKitShellInput.h"
 #include "GameKitShellTheme.h"
+#include "GameKitSpring.h"
+#include "Rendering/DrawElements.h"
 #include "Styling/CoreStyle.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Layout/SBorder.h"
@@ -18,12 +25,111 @@
 #include "Widgets/Layout/SDPIScaler.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SSpacer.h"
+#include "Widgets/Layout/SWrapBox.h"
 #include "Widgets/Notifications/SProgressBar.h"
 #include "Widgets/SBoxPanel.h"
+#include "Widgets/SLeafWidget.h"
 #include "Widgets/SOverlay.h"
 #include "Widgets/Text/STextBlock.h"
 
 using namespace GameKitTheme;
+
+namespace
+{
+	// ---- Tunables: the juice demo's colours (sRGB, the LÖVE demo's fallback palette) ----
+	const FColor JuicePlayer(242, 191, 77);
+	const FColor JuiceTarget(89, 204, 115);
+	const FColor JuiceHit(255, 77, 64);
+	const FColor JuiceFloor(64, 69, 82);
+	const FColor JuiceDeadzone(128, 153, 230, 89);
+	constexpr float JuiceLine = 2.f;          // outline width, world units
+	constexpr float JuiceRingMin = 10.f, JuiceRingGrow = 30.f;
+	constexpr float JuiceFloorMark = 80.f;    // floor marks every this many units, so camera motion shows
+
+	/** The juice demo's world, painted from the model each frame (FGameKitJuiceDemo holds the state). */
+	class SGameKitJuiceWorld : public SLeafWidget
+	{
+	public:
+		SLATE_BEGIN_ARGS(SGameKitJuiceWorld) {}
+		SLATE_END_ARGS()
+
+		void Construct(const FArguments& InArgs, const TSharedRef<FGameKitShellModel>& InModel)
+		{
+			Model = InModel;
+		}
+
+		virtual FVector2D ComputeDesiredSize(float) const override { return FVector2D(DesignW, DesignH); }
+
+		virtual int32 OnPaint(const FPaintArgs& Args, const FGeometry& Geo, const FSlateRect& Cull, FSlateWindowElementList& Out,
+		                      int32 Layer, const FWidgetStyle& Style, bool bParentEnabled) const override
+		{
+			const FGameKitJuiceDemo* J = Model.IsValid() ? Model->Juice() : nullptr;
+			const FVector2f Size = Geo.GetLocalSize();
+			Box(Out, Layer, Geo, 0.f, 0.f, Size.X, Size.Y, Colour::Bg);
+			if (!J)
+			{
+				return Layer;
+			}
+			const float S = Size.X / static_cast<float>(FGameKitJuiceDemo::ViewW);   // world unit -> local
+			// the camera, then the shake (offset and a turn about the centre)
+			const float Ox = static_cast<float>(FGameKitJuiceDemo::ViewW / 2 - J->Cam.GetX() + J->Offset.X);
+			const float Oy = static_cast<float>(FGameKitJuiceDemo::ViewH / 2 - J->Cam.GetY() + J->Offset.Y);
+			const FGeometry World = Geo.MakeChild(FSlateRenderTransform(FQuat2D(static_cast<float>(J->Offset.Angle))));
+			auto W = [&](double X, double Y, double Wd, double H, const FColor& C)
+			{
+				Box(Out, Layer + 1, World, (static_cast<float>(X) + Ox) * S, (static_cast<float>(Y) + Oy) * S, static_cast<float>(Wd) * S,
+				    static_cast<float>(H) * S, C);
+			};
+			auto Ring = [&](double X, double Y, double Wd, double H, float Line, const FColor& C)
+			{
+				W(X, Y, Wd, Line, C);
+				W(X, Y + H - Line, Wd, Line, C);
+				W(X, Y, Line, H, C);
+				W(X + Wd - Line, Y, Line, H, C);
+			};
+			const double Floor = FGameKitJuiceDemo::FloorY;
+			W(-200.0, Floor, FGameKitJuiceDemo::WorldW + 400.0, 200.0, JuiceFloor);
+			for (double X = 0.0; X <= FGameKitJuiceDemo::WorldW; X += JuiceFloorMark)
+			{
+				W(X, Floor + 6.0, 2.0, 8.0, Colour::PanelEdge);
+			}
+			const FVector2D Squash = GameKit::Squash(J->Spring.X);
+			const double Tw = FGameKitJuiceDemo::TargetSize * Squash.X, Th = FGameKitJuiceDemo::TargetSize * Squash.Y;
+			W(FGameKitJuiceDemo::TargetX + (FGameKitJuiceDemo::TargetSize - Tw) / 2, Floor - Th, Tw, Th, JuiceTarget);
+			W(J->PX, J->PY, FGameKitJuiceDemo::PlayerSize, FGameKitJuiceDemo::PlayerSize, JuicePlayer);
+			if (J->bGuard)
+			{
+				const double P = FGameKitJuiceDemo::PlayerSize;
+				Ring(J->PX - P / 2, J->PY - P / 2, P * 2, P * 2, JuiceLine, JuicePlayer);
+			}
+			if (J->Pop > 0.0)   // an eased ring on the box
+			{
+				const double K = GameKit::Ease(EGameKitEase::OutBack, 1.0 - J->Pop / FGameKitJuiceDemo::PopS);
+				const double R = JuiceRingMin + JuiceRingGrow * K;
+				const double Cx = FGameKitJuiceDemo::TargetX + FGameKitJuiceDemo::TargetSize / 2, Cy = Floor - FGameKitJuiceDemo::TargetSize / 2;
+				Ring(Cx - R, Cy - R, R * 2, R * 2, JuiceLine, JuiceHit);
+			}
+			Ring(J->Cam.GetX() - FGameKitJuiceDemo::CamDeadzoneW / 2, J->Cam.GetY() - FGameKitJuiceDemo::CamDeadzoneH / 2,
+			     FGameKitJuiceDemo::CamDeadzoneW, FGameKitJuiceDemo::CamDeadzoneH, 1.f, JuiceDeadzone);
+			if (J->Flash > 0.0)
+			{
+				FColor C = JuiceHit;
+				C.A = static_cast<uint8>(FMath::Clamp(J->FlashPeak * (J->Flash / FGameKitJuiceDemo::FlashS), 0.0, 1.0) * 255.0);
+				Box(Out, Layer + 2, Geo, 0.f, 0.f, Size.X, Size.Y, C);
+			}
+			return Layer + 2;
+		}
+
+	private:
+		TSharedPtr<FGameKitShellModel> Model;
+
+		static void Box(FSlateWindowElementList& Out, int32 Layer, const FGeometry& Geo, float X, float Y, float Wd, float H, const FColor& C)
+		{
+			FSlateDrawElement::MakeBox(Out, Layer, Geo.ToPaintGeometry(FVector2f(Wd, H), FSlateLayoutTransform(FVector2f(X, Y))),
+			                           FCoreStyle::Get().GetBrush("WhiteBrush"), ESlateDrawEffect::None, Linear(C));
+		}
+	};
+}
 
 namespace
 {
@@ -100,10 +206,32 @@ FReply SGameKitShell::OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& In
 	return Model->KeyPressed(Binding, Device) ? FReply::Handled() : FReply::Unhandled();
 }
 
+FReply SGameKitShell::OnKeyUp(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
+{
+	const FString Binding = GameKit::ShellInput::BindingOf(InKeyEvent.GetKey());
+	if (!Binding.IsEmpty())
+	{
+		Model->KeyReleased(Binding);   // no longer a held game action (#274)
+	}
+	return FReply::Unhandled();        // the game sees the release too
+}
+
+void SGameKitShell::OnFocusLost(const FFocusEvent& InFocusEvent)
+{
+	SCompoundWidget::OnFocusLost(InFocusEvent);
+	Model->ReleaseAll();               // a key let go elsewhere never reaches OnKeyUp: nothing stays held
+}
+
 FReply SGameKitShell::OnAnalogValueChanged(const FGeometry& MyGeometry, const FAnalogInputEvent& InAnalogInputEvent)
 {
-	// the left stick moves the focus like the d-pad; the model keeps the hysteresis (StickMoved)
+	// the left stick moves the focus like the d-pad; the model keeps the hysteresis (StickMoved) and the raw value
+	// for the game's Stick() (#274); the triggers feed Trigger(). Both also reach the game (unhandled).
 	const FKey Key = InAnalogInputEvent.GetKey();
+	if (Key == EKeys::Gamepad_LeftTriggerAxis || Key == EKeys::Gamepad_RightTriggerAxis)
+	{
+		Model->TriggerMoved(Key == EKeys::Gamepad_RightTriggerAxis, InAnalogInputEvent.GetAnalogValue());
+		return FReply::Unhandled();
+	}
 	const bool bX = Key == EKeys::Gamepad_LeftX;
 	if (!bX && Key != EKeys::Gamepad_LeftY)
 	{
@@ -541,8 +669,74 @@ TSharedRef<SWidget> SGameKitShell::CapturePrompt()
 		];
 }
 
+TSharedRef<SWidget> SGameKitShell::JuiceDemo(const FGameKitScreen& S)
+{
+	// the HUD: outlined text, so it reads over any part of the world; the controls wrap at long text sizes
+	auto Outlined = [this](const FString& Str, float DesignPx, const FColor& C)
+	{
+		FSlateFontInfo F = Font(DesignPx);
+		F.OutlineSettings = FFontOutlineSettings(1, Linear(Colour::Outline));
+		return SNew(STextBlock).Text(FText::FromString(Str)).Font(F).ColorAndOpacity(FSlateColor(Linear(C))).AutoWrapText(true);
+	};
+	TSharedRef<SWrapBox> Controls = SNew(SWrapBox).UseAllottedSize(true).InnerSlotPadding(FVector2D(16.f, 6.f));
+	for (const TCHAR* Action : {TEXT("move_left"), TEXT("move_right"), TEXT("jump"), TEXT("attack"), TEXT("interact"), TEXT("pause")})
+	{
+		FString Glyph, Label;
+		Model->Prompt(Action, Glyph, Label);
+		Controls->AddSlot()
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().Padding(FMargin(0.f, 0.f, 6.f, 0.f))
+			[
+				Panel(Colour::Panel, Text(Label, SmallPx, Colour::Text), 4.f)
+			]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+			[
+				Outlined(Model->T(TEXT("action.") + FString(Action)), SmallPx, Colour::Dim)
+			]
+		];
+	}
+	TSharedRef<FGameKitShellModel> M = Model.ToSharedRef();
+	return SNew(SOverlay)
+		+ SOverlay::Slot()
+		[
+			SNew(SGameKitJuiceWorld, M)
+		]
+		+ SOverlay::Slot().HAlign(HAlign_Fill).VAlign(VAlign_Top).Padding(FMargin(PanelPad))
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight()[Outlined(Model->Heading(S), HeadingPx, Colour::Accent)]
+			+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0.f, 8.f))[Controls]
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				SNew(STextBlock)
+				.Font(Font(SmallPx))
+				.ColorAndOpacity(FSlateColor(Linear(Colour::Dim)))
+				.AutoWrapText(true)
+				.Text_Lambda([M] { return FText::FromString(M->Juice() ? M->Juice()->Stats(*M) : FString()); })   // live
+			]
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				SNew(STextBlock)
+				.Font(Font(SmallPx))
+				.ColorAndOpacity(FSlateColor(Linear(Colour::Accent)))
+				.Text(FText::FromString(Model->T(TEXT("juice.guard"))))
+				.Visibility_Lambda([M] { return M->Juice() && M->Juice()->bGuard ? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
+			]
+		];
+}
+
+TSharedRef<SWidget> SGameKitShell::ToastWidget()
+{
+	return SNew(SBox).HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(FMargin(0.f, 24.f))
+		[
+			Panel(Colour::Panel, Text(Model->Toast, SmallPx, Colour::Text, true), 12.f)
+		];
+}
+
 TSharedRef<SWidget> SGameKitShell::Screen(const FGameKitScreen& S)
 {
+	if (S.Name == TEXT("juice_demo")) return JuiceDemo(S);
 	if (S.Name == TEXT("title")) return Title(S);
 	if (S.Name == TEXT("main_menu")) return MainMenu(S);
 	if (S.Name == TEXT("settings")) return Settings(S);
@@ -582,6 +776,10 @@ void SGameKitShell::Rebuild()
 	if (Model->IsCapturing())
 	{
 		Root->AddSlot()[CapturePrompt()];
+	}
+	if (!Model->Toast.IsEmpty())
+	{
+		Root->AddSlot()[ToastWidget()];   // "Bug report saved." over every screen (#275)
 	}
 }
 
