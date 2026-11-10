@@ -8,6 +8,7 @@
 //           re-arms a consumed jump. Same rules as the Godot and web CoyoteTimer; matches
 //           tools/golden_vectors.py (Coyote), checked against data/golden/juice.json.
 //           Pairs with InputBuffer: buffer the press, then consume it when can_jump() turns true.
+//           set_window() takes effect at the next landing (the player's access.timing_scale, core/MotorAccess.hpp).
 //
 // Pseudocode:
 //   on floor  -> (just landed: consumed = false) grounded, time_left = window
@@ -15,6 +16,7 @@
 //   can_jump  -> not consumed and (grounded or time_left > 0)
 //   consume   -> consumed until the next landing, time_left = 0
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): set_window for access.timing_scale (#269)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -29,6 +31,10 @@ class CoyoteTimer {
 public:
     // A negative window (bad tuning data) counts as 0.
     explicit CoyoteTimer(double window_seconds = kCoyoteWindow) : window_(std::max(window_seconds, 0.0)) {}
+
+    // A new window (seconds), used from the next update on the floor; negative counts as 0.
+    void set_window(double window_seconds) { window_ = std::max(window_seconds, 0.0); }
+    double window() const { return window_; }
 
     void update(double dt, bool on_floor) {
         if (on_floor) {

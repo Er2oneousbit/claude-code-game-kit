@@ -62,6 +62,10 @@ Recommended extensions: C/C++ (ms-vscode.cpptools), CMake Tools (ms-vscode.cmake
   `settings()["audio"]["sfx"]`, `palette("player")` (the colour-blind palette from `data/access/colours.json`),
   `is_down("attack")`; a line says itself with `say_line("guide.welcome")` (subtitles, history, `subtitle_hold`),
   a sound captions itself with `caption("box_hit")`, the goal for "What now?" with `set_objective(t("..."))`.
+- Motor access (#166): every timing window goes through `core::scaled_window(base, shell_->timing_scale())`
+  (`InputBuffer::set_window`, `CoyoteTimer::set_window`), and every held action (guard, sprint, aim) through a
+  `core::HeldAction` with `access_flag("hold_to_toggle")` (`src/core/MotorAccess.hpp`). The starter's jump and guard
+  in `Game.cpp` show both.
 - A new setting: `Settings.cpp` (default and schema rule), `Menu.cpp` (its row), `data/i18n/en.json` (its label), and
   the kit's reference `tools/golden_vectors.py` when the kit itself changes.
 - A new screen: a `ScreenId`, a case in `Shell::make_screen`, `screen_action` and `draw_screen`; its title key in

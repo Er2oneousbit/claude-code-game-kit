@@ -134,6 +134,7 @@ if(BUILD_TESTS)
     tests/test_golden_vectors.cpp
     tests/test_golden_audio.cpp
     tests/test_menu.cpp
+    tests/test_motor_access.cpp
     tests/test_shell_files.cpp
   )
   target_link_libraries(unit_tests PRIVATE core doctest::doctest)
