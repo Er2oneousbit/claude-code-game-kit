@@ -71,9 +71,10 @@
 - **Godot needs 4.6 (was "4.3"):** the shell never compiled on 4.3 to 4.5 (`Control.has_focus(bool)` is new in 4.6,
   `MIX_RATE_OUTPUT` in 4.4); `dev.py` and `doctor` now refuse an older Godot with exit 2 instead of failing on parse
   errors, and the crash hook is a plain `Logger`. Use GUT 9.6.1 on 4.6 (GUT 9.7 needs 4.7).
-- **Scripted drives read no real input (#276):** during any smoke run the shells of Bevy, C++/SDL3, Godot, LÖVE, Unity
-  and Unreal ignore the real keyboard, mouse and gamepads, so a stray key or a virtual pad on a busy machine cannot
-  break a tour. The sweep keeps every run's output in `captures/access/<run>/smoke.log` (and `last.png` where the
+- **Scripted drives read no real input (#276):** while a `smoke --drive` runs, the shells of every engine with one
+  (Bevy, C++/SDL3, Godot, LÖVE, Unity, Unreal and web; headless Chromium's gamepad API is live, so web needed it too)
+  ignore the real keyboard, mouse and gamepads and take only the drive's own presses, so a stray key or a virtual pad
+  on a busy machine cannot break a tour. The sweep keeps every run's output in `captures/access/<run>/smoke.log` (and `last.png` where the
   engine can capture) and prints the path when a run fails.
 - **`scripts/check_examples.py` (#159):** doctor, check, test and smoke across every example, with toolchains
   skipped by name when missing, known gaps recorded, and a final check that the run left `examples/` untouched.
