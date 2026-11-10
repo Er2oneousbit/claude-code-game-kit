@@ -4,7 +4,7 @@
 # Purpose : Exam for tools/check_i18n.py: a missing key, an English text left in place and a changed placeholder are
 #           problems; placeholder-only values, the listed names and units, --same texts, plural keys and the pseudo
 #           table are not; a broken table is a usage problem (exit 2). In the kit (engines/ next to core/), also
-#           checks the engine overlays' own French tables (#270).
+#           checks that every engine overlay's own French table is complete (#270, #272).
 # Usage   : python tools/test_check_i18n.py      (in the kit: python core/tools/test_check_i18n.py)
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only. The kit part is skipped in a game (no engines/ folder).
@@ -22,13 +22,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_i18n  # noqa: E402
 
 KIT_ENGINES = Path(__file__).resolve().parents[2] / "engines"
-# The overlays whose French table must be complete (#270), and the ones still partial on purpose, with the reason.
-# Every overlay that ships a fr.json must be in one of the two, so a new overlay makes this choice too.
-COMPLETE = ("love2d", "unity", "unreal", "bevy")
-PARTIAL = {
-    "godot": "a sample table: tests/test_shell_data.gd checks that a key fr lacks falls back to English",
-    "web": "a sample table: missing keys fall back to English",
-}
+# The overlays whose French table must be complete (#270, #272). Every overlay that ships a fr.json must be listed,
+# so a new overlay ships a complete table too (its English fallback is tested on a partial table of the test's own).
+COMPLETE = ("love2d", "unity", "unreal", "bevy", "godot", "web")
 
 
 class CheckI18n(unittest.TestCase):
@@ -115,7 +111,7 @@ class CheckI18n(unittest.TestCase):
 
 @unittest.skipUnless(KIT_ENGINES.is_dir(), "in a game: the kit's engine tables are not here")
 class KitEngineTables(unittest.TestCase):
-    """The overlays' French tables (#270): complete where the kit says so, every overlay accounted for."""
+    """The overlays' French tables (#270, #272): every overlay that ships one has it complete."""
 
     def test_complete_overlays_translate_every_english_key(self):
         for engine in COMPLETE:
@@ -126,7 +122,7 @@ class KitEngineTables(unittest.TestCase):
 
     def test_every_overlay_with_a_french_table_is_listed(self):
         shipped = {p.parents[3].name for p in KIT_ENGINES.glob("*/skeleton/data/i18n/fr.json")}
-        self.assertEqual(shipped, set(COMPLETE) | set(PARTIAL))
+        self.assertEqual(shipped, set(COMPLETE))
 
 
 if __name__ == "__main__":

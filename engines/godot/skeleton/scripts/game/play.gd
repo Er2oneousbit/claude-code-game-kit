@@ -6,7 +6,8 @@
 # Usage   : Main menu > Play (through the loading screen). Move with move_left/right/up/down, pause with pause.
 # Notes   : Replace this scene with your game. Keep the pattern: game time = delta * Shell.game_speed(), strings
 #           through Shell.t(), save through SaveStore in _exit_tree() (FrontEnd removes the scene on Quit to
-#           title), apply_theme() for HUD controls (a CanvasLayer does not inherit the menu theme).
+#           title), apply_theme() for HUD controls (a CanvasLayer does not inherit the menu theme), movement from
+#           Shell.move_vector() (keys, d-pad and the analog stick; Shell.triggers() and Shell.held_actions() too).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 extends Node2D
@@ -76,9 +77,7 @@ func relabel() -> void:
 
 func _physics_process(delta: float) -> void:
 	var dt: float = delta * Shell.game_speed()
-	var dir: Vector2 = Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	if bool(Shell.settings["input"]["invert_y"]):
-		dir.y = -dir.y
+	var dir: Vector2 = Shell.move_vector() # invert_y is in there, for the stick only
 	_pos = (_pos + dir * SPEED * dt).clamp(ARENA.position, ARENA.end - PLAYER_SIZE)
 	_player.position = _pos
 

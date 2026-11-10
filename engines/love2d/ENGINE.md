@@ -44,7 +44,9 @@ build/              .love and the fused Windows exe (git-ignored)
   copies every line into game.log in the user-data folder's logs folder.
 - Engine-free logic in `src/core/` or `src/game/logic/` with no `love.*` calls, so tests run it without a window.
 - Input as actions, not keys: the game gets `Game.action("jump")` and asks `app.input:is_down("move_left")`, so
-  rebinding in Settings just works. Every visible string goes through `app:t("key")` (`data/i18n/en.json`).
+  rebinding in Settings just works. Analog: `app.input:move_vector()` (the left stick, the player's radial deadzone
+  and invert_y applied, up is -y), `app.input:triggers()` (0 to 1) and `app.input:held_actions()`; the stick also
+  holds `move_*`. Every visible string goes through `app:t("key")` (`data/i18n/en.json`).
 - User data (settings, saves, logs, crashes, telemetry) only through `src/core/text_store.lua` and
   `atomic_file.lua`, never `love.filesystem.write` directly: `--data-dir` and crash safety depend on it.
 - **Shaders:** `local fx = love.graphics.newShader("shaders/kit/flash.glsl")`, then `fx:send("u_amount", 1)` and

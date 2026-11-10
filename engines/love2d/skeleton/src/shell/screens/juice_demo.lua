@@ -99,9 +99,9 @@ function Demo:update(real_dt)
   self.flash = math.max(0, self.flash - real_dt)
   local dt = self.hitstop:scaled_dt(real_dt) * app:game_speed()          -- game time from here on
   local p = self.player
-  local stick_x = input:move_vector()
-  local dir = (input:is_down("move_right") and 1 or 0) - (input:is_down("move_left") and 1 or 0)
-  if dir == 0 then dir = stick_x end
+  local stick_x = input:move_vector()                -- analog: half a lean is half speed
+  local dir = stick_x
+  if dir == 0 then dir = (input:is_down("move_right") and 1 or 0) - (input:is_down("move_left") and 1 or 0) end
   p.vx = dir * SPEED
   p.x = math.max(0, math.min(WORLD_W - PLAYER, p.x + p.vx * dt))
   p.vy = p.vy + GRAVITY * dt

@@ -33,6 +33,9 @@ tools/                   dev.py and helpers
 - Prefer signals ("call down, signal up"). Node paths with `%UniqueName` over long relative paths.
 - Autoloads: max 3: Log, Shell (settings, strings, data folder, crash files) and one for game state. Each documented in `ARCHITECTURE.md`.
 - Every visible string goes through `Shell.t("key")` (tables in `data/i18n/`); `smoke --locale pseudo` fails on any that does not.
+- Movement: `Shell.move_vector()` (keys, d-pad and the left stick: the shell binds the stick to `move_*` on top of the
+  player's bindings, with their radial deadzone, invert_y on the stick only). Analog: `Shell.stick()`, `Shell.triggers()`
+  (x left, y right, 0 to 1), `Shell.held_actions()`; `Input.is_action_pressed()` works as usual.
 - Player files (settings, saves, logs, crashes) live in `Shell.data_dir` (user://, or `--data-dir`); write them with `AtomicFile`/`SaveStore`.
 - Pure logic goes in `RefCounted` classes under `scripts/core/` or `scripts/game/logic/` so GUT can test it without scenes.
 - Logging via the `Log` autoload (`Log.info("physics", "msg")`), never bare `print` in committed code.

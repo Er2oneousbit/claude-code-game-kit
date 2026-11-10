@@ -51,7 +51,7 @@ WEB_CORE_WORDS = {
     "flashLimiter": "flash limiter", "holdToggle": "hold toggle", "autoRepeat": "auto repeat", "settings": "settings", "bindings": "bindings",
     "saveStore": "saves", "i18n": "i18n", "userData": "user data", "dialogue": "dialogue",
     "audioDirector": "audio director", "musicDirector": "music director", "audioAccess": "audio access",
-    "atomicFile": None, "textStore": None, "jsonUtil": None,
+    "analog": "analog", "atomicFile": None, "textStore": None, "jsonUtil": None,
 }
 WAVESMITH = "core/tools/audio/wavesmith"
 WAVESMITH_BUILTINS = {"list", "check", "test"}   # handled by wavesmith.py itself, not in SUBCOMMANDS

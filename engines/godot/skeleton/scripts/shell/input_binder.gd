@@ -3,13 +3,19 @@
 # Purpose : Bridges the kit's binding strings ("key:space", "pad:south", "pad_axis:leftx-", "mouse:left") and
 #           Godot's InputMap: applies the settings' bindings to the actions, turns a pressed key or button back
 #           into a binding string (rebinding), and gives a readable text label when there is no glyph art.
-# Usage   : InputBinder.apply(settings.input.bindings, settings.input.deadzone)   # Shell does this on change
+# Usage   : InputBinder.apply(settings.input.bindings, settings.input.deadzone, settings.input.invert_y)
+#           (Shell does this on change)
 #           var b := InputBinder.from_event(event)                               # "" when not bindable
 #           InputBinder.label(gset, "pad:south")                                 # "A" for the Xbox set
 # Notes   : Keys use physical keycodes, so WASD stays in the same place on AZERTY or Dvorak layouts; the label
 #           shows what is printed on the player's key. pad: names follow positions (south = bottom face button),
 #           so one binding fits Xbox, PlayStation and Nintendo pads. Triggers l2/r2 are axes in Godot.
 #           Godot's built-in ui_* actions are replaced by the kit's bindings (ui_accept is Enter and pad south).
+#           The left stick: apply() also gives move_left/right/up/down the matching stick direction (#274), so
+#           Input.get_vector() and is_action_pressed() follow the stick with the default bindings (d-pad only).
+#           invert_y swaps the stick's up and down there; a stick direction the player bound to any game action is
+#           left alone. Those actions' deadzone is the player's, at least Analog.STICK_HOLD_MIN, so a drifting
+#           stick does not walk the player.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 class_name InputBinder
@@ -28,19 +34,44 @@ const PAD_AXES: Dictionary = {"leftx": JOY_AXIS_LEFT_X, "lefty": JOY_AXIS_LEFT_Y
 		"righty": JOY_AXIS_RIGHT_Y}
 const MOUSE_BUTTONS: Dictionary = {"left": MOUSE_BUTTON_LEFT, "right": MOUSE_BUTTON_RIGHT,
 		"middle": MOUSE_BUTTON_MIDDLE}
+# The left stick direction each move action follows on top of the player's bindings (up is -y)
+const MOVE_STICK: Dictionary = {"move_left": "pad_axis:leftx-", "move_right": "pad_axis:leftx+",
+		"move_up": "pad_axis:lefty-", "move_down": "pad_axis:lefty+"}
 
 
-static func apply(bindings: Dictionary, deadzone: float) -> void:
+static func apply(bindings: Dictionary, deadzone: float, invert_y: bool = false) -> void:
 	for action: String in bindings:
+		var dz: float = Analog.hold_deadzone(deadzone) if MOVE_STICK.has(action) else deadzone
 		if not InputMap.has_action(action):
-			InputMap.add_action(action, deadzone)
+			InputMap.add_action(action, dz)
 		else:
-			InputMap.action_set_deadzone(action, deadzone)
+			InputMap.action_set_deadzone(action, dz)
 		InputMap.action_erase_events(action)
 		for binding: Variant in bindings[action]:
 			var ev: InputEvent = to_event(str(binding))
 			if ev != null:
 				InputMap.action_add_event(action, ev)
+	var sticks: Dictionary = stick_bindings(bindings, invert_y)
+	for action: String in sticks:
+		InputMap.action_add_event(action, to_event(sticks[action]))
+
+
+static func stick_bindings(bindings: Dictionary, invert_y: bool) -> Dictionary:
+	# {move action: "pad_axis:..."}: the left stick directions apply() adds on top of the player's bindings. None for
+	# a move action the bindings lack, or one whose stick direction some game action (no ui_*) is bound to already.
+	var taken: Dictionary = {}
+	for action: String in bindings:
+		if not action.begins_with("ui_"):
+			for binding: Variant in bindings[action]:
+				taken[str(binding)] = true
+	var out: Dictionary = {}
+	for action: String in MOVE_STICK:
+		var binding: String = MOVE_STICK[action]
+		if invert_y and binding.begins_with("pad_axis:lefty"):
+			binding = "pad_axis:lefty+" if binding.ends_with("-") else "pad_axis:lefty-"
+		if bindings.has(action) and not taken.has(binding):
+			out[action] = binding
+	return out
 
 
 static func split(binding: String) -> PackedStringArray:

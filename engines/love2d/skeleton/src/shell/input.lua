@@ -2,17 +2,22 @@
 -- input.lua
 -- Purpose : The shell's input: turns LÖVE's key, gamepad and stick events into bindings ("key:space",
 --           "pad:south"), remembers the last device (for the prompt glyphs), answers "is this action held?",
---           captures the next press for "press a key" rebinding, and lets a drive script hold actions.
+--           captures the next press for "press a key" rebinding, lets a drive script hold actions, and gives the
+--           game the pad's analog values (#274).
 -- Usage   : local Input = require("src.shell.input"); local input = Input.new(app)
 --           main.lua events -> app -> input:key(key, isrepeat) / input:button(joystick, button) / input:axis(...)
 --           input:is_down("move_left")   input.last_device ("keyboard", "mouse", "pad_xbox", ...)
 --           input:capture("key", function(binding) ... end)   -- nil binding = cancelled (Esc, or Back on a pad)
--- Notes   : The left stick also counts as the d-pad (menus and the demo), past the player's deadzone, and
---           input.invert_y flips its vertical axis for gameplay. Triggers are axes in LÖVE: past TRIGGER_ON they
---           press pad:l2 / pad:r2. Key repeat only repeats ui_* actions (holding Down scrolls a menu; holding
---           Space does not jump twice).
+--           analog: input:move_vector() -> x, y ; input:triggers() -> left, right ; input:held_actions()
+-- Notes   : The left stick also counts as the d-pad (menus and the demo) past STICK_ON, and holds move_left/right/
+--           up/down past the player's deadzone (is_down, held_actions), whatever the bindings say. move_vector() is
+--           the stick with the Bevy shell's rules (src/core/analog.lua): a radial, rescaled deadzone from
+--           input.deadzone and input.invert_y, up is -y. Triggers are axes in LÖVE: triggers() reads them 0 to 1,
+--           and past TRIGGER_ON they also press pad:l2 / pad:r2. Key repeat only repeats ui_* actions (holding
+--           Down scrolls a menu; holding Space does not jump twice).
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- ---------------------------------------------------------------------------
+local Analog = require("src.core.analog")
 local InputMap = require("src.core.input_map")
 
 local Input = {}
@@ -23,8 +28,9 @@ local STICK_ON, STICK_OFF = 0.5, 0.3     -- stick-as-dpad press and release thre
 local TRIGGER_ON, TRIGGER_OFF = 0.5, 0.3
 
 function Input.new(app)
+  -- raw: the pad's analog values as LÖVE reports them (left stick -1..1, triggers 0..1); tests may set them
   return setmetatable({ app = app, last_device = "keyboard", capturing = nil, forced = {},
-                        stick = { x = 0, y = 0 }, held_dirs = {}, triggers = {} }, Input)
+                        raw = { x = 0, y = 0, l2 = 0, r2 = 0 }, held_dirs = {}, trigger_on = {} }, Input)
 end
 
 function Input:bindings() return self.app.settings.input.bindings end
@@ -81,20 +87,21 @@ function Input:axis(joystick, axis, value)
   local dz = math.max(self.app.settings.input.deadzone or 0.2, 0.05)
   if axis == "triggerleft" or axis == "triggerright" then
     local name = axis == "triggerleft" and "l2" or "r2"
-    local on = self.triggers[name]
+    self.raw[name] = value
+    local on = self.trigger_on[name]
     if value > TRIGGER_ON and not on then
-      self.triggers[name] = true
+      self.trigger_on[name] = true
       self.last_device = InputMap.device_of_pad(joystick and joystick:getName())
       if self.capturing and self.capturing.kind == "pad" then finish_capture(self, "pad:" .. name)
       elseif not self.capturing then self.app:binding_pressed("pad:" .. name, false) end
     elseif value < TRIGGER_OFF then
-      self.triggers[name] = nil
+      self.trigger_on[name] = nil
     end
     return
   end
   if axis ~= "leftx" and axis ~= "lefty" then return end
+  if axis == "leftx" then self.raw.x = value else self.raw.y = value end
   if math.abs(value) < dz then value = 0 end
-  if axis == "leftx" then self.stick.x = value else self.stick.y = value end
   if value ~= 0 then self.last_device = InputMap.device_of_pad(joystick and joystick:getName()) end
   local on = math.max(STICK_ON, dz)
   if axis == "leftx" then
@@ -114,7 +121,7 @@ local function binding_down(self, binding)
   local dir = binding:match("^pad:(dpad_%a+)$")
   if dir and self.held_dirs[dir] then return true end
   local trig = binding:match("^pad:([lr]2)$")
-  if trig then return self.triggers[trig] == true end
+  if trig then return self.trigger_on[trig] == true end
   local button = InputMap.love_button(binding)
   if button and love.joystick then
     for _, j in ipairs(love.joystick.getJoysticks()) do
@@ -124,9 +131,18 @@ local function binding_down(self, binding)
   return false
 end
 
--- Held right now (keyboard, pad, stick, or held by a drive script)?
+local function stick_holds(self, action)
+  local input = self.app.settings.input
+  for _, a in ipairs(Analog.stick_actions(self.raw.x, self.raw.y, input.deadzone or 0.2, input.invert_y)) do
+    if a == action then return true end
+  end
+  return false
+end
+
+-- Held right now (keyboard, pad, stick, or held by a drive script)? The stick also holds move_* (Analog.stick_actions).
 function Input:is_down(action)
   if self.forced[action] then return true end
+  if stick_holds(self, action) then return true end
   local list = self:bindings()[action]
   if type(list) ~= "table" then return false end
   for _, b in ipairs(list) do
@@ -135,11 +151,26 @@ function Input:is_down(action)
   return false
 end
 
--- The left stick for gameplay (-1..1 each, deadzone applied, invert_y honoured).
+-- The game actions (no ui_*) held right now, sorted: a drift button, a charge, "hold to sprint".
+function Input:held_actions()
+  local out = {}
+  for action in pairs(self:bindings()) do
+    if action:sub(1, 3) ~= "ui_" and self:is_down(action) then out[#out + 1] = action end
+  end
+  table.sort(out)
+  return out
+end
+
+-- The left stick for gameplay: each axis -1..1, the length 0..1, input.deadzone (radial, rescaled) and
+-- input.invert_y applied, up is -y.
 function Input:move_vector()
-  local y = self.stick.y
-  if self.app.settings.input.invert_y then y = -y end
-  return self.stick.x, y
+  local input = self.app.settings.input
+  return Analog.stick(self.raw.x, self.raw.y, input.deadzone or 0.2, input.invert_y)
+end
+
+-- The analog triggers, 0 at rest to 1 fully in (Analog.TRIGGER_DEADZONE applied): left, right.
+function Input:triggers()
+  return Analog.trigger(self.raw.l2), Analog.trigger(self.raw.r2)
 end
 
 return Input
