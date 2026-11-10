@@ -187,12 +187,34 @@ focused)**. Wire the game to it:
   PlayStation pad as one too), the WinDualShock plugin reports Sony pads, Linux passes SDL's pad names
   **(verify: only the name-to-make mapping is tested, no pad on the test machine)**. The left stick moves the focus
   like the D-pad, with hysteresis (pressed past 0.5 or `input.deadzone`, let go under 0.3), one step per push.
+- Analog input through the shell (#274, as Bevy's `Intent`): `GetStick()` is the left stick with the player's
+  `input.deadzone` (radial, then rescaled from 0, so a stick just past it gives a small value) and `input.invert_y`
+  (up is +Y), `GetTrigger(bRight)` a trigger from 0 to 1 (a 0.05 rest deadzone removed), `IsActionHeld(Action)` and
+  `GetHeldActions()` the game actions held now (keys and buttons, plus the `move_*` the stick leans past the deadzone,
+  at least 0.2). All `BlueprintPure`, all zero outside play, so a menu never leaks a held trigger into the game; the
+  maths is `GameKitAnalog.h`. The widget lets the stick, the triggers and the keys through to your own input as well
+  **(verify with a pad: only the model is tested, no pad on the test machine)**.
+- Debug builds (not Shipping) add the **juice demo** to the main menu (a box to hit: trauma shake, hitstop, squash
+  spring, gentle flashes through the limiter, follow camera with its deadzone drawn, buffered jump with coyote time,
+  a guard on `interact` that honours hold to toggle, moving by held keys or the stick), the **pseudo** language in the
+  Language tab, and the **F8 bug report**: `bug_<time>/` in the data folder with `info.txt`, `log_tail.txt` (the last
+  200 log lines), `settings.json` and `screenshot.png` (the viewport, a frame later), and a toast.
+- **Crash files:** while the screens run, a fatal error writes `crashes/crash_<time>.txt` in the data folder (version,
+  engine, OS, the error, the last 60 log lines, the settings) from `FCoreDelegates::OnHandleSystemError`, before
+  Unreal's own crash reporter; nothing leaves the machine. `smoke --drive crash` proves the writer with a planted error
+  through the same handler and does not crash the editor (an unattended editor crash may be sent to Epic by its crash
+  reporter) **(verify: the handler on a real fatal error in a packaged game is not tried)**.
 - Strings: `data/i18n/en.json` and `fr.json` (the LÖVE shell's tables); add a locale by adding a file. The version on
   the title is the project version from Project Settings.
 
 Scripted runs (the plugin's `GameKit.Screens.Drive` and `.Show` tests, headless on the model):
 ```
 python tools/dev.py smoke --drive menus                                # settings changed and saved: SETTINGS_WRITTEN
+python tools/dev.py smoke --drive crash                                # exit 1 on purpose: CRASH_WRITTEN <file>
+python tools/dev.py smoke --drive bug                                  # F8 on the menu: DRIVE_BUG <folder> (a GPU, for the picture)
+python tools/dev.py smoke --drive pseudo --locale pseudo               # every screen: PSEUDO_PASS, or PSEUDO_FAIL lines
+python tools/dev.py smoke --drive pseudo-plant --locale pseudo         # exit 1 on purpose, naming plant.too_small
+python tools/dev.py smoke --drive show:juice --screenshot captures/juice.png   # the box hit: DRIVE_JUICE
 python tools/dev.py smoke --drive show:settings --screenshot captures/settings.png   # a picture (the editor off-screen, a GPU)
 python tools/dev.py smoke --drive access:res=1280x800,scale=2,pad      # the sweep's tour: ACCESS_* lines
 python tools/access/sweep.py                                            # runs the tour at both sizes and checks it
@@ -200,12 +222,18 @@ python tools/dev.py test --filter GameKit.Screens                       # the sc
 ```
 `--data-dir` keeps a settings folder between runs (default: a fresh `Saved/GameKitSmoke`; one inside `Packaged/`,
 `Saved/StagedBuilds/` or `Binaries/` is refused, exit 2), `--locale fr` shows another
-language. Screens for `show:`: title, main_menu, settings, pause, help, history, credits, loading, subtitle. The
+language. Screens for `show:`: title, main_menu, settings, pause, help, history, credits, loading, subtitle, juice
+(the box just hit, inside the hitstop; `DRIVE_JUICE` lists hits, trauma, frozen, squash, flash and the ring, and the
+drive fails unless every one took). The pseudo drive checks each screen, each settings tab at its top and its end,
+the "press a key" prompt, the juice demo and the pause pages: a text wider than its column, or not through `T()` (no
+leading `[`), is a `PSEUDO_FAIL` line (without `--locale pseudo` it switches and says so). The
 access report describes the 1920x1080 design (scaling "exact": the view scales it to the window), each text's size,
 colours and whether it fits its column (measured with Slate's font service), and which rows the arrow keys reach; a
-`res=` option is noted, not applied. Paths given to `--screenshot` and `--data-dir` may contain spaces: dev.py
-passes them as `-Name="a b"`, the form Unreal's command line reads whole (K01: UE 5.8 on Windows, 2026-11-10);
-a double quote is refused.
+`res=` option is noted, not applied. Paths given to `--screenshot` and `--data-dir` may contain spaces, and so may
+the project folder: dev.py passes every path the editor gets (`-abslog=`, `-script=`, the drive's) as `-Name="a b"`
+with forward slashes, the form Unreal's command line reads whole, and the shader check names its script by its
+place on the editor's Python path (`kit_shaders/shader_check.py`), so no path sits inside `-ExecCmds` (K01: UE 5.8 on
+Windows, 2026-11-10, `check`, `test`, `exec` and the drives from a folder with a space); a double quote is refused.
 
 ## Source control (Git + LFS)
 - `.gitattributes` in this repo routes `.uasset`, `.umap`, textures, audio, and meshes through LFS. Run `git lfs install` before the first commit.

@@ -63,9 +63,12 @@ and a clear spec for the Blueprint child.
   builds in a Blueprint-only project). Turn them on in `Config/DefaultGame.ini` (`bShowScreens=True` under the
   `GameKitShellUI.GameKitShellSettings` section: docs/ENGINE_FLOW.md has the lines) or with `-GameKitShell`; the subsystem
   `UGameKitShellSubsystem` puts them over your map and fires `OnShellEvent` ("play", "resume", "quit_title",
-  "settings_changed"). Strings in `data/i18n/<locale>.json`, credits from `CREDITS.md`. `python tools/dev.py smoke
-  --drive menus` and `--drive show:<screen> --screenshot captures/x.png` walk and picture them (docs/ENGINE_FLOW.md
-  "Shell screens"); `python tools/access/sweep.py` runs the accessibility sweep on them.
+  "settings_changed"). Strings in `data/i18n/<locale>.json`, credits from `CREDITS.md`. The subsystem also gives the
+  game analog input (`GetStick`, `GetTrigger`, `IsActionHeld`, Blueprint-callable) with the player's deadzone and
+  invert_y, writes a crash file on a fatal error, and in debug builds adds the juice demo, the pseudo language and the
+  F8 bug report. `python tools/dev.py smoke --drive menus|crash|bug|pseudo` and `--drive show:<screen> --screenshot
+  captures/x.png` walk and picture them (docs/ENGINE_FLOW.md "Shell screens"); `python tools/access/sweep.py` runs the
+  accessibility sweep on them.
 - **Shaders:** `python tools/dev.py exec Content/Python/kit_shaders/make_materials.py` builds every kit recipe as a
   material in `/Game/KitShaders/` (`M_Kit_<name>`: an Unlit material whose Custom node holds the recipe's HLSL;
   sprites and lighting Translucent, the rest Opaque). Make a material instance per use, set `MainTex` (and `AuxTex`)

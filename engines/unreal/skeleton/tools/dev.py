@@ -13,8 +13,9 @@
 #             smoke    run automation tests named <Game>.Smoke (--filter, --until, --fail-on for scenario runs;
 #                      screenshots need a renderer, so capture from the game itself, e.g. a -record= option);
 #                      --shaders first draws every kit shader recipe and compares it with its golden image;
-#                      --drive menus|access|show:<screen> walks the kit's shell screens instead (the GameKitShell
-#                      plugin), --screenshot FILE draws a show:<screen>, --data-dir and --locale set its run
+#                      --drive menus|crash|bug|pseudo|pseudo-plant|access|show:<screen> walks the kit's shell screens
+#                      instead (the GameKitShell plugin), --screenshot FILE draws a show:<screen>, --data-dir and
+#                      --locale set its run
 #             exec     run an editor Python script headless (asset imports, maps)
 #             run      open the project in the editor
 #             package  BuildCookRun a packaged build into Packaged/
@@ -77,6 +78,14 @@
 #           renderer (-RenderOffScreen); --data-dir and --locale
 # Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): --screenshot and --data-dir take a path with a
 #           space (#267): the value goes in quotes, -Key="a b", passed as is on the Windows command line (UnrealValue)
+# Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): every path the editor gets (-abslog=, -script=) goes
+#           through unreal_path (forward slashes, -Key="a b" for a space) and the shader check names its script by
+#           its place on sys.path, so no project path lands inside -ExecCmds (#273); a quote in the project path is
+#           refused up front
+# Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the shell's crash, bug, pseudo and pseudo-plant drives
+#           and show:juice (#275): crash and pseudo-plant exit 1 on purpose with their proof checked (a crash file on
+#           disk, the planted label named), bug runs with a renderer for its screenshot, CRASH_WRITTEN and BUG_REPORT
+#           are echoed
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -131,6 +140,7 @@ KIT_PLUGIN = "GameKitShell"                   # Plugins/GameKitShell: the kit's 
 KIT_TEST_PREFIX = "GameKit."                  # its automation tests; `test` runs them with the game's own
 KIT_OK_PATTERN = r"Result=\{Success\} Name=\{[^}]*\} Path=\{GameKit\."
 SHADER_SCRIPT = "Content/Python/kit_shaders/shader_check.py"   # the kit's shader recipes as materials
+SHADER_PY = "kit_shaders/shader_check.py"    # the same file as `py` finds it on sys.path (Content/Python is on it)
 SHADER_LOG = ROOT / "Saved" / "Logs" / "dev_shaders.log"
 SHADER_OUT = "Saved/ShaderCheck"          # smoke --shaders pictures, compared by tools/shaders/shader_ref.py
 SHADER_TIMEOUT_S = 1800                   # editor start, material compiles (a fresh shader cache is slow), draws
@@ -378,6 +388,16 @@ def unreal_arg(key, value):
     return f"-{key}={value}"
 
 
+def unreal_path(key, path):
+    """unreal_arg for a path the editor reads (-abslog=, -script=, -GameKitDataDir=): forward slashes, since inside
+    quotes Unreal reads a backslash as an escape (a folder named rune-delve after one arrived as <CR>une-delve on
+    UE 5.8), then quoted when the path holds a space (#273). A double quote cannot be carried: ValueError."""
+    value = Path(path).as_posix()
+    if '"' in value:
+        raise ValueError(f"-{key} holds a double quote, which Unreal's command line cannot carry: {value}")
+    return unreal_arg(key, value)
+
+
 def run(cmd, capture=False, timeout=None, env=None):
     """Run a command in the project root. 124 = timed out (output so far is returned), 126 = not executable,
     127 = not found."""
@@ -468,6 +488,9 @@ def preflight(need_uproject=True):
         return "UE_ROOT is not set. Point it at your engine folder (the one containing Engine/)."
     if not (ue_root() / "Engine").exists():
         return f"UE_ROOT={ue_root()} has no Engine/ folder."
+    if '"' in str(ROOT):
+        # every path dev.py gives the editor (-abslog=, -script=, -GameKitDataDir=) comes from this folder (#273)
+        return "the project path contains a double quote, which Unreal's command line cannot carry. Move or rename it."
     if SYSTEM == "Windows":
         # The .bat wrappers run under cmd.exe, and subprocess does not escape cmd metacharacters
         bad = sorted(set(CMD_METACHARS) & set(str(ROOT) + str(ue_root())))
@@ -582,19 +605,16 @@ def shader_editor(args, mode, out_dir=None):
     missing = missing_tool(exe)
     if missing:
         return missing
-    script = (ROOT / SHADER_SCRIPT).as_posix()
-    if any(c in script for c in ',;"'):
-        # -ExecCmds splits commands on , and ; and a quote ends the argument
-        print(f"[error] the project path may not contain , ; or \" for the shader check: {script}", file=sys.stderr)
-        return 2
     SHADER_LOG.parent.mkdir(parents=True, exist_ok=True)
     if SHADER_LOG.exists():
         SHADER_LOG.unlink()
     env = {"GAMEKIT_SHADER_MODE": mode, "GAMEKIT_SHADER_OUT": str(out_dir) if out_dir else ""}
     # -ExecCmds=py, not -ExecutePythonScript: that one quits a frame after the script returns, before the
-    # materials finish compiling (seen on UE 5.8); the script quits the editor itself when it is done
-    cmd = [exe, find_uproject(), f"-ExecCmds=py {script}", "-unattended", "-nopause", "-nosplash", "-RenderOffScreen",
-           f"-abslog={SHADER_LOG}"]
+    # materials finish compiling (seen on UE 5.8); the script quits the editor itself when it is done.
+    # The script by its name under Content/Python (on the editor's sys.path, where `py` looks for a relative file):
+    # an absolute path would split at a space in the project folder, and -ExecCmds splits commands on , and ; (#273)
+    cmd = [exe, find_uproject(), f"-ExecCmds=py {SHADER_PY}", "-unattended", "-nopause", "-nosplash", "-RenderOffScreen",
+           unreal_path("abslog", SHADER_LOG)]
     rc, out = run(cmd, capture=True, timeout=SHADER_TIMEOUT_S, env=env)
     log = SHADER_LOG.read_text(encoding="utf-8", errors="ignore") if SHADER_LOG.exists() else ""
     if DEBUG:
@@ -683,7 +703,8 @@ def run_automation(filter_, args, until=None, fail_on=None, extra_args=None, mar
         AUTOMATION_LOG.unlink()
     cmd = [exe, find_uproject(),
            f'-ExecCmds=Automation RunTests {filter_}; Quit',
-           "-unattended", "-nopause", "-RenderOffScreen" if render else "-NullRHI", "-nosplash", f"-abslog={AUTOMATION_LOG}",
+           "-unattended", "-nopause", "-RenderOffScreen" if render else "-NullRHI", "-nosplash",
+           unreal_path("abslog", AUTOMATION_LOG),
            "-TestExit=Automation Test Queue Empty"] + list(extra_args or [])
     rc, out = run(cmd, capture=True, timeout=TEST_TIMEOUT_S)
     # Test results only reach the log file, not stdout (verified on UE 5.8)
@@ -773,7 +794,10 @@ SHOW_TEST = "GameKit.Screens.Show"          # the one that also draws the screen
 DRIVE_PATTERN = r"[A-Za-z0-9_:=,.-]+"        # menus, show:settings, access:res=1280x800,scale=2,pad
 SMOKE_DATA = "Saved/GameKitSmoke"           # the drive's own settings folder (never the player's Saved/GameKit)
 BUILD_OUTPUTS = ("Packaged", "Saved/StagedBuilds", "Binaries")   # package, its staging, compiled modules (#263)
-MARKER_LINE = re.compile(r"\b((?:DRIVE_[A-Z]+|SETTINGS_WRITTEN|SCREENSHOT_WRITTEN|ACCESS_[A-Z]+|PSEUDO_[A-Z]+)\b.*)$")
+MARKER_LINE = re.compile(r"\b((?:DRIVE_[A-Z]+|SETTINGS_WRITTEN|SCREENSHOT_WRITTEN|ACCESS_[A-Z]+|PSEUDO_[A-Z]+|CRASH_WRITTEN"
+                         r"|BUG_REPORT)\b.*)$")
+RENDER_DRIVES = ("bug",)                     # drives that draw (the bug report's screenshot): a renderer, not -NullRHI
+EXPECTED_FAIL_DRIVES = {"crash": "CRASH_WRITTEN", "pseudo-plant": "PSEUDO_FAIL"}   # exit 1 on purpose, with this proof
 UNSAFE_VALUE_CHARS = '"'                   # a quote ends an Unreal argument (, and ; only matter inside -ExecCmds)
 
 
@@ -836,10 +860,13 @@ def drive_run(args):
         if shot.is_file():
             shot.unlink()                   # a picture from an earlier run must not pass for this one
     extra = [unreal_arg(key, value) for key, value in values]   # a path with a space goes in quotes (#267)
-    rc = run_automation(SHOW_TEST if shot else DRIVE_TEST, args, extra_args=extra, markers=True, render=bool(shot))
+    render = bool(shot) or args.drive in RENDER_DRIVES
+    rc = run_automation(SHOW_TEST if shot else DRIVE_TEST, args, extra_args=extra, markers=True, render=render)
+    text = AUTOMATION_LOG.read_text(encoding="utf-8", errors="ignore") if AUTOMATION_LOG.exists() else ""
+    if args.drive in EXPECTED_FAIL_DRIVES:
+        return expected_failure(args.drive, rc, text)
     if rc:
         return rc
-    text = AUTOMATION_LOG.read_text(encoding="utf-8", errors="ignore") if AUTOMATION_LOG.exists() else ""
     if "DRIVE_DONE" not in text:
         print(f"[FAIL] the drive {args.drive!r} did not finish (no DRIVE_DONE in {AUTOMATION_LOG})")
         return 1
@@ -850,6 +877,28 @@ def drive_run(args):
             return 1
         print(f"[ OK ] screenshot: {shot} ({shot.stat().st_size} bytes)")
     return 0
+
+
+def expected_failure(drive, rc, text):
+    """`--drive crash` and `--drive pseudo-plant` exit 1 on purpose, as on the Godot and LÖVE shells: say whether
+    the proof is there (a crash file on disk; a PSEUDO_FAIL naming the planted label). Always 1, or 2 for a setup
+    problem, so an expected failure never reads as a pass."""
+    if rc == 2:
+        return 2
+    lines = [m.group(1) for m in map(MARKER_LINE.search, text.splitlines()) if m]
+    if drive == "crash":
+        # the automation repeats a failed test's lines with " [log]" after them: take the path up to its .txt
+        found = [m.group(1) for m in (re.match(r"CRASH_WRITTEN (.+?\.txt)\b", l) for l in lines) if m]
+        found = [p for p in found if Path(p).is_file()]
+        if found:
+            print(f"[info] --drive crash fails on purpose: the CRASH_WRITTEN file above is the proof ({found[0]})")
+        else:
+            print("[FAIL] --drive crash wrote no crash file (no CRASH_WRITTEN line, or the file is missing)")
+    elif any(l.startswith("PSEUDO_FAIL") and "plant.too_small" in l for l in lines):
+        print("[info] --drive pseudo-plant fails on purpose: the PSEUDO_FAIL line names the planted label")
+    else:
+        print("[FAIL] --drive pseudo-plant did not name the planted label plant.too_small")
+    return 1
 
 
 def echo_markers(text):
@@ -883,10 +932,11 @@ def cmd_exec(args):
     EXEC_LOG.parent.mkdir(parents=True, exist_ok=True)
     if EXEC_LOG.exists():
         EXEC_LOG.unlink()
-    # Forward slashes: in a quoted argument (any path with a space) Unreal reads backslashes as escapes, so a
-    # folder named rune-delve after a backslash arrives as <CR>une-delve, and tools as <TAB>ools (seen on UE 5.8)
-    cmd = [exe, find_uproject(), "-run=pythonscript", f"-script={script.as_posix()}",
-           "-unattended", "-nopause", "-nosplash", f"-abslog={EXEC_LOG}"]
+    # unreal_path: forward slashes (in a quoted argument Unreal reads backslashes as escapes, so a folder named
+    # rune-delve after a backslash arrives as <CR>une-delve, and tools as <TAB>ools, seen on UE 5.8) and quotes
+    # around a path with a space, the form FParse::Value reads whole (#273)
+    cmd = [exe, find_uproject(), "-run=pythonscript", unreal_path("script", script),
+           "-unattended", "-nopause", "-nosplash", unreal_path("abslog", EXEC_LOG)]
     rc, out = run(cmd, capture=True, timeout=EXEC_TIMEOUT_S)
     log = EXEC_LOG.read_text(encoding="utf-8", errors="ignore") if EXEC_LOG.exists() else ""
     if rc == 124:
@@ -1115,9 +1165,12 @@ def build_parser():
                         "golden image (tools/shaders/)")
     p.add_argument("--drive", default="", metavar="SCENARIO",
                    help="instead of the Smoke tests, run a scripted path through the kit's shell screens (the GameKitShell "
-                        "plugin): menus (settings changed and saved), access[:res=WxH,scale=N,pad,read] (the "
-                        "accessibility sweep's tour, tools/access/sweep.py), show:<screen> (title, main_menu, settings, "
-                        "pause, help, history, credits, loading, subtitle; add --screenshot)")
+                        "plugin): menus (settings changed and saved), crash (a planted error: CRASH_WRITTEN, exit 1 on "
+                        "purpose), bug (F8: the bug_<time>/ folder, DRIVE_BUG), pseudo (with --locale pseudo: every "
+                        "screen, PSEUDO_PASS or PSEUDO_FAIL), pseudo-plant (one label too small: exit 1 on purpose), "
+                        "access[:res=WxH,scale=N,pad,read] (the accessibility sweep's tour, tools/access/sweep.py), "
+                        "show:<screen> (title, main_menu, settings, pause, help, history, credits, loading, subtitle, "
+                        "juice; add --screenshot)")
     p.add_argument("--screenshot", default="", help="with --drive show:<screen>: save the screen as this PNG (relative to the "
                                                    "project; the editor draws it off-screen, a GPU)")
     p.add_argument("--data-dir", default="", help="with --drive: the settings folder the run reads and writes (default: a fresh "
