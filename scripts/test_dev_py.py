@@ -13,7 +13,8 @@
 #           setup names the project file it copied (#136), that Unreal's test/smoke exit 1 when the editor
 #           crashes before any result, not 2 "no tests matched" (#176), and that smoke --drive runs the shell's
 #           drive on Unity (the drive test, run options in the environment), Bevy and Unreal (the Drive test),
-#           echoes its markers and fails without DRIVE_DONE (#168).
+#           echoes its markers and fails without DRIVE_DONE (#168), and that Unreal's --screenshot and --data-dir
+#           reach the editor quoted when the path has a space (#267).
 # Usage   : python scripts/test_dev_py.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, no engine needed. The live checks (a real smoke with each toolchain) are
@@ -412,6 +413,58 @@ class UnrealDrive(TempRoot):
         rc, text, _ = self.drive(log, drive="show:title", screenshot="captures/s.png")
         self.assertEqual(rc, 1, text)
         self.assertFalse(shot.exists())
+
+
+# ---- #267: Unreal smoke --screenshot and --data-dir take a path with a space ----------
+class UnrealSpacedPaths(TempRoot):
+    drive = UnrealDrive.drive               # the same faked editor, without running UnrealDrive's cases again
+    PASS = UnrealDrive.PASS
+
+    def test_a_plain_value_stays_plain(self):
+        dev = load("unreal")
+        arg = dev.unreal_arg("GameKitDrive", "show:settings")
+        self.assertEqual(arg, "-GameKitDrive=show:settings")
+        self.assertNotIsInstance(arg, dev.UnrealValue)
+
+    def test_a_value_with_a_space_is_quoted_for_unreal(self):
+        dev = load("unreal")
+        arg = dev.unreal_arg("GameKitDataDir", "D:/my games/x")
+        self.assertEqual(arg, '-GameKitDataDir="D:/my games/x"')
+        self.assertIsInstance(arg, dev.UnrealValue)
+
+    def test_spaced_screenshot_and_data_dir_reach_the_editor_quoted(self):
+        log = "LogGameKitShell: Display: DRIVE_DONE show:settings\nResult={Success} Name={Show}\n"
+        rc, text, cmd = self.drive(log, drive="show:settings", screenshot="my shots/s.png", data_dir="smoke data",
+                                   writes=["my shots/s.png"])
+        self.assertEqual(rc, 0, text)
+        root = self.root.resolve().as_posix()
+        self.assertIn(f'-GameKitScreenshot="{root}/my shots/s.png"', cmd)
+        self.assertIn(f'-GameKitDataDir="{root}/smoke data"', cmd)
+        self.assertTrue((self.root / "smoke data").is_dir())
+
+    def test_a_quote_is_still_refused(self):
+        rc, text, cmd = self.drive(self.PASS, locale='fr"x')
+        self.assertEqual(rc, 2, text)
+        self.assertEqual(cmd, [], "the editor is never started")
+        self.assertIn("double quotes", text)
+
+    def test_run_passes_the_quoted_value_as_is(self):
+        """The real command line the child sees: on Windows -Key="a b" exactly (no \\" escapes, not the whole
+        argument in quotes), elsewhere one argv entry holding the quotes, which BuildFromArgV keeps."""
+        dev = load("unreal")
+        dev.ROOT = self.root
+        arg = dev.unreal_arg("GameKitDataDir", "C:/a b/c")
+        if sys.platform == "win32":
+            probe = ("import ctypes; f = ctypes.windll.kernel32.GetCommandLineW; f.restype = ctypes.c_wchar_p; "
+                     "print(f())")
+        else:
+            probe = "import sys; print(sys.argv[-1])"
+        rc, out = quiet(dev.run, [sys.executable, "-c", probe, "-plain=x y", arg], capture=True, timeout=60)[0]
+        self.assertEqual(rc, 0, out)
+        self.assertIn('-GameKitDataDir="C:/a b/c"', out)
+        self.assertNotIn('\\"', out)
+        if sys.platform == "win32":
+            self.assertIn('"-plain=x y"', out, "other arguments keep subprocess's usual quoting")
 
 
 class GodotCaptureFiles(TempRoot):
