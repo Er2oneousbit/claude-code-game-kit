@@ -1011,12 +1011,7 @@ fn report_access(
             (lo / sf, (hi - lo) / sf)
         };
         let block_at = Vec2::new(rect[0] + (rect[2] - block.x) / 2.0, rect[1] + (rect[3] - block.y) / 2.0);
-        let ink = [
-            block_at.x + ink_min.x,
-            block_at.y + ink_min.y,
-            ink_size.x,
-            ink_size.y,
-        ];
+        let ink = [block_at.x + ink_min.x, block_at.y + ink_min.y, ink_size.x, ink_size.y];
         let covered = meta
             .clip
             .and_then(|c| clips.get(c).ok())

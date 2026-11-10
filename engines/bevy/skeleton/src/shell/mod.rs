@@ -703,7 +703,9 @@ impl Shell {
         let focused = screens::focused_row(self, &rows);
         let role = focused.map(|r| self.t(role_key(r.kind))).unwrap_or_default();
         let row = focused.map(|r| (r.label.as_str(), role.as_str(), r.value.as_str()));
-        let enabled = self.flag("access", "narration");
+        // The line is always worked out (the access report lists it); it is spoken only with the setting on and
+        // never in an automated run (dev.py smoke must not start the system's speech).
+        let enabled = self.flag("access", "narration") && !self.automated;
         self.narrator.update(&narrator::Focus {
             screen_title: &title,
             screen_word: &word,
