@@ -22,11 +22,14 @@
 // Notes   : A scenario is a list of steps; each step runs once a frame until it reports done, and every step has a
 //           frame limit, so a broken menu fails instead of hanging. Steps run in an exclusive system (they need the
 //           whole World: the shell, the window, the access report). A failure logs an ERROR line (dev.py fails on it)
-//           and exits 1; done prints DRIVE_DONE <name> and hands the smoke budget its last frame (the screenshot).
+//           and exits 1 (after the screenshot of where it stopped, with --screenshot: #276); done prints DRIVE_DONE
+//           <name> and hands the smoke budget its last frame (the screenshot). While a drive runs, the window's real
+//           keyboard and pads are not read at all (view.rs ShellInputPlugin, #276): only the drive presses.
 //           Add a scenario: a function in scenario(), then document it in docs/ENGINE_FLOW.md.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): crash, pseudo, pseudo-plant, bug and show:juice;
 //           the access tour visits the juice demo in debug builds (#275)
+//           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a failed drive's screenshot (#276)
 // ---------------------------------------------------------------------------
 use std::collections::{BTreeMap, VecDeque};
 
@@ -501,7 +504,13 @@ fn fail(world: &mut World, d: &mut Drive, msg: &str) {
     error!("drive {}: {msg}", d.name);
     d.finished = true;
     d.steps.clear();
-    world.write_message(AppExit::from_code(1));
+    // with --screenshot, one more frame for the picture of where the drive stopped (#276); else exit now
+    if !world
+        .get_resource_mut::<Smoke>()
+        .is_some_and(|mut smoke| smoke.finish_failed(1))
+    {
+        world.write_message(AppExit::from_code(1));
+    }
 }
 
 /// Runs the current step once a frame (an exclusive system: steps need the whole World).
