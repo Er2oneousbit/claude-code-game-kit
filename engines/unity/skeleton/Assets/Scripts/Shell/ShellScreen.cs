@@ -164,7 +164,7 @@ namespace {{GAME_SLUG}}.Shell
         }
 
         /// <summary>The row and column of a control in the grid, or (-1, -1).</summary>
-        public (int row, int col) Position(Control c)
+        public (int row, int col) GridPosition(Control c)
         {
             for (int r = 0; r < Grid.Count; r++)
             {
@@ -183,7 +183,7 @@ namespace {{GAME_SLUG}}.Shell
             {
                 return false;
             }
-            (int row, int col) = Position(Focused);
+            (int row, int col) = GridPosition(Focused);
             if (row < 0)
             {
                 FocusFirst();
@@ -207,7 +207,7 @@ namespace {{GAME_SLUG}}.Shell
                 Front.OnValueChanged(this, Focused);
                 return true;
             }
-            (int row, int col) = Position(Focused);
+            (int row, int col) = GridPosition(Focused);
             if (row < 0 || Grid[row].Count < 2)
             {
                 return false;

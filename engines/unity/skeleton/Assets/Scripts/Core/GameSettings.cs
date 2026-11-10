@@ -157,7 +157,7 @@ namespace {{GAME_SLUG}}.Core
         /// <summary>The fields of one section in schema order (empty for a section the kit does not define).</summary>
         public static List<FieldInfo> Fields(string section)
         {
-            var out = new List<FieldInfo>();
+            var fields = new List<FieldInfo>();
             foreach (Rule rule in FIELDS)
             {
                 if (rule.Section != section)
@@ -172,10 +172,10 @@ namespace {{GAME_SLUG}}.Core
                     choices = new object[rule.Choices.Length];
                     Array.Copy(rule.Choices, choices, choices.Length);
                 }
-                out.Add(new FieldInfo { Section = section, Field = rule.Field, Kind = kind, Lo = rule.Lo, Hi = rule.Hi,
-                                        Choices = choices });
+                fields.Add(new FieldInfo { Section = section, Field = rule.Field, Kind = kind, Lo = rule.Lo, Hi = rule.Hi,
+                                           Choices = choices });
             }
-            return out;
+            return fields;
         }
 
         // ---- Defaults ----------------------------------------------------------------

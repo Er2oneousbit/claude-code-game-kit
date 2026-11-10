@@ -121,9 +121,13 @@ namespace {{GAME_SLUG}}.Shell
 
         public bool IsPlaying => _line != null;
 
+        /// <summary>A finished line kept on screen by access.subtitle_hold, waiting for accept.</summary>
+        public bool IsHeld => _line != null && _held;
+
         public bool IsFullyShown => _line != null && DialogueData.Revealed(_line, _t) >= DialogueData.Text(_line).Length;
 
-        /// <summary>What the bar shows now: visible, speaker, text, id (the access sweep checks it against the line).</summary>
+        /// <summary>What the bar shows now: visible, speaker, the line's whole text (what the player reads across
+        /// its cues), id (the access sweep checks it against the dialogue file).</summary>
         public Dictionary<string, object> Shown()
         {
             bool visible = _panel.resolvedStyle.display != DisplayStyle.None && _line != null;
@@ -131,7 +135,7 @@ namespace {{GAME_SLUG}}.Shell
             {
                 { "visible", visible },
                 { "speaker", _speaker.resolvedStyle.display != DisplayStyle.None ? _speaker.text : "" },
-                { "text", _text.text },
+                { "text", _line != null ? Shell.I.Content(DialogueData.Text(_line)) : _text.text },
                 { "id", _line != null ? Str(_line, "id") : "" },
             };
         }

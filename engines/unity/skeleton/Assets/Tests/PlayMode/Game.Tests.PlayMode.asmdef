@@ -1,7 +1,7 @@
 {
   "name": "Game.Tests.PlayMode",
   "rootNamespace": "{{GAME_SLUG}}.Tests",
-  "references": ["Game.Core", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
+  "references": ["Game.Core", "Game.Shell", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
   "includePlatforms": [],
   "excludePlatforms": [],
   "overrideReferences": true,

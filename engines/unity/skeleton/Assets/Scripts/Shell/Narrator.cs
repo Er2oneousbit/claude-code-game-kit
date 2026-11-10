@@ -16,6 +16,7 @@
 using System;
 using System.Diagnostics;
 using UnityEngine;
+using UnityEngine.UIElements;
 using {{GAME_SLUG}}.Core;
 
 namespace {{GAME_SLUG}}.Shell
@@ -52,7 +53,7 @@ namespace {{GAME_SLUG}}.Shell
             {
                 return;
             }
-            var heading = screen.Root?.Q<UnityEngine.UIElements.Label>("Heading") ?? screen.Root?.Q<UnityEngine.UIElements.Label>("Title");
+            Label heading = screen.Root?.Q<Label>("Heading") ?? screen.Root?.Q<Label>("Title");
             Say(Bindings.NarrationLine(heading != null ? heading.text : screen.Name, Shell.I.T("narrate.screen")));
         }
 
