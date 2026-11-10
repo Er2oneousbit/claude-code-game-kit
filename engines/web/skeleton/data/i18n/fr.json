@@ -1,5 +1,5 @@
 {
- "game.title": "{{GAME_NAME}}",
+ "game.title": "{name}",
  "version": "Version : {v}",
  "boot.loading": "Démarrage",
  "title.press": "Appuyez sur une touche ou un bouton",

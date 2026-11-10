@@ -27,7 +27,7 @@ func _init(p_front: FrontEnd) -> void:
 
 func build() -> void:
 	var col: VBoxContainer = centered_column()
-	var title: Label = label(Shell.t("game.title"), UiTheme.TITLE_FONT, "Title")
+	var title: Label = label(Shell.t("game.title", {"name": Shell.game_name()}), UiTheme.TITLE_FONT, "Title")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(title)
 	_prompt = label(Shell.t("title.press_any"), 1.0, "Prompt")

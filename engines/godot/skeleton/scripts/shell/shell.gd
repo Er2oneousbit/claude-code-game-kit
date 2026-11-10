@@ -290,6 +290,12 @@ func apply_all() -> void:
 	_update_locale(false)
 
 
+## The game's name (application/config/name): the string tables show it through "game.title" ("{name}"), so a
+## translation can dress it ("{name} : l'aventure") and tools/check_i18n.py never mistakes it for English.
+func game_name() -> String:
+	return str(ProjectSettings.get_setting("application/config/name", ""))
+
+
 func access(key: String) -> Variant:
 	return (settings["access"] as Dictionary).get(key)
 

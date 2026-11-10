@@ -1,5 +1,5 @@
 {
- "game.title": "{{GAME_NAME}}",
+ "game.title": "{name}",
  "title.press_any": "Press any key or button",
  "title.version": "v{version}",
  "consent.title": "Play statistics",
