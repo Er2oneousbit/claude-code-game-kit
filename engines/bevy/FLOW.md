@@ -73,7 +73,7 @@ debug builds.
 
 The player's files: `settings.json`, `crashes/crash_<time>.txt` (written by the panic hook in `src/shell/crash.rs`:
 version, build, screen, locale, the error and where, the backtrace, the settings, the last 60 log lines) and
-`bug_<time>/` (F8 in a debug build: `info.txt`, `log_tail.txt`, `settings.json`, `screenshot.png`; no screenshot
+`bug_<time>/` (F8 in a debug build: `bug_<time>/info.txt`, `bug_<time>/log_tail.txt`, the settings and a screenshot; no screenshot
 headless). In a smoke run they land in `build/smoke-data/`.
 
 ## Testing
