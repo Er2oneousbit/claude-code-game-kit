@@ -10,10 +10,11 @@
 //           .Shrink: the same min(w/W, h/H) rule the access sweep uses). In batchmode and for captures the panel
 //           draws into a RenderTexture (GameKitCapture composes it over the camera's picture) of the drive's size.
 //           UI Toolkit's own navigation events are stopped at the root: the shell moves focus from the player's
-//           bindings instead, so a remapped ui_accept works in the menus too; without the Input Manager those
-//           events are turned into the menu actions (see ShellInput). Time.timeScale is 0 while paused and
+//           bindings instead, so a remapped ui_accept works in the menus too; when ShellInput cannot poll (ui_events)
+//           those events are turned into the menu actions (see ShellInput). Time.timeScale is 0 while paused and
 //           access.game_speed otherwise; the menus run on unscaled time. Replace PlayWorld with your game.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the UI Toolkit fallback only when ShellInput cannot poll (#266)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -233,31 +234,30 @@ namespace {{GAME_SLUG}}.Shell
 
         private void OnKeyDown(KeyDownEvent evt)
         {
-#if !ENABLE_LEGACY_INPUT_MANAGER
-            // No Input Manager to poll: keyboard bindings come from the panel's key events
-            Dictionary<string, object> bindings = Shell.I.BindingsMap();
-            foreach (string action in bindings.Keys)
+            if (!ShellInput.Polls)
             {
-                foreach (string b in Bindings.Of(bindings, action))
+                // Nothing to poll (the Input System without its package): keyboard bindings come from the panel's key events
+                Dictionary<string, object> bindings = Shell.I.BindingsMap();
+                foreach (string action in bindings.Keys)
                 {
-                    if (ShellInput.KindOf(b) == "key" && ShellInput.ParseKey(ShellInput.NameOf(b)) == evt.keyCode)
+                    foreach (string b in Bindings.Of(bindings, action))
                     {
-                        ShellInput.Inject(action, "keyboard");
+                        if (ShellInput.KindOf(b) == "key" && ShellInput.ParseKey(ShellInput.NameOf(b)) == evt.keyCode)
+                        {
+                            ShellInput.Inject(action, "keyboard");
+                        }
                     }
                 }
             }
-#endif
             evt.StopPropagation();
         }
 
         private void Swallow(EventBase evt, string action)
         {
-#if !ENABLE_LEGACY_INPUT_MANAGER
-            if (action != null)
+            if (action != null && !ShellInput.Polls)
             {
                 ShellInput.Inject(action, action == "ui_accept" || action == "ui_cancel" ? "pad_other" : null);
             }
-#endif
             evt.StopPropagation();
             _root.focusController?.IgnoreEvent(evt);
         }
