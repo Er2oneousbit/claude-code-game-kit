@@ -106,6 +106,8 @@ resting on the window cannot change the picture.
    `test_golden_access.gd` checks `scripts/core/audio_access.gd` against `data/golden/access.json` (slider gains, caption arrows).
    `test_golden_telemetry.gd` checks `telemetry.gd` against `data/golden/telemetry.json` (the CSV columns every engine writes).
    `test_golden_dialogue.gd` checks the subtitle typewriter (`DialogueData.revealed`) against `data/golden/dialogue.json`.
+   `test_credits_text.gd` checks the credits screen's text (`CreditsScreen.plain_text`, HTML comments out of
+   CREDITS.md) against `data/golden/credits.json`.
 4. `python tools/dev.py test` runs them headless. Add `--filter <name>` to run one file.
 
 ## Adopting an existing project

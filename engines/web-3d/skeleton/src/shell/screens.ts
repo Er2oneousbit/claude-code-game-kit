@@ -6,7 +6,8 @@
 // Usage   : shell.reset(screens.title(shell)) ; shell.push(screens.pause(shell)) ...
 // Notes   : Browser only (DOM). Every string goes through tl() (tr) or val() (data), every panel is a
 //           [data-box] for the pseudo-locale check. ui_cancel goes back one screen everywhere it can.
-//           CREDITS.md at the project root (if present) is bundled and scrolls on the credits screen.
+//           CREDITS.md at the project root (if present) is bundled and scrolls on the credits screen, without its
+//           HTML comments (credits.ts).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the loading screen starts the world through the
 //           shell's GameHost, so web and web-3d share this file; pseudo-plant's label stays on one line, so the
@@ -14,6 +15,7 @@
 // ---------------------------------------------------------------------------
 import { glyphName, glyphSet, promptBinding } from "../core/bindings";
 import type { Screen, Shell } from "./app";
+import { creditsText } from "./credits";
 import type { GameKey } from "./host";
 import { GAME_NAME, GAME_VERSION } from "./meta";
 import { settingsScreen } from "./settingsScreen";
@@ -130,7 +132,7 @@ export function creditsScreen(shell: Shell): Screen {
     const p = panel();
     p.append(tl(shell.i18n, "credits.title", "heading", {}, "div"));
     box = el("div", "credits");
-    const text = Object.values(credits)[0];
+    const text = creditsText(Object.values(credits)[0]); // HTML comments out (#279)
     box.append(text ? val(text, "credits-body", "credits.body") : tl(shell.i18n, "credits.placeholder", "credits-body", {}, "div"));
     p.append(box, m.add(buttonItem(shell.i18n, "credits.back", () => shell.back())).el);
     root.append(p);

@@ -1,7 +1,8 @@
 // ---------------------------------------------------------------------------
 // test_golden_vectors.cpp
 // Purpose : Checks the C++ juice and shell logic (src/core) against the kit's golden vectors,
-//           data/golden/juice.json and data/golden/shell.json, case by case.
+//           data/golden/juice.json and data/golden/shell.json, case by case; and data/golden/credits.json through
+//           the credits screen's text (core::strip_html_comments, #279).
 // Usage   : python tools/dev.py test     (ctest lists "golden vectors: juice.json" and "... shell.json";
 //           build/debug/bin/Debug/unit_tests.exe -tc="golden*" prints how many cases each file had)
 // Notes   : The vectors are written by tools/golden_vectors.py, the reference implementation every engine
@@ -39,6 +40,7 @@
 #include "core/SaveStore.hpp"
 #include "core/Settings.hpp"
 #include "core/Shake.hpp"
+#include "core/ShellLogic.hpp"
 #include "core/Spring.hpp"
 
 #ifndef GOLDEN_DIR
@@ -351,6 +353,12 @@ void check_pseudo(const json& c) {
     }
 }
 
+void check_strip_comments(const json& c) {
+    for (const json& p : c.at("points")) {
+        expect_same(core::strip_html_comments(text(p[1])), p[2], "strip_comments " + text(p[0]));
+    }
+}
+
 using Checker = void (*)(const json& c);
 
 // Runs every case of one vector file through its checker; unknown types fail. Returns the cases checked.
@@ -405,6 +413,10 @@ TEST_CASE("golden vectors: shell.json") {
         {"save_load", check_save_load}, {"tr", check_tr}, {"plural", check_plural}, {"pseudo", check_pseudo},
         {"narration", check_narration},
     });
+}
+
+TEST_CASE("golden vectors: credits.json") {
+    run_file("credits.json", {{"strip_comments", check_strip_comments}});
 }
 
 // ---- What the vectors cannot express: the error paths ----
