@@ -11,15 +11,15 @@ run found were fixed on the way (listed at the end).
 
 Machine: Windows 11, RTX 5060 Ti 16 GB, 64 GB RAM, ComfyUI 0.43.0, Blender 5.2.3, Godot 4.7.2, LÖVE 11.5 (K01,
 2026-11-11). Both games were fresh kit scaffolds (`scripts/new_game.py --engine godot`, `--engine love2d`). VRAM is
-the whole card, sampled every 2 s, and includes about 1.4 GB that desktop programs held before the run.
+the whole card, sampled every 2 s, and includes about 1.3 GB that desktop programs held before the run.
 
 | Gate | Step | Command | Time | VRAM peak | Result |
 |---|---|---|---|---|---|
 | 1 | Concept | the sentence below | | | one prompt, seed 7 |
-| 2 | Reference views | `bozzetto.py reference` | 178 s (front 12 s, side and back 48 to 62 s each) | 15.5 GB | four views; left and right swapped, fixed with `--swap-sides` in 1 s |
-| 3 | Model | `bozzetto.py make --class hero` | 176 s (158 s on the GPU) | 10.9 GB | 53,996 triangles, 1.8 m, two LODs, budget passed with one warning |
-| | Stop ComfyUI | | | 1.4 GB left | |
-| 4 | Rig and clips | `bozzetto.py rig make` (UniRig) | 192 s | 15.7 GB | 46 bones, 22 with Mixamo names, `idle`, `wave`, `walk` |
+| 2 | Reference views | `bozzetto.py reference` | 178 s (front 12 s, side and back 48 to 62 s each) | 15.1 GB | four views; left and right swapped, fixed with `--swap-sides` in 1 s |
+| 3 | Model | `bozzetto.py make --class hero` | 176 s (158 s on the GPU) | 10.7 GB (ComfyUI: 10.5) | 53,996 triangles, 1.8 m, two LODs, budget passed with one warning |
+| | Stop ComfyUI | | | 1.3 GB left | |
+| 4 | Rig and clips | `bozzetto.py rig make` (UniRig) | 192 s | 15.3 GB | 46 bones, 22 with Mixamo names, `idle`, `wave`, `walk` |
 | 5 | Scarf | `bozzetto.py rig chain` | 6 s (third try) | CPU | two 4-bone chains, rebuilt as strips |
 | 6 | 3D game | Godot `KitCharacter`, `smoke --record` | seconds | | walks, waves, idles |
 | 6 | 2D game | `render_sprites.py --manifest`, LÖVE starter | 83 s render (CPU) | | 8 directions x 3 clips; walks east |
@@ -86,7 +86,7 @@ islands. What the model got wrong:
 ## Gate 4: the rig and the clips
 ![Idle, wave and walk, four frames each](media/clips.jpg)
 
-ComfyUI was stopped first; the card went back to 1.4 GB. UniRig had to be installed again on this machine: the
+ComfyUI was stopped first; the card went back to 1.3 GB. UniRig had to be installed again on this machine: the
 README's six setup lines (clone, `patch_unirig.py`, a Python 3.11 env, torch 2.7.0 cu128, the PyG wheels, spconv,
 the requirements without `flash_attn`) ran in 53 s because uv's cache still held the wheels; a first install on a
 fresh machine downloads several GB **(not measured here)**. The run: extract 25 s, skeleton 89 s (the first run also
