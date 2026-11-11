@@ -31,6 +31,7 @@ Optional: set `RPGMZ_EXE` to the editor's `RPGMZ.exe` so `python tools/dev.py ru
 | `run` | serves `game/` and opens your browser; `--editor` opens the project in RPG Maker MZ **(verify)** |
 | `clean` | removes `build/` (`--deep`: also `node_modules/`) |
 | `doctor` | node, npm, the MZ project, Playwright's browser, `RPGMZ_EXE`, plus `tools/doctor.py` |
+| `dotwork [options]` | `node tools/dotwork_mz.mjs`: Dotwork's art into MZ's image layouts in `game/img` ("Dotwork art in MZ" below); `check` re-checks the last export |
 
 ## Adding a plugin command
 ```js
@@ -64,6 +65,8 @@ Manager or the project). **(verify)**
   `GameShell.js`; an unknown case type fails. `tests/gameAccess.test.js` runs the MZ glue against stand-ins for
   ConfigManager, Window_Options, Scene_Options, Game_Screen and Game_System (`tests/support/golden.js` is the shared
   comparison).
+- **Dotwork art:** `tests/dotworkMz.test.js` loads `data/golden/dotwork/` through `tools/dotwork_mz.mjs`, compares the
+  kinds MZ uses with its `expected.json`, and checks the converted images hold the right frames in MZ's cells.
 
 ## Assets and audio
 - MZ's default art and sound come with your copy of MZ; log your own additions in `docs/ASSET_LOG.md` as usual.
@@ -71,7 +74,52 @@ Manager or the project). **(verify)**
   `.m4a` for some platforms. **(verify which formats MZ 1.x still needs)**
 - Generated audio (Wavesmith, `tools/audio/wavesmith/`): export OGG with `wavesmith.py formats convert x.wav --out x.ogg`
   (needs ffmpeg; `--loop` keeps a WAV loop point as LOOPSTART / LOOPLENGTH). Generated art: match MZ's sheet layouts (a
-  character sheet is 4 x 2 characters of 3 x 4 frames). **(verify sizes)**
+  character sheet is 4 x 2 characters of 3 x 4 frames). **(verify sizes)** Dotwork's art: `dev.py dotwork` (below).
+
+## Dotwork art in MZ
+Dotwork (`tools/art/dotwork/`, `/dotwork`) makes engine-neutral PNGs plus an asset manifest per pack
+(`assets/dotwork/<pack>.assets.json`; `tools/art/dotwork/ASSET_MANIFEST.md`). MZ cannot load that: it reads fixed
+image layouts from `img/<folder>/` by name, and the editor's pickers only see files on disk. So the kit converts once,
+after every Dotwork run, instead of loading at runtime (a plugin could not put the art into the database or the event
+editor):
+```
+python tools/dev.py dotwork --dry-run      # what it would write, and what it skips
+python tools/dev.py dotwork                # write; files MZ shipped (Window.png, IconSet.png) are kept
+python tools/dev.py dotwork --replace      # also replace those (the originals go to build/dotwork_mz/originals/)
+```
+| Dotwork | MZ file | How |
+|---|---|---|
+| a character (`walk_<dir>` in s, w, e, n; else `idle`) | `img/characters/$<name>.png`, or `--sheet NAME` for 4 x 2 per file | 3 frames per direction: walk frame 0 stands in the middle column (MZ shows it when idle; `--stand idle` takes idle's first frame instead), the strides a quarter and three quarters through the walk either side (MZ walks 1, 2, 1, 0). Rows: down, left, right, up. Feet on the cell's bottom centre; a cell is at least one tile |
+| a prop, an animated prop | `img/characters/!$<name>.png` | an object sheet: the picture (or three frames of its clip) in every cell, for events |
+| portrait expressions | `img/faces/<name>.png` | 144 x 144 cells, 4 x 2 per file, neutral first (face index 0); scaled up by a whole number to fit |
+| battle poses (character entry `"poses": "battle"`) | `img/sv_actors/<name>.png` | only in side-view games (System.json, or `--side-view`): 9 x 6 cells, MZ's 18 motions from ready, idle, walk, attack, cast, defend, hurt, item, victory, weak and ko clips facing west (escape runs east); a motion with no clip shows wait |
+| enemies | `img/enemies/` (front view) or `img/sv_enemies/` | the picture at the game's scale, feet on the bottom centre; the contact shadow is left out |
+| a ui_kit window part (+ a hover or focus button) | Window.png in `img/system/` | background, frame and cursor from the parts, taken 1:1 (a ui_kit is already drawn at its scale); the arrows, pause sign and text colours stay as the existing skin has them |
+| icons | IconSet.png in `img/system/` | appended below the icons already there (a 32 px size, or one that divides 32, scaled up); a re-run replaces only its own rows |
+| plain tiles (no terrain) of square tilesets | `img/tilesets/<pack>_<tileset>_B.png` (C, D, E when full) | at MZ's tile size; multi-tile stamps stay whole; B's tile 0 is MZ's empty tile |
+
+**The scale** is one whole number for the whole game: MZ's tile size (`tileSize` in the project's System.json, 48 when
+absent) over the art's tile size, so 16 px Dotwork tiles become 3x. Art whose tile size does not divide MZ's is not
+shrunk or blurred: set MZ's tile size to a multiple (Database > System 2, verify) or pass `--scale`.
+
+**What it records:** `<src_dir>/dotwork/mz_export.json` (Dotwork's source folder, assets_src unless its config
+says otherwise; commit it) lists every file written with its hash and the
+numbers MZ's database wants: each character's file and index, each expression's face file and index, each icon's
+index, each tile's B to E tile id and whether it collides (set those tiles to impassable in Database > Tilesets).
+A file whose hash no longer matches (you edited it in MZ or a paint program) is left alone without `--replace`.
+`python tools/dev.py check` checks the export: the files exist and have MZ's shapes.
+
+**Not converted yet** (each prints a note): terrain tiles (MZ's A1 to A4 autotiles are cut from quarter tiles in
+MZ's own arrangement, not from Dotwork's 47 blob or 16 corner tiles: a later step, so paint ground with B to E tiles
+or MZ's own autotiles for now), maps (they need those autotiles), isometric tilesets, effects and spells (MZ's battle
+animations are Effekseer files), particles, rule-image transitions, normal maps, bitmap fonts (MZ draws TrueType or
+WOFF fonts), battle backgrounds and parallaxes, and other pictures (copy them to `img/pictures` by hand). Lost on the
+way: Dotwork's frame timing (MZ times walks by move speed and plays three frames), frames past the three MZ uses, tile
+animation (B to E tiles do not animate) and collision boxes (MZ's passability is per tile, in the database).
+
+**Verify in MZ:** every layout above comes from MZ's documented formats and has been checked only against stand-ins
+(sizes, the right frames in the right cells, Chromium decoding the files). Open a converted character, face and
+tileset in the editor once before relying on it.
 
 ## Profiling
 Real numbers come from the editor's Playtest or a real browser (F12 > Performance), not headless smoke (software WebGL).

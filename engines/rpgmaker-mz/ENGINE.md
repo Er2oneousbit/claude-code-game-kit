@@ -33,7 +33,8 @@ game/js/plugins.js        the Plugin Manager's list (the editor writes it; setup
 game/data/*.json          the database and maps (the editor writes them; see gotcha 1)
 game/img, audio, ...      art and sound (MZ's defaults plus yours; docs/ASSET_LOG.md for yours)
 tests/                    Node tests (*.test.js); tests/support/mzFake.js loads a plugin with stand-ins for MZ
-tools/                    dev.py, smoke.mjs, serve.mjs and helpers
+tools/                    dev.py, smoke.mjs, serve.mjs and helpers; dotwork_mz.mjs (Dotwork's art into MZ's image
+                          layouts: `dev.py dotwork`, ENGINE_FLOW "Dotwork art in MZ")
 build/web/                a web-browser copy of the game (git-ignored)
 ```
 Keeping the MZ project in `game/` means the editor's Deployment exports the game and none of the kit's docs or tools.
@@ -84,4 +85,6 @@ accessibility in MZ") says what is wired and what is left to you. There are no `
 ## Generated (do not hand-edit)
 `node_modules/`, `build/`, `package-lock.json`, `game/save/`, the KitShaders plugin (edit
 `tools/shaders/ksl/`, then `python tools/shaders/shader_gen.py`). The editor writes `game/data/*.json` and
-`game/js/plugins.js`: edit them only with the project closed (gotcha 1).
+`game/js/plugins.js`: edit them only with the project closed (gotcha 1). The images `dev.py dotwork` writes from
+Dotwork's art (listed in `<src_dir>/dotwork/mz_export.json`, src_dir is assets_src by default): change the art in Dotwork and convert again; a file
+edited by hand is kept, not overwritten.
