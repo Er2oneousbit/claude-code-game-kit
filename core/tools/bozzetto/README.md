@@ -231,6 +231,34 @@ model, PBR textures embedded. The game's ENGINE.md (in docs/) has the import lin
 - Unity, Unreal, Bevy: see the ENGINE.md of that engine.
 - 2D engines: render it to a sprite sheet (`--sprites`, or `tools/blender/render_sprites.py`).
 
+### A rigged character (`rig make` output) in each engine (#290)
+The rigged `.glb` carries its clips as glTF animations (`idle`, `walk` ...), Mixamo bone names and no root motion
+(the clips walk in place: the game moves the character). Every engine's `docs/ENGINE.md` has a "Rigged characters"
+recipe and a small helper that loads the file and plays a named clip on a loop, and a test that loads the kit's golden
+character (`data/golden/character/`: a 1.8 m blocky biped, Mixamo names, looping `idle` and `walk`), plays `walk` and
+checks that `mixamorig:LeftUpLeg` swings as far as the clip does. What was run on 2026-11-11, each on a fresh scaffold:
+
+| Engine | Helper | Import notes | Run |
+|---|---|---|---|
+| Godot 4.7.2 | `KitCharacter` (scripts/core/kit_character.gd): `load_scene`, `play(hero, "walk")` | glTF clips import without looping (`play` sets `loop_mode`); `:` becomes `_` (`mixamorig_Hips`); faces +Z | GUT 4 tests; `check`, `test` (108), `smoke` passed |
+| web-3d (three r186) | src/game/character.ts: `loadCharacter`, `hero.play("walk")`, `hero.update(dt)` | three strips `:` (`mixamorigHips`); `lookAt` turns the model's +Z front to its target | Vitest 5 tests in Node; `check`, `test` (183), `smoke` passed. Drawing a skinned model in the browser is not tested **(verify)** |
+| Unity 6000.6.6f1 | `KitCharacter` (Assets/Scripts/Characters/): `Attach(model, clips).Play("walk")`, `Load(path)` at run time | needs glTFast 6.20.0 (`dev.py exec GameKitCharacters.AddGltfast`); clips are Generic with Loop Time on; names keep `:`; 1 unit = 1 m, faces +Z | EditMode 6 tests, PlayMode 1; `check`, `test` (185), PlayMode (14), `smoke` passed |
+| Unreal 5.8.4 | `kit_character.import_character(glb)` (editor Python, `dev.py exec`) | Interchange: `:` becomes `_`, metres to centimetres (180 cm), front +Z to +Y, Hips the root bone; clips get Loop on, root motion off | `test` ran the check (walk sampled, 56.00 degrees); `check` passed. Playing it in a level **(verify)** |
+| Bevy 0.20.1 | `spawn_character(&mut commands, &server, "models/hero.glb", "idle")` (src/character.rs), set `Character.clip` to switch | no extra Cargo features; names keep `:`; a child half turn makes the +Z front look along `forward()` | `cargo test` headless (no window or GPU); `check`, `test` (137), `smoke` passed. A windowed draw **(verify)** |
+
+**Unity Humanoid (tried, 2026-11-11):** glTFast makes no avatar and imports the clips as Generic. An avatar built in
+script from the Mixamo names (`AvatarBuilder.BuildHumanAvatar`) maps all 22 bones from the A-pose, but glTFast's
+Generic clips move nothing on a Humanoid Animator. The same character exported from Blender as FBX goes Humanoid with
+Create From This Model (20 bones mapped, the shoulders left out), and its humanoid walk also played on the glTF model
+through the script-built avatar (with a larger thigh swing: muscle retargeting is not 1:1). So: import a glTF
+character Generic and play its own clips; Humanoid is the route for sharing Mixamo-style FBX clips. Details in the
+Unity ENGINE.md.
+
+For a 2D game, `render_sprites.py --actions all --manifest assets/dotwork/rendered.assets.json` renders every clip in 8
+(or 4) directions into a Dotwork asset manifest that each engine's Dotwork importer loads as it is (SOP-11). The web,
+web-3d, LÖVE, C++/SDL3, Bevy and RPG Maker MZ importer tests load the golden character's rendered sheet; the LÖVE and
+C++ starters drew it walking. Unity's and Unreal's importers were not run on it **(verify)**.
+
 ## Rig a character
 `make` gives a character as a statue. `rig` gives it a skeleton, skin weights and clips, checks that the rig really
 deforms, and names the bones the way engines and animation packs expect (Mixamo's `mixamorig:Hips` ...):
@@ -294,9 +322,9 @@ Other `rig make` options: `--wait S` (each UniRig step's and Tripo task's limit,
 **One GPU at a time:** UniRig peaks near 15.6 GB. With another program holding the card (ComfyUI, a local LLM
 runner) it still finished here, but took 562 s instead of about 85: close them first.
 
-In the engine: the rigged `.glb` carries its clips as glTF animations. Godot: an AnimationPlayer in the imported scene;
-glTF clips import without looping, so set `loop_mode` (the showcase does). Unity: set the model's rig to Humanoid; the
-Mixamo names should map without hand work, so Mixamo-style clips play on it **(verify: not yet tested in Unity)**.
+In the engine: the rigged `.glb` carries its clips as glTF animations, starting at 0 s so an engine's loop has no
+extra frame on its first pose. Each engine's recipe and what was run: [In the engine](#in-the-engine) "A rigged
+character". Unity: import it Generic through glTFast; Humanoid was tried and needs humanoid (FBX) clips.
 
 ### Secondary motion
 An auto-rig gives a body skeleton: a scarf tail, cape, long hair or tail is skinned stiffly to the neck or spine and

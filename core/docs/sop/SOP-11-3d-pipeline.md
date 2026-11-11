@@ -189,12 +189,15 @@ the tool warns and `--ignore NAME` drops them (`prep_export.py` has the same opt
 Tested on a Kenney CC0 character's walk cycle and by its exam (K01: 24/24). Then treat the sheet as 2D art (`SOP-16`).
 For a rigged character, `--actions all --step 2 --manifest assets/dotwork/rendered.assets.json` renders every clip in
 8 (or 4) directions and writes a Dotwork asset manifest that every 2D engine's Dotwork importer loads with no new code
-(clips `walk_s` ... `walk_se`, per-frame durations, the feet as the pivot; K01, #290: the web, web-3d, LÖVE and C++
-importer tests load the golden character's sheet, and the LÖVE and C++ starters draw it walking).
+(clips `walk_s` ... `walk_se`, per-frame durations, the feet as the pivot; K01, #290: the web, web-3d, LÖVE, C++, Bevy and MZ
+importer tests load the golden character's sheet, and the LÖVE and C++ starters draw it walking; Unity's and
+Unreal's importers were not run on it **(verify)**).
 
 A rigged character in a 3D engine: the `.glb` from `bozzetto.py rig make` loads with its clips; each engine's
 `docs/ENGINE.md` "Rigged characters" has the import recipe (looping, root motion, scale, facing, bone names) and a
 helper that plays a clip on a loop, tested against the kit's golden character (`data/golden/character/`, K01).
+Unity: import a glTF character Generic (glTFast); Humanoid was tried and plays only humanoid (FBX) clips
+(`tools/bozzetto/README.md` "In the engine").
 
 ## Budgets (placeholders, set yours in `ARCHITECTURE.md`)
 | Class | Triangles | Texture | Notes |
