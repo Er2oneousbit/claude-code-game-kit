@@ -6,23 +6,47 @@
 #           reports what should not be there: no LICENSE, secret files, token-shaped
 #           strings, files GitHub rejects without LFS, personal paths (also the export folder
 #           Pixelorama saves inside each .pxo), and personal email addresses in commit history.
-# Usage   : python tools/publish_check.py [--root DIR] [--debug]
-# Exit    : 0 no FAIL items (WARN items may remain), 1 FAIL items found, 2 not a git repo / git missing
-# Notes   : Scans the working tree, not old commits. A secret that was committed and then
-#           deleted is still in history: run a history scanner (gitleaks) before going public,
+#           With --range it reviews commits instead (someone else's, a subagent's, a patch): only the lines those
+#           commits add, their messages, and files they must not add.
+# Usage   : python tools/publish_check.py [--root DIR] [--terms FILE] [--style] [--debug]
+#           python tools/publish_check.py --range main..feature [--terms FILE] [--style] [--trailer TEXT]
+#             --range A..B   scan only commits in A..B: every added line, every commit message, local-only or
+#                            secret files they add or change (CLAUDE.local.md, .env, captures/), author emails;
+#                            findings are grouped per commit (hash, subject). --commits is the same option.
+#             --terms FILE   private words or names that must never appear publicly, one per line: a plain term
+#                            (whole word, any case) or `re:<regex>`; `#` starts a comment line. Default: the file in
+#                            the PUBLISH_CHECK_TERMS environment variable. Keep it OUTSIDE the repo (for example
+#                            ~/.config/game-kit/private-terms.txt) or in the gitignored .private-terms.txt: a list
+#                            that would be published is a FAIL of its own. Matches name the list's line, never the term.
+#             --style        also FAIL on em dashes (the kit's no-em-dash rule) in scanned text
+#             --trailer TEXT with --range: WARN for each commit whose message has no line starting with TEXT
+#                            (the project's attribution trailer, e.g. "Co-Authored-By:")
+# Exit    : 0 no FAIL items (WARN items may remain), 1 FAIL items found, 2 not a git repo / git missing / bad
+#           range / unreadable or invalid terms file / bad arguments
+# Notes   : Scans the working tree, not old commits (commit messages too, for private terms). A secret that was
+#           committed and then deleted is still in history: run a history scanner (gitleaks) before going public,
 #           and rotate any key it finds. Pattern matching is a net, not a guarantee. Text with a byte
 #           order mark (UTF-8, UTF-16, UTF-32) is decoded and scanned; other files with NUL bytes count as binary.
 #           Files over 2 MB are not content-scanned; one that looks like text (no media extension, no NUL near the
-#           start) is listed as a WARN so it gets a look by hand. Standard library only, Python 3.8+.
+#           start) is listed as a WARN so it gets a look by hand. In --range mode, files git shows as binary (UTF-16
+#           text included) have no added lines to scan, and a merge commit adds no lines of its own (its message is
+#           still scanned). Standard library only, Python 3.8+.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
-#   list files git would publish (ls-files tracked + others --exclude-standard)
-#   FAIL: no LICENSE; secret-named files; token-shaped strings in text files; files > 100 MB not routed to LFS
-#   WARN: files > 50 MB not in LFS; text files > 2 MB (not content-scanned); home-folder paths in text;
-#         a .pxo whose data.json holds an absolute export folder; non-noreply emails in history;
-#         PLACEHOLDER rows in docs/ASSET_LOG.md; Unreal's Android File Server token with network connections on
+#   tree mode (default):
+#     list files git would publish (ls-files tracked + others --exclude-standard)
+#     FAIL: no LICENSE; secret-named files; token-shaped strings in text files; files > 100 MB not routed to LFS;
+#           private terms in file names, text or any commit message; em dashes with --style; the terms list itself
+#     WARN: files > 50 MB not in LFS; text files > 2 MB (not content-scanned); home-folder paths in text;
+#           a .pxo whose data.json holds an absolute export folder; non-noreply emails in history;
+#           PLACEHOLDER rows in docs/ASSET_LOG.md; Unreal's Android File Server token with network connections on
+#   range mode (--range A..B): per commit in rev-list order
+#     FAIL: tokens, private terms, em dashes (--style) in its added lines (diff-tree -p -U0) or its message;
+#           secret-named or local-only files it adds or changes
+#     WARN: home-folder paths in added lines or the message; a non-noreply author or committer email;
+#           no attribution trailer (--trailer)
 #   print grouped results and the reminders that cannot be automated, return exit code
 import argparse
 import fnmatch
@@ -103,6 +127,72 @@ MEDIA_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tga", ".tif", ".tiff", 
 BOMS = ((b"\xff\xfe\x00\x00", "utf-32"), (b"\x00\x00\xfe\xff", "utf-32"), (b"\xef\xbb\xbf", "utf-8-sig"),
         (b"\xff\xfe", "utf-16"), (b"\xfe\xff", "utf-16"))
 AFS_SECTION = "[/Script/AndroidFileServerEditor.AndroidFileServerRuntimeSettings]"   # Unreal, from Epic's template
+# --range: files a commit must not add or change, beyond the secret names above (matched lower-case against the
+# path relative to the repo root): Claude Code's local-only files, agent worktrees, scratch and capture output
+LOCAL_ONLY_GLOBS = ("claude.local.md", "*/claude.local.md", ".claude/settings.local.json", ".claude/worktrees/*",
+                    "captures/*", "scratch/*", "*.log", "*.tmp", ".private-terms.txt", "*/.private-terms.txt")
+TERMS_ENV = "PUBLISH_CHECK_TERMS"       # where --terms comes from when it is not given
+TERM_REGEX_PREFIX = "re:"
+EM_DASH = "—"
+HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+C_ESCAPES = {"a": "\a", "b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v", '"': '"', "\\": "\\"}
+
+
+class UsageProblem(Exception):
+    """A bad --range, --terms file or option combination: exit 2 with the message."""
+
+
+# ---- private terms -------------------------------------------------------------------------------------------------
+def load_terms(path):
+    """[(line number in the list, compiled pattern)] from a terms file. A plain line is a whole word or phrase in any
+    case; `re:<regex>` is a regular expression (any case); blank lines and `#` lines are skipped. Raises
+    UsageProblem for an unreadable file or a regex that is invalid or matches empty text."""
+    try:
+        text = Path(path).read_text(encoding="utf-8-sig")
+    except OSError as exc:
+        raise UsageProblem(f"cannot read the terms file {path} ({exc.strerror or exc.__class__.__name__})")
+    except UnicodeDecodeError:
+        raise UsageProblem(f"the terms file {path} is not UTF-8 text")
+    terms = []
+    for n, raw in enumerate(text.splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith(TERM_REGEX_PREFIX):
+            try:
+                pat = re.compile(line[len(TERM_REGEX_PREFIX):].strip(), re.I)
+            except re.error as exc:
+                raise UsageProblem(f"terms file line {n}: not a valid regular expression ({exc})")
+            if pat.search(""):
+                raise UsageProblem(f"terms file line {n}: the regular expression matches empty text")
+        else:
+            # whole word: no letter or digit right before or after, so "Kraken" finds coral_kraken, not krakens
+            pat = re.compile(r"(?<![A-Za-z0-9])" + re.escape(line) + r"(?![A-Za-z0-9])", re.I)
+        terms.append((n, pat))
+    return terms
+
+
+def term_hits(text, terms):
+    """Labels for the private terms found in text. The term itself is never printed: the output may be shared."""
+    return [f"private term (terms file line {n})" for n, pat in terms if pat.search(text)]
+
+
+def resolve_terms(arg):
+    """(terms, the list's resolved path or None) from --terms or the PUBLISH_CHECK_TERMS environment variable."""
+    path = arg or os.environ.get(TERMS_ENV, "").strip()
+    if not path:
+        return [], None
+    return load_terms(path), Path(path).expanduser().resolve()
+
+
+def rel_inside(root, path):
+    """path relative to root (forward slashes), or None when it lies outside root."""
+    if path is None:
+        return None
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return None
 
 
 def git(root, *args, check=True):
@@ -147,9 +237,10 @@ class Unreadable(Exception):
     """A file that could not be read: reported, never taken as clean (#239)."""
 
 
-def scan_text(path):
-    """Return (token findings, home-path findings) for one file, or ([], []) for binary or large files. Raises
-    Unreadable when the file cannot be read."""
+def scan_text(path, terms=(), style=False):
+    """Return (token findings, home-path findings) for one file, or ([], []) for binary or large files. Private
+    terms and (with style) em dashes count as token findings: both FAIL. Raises Unreadable when the file cannot be
+    read."""
     try:
         if path.stat().st_size > MAX_TEXT_SCAN:
             return [], []
@@ -163,24 +254,38 @@ def scan_text(path):
         return [], []
     else:
         text = data.decode("utf-8", "replace")
-    return scan_lines(text, config=path.suffix.lower() in CONFIG_EXTS or path.name.lower().startswith(".env"))
+    return scan_lines(text, config=is_config(path.name), terms=terms, style=style)
 
 
-def scan_lines(text, config=False):
+def is_config(name):
+    """A config-type file name, where an unquoted value after `secret =` is a value, not a name."""
+    name = name.rsplit("/", 1)[-1].lower()
+    return Path(name).suffix in CONFIG_EXTS or name.startswith(".env")
+
+
+def scan_line(line, config=False, terms=(), style=False):
+    """(problems that FAIL, a home path that WARNs or "") for one line of text."""
+    fails = [f"looks like a {label}" for label, pat in TOKEN_PATTERNS if pat.search(line)]
+    m = UNQUOTED_SECRET.match(line) if config and not fails else None
+    if m:
+        v = m.group(1)
+        if re.search(r"\d", v) and ((re.search(r"[a-z]", v) and re.search(r"[A-Z]", v)) or re.search(r"[/+=]", v)):
+            fails.append("looks like a hard-coded secret (unquoted)")
+    fails += term_hits(line, terms)
+    if style and EM_DASH in line:
+        fails.append("an em dash (style rule: use a colon, a comma or parentheses)")
+    m = HOME_PATH.search(line)
+    return fails, (m.group(0) if m else "")
+
+
+def scan_lines(text, config=False, terms=(), style=False):
     """(token findings, home-path findings) in text; config: also unquoted secret values (an INI, a .env)."""
     tokens, homes = [], []
     for lineno, line in enumerate(text.splitlines(), 1):
-        for label, pat in TOKEN_PATTERNS:
-            if pat.search(line):
-                tokens.append(f"line {lineno}: looks like a {label}")
-        m = UNQUOTED_SECRET.match(line) if config else None
-        if m and not any(f"line {lineno}:" in x for x in tokens):
-            v = m.group(1)
-            if re.search(r"\d", v) and ((re.search(r"[a-z]", v) and re.search(r"[A-Z]", v)) or re.search(r"[/+=]", v)):
-                tokens.append(f"line {lineno}: looks like a hard-coded secret (unquoted)")
-        m = HOME_PATH.search(line)
-        if m:
-            homes.append(f"line {lineno}: {m.group(0)}")
+        fails, home = scan_line(line, config, terms, style)
+        tokens += [f"line {lineno}: {x}" for x in fails]
+        if home:
+            homes.append(f"line {lineno}: {home}")
     return tokens, homes
 
 
@@ -257,9 +362,26 @@ def unreal_afs_token(root, files):
     return found
 
 
-def run(root):
+def history_messages(root):
+    """[(short hash, full message)] for every commit on every ref (empty for a repo with no commits)."""
+    out = git(root, "log", "--all", "-z", "--format=%h%x01%B", check=False).decode("utf-8", "replace")
+    return [tuple(entry.split("\x01", 1)) for entry in out.split("\0") if "\x01" in entry]
+
+
+def run(root, terms=(), style=False, terms_path=None):
+    """Tree mode. terms: from load_terms; terms_path: the list's resolved path (never scanned, FAIL if published)."""
     fails, warns = [], []
     files = publishable_files(root)
+    terms_rel = rel_inside(root, terms_path)
+    if terms_rel in files:
+        fails.append(f"{terms_rel}: the private term list itself would be published (keep it outside the repo, or "
+                     "add it to .gitignore)")
+        files = [f for f in files if f != terms_rel]
+    for rel in files:
+        fails += [f"{rel}: its path contains a {hit}" for hit in term_hits(rel, terms)]
+    for short, message in history_messages(root) if terms else ():
+        fails += [f"commit {short} message: {hit} (public once pushed; reword it before pushing)"
+                  for hit in term_hits(message, terms)]
     if not any(f.lower() in LICENSE_NAMES for f in files):
         fails.append("no LICENSE file at the root: without one, nobody may legally reuse the code (SOP-13 step 1)")
     lfs = lfs_paths(root, files)
@@ -275,7 +397,7 @@ def run(root):
             if is_secret_name(rel):
                 fails.append(f"{rel}: secret-type file would be published (remove it and add it to .gitignore)")
             try:
-                tokens, homes = scan_lines(os.readlink(path))
+                tokens, homes = scan_lines(os.readlink(path), terms=terms, style=style)
             except OSError:
                 tokens, homes = [], []
             fails += [f"{rel} (symlink) {x}" for x in tokens]
@@ -293,7 +415,7 @@ def run(root):
         if unscanned_text(path):                      # check it by hand for tokens and personal paths
             warns.append(f"not content-scanned (over {MAX_TEXT_SCAN // 2**20} MB): {rel}")
         try:
-            tokens, homes = scan_text(path)
+            tokens, homes = scan_text(path, terms, style)
         except Unreadable as exc:
             warns.append(f"{rel}: could not be read ({exc}), so it was not scanned: check it by hand")
             tokens, homes = [], []
@@ -316,20 +438,202 @@ def run(root):
     return files, fails, warns
 
 
+# ---- range mode ----------------------------------------------------------------------------------------------------
+def unquote_path(text):
+    """A path as git prints it in a patch header: C-quoted ("a\\tb", octal bytes) when it holds unusual characters."""
+    if not (len(text) >= 2 and text[0] == '"' and text[-1] == '"'):
+        return text
+    raw, i, body = bytearray(), 0, text[1:-1]
+    while i < len(body):
+        ch = body[i]
+        if ch == "\\" and i + 1 < len(body):
+            nxt = body[i + 1]
+            if nxt in "01234567" and re.match(r"[0-7]{3}", body[i + 1:i + 4]):
+                raw.append(int(body[i + 1:i + 4], 8))
+                i += 4
+                continue
+            raw += C_ESCAPES.get(nxt, nxt).encode("utf-8")
+            i += 2
+            continue
+        raw += ch.encode("utf-8")
+        i += 1
+    return raw.decode("utf-8", "surrogateescape")
+
+
+def added_lines(patch):
+    """Yield (path, new line number, text) for every line a -U0 patch adds. Hunk sizes decide what is content, so an
+    added line that itself starts with "++" is never taken for a file header."""
+    path, new_no, old_left, new_left = None, 0, 0, 0
+    for raw in patch.split("\n"):
+        if old_left > 0 or new_left > 0:
+            if raw.startswith("+"):
+                if path is not None:
+                    yield path, new_no, raw[1:].rstrip("\r")
+                new_no += 1
+                new_left -= 1
+            elif raw.startswith("-"):
+                old_left -= 1
+            elif raw.startswith(" "):
+                old_left, new_left, new_no = old_left - 1, new_left - 1, new_no + 1
+            elif not raw.startswith("\\"):        # "\ No newline at end of file" belongs to the hunk
+                old_left = new_left = 0           # malformed: leave the hunk
+            continue
+        if raw.startswith("diff --git "):
+            path = None
+        elif raw.startswith("+++ "):
+            name = unquote_path(raw[4:].rstrip("\r"))
+            path = None if name == "/dev/null" else (name[2:] if name.startswith("b/") else name)
+        elif raw.startswith("@@"):
+            m = HUNK.match(raw)
+            if m:
+                old_left = int(m.group(1)) if m.group(1) is not None else 1
+                new_no = int(m.group(2))
+                new_left = int(m.group(3)) if m.group(3) is not None else 1
+
+
+def range_commits(root, rng):
+    """Full hashes in rng, oldest first. Raises UsageProblem for something that is not a valid A..B range."""
+    if ".." not in rng or rng.startswith("-"):
+        raise UsageProblem(f"--range wants A..B (two commits or branches), got {rng!r}")
+    try:
+        out = git(root, "rev-list", "--reverse", rng, "--")
+    except RuntimeError as exc:
+        raise UsageProblem(f"git does not know the range {rng}: {exc}")
+    return out.decode("utf-8", "replace").split()
+
+
+def commit_info(root, sha):
+    """(short hash, subject, full message, {author and committer emails}) of one commit."""
+    out = git(root, "show", "-s", "--format=%h%x00%ae%x00%ce%x00%B", sha).decode("utf-8", "replace")
+    short, author, committer, message = (out.split("\0", 3) + ["", "", ""])[:4]
+    subject = (message.strip().splitlines() or [""])[0]
+    return short.strip(), subject, message, {e for e in (author.strip(), committer.strip()) if e}
+
+
+def commit_files(root, sha):
+    """Paths a commit adds, changes, renames or copies to (deletions left out: a removal publishes nothing new)."""
+    out = git(root, "-c", "core.quotepath=off", "diff-tree", "-r", "--root", "--no-commit-id", "-z", "-M",
+              "--name-status", sha).decode("utf-8", "surrogateescape")
+    fields, paths, i = out.split("\0"), [], 0
+    while i < len(fields) and fields[i]:
+        status = fields[i]
+        count = 2 if status[:1] in ("R", "C") else 1
+        names = fields[i + 1:i + 1 + count]
+        if status[:1] != "D" and names:
+            paths.append(names[-1])
+        i += 1 + count
+    return paths
+
+
+def commit_patch(root, sha):
+    # explicit prefixes: diff.noprefix or diff.mnemonicPrefix in a user's config would change a/ and b/
+    return git(root, "-c", "core.quotepath=off", "diff-tree", "-r", "--root", "-p", "-M", "--unified=0",
+               "--no-color", "--no-ext-diff", "--no-textconv", "--no-commit-id", "--src-prefix=a/",
+               "--dst-prefix=b/", sha).decode("utf-8", "replace")
+
+
+def is_local_only(rel):
+    low = rel.lower()
+    return any(fnmatch.fnmatchcase(low, g) for g in LOCAL_ONLY_GLOBS)
+
+
+def check_commit(root, sha, terms=(), style=False, trailer=None, terms_rel=None):
+    """(short hash, subject, fails, warns, emails) for one commit."""
+    short, subject, message, emails = commit_info(root, sha)
+    fails, warns = [], []
+    for rel in commit_files(root, sha):
+        if terms_rel and rel == terms_rel:
+            fails.append(f"{rel}: commits the private term list itself")
+        elif is_secret_name(rel):
+            fails.append(f"{rel}: secret-type file in the commit (remove it and add it to .gitignore)")
+        elif is_local_only(rel):
+            fails.append(f"{rel}: a local-only or scratch file in the commit (CLAUDE.local.md, settings.local.json, "
+                         "captures/, scratch/, logs); take it out and keep it ignored")
+        fails += [f"{rel}: its path contains a {hit}" for hit in term_hits(rel, terms)]
+    for rel, lineno, text in added_lines(commit_patch(root, sha)):
+        if terms_rel and rel == terms_rel:
+            continue
+        found, home = scan_line(text, is_config(rel), terms, style)
+        fails += [f"{rel} line {lineno}: {x}" for x in found]
+        if home:
+            warns.append(f"{rel} line {lineno}: {home} (a personal path; it names your account)")
+    for lineno, text in enumerate(message.splitlines(), 1):
+        found, home = scan_line(text, False, terms, style)
+        fails += [f"commit message line {lineno}: {x}" for x in found]
+        if home:
+            warns.append(f"commit message line {lineno}: {home} (a personal path)")
+    if trailer and not any(l.strip().lower().startswith(trailer.lower()) for l in message.splitlines()):
+        warns.append(f"no {trailer!r} trailer in the commit message")
+    return short, subject, fails, warns, emails
+
+
+def run_range(root, rng, terms=(), style=False, trailer=None, terms_path=None):
+    """[(short hash, subject, fails, warns)] per commit in rng, oldest first. Each personal email is reported once,
+    at the first commit that carries it."""
+    results, seen = [], set()
+    terms_rel = rel_inside(root, terms_path)
+    for sha in range_commits(root, rng):
+        short, subject, fails, warns, emails = check_commit(root, sha, terms, style, trailer, terms_rel)
+        for email in sorted(emails - seen):
+            if not NOREPLY.search(email):
+                warns.append(f"author or committer email {email} (public once pushed; SOP-13 step 3)")
+        seen |= emails
+        results.append((short, subject, fails, warns))
+    return results
+
+
+def print_range(root, rng, results):
+    fails = sum(len(r[2]) for r in results)
+    warns = sum(len(r[3]) for r in results)
+    print(f"publish_check: {len(results)} commit(s) in {rng} ({root})")
+    for short, subject, c_fails, c_warns in results:
+        print(f"  {short} {subject[:100]}: {len(c_fails)} FAIL, {len(c_warns)} WARN")
+        for item in c_fails:
+            print(f"    FAIL  {item}")
+        for item in c_warns:
+            print(f"    WARN  {item}")
+    print("Only the lines these commits add were scanned. Run without --range for the whole tree.")
+    print(f"Result: {fails} FAIL, {warns} WARN")
+    return 1 if fails else 0
+
+
 def main(argv=None):
     for stream in (sys.stdout, sys.stderr):
         try:
             stream.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
         except (AttributeError, ValueError):
             pass
-    ap = argparse.ArgumentParser(description="Check a git repo for things that should not go public (SOP-13).")
+    ap = argparse.ArgumentParser(
+        description="Check a git repo for things that should not go public (SOP-13): the working tree, or with "
+                    "--range only the lines and messages of some commits.",
+        epilog=f"Private terms: one per line, a plain word or phrase (whole word, any case) or re:<regex>; # starts a "
+               f"comment. Keep the list outside the repo (e.g. ~/.config/game-kit/private-terms.txt) and point "
+               f"{TERMS_ENV} at it, or use the gitignored .private-terms.txt in the project. Exit 0 no FAIL, "
+               f"1 FAIL items, 2 git missing, not a repo, a bad range or terms file.", allow_abbrev=False)
     ap.add_argument("--root", default=".", help="repository folder (default: current folder)")
+    ap.add_argument("--range", "--commits", dest="range", metavar="A..B",
+                    help="scan only the commits in A..B: added lines, messages, files they must not add")
+    ap.add_argument("--terms", metavar="FILE",
+                    help=f"private term list that must never appear publicly (default: ${TERMS_ENV}, if set)")
+    ap.add_argument("--style", action="store_true", help="also FAIL on em dashes in scanned text")
+    ap.add_argument("--trailer", metavar="TEXT",
+                    help="with --range: WARN for commits without a message line starting with TEXT")
     ap.add_argument("--debug", action="store_true", help="print a traceback on unexpected errors")
     args = ap.parse_args(argv)
     root = Path(args.root).resolve()
+    if args.trailer and not args.range:
+        print("publish_check: --trailer only applies with --range", file=sys.stderr)
+        return 2
     try:
+        terms, terms_path = resolve_terms(args.terms)
         git(root, "rev-parse", "--git-dir")
-        files, fails, warns = run(root)
+        if args.range:
+            results = run_range(root, args.range, terms, args.style, args.trailer, terms_path)
+            return print_range(root, args.range, results)
+        files, fails, warns = run(root, terms, args.style, terms_path)
+    except UsageProblem as exc:
+        print(f"publish_check: {exc}", file=sys.stderr)
+        return 2
     except FileNotFoundError:
         print("publish_check: git is not installed or not on PATH", file=sys.stderr)
         return 2
@@ -339,6 +643,8 @@ def main(argv=None):
         print(f"publish_check: {root} is not a usable git repository ({exc})", file=sys.stderr)
         return 2
     print(f"publish_check: {len(files)} files would be published from {root}")
+    if terms_path:
+        print(f"publish_check: {len(terms)} private term(s) checked in files, file names and commit messages")
     for item in fails:
         print(f"  FAIL  {item}")
     for item in warns:

@@ -24,6 +24,8 @@ secrets/
 *.p12
 *.jks
 *.p8
+# The private word list publish_check.py --terms reads (SOP-13 step 3)
+.private-terms.txt
 
 # Progress screenshots and GIF frames taken while building (CLAUDE.md "While building")
 captures/
