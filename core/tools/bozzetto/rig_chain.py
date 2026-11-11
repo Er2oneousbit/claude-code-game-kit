@@ -40,8 +40,9 @@
 #           chain bone is turned to follow the ribbon, frame by frame. Other one-shots: the chain follows the body.
 #           The sway itself collides with nothing. Body bones' keys are never touched: the report checks it.
 #           Blender 4.2: its glTF importer names an action "<clip>_<armature>" while the NLA track keeps the clip's
-#           name, so actions are renamed from their tracks; the bpy 4.2 module crashes on exit after a glTF export
-#           on Windows, so with the module the script ends with os._exit (its files are written by then).
+#           name, so actions are renamed from their tracks. The bpy module crashes while the process ends on
+#           Windows (4.2 after a glTF export, 5.3 after a render), so with the module the script ends the process
+#           itself once its files are written.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
@@ -1309,10 +1310,17 @@ if __name__ == "__main__":
             traceback.print_exc()
         code = 2
     if not bpy.app.binary_path:
-        # the bpy module (no Blender executable): bpy 4.2 on Windows crashes on interpreter exit after any glTF
-        # export (0xC0000005, seen 2026-11-11), which would hide this exit code; everything is written by now
+        # the bpy module (no Blender executable) crashes while the process ends on Windows (0xC0000005, seen
+        # 2026-11-11): bpy 4.2 after any glTF export, bpy 5.3 after a render, which would hide this exit code.
+        # Everything is written by now; end the process without unloading its libraries (os._exit crashed 5.3 the
+        # same way). The handle types matter: an untyped GetCurrentProcess() came back truncated and the call failed.
         sys.stdout.flush()
         sys.stderr.flush()
         import os
-        os._exit(code)
+        if os.name == "nt":
+            import ctypes
+            k32 = ctypes.windll.kernel32
+            k32.GetCurrentProcess.restype = ctypes.c_void_p
+            k32.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+            k32.TerminateProcess(k32.GetCurrentProcess(), code)
     sys.exit(code)

@@ -217,6 +217,17 @@ class CliExam(unittest.TestCase):
 
 
 # ---- part 2: the made-up character in Blender ------------------------------------------------------------------
+END = textwrap.dedent('''
+    if not bpy.app.binary_path and sys.platform == "win32":
+        # the bpy module crashes while the process ends on Windows (rig_chain.py says more): end it here
+        import ctypes
+        sys.stdout.flush()
+        k = ctypes.windll.kernel32
+        k.GetCurrentProcess.restype = ctypes.c_void_p
+        k.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+        k.TerminateProcess(k.GetCurrentProcess(), 0)
+''')
+
 BUILD = textwrap.dedent('''
     import sys, math, bpy
     from mathutils import Vector, Quaternion
@@ -368,10 +379,6 @@ BUILD = textwrap.dedent('''
     for k in ("free", "texture", "vertex", "box", "fused", "fused_tex", "lump"):
         build(k)
         print("BUILT", k)
-    if not bpy.app.binary_path:   # the bpy module: 4.2 crashes on exit after a glTF export (rig_chain.py says more)
-        import os
-        sys.stdout.flush()
-        os._exit(0)
 ''')
 
 # Reads an input and an output .glb and measures what the exam asserts. Body bones and meshes are compared frame by
@@ -475,10 +482,6 @@ PROBE = textwrap.dedent('''
             cols = [px[min(h - 1, int(l.uv[1] % 1 * h)), min(w - 1, int(l.uv[0] % 1 * w)), :3] for l in uv]
             res["part_texture_mean"] = np.mean(cols, axis=0).tolist()
     print("PROBE" + json.dumps(res))
-    if not bpy.app.binary_path:   # the bpy module: see BUILD
-        import os
-        sys.stdout.flush()
-        os._exit(0)
 ''')
 
 
@@ -505,8 +508,8 @@ class ChainExam(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory(prefix="bz_chain_bpy_")
         cls.d = Path(cls.tmp.name)
-        (cls.d / "build.py").write_text(BUILD, encoding="utf-8")
-        (cls.d / "probe.py").write_text(PROBE, encoding="utf-8")
+        (cls.d / "build.py").write_text(BUILD + END, encoding="utf-8")
+        (cls.d / "probe.py").write_text(PROBE + END, encoding="utf-8")
         p = blender_run(cls.d / "build.py", [cls.d])
         assert p.returncode == 0 and p.stdout.count("BUILT") == 7, p.stdout[-2000:] + p.stderr[-2000:]
         cls.runs = {}
