@@ -58,7 +58,12 @@ std::string binding_with_prefix(const Bindings& bindings, const std::string& act
 // ---- Text ---------------------------------------------------------------------------------------------------
 // Word-wrapped lines for a fixed-width font that fits max_chars per line (a longer word is cut).
 std::vector<std::string> wrap_chars(const std::string& text, std::size_t max_chars);
-// CREDITS.md as plain lines: heading marks, list markers and bold stars stripped.
+// CREDITS.md without HTML comments (tools/credits.py writes one, #279): one line or many, an unclosed one runs to the
+// end; a comment-only line goes, with one blank line after it when a blank line came before. CRLF -> LF.
+// tools/golden_vectors.py strip_html_comments is the spec, data/golden/credits.json the cases.
+std::string strip_html_comments(const std::string& text);
+// CREDITS.md as plain lines: HTML comments, heading marks, list markers and bold stars stripped. Empty when nothing
+// is left (the screen shows its placeholder then).
 std::vector<std::string> credits_lines(const std::string& markdown);
 // "key_space" -> "Space", "xbox_a" -> "A", "pad_dpad_up" -> "Dpad up" (the glyph table's own text wins in the shell)
 std::string glyph_fallback_label(const std::string& glyph_name);

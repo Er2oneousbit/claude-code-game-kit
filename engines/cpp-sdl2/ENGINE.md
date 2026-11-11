@@ -21,7 +21,8 @@
   recipe. The build compiles every recipe with shadercross (vcpkg host tool) to SPIR-V, DXIL and MSL into `shaders/kit/`
   next to the exe; `smoke --shaders` draws each with `kit_shader_check` and compares it with its golden image.
 - **Tests:** doctest, built as `unit_tests`, one CTest test per `TEST_CASE`. `tests/test_golden_vectors.cpp` holds
-  `src/core` to the kit's reference logic: it reads `data/golden/juice.json` and `shell.json` at test time (path from
+  `src/core` to the kit's reference logic: it reads `data/golden/juice.json`, `shell.json` and `credits.json` (the
+  credits screen's text without CREDITS.md's HTML comments) at test time (path from
   the `GOLDEN_DIR` compile definition); never copy their expected values into code.
 - **JSON:** nlohmann-json (vcpkg, header-only, MIT) for settings, saves and string tables. Settings and saves go
   through `src/core/AtomicFile.hpp` (write `<file>.tmp`, flush, rename; saves keep `<file>.bak`).
