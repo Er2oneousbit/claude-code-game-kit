@@ -265,8 +265,7 @@ the manifest against them (frames, holds, fps, loop; peering bits; collision pol
 
 A rendered sheet was loaded unchanged by the web, web-3d, LÖVE, C++ and RPG Maker MZ importers' tests
 (`data/golden/character/sprites/`, 2026-11-11; MZ cut it into a character sheet), and the LÖVE and C++ starters drew it
-walking; the other importers
-take the same rects and pivots **(verify)**.
+walking; the other importers take the same rects and pivots **(verify)**.
 
 ## Golden fixture and loaded result
 `data/golden/dotwork/` holds one small pack with every kind: `assets/` is an assets folder (its manifest is
