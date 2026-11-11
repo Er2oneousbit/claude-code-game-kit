@@ -13,13 +13,14 @@ that machine needed, not promises.
 
 ## Contents
 1. [Setup](#setup)
-2. [Make a model](#make-a-model)
-3. [What lands where](#what-lands-where)
-4. [What to expect](#what-to-expect)
-5. [In the engine](#in-the-engine)
-6. [Rig a character](#rig-a-character)
-7. [Licences](#licences)
-8. [Exams](#exams)
+2. [Reference views](#reference-views)
+3. [Make a model](#make-a-model)
+4. [What lands where](#what-lands-where)
+5. [What to expect](#what-to-expect)
+6. [In the engine](#in-the-engine)
+7. [Rig a character](#rig-a-character)
+8. [Licences](#licences)
+9. [Exams](#exams)
 
 ## Setup
 1. **ComfyUI 0.43.0 or newer** (TRELLIS.2's nodes are built in: no custom node pack). Dotwork's README has the install
@@ -48,6 +49,71 @@ that machine needed, not promises.
    ```
 Hardware: an NVIDIA GPU with 16 GB of VRAM (ComfyUI fills most of it; peak about 14 GB measured) and 32 GB of RAM.
 Upstream TRELLIS.2 asks for 24 GB (E109); ComfyUI's int8 build of it runs in 16 (K01).
+
+## Reference views
+A character concept is usually a dynamic pose: arms against the body, a scarf flying, one view. 3D generators and
+auto-riggers want something else: the same design in a relaxed A-pose with a gap between each arm and the body,
+orthographic and straight-on, flat light, a plain background, ideally from the front, the side and the back.
+`reference` makes those views from your concept picture or from a sentence:
+```
+python tools/bozzetto/bozzetto.py reference chr_keeper --prompt "a lanky lighthouse keeper in a yellow coat" --seed 4
+python tools/bozzetto/bozzetto.py reference chr_keeper --from art_src/keeper_concept.png --seed 4
+python tools/bozzetto/bozzetto.py reference chr_keeper --from art_src/keeper_concept.png --with nanobanana --quote-only
+python tools/bozzetto/bozzetto.py reference chr_keeper --prompt "..." --with tripo --views front,back --max-cost 30
+```
+Every route asks for the same thing: a relaxed A-pose (arms about 35 degrees out, hands open, legs a little apart, feet
+flat), orthographic straight-on camera, flat even light with no cast shadow, a plain light grey background, nothing
+else in frame, loose cloth (scarves, capes, coat tails, long hair) hanging down instead of flying. From a concept the
+instruction is "keep every design detail identical, change only the pose, the camera, the light and the background".
+The front is always made first; the other views are turned from it.
+
+| | local (default) | nanobanana | tripo |
+|---|---|---|---|
+| What runs | FLUX.2 klein 4B draws the front from `--prompt`; Qwen-Image-Edit-2511 re-poses a `--from` concept; Qwen-Image-Edit with the Multiple-Angles LoRA turns the front to each other view (as Dotwork's rotations do) | Google's Gemini image model ("Nano Banana", default `gemini-nano-banana-2.1`; `--model` for another), one `generateContent` call per view in one conversation: the front, then "the same character from its left side" ... | Tripo's text-to-image (from a prompt) or image-to-image (from a concept, default model `banana2`), then its image-to-multiview for the other views |
+| Cost | free, your GPU | per picture, about $0.034 for a 1K image plus input and thinking tokens: about $0.21 for four views **(verify: read 2026-11-11 on Google's pricing page; no free tier for image output)** | about 5 to 10 credits a picture and 10 for the multiview: up to 20 credits ($0.20) for all four **(verify: upper bounds from Tripo's pricing summary, 2026-11-11)** |
+| Needs | a running ComfyUI (the same `--url`/`--allow-remote` rules as `make`), Dotwork's Qwen-Image-Edit files (its `rotate` tier) and the ComfyUI-GGUF node pack; `--prompt` also its FLUX.2 klein files | `GEMINI_API_KEY` on a project with billing | `TRIPO_API_KEY` with API credits |
+| Who owns the pictures | you (generated locally; Apache-2.0 models) | you: the Gemini API terms say Google won't claim ownership of generated content (and may make similar content for others); every image carries a SynthID watermark **(verify)** | you, on paid API credits (Tripo terms 5.2.2); not on free credits **(verify)** |
+
+**Paid routes, every time:** the quote is printed first (`--quote-only` prints it and stops, no key needed: show it
+to whoever pays and ask). `--max-cost` (dollars for nanobanana, default 1.00; credits for tripo, default 40) caps
+one run: a quote over it stops before any call, and before each call the run checks what it has already spent plus
+the next call. Every paid result goes into the journal, `assets_src/bozzetto/<name>/reference/journal.json` (pictures in its `steps/` folder), as it arrives,
+so a run that fails or hits the cap halfway is run again and pays only for what is missing; a Tripo task the last run
+left running is asked for first, never paid for twice. `--no-reuse` pays for a new take; a new `--seed` names a new
+take too. The actual cost (Gemini: from the reply's token counts; Tripo: the task's credits) goes into the record.
+Keys are read from the environment and sent only in request headers; every picture sent out has its metadata (EXIF,
+GPS, XMP, text) removed first.
+
+What lands in `assets_src/bozzetto/<name>/reference/`: `front.png`, `left.png`, `back.png`, `right.png` (the views
+asked for), `sheet.png` (the views side by side, front, left, back, right), `concept.png` (your concept, metadata
+removed), the record reference.json (route, model, prompts, seeds, cost, terms, the look check) and, on paid
+routes, the journal and `steps/`. The asset log gets an `art` row with the route and its terms (`--no-log` for scratch
+runs); `--overwrite` makes the views again and updates the same row. "Left" is the character's own left side: in
+`left.png` it faces the left edge of the picture.
+
+**The look check** prints `[look]` lines when a background is not flat or not light, a figure touches the edge, or
+the views differ in height or feet line. It is a hint, not a gate: look at `sheet.png` yourself for what no pixel
+count sees (a changed costume, a flipped side, an arm fused to the body). Then:
+```
+python tools/bozzetto/bozzetto.py make chr_keeper --image assets_src/bozzetto/chr_keeper/reference/front.png --class npc
+```
+or, with all four views, the paid multiview make (`make chr_keeper --with tripo --class npc --front ... --left ...
+--back ... --right ...`, "Make a model"). Prefer to paste prompts into a chat image tool yourself? The same
+instructions are in `docs/BRIEFS.md` ("Model-ready reference views").
+
+Options: `--views front,left,back,right` (default all four), `--seed N` (local: every sampler; paid routes: names the
+take), `--model`, `--max-cost`, `--quote-only`, `--no-reuse`, `--wait S` (each job or task, default 1800),
+`--project`, `--overwrite`, `--no-log`, `--debug`. Exit codes: 0 ok, 1 a call or job failed, 2 usage, a missing key,
+the cap, the balance, or files in the way.
+
+**What the local route did in its first live runs** (K01, 2026-11-11, 16 GB RTX 5060 Ti, ComfyUI 0.43): from a prompt,
+the four views of one design in a clean A-pose with gaps under the arms, about 7 minutes cold (14 s for the FLUX.2
+klein front, about 5 minutes for the first Qwen-Image-Edit job while it loads, about 50 s for each view after). From a
+running concept on a city street with a flying scarf, the re-posed front kept the jacket, badges, belt, pouch, jeans
+and boots, dropped the street and the light, and stood in the A-pose (56 s warm). Two things to look for: the flying
+scarf came back as a cape hanging down the back (the "hang down" instruction can turn loose cloth into another
+garment), and the "left side view" came back facing the picture's right, which is why every run asks you to check
+the sides by eye. One view had a soft floor shadow (the look check flagged it). The paid routes have not been run live.
 
 ## Make a model
 ```
@@ -232,6 +298,85 @@ In the engine: the rigged `.glb` carries its clips as glTF animations. Godot: an
 glTF clips import without looping, so set `loop_mode` (the showcase does). Unity: set the model's rig to Humanoid; the
 Mixamo names should map without hand work, so Mixamo-style clips play on it **(verify: not yet tested in Unity)**.
 
+### Secondary motion
+An auto-rig gives a body skeleton: a scarf tail, cape, long hair or tail is skinned stiffly to the neck or spine and
+moves like part of the torso. `rig chain` gives that part its own chain of bones and keys its motion into the clips:
+```
+python tools/bozzetto/bozzetto.py rig chain npc_guard --part colour:#c8202a~0.15          # the scarf: the only red
+python tools/bozzetto/bozzetto.py rig chain npc_guard --part scarf=colour:#c8202a --bones 5 --sway 10,idle=4 --cloth hit
+python tools/bozzetto/bozzetto.py rig chain npc_guard --part "hair=material:Hair" --part "tail=group:Tail" --no-replace
+```
+It works on `<models>/<name>_rigged.glb` (from `rig make`) and writes the same file back, so the engine and the asset
+log keep pointing at it. The rig before its first chain is kept in `assets_src/bozzetto/<name>/rig/chain/before_chain.glb`
+and every run starts from it, so running again with other options replaces the chain instead of adding a second one
+(a model rigged again since then becomes the new starting point). `--no-replace` writes only
+`assets_src/bozzetto/<name>/rig/chain/chained.glb` and the preview, to look first. The report (chain_report.json), the
+record (chain.json) and the preview chain.png (each clip from behind and to the side) sit in the same folder; the
+model's asset log row gets a "chain: ..." note.
+
+**Choosing the part** (`--part [label=]selector`, terms joined with `&` must all match; the label names the bones
+`label_01` ...):
+
+| Selector | Picks the faces |
+|---|---|
+| `colour:#rrggbb~0.15` | whose colour is within the tolerance (straight-line distance of sRGB 0..1; 0.15 by default): the base texture at the face, else its colour attribute, else its material colour. The scarf case: the one red on the character |
+| `material:NAME` | with that material (case does not matter) |
+| `group:NAME` | whose vertices are all at least half in that vertex group (made by hand in Blender) |
+| `box:x0,y0,z0,x1,y1,z1` | whose centre is inside the box: metres, glTF axes (Y up, the character faces +Z, its left is +X), as the engine shows the model. `colour:#c8202a&box:-1,0,-1,1,1.2,1` is the red below 1.2 m |
+
+Only the largest connected piece of the selection is used (others are named in the output). It refuses, rather than
+guesses, when nothing is selected (naming the closest colour it found, or the model's main colours), when the
+selection is more than 40% of a mesh, and when the part is a lump (not longer than it is wide, and not a thin sheet
+like a cape). The chain hangs from the nearest bone of the spine line (hips, spine, neck, head), or `--parent`.
+
+**Shapes:** a part that is its own shell is separated from the body as it is. If it has too few rows along its length
+to bend (a box with two ends), it is cut across its length: more rows, the same shape, texture and colours. A part
+that is fused to the body along its length (generated meshes often are: the scarf is just a red area of one surface)
+cannot swing without tearing a hole, so it is **rebuilt as a strip**: a box-section ribbon along the part's middle line,
+its width and thickness measured slice by slice, laid just on top of the original, with the texture coordinates (or
+colours) taken from the nearest point of the original, so it looks the same from the front. Its limits, measured on the
+exam's fused band: the width (0.09 m of 0.085) and the colours come through; folds, fringes, knots, tassels and a
+pattern on the back do not (both sides show the front); the thickness is a guess (8 to 50% of the width); the original
+area stays painted on the body, so it shows behind the strip when the strip swings out; one strip follows one middle
+line, so a part that wraps around the neck as well as hanging would be flattened (not tried): select the hanging part
+only (`&box:...`). `--rebuild strip`
+forces a strip, `--rebuild no` refuses to change the shape.
+
+**Weights:** each vertex blends between the two nearest chain bones by its place along the part, and the first half
+bone blends into the parent bone, so the root never leaves the body. The check: every vertex of the part sums to 1 and
+every chain bone holds some of it.
+
+**Motion:** a clip counts as a loop when its first and last poses match (`--loop` names mocap clips that almost do).
+In each loop the chain sways a whole number of cycles over the clip's own frames (about one per 1.5 s), each bone
+`--lag` of a cycle (default 0.12) behind the one above it, `--sway` degrees (default 8; per clip: `8,idle=4,run=14`):
+outward, away from the body, never into it, and half that sideways. Keys are on every frame and the phase wraps at the
+clip's length, so the first and last frame are the same and a sprite cycle still loops (the exam checks it). One-shot
+clips named in `--cloth` (`oneshots` for all) get a Blender cloth simulation: a ribbon pinned to the parent bone,
+colliding with the body, simulated over the clip, and each chain bone turned to follow it frame by frame, stored in
+that clip. It starts at rest and ends where the cloth is, so let the engine blend into the next clip. Other one-shots:
+the chain follows the body. The sway does not collide with anything; keep `--sway` small for a part that hangs close
+to the legs. The body's own keys are never changed (checked per clip), and the result passes `rig_finish.py`'s checks
+(weights, deformation) before anything is written.
+
+**In a 3D engine** the chain bones can be driven by the engine's spring bones instead of (or on top of) the baked
+motion. For engine-driven motion, run with `--sway 0` (the chain stays at rest in every clip) so the keys do not fight
+the simulation. Recipes:
+- Godot 4.6+: a `SpringBoneSimulator3D` child of the imported `Skeleton3D`, `setting_count = 1`,
+  `set_root_bone_name(0, "scarf_01")`, `set_end_bone_name(0, "scarf_04")`. Checked headless on Godot 4.7.2 with the
+  exam's character exported with `--sway 0` (K01): sliding the model 0.6 m sideways and stopping swung the scarf tip
+  up to 0.44 m with only these defaults, and not at all without the node, so tune stiffness, drag and gravity. Read a
+  bone's simulated pose in the skeleton's `skeleton_updated` signal (outside it you get the pose before modifiers).
+  A `SpringBoneCollisionCapsule3D` on the spine to keep it out of the body **(verify)**.
+- Unity **(verify)**: no spring bone in the engine itself. UniVRM's `VRMSpringBone` (MIT) works on any transforms, or
+  Animation Rigging's `DampedTransform` per bone for a stiffer follow; paid assets (Dynamic Bone, Magica Cloth) exist.
+- Unreal **(verify)**: an `AnimDynamics` node in the character's Animation Blueprint, bound to the chain (chain start
+  `scarf_01`, end `scarf_04`), or the free Kawaii Physics plugin.
+- Bevy, Three.js **(verify)**: no built-in spring bone; a small system that moves each joint toward its rest position
+  with a damped spring (Verlet) and points the bones at the results is enough for a scarf.
+
+Exits: 0 done, 1 refused or a check failed (the model is not touched), 2 usage, a clip name the file does not have,
+or `--cloth` on a loop.
+
 ## Licences
 `LICENSES.md` has the register. In short: TRELLIS.2 and BiRefNet are MIT; DINOv3, TRELLIS.2's image encoder, has
 its own licence: worldwide and royalty-free, but with a list of prohibited uses (military, weapons, ITAR) whose reach
@@ -239,9 +384,10 @@ over game props such as swords and guns is an **open question** you decide for y
 which upstream TRELLIS.2 uses, are non-commercial and never loaded (`make` refuses a workflow that names them).
 Hunyuan3D 2.x (region exclusions) and Stable Fast 3D (revenue cap) were ruled out. Rigging: UniRig is MIT, its
 checkpoint was trained on Articulation-XL2.0 (CC-BY-4.0, credited); its successor SkinTokens is not used (trained on
-models from commercial games and VRoid Hub). Tripo is wired in for models (`make --with tripo`) and rigging
-(`rig --with tripo`): outputs bought with paid API credits are yours (its terms 5.2.2); other paid 3D services
-(Meshy and others) are not wired in: `docs/resources/ai-tools.md` lists them.
+models from commercial games and VRoid Hub). Tripo is wired in for models (`make --with tripo`), rigging
+(`rig --with tripo`) and reference pictures (`reference --with tripo`): outputs bought with paid API credits are yours
+(its terms 5.2.2). Google's Gemini is wired in for reference pictures (`reference --with nanobanana`). Other paid 3D
+services (Meshy and others) are not wired in: `docs/resources/ai-tools.md` lists them.
 
 The tool was first called Meshwright and renamed before release: that name, and Polywright, Whittle and Plinth, were
 already taken by other 3D projects. A web search on 2026-11-05 found no software named "Bozzetto" **(verify)** before
@@ -258,5 +404,8 @@ python tools/bozzetto/test_tripo.py             # make --with tripo, offline: a 
                                                     # the real cleanup.py turns a +X-facing mesh to +Z (about 15 s)
 python tools/bozzetto/test_rig.py               # rig, offline: stand-in UniRig and Tripo; rig_finish.py on rigs
                                                     # built in Blender when it is found (about 25 s)
+python tools/bozzetto/test_chain.py             # rig chain: parsers and the command offline; a made-up scarf
+                                                    # character built in Blender when it is found (about 1 min)
+python tools/bozzetto/test_reference.py         # reference, offline: stand-in ComfyUI, Gemini and Tripo (about 5 s)
 python tools/bozzetto/bozzetto.py test [--live] # the above in one go
 ```
