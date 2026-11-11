@@ -8,7 +8,8 @@
 #           Windows that a timeout ends a grandchild whose parent already exited (the job object, #36), and on
 #           Linux and macOS (process-group calls faked) that killing an untimed command kills what it started (#37),
 #           that the Godot build fails on a .pck holding .game-kit.json or a dev-only folder (#161), and that the
-#           web, web-3d and RPG Maker MZ smoke.mjs --record leaves only this run's frames (#134; needs node), a
+#           web, web-3d and RPG Maker MZ smoke.mjs --record leaves only this run's frames (#134; needs node), that
+#           web's pseudo-plant says it fails on purpose only for the planted label (#175), a
 #           refused --drive is one error (#135), web-3d's -h names the shell's scenarios as web's does (#135,
 #           #175), and RPG Maker MZ's setup names the project file it copied (#136), that Unreal's test/smoke exit 1 when the editor
 #           crashes before any result, not 2 "no tests matched" (#176), and that smoke --drive runs the shell's
@@ -1106,7 +1107,8 @@ export const chromium = {
             setTimeout(() => {
               emit("log", "BOOT_OK");
               const drive = new URL(url).searchParams.get("drive");
-              if (drive) emit("error", `[ERROR][drive] DRIVE_ABORT ${drive}: no scripted runs here`);
+              if (drive && process.env.FAKE_DRIVE_ERROR) emit("error", process.env.FAKE_DRIVE_ERROR);   // #175
+              else if (drive) emit("error", `[ERROR][drive] DRIVE_ABORT ${drive}: no scripted runs here`);
             }, 10);
           },
           async screenshot({ path }) { writeFileSync(path, "new"); },
@@ -1176,6 +1178,23 @@ class WebSmokeRecord(TempRoot):
                 self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
                 self.assertIn("DRIVE_ABORT menus", r.stdout)
                 self.assertNotIn("[drive menus]", r.stdout)
+
+
+    def test_pseudo_plant_says_it_fails_on_purpose_only_for_the_planted_label(self):
+        # #175: the planted label is the proof; any other PSEUDO_FAIL is a real failure
+        import os
+        planted = '[ERROR][i18n] PSEUDO_FAIL menu: "plant.too_small" clipped (needs 114x22 px, has 41x22): "[x]"'
+        other = '[ERROR][i18n] PSEUDO_FAIL menu: "menu.play" clipped (needs 114x22 px, has 41x22): "[x]"'
+        for engine in ("web", "web-3d"):
+            for line, note in ((planted, True), (other, False)):
+                with self.subTest(engine=engine, note=note):
+                    root = self.project(engine)
+                    r = subprocess.run([NODE, str(root / "tools" / "smoke.mjs"), "--drive", "pseudo-plant"], cwd=root,
+                                       capture_output=True, encoding="utf-8", errors="replace", timeout=60,
+                                       env=dict(os.environ, FAKE_DRIVE_ERROR=line))
+                    self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+                    self.assertEqual("fails on purpose" in r.stdout, note, r.stdout)
+                    shutil.rmtree(root)
 
 
 @unittest.skipUnless(NODE, "node is not on PATH")
