@@ -954,7 +954,8 @@ def cmd_list(args):
 
 
 def cmd_test(args):
-    exams = [HERE / "test_bozzetto.py", HERE / "test_tripo.py", HERE / "test_rig.py"] +([HERE / "test_bozzetto_live.py"] if args.live else [])
+    exams = [HERE / "test_bozzetto.py", HERE / "test_tripo.py", HERE / "test_rig.py", HERE / "test_chain.py"] + \
+        ([HERE / "test_bozzetto_live.py"] if args.live else [])
     failed = 0
     for exam in exams:
         t0 = time.monotonic()

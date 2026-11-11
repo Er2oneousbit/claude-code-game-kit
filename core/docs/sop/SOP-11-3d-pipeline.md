@@ -17,6 +17,7 @@ as well on a model you made, bought or downloaded.
 | A 2D sprite sheet from a 3D model | `tools/blender/render_sprites.py` (or `bozzetto.py make --sprites`) | [3D source, 2D game](#3d-source-2d-game-sprite-sheets) |
 | Procedural props, kits, shaders, batch jobs | Claude-written scripts in `tools/blender/` | [Claude and Blender](#claude-and-blender) |
 | Rig a character (skeleton, skin weights, Mixamo bone names, clips) | `python tools/bozzetto/bozzetto.py rig make <name>` (UniRig, free, your GPU; or `--with tripo`, paid) | `tools/bozzetto/README.md` "Rig a character" |
+| Secondary motion: a scarf, cape, hair or tail that swings | `python tools/bozzetto/bozzetto.py rig chain <name> --part colour:#rrggbb` (Blender, free) | `tools/bozzetto/README.md` "Secondary motion" |
 | Animate beyond that, retarget, creatures | Guidance and scripts | [Animation](#animation), `docs/resources/pipelines.md` |
 | Paid generators (Meshy and others) | Not wired in (Tripo is: `make --with tripo`, `rig --with tripo`) | `docs/resources/ai-tools.md` |
 | Log and credit an asset | `/asset-intake` | Stage 7 below |
@@ -137,6 +138,13 @@ to textured planes (leaf cards), keep trunk and main branches as geometry, reuse
   Prompt2Rig) are Apache-2.0 themselves but download body models and weights (SMPL-X, GVHMR, MANO) that are
   non-commercial or research-only by default, per their own READMEs (E65, read 2026-10-24; licenses change: re-read). Log them in `ASSET_LOG.md`.
 - Script the boring parts: retarget, trim, loop, root motion, curve cleanup, naming (`anim_run_loop`), export.
+- Secondary motion, after the rig and its clips: a scarf, cape, long hair or tail that an auto-rig left stiff gets its
+  own bone chain with `bozzetto.py rig chain <name> --part <selector>` (by colour, material, vertex group or a box).
+  Looping clips get a sway that keeps them looping exactly (sprite cycles need that), one-shots named in `--cloth` a
+  baked cloth simulation. Run it with `--no-replace` first and look at `assets_src/bozzetto/<name>/rig/chain/chain.png`; a part
+  fused to the body is rebuilt as a strip, which keeps its colours, not its folds (the README lists the limits). In a
+  3D engine the same bones can run on the engine's spring bones instead (`--sway 0`; README recipes: Godot's checked
+  headless (K01), Unity, Unreal and the rest **(verify)**).
 - Gameplay animation (attacks, dodges): timings in data first (anticipation, active, recovery frames), art polish second.
 - Test in the engine with the real controller. "Looks good in Blender" is not the bar.
 - Tip (E50): when the third prompt has not fixed a contact problem (feet through a footpad, an open hand on a punch, a weapon
