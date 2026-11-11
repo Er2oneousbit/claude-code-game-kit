@@ -24,8 +24,10 @@ src/core/           engine-free logic (juice, settings, saves, i18n, JSON, atomi
                     so tests load them; checked against data/golden/*.json
 src/shell/          the runtime front end: app.lua (screen stack, settings applied, user data), screens/, drive.lua
                     (smoke scenarios), ui.lua + widgets.lua (menus, focus, the pseudo-locale layout check)
-src/game/           gameplay; game.lua is what the play screen runs
-assets/             art, audio, fonts (see docs/ASSET_LOG.md); assets/ui/glyphs/<name>.png = button prompts
+src/game/           gameplay; game.lua is what the play screen runs; dotwork_loader.lua + dotwork_view.lua import
+                    Dotwork art (src/core/dotwork_manifest.lua parses it)
+assets/             art, audio, fonts (see docs/ASSET_LOG.md); assets/ui/glyphs/<name>.png = button prompts;
+                    assets/dotwork/<pack>.assets.json = Dotwork asset manifests
 data/               tunables and tables; i18n/<locale>.json strings, dialogue/*.built.json subtitles;
                     data/golden/ is test data, not packaged
 shaders/kit/        the kit's shader recipes as LÖVE pixel shaders, *.glsl + params.lua (generated)
@@ -56,6 +58,13 @@ build/              .love and the fused Windows exe (git-ignored)
   size pixel parameters (`light_pos`) are given in. Post effects (`crt`, `vignette`, `colorblind`) draw a Canvas of
   the whole frame through them. `check` compiles them and `smoke --shaders` compares each with its golden image;
   both open a small window off-screen (`--headless` cannot draw shaders).
+- **Dotwork art** (tools/art/dotwork/ASSET_MANIFEST.md): `DotworkLoader.load_all()` reads every
+  `assets/dotwork/*.assets.json` (headless, also from the .love); `DotworkView.new()` (in draw) gives
+  `view:animated(model.animated_sprite.hero)` (`:play_direction("walk", "e")`, `:update(dt)`, `:draw(x, y, 2)` with
+  the pivot at x, y), `view:draw_sprite`, `view:map(model.map.yard)` (a SpriteBatch per atlas and layer, terrain
+  resolved by the blob rule), `view:print(model.font.tiny, text, x, y, 2)` (the .fnt through
+  `love.graphics.newFont`), `view:draw_part` (9-slice). Frame timing comes from each frame's `duration`. The starter
+  scene shows the first character, prop, map and font; `test` checks the golden fixture and every real manifest.
 
 ## Gotchas (Claude: read before editing)
 1. **LÖVE's error screen waits for a key, even with no window.** conf.lua replaces `love.errorhandler` so automated
