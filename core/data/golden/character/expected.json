@@ -46,8 +46,12 @@
  },
  "moving_bone": "mixamorig:LeftUpLeg",
  "moving_bone_swing_deg": 56.0,
- "mixamo_prefix_in_engines": {
-  "glTF": "mixamorig:",
-  "Godot": "mixamorig_ (Godot replaces ':' in bone names)"
+ "bone_names_in_engines": {
+  "glTF": "mixamorig:Hips",
+  "Godot": "mixamorig_Hips",
+  "Unreal": "mixamorig_Hips",
+  "three.js": "mixamorigHips",
+  "Unity (glTFast)": "mixamorig:Hips",
+  "Bevy": "mixamorig:Hips"
  }
 }

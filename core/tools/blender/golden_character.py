@@ -312,7 +312,9 @@ def build(bpy, out, expected_path, debug):
                   for c in clips},
         "moving_bone": PREFIX + MOVING_BONE,
         "moving_bone_swing_deg": 2 * WALK_THIGH_DEG,
-        "mixamo_prefix_in_engines": {"glTF": PREFIX, "Godot": "mixamorig_ (Godot replaces ':' in bone names)"},
+        "bone_names_in_engines": {   # what each engine's import makes of mixamorig:Hips (#290, each engine's test)
+            "glTF": PREFIX + "Hips", "Godot": "mixamorig_Hips", "Unreal": "mixamorig_Hips",
+            "three.js": "mixamorigHips", "Unity (glTFast)": PREFIX + "Hips", "Bevy": PREFIX + "Hips"},
     }
     with open(expected_path, "w", encoding="utf-8", newline="\n") as fh:   # LF on Windows too, as git stores it
         fh.write(json.dumps(exp, indent=1) + "\n")

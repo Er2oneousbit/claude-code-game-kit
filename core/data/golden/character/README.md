@@ -18,8 +18,9 @@ routes rig a character: Mixamo bone names, one skinned mesh, clips as glTF anima
 | Keys | every clip starts at 0 s and its last key equals its first: it loops without a seam |
 | Moving bone | `mixamorig:LeftUpLeg` swings 56 degrees over `walk` (engine tests watch it) |
 
-`expected.json` holds these numbers for the tests; never copy them into a test. Godot replaces `:` in bone names
-with `_` on import (`mixamorig_Hips`).
+`expected.json` holds these numbers for the tests; never copy them into a test. What each engine names
+`mixamorig:Hips` after import (its test checks it, `bone_names_in_engines`): Godot and Unreal `mixamorig_Hips`,
+three.js `mixamorigHips`, Unity (glTFast) and Bevy keep `mixamorig:Hips`.
 
 ## The sprite sheets: `sprites/`
 The same character rendered for the 2D engines by `render_sprites.py --manifest`: an assets folder whose
