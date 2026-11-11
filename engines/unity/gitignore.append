@@ -27,6 +27,8 @@
 sysinfo.txt
 # Left behind when a PlayMode run (dev.py smoke) is killed
 /[Aa]ssets/InitTestScene*.unity*
+# The Dotwork importer test's copy of the golden fixture (deleted after the run, left by a killed one)
+/[Aa]ssets/__DotworkGolden*
 # Copies of data/ and CREDITS.md that GameKitBuild.SyncData makes for a player build (the originals are tracked)
 /[Aa]ssets/StreamingAssets/data/
 /[Aa]ssets/StreamingAssets/data.meta

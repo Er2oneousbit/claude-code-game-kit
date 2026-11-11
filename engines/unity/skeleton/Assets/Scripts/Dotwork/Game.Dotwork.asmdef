@@ -1,0 +1,9 @@
+{
+  "name": "Game.Dotwork",
+  "rootNamespace": "{{GAME_SLUG}}.Dotwork",
+  "references": ["Game.Core"],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "autoReferenced": true
+}

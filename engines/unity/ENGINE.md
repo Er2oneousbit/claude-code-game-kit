@@ -29,8 +29,12 @@ Assets/Scripts/Shell/    the front end on UI Toolkit (Game.Shell assembly): Shel
                          UiCapture (the panel in screenshots), OutlineFace (outlined text that keeps its colour),
                          AccessAudit and SmokeDrive (`dev.py smoke --drive`)
 Assets/Scripts/Game/     gameplay MonoBehaviours and ScriptableObjects; AudioEventPlayer, MusicPlayer play the audio decisions
+Assets/Scripts/Dotwork/  Dotwork art at run time (Game.Dotwork assembly): DotworkPack (a pack's index), DotworkTile and
+                         DotworkTerrainTile (tiles, autotiling by Core/Autotile), DotworkFont and DotworkLabel (bitmap text)
 Assets/Editor/           editor-only code (GameKitBuild.cs; GameKitScenes.cs builds the starter and shell scenes;
-                         GameKitShaders.cs checks the shader recipes)
+                         GameKitShaders.cs checks the shader recipes; GameKitDotwork.cs imports Dotwork packs, its
+                         importer is Assets/Editor/Dotwork/)
+Assets/dotwork/          Dotwork's manifests (<pack>.assets.json) and what the importer makes of them (<pack>/)
 Assets/Resources/GameKit/  the shell's panel theme (.tss) and the readable font (Atkinson Hyperlegible, OFL)
 Assets/Shaders/Kit/      the kit's shader recipes as unlit shaders, Kit/<name> (generated)
 Assets/Tests/EditMode/   EditMode tests (own assembly definition)
@@ -92,6 +96,30 @@ ProjectSettings/         project config (text, edit with care)
   spring and a rate-limited flash, a follow camera with its deadzone drawn, a buffered jump with coyote time, a held
   guard, a line, a bark and a caption, analog movement. UI Toolkit elements only, so it needs no assets.
 - Not here yet (Godot, LÖVE and web have it): telemetry rows.
+
+## Dotwork art (#57)
+- Dotwork (`tools/art/dotwork/`, `--engine none`) writes PNGs under `Assets/art/` and one manifest per pack,
+  `Assets/dotwork/<pack>.assets.json` (spec: `tools/art/dotwork/ASSET_MANIFEST.md`). Set Dotwork's `assets_dir` to
+  `Assets` (its default `assets` is the same folder only on a case-insensitive file system).
+- `python tools/dev.py exec GameKitDotwork.ImportAll` (after every `pack` or `character`) imports every pack into
+  `Assets/dotwork/<pack>/`: sprites sliced from the sheets (Point filter, no mipmaps, no compression, pixels per unit
+  = the pack's first tileset's tile width, else 16; pivots and rects flipped to Unity's y up), an AnimationClip per clip
+  (sprite keys at each frame's `duration`, `loopTime` from `loop`) with an AnimatorController (a state per clip, named
+  as the clip) and a prefab per animated sprite, a prop prefab per sprite (BoxCollider2D per collision rect, shadow
+  child), a DotworkTile per tileset cell (custom physics shapes for a TilemapCollider2D, animation frames), a
+  DotworkTerrainTile per blob47 or sides4 terrain (paint it in the Tile Palette: it picks the tile by its neighbours),
+  a map prefab (Grid, a Tilemap per layer, top-left corner at the origin, the props), a DotworkFont per BMFont and
+  the UI kit parts (9-slice margins as sprite borders). Everything is listed in `Assets/dotwork/<pack>/<pack>.asset`
+  (DotworkPack: `pack.Animated("hero").Clip("walk", "s")`, `pack.Map("yard").prefab`, `pack.Font("dialogue")`).
+  Running it again updates every asset in place (same GUIDs); commit the generated assets and their `.meta` files.
+- Fonts and UI kits are already drawn at their `scale` by Dotwork: draw them 1:1 (DotworkLabel does).
+- `exec GameKitDotwork.Verify` (and `dev.py test`, `DotworkImportTests.EveryManifestInTheGameLoads`) fails on a missing
+  file, a rect outside its image, a stale or broken import. `exec GameKitDotwork.ShowInStarterScene` puts the first
+  map, a character walking, a prop and a label in the font in `Assets/Scenes/Main.unity`.
+- Not built yet (skipped with a warning; their PNGs get the pixel-art settings): background, particles, transition,
+  normal_map, image; corners4 terrain layers of a map; stamps. Blend `add` uses a built-in particle shader (Built-in
+  pipeline; URP needs its own particle material **(verify)**). Isometric maps use Unity's isometric Grid **(verify
+  against Godot's diamond-down layout)**.
 
 ## Conventions
 - C# standard style: `PascalCase` types and methods, `_camelCase` private fields, `[SerializeField] private` over public fields.
