@@ -20,21 +20,28 @@ Assets/Scripts/Core/     engine-agnostic logic (no UnityEngine types where possi
                          Ease, FollowCamera, InputBuffer, CoyoteTimer, Spring, FlashLimiter), shell logic
                          (GameSettings, Bindings, SaveStore, I18n, AtomicFile, Json, DialogueData) and audio decisions
                          (AudioDirector, MusicDirector, AudioAccess), checked against data/golden/*.json; Analog
-                         (stick and trigger shaping) and CrashText (crash file text, log tail)
+                         (stick and trigger shaping), CrashText (crash file text, log tail) and UiComposite (a UI
+                         panel's texture over the camera's picture, blended as the screen does)
 Assets/Scripts/Shell/    the front end on UI Toolkit (Game.Shell assembly): Shell (settings, strings, data folder),
                          FrontEnd (the screen flow), Screens/ (title, main menu, settings, pause, What now?, history,
                          credits, loading), SubtitleBar, ShellWorld with PlayWorld (the placeholder game) and
                          JuiceWorld (the juice demo), Narrator, ShellInput, ShellReports (crash files, F8 bug report),
+                         UiCapture (the panel in screenshots), OutlineFace (outlined text that keeps its colour),
                          AccessAudit and SmokeDrive (`dev.py smoke --drive`)
 Assets/Scripts/Game/     gameplay MonoBehaviours and ScriptableObjects; AudioEventPlayer, MusicPlayer play the audio decisions
+Assets/Scripts/Dotwork/  Dotwork art at run time (Game.Dotwork assembly): DotworkPack (a pack's index), DotworkTile and
+                         DotworkTerrainTile (tiles, autotiling by Core/Autotile), DotworkFont and DotworkLabel (bitmap text)
 Assets/Editor/           editor-only code (GameKitBuild.cs; GameKitScenes.cs builds the starter and shell scenes;
-                         GameKitShaders.cs checks the shader recipes)
+                         GameKitShaders.cs checks the shader recipes; GameKitDotwork.cs imports Dotwork packs, its
+                         importer is Assets/Editor/Dotwork/)
+Assets/dotwork/          Dotwork's manifests (<pack>.assets.json) and what the importer makes of them (<pack>/)
 Assets/Resources/GameKit/  the shell's panel theme (.tss) and the readable font (Atkinson Hyperlegible, OFL)
 Assets/Shaders/Kit/      the kit's shader recipes as unlit shaders, Kit/<name> (generated)
 Assets/Tests/EditMode/   EditMode tests (own assembly definition)
 Assets/Tests/PlayMode/   PlayMode tests, incl. BootSmokeTests and ShellSmokeTests (what `dev.py smoke` runs; the second
-                         also runs `--drive` scenarios) and AudioPlayModeTests (AudioEventPlayer on real AudioSources:
-                         `dev.py test --mode PlayMode --filter Audio`)
+                         also runs `--drive` scenarios), AudioPlayModeTests (AudioEventPlayer on real AudioSources:
+                         `dev.py test --mode PlayMode --filter Audio`) and GameKitCaptureTests (a capture against the
+                         GPU's own picture, outlined text in its own colour: `dev.py smoke --graphics --filter Capture`)
 Assets/Art, Audio, Prefabs, Scenes/   content (see docs/ASSET_LOG.md); Scenes/Shell.unity is the kit's front end
 data/                    i18n/ string tables (en, fr), input/presets.json (one-handed layouts), access/colours.json,
                          dialogue/sample.built.json, golden/ test vectors; a build copies the first four into
@@ -78,17 +85,47 @@ ProjectSettings/         project config (text, edit with care)
   applied, up is +y), `LeftTrigger` / `RightTrigger` (0 to 1) and `HeldGameActions` / `IsGameHeld` (held game actions,
   the stick's `move_*` included). The Input System's own stick deadzone is bypassed (unprocessed values), so only the
   player's applies. None of it on the UI Toolkit fallback. Tests and drives hold a stick with `ShellInput.InjectAnalog`.
+- Text over the game (HUD, hint, subtitles) gets `UiTheme.Outline(label)`: a black outline plus an un-outlined copy
+  of the text drawn right on top (`OutlineFace`), because UI Toolkit centres `-unity-text-outline-width` on the
+  glyph's edge and at body size even 1 px darkens the letters (2 px left almost none of `UiTheme.TEXT`, #283). Set the
+  label's text and styles as usual: the copy follows them. A label outlined by hand, without the copy, is reported by
+  the access sweep in its outline's colour.
 - Line spacing adds space between the menus' lines and paragraphs: UI Toolkit has no line-height, so lines inside one
   wrapped paragraph keep the font's spacing **(verify: a later Unity may add it)**.
 - Crash files and the bug report (#275): the first unhandled exception of a launch writes
   `crashes/crash_<time>.txt` in the data folder (version, error, stack, settings, log tail) and logs
   `CRASH_WRITTEN <path>`; Unity keeps running (a player started with `--smoke` quits with exit 1). F8 in the editor and
-  development builds saves `bug_<time>/` (info, log tail, settings, a screenshot when there is a graphics device) and
-  logs `BUG_REPORT <dir>`.
+  development builds saves `bug_<time>/` (info, log tail, settings, a screenshot when there is a graphics device,
+  always opaque) and logs `BUG_REPORT <dir>`.
 - The juice demo (#275, main menu in the editor and development builds): hit the box for shake, hitstop, squash on a
   spring and a rate-limited flash, a follow camera with its deadzone drawn, a buffered jump with coyote time, a held
   guard, a line, a bark and a caption, analog movement. UI Toolkit elements only, so it needs no assets.
 - Not here yet (Godot, LÖVE and web have it): telemetry rows.
+
+## Dotwork art (#57)
+- Dotwork (`tools/art/dotwork/`, `--engine none`) writes PNGs under `Assets/art/` and one manifest per pack,
+  `Assets/dotwork/<pack>.assets.json` (spec: `tools/art/dotwork/ASSET_MANIFEST.md`). Dotwork reads the engine from
+  `.game-kit.json` and uses `Assets` and `--engine none` by default (a `dotwork.config.json` that sets `assets_dir`
+  wins: keep it `Assets`, since `assets` is another folder on a case-sensitive file system).
+- `python tools/dev.py exec GameKitDotwork.ImportAll` (after every `pack` or `character`) imports every pack into
+  `Assets/dotwork/<pack>/`: sprites sliced from the sheets (Point filter, no mipmaps, no compression, pixels per unit
+  = the pack's first tileset's tile width, else 16; pivots and rects flipped to Unity's y up), an AnimationClip per clip
+  (sprite keys at each frame's `duration`, `loopTime` from `loop`) with an AnimatorController (a state per clip, named
+  as the clip) and a prefab per animated sprite, a prop prefab per sprite (BoxCollider2D per collision rect, shadow
+  child), a DotworkTile per tileset cell (custom physics shapes for a TilemapCollider2D, animation frames), a
+  DotworkTerrainTile per blob47 or sides4 terrain (paint it in the Tile Palette: it picks the tile by its neighbours),
+  a map prefab (Grid, a Tilemap per layer, top-left corner at the origin, the props), a DotworkFont per BMFont and
+  the UI kit parts (9-slice margins as sprite borders). Everything is listed in `Assets/dotwork/<pack>/<pack>.asset`
+  (DotworkPack: `pack.Animated("hero").Clip("walk", "s")`, `pack.Map("yard").prefab`, `pack.Font("dialogue")`).
+  Running it again updates every asset in place (same GUIDs); commit the generated assets and their `.meta` files.
+- Fonts and UI kits are already drawn at their `scale` by Dotwork: draw them 1:1 (DotworkLabel does).
+- `exec GameKitDotwork.Verify` (and `dev.py test`, `DotworkImportTests.EveryManifestInTheGameLoads`) fails on a missing
+  file, a rect outside its image, a stale or broken import. `exec GameKitDotwork.ShowInStarterScene` puts the first
+  map, a character walking, a prop and a label in the font in `Assets/Scenes/Main.unity`.
+- Not built yet (skipped with a warning; their PNGs get the pixel-art settings): background, particles, transition,
+  normal_map, image; corners4 terrain layers of a map; stamps. Blend `add` uses a built-in particle shader (Built-in
+  pipeline; URP needs its own particle material **(verify)**). Isometric maps use Unity's isometric Grid **(verify
+  against Godot's diamond-down layout)**.
 
 ## Conventions
 - C# standard style: `PascalCase` types and methods, `_camelCase` private fields, `[SerializeField] private` over public fields.

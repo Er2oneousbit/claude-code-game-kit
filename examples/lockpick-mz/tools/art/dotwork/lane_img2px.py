@@ -43,7 +43,7 @@ def run(entries, pack, man, conf):
         w = int(e.get("width", 96))
         h = max(1, round(im.height * w / im.width))   # a very wide source rounded to 0 rows and crashed
         small = im.resize((w, h), Image.BOX)
-        core.save_clean(im, os.path.join(src_dir, f"{name}_source.png"))
+        kept = core.save_clean(im, os.path.join(src_dir, f"{name}_source.png"))
         core.save_clean(small, os.path.join(src_dir, f"{name}_naive.png"))
         cw, ch = (w * 8 + 15) // 16 * 16, (h * 8 + 15) // 16 * 16
         init = Image.new("RGB", (cw, ch), (255, 255, 255))
@@ -59,5 +59,6 @@ def run(entries, pack, man, conf):
         core.save_clean(Image.fromarray(arr).convert("RGB"), dst)
         man.add(dst, "scene", prompt=(e.get("prompt") or core.prompt(PROMPT)), seed=seed, routes=("klein",), request=req,
                 workflow="Dotwork img2px (box down, 8x grid, klein img2img, grid sample)", size=[w, h],
-                denoise=float(e.get("denoise", 0.3)), source=f"assets_src/art/scenes/{name}_source.png")
+                # the copy really kept, under the configured src_dir (it said assets_src/ whatever the config was)
+                denoise=float(e.get("denoise", 0.3)), source=os.path.relpath(kept, core.PROJECT).replace(os.sep, "/"))
         core.log(f"img2px {name}: {w}x{h} in {sec:.0f}s")

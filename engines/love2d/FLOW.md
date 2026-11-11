@@ -50,6 +50,8 @@ a list that may be empty so it writes back as `[]`.
 - `tests/test_access_golden.lua`: `src/core/audio_access.lua` (bus gains, caption arrows) against `data/golden/access.json`.
 - `test_telemetry_golden.lua`: `telemetry.lua` (the CSV columns every engine writes) against `data/golden/telemetry.json`.
 - `test_dialogue_golden.lua`: the subtitle typewriter (`Dialogue.revealed`) against `data/golden/dialogue.json`.
+- `test_credits_text.lua`: the credits screen's lines (HTML comments out of CREDITS.md, then the markdown marks)
+  against `data/golden/credits.json`.
 - `tests/test_music_player.lua`: the mixer of `src/shell/music_player.lua`, sample by sample, with no audio device.
 - `tests/test_audio_wiring.lua`: bus volumes along the bus chain (`app:bus_volume`) and directional caption arrows.
 
@@ -115,8 +117,8 @@ coroutine in `src/shell/drive.lua`: add one there and list it here.
 
 ## Assets and audio
 - Images: `love.graphics.newImage("assets/art/hero.png")` after `love.graphics.setDefaultFilter("nearest",
-  "nearest")`. Sprite sheets: `love.graphics.newQuad`. Dotwork's non-Godot output (PNGs, sheets and a manifest)
-  loads directly.
+  "nearest")`. Sprite sheets: `love.graphics.newQuad`. Dotwork's art loads through its importer,
+  `DotworkLoader.load_all()` and `DotworkView` (docs/ENGINE.md "Dotwork art").
 - Audio: `love.audio.newSource(path, "static")` for short sounds, `"stream"` for music. WAV and OGG are safe; MP3
   works through mpg123. Log every asset in `docs/ASSET_LOG.md`.
 - Bus volumes: with data/audio_events.json, `app:bus_volume(bus)` (and `app:play_sound`) takes each slider once

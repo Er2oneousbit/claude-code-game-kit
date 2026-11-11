@@ -10,6 +10,8 @@
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1); analog input (#274), the juice demo, the bug report,
 //           crash files and the pseudo locale (#275) by Claude (Opus 5.5, claude-opus-5-5); the i18n log line
 //           (where the string tables came from, or that there were none) by Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): credits from data/credits.md in a packaged game,
+//           the copy kept in step by SyncCreditsCopy (#278)
 // ---------------------------------------------------------------------------
 #include "GameKitShellModel.h"
 
@@ -24,6 +26,7 @@
 #include "HAL/PlatformMisc.h"
 #include "Misc/DateTime.h"
 #include "Misc/EngineVersion.h"
+#include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 
 const TCHAR* const FGameKitShellModel::BugKey = TEXT("key:f8");
@@ -33,6 +36,7 @@ const TCHAR* const FGameKitShellModel::PresetsFile = TEXT("data/input/presets.js
 const TCHAR* const FGameKitShellModel::ColoursFile = TEXT("data/access/colours.json");
 const TCHAR* const FGameKitShellModel::I18nDir = TEXT("data/i18n");
 const TCHAR* const FGameKitShellModel::CreditsFile = TEXT("CREDITS.md");
+const TCHAR* const FGameKitShellModel::CreditsCopyFile = TEXT("data/credits.md");
 const TCHAR* FGameKitShellModel::SettingsTabs[5] = {TEXT("display"), TEXT("audio"), TEXT("controls"), TEXT("access"), TEXT("language")};
 const TCHAR* FGameKitShellModel::GameActions[8] = {TEXT("move_left"), TEXT("move_right"), TEXT("move_up"), TEXT("move_down"),
                                                    TEXT("jump"), TEXT("attack"), TEXT("interact"), TEXT("pause")};
@@ -841,30 +845,211 @@ FGameKitScreen FGameKitShellModel::Build(const FString& Name)
 	return S;
 }
 
+FString FGameKitShellModel::CreditsSource(const FString& ProjectDir)
+{
+	// The project's own CREDITS.md first (the editor, a dev run: always the file you just edited), then the copy
+	// under data/ that a packaged game ships (#278); "" when there is neither
+	for (const TCHAR* Rel : {CreditsFile, CreditsCopyFile})
+	{
+		const FString Path = FPaths::Combine(ProjectDir, Rel);
+		if (IFileManager::Get().FileExists(*Path))
+		{
+			return Path;
+		}
+	}
+	return FString();
+}
+
+bool FGameKitShellModel::SyncCreditsCopy(const FString& ProjectDir, FString& OutWhat)
+{
+	IFileManager& Files = IFileManager::Get();
+	const FString Source = FPaths::Combine(ProjectDir, CreditsFile);
+	const FString Copy = FPaths::Combine(ProjectDir, CreditsCopyFile);
+	if (!Files.FileExists(*Source))
+	{
+		if (!Files.FileExists(*Copy))
+		{
+			OutWhat = FString::Printf(TEXT("no %s, nothing to copy"), CreditsFile);
+			return true;
+		}
+		// The copy is generated (and gitignored): with CREDITS.md gone it would ship credits nobody has any more
+		if (!Files.Delete(*Copy, /*RequireExists*/ false, /*EvenReadOnly*/ true, /*Quiet*/ true))
+		{
+			OutWhat = FString::Printf(TEXT("could not remove %s (CREDITS.md is gone)"), *Copy);
+			return false;
+		}
+		OutWhat = FString::Printf(TEXT("removed %s: there is no %s any more"), CreditsCopyFile, CreditsFile);
+		return true;
+	}
+	TArray<uint8> Want, Have;
+	if (!FFileHelper::LoadFileToArray(Want, *Source))
+	{
+		OutWhat = FString::Printf(TEXT("could not read %s"), *Source);
+		return false;
+	}
+	if (FFileHelper::LoadFileToArray(Have, *Copy, FILEREAD_Silent) && Have == Want)
+	{
+		OutWhat = FString::Printf(TEXT("%s is up to date"), CreditsCopyFile);
+		return true;   // untouched: no new timestamp, nothing for a cook or a backup to pick up
+	}
+	Files.MakeDirectory(*FPaths::GetPath(Copy), /*Tree*/ true);   // a project without data/ gets one for the copy
+	if (!FFileHelper::SaveArrayToFile(Want, *Copy))
+	{
+		OutWhat = FString::Printf(TEXT("could not write %s"), *Copy);
+		return false;
+	}
+	OutWhat = FString::Printf(TEXT("copied %s to %s (%d bytes)"), CreditsFile, CreditsCopyFile, Want.Num());
+	return true;
+}
+
 TArray<FString> FGameKitShellModel::CreditsLines() const
 {
 	TArray<FString> Out;
-	const TOptional<FString> Text = GameKit::ReadTextFile(FPaths::Combine(Opt.ProjectDir, CreditsFile));
-	if (!Text.IsSet() || Text.GetValue().TrimStartAndEnd().IsEmpty())
+	const FString Path = CreditsSource(Opt.ProjectDir);
+	const TOptional<FString> Text = Path.IsEmpty() ? TOptional<FString>() : GameKit::ReadTextFile(Path);
+	// Whichever file it is (CREDITS.md, or the data/credits.md copy a packaged game reads), its HTML comments go (#279)
+	const TArray<FString> Lines = Text.IsSet() ? CreditsLinesFrom(Text.GetValue()) : TArray<FString>();
+	if (Lines.IsEmpty())
 	{
+		// Says where it looked, so a packaged game without credits is one log line to explain
+		if (Path.IsEmpty())
+		{
+			UE_LOG(LogGameKitShell, Display, TEXT("credits: none (no %s or %s in %s), the placeholder shows"), CreditsFile,
+			       CreditsCopyFile, *FPaths::ConvertRelativePathToFull(Opt.ProjectDir));
+		}
+		else
+		{
+			UE_LOG(LogGameKitShell, Display, TEXT("credits: only blanks or comments in %s, the placeholder shows"),
+			       *FPaths::ConvertRelativePathToFull(Path));
+		}
 		Out.Add(T(TEXT("credits.placeholder")));
 	}
 	else
 	{
-		TArray<FString> Lines;
-		Text.GetValue().Replace(TEXT("\r"), TEXT("")).ParseIntoArray(Lines, TEXT("\n"), /*CullEmpty*/ false);
-		for (FString Line : Lines)
-		{
-			if (Line.StartsWith(TEXT("#")))
-			{
-				Line = Line.Replace(TEXT("#"), TEXT("")).TrimStartAndEnd();   // heading marks off, the text stays
-			}
-			Out.Add(Content(Line.TrimEnd()));
-		}
+		UE_LOG(LogGameKitShell, Display, TEXT("credits: %d lines from %s"), Lines.Num(), *FPaths::ConvertRelativePathToFull(Path));
+	}
+	for (const FString& Line : Lines)
+	{
+		Out.Add(Content(Line));
 	}
 	Out.Add(FString());
 	Out.Add(T(TEXT("credits.engine")));
 	return Out;
+}
+
+TArray<FString> FGameKitShellModel::CreditsLinesFrom(const FString& Markdown)
+{
+	TArray<FString> Out;
+	const FString Text = StripHtmlComments(Markdown);
+	if (Text.TrimStartAndEnd().IsEmpty())
+	{
+		return Out;
+	}
+	TArray<FString> Lines;
+	Text.Replace(TEXT("\r"), TEXT("")).ParseIntoArray(Lines, TEXT("\n"), /*CullEmpty*/ false);
+	for (FString Line : Lines)
+	{
+		if (Line.StartsWith(TEXT("#")))
+		{
+			Line = Line.Replace(TEXT("#"), TEXT("")).TrimStartAndEnd();   // heading marks off, the text stays
+		}
+		Out.Add(Line.TrimEnd());
+	}
+	return Out;
+}
+
+namespace GameKitCreditsText
+{
+	const TCHAR* const CommentOpen = TEXT("<!--");
+	const TCHAR* const CommentClose = TEXT("-->");
+
+	/** Only spaces and tabs (every port counts these two; Unicode whitespace differs between languages). */
+	bool Blank(const FString& Line)
+	{
+		for (const TCHAR C : Line)
+		{
+			if (C != TEXT(' ') && C != TEXT('\t'))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** Needle in Hay at From or later, or INDEX_NONE. FString::Find clamps a start past the end to the last
+	 *  character, which would find a one-character needle there again. */
+	int32 FindFrom(const FString& Hay, const TCHAR* Needle, int32 From)
+	{
+		if (From >= Hay.Len())
+		{
+			return INDEX_NONE;
+		}
+		return Hay.Find(Needle, ESearchCase::CaseSensitive, ESearchDir::FromStart, From);
+	}
+}
+
+FString FGameKitShellModel::StripHtmlComments(const FString& Text)
+{
+	using namespace GameKitCreditsText;
+	const int32 OpenLen = FCString::Strlen(CommentOpen);
+	const int32 CloseLen = FCString::Strlen(CommentClose);
+	TArray<FString> Out;
+	bool bInComment = false;
+	bool bSkipBlank = false;                         // the blank line after a dropped comment-only line
+	const FString Unix = Text.Replace(TEXT("\r\n"), TEXT("\n"));
+	int32 LineStart = 0;
+	while (LineStart <= Unix.Len())
+	{
+		int32 LineEnd = FindFrom(Unix, TEXT("\n"), LineStart);
+		if (LineEnd == INDEX_NONE)
+		{
+			LineEnd = Unix.Len();
+		}
+		const FString Line = Unix.Mid(LineStart, LineEnd - LineStart);
+		LineStart = LineEnd + 1;
+		FString Kept;
+		bool bHad = bInComment;
+		int32 I = 0;
+		while (true)
+		{
+			if (bInComment)
+			{
+				const int32 End = FindFrom(Line, CommentClose, I);
+				if (End == INDEX_NONE)
+				{
+					break;                           // the comment goes on into the next line
+				}
+				bInComment = false;
+				I = End + CloseLen;
+			}
+			else
+			{
+				const int32 Start = FindFrom(Line, CommentOpen, I);
+				if (Start == INDEX_NONE)
+				{
+					Kept += Line.Mid(I);
+					break;
+				}
+				Kept += Line.Mid(I, Start - I);
+				bInComment = true;
+				bHad = true;
+				I = Start + OpenLen;
+			}
+		}
+		if (bHad && Blank(Kept))
+		{
+			bSkipBlank = Out.IsEmpty() || Blank(Out.Last());
+			continue;
+		}
+		if (bSkipBlank && Blank(Kept))
+		{
+			bSkipBlank = false;
+			continue;
+		}
+		bSkipBlank = false;
+		Out.Add(Kept);
+	}
+	return FString::Join(Out, TEXT("\n"));
 }
 
 TArray<FString> FGameKitShellModel::HelpLines() const

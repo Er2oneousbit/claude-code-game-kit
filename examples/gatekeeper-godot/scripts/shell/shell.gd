@@ -12,6 +12,7 @@
 # Notes   : User args (after "--"): --data-dir <dir> (default user://), --locale <code> (this run only; "pseudo"
 #           is the test locale), --smoke (a dev.py smoke run: a crash exits 1, no pause on focus loss),
 #           --drive <scenario> (scripts/shell/smoke_drive.gd), --capture (tools/capture.gd is taking a picture).
+#           A smoke run also times its frames (scripts/shell/frame_times.gd, the FRAME_TIMES line, #90).
 #           Files in the data folder: settings.json (+ .bak), save_<slot>.json (+ .bak), logs/game.log (+ 5
 #           rotated), crashes/crash_<time>.txt, telemetry.csv (only after the player said yes), bug_<time>/ (F8 in
 #           debug builds). When the engine runs a tool script (GUT tests, dev.py check) the Shell stays passive:
@@ -118,6 +119,8 @@ func _ready() -> void:
 		_update_locale(false)
 	Log.info("shell", "data folder: %s" % data_dir)
 	telemetry("session_start", version)
+	if smoke:
+		add_child(SmokeFrameTimes.new()) # the FRAME_TIMES line dev.py smoke reports (#90)
 
 
 func _process(_delta: float) -> void:

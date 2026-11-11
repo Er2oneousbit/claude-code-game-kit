@@ -8,10 +8,10 @@ prompts that show the buttons they hold, text that fits in every language, and a
 Run it with `/game-shell`.
 
 ## 1. The shell's parts
-Godot, LÖVE, web, Unity, Unreal, Bevy and C++/SDL3 overlays ship a working shell, each with crash files, the bug
-report key, the juice demo, the pseudo-locale drive and analog input for the game; web-3d ships its engine-free logic with
-tests, and the screens are built in the engine on top of it; RPG Maker MZ keeps MZ's own screens, settings
-and saves, and the kit maps the rules onto them (details per engine: `docs/ENGINE_FLOW.md`). The behavior is one spec, `tools/golden_vectors.py`, with expected
+Godot, LÖVE, web, web-3d, Unity, Unreal, Bevy and C++/SDL3 overlays ship a working shell, each with crash files, the
+bug report key, the juice demo, the pseudo-locale drive and analog input for the game (web-3d runs web's shell over
+Three.js); RPG Maker MZ keeps MZ's own screens, settings and saves, ships the shell's rules as the GameShell plugin
+(the same golden vectors) and puts the accessibility settings that fit onto MZ's Options screen (GameAccess) (details per engine: `docs/ENGINE_FLOW.md`). The behavior is one spec, `tools/golden_vectors.py`, with expected
 values in `data/golden/shell.json` that every port's tests check (K01).
 
 | Part | What it gives |

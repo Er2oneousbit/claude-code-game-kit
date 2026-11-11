@@ -4,6 +4,8 @@
   "references": [
     "Game.Core",
     "Game.Runtime",
+    "Game.Dotwork",
+    "Game.Dotwork.Editor",
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner"
   ],

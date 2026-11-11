@@ -28,9 +28,12 @@ def load_colors(patterns):
         raise fcore.ToolError(f"no PNG files match {', '.join(patterns)}")
     px = []
     for f in files:
-        a = np.asarray(Image.open(f).convert("RGBA")).reshape(-1, 4)
+        with Image.open(f) as im:
+            a = np.asarray(im.convert("RGBA")).reshape(-1, 4)
         px.append(a[a[:, 3] >= 128, :3])
     uniq, counts = np.unique(np.concatenate(px), axis=0, return_counts=True)
+    if not len(uniq):   # k-means on nothing failed deep in numpy ("a must be a positive integer")
+        raise fcore.ToolError(f"no opaque pixels in {len(files)} file(s) matching {', '.join(patterns)}")
     return uniq, counts, files
 
 
@@ -96,7 +99,21 @@ def write(pal, out):
     return out
 
 
+def check_args(args):
+    """Usage errors as ToolError (exit 2); each of these used to surface as an "unexpected failure" from numpy."""
+    if args.action == "extract" and args.colors < 1:
+        raise fcore.ToolError(f"--colors {args.colors}: a palette needs at least 1 colour")
+    if args.action == "extend":
+        if not args.base:
+            raise fcore.ToolError("extend needs --base PALETTE.hex (the palette to keep)")
+        if not os.path.isfile(args.base):
+            raise fcore.ToolError(f"--base {args.base} not found")
+        if args.add < 1:
+            raise fcore.ToolError(f"--add {args.add}: add at least 1 colour")
+
+
 def cmd(args):
+    check_args(args)
     if args.action == "extract":
         pal, err, nf = extract(args.sources, args.colors)
         write(pal, args.out)

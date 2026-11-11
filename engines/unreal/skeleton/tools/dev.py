@@ -9,7 +9,8 @@
 #                      kit's shader recipes as materials (the full editor off-screen; --no-shaders skips)
 #             build    same as check (kept for command-contract parity)
 #             test     run automation tests headless (--filter, default "<Game>", plus "GameKit." when the
-#                      kit's GameKitShell plugin is enabled)
+#                      kit's GameKitShell plugin is enabled); without --filter also the Dotwork importer's checks
+#                      (Content/Python/kit_dotwork: the golden pack and every manifest of the game, pythonscript commandlet)
 #             smoke    run automation tests named <Game>.Smoke (--filter, --until, --fail-on for scenario runs;
 #                      screenshots need a renderer, so capture from the game itself, e.g. a -record= option);
 #                      --shaders first draws every kit shader recipe and compares it with its golden image;
@@ -18,7 +19,7 @@
 #                      --locale set its run
 #             exec     run an editor Python script headless (asset imports, maps)
 #             run      open the project in the editor
-#             package  BuildCookRun a packaged build into Packaged/
+#             package  BuildCookRun a packaged build into Packaged/ (replaces that platform's last one)
 #             genproj  regenerate IDE project files
 #             clean    remove Intermediate/ and Binaries/ (asks first, or --yes)
 #             doctor   verify the local environment
@@ -86,6 +87,13 @@
 #           and show:juice (#275): crash and pseudo-plant exit 1 on purpose with their proof checked (a crash file on
 #           disk, the planted label named), bug runs with a renderer for its screenshot, CRASH_WRITTEN and BUG_REPORT
 #           are echoed
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): package archives into Packaged/.next, then replaces
+#           the platform's old folder, so a file the game dropped (an old data/credits.md) never ships again (#278)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): test also runs the Dotwork importer's checks
+#           (#58: the golden pack against expected.json, every manifest of the game) through the commandlet
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): smoke reports the run's FRAME_TIMES line (mean,
+#           p95, p99, worst) and fails a p95 over --frame-budget MS, or over the "Smoke frame time" row of
+#           docs/ARCHITECTURE.md; a run that measured nothing says so (#90)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -103,6 +111,13 @@ ROOT = Path(__file__).resolve().parents[1]
 SYSTEM = platform.system()  # Windows, Linux, Darwin
 
 # ---- Tunables / constants (edit if your UE version differs) -------------------
+LAST_LOG = [""]                               # the last automation run's output (stdout + log file)
+NOTHING_RAN = [False]                         # the last automation run matched no test (exit 2, not a failure)
+DOTWORK_DIR = "Content/Python/kit_dotwork"    # the Dotwork importer (Paper2D); `test` runs its checks below
+DOTWORK_CHECKS = ("test_dotwork_golden.py", "test_dotwork_manifests.py")
+PYTHON_PLUGIN = "PythonScriptPlugin"          # editor Python: exec, the shader check and the Dotwork importer
+SMOKE_UNMEASURED = ("no Smoke test logged a FRAME_TIMES line: automation runs with -NullRHI draw nothing, and the "
+                    "kit ships no Smoke test (log one from yours: docs/ENGINE.md, Conventions, Frame times in smoke)")
 SMOKE_GROUP_SUFFIX = "Smoke"                  # tests named <Game>.Smoke.* are the smoke group
 TEST_TIMEOUT_S = 1800
 # Result={Fail} covers every failed test; "Test Failed" alone also matched a test named "Test Failed Handling" (#250)
@@ -698,6 +713,7 @@ def run_automation(filter_, args, until=None, fail_on=None, extra_args=None, mar
     if not exe or not exe.exists():
         print(f"[error] editor command-line binary not found: {exe}", file=sys.stderr)
         return 2
+    NOTHING_RAN[0] = False
     AUTOMATION_LOG.parent.mkdir(parents=True, exist_ok=True)
     if AUTOMATION_LOG.exists():
         AUTOMATION_LOG.unlink()
@@ -710,6 +726,7 @@ def run_automation(filter_, args, until=None, fail_on=None, extra_args=None, mar
     # Test results only reach the log file, not stdout (verified on UE 5.8)
     if AUTOMATION_LOG.exists():
         out += AUTOMATION_LOG.read_text(encoding="utf-8", errors="ignore")
+    LAST_LOG[0] = out                        # cmd_smoke reads the frame times from it (#90)
     if DEBUG:
         print(out)
     if markers:
@@ -740,6 +757,7 @@ def run_automation(filter_, args, until=None, fail_on=None, extra_args=None, mar
     if oks == 0:
         # Nothing ran: a setup gap (no such tests yet), not a failing test. Same rule as Unity and Godot.
         print(f"[FAIL] no tests matched filter {filter_!r} (exit 2: nothing ran). Run with --debug to see the log.")
+        NOTHING_RAN[0] = True
         return 2
     hit = [m for m in (fail_on or []) if m in out]
     if hit:
@@ -765,7 +783,45 @@ def default_test_filter():
 
 
 def cmd_test(args):
-    return run_automation(args.filter or default_test_filter(), args)
+    rc = run_automation(args.filter or default_test_filter(), args)
+    if args.filter:
+        return rc
+    dot = dotwork_checks(args)
+    if dot is None:
+        return rc
+    if rc == 2 and NOTHING_RAN[0]:
+        return dot                           # no automation tests yet, but the Dotwork checks ran
+    return 1 if 1 in (rc, dot) else max(rc, dot)
+
+
+def uproject_plugin_enabled(name):
+    """True when the .uproject lists the plugin with "Enabled": true (engine plugins such as PythonScriptPlugin)."""
+    up = find_uproject()
+    try:
+        data = json.loads(up.read_text(encoding="utf-8-sig")) if up else {}
+    except (OSError, ValueError):
+        return False
+    plugins = data.get("Plugins") if isinstance(data, dict) else None
+    return any(isinstance(e, dict) and e.get("Name") == name and e.get("Enabled") is True
+               for e in (plugins if isinstance(plugins, list) else []))
+
+
+def dotwork_checks(args):
+    """The Dotwork importer's checks (Content/Python/kit_dotwork): the golden pack against expected.json and every
+    manifest of the game, through the pythonscript commandlet (the full editor refuses the `set` command an
+    offline font's pages need). None when the importer is not here or Python is off; else 0, 1 or 2."""
+    if not (ROOT / DOTWORK_DIR).is_dir():
+        return None
+    if not uproject_plugin_enabled(PYTHON_PLUGIN):
+        print(f"[info] the Dotwork importer's checks ({DOTWORK_DIR}) are skipped: they need the {PYTHON_PLUGIN} "
+              "enabled in the .uproject (docs/ENGINE.md, Dotwork art)")
+        return None
+    worst = 0
+    for name in DOTWORK_CHECKS:
+        print(f"[info] Dotwork check {name} (pythonscript commandlet)")
+        rc = exec_script(ROOT / DOTWORK_DIR / name, args)
+        worst = 1 if 1 in (worst, rc) else max(worst, rc)
+    return worst
 
 
 def cmd_smoke(args):
@@ -784,8 +840,11 @@ def cmd_smoke(args):
         return 2
     if getattr(args, "drive", ""):
         return drive_run(args)
-    return run_automation(f"{game_name()}.{SMOKE_GROUP_SUFFIX}" + (f".{args.filter}" if args.filter else ""), args,
-                          until=args.until, fail_on=fail_on)
+    rc = run_automation(f"{game_name()}.{SMOKE_GROUP_SUFFIX}" + (f".{args.filter}" if args.filter else ""), args,
+                        until=args.until, fail_on=fail_on)
+    if rc == 0:                              # #90: a FRAME_TIMES line one of your Smoke tests logged
+        rc = frame_budget_report(LAST_LOG[0], getattr(args, "frame_budget", None), SMOKE_UNMEASURED)
+    return rc
 
 
 # ---- The shell's scripted runs (#168): smoke --drive, --screenshot, --data-dir ---------------------------
@@ -794,6 +853,8 @@ SHOW_TEST = "GameKit.Screens.Show"          # the one that also draws the screen
 DRIVE_PATTERN = r"[A-Za-z0-9_:=,.-]+"        # menus, show:settings, access:res=1280x800,scale=2,pad
 SMOKE_DATA = "Saved/GameKitSmoke"           # the drive's own settings folder (never the player's Saved/GameKit)
 BUILD_OUTPUTS = ("Packaged", "Saved/StagedBuilds", "Binaries")   # package, its staging, compiled modules (#263)
+PACKAGE_DIR = "Packaged"                     # `package` output, one folder per platform (Windows/, Linux/, Mac/)
+PACKAGE_NEXT = ".next"                       # a new package lands in Packaged/.next, then replaces the old (#278)
 MARKER_LINE = re.compile(r"\b((?:DRIVE_[A-Z]+|SETTINGS_WRITTEN|SCREENSHOT_WRITTEN|ACCESS_[A-Z]+|PSEUDO_[A-Z]+|CRASH_WRITTEN"
                          r"|BUG_REPORT)\b.*)$")
 RENDER_DRIVES = ("bug",)                     # drives that draw (the bug report's screenshot): a renderer, not -NullRHI
@@ -917,7 +978,11 @@ def cmd_exec(args):
     if err:
         print(f"[error] {err}", file=sys.stderr)
         return 2
-    script = Path(args.script)
+    return exec_script(Path(args.script), args)
+
+
+def exec_script(script, args):
+    """The body of `exec`: one editor Python script through the pythonscript commandlet. Returns 0, 1 or 2."""
     script = script if script.is_absolute() else ROOT / script
     if not script.is_file() or script.suffix != ".py":
         print(f"[error] no Python script at {script}", file=sys.stderr)
@@ -990,13 +1055,45 @@ def cmd_package(args):
     if missing:
         return missing
     # Packaged/, not build/: on Windows build/ and the committed Build/ are the same folder
-    out_dir = ROOT / "Packaged"
+    out_dir = ROOT / PACKAGE_DIR
+    next_dir = out_dir / PACKAGE_NEXT
+    shutil.rmtree(next_dir, ignore_errors=True)   # what a stopped run left half written
     cmd = [uat, "BuildCookRun", f"-project={find_uproject()}", "-noP4",
            f"-platform={platform_name(args.platform)}", f"-clientconfig={args.config}",
-           "-build", "-cook", "-stage", "-pak", "-archive", f"-archivedirectory={out_dir}"]
+           "-build", "-cook", "-stage", "-pak", "-archive", f"-archivedirectory={next_dir}"]
     rc, _ = run(cmd, timeout=BUILD_TIMEOUT_S)
+    if rc == 0:
+        rc = replace_package(next_dir, out_dir)
+    else:
+        shutil.rmtree(next_dir, ignore_errors=True)   # the last good package stays as it was
     print(f"[{' OK ' if rc == 0 else 'FAIL'}] package {'written to Packaged/' if rc == 0 else 'failed'}")
     return 2 if rc in NO_EXEC else 0 if rc == 0 else 1
+
+
+def replace_package(next_dir, out_dir):
+    """Moves the new package (each platform folder UAT archived into next_dir, e.g. Windows/) over the last one in
+    out_dir, which goes first: UAT's -archive copies into a folder without emptying it, so a file the game no longer
+    has (a removed data file, an old data/credits.md) would ship again (#278). Other platforms' folders stay.
+    0 ok, 1 when a folder could not be replaced (the old game still running): the new package is kept in next_dir."""
+    made = sorted(p for p in next_dir.iterdir()) if next_dir.is_dir() else []
+    if not made:
+        print(f"[error] UAT reported success but archived nothing into {next_dir}", file=sys.stderr)
+        return 1
+    for new in made:
+        old = out_dir / new.name
+        try:
+            if old.is_dir():
+                shutil.rmtree(old)
+            elif old.exists():
+                old.unlink()
+            shutil.move(str(new), str(old))
+        except OSError as exc:
+            print(f"[error] could not replace {PACKAGE_DIR}/{new.name} ({exc}); is the packaged game still running? "
+                  f"The new package is in {PACKAGE_DIR}/{PACKAGE_NEXT}/{new.name}", file=sys.stderr)
+            return 1
+        dbg(f"package: {PACKAGE_DIR}/{new.name} replaced")
+    shutil.rmtree(next_dir, ignore_errors=True)
+    return 0
 
 
 def cmd_genproj(args):
@@ -1093,6 +1190,92 @@ def cmd_doctor(args):
 
 
 
+# ---- Frame-time budget (#90): the same block in every engine's dev.py -----------------------------------------
+# The game (or smoke.mjs) prints one line at the end of a smoke run:
+#   FRAME_TIMES frames=N mean=MS p95=MS p99=MS worst=MS mode=render|software|logic
+# smoke prints it as numbers, and fails a run whose p95 is over the budget (--frame-budget, else the "Smoke frame
+# time" row of docs/ARCHITECTURE.md). A run that measured nothing says so, and why, instead of passing a budget.
+FRAME_LINE = re.compile(r"\bFRAME_TIMES((?:[ \t]+\w+=[^\s=]+)+)")
+FRAME_MODES = {                           # what the numbers mean, by the mode= the game reported
+    "render": "drawn in a window: a render budget",
+    "software": "drawn on the CPU without a display: not a GPU budget",
+    "logic": "headless, nothing drawn: a logic budget, not a render budget",
+}
+BUDGET_DOC = "docs/ARCHITECTURE.md"       # its Budgets table: smoke reads the "Smoke frame time" row
+BUDGET_ROW = re.compile(r"^\|\s*Smoke frame time[^|]*\|([^|]*)\|", re.M | re.I)
+FRAME_BUDGET_HELP = (f"fail the run when its p95 frame time is over MS milliseconds (default: the 'Smoke frame time' row "
+                     f"in {BUDGET_DOC}, when it holds a number); the run prints mean, p95, p99 and worst frame time "
+                     "whenever the game measured them")
+
+
+def frame_times(text):
+    """The last FRAME_TIMES line in text as a dict: frames, mean, p95, p99, worst (ms) and mode. None without one."""
+    found = None
+    for m in FRAME_LINE.finditer(text or ""):
+        fields = dict(pair.split("=", 1) for pair in m.group(1).split())
+        try:
+            stats = {"frames": int(fields["frames"]), "mode": fields.get("mode", "render")}
+            for key in ("mean", "p95", "worst"):
+                stats[key] = float(fields[key])
+            stats["p99"] = float(fields.get("p99", fields["worst"]))
+        except (KeyError, ValueError):
+            continue                          # a broken line is no measurement
+        if stats["frames"] > 0:
+            found = stats
+    return found
+
+
+def doc_frame_budget():
+    """The frame budget in ms from BUDGET_DOC's "Smoke frame time" row, or None: no file, no row, the template's
+    "e.g." placeholder, or no "<number> ms" in the cell."""
+    try:
+        text = (ROOT / BUDGET_DOC).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    m = BUDGET_ROW.search(text)
+    cell = m.group(1).strip() if m else ""
+    if not cell or cell.lower().startswith("e.g"):
+        return None
+    n = re.search(r"(\d+(?:\.\d+)?)\s*ms\b", cell)
+    return float(n.group(1)) if n and float(n.group(1)) > 0 else None
+
+
+def frame_budget_report(text, budget=None, unmeasured=""):
+    """Print the run's frame times and check the p95 against the budget (budget from --frame-budget, else
+    doc_frame_budget()). Returns 1 when the p95 is over it, else 0. Without a FRAME_TIMES line it prints why nothing
+    was measured (unmeasured) and, with a budget, that the budget was not checked: never a silent pass."""
+    source = "--frame-budget" if budget else BUDGET_DOC
+    budget = budget or doc_frame_budget()
+    stats = frame_times(text)
+    if not stats:
+        print(f"[info] frame time: not measured ({unmeasured or 'the game printed no FRAME_TIMES line'})")
+        if budget:
+            print(f"[WARN] frame budget {budget:g} ms ({source}) not checked: this run measured no frame time")
+        return 0
+    mode = stats["mode"]
+    numbers = (f"mean {stats['mean']:.2f} ms, p95 {stats['p95']:.2f} ms, p99 {stats['p99']:.2f} ms, "
+               f"worst {stats['worst']:.2f} ms")
+    print(f"[info] frame time over {stats['frames']} frames ({mode}, {FRAME_MODES.get(mode, 'unknown mode')}): {numbers}")
+    if not budget:
+        return 0
+    if stats["p95"] > budget:
+        print(f"[FAIL] frame budget: p95 {stats['p95']:.2f} ms is over {budget:g} ms ({source}); {numbers}")
+        return 1
+    print(f"[ OK ] frame budget: p95 {stats['p95']:.2f} ms within {budget:g} ms ({source})")
+    return 0
+
+
+def frame_ms(text):
+    """argparse type: a frame budget in milliseconds, above 0 and at most 10000."""
+    try:
+        n = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a number of milliseconds")
+    if not 0 < n <= 10000:
+        raise argparse.ArgumentTypeError("must be above 0 and at most 10000 ms")
+    return n
+
+
 # ---- Cloud deployments (#252) ------------------------------------------------------------
 SHIP_TOOL = "tools/cloud/ship.py"
 
@@ -1152,7 +1335,7 @@ def build_parser():
     p = sub.add_parser("build", help="same as check")
     p.add_argument("--no-shaders", action="store_true", help="skip the shader recipes")
     p.set_defaults(fn=cmd_build)
-    p = sub.add_parser("test", help="run automation tests headless")
+    p = sub.add_parser("test", help="run automation tests headless, then the Dotwork importer's checks")
     p.add_argument("--filter", help='automation filter, e.g. "MyGame.Logic" (default: the game name, plus GameKit. '
                                     'when the GameKitShell plugin is enabled)')
     p.set_defaults(fn=cmd_test)
@@ -1176,6 +1359,7 @@ def build_parser():
     p.add_argument("--data-dir", default="", help="with --drive: the settings folder the run reads and writes (default: a fresh "
                                                  f"{SMOKE_DATA})")
     p.add_argument("--locale", default="", help="with --drive: the language the screens show (a data/i18n/<tag>.json)")
+    p.add_argument("--frame-budget", type=frame_ms, metavar="MS", help=FRAME_BUDGET_HELP)
     p.set_defaults(fn=cmd_smoke)
     p = sub.add_parser("exec", help="run an editor Python script headless (imports, maps; needs PythonScriptPlugin)")
     p.add_argument("script", help="path to the .py script, relative to the project (e.g. tools/unreal/build_content.py)")

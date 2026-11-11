@@ -513,8 +513,9 @@ Screen Shell::make_screen(ScreenId id) {
         }
         case ScreenId::Credits: {
             const std::optional<std::string> text = core::read_file(game_dir_ / core::path_from_utf8(kCreditsFile));
-            if (text) {
-                s.credits = core::credits_lines(*text);
+            std::vector<std::string> lines = text ? core::credits_lines(*text) : std::vector<std::string>();
+            if (!lines.empty()) {   // only HTML comments (#279) or no file: the placeholder
+                s.credits = std::move(lines);
             }
             break;
         }

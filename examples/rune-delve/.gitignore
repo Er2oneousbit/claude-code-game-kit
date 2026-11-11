@@ -94,3 +94,7 @@ assets_src/daw/*/render/
 
 # ---- Claude Code Game Kit 0.14.0: rules added by --upgrade ----
 /deploy/
+
+# ---- Claude Code Game Kit 0.14.5: rules added by --upgrade ----
+.private-terms.txt
+/data/credits.md

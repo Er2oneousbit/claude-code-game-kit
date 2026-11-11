@@ -1,23 +1,26 @@
 // ---------------------------------------------------------------------------
 // main.ts
-// Purpose : Entry point: creates the WebGL renderer, the game, the frame loop and
-//           resizing, and announces a successful boot for `dev.py smoke`.
+// Purpose : Entry point: creates the WebGL renderer and the host that runs the worlds (src/game/threeHost.ts),
+//           then hands the host to the shell (title, menus, settings, pause, subtitles: src/shell/).
 // Usage   : Loaded by index.html (<script type="module" src="/src/main.ts">).
-// Notes   : BOOT_OK is logged after the FIRST RENDERED FRAME, so smoke proves the renderer
-//           really works, not just that the script loaded. Uncaught errors go through Log.error,
-//           which smoke fails on. dt is clamped so a background tab does not teleport the world.
-//           The engine-free juice and shell logic is in src/core/ (settings, saves, i18n, shake, ...); this
-//           skeleton has no menu screens, so `dev.py smoke --drive` stops at once with DRIVE_ABORT.
+// Notes   : The shell is imported first: its crash hook (crash file + Log.error, which `dev.py smoke` fails on) is
+//           in place before anything else runs, a renderer that cannot start included. The shell starts after the
+//           FIRST RENDERED FRAME and logs BOOT_OK once the title screen is up, so smoke proves the renderer really
+//           draws, not just that the script loaded. Worlds: "main" (Play, src/game/Game.ts) and "juice" (the juice
+//           demo, src/game/JuiceWorld.ts); the Backdrop is the still picture behind the menus. The shell's input
+//           layer (src/shell/input.ts) reads keyboard and pads for menus and worlds alike. Under automation the
+//           Dotwork check (src/game/dotwork/boot.ts) loads every asset manifest before the shell starts.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the shell runs over the renderer (#175)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the Dotwork load check before the shell (#56)
 // ---------------------------------------------------------------------------
+import { shell } from "./shell/app";
 import * as THREE from "three";
-import { Log } from "./core/log";
+import { Backdrop } from "./game/Backdrop";
+import { dotworkCheck } from "./game/dotwork/boot";
 import { Game } from "./game/Game";
-
-const MAX_DT = 0.1; // s
-
-window.addEventListener("error", (e) => Log.error("core", `uncaught: ${e.message}`));
-window.addEventListener("unhandledrejection", (e) => Log.error("core", `unhandled promise: ${String(e.reason)}`));
+import { JuiceWorld } from "./game/JuiceWorld";
+import { ThreeHost } from "./game/threeHost";
 
 // ?shadercheck=1 (python tools/dev.py smoke --shaders): render every kit shader recipe for the golden-image check
 if (new URLSearchParams(location.search).has("shadercheck")) {
@@ -37,27 +40,16 @@ renderer.setSize(host.clientWidth, host.clientHeight);
 renderer.shadowMap.enabled = true;
 host.appendChild(renderer.domElement);
 
-const game = new Game(host.clientWidth / Math.max(host.clientHeight, 1));
-window.addEventListener("resize", () => {
-  renderer.setSize(host.clientWidth, host.clientHeight);
-  game.resize(host.clientWidth / Math.max(host.clientHeight, 1));
-});
-
-// THREE.Timer, not THREE.Clock: Clock is deprecated since r183. connect() pauses time while the tab is hidden.
-const timer = new THREE.Timer();
-timer.connect(document);
-let booted = false;
-renderer.setAnimationLoop((timestamp) => {
-  timer.update(timestamp);
-  const dt = Math.min(timer.getDelta(), MAX_DT);
-  game.update(dt);
-  renderer.render(game.scene, game.camera);
-  if (!booted) {
-    booted = true;
-    Log.info("core", "BOOT_OK {{GAME_NAME}}");
-    const drive = new URLSearchParams(location.search).get("drive");
-    if (drive) Log.error("drive", `DRIVE_ABORT ${drive}: no scripted runs here (web-3d ships the shell logic in src/core, not its screens)`);
-  }
-});
+const aspect = host.clientWidth / Math.max(host.clientHeight, 1);
+export const game = new ThreeHost(
+  renderer,
+  new Backdrop(aspect),
+  { main: (a) => new Game(a), juice: (a) => new JuiceWorld(a) },
+  (err) => shell.crash(err),
+);
+window.addEventListener("resize", () => game.resize(host.clientWidth, host.clientHeight));
+// smoke (an automated browser) loads every Dotwork manifest first: a missing image or broken asset fails the boot
+game.onFirstFrame = () => void dotworkCheck().finally(() => shell.start(game));
+game.run();
 
 // {{FOOTER}}

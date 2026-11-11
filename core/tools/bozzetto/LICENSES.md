@@ -47,6 +47,15 @@ UniRig licence and the Articulation-XL2.0 notice; the first UniRig `rig make` co
 
 The record (`assets_src/bozzetto/<name>/reference/reference.json`) and the asset log row of every reference run name the route and these terms.
 
+## Paid model route (`make --with tripo`, optional)
+| Route | What | Terms | Commercial use |
+|---|---|---|---|
+| Tripo3D API (`make --with tripo`) | image, multiview or text to a textured model (P series), run on Tripo's servers | Tripo's terms: outputs from paid API credits are the user's and are not used for training (5.2.2); outputs from free credits stay Tripo's (5.2.1); a Tripo Studio plan adds no API credits | on paid credits |
+
+Nothing of Tripo's is loaded or shipped by the kit: the model it returns goes through the same cleanup and checks,
+and its asset log row says "paid service" with these terms (E153, E160). No licence text is copied into the game
+for it: the terms are a web page; re-read them before you ship.
+
 ## Never loaded
 | Piece | Why |
 |---|---|

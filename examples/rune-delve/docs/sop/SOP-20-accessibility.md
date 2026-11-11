@@ -38,7 +38,7 @@ The shell (`SOP-19`) has the settings; this SOP is what they must do.
    the first check, not proof. Bright, red or striped effects that stay in the game get a flash analysis tool run on a
    recording before release (E73, E74), or are softened until they need none.
 5. **Check the colour pairs** whenever a palette changes: `python tools/access/colour_check.py pairs` simulates each pair as a protanope, deuteranope and tritanope sees it, in the palette the colour-blind setting switches to, and fails a pair that comes too close (CIEDE2000, E159). The pass mark is the file's `min_delta_e`: no published rule sets one for game art, so the kit's 20 is a tip; raise it if colour-blind playtesters still mix a pair up. `colour_check.py image <screenshot>` writes the picture as each player sees it, for a look.
-6. **Run the sweep** on the engines with the shell's screens (Godot, LÖVE, web, Unity, Unreal, Bevy, C++/SDL3): `python tools/access/sweep.py` drives every screen
+6. **Run the sweep** on the engines with the shell's screens (Godot, LÖVE, web, web-3d, Unity, Unreal, Bevy, C++/SDL3): `python tools/access/sweep.py` drives every screen
    at 1920x1080 and at 1280x800 (gamepad only), at 100 % and 200 % text, and fails text under 18 px at 1080p or 9 px
    at 1280x800 (F36), text under 4.5:1 against what is behind it (3:1 for large text, E158; text over the game is
    checked against its panel or outline over both a black and a white game), text clipped, off screen or running
@@ -50,7 +50,7 @@ The shell (`SOP-19`) has the settings; this SOP is what they must do.
    `captures/access/<run>/`, never under `build/` (on Windows and macOS that is Unity's player folder `Build/`); every
    `dev.py smoke` refuses a `--data-dir` inside its player or build output. The game's output stays there too
    (`smoke.log`), with the last frame drawn (`last.png`, `last.bmp` on C++/SDL3) on the engines that capture during
-   a drive (Bevy, C++/SDL3, LÖVE, web); a failed run prints where they are. A drive reads no real keyboard, mouse or
+   a drive (Bevy, C++/SDL3, LÖVE, web, web-3d); a failed run prints where they are. A drive reads no real keyboard, mouse or
    gamepad, so a stray key or a virtual pad on a shared machine cannot change the tour (#276).
 7. **Test with the settings at their extremes:** text 200 %, subtitles largest with full background, colour-blind modes,
    gamepad only, keyboard only, mono, reduce motion. Run the pseudo-locale smoke at text 200 % too: it catches clipping.

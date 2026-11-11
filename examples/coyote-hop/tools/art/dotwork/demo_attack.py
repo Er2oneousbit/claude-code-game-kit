@@ -31,10 +31,16 @@ def peak(fr):
         a = np.array(f)[..., 3] > 127
         ys, xs = np.nonzero(a)
         bb = f.getbbox()
+        if bb is None or not len(xs):   # a blank frame (a fade in or out) has no tip; getbbox() is None there
+            continue
         up = ys < bb[1] + (bb[3] - bb[1]) * 0.7
+        if not up.any():
+            continue
         j = int(np.argmax(xs[up]))
         if best is None or xs[up][j] > best[0]:
             best = (int(xs[up][j]), i, (int(xs[up][j]), int(ys[up][j])))
+    if best is None:
+        raise core.ToolError("every frame of the cast clip is blank: nothing to launch the projectile from")
     return best[1], best[2]
 
 
@@ -76,9 +82,11 @@ def main(argv=None):
     ap.add_argument("--projectile", default="fireball")
     ap.add_argument("--impact", default="explosion")
     ap.add_argument("--tile", help="ground tile PNG for the backdrop (default: plain dark ground)")
-    ap.add_argument("--hold", type=int, default=6)
-    ap.add_argument("--speed", type=int, default=18)
+    ap.add_argument("--hold", type=int, default=6, help="frames the caster holds the peak pose (default 6)")
+    ap.add_argument("--speed", type=int, default=18, help="projectile pixels per frame, 1 or more (default 18)")
     a = ap.parse_args(argv)
+    if a.speed < 1 or a.hold < 0:   # --speed 0 divided by zero
+        raise core.ToolError(f"--speed {a.speed} / --hold {a.hold}: --speed must be 1 or more, --hold 0 or more")
     conf = core.cfg()
     art = core.art(conf)
     cast = frames(os.path.join(art, "characters", a.char, "frames", f"spr_{a.char}_{a.anim}_*.png"))

@@ -78,8 +78,10 @@ tools/                   dev.py and helpers
 11. **Crash files come from a `Logger`** (`scripts/shell/crash_hook.gd`, `OS.add_logger`): it sees every script error, on any thread, and the Shell writes the file on the main thread.
 12. **The windowed shader check can crash under GPU load.** Godot 4.7.2 died twice in five `check` runs (exit
     3221226356, 0xC0000374, heap corruption) during a SubViewport readback while other programs used the GPU; never
-    seen with Godot alone. `dev.py` then says "Godot crashed after N recipe(s)": rerun it, or use `check --no-shaders`
-    and let `smoke --shaders` cover them later. "It needs a window" means nothing was drawn at all.
+    seen with Godot alone. It can also die before the first recipe (0xC0000005 and 0xC0000374, two runs in a row
+    on 2026-11-11 while a Unity editor and other tests ran; the third passed). `dev.py` then says "Godot crashed
+    after N recipe(s)" or "before drawing a recipe": rerun it, or use `check --no-shaders` and let
+    `smoke --shaders` cover them later. "It needs a window" means nothing was drawn and Godot did not crash.
 
 ## Generated or binary (do not hand-edit)
 `.godot/`, `*.import`, `*.uid` (commit, but do not edit), exported builds in `build/`, `*.translation`,

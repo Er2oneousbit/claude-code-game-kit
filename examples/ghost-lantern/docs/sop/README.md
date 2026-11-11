@@ -6,7 +6,7 @@ Short, followable, engine-agnostic. Engine specifics are in `docs/ENGINE_FLOW.md
 |---|---|---|
 | SOP-01 Feature workflow | Building anything new | `/new-feature` |
 | SOP-02 Bug workflow | Something is broken | `/bug-hunt`, `/stuck` |
-| SOP-03 Playtest and tuning | After anyone plays the build; player reports in GitHub Issues | `/playtest-report`, `/triage-issues` |
+| SOP-03 Playtest and tuning | After anyone plays the build; player reports in GitHub Issues; filing what Claude found | `/playtest-report`, `/triage-issues`, `/file-issue` |
 | SOP-04 Assets and licensing | Any third-party or AI-assisted content | `/asset-intake`, `/gen-brief` |
 | SOP-05 Git | Branching, commits, LFS | (manual) |
 | SOP-06 Build and release | Shipping a build | `/release-check` |

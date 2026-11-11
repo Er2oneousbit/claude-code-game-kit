@@ -35,9 +35,11 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import bozzetto as bz  # noqa: E402
 import reference as ref  # noqa: E402
+import tripo as tp  # noqa: E402  (the shared Tripo client the tripo route uses)
 import refsheet  # noqa: E402
 cl = bz.cl
 ref.bind(bz)   # as bozzetto.py's parser does, for the cases that call reference.py's helpers directly
+tp.bind(bz)
 
 KEY_G = "AIzaTEST-gemini-key-never-written-7f3a"
 KEY_T = "tsk_TEST-tripo-key-never-written-91c2"
@@ -306,16 +308,17 @@ class Base(unittest.TestCase):
         (self.root / "docs" / "ASSET_LOG.md").write_text(LOG, encoding="utf-8")
         (self.root / "art_src").mkdir()
         (self.root / "art_src" / "concept.png").write_bytes(figure_png((150, 30, 30), w=40, h=56))
-        self.saved = (cl.SLEEP, bz.SLEEP, ref.GEMINI_BASE, ref.TRIPO_BASE, ref.OPENER, os.getcwd(),
+        self.saved = (cl.SLEEP, bz.SLEEP, ref.GEMINI_BASE, tp.BASE, ref.OPENER, tp.OPENER, os.getcwd(),
                       {k: os.environ.get(k) for k in (ref.GEMINI_ENV, ref.TRIPO_ENV)})
         cl.SLEEP = bz.SLEEP = lambda s: None
-        ref.GEMINI_BASE, ref.TRIPO_BASE = self.url + "/v1beta", self.url + "/v3"
-        ref.OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({})).open   # never a system proxy
+        ref.GEMINI_BASE, tp.BASE = self.url + "/v1beta", self.url + "/v3"
+        no_proxy = urllib.request.build_opener(urllib.request.ProxyHandler({})).open   # never a system proxy
+        ref.OPENER = tp.OPENER = no_proxy
         os.environ[ref.GEMINI_ENV], os.environ[ref.TRIPO_ENV] = KEY_G, KEY_T
         os.chdir(self.root)
 
     def tearDown(self):
-        cl.SLEEP, bz.SLEEP, ref.GEMINI_BASE, ref.TRIPO_BASE, ref.OPENER, cwd, env = self.saved
+        cl.SLEEP, bz.SLEEP, ref.GEMINI_BASE, tp.BASE, ref.OPENER, tp.OPENER, cwd, env = self.saved
         for k, v in env.items():
             if v is None:
                 os.environ.pop(k, None)
@@ -418,6 +421,14 @@ class FrontDoor(Base):
         self.assertIn(ref.REPOSE, text)
         self.assertIn(ref.TURN.format(how=ref.TURN_HOW["left"]), text)
 
+    def test_one_tripo_client_in_bozzetto(self):
+        """The tripo route talks to Tripo only through tripo.py (shared with make and rig): no URL, upload or
+        endpoint of its own."""
+        src = (HERE / "reference.py").read_text(encoding="utf-8")
+        for own in ("openapi.tripo3d.ai", '"/files"', "/generation/", "Bearer"):
+            self.assertNotIn(own, src)
+        self.assertIsInstance(ref.Tripo(None, None).client, tp.Client)
+
     def test_missing_key_exits_2_and_quote_only_needs_none(self):
         for route, env in (("nanobanana", ref.GEMINI_ENV), ("tripo", ref.TRIPO_ENV)):
             os.environ.pop(env)
@@ -492,6 +503,8 @@ class LocalRoute(Base):
         self.assertTrue((self.root / "docs" / "licenses" / "A-0001.txt").is_file())
         self.assertIn("make chr_hero --image assets_src/bozzetto/chr_hero/reference/front.png", out)
         self.assertIn("multiview make", out)
+        self.assertIn("make chr_hero --with tripo --class npc --front assets_src/bozzetto/chr_hero/reference/front.png",
+                      out)
         self.clean_files()
 
     def test_concept_is_reposed_then_turned(self):

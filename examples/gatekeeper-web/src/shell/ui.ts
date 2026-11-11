@@ -5,7 +5,7 @@
 // Usage   : const m = new Menu() ; m.add(buttonItem(i18n, "menu.play", () => play())) ; panel.append(...m.elements())
 //           screen.onAction = (a) => m.handle(a)
 //           glyph(i18n, "key_space")   // <img> when public/assets/ui/glyphs/key_space.png exists, else a keycap
-// Notes   : Browser only, no Phaser. Every visible string is marked: data-tr (went through I18n.t, the
+// Notes   : Browser only, no renderer import. Every visible string is marked: data-tr (went through I18n.t, the
 //           pseudo-locale check expects "[" at its start) or data-val (numbers, key names, content). The
 //           pseudo check (pseudoCheck.ts) flags any text that is neither. data-id names a label in reports.
 //           Glyph PNGs (public/assets/ui/glyphs/<glyph_name>.png) can come from Dotwork's UI kit

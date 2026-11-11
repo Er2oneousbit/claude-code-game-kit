@@ -2,7 +2,7 @@
 // shellLogic.test.ts
 // Purpose : Unit tests for the shell's engine-free helpers that the golden vectors do not cover: the rotating
 //           game log, crash files, consent-gated telemetry, the dialogue reader, hold-to-toggle, binding
-//           conflicts.
+//           conflicts and the key / gamepad names the input layer produces.
 // Usage   : python tools/dev.py test
 // Notes   : No browser, no Phaser: everything runs on MemoryStore, or on fullStorage() (a localStorage stand-in
 //           that throws like a full one) for the log's degraded mode.
@@ -18,6 +18,8 @@ import {
   GameLog, LOG_FILE, LOG_KEEP, TELEMETRY_FILE, TELEMETRY_HEADER, TELEMETRY_MAX_ROWS, Telemetry, crashText, csvField, csvRows,
   stamp, writeCrash,
 } from "../src/core/userData";
+import { keyName, padButtonName, padDevice } from "../src/shell/input";
+import { MAX_SLIDER_STEPS, MENU_TARGET, slideAction } from "../src/shell/driveLogic";
 
 describe("GameLog", () => {
   it("starts each log with the version and a timestamp", () => {
@@ -208,5 +210,37 @@ describe("findConflicts", () => {
   it("finds two game actions on one key, not a ui and a game action", () => {
     const b: Bindings = { jump: ["key:k"], attack: ["key:k"], ui_accept: ["key:k"] };
     expect(findConflicts(b)).toEqual([["attack", 0], ["jump", 0]]);
+  });
+});
+
+describe("input names", () => {
+  it("turns KeyboardEvent.code into binding names", () => {
+    expect(["KeyA", "Digit7", "ArrowUp", "Space", "Escape", "Numpad4", "ShiftRight", "F8"].map(keyName))
+      .toEqual(["a", "7", "up", "space", "escape", "kp_4", "shift", "f8"]);
+  });
+
+  it("names standard-mapping buttons and pad families", () => {
+    expect([0, 1, 9, 12, 20].map(padButtonName)).toEqual(["south", "east", "start", "dpad_up", "b20"]);
+    expect(padDevice("Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e)")).toBe("pad_xbox");
+    expect(padDevice("DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c)")).toBe("pad_playstation");
+    expect(padDevice("8BitDo Pro 2")).toBe("pad_other");
+  });
+});
+
+describe("menus drive", () => {
+  it("steps the master slider towards 0.5 from any start value", () => {
+    const t = MENU_TARGET.master;
+    expect([slideAction(1, t), slideAction(0.3, t), slideAction(0, t), slideAction(t, t)])
+      .toEqual(["ui_left", "ui_right", "ui_right", ""]);
+    // a slider with 0.05 steps (rounded like settingsScreen's numRow) gets there within the press budget
+    for (let start = 0; start <= 20; start++) {
+      let v = start * 0.05;
+      let presses = 0;
+      while (slideAction(v, t) && presses < MAX_SLIDER_STEPS) {
+        v = Math.round((v + (slideAction(v, t) === "ui_left" ? -0.05 : 0.05)) * 100) / 100;
+        presses++;
+      }
+      expect(v, `from ${start * 0.05}`).toBeCloseTo(t, 9);
+    }
   });
 });

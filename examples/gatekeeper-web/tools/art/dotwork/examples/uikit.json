@@ -13,7 +13,7 @@
   {
    "name": "menu",
    "style": "iron",
-   "font": "assets/art/ui/fonts/font_dialogue.fnt",
+   "font": "art/ui/fonts/font_dialogue.fnt",
    "keys": [
     "minus",
     "period"

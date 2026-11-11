@@ -8,12 +8,20 @@
 #           only while network connections are on. POSIX home paths warn with or without a
 #           trailing slash; text files over the scan cap are listed, media and binaries are not. A .pxo
 #           holding an absolute export folder (Pixelorama) warns; a blank or relative one does not.
+#           #157: --range scans only the lines a range adds and its commit messages, groups findings per commit,
+#           catches local-only, scratch and secret files a commit adds (renames too, not deletions), warns on a
+#           missing --trailer and a personal email once; --terms (plain whole words or re: lines, from the option
+#           or PUBLISH_CHECK_TERMS) hits text, file names and commit messages without printing the term, and FAILs
+#           when the list itself would be published; --style catches em dashes; bad ranges and lists exit 2.
 # Usage   : python tools/test_publish_check.py
 # Exit    : 0 all pass, 1 a case failed (skips when git is not installed)
 # Notes   : Fake secrets are built by concatenation so this file never matches itself.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
+import contextlib
+import io
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -29,8 +37,9 @@ FAKE_GH = "gh" + "p_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8"
 FAKE_KEY_BLOCK = "-----BEGIN " + "OPENSSH PRIVATE KEY-----"
 
 
-@unittest.skipUnless(shutil.which("git"), "git not installed")
-class PublishCheckExam(unittest.TestCase):
+class RepoCase(unittest.TestCase):
+    """A fresh git repo with a LICENSE, a README and a .gitignore, per test."""
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
@@ -46,6 +55,9 @@ class PublishCheckExam(unittest.TestCase):
         subprocess.run(["git", "-C", str(self.root), "-c", f"user.email={email}", "-c", "user.name=Dev",
                         "-c", "commit.gpgsign=false", *args], check=True, capture_output=True)
 
+
+@unittest.skipUnless(shutil.which("git"), "git not installed")
+class PublishCheckExam(RepoCase):
     def results(self):
         _, fails, warns = publish_check.run(self.root)
         return " | ".join(fails), " | ".join(warns), fails
@@ -304,6 +316,199 @@ class PublishCheckExam(unittest.TestCase):
         (self.root / "art.pxo").write_bytes(bytes(raw))
         self.assertIn("art.pxo: its data.json cannot be read", self.results()[1])
         self.assertIn(publish_check.main(["--root", str(self.root)]), (0, 1))
+
+
+EM = "\u2014"     # written as an escape: the kit's own files carry no em dash
+
+
+@unittest.skipUnless(shutil.which("git"), "git not installed")
+class RangeAndTermsExam(RepoCase):
+    """#157: --range A..B (added lines, messages, files a commit must not add), --terms, --style, --trailer."""
+
+    def setUp(self):
+        super().setUp()
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "base")
+        self.private = tempfile.TemporaryDirectory()           # the term list lives outside the repo
+        self.terms = Path(self.private.name) / "private-terms.txt"
+        self.terms.write_text("# private names\n\nKraken\nre:proj(ect)?[-_ ]?nebula\n", encoding="utf-8")
+
+    def tearDown(self):
+        self.private.cleanup()
+        super().tearDown()
+
+    def commit(self, files, message, email="dev@users.noreply.github.com", force=()):
+        for name, text in files.items():
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if text is None:
+                path.unlink()
+            else:
+                path.write_bytes(text.encode("utf-8"))
+        self.git("add", "-A")
+        for name in force:
+            self.git("add", "-f", name)
+        self.git("commit", "-q", "-m", message, email=email)
+
+    def main(self, *argv):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            code = publish_check.main(["--root", str(self.root)] + list(argv))
+        return code, out.getvalue()
+
+    # ---- --range ----
+    def test_only_lines_the_range_adds_are_scanned(self):
+        self.commit({"old.gd": f'var t = "{FAKE_GH}"\n'}, "old token, before the range")
+        self.git("tag", "start")
+        self.commit({"new.gd": "var a = 1\n" + f'var t = "{FAKE_GH}"\n', "old.gd": f'var t = "{FAKE_GH}"\nvar b = 2\n'},
+                    "add new.gd")
+        code, out = self.main("--range", "start..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn("new.gd line 2: looks like a GitHub token", out)
+        self.assertNotIn("old.gd", out)                    # its token came before the range; only "var b" is new
+        self.assertIn("1 commit(s) in start..HEAD", out)
+        self.assertIn("add new.gd: 1 FAIL, 0 WARN", out)
+
+    def test_findings_are_grouped_per_commit_with_hash_and_subject(self):
+        self.git("tag", "start")
+        self.commit({"a.txt": "fine\n"}, "first clean commit")
+        self.commit({"b.md": "built in /home/" + "alice/proj\n"}, "second adds a path")
+        code, out = self.main("--range", "start..HEAD")
+        self.assertEqual(code, 0, out)                     # a home path WARNs, it does not FAIL
+        short = subprocess.run(["git", "-C", str(self.root), "rev-parse", "--short", "HEAD"], capture_output=True,
+                               encoding="utf-8").stdout.strip()
+        self.assertIn(f"  {short} second adds a path: 0 FAIL, 1 WARN", out)
+        self.assertIn("first clean commit: 0 FAIL, 0 WARN", out)
+        self.assertIn("b.md line 1: /home/" + "alice", out)
+
+    def test_commit_messages_are_scanned(self):
+        self.git("tag", "start")
+        self.commit({"a.txt": "x\n"}, "fix login\n\nused token " + FAKE_GH + " from C:\\Users\\" + "alex\\keys")
+        code, out = self.main("--range", "start..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn("commit message line 3: looks like a GitHub token", out)
+        self.assertIn("commit message line 3: C:\\Users\\" + "alex", out)
+
+    def test_files_a_commit_must_not_add(self):
+        self.git("tag", "start")
+        self.commit({"CLAUDE.local.md": "my machine\n", "captures/progress/01.png": "png", ".env": "X=1\n",
+                     "tools/notes.log": "log\n", "src/ok.gd": "var a = 1\n"}, "oops", force=(".env", "CLAUDE.local.md"))
+        code, out = self.main("--range", "start..HEAD")
+        self.assertEqual(code, 1, out)
+        self.assertIn("CLAUDE.local.md: a local-only or scratch file", out)
+        self.assertIn("captures/progress/01.png: a local-only or scratch file", out)
+        self.assertIn("tools/notes.log: a local-only or scratch file", out)
+        self.assertIn(".env: secret-type file in the commit", out)
+        self.assertNotIn("src/ok.gd", out)
+        self.git("tag", "mid")
+        self.commit({"CLAUDE.local.md": None}, "remove it")          # a deletion publishes nothing new
+        self.assertEqual(self.main("--range", "mid..HEAD")[0], 0)
+
+    def test_a_rename_onto_a_local_only_name_is_caught(self):
+        self.commit({"notes.md": "a\nb\nc\nd\n"}, "notes")
+        self.git("tag", "start")
+        self.git("mv", "notes.md", "CLAUDE.local.md")
+        self.git("commit", "-q", "-m", "rename")
+        code, out = self.main("--range", "start..HEAD")
+        self.assertIn("CLAUDE.local.md: a local-only or scratch file", out)
+
+    def test_trailer_and_email_warnings(self):
+        self.git("tag", "start")
+        self.commit({"a.txt": "1\n"}, "with trailer\n\nCo-Authored-By: Helper <noreply@example.com>")
+        self.commit({"b.txt": "2\n"}, "without trailer", email="alex@example.com")
+        self.commit({"c.txt": "3\n"}, "again without\n\nCo-Authored-By: Helper <noreply@example.com>",
+                    email="alex@example.com")
+        code, out = self.main("--range", "start..HEAD", "--trailer", "co-authored-by:")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("no 'co-authored-by:' trailer"), 1, out)
+        self.assertEqual(out.count("email alex@example.com"), 1, out)      # reported once, at its first commit
+
+    def test_bad_ranges_and_options_exit_2(self):
+        for argv in (["--range", "HEAD"], ["--range", "nope..HEAD"], ["--trailer", "X"], ["--range=-x..HEAD"]):
+            code, out = self.main(*argv)
+            self.assertEqual(code, 2, (argv, out))
+            self.assertNotIn("Traceback", out)
+        code, out = self.main("--commits", "HEAD..HEAD")                    # the issue's spelling works too
+        self.assertEqual(code, 0, out)
+        self.assertIn("0 commit(s)", out)
+
+    def test_added_lines_parser(self):
+        patch = ("diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1,0 +1,2 @@\n+++ not a header\n+second\n"
+                 "diff --git \"a/sp\\303\\251c\\tial\" \"b/sp\\303\\251c\\tial\"\nnew file mode 100644\n--- /dev/null\n"
+                 "+++ \"b/sp\\303\\251c\\tial\"\n@@ -0,0 +1 @@\n+only\n\\ No newline at end of file\n"
+                 "diff --git a/gone b/gone\ndeleted file mode 100644\n--- a/gone\n+++ /dev/null\n@@ -1 +0,0 @@\n-old\n"
+                 "diff --git a/y b/y\n--- a/y\n+++ b/y\n@@ -5,2 +5 @@\n-a\n-b\n+c\r\n")
+        self.assertEqual(list(publish_check.added_lines(patch)),
+                         [("x", 1, "++ not a header"), ("x", 2, "second"), ("sp\u00e9c\tial", 1, "only"), ("y", 5, "c")])
+
+    # ---- --terms ----
+    def test_private_terms_in_text_names_and_history(self):
+        self.commit({"a.txt": "x\n"}, "wip on the kraken boss")
+        (self.root / "story.md").write_text("The KRAKEN rises.\nkrakens are fine\n", encoding="utf-8")
+        (self.root / "coral_kraken.gd").write_text("var a = 1\n", encoding="utf-8")
+        (self.root / "b.txt").write_text("see Project-Nebula and projnebula\n", encoding="utf-8")
+        code, out = self.main("--terms", str(self.terms))
+        self.assertEqual(code, 1, out)
+        self.assertIn("story.md line 1: private term (terms file line 3)", out)
+        self.assertNotIn("story.md line 2", out)                      # whole words only
+        self.assertIn("coral_kraken.gd: its path contains a private term (terms file line 3)", out)
+        self.assertIn("b.txt line 1: private term (terms file line 4)", out)
+        self.assertIn("message: private term (terms file line 3)", out)
+        self.assertIn("2 private term(s) checked", out)
+        for line in out.splitlines():                                  # the terms are never printed
+            if "private term" in line:
+                self.assertNotRegex(line.lower(), r"kraken\b(?!\.gd)|nebula")
+
+    def test_terms_from_the_environment_and_in_a_range(self):
+        self.git("tag", "start")
+        self.commit({"lore.md": "the kraken\n"}, "lore")
+        os.environ[publish_check.TERMS_ENV] = str(self.terms)
+        try:
+            code, out = self.main("--range", "start..HEAD")
+        finally:
+            del os.environ[publish_check.TERMS_ENV]
+        self.assertEqual(code, 1, out)
+        self.assertIn("lore.md line 1: private term (terms file line 3)", out)
+
+    def test_the_term_list_itself_must_not_be_published(self):
+        inside = self.root / ".private-terms.txt"
+        inside.write_text("Kraken\n", encoding="utf-8")
+        code, out = self.main("--terms", str(inside))
+        self.assertIn(".private-terms.txt: the private term list itself would be published", out)
+        self.assertEqual(out.count("private term (terms file line 1)"), 0, out)      # the list is not scanned
+        (self.root / ".gitignore").write_text(".env\n.private-terms.txt\n", encoding="utf-8")
+        code, out = self.main("--terms", str(inside))
+        self.assertEqual(code, 0, out)
+        self.git("tag", "start")
+        self.git("add", "-f", ".private-terms.txt")
+        self.git("commit", "-q", "-m", "oops")
+        code, out = self.main("--range", "start..HEAD", "--terms", str(inside))
+        self.assertIn(".private-terms.txt: commits the private term list itself", out)
+
+    def test_bad_terms_files_exit_2(self):
+        bad = Path(self.private.name) / "bad.txt"
+        for text, words in (("re:(unclosed\n", "line 1: not a valid regular expression"),
+                            ("ok\nre:x*\n", "line 2: the regular expression matches empty text")):
+            bad.write_text(text, encoding="utf-8")
+            code, out = self.main("--terms", str(bad))
+            self.assertEqual(code, 2, out)
+            self.assertIn(words, out)
+        code, out = self.main("--terms", str(Path(self.private.name) / "missing.txt"))
+        self.assertEqual(code, 2, out)
+        self.assertIn("cannot read the terms file", out)
+
+    # ---- --style ----
+    def test_style_flags_em_dashes_only_when_asked(self):
+        (self.root / "notes.md").write_text(f"fast {EM} and loud\n", encoding="utf-8")
+        self.assertEqual(self.main()[0], 0)
+        code, out = self.main("--style")
+        self.assertEqual(code, 1, out)
+        self.assertIn("notes.md line 1: an em dash", out)
+        self.git("tag", "start")
+        self.commit({"x.md": "ok\n"}, f"subject {EM} with a dash")
+        code, out = self.main("--range", "start..HEAD", "--style")
+        self.assertIn("commit message line 1: an em dash", out)
+        self.assertIn("notes.md line 1: an em dash", out)               # notes.md is added in that commit too
 
 
 if __name__ == "__main__":

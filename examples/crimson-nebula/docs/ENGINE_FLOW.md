@@ -81,6 +81,7 @@ headless). In a smoke run they land in `build/smoke-data/`.
 - `tests/golden.rs`: replays every case in `data/golden/juice.json` and `shell.json` through the juice and shell
   modules (one test per case type; `cargo test --test golden -- --nocapture` prints the counts). To change their
   behavior, change `tools/golden_vectors.py` first, run it with `--write`, then fix `src/logic/` until this passes.
+  `credits.json` checks the credits page's text (HTML comments out of CREDITS.md, `shell::screens`).
   `audio.json`, `music.json` and `access.json` check the audio modules the same way (`audio_director`,
   `music_director`, `audio_access`); their references are in `tools/audio/wavesmith/`, and each file is written by
   its own command: `python tools/audio/wavesmith/wavesmith.py events vectors --write` (audio.json), then

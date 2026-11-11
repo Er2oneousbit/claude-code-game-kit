@@ -27,6 +27,8 @@
 //           long loading takes
 //   show  : open one screen, settle, freeze the game, SHOWN <screen> (smoke takes the screenshot)
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the still frame goes through the shell's GameHost,
+//           so web and web-3d share this file (#175)
 // ---------------------------------------------------------------------------
 import { glyphName, glyphSet, promptBinding } from "../core/bindings";
 import { PSEUDO_LOCALE } from "../core/i18n";
@@ -36,6 +38,7 @@ import { DATA_DIR_PARAM, dataPrefix } from "../core/textStore";
 import { accessScreen } from "./accessAudit";
 import { describe } from "./narrator";
 import type { Shell } from "./app";
+import type { GameKey } from "./host";
 import { MAX_SLIDER_STEPS, MENU_TARGET, slideAction } from "./driveLogic";
 import { SETTINGS_FILE } from "./meta";
 import { TABS } from "./settingsScreen";
@@ -144,7 +147,7 @@ class Driver {
     if (read() !== want) throw new Error(`${id} did not reach ${String(want)} (is ${String(read())})`);
   }
 
-  async game(key: "main" | "juice"): Promise<void> {
+  async game(key: GameKey): Promise<void> {
     this.shell.startGame(key);
     await this.screen(key === "main" ? "play" : "juice");
     await frames(10);
@@ -183,7 +186,7 @@ async function crash(shell: Shell, d: Driver): Promise<void> {
   await d.toMenu();
   await d.choose("menu", "menu.play");
   await d.screen("play");
-  shell.plantedCrash = true; // the play scene throws in its next update; the crash hook logs DRIVE_DONE crash
+  shell.plantedCrash = true; // the play world throws in its next update; the crash hook logs DRIVE_DONE crash
   await waitFor("the crash screen", () => shell.topId === "crash");
 }
 
@@ -277,7 +280,7 @@ async function show(shell: Shell, d: Driver, what: string): Promise<void> {
         await d.press("attack"); // the box is in reach at the start: shake, hitstop, squash, flash
         await frames(4);
       }
-      if (shell.scene) shell.game?.scene.pause(shell.scene); // a still frame for the screenshot
+      if (shell.scene) shell.host?.pause(shell.scene); // a still frame for the screenshot
       break;
     default:
       throw new Error(`unknown screen "${what}" (title, menu, settings, pause, subtitle, juice)`);

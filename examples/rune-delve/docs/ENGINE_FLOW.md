@@ -123,7 +123,8 @@ The plugin's tests: `GameKit.Golden.Juice.<case>`, `GameKit.Golden.Shell.<case>`
 `shell.json`, `audio.json`, `music.json` and `access.json` from the project folder and compare every value with the kit's reference
 (`tools/golden_vectors.py`) within the file's tolerance; `GameKit.Golden.Coverage` fails when a vector type has no case;
 `GameKit.Shell.*` writes real files in a temp folder (a crash between write and rename leaves the old file, a corrupt save
-falls back to the `.bak`, a newer game's save is never overwritten). Keep `data/golden/` in the repo.
+falls back to the `.bak`, a newer game's save is never overwritten); `GameKit.Screens.CreditsDropHtmlComments` runs
+`data/golden/credits.json` through the credits page (CREDITS.md without its HTML comments). Keep `data/golden/` in the repo.
 
 - Player files: `FPaths::ProjectSavedDir() / TEXT("GameKit/settings.json")` and `.../save.json` (the user's folder in a
   packaged game). The headers' Usage blocks show each call; settings and saves are `FJsonObject`, so keys a newer build
@@ -269,7 +270,19 @@ place on the editor's Python path (kit_shaders/shader_check.py under `Content/Py
    Blueprint-only project with the plugin packaged in about 4 minutes on UE 5.8 (Windows, 2026-11-10); its exe, started
    from another folder with `-GameKitShell -GameKitLocale=fr`, read `data/i18n` and narrated in French, and the
    plugin's `GameKit.Screens` tests passed inside it (`-ExecCmds="Automation RunTests GameKit.Screens; Quit"`).
-   `CREDITS.md` is not staged yet: the packaged credits screen shows its placeholder **(verify, kit issue)**.
+   `CREDITS.md` ships as a copy, credits.md in `data/`: Unreal stages folders, not single files, and a
+   `RuntimeDependencies` line for it would fail the package whenever the file is missing (an exists-check there
+   goes stale: UBT caches the rules). So the plugin copies `CREDITS.md` into `data/` whenever an editor build of it starts: the
+   editor, and the cook every packaging route runs first (`dev.py package`, the editor's Package Project, UAT), so
+   the copy is fresh when `data/` is staged. The copy is gitignored and removed when `CREDITS.md` is gone; edit
+   `CREDITS.md`, never the copy. The credits screen reads `CREDITS.md` when it is there (the editor), else
+   the copy (the packaged game), else shows its placeholder; either file loses its HTML comments (#279); the log
+   says which (`credits: 7 lines from ...`). `dev.py package` archives into `Packaged/.next/` and then replaces that platform's folder, since UAT's
+   `-archive` never empties its target and a file the game dropped would ship again. K01 (UE 5.8, Windows,
+   2026-11-11): a Blueprint-only project packaged with and without `CREDITS.md`; started from another folder, its
+   credits screen showed the file's text (screenshot through `GameKit.Screens.Show`) and the placeholder.
+   A cook inside the editor process (the Project Launcher's "cook in editor") makes no new copy: there it is as
+   fresh as the editor's start **(verify)**.
 3. Test the packaged build on a clean machine (SOP-06). Check logs under `Saved/Logs/` of the packaged game.
 
 ## Common errors

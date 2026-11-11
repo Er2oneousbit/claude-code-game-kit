@@ -4,7 +4,8 @@
 // Usage   : scrap_tanks [--debug] [--smoke N] [--screenshot FILE] [--record DIR] [--version] [--help] [-- game args]
 //             --debug     verbose logging (LOG_DEBUG lines)
 //             --smoke N   run N frames headless (dummy video/audio, software
-//                         renderer), print BOOT_OK and exit 0. Used by dev.py smoke.
+//                         renderer), print BOOT_OK and exit 0. Used by dev.py smoke, which also reads the
+//                         FRAME_TIMES line printed at the end (core/FrameTimes.hpp, #90).
 //                         Outside smoke runs the renderer is SDL's GPU renderer, which runs the kit's
 //                         shader recipes (src/gfx/KitShaders.hpp); without a GPU backend, the default one.
 //             --screenshot FILE  save the last frame as BMP;  --record DIR  save every Nth frame
@@ -61,6 +62,7 @@
 
 #include "core/AtomicFile.hpp"
 #include "core/FixedTimestep.hpp"
+#include "core/FrameTimes.hpp"
 #include "core/Log.hpp"
 #include "core/Report.hpp"
 #include "game/Game.hpp"
@@ -336,11 +338,13 @@ int main(int argc, char** argv) {
     const double freq = static_cast<double>(SDL_GetPerformanceFrequency());
     Uint64 last = SDL_GetPerformanceCounter();
     int frames = 0;
+    core::FrameTimes frame_times;  // smoke runs: how long each frame took, for dev.py's FRAME_TIMES line (#90)
 
     // The top of the loop: an exception from anywhere in a frame stops the game with a crash file (#275). A game
     // that can recover from an error catches it closer to where it happens.
     try {
         while (!game.quit_requested()) {
+            const Uint64 frame_start = SDL_GetPerformanceCounter();
             SDL_Event event;
             while (SDL_PollEvent(&event)) {
                 // Mouse positions in the game's logical space (SDL2's logical size did this by itself; SDL3 asks)
@@ -377,6 +381,9 @@ int main(int argc, char** argv) {
                 }
             }
             SDL_RenderPresent(renderer.get());
+            if (smoke) {
+                frame_times.add(static_cast<double>(SDL_GetPerformanceCounter() - frame_start) * 1000.0 / freq);
+            }
 
             ++frames;
             if (smoke && frames >= opts.smoke_frames) {
@@ -388,6 +395,10 @@ int main(int argc, char** argv) {
         return stop_on_exception(std::string("exception: ") + e.what(), window.get(), smoke);
     } catch (...) {
         return stop_on_exception("an exception of an unknown type", window.get(), smoke);
+    }
+    if (smoke && frame_times.size() > 0) {
+        // unthrottled frames under the dummy driver, drawn by the software renderer: CPU work, not a GPU budget
+        std::cout << frame_times.line("software") << std::endl;
     }
     if (smoke && frames < opts.smoke_frames) {
         // dev.py smoke passes this only when --until saw its marker: an early quit is not a full run

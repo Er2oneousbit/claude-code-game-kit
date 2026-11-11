@@ -14,6 +14,8 @@
 //           would take WASD, Space and Enter for its own actions); Escape still reaches the shell and pauses.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): the kit's shell wired in (#182)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the shell gets a GameHost (src/game/phaserHost.ts),
+//           not the Phaser game; Dotwork manifests are checked before the shell (kit 0.14.5, #175, #55)
 // ---------------------------------------------------------------------------
 import { shell } from "./shell/app";
 import * as Phaser from "phaser";
@@ -21,6 +23,8 @@ import { BackdropScene } from "./game/BackdropScene";
 import { Controller } from "./game/controller";
 import { GateScene } from "./game/GateScene";
 import { JuiceScene } from "./game/JuiceScene";
+import { verifyDotwork } from "./game/dotworkVerify";
+import { phaserHost } from "./game/phaserHost";
 
 const MENUS_CLASS = "in-menus"; // on <body> while the shell's title or menus are up: the page panels hide (index.html)
 
@@ -37,7 +41,7 @@ export const game = new Phaser.Game({
   input: { gamepad: false },
   // the first one starts on its own; the shell runs the others ("main" = GateScene, "juice" = the kit's demo)
   scene: direct ? [GateScene, BackdropScene, JuiceScene] : [BackdropScene, GateScene, JuiceScene],
-  callbacks: { postBoot: (g) => !direct && shell.start(g) },
+  callbacks: { postBoot: (g) => void (!direct && verifyDotwork(g).then(() => shell.start(phaserHost(g)))) },
 });
 
 let controller: Controller | null = null;

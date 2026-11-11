@@ -11,6 +11,8 @@
 //           (-unity-paragraph-spacing); lines inside one wrapped paragraph keep the font's own spacing (verify:
 //           a later Unity may add line-height). Focus looks different from hover on purpose: hover is not styled.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): outlined text keeps its colour (OutlineFace,
+//           FaceColour, #283)
 // ---------------------------------------------------------------------------
 using System.Collections.Generic;
 using UnityEngine;
@@ -26,7 +28,8 @@ namespace {{GAME_SLUG}}.Shell
         public const float HEADING = 1.5f;          // heading size as a multiple of the body
         public const float TITLE = 2.5f;
         public const int MIN_PX = 8;
-        public const int OUTLINE_PX = 2;            // text drawn over the game gets this outline
+        public const int OUTLINE_PX = 2;            // text drawn over the game gets this outline around its letters
+                                                    // (the font's distance field caps it: about 1.2 px at body size)
         public const int FOCUS_BORDER = 3;
         public const string READABLE_FONT = "GameKit/Fonts/AtkinsonHyperlegible-Regular";   // Resources path
 
@@ -100,11 +103,25 @@ namespace {{GAME_SLUG}}.Shell
                                                        : new StyleFontDefinition(StyleKeyword.Null);
         }
 
-        /// <summary>Text drawn over the game (HUD, subtitles): a black outline so it reads on any background.</summary>
+        /// <summary>Text drawn over the game (HUD, subtitles): a black outline so it reads on any background, with an
+        /// un-outlined copy on top (OutlineFace) so the letters keep their colour (#283). Call once per text.</summary>
         public static void Outline(TextElement e)
         {
-            e.style.unityTextOutlineWidth = OUTLINE_PX;
+            e.style.unityTextOutlineWidth = OUTLINE_PX * 2;   // centred on the glyph's edge: half of it is under the face
             e.style.unityTextOutlineColor = OUTLINE;
+            OutlineFace.Attach(e);
+        }
+
+        /// <summary>The colour a player sees on a text's letters: its face copy's when it has one; the outline's when
+        /// it is outlined without one (UI Toolkit's outline covers the face, #283); else its own.</summary>
+        public static Color FaceColour(TextElement e)
+        {
+            TextElement face = OutlineFace.Of(e);
+            if (face != null && face.panel != null && face.resolvedStyle.display != DisplayStyle.None)
+            {
+                return face.resolvedStyle.color;
+            }
+            return e.resolvedStyle.unityTextOutlineWidth > 0f ? e.resolvedStyle.unityTextOutlineColor : e.resolvedStyle.color;
         }
 
         /// <summary>A panel: a solid colour, rounded corners and padding (in reference pixels).</summary>
@@ -127,6 +144,10 @@ namespace {{GAME_SLUG}}.Shell
             Color text = focused ? TEXT_ON_FOCUS : TEXT;
             foreach (TextElement t in box.Query<TextElement>().ToList())
             {
+                if (OutlineFace.IsFace(t))
+                {
+                    continue;                              // copies its text's colour itself
+                }
                 t.style.color = text;
             }
         }

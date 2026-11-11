@@ -20,7 +20,8 @@
 #           rig-check (free) -> rig (Mixamo spec, 25 credits) -> retarget (10 credits a clip) -> download; the
 #           quote is printed first and the run refuses past --max-credits or the balance. Tripo returns every model
 #           1.0 m tall: rig_finish.py scales it back by 1/normalize_scale. Paid outputs are yours under Tripo's
-#           terms (5.2.2); outputs from free credits are not.
+#           terms (5.2.2); outputs from free credits are not. The Tripo client, the --max-credits cap with the
+#           balance check and the tasks.json journal are tripo.py's, shared with `make --with tripo`.
 #           Licences: UniRig MIT; its checkpoint was trained on Articulation-XL2.0 (CC-BY-4.0: the credit goes in
 #           the asset log and docs/licenses/).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
@@ -39,10 +40,9 @@ import shutil
 import subprocess
 import sys
 import time
-import urllib.error
-import urllib.request
-import uuid
 from pathlib import Path
+
+import tripo as tp   # the Tripo client, journal and cap, shared with make --with tripo
 
 bz = None   # bozzetto.py binds itself here (bind): importing it again would load a second copy
 
@@ -51,8 +51,7 @@ RIG_DIR = HERE / "rig"
 FINISH = HERE / "rig_finish.py"
 PATCHER = RIG_DIR / "patch_unirig.py"
 RIG_LICENSES = RIG_DIR / "licenses"
-UNIRIG_ENV, UNIRIG_PY_ENV, TRIPO_ENV = "UNIRIG_DIR", "UNIRIG_PY", "TRIPO_API_KEY"
-TRIPO_BASE = "https://openapi.tripo3d.ai/v3"
+UNIRIG_ENV, UNIRIG_PY_ENV, TRIPO_ENV = "UNIRIG_DIR", "UNIRIG_PY", tp.TRIPO_ENV
 TRIPO_RIG_MODEL = "v3.0-20260909"
 TRIPO_COST = {"rig": 25, "clip": 10}          # credits (1 credit = $0.01), read 2026-11-05
 TRIPO_CLIPS = ("idle", "walk", "run", "dive", "climb", "jump", "slash", "shoot", "hurt", "fall", "turn")
@@ -60,12 +59,10 @@ CLIPS_DEFAULT = "idle,wave,walk"
 UNIRIG_CLIPS = ("idle", "wave", "walk")      # what rig_finish.py can key (CLIPS_KNOWN there)
 SUFFIXES = "obj,fbx,FBX,dae,glb,gltf,vrm"
 STEP_WAIT_S = 1800
-POLL_S = 3
 RECORD = "rig.json"
 CREDIT_UNIRIG = ("Rig by UniRig (VAST-AI-Research, MIT); its checkpoint was trained on Articulation-XL2.0 "
                  "(Seed3D, CC-BY-4.0).")
 CREDIT_TRIPO = "Rig and clips by the Tripo3D API (paid credits; outputs owned by the paying user, Tripo terms 5.2.2)."
-OPENER = urllib.request.urlopen              # the exam replaces it
 PROBE = True                                 # import torch/spconv/bpy in UniRig's env (the exam turns it off)
 
 
@@ -73,6 +70,7 @@ def bind(module):
     """Use the running bozzetto module (its DEBUG flag, Blender helpers, error types)."""
     global bz
     bz = module
+    tp.bind(module)
 
 
 # ---- UniRig ---------------------------------------------------------------------------------------------------
@@ -206,77 +204,7 @@ def run_unirig(inp, work, log, root, wait=STEP_WAIT_S):
     return merged, times, sampler.peak
 
 
-# ---- Tripo ----------------------------------------------------------------------------------------------------
-class Tripo:
-    def __init__(self, key, base=TRIPO_BASE):
-        self.key, self.base = key, base.rstrip("/")
-
-    def call(self, method, path, body=None, raw=None, ctype=None):
-        h = {"Authorization": f"Bearer {self.key}"}
-        data = None
-        if body is not None:
-            data, h["Content-Type"] = json.dumps(body).encode(), "application/json"
-        if raw is not None:
-            data, h["Content-Type"] = raw, ctype
-        req = urllib.request.Request(self.base + path, data=data, method=method, headers=h)
-        try:
-            with OPENER(req, timeout=180) as r:
-                doc = json.loads(r.read().decode("utf-8"))
-        except urllib.error.HTTPError as e:
-            msg = e.read().decode("utf-8", "replace")[:300]
-            if e.code in (401, 403):
-                raise bz.ToolError(f"Tripo refused the key (HTTP {e.code}): check {TRIPO_ENV}")
-            raise bz.JobError(f"Tripo {path}: HTTP {e.code}: {msg}")
-        except (urllib.error.URLError, OSError) as e:
-            raise bz.ToolError(f"cannot reach Tripo ({self.base}): {e}")
-        if doc.get("code", 0) != 0:
-            raise bz.JobError(f"Tripo {path}: {doc.get('message') or doc}")
-        return doc.get("data") or {}
-
-    def balance(self):
-        return float(self.call("GET", "/account/balance").get("balance", 0))
-
-    def upload(self, path):
-        b = "----bozzetto" + uuid.uuid4().hex
-        raw = (f"--{b}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{path.name}\"\r\n"
-               f"Content-Type: model/gltf-binary\r\n\r\n").encode() + path.read_bytes() + f"\r\n--{b}--\r\n".encode()
-        tok = self.call("POST", "/files", raw=raw, ctype=f"multipart/form-data; boundary={b}").get("file_token")
-        if not tok:
-            raise bz.JobError("Tripo's upload returned no file_token")
-        return tok
-
-    def task(self, path, body, what, wait, on_created=None):
-        tid = self.call("POST", path, body=body).get("task_id")
-        if not tid:
-            raise bz.JobError(f"Tripo {what}: no task id")
-        if on_created:
-            on_created(tid)          # journal the paid task before anything else can fail (#210)
-        return tid, self.wait_for(tid, what, wait)
-
-    def wait_for(self, tid, what, wait):
-        t0 = time.monotonic()
-        while True:
-            d = self.call("GET", f"/tasks/{tid}")
-            st = d.get("status")
-            if st == "success":
-                print(f"[ OK ] Tripo {what}: task {tid}, {time.monotonic() - t0:.0f} s, "
-                      f"{float(d.get('credits_consumed') or 0):g} credits", flush=True)
-                return d
-            if st in ("failed", "cancelled", "banned", "expired"):
-                raise bz.JobError(f"Tripo {what}: {st} (task {tid})")
-            if time.monotonic() - t0 > wait:
-                raise bz.JobError(f"Tripo {what} did not finish in {wait} s (task {tid}; a re-run picks it up from "
-                                  "tasks.json without paying again)")
-            bz.SLEEP(POLL_S)
-
-    def download(self, url, dst):
-        try:
-            with OPENER(urllib.request.Request(url), timeout=300) as r:
-                dst.write_bytes(r.read())
-        except (urllib.error.URLError, OSError) as e:
-            raise bz.JobError(f"could not download Tripo's model (links expire after 5 minutes): {e}")
-
-
+# ---- Tripo (the client, journal and cap are tripo.py's, shared with make --with tripo) ----------------------
 def tripo_clips(text):
     if text.strip().lower() in ("", "none"):
         return []
@@ -289,124 +217,68 @@ def tripo_clips(text):
     return clips
 
 
-JOURNAL = "tasks.json"   # Tripo: every paid task, written as it is created and as it finishes (#210)
-
-
 def run_tripo(args, inp, work, clips, input_sha):
-    """Quote, then upload -> rig-check -> rig -> retarget -> download, with a journal so paid work survives a
-    failure: a re-run for the same input and clips reuses finished tasks (fetching a fresh model URL) instead of
+    """Quote, then upload -> rig-check -> rig -> retarget -> download, with tripo.py's journal so paid work survives
+    a failure: a re-run for the same input and clips reuses finished tasks (fetching a fresh model URL) instead of
     paying again. Actual credits are checked against --max-credits and the balance before each paid call (#209).
     Returns (rigged .glb, scale to apply, credits spent in total, tasks)."""
-    t = Tripo(os.environ[TRIPO_ENV], getattr(args, "tripo_url", None) or TRIPO_BASE)
-    jpath = work / JOURNAL
-    want = {"input_sha256": input_sha, "clips": clips, "rig_model": TRIPO_RIG_MODEL}
-    try:
-        old = json.loads(jpath.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        old = {}
-    j = old if (not args.no_reuse and all(old.get(k) == v for k, v in want.items())) else dict(want, tasks={})
-    tasks = j.setdefault("tasks", {})
-
-    def save():
-        jpath.write_text(json.dumps(j, indent=2) + "\n", encoding="utf-8")
-
-    def done(step):
-        return (tasks.get(step) or {}).get("status") == "success"
-
-    # a task journalled as running (the last run timed out or was interrupted while it was paid for): ask Tripo how
-    # it ended before paying for another one (#221)
-    for step in ("rig", "retarget"):
-        entry = tasks.get(step) or {}
-        if entry.get("status") == "running" and entry.get("id"):
-            st = t.call("GET", f"/tasks/{entry['id']}").get("status")
-            if st in ("failed", "cancelled", "banned", "expired"):
-                print(f"[info] the last run's {step} task {entry['id']} ended {st}; a new one will be made")
-                del tasks[step]
-                save()
-                continue
-            try:
-                d = t.wait_for(entry["id"], f"{step} (from the last run)", args.wait)
-            except bz.JobError:
-                # still running after --wait: never pay for a second one while the first may still finish
-                raise bz.ToolError(f"the last run's {step} task {entry['id']} is still running at Tripo; run again "
-                                   f"later (it is kept in {JOURNAL}), or pass --no-reuse to pay for a new one")
-            else:
-                tasks[step] = {"id": entry["id"], "status": "success", "credits": float(d.get("credits_consumed") or 0)}
-                if step == "rig":
-                    tasks[step]["normalize_scale"] = (d.get("output") or {}).get("normalize_scale")
-            save()
-
-    spent = sum(float(v.get("credits") or 0) for v in tasks.values())
-    todo = ([] if done("rig") else ["rig"]) + ([] if (done("retarget") or not clips) else ["retarget"])
+    t = tp.Client()
+    j = tp.Journal(work / tp.JOURNAL, {"input_sha256": input_sha, "clips": clips, "rig_model": TRIPO_RIG_MODEL},
+                   reuse=not args.no_reuse)
+    j.settle(t, ("rig", "retarget"), args.wait,
+             lambda step, d: {"normalize_scale": (d.get("output") or {}).get("normalize_scale")} if step == "rig" else {})
+    todo = ([] if j.done("rig") else ["rig"]) + ([] if (j.done("retarget") or not clips) else ["retarget"])
     quote = (TRIPO_COST["rig"] if "rig" in todo else 0) + (TRIPO_COST["clip"] * len(clips) if "retarget" in todo else 0)
-    bal = t.balance()
-    if done("rig"):
-        print(f"[ OK ] reusing paid Tripo work from {JOURNAL}: " + ", ".join(
-            f"{k} task {v['id']}" for k, v in tasks.items() if v.get("status") == "success") + " (no new credits)")
+    budget = tp.Budget(args.max_credits, t.balance(), j.spent())
+    if j.done("rig"):
+        print(f"[ OK ] reusing paid Tripo work from {tp.JOURNAL}: {j.reused()} (no new credits)")
     print(f"[info] Tripo quote: {quote} credits still to spend (rig {TRIPO_COST['rig']}, {len(clips)} clip(s) x "
-          f"{TRIPO_COST['clip']}); balance {bal:g}; limit --max-credits {args.max_credits}")
-
-    def afford(more):
-        """Refuse a paid call that would take actual spend past --max-credits or the balance."""
-        if spent + more > args.max_credits:
-            raise bz.ToolError(f"spending {more} more credits would make {spent + more:g} in all, over --max-credits "
-                               f"{args.max_credits}; finished tasks are kept in {JOURNAL} for a re-run")
-        if more > bal:
-            raise bz.ToolError(f"the Tripo balance ({bal:g} credits) is under the next step ({more}); API credits are "
-                               "bought separately from a Tripo Studio plan")
-
-    afford(quote)
-    rig = None
+          f"{TRIPO_COST['clip']}); balance {budget.balance:g}; limit --max-credits {args.max_credits}")
+    budget.afford(quote)
     if "rig" in todo:
-        tok = t.upload(inp)
+        tok = t.upload(inp.read_bytes(), inp.name, "model/gltf-binary")
         chk = t.wait_for(t.call("POST", "/animations/rig-check", body={"input": tok}).get("task_id"),
                          "rig check (free)", args.wait)
         out = chk.get("output") or {}
         if not out.get("riggable") or out.get("rig_type") != "biped":
             raise bz.JobError(f"Tripo says this model is not a riggable biped (riggable={out.get('riggable')}, "
                               f"type={out.get('rig_type')})")
-        afford(TRIPO_COST["rig"] + (TRIPO_COST["clip"] * len(clips) if clips else 0))
+        budget.afford(TRIPO_COST["rig"] + (TRIPO_COST["clip"] * len(clips) if clips else 0))
 
         def created(tid):
-            tasks["rig"] = {"id": tid, "status": "running"}
-            save()
-            print(f"[info] Tripo rig task {tid} (journal: {JOURNAL})", flush=True)
+            j.running("rig", tid)
+            print(f"[info] Tripo rig task {tid} (journal: {tp.JOURNAL})", flush=True)
         rig_id, rig = t.task("/animations/rig", {"input": tok, "model": TRIPO_RIG_MODEL, "rig_type": "biped",
                                                  "spec": "mixamo"}, "rig (Mixamo bones)", args.wait, created)
         cost = float(rig.get("credits_consumed") or 0)
-        tasks["rig"] = {"id": rig_id, "status": "success", "credits": cost,
-                        "normalize_scale": (rig.get("output") or {}).get("normalize_scale")
-                        or out.get("normalize_scale")}
-        spent += cost
-        save()
-        bal -= cost
+        j.finished("rig", rig_id, cost, normalize_scale=(rig.get("output") or {}).get("normalize_scale")
+                   or out.get("normalize_scale"))
+        budget.charge(cost)
     final_step = "retarget" if clips else "rig"
     if "retarget" in todo:
-        afford(TRIPO_COST["clip"] * len(clips))     # with the rig's actual cost now counted
+        budget.afford(TRIPO_COST["clip"] * len(clips))     # with the rig's actual cost now counted
 
         def created(tid):
-            tasks["retarget"] = {"id": tid, "status": "running"}
-            save()
-            print(f"[info] Tripo clips task {tid} (journal: {JOURNAL})", flush=True)
-        anim_id, anim = t.task("/animations/retarget", {"input": tasks["rig"]["id"],
+            j.running("retarget", tid)
+            print(f"[info] Tripo clips task {tid} (journal: {tp.JOURNAL})", flush=True)
+        anim_id, anim = t.task("/animations/retarget", {"input": j.tasks["rig"]["id"],
                                                         "animations": [f"preset:{c}" for c in clips],
                                                         "animate_in_place": True}, "clips", args.wait, created)
         cost = float(anim.get("credits_consumed") or 0)
-        tasks["retarget"] = {"id": anim_id, "status": "success", "credits": cost}
-        spent += cost
-        save()
+        j.finished("retarget", anim_id, cost)
+        budget.charge(cost)
     # the finished task is queried again for its model URL (URLs expire after 5 minutes; a reused task needs a new one)
-    fin = t.wait_for(tasks[final_step]["id"], f"{final_step} result", args.wait)
+    fin = t.wait_for(j.tasks[final_step]["id"], f"{final_step} result", args.wait)
     url = (fin.get("output") or {}).get("model_url")
     if not url:
-        raise bz.JobError(f"Tripo returned no model URL for task {tasks[final_step]['id']}; it is kept in {JOURNAL}, "
-                          "a re-run fetches it again without paying")
+        raise bz.JobError(f"Tripo returned no model URL for task {j.tasks[final_step]['id']}; it is kept in "
+                          f"{tp.JOURNAL}, a re-run fetches it again without paying")
     dst = work / "tripo.glb"
     if dst.exists():
         dst.unlink()
     t.download(url, dst)
-    norm = tasks["rig"].get("normalize_scale") or 1.0
-    return dst, 1.0 / float(norm), spent, {k: v["id"] for k, v in tasks.items()}
+    norm = j.tasks["rig"].get("normalize_scale") or 1.0
+    return dst, 1.0 / float(norm), j.spent(), {k: v["id"] for k, v in j.tasks.items()}
 
 
 # ---- commands -------------------------------------------------------------------------------------------------
@@ -423,7 +295,7 @@ def cmd_rig_check(args):
     tripo_ok = False                 # ready only when the key works, not merely when it is set (#222)
     if os.environ.get(TRIPO_ENV):
         try:
-            print(f"[ OK ] Tripo route (paid): balance {Tripo(os.environ[TRIPO_ENV]).balance():g} credits")
+            print(f"[ OK ] Tripo route (paid): balance {tp.Client().balance():g} credits")
             tripo_ok = True
         except (bz.ToolError, bz.JobError) as e:
             print(f"[FAIL] Tripo route: {e}")

@@ -10,6 +10,7 @@ as well on a model you made, bought or downloaded.
 |---|---|---|
 | A character concept or idea to model-ready views (A-pose front, left, back, right) | `python tools/bozzetto/bozzetto.py reference <name> --from <concept.png>` (or `--prompt "..."`; `--with nanobanana` or `tripo` is paid) | [Local generation](#local-generation-bozzetto), `tools/bozzetto/README.md` "Reference views" |
 | A model from a picture or a sentence, on your own GPU | `python tools/bozzetto/bozzetto.py make <name> --image <ref.png>` (or `--prompt "..."`) | [Local generation](#local-generation-bozzetto), `tools/bozzetto/README.md` |
+| The same from Tripo (paid credits, no GPU; one picture, several views or a sentence) | `bozzetto.py make <name> --with tripo --image <ref.png>` (or `--front F --back B ...`, or `--prompt "..."`) | [Local generation](#local-generation-bozzetto) "The Tripo route", `tools/bozzetto/README.md` |
 | Clean a raw generated mesh (merge, fragments, decimate, height, pivot) | `tools/bozzetto/cleanup.py`, in Blender | `tools/bozzetto/README.md` "What lands where" |
 | Look at a model from every side | `tools/bozzetto/turntable.py`, in Blender | `tools/bozzetto/README.md` |
 | Check a model against its class budget | `tools/blender/validate_asset.py <file.glb> --class <class>` | Stage 4 below |
@@ -18,7 +19,7 @@ as well on a model you made, bought or downloaded.
 | Procedural props, kits, shaders, batch jobs | Claude-written scripts in `tools/blender/` | [Claude and Blender](#claude-and-blender) |
 | Rig a character (skeleton, skin weights, Mixamo bone names, clips) | `python tools/bozzetto/bozzetto.py rig make <name>` (UniRig, free, your GPU; or `--with tripo`, paid) | `tools/bozzetto/README.md` "Rig a character" |
 | Animate beyond that, retarget, creatures | Guidance and scripts | [Animation](#animation), `docs/resources/pipelines.md` |
-| Paid generators (Meshy and others; Tripo for rigging and reference pictures) | Not wired in (Tripo: `rig --with tripo`, `reference --with tripo`; Gemini: `reference --with nanobanana`) | `docs/resources/ai-tools.md` |
+| Paid generators (Meshy and others) | Not wired in (Tripo is: `make --with tripo`, `rig --with tripo`, `reference --with tripo`; Gemini: `reference --with nanobanana`) | `docs/resources/ai-tools.md` |
 | Log and credit an asset | `/asset-intake` | Stage 7 below |
 | Ask Claude for any of it | the `model-pipeline` skill | Follows this SOP |
 
@@ -77,6 +78,14 @@ preview; `check` says what is missing. Setup, options and limits: `tools/bozzett
 - Licences: TRELLIS.2 and BiRefNet are MIT; DINOv3 (its image encoder) has a use-restriction list (military, weapons)
   whose reach over game props is an open question to settle before you ship such a model (`tools/bozzetto/LICENSES.md`).
   Upstream TRELLIS.2's RMBG-2.0 and nvdiffrast are non-commercial and never loaded (E147, E148, E149).
+- **The Tripo route** (`make <name> --with tripo`): the Tripo3D API makes the mesh instead (`--image`, several views
+  with `--front` plus `--left`/`--back`/`--right`, or `--prompt`), then the same cleanup, budget check, LODs, turntable
+  and log row follow. It costs paid API credits (a Tripo Studio plan adds none): the quote is printed first,
+  `--max-credits` (default 150) caps a run, and a re-run reuses the paid task. A P2 image-to-model cost 110 credits
+  in the kit's test, not the 30 of the public table (E153); Tripo has no price endpoint (E160), so the other quotes
+  are set to that ceiling until measured. Outputs on paid credits are the user's (Tripo terms 5.2.2, E153). Tripo
+  exports facing +X (E160): Bozzetto turns its models to glTF's +Z **(verify on a live run)**; check the turntable,
+  `--turn` overrides. Ask the user before every paid run.
 
 ## Claude and Blender
 - Default: headless scripts in `tools/blender/`. Diffable, repeatable, reviewable.

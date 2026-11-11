@@ -28,8 +28,8 @@
 #           journal (reference/journal.json, outputs in reference/steps/) so a rerun reuses what was paid for, the
 #           actual cost recorded, keys only ever in request headers, metadata stripped from every picture sent out.
 #           Prices and terms were read on 2026-11-11 and are marked (verify) in the README.
-#           The Tripo HTTP client here is a minimal one of its own (#288); rig.py has another. They are meant to
-#           become one shared client with the Tripo model route (#287).
+#           Tripo goes through tripo.py's shared Client and Budget (the image endpoints, models and quote are there);
+#           the per-picture journal here also serves the Gemini route, so it stays this tool's own.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
@@ -59,6 +59,7 @@ import uuid
 from pathlib import Path
 
 import refsheet
+import tripo as tp   # the one Tripo client in Bozzetto (Client, Budget; image tasks), shared with make and rig
 
 bz = None   # bozzetto.py binds itself here (bind)
 
@@ -74,7 +75,6 @@ JOURNAL = "journal.json"
 STEPS = "steps"                     # pictures the routes made, kept for reuse and for the record
 SHEET = "sheet.png"
 WAIT_S = 1800
-POLL_S = 3
 MAX_DOWNLOAD = 64 * 1024 * 1024
 CONCEPT_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
 
@@ -126,14 +126,9 @@ GEMINI_THINK_TOKENS = 2000          # quote allowance for thinking tokens per ca
 GEMINI_TIMEOUT_S = 360
 GEMINI_MAX_COST = 1.00              # dollars, default --max-cost
 
-# ---- Tripo ------------------------------------------------------------------------------------------------------
-TRIPO_ENV = "TRIPO_API_KEY"
-TRIPO_BASE = "https://openapi.tripo3d.ai/v3"   # the exam points this at a stand-in
-TRIPO_MODEL = "banana2"
-TRIPO_MODELS = {"banana2": "1K", "banana_pro": "1K", "banana": "1024x1024", "seedream_v5": "2K"}   # model: size
-TRIPO_QUOTE = {"text_to_image": 10, "image_to_image": 10, "image_to_multiview": 10}   # credits, upper bounds (verify)
+# ---- Tripo: the client, endpoints, image models and quote live in tripo.py (shared with make and rig) -------------
+TRIPO_ENV = tp.TRIPO_ENV
 TRIPO_MAX_COST = 40                 # credits (1 credit = $0.01), default --max-cost
-TRIPO_FAILED = ("failed", "cancelled", "banned", "expired")
 
 # ---- terms (record and asset log) ------------------------------------------------------------------------------
 TERMS = {
@@ -275,19 +270,6 @@ def http_json(method, url, headers, body=None, raw=None, timeout=180, secret="")
     return status, doc, scrub(text, secret)
 
 
-def download(url, what):
-    try:
-        with OPENER(urllib.request.Request(url, headers={"User-Agent": "claude-code-game-kit bozzetto"}),
-                    timeout=300) as r:
-            data = r.read(MAX_DOWNLOAD + 1)
-    except (urllib.error.URLError, OSError) as e:
-        raise bz.JobError(f"could not download {what}: {getattr(e, 'reason', e)} (the link may have expired; a rerun "
-                          "asks for a fresh one without paying again)")
-    if len(data) > MAX_DOWNLOAD:
-        raise bz.JobError(f"{what} is over {MAX_DOWNLOAD // 2 ** 20} MB")
-    return data
-
-
 # ---- plan -----------------------------------------------------------------------------------------------------------
 def parse_views(text):
     want = [v.strip().lower() for v in (text or "").split(",") if v.strip()]
@@ -352,9 +334,9 @@ class Plan:
                                    f"{', '.join(GEMINI_PRICES)} (add its price to GEMINI_PRICES in reference.py)")
             self.unit, self.cap = "usd", GEMINI_MAX_COST if args.max_cost is None else args.max_cost
         else:
-            self.model = args.model or TRIPO_MODEL
-            if self.model not in TRIPO_MODELS:
-                raise bz.ToolError(f"--model {self.model}: Tripo image models wired in here: {', '.join(TRIPO_MODELS)}")
+            self.model = args.model or tp.IMAGE_MODEL
+            if self.model not in tp.IMAGE_MODELS:
+                raise bz.ToolError(f"--model {self.model}: Tripo image models wired in here: {', '.join(tp.IMAGE_MODELS)}")
             self.unit, self.cap = "credits", TRIPO_MAX_COST if args.max_cost is None else args.max_cost
         if self.route != "local" and self.cap <= 0:
             raise bz.ToolError("--max-cost must be a positive number")
@@ -662,62 +644,14 @@ class Gemini:
 
 # ---- tripo route ---------------------------------------------------------------------------------------------------
 class Tripo:
-    """A minimal Tripo client for its image tasks (#288). rig.py has its own; both are to merge with #287's."""
+    """Tripo's image tasks through the shared client (tripo.py: Client, Budget), with this tool's per-picture journal:
+    a front from text-to-image or image-to-image, the other views from one image-to-multiview task."""
     unit = "credits"
 
     def __init__(self, args, plan):
         self.args, self.plan = args, plan
-        self.key = os.environ.get(TRIPO_ENV, "")
-
-    # -- HTTP
-    def call(self, method, path, body=None, raw=None, ctype=None):
-        h = {"Authorization": f"Bearer {self.key}"}
-        if body is not None:
-            h["Content-Type"] = "application/json"
-        if raw is not None:
-            h["Content-Type"] = ctype
-        status, doc, text = http_json(method, TRIPO_BASE + path, h, body=body, raw=raw, secret=self.key)
-        if status in (401, 403):
-            raise bz.ToolError(f"Tripo refused the key (HTTP {status}): check {TRIPO_ENV}")
-        if status != 200 or doc is None:
-            raise bz.JobError(f"Tripo {path}: HTTP {status}: {text[:300]}")
-        if doc.get("code", 0) != 0:
-            raise bz.JobError(f"Tripo {path}: {doc.get('message') or text[:300]}")
-        return doc.get("data") or {}
-
-    def balance(self):
-        return float(self.call("GET", "/account/balance").get("balance", 0))
-
-    def upload(self, data, ctype, name):
-        b = "----bozzetto" + uuid.uuid4().hex
-        raw = (f"--{b}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{name}\"\r\n"
-               f"Content-Type: {ctype}\r\n\r\n").encode() + data + f"\r\n--{b}--\r\n".encode()
-        tok = self.call("POST", "/files", raw=raw, ctype=f"multipart/form-data; boundary={b}").get("file_token")
-        if not tok:
-            raise bz.JobError("Tripo's upload returned no file_token")
-        return tok
-
-    def wait_for(self, tid, what):
-        t0 = time.monotonic()
-        while True:
-            d = self.call("GET", f"/tasks/{tid}")
-            st = d.get("status")
-            if st == "success":
-                return d, time.monotonic() - t0
-            if st in TRIPO_FAILED:
-                raise bz.JobError(f"Tripo {what}: {st} (task {tid}; a failed task is not charged)")
-            if time.monotonic() - t0 > self.args.wait:
-                raise bz.JobError(f"Tripo {what} did not finish in {self.args.wait} s (task {tid}; a rerun picks it "
-                                  f"up from {JOURNAL} without paying again)")
-            bz.SLEEP(POLL_S)
-
-    # -- steps
-    def body(self, extra):
-        b = {"model": self.plan.model, "size": TRIPO_MODELS[self.plan.model], "output_format": "png"}
-        if self.plan.model.startswith("banana"):
-            b["aspect_ratio"] = "1:1"
-        b.update(extra)
-        return b
+        self.client = tp.Client()
+        self.budget = None            # tp.Budget, made at the first paid step (it needs the balance)
 
     def keys(self):
         src = sha(self.plan.concept_bytes) if self.plan.concept else self.plan.prompt
@@ -736,43 +670,53 @@ class Tripo:
         others = [v for v in self.plan.views if v != "front"]
         if others and not (data is not None and journal.done(self.mv_key(data))[0]):
             todo.append("image_to_multiview")
-        total = sum(TRIPO_QUOTE[t] for t in todo)
+        q = tp.IMAGE_QUOTE
+        total = sum(q[t] for t in todo)
         return float(total), (f"tripo ({self.plan.model}): {', '.join(todo) or 'nothing'} to pay for, up to "
-                              f"{total} credits (${total / 100:.2f}; {', '.join(f'{t} {TRIPO_QUOTE[t]}' for t in todo) or 'all reused'}"
-                              "; upper bounds read 2026-11-11, verify)")
+                              f"{total} credits (${total / 100:.2f}; "
+                              + (', '.join(f'{t} {q[t]}' for t in todo) or 'all reused')
+                              + "; upper bounds read 2026-11-11, verify)")
 
-    def task(self, journal, key, step, path, body, spent, entry_extra):
-        """One paid task with the journal around it: a task the last run left running is waited for (never paid
-        twice), else cap -> balance -> create -> journal as running -> wait. Returns (task data, credits, whether
-        the last run paid for it)."""
+    def task(self, journal, key, kind, extra, spent, entry_extra):
+        """One paid task with the journal around it: a task the last run left running is asked for first (never
+        paid twice; a failed one cost nothing and is made again), else cap and balance (tp.Budget) -> create ->
+        journal as running -> wait. Returns (task data, credits, whether the last run paid for it)."""
         old = journal.running(key)
         if old:
-            print(f"[info] the last run's {step} task {old['task_id']} is in the journal: asking Tripo for it first")
-            st = self.call("GET", f"/tasks/{old['task_id']}").get("status")
-            if st in TRIPO_FAILED:     # failed tasks are not charged: make a new one
+            print(f"[info] the last run's {kind} task {old['task_id']} is in the journal: asking Tripo for it first")
+            st = self.client.call("GET", f"/tasks/{old['task_id']}").get("status")
+            if st in tp.FAILED:
                 print(f"[info] it ended {st} (not charged); a new task will be made")
             else:
-                d, _ = self.wait_for(old["task_id"], f"{step} (from the last run)")
+                d = self.client.wait_for(old["task_id"], f"{kind} (from the last run)", self.args.wait)
                 d.setdefault("task_id", old["task_id"])
                 return d, float(d.get("credits_consumed") or 0), True
-        spent.allow(TRIPO_QUOTE[step], f"Tripo {step} (up to {TRIPO_QUOTE[step]} credits)")
-        if self.bal is None:
-            self.bal = self.balance()
-        if self.bal < TRIPO_QUOTE[step]:
-            raise bz.ToolError(f"the Tripo balance ({self.bal:g} credits) is under the next step's "
-                               f"{TRIPO_QUOTE[step]}; API credits are bought apart from a Tripo Studio plan")
-        tid = self.call("POST", path, body=body).get("task_id")
-        if not tid:
-            raise bz.JobError(f"Tripo {step}: no task id")
-        journal.put(key, dict(entry_extra, step=step, status="running", task_id=tid))
-        print(f"[info] Tripo {step} task {tid} (journal: {REF_DIR}/{JOURNAL})", flush=True)
-        d, secs = self.wait_for(tid, step)
+        if self.budget is None:
+            self.budget = tp.Budget(self.plan.cap, self.client.balance(), spent.new, flag="--max-cost",
+                                    journal=f"{REF_DIR}/{JOURNAL}")
+        self.budget.afford(tp.IMAGE_QUOTE[kind])
+        tid = self.client.image_task(kind, self.plan.model, extra)
+        journal.put(key, dict(entry_extra, step=kind, status="running", task_id=tid))
+        print(f"[info] Tripo {kind} task {tid} (journal: {REF_DIR}/{JOURNAL})", flush=True)
+        d = self.client.wait_for(tid, kind, self.args.wait)
         cost = float(d.get("credits_consumed") or 0)
+        self.budget.charge(cost)
         spent.add(cost)
-        self.bal -= cost
-        print(f"[ OK ] Tripo {step}: {secs:.0f} s, {cost:g} credits", flush=True)
         d.setdefault("task_id", tid)
         return d, cost, False
+
+    def fetch(self, journal, url, what):
+        """A result picture through the shared client (no key goes to the CDN), metadata stripped."""
+        tmp = journal.folder / STEPS / f"download_{uuid.uuid4().hex}"
+        tmp.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            data = self.client.download(url, tmp)
+        finally:
+            if tmp.exists():
+                tmp.unlink()
+        if len(data) > MAX_DOWNLOAD:
+            raise bz.JobError(f"{what} is over {MAX_DOWNLOAD // 2 ** 20} MB")
+        return clean(data)
 
     @staticmethod
     def facts(cost, earlier, extra):
@@ -782,35 +726,35 @@ class Tripo:
     def make_front(self, spent, journal, k):
         if self.plan.concept:
             prompt = REPOSE
-            tok = self.upload(self.plan.concept_bytes, self.plan.concept_type, f"concept{self.plan.concept.suffix}")
-            path, body = "/generation/image-to-image", self.body({"input": tok, "prompt": prompt})
+            tok = self.client.upload(self.plan.concept_bytes, f"concept{self.plan.concept.suffix}",
+                                     self.plan.concept_type)
+            extra = {"input": tok, "prompt": prompt}
         else:
             prompt = FRONT_FROM_PROMPT.format(prompt=self.plan.prompt)
-            path, body = "/generation/text-to-image", self.body({"prompt": prompt})
-        d, cost, earlier = self.task(journal, k, self.front_kind(), path, body, spent, {"prompt": prompt})
+            extra = {"prompt": prompt}
+        d, cost, earlier = self.task(journal, k, self.front_kind(), extra, spent, {"prompt": prompt})
         url = (d.get("output") or {}).get("generated_image_url")
         if not url:
             raise bz.JobError(f"Tripo returned no generated_image_url for task {d['task_id']}; it is kept in "
                               f"{JOURNAL}, a rerun asks for it again without paying")
-        front = download(url, "Tripo's front picture")
-        front = journal.keep(k, front, {"step": "front", "model": self.plan.model, "prompt": prompt, "task_id": d["task_id"],
-                                "cost": cost})
+        front = journal.keep(k, self.fetch(journal, url, "Tripo's front picture"),
+                             {"step": "front", "model": self.plan.model, "prompt": prompt, "task_id": d["task_id"],
+                              "cost": cost})
         return front, self.facts(cost, earlier, {"prompt": prompt, "model": self.plan.model, "task_id": d["task_id"]})
 
     def make_multiview(self, spent, journal, mk, front):
-        """All four of Tripo's multiview pictures into steps/; returns ({view: bytes}, facts)."""
+        """All of Tripo's multiview pictures into steps/; returns ({view: bytes}, facts)."""
         is_png = front.startswith(refsheet.PNG_MAGIC)
-        tok = self.upload(clean(front), "image/png" if is_png else "image/jpeg", "front.png" if is_png else "front.jpg")
-        d, cost, earlier = self.task(journal, mk, "image_to_multiview", "/generation/image-to-multiview",
-                                     {"input": tok}, spent, {})
+        tok = self.client.upload(clean(front), "front.png" if is_png else "front.jpg",
+                                 "image/png" if is_png else "image/jpeg")
+        d, cost, earlier = self.task(journal, mk, "image_to_multiview", {"input": tok}, spent, {})
         urls = (d.get("output") or {}).get("generate_multiview_image") or {}
         files, views = {}, {}
-        (journal.folder / STEPS).mkdir(parents=True, exist_ok=True)
         for v in VIEWS:
             url = urls.get(f"{v}_view_url")
             if not url:
                 continue
-            data = clean(download(url, f"Tripo's {v} view"))
+            data = self.fetch(journal, url, f"Tripo's {v} view")
             rel_file = f"{STEPS}/{mk}_{v}" + (".png" if data.startswith(refsheet.PNG_MAGIC) else ".jpg")
             (journal.folder / rel_file).write_bytes(data)
             files[v], views[v] = rel_file, data
@@ -819,7 +763,6 @@ class Tripo:
         return views, self.facts(cost, earlier, {"task_id": d["task_id"]})
 
     def run(self, spent, journal):
-        self.bal = None
         out = {}
         k = self.keys()["front"]
         entry, front = journal.done(k)
@@ -931,8 +874,9 @@ def next_steps(plan, files):
     print(f"       python tools/{bz.TOOL.lower()}/{bz.TOOL.lower()}.py make {plan.name} --image {r('front')} "
           "--class npc --seed 1      # --class hero for the main character")
     if all(v in files for v in VIEWS):
-        print(f"       multiview make (#287): make {plan.name} --front {r('front')} --left {r('left')} "
-              f"--back {r('back')} --right {r('right')} ...")
+        print(f"       or the paid multiview make (Tripo; quote first, ask): python tools/{bz.TOOL.lower()}/"
+              f"{bz.TOOL.lower()}.py make {plan.name} --with tripo --class npc --front {r('front')} "
+              f"--left {r('left')} --back {r('back')} --right {r('right')}")
 
 
 # ---- command ---------------------------------------------------------------------------------------------------------
@@ -1023,7 +967,7 @@ def add_parser(sub, common):
     p.add_argument("--views", default=",".join(VIEWS), help=f"which views (default {','.join(VIEWS)}; front always)")
     p.add_argument("--seed", type=int, help="seed (local: every sampler; paid routes: names the take in the journal)")
     p.add_argument("--model", help=f"nanobanana: a Gemini image model (default {GEMINI_MODEL}); tripo: "
-                                   f"{', '.join(TRIPO_MODELS)} (default {TRIPO_MODEL})")
+                                   f"{', '.join(tp.IMAGE_MODELS)} (default {tp.IMAGE_MODEL})")
     p.add_argument("--max-cost", type=float, help=f"never spend more than this in one run: dollars for nanobanana "
                                                   f"(default {GEMINI_MAX_COST:.2f}), credits for tripo (default "
                                                   f"{TRIPO_MAX_COST})")

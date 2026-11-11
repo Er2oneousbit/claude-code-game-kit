@@ -13,9 +13,9 @@
 //           rebinding: input.capture((binding) => ...)     // null when cancelled (Escape) or timed out
 //           smoke driver: input.inject("ui_down")          // presses the action's first binding
 //           (app sets input.scripted while a drive runs: then only inject / injectPad press anything)
-// Notes   : Browser only (window, navigator.getGamepads), no Phaser: Phaser's own keyboard and gamepad
-//           plugins are off in main.ts so nothing reads keys twice. Gamepads use the browser's "standard"
-//           mapping (button 0 = south). keyName / padButtonName / padDevice are pure and unit tested.
+// Notes   : Browser only (window, navigator.getGamepads), no renderer import: the renderer reads no keys or pads
+//           itself (on web, Phaser's keyboard and gamepad plugins are off in main.ts), so nothing reads keys twice.
+//           Gamepads use the browser's "standard" mapping (button 0 = south). keyName / padButtonName / padDevice are pure and unit tested.
 //           Analog (the Bevy shell's Intent rules, src/core/analog.ts): stick() is the left stick with the
 //           player's radial, rescaled deadzone and invert_y (up is -y); triggers() are 0 to 1; the stick leaning
 //           past the deadzone also holds move_left/right/up/down (isDown, heldActions), whatever the bindings say.
@@ -23,7 +23,7 @@
 //           furthest. The browser offers no trigger on a pad without the standard mapping (both read 0).
 //           scripted (#276; app sets it while a smoke drive runs): no real device is read, only what the drive
 //           injects. attach() puts a capture-phase guard on the window first, so every real key, mouse, pointer
-//           and touch event stops there (the menus' click and hover handlers, the F8 key, Phaser's pointer too),
+//           and touch event stops there (the menus' click and hover handlers, the F8 key, the renderer's pointer too),
 //           and poll() reads no pad (navigator.getGamepads is live in headless Chromium: a real or virtual pad on
 //           the machine would otherwise reach the tour). inject() and injectPad() still land.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)

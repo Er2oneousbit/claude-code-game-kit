@@ -6,15 +6,21 @@
 #           metadata-free PNG saving, a cross-platform free-RAM check, and starting / stopping a ComfyUI that
 #           Dotwork launched itself.
 # Usage   : imported by dotwork.py and every lane (not run directly)
-# Notes   : Settings, lowest to highest priority: config.example.json (next to this file) -> the game's
+# Notes   : Settings, lowest to highest priority: config.example.json (next to this file) -> the kit engine's
+#           defaults (KIT_ENGINE_DEFAULTS, by the engine in the game's .game-kit.json) -> the game's
 #           art_src/dotwork/dotwork.config.json (or --config) -> environment: COMFYUI_URL, COMFYUI_ROOT, COMFYUI_PYTHON,
-#           SPRITEKILN_ROOT, GODOT_BIN, ASEPRITE_BIN, DOTWORK_WORK.
+#           SPRITEKILN_ROOT, GODOT_BIN, ASEPRITE_BIN, DOTWORK_WORK -> --engine.
 #           Output goes into the game: <assets_dir>/art/... (shipped), <src_dir>/... (editable sources),
 #           <work_dir>/ (caches, ComfyUI downloads, log; keep it gitignored).
 #           ComfyUI is reached over HTTP only (127.0.0.1 unless comfyui.allow_remote); Dotwork never writes into
 #           ComfyUI's folders. If COMFYUI_ROOT is set and no server answers, Dotwork starts one on 127.0.0.1 and stops
 #           it when done; a server it did not start is never stopped.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): Manifest.entity and plain(): records of what each Godot
+#           resource is built from, for the engine-neutral asset manifest (assetmap.py)
+#           2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): defaults per kit engine (KIT_ENGINE_DEFAULTS: Unity's
+#           Assets/, the web overlays' public/assets/, engine none outside Godot); game_file() finds a spec's font
+#           under the assets folder first
 # ---------------------------------------------------------------------------
 import ctypes
 import datetime
@@ -81,6 +87,38 @@ def _read_json(path, what):
         raise ToolError(f"{what} {path} is not valid JSON: {exc}")
 
 
+KIT_META = ".game-kit.json"   # the kit's record of a scaffolded game; its "engine" is the kit engine id
+# Where Dotwork writes in a kit game of each engine when no dotwork.config.json says otherwise (settings layer 2).
+# Mostly the engine's own assets_dir (engines/<id>/engine.json), so the engine sees the art: Unity's folder is
+# "Assets" (Dotwork's "assets" is another folder on a case-sensitive file system), the web overlays serve
+# "public/assets". Unreal and RPG Maker MZ keep "assets" on purpose: Dotwork's output stays OUTSIDE Content/ (the open
+# editor would auto-import the PNGs) and game/ (MZ's own layouts come from `dev.py dotwork`), and their importers read
+# assets/dotwork/. Every engine but Godot gets engine "none": no .tres / .tscn. An engine not listed here: no change.
+KIT_ENGINE_DEFAULTS = {
+    "godot": {},
+    "web": {"engine": "none", "project": {"assets_dir": "public/assets", "res_root": "res://public/assets"}},
+    "web-3d": {"engine": "none", "project": {"assets_dir": "public/assets", "res_root": "res://public/assets"}},
+    "unity": {"engine": "none", "project": {"assets_dir": "Assets", "res_root": "res://Assets"}},
+    "unreal": {"engine": "none"},
+    "rpgmaker-mz": {"engine": "none"},
+    "bevy": {"engine": "none"},
+    "cpp-sdl2": {"engine": "none"},
+    "love2d": {"engine": "none"},
+}
+
+
+def kit_engine(project):
+    """The kit engine id a game was scaffolded with (its .game-kit.json "engine"), or None: not a kit game, or a record
+    that cannot be read (then Dotwork's own defaults apply, as before)."""
+    try:
+        with open(os.path.join(project, KIT_META), encoding="utf-8") as f:
+            eid = json.load(f).get("engine")
+    except (OSError, ValueError, AttributeError) as exc:
+        dbg(f"{KIT_META}: {exc}")
+        return None
+    return eid if isinstance(eid, str) else None
+
+
 class Settings:
     """Everything a lane needs to know about this machine and this game. `conf` is the merged dict; the old
     `conf["fixed"]` view the lanes read is rebuilt from it so lane code stays small."""
@@ -88,6 +126,8 @@ class Settings:
     def __init__(self, project=".", config=None, engine=None, spec=None):
         self.project = os.path.abspath(project)
         base = _read_json(os.path.join(HERE, "config.example.json"), "Dotwork default config")
+        self.kit_engine = kit_engine(self.project)
+        base = _merge(base, KIT_ENGINE_DEFAULTS.get(self.kit_engine, {}))
         user_path = config or os.path.join(self.project, base["project"]["work_dir"], "dotwork.config.json")
         if os.path.exists(user_path):
             base = _merge(base, _read_json(user_path, "Dotwork config"))
@@ -202,6 +242,19 @@ def project_path(p):
     """A path from a spec ("source": "assets_src/concept/tower.png"): relative to the game, not to the folder Dotwork was
     started from (--project), and never outside it."""
     return contained(p, PROJECT, what="spec path")
+
+
+def game_file(conf, p, what="spec path"):
+    """A file a spec names that Dotwork itself wrote into the game (a uikit or widgets "font": a .fnt from the fonts
+    lane): relative to the assets folder first ("art/ui/fonts/font_dialogue.fnt" is assets/... in most games,
+    public/assets/... in a web game, Assets/... in Unity), then relative to the game folder (older specs say
+    "assets/art/..."). Returns the first that is a file, else the game-relative path (the caller says it is missing).
+    Never outside the game."""
+    for root in (asset(conf), PROJECT):
+        full = contained(p, root, PROJECT, what=what)
+        if os.path.isfile(full):
+            return full
+    return full
 
 
 def source_path(p):
@@ -428,6 +481,17 @@ def write_text(path, text):
 
 
 # ---- manifest -----------------------------------------------------------------------
+def plain(v):
+    """v as JSON data: tuples to lists, numpy numbers to Python ones (lanes hand over both)."""
+    if isinstance(v, dict):
+        return {str(k): plain(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [plain(x) for x in v]
+    if hasattr(v, "item") and not isinstance(v, (str, bytes)):
+        return v.item()
+    return v
+
+
 class Manifest:
     """One row per shipped file (SHA-256, kind, prompt, seed, routes, models), in <src_dir>/dotwork/manifest.json.
     `dotwork.py log` turns rows into docs/ASSET_LOG.md entries; rows survive re-runs (keyed by file)."""
@@ -468,6 +532,18 @@ class Manifest:
         if text not in self.data["assumptions"]:
             self.data["assumptions"].append(text)
 
+    def entity(self, kind, path, data):
+        """What one Godot resource (path, written or not) was built from: godot.record calls this, under --engine
+        none too. assetmap.py turns these records and the rows into the engine-neutral asset manifest. Keyed by the
+        resource's game-relative path, so a re-run replaces its record; a record whose files are gone is skipped
+        there."""
+        ents = self.data.setdefault("entities", {})
+        rec = dict(plain(data), kind=kind)
+        rel = self._rel(path)
+        if ents.get(rel) != rec:
+            ents[rel] = rec
+            self.save()
+
     GODOT_EXT = (".tres", ".tscn", ".gdshader", ".gd")
 
     def drop_engine_rows(self):
@@ -490,6 +566,8 @@ class Manifest:
         lexical check and take the target with it (2026-10-30 Kimi audit)."""
         rel = self._rel(dir_abs).rstrip("/") + "/"
         self.data["assets"] = [a for a in self.data["assets"] if not a["file"].startswith(rel)]
+        if self.data.get("entities"):   # records of resources in that folder go with it (the lane records anew)
+            self.data["entities"] = {k: v for k, v in self.data["entities"].items() if not k.startswith(rel)}
         if os.path.exists(dir_abs):
             _inside_or_refuse(dir_abs, self.s.project)
             _rmtree_no_links(dir_abs)

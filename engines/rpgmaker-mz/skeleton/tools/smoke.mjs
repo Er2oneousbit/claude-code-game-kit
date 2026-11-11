@@ -28,6 +28,9 @@
 //           (it was swallowed), an old --screenshot is deleted first, and each capture is checked after the run
 // Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): --record clears the folder's old f*.png frames
 //           first, so it holds this run's frames only
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the time between animation frames after boot is
+//           sampled (tools/frame_times.mjs) and a passing run prints it as the FRAME_TIMES line dev.py smoke
+//           reports and checks against --frame-budget (#90)
 // ---------------------------------------------------------------------------
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -88,6 +91,8 @@ let recorder;
 let recording = null; // the screenshot in flight, awaited before the final picture
 let recordError = "";
 let frameCount = 0;
+let frameTimes = null; // #90: the time between animation frames after boot (tools/frame_times.mjs)
+const frameKit = await import("./frame_times.mjs").catch(() => null); // a project without it measures nothing
 let code = 0;
 if (SCREENSHOT) rmSync(SCREENSHOT, { force: true }); // a picture from an earlier run must not pass for this one
 if (RECORD && existsSync(RECORD)) {
@@ -129,6 +134,7 @@ try {
   if (!(await Promise.race([boot.promise, timeout(TIMEOUT_MS)]))) {
     errors.push(`[smoke] marker ${JSON.stringify(MARKER)} not seen within ${TIMEOUT_MS} ms`);
   } else {
+    await frameKit?.startFrameSampler(page);
     if (RECORD) {
       mkdirSync(RECORD, { recursive: true });
       recorder = setInterval(() => {
@@ -162,6 +168,7 @@ try {
       ]);
       if (!ran) errors.push(`[smoke] ${FRAMES} frames did not run within ${frameMs} ms (the page froze?)`);
     }
+    frameTimes = (await frameKit?.stopFrameSampler(page)) ?? null;
     if (recorder) clearInterval(recorder);
     recorder = null;
     await recording; // the last frame lands (or fails) before the page can close
@@ -190,6 +197,8 @@ if (errors.length) {
 } else {
   const what = UNTIL ? `marker ${JSON.stringify(UNTIL)} reached` : `${FRAMES} frames`;
   console.log(`[ OK ] boot marker seen, ${what}, no errors`);
+  const frames = frameKit?.frameLine(frameTimes, HEADED ? "render" : "software") ?? "";
+  if (frames) console.log(frames); // dev.py smoke reports it and checks --frame-budget
   if (SCREENSHOT) console.log(`[ OK ] screenshot: ${SCREENSHOT}`);
   if (RECORD) console.log(`[ OK ] ${frameCount} frame(s) in ${RECORD} (make a GIF: python tools/art/frames_to_gif.py ${RECORD} out.gif)`);
 }

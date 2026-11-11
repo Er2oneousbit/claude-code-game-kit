@@ -14,7 +14,7 @@ from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fcore as core  # noqa: E402
-from battle_mock import Font  # noqa: E402
+from battle_mock import Font, save_pair  # noqa: E402
 
 
 
@@ -46,10 +46,7 @@ def main(argv=None):
         menu.draw(scr, t, x0, 250 + i * 24)
     cur = Image.open(core.art(conf, "ui", "symbols", "ui_cursor_hand.png"))
     scr.alpha_composite(cur.convert("RGBA"), (x0 - cur.width - 8, 250 + 2))
-    os.makedirs(os.path.dirname(a.out), exist_ok=True)
-    scr.convert("RGB").save(a.out)
-    scr.convert("RGB").resize((1280, 720), Image.NEAREST).save(a.out[:-4] + "_2x.png")
-    print(f"[+] {a.out}")
+    print(f"[+] {save_pair(scr, a.out)}")
     return 0
 
 

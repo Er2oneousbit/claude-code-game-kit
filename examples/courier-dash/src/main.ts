@@ -6,6 +6,10 @@
 // Notes   : Models load first (Game.load), then the loop starts. BOOT_OK is logged after the FIRST RENDERED FRAME, so smoke proves the renderer
 //           really works, not just that the script loaded. Uncaught errors go through Log.error,
 //           which smoke fails on. dt is clamped so a background tab does not teleport the world.
+//           This game keeps its own boot: the kit's shell for web-3d (src/shell/, src/game/threeHost.ts,
+//           Backdrop.ts, JuiceWorld.ts, kit 0.14.5) compiles alongside and its logic is tested, but it is not wired
+//           in, so there is no title or menu and `dev.py smoke --drive` has no screens to drive. Adopting it means
+//           a World (threeHost.ts) around Game and the kit's main.ts boot: see docs/ENGINE.md.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 import * as THREE from "three";

@@ -205,5 +205,27 @@ class Telemetry(unittest.TestCase):
         self.assertEqual(gv.csv_field("x\ny"), '"x\ny"')
 
 
+class Credits(unittest.TestCase):
+    """#279: tools/credits.py writes an HTML comment into CREDITS.md and every credits screen showed it."""
+
+    def test_the_vectors_hold_the_comment_credits_py_writes(self):
+        import credits                                       # tools/credits.py, next to this file
+        with tempfile.TemporaryDirectory() as d:
+            text = credits.credits_md([], Path(d))
+        self.assertIn(gv.CREDITS_HEADER, text, "credits.py changed its comment: update CREDITS_HEADER, then --write")
+        self.assertNotIn("<!--", gv.strip_html_comments(text))
+        self.assertEqual(gv.strip_html_comments(text), "# Credits\n")
+
+    def test_comments_go_and_the_gap_does_not_double(self):
+        self.assertEqual(gv.strip_html_comments("# A\n\n<!-- x -->\n\n- b\n"), "# A\n\n- b\n")
+        self.assertEqual(gv.strip_html_comments("# A\n<!--\nmany\nlines\n-->\n- b"), "# A\n- b")
+        self.assertEqual(gv.strip_html_comments("a <!-- x --> b"), "a  b")
+        self.assertEqual(gv.strip_html_comments("a\n<!-- open"), "a")
+
+    def test_text_without_a_comment_is_unchanged(self):
+        for text in ("", "# Credits\n\n\n- x\n", "<! -- no --> -->", "Zoë ”q”\n"):
+            self.assertEqual(gv.strip_html_comments(text), text)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

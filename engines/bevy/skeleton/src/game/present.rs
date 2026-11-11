@@ -13,25 +13,39 @@
 //           shake_camera undoes last frame's shake before adding this frame's, so it composes with any camera
 //           movement (a follow camera from logic::follow) that runs before it.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+//           Dotwork art (assets/dotwork/*.assets.json, crate::dotwork): when the game has some, show_dotwork puts a
+//           showcase in the top-left corner (a map, a character walking through its directions, a prop and a label
+//           in the font). Replace it with the game's own use of the art: the Dotwork system parameter spawns it.
 // Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): shake_camera applies ScreenShake
 //           2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): palette colours; input moved to the shell
+//           2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the Dotwork showcase (#59)
 // ---------------------------------------------------------------------------
 use bevy::prelude::*;
 
-use super::{Goal, Palette, Player, ScreenShake};
+use super::{Goal, Palette, Player, ScreenShake, TITLE};
+use crate::dotwork::Dotwork;
+use crate::shell::HideUnderJuice;
 
 // ---- Fallback colours (the palette's "none" set normally wins) ------------------
 const PLAYER_COLOUR: Color = Color::srgb(0.95, 0.75, 0.3);
 const TARGET_COLOUR: Color = Color::srgb(0.35, 0.8, 0.45);
 const FLOOR_COLOUR: Color = Color::srgb(0.25, 0.27, 0.32);
 
+// ---- Dotwork showcase ------------------------------------------------------------
+/// Whole-number scale for pixel art (a fractional one blurs or drops pixels).
+const ART_SCALE: f32 = 3.0;
+/// Top-left corner of the showcase, in world units (the camera looks at 0, 0).
+const SHOWCASE_AT: Vec3 = Vec3::new(-600.0, 260.0, 1.0);
+/// Seconds the showcase character walks one way before turning.
+const TURN_SECONDS: f32 = 1.5;
+
 pub struct PresentPlugin;
 
 impl Plugin for PresentPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(ClearColor(FLOOR_COLOUR))
-            .add_systems(Startup, setup_view)
-            .add_systems(Update, (shake_camera, recolour))
+            .add_systems(Startup, (setup_view, show_dotwork))
+            .add_systems(Update, (shake_camera, recolour, turn_walker))
             .add_observer(dress_player)
             .add_observer(dress_goal);
     }
@@ -53,6 +67,98 @@ fn dress_goal(add: On<Add<Goal>>, palette: Res<Palette>, mut commands: Commands)
         palette.get("target", TARGET_COLOUR),
         Vec2::new(4.0, 400.0),
     ));
+}
+
+/// The showcase character: walks through the clips of its "walk" directions, one turn every TURN_SECONDS.
+#[derive(Component, Debug)]
+struct Walker {
+    sprite: String,
+    clips: Vec<String>,
+    next: usize,
+    timer: Timer,
+}
+
+/// Shows the game's Dotwork art, when it has some: its first map, a character with a walk cycle, a prop and a
+/// label in its first font, under one parent at ART_SCALE.
+fn show_dotwork(mut commands: Commands, mut dw: Dotwork) {
+    let packs = &dw.library.packs;
+    let walker = packs.iter().flat_map(|p| p.animated.values()).find_map(|a| {
+        Some((
+            a.name.clone(),
+            a.directions.get("walk")?.values().cloned().collect::<Vec<_>>(),
+        ))
+    });
+    let map = packs
+        .iter()
+        .find_map(|p| p.maps.values().next())
+        .map(|m| m.name.clone());
+    let prop = packs.iter().find_map(|p| p.sprites.keys().next().cloned());
+    let font = packs.iter().find_map(|p| p.fonts.keys().next().cloned());
+    if walker.is_none() && map.is_none() && prop.is_none() && font.is_none() {
+        return;
+    }
+    let root = commands
+        .spawn((
+            Name::new("Dotwork showcase"),
+            Transform::from_translation(SHOWCASE_AT).with_scale(Vec3::new(ART_SCALE, ART_SCALE, 1.0)),
+            Visibility::default(),
+            HideUnderJuice,
+        ))
+        .id();
+    let mut x = 0.0; // the next free column, in art pixels
+    if let Some(name) = map
+        && let Some(e) = dw.spawn_map(&mut commands, &name)
+    {
+        commands.entity(e).insert(ChildOf(root));
+        x += dw
+            .library
+            .map(&name)
+            .map_or(0.0, |(_, m, _)| (m.size.x * m.cell_size.x) as f32)
+            + 16.0;
+    }
+    if let Some((name, clips)) = walker
+        && let Some(e) = dw.spawn_clip(&mut commands, &name, &clips[0])
+    {
+        commands.entity(e).insert((
+            Transform::from_xyz(x + 8.0, -32.0, 0.5),
+            ChildOf(root),
+            Walker {
+                sprite: name,
+                clips,
+                next: 1,
+                timer: Timer::from_seconds(TURN_SECONDS, TimerMode::Repeating),
+            },
+        ));
+        x += 32.0;
+    }
+    if let Some(name) = prop
+        && let Some(e) = dw.spawn_sprite(&mut commands, &name)
+    {
+        commands
+            .entity(e)
+            .insert((Transform::from_xyz(x + 8.0, -32.0, 0.5), ChildOf(root)));
+    }
+    if let Some(name) = font
+        && let Some(e) = dw.spawn_text(&mut commands, &name, TITLE, Color::WHITE)
+    {
+        commands
+            .entity(e)
+            .insert((Transform::from_xyz(0.0, 12.0, 0.5), ChildOf(root)));
+    }
+}
+
+/// Turns the showcase character: the next clip of its walk directions (the Dotwork bundle replaces the old one).
+fn turn_walker(time: Res<Time>, mut commands: Commands, mut dw: Dotwork, mut walkers: Query<(Entity, &mut Walker)>) {
+    for (e, mut w) in &mut walkers {
+        if !w.timer.tick(time.delta()).just_finished() {
+            continue;
+        }
+        let clip = w.clips[w.next % w.clips.len()].clone();
+        w.next += 1;
+        if let Some(bundle) = dw.clip_bundle(&w.sprite, &clip) {
+            commands.entity(e).insert(bundle);
+        }
+    }
 }
 
 /// The colour-blind setting changed: swap every palette colour (SOP-20: palettes, not a filter).

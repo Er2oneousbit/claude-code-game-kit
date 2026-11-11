@@ -27,6 +27,8 @@ data/i18n/               the screens' strings per locale (en.json, fr.json), dat
 data/golden/             the kit's golden vectors, read by the plugin's GameKit.* tests
 Content/Python/kit_shaders/  the kit's shader recipes: kit_recipes.py (generated HLSL), kit_materials.py (builds
                          them as materials), make_materials.py, shader_check.py
+Content/Python/kit_dotwork/  the Dotwork importer (Paper2D): import_dotwork.py, its checks test_dotwork_*.py
+assets/dotwork/          Dotwork's packs (`<pack>.assets.json` + PNGs under assets/art/): outside Content/ on purpose
 Tools/ or tools/         dev.py and helpers
 ```
 
@@ -63,7 +65,8 @@ and a clear spec for the Blueprint child.
   builds in a Blueprint-only project). Turn them on in `Config/DefaultGame.ini` (`bShowScreens=True` under the
   `GameKitShellUI.GameKitShellSettings` section: docs/ENGINE_FLOW.md has the lines) or with `-GameKitShell`; the subsystem
   `UGameKitShellSubsystem` puts them over your map and fires `OnShellEvent` ("play", "resume", "quit_title",
-  "settings_changed"). Strings in `data/i18n/<locale>.json`, credits from `CREDITS.md`. The subsystem also gives the
+  "settings_changed"). Strings in `data/i18n/<locale>.json`, credits from `CREDITS.md` (a packaged game reads
+  its copy, credits.md in `data/`, which the plugin keeps in step: never edit the copy). The subsystem also gives the
   game analog input (`GetStick`, `GetTrigger`, `IsActionHeld`, Blueprint-callable) with the player's deadzone and
   invert_y, writes a crash file on a fatal error, and in debug builds adds the juice demo, the pseudo language and the
   F8 bug report. `python tools/dev.py smoke --drive menus|crash|bug|pseudo` and `--drive show:<screen> --screenshot
@@ -80,6 +83,31 @@ and a clear spec for the Blueprint child.
   minute each). Those runs draw opaque check variants built from the same graph; the translucent `M_Kit_` assets and
   post effects in a Post Process material (PostProcessInput0 in place of `MainTex`) are **(verify)** in your game.
   Python needs the PythonScriptPlugin enabled in the `.uproject`.
+- **Dotwork art (Paper2D):** Dotwork runs with `--engine none` in an Unreal game by default (from `.game-kit.json`;
+  its `assets_dir` stays "assets", which keeps the PNGs out of `Content/`, where the open editor would auto-import
+  them), then `python tools/dev.py exec
+  Content/Python/kit_dotwork/import_dotwork.py` builds every `assets/dotwork/<pack>.assets.json` under
+  `/Game/Dotwork/<pack>/`: textures (`T_`, nearest, no mips, uncompressed), a PaperSprite per frame and per prop
+  (`S_`, custom pivot, collision boxes), a PaperFlipbook per clip (`FB_<name>_<clip>`, a frame rate at which every
+  hold is a whole frame run), a PaperTileSet per atlas (`TS_`, per-tile collision, the surface as user data), a
+  PaperTileMap per map (`TM_`, terrain layers resolved by the blob rule: Paper2D has no autotiling), an offline Font
+  (`F_`) and Slate brushes for UI parts (`SB_`, 9-slice margins). Loop, blend, directions, hotspots and map objects
+  are metadata tags (`dotwork.*`). It also saves `/Game/Dotwork/L_DotworkDemo` (the map, its props, a character
+  walking, a label in the font; `DOTWORK_DEMO=0` skips it). Run it again after every Dotwork `pack`: assets update in
+  place. `dev.py test` runs the importer's checks (the golden pack against `data/golden/dotwork/expected.json`, then
+  every manifest of the game) through the pythonscript commandlet; enable the PythonAutomationTest plugin as well to
+  have them as `Editor.Python.<Game>.kit_dotwork.*` automation tests. Both need `PythonScriptPlugin` (and Paper2D,
+  on by default) in the `.uproject`. Paper2D cannot do: animated tiles (first frame shown), tile variants by
+  probability (the first tile is used), additive blend (no Paper2D material; set one), particles (skipped), a
+  font's per-glyph x offset and kerning pairs (offline Fonts keep one advance per glyph), taller iso tiles' origin
+  (set the tile set's Drawing Offset by eye). An offline Font draws in TextRender and Canvas; UMG text wants a
+  runtime font from a TTF/OTF **(verify)**. The font's page textures can only be set by the commandlet (the editor
+  refuses the `set` command), so import through `dev.py exec`, not from the editor's Python console.
+- **Frame times in smoke (#90):** `dev.py smoke` reports and budget-checks (`--frame-budget MS`) a line
+  `FRAME_TIMES frames=N mean=MS p95=MS p99=MS worst=MS mode=logic` when one of your `<Game>.Smoke.*` tests logs it
+  (the kit ships no Smoke test here). Time each tick with `FPlatformTime::Seconds()` in a latent command and log the
+  line once at the end (nearest-rank percentiles); `mode=logic`, since the automation run uses `-NullRHI` and draws
+  nothing. Without the line smoke says "not measured" and checks no budget **(verify)**.
 
 ## Gotchas (Claude: read before editing)
 1. **Header changes require a full editor restart or a Live Coding-incompatible rebuild.** Prefer building with `dev.py check` and restarting the editor after header/reflection changes. Live Coding handles function body edits only.

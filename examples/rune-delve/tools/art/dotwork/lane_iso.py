@@ -17,6 +17,8 @@
 #           maps to an iso corner: north-west -> top, north-east -> right, south-east -> bottom, south-west -> left
 #           (the projection below). Single iso objects stay in the props lane (template "iso").
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the TileSet's inputs go to godot.record, for the
+#           engine-neutral asset manifest (assetmap.py)
 # ---------------------------------------------------------------------------
 import os
 
@@ -110,6 +112,22 @@ def tileset(path, floors_res, n_floor, blocks_res, n_block, W, bh, trans_res=Non
     one Match Corners terrain set per pair. trans: [(lower name, upper name)]."""
     H = W // 2
     n_src = 1 + bool(n_block) + bool(trans)
+    # what this TileSet is built from, for the engine-neutral manifest (godot.record): one Match Corners terrain set per
+    # transition pair (terrain 0 lower, 1 upper), corners named as Godot's isometric peering bits
+    srcs = [{"atlas_res": floors_res, "kind": "floors", "name": floors_res.rsplit("/", 1)[-1][:-4],
+             "tiles": [{"x": i, "y": 0} for i in range(n_floor)]}]
+    if n_block:
+        srcs.append({"atlas_res": blocks_res, "kind": "blocks", "name": blocks_res.rsplit("/", 1)[-1][:-4],
+                     "region": [W, H + bh], "tiles": [{"x": i, "y": 0, "origin_y": bh // 2} for i in range(n_block)]})
+    if trans:
+        srcs.append({"atlas_res": trans_res, "kind": "transitions", "name": trans_res.rsplit("/", 1)[-1][:-4], "tiles": [
+            {"x": b + 16 * copy, "y": r, "terrain_set": r,
+             "terrain": ((0 if b == 0 else 1) if copy == 0 else (1 if b == 15 else 0)),
+             "corners": {bit[:-7]: (1 if b & m else 0) for bit, m in ISO_CORNERS}}
+            for r in range(len(trans)) for copy in (0, 1) for b in range(16)]})
+    godot.record("tileset", path, {"tile_size": [W, H], "shape": "isometric", "sources": srcs, "terrain_sets": [
+        {"mode": "match_corners", "terrains": [[lower, [51, 153, 51]], [upper, [178, 153, 102]]]}
+        for lower, upper in trans]})
     lines = [f'[gd_resource type="TileSet" load_steps={2 * n_src + 1} format=3]', "",
              f'[ext_resource type="Texture2D" path="{floors_res}" id="1_floor"]']
     if n_block:

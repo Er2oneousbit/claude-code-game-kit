@@ -5,12 +5,14 @@
 // Notes   : The name tables are the tunables: a key SDL names differently on your platform gets an alias here.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): admits_device_event, no real input in a drive (#276)
+//           2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): CREDITS.md loses its HTML comments (#279)
 // ---------------------------------------------------------------------------
 #include "core/ShellLogic.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <sstream>
+#include <string_view>
 #include <utility>
 
 namespace core {
@@ -154,9 +156,85 @@ std::vector<std::string> wrap_chars(const std::string& text, std::size_t max_cha
     return lines;
 }
 
+namespace {
+
+constexpr std::string_view kCommentOpen = "<!--";
+constexpr std::string_view kCommentClose = "-->";
+
+// Only spaces and tabs (every port counts these two; Unicode whitespace differs between languages).
+bool blank_line(const std::string& line) {
+    return line.find_first_not_of(" \t") == std::string::npos;
+}
+
+}  // namespace
+
+std::string strip_html_comments(const std::string& text) {
+    std::string unix_text;                            // CRLF -> LF
+    unix_text.reserve(text.size());
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        if (!(text[i] == '\r' && i + 1 < text.size() && text[i + 1] == '\n')) {
+            unix_text.push_back(text[i]);
+        }
+    }
+    std::vector<std::string> out;
+    bool in_comment = false;
+    bool skip_blank = false;                          // the blank line after a dropped comment-only line
+    std::size_t line_start = 0;
+    while (line_start <= unix_text.size()) {          // split on '\n', keeping a last empty line as Python does
+        std::size_t line_end = unix_text.find('\n', line_start);
+        if (line_end == std::string::npos) {
+            line_end = unix_text.size();
+        }
+        const std::string line = unix_text.substr(line_start, line_end - line_start);
+        line_start = line_end + 1;
+        std::string kept;
+        bool had = in_comment;
+        std::size_t i = 0;
+        while (true) {
+            if (in_comment) {
+                const std::size_t end = line.find(kCommentClose, i);
+                if (end == std::string::npos) {
+                    break;                            // the comment goes on into the next line
+                }
+                in_comment = false;
+                i = end + kCommentClose.size();
+            } else {
+                const std::size_t start = line.find(kCommentOpen, i);
+                if (start == std::string::npos) {
+                    kept += line.substr(i);
+                    break;
+                }
+                kept += line.substr(i, start - i);
+                in_comment = true;
+                had = true;
+                i = start + kCommentOpen.size();
+            }
+        }
+        if (had && blank_line(kept)) {
+            skip_blank = out.empty() || blank_line(out.back());
+            continue;
+        }
+        if (skip_blank && blank_line(kept)) {
+            skip_blank = false;
+            continue;
+        }
+        skip_blank = false;
+        out.push_back(kept);
+    }
+    std::string joined;
+    for (std::size_t n = 0; n < out.size(); ++n) {
+        joined += (n ? "\n" : "") + out[n];
+    }
+    return joined;
+}
+
 std::vector<std::string> credits_lines(const std::string& markdown) {
     std::vector<std::string> out;
-    std::istringstream in(markdown);
+    const std::string text = strip_html_comments(markdown);
+    if (text.find_first_not_of(" \t\n") == std::string::npos) {
+        return out;                                   // nothing but comments and blanks: the placeholder
+    }
+    std::istringstream in(text);
     std::string line;
     while (std::getline(in, line)) {
         if (!line.empty() && line.back() == '\r') {

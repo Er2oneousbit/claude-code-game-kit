@@ -3,6 +3,8 @@
 Dotwork makes a game's 2D pixel art on your own GPU, with local models through ComfyUI. You describe what you need in
 a small JSON spec; Dotwork writes Godot-ready assets straight into the game (`assets/`), editable sources and review
 sheets (`assets_src/`), and a manifest for `docs/ASSET_LOG.md`. Claude (or you) orchestrates; the models only draw.
+Every engine also gets `assets/dotwork/<pack>.assets.json`, the engine-neutral asset manifest its importer reads
+(clips and timings, pivots, collision, autotile masks, maps, fonts, UI margins): [ASSET_MANIFEST.md](ASSET_MANIFEST.md).
 
 What it makes (each is a **lane**): animated characters (4 or 8 directions, idle / walk / attack, battle and emote
 poses), townsfolk in bulk (walk clips plus palette variants), props with collision scenes, layered terrain with
@@ -27,7 +29,8 @@ Tested on Windows 11, RTX 5060 Ti 16 GB, 64 GB RAM, ComfyUI 0.43.0, Godot 4.7.2.
 should work (Dotwork itself is plain Python + HTTP); the numbers below are what this setup needed, not promises.
 
 ## Contents
-0. [First run](#first-run-no-gpu-about-10-s) - see it work in seconds, before installing any model
+0. [First run](#first-run-no-gpu-about-10-s) - see it work in seconds, before installing any model; [other
+   engines](#other-engines-the-importer-brings-the-art-in): the importer per engine
 1. [Setup](#setup) - ComfyUI, node packs (review first), models, Godot, Dotwork's config
 2. [Commands](#commands)
 3. [Pack spec](#pack-spec) - every lane and its keys
@@ -50,8 +53,28 @@ GODOT_BIN=/path/to/godot python tools/art/dotwork/dotwork.py pack --spec tools/a
 python tools/art/dotwork/dotwork.py verify            # every Dotwork asset of this game loads in Godot
 python tools/art/dotwork/dotwork.py log --pack ui     # a docs/ASSET_LOG.md row + evidence file (run again: it updates)
 ```
-On Windows set the variable first (PowerShell `$env:GODOT_BIN = "C:\path\godot.exe"`). A game without Godot: add
-`--engine none` to `pack` (76 files: PNGs, `.fnt` fonts, the manifest; there is nothing to `verify`).
+On Windows set the variable first (PowerShell `$env:GODOT_BIN = "C:\path\godot.exe"`). A game without Godot gets
+`--engine none` (76 files: PNGs, `.fnt` fonts, the manifest; there is nothing to `verify`): a kit game of another
+engine has it by default, with its own assets folder (`public/assets` on web and web-3d, `Assets` in Unity, `assets`
+elsewhere), from the engine in `.game-kit.json`; elsewhere add `--engine none` to `pack`.
+
+### Other engines: the importer brings the art in
+Godot loads Dotwork's resources as they are. Every other engine of the kit has an importer for the asset manifest
+([ASSET_MANIFEST.md](ASSET_MANIFEST.md)); its game's `docs/ENGINE.md` (web and RPG Maker MZ: `docs/ENGINE_FLOW.md`)
+has the details:
+- **web (Phaser):** `queueDotwork(this)` in a scene's `preload()`, then `dotworkPack()` in `create()`
+  (src/game/dotwork.ts); every pack loads before the title screen in `dev.py run` and `smoke`.
+- **web-3d (Three.js):** `await DotworkLibrary.load(DOTWORK_MANIFESTS)` in a world's `load()` (`src/game/dotwork/`);
+  restart `dev.py run` after a pack (the list is made at build time).
+- **Unity:** `python tools/dev.py exec GameKitDotwork.ImportAll` after every `pack` or `character`.
+- **Unreal (Paper2D):** `python tools/dev.py exec Content/Python/kit_dotwork/import_dotwork.py` after every `pack`.
+- **Bevy:** `src/dotwork/` loads every `assets/dotwork/*.assets.json` at startup (the `Dotwork` system parameter
+  spawns it).
+- **C++ / SDL3:** `gfx::dotwork::Library` (`src/gfx/DotworkRender`) loads every pack at boot.
+- **LÖVE:** `DotworkLoader.load_all()` reads every pack, `DotworkView.new()` draws it (src/game/dotwork_loader.lua,
+  src/game/dotwork_view.lua).
+- **RPG Maker MZ:** `python tools/dev.py dotwork` converts the packs into MZ's image layouts in `game/img/` after
+  every Dotwork run (`--dry-run` first).
 
 ## Setup
 You need an NVIDIA GPU (tested; see the tiers in step 3 for VRAM and RAM) and about 78 GB of disk for all models.
@@ -121,7 +144,11 @@ workflow it loads.
 - Settings: copy what you want to change from `config.example.json` into `<game>/art_src/dotwork/dotwork.config.json`.
   That file is tracked in git and can name programs Dotwork runs (`godot_bin`, `aseprite_bin`, `comfyui.python`,
   `comfyui.root`): review changes to it like code, especially in pull requests.
-  Environment variables win over both: `COMFYUI_URL`, `COMFYUI_ROOT`, `COMFYUI_PYTHON`, `SPRITEKILN_ROOT`,
+  Between the two sit the defaults for the game's engine (the `engine` in its `.game-kit.json`; `KIT_ENGINE_DEFAULTS`
+  in `fcore.py`): `--engine none` outside Godot, and `assets_dir` `public/assets` on web and web-3d, `Assets` in
+  Unity, `assets` everywhere else (Unreal and RPG Maker MZ too: their importers read `assets/dotwork/`, outside
+  `Content/` and `game/`). The game's own config still wins.
+  Environment variables win over all of these: `COMFYUI_URL`, `COMFYUI_ROOT`, `COMFYUI_PYTHON`, `SPRITEKILN_ROOT`,
   `GODOT_BIN`, `ASEPRITE_BIN`, `DOTWORK_WORK`. Dotwork writes its caches, the renders it fetches from ComfyUI and its
   log to `art_src/dotwork/` and drops a `.gitignore` there that keeps everything but `dotwork.config.json` out of git (keep
   your specs somewhere else, such as `assets_src/specs/`), plus an empty `.gdignore` so Godot never tries to import
@@ -149,6 +176,7 @@ or usage (the `[error]` line says what to fix). `preview KIND --help` lists each
 | `recolor --source GLOB --hue DEG\|--to #RRGGBB --out DIR` | palette swap, no model: turns the coloured ramps, keeps outline and greys, snaps to the palette; every file shares one colour map, so an animation stays consistent |
 | `clean --source GLOB --out DIR [--cell N\|--width W]` | any image to clean pixel art, no model: measures the pixel grid of upscaled or generated art (or shrinks to `--width`), keys a plain background, snaps to the palette (`--palette none --colors N` reduces instead), drops specks; `--outline #RRGGBB` adds one |
 | `verify` | load every Dotwork asset of this game in Godot (shader materials compiled, held frames counted) and run its smoke test |
+| `manifest [--check] [--pack P ...]` | rebuild and validate every pack's engine-neutral asset manifest, `<assets>/dotwork/<pack>.assets.json` (`pack` and `character` write them too, the hand-polish re-exports keep them in step); `--check` writes nothing and exits 1 on a stale or invalid one ([ASSET_MANIFEST.md](ASSET_MANIFEST.md)) |
 | `qa pack [--json OUT] [--lineup OUT.png]` | style check over every PNG the game's manifests list (not sheets, normal maps, or store art, the game icon and boot splash, which are scaled up on purpose), read only: pixel scale, each lane's palette lock (the table under Palettes), outline colour and thickness, light side, figure height in tiles, contrast on the ground tiles, colour-blind separation of gauge fills, status marks, button states and palette swaps (Machado 2009 simulation); `--lineup` draws every character and prop at game scale on a ground tile; exit 1 on findings |
 | `aseprite [--reexport] [--overwrite]` | editable `.aseprite` sources (frames timed by their holds); push hand-polished files back |
 | `pixelorama [--reexport] [--overwrite] [--clear-export-path]` | the same round trip with Pixelorama `.pxo` files, no install needed, plus tilemaps (yours into a TileSet and maps; the game's maps and TileSets into tilemap projects and back); `--clear-export-path` blanks the local export folder Pixelorama saves in each file; `--install-extension` puts the Dotwork panel into Pixelorama (`--info PXO` is what it asks) ([Hand polish](#hand-polish-aseprite-or-pixelorama)) |
@@ -194,7 +222,7 @@ pixel-art wording. Ready-to-run specs for every capability are in `examples/` (s
  "fonts": [{"name": "dialogue", "glyphs": "glyphs/dialogue.txt", "effect": "shadow"}],
  "windows": [{"name": "classic", "style": "classic"}], "balloons": [{"name": "exclaim", "symbol": "!", "color": "d83a3a"}],
  "widgets": [{"name": "hud", "style": "brass", "gauges": ["hp", "mp", "atb"]}],
- "uikit": [{"name": "menu", "style": "iron", "font": "assets/art/ui/fonts/font_dialogue.fnt", "keys": ["minus"]}],
+ "uikit": [{"name": "menu", "style": "iron", "font": "art/ui/fonts/font_dialogue.fnt", "keys": ["minus"]}],
  "transitions": [{"name": "battle_swirl", "kind": "spiral"}, {"name": "mosaic", "kind": "mosaic"}],
  "weather": [{"name": "storm", "kind": "rain", "intensity": 0.8}],
  "status": [{"name": "poison"}, {"name": "zzz", "kind": "sleep"}],
@@ -295,7 +323,7 @@ Honest list: these are the failure modes seen in testing and what Dotwork does a
 | battle backgrounds (moving sky) | Cutting the painted sky off at the horizon and scrolling it split mountain peaks (the tip drifted away from its base) | `"scroll": -4` keeps the picture whole and adds two cloud layers drawn in code in its own lightest sky colours (far: small, half speed; near: bigger, full speed) that tile sideways; `horizon` sets how far down they reach, `clouds` how many. They drift over far mountains, which reads as nearer clouds; leave `scroll` off for caves and interiors |
 | pixelorama tilemaps | Pixelorama keeps one flat list of square tiles with no animation, collision or custom data, and its Auto and Stack tile modes add and renumber tiles as you draw | Your own tilemaps: collision and surface come from each tile's user data (`solid`, a surface name), terrains and probabilities carry over. A game's map edited there keeps its TileSet: each tile carries its atlas slot, so a renumbered tile still lands in its slot, and a tile Pixelorama added stops the re-export with the fix (draw in Manual mode); an animated tile's other frames stay as they are |
 | lighting (normal maps, no model) | A normal map guessed from one picture cannot know the real shape: it reads a rounded rim from the alpha edge (`bevel` px) and small relief from brightness (`detail` px), so dark paint reads as a dent and a flat-coloured cloak reads flat; an atlas tile cannot see its neighbours | Opaque tiles get no rim at their borders and the brightness relief wraps inside each tile, so Dotwork's seamless tiles stay seamless (a tile whose opposite edge is clear repeats its own edge instead). Occluders are the largest opaque region only, `base` (default) spans the feet of the bottom quarter, `full` the whole outline, at most `occluder_points` corners, never self-crossing (a crossing outline falls back to its convex hull). A sprite node that is scaled, flipped or nested in its own scene gets a fresh lit scene instead of a copy. Headless Godot renders nothing: `verify` proves the lit resources are wired (both textures, same size, normals that decode with z > 0, occluder polygons, cells on lit tiles), not how the light looks; judge `assets_src/art/lit/<name>/<name>_review.png` and the demo scene in the editor |
-| `--engine none` | Maps, TileSets, scenes, SpriteFrames and the damage-flash and dissolve shaders are Godot resources | PNGs, sprite sheets + their JSON (with any hold `durations`), BMFont `.fnt` fonts, 9-slice margins (in the manifest) and the manifest still ship; maps and the shaders are skipped with a log line; the hand-polish round trip (`aseprite`, `pixelorama`, `--reexport`) works the same, with no `verify` |
+| `--engine none` | Maps, TileSets, scenes, SpriteFrames and the damage-flash and dissolve shaders are Godot resources | PNGs, sprite sheets + their JSON (with any hold `durations`), BMFont `.fnt` fonts, 9-slice margins (in the manifest) and the manifest still ship, and `assets/dotwork/<pack>.assets.json` describes all of it for the engine's importer, maps and tilesets included ([ASSET_MANIFEST.md](ASSET_MANIFEST.md)); map scenes and the shaders are skipped with a log line; the hand-polish round trip (`aseprite`, `pixelorama`, `--reexport`) works the same, with no `verify` |
 
 Timing on the tested GPU: a sprite about 18 s, a texture tile with variants about 25 s, a Wan clip about 110 s, a
 4-direction rotation about 130-170 s, an 8-direction rotation about 210 s, a battle background about 13 s.
@@ -635,6 +663,12 @@ one-shots that end empty, loops that wrap, ramp-only colours, trails that fade, 
 digests of the skeleton and of a character export taken before the polish; the smear lands on the frame of peak motion
 in that frame's colours; holds reach the SpriteFrames; the wind-up moves against the strike; the shader files are
 well-formed and the flash is the hitfx lane's byte for byte.
+`python tools/art/dotwork/tests/test_asset_manifest.py` - offline, about half a minute: the engine-neutral asset
+manifest's validator (every rule broken once), the golden fixture `data/golden/dotwork/` current and its loaded result,
+the fixture checked against the SpriteFrames, TileSet and prop scene Godot gets, and every model-free example pack
+written with and without Godot's files (the same manifest, every shipped PNG named, an untouched Pixelorama round trip
+changing no manifest). `DOTWORK_LIVE_GROUND=1` (with `GODOT_BIN` and `COMFYUI_ROOT`) adds a real ground pack whose map
+Godot paints: every terrain cell must hold the tile the spec's rule names.
 `tests/test_qapack.py` (seconds): `qa pack` on a synthetic game, clean and with planted
 outliers (a 2x upscale, an off-palette prop, a mirrored prop, a red / green gauge pair); lit TileSet normal maps and
 store art in the manifests add no findings.

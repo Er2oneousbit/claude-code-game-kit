@@ -5,7 +5,8 @@ MIT) makes the mesh and bakes its textures inside a local ComfyUI; Blender then 
 metres, puts the pivot at the bottom centre, writes LODs and checks it against the SOP-11 budget for its class.
 Nothing reaches the game's models folder unless that check passes, and every model gets its `docs/ASSET_LOG.md` row.
 It is the third asset lane next to Wavesmith (audio) and Dotwork (pixel art), and like them it is a set of primitives
-you call, not a 3D editor: a generated mesh is a draft (SOP-11).
+you call, not a 3D editor: a generated mesh is a draft (SOP-11). Without a GPU, or with several views of one object,
+`make --with tripo` has the Tripo3D API make the mesh instead (paid credits), and everything after it is the same.
 
 Tested on Windows 11, RTX 5060 Ti 16 GB, 64 GB RAM, ComfyUI 0.43.0, Blender 5.2.3 (K01). The numbers below are what
 that machine needed, not promises.
@@ -96,7 +97,8 @@ count sees (a changed costume, a flipped side, an arm fused to the body). Then:
 ```
 python tools/bozzetto/bozzetto.py make chr_keeper --image assets_src/bozzetto/chr_keeper/reference/front.png --class npc
 ```
-or, with all four views, a multiview make (#287). Prefer to paste prompts into a chat image tool yourself? The same
+or, with all four views, the paid multiview make (`make chr_keeper --with tripo --class npc --front ... --left ...
+--back ... --right ...`, "Make a model"). Prefer to paste prompts into a chat image tool yourself? The same
 instructions are in `docs/BRIEFS.md` ("Model-ready reference views").
 
 Options: `--views front,left,back,right` (default all four), `--seed N` (local: every sampler; paid routes: names the
@@ -121,6 +123,34 @@ python tools/bozzetto/bozzetto.py make prop_chest --prompt "..." --seed 12 --ref
 python tools/bozzetto/bozzetto.py make npc_robot --prompt "a friendly round robot" --class npc --seed 3
 python tools/bozzetto/bozzetto.py make prop_lamp --image ref.png --sprites assets/art/lamp_sheet.png   # 2D games
 ```
+**Two routes** make the mesh; the rest of `make` (cleanup, budget check, LODs, turntable, record, log row) is the same:
+
+| | Local (`--with local`, the default) | Tripo (`--with tripo`) |
+|---|---|---|
+| From | `--image`, or `--prompt` (FLUX.2 klein draws the picture first) | `--image` (image-to-model), `--front` plus any of `--left`, `--back`, `--right` (multiview: two views at least), or `--prompt` (text-to-model) |
+| Cost | free | paid API credits (1 credit = $0.01): a P2 image-to-model cost 110 credits in the kit's test, not the 30 of the public table (E153). The quote is printed first; `--max-credits` (default 150) and the balance stop a run before anything is uploaded |
+| Needs | an NVIDIA GPU with 16 GB, a local ComfyUI with 9 GB of model files, Blender | `TRIPO_API_KEY` with API credits (a Tripo Studio plan adds none), Blender; no GPU, no ComfyUI |
+| Time | about 5 minutes warm (K01) | about 16 s for the P2 model in the kit's test (E153), plus the download and Blender |
+| Terms | TRELLIS.2 and BiRefNet MIT, DINOv3 License (use restrictions) | outputs on paid credits are yours and not used for training (Tripo terms 5.2.2); outputs on free credits stay Tripo's (5.2.1) |
+
+```
+python tools/bozzetto/bozzetto.py make prop_crate --with tripo --image art_src/crate_front.png --seed 7
+python tools/bozzetto/bozzetto.py make npc_guard --with tripo --class npc --front ref/front.png --back ref/back.png --left ref/left.png
+python tools/bozzetto/bozzetto.py make prop_lamp --with tripo --prompt "a brass ship's lantern" --max-credits 120
+```
+What the Tripo route does: the pictures lose their metadata (as on the local route) and are kept in the source
+folder, the quote is printed, then the pictures go up (`/files`, PNG or JPEG up to 20 MB) and one task runs; its
+actual cost (`credits_consumed`) is read back, and a charge over the quote warns. Every task is written to
+`assets_src/bozzetto/<name>/tripo/tasks.json` as it is created: a re-run with the same pictures (or sentence) and
+settings reuses it, a finished one with a fresh download link (links expire after about 5 minutes), a running one
+by waiting for it; a failed task costs nothing and is made again. Change the pictures, `--seed`, `--class`,
+`--quality` or `--tripo-model` and it is a new model; `--no-reuse` pays for a new one on purpose. Fixing the size or
+the facing (`--overwrite --height ...`, `--turn ...`) reuses the paid task. Tripo's models face +X (its export
+default, E160): `make` turns them -90 degrees so the front is glTF's +Z **(verify on a live run)**, and cleanup scales
+them from Tripo's 1 m to the class height. A character from `--prompt` gets "full body, A-pose" added (`--raw-prompt`
+sends yours as written). The quote table, the endpoints and the models are in `tripo.py`; facts not measured in a
+paid run are marked (verify) there.
+
 | Option | What it does |
 |---|---|
 | `--image FILE` | Your reference: one object, whole, on a plain background, no cast shadow. BiRefNet cuts it out. |
@@ -129,7 +159,7 @@ python tools/bozzetto/bozzetto.py make prop_lamp --image ref.png --sprites asset
 | `--class prop\|kit\|hero\|npc` | Default `prop` (a name prefix such as `npc_` does not pick the class). The SOP-11 budget (`list` shows them). Sets the triangle target, the default height (prop 1.0 m, kit 3.0, hero and npc 1.8), the texture size (1024 or 2048) and the default LODs (hero 0.5,0.25; kit and npc 0.5). |
 | `--seed N` | One seed for every sampler. Without it the clock picks one and prints it. Shapes change between seeds: try two or three. |
 | `--height M` | Height in metres after cleanup. |
-| `--turn DEG` | Turn around the up axis when the model's front is not glTF's front (+Z). TRELLIS.2 put the reference's front there in every run so far. |
+| `--turn DEG` | Turn around the up axis (counter-clockwise seen from above) when the model's front is not glTF's front (+Z). TRELLIS.2 put the reference's front there in every run so far (default 0); the Tripo route's default is -90. |
 | `--lods 0.5,0.25` or `none` | LOD files `<name>_LOD1.glb` ... (Blender's Decimate: check them by eye). |
 | `--quality normal\|high` | Default `normal`. TRELLIS.2's grid: 1024 (about 5 min warm) or 1536 (about 19 min). |
 | `--material texture\|vertex` | Default `texture`: baked PBR textures (base colour, metallic-roughness, normal, AO), or vertex colours only (small, no textures). A vertex job queues only its own branch, so the UV unwrap and the bakes do not run; TRELLIS.2's vertex-colour mesh has no UV map, so cleanup.py adds one (Smart UV Project) for lightmaps and the budget check. In Godot such a model renders white until one material flag is set ("In the engine" below, #202). |
@@ -137,7 +167,8 @@ python tools/bozzetto/bozzetto.py make prop_lamp --image ref.png --sprites asset
 | `--out DIR` | Models folder. Default from the game's engine: `assets/models`, web and web-3d `public/assets/models`, Unity `Assets/Models`, Unreal `SourceArt/Models` (import from there). |
 | `--sprites FILE` | Also an 8-direction sprite sheet (tools/blender/render_sprites.py, with its layout in a .json of the same name beside it) for a 2D game. The sheet goes into the same asset log row and the record, with its hash. |
 | `--no-log`, `--no-preview`, `--overwrite` | Scratch runs; skip the turntable; make the same name again (the asset log row is updated, not doubled). |
-| `--wait S` | Seconds to wait for each ComfyUI job (default 3600). Each Blender step has its own fixed 3600 s limit. |
+| `--wait S` | Seconds to wait for each ComfyUI job or Tripo task (default 3600). Each Blender step has its own fixed 3600 s limit. |
+| `--with local\|tripo` | The route (table above). Tripo only: `--front`/`--left`/`--back`/`--right FILE`, `--max-credits N` (default 150), `--no-reuse`, `--tripo-model P2-20260801\|P1-20260311` (default P2; P1, Tripo's low-poly series, is not tested here). `--quality high` asks Tripo for detailed textures (more credits); `--material vertex`, `--reference-only` and `.webp` pictures are local only. |
 | `--project DIR`, `--blender PATH\|bpy`, `--workflow FILE`, `--debug` | The game's root (default: the current folder); the Blender to use (default: `BLENDER_BIN`, PATH, the default install, then the bpy module); a different API-format TRELLIS.2 workflow with the same node titles; full Blender output and tracebacks. |
 | `--url URL`, `--allow-remote` | Another ComfyUI address (default `COMFYUI_URL`, else `http://127.0.0.1:8188`); allow one on another computer. |
 
@@ -151,12 +182,13 @@ the GPU starts.
 |---|---|
 | `<models>/<name>.glb`, `<name>_LOD1.glb` ... | The model, only when it passed `validate_asset.py --class`; the LODs are made from that validated model and copied with it (they are not validated on their own). |
 | `assets_src/bozzetto/<name>/reference.png` | The picture the mesh was made from (`.jpg`, `.jpeg` or `.webp` when your `--image` was one). Metadata is removed from the copy and from what ComfyUI gets: EXIF (a photo's GPS position, the camera), XMP, IPTC, text chunks, comments and ComfyUI's embedded prompt; the pixels and the colour profile stay. |
-| `assets_src/bozzetto/<name>/raw.glb` | TRELLIS.2's own output, before cleanup (its embedded ComfyUI prompt removed: it holds local paths). |
+| `assets_src/bozzetto/<name>/raw.glb` | TRELLIS.2's own output, before cleanup (its embedded ComfyUI prompt removed: it holds local paths), or Tripo's (glTF extras removed). |
+| `.../view_front.png` ..., `.../tripo/tasks.json`, `.../tripo/tripo.glb` | Tripo route: the views as uploaded (metadata removed), the journal of paid tasks (no key in it), Tripo's file as downloaded. |
 | `.../clean.glb`, `export/` | After cleanup.py, after prep_export.py. A model that fails the budget stays here. |
 | `.../cleanup.json`, `.../validate.json` | The numbers: triangles in and out, vertices merged, fragments dropped, size; the validator's findings. |
-| `.../bozzetto.json` | The record: seed, prompt, class, settings, models with licences, GPU time and VRAM peak, file hashes. |
+| `.../bozzetto.json` | The record: route, seed, prompt, class, turn, settings, models with licences, GPU time and VRAM peak (local) or Tripo's model, task ids, credits spent and terms (Tripo), file hashes. |
 | `.../turntable.png` | Eight views around the model. Look at it before anything else. |
-| `docs/ASSET_LOG.md`, `docs/licenses/A-NNNN.txt` | The row (`pre-generated` AI, licences, "Built with DINOv3" credit) and the evidence file. |
+| `docs/ASSET_LOG.md`, `docs/licenses/A-NNNN.txt` | The row (`pre-generated` AI, licences, "Built with DINOv3" credit; Tripo: "paid service", Tripo's terms 5.2.2, the credits and task id) and the evidence file. |
 | `docs/licenses/bozzetto-*` | The model licence texts, copied the first time; `tools/credits.py` ships them. |
 Godot games ship `assets_src/.gdignore`, so the sources stay out of the build. `raw.glb` is a few MB: commit it (or
 use Git LFS) if you want the cleanup to be repeatable, as SOP-11 asks.
@@ -273,9 +305,10 @@ over game props such as swords and guns is an **open question** you decide for y
 which upstream TRELLIS.2 uses, are non-commercial and never loaded (`make` refuses a workflow that names them).
 Hunyuan3D 2.x (region exclusions) and Stable Fast 3D (revenue cap) were ruled out. Rigging: UniRig is MIT, its
 checkpoint was trained on Articulation-XL2.0 (CC-BY-4.0, credited); its successor SkinTokens is not used (trained on
-models from commercial games and VRoid Hub). Tripo is wired in for rigging (`rig --with tripo`) and reference
-pictures (`reference --with tripo`), Google's Gemini for reference pictures (`reference --with nanobanana`); other
-paid 3D services (Meshy and others) are not: `docs/resources/ai-tools.md` lists them.
+models from commercial games and VRoid Hub). Tripo is wired in for models (`make --with tripo`), rigging
+(`rig --with tripo`) and reference pictures (`reference --with tripo`): outputs bought with paid API credits are yours
+(its terms 5.2.2). Google's Gemini is wired in for reference pictures (`reference --with nanobanana`). Other paid 3D
+services (Meshy and others) are not wired in: `docs/resources/ai-tools.md` lists them.
 
 The tool was first called Meshwright and renamed before release: that name, and Polywright, Whittle and Plinth, were
 already taken by other 3D projects. A web search on 2026-11-05 found no software named "Bozzetto" **(verify)** before
@@ -288,6 +321,8 @@ python tools/bozzetto/test_bozzetto.py          # offline: a stand-in ComfyUI an
                                                     # for real when Blender (or bpy) is found (about 20 s)
 uv run --python 3.13 --with bpy python tools/bozzetto/test_bozzetto.py   # the same on the bpy module
 python tools/bozzetto/test_bozzetto_live.py     # one real run on the GPU (about 5 min); skips without one
+python tools/bozzetto/test_tripo.py             # make --with tripo, offline: a stand-in Tripo API; with Blender,
+                                                    # the real cleanup.py turns a +X-facing mesh to +Z (about 15 s)
 python tools/bozzetto/test_rig.py               # rig, offline: stand-in UniRig and Tripo; rig_finish.py on rigs
                                                     # built in Blender when it is found (about 25 s)
 python tools/bozzetto/test_reference.py         # reference, offline: stand-in ComfyUI, Gemini and Tripo (about 5 s)

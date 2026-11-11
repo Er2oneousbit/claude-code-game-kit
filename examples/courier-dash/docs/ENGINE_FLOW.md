@@ -28,7 +28,8 @@ python tools/dev.py build     # dist/ for upload
 
 ## Mapped to the tools
 Same as the 2D web overlay: `tsc` for check, Vitest for test, Vite for build and run, `tools/smoke.mjs` (Vite preview +
-Playwright Chromium) for smoke. The boot marker is logged by `src/main.ts` after the first rendered frame.
+Playwright Chromium) for smoke. The boot marker is logged by the shell (`src/shell/app.ts`) once the title screen is up,
+and `src/main.ts` starts the shell only after the first rendered frame, so `BOOT_OK` also proves the renderer draws.
 
 ## 3D assets: Blender to the game
 1. Model or download (CC0 first, `docs/resources/art.md`), log it (`/asset-intake`, `tools/fetch_asset.py`).
@@ -52,29 +53,69 @@ Playwright Chromium) for smoke. The boot marker is logged by `src/main.ts` after
   costs a render pass). Environment maps (`RoomEnvironment` in the add-ons) make PBR materials look right quickly.
 - Camera follow: `src/core/follow.ts` (critically damped spring, unit tested) instead of copying positions.
 - Picking and interaction: `THREE.Raycaster` from the pointer.
-- UI: plain HTML over the canvas is simplest; keep game state in TypeScript, not in the DOM.
+- UI: plain HTML over the canvas, as the shell does (`src/shell/`); keep game state in TypeScript, not in the DOM.
 
 ## Testing
-- Vitest for `src/core` (math, rules, AI decisions, spring follow). Nothing that needs a canvas.
+- Vitest for `src/core` (math, rules, AI decisions, spring follow) and the pure parts of `src/shell` (input names, the
+  drives' slider steps, the string tables, the colour palettes). Nothing that needs a canvas.
 - `tests/juice.golden.test.ts` and `tests/shell.golden.test.ts` run every case of `data/golden/juice.json` and
   `shell.json` (written by `tools/golden_vectors.py`, the reference for every engine) through `src/core/`. Never copy
   expected values into a test; an unknown case type fails. After the kit changes the reference, the vectors change
   and these tests say which module to fix.
 - `telemetry.golden.test.ts` checks the `telemetry.csv` columns and row format (`userData.ts`) against
   `data/golden/telemetry.json`, so every engine writes the same file.
+- `credits.test.ts` checks the credits screen's text (`credits.ts` in the shell: HTML comments out of CREDITS.md)
+  against `data/golden/credits.json`.
 - `dialogue.golden.test.ts` checks the subtitle typewriter (`revealCount` in `dialogue.ts`) against
   `data/golden/dialogue.json` (written by `python tools/audio/wavesmith/wavesmith.py dialogue vectors --write`).
 - `tests/atomicFile.test.ts` proves the crash-safe write on the real filesystem (a temp folder).
 - Smoke boots the real build; give the game an `?autoplay` or scripted mode for scenario checks (SOP-14 step 6).
 
-## Juice and shell logic
-`src/core/` holds the kit's engine-free game logic, the same modules as the web (Phaser) overlay: screen shake,
-hitstop, easing, a 2D follow camera (use it on the XZ plane, or `follow.ts` for a 3D spring), input buffer, coyote
-time, spring and squash, flash limiter; settings (defaults, repair, `effectiveShake`, `telemetryAllowed`), bindings
-and prompt glyph names, save slots with migration and `.bak`, i18n with the pseudo-locale, the crash-safe write over
-localStorage (`textStore.ts`, `atomicFile.ts`), the game log, crash files and telemetry (`userData.ts`), and the
-dialogue reader. The web-3d skeleton has no menu screens: build them on these modules (the web overlay's `src/shell/`
-shows one way). The FlashLimiter is always on; `access.flash_limit` only makes flashes gentler. Hitstop and the
+## The front end (shell)
+The skeleton ships the same front end as the 2D web overlay, file for file (`src/shell/`): boot, title ("press any
+key or button"), main menu (Play, Settings, Credits, Quit, plus "Juice demo" in debug builds: the dev server or
+`?debug`), settings, credits (scrolls `CREDITS.md` from the project root when it exists), a loading bar, the game, a
+pause menu (the `pause` action, and automatically when the window loses focus; it also opens "What now?": the goal
+from `shell.setObjective()`, the last line and the controls, and "Dialogue history" from `shell.history`), quit and
+crash screens. Settings > Controls offers one-handed layouts (`data/input/presets.json`); `readable_font`,
+`line_spacing`, `subtitle_hold`, `timing_scale` and `auto_repeat` work as SOP-20 says.
+- **How it meets Three.js:** the shell imports no `three`. It talks to the renderer through `src/shell/host.ts`
+  (start, pause, resume and stop a world, the backdrop, the frame cap, volume and mono, a screenshot), which
+  `src/game/threeHost.ts` implements: one `setAnimationLoop`, the running world (`main` = Play in `Game.ts`, `juice`
+  = `JuiceWorld.ts`, each built fresh on every start) or the still `Backdrop.ts` behind the menus. A throw in a
+  world's `update` goes to the crash screen. Keep `src/shell/` free of `three` imports: then a shell fix from the web
+  overlay (or to it) carries across by copying the file.
+- **Narration:** `narrator.ts` puts a line for every focus change, value change and screen into an ARIA live region
+  (always) and speaks it with `speechSynthesis` when `access.narration` is on.
+- **Screens are HTML over the canvas**, built in code: real text layout, so text size, wrapping and the pseudo-locale
+  check behave like any web page. A theme: a file named `theme_default.css` in the `public/assets/ui` folder (loaded
+  after the built-in `src/shell/shell.css`). Prompt glyphs: `public/assets/ui/glyphs/<glyph_name>.png` (key_space,
+  xbox_a, ps_cross ...); a missing glyph shows a text keycap. Restart `run` after adding files there.
+- **Navigation:** keyboard and gamepad (the browser's standard mapping) through one input layer
+  (`src/shell/input.ts`); worlds read the same layer (`shell.input.isDown`, `takePress`, `stick`, `triggers`).
+- **Settings** apply live and save on Back (`settings.json`, atomic, with `.bak`). A browser cannot apply
+  `display.vsync` or `display.resolution`: they stay in the file but are not shown. The frame cap skips animation
+  frames in `threeHost.ts`. Three.js has no sound system of its own: `host.sound` holds the master volume and mono
+  setting, and `game.setListener(listener)` (the exported host in `src/main.ts`) applies them to your
+  `THREE.AudioListener`. The colorblind option recolours the juice demo's palette only (`palettes.ts`, from
+  `data/access/colours.json`, which `tools/access/colour_check.py` checks; the demo draws it unlit, so what is on
+  screen is what was checked).
+- **User data** lives in localStorage under one key prefix (`<slug>/`, or `?data-dir=`): `settings.json`,
+  `save_<slot>.json` (+ `.bak`), the game log, `crashes/crash_<time>.txt`, `telemetry.csv`. Language > "Download my
+  data" gives the player all of it as one file. **Crashes** write a crash file, log `CRASH_WRITTEN` and show the crash
+  screen. **Telemetry** is off until the player says yes and stays on the device. **F8** (debug builds) saves a bug
+  report (`bug_<time>/`: log tail, settings, a screenshot of the canvas) plus a download.
+- **Localization:** every visible string goes through `shell.i18n.t(key)`; a new language is a new
+  `data/i18n/<id>.json` (`python tools/check_i18n.py` names missing keys). The `pseudo` locale makes every string
+  accented, 40 % longer and bracketed; with `?locale=pseudo` every screen is checked as it appears.
+
+## The juice demo
+`src/game/JuiceWorld.ts` is the web overlay's juice demo on a side-on 3D stage, in meters (the 2D numbers at 40 px per
+meter): walk and jump with a follow camera (`followCamera.ts` on the x/y plane, the camera on +z), an input buffer and
+coyote time; attack the box for trauma shake (the camera moves and rolls), hitstop, a spring squash (x and z scale
+together) and a white flash quad in front of the camera; hold interact to guard. `src/core/` holds the modules, the
+same as the web overlay's and checked against `data/golden/juice.json`; `follow.ts` is a 3D spring for a
+third-person camera. The FlashLimiter is always on; `access.flash_limit` only makes flashes gentler. Hitstop and the
 FlashLimiter take real time; shake, follow, buffer, coyote and spring take game time (after hitstop and game_speed).
 
 ## Scenario runs (smoke options)
@@ -83,8 +124,22 @@ FlashLimiter take real time; shake, follow, buffer, coyote and spring take game 
 - `--until MARKER` passes only if the console logs that marker; `--fail-on A,B` fails if it logs any of them.
 - `--screenshot FILE` saves the last frame; `--record DIR` saves PNG frames every `--record-every` milliseconds
   (record 3D with `--headed`: headless software rendering is slow).
-- `--drive SCENARIO` adds `?drive=` and waits for `DRIVE_DONE`. The scenarios (menus, crash, pseudo, show:...) are
-  implemented by the web overlay's shell; this skeleton answers `DRIVE_ABORT` at once until a game adds its own.
+- `--drive SCENARIO` lets the game play a scripted run (`src/shell/drive.ts`) and waits for `DRIVE_DONE`
+  (`DRIVE_ABORT` fails at once). The shell runs a scenario only with its own data dir (without `--data-dir`, smoke
+  uses `build/smoke-data`) and only in a dev server or an automated browser, so a `?drive=` link to the hosted game
+  logs `DRIVE_IGNORED` and never touches the player's settings. While a drive runs, the real keyboard, mouse and
+  pads are ignored:
+  - `menus`: title, settings, master volume to 0.5, reduce motion on, Back, quit; prints `SETTINGS_WRITTEN <path>`
+    and checks the file holds the new values.
+  - `crash`: plays, then the play world throws a planted error; prints `CRASH_WRITTEN <path>`. Exit 1 is the
+    expected result.
+  - `pseudo` (with `--locale pseudo`): visits every screen and settings section; exit 0 when nothing is truncated,
+    clipped or untranslated. `pseudo-plant` adds one label that is too small: it must exit 1 naming
+    `plant.too_small`.
+  - `show:title|settings|pause|subtitle|juice` (with `--screenshot`): opens that screen, freezes the world, captures it.
+  - `access[:res=WxH][,scale=N][,pad][,read]`: every screen reported as `ACCESS_*` lines for
+    `python tools/access/sweep.py` (five runs: 1080p, 200 % text, the readable font, and the Steam Deck size with
+    the gamepad only).
 - `--data-dir DIR` maps the game's user-data folder (localStorage) onto a real folder: its files are loaded under
   the key prefix `DIR/` (`?data-dir=DIR`) before the page starts and written back afterwards, so a test reads
   `settings.json`, the game log, the crash files and `telemetry.csv` as files (and can seed a damaged `settings.json`
@@ -105,7 +160,8 @@ Same as the 2D web overlay: `python tools/dev.py build`, zip the contents of `di
 
 ## Adopting an existing project
 1. `new_game.py --adopt --engine web-3d`; merge `package.json.gold` (scripts and devDependencies).
-2. Log `BOOT_OK <Game>` to the console after your first rendered frame.
+2. Log `BOOT_OK <Game>` to the console after your first rendered frame (or keep the kit's shell: hand your renderer
+   to it through a `GameHost`, as `src/game/threeHost.ts` does, and it logs `BOOT_OK` for you).
 3. `python tools/dev.py setup`, then `check`, `test`, `smoke`.
 
 ## Common errors

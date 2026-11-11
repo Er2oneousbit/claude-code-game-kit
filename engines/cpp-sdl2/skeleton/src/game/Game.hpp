@@ -10,10 +10,13 @@
 //           play_update / play_draw / play_action with real systems and keep SDL types out of update() so the
 //           simulation stays testable. The shell owns settings.json, the strings (data/i18n) and the dialogue
 //           lines (data/dialogue); the game reads them through shell_ (shell_->game_speed(), shell_->palette()).
+//           When the game has Dotwork packs (assets/dotwork/*.assets.json), the play screen also shows their art
+//           (DotworkShowcase: a map, a label in the font, a prop and a character walking).
 // Authored: Written with Claude (Sonnet 5.5, claude-sonnet-5-5)
 // Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): the shell's screens (#168); the play screen uses the
 //           settings (game speed, colour-blind palette, hold to mash, captions) and says the sample line
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): jump and guard use timing_scale and hold_to_toggle (#269)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the Dotwork art on the play screen (#60)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -27,6 +30,7 @@
 #include "core/InputBuffer.hpp"
 #include "core/MotorAccess.hpp"
 #include "core/ShellLogic.hpp"
+#include "game/DotworkShowcase.hpp"
 #include "shell/Shell.hpp"
 
 namespace game {
@@ -80,6 +84,7 @@ private:
     core::InputBuffer jump_buffer_;      // a jump pressed just before landing still happens
     core::CoyoteTimer coyote_;           // ... and just after leaving the floor
     core::HeldAction guard_;             // held, or toggled with access.hold_to_toggle (#166)
+    DotworkShowcase art_;                // the game's Dotwork art, when it has some (#60)
     static constexpr int kBoxSize = 32;
     static constexpr int kFloorH = 40;
     static constexpr double kHitS = 0.15;

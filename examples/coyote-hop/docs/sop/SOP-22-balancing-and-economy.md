@@ -32,6 +32,9 @@ tip); this SOP is how to choose them on evidence instead of by feel alone.
 1. **Bots** (`SOP-14` step 6): run the game's bots over many seeds and difficulty settings and log time to clear, deaths,
    resources at each checkpoint, with bots that also try the cheap ways through (F32). Tip: a change meant to help one
    strategy should not lift all of them; if it does, it changed the baseline instead.
+   `python tools/seed_sweep.py --seeds 1-8 --set bot=a,b --collect WON,LOST -- <smoke options with {seed} and {bot}>`
+   runs `dev.py smoke` once per seed and setting, in parallel, and prints each run's outcome, the `key=value` numbers
+   on its marker lines and the pass rate per setting (`--json` keeps them for the balance sheet).
 2. **Playtests** (`SOP-03`): one question per session; write down the numbers players hit (wave reached, gold at the
    shop, time to the boss).
 3. **Telemetry with consent** (`SOP-19` step 8): the same counters from real players, local CSV first.

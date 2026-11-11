@@ -21,10 +21,11 @@
 #           checklist: SOP-19's Steam Deck list. Exit 0 every run passes, 1 a check failed, 2 the game could not run
 #           the drive (an engine without it, a crash) or a usage problem.
 #           Every run keeps the game's output in captures/access/<run>/smoke.log and, on the engines whose smoke
-#           can capture during a drive (SHOT_FILES: Bevy, C++/SDL3, LÖVE, web), the last frame drawn as last.png
+#           can capture during a drive (SHOT_FILES: Bevy, C++/SDL3, LÖVE, web, web-3d), the last frame drawn as last.png
 #           or last.bmp; a failing run prints where they are (#276).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a run's game output and last frame are kept (#276)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): web-3d runs the shell and keeps its last frame (#175)
 # ---------------------------------------------------------------------------
 import argparse
 import glob
@@ -62,7 +63,7 @@ LOG_FILE = "smoke.log"   # the run's game output, next to its data: captures/acc
 # the engines whose `dev.py smoke --drive access` takes --screenshot and saves the last frame drawn, a failed drive's
 # included (.game-kit.json "engine" -> file name). Godot captures in a second, windowed run, Unity needs --graphics
 # (no -nographics) and Unreal draws only show:<screen>: those three keep the log alone.
-SHOT_FILES = {"bevy": "last.png", "cpp-sdl2": "last.bmp", "love2d": "last.png", "web": "last.png"}
+SHOT_FILES = {"bevy": "last.png", "cpp-sdl2": "last.bmp", "love2d": "last.png", "web": "last.png", "web-3d": "last.png"}
 KIT_FILE = ".game-kit.json"
 MARKER = re.compile(r"\b(ACCESS_[A-Z]+) (.*)$")
 OVERLAP_SLACK = 1        # px two glyph boxes may share (antialiasing, rounding) before it counts as overlap

@@ -265,7 +265,9 @@ and GPU minutes. One test machine's setup and test (tip, E68):
   `python tools/art/dotwork/dotwork.py setup --check` (the models per tier, 15 to 33 GB; it never downloads), then
   `pack --spec <file>`, which ends by loading every asset in Godot and running the game's smoke test. The lanes drawn
   in code (fonts, window skins, balloons, hit effects) need no GPU: `pack --spec tools/art/dotwork/examples/ui.json` is
-  a good first run (set `GODOT_BIN` first, or add `--engine none`). Godot only for now; `--engine none` writes the PNGs, sheets and manifest for any engine. Tested
+  a good first run (set `GODOT_BIN` first in a Godot game). Godot gets ready-made resources; any other engine gets
+  `--engine none` by default (PNGs, sheets and an asset manifest per pack) and its own importer brings them in (the
+  Dotwork README, "Other engines", one line per engine; the details are in `docs/ENGINE.md`). Tested
   offline and in a freshly made Godot game (K01); the model lanes on one machine (E68). Its README lists every lane,
   key and limit.
 - **Bring 3 or 4 of your own sprites** (tip, E68). Dotwork's `style_refs` is empty by default, so the style comes only

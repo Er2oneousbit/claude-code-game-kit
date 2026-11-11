@@ -134,6 +134,7 @@ EXAMS = [
     Exam("core/tools/test_yt_transcript.py", "offline (canned WebVTT, faked caption methods)", covers=("core/tools/yt_transcript.py",)),
     Exam("core/tools/test_token_audit.py", "a fake home, project and session log", covers=("core/tools/token_audit.py",)),
     Exam("core/tools/test_session_context.py", "the SessionStart hook, as Claude Code runs it", covers=("core/tools/hooks/", "core/.claude/settings.json")),
+    Exam("core/tools/test_seed_sweep.py", "the seed and settings sweep (#183), a fake dev.py", covers=("core/tools/seed_sweep.py",)),
     Exam("core/tools/test_check_i18n.py", "the translation check; the overlays' French tables in the kit", covers=("core/tools/check_i18n.py", "engines/*/skeleton/data/i18n/*.json")),
     # core/tools/access
     Exam("core/tools/access/test_colour.py", "colour-blind pairs, CIEDE2000, WCAG contrast"),
@@ -166,14 +167,18 @@ EXAMS = [
     # core/tools/art
     Exam("core/tools/art/test_pixellab.py", "offline (canned API responses)", covers=("core/tools/art/pixellab.py",)),
     Exam("core/tools/art/test_comfy_local.py", "offline (a stand-in ComfyUI server on 127.0.0.1)", covers=("core/tools/art/comfy_local.py",)),
-    Exam("core/tools/art/dotwork/tests/test_dotwork.py", "offline; loads the lane exams (uikit, store, screens, bdf, diorama, shipped, vfx, animpolish, lighting, qapack, fonts, defaults_cvd, pixelorama); AsepriteLiveExam and PixeloramaLiveExam run the real programs",
+    Exam("core/tools/art/dotwork/tests/test_dotwork.py", "offline; loads the lane exams (uikit, store, screens, bdf, diorama, shipped, vfx, animpolish, lighting, qapack, fonts, defaults_cvd, pixelorama, unrun); AsepriteLiveExam and PixeloramaLiveExam run the real programs",
          needs=(module("pillow"), module("numpy")), env=("ASEPRITE_BIN", "PIXELORAMA_BIN")),
+    Exam("core/tools/art/dotwork/tests/test_asset_manifest.py", "the engine-neutral asset manifest (#83): schema, golden fixture, Godot cross-check; DOTWORK_LIVE_GROUND=1 renders one ComfyUI pack",
+         needs=(module("pillow"), module("numpy")), covers=("core/tools/art/dotwork/", "core/data/golden/dotwork/")),
     Exam("core/tools/art/test_chroma_key.py", "keying, despill, overwrite guards", needs=(module("pillow"),), style="cases", covers=("core/tools/art/chroma_key.py",)),
-    Exam("core/tools/art/test_pixel_sprite.py", "the code-drawn sprites", covers=("core/tools/art/pixel_sprite.py",)),
+    Exam("core/tools/art/test_pixel_sprite.py", "the code-drawn sprites", covers=("core/tools/art/pixel_sprite.py", "core/tools/art/sprites/")),
+    Exam("core/tools/art/test_frames_to_gif.py", "frame order, delays, scaling, the overwrite guard", needs=(module("pillow"),), covers=("core/tools/art/frames_to_gif.py",)),
     Exam("core/tools/art/test_gimp_batch.py", "exit 2 when GIMP is missing", needs=(exam_checks("GIMP 3"),), style="cases", covers=("core/tools/art/gimp_batch.py",)),
     Exam("core/tools/art/test_svg_export.py", "exit 2 when Inkscape is missing", needs=(exam_checks("Inkscape 1.x"),), style="cases", covers=("core/tools/art/svg_export.py",)),
     # core/tools/bozzetto
     Exam("core/tools/bozzetto/test_bozzetto.py", "a stand-in ComfyUI, a canned mesh; its Blender part runs when Blender or bpy is found (BOZZETTO_TEST_BLENDER=skip|bpy|<path>)"),
+    Exam("core/tools/bozzetto/test_tripo.py", "make --with tripo against a stand-in Tripo API; its Blender part runs when Blender or bpy is found"),
     Exam("core/tools/bozzetto/test_rig.py", "UniRig and Tripo routes offline; its Blender part runs when Blender or bpy is found"),
     Exam("core/tools/bozzetto/test_reference.py", "reference views: stand-in ComfyUI, Gemini and Tripo; caps, journal reuse, failures, the PNG reader"),
     Exam("core/tools/bozzetto/test_bozzetto_live.py", "one real TRELLIS.2 run (about 5 min); [SKIP] without ComfyUI", style="cases", live=True),
@@ -188,6 +193,8 @@ EXAMS = [
     Exam("scripts/test_codename.py", covers=("scripts/codename.py",)),
     Exam("scripts/test_dev_py.py", "every engine's dev.py, engine calls faked", covers=("engines/",)),
     Exam("scripts/test_shader_ports.py", "every engine's generated shader files current", covers=("core/tools/shaders/", "engines/")),
+    Exam("scripts/test_unreal_dotwork.py", "the Unreal Dotwork importer's manifest rules against assetspec (no Unreal needed)",
+         covers=("engines/unreal/skeleton/Content/Python/kit_dotwork/", "core/tools/art/dotwork/assetspec.py", "core/data/golden/dotwork/")),
     Exam("scripts/test_kit_docs.py", "the docs' claims against the kit tree (one case asks git)", covers=("*.md", "core/", "engines/", "examples/*/.game-kit.json")),
     Exam("scripts/test_run_exams.py", "this runner, on fake exams in a temp folder", covers=("scripts/run_exams.py",)),
 ]
@@ -195,7 +202,7 @@ EXAMS = [
 LOADED_BY_ANOTHER = {
     "core/tools/art/dotwork/tests/test_%s.py" % n for n in
     ("uikit", "store", "screens", "bdf", "diorama", "shipped", "vfx", "animpolish", "lighting", "qapack", "fonts",
-     "defaults_cvd", "pixelorama")
+     "defaults_cvd", "pixelorama", "unrun")
 }
 EXAM_ROOTS = ("core/tools", "scripts")
 

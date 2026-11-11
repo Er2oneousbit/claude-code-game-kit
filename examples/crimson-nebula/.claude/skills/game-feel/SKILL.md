@@ -13,14 +13,14 @@ Follow `docs/sop/SOP-18-game-feel.md`.
    give, and pick at most two or three effects per moment (SOP-18 step 1). Confirm the list with the user.
 3. **Use the kit's juice module** (`docs/ENGINE.md` names the files; the spec is `tools/golden_vectors.py`). Do not write
    a second shake or tween system. If a needed behavior is missing, change the reference first, run
-   `python tools/golden_vectors.py --write`, then the port, then its tests. Every overlay ships the module except
-   RPG Maker MZ: there, follow docs/ENGINE_FLOW.md ("The shell, juice and accessibility in MZ": MZ's own
-   `$gameScreen.startShake` and `startFlash`, the limits in a plugin) and write new rules as engine-free plugin code.
+   `python tools/golden_vectors.py --write`, then the port, then its tests. Every overlay ships the module; in
+   RPG Maker MZ it is the GameJuice plugin, and MZ's own `$gameScreen.startShake` and `startFlash` already follow the
+   player's settings through GameAccess (docs/ENGINE_FLOW.md, "The shell, juice and accessibility in MZ").
 4. **Wire it:** game time in (`dt` after hitstop and game speed), the camera moves (never the world), every number in the
    constants block or a data file.
 5. **Protect players (always):** shake intensity from `effective_shake(settings)`, reduce motion turns shake, bob and
    pulses off, every full-screen flash through the flash limiter (SOP-18 step 3, F33, F34).
-6. **Prove it:** `check`, `test` (the juice tests against `data/golden/juice.json` where the overlay has the port; in
-   RPG Maker MZ the Node tests of your plugin rules), then record a burst of each key
+6. **Prove it:** `check`, `test` (the juice tests against `data/golden/juice.json`; in RPG Maker MZ the Node tests
+   of GameJuice and of your plugin rules), then record a burst of each key
    moment (`dev.py smoke --record`, a GIF with `tools/art/frames_to_gif.py`) and look at the frames before posting.
 7. **Report:** moments and effects, where the tunables live, the GIF links, and one playtest question for the user.

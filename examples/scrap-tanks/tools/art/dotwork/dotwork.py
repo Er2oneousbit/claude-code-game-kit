@@ -15,6 +15,7 @@
 #           python tools/art/dotwork/dotwork.py pixelorama [--overwrite] | pixelorama --reexport [--clear-export-path]   # hand polish
 #           python tools/art/dotwork/dotwork.py pixelorama --install-extension   # the Dotwork panel inside Pixelorama
 #           python tools/art/dotwork/dotwork.py qa pack [--json OUT] [--lineup OUT.png]   # style check, read only
+#           python tools/art/dotwork/dotwork.py manifest [--check]   # engine-neutral asset manifests (ASSET_MANIFEST.md)
 #           Global: --project GAME (default: current folder), --config FILE, --engine godot|none, --debug
 # Notes   : Needs ComfyUI (local, http://127.0.0.1:8188 by default) with the SpriteKiln and GGUF node packs and the
 #           models in models.lock.json; Godot 4 for maps and verify. README.md walks through setup and every lane.
@@ -22,6 +23,10 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): pixelorama --install-extension and --info (the
 #           Dotwork panel inside Pixelorama, pxo_panel.py)
+#           2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the engine-neutral asset manifest
+#           (<assets>/dotwork/<pack>.assets.json, assetmap.py): written after pack and character, kept in step by the
+#           hand-polish re-exports, `manifest [--check]` rebuilds or validates it; godot.RECORD bound to the run's manifest
+#           2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): --engine help names the kit engine default (fcore)
 # ---------------------------------------------------------------------------
 import argparse
 import ast
@@ -138,6 +143,66 @@ def entry_keys(lane):
     return keys
 
 
+def asset_manifests(s, packs=None, check_only=False, focus=None, existing_only=False):
+    """The engine-neutral asset manifest of each pack (ASSET_MANIFEST.md): rebuilt from its provenance manifest and
+    written to <assets_dir>/dotwork/<pack>.assets.json when it changed, then validated (assetspec.py). check_only
+    writes nothing: it validates the files on disk and names any that a rebuild would change. focus: the packs a
+    command just built (an OK line each; another pack's line shows only when its manifest changed, because two packs
+    can write one file, such as a font). existing_only (the hand-polish re-exports): keep the files that exist in step
+    and create none, so an untouched round trip still changes no file. Returns the findings (a writer bug when not
+    check_only, so pack fails)."""
+    import glob
+    import assetmap
+    import assetspec
+    sch = assetspec.schema()
+    findings = []
+    for p in sorted(glob.glob(os.path.join(s.src, "dotwork", "manifest_*.json"))):
+        pack = os.path.basename(p)[len("manifest_"):-len(".json")]
+        if packs is not None and pack not in packs:
+            continue
+        with open(p, encoding="utf-8") as f:
+            data = json.load(f)
+        doc, warns = assetmap.build(s.project, s.conf["fixed"]["assets_dir"], data, pack)
+        path = assetmap.manifest_path(s.assets, pack)
+        rel = os.path.relpath(path, s.project).replace(os.sep, "/")
+        if existing_only and not os.path.exists(path):
+            continue
+        for w in warns:
+            print(f"[warn] asset manifest {pack}: {w}")
+        if check_only:
+            if not os.path.exists(path):
+                findings.append(f"{rel}: missing (run `dotwork.py manifest`)")
+                continue
+            on_disk = assetspec.load(path)
+            errs = assetspec.check(on_disk, assetspec.base_dir(path, on_disk), sch)
+            if not errs and on_disk != doc:
+                errs = ["differs from what its provenance manifest gives now (run `dotwork.py manifest`)"]
+        else:
+            text = assetmap.text_of(doc)
+            old = None
+            if os.path.exists(path):
+                with open(path, encoding="utf-8") as f:
+                    old = f.read()
+            if old != text:
+                fcore.write_text(path, text)
+            errs = assetspec.check(doc, assetspec.base_dir(path, doc), sch)
+            if focus is not None and pack not in focus and old is not None and old != text and not errs:
+                print(f"[info] asset manifest {rel} updated: files it lists changed")
+        findings += [f"{rel}: {e}" for e in errs]
+        if (focus is None or pack in focus) and not errs:
+            print(f"[ OK ] asset manifest {rel}: {len(doc['assets'])} assets (spec {assetspec.VERSION})")
+    return findings
+
+
+def finish_manifests(s, focus=None, existing_only=False):
+    """Rebuild every pack's asset manifest after a command that wrote files (a pack can overwrite another's)."""
+    bad = asset_manifests(s, focus=focus, existing_only=existing_only)
+    if bad:
+        for b in bad[:20]:
+            print(f"  {b}", file=sys.stderr)
+        raise fcore.JobError(f"the asset manifest Dotwork wrote does not pass its own spec ({len(bad)} findings)")
+
+
 def finish_verify(s, man, no_verify):
     if no_verify or not s.godot():
         return 0
@@ -165,6 +230,8 @@ def cmd_pack(a):
     spec = load_spec(a.spec)
     s = setup_run(a, spec)
     man = fcore.Manifest(s, spec["name"])
+    import godot
+    godot.RECORD = man.entity   # what each Godot resource is built from, for the asset manifest (assetmap.py)
     conf = s.conf
     where = "characters"   # the lane running now, for the missing-key message below
     try:
@@ -198,9 +265,11 @@ def cmd_pack(a):
                               "--debug shows where it was read)")
     finally:
         fcore.stop_comfy()
+        godot.RECORD = None
     man.drop_engine_rows()
     man.save()
     print(f"[ OK ] pack {spec['name']}: {len(man.data['assets'])} files; manifest {os.path.relpath(man.path, s.project)}")
+    finish_manifests(s, [fcore.snake(spec["name"])])
     return finish_verify(s, man, a.no_verify)
 
 
@@ -226,20 +295,33 @@ def cmd_character(a):
     if not (a.prompt or a.source):
         raise fcore.ToolError("character needs --prompt (generate the south sprite) or --source (an existing one)")
     man = fcore.Manifest(s, a.name)
+    import godot
+    godot.RECORD = man.entity
     try:
         tres, canvas = lane_character.Character(entry, s.project, man, s.conf).run()
         fcore.log(f"character {a.name} done: canvas {canvas}")
     finally:
         fcore.stop_comfy()
+        godot.RECORD = None
     if man.drop_engine_rows():
         man.save()
+    finish_manifests(s, [fcore.snake(a.name)])
     return finish_verify(s, man, a.no_verify)
 
 
 def cmd_audition(a):
     s = setup_run(a)
     import audition
-    hue = tuple(int(x) for x in a.feature_hue.split("-")) if a.feature_hue else None
+    # checked up front: "walk" (no direction) and "--feature-hue 30" used to fail inside the run as ValueError/IndexError
+    action, _, direction = a.clip.rpartition("_")
+    if not action or not direction:
+        raise fcore.ToolError(f"--clip {a.clip}: give action_direction, e.g. walk_e")
+    hue = None
+    if a.feature_hue:
+        lo, dash, hi = a.feature_hue.partition("-")
+        if not (dash and lo.isdigit() and hi.isdigit() and int(lo) <= int(hi) <= 360):
+            raise fcore.ToolError(f"--feature-hue {a.feature_hue}: give a hue range LO-HI in degrees, e.g. 30-56")
+        hue = (int(lo), int(hi))
     entry = {"name": a.name, "asymmetric": a.asymmetric, "subject": a.subject,
              "motions": dict(m.split("=", 1) for m in a.char_motion)}
     if a.promote:
@@ -332,7 +414,9 @@ def cmd_aseprite(a):
     s = setup_run(a)
     import aseprite
     if a.reexport:
-        report_reexport(aseprite.reexport(s.project, s.conf))
+        r = aseprite.reexport(s.project, s.conf)
+        finish_manifests(s, existing_only=True)
+        report_reexport(r)
         return 0
     report_sources(s, aseprite.build(s.project, s.conf, overwrite=a.overwrite), "aseprite")
     return 0
@@ -344,7 +428,9 @@ def cmd_pixelorama(a):
     s = setup_run(a)
     import pixelorama
     if a.reexport:
-        report_reexport(pixelorama.reexport(s.project, s.conf))
+        r = pixelorama.reexport(s.project, s.conf)
+        finish_manifests(s, existing_only=True)
+        report_reexport(r)
     else:
         report_sources(s, pixelorama.build(s.project, s.conf, overwrite=a.overwrite), "pixelorama")
     for rel, folder, cleared in pixelorama.local_paths(s.project, s.conf, clear=a.clear_export_path):
@@ -454,6 +540,23 @@ def cmd_fonts_check(a):
     return fontcheck.cmd(a, os.path.abspath(a.project), HERE)
 
 
+def cmd_manifest(a):
+    """Rebuild every pack's engine-neutral asset manifest (or --check them) and validate it (ASSET_MANIFEST.md)."""
+    s = setup_run(a, game=not a.check)
+    if a.check:
+        s.require_game()
+    import glob
+    if not glob.glob(os.path.join(s.src, "dotwork", "manifest_*.json")):
+        raise fcore.ToolError("no Dotwork manifests in this game yet (build something with `dotwork.py pack` first)")
+    bad = asset_manifests(s, a.pack or None, check_only=a.check)
+    for b in bad:
+        print(f"[fail] {b}")
+    if bad:
+        return 1
+    print(f"[ OK ] asset manifests {'checked' if a.check else 'written'}: {os.path.join(s.assets, 'dotwork')}")
+    return 0
+
+
 def cmd_config(a):
     s = setup_run(a, game=False)
     print(json.dumps({k: v for k, v in s.conf.items() if k != "fixed"}, indent=1, ensure_ascii=False))
@@ -465,8 +568,9 @@ def build_parser():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--project", default=".", help="the game's folder (default: current folder)")
     common.add_argument("--config", help="Dotwork config JSON (default <project>/art_src/dotwork/dotwork.config.json)")
-    common.add_argument("--engine", choices=["godot", "none"], help="godot (default): write .tres/.tscn; none: "
-                        "PNGs, sheets and JSON only (web, Bevy, other engines)")
+    common.add_argument("--engine", choices=["godot", "none"], help="godot: write .tres/.tscn (the default, except in "
+                        "a kit game of another engine); none: PNGs, sheets and JSON only, for that engine's importer "
+                        "(web, Unity, Bevy, ...). A kit game's engine (.game-kit.json) also picks its assets folder")
     common.add_argument("--debug", action="store_true", help="tracebacks and request logs")
     ap = argparse.ArgumentParser(description="Dotwork: local pixel-art assets for a game, made with ComfyUI on your GPU. "
                                              "Global options, before or after the command: --project GAME, "
@@ -635,6 +739,16 @@ def build_parser():
     p.add_argument("--caps-only", action="store_true", help="as the spec key: lowercase is drawn with the capitals "
                    "(title fonts)")
     p.set_defaults(fn=cmd_fonts_check)
+
+    p = sub.add_parser("manifest", parents=[common],
+                       help="write and validate the engine-neutral asset manifests (<assets>/dotwork/<pack>.assets.json)",
+                       description="Every pack's engine-neutral asset manifest (ASSET_MANIFEST.md), rebuilt from its "
+                                   "provenance manifest and validated against the spec; pack and the hand-polish "
+                                   "re-exports write them too. Exit 0 ok, 1 findings, 2 usage.")
+    p.add_argument("--check", action="store_true", help="write nothing: validate the files on disk and name any "
+                   "that a rebuild would change")
+    p.add_argument("--pack", nargs="+", help="only these packs (spec \"name\", snake_case)")
+    p.set_defaults(fn=cmd_manifest)
 
     p = sub.add_parser("config", parents=[common], help="print the merged settings")
     p.set_defaults(fn=cmd_config)

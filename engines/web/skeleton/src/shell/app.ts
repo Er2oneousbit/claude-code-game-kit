@@ -5,24 +5,27 @@
 //           the user-data folder (localStorage under one prefix), the game log, the crash hook, consent-gated
 //           telemetry, the F8 bug report, subtitles and the smoke driver.
 // Usage   : import { shell } from "./shell/app"   (first import in main.ts: the crash hook goes in early)
-//           shell.start(game) once Phaser has booted ; scenes read shell.settings / shell.input / shell.palette()
-// Notes   : Browser only. The screens are HTML over the canvas (real text layout, so text scaling, wrapping
-//           and the pseudo-locale check work like any web page); the game itself stays in Phaser scenes
-//           ("main" = the play scene, "juice" = the juice demo, "backdrop" behind the menus).
+//           shell.start(host) once the renderer is up (host.ts) ; the game reads shell.settings / shell.input /
+//           shell.palette()
+// Notes   : Browser only, no renderer import: the same file in the web and web-3d overlays (host.ts). The screens
+//           are HTML over the canvas (real text layout, so text scaling, wrapping and the pseudo-locale check work
+//           like any web page); the game itself runs in the host's worlds ("main" = play, "juice" = the juice
+//           demo) with a still backdrop behind the menus.
 //           URL parameters: ?debug (debug build: Juice demo, F8), ?locale=<id> (overrides the setting),
 //           ?data-dir=<prefix> (user-data key prefix), ?drive=<scenario> (smoke, see drive.ts: only with its
 //           own ?data-dir= and in a dev server or an automated browser, so a crafted link changes nothing).
 //
 // Pseudocode:
 //   constructor: store (prefix) -> game log (rotate) -> crash hook -> settings (repair) -> i18n -> input
-//   start(game): apply settings -> boot screen -> title (BOOT_OK) -> drive scenario if asked
+//   start(host): apply settings -> boot screen -> title (BOOT_OK) -> drive scenario if asked
 //   every press: the top screen gets it (its own handler, then its menu, then ui_cancel = back)
 //   every screen shown: telemetry "screen" event (if allowed), pseudo-locale check (if locale is pseudo)
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a drive is the only input; the real keyboard, mouse
 //           and pads are ignored while one runs (input.scripted, #276)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the renderer sits behind a GameHost (host.ts), so
+//           web-3d runs the same shell over Three.js (#175)
 // ---------------------------------------------------------------------------
-import type * as PhaserNS from "phaser";
 import { atomicWrite } from "../core/atomicFile";
 import { I18n, PSEUDO_LOCALE, type Tables } from "../core/i18n";
 import { Log } from "../core/log";
@@ -31,6 +34,7 @@ import { defaultSettings, settingsLoad, settingsText, telemetryAllowed, type Set
 import { DEFAULT_DATA_PREFIX, MemoryStore, WebStorageStore, dataPrefix, type TextStore } from "../core/textStore";
 import { GameLog, Telemetry, TAIL_LINES, stamp, writeCrash } from "../core/userData";
 import { DRIVE_PARAM, driveRequest, runDrive } from "./drive";
+import type { GameHost, GameKey } from "./host";
 import { Narrator } from "./narrator";
 import { ShellInput } from "./input";
 import { checkScreen } from "./pseudoCheck";
@@ -133,9 +137,10 @@ export class Shell {
     if (this.history.length > MAX_HISTORY) this.history.shift();
   }
   settings: Settings;
-  game: PhaserNS.Game | null = null;
-  /** The running gameplay scene ("main" or "juice"), if any. */
-  scene: "main" | "juice" | null = null;
+  /** The renderer under the shell (null until start). */
+  host: GameHost | null = null;
+  /** The running gameplay world ("main" or "juice"), if any. */
+  scene: GameKey | null = null;
   consentAsked = false;
   settingsTab = 0;
   plantedCrash = false;
@@ -207,8 +212,8 @@ export class Shell {
   }
 
   // ---- lifecycle -------------------------------------------------------------
-  start(game: PhaserNS.Game): void {
-    this.game = game;
+  start(host: GameHost): void {
+    this.host = host;
     this.input.attach(window);
     window.addEventListener("blur", () => this.focusLost());
     document.addEventListener("visibilitychange", () => document.hidden && this.focusLost());
@@ -370,23 +375,13 @@ export class Shell {
     document.documentElement.classList.toggle("still", !!this.drive); // no blinking in scripted runs: stable screenshots
     this.i18n.locale = this.params.get("locale") || s.language;
     document.documentElement.lang = this.i18n.locale === PSEUDO_LOCALE ? "en" : this.i18n.locale;
-    const game = this.game;
-    if (!game) return;
+    const host = this.host;
+    if (!host) return;
     if (s.display.frame_cap !== this.frameCap) {
       this.frameCap = s.display.frame_cap;
-      game.loop.setFPSLimit(s.display.frame_cap);
+      host.frameCap(s.display.frame_cap);
     }
-    game.sound.volume = s.audio.master;
-    try {
-      const ctx = (game.sound as unknown as { context?: AudioContext }).context;
-      if (ctx) {
-        ctx.destination.channelCountMode = "explicit";
-        ctx.destination.channelInterpretation = "speakers";
-        ctx.destination.channelCount = s.audio.mono ? 1 : Math.max(1, Math.min(2, ctx.destination.maxChannelCount));
-      }
-    } catch (err) {
-      Log.debug("core", `mono audio not applied: ${String(err)}`);
-    }
+    host.audio(s.audio.master, s.audio.mono);
   }
 
   /** Volume for one category (master included), for game code that plays sounds. */
@@ -429,31 +424,31 @@ export class Shell {
   }
 
   // ---- gameplay --------------------------------------------------------------
-  /** Loading screen, then the scene with its HUD screen. */
-  startGame(key: "main" | "juice"): void {
+  /** Loading screen, then the world with its HUD screen. */
+  startGame(key: GameKey): void {
     if (key === "main") this.recordRun();
     this.telemetry.event("play_start", key);
     this.replace(screens.loading(this, key));
   }
 
-  /** Called by the loading screen once the scene is up. */
-  enterGame(key: "main" | "juice"): void {
+  /** Called by the loading screen once the world is up. */
+  enterGame(key: GameKey): void {
     this.scene = key;
-    this.game?.scene.sleep("backdrop");
+    this.host?.backdrop(false);
     this.input.clearPresses();
     this.replace(screens.gameplay(this, key));
   }
 
   pauseGame(): void {
-    if (!this.scene || !this.game || this.topId === "pause") return;
-    this.game.scene.pause(this.scene);
+    if (!this.scene || !this.host || this.topId === "pause") return;
+    this.host.pause(this.scene);
     this.push(screens.pause(this));
   }
 
   resumeGame(): void {
-    if (!this.scene || !this.game) return;
+    if (!this.scene || !this.host) return;
     if (this.topId === "pause") this.back();
-    this.game.scene.resume(this.scene);
+    this.host.resume(this.scene);
     this.input.clearPresses();
   }
 
@@ -464,10 +459,10 @@ export class Shell {
 
   stopGame(): void {
     try {
-      if (this.scene && this.game) this.game.scene.stop(this.scene);
-      if (this.game?.scene.isSleeping("backdrop")) this.game.scene.wake("backdrop");
+      if (this.scene && this.host) this.host.stop(this.scene);
+      this.host?.backdrop(true);
     } catch (err) {
-      Log.debug("core", `scene stop failed (after a crash): ${String(err)}`);
+      Log.debug("core", `world stop failed (after a crash): ${String(err)}`);
     }
     this.scene = null;
     this.subtitles.clear();
@@ -543,7 +538,7 @@ export class Shell {
       }
       download(`${dir.slice(0, -1)}.json`, JSON.stringify({ log_tail: tail, settings: JSON.parse(settings), screenshot: png }, null, 1));
     };
-    if (this.game) this.game.renderer.snapshot((img) => finish(img instanceof HTMLImageElement ? img.src : ""));
+    if (this.host) this.host.snapshot(finish);
     else finish("");
   }
 

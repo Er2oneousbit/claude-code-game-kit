@@ -7,6 +7,8 @@
 #           "decal_density"}
 # Notes   : Legend: per character the terrains painted there, base first; "none" = no base (interior void).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the map plan is recorded for the engine-neutral asset
+#           manifest before the Godot step, so --engine none games get their maps too (assetmap.py)
 # ---------------------------------------------------------------------------
 import json
 import os
@@ -16,6 +18,7 @@ import numpy as np
 from PIL import Image
 
 import fcore as core
+import godot
 import godotrun
 GD = r'''extends SceneTree
 # Dotwork mapbuild: paint the layers listed in the job JSON with Godot's terrain solver, save the scene, dump cells.
@@ -205,17 +208,22 @@ def build(m, ground, pack, conf):
     """Paint the map with Godot's own terrain solver inside the game project, save the scene under
     <assets>/maps/, write the preview + report under <src>/maps/."""
     settings = core.SETTINGS
-    if not settings.godot():
-        core.log(f"map {m.get('name', 'map')}: skipped (--engine none: maps are painted by Godot)")
-        return None, {}
-    godotrun.project_ok(settings)
     name = core.snake(m.get("name", "map"))
     layers, w, h = plan(m, ground)
     props = plan_props(m, ground["tile_px"], conf["fixed"]["res_root"], conf["fixed"]["art_dir"])
+    scene = core.asset(conf, "maps", f"{name}.tscn")
+    # the plan is the engine-neutral map (godot.record -> assetmap.py): base, decal and fixture cells as placed, overlay
+    # layers as the terrain cells to paint; every engine resolves those with the 8-neighbour rule Godot's solver
+    # follows (blob_bad above checks it), so --engine none games get the map too
+    godot.record("map", scene, {"tileset": ground["res"], "w": w, "h": h, "tile_px": ground["tile_px"],
+                                "layers": layers, "props": props})
+    if not settings.godot():
+        core.log(f"map {name}: no Godot scene (--engine none); the asset manifest carries the map")
+        return None, {}
+    godotrun.project_ok(settings)
     code, out = godotrun.import_project(settings)   # new atlases / scenes must be imported before they load
     if code != 0:
         raise core.JobError(f"Godot import failed before painting {name}:\n{out[-1500:]}")
-    scene = core.asset(conf, "maps", f"{name}.tscn")
     os.makedirs(os.path.dirname(scene), exist_ok=True)   # ResourceSaver does not create folders
     job = {"name": name.title().replace("_", ""), "tileset": ground["res"], "w": w, "h": h, "layers": layers,
            "scene": godotrun.res_of(settings, scene), "props": props}

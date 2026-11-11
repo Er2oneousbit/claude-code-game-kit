@@ -14,6 +14,9 @@ show the exact command and get a yes first. Never flip a repo to public without 
    (store packs, commercial fonts, unclear AI or music terms) and every `PLACEHOLDER` row. Propose: remove, gitignore,
    or keep the repo private.
 3. **Scan:** run `python tools/publish_check.py`. Report FAIL and WARN items as a table with the fix for each.
+   Ask once whether there are private words that must never go public (other projects, client names, real names):
+   if so, help the user write the list outside the repo and point `PUBLISH_CHECK_TERMS` at it (SOP-13 step 3); never
+   copy the words into the chat summary or any tracked file.
    Check whether a history scanner is installed (`gitleaks version`); if so run it, if not say history is unscanned.
    A real key found anywhere: tell the user to rotate it at the provider first. Do not print the key.
 4. **Email:** show the emails in `git log --format=%ae | sort -u`. If any is personal, explain the noreply setup (step 3).

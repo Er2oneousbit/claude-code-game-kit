@@ -9,6 +9,9 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): tileset_layers takes a (w, h) tile size and TileSet
 #           metadata (Pixelorama tilemaps)
+#           2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): RECORD / record(): every writer hands what it builds a
+#           resource from to the run's manifest, also under --engine none, so the engine-neutral asset manifest
+#           (assetmap.py, ASSET_MANIFEST.md) maps exactly the data Godot gets; prop_geometry() split out of prop_scene
 # ---------------------------------------------------------------------------
 import os
 
@@ -19,6 +22,15 @@ PEERS8 = ("top_side", "top_right_corner", "right_side", "bottom_right_corner", "
 
 
 ENABLED = True   # dotwork.py sets False for --engine none: PNGs, sheets and JSON still ship
+RECORD = None    # dotwork.py binds the run's manifest (fcore.Manifest.entity): RECORD(kind, path, data)
+
+
+def record(kind, path, data):
+    """Hand the inputs a Godot resource is built from to the run's manifest (kind: frames, tileset, prop, map). It runs
+    under --engine none too, where the resource itself is not written: the engine-neutral asset manifest (assetmap.py)
+    is made from these records, so it is the same with or without Godot."""
+    if RECORD is not None and path:
+        RECORD(kind, path, data)
 
 
 def q(s):
@@ -51,6 +63,9 @@ def sprite_frames(path, res_dir, animations):
     """animations: {name: (list_of_png_basenames, fps, loop)} or (files, fps, loop, durations): one relative duration
     per frame (holds: 2.0 shows a frame twice as long; None or no fourth item is 1.0 each, as before); textures live in
     res_dir (a res:// folder)."""
+    record("frames", path, {"res_dir": res_dir, "animations": {
+        name: [list(a[0]), a[1], bool(a[2]), list(a[3]) if len(a) > 3 and a[3] else None]
+        for name, a in animations.items()}})
     ext, anims, n = [], [], 0
     for name, anim in animations.items():
         files, fps, loop = anim[:3]
@@ -92,6 +107,11 @@ def effect_scene(path, frames_res, material_res, anim, node_name="Effect"):
 def tileset(path, atlas_res, tile_px, cols, tiles, terrains, mode="match_corners", custom=None):
     """tiles: list of dicts {index, corners: (tl, tr, bl, br) terrain ids, terrain: center id, custom: value}.
     terrains: list of (name, (r, g, b)) in id order. custom: name of a String custom data layer (or None)."""
+    record("tileset", path, {"tile_size": [tile_px, tile_px], "mode": mode, "terrains": terrains, "custom": custom,
+                             "sources": [{"atlas_res": atlas_res, "kind": "pair", "name": atlas_res.rsplit("/", 1)[-1][:-4],
+                                          "tiles": [{"x": t["index"] % cols, "y": t["index"] // cols,
+                                                     "terrain": t["terrain"], "corners": list(t["corners"]),
+                                                     "custom": t.get("custom")} for t in tiles]}]})
     lines = [f'[gd_resource type="TileSet" load_steps=3 format=3]', "",
              f'[ext_resource type="Texture2D" path="{atlas_res}" id="1_atlas"]', "",
              '[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_1"]',
@@ -137,13 +157,9 @@ def prop_scene(path, tex_res, size, bbox, node_name="Prop", solid=True, footprin
     offset to match, and a StaticBody2D footprint box blocks movement. Put props under a Node2D with
     y_sort_enabled so characters pass behind / in front by their feet.
     footprint: base (80% of the content width x 12 px), trunk (25% x 8 px: trees, posts, lamps), or [w, h]."""
-    w, h = size
-    x0, y0, x1, y1 = bbox
-    cx, bottom = (x0 + x1) / 2, y1
-    off = (round(w / 2 - cx), round(h / 2 - bottom))  # Sprite2D is centred: shift so (cx, bottom) lands on 0,0
-    cw = x1 - x0
-    fw, fh = {"base": (max(4, round(cw * 0.8)), 12), "trunk": (max(4, round(cw * 0.25)), 8)}.get(
-        footprint, footprint if isinstance(footprint, (list, tuple)) else (round(cw * 0.8), 12))
+    off, (fw, fh) = prop_geometry(size, bbox, footprint)
+    record("prop", path, {"texture": tex_res, "size": list(size), "bbox": list(bbox), "solid": bool(solid),
+                          "offset": list(off), "footprint": [fw, fh], "shape_y": -fh // 2})
     root = "StaticBody2D" if solid else "Node2D"
     lines = [f'[gd_scene load_steps={3 if solid else 2} format=3]', "",
              f'[ext_resource type="Texture2D" path="{tex_res}" id="1_tex"]', ""]
@@ -156,6 +172,19 @@ def prop_scene(path, tex_res, size, bbox, node_name="Prop", solid=True, footprin
         lines += ['[node name="CollisionShape2D" type="CollisionShape2D" parent="."]',
                   f"position = Vector2(0, {-fh // 2})", 'shape = SubResource("RectangleShape2D_1")', ""]
     return _write(path, "\n".join(lines)), (fw, fh)
+
+
+def prop_geometry(size, bbox, footprint="base"):
+    """(sprite offset, (footprint w, h)) of a prop scene: the Sprite2D is centred, so the offset moves the content's
+    bottom centre onto the node origin; the footprint box sits on the origin, centred, fh // 2 above it."""
+    w, h = size
+    x0, y0, x1, y1 = bbox
+    cx, bottom = (x0 + x1) / 2, y1
+    off = (round(w / 2 - cx), round(h / 2 - bottom))  # Sprite2D is centred: shift so (cx, bottom) lands on 0,0
+    cw = x1 - x0
+    fw, fh = {"base": (max(4, round(cw * 0.8)), 12), "trunk": (max(4, round(cw * 0.25)), 8)}.get(
+        footprint, footprint if isinstance(footprint, (list, tuple)) else (round(cw * 0.8), 12))
+    return off, (fw, fh)
 
 
 # quadrant boxes (tile-center coordinates) for per-corner collision, in CORNERS order
@@ -174,6 +203,8 @@ def tileset_layers(path, tile_px, sources, terrains, custom=None, physics=False,
     tile_px: one side of a square tile, or (w, h). metadata: {name: Godot value text} set on the TileSet."""
     n = len(sources)
     tw, th = (tile_px, tile_px) if isinstance(tile_px, int) else tuple(tile_px)
+    record("tileset", path, {"tile_size": [tw, th], "mode": mode, "terrains": terrains, "custom": custom,
+                             "physics": bool(physics), "sources": sources})
     lines = [f'[gd_resource type="TileSet" load_steps={2 * n + 1} format=3]', ""]
     for i, s in enumerate(sources):
         lines.append(f'[ext_resource type="Texture2D" path="{s["atlas_res"]}" id="{i + 1}_atlas"]')

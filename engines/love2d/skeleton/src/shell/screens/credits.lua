@@ -18,15 +18,58 @@ local SCROLL_PX_S = 18                   -- auto scroll speed
 local STEP_PX = 24                       -- one up/down press
 local AREA_X, AREA_Y, AREA_W, AREA_H = 60, 56, 520, 260
 
-local function read_lines()
-  local text = love.filesystem.read(FILE)
-  if not text then return nil end
+local COMMENT_OPEN, COMMENT_CLOSE = "<!--", "-->"
+
+local function blank(s) return s:find("^[ \t]*$") ~= nil end   -- spaces and tabs only, as every port counts them
+
+-- Every <!-- --> comment removed, one line or many (an unclosed one runs to the end); a line that held only comments
+-- goes, with one blank line after it when a blank line came before. tools/golden_vectors.py strip_html_comments is
+-- the spec, data/golden/credits.json the cases (tests/test_credits_text.lua). Byte-wise: the delimiters are ASCII.
+function Credits.strip_html_comments(text)
+  local out, in_comment, skip_blank = {}, false, false
+  for line in (text:gsub("\r\n", "\n") .. "\n"):gmatch("(.-)\n") do
+    local kept, had, i = "", in_comment, 1
+    while true do
+      if in_comment then
+        local e = line:find(COMMENT_CLOSE, i, true)
+        if not e then break end
+        in_comment, i = false, e + #COMMENT_CLOSE
+      else
+        local s = line:find(COMMENT_OPEN, i, true)
+        if not s then kept = kept .. line:sub(i) break end
+        kept = kept .. line:sub(i, s - 1)
+        in_comment, had, i = true, true, s + #COMMENT_OPEN
+      end
+    end
+    if had and blank(kept) then
+      skip_blank = #out == 0 or blank(out[#out])
+    elseif skip_blank and blank(kept) then
+      skip_blank = false
+    else
+      skip_blank = false
+      out[#out + 1] = kept
+    end
+  end
+  return table.concat(out, "\n")
+end
+
+-- CREDITS.md as the lines the screen scrolls: HTML comments out (tools/credits.py writes one, #279), then heading
+-- marks, list markers and bold stars. nil (the placeholder) when nothing is left.
+function Credits.lines_from(text)
+  text = Credits.strip_html_comments(text)
+  if blank((text:gsub("\n", ""))) then return nil end
   local lines = {}
-  for line in (text .. "\n"):gmatch("(.-)\r?\n") do
+  for line in (text .. "\n"):gmatch("(.-)\n") do
     line = line:gsub("^%s*#+%s*", ""):gsub("^%s*[-*]%s+", ""):gsub("%*%*", "")
     lines[#lines + 1] = line
   end
   return lines
+end
+
+local function read_lines()
+  local text = love.filesystem.read(FILE)
+  if not text then return nil end
+  return Credits.lines_from(text)
 end
 
 function Credits:enter()
