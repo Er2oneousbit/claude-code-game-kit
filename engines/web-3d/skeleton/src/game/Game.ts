@@ -10,13 +10,19 @@
 //           settings.input.bindings; stick() and triggers() for analog control, heldActions() for everything held).
 //           Units are meters, +Y is up (Three.js default), which is what Blender's glTF export gives.
 //           BOOT_OK is logged by the shell once the title screen is up (dev.py smoke waits for it).
+//           Dotwork art: load() reads every public/assets/dotwork/*.assets.json (src/game/dotwork/) and the
+//           showcase puts the first map, a walking character, a prop and a font label at the centre (#56).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): a world the shell runs (game_speed, the crash drive)
 //           (#175)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): Dotwork packs load and show (#56)
 // ---------------------------------------------------------------------------
 import * as THREE from "three";
 import { Follow3 } from "../core/follow";
 import { shell } from "../shell/app";
+import { DOTWORK_MANIFESTS } from "./dotwork/boot";
+import { DotworkLibrary } from "./dotwork/library";
+import { DotworkShowcase } from "./dotwork/showcase";
 import type { World } from "./threeHost";
 
 const ORBIT_RADIUS = 4; // m
@@ -30,6 +36,8 @@ export class Game implements World {
   private readonly box: THREE.Mesh;
   private readonly cam = new Follow3(CAMERA_SMOOTH);
   private time = 0;
+  private dotwork: DotworkLibrary | null = null;
+  private showcase: DotworkShowcase | null = null;
 
   constructor(aspect: number) {
     this.scene.background = new THREE.Color("#10131c");
@@ -56,6 +64,19 @@ export class Game implements World {
     this.camera.lookAt(this.box.position);
   }
 
+  /** The game's Dotwork packs (none: nothing to fetch). */
+  async load(progress: (v: number) => void): Promise<void> {
+    if (!DOTWORK_MANIFESTS.length) return;
+    this.dotwork = await DotworkLibrary.load(DOTWORK_MANIFESTS, progress);
+    this.showcase = new DotworkShowcase(this.dotwork);
+    this.scene.add(this.showcase);
+  }
+
+  dispose(): void {
+    this.showcase?.dispose();
+    this.dotwork?.dispose();
+  }
+
   resize(aspect: number): void {
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
@@ -74,6 +95,7 @@ export class Game implements World {
     const p = this.cam.step(this.box.position.clone().add(CAMERA_OFFSET), dt);
     this.camera.position.set(p.x, p.y, p.z);
     this.camera.lookAt(this.box.position);
+    this.showcase?.update(dt, this.camera);
   }
 }
 
