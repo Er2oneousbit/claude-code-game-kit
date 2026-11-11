@@ -17,6 +17,9 @@
 #             run      serve game/ on localhost and open the browser (--editor opens RPG Maker MZ instead)
 #             clean    remove build/ (--deep also removes node_modules/)
 #             doctor   verify the local environment
+#             dotwork  turn Dotwork's art (asset manifests) into MZ's image layouts in game/img: character,
+#                      object, face and side-view battler sheets, enemies, Window.png, IconSet.png, B to E
+#                      tilesets (tools/dotwork_mz.mjs; dotwork -h for its options)
 #             ship     put the game online (tools/cloud/ship.py): ship --target aws|azure|gcp|linode|do
 #                      --kind static|container --plan, then --apply / --destroy; ship -h for its options
 # Env     : RPGMZ_EXE  optional, the editor (RPGMZ.exe) for `run --editor` and `doctor`.
@@ -33,6 +36,8 @@
 #   test: node --test over tests/**/*.test.js, parse the TAP totals
 #   smoke: node tools/smoke.mjs (serve, Chromium, wait for BOOT_OK); --shaders first runs
 #          tools/shader_render.mjs, then tools/shaders/shader_ref.py compare build/shader_check
+#   dotwork: node tools/dotwork_mz.mjs --game <the MZ project> [options]; check also runs its --check once an
+#          export record exists
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
@@ -52,6 +57,8 @@
 # Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): smoke reports the run's FRAME_TIMES line (mean,
 #           p95, p99, worst) and fails a p95 over --frame-budget MS, or over the "Smoke frame time" row of
 #           docs/ARCHITECTURE.md; a run that measured nothing says so (#90)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): `dotwork` converts Dotwork's asset manifests into
+#           MZ's image layouts (tools/dotwork_mz.mjs); `check` checks the last export against MZ's shapes (#62)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -93,6 +100,10 @@ SHADER_OUT = "build/shader_check"          # smoke --shaders renders land here, 
 SHADER_TIMEOUT_S = 180
 NO_EXEC = (126, 127)
 SHIP_SITE = "build/web"   # the web build `ship --kind static` publishes unless --site is given (None: none)
+DOTWORK_TOOL = "tools/dotwork_mz.mjs"      # Dotwork's art into MZ's image layouts (#62)
+DOTWORK_CONFIG = "art_src/dotwork/dotwork.config.json"   # Dotwork's per-game config (its project.src_dir)
+DOTWORK_RECORD = "dotwork/mz_export.json"  # under the src_dir: what the converter wrote, and the database's ids
+DOTWORK_TIMEOUT_S = 600
 DEBUG = False
 
 
@@ -564,6 +575,7 @@ def cmd_check(args):
     shader_rc = 0
     if (g / SHADER_PLUGIN).is_file() and not getattr(args, "no_shaders", False):
         shader_rc = shader_compile(g, problems)
+    dotwork_check(g, problems)
     for p in problems:
         print(f"[FAIL] {p}")
     if problems:
@@ -577,6 +589,60 @@ def cmd_check(args):
         print(f"[WARN] no RPG Maker MZ project in {rel(g)}/ yet (only the game's plugins were checked): "
               "python tools/dev.py setup --from <a new MZ project>")
     return 0
+
+
+def dotwork_record():
+    """The Dotwork converter's export record (<src_dir>/dotwork/mz_export.json; src_dir from Dotwork's config,
+    assets_src by default), or None before the first export."""
+    src = "assets_src"
+    try:
+        src = json.loads((ROOT / DOTWORK_CONFIG).read_text(encoding="utf-8")).get("project", {}).get("src_dir") or src
+    except (OSError, ValueError, AttributeError):
+        pass
+    p = ROOT / src / DOTWORK_RECORD
+    return p if p.is_file() else None
+
+
+def dotwork_check(g, problems):
+    """After a `dotwork` export: its files are present and in MZ's shapes (the converter's --check)."""
+    if dotwork_record() is None or not (ROOT / DOTWORK_TOOL).is_file():
+        return
+    rc, out = run([shutil.which("node") or "node", ROOT / DOTWORK_TOOL, "--check", "--game", g], capture=True,
+                  timeout=120)
+    for line in out.splitlines():
+        if line.startswith("[WARN]"):
+            print(line)
+    if rc:
+        found = [line[len("[FAIL] "):] for line in out.splitlines() if line.startswith("[FAIL] ")]
+        problems.extend(f"dotwork export: {p}" for p in found or [out.strip() or f"{DOTWORK_TOOL} --check exited {rc}"])
+
+
+def cmd_dotwork(args):
+    """Convert Dotwork's asset manifests into MZ's image layouts (tools/dotwork_mz.mjs does the work)."""
+    err = node_problem()
+    if err:
+        print(f"[error] {err}", file=sys.stderr)
+        return 2
+    tool = ROOT / DOTWORK_TOOL
+    if not tool.is_file():
+        print(f"[error] {DOTWORK_TOOL} is missing (python scripts/new_game.py --upgrade adds it)", file=sys.stderr)
+        return 2
+    cmd = [shutil.which("node") or "node", tool, "--game", game_dir()]
+    for m in args.manifest or []:
+        cmd += ["--manifest", m]
+    for flag, value in (("--scale", args.scale), ("--sheet", args.sheet), ("--only", args.only), ("--stand", args.stand)):
+        if value:
+            cmd += [flag, str(value)]
+    for flag, on in (("--side-view", args.side_view), ("--replace", args.replace), ("--dry-run", args.dry_run),
+                     ("--check", args.check), ("--debug", DEBUG)):
+        if on:
+            cmd.append(flag)
+    rc, out = run(cmd, capture=True, timeout=DOTWORK_TIMEOUT_S)
+    print(out.rstrip())
+    if rc == 124:
+        print(f"[FAIL] the conversion did not finish within {DOTWORK_TIMEOUT_S} s")
+        return 1
+    return 2 if rc in NO_EXEC else rc
 
 
 def shader_compile(g, problems):
@@ -1041,6 +1107,28 @@ def build_parser():
     p.add_argument("--deep", action="store_true", help="also remove node_modules/ (reinstalled by setup)")
     p.add_argument("--yes", action="store_true", help="accepted on every engine; this clean never asks")
     p.set_defaults(fn=cmd_clean)
+    p = sub.add_parser("dotwork", help="Dotwork's art into MZ's image layouts in game/img (characters, faces, "
+                                       "battlers, Window.png, IconSet.png, B to E tilesets)",
+                       description="Convert Dotwork's asset manifests (<assets_dir>/dotwork/*.assets.json) into RPG "
+                                   "Maker MZ's image layouts in game/img, and record the icon, face and tile ids for "
+                                   "the database in <src_dir>/dotwork/mz_export.json. Never overwrites a file it did "
+                                   "not write unless --replace. docs/ENGINE_FLOW.md 'Dotwork art in MZ'.")
+    p.add_argument("--manifest", action="append", metavar="FILE",
+                   help="a manifest to convert (repeatable; default: every *.assets.json in Dotwork's assets folder)")
+    p.add_argument("--scale", type=int, default=0,
+                   help="whole-number scale from Dotwork pixels to MZ pixels (default: MZ's tile size / the art's)")
+    p.add_argument("--sheet", default="", metavar="NAME",
+                   help="put characters on normal sheets NAME, NAME_2 ... (8 each) instead of one $ file each")
+    p.add_argument("--only", default="", metavar="KINDS",
+                   help="comma list of characters, objects, faces, sv, enemies, icons, window, tilesets")
+    p.add_argument("--stand", choices=("walk", "idle"), default="",
+                   help="the standing frame (MZ's middle column): walk's first (default) or idle's")
+    p.add_argument("--side-view", action="store_true", help="make side-view battlers even in a front-view game")
+    p.add_argument("--replace", action="store_true",
+                   help="overwrite files it did not write (MZ's Window.png, IconSet.png); originals go to build/")
+    p.add_argument("--dry-run", action="store_true", help="say what would be written, write nothing")
+    p.add_argument("--check", action="store_true", help="check the last export (files, MZ's shapes); `check` runs it too")
+    p.set_defaults(fn=cmd_dotwork)
     sub.add_parser("ship", help="put the game online with OpenTofu (tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
     sub.add_parser("doctor", help="verify the local environment").set_defaults(fn=cmd_doctor)
     return ap
