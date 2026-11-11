@@ -14,6 +14,7 @@
 #           python tools/bozzetto/bozzetto.py make npc_guard --image ref.png --class npc --lods 0.5 --sprites assets/art/guard.png
 #           python tools/bozzetto/bozzetto.py rig check            # the rig routes: UniRig (local) and Tripo (paid)
 #           python tools/bozzetto/bozzetto.py rig make npc_guard   # skeleton, skin weights, Mixamo names, clips
+#           python tools/bozzetto/bozzetto.py reference chr_hero --from concept.png   # A-pose views (reference.py)
 #           Options for make: --class prop|kit|hero|npc, --seed N, --out <models folder>, --lods 0.5,0.25|none,
 #           --height M, --turn DEG, --quality normal|high, --material texture|vertex, --no-log, --overwrite, --debug
 # Needs   : Python 3.8+ (standard library). For make: a running ComfyUI 0.43.0+ (TRELLIS.2 nodes are built in) with
@@ -856,6 +857,7 @@ STEPS = [
 def cmd_list(args):
     print(f"{TOOL}: the kit's local 3D asset lane. python tools/{TOOL.lower()}/{TOOL.lower()}.py <subcommand>\n")
     print("  check     what is ready here        test      the exams (--live adds one GPU run)")
+    print("  reference model-ready views (A-pose front, left, back, right) from a concept or a prompt")
     print("  make      a model from --image or --prompt (make --help for every option)\n\nSteps of make:")
     for name, what in STEPS:
         print(f"  {name:9} {what}")
@@ -868,7 +870,8 @@ def cmd_list(args):
 
 
 def cmd_test(args):
-    exams = [HERE / "test_bozzetto.py", HERE / "test_rig.py"] + ([HERE / "test_bozzetto_live.py"] if args.live else [])
+    exams = [HERE / "test_bozzetto.py", HERE / "test_rig.py", HERE / "test_reference.py"] + \
+        ([HERE / "test_bozzetto_live.py"] if args.live else [])
     failed = 0
     for exam in exams:
         t0 = time.monotonic()
@@ -889,7 +892,8 @@ def build_parser():
                     "(TRELLIS.2 in a local ComfyUI, cleanup and checks in Blender).",
         epilog="Exit: 0 ok, 1 the job or the budget check failed, 2 usage, environment, missing models or files in "
                f"the way.\nEnv: {cl.URL_ENV} (default {cl.DEFAULT_URL}), {BLENDER_ENV} (blender executable), "
-               "COMFYUI_ROOT (check --hash); rig: UNIRIG_DIR, UNIRIG_PY, TRIPO_API_KEY.\nREADME.md in this folder "
+               "COMFYUI_ROOT (check --hash); rig: UNIRIG_DIR, UNIRIG_PY, TRIPO_API_KEY; reference: GEMINI_API_KEY, "
+               "TRIPO_API_KEY.\nREADME.md in this folder "
                "walks through setup and every option.")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--url", help=f"ComfyUI address (default {cl.URL_ENV} or {cl.DEFAULT_URL})")
@@ -939,6 +943,9 @@ def build_parser():
     import rig as rig_mod   # noqa: E402  (rig.py: the rig subcommand)
     rig_mod.bind(sys.modules[__name__])
     rig_mod.add_parser(sub, common)
+    import reference as ref_mod   # noqa: E402  (reference.py: the reference subcommand, #288)
+    ref_mod.bind(sys.modules[__name__])
+    ref_mod.add_parser(sub, common)
     return ap
 
 
