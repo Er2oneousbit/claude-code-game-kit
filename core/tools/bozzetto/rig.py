@@ -615,3 +615,6 @@ def add_parser(sub, common):
     m.add_argument("--overwrite", action="store_true", help="replace <name>_rigged.glb from an earlier run")
     m.add_argument("--wait", type=int, default=STEP_WAIT_S, help=f"seconds to wait for each step (default {STEP_WAIT_S})")
     m.set_defaults(fn=cmd_rig_make)
+    import chain   # chain.py: `rig chain`, secondary motion (#289)
+    chain.bind(bz)
+    chain.add_parser(rs, common)
