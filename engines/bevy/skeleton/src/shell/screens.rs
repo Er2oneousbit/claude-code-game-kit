@@ -429,12 +429,11 @@ pub fn page_lines(shell: &Shell) -> Vec<(String, bool)> {
                 .as_ref()
                 .and_then(|d| d.parent().map(|p| p.join("CREDITS.md")))
                 .and_then(|p| std::fs::read_to_string(p).ok());
-            let mut lines: Vec<(String, bool)> = match text {
-                Some(t) => t
-                    .lines()
-                    .map(|l| (l.trim_start_matches('#').trim().to_string(), true))
-                    .collect(),
-                None => vec![(shell.t("credits.placeholder"), false)],
+            let lines_from_file = text.map(|t| credits_lines(&t)).unwrap_or_default();
+            let mut lines: Vec<(String, bool)> = if lines_from_file.is_empty() {
+                vec![(shell.t("credits.placeholder"), false)]
+            } else {
+                lines_from_file.into_iter().map(|l| (l, true)).collect()
             };
             lines.push((String::new(), false));
             lines.push((shell.t("credits.engine"), false));
@@ -471,6 +470,77 @@ pub fn page_lines(shell: &Shell) -> Vec<(String, bool)> {
         }
         _ => Vec::new(),
     }
+}
+
+const COMMENT_OPEN: &str = "<!--";
+const COMMENT_CLOSE: &str = "-->";
+
+/// Only spaces and tabs (every port counts these two; Unicode whitespace differs between languages).
+fn blank(line: &str) -> bool {
+    line.chars().all(|c| c == ' ' || c == '\t')
+}
+
+/// CREDITS.md without its HTML comments (tools/credits.py writes one, #279): one line or many, an unclosed one runs
+/// to the end; a line that held only comments goes, with one blank line after it when a blank line (or the top of the
+/// file) came before. CRLF becomes LF. tools/golden_vectors.py strip_html_comments is the spec, data/golden/credits.json
+/// the cases (tests/golden.rs).
+pub fn strip_html_comments(text: &str) -> String {
+    let unix = text.replace("\r\n", "\n");
+    let mut out: Vec<String> = Vec::new();
+    let mut in_comment = false;
+    let mut skip_blank = false; // the blank line after a dropped comment-only line
+    for line in unix.split('\n') {
+        let mut kept = String::new();
+        let mut had = in_comment;
+        let mut i = 0;
+        loop {
+            if in_comment {
+                match line[i..].find(COMMENT_CLOSE) {
+                    Some(end) => {
+                        in_comment = false;
+                        i += end + COMMENT_CLOSE.len();
+                    }
+                    None => break, // the comment goes on into the next line
+                }
+            } else {
+                match line[i..].find(COMMENT_OPEN) {
+                    Some(start) => {
+                        kept.push_str(&line[i..i + start]);
+                        in_comment = true;
+                        had = true;
+                        i += start + COMMENT_OPEN.len();
+                    }
+                    None => {
+                        kept.push_str(&line[i..]);
+                        break;
+                    }
+                }
+            }
+        }
+        if had && blank(&kept) {
+            skip_blank = out.last().is_none_or(|l| blank(l));
+            continue;
+        }
+        if skip_blank && blank(&kept) {
+            skip_blank = false;
+            continue;
+        }
+        skip_blank = false;
+        out.push(kept);
+    }
+    out.join("\n")
+}
+
+/// CREDITS.md as the credits page's lines: HTML comments out, heading marks off. Empty (the placeholder) when nothing
+/// is left.
+pub fn credits_lines(markdown: &str) -> Vec<String> {
+    let text = strip_html_comments(markdown);
+    if text.trim().is_empty() {
+        return Vec::new();
+    }
+    text.lines()
+        .map(|l| l.trim_start_matches('#').trim().to_string())
+        .collect()
 }
 
 /// What a screen does when it opens.
