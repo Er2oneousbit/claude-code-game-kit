@@ -201,6 +201,85 @@ In the engine: the rigged `.glb` carries its clips as glTF animations. Godot: an
 glTF clips import without looping, so set `loop_mode` (the showcase does). Unity: set the model's rig to Humanoid; the
 Mixamo names should map without hand work, so Mixamo-style clips play on it **(verify: not yet tested in Unity)**.
 
+### Secondary motion
+An auto-rig gives a body skeleton: a scarf tail, cape, long hair or tail is skinned stiffly to the neck or spine and
+moves like part of the torso. `rig chain` gives that part its own chain of bones and keys its motion into the clips:
+```
+python tools/bozzetto/bozzetto.py rig chain npc_guard --part colour:#c8202a~0.15          # the scarf: the only red
+python tools/bozzetto/bozzetto.py rig chain npc_guard --part scarf=colour:#c8202a --bones 5 --sway 10,idle=4 --cloth hit
+python tools/bozzetto/bozzetto.py rig chain npc_guard --part "hair=material:Hair" --part "tail=group:Tail" --no-replace
+```
+It works on `<models>/<name>_rigged.glb` (from `rig make`) and writes the same file back, so the engine and the asset
+log keep pointing at it. The rig before its first chain is kept in `assets_src/bozzetto/<name>/rig/chain/before_chain.glb`
+and every run starts from it, so running again with other options replaces the chain instead of adding a second one
+(a model rigged again since then becomes the new starting point). `--no-replace` writes only
+`assets_src/bozzetto/<name>/rig/chain/chained.glb` and the preview, to look first. The report (chain_report.json), the
+record (chain.json) and the preview chain.png (each clip from behind and to the side) sit in the same folder; the
+model's asset log row gets a "chain: ..." note.
+
+**Choosing the part** (`--part [label=]selector`, terms joined with `&` must all match; the label names the bones
+`label_01` ...):
+
+| Selector | Picks the faces |
+|---|---|
+| `colour:#rrggbb~0.15` | whose colour is within the tolerance (straight-line distance of sRGB 0..1; 0.15 by default): the base texture at the face, else its colour attribute, else its material colour. The scarf case: the one red on the character |
+| `material:NAME` | with that material (case does not matter) |
+| `group:NAME` | whose vertices are all at least half in that vertex group (made by hand in Blender) |
+| `box:x0,y0,z0,x1,y1,z1` | whose centre is inside the box: metres, glTF axes (Y up, the character faces +Z, its left is +X), as the engine shows the model. `colour:#c8202a&box:-1,0,-1,1,1.2,1` is the red below 1.2 m |
+
+Only the largest connected piece of the selection is used (others are named in the output). It refuses, rather than
+guesses, when nothing is selected (naming the closest colour it found, or the model's main colours), when the
+selection is more than 40% of a mesh, and when the part is a lump (not longer than it is wide, and not a thin sheet
+like a cape). The chain hangs from the nearest bone of the spine line (hips, spine, neck, head), or `--parent`.
+
+**Shapes:** a part that is its own shell is separated from the body as it is. If it has too few rows along its length
+to bend (a box with two ends), it is cut across its length: more rows, the same shape, texture and colours. A part
+that is fused to the body along its length (generated meshes often are: the scarf is just a red area of one surface)
+cannot swing without tearing a hole, so it is **rebuilt as a strip**: a box-section ribbon along the part's middle line,
+its width and thickness measured slice by slice, laid just on top of the original, with the texture coordinates (or
+colours) taken from the nearest point of the original, so it looks the same from the front. Its limits, measured on the
+exam's fused band: the width (0.09 m of 0.085) and the colours come through; folds, fringes, knots, tassels and a
+pattern on the back do not (both sides show the front); the thickness is a guess (8 to 50% of the width); the original
+area stays painted on the body, so it shows behind the strip when the strip swings out; one strip follows one middle
+line, so a part that wraps around the neck as well as hanging would be flattened (not tried): select the hanging part
+only (`&box:...`). `--rebuild strip`
+forces a strip, `--rebuild no` refuses to change the shape.
+
+**Weights:** each vertex blends between the two nearest chain bones by its place along the part, and the first half
+bone blends into the parent bone, so the root never leaves the body. The check: every vertex of the part sums to 1 and
+every chain bone holds some of it.
+
+**Motion:** a clip counts as a loop when its first and last poses match (`--loop` names mocap clips that almost do).
+In each loop the chain sways a whole number of cycles over the clip's own frames (about one per 1.5 s), each bone
+`--lag` of a cycle (default 0.12) behind the one above it, `--sway` degrees (default 8; per clip: `8,idle=4,run=14`):
+outward, away from the body, never into it, and half that sideways. Keys are on every frame and the phase wraps at the
+clip's length, so the first and last frame are the same and a sprite cycle still loops (the exam checks it). One-shot
+clips named in `--cloth` (`oneshots` for all) get a Blender cloth simulation: a ribbon pinned to the parent bone,
+colliding with the body, simulated over the clip, and each chain bone turned to follow it frame by frame, stored in
+that clip. It starts at rest and ends where the cloth is, so let the engine blend into the next clip. Other one-shots:
+the chain follows the body. The sway does not collide with anything; keep `--sway` small for a part that hangs close
+to the legs. The body's own keys are never changed (checked per clip), and the result passes `rig_finish.py`'s checks
+(weights, deformation) before anything is written.
+
+**In a 3D engine** the chain bones can be driven by the engine's spring bones instead of (or on top of) the baked
+motion. For engine-driven motion, run with `--sway 0` (the chain stays at rest in every clip) so the keys do not fight
+the simulation. Recipes:
+- Godot 4.6+: a `SpringBoneSimulator3D` child of the imported `Skeleton3D`, `setting_count = 1`,
+  `set_root_bone_name(0, "scarf_01")`, `set_end_bone_name(0, "scarf_04")`. Checked headless on Godot 4.7.2 with the
+  exam's character exported with `--sway 0` (K01): sliding the model 0.6 m sideways and stopping swung the scarf tip
+  up to 0.44 m with only these defaults, and not at all without the node, so tune stiffness, drag and gravity. Read a
+  bone's simulated pose in the skeleton's `skeleton_updated` signal (outside it you get the pose before modifiers).
+  A `SpringBoneCollisionCapsule3D` on the spine to keep it out of the body **(verify)**.
+- Unity **(verify)**: no spring bone in the engine itself. UniVRM's `VRMSpringBone` (MIT) works on any transforms, or
+  Animation Rigging's `DampedTransform` per bone for a stiffer follow; paid assets (Dynamic Bone, Magica Cloth) exist.
+- Unreal **(verify)**: an `AnimDynamics` node in the character's Animation Blueprint, bound to the chain (chain start
+  `scarf_01`, end `scarf_04`), or the free Kawaii Physics plugin.
+- Bevy, Three.js **(verify)**: no built-in spring bone; a small system that moves each joint toward its rest position
+  with a damped spring (Verlet) and points the bones at the results is enough for a scarf.
+
+Exits: 0 done, 1 refused or a check failed (the model is not touched), 2 usage, a clip name the file does not have,
+or `--cloth` on a loop.
+
 ## Licences
 `LICENSES.md` has the register. In short: TRELLIS.2 and BiRefNet are MIT; DINOv3, TRELLIS.2's image encoder, has
 its own licence: worldwide and royalty-free, but with a list of prohibited uses (military, weapons, ITAR) whose reach
@@ -224,5 +303,7 @@ uv run --python 3.13 --with bpy python tools/bozzetto/test_bozzetto.py   # the s
 python tools/bozzetto/test_bozzetto_live.py     # one real run on the GPU (about 5 min); skips without one
 python tools/bozzetto/test_rig.py               # rig, offline: stand-in UniRig and Tripo; rig_finish.py on rigs
                                                     # built in Blender when it is found (about 25 s)
+python tools/bozzetto/test_chain.py             # rig chain: parsers and the command offline; a made-up scarf
+                                                    # character built in Blender when it is found (about 1 min)
 python tools/bozzetto/bozzetto.py test [--live] # the above in one go
 ```
