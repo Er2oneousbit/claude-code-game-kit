@@ -12,13 +12,14 @@ that machine needed, not promises.
 
 ## Contents
 1. [Setup](#setup)
-2. [Make a model](#make-a-model)
-3. [What lands where](#what-lands-where)
-4. [What to expect](#what-to-expect)
-5. [In the engine](#in-the-engine)
-6. [Rig a character](#rig-a-character)
-7. [Licences](#licences)
-8. [Exams](#exams)
+2. [Reference views](#reference-views)
+3. [Make a model](#make-a-model)
+4. [What lands where](#what-lands-where)
+5. [What to expect](#what-to-expect)
+6. [In the engine](#in-the-engine)
+7. [Rig a character](#rig-a-character)
+8. [Licences](#licences)
+9. [Exams](#exams)
 
 ## Setup
 1. **ComfyUI 0.43.0 or newer** (TRELLIS.2's nodes are built in: no custom node pack). Dotwork's README has the install
@@ -47,6 +48,62 @@ that machine needed, not promises.
    ```
 Hardware: an NVIDIA GPU with 16 GB of VRAM (ComfyUI fills most of it; peak about 14 GB measured) and 32 GB of RAM.
 Upstream TRELLIS.2 asks for 24 GB (E109); ComfyUI's int8 build of it runs in 16 (K01).
+
+## Reference views
+A character concept is usually a dynamic pose: arms against the body, a scarf flying, one view. 3D generators and
+auto-riggers want something else: the same design in a relaxed A-pose with a gap between each arm and the body,
+orthographic and straight-on, flat light, a plain background, ideally from the front, the side and the back.
+`reference` makes those views from your concept picture or from a sentence:
+```
+python tools/bozzetto/bozzetto.py reference chr_keeper --prompt "a lanky lighthouse keeper in a yellow coat" --seed 4
+python tools/bozzetto/bozzetto.py reference chr_keeper --from art_src/keeper_concept.png --seed 4
+python tools/bozzetto/bozzetto.py reference chr_keeper --from art_src/keeper_concept.png --with nanobanana --quote-only
+python tools/bozzetto/bozzetto.py reference chr_keeper --prompt "..." --with tripo --views front,back --max-cost 30
+```
+Every route asks for the same thing: a relaxed A-pose (arms about 35 degrees out, hands open, legs a little apart, feet
+flat), orthographic straight-on camera, flat even light with no cast shadow, a plain light grey background, nothing
+else in frame, loose cloth (scarves, capes, coat tails, long hair) hanging down instead of flying. From a concept the
+instruction is "keep every design detail identical, change only the pose, the camera, the light and the background".
+The front is always made first; the other views are turned from it.
+
+| | local (default) | nanobanana | tripo |
+|---|---|---|---|
+| What runs | FLUX.2 klein 4B draws the front from `--prompt`; Qwen-Image-Edit-2511 re-poses a `--from` concept; Qwen-Image-Edit with the Multiple-Angles LoRA turns the front to each other view (as Dotwork's rotations do) | Google's Gemini image model ("Nano Banana", default `gemini-nano-banana-2.1`; `--model` for another), one `generateContent` call per view in one conversation: the front, then "the same character from its left side" ... | Tripo's text-to-image (from a prompt) or image-to-image (from a concept, default model `banana2`), then its image-to-multiview for the other views |
+| Cost | free, your GPU | per picture, about $0.034 for a 1K image plus input and thinking tokens: about $0.21 for four views **(verify: read 2026-11-11 on Google's pricing page; no free tier for image output)** | about 5 to 10 credits a picture and 10 for the multiview: up to 20 credits ($0.20) for all four **(verify: upper bounds from Tripo's pricing summary, 2026-11-11)** |
+| Needs | a running ComfyUI (the same `--url`/`--allow-remote` rules as `make`), Dotwork's Qwen-Image-Edit files (its `rotate` tier) and the ComfyUI-GGUF node pack; `--prompt` also its FLUX.2 klein files | `GEMINI_API_KEY` on a project with billing | `TRIPO_API_KEY` with API credits |
+| Who owns the pictures | you (generated locally; Apache-2.0 models) | you: the Gemini API terms say Google won't claim ownership of generated content (and may make similar content for others); every image carries a SynthID watermark **(verify)** | you, on paid API credits (Tripo terms 5.2.2); not on free credits **(verify)** |
+
+**Paid routes, every time:** the quote is printed first (`--quote-only` prints it and stops, no key needed: show it
+to whoever pays and ask). `--max-cost` (dollars for nanobanana, default 1.00; credits for tripo, default 40) caps
+one run: a quote over it stops before any call, and before each call the run checks what it has already spent plus
+the next call. Every paid result goes into the journal, `assets_src/bozzetto/<name>/reference/journal.json` (pictures in its `steps/` folder), as it arrives,
+so a run that fails or hits the cap halfway is run again and pays only for what is missing; a Tripo task the last run
+left running is asked for first, never paid for twice. `--no-reuse` pays for a new take; a new `--seed` names a new
+take too. The actual cost (Gemini: from the reply's token counts; Tripo: the task's credits) goes into the record.
+Keys are read from the environment and sent only in request headers; every picture sent out has its metadata (EXIF,
+GPS, XMP, text) removed first.
+
+What lands in `assets_src/bozzetto/<name>/reference/`: `front.png`, `left.png`, `back.png`, `right.png` (the views
+asked for), `sheet.png` (the views side by side, front, left, back, right), `concept.png` (your concept, metadata
+removed), the record reference.json (route, model, prompts, seeds, cost, terms, the look check) and, on paid
+routes, the journal and `steps/`. The asset log gets an `art` row with the route and its terms (`--no-log` for scratch
+runs); `--overwrite` makes the views again and updates the same row. "Left" is the character's own left side: in
+`left.png` it faces the left edge of the picture.
+
+**The look check** prints `[look]` lines when a background is not flat or not light, a figure touches the edge, or
+the views differ in height or feet line. It is a hint, not a gate: look at `sheet.png` yourself for what no pixel
+count sees (a changed costume, a flipped side, an arm fused to the body). Then:
+```
+python tools/bozzetto/bozzetto.py make chr_keeper --image assets_src/bozzetto/chr_keeper/reference/front.png --class npc
+```
+or, with all four views, a multiview make (#287). Prefer to paste prompts into a chat image tool yourself? The same
+instructions are in `docs/BRIEFS.md` ("Model-ready reference views").
+
+Options: `--views front,left,back,right` (default all four), `--seed N` (local: every sampler; paid routes: names the
+take), `--model`, `--max-cost`, `--quote-only`, `--no-reuse`, `--wait S` (each job or task, default 1800),
+`--project`, `--overwrite`, `--no-log`, `--debug`. Exit codes: 0 ok, 1 a call or job failed, 2 usage, a missing key,
+the cap, the balance, or files in the way. Not yet run live: no route has made a real character yet (K01 covers the
+offline exam only).
 
 ## Make a model
 ```
@@ -208,8 +265,9 @@ over game props such as swords and guns is an **open question** you decide for y
 which upstream TRELLIS.2 uses, are non-commercial and never loaded (`make` refuses a workflow that names them).
 Hunyuan3D 2.x (region exclusions) and Stable Fast 3D (revenue cap) were ruled out. Rigging: UniRig is MIT, its
 checkpoint was trained on Articulation-XL2.0 (CC-BY-4.0, credited); its successor SkinTokens is not used (trained on
-models from commercial games and VRoid Hub). Tripo is wired in for rigging only (`rig --with tripo`); other paid 3D
-services (Meshy and others) are not: `docs/resources/ai-tools.md` lists them.
+models from commercial games and VRoid Hub). Tripo is wired in for rigging (`rig --with tripo`) and reference
+pictures (`reference --with tripo`), Google's Gemini for reference pictures (`reference --with nanobanana`); other
+paid 3D services (Meshy and others) are not: `docs/resources/ai-tools.md` lists them.
 
 The tool was first called Meshwright and renamed before release: that name, and Polywright, Whittle and Plinth, were
 already taken by other 3D projects. A web search on 2026-11-05 found no software named "Bozzetto" **(verify)** before
@@ -224,5 +282,6 @@ uv run --python 3.13 --with bpy python tools/bozzetto/test_bozzetto.py   # the s
 python tools/bozzetto/test_bozzetto_live.py     # one real run on the GPU (about 5 min); skips without one
 python tools/bozzetto/test_rig.py               # rig, offline: stand-in UniRig and Tripo; rig_finish.py on rigs
                                                     # built in Blender when it is found (about 25 s)
+python tools/bozzetto/test_reference.py         # reference, offline: stand-in ComfyUI, Gemini and Tripo (about 5 s)
 python tools/bozzetto/bozzetto.py test [--live] # the above in one go
 ```

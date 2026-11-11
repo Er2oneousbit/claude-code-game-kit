@@ -37,6 +37,7 @@ import bozzetto as bz  # noqa: E402
 import reference as ref  # noqa: E402
 import refsheet  # noqa: E402
 cl = bz.cl
+ref.bind(bz)   # as bozzetto.py's parser does, for the cases that call reference.py's helpers directly
 
 KEY_G = "AIzaTEST-gemini-key-never-written-7f3a"
 KEY_T = "tsk_TEST-tripo-key-never-written-91c2"
@@ -400,6 +401,22 @@ class FrontDoor(Base):
         rc, out = self.run_tool("chr_hero", "--from", "art_src/c.webp", "--with", "tripo")
         self.assertEqual(rc, 2)
         self.assertIn("save the concept as PNG", out)
+
+    def test_edit_workflow_loads_exactly_dotworks_rotation_files(self):
+        loads = {v for n in WF_EDIT.values() for v in n["inputs"].values()
+                 if isinstance(v, str) and v.endswith((".safetensors", ".gguf"))}
+        self.assertEqual(loads, {m["file"] for m in ref.qwen_models()})
+        self.assertEqual(bz.non_commercial_in(WF_EDIT), [])
+        for title in ref.EDIT_NODES.values():
+            bz.cl.find_node(WF_EDIT, title)          # every title the tool sets is in the workflow, once
+
+    def test_paste_template_in_briefs_matches_the_tool(self):
+        briefs = HERE.parents[1] / "docs" / "BRIEFS.md"     # core/docs in the kit, docs/ in a game
+        if not briefs.is_file():
+            self.skipTest("no docs/BRIEFS.md beside tools/")
+        text = " ".join(briefs.read_text(encoding="utf-8").split())
+        self.assertIn(ref.REPOSE, text)
+        self.assertIn(ref.TURN.format(how=ref.TURN_HOW["left"]), text)
 
     def test_missing_key_exits_2_and_quote_only_needs_none(self):
         for route, env in (("nanobanana", ref.GEMINI_ENV), ("tripo", ref.TRIPO_ENV)):

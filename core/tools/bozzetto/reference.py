@@ -79,7 +79,7 @@ MAX_DOWNLOAD = 64 * 1024 * 1024
 CONCEPT_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
 
 # ---- what every route is asked for ------------------------------------------------------------------------------
-POSE = ("a relaxed A-pose: standing straight, both arms held about 35 degrees out from the body with a clear gap "
+POSE = ("a relaxed A-pose, standing straight, both arms held about 35 degrees out from the body with a clear gap "
         "between each arm and the torso, hands open with the fingers relaxed, legs a little apart, feet flat on "
         "the ground")
 CLOTH = "loose cloth such as scarves, capes, coat tails and long hair hangs straight down under gravity, not blowing"
