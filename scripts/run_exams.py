@@ -200,6 +200,8 @@ EXAMS = [
     Exam("scripts/test_shader_ports.py", "every engine's generated shader files current", covers=("core/tools/shaders/", "engines/")),
     Exam("scripts/test_unreal_dotwork.py", "the Unreal Dotwork importer's manifest rules against assetspec (no Unreal needed)",
          covers=("engines/unreal/skeleton/Content/Python/kit_dotwork/", "core/tools/art/dotwork/assetspec.py", "core/data/golden/dotwork/")),
+    Exam("scripts/test_unreal_character.py", "the Unreal rigged character import's plain-Python half against the golden character (no Unreal needed)",
+         covers=("engines/unreal/skeleton/Content/Python/kit_character/", "core/data/golden/character/")),
     Exam("scripts/test_kit_docs.py", "the docs' claims against the kit tree (one case asks git)", covers=("*.md", "core/", "engines/", "examples/*/.game-kit.json")),
     Exam("scripts/test_run_exams.py", "this runner, on fake exams in a temp folder", covers=("scripts/run_exams.py",)),
 ]

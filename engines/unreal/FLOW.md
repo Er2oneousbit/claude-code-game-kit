@@ -61,6 +61,8 @@ Binary content can still come from text: an editor Python script run by `python 
   `AssetToolsHelpers.get_asset_tools().import_asset_tasks([...])`. FBX goes through Interchange: a rigged character becomes a
   skeletal mesh, its skeleton and one AnimSequence per take, named `<mesh name><take name>` (e.g. `character-orcwalk`).
   An FBX with a rig and no character (a Kenney gate) also imports as a skeletal mesh with its animation. OGG and WAV import directly.
+  A rigged glTF character (`.glb` with clips): `from kit_character import import_character` sets the clips up to play in
+  place and maps the bone names (docs/ENGINE.md "Rigged characters").
 - A map: `EditorLoadingAndSavingUtils.new_blank_map(False)`, `EditorLevelLibrary.spawn_actor_from_class(...)` (a PlayerStart,
   a NavMeshBoundsVolume: its brush is 200 cm, scale it), `save_map(world, "/Game/Maps/X")`.
 - Print what you imported (sizes from `get_bounding_box()`), so C++ layouts use measured sizes.
