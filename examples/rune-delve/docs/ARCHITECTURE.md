@@ -67,11 +67,16 @@ Direct calls. Damage always goes through GAS (an effect spec into `URDAttributeS
 | Budget | Target | Measured on | Last measured |
 |---|---|---|---|
 | Frame time | e.g. 16.6 ms (60 FPS) | min-spec machine, release build | |
+| Smoke frame time (p95) | e.g. 20 ms | `dev.py smoke` on the dev machine | |
 | Memory ceiling | e.g. 2 GB | | |
 | Load time | e.g. under 5 s to menu | | |
 | Triangles per asset class | see `docs/sop/SOP-11-3d-pipeline.md` (prop, kit, hero, NPC) | `tools/blender/validate_asset.py` | |
 | Min-spec hardware | CPU, GPU, RAM | | |
 Set these early (`SOP-10`), measure before optimizing, update the last column when you measure.
+`dev.py smoke` prints the run's frame times (mean, p95, p99, worst) and fails when the p95 is over the
+"Smoke frame time" target once it holds a number (replace the `e.g.` text, e.g. `20 ms`; `smoke --frame-budget MS`
+overrides it for one run). It is a guard for this machine's smoke runs, not the min-spec target above: a headless run
+draws nothing (a logic budget), and a browser run cannot go below its 60 Hz frame (about 16.7 ms).
 
 ## Debug tooling
 - Debug overlay, console commands, cheat keys, log channels. List them here so Claude and testers can find them.

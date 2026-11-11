@@ -94,3 +94,7 @@ assets_src/daw/*/render/
 /[Aa]ssets/StreamingAssets/data/
 /[Aa]ssets/StreamingAssets/data.meta
 /[Aa]ssets/StreamingAssets/CREDITS.md*
+
+# ---- Claude Code Game Kit 0.14.5: rules added by --upgrade ----
+.private-terms.txt
+/[Aa]ssets/__DotworkGolden*

@@ -8,7 +8,8 @@
 #           gauges: kind names, or {"name": "rage", "color": ["ffb080", "f05a30", "a02010"], "ticks": 4}
 #           style: classic / brass / iron (lane_windows.STYLES) or "fill" / "frame" hex lists like a window entry;
 #           length / height (gauge, 1x px, default 56 x 8), button (1x px, default 16), scale (default 2),
-#           buttons / panel false to skip them, font: a .fnt / .ttf path in the game for the Theme's default font.
+#           buttons / panel false to skip them, font: a .fnt / .ttf for the Theme's default font,
+#           relative to the assets folder ("art/ui/fonts/font_dialogue.fnt") or else to the game folder.
 # Notes   : Godot: apply theme_<name>.tres to a Control (or Project Settings > GUI > Theme > Custom); set the project's
 #           default texture filter to Nearest so the 9-slices stay crisp. Gauge scenes are TextureProgressBar with
 #           nine-patch stretch, so one texture serves any bar length.
@@ -230,7 +231,7 @@ def run(entries, pack, man, conf):
             man.add(p, "ui_panel", scale=scale, patch_margin=pm * scale, workflow="Dotwork widgets (drawn in code)")
         font_res = None
         if e.get("font"):
-            fp = core.project_path(e["font"])
+            fp = core.game_file(conf, e["font"], f"widgets {name}: font")   # assets folder first, then the game
             if not os.path.isfile(fp):
                 raise core.ToolError(f"widgets {name}: font {e['font']!r} not found (make it with the fonts lane first)")
             font_res = core.linked_res(fp, f"widgets {name}: font")   # res:// is the game root

@@ -109,7 +109,10 @@
       "Bash(tofu:*)",
       "PowerShell(python tools/dev.py *ship*)",
       "PowerShell(python tools/cloud/ship.py *)",
-      "PowerShell(tofu *)"
+      "PowerShell(tofu *)",
+      "Bash(python tools/issues.py *--create*)",
+      "Bash(python3 tools/issues.py *--create*)",
+      "PowerShell(python tools/issues.py *--create*)"
     ],
     "deny": [
       "Read(./.env)",

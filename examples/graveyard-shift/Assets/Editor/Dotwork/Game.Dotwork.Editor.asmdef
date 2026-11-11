@@ -1,0 +1,9 @@
+{
+  "name": "Game.Dotwork.Editor",
+  "rootNamespace": "graveyard_shift.Dotwork",
+  "references": ["Game.Core", "Game.Dotwork"],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "autoReferenced": true
+}

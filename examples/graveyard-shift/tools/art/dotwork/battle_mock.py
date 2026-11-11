@@ -34,6 +34,19 @@ def nine(path, w, h, m):
     return out
 
 
+def save_pair(img, out):
+    """Write img to out and a 2x copy beside it (<name>_2x<ext>); out without an extension gets .png. The old
+    out[:-4] cut the name instead ("shots/battle" -> "shots/b" + "_2x.png", and Pillow refused the bare name).
+    Returns the path written."""
+    stem, ext = os.path.splitext(out)
+    if not ext:
+        stem, ext = out, ".png"
+    os.makedirs(os.path.dirname(os.path.abspath(stem)), exist_ok=True)
+    img.convert("RGB").save(stem + ext)
+    img.convert("RGB").resize((img.width * 2, img.height * 2), Image.NEAREST).save(stem + "_2x" + ext)
+    return stem + ext
+
+
 class Font:
     def __init__(self, glyphs, scale=2, effect="shadow", gradient=None, caps_only=False):
         self.meta, g = lane_fonts.parse(os.path.join(HERE, "glyphs", glyphs))
@@ -119,10 +132,7 @@ def main(argv=None):
     if len(spots) > 1:
         n, ex, ey, ew = spots[1]
         dmg.draw(scr, "MISS", ex + ew // 2 - 26, ey - 6)
-    os.makedirs(os.path.dirname(a.out), exist_ok=True)
-    scr.convert("RGB").save(a.out)
-    scr.convert("RGB").resize((1280, 720), Image.NEAREST).save(a.out[:-4] + "_2x.png")
-    print(f"[+] {a.out}")
+    print(f"[+] {save_pair(scr, a.out)}")
     return 0
 
 

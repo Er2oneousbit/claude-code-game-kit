@@ -52,7 +52,12 @@ ticks per frame never lose anything.
 | Budget | Target | Measured on | Last measured |
 |---|---|---|---|
 | Frame time | 16.6 ms (60 FPS) | the dev PC, release build | not yet |
+| Smoke frame time (p95) | e.g. 20 ms | `dev.py smoke` on the dev machine | |
 | Min-spec hardware | any GPU with Vulkan or DX12 | | |
+`dev.py smoke` prints the run's frame times (mean, p95, p99, worst) and fails when the p95 is over the
+"Smoke frame time" target once it holds a number (replace the `e.g.` text, e.g. `20 ms`; `smoke --frame-budget MS`
+overrides it for one run). It is a guard for this machine's smoke runs, not the min-spec target above: a headless run
+draws nothing (a logic budget), and a browser run cannot go below its 60 Hz frame (about 16.7 ms).
 
 ## Debug tooling
 - `dev.py --debug smoke ...` shows BONK lines; markers RACE_SEED, RACE_GO, LAP, CHANGE_WARN, CHANGE_LIVE, FINISH, RACE_OVER.

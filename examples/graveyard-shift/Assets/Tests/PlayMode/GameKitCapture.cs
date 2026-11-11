@@ -11,19 +11,24 @@
 //           cannot be saved (no main camera, a write error) is a Debug.LogError, which fails the test.
 //           dev.py smoke fails when an asked-for screenshot or frame folder is empty afterwards. UI Toolkit panels
 //           that draw into a RenderTexture (the kit's shell does under a capture: UIDocument.panelSettings
-//           .targetTexture) are laid over the camera's picture, alpha-blended on the CPU, so the menus show in
-//           the capture; a panel of another size is stretched to the picture.
+//           .targetTexture) are laid over the camera's picture on the CPU as the GPU blends them on the screen
+//           (Shell/UiCapture: premultiplied alpha, in linear light in a Linear project), so the menus show in the
+//           capture as a player sees them; a panel of another size is stretched to the picture.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): a failed save is an error, not a warning;
 //           Finish() is required for --screenshot (it takes the picture)
 // Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): UI Toolkit panels with a target texture are
 //           composed over the camera's picture (#168: the shell's screens in show: captures)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the panel's colours are premultiplied, blended in
+//           linear light in a Linear project, as on the screen (#277: soft edges and translucent panels came out
+//           too dark)
 // ---------------------------------------------------------------------------
 using System;
 using System.IO;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.UIElements;
+using graveyard_shift.Shell;
 
 namespace graveyard_shift.Tests
 {
@@ -99,44 +104,12 @@ namespace graveyard_shift.Tests
             }
         }
 
-        // Every UI Toolkit panel drawing into a texture, laid over the picture (straight alpha, nearest sampling)
+        // Every UI Toolkit panel drawing into a texture, laid over the picture as the screen shows it (nearest sampling)
         private static void ComposeUi(Texture2D picture)
         {
             foreach (UIDocument doc in UnityEngine.Object.FindObjectsByType<UIDocument>(FindObjectsSortMode.None))
             {
-                RenderTexture ui = doc.panelSettings != null ? doc.panelSettings.targetTexture : null;
-                if (ui == null || !ui.IsCreated())
-                {
-                    continue;
-                }
-                var active = RenderTexture.active;
-                RenderTexture.active = ui;
-                var layer = new Texture2D(ui.width, ui.height, TextureFormat.RGBA32, false);
-                layer.ReadPixels(new Rect(0, 0, ui.width, ui.height), 0, 0);
-                layer.Apply();
-                RenderTexture.active = active;
-                Color32[] bottom = picture.GetPixels32();
-                Color32[] top = layer.GetPixels32();
-                for (int y = 0; y < picture.height; y++)
-                {
-                    int sy = y * ui.height / picture.height;
-                    for (int x = 0; x < picture.width; x++)
-                    {
-                        Color32 t = top[sy * ui.width + x * ui.width / picture.width];
-                        if (t.a == 0)
-                        {
-                            continue;
-                        }
-                        int i = y * picture.width + x;
-                        Color32 b = bottom[i];
-                        int a = t.a, ia = 255 - a;
-                        bottom[i] = new Color32((byte)((t.r * a + b.r * ia) / 255), (byte)((t.g * a + b.g * ia) / 255),
-                                                (byte)((t.b * a + b.b * ia) / 255), 255);
-                    }
-                }
-                picture.SetPixels32(bottom);
-                picture.Apply();
-                UnityEngine.Object.Destroy(layer);
+                UiCapture.LayOver(picture, doc.panelSettings != null ? doc.panelSettings.targetTexture : null);
             }
         }
 

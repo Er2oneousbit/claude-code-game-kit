@@ -44,6 +44,16 @@ A public repo redistributes every file in it. Check `docs/ASSET_LOG.md` row by r
    `git branch -D main` and `git branch -m main`. Check `git log` shows only the new commit before you push.
    (GitHub's menu names and settings move: **(verify)** these paths in GitHub's docs.)
 2. Run `python tools/publish_check.py`. Fix every **FAIL**; read every **WARN**.
+   - **Private words** (your other projects, client or employer names, testers' real names, a codename): list them
+     one per line in a file that is never committed, a plain word or `re:<regex>` per line, `#` for comments. Keep it
+     outside the repo (for example `~/.config/game-kit/private-terms.txt`) and set `PUBLISH_CHECK_TERMS` to its path,
+     or keep it as `.private-terms.txt` in the project, which `.gitignore` already ignores. `publish_check.py` (or
+     `--terms <file>`) then FAILs on any of them in files, file names and commit messages, naming the list's line, not
+     the word. A list that would itself be published is a FAIL.
+   - **Someone else's commits** (a contributor, a subagent, a patch): `python tools/publish_check.py --range
+     main..their-branch` scans only the lines those commits add, their messages and any local-only file they add
+     (`CLAUDE.local.md`, `.env`, `captures/`), per commit. `--style` also flags em dashes; `--trailer
+     "Co-Authored-By:"` warns about commits without the attribution line your project uses.
 3. Scan history, not just the working tree: a key that was committed and deleted is still in old commits.
    Use a scanner such as gitleaks (`gitleaks git .`; older versions use `gitleaks detect`). The project's
    `.gitleaks.toml` keeps gitleaks' default rules and skips `.game-kit.json`, whose kit file hashes look like keys.

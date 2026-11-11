@@ -1,0 +1,5716 @@
+{
+ "format": "dotwork-assets",
+ "version": "1.0.0",
+ "pack": "golden",
+ "generator": "dotwork",
+ "base": "..",
+ "assets": [
+  {
+   "kind": "animated_sprite",
+   "name": "fx_spark",
+   "role": "fx",
+   "blend": "add",
+   "clips": [
+    {
+     "name": "play",
+     "fps": 12,
+     "loop": false,
+     "frame_size": [
+      16,
+      16
+     ],
+     "pivot": [
+      8,
+      8
+     ],
+     "frames": [
+      {
+       "file": "art/fx/spark/spr_fx_spark_00.png",
+       "rect": [
+        0,
+        0,
+        16,
+        16
+       ],
+       "duration": 0.08333333333333333
+      },
+      {
+       "file": "art/fx/spark/spr_fx_spark_01.png",
+       "rect": [
+        0,
+        0,
+        16,
+        16
+       ],
+       "duration": 0.08333333333333333
+      },
+      {
+       "file": "art/fx/spark/spr_fx_spark_02.png",
+       "rect": [
+        0,
+        0,
+        16,
+        16
+       ],
+       "duration": 0.08333333333333333
+      }
+     ],
+     "length": 0.25
+    }
+   ]
+  },
+  {
+   "kind": "animated_sprite",
+   "name": "hero",
+   "role": "characters",
+   "blend": "normal",
+   "clips": [
+    {
+     "name": "idle_s",
+     "fps": 4,
+     "loop": true,
+     "frame_size": [
+      16,
+      24
+     ],
+     "pivot": [
+      8,
+      24
+     ],
+     "sheet": "art/characters/hero/hero_idle_s_sheet.png",
+     "frames": [
+      {
+       "file": "art/characters/hero/frames/spr_hero_idle_s_00.png",
+       "rect": [
+        0,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/characters/hero/frames/spr_hero_idle_s_01.png",
+       "rect": [
+        16,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.25
+      }
+     ],
+     "length": 0.5
+    },
+    {
+     "name": "walk_s",
+     "fps": 8,
+     "loop": true,
+     "holds": [
+      1,
+      1,
+      2,
+      1
+     ],
+     "frame_size": [
+      16,
+      24
+     ],
+     "pivot": [
+      8,
+      24
+     ],
+     "sheet": "art/characters/hero/hero_walk_s_sheet.png",
+     "frames": [
+      {
+       "file": "art/characters/hero/frames/spr_hero_walk_s_00.png",
+       "rect": [
+        0,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.125
+      },
+      {
+       "file": "art/characters/hero/frames/spr_hero_walk_s_01.png",
+       "rect": [
+        16,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.125
+      },
+      {
+       "file": "art/characters/hero/frames/spr_hero_walk_s_02.png",
+       "rect": [
+        32,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/characters/hero/frames/spr_hero_walk_s_03.png",
+       "rect": [
+        48,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.125
+      }
+     ],
+     "length": 0.625
+    },
+    {
+     "name": "idle_e",
+     "fps": 4,
+     "loop": true,
+     "frame_size": [
+      16,
+      24
+     ],
+     "pivot": [
+      8,
+      24
+     ],
+     "sheet": "art/characters/hero/hero_idle_e_sheet.png",
+     "frames": [
+      {
+       "file": "art/characters/hero/frames/spr_hero_idle_e_00.png",
+       "rect": [
+        0,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/characters/hero/frames/spr_hero_idle_e_01.png",
+       "rect": [
+        16,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.25
+      }
+     ],
+     "length": 0.5
+    },
+    {
+     "name": "walk_e",
+     "fps": 8,
+     "loop": true,
+     "frame_size": [
+      16,
+      24
+     ],
+     "pivot": [
+      8,
+      24
+     ],
+     "sheet": "art/characters/hero/hero_walk_e_sheet.png",
+     "frames": [
+      {
+       "file": "art/characters/hero/frames/spr_hero_walk_e_00.png",
+       "rect": [
+        0,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.125
+      },
+      {
+       "file": "art/characters/hero/frames/spr_hero_walk_e_01.png",
+       "rect": [
+        16,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.125
+      },
+      {
+       "file": "art/characters/hero/frames/spr_hero_walk_e_02.png",
+       "rect": [
+        32,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.125
+      },
+      {
+       "file": "art/characters/hero/frames/spr_hero_walk_e_03.png",
+       "rect": [
+        48,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.125
+      }
+     ],
+     "length": 0.5
+    },
+    {
+     "name": "idle_n",
+     "fps": 4,
+     "loop": true,
+     "frame_size": [
+      16,
+      24
+     ],
+     "pivot": [
+      8,
+      24
+     ],
+     "sheet": "art/characters/hero/hero_idle_n_sheet.png",
+     "frames": [
+      {
+       "file": "art/characters/hero/frames/spr_hero_idle_n_00.png",
+       "rect": [
+        0,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/characters/hero/frames/spr_hero_idle_n_01.png",
+       "rect": [
+        16,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.25
+      }
+     ],
+     "length": 0.5
+    },
+    {
+     "name": "walk_n",
+     "fps": 8,
+     "loop": true,
+     "frame_size": [
+      16,
+      24
+     ],
+     "pivot": [
+      8,
+      24
+     ],
+     "sheet": "art/characters/hero/hero_walk_n_sheet.png",
+     "frames": [
+      {
+       "file": "art/characters/hero/frames/spr_hero_walk_n_00.png",
+       "rect": [
+        0,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.125
+      },
+      {
+       "file": "art/characters/hero/frames/spr_hero_walk_n_01.png",
+       "rect": [
+        16,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.125
+      },
+      {
+       "file": "art/characters/hero/frames/spr_hero_walk_n_02.png",
+       "rect": [
+        32,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.125
+      },
+      {
+       "file": "art/characters/hero/frames/spr_hero_walk_n_03.png",
+       "rect": [
+        48,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.125
+      }
+     ],
+     "length": 0.5
+    },
+    {
+     "name": "idle_w",
+     "fps": 4,
+     "loop": true,
+     "frame_size": [
+      16,
+      24
+     ],
+     "pivot": [
+      8,
+      24
+     ],
+     "sheet": "art/characters/hero/hero_idle_w_sheet.png",
+     "frames": [
+      {
+       "file": "art/characters/hero/frames/spr_hero_idle_w_00.png",
+       "rect": [
+        0,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/characters/hero/frames/spr_hero_idle_w_01.png",
+       "rect": [
+        16,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.25
+      }
+     ],
+     "length": 0.5
+    },
+    {
+     "name": "walk_w",
+     "fps": 8,
+     "loop": true,
+     "frame_size": [
+      16,
+      24
+     ],
+     "pivot": [
+      8,
+      24
+     ],
+     "sheet": "art/characters/hero/hero_walk_w_sheet.png",
+     "frames": [
+      {
+       "file": "art/characters/hero/frames/spr_hero_walk_w_00.png",
+       "rect": [
+        0,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.125
+      },
+      {
+       "file": "art/characters/hero/frames/spr_hero_walk_w_01.png",
+       "rect": [
+        16,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.125
+      },
+      {
+       "file": "art/characters/hero/frames/spr_hero_walk_w_02.png",
+       "rect": [
+        32,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.125
+      },
+      {
+       "file": "art/characters/hero/frames/spr_hero_walk_w_03.png",
+       "rect": [
+        48,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.125
+      }
+     ],
+     "length": 0.5
+    },
+    {
+     "name": "attack_e",
+     "fps": 10,
+     "loop": false,
+     "holds": [
+      1,
+      2,
+      1
+     ],
+     "frame_size": [
+      16,
+      24
+     ],
+     "pivot": [
+      8,
+      24
+     ],
+     "sheet": "art/characters/hero/hero_attack_e_sheet.png",
+     "frames": [
+      {
+       "file": "art/characters/hero/frames/spr_hero_attack_e_00.png",
+       "rect": [
+        0,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.1
+      },
+      {
+       "file": "art/characters/hero/frames/spr_hero_attack_e_01.png",
+       "rect": [
+        16,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.2
+      },
+      {
+       "file": "art/characters/hero/frames/spr_hero_attack_e_02.png",
+       "rect": [
+        32,
+        0,
+        16,
+        24
+       ],
+       "duration": 0.1
+      }
+     ],
+     "length": 0.4
+    }
+   ],
+   "directions": {
+    "idle": {
+     "s": "idle_s",
+     "e": "idle_e",
+     "n": "idle_n",
+     "w": "idle_w"
+    },
+    "walk": {
+     "s": "walk_s",
+     "e": "walk_e",
+     "n": "walk_n",
+     "w": "walk_w"
+    },
+    "attack": {
+     "e": "attack_e"
+    }
+   }
+  },
+  {
+   "kind": "animated_sprite",
+   "name": "portrait_sage",
+   "role": "portraits",
+   "blend": "normal",
+   "clips": [
+    {
+     "name": "idle",
+     "fps": 1,
+     "loop": true,
+     "frame_size": [
+      24,
+      24
+     ],
+     "pivot": [
+      12,
+      12
+     ],
+     "frames": [
+      {
+       "file": "art/portraits/spr_sage_portrait.png",
+       "rect": [
+        0,
+        0,
+        24,
+        24
+       ],
+       "duration": 1.0
+      }
+     ],
+     "length": 1.0
+    },
+    {
+     "name": "talk",
+     "fps": 10,
+     "loop": true,
+     "frame_size": [
+      24,
+      24
+     ],
+     "pivot": [
+      12,
+      12
+     ],
+     "frames": [
+      {
+       "file": "art/portraits/spr_sage_portrait.png",
+       "rect": [
+        0,
+        0,
+        24,
+        24
+       ],
+       "duration": 0.1
+      },
+      {
+       "file": "art/portraits/spr_sage_portrait_talk.png",
+       "rect": [
+        0,
+        0,
+        24,
+        24
+       ],
+       "duration": 0.1
+      }
+     ],
+     "length": 0.2
+    }
+   ]
+  },
+  {
+   "kind": "sprite",
+   "name": "crate",
+   "role": "props",
+   "image": "art/props/spr_crate.png",
+   "size": [
+    16,
+    16
+   ],
+   "pivot": [
+    8,
+    16
+   ],
+   "content_rect": [
+    2,
+    3,
+    12,
+    13
+   ],
+   "collision": [
+    {
+     "rect": [
+      3,
+      4,
+      10,
+      12
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "icon",
+   "name": "potion",
+   "sizes": [
+    {
+     "size": 16,
+     "image": "art/ui/icons/ui_icon_potion_16.png"
+    },
+    {
+     "size": 32,
+     "image": "art/ui/icons/ui_icon_potion_32.png"
+    }
+   ]
+  },
+  {
+   "kind": "portrait",
+   "name": "sage",
+   "size": [
+    24,
+    24
+   ],
+   "expressions": [
+    {
+     "name": "neutral",
+     "image": "art/portraits/spr_sage_portrait.png"
+    },
+    {
+     "name": "happy",
+     "image": "art/portraits/spr_sage_portrait_happy.png"
+    },
+    {
+     "name": "talk",
+     "image": "art/portraits/spr_sage_portrait_talk.png"
+    }
+   ],
+   "animation": "portrait_sage"
+  },
+  {
+   "kind": "tileset",
+   "name": "ground_yard",
+   "tile_size": [
+    8,
+    8
+   ],
+   "shape": "square",
+   "terrain_sets": [
+    {
+     "id": 0,
+     "mode": "blob47",
+     "terrains": [
+      {
+       "id": 0,
+       "name": "grass",
+       "color": "#468c3c"
+      },
+      {
+       "id": 1,
+       "name": "path",
+       "color": "#967850"
+      },
+      {
+       "id": 2,
+       "name": "water",
+       "color": "#325ac8"
+      }
+     ]
+    }
+   ],
+   "atlases": [
+    {
+     "id": 0,
+     "name": "grass",
+     "role": "base",
+     "image": "art/tiles/yard/base_grass.png",
+     "tile_size": [
+      8,
+      8
+     ],
+     "columns": 2,
+     "rows": 1,
+     "tiles": [
+      {
+       "col": 0,
+       "row": 0
+      },
+      {
+       "col": 1,
+       "row": 0,
+       "probability": 0.6
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "name": "path",
+     "role": "overlay",
+     "image": "art/tiles/yard/overlay_path.png",
+     "tile_size": [
+      8,
+      8
+     ],
+     "columns": 12,
+     "rows": 4,
+     "tiles": [
+      {
+       "col": 0,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 0,
+       "surface": "dirt"
+      },
+      {
+       "col": 1,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 1,
+       "surface": "dirt"
+      },
+      {
+       "col": 2,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 4,
+       "surface": "dirt"
+      },
+      {
+       "col": 3,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 5,
+       "surface": "dirt"
+      },
+      {
+       "col": 4,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 7,
+       "surface": "dirt"
+      },
+      {
+       "col": 5,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 16,
+       "surface": "dirt"
+      },
+      {
+       "col": 6,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 17,
+       "surface": "dirt"
+      },
+      {
+       "col": 7,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 20,
+       "surface": "dirt"
+      },
+      {
+       "col": 8,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 21,
+       "surface": "dirt"
+      },
+      {
+       "col": 9,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 23,
+       "surface": "dirt"
+      },
+      {
+       "col": 10,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 28,
+       "surface": "dirt"
+      },
+      {
+       "col": 11,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 29,
+       "surface": "dirt"
+      },
+      {
+       "col": 0,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 31,
+       "surface": "dirt"
+      },
+      {
+       "col": 1,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 64,
+       "surface": "dirt"
+      },
+      {
+       "col": 2,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 65,
+       "surface": "dirt"
+      },
+      {
+       "col": 3,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 68,
+       "surface": "dirt"
+      },
+      {
+       "col": 4,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 69,
+       "surface": "dirt"
+      },
+      {
+       "col": 5,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 71,
+       "surface": "dirt"
+      },
+      {
+       "col": 6,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 80,
+       "surface": "dirt"
+      },
+      {
+       "col": 7,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 81,
+       "surface": "dirt"
+      },
+      {
+       "col": 8,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 84,
+       "surface": "dirt"
+      },
+      {
+       "col": 9,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 85,
+       "surface": "dirt"
+      },
+      {
+       "col": 10,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 87,
+       "surface": "dirt"
+      },
+      {
+       "col": 11,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 92,
+       "surface": "dirt"
+      },
+      {
+       "col": 0,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 93,
+       "surface": "dirt"
+      },
+      {
+       "col": 1,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 95,
+       "surface": "dirt"
+      },
+      {
+       "col": 2,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 112,
+       "surface": "dirt"
+      },
+      {
+       "col": 3,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 113,
+       "surface": "dirt"
+      },
+      {
+       "col": 4,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 116,
+       "surface": "dirt"
+      },
+      {
+       "col": 5,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 117,
+       "surface": "dirt"
+      },
+      {
+       "col": 6,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 119,
+       "surface": "dirt"
+      },
+      {
+       "col": 7,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 124,
+       "surface": "dirt"
+      },
+      {
+       "col": 8,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 125,
+       "surface": "dirt"
+      },
+      {
+       "col": 9,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 127,
+       "surface": "dirt"
+      },
+      {
+       "col": 10,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 193,
+       "surface": "dirt"
+      },
+      {
+       "col": 11,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 197,
+       "surface": "dirt"
+      },
+      {
+       "col": 0,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 199,
+       "surface": "dirt"
+      },
+      {
+       "col": 1,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 209,
+       "surface": "dirt"
+      },
+      {
+       "col": 2,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 213,
+       "surface": "dirt"
+      },
+      {
+       "col": 3,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 215,
+       "surface": "dirt"
+      },
+      {
+       "col": 4,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 221,
+       "surface": "dirt"
+      },
+      {
+       "col": 5,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 223,
+       "surface": "dirt"
+      },
+      {
+       "col": 6,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 241,
+       "surface": "dirt"
+      },
+      {
+       "col": 7,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 245,
+       "surface": "dirt"
+      },
+      {
+       "col": 8,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 247,
+       "surface": "dirt"
+      },
+      {
+       "col": 9,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 253,
+       "surface": "dirt"
+      },
+      {
+       "col": 10,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 1,
+       "mask": 255,
+       "surface": "dirt"
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "name": "water",
+     "role": "overlay",
+     "image": "art/tiles/yard/overlay_water.png",
+     "tile_size": [
+      8,
+      8
+     ],
+     "columns": 24,
+     "rows": 4,
+     "tiles": [
+      {
+       "col": 0,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 0,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 2,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 1,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 4,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 4,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 6,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 5,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 8,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 7,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          0,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 10,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 16,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 12,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 17,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 14,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 20,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 16,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 21,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 18,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 23,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          0,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 20,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 28,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 22,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 29,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 0,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 31,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          0,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 2,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 64,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 4,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 65,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 6,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 68,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 8,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 69,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 10,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 71,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          0,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 12,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 80,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 14,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 81,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 16,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 84,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 18,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 85,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 20,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 87,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          0,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 22,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 92,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 0,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 93,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 2,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 95,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          0,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 4,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 112,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 6,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 113,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 8,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 116,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 10,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 117,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 12,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 119,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          0,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 14,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 124,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 16,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 125,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 18,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 127,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          0,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 20,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 193,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          0,
+          3,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 22,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 197,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          0,
+          3,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 0,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 199,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          0,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          0,
+          3,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 2,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 209,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          0,
+          3,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 4,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 213,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          0,
+          3,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 6,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 215,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          0,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          0,
+          3,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 8,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 221,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          0,
+          3,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 10,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 223,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          0,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          0,
+          3,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 12,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 241,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          0,
+          3,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 14,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 245,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          0,
+          3,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 16,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 247,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          0,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          0,
+          3,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 18,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 253,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          0,
+          3,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      },
+      {
+       "col": 20,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 2,
+       "mask": 255,
+       "collision": [
+        {
+         "rect": [
+          3,
+          3,
+          2,
+          2
+         ]
+        },
+        {
+         "rect": [
+          3,
+          0,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          0,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          5,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          5,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          3,
+          5,
+          2,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          5,
+          3,
+          3
+         ]
+        },
+        {
+         "rect": [
+          0,
+          3,
+          3,
+          2
+         ]
+        },
+        {
+         "rect": [
+          0,
+          0,
+          3,
+          3
+         ]
+        }
+       ],
+       "anim": {
+        "frames": 2,
+        "fps": 4
+       }
+      }
+     ]
+    },
+    {
+     "id": 3,
+     "name": "decals",
+     "role": "decals",
+     "image": "art/tiles/yard/decals_yard.png",
+     "tile_size": [
+      8,
+      8
+     ],
+     "columns": 2,
+     "rows": 1,
+     "tiles": [
+      {
+       "col": 0,
+       "row": 0
+      },
+      {
+       "col": 1,
+       "row": 0
+      }
+     ]
+    },
+    {
+     "id": 4,
+     "name": "fixtures",
+     "role": "fixtures",
+     "image": "art/tiles/yard/fixtures_yard.png",
+     "tile_size": [
+      8,
+      8
+     ],
+     "columns": 12,
+     "rows": 1,
+     "tiles": [
+      {
+       "col": 0,
+       "row": 0,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          8
+         ]
+        }
+       ]
+      },
+      {
+       "col": 1,
+       "row": 0,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          8
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "stamps": [
+    {
+     "name": "door",
+     "size": [
+      1,
+      2
+     ],
+     "solid": true,
+     "tiles": [
+      [
+       4,
+       0,
+       0
+      ],
+      [
+       4,
+       1,
+       0
+      ]
+     ]
+    }
+   ],
+   "custom_data": "surface"
+  },
+  {
+   "kind": "tileset",
+   "name": "iso_isle",
+   "tile_size": [
+    16,
+    8
+   ],
+   "shape": "isometric",
+   "terrain_sets": [
+    {
+     "id": 0,
+     "mode": "corners4",
+     "terrains": [
+      {
+       "id": 0,
+       "name": "sand",
+       "color": "#339933"
+      },
+      {
+       "id": 1,
+       "name": "grass",
+       "color": "#b29966"
+      }
+     ]
+    }
+   ],
+   "atlases": [
+    {
+     "id": 0,
+     "name": "iso_isle_floors",
+     "role": "floors",
+     "image": "art/tiles/iso/isle/iso_isle_floors.png",
+     "tile_size": [
+      16,
+      8
+     ],
+     "columns": 2,
+     "rows": 1,
+     "tiles": [
+      {
+       "col": 0,
+       "row": 0
+      },
+      {
+       "col": 1,
+       "row": 0
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "name": "iso_isle_blocks",
+     "role": "blocks",
+     "image": "art/tiles/iso/isle/iso_isle_blocks.png",
+     "tile_size": [
+      16,
+      12
+     ],
+     "columns": 1,
+     "rows": 1,
+     "tiles": [
+      {
+       "col": 0,
+       "row": 0,
+       "origin": [
+        8,
+        8
+       ]
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "name": "iso_isle_transitions",
+     "role": "transitions",
+     "image": "art/tiles/iso/isle/iso_isle_transitions.png",
+     "tile_size": [
+      16,
+      8
+     ],
+     "columns": 32,
+     "rows": 1,
+     "tiles": [
+      {
+       "col": 0,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+       }
+      },
+      {
+       "col": 1,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top": 1,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+       }
+      },
+      {
+       "col": 2,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top": 0,
+        "right": 1,
+        "bottom": 0,
+        "left": 0
+       }
+      },
+      {
+       "col": 3,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top": 1,
+        "right": 1,
+        "bottom": 0,
+        "left": 0
+       }
+      },
+      {
+       "col": 4,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 1
+       }
+      },
+      {
+       "col": 5,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top": 1,
+        "right": 0,
+        "bottom": 0,
+        "left": 1
+       }
+      },
+      {
+       "col": 6,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top": 0,
+        "right": 1,
+        "bottom": 0,
+        "left": 1
+       }
+      },
+      {
+       "col": 7,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top": 1,
+        "right": 1,
+        "bottom": 0,
+        "left": 1
+       }
+      },
+      {
+       "col": 8,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top": 0,
+        "right": 0,
+        "bottom": 1,
+        "left": 0
+       }
+      },
+      {
+       "col": 9,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top": 1,
+        "right": 0,
+        "bottom": 1,
+        "left": 0
+       }
+      },
+      {
+       "col": 10,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top": 0,
+        "right": 1,
+        "bottom": 1,
+        "left": 0
+       }
+      },
+      {
+       "col": 11,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top": 1,
+        "right": 1,
+        "bottom": 1,
+        "left": 0
+       }
+      },
+      {
+       "col": 12,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top": 0,
+        "right": 0,
+        "bottom": 1,
+        "left": 1
+       }
+      },
+      {
+       "col": 13,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top": 1,
+        "right": 0,
+        "bottom": 1,
+        "left": 1
+       }
+      },
+      {
+       "col": 14,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top": 0,
+        "right": 1,
+        "bottom": 1,
+        "left": 1
+       }
+      },
+      {
+       "col": 15,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top": 1,
+        "right": 1,
+        "bottom": 1,
+        "left": 1
+       }
+      },
+      {
+       "col": 16,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+       }
+      },
+      {
+       "col": 17,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top": 1,
+        "right": 0,
+        "bottom": 0,
+        "left": 0
+       }
+      },
+      {
+       "col": 18,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top": 0,
+        "right": 1,
+        "bottom": 0,
+        "left": 0
+       }
+      },
+      {
+       "col": 19,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top": 1,
+        "right": 1,
+        "bottom": 0,
+        "left": 0
+       }
+      },
+      {
+       "col": 20,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "left": 1
+       }
+      },
+      {
+       "col": 21,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top": 1,
+        "right": 0,
+        "bottom": 0,
+        "left": 1
+       }
+      },
+      {
+       "col": 22,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top": 0,
+        "right": 1,
+        "bottom": 0,
+        "left": 1
+       }
+      },
+      {
+       "col": 23,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top": 1,
+        "right": 1,
+        "bottom": 0,
+        "left": 1
+       }
+      },
+      {
+       "col": 24,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top": 0,
+        "right": 0,
+        "bottom": 1,
+        "left": 0
+       }
+      },
+      {
+       "col": 25,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top": 1,
+        "right": 0,
+        "bottom": 1,
+        "left": 0
+       }
+      },
+      {
+       "col": 26,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top": 0,
+        "right": 1,
+        "bottom": 1,
+        "left": 0
+       }
+      },
+      {
+       "col": 27,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top": 1,
+        "right": 1,
+        "bottom": 1,
+        "left": 0
+       }
+      },
+      {
+       "col": 28,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top": 0,
+        "right": 0,
+        "bottom": 1,
+        "left": 1
+       }
+      },
+      {
+       "col": 29,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top": 1,
+        "right": 0,
+        "bottom": 1,
+        "left": 1
+       }
+      },
+      {
+       "col": 30,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top": 0,
+        "right": 1,
+        "bottom": 1,
+        "left": 1
+       }
+      },
+      {
+       "col": 31,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top": 1,
+        "right": 1,
+        "bottom": 1,
+        "left": 1
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "tileset",
+   "name": "meadow",
+   "tile_size": [
+    8,
+    8
+   ],
+   "shape": "square",
+   "terrain_sets": [
+    {
+     "id": 0,
+     "mode": "corners4",
+     "terrains": [
+      {
+       "id": 0,
+       "name": "grass",
+       "color": "#5aa046"
+      },
+      {
+       "id": 1,
+       "name": "sand",
+       "color": "#dcc88c"
+      }
+     ]
+    }
+   ],
+   "atlases": [
+    {
+     "id": 0,
+     "name": "tiles_meadow",
+     "role": "pair",
+     "image": "art/tiles/meadow/tiles_meadow.png",
+     "tile_size": [
+      8,
+      8
+     ],
+     "columns": 8,
+     "rows": 4,
+     "tiles": [
+      {
+       "col": 0,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top_left": 1,
+        "top_right": 1,
+        "bottom_left": 1,
+        "bottom_right": 1
+       },
+       "surface": "sand"
+      },
+      {
+       "col": 1,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top_left": 0,
+        "top_right": 1,
+        "bottom_left": 1,
+        "bottom_right": 1
+       },
+       "surface": "sand"
+      },
+      {
+       "col": 2,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top_left": 1,
+        "top_right": 0,
+        "bottom_left": 1,
+        "bottom_right": 1
+       },
+       "surface": "sand"
+      },
+      {
+       "col": 3,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top_left": 0,
+        "top_right": 0,
+        "bottom_left": 1,
+        "bottom_right": 1
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 0,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top_left": 1,
+        "top_right": 1,
+        "bottom_left": 0,
+        "bottom_right": 1
+       },
+       "surface": "sand"
+      },
+      {
+       "col": 1,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top_left": 0,
+        "top_right": 1,
+        "bottom_left": 0,
+        "bottom_right": 1
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 2,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top_left": 1,
+        "top_right": 0,
+        "bottom_left": 0,
+        "bottom_right": 1
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 3,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top_left": 0,
+        "top_right": 0,
+        "bottom_left": 0,
+        "bottom_right": 1
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 0,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top_left": 1,
+        "top_right": 1,
+        "bottom_left": 1,
+        "bottom_right": 0
+       },
+       "surface": "sand"
+      },
+      {
+       "col": 1,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top_left": 0,
+        "top_right": 1,
+        "bottom_left": 1,
+        "bottom_right": 0
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 2,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top_left": 1,
+        "top_right": 0,
+        "bottom_left": 1,
+        "bottom_right": 0
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 3,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top_left": 0,
+        "top_right": 0,
+        "bottom_left": 1,
+        "bottom_right": 0
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 0,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top_left": 1,
+        "top_right": 1,
+        "bottom_left": 0,
+        "bottom_right": 0
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 1,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top_left": 0,
+        "top_right": 1,
+        "bottom_left": 0,
+        "bottom_right": 0
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 2,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top_left": 1,
+        "top_right": 0,
+        "bottom_left": 0,
+        "bottom_right": 0
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 3,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top_left": 0,
+        "top_right": 0,
+        "bottom_left": 0,
+        "bottom_right": 0
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 4,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 1,
+       "corners": {
+        "top_left": 1,
+        "top_right": 1,
+        "bottom_left": 1,
+        "bottom_right": 1
+       },
+       "surface": "sand"
+      },
+      {
+       "col": 5,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top_left": 0,
+        "top_right": 1,
+        "bottom_left": 1,
+        "bottom_right": 1
+       },
+       "surface": "sand"
+      },
+      {
+       "col": 6,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top_left": 1,
+        "top_right": 0,
+        "bottom_left": 1,
+        "bottom_right": 1
+       },
+       "surface": "sand"
+      },
+      {
+       "col": 7,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top_left": 0,
+        "top_right": 0,
+        "bottom_left": 1,
+        "bottom_right": 1
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 4,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top_left": 1,
+        "top_right": 1,
+        "bottom_left": 0,
+        "bottom_right": 1
+       },
+       "surface": "sand"
+      },
+      {
+       "col": 5,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top_left": 0,
+        "top_right": 1,
+        "bottom_left": 0,
+        "bottom_right": 1
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 6,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top_left": 1,
+        "top_right": 0,
+        "bottom_left": 0,
+        "bottom_right": 1
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 7,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top_left": 0,
+        "top_right": 0,
+        "bottom_left": 0,
+        "bottom_right": 1
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 4,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top_left": 1,
+        "top_right": 1,
+        "bottom_left": 1,
+        "bottom_right": 0
+       },
+       "surface": "sand"
+      },
+      {
+       "col": 5,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top_left": 0,
+        "top_right": 1,
+        "bottom_left": 1,
+        "bottom_right": 0
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 6,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top_left": 1,
+        "top_right": 0,
+        "bottom_left": 1,
+        "bottom_right": 0
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 7,
+       "row": 2,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top_left": 0,
+        "top_right": 0,
+        "bottom_left": 1,
+        "bottom_right": 0
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 4,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top_left": 1,
+        "top_right": 1,
+        "bottom_left": 0,
+        "bottom_right": 0
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 5,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top_left": 0,
+        "top_right": 1,
+        "bottom_left": 0,
+        "bottom_right": 0
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 6,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top_left": 1,
+        "top_right": 0,
+        "bottom_left": 0,
+        "bottom_right": 0
+       },
+       "surface": "grass"
+      },
+      {
+       "col": 7,
+       "row": 3,
+       "terrain_set": 0,
+       "terrain": 0,
+       "corners": {
+        "top_left": 0,
+        "top_right": 0,
+        "bottom_left": 0,
+        "bottom_right": 0
+       },
+       "surface": "grass"
+      }
+     ]
+    }
+   ],
+   "custom_data": "surface"
+  },
+  {
+   "kind": "tileset",
+   "name": "platforms_ledge",
+   "tile_size": [
+    8,
+    8
+   ],
+   "shape": "square",
+   "terrain_sets": [
+    {
+     "id": 0,
+     "mode": "sides4",
+     "terrains": [
+      {
+       "id": 0,
+       "name": "platform",
+       "color": "#66b34d"
+      }
+     ]
+    }
+   ],
+   "atlases": [
+    {
+     "id": 0,
+     "name": "platforms_ledge_atlas",
+     "role": "platform",
+     "image": "art/tiles/platforms/ledge/platforms_ledge_atlas.png",
+     "tile_size": [
+      8,
+      8
+     ],
+     "columns": 8,
+     "rows": 3,
+     "tiles": [
+      {
+       "col": 0,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "mask": 85,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          8
+         ]
+        }
+       ]
+      },
+      {
+       "col": 1,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "mask": 84,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          8
+         ]
+        }
+       ]
+      },
+      {
+       "col": 2,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "mask": 81,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          8
+         ]
+        }
+       ]
+      },
+      {
+       "col": 3,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "mask": 80,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          8
+         ]
+        }
+       ]
+      },
+      {
+       "col": 4,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "mask": 69,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          8
+         ]
+        }
+       ]
+      },
+      {
+       "col": 5,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "mask": 68,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          8
+         ]
+        }
+       ]
+      },
+      {
+       "col": 6,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "mask": 65,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          8
+         ]
+        }
+       ]
+      },
+      {
+       "col": 7,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "mask": 64,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          8
+         ]
+        }
+       ]
+      },
+      {
+       "col": 0,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 0,
+       "mask": 21,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          8
+         ]
+        }
+       ]
+      },
+      {
+       "col": 1,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 0,
+       "mask": 20,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          8
+         ]
+        }
+       ]
+      },
+      {
+       "col": 2,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 0,
+       "mask": 17,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          8
+         ]
+        }
+       ]
+      },
+      {
+       "col": 3,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 0,
+       "mask": 16,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          8
+         ]
+        }
+       ]
+      },
+      {
+       "col": 4,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 0,
+       "mask": 5,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          8
+         ]
+        }
+       ]
+      },
+      {
+       "col": 5,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 0,
+       "mask": 4,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          8
+         ]
+        }
+       ]
+      },
+      {
+       "col": 6,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 0,
+       "mask": 1,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          8
+         ]
+        }
+       ]
+      },
+      {
+       "col": 7,
+       "row": 1,
+       "terrain_set": 0,
+       "terrain": 0,
+       "mask": 0,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          8
+         ]
+        }
+       ]
+      },
+      {
+       "col": 0,
+       "row": 2,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          3
+         ],
+         "one_way": true
+        }
+       ]
+      },
+      {
+       "col": 1,
+       "row": 2,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          3
+         ],
+         "one_way": true
+        }
+       ]
+      },
+      {
+       "col": 2,
+       "row": 2,
+       "collision": [
+        {
+         "rect": [
+          0,
+          0,
+          8,
+          3
+         ],
+         "one_way": true
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "map",
+   "name": "yard",
+   "tileset": "ground_yard",
+   "size": [
+    8,
+    6
+   ],
+   "tile_size": [
+    8,
+    8
+   ],
+   "layers": [
+    {
+     "name": "Base",
+     "kind": "tiles",
+     "cells": [
+      [
+       0,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       1,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       2,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       3,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       4,
+       0,
+       0,
+       1,
+       0
+      ],
+      [
+       5,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       6,
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       7,
+       0,
+       0,
+       1,
+       0
+      ],
+      [
+       0,
+       1,
+       0,
+       0,
+       0
+      ],
+      [
+       1,
+       1,
+       0,
+       0,
+       0
+      ],
+      [
+       2,
+       1,
+       0,
+       1,
+       0
+      ],
+      [
+       3,
+       1,
+       0,
+       0,
+       0
+      ],
+      [
+       4,
+       1,
+       0,
+       1,
+       0
+      ],
+      [
+       5,
+       1,
+       0,
+       0,
+       0
+      ],
+      [
+       6,
+       1,
+       0,
+       1,
+       0
+      ],
+      [
+       7,
+       1,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       2,
+       0,
+       1,
+       0
+      ],
+      [
+       1,
+       2,
+       0,
+       1,
+       0
+      ],
+      [
+       2,
+       2,
+       0,
+       0,
+       0
+      ],
+      [
+       3,
+       2,
+       0,
+       1,
+       0
+      ],
+      [
+       4,
+       2,
+       0,
+       1,
+       0
+      ],
+      [
+       5,
+       2,
+       0,
+       0,
+       0
+      ],
+      [
+       6,
+       2,
+       0,
+       1,
+       0
+      ],
+      [
+       7,
+       2,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       3,
+       0,
+       0,
+       0
+      ],
+      [
+       1,
+       3,
+       0,
+       0,
+       0
+      ],
+      [
+       2,
+       3,
+       0,
+       1,
+       0
+      ],
+      [
+       3,
+       3,
+       0,
+       0,
+       0
+      ],
+      [
+       4,
+       3,
+       0,
+       1,
+       0
+      ],
+      [
+       5,
+       3,
+       0,
+       1,
+       0
+      ],
+      [
+       6,
+       3,
+       0,
+       1,
+       0
+      ],
+      [
+       7,
+       3,
+       0,
+       1,
+       0
+      ],
+      [
+       0,
+       4,
+       0,
+       0,
+       0
+      ],
+      [
+       1,
+       4,
+       0,
+       1,
+       0
+      ],
+      [
+       2,
+       4,
+       0,
+       0,
+       0
+      ],
+      [
+       3,
+       4,
+       0,
+       1,
+       0
+      ],
+      [
+       4,
+       4,
+       0,
+       1,
+       0
+      ],
+      [
+       5,
+       4,
+       0,
+       0,
+       0
+      ],
+      [
+       6,
+       4,
+       0,
+       0,
+       0
+      ],
+      [
+       7,
+       4,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       5,
+       0,
+       1,
+       0
+      ],
+      [
+       1,
+       5,
+       0,
+       0,
+       0
+      ],
+      [
+       2,
+       5,
+       0,
+       1,
+       0
+      ],
+      [
+       3,
+       5,
+       0,
+       0,
+       0
+      ],
+      [
+       4,
+       5,
+       0,
+       0,
+       0
+      ],
+      [
+       5,
+       5,
+       0,
+       0,
+       0
+      ],
+      [
+       6,
+       5,
+       0,
+       0,
+       0
+      ],
+      [
+       7,
+       5,
+       0,
+       0,
+       0
+      ]
+     ]
+    },
+    {
+     "name": "Path",
+     "kind": "terrain",
+     "terrain_set": 0,
+     "terrain": 1,
+     "cells": [
+      [
+       2,
+       0
+      ],
+      [
+       3,
+       0
+      ],
+      [
+       4,
+       0
+      ],
+      [
+       1,
+       1
+      ],
+      [
+       2,
+       1
+      ],
+      [
+       3,
+       1
+      ],
+      [
+       1,
+       2
+      ]
+     ]
+    },
+    {
+     "name": "Water",
+     "kind": "terrain",
+     "terrain_set": 0,
+     "terrain": 2,
+     "cells": [
+      [
+       2,
+       2
+      ],
+      [
+       3,
+       2
+      ],
+      [
+       2,
+       3
+      ],
+      [
+       3,
+       3
+      ],
+      [
+       4,
+       3
+      ]
+     ]
+    },
+    {
+     "name": "Decals",
+     "kind": "tiles",
+     "cells": [
+      [
+       6,
+       0,
+       3,
+       1,
+       0
+      ],
+      [
+       6,
+       3,
+       3,
+       1,
+       0
+      ],
+      [
+       6,
+       4,
+       3,
+       0,
+       0
+      ],
+      [
+       1,
+       5,
+       3,
+       0,
+       0
+      ],
+      [
+       2,
+       5,
+       3,
+       1,
+       0
+      ],
+      [
+       3,
+       5,
+       3,
+       0,
+       0
+      ],
+      [
+       4,
+       5,
+       3,
+       0,
+       0
+      ],
+      [
+       5,
+       5,
+       3,
+       1,
+       0
+      ]
+     ]
+    },
+    {
+     "name": "Fixtures",
+     "kind": "tiles",
+     "cells": [
+      [
+       7,
+       0,
+       4,
+       0,
+       0
+      ],
+      [
+       7,
+       1,
+       4,
+       1,
+       0
+      ]
+     ]
+    }
+   ],
+   "objects": [
+    {
+     "asset": "crate",
+     "x": 12,
+     "y": 40
+    }
+   ]
+  },
+  {
+   "kind": "font",
+   "name": "tiny",
+   "file": "art/ui/fonts/font_tiny.fnt",
+   "pages": [
+    "art/ui/fonts/font_tiny.png"
+   ],
+   "line_height": 7,
+   "base": 5,
+   "scale": 1,
+   "tint": true,
+   "chars": [
+    [
+     32,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     3,
+     0
+    ],
+    [
+     65,
+     1,
+     1,
+     3,
+     5,
+     0,
+     0,
+     4,
+     0
+    ],
+    [
+     66,
+     5,
+     1,
+     3,
+     5,
+     0,
+     0,
+     4,
+     0
+    ]
+   ],
+   "kerning": [
+    [
+     65,
+     66,
+     -1
+    ]
+   ]
+  },
+  {
+   "kind": "ui_kit",
+   "name": "windows",
+   "role": "ui",
+   "parts": [
+    {
+     "name": "cursor_pointer",
+     "role": "cursor",
+     "image": "art/ui/windows/cursor_pointer.png",
+     "size": [
+      8,
+      8
+     ],
+     "scale": 1,
+     "hotspot": [
+      0,
+      0
+     ]
+    },
+    {
+     "name": "ui_button_plain_hover",
+     "role": "button",
+     "image": "art/ui/windows/ui_button_plain_hover.png",
+     "size": [
+      10,
+      10
+     ],
+     "scale": 1,
+     "state": "hover",
+     "margins": [
+      2,
+      2,
+      2,
+      2
+     ]
+    },
+    {
+     "name": "ui_button_plain_normal",
+     "role": "button",
+     "image": "art/ui/windows/ui_button_plain_normal.png",
+     "size": [
+      10,
+      10
+     ],
+     "scale": 1,
+     "state": "normal",
+     "margins": [
+      2,
+      2,
+      2,
+      2
+     ]
+    },
+    {
+     "name": "ui_button_plain_pressed",
+     "role": "button",
+     "image": "art/ui/windows/ui_button_plain_pressed.png",
+     "size": [
+      10,
+      10
+     ],
+     "scale": 1,
+     "state": "pressed",
+     "margins": [
+      2,
+      2,
+      2,
+      2
+     ]
+    },
+    {
+     "name": "ui_window_plain",
+     "role": "window",
+     "image": "art/ui/windows/ui_window_plain.png",
+     "size": [
+      12,
+      12
+     ],
+     "scale": 1,
+     "margins": [
+      3,
+      3,
+      3,
+      3
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "background",
+   "name": "hills",
+   "role": "battle",
+   "layers": [
+    {
+     "image": "art/battle/bg/spr_bg_hills.png",
+     "size": [
+      32,
+      16
+     ],
+     "velocity": [
+      0,
+      0
+     ],
+     "repeat": "none",
+     "scale": 2
+    },
+    {
+     "name": "clouds_near",
+     "image": "art/battle/bg/spr_bg_hills_clouds_near.png",
+     "size": [
+      32,
+      6
+     ],
+     "velocity": [
+      -4,
+      0
+     ],
+     "repeat": "x",
+     "scale": 2
+    }
+   ]
+  },
+  {
+   "kind": "particles",
+   "name": "vfx_embers_particles",
+   "texture": "art/fx/vfx/embers/vfx_embers_particle.png",
+   "emitter": {
+    "amount": 12,
+    "lifetime": 1.4,
+    "one_shot": false,
+    "colors": [
+     "#ffd060",
+     "#ff8030",
+     "#802010"
+    ]
+   }
+  },
+  {
+   "kind": "transition",
+   "name": "transition_wipe",
+   "image": "art/ui/transitions/transition_wipe.png",
+   "size": [
+    8,
+    8
+   ],
+   "transition": "wipe"
+  },
+  {
+   "kind": "normal_map",
+   "name": "spr_crate_n",
+   "image": "art/lit/yard/props/spr_crate_n.png",
+   "size": [
+    16,
+    16
+   ],
+   "target": "art/props/spr_crate.png",
+   "convention": "opengl"
+  },
+  {
+   "kind": "image",
+   "name": "logo_golden",
+   "role": "logo",
+   "image": "art/brand/golden/logo_golden.png",
+   "size": [
+    12,
+    4
+   ]
+  }
+ ]
+}

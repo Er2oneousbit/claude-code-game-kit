@@ -294,6 +294,7 @@ class SweepKeepsTheGameOutput(unittest.TestCase):
 
     def test_each_engine_gets_its_own_picture_format(self):
         self.assertEqual(sweep.SHOT_FILES["cpp-sdl2"], "last.bmp")   # SDL saves BMP (CLAUDE.md, smoke -h)
+        self.assertEqual(sweep.SHOT_FILES["web-3d"], sweep.SHOT_FILES["web"])   # the same smoke.mjs (#175)
         with tempfile.TemporaryDirectory() as d:
             self.sweep(Path(d), "cpp-sdl2")
             self.assertTrue((Path(d) / "captures/access/deck/last.bmp").is_file())

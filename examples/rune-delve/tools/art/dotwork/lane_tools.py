@@ -85,7 +85,8 @@ def run(entries, pack, man, conf):
                 else _first(os.path.join(work, f"edit{k}", "e_*.png"))
             dst = core.save_clean(_settle(out, Image.open(src), conf), os.path.join(art, f"spr_{name}_edit_{k:02d}.png"))
             man.add(dst, "edit", prompt=instr, workflow="SpriteKiln wf04 (klein reference edit)", routes=("klein",),
-                    source="assets_src/art/tools/%s/source.png" % name)
+                    # the copy really kept, under the configured src_dir (it said assets_src/ whatever the config was)
+                    source=os.path.relpath(src, core.PROJECT).replace(os.sep, "/"))
             core.log(f"tools {name}: edit {k} '{instr[:40]}' {r['seconds']:.0f}s")
         if e.get("inpaint"):
             ip = e["inpaint"]

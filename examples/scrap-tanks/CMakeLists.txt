@@ -7,8 +7,10 @@
 #           Layering: `core` (no SDL) <- `game_lib` (SDL) <- exe. Tests link `core` only.
 #           Dependencies come from vcpkg.json via the toolchain file in CMakePresets.json.
 #           The kit's golden-vector tests read data/golden/*.json through the GOLDEN_DIR definition.
-#           Every build copies data/ (without golden/ and shaders/) next to the exe (game_data); the sprites, font
-#           and sounds are found in assets/ from the working directory or the exe's folder (src/game/Assets.cpp).
+#           Every build copies data/ (without golden/ and shaders/), assets/ and CREDITS.md next to the exe
+#           (game_data); the sprites, font and sounds are found in assets/ from the working directory or the exe's
+#           folder (src/game/Assets.cpp). Dotwork art (assets/dotwork/*.assets.json, none yet) would load through
+#           src/core/DotworkAssets (SDL-free) and src/gfx/DotworkRender.
 # Authored: Written with Claude (Sonnet 5.5, claude-sonnet-5-5)
 # Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): the kit's juice and shell logic in core
 #           (nlohmann-json), its golden-vector and file tests
@@ -18,6 +20,8 @@
 #           core, src/shell in game_lib, tests/test_menu.cpp
 # Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): kit 0.14.4: Report (crash files), JuiceDemo, the analog,
 #           motor-access and report tests, the game_data target (data/ next to the exe)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): kit 0.14.5: the Dotwork importer (DotworkAssets in core,
+#           DotworkRender and DotworkShowcase in game_lib, their tests), the frame-time test; assets/ ships too
 # ---------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.21)
 project(scrap_tanks VERSION 0.2.0 LANGUAGES CXX)
@@ -58,6 +62,7 @@ add_library(core STATIC
   src/core/Bot.cpp
   src/core/AtomicFile.cpp
   src/core/Bindings.cpp
+  src/core/DotworkAssets.cpp
   src/core/I18n.cpp
   src/core/Menu.cpp
   src/core/Report.cpp
@@ -80,6 +85,8 @@ find_package(SDL3_mixer CONFIG REQUIRED)
 set(GAME_SOURCES
   src/game/Game.cpp
   src/game/Assets.cpp
+  src/game/DotworkShowcase.cpp
+  src/gfx/DotworkRender.cpp
   src/gfx/KitShaders.cpp
   src/shell/Draw.cpp
   src/shell/Drive.cpp
@@ -131,7 +138,7 @@ set_target_properties(scrap_tanks PROPERTIES WIN32_EXECUTABLE $<CONFIG:Release>)
 target_link_libraries(scrap_tanks PRIVATE game_lib)
 copy_kit_shaders(scrap_tanks)
 
-# ---- the game's data next to the exe: data/ (minus the kit's test folders) and CREDITS.md ----
+# ---- the game's data next to the exe: data/ (minus the kit's test folders), assets/ and CREDITS.md ----
 # The shell reads them from the working directory when it has data/, else from the exe's folder, so a shipped
 # build started from anywhere finds its strings, presets, colours and dialogue. A custom target runs on every
 # build (a POST_BUILD step would only run when the exe relinks), so an edit to data/ alone is copied too.
@@ -154,7 +161,9 @@ if(BUILD_TESTS)
   add_executable(unit_tests
     tests/test_main.cpp
     tests/test_analog.cpp
+    tests/test_dotwork_assets.cpp
     tests/test_fixed_timestep.cpp
+    tests/test_frame_times.cpp
     tests/test_math_geom.cpp
     tests/test_nav.cpp
     tests/test_bt.cpp
@@ -174,6 +183,7 @@ if(BUILD_TESTS)
   target_link_libraries(unit_tests PRIVATE core doctest::doctest)
   # The kit's golden vectors (reference: tools/golden_vectors.py). Override with -DGOLDEN_DIR=<folder>.
   set(GOLDEN_DIR "${CMAKE_SOURCE_DIR}/data/golden" CACHE PATH "Folder holding the golden vector files")
-  target_compile_definitions(unit_tests PRIVATE GOLDEN_DIR="${GOLDEN_DIR}")
+  # The game's assets folder: test_dotwork_assets.cpp loads every assets/dotwork/*.assets.json in it
+  target_compile_definitions(unit_tests PRIVATE GOLDEN_DIR="${GOLDEN_DIR}" GAME_ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets")
   add_test(NAME unit_tests COMMAND unit_tests)
 endif()

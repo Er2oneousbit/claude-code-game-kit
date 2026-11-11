@@ -138,7 +138,7 @@ def main(argv=None):
     DEBUG = args.debug
     folder = Path(args.dir) if args.dir else ROOT / I18N_DIR
     if not args.dir and not folder.is_dir():
-        # A project with no string tables at all (web-3d, RPG Maker MZ): the tool ships into every game, so the plain
+        # A project with no string tables at all (RPG Maker MZ): the tool ships into every game, so the plain
         # run passes there. A --dir that is wrong or holds no en.json is still a usage problem (exit 2).
         print(f"[ OK ] no string tables ({I18N_DIR}/ does not exist), nothing to check")
         return 0
