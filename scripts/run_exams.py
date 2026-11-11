@@ -166,7 +166,7 @@ EXAMS = [
     # core/tools/art
     Exam("core/tools/art/test_pixellab.py", "offline (canned API responses)", covers=("core/tools/art/pixellab.py",)),
     Exam("core/tools/art/test_comfy_local.py", "offline (a stand-in ComfyUI server on 127.0.0.1)", covers=("core/tools/art/comfy_local.py",)),
-    Exam("core/tools/art/dotwork/tests/test_dotwork.py", "offline; loads the lane exams (uikit, store, screens, bdf, diorama, shipped, vfx, animpolish, lighting, qapack, fonts, defaults_cvd, pixelorama); AsepriteLiveExam and PixeloramaLiveExam run the real programs",
+    Exam("core/tools/art/dotwork/tests/test_dotwork.py", "offline; loads the lane exams (uikit, store, screens, bdf, diorama, shipped, vfx, animpolish, lighting, qapack, fonts, defaults_cvd, pixelorama, unrun); AsepriteLiveExam and PixeloramaLiveExam run the real programs",
          needs=(module("pillow"), module("numpy")), env=("ASEPRITE_BIN", "PIXELORAMA_BIN")),
     Exam("core/tools/art/test_chroma_key.py", "keying, despill, overwrite guards", needs=(module("pillow"),), style="cases", covers=("core/tools/art/chroma_key.py",)),
     Exam("core/tools/art/test_pixel_sprite.py", "the code-drawn sprites", covers=("core/tools/art/pixel_sprite.py", "core/tools/art/sprites/")),
@@ -195,7 +195,7 @@ EXAMS = [
 LOADED_BY_ANOTHER = {
     "core/tools/art/dotwork/tests/test_%s.py" % n for n in
     ("uikit", "store", "screens", "bdf", "diorama", "shipped", "vfx", "animpolish", "lighting", "qapack", "fonts",
-     "defaults_cvd", "pixelorama")
+     "defaults_cvd", "pixelorama", "unrun")
 }
 EXAM_ROOTS = ("core/tools", "scripts")
 
