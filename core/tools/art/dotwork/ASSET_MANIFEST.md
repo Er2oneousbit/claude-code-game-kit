@@ -9,7 +9,9 @@ and tested against.
 - Spec version: **1.0.0** (`assetspec.VERSION`)
 - Schema: [asset_manifest.schema.json](asset_manifest.schema.json) (JSON Schema 2020-12)
 - Validator and reference loader: `assetspec.py` (standard library only, Python 3.8+)
-- Writer: `assetmap.py` (called by `dotwork.py pack`, `character`, the hand-polish re-exports and `manifest`)
+- Writer: `assetmap.py` (called by `dotwork.py pack`, `character`, the hand-polish re-exports and `manifest`); a 3D
+  model rendered to sprites gets a pack of its own from `tools/blender/render_sprites.py --manifest` (generator
+  `render_sprites`, #290; [below](#which-lane-makes-which-kind))
 - Golden fixture: `data/golden/dotwork/` (every kind, plus `expected.json`, the loaded result importers must match)
 
 ## Contents
@@ -115,7 +117,7 @@ The first eight are **core**: every importer handles them. The other five are **
 | `clips[].holds` | numbers | optional: the relative hold of every frame (absent: all 1) |
 | `clips[].frame_size` | `[w, h]` | every frame of a clip is this size; clips of one asset may differ (a death clip is wider) |
 | `clips[].pivot` | point | the feet for characters (`[w/2, h]`), the centre for effects, the head of a trail (`[w, h/2]`) |
-| `clips[].sheet` | path | optional: one horizontal strip holding every frame; when present each `rect` is in it |
+| `clips[].sheet` | path | optional: one image holding every frame of the clip, and each `rect` is in it. Dotwork's are one horizontal strip per clip; `render_sprites.py` puts every direction of an action in one sheet, a row each, so its rects have a `y` |
 | `clips[].frames[]` | `{file, rect, duration}` | `file` is the frame's own PNG (always shipped); `rect` is in `sheet` when there is one, else `[0, 0, w, h]` |
 | `clips[].length` | number | seconds, the sum of the durations |
 | `directions` | `{action: {dir: clip}}` | optional: clips named `<action>_<dir>` grouped, `{"walk": {"s": "walk_s", "e": "walk_e"}}` |
@@ -259,6 +261,11 @@ the manifest against them (frames, holds, fps, loop; peering bits; collision pol
 | windows, widgets, uikit, ui | `ui_kit` |
 | battle_bgs, scenes, img2px, platforms (background), weather | `background` |
 | transitions | `transition`; lighting: `normal_map`; anything else: `image` |
+| (not a lane) `tools/blender/render_sprites.py --manifest` | `animated_sprite`: a 3D model (a Bozzetto rigged character) rendered in 1, 4 or 8 directions, a clip `<action>_<dir>` per glTF animation and direction, the pivot where the model's origin (its feet) lands, in its own pack (`generator: render_sprites`), which Dotwork never rewrites |
+
+A rendered sheet was loaded unchanged by the web, web-3d, LÖVE and C++ importers' tests
+(`data/golden/character/sprites/`, 2026-11-11), and the LÖVE and C++ starters drew it walking; the other importers
+take the same rects and pivots **(verify)**.
 
 ## Golden fixture and loaded result
 `data/golden/dotwork/` holds one small pack with every kind: `assets/` is an assets folder (its manifest is

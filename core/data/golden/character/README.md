@@ -23,13 +23,13 @@ with `_` on import (`mixamorig_Hips`).
 
 ## The sprite sheets: `sprites/`
 The same character rendered for the 2D engines by `render_sprites.py --manifest`: an assets folder whose
-`dotwork/character.assets.json` is a Dotwork asset manifest (spec 1.0.0, generator `render_sprites`) with one
+`sprites/dotwork/character.assets.json` is a Dotwork asset manifest (spec 1.0.0, generator `render_sprites`) with one
 `animated_sprite`, `character`, and `expected.json`, assetspec's loaded result of it. The 2D engines' Dotwork
 importer tests load it beside the Dotwork golden pack.
 
 | | |
 |---|---|
-| Sheets | `art/character/character_idle.png` (8 frames) and `character_walk.png` (4 frames): one row per direction (s, w, n, e), 48 px cells |
+| Sheets | `sprites/art/character/character_idle.png` (8 frames) and `character_walk.png` (4 frames): one row per direction (s, w, n, e), 48 px cells |
 | Clips | `idle_s` ... `walk_e`, 6 fps (every 6th frame of 24 fps), all looping; the glTF loop's repeated last frame is rendered once |
 | Pivot | where the origin (the feet) lands in each direction's cell, about `[24, 37]` |
 | Frames | each frame also as its own PNG in `art/character/character_frames/` (the manifest requires them) |
