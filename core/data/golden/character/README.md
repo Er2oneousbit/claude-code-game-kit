@@ -41,7 +41,7 @@ blender -b --factory-startup --python-exit-code 1 -P tools/blender/golden_charac
 python tools/blender/test_golden_character.py      # the exam: reads the .glb without Blender, rebuilds when it can
 # the sheets (delete sprites/ first), then expected.json from assetspec.expected():
 blender -b --factory-startup --python-exit-code 1 -P tools/blender/render_sprites.py -- data/golden/character/character.glb --out data/golden/character/sprites/art/character/character.png --actions all --step 6 --directions 4 --size 48 --samples 16 --pixel-art --manifest data/golden/character/sprites/dotwork/character.assets.json
-python tools/art/dotwork/assetspec.py expected data/golden/character/sprites/dotwork/character.assets.json > data/golden/character/sprites/expected.json
+python -c "import json,sys; sys.path.insert(0,'tools/art/dotwork'); import assetspec as a; d='data/golden/character/sprites/'; open(d+'expected.json','w',encoding='utf-8',newline='\n').write(json.dumps(a.expected(a.load(d+'dotwork/character.assets.json')),indent=1)+'\n')"
 python tools/blender/test_render_sprites_manifest.py   # validates sprites/ and checks expected.json is current
 ```
 Built and rendered with Blender 5.2.3 (2026-11-11).
