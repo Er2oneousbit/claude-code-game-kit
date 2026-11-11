@@ -76,7 +76,9 @@ offers one-handed layouts (`data/input/presets.json`, #166); `readable_font`, `l
 - **Where:** `src/shell/` (screens, input, subtitles, the smoke driver), `src/core/` (the engine-free logic: settings,
   bindings and glyphs, saves, i18n, juice), `data/i18n/<locale>.json` (strings), `data/dialogue/*.built.json`
   (subtitles in the dialogue format v0 of Wavesmith's dialogue subcommand). Scenes read `shell.settings`,
-  `shell.input` (`isDown`, `takePress`) and `shell.volume("sfx")` from `src/shell/app.ts`.
+  `shell.input` (`isDown`, `takePress`) and `shell.volume("sfx")` from `src/shell/app.ts`. The shell imports no
+  Phaser: it starts, pauses and stops scenes through `src/shell/host.ts`, which `src/game/phaserHost.ts` implements,
+  so the same `src/shell/` runs over Three.js in the web-3d overlay. Keep Phaser out of `src/shell/`.
 - **Screens are HTML over the canvas**, built in code: real text layout, so text size, wrapping and the
   pseudo-locale check behave like any web page. A theme: a file named `theme_default.css` in the
   `public/assets/ui` folder (loaded after the built-in `src/shell/shell.css`). Prompt glyphs:

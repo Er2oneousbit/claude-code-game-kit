@@ -15,8 +15,10 @@ src/main.ts         creates the Phaser.Game (size, scale mode, scene list)
 src/core/           engine-free logic: Log, juice (shake, hitstop, ease, follow, buffer, coyote, spring, flash limiter,
                     hold toggle, auto repeat), settings, bindings, saves, i18n, user data, dialogue, audio director, music director,
                     audio access, analog (stick and trigger shaping). No Phaser import. Unit tested (golden vectors).
-src/shell/          the front end: HTML screens over the canvas, input, subtitles, smoke driver (no Phaser import)
-src/game/           scenes and game objects (Phaser lives here): main (play), juice (demo), backdrop
+src/shell/          the front end: HTML screens over the canvas, input, subtitles, smoke driver (no Phaser import; the
+                    same files as the web-3d overlay's, host.ts is all it knows of the renderer)
+src/game/           scenes and game objects (Phaser lives here): main (play), juice (demo), backdrop; phaserHost.ts
+                    gives the shell Phaser's scene calls
 data/               i18n/<locale>.json strings, dialogue/*.built.json subtitles, golden/ test vectors
 tests/              Vitest tests for src/core and pure parts of src/game (*.test.ts)
 public/assets/      images, audio, fonts, tilemaps: served as-is at assets/... (see docs/ASSET_LOG.md)
