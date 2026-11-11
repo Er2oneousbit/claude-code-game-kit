@@ -2,7 +2,7 @@
 // TextPages.cs
 // Purpose : The screens that are a heading, scrolling text and Back: "What now?" (the goal, the last line said,
 //           the controls: #167, cognitive access), "Dialogue history" (every line said so far, newest last: #167),
-//           Credits (CREDITS.md, or a placeholder) and Loading.
+//           Credits (CREDITS.md without its HTML comments, Core/CreditsText.cs; or a placeholder) and Loading.
 // Usage   : front.OpenHelp(); front.OpenHistory(); front.OpenCredits(); front.Push(new LoadingScreen(front))
 // Notes   : Up and down scroll the text (Back keeps the focus); accept or cancel goes back. The goal is whatever
 //           the game last set (Shell.SetObjective; empty: "no goal set yet"); the last line and the history come
@@ -11,6 +11,7 @@
 // ---------------------------------------------------------------------------
 using System.Collections.Generic;
 using UnityEngine.UIElements;
+using {{GAME_SLUG}}.Core;
 
 namespace {{GAME_SLUG}}.Shell.Screens
 {
@@ -125,16 +126,16 @@ namespace {{GAME_SLUG}}.Shell.Screens
 
         protected override void Fill(VisualElement body)
         {
-            string credits = ShellFiles.ReadOrNull(Shell.CREDITS_FILE);
-            if (string.IsNullOrEmpty(credits))
+            // HTML comments out (tools/credits.py writes one, #279), one paragraph per block (Core/CreditsText.cs)
+            List<string> blocks = CreditsText.Blocks(ShellFiles.ReadOrNull(Shell.CREDITS_FILE));
+            if (blocks == null)
             {
                 Paragraph(body, S.T("credits.placeholder"), "Placeholder");
                 return;
             }
-            int i = 0;
-            foreach (string block in credits.Replace("\r\n", "\n").Split(new[] { "\n\n" }, System.StringSplitOptions.RemoveEmptyEntries))
+            for (int i = 0; i < blocks.Count; i++)
             {
-                Paragraph(body, S.Content(block.Trim()), "Credits_" + i++);
+                Paragraph(body, S.Content(blocks[i]), "Credits_" + i);
             }
         }
     }
