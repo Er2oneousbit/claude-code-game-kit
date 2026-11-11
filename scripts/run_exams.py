@@ -175,6 +175,7 @@ EXAMS = [
     # core/tools/bozzetto
     Exam("core/tools/bozzetto/test_bozzetto.py", "a stand-in ComfyUI, a canned mesh; its Blender part runs when Blender or bpy is found (BOZZETTO_TEST_BLENDER=skip|bpy|<path>)"),
     Exam("core/tools/bozzetto/test_rig.py", "UniRig and Tripo routes offline; its Blender part runs when Blender or bpy is found"),
+    Exam("core/tools/bozzetto/test_chain.py", "rig chain (secondary motion): parsers and the command offline; its Blender part (a made-up scarf character, about 1 min) runs when Blender or bpy is found"),
     Exam("core/tools/bozzetto/test_bozzetto_live.py", "one real TRELLIS.2 run (about 5 min); [SKIP] without ComfyUI", style="cases", live=True),
     # core/tools/blender (bpy on uv's Python 3.13)
     Exam("core/tools/blender/test_validate_asset.py", "builds fixtures with bpy", **BPY),
