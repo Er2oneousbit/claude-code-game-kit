@@ -169,6 +169,8 @@ EXAMS = [
     Exam("core/tools/art/test_comfy_local.py", "offline (a stand-in ComfyUI server on 127.0.0.1)", covers=("core/tools/art/comfy_local.py",)),
     Exam("core/tools/art/dotwork/tests/test_dotwork.py", "offline; loads the lane exams (uikit, store, screens, bdf, diorama, shipped, vfx, animpolish, lighting, qapack, fonts, defaults_cvd, pixelorama, unrun); AsepriteLiveExam and PixeloramaLiveExam run the real programs",
          needs=(module("pillow"), module("numpy")), env=("ASEPRITE_BIN", "PIXELORAMA_BIN")),
+    Exam("core/tools/art/dotwork/tests/test_asset_manifest.py", "the engine-neutral asset manifest (#83): schema, golden fixture, Godot cross-check; DOTWORK_LIVE_GROUND=1 renders one ComfyUI pack",
+         needs=(module("pillow"), module("numpy")), covers=("core/tools/art/dotwork/", "core/data/golden/dotwork/")),
     Exam("core/tools/art/test_chroma_key.py", "keying, despill, overwrite guards", needs=(module("pillow"),), style="cases", covers=("core/tools/art/chroma_key.py",)),
     Exam("core/tools/art/test_pixel_sprite.py", "the code-drawn sprites", covers=("core/tools/art/pixel_sprite.py", "core/tools/art/sprites/")),
     Exam("core/tools/art/test_frames_to_gif.py", "frame order, delays, scaling, the overwrite guard", needs=(module("pillow"),), covers=("core/tools/art/frames_to_gif.py",)),
@@ -189,6 +191,8 @@ EXAMS = [
     Exam("scripts/test_codename.py", covers=("scripts/codename.py",)),
     Exam("scripts/test_dev_py.py", "every engine's dev.py, engine calls faked", covers=("engines/",)),
     Exam("scripts/test_shader_ports.py", "every engine's generated shader files current", covers=("core/tools/shaders/", "engines/")),
+    Exam("scripts/test_unreal_dotwork.py", "the Unreal Dotwork importer's manifest rules against assetspec (no Unreal needed)",
+         covers=("engines/unreal/skeleton/Content/Python/kit_dotwork/", "core/tools/art/dotwork/assetspec.py", "core/data/golden/dotwork/")),
     Exam("scripts/test_kit_docs.py", "the docs' claims against the kit tree (one case asks git)", covers=("*.md", "core/", "engines/", "examples/*/.game-kit.json")),
     Exam("scripts/test_run_exams.py", "this runner, on fake exams in a temp folder", covers=("scripts/run_exams.py",)),
 ]
