@@ -347,7 +347,8 @@ log keep pointing at it. The rig before its first chain is kept in `assets_src/b
 and every run starts from it, so running again with other options replaces the chain instead of adding a second one
 (a model rigged again since then becomes the new starting point). `--no-replace` writes only
 `assets_src/bozzetto/<name>/rig/chain/chained.glb` and the preview, to look first. The report (chain_report.json), the
-record (chain.json) and the preview chain.png (each clip from behind and to the side) sit in the same folder; the
+record (chain.json) and the preview chain.png (each clip from the side, and from behind for a cape or from the front
+for a part down the chest: the side the chain hangs on) sit in the same folder; the
 model's asset log row gets a "chain: ..." note.
 
 **Choosing the part** (`--part [label=]selector`, terms joined with `&` must all match; the label names the bones

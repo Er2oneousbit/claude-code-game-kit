@@ -981,16 +981,26 @@ def key_cloth(arm, act, names, parent, joints, label, body):
 
 
 # --- preview -------------------------------------------------------------------------------------------------------
-def render_sheet(arm, meshes, clips, path):
-    """SHEET_FRAMES frames of each clip from behind and to the side (where scarves and capes hang)."""
+def preview_side(joints, mid_y):
+    """Which side the chains hang on: "front" when their joints sit in front of the body's middle (Blender's front
+    is -Y), else "behind". A scarf hanging down the chest is hidden from a camera behind the back (#291 live run)."""
+    ys = [float(j[1]) for js in joints for j in js]
+    return "front" if ys and sum(ys) / len(ys) < mid_y else "behind"
+
+
+def render_sheet(arm, meshes, clips, path, joints, report):
+    """SHEET_FRAMES frames of each clip from the side and from the side the chains hang on (behind for a cape, the
+    front for a scarf down the chest)."""
     sc = bpy.context.scene
     pts = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]
     lo = Vector([min(p[i] for p in pts) for i in range(3)])
     hi = Vector([max(p[i] for p in pts) for i in range(3)])
     mid, size = (lo + hi) / 2, max(hi - lo)
+    side = preview_side(joints, mid.y)
+    report["preview_from"] = side
     cam = bpy.data.objects.new("chain_cam", bpy.data.cameras.new("chain_cam"))
     sc.collection.objects.link(cam)
-    cam.location = mid + Vector((size * 1.8, size * 1.1, size * 0.2))
+    cam.location = mid + Vector((size * 1.8, size * 1.1 * (-1 if side == "front" else 1), size * 0.2))
     cam.rotation_euler = (mid - cam.location).to_track_quat("-Z", "Y").to_euler()
     sc.camera = cam
     sc.render.engine = "BLENDER_WORKBENCH"
@@ -1029,7 +1039,7 @@ def render_sheet(arm, meshes, clips, path):
         f.unlink()
     tmp.rmdir()
     bpy.data.objects.remove(cam)
-    print(f"[ OK ] preview {path} (one row per clip, {SHEET_FRAMES} frames each, seen from behind)")
+    print(f"[ OK ] preview {path} (one row per clip, {SHEET_FRAMES} frames each, seen from {side})")
 
 
 # --- one part ----------------------------------------------------------------------------------------------------
@@ -1292,7 +1302,7 @@ def run(a, report):
     report["clips_written"] = [c.name for c in clips]
     print(f"[ OK ] wrote {a.out}" + (f" with clips {', '.join(report['clips_written'])}" if clips else ""))
     if a.sheet and clips:
-        render_sheet(arm, meshes, clips, a.sheet)
+        render_sheet(arm, meshes, clips, a.sheet, [j for _, _, _, j in parts], report)
     return 0
 
 

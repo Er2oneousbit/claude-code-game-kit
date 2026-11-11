@@ -288,6 +288,9 @@ BUILD = textwrap.dedent('''
         if kind in ("free", "texture", "vertex"):     # the scarf tail: its own shell, 12 rows
             box(V, F, G, C, (0, 0.115, 1.48), (0, 0.13, 0.95), 0.12, 0.012, 12,
                 [(M + "Spine2", 0.6), (M + "Spine1", 0.4)], RED)
+        elif kind == "front":                         # the same tail hanging down the chest instead of the back
+            box(V, F, G, C, (0, -0.115, 1.48), (0, -0.13, 0.95), 0.12, 0.012, 12,
+                [(M + "Spine2", 0.6), (M + "Spine1", 0.4)], RED)
         elif kind == "box":                           # the same tail as one box: two rows
             box(V, F, G, C, (0, 0.115, 1.48), (0, 0.13, 0.95), 0.12, 0.03, 1, M + "Spine2", RED)
         elif kind == "lump":                          # a red lump on the chest
@@ -376,7 +379,7 @@ BUILD = textwrap.dedent('''
         bpy.ops.export_scene.gltf(filepath=f"{out_dir}/{kind}.glb", export_format="GLB", export_yup=True,
                                   export_animations=True, export_animation_mode="ACTIONS")
 
-    for k in ("free", "texture", "vertex", "box", "fused", "fused_tex", "lump"):
+    for k in ("free", "texture", "vertex", "box", "fused", "fused_tex", "lump", "front"):
         build(k)
         print("BUILT", k)
 ''')
@@ -513,7 +516,7 @@ class ChainExam(unittest.TestCase):
         (cls.d / "build.py").write_text(BUILD + END, encoding="utf-8")
         (cls.d / "probe.py").write_text(PROBE + END, encoding="utf-8")
         p = blender_run(cls.d / "build.py", [cls.d])
-        assert p.returncode == 0 and p.stdout.count("BUILT") == 7, p.stdout[-2000:] + p.stderr[-2000:]
+        assert p.returncode == 0 and p.stdout.count("BUILT") == 8, p.stdout[-2000:] + p.stderr[-2000:]
         cls.runs = {}
 
     @classmethod
@@ -628,6 +631,16 @@ class ChainExam(unittest.TestCase):
         self.assertLess(r["body_mesh_err"], 1e-4)               # the band stays on the body as it was
         self.assertLess(r["loop_err"]["walk"], 1e-4)
         self.assertGreater(r["tip_move"]["walk"], 0.02)
+
+    def test_the_preview_looks_from_the_side_the_chain_hangs_on(self):
+        # #291 live run: a scarf down the chest was hidden in chain.png, which always looked from behind
+        for kind, side in (("front", "front"), ("free", "behind")):
+            sheet = self.d / f"sheet_{kind}.png"
+            p, rep, _ = self.chain(kind, "--part", f"scarf=colour:{RED}", "--sheet", sheet)
+            self.assertEqual(p.returncode, 0, p.stdout[-2000:])
+            self.assertEqual(rep.get("preview_from"), side, kind)
+            self.assertIn(f"seen from {side}", p.stdout)
+            self.assertTrue(sheet.is_file(), kind)
 
     def test_the_command_end_to_end(self):
         """One real `bozzetto.py rig chain` in a scratch game: the model replaced, the backup, the sheet, the note."""
