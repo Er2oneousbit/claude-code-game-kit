@@ -239,7 +239,16 @@ def cmd_character(a):
 def cmd_audition(a):
     s = setup_run(a)
     import audition
-    hue = tuple(int(x) for x in a.feature_hue.split("-")) if a.feature_hue else None
+    # checked up front: "walk" (no direction) and "--feature-hue 30" used to fail inside the run as ValueError/IndexError
+    action, _, direction = a.clip.rpartition("_")
+    if not action or not direction:
+        raise fcore.ToolError(f"--clip {a.clip}: give action_direction, e.g. walk_e")
+    hue = None
+    if a.feature_hue:
+        lo, dash, hi = a.feature_hue.partition("-")
+        if not (dash and lo.isdigit() and hi.isdigit() and int(lo) <= int(hi) <= 360):
+            raise fcore.ToolError(f"--feature-hue {a.feature_hue}: give a hue range LO-HI in degrees, e.g. 30-56")
+        hue = (int(lo), int(hi))
     entry = {"name": a.name, "asymmetric": a.asymmetric, "subject": a.subject,
              "motions": dict(m.split("=", 1) for m in a.char_motion)}
     if a.promote:
