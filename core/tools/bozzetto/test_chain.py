@@ -428,7 +428,9 @@ PROBE = textwrap.dedent('''
         f0, f1 = play(arm, c)
         for f in sorted({f0, (2 * f0 + f1) // 3, (f0 + 2 * f1) // 3, f1}):
             bpy.context.scene.frame_set(f)
-            ref[(c, f)] = (mats(arm, body_names), points(meshes))
+            # keyed by the frame within the clip: the output's clips start at 0 s (slid to zero, #290), the input's
+            # may start at frame 1
+            ref[(c, f - f0)] = (mats(arm, body_names), points(meshes))
     arm, meshes = load(out)
     chain = [b.name for b in arm.data.bones if b.name.startswith(label + "_")]
     part = [m for m in meshes if m.name.startswith(label)]
@@ -442,8 +444,8 @@ PROBE = textwrap.dedent('''
         tips = []
         for f in range(f0, f1 + 1):
             bpy.context.scene.frame_set(f)
-            if (c, f) in ref:
-                bm, bp = ref[(c, f)]
+            if (c, f - f0) in ref:
+                bm, bp = ref[(c, f - f0)]
                 cur = mats(arm, body_names)
                 res["body_bone_err"] = max(res["body_bone_err"], max(float(np.abs(cur[n] - bm[n]).max()) for n in bm))
                 kd = KDTree(len(bp))
@@ -566,6 +568,10 @@ class ChainExam(unittest.TestCase):
         self.assertGreater(r["tip_move"]["hit"], 0.05, "the cloth bake does not move the scarf")
         self.assertLess(r["body_bone_err"], 1e-4, "a body bone moved differently")
         self.assertLess(r["body_mesh_err"], 1e-4, "the body mesh changed")
+        data = Path(out).read_bytes()             # #290: every clip starts at 0 s, read from the .glb itself
+        doc = json.loads(data[20:20 + int.from_bytes(data[12:16], "little")].decode("utf-8"))
+        starts = {a["name"]: min(doc["accessors"][s["input"]]["min"][0] for s in a["samplers"]) for a in doc["animations"]}
+        self.assertTrue(all(abs(t) < 1e-6 for t in starts.values()), f"clips start at {starts} s")
 
     def test_colour_from_texture_and_colour_attribute(self):
         for kind in ("texture", "vertex"):

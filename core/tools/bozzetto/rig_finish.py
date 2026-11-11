@@ -504,8 +504,11 @@ def main():
                     o.scale = o.scale * a.scale
                 print(f"[ OK ] scaled by {a.scale:g}")
             clips = made or existing
+            # slide to zero: keys start at frame 1 (1/24 s); an engine loops a clip over 0..length, so without it
+            # the first pose was held an extra frame every cycle (#290)
             bpy.ops.export_scene.gltf(filepath=a.out, export_format="GLB", export_yup=True,
-                                      export_animations=bool(clips), export_animation_mode="ACTIONS")
+                                      export_animations=bool(clips), export_animation_mode="ACTIONS",
+                                      export_anim_slide_to_zero=True)
             rep["clips"] = [x.name for x in clips]
             print(f"[ OK ] wrote {a.out}" + (f" with clips {', '.join(rep['clips'])}" if clips else ""))
             if a.sheet and clips:
