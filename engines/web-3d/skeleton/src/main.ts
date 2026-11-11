@@ -8,13 +8,16 @@
 //           FIRST RENDERED FRAME and logs BOOT_OK once the title screen is up, so smoke proves the renderer really
 //           draws, not just that the script loaded. Worlds: "main" (Play, src/game/Game.ts) and "juice" (the juice
 //           demo, src/game/JuiceWorld.ts); the Backdrop is the still picture behind the menus. The shell's input
-//           layer (src/shell/input.ts) reads keyboard and pads for menus and worlds alike.
+//           layer (src/shell/input.ts) reads keyboard and pads for menus and worlds alike. Under automation the
+//           Dotwork check (src/game/dotwork/boot.ts) loads every asset manifest before the shell starts.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the shell runs over the renderer (#175)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the Dotwork load check before the shell (#56)
 // ---------------------------------------------------------------------------
 import { shell } from "./shell/app";
 import * as THREE from "three";
 import { Backdrop } from "./game/Backdrop";
+import { dotworkCheck } from "./game/dotwork/boot";
 import { Game } from "./game/Game";
 import { JuiceWorld } from "./game/JuiceWorld";
 import { ThreeHost } from "./game/threeHost";
@@ -45,7 +48,8 @@ export const game = new ThreeHost(
   (err) => shell.crash(err),
 );
 window.addEventListener("resize", () => game.resize(host.clientWidth, host.clientHeight));
-game.onFirstFrame = () => shell.start(game);
+// smoke (an automated browser) loads every Dotwork manifest first: a missing image or broken asset fails the boot
+game.onFirstFrame = () => void dotworkCheck().finally(() => shell.start(game));
 game.run();
 
 // {{FOOTER}}

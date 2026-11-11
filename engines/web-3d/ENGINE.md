@@ -23,9 +23,9 @@ src/core/           engine-free logic: Log, juice (shake, hitstop, ease, follow 
 src/shell/          the front end: HTML screens over the canvas, input, subtitles, smoke driver (no three import; the
                     same files as the 2D web overlay's, host.ts is all it knows of the renderer)
 src/game/           threeHost.ts (frame loop, worlds, pause, frame cap, screenshot), Game.ts (play), JuiceWorld.ts
-                    (the juice demo), Backdrop.ts (behind the menus)
+                    (the juice demo), Backdrop.ts (behind the menus), dotwork/ (the Dotwork asset manifest importer)
 data/               i18n/<locale>.json strings, dialogue/*.built.json subtitles, access/colours.json, golden/ vectors
-tests/              Vitest tests for src/core and the pure parts of src/shell (*.test.ts)
+tests/              Vitest tests for src/core, the pure parts of src/shell and the Dotwork importer (*.test.ts)
 public/assets/      models (.glb), textures, audio, fonts: served as-is at assets/... (docs/ASSET_LOG.md)
 src/shaders/        the kit's shader recipes (kit/ generated from tools/shaders/) and their glue
 tools/              dev.py, smoke.mjs and helpers
@@ -51,6 +51,14 @@ dist/               production build (git-ignored)
   `import { version } from "../package.json"` (adjust the relative path; `resolveJsonModule` is on, Vite keeps only that field).
 - **Rules in `src/core`, stepped at a fixed rate,** make the whole game playable in a unit test: a scenario run in the browser
   (`?autoplay`) then replays exactly in Vitest (the kit repo's Courier Dash example does this).
+
+- **Dotwork art** (`public/assets/dotwork/<pack>.assets.json`, spec `tools/art/dotwork/ASSET_MANIFEST.md`): in a world's
+  `load()`, `const lib = await DotworkLibrary.load(DOTWORK_MANIFESTS, progress)` (src/game/dotwork/), then
+  `lib.animated("hero", { ppu })` (`playDirection("walk", "e")`), `lib.sprite`, `lib.map`, `lib.text`, `lib.icon`,
+  `lib.portrait`, `lib.nineSlice`; call `update(dt, camera)` on each every frame. The diorama look: one world unit per
+  map tile, tiles flat on the ground (map y is +Z), sprites as billboards turning around y, nearest filtering, alphaTest.
+  `dev.py test` checks every manifest's files (tests/dotwork.manifests.test.ts) and `smoke` loads them all in the
+  browser before BOOT_OK. Restart `dev.py run` after Dotwork writes a new pack (the list is made at build time).
 
 - **Shaders:** `kitMaterial("toon_rim", { albedo: [0.2, 0.6, 0.9] }, texture)` (src/shaders/kitMaterial.ts) returns a
   ShaderMaterial for any UV-mapped mesh (a sprite plane, a full-screen quad for post effects, a model); set
