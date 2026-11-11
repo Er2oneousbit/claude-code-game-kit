@@ -424,6 +424,26 @@ TEST_CASE("dotwork assets: tile flags as SDL's flip-then-turn") {
     }
 }
 
+// A sheet render_sprites.py made from the golden rigged character (#290): rows are directions, columns frames, so a
+// clip's rects sit on its own row of a shared sheet. The importer loads it as it loads Dotwork's packs.
+TEST_CASE("dotwork assets: a sheet render_sprites rendered loads as its expected.json") {
+    const dw::Pack pack = dw::load_manifest(golden("character/sprites/dotwork/character.assets.json"));
+    REQUIRE_MESSAGE(pack.ok(), "the rendered manifest has errors: " << (pack.errors.empty() ? "" : pack.errors.front()));
+    CHECK(pack.warnings.empty());
+    const json expected = load_json(golden("character/sprites/expected.json"));
+    const json got = loaded_result(pack);
+    REQUIRE(expected.at("assets").size() == got.size());
+    for (const auto& [key, want] : expected.at("assets").items()) {
+        INFO("asset " << key);
+        REQUIRE_MESSAGE(got.contains(key), key << " was not loaded");
+        std::string why;
+        CHECK_MESSAGE(same(want, got.at(key), key, why), why);
+    }
+    for (const auto& p : dw::check_files(pack)) {
+        FAIL_CHECK(p);
+    }
+}
+
 TEST_CASE("dotwork assets: every manifest in the game loads") {
     const auto manifests = dw::find_manifests(core::path_from_utf8(GAME_ASSETS_DIR));
     if (manifests.empty()) {

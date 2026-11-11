@@ -85,6 +85,33 @@ describe("golden pack (data/golden/dotwork)", () => {
   });
 });
 
+// A sheet render_sprites.py made from the golden rigged character (#290): rows are directions, columns frames,
+// so a clip's rects sit on its own row of a shared sheet. The importer must load it as it loads Dotwork's packs.
+describe("rendered character (data/golden/character/sprites)", () => {
+  const CHAR = GOLDEN_DIR + "character/sprites/";
+  const rendered = () => readPlan(CHAR + "dotwork/character.assets.json");
+
+  it("reproduces its expected.json", () => {
+    const expected = JSON.parse(readFileSync(CHAR + "expected.json", "utf-8"));
+    const { plan } = rendered();
+    expect(plan.errors).toEqual([]);
+    expect(diff(loadedResult(plan), expected, TOLERANCE)).toBeNull();
+  });
+
+  it("names only files that exist, with rects inside their sheets", () => {
+    expect(problems(rendered().plan)).toEqual([]);
+  });
+
+  it("cuts each direction from its own row and keeps the feet on the origin", () => {
+    const sprite = rendered().plan.animatedSprites.get("character")!;
+    const walkW = sprite.clips.find((c) => c.name === "walk_w")!;
+    const size = walkW.frames[0].rect[3];
+    expect(walkW.frames.map((f) => f.rect[1])).toEqual(walkW.frames.map(() => size)); // row 1 of the sheet
+    expect(walkW.origin[1]).toBeGreaterThan(0.5); // the feet are below the cell's centre
+    expect(frameAt(walkW, walkW.frames[0].ms * walkW.frames.length + 1)).toBe(0); // loops
+  });
+});
+
 describe("manifest rules", () => {
   it("refuses another major version, naming both", () => {
     expect(() => planManifest(minimal([], "2.0.0"), "x.assets.json")).toThrow(/2\.0\.0.*1\.x/);

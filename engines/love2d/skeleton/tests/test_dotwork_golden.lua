@@ -32,10 +32,10 @@ end
 local expected = read_json(EXPECTED)
 local model = Loader.load(MANIFEST)
 
--- a resolved path back to the manifest-relative form expected.json uses
-local function rel(path)
+-- a resolved path back to the manifest-relative form expected.json uses (m: the model it came from)
+local function rel(path, m)
   if path == nil then return nil end
-  local prefix = model.base .. "/"
+  local prefix = (m or model).base .. "/"
   return path:sub(1, #prefix) == prefix and path:sub(#prefix + 1) or path
 end
 
@@ -51,13 +51,13 @@ end
 -- ---- The importer's objects in the loaded-result shape (spec "Golden fixture and loaded result") ----
 local shape = {}
 
-function shape.animated_sprite(a)
+function shape.animated_sprite(a, m)
   local clips = {}
   for name, c in pairs(a.clips) do
     local rects, seconds = {}, {}
     for i, f in ipairs(c.frames) do rects[i], seconds[i] = f.rect, f.duration end
     clips[name] = { frames = #c.frames, rects = rects, seconds = seconds, length = c.length, loop = c.loop,
-                    pivot = c.pivot, texture = rel(c.sheet) }
+                    pivot = c.pivot, texture = rel(c.sheet, m) }
   end
   return { blend = a.blend, clips = clips, directions = a.directions }
 end
@@ -187,6 +187,27 @@ function T.test_golden_files_ship_and_fit()
   local problems = Loader.verify(model)
   A.eq(#problems, 0, table.concat(problems, "\n"))
   A.truthy(#model.files > 40, "the golden pack names its PNGs and the .fnt (" .. #model.files .. " files)")
+end
+
+-- ---- A sheet render_sprites.py rendered from the golden rigged character (#290) ----
+-- Rows are directions, columns frames: a clip's rects sit on its own row of a shared sheet.
+local CHAR = "data/golden/character/sprites/"
+
+function T.test_rendered_character_loads_as_its_expected_json()
+  local want = read_json(CHAR .. "expected.json")
+  local m = Loader.load(CHAR .. "dotwork/character.assets.json")
+  A.eq(#m.warnings, 0, table.concat(m.warnings, "\n"))
+  local n = 0
+  for _, key in ipairs(Json.sorted_keys(want.assets)) do
+    local kind, name = key:match("^([^/]+)/(.+)$")
+    local a = m[kind] and m[kind][name]
+    A.truthy(a, key .. " was not imported")
+    Golden.expect(shape[kind](a, m), want.assets[key], TOL, key)
+    n = n + 1
+  end
+  A.truthy(n > 0, "the rendered character has an asset")
+  local problems = Loader.verify(m)
+  A.eq(#problems, 0, table.concat(problems, "\n"))
 end
 
 -- ---- Timing: each frame's own duration, not fps ----------------------------------

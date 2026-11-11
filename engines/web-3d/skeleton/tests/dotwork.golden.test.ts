@@ -131,6 +131,28 @@ describe("Dotwork golden fixture (data/golden/dotwork/)", () => {
   });
 });
 
+// A sheet render_sprites.py made from the golden rigged character (#290): rows are directions, columns frames, so
+// a clip's rects sit on its own row of a shared sheet. The importer must load it as it loads Dotwork's packs.
+describe("rendered character (data/golden/character/sprites/)", () => {
+  const CHAR = join(GOLDEN_DIR, "character", "sprites");
+  const CHAR_MANIFEST = join(CHAR, "dotwork", "character.assets.json");
+  const charPack = readPack(CHAR_MANIFEST);
+
+  it("imports to its expected.json", () => {
+    const want = JSON.parse(readFileSync(join(CHAR, "expected.json"), "utf-8"));
+    expectClose(loaded(charPack), want, TOL, "rendered character");
+    expect(checkPackFiles(CHAR_MANIFEST, charPack)).toEqual([]);
+  });
+
+  it("maps each direction's row to its own UV band (y up)", () => {
+    const clip = charPack.animated.get("character")!.clips.get("walk_w")!;
+    const [w, h] = pngSize(clip.frames[0].texture);
+    const size = clip.frames[0].rect[3];
+    expect(uvRect(clip.frames[0].rect, w, h)[1]).toBeCloseTo(1 - (2 * size) / h, 9); // row 1 from the top
+    expect(frameAt(clip, clip.length + 1e-3).index).toBe(0); // loops
+  });
+});
+
 describe("Dotwork manifest rules", () => {
   const doc = () => JSON.parse(readFileSync(MANIFEST, "utf-8"));
 
