@@ -28,6 +28,7 @@ data/golden/             the kit's golden vectors, read by the plugin's GameKit.
 Content/Python/kit_shaders/  the kit's shader recipes: kit_recipes.py (generated HLSL), kit_materials.py (builds
                          them as materials), make_materials.py, shader_check.py
 Content/Python/kit_dotwork/  the Dotwork importer (Paper2D): import_dotwork.py, its checks test_dotwork_*.py
+Content/Python/kit_character/  rigged glTF characters: import_character (character.py), its check test_character_golden.py
 assets/dotwork/          Dotwork's packs (`<pack>.assets.json` + PNGs under assets/art/): outside Content/ on purpose
 Tools/ or tools/         dev.py and helpers
 ```
@@ -108,6 +109,58 @@ and a clear spec for the Blueprint child.
   (the kit ships no Smoke test here). Time each tick with `FPlatformTime::Seconds()` in a latent command and log the
   line once at the end (nearest-rank percentiles); `mode=logic`, since the automation run uses `-NullRHI` and draws
   nothing. Without the line smoke says "not measured" and checks no budget **(verify)**.
+
+## Rigged characters (glTF with clips, #290)
+A rigged `.glb` (one skinned mesh, clips as glTF animations: Bozzetto's rig routes, Mixamo, Blender) comes in through
+Unreal's own glTF importer (Interchange) with `kit_character.import_character`, from an editor script:
+```
+# tools/unreal/import_hero.py, run with: python tools/dev.py exec tools/unreal/import_hero.py
+from kit_character import import_character
+ch = import_character("SourceArt/Models/hero.glb", "/Game/Characters/Hero", sample_rate=30)
+ch.mesh, ch.skeleton, ch.physics_asset, ch.materials   # SK_ asset, its Skeleton, PhysicsAsset, material instances
+ch.sequences["walk"]                                   # one AnimSequence per glTF clip, keyed by the clip's name
+ch.bone("mixamorig:LeftHand")                          # the Skeleton's name for a glTF joint: "mixamorig_LeftHand"
+```
+- **Where the file goes:** outside `Content/` (`SourceArt/Models/`, where Bozzetto writes), like Dotwork's PNGs: the
+  open editor watches `Content/` and would offer to import a dropped file with its own settings **(verify)**. The
+  assets remember the source path, so the editor's Reimport finds it. Arguments: `dest` (default
+  `/Game/Characters/<stem>`), `sample_rate` (glTF stores no frame rate: Interchange samples at 30 fps without it),
+  `loop` (default True), `save` (default: yes, unless `dest` is under `/Temp/`), `materials` (the glTF material pipeline).
+- **What it makes:** a fresh Interchange generic pipeline plus the engine's glTF material pipeline (the project's import
+  settings do not apply): SkeletalMesh `<stem>`, `<stem>_Skeleton`, `<stem>_PhysicsAsset`, a MaterialInstanceConstant per
+  glTF material, and an AnimSequence `<stem><clip>` per clip (`walk` in `hero.glb` becomes `herowalk`).
+- **Scale:** glTF metres arrive as centimetres (the 1.80 m golden character is 180.13 cm tall); keep
+  `import_offset_uniform_scale` at 1.0, never 100.
+- **Facing:** glTF +Y up becomes +Z up, the glTF front (+Z) becomes **+Y**, left (+X) stays +X: the way the UE
+  Mannequin's mesh faces, so in a Character turn the mesh component -90 yaw and lower it by the capsule's half height
+  (feet are at the origin) **(verify)**.
+- **Root bone and names:** the first joint is the root (`mixamorig_Hips`); the armature node is not a bone (the log's
+  "Node [...] with a skinned mesh is not root" warning is harmless). `:` in a bone name becomes `_` (`mixamorig:Hips`
+  is `mixamorig_Hips`), so sockets, Blueprints and C++ use the underscore names; nothing else in the golden names
+  changed (other characters: **(verify)**).
+- **Looping and root motion:** glTF has no loop flag; the helper sets each AnimSequence's Loop flag (`loop`, kept
+  through a reimport), but the player decides at run time: a SkeletalMeshComponent in Animation Mode "Use Animation
+  Asset" with Looping on, `Mesh->PlayAnimation(Walk, /*bLooping=*/true)` in C++, or a Sequence Player's Loop Animation.
+  Root motion is off and Force Root Lock is left off on purpose: Hips is the root, so the lock would pin the hips to
+  the rest pose and kill their bob. A clip with real root motion needs a root bone above Hips **(verify)**.
+- **After the `.glb` changes:** run the script again. Interchange then reimports only the SkeletalMesh, so the helper
+  reimports each clip already in `dest` from the file (`InterchangeManager.reimport_asset`); a clip new to the file
+  may not be added by that run **(verify)**: import into a new folder then.
+- **Playing it in a level:** drop the SkeletalMesh in, set Animation Mode "Use Animation Asset", Anim to Play the
+  `walk` sequence, Looping and Playing on (or `PlayAnimation` from BeginPlay). In the commandlet a SkeletalMeshActor
+  took `play_animation(walk, True)` (playing, looping), but nothing ticks there, so the visible motion is **(verify)**.
+- **Mannequin animations:** to play UE5 Mannequin clips on this skeleton (or Mixamo clips on the Mannequin), make an IK
+  Rig per skeleton and an IK Retargeter between them **(verify)**.
+- **The check:** `dev.py test` runs `Content/Python/kit_character/test_character_golden.py` through the pythonscript
+  commandlet (it needs the PythonScriptPlugin): it imports `data/golden/character/character.glb` twice into `/Temp`
+  (never saved; the second run at expected.json's fps, so the frame counts prove the clips were reimported), then
+  compares with `expected.json`: every bone under its Unreal name, the root, the height, the axes, both clips (length,
+  frames, Loop flag, root motion off), and that `walk` turns the moving bone by at least half its swing, ends where it
+  starts and keeps the root in place. Run 2026-11-11 on UE 5.8.4, a fresh adopt-first Blueprint-only project
+  (TP_BlankBP plus the PythonScriptPlugin): `check` 0, `test` 0 (no game tests yet, then the 2 Dotwork checks and
+  this one passed: 22 bones, `idle` 48 and `walk` 24 frames at 24 fps, `mixamorig_LeftUpLeg` turns 56.00 degrees over
+  `walk`), and with expected.json changed (frames, swing) the check failed with exit 1 and a `CHARACTER_DIFF` line each.
+  The plain-Python half (`character_spec.py`: glTF names, clip matching, angles) is also checked by the kit without Unreal.
 
 ## Gotchas (Claude: read before editing)
 1. **Header changes require a full editor restart or a Live Coding-incompatible rebuild.** Prefer building with `dev.py check` and restarting the editor after header/reflection changes. Live Coding handles function body edits only.

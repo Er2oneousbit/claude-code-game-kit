@@ -106,8 +106,10 @@ headless). In a smoke run they land in `build/smoke-data/`.
 - Audio: `AudioPlayer::new(asset_server.load("audio/sfx_engine.ogg"))` (verify the playback settings API for 0.20).
 - Naming: `spr_car_red.png`, `sfx_skid_01.wav`, `mus_race.ogg`, `fnt_ui.ttf`. Sources and licenses:
   `docs/RESOURCES.md`, `docs/ASSET_LOG.md`.
-- 3D: export `.glb` (Blender scripts in `tools/blender/`), spawn with `SceneRoot(asset_server.load("models/car.glb#Scene0"))`
-  (verify the label syntax for 0.20).
+- 3D: export `.glb` (Blender scripts in `tools/blender/`), spawn with
+  `WorldAssetRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/car.glb")))` (Bevy 0.20 renamed
+  `SceneRoot` to `WorldAssetRoot`). A rigged character with clips: `character::spawn_character` (docs/ENGINE.md
+  "Rigged characters").
 
 ## Profiling
 - Measure in `--release`. Frame time: add `FrameTimeDiagnosticsPlugin` and `LogDiagnosticsPlugin` in `present.rs`.

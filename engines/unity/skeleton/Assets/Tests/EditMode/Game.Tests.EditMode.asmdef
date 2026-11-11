@@ -1,7 +1,7 @@
 {
   "name": "Game.Tests.EditMode",
   "rootNamespace": "{{GAME_SLUG}}.Tests",
-  "references": ["Game.Core", "Game.Dotwork", "Game.Dotwork.Editor", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
+  "references": ["Game.Core", "Game.Dotwork", "Game.Dotwork.Editor", "Game.Characters", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
   "includePlatforms": ["Editor"],
   "excludePlatforms": [],
   "overrideReferences": true,

@@ -1284,8 +1284,11 @@ def run(a, report):
     if fails:
         return 1
     assign(arm, None)
+    # slide to zero, as rig_finish.py exports: a clip whose keys start after 0 s holds its first pose an extra
+    # frame every time an engine loops it (#290)
     bpy.ops.export_scene.gltf(filepath=a.out, export_format="GLB", export_yup=True,
-                              export_animations=bool(clips), export_animation_mode="ACTIONS")
+                              export_animations=bool(clips), export_animation_mode="ACTIONS",
+                              export_anim_slide_to_zero=True)
     report["clips_written"] = [c.name for c in clips]
     print(f"[ OK ] wrote {a.out}" + (f" with clips {', '.join(report['clips_written'])}" if clips else ""))
     if a.sheet and clips:

@@ -21,10 +21,12 @@
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
+import ast
 import contextlib
 import io
 import json
 import os
+import struct
 import subprocess
 import sys
 import tempfile
@@ -550,6 +552,23 @@ def pick_blender():
 BLENDER = pick_blender()
 
 
+def finish_constants():
+    """rig_finish.py's clip constants (FPS, IDLE_FRAMES ...), read from its source: it imports bpy, so it cannot
+    be imported here."""
+    out = {}
+    for node in ast.parse((HERE / "rig_finish.py").read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.Assign) and isinstance(node.value, (ast.Constant, ast.Tuple)):
+            names = node.targets[0].elts if isinstance(node.targets[0], ast.Tuple) else node.targets
+            values = node.value.elts if isinstance(node.value, ast.Tuple) else [node.value]
+            for n, v in zip(names, values):
+                if isinstance(n, ast.Name) and isinstance(v, ast.Constant):
+                    out[n.id] = v.value
+    return out
+
+
+FINISH_CONST = finish_constants()
+
+
 def blender_run(script, argv):
     kind, path = BLENDER
     cmd = ([path, "-b", "--factory-startup", "--python-exit-code", "1", "-P", str(script), "--"] if kind == "blender"
@@ -616,6 +635,23 @@ class FinishExam(unittest.TestCase):
         for clip, moved in data["moves"].items():
             self.assertGreater(moved, 0.01, f"{clip} does not move the mesh")
         self.assertGreater(data["height"], 3.0)                     # --scale 2 on a 1.8 m figure
+
+    def test_clips_start_at_zero_seconds(self):
+        """#290: keys start at frame 1 (1/24 s); exported without slide-to-zero, an engine looping the clip over
+        0..length held the first pose an extra frame every cycle. Read from the .glb itself, not through Blender."""
+        p, rep = self.finish("biped", "--animate", "idle,walk")
+        self.assertEqual(p.returncode, 0, p.stdout[-3000:])
+        data = (self.d / "biped_out.glb").read_bytes()
+        jlen = struct.unpack_from("<I", data, 12)[0]
+        doc = json.loads(data[20:20 + jlen].decode("utf-8"))
+        self.assertEqual(sorted(a["name"] for a in doc["animations"]), ["idle", "walk"])
+        for a in doc["animations"]:
+            for s in a["samplers"]:
+                acc = doc["accessors"][s["input"]]
+                self.assertAlmostEqual(acc["min"][0], 0.0, places=5, msg=f"{a['name']} starts at {acc['min'][0]} s")
+            seconds = max(doc["accessors"][s["input"]]["max"][0] for s in a["samplers"])
+            frames = FINISH_CONST[a["name"].upper() + "_FRAMES"]
+            self.assertAlmostEqual(seconds, frames / FINISH_CONST["FPS"], places=4, msg=f"{a['name']} lasts {seconds} s")
 
     def test_everything_on_one_bone_fails(self):
         p, rep = self.finish("one_bone")

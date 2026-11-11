@@ -23,7 +23,8 @@ src/core/           engine-free logic: Log, juice (shake, hitstop, ease, follow 
 src/shell/          the front end: HTML screens over the canvas, input, subtitles, smoke driver (no three import; the
                     same files as the 2D web overlay's, host.ts is all it knows of the renderer)
 src/game/           threeHost.ts (frame loop, worlds, pause, frame cap, screenshot), Game.ts (play), JuiceWorld.ts
-                    (the juice demo), Backdrop.ts (behind the menus), dotwork/ (the Dotwork asset manifest importer)
+                    (the juice demo), Backdrop.ts (behind the menus), dotwork/ (the Dotwork asset manifest importer),
+                    character.ts (a rigged glTF character: load, play a clip on a loop)
 data/               i18n/<locale>.json strings, dialogue/*.built.json subtitles, access/colours.json, golden/ vectors
 tests/              Vitest tests for src/core, the pure parts of src/shell and the Dotwork importer (*.test.ts)
 public/assets/      models (.glb), textures, audio, fonts: served as-is at assets/... (docs/ASSET_LOG.md);
@@ -39,6 +40,18 @@ dist/               production build (git-ignored)
   default folder here is `public/assets/models/`; a Bozzetto model loaded in the smoke run, K01), loaded with `import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"`.
   A vertex-coloured model (`--material vertex`, glTF `COLOR_0`) needs nothing extra: GLTFLoader turns `vertexColors` on
   by itself when a mesh has colours (three r186 source).
+- **Rigged characters (glTF with clips, #290):** a `.glb` with a skin and animations (a Bozzetto `rig make` result:
+  Mixamo bone names, clips `idle`, `walk` ...) goes in `public/assets/models/`. `src/game/character.ts` wraps the
+  AnimationMixer: `const hero = await loadCharacter("assets/models/hero_rigged.glb")` in a world's `load()`,
+  `scene.add(hero.root)`, `hero.play("walk")` (loops; `{ loop: false }` plays once and holds; 0.2 s crossfade), and
+  `hero.update(dt)` every frame. Three.js strips `:` from node names: `mixamorig:Hips` is `mixamorigHips`
+  (`boneName()` converts). No root motion: the clips play in place and the game moves `hero.root`. Metres, +Y up;
+  glTF's front is +Z and `Object3D.lookAt()` turns a model's +Z toward its target, so `hero.root.lookAt(x, y, z)`
+  faces where it walks. Tested 2026-11-11 (three r186): `tests/character.test.ts` (5 Vitest tests, in Node: the
+  golden character has no textures) loads `data/golden/character/character.glb`, finds `idle` and `walk` at their
+  lengths, plays `walk` 30 frames and checks `mixamorigLeftUpLeg` swings as far as `expected.json` says, loops, plays
+  once, height 1.8 m; `check`, `test` (183) and `smoke` passed on a fresh scaffold. Drawing it in the browser is not
+  in a test yet **(verify: the smoke run loads a static Bozzetto model, K01, not a skinned one)**.
 - One `update(dt)` per frame; dt in seconds from `THREE.Timer`, clamped. Never assume 60 fps.
 - Input: read it through `shell.input` (`import { shell } from "../shell/app"`): `isDown(action)` / `takePress(action)`
   for the player's bindings, `stick()` (the left stick with the player's radial deadzone and invert_y, up is -y),

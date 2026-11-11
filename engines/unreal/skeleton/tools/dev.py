@@ -11,6 +11,7 @@
 #             test     run automation tests headless (--filter, default "<Game>", plus "GameKit." when the
 #                      kit's GameKitShell plugin is enabled); without --filter also the Dotwork importer's checks
 #                      (Content/Python/kit_dotwork: the golden pack and every manifest of the game, pythonscript commandlet)
+#                      and the rigged character check (Content/Python/kit_character: the golden glTF imported, walk played)
 #             smoke    run automation tests named <Game>.Smoke (--filter, --until, --fail-on for scenario runs;
 #                      screenshots need a renderer, so capture from the game itself, e.g. a -record= option);
 #                      --shaders first draws every kit shader recipe and compares it with its golden image;
@@ -94,6 +95,9 @@
 # Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): smoke reports the run's FRAME_TIMES line (mean,
 #           p95, p99, worst) and fails a p95 over --frame-budget MS, or over the "Smoke frame time" row of
 #           docs/ARCHITECTURE.md; a run that measured nothing says so (#90)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): test also runs the rigged character check (#290:
+#           Content/Python/kit_character/test_character_golden.py, the golden glTF through Interchange) next to the
+#           Dotwork checks, when its folder is there
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -115,6 +119,8 @@ LAST_LOG = [""]                               # the last automation run's output
 NOTHING_RAN = [False]                         # the last automation run matched no test (exit 2, not a failure)
 DOTWORK_DIR = "Content/Python/kit_dotwork"    # the Dotwork importer (Paper2D); `test` runs its checks below
 DOTWORK_CHECKS = ("test_dotwork_golden.py", "test_dotwork_manifests.py")
+CHARACTER_DIR = "Content/Python/kit_character"  # rigged glTF characters (#290); `test` runs its check below
+CHARACTER_CHECKS = ("test_character_golden.py",)
 PYTHON_PLUGIN = "PythonScriptPlugin"          # editor Python: exec, the shader check and the Dotwork importer
 SMOKE_UNMEASURED = ("no Smoke test logged a FRAME_TIMES line: automation runs with -NullRHI draw nothing, and the "
                     "kit ships no Smoke test (log one from yours: docs/ENGINE.md, Conventions, Frame times in smoke)")
@@ -786,11 +792,11 @@ def cmd_test(args):
     rc = run_automation(args.filter or default_test_filter(), args)
     if args.filter:
         return rc
-    dot = dotwork_checks(args)
+    dot = python_checks(args)
     if dot is None:
         return rc
     if rc == 2 and NOTHING_RAN[0]:
-        return dot                           # no automation tests yet, but the Dotwork checks ran
+        return dot                           # no automation tests yet, but the kit's Python checks ran
     return 1 if 1 in (rc, dot) else max(rc, dot)
 
 
@@ -806,21 +812,28 @@ def uproject_plugin_enabled(name):
                for e in (plugins if isinstance(plugins, list) else []))
 
 
-def dotwork_checks(args):
-    """The Dotwork importer's checks (Content/Python/kit_dotwork): the golden pack against expected.json and every
-    manifest of the game, through the pythonscript commandlet (the full editor refuses the `set` command an
-    offline font's pages need). None when the importer is not here or Python is off; else 0, 1 or 2."""
-    if not (ROOT / DOTWORK_DIR).is_dir():
+def python_checks(args):
+    """The kit's editor Python checks, through the pythonscript commandlet (the full editor refuses the `set`
+    command an offline font's pages need): the Dotwork importer's (Content/Python/kit_dotwork: the golden pack
+    against expected.json, every manifest of the game) and the rigged character's (Content/Python/kit_character:
+    the golden character imported and played, #290). None when neither folder is here or Python is off; else 0, 1
+    or 2."""
+    sets = [(label, folder, names) for label, folder, names in
+            (("Dotwork", DOTWORK_DIR, DOTWORK_CHECKS), ("Character", CHARACTER_DIR, CHARACTER_CHECKS))
+            if (ROOT / folder).is_dir()]
+    if not sets:
         return None
     if not uproject_plugin_enabled(PYTHON_PLUGIN):
-        print(f"[info] the Dotwork importer's checks ({DOTWORK_DIR}) are skipped: they need the {PYTHON_PLUGIN} "
-              "enabled in the .uproject (docs/ENGINE.md, Dotwork art)")
+        folders = ", ".join(folder for _, folder, _ in sets)
+        print(f"[info] the kit's editor Python checks ({folders}) are skipped: they need the {PYTHON_PLUGIN} "
+              "enabled in the .uproject (docs/ENGINE.md, Dotwork art and Rigged characters)")
         return None
     worst = 0
-    for name in DOTWORK_CHECKS:
-        print(f"[info] Dotwork check {name} (pythonscript commandlet)")
-        rc = exec_script(ROOT / DOTWORK_DIR / name, args)
-        worst = 1 if 1 in (worst, rc) else max(worst, rc)
+    for label, folder, names in sets:
+        for name in names:
+            print(f"[info] {label} check {name} (pythonscript commandlet)")
+            rc = exec_script(ROOT / folder / name, args)
+            worst = 1 if 1 in (worst, rc) else max(worst, rc)
     return worst
 
 

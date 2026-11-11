@@ -1,0 +1,12 @@
+{
+  "name": "Game.Characters",
+  "rootNamespace": "{{GAME_SLUG}}.Characters",
+  "references": ["glTFast"],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "autoReferenced": true,
+  "versionDefines": [
+    { "name": "com.unity.cloud.gltfast", "expression": "6.0.0", "define": "GAMEKIT_GLTFAST" }
+  ]
+}
