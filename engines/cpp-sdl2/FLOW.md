@@ -104,10 +104,13 @@ Recommended extensions: C/C++ (ms-vscode.cpptools), CMake Tools (ms-vscode.cmake
 
 ## Assets and audio
 - SDL3_mixer or miniaudio for audio **(your ADR)**. Load assets from `assets/...` relative to the working directory: `dev.py run`, `smoke` and the VS Code launch config all start
-  the game from the project root. For a shipped build, put `assets/` next to the exe (Packaging step 2) and join your paths to
+  the game from the project root. A shipped build has `assets/` next to the exe (every build copies it, Packaging step 1): join your paths to
   `shell.game_dir()` (`shell.game_dir() / "assets/spr_player.png"`): it is the working directory when that has `data/i18n`,
   else the exe's folder, so the shipped game also runs when started from another folder (a shortcut, a launcher). The shell
   reads `data/` and `CREDITS.md` the same way.
+- PNGs: SDL 3.4's own `SDL_LoadPNG` (no SDL3_image needed for PNG), then `SDL_CreateTextureFromSurface` and
+  `SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_NEAREST)` for pixel art. Dotwork packs load through
+  `gfx::dotwork::Library` (docs/ENGINE.md "Dotwork art"), which does all of that.
 - Naming: `spr_player_idle.png`, `sfx_jump_01.wav`, `mus_level1.ogg`, `fnt_ui.ttf`.
 - Sources and licenses: `docs/RESOURCES.md`, `docs/ASSET_LOG.md`.
 
@@ -117,9 +120,10 @@ Recommended extensions: C/C++ (ms-vscode.cpptools), CMake Tools (ms-vscode.cmake
 
 ## Packaging (release)
 1. `python tools/dev.py build --preset release`. Every build copies `data/` (the string tables, dialogue, input presets,
-   colour palettes and your own data files; not the kit's test folders `data/golden/` and `data/shaders/`) and `CREDITS.md`
-   next to the exe (the `game_data` target, `cmake/copy_game_data.cmake`), so `build/release/bin/` (`bin/Release/` with
-   Visual Studio) is the shipped layout.
+   colour palettes and your own data files; not the kit's test folders `data/golden/` and `data/shaders/`), `assets/`
+   (art, audio, Dotwork packs with their manifests; files whose copy is current are skipped, deleted ones removed) and
+   `CREDITS.md` next to the exe (the `game_data` target, `cmake/copy_game_data.cmake`), so `build/release/bin/`
+   (`bin/Release/` with Visual Studio) is the shipped layout.
 2. Package that folder: exe, DLLs (vcpkg app-local copies), `data/`, `CREDITS.md`, the `shaders/` folder (the compiled
    recipes), `assets/`, license files. Zip or installer. Without `data/` the menus show their keys (`menu.play`) and the
    log says `no string tables in ...`.

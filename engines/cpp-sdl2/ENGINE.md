@@ -69,6 +69,23 @@
   buffered jump with coyote time; the guard (hold or toggle); walking by keys or the analog stick; a line, a bark and a
   caption. Copy the parts you want into `Game.cpp`. The shake's angle is not drawn (SDL's renderer has no rotated
   rectangles).
+- **Dotwork art (#60):** packs from Dotwork (`tools/art/dotwork/`) arrive as PNGs plus `assets/dotwork/<pack>.assets.json`
+  (spec: `tools/art/dotwork/ASSET_MANIFEST.md`). `src/core/DotworkAssets` (SDL-free, `core::dotwork`) reads them: clips
+  with each frame's `duration` (`ClipPlayer`), sprites, icons, portraits, tilesets, maps (terrain layers resolved at load
+  by a port of the spec's `cell_mask`), fonts (glyph quads from `chars`: `layout_text`) and UI kits; the extra kinds
+  (background, particles, transition, normal_map, image) are skipped with one warning each. `src/gfx/DotworkRender`
+  (`gfx::dotwork::Library`) loads every pack and its textures and draws them: `draw_frame` (the frame rect as the source
+  rect, offset by the pivot), `draw_sprite`, `draw_map` (flip flags included), `draw_text`, `draw_ui_part` (9-slice
+  through `SDL_RenderTexture9Grid`). **PNG decoder:** SDL's own `SDL_LoadPNG` (SDL 3.4.0 and later; the pinned 3.4.12 has
+  it), so no SDL3_image or stb_image: SDL documents it for trusted files, which a game's own assets are. Every texture is
+  `SDL_SCALEMODE_NEAREST` (SDL's renderer makes no mipmaps); draw at whole-number scales. A `font` or `ui_kit` image
+  (its glyph rects, metrics and 9-slice margins too) is already upscaled by the manifest's `scale`: draw it 1:1, never
+  times `scale` again. The starter play screen shows
+  a map, a label in the font, a prop and a character walking when the game has packs (`src/game/DotworkShowcase`,
+  PROTOTYPE). `tests/test_dotwork_assets.cpp` holds the loader to `data/golden/dotwork/expected.json` (1e-6) and fails
+  on any manifest under `assets/dotwork/` that does not load or names a missing, non-PNG or wrongly sized file; a PNG
+  SDL cannot decode is an `[ERROR]` line at boot, which fails `smoke`. All types are in `core::dotwork` and
+  `gfx::dotwork`, so a game's own `Sprite` or `Map` never clashes with them.
 - **Smoke scenarios:** `python tools/dev.py smoke --drive menus` (changes two settings, saves, quits; prints
   `SETTINGS_WRITTEN`), `--drive crash` (a planted exception: `CRASH_WRITTEN`, exit 1 on purpose), `--drive pseudo
   --locale pseudo` (every screen, every label: `PSEUDO_PASS` or `PSEUDO_FAIL` lines and exit 1; `pseudo-plant` must
@@ -86,20 +103,21 @@ CMakeLists.txt, CMakePresets.json, vcpkg.json
 src/core/        SDL-free, unit tested: Log, FixedTimestep; juice (Shake, Hitstop, Ease, FollowCamera, InputBuffer,
                  CoyoteTimer, Spring, FlashLimiter); motor access (MotorAccess: timing_scale, hold_to_toggle);
                  shell logic (Settings, Bindings, SaveStore, I18n, AtomicFile, Menu, ShellLogic); Analog (stick and
-                 trigger shaping); Report (crash files, bug-report texts)
+                 trigger shaping); Report (crash files, bug-report texts); DotworkAssets (Dotwork manifests)
 src/shell/       the shell's screens on SDL: Shell (stack, input, settings applied), Draw (text, panels, the access
                  report), Drive (smoke scenarios), JuiceDemo (debug builds)
-src/game/        gameplay: Game class (owns the shell, fills in the play screen), entities, systems
-src/gfx/         KitShaders: the kit's shader recipes on SDL's GPU renderer
+src/game/        gameplay: Game class (owns the shell, fills in the play screen), DotworkShowcase, entities, systems
+src/gfx/         KitShaders: the kit's shader recipes on SDL's GPU renderer; DotworkRender: Dotwork packs drawn
 data/            i18n/en.json (every label), dialogue/sample.built.json (lines and captions), access/colours.json
-                 (the colour-blind palettes), input/presets.json, golden/ (the test vectors); every build copies
-                 it next to the exe without golden/ and shaders/ (docs/ENGINE_FLOW.md "Packaging")
+                 (the colour-blind palettes), input/presets.json, golden/ (the test vectors, golden/dotwork/ the
+                 Dotwork fixture); every build copies it next to the exe without golden/ and shaders/, and assets/
+                 with it (docs/ENGINE_FLOW.md "Packaging")
 cmake/           copy_game_data.cmake (that copy)
 src/tools/       kit_shader_check (dev.py smoke --shaders), not shipped
 shaders/kit/     the recipes: *.frag.hlsl, kit_shaders.hpp (parameter structs), kit_shaders.cmake (generated)
 src/main.cpp     startup, arg parsing, main loop
 tests/           doctest tests for src/core and engine-free parts of src/game
-assets/          art, audio, fonts (see docs/ASSET_LOG.md)
+assets/          art, audio, fonts (see docs/ASSET_LOG.md); dotwork/*.assets.json: Dotwork's manifests
 tools/           dev.py and helpers
 build/           build output (git-ignored): build/<preset>/
 ```

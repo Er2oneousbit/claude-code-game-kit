@@ -16,6 +16,8 @@
 // Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): the shell's screens (#168)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): jump and guard use timing_scale and hold_to_toggle (#269);
 //           the new drives in --help (#275)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the game's Dotwork packs load at init and show on the
+//           play screen (#60, DotworkShowcase)
 // ---------------------------------------------------------------------------
 #include "game/Game.hpp"
 
@@ -30,6 +32,7 @@ constexpr shell::Rgb kPlayer{242, 191, 76};
 constexpr shell::Rgb kHit{255, 76, 64};
 constexpr shell::Rgb kFloor{64, 69, 82};
 constexpr shell::Rgb kGuard{89, 204, 115};
+constexpr const char* kAssetsDir = "assets";   // the game's art (Dotwork packs: assets/dotwork/*.assets.json)
 
 }  // namespace
 
@@ -80,7 +83,11 @@ bool Game::init(SDL_Window* window, SDL_Renderer* renderer) {
     shell_->play.update = [this](double dt) { play_update(dt); };
     shell_->play.draw = [this](shell::Draw& draw) { play_draw(draw); };
     shell_->play.action = [this](const std::string& action) { return play_action(action); };
-    return shell_->init(window, renderer);
+    if (!shell_->init(window, renderer)) {
+        return false;
+    }
+    art_.load(renderer, shell_->game_dir() / kAssetsDir);   // nothing to show without Dotwork packs
+    return true;
 }
 
 void Game::handle_event(const SDL_Event& event) {
@@ -165,11 +172,13 @@ void Game::play_update(double dt) {
     if (bounced) {
         shell_->caption("box_hit");                        // "[thud]" with captions_sfx on
     }
+    art_.update(step);
 }
 
 void Game::play_draw(shell::Draw& draw) {
     // game content: ui = false, so the access report does not take it for a panel
     draw.fill(0, kHeight - kFloorH, kWidth, kFloorH, shell_->palette("floor", kFloor), 255, false);
+    art_.draw(static_cast<float>(kHeight - kFloorH), options_.game_name);   // Dotwork art standing on the floor
     const shell::Rgb box = hit_t_ > 0 ? shell_->palette("hit", kHit) : shell_->palette("player", kPlayer);
     draw.fill(x_, y_, kBoxSize, kBoxSize, box, 255, false);
     if (guarding_) {                                       // a frame, not only a colour: the guard's shape cue
