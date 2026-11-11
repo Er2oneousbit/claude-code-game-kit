@@ -400,8 +400,10 @@ def cmd_rig_make(args):
     print(f"[ OK ] {args.name}: {rep.get('bones')} bones, clips {', '.join(rep.get('clips', [])) or 'none'}, "
           f"{time.monotonic() - t0:.0f} s in all" + (f", {record['tripo_credits']:g} Tripo credits"
                                                      if route == "tripo" else ""))
+    # #290: glTFast imports the clips Generic, and a Humanoid avatar plays none of them: the engine's own recipe
     print("[next] look at " + (bz.rel(root, sheet) if sheet.is_file() else "the model in the engine")
-          + "; Unity: set the rig to Humanoid (Mixamo names map by themselves) (verify)")
+          + f"; a scarf, cape or tail that should swing: {bz.TOOL.lower()}.py rig chain {args.name} --part "
+          "colour:#rrggbb --no-replace; in the engine: docs/ENGINE.md \"Rigged characters\"")
     return 0
 
 

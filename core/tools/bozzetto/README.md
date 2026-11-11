@@ -7,6 +7,8 @@ Nothing reaches the game's models folder unless that check passes, and every mod
 It is the third asset lane next to Wavesmith (audio) and Dotwork (pixel art), and like them it is a set of primitives
 you call, not a 3D editor: a generated mesh is a draft (SOP-11). Without a GPU, or with several views of one object,
 `make --with tripo` has the Tripo3D API make the mesh instead (paid credits), and everything after it is the same.
+For a whole character, from an idea or a picture to it moving in the game with a look and a yes at every step, ask
+Claude for `/make-character`: it runs the commands below in order.
 
 Tested on Windows 11, RTX 5060 Ti 16 GB, 64 GB RAM, ComfyUI 0.43.0, Blender 5.2.3 (K01). The numbers below are what
 that machine needed, not promises.
@@ -93,7 +95,13 @@ runs); `--overwrite` makes the views again and updates the same row. "Left" is t
 
 **The look check** prints `[look]` lines when a background is not flat or not light, a figure touches the edge, or
 the views differ in height or feet line. It is a hint, not a gate: look at `sheet.png` yourself for what no pixel
-count sees (a changed costume, a flipped side, an arm fused to the body). Then:
+count sees (a changed costume, a flipped side, an arm fused to the body). Left and right the wrong way round
+(`left.png` facing the picture's right edge) is fixed without a new run:
+```
+python tools/bozzetto/bozzetto.py reference chr_keeper --swap-sides     # no GPU, no cost; run it again to undo
+```
+It swaps the two pictures, rebuilds the sheet, swaps the two views in the record (each picture keeps the prompt that
+made it, under its new name and hash) and updates the asset log row and its evidence file. Then:
 ```
 python tools/bozzetto/bozzetto.py make chr_keeper --image assets_src/bozzetto/chr_keeper/reference/front.png --class npc
 ```
@@ -103,8 +111,8 @@ instructions are in `docs/BRIEFS.md` ("Model-ready reference views").
 
 Options: `--views front,left,back,right` (default all four), `--seed N` (local: every sampler; paid routes: names the
 take), `--model`, `--max-cost`, `--quote-only`, `--no-reuse`, `--wait S` (each job or task, default 1800),
-`--project`, `--overwrite`, `--no-log`, `--debug`. Exit codes: 0 ok, 1 a call or job failed, 2 usage, a missing key,
-the cap, the balance, or files in the way.
+`--project`, `--overwrite`, `--no-log`, `--swap-sides`, `--debug`. Exit codes: 0 ok, 1 a call or job failed, 2 usage,
+a missing key, the cap, the balance, or files in the way.
 
 **What the local route did in its first live runs** (K01, 2026-11-11, 16 GB RTX 5060 Ti, ComfyUI 0.43): from a prompt,
 the four views of one design in a clean A-pose with gaps under the arms, about 7 minutes cold (14 s for the FLUX.2
@@ -113,7 +121,9 @@ running concept on a city street with a flying scarf, the re-posed front kept th
 and boots, dropped the street and the light, and stood in the A-pose (56 s warm). Two things to look for: the flying
 scarf came back as a cape hanging down the back (the "hang down" instruction can turn loose cloth into another
 garment), and the "left side view" came back facing the picture's right, which is why every run asks you to check
-the sides by eye. One view had a soft floor shadow (the look check flagged it). The paid routes have not been run live.
+the sides by eye. One view had a soft floor shadow (the look check flagged it). A second character from a prompt
+(the kit's `workflows/make-character/`, 178 s for four views from a fresh ComfyUI start) came back with the sides
+swapped too; `--swap-sides` fixed it in a second. The paid routes have not been run live.
 
 ## Make a model
 ```
@@ -339,7 +349,8 @@ log keep pointing at it. The rig before its first chain is kept in `assets_src/b
 and every run starts from it, so running again with other options replaces the chain instead of adding a second one
 (a model rigged again since then becomes the new starting point). `--no-replace` writes only
 `assets_src/bozzetto/<name>/rig/chain/chained.glb` and the preview, to look first. The report (chain_report.json), the
-record (chain.json) and the preview chain.png (each clip from behind and to the side) sit in the same folder; the
+record (chain.json) and the preview chain.png (each clip from the side, and from behind for a cape or from the front
+for a part down the chest: the side the chain hangs on) sit in the same folder; the
 model's asset log row gets a "chain: ..." note.
 
 **Choosing the part** (`--part [label=]selector`, terms joined with `&` must all match; the label names the bones

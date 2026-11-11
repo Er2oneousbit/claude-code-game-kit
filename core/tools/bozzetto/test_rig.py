@@ -221,6 +221,13 @@ class UniRigExam(Base):
             for local in (str(self.root.parent), str(self.root.parent).replace("\\", "/"), str(self.unirig)):
                 self.assertNotIn(local, text, f"local path in {f.name}")
         self.assertIn("<project>", (work / "unirig.log").read_text(encoding="utf-8"))
+        # #291 live run: the next step told Unity users to set the rig to Humanoid, which #290 found plays none of
+        # the glTF's own clips (glTFast imports them Generic); point at the engine's recipe and the chain instead
+        nxt = [l for l in out.splitlines() if l.startswith("[next]")]
+        self.assertEqual(len(nxt), 1, out)
+        self.assertNotIn("Humanoid (Mixamo", nxt[0])
+        self.assertIn("rig chain npc_guard", nxt[0])
+        self.assertIn("Rigged characters", nxt[0])
 
     def test_a_step_that_writes_nothing_never_ships_an_older_rig(self):
         """#212: after a good run, a re-run whose merge exits 0 without output must fail, not reuse the old file."""

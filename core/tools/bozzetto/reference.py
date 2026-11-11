@@ -10,9 +10,10 @@
 #           python tools/bozzetto/bozzetto.py reference chr_hero --from art_src/hero_concept.png --seed 4
 #           python tools/bozzetto/bozzetto.py reference chr_hero --from concept.png --with nanobanana --quote-only
 #           python tools/bozzetto/bozzetto.py reference chr_hero --prompt "..." --with tripo --max-cost 40
+#           python tools/bozzetto/bozzetto.py reference chr_hero --swap-sides     # left and right came back swapped
 #           Options: --with local|nanobanana|tripo, --views front,left,back,right, --seed N, --model ID,
 #           --max-cost N (dollars for nanobanana, credits for tripo), --quote-only, --no-reuse, --project DIR,
-#           --overwrite, --no-log, --wait S, --url/--allow-remote (local), --debug
+#           --overwrite, --no-log, --wait S, --url/--allow-remote (local), --swap-sides, --debug
 # Needs   : Python 3.8+ (standard library; Pillow only speeds up the sheet and reads JPEG/WebP). local: a running
 #           ComfyUI with Dotwork's Qwen-Image-Edit-2511 files (route qwen_rotate in its models.lock.json, plus the
 #           ComfyUI-GGUF node pack) and, for --prompt, its FLUX.2 klein 4B files. nanobanana: GEMINI_API_KEY (paid:
@@ -47,6 +48,8 @@
 #                   others: the same around upload(front) -> image-to-multiview -> download each view
 #   write:   views as PNG (metadata stripped) -> concept copy -> sheet -> look check -> record -> asset log row ->
 #            print the next command (make --image front.png; multiview make with all four)
+#   swap:    --swap-sides: record -> swap left.png and right.png -> swap their record entries (each keeps the prompt
+#            that made it, under its new file name and hash) -> sheet -> look -> record -> the same log row updated
 import base64
 import datetime
 import hashlib
@@ -102,10 +105,11 @@ TURN_HOW = {"left": "from its left side: a side profile of its left side, facing
 ANGLE_PROMPT = "<sks> {azimuth} eye-level shot medium shot"
 AZIMUTH = {"left": "left side view", "back": "back view", "right": "right side view"}
 ANGLE_STRENGTH = 0.9
-# the first live run (2026-11-11) got "left side view" back facing picture-right; Dotwork saw the LoRA read the
+# the first two live runs (2026-11-11) got "left side view" back facing picture-right; Dotwork saw the LoRA read the
 # sides either way from one character to the next, so every run asks for a look instead of trusting the label
 SIDES_NOTE = ("left.png should show the character's left side, facing the picture's left edge, and right.png the "
-              "other way; generators mix the two up, so if they are swapped, swap the two files")
+              "other way; generators mix the two up, so if they are swapped, `reference <name> --swap-sides` swaps "
+              "them with the sheet, the record and the asset log (no GPU, no cost)")
 
 # ---- Google Gemini (Nano Banana) --------------------------------------------------------------------------------
 GEMINI_ENV = "GEMINI_API_KEY"
@@ -879,8 +883,72 @@ def next_steps(plan, files):
               f"--left {r('left')} --back {r('back')} --right {r('right')}")
 
 
+def swap_sides(args):
+    """--swap-sides: the generator turned the figure the wrong way for left and right (SIDES_NOTE). Swap the two
+    pictures, rebuild the sheet, swap the two views in the record (each picture keeps the prompt and model that made
+    it, under its new name, so the record still says how each file was made) and update the asset log row and its
+    evidence file, whose hashes would otherwise describe the wrong files. No GPU, no service, no cost."""
+    root = Path(args.project).resolve()
+    if not bz.NAME_RULE.match(args.name):
+        raise bz.ToolError(f"name {args.name!r}: lowercase letters, digits and underscores, starting with a letter")
+    extra = [flag for flag, on in (("--from", args.concept), ("--prompt", args.prompt), ("--model", args.model),
+                                   ("--max-cost", args.max_cost is not None), ("--quote-only", args.quote_only),
+                                   ("--no-reuse", args.no_reuse), ("--overwrite", args.overwrite)) if on]
+    if extra:
+        raise bz.ToolError(f"--swap-sides works on the views already made and takes no {', '.join(extra)}")
+    folder = root / bz.SRC_ROOT / args.name / REF_DIR
+    rec_path = folder / RECORD
+    if not rec_path.is_file():
+        raise bz.ToolError(f"{bz.rel(root, rec_path)} not found: make the views first (reference {args.name} --prompt "
+                           "or --from)")
+    record = json.loads(rec_path.read_text(encoding="utf-8"))
+    views = record.get("views") or {}
+    if "left" not in views or "right" not in views:
+        raise bz.ToolError(f"{bz.rel(root, rec_path)} has no left and right views to swap")
+    left, right = root / views["left"]["file"], root / views["right"]["file"]
+    for p in (left, right):
+        if not p.is_file():
+            raise bz.ToolError(f"{bz.rel(root, p)} is missing: make the views again (--overwrite)")
+    if left.suffix.lower() != right.suffix.lower():
+        raise bz.ToolError(f"{left.name} and {right.name} are different picture types: swap them by hand")
+    a, b = left.read_bytes(), right.read_bytes()
+    bz.write_new(left, b, True)
+    bz.write_new(right, a, True)
+    views["left"], views["right"] = (dict(views["right"], file=views["left"]["file"], sha256=sha(b)),
+                                     dict(views["left"], file=views["right"]["file"], sha256=sha(a)))
+    record["sides_swapped"] = not record.get("sides_swapped", False)   # a second swap undoes the first
+    print(f"[ OK ] swapped {left.name} and {right.name}")
+    images = {v: refsheet.decode((root / views[v]["file"]).read_bytes()) for v in views}
+    if all(images.values()):
+        sheet = folder / SHEET
+        bz.write_new(sheet, refsheet.sheet([images[v] for v in views]), True)
+        record["sheet"] = bz.rel(root, sheet)
+        print(f"[ OK ] turnaround sheet: {record['sheet']} ({', '.join(views)}, left to right)")
+    else:
+        print("[warn] no sheet: a view could not be read here (install Pillow); the views themselves are swapped")
+    look = refsheet.look(images)
+    look["by_eye"] = SIDES_NOTE
+    record["look"] = look
+    bz.write_new(rec_path, json.dumps(record, indent=2, ensure_ascii=False).encode("utf-8"), True)
+    print(f"[ OK ] record: {bz.rel(root, rec_path)}")
+    log_path = root / bz.fetch_asset.ASSET_LOG
+    front_rel = views.get("front", {}).get("file", "")
+    if args.no_log or not log_path.is_file() or f"`{front_rel}`" not in log_path.read_text(encoding="utf-8"):
+        print("[info] no asset log row for these views to update")
+    else:
+        source = record.get("source") or {}
+        plan = type("SwapPlan", (), dict(root=root, name=args.name, dir=folder, log_path=log_path,
+                                         route=record["route"], model=record.get("model"),
+                                         prompt=source.get("prompt"), unit=record["cost"]["unit"]))
+        write_log(plan, record)
+    print(f"[look] look at {record.get('sheet') or bz.rel(root, folder)} again: left faces the picture's left edge")
+    return 0
+
+
 # ---- command ---------------------------------------------------------------------------------------------------------
 def cmd_reference(args):
+    if args.swap_sides:
+        return swap_sides(args)
     t0 = time.monotonic()
     plan = Plan(args)
     if args.seed is None:
@@ -977,4 +1045,7 @@ def add_parser(sub, common):
     p.add_argument("--overwrite", action="store_true", help="replace views, sheet and record from an earlier run")
     p.add_argument("--no-log", action="store_true", help="do not touch docs/ASSET_LOG.md (scratch runs)")
     p.add_argument("--wait", type=int, default=WAIT_S, help=f"seconds to wait for each job or task (default {WAIT_S})")
+    p.add_argument("--swap-sides", action="store_true",
+                   help="the views already made have left and right the wrong way round: swap left.png and right.png "
+                        "and update the sheet, the record and the asset log (no GPU, no cost; give only the name)")
     p.set_defaults(fn=cmd_reference)

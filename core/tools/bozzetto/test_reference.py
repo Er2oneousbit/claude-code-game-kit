@@ -492,7 +492,7 @@ class LocalRoute(Base):
         self.assertEqual(rec["views"]["front"]["model"], "FLUX.2 klein 4B")
         self.assertIn("you", rec["terms"]["owner"])
         self.assertEqual(rec["look"]["warnings"], [])
-        self.assertIn("swap the two files", rec["look"]["by_eye"])
+        self.assertIn("--swap-sides", rec["look"]["by_eye"])
         self.assertIn("[look] by eye: left.png should show", out)
         self.assertTrue(rec["models"] and all(m["license"].lower() == "apache-2.0" for m in rec["models"]))
         row = self.log_rows()[0]
@@ -544,6 +544,49 @@ class LocalRoute(Base):
         self.assertIn("out of memory", out)
         self.assertEqual(len(self.log_rows()), 1)
         self.assertNotIn("art", self.log_rows()[0])
+
+    def test_swap_sides_keeps_sheet_record_and_log_in_step(self):
+        # #291 live run: left and right came back swapped (the second run in two); "swap the two files" by hand
+        # left the sheet, the record's hashes and the asset log's evidence file describing the wrong pictures
+        self.assertEqual(self.run_tool("chr_hero", "--prompt", "a knight", "--seed", "5")[0], 0)
+        left, right = (self.dir / "left.png").read_bytes(), (self.dir / "right.png").read_bytes()
+        before = self.record()
+        sheet_before = (self.dir / "sheet.png").read_bytes()
+        STATE.reset()
+        rc, out = self.run_tool("chr_hero", "--swap-sides")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(STATE.requests, [], "no GPU job and no service call")
+        self.assertEqual((self.dir / "left.png").read_bytes(), right)
+        self.assertEqual((self.dir / "right.png").read_bytes(), left)
+        self.assertNotEqual((self.dir / "sheet.png").read_bytes(), sheet_before)
+        sheet = refsheet.decode((self.dir / "sheet.png").read_bytes())
+        cell = refsheet.CELL_H + refsheet.GAP           # the cells are square here: the views are square
+        self.assertEqual(sheet.px(refsheet.GAP + cell + 12, refsheet.GAP + 12),
+                         refsheet.decode(right).px(2, 2), "the sheet's second cell is the new left view")
+        rec = self.record()
+        self.assertTrue(rec["sides_swapped"])
+        for view, data in (("left", right), ("right", left)):
+            self.assertEqual(rec["views"][view]["file"], f"assets_src/bozzetto/chr_hero/reference/{view}.png")
+            self.assertEqual(rec["views"][view]["sha256"], ref.sha(data), view)
+        # each picture keeps the prompt that made it, under its new name
+        self.assertEqual(rec["views"]["left"]["prompt"], before["views"]["right"]["prompt"])
+        self.assertEqual(rec["views"]["right"]["prompt"], before["views"]["left"]["prompt"])
+        self.assertEqual(list(rec["views"]), list(ref.VIEWS))
+        evidence = (self.root / "docs" / "licenses" / "A-0001.txt").read_text(encoding="utf-8")
+        self.assertIn(f"left.png  SHA-256 {ref.sha(right)}", evidence)
+        self.assertIn(f"right.png  SHA-256 {ref.sha(left)}", evidence)
+        self.assertEqual(len([l for l in self.log_rows() if "chr_hero/reference" in l]), 1, "the same row, updated")
+        # a second swap puts everything back
+        self.assertEqual(self.run_tool("chr_hero", "--swap-sides")[0], 0)
+        self.assertEqual((self.dir / "left.png").read_bytes(), left)
+        self.assertFalse(self.record()["sides_swapped"])
+        rc, out = self.run_tool("chr_hero", "--swap-sides", "--prompt", "x")
+        self.assertEqual(rc, 2)
+        self.assertIn("takes no --prompt", out)
+        rc, out = self.run_tool("chr_nobody", "--swap-sides")
+        self.assertEqual(rc, 2)
+        self.assertIn("make the views first", out)
+        self.clean_files()
 
     def test_rerun_needs_overwrite_and_updates_the_same_row(self):
         self.assertEqual(self.run_tool("chr_hero", "--prompt", "a knight", "--seed", "1", "--views", "front")[0], 0)

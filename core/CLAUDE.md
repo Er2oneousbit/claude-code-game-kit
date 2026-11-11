@@ -70,6 +70,7 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 | 2D exports (GIMP, Inkscape, sprite sheets) | `docs/sop/SOP-16-2d-art-pipeline.md` |
 | Pixel art on this machine's GPU (GDD "Art source": Dotwork) | `tools/art/dotwork/README.md` via `/dotwork` |
 | 3D models from a picture or a prompt on this machine's GPU (Bozzetto) | `tools/bozzetto/README.md` via `/model-pipeline` |
+| "The main character should look like this" (an idea, a sentence or a picture) to that character moving in the game | `/make-character` (Bozzetto: views, model, rig, swinging parts, the engine or sprite sheets) |
 | Generated levels, seeds, "a new level every run" | `docs/sop/SOP-17-procedural-generation.md` via `/procgen` |
 | Screen shake, hitstop, easing, camera feel ("juice") | `docs/sop/SOP-18-game-feel.md` via `/game-feel` |
 | Menus, settings, saves, rebinding, gamepad prompts, localization, crash logs | `docs/sop/SOP-19-front-end-and-settings.md` via `/game-shell` |
@@ -87,7 +88,7 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 
 ## Skills and subagents
 Skills: `/start-session` `/end-session` `/new-feature` `/bug-hunt` `/stuck` `/playtest-report` `/asset-intake` `/gen-brief`
-`/dotwork` `/model-pipeline` `/adr` `/gdd-sync` `/next-tier` `/perf-pass` `/release-check` `/publish-repo` `/triage-issues` `/file-issue` `/game-ai` `/procgen` `/game-feel` `/game-shell` `/shader` `/token-audit`. They encode the SOPs, use them.
+`/dotwork` `/model-pipeline` `/make-character` `/adr` `/gdd-sync` `/next-tier` `/perf-pass` `/release-check` `/publish-repo` `/triage-issues` `/file-issue` `/game-ai` `/procgen` `/game-feel` `/game-shell` `/shader` `/token-audit`. They encode the SOPs, use them.
 Subagents: `code-reviewer` `build-doctor` `design-critic` `playtest-analyst` `researcher`. Delegate wide searches and reviews to keep context clean.
 Never import an asset with an unknown license.
 
