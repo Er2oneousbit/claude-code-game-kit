@@ -134,6 +134,7 @@ EXAMS = [
     Exam("core/tools/test_yt_transcript.py", "offline (canned WebVTT, faked caption methods)", covers=("core/tools/yt_transcript.py",)),
     Exam("core/tools/test_token_audit.py", "a fake home, project and session log", covers=("core/tools/token_audit.py",)),
     Exam("core/tools/test_session_context.py", "the SessionStart hook, as Claude Code runs it", covers=("core/tools/hooks/", "core/.claude/settings.json")),
+    Exam("core/tools/test_seed_sweep.py", "the seed and settings sweep (#183), a fake dev.py", covers=("core/tools/seed_sweep.py",)),
     Exam("core/tools/test_check_i18n.py", "the translation check; the overlays' French tables in the kit", covers=("core/tools/check_i18n.py", "engines/*/skeleton/data/i18n/*.json")),
     # core/tools/access
     Exam("core/tools/access/test_colour.py", "colour-blind pairs, CIEDE2000, WCAG contrast"),
