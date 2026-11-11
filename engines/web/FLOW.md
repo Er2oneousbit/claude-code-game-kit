@@ -86,7 +86,9 @@ offers one-handed layouts (`data/input/presets.json`, #166); `readable_font`, `l
   `public/assets/ui` folder (loaded after the built-in `src/shell/shell.css`). Prompt glyphs:
   `public/assets/ui/glyphs/<glyph_name>.png` (key_space, xbox_a, ps_cross ...), drawn at a whole-number scale with
   nearest filtering; a missing glyph shows a text keycap.
-  Dotwork's UI kit (tools/art/dotwork, the widgets lane) can supply both. Restart `run` after adding files there.
+  Dotwork's uikit lane writes the glyphs there (this game's `art_src/dotwork/dotwork.config.json` points Dotwork at
+  `public/assets`). It does not write the theme: Dotwork's theme is a Godot `.tres`, so write `theme_default.css` by
+  hand from the same colours. Restart `run` after adding files there.
 - **Navigation:** keyboard and gamepad (the browser's standard mapping) through one input layer; `ui_accept` /
   `ui_cancel` everywhere, cancel goes back one screen, the focused item has an outline and a marker.
 - **Settings** apply live and save on Back (`settings.json`, atomic, with `.bak`). A browser cannot apply
@@ -116,6 +118,33 @@ offers one-handed layouts (`data/input/presets.json`, #166); `readable_font`, `l
 - Audio: OGG plus an MP3 or M4A fallback covers every browser (Safari has had OGG gaps **(verify)**); Phaser picks the first
   the browser can play from `this.load.audio(key, [ogg, mp3])`. Music starts after the first input (autoplay policy).
 - Naming: `spr_player_idle.png`, `sfx_jump_01.ogg`, `mus_level1.ogg`.
+
+## Dotwork art (the asset manifest importer)
+Dotwork (`tools/art/dotwork/`, `/dotwork`) makes pixel art on your GPU. A web game has no Godot, so the game's
+`art_src/dotwork/dotwork.config.json` sets `"engine": "none"` and `"assets_dir": "public/assets"`: every pack writes
+its PNGs under `public/assets/art/` and one manifest, `public/assets/dotwork/<pack>.assets.json` (the format:
+`tools/art/dotwork/ASSET_MANIFEST.md`). Pack specs that name a font by path (`tools/art/dotwork/examples/uikit.json`) need the
+`public/assets/...` path in a web game.
+- **Loader:** `src/game/dotworkPlan.ts` (no Phaser: the plan, the blob rule for terrain layers, bitmap font data)
+  and `src/game/dotwork.ts` (Phaser). In a scene: `queueDotwork(this)` in `preload()`, then in `create()` with
+  `const pack = dotworkPack()`: `addAnimatedSprite(this, pack, "hero", x, y, "walk_s")`, `playDirection(sprite, pack,
+  "hero", "walk", "e")`, `addSprite` (a prop, its pivot on x, y, its collision rects in world pixels), `addMap` (a
+  tilemap: terrain layers resolved, animated tiles, flips, objects), `addCollisionBodies` (static Arcade bodies; the
+  scene needs `physics: { arcade: {} }`), `addText` (a bitmap font label), `addNineSlice` (a UI kit part).
+- **What Phaser gets:** frames named `<pack>/<asset>/<clip>/<i>` with the pivot as their origin, animations keyed
+  `<pack>/<asset>/<clip>` with each frame's own duration (Phaser 4 lets a frame's duration replace the clip's rate;
+  Phaser 3 added it, so tutorials disagree), nearest filtering. Fonts and UI kit images are already drawn at their
+  `scale`: draw them at 1 (on a camera without zoom), not zoomed with the world.
+- **Not drawn yet** (a warning names each, their files are still checked): `background`, `particles`, `transition`,
+  `normal_map`, `image`. Glyphs on a font's second page are left out (Phaser draws a bitmap font from one texture).
+- **Checks:** `tests/dotwork.golden.test.ts` compares the importer with `data/golden/dotwork/expected.json` (the
+  reference every engine matches); `tests/dotwork.assets.test.ts` checks every manifest of the game on disk (missing
+  files, rects outside their PNGs, terrain cells with no tile); in a dev server and in `smoke`, every manifest is
+  loaded in Phaser before the title screen (`src/game/dotworkVerify.ts`): a broken asset is a console error, and
+  `smoke --until DOTWORK_VERIFY_OK` proves it ran.
+- **The starter scene** (`MainScene.ts`) shows the first map, a character walking (it turns at the prop's box), the
+  first prop, a 9-slice window and a label in the first font when the game has Dotwork art, and the bouncing box
+  otherwise.
 
 ## Profiling
 - Chrome DevTools Performance panel, and Phaser's `game.loop.actualFps`. Measure in `vite preview` (production build), not the dev server.

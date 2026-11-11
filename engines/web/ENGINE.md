@@ -18,10 +18,11 @@ src/core/           engine-free logic: Log, juice (shake, hitstop, ease, follow,
 src/shell/          the front end: HTML screens over the canvas, input, subtitles, smoke driver (no Phaser import; the
                     same files as the web-3d overlay's, host.ts is all it knows of the renderer)
 src/game/           scenes and game objects (Phaser lives here): main (play), juice (demo), backdrop; phaserHost.ts
-                    gives the shell Phaser's scene calls
+                    gives the shell Phaser's scene calls; dotwork.ts loads Dotwork art (dotworkPlan.ts, engine-free, plans it)
 data/               i18n/<locale>.json strings, dialogue/*.built.json subtitles, golden/ test vectors
 tests/              Vitest tests for src/core and pure parts of src/game (*.test.ts)
-public/assets/      images, audio, fonts, tilemaps: served as-is at assets/... (see docs/ASSET_LOG.md)
+public/assets/      images, audio, fonts, tilemaps: served as-is at assets/... (see docs/ASSET_LOG.md);
+                    Dotwork writes here (art/, dotwork/<pack>.assets.json, ui/glyphs/: art_src/dotwork/dotwork.config.json)
 src/shaders/        the kit's shader recipes (kit/ generated from tools/shaders/) and their glue
 tools/              dev.py, smoke.mjs and helpers
 dist/               production build (git-ignored): what you upload
