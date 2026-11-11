@@ -6,7 +6,8 @@
 //           history read back, every control says what it is, every row is reachable, hold-to-repeat timing,
 //           the pad's make from its device name and the left stick as the d-pad (#267); analog stick, triggers and
 //           held actions for the game (#274); the juice demo, the pseudo locale, the F8 bug report, crash files and
-//           their drives (#275); a drive's model ignores the widget's real key and stick events (#276);
+//           their drives (#275); a drive's model ignores the widget's real key and stick events (#276); the
+//           credits in the editor layout (CREDITS.md) and the packaged one (data/credits.md), and the copy (#278);
 //           plus the scripted runs tools/dev.py starts: GameKit.Screens.Drive (--drive) and GameKit.Screens.Show
 //           (--drive show:<screen> --screenshot).
 // Usage   : python tools/dev.py test --filter GameKit.Screens          (or `test` for everything)
@@ -41,6 +42,7 @@
 #include "HAL/FileManager.h"
 #include "HAL/PlatformProcess.h"
 #include "Misc/CommandLine.h"
+#include "Misc/FileHelper.h"
 #include "Misc/Guid.h"
 #include "Misc/Paths.h"
 #include "SGameKitShell.h"
@@ -870,6 +872,112 @@ bool FGameKitScreensRealInputTest::RunTest(const FString& Parameters)
 	W->OnAnalogValueChanged(FGeometry(), StickDown);
 	W->OnAnalogValueChanged(FGeometry(), StickRest);
 	TestNotEqual(TEXT("a real stick moves the focus in play"), M->FocusId(), AfterKey);
+	return true;
+}
+
+	/** A project folder of its own holding only the English string table, for the credits tests (#278). */
+	void MakeCreditsProject(const FString& Root)
+	{
+		const FString Tables = FPaths::Combine(Root, FGameKitShellModel::I18nDir);
+		IFileManager::Get().MakeDirectory(*Tables, true);
+		IFileManager::Get().Copy(*FPaths::Combine(Tables, TEXT("en.json")),
+		                         *FPaths::Combine(FPaths::ProjectDir(), FGameKitShellModel::I18nDir, TEXT("en.json")));
+	}
+
+	/** A model on ProjectDir, opened on the credits screen. */
+	TSharedRef<FGameKitShellModel> OnCredits(const FString& ProjectDir, const FString& DataDir)
+	{
+		FGameKitShellModel::FOptions Opt;
+		Opt.ProjectDir = ProjectDir;
+		Opt.DataDir = DataDir;
+		Opt.Locale = TEXT("en");
+		Opt.bAutomated = true;
+		TSharedRef<FGameKitShellModel> M = MakeShared<FGameKitShellModel>(Opt);
+		M->Push(TEXT("credits"));
+		return M;
+	}
+
+	bool ShowsText(const FGameKitShellModel& M, const FString& Text)
+	{
+		return M.Top() && M.Top()->Lines.ContainsByPredicate([&Text](const FString& L) { return L.Contains(Text); });
+	}
+
+	void WriteUtf8(const FString& Path, const FString& Text)
+	{
+		IFileManager::Get().MakeDirectory(*FPaths::GetPath(Path), true);
+		FFileHelper::SaveStringToFile(Text, *Path, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensCreditsLayoutsTest, "GameKit.Screens.CreditsInEditorAndPackagedLayout", ScreenTestFlags)
+bool FGameKitScreensCreditsLayoutsTest::RunTest(const FString& Parameters)
+{
+	// The editor reads <project>/CREDITS.md; a packaged game has only what was staged, data/ among it, so its
+	// credits come from data/credits.md (#278). Neither: the placeholder, never an error.
+	FTempFolder Temp;
+	const FString Proj = FPaths::Combine(Temp.Path, TEXT("proj"));
+	const FString Data = FPaths::Combine(Temp.Path, TEXT("save"));
+	MakeCreditsProject(Proj);
+
+	TSharedRef<FGameKitShellModel> None = OnCredits(Proj, Data);
+	const FString Placeholder = None->T(TEXT("credits.placeholder"));
+	TestFalse(TEXT("the string table loaded (the placeholder is text, not its key)"), Placeholder == TEXT("credits.placeholder"));
+	TestTrue(TEXT("no credits file: the placeholder"), ShowsText(*None, Placeholder));
+
+	const FString Packaged = FString(TEXT("Art: Packaged Person J")) + static_cast<TCHAR>(0x00CD) + TEXT("n");
+	WriteUtf8(FPaths::Combine(Proj, FGameKitShellModel::CreditsCopyFile), TEXT("# Credits\n\n") + Packaged + TEXT("\n"));
+	TSharedRef<FGameKitShellModel> Shipped = OnCredits(Proj, Data);
+	TestTrue(TEXT("packaged layout: data/credits.md is shown"), ShowsText(*Shipped, Packaged));
+	TestFalse(TEXT("packaged layout: no placeholder"), ShowsText(*Shipped, Placeholder));
+	TestTrue(TEXT("the heading mark is dropped"), Shipped->Top()->Lines.Contains(TEXT("Credits")));
+
+	WriteUtf8(FPaths::Combine(Proj, FGameKitShellModel::CreditsFile), TEXT("# Credits\n\nArt: Editor Person\n"));
+	TSharedRef<FGameKitShellModel> Editor = OnCredits(Proj, Data);
+	TestTrue(TEXT("editor layout: CREDITS.md is shown"), ShowsText(*Editor, TEXT("Editor Person")));
+	TestFalse(TEXT("editor layout: CREDITS.md wins over an older copy"), ShowsText(*Editor, TEXT("Packaged Person")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensCreditsCopyTest, "GameKit.Screens.CreditsCopyFollowsCreditsMd", ScreenTestFlags)
+bool FGameKitScreensCreditsCopyTest::RunTest(const FString& Parameters)
+{
+	// What the module does in every editor-build process (the editor, the cook): data/credits.md is CREDITS.md
+	FTempFolder Temp;
+	const FString Proj = Temp.Path;
+	const FString Source = FPaths::Combine(Proj, FGameKitShellModel::CreditsFile);
+	const FString Copy = FPaths::Combine(Proj, FGameKitShellModel::CreditsCopyFile);
+	IFileManager& Files = IFileManager::Get();
+	FString What;
+
+	TestTrue(TEXT("no CREDITS.md: fine"), FGameKitShellModel::SyncCreditsCopy(Proj, What));
+	TestFalse(TEXT("no CREDITS.md: no copy made"), Files.FileExists(*Copy));
+	TestEqual(TEXT("no CREDITS.md: nothing to read"), FGameKitShellModel::CreditsSource(Proj), FString());
+
+	// Bytes cp1252 cannot decode (I acute, a right double quote): the copy is the file, not a re-encoding
+	const FString Text = FString(TEXT("# Credits\n\nMusic by J")) + static_cast<TCHAR>(0x00CD) + TEXT("n ") +
+	                     static_cast<TCHAR>(0x201D) + TEXT("Loop") + static_cast<TCHAR>(0x201D) + TEXT("\n");
+	WriteUtf8(Source, Text);
+	TestTrue(TEXT("CREDITS.md: copied"), FGameKitShellModel::SyncCreditsCopy(Proj, What));
+	TArray<uint8> A, B;
+	FFileHelper::LoadFileToArray(A, *Source);
+	TestTrue(TEXT("data/ is made and the copy written"), FFileHelper::LoadFileToArray(B, *Copy, FILEREAD_Silent));
+	TestTrue(TEXT("the copy is byte for byte CREDITS.md"), A == B);
+	TestEqual(TEXT("both there: CREDITS.md is read"), FGameKitShellModel::CreditsSource(Proj), Source);
+
+	const FDateTime Stamp = Files.GetTimeStamp(*Copy);
+	TestTrue(TEXT("unchanged: fine"), FGameKitShellModel::SyncCreditsCopy(Proj, What));
+	TestTrue(TEXT("unchanged: says so"), What.Contains(TEXT("up to date")));
+	TestEqual(TEXT("unchanged: the copy is not rewritten"), Files.GetTimeStamp(*Copy), Stamp);
+
+	WriteUtf8(Source, TEXT("# Credits\n\nArt: Someone New\n"));
+	FGameKitShellModel::SyncCreditsCopy(Proj, What);
+	FString Now;
+	FFileHelper::LoadFileToString(Now, *Copy);
+	TestTrue(TEXT("an edit reaches the copy"), Now.Contains(TEXT("Someone New")));
+
+	Files.Delete(*Source);
+	TestTrue(TEXT("CREDITS.md removed: fine"), FGameKitShellModel::SyncCreditsCopy(Proj, What));
+	TestFalse(TEXT("CREDITS.md removed: the stale copy goes too"), Files.FileExists(*Copy));
+	TestEqual(TEXT("CREDITS.md removed: the placeholder again"), FGameKitShellModel::CreditsSource(Proj), FString());
 	return true;
 }
 

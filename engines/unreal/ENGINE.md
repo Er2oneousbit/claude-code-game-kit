@@ -63,7 +63,8 @@ and a clear spec for the Blueprint child.
   builds in a Blueprint-only project). Turn them on in `Config/DefaultGame.ini` (`bShowScreens=True` under the
   `GameKitShellUI.GameKitShellSettings` section: docs/ENGINE_FLOW.md has the lines) or with `-GameKitShell`; the subsystem
   `UGameKitShellSubsystem` puts them over your map and fires `OnShellEvent` ("play", "resume", "quit_title",
-  "settings_changed"). Strings in `data/i18n/<locale>.json`, credits from `CREDITS.md`. The subsystem also gives the
+  "settings_changed"). Strings in `data/i18n/<locale>.json`, credits from `CREDITS.md` (a packaged game reads
+  its copy, credits.md in `data/`, which the plugin keeps in step: never edit the copy). The subsystem also gives the
   game analog input (`GetStick`, `GetTrigger`, `IsActionHeld`, Blueprint-callable) with the player's deadzone and
   invert_y, writes a crash file on a fatal error, and in debug builds adds the juice demo, the pseudo language and the
   F8 bug report. `python tools/dev.py smoke --drive menus|crash|bug|pseudo` and `--drive show:<screen> --screenshot
