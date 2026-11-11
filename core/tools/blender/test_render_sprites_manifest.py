@@ -162,6 +162,17 @@ class Options(unittest.TestCase):
                                       "--manifest", "assets/dotwork/r.assets.json", "--once", "die"])[0], 0)
 
 
+class Api(unittest.TestCase):
+    def test_functions_other_tools_import_are_still_there(self):
+        # bozzetto/turntable.py frames its contact sheet with import_asset and scene_bounds (a refactor once dropped
+        # scene_bounds and the turntable step failed while this exam passed)
+        for name in ("import_asset", "scene_bounds", "setup_scene", "place_camera", "stitch"):
+            self.assertTrue(callable(getattr(rs, name, None)), name)
+        used = (HERE.parent / "bozzetto" / "turntable.py").read_text(encoding="utf-8")
+        for name in ("import_asset", "scene_bounds"):
+            self.assertIn("rs." + name, used, "turntable.py no longer uses " + name + ": update this list")
+
+
 class CommittedFixture(unittest.TestCase):
     """data/golden/character/sprites/: render_sprites.py --manifest on the golden character (README there)."""
 

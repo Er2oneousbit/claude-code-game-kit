@@ -361,6 +361,14 @@ def grow_bounds(bpy, scene, frames, box):
     box["lo"], box["hi"] = lo, hi
 
 
+def scene_bounds(bpy, scene, frames):
+    """Center, radius, reach and fit points of all meshes over these frames (one clip). bozzetto/turntable.py
+    frames its contact sheet with it."""
+    box = new_bounds()
+    grow_bounds(bpy, scene, frames, box)
+    return finish_bounds(box)
+
+
 def finish_bounds(box):
     """Center, radius, reach (farthest corner from the origin) and fit points of the grown box."""
     from mathutils import Vector
