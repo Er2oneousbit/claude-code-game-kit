@@ -31,6 +31,9 @@ examples/lockpick-mz/game/**
 !examples/lockpick-mz/game/js/plugins/GameCore.js
 !examples/lockpick-mz/game/js/plugins/GameMain.js
 !examples/lockpick-mz/game/js/plugins/GameAudio.js
+!examples/lockpick-mz/game/js/plugins/GameJuice.js
+!examples/lockpick-mz/game/js/plugins/GameShell.js
+!examples/lockpick-mz/game/js/plugins/GameAccess.js
 !examples/lockpick-mz/game/js/plugins/KitShaders.js
 !examples/lockpick-mz/game/img/.gitkeep
 

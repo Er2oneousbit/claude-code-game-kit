@@ -59,6 +59,11 @@ Manager or the project). **(verify)**
   `python tools/dev.py smoke --query autoplay --until DONE --fail-on LOST`.
 - Bot pairs (SOP-14 step 6) belong in GameCore tests: they run in seconds over many seeds.
 - **Audio:** `tests/gameAudio.test.js` runs `data/golden/audio.json`, `music.json`, `access.json` through `GameAudio.js`.
+- **Juice and shell:** `tests/gameJuice.test.js` and `tests/gameShell.test.js` run every case of `data/golden/juice.json`
+  and `shell.json` (written by `tools/golden_vectors.py`, the reference for every engine) through `GameJuice.js` and
+  `GameShell.js`; an unknown case type fails. `tests/gameAccess.test.js` runs the MZ glue against stand-ins for
+  ConfigManager, Window_Options, Scene_Options, Game_Screen and Game_System (`tests/support/golden.js` is the shared
+  comparison).
 
 ## Assets and audio
 - MZ's default art and sound come with your copy of MZ; log your own additions in `docs/ASSET_LOG.md` as usual.
@@ -74,20 +79,31 @@ MZ's FPS counter: F2 in a Playtest. **(verify)**
 
 ## The shell, juice and accessibility in MZ (SOP-18 to SOP-20)
 MZ already has the shell's screens: Scene_Title, Scene_Menu, Scene_Options, Scene_Save and Scene_Load, a pause on
-focus loss (the "background" option) and its own save files. So the kit does not port the shell here; it maps the
-rules onto MZ (verify each against MZ itself: the overlay is not yet run against MZ).
+focus loss (the "background" option) and its own save files. So the kit does not port the screens here. It ships
+the rules as plugins, the same as every other overlay's and checked against the same golden vectors, and wires the
+part that protects players into MZ (verify each hook in a test play: the overlay is not yet run against MZ):
+- **GameJuice.js** (engine-free): `Shake` (trauma on value noise), `Hitstop`, `ease`, `FollowCamera`, `InputBuffer`,
+  `CoyoteTimer`, `Spring` and `squash`, `FlashLimiter`, `HoldToggle`, `AutoRepeat`. MZ steps 60 frames a second:
+  pass `dt = 1 / 60` (verify), and hold a scene still while `hitstop.scaledDt(dt)` is 0.
+- **GameShell.js** (engine-free): `settingsLoad` (defaults, repair, unknown keys kept), `effectiveShake`,
+  `telemetryAllowed`, `rebind` with swap, `glyphSet` / `glyphName` / `promptBinding`, `narrationLine`, `tr` /
+  `trPlural` / `pseudo`, and the save envelope (`saveLoad`, `saveMigrate`, `MIGRATIONS`, `saveText`).
+- **GameAccess.js** (MZ glue): the kit's settings live in MZ's `config.rpgsave` under `kit` (ConfigManager.makeData
+  and applyData, repaired on load); MZ's Options screen gets Reduce Motion, Screen Shake (0 to 100 %), Gentle
+  Flashes and Text Size after its own rows (labels are plugin parameters, for translated games); MZ's Shake Screen
+  is scaled by `effectiveShake` (0 with reduce motion), every Flash Screen goes through the FlashLimiter (three per
+  real second, always) and is softer with Gentle Flashes on; Text Size scales `Game_System.mainFontSize`.
 
 | Kit rule | In MZ |
 |---|---|
-| Settings saved and restored (SOP-19 step 2) | ConfigManager writes config.rpgsave; add new options by extending ConfigManager.makeData / applyData and Window_Options.makeCommandList in a plugin, and keep unknown keys when reading |
-| Versioned saves with migration (SOP-19 step 3) | DataManager.makeSaveContents / extractSaveContents: add a version field in a plugin and migrate in extractSaveContents; test the migration in Node like the other plugin rules |
-| Rebinding and prompts (SOP-19 step 4) | Input.keyMapper and Input.gamepadMapper hold the bindings; a rebinding screen is a plugin (community plugins exist, check their license). Prompts in messages use icons or text codes |
-| Text size and subtitles (SOP-20) | Window_Base.prototype.resetFontSettings and $gameSystem.mainFontSize() set the text size; messages are already text, so "subtitles" mean voiced lines also appear in the message window; a text-size option is a ConfigManager entry |
-| Shake and flash safety (SOP-18 step 3, F33, F34) | Event commands "Shake Screen" and "Flash Screen" and battle animations: add a reduce-motion option that scales $gameScreen.startShake power to 0, and limit $gameScreen.startFlash to three per second in a plugin |
-| Localization (SOP-19 step 5) | Database text and messages live in data/*.json: keep the source language there and load per-locale JSON in a plugin; the pseudo-locale check runs on the extracted strings in Node |
-
-The kit's golden vectors (data/golden/*.json) can still test any rule you write as engine-free plugin code, with the
-same Node test runner as GameCore.js.
+| Settings saved and restored (SOP-19 step 2) | **Wired:** GameAccess keeps the kit's settings in config.rpgsave next to MZ's options, repaired by `GameShell.settingsLoad`; unknown keys stay |
+| Shake and flash safety (SOP-18 step 3, F33, F34) | **Wired:** "Shake Screen" (and anything calling `$gameScreen.startShake`) follows Reduce Motion and Screen Shake; "Flash Screen" and damage flashes (`$gameScreen.startFlash`) go through the limiter. **Left to you:** battle animations' own flashes (Sprite_Animation) are not routed (verify what yours flash) |
+| Text size (SOP-20) | **Wired:** Text Size (75 to 150 %) scales the main font. **Left to you:** windows keep their line height, so check long messages and menus at 150 % (verify) |
+| The other accessibility settings (SOP-20) | **Left to you:** subtitles are MZ's message window already; colour-blind palettes, difficulty, game speed, hold to toggle, timing and the rest are in `GameAccess.settings()` with no Options row: add a row the way GameAccess does (a ConfigManager property, a `Window_Options` command, one more in `Scene_Options.maxCommands`) when your game uses one |
+| Versioned saves with migration (SOP-19 step 3) | **Left to you:** DataManager.makeSaveContents / extractSaveContents: put `GameShell.SAVE_VERSION` in the contents and run your `MIGRATIONS` in extractSaveContents; test them in Node with `GameShell.saveMigrate` |
+| Rebinding and prompts (SOP-19 step 4) | **Left to you:** Input.keyMapper and Input.gamepadMapper hold MZ's bindings; a rebinding screen is a plugin (community plugins exist, check their license); `GameShell.rebind` and `glyphName` give the swap rule and the prompt names. Prompts in messages use icons or text codes |
+| Localization (SOP-19 step 5) | **Left to you:** database text and messages live in data/*.json: keep the source language there and load per-locale JSON in a plugin with `GameShell.tr`; run `GameShell.pseudo` over the extracted strings in Node for the pseudo-locale check |
+| Scripted runs (`--drive`) | **Not here:** MZ's smoke has no `--drive` scenarios (menus, pseudo, access): they need MZ's own screens driven in a real MZ project (verify). Use `--query` with your own markers, and play the Options screen by hand |
 
 ## Packaging (release)
 - `python tools/dev.py build` makes `build/web/`, a plain copy for browsers (itch.io: zip the folder's contents).
