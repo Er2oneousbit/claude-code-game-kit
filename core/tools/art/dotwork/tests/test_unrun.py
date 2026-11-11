@@ -391,6 +391,32 @@ class LaneExam(Dw):
                                                                     "width": 40}]})[0], 0)
         self.assertEqual(fake.calls, [])
 
+    def test_tools_edit_records_its_source_under_the_configured_folder(self):
+        """The tools lane's rows named assets_src/art/tools/<name>/source.png whatever src_dir said, so qa_pack's
+        colour check (which opens that file) found nothing and skipped the edit."""
+        save(os.path.join(self.game, "concept", "guard.png"), figure(32, 32, (60, 90, 160), (8, 4, 24, 32)))
+
+        def fake_job(graph, timeout=1800):
+            prefix = next(n["inputs"]["filename_prefix"] for n in graph.values() if n["class_type"] == "SK_SavePixelArt")
+            out = os.path.join(fcore.WORK, "comfy_out", *prefix.split("/")) + "_00031_.png"
+            save(out, figure(32, 32, (200, 40, 40), (8, 4, 24, 32)))
+            return {"files": [out], "seconds": 0.1}
+
+        graph = {"2": {"class_type": "LoadImage", "inputs": {}}, "5": {"class_type": "LoadImage", "inputs": {}},
+                 "13": {"class_type": "CLIPTextEncode", "inputs": {}}, "9": {"class_type": "SK_SavePixelArt", "inputs": {}}}
+        import engine
+        import lane_character
+        sys.modules.pop("lane_tools", None)      # COMFY_OUT is bound at import, to the game of the first run
+        with StandIn(os.path.join(self.tmp, "renders")), mock.patch.object(engine, "run_job", fake_job), \
+                mock.patch.object(lane_character, "_wf", lambda name: json.loads(json.dumps(graph))):
+            code, text = self.pack({"name": "kit", "tools": [{"name": "guard_edit", "source": "concept/guard.png",
+                                                              "edits": ["give him a red scarf"]}]})
+        sys.modules.pop("lane_tools", None)
+        self.assertEqual(code, 0, text)
+        row = self.rows("kit")["assets/art/tools/guard_edit/spr_guard_edit_edit_00.png"]
+        self.assertEqual(row["source"], "art_source/art/tools/guard_edit/source.png")
+        self.assertTrue(os.path.isfile(os.path.join(self.game, *row["source"].split("/"))))
+
     def test_effects_one_shot_and_loop_from_a_cached_clip(self):
         """The effect lane's first frame and Wan clip are cached in the work folder: seed them, and the lane runs its
         own part (keep, ping-pong, dithered fade, vignette, export) without ComfyUI."""
