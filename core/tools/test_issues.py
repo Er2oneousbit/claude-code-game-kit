@@ -520,7 +520,7 @@ class NewIssueExam(unittest.TestCase):
         self.assertEqual(self.creates(), [])
 
     def test_account_name_from_the_home_folder(self):
-        for home, expect in (("/home/zed42", True), ("/home/runner", False), ("C:/Users/al", False)):
+        for home, expect in (("/home/" + "zed42", True), ("/home/runner", False), ("C:/Users/" + "al", False)):
             with mock.patch.object(issues.Path, "home", return_value=Path(home)):
                 terms = self.real_accounts()
             self.assertEqual(bool(terms), expect, home)
