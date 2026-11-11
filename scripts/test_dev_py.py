@@ -2177,7 +2177,7 @@ class GodotShaderCrash(TempRoot):
     def shader_pass(self, rc, check_out):
         dev = load("godot")
         dev.ROOT = self.root
-        (self.root / "shaders" / "kit").mkdir(parents=True)
+        (self.root / "shaders" / "kit").mkdir(parents=True, exist_ok=True)
         dev.run = lambda cmd, **kw: (0, "") if "shader_gen.py" in " ".join(map(str, cmd)) else (rc, check_out)
         return quiet(dev.shader_pass, "godot", False)
 
@@ -2188,6 +2188,17 @@ class GodotShaderCrash(TempRoot):
         self.assertIn("Godot crashed after 3 recipe(s) (exit 3221226356 = 0xC0000374)", text)
         self.assertIn("check --no-shaders", text)
         self.assertNotIn("needs a window", text)
+
+    def test_a_crash_before_the_first_recipe_names_the_crash(self):
+        # 2026-11-11: two runs in a row died with 0xC0000374 and 0xC0000005 before any SHADER_OK line (a Unity
+        # editor and other tests running); dev.py said "it needs a window"
+        for rc, hexcode in ((3221225477, "0xC0000005"), (3221226356, "0xC0000374")):
+            with self.subTest(rc=hexcode):
+                out = "Godot Engine v4.7.2.stable\nVulkan 1.4.341 - Forward+ - Using Device #0\n"
+                code, text = self.shader_pass(rc, out)
+                self.assertEqual(code, 1, text)
+                self.assertIn(f"Godot crashed before drawing a recipe (exit {rc} = {hexcode})", text)
+                self.assertNotIn("needs a window", text)
 
     def test_a_run_that_never_started_keeps_the_window_message(self):
         rc, text = self.shader_pass(1, "Godot Engine v4.7.2.stable\n")
