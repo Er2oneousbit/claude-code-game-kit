@@ -263,8 +263,9 @@ the manifest against them (frames, holds, fps, loop; peering bits; collision pol
 | transitions | `transition`; lighting: `normal_map`; anything else: `image` |
 | (not a lane) `tools/blender/render_sprites.py --manifest` | `animated_sprite`: a 3D model (a Bozzetto rigged character) rendered in 1, 4 or 8 directions, a clip `<action>_<dir>` per glTF animation and direction, the pivot where the model's origin (its feet) lands, in its own pack (`generator: render_sprites`), which Dotwork never rewrites |
 
-A rendered sheet was loaded unchanged by the web, web-3d, LÖVE and C++ importers' tests
-(`data/golden/character/sprites/`, 2026-11-11), and the LÖVE and C++ starters drew it walking; the other importers
+A rendered sheet was loaded unchanged by the web, web-3d, LÖVE, C++ and RPG Maker MZ importers' tests
+(`data/golden/character/sprites/`, 2026-11-11; MZ cut it into a character sheet), and the LÖVE and C++ starters drew it
+walking; the other importers
 take the same rects and pivots **(verify)**.
 
 ## Golden fixture and loaded result
