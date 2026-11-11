@@ -314,7 +314,8 @@ def build(bpy, out, expected_path, debug):
         "moving_bone_swing_deg": 2 * WALK_THIGH_DEG,
         "mixamo_prefix_in_engines": {"glTF": PREFIX, "Godot": "mixamorig_ (Godot replaces ':' in bone names)"},
     }
-    expected_path.write_text(json.dumps(exp, indent=1) + "\n", encoding="utf-8")
+    with open(expected_path, "w", encoding="utf-8", newline="\n") as fh:   # LF on Windows too, as git stores it
+        fh.write(json.dumps(exp, indent=1) + "\n")
     size = out.stat().st_size
     clip_text = ", ".join("%s %d frames" % (k, v["frames"]) for k, v in exp["clips"].items())
     print(f"[ OK ] {out}: {len(exp['bones'])} bones, {exp['triangles']} triangles, {exp['height_m']} m, "
