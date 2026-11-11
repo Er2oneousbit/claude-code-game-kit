@@ -339,14 +339,19 @@ against the installed engine):
   Extras' rule tiles **(verify the package is wanted)**; collision as custom physics shapes and a `TilemapCollider2D`.
   Fonts: a TextMeshPro font asset from `chars` **(verify)**, or a sprite-based label. Tests: an EditMode test that
   imports `data/golden/dotwork/` into a temporary folder and compares.
-- **Unreal (#58).** An editor Python script through `dev.py exec` with Paper2D: a `PaperSprite` per frame (source
-  texture = the sheet, source UV and dimension = the rect, pivot mode custom at the pivot), a `PaperFlipbook` per clip
-  (key frames with whole `FrameRun` counts at the flipbook's frames per second: choose a rate at which every hold is
-  whole), textures with the Paper2D settings (nearest, no mips, UI or 2D group). Paper2D's plane is X right, Z up:
-  flip y. Tiles: `PaperTileSet` per atlas and `PaperTileMap` with terrain layers resolved by `cell_mask` in the script
-  (Paper2D has no autotiling); collision as the tile set's per-tile geometry **(verify the Python API reaches it)**.
-  Fonts: an offline `Font` built from the page textures and `chars` **(verify)**. Tests: an automation test that
-  imports the golden fixture into a transient package.
+- **Unreal (#58, done: `Content/Python/kit_dotwork/`, UE 5.8).** An editor Python script through `dev.py exec` with
+  Paper2D: a `PaperSprite` per frame (source texture = the sheet, source UV and dimension = the rect, pivot mode
+  custom; `CustomPivotPoint` is in the texture's own pixels, y down, so it is `rect.xy + pivot` and Paper2D flips to
+  its X right, Z up plane itself), a `PaperFlipbook` per clip (whole `FrameRun` counts at the clip's fps times the
+  smallest factor that makes every duration whole), textures nearest, no mips, uncompressed, Pixels2D group. Tiles:
+  a `PaperTileSet` per atlas and a `PaperTileMap` with terrain layers resolved by a port of `cell_mask`; Paper2D
+  draws tile layer 0 on top, so manifest layers go in reversed. The Python API reaches per-tile collision
+  (`per_tile_data`; box shapes are filled with `SpriteGeometryShape.import_text`, their fields are read-only) but
+  not a layer's name (the layers come from Paper2D's own Tiled importer) nor an offline `Font`'s page textures (set
+  with the `set` console command, which only the pythonscript commandlet runs). An offline Font keeps one advance
+  per glyph plus one font-wide kerning: xoffset and kerning pairs are lost. Not in Paper2D: tile animation,
+  probability variants, additive blend. Tests: `dev.py test` runs the golden check and every game manifest through
+  the commandlet, and as `Editor.Python.<Game>.kit_dotwork.*` automation tests with the PythonAutomationTest plugin.
 - **Bevy 0.20 (#59).** Plain Rust with `serde_json` (already a dependency): a `TextureAtlasLayout` per sheet from the
   rects (or one image per frame), an animation component with per-frame `Duration`s and a system that advances it,
   `Anchor` from the pivot (centre-relative, y up: `(px / w - 0.5, 0.5 - py / h)` **(verify the Anchor API in 0.20)**),
