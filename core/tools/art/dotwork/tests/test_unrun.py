@@ -2,12 +2,13 @@
 # ---------------------------------------------------------------------------
 # test_unrun.py
 # Purpose : offline exam for the Dotwork commands and lanes no other exam ran (#14, found with a coverage run of every
-#           exam): `palette extract|extend`, `materials` and `--extend-palette`, `preview title|battle|attack`, and the
-#           scenes, img2px and effects lanes, with stand-in renders in place of ComfyUI (no GPU, no models).
+#           exam): `palette extract|extend`, `materials` and `--extend-palette`, `preview title|battle|attack`,
+#           `audition --promote` and its argument checks, and the scenes, img2px and effects lanes, with stand-in
+#           renders in place of ComfyUI (no GPU, no models).
 # Usage   : python tools/art/dotwork/tests/test_unrun.py   (test_dotwork.py runs it too)
 # Exit    : 0 all pass, 1 a case failed
-# Notes   : Not covered here: `audition` (it needs a stand-in Wan clip job) and lane_icons.py, an 8-line alias of
-#           lane_props.run_icons, which test_dotwork's small-icons case runs.
+# Notes   : Not covered here: an audition render (it needs a stand-in Wan clip job and a character's rotations) and
+#           lane_icons.py, an 8-line alias of lane_props.run_icons, which test_dotwork's small-icons case runs.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
@@ -301,6 +302,47 @@ class PreviewExam(Dw):
         self.assertEqual(code, 2, text)
         self.assertIn("--speed", text)
         self.assertNotIn("unexpected failure", text)
+
+
+# ---- audition --------------------------------------------------------------------------------------------------------
+class AuditionExam(Dw):
+    def take(self, folder, seed, colour):
+        for k in range(3):
+            save(os.path.join(folder, "f_%05d.png" % k), figure(32, 32, colour, (8, 4 + k, 24, 32)))
+        with open(os.path.join(folder, "meta.json"), "w", encoding="utf-8") as f:
+            json.dump({"seed": seed, "motion_fix": None}, f)
+
+    def test_promote_ships_a_take_and_keeps_the_old_clip(self):
+        code, text = self.dw("audition", "--name", "guard", "--clip", "walk_e", "--promote", "m0_s8101")
+        self.assertEqual(code, 2)
+        self.assertIn("no take m0_s8101 in ", text)
+        root = text.split("no take m0_s8101 in ", 1)[1].split(" (tags", 1)[0].strip()
+        self.take(os.path.join(root, "m0_s8101"), 8101, (200, 40, 40))
+        self.take(os.path.join(root, "m0_s8102"), 8102, (40, 200, 40))
+        code, text = self.dw("audition", "--name", "guard", "--clip", "walk_e", "--promote", "m0_s8101")
+        self.assertEqual(code, 0, text)
+        self.assertIn("--fix walk_e:seed=8101", text)
+        ship = os.path.join(os.path.dirname(os.path.dirname(root)), "clips", "walk_e")
+        with open(os.path.join(ship, "meta.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["seed"], 8101)
+        code, text = self.dw("audition", "--name", "guard", "--clip", "walk_e", "--promote", "m0_s8102")
+        self.assertEqual(code, 0, text)
+        self.assertTrue(os.path.isfile(os.path.join(root, "prev_s8101", "f_00000.png")))   # promotable back
+        with open(os.path.join(ship, "meta.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["seed"], 8102)
+
+    def test_usage_errors_before_any_render(self):
+        """A clip with no direction and a hue range without a dash ended in "unexpected failure: ValueError"."""
+        cases = [(("--clip", "walk_e", "--seeds", "1"), "run dotwork.py character for guard first"),
+                 (("--clip", "walk_e"), "needs --seeds"),
+                 (("--clip", "walk", "--seeds", "1"), "--clip walk"),
+                 (("--clip", "walk_e", "--seeds", "1", "--feature-hue", "30"), "--feature-hue 30")]
+        for args, want in cases:
+            with self.subTest(args=args):
+                code, text = self.dw("audition", "--name", "guard", *args)
+                self.assertEqual(code, 2, text)
+                self.assertIn(want, text)
+                self.assertNotIn("unexpected failure", text)
 
 
 # ---- lanes with stand-in renders ------------------------------------------------------------------------------------
