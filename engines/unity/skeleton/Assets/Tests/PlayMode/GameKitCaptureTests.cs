@@ -8,11 +8,16 @@
 //           The GPU's picture: the camera renders into a texture, then the panel draws into that same texture
 //           without clearing for exactly one frame (one paint, read on the next update), as it draws on the back buffer. Works in Gamma and Linear projects
 //           (the blend differs, the test compares against whatever the GPU does). The outlined HUD line is compared
-//           pixel for pixel like the rest; a face that is dark on both sides is UI Toolkit's outline (centred on the
-//           glyph's edge), not the capture.
+//           pixel for pixel like the rest. Smoke_OutlinedTextKeepsItsColour (#283): an outlined label's letters show
+//           UiTheme.TEXT over a white and a black game (UI Toolkit centres its outline on the glyph's edge, so
+//           without the face copy they came out dark grey), the outline shows around them, and the access report
+//           and the pseudo-locale check see each label once, in the colour on its letters. Opaque_*: the F8
+//           screenshot of a windowed player drops the back buffer's alpha.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): outlined text keeps its colour, opaque screenshots (#283)
 // ---------------------------------------------------------------------------
 using System.Collections;
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -30,6 +35,7 @@ namespace {{GAME_SLUG}}.Tests
         private const int SETTLE_FRAMES = 10;       // layout and the first paint of the panel
         private static readonly Color CAMERA = new Color(0.2f, 0.4f, 0.6f);
         private static readonly Color HIT_FLASH = new Color(1.0f, 0.95f, 0.75f, 0.5f);   // JuiceWorld's "hit" at half
+        private const int DARK = 40;                // an outline pixel over a white game: every channel at most this
 
         private GameObject _camera, _doc;
         private PanelSettings _panel;
@@ -123,6 +129,138 @@ namespace {{GAME_SLUG}}.Tests
             Assert.IsTrue(HasColour(got, 20, 330, 700, 120, text), $"no pixel of the plain label's face is {text}");
         }
 
+        [UnityTest]
+        public IEnumerator Smoke_OutlinedTextKeepsItsColour()
+        {
+            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
+            {
+                Assert.Ignore("needs a graphics device: python tools/dev.py smoke --graphics --filter Capture");
+            }
+            Camera cam = MakeCamera();
+            PanelSettings panel = _panel = FrontEnd.NewPanel();
+            _ui = new RenderTexture(W, H, 0, RenderTextureFormat.ARGB32) { name = "CaptureTestUi" };
+            _ui.Create();
+            panel.targetTexture = _ui;
+            panel.clearColor = true;
+            _doc = new GameObject("CaptureTestPanel");
+            var doc = _doc.AddComponent<UIDocument>();
+            doc.panelSettings = panel;
+            VisualElement root = doc.rootVisualElement;
+            // the HUD line at body size, as JuiceWorld and PlayWorld make it
+            var hud = new Label("Hits 1 trauma 0.53 shake 1.00") { name = "Hud" };
+            UiTheme.Text(hud, 1.0f, UiTheme.TEXT);
+            UiTheme.Outline(hud);
+            Place(hud, 20, 160);
+            root.Add(hud);
+            // a line whose text and colour change after it is outlined, inside a padded, bordered box (SubtitleBar's
+            // speaker name): the face follows both and lands on the same pixels
+            var box = new VisualElement { name = "Box" };
+            Place(box, 20, 260);
+            UiTheme.Border(box, Color.clear, 3f);
+            box.style.paddingLeft = 7;
+            box.style.paddingTop = 5;
+            var late = new Label("") { name = "Late" };
+            UiTheme.Text(late, 1.0f, UiTheme.TEXT);
+            UiTheme.Outline(late);
+            box.Add(late);
+            root.Add(box);
+            for (int i = 0; i < SETTLE_FRAMES; i++)
+            {
+                yield return null;
+            }
+            late.text = "Speaker";
+            late.style.color = UiTheme.FOCUS;
+            for (int i = 0; i < SETTLE_FRAMES; i++)
+            {
+                yield return null;
+            }
+
+            foreach ((string name, Color world) in new[] { ("white", Color.white), ("black", Color.black) })
+            {
+                cam.backgroundColor = world;
+                Texture2D shot = Render(cam);
+                UiCapture.LayOver(shot, _ui);
+                Color32[] px = shot.GetPixels32();
+                Object.Destroy(shot);
+                Assert.IsTrue(HasColour(px, hud.worldBound, UiTheme.TEXT),
+                    $"over a {name} game no pixel of the outlined HUD line is the text colour {(Color32)UiTheme.TEXT}: "
+                    + $"the outline covers its letters (brightest {Brightest(px, hud.worldBound)})");
+                Assert.IsTrue(HasColour(px, late.worldBound, UiTheme.FOCUS),
+                    $"over a {name} game the recoloured line does not show {(Color32)UiTheme.FOCUS} "
+                    + $"(brightest {Brightest(px, late.worldBound)})");
+                if (name == "white")
+                {
+                    Assert.IsTrue(HasDark(px, hud.worldBound), "over a white game the outline does not show around the letters");
+                }
+            }
+
+            // The face copy: on its text, with its text
+            TextElement face = OutlineFace.Of(late);
+            Assert.IsNotNull(face, "UiTheme.Outline gives the text a face copy");
+            Assert.AreEqual("Speaker", face.text);
+            Assert.That(Vector2.Distance(face.worldBound.position, late.worldBound.position), Is.LessThan(0.01f),
+                $"the face copy is not on its text: {face.worldBound} vs {late.worldBound}");
+            Assert.That(Vector2.Distance(face.worldBound.size, late.worldBound.size), Is.LessThan(0.01f));
+
+            // The access report and the pseudo-locale check: each label once, in the colour on its letters
+            var rows = new List<Dictionary<string, object>>();
+            foreach (object o in AccessAudit.Texts(root))
+            {
+                rows.Add((Dictionary<string, object>)o);
+            }
+            Assert.AreEqual(2, rows.Count, "one row per label: the face copy is part of its text");
+            Dictionary<string, object> row = rows.Find(r => (string)r["text"] == hud.text);
+            Assert.AreEqual(UiTheme.Hex(UiTheme.TEXT), row["fg"]);
+            Assert.AreEqual("#000000", row["outline"]);
+            Assert.AreEqual(UiTheme.Hex(UiTheme.FOCUS), rows.Find(r => (string)r["text"] == "Speaker")["fg"]);
+            AccessAudit.PseudoProblems(root, out int labels);
+            Assert.AreEqual(2, labels, "the pseudo-locale check counts each label once");
+        }
+
+        [Test]
+        public void Audit_OutlineWithoutAFaceReportsTheOutlineColour()
+        {
+            // a game's own outlined label (not through UiTheme.Outline): UI Toolkit's outline covers the letters, so
+            // the colour on them is the outline's, not the text colour that does not show (#283)
+            var label = new Label("Own HUD");
+            label.style.color = UiTheme.TEXT;
+            label.style.unityTextOutlineWidth = 2;
+            label.style.unityTextOutlineColor = new Color(0.2f, 0.1f, 0.0f);
+            var host = new GameObject("AuditTestPanel");
+            PanelSettings panel = FrontEnd.NewPanel();
+            try
+            {
+                var doc = host.AddComponent<UIDocument>();
+                doc.panelSettings = panel;
+                doc.rootVisualElement.Add(label);
+                Assert.IsNull(OutlineFace.Of(label));
+                Assert.AreEqual(UiTheme.Hex(new Color(0.2f, 0.1f, 0.0f)), UiTheme.Hex(UiTheme.FaceColour(label)));
+            }
+            finally
+            {
+                Object.Destroy(host);
+                Object.Destroy(panel);
+            }
+        }
+
+        [Test]
+        public void Opaque_TheWindowedScreenshotHasNoAlpha()
+        {
+            // ScreenCapture.CaptureScreenshotAsTexture keeps the back buffer's alpha (the camera cleared to 0 here)
+            var tex = new Texture2D(2, 1, TextureFormat.RGBA32, false);
+            tex.SetPixels32(new[] { new Color32(10, 20, 30, 0), new Color32(40, 50, 60, 128) });
+            tex.Apply();
+            byte[] png = ShellReports.Opaque(tex).EncodeToPNG();
+            Object.Destroy(tex);
+            var back = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            Assert.IsTrue(back.LoadImage(png));
+            Color32[] px = back.GetPixels32();
+            Object.Destroy(back);
+            Assert.AreEqual(new Color32(10, 20, 30, 255), px[0]);
+            Assert.AreEqual(new Color32(40, 50, 60, 255), px[1]);
+        }
+
+
         private Camera MakeCamera()
         {
             _camera = new GameObject("CaptureTestCamera");
@@ -204,13 +342,41 @@ namespace {{GAME_SLUG}}.Tests
                 $"{what} at ({x}, {y}): capture {got[i]}, screen {want[i]}");
         }
 
-        private static bool HasColour(Color32[] pixels, int x0, int y0, int w, int h, Color32 c)
+        private static bool HasColour(Color32[] pixels, Rect r, Color32 c)
+        {
+            return HasColour(pixels, (int)r.x, (int)r.y, Mathf.CeilToInt(r.width), Mathf.CeilToInt(r.height), c);
+        }
+
+        private static bool HasDark(Color32[] pixels, Rect r)
+        {
+            return HasColour(pixels, (int)r.x, (int)r.y, Mathf.CeilToInt(r.width), Mathf.CeilToInt(r.height),
+                             new Color32(0, 0, 0, 255), DARK);
+        }
+
+        private static Color32 Brightest(Color32[] pixels, Rect r)
+        {
+            Color32 best = new Color32(0, 0, 0, 255);
+            for (int y = (int)r.y; y < (int)r.yMax && y < H; y++)
+            {
+                for (int x = (int)r.x; x < (int)r.xMax && x < W; x++)
+                {
+                    Color32 p = pixels[(H - 1 - y) * W + x];
+                    if (p.r + p.g + p.b > best.r + best.g + best.b)
+                    {
+                        best = p;
+                    }
+                }
+            }
+            return best;
+        }
+
+        private static bool HasColour(Color32[] pixels, int x0, int y0, int w, int h, Color32 c, int tolerance = TOLERANCE)
         {
             for (int y = y0; y < y0 + h; y++)
             {
                 for (int x = x0; x < x0 + w; x++)
                 {
-                    if (Diff(pixels[(H - 1 - y) * W + x], c) <= TOLERANCE)
+                    if (Diff(pixels[(H - 1 - y) * W + x], c) <= tolerance)
                     {
                         return true;
                     }

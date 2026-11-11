@@ -15,12 +15,14 @@
 //           the bytes are decoded, blended and encoded again; in a Gamma project they are blended as they are.
 //           Checked against a windowed player's own screenshot (Direct3D 12, Unity 6000.6): every pixel within 1.
 //           A layer of another size is stretched to the picture (nearest sampling). The picture stays opaque.
+//           Opaque drops a screen capture's alpha (the F8 screenshot of a windowed player).
 //
 // Pseudocode:
 //   for each picture pixel: the layer pixel under it (nearest) ; alpha 0 -> skip
 //   gamma:  out = top + under * (1 - a)
 //   linear: out = encode(decode(top) + decode(under) * (1 - a))      (sRGB transfer function both ways)
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): Opaque (#283)
 // ---------------------------------------------------------------------------
 using System;
 
@@ -80,6 +82,21 @@ namespace {{GAME_SLUG}}.Core
                         picture[i + 3] = 255;
                     }
                 }
+            }
+        }
+
+        /// <summary>Every pixel's alpha set to 255, in place (RGBA32 raw data). A screen capture holds the back
+        /// buffer's alpha, which is whatever the camera cleared to and the game drew, not how the screen looks:
+        /// saved as is, a PNG of a game that clears to alpha 0 is see-through (#283).</summary>
+        public static void Opaque(byte[] rgba)
+        {
+            if (rgba == null)
+            {
+                throw new ArgumentNullException(nameof(rgba));
+            }
+            for (int i = 3; i < rgba.Length; i += 4)
+            {
+                rgba[i] = 255;
             }
         }
 

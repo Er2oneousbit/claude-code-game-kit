@@ -4,7 +4,7 @@
 //           texture (premultiplied), the camera's picture and the screen, read from the same frame of a Unity 6000.6
 //           player on Direct3D 12, in a Gamma and in a Linear colour space project. The camera cleared to
 //           (51, 102, 153); the panels were the juice demo's hit flash at 0.5, the pause shade (black at 0.6), the
-//           settings panel colour at 0.96, red at 0.25, and opaque text colour.
+//           settings panel colour at 0.96, red at 0.25, and opaque text colour. Opaque: the F8 screenshot (#283).
 // Usage   : python tools/dev.py test --filter UiComposite
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
@@ -97,6 +97,16 @@ namespace {{GAME_SLUG}}.Tests
             Assert.Throws<ArgumentException>(() => UiComposite.Over(new byte[8], 2, 1, 4, new byte[4], 2, 1, false));
             Assert.Throws<ArgumentException>(() => UiComposite.Over(new byte[2], 1, 1, 2, new byte[4], 1, 1, false));
             Assert.Throws<ArgumentNullException>(() => UiComposite.Over(null, 1, 1, 3, new byte[4], 1, 1, false));
+        }
+
+        [Test]
+        public void UiComposite_OpaqueDropsAScreenCapturesAlpha()
+        {
+            // a windowed player's back buffer, read for the F8 screenshot: the camera cleared to alpha 0 here (#283)
+            byte[] rgba = { 10, 20, 30, 0, 40, 50, 60, 128, 70, 80, 90, 255 };
+            UiComposite.Opaque(rgba);
+            CollectionAssert.AreEqual(new byte[] { 10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255 }, rgba);
+            Assert.Throws<ArgumentNullException>(() => UiComposite.Opaque(null));
         }
     }
 }

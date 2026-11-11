@@ -8,13 +8,17 @@
 // Notes   : Nothing is read from pixels: colours come from the resolved styles, a text's background is the nearest
 //           thing behind it in the tree (its control box, a panel, the screen's backdrop) blended down to the
 //           first opaque layer. A text over the game (HUD, subtitles) has no opaque layer: it is reported with
-//           what lies between it and the game (its panel layers), and its outline counts as its background. Sizes
+//           what lies between it and the game (its panel layers), and its outline counts as its background. A
+//           text's colour is the one on its letters (UiTheme.FaceColour): its face copy's (OutlineFace), and an
+//           outline without one reports the outline's colour, since UI Toolkit's outline covers the face (#283);
+//           face copies are part of their text, never listed on their own. Sizes
 //           are in the panel's reference resolution (FrontEnd.REF_W x REF_H); sweep.py scales them to the window the
 //           way "scaling" says ("fractional": min(w/W, h/H), which is PanelScreenMatchMode.Shrink). Reach is the
 //           screen's own grid (the shell moves focus along it): a focusable element outside the grid is unreached.
 //           Hover is not styled by the shell, so no control can look the same focused as hovered.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): PseudoProblems, the pseudo-locale drive's check (#275)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the colour on the letters, face copies skipped (#283)
 // ---------------------------------------------------------------------------
 using System.Collections.Generic;
 using UnityEngine;
@@ -46,18 +50,8 @@ namespace {{GAME_SLUG}}.Shell
         /// <summary>The report for the screens on the panel: {"screen", "design", "window", "texts": [...], "focus": {...}}.</summary>
         public static Dictionary<string, object> Screen(FrontEnd front, string where)
         {
-            var texts = new List<Found>();
             var focusable = new List<VisualElement>();
-            var panels = new List<Panel>();
-            int order = 0;
-            Walk(front.Root, texts, focusable, panels, ref order);
-            var rows = new List<object>();
-            foreach (Found f in texts)
-            {
-                f.Row["covered"] = Covered(f, panels);
-                f.Row["card"] = Card(f, panels);
-                rows.Add(f.Row);
-            }
+            List<object> rows = Texts(front.Root, focusable);
             Rect root = front.Root.worldBound;
             Vector2Int window = front.WindowSize();
             return new Dictionary<string, object>
@@ -70,6 +64,23 @@ namespace {{GAME_SLUG}}.Shell
                 { "texts", rows },
                 { "focus", Focus(front, focusable) },
             };
+        }
+
+        /// <summary>The report's "texts" rows for everything visible under root (a screen's, or a test's panel).</summary>
+        public static List<object> Texts(VisualElement root, List<VisualElement> focusable = null)
+        {
+            var texts = new List<Found>();
+            var panels = new List<Panel>();
+            int order = 0;
+            Walk(root, texts, focusable ?? new List<VisualElement>(), panels, ref order);
+            var rows = new List<object>();
+            foreach (Found f in texts)
+            {
+                f.Row["covered"] = Covered(f, panels);
+                f.Row["card"] = Card(f, panels);
+                rows.Add(f.Row);
+            }
+            return rows;
         }
 
         /// <summary>Which actions have a gamepad binding and which a keyboard one (the shell's navigation must have both).</summary>
@@ -94,18 +105,24 @@ namespace {{GAME_SLUG}}.Shell
         /// (node, text, why) per problem; labels counts the texts checked. The same rules as LÖVE's and Godot's.</summary>
         public static List<(string Node, string Text, string Why)> PseudoProblems(FrontEnd front, out int labels)
         {
+            return PseudoProblems(front.Root, out labels);
+        }
+
+        /// <summary>The pseudo-locale check of everything visible under root.</summary>
+        public static List<(string Node, string Text, string Why)> PseudoProblems(VisualElement root, out int labels)
+        {
             var problems = new List<(string, string, string)>();
             labels = 0;
-            PseudoWalk(front.Root, problems, ref labels);
+            PseudoWalk(root, problems, ref labels);
             return problems;
         }
 
         private static void PseudoWalk(VisualElement e, List<(string, string, string)> problems, ref int labels)
         {
             if (e.resolvedStyle.display == DisplayStyle.None || e.resolvedStyle.visibility == Visibility.Hidden
-                || e.resolvedStyle.opacity <= 0f)
+                || e.resolvedStyle.opacity <= 0f || OutlineFace.IsFace(e))
             {
-                return;
+                return;                           // a face copy is part of the text it copies: counted once
             }
             if (e is TextElement t && !string.IsNullOrWhiteSpace(t.text))
             {
@@ -144,9 +161,9 @@ namespace {{GAME_SLUG}}.Shell
         private static void Walk(VisualElement e, List<Found> texts, List<VisualElement> focusable, List<Panel> panels, ref int order)
         {
             if (e.resolvedStyle.display == DisplayStyle.None || e.resolvedStyle.visibility == Visibility.Hidden
-                || e.resolvedStyle.opacity <= 0f)
+                || e.resolvedStyle.opacity <= 0f || OutlineFace.IsFace(e))
             {
-                return;
+                return;                           // a face copy is reported as part of the text it copies
             }
             order++;
             Color bg = e.resolvedStyle.backgroundColor;
@@ -181,7 +198,7 @@ namespace {{GAME_SLUG}}.Shell
 
         private static Dictionary<string, object> Text(TextElement t, Control control, string state)
         {
-            Color fg = control != null ? UiTheme.StateColours(state).fg : t.resolvedStyle.color;
+            Color fg = control != null ? UiTheme.StateColours(state).fg : UiTheme.FaceColour(t);   // what the letters show
             List<Color> layers = Layers(t, control, state);
             Color? bg = Background(layers);
             float outline = t.resolvedStyle.unityTextOutlineWidth;
