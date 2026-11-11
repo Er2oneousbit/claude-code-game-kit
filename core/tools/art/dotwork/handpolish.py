@@ -10,6 +10,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): one canvas per clip: a character whose clips have
 #           different sizes is padded to one editor canvas (clip_box) and each clip is cropped back on write_back (#82)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): re-exports keep existing asset-manifest records in step
+#           (godot.RECORD); fx_rate reads a hit effect's rate from its record under --engine none (it fell back to 12 fps)
 # ---------------------------------------------------------------------------
 import datetime
 import glob
@@ -118,6 +120,15 @@ class GameManifests:
         home.data["assets"].append(row)
         home.save()
 
+    def entity(self, kind, path, data):
+        """godot.record during a re-export: every manifest that already holds a record for this resource gets the new
+        one (saved only when it changed). A manifest written before records existed gains none here, so an untouched
+        round trip still rewrites no manifest; its next `pack` adds them (ASSET_MANIFEST.md, Limits)."""
+        rel = os.path.relpath(path, core.PROJECT).replace(os.sep, "/")
+        for m in self.mans:
+            if rel in (m.data.get("entities") or {}):
+                m.entity(kind, path, data)
+
     def forget_stale(self, folder, pattern, keep):
         """Delete the files in folder matching pattern that this re-export did not write, and their manifest rows.
         Frames trimmed in the editor used to stay on disk and in the asset log (2026-10-30 Kimi audit)."""
@@ -196,9 +207,18 @@ def tres_animations(path):
 def fx_rate(conf, name, tag):
     """(fps, loop) of an effect: its SpriteFrames as shipped (hit effects play faster than the effects lane's
     default), else the config's effect fps."""
-    for n, speed, loop in tres_animations(core.art(conf, "fx", name, f"fx_{name}_frames.tres")):
+    tres = core.art(conf, "fx", name, f"fx_{name}_frames.tres")
+    for n, speed, loop in tres_animations(tres):
         if n == tag:
             return speed, loop
+    # --engine none writes no SpriteFrames: the record of what it would hold (godot.record) keeps a hit effect's own
+    # rate, which the round trip used to replace with the effects lane's default (20 fps became 12)
+    rel = os.path.relpath(tres, core.PROJECT).replace(os.sep, "/")
+    for p in sorted(glob.glob(os.path.join(core.SETTINGS.src, "dotwork", "manifest_*.json"))):
+        with open(p, encoding="utf-8") as f:
+            anim = ((json.load(f).get("entities") or {}).get(rel) or {}).get("animations", {}).get(tag)
+        if anim:
+            return anim[1], bool(anim[2])
     return conf["design"]["effect"]["fps"], tag == "loop"
 
 
@@ -311,8 +331,16 @@ def write_back(pack, conf, src_dir, ext, export, tool):
     export(file, prefix) -> (PNG paths, sorted, named <prefix>_<tag>_NN.png, or <prefix>.png for one untagged frame;
     {png basename: seconds that frame shows}); tool: the editor's name for the manifest notes.
     Only what really changed is written: an untouched round trip changes no file and no manifest."""
-    import verify
     man = GameManifests()
+    godot.RECORD = man.entity   # the rebuilt SpriteFrames' records keep the asset manifest in step (assetmap.py)
+    try:
+        return _write_back(man, pack, conf, src_dir, ext, export, tool)
+    finally:
+        godot.RECORD = None
+
+
+def _write_back(man, pack, conf, src_dir, ext, export, tool):
+    import verify
     rows = {r["file"]: r for r in man.current()}
     chars, fx, single, fps, fx_loop, holds = groups(pack)
     res_root = f'{conf["fixed"]["res_root"]}/{conf["fixed"]["art_dir"]}'
