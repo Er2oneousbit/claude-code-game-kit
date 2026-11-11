@@ -1,8 +1,9 @@
 # ---------------------------------------------------------------------------
 # copy_game_data.cmake
 # Purpose : Copies the game's runtime data next to the exe: data/ (string tables, dialogue, input presets, colours
-#           and whatever the game adds) without the kit's test folders, and CREDITS.md when there is one. A shipped
-#           build is that folder, so the shell finds its files from any working directory (Shell::game_dir()).
+#           and whatever the game adds) without the kit's test folders, assets/ (art, audio, Dotwork packs) and
+#           CREDITS.md when there is one. A shipped build is that folder, so the shell finds its files from any
+#           working directory (Shell::game_dir()).
 # Usage   : cmake -DSRC=<project root> -DDST=<the exe's folder> -P cmake/copy_game_data.cmake
 #           (CMakeLists.txt runs it on every build, through the game_data target)
 # Notes   : DST/data is cleared first, so a file deleted from data/ does not linger in the build. The folders in
@@ -10,8 +11,9 @@
 #
 # Pseudocode:
 #   remove DST/data -> for each entry directly under SRC/data: skip SKIP names, copy the rest into DST/data
-#     -> CREDITS.md into DST when it exists
+#     -> assets/ into DST/assets (unchanged files skipped, deleted ones removed) -> CREDITS.md into DST when it exists
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): assets/ ships too (#60: Dotwork packs)
 # ---------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.21)
 
@@ -31,6 +33,21 @@ foreach(entry IN LISTS entries)
     file(COPY "${entry}" DESTINATION "${DST}/data")
   endif()
 endforeach()
+
+# assets/ (art, audio, fonts; Dotwork's packs with their manifests): copied file by file, skipping files whose
+# copy is current (file(COPY) compares timestamps), so big audio does not cost every build; files gone from
+# assets/ are removed from the copy.
+if(IS_DIRECTORY "${SRC}/assets")
+  file(COPY "${SRC}/assets" DESTINATION "${DST}" PATTERN ".gitkeep" EXCLUDE)
+  file(GLOB_RECURSE copied RELATIVE "${DST}/assets" "${DST}/assets/*")
+  foreach(rel IN LISTS copied)
+    if(NOT EXISTS "${SRC}/assets/${rel}")
+      file(REMOVE "${DST}/assets/${rel}")
+    endif()
+  endforeach()
+else()
+  file(REMOVE_RECURSE "${DST}/assets")
+endif()
 
 if(EXISTS "${SRC}/CREDITS.md")
   file(COPY "${SRC}/CREDITS.md" DESTINATION "${DST}")
