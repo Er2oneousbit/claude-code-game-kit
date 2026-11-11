@@ -169,7 +169,8 @@ EXAMS = [
     Exam("core/tools/art/dotwork/tests/test_dotwork.py", "offline; loads the lane exams (uikit, store, screens, bdf, diorama, shipped, vfx, animpolish, lighting, qapack, fonts, defaults_cvd, pixelorama); AsepriteLiveExam and PixeloramaLiveExam run the real programs",
          needs=(module("pillow"), module("numpy")), env=("ASEPRITE_BIN", "PIXELORAMA_BIN")),
     Exam("core/tools/art/test_chroma_key.py", "keying, despill, overwrite guards", needs=(module("pillow"),), style="cases", covers=("core/tools/art/chroma_key.py",)),
-    Exam("core/tools/art/test_pixel_sprite.py", "the code-drawn sprites", covers=("core/tools/art/pixel_sprite.py",)),
+    Exam("core/tools/art/test_pixel_sprite.py", "the code-drawn sprites", covers=("core/tools/art/pixel_sprite.py", "core/tools/art/sprites/")),
+    Exam("core/tools/art/test_frames_to_gif.py", "frame order, delays, scaling, the overwrite guard", needs=(module("pillow"),), covers=("core/tools/art/frames_to_gif.py",)),
     Exam("core/tools/art/test_gimp_batch.py", "exit 2 when GIMP is missing", needs=(exam_checks("GIMP 3"),), style="cases", covers=("core/tools/art/gimp_batch.py",)),
     Exam("core/tools/art/test_svg_export.py", "exit 2 when Inkscape is missing", needs=(exam_checks("Inkscape 1.x"),), style="cases", covers=("core/tools/art/svg_export.py",)),
     # core/tools/bozzetto
