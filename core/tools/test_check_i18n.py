@@ -24,7 +24,7 @@ import check_i18n  # noqa: E402
 KIT_ENGINES = Path(__file__).resolve().parents[2] / "engines"
 # The overlays whose French table must be complete (#270, #272). Every overlay that ships a fr.json must be listed,
 # so a new overlay ships a complete table too (its English fallback is tested on a partial table of the test's own).
-COMPLETE = ("love2d", "unity", "unreal", "bevy", "godot", "web")
+COMPLETE = ("love2d", "unity", "unreal", "bevy", "godot", "web", "web-3d")   # web-3d: web's tables (#175)
 
 
 class CheckI18n(unittest.TestCase):
