@@ -1,6 +1,6 @@
 # Known issues and untested parts
 
-Everything known to be broken, flaky, unproven or never tried, in one place (2026-11-03). Fixed bugs are in
+Everything known to be broken, flaky, unproven or never tried, in one place (2026-11-11). Fixed bugs are in
 `CHANGELOG.md`; what *was* tested, and how, is the README table "What was tested and what was not". The kit and the
 examples were built and tested on one Windows 11 machine.
 
@@ -13,12 +13,14 @@ examples were built and tested on one Windows 11 machine.
 - **Unreal:** turning the GameKitShell plugin on the way the Plugins window does (its `.uproject` entry) is verified
   headless in a Blank Blueprint project on UE 5.8 (`check` builds both modules, `test` passes); the window itself, the
   restart and the editor's "modules are missing, rebuild?" prompt are not tried
-  ([#47](https://github.com/Er2oneousbit/claude-code-game-kit/issues/47)). A packaged game ships `data/` and the
-  readable font (0.14.4) but not `CREDITS.md`, so its credits screen shows the placeholder
-  ([#278](https://github.com/Er2oneousbit/claude-code-game-kit/issues/278)).
-- **Shell screens** ship for Godot, LÖVE, web, Unity, Unreal, Bevy and C++/SDL3; web-3d ships the tested logic and
-  the screens are built in the engine; RPG Maker MZ keeps MZ's own screens and ships no juice or shell port (its
-  ENGINE_FLOW maps the rules onto MZ). Display settings the browser cannot apply (vsync, resolution) are stored only.
+  ([#47](https://github.com/Er2oneousbit/claude-code-game-kit/issues/47)).
+- **Shell screens** ship for Godot, LÖVE, web, web-3d (web's shell over Three.js since 0.14.5), Unity, Unreal, Bevy
+  and C++/SDL3; RPG Maker MZ keeps MZ's own screens and gets the juice and shell rules as plugins and the accessibility
+  settings on MZ's Options screen (0.14.5, checked against stand-ins only:
+  [#280](https://github.com/Er2oneousbit/claude-code-game-kit/issues/280)). Credits screens show Markdown marks as
+  typed, and `show:credits` exists only on Bevy and Unreal
+  ([#284](https://github.com/Er2oneousbit/claude-code-game-kit/issues/284)). Display settings the browser cannot
+  apply (vsync, resolution) are stored only.
   The four new shells (#168) were checked by their drives, tests, sweep and screenshots, never played by hand: no
   real gamepad pressed, no narration heard, no `dev.py run` session. Unity reads bindings on both the Input Manager
   and the Input System (0.14.4), but the Input Manager's d-pad and trigger axes (6, 7, 9, 10) are the Windows layout
@@ -32,8 +34,11 @@ examples were built and tested on one Windows 11 machine.
   not run on a real fatal error (verify); C++'s juice demo draws no shake angle; Bevy's shell plays no sounds, so its
   demo has no hit sound or caption ([#168](https://github.com/Er2oneousbit/claude-code-game-kit/issues/168)).
 - **Analog input** reaches the game through the shell in every engine with one since 0.14.4 (#274); it is tested
-  with injected pads and models only, never a physical pad. Unity's `show:` captures darken outlined HUD text and grey
-  the frame under translucent panels ([#277](https://github.com/Er2oneousbit/claude-code-game-kit/issues/277)).
+  with injected pads and models only, never a physical pad.
+- **Frame-time budgets** (0.14.5): every smoke reports frame times and fails a p95 over budget; headless runs measure
+  logic only, the starters have no stress scene (an idle prototype is measured), there is no CI baseline, Unreal's
+  smoke says "not measured" (no frame-sampling Smoke test ships) and headless Chromium cannot go below about 16.7 ms
+  ([#281](https://github.com/Er2oneousbit/claude-code-game-kit/issues/281)).
 
 ### 0.8.1 follow-ups (Dotwork)
 - **Cyrillic glyph font** not made (the `bdf` lane may already cover it with an OFL font, untried):
@@ -55,12 +60,12 @@ examples were built and tested on one Windows 11 machine.
   only, never applied to a real account; Linode and DigitalOcean have no budget API (set an alert by hand); the
   least-privilege logins in `tools/cloud/README.md` are unchecked
   ([#252](https://github.com/Er2oneousbit/claude-code-game-kit/issues/252)).
-- **Accessibility sweep** (`tools/access/sweep.py`): runs on Godot, LÖVE, web, Unity, Unreal, Bevy and C++/SDL3
+- **Accessibility sweep** (`tools/access/sweep.py`): runs on Godot, LÖVE, web, web-3d, Unity, Unreal, Bevy and C++/SDL3
   (Unreal's report is in its 1920x1080 design with measured widths and no overlap boxes); the "play" placeholder scene is not in its tour; it checks what the engine reports, so a look at
   screenshots is still needed; a real Steam Deck (Proton, on-screen keyboard, suspend) is not tried
   ([#91](https://github.com/Er2oneousbit/claude-code-game-kit/issues/91),
   [#85](https://github.com/Er2oneousbit/claude-code-game-kit/issues/85)).
-- **Cognitive and motor settings** have screens in all seven engines with a shell (see Shell screens above); the auto-repeat delay and interval
+- **Cognitive and motor settings** have screens in all eight engines with a shell (see Shell screens above); the auto-repeat delay and interval
   (0.35 s, 0.15 s) are the kit's starting point, not from a source; the one-handed layouts are not tried with
   players who play one-handed.
 - **Narration** (#165): the lines are checked, the speaking is not: no screen reader has been tried with the web page
@@ -73,17 +78,14 @@ examples were built and tested on one Windows 11 machine.
   other engines used the GPU (never alone); `dev.py` now says so; rerun, or `check --no-shaders`.
 
 ### Art workflow outside Godot
-Dotwork is Godot-first: other engines get PNGs, sheets with their JSON, `.fnt` fonts and a manifest, and no overlay
-outside Godot reads them yet (no animation, tile map, font, UI, lighting, particle or icon import). One issue per
-engine: web [#55](https://github.com/Er2oneousbit/claude-code-game-kit/issues/55), web-3d
-[#56](https://github.com/Er2oneousbit/claude-code-game-kit/issues/56), Unity
-[#57](https://github.com/Er2oneousbit/claude-code-game-kit/issues/57), Unreal
-[#58](https://github.com/Er2oneousbit/claude-code-game-kit/issues/58), Bevy
-[#59](https://github.com/Er2oneousbit/claude-code-game-kit/issues/59), C++/SDL3
-[#60](https://github.com/Er2oneousbit/claude-code-game-kit/issues/60), LÖVE
-[#61](https://github.com/Er2oneousbit/claude-code-game-kit/issues/61), RPG Maker MZ
-[#62](https://github.com/Er2oneousbit/claude-code-game-kit/issues/62). The umbrella, a manifest spec with golden
-fixtures that every loader is tested against: [#83](https://github.com/Er2oneousbit/claude-code-game-kit/issues/83).
+Since 0.14.5 every engine reads Dotwork's asset manifest (`core/tools/art/dotwork/ASSET_MANIFEST.md`) through its
+own importer, each tested against the golden fixture in `core/data/golden/dotwork/`. Not covered yet in any engine:
+corners4 terrain layers on a map, isometric placement checked in the engine, picking a variant, the extra kinds
+(backgrounds, particles, transitions, normal maps) and stamps
+([#285](https://github.com/Er2oneousbit/claude-code-game-kit/issues/285)). Per engine (additive blending in Bevy and
+Unreal, Unreal tile animation and font kerning, MZ autotiles and maps, Phaser multi-page fonts, and others):
+[#286](https://github.com/Er2oneousbit/claude-code-game-kit/issues/286). The importers ran on the golden pack and the
+model-free example packs, not yet on a real game's art.
 
 ### Audio (Wavesmith) follow-ups
 - **Not run:** either `audio.yml` on GitHub, macOS or Python 3.10 ([#75](https://github.com/Er2oneousbit/claude-code-game-kit/issues/75), a sibling of #40); voice and sfx
@@ -105,21 +107,18 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
   SteamPipe and itch.io with a dry run ([#86](https://github.com/Er2oneousbit/claude-code-game-kit/issues/86)).
 - **Localization round trip:** export, local-model drafts, review, re-import and checks
   ([#87](https://github.com/Er2oneousbit/claude-code-game-kit/issues/87)).
-- **Checks:** frame-time budgets in smoke and CI ([#90](https://github.com/Er2oneousbit/claude-code-game-kit/issues/90)); an automated accessibility sweep of the shell
+- **Checks:** an automated accessibility sweep of the shell
   screens ([#91](https://github.com/Er2oneousbit/claude-code-game-kit/issues/91)).
 - **Starting a game:** genre starters with a tested core loop ([#89](https://github.com/Er2oneousbit/claude-code-game-kit/issues/89)).
 - **Examples:** bring them onto the 0.8 systems ([#88](https://github.com/Er2oneousbit/claude-code-game-kit/issues/88)); designed-voice dialogue in one example
   ([#93](https://github.com/Er2oneousbit/claude-code-game-kit/issues/93)).
-- **Kit tools for recurring jobs:** `/file-issue` and `issues.py new` [#156](https://github.com/Er2oneousbit/claude-code-game-kit/issues/156); `publish_check.py` over a commit
-  range and a private term list [#157](https://github.com/Er2oneousbit/claude-code-game-kit/issues/157); a script that runs every exam on the supported Pythons [#158](https://github.com/Er2oneousbit/claude-code-game-kit/issues/158); one that runs
-  every example's doctor, check, test and smoke [#159](https://github.com/Er2oneousbit/claude-code-game-kit/issues/159).
+- **Kit tools for recurring jobs:** a coverage run over every exam, to find code no exam executes
+  ([#282](https://github.com/Er2oneousbit/claude-code-game-kit/issues/282)).
 - **Game feel:** recipes for common effects built from the juice primitives, added per game as needed [#170](https://github.com/Er2oneousbit/claude-code-game-kit/issues/170);
   shooting effects (muzzle flash, tracer, firing light, wall debris) [#164](https://github.com/Er2oneousbit/claude-code-game-kit/issues/164); a blood on/off setting [#171](https://github.com/Er2oneousbit/claude-code-game-kit/issues/171).
 - **Accessibility:** screen reader and menu narration [#165](https://github.com/Er2oneousbit/claude-code-game-kit/issues/165); motor access beyond remapping [#166](https://github.com/Er2oneousbit/claude-code-game-kit/issues/166);
   cognitive access [#167](https://github.com/Er2oneousbit/claude-code-game-kit/issues/167); shell screens for Unity, Unreal, Bevy and C++ [#168](https://github.com/Er2oneousbit/claude-code-game-kit/issues/168); colour-blind modes tested
   beyond the demo palettes [#169](https://github.com/Er2oneousbit/claude-code-game-kit/issues/169).
-- **RPG Maker MZ and web-3d:** the juice and shell modules the other overlays ship
-  ([#175](https://github.com/Er2oneousbit/claude-code-game-kit/issues/175)).
 - **More local 3D lanes after Bozzetto:** auto-rigging for characters, UniRig the candidate
   ([#199](https://github.com/Er2oneousbit/claude-code-game-kit/issues/199)); tiling PBR materials on FLUX.2 klein
   ([#200](https://github.com/Er2oneousbit/claude-code-game-kit/issues/200)); motion reference video with Wan 2.2 in place of Seedance
@@ -149,7 +148,8 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
 - **`tools/art/chroma_key.py`:** tested on synthetic images, not on real AI sprites.
 
 - **`tools/art/dotwork/`:** model lanes ran on one machine only (RTX 5060 Ti 16 GB, 64 GB RAM, Windows 11), and only
-  Godot gets engine resources (`--engine none` gives PNGs, sheets and the manifest). The model's in-between rotation
+  Godot gets engine resources straight from Dotwork; the other engines import its asset manifest (see "Art workflow
+  outside Godot"). The model's in-between rotation
   views stay approximate; back views and faceless designs cannot be checked for facing (`rot_swap` fixes a pair by
   hand). The art flaws found in 0.7.0 review (#22 to #28) are fixed in 0.7.1. Skeleton clips: walk, run, idle,
   attack, jump, cast and shoot ran live on one test character (front and back strikes read weakly, see the README's
@@ -169,7 +169,9 @@ fixtures that every loader is tested against: [#83](https://github.com/Er2oneous
 ### Bugs and doubts
 - **Docs marked (verify):** facts about outside services (prices, plans, menu paths, license terms) that were not
   checked live. They are the most likely to be out of date.
-- **Tools without an exam:** `tools/art/frames_to_gif.py` and several Dotwork helpers (the SessionStart hook has one since 0.13.1) ([#14](https://github.com/Er2oneousbit/claude-code-game-kit/issues/14)).
+- **Code no exam runs:** the 0.14.5 pass gave doctor, `frames_to_gif.py` and Dotwork's unrun commands exams; Dotwork's
+  audition render and qa_pack's fallback for rows without a `source` still have none
+  ([#282](https://github.com/Er2oneousbit/claude-code-game-kit/issues/282)).
 - **Bozzetto:** a `--material vertex` model renders white in Godot until `vertex_color_use_as_albedo` is set
   ([#202](https://github.com/Er2oneousbit/claude-code-game-kit/issues/202)); TRELLIS.2 characters with baked textures
   landed under the `npc` class's 55% UV coverage floor on two seeds

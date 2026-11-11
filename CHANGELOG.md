@@ -3,6 +3,69 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.14.5 (2026-11-11): Dotwork in every engine, web-3d and MZ shells, tooling (#277 to #279, #283, #175, #83, #55 to #62, #156, #157, #183, #90, #14)
+This one is larger than a patch usually is: the fixes and the next feature batch ship together, once.
+- **Dotwork asset manifest (#83):** every pack also writes `<assets_dir>/dotwork/<pack>.assets.json`, an
+  engine-neutral manifest (spec 1.0.0, `core/tools/art/dotwork/ASSET_MANIFEST.md`) of animated sprites (clips with
+  per-frame durations, pivots, directions), sprites with collision and shadow, icons, portraits, tilesets (blob47,
+  corners4 and sides4 masks), maps, BMFont fonts, UI kits (9-slice, states, hotspots), backgrounds, particles,
+  transitions and normal maps. It carries exactly what Godot gets, with or without Godot, so `--engine none` games get
+  their maps too. `assetspec.py` validates and loads it (standard library); `dotwork.py manifest [--check]` rebuilds
+  or checks. A golden pack in `core/data/golden/dotwork/` with `expected.json` is what every importer reproduces.
+- **Dotwork importers in every engine (#55 to #62):** each reads the manifests, matches the golden fixture to 1e-6 in
+  its own tests, fails `smoke` (or its test) on a broken manifest or a missing image, and shows a map, a walking
+  character, a prop and a label in the starter when the game has Dotwork art. Fonts and UI kits draw 1:1 (Dotwork
+  already scaled them).
+  - web (Phaser 4): `src/game/dotwork.ts`, named frames, per-frame animations, tilemaps, BitmapText, NineSlice.
+  - web-3d (Three.js): `src/game/dotwork/`, pivot quads, instanced tile maps, glyph-quad text.
+  - Unity: `dev.py exec GameKitDotwork.ImportAll` writes sprites, AnimationClips, tiles with physics shapes, terrain
+    tiles, map prefabs, fonts and 9-slice UI parts; re-imports keep their GUIDs.
+  - Unreal: `kit_dotwork` editor Python builds Paper2D sprites, flipbooks, tile sets, tile maps, an offline font and
+    Slate brushes under `/Game/Dotwork/<pack>/`.
+  - Bevy: `src/dotwork/`, atlases, a frame clock, terrain maps, glyph sprites, TextureSlicers.
+  - C++/SDL3: `core::dotwork` (SDL-free loader) and `gfx::dotwork` (SDL 3.4's own `SDL_LoadPNG`, no SDL3_image).
+  - LÖVE: `src/core/dotwork_manifest.lua`, `src/game/dotwork_loader.lua` and `dotwork_view.lua` (works from a .love).
+  - RPG Maker MZ: a converter, `dev.py dotwork`, writes MZ's own layouts (characters, object sheets, faces,
+    side-view battlers, Window.png, IconSet rows, B to E tilesets) and never overwrites a file it did not write
+    without `--replace`. Checked against stand-ins only (verify in RPG Maker MZ).
+  - Dotwork follows the kit engine's assets folder when the game's config names none (Unity `Assets`, web and web-3d
+    `public/assets`), so Unity art no longer lands in a second `assets/` folder; web-3d ships web's
+    `dotwork.config.json`, so prompt glyphs reach the folder the shell reads. Known gaps: #285, #286.
+- **web-3d and RPG Maker MZ shells (#175):** the web shell no longer imports Phaser: it meets the renderer through
+  `src/shell/host.ts`, and web-3d now shares `src/shell/`, `src/core/` and `data/` with web file for file (title,
+  menus, settings, pause, subtitles, narration, analog input, crash files, F8, every drive, the access sweep), with a
+  3D juice demo. MZ gets the juice and shell rules as plugins (`GameJuice.js`, `GameShell.js`) and `GameAccess.js`
+  puts Reduce Motion, Screen Shake, Gentle Flashes and Text Size on MZ's Options screen (verify in RPG Maker MZ;
+  #280 lists what is left).
+- **Frame-time budgets (#90):** every engine's smoke prints `FRAME_TIMES` (mean, p95, p99, worst, and whether it was
+  a rendered, software or logic-only run) and fails a p95 over `--frame-budget MS` or the new "Smoke frame time" row
+  of `docs/ARCHITECTURE.md`; a run that cannot measure says so instead of passing. web, web-3d and C++ smoke gain
+  `--no-build`. Follow-ups: #281.
+- **Seed and settings sweep (#183):** `tools/seed_sweep.py` runs `dev.py smoke` over seeds times settings in
+  parallel (Unity and Unreal one at a time), collects the game's own marker lines and prints pass rates per setting.
+- **Filing issues (#156, #157):** `/file-issue` and `issues.py new` draft a bug, feel or idea in the issue forms'
+  shape and show a dry run; only `--create` posts (an ask rule), after the publish checks, a duplicate search and a
+  record that stops a rerun filing twice. `publish_check.py --range A..B` reviews commits (added lines, messages,
+  local-only files, author emails) and `--terms FILE` a private word list it never prints.
+- **Untested tools get exams (#14):** doctor, frames_to_gif and Dotwork's unrun commands and lanes. What they found:
+  `frames_to_gif --fps 60` wrote GIFs browsers play six times slower; doctor crashed on a `settings.json` that is not
+  an object and missed a stale UTF-16 HANDOFF; Dotwork's palette, previews, img2px and tools lane had crashes and
+  wrong paths under a custom `src_dir`. Coverage tooling: #282.
+- **Unity captures match the screen (#277):** `GameKitCapture` and F8 composite the UI the way the screen does
+  (premultiplied, linear light), so translucent panels are no longer too dark; the menu panel no longer cleared the
+  camera's picture in a windowed player (the game was black under the shell).
+- **Unity outlined text (#283):** `UiTheme.Outline` keeps the letter's colour (an un-outlined copy of the text sits on
+  top; the outline alone ate most of each letter), and the access sweep reports the colour on the letters.
+- **Unreal packaged credits (#278):** a packaged game shows `CREDITS.md` (kept as `data/credits.md` in editor builds,
+  gitignored), and `dev.py package` replaces the last package instead of leaving dropped files in it.
+- **Credits screens (#279):** the HTML comment `tools/credits.py` writes into `CREDITS.md` no longer shows on any
+  engine's credits screen (`data/golden/credits.json`). Markdown marks still show: #284.
+- **Upgrade notes:** a web game that used `Shell.game` imports `game` from `src/main.ts` instead (the shell holds no
+  Phaser game now). A Unity label outlined by hand rather than through `UiTheme.Outline` reads as its outline colour
+  in the access sweep until it uses `UiTheme.Outline`. An RPG Maker MZ game reruns `python tools/dev.py setup` to
+  register the three new plugins. A C++ game that edited `CMakeLists.txt` merges the new sources and tests from its
+  `.gold` copy. Dotwork games that set no `assets_dir` and are not Godot now write under the engine's assets folder.
+
 ## 0.14.4 (2026-11-10): fixes and shell parity after 0.14.3 (#262 to #276, #159)
 - **Wavesmith (#262):** an Ogg whose Vorbis stream follows a Skeleton or Theora page (a video with Vorbis sound) is
   read by `oggvorbis.py` instead of being sent to ffmpeg, so reading, streaming, `formats info` and `formats convert`
