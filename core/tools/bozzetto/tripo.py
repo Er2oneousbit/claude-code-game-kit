@@ -47,6 +47,7 @@ import uuid
 bz = None   # bozzetto.py binds itself here (bind): its errors, DEBUG flag, SLEEP and helpers
 
 TRIPO_ENV = "TRIPO_API_KEY"
+SECRET_PREFIX, CLIENT_ID_PREFIX = "tsk_", "tcli_"    # Tripo's secret API keys and its client IDs (refused as keys)
 BASE = "https://openapi.tripo3d.ai/v3"       # the exam points this at its stand-in server
 OPENER = urllib.request.urlopen              # the exam may replace it too
 POLL_S = 2                                   # the docs ask for one query every 1 to 2 seconds
@@ -101,12 +102,27 @@ def key():
     return os.environ.get(TRIPO_ENV, "")
 
 
+def refusal_hint(body):
+    """Tripo's own words on a refused key ("API key must start with 'tsk_' ..."), so the user sees the fix."""
+    try:
+        doc = json.loads(body)
+    except ValueError:
+        return ""
+    if not isinstance(doc, dict):
+        return ""
+    words = " ".join(str(doc[k]) for k in ("message", "suggestion") if doc.get(k))
+    return f". Tripo says: {words[:240]}" if words else ""
+
+
 # ---- the client --------------------------------------------------------------------------------------------------
 class Client:
     def __init__(self, api_key=None, base=None):
         self.key, self.base = api_key or key(), (base or BASE).rstrip("/")
 
     def call(self, method, path, body=None, raw=None, ctype=None):
+        if self.key.startswith(CLIENT_ID_PREFIX):       # a common mix-up; Tripo refuses it, so say so before a call
+            raise bz.ToolError(f"{TRIPO_ENV} holds a Tripo client ID ({CLIENT_ID_PREFIX}...), not the secret key: "
+                               f"use the secret key, which starts with {SECRET_PREFIX} (Tripo's API keys page)")
         h = {"Authorization": f"Bearer {self.key}"}
         data = None
         if body is not None:
@@ -120,7 +136,7 @@ class Client:
         except urllib.error.HTTPError as e:
             msg = e.read().decode("utf-8", "replace")[:300]
             if e.code in (401, 403):
-                raise bz.ToolError(f"Tripo refused the key (HTTP {e.code}): check {TRIPO_ENV}")
+                raise bz.ToolError(f"Tripo refused the key (HTTP {e.code}): check {TRIPO_ENV}{refusal_hint(msg)}")
             if e.code == 429:
                 raise bz.JobError(f"Tripo {path}: too many requests or tasks at once (HTTP 429): wait and run again")
             raise bz.JobError(f"Tripo {path}: HTTP {e.code}: {msg}")

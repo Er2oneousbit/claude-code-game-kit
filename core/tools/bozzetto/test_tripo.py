@@ -370,6 +370,23 @@ class Money(Base):
         self.assertIn("TRIPO_API_KEY", out)
         self.assertEqual(STATE.requests, [])
 
+    def test_a_client_id_in_place_of_the_key_stops_before_any_call(self):
+        os.environ[tripo.TRIPO_ENV] = "tcli_exam_client_id"
+        rc, out = self.make()
+        self.assertEqual(rc, 2, out)
+        self.assertIn("client ID", out)
+        self.assertIn("tsk_", out, "names the key the user needs")
+        self.assertEqual(STATE.requests, [])
+
+    def test_a_refused_key_shows_tripos_own_words(self):
+        os.environ[tripo.TRIPO_ENV] = "tsk_wrong"
+        rc, out = self.make()
+        self.assertEqual(rc, 2, out)
+        self.assertIn("Tripo refused the key", out)
+        self.assertIn("invalid api key", out, "the stand-in's message reaches the user")
+        self.assertNotIn("tsk_wrong", out, "the key is never printed")
+        self.assertEqual(STATE.uploads, [])
+
 
 class Recovery(Base):
     def test_a_failed_task_shows_why_and_the_rerun_makes_a_new_one(self):
