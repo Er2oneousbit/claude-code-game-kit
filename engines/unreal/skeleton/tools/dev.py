@@ -18,7 +18,7 @@
 #                      --locale set its run
 #             exec     run an editor Python script headless (asset imports, maps)
 #             run      open the project in the editor
-#             package  BuildCookRun a packaged build into Packaged/
+#             package  BuildCookRun a packaged build into Packaged/ (replaces that platform's last one)
 #             genproj  regenerate IDE project files
 #             clean    remove Intermediate/ and Binaries/ (asks first, or --yes)
 #             doctor   verify the local environment
@@ -86,6 +86,8 @@
 #           and show:juice (#275): crash and pseudo-plant exit 1 on purpose with their proof checked (a crash file on
 #           disk, the planted label named), bug runs with a renderer for its screenshot, CRASH_WRITTEN and BUG_REPORT
 #           are echoed
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): package archives into Packaged/.next, then replaces
+#           the platform's old folder, so a file the game dropped (an old data/credits.md) never ships again (#278)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -794,6 +796,8 @@ SHOW_TEST = "GameKit.Screens.Show"          # the one that also draws the screen
 DRIVE_PATTERN = r"[A-Za-z0-9_:=,.-]+"        # menus, show:settings, access:res=1280x800,scale=2,pad
 SMOKE_DATA = "Saved/GameKitSmoke"           # the drive's own settings folder (never the player's Saved/GameKit)
 BUILD_OUTPUTS = ("Packaged", "Saved/StagedBuilds", "Binaries")   # package, its staging, compiled modules (#263)
+PACKAGE_DIR = "Packaged"                     # `package` output, one folder per platform (Windows/, Linux/, Mac/)
+PACKAGE_NEXT = ".next"                       # a new package lands in Packaged/.next, then replaces the old (#278)
 MARKER_LINE = re.compile(r"\b((?:DRIVE_[A-Z]+|SETTINGS_WRITTEN|SCREENSHOT_WRITTEN|ACCESS_[A-Z]+|PSEUDO_[A-Z]+|CRASH_WRITTEN"
                          r"|BUG_REPORT)\b.*)$")
 RENDER_DRIVES = ("bug",)                     # drives that draw (the bug report's screenshot): a renderer, not -NullRHI
@@ -990,13 +994,45 @@ def cmd_package(args):
     if missing:
         return missing
     # Packaged/, not build/: on Windows build/ and the committed Build/ are the same folder
-    out_dir = ROOT / "Packaged"
+    out_dir = ROOT / PACKAGE_DIR
+    next_dir = out_dir / PACKAGE_NEXT
+    shutil.rmtree(next_dir, ignore_errors=True)   # what a stopped run left half written
     cmd = [uat, "BuildCookRun", f"-project={find_uproject()}", "-noP4",
            f"-platform={platform_name(args.platform)}", f"-clientconfig={args.config}",
-           "-build", "-cook", "-stage", "-pak", "-archive", f"-archivedirectory={out_dir}"]
+           "-build", "-cook", "-stage", "-pak", "-archive", f"-archivedirectory={next_dir}"]
     rc, _ = run(cmd, timeout=BUILD_TIMEOUT_S)
+    if rc == 0:
+        rc = replace_package(next_dir, out_dir)
+    else:
+        shutil.rmtree(next_dir, ignore_errors=True)   # the last good package stays as it was
     print(f"[{' OK ' if rc == 0 else 'FAIL'}] package {'written to Packaged/' if rc == 0 else 'failed'}")
     return 2 if rc in NO_EXEC else 0 if rc == 0 else 1
+
+
+def replace_package(next_dir, out_dir):
+    """Moves the new package (each platform folder UAT archived into next_dir, e.g. Windows/) over the last one in
+    out_dir, which goes first: UAT's -archive copies into a folder without emptying it, so a file the game no longer
+    has (a removed data file, an old data/credits.md) would ship again (#278). Other platforms' folders stay.
+    0 ok, 1 when a folder could not be replaced (the old game still running): the new package is kept in next_dir."""
+    made = sorted(p for p in next_dir.iterdir()) if next_dir.is_dir() else []
+    if not made:
+        print(f"[error] UAT reported success but archived nothing into {next_dir}", file=sys.stderr)
+        return 1
+    for new in made:
+        old = out_dir / new.name
+        try:
+            if old.is_dir():
+                shutil.rmtree(old)
+            elif old.exists():
+                old.unlink()
+            shutil.move(str(new), str(old))
+        except OSError as exc:
+            print(f"[error] could not replace {PACKAGE_DIR}/{new.name} ({exc}); is the packaged game still running? "
+                  f"The new package is in {PACKAGE_DIR}/{PACKAGE_NEXT}/{new.name}", file=sys.stderr)
+            return 1
+        dbg(f"package: {PACKAGE_DIR}/{new.name} replaced")
+    shutil.rmtree(next_dir, ignore_errors=True)
+    return 0
 
 
 def cmd_genproj(args):

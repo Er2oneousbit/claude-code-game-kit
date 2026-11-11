@@ -19,7 +19,8 @@
 #           editor path from a project folder with a space too (#273), that Unreal's crash and pseudo-plant drives
 #           exit 1 on purpose with their proof checked and its bug drive gets a renderer (#275), and that every smoke
 #           refuses a --data-dir inside its player or build output (#263), or inside a folder its build packs into
-#           the game (#271), and that Godot's dev.py refuses a Godot older than its 4.6 floor with exit 2.
+#           the game (#271), and that Godot's dev.py refuses a Godot older than its 4.6 floor with exit 2, and that
+#           Unreal's package replaces the platform's last package instead of archiving over it (#278).
 # Usage   : python scripts/test_dev_py.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, no engine needed. The live checks (a real smoke with each toolchain) are
@@ -658,6 +659,61 @@ class UnrealDrive(TempRoot):
         rc, text, _ = self.drive(log, drive="show:title", screenshot="captures/s.png")
         self.assertEqual(rc, 1, text)
         self.assertFalse(shot.exists())
+
+
+# ---- #278: Unreal package replaces the last package, so a dropped file never ships again ----------
+class UnrealPackage(TempRoot):
+    def package(self, rc=0, archived=("Windows/Game/data/i18n/en.json",)):
+        """cmd_package with UAT faked: it writes `archived` under its -archivedirectory, as -archive does."""
+        dev = load("unreal")
+        dev.ROOT = self.root
+        uat = self.root / "RunUAT.bat"
+        uat.write_bytes(b"")
+        dev.preflight = lambda *a, **kw: None
+        dev.batch_file = lambda name: uat
+        dev.find_uproject = lambda: self.root / "Game.uproject"
+        seen = {}
+
+        def fake_run(cmd, **kwargs):
+            seen["cmd"] = [str(c) for c in cmd]
+            arch = Path(next(c for c in seen["cmd"] if c.startswith("-archivedirectory=")).split("=", 1)[1])
+            for rel in archived:
+                p = arch / rel
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text("new", encoding="utf-8")
+            return rc, ""
+        dev.run = fake_run
+        result, text = quiet(dev.cmd_package, argparse.Namespace(platform="Win64", config="Development"))
+        return result, text
+
+    def old_package(self):
+        for rel in ("Windows/Game/data/credits.md", "Windows/Game/data/i18n/en.json", "Linux/Game/keep.txt"):
+            p = self.root / "Packaged" / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text("old", encoding="utf-8")
+
+    def test_a_file_the_game_dropped_does_not_ship_again(self):
+        self.old_package()
+        rc, text = self.package()
+        self.assertEqual(rc, 0, text)
+        out = self.root / "Packaged"
+        self.assertFalse((out / "Windows/Game/data/credits.md").exists(), "UAT -archive never empties its folder")
+        self.assertEqual((out / "Windows/Game/data/i18n/en.json").read_text(encoding="utf-8"), "new")
+        self.assertTrue((out / "Linux/Game/keep.txt").exists(), "another platform's package stays")
+        self.assertFalse((out / ".next").exists(), "the staging folder is gone after the swap")
+
+    def test_a_failed_package_keeps_the_last_good_one(self):
+        self.old_package()
+        rc, text = self.package(rc=1)
+        self.assertEqual(rc, 1, text)
+        out = self.root / "Packaged"
+        self.assertEqual((out / "Windows/Game/data/credits.md").read_text(encoding="utf-8"), "old")
+        self.assertFalse((out / ".next").exists())
+
+    def test_success_with_nothing_archived_fails(self):
+        rc, text = self.package(archived=())
+        self.assertEqual(rc, 1, text)
+        self.assertIn("archived nothing", text)
 
 
 # ---- #267: Unreal smoke --screenshot and --data-dir take a path with a space ----------
