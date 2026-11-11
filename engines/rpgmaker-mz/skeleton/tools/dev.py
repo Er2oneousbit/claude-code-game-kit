@@ -46,6 +46,9 @@
 #           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
 # Updated : 2026-11-06 with Claude (Opus 5.5, claude-opus-5-5): the kit's shader recipes (KitShaders.js): `check`
 #           compiles them, `smoke --shaders` renders and compares them
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): smoke reports the run's FRAME_TIMES line (mean,
+#           p95, p99, worst) and fails a p95 over --frame-budget MS, or over the "Smoke frame time" row of
+#           docs/ARCHITECTURE.md; a run that measured nothing says so (#90)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -76,6 +79,7 @@ SMOKE_FRAMES = 120
 BOOT_MARKER = "BOOT_OK"                    # logged by game/js/plugins/GameMain.js
 SMOKE_TIMEOUT_S = 240                      # MZ loads its whole database before the title: software WebGL is slow
 SMOKE_MIN_FPS = 20
+SMOKE_UNMEASURED = "smoke.mjs printed no FRAME_TIMES line (the page never booted, or tools/frame_times.mjs is missing)"
 TEST_TIMEOUT_S = 600
 INSTALL_TIMEOUT_S = 900
 KILL_TIMEOUT_S = 10                       # after a timeout: seconds to wait for the killed tree's pipe
@@ -702,7 +706,7 @@ def cmd_smoke(args):
         return 2
     if rc != 0 or "[ OK ]" not in out:
         return 1
-    return shader_rc
+    return shader_rc or frame_budget_report(out, getattr(args, "frame_budget", None), SMOKE_UNMEASURED)   # #90
 
 
 def cmd_build(args):
@@ -852,6 +856,92 @@ def port_number(text):
     return value
 
 
+# ---- Frame-time budget (#90): the same block in every engine's dev.py -----------------------------------------
+# The game (or smoke.mjs) prints one line at the end of a smoke run:
+#   FRAME_TIMES frames=N mean=MS p95=MS p99=MS worst=MS mode=render|software|logic
+# smoke prints it as numbers, and fails a run whose p95 is over the budget (--frame-budget, else the "Smoke frame
+# time" row of docs/ARCHITECTURE.md). A run that measured nothing says so, and why, instead of passing a budget.
+FRAME_LINE = re.compile(r"\bFRAME_TIMES((?:[ \t]+\w+=[^\s=]+)+)")
+FRAME_MODES = {                           # what the numbers mean, by the mode= the game reported
+    "render": "drawn in a window: a render budget",
+    "software": "drawn on the CPU without a display: not a GPU budget",
+    "logic": "headless, nothing drawn: a logic budget, not a render budget",
+}
+BUDGET_DOC = "docs/ARCHITECTURE.md"       # its Budgets table: smoke reads the "Smoke frame time" row
+BUDGET_ROW = re.compile(r"^\|\s*Smoke frame time[^|]*\|([^|]*)\|", re.M | re.I)
+FRAME_BUDGET_HELP = (f"fail the run when its p95 frame time is over MS milliseconds (default: the 'Smoke frame time' row "
+                     f"in {BUDGET_DOC}, when it holds a number); the run prints mean, p95, p99 and worst frame time "
+                     "whenever the game measured them")
+
+
+def frame_times(text):
+    """The last FRAME_TIMES line in text as a dict: frames, mean, p95, p99, worst (ms) and mode. None without one."""
+    found = None
+    for m in FRAME_LINE.finditer(text or ""):
+        fields = dict(pair.split("=", 1) for pair in m.group(1).split())
+        try:
+            stats = {"frames": int(fields["frames"]), "mode": fields.get("mode", "render")}
+            for key in ("mean", "p95", "worst"):
+                stats[key] = float(fields[key])
+            stats["p99"] = float(fields.get("p99", fields["worst"]))
+        except (KeyError, ValueError):
+            continue                          # a broken line is no measurement
+        if stats["frames"] > 0:
+            found = stats
+    return found
+
+
+def doc_frame_budget():
+    """The frame budget in ms from BUDGET_DOC's "Smoke frame time" row, or None: no file, no row, the template's
+    "e.g." placeholder, or no "<number> ms" in the cell."""
+    try:
+        text = (ROOT / BUDGET_DOC).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    m = BUDGET_ROW.search(text)
+    cell = m.group(1).strip() if m else ""
+    if not cell or cell.lower().startswith("e.g"):
+        return None
+    n = re.search(r"(\d+(?:\.\d+)?)\s*ms\b", cell)
+    return float(n.group(1)) if n and float(n.group(1)) > 0 else None
+
+
+def frame_budget_report(text, budget=None, unmeasured=""):
+    """Print the run's frame times and check the p95 against the budget (budget from --frame-budget, else
+    doc_frame_budget()). Returns 1 when the p95 is over it, else 0. Without a FRAME_TIMES line it prints why nothing
+    was measured (unmeasured) and, with a budget, that the budget was not checked: never a silent pass."""
+    source = "--frame-budget" if budget else BUDGET_DOC
+    budget = budget or doc_frame_budget()
+    stats = frame_times(text)
+    if not stats:
+        print(f"[info] frame time: not measured ({unmeasured or 'the game printed no FRAME_TIMES line'})")
+        if budget:
+            print(f"[WARN] frame budget {budget:g} ms ({source}) not checked: this run measured no frame time")
+        return 0
+    mode = stats["mode"]
+    numbers = (f"mean {stats['mean']:.2f} ms, p95 {stats['p95']:.2f} ms, p99 {stats['p99']:.2f} ms, "
+               f"worst {stats['worst']:.2f} ms")
+    print(f"[info] frame time over {stats['frames']} frames ({mode}, {FRAME_MODES.get(mode, 'unknown mode')}): {numbers}")
+    if not budget:
+        return 0
+    if stats["p95"] > budget:
+        print(f"[FAIL] frame budget: p95 {stats['p95']:.2f} ms is over {budget:g} ms ({source}); {numbers}")
+        return 1
+    print(f"[ OK ] frame budget: p95 {stats['p95']:.2f} ms within {budget:g} ms ({source})")
+    return 0
+
+
+def frame_ms(text):
+    """argparse type: a frame budget in milliseconds, above 0 and at most 10000."""
+    try:
+        n = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a number of milliseconds")
+    if not 0 < n <= 10000:
+        raise argparse.ArgumentTypeError("must be above 0 and at most 10000 ms")
+    return n
+
+
 def positive_int(text):
     """argparse type: 1..100000, so a typo cannot ask for a smoke run that never ends."""
     try:
@@ -936,6 +1026,7 @@ def build_parser():
     p.add_argument("--shaders", action="store_true",
                    help="also render every kit shader recipe as a PIXI filter and compare it with its golden image "
                         "(tools/shaders/; runs without an MZ project)")
+    p.add_argument("--frame-budget", type=frame_ms, metavar="MS", help=FRAME_BUDGET_HELP)
     p.set_defaults(fn=cmd_smoke)
     sub.add_parser("build", help="a web-browser copy of the game in build/web/").set_defaults(fn=cmd_build)
     p = sub.add_parser("run", help="serve the game and open your browser (--editor: open RPG Maker MZ)")

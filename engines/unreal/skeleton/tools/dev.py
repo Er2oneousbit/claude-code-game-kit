@@ -86,6 +86,9 @@
 #           and show:juice (#275): crash and pseudo-plant exit 1 on purpose with their proof checked (a crash file on
 #           disk, the planted label named), bug runs with a renderer for its screenshot, CRASH_WRITTEN and BUG_REPORT
 #           are echoed
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): smoke reports the run's FRAME_TIMES line (mean,
+#           p95, p99, worst) and fails a p95 over --frame-budget MS, or over the "Smoke frame time" row of
+#           docs/ARCHITECTURE.md; a run that measured nothing says so (#90)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -103,6 +106,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SYSTEM = platform.system()  # Windows, Linux, Darwin
 
 # ---- Tunables / constants (edit if your UE version differs) -------------------
+LAST_LOG = [""]                               # the last automation run's output (stdout + log file)
+SMOKE_UNMEASURED = ("no Smoke test logged a FRAME_TIMES line: automation runs with -NullRHI draw nothing, and the "
+                    "kit ships no Smoke test (log one from yours: docs/ENGINE.md, Conventions, Frame times in smoke)")
 SMOKE_GROUP_SUFFIX = "Smoke"                  # tests named <Game>.Smoke.* are the smoke group
 TEST_TIMEOUT_S = 1800
 # Result={Fail} covers every failed test; "Test Failed" alone also matched a test named "Test Failed Handling" (#250)
@@ -710,6 +716,7 @@ def run_automation(filter_, args, until=None, fail_on=None, extra_args=None, mar
     # Test results only reach the log file, not stdout (verified on UE 5.8)
     if AUTOMATION_LOG.exists():
         out += AUTOMATION_LOG.read_text(encoding="utf-8", errors="ignore")
+    LAST_LOG[0] = out                        # cmd_smoke reads the frame times from it (#90)
     if DEBUG:
         print(out)
     if markers:
@@ -784,8 +791,11 @@ def cmd_smoke(args):
         return 2
     if getattr(args, "drive", ""):
         return drive_run(args)
-    return run_automation(f"{game_name()}.{SMOKE_GROUP_SUFFIX}" + (f".{args.filter}" if args.filter else ""), args,
-                          until=args.until, fail_on=fail_on)
+    rc = run_automation(f"{game_name()}.{SMOKE_GROUP_SUFFIX}" + (f".{args.filter}" if args.filter else ""), args,
+                        until=args.until, fail_on=fail_on)
+    if rc == 0:                              # #90: a FRAME_TIMES line one of your Smoke tests logged
+        rc = frame_budget_report(LAST_LOG[0], getattr(args, "frame_budget", None), SMOKE_UNMEASURED)
+    return rc
 
 
 # ---- The shell's scripted runs (#168): smoke --drive, --screenshot, --data-dir ---------------------------
@@ -1093,6 +1103,92 @@ def cmd_doctor(args):
 
 
 
+# ---- Frame-time budget (#90): the same block in every engine's dev.py -----------------------------------------
+# The game (or smoke.mjs) prints one line at the end of a smoke run:
+#   FRAME_TIMES frames=N mean=MS p95=MS p99=MS worst=MS mode=render|software|logic
+# smoke prints it as numbers, and fails a run whose p95 is over the budget (--frame-budget, else the "Smoke frame
+# time" row of docs/ARCHITECTURE.md). A run that measured nothing says so, and why, instead of passing a budget.
+FRAME_LINE = re.compile(r"\bFRAME_TIMES((?:[ \t]+\w+=[^\s=]+)+)")
+FRAME_MODES = {                           # what the numbers mean, by the mode= the game reported
+    "render": "drawn in a window: a render budget",
+    "software": "drawn on the CPU without a display: not a GPU budget",
+    "logic": "headless, nothing drawn: a logic budget, not a render budget",
+}
+BUDGET_DOC = "docs/ARCHITECTURE.md"       # its Budgets table: smoke reads the "Smoke frame time" row
+BUDGET_ROW = re.compile(r"^\|\s*Smoke frame time[^|]*\|([^|]*)\|", re.M | re.I)
+FRAME_BUDGET_HELP = (f"fail the run when its p95 frame time is over MS milliseconds (default: the 'Smoke frame time' row "
+                     f"in {BUDGET_DOC}, when it holds a number); the run prints mean, p95, p99 and worst frame time "
+                     "whenever the game measured them")
+
+
+def frame_times(text):
+    """The last FRAME_TIMES line in text as a dict: frames, mean, p95, p99, worst (ms) and mode. None without one."""
+    found = None
+    for m in FRAME_LINE.finditer(text or ""):
+        fields = dict(pair.split("=", 1) for pair in m.group(1).split())
+        try:
+            stats = {"frames": int(fields["frames"]), "mode": fields.get("mode", "render")}
+            for key in ("mean", "p95", "worst"):
+                stats[key] = float(fields[key])
+            stats["p99"] = float(fields.get("p99", fields["worst"]))
+        except (KeyError, ValueError):
+            continue                          # a broken line is no measurement
+        if stats["frames"] > 0:
+            found = stats
+    return found
+
+
+def doc_frame_budget():
+    """The frame budget in ms from BUDGET_DOC's "Smoke frame time" row, or None: no file, no row, the template's
+    "e.g." placeholder, or no "<number> ms" in the cell."""
+    try:
+        text = (ROOT / BUDGET_DOC).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    m = BUDGET_ROW.search(text)
+    cell = m.group(1).strip() if m else ""
+    if not cell or cell.lower().startswith("e.g"):
+        return None
+    n = re.search(r"(\d+(?:\.\d+)?)\s*ms\b", cell)
+    return float(n.group(1)) if n and float(n.group(1)) > 0 else None
+
+
+def frame_budget_report(text, budget=None, unmeasured=""):
+    """Print the run's frame times and check the p95 against the budget (budget from --frame-budget, else
+    doc_frame_budget()). Returns 1 when the p95 is over it, else 0. Without a FRAME_TIMES line it prints why nothing
+    was measured (unmeasured) and, with a budget, that the budget was not checked: never a silent pass."""
+    source = "--frame-budget" if budget else BUDGET_DOC
+    budget = budget or doc_frame_budget()
+    stats = frame_times(text)
+    if not stats:
+        print(f"[info] frame time: not measured ({unmeasured or 'the game printed no FRAME_TIMES line'})")
+        if budget:
+            print(f"[WARN] frame budget {budget:g} ms ({source}) not checked: this run measured no frame time")
+        return 0
+    mode = stats["mode"]
+    numbers = (f"mean {stats['mean']:.2f} ms, p95 {stats['p95']:.2f} ms, p99 {stats['p99']:.2f} ms, "
+               f"worst {stats['worst']:.2f} ms")
+    print(f"[info] frame time over {stats['frames']} frames ({mode}, {FRAME_MODES.get(mode, 'unknown mode')}): {numbers}")
+    if not budget:
+        return 0
+    if stats["p95"] > budget:
+        print(f"[FAIL] frame budget: p95 {stats['p95']:.2f} ms is over {budget:g} ms ({source}); {numbers}")
+        return 1
+    print(f"[ OK ] frame budget: p95 {stats['p95']:.2f} ms within {budget:g} ms ({source})")
+    return 0
+
+
+def frame_ms(text):
+    """argparse type: a frame budget in milliseconds, above 0 and at most 10000."""
+    try:
+        n = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a number of milliseconds")
+    if not 0 < n <= 10000:
+        raise argparse.ArgumentTypeError("must be above 0 and at most 10000 ms")
+    return n
+
+
 # ---- Cloud deployments (#252) ------------------------------------------------------------
 SHIP_TOOL = "tools/cloud/ship.py"
 
@@ -1176,6 +1272,7 @@ def build_parser():
     p.add_argument("--data-dir", default="", help="with --drive: the settings folder the run reads and writes (default: a fresh "
                                                  f"{SMOKE_DATA})")
     p.add_argument("--locale", default="", help="with --drive: the language the screens show (a data/i18n/<tag>.json)")
+    p.add_argument("--frame-budget", type=frame_ms, metavar="MS", help=FRAME_BUDGET_HELP)
     p.set_defaults(fn=cmd_smoke)
     p = sub.add_parser("exec", help="run an editor Python script headless (imports, maps; needs PythonScriptPlugin)")
     p.add_argument("script", help="path to the .py script, relative to the project (e.g. tools/unreal/build_content.py)")

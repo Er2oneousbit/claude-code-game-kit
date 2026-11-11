@@ -6,6 +6,7 @@
 --           frame burst through a canvas), and the test run (tests/runner.lua). conf.lua parsed the command line
 --           into the global KIT.
 -- Usage   : love .  |  python tools/dev.py smoke [--drive menus] | test | run
+--           A smoke run prints FRAME_TIMES (src/core/frame_times.lua, #90) before its end marker.
 -- Notes   : Keep game code out of this file: put it in src/game/ (and engine-free logic in src/core/) so the tests
 --           can load it without a window. Captures render each frame into a canvas and save the canvas, because
 --           reading back a window that is off-screen or covered gives undefined pixels on some drivers.
@@ -20,6 +21,7 @@
 
 local Log = require("src.core.log")
 local TextStore = require("src.core.text_store")
+local FrameTimes = require("src.core.frame_times")
 
 local BOOT_MARKER = "BOOT_OK"
 
@@ -35,6 +37,7 @@ local App = require("src.shell.app")
 local Version = require("src.version")
 local app = App.new(KIT)
 local frame, canvas, record_t, record_n = 0, nil, 0, 0
+local frame_times = FrameTimes.new()   -- smoke runs: each frame's time, for dev.py's FRAME_TIMES line (#90)
 
 -- Writes a PNG to an absolute path (love.filesystem may only write inside the save folder). TextStore.file, not
 -- io.open: io.open cannot open a path with "Í" or a curly quote on Windows.
@@ -48,6 +51,10 @@ local function finish(marker, code)
   if canvas and KIT.shot then
     save_png(canvas:newImageData(), KIT.shot)
     print("CAPTURE_SHOT " .. KIT.shot)
+  end
+  if KIT.mode == "smoke" then
+    local line = frame_times:line(KIT.headless and "logic" or "render")
+    if line ~= "" then print(line) end
   end
   print(marker)
   io.stdout:flush()
@@ -69,6 +76,7 @@ function love.update(dt)
   if app.finished then return end
   app:update(dt)
   frame = frame + 1
+  if KIT.mode == "smoke" and frame > 1 then frame_times:add(dt * 1000) end   -- frame 1's dt includes the load
   if app.finish_request then
     app.finished = true
     finish(app.finish_request.marker, app.finish_request.code)

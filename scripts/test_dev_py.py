@@ -2418,6 +2418,304 @@ class ShipCommand(TempRoot):
         self.assertEqual(calls[0][-2:], ["--site", str(self.root / "dist")])
 
 
+# ---- #90: frame-time budgets in smoke ------------------------------------------------------------
+FRAMES_OK = "FRAME_TIMES frames=119 mean=4.10 p95=6.50 p99=9.00 worst=12.25 mode=logic\n"
+BUDGET_DOC_ROW = ("| Budget | Target | Measured on | Last measured |\n|---|---|---|---|\n"
+                  "| Smoke frame time (p95) | {} | dev.py smoke | |\n")
+
+
+class FrameBudget(TempRoot):
+    """Every engine's smoke reports the FRAME_TIMES line as numbers, fails a p95 over --frame-budget (or the "Smoke
+    frame time" row of docs/ARCHITECTURE.md), and says so when nothing was measured instead of passing silently."""
+
+    def module(self, engine):
+        dev = load(engine)
+        dev.ROOT = self.root
+        return dev
+
+    def doc(self, cell):
+        (self.root / "docs").mkdir(exist_ok=True)
+        (self.root / "docs" / "ARCHITECTURE.md").write_text(BUDGET_DOC_ROW.format(cell), encoding="utf-8")
+
+    def test_the_block_is_the_same_in_every_dev_py(self):
+        def block(engine):
+            text = (KIT / "engines" / engine / "skeleton" / "tools" / "dev.py").read_text(encoding="utf-8")
+            start = text.index("# ---- Frame-time budget (#90)")
+            return text[start:text.index("def frame_ms", start)]
+        first = block(ENGINES[0])
+        for engine in ENGINES[1:]:
+            self.assertEqual(block(engine), first, f"{engine}'s frame-time block differs from {ENGINES[0]}'s")
+
+    def test_the_line_is_read_and_reported(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                dev = self.module(engine)
+                stats = dev.frame_times("noise\n[INFO][core] " + FRAMES_OK + "SMOKE_DONE\n")
+                self.assertEqual(stats, {"frames": 119, "mode": "logic", "mean": 4.1, "p95": 6.5, "p99": 9.0,
+                                         "worst": 12.25})
+                self.assertIsNone(dev.frame_times("FRAME_TIMES frames=0 mean=0 p95=0 worst=0"))
+                self.assertIsNone(dev.frame_times("FRAME_TIMES frames=3 mean=x p95=1 worst=1"))
+                rc, text = quiet(dev.frame_budget_report, FRAMES_OK, None, "why")
+                self.assertEqual(rc, 0, text)
+                self.assertIn("mean 4.10 ms, p95 6.50 ms, p99 9.00 ms, worst 12.25 ms", text)
+                self.assertIn("a logic budget, not a render budget", text)
+
+    def test_a_p95_over_budget_fails_with_the_numbers(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                dev = self.module(engine)
+                rc, text = quiet(dev.frame_budget_report, FRAMES_OK, 5.0, "why")
+                self.assertEqual(rc, 1, text)
+                self.assertIn("[FAIL] frame budget: p95 6.50 ms is over 5 ms (--frame-budget)", text)
+                rc, text = quiet(dev.frame_budget_report, FRAMES_OK, 6.5, "why")
+                self.assertEqual(rc, 0, text)                       # at the budget is within it
+                self.assertIn("[ OK ] frame budget", text)
+
+    def test_nothing_measured_says_so_and_why(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                dev = self.module(engine)
+                rc, text = quiet(dev.frame_budget_report, "BOOT_OK\n", None, "headless, no clock")
+                self.assertEqual(rc, 0, text)
+                self.assertIn("frame time: not measured (headless, no clock)", text)
+                self.assertNotIn("[WARN]", text)
+                rc, text = quiet(dev.frame_budget_report, "BOOT_OK\n", 16.7, "headless, no clock")
+                self.assertEqual(rc, 0, text)
+                self.assertIn("[WARN] frame budget 16.7 ms (--frame-budget) not checked", text)
+
+    def test_the_budget_row_in_architecture_md(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                dev = self.module(engine)
+                self.assertIsNone(dev.doc_frame_budget())             # no docs/ at all
+                self.doc("e.g. 20 ms (the template's placeholder)")
+                self.assertIsNone(dev.doc_frame_budget())
+                self.doc("as fast as possible")
+                self.assertIsNone(dev.doc_frame_budget())
+                self.doc("5 ms on this machine")
+                self.assertEqual(dev.doc_frame_budget(), 5.0)
+                rc, text = quiet(dev.frame_budget_report, FRAMES_OK, None, "why")
+                self.assertEqual(rc, 1, text)
+                self.assertIn("over 5 ms (docs/ARCHITECTURE.md)", text)
+                rc, text = quiet(dev.frame_budget_report, FRAMES_OK, 50.0, "why")
+                self.assertEqual(rc, 0, text)                       # --frame-budget wins over the row
+                (self.root / "docs" / "ARCHITECTURE.md").unlink()
+
+    def test_the_kit_template_has_the_row_unset(self):
+        text = (KIT / "core" / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8")
+        dev = load("godot")
+        m = dev.BUDGET_ROW.search(text)
+        self.assertIsNotNone(m, "core/docs/ARCHITECTURE.md lost its Smoke frame time row")
+        self.assertTrue(m.group(1).strip().startswith("e.g."), "the template must not set a budget for every game")
+
+    def test_frame_budget_option_on_every_smoke(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                dev = load(engine)
+                parser = dev.build_parser()
+                args = parser.parse_args(dev.hoist_global_options(parser, ["smoke", "--frame-budget", "16.7"]))
+                self.assertEqual(args.frame_budget, 16.7)
+                self.assertIsNone(parser.parse_args(["smoke"]).frame_budget)
+                for bad in ("0", "-3", "abc", "nan", "20000"):
+                    with self.assertRaises(SystemExit, msg=bad):
+                        quiet(parser.parse_args, ["smoke", "--frame-budget", bad])
+
+    def test_the_overlays_that_build_in_smoke_take_no_build(self):
+        for engine in ("web", "web-3d", "cpp-sdl2"):
+            with self.subTest(engine=engine):
+                parser = load(engine).build_parser()
+                self.assertTrue(parser.parse_args(["smoke", "--no-build"]).no_build)
+
+
+class FrameBudgetSmoke(TempRoot):
+    """cmd_smoke on each engine with the engine faked: the frame report runs after a passing smoke, and a slow p95
+    turns the pass into a failure."""
+
+    def godot(self, out, **opts):
+        dev = load("godot")
+        dev.ROOT = self.root
+        dev.ensure_imported = lambda godot: 0
+        dev.run = lambda cmd, **kw: (0, out)
+        args = argparse.Namespace(data_dir="", compare="", screenshot="", record="", frames=120, drive="", locale="",
+                                  shaders=False, frame_budget=None)
+        for k, v in opts.items():
+            setattr(args, k, v)
+        return quiet(dev.cmd_smoke, args, "godot")
+
+    def test_godot(self):
+        out = "[INFO][core] BOOT_OK Test\n" + FRAMES_OK
+        rc, text = self.godot(out)
+        self.assertEqual(rc, 0, text)
+        self.assertIn("frame time over 119 frames (logic", text)
+        self.assertEqual(self.godot(out, frame_budget=5.0)[0], 1)
+        rc, text = self.godot("[INFO][core] BOOT_OK Test\n", frame_budget=5.0)
+        self.assertEqual(rc, 0, text)
+        self.assertIn("frame_times.gd", text)                         # says why nothing was measured
+        self.assertIn("[WARN] frame budget 5 ms", text)
+        self.assertEqual(self.godot("SCRIPT ERROR: x\n" + FRAMES_OK, frame_budget=50.0)[0], 1)   # errors still fail
+
+    def cpp(self, out, **opts):
+        dev = load("cpp-sdl2")
+        dev.ROOT = self.root
+        self.built = []
+        dev.cmd_check = lambda args: self.built.append(1) or 0
+        dev.find_exe = lambda preset: "game.exe"
+        dev.run = lambda cmd, **kw: (0, out)
+        args = argparse.Namespace(preset="debug", frames=120, screenshot=None, record=None, record_every=4,
+                                  game_args=[], timeout=60, until=None, fail_on=None, frame_budget=None, no_build=False)
+        for k, v in opts.items():
+            setattr(args, k, v)
+        return quiet(dev.cmd_smoke, args)
+
+    def test_cpp(self):
+        out = CppSmoke.FULL + FRAMES_OK.replace("logic", "software")
+        rc, text = self.cpp(out)
+        self.assertEqual(rc, 0, text)
+        self.assertIn("software, drawn on the CPU without a display", text)
+        self.assertEqual(self.built, [1])
+        rc, text = self.cpp(out, frame_budget=6.0, no_build=True)
+        self.assertEqual(rc, 1, text)
+        self.assertEqual(self.built, [], "--no-build ran the build")
+        rc, text = self.cpp(CppSmoke.FULL)
+        self.assertIn("main.cpp printed no FRAME_TIMES line", text)
+
+    def test_bevy(self):
+        dev = load("bevy")
+        dev.ROOT = self.root
+        dev.preflight = lambda: None
+        dev.build = lambda args: 0
+        dev.run = lambda cmd, **kw: (0, "BOOT_OK x 0.1.0\n" + FRAMES_OK + "SMOKE_DONE frames=120\n")
+        args = argparse.Namespace(frames=120, screenshot="", record="", record_every=66, record_from=0, game_args=[],
+                                  timeout=60, until="", fail_on="", release=False, frame_budget=None)
+        rc, text = quiet(dev.cmd_smoke, args)
+        self.assertEqual(rc, 0, text)
+        self.assertIn("p95 6.50 ms", text)
+        args.frame_budget = 1.0
+        self.assertEqual(quiet(dev.cmd_smoke, args)[0], 1)
+
+    def test_love(self):
+        dev = load("love2d")
+        dev.ROOT = self.root
+        dev.compile_check = lambda love, files: ([], True, [])
+        dev.run = lambda cmd, **kw: (0, "BOOT_OK\n" + FRAMES_OK.replace("logic", "render") + "SMOKE_DONE 120\n")
+        args = argparse.Namespace(frames=120, headless=False, screenshot="", record="", record_every=66, drive="",
+                                  locale="", data_dir="", debug=False, game_args=[], compare="", tolerance=0,
+                                  frame_budget=None)
+        rc, text = quiet(dev.cmd_smoke, args, "love")
+        self.assertEqual(rc, 0, text)
+        self.assertIn("render, drawn in a window", text)
+        args.frame_budget = 6.0
+        self.assertEqual(quiet(dev.cmd_smoke, args, "love")[0], 1)
+
+    def test_unity_reads_the_unity_log(self):
+        dev = load("unity")
+        dev.ROOT = self.root
+        dev.LOG_FILE = self.root / "Logs" / "dev_unity.log"
+        dev.LOG_FILE.parent.mkdir()
+        dev.run_tests = lambda *a, **kw: 0
+        args = argparse.Namespace(screenshot=None, record=None, record_every=6, graphics=False, fail_on=None,
+                                  until=None, filter="Smoke", frame_budget=None)
+        dev.LOG_FILE.write_text("Loading\n" + FRAMES_OK + "(Filename: BootSmokeTests.cs Line: 50)\n", encoding="utf-8")
+        rc, text = quiet(dev.cmd_smoke, args)
+        self.assertEqual(rc, 0, text)
+        self.assertIn("p95 6.50 ms", text)
+        args.frame_budget = 2.0
+        self.assertEqual(quiet(dev.cmd_smoke, args)[0], 1)
+        dev.LOG_FILE.write_text("Loading\n", encoding="utf-8")
+        rc, text = quiet(dev.cmd_smoke, args)
+        self.assertEqual(rc, 0, text)
+        self.assertIn("BootSmokeTests", text)
+
+    def test_unreal_reads_the_automation_log(self):
+        dev = load("unreal")
+        dev.ROOT = self.root
+        dev.game_name = lambda: "Test"
+
+        def fake_automation(filter_, args, **kw):
+            dev.LAST_LOG[0] = self.log
+            return 0
+        dev.run_automation = fake_automation
+        args = argparse.Namespace(filter="", until="", fail_on="", shaders=False, screenshot="", drive="",
+                                  frame_budget=3.0)
+        self.log = "Test Completed. Result={Success} Name={Boot}\nLogTemp: " + FRAMES_OK
+        rc, text = quiet(dev.cmd_smoke, args)
+        self.assertEqual(rc, 1, text)
+        self.log = "Test Completed. Result={Success} Name={Boot}\n"
+        rc, text = quiet(dev.cmd_smoke, args)
+        self.assertEqual(rc, 0, text)
+        self.assertIn("-NullRHI draw nothing", text)
+        self.assertIn("[WARN] frame budget 3 ms (--frame-budget) not checked", text)
+
+    def test_web_overlays_and_mz_pass_the_line_on(self):
+        for engine in ("web", "web-3d", "rpgmaker-mz"):
+            with self.subTest(engine=engine):
+                dev = load(engine)
+                dev.ROOT = self.root
+                dev.node_problem = lambda: None
+                dev.deps_stale = lambda: False
+                dev.cmd_build = lambda args: 0
+                dev.need_project = lambda: self.root
+                out = "[ OK ] boot marker seen, 120 frames, no errors\n" + FRAMES_OK.replace("logic", "software")
+                dev.run = lambda cmd, **kw: (0, out)
+                args = argparse.Namespace(frames=120, query="", until="", fail_on="", timeout=30, screenshot="",
+                                          record="", record_every=66, drive="", data_dir="", locale="", compare="",
+                                          tolerance=0, shaders=False, headed=False, gpu=False, frame_budget=6.0,
+                                          no_build=True)
+                rc, text = quiet(dev.cmd_smoke, args)
+                self.assertEqual(rc, 1, text)
+                self.assertIn("p95 6.50 ms is over 6 ms", text)
+                args.frame_budget = None
+                self.assertEqual(quiet(dev.cmd_smoke, args)[0], 0)
+
+
+FAKE_PLAYWRIGHT_FRAMES = FAKE_PLAYWRIGHT.replace(
+    "          async evaluate() {",
+    "          async evaluate(fn) {\n"
+    "            if (String(fn).includes(\"s.on = false\")) return [16, 17, 40];   // #90: the frame sampler's read\n")
+
+
+@unittest.skipUnless(NODE, "node is not on PATH")
+class WebSmokeFrameTimes(WebSmokeRecord):
+    """#90: smoke.mjs samples the time between animation frames and prints the FRAME_TIMES line dev.py reads; a project
+    without tools/frame_times.mjs still runs, measuring nothing."""
+
+    def project(self, engine, sampler=True):
+        root = super().project(engine)
+        (root / "node_modules" / "playwright" / "index.js").write_text(FAKE_PLAYWRIGHT_FRAMES)
+        if sampler:
+            shutil.copy2(KIT / "engines" / engine / "skeleton" / "tools" / "frame_times.mjs",
+                         root / "tools" / "frame_times.mjs")
+        return root
+
+    def test_the_line_after_a_passing_run(self):
+        for engine in ("web", "web-3d", "rpgmaker-mz"):
+            with self.subTest(engine=engine):
+                root = self.project(engine)
+                r = subprocess.run([NODE, str(root / "tools" / "smoke.mjs"), "--frames", "1"], cwd=root,
+                                   capture_output=True, encoding="utf-8", errors="replace", timeout=60)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                self.assertIn("FRAME_TIMES frames=3 mean=24.33 p95=40.00 p99=40.00 worst=40.00 mode=software", r.stdout)
+                self.assertEqual(load(engine).frame_times(r.stdout)["p95"], 40.0)
+
+    def test_without_the_sampler_file_the_run_still_passes(self):
+        for engine in ("web", "rpgmaker-mz"):
+            with self.subTest(engine=engine):
+                root = self.project(engine, sampler=False)
+                r = subprocess.run([NODE, str(root / "tools" / "smoke.mjs"), "--frames", "1"], cwd=root,
+                                   capture_output=True, encoding="utf-8", errors="replace", timeout=60)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                self.assertNotIn("FRAME_TIMES", r.stdout)
+
+    def test_a_frozen_page_gives_no_numbers_and_no_hang(self):
+        import os
+        root = self.project("web")
+        r = subprocess.run([NODE, str(root / "tools" / "smoke.mjs"), "--frames", "1", "--timeout-ms", "1000"],
+                           cwd=root, capture_output=True, encoding="utf-8", errors="replace", timeout=60,
+                           env=dict(os.environ, FAKE_FREEZE="1"))
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertNotIn("FRAME_TIMES", r.stdout)
+
+
 if __name__ == "__main__":
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
