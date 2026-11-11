@@ -17,6 +17,9 @@
 #             run      serve game/ on localhost and open the browser (--editor opens RPG Maker MZ instead)
 #             clean    remove build/ (--deep also removes node_modules/)
 #             doctor   verify the local environment
+#             dotwork  turn Dotwork's art (asset manifests) into MZ's image layouts in game/img: character,
+#                      object, face and side-view battler sheets, enemies, Window.png, IconSet.png, B to E
+#                      tilesets (tools/dotwork_mz.mjs; dotwork -h for its options)
 #             ship     put the game online (tools/cloud/ship.py): ship --target aws|azure|gcp|linode|do
 #                      --kind static|container --plan, then --apply / --destroy; ship -h for its options
 # Env     : RPGMZ_EXE  optional, the editor (RPGMZ.exe) for `run --editor` and `doctor`.
@@ -33,6 +36,8 @@
 #   test: node --test over tests/**/*.test.js, parse the TAP totals
 #   smoke: node tools/smoke.mjs (serve, Chromium, wait for BOOT_OK); --shaders first runs
 #          tools/shader_render.mjs, then tools/shaders/shader_ref.py compare build/shader_check
+#   dotwork: node tools/dotwork_mz.mjs --game <the MZ project> [options]; check also runs its --check once an
+#          export record exists
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
@@ -46,6 +51,14 @@
 #           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
 # Updated : 2026-11-06 with Claude (Opus 5.5, claude-opus-5-5): the kit's shader recipes (KitShaders.js): `check`
 #           compiles them, `smoke --shaders` renders and compares them
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): GameJuice.js, GameShell.js (the kit's juice and shell
+#           rules) and GameAccess.js (MZ's Options screen, shake and flash through the player's settings) are game
+#           plugins too (#175)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): smoke reports the run's FRAME_TIMES line (mean,
+#           p95, p99, worst) and fails a p95 over --frame-budget MS, or over the "Smoke frame time" row of
+#           docs/ARCHITECTURE.md; a run that measured nothing says so (#90)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): `dotwork` converts Dotwork's asset manifests into
+#           MZ's image layouts (tools/dotwork_mz.mjs); `check` checks the last export against MZ's shapes (#62)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -63,7 +76,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # ---- Tunables / constants ----------------------------------------------------
 MIN_NODE = (22, 12)
 GAME_DIR = "game"                          # where the MZ project lives
-OWN_PLUGINS = ("GameCore", "GameAudio", "GameMain")   # the game's plugins, in load order (setup registers them)
+OWN_PLUGINS = ("GameCore", "GameAudio", "GameJuice", "GameShell", "GameAccess",   # the game's plugins, in load
+               "GameMain")                                                     # order (setup registers them)
 CORE_FILES = ("index.html", "js/main.js", "js/rmmz_core.js", "js/rmmz_managers.js", "js/rmmz_objects.js",
               "js/rmmz_scenes.js", "js/rmmz_sprites.js", "js/rmmz_windows.js", "data/System.json")
 DATABASE = ("Actors", "Animations", "Armors", "Classes", "CommonEvents", "Enemies", "Items", "MapInfos",
@@ -76,6 +90,7 @@ SMOKE_FRAMES = 120
 BOOT_MARKER = "BOOT_OK"                    # logged by game/js/plugins/GameMain.js
 SMOKE_TIMEOUT_S = 240                      # MZ loads its whole database before the title: software WebGL is slow
 SMOKE_MIN_FPS = 20
+SMOKE_UNMEASURED = "smoke.mjs printed no FRAME_TIMES line (the page never booted, or tools/frame_times.mjs is missing)"
 TEST_TIMEOUT_S = 600
 INSTALL_TIMEOUT_S = 900
 KILL_TIMEOUT_S = 10                       # after a timeout: seconds to wait for the killed tree's pipe
@@ -85,6 +100,10 @@ SHADER_OUT = "build/shader_check"          # smoke --shaders renders land here, 
 SHADER_TIMEOUT_S = 180
 NO_EXEC = (126, 127)
 SHIP_SITE = "build/web"   # the web build `ship --kind static` publishes unless --site is given (None: none)
+DOTWORK_TOOL = "tools/dotwork_mz.mjs"      # Dotwork's art into MZ's image layouts (#62)
+DOTWORK_CONFIG = "art_src/dotwork/dotwork.config.json"   # Dotwork's per-game config (its project.src_dir)
+DOTWORK_RECORD = "dotwork/mz_export.json"  # under the src_dir: what the converter wrote, and the database's ids
+DOTWORK_TIMEOUT_S = 600
 DEBUG = False
 
 
@@ -556,6 +575,7 @@ def cmd_check(args):
     shader_rc = 0
     if (g / SHADER_PLUGIN).is_file() and not getattr(args, "no_shaders", False):
         shader_rc = shader_compile(g, problems)
+    dotwork_check(g, problems)
     for p in problems:
         print(f"[FAIL] {p}")
     if problems:
@@ -569,6 +589,60 @@ def cmd_check(args):
         print(f"[WARN] no RPG Maker MZ project in {rel(g)}/ yet (only the game's plugins were checked): "
               "python tools/dev.py setup --from <a new MZ project>")
     return 0
+
+
+def dotwork_record():
+    """The Dotwork converter's export record (<src_dir>/dotwork/mz_export.json; src_dir from Dotwork's config,
+    assets_src by default), or None before the first export."""
+    src = "assets_src"
+    try:
+        src = json.loads((ROOT / DOTWORK_CONFIG).read_text(encoding="utf-8")).get("project", {}).get("src_dir") or src
+    except (OSError, ValueError, AttributeError):
+        pass
+    p = ROOT / src / DOTWORK_RECORD
+    return p if p.is_file() else None
+
+
+def dotwork_check(g, problems):
+    """After a `dotwork` export: its files are present and in MZ's shapes (the converter's --check)."""
+    if dotwork_record() is None or not (ROOT / DOTWORK_TOOL).is_file():
+        return
+    rc, out = run([shutil.which("node") or "node", ROOT / DOTWORK_TOOL, "--check", "--game", g], capture=True,
+                  timeout=120)
+    for line in out.splitlines():
+        if line.startswith("[WARN]"):
+            print(line)
+    if rc:
+        found = [line[len("[FAIL] "):] for line in out.splitlines() if line.startswith("[FAIL] ")]
+        problems.extend(f"dotwork export: {p}" for p in found or [out.strip() or f"{DOTWORK_TOOL} --check exited {rc}"])
+
+
+def cmd_dotwork(args):
+    """Convert Dotwork's asset manifests into MZ's image layouts (tools/dotwork_mz.mjs does the work)."""
+    err = node_problem()
+    if err:
+        print(f"[error] {err}", file=sys.stderr)
+        return 2
+    tool = ROOT / DOTWORK_TOOL
+    if not tool.is_file():
+        print(f"[error] {DOTWORK_TOOL} is missing (python scripts/new_game.py --upgrade adds it)", file=sys.stderr)
+        return 2
+    cmd = [shutil.which("node") or "node", tool, "--game", game_dir()]
+    for m in args.manifest or []:
+        cmd += ["--manifest", m]
+    for flag, value in (("--scale", args.scale), ("--sheet", args.sheet), ("--only", args.only), ("--stand", args.stand)):
+        if value:
+            cmd += [flag, str(value)]
+    for flag, on in (("--side-view", args.side_view), ("--replace", args.replace), ("--dry-run", args.dry_run),
+                     ("--check", args.check), ("--debug", DEBUG)):
+        if on:
+            cmd.append(flag)
+    rc, out = run(cmd, capture=True, timeout=DOTWORK_TIMEOUT_S)
+    print(out.rstrip())
+    if rc == 124:
+        print(f"[FAIL] the conversion did not finish within {DOTWORK_TIMEOUT_S} s")
+        return 1
+    return 2 if rc in NO_EXEC else rc
 
 
 def shader_compile(g, problems):
@@ -702,7 +776,7 @@ def cmd_smoke(args):
         return 2
     if rc != 0 or "[ OK ]" not in out:
         return 1
-    return shader_rc
+    return shader_rc or frame_budget_report(out, getattr(args, "frame_budget", None), SMOKE_UNMEASURED)   # #90
 
 
 def cmd_build(args):
@@ -852,6 +926,92 @@ def port_number(text):
     return value
 
 
+# ---- Frame-time budget (#90): the same block in every engine's dev.py -----------------------------------------
+# The game (or smoke.mjs) prints one line at the end of a smoke run:
+#   FRAME_TIMES frames=N mean=MS p95=MS p99=MS worst=MS mode=render|software|logic
+# smoke prints it as numbers, and fails a run whose p95 is over the budget (--frame-budget, else the "Smoke frame
+# time" row of docs/ARCHITECTURE.md). A run that measured nothing says so, and why, instead of passing a budget.
+FRAME_LINE = re.compile(r"\bFRAME_TIMES((?:[ \t]+\w+=[^\s=]+)+)")
+FRAME_MODES = {                           # what the numbers mean, by the mode= the game reported
+    "render": "drawn in a window: a render budget",
+    "software": "drawn on the CPU without a display: not a GPU budget",
+    "logic": "headless, nothing drawn: a logic budget, not a render budget",
+}
+BUDGET_DOC = "docs/ARCHITECTURE.md"       # its Budgets table: smoke reads the "Smoke frame time" row
+BUDGET_ROW = re.compile(r"^\|\s*Smoke frame time[^|]*\|([^|]*)\|", re.M | re.I)
+FRAME_BUDGET_HELP = (f"fail the run when its p95 frame time is over MS milliseconds (default: the 'Smoke frame time' row "
+                     f"in {BUDGET_DOC}, when it holds a number); the run prints mean, p95, p99 and worst frame time "
+                     "whenever the game measured them")
+
+
+def frame_times(text):
+    """The last FRAME_TIMES line in text as a dict: frames, mean, p95, p99, worst (ms) and mode. None without one."""
+    found = None
+    for m in FRAME_LINE.finditer(text or ""):
+        fields = dict(pair.split("=", 1) for pair in m.group(1).split())
+        try:
+            stats = {"frames": int(fields["frames"]), "mode": fields.get("mode", "render")}
+            for key in ("mean", "p95", "worst"):
+                stats[key] = float(fields[key])
+            stats["p99"] = float(fields.get("p99", fields["worst"]))
+        except (KeyError, ValueError):
+            continue                          # a broken line is no measurement
+        if stats["frames"] > 0:
+            found = stats
+    return found
+
+
+def doc_frame_budget():
+    """The frame budget in ms from BUDGET_DOC's "Smoke frame time" row, or None: no file, no row, the template's
+    "e.g." placeholder, or no "<number> ms" in the cell."""
+    try:
+        text = (ROOT / BUDGET_DOC).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    m = BUDGET_ROW.search(text)
+    cell = m.group(1).strip() if m else ""
+    if not cell or cell.lower().startswith("e.g"):
+        return None
+    n = re.search(r"(\d+(?:\.\d+)?)\s*ms\b", cell)
+    return float(n.group(1)) if n and float(n.group(1)) > 0 else None
+
+
+def frame_budget_report(text, budget=None, unmeasured=""):
+    """Print the run's frame times and check the p95 against the budget (budget from --frame-budget, else
+    doc_frame_budget()). Returns 1 when the p95 is over it, else 0. Without a FRAME_TIMES line it prints why nothing
+    was measured (unmeasured) and, with a budget, that the budget was not checked: never a silent pass."""
+    source = "--frame-budget" if budget else BUDGET_DOC
+    budget = budget or doc_frame_budget()
+    stats = frame_times(text)
+    if not stats:
+        print(f"[info] frame time: not measured ({unmeasured or 'the game printed no FRAME_TIMES line'})")
+        if budget:
+            print(f"[WARN] frame budget {budget:g} ms ({source}) not checked: this run measured no frame time")
+        return 0
+    mode = stats["mode"]
+    numbers = (f"mean {stats['mean']:.2f} ms, p95 {stats['p95']:.2f} ms, p99 {stats['p99']:.2f} ms, "
+               f"worst {stats['worst']:.2f} ms")
+    print(f"[info] frame time over {stats['frames']} frames ({mode}, {FRAME_MODES.get(mode, 'unknown mode')}): {numbers}")
+    if not budget:
+        return 0
+    if stats["p95"] > budget:
+        print(f"[FAIL] frame budget: p95 {stats['p95']:.2f} ms is over {budget:g} ms ({source}); {numbers}")
+        return 1
+    print(f"[ OK ] frame budget: p95 {stats['p95']:.2f} ms within {budget:g} ms ({source})")
+    return 0
+
+
+def frame_ms(text):
+    """argparse type: a frame budget in milliseconds, above 0 and at most 10000."""
+    try:
+        n = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a number of milliseconds")
+    if not 0 < n <= 10000:
+        raise argparse.ArgumentTypeError("must be above 0 and at most 10000 ms")
+    return n
+
+
 def positive_int(text):
     """argparse type: 1..100000, so a typo cannot ask for a smoke run that never ends."""
     try:
@@ -936,6 +1096,7 @@ def build_parser():
     p.add_argument("--shaders", action="store_true",
                    help="also render every kit shader recipe as a PIXI filter and compare it with its golden image "
                         "(tools/shaders/; runs without an MZ project)")
+    p.add_argument("--frame-budget", type=frame_ms, metavar="MS", help=FRAME_BUDGET_HELP)
     p.set_defaults(fn=cmd_smoke)
     sub.add_parser("build", help="a web-browser copy of the game in build/web/").set_defaults(fn=cmd_build)
     p = sub.add_parser("run", help="serve the game and open your browser (--editor: open RPG Maker MZ)")
@@ -946,6 +1107,28 @@ def build_parser():
     p.add_argument("--deep", action="store_true", help="also remove node_modules/ (reinstalled by setup)")
     p.add_argument("--yes", action="store_true", help="accepted on every engine; this clean never asks")
     p.set_defaults(fn=cmd_clean)
+    p = sub.add_parser("dotwork", help="Dotwork's art into MZ's image layouts in game/img (characters, faces, "
+                                       "battlers, Window.png, IconSet.png, B to E tilesets)",
+                       description="Convert Dotwork's asset manifests (<assets_dir>/dotwork/*.assets.json) into RPG "
+                                   "Maker MZ's image layouts in game/img, and record the icon, face and tile ids for "
+                                   "the database in <src_dir>/dotwork/mz_export.json. Never overwrites a file it did "
+                                   "not write unless --replace. docs/ENGINE_FLOW.md 'Dotwork art in MZ'.")
+    p.add_argument("--manifest", action="append", metavar="FILE",
+                   help="a manifest to convert (repeatable; default: every *.assets.json in Dotwork's assets folder)")
+    p.add_argument("--scale", type=int, default=0,
+                   help="whole-number scale from Dotwork pixels to MZ pixels (default: MZ's tile size / the art's)")
+    p.add_argument("--sheet", default="", metavar="NAME",
+                   help="put characters on normal sheets NAME, NAME_2 ... (8 each) instead of one $ file each")
+    p.add_argument("--only", default="", metavar="KINDS",
+                   help="comma list of characters, objects, faces, sv, enemies, icons, window, tilesets")
+    p.add_argument("--stand", choices=("walk", "idle"), default="",
+                   help="the standing frame (MZ's middle column): walk's first (default) or idle's")
+    p.add_argument("--side-view", action="store_true", help="make side-view battlers even in a front-view game")
+    p.add_argument("--replace", action="store_true",
+                   help="overwrite files it did not write (MZ's Window.png, IconSet.png); originals go to build/")
+    p.add_argument("--dry-run", action="store_true", help="say what would be written, write nothing")
+    p.add_argument("--check", action="store_true", help="check the last export (files, MZ's shapes); `check` runs it too")
+    p.set_defaults(fn=cmd_dotwork)
     sub.add_parser("ship", help="put the game online with OpenTofu (tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
     sub.add_parser("doctor", help="verify the local environment").set_defaults(fn=cmd_doctor)
     return ap

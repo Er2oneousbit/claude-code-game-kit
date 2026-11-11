@@ -113,7 +113,13 @@ def check_claude_settings(problems):
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         problems.append(f"INVALID .claude/settings.json ({exc}): Claude Code ignores it, so no deny rules or hooks apply")
         return
-    if not (data.get("permissions") or {}).get("deny"):
+    # valid JSON of the wrong shape (a list, "permissions" as a list) used to crash this check with .get
+    perms = data.get("permissions") if isinstance(data, dict) else None
+    if not isinstance(data, dict) or not isinstance(perms, (dict, type(None))):
+        what = "is not a JSON object" if not isinstance(data, dict) else '"permissions" is not an object'
+        problems.append(f"INVALID .claude/settings.json ({what}): Claude Code ignores it, so no deny rules or hooks apply")
+        return
+    if not (perms or {}).get("deny"):
         problems.append(".claude/settings.json has no permissions.deny rules (secrets are unprotected)")
 
 
@@ -140,7 +146,8 @@ def check_handoff_age(warnings):
     path = ROOT / "docs" / "HANDOFF.md"
     if not path.exists():
         return
-    m = re.search(r"\*\*Last updated:\*\*\s*(\d{4}-\d{2}-\d{2})", path.read_text(encoding="utf-8", errors="replace"))
+    # check_links.read_text: a UTF-16 save (Notepad's "Unicode") hid the date, so the fresh file time was judged
+    m = re.search(r"\*\*Last updated:\*\*\s*(\d{4}-\d{2}-\d{2})", check_links.read_text(path))
     try:
         when = datetime.date.fromisoformat(m.group(1)) if m else None
     except ValueError:   # a typo such as 2026-02-30: fall back to the file's age

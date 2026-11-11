@@ -59,6 +59,9 @@
 #           as Dotwork's Pixelorama extension, whose scripts belong to Pixelorama, not the game
 # Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the floor is Godot 4.6 (MIN_GODOT); every command
 #           but clean and ship exits 2 on an older Godot, doctor too, instead of failing on parse errors
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): smoke reports the run's FRAME_TIMES line (mean,
+#           p95, p99, worst) and fails a p95 over --frame-budget MS, or over the "Smoke frame time" row of
+#           docs/ARCHITECTURE.md; a run that measured nothing says so (#90)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -104,6 +107,8 @@ GUT_NOTHING_RAN = [                      # GUT exits 0 on these, so they must be
 ANSI = re.compile(r"\x1b\[[0-9;]*m")    # GUT colours its summary
 SMOKE_TIMEOUT_S = 120                    # a scene that hangs in _ready must fail, not block forever
 SMOKE_MIN_FPS = 60                       # headless frames are uncapped; --frames adds frames/60 s to the limit
+SMOKE_UNMEASURED = ("the Shell autoload printed no FRAME_TIMES line (scripts/shell/frame_times.gd samples them in a "
+                    "smoke run; a project without it measures nothing)")
 TEST_TIMEOUT_S = 900
 CHECK_TIMEOUT_S = 600                    # per batch of CHECK_BATCH files
 IMPORT_TIMEOUT_S = 1800                  # first import of a big project is slow
@@ -742,6 +747,9 @@ def cmd_smoke(args, godot):
         return 1
     print(f"[ OK ] smoke passed ({'drive ' + args.drive if args.drive else str(frames) + ' frames'}"
           f"{', locale ' + args.locale if args.locale else ''}; data in {data_dir})")
+    rc = frame_budget_report(out, getattr(args, "frame_budget", None), SMOKE_UNMEASURED)   # #90: headless, so a logic budget
+    if rc:
+        return rc
     if args.screenshot or args.record:
         rc = capture(args, godot, frames, user)
         if rc:
@@ -1104,6 +1112,92 @@ def cmd_doctor(args, godot):
     return 2 if too_old else 1 if problems else 0   # a too old Godot is an environment problem, like elsewhere
 
 
+# ---- Frame-time budget (#90): the same block in every engine's dev.py -----------------------------------------
+# The game (or smoke.mjs) prints one line at the end of a smoke run:
+#   FRAME_TIMES frames=N mean=MS p95=MS p99=MS worst=MS mode=render|software|logic
+# smoke prints it as numbers, and fails a run whose p95 is over the budget (--frame-budget, else the "Smoke frame
+# time" row of docs/ARCHITECTURE.md). A run that measured nothing says so, and why, instead of passing a budget.
+FRAME_LINE = re.compile(r"\bFRAME_TIMES((?:[ \t]+\w+=[^\s=]+)+)")
+FRAME_MODES = {                           # what the numbers mean, by the mode= the game reported
+    "render": "drawn in a window: a render budget",
+    "software": "drawn on the CPU without a display: not a GPU budget",
+    "logic": "headless, nothing drawn: a logic budget, not a render budget",
+}
+BUDGET_DOC = "docs/ARCHITECTURE.md"       # its Budgets table: smoke reads the "Smoke frame time" row
+BUDGET_ROW = re.compile(r"^\|\s*Smoke frame time[^|]*\|([^|]*)\|", re.M | re.I)
+FRAME_BUDGET_HELP = (f"fail the run when its p95 frame time is over MS milliseconds (default: the 'Smoke frame time' row "
+                     f"in {BUDGET_DOC}, when it holds a number); the run prints mean, p95, p99 and worst frame time "
+                     "whenever the game measured them")
+
+
+def frame_times(text):
+    """The last FRAME_TIMES line in text as a dict: frames, mean, p95, p99, worst (ms) and mode. None without one."""
+    found = None
+    for m in FRAME_LINE.finditer(text or ""):
+        fields = dict(pair.split("=", 1) for pair in m.group(1).split())
+        try:
+            stats = {"frames": int(fields["frames"]), "mode": fields.get("mode", "render")}
+            for key in ("mean", "p95", "worst"):
+                stats[key] = float(fields[key])
+            stats["p99"] = float(fields.get("p99", fields["worst"]))
+        except (KeyError, ValueError):
+            continue                          # a broken line is no measurement
+        if stats["frames"] > 0:
+            found = stats
+    return found
+
+
+def doc_frame_budget():
+    """The frame budget in ms from BUDGET_DOC's "Smoke frame time" row, or None: no file, no row, the template's
+    "e.g." placeholder, or no "<number> ms" in the cell."""
+    try:
+        text = (ROOT / BUDGET_DOC).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    m = BUDGET_ROW.search(text)
+    cell = m.group(1).strip() if m else ""
+    if not cell or cell.lower().startswith("e.g"):
+        return None
+    n = re.search(r"(\d+(?:\.\d+)?)\s*ms\b", cell)
+    return float(n.group(1)) if n and float(n.group(1)) > 0 else None
+
+
+def frame_budget_report(text, budget=None, unmeasured=""):
+    """Print the run's frame times and check the p95 against the budget (budget from --frame-budget, else
+    doc_frame_budget()). Returns 1 when the p95 is over it, else 0. Without a FRAME_TIMES line it prints why nothing
+    was measured (unmeasured) and, with a budget, that the budget was not checked: never a silent pass."""
+    source = "--frame-budget" if budget else BUDGET_DOC
+    budget = budget or doc_frame_budget()
+    stats = frame_times(text)
+    if not stats:
+        print(f"[info] frame time: not measured ({unmeasured or 'the game printed no FRAME_TIMES line'})")
+        if budget:
+            print(f"[WARN] frame budget {budget:g} ms ({source}) not checked: this run measured no frame time")
+        return 0
+    mode = stats["mode"]
+    numbers = (f"mean {stats['mean']:.2f} ms, p95 {stats['p95']:.2f} ms, p99 {stats['p99']:.2f} ms, "
+               f"worst {stats['worst']:.2f} ms")
+    print(f"[info] frame time over {stats['frames']} frames ({mode}, {FRAME_MODES.get(mode, 'unknown mode')}): {numbers}")
+    if not budget:
+        return 0
+    if stats["p95"] > budget:
+        print(f"[FAIL] frame budget: p95 {stats['p95']:.2f} ms is over {budget:g} ms ({source}); {numbers}")
+        return 1
+    print(f"[ OK ] frame budget: p95 {stats['p95']:.2f} ms within {budget:g} ms ({source})")
+    return 0
+
+
+def frame_ms(text):
+    """argparse type: a frame budget in milliseconds, above 0 and at most 10000."""
+    try:
+        n = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a number of milliseconds")
+    if not 0 < n <= 10000:
+        raise argparse.ArgumentTypeError("must be above 0 and at most 10000 ms")
+    return n
+
+
 def positive_int(text):
     """argparse type: 1..100000, so a typo cannot ask for a smoke run that never ends."""
     try:
@@ -1227,6 +1321,7 @@ def build_parser():
                    help=f"after --screenshot, compare it with this picture ({IMAGE_DIFF}); exit 1 when they differ")
     p.add_argument("--tolerance", type=channel_tolerance, default=0,
                    help="--compare: per-channel difference allowed, 0-255 (default 0)")
+    p.add_argument("--frame-budget", type=frame_ms, metavar="MS", help=FRAME_BUDGET_HELP)
     p.set_defaults(fn=cmd_smoke)
 
     p = sub.add_parser("run", help="launch the game window")

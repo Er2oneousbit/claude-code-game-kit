@@ -30,6 +30,20 @@ not, how far they got). Asking for what happened before what they think keeps ob
 5. **Close the loop.** Reply on the issue with what changed and what to try next (each reply needs your yes:
    it is public). A commit that says `Fixes #12` closes the issue when it reaches the default branch.
 
+## Filing an issue yourself
+Claude finds things too: a review, a bug hunt that is not fixed today, a playtest note that needs tracking.
+`/file-issue` files them in the same shape as the forms, through `python tools/issues.py new`:
+1. **A draft, then a dry run.** Each item (bug, feel or idea, one problem each) is printed exactly as it would be
+   filed: title with its `[Bug]`/`[Feel]`/`[Idea]` prefix, labels, body, and a footer saying where it came from.
+   Nothing is posted until you have seen it and said yes; `--create` then posts and asks for permission again.
+2. **Private content is refused**, not cleaned up: keys and tokens, home-folder and other absolute paths on your
+   machine, email addresses, your account name, the private words in your terms list (`SOP-13` step 3), hidden
+   characters and em dashes block the item. Security weaknesses with a working recipe and anything with personal
+   data are marked sensitive and never filed: they are fixed privately.
+3. **No duplicates.** Open and closed issues with mostly the same title words, or a shared file and a shared word,
+   stop the item: comment on the existing one instead, or file it linked to it. A record of what each draft became,
+   kept under the gitignored `captures/issues/`, keeps a rerun from filing anything twice.
+
 ## Telemetry (cheap version)
 Log to a text or CSV file in debug builds: deaths with position, time per section, quits, inputs per second.
 `playtest-analyst` subagent can summarize those files.

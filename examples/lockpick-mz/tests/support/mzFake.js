@@ -5,8 +5,10 @@
 //           here first.
 // Usage   : const mz = loadPlugin("GameMain", { LockpickCore }, { titleDemo: "true" }, { search: "?autoplay" });
 //           mz.commands.get("OpenLock")({ pins: "3" });  mz.runScene(200);  mz.logs  mz.switches
+//           const mz = loadPlugin("GameAccess", { GameJuice, GameShell, ConfigManager, Window_Options, ... });
 // Notes   : These are fakes, not RPG Maker: they prove the code runs and calls what it means to, not that MZ's real
-//           classes behave the same. Each fake is as small as this game's use of it, in MZ's prototype style.
+//           classes behave the same. Each fake is as small as this game's use of it, in MZ's prototype style
+//           (passed in globals, as tests/gameAccess.test.js does, or here when several tests need it).
 //           The smoke test (python tools/dev.py smoke) boots the plugin in a browser on the MZ files that
 //           setup --from copied in (not yet run against a real MZ project).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)

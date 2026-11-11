@@ -166,6 +166,60 @@ class DotworkExam(unittest.TestCase):
         with self.assertRaises(fcore.ToolError):
             fcore.Settings(self.tmp, config=os.path.join(self.tmp, "missing.json"))
 
+    def kit_game(self, engine_id, conf=None):
+        """A kit game with no project.godot: only its .game-kit.json (and a dotwork.config.json when conf is given)."""
+        os.makedirs(os.path.join(self.tmp, "art_src", "dotwork"), exist_ok=True)
+        with open(os.path.join(self.tmp, ".game-kit.json"), "w", encoding="utf-8") as f:
+            json.dump({"kit_version": "0.14.5", "engine": engine_id}, f)
+        cfg = os.path.join(self.tmp, "art_src", "dotwork", "dotwork.config.json")
+        if conf is not None:
+            with open(cfg, "w", encoding="utf-8") as f:
+                json.dump(conf, f)
+        elif os.path.exists(cfg):
+            os.remove(cfg)
+
+    def test_kit_engine_defaults(self):
+        # Unity's folder is Assets: Dotwork's own "assets" is another folder on a case-sensitive file system, which
+        # Unity never sees; with no config, Dotwork follows the game's engine (from .game-kit.json)
+        want = {"unity": ("Assets", "none"), "web": ("public/assets", "none"), "web-3d": ("public/assets", "none"),
+                "godot": ("assets", "godot"), "unreal": ("assets", "none"), "rpgmaker-mz": ("assets", "none"),
+                "bevy": ("assets", "none"), "cpp-sdl2": ("assets", "none"), "love2d": ("assets", "none")}
+        for eid, (assets_dir, engine) in want.items():
+            self.kit_game(eid)
+            s = fcore.Settings(self.tmp)
+            self.assertEqual((s.conf["project"]["assets_dir"], s.conf["engine"]), (assets_dir, engine), eid)
+            self.assertEqual(s.conf["project"]["res_root"], "res://" + assets_dir, eid)
+            self.assertEqual(s.assets, os.path.normpath(os.path.join(self.tmp, assets_dir)), eid)
+            if engine == "none":
+                s.require_game()                                            # .game-kit.json marks the game
+        # the game's config, then --engine, still win over the engine's defaults
+        self.kit_game("unity", {"project": {"assets_dir": "Assets/Art"}})
+        self.assertEqual(fcore.Settings(self.tmp).conf["project"]["assets_dir"], "Assets/Art")
+        self.assertEqual(fcore.Settings(self.tmp, engine="godot").conf["engine"], "godot")
+        # an engine Dotwork does not know, or a record it cannot read: Dotwork's own defaults, no error
+        self.kit_game("unity")
+        for text in ('{"engine": "pico-8"}', "{not json", '["unity"]', '{"engine": 7}'):
+            with open(os.path.join(self.tmp, ".game-kit.json"), "w", encoding="utf-8") as f:
+                f.write(text)
+            s = fcore.Settings(self.tmp)
+            self.assertEqual((s.conf["project"]["assets_dir"], s.conf["engine"]), ("assets", "godot"), text)
+        # every engine the kit ships is in the table; each matches its engine.json, except Unreal and MZ, whose
+        # Dotwork art stays outside Content/ and game/ (their importers read assets/dotwork/). Only in the kit repo.
+        engines = os.path.join(os.path.dirname(os.path.abspath(fcore.__file__)), *[os.pardir] * 4, "engines")
+        if os.path.isdir(engines):
+            seen = []
+            for eid in sorted(os.listdir(engines)):
+                ej = os.path.join(engines, eid, "engine.json")
+                if eid.startswith("_") or not os.path.isfile(ej):
+                    continue
+                seen.append(eid)
+                with open(ej, encoding="utf-8") as f:
+                    kit_dir = json.load(f)["assets_dir"]
+                self.assertIn(eid, fcore.KIT_ENGINE_DEFAULTS, f"engines/{eid}: add it to fcore.KIT_ENGINE_DEFAULTS")
+                got = fcore.KIT_ENGINE_DEFAULTS[eid].get("project", {}).get("assets_dir", "assets")
+                self.assertEqual(got, "assets" if eid in ("unreal", "rpgmaker-mz") else kit_dir, eid)
+            self.assertGreaterEqual(len(seen), 9)
+
     def test_spec_errors_exit_2(self):
         import dotwork
         make_project(self.tmp)
@@ -2349,7 +2403,7 @@ class DotworkExam(unittest.TestCase):
 
 
 # lane exams kept in their own files run with this one (the kit runs only this file)
-EXTRA_EXAMS = ("test_uikit", "test_store", "test_screens", "test_bdf", "test_diorama", "test_shipped", "test_vfx", "test_animpolish", "test_lighting", "test_qapack", "test_fonts", "test_defaults_cvd", "test_pixelorama")
+EXTRA_EXAMS = ("test_uikit", "test_store", "test_screens", "test_bdf", "test_diorama", "test_shipped", "test_vfx", "test_animpolish", "test_lighting", "test_qapack", "test_fonts", "test_defaults_cvd", "test_pixelorama", "test_unrun")
 
 def load_extra_exams():
     """Put each extra module's TestCase classes into this module (in a function, so no loop variable is left behind

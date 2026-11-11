@@ -1,6 +1,6 @@
 ---
 name: dotwork
-description: Make the game's pixel art on the user's own GPU with Dotwork (tools/art/dotwork/, local AI through ComfyUI): characters with 4-direction animations, props with collision, terrain and maps from text, effects, enemies, battle backgrounds, icons, portraits, fonts and UI. Use when the GDD's art source is Dotwork, or the user says "Dotwork", "make pixel art locally", "generate sprites/tiles/effects on my GPU", or wants AI art without a paid service. Godot gets ready-made resources; other engines get PNGs, sheets and a manifest. Not for 3D (/model-pipeline) or paid services (/gen-brief).
+description: Make the game's pixel art on the user's own GPU with Dotwork (tools/art/dotwork/, local AI through ComfyUI): characters with 4-direction animations, props with collision, terrain and maps from text, effects, enemies, battle backgrounds, icons, portraits, fonts and UI. Use when the GDD's art source is Dotwork, or the user says "Dotwork", "make pixel art locally", "generate sprites/tiles/effects on my GPU", or wants AI art without a paid service. Godot gets ready-made resources; every other engine's importer brings the art in (README "Other engines"). Not for 3D (/model-pipeline) or paid services (/gen-brief).
 ---
 
 # Dotwork: local pixel art
@@ -17,9 +17,9 @@ and its keys, limits) and SOP-16 "Generating pixel art locally" before the first
    depending on the tier. **Never download a model, install a node pack or install ComfyUI without a clear yes for
    that item.** Node packs are untrusted code: review them as SOP-16 says. ComfyUI stays on 127.0.0.1. No GPU or too little memory: say so and offer the other art routes (GDD "Art source").
 3. **First run, no GPU:** `python tools/art/dotwork/dotwork.py pack --spec tools/art/dotwork/examples/ui.json`
-   (needs `GODOT_BIN`, or add `--engine none` on another engine). It proves the folder layout, the Godot import and the
-   asset log in seconds. `tools/art/dotwork/examples/uikit.json` is the same kind of run: the menu Theme, prompt
-   glyphs and cursors.
+   (needs `GODOT_BIN` in a Godot game; another engine gets `--engine none` and its own assets folder by default). It
+   proves the folder layout, the Godot import and the asset log in seconds. `tools/art/dotwork/examples/uikit.json`
+   is the same kind of run: the menu Theme, prompt glyphs and cursors.
 4. **Write a spec from the plan.** Read GDD "Art and audio direction" and the style fragments in `docs/BRIEFS.md`
    (fill them first if blank, as `/gen-brief` does). Start from the closest file in `tools/art/dotwork/examples/` and
    save the game's spec as `assets_src/specs/<pack>.json`. Start small: one prop, one character, one tile set, then grow.
@@ -34,8 +34,16 @@ and its keys, limits) and SOP-16 "Generating pixel art locally" before the first
    sprite, a tile edge repeating, a cropped figure. Fix one clip at a time (`character --fix CLIP:seed=N`), or render
    takes side by side and pick one (`audition`, then `--promote`). Hand polish goes through `dotwork.py aseprite` or `dotwork.py pixelorama` (Pixelorama `.pxo` files, no install needed; `pixelorama --install-extension` adds a Dotwork tab inside Pixelorama that shows the asset and its QA notes and re-exports it with one button: README, Hand polish); `dotwork.py clean` tidies pixel art from elsewhere (grid, palette,
    stray pixels), and `recolor` makes palette-swapped variants without a render.
-8. **Prove it in the game.** `pack` ends with `verify` (every asset loads, then the game's smoke). On other engines,
-   import the PNGs and sheets as `docs/ENGINE.md` says and run `python tools/dev.py smoke`.
+8. **Prove it in the game.** In Godot, `pack` ends with `verify` (every asset loads, then the game's smoke). On other
+   engines, run the engine's importer, then `python tools/dev.py test` and `smoke` (details in `docs/ENGINE.md`; web
+   and RPG Maker MZ: `docs/ENGINE_FLOW.md`):
+   - web: nothing to run, every pack loads before the title screen (`queueDotwork` / `dotworkPack`, src/game/dotwork.ts).
+   - web-3d: restart `dev.py run` after a pack; `DotworkLibrary.load(DOTWORK_MANIFESTS)` in `src/game/dotwork/`.
+   - Unity: `python tools/dev.py exec GameKitDotwork.ImportAll`.
+   - Unreal: `python tools/dev.py exec Content/Python/kit_dotwork/import_dotwork.py`.
+   - Bevy, C++ / SDL3, LÖVE: nothing to run, the game loads every `assets/dotwork/*.assets.json` at startup
+     (`src/dotwork/`, `gfx::dotwork::Library`, `DotworkLoader.load_all()`).
+   - RPG Maker MZ: `python tools/dev.py dotwork` (MZ's image layouts in `game/img/`; `--dry-run` first).
 9. **Log it.** `python tools/art/dotwork/dotwork.py log --pack NAME --dry-run`, check the row, then run it without
    `--dry-run`. It writes the `ASSET_LOG.md` row (models and their licenses, `pre-generated` or `no`) and the evidence
    file. Save prompts that worked in the Prompt Library in `docs/BRIEFS.md`.

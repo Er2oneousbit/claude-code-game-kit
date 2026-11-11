@@ -6,7 +6,7 @@
 //           shell.subtitles.caption("hit")               // "[thud]" when access.captions_sfx is on
 //           shell.subtitles.caption("growl", { dx, dy, halfW, halfH })   // "← [growl]" from off screen, left
 //           shell.subtitles.finish()                     // reveal the whole line now (screenshots)
-// Notes   : Browser only (DOM), no Phaser. Bundles every data/dialogue/*.built.json at build time (Vite glob);
+// Notes   : Browser only (DOM), no renderer import. Bundles every data/dialogue/*.built.json at build time (Vite glob);
 //           a later file's line id wins. In locale "pseudo" the text runs through pseudo(), so the bar's
 //           layout gets the same overflow check as the menus, once the typewriter has finished the line (it carries
 //           data-settling until then). Unknown fields in the files are ignored. holdTime stops the clock of

@@ -24,6 +24,8 @@
 #           project names each tile's atlas slot in its user data ("dotwork:<source>:<x>:<y>:<hash>", the hash of the
 #           tile as built): edits are what differs from the hash, wherever the tile moved to.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): your own tilemaps' TileSet inputs are recorded with or
+#           without Godot, for the engine-neutral asset manifest (assetmap.py)
 # ---------------------------------------------------------------------------
 import base64
 import glob
@@ -668,6 +670,9 @@ def export_own(tm, name, conf, rows, touched):
     custom = "surface" if any(t.get("custom") for s in sources for t in s["tiles"]) else None
     physics = any(t.get("solid_rects") for s in sources for t in s["tiles"])
     tres = os.path.join(out, f"{name}_tileset.tres")
+    # what the TileSet is built from, with or without Godot: the engine-neutral asset manifest reads it (assetmap.py)
+    rows.man.entity("tileset", tres, {"tile_size": [tw, th], "mode": "match_corners_and_sides", "terrains": terrains,
+                                      "custom": custom, "physics": physics, "sources": sources})
     if not godot.ENABLED:
         # #245, #257: without Godot no TileSet or scene is written, so every one an earlier Godot re-export of this
         # project wrote is kept, whatever the frame count now names them

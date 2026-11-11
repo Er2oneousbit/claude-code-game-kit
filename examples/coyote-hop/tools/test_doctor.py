@@ -4,17 +4,22 @@
 # Purpose : Exam for doctor.py, the engine-agnostic health check: the asset-log reminder fires in every overlay's
 #           media folder (assets, Assets, Content, public/assets, game/img) and stays quiet once a row is filled;
 #           the placeholder scan reads the overlays' source files and the profile tokens; a web game's src/shell/
-#           that src/main.ts never reaches is reported.
+#           that src/main.ts never reaches is reported; the required files, a settings.json Claude Code would drop,
+#           the HANDOFF age (its date, a UTF-16 save, the file-time fallback), doc links, --strict, --ignore, exit
+#           codes and non-ASCII names in the output (#14).
 # Usage   : python tools/test_doctor.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only. Each case copies doctor.py and check_links.py into a fake project under a temp
 #           folder and runs it there (doctor.py checks the project its own file sits in).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
+import datetime
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -133,6 +138,117 @@ class DoctorKimiFixes(DoctorExam):
         (self.root / "docs" / "ASSET_LOG.md").write_bytes(
             (LOG_HEAD + "| A-0001 | hero | assets/art/hero.png | CC0 |\n").encode("utf-16"))
         self.assertNotIn("media file(s) under", self.doctor())
+
+
+REQUIRED = ["CLAUDE.md", "README.md", "docs/GDD.md", "docs/ARCHITECTURE.md", "docs/ROADMAP.md", "docs/HANDOFF.md",
+            "docs/ENGINE.md", "docs/ENGINE_FLOW.md", "docs/STYLE.md", "docs/RESOURCES.md", "docs/FIRST_HOUR.md",
+            "docs/EVIDENCE.md", "docs/BRIEFS.md", "docs/ASSET_LOG.md", "docs/TROUBLESHOOTING.md", "docs/sop/README.md",
+            "tools/dev.py", ".claude/settings.json"]
+SETTINGS = '{"permissions": {"deny": ["Read(./.env)"]}}\n'
+
+
+class DoctorChecks(unittest.TestCase):
+    """#14: the checks the cases above leave out: required files, settings.json, the HANDOFF age, doc links,
+    --strict, --ignore, exit codes, -h, and non-ASCII names in the output. Each starts from a healthy project."""
+
+    setUp, tearDown, put = DoctorExam.setUp, DoctorExam.tearDown, DoctorExam.put
+
+    def healthy(self):
+        for rel in REQUIRED:
+            if not (self.root / rel).exists():
+                self.put(rel, "# " + rel + "\n")
+        self.put(".claude/settings.json", SETTINGS)
+        self.put("docs/HANDOFF.md", "# Handoff\n\n**Last updated:** %s\n" % datetime.date.today().isoformat())
+
+    def run_doctor(self, *extra):
+        r = subprocess.run([sys.executable, "-B", str(self.root / "tools" / "doctor.py"), *extra],
+                           capture_output=True, encoding="utf-8", errors="strict")
+        return r.returncode, r.stdout + r.stderr
+
+    def test_a_healthy_project_exits_0(self):
+        self.healthy()
+        code, out = self.run_doctor()
+        self.assertEqual(code, 0, out)
+        self.assertIn("[ OK ] project scaffold looks healthy", out)
+
+    def test_every_missing_required_file_is_named_and_exits_1(self):
+        code, out = self.run_doctor()
+        self.assertEqual(code, 1, out)
+        for rel in REQUIRED:
+            if rel != "docs/ASSET_LOG.md":                     # setUp wrote that one
+                self.assertIn("MISSING required file: " + rel, out)
+        self.assertNotIn("MISSING required file: docs/ASSET_LOG.md", out)
+
+    def test_settings_json_that_claude_code_would_drop(self):
+        self.healthy()
+        cases = [("{not json", "INVALID .claude/settings.json"),
+                 ('{"permissions": {"allow": ["Bash(ls)"]}}', "no permissions.deny rules"),
+                 ('{"permissions": {"deny": []}}', "no permissions.deny rules"),
+                 # valid JSON that is not an object: the old check called .get on it and crashed (exit 2)
+                 ('["Read(./.env)"]', "INVALID .claude/settings.json"),
+                 ('{"permissions": ["Read(./.env)"]}', "INVALID .claude/settings.json")]
+        for text, want in cases:
+            with self.subTest(settings=text):
+                self.put(".claude/settings.json", text)
+                code, out = self.run_doctor()
+                self.assertEqual(code, 1, out)
+                self.assertIn(want, out)
+                self.assertNotIn("crashed", out)
+
+    def test_an_old_handoff_warns_and_strict_fails(self):
+        self.healthy()
+        self.put("docs/HANDOFF.md", "# Handoff\n\n**Last updated:** 2020-01-02\n")
+        code, out = self.run_doctor()
+        self.assertEqual(code, 0, out)                       # a warning alone passes
+        self.assertIn("[WARN] HANDOFF.md is", out)
+        self.assertIn("(Last updated 2020-01-02)", out)
+        self.assertNotIn("looks healthy", out)
+        code, out = self.run_doctor("--strict")
+        self.assertEqual(code, 1, out)
+
+    def test_handoff_without_a_good_date_falls_back_to_the_file_age(self):
+        self.healthy()
+        for text in ("# Handoff\n\n**Last updated:** 2026-02-30\n", "# Handoff\n\n**Last updated:** (fill in)\n"):
+            with self.subTest(text=text):
+                self.put("docs/HANDOFF.md", text)
+                self.assertNotIn("HANDOFF.md is", self.run_doctor()[1])      # a fresh file: no warning
+                old = time.time() - 40 * 86400
+                os.utime(self.root / "docs" / "HANDOFF.md", (old, old))
+                out = self.run_doctor()[1]
+                self.assertIn("HANDOFF.md is 40 days old (file not touched)", out)
+
+    def test_a_utf16_handoff_date_is_read(self):
+        """Notepad's "Unicode" save: the old check read it as UTF-8, found no date and judged the fresh file time."""
+        self.healthy()
+        (self.root / "docs" / "HANDOFF.md").write_bytes("# Handoff\n\n**Last updated:** 2020-01-02\n".encode("utf-16"))
+        self.assertIn("(Last updated 2020-01-02)", self.run_doctor()[1])
+
+    def test_broken_doc_links_warn_and_ignore_skips_a_folder(self):
+        self.healthy()
+        self.put("docs/GDD.md", "# GDD\n\nSee [the plan](docs/NOPE.md).\n")
+        code, out = self.run_doctor()
+        self.assertEqual(code, 0, out)
+        self.assertIn("broken doc reference in docs/GDD.md", out)
+        self.assertEqual(self.run_doctor("--strict")[0], 1)
+        name = "{{" + "GAME_NAME}}"
+        self.put("localization/fr.json", '{"title": "%s"}\n' % name)
+        self.assertIn("in localization/fr.json", self.run_doctor()[1])
+        self.assertNotIn("localization/fr.json", self.run_doctor("--ignore", "localization")[1])
+
+    def test_non_ascii_file_names_print_as_utf8(self):
+        """Bytes cp1252 cannot decode (0x8D in "Í", 0x9D in a right double quote): the output must be UTF-8."""
+        self.healthy()
+        name = "Í”notes.md"
+        self.put("docs/" + name, "{{" + "GAME_NAME}}\n")
+        code, out = self.run_doctor()                          # run_doctor decodes strictly: a bad byte raises
+        self.assertEqual(code, 1, out)
+        self.assertIn("in docs/" + name, out)
+
+    def test_help_names_every_option(self):
+        code, out = self.run_doctor("-h")
+        self.assertEqual(code, 0)
+        for opt in ("--debug", "--strict", "--assets-dir", "--ignore"):
+            self.assertIn(opt, out)
 
 
 if __name__ == "__main__":

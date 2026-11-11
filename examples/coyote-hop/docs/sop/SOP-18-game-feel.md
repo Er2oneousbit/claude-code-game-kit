@@ -13,12 +13,11 @@ the player should feel ("heavy", "snappy", "relief"). Then pick at most two or t
 Stacking every effect on every event is noise; the strongest moment should get the strongest response.
 
 ## 2. The kit's juice module
-Every engine overlay except RPG Maker MZ ships the same engine-free module (its file names: `docs/ENGINE.md`), tested
-against one shared set of expected values, `data/golden/juice.json`, written by `tools/golden_vectors.py` (the
-reference: change it there first, then the port; K01). RPG Maker MZ ships no juice module: docs/ENGINE_FLOW.md ("The
-shell, juice and accessibility in MZ") maps the rules onto MZ's own shake and flash (`$gameScreen.startShake`,
-`$gameScreen.startFlash`, the limits in a plugin); write any rule you add there as engine-free plugin code and test it
-in Node against the same vectors.
+Every engine overlay ships the same engine-free module (its file names: `docs/ENGINE.md`), tested against one shared
+set of expected values, `data/golden/juice.json`, written by `tools/golden_vectors.py` (the reference: change it there
+first, then the port; K01). In RPG Maker MZ it is the GameJuice plugin, and GameAccess routes MZ's own shake and flash
+(`$gameScreen.startShake`, `$gameScreen.startFlash`) through the player's settings and the flash limiter
+(docs/ENGINE_FLOW.md, "The shell, juice and accessibility in MZ").
 
 | Piece | What it does | Tunables (defaults) | Typical use |
 |---|---|---|---|

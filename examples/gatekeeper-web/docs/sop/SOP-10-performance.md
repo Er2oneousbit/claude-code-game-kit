@@ -11,7 +11,9 @@ Hit frame-time and memory budgets with evidence, not hunches.
 4. **Common culprits:** per-frame allocations, too many draw calls, overdraw, unbounded entity counts, physics on everything,
    expensive per-frame searches, loading in the main thread, unpooled spawn/despawn, huge textures, log spam.
 5. **Record results** in the `docs/ARCHITECTURE.md` Budgets table ("Measured on", "Last measured"), and in the PR/commit message when there is one: before, after, where measured.
-6. **Guard it.** Add a smoke-level stress scene or a frame-time log to catch regressions. Measure it on the production
+6. **Guard it.** `dev.py smoke` prints its frame times (mean, p95, p99, worst, and whether they were drawn in a window,
+   on the CPU, or headless with nothing drawn) and fails a p95 over the `Smoke frame time` row of `ARCHITECTURE.md`
+   (or `smoke --frame-budget MS`). Add a smoke-level stress scene so that guard catches regressions. Measure on the production
    build at every milestone, not only when the game feels slow (tip, E54): small per-feature costs pile up quietly. One
    game's audit found a map screen at about 24 ms of script per frame (under 4x CPU throttle) and got it to about 2 ms.
 

@@ -1,0 +1,254 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/Er2oneousbit/claude-code-game-kit/core/tools/art/dotwork/asset_manifest.schema.json",
+ "title": "Dotwork engine-neutral asset manifest, version 1",
+ "description": "ASSET_MANIFEST.md is the spec. Pixels, origin top left, y down, times in seconds. Paths are relative to the manifest's folder joined with base.",
+ "type": "object",
+ "required": ["format", "version", "pack", "generator", "base", "assets"],
+ "additionalProperties": false,
+ "properties": {
+  "format": {"const": "dotwork-assets"},
+  "version": {"type": "string", "pattern": "^1\\.[0-9]+\\.[0-9]+$"},
+  "pack": {"type": "string", "minLength": 1},
+  "generator": {"type": "string"},
+  "base": {"type": "string"},
+  "assets": {"type": "array", "items": {"$ref": "#/$defs/asset"}}
+ },
+ "$defs": {
+  "path": {"type": "string", "minLength": 1, "pattern": "^[^/\\\\:][^\\\\:]*$"},
+  "name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+  "size": {"type": "array", "items": {"type": "integer", "minimum": 1}, "minItems": 2, "maxItems": 2},
+  "point": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+  "rect": {"type": "array", "items": {"type": "integer", "minimum": 0}, "minItems": 4, "maxItems": 4},
+  "box": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+  "margins": {"type": "array", "items": {"type": "integer", "minimum": 0}, "minItems": 4, "maxItems": 4},
+  "collision": {
+   "type": "array",
+   "items": {"type": "object", "required": ["rect"], "additionalProperties": false,
+             "properties": {"rect": {"$ref": "#/$defs/box"}, "one_way": {"type": "boolean"}}}
+  },
+  "frame": {
+   "type": "object", "required": ["file", "rect", "duration"], "additionalProperties": false,
+   "properties": {"file": {"$ref": "#/$defs/path"}, "rect": {"$ref": "#/$defs/rect"},
+                  "duration": {"type": "number", "exclusiveMinimum": 0}}
+  },
+  "clip": {
+   "type": "object", "required": ["name", "fps", "loop", "frame_size", "pivot", "frames", "length"],
+   "additionalProperties": false,
+   "properties": {
+    "name": {"$ref": "#/$defs/name"},
+    "fps": {"type": "number", "exclusiveMinimum": 0},
+    "loop": {"type": "boolean"},
+    "holds": {"type": "array", "items": {"type": "number", "exclusiveMinimum": 0}, "minItems": 1},
+    "frame_size": {"$ref": "#/$defs/size"},
+    "pivot": {"$ref": "#/$defs/point"},
+    "sheet": {"$ref": "#/$defs/path"},
+    "frames": {"type": "array", "items": {"$ref": "#/$defs/frame"}, "minItems": 1},
+    "length": {"type": "number", "exclusiveMinimum": 0}
+   }
+  },
+  "tile": {
+   "type": "object", "required": ["col", "row"], "additionalProperties": false,
+   "properties": {
+    "col": {"type": "integer", "minimum": 0},
+    "row": {"type": "integer", "minimum": 0},
+    "terrain_set": {"type": "integer", "minimum": 0},
+    "terrain": {"type": "integer", "minimum": 0},
+    "mask": {"type": "integer", "minimum": 0},
+    "corners": {"type": "object", "additionalProperties": {"type": "integer", "minimum": -1}},
+    "probability": {"type": "number", "minimum": 0},
+    "surface": {"type": "string"},
+    "collision": {"$ref": "#/$defs/collision"},
+    "anim": {"type": "object", "required": ["frames", "fps"], "additionalProperties": false,
+             "properties": {"frames": {"type": "integer", "minimum": 1}, "fps": {"type": "number", "exclusiveMinimum": 0}}},
+    "origin": {"$ref": "#/$defs/point"}
+   }
+  },
+  "asset": {
+   "type": "object",
+   "required": ["kind", "name"],
+   "properties": {
+    "kind": {"enum": ["animated_sprite", "sprite", "icon", "portrait", "tileset", "map", "font", "ui_kit",
+                      "background", "particles", "transition", "normal_map", "image"]},
+    "name": {"$ref": "#/$defs/name"}
+   },
+   "allOf": [
+    {"if": {"properties": {"kind": {"const": "animated_sprite"}}}, "then": {"$ref": "#/$defs/animated_sprite"}},
+    {"if": {"properties": {"kind": {"const": "sprite"}}}, "then": {"$ref": "#/$defs/sprite"}},
+    {"if": {"properties": {"kind": {"const": "icon"}}}, "then": {"$ref": "#/$defs/icon"}},
+    {"if": {"properties": {"kind": {"const": "portrait"}}}, "then": {"$ref": "#/$defs/portrait"}},
+    {"if": {"properties": {"kind": {"const": "tileset"}}}, "then": {"$ref": "#/$defs/tileset"}},
+    {"if": {"properties": {"kind": {"const": "map"}}}, "then": {"$ref": "#/$defs/map"}},
+    {"if": {"properties": {"kind": {"const": "font"}}}, "then": {"$ref": "#/$defs/font"}},
+    {"if": {"properties": {"kind": {"const": "ui_kit"}}}, "then": {"$ref": "#/$defs/ui_kit"}},
+    {"if": {"properties": {"kind": {"const": "background"}}}, "then": {"$ref": "#/$defs/background"}},
+    {"if": {"properties": {"kind": {"const": "particles"}}}, "then": {"$ref": "#/$defs/particles"}},
+    {"if": {"properties": {"kind": {"const": "transition"}}}, "then": {"$ref": "#/$defs/transition"}},
+    {"if": {"properties": {"kind": {"const": "normal_map"}}}, "then": {"$ref": "#/$defs/normal_map"}},
+    {"if": {"properties": {"kind": {"const": "image"}}}, "then": {"$ref": "#/$defs/image"}}
+   ]
+  },
+  "animated_sprite": {
+   "type": "object", "required": ["kind", "name", "role", "blend", "clips"], "additionalProperties": false,
+   "properties": {
+    "kind": {"const": "animated_sprite"}, "name": {"$ref": "#/$defs/name"}, "role": {"type": "string"},
+    "blend": {"enum": ["normal", "add"]},
+    "clips": {"type": "array", "items": {"$ref": "#/$defs/clip"}, "minItems": 1},
+    "directions": {"type": "object", "additionalProperties": {"type": "object", "additionalProperties": {"$ref": "#/$defs/name"}}},
+    "godot": {"$ref": "#/$defs/path"}
+   }
+  },
+  "sprite": {
+   "type": "object", "required": ["kind", "name", "role", "image", "size", "pivot", "content_rect"],
+   "additionalProperties": false,
+   "properties": {
+    "kind": {"const": "sprite"}, "name": {"$ref": "#/$defs/name"}, "role": {"type": "string"},
+    "image": {"$ref": "#/$defs/path"}, "size": {"$ref": "#/$defs/size"}, "pivot": {"$ref": "#/$defs/point"},
+    "content_rect": {"$ref": "#/$defs/rect"}, "collision": {"$ref": "#/$defs/collision"},
+    "shadow": {"type": "object", "required": ["image", "offset"], "additionalProperties": false,
+               "properties": {"image": {"$ref": "#/$defs/path"}, "offset": {"$ref": "#/$defs/point"}}},
+    "godot": {"$ref": "#/$defs/path"}
+   }
+  },
+  "icon": {
+   "type": "object", "required": ["kind", "name", "sizes"], "additionalProperties": false,
+   "properties": {
+    "kind": {"const": "icon"}, "name": {"$ref": "#/$defs/name"},
+    "sizes": {"type": "array", "minItems": 1,
+              "items": {"type": "object", "required": ["size", "image"], "additionalProperties": false,
+                        "properties": {"size": {"type": "integer", "minimum": 1}, "image": {"$ref": "#/$defs/path"}}}}
+   }
+  },
+  "portrait": {
+   "type": "object", "required": ["kind", "name", "size", "expressions"], "additionalProperties": false,
+   "properties": {
+    "kind": {"const": "portrait"}, "name": {"$ref": "#/$defs/name"}, "size": {"$ref": "#/$defs/size"},
+    "expressions": {"type": "array", "minItems": 1,
+                    "items": {"type": "object", "required": ["name", "image"], "additionalProperties": false,
+                              "properties": {"name": {"$ref": "#/$defs/name"}, "image": {"$ref": "#/$defs/path"}}}},
+    "animation": {"$ref": "#/$defs/name"}
+   }
+  },
+  "tileset": {
+   "type": "object", "required": ["kind", "name", "tile_size", "shape", "terrain_sets", "atlases"],
+   "additionalProperties": false,
+   "properties": {
+    "kind": {"const": "tileset"}, "name": {"$ref": "#/$defs/name"}, "tile_size": {"$ref": "#/$defs/size"},
+    "shape": {"enum": ["square", "isometric"]},
+    "terrain_sets": {"type": "array", "items": {
+     "type": "object", "required": ["id", "mode", "terrains"], "additionalProperties": false,
+     "properties": {
+      "id": {"type": "integer", "minimum": 0},
+      "mode": {"enum": ["blob47", "corners4", "sides4"]},
+      "terrains": {"type": "array", "items": {
+       "type": "object", "required": ["id", "name", "color"], "additionalProperties": false,
+       "properties": {"id": {"type": "integer", "minimum": 0}, "name": {"type": "string"},
+                      "color": {"type": "string", "pattern": "^#[0-9a-f]{6}$"}}}}}}},
+    "atlases": {"type": "array", "minItems": 1, "items": {
+     "type": "object", "required": ["id", "name", "role", "image", "tile_size", "columns", "rows", "tiles"],
+     "additionalProperties": false,
+     "properties": {
+      "id": {"type": "integer", "minimum": 0}, "name": {"type": "string"}, "role": {"type": "string"},
+      "image": {"$ref": "#/$defs/path"}, "tile_size": {"$ref": "#/$defs/size"},
+      "columns": {"type": "integer", "minimum": 1}, "rows": {"type": "integer", "minimum": 1},
+      "tiles": {"type": "array", "items": {"$ref": "#/$defs/tile"}}}}},
+    "stamps": {"type": "array", "items": {
+     "type": "object", "required": ["name", "size", "tiles"], "additionalProperties": false,
+     "properties": {"name": {"$ref": "#/$defs/name"}, "size": {"$ref": "#/$defs/size"}, "solid": {"type": "boolean"},
+                    "tiles": {"type": "array", "items": {"type": "array", "items": {"type": "integer", "minimum": 0},
+                                                         "minItems": 3, "maxItems": 3}}}}},
+    "custom_data": {"type": "string"},
+    "godot": {"$ref": "#/$defs/path"}
+   }
+  },
+  "map": {
+   "type": "object", "required": ["kind", "name", "tileset", "size", "tile_size", "layers"],
+   "additionalProperties": false,
+   "properties": {
+    "kind": {"const": "map"}, "name": {"$ref": "#/$defs/name"}, "tileset": {"$ref": "#/$defs/name"},
+    "size": {"$ref": "#/$defs/size"}, "tile_size": {"$ref": "#/$defs/size"},
+    "layers": {"type": "array", "minItems": 1, "items": {
+     "type": "object", "required": ["name", "kind", "cells"], "additionalProperties": false,
+     "properties": {
+      "name": {"type": "string"}, "kind": {"enum": ["tiles", "terrain"]},
+      "terrain_set": {"type": "integer", "minimum": 0}, "terrain": {"type": "integer", "minimum": 0},
+      "opacity": {"type": "number", "minimum": 0},
+      "cells": {"type": "array", "items": {"type": "array", "items": {"type": "integer", "minimum": 0},
+                                            "minItems": 2, "maxItems": 6}}},
+     "allOf": [{"if": {"properties": {"kind": {"const": "terrain"}}}, "then": {"required": ["terrain"]}}]}},
+    "objects": {"type": "array", "items": {
+     "type": "object", "required": ["asset", "x", "y"], "additionalProperties": false,
+     "properties": {"asset": {"$ref": "#/$defs/name"}, "x": {"type": "number"}, "y": {"type": "number"}}}},
+    "godot": {"$ref": "#/$defs/path"}
+   }
+  },
+  "font": {
+   "type": "object", "required": ["kind", "name", "file", "pages", "line_height", "base", "scale", "tint", "chars"],
+   "additionalProperties": false,
+   "properties": {
+    "kind": {"const": "font"}, "name": {"$ref": "#/$defs/name"}, "file": {"$ref": "#/$defs/path"},
+    "pages": {"type": "array", "items": {"$ref": "#/$defs/path"}, "minItems": 1},
+    "line_height": {"type": "integer", "minimum": 1}, "base": {"type": "integer", "minimum": 0},
+    "scale": {"type": "integer", "minimum": 1}, "tint": {"type": "boolean"},
+    "chars": {"type": "array", "items": {"type": "array", "items": {"type": "integer"}, "minItems": 9, "maxItems": 9}},
+    "kerning": {"type": "array", "items": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3}},
+    "license": {"$ref": "#/$defs/path"}
+   }
+  },
+  "ui_kit": {
+   "type": "object", "required": ["kind", "name", "role", "parts"], "additionalProperties": false,
+   "properties": {
+    "kind": {"const": "ui_kit"}, "name": {"$ref": "#/$defs/name"}, "role": {"type": "string"},
+    "parts": {"type": "array", "minItems": 1, "items": {
+     "type": "object", "required": ["name", "role", "image", "size", "scale"], "additionalProperties": false,
+     "properties": {
+      "name": {"$ref": "#/$defs/name"}, "role": {"type": "string"}, "image": {"$ref": "#/$defs/path"},
+      "size": {"$ref": "#/$defs/size"}, "scale": {"type": "integer", "minimum": 1},
+      "state": {"type": "string"}, "control": {"type": "string"}, "margins": {"$ref": "#/$defs/margins"},
+      "stretch_margin": {"type": "integer", "minimum": 0}, "hotspot": {"$ref": "#/$defs/point"},
+      "glyph": {"type": "string"}}}},
+    "godot": {"$ref": "#/$defs/path"}
+   }
+  },
+  "background": {
+   "type": "object", "required": ["kind", "name", "role", "layers"], "additionalProperties": false,
+   "properties": {
+    "kind": {"const": "background"}, "name": {"$ref": "#/$defs/name"}, "role": {"type": "string"},
+    "layers": {"type": "array", "minItems": 1, "items": {
+     "type": "object", "required": ["image", "size", "velocity", "repeat"], "additionalProperties": false,
+     "properties": {"name": {"type": "string"}, "image": {"$ref": "#/$defs/path"}, "size": {"$ref": "#/$defs/size"},
+                    "velocity": {"$ref": "#/$defs/point"}, "repeat": {"enum": ["none", "x", "y", "xy"]},
+                    "wobble_px": {"type": "number", "minimum": 0}, "scale": {"type": "integer", "minimum": 1}}}},
+    "godot": {"$ref": "#/$defs/path"}
+   }
+  },
+  "particles": {
+   "type": "object", "required": ["kind", "name", "texture", "emitter"], "additionalProperties": false,
+   "properties": {
+    "kind": {"const": "particles"}, "name": {"$ref": "#/$defs/name"}, "texture": {"$ref": "#/$defs/path"},
+    "emitter": {"type": "object"}, "godot": {"$ref": "#/$defs/path"}
+   }
+  },
+  "transition": {
+   "type": "object", "required": ["kind", "name", "image", "size", "transition"], "additionalProperties": false,
+   "properties": {
+    "kind": {"const": "transition"}, "name": {"$ref": "#/$defs/name"}, "image": {"$ref": "#/$defs/path"},
+    "size": {"$ref": "#/$defs/size"}, "transition": {"type": "string"}, "godot": {"$ref": "#/$defs/path"}
+   }
+  },
+  "normal_map": {
+   "type": "object", "required": ["kind", "name", "image", "target", "convention"], "additionalProperties": false,
+   "properties": {
+    "kind": {"const": "normal_map"}, "name": {"$ref": "#/$defs/name"}, "image": {"$ref": "#/$defs/path"},
+    "size": {"$ref": "#/$defs/size"}, "target": {"$ref": "#/$defs/path"}, "convention": {"enum": ["opengl"]}
+   }
+  },
+  "image": {
+   "type": "object", "required": ["kind", "name", "role", "image", "size"], "additionalProperties": false,
+   "properties": {
+    "kind": {"const": "image"}, "name": {"$ref": "#/$defs/name"}, "role": {"type": "string"},
+    "image": {"$ref": "#/$defs/path"}, "size": {"$ref": "#/$defs/size"}, "pivot": {"$ref": "#/$defs/point"}
+   }
+  }
+ }
+}

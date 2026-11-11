@@ -14,18 +14,21 @@
 #           --every 2 keeps every second frame (halves the size of a 30 fps recording).
 #           --width scales down with nearest-neighbor, so pixel art stays crisp.
 #           GIFs get big fast: keep clips under about 10 s, 480 px wide, 64 colors.
+#           GIF frame delays are whole hundredths of a second, so --fps is rounded to the nearest one (15 fps is
+#           70 ms a frame) and capped at 50 fps with a warning: browsers play faster GIFs at 10 fps.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
 #   list *.png and *.bmp in frames-dir (BMP: the C++ overlay's smoke --record), sorted; keep every Nth
 #   for each: open, convert to RGB, scale to --width (nearest), quantize to --colors
-#   save as an animated GIF, duration 1000/fps ms per frame, loop forever
+#   save as an animated GIF, 100/fps cs per frame (rounded, at least 2 cs), loop forever
 import argparse
 import sys
 from pathlib import Path
 
 DEBUG = False
+MIN_DELAY_CS = 2   # GIF delays are whole centiseconds; browsers play 0 or 1 cs at 10 cs, so 2 cs (50 fps) is the top
 
 
 def dbg(msg):
@@ -33,16 +36,27 @@ def dbg(msg):
         print(f"[debug] {msg}", file=sys.stderr)
 
 
-def build_gif(frames, out, fps, width, colors, Image):
-    """Write the GIF. Returns the number of frames written."""
+def frame_delay_ms(fps):
+    """The per-frame delay a GIF can really hold for this fps: whole centiseconds (Pillow drops the rest), never
+    under MIN_DELAY_CS (browsers play a 0 or 1 cs delay at 100 ms, so a faster GIF would play slower)."""
+    return max(MIN_DELAY_CS, round(100 / fps)) * 10
+
+
+def build_gif(frames, out, delay_ms, width, colors, Image):
+    """Write the GIF. Returns the number of frames written. A frame that cannot be read raises OSError naming it."""
     images = []
     for f in frames:
-        im = Image.open(f).convert("RGB")
+        try:
+            with Image.open(f) as src:
+                im = src.convert("RGB")
+        except (OSError, ValueError) as exc:
+            raise OSError(f"{f.name}: {exc}") from exc
         if width and im.width > width:
-            im = im.resize((width, round(im.height * width / im.width)), Image.NEAREST)
+            # max(1, ...): a strip far wider than tall would round to 0 px, which Pillow refuses
+            im = im.resize((width, max(1, round(im.height * width / im.width))), Image.NEAREST)
         images.append(im.quantize(colors=colors, method=getattr(Image, "Quantize", Image).MEDIANCUT))  # Pillow 9.1+ and older
         dbg(f"frame {f.name} {im.size}")
-    images[0].save(out, save_all=True, append_images=images[1:], duration=round(1000 / fps), loop=0, optimize=True)
+    images[0].save(out, save_all=True, append_images=images[1:], duration=delay_ms, loop=0, optimize=True)
     return len(images)
 
 
@@ -86,13 +100,18 @@ def main(argv=None):
     if not frames:
         print(f"[error] no .png or .bmp frames in {src}", file=sys.stderr)
         return 1
+    delay = frame_delay_ms(args.fps)
+    if 100 / args.fps < MIN_DELAY_CS:                 # over 50 fps: capped, the GIF plays slower than asked
+        print(f"[warn] a GIF frame lasts at least {MIN_DELAY_CS * 10} ms (browsers play shorter delays at 100 ms): "
+              f"{args.fps:g} fps plays at {1000 / delay:g} fps; drop frames with --every to keep the real speed",
+              file=sys.stderr)
     try:
         out.parent.mkdir(parents=True, exist_ok=True)
-        n = build_gif(frames, out, args.fps, args.width, args.colors, Image)
+        n = build_gif(frames, out, delay, args.width, args.colors, Image)
     except (OSError, ValueError) as exc:
         print(f"[error] {exc}", file=sys.stderr)
         return 1
-    print(f"[ OK ] {out}: {n} frames, {out.stat().st_size // 1024} KB, {n / args.fps:.1f} s")
+    print(f"[ OK ] {out}: {n} frames, {out.stat().st_size // 1024} KB, {n * delay / 1000:.1f} s")
     return 0
 
 

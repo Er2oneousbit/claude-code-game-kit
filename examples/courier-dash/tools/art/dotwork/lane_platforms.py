@@ -13,6 +13,8 @@
 #           direction. The terrain set uses side peering only (Godot "Match Sides"): paint with the terrain tool or
 #           set_cells_terrain_connect. The parallax layer mirrors itself horizontally (motion_mirroring).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the TileSet's inputs go to godot.record, for the
+#           engine-neutral asset manifest (assetmap.py)
 # ---------------------------------------------------------------------------
 import os
 
@@ -125,13 +127,25 @@ def atlas(fill, surf, T, lip, seed):
 def tileset(path, atlas_res, T, cols, n_full=16):
     """TileSet: terrain set 0 in Match Sides mode; tile m (0-15) peers on the sides where mask bit m is clear (that
     side touches more platform); full-tile collision; the three one-way pieces collide from above only."""
+    h = T // 2
+    thick = max(3, T // 4)
+    # what this TileSet is built from, for the engine-neutral manifest (godot.record): tile m peers on the sides whose
+    # mask bit is clear, in the 8-neighbour order N, NE, E ... (corners -1); one-way caps collide from above only
+    peer_bit = (0, 2, 4, 6)   # N, E, S, W in the N, NE, E, SE, S, SW, W, NW order
+    godot.record("tileset", path, {"tile_size": [T, T], "mode": "match_sides", "terrains": [["platform", [102, 179, 77]]],
+                                   "physics": True, "sources": [{"atlas_res": atlas_res, "kind": "platform",
+                                   "name": atlas_res.rsplit("/", 1)[-1][:-4], "tiles": [
+        {"x": i % cols, "y": i // cols, "terrain": 0,
+         "peers": [-1 if (b not in peer_bit or i >> peer_bit.index(b) & 1) else 0 for b in range(8)],
+         "solid_rects": [[-h, -h, h, h]]} if i < n_full else
+        {"x": i % cols, "y": i // cols, "solid_rects": [[-h, -h, h, -h + thick]], "one_way": True}
+        for i in range(n_full + 3)]}]})
     lines = ['[gd_resource type="TileSet" load_steps=3 format=3]', "",
              f'[ext_resource type="Texture2D" path="{atlas_res}" id="1_atlas"]', "",
              '[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_1"]', 'texture = ExtResource("1_atlas")',
              f"texture_region_size = Vector2i({T}, {T})"]
-    h = T // 2
     full = f"PackedVector2Array({-h}, {-h}, {h}, {-h}, {h}, {h}, {-h}, {h})"
-    thin = f"PackedVector2Array({-h}, {-h}, {h}, {-h}, {h}, {-h + max(3, T // 4)}, {-h}, {-h + max(3, T // 4)})"
+    thin = f"PackedVector2Array({-h}, {-h}, {h}, {-h}, {h}, {-h + thick}, {-h}, {-h + thick})"
     for i in range(n_full + 3):
         k = f"{i % cols}:{i // cols}/0"
         lines.append(f"{k} = 0")
