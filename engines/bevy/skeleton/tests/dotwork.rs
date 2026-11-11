@@ -308,6 +308,34 @@ fn golden_pack_matches_the_reference_loaded_result() {
     assert_eq!(core, all_core, "the golden pack exercises every core kind");
 }
 
+/// A sheet render_sprites.py made from the golden rigged character (#290): rows are directions, columns frames, so a
+/// clip's rects sit on its own row of a shared sheet. The importer loads it as it loads Dotwork's packs.
+#[test]
+fn a_sheet_render_sprites_rendered_matches_its_loaded_result() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("data")
+        .join("golden")
+        .join("character")
+        .join("sprites");
+    let pack = manifest::read_manifest(&root.join("dotwork").join("character.assets.json"), &root)
+        .unwrap_or_else(|e| panic!("the rendered manifest did not load: {e}"));
+    assert!(pack.errors.is_empty(), "broken assets: {:#?}", pack.errors);
+    assert!(pack.skipped.is_empty(), "nothing to skip: {:?}", pack.skipped);
+    let path = root.join("expected.json");
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let want: Value = serde_json::from_str(&text).expect("expected.json is JSON");
+    let want = want["assets"].as_object().expect("expected.json has assets");
+    let got = loaded_result(&pack);
+    let mut errs = Vec::new();
+    compare(&Value::Object(got), &Value::Object(want.clone()), "rendered", &mut errs);
+    assert!(
+        errs.is_empty(),
+        "{} difference(s) from expected.json:\n{}",
+        errs.len(),
+        errs.join("\n")
+    );
+}
+
 #[test]
 fn extra_kinds_are_skipped_with_one_warning_each() {
     let pack = golden_pack();
