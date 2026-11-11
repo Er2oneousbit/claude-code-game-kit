@@ -20,12 +20,13 @@ Assets/Scripts/Core/     engine-agnostic logic (no UnityEngine types where possi
                          Ease, FollowCamera, InputBuffer, CoyoteTimer, Spring, FlashLimiter), shell logic
                          (GameSettings, Bindings, SaveStore, I18n, AtomicFile, Json, DialogueData) and audio decisions
                          (AudioDirector, MusicDirector, AudioAccess), checked against data/golden/*.json; Analog
-                         (stick and trigger shaping) and CrashText (crash file text, log tail)
+                         (stick and trigger shaping), CrashText (crash file text, log tail) and UiComposite (a UI
+                         panel's texture over the camera's picture, blended as the screen does)
 Assets/Scripts/Shell/    the front end on UI Toolkit (Game.Shell assembly): Shell (settings, strings, data folder),
                          FrontEnd (the screen flow), Screens/ (title, main menu, settings, pause, What now?, history,
                          credits, loading), SubtitleBar, ShellWorld with PlayWorld (the placeholder game) and
                          JuiceWorld (the juice demo), Narrator, ShellInput, ShellReports (crash files, F8 bug report),
-                         AccessAudit and SmokeDrive (`dev.py smoke --drive`)
+                         UiCapture (the panel in screenshots), AccessAudit and SmokeDrive (`dev.py smoke --drive`)
 Assets/Scripts/Game/     gameplay MonoBehaviours and ScriptableObjects; AudioEventPlayer, MusicPlayer play the audio decisions
 Assets/Editor/           editor-only code (GameKitBuild.cs; GameKitScenes.cs builds the starter and shell scenes;
                          GameKitShaders.cs checks the shader recipes)
@@ -33,8 +34,9 @@ Assets/Resources/GameKit/  the shell's panel theme (.tss) and the readable font 
 Assets/Shaders/Kit/      the kit's shader recipes as unlit shaders, Kit/<name> (generated)
 Assets/Tests/EditMode/   EditMode tests (own assembly definition)
 Assets/Tests/PlayMode/   PlayMode tests, incl. BootSmokeTests and ShellSmokeTests (what `dev.py smoke` runs; the second
-                         also runs `--drive` scenarios) and AudioPlayModeTests (AudioEventPlayer on real AudioSources:
-                         `dev.py test --mode PlayMode --filter Audio`)
+                         also runs `--drive` scenarios), AudioPlayModeTests (AudioEventPlayer on real AudioSources:
+                         `dev.py test --mode PlayMode --filter Audio`) and GameKitCaptureTests (a capture against the
+                         GPU's own picture: `dev.py smoke --graphics --filter Capture`)
 Assets/Art, Audio, Prefabs, Scenes/   content (see docs/ASSET_LOG.md); Scenes/Shell.unity is the kit's front end
 data/                    i18n/ string tables (en, fr), input/presets.json (one-handed layouts), access/colours.json,
                          dialogue/sample.built.json, golden/ test vectors; a build copies the first four into
