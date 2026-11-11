@@ -2,11 +2,12 @@
 # ---------------------------------------------------------------------------
 # tripo.py
 # Purpose : Everything Bozzetto says to the Tripo3D API, in one place, for both of its paid routes: `make --with tripo`
-#           (a model from a picture, several views or a sentence) and `rig make --with tripo` (rig.py). The client,
+#           (a model from a picture, several views or a sentence), `rig make --with tripo` (rig.py) and `reference
+#           --with tripo` (reference.py: text-to-image, image-to-image, image-to-multiview pictures). The client,
 #           the price quote, the --max-credits cap with the balance check, and the tasks.json journal that lets a
 #           re-run reuse paid work live here; rig.py keeps only its own steps.
 # Usage   : A module, not a command. bozzetto.py binds itself (bind) and calls run_make(); rig.py uses Client, Journal
-#           and Budget. The commands:
+#           and Budget; reference.py uses Client (image_task) and Budget with its own per-picture journal. The commands:
 #             python tools/bozzetto/bozzetto.py make prop_crate --with tripo --image art_src/crate.png
 #             python tools/bozzetto/bozzetto.py make npc_guard --with tripo --class npc --front f.png --back b.png
 #             python tools/bozzetto/bozzetto.py make prop_lamp --with tripo --prompt "a brass ship's lantern"
@@ -75,6 +76,20 @@ PROMPT_MAX = 1024
 FACING = "+X"
 FACING_TURN = -90.0
 CHARACTER_HINT = ", full body, standing in an A-pose with the arms slightly away from the body"
+
+# ---- reference pictures: reference.py's tripo route (#288) --------------------------------------------------------
+# POST /generation/text-to-image {prompt, model, size, aspect_ratio (banana models), output_format},
+# /generation/image-to-image {input: file_token | URL | task_id, prompt, ...} -> output.generated_image_url;
+# /generation/image-to-multiview {input} -> output.generate_multiview_image {front,left,back,right}_view_url
+# (developers.tripo3d.ai, read 2026-11-11)
+IMAGE_ENDPOINT = {"text_to_image": "/generation/text-to-image", "image_to_image": "/generation/image-to-image",
+                  "image_to_multiview": "/generation/image-to-multiview"}
+# credits per task: upper bounds from the pricing summary (text to image 5, generate image 5 to 10, image to multiview
+# 10; verify). No endpoint quotes a price: the actual cost is read from each finished task.
+IMAGE_QUOTE = {"text_to_image": 10, "image_to_image": 10, "image_to_multiview": 10}
+IMAGE_MODELS = {"banana2": "1K", "banana_pro": "1K", "banana": "1024x1024", "seedream_v5": "2K"}   # model: size
+IMAGE_MODEL = "banana2"
+IMAGE_TERMS = TERMS + "; its banana models are Google's and carry Google's invisible watermark (Tripo docs)"
 
 
 def bind(module):
@@ -157,6 +172,19 @@ class Client:
                                   f"{JOURNAL} without paying again)")
             bz.SLEEP(POLL_S)
 
+    def image_task(self, kind, model, extra):
+        """Create a reference-picture task (IMAGE_ENDPOINT kind) and return its id. The body: a square PNG at the
+        model's size (Banana models take an aspect ratio, the others refuse one) plus `extra` (prompt, input)."""
+        body = {"model": model, "size": IMAGE_MODELS[model], "output_format": "png"} if kind != "image_to_multiview" \
+            else {}
+        if kind != "image_to_multiview" and model.startswith("banana"):
+            body["aspect_ratio"] = "1:1"
+        body.update(extra)
+        tid = self.call("POST", IMAGE_ENDPOINT[kind], body=body).get("task_id")
+        if not tid:
+            raise bz.JobError(f"Tripo {kind}: no task id")
+        return tid
+
     def download(self, url, dst):
         """The result file. The link is Tripo's CDN: no key goes with it."""
         try:
@@ -230,13 +258,14 @@ class Journal:
 class Budget:
     """--max-credits counts actual charges; the balance is checked too. afford() refuses before a paid call."""
 
-    def __init__(self, cap, balance, spent=0.0):
+    def __init__(self, cap, balance, spent=0.0, flag="--max-credits", journal=JOURNAL):
         self.cap, self.balance, self.spent = cap, balance, spent
+        self.flag, self.journal = flag, journal      # how the caller names its cap and journal (reference.py differs)
 
     def afford(self, more):
         if self.spent + more > self.cap:
             raise bz.ToolError(f"spending {more:g} more credits would make {self.spent + more:g} in all, over "
-                               f"--max-credits {self.cap}; finished tasks are kept in {JOURNAL} for a re-run")
+                               f"{self.flag} {self.cap:g}; finished tasks are kept in {self.journal} for a re-run")
         if more > self.balance:
             raise bz.ToolError(f"the Tripo balance ({self.balance:g} credits) is under the next step ({more:g}); "
                                f"{NO_STUDIO}")
