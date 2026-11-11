@@ -8,8 +8,10 @@
 #           and a pointing-hand cursor, and a preview scene with the focus chain wired top to bottom.
 # Usage   : pack spec "uikit": [{"name": "menu", "style": "iron"}]
 #           style: classic / brass / iron (lane_windows.STYLES) or "fill" / "frame" hex lists like a window entry;
-#           focus: hex colour of the focus ring (default per style); scale (default 2); font: a .fnt / .ttf in the
-#           game for the Theme's default font; keys: extra key names to draw as keycaps ("minus", "f13", "kp_1").
+#           focus: hex colour of the focus ring (default per style); scale (default 2); font: a .fnt / .ttf for the
+#           Theme's default font, relative to the assets folder ("art/ui/fonts/font_dialogue.fnt", what the fonts
+#           lane writes, in any engine's layout) or else to the game folder; keys: extra key names to draw as
+#           keycaps ("minus", "f13", "kp_1").
 # Notes   : Theme: <assets_dir>/ui/theme_<name>.tres (the kit's shell loads the first assets/ui/theme_*.tres);
 #           textures under <assets_dir>/art/ui/uikit/<name>/. Glyphs: <assets_dir>/ui/glyphs/<glyph name>.png at 1x,
 #           16 px tall (wide keys grow in width), and glyphs.json {name: {"w", "h"}}; the names follow the kit's
@@ -19,6 +21,8 @@
 #           for both hover and focus, so a theme cannot split those two on a slider (see README).
 #           verify runs the preview scene's focus walk (ui_down / ui_up) in a headless SceneTree.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): "font" resolves against the assets folder first, so
+#           one spec works in a web game (public/assets/) and a Unity game (Assets/)
 # ---------------------------------------------------------------------------
 import json
 import os
@@ -1351,9 +1355,10 @@ def _scaled(a, s):
     return np.kron(a, np.ones((s, s, 1), np.uint8))
 
 
-def _font_res(e, name):
-    """The "font" key: a .fnt / .ttf in the game -> (res:// path, size for default_font_size or None)."""
-    fp = core.project_path(e["font"])
+def _font_res(e, name, conf):
+    """The "font" key: a .fnt / .ttf in the game, relative to the assets folder or the game folder (core.game_file)
+    -> (res:// path, size for default_font_size or None)."""
+    fp = core.game_file(conf, e["font"], f"uikit {name}: font")
     if not os.path.isfile(fp):
         raise core.ToolError(f"uikit {name}: font {e['font']!r} not found (make it with the fonts lane first)")
     size = None
@@ -1384,7 +1389,7 @@ def run(entries, pack, man, conf):
         if not isinstance(keys, list):
             raise core.ToolError(f"uikit {name}: \"keys\" is a list of key names")
         extra += [key_name(k, f"uikit {name}") for k in keys]
-        fr = _font_res(e, name) if e.get("font") else (None, None)
+        fr = _font_res(e, name, conf) if e.get("font") else (None, None)
         plans.append((name, st, scale, fr))
         first_scale = first_scale or scale
     for name, st, scale, (font_res, font_size) in plans:

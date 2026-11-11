@@ -450,5 +450,54 @@ class UikitExam(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+class FontPathExam(unittest.TestCase):
+    """A uikit "font" is found under the game's assets folder first, so the shipped example spec works in every
+    layout: a web game keeps its fonts in public/assets/, where the old game-relative "assets/art/..." path missed
+    them and the pack stopped with "not found" (exit 2)."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="dotwork_uikit_font_")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def example(self):
+        with open(os.path.join(DOTWORK, "examples", "uikit.json"), encoding="utf-8") as f:
+            return json.load(f)
+
+    def test_example_spec_in_a_web_game(self):
+        # a web game's layout, set the way the web overlay ships it: engine none, assets in public/assets
+        os.makedirs(os.path.join(self.tmp, "art_src", "dotwork"))
+        with open(os.path.join(self.tmp, "art_src", "dotwork", "dotwork.config.json"), "w", encoding="utf-8") as f:
+            json.dump({"engine": "none", "project": {"assets_dir": "public/assets", "res_root": "res://public/assets"}}, f)
+        with open(os.path.join(self.tmp, "CLAUDE.md"), "w", encoding="utf-8") as f:
+            f.write("# a web game\n")
+        code, out = pack(self.tmp, self.example())
+        self.assertEqual(code, 0, out)
+        assets = os.path.join(self.tmp, "public", "assets")
+        self.assertTrue(os.path.isfile(os.path.join(assets, "art", "ui", "fonts", "font_dialogue.fnt")))
+        self.assertTrue(os.path.isfile(os.path.join(assets, "ui", "glyphs", "key_minus.png")))
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "assets")))
+
+    def test_example_spec_in_a_godot_game(self):
+        make_project(self.tmp)
+        code, out = pack(self.tmp, self.example())
+        self.assertEqual(code, 0, out)
+        th = read(os.path.join(self.tmp, "assets", "ui", "theme_menu.tres"))
+        self.assertIn('path="res://assets/art/ui/fonts/font_dialogue.fnt"', th)
+        self.assertIn("default_font_size = 9", th)                         # the example's scale 1 font
+
+    def test_game_relative_path_and_escape(self):
+        make_project(self.tmp)
+        spec = {"name": "f", "fonts": [{"name": "dialogue", "glyphs": "glyphs/dialogue.txt"}],
+                "uikit": [{"name": "menu", "font": "assets/art/ui/fonts/font_dialogue.fnt"}]}
+        code, out = pack(self.tmp, spec)                                   # older specs: relative to the game
+        self.assertEqual(code, 0, out)
+        spec["uikit"][0]["font"] = "../../outside.fnt"
+        code, out = pack(self.tmp, spec)
+        self.assertEqual(code, 2, out)
+        self.assertIn("outside the game folder", out)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

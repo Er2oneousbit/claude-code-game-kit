@@ -123,8 +123,8 @@ offers one-handed layouts (`data/input/presets.json`, #166); `readable_font`, `l
 Dotwork (`tools/art/dotwork/`, `/dotwork`) makes pixel art on your GPU. A web game has no Godot, so the game's
 `art_src/dotwork/dotwork.config.json` sets `"engine": "none"` and `"assets_dir": "public/assets"`: every pack writes
 its PNGs under `public/assets/art/` and one manifest, `public/assets/dotwork/<pack>.assets.json` (the format:
-`tools/art/dotwork/ASSET_MANIFEST.md`). Pack specs that name a font by path (`tools/art/dotwork/examples/uikit.json`) need the
-`public/assets/...` path in a web game.
+`tools/art/dotwork/ASSET_MANIFEST.md`). A pack spec that names a font by path (`tools/art/dotwork/examples/uikit.json`)
+gives it relative to the assets folder ("art/ui/fonts/font_dialogue.fnt"), so the same spec works here.
 - **Loader:** `src/game/dotworkPlan.ts` (no Phaser: the plan, the blob rule for terrain layers, bitmap font data)
   and `src/game/dotwork.ts` (Phaser). In a scene: `queueDotwork(this)` in `preload()`, then in `create()` with
   `const pack = dotworkPack()`: `addAnimatedSprite(this, pack, "hero", x, y, "walk_s")`, `playDirection(sprite, pack,

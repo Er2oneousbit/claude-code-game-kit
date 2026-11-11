@@ -26,7 +26,8 @@ src/game/           threeHost.ts (frame loop, worlds, pause, frame cap, screensh
                     (the juice demo), Backdrop.ts (behind the menus), dotwork/ (the Dotwork asset manifest importer)
 data/               i18n/<locale>.json strings, dialogue/*.built.json subtitles, access/colours.json, golden/ vectors
 tests/              Vitest tests for src/core, the pure parts of src/shell and the Dotwork importer (*.test.ts)
-public/assets/      models (.glb), textures, audio, fonts: served as-is at assets/... (docs/ASSET_LOG.md)
+public/assets/      models (.glb), textures, audio, fonts: served as-is at assets/... (docs/ASSET_LOG.md);
+                    Dotwork writes here (art/, dotwork/<pack>.assets.json, ui/glyphs/: art_src/dotwork/dotwork.config.json)
 src/shaders/        the kit's shader recipes (kit/ generated from tools/shaders/) and their glue
 tools/              dev.py, smoke.mjs and helpers
 dist/               production build (git-ignored)

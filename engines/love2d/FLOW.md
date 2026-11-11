@@ -117,8 +117,8 @@ coroutine in `src/shell/drive.lua`: add one there and list it here.
 
 ## Assets and audio
 - Images: `love.graphics.newImage("assets/art/hero.png")` after `love.graphics.setDefaultFilter("nearest",
-  "nearest")`. Sprite sheets: `love.graphics.newQuad`. Dotwork's non-Godot output (PNGs, sheets and a manifest)
-  loads directly.
+  "nearest")`. Sprite sheets: `love.graphics.newQuad`. Dotwork's art loads through its importer,
+  `DotworkLoader.load_all()` and `DotworkView` (docs/ENGINE.md "Dotwork art").
 - Audio: `love.audio.newSource(path, "static")` for short sounds, `"stream"` for music. WAV and OGG are safe; MP3
   works through mpg123. Log every asset in `docs/ASSET_LOG.md`.
 - Bus volumes: with data/audio_events.json, `app:bus_volume(bus)` (and `app:play_sound`) takes each slider once
