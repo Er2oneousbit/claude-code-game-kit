@@ -21,6 +21,8 @@
 //           report, the crash drive's planted error (#275)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a drive sets ShellInput.Scripted, and UI Toolkit's key
 //           and navigation events are dropped meanwhile (#276)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the panel clears only its own texture; on the screen it
+//           draws over the camera's picture instead of blacking it out (#277)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -170,25 +172,34 @@ namespace {{GAME_SLUG}}.Shell
 
         // ---- the panel -------------------------------------------------------------------
 
-        private void BuildPanel()
+        /// <summary>The shell's panel settings as it draws on the screen: the theme, the 1280x720 reference scaled so the
+        /// smaller side fits, and no clear, so the camera's picture (the game) stays under the menus (#277: a clearing
+        /// panel blacked it out in a windowed player). SetWindow turns the clear on for the panel's own texture.</summary>
+        public static PanelSettings NewPanel()
         {
-            Document = GetComponent<UIDocument>() ?? gameObject.AddComponent<UIDocument>();
-            _panel = ScriptableObject.CreateInstance<PanelSettings>();
-            _panel.name = "GameKitPanel";
+            var panel = ScriptableObject.CreateInstance<PanelSettings>();
+            panel.name = "GameKitPanel";
             var theme = Resources.Load<ThemeStyleSheet>(THEME);
             if (theme != null)
             {
-                _panel.themeStyleSheet = theme;
+                panel.themeStyleSheet = theme;
             }
             else
             {
                 Debug.LogWarning($"[WARN][shell] no theme at Resources/{THEME}.tss: text may not render");
             }
-            _panel.scaleMode = PanelScaleMode.ScaleWithScreenSize;
-            _panel.screenMatchMode = PanelScreenMatchMode.Shrink;
-            _panel.referenceResolution = new Vector2Int(REF_W, REF_H);
-            _panel.clearColor = true;
-            _panel.colorClearValue = new Color(0, 0, 0, 0);
+            panel.scaleMode = PanelScaleMode.ScaleWithScreenSize;
+            panel.screenMatchMode = PanelScreenMatchMode.Shrink;
+            panel.referenceResolution = new Vector2Int(REF_W, REF_H);
+            panel.clearColor = false;
+            panel.colorClearValue = new Color(0, 0, 0, 0);
+            return panel;
+        }
+
+        private void BuildPanel()
+        {
+            Document = GetComponent<UIDocument>() ?? gameObject.AddComponent<UIDocument>();
+            _panel = NewPanel();
             if (Application.isBatchMode || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GAMEKIT_SCREENSHOT"))
                 || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GAMEKIT_RECORD_DIR")))
             {
@@ -230,6 +241,7 @@ namespace {{GAME_SLUG}}.Shell
             var rt = new RenderTexture(width, height, 0, RenderTextureFormat.ARGB32) { name = "GameKitUi" };
             rt.Create();
             _panel.targetTexture = rt;
+            _panel.clearColor = true;           // its own texture starts each frame transparent (GameKitCapture lays it over)
             if (UiTexture != null)
             {
                 UiTexture.Release();

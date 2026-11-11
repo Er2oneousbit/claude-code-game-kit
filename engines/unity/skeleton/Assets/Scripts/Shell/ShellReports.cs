@@ -22,6 +22,8 @@
 //   Tick: a crash file written since the last frame -> CRASH_WRITTEN <path> ; smoke player -> quit(1)
 //   BugReport: bug_<stamp>/ -> info, log tail, settings -> screenshot (graphics device only) -> BUG_REPORT <dir>
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the composed screenshot blends as the screen does
+//           (UiCapture, #277)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections;
@@ -185,7 +187,7 @@ namespace {{GAME_SLUG}}.Shell
             return dir;
         }
 
-        // The camera's picture with the UI panel's texture laid over it (straight alpha, nearest sampling)
+        // The camera's picture with the UI panel's texture laid over it as the screen shows it (UiCapture)
         private static void SaveComposed(string path, RenderTexture ui)
         {
             var rt = RenderTexture.GetTemporary(SHOT_W, SHOT_H, 24);
@@ -209,34 +211,7 @@ namespace {{GAME_SLUG}}.Shell
             picture.Apply();
             RenderTexture.active = active;
             RenderTexture.ReleaseTemporary(rt);
-            if (ui != null && ui.IsCreated())
-            {
-                RenderTexture.active = ui;
-                var layer = new Texture2D(ui.width, ui.height, TextureFormat.RGBA32, false);
-                layer.ReadPixels(new Rect(0, 0, ui.width, ui.height), 0, 0);
-                layer.Apply();
-                RenderTexture.active = active;
-                Color32[] bottom = picture.GetPixels32();
-                Color32[] top = layer.GetPixels32();
-                for (int y = 0; y < SHOT_H; y++)
-                {
-                    int sy = y * ui.height / SHOT_H;
-                    for (int x = 0; x < SHOT_W; x++)
-                    {
-                        Color32 t = top[sy * ui.width + x * ui.width / SHOT_W];
-                        if (t.a == 0)
-                        {
-                            continue;
-                        }
-                        int i = y * SHOT_W + x, a = t.a, ia = 255 - a;
-                        Color32 b = bottom[i];
-                        bottom[i] = new Color32((byte)((t.r * a + b.r * ia) / 255), (byte)((t.g * a + b.g * ia) / 255),
-                                                (byte)((t.b * a + b.b * ia) / 255), 255);
-                    }
-                }
-                picture.SetPixels32(bottom);
-                UnityEngine.Object.Destroy(layer);
-            }
+            UiCapture.LayOver(picture, ui);
             WritePng(path, picture);
         }
 
