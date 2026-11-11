@@ -19,6 +19,8 @@ publish = false
 bevy = "0.20"
 # JSON for settings, saves and string tables (src/logic/); Bevy's default features build it anyway
 serde_json = "1"
+# Typed reading of the Dotwork asset manifests (src/dotwork/); Bevy already builds serde with derive
+serde = { version = "1", features = ["derive"] }
 
 [features]
 # Faster rebuilds while developing: cargo run --features dev. Never ship it (docs/ENGINE.md gotcha 6).

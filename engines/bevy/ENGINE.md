@@ -32,6 +32,18 @@
   Hyperlegible with Fira Mono behind it (`src/shell/fonts/`, OFL, compiled into the exe); Bevy's own built-in font is
   ASCII only, so a font you swap in must cover your languages: the pseudo drive fails a character no font in the stack
   has, and a test checks every `data/i18n/` table against the font.
+- **Dotwork art (#59):** `src/dotwork/` loads every `assets/dotwork/*.assets.json` (the engine-neutral manifest,
+  `tools/art/dotwork/ASSET_MANIFEST.md`) at PreStartup into `DotworkLibrary` (headless too, so a broken manifest or a
+  missing PNG is an ERROR that fails `dev.py smoke`). With a window, the `Dotwork` system parameter spawns it:
+  `spawn_clip` (a `TextureAtlasLayout` per sheet, per-frame `Duration`s in `DotworkAnimation`, the pivot as an
+  `Anchor`), `spawn_sprite` (+ `DotworkColliders`, y up around the pivot), `spawn_map` (one sprite per cell under
+  the map entity, terrain layers resolved by the spec's blob rule, animated tiles playing), `spawn_text` (glyph
+  sprites from the font's `chars`), `ui_sprite` (9-slice through `TextureSlicer`), `icon_sprite`, `portrait_sprite`. Every texture is
+  nearest-filtered with no mipmaps; draw at whole-number scales (fonts and UI parts already carry their `scale`: 1:1).
+  The extra kinds (background, particles, transition, normal_map, image) are skipped with one warning each; `blend: add`
+  draws with normal blending (Bevy 0.20 sprites have no additive mode). `tests/dotwork.rs` checks the golden pack in
+  `data/golden/dotwork/` against its `expected.json` and that every manifest the game ships loads; `present.rs` shows a
+  map, a walking character, a prop and a label when the game has them.
 - **Verify:** `python tools/dev.py doctor`.
 
 ## Layout
@@ -54,12 +66,16 @@ src/shell/screens.rs the rows and actions of every screen; view.rs draws them wi
                    crash.rs crash files and the log tail; bug_report.rs F8; juice.rs the juice demo (debug builds)
 data/i18n/         string tables (en, fr; compiled in, a new file here is picked up at start)
 data/access/colours.json the colour-blind palettes;  data/input/presets.json the one-handed layouts (from the kit)
+src/dotwork/       the Dotwork importer: manifest.rs reads a manifest (defs.rs its serde structs) into assets.rs's
+                   objects; autotile.rs the blob rule and tile flags; player.rs the frame clock; mod.rs the plugins,
+                   the Dotwork system parameter and the animation system
 src/shell/fonts/   Fira Mono Medium (the text font) and Atkinson Hyperlegible (the readable font), both OFL; compiled
                    in with include_bytes!
 src/kit_shaders.rs the kit's shader recipes as typed 2D materials (generated, with assets/shaders/kit/*.wesl)
 examples/shader_check.rs renders every recipe on the GPU for `smoke --shaders`
 tests/             integration tests: drive the real GamePlugin headless with app.update()
 tests/golden.rs    the juice, shell and audio modules against data/golden/*.json (the kit's shared vectors)
+tests/dotwork.rs   the Dotwork importer against data/golden/dotwork/expected.json; every assets/dotwork manifest loads
 data/golden/       golden vectors from tools/golden_vectors.py and tools/audio/wavesmith/; never edit by hand
 assets/            art, audio, fonts (docs/ASSET_LOG.md); Bevy loads paths relative to it
 target/            build output (git-ignored)
