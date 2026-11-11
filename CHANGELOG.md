@@ -16,7 +16,7 @@ This one is larger than a patch usually is: the fixes and the next feature batch
   its own tests, fails `smoke` (or its test) on a broken manifest or a missing image, and shows a map, a walking
   character, a prop and a label in the starter when the game has Dotwork art. Fonts and UI kits draw 1:1 (Dotwork
   already scaled them).
-  - web (Phaser 4): `src/game/dotwork.ts`, named frames, per-frame animations, tilemaps, BitmapText, NineSlice.
+  - web (Phaser 4): `engines/web/skeleton/src/game/dotwork.ts`, named frames, per-frame animations, tilemaps, BitmapText, NineSlice.
   - web-3d (Three.js): `src/game/dotwork/`, pivot quads, instanced tile maps, glyph-quad text.
   - Unity: `dev.py exec GameKitDotwork.ImportAll` writes sprites, AnimationClips, tiles with physics shapes, terrain
     tiles, map prefabs, fonts and 9-slice UI parts; re-imports keep their GUIDs.
@@ -24,7 +24,7 @@ This one is larger than a patch usually is: the fixes and the next feature batch
     Slate brushes under `/Game/Dotwork/<pack>/`.
   - Bevy: `src/dotwork/`, atlases, a frame clock, terrain maps, glyph sprites, TextureSlicers.
   - C++/SDL3: `core::dotwork` (SDL-free loader) and `gfx::dotwork` (SDL 3.4's own `SDL_LoadPNG`, no SDL3_image).
-  - LÖVE: `src/core/dotwork_manifest.lua`, `src/game/dotwork_loader.lua` and `dotwork_view.lua` (works from a .love).
+  - LÖVE: `engines/love2d/skeleton/src/core/dotwork_manifest.lua`, `engines/love2d/skeleton/src/game/dotwork_loader.lua` and `dotwork_view.lua` (works from a .love).
   - RPG Maker MZ: a converter, `dev.py dotwork`, writes MZ's own layouts (characters, object sheets, faces,
     side-view battlers, Window.png, IconSet rows, B to E tilesets) and never overwrites a file it did not write
     without `--replace`. Checked against stand-ins only (verify in RPG Maker MZ).
@@ -32,7 +32,7 @@ This one is larger than a patch usually is: the fixes and the next feature batch
     `public/assets`), so Unity art no longer lands in a second `assets/` folder; web-3d ships web's
     `dotwork.config.json`, so prompt glyphs reach the folder the shell reads. Known gaps: #285, #286.
 - **web-3d and RPG Maker MZ shells (#175):** the web shell no longer imports Phaser: it meets the renderer through
-  `src/shell/host.ts`, and web-3d now shares `src/shell/`, `src/core/` and `data/` with web file for file (title,
+  `engines/web/skeleton/src/shell/host.ts`, and web-3d now shares `src/shell/`, `src/core/` and `data/` with web file for file (title,
   menus, settings, pause, subtitles, narration, analog input, crash files, F8, every drive, the access sweep), with a
   3D juice demo. MZ gets the juice and shell rules as plugins (`GameJuice.js`, `GameShell.js`) and `GameAccess.js`
   puts Reduce Motion, Screen Shake, Gentle Flashes and Text Size on MZ's Options screen (verify in RPG Maker MZ;
@@ -56,11 +56,11 @@ This one is larger than a patch usually is: the fixes and the next feature batch
   camera's picture in a windowed player (the game was black under the shell).
 - **Unity outlined text (#283):** `UiTheme.Outline` keeps the letter's colour (an un-outlined copy of the text sits on
   top; the outline alone ate most of each letter), and the access sweep reports the colour on the letters.
-- **Unreal packaged credits (#278):** a packaged game shows `CREDITS.md` (kept as `data/credits.md` in editor builds,
-  gitignored), and `dev.py package` replaces the last package instead of leaving dropped files in it.
+- **Unreal packaged credits (#278):** a packaged game shows `CREDITS.md` (editor builds keep a gitignored copy of it,
+  `credits.md`, in the staged `data/` folder), and `dev.py package` replaces the last package instead of leaving dropped files in it.
 - **Credits screens (#279):** the HTML comment `tools/credits.py` writes into `CREDITS.md` no longer shows on any
   engine's credits screen (`data/golden/credits.json`). Markdown marks still show: #284.
-- **Upgrade notes:** a web game that used `Shell.game` imports `game` from `src/main.ts` instead (the shell holds no
+- **Upgrade notes:** a web game that used `Shell.game` imports `game` from its `main.ts` instead (`engines/web/skeleton/src/main.ts`) (the shell holds no
   Phaser game now). A Unity label outlined by hand rather than through `UiTheme.Outline` reads as its outline colour
   in the access sweep until it uses `UiTheme.Outline`. An RPG Maker MZ game reruns `python tools/dev.py setup` to
   register the three new plugins. A C++ game that edited `CMakeLists.txt` merges the new sources and tests from its
