@@ -21,9 +21,26 @@ routes rig a character: Mixamo bone names, one skinned mesh, clips as glTF anima
 `expected.json` holds these numbers for the tests; never copy them into a test. Godot replaces `:` in bone names
 with `_` on import (`mixamorig_Hips`).
 
+## The sprite sheets: `sprites/`
+The same character rendered for the 2D engines by `render_sprites.py --manifest`: an assets folder whose
+`dotwork/character.assets.json` is a Dotwork asset manifest (spec 1.0.0, generator `render_sprites`) with one
+`animated_sprite`, `character`, and `expected.json`, assetspec's loaded result of it. The 2D engines' Dotwork
+importer tests load it beside the Dotwork golden pack.
+
+| | |
+|---|---|
+| Sheets | `art/character/character_idle.png` (8 frames) and `character_walk.png` (4 frames): one row per direction (s, w, n, e), 48 px cells |
+| Clips | `idle_s` ... `walk_e`, 6 fps (every 6th frame of 24 fps), all looping; the glTF loop's repeated last frame is rendered once |
+| Pivot | where the origin (the feet) lands in each direction's cell, about `[24, 37]` |
+| Frames | each frame also as its own PNG in `art/character/character_frames/` (the manifest requires them) |
+
 ## Rebuild
 ```
 blender -b --factory-startup --python-exit-code 1 -P tools/blender/golden_character.py --
 python tools/blender/test_golden_character.py      # the exam: reads the .glb without Blender, rebuilds when it can
+# the sheets (delete sprites/ first), then expected.json from assetspec.expected():
+blender -b --factory-startup --python-exit-code 1 -P tools/blender/render_sprites.py -- data/golden/character/character.glb --out data/golden/character/sprites/art/character/character.png --actions all --step 6 --directions 4 --size 48 --samples 16 --pixel-art --manifest data/golden/character/sprites/dotwork/character.assets.json
+python tools/art/dotwork/assetspec.py expected data/golden/character/sprites/dotwork/character.assets.json > data/golden/character/sprites/expected.json
+python tools/blender/test_render_sprites_manifest.py   # validates sprites/ and checks expected.json is current
 ```
-Built with Blender 5.2.3 (2026-11-11).
+Built and rendered with Blender 5.2.3 (2026-11-11).

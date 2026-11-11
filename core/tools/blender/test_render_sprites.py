@@ -74,13 +74,18 @@ def build_fixture(bpy, path, animate=False, export=True):
         o.select_set(True)
     bpy.context.view_layer.objects.active = body
     bpy.ops.object.join()
-    if animate:
+    if animate == "bob":     # a loop: up and back down, so frame 3 repeats frame 1's pose
+        for f, z in ((1, 0.0), (2, 0.1), (3, 0.0)):
+            body.location = (0, 0, z)
+            body.keyframe_insert("location", frame=f)
+        body.animation_data.action.name = "bob"
+    elif animate:
         body.location = (-0.8, 0, 0)
         body.keyframe_insert("location", frame=1)
         body.location = (0.8, 0, 0)
         body.keyframe_insert("location", frame=3)
     if export:
-        bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", export_animations=animate)
+        bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", export_animations=bool(animate))
 
 
 def build_double_sided(bpy, path):
@@ -139,6 +144,69 @@ def opaque_width(alpha):
 def opaque_center_x(alpha):
     cols = (alpha > 0.5).any(axis=0).nonzero()[0]
     return None if len(cols) == 0 else float(cols.mean())
+
+
+def opaque_extent(alpha, x):
+    """(pixels of the model left of column x, right of it) in one cell's alpha."""
+    cols = (alpha > 0.5).any(axis=0).nonzero()[0]
+    return (0.0, 0.0) if len(cols) == 0 else (x - cols[0], cols[-1] + 1 - x)
+
+
+def manifest_cases(bpy, tmp, case, common):
+    """--actions and --manifest (#290): the Dotwork asset manifest a 2D engine's importer loads."""
+    bob = tmp / "bob.glb"
+    build_fixture(bpy, bob, animate="bob")
+    assets = tmp / "assets"
+    manifest = assets / "dotwork" / "rendered.assets.json"
+    sheet = assets / "art" / "body" / "body.png"
+    rc, out = run_tool(bob, "--out", sheet, "--actions", "all", "--directions", 4, "--elevation", 0,
+                       "--manifest", manifest, *common)
+    case("--actions all --manifest renders and writes a manifest (exit 0)", rc == 0 and manifest.exists(), out[-500:])
+    if rc != 0:
+        return
+    doc = json.loads(manifest.read_text(encoding="utf-8"))
+    sprite = doc["assets"][0]
+    clips = {c["name"]: c for c in sprite["clips"]}
+    case("one clip per direction and the direction table (s, w, n, e)",
+         sorted(clips) == ["bob_e", "bob_n", "bob_s", "bob_w"] and sprite["directions"]["bob"]["w"] == "bob_w",
+         str(sorted(clips)))
+    case("the sheet is <stem>_<action>.png, its base the assets folder",
+         clips["bob_s"]["sheet"] == "art/body/body_bob.png" and doc["base"] == ".." and (assets / "art/body/body_bob.png").exists(),
+         str(clips["bob_s"]["sheet"]))
+    case("a loop's last frame that repeats the first pose is rendered once (3 frames -> 2)",
+         len(clips["bob_s"]["frames"]) == 2, str(len(clips["bob_s"]["frames"])))
+    case("every frame has its own PNG",
+         all((assets / f["file"]).exists() for c in clips.values() for f in c["frames"]))
+    case("durations are 1 / the scene's fps (24)", abs(clips["bob_s"]["frames"][0]["duration"] - 1 / 24) < 1e-9,
+         str(clips["bob_s"]["frames"][0]))
+    _, _, alpha = read_sheet(bpy, assets / "art/body/body_bob.png")
+    rows = {d: alpha[r * CELL:(r + 1) * CELL, :CELL] for r, d in enumerate(("s", "w", "n", "e"))}
+    px = {d: clips[f"bob_{d}"]["pivot"][0] for d in rows}
+    wl, wr = opaque_extent(rows["w"], px["w"])
+    el, er = opaque_extent(rows["e"], px["e"])
+    case("in the w row the model's front (its nose) points to screen left, in the e row to the right",
+         wl > wr + 3 and er > el + 3, f"w {wl}/{wr} e {el}/{er}")
+    ys = (rows["s"] > 0.5).any(axis=1).nonzero()[0]
+    py = clips["bob_s"]["pivot"][1]
+    case("the pivot is the origin: the feet, at the bottom of the model (side view)",
+         len(ys) > 0 and abs((ys[-1] + 1) - py) <= 1.5, f"bottom {ys[-1] + 1 if len(ys) else None}, pivot y {py}")
+    rc, out = run_tool(bob, "--out", assets / "art" / "body2" / "body2.png", "--action", "bob", "--directions", 1,
+                       "--name", "body2", "--manifest", manifest, *common)
+    doc = json.loads(manifest.read_text(encoding="utf-8")) if rc == 0 else {}
+    case("a second render merges into the manifest, keeping the first asset",
+         rc == 0 and [a["name"] for a in doc.get("assets", [])] == ["body", "body2"], out[-300:])
+    foreign = tmp / "town" / "dotwork" / "town.assets.json"
+    foreign.parent.mkdir(parents=True)
+    foreign.write_text(json.dumps({"format": "dotwork-assets", "version": "1.0.0", "pack": "town",
+                                   "generator": "dotwork", "base": "..", "assets": []}), encoding="utf-8")
+    rc, out = run_tool(bob, "--out", tmp / "town" / "art" / "b.png", "--action", "bob", "--directions", 1,
+                       "--manifest", foreign, *common)
+    case("a manifest Dotwork wrote is refused (exit 2), nothing rendered",
+         rc == 2 and "dotwork" in out and not (tmp / "town" / "art" / "b.png").exists(), out[-300:])
+    rc, out = run_tool(bob, "--out", tmp / "outside" / "b.png", "--action", "bob", "--directions", 1,
+                       "--manifest", manifest, *common)
+    case("a sheet outside the manifest's assets folder is refused (exit 2)", rc == 2 and "not inside" in out,
+         out[-300:])
 
 
 def main():
@@ -243,6 +311,7 @@ def main():
         case("ignoring the helper frames the model exactly like the plain model (within 2 px)",
              plain_front is not None and abs(opaque_width(ign) - plain_front) <= 2,
              f"plain {plain_front}, ignored {opaque_width(ign)}, raw {opaque_width(raw)}")
+    manifest_cases(bpy, tmp, case, common)
     rc, out = run_tool(moving, "--list-actions")
     case("--list-actions names the animation", rc == 0 and "frames" in out, out[-300:])
     rc, out = run_tool(moving, "--out", tmp / "x.png", "--action", "no-such-action")

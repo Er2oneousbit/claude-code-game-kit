@@ -187,6 +187,8 @@ EXAMS = [
     Exam("core/tools/blender/test_render_sprites.py", "renders with Cycles on the CPU, a few minutes", live=True, **BPY),
     Exam("core/tools/blender/test_golden_character.py", "the golden rigged character read with the standard library; its rebuild check runs when Blender or bpy is found (GOLDEN_CHARACTER_BLENDER=skip|bpy|<path>)",
          covers=("core/tools/blender/golden_character.py", "core/data/golden/character/")),
+    Exam("core/tools/blender/test_render_sprites_manifest.py", "render_sprites' Dotwork manifest writer and the rendered fixture, no Blender",
+         covers=("core/tools/blender/render_sprites.py", "core/tools/art/dotwork/assetspec.py", "core/data/golden/character/sprites/")),
     # scripts (the kit's own)
     Exam("scripts/test_sync_examples.py", "a fake kit and example in a temp folder", covers=("scripts/sync_examples.py", "scripts/new_game.py")),
     Exam("scripts/test_check_examples.py", "fake examples in a temp git repo", needs=(tool("git"),), covers=("scripts/check_examples.py", "engines/*/skeleton/tools/dev.py")),
