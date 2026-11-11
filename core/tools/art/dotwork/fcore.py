@@ -15,6 +15,8 @@
 #           ComfyUI's folders. If COMFYUI_ROOT is set and no server answers, Dotwork starts one on 127.0.0.1 and stops
 #           it when done; a server it did not start is never stopped.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): Manifest.entity and plain(): records of what each Godot
+#           resource is built from, for the engine-neutral asset manifest (assetmap.py)
 # ---------------------------------------------------------------------------
 import ctypes
 import datetime
@@ -428,6 +430,17 @@ def write_text(path, text):
 
 
 # ---- manifest -----------------------------------------------------------------------
+def plain(v):
+    """v as JSON data: tuples to lists, numpy numbers to Python ones (lanes hand over both)."""
+    if isinstance(v, dict):
+        return {str(k): plain(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [plain(x) for x in v]
+    if hasattr(v, "item") and not isinstance(v, (str, bytes)):
+        return v.item()
+    return v
+
+
 class Manifest:
     """One row per shipped file (SHA-256, kind, prompt, seed, routes, models), in <src_dir>/dotwork/manifest.json.
     `dotwork.py log` turns rows into docs/ASSET_LOG.md entries; rows survive re-runs (keyed by file)."""
@@ -468,6 +481,18 @@ class Manifest:
         if text not in self.data["assumptions"]:
             self.data["assumptions"].append(text)
 
+    def entity(self, kind, path, data):
+        """What one Godot resource (path, written or not) was built from: godot.record calls this, under --engine
+        none too. assetmap.py turns these records and the rows into the engine-neutral asset manifest. Keyed by the
+        resource's game-relative path, so a re-run replaces its record; a record whose files are gone is skipped
+        there."""
+        ents = self.data.setdefault("entities", {})
+        rec = dict(plain(data), kind=kind)
+        rel = self._rel(path)
+        if ents.get(rel) != rec:
+            ents[rel] = rec
+            self.save()
+
     GODOT_EXT = (".tres", ".tscn", ".gdshader", ".gd")
 
     def drop_engine_rows(self):
@@ -490,6 +515,8 @@ class Manifest:
         lexical check and take the target with it (2026-10-30 Kimi audit)."""
         rel = self._rel(dir_abs).rstrip("/") + "/"
         self.data["assets"] = [a for a in self.data["assets"] if not a["file"].startswith(rel)]
+        if self.data.get("entities"):   # records of resources in that folder go with it (the lane records anew)
+            self.data["entities"] = {k: v for k, v in self.data["entities"].items() if not k.startswith(rel)}
         if os.path.exists(dir_abs):
             _inside_or_refuse(dir_abs, self.s.project)
             _rmtree_no_links(dir_abs)
