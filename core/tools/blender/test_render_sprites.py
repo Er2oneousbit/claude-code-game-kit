@@ -61,6 +61,24 @@ def build_with_helper(bpy, path):
     bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB")
 
 
+def build_skinned_with_strip(bpy, path):
+    """The body skinned to an armature plus a small skinned strip in front of it, the way `bozzetto.py rig chain`
+    leaves a scarf (#291): the body is the character, not a helper, so it must not draw the framing warning."""
+    build_fixture(bpy, path, export=False)
+    body = bpy.context.view_layer.objects.active
+    bpy.ops.mesh.primitive_cube_add(size=0.2, location=(0.15, -0.35, 1.1))
+    strip = bpy.context.active_object
+    strip.name = "scarf"
+    bpy.ops.object.armature_add(location=(0, 0, 0))
+    arm = bpy.context.active_object
+    for o in (body, strip):
+        g = o.vertex_groups.new(name=arm.data.bones[0].name)
+        g.add(list(range(len(o.data.vertices))), 1.0, "REPLACE")
+        o.modifiers.new("Armature", "ARMATURE").object = arm
+        o.parent = arm
+    bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB")
+
+
 def build_fixture(bpy, path, animate=False, export=True):
     """A tall body with a nose sticking out of its front (-Y), exported as .glb."""
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -303,6 +321,11 @@ def main():
 
     rc, out = run_tool(helper, "--out", tmp / "helper_raw.png", "--directions", 1, *common)
     case("a giant helper mesh triggers the framing warning", rc == 0 and "--ignore" in out and "Helper" in out, out[-300:])
+    skinned = tmp / "skinned_strip.glb"
+    build_skinned_with_strip(bpy, skinned)
+    rc, out = run_tool(skinned, "--out", tmp / "skinned_strip.png", "--directions", 1, *common)
+    case("a skinned body beside a small skinned strip (a rig chain's scarf) is not called a helper",
+         rc == 0 and "--ignore" not in out, out[-300:])
     rc2, out2 = run_tool(helper, "--out", tmp / "helper_ign.png", "--directions", 1, "--ignore", "Help*", *common)
     case("--ignore drops it (wildcards work)", rc2 == 0 and "ignored Helper" in out2, out2[-300:])
     if rc == 0 and rc2 == 0:

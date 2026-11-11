@@ -56,7 +56,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-10-24: --engine eevee also tries BLENDER_EEVEE_NEXT (Blender 4.2 to 4.5); launch lines
 #           pass --python-exit-code 1 so a traceback is not exit 0 (E64, tested on Blender 5.2)
-#           2026-11-11: --actions, --step, --manifest, --name, --once (#290)
+#           2026-11-11: --actions, --step, --manifest, --name, --once (#290); a skinned body beside a rig chain's
+#           small strip is not called a helper (#291)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -316,7 +317,8 @@ def drop_ignored(bpy, scene, patterns):
 
 
 def warn_outliers(bpy, scene):
-    """Warn when one mesh is much bigger than all the others together (a helper deciding the framing)."""
+    """Warn when one mesh is much bigger than all the others together (a helper deciding the framing). A skinned
+    mesh is never called a helper: it is the character."""
     from mathutils import Vector
     depsgraph = bpy.context.evaluated_depsgraph_get()
     sizes = {}
@@ -328,6 +330,8 @@ def warn_outliers(bpy, scene):
     if len(sizes) < 2:
         return
     biggest = max(sizes, key=sizes.get)
+    if any(m.type == "ARMATURE" for m in scene.objects[biggest].modifiers):
+        return   # a skinned body is the character, not a helper (beside a rig chain's small scarf strip, #291)
     rest = max(v for k, v in sizes.items() if k != biggest)
     if rest > 0 and sizes[biggest] > 2.5 * rest:
         print(f"[WARN] '{biggest}' ({sizes[biggest]:.2f} m) is {sizes[biggest] / rest:.1f}x bigger than any other mesh and "
