@@ -81,6 +81,11 @@ and a clear spec for the Blueprint child.
   minute each). Those runs draw opaque check variants built from the same graph; the translucent `M_Kit_` assets and
   post effects in a Post Process material (PostProcessInput0 in place of `MainTex`) are **(verify)** in your game.
   Python needs the PythonScriptPlugin enabled in the `.uproject`.
+- **Frame times in smoke (#90):** `dev.py smoke` reports and budget-checks (`--frame-budget MS`) a line
+  `FRAME_TIMES frames=N mean=MS p95=MS p99=MS worst=MS mode=logic` when one of your `<Game>.Smoke.*` tests logs it
+  (the kit ships no Smoke test here). Time each tick with `FPlatformTime::Seconds()` in a latent command and log the
+  line once at the end (nearest-rank percentiles); `mode=logic`, since the automation run uses `-NullRHI` and draws
+  nothing. Without the line smoke says "not measured" and checks no budget **(verify)**.
 
 ## Gotchas (Claude: read before editing)
 1. **Header changes require a full editor restart or a Live Coding-incompatible rebuild.** Prefer building with `dev.py check` and restarting the editor after header/reflection changes. Live Coding handles function body edits only.

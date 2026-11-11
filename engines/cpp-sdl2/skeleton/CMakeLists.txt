@@ -146,6 +146,7 @@ if(BUILD_TESTS)
     tests/test_main.cpp
     tests/test_analog.cpp
     tests/test_fixed_timestep.cpp
+    tests/test_frame_times.cpp
     tests/test_golden_vectors.cpp
     tests/test_golden_audio.cpp
     tests/test_menu.cpp

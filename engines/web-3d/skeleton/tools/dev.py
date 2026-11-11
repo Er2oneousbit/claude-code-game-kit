@@ -38,6 +38,10 @@
 #           job object (WinJob), so a timeout also ends a grandchild whose parent already exited
 # Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Linux and macOS, killing an untimed command
 #           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): smoke reports the run's FRAME_TIMES line (mean,
+#           p95, p99, worst) and fails a p95 over --frame-budget MS, or over the "Smoke frame time" row of
+#           docs/ARCHITECTURE.md; a run that measured nothing says so (#90) and --no-build (one build for
+#           every run of tools/seed_sweep.py, #183)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -63,6 +67,7 @@ DATA_DIR_HELP = ("user-data folder for this run (?data-dir=): loaded before, wri
 LOCALE_HELP = "language for this run, e.g. fr or pseudo (?locale=)"
 SMOKE_TIMEOUT_S = 180                     # whole smoke run, including browser start
 SMOKE_MIN_FPS = 20                        # slowest headless software rendering we allow for: --frames adds frames/20 s
+SMOKE_UNMEASURED = "smoke.mjs printed no FRAME_TIMES line (the page never booted, or tools/frame_times.mjs is missing)"
 TEST_TIMEOUT_S = 600
 INSTALL_TIMEOUT_S = 900
 KILL_TIMEOUT_S = 10                       # after a timeout: seconds to wait for the killed tree's pipe
@@ -471,7 +476,7 @@ def cmd_smoke(args):
         return 2
     if data_dir_in_pack(args.data_dir):   # #271: a folder the build copies into dist/
         return 2
-    rc = cmd_build(args)
+    rc = 0 if getattr(args, "no_build", False) else cmd_build(args)   # --no-build: tools/seed_sweep.py's later runs reuse one build
     if rc:
         return rc
     cmd = [shutil.which("node") or "node", ROOT / "tools" / "smoke.mjs", "--frames", str(args.frames),
@@ -498,7 +503,7 @@ def cmd_smoke(args):
         return 2
     if rc != 0 or "[ OK ]" not in out:
         return 1
-    return 0
+    return frame_budget_report(out, getattr(args, "frame_budget", None), SMOKE_UNMEASURED)   # #90
 
 
 def cmd_run(args):
@@ -585,6 +590,92 @@ def cmd_doctor(args):
         rc, _ = run([sys.executable, doctor])
         problems += 1 if rc else 0
     return 1 if problems else 0
+
+
+# ---- Frame-time budget (#90): the same block in every engine's dev.py -----------------------------------------
+# The game (or smoke.mjs) prints one line at the end of a smoke run:
+#   FRAME_TIMES frames=N mean=MS p95=MS p99=MS worst=MS mode=render|software|logic
+# smoke prints it as numbers, and fails a run whose p95 is over the budget (--frame-budget, else the "Smoke frame
+# time" row of docs/ARCHITECTURE.md). A run that measured nothing says so, and why, instead of passing a budget.
+FRAME_LINE = re.compile(r"\bFRAME_TIMES((?:[ \t]+\w+=[^\s=]+)+)")
+FRAME_MODES = {                           # what the numbers mean, by the mode= the game reported
+    "render": "drawn in a window: a render budget",
+    "software": "drawn on the CPU without a display: not a GPU budget",
+    "logic": "headless, nothing drawn: a logic budget, not a render budget",
+}
+BUDGET_DOC = "docs/ARCHITECTURE.md"       # its Budgets table: smoke reads the "Smoke frame time" row
+BUDGET_ROW = re.compile(r"^\|\s*Smoke frame time[^|]*\|([^|]*)\|", re.M | re.I)
+FRAME_BUDGET_HELP = (f"fail the run when its p95 frame time is over MS milliseconds (default: the 'Smoke frame time' row "
+                     f"in {BUDGET_DOC}, when it holds a number); the run prints mean, p95, p99 and worst frame time "
+                     "whenever the game measured them")
+
+
+def frame_times(text):
+    """The last FRAME_TIMES line in text as a dict: frames, mean, p95, p99, worst (ms) and mode. None without one."""
+    found = None
+    for m in FRAME_LINE.finditer(text or ""):
+        fields = dict(pair.split("=", 1) for pair in m.group(1).split())
+        try:
+            stats = {"frames": int(fields["frames"]), "mode": fields.get("mode", "render")}
+            for key in ("mean", "p95", "worst"):
+                stats[key] = float(fields[key])
+            stats["p99"] = float(fields.get("p99", fields["worst"]))
+        except (KeyError, ValueError):
+            continue                          # a broken line is no measurement
+        if stats["frames"] > 0:
+            found = stats
+    return found
+
+
+def doc_frame_budget():
+    """The frame budget in ms from BUDGET_DOC's "Smoke frame time" row, or None: no file, no row, the template's
+    "e.g." placeholder, or no "<number> ms" in the cell."""
+    try:
+        text = (ROOT / BUDGET_DOC).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    m = BUDGET_ROW.search(text)
+    cell = m.group(1).strip() if m else ""
+    if not cell or cell.lower().startswith("e.g"):
+        return None
+    n = re.search(r"(\d+(?:\.\d+)?)\s*ms\b", cell)
+    return float(n.group(1)) if n and float(n.group(1)) > 0 else None
+
+
+def frame_budget_report(text, budget=None, unmeasured=""):
+    """Print the run's frame times and check the p95 against the budget (budget from --frame-budget, else
+    doc_frame_budget()). Returns 1 when the p95 is over it, else 0. Without a FRAME_TIMES line it prints why nothing
+    was measured (unmeasured) and, with a budget, that the budget was not checked: never a silent pass."""
+    source = "--frame-budget" if budget else BUDGET_DOC
+    budget = budget or doc_frame_budget()
+    stats = frame_times(text)
+    if not stats:
+        print(f"[info] frame time: not measured ({unmeasured or 'the game printed no FRAME_TIMES line'})")
+        if budget:
+            print(f"[WARN] frame budget {budget:g} ms ({source}) not checked: this run measured no frame time")
+        return 0
+    mode = stats["mode"]
+    numbers = (f"mean {stats['mean']:.2f} ms, p95 {stats['p95']:.2f} ms, p99 {stats['p99']:.2f} ms, "
+               f"worst {stats['worst']:.2f} ms")
+    print(f"[info] frame time over {stats['frames']} frames ({mode}, {FRAME_MODES.get(mode, 'unknown mode')}): {numbers}")
+    if not budget:
+        return 0
+    if stats["p95"] > budget:
+        print(f"[FAIL] frame budget: p95 {stats['p95']:.2f} ms is over {budget:g} ms ({source}); {numbers}")
+        return 1
+    print(f"[ OK ] frame budget: p95 {stats['p95']:.2f} ms within {budget:g} ms ({source})")
+    return 0
+
+
+def frame_ms(text):
+    """argparse type: a frame budget in milliseconds, above 0 and at most 10000."""
+    try:
+        n = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a number of milliseconds")
+    if not 0 < n <= 10000:
+        raise argparse.ArgumentTypeError("must be above 0 and at most 10000 ms")
+    return n
 
 
 def positive_int(text):
@@ -684,6 +775,8 @@ def build_parser():
                    help="also render every kit shader recipe and compare it with its golden image (tools/shaders/)")
     p.add_argument("--headed", action="store_true", help="visible browser window (real GPU: WebGPU, local AI models)")
     p.add_argument("--gpu", action="store_true", help="headless with Chrome's WebGPU flags (may not work on every machine)")
+    p.add_argument("--frame-budget", type=frame_ms, metavar="MS", help=FRAME_BUDGET_HELP)
+    p.add_argument("--no-build", action="store_true", help="use dist/ as it is (tools/seed_sweep.py: many runs, one build)")
     p.set_defaults(fn=cmd_smoke)
     sub.add_parser("build", help="production build into dist/").set_defaults(fn=cmd_build)
     sub.add_parser("run", help="dev server with hot reload").set_defaults(fn=cmd_run)

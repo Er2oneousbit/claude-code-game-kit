@@ -76,6 +76,7 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 | Subtitles, text size, colour, motion and flash safety, difficulty; colour-blind pairs (`python tools/access/colour_check.py pairs`), the screens and the Steam Deck pass (`python tools/access/sweep.py`) | `docs/sop/SOP-20-accessibility.md` |
 | Steam and itch.io: store page, uploads, achievements, signing, CI, legal | `docs/sop/SOP-21-ship-on-steam-and-itch.md`, `docs/LEGAL.md` |
 | Balance, economy, progression curves | `docs/sop/SOP-22-balancing-and-economy.md` |
+| Run the bots over many seeds and settings (pass rates per setting) | `python tools/seed_sweep.py -h` |
 | Store page, trailer, press kit, wishlists | `docs/sop/SOP-23-marketing.md` |
 | Shaders: a hit flash, dissolve, outline, screen filters, toon or water look (`/shader`) | `docs/sop/SOP-24-shaders.md` |
 | Put a web build or a server online (AWS, Azure, GCP, Linode, DigitalOcean) | `docs/sop/SOP-06-build-and-release.md` "Putting it online", `tools/cloud/README.md` |
