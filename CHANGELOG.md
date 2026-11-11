@@ -57,14 +57,29 @@ This one is larger than a patch usually is: the fixes and the next feature batch
 - **Unity outlined text (#283):** `UiTheme.Outline` keeps the letter's colour (an un-outlined copy of the text sits on
   top; the outline alone ate most of each letter), and the access sweep reports the colour on the letters.
 - **Unreal packaged credits (#278):** a packaged game shows `CREDITS.md` (editor builds keep a gitignored copy of it,
-  `credits.md`, in the staged `data/` folder), and `dev.py package` replaces the last package instead of leaving dropped files in it.
+  credits.md, in the staged `data/` folder), and `dev.py package` replaces the last package instead of leaving dropped files in it.
 - **Credits screens (#279):** the HTML comment `tools/credits.py` writes into `CREDITS.md` no longer shows on any
   engine's credits screen (`data/golden/credits.json`). Markdown marks still show: #284.
-- **Upgrade notes:** a web game that used `Shell.game` imports `game` from its `main.ts` instead (`engines/web/skeleton/src/main.ts`) (the shell holds no
-  Phaser game now). A Unity label outlined by hand rather than through `UiTheme.Outline` reads as its outline colour
-  in the access sweep until it uses `UiTheme.Outline`. An RPG Maker MZ game reruns `python tools/dev.py setup` to
-  register the three new plugins. A C++ game that edited `CMakeLists.txt` merges the new sources and tests from its
-  `.gold` copy. Dotwork games that set no `assets_dir` and are not Godot now write under the engine's assets folder.
+- **Examples:** all ten on 0.14.5 and passing `scripts/check_examples.py` (lockpick-mz's smoke needs MZ's own
+  files, as before). Games that keep their own boot (courier-dash on web-3d, graveyard-shift on Unity) get the shell
+  files without wiring them in.
+- **Upgrade notes:**
+  - web: a game that used `Shell.game` imports `game` from its `main.ts` instead (the shell holds no Phaser game
+    now); a `main.ts` the game edited starts the shell with `shell.start(phaserHost(g))` after `verifyDotwork(g)` in
+    `postBoot`, as `engines/web/skeleton/src/main.ts` does. A game that kept Phaser's keyboard plugin on for its own
+    keys can keep it on.
+  - web-3d: a game with its own `main.ts` and `Game.ts` keeps its boot; to use the shell, wrap its world as a `World`
+    for `threeHost.ts` and take the kit's `main.ts`.
+  - Unity: a label outlined by hand rather than through `UiTheme.Outline` reads as its outline colour in the access
+    sweep until it uses `UiTheme.Outline`. A game that edited `Game.Tests.EditMode.asmdef` adds the `Game.Dotwork`
+    and `Game.Dotwork.Editor` references.
+  - C++: a game that edited `CMakeLists.txt` merges from its `.gold` copy (paths in
+    `engines/cpp-sdl2/skeleton/`): `src/core/DotworkAssets`, `src/game/DotworkShowcase`, `src/gfx/DotworkRender`, the tests `test_dotwork_assets.cpp` and
+    `test_frame_times.cpp`, and `GAME_ASSETS_DIR`.
+  - RPG Maker MZ: rerun `python tools/dev.py setup` to register GameJuice, GameShell and GameAccess.
+  - Bevy: `Cargo.toml` gains `serde`, so `Cargo.lock` changes. Godot and Unity write `.gd.uid` and `.meta` files for
+    the new kit scripts on the first run: commit them.
+  - Dotwork games that set no `assets_dir` and are not Godot now write under the engine's assets folder.
 
 ## 0.14.4 (2026-11-10): fixes and shell parity after 0.14.3 (#262 to #276, #159)
 - **Wavesmith (#262):** an Ogg whose Vorbis stream follows a Skeleton or Theora page (a video with Vorbis sound) is
