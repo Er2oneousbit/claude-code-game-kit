@@ -300,6 +300,15 @@ class CountExam(unittest.TestCase):
         self.assertEqual(unlisted, [], "skills no SOP index row names")
         self.assertEqual(wrong_row, [], "skills missing from the row of the SOP they follow")
 
+    def test_the_skill_counts_match_the_skills_folder(self):
+        # 0.14.5 verify: /file-issue made 24 skills; README and the kit's CLAUDE.md still said 23 and README's list
+        # left it out
+        names = sorted(p.parent.name for p in (KIT / "core/.claude/skills").glob("*/SKILL.md"))
+        line = next(l for l in read("README.md").splitlines() if "skills (slash commands):" in l)
+        self.assertIn("**%d skills" % len(names), line)
+        self.assertEqual(sorted(re.findall(r"`/([\w-]+)`", line)), names, "README's skill list")
+        self.assertIn("%d skills" % len(names), read("CLAUDE.md"))
+
     def test_a_check_that_compiles_shaders_names_the_bevy_exception(self):
         # second-model review: SOP-24 and /shader said `check` compiles every recipe, but Bevy compiles WESL only
         # when it builds a pipeline (`smoke --shaders`), as Bevy's ENGINE.md and SOP-24 section 3 say
