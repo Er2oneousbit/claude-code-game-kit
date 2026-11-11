@@ -14,7 +14,8 @@
 //           (logging inside the hook would feed the hook). A player started with --smoke quits with exit code 1
 //           after a crash; in a PlayMode test the logged exception already fails the test. The screenshot needs a
 //           graphics device: in batchmode or a capture the panel's texture is laid over the camera's picture (as
-//           GameKitCapture does), in a windowed player the screen is read at the end of the frame. Nothing leaves
+//           GameKitCapture does), in a windowed player the screen is read at the end of the frame (and its alpha
+//           dropped: the back buffer's alpha is not what the screen shows). Nothing leaves
 //           the machine.
 //
 // Pseudocode:
@@ -24,6 +25,7 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the composed screenshot blends as the screen does
 //           (UiCapture, #277)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): a windowed player's screenshot is saved opaque (#283)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections;
@@ -218,7 +220,21 @@ namespace {{GAME_SLUG}}.Shell
         private static IEnumerator SaveAtEndOfFrame(string path)
         {
             yield return new WaitForEndOfFrame();
-            WritePng(path, ScreenCapture.CaptureScreenshotAsTexture());
+            WritePng(path, Opaque(ScreenCapture.CaptureScreenshotAsTexture()));
+        }
+
+        /// <summary>The texture with every alpha at 255 (an RGBA32 screen capture holds the back buffer's alpha, so a
+        /// game that clears to alpha below 1 would save a see-through PNG, #283); other formats as they are.</summary>
+        public static Texture2D Opaque(Texture2D tex)
+        {
+            if (tex != null && tex.format == TextureFormat.RGBA32)
+            {
+                byte[] raw = tex.GetRawTextureData();
+                UiComposite.Opaque(raw);
+                tex.LoadRawTextureData(raw);
+                tex.Apply();
+            }
+            return tex;
         }
 
         private static void WritePng(string path, Texture2D tex)

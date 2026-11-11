@@ -26,7 +26,8 @@ Assets/Scripts/Shell/    the front end on UI Toolkit (Game.Shell assembly): Shel
                          FrontEnd (the screen flow), Screens/ (title, main menu, settings, pause, What now?, history,
                          credits, loading), SubtitleBar, ShellWorld with PlayWorld (the placeholder game) and
                          JuiceWorld (the juice demo), Narrator, ShellInput, ShellReports (crash files, F8 bug report),
-                         UiCapture (the panel in screenshots), AccessAudit and SmokeDrive (`dev.py smoke --drive`)
+                         UiCapture (the panel in screenshots), OutlineFace (outlined text that keeps its colour),
+                         AccessAudit and SmokeDrive (`dev.py smoke --drive`)
 Assets/Scripts/Game/     gameplay MonoBehaviours and ScriptableObjects; AudioEventPlayer, MusicPlayer play the audio decisions
 Assets/Editor/           editor-only code (GameKitBuild.cs; GameKitScenes.cs builds the starter and shell scenes;
                          GameKitShaders.cs checks the shader recipes)
@@ -36,7 +37,7 @@ Assets/Tests/EditMode/   EditMode tests (own assembly definition)
 Assets/Tests/PlayMode/   PlayMode tests, incl. BootSmokeTests and ShellSmokeTests (what `dev.py smoke` runs; the second
                          also runs `--drive` scenarios), AudioPlayModeTests (AudioEventPlayer on real AudioSources:
                          `dev.py test --mode PlayMode --filter Audio`) and GameKitCaptureTests (a capture against the
-                         GPU's own picture: `dev.py smoke --graphics --filter Capture`)
+                         GPU's own picture, outlined text in its own colour: `dev.py smoke --graphics --filter Capture`)
 Assets/Art, Audio, Prefabs, Scenes/   content (see docs/ASSET_LOG.md); Scenes/Shell.unity is the kit's front end
 data/                    i18n/ string tables (en, fr), input/presets.json (one-handed layouts), access/colours.json,
                          dialogue/sample.built.json, golden/ test vectors; a build copies the first four into
@@ -75,13 +76,18 @@ ProjectSettings/         project config (text, edit with care)
   applied, up is +y), `LeftTrigger` / `RightTrigger` (0 to 1) and `HeldGameActions` / `IsGameHeld` (held game actions,
   the stick's `move_*` included). The Input System's own stick deadzone is bypassed (unprocessed values), so only the
   player's applies. None of it on the UI Toolkit fallback. Tests and drives hold a stick with `ShellInput.InjectAnalog`.
+- Text over the game (HUD, hint, subtitles) gets `UiTheme.Outline(label)`: a black outline plus an un-outlined copy
+  of the text drawn right on top (`OutlineFace`), because UI Toolkit centres `-unity-text-outline-width` on the
+  glyph's edge and at body size even 1 px darkens the letters (2 px left almost none of `UiTheme.TEXT`, #283). Set the
+  label's text and styles as usual: the copy follows them. A label outlined by hand, without the copy, is reported by
+  the access sweep in its outline's colour.
 - Line spacing adds space between the menus' lines and paragraphs: UI Toolkit has no line-height, so lines inside one
   wrapped paragraph keep the font's spacing **(verify: a later Unity may add it)**.
 - Crash files and the bug report (#275): the first unhandled exception of a launch writes
   `crashes/crash_<time>.txt` in the data folder (version, error, stack, settings, log tail) and logs
   `CRASH_WRITTEN <path>`; Unity keeps running (a player started with `--smoke` quits with exit 1). F8 in the editor and
-  development builds saves `bug_<time>/` (info, log tail, settings, a screenshot when there is a graphics device) and
-  logs `BUG_REPORT <dir>`.
+  development builds saves `bug_<time>/` (info, log tail, settings, a screenshot when there is a graphics device,
+  always opaque) and logs `BUG_REPORT <dir>`.
 - The juice demo (#275, main menu in the editor and development builds): hit the box for shake, hitstop, squash on a
   spring and a rate-limited flash, a follow camera with its deadzone drawn, a buffered jump with coyote time, a held
   guard, a line, a bark and a caption, analog movement. UI Toolkit elements only, so it needs no assets.
