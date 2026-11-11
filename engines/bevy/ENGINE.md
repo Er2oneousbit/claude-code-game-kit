@@ -69,6 +69,7 @@ data/access/colours.json the colour-blind palettes;  data/input/presets.json the
 src/dotwork/       the Dotwork importer: manifest.rs reads a manifest (defs.rs its serde structs) into assets.rs's
                    objects; autotile.rs the blob rule and tile flags; player.rs the frame clock; mod.rs the plugins,
                    the Dotwork system parameter and the animation system
+src/character.rs   rigged glTF characters: spawn_character plays a named clip on a loop (CharacterPlugin)
 src/shell/fonts/   Fira Mono Medium (the text font) and Atkinson Hyperlegible (the readable font), both OFL; compiled
                    in with include_bytes!
 src/kit_shaders.rs the kit's shader recipes as typed 2D materials (generated, with assets/shaders/kit/*.wesl)
@@ -76,6 +77,7 @@ examples/shader_check.rs renders every recipe on the GPU for `smoke --shaders`
 tests/             integration tests: drive the real GamePlugin headless with app.update()
 tests/golden.rs    the juice, shell and audio modules against data/golden/*.json (the kit's shared vectors)
 tests/dotwork.rs   the Dotwork importer against data/golden/dotwork/expected.json; every assets/dotwork manifest loads
+tests/character.rs the golden rigged character (data/golden/character/) loads, walks and switches clips, headless
 data/golden/       golden vectors from tools/golden_vectors.py and tools/audio/wavesmith/; never edit by hand
 assets/            art, audio, fonts (docs/ASSET_LOG.md); Bevy loads paths relative to it
 target/            build output (git-ignored)
@@ -95,7 +97,8 @@ target/            build output (git-ignored)
   is a bug (and say why in a comment): a panic kills the game.
 - Tests name the behavior they guard; count `SimTick`, never frames.
 - 3D models: a `.glb` from `tools/bozzetto/bozzetto.py` (in `assets/models/`) loads with the default features:
-  `SceneRoot(asset_server.load("models/<name>.glb#Scene0"))` (ENGINE_FLOW; the starter itself is 2D) **(verify)**.
+  `WorldAssetRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/<name>.glb")))` (Bevy 0.20's name
+  for the old `SceneRoot`; the starter itself is 2D). Rigged characters: "Rigged characters" below.
   A `--material vertex` model keeps its colours in glTF `COLOR_0`: check that it is not white, because Godot ignores
   them by default (#202) and Bevy is not tested here **(verify)**.
 - **Shaders:** add `kit_shaders::KitShadersPlugin`, then give an entity `Mesh2d(meshes.add(Rectangle::new(w, h)))` and
@@ -107,6 +110,41 @@ target/            build output (git-ignored)
   showing a render-target image of the scene. Bevy 0.20 shaders are WESL (naga_oil and `#import` are gone);
   Bevy compiles them only when it builds a pipeline, so `check` checks the generated files and `smoke --shaders`
   compiles and renders them.
+
+## Rigged characters (glTF with clips, #290)
+- **File:** one `.glb` (glTF 2.0 binary: skinned mesh, skin, clips as named animations) under `assets/`, for example a
+  hero.glb in `assets/models/`. Bozzetto's rig routes and Mixamo exports fit; bone names keep their `mixamorig:` prefix
+  (Bevy's `Name` is the glTF node name as is: `mixamorig:LeftUpLeg`).
+- **Features:** none to add. Bevy's default features (the `3d` group) already build `bevy_gltf`, `gltf_animation`,
+  `bevy_animation` and the world-asset (scene) plugin, so this costs no extra compile time.
+- **The helper, `src/character.rs`:** add `character::CharacterPlugin`, then in a system
+  `let hero = spawn_character(&mut commands, &asset_server, "models/hero.glb", "idle");`. It returns the `Character`
+  entity: move and turn that one. Switch clips with `characters.get_mut(hero)?.clip = "walk".into();` (an unknown
+  name logs one WARN and stops the animation). `CharacterAnimator` (on the scene's `AnimationPlayer` entity) maps
+  every clip name to its node; `clip_names(&gltf)` lists them.
+- **What it does, for your own variants:** loads the scene by label,
+  `WorldAssetRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset(path)))`, and the whole file as
+  `Handle<Gltf>` (the same load). The loader puts an `AnimationPlayer` on the animation's root node inside the scene;
+  once it exists and `Assets<Gltf>` has the file, `AnimationGraph::from_clips` builds a graph from
+  `gltf.named_animations` (clips by name, not by index), the player entity gets `AnimationGraphHandle`, and
+  `player.play(node).repeat()` loops the clip. For cross-fades use `AnimationTransitions` instead of `play` **(verify)**.
+- **Root motion:** Bevy has none built in. Use in-place clips (the kit's golden character and Bozzetto's are) and
+  move the `Character` entity in `FixedUpdate` at the speed the walk was authored for.
+- **Scale:** glTF is metres and 1 Bevy unit = 1 m, so a 1.8 m character is 1.8 units tall; no scaling needed.
+- **Facing:** glTF's front is +Z, Bevy's `Transform::forward()` is -Z. Bevy 0.20 does not convert by default
+  (`GltfConvertCoordinates` is off and marked experimental), so a raw `WorldAssetRoot` faces +Z, its entity's back.
+  `spawn_character` puts the scene on a child turned half a turn about Y (`GLTF_TO_BEVY_YAW`), so the character looks
+  along its entity's forward: `transform.look_to(dir, Vec3::Y)` points it, `transform.forward()` is where it walks.
+- **Headless:** the helper needs no window or GPU. `tests/character.rs` builds `MinimalPlugins` + `AssetPlugin`
+  (rooted at `data/golden/character/`) + `TransformPlugin`, `WorldSerializationPlugin`, `MeshPlugin`,
+  `GltfPlugin`, `AnimationPlugin` and inserts `CompressedImageFormatSupport(CompressedImageFormats::NONE)` (normally
+  the renderer's job; the fixture has no textures). A model with textures would also need `ImagePlugin` **(verify)**.
+- **Tested** 2026-11-11, Bevy 0.20.1, Rust 1.99.1, Windows: `tests/character.rs` loads the kit's golden character
+  (`data/golden/character/character.glb`), finds `idle` and `walk` by name with their lengths from `expected.json`,
+  plays `walk` for one loop at 60 Hz and measures `mixamorig:LeftUpLeg` swinging 56.0 degrees (expected 56; the test
+  asks for 50 to 110 percent), checks the left leg sits at -x (the character faces -Z), and switches to `idle`. Passed,
+  headless, as part of `python tools/dev.py test` in a fresh scaffold. Not run: a windowed run that draws the skinned
+  mesh **(verify)**, a Bozzetto or Mixamo file other than the golden character **(verify)**.
 
 ## Gotchas (Claude: read before editing)
 1. **Your Bevy memory is probably from an older version.** Bevy breaks its API every release (about every three
