@@ -23,12 +23,15 @@ and tested against.
 8. [Which lane makes which kind](#which-lane-makes-which-kind)
 9. [Golden fixture and loaded result](#golden-fixture-and-loaded-result)
 10. [Commands](#commands)
-11. [How to write an importer](#how-to-write-an-importer) (per-engine notes for #55 to #62)
+11. [How to write an importer](#how-to-write-an-importer) (how each engine's importer, #55 to #62, does it)
 12. [Limits](#limits)
 
 ## Where it lives
 One file per pack: `<assets_dir>/dotwork/<pack>.assets.json` (`assets/dotwork/<pack>.assets.json` in most games,
-`public/assets/dotwork/<pack>.assets.json` in a web game, `Assets/dotwork/<pack>.assets.json` in Unity). Every path
+`public/assets/dotwork/<pack>.assets.json` in a web game, `Assets/dotwork/<pack>.assets.json` in Unity). In a kit
+game Dotwork picks that folder (and `--engine none` outside Godot) from the engine in the game's `.game-kit.json` when
+its `dotwork.config.json` names none (`fcore.KIT_ENGINE_DEFAULTS`); Unreal and RPG Maker MZ keep `assets/` on purpose,
+outside `Content/` and `game/`, where their importers read it. Every path
 in it is relative to the folder named by its `base` field, which is relative to the manifest's own folder. Dotwork
 writes `"base": ".."`, so paths are relative to the assets folder (`art/characters/<name>/frames/<frame>.png`), and
 an importer resolves a path as `join(dirname(manifest), base, path)`. Paths use forward slashes, never `..`, a drive or a leading `/`.
@@ -45,7 +48,7 @@ Files outside the assets folder (store art in `assets_src/`) are not listed: the
 ## Conventions
 | What | Rule |
 |---|---|
-| Units | pixels of the art itself (1x; a `scale` field says when an image is drawn bigger, as UI kits and fonts are) |
+| Units | pixels of the image file. Most art is 1x. A `font` and a `ui_kit` are the exception: Dotwork has **already upscaled** their images by their `scale`, and their glyph rects, metrics, 9-slice margins and hotspots are in those upscaled pixels. Importers draw them 1:1 and never multiply by `scale` again (it only records the factor Dotwork used) |
 | Origin and axes | an image's top-left corner, x to the right, **y down** (Godot, SDL, LÖVE, Phaser, MZ). Unity, Bevy, Unreal and Three.js are y up: flip y when converting (notes below) |
 | Rect | `[x, y, w, h]`, integers for image regions, numbers for collision boxes (a centred box on an odd size lands on a half pixel) |
 | Pivot | `[x, y]` in the image's own pixels: the point that sits on the node's position (a character's feet, a prop's base, an effect's centre). Normalised for an engine: `px / w`, and `py / h` (y down) or `1 - py / h` (y up) |
@@ -162,7 +165,8 @@ A tile is addressed as `[atlas, col, row]` everywhere (maps, stamps).
 
 ### font
 `file` (the `.fnt`, AngelCode BMFont text format), `pages` (PNG paths, page 0 first), `line_height`, `base` (pixels from
-a line's top to the baseline), `scale`, `tint` (true: white ink that takes a colour; false: coloured, such as a
+a line's top to the baseline), `scale` (the factor Dotwork already drew the font at: pages, `chars`, `line_height` and
+`base` are all at that size, so draw 1:1), `tint` (true: white ink that takes a colour; false: coloured, such as a
 gradient title font), `chars` (`[id, x, y, w, h, xoffset, yoffset, xadvance, page]`, id = Unicode code point, sorted),
 optional `kerning` (`[first, second, amount]`), optional `license` (fonts you bring ship their licence). The `chars`
 table is the `.fnt` file's, so an engine with a BMFont loader can use the file and one without builds its glyph map
@@ -175,8 +179,9 @@ One per folder of UI images (`windows`, a widgets set, a menu kit, `glyphs`, `sy
 `logo`), `state` a button state (`normal`, `hover`, `pressed`, `focus`, `disabled`), `control` the gauge a part
 belongs to (`hp`: parts `under`, `fill`, `over`), `margins` 9-slice margins `[left, top, right, bottom]` in the
 image's pixels, `stretch_margin` the ends of a gauge that never stretch, `hotspot` a cursor's click point, `glyph`
-the input or symbol a glyph image shows (`key_enter`, `xbox_a`). Prompt glyphs are 1x and 16 px tall: draw them at
-whole multiples.
+the input or symbol a glyph image shows (`key_enter`, `xbox_a`). A part's `scale` is the factor Dotwork already drew
+its image at (`margins`, `stretch_margin` and `hotspot` are in that image's pixels): draw the part 1:1, never times
+`scale` again. Prompt glyphs are 1x and 16 px tall: draw them at whole multiples.
 
 ### background
 `role`, `layers`: `[{name?, image, size, velocity: [vx, vy], repeat, wobble_px?, scale?}]` drawn first to last.
@@ -313,33 +318,36 @@ engine's issue is "wire the importer into the starter scene".
 8. **Wire it**: the starter scene shows one character walking, a prop, a tile map and a label in the font when the
    game has them.
 
-Per-engine notes (engine versions as the overlays pin them; API names marked **(verify)** are from memory, not checked
-against the installed engine):
+Per-engine notes. Every overlay now has its importer (#55 to #62); the notes say how each one does it and what it
+settled about its engine (versions as the overlays pin them). **(verify)** marks what is still not checked against the
+real engine. Each engine's `docs/ENGINE.md` or `docs/ENGINE_FLOW.md` "Dotwork" section is the user's guide.
 
-- **web, Phaser 4 (#55).** Load the manifest with the scene loader's JSON, then the PNGs. Sheets become a spritesheet
-  or an atlas texture with named frames (`<clip>_<i>` from each rect); `anims.create` with per-frame `duration`.
-  Phaser's per-frame `duration` adds to the clip's base rate rather than replacing it **(verify)**: either set the
-  base so each frame's total equals its `duration`, or drive frames from a small timer. Pivot: `setOrigin(px / w, py / h)`
-  (y down, no flip). Fonts: Phaser's bitmap text parses BMFont XML **(verify)**: build its font data from `chars` or
-  convert to XML at load. Tilemaps: create a blank tilemap and `putTileAt` per cell after resolving terrain layers;
-  collision rects become Arcade bodies or tile collision data. 9-slice: Phaser's NineSlice game object takes the four
-  margins. Tests: Vitest on the manifest logic (`dev.py test`), the browser smoke for drawing.
-- **web-3d, Three.js (#56).** Sprites are `PlaneGeometry` quads with a `MeshBasicMaterial` (or `SpriteMaterial`),
-  `NearestFilter`, `colorSpace` sRGB, `alphaTest` for hard edges. Animate by moving the texture's `offset` / `repeat`
-  over the sheet rect (UV y is up: `v = 1 - (y + h) / sheetH`). The pivot is the quad's origin shift. Tiles: one
-  `InstancedMesh` per atlas with per-instance UV offsets, or one merged geometry per layer; the 2.5D look follows
-  Dotwork's diorama lane (tiles as planes, props and characters as billboards that turn only around y). Fonts: draw
-  glyph quads from `chars`. Tests: Vitest.
-- **Unity (#57).** An editor importer (a `ScriptedImporter` for `.assets.json`, or an `AssetPostprocessor` plus a menu
-  item run through `dev.py exec`) slices each sheet with `SpriteMetaData` rects (Unity's rect origin is bottom-left:
-  `y = sheetH - y - h`) and pivots (`SpriteAlignment.Custom`, `(px / w, 1 - py / h)`), sets pixels per unit to the tile
-  size, Point filter, no compression. Clips become `AnimationClip`s with `ObjectReferenceKeyframe` sprite keys at the
-  cumulative frame times (`loopTime` from `loop`) and an `AnimatorController` or a small player component. Tiles:
-  `Tile` assets per atlas cell; blob terrain through a custom `TileBase` that computes `cell_mask`, or 2D Tilemap
-  Extras' rule tiles **(verify the package is wanted)**; collision as custom physics shapes and a `TilemapCollider2D`.
-  Fonts: a TextMeshPro font asset from `chars` **(verify)**, or a sprite-based label. Tests: an EditMode test that
-  imports `data/golden/dotwork/` into a temporary folder and compares.
-- **Unreal (#58, done: `Content/Python/kit_dotwork/`, UE 5.8).** An editor Python script through `dev.py exec` with
+- **web, Phaser 4.2.1 (#55, src/game/dotworkPlan.ts + src/game/dotwork.ts).** The manifests and PNGs load
+  through the scene loader; every clip's frames become named frames (`<pack>/<asset>/<clip>/<i>`) with the pivot as
+  their origin (`px / w`, `py / h`, y down, no flip), and `anims.create` gets each frame's own `duration`. In Phaser
+  4.2.1 a frame's `duration` replaces the clip's base rate (Phaser 3 added it to the rate, so tutorials disagree).
+  Fonts become Phaser bitmap-font data built from `chars` (one texture: glyphs on a second page are left out); tile
+  maps are a blank tilemap filled per cell after the terrain layers are resolved; collision rects become static
+  Arcade bodies; 9-slice parts use Phaser's NineSlice with the four margins. Fonts and UI parts draw at 1 on a camera
+  without zoom. Tests: Vitest on the plan and every game manifest (`dev.py test`), and `smoke --until
+  DOTWORK_VERIFY_OK` loads every manifest in Phaser.
+- **web-3d, Three.js (#56, `src/game/dotwork/`).** `DotworkLibrary.load()` builds sprites as quads with
+  `NearestFilter`, sRGB and `alphaTest`, animated by moving the texture's `offset` / `repeat` over the sheet rect (UV
+  y is up: `v = 1 - (y + h) / sheetH`); the pivot is the quad's origin shift. The diorama look: one world unit per map
+  tile, tiles flat on the ground, sprites as billboards that turn only around y. Fonts are glyph quads from `chars`.
+  Tests: Vitest on the golden pack and every game manifest; `smoke` loads them all in the browser.
+- **Unity (#57, `Assets/Editor/Dotwork/`).** An explicit command, `python tools/dev.py exec GameKitDotwork.ImportAll`,
+  plus an import-time hook (`DotworkSpritePhysics`, an `AssetPostprocessor` that sets each sprite's physics shape
+  while Unity imports the PNG), not a `ScriptedImporter`: the slicing, pivots and physics shapes belong to each PNG's
+  own TextureImporter, which an importer of the JSON file cannot set without fighting Unity's import order. Rects
+  and pivots flip to Unity's bottom-left origin (`y = sheetH - y - h`, pivot `(px / w, 1 - py / h)`), Point filter,
+  no compression, pixels per unit from the first tileset. Clips become `AnimationClip`s with sprite keys at each
+  frame's `duration` and an AnimatorController; blob47 and sides4 terrain are the kit's own `DotworkTerrainTile` (no
+  2D Tilemap Extras package). Fonts are sprite labels (`DotworkFont`, `DotworkLabel`), not TextMeshPro: TMP needs the
+  uGUI package and its Essential Resources, which an adopt-first project has not. Still to check: blend `add` uses a
+  Built-in pipeline particle shader, URP needs its own material **(verify)**; isometric maps on Unity's isometric
+  Grid against Godot's diamond-down layout **(verify)**. Tests: EditMode tests on the golden pack and every manifest.
+- **Unreal (#58, `Content/Python/kit_dotwork/`, UE 5.8).** An editor Python script through `dev.py exec` with
   Paper2D: a `PaperSprite` per frame (source texture = the sheet, source UV and dimension = the rect, pivot mode
   custom; `CustomPivotPoint` is in the texture's own pixels, y down, so it is `rect.xy + pivot` and Paper2D flips to
   its X right, Z up plane itself), a `PaperFlipbook` per clip (whole `FrameRun` counts at the clip's fps times the
@@ -349,36 +357,41 @@ against the installed engine):
   (`per_tile_data`; box shapes are filled with `SpriteGeometryShape.import_text`, their fields are read-only) but
   not a layer's name (the layers come from Paper2D's own Tiled importer) nor an offline `Font`'s page textures (set
   with the `set` console command, which only the pythonscript commandlet runs). An offline Font keeps one advance
-  per glyph plus one font-wide kerning: xoffset and kerning pairs are lost. Not in Paper2D: tile animation,
-  probability variants, additive blend. Tests: `dev.py test` runs the golden check and every game manifest through
-  the commandlet, and as `Editor.Python.<Game>.kit_dotwork.*` automation tests with the PythonAutomationTest plugin.
-- **Bevy 0.20 (#59).** Plain Rust with `serde_json` (already a dependency): a `TextureAtlasLayout` per sheet from the
-  rects (or one image per frame), an animation component with per-frame `Duration`s and a system that advances it,
-  `Anchor` from the pivot (centre-relative, y up: `(px / w - 0.5, 0.5 - py / h)` **(verify the Anchor API in 0.20)**),
-  `ImageSampler::nearest()`. Tiles: one sprite per cell under a parent entity, or `bevy_ecs_tilemap` if the game adds
-  it (the kit adds no crate); terrain layers resolved by `cell_mask`. Fonts: glyph sprites from `chars`. Tests: plain
-  `cargo test` on the loader (no window), comparing with `expected.json`.
-- **C++ / SDL3 (#60).** `nlohmann-json` (already in the overlay's vcpkg manifest) reads the manifest. SDL3 itself loads BMP; PNG needs a
-  decoder: SDL3_image from vcpkg, or `stb_image`, or SDL's own PNG loader if the pinned SDL3 has one **(verify)**.
-  `SDL_RenderTexture` with source rects from the frames, destination offset by the pivot, `SDL_SCALEMODE_NEAREST`
-  (or the pixel-art scale mode). Frame timing from `duration`. Tiles: draw cells per layer, terrain layers resolved
-  by a C++ port of `cell_mask`. Fonts: glyph quads from `chars`. Tests: doctest on the loader with the golden fixture
-  (no window needed for the numbers).
-- **LÖVE 11.5 (#61).** The kit's JSON module (`require("src.core.json")`) decodes the manifest. `love.graphics.newImage` with
-  `setFilter("nearest", "nearest")`, a `Quad` per rect, `love.graphics.draw(image, quad, x, y, 0, sx, sy, px, py)`
-  (the origin arguments are the pivot, y down, no conversion). Timing from `duration`. Tiles: a `SpriteBatch` per
-  atlas and layer. Fonts: LÖVE reads BMFont text files with `love.graphics.newFont(fntPath)` **(verify against 11.5;
-  it takes the `.fnt` path and finds the pages beside it)**, else build an image font from `chars`. Tests: the kit's
-  Lua test runner (`dev.py test`) on the loader, headless.
-- **RPG Maker MZ (#62).** MZ has fixed formats, so this importer is a converter (a Node script run by `dev.py`, or a
-  plugin for runtime use), not a loader. Characters: compose MZ character sheets (3 frames by 4 directions per
-  character, `$` prefix for a single-character file) from `walk_<dir>` (pick 3 frames: the stride frames, standing
-  in the middle), scaling or padding to MZ's cell size **(verify the cell size against the project)**. Faces (144 x 144
-  cells) from `portrait` expressions; side-view battlers from battle poses where the game uses them. Window skin:
-  compose MZ's window skin (img/system/Window.png in the MZ project) from a `ui_kit` window part; icons into `IconSet.png` (32 px cells, MZ default
-  **(verify)**). Tilesets: MZ's A1 to E layouts and its own autotile shapes differ from blob47; converting needs MZ's
-  autotile quarter-tile layout, so start with B to E tiles (plain tiles) and leave autotiles to a later step. Tests:
-  Node test on the converter's numbers against `expected.json` (the clip and portrait parts), plus the MZ smoke.
+  per glyph plus one font-wide kerning: xoffset and kerning pairs are lost; UMG text wants a runtime font from a
+  TTF/OTF **(verify)**. Not in Paper2D: tile animation, probability variants, additive blend. Dotwork's output stays
+  in `assets/`, outside `Content/` (the open editor would auto-import the PNGs). Tests: `dev.py test` runs the golden
+  check and every game manifest through the commandlet, and as `Editor.Python.<Game>.kit_dotwork.*` automation tests
+  with the PythonAutomationTest plugin.
+- **Bevy 0.20 (#59, `src/dotwork/`).** Plain Rust with `serde_json`: a `TextureAtlasLayout` per sheet from the rects,
+  per-frame `Duration`s in a `DotworkAnimation` component and a system that advances it, `ImageSampler::nearest()`.
+  The pivot is an `Anchor`: in 0.20 `Anchor(pub Vec2)` is a component of its own (a required component of `Sprite`),
+  centre-relative and y up, `Anchor(Vec2::new(px / w - 0.5, 0.5 - py / h))`. Tiles: one sprite per cell under the map
+  entity (no `bevy_ecs_tilemap`), terrain layers resolved by `cell_mask`. Fonts: glyph sprites from `chars`; 9-slice
+  through `TextureSlicer`. Bevy 0.20 sprites have no additive blend (drawn normal). Tests: `cargo test` on the loader
+  (no window) against `expected.json` and every game manifest.
+- **C++ / SDL3 (#60, `src/core/DotworkAssets` + `src/gfx/DotworkRender`).** `nlohmann-json` reads the manifest. PNGs
+  load with SDL's own `SDL_LoadPNG` (SDL 3.4.0 and later; the pinned 3.4.12 has it), so no SDL3_image or `stb_image`.
+  `SDL_RenderTexture` with the frame rect as the source rect, the destination offset by the pivot,
+  `SDL_SCALEMODE_NEAREST`; 9-slice through `SDL_RenderTexture9Grid`. Timing from `duration`. Terrain layers resolved
+  at load by a C++ port of `cell_mask`. Fonts: glyph quads from `chars`. Tests: doctest on the loader with the golden
+  fixture (no window needed for the numbers) and every game manifest.
+- **LÖVE 11.5 (#61, src/core/dotwork_manifest.lua, src/game/dotwork_loader.lua, src/game/dotwork_view.lua).**
+  The kit's JSON module decodes the manifest headless; drawing needs a window, because every `love.graphics.new*`
+  call (`newImage`, `newQuad`, `newFont`, `newSpriteBatch`) errors without one, so the view is built in `love.draw` or
+  after the window exists. `setFilter("nearest", "nearest")`, a `Quad` per rect, `love.graphics.draw(image, quad, x,
+  y, 0, sx, sy, px, py)` (the origin arguments are the pivot, y down, no conversion). Fonts: `love.graphics.newFont`
+  reads the `.fnt` (AngelCode BMFont text) and finds its pages beside it on 11.5; the glyph quads from `chars` are the
+  fallback. Tiles: a `SpriteBatch` per atlas and layer. Tests: the kit's Lua test runner (`dev.py test`) on the loader
+  with the golden fixture and every game manifest, headless.
+- **RPG Maker MZ (#62, tools/dotwork_mz.mjs).** MZ reads fixed image layouts, so the importer is a converter run
+  after every Dotwork run: `python tools/dev.py dotwork` (`--dry-run` first, `--replace` to replace files MZ shipped).
+  It writes character sheets (3 frames by 4 directions, `$` single-character files) from `walk_<dir>`, object sheets
+  for props, faces (144 x 144 cells) from `portrait` expressions, side-view battlers from battle poses, enemies, the
+  Window.png skin from a `ui_kit` window part, rows of `IconSet.png`, and B to E tile sheets from plain tiles, at one
+  whole-number scale (MZ's tile size over the art's). Terrain autotiles (MZ's A1 to A4 quarter-tile layouts) and maps
+  are not converted yet. Dotwork's output stays in `assets/`, outside `game/`; the converter records what it wrote in
+  `<src_dir>/dotwork/mz_export.json`. Every layout has been checked against stand-ins only, not in the real MZ editor
+  **(verify)**. Tests: tests/dotworkMz.test.js on the golden pack, and `dev.py check` re-checks the last export.
 
 ## Limits
 - One manifest per pack. A game with several packs has several files; importers load them all (names are unique per
