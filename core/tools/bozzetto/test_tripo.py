@@ -486,6 +486,24 @@ class Placement(Base):
         args = bz.build_parser().parse_args(["make", "prop_x", "--image", "art_src/crate.png"])
         self.assertEqual(bz.Plan(args).turn, 0.0)
 
+    def test_a_tripo_model_keeps_all_its_parts(self):
+        # A live Tripo character came back as 120 parts (goggles, buckles, arm plates); cleanup's 1% fragment floor
+        # dropped 103 of them, the mechanical arm and the goggles included.
+        rc, out = self.make("--image", "art_src/crate.png")
+        self.assertEqual(rc, 0, out)
+        argv = self.cleanup_argv()
+        self.assertEqual(argv[argv.index("--min-part") + 1], "0.0", "Tripo's parts are the model, not fragments")
+        rc, out = self.make("--image", "art_src/crate.png", "--min-part", "0.002", "--no-log", name="prop_b")
+        self.assertEqual(rc, 0, out)
+        argv = self.cleanup_argv()
+        self.assertEqual(argv[argv.index("--min-part") + 1], "0.002", "the user's own floor wins")
+        local = bz.Plan(bz.build_parser().parse_args(["make", "prop_x", "--image", "art_src/crate.png"]))
+        self.assertIsNone(local.min_part, "the local route keeps cleanup's own default")
+        uploads = len(STATE.uploads)
+        rc, out = self.make("--image", "art_src/crate.png", "--min-part", "1.5", "--no-log", name="prop_c")
+        self.assertEqual(rc, 2, out)
+        self.assertEqual(len(STATE.uploads), uploads, "a bad --min-part stops before any upload")
+
 
 class Usage(Base):
     def test_usage_errors_exit_2_before_any_call(self):

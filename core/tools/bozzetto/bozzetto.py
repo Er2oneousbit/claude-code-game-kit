@@ -414,6 +414,12 @@ class Plan:
             raise ToolError("--height must be a positive number of metres")
         # Tripo faces its models +X; glTF's front is +Z. The local route's TRELLIS.2 output already faces +Z.
         self.turn = args.turn if args.turn is not None else (tp.FACING_TURN if self.route == "tripo" else 0.0)
+        # Tripo builds a model from many separate parts (goggles, buckles, arm plates), each under cleanup's 1%
+        # fragment floor: dropping them took most of a character apart in a live run. TRELLIS.2's loose bits are noise.
+        min_part = getattr(args, "min_part", None)
+        self.min_part = min_part if min_part is not None else (0.0 if self.route == "tripo" else None)
+        if self.min_part is not None and not 0 <= self.min_part < 1:
+            raise ToolError("--min-part must be at least 0 and under 1 (a share of the faces)")
         self.texture = args.texture or settings["texture"]
         self.faces = int(self.budget["max_tris"] * FACE_SHARE)
         self.lods = parse_lods(args.lods, self.cls)
@@ -604,6 +610,7 @@ def blender_steps(args, plan, blender, raw):
     rc, _ = run_bpy(blender, HERE / "cleanup.py",
                     [raw, "--out", clean, "--name", plan.name, "--max-tris", plan.faces, "--height", plan.height,
                      "--turn", plan.turn, "--json", plan.src / "cleanup.json", "--overwrite"]
+                    + (["--min-part", plan.min_part] if plan.min_part is not None else [])
                     + (["--debug"] if DEBUG else []), "cleanup")
     if rc != 0:
         raise (JobError if rc == 1 else ToolError)(f"cleanup.py failed (exit {rc}); --debug shows Blender's output")
@@ -1024,6 +1031,8 @@ def build_parser():
     p.add_argument("--height", type=float, help="height in metres (default per class: prop 1.0, kit 3.0, hero/npc 1.8)")
     p.add_argument("--turn", type=float, help="degrees to turn around the up axis if the front is wrong (default 0; "
                                               f"Tripo {tp.FACING_TURN:g}: its models face {tp.FACING})")
+    p.add_argument("--min-part", type=float, help="cleanup drops separate parts under this share of the faces "
+                                                  "(default 0.01; Tripo 0: its models are built from many parts)")
     p.add_argument("--texture", type=int, choices=(512, 1024, 2048), help="baked texture size (default per class)")
     p.add_argument("--quality", choices=sorted(QUALITY), default="normal",
                    help="TRELLIS.2 resolution: normal 1024 (about 5 min), high 1536 (about 19 min); Tripo: "
