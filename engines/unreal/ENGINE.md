@@ -83,8 +83,9 @@ and a clear spec for the Blueprint child.
   minute each). Those runs draw opaque check variants built from the same graph; the translucent `M_Kit_` assets and
   post effects in a Post Process material (PostProcessInput0 in place of `MainTex`) are **(verify)** in your game.
   Python needs the PythonScriptPlugin enabled in the `.uproject`.
-- **Dotwork art (Paper2D):** run Dotwork with `--engine none` (its default `assets_dir` "assets" keeps the PNGs out
-  of `Content/`, where the open editor would auto-import them), then `python tools/dev.py exec
+- **Dotwork art (Paper2D):** Dotwork runs with `--engine none` in an Unreal game by default (from `.game-kit.json`;
+  its `assets_dir` stays "assets", which keeps the PNGs out of `Content/`, where the open editor would auto-import
+  them), then `python tools/dev.py exec
   Content/Python/kit_dotwork/import_dotwork.py` builds every `assets/dotwork/<pack>.assets.json` under
   `/Game/Dotwork/<pack>/`: textures (`T_`, nearest, no mips, uncompressed), a PaperSprite per frame and per prop
   (`S_`, custom pivot, collision boxes), a PaperFlipbook per clip (`FB_<name>_<clip>`, a frame rate at which every

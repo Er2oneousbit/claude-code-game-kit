@@ -1,0 +1,8 @@
+{
+ "_comment": "Dotwork settings for this web-3d game (tools/art/dotwork/config.example.json lists every key). A web game has no Godot: Dotwork writes PNGs, sheets, .fnt fonts and the asset manifest (engine none) into public/assets/, which Vite serves and the shell reads (prompt glyphs in public/assets/ui/glyphs/). The importer in src/game/dotwork/ (DotworkLibrary) loads public/assets/dotwork/*.assets.json.",
+ "engine": "none",
+ "project": {
+  "assets_dir": "public/assets",
+  "res_root": "res://public/assets"
+ }
+}

@@ -99,8 +99,9 @@ ProjectSettings/         project config (text, edit with care)
 
 ## Dotwork art (#57)
 - Dotwork (`tools/art/dotwork/`, `--engine none`) writes PNGs under `Assets/art/` and one manifest per pack,
-  `Assets/dotwork/<pack>.assets.json` (spec: `tools/art/dotwork/ASSET_MANIFEST.md`). Set Dotwork's `assets_dir` to
-  `Assets` (its default `assets` is the same folder only on a case-insensitive file system).
+  `Assets/dotwork/<pack>.assets.json` (spec: `tools/art/dotwork/ASSET_MANIFEST.md`). Dotwork reads the engine from
+  `.game-kit.json` and uses `Assets` and `--engine none` by default (a `dotwork.config.json` that sets `assets_dir`
+  wins: keep it `Assets`, since `assets` is another folder on a case-sensitive file system).
 - `python tools/dev.py exec GameKitDotwork.ImportAll` (after every `pack` or `character`) imports every pack into
   `Assets/dotwork/<pack>/`: sprites sliced from the sheets (Point filter, no mipmaps, no compression, pixels per unit
   = the pack's first tileset's tile width, else 16; pivots and rects flipped to Unity's y up), an AnimationClip per clip

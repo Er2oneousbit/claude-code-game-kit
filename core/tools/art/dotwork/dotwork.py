@@ -26,6 +26,7 @@
 #           2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the engine-neutral asset manifest
 #           (<assets>/dotwork/<pack>.assets.json, assetmap.py): written after pack and character, kept in step by the
 #           hand-polish re-exports, `manifest [--check]` rebuilds or validates it; godot.RECORD bound to the run's manifest
+#           2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): --engine help names the kit engine default (fcore)
 # ---------------------------------------------------------------------------
 import argparse
 import ast
@@ -567,8 +568,9 @@ def build_parser():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--project", default=".", help="the game's folder (default: current folder)")
     common.add_argument("--config", help="Dotwork config JSON (default <project>/art_src/dotwork/dotwork.config.json)")
-    common.add_argument("--engine", choices=["godot", "none"], help="godot (default): write .tres/.tscn; none: "
-                        "PNGs, sheets and JSON only (web, Bevy, other engines)")
+    common.add_argument("--engine", choices=["godot", "none"], help="godot: write .tres/.tscn (the default, except in "
+                        "a kit game of another engine); none: PNGs, sheets and JSON only, for that engine's importer "
+                        "(web, Unity, Bevy, ...). A kit game's engine (.game-kit.json) also picks its assets folder")
     common.add_argument("--debug", action="store_true", help="tracebacks and request logs")
     ap = argparse.ArgumentParser(description="Dotwork: local pixel-art assets for a game, made with ComfyUI on your GPU. "
                                              "Global options, before or after the command: --project GAME, "
