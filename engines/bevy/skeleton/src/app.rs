@@ -5,18 +5,18 @@
 //           the tick rate and the smoke frame budget, so main.rs and the tests share it.
 // Usage   : app::build(&cli, cfg).run()   |   tests: let mut app = app::test_app(cfg); app.update();
 //           (app::smoke_test_app(cfg, n) adds the smoke frame budget, for tests of the smoke run itself)
-// Notes   : Headless = MinimalPlugins + LogPlugin + StatesPlugin + TransformPlugin + GamePlugin: no window,
-//           no renderer, no GPU. Smoke and capture runs advance time by exactly one 1/60 s tick per frame
-//           (TimeUpdateStrategy::ManualDuration), so N frames = N fixed ticks on any machine, as fast as it
-//           can go. The very first update only starts the clock (zero delta, no tick), so the smoke budget
-//           does not count it: frame n is tick n, and --record names frames the same way. Normal play uses
-//           real time.
+// Notes   : Headless = MinimalPlugins + LogPlugin + StatesPlugin + TransformPlugin + GamePlugin (+ the Dotwork
+//           manifests as data, DotworkLibraryPlugin): no window, no renderer, no GPU. Smoke and capture runs
+//           advance time by exactly one 1/60 s tick per frame (TimeUpdateStrategy::ManualDuration), so N frames
+//           = N fixed ticks on any machine, as fast as it can go. The very first update only starts the clock
+//           (zero delta, no tick), so the smoke budget does not count it: frame n is tick n, and --record names
+//           frames the same way. Normal play uses real time.
 //
 // Pseudocode:
-//   build(cli): plugins for the mode -> fixed tick 60 Hz -> GameConfig -> GamePlugin (+ PresentPlugin with
-//   a window) -> boot marker on the first frame -> (smoke) skip the clock-priming update, then count
-//   frames in Last; capture screenshots on the frames asked for; after N frames pause the game, wait for
-//   pending screenshots, print FRAME_TIMES (the real time between smoke frames, #90) and SMOKE_DONE, exit
+//   build(cli): plugins for the mode -> fixed tick 60 Hz -> GameConfig -> GamePlugin (+ DotworkPlugin and
+//   PresentPlugin with a window) -> boot marker on the first frame -> (smoke) skip the clock-priming update,
+//   then count frames in Last; capture screenshots on the frames asked for; after N frames pause the game, wait
+//   for pending screenshots, print FRAME_TIMES (the real time between smoke frames, #90) and SMOKE_DONE, exit
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): the smoke budget skips the clock-priming
 //           update (--smoke 120 ran 119 ticks); smoke_test_app for the headless test of that
@@ -26,6 +26,8 @@
 //           reports (shell/crash.rs, #275)
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a failed drive still gets its --screenshot, of the
 //           frame it stopped on (Smoke::finish_failed, #276)
+//           2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the Dotwork importer (DotworkPlugin with a window,
+//           DotworkLibraryPlugin headless, #59)
 // ---------------------------------------------------------------------------
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -39,6 +41,7 @@ use bevy::time::TimeUpdateStrategy;
 use bevy::window::WindowResolution;
 
 use crate::cli::Cli;
+use crate::dotwork::{DotworkLibraryPlugin, DotworkPlugin};
 use crate::game::{GameConfig, GamePlugin, PresentPlugin, TITLE};
 use crate::shell::ShellPlugin;
 use crate::shell::drive::Drive;
@@ -112,13 +115,14 @@ pub fn build(cli: &Cli, cfg: GameConfig, drive: Option<Drive>) -> App {
                 })
                 .set(log),
         )
-        .add_plugins((PresentPlugin, ShellViewPlugin));
+        .add_plugins((DotworkPlugin, PresentPlugin, ShellViewPlugin));
     } else {
         app.add_plugins((
             MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::ZERO)),
             log,
             StatesPlugin,
             TransformPlugin,
+            DotworkLibraryPlugin, // the manifests load headless too: a broken one fails dev.py smoke
         ));
     }
     add_game(&mut app, cfg);
@@ -237,7 +241,10 @@ fn smoke_budget(
     }
     if smoke.done < smoke.frames {
         if let Some(last) = smoke.clock.last {
-            smoke.clock.times_ms.push(now.duration_since(last).as_secs_f64() * 1000.0);
+            smoke
+                .clock
+                .times_ms
+                .push(now.duration_since(last).as_secs_f64() * 1000.0);
         }
         smoke.clock.last = Some(now);
         smoke.done += 1;
