@@ -9,7 +9,8 @@
 #                      kit's shader recipes as materials (the full editor off-screen; --no-shaders skips)
 #             build    same as check (kept for command-contract parity)
 #             test     run automation tests headless (--filter, default "<Game>", plus "GameKit." when the
-#                      kit's GameKitShell plugin is enabled)
+#                      kit's GameKitShell plugin is enabled); without --filter also the Dotwork importer's checks
+#                      (Content/Python/kit_dotwork: the golden pack and every manifest of the game, pythonscript commandlet)
 #             smoke    run automation tests named <Game>.Smoke (--filter, --until, --fail-on for scenario runs;
 #                      screenshots need a renderer, so capture from the game itself, e.g. a -record= option);
 #                      --shaders first draws every kit shader recipe and compares it with its golden image;
@@ -88,6 +89,8 @@
 #           are echoed
 # Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): package archives into Packaged/.next, then replaces
 #           the platform's old folder, so a file the game dropped (an old data/credits.md) never ships again (#278)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): test also runs the Dotwork importer's checks
+#           (#58: the golden pack against expected.json, every manifest of the game) through the commandlet
 # Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): smoke reports the run's FRAME_TIMES line (mean,
 #           p95, p99, worst) and fails a p95 over --frame-budget MS, or over the "Smoke frame time" row of
 #           docs/ARCHITECTURE.md; a run that measured nothing says so (#90)
@@ -109,6 +112,10 @@ SYSTEM = platform.system()  # Windows, Linux, Darwin
 
 # ---- Tunables / constants (edit if your UE version differs) -------------------
 LAST_LOG = [""]                               # the last automation run's output (stdout + log file)
+NOTHING_RAN = [False]                         # the last automation run matched no test (exit 2, not a failure)
+DOTWORK_DIR = "Content/Python/kit_dotwork"    # the Dotwork importer (Paper2D); `test` runs its checks below
+DOTWORK_CHECKS = ("test_dotwork_golden.py", "test_dotwork_manifests.py")
+PYTHON_PLUGIN = "PythonScriptPlugin"          # editor Python: exec, the shader check and the Dotwork importer
 SMOKE_UNMEASURED = ("no Smoke test logged a FRAME_TIMES line: automation runs with -NullRHI draw nothing, and the "
                     "kit ships no Smoke test (log one from yours: docs/ENGINE.md, Conventions, Frame times in smoke)")
 SMOKE_GROUP_SUFFIX = "Smoke"                  # tests named <Game>.Smoke.* are the smoke group
@@ -706,6 +713,7 @@ def run_automation(filter_, args, until=None, fail_on=None, extra_args=None, mar
     if not exe or not exe.exists():
         print(f"[error] editor command-line binary not found: {exe}", file=sys.stderr)
         return 2
+    NOTHING_RAN[0] = False
     AUTOMATION_LOG.parent.mkdir(parents=True, exist_ok=True)
     if AUTOMATION_LOG.exists():
         AUTOMATION_LOG.unlink()
@@ -749,6 +757,7 @@ def run_automation(filter_, args, until=None, fail_on=None, extra_args=None, mar
     if oks == 0:
         # Nothing ran: a setup gap (no such tests yet), not a failing test. Same rule as Unity and Godot.
         print(f"[FAIL] no tests matched filter {filter_!r} (exit 2: nothing ran). Run with --debug to see the log.")
+        NOTHING_RAN[0] = True
         return 2
     hit = [m for m in (fail_on or []) if m in out]
     if hit:
@@ -774,7 +783,45 @@ def default_test_filter():
 
 
 def cmd_test(args):
-    return run_automation(args.filter or default_test_filter(), args)
+    rc = run_automation(args.filter or default_test_filter(), args)
+    if args.filter:
+        return rc
+    dot = dotwork_checks(args)
+    if dot is None:
+        return rc
+    if rc == 2 and NOTHING_RAN[0]:
+        return dot                           # no automation tests yet, but the Dotwork checks ran
+    return 1 if 1 in (rc, dot) else max(rc, dot)
+
+
+def uproject_plugin_enabled(name):
+    """True when the .uproject lists the plugin with "Enabled": true (engine plugins such as PythonScriptPlugin)."""
+    up = find_uproject()
+    try:
+        data = json.loads(up.read_text(encoding="utf-8-sig")) if up else {}
+    except (OSError, ValueError):
+        return False
+    plugins = data.get("Plugins") if isinstance(data, dict) else None
+    return any(isinstance(e, dict) and e.get("Name") == name and e.get("Enabled") is True
+               for e in (plugins if isinstance(plugins, list) else []))
+
+
+def dotwork_checks(args):
+    """The Dotwork importer's checks (Content/Python/kit_dotwork): the golden pack against expected.json and every
+    manifest of the game, through the pythonscript commandlet (the full editor refuses the `set` command an
+    offline font's pages need). None when the importer is not here or Python is off; else 0, 1 or 2."""
+    if not (ROOT / DOTWORK_DIR).is_dir():
+        return None
+    if not uproject_plugin_enabled(PYTHON_PLUGIN):
+        print(f"[info] the Dotwork importer's checks ({DOTWORK_DIR}) are skipped: they need the {PYTHON_PLUGIN} "
+              "enabled in the .uproject (docs/ENGINE.md, Dotwork art)")
+        return None
+    worst = 0
+    for name in DOTWORK_CHECKS:
+        print(f"[info] Dotwork check {name} (pythonscript commandlet)")
+        rc = exec_script(ROOT / DOTWORK_DIR / name, args)
+        worst = 1 if 1 in (worst, rc) else max(worst, rc)
+    return worst
 
 
 def cmd_smoke(args):
@@ -931,7 +978,11 @@ def cmd_exec(args):
     if err:
         print(f"[error] {err}", file=sys.stderr)
         return 2
-    script = Path(args.script)
+    return exec_script(Path(args.script), args)
+
+
+def exec_script(script, args):
+    """The body of `exec`: one editor Python script through the pythonscript commandlet. Returns 0, 1 or 2."""
     script = script if script.is_absolute() else ROOT / script
     if not script.is_file() or script.suffix != ".py":
         print(f"[error] no Python script at {script}", file=sys.stderr)
@@ -1284,7 +1335,7 @@ def build_parser():
     p = sub.add_parser("build", help="same as check")
     p.add_argument("--no-shaders", action="store_true", help="skip the shader recipes")
     p.set_defaults(fn=cmd_build)
-    p = sub.add_parser("test", help="run automation tests headless")
+    p = sub.add_parser("test", help="run automation tests headless, then the Dotwork importer's checks")
     p.add_argument("--filter", help='automation filter, e.g. "MyGame.Logic" (default: the game name, plus GameKit. '
                                     'when the GameKitShell plugin is enabled)')
     p.set_defaults(fn=cmd_test)

@@ -21,7 +21,8 @@
 #           exit 1 on purpose with their proof checked and its bug drive gets a renderer (#275), and that every smoke
 #           refuses a --data-dir inside its player or build output (#263), or inside a folder its build packs into
 #           the game (#271), and that Godot's dev.py refuses a Godot older than its 4.6 floor with exit 2, and that
-#           Unreal's package replaces the platform's last package instead of archiving over it (#278).
+#           Unreal's package replaces the platform's last package instead of archiving over it (#278), and that
+#           Unreal's test also runs the Dotwork importer's two checks through the commandlet (#58).
 # Usage   : python scripts/test_dev_py.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, no engine needed. The live checks (a real smoke with each toolchain) are
@@ -502,6 +503,55 @@ class UnrealAutomation(TempRoot):
         """#250: the pattern \\bTest Failed\\b matched a passing test's own name."""
         rc, text = self.automation(0, "Test Completed. Result={Success} Name={Test Failed Handling}\n")
         self.assertEqual(rc, 0, text)
+
+
+# ---- #58: Unreal test also runs the Dotwork importer's checks through the commandlet ----------
+class UnrealDotworkChecks(TempRoot):
+    def dev(self, plugins=("PythonScriptPlugin",), folder=True, auto=0, nothing_ran=False, checks=0):
+        dev = load("unreal")
+        dev.ROOT = self.root
+        (self.root / "Test.uproject").write_text(
+            '{"Plugins": [%s]}' % ",".join('{"Name": "%s", "Enabled": true}' % p for p in plugins), encoding="utf-8")
+        dev.find_uproject = lambda: self.root / "Test.uproject"
+        if folder:
+            (self.root / dev.DOTWORK_DIR).mkdir(parents=True, exist_ok=True)
+        else:
+            shutil.rmtree(self.root / dev.DOTWORK_DIR, ignore_errors=True)
+        ran = []
+
+        def fake_automation(filter_, args, **kw):
+            dev.NOTHING_RAN[0] = nothing_ran
+            return auto
+        dev.run_automation = fake_automation
+        dev.exec_script = lambda script, args: ran.append(script.name) or checks
+        self.ran = ran
+        return dev
+
+    def run_test(self, dev, filter_=None):
+        return quiet(dev.cmd_test, argparse.Namespace(filter=filter_, platform=None))
+
+    def test_both_checks_run_after_the_automation(self):
+        rc, text = self.run_test(self.dev())
+        self.assertEqual(rc, 0, text)
+        self.assertEqual(self.ran, ["test_dotwork_golden.py", "test_dotwork_manifests.py"])
+
+    def test_a_failing_check_fails_test(self):
+        self.assertEqual(self.run_test(self.dev(checks=1))[0], 1)
+        self.assertEqual(self.run_test(self.dev(auto=1))[0], 1)
+
+    def test_no_automation_tests_but_passing_checks_pass(self):
+        """A Blueprint-only game without tests of its own: the Dotwork checks still ran, so not "nothing ran"."""
+        self.assertEqual(self.run_test(self.dev(auto=2, nothing_ran=True))[0], 0)
+        self.assertEqual(self.run_test(self.dev(auto=2, nothing_ran=False))[0], 2)   # a setup problem stays 2
+
+    def test_skipped_without_python_or_importer_or_with_a_filter(self):
+        rc, text = self.run_test(self.dev(plugins=()))
+        self.assertEqual((rc, self.ran), (0, []))
+        self.assertIn("PythonScriptPlugin", text)
+        rc, _ = self.run_test(self.dev(folder=False))
+        self.assertEqual((rc, self.ran), (0, []))
+        rc, _ = self.run_test(self.dev(), filter_="Test.Logic")
+        self.assertEqual((rc, self.ran), (0, []))
 
 
 class UnrealRunTeeTimeout(TempRoot):
