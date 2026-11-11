@@ -845,26 +845,133 @@ TArray<FString> FGameKitShellModel::CreditsLines() const
 {
 	TArray<FString> Out;
 	const TOptional<FString> Text = GameKit::ReadTextFile(FPaths::Combine(Opt.ProjectDir, CreditsFile));
-	if (!Text.IsSet() || Text.GetValue().TrimStartAndEnd().IsEmpty())
+	const TArray<FString> Lines = Text.IsSet() ? CreditsLinesFrom(Text.GetValue()) : TArray<FString>();
+	if (Lines.IsEmpty())
 	{
 		Out.Add(T(TEXT("credits.placeholder")));
 	}
-	else
+	for (const FString& Line : Lines)
 	{
-		TArray<FString> Lines;
-		Text.GetValue().Replace(TEXT("\r"), TEXT("")).ParseIntoArray(Lines, TEXT("\n"), /*CullEmpty*/ false);
-		for (FString Line : Lines)
-		{
-			if (Line.StartsWith(TEXT("#")))
-			{
-				Line = Line.Replace(TEXT("#"), TEXT("")).TrimStartAndEnd();   // heading marks off, the text stays
-			}
-			Out.Add(Content(Line.TrimEnd()));
-		}
+		Out.Add(Content(Line));
 	}
 	Out.Add(FString());
 	Out.Add(T(TEXT("credits.engine")));
 	return Out;
+}
+
+TArray<FString> FGameKitShellModel::CreditsLinesFrom(const FString& Markdown)
+{
+	TArray<FString> Out;
+	const FString Text = StripHtmlComments(Markdown);
+	if (Text.TrimStartAndEnd().IsEmpty())
+	{
+		return Out;
+	}
+	TArray<FString> Lines;
+	Text.Replace(TEXT("\r"), TEXT("")).ParseIntoArray(Lines, TEXT("\n"), /*CullEmpty*/ false);
+	for (FString Line : Lines)
+	{
+		if (Line.StartsWith(TEXT("#")))
+		{
+			Line = Line.Replace(TEXT("#"), TEXT("")).TrimStartAndEnd();   // heading marks off, the text stays
+		}
+		Out.Add(Line.TrimEnd());
+	}
+	return Out;
+}
+
+namespace GameKitCreditsText
+{
+	const TCHAR* const CommentOpen = TEXT("<!--");
+	const TCHAR* const CommentClose = TEXT("-->");
+
+	/** Only spaces and tabs (every port counts these two; Unicode whitespace differs between languages). */
+	bool Blank(const FString& Line)
+	{
+		for (const TCHAR C : Line)
+		{
+			if (C != TEXT(' ') && C != TEXT('\t'))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** Needle in Hay at From or later, or INDEX_NONE. FString::Find clamps a start past the end to the last
+	 *  character, which would find a one-character needle there again. */
+	int32 FindFrom(const FString& Hay, const TCHAR* Needle, int32 From)
+	{
+		if (From >= Hay.Len())
+		{
+			return INDEX_NONE;
+		}
+		return Hay.Find(Needle, ESearchCase::CaseSensitive, ESearchDir::FromStart, From);
+	}
+}
+
+FString FGameKitShellModel::StripHtmlComments(const FString& Text)
+{
+	using namespace GameKitCreditsText;
+	const int32 OpenLen = FCString::Strlen(CommentOpen);
+	const int32 CloseLen = FCString::Strlen(CommentClose);
+	TArray<FString> Out;
+	bool bInComment = false;
+	bool bSkipBlank = false;                         // the blank line after a dropped comment-only line
+	const FString Unix = Text.Replace(TEXT("\r\n"), TEXT("\n"));
+	int32 LineStart = 0;
+	while (LineStart <= Unix.Len())
+	{
+		int32 LineEnd = FindFrom(Unix, TEXT("\n"), LineStart);
+		if (LineEnd == INDEX_NONE)
+		{
+			LineEnd = Unix.Len();
+		}
+		const FString Line = Unix.Mid(LineStart, LineEnd - LineStart);
+		LineStart = LineEnd + 1;
+		FString Kept;
+		bool bHad = bInComment;
+		int32 I = 0;
+		while (true)
+		{
+			if (bInComment)
+			{
+				const int32 End = FindFrom(Line, CommentClose, I);
+				if (End == INDEX_NONE)
+				{
+					break;                           // the comment goes on into the next line
+				}
+				bInComment = false;
+				I = End + CloseLen;
+			}
+			else
+			{
+				const int32 Start = FindFrom(Line, CommentOpen, I);
+				if (Start == INDEX_NONE)
+				{
+					Kept += Line.Mid(I);
+					break;
+				}
+				Kept += Line.Mid(I, Start - I);
+				bInComment = true;
+				bHad = true;
+				I = Start + OpenLen;
+			}
+		}
+		if (bHad && Blank(Kept))
+		{
+			bSkipBlank = Out.IsEmpty() || Blank(Out.Last());
+			continue;
+		}
+		if (bSkipBlank && Blank(Kept))
+		{
+			bSkipBlank = false;
+			continue;
+		}
+		bSkipBlank = false;
+		Out.Add(Kept);
+	}
+	return FString::Join(Out, TEXT("\n"));
 }
 
 TArray<FString> FGameKitShellModel::HelpLines() const

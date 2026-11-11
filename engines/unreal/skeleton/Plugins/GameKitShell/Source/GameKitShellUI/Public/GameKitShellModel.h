@@ -20,7 +20,8 @@
 //           Settings are applied at once (the Version counter bumps and OnEvent fires "settings_changed");
 //           Back or cancel on the settings screen saves <DataDir>/settings.json. The one-handed layouts
 //           come from <ProjectDir>/data/input/presets.json, the colour palettes from
-//           data/access/colours.json, the strings from data/i18n/<locale>.json, the credits from CREDITS.md.
+//           data/access/colours.json, the strings from data/i18n/<locale>.json, the credits from CREDITS.md
+//           (its HTML comments dropped: StripHtmlComments, #279).
 //           Only the top screen takes input; a transparent screen (pause) is drawn over the one below.
 //           Analog input for the game (#274, as the Bevy shell's Intent): Stick() (radial, rescaled deadzone and
 //           invert_y, GameKitAnalog.h), Trigger(), HeldActions(); all zero outside play and the juice demo, so a
@@ -186,6 +187,12 @@ public:
 	FString T(const FString& Key, const FGameKitTrArgs& Args = FGameKitTrArgs()) const;
 	/** A value the game made up (a name, a number) through the "{v}" template, so the pseudo check sees it. */
 	FString Content(const FString& Text) const;
+	/** CREDITS.md without HTML comments (tools/credits.py writes one, #279): one line or many, an unclosed one runs to
+	 *  the end; a comment-only line goes, with one blank line after it when a blank line came before. LF joined.
+	 *  tools/golden_vectors.py strip_html_comments is the spec, data/golden/credits.json the cases. */
+	static FString StripHtmlComments(const FString& Text);
+	/** CREDITS.md as the credits page's lines: comments out, heading marks off; empty when nothing is left. */
+	static TArray<FString> CreditsLinesFrom(const FString& Markdown);
 	/** The label of a binding for a glyph set: glyph.<name> from the tables, or the key's own name ("Space"). */
 	FString BindingLabel(const FString& GlyphName) const;
 	FString GlyphSet() const;
