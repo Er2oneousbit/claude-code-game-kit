@@ -342,6 +342,7 @@ class NewIssueExam(unittest.TestCase):
 
     def test_bad_drafts_exit_2(self):
         cases = [({"kind": "bug", "title": "t", "fields": {"what": "x"}}, "a bug needs steps"),
+                 ({"kind": "idea", "title": "t", "fields": {"what": "x"}}, "an idea needs why"),
                  ({"kind": "bug", "title": "t", "fields": {"what": "x", "steps": "y", "colour": "z"}}, "no field colour"),
                  ({"kind": "rant", "title": "t", "body": "x"}, "kind must be one of"),
                  ({"kind": "idea", "title": "t", "body": "x", "fields": {}}, "not both"),
