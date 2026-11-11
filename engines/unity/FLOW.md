@@ -78,7 +78,7 @@ AnkleBreaker Unity MCP is a community Unity MCP server (claims 281 tools) seen i
 - Import audio WAV or OGG, set load type and compression per clip, route through an AudioMixer (Master > Music, SFX, UI).
 - Event sounds and adaptive music: `Assets/Scripts/Game/AudioEventPlayer.cs` and `MusicPlayer.cs` play what `AudioDirector`, `MusicDirector`, `MusicQueue` and `AudioAccess` (Core, tested against data/golden and in EditMode) decide; music stems Decompress On Load **(verify)**.
 - Sprites: Pixels Per Unit consistent, Filter Mode Point for pixel art, no compression for small sprites.
-- 3D from generators (Tripo and similar): clean in Blender first (SOP-11), import FBX or GLB (GLB needs a glTF importer package **(verify)**).
+- 3D from generators (Tripo and similar): clean in Blender first (SOP-11), import FBX or GLB (GLB needs the glTFast package: `python tools/dev.py exec GameKitCharacters.AddGltfast`; a rigged character's recipe is docs/ENGINE.md "Rigged characters").
 - Naming: `spr_player_idle.png`, `sfx_jump_01.wav`, `mus_level1.ogg`, `fnt_ui.ttf`; prefabs `PF_<Thing>`, ScriptableObjects
   `SO_<Thing>`; 3D per SOP-11 (`prop_`, `chr_`, ...). Sources and licenses: `docs/RESOURCES.md`, `docs/ASSET_LOG.md`.
 

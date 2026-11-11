@@ -29,6 +29,8 @@ sysinfo.txt
 /[Aa]ssets/InitTestScene*.unity*
 # The Dotwork importer test's copy of the golden fixture (deleted after the run, left by a killed one)
 /[Aa]ssets/__DotworkGolden*
+# The character test's copy of the golden glb (deleted after the run, left by a killed one)
+/[Aa]ssets/__CharacterGolden*
 # Copies of data/ and CREDITS.md that GameKitBuild.SyncData makes for a player build (the originals are tracked)
 /[Aa]ssets/StreamingAssets/data/
 /[Aa]ssets/StreamingAssets/data.meta
