@@ -133,7 +133,7 @@ LOCAL_ONLY_GLOBS = ("claude.local.md", "*/claude.local.md", ".claude/settings.lo
                     "captures/*", "scratch/*", "*.log", "*.tmp", ".private-terms.txt", "*/.private-terms.txt")
 TERMS_ENV = "PUBLISH_CHECK_TERMS"       # where --terms comes from when it is not given
 TERM_REGEX_PREFIX = "re:"
-EM_DASH = "—"
+EM_DASH = "\u2014"                      # an escape, so this file passes its own --style check
 HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 C_ESCAPES = {"a": "\a", "b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v", '"': '"', "\\": "\\"}
 
