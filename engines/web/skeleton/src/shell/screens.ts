@@ -8,9 +8,13 @@
 //           [data-box] for the pseudo-locale check. ui_cancel goes back one screen everywhere it can.
 //           CREDITS.md at the project root (if present) is bundled and scrolls on the credits screen.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the loading screen starts the world through the
+//           shell's GameHost, so web and web-3d share this file; pseudo-plant's label stays on one line, so the
+//           pseudo check fails on it as it must (it wrapped and passed) (#175)
 // ---------------------------------------------------------------------------
 import { glyphName, glyphSet, promptBinding } from "../core/bindings";
 import type { Screen, Shell } from "./app";
+import type { GameKey } from "./host";
 import { GAME_NAME, GAME_VERSION } from "./meta";
 import { settingsScreen } from "./settingsScreen";
 import { Menu, buttonItem, el, glyph, glyphText, tl, val } from "./ui";
@@ -108,9 +112,12 @@ export function menu(shell: Shell): Screen {
     add("menu.quit", () => shell.quit());
     p.append(list);
     if (shell.drive === "pseudo-plant") {
-      const planted = tl(shell.i18n, "menu.settings", "label", {}, "div"); // a label far too small for its text
-      planted.dataset.id = "drive.planted_label";
+      // a label far too small for its text, on one line: .label wraps anywhere, and a wrapped label fits (#175)
+      const planted = tl(shell.i18n, "menu.settings", "label", {}, "div");
+      planted.dataset.id = "plant.too_small"; // the name every engine's pseudo-plant drive reports
       planted.style.width = "2.5em";
+      planted.style.whiteSpace = "nowrap";
+      planted.style.overflow = "hidden";
       p.append(planted);
     }
     root.append(p, tl(shell.i18n, "version", "corner", { v: GAME_VERSION }, "div"));
@@ -142,11 +149,12 @@ export function creditsScreen(shell: Shell): Screen {
   });
 }
 
-export function loading(shell: Shell, key: "main" | "juice"): Screen {
+export function loading(shell: Shell, key: GameKey): Screen {
   let fill: HTMLElement | null = null;
   let pct: HTMLElement | null = null;
   let t = 0;
   let loaded = 0;
+  let started = false;
   let created = false;
   const s = built("loading", "dim", (root) => {
     const p = panel("narrow");
@@ -158,17 +166,13 @@ export function loading(shell: Shell, key: "main" | "juice"): Screen {
     root.append(p);
   }, {
     enter: () => {
-      const game = shell.game;
-      if (!game || created) return;
-      const scene = game.scene.getScene(key);
-      const onProgress = (v: number) => (loaded = v);
-      scene.load.on("progress", onProgress);
-      scene.events.once("create", () => {
-        scene.load.off("progress", onProgress);
+      const host = shell.host;
+      if (!host || started) return;
+      started = true;
+      host.start(key, (v) => (loaded = v), () => {
         loaded = 1;
         created = true;
       });
-      game.scene.start(key);
     },
     tick: (dt) => {
       t += dt;
@@ -181,8 +185,8 @@ export function loading(shell: Shell, key: "main" | "juice"): Screen {
   return s;
 }
 
-/** The HUD over a running scene: prompts with glyphs for the current device. */
-export function gameplay(shell: Shell, key: "main" | "juice"): Screen {
+/** The HUD over a running world: prompts with glyphs for the current device. */
+export function gameplay(shell: Shell, key: GameKey): Screen {
   let lastSet = "";
   const s = built(key === "main" ? "play" : "juice", "hud", (root) => {
     const hud = el("div", "hudbar");

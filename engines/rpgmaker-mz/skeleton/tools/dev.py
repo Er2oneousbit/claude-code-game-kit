@@ -46,6 +46,9 @@
 #           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
 # Updated : 2026-11-06 with Claude (Opus 5.5, claude-opus-5-5): the kit's shader recipes (KitShaders.js): `check`
 #           compiles them, `smoke --shaders` renders and compares them
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): GameJuice.js, GameShell.js (the kit's juice and shell
+#           rules) and GameAccess.js (MZ's Options screen, shake and flash through the player's settings) are game
+#           plugins too (#175)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -63,7 +66,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # ---- Tunables / constants ----------------------------------------------------
 MIN_NODE = (22, 12)
 GAME_DIR = "game"                          # where the MZ project lives
-OWN_PLUGINS = ("GameCore", "GameAudio", "GameMain")   # the game's plugins, in load order (setup registers them)
+OWN_PLUGINS = ("GameCore", "GameAudio", "GameJuice", "GameShell", "GameAccess",   # the game's plugins, in load
+               "GameMain")                                                     # order (setup registers them)
 CORE_FILES = ("index.html", "js/main.js", "js/rmmz_core.js", "js/rmmz_managers.js", "js/rmmz_objects.js",
               "js/rmmz_scenes.js", "js/rmmz_sprites.js", "js/rmmz_windows.js", "data/System.json")
 DATABASE = ("Actors", "Animations", "Armors", "Classes", "CommonEvents", "Enemies", "Items", "MapInfos",

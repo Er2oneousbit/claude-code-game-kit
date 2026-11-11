@@ -8,9 +8,10 @@
 #           Windows that a timeout ends a grandchild whose parent already exited (the job object, #36), and on
 #           Linux and macOS (process-group calls faked) that killing an untimed command kills what it started (#37),
 #           that the Godot build fails on a .pck holding .game-kit.json or a dev-only folder (#161), and that the
-#           web, web-3d and RPG Maker MZ smoke.mjs --record leaves only this run's frames (#134; needs node), a
-#           refused --drive is one error (#135), web-3d's -h says its --drive aborts (#135), and RPG Maker MZ's
-#           setup names the project file it copied (#136), that Unreal's test/smoke exit 1 when the editor
+#           web, web-3d and RPG Maker MZ smoke.mjs --record leaves only this run's frames (#134; needs node), that
+#           web's pseudo-plant says it fails on purpose only for the planted label (#175), a
+#           refused --drive is one error (#135), web-3d's -h names the shell's scenarios as web's does (#135,
+#           #175), and RPG Maker MZ's setup names the project file it copied (#136), that Unreal's test/smoke exit 1 when the editor
 #           crashes before any result, not 2 "no tests matched" (#176), and that smoke --drive runs the shell's
 #           drive on Unity (the drive test, run options in the environment), Bevy and Unreal (the Drive test),
 #           echoes its markers and fails without DRIVE_DONE (#168), and on C++ (the scenario, data folder and
@@ -1147,7 +1148,7 @@ class RpgMakerSetup(TempRoot):
 
 # ---- #134, #135: web, web-3d and RPG Maker MZ smoke.mjs ------------------------
 # smoke.mjs runs for real under node; vite, Playwright and MZ's serve.mjs are stand-ins that boot at once,
-# "screenshot" by writing a small file, and answer any ?drive= with DRIVE_ABORT (as the web-3d skeleton does).
+# "screenshot" by writing a small file, and answer any ?drive= with DRIVE_ABORT (as a game without a shell does).
 FAKE_PLAYWRIGHT = """import { writeFileSync } from "node:fs";
 export const chromium = {
   async launch() {
@@ -1162,7 +1163,8 @@ export const chromium = {
             setTimeout(() => {
               emit("log", "BOOT_OK");
               const drive = new URL(url).searchParams.get("drive");
-              if (drive) emit("error", `[ERROR][drive] DRIVE_ABORT ${drive}: no scripted runs here`);
+              if (drive && process.env.FAKE_DRIVE_ERROR) emit("error", process.env.FAKE_DRIVE_ERROR);   // #175
+              else if (drive) emit("error", `[ERROR][drive] DRIVE_ABORT ${drive}: no scripted runs here`);
             }, 10);
           },
           async screenshot({ path }) { writeFileSync(path, "new"); },
@@ -1232,6 +1234,23 @@ class WebSmokeRecord(TempRoot):
                 self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
                 self.assertIn("DRIVE_ABORT menus", r.stdout)
                 self.assertNotIn("[drive menus]", r.stdout)
+
+
+    def test_pseudo_plant_says_it_fails_on_purpose_only_for_the_planted_label(self):
+        # #175: the planted label is the proof; any other PSEUDO_FAIL is a real failure
+        import os
+        planted = '[ERROR][i18n] PSEUDO_FAIL menu: "plant.too_small" clipped (needs 114x22 px, has 41x22): "[x]"'
+        other = '[ERROR][i18n] PSEUDO_FAIL menu: "menu.play" clipped (needs 114x22 px, has 41x22): "[x]"'
+        for engine in ("web", "web-3d"):
+            for line, note in ((planted, True), (other, False)):
+                with self.subTest(engine=engine, note=note):
+                    root = self.project(engine)
+                    r = subprocess.run([NODE, str(root / "tools" / "smoke.mjs"), "--drive", "pseudo-plant"], cwd=root,
+                                       capture_output=True, encoding="utf-8", errors="replace", timeout=60,
+                                       env=dict(os.environ, FAKE_DRIVE_ERROR=line))
+                    self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+                    self.assertEqual("fails on purpose" in r.stdout, note, r.stdout)
+                    shutil.rmtree(root)
 
 
 @unittest.skipUnless(NODE, "node is not on PATH")
@@ -1350,9 +1369,10 @@ class CaptureChecks(TempRoot):
 
 
 class WebDriveHelp(unittest.TestCase):
-    def test_web_3d_says_its_drive_aborts(self):
-        # #135: web-3d has no shell screens, so its -h must not promise the web overlay's scenarios
-        for engine, want, not_want in (("web", "menus, crash", "DRIVE_ABORT"), ("web-3d", "DRIVE_ABORT", "menus, crash")):
+    def test_web_and_web_3d_promise_the_shell_scenarios(self):
+        # #135: web-3d had no shell screens and its -h said its --drive aborts; #175: it runs web's shell now, so both
+        # name the scenarios and neither promises an abort
+        for engine, want, not_want in (("web", "menus, crash", "DRIVE_ABORT"), ("web-3d", "menus, crash", "DRIVE_ABORT")):
             with self.subTest(engine=engine):
                 dev_py = KIT / "engines" / engine / "skeleton" / "tools" / "dev.py"
                 r = subprocess.run([sys.executable, str(dev_py), "smoke", "-h"], capture_output=True,

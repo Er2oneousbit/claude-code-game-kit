@@ -45,6 +45,8 @@
 //           data-dir scenario checks (the refusal is its one error)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the "--drive crash fails on purpose" note prints
 //           only when a crash file was written (it also followed a refused drive or a crash hook that wrote nothing)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): --drive pseudo-plant says it fails on purpose
+//           when the planted label is what failed (#175)
 // ---------------------------------------------------------------------------
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -421,10 +423,13 @@ else for (const l of lines) if (NOTE.test(l)) console.log(l);
 if (errors.length) {
   console.log("[FAIL] errors during smoke:");
   for (const e of errors.slice(0, 20)) console.log(`  ${e}`);
-  // only with the proof: a crash hook that wrote nothing, or a game that refused the drive (DRIVE_ABORT, web-3d's
-  // skeleton), is a real failure and must not read as the expected one
+  // only with the proof: a crash hook that wrote nothing, or a game that refused the drive (DRIVE_ABORT: a game
+  // without the kit's shell), is a real failure and must not read as the expected one
   const crashProof = written.some(([m]) => m === "CRASH_WRITTEN") && !errors.some((e) => e.startsWith("[drive crash]"));
   if (DRIVE === "crash" && crashProof) console.log("[info] --drive crash fails on purpose: the CRASH_WRITTEN file above is the proof (exit 1 is the pass)");
+  if (DRIVE === "pseudo-plant" && errors.some((e) => e.includes("PSEUDO_FAIL") && e.includes("plant.too_small"))) {
+    console.log("[info] --drive pseudo-plant fails on purpose: the PSEUDO_FAIL line names the planted label (exit 1 is the pass)");
+  }
   code = 1;
 } else {
   const what = UNTIL ? `marker ${JSON.stringify(UNTIL)} reached` : `${FRAMES} frames`;

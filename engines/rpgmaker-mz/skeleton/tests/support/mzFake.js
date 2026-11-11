@@ -3,9 +3,11 @@
 // Purpose : Load an MZ plugin in Node with stand-ins for the few RPG Maker objects it touches, so tests can run
 //           its glue (commands, hooks) without the editor. A plugin that throws on load fails here first.
 // Usage   : const mz = loadPlugin("GameMain", { GameCore }, { startMinutes: "480" });
+//           const mz = loadPlugin("GameAccess", { GameJuice, GameShell, ConfigManager, Window_Options, ... });
 //           mz.commands.get("LogPhase")({ minutes: "480" });  new mz.Scene_Title().start();  mz.logs
 // Notes   : These are fakes, not RPG Maker: they prove your code runs and calls what you meant, not that MZ's real
-//           classes behave the same. Add a fake when a plugin uses a new MZ class; keep each one as small as its use.
+//           classes behave the same. Add a fake when a plugin uses a new MZ class; keep each one as small as its use
+//           (passed in globals, as tests/gameAccess.test.js does, or here when several tests need it).
 //           The smoke test (python tools/dev.py smoke) boots the plugin in a browser on the MZ files that
 //           setup --from copied in (not yet run against a real MZ project).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)

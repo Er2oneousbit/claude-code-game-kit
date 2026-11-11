@@ -7,6 +7,8 @@
 #             engine, and every engine without a juice port is named where the module is promised (#103)
 #           - an ENGINE.md whose overlay has no juice port says so (#103)
 #           - the web and web-3d ENGINE.md layout names every src/core module the skeleton holds (#117)
+#           - web and web-3d share their shell (src/shell/, data/) and src/core/ file for file, as CLAUDE.md says, so a
+#             fix in one carries to the other by copying (#175)
 #           - every Wavesmith command the docs give names a real subcommand, and `vectors` always says whose (#118)
 #           - the PixelLab commands run live are the same in README and SOP-16, and ai-tools.md points there (#119)
 #           - every source ID the shipped docs cite (E##, F##, K##) has a row in EVIDENCE.md (#120)
@@ -184,6 +186,27 @@ class LayoutExam(unittest.TestCase):
     def test_layout_entry_takes_the_continuation_lines(self):
         text = "src/core/   one,\n            two.\nsrc/game/   three\n"
         self.assertEqual(layout_entry(text, "src/core/"), "src/core/ one, two.")
+
+
+class SharedWebShellExam(unittest.TestCase):
+    """#175: web-3d runs the web overlay's shell over Three.js; the two copies must not drift apart."""
+    SHARED = ["src/shell", "src/core", "data"]
+    ONLY_WEB_3D = {"src/core/follow.ts"}   # the 3D spring: web-3d's own module
+
+    def files(self, engine):
+        base = KIT / "engines" / engine / "skeleton"
+        return {p.relative_to(base).as_posix(): p.read_bytes() for d in self.SHARED for p in (base / d).rglob("*")
+                if p.is_file()}
+
+    def test_the_shared_folders_are_the_same_file_for_file(self):
+        web, web3d = self.files("web"), self.files("web-3d")
+        self.assertEqual(sorted(set(web) ^ (set(web3d) - self.ONLY_WEB_3D)), [], "a file only one overlay has")
+        self.assertEqual(sorted(f for f in web if web[f] != web3d[f]), [], "copy the change to the other overlay")
+
+    def test_the_shell_imports_no_renderer(self):
+        base = KIT / "engines" / "web" / "skeleton" / "src" / "shell"
+        bad = [p.name for p in base.glob("*.ts") if re.search(r'from "(phaser|three)', p.read_text(encoding="utf-8"))]
+        self.assertEqual(bad, [], "the shell meets the renderer through host.ts only")
 
 
 class CommandExam(unittest.TestCase):

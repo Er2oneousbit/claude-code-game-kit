@@ -15,14 +15,17 @@
 ## Layout
 ```
 index.html          full-window page, loads src/main.ts
-src/main.ts         renderer, frame loop (setAnimationLoop + THREE.Timer), resize, BOOT_OK after the first frame
+src/main.ts         renderer, the worlds, hands the host to the shell after the first rendered frame
 src/core/           engine-free logic: Log, juice (shake, hitstop, ease, follow camera, follow spring, buffer, coyote,
-                    spring, flash limiter, hold toggle), settings, bindings, saves, i18n, user data, dialogue, audio
-                    director, music director, audio access, analog (stick deadzone and trigger shaping for
+                    spring, flash limiter, hold toggle, auto repeat), settings, bindings, saves, i18n, user data, dialogue,
+                    audio director, music director, audio access, analog (stick deadzone and trigger shaping for
                     navigator.getGamepads values). No three import. Unit tested (golden vectors).
-                    No src/shell/: there are no menu screens, build them on src/core (docs/ENGINE_FLOW.md).
-src/game/           the world: scene, camera, lights, objects, update(dt)
-tests/              Vitest tests for src/core (*.test.ts)
+src/shell/          the front end: HTML screens over the canvas, input, subtitles, smoke driver (no three import; the
+                    same files as the 2D web overlay's, host.ts is all it knows of the renderer)
+src/game/           threeHost.ts (frame loop, worlds, pause, frame cap, screenshot), Game.ts (play), JuiceWorld.ts
+                    (the juice demo), Backdrop.ts (behind the menus)
+data/               i18n/<locale>.json strings, dialogue/*.built.json subtitles, access/colours.json, golden/ vectors
+tests/              Vitest tests for src/core and the pure parts of src/shell (*.test.ts)
 public/assets/      models (.glb), textures, audio, fonts: served as-is at assets/... (docs/ASSET_LOG.md)
 src/shaders/        the kit's shader recipes (kit/ generated from tools/shaders/) and their glue
 tools/              dev.py, smoke.mjs and helpers
@@ -36,6 +39,12 @@ dist/               production build (git-ignored)
   A vertex-coloured model (`--material vertex`, glTF `COLOR_0`) needs nothing extra: GLTFLoader turns `vertexColors` on
   by itself when a mesh has colours (three r186 source).
 - One `update(dt)` per frame; dt in seconds from `THREE.Timer`, clamped. Never assume 60 fps.
+- Input: read it through `shell.input` (`import { shell } from "../shell/app"`): `isDown(action)` / `takePress(action)`
+  for the player's bindings, `stick()` (the left stick with the player's radial deadzone and invert_y, up is -y),
+  `triggers()` (0 to 1) and `heldActions()`. Settings: `shell.settings` (`access.game_speed` scales dt in Game.ts).
+- A new world (level, minigame): a class with `scene`, `camera`, `update(dt)`, `resize(aspect)` (and `load(progress)`
+  for models) registered in src/main.ts; the shell starts, pauses and stops it, and a throw in `update` shows the
+  crash screen with a crash file.
 - Tunables in one module or JSON in public/assets/data, never literals inside logic.
 - Load assets with relative paths (`assets/models/<name>.glb`), never `/assets/...` (breaks itch.io and GitHub Pages subfolders).
 - **Version:** one source, the `version` field of package.json (SOP-06). Show it in game with
