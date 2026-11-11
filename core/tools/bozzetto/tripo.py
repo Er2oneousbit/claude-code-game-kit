@@ -57,6 +57,26 @@ TERMS = ("outputs made with paid API credits are the user's and are not used for
 LICENSE = "Tripo3D terms (paid output, 5.2.2)"
 CREDIT_MAKE = "3D model generated with the Tripo3D API (paid credits; outputs owned by the paying user, Tripo terms 5.2.2)."
 
+# ---- make: the model route -------------------------------------------------------------------------------------
+MAKE_MODELS = ("P2-20260801", "P1-20260311")  # the P series ("game assets"); P2 is the one tested (E153)
+MAKE_MODEL = "P2-20260801"
+# credits per task before any add-on. No endpoint quotes a price: P2 image-to-model is measured (110, E153), every
+# other figure is set to that ceiling until a run measures it (verify). The actual cost is read after each task.
+MAKE_QUOTE = {model: {"image": 110, "multiview": 110, "text": 110} for model in MAKE_MODELS}
+QUALITY = {"normal": ("standard", 0), "high": ("detailed", 30)}   # --quality -> texture_quality, extra credits (verify)
+FACE_LIMIT = {"P2-20260801": (48, 50000), "P1-20260311": (50, 20000)}   # triangle limits from the docs
+ENDPOINT = {"image": "/generation/image-to-model", "multiview": "/generation/multiview-to-model",
+            "text": "/generation/text-to-model"}
+VIEWS = ("front", "left", "back", "right")
+UPLOAD_MAX = 20 * 1024 * 1024                # /files: images up to 20 MB, PNG or JPEG
+PROMPT_MAX = 1024
+# Tripo writes models facing +X (its export_orientation default "+x", and the 2026-11-05 rig test); glTF's front is
+# +Z. cleanup.py turns counter-clockwise seen from above, so -90 brings +X round to +Z (verify on a live run).
+FACING = "+X"
+FACING_TURN = -90.0
+CHARACTER_HINT = ", full body, standing in an A-pose with the arms slightly away from the body"
+
+
 def bind(module):
     global bz
     bz = module
@@ -224,3 +244,151 @@ class Budget:
     def charge(self, cost):
         self.spent += cost
         self.balance -= cost
+
+
+# ---- make --with tripo -------------------------------------------------------------------------------------------
+def make_kind(args):
+    """'image', 'multiview' or 'text' from make's options."""
+    if any(getattr(args, v, None) for v in VIEWS):
+        return "multiview"
+    return "text" if args.prompt else "image"
+
+
+def quote(model, kind, quality):
+    return MAKE_QUOTE[model][kind] + QUALITY[quality][1]
+
+
+def face_limit(model, faces):
+    lo, hi = FACE_LIMIT[model]
+    return max(lo, min(hi, faces))
+
+
+def prompt_text(args, cls):
+    """The sentence Tripo gets: as written for props and with --raw-prompt; characters get the A-pose hint (a rig
+    needs gaps between the arms and the body)."""
+    text = args.prompt.strip()
+    if cls in ("hero", "npc") and not args.raw_prompt:
+        text = text.rstrip(".") + CHARACTER_HINT
+    return text
+
+
+def check_make(args, plan):
+    """make --with tripo's own checks, before any credit (bozzetto's preflight calls this)."""
+    if not key():
+        raise bz.ToolError(f"--with tripo needs {TRIPO_ENV} (paid API credits; {NO_STUDIO})")
+    if args.max_credits <= 0:
+        raise bz.ToolError("--max-credits must be a positive number")
+    if args.wait <= 0:
+        raise bz.ToolError("--wait must be a positive number of seconds")
+    if args.material != "texture":
+        raise bz.ToolError("--with tripo makes textured models only (--material texture)")
+    if args.prompt and len(prompt_text(args, plan.cls)) > PROMPT_MAX:
+        raise bz.ToolError(f"--prompt is longer than Tripo takes ({PROMPT_MAX} characters)")
+    for role, path in plan.pictures:
+        if path.stat().st_size > UPLOAD_MAX:
+            raise bz.ToolError(f"{path.name} is over Tripo's 20 MB upload limit")
+
+
+def keep_pictures(plan):
+    """Each picture, metadata removed (as the local route does), kept in the source folder and returned with its
+    upload facts: [(role, kept path, bytes, content type, sha256)]. Tripo's upload takes PNG and JPEG only."""
+    out = []
+    for role, path in plan.pictures:
+        try:
+            data = bz.comfy(bz.cl.strip_picture, path.read_bytes())
+        except bz.ToolError as exc:
+            raise bz.ToolError(f"{path.name}: {exc}")
+        if data.startswith(b"\x89PNG"):
+            ext, ctype = ".png", "image/png"
+        elif data.startswith(b"\xff\xd8"):
+            ext, ctype = ".jpg", "image/jpeg"
+        else:
+            raise bz.ToolError(f"{path.name}: Tripo's upload takes PNG or JPEG pictures; save it as one of those")
+        name = ("reference" if role == "image" else f"view_{role}") + ext
+        dest = plan.src / name
+        bz.write_new(dest, data, True)
+        out.append((role, dest, data, ctype, bz.sha256_bytes(data)))
+    if out:
+        print(f"[ OK ] reference: " + ", ".join(bz.rel(plan.root, p[1]) for p in out) + " (metadata removed)")
+    return out
+
+
+def run_make(args, plan):
+    """One Tripo model task with the journal, quote and cap. Returns (raw .glb path, job facts, reference facts)."""
+    client = Client()
+    work = plan.src / "tripo"
+    kind, model = make_kind(args), args.tripo_model
+    pictures = keep_pictures(plan)
+    tq = QUALITY[args.quality][0]
+    settings = {"model": model, "face_limit": face_limit(model, plan.faces), "texture": True, "pbr": True,
+                "texture_quality": tq}
+    if args.seed is not None:
+        settings.update(model_seed=args.seed, texture_seed=args.seed)
+        if kind == "text":
+            settings["image_seed"] = args.seed
+    text = prompt_text(args, plan.cls) if kind == "text" else None
+    want = {"kind": kind, "inputs_sha256": {role: sha for role, _, _, _, sha in pictures}, "prompt": text,
+            "settings": settings}
+    j = Journal(work / JOURNAL, want, reuse=not args.no_reuse)
+    j.settle(client, ["model"], args.wait)
+    price = 0 if j.done("model") else quote(model, kind, args.quality)
+    budget = Budget(args.max_credits, client.balance(), j.spent())
+    if j.done("model"):
+        print(f"[ OK ] reusing paid Tripo work from {JOURNAL}: {j.reused()} (no new credits)")
+    print(f"[info] Tripo quote: {price} credits still to spend ({model} {kind}-to-model, texture {tq}; the quote is "
+          f"the kit's table, Tripo has no price endpoint); balance {budget.balance:g}; limit --max-credits "
+          f"{args.max_credits}")
+    budget.afford(price)
+    if not j.done("model"):
+        body = dict(settings)
+        if kind == "image":
+            _, p, data, ctype, _ = pictures[0]
+            body["input"] = client.upload(data, p.name, ctype)
+        elif kind == "multiview":
+            body["inputs"] = [{role: client.upload(data, p.name, ctype)} for role, p, data, ctype, _ in pictures]
+        else:
+            body["prompt"] = text
+
+        def created(tid):
+            j.running("model", tid)
+            print(f"[info] Tripo {kind}-to-model task {tid} (journal: {bz.rel(plan.root, j.path)})", flush=True)
+        tid, d = client.task(ENDPOINT[kind], body, f"{kind}-to-model ({model})", args.wait, created)
+        cost = float(d.get("credits_consumed") or 0)
+        j.finished("model", tid, cost)
+        budget.charge(cost)
+        if cost > price:
+            print(f"[warn] Tripo charged {cost:g} credits, more than the quote ({price}): raise MAKE_QUOTE in "
+                  f"tools/bozzetto/tripo.py for {model} {kind}")
+    tid = j.tasks["model"]["id"]
+    # the finished task is asked again for its link: links expire after about 5 minutes, a reused task needs a new one
+    fin = client.wait_for(tid, "model result", args.wait)
+    url = (fin.get("output") or {}).get("model_url")
+    if not url:
+        raise bz.JobError(f"Tripo returned no model link for task {tid}; it is kept in {JOURNAL}, a re-run fetches "
+                          "it again without paying")
+    work.mkdir(parents=True, exist_ok=True)
+    got = work / "tripo.glb"
+    if got.exists():
+        got.unlink()
+    data = client.download(url, got)
+    try:
+        data = bz.cl.strip_glb(data)
+    except bz.cl.ToolError as exc:
+        raise bz.JobError(f"Tripo's file for task {tid} is not a usable .glb ({exc}); it is kept as "
+                          f"{bz.rel(plan.root, got)}")
+    raw = plan.src / "raw.glb"
+    bz.write_new(raw, data, True)
+    doc, _ = bz.cl.read_glb(data)
+    tris = bz.glb_triangles(doc)
+    print(f"[ OK ] raw mesh: {bz.rel(plan.root, raw)} ({tris:,} triangles from Tripo)")
+    job = {"service": "Tripo3D API", "endpoint": ENDPOINT[kind], "model": model, "task_id": tid,
+           "tasks": {k: v["id"] for k, v in j.tasks.items()}, "credits": j.spent(), "quote": quote(model, kind, args.quality),
+           "settings": settings, "facing": FACING, "tris_raw": tris, "sha256": bz.sha256_bytes(data), "terms": TERMS}
+    if kind == "text":
+        ref = {"kind": "prompt", "prompt": args.prompt, "full_prompt": text}
+    elif kind == "image":
+        ref = {"kind": "image", "file": bz.rel(plan.root, pictures[0][1]), "sha256": pictures[0][4]}
+    else:
+        ref = {"kind": "views", "views": {role: {"file": bz.rel(plan.root, p), "sha256": sha}
+                                          for role, p, _, _, sha in pictures}}
+    return raw, job, ref

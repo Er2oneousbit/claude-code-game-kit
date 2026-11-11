@@ -12,13 +12,18 @@
 #           python tools/bozzetto/bozzetto.py make prop_chest --prompt "a wooden chest with iron bands" --seed 11
 #           python tools/bozzetto/bozzetto.py make prop_chest --prompt "..." --reference-only --seed 12  # image only
 #           python tools/bozzetto/bozzetto.py make npc_guard --image ref.png --class npc --lods 0.5 --sprites assets/art/guard.png
+#           python tools/bozzetto/bozzetto.py make prop_crate --with tripo --image art_src/crate.png   # paid: Tripo API
+#           python tools/bozzetto/bozzetto.py make npc_guard --with tripo --class npc --front f.png --back b.png
+#           python tools/bozzetto/bozzetto.py make prop_lamp --with tripo --prompt "a brass ship's lantern"
 #           python tools/bozzetto/bozzetto.py rig check            # the rig routes: UniRig (local) and Tripo (paid)
 #           python tools/bozzetto/bozzetto.py rig make npc_guard   # skeleton, skin weights, Mixamo names, clips
-#           Options for make: --class prop|kit|hero|npc, --seed N, --out <models folder>, --lods 0.5,0.25|none,
-#           --height M, --turn DEG, --quality normal|high, --material texture|vertex, --no-log, --overwrite, --debug
+#           Options for make: --with local|tripo, --class prop|kit|hero|npc, --seed N, --out <models folder>,
+#           --lods 0.5,0.25|none, --height M, --turn DEG, --quality normal|high, --material texture|vertex, --no-log,
+#           --overwrite, --debug; Tripo: --front/--left/--back/--right, --max-credits N, --no-reuse, --tripo-model
 # Needs   : Python 3.8+ (standard library). For make: a running ComfyUI 0.43.0+ (TRELLIS.2 nodes are built in) with
 #           the model files in models.lock.json (check lists what is missing and where it goes; --prompt also needs
 #           Dotwork's FLUX.2 klein files), and Blender 4.2+ (BLENDER_BIN, PATH, the default install) or the bpy module.
+#           make --with tripo needs no ComfyUI or GPU: TRIPO_API_KEY with paid API credits, and Blender.
 # Exit    : 0 ok, 1 the job or the budget check failed, 2 usage, environment, missing models or files in the way
 # Notes   : Steps of make: reference (copy --image, or FLUX.2 klein from --prompt) -> TRELLIS.2 over ComfyUI's HTTP
 #           API (BiRefNet removes the background inside the workflow; ComfyUI's prompt is stripped from the .glb)
@@ -30,7 +35,10 @@
 #           Sources and records stay in assets_src/bozzetto/<name>/ (reference, raw mesh, reports, preview).
 #           Nothing reaches --out unless the budget check passes. Files are never replaced without --overwrite.
 #           Licences: TRELLIS.2 and BiRefNet are MIT, DINOv3 (TRELLIS.2's image encoder) has its own licence with a
-#           use restriction list (LICENSES.md). Paid 3D services are not wired in: docs/resources/ai-tools.md.
+#           use restriction list (LICENSES.md). The one paid 3D service wired in is Tripo (tripo.py: --with tripo for
+#           make and rig; a quote, a --max-credits cap and a tasks.json journal so a re-run never pays twice); its
+#           output goes through the same cleanup, budget check, LODs, turntable and asset log row. Outputs on paid
+#           credits are the user's (Tripo terms 5.2.2). Others: docs/resources/ai-tools.md.
 #           Timing on a 16 GB RTX 5060 Ti: about 5 min per model at normal quality once warm, about 19 at high (K01).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
@@ -40,10 +48,13 @@
 #   check: Python -> ComfyUI up (comfy_local) -> node types of both workflows -> each locked model in the loader's
 #          list -> non-commercial pieces named in the workflow? -> Blender or bpy -> exit 0 ready / 2 not
 #   test:  test_bozzetto.py (offline) [+ test_bozzetto_live.py]
-#   make:  check name, paths, budget, Blender, ComfyUI, nodes, models, outputs free, ASSET_LOG  [before any GPU time]
-#          reference: --image copied (EXIF/XMP/text gone) | --prompt -> klein job -> free VRAM [-> --reference-only stop]
-#          TRELLIS.2 job (only the --material branch; image, seed, resolution, face target, texture size)
-#          -> fetch the .glb (extras stripped)
+#   make:  check name, paths, budget, Blender, outputs free, ASSET_LOG, and per route  [before any GPU time or credit]
+#            local: ComfyUI, nodes, models | tripo: TRIPO_API_KEY, --max-credits, --material texture, picture sizes
+#          local: reference: --image copied (EXIF/XMP/text gone) | --prompt -> klein job -> free VRAM
+#                 [-> --reference-only stop] -> TRELLIS.2 job (only the --material branch) -> fetch the .glb
+#          tripo: tripo.run_make: pictures kept without metadata -> journal -> quote <= cap and balance -> upload ->
+#                 image/multiview/text task -> actual cost -> fresh link -> download (extras stripped); turn default
+#                 -90 (Tripo faces +X, glTF's front is +Z)
 #          cleanup.py -> prep_export.py --no-validate -> validate_asset.py --json -> fail: stop, exit 1
 #          copy the .glb and LODs into --out -> --sprites sheet -> record JSON -> ASSET_LOG row (updated on a
 #          re-run; the sheet is in it) -> turntable
@@ -70,9 +81,11 @@ for _p in (TOOLS, TOOLS / "art", TOOLS / "blender"):
 import comfy_local as cl  # noqa: E402  (server rule, upload, queue, wait, GLB / PNG stripping)
 import fetch_asset  # noqa: E402  (ASSET_LOG helpers)
 import validate_asset as va  # noqa: E402  (class budgets; its bpy import is lazy)
+sys.path.insert(0, str(HERE))
+import tripo as tp  # noqa: E402  (the Tripo route: client, quote, cap, journal; shared with rig.py)
 
 TOOL = "Bozzetto"                 # the one place the name is spelled for people: a rename starts here
-VERSION = "0.12.0"
+VERSION = "0.15.0"
 SRC_ROOT = Path("assets_src") / TOOL.lower()   # per model: reference, raw mesh, reports, preview
 DEFAULT_OUT = "assets/models"
 # where models go when --out is not given, by the engine in the game's .game-kit.json (its assets folder + models;
@@ -379,14 +392,27 @@ class Plan:
         if not NAME_RULE.match(args.name):
             raise ToolError(f"name {args.name!r}: lowercase letters, digits and underscores, starting with a letter "
                             "(SOP-11 names: prop_<thing>, kit_<set>_<piece>, chr_<name>, npc_<name>)")
-        if bool(args.image) == bool(args.prompt):
-            raise ToolError("give exactly one of --image <reference.png> or --prompt \"...\"")
+        self.route = args.route
+        views = {v: getattr(args, v) for v in tp.VIEWS if getattr(args, v, None)}
+        if views and self.route != "tripo":
+            raise ToolError("--front/--left/--back/--right are Tripo's multiview route (--with tripo); the local "
+                            "route makes a model from one --image")
+        if sum(map(bool, (args.image, args.prompt, views))) != 1:
+            raise ToolError("give exactly one of --image <reference.png> or --prompt \"...\""
+                            + (" or the views (--front F, plus --left/--back/--right)" if self.route == "tripo" else ""))
+        if views and "front" not in views:
+            raise ToolError("Tripo's multiview route needs --front (the other views are optional)")
+        if views and len(views) < 2:
+            raise ToolError("Tripo's multiview route needs at least two views: --front plus one of --left, --back, "
+                            "--right (one picture is --image)")
         self.name, self.cls = args.name, args.asset_class
         settings = CLASS_SETTINGS[self.cls]
         self.budget = dict(va.CLASS_BUDGETS[self.cls])
         self.height = args.height if args.height is not None else settings["height"]
         if self.height <= 0:
             raise ToolError("--height must be a positive number of metres")
+        # Tripo faces its models +X; glTF's front is +Z. The local route's TRELLIS.2 output already faces +Z.
+        self.turn = args.turn if args.turn is not None else (tp.FACING_TURN if self.route == "tripo" else 0.0)
         self.texture = args.texture or settings["texture"]
         self.faces = int(self.budget["max_tris"] * FACE_SHARE)
         self.lods = parse_lods(args.lods, self.cls)
@@ -400,14 +426,22 @@ class Plan:
         self.sprites = Path(args.sprites) if args.sprites else None
         if self.sprites and not self.sprites.is_absolute():
             self.sprites = self.root / self.sprites
-        if args.image:
-            self.image = Path(args.image)
-            if not self.image.is_absolute() and not self.image.is_file():
-                self.image = self.root / args.image
-            if not self.image.is_file():
-                raise ToolError(f"--image {args.image} not found")
-            if self.image.suffix.lower() not in (".png", ".jpg", ".jpeg", ".webp"):
-                raise ToolError("--image must be a .png, .jpg or .webp picture")
+        # every picture this run reads: [(role, path)], role "image" or a view name
+        self.pictures = [(role, self.picture(f"--{role}", value, tripo_route=self.route == "tripo"))
+                         for role, value in ([("image", args.image)] if args.image else list(views.items()))]
+        self.image = self.pictures[0][1] if args.image else None
+
+    def picture(self, option, value, tripo_route):
+        path = Path(value)
+        if not path.is_absolute() and not path.is_file():
+            path = self.root / value
+        if not path.is_file():
+            raise ToolError(f"{option} {value} not found")
+        kinds = (".png", ".jpg", ".jpeg") if tripo_route else (".png", ".jpg", ".jpeg", ".webp")
+        if path.suffix.lower() not in kinds:
+            raise ToolError(f"{option} must be a .png or .jpg picture (Tripo's upload takes PNG and JPEG)" if tripo_route
+                            else f"{option} must be a .png, .jpg or .webp picture")
+        return path
 
     def in_the_way(self, args):
         """Files this run would replace (refused without --overwrite)."""
@@ -441,6 +475,9 @@ def preflight(args, plan):
             raise ToolError(f"Blender not found: set {BLENDER_ENV} to blender(.exe), put blender on PATH, install it "
                             "in the default place, or run with a Python that has the bpy module "
                             "(uv run --python 3.13 --with bpy python tools/bozzetto/bozzetto.py ...)")
+    if plan.route == "tripo":            # no ComfyUI and no GPU: Tripo makes the mesh, Blender does the rest here
+        tp.check_make(args, plan)
+        return None, blender, (None, None), {}
     base = comfy_base(args)
     stats = comfy(cl.get_json, base, "/system_stats")
     info = comfy(cl.get_json, base, "/object_info")
@@ -565,7 +602,7 @@ def blender_steps(args, plan, blender, raw):
     clean = plan.src / "clean.glb"
     rc, _ = run_bpy(blender, HERE / "cleanup.py",
                     [raw, "--out", clean, "--name", plan.name, "--max-tris", plan.faces, "--height", plan.height,
-                     "--turn", args.turn, "--json", plan.src / "cleanup.json", "--overwrite"]
+                     "--turn", plan.turn, "--json", plan.src / "cleanup.json", "--overwrite"]
                     + (["--debug"] if DEBUG else []), "cleanup")
     if rc != 0:
         raise (JobError if rc == 1 else ToolError)(f"cleanup.py failed (exit {rc}); --debug shows Blender's output")
@@ -643,27 +680,47 @@ def write_log(plan, record):
         aid = f"A-{num:04d}"
     licences = sorted({m["license"] for m in record["models"]})
     ref = record["reference"]
+    tripo_route = record.get("route") == "tripo"
+    job = record["job"]
+    what = {"prompt": f"prompt: {ref.get('prompt', '')[:160]}", "views": f"views: {', '.join(ref.get('views', {}))}"
+            }.get(ref["kind"], "reference image supplied (see the record)")
     notes = "; ".join(x for x in [
-        f"{TOOL} {plan.cls}",
-        f"prompt: {ref['prompt'][:160]}" if ref.get("prompt") else "reference image supplied (see the record)",
-        f"seed {record['seed']}", f"{record['tris']} triangles", f"GPU {record['job']['gpu_seconds']:.0f} s",
+        f"{TOOL} {plan.cls}" + (f" via Tripo ({job['model']})" if tripo_route else ""), what,
+        f"seed {record['seed']}" if record.get("seed") is not None else "", f"{record['tris']} triangles",
+        f"{job['credits']:g} Tripo credits, task {job['task_id']}" if tripo_route else f"GPU {job['gpu_seconds']:.0f} s",
         f"record `{rel(plan.root, plan.src / RECORD)}`"] if x)
     shown = ", ".join(f"`{f['file']}`" for f in files)
-    source = f"{TOOL} (local ComfyUI: TRELLIS.2 4B" + (", FLUX.2 klein 4B reference" if ref["kind"] == "prompt" else "") + ")"
-    row = (f"| {aid} | model | {shown} | {fetch_asset.md_cell(source)} | generated locally | "
-           f"{fetch_asset.md_cell(', '.join(licences))} | {fetch_asset.md_cell(ATTRIBUTION)} | pre-generated | no | "
+    if tripo_route:
+        kind = {"prompt": "text", "views": "multiview"}.get(ref["kind"], "image")
+        source, how, credit = f"{TOOL} (Tripo3D API: {job['model']} {kind}-to-model)", "paid service", tp.CREDIT_MAKE
+    else:
+        source = (f"{TOOL} (local ComfyUI: TRELLIS.2 4B" + (", FLUX.2 klein 4B reference" if ref["kind"] == "prompt"
+                                                           else "") + ")")
+        how, credit = "generated locally", ATTRIBUTION
+    row = (f"| {aid} | model | {shown} | {fetch_asset.md_cell(source)} | {how} | "
+           f"{fetch_asset.md_cell(', '.join(licences))} | {fetch_asset.md_cell(credit)} | pre-generated | no | "
            f"{record['date']} | {fetch_asset.md_cell(notes)} |")
-    ev = [f"{aid}  model  generated {record['date']} with tools/{TOOL.lower()}/{TOOL.lower()}.py {VERSION}",
+    if ref["kind"] == "views":
+        refline = "Reference: views " + "; ".join(f"{k} SHA-256 {v['sha256']}" for k, v in ref["views"].items())
+    else:
+        refline = (f"Reference: {ref['kind']}" + (f", prompt: {ref['prompt']}" if ref.get("prompt") else "")
+                   + (f", SHA-256 {ref['sha256']}" if ref.get("sha256") else ""))
+    ev = [f"{aid}  model  generated {record['date']} with tools/{TOOL.lower()}/{TOOL.lower()}.py {VERSION}"
+          + (" --with tripo" if tripo_route else ""),
           f"Class    : {plan.cls} (budget {plan.budget['max_tris']} triangles, {plan.budget['max_dim']} m), "
-          f"height {plan.height} m, seed {record['seed']}, quality {record['quality']}",
-          f"Reference: {ref['kind']}" + (f", prompt: {ref['prompt']}" if ref.get("prompt") else "")
-          + f", SHA-256 {ref['sha256']}",
-          f"ComfyUI  : {record['comfyui']}, workflow SHA-256 {record['workflow_sha256']}",
-          "Models   : " + "; ".join(f"{m['file']} ({m['repo']} @ {m['commit'][:12]}, {m['license']})"
-                                    for m in record["models"]),
-          f"Credit   : {ATTRIBUTION}",
-          f"Licences : texts in {fetch_asset.LICENSE_DIR.as_posix()}/{TOOL.lower()}-*; the DINOv3 License restricts "
-          "some uses (its section 1.b.v): read it before you ship"]
+          f"height {plan.height} m, seed {record['seed'] if record.get('seed') is not None else 'not set'}, "
+          f"quality {record['quality']}", refline]
+    if tripo_route:
+        ev += [f"Tripo    : {job['model']} via {job['endpoint']}, task {job['task_id']}, {job['credits']:g} credits "
+               f"(quote {job['quote']}), facing {job['facing']} turned {record['turn_deg']:g} degrees",
+               f"Terms    : {job['terms']}", f"Credit   : {credit}"]
+    else:
+        ev += [f"ComfyUI  : {record['comfyui']}, workflow SHA-256 {record['workflow_sha256']}",
+               "Models   : " + "; ".join(f"{m['file']} ({m['repo']} @ {m['commit'][:12]}, {m['license']})"
+                                         for m in record["models"]),
+               f"Credit   : {credit}",
+               f"Licences : texts in {fetch_asset.LICENSE_DIR.as_posix()}/{TOOL.lower()}-*; the DINOv3 License "
+               "restricts some uses (its section 1.b.v): read it before you ship"]
     ev += [f"File     : {f['file']}  SHA-256 {f['sha256']}  "
            + (f"{f['triangles']} triangles" if "triangles" in f else f.get("kind", "")) for f in files]
     new = text.replace(existing[0], row, 1) if existing else fetch_asset.add_log_row(text, row, fill)
@@ -673,7 +730,8 @@ def write_log(plan, record):
     (lic / f"{aid}.txt").write_bytes(("\n".join(ev) + "\n").encode("utf-8"))
     print(f"[ OK ] {aid} {'updated in' if existing else 'added to'} {fetch_asset.ASSET_LOG.as_posix()}, evidence "
           f"{(fetch_asset.LICENSE_DIR / (aid + '.txt')).as_posix()}")
-    copy_licence_texts(plan)
+    if not tripo_route:                  # the local models' licence texts; Tripo's terms are a web page, not a file
+        copy_licence_texts(plan)
     return aid
 
 
@@ -704,21 +762,29 @@ def turntable(args, plan, blender):
 def cmd_make(args):
     t0 = time.monotonic()
     plan = Plan(args)
-    if args.seed is None:
+    tripo_route = plan.route == "tripo"
+    if args.seed is None and tripo_route:
+        # no clock seed here: the journal matches on the settings, so a re-run without --seed reuses the paid task
+        print("[info] no --seed given: Tripo picks its own (pass --seed N to ask for the same model again)")
+    elif args.seed is None:
         args.seed = int(time.time()) % 100000
         print(f"[info] no --seed given: using {args.seed} (pass it to make the same model again)")
     base, blender, (wf3d, wfref), stats = preflight(args, plan)
     if blender:
         print(f"[info] Blender: {blender_version(blender) or blender[1]} ({'module' if blender[0] == 'bpy' else 'app'})")
     plan.src.mkdir(parents=True, exist_ok=True)
-    reference, ref_facts = make_reference(args, plan, base, wfref)
-    if args.reference_only:
-        print(f"[ OK ] --reference-only: look at {rel(plan.root, reference)}; when it is right, run make again with "
-              f"--image {rel(plan.root, reference)}")
-        return 0
-    if args.prompt:
-        free_vram(base)
-    raw, job = make_mesh(args, plan, base, wf3d, reference)
+    if tripo_route:
+        raw, job, ref_facts = tp.run_make(args, plan)
+    else:
+        reference, ref_facts = make_reference(args, plan, base, wfref)
+        if args.reference_only:
+            print(f"[ OK ] --reference-only: look at {rel(plan.root, reference)}; when it is right, run make again "
+                  f"with --image {rel(plan.root, reference)}")
+            return 0
+        ref_facts = dict(ref_facts, file=rel(plan.root, reference))
+        if args.prompt:
+            free_vram(base)
+        raw, job = make_mesh(args, plan, base, wf3d, reference)
     export, lods, cleanup, validation = blender_steps(args, plan, blender, raw)
     placed = install(plan, export, lods, args.overwrite)
     sprite_error = sprites(args, plan, blender)
@@ -730,17 +796,22 @@ def cmd_make(args):
     if plan.sprites and not sprite_error:   # the sheet ships in the game too: it gets its hash and the log row
         files.append({"file": rel(plan.root, plan.sprites), "sha256": sha256_bytes(plan.sprites.read_bytes()),
                       "kind": "sprite sheet"})
-    record = {"tool": f"{TOOL} {VERSION}", "date": datetime.date.today().isoformat(), "name": plan.name,
-              "class": plan.cls, "budget": plan.budget, "height_m": plan.height, "seed": args.seed,
-              "quality": args.quality, "material": args.material, "texture_px": plan.texture, "lods": plan.lods,
-              "reference": dict(ref_facts, file=rel(plan.root, reference)),
-              "workflow": rel(TOOLS.parent, args.workflow or WORKFLOW_3D),
-              "workflow_sha256": sha256_bytes(Path(args.workflow or WORKFLOW_3D).read_bytes()),
-              "comfyui": (stats.get("system") or {}).get("comfyui_version"), "job": job,
+    record = {"tool": f"{TOOL} {VERSION}", "route": plan.route, "date": datetime.date.today().isoformat(),
+              "name": plan.name, "class": plan.cls, "budget": plan.budget, "height_m": plan.height, "seed": args.seed,
+              "turn_deg": plan.turn, "quality": args.quality, "material": args.material, "lods": plan.lods,
+              "reference": ref_facts, "job": job,
               "cleanup": cleanup, "validation": {k: validation.get(k) for k in ("failures", "warnings", "notes",
                                                                                 "objects", "total_tris")},
-              "tris": files[0]["triangles"], "files": files, "models": models_used(bool(args.prompt)),
-              "blender": blender_version(blender)}
+              "tris": files[0]["triangles"], "files": files, "blender": blender_version(blender)}
+    if tripo_route:
+        record.update(models=[{"service": "Tripo3D API", "model": job["model"], "license": tp.LICENSE,
+                               "role": f"3D model ({job['endpoint'].rsplit('/', 1)[-1]})"}],
+                      terms=tp.TERMS, credits=job["credits"])
+    else:
+        record.update(texture_px=plan.texture, workflow=rel(TOOLS.parent, args.workflow or WORKFLOW_3D),
+                      workflow_sha256=sha256_bytes(Path(args.workflow or WORKFLOW_3D).read_bytes()),
+                      comfyui=(stats.get("system") or {}).get("comfyui_version"),
+                      models=models_used(bool(args.prompt)))
     write_new(plan.src / RECORD, json.dumps(record, indent=2, ensure_ascii=False).encode("utf-8"), True)
     if plan.log:
         write_log(plan, record)
@@ -750,7 +821,12 @@ def cmd_make(args):
     warns = len(validation.get("warnings") or [])
     print(f"[ OK ] {plan.name}: {files[0]['triangles']:,} triangles, {plan.height} m tall, "
           f"{len(placed)} file(s) in {rel(plan.root, plan.out_dir)}, {time.monotonic() - t0:.0f} s in all"
+          + (f", {job['credits']:g} Tripo credits" if tripo_route else "")
           + (f"; {warns} validator warning(s) in {rel(plan.root, plan.src / 'validate.json')}" if warns else ""))
+    if tripo_route:
+        print(f"[info] Tripo's model was turned {plan.turn:g} degrees (it faces {tp.FACING}); if the turntable shows "
+              "its front away from the first view, run the same make with --overwrite --turn 0, 90 or 180 (the paid task is "
+              "reused: no new credits)")
     godot = (plan.root / "project.godot").is_file()
     print(f"[next] look at {rel(plan.root, plan.src / 'turntable.png')}, then import it in the engine "
           + ("(`python tools/dev.py import`, or let check, test or smoke import it: they import new assets)"
@@ -835,6 +911,13 @@ def cmd_check(args):
                     say("ok" if ok else "error", f"{m['file']} SHA-256 {'matches' if ok else 'DIFFERS from'} the lock")
                 else:
                     say("info", f"{m['file']}: not on disk, nothing to hash")
+    if tp.key():                         # the paid route; it does not decide whether the local one is ready
+        try:
+            say("ok", f"make --with tripo (paid): balance {tp.Client().balance():g} credits")
+        except (ToolError, JobError) as exc:
+            say("warn", f"make --with tripo: {exc}")
+    else:
+        say("info", f"make --with tripo (paid, optional): {tp.TRIPO_ENV} is not set")
     say("info", "licences: TRELLIS.2 and BiRefNet MIT; DINOv3 License (use restrictions in its section 1.b.v): "
                 "LICENSES.md")
     bad = "error" in results
@@ -845,6 +928,8 @@ def cmd_check(args):
 STEPS = [
     ("reference", "--image as given, or --prompt -> FLUX.2 klein 4B (Apache-2.0) on a plain background"),
     ("generate", "TRELLIS.2 4B through ComfyUI: BiRefNet background removal, shape, texture bake (MIT; DINOv3 License)"),
+    ("  (tripo)", "--with tripo: Tripo3D API from --image, --front/--left/--back/--right or --prompt (paid credits: "
+                  "a quote first, --max-credits, a journal so a re-run never pays twice)"),
     ("cleanup", "cleanup.py in Blender: merge, drop fragments, normals, decimate to budget, height, pivot"),
     ("export", "tools/blender/prep_export.py: the kit's one glTF preset, LODs"),
     ("validate", "tools/blender/validate_asset.py --class: budget, size, UVs; nothing ships when it fails"),
@@ -856,7 +941,8 @@ STEPS = [
 def cmd_list(args):
     print(f"{TOOL}: the kit's local 3D asset lane. python tools/{TOOL.lower()}/{TOOL.lower()}.py <subcommand>\n")
     print("  check     what is ready here        test      the exams (--live adds one GPU run)")
-    print("  make      a model from --image or --prompt (make --help for every option)\n\nSteps of make:")
+    print("  make      a model from --image or --prompt, on your GPU or --with tripo (make --help for every "
+          "option)\n  rig       a skeleton, skin weights and clips (rig make --help)\n\nSteps of make:")
     for name, what in STEPS:
         print(f"  {name:9} {what}")
     print("\nClasses (budgets from tools/blender/validate_asset.py, SOP-11):")
@@ -868,7 +954,7 @@ def cmd_list(args):
 
 
 def cmd_test(args):
-    exams = [HERE / "test_bozzetto.py", HERE / "test_rig.py"] + ([HERE / "test_bozzetto_live.py"] if args.live else [])
+    exams = [HERE / "test_bozzetto.py", HERE / "test_tripo.py", HERE / "test_rig.py"] +([HERE / "test_bozzetto_live.py"] if args.live else [])
     failed = 0
     for exam in exams:
         t0 = time.monotonic()
@@ -889,7 +975,8 @@ def build_parser():
                     "(TRELLIS.2 in a local ComfyUI, cleanup and checks in Blender).",
         epilog="Exit: 0 ok, 1 the job or the budget check failed, 2 usage, environment, missing models or files in "
                f"the way.\nEnv: {cl.URL_ENV} (default {cl.DEFAULT_URL}), {BLENDER_ENV} (blender executable), "
-               "COMFYUI_ROOT (check --hash); rig: UNIRIG_DIR, UNIRIG_PY, TRIPO_API_KEY.\nREADME.md in this folder "
+               "COMFYUI_ROOT (check --hash); make --with tripo: TRIPO_API_KEY; rig: UNIRIG_DIR, UNIRIG_PY, "
+               "TRIPO_API_KEY.\nREADME.md in this folder "
                "walks through setup and every option.")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--url", help=f"ComfyUI address (default {cl.URL_ENV} or {cl.DEFAULT_URL})")
@@ -911,9 +998,18 @@ def build_parser():
                        epilog="Classes and budgets: `list`. Sources and reports land in assets_src/bozzetto/<name>/.")
     p.add_argument("name", help="asset name: lowercase, digits, underscores (prop_crate, npc_guard)")
     src = p.add_mutually_exclusive_group()
-    src.add_argument("--image", help="reference picture: one object, whole, plain background (.png .jpg .webp)")
-    src.add_argument("--prompt", help="describe the object; FLUX.2 klein draws the reference first")
-    p.add_argument("--raw-prompt", action="store_true", help="send --prompt as written (no 'plain background...' suffix)")
+    p.add_argument("--with", dest="route", choices=("local", "tripo"), default="local",
+                   help="local: TRELLIS.2 on your GPU, free (default); tripo: the Tripo3D API, paid credits, any machine")
+    src.add_argument("--image", help="reference picture: one object, whole, plain background (.png .jpg .webp; "
+                                     "Tripo: .png .jpg)")
+    src.add_argument("--prompt", help="describe the object; FLUX.2 klein draws the reference first (Tripo: its own "
+                                      "text-to-model)")
+    for view in tp.VIEWS:
+        p.add_argument(f"--{view}", metavar="FILE",
+                       help=f"Tripo multiview: the {view} view" + (" (required; add at least one more)"
+                                                                  if view == "front" else ""))
+    p.add_argument("--raw-prompt", action="store_true", help="send --prompt as written (no 'plain background...' "
+                                                             "suffix; Tripo: no A-pose hint for characters)")
     p.add_argument("--reference-only", action="store_true", help="with --prompt: stop after the reference image")
     p.add_argument("--class", dest="asset_class", choices=sorted(CLASS_SETTINGS), default="prop",
                    help="budget class from SOP-11 (default prop)")
@@ -923,10 +1019,12 @@ def build_parser():
     p.add_argument("--project", default=".", help="the game's root folder (default: the current folder)")
     p.add_argument("--lods", help="LOD ratios, e.g. 0.5,0.25, or none (default per class: `list`)")
     p.add_argument("--height", type=float, help="height in metres (default per class: prop 1.0, kit 3.0, hero/npc 1.8)")
-    p.add_argument("--turn", type=float, default=0.0, help="degrees to turn around the up axis if the front is wrong")
+    p.add_argument("--turn", type=float, help="degrees to turn around the up axis if the front is wrong (default 0; "
+                                              f"Tripo {tp.FACING_TURN:g}: its models face {tp.FACING})")
     p.add_argument("--texture", type=int, choices=(512, 1024, 2048), help="baked texture size (default per class)")
     p.add_argument("--quality", choices=sorted(QUALITY), default="normal",
-                   help="TRELLIS.2 resolution: normal 1024 (about 5 min), high 1536 (about 19 min)")
+                   help="TRELLIS.2 resolution: normal 1024 (about 5 min), high 1536 (about 19 min); Tripo: "
+                        "texture standard or detailed (costs more)")
     p.add_argument("--material", choices=("texture", "vertex"), default="texture",
                    help="baked PBR textures (default), or vertex colours: no textures, smaller, and the unwrap and "
                         "bakes do not run (cleanup.py adds a UV map for lightmaps)")
@@ -934,8 +1032,17 @@ def build_parser():
     p.add_argument("--no-preview", action="store_true", help="skip the turntable contact sheet")
     p.add_argument("--no-log", action="store_true", help="do not touch docs/ASSET_LOG.md (scratch runs)")
     p.add_argument("--overwrite", action="store_true", help="replace this model's files from an earlier run")
-    p.add_argument("--wait", type=int, default=WAIT_S, help=f"seconds to wait for each ComfyUI job (default {WAIT_S})")
+    p.add_argument("--wait", type=int, default=WAIT_S, help=f"seconds to wait for each ComfyUI job or Tripo task "
+                                                            f"(default {WAIT_S})")
+    p.add_argument("--max-credits", type=int, default=150,
+                   help="Tripo: never spend more than this in one run, counting actual charges (default 150; "
+                        "1 credit = $0.01)")
+    p.add_argument("--no-reuse", action="store_true",
+                   help="Tripo: ignore a paid task in tasks.json for the same inputs and pay for a new one")
+    p.add_argument("--tripo-model", choices=tp.MAKE_MODELS, default=tp.MAKE_MODEL,
+                   help=f"Tripo's model series (default {tp.MAKE_MODEL}; P1 is its low-poly series, not tested here)")
     p.set_defaults(fn=cmd_make)
+    tp.bind(sys.modules[__name__])
     import rig as rig_mod   # noqa: E402  (rig.py: the rig subcommand)
     rig_mod.bind(sys.modules[__name__])
     rig_mod.add_parser(sub, common)
@@ -957,6 +1064,10 @@ def main(argv=None):
     if getattr(args, "reference_only", False) and not args.prompt:
         print("[error] --reference-only goes with --prompt (an --image is already the reference)", file=sys.stderr)
         return 2
+    if getattr(args, "reference_only", False) and args.route == "tripo":
+        print("[error] --reference-only is the local route's picture audition; Tripo draws its own picture from "
+              "--prompt", file=sys.stderr)
+        return 2
     try:
         return args.fn(args)
     except ToolError as exc:
@@ -966,7 +1077,8 @@ def main(argv=None):
         print(f"[FAIL] {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:
-        print("\n[abort] interrupted (a queued job keeps running in ComfyUI; cancel it there)", file=sys.stderr)
+        print("\n[abort] interrupted (a queued job keeps running in ComfyUI: cancel it there; a paid Tripo task is "
+              "kept in tasks.json and a re-run picks it up)", file=sys.stderr)
         return 1
     except Exception as exc:  # noqa: BLE001
         print(f"[error] unexpected failure: {exc!r}. Re-run with --debug.", file=sys.stderr)

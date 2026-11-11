@@ -174,6 +174,7 @@ EXAMS = [
     Exam("core/tools/art/test_svg_export.py", "exit 2 when Inkscape is missing", needs=(exam_checks("Inkscape 1.x"),), style="cases", covers=("core/tools/art/svg_export.py",)),
     # core/tools/bozzetto
     Exam("core/tools/bozzetto/test_bozzetto.py", "a stand-in ComfyUI, a canned mesh; its Blender part runs when Blender or bpy is found (BOZZETTO_TEST_BLENDER=skip|bpy|<path>)"),
+    Exam("core/tools/bozzetto/test_tripo.py", "make --with tripo against a stand-in Tripo API; its Blender part runs when Blender or bpy is found"),
     Exam("core/tools/bozzetto/test_rig.py", "UniRig and Tripo routes offline; its Blender part runs when Blender or bpy is found"),
     Exam("core/tools/bozzetto/test_bozzetto_live.py", "one real TRELLIS.2 run (about 5 min); [SKIP] without ComfyUI", style="cases", live=True),
     # core/tools/blender (bpy on uv's Python 3.13)
