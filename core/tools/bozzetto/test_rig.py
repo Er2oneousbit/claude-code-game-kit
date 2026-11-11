@@ -38,6 +38,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import bozzetto as bz  # noqa: E402
 import rig  # noqa: E402
+import tripo  # noqa: E402
 
 rig.bind(bz)
 PATCHER = HERE / "rig" / "patch_unirig.py"
@@ -113,7 +114,7 @@ class Base(unittest.TestCase):
         (self.root / "assets" / "models" / "npc_guard.glb").write_bytes(b"glTF-model")
         self.unirig = Path(self.tmp.name) / "UniRig"
         fake_unirig(self.unirig)
-        self.saved = (bz.run_bpy, bz.find_blender, bz.SLEEP, rig.PROBE, rig.OPENER, os.getcwd(), dict(os.environ))
+        self.saved = (bz.run_bpy, bz.find_blender, bz.SLEEP, rig.PROBE, tripo.OPENER, os.getcwd(), dict(os.environ))
         bz.find_blender = lambda choice=None: ("blender", "fake-blender")
         bz.SLEEP = lambda s: None
         rig.PROBE = False
@@ -125,7 +126,7 @@ class Base(unittest.TestCase):
         os.chdir(self.root)
 
     def tearDown(self):
-        bz.run_bpy, bz.find_blender, bz.SLEEP, rig.PROBE, rig.OPENER, cwd, env = self.saved
+        bz.run_bpy, bz.find_blender, bz.SLEEP, rig.PROBE, tripo.OPENER, cwd, env = self.saved
         os.chdir(cwd)
         os.environ.clear()
         os.environ.update(env)
@@ -364,27 +365,27 @@ class TripoExam(Base):
         os.environ[rig.TRIPO_ENV] = "tsk_exam"
 
     def test_quote_over_limit_or_balance_stops_before_upload(self):
-        rig.OPENER = fake = FakeTripo()
+        tripo.OPENER = fake = FakeTripo()
         code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk,run",
                               "--max-credits", "40"])
         self.assertEqual(code, 2)
         self.assertIn("over --max-credits", out)
         self.assertNotIn(("POST", "/files"), fake.calls)
-        rig.OPENER = fake = FakeTripo(balance=20)
+        tripo.OPENER = fake = FakeTripo(balance=20)
         code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo"])
         self.assertEqual(code, 2)
         self.assertIn("under the next step", out)
         self.assertNotIn(("POST", "/files"), fake.calls)
 
     def test_not_a_biped_stops_before_a_paid_call(self):
-        rig.OPENER = fake = FakeTripo(rig_type="quadruped")
+        tripo.OPENER = fake = FakeTripo(rig_type="quadruped")
         code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo"])
         self.assertEqual(code, 1)
         self.assertIn("not a riggable biped", out)
         self.assertEqual([k for k, _ in fake.tasks.values()], ["/animations/rig-check"])
 
     def test_paid_route_end_to_end(self):
-        rig.OPENER = fake = FakeTripo()
+        tripo.OPENER = fake = FakeTripo()
         code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
         self.assertEqual(code, 0, out)
         kinds = [(k, b) for k, b in fake.tasks.values()]
@@ -404,7 +405,7 @@ class TripoExam(Base):
     def test_actual_cost_is_checked_before_the_next_paid_call(self):
         """#209: the rig costs more than the table; the clips step must not push spend past --max-credits. A re-run
         with a higher limit reuses the paid rig and pays only for the clips (#210)."""
-        rig.OPENER = fake = FakeTripo(rig_cost=70)
+        tripo.OPENER = fake = FakeTripo(rig_cost=70)
         code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk",
                               "--max-credits", "80"])
         self.assertEqual(code, 2, out)
@@ -412,7 +413,7 @@ class TripoExam(Base):
         self.assertEqual(fake.posts("/animations/retarget"), [])
         journal = json.loads((self.root / "assets_src/bozzetto/npc_guard/rig/tripo/tasks.json").read_text(encoding="utf-8"))
         self.assertEqual(journal["tasks"]["rig"]["status"], "success")
-        rig.OPENER = fake2 = FakeTripo()
+        tripo.OPENER = fake2 = FakeTripo()
         fake2.tasks.update(fake.tasks)          # the same server still knows the paid rig task
         code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk",
                               "--max-credits", "200"])
@@ -424,7 +425,7 @@ class TripoExam(Base):
     def test_a_lost_result_is_fetched_again_without_paying(self):
         """#210: rig and clips succeed but the model URL is missing: the run fails, the journal keeps the paid
         tasks, and a re-run downloads the result with no new paid call."""
-        rig.OPENER = fake = FakeTripo(no_url=True)
+        tripo.OPENER = fake = FakeTripo(no_url=True)
         code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
         self.assertEqual(code, 1, out)
         self.assertIn("a re-run fetches it again without paying", out)
@@ -444,7 +445,7 @@ class TripoExam(Base):
 
     def test_a_task_left_running_is_adopted_not_paid_again(self):
         """#221: the journal says a paid rig task was running when the last run stopped; it finished since."""
-        rig.OPENER = fake = FakeTripo()
+        tripo.OPENER = fake = FakeTripo()
         fake.tasks["t99"] = ("/animations/rig", {})
         self.journal({"rig": {"id": "t99", "status": "running"}})
         code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
@@ -454,7 +455,7 @@ class TripoExam(Base):
 
     def test_a_task_still_running_stops_the_run_without_paying(self):
         """#221: a journalled task still running after --wait must not be replaced by a new paid one."""
-        rig.OPENER = fake = FakeTripo()
+        tripo.OPENER = fake = FakeTripo()
         fake.tasks["t99"] = ("/animations/rig", {})
         fake.status["t99"] = "running"
         self.journal({"rig": {"id": "t99", "status": "running"}})
@@ -470,7 +471,7 @@ class TripoExam(Base):
     def test_a_bad_key_is_not_ready(self):
         """#222: with no UniRig and a Tripo key that is refused, rig check exits 2."""
         os.environ.pop(rig.UNIRIG_ENV)
-        rig.OPENER = fake = FakeTripo()
+        tripo.OPENER = fake = FakeTripo()
         fake.bad_key = True
         code, out = run_main(["rig", "check"])
         self.assertEqual(code, 2, out)
@@ -479,7 +480,7 @@ class TripoExam(Base):
         self.assertEqual(run_main(["rig", "check"])[0], 0)
 
     def test_unknown_or_too_many_clips_exit_2(self):
-        rig.OPENER = FakeTripo()
+        tripo.OPENER = FakeTripo()
         self.assertEqual(run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "moonwalk"])[0], 2)
         self.assertEqual(run_main(["rig", "make", "npc_guard", "--with", "tripo",
                                    "--clips", "idle,walk,run,jump,turn,fall"])[0], 2)
