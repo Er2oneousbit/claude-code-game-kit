@@ -54,14 +54,13 @@ ROOT = Path(__file__).resolve().parents[1]
 # ---- Tunables / constants ----------------------------------------------------
 MIN_NODE = (22, 12)                       # Vitest 5 needs ^22.12 || ^24 || >=26; Vite 8 needs 20.19+
 SMOKE_FRAMES = 120
-BOOT_MARKER = "BOOT_OK"                   # logged by src/main.ts after the first rendered frame
-# --drive, --data-dir, --locale: this skeleton has no shell screens (docs/ENGINE_FLOW.md), so the help says so
-DRIVE_HELP = ("adds ?drive=SCENARIO and waits for DRIVE_DONE; this skeleton has no scripted runs and answers "
-              "DRIVE_ABORT at once until the game adds its own (docs/ENGINE_FLOW.md)")
-DATA_DIR_HELP = ("user-data folder for this run (?data-dir=): loaded into localStorage before, written back after "
-                 "(default build/smoke-data with --drive); the skeleton reads none of it until the game builds on "
-                 "the src/core stores")
-LOCALE_HELP = "adds ?locale=ID (e.g. fr or pseudo); the skeleton reads it only once the game wires up src/core/i18n.ts"
+BOOT_MARKER = "BOOT_OK"                   # logged by src/shell/app.ts once the title screen is up
+# --drive, --data-dir, --locale: the shell (src/shell/drive.ts) runs the scenarios and reads both folders
+DRIVE_HELP = ("the game plays a scripted run (shell games): menus, crash (exits 1 on purpose), pseudo, "
+              "pseudo-plant, show:title|settings|pause|subtitle|juice (with --screenshot); waits for DRIVE_DONE")
+DATA_DIR_HELP = ("user-data folder for this run (?data-dir=): loaded before, written back after "
+                 "(default build/smoke-data with --drive)")
+LOCALE_HELP = "language for this run, e.g. fr or pseudo (?locale=)"
 SMOKE_TIMEOUT_S = 180                     # whole smoke run, including browser start
 SMOKE_MIN_FPS = 20                        # slowest headless software rendering we allow for: --frames adds frames/20 s
 TEST_TIMEOUT_S = 600

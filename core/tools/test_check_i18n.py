@@ -95,7 +95,7 @@ class CheckI18n(unittest.TestCase):
         self.assertIn("English only", text)
 
     def test_a_project_without_string_tables_passes_the_plain_run(self):
-        # web-3d and RPG Maker MZ ship no data/i18n/, and the tool is in every game: the plain run must not exit 2
+        # RPG Maker MZ ships no data/i18n/, and the tool is in every game: the plain run must not exit 2
         # there; a --dir that does not exist is still a usage problem
         missing = Path(tempfile.mkdtemp()) / "data" / "i18n"
         saved = check_i18n.ROOT
