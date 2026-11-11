@@ -7,6 +7,8 @@ Nothing reaches the game's models folder unless that check passes, and every mod
 It is the third asset lane next to Wavesmith (audio) and Dotwork (pixel art), and like them it is a set of primitives
 you call, not a 3D editor: a generated mesh is a draft (SOP-11). Without a GPU, or with several views of one object,
 `make --with tripo` has the Tripo3D API make the mesh instead (paid credits), and everything after it is the same.
+For a whole character, from an idea or a picture to it moving in the game with a look and a yes at every step, ask
+Claude for `/make-character`: it runs the commands below in order.
 
 Tested on Windows 11, RTX 5060 Ti 16 GB, 64 GB RAM, ComfyUI 0.43.0, Blender 5.2.3 (K01). The numbers below are what
 that machine needed, not promises.
