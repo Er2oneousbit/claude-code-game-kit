@@ -185,6 +185,8 @@ EXAMS = [
     Exam("core/tools/blender/test_validate_asset.py", "builds fixtures with bpy", **BPY),
     Exam("core/tools/blender/test_prep_export.py", "builds fixtures with bpy", **BPY),
     Exam("core/tools/blender/test_render_sprites.py", "renders with Cycles on the CPU, a few minutes", live=True, **BPY),
+    Exam("core/tools/blender/test_golden_character.py", "the golden rigged character read with the standard library; its rebuild check runs when Blender or bpy is found (GOLDEN_CHARACTER_BLENDER=skip|bpy|<path>)",
+         covers=("core/tools/blender/golden_character.py", "core/data/golden/character/")),
     # scripts (the kit's own)
     Exam("scripts/test_sync_examples.py", "a fake kit and example in a temp folder", covers=("scripts/sync_examples.py", "scripts/new_game.py")),
     Exam("scripts/test_check_examples.py", "fake examples in a temp git repo", needs=(tool("git"),), covers=("scripts/check_examples.py", "engines/*/skeleton/tools/dev.py")),

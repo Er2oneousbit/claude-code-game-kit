@@ -1,0 +1,53 @@
+{
+ "file": "character.glb",
+ "note": "written by tools/blender/golden_character.py; engine tests compare with these numbers",
+ "up": "+Y",
+ "front": "+Z",
+ "units": "metres",
+ "fps": 24,
+ "height_m": 1.8013,
+ "triangles": 252,
+ "root_bone": "mixamorig:Hips",
+ "bones": [
+  "mixamorig:Hips",
+  "mixamorig:Spine",
+  "mixamorig:Spine1",
+  "mixamorig:Spine2",
+  "mixamorig:Neck",
+  "mixamorig:Head",
+  "mixamorig:LeftShoulder",
+  "mixamorig:LeftArm",
+  "mixamorig:LeftForeArm",
+  "mixamorig:LeftHand",
+  "mixamorig:RightShoulder",
+  "mixamorig:RightArm",
+  "mixamorig:RightForeArm",
+  "mixamorig:RightHand",
+  "mixamorig:LeftUpLeg",
+  "mixamorig:LeftLeg",
+  "mixamorig:LeftFoot",
+  "mixamorig:LeftToeBase",
+  "mixamorig:RightUpLeg",
+  "mixamorig:RightLeg",
+  "mixamorig:RightFoot",
+  "mixamorig:RightToeBase"
+ ],
+ "clips": {
+  "idle": {
+   "frames": 48,
+   "seconds": 2.0,
+   "loop": true
+  },
+  "walk": {
+   "frames": 24,
+   "seconds": 1.0,
+   "loop": true
+  }
+ },
+ "moving_bone": "mixamorig:LeftUpLeg",
+ "moving_bone_swing_deg": 56.0,
+ "mixamo_prefix_in_engines": {
+  "glTF": "mixamorig:",
+  "Godot": "mixamorig_ (Godot replaces ':' in bone names)"
+ }
+}
