@@ -10,6 +10,8 @@
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1); analog input (#274), the juice demo, the bug report,
 //           crash files and the pseudo locale (#275) by Claude (Opus 5.5, claude-opus-5-5); the i18n log line
 //           (where the string tables came from, or that there were none) by Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): credits from data/credits.md in a packaged game,
+//           the copy kept in step by SyncCreditsCopy (#278)
 // ---------------------------------------------------------------------------
 #include "GameKitShellModel.h"
 
@@ -24,6 +26,7 @@
 #include "HAL/PlatformMisc.h"
 #include "Misc/DateTime.h"
 #include "Misc/EngineVersion.h"
+#include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 
 const TCHAR* const FGameKitShellModel::BugKey = TEXT("key:f8");
@@ -33,6 +36,7 @@ const TCHAR* const FGameKitShellModel::PresetsFile = TEXT("data/input/presets.js
 const TCHAR* const FGameKitShellModel::ColoursFile = TEXT("data/access/colours.json");
 const TCHAR* const FGameKitShellModel::I18nDir = TEXT("data/i18n");
 const TCHAR* const FGameKitShellModel::CreditsFile = TEXT("CREDITS.md");
+const TCHAR* const FGameKitShellModel::CreditsCopyFile = TEXT("data/credits.md");
 const TCHAR* FGameKitShellModel::SettingsTabs[5] = {TEXT("display"), TEXT("audio"), TEXT("controls"), TEXT("access"), TEXT("language")};
 const TCHAR* FGameKitShellModel::GameActions[8] = {TEXT("move_left"), TEXT("move_right"), TEXT("move_up"), TEXT("move_down"),
                                                    TEXT("jump"), TEXT("attack"), TEXT("interact"), TEXT("pause")};
@@ -841,12 +845,73 @@ FGameKitScreen FGameKitShellModel::Build(const FString& Name)
 	return S;
 }
 
+FString FGameKitShellModel::CreditsSource(const FString& ProjectDir)
+{
+	// The project's own CREDITS.md first (the editor, a dev run: always the file you just edited), then the copy
+	// under data/ that a packaged game ships (#278); "" when there is neither
+	for (const TCHAR* Rel : {CreditsFile, CreditsCopyFile})
+	{
+		const FString Path = FPaths::Combine(ProjectDir, Rel);
+		if (IFileManager::Get().FileExists(*Path))
+		{
+			return Path;
+		}
+	}
+	return FString();
+}
+
+bool FGameKitShellModel::SyncCreditsCopy(const FString& ProjectDir, FString& OutWhat)
+{
+	IFileManager& Files = IFileManager::Get();
+	const FString Source = FPaths::Combine(ProjectDir, CreditsFile);
+	const FString Copy = FPaths::Combine(ProjectDir, CreditsCopyFile);
+	if (!Files.FileExists(*Source))
+	{
+		if (!Files.FileExists(*Copy))
+		{
+			OutWhat = FString::Printf(TEXT("no %s, nothing to copy"), CreditsFile);
+			return true;
+		}
+		// The copy is generated (and gitignored): with CREDITS.md gone it would ship credits nobody has any more
+		if (!Files.Delete(*Copy, /*RequireExists*/ false, /*EvenReadOnly*/ true, /*Quiet*/ true))
+		{
+			OutWhat = FString::Printf(TEXT("could not remove %s (CREDITS.md is gone)"), *Copy);
+			return false;
+		}
+		OutWhat = FString::Printf(TEXT("removed %s: there is no %s any more"), CreditsCopyFile, CreditsFile);
+		return true;
+	}
+	TArray<uint8> Want, Have;
+	if (!FFileHelper::LoadFileToArray(Want, *Source))
+	{
+		OutWhat = FString::Printf(TEXT("could not read %s"), *Source);
+		return false;
+	}
+	if (FFileHelper::LoadFileToArray(Have, *Copy, FILEREAD_Silent) && Have == Want)
+	{
+		OutWhat = FString::Printf(TEXT("%s is up to date"), CreditsCopyFile);
+		return true;   // untouched: no new timestamp, nothing for a cook or a backup to pick up
+	}
+	Files.MakeDirectory(*FPaths::GetPath(Copy), /*Tree*/ true);   // a project without data/ gets one for the copy
+	if (!FFileHelper::SaveArrayToFile(Want, *Copy))
+	{
+		OutWhat = FString::Printf(TEXT("could not write %s"), *Copy);
+		return false;
+	}
+	OutWhat = FString::Printf(TEXT("copied %s to %s (%d bytes)"), CreditsFile, CreditsCopyFile, Want.Num());
+	return true;
+}
+
 TArray<FString> FGameKitShellModel::CreditsLines() const
 {
 	TArray<FString> Out;
-	const TOptional<FString> Text = GameKit::ReadTextFile(FPaths::Combine(Opt.ProjectDir, CreditsFile));
+	const FString Path = CreditsSource(Opt.ProjectDir);
+	const TOptional<FString> Text = Path.IsEmpty() ? TOptional<FString>() : GameKit::ReadTextFile(Path);
 	if (!Text.IsSet() || Text.GetValue().TrimStartAndEnd().IsEmpty())
 	{
+		// Says where it looked, so a packaged game without credits is one log line to explain
+		UE_LOG(LogGameKitShell, Display, TEXT("credits: none (no %s or %s in %s), the placeholder shows"), CreditsFile,
+		       CreditsCopyFile, *FPaths::ConvertRelativePathToFull(Opt.ProjectDir));
 		Out.Add(T(TEXT("credits.placeholder")));
 	}
 	else
@@ -861,6 +926,7 @@ TArray<FString> FGameKitShellModel::CreditsLines() const
 			}
 			Out.Add(Content(Line.TrimEnd()));
 		}
+		UE_LOG(LogGameKitShell, Display, TEXT("credits: %d lines from %s"), Lines.Num(), *FPaths::ConvertRelativePathToFull(Path));
 	}
 	Out.Add(FString());
 	Out.Add(T(TEXT("credits.engine")));

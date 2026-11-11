@@ -25,6 +25,8 @@ Saved/
 /.ignore
 # Packaged output (dev.py package)
 /Packaged/
+# The GameKitShell plugin's copy of CREDITS.md for packaged games (made in the editor and at every cook; edit CREDITS.md)
+/data/credits.md
 # Plugins build output
 Plugins/**/Binaries/
 Plugins/**/Intermediate/

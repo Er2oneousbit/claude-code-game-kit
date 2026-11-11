@@ -20,7 +20,8 @@
 //           Settings are applied at once (the Version counter bumps and OnEvent fires "settings_changed");
 //           Back or cancel on the settings screen saves <DataDir>/settings.json. The one-handed layouts
 //           come from <ProjectDir>/data/input/presets.json, the colour palettes from
-//           data/access/colours.json, the strings from data/i18n/<locale>.json, the credits from CREDITS.md.
+//           data/access/colours.json, the strings from data/i18n/<locale>.json, the credits from CREDITS.md
+//           (a packaged game: its copy data/credits.md, see CreditsSource).
 //           Only the top screen takes input; a transparent screen (pause) is drawn over the one below.
 //           Analog input for the game (#274, as the Bevy shell's Intent): Stick() (radial, rescaled deadzone and
 //           invert_y, GameKitAnalog.h), Trigger(), HeldActions(); all zero outside play and the juice demo, so a
@@ -147,6 +148,7 @@ public:
 	static const TCHAR* const ColoursFile;            // "data/access/colours.json"
 	static const TCHAR* const I18nDir;                // "data/i18n"
 	static const TCHAR* const CreditsFile;            // "CREDITS.md"
+	static const TCHAR* const CreditsCopyFile;        // "data/credits.md": the copy a packaged game ships (#278)
 	static const TCHAR* SettingsTabs[5];              // display, audio, controls, access, language
 	static const TCHAR* GameActions[8];               // the rebindable actions, in menu order
 	static const TCHAR* PresetNames[2];               // one_hand_left, one_hand_right
@@ -154,6 +156,16 @@ public:
 
 	explicit FGameKitShellModel(const FOptions& InOptions);
 	~FGameKitShellModel();
+
+	// ---- Credits (#278) ----
+	/** The file the credits screen reads: <ProjectDir>/CREDITS.md when there is one (the editor), else
+	 *  <ProjectDir>/data/credits.md (a packaged game, where only data/ is staged), else "" (the placeholder). */
+	static FString CreditsSource(const FString& ProjectDir);
+	/** Keeps data/credits.md a copy of CREDITS.md: written when it differs (data/ made if missing), left alone when
+	 *  it matches, removed when CREDITS.md is gone. The module calls it in editor builds, so the editor and every
+	 *  cook (dev.py package, the editor's Package Project, UAT) leave a fresh copy for staging. False only when a
+	 *  file could not be read, written or removed; OutWhat says what happened, for the log. */
+	static bool SyncCreditsCopy(const FString& ProjectDir, FString& OutWhat);
 
 	// ---- Settings (always valid: GameKit::SettingsLoad fixed the file) ----
 	TSharedRef<FJsonObject> Settings;
