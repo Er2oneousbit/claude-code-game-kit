@@ -102,6 +102,10 @@ TURN_HOW = {"left": "from its left side: a side profile of its left side, facing
 ANGLE_PROMPT = "<sks> {azimuth} eye-level shot medium shot"
 AZIMUTH = {"left": "left side view", "back": "back view", "right": "right side view"}
 ANGLE_STRENGTH = 0.9
+# the first live run (2026-11-11) got "left side view" back facing picture-right; Dotwork saw the LoRA read the
+# sides either way from one character to the next, so every run asks for a look instead of trusting the label
+SIDES_NOTE = ("left.png should show the character's left side, facing the picture's left edge, and right.png the "
+              "other way; generators mix the two up, so if they are swapped, swap the two files")
 
 # ---- Google Gemini (Nano Banana) --------------------------------------------------------------------------------
 GEMINI_ENV = "GEMINI_API_KEY"
@@ -949,12 +953,13 @@ def cmd_reference(args):
     if plan.route != "local" and amount > plan.cap + 1e-9:
         raise bz.ToolError(f"the quote ({fmt(amount, plan.unit)}) is over --max-cost {fmt(plan.cap, plan.unit)}: "
                            "raise the cap or make fewer views")
-    plan.dir.mkdir(parents=True, exist_ok=True)
-    spent = Spent(plan.cap, plan.unit)
     stats = None
     if plan.route == "local":
-        route.preflight()
+        route.preflight()             # ComfyUI, nodes, model files: before any folder is made
         stats = route.stats
+    plan.dir.mkdir(parents=True, exist_ok=True)
+    spent = Spent(plan.cap, plan.unit)
+    if plan.route == "local":
         results = route.run(spent)
     else:
         results = route.run(spent, journal)
@@ -974,6 +979,9 @@ def cmd_reference(args):
     else:
         print("[warn] no sheet: a view could not be read here (install Pillow); the views themselves are fine")
     look = refsheet.look(images)
+    if "left" in plan.views or "right" in plan.views:   # no pixel count tells which way a profile faces
+        look["by_eye"] = SIDES_NOTE
+        print(f"[look] by eye: {SIDES_NOTE}")
     for w in look["warnings"]:
         print(f"[look] {w}")
     if not look["warnings"]:

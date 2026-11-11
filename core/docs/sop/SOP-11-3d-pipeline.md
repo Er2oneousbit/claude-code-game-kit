@@ -72,7 +72,8 @@ preview; `check` says what is missing. Setup, options and limits: `tools/bozzett
   assets_src/bozzetto/<name>/reference/front.png --class npc`. Local is free (Qwen-Image-Edit and FLUX.2 klein through
   ComfyUI); `--with nanobanana` (Gemini) and `--with tripo` are paid: run `--quote-only`, show the price and ask
   before the real run, and keep `--max-cost` low. Look at `assets_src/bozzetto/<name>/reference/sheet.png` before any 3D run: the same costume in
-  every view, a gap under each arm, nothing cut off. Not yet run live (K01: offline exam only).
+  every view, a gap under each arm, nothing cut off, and left and right not swapped (the first live run's left view
+  faced the wrong way; K01). Local, cold: about 7 minutes for four views; the paid routes are not yet run live.
 - Licences: TRELLIS.2 and BiRefNet are MIT; DINOv3 (its image encoder) has a use-restriction list (military, weapons)
   whose reach over game props is an open question to settle before you ship such a model (`tools/bozzetto/LICENSES.md`).
   Upstream TRELLIS.2's RMBG-2.0 and nvdiffrast are non-commercial and never loaded (E147, E148, E149).

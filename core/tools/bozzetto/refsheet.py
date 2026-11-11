@@ -261,8 +261,10 @@ def look(views):
         f = m["figure"]
         if f is None:
             warns.append(f"{name}: no figure stands out from the background")
-        elif f["top"] <= 0.0 or f["bottom"] >= 1.0 or f["left"] <= 0.0 or f["right"] >= 1.0:
+        elif f["top"] <= 0.0 or f["left"] <= 0.0 or f["right"] >= 1.0:
             warns.append(f"{name}: the figure touches the edge of the picture (cut off?)")
+        elif f["bottom"] >= 1.0:
+            warns.append(f"{name}: something reaches the bottom edge: cut-off feet, or a floor shadow or gradient")
     figs = {n: m["figure"] for n, m in report.items() if m["figure"]}
     if len(figs) > 1:
         heights = {n: f["bottom"] - f["top"] for n, f in figs.items()}

@@ -481,6 +481,8 @@ class LocalRoute(Base):
         self.assertEqual(rec["views"]["front"]["model"], "FLUX.2 klein 4B")
         self.assertIn("you", rec["terms"]["owner"])
         self.assertEqual(rec["look"]["warnings"], [])
+        self.assertIn("swap the two files", rec["look"]["by_eye"])
+        self.assertIn("[look] by eye: left.png should show", out)
         self.assertTrue(rec["models"] and all(m["license"].lower() == "apache-2.0" for m in rec["models"]))
         row = self.log_rows()[0]
         self.assertIn("| A-0001 | art |", row)
@@ -813,6 +815,8 @@ class Sheet(unittest.TestCase):
         self.assertTrue(any("height" in w for w in warns), warns)
         cut = refsheet._decode_png(figure_png(top=0, bottom=48))
         self.assertTrue(any("touches the edge" in w for w in refsheet.look({"front": cut})["warnings"]))
+        floor = refsheet._decode_png(figure_png(top=6, bottom=48))     # feet or a floor shadow on the bottom edge
+        self.assertTrue(any("bottom edge" in w for w in refsheet.look({"front": floor})["warnings"]))
         dark = refsheet.Image(8, 8, bytes((20, 20, 20)) * 64)
         warns = refsheet.look({"front": dark})["warnings"]
         self.assertTrue(any("not light grey" in w for w in warns), warns)
