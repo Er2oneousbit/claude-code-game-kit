@@ -10,6 +10,7 @@
 // Notes   : GLTFLoader keeps the clips' names (glTF animation names). Three.js strips ':' '.' '/' '[' ']' from node
 //           names (PropertyBinding.sanitizeNodeName), so mixamorig:Hips is mixamorigHips: boneName() converts. No root
 //           motion: the mixer plays the clips in place (Bozzetto's walk does not travel) and the game moves root.
+//           play() restarts the clip from its start (AnimationAction.reset()): call it on a change, not every frame.
 //           Units are metres, +Y up. glTF's front is +Z and Object3D.lookAt() turns a model's +Z toward the target,
 //           so hero.root.lookAt(x, hero.root.position.y, z) faces it where it walks. parseCharacter() takes the bytes
 //           (tests, or a file the player picked); a model with textures needs a DOM for its images.

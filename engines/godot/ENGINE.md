@@ -67,10 +67,17 @@ tools/                   dev.py and helpers
   so the character faces the default camera; turn it toward a point with `look_at(target, Vector3.UP, true)` (model
   front). `load_scene()` falls back to a run-time load (`GLTFDocument`) for a file Godot has not imported (user://, a
   download). Godot's own humanoid retargeting (a `BoneMap` with `SkeletonProfileHumanoid` in the import dialog) is
-  for sharing clips between skeletons; it should match the Mixamo names **(verify: not tried)**. Tested 2026-11-11
-  on Godot 4.7.2: `tests/test_kit_character.gd` (4 GUT tests) loads `data/golden/character/character.glb` both ways,
-  finds `idle` and `walk` at their lengths, plays `walk` 30 frames and checks `mixamorig_LeftUpLeg` swings as far as
-  `expected.json` says; `check`, `test` (108 tests) and `smoke` passed on a fresh scaffold.
+  for sharing clips between skeletons; it should match the Mixamo names **(verify: not tried)**. `play()` sets the
+  loop flag on the player's own copies of the clips (`own_animations()`): instances of one imported scene share
+  their Animation resources, so without that one hero's `play("wave", false)` would stop another's looping wave.
+  `play()` of the clip already playing keeps it going (AnimationPlayer's rule), so a game may call it every frame;
+  `KitCharacter.player(hero).seek(0.0, true)` restarts it. Tested 2026-11-11 on Godot 4.7.2:
+  `tests/test_kit_character.gd` (5 GUT tests) loads `data/golden/character/character.glb` both ways, finds `idle`
+  and `walk` at their lengths, plays `walk` 30 frames and checks `mixamorig_LeftUpLeg` swings as far as
+  `expected.json` says and no further, that the loop's period is the clip's length at 1x, and that two instances
+  keep their own loop flags; `check`, `test` (109 tests) and `smoke` passed on a fresh scaffold. The same helper
+  loaded a 69-bone Tripo rig with three textured clips (idle, walk, run): every clip looped, the Mixamo names mapped
+  through `bone_name()`, its own chain bones kept their names, 1.8 m tall facing +Z (2026-11-11, not a kept test).
 - **Shaders:** a `ShaderMaterial` with `res://shaders/kit/<name>.gdshader` on a CanvasItem (Sprite2D, TextureRect):
   `mat.set_shader_parameter("u_amount", 1.0)`, a second picture as `kit_aux` (dissolve's noise, the palette, the normal
   map). Post effects (`crt`, `vignette`, `colorblind`) read the screen (`hint_screen_texture`): put them on a full-screen
