@@ -47,11 +47,13 @@ dist/               production build (git-ignored)
   `hero.update(dt)` every frame. Three.js strips `:` from node names: `mixamorig:Hips` is `mixamorigHips`
   (`boneName()` converts). No root motion: the clips play in place and the game moves `hero.root`. Metres, +Y up;
   glTF's front is +Z and `Object3D.lookAt()` turns a model's +Z toward its target, so `hero.root.lookAt(x, y, z)`
-  faces where it walks. Tested 2026-11-11 (three r186): `tests/character.test.ts` (5 Vitest tests, in Node: the
-  golden character has no textures) loads `data/golden/character/character.glb`, finds `idle` and `walk` at their
-  lengths, plays `walk` 30 frames and checks `mixamorigLeftUpLeg` swings as far as `expected.json` says, loops, plays
-  once, height 1.8 m; `check`, `test` (183) and `smoke` passed on a fresh scaffold. Drawing it in the browser is not
-  in a test yet **(verify: the smoke run loads a static Bozzetto model, K01, not a skinned one)**.
+  faces where it walks. `hero.play(name)` restarts the clip from its start (`AnimationAction.reset()`): call it when
+  the clip changes, not every frame. Tested 2026-11-11 (three r186): `tests/character.test.ts` (6 Vitest tests, in
+  Node: the golden character has no textures) loads `data/golden/character/character.glb`, finds `idle` and `walk` at
+  their lengths, plays `walk` 30 frames and checks `mixamorigLeftUpLeg` swings as far as `expected.json` says and no
+  further, loops with the clip's length as its period at 1x, plays once, height 1.8 m; `check`, `test` (184) and
+  `smoke` passed on a fresh scaffold. Drawing it in the browser is not in a test yet **(verify: the smoke run loads
+  a static Bozzetto model, K01, not a skinned one)**.
 - One `update(dt)` per frame; dt in seconds from `THREE.Timer`, clamped. Never assume 60 fps.
 - Input: read it through `shell.input` (`import { shell } from "../shell/app"`): `isDown(action)` / `takePress(action)`
   for the player's bindings, `stick()` (the left stick with the player's radial deadzone and invert_y, up is -y),

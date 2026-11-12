@@ -250,11 +250,11 @@ checks that `mixamorig:LeftUpLeg` swings as far as the clip does. What was run o
 
 | Engine | Helper | Import notes | Run |
 |---|---|---|---|
-| Godot 4.7.2 | `KitCharacter` (scripts/core/kit_character.gd): `load_scene`, `play(hero, "walk")` | glTF clips import without looping (`play` sets `loop_mode`); `:` becomes `_` (`mixamorig_Hips`); faces +Z | GUT 4 tests; `check`, `test` (108), `smoke` passed |
-| web-3d (three r186) | src/game/character.ts: `loadCharacter`, `hero.play("walk")`, `hero.update(dt)` | three strips `:` (`mixamorigHips`); `lookAt` turns the model's +Z front to its target | Vitest 5 tests in Node; `check`, `test` (183), `smoke` passed. Drawing a skinned model in the browser is not tested **(verify)** |
-| Unity 6000.6.6f1 | `KitCharacter` (Assets/Scripts/Characters/): `Attach(model, clips).Play("walk")`, `Load(path)` at run time | needs glTFast 6.20.0 (`dev.py exec GameKitCharacters.AddGltfast`); clips are Generic with Loop Time on; names keep `:`; 1 unit = 1 m, faces +Z | EditMode 6 tests, PlayMode 1; `check`, `test` (185), PlayMode (14), `smoke` passed |
+| Godot 4.7.2 | `KitCharacter` (scripts/core/kit_character.gd): `load_scene`, `play(hero, "walk")` | glTF clips import without looping (`play` sets `loop_mode` on the player's own copies of the clips, so two instances keep their own flags); `:` becomes `_` (`mixamorig_Hips`); faces +Z | GUT 5 tests; `check`, `test` (109), `smoke` passed |
+| web-3d (three r186) | src/game/character.ts: `loadCharacter`, `hero.play("walk")`, `hero.update(dt)` | three strips `:` (`mixamorigHips`); `lookAt` turns the model's +Z front to its target | Vitest 6 tests in Node; `check`, `test` (184), `smoke` passed. Drawing a skinned model in the browser is not tested **(verify)** |
+| Unity 6000.6.6f1 | `KitCharacter` (Assets/Scripts/Characters/): `Attach(model, clips).Play("walk")`, `Load(path)` at run time | needs glTFast 6.20.0 (`dev.py exec GameKitCharacters.AddGltfast`); clips are Generic with Loop Time on; names keep `:`; 1 unit = 1 m, faces +Z | EditMode 6 tests, PlayMode 1; `check`, `test` (186), PlayMode (14), `smoke` passed |
 | Unreal 5.8.4 | `kit_character.import_character(glb)` (editor Python, `dev.py exec`) | Interchange: `:` becomes `_`, metres to centimetres (180 cm), front +Z to +Y, Hips the root bone; clips get Loop on, root motion off | `test` ran the check (walk sampled, 56.00 degrees); `check` passed. Playing it in a level **(verify)** |
-| Bevy 0.20.1 | `spawn_character(&mut commands, &server, "models/hero.glb", "idle")` (src/character.rs), set `Character.clip` to switch | no extra Cargo features; names keep `:`; a child half turn makes the +Z front look along `forward()` | `cargo test` headless (no window or GPU); `check`, `test` (137), `smoke` passed. A windowed draw **(verify)** |
+| Bevy 0.20.1 | `spawn_character(&mut commands, &server, "models/hero.glb", "idle")` (src/character.rs), set `Character.clip` to switch | the kit's Cargo.toml adds the `jpeg` feature (Tripo textures are JPEG; Bevy's defaults decode PNG only); names keep `:`; a child half turn makes the +Z front look along `forward()` | `cargo test` headless (no window or GPU); `check`, `test` (138), `smoke` passed. A windowed draw **(verify)** |
 
 **Unity Humanoid (tried, 2026-11-11):** glTFast makes no avatar and imports the clips as Generic. An avatar built in
 script from the Mixamo names (`AvatarBuilder.BuildHumanAvatar`) maps all 22 bones from the A-pose, but glTFast's
@@ -266,8 +266,9 @@ Unity ENGINE.md.
 
 For a 2D game, `render_sprites.py --actions all --manifest assets/dotwork/rendered.assets.json` renders every clip in 8
 (or 4) directions into a Dotwork asset manifest that each engine's Dotwork importer loads as it is (SOP-11). The web,
-web-3d, LÖVE, C++/SDL3, Bevy and RPG Maker MZ importer tests load the golden character's rendered sheet; the LÖVE and
-C++ starters drew it walking. Unity's and Unreal's importers were not run on it **(verify)**.
+web-3d, LÖVE, C++/SDL3, Bevy, RPG Maker MZ, Unity and Unreal importer tests load the golden character's rendered
+sheet; the LÖVE and C++ starters drew it walking. Godot has no manifest importer (it loads Dotwork's own resources):
+a 2D Godot game uses the sheets with the layout `.json` beside each by hand **(verify: not in a test)**.
 
 ## Rig a character
 `make` gives a character as a statue. `rig` gives it a skeleton, skin weights and clips, checks that the rig really
