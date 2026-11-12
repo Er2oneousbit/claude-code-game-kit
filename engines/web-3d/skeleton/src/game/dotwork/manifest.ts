@@ -1,44 +1,60 @@
 // ---------------------------------------------------------------------------
 // manifest.ts
-// Purpose : Reads a Dotwork asset manifest (<pack>.assets.json, spec: tools/art/dotwork/ASSET_MANIFEST.md, version 1)
-//           into plain, engine-ready definitions: clips with per-frame seconds and pivots, sprites with collision,
-//           tilesets with a tile per [atlas, col, row], maps whose terrain layers are already resolved into tiles,
-//           fonts with a glyph map, UI kits with 9-slice margins. No three import: tests run it in Node.
+// Purpose : Reads a Dotwork asset manifest (<pack>.assets.json, spec: tools/art/dotwork/ASSET_MANIFEST.md, version
+//           1.x, 1.1.0 now) into plain, engine-ready definitions: clips with per-frame seconds and pivots, sprites
+//           with collision, tilesets with a tile per [atlas, col, row], maps whose terrain and stamps layers are
+//           already resolved into placed tiles with their top-left in map pixels, fonts with a glyph map, UI kits
+//           with 9-slice margins, and the extra kinds (backgrounds, particles, transitions, normal maps, images)
+//           by name with their data. No three import: tests run it in Node.
 // Usage   : const pack = importManifest(json, "assets/dotwork/town.assets.json", (m) => Log.warn("dotwork", m));
 //           pack.animated.get("hero")!.clips.get("walk_s")!.frames[0].seconds
 //           (src/game/dotwork/library.ts loads the files and builds Three.js objects from these definitions)
 // Notes   : Every path resolves as join(dirname(manifest), base, path) (URLs or file paths, forward slashes). Another
-//           major version is refused with a message naming both; unknown fields are ignored; unknown kinds and the
-//           extra kinds this importer does not build yet (particles, transition, normal_map, image) are skipped
-//           with one warning per kind. `background` is read (layers) but not drawn. A terrain layer resolves with
-//           the spec's blob rule (cellMask below, a port of assetspec.cell_mask): each painted cell takes the first
-//           tile in atlas order of the layer's terrain whose mask is the cell's. corners4 terrain layers name no
-//           tile (spec 1.0 gives the rule for masks only), like the reference loader: place those as tiles layers.
-//           Timing is each frame's own `duration` (seconds; holds included), never fps alone.
+//           major version is refused with a message naming both; unknown fields are ignored; unknown kinds (and
+//           unknown map layer kinds) are skipped with one warning per kind. A terrain layer resolves with the spec's
+//           rules (ports of assetspec.py): the cell's key is cellMask (blob47 the canon mask, sides4 the side bits,
+//           corners4 the corner bits), the candidates are the layer's terrain's tiles with that key (tileKey: the
+//           mask, or the corner bits whose corner holds the tile's terrain) in atlas order, and the pick walks
+//           their probabilities with cellRoll(x, y, layerIndex) (Jenkins' 32-bit hash: every step `>>> 0`, so the
+//           roll is the same number in every engine). A stamps layer places every tile of each stamp. Every placed
+//           cell carries its image's top-left in map pixels (cell centre minus the tile's origin; isometric centres
+//           follow Godot's diamond-down layout, cell (0, 0) at (w/2, h/2)). Timing is each frame's own `duration`
+//           (seconds; holds included), never fps alone.
 //
 // Pseudocode:
 //   check format + major version -> base folder = dirname(manifest) + base
-//   per asset in the spec's import order (sprite, animated_sprite, icon, portrait, font, ui_kit, tileset, map):
+//   per asset in the spec's import order (sprite, animated_sprite, icon, portrait, font, ui_kit, tileset, map, ...):
 //     read the fields it needs (missing required field -> DotworkError naming manifest and asset)
-//     map: tiles layers as placed cells; terrain layers -> cellMask per painted cell -> first tile with that mask
-//   other kinds -> background read, the rest skipped with one warning each
+//     map: tiles layers as placed cells; terrain layers -> cellMask per painted cell -> pick among the tiles with
+//          that key by cellRoll; stamps layers -> every tile of the stamp; each cell -> left/top in map pixels
+//   extra kinds -> read into their own maps (textures listed in pack.images); unknown kinds -> one warning each
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners4 keys, the variant
+//           pick, the isometric centre, stamps layers, left/top per cell, the extra kinds loaded
 // ---------------------------------------------------------------------------
 
 // ---- Constants -----------------------------------------------------------------
 export const FORMAT = "dotwork-assets";
 export const SPEC_MAJOR = 1; // the manifest major version this importer reads
 export const CORE_KINDS = ["animated_sprite", "sprite", "icon", "portrait", "tileset", "map", "font", "ui_kit"] as const;
-/** Extra kinds the importer skips (with one warning each) until a game needs them. */
-export const SKIPPED_KINDS = ["particles", "transition", "normal_map", "image"] as const;
+/** The extra kinds, all loaded (read, textures listed, exposed by name); the game object that uses them is the game's. */
+export const EXTRA_KINDS = ["background", "particles", "transition", "normal_map", "image"] as const;
 /** The spec's import order: a portrait needs its animation, a map its tileset. */
-const IMPORT_ORDER = ["sprite", "animated_sprite", "icon", "portrait", "font", "ui_kit", "tileset", "map", "background"];
+const IMPORT_ORDER = ["sprite", "animated_sprite", "icon", "portrait", "font", "ui_kit", "tileset", "map", ...EXTRA_KINDS];
+const LAYER_KINDS = ["tiles", "terrain", "stamps"] as const;
 
 // 8-neighbour masks, bit order N, NE, E, SE, S, SW, W, NW (bit 0 = N = 1), y down (assetspec.NB8)
 export const NB8: ReadonlyArray<readonly [number, number]> = [
   [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1],
 ];
 const SIDES_ONLY = 1 | 4 | 16 | 64; // N, E, S, W
+const CORNERS_ONLY = 2 | 8 | 32 | 128; // NE, SE, SW, NW
+/** A corners4 tile's corner names per shape and the mask bit of the cell across that corner: on a diamond the top
+ *  corner touches the cell up the screen, which is NW in map coordinates (Godot's get_neighbor_cell, 2026-11-11). */
+export const CORNER_BITS: Record<"square" | "isometric", Record<string, number>> = {
+  square: { top_left: 128, top_right: 2, bottom_right: 8, bottom_left: 32 },
+  isometric: { top: 128, right: 2, bottom: 8, left: 32 },
+};
 export const FLIP_H = 1;
 export const FLIP_V = 2;
 export const TRANSPOSE = 4;
@@ -155,30 +171,40 @@ export interface MapCell {
   col: number;
   row: number;
   flags: number; // FLIP_H | FLIP_V | TRANSPOSE
+  /** The tile image's top-left in map pixels (y down): the cell's centre less the tile's origin (spec "Placing tiles"). */
+  left: number;
+  top: number;
 }
 
 export interface TerrainCell {
   x: number;
   y: number;
-  mask: number;
-  tile: [number, number, number] | null; // [atlas, col, row]
+  /** The cell's key: its blob or sides mask, or on a corners4 set the corner bits (cellMask). */
+  key: number;
+  /** The pick among the terrain's tiles with that key ([atlas, col, row]), null when no tile has it. */
+  tile: [number, number, number] | null;
 }
+
+export type LayerKind = (typeof LAYER_KINDS)[number];
 
 export interface MapLayerDef {
   name: string;
-  kind: "tiles" | "terrain";
+  kind: LayerKind;
+  /** The layer's position in the manifest's layers list (the variant pick's layer index). */
+  index: number;
   opacity: number;
-  /** The cells as given (tiles: [x, y, atlas, col, row, flags?]; terrain: [x, y]). */
+  /** How many cells the manifest gives (tiles: [x, y, atlas, col, row, flags?]; terrain: [x, y]; stamps: [x, y, stamp]). */
   given: number;
-  /** What to draw: placed tiles, and for a terrain layer its resolved cells that have a tile. */
+  /** What to draw: placed tiles (tiles layers as given, terrain layers' cells that have a tile, stamps expanded). */
   cells: MapCell[];
-  /** Terrain layers: every painted cell with its mask and tile (null: no tile has that mask). */
+  /** Terrain layers: every painted cell with its key and pick (by y, then x). */
   terrain: TerrainCell[] | null;
 }
 
 export interface MapDef {
   name: string;
   tileset: string;
+  shape: TilesetDef["shape"];
   size: Point;
   tileSize: Point;
   layers: MapLayerDef[];
@@ -230,10 +256,57 @@ export interface UiKitDef {
   parts: Map<string, UiPartDef>;
 }
 
+export type RepeatAxes = "none" | "x" | "y" | "xy";
+
+export interface BackgroundLayerDef {
+  name: string | null;
+  image: string;
+  size: Point;
+  /** Pixels per second of the art. */
+  velocity: Point;
+  /** The axes the image tiles seamlessly on (RepeatWrapping there). */
+  repeat: RepeatAxes;
+  wobblePx: number;
+  scale: number;
+}
+
 export interface BackgroundDef {
   name: string;
   role: string;
-  layers: { name: string | null; image: string; size: Point; velocity: Point; repeat: string; wobblePx: number; scale: number }[];
+  layers: BackgroundLayerDef[]; // drawn first to last
+}
+
+/** `particles`: a white mask texture and the emitter JSON as Dotwork writes it (amount, lifetime, one_shot, colors ...). */
+export interface ParticlesDef {
+  name: string;
+  texture: string;
+  emitter: Record<string, unknown>;
+}
+
+/** `transition`: a greyscale rule image; a pixel is covered once progress (0..1) passes its grey / 255. */
+export interface TransitionDef {
+  name: string;
+  image: string;
+  size: Point;
+  transition: string; // wipe, iris, spiral ...
+}
+
+/** `normal_map`: an OpenGL-style (green up) normal map and the image URL it lights. */
+export interface NormalMapDef {
+  name: string;
+  image: string;
+  size: Point;
+  target: string;
+  convention: string;
+}
+
+/** `image`: any other shipped PNG. */
+export interface ImageDef {
+  name: string;
+  role: string;
+  image: string;
+  size: Point;
+  pivot: Point | null;
 }
 
 export interface PackDef {
@@ -249,10 +322,17 @@ export interface PackDef {
   fonts: Map<string, FontDef>;
   uiKits: Map<string, UiKitDef>;
   backgrounds: Map<string, BackgroundDef>;
-  /** Assets of kinds this importer does not build: name -> kind. */
+  particles: Map<string, ParticlesDef>;
+  transitions: Map<string, TransitionDef>;
+  normalMaps: Map<string, NormalMapDef>;
+  /** The `image` kind (loose PNGs: logos, sheets, diorama tiles). */
+  pictures: Map<string, ImageDef>;
+  /** Assets of kinds this importer does not know: name -> kind. */
   skipped: Map<string, string>;
   /** Every image URL the imported assets draw from (what a loader fetches). */
   images: Set<string>;
+  /** The images among them that hold data, not colour (normal maps, transition rules): loaded without sRGB. */
+  dataImages: Set<string>;
   warnings: string[];
 }
 
@@ -296,34 +376,103 @@ export function canon(m: number): number {
   return m;
 }
 
-/** The mask a painted cell at (x, y) needs; painted holds "x,y" keys of the same terrain. */
+/** The key a painted cell at (x, y) needs (painted holds "x,y" keys of the same terrain): blob47 the canon mask,
+ *  sides4 the four side bits, corners4 the four corner bits of the canon mask (a corner is the terrain only when
+ *  all four cells meeting there are painted: Godot's Match Corners over a base fill, probed on 4.7.2). */
 export function cellMask(painted: Set<string>, x: number, y: number, mode: TerrainMode = "blob47"): number {
   let m = 0;
   NB8.forEach(([dx, dy], b) => {
     if (painted.has(`${x + dx},${y + dy}`)) m |= 1 << b;
   });
-  return mode === "sides4" ? m & SIDES_ONLY : canon(m);
+  if (mode === "sides4") return m & SIDES_ONLY;
+  if (mode === "corners4") return canon(m) & CORNERS_ONLY;
+  return canon(m);
 }
 
-/** Each painted cell of a terrain layer, in reading order, with its mask and the first tile (atlas order) of the
- *  layer's terrain that has that mask (assetspec.resolve_terrain). */
-export function resolveTerrain(ts: TilesetDef, terrainSet: number, terrain: number, cells: Point[]): TerrainCell[] {
+/** The key a tileset tile answers to: its mask (blob47, sides4), or on corners4 the sum of the corner bits whose
+ *  corner holds the tile's own terrain (assetspec.tile_key); null when it has neither. */
+export function tileKey(tile: TileDef, mode: TerrainMode, shape: TilesetDef["shape"]): number | null {
+  if (mode !== "corners4") return tile.mask;
+  const names = CORNER_BITS[shape] ?? CORNER_BITS.square;
+  const corners = tile.corners;
+  if (!corners) return null;
+  const have = Object.keys(corners).sort().join(",");
+  if (have !== Object.keys(names).sort().join(",")) return null;
+  let key = 0;
+  for (const [name, bit] of Object.entries(names)) if (corners[name] === tile.terrain) key += bit;
+  return key;
+}
+
+// ---- The variant pick (a port of assetspec.hash32 / cell_roll / pick_variant) ----------------------
+/** Bob Jenkins' 6-shift 32-bit integer hash: shifts, adds and xors only, every step brought back to an unsigned
+ *  32-bit value with `>>> 0` (JS bit ops work on int32; `k << 12` of a 32-bit value overflows, so the adds are
+ *  done in doubles, exact below 2^53, and masked by `>>> 0`). */
+export function hash32(k: number): number {
+  k = k >>> 0;
+  k = (k + 0x7ED55D16 + (k << 12 >>> 0)) >>> 0;
+  k = (k ^ 0xC761C23C ^ (k >>> 19)) >>> 0;
+  k = (k + 0x165667B1 + (k << 5 >>> 0)) >>> 0;
+  k = ((k + 0xD3A2646C) ^ (k << 9 >>> 0)) >>> 0;
+  k = (k + 0xFD7046C5 + (k << 3 >>> 0)) >>> 0;
+  return (k ^ 0xB55A4F09 ^ (k >>> 16)) >>> 0;
+}
+
+/** The roll in [0, 1) that picks a terrain cell's variant, from the cell and its layer's index in the map's layers
+ *  list: the same number in every engine (coordinates wrap at 16 bits). */
+export function cellRoll(x: number, y: number, layer: number): number {
+  const cell = (((x & 0xFFFF) << 16) | (y & 0xFFFF)) >>> 0;
+  return hash32((hash32(cell) + layer) >>> 0) / 4294967296;
+}
+
+/** Walks the candidates ([weight, value] in atlas order) subtracting weights until the roll's span; the first when
+ *  every weight is 0 (a weight 0 tile is never picked otherwise). */
+export function pickVariant<T>(candidates: [number, T][], roll: number): T {
+  const total = candidates.reduce((s, [w]) => s + w, 0);
+  if (total <= 0) return candidates[0][1];
+  let u = roll * total;
+  for (const [w, v] of candidates) {
+    u -= w;
+    if (u < 0) return v;
+  }
+  return candidates[candidates.length - 1][1];
+}
+
+/** Each painted cell of a terrain layer (by y, then x) with its key and pick: among the layer's terrain's tiles
+ *  with that key, in atlas order (atlases by id, tiles in list order), by probability with cellRoll(x, y,
+ *  layerIndex) (assetspec.resolve_terrain). */
+export function resolveTerrain(ts: TilesetDef, terrainSet: number, terrain: number, cells: Point[], layerIndex = 0): TerrainCell[] {
   const set = ts.terrainSets.find((s) => s.id === terrainSet);
   if (!set) throw new DotworkError(`tileset ${ts.name}: no terrain set ${terrainSet}`);
-  const byMask = new Map<number, [number, number, number]>();
-  for (const at of ts.atlases) {
+  const byKey = new Map<number, [number, [number, number, number]][]>();
+  for (const at of [...ts.atlases].sort((a, b) => a.id - b.id)) {
     for (const t of at.tiles) {
-      if (t.terrain === terrain && (t.terrainSet ?? 0) === terrainSet && t.mask !== null && !byMask.has(t.mask)) {
-        byMask.set(t.mask, [at.id, t.col, t.row]);
-      }
+      if (t.terrain !== terrain || (t.terrainSet ?? 0) !== terrainSet) continue;
+      const k = tileKey(t, set.mode, ts.shape);
+      if (k === null) continue;
+      if (!byKey.has(k)) byKey.set(k, []);
+      byKey.get(k)!.push([t.probability, [at.id, t.col, t.row]]);
     }
   }
   const painted = new Set(cells.map(([x, y]) => `${x},${y}`));
   const order = [...painted].map((k) => k.split(",").map(Number) as Point).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
   return order.map(([x, y]) => {
-    const mask = cellMask(painted, x, y, set.mode);
-    return { x, y, mask, tile: byMask.get(mask) ?? null };
+    const key = cellMask(painted, x, y, set.mode);
+    const cands = byKey.get(key);
+    return { x, y, key, tile: cands ? pickVariant(cands, cellRoll(x, y, layerIndex)) : null };
   });
+}
+
+/** The tiles of each [x, y, stamp] cell of a stamps layer as [x, y, atlas, col, row], tile j of a stamp w cells wide
+ *  at (x + j % w, y + floor(j / w)) from its top-left cell, in the order of the layer's cells (assetspec.expand_stamps). */
+export function expandStamps(ts: TilesetDef, cells: number[][], where: string): [number, number, number, number, number][] {
+  const out: [number, number, number, number, number][] = [];
+  for (const c of cells) {
+    const st = ts.stamps[c[2]];
+    if (!st) throw new DotworkError(`${where}: cell [${c[0]}, ${c[1]}] names stamp ${c[2]}, which ${ts.name} does not have (${ts.stamps.length} stamp(s))`);
+    const w = st.size[0];
+    st.tiles.forEach(([atlas, col, row], j) => out.push([c[0] + (j % w), c[1] + Math.floor(j / w), atlas, col, row]));
+  }
+  return out;
 }
 
 // ---- Geometry helpers (shared by the Three.js builders and the tests) -------------------
@@ -352,11 +501,26 @@ export function tileAnimCol(tile: TileDef, t: number): number {
   return tile.col + (Math.floor(t * tile.anim.fps) % tile.anim.frames);
 }
 
-/** Centre of map cell (x, y) in map pixels (y down): squares in rows, isometric diamond-down (Godot's layout). */
+/** Centre of map cell (x, y) in map pixels (y down): squares in rows, isometric diamonds in Godot's diamond-down
+ *  layout (x runs down-right, y down-left, cell (0, 0) at (w/2, h/2): TileMapLayer.map_to_local on 4.7.2). */
 export function cellCentre(shape: TilesetDef["shape"], tileSize: Point, x: number, y: number): Point {
   const [w, h] = tileSize;
-  if (shape === "isometric") return [((x - y) * w) / 2, ((x + y + 1) * h) / 2];
-  return [x * w + w / 2, y * h + h / 2];
+  if (shape === "isometric") return [((x - y + 1) * w) / 2, ((x + y + 1) * h) / 2];
+  return [(x + 0.5) * w, (y + 0.5) * h];
+}
+
+/** The image point drawn on the cell centre: the tile's own origin, else the centre of the atlas tile. */
+export function tileOrigin(tile: TileDef | undefined, atlas: AtlasDef): Point {
+  return tile?.origin ?? [atlas.tileSize[0] / 2, atlas.tileSize[1] / 2];
+}
+
+/** Every cell's centre of a map as [x, y, cx, cy], y outer then x (the spec's `centres`). */
+export function mapCentres(map: MapDef): [number, number, number, number][] {
+  const out: [number, number, number, number][] = [];
+  for (let y = 0; y < map.size[1]; y++) {
+    for (let x = 0; x < map.size[0]; x++) out.push([x, y, ...cellCentre(map.shape, map.tileSize, x, y)]);
+  }
+  return out;
 }
 
 /** Where a clip's time lands: the frame index and whether a one-shot clip has finished. */
@@ -463,19 +627,22 @@ export function importManifest(doc: unknown, manifestUrl: string, warn: (msg: st
   const pack: PackDef = {
     pack: String(d.pack ?? where), version, url: manifestUrl,
     animated: new Map(), sprites: new Map(), icons: new Map(), portraits: new Map(), tilesets: new Map(), maps: new Map(),
-    fonts: new Map(), uiKits: new Map(), backgrounds: new Map(), skipped: new Map(), images: new Set(), warnings: [],
+    fonts: new Map(), uiKits: new Map(), backgrounds: new Map(), particles: new Map(), transitions: new Map(), normalMaps: new Map(),
+    pictures: new Map(), skipped: new Map(), images: new Set(), dataImages: new Set(), warnings: [],
   };
   const say = (msg: string) => {
     pack.warnings.push(msg);
     warn(msg);
   };
-  const url = (p: unknown, at: string) => {
-    const u = normalizePath(`${root}/${checkedPath(p, at)}`);
-    return u;
-  };
+  const url = (p: unknown, at: string) => normalizePath(`${root}/${checkedPath(p, at)}`);
   const image = (p: unknown, at: string) => {
     const u = url(p, at);
     pack.images.add(u);
+    return u;
+  };
+  const dataImage = (p: unknown, at: string) => {
+    const u = image(p, at);
+    pack.dataImages.add(u);
     return u;
   };
 
@@ -582,9 +749,31 @@ export function importManifest(doc: unknown, manifestUrl: string, warn: (msg: st
           name, role: String(a.role ?? ""),
           layers: (list(a.layers, `${at}.layers`) as Obj[]).map((L, i) => ({
             name: L.name ?? null, image: image(L.image, `${at}.layers[${i}]`), size: pair(L.size, `${at}.layers[${i}].size`),
-            velocity: pair(L.velocity ?? [0, 0], `${at}.layers[${i}].velocity`), repeat: String(L.repeat ?? "none"),
+            velocity: pair(L.velocity ?? [0, 0], `${at}.layers[${i}].velocity`),
+            repeat: (["none", "x", "y", "xy"].includes(L.repeat) ? L.repeat : "none") as RepeatAxes,
             wobblePx: typeof L.wobble_px === "number" ? L.wobble_px : 0, scale: typeof L.scale === "number" ? L.scale : 1,
           })),
+        });
+        break;
+      case "particles":
+        pack.particles.set(name, {
+          name, texture: image(a.texture, `${at}.texture`),
+          emitter: a.emitter && typeof a.emitter === "object" && !Array.isArray(a.emitter) ? { ...(a.emitter as Record<string, unknown>) } : {},
+        });
+        break;
+      case "transition":
+        pack.transitions.set(name, { name, image: dataImage(a.image, at), size: pair(a.size, `${at}.size`), transition: String(a.transition ?? "") });
+        break;
+      case "normal_map":
+        pack.normalMaps.set(name, {
+          name, image: dataImage(a.image, at), size: pair(a.size, `${at}.size`), target: image(a.target, `${at}.target`),
+          convention: String(a.convention ?? "opengl"),
+        });
+        break;
+      case "image":
+        pack.pictures.set(name, {
+          name, role: String(a.role ?? ""), image: image(a.image, at), size: pair(a.size, `${at}.size`),
+          pivot: a.pivot ? pair(a.pivot, `${at}.pivot`) : null,
         });
         break;
       default:
@@ -592,11 +781,7 @@ export function importManifest(doc: unknown, manifestUrl: string, warn: (msg: st
         skippedKinds.set(kind, (skippedKinds.get(kind) ?? 0) + 1);
     }
   }
-  for (const [kind, n] of skippedKinds) {
-    const why = (SKIPPED_KINDS as readonly string[]).includes(kind) ? "an extra kind this importer does not build yet" : "a kind this importer does not know (a newer minor version?)";
-    say(`${where}: skipped ${n} ${kind} asset(s): ${why}`);
-  }
-  if (pack.backgrounds.size) say(`${where}: ${pack.backgrounds.size} background(s) read but not drawn (an extra kind: draw the layers in your game)`);
+  for (const [kind, n] of skippedKinds) say(`${where}: skipped ${n} ${kind} asset(s): a kind this importer does not know (a newer minor version?)`);
   return pack;
 }
 
@@ -640,30 +825,44 @@ function readMap(a: Obj, at: string, pack: PackDef, say: (msg: string) => void):
   const tsName = String(a.tileset ?? "");
   const ts = pack.tilesets.get(tsName);
   if (!ts) throw new DotworkError(`${at}: tileset "${tsName}" is not in this manifest`);
+  const tileSize = pair(a.tile_size ?? ts.tileSize, `${at}.tile_size`);
   const layers: MapLayerDef[] = [];
-  for (const L of list(a.layers, `${at}.layers`) as Obj[]) {
+  const unknownKinds = new Map<string, number>();
+  // a placed cell: the tile's image top-left is the cell centre less the tile's origin (spec "Placing tiles")
+  const place = (x: number, y: number, atlas: number, col: number, row: number, flags: number, lw: string): MapCell => {
+    const tile = ts.tiles.get(`${atlas},${col},${row}`);
+    const at = ts.atlases.find((A) => A.id === atlas);
+    if (!tile || !at) throw new DotworkError(`${lw}: cell [${x}, ${y}] names tile [${atlas}, ${col}, ${row}], which ${tsName} does not have`);
+    const [cx, cy] = cellCentre(ts.shape, tileSize, x, y);
+    const [ox, oy] = tileOrigin(tile, at);
+    return { x, y, atlas, col, row, flags, left: cx - ox, top: cy - oy };
+  };
+  (list(a.layers, `${at}.layers`) as Obj[]).forEach((L, index) => {
     const lw = `${at}.${L?.name}`;
+    const kind = String(L.kind ?? "tiles");
+    if (!(LAYER_KINDS as readonly string[]).includes(kind)) {
+      unknownKinds.set(kind, (unknownKinds.get(kind) ?? 0) + 1);
+      return;
+    }
     const cells = list(L.cells, `${lw}.cells`) as number[][];
     const layer: MapLayerDef = {
-      name: String(L.name), kind: L.kind === "terrain" ? "terrain" : "tiles", opacity: typeof L.opacity === "number" ? L.opacity : 1,
+      name: String(L.name), kind: kind as LayerKind, index, opacity: typeof L.opacity === "number" ? L.opacity : 1,
       given: cells.length, cells: [], terrain: null,
     };
     if (layer.kind === "tiles") {
-      for (const c of cells) {
-        if (!ts.tiles.has(`${c[2]},${c[3]},${c[4]}`)) throw new DotworkError(`${lw}: cell [${c.slice(0, 2)}] names tile [${c.slice(2, 5)}], which ${tsName} does not have`);
-        layer.cells.push({ x: c[0], y: c[1], atlas: c[2], col: c[3], row: c[4], flags: c[5] ?? 0 });
-      }
+      for (const c of cells) layer.cells.push(place(c[0], c[1], c[2], c[3], c[4], c[5] ?? 0, lw));
+    } else if (layer.kind === "stamps") {
+      for (const c of expandStamps(ts, cells, lw)) layer.cells.push(place(c[0], c[1], c[2], c[3], c[4], 0, lw));
     } else {
       const set = num(L.terrain_set ?? 0, lw), terrain = num(L.terrain, `${lw}.terrain`);
-      const mode = ts.terrainSets.find((s) => s.id === set)?.mode;
-      layer.terrain = resolveTerrain(ts, set, terrain, cells.map((c) => [c[0], c[1]] as Point));
+      layer.terrain = resolveTerrain(ts, set, terrain, cells.map((c) => [c[0], c[1]] as Point), index);
       const none = layer.terrain.filter((c) => !c.tile).length;
-      if (mode === "corners4") say(`${lw}: a corners4 terrain layer is not resolved (spec 1.0 has the rule for masks only): place it as a tiles layer`);
-      else if (none) say(`${lw}: ${none} cell(s) have a mask no tile of terrain ${terrain} carries (left empty)`);
-      for (const c of layer.terrain) if (c.tile) layer.cells.push({ x: c.x, y: c.y, atlas: c.tile[0], col: c.tile[1], row: c.tile[2], flags: 0 });
+      if (none) say(`${lw}: ${none} cell(s) have a key no tile of terrain ${terrain} carries (left empty; the validator refuses such a map)`);
+      for (const c of layer.terrain) if (c.tile) layer.cells.push(place(c.x, c.y, c.tile[0], c.tile[1], c.tile[2], 0, lw));
     }
     layers.push(layer);
-  }
+  });
+  for (const [kind, n] of unknownKinds) say(`${at}: skipped ${n} layer(s) of kind "${kind}" (this importer knows ${LAYER_KINDS.join(", ")})`);
   const objects: MapDef["objects"] = [];
   for (const o of list(a.objects, `${at}.objects`) as Obj[]) {
     const asset = String(o.asset);
@@ -673,7 +872,7 @@ function readMap(a: Obj, at: string, pack: PackDef, say: (msg: string) => void):
     }
     objects.push({ asset, x: num(o.x, `${at}.objects`), y: num(o.y, `${at}.objects`) });
   }
-  return { name: String(a.name), tileset: tsName, size: pair(a.size, `${at}.size`), tileSize: pair(a.tile_size ?? ts.tileSize, `${at}.tile_size`), layers, objects };
+  return { name: String(a.name), tileset: tsName, shape: ts.shape, size: pair(a.size, `${at}.size`), tileSize, layers, objects };
 }
 
 // {{FOOTER}}

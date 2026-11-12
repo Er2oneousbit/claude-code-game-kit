@@ -66,13 +66,32 @@ dist/               production build (git-ignored)
 - **Rules in `src/core`, stepped at a fixed rate,** make the whole game playable in a unit test: a scenario run in the browser
   (`?autoplay`) then replays exactly in Vitest (the kit repo's Courier Dash example does this).
 
-- **Dotwork art** (`public/assets/dotwork/<pack>.assets.json`, spec `tools/art/dotwork/ASSET_MANIFEST.md`): in a world's
-  `load()`, `const lib = await DotworkLibrary.load(DOTWORK_MANIFESTS, progress)` (src/game/dotwork/), then
-  `lib.animated("hero", { ppu })` (`playDirection("walk", "e")`), `lib.sprite`, `lib.map`, `lib.text`, `lib.icon`,
-  `lib.portrait`, `lib.nineSlice`; call `update(dt, camera)` on each every frame. The diorama look: one world unit per
-  map tile, tiles flat on the ground (map y is +Z), sprites as billboards turning around y, nearest filtering, alphaTest.
-  `dev.py test` checks every manifest's files (tests/dotwork.manifests.test.ts) and `smoke` loads them all in the
-  browser before BOOT_OK. Restart `dev.py run` after Dotwork writes a new pack (the list is made at build time).
+- **Dotwork art** (`public/assets/dotwork/<pack>.assets.json`, spec `tools/art/dotwork/ASSET_MANIFEST.md` 1.1.0; the
+  importer reads any 1.x): in a world's `load()`, `const lib = await DotworkLibrary.load(DOTWORK_MANIFESTS, progress)`
+  (src/game/dotwork/), then `lib.animated("hero", { ppu })` (`playDirection("walk", "e")`), `lib.sprite`, `lib.map`,
+  `lib.text`, `lib.icon`, `lib.portrait`, `lib.nineSlice`; call `update(dt, camera)` on each every frame. The diorama
+  look: one world unit per map tile, tiles flat on the ground (map y is +Z), sprites as billboards turning around y,
+  nearest filtering, alphaTest.
+  - **Maps** are resolved by the importer (`manifest.ts`, no Three.js): a `tiles` layer as given, a `terrain` layer by
+    the spec's rules (`cellMask` for blob47, sides4 and corners4, the key match, the variant pick by `cellRoll`, so a
+    cell shows the same variant as every other engine), a `stamps` layer expanded into its tiles. Every placed cell
+    carries its image's top-left in map pixels (`left`, `top`: the cell centre less the tile's origin); an isometric
+    map's centres follow Godot's diamond-down layout (cell (0, 0) at (w/2, h/2)) and the diamonds lie flat on the
+    ground at those pixels over the map's unit, so a raised block (its own `origin`) stands on its cell. A terrain cell
+    no tile answers to is left empty with one warning per layer (the validator refuses such a map); a layer of an
+    unknown kind is skipped with one warning.
+  - **The extra kinds** are loaded by name: `lib.background(name)` (a texture per layer, `RepeatWrapping` on its
+    `repeat` axes, with the layer's velocity and size), `lib.particles(name)` (the mask texture and the emitter JSON),
+    `lib.transition(name)` (the rule texture and the transition's kind), `lib.normalMap(name)` (the map and its
+    target's texture) and `lib.image(name)` (a quad). `lib.sprite(name, { lit: true })` gives the sprite a
+    `MeshLambertMaterial` with the pack's normal map for its image as `normalMap` (OpenGL style, three's own
+    convention; it needs a light in the scene). Normal maps and transition rules load without sRGB (`NoColorSpace`),
+    so a shader reads their bytes as drawn. Drawing a scrolling layer, an emitter or a wipe is the game's job
+    (`tools/shaders/` has the dissolve and the transition threshold).
+  - `dev.py test` checks the importer against `data/golden/dotwork/expected.json` (tests/dotwork.golden.test.ts: the
+    three maps' terrain, placed cells and centres, the hash vectors) and every manifest's files
+    (tests/dotwork.manifests.test.ts); `smoke` loads them all in the browser before BOOT_OK. Restart `dev.py run`
+    after Dotwork writes a new pack (the list is made at build time).
 
 - **Shaders:** `kitMaterial("toon_rim", { albedo: [0.2, 0.6, 0.9] }, texture)` (src/shaders/kitMaterial.ts) returns a
   ShaderMaterial for any UV-mapped mesh (a sprite plane, a full-screen quad for post effects, a model); set
