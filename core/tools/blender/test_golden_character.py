@@ -7,12 +7,16 @@
 #           clips and their lengths, that every clip loops (last key = first key), that walk really swings the
 #           moving bone (decoded from the key values, not from accessor min/max, which glTF only requires on time),
 #           the height, no textures, and the size budget. With Blender or bpy it also rebuilds the character into
-#           a temp folder and checks that the committed file is current.
+#           a temp folder and checks that the committed file is current (by what the kit built: nodes, joints,
+#           triangles, clips and their lengths; not by how the exporter packed it, which differs between Blender
+#           4.2 and 5.x, #292).
 # Usage   : python tools/blender/test_golden_character.py [-v]
 #           GOLDEN_CHARACTER_BLENDER=skip|bpy|<blender.exe> picks the rebuild (default: BLENDER_BIN, then Blender on
 #           PATH, then the bpy module; none found: that one test is skipped)
 # Exit    : 0 all tests pass, 1 a test failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the rebuild check compares the character, not the
+#           exporter's accessor count (#292)
 # ---------------------------------------------------------------------------
 import json
 import math
@@ -163,9 +167,25 @@ class GoldenCharacter(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, (proc.stdout + proc.stderr)[-800:])
             got = json.loads((Path(tmp) / "expected.json").read_text(encoding="utf-8"))
             self.assertEqual(got, self.exp, "the committed expected.json is stale: rebuild with golden_character.py")
-            doc, _ = read_glb(out)
-            self.assertEqual(len(doc["accessors"]), len(self.doc["accessors"]),
+            doc, binary = read_glb(out)
+            # what the kit controls, not how an exporter packs it: Blender 4.2 writes 157 accessors for the same
+            # character that 5.x writes in 89 (#292), so the accessor count is no fingerprint
+            self.assertEqual(shape_of(doc, binary), shape_of(self.doc, self.bin),
                              "the committed character.glb is stale: rebuild with golden_character.py")
+
+
+def shape_of(doc, binary):
+    """The character as the kit built it: nodes, joints, triangles, clips and their lengths (the same on every Blender
+    that exports it)."""
+    tris = sum(doc["accessors"][p["indices"]]["count"] // 3 for m in doc["meshes"] for p in m["primitives"])
+    clips = {}
+    for a in doc["animations"]:
+        times = [floats(doc, binary, s["input"]) for s in a["samplers"]]
+        clips[a["name"]] = (round(min(t[0] for t in times), 4), round(max(t[-1] for t in times), 4),
+                            len(a["channels"]))
+    return {"nodes": sorted(n.get("name", "") for n in doc["nodes"]),
+            "joints": sorted(doc["nodes"][j]["name"] for j in doc["skins"][0]["joints"]),   # 4.2 orders them differently
+            "triangles": tris, "clips": clips}
 
 
 if __name__ == "__main__":

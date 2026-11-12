@@ -10,6 +10,8 @@
 #           Inside Blender:       blender -b --python-exit-code 1 -P tools/blender/test_prep_export.py -- [--keep] [--debug]
 # Exit    : 0 all cases pass, 1 some case failed, 2 bpy not available
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the exam ends through bpy_common with the bpy
+#           module (#292: its own exit crashed after the fixtures' glTF export)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -224,4 +226,11 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    code = main()
+    try:
+        import bpy
+        sys.path.insert(0, str(HERE))
+        import bpy_common
+        bpy_common.end_process(bpy, code)   # the fixtures were exported with the bpy module: a plain exit crashes (#292)
+    except ImportError:
+        sys.exit(code)

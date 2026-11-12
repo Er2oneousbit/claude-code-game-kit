@@ -21,7 +21,10 @@
 #           (render_sprites.py drops that duplicate for a looping sprite clip).
 #           expected.json records what engine tests compare: bone names, root bone, clip names and lengths, the
 #           bone that moves most in walk, height. The exam (test_golden_character.py) checks the .glb against it.
+#           With the bpy module on Windows the process is ended through bpy_common.end_process (#292): a plain exit
+#           after a glTF export crashed (bpy 4.2) and hid the exit code.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the bpy module's exit crash (#292)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -354,5 +357,16 @@ def main():
         return 1
 
 
+def exit_with(code):
+    """sys.exit, or with the bpy module on Windows the process end that does not crash after a glTF export (#292)."""
+    try:
+        import bpy
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import bpy_common
+    except ImportError:
+        sys.exit(code)
+    bpy_common.end_process(bpy, code)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    exit_with(main())
