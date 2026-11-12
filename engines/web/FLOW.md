@@ -125,23 +125,42 @@ Dotwork (`tools/art/dotwork/`, `/dotwork`) makes pixel art on your GPU. A web ga
 its PNGs under `public/assets/art/` and one manifest, `public/assets/dotwork/<pack>.assets.json` (the format:
 `tools/art/dotwork/ASSET_MANIFEST.md`). A pack spec that names a font by path (`tools/art/dotwork/examples/uikit.json`)
 gives it relative to the assets folder ("art/ui/fonts/font_dialogue.fnt"), so the same spec works here.
-- **Loader:** `src/game/dotworkPlan.ts` (no Phaser: the plan, the blob rule for terrain layers, bitmap font data)
-  and `src/game/dotwork.ts` (Phaser). In a scene: `queueDotwork(this)` in `preload()`, then in `create()` with
-  `const pack = dotworkPack()`: `addAnimatedSprite(this, pack, "hero", x, y, "walk_s")`, `playDirection(sprite, pack,
-  "hero", "walk", "e")`, `addSprite` (a prop, its pivot on x, y, its collision rects in world pixels), `addMap` (a
-  tilemap: terrain layers resolved, animated tiles, flips, objects), `addCollisionBodies` (static Arcade bodies; the
-  scene needs `physics: { arcade: {} }`), `addText` (a bitmap font label), `addNineSlice` (a UI kit part).
+- **Loader:** `src/game/dotworkPlan.ts` (no Phaser: the plan, the terrain rules, the variant pick, where every tile
+  lands, bitmap font data) and `src/game/dotwork.ts` (Phaser). In a scene: `queueDotwork(this)` in `preload()`, then
+  in `create()` with `const pack = dotworkPack()`: `addAnimatedSprite(this, pack, "hero", x, y, "walk_s")`,
+  `playDirection(sprite, pack, "hero", "walk", "e")`, `addSprite` (a prop, its pivot on x, y, its collision rects in
+  world pixels), `addMap` (a tilemap: terrain layers resolved, stamps expanded, animated tiles, flips, objects),
+  `addCollisionBodies` (static Arcade bodies; the scene needs `physics: { arcade: {} }`), `addText` (a bitmap font
+  label), `addNineSlice` (a UI kit part), `addBackground` (its layers; call its `update(delta)` from the scene's
+  `update` to scroll them), `addParticles` (an emitter from the `particles` asset's texture and emitter JSON),
+  `addImage` (a plain `image`).
+- **Maps (spec 1.1.0):** a `terrain` layer resolves every cell with the spec's rule (`blob47`, `sides4` and
+  `corners4` keys from `cellMask`; among the tiles with that key, the variant is picked by probability with
+  `cellRoll(x, y, layer index)`, so every engine draws the same variant), a `stamps` layer places every tile of each
+  stamp, and a cell with no tile for its key stays empty with one warning per layer. Every tile's image lands at the
+  spec's point, the cell centre less the tile's origin: Phaser's own layouts, rows for `square` and
+  `((x - y) w / 2, (x + y) h / 2)` for `isometric`, are the spec's diamond-down layout for a cell-sized tile, and
+  the importer writes the plan's top-left into each tile's `pixelX`, `pixelY` so a taller iso block (an atlas with
+  a bigger `tile_size`, or a tile with its own `origin`) stands on its cell too (`dotworkVerify.ts` checks Phaser's
+  `tileToWorldXY` agrees with the plan where it should). Phaser draws a layer's tiles by row then column, the spec's
+  order for terrain layers; a `tiles` layer that lists its cells in another order draws in row order here.
 - **What Phaser gets:** frames named `<pack>/<asset>/<clip>/<i>` with the pivot as their origin, animations keyed
   `<pack>/<asset>/<clip>` with each frame's own duration (Phaser 4 lets a frame's duration replace the clip's rate;
   Phaser 3 added it, so tutorials disagree), nearest filtering. Fonts and UI kit images are already drawn at their
   `scale`: draw them at 1 (on a camera without zoom), not zoomed with the world.
-- **Not drawn yet** (a warning names each, their files are still checked): `background`, `particles`, `transition`,
-  `normal_map`, `image`. Glyphs on a font's second page are left out (Phaser draws a bitmap font from one texture).
+- **The extra kinds** are loaded and exposed by name on the pack (`backgrounds`, `particles`, `transitions`,
+  `normalMaps`, `images`): a background layer with `repeat` becomes a `TileSprite` that scrolls by its `velocity`
+  (whole pixels), the others images, drawn at the layer's `scale`; a `normal_map` loads with its target
+  (`load.image(key, [url, normal])`), so `this.lights.enable()` plus `setLighting(true)` on any object drawn with
+  the target's texture lights it (the shader recipes under `tools/shaders/` cover the rest); a `transition` and an
+  `image` are textures (`plan.transitions.get(name).texture`, `addImage`). Glyphs on a font's second page are left
+  out (Phaser draws a bitmap font from one texture).
 - **Checks:** `tests/dotwork.golden.test.ts` compares the importer with `data/golden/dotwork/expected.json` (the
-  reference every engine matches); `tests/dotwork.assets.test.ts` checks every manifest of the game on disk (missing
-  files, rects outside their PNGs, terrain cells with no tile); in a dev server and in `smoke`, every manifest is
-  loaded in Phaser before the title screen (`src/game/dotworkVerify.ts`): a broken asset is a console error, and
-  `smoke --until DOTWORK_VERIFY_OK` proves it ran.
+  reference every engine matches: clips, sprites, the three maps' `terrain`, `placed` and `centres`) and holds the
+  spec's hash and roll vectors; `tests/dotwork.assets.test.ts` checks every manifest of the game on disk (missing
+  files, rects outside their PNGs, terrain cells with no tile, a normal map not its target's size); in a dev server
+  and in `smoke`, every manifest is loaded in Phaser before the title screen (`src/game/dotworkVerify.ts`): a broken
+  asset is a console error, and `smoke --until DOTWORK_VERIFY_OK` proves it ran.
 - **The starter scene** (`MainScene.ts`) shows the first map, a character walking (it turns at the prop's box), the
   first prop, a 9-slice window and a label in the first font when the game has Dotwork art, and the bouncing box
   otherwise.

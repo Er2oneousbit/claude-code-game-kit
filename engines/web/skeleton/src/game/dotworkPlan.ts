@@ -18,11 +18,19 @@
 //             animated_sprite: one frame per manifest frame (named <pack>/<asset>/<clip>/<i>, in the sheet or in the
 //               frame's own PNG), origin = pivot / frame size, each frame keeps its own duration in ms
 //             tileset: atlases get consecutive Phaser tile indexes (firstgid), each tile keeps collision and anim
-//             map: a tiles layer places its cells as they are; a terrain layer gets each cell's mask from the blob
-//               rule (cellMask, a port of assetspec.cell_mask) and the first tile, in atlas order, with that mask
+//             map: a tiles layer places its cells as they are; a stamps layer places every tile of each stamp (tile j
+//               at (x + j % w, y + j // w)); a terrain layer gets each cell's key from cellMask (a port of
+//               assetspec.cell_mask: the blob mask, the four sides, or the four corner bits) and picks among the
+//               tiles of its terrain with that key by probability with cellRoll(x, y, layer index); every placed
+//               cell gets its image's top-left in map pixels: the cell centre (square rows, or the diamond-down
+//               isometric layout) less the tile's origin (ASSET_MANIFEST.md "Placing tiles")
 //             font: Phaser's BitmapFont data built from `chars` (Phaser parses BMFont XML; Dotwork writes the text
 //               format, so the data is built here instead of parsing either file)
+//             extra kinds: background, particles, transition, normal_map and image are planned and exposed by name
+//               (a normal map rides on its target's texture); unknown kinds are skipped with one warning each
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners4 keys, the variant
+//           pick, stamps layers, cell centres and placement, the extra kinds loaded
 // ---------------------------------------------------------------------------
 
 export const FORMAT = "dotwork-assets";
@@ -35,6 +43,14 @@ const TEXTURE_PREFIX = "dotwork:"; // Phaser texture key = this + the resolved U
 // Masks: one bit per neighbour, N NE E SE S SW W NW (bit 0 is N), y down (ASSET_MANIFEST.md "Conventions")
 const NB8: ReadonlyArray<readonly [number, number]> = [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]];
 const SIDES_ONLY = 1 | 4 | 16 | 64;
+const CORNERS_ONLY = 2 | 8 | 32 | 128;
+// a corners4 tile's corner names -> the mask bit of the cell across that corner (a diamond's top corner touches the
+// cell up the screen, NW in map coordinates: Godot's get_neighbor_cell on the diamond-down layout, spec 1.1.0)
+const CORNER_BITS: Record<string, Record<string, number>> = {
+  square: { top_left: 128, top_right: 2, bottom_right: 8, bottom_left: 32 },
+  isometric: { top: 128, right: 2, bottom: 8, left: 32 },
+};
+const ROLL_DIVISOR = 4294967296; // 2^32: a roll is hash32 / this, in [0, 1)
 
 export type Rect = [number, number, number, number];
 export type Pt = [number, number];
@@ -52,13 +68,77 @@ export function canon(m: number): number {
 
 export const cellKey = (x: number, y: number): string => `${x},${y}`;
 
-/** The mask a painted cell needs, from the set of painted cells of the same terrain (keys from cellKey). */
+/** The key a painted cell needs, from the set of painted cells of the same terrain (keys from cellKey): the blob
+ *  mask (blob47), the four side bits (sides4), or the four corner bits of the blob mask (corners4: a corner is the
+ *  terrain only when all four cells meeting there are painted). */
 export function cellMask(painted: ReadonlySet<string>, x: number, y: number, mode = "blob47"): number {
   let m = 0;
   NB8.forEach(([dx, dy], b) => {
     if (painted.has(cellKey(x + dx, y + dy))) m |= 1 << b;
   });
-  return mode === "sides4" ? m & SIDES_ONLY : canon(m);
+  if (mode === "sides4") return m & SIDES_ONLY;
+  if (mode === "corners4") return canon(m) & CORNERS_ONLY;
+  return canon(m);
+}
+
+/** The key a tileset tile answers to: its mask (blob47, sides4), or the sum of the corner bits whose corner holds the
+ *  tile's own terrain (corners4, names per shape); null when it has neither. */
+export function tileKey(tile: Pick<PlanTile, "mask" | "corners" | "terrain">, mode: string, shape: string): number | null {
+  if (mode !== "corners4") return tile.mask;
+  if (!tile.corners) return null;
+  const names = CORNER_BITS[shape] ?? CORNER_BITS.square;
+  const have = Object.keys(tile.corners).sort().join(",");
+  if (have !== Object.keys(names).sort().join(",")) return null;
+  let key = 0;
+  for (const [name, bit] of Object.entries(names)) if (tile.corners[name] === tile.terrain) key += bit;
+  return key;
+}
+
+// ---- the variant pick (ASSET_MANIFEST.md "Variants: the probability pick", ported step for step) ----------
+/** Bob Jenkins' 32-bit integer hash: only shifts, adds and xors, every step kept to 32 bits. JS shifts work on
+ *  int32, so each `<< n` gets a `>>> 0` (the low 32 bits, what Python's `& 0xFFFFFFFF` keeps); a sum of three
+ *  32-bit values is exact in a double and `>>> 0` folds it back to 32 bits. */
+export function hash32(k: number): number {
+  k = k >>> 0;
+  k = (k + 0x7ed55d16 + ((k << 12) >>> 0)) >>> 0;
+  k = (k ^ 0xc761c23c ^ (k >>> 19)) >>> 0;
+  k = (k + 0x165667b1 + ((k << 5) >>> 0)) >>> 0;
+  k = (((k + 0xd3a2646c) >>> 0) ^ ((k << 9) >>> 0)) >>> 0;
+  k = (k + 0xfd7046c5 + ((k << 3) >>> 0)) >>> 0;
+  return (k ^ 0xb55a4f09 ^ (k >>> 16)) >>> 0;
+}
+
+/** The roll in [0, 1) that picks a cell's variant, from the cell and its layer's index in the map's layers list
+ *  (the same number in every engine; coordinates wrap at 16 bits). */
+export function cellRoll(x: number, y: number, layer: number): number {
+  const packed = (((x & 0xffff) << 16) | (y & 0xffff)) >>> 0;
+  return hash32(hash32(packed) + layer) / ROLL_DIVISOR;
+}
+
+/** The candidate (in atlas order) whose weight span holds roll * total; the first when every weight is 0. */
+export function pickVariant<T>(candidates: ReadonlyArray<readonly [number, T]>, roll: number): T {
+  const total = candidates.reduce((s, [w]) => s + w, 0);
+  if (total <= 0) return candidates[0][1];
+  let u = roll * total;
+  for (const [w, v] of candidates) {
+    u -= w;
+    if (u < 0) return v;
+  }
+  return candidates[candidates.length - 1][1];
+}
+
+// ---- cells on the screen (ASSET_MANIFEST.md "Placing tiles") ----------------------------------------------
+/** The centre of map cell (x, y) in map pixels, y down: squares in rows, isometric diamonds in the diamond-down
+ *  layout (x runs down-right, y down-left; cell (0, 0) at (w/2, h/2)). A tile's image is drawn with its origin here. */
+export function cellCentre(shape: string, x: number, y: number, tileSize: Pt): Pt {
+  const [w, h] = tileSize;
+  if (shape === "isometric") return [((x - y + 1) * w) / 2, ((x + y + 1) * h) / 2];
+  return [(x + 0.5) * w, (y + 0.5) * h];
+}
+
+/** The point of a tile's image drawn on the cell centre: its own origin, else the atlas tile's centre. */
+export function tileOrigin(tile: Pick<PlanTile, "origin"> | undefined, atlas: Pick<PlanAtlas, "tileSize">): Pt {
+  return tile?.origin ?? [atlas.tileSize[0] / 2, atlas.tileSize[1] / 2];
 }
 
 // ---- tile flags (map cells: 1 flip h, 2 flip v, 4 transpose; transpose first, then flip) ----------------
@@ -108,6 +188,7 @@ export interface PlanTexture {
   url: string; // resolved URL (or file path in Node)
   path: string; // as the manifest names it
   repeat?: string; // background layers only: "x", "y", "xy" or "none"
+  normal?: string; // the URL of this image's normal map, loaded with it (load.image(key, [url, normal]))
 }
 
 export interface PlanFrame {
@@ -188,6 +269,7 @@ export interface PlanTile {
   mask: number | null;
   corners: Record<string, number> | null;
   probability: number;
+  origin: Pt | null; // the image point drawn on the cell centre; null: the atlas tile's centre
   surface: string | null;
   collision: Rect[];
   oneWay: boolean;
@@ -210,22 +292,25 @@ export interface PlanCell {
   gid: number;
   tile: [number, number, number]; // [atlas, col, row]
   flags: number;
-  mask: number | null; // terrain cells only
+  mask: number | null; // terrain cells only: the cell's key (the blob mask, or the corner bits)
+  left: number; // the image's top-left in map pixels: the cell centre less the tile's origin
+  top: number;
 }
 
 export interface PlanLayer {
   name: string;
-  kind: string; // tiles | terrain
-  count: number; // cells in the manifest
+  kind: string; // tiles | terrain | stamps
+  count: number; // cells drawn (a stamps layer counts its expanded tiles, a terrain layer its resolved cells)
   opacity: number;
   terrain: { set: number; id: number; mode: string } | null;
-  cells: PlanCell[]; // what gets placed
-  unresolved: { x: number; y: number; mask: number }[]; // terrain cells no tile fits
+  cells: PlanCell[]; // what gets placed, in draw order (cell order; y then x for a terrain layer)
+  unresolved: { x: number; y: number; mask: number }[]; // terrain cells no tile fits (left empty)
 }
 
 export interface PlanMap {
   name: string;
   tileset: string;
+  shape: string; // square | isometric (the tileset's)
   size: Pt;
   tileSize: Pt;
   layers: PlanLayer[];
@@ -298,6 +383,35 @@ export interface PlanBackground {
   layers: { name: string; texture: string; size: Pt; velocity: Pt; repeat: string; scale: number; wobble: number }[];
 }
 
+export interface PlanParticles {
+  name: string;
+  texture: string; // a white mask the emitter tints
+  emitter: Record<string, unknown>; // the emitter JSON as Dotwork wrote it (amount, lifetime, one_shot, colors ...)
+}
+
+export interface PlanTransition {
+  name: string;
+  texture: string; // greyscale: a pixel is covered once the progress passes its grey / 255
+  size: Pt;
+  transition: string; // wipe, iris, spiral ...
+}
+
+export interface PlanNormalMap {
+  name: string;
+  image: string; // the normal map's URL (it loads with its target, not as a texture of its own)
+  target: string; // the Phaser texture key of the image it lights
+  size: Pt;
+  convention: string; // "opengl": green up
+}
+
+export interface PlanImage {
+  name: string;
+  role: string;
+  texture: string;
+  size: Pt;
+  pivot: Pt | null;
+}
+
 export interface DotworkPlan {
   url: string;
   pack: string;
@@ -315,7 +429,10 @@ export interface DotworkPlan {
   fonts: Map<string, PlanFont>;
   uiKits: Map<string, PlanUiKit>;
   backgrounds: Map<string, PlanBackground>;
-  others: { kind: string; name: string }[]; // extra kinds this importer does not draw (particles, transition ...)
+  particles: Map<string, PlanParticles>;
+  transitions: Map<string, PlanTransition>;
+  normalMaps: Map<string, PlanNormalMap>;
+  images: Map<string, PlanImage>;
   warnings: string[];
   errors: string[];
 }
@@ -368,7 +485,8 @@ class Planner {
       url, pack: str(doc, "pack", url), version: str(doc, "version", url), base: str(doc, "base", url, "."),
       textures: new Map(), frames: [], files: [], animatedSprites: new Map(), sprites: new Map(), icons: new Map(),
       portraits: new Map(), tilesets: new Map(), maps: new Map(), fonts: new Map(), uiKits: new Map(),
-      backgrounds: new Map(), others: [], warnings: [], errors: [],
+      backgrounds: new Map(), particles: new Map(), transitions: new Map(), normalMaps: new Map(), images: new Map(),
+      warnings: [], errors: [],
     };
   }
 
@@ -388,10 +506,15 @@ class Planner {
     return key;
   }
 
+  /** One warning per key for the whole manifest (an unknown kind, an unknown layer kind). */
+  warnOnce(key: string, message: string): void {
+    if (this.warnedKinds.has(key)) return;
+    this.warnedKinds.add(key);
+    this.plan.warnings.push(message);
+  }
+
   warnKind(kind: string, why: string): void {
-    if (this.warnedKinds.has(kind)) return;
-    this.warnedKinds.add(kind);
-    this.plan.warnings.push(`kind "${kind}" ${why}`);
+    this.warnOnce(`kind:${kind}`, `kind "${kind}" ${why}`);
   }
 
   asset(a: Obj, i: number): void {
@@ -416,15 +539,34 @@ class Planner {
       case "font": return this.font(a, name, where);
       case "ui_kit": return this.uiKit(a, name, where);
       case "background": return this.background(a, name, where);
+      case "particles":
+        this.plan.particles.set(name, { name, texture: this.texture(a.texture, where), emitter: isObj(a.emitter) ? a.emitter : {} });
+        return;
+      case "transition":
+        this.plan.transitions.set(name, { name, texture: this.texture(a.image, where), size: pt(a.size, `${where} size`), transition: str(a, "transition", where, "") });
+        return;
+      case "normal_map": return this.normalMap(a, name, where);
+      case "image":
+        this.plan.images.set(name, {
+          name, role: str(a, "role", where, ""), texture: this.texture(a.image, where), size: pt(a.size, `${where} size`),
+          pivot: a.pivot === undefined || a.pivot === null ? null : pt(a.pivot, `${where} pivot`),
+        });
+        return;
       default:
-        if (EXTRA_KINDS.includes(kind)) {
-          for (const k of ["image", "texture", "target"]) if (safePath(a[k])) this.file(a[k], where);
-          this.plan.others.push({ kind, name });
-          this.warnKind(kind, "is an extra kind: its files are checked, this importer does not draw it yet");
-        } else {
-          this.warnKind(kind, "is unknown to this importer (a newer 1.x manifest?): skipped");
-        }
+        this.warnKind(kind, "is unknown to this importer (a newer 1.x manifest?): skipped");
     }
+  }
+
+  /** A normal map rides on its target's texture: Phaser loads the pair as one image (load.image(key, [url, normal]))
+   *  and setLighting(true) on an object drawn with that texture lights it. The target is planned as a texture here
+   *  in case no other asset uses it. */
+  normalMap(a: Obj, name: string, where: string): void {
+    const image = this.file(a.image, where);
+    const target = this.texture(a.target, `${where} target`);
+    const tex = this.plan.textures.get(target)!;
+    if (tex.normal && tex.normal !== image) this.plan.warnings.push(`${where}: ${tex.path} already has normal map ${tex.normal}; ${name} replaces it`);
+    tex.normal = image;
+    this.plan.normalMaps.set(name, { name, image, target, size: pt(a.size ?? [0, 0], `${where} size`), convention: str(a, "convention", where, "opengl") });
   }
 
   animatedSprite(a: Obj, name: string, where: string): void {
@@ -493,7 +635,8 @@ class Planner {
           terrain: t.terrain === undefined ? null : num(t, "terrain", tw),
           mask: t.mask === undefined ? null : num(t, "mask", tw),
           corners: isObj(t.corners) ? (t.corners as Record<string, number>) : null,
-          probability: num(t, "probability", tw, 1), surface: typeof t.surface === "string" ? t.surface : null,
+          probability: num(t, "probability", tw, 1), origin: t.origin === undefined || t.origin === null ? null : pt(t.origin, `${tw} origin`),
+          surface: typeof t.surface === "string" ? t.surface : null,
           collision: coll.map((c, i) => rect(c.rect, `${tw} collision ${i}`)), oneWay: coll.some((c) => c.one_way === true), anim,
         });
       }
@@ -516,24 +659,42 @@ class Planner {
     const byTile = new Map<string, PlanTile>(ts.tiles.map((t) => [`${t.atlas},${t.col},${t.row}`, t]));
     const atlasById = new Map(ts.atlases.map((at) => [at.id, at]));
     const size = pt(a.size, `${where} size`);
-    const layers = list(a, "layers", where).map((L) => this.layer(L, ts, byTile, atlasById, size, `${where} layer ${String(L.name)}`));
+    const tileSize = pt(a.tile_size ?? ts.tileSize, `${where} tile_size`);
+    const layers = list(a, "layers", where).map((L, i) => this.layer(L, i, ts, byTile, atlasById, size, tileSize, `${where} layer ${String(L.name)}`));
     const objects = list(a, "objects", where, true).map((o) => ({ asset: str(o, "asset", where), x: num(o, "x", where), y: num(o, "y", where) }));
-    this.plan.maps.set(name, { name, tileset: tsName, size, tileSize: pt(a.tile_size ?? ts.tileSize, `${where} tile_size`), layers, objects });
+    this.plan.maps.set(name, { name, tileset: tsName, shape: ts.shape, size, tileSize, layers, objects });
   }
 
-  layer(L: Obj, ts: PlanTileset, byTile: Map<string, PlanTile>, atlasById: Map<number, PlanAtlas>, size: Pt, where: string): PlanLayer {
+  /** One map layer, its cells placed: tiles as they are, stamps expanded, terrain resolved by key and roll. */
+  layer(L: Obj, index: number, ts: PlanTileset, byTile: Map<string, PlanTile>, atlasById: Map<number, PlanAtlas>, size: Pt, tileSize: Pt, where: string): PlanLayer {
     const kind = str(L, "kind", where);
     const raw = Array.isArray(L.cells) ? (L.cells as unknown[]) : [];
-    const out: PlanLayer = { name: str(L, "name", where), kind, count: raw.length, opacity: num(L, "opacity", where, 1), terrain: null, cells: [], unresolved: [] };
+    const out: PlanLayer = { name: str(L, "name", where), kind, count: 0, opacity: num(L, "opacity", where, 1), terrain: null, cells: [], unresolved: [] };
     const inside = (x: number, y: number) => x >= 0 && y >= 0 && x < size[0] && y < size[1];
+    // a placed cell: the tile's Phaser index and where its image lands (the cell centre less the tile's origin)
+    const place = (x: number, y: number, at: number, col: number, row: number, flags: number, mask: number | null): PlanCell => {
+      const atlas = atlasById.get(at);
+      const tile = byTile.get(`${at},${col},${row}`);
+      if (!inside(x, y)) throw new DotworkError(`${where}: cell ${x},${y} is outside the map`);
+      if (!atlas || !tile) throw new DotworkError(`${where}: cell ${x},${y} names tile [${at}, ${col}, ${row}], which tileset ${ts.name} does not have`);
+      const [cx, cy] = cellCentre(ts.shape, x, y, tileSize);
+      const [ox, oy] = tileOrigin(tile, atlas);
+      return { x, y, gid: tile.gid, tile: [at, col, row], flags, mask, left: cx - ox, top: cy - oy };
+    };
     if (kind === "tiles") {
       for (const c of raw) {
         if (!Array.isArray(c) || c.length < 5 || !c.every(isNum)) throw new DotworkError(`${where}: a tiles cell is [x, y, atlas, col, row(, flags)]`);
         const [x, y, at, col, row] = c as number[];
-        const atlas = atlasById.get(at);
-        if (!inside(x, y)) throw new DotworkError(`${where}: cell ${x},${y} is outside the map`);
-        if (!atlas || !byTile.has(`${at},${col},${row}`)) throw new DotworkError(`${where}: cell ${x},${y} names tile [${at}, ${col}, ${row}], which tileset ${ts.name} does not have`);
-        out.cells.push({ x, y, gid: atlas.firstgid + row * atlas.columns + col, tile: [at, col, row], flags: (c as number[])[5] ?? 0, mask: null });
+        out.cells.push(place(x, y, at, col, row, (c as number[])[5] ?? 0, null));
+      }
+    } else if (kind === "stamps") {
+      for (const c of raw) {
+        if (!Array.isArray(c) || c.length < 3 || !c.every(isNum)) throw new DotworkError(`${where}: a stamps cell is [x, y, stamp]`);
+        const [x, y, si] = c as number[];
+        const stamp = ts.stamps[si];
+        if (!stamp) throw new DotworkError(`${where}: cell ${x},${y} names stamp ${si}, which tileset ${ts.name} does not have`);
+        const w = Math.max(1, stamp.size[0]);
+        stamp.tiles.forEach(([at, col, row], j) => out.cells.push(place(x + (j % w), y + Math.floor(j / w), at, col, row, 0, null)));
       }
     } else if (kind === "terrain") {
       const set = num(L, "terrain_set", where, 0);
@@ -541,9 +702,16 @@ class Planner {
       const mode = ts.terrainSets.find((s) => s.id === set)?.mode;
       if (!mode || !ts.terrainSets.find((s) => s.id === set)?.terrains.some((t) => t.id === id)) throw new DotworkError(`${where}: terrain ${set}/${id} is not in tileset ${ts.name}`);
       out.terrain = { set, id, mode };
-      // the first tile of this terrain with each mask, in atlas order (what the loaded result names)
-      const byMask = new Map<number, PlanTile>();
-      for (const t of ts.tiles) if (t.terrain === id && (t.terrainSet ?? 0) === set && t.mask !== null && !byMask.has(t.mask)) byMask.set(t.mask, t);
+      // the candidates per key: this terrain's tiles with that key, in atlas order (atlases by id, tiles in list order)
+      const byKey = new Map<number, [number, PlanTile][]>();
+      const ordered = [...ts.tiles].sort((p, q) => p.atlas - q.atlas); // a stable sort keeps the list order within an atlas
+      for (const t of ordered) {
+        if (t.terrain !== id || (t.terrainSet ?? 0) !== set) continue;
+        const k = tileKey(t, mode, ts.shape);
+        if (k === null) continue;
+        if (!byKey.has(k)) byKey.set(k, []);
+        byKey.get(k)!.push([t.probability, t]);
+      }
       const painted = new Set<string>();
       for (const c of raw) {
         if (!Array.isArray(c) || c.length < 2 || !isNum(c[0]) || !isNum(c[1])) throw new DotworkError(`${where}: a terrain cell is [x, y]`);
@@ -553,16 +721,19 @@ class Planner {
       const cells = [...painted].map((k) => k.split(",").map(Number) as Pt).sort((p, q) => p[1] - q[1] || p[0] - q[0]);
       for (const [x, y] of cells) {
         const mask = cellMask(painted, x, y, mode);
-        const t = byMask.get(mask);
-        if (t) out.cells.push({ x, y, gid: t.gid, tile: [t.atlas, t.col, t.row], flags: 0, mask });
-        else out.unresolved.push({ x, y, mask });
+        const candidates = byKey.get(mask);
+        if (!candidates) {
+          out.unresolved.push({ x, y, mask });
+          continue;
+        }
+        const t = pickVariant(candidates, cellRoll(x, y, index));
+        out.cells.push(place(x, y, t.atlas, t.col, t.row, 0, mask));
       }
-      if (out.unresolved.length) {
-        this.plan.warnings.push(`${where}: ${out.unresolved.length} cell(s) have no ${mode} tile with their mask (${mode === "corners4" ? "corner terrains are not painted from terrain layers" : "the tileset lacks it"}): left empty`);
-      }
+      if (out.unresolved.length) this.plan.warnings.push(`${where}: ${out.unresolved.length} cell(s) have no ${mode} tile with their key: left empty`);
     } else {
-      this.plan.warnings.push(`${where}: layer kind "${kind}" is unknown: skipped`);
+      this.warnOnce(`layer:${kind}`, `layer kind "${kind}" is unknown to this importer (a newer 1.x manifest?): skipped`);
     }
+    out.count = out.cells.length;
     return out;
   }
 
@@ -604,7 +775,6 @@ class Planner {
       };
     });
     this.plan.backgrounds.set(name, { name, role: str(a, "role", where, ""), layers });
-    this.warnKind("background", "is an extra kind: planned and checked, this importer does not draw it yet");
   }
 }
 
@@ -742,8 +912,10 @@ export function loadedResult(plan: DotworkPlan): Record<string, unknown> {
     const ts = plan.tilesets.get(m.tileset)!;
     const layers: Record<string, number> = {};
     const terrain: Record<string, unknown[]> = {};
+    const placed: Record<string, unknown[]> = {};
     for (const L of m.layers) {
       layers[L.name] = L.count;
+      placed[L.name] = L.cells.map((c) => [c.x, c.y, ...tileOfGid(ts, c.gid)!, c.left, c.top]);
       if (L.kind !== "terrain") continue;
       const rows = [
         ...L.cells.map((c) => ({ x: c.x, y: c.y, mask: c.mask, tile: tileOfGid(ts, c.gid) as unknown })),
@@ -751,7 +923,9 @@ export function loadedResult(plan: DotworkPlan): Record<string, unknown> {
       ].sort((p, q) => p.y - q.y || p.x - q.x);
       terrain[L.name] = rows.map((r) => [r.x, r.y, r.mask, r.tile]);
     }
-    out[`map/${m.name}`] = { size: m.size, layers, terrain, objects: m.objects.map((o) => [o.asset, o.x, o.y]) };
+    const centres: number[][] = [];
+    for (let y = 0; y < m.size[1]; y++) for (let x = 0; x < m.size[0]; x++) centres.push([x, y, ...cellCentre(m.shape, x, y, m.tileSize)]);
+    out[`map/${m.name}`] = { size: m.size, shape: m.shape, tile_size: m.tileSize, layers, terrain, placed, centres, objects: m.objects.map((o) => [o.asset, o.x, o.y]) };
   }
   for (const f of plan.fonts.values()) {
     // read the glyph back out of the data Phaser gets (a page-0 glyph), the manifest row otherwise
@@ -767,7 +941,10 @@ export function loadedResult(plan: DotworkPlan): Record<string, unknown> {
     out[`ui_kit/${k.name}`] = { parts };
   }
   for (const b of plan.backgrounds.values()) out[`background/${b.name}`] = { layers: b.layers.map((L) => [L.size[0], L.size[1], L.velocity[0], L.velocity[1], L.repeat]) };
-  for (const o of plan.others) out[`${o.kind}/${o.name}`] = { kind: o.kind };
+  for (const p of plan.particles.values()) out[`particles/${p.name}`] = { kind: "particles" };
+  for (const t of plan.transitions.values()) out[`transition/${t.name}`] = { kind: "transition" };
+  for (const n of plan.normalMaps.values()) out[`normal_map/${n.name}`] = { kind: "normal_map" };
+  for (const i of plan.images.values()) out[`image/${i.name}`] = { kind: "image" };
   return { format: `${FORMAT}-expected`, version: plan.version, pack: plan.pack, assets: out };
 }
 

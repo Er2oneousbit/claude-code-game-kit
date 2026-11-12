@@ -12,6 +12,9 @@
 //                      addCollisionBodies(this, [...yard.collision, ...crate.collision])   // needs Arcade physics
 //                      addText(this, pack, "dialogue", 8, 8, "Hello")
 //                      addNineSlice(this, pack, "windows", "ui_window_plain", 8, 8, 120, 40)
+//                      const bg = addBackground(this, pack, "hills", 0, 0, 320, 180)   // bg.update(delta) in update()
+//                      addParticles(this, pack, "embers", 100, 80, { speed: 20 })     // the emitter JSON + yours
+//                      this.lights.enable(); crate.image.setLighting(true)          // a normal_map lights its target
 // Notes   : Phaser 4.2.1 (checked in its source, not memory):
 //           - an animation frame's `duration` REPLACES the clip's base rate for that frame
 //             (Animation.getNextTick: nextTick = frame.duration || msPerFrame) as long as play() keeps the clip's
@@ -19,10 +22,19 @@
 //           - a texture frame with customPivot sets the sprite's origin whenever an animation shows it, so a clip
 //             with another frame size or pivot (a wider death clip) keeps its feet in place.
 //           - tilemap layers play Tiled-style tile animations (tileset.tileData) on their own timer.
+//           - a tile's image is drawn with its top-left at the layer's (x, y) plus the tile's pixelX, pixelY
+//             (TransformerTile.js); Phaser's own isometric layout, ((x - y) w / 2, (x + y) h / 2), is the spec's
+//             diamond-down layout for a cell-sized tile, so the plan's top-left (the cell centre less the tile's
+//             origin) is written into pixelX, pixelY after putTileAt: a taller iso block then stands on its cell.
+//             putTileAt never recomputes them (only the Tile constructor and setSize do).
+//           - a texture loaded as load.image(key, [url, normal]) carries its normal map; setLighting(true) on an
+//             object drawn with it lights it (scene.lights.enable() and a light in the scene).
 //           - BitmapText reads font data in ParseXMLBitmapFont's shape; it is built from `chars` (one page).
 //           Textures are game-wide: a second scene reuses them (queueDotwork loads nothing twice).
 //           Animation keys: <pack>/<asset>/<clip>; fonts: <pack>/<font> (names are unique per pack only).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): tiles placed where the plan
+//           says (isometric and origins), normal maps loaded with their targets, addBackground, addParticles, addImage
 // ---------------------------------------------------------------------------
 import * as Phaser from "phaser";
 import manifestFiles from "virtual:dotwork-manifests";
@@ -65,7 +77,11 @@ export function queueDotwork(scene: Phaser.Scene, urls: readonly string[] = DOTW
 }
 
 function queueTextures(scene: Phaser.Scene, plan: DotworkPlan): void {
-  for (const t of plan.textures.values()) if (!scene.textures.exists(t.key)) scene.load.image(t.key, t.url);
+  for (const t of plan.textures.values()) {
+    if (scene.textures.exists(t.key)) continue;
+    // a normal map loads as the texture's second image, so the Lighting component finds it
+    scene.load.image(t.key, t.normal ? [t.url, t.normal] : t.url);
+  }
 }
 
 /** Warnings once per pack (info: skipped extra kinds are expected), broken assets as errors (smoke fails). */
@@ -184,8 +200,10 @@ export interface BuiltMap {
 }
 
 /** A Dotwork map at (x, y): a blank tilemap per the plan, a layer per manifest layer (terrain layers already
- *  resolved by the blob rule), tile flags as flips and quarter turns, animated tiles, collision rects of every
- *  placed tile, and the map's objects (y-sorted by their feet). */
+ *  resolved by the terrain rule and the variant pick, stamps expanded), every tile's image at the plan's top-left
+ *  (the cell centre less the tile's origin, on both shapes), tile flags as flips and quarter turns, animated tiles,
+ *  collision rects of every placed tile, and the map's objects (y-sorted by their feet). Phaser draws a layer's
+ *  tiles by row then column, so on a diamond grid a taller tile overdraws the one above it. */
 export function addMap(scene: Phaser.Scene, plan: DotworkPlan, name: string, x = 0, y = 0): BuiltMap {
   buildDotwork(scene, plan);
   const m = need(plan.maps.get(name), `map ${name}`, plan);
@@ -212,6 +230,10 @@ export function addMap(scene: Phaser.Scene, plan: DotworkPlan, name: string, x =
       const tile = layer.putTileAt(c.gid, c.x, c.y);
       if (!tile) continue;
       out.placed++;
+      // the image's top-left in map pixels: Phaser's own values for a cell-sized tile, the spec's for an iso block
+      // or a tile with its own origin (dotworkVerify.ts checks the two agree where they should)
+      tile.pixelX = c.left;
+      tile.pixelY = c.top;
       if (c.flags) {
         const t = tileTransform(c.flags);
         tile.flipX = t.flipX;
@@ -223,7 +245,7 @@ export function addMap(scene: Phaser.Scene, plan: DotworkPlan, name: string, x =
         // collision rects are in tile pixels from the tile's top-left (flags are not applied: Dotwork's flipped
         // tiles come from Pixelorama tilemaps, which carry no collision)
         for (const r of info.collision) {
-          out.collision.push({ rect: [x + c.x * m.tileSize[0] + r[0], y + c.y * m.tileSize[1] + r[1], r[2], r[3]], oneWay: info.oneWay });
+          out.collision.push({ rect: [x + c.left + r[0], y + c.top + r[1], r[2], r[3]], oneWay: info.oneWay });
         }
       }
     }
@@ -274,6 +296,75 @@ export function addText(scene: Phaser.Scene, plan: DotworkPlan, font: string, x:
   buildDotwork(scene, plan);
   const f = need(plan.fonts.get(font), `font ${font}`, plan);
   return scene.add.bitmapText(x, y, f.key, text, f.lineHeight * Math.max(1, Math.round(scale)));
+}
+
+export interface BuiltBackground {
+  layers: (Phaser.GameObjects.TileSprite | Phaser.GameObjects.Image)[]; // first to last, as the manifest draws them
+  update(deltaMs: number): void; // scrolls the repeating layers by their velocity (call it from the scene's update)
+}
+
+/** A background at (x, y) covering w x h pixels, a layer per manifest layer: one with `repeat` is a TileSprite over
+ *  the covered axes that scrolls by the layer's `velocity` (px/s of the art, whole pixels), one without is an image.
+ *  Layers draw at their `scale` (the art is drawn at 1x; Dotwork means it to show at that factor). */
+export function addBackground(scene: Phaser.Scene, plan: DotworkPlan, name: string, x: number, y: number, w: number, h: number): BuiltBackground {
+  buildDotwork(scene, plan);
+  const b = need(plan.backgrounds.get(name), `background ${name}`, plan);
+  const layers: BuiltBackground["layers"] = [];
+  const scrolling: { sprite: Phaser.GameObjects.TileSprite; vx: number; vy: number; ox: number; oy: number }[] = [];
+  for (const L of b.layers) {
+    const scale = Math.max(1, Math.round(L.scale));
+    if (L.repeat === "none") {
+      layers.push(scene.add.image(x, y, L.texture).setOrigin(0, 0).setScale(scale));
+      continue;
+    }
+    const rx = L.repeat.includes("x");
+    const ry = L.repeat.includes("y");
+    const sprite = scene.add.tileSprite(x, y, rx ? Math.ceil(w / scale) : L.size[0], ry ? Math.ceil(h / scale) : L.size[1], L.texture).setOrigin(0, 0).setScale(scale);
+    layers.push(sprite);
+    scrolling.push({ sprite, vx: rx ? L.velocity[0] : 0, vy: ry ? L.velocity[1] : 0, ox: 0, oy: 0 });
+  }
+  return {
+    layers,
+    update(deltaMs: number): void {
+      for (const s of scrolling) {
+        // the art moves by velocity; the tile position is the texture's offset, so it moves the other way
+        s.ox -= (s.vx * deltaMs) / 1000;
+        s.oy -= (s.vy * deltaMs) / 1000;
+        s.sprite.setTilePosition(Math.round(s.ox), Math.round(s.oy));
+      }
+    },
+  };
+}
+
+/** A particle emitter at (x, y) from a Dotwork `particles` asset: its texture as the particle, and from the emitter
+ *  JSON what Phaser's emitter reads directly (lifetime -> lifespan, amount -> the flow or the one-shot burst, colors
+ *  -> tint steps over a particle's life); `config` adds or overrides the rest (speed, gravity, scale ...). The JSON
+ *  itself is plan.particles.get(name).emitter. A one-shot emitter bursts once and stops. */
+export function addParticles(scene: Phaser.Scene, plan: DotworkPlan, name: string, x: number, y: number, config: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {}): Phaser.GameObjects.Particles.ParticleEmitter {
+  buildDotwork(scene, plan);
+  const p = need(plan.particles.get(name), `particles ${name}`, plan);
+  const e = p.emitter;
+  const lifetime = typeof e.lifetime === "number" && e.lifetime > 0 ? e.lifetime : 1;
+  const amount = typeof e.amount === "number" && e.amount > 0 ? Math.round(e.amount) : 8;
+  const oneShot = e.one_shot === true;
+  const colors = (Array.isArray(e.colors) ? e.colors : []).filter((c): c is string => typeof c === "string").map((c) => parseInt(c.replace("#", ""), 16)).filter((n) => Number.isFinite(n));
+  const base: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
+    lifespan: lifetime * 1000,
+    ...(colors.length ? { color: colors } : {}),
+    ...(oneShot ? { emitting: false } : { frequency: (lifetime * 1000) / amount }), // `amount` alive at once
+  };
+  const emitter = scene.add.particles(x, y, p.texture, { ...base, ...config });
+  if (oneShot) emitter.explode(amount);
+  return emitter;
+}
+
+/** A plain Dotwork `image` (a logo, a diorama tile) with its pivot (the top-left without one) on (x, y). A
+ *  `transition` image is added the same way with its own texture (plan.transitions): the shader recipes read it. */
+export function addImage(scene: Phaser.Scene, plan: DotworkPlan, name: string, x: number, y: number): Phaser.GameObjects.Image {
+  buildDotwork(scene, plan);
+  const i = need(plan.images.get(name), `image ${name}`, plan);
+  const image = scene.add.image(x, y, i.texture);
+  return i.pivot ? image.setOrigin(i.pivot[0] / i.size[0], i.pivot[1] / i.size[1]) : image.setOrigin(0, 0);
 }
 
 /** A 9-slice of a UI kit part, w x h pixels before `scale`; parts without margins are plain images. The images and
