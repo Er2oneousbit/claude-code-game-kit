@@ -92,7 +92,9 @@ and a clear spec for the Blueprint child.
   (`S_`, custom pivot, collision boxes), a PaperFlipbook per clip (`FB_<name>_<clip>`, a frame rate at which every
   hold is a whole frame run), a PaperTileSet per atlas (`TS_`, per-tile collision, the surface as user data, and
   the Drawing Offset that puts its tiles where the manifest draws them: the tile's `origin`, or its centre, on the
-  cell's centre), a PaperTileMap per map (`TM_`, Orthogonal for a square set, Isometric Diamond for an isometric
+  cell's centre; the rule comes from Paper2D's render source, `PaperTileMapComponent::RebuildRenderData`, and
+  every golden atlas needs offset 0, the golden iso block included, so a non-zero offset is **(verify)** until an
+  atlas needs one), a PaperTileMap per map (`TM_`, Orthogonal for a square set, Isometric Diamond for an isometric
   one), an offline Font (`F_`) and Slate brushes for UI parts (`SB_`, 9-slice margins). Maps follow the manifest
   spec's rules (`tools/art/dotwork/ASSET_MANIFEST.md` 1.1.0, Paper2D has no autotiling): a `terrain` layer's cells
   get the tile whose key matches (blob47, sides4 and corners4; a cell with no tile stays empty with a warning), a
@@ -105,7 +107,9 @@ and a clear spec for the Blueprint child.
   has one whole-pixel Drawing Offset, so put such tiles in an atlas of their own. The extra kinds load as textures:
   `background` layers (wrapping on their `repeat` axes, `dotwork.velocity`), `particles` (the mask texture with
   the emitter JSON in its `dotwork.emitter` tag; nothing is written beside it under `Content/`, because the editor's
-  auto-import, on by default, offers any `.json` there as a DataTable; a Niagara system is #286), `transition`
+  auto-import is on by default (`bMonitorContentDirectories`, `bAutoCreateAssets`) and `CSVImportFactory` claims
+  `.json`, so a loose file there would be offered as a DataTable on the next editor start, read from the 5.8 source,
+  not watched **(verify)**; a Niagara system is #286), `transition`
   (`dotwork.transition`), `normal_map` (linear, `dotwork.target`; a lit Paper2D material is #286) and `image`.
   Loop, blend, directions, hotspots, map objects and the map's shape are metadata tags (`dotwork.*`) too. It also
   saves `/Game/Dotwork/L_DotworkDemo` (the map, its props placed through `map_to_local`, a character walking, a
