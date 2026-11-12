@@ -1572,6 +1572,12 @@
       "unmerged": [
         "docs/ENGINE.md"
       ]
+    },
+    {
+      "version": "0.15.0",
+      "date": "2026-11-12",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1617,10 +1623,10 @@
     "Content/Python/kit_character/character_spec.py": "c7f6441824b14b27b99c18b9cebc526aa4da89cb9c19140734e13ae7318e6d70",
     "Content/Python/kit_character/test_character_golden.py": "eb2351807dd4fef01bbbbc23b146ae82f847ac594a713f0fd8e6ad223203733a",
     "Content/Python/kit_dotwork/__init__.py": "46b8d3f46b49188bbca8aed5fbca4341e06af5135e86449812bbd5d4a54baf8a",
-    "Content/Python/kit_dotwork/dotwork_paper.py": "6a14ef32896faa9f1f9bdc1f1df2322dc39d4af5c57501f6a9ef03369c5f9d8c",
-    "Content/Python/kit_dotwork/dotwork_spec.py": "bcb373232f3f0d53d560f904a4bd63a69e27d33de3f0d546d7bfb95f9c741433",
-    "Content/Python/kit_dotwork/import_dotwork.py": "fda796406d6eea49358a0cb2bb21c97e342c131199dfdaa7d6a2dd4482b8aa3c",
-    "Content/Python/kit_dotwork/test_dotwork_golden.py": "75c7c0cc46724771befd75cb2fe768bba7d8274c7a9b4d3e961de27bf3c3931a",
+    "Content/Python/kit_dotwork/dotwork_paper.py": "3620895c74eb488c214bff6e5a48a48bf88029d6113c56d3cce6cde031b50f35",
+    "Content/Python/kit_dotwork/dotwork_spec.py": "aed9c7a88712f7b6869fe74cd48ba8002a76d078f83edf4a9de7209aa97320d6",
+    "Content/Python/kit_dotwork/import_dotwork.py": "dbe580b27352847f2c0f3815711264ae9709fefbec9fa330d583483e160204fd",
+    "Content/Python/kit_dotwork/test_dotwork_golden.py": "0ab1d5714a753d68bb7cff01e8d68964d4867dbe088c37a3d446f4c098df7617",
     "Content/Python/kit_dotwork/test_dotwork_manifests.py": "857d159204c90c5a4a2352dfed40879ba3d96f7ca03bcab3a97f113d39d42f83",
     "Content/Python/kit_shaders/__init__.py": "e28a4a56a0e55f933d307a4aa0031f17fb1ab92f8e3e51d51164ed42bdb32246",
     "Content/Python/kit_shaders/kit_materials.py": "ef01f46797c4085f05322d8d49cc1e23bc1e0ad400d6f049bc6937ffc9ad1d42",

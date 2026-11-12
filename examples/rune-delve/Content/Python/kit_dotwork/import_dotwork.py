@@ -13,9 +13,12 @@
 #             manifests = DOTWORK_MANIFESTS or every *.assets.json in assets/dotwork/
 #             per manifest: Importer(path).run() then save(); one failing pack fails the run after the others
 #             demo: a new level with a PaperTileMapActor (first map), PaperSpriteActors at the map's objects
-#             (x, -y: Paper2D is X right, Z up), a PaperFlipbookActor playing the first walk clip, a TextRenderActor
-#             in the first font, an orthographic camera looking along +Y, saved as L_DotworkDemo
+#             (dotwork_paper.map_to_local: Paper2D is X right, Z up, and centres cell (0, 0) on the actor), a
+#             PaperFlipbookActor playing the first walk clip, a TextRenderActor in the first font, an orthographic
+#             camera looking along +Y, saved as L_DotworkDemo
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the demo places objects through map_to_local
+#           (cell (0, 0)'s centre is the tile map's origin, not its top-left; isometric maps too), #285
 # ---------------------------------------------------------------------------
 import os
 
@@ -82,27 +85,34 @@ def build_demo(done):
     """The demo level: what the packs hold, placed in Paper2D's plane (X right, Z up), seen as Paper2D's own
     2D template sees it: from +Y looking along -Y (tile layer 0 and smaller Y are nearer the camera)."""
     unreal.EditorLoadingAndSavingUtils.new_blank_map(False)
-    width = height = 0.0
+    tile_size, box = [0, 0], (0.0, 0.0, 0.0, 0.0)   # the map's box in map pixels: left, top, right, bottom
     tm = first(done, "map")
     if tm:
         # Components of editor-placed actors are static: set the asset properties (SetSprite and friends refuse)
         actor = spawn(unreal.PaperTileMapActor, 0.0, 0.0)
         actor.get_editor_property("render_component").set_editor_property("tile_map", tm["map"])
-        width = tm["doc"]["size"][0] * tm["doc"]["tile_size"][0]
-        height = tm["doc"]["size"][1] * tm["doc"]["tile_size"][1]
+        tile_size = tm["tile_size"]
+        (mw, mh), (w, h) = tm["doc"]["size"], tile_size
+        if tm["shape"] == "isometric":                # the diamonds spread left of cell (0, 0) as y grows
+            box = (-mh * w / 2, 0.0, (mw + 1) * w / 2, (mw + mh) * h / 2)
+        else:
+            box = (0.0, 0.0, mw * w, mh * h)
         sprites = {key.split("/", 1)[1]: rec["sprite"] for imp in done
                    for key, rec in imp.records.items() if rec["kind"] == "sprite"}
         for obj in tm["doc"].get("objects") or []:
             sp = sprites.get(obj["asset"])
             if sp:
-                # The tile map's top-left corner sits on its actor; a map pixel (x, y) is (x, -y) in the plane.
-                # Objects are a little nearer the camera (+Y) so they draw over the tiles.
-                spawn(unreal.PaperSpriteActor, obj["x"], -obj["y"], y=10.0).get_editor_property(
+                # The map's cell (0, 0) is centred on its actor (map_to_local). Objects are a little nearer the
+                # camera (+Y) so they draw over the tiles.
+                x, z = paper.map_to_local(obj["x"], obj["y"], tile_size)
+                spawn(unreal.PaperSpriteActor, x, z, y=10.0).get_editor_property(
                     "render_component").set_editor_property("source_sprite", sp)
+    # the middle of the map in the plane, where the walker and the camera go
+    mid_x, mid_z = paper.map_to_local((box[0] + box[2]) / 2, (box[1] + box[3]) / 2, tile_size)
     walker = first(done, "animated_sprite", lambda r: any(c in r["clips"] for c in WALK_CLIPS))
     if walker:
         clip = next(c for c in WALK_CLIPS if c in walker["clips"])
-        actor = spawn(unreal.PaperFlipbookActor, width / 2, -height / 2, y=20.0)
+        actor = spawn(unreal.PaperFlipbookActor, mid_x, mid_z, y=20.0)
         actor.get_editor_property("render_component").set_editor_property(
             "source_flipbook", walker["clips"][clip]["flipbook"])
     font = first(done, "font")
@@ -118,7 +128,7 @@ def build_demo(done):
         text.set_editor_property("text", label_text)
         text.set_editor_property("world_size", size)
         spawn(unreal.DirectionalLight, 0.0, 0.0, y=1000.0, yaw=-90.0)   # TextRender's material is lit; sprites are not
-    camera = spawn(unreal.CameraActor, width / 2, -height / 2, y=1000.0, yaw=-90.0)
+    camera = spawn(unreal.CameraActor, mid_x, mid_z, y=1000.0, yaw=-90.0)
     cam = camera.get_editor_property("camera_component")
     cam.set_editor_property("projection_mode", unreal.CameraProjectionMode.ORTHOGRAPHIC)
     cam.set_editor_property("ortho_width", DEMO_CAMERA_WIDTH)

@@ -16,12 +16,19 @@
 #             portrait           Sprites/S_<name>_<expression> per expression; talking: the animated_sprite's flipbooks
 #             font               Fonts/F_<name>: an offline Font (Characters from chars, the pages as its textures)
 #             ui_kit             UI/SB_<kit>_<part>: a Slate Brush asset (Box with the 9-slice margins, else Image)
-#             tileset            TileSets/TS_<name>_<atlas>: one PaperTileSet per atlas, per-tile collision boxes and
-#                                the surface as each tile's user data name
-#             map                Maps/TM_<name>: a PaperTileMap, terrain layers resolved by cell_mask (Paper2D has no
-#                                autotiling), layer 0 on top as Paper2D draws it
+#             tileset            TileSets/TS_<name>_<atlas>: one PaperTileSet per atlas, per-tile collision boxes,
+#                                the surface as each tile's user data name, and the DrawingOffset that puts the
+#                                atlas's tiles where the spec draws them (centre minus origin; taller iso blocks)
+#             map                Maps/TM_<name>: a PaperTileMap (Orthogonal or IsometricDiamond), terrain layers
+#                                resolved by cell_mask and the variant pick (Paper2D has no autotiling), stamps
+#                                layers expanded, layer 0 on top as Paper2D draws it
+#             particles          the mask texture, its emitter JSON as the texture's dotwork.emitter metadata tag
 #           Facts no Paper2D type holds go into the asset's metadata tags (dotwork.loop, dotwork.blend,
-#           dotwork.directions, dotwork.hotspot, dotwork.objects, dotwork.animated_tiles ...).
+#           dotwork.directions, dotwork.hotspot, dotwork.objects, dotwork.animated_tiles, dotwork.emitter ...).
+#           Where a map pixel is: Paper2D centres cell (0, 0) on the tile map's origin in both projections
+#           (UPaperTileMap::GetTileToLocalParameters: the orthogonal corner is (-w/2, +h/2), the diamond's steps are
+#           (w/2, -h/2) and (-w/2, -h/2) in its X right, Z up plane), so the spec's map pixel (px, py), y down,
+#           is local (px - w/2, 0, -(py - h/2)) (map_to_local); its diamond grid is Godot's, no cell conversion.
 #           Two properties are hidden from Python: a tile layer's name (UPaperTileLayer::LayerName: the layers come
 #           from Paper2D's own Tiled importer, which names them) and an offline font's page textures (UFont::Textures:
 #           set with the `set` console command, which only the pythonscript commandlet runs, so fonts are imported
@@ -30,11 +37,14 @@
 #           Pseudocode
 #             load + version check; texture(rel) imports a PNG once per path
 #             core kinds in build order (sprite, animated_sprite, icon, portrait, font, ui_kit, tileset, map),
-#             then background / transition / normal_map / image as textures; particles and unknown kinds: one warning
+#             then background / particles / transition / normal_map / image as textures; unknown kinds: one warning
 #             map: a PaperTileMapComponent owns a scratch map (SetTile only edits a map its component owns); its layers
 #             move into the TM_ asset
 #             a failing asset is an error line; run() raises after trying every asset
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners4 terrain, the variant
+#           pick by layer index, stamps layers, DrawingOffset from the tiles' origins, the loaded result's placed cells
+#           and centres read back from Paper2D, particles loaded (texture + emitter tag)
 # ---------------------------------------------------------------------------
 import json
 import os
@@ -50,8 +60,10 @@ DEST_ROOT = "/Game/Dotwork"                 # assets of pack <p> go to /Game/Dot
 TRANSIENT_TEXTURES = "/Temp/DotworkImport"  # tests: textures here, every other object in the transient package
 PIXELS_PER_UNIT = 1.0                       # one art pixel = one Unreal unit (cm); Paper2D's sprite default
 META = "dotwork."                           # metadata tag prefix
-SKIPPED_KINDS = ("particles",)              # Niagara systems are not built from Dotwork's emitter JSON (yet)
+SKIPPED_KINDS = ()                          # every spec 1.1.0 kind is built (particles: texture + emitter tag, #286
+                                            # for a Niagara system); unknown kinds get one warning
 FLIP_BITS = {1: 1 << 31, 2: 1 << 30, 4: 1 << 29}   # manifest flags -> EPaperTileFlags (H, V, diagonal)
+PROJECTION = {"square": "ORTHOGONAL", "isometric": "ISOMETRIC_DIAMOND"}   # tileset shape -> TileMapProjectionMode
 TILE_INDEX_MASK = ~(7 << 29)
 BAD_NAME = re.compile(r"[^A-Za-z0-9_]")
 
@@ -74,6 +86,17 @@ def transient_package():
 def safe(name):
     """An asset or folder name Unreal accepts (manifest names may hold . and -)."""
     return BAD_NAME.sub("_", str(name))
+
+
+def map_to_local(px, py, tile_size):
+    """A map pixel (x right, y down, cell (0, 0)'s top-left at (0, 0)) as a Paper2D local position (X, Z) in the
+    tile map's X right, Z up plane: Paper2D centres cell (0, 0) on the origin in both projections."""
+    return px - tile_size[0] / 2, -(py - tile_size[1] / 2)
+
+
+def local_to_map(vec, tile_size):
+    """The inverse: a Paper2D local position (an unreal.Vector) as a map pixel [px, py]."""
+    return [vec.x + tile_size[0] / 2, -vec.z + tile_size[1] / 2]
 
 
 def say(text):
@@ -360,7 +383,7 @@ class Importer:
         self.records[f"ui_kit/{a['name']}"] = {"kind": "ui_kit", "parts": parts}
 
     def _tileset(self, a):
-        atlases, animated, origins = {}, [], 0
+        atlases, animated, odd_origins = {}, [], []
         for at in a["atlases"]:
             tex = self.texture(at["image"])
             tw, th = at.get("tile_size") or a["tile_size"]
@@ -368,6 +391,11 @@ class Importer:
                           f"TS_{a['name']}_{at['name']}")
             ts.set_editor_property("tile_sheet", tex)
             ts.set_editor_property("tile_size", unreal.IntPoint(tw, th))
+            # Where the spec draws the atlas's tiles (centre minus origin) against where Paper2D draws them (the
+            # cell's top-left, taller tiles bottom-aligned): one DrawingOffset per tile set
+            (dx, dy), odd = spec.drawing_offset({"tile_size": [tw, th], "tiles": at["tiles"]}, a["tile_size"])
+            ts.set_editor_property("drawing_offset", unreal.IntPoint(dx, dy))
+            odd_origins += [[at["id"]] + cell for cell in odd]
             across = tex.blueprint_get_size_x() // tw         # Paper2D's WidthInTiles (index = row * across + col)
             data = [unreal.PaperTileMetadata() for _ in ts.get_editor_property("per_tile_data")]
             for t in at["tiles"]:
@@ -384,18 +412,18 @@ class Importer:
                     md.set_editor_property("collision_data", cd)
                 if t.get("anim"):
                     animated.append([at["id"], t["col"], t["row"], t["anim"]["frames"], t["anim"]["fps"]])
-                origins += 1 if t.get("origin") else 0
             ts.set_editor_property("per_tile_data", data)
             self.tag(ts, "atlas", {"tileset": a["name"], "id": at["id"], "role": at.get("role", "")})
-            atlases[at["id"]] = {"tileset": ts, "across": across}
+            atlases[at["id"]] = {"tileset": ts, "across": across, "tile_size": [tw, th], "offset": [dx, dy]}
         if animated:
             self.warn(f"tileset {a['name']}: {len(animated)} animated tile(s) show their first frame (Paper2D tile "
                       "maps have no tile animation; the frames are in metadata dotwork.animated_tiles)")
             for info in atlases.values():
                 self.tag(info["tileset"], "animated_tiles", animated)
-        if origins:
-            self.warn(f"tileset {a['name']}: {origins} tile(s) with an origin (taller iso blocks): set the tile set's "
-                      "Drawing Offset by eye (verify)")
+        if odd_origins:
+            self.warn(f"tileset {a['name']}: {len(odd_origins)} tile(s) {odd_origins[:4]} want another origin than "
+                      "their atlas's first tile, or a half-pixel one; a PaperTileSet has one whole-pixel Drawing "
+                      "Offset for all its tiles (put such tiles in an atlas of their own)")
         masks, n = {}, 0
         for at in a["atlases"]:
             for t in at["tiles"]:
@@ -424,7 +452,13 @@ class Importer:
         for layer in named:
             layer.rename(f"Scratch_{uuid.uuid4().hex[:8]}", comp.get_editor_property("tile_map"))
         comp.get_editor_property("tile_map").set_editor_property("tile_layers", named)
-        terrain, missing = {}, 0
+        shape = ts_doc.get("shape", "square")
+        if shape not in PROJECTION:
+            raise RuntimeError(f"tileset {a['tileset']} has shape {shape!r}; Paper2D draws square and isometric")
+        if list(a.get("tile_size") or (tw, th)) != list(ts_doc["tile_size"]):
+            self.warn(f"map {a['name']}: its tile_size {a.get('tile_size')} differs from tileset {a['tileset']}'s "
+                      f"{ts_doc['tile_size']}; the tile sets' Drawing Offsets were made for the tileset's cell")
+        terrain, drawn = {}, {}                    # drawn[layer name] = [[x, y, atlas, col, row], ...] in draw order
 
         def put(x, y, pi, atlas, col, row, flags=0):
             info = atlases[atlas]
@@ -441,24 +475,24 @@ class Importer:
 
         for i, L in enumerate(layers):
             pi = spec.paper_layer_index(i, len(layers))
-            if L["kind"] == "tiles":
-                for c in L["cells"]:
-                    put(c[0], c[1], pi, c[2], c[3], c[4], c[5] if len(c) > 5 else 0)
-            elif L["kind"] == "terrain":
-                if spec.terrain_mode(ts_doc, L.get("terrain_set", 0)) == "corners4":
-                    self.warn(f"map {a['name']} layer {L['name']}: corners4 terrain layers are not painted "
-                              "(Dotwork maps paint blob47 and sides4)")
-                cells = spec.resolve_terrain(ts_doc, L)
-                for x, y, m, tile in cells:
-                    if tile is None:
-                        missing += 1
-                    else:
-                        put(x, y, pi, *tile)
+            if L["kind"] not in spec.LAYER_KINDS:
+                self.warn(f"map {a['name']}: layer {L['name']} of unknown kind {L['kind']!r} skipped (newer spec?)")
+                drawn[L["name"]] = []
+                continue
+            if L["kind"] == "terrain":
+                # the key per cell (mask or corner bits) and the variant picked with the cell's roll and this
+                # layer's index: the same tile on every engine (Godot rolls its own)
+                cells = spec.resolve_terrain(ts_doc, L, i)
                 terrain[L["name"]] = cells
-            else:
-                self.warn(f"map {a['name']}: layer {L['name']} of unknown kind {L['kind']!r} skipped")
-        if missing:
-            self.warn(f"map {a['name']}: {missing} terrain cell(s) have no tile with their mask (left empty)")
+                missing = sum(1 for _, _, _, tile in cells if tile is None)
+                if missing:
+                    self.warn(f"map {a['name']} layer {L['name']}: {missing} terrain cell(s) have no tile with "
+                              "their key (left empty; a corners4 shape must be 2 cells thick)")
+            placed = spec.placed_cells(ts_doc, L, i)    # tiles as listed, terrain resolved, stamps expanded
+            drawn[L["name"]] = placed
+            flags = {tuple(c[:2]): c[5] for c in L["cells"] if len(c) > 5} if L["kind"] == "tiles" else {}
+            for x, y, atlas, col, row in placed:
+                put(x, y, pi, atlas, col, row, flags.get((x, y), 0))
         built = comp.get_editor_property("tile_map")
         target = self.new(unreal.PaperTileMap, unreal.PaperTileMapFactory, f"{self.dest}/Maps", f"TM_{a['name']}")
         # Swap layers: the new ones move into the asset, the asset's old ones into the scratch map (a layer's outer
@@ -473,13 +507,13 @@ class Importer:
         target.set_editor_properties({
             "map_width": mw, "map_height": mh, "tile_width": tw, "tile_height": th,
             "pixels_per_unreal_unit": PIXELS_PER_UNIT,
-            "projection_mode": (unreal.TileMapProjectionMode.ISOMETRIC_DIAMOND if ts_doc.get("shape") == "isometric"
-                                else unreal.TileMapProjectionMode.ORTHOGONAL)})
+            "projection_mode": getattr(unreal.TileMapProjectionMode, PROJECTION[shape])})
         target.set_editor_property("tile_layers", moved)
         if a.get("objects"):
             self.tag(target, "objects", a["objects"])
+        self.tag(target, "shape", shape)
         self.records[f"map/{a['name']}"] = {"kind": "map", "map": target, "doc": a, "terrain": terrain,
-                                            "tileset": rec_ts}
+                                            "drawn": drawn, "tileset": rec_ts, "shape": shape, "tile_size": [tw, th]}
 
     def named_layers(self, a, tw, th):
         """Empty tile layers named as the manifest's, in Paper2D order (layer 0 on top), with each layer's opacity.
@@ -518,8 +552,12 @@ class Importer:
             raise RuntimeError(f"layer stack came back as {got}, expected {want}")
         return named
 
-    # ---- extra kinds: textures only ----------------------------------------------------------------
+    # ---- extra kinds: textures (plus what the texture's metadata can hold) -------------------------------
     def _texture_only(self, a):
+        """background: a texture per layer (wrapping on its repeat axes, the velocity as a tag); particles: the
+        mask texture with the emitter JSON as its dotwork.emitter tag (no file beside it under Content/: the editor's
+        auto-import, on by default, would offer any .json there as a DataTable; a Niagara system is #286);
+        transition, normal_map (linear, the lit target as a tag) and image: the texture."""
         k = a["kind"]
         if k == "background":
             texs = [self.texture(L["image"], repeat=L.get("repeat", "none")) for L in a["layers"]]
@@ -527,10 +565,17 @@ class Importer:
                 self.tag(t, "velocity", L.get("velocity", [0, 0]))
             self.records[f"background/{a['name']}"] = {"kind": k, "textures": texs, "doc": a}
             return
+        if k == "particles":
+            tex = self.texture(a["texture"])
+            self.tag(tex, "emitter", a.get("emitter") or {})
+            self.records[f"particles/{a['name']}"] = {"kind": k, "texture": tex, "emitter": a.get("emitter") or {}}
+            return
         tex = self.texture(a["image"], normal=(k == "normal_map"))
         if k == "normal_map":
             self.tag(tex, "target", a.get("target", ""))
-        self.records[f"{k}/{a['name']}"] = {"kind": k, "texture": tex}
+        if k == "transition":
+            self.tag(tex, "transition", a.get("transition", ""))
+        self.records[f"{k}/{a['name']}"] = {"kind": k, "texture": tex, "doc": a}
 
 
 def box_shape(x, y, w, h):
@@ -681,12 +726,26 @@ def font_page_count(font):
 
 
 def _map_back(rec):
+    """The map's loaded result from the PaperTileMap: sizes and shape from the asset, every cell's tile from
+    GetTile, centres from Paper2D's own GetTileCenterPosition (so an isometric map proves Paper2D's diamond grid
+    is the spec's), and where each drawn tile's image lands from Paper2D's render rule (the cell's top-left plus the
+    tile set's DrawingOffset, taller tiles bottom-aligned: PaperTileMapComponent::RebuildRenderData). Which cells
+    a layer draws, and in what order, comes from the import record (Paper2D keeps no cell order)."""
     tm, a = rec["map"], rec["doc"]
     comp = unreal.new_object(unreal.PaperTileMapComponent)
     comp.set_tile_map(tm)
     w, h = tm.get_editor_property("map_width"), tm.get_editor_property("map_height")
+    tile_size = [tm.get_editor_property("tile_width"), tm.get_editor_property("tile_height")]
+    mode = tm.get_editor_property("projection_mode")
+    shape = next((s for s, name in PROJECTION.items() if mode == getattr(unreal.TileMapProjectionMode, name)),
+                 str(mode))
     paper_layers = tm.get_editor_property("tile_layers")
-    by_set = {info["tileset"].get_path_name(): (aid, info["across"]) for aid, info in rec["tileset"]["atlases"].items()}
+    by_set = {info["tileset"].get_path_name(): aid for aid, info in rec["tileset"]["atlases"].items()}
+    sets = {}                                    # atlas id -> (across, tile height, drawing offset) from the asset
+    for aid, info in rec["tileset"]["atlases"].items():
+        ts = info["tileset"]
+        off = ts.get_editor_property("drawing_offset")
+        sets[aid] = (info["across"], ts.get_editor_property("tile_size").y, [off.x, off.y])
 
     def tile(x, y, pi):
         t = comp.get_tile(x, y, pi)
@@ -694,11 +753,22 @@ def _map_back(rec):
         packed = t.get_editor_property("packed_tile_index")
         if ts is None or packed == -1:
             return None
-        aid, across = by_set.get(ts.get_path_name(), (None, 1))
+        aid = by_set.get(ts.get_path_name())
+        across = sets[aid][0] if aid in sets else 1
         idx = packed & TILE_INDEX_MASK
         return [aid, idx % across, idx // across]
 
-    layers, terrain = {}, {}
+    def centre(x, y):
+        return local_to_map(comp.get_tile_center_position(x, y, 0, False), tile_size)
+
+    def corner(x, y, aid):
+        """The image's top-left in map pixels: the cell's top-left (its centre less half a cell), plus the tile
+        set's DrawingOffset, plus the bottom alignment of a tile taller than the cell."""
+        _, th, (dx, dy) = sets[aid]
+        cx, cy = centre(x, y)
+        return [spec.round6(cx - tile_size[0] / 2 + dx), spec.round6(cy - tile_size[1] / 2 + dy + tile_size[1] - th)]
+
+    layers, terrain, placed = {}, {}, {}
     n = len(a["layers"])
     for i, L in enumerate(a["layers"]):
         pi = spec.paper_layer_index(i, n)
@@ -706,7 +776,14 @@ def _map_back(rec):
         layers[name] = sum(1 for y in range(h) for x in range(w) if tile(x, y, pi) is not None)
         if L["name"] in rec["terrain"]:
             terrain[name] = [[x, y, m, tile(x, y, pi)] for x, y, m, _ in rec["terrain"][L["name"]]]
-    return {"size": [w, h], "layers": layers, "terrain": terrain,
+        cells = []
+        for x, y, *_ in rec["drawn"].get(L["name"], []):
+            got = tile(x, y, pi)
+            cells.append([x, y] + (got + corner(x, y, got[0]) if got else [None, None, None, None, None]))
+        placed[name] = cells
+    return {"size": [w, h], "shape": shape, "tile_size": tile_size, "layers": layers, "terrain": terrain,
+            "placed": placed,
+            "centres": [[x, y] + [spec.round6(v) for v in centre(x, y)] for y in range(h) for x in range(w)],
             "objects": [[o["asset"], spec.round6(o["x"]), spec.round6(o["y"])] for o in a.get("objects") or []]}
 
 
