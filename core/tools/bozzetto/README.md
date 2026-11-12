@@ -18,7 +18,7 @@ that machine needed, not promises.
 2. [Reference views](#reference-views)
 3. [Make a model](#make-a-model)
 4. [What lands where](#what-lands-where)
-5. [What to expect](#what-to-expect)
+5. [What to expect](#what-to-expect) and [UV coverage](#uv-coverage)
 6. [In the engine](#in-the-engine)
 7. [Rig a character](#rig-a-character)
 8. [Licences](#licences)
@@ -136,7 +136,8 @@ python tools/bozzetto/bozzetto.py make prop_chest --prompt "..." --seed 12 --ref
 python tools/bozzetto/bozzetto.py make npc_robot --prompt "a friendly round robot" --class npc --seed 3
 python tools/bozzetto/bozzetto.py make prop_lamp --image ref.png --sprites assets/art/lamp_sheet.png   # 2D games
 ```
-**Two routes** make the mesh; the rest of `make` (cleanup, budget check, LODs, turntable, record, log row) is the same:
+**Two routes** make the mesh; the rest of `make` (cleanup, the UV rebake on Tripo, budget check, LODs, turntable,
+record, log row) is the same:
 
 | | Local (`--with local`, the default) | Tripo (`--with tripo`) |
 |---|---|---|
@@ -179,7 +180,9 @@ paid run are marked (verify) there.
 | `--lods 0.5,0.25` or `none` | LOD files `<name>_LOD1.glb` ... (Blender's Decimate: check them by eye). |
 | `--quality normal\|high` | Default `normal`. TRELLIS.2's grid: 1024 (about 5 min warm) or 1536 (about 19 min). |
 | `--material texture\|vertex` | Default `texture`: baked PBR textures (base colour, metallic-roughness, normal, AO), or vertex colours only (small, no textures). A vertex job queues only its own branch, so the UV unwrap and the bakes do not run; TRELLIS.2's vertex-colour mesh has no UV map, so cleanup.py adds one (Smart UV Project) for lightmaps and the budget check. In Godot such a model renders white until one material flag is set ("In the engine" below, #202). |
-| `--texture 512\|1024\|2048` | Baked texture size. |
+| `--texture 512\|1024\|2048` | Baked texture size (the local bake, and the rebake's). |
+| `--rebake`, `--no-rebake` | A fresh UV layout in cleanup and the model's textures baked onto it ("UV coverage" below). On by default with `--with tripo` (the atlas is Tripo's); opt in on the local route. |
+| `--accept-uv` | Ship a model that fails the UV coverage floor alone; the waiver goes on its asset log row and evidence file. |
 | `--out DIR` | Models folder. Default from the game's engine: `assets/models`, web and web-3d `public/assets/models`, Unity `Assets/Models`, Unreal `SourceArt/Models` (import from there). |
 | `--sprites FILE` | Also an 8-direction sprite sheet (tools/blender/render_sprites.py, with its layout in a .json of the same name beside it) for a 2D game. The sheet goes into the same asset log row and the record, with its hash. |
 | `--no-log`, `--no-preview`, `--overwrite` | Scratch runs; skip the turntable; make the same name again (the asset log row is updated, not doubled). |
@@ -202,7 +205,8 @@ the GPU starts.
 | `assets_src/bozzetto/<name>/raw.glb` | TRELLIS.2's own output, before cleanup (its embedded ComfyUI prompt removed: it holds local paths), or Tripo's (glTF extras removed). |
 | `.../view_front.png` ..., `.../tripo/tasks.json`, `.../tripo/tripo.glb` | Tripo route: the views as uploaded (metadata removed), the journal of paid tasks (no key in it), Tripo's file as downloaded. |
 | `.../clean.glb`, `export/` | After cleanup.py, after prep_export.py. A model that fails the budget stays here. |
-| `.../cleanup.json`, `.../validate.json` | The numbers: triangles in and out, vertices merged, fragments dropped, size; the validator's findings. |
+| `.../cleanup.json`, `.../validate.json` | The numbers: triangles in and out, vertices merged, fragments dropped, size, the rebake (coverage and islands before and after, texture size, maps, bake settings, the before/after check); the validator's findings, and `waived` with `--accept-uv`. |
+| `.../rebake/` | `rebake <name>`: the model before its first rebake (`before_rebake.glb`), the rebaked file, reports, record and turntable. |
 | `.../bozzetto.json` | The record: route, seed, prompt, class, turn, settings, models with licences, GPU time and VRAM peak (local) or Tripo's model, task ids, credits spent and terms (Tripo), file hashes. |
 | `.../turntable.png` | Eight views around the model. Look at it before anything else. |
 | `docs/ASSET_LOG.md`, `docs/licenses/A-NNNN.txt` | The row (`pre-generated` AI, licences, "Built with DINOv3" credit; Tripo: "paid service", Tripo's terms 5.2.2, the credits and task id) and the evidence file. |
@@ -224,9 +228,49 @@ From the kit's own runs (K01, `workflows/bozzetto-showcase/`):
 - **The back is invented.** TRELLIS.2 sees one picture; the hidden sides are its guess. Look at the turntable.
 - **Open or thin parts**: a barrel came back with an open top in every run; thin parts (straps, handles, limbs held
   close to the body) merge or vanish. Characters in an A-pose with clear gaps between arms and body work best.
-- **UVs are the model's own unwrap**: the validator passes them on coverage, but warns about texel density (islands
+- **UVs are the model's own unwrap**: the validator passes props on coverage, but warns about texel density (islands
   20x apart) and a few triangles outside 0..1. Fine for props seen at game distance; a hero asset gets a hand
-  unwrap (SOP-11 UV check).
+  unwrap (SOP-11 UV check). Characters land under the floor (TRELLIS.2: 51 to 53% on the npc floor of 55%, E152;
+  Tripo: 29% on the hero floor of 60%): "UV coverage" below.
+
+## UV coverage
+The SOP-11 budget floors UV coverage (prop 50%, npc 55%, hero 60%) because an atlas of tiny islands wastes texels;
+`validate_asset.py` fails a model under it and nothing ships. A generated model's atlas is the vendor's: a Tripo
+multiview character came back with 6,805 islands covering 29% of a 2048 texture, otherwise good (#293), and the user
+cannot fix that without a rebake. The policy, decided from that run (K01, 2026-11-11):
+- **The floor stays a failure.** The validator measures what ships, not where it came from, and a warning would be
+  skipped the way warnings are.
+- **The remedy is a rebake** (`tools/blender/rebake_uvs.py`, run by cleanup.py): a new UV map from Smart UV Project
+  (66 degrees) packed with Blender's own packer (rotation, exact shapes, a 2 px gap), then every image the materials
+  read baked through both layouts onto a new image of the class texture size (base colour, metallic-roughness and
+  occlusion, emission and alpha as a plain transfer; the normal map baked as a tangent-space normal, since island
+  rotation changes the tangent frame). The materials keep their graphs; only the images and the UV map change. The
+  result is checked by rendering both from four sides, as flat colour and lit by a sun (the normal and roughness maps
+  show there): a mean difference over 16 levels (24 lit) fails the bake and nothing is written, over 4 (8) warns.
+  **On by default for `make --with tripo`** (`--no-rebake` keeps Tripo's atlas), **opt in with `--rebake`** on the
+  local route (TRELLIS.2 bakes its own 2048 atlas with 1 px padding; rebake it when it lands under the floor).
+  The numbers go into cleanup.json, the record, the asset log row ("UV rebaked 29% -> 46% at 2048 px") and its
+  evidence file (islands, maps, bake settings, the check).
+- **What it reached on that character** (51,244 triangles, 120 parts): 29% to 46% coverage, 6,805 to 3,120 islands,
+  texel density spread 1.14x to 1.34x, 16 s in Blender 5.2.3, the flat check 0.26 levels mean and the lit check 1.15
+  (the turntables are indistinguishable). Not 60%: Smart UV Project turns every tube-like part (straps, rings, a belt)
+  into a hollow ring island, and Blender's packer cannot nest islands in the holes, so about 50% is its ceiling on a
+  mesh like that; merging the fragments first (tried, 3,120 islands to 190) packed no better. A hand unwrap does
+  (SOP-11). Other files: a 51% TRELLIS.2 npc (#203) is the next thing to measure.
+- **`--accept-uv` is the waiver**: a model that fails on UV coverage alone ships, and the waiver is written to the
+  record (`validation.waived`), the asset log row ("UV coverage waived: 46% under the hero floor 60% (--accept-uv)")
+  and the evidence file. Any other failure still stops it. A sprite source (`--sprites`, render_sprites.py) never
+  needed the floor: waive it there too.
+- **`bozzetto.py rebake <name>`** does the same to a model already in the models folder (free: a paid Tripo task is not
+  run again), or to any `.glb` with `--input`; LODs are made again from the result, the file is replaced in place
+  (the version before stays in `assets_src/bozzetto/<name>/rebake/before_rebake.glb`, and every run starts from it),
+  the record and the row are updated. `--no-replace` writes the result next to the reports to look at first;
+  `--texture`, `--class`, `--accept-uv` as for make. The Blender script on its own, for a mesh outside Bozzetto:
+  ```
+  blender -b --python-exit-code 1 -P tools/blender/rebake_uvs.py -- model.glb --out rebaked.glb --texture 2048 --json r.json
+  ```
+  (`--join` for a file with several meshes, `--no-weld` to keep vertices split at the old seams, `--no-check` to skip
+  the renders).
 - **No rig, no animation.** Characters come out as one static mesh. Rig and animate them per SOP-11 (or use them as
   statues, NPC stand-ins and sprite sources).
 - **Seeds matter**: the same picture with another seed can change a detail or the whole shape.
@@ -469,5 +513,7 @@ python tools/bozzetto/test_rig.py               # rig, offline: stand-in UniRig 
 python tools/bozzetto/test_chain.py             # rig chain: parsers and the command offline; a made-up scarf
                                                     # character built in Blender when it is found (about 1 min)
 python tools/bozzetto/test_reference.py         # reference, offline: stand-in ComfyUI, Gemini and Tripo (about 5 s)
+python tools/bozzetto/test_rebake.py            # the UV rebake and --accept-uv offline; a tiny-island cube rebaked
+                                                    # and checked in Blender when it is found (about 1 min)
 python tools/bozzetto/bozzetto.py test [--live] # the above in one go
 ```

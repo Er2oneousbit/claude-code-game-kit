@@ -73,9 +73,11 @@ the quote. Show `assets_src/bozzetto/<name>/reference/sheet.png` and the `[look]
 --seed N` (about 5 minutes warm), or paid: the same `make <name> --with tripo --class <class> --front ... --left ...
 --back ... --right ...` with `--quote-only` first, then after the user's yes with `--max-credits <quote>` (a P2 model
 from one picture or from views cost 110 credits on the kit's live runs). Show
-`assets_src/bozzetto/<name>/turntable.png` and the validator warnings. A budget failure on UV coverage: `--material
-vertex` (flat colours, no bake). Facing wrong (rig refuses it, or the turntable's first view is not the front):
-`--turn`.
+`assets_src/bozzetto/<name>/turntable.png` and the validator warnings. A budget failure on UV coverage alone: on the
+local route run again with `--rebake` (Tripo rebakes by default: a fresh layout, the textures baked onto it, checked);
+still under the floor (a 120-part character reached 46% of the hero's 60%), say so and offer `--accept-uv` (the waiver
+goes on the asset log row; the paid Tripo task is reused) or `--material vertex` on the local route (flat colours,
+no bake). Facing wrong (rig refuses it, or the turntable's first view is not the front): `--turn`.
 
 ## 5. Gate 4: the rig and its clips
 **Stop ComfyUI first** if it is running (and say so): UniRig peaks near 15.6 GB and ran six times slower sharing the
