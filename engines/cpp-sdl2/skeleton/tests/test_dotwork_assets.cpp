@@ -310,7 +310,8 @@ TEST_CASE("dotwork assets: the golden pack loads as expected.json") {
     }
     CHECK_MESSAGE(got.size() == compared, "the importer loaded assets expected.json does not list");
     CHECK(maps == 3);   // yard (blob47, a stamps layer), meadow_patch (corners4) and isle (isometric corners4)
-    CHECK_MESSAGE(pack.warnings.empty(), "the golden pack warned: " << pack.warnings.front());
+    // (the message is built even when the check passes under -s, so never front() an empty vector in one)
+    CHECK_MESSAGE(pack.warnings.empty(), "the golden pack warned: " << (pack.warnings.empty() ? "" : pack.warnings.front()));
     MESSAGE("compared " << compared << " assets with expected.json");
 }
 
