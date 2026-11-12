@@ -10,13 +10,16 @@
 # Exit    : 0 all cases pass, 1 some case failed, 2 bpy not available
 # Notes   : Renders tiny cells (32 px, 4 Cycles samples) so the whole exam takes about a minute on a CPU.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the 30 fps clip case; the exam ends through
+#           bpy_common with the bpy module (#292)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
 #   build fixtures (a body with a nose on its front; the same with a moving location key)
 #   run render_sprites as a separate process for each case, then read the sheet with bpy
 #   check: dimensions, transparent corners, alpha in every cell, front vs side silhouettes
-#          differ, animated frames differ, JSON layout, a clip far from the rest pose warns, bad input exits 2
+#          differ, animated frames differ, JSON layout, a clip far from the rest pose warns, bad input exits 2,
+#          a clip keyed at 30 fps keeps its rate and length in the manifest (#292)
 import argparse
 import json
 import shutil
@@ -103,9 +106,12 @@ def build_offset_clip(bpy, path):
     bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", export_animation_mode="ACTIONS")
 
 
-def build_fixture(bpy, path, animate=False, export=True):
-    """A tall body with a nose sticking out of its front (-Y), exported as .glb."""
+def build_fixture(bpy, path, animate=False, export=True, fps=None):
+    """A tall body with a nose sticking out of its front (-Y), exported as .glb (its keys at `fps`, the scene's
+    default 24 when None)."""
     bpy.ops.wm.read_factory_settings(use_empty=True)
+    if fps:
+        bpy.context.scene.render.fps = fps
     bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0.75))
     body = bpy.context.active_object
     body.scale = (0.5, 0.5, 1.5)
@@ -249,6 +255,19 @@ def manifest_cases(bpy, tmp, case, common):
                        "--manifest", manifest, *common)
     case("a sheet outside the manifest's assets folder is refused (exit 2)", rc == 2 and "not inside" in out,
          out[-300:])
+    # #292: a clip keyed at 30 fps (Tripo's) lands every 0.8 frames in Blender's 24 fps scene; the frames rendered
+    # and the durations written were the scene's, so the clip played at the wrong length (2 frames of 1/24 s for a
+    # clip of 2/30 s) and its loop's closing frame was missed
+    bob30 = tmp / "bob30.glb"
+    build_fixture(bpy, bob30, animate="bob", fps=30)
+    m30 = tmp / "a30" / "dotwork" / "r.assets.json"
+    rc, out = run_tool(bob30, "--out", tmp / "a30" / "art" / "b.png", "--action", "bob", "--directions", 1,
+                       "--manifest", m30, *common)
+    clip = json.loads(m30.read_text(encoding="utf-8"))["assets"][0]["clips"][0] if rc == 0 and m30.exists() else {}
+    case("a clip keyed at 30 fps renders 2 frames (the loop's repeat dropped) of 1/30 s each, at fps 30",
+         rc == 0 and len(clip.get("frames", [])) == 2 and clip.get("fps") == 30
+         and abs(clip["frames"][0]["duration"] - 1 / 30) < 1e-9 and "clips keyed at 30 fps" in out,
+         f"fps {clip.get('fps')}, frames {[f.get('duration') for f in clip.get('frames', [])]}; " + out[-300:])
 
 
 def main():
@@ -392,4 +411,11 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    code = main()
+    try:
+        import bpy
+        sys.path.insert(0, str(HERE))
+        import bpy_common
+        bpy_common.end_process(bpy, code)   # the fixtures were exported with the bpy module: a plain exit crashes (#292)
+    except ImportError:
+        sys.exit(code)

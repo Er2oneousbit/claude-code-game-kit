@@ -55,15 +55,23 @@
 #           that name replaced); one another tool wrote (Dotwork rebuilds its own) is refused. The manifest is
 #           checked with assetspec.py before it is written. Every engine's Dotwork importer loads it as it is.
 #           A looping clip whose last frame repeats its first pose (glTF loops do) renders that frame once.
+#           Clips keyed at another frame rate than the scene's (Tripo's at 30 fps land every 0.8 frames in Blender's
+#           24 fps scene) first move the scene to their rate (bpy_common.py, #292): rendered frames then sit on the
+#           clip's own keys, the manifest's fps and durations are the clip's, and a loop's closing frame is found.
+#           Blender 4.2's glTF importer names an action "<clip>_<object>": it takes its clip's name back, so
+#           --action walk finds it and the manifest's clips are walk_s, not walk_Armature_s.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-10-24: --engine eevee also tries BLENDER_EEVEE_NEXT (Blender 4.2 to 4.5); launch lines
 #           pass --python-exit-code 1 so a traceback is not exit 0 (E64, tested on Blender 5.2)
 #           2026-11-11: --actions, --step, --manifest, --name, --once (#290); a skinned body beside a rig chain's
 #           small strip is not called a helper (#291); a clip standing far from the rest pose warns
+#           2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): Blender 4.2 clip names, clips at 30 fps, the bpy
+#           module's exit crash (#292)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
-#   parse args -> import asset into an empty scene -> remove cameras and lights
+#   parse args -> import asset into an empty scene -> remove cameras and lights -> actions take their clip's name
+#   an action asked for: the scene takes the clips' frame rate (keys on whole frames)
 #   clips = --actions (each with its frame range, every --step-th frame; a looping clip drops its last frame when
 #           the pose there equals the first), or the one --action, or no action
 #   frames = parsed range or the current frame
@@ -278,6 +286,17 @@ def load_bpy():
         return None
 
 
+def common(bpy):
+    """bpy_common.py from this folder (clip names, clip frame rate, the exit): None when a lone copy of this script
+    has no such neighbour."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        import bpy_common
+    except ImportError:
+        return None
+    return bpy_common
+
+
 def import_asset(bpy, path):
     """Same import rules as validate_asset.py (shared on purpose)."""
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -287,6 +306,10 @@ def import_asset(bpy, path):
     if removed:
         print(f"[info] removed {removed} back-to-back duplicate faces (the file stores both sides of each face; "
               f"Cycles would render them black)")
+    bc = common(bpy)
+    if bc is not None:
+        for old, new in bc.adopt_clip_names(bpy):   # Blender 4.2: "walk_Armature" is the clip "walk" (#292)
+            dbg(f"action {old} is the clip {new}")
 
 
 def assign_action(bpy, scene, name):
@@ -663,6 +686,11 @@ def run(args):
     for name in drop_ignored(bpy, scene, args.ignore):
         print(f"[info] ignored {name}")
     warn_outliers(bpy, scene)
+    bc = common(bpy)
+    if bc is not None and (args.action or args.actions) and bpy.data.actions:
+        # Tripo's 30 fps clips land every 0.8 frames in a 24 fps scene: rendering whole frames would miss the keys
+        # and the manifest would hold 24 fps durations for a 30 fps clip (#292)
+        bc.conform_clip_fps(bpy, scene, list(bpy.data.actions))
     try:
         clips = plan_clips(bpy, scene, args)
     except ValueError as exc:
@@ -804,5 +832,17 @@ def main():
         return 2
 
 
+def exit_with(code):
+    """sys.exit, or with the bpy module on Windows the process end that does not crash after a render (#292)."""
+    try:
+        import bpy
+    except ImportError:
+        sys.exit(code)
+    bc = common(bpy)
+    if bc is None:
+        sys.exit(code)
+    bc.end_process(bpy, code)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    exit_with(main())
