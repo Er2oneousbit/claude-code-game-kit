@@ -57,7 +57,8 @@
 #           A looping clip whose last frame repeats its first pose (glTF loops do) renders that frame once.
 #           Clips keyed at another frame rate than the scene's (Tripo's at 30 fps land every 0.8 frames in Blender's
 #           24 fps scene) first move the scene to their rate (bpy_common.py, #292): rendered frames then sit on the
-#           clip's own keys, the manifest's fps and durations are the clip's, and a loop's closing frame is found.
+#           clip's own keys, the manifest's fps and durations are the clip's, and a loop's closing frame is found
+#           (--frames and --step then count frames at that rate; --list-actions shows the ranges before the move).
 #           Blender 4.2's glTF importer names an action "<clip>_<object>": it takes its clip's name back, so
 #           --action walk finds it and the manifest's clips are walk_s, not walk_Armature_s.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)

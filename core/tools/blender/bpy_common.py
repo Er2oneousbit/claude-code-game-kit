@@ -100,6 +100,8 @@ def conform_clip_fps(bpy, scene, actions, quiet=False):
     no common rate up to 60 fps exists)."""
     old = scene.render.fps / scene.render.fps_base
     frames = [k.co[0] for act in actions for fc in fcurves_of(act) for k in fc.keyframe_points]
+    if not frames:               # no clips (a statue, or a rig that gets its clips keyed here): nothing to follow
+        return old
     rate = clip_fps(frames, old)
     if rate is None:
         if not quiet:
