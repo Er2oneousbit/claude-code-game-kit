@@ -7,12 +7,14 @@
 #           .claude/settings.json and .gitignore come back merged, keeping the game's own rules; a binary kit file
 #           syncs; a second run reports 0 synced and leaves .game-kit.json byte for byte as it was (no history entry
 #           per no-op run); a CRLF checkout of a kit file is not a change; a failed upgrade copies nothing back;
-#           usage errors exit 2.
+#           usage errors exit 2; a kit script under Content/Python/ syncs while the game's Content/ assets stay home.
 # Usage   : python scripts/test_sync_examples.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline. Never touches the kit's real examples/: sync_examples.py finds the kit
 #           from its own location, so the exam runs the copy inside the fake kit. About 10 s (one scaffold per case).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-12 with Claude (Fable 5.1, claude-fable-5-1): the Content/Python case (the Unreal example's
+#           kit scripts were never synced because all of Content/ was skipped)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -76,6 +78,8 @@ class SyncExamplesExam(unittest.TestCase):
         write(eng / "ENGINE.md", "# Fake engine\n")
         write(eng / "FLOW.md", "# Fake flow\n")
         write(eng / "skeleton" / "main.txt", "starter for {{GAME_NAME}}\n")
+        # An Unreal-style kit script under Content/Python/ (the real overlay's kit_dotwork, kit_character, kit_shaders)
+        write(eng / "skeleton" / "Content" / "Python" / "kit_py" / "tool.py", "print('editor tool v1')\n")
         write(self.kit / "profiles" / "default.json", json.dumps({"author": "", "footer": "", "style": []}))
         # The example: a real scaffold made outside the fake kit (new_game.py refuses a dest inside it), moved in
         seed = self.root / "seed"
@@ -171,6 +175,21 @@ class SyncExamplesExam(unittest.TestCase):
         code, out = self.sync()
         self.assertEqual(code, 0, out)
         self.assertEqual((self.ex / "art" / "logo.png").read_bytes(), PNG_V2)
+        self.assertIn("0 synced", self.sync()[1])
+
+    def test_content_python_syncs_while_content_assets_stay_home(self):
+        """Unreal: Content/ is gigabytes of assets and is not copied to the work folder, but Content/Python/ holds the
+        kit's scripts. Skipping all of Content/ made the upgrade take them for deleted and never sync a change."""
+        write(self.ex / "Content" / "Maps" / "Big.umap", "the game's own, heavy\n")
+        write(self.kit / "engines" / "fake" / "skeleton" / "Content" / "Python" / "kit_py" / "tool.py",
+              "print('editor tool v2')\n")
+        code, out = self.sync()
+        self.assertEqual(code, 0, out)
+        self.assertIn("1 synced ['Content/Python/kit_py/tool.py']", out)
+        self.assertEqual(self.ex_text("Content/Python/kit_py/tool.py"), "print('editor tool v2')\n")
+        self.assertFalse((self.root / "work1" / "fake-game" / "Content" / "Maps").exists(),
+                         "Content assets were copied to the work folder")
+        self.assertTrue((self.ex / "Content" / "Maps" / "Big.umap").exists())
         self.assertIn("0 synced", self.sync()[1])
 
     def test_crlf_checkout_is_not_a_change(self):

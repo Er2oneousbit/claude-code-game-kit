@@ -14,17 +14,21 @@
 #           game edited are never overwritten: the scaffolder leaves the kit's version as <file>.gold in the work
 #           folder; merge those by hand. Name, engine and slug come from each example's .game-kit.json. Keep the work
 #           folder short on Windows (C++ and Unreal hit path limits). Heavy folders (node_modules, Library, ...) are
-#           not copied.
+#           not copied; of Unreal's Content/ only Content/Python/ (the kit's editor scripts) is.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a scaffolder exit 1 fails the example (nothing copied
 #           back, its [WARN] lines shown), work folder errors exit 2, numbered .goldN copies are reported
 # Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): a run with nothing to sync leaves the example untouched
 #           (it used to copy .game-kit.json back anyway, adding one history entry per run)
 # Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): passes the recorded slug (#97)
+# Updated : 2026-11-12 with Claude (Fable 5.1, claude-fable-5-1): Content/Python/ is copied with the example. Skipping
+#           all of Content/ left the Unreal example's kit scripts out of the upgrade, which took them for deleted
+#           and never synced their changes (the 0.14.5 kit_dotwork stayed behind at 0.15.0).
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
-#   for each example with a .game-kit.json: copy (skipping heavy folders) -> new_game.py --upgrade on the copy
+#   for each example with a .game-kit.json: copy (skipping heavy folders; of Content/ only Python/) -> new_game.py
+#   --upgrade on the copy
 #   -> nonzero exit: [FAIL] with the scaffolder's [WARN] lines, copy nothing back
 #   -> for each tracked file: copy back if upgraded == recorded hash != example
 #   -> copy back .gitignore and .claude/settings.json when the upgrade changed them
@@ -45,10 +49,28 @@ from pathlib import Path
 KIT = Path(__file__).resolve().parents[1]
 EXAMPLES = KIT / "examples"
 GOLD_RE = re.compile(r"\.gold\d*$")       # conflict copies new_game.py writes: x.gd.gold, x.gd.gold2, ...
-SKIP = shutil.ignore_patterns(".git", "node_modules", "dist", "build", ".godot", ".asset_cache", "__pycache__",
-                              "Binaries", "Intermediate", "Saved", "DerivedDataCache", "Content", "Packaged",
-                              "Library", "Temp", "Logs", "UserSettings", "Build", "*.slnx", "*.csproj", "*.sln",
-                              "vcpkg_installed", "addons", "models")
+# Heavy folders, skipped by name anywhere in the example. Unreal's Content/ is handled by skipper(): its assets stay
+# home, but Content/Python/ holds the kit's editor scripts (kit_dotwork, kit_character, kit_shaders) and must come along,
+# or the upgrade takes the missing files for the game's deletions and their changes never sync (0.15.0, rune-delve).
+HEAVY = shutil.ignore_patterns(".git", "node_modules", "dist", "build", ".godot", ".asset_cache", "__pycache__",
+                               "Binaries", "Intermediate", "Saved", "DerivedDataCache", "Packaged",
+                               "Library", "Temp", "Logs", "UserSettings", "Build", "*.slnx", "*.csproj", "*.sln",
+                               "vcpkg_installed", "addons", "models")
+CONTENT_KEEP = ("Python",)                 # the only children of <example>/Content/ that are copied
+
+
+def skipper(root):
+    """An ignore= for copytree: the heavy names everywhere, and under the example's own Content/ everything but
+    CONTENT_KEEP (an Unreal project's assets run to gigabytes; the kit's scripts under Content/Python/ are a few files)."""
+    content = root.resolve() / "Content"
+
+    def ignore(directory, names):
+        skipped = set(HEAVY(directory, names))
+        if Path(directory).resolve() == content:
+            skipped.update(n for n in names if n not in CONTENT_KEEP)
+        return skipped
+
+    return ignore
 
 
 def file_hash(path):
@@ -70,7 +92,7 @@ def recorded_state(meta):
 def sync_one(src, work):
     meta = json.loads((src / ".game-kit.json").read_text(encoding="utf-8"))
     tmp = work / src.name
-    shutil.copytree(src, tmp, ignore=SKIP)
+    shutil.copytree(src, tmp, ignore=skipper(src))
     # The recorded slug too: without it the upgrade would derive one from the name (kits before 0.8.3 did not check)
     slug = ["--slug", meta["slug"]] if meta.get("slug") else []
     r = subprocess.run([sys.executable, "-B", str(KIT / "scripts" / "new_game.py"), "--name", meta["game_name"],
