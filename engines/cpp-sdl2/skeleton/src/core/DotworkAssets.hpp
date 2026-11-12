@@ -20,8 +20,9 @@
 //           "..", a drive or a leading "/" is an error. Map layers become placed cells at load: a tiles layer as
 //           listed, a stamps layer expanded tile by tile, a terrain layer through resolve_terrain (the spec's
 //           cell_mask for blob47, sides4 and corners4, then the probability pick with cell_roll), which is what
-//           the golden expected.json names. cell_centre and placed_corner give where a cell's image lands on both
-//           shapes (square rows, isometric diamond-down), so the renderer and the test share one formula.
+//           the golden expected.json names. cell_centre, placed_corner and map_bounds give where a cell's image
+//           lands and what a map covers on both shapes (square rows, isometric diamond-down), so the renderer,
+//           the showcase and the test share one formula.
 //           Tested against data/golden/dotwork/ in tests/test_dotwork_assets.cpp.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners4 keys, the variant
@@ -251,7 +252,7 @@ struct Transition {
 struct NormalMap {
     std::string name, image, target;   // target: the image it lights
     std::string convention = "opengl";   // green up
-    int w = 0, h = 0;
+    int w = 0, h = 0;                    // 0 when the manifest gives no size (the spec's row has none)
 };
 struct Image {
     std::string name, role, image;
@@ -343,6 +344,13 @@ Point tile_origin(const Tile& tile, const Atlas& atlas);
 // Where a placed cell's image lands: its top-left in map pixels, the cell centre less the tile's origin. nullopt
 // when the tileset has no such tile.
 std::optional<Point> placed_corner(const Tileset& tileset, const Map& map, const MapCell& cell);
+// The map pixels every cell covers (the cells, not the tile images that may stand taller): square maps start at
+// (0, 0); on an isometric map cell (0, h - 1)'s diamond reaches left of 0, so `left` is (1 - h) w / 2 and the
+// map is (w + h) / 2 cells wide and tall in tile pixels.
+struct MapBounds {
+    double left = 0, top = 0, w = 0, h = 0;
+};
+MapBounds map_bounds(const Map& map);
 
 // ---- timing: one clip, played by each frame's duration ----
 class ClipPlayer {

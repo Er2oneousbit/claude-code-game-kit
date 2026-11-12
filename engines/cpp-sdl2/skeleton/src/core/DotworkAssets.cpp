@@ -448,8 +448,10 @@ NormalMap read_normal_map(const json& a) {
     NormalMap n;
     n.name = a.at("name").get<std::string>();
     n.image = path_of(a, "image");
-    n.w = a.at("size").at(0).get<int>();
-    n.h = a.at("size").at(1).get<int>();
+    if (a.contains("size") && a.at("size").is_array()) {   // the spec's normal_map row names no size
+        n.w = a.at("size").at(0).get<int>();
+        n.h = a.at("size").at(1).get<int>();
+    }
     n.target = path_of(a, "target");
     n.convention = opt<std::string>(a, "convention", "opengl");
     return n;
@@ -970,6 +972,14 @@ std::optional<Point> placed_corner(const Tileset& tileset, const Map& map, const
     const Point c = cell_centre(map.shape, cell.x, cell.y, map.tile_w, map.tile_h);
     const Point o = tile_origin(*tile, *atlas);
     return Point{c.x - o.x, c.y - o.y};
+}
+
+MapBounds map_bounds(const Map& map) {
+    const double w = map.tile_w, h = map.tile_h;
+    if (map.shape == "isometric") {
+        return {(1 - map.h) * w / 2, 0.0, (map.w + map.h) * w / 2, (map.w + map.h) * h / 2};
+    }
+    return {0.0, 0.0, map.w * w, map.h * h};
 }
 
 // ---- timing ----

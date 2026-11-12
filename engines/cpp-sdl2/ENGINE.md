@@ -70,19 +70,33 @@
   caption. Copy the parts you want into `Game.cpp`. The shake's angle is not drawn (SDL's renderer has no rotated
   rectangles).
 - **Dotwork art (#60):** packs from Dotwork (`tools/art/dotwork/`) arrive as PNGs plus `assets/dotwork/<pack>.assets.json`
-  (spec: `tools/art/dotwork/ASSET_MANIFEST.md`). `src/core/DotworkAssets` (SDL-free, `core::dotwork`) reads them: clips
-  with each frame's `duration` (`ClipPlayer`), sprites, icons, portraits, tilesets, maps (terrain layers resolved at load
-  by a port of the spec's `cell_mask`), fonts (glyph quads from `chars`: `layout_text`) and UI kits; the extra kinds
-  (background, particles, transition, normal_map, image) are skipped with one warning each. `src/gfx/DotworkRender`
-  (`gfx::dotwork::Library`) loads every pack and its textures and draws them: `draw_frame` (the frame rect as the source
-  rect, offset by the pivot), `draw_sprite`, `draw_map` (flip flags included), `draw_text`, `draw_ui_part` (9-slice
+  (spec: `tools/art/dotwork/ASSET_MANIFEST.md`, 1.x: 1.0.0 and 1.1.0 load, another major is refused).
+  `src/core/DotworkAssets` (SDL-free, `core::dotwork`) reads them: clips with each frame's `duration` (`ClipPlayer`),
+  sprites, icons, portraits, tilesets, maps, fonts (glyph quads from `chars`: `layout_text`), UI kits, and the extra
+  kinds (background layers with their velocities and `repeat`, particles with the emitter JSON, transition, normal_map,
+  image) as plain data by name (`pack.background("hills")`, `particle_set`, `transition`, `normal_map`, `image`); the
+  object that scrolls, emits, wipes or lights with them is the game's (SDL's 2D renderer has no normal-map lighting:
+  the texture loads, nothing lights with it). **Maps** become placed cells at load: a `tiles` layer as listed, a
+  `stamps` layer expanded tile by tile (tile `j` of a stamp at `(x + j % w, y + j / w)`), a `terrain` layer resolved by
+  the spec's rules ported to C++: `cell_mask` for `blob47`, `sides4` and `corners4` (the corner bits of the blob mask;
+  a corners4 tile's key from its `corners` by shape, `tile_key`), then the variant pick among the tiles with that key
+  with `cell_roll(x, y, layer_index)` (`hash32`, Jenkins' 6-shift hash in `uint32_t`, the spec's vectors in the test)
+  walking the `probability` weights, so every engine picks the same variant. A cell no tile fits stays empty with one
+  warning per layer. Cells land where `cell_centre` says: square `((x + 0.5) w, (y + 0.5) h)`, isometric
+  `((x - y + 1) w / 2, (x + y + 1) h / 2)` (Godot's diamond-down layout; cell (0, 0) of a 16x8 set at (8, 4)), and a
+  tile's image is drawn with its `origin` (else the atlas tile's centre) on that point (`placed_corner` gives the
+  top-left; `map_bounds` what an isometric map covers, which starts left of pixel 0). `src/gfx/DotworkRender`
+  (`gfx::dotwork::Library`) loads every pack and its textures (the extra kinds' too) and draws them: `draw_frame` (the
+  frame rect as the source rect, offset by the pivot), `draw_sprite`, `draw_map` (both shapes through `cell_centre`,
+  flip flags included), `draw_text`, `draw_ui_part` (9-slice
   through `SDL_RenderTexture9Grid`). **PNG decoder:** SDL's own `SDL_LoadPNG` (SDL 3.4.0 and later; the pinned 3.4.12 has
   it), so no SDL3_image or stb_image: SDL documents it for trusted files, which a game's own assets are. Every texture is
   `SDL_SCALEMODE_NEAREST` (SDL's renderer makes no mipmaps); draw at whole-number scales. A `font` or `ui_kit` image
   (its glyph rects, metrics and 9-slice margins too) is already upscaled by the manifest's `scale`: draw it 1:1, never
   times `scale` again. The starter play screen shows
   a map, a label in the font, a prop and a character walking when the game has packs (`src/game/DotworkShowcase`,
-  PROTOTYPE). `tests/test_dotwork_assets.cpp` holds the loader to `data/golden/dotwork/expected.json` (1e-6) and fails
+  PROTOTYPE). `tests/test_dotwork_assets.cpp` holds the loader to `data/golden/dotwork/expected.json` (1e-6: every
+  kind, the three maps' `terrain`, `placed` and `centres` included) and fails
   on any manifest under `assets/dotwork/` that does not load or names a missing, non-PNG or wrongly sized file; a PNG
   SDL cannot decode is an `[ERROR]` line at boot, which fails `smoke`. All types are in `core::dotwork` and
   `gfx::dotwork`, so a game's own `Sprite` or `Map` never clashes with them.

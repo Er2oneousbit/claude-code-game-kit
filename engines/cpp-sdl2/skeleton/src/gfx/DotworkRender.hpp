@@ -11,13 +11,21 @@
 //           texture is nearest-filtered (SDL_SCALEMODE_NEAREST, no mipmaps), so draw at whole-number scales.
 //           Textures load at load_all (a PNG that fails is an [ERROR] log line, which fails dev.py smoke) and
 //           live until the Library goes, which must be before the renderer (Game owns it; main.cpp destroys the
-//           game first). A failed manifest or broken asset is logged as an error and left out; skipped kinds
-//           are warnings. Coordinates are the art's, y down: no conversion. Tile maps: square cells at
-//           (x + col * w, y + row * h); isometric (2:1 diamond-down) cell centres at
-//           (x + (col - row) * w / 2, y + (col + row + 1) * h / 2), (x, y) being the top corner of cell 0, 0.
-//           A tile's image is drawn with its `origin` (default: its centre) on the cell's centre; animated tiles
-//           step through the next cells to the right at their fps; flags flip and transpose (tile_transform).
+//           game first). A failed manifest or broken asset is logged as an error and left out; unknown kinds
+//           are warnings. The extra kinds load too: a background's layer images, a particle set's texture, a
+//           transition's rule image, a normal map's image (texture only: SDL's 2D renderer has no lighting) and
+//           a plain image are textures by path (`texture(pack, rel)`), their data in the pack's structs; the
+//           object that scrolls, emits, wipes or lights with them is the game's (or the shader recipes').
+//           Coordinates are the art's, y down: no conversion. Tile maps: every cell's centre is the spec's
+//           core::dotwork::cell_centre (square ((col + 0.5) w, (row + 0.5) h); isometric, Godot's diamond-down
+//           layout, ((col - row + 1) w / 2, (col + row + 1) h / 2): cell (0, 0) of a 16x8 set at (8, 4)) scaled
+//           and moved by (x, y), map pixel (0, 0); on an isometric map cells with row > col reach left of x
+//           (core::dotwork::map_bounds says how far). A tile's image is drawn with its `origin` (default: its
+//           centre) on the cell's centre; animated tiles step through the next cells to the right at their fps;
+//           flags flip and transpose (tile_transform).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): the cell centre formula
+//           shared with the loader, the extra kinds' textures loaded
 // ---------------------------------------------------------------------------
 #pragma once
 
