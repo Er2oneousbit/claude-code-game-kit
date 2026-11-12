@@ -3,31 +3,45 @@
 -- Purpose : Reads a Dotwork asset manifest (<pack>.assets.json, spec in tools/art/dotwork/ASSET_MANIFEST.md) into
 --           plain Lua tables the game draws from: sprites, animated sprites with per-frame durations, icons,
 --           portraits, BMFont fonts, UI kits, tilesets and maps whose terrain layers are resolved with the spec's
---           blob rule. Engine-free: no love.* calls, so tests run it without a window.
+--           autotile rules (blob47, sides4, corners4) and probability pick, stamps layers expanded into tiles,
+--           every placed cell with its draw position, plus the extra kinds (background, particles, transition,
+--           normal_map, image) as data. Engine-free: no love.* calls, so tests run it without a window.
 -- Usage   : local Manifest = require("src.core.dotwork_manifest")
 --           local model = Manifest.parse(Json.decode(text), "assets/dotwork/town.assets.json")
 --           model.animated_sprite.hero.clips.walk_s.frames[1].duration   -- seconds
---           model.map.yard.layers[2].cells[1]                            -- { x, y, mask, tile = {atlas, col, row} }
+--           model.map.yard.layers[2].cells[1]        -- { x, y, key, tile = {atlas, col, row}, left, top, flags }
+--           model.map.yard.centres[1]                -- { x, y, cx, cy }: every cell's centre in map pixels
+--           Manifest.cell_centre("isometric", 1, 0, { 16, 8 })   -- 16, 8 (the spec's placing rule)
 --           local p = Manifest.player(model.animated_sprite.hero.clips.walk_s); p:update(dt); p.index
+--           model.background.hills.layers[2].velocity   model.particles.embers.emitter   model.image.logo.image
 --           model.warnings   skipped kinds and fields (log them)    model.problems   broken references (fail on them)
 --           model.files      every file the manifest names, with the size it must have (the loader checks them)
--- Notes   : Version rule: reads every 1.x.y manifest, refuses another major with a message naming both. Unknown
---           kinds and the extra kinds (background, particles, transition, normal_map, image) are skipped with one
---           warning per kind; unknown fields with one warning per kind and field. Paths come out resolved from the
---           game folder: join(dirname(manifest), base, path). Terrain layers take the FIRST tile (atlas order)
---           whose mask is the cell's, the variant the spec's loaded result names; every variant is kept in
---           tileset.by_mask for a game that wants to pick by probability. corners4 terrain layers keep the
---           reference loader's answer (a mask, no tile) and warn: the spec defines no corner rule for map layers yet.
+-- Notes   : Version rule: reads every 1.x.y manifest (spec 1.1.0; 1.0.0 packs still load), refuses another major
+--           with a message naming both. Unknown kinds are skipped with one warning per kind, unknown layer kinds
+--           with one warning per kind, unknown fields with one warning per kind and field. Paths come out resolved
+--           from the game folder: join(dirname(manifest), base, path). A terrain cell's tile is picked among the
+--           tiles of its terrain with the cell's key (the blob mask, the side bits, or the corner bits) by
+--           probability with the spec's cell_roll (Jenkins hash, the same pick in every engine); every candidate is
+--           kept in cell.variants. A cell with no tile for its key stays empty (a problem line per layer: the
+--           validator refuses such maps). Cells land as the spec's "Placing tiles" says: the tile's origin (its
+--           `origin` field, else the atlas tile's centre) on the cell centre, isometric in Godot's diamond-down
+--           layout, so an iso map's left column sits left of x = 0.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners4 keys, the
+--           probability pick (hash32 / cell_roll), stamps layers, cell centres and placed positions, the extra
+--           kinds loaded as data instead of skipped.
 -- ---------------------------------------------------------------------------
 --
 -- Pseudocode
 --   parse(doc, path): check format and major version -> base dir = normalize(dirname(path) / doc.base)
---     for each kind in dependency order (sprite, animated_sprite, icon, portrait, font, ui_kit, tileset, map):
---       convert every asset of that kind (required fields checked, unknown fields warned, paths resolved)
---     unknown and extra kinds: one warning each, their image paths still listed in model.files
---   map terrain layer: painted = its cells; each cell's mask = canon(8 neighbour bits) (sides4: N E S W only);
---     tile = the first tile of that terrain and mask
+--     for each kind in dependency order (sprite, animated_sprite, icon, portrait, font, ui_kit, tileset, map,
+--     then the extra kinds): convert every asset (required fields checked, unknown fields warned, paths resolved)
+--     unknown kinds: one warning each, their image paths still listed in model.files
+--   tileset: tiles filed by terrain and key (mask, or the sum of the corner bits holding the tile's own terrain)
+--   map terrain layer: painted = its cells; key = cell_mask(painted, x, y, mode); candidates = tiles of the
+--     layer's terrain with that key, in atlas order; tile = pick(candidates, cell_roll(x, y, layer_index))
+--   map stamps layer: each [x, y, stamp] -> the stamp's tiles, tile j at (x + j % w, y + floor(j / w))
+--   every placed cell: centre = cell_centre(shape, x, y, map tile_size); left, top = centre - tile origin
 --   player(clip): time advances by dt; the frame is the one whose cumulative duration window holds the time;
 --     a loop wraps, a one-shot holds its last frame and sets done
 local bit = require("bit")                 -- LuaJIT's bit operations (Lua 5.1 has none)
@@ -37,19 +51,37 @@ local Manifest = {}
 
 -- ---- Tunables (the spec's constants) -------------------------------------------
 Manifest.FORMAT = "dotwork-assets"
-Manifest.MAJOR = 1                        -- the spec major this importer reads (spec 1.0.0)
+Manifest.MAJOR = 1                        -- the spec major this importer reads (spec 1.1.0; 1.0.0 loads too)
 Manifest.SUFFIX = ".assets.json"
 Manifest.CORE_KINDS = { "animated_sprite", "sprite", "icon", "portrait", "tileset", "map", "font", "ui_kit" }
 Manifest.EXTRA_KINDS = { "background", "particles", "transition", "normal_map", "image" }
+Manifest.KINDS = {}                       -- every kind this importer loads (core first, then the extra kinds)
+for _, k in ipairs(Manifest.CORE_KINDS) do Manifest.KINDS[#Manifest.KINDS + 1] = k end
+for _, k in ipairs(Manifest.EXTRA_KINDS) do Manifest.KINDS[#Manifest.KINDS + 1] = k end
 -- parse order: a portrait names an animated_sprite, a map names a tileset and sprite objects
-local PARSE_ORDER = { "sprite", "animated_sprite", "icon", "portrait", "font", "ui_kit", "tileset", "map" }
+local PARSE_ORDER = { "sprite", "animated_sprite", "icon", "portrait", "font", "ui_kit", "tileset", "map",
+                      "background", "particles", "transition", "normal_map", "image" }
 -- N NE E SE S SW W NW, y down: bit b is NB8[b + 1]
 Manifest.NB8 = { { 0, -1 }, { 1, -1 }, { 1, 0 }, { 1, 1 }, { 0, 1 }, { -1, 1 }, { -1, 0 }, { -1, -1 } }
 Manifest.SIDES_ONLY = 1 + 4 + 16 + 64     -- N, E, S, W
+Manifest.CORNERS_ONLY = 2 + 8 + 32 + 128  -- NE, SE, SW, NW
+-- a corners4 tile's corner names per shape and the mask bit of the cell across that corner (spec "Autotiling"):
+-- a diamond's top corner touches the cell up the screen, which is NW in map coordinates
+Manifest.CORNER_BITS = {
+  square = { top_left = 128, top_right = 2, bottom_right = 8, bottom_left = 32 },
+  isometric = { top = 128, right = 2, bottom = 8, left = 32 },
+}
 Manifest.FLIP_H, Manifest.FLIP_V, Manifest.TRANSPOSE = 1, 2, 4
+local M32 = 4294967296                    -- 2^32: hash32 keeps every step below it (the bit library is int32)
 
--- Fields each kind may carry (spec 1.0.0). Others are warned about once and ignored.
+-- Fields each kind may carry (spec 1.1.0). Others are warned about once and ignored.
 local KNOWN = {
+  background = { "kind", "name", "role", "layers", "godot" },
+  bg_layer = { "name", "image", "size", "velocity", "repeat", "wobble_px", "scale" },
+  particles = { "kind", "name", "texture", "emitter", "godot" },
+  transition = { "kind", "name", "image", "size", "transition", "godot" },
+  normal_map = { "kind", "name", "image", "size", "target", "convention", "godot" },
+  image = { "kind", "name", "role", "image", "size", "pivot", "godot" },
   animated_sprite = { "kind", "name", "role", "blend", "clips", "directions", "godot" },
   sprite = { "kind", "name", "role", "image", "size", "pivot", "content_rect", "collision", "shadow", "godot" },
   icon = { "kind", "name", "sizes" },
@@ -68,11 +100,10 @@ for kind, list in pairs(KNOWN) do
   KNOWN[kind] = set
 end
 
-local CORE, EXTRA = {}, {}
-for _, k in ipairs(Manifest.CORE_KINDS) do CORE[k] = true end
-for _, k in ipairs(Manifest.EXTRA_KINDS) do EXTRA[k] = true end
+local LOADED = {}
+for _, k in ipairs(Manifest.KINDS) do LOADED[k] = true end
 
--- ---- Autotiling (the spec's blob rule, ported) ----------------------------------
+-- ---- Autotiling (the spec's rules, ported) -----------------------------------------
 -- A corner bit only counts when both sides next to it are set: 256 raw masks fold into the 47 blob masks.
 function Manifest.canon(m)
   for _, c in ipairs({ 1, 3, 5, 7 }) do   -- NE, SE, SW, NW
@@ -86,13 +117,16 @@ end
 
 local function key2(x, y) return x .. "," .. y end
 
--- painted: a set built by Manifest.painted_set(cells). mode: "blob47" (default) or "sides4".
+-- The key a painted cell needs. painted: a set built by Manifest.painted_set(cells). mode: "blob47" (default,
+-- the canon mask), "sides4" (N E S W bits) or "corners4" (the corner bits of the canon mask: a corner is the
+-- terrain only when all four cells meeting there are painted).
 function Manifest.cell_mask(painted, x, y, mode)
   local m = 0
   for b, d in ipairs(Manifest.NB8) do
     if painted[key2(x + d[1], y + d[2])] then m = m + bit.lshift(1, b - 1) end
   end
   if mode == "sides4" then return bit.band(m, Manifest.SIDES_ONLY) end
+  if mode == "corners4" then return bit.band(Manifest.canon(m), Manifest.CORNERS_ONLY) end
   return Manifest.canon(m)
 end
 
@@ -112,11 +146,82 @@ function Manifest.corner_list(corners)
   return out
 end
 
--- The key a tile is filed under in tileset.by_mask: the mask number, or the corner list joined.
+-- The key a tileset tile answers to: its mask (blob47, sides4), or the sum of the corner bits whose corner holds
+-- the tile's own terrain (corners4, corner names by shape). nil when it has neither, or the corner names are not
+-- the shape's.
+function Manifest.tile_key(tile, mode, shape)
+  if mode ~= "corners4" then return tile.mask end
+  local corners = tile.corners
+  if type(corners) ~= "table" then return nil end
+  local names = Manifest.CORNER_BITS[shape] or Manifest.CORNER_BITS.square
+  local key, n = 0, 0
+  for name, b in pairs(names) do
+    if corners[name] == nil then return nil end
+    n = n + 1
+    if corners[name] == tile.terrain then key = key + b end
+  end
+  for name in pairs(corners) do if not names[name] then return nil end end
+  return key
+end
+
+-- The key a tile is filed under for comparison (tests): the mask number, or the corner list joined.
 function Manifest.mask_key(tile)
   if tile.mask ~= nil then return tostring(tile.mask) end
   if tile.corners then return table.concat(Manifest.corner_list(tile.corners), ",") end
   return nil
+end
+
+-- ---- The variant pick (spec "Variants: the probability pick") ----------------------------
+-- Bob Jenkins' 32-bit integer hash: only shifts, adds and xors. LuaJIT's bit functions return signed int32, so
+-- every result is brought back to [0, 2^32) with % M32; a << 12 of a 32-bit value is below 2^44, exact in a double.
+local function u32(v) return v % M32 end
+
+function Manifest.hash32(k)
+  k = u32(k)
+  k = u32(k + 0x7ED55D16 + u32(bit.lshift(k, 12)))
+  k = u32(bit.bxor(k, 0xC761C23C, u32(bit.rshift(k, 19))))
+  k = u32(k + 0x165667B1 + u32(bit.lshift(k, 5)))
+  k = u32(bit.bxor(u32(k + 0xD3A2646C), u32(bit.lshift(k, 9))))
+  k = u32(k + 0xFD7046C5 + u32(bit.lshift(k, 3)))
+  return u32(bit.bxor(k, 0xB55A4F09, u32(bit.rshift(k, 16))))
+end
+
+-- The roll in [0, 1) that picks cell (x, y)'s variant on the layer at layer_index (0-based, the layer's position in
+-- the map's layers list); coordinates wrap at 16 bits, so negative cells roll too.
+function Manifest.cell_roll(x, y, layer_index)
+  local key = u32(bit.bor(bit.lshift(bit.band(x, 0xFFFF), 16), bit.band(y, 0xFFFF)))
+  return Manifest.hash32(Manifest.hash32(key) + layer_index) / M32
+end
+
+-- candidates: { { weight, value }, ... } in atlas order. The value whose weight span holds roll * total; the first
+-- when every weight is 0 (weight 0 is never picked otherwise).
+function Manifest.pick_variant(candidates, roll)
+  local total = 0
+  for _, c in ipairs(candidates) do total = total + c[1] end
+  if total <= 0 then return candidates[1][2] end
+  local u = roll * total
+  for _, c in ipairs(candidates) do
+    u = u - c[1]
+    if u < 0 then return c[2] end
+  end
+  return candidates[#candidates][2]
+end
+
+-- ---- Placing tiles (spec "Placing tiles") ------------------------------------------------
+-- The centre of cell (x, y) in map pixels, y down: squares in rows; isometric diamonds in Godot's diamond-down
+-- layout (x runs down-right, y down-left; cell (0, 0) at (w/2, h/2), so cell (0, 1) is at x = 0 and the left
+-- column sits left of it). tile_size is the map's cell: the diamond [w, h] on an isometric set.
+function Manifest.cell_centre(shape, x, y, tile_size)
+  local w, h = tile_size[1], tile_size[2]
+  if shape == "isometric" then return (x - y + 1) * w / 2, (x + y + 1) * h / 2 end
+  return (x + 0.5) * w, (y + 0.5) * h
+end
+
+-- The image point drawn on the cell centre: the tile's own origin, else the atlas tile's centre (the atlas's tile
+-- size, which can be taller than the map cell: iso blocks).
+function Manifest.tile_origin(tile, atlas)
+  if tile.origin then return tile.origin[1], tile.origin[2] end
+  return atlas.tile_size[1] / 2, atlas.tile_size[2] / 2
 end
 
 -- ---- Tile flags -----------------------------------------------------------------
@@ -431,7 +536,8 @@ Manifest.tile_key = tile_key
 function convert.tileset(ctx, a, where)
   local s = { kind = "tileset", name = a.name, tile_size = copy_pair(ctx:need(a, "tile_size", "pair", where)),
               shape = ctx:need(a, "shape", "string", where), terrain_sets = {}, atlases = {}, atlas_by_id = {},
-              tiles = {}, tile_list = {}, by_mask = {}, stamps = {}, custom_data = opt(a.custom_data) }
+              tiles = {}, tile_list = {}, by_key = {}, stamps = {}, stamp_list = {},
+              custom_data = opt(a.custom_data) }
   for _, ts in ipairs(ctx:need(a, "terrain_sets", "list", where)) do
     local set = { id = ts.id, mode = ts.mode, terrains = {} }
     for _, t in ipairs(ts.terrains or {}) do set.terrains[t.id] = { id = t.id, name = t.name, color = t.color } end
