@@ -382,7 +382,7 @@ scene, and its glTF exporter, sampling whole frames, wrote the last frame 0.8 fr
 loop (the walk came back with a visible seam; the idle no longer counted as a loop for `rig chain` without `--loop`).
 `rig_finish.py`, `rig_chain.py` and `render_sprites.py` now move the scene to the clips' own rate first
 (`tools/blender/bpy_common.py`: the lowest common rate up to 60 fps at which every key is a whole frame), so the poses
-and the length are kept exactly; `rig_finish.json` records `fps`. A file whose clips fit no common rate is left at
+and the length are kept exactly; the `rig/<route>/rig_finish.json` report records `fps`. A file whose clips fit no common rate is left at
 24 fps with a warning. Blender 4.2's importer names each clip's action `<clip>_<armature>`; the three scripts give the
 action its clip's name back, so `walk` stays `walk`.
 

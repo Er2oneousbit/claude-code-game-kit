@@ -208,6 +208,18 @@ class SharedWebShellExam(unittest.TestCase):
         bad = [p.name for p in base.glob("*.ts") if re.search(r'from "(phaser|three)', p.read_text(encoding="utf-8"))]
         self.assertEqual(bad, [], "the shell meets the renderer through host.ts only")
 
+    def test_vitest_gives_a_test_time_for_a_busy_machine(self):
+        # 0.15.0 verify: web-3d's `test` failed twice on a box running an engine build, a different golden Dotwork
+        # test each time, "Test timed out in 5000ms": the test takes 100 ms alone, but 23 workers start at once.
+        # Both overlays run the same shell tests, so both configs set the same, longer timeout.
+        timeouts = {}
+        for engine in ("web", "web-3d"):
+            text = (KIT / "engines" / engine / "skeleton" / "vitest.config.ts").read_text(encoding="utf-8")
+            m = re.search(r"testTimeout:\s*([\d_]+)", text)
+            timeouts[engine] = int(m.group(1).replace("_", "")) if m else 5000   # Vitest's default
+        self.assertGreaterEqual(min(timeouts.values()), 20000, timeouts)
+        self.assertEqual(len(set(timeouts.values())), 1, timeouts)
+
 
 class CommandExam(unittest.TestCase):
     def test_wavesmith_commands_in_the_docs_exist(self):
@@ -334,6 +346,26 @@ class ExampleTrackingExam(unittest.TestCase):
             self.assertIn(r.returncode, (0, 1), r.stderr.decode("utf-8", "replace"))
             hidden += [h for h in r.stdout.decode("utf-8", "replace").split("\0") if h]
         self.assertEqual(hidden, [], "kit files the root .gitignore keeps out of the repo")
+
+
+class ShippedNamesExam(unittest.TestCase):
+    def test_bare_file_names_in_core_docs_are_files_the_kit_ships(self):
+        # 0.15.0 verify: `doctor` in every fresh scaffold warned "broken doc reference in tools/bozzetto/README.md:
+        # path: rig_finish.json": the README named a report the rig step writes at run time as if it were a kit file.
+        # A backticked bare file name (no slash) in core's docs must exist somewhere in core/ or an overlay, or be
+        # written with its run-time folder (`rig/<route>/rig_finish.json`), which the link check reads as an example.
+        sys.path.insert(0, str(KIT / "core/tools"))
+        import check_links
+        shipped = {p.name for root in ("core", "engines") for p, _ in check_links.walk(KIT / root)}
+        unshipped = []
+        for md, rel in check_links.walk(KIT / "core"):
+            if md.suffix != ".md":
+                continue
+            for kind, target in check_links.references(check_links.read_text(md)):
+                if kind == "path" and "/" not in target and target not in shipped \
+                        and target not in check_links.LATER_FILES:   # CREDITS.md and co: made later, by design
+                    unshipped.append(f"core/{rel}: {target}")
+        self.assertEqual(unshipped, [], "bare file names core's docs name that no kit file carries")
 
 
 if __name__ == "__main__":
