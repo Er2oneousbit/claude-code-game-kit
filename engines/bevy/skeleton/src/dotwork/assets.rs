@@ -410,9 +410,9 @@ pub struct BackgroundLayer {
     pub size: UVec2,
     /// Pixels per second of the art, y up (the manifest's `vy` negated, like every position here).
     pub velocity: Vec2,
-    /// The image tiles seamlessly along x and along y: load it with a repeating sampler on those axes
-    /// (`Dotwork::background_image`) and draw it past its edges (`SpriteImageMode::Tiled`, or a quad with UVs
-    /// past 1).
+    /// The image tiles seamlessly along x and along y: `Dotwork::background_layers` loads it with a repeating
+    /// sampler on those axes (for a quad whose UVs run past 1; a `Sprite` with `SpriteImageMode::Tiled` repeats the
+    /// image on its own).
     pub repeat_x: bool,
     pub repeat_y: bool,
     /// A weather layer sways sideways by up to this many pixels; move in whole pixels.

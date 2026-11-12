@@ -325,8 +325,9 @@ impl Dotwork<'_> {
     }
 
     /// A background's layers, first to last, each with its image loaded to repeat on its `repeat` axes. The
-    /// scrolling (`velocity`, `wobble_px`) and the drawing past the edges (`SpriteImageMode::Tiled`, or a quad with
-    /// UVs past 1) are the game's. None when the library has no such background.
+    /// scrolling (`velocity`, `wobble_px`) and the drawing past the edges are the game's: a quad whose UVs run past
+    /// 1 reaches the repeating sampler; a `Sprite` with `SpriteImageMode::Tiled` repeats the image on its own (its
+    /// tiles keep UVs inside 0..1). None when the library has no such background.
     pub fn background_layers(&self, name: &str) -> Option<Vec<(Handle<Image>, BackgroundLayer)>> {
         let bg = self.library.background(name)?;
         Some(

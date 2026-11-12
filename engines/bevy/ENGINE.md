@@ -51,8 +51,9 @@
   pixels. Cells draw in the spec's order (later layers and later cells above), so a taller iso tile overdraws the one
   up the screen.
   **The extra kinds** are loaded as data plus their images, the game object stays yours: `background_layers` gives
-  each layer's image with a sampler that repeats on its `repeat` axes (`ImageAddressMode::Repeat`; draw it past its
-  edges with `SpriteImageMode::Tiled` and move it by `velocity`), `particles` the white texture and the emitter JSON
+  each layer's image with a sampler that repeats on its `repeat` axes (`ImageAddressMode::Repeat`, reached by a quad
+  whose UVs run past 1; a `Sprite` with `SpriteImageMode::Tiled` repeats the image on its own instead) to move by
+  `velocity`, `particles` the white texture and the emitter JSON
   (Bevy 0.20 ships no particle system), `transition` the greyscale wipe (the threshold texture of the kit's
   transition recipe), `normal_map` the map and its `target` image (Bevy 0.20's 2D sprites have no normal-map
   lighting: feed both to the kit's `sprite_light` material), `image_sprite` a loose image with its pivot. `blend: add`
