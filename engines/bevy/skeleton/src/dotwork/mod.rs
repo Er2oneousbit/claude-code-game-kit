@@ -2,33 +2,43 @@
 // dotwork/mod.rs
 // Purpose : The Dotwork importer (#59): loads every asset manifest in assets/dotwork/ (art Dotwork made on the
 //           user's GPU, tools/art/dotwork/ASSET_MANIFEST.md) and turns it into Bevy sprites: animated characters and
-//           effects, props with collision boxes, tile maps (terrain resolved by the blob rule), bitmap-font labels,
-//           9-slice UI parts, icons and portraits.
+//           effects, props with collision boxes, tile maps (terrain resolved by the spec's rules, stamps expanded,
+//           square and isometric), bitmap-font labels, 9-slice UI parts, icons and portraits, plus the extra kinds
+//           as loaded images with their data (backgrounds, particles, transitions, normal maps, loose images).
 // Usage   : app.rs adds DotworkPlugin with a window, DotworkLibraryPlugin headless (smoke runs load the manifests too).
 //           In a system:  fn show(mut commands: Commands, mut dw: Dotwork) {
 //                             dw.spawn_clip(&mut commands, "hero", "walk_s");     // animated, pivot at its feet
 //                             dw.spawn_sprite(&mut commands, "crate");            // + DotworkColliders
 //                             dw.spawn_map(&mut commands, "yard");                // tiles and props as children
 //                             dw.spawn_text(&mut commands, "tiny", "HELLO", Color::WHITE);
+//                             for (image, layer) in dw.background_layers("hills").unwrap() { ... }
 //                         }
 //           Switch a character's clip: commands.entity(e).insert(dw.clip_bundle("hero", "walk_e").unwrap());
-//           Data only (headless too): Res<DotworkLibrary> -> .animated("hero"), .sprite("crate").colliders, ...
+//           Data only (headless too): Res<DotworkLibrary> -> .animated("hero"), .sprite("crate").colliders,
+//           .particles("embers").emitter, .normal_map("crate_n").target, ...
 // Notes   : Kit code: nothing here imports the game (src/game). Pixel art rules from the spec: every texture loads
-//           with ImageSampler::nearest() and no mipmaps (Bevy makes none for PNGs); draw at whole-number scales
-//           (scale a parent entity); font pages and UI parts already carry the manifest's `scale` (Dotwork
+//           with ImageSampler::nearest() and no mipmaps (Bevy makes none for PNGs); a background layer's image
+//           repeats (ImageAddressMode::Repeat) on its `repeat` axes and clamps on the others; draw at whole-number
+//           scales (scale a parent entity); font pages and UI parts already carry the manifest's `scale` (Dotwork
 //           upscaled their images, rects and margins), so they draw 1:1 like the rest. Units are the art's
 //           pixels, y up; an Anchor is the pivot. Names are unique per pack; lookups take the first pack (sorted by
 //           file name) that has the name. A broken manifest or asset logs an ERROR (dev.py smoke fails on it) and
-//           is left out; skipped kinds log one WARN each.
+//           is left out; an unknown kind logs one WARN.
 //           Blend "add" is recorded (AnimatedSprite::additive) but drawn with normal blending: Bevy 0.20 sprites
 //           have no additive mode. Tiles are one sprite per cell under the map entity (no tilemap crate; add
-//           bevy_ecs_tilemap through an ADR if a map gets big enough to need it).
+//           bevy_ecs_tilemap through an ADR if a map gets big enough to need it), on both shapes at the spec's cell
+//           centres (y flipped), so an isometric map needs no tilemap of its own. The extra kinds stop at the image
+//           handle and the data: the emitter, the scrolling background and the lit sprite are the game's objects
+//           (Bevy 0.20 ships no particle system, and its 2D sprites have no normal-map lighting: the kit's
+//           sprite_light recipe takes the normal map as a material texture).
 //
 // Pseudocode:
 //   PreStartup: find assets/dotwork/*.assets.json -> read each (manifest.rs) -> log its warnings and errors ->
 //   DotworkLibrary. Update: every DotworkAnimation advances by the frame time (player.rs) and shows its frame.
 //   spawn_*: look the asset up -> load its images (nearest) and atlas layouts (cached) -> spawn sprites
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+//           Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): the extra kinds
+//           exposed (background images with a repeating sampler), stamps and isometric maps through spawn_map
 // ---------------------------------------------------------------------------
 pub mod assets;
 pub mod autotile;
@@ -40,18 +50,24 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use bevy::ecs::system::SystemParam;
-use bevy::image::{ImageLoaderSettings, ImageSampler, TextureAtlas, TextureAtlasLayout};
+use bevy::image::{
+    ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor, TextureAtlas, TextureAtlasLayout,
+};
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
 
 pub use manifest::{
-    AnimatedSprite, BitmapFont, Clip, ClipTexture, Collider, Icon, Pack, Portrait, SpriteAsset, TileMap, Tileset, UiKit,
+    AnimatedSprite, Background, BackgroundLayer, BitmapFont, Clip, ClipTexture, Collider, Icon, ImageAsset, LayerKind,
+    MapCell, MapLayer, NormalMap, Pack, Particles, Portrait, SpriteAsset, TileMap, Tileset, Transition, UiKit,
 };
 pub use player::FramePlayer;
 
 // ---- Tunables ------------------------------------------------------------------
 /// z step between a map's layers (children of the map entity), so later layers draw on top.
 pub const LAYER_Z: f32 = 0.01;
+/// z step between the cells of one layer, in draw order (the spec: a later cell overdraws an earlier one; on a
+/// diamond grid a taller tile covers the one above it). Small enough that a 100,000-cell layer stays under LAYER_Z.
+pub const CELL_Z: f32 = 0.0000001;
 /// z of a map's objects above its last layer, plus Y_SORT per pixel of depth: lower on screen draws in front.
 pub const OBJECT_Z: f32 = 0.1;
 pub const Y_SORT: f32 = 0.0001;
@@ -162,6 +178,26 @@ impl DotworkLibrary {
             Some((p, m, p.tilesets.get(&m.tileset)?))
         })
     }
+
+    pub fn background(&self, name: &str) -> Option<&Background> {
+        self.packs.iter().find_map(|p| p.backgrounds.get(name))
+    }
+
+    pub fn particles(&self, name: &str) -> Option<&Particles> {
+        self.packs.iter().find_map(|p| p.particles.get(name))
+    }
+
+    pub fn transition(&self, name: &str) -> Option<&Transition> {
+        self.packs.iter().find_map(|p| p.transitions.get(name))
+    }
+
+    pub fn normal_map(&self, name: &str) -> Option<&NormalMap> {
+        self.packs.iter().find_map(|p| p.normal_maps.get(name))
+    }
+
+    pub fn image_asset(&self, name: &str) -> Option<&ImageAsset> {
+        self.packs.iter().find_map(|p| p.images.get(name))
+    }
 }
 
 fn load_library(mut lib: ResMut<DotworkLibrary>) {
@@ -178,13 +214,16 @@ fn load_library(mut lib: ResMut<DotworkLibrary>) {
     if !lib.packs.is_empty() || !lib.failed.is_empty() {
         let count = |f: fn(&Pack) -> usize| lib.packs.iter().map(f).sum::<usize>();
         info!(
-            "DOTWORK packs={} animated={} sprites={} maps={} fonts={} ui_kits={} errors={}",
+            "DOTWORK packs={} animated={} sprites={} maps={} fonts={} ui_kits={} extras={} errors={}",
             lib.packs.len(),
             count(|p| p.animated.len()),
             count(|p| p.sprites.len()),
             count(|p| p.maps.len()),
             count(|p| p.fonts.len()),
             count(|p| p.ui_kits.len()),
+            count(|p| {
+                p.backgrounds.len() + p.particles.len() + p.transitions.len() + p.normal_maps.len() + p.images.len()
+            }),
             lib.errors().len()
         );
     }
@@ -258,12 +297,69 @@ pub struct Dotwork<'w> {
 }
 
 impl Dotwork<'_> {
-    /// An image of the asset folder, nearest-filtered (pixel art: no smoothing, no mipmaps).
+    /// An image of the asset folder, nearest-filtered (pixel art: no smoothing, no mipmaps), clamped at its edges.
     pub fn image(&self, path: &str) -> Handle<Image> {
+        self.image_with(path, false, false)
+    }
+
+    /// An image that repeats along x and/or y when drawn past its edges (a seamless background layer):
+    /// ImageAddressMode::Repeat on those axes of the sampler, ClampToEdge on the rest, still nearest-filtered.
+    /// The image's `.meta` settings are per path, so a path loaded with two samplers keeps the first.
+    pub fn image_with(&self, path: &str, repeat_x: bool, repeat_y: bool) -> Handle<Image> {
+        let mode = |on: bool| {
+            if on {
+                ImageAddressMode::Repeat
+            } else {
+                ImageAddressMode::ClampToEdge
+            }
+        };
+        let sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+            address_mode_u: mode(repeat_x),
+            address_mode_v: mode(repeat_y),
+            ..ImageSamplerDescriptor::nearest()
+        });
         self.server
             .load_builder()
-            .with_settings(|s: &mut ImageLoaderSettings| s.sampler = ImageSampler::nearest())
+            .with_settings(move |s: &mut ImageLoaderSettings| s.sampler = sampler.clone())
             .load(path.to_owned())
+    }
+
+    /// A background's layers, first to last, each with its image loaded to repeat on its `repeat` axes. The
+    /// scrolling (`velocity`, `wobble_px`) and the drawing past the edges (`SpriteImageMode::Tiled`, or a quad with
+    /// UVs past 1) are the game's. None when the library has no such background.
+    pub fn background_layers(&self, name: &str) -> Option<Vec<(Handle<Image>, BackgroundLayer)>> {
+        let bg = self.library.background(name)?;
+        Some(
+            bg.layers
+                .iter()
+                .map(|l| (self.image_with(&l.image, l.repeat_x, l.repeat_y), l.clone()))
+                .collect(),
+        )
+    }
+
+    /// A particle texture (a white mask to tint) and its emitter JSON, for the game's own emitter.
+    pub fn particles(&self, name: &str) -> Option<(Handle<Image>, Particles)> {
+        let p = self.library.particles(name)?;
+        Some((self.image(&p.texture), p.clone()))
+    }
+
+    /// A transition's greyscale image (the threshold texture of the kit's transition recipe) and its data.
+    pub fn transition(&self, name: &str) -> Option<(Handle<Image>, Transition)> {
+        let t = self.library.transition(name)?;
+        Some((self.image(&t.image), t.clone()))
+    }
+
+    /// A normal map's image and the image it lights (its `target`), for a lit material of the game's: Bevy 0.20's
+    /// 2D sprites do not read a normal map themselves.
+    pub fn normal_map(&self, name: &str) -> Option<(Handle<Image>, Handle<Image>, NormalMap)> {
+        let n = self.library.normal_map(name)?;
+        Some((self.image(&n.image), self.image(&n.target), n.clone()))
+    }
+
+    /// A loose image (a logo, a sheet) as a Sprite with its pivot as the Anchor.
+    pub fn image_sprite(&self, name: &str) -> Option<(Sprite, Anchor)> {
+        let i = self.library.image_asset(name)?;
+        Some((Sprite::from_image(self.image(&i.image)), i.anchor))
     }
 
     fn layout(&mut self, key: String, layout: &TextureAtlasLayout) -> Handle<TextureAtlasLayout> {
@@ -368,8 +464,10 @@ impl Dotwork<'_> {
         Some(sprite)
     }
 
-    /// Spawns a map: a parent entity at the map's top-left corner, one sprite per placed cell (layers stacked by z,
-    /// animated tiles playing, DotworkColliders on solid tiles) and its objects y-sorted on top.
+    /// Spawns a map: a parent entity at the map's top-left corner, one sprite per placed cell (terrain resolved and
+    /// stamps expanded at load; layers stacked by z and cells in draw order within a layer; square or isometric
+    /// centres with the tile's origin on them, y flipped; animated tiles playing, DotworkColliders on solid tiles)
+    /// and its objects y-sorted on top.
     pub fn spawn_map(&mut self, commands: &mut Commands, name: &str) -> Option<Entity> {
         let (pack, map, ts) = self.library.map(name)?;
         let (pack, map, ts) = (pack.name.clone(), map.clone(), ts.clone());
@@ -385,17 +483,19 @@ impl Dotwork<'_> {
                 Visibility::default(),
             ))
             .id();
-        let cell = map.cell_size.as_vec2();
         for (li, layer) in map.layers.iter().enumerate() {
-            for c in &layer.cells {
+            for (ci, c) in layer.cells.iter().enumerate() {
                 let Some([atlas, col, row]) = c.tile else {
                     continue;
                 };
                 let (Some(tile), Some((image, layout))) = (ts.tile(atlas, col, row), atlases.get(&atlas)) else {
                     continue;
                 };
-                let centre = autotile::cell_centre(map.shape, c.x, c.y, cell);
+                let centre = map.centre(c.x, c.y);
                 let (angle, scale) = autotile::flags_transform(c.flags);
+                // later layers above earlier ones; within a layer, later cells above earlier ones (a taller iso
+                // tile overdraws the one up the screen)
+                let z = li as f32 * LAYER_Z + ci as f32 * CELL_Z;
                 let mut e = commands.spawn((
                     Sprite {
                         image: image.clone(),
@@ -408,7 +508,7 @@ impl Dotwork<'_> {
                     },
                     tile.anchor,
                     Transform {
-                        translation: Vec3::new(centre.x, -centre.y, li as f32 * LAYER_Z),
+                        translation: Vec3::new(centre.x, -centre.y, z),
                         rotation: Quat::from_rotation_z(angle),
                         scale: scale.extend(1.0),
                     },

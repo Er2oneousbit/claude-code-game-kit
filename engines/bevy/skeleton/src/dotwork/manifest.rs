@@ -1,26 +1,32 @@
 // ---------------------------------------------------------------------------
 // dotwork/manifest.rs
-// Purpose : Reads one Dotwork asset manifest (<assets>/dotwork/<pack>.assets.json, spec version 1:
+// Purpose : Reads one Dotwork asset manifest (<assets>/dotwork/<pack>.assets.json, spec version 1.x:
 //           tools/art/dotwork/ASSET_MANIFEST.md) into a Pack of Bevy-ready objects: TextureAtlasLayouts from the rects,
-//           per-frame Durations, Anchors from the pivots, collision Rects, tiles with their masks, maps with every
-//           terrain cell resolved, glyph maps for bitmap fonts and TextureSlicers for 9-slice UI parts.
+//           per-frame Durations, Anchors from the pivots, collision Rects, tiles with their keys, maps with every
+//           terrain cell resolved and every stamp expanded, glyph maps for bitmap fonts, TextureSlicers for 9-slice
+//           UI parts, and the extra kinds (backgrounds, particles, transitions, normal maps, images) as data.
 // Usage   : let pack = read_manifest(&asset_root.join("dotwork/town.assets.json"), &asset_root)?;
-//           pack.errors (broken assets, each left out), pack.warnings (skipped kinds and fields)
-// Notes   : The objects are in assets.rs (re-exported here), the manifest's serde structs in defs.rs.
-//           No App, no window, no GPU: tests/dotwork.rs runs it on data/golden/dotwork/ and compares with
-//           expected.json. Paths become asset paths (relative to the asset root, forward slashes) that
-//           AssetServer::load takes; every file is checked on disk, and sheets, atlases and font pages are measured
-//           from their PNG header. Coordinates turn y up here, once: an Anchor is (px / w - 0.5, 0.5 - py / h), a
-//           collision box is a Rect around the pivot (or the tile's centre), y up. The eight core kinds load; the
-//           extra kinds (background, particles, transition, normal_map, image) and unknown kinds are skipped with one
-//           warning each; unknown fields are ignored (serde's default), as the spec's versioning asks.
+//           pack.errors (broken assets, each left out), pack.warnings (skipped kinds, empty cells, missing targets)
+// Notes   : The objects are in assets.rs (re-exported here), the manifest's serde structs in defs.rs, the tile
+//           rules in autotile.rs. No App, no window, no GPU: tests/dotwork.rs runs it on data/golden/dotwork/ and
+//           compares with expected.json. Paths become asset paths (relative to the asset root, forward slashes)
+//           that AssetServer::load takes; every file is checked on disk, and sheets, atlases and font pages are
+//           measured from their PNG header. Coordinates turn y up here, once: an Anchor is (px / w - 0.5,
+//           0.5 - py / h), a collision box is a Rect around the pivot (or the tile's centre), y up. Every kind of
+//           spec 1.1.0 loads; unknown kinds and unknown layer kinds are skipped with one warning each; unknown
+//           fields are ignored (serde's default), as the spec's versioning asks.
 //
 // Pseudocode:
 //   read the JSON -> refuse another format or major version -> base = the manifest's folder + "base" ->
-//   for each asset in the spec's order (sprite, animated_sprite, icon, portrait, font, ui_kit, tileset, map):
-//   parse its fields -> check its files -> build the objects (a broken asset is an error and is left out) ->
-//   maps last: resolve terrain layers with cell_mask against their tileset
+//   for each asset in the spec's order (sprite, animated_sprite, icon, portrait, font, ui_kit, tileset, map, then
+//   the extra kinds): parse its fields -> check its files -> build the objects (a broken asset is an error and is
+//   left out). A tileset gives each terrain tile its key (mask, or corner bits by shape). A map resolves a terrain
+//   layer cell by cell: key = cell_mask -> the tiles of the layer's terrain with that key, in atlas order -> pick
+//   by probability with cell_roll(x, y, layer index); a stamps layer expands each stamp into its tiles.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+//           Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners4 terrain,
+//           the variant pick, stamps layers, tile origins, the extra kinds loaded, a cell with no tile warns once
+//           per layer, an unknown layer kind is skipped
 // ---------------------------------------------------------------------------
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
@@ -54,7 +60,7 @@ pub const CORE_KINDS: [&str; 8] = [
     "tileset",
     "map",
 ];
-/// Kinds the spec allows an importer to skip until the game needs them.
+/// The extra kinds (spec "The extra kinds per engine"): loaded after the core kinds, as data plus their images.
 pub const EXTRA_KINDS: [&str; 5] = ["background", "particles", "transition", "normal_map", "image"];
 
 // ---- Conversions (y down in the manifest, y up in Bevy) ----------------------------------------------------------
@@ -242,9 +248,9 @@ pub fn read_document(doc: &Value, path: &Path, asset_root: &Path) -> Result<Pack
         manifest: path.to_path_buf(),
         ..Default::default()
     };
-    // core kinds in load order, then everything else in the manifest's order
+    // core kinds in load order, then the extra kinds, then whatever is left (unknown) in the manifest's order
     let mut warned_kinds = HashSet::new();
-    for kind in CORE_KINDS {
+    for kind in CORE_KINDS.iter().chain(EXTRA_KINDS.iter()) {
         for a in &head.assets {
             if a.get("kind").and_then(Value::as_str) == Some(kind) {
                 add_asset(&mut pack, &files, kind, a);
@@ -253,23 +259,16 @@ pub fn read_document(doc: &Value, path: &Path, asset_root: &Path) -> Result<Pack
     }
     for a in &head.assets {
         let kind = a.get("kind").and_then(Value::as_str).unwrap_or("?");
-        if CORE_KINDS.contains(&kind) {
+        if CORE_KINDS.contains(&kind) || EXTRA_KINDS.contains(&kind) {
             continue;
         }
         let name = a.get("name").and_then(Value::as_str).unwrap_or("?");
         pack.skipped.push(format!("{kind}/{name}"));
         if warned_kinds.insert(kind.to_string()) {
-            pack.warnings.push(if EXTRA_KINDS.contains(&kind) {
-                format!(
-                    "pack {}: {kind} assets skipped (an extra kind this importer does not load yet)",
-                    pack.name
-                )
-            } else {
-                format!(
-                    "pack {}: unknown kind {kind:?} skipped (a newer spec minor version?)",
-                    pack.name
-                )
-            });
+            pack.warnings.push(format!(
+                "pack {}: unknown kind {kind:?} skipped (a newer spec minor version?)",
+                pack.name
+            ));
         }
     }
     Ok(pack)
@@ -311,6 +310,21 @@ fn add_asset(pack: &mut Pack, files: &Files, kind: &str, a: &Value) {
         "map" => parse(a).and_then(|d| tile_map(&name, d, pack)).map(|(v, warnings)| {
             pack.warnings.extend(warnings);
             pack.maps.insert(name.clone(), v);
+        }),
+        "background" => parse(a).and_then(|d| background(&name, d, files)).map(|v| {
+            pack.backgrounds.insert(name.clone(), v);
+        }),
+        "particles" => parse(a).and_then(|d| particles(&name, d, files)).map(|v| {
+            pack.particles.insert(name.clone(), v);
+        }),
+        "transition" => parse(a).and_then(|d| transition(&name, d, files)).map(|v| {
+            pack.transitions.insert(name.clone(), v);
+        }),
+        "normal_map" => parse(a).and_then(|d| normal_map(&name, d, files)).map(|v| {
+            pack.normal_maps.insert(name.clone(), v);
+        }),
+        "image" => parse(a).and_then(|d| image(&name, d, files)).map(|v| {
+            pack.images.insert(name.clone(), v);
         }),
         _ => Ok(()),
     };
@@ -518,6 +532,7 @@ fn tileset(name: &str, d: TilesetDef, files: &Files) -> Result<Tileset, String> 
             });
         }
     }
+    let mode_of = |set: u32, id: u32| terrains.iter().find(|t| t.set == set && t.id == id).map(|t| t.mode);
     let mut atlases = Vec::new();
     for a in d.atlases {
         let tile_size = uvec(a.tile_size);
@@ -552,14 +567,32 @@ fn tileset(name: &str, d: TilesetDef, files: &Files) -> Result<Tileset, String> 
                 }
                 _ => None,
             };
+            let terrain = t.terrain.map(|id| (t.terrain_set.unwrap_or(0), id));
+            // the key a cell must have to draw this tile: its mask, or (corners4) the corner bits of its terrain
+            let key = match terrain.and_then(|(set, id)| Some((id, mode_of(set, id)?))) {
+                Some((_, TerrainMode::Blob47 | TerrainMode::Sides4)) => t.mask,
+                Some((id, TerrainMode::Corners4)) => {
+                    t.corners.as_ref().and_then(|c| autotile::corners_key(c, id, shape))
+                }
+                None => None,
+            };
+            if let Some((set, id)) = terrain
+                && mode_of(set, id).is_none()
+            {
+                return Err(format!(
+                    "{at}: terrain {set}/{id} is not in a terrain set of this tileset"
+                ));
+            }
+            let origin = t.origin.unwrap_or(centre);
             tiles.push(Tile {
                 col: t.col,
                 row: t.row,
                 index,
-                terrain: t.terrain.map(|id| (t.terrain_set.unwrap_or(0), id)),
+                terrain,
                 mask: t.mask,
                 corners: t.corners,
-                probability: t.probability.unwrap_or(1.0) as f32,
+                key,
+                probability: t.probability.unwrap_or(1.0),
                 surface: t.surface,
                 colliders: t
                     .collision
@@ -570,7 +603,8 @@ fn tileset(name: &str, d: TilesetDef, files: &Files) -> Result<Tileset, String> 
                     })
                     .collect(),
                 anim,
-                anchor: anchor_from_pivot(t.origin.unwrap_or(centre), tile_size),
+                origin,
+                anchor: anchor_from_pivot(origin, tile_size),
             });
         }
         atlases.push(TileAtlas {
@@ -603,9 +637,11 @@ fn tileset(name: &str, d: TilesetDef, files: &Files) -> Result<Tileset, String> 
     })
 }
 
-/// A map with its terrain layers resolved: each painted cell takes the first tile (atlas order) of the layer's
-/// terrain whose mask is the cell's (the spec's rule; Godot picks among same-mask variants by probability).
-/// Returns the map and its warnings.
+/// A map with its terrain layers resolved and its stamps expanded (the spec's "Autotiling and maps"): each painted
+/// cell of a terrain layer takes a tile of the layer's terrain whose key is the cell's (`cell_mask`), picked among
+/// the tiles with that key, in atlas order, by probability with the cell's roll (`cell_roll(x, y, layer index)`),
+/// so every engine shows the same tile; Godot rolls its own dice among the same tiles. A cell with no tile for its
+/// key stays empty (one warning per layer). Returns the map and its warnings.
 fn tile_map(name: &str, d: MapDef, pack: &Pack) -> Result<(TileMap, Vec<String>), String> {
     let ts = pack
         .tilesets
@@ -614,11 +650,12 @@ fn tile_map(name: &str, d: MapDef, pack: &Pack) -> Result<(TileMap, Vec<String>)
     let size = uvec(d.size);
     let mut warnings = Vec::new();
     let mut layers = Vec::new();
-    for l in d.layers {
+    // the roll's layer index counts every layer of the manifest, skipped kinds included
+    for (li, l) in d.layers.into_iter().enumerate() {
         let at = format!("layer {}", l.name);
         let inside = |x: i64, y: i64| x >= 0 && y >= 0 && x < i64::from(size.x) && y < i64::from(size.y);
         let mut cells = Vec::new();
-        let terrain = match l.kind.as_str() {
+        let (kind, terrain) = match l.kind.as_str() {
             "tiles" => {
                 for c in &l.cells {
                     let &[x, y, atlas, col, row, ..] = c.as_slice() else {
@@ -635,11 +672,11 @@ fn tile_map(name: &str, d: MapDef, pack: &Pack) -> Result<(TileMap, Vec<String>)
                         x,
                         y,
                         tile: Some(tile),
-                        mask: None,
+                        key: None,
                         flags,
                     });
                 }
-                None
+                (LayerKind::Tiles, None)
             }
             "terrain" => {
                 let set = l.terrain_set.unwrap_or(0);
@@ -650,17 +687,18 @@ fn tile_map(name: &str, d: MapDef, pack: &Pack) -> Result<(TileMap, Vec<String>)
                     .find(|t| t.set == set && t.id == id)
                     .map(|t| t.mode)
                     .ok_or(format!("{at}: terrain {set}/{id} is not in tileset {}", ts.name))?;
-                let mut by_mask: HashMap<u8, [u32; 3]> = HashMap::new();
+                // the candidates per key, in atlas order (atlases as listed, tiles in list order), with weights
+                let mut by_key: HashMap<u8, Vec<(f64, [u32; 3])>> = HashMap::new();
                 for a in &ts.atlases {
                     for t in &a.tiles {
                         if t.terrain == Some((set, id))
-                            && let Some(m) = t.mask
+                            && let Some(k) = t.key
                         {
-                            by_mask.entry(m).or_insert([a.id, t.col, t.row]);
+                            by_key.entry(k).or_default().push((t.probability, [a.id, t.col, t.row]));
                         }
                     }
                 }
-                let mut painted: Vec<(i64, i64)> = Vec::new();
+                let mut painted: HashSet<(i64, i64)> = HashSet::new();
                 for c in &l.cells {
                     let &[x, y, ..] = c.as_slice() else {
                         return Err(format!("{at}: cell {c:?} needs x, y"));
@@ -668,44 +706,80 @@ fn tile_map(name: &str, d: MapDef, pack: &Pack) -> Result<(TileMap, Vec<String>)
                     if !inside(x, y) {
                         return Err(format!("{at}: cell [{x}, {y}] is outside the map"));
                     }
-                    painted.push((x, y));
+                    painted.insert((x, y));
                 }
-                let set_of: HashSet<(i64, i64)> = painted.iter().copied().collect();
-                let mut order: Vec<(i64, i64)> = set_of.iter().copied().collect();
+                let mut order: Vec<(i64, i64)> = painted.iter().copied().collect();
                 order.sort_by_key(|&(x, y)| (y, x));
-                if mode == TerrainMode::Corners4 {
-                    warnings.push(format!(
-                        "map/{name} {at}: corners4 terrain is not resolved by this importer yet (cells left empty)"
-                    ));
-                }
+                let mut empty: Vec<String> = Vec::new();
                 for (x, y) in order {
-                    let (mask, tile) = if mode == TerrainMode::Corners4 {
-                        (None, None)
-                    } else {
-                        let m = autotile::cell_mask(&set_of, x, y, mode);
-                        (Some(m), by_mask.get(&m).copied())
-                    };
-                    if mode != TerrainMode::Corners4 && tile.is_none() {
-                        warnings.push(format!(
-                            "map/{name} {at}: cell [{x}, {y}] needs mask {}, which no tile of tileset {} has",
-                            mask.unwrap_or(0),
-                            ts.name
-                        ));
+                    let key = autotile::cell_mask(&painted, x, y, mode);
+                    let tile = by_key
+                        .get(&key)
+                        .and_then(|cands| autotile::pick(cands, autotile::cell_roll(x, y, li)))
+                        .copied();
+                    if tile.is_none() {
+                        empty.push(format!("[{x}, {y}] key {key}"));
                     }
                     cells.push(MapCell {
                         x,
                         y,
                         tile,
-                        mask,
+                        key: Some(key),
                         flags: 0,
                     });
                 }
-                Some((set, id))
+                if !empty.is_empty() {
+                    warnings.push(format!(
+                        "map/{name} {at}: {} cell(s) have no tile of terrain {set}/{id} for their key in tileset {} \
+                         (left empty; a corners4 terrain needs shapes at least 2 cells thick): {}",
+                        empty.len(),
+                        ts.name,
+                        empty.join(", ")
+                    ));
+                }
+                (LayerKind::Terrain, Some((set, id)))
             }
-            other => return Err(format!("{at}: unknown layer kind {other:?}")),
+            "stamps" => {
+                for c in &l.cells {
+                    let &[x, y, stamp, ..] = c.as_slice() else {
+                        return Err(format!("{at}: cell {c:?} needs x, y, stamp"));
+                    };
+                    let st = usize::try_from(stamp)
+                        .ok()
+                        .and_then(|i| ts.stamps.get(i))
+                        .ok_or(format!(
+                            "{at}: cell {c:?} names stamp {stamp}, which tileset {} lacks",
+                            ts.name
+                        ))?;
+                    for (sx, sy, tile) in autotile::stamp_cells(x, y, st.size.x, &st.tiles) {
+                        if !inside(sx, sy) || ts.tile(tile[0], tile[1], tile[2]).is_none() {
+                            return Err(format!(
+                                "{at}: stamp {} at [{x}, {y}] puts tile {tile:?} at [{sx}, {sy}], outside the map \
+                                 or not in the tileset",
+                                st.name
+                            ));
+                        }
+                        cells.push(MapCell {
+                            x: sx,
+                            y: sy,
+                            tile: Some(tile),
+                            key: None,
+                            flags: 0,
+                        });
+                    }
+                }
+                (LayerKind::Stamps, None)
+            }
+            other => {
+                warnings.push(format!(
+                    "map/{name} {at}: unknown layer kind {other:?} skipped (a newer spec minor version?)"
+                ));
+                continue;
+            }
         };
         layers.push(MapLayer {
             name: l.name,
+            kind,
             terrain,
             opacity: l.opacity.unwrap_or(1.0),
             cells,
@@ -736,6 +810,80 @@ fn tile_map(name: &str, d: MapDef, pack: &Pack) -> Result<(TileMap, Vec<String>)
         },
         warnings,
     ))
+}
+
+// ---- The extra kinds -------------------------------------------------------------------------------------------
+
+fn background(name: &str, d: BackgroundDef, files: &Files) -> Result<Background, String> {
+    let layers = d
+        .layers
+        .into_iter()
+        .enumerate()
+        .map(|(i, l)| {
+            let (repeat_x, repeat_y) = match l.repeat.as_str() {
+                "none" => (false, false),
+                "x" => (true, false),
+                "y" => (false, true),
+                "xy" => (true, true),
+                other => return Err(format!("layer {i}: repeat {other:?} is not none, x, y or xy")),
+            };
+            Ok(BackgroundLayer {
+                image: files.existing(&l.image).map_err(|e| format!("layer {i}: {e}"))?,
+                name: l.name,
+                size: uvec(l.size),
+                velocity: Vec2::new(l.velocity[0] as f32, -l.velocity[1] as f32),
+                repeat_x,
+                repeat_y,
+                wobble_px: l.wobble_px as f32,
+                scale: l.scale as f32,
+            })
+        })
+        .collect::<Result<_, String>>()?;
+    Ok(Background {
+        name: name.into(),
+        role: d.role,
+        layers,
+    })
+}
+
+fn particles(name: &str, d: ParticlesDef, files: &Files) -> Result<Particles, String> {
+    Ok(Particles {
+        name: name.into(),
+        texture: files.existing(&d.texture)?,
+        emitter: d.emitter,
+    })
+}
+
+fn transition(name: &str, d: TransitionDef, files: &Files) -> Result<Transition, String> {
+    Ok(Transition {
+        name: name.into(),
+        image: files.existing(&d.image)?,
+        size: uvec(d.size),
+        transition: d.transition,
+    })
+}
+
+/// The target is a path (the image it lights), checked like every other file: a normal map whose target is gone
+/// is a broken asset.
+fn normal_map(name: &str, d: NormalMapDef, files: &Files) -> Result<NormalMap, String> {
+    Ok(NormalMap {
+        name: name.into(),
+        image: files.existing(&d.image)?,
+        size: d.size.map(uvec),
+        target: files.existing(&d.target).map_err(|e| format!("target {e}"))?,
+        convention: d.convention,
+    })
+}
+
+fn image(name: &str, d: ImageDef, files: &Files) -> Result<ImageAsset, String> {
+    let size = uvec(d.size);
+    Ok(ImageAsset {
+        name: name.into(),
+        role: d.role,
+        image: files.existing(&d.image)?,
+        size,
+        anchor: d.pivot.map_or(Anchor::CENTER, |p| anchor_from_pivot(p, size)),
+    })
 }
 
 #[cfg(test)]
@@ -810,10 +958,41 @@ mod tests {
             ]
         });
         let pack = read_document(&doc, &root.join("dotwork/x.assets.json"), root).unwrap();
-        assert_eq!(pack.skipped, ["hologram/a", "hologram/b", "image/logo"]);
-        assert_eq!(pack.warnings.len(), 2, "{:?}", pack.warnings);
-        assert!(pack.errors.is_empty(), "{:?}", pack.errors);
+        assert_eq!(
+            pack.skipped,
+            ["hologram/a", "hologram/b"],
+            "an image is an extra kind: loaded, not skipped"
+        );
+        assert_eq!(pack.warnings.len(), 1, "{:?}", pack.warnings);
+        assert!(pack.warnings[0].contains("hologram"), "{:?}", pack.warnings);
+        assert_eq!(pack.errors.len(), 1, "the image's PNG is not there: {:?}", pack.errors);
+        assert!(pack.errors[0].starts_with("image/logo:"), "{:?}", pack.errors);
         assert!(pack.icons.contains_key("gem"), "the unknown field is ignored");
+    }
+
+    /// A tileset and map in memory (no files: the atlas image is the only file a tileset needs, so the map
+    /// rules are checked through the golden pack in tests/dotwork.rs; here only what needs no PNG).
+    #[test]
+    fn an_unknown_layer_kind_is_skipped_with_one_warning() {
+        let ts = Tileset {
+            name: "t".into(),
+            tile_size: UVec2::new(8, 8),
+            shape: Shape::Square,
+            terrains: Vec::new(),
+            atlases: Vec::new(),
+            stamps: Vec::new(),
+        };
+        let mut pack = Pack::default();
+        pack.tilesets.insert("t".into(), ts);
+        let d: MapDef = serde_json::from_value(serde_json::json!({
+            "tileset": "t", "size": [2, 2], "tile_size": [8, 8],
+            "layers": [{"name": "Fog", "kind": "volumes", "cells": [[0, 0, 1]]}]
+        }))
+        .unwrap();
+        let (map, warnings) = tile_map("m", d, &pack).unwrap();
+        assert!(map.layers.is_empty(), "the layer is left out");
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].contains("volumes"), "{warnings:?}");
     }
 }
 

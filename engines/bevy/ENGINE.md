@@ -37,13 +37,29 @@
   missing PNG is an ERROR that fails `dev.py smoke`). With a window, the `Dotwork` system parameter spawns it:
   `spawn_clip` (a `TextureAtlasLayout` per sheet, per-frame `Duration`s in `DotworkAnimation`, the pivot as an
   `Anchor`), `spawn_sprite` (+ `DotworkColliders`, y up around the pivot), `spawn_map` (one sprite per cell under
-  the map entity, terrain layers resolved by the spec's blob rule, animated tiles playing), `spawn_text` (glyph
-  sprites from the font's `chars`), `ui_sprite` (9-slice through `TextureSlicer`), `icon_sprite`, `portrait_sprite`. Every texture is
-  nearest-filtered with no mipmaps; draw at whole-number scales (fonts and UI parts already carry their `scale`: 1:1).
-  The extra kinds (background, particles, transition, normal_map, image) are skipped with one warning each; `blend: add`
+  the map entity, animated tiles playing), `spawn_text` (glyph sprites from the font's `chars`), `ui_sprite` (9-slice
+  through `TextureSlicer`), `icon_sprite`, `portrait_sprite`. Every texture is nearest-filtered with no mipmaps; draw
+  at whole-number scales (fonts and UI parts already carry their `scale`: 1:1).
+  **Maps** (spec 1.1.0): the loader resolves every terrain layer with the spec's rules (`src/dotwork/autotile.rs`):
+  a cell's key is `cell_mask` (the blob mask, the side bits, or for a `corners4` set the corner bits, with the tile's
+  corner names mapped to bits by shape), the tiles of the layer's terrain with that key are picked by `probability`
+  with the cell roll (`cell_roll(x, y, layer index)`, the Jenkins hash: every engine shows the same variant), a cell
+  with no tile stays empty with one warning per layer, and a `stamps` layer is expanded tile by tile (a door is two
+  cells). Cells sit at the spec's centres on both shapes: square rows, or Godot's diamond-down isometric layout
+  (`((x - y + 1) w / 2, (x + y + 1) h / 2)`, y flipped for Bevy), with the tile's `origin` (else its centre) as the
+  sprite's `Anchor`, so an isometric map needs no tilemap of its own; `TileMap::centre` and `top_left` give the map
+  pixels. Cells draw in the spec's order (later layers and later cells above), so a taller iso tile overdraws the one
+  up the screen.
+  **The extra kinds** are loaded as data plus their images, the game object stays yours: `background_layers` gives
+  each layer's image with a sampler that repeats on its `repeat` axes (`ImageAddressMode::Repeat`; draw it past its
+  edges with `SpriteImageMode::Tiled` and move it by `velocity`), `particles` the white texture and the emitter JSON
+  (Bevy 0.20 ships no particle system), `transition` the greyscale wipe (the threshold texture of the kit's
+  transition recipe), `normal_map` the map and its `target` image (Bevy 0.20's 2D sprites have no normal-map
+  lighting: feed both to the kit's `sprite_light` material), `image_sprite` a loose image with its pivot. `blend: add`
   draws with normal blending (Bevy 0.20 sprites have no additive mode). `tests/dotwork.rs` checks the golden pack in
-  `data/golden/dotwork/` against its `expected.json` and that every manifest the game ships loads; `present.rs` shows a
-  map, a walking character, a prop and a label when the game has them.
+  `data/golden/dotwork/` against its `expected.json` (clips, sprites, the three maps' terrain, placed cells and
+  centres, the backgrounds) and that every manifest the game ships loads; `present.rs` shows a map, a walking
+  character, a prop and a label when the game has them.
 - **Verify:** `python tools/dev.py doctor`.
 
 ## Layout
@@ -67,8 +83,9 @@ src/shell/screens.rs the rows and actions of every screen; view.rs draws them wi
 data/i18n/         string tables (en, fr; compiled in, a new file here is picked up at start)
 data/access/colours.json the colour-blind palettes;  data/input/presets.json the one-handed layouts (from the kit)
 src/dotwork/       the Dotwork importer: manifest.rs reads a manifest (defs.rs its serde structs) into assets.rs's
-                   objects; autotile.rs the blob rule and tile flags; player.rs the frame clock; mod.rs the plugins,
-                   the Dotwork system parameter and the animation system
+                   objects; autotile.rs the terrain keys (blob47, sides4, corners4), the cell roll and pick, stamps,
+                   cell centres on both shapes and tile flags; player.rs the frame clock; mod.rs the plugins, the
+                   Dotwork system parameter and the animation system
 src/character.rs   rigged glTF characters: spawn_character plays a named clip on a loop (CharacterPlugin)
 src/shell/fonts/   Fira Mono Medium (the text font) and Atkinson Hyperlegible (the readable font), both OFL; compiled
                    in with include_bytes!

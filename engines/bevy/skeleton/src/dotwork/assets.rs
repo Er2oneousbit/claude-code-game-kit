@@ -2,12 +2,18 @@
 // dotwork/assets.rs
 // Purpose : What the Dotwork importer builds from a manifest: a Pack of Bevy-ready objects per manifest (clips with
 //           TextureAtlasLayouts, Durations and Anchors, sprites with collision Rects, tilesets, resolved maps, bitmap
-//           fonts, UI kits, icons, portraits).
+//           fonts, UI kits, icons, portraits, and the extra kinds: backgrounds, particles, transitions, normal maps
+//           and loose images).
 // Usage   : let pack = manifest::read_manifest(..)?;  pack.animated["hero"].directed("walk", "e")
+//           map.top_left(&tileset, &cell)   // where a placed cell's image lands, in map pixels (y down)
 // Notes   : Plain values, no handles: tests compare them without a window, and dotwork/mod.rs turns them into
 //           sprites. Every path is an asset path (relative to the asset folder) that AssetServer::load takes.
-//           Coordinates are Bevy's: y up, pivots as Anchors, collision boxes around the pivot or tile centre.
+//           Coordinates are Bevy's: y up, pivots as Anchors, collision boxes around the pivot or tile centre. The
+//           map helpers (centre, top_left) answer in the spec's map pixels, y down, the numbers expected.json holds;
+//           dotwork/mod.rs flips y when it spawns.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+//           Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): a tile's key and
+//           origin, map layers of kind stamps, a cell's key (mask or corner bits), the five extra kinds
 // ---------------------------------------------------------------------------
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -16,8 +22,9 @@ use std::time::Duration;
 use bevy::image::TextureAtlasLayout;
 use bevy::math::{IVec2, Rect, URect, UVec2, Vec2};
 use bevy::sprite::{Anchor, TextureSlicer};
+use serde_json::Value;
 
-use super::autotile::{Shape, TerrainMode};
+use super::autotile::{self, Shape, TerrainMode};
 
 /// One manifest, loaded. Names are unique per kind within a pack.
 #[derive(Debug, Default)]
@@ -33,7 +40,12 @@ pub struct Pack {
     pub ui_kits: BTreeMap<String, UiKit>,
     pub tilesets: BTreeMap<String, Tileset>,
     pub maps: BTreeMap<String, TileMap>,
-    /// `kind/name` of every asset skipped on purpose (extra or unknown kinds).
+    pub backgrounds: BTreeMap<String, Background>,
+    pub particles: BTreeMap<String, Particles>,
+    pub transitions: BTreeMap<String, Transition>,
+    pub normal_maps: BTreeMap<String, NormalMap>,
+    pub images: BTreeMap<String, ImageAsset>,
+    /// `kind/name` of every asset skipped on purpose (unknown kinds: a newer spec minor version).
     pub skipped: Vec<String>,
     /// Skipped kinds and other things worth a line in the log.
     pub warnings: Vec<String>,
@@ -268,15 +280,24 @@ pub struct Tile {
     /// (terrain set, terrain).
     pub terrain: Option<(u32, u32)>,
     pub mask: Option<u8>,
-    /// Terrain id per corner, keys sorted (bottom_left, bottom_right, top_left, top_right; iso bottom, left, ...).
-    pub corners: Option<BTreeMap<String, u32>>,
-    pub probability: f32,
+    /// Terrain id per corner (-1: any other terrain), keys sorted (bottom_left, bottom_right, top_left, top_right;
+    /// iso bottom, left, right, top).
+    pub corners: Option<BTreeMap<String, i64>>,
+    /// The key a terrain cell must have to draw this tile: the mask (blob47, sides4) or the corner bits of the
+    /// tile's own terrain (corners4). None on a plain tile, or a terrain tile without a key.
+    pub key: Option<u8>,
+    /// The relative weight among the tiles of the same terrain and key (0 is never picked). f64 like the
+    /// reference, so the pick's sums agree to the last bit.
+    pub probability: f64,
     pub surface: Option<String>,
     /// Around the tile's centre, y up.
     pub colliders: Vec<Collider>,
     /// Atlas indices and durations of an animated tile (its frames sit in the next cells to the right).
     pub anim: Option<(Vec<usize>, Vec<Duration>)>,
-    /// The point drawn on the cell's centre (the image's own centre unless `origin` moved it).
+    /// The point of the image drawn on the cell's centre, in the image's pixels, y down (the manifest's `origin`,
+    /// else the atlas tile's centre).
+    pub origin: [f64; 2],
+    /// The same point as an Anchor (centre-relative, y up), for the tile's Sprite.
     pub anchor: Anchor,
 }
 
@@ -299,7 +320,7 @@ impl Tileset {
     }
 }
 
-/// Layers of placed tiles (terrain layers already resolved) and objects at pixel positions.
+/// Layers of placed tiles (terrain layers resolved, stamps expanded) and objects at pixel positions.
 #[derive(Debug, Clone)]
 pub struct TileMap {
     pub name: String,
@@ -312,13 +333,43 @@ pub struct TileMap {
     pub objects: Vec<MapObject>,
 }
 
+impl TileMap {
+    /// The centre of cell (x, y) in map pixels, y down (the spec's "Placing tiles": squares in rows, isometric
+    /// diamonds in Godot's diamond-down layout).
+    pub fn centre(&self, x: i64, y: i64) -> Vec2 {
+        autotile::cell_centre(self.shape, x, y, self.cell_size.as_vec2())
+    }
+
+    /// Where a placed cell's image lands: its top-left corner in map pixels, y down (the cell's centre less the
+    /// tile's origin). None for an empty cell or a tile the tileset lacks.
+    pub fn top_left(&self, ts: &Tileset, cell: &MapCell) -> Option<[f64; 2]> {
+        let [atlas, col, row] = cell.tile?;
+        let tile = ts.tile(atlas, col, row)?;
+        let c = self.centre(cell.x, cell.y).as_dvec2();
+        Some([c.x - tile.origin[0], c.y - tile.origin[1]])
+    }
+}
+
+/// The spec's map layer kinds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayerKind {
+    /// Cells placed as listed.
+    Tiles,
+    /// Painted cells, each resolved to a tile of the layer's terrain by its key and the cell roll.
+    Terrain,
+    /// Multi-cell pieces (a door), each expanded into its tiles.
+    Stamps,
+}
+
 #[derive(Debug, Clone)]
 pub struct MapLayer {
     pub name: String,
+    pub kind: LayerKind,
     /// The terrain painted, for terrain layers: (set, terrain).
     pub terrain: Option<(u32, u32)>,
     pub opacity: f32,
-    /// Placed cells; terrain cells sorted by row, then column.
+    /// The cells drawn, in draw order: as listed for tiles layers, stamps expanded tile by tile in reading order,
+    /// terrain cells sorted by row then column (so on a diamond grid a taller tile overdraws the one above it).
     pub cells: Vec<MapCell>,
 }
 
@@ -326,10 +377,10 @@ pub struct MapLayer {
 pub struct MapCell {
     pub x: i64,
     pub y: i64,
-    /// [atlas, col, row]; None when a terrain cell's mask has no tile (warned).
+    /// [atlas, col, row]; None when a terrain cell's key has no tile (warned, drawn empty).
     pub tile: Option<[u32; 3]>,
-    /// The mask a terrain cell resolved to.
-    pub mask: Option<u8>,
+    /// The key a terrain cell resolved to: its blob mask, side bits or corner bits.
+    pub key: Option<u8>,
     pub flags: u8,
 }
 
@@ -338,6 +389,92 @@ pub struct MapCell {
 pub struct MapObject {
     pub asset: String,
     pub position: Vec2,
+}
+
+// ---- The extra kinds -------------------------------------------------------------------------------------------
+
+/// Scrolling layers of a battle background, a scene or a weather sheet, drawn first to last.
+#[derive(Debug, Clone)]
+pub struct Background {
+    pub name: String,
+    /// battle, scene, platform, weather, ...
+    pub role: String,
+    pub layers: Vec<BackgroundLayer>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BackgroundLayer {
+    pub name: Option<String>,
+    pub image: String,
+    /// The art's size in pixels.
+    pub size: UVec2,
+    /// Pixels per second of the art, y up (the manifest's `vy` negated, like every position here).
+    pub velocity: Vec2,
+    /// The image tiles seamlessly along x and along y: load it with a repeating sampler on those axes
+    /// (`Dotwork::background_image`) and draw it past its edges (`SpriteImageMode::Tiled`, or a quad with UVs
+    /// past 1).
+    pub repeat_x: bool,
+    pub repeat_y: bool,
+    /// A weather layer sways sideways by up to this many pixels; move in whole pixels.
+    pub wobble_px: f32,
+    /// The whole-number scale the art is drawn at.
+    pub scale: f32,
+}
+
+impl BackgroundLayer {
+    /// The manifest's `repeat`: none, x, y or xy.
+    pub fn repeat(&self) -> &'static str {
+        match (self.repeat_x, self.repeat_y) {
+            (false, false) => "none",
+            (true, false) => "x",
+            (false, true) => "y",
+            (true, true) => "xy",
+        }
+    }
+}
+
+/// A particle texture (a white mask the emitter tints) and the emitter as Dotwork wrote it (amount, lifetime,
+/// one_shot, colors, ...), for the game's own emitter: Bevy 0.20 ships no particle system.
+#[derive(Debug, Clone)]
+pub struct Particles {
+    pub name: String,
+    pub texture: String,
+    pub emitter: Value,
+}
+
+/// A greyscale wipe image: a pixel is covered once the transition's progress (0 to 1) passes its grey / 255 (the
+/// kit's transition shader recipe takes it as its threshold texture).
+#[derive(Debug, Clone)]
+pub struct Transition {
+    pub name: String,
+    pub image: String,
+    pub size: UVec2,
+    /// wipe, iris, spiral, ...
+    pub transition: String,
+}
+
+/// A normal map and the image it lights (`target`, an asset path). Bevy 0.20's 2D sprites have no normal-map
+/// lighting: the game draws the target through its own lit material (the kit's sprite_light recipe) with this
+/// image; the importer only loads it.
+#[derive(Debug, Clone)]
+pub struct NormalMap {
+    pub name: String,
+    pub image: String,
+    pub size: Option<UVec2>,
+    pub target: String,
+    /// `opengl` (green up, the default) or `directx` (green down).
+    pub convention: String,
+}
+
+/// A loose image (a logo, a sheet, a particle texture) with an optional pivot.
+#[derive(Debug, Clone)]
+pub struct ImageAsset {
+    pub name: String,
+    pub role: String,
+    pub image: String,
+    pub size: UVec2,
+    /// The pivot as an Anchor; Anchor::CENTER when the manifest names none.
+    pub anchor: Anchor,
 }
 
 // {{FOOTER}}
