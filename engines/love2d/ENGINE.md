@@ -58,13 +58,38 @@ build/              .love and the fused Windows exe (git-ignored)
   size pixel parameters (`light_pos`) are given in. Post effects (`crt`, `vignette`, `colorblind`) draw a Canvas of
   the whole frame through them. `check` compiles them and `smoke --shaders` compares each with its golden image;
   both open a small window off-screen (`--headless` cannot draw shaders).
-- **Dotwork art** (tools/art/dotwork/ASSET_MANIFEST.md): `DotworkLoader.load_all()` reads every
-  `assets/dotwork/*.assets.json` (headless, also from the .love); `DotworkView.new()` (in draw) gives
+- **Dotwork art** (tools/art/dotwork/ASSET_MANIFEST.md, spec 1.1.0; 1.0.0 packs still load): `DotworkLoader.load_all()`
+  reads every `assets/dotwork/*.assets.json` (headless, also from the .love); `DotworkView.new()` (in draw) gives
   `view:animated(model.animated_sprite.hero)` (`:play_direction("walk", "e")`, `:update(dt)`, `:draw(x, y, 2)` with
-  the pivot at x, y), `view:draw_sprite`, `view:map(model.map.yard)` (a SpriteBatch per atlas and layer, terrain
-  resolved by the blob rule), `view:print(model.font.tiny, text, x, y, 2)` (the .fnt through
-  `love.graphics.newFont`), `view:draw_part` (9-slice). Frame timing comes from each frame's `duration`. The starter
-  scene shows the first character, prop, map and font; `test` checks the golden fixture and every real manifest.
+  the pivot at x, y), `view:draw_sprite`, `view:map(model.map.yard)` (a SpriteBatch per atlas and layer),
+  `view:print(model.font.tiny, text, x, y, 2)` (the .fnt through `love.graphics.newFont`), `view:draw_part`
+  (9-slice). Frame timing comes from each frame's `duration`. The starter scene shows the first character, prop,
+  map and font; `test` checks the golden fixture (the three maps' terrain, placed cells and centres to 1e-6) and
+  every real manifest.
+  - **Maps.** A `terrain` layer is resolved at load (src/core/dotwork_manifest.lua, no window): every painted cell
+    gets the key of the spec's `cell_mask` (`blob47`, `sides4`, or `corners4`: the four corner bits, a corner only
+    when all four cells meeting there are painted; corner names map to bits by shape, square `top_left` NW ...
+    isometric `top` NW, `right` NE, `bottom` SE, `left` SW) and the tile of its terrain with that key; several tiles
+    with the key are variants, picked by `probability` with `Manifest.cell_roll(x, y, layer_index)` (the spec's
+    Jenkins hash, 0-based layer index), so LÖVE, Bevy, C++ and the web overlays show the same variant in the same
+    cell. A key with no tile leaves the cell empty and warns once per layer (Dotwork's validator refuses such a
+    map). A `stamps` layer (`[x, y, stamp]`) is expanded into the stamp's tiles, tile `j` at
+    `(x + j % w, y + j // w)`; an unknown layer kind warns once and draws nothing. Each cell carries `cx, cy`
+    (its centre) and `left, top` (where its image lands), so the game can hit-test or y-sort without the view.
+  - **Placement.** `Manifest.cell_centre(shape, x, y, tile_size)` is the spec's rule: square `((x + 0.5) w,
+    (y + 0.5) h)`, isometric `((x - y + 1) w / 2, (x + y + 1) h / 2)` (Godot's diamond-down layout: cell (0, 0)
+    of a 16x8 set is centred on (8, 4), (0, 1) on (0, 8)). The view draws each tile with its `origin` (else the
+    atlas tile's centre) on that point, so a 16x12 iso block with `origin [8, 8]` stands on its diamond. An iso
+    map's left column reaches left of the map's x: `DotworkView.map_bounds(map)` gives the pixel bounds to offset
+    by. Checked against `expected.json` on 11.5; a Dotwork iso pack drawn next to Godot's own TileMapLayer is
+    still to look at **(verify)**.
+  - **The extra kinds** load as data and the view turns them into LÖVE objects: `view:background(bg)` (an Image
+    per layer, `setWrap("repeat")` on its `repeat` axes, `:update(dt)` scrolls by `velocity`, `:draw(x, y, scale,
+    w, h)`), `view:particles(p)` (the texture plus a `love.graphics.newParticleSystem` from the emitter's `amount`,
+    `lifetime`, `one_shot` and colour steps; `ps.emitter` keeps the rest of the JSON for the game to apply,
+    `ps.system:emit(ps.amount)` fires a one-shot), `view:transition(t)` and `view:normal_map(n)` (Images, for the
+    `tools/shaders/` recipes: the transition threshold, `sprite_light` with the map as `kit_aux`),
+    `view:draw_image(img, x, y, scale)` (its pivot at x, y).
 
 ## Gotchas (Claude: read before editing)
 1. **LÖVE's error screen waits for a key, even with no window.** conf.lua replaces `love.errorhandler` so automated
