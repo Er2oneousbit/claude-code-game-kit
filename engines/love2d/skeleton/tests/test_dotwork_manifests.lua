@@ -6,8 +6,11 @@
 -- Usage   : python tools/dev.py test     (or --filter dotwork)
 -- Notes   : Fails on a manifest that does not parse, another major version, a missing or mis-sized PNG, a rect
 --           outside its image, or a broken reference (a map's tileset, a portrait's animation, a tile a map names).
---           Warnings (kinds this importer skips) are printed, not failed.
+--           Warnings (an unknown kind or layer kind, a terrain key no tile answers to, an unknown field) are
+--           printed, not failed.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): every kind loads now, so the
+--           warnings named here are the ones left.
 -- ---------------------------------------------------------------------------
 local Loader = require("src.game.dotwork_loader")
 

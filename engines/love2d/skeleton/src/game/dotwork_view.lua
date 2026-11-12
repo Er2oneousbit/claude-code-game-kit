@@ -2,7 +2,9 @@
 -- dotwork_view.lua
 -- Purpose : Draws what a Dotwork manifest describes (src/core/dotwork_manifest.lua): images with nearest filtering
 --           and no mipmaps, one Quad per rect, animated sprites timed by each frame's duration, a SpriteBatch per
---           atlas and layer for maps (animated tiles included), BMFont fonts, 9-slice UI parts, icons, portraits.
+--           atlas and layer for maps (terrain, tiles and stamps layers, animated tiles, both shapes), BMFont fonts,
+--           9-slice UI parts, icons, portraits, and the extra kinds: backgrounds (Images wrapped on their repeat
+--           axes), particles (texture + a ParticleSystem from the emitter), transitions, normal maps, images.
 -- Usage   : local View = require("src.game.dotwork_view")
 --           local view = View.new()                          -- in love.draw or after the window exists
 --           local hero = view:animated(model.animated_sprite.hero); hero:play_direction("walk", "e")
@@ -11,23 +13,35 @@
 --           local map = view:map(model.map.yard); map:update(dt); map:draw(x, y, 2)
 --           view:print(model.font.tiny, "AB", x, y, 2)       -- the .fnt through love.graphics.newFont
 --           view:draw_part(model.ui_kit.windows.parts.ui_window_plain, x, y, 2, w, h)   -- 9-slice when w, h given
+--           local bg = view:background(model.background.hills); bg:update(dt); bg:draw(0, 0, 2, 640, 360)
+--           local ps = view:particles(model.particles.embers)   -- { image, system = love ParticleSystem, emitter }
+--           view:transition(model.transition.wipe).image     view:normal_map(model.normal_map.crate_n).image
+--           view:draw_image(model.image.logo, x, y, 2)       -- its pivot (else the top-left) at (x, y)
 -- Notes   : Needs a window: every love.graphics.new* call errors without one (docs/ENGINE.md gotcha 2), so build
 --           the view lazily in draw. Pivots go straight into love.graphics.draw's origin arguments (y down, the
 --           manifest's own axes: no conversion). Scale by whole numbers. Fonts: love.graphics.newFont(fntPath)
 --           reads AngelCode BMFont text files and finds the pages beside the .fnt (checked on LÖVE 11.5); if that
---           fails, the font is drawn from the manifest's `chars` with one Quad per glyph. Isometric map cells use
---           Godot's diamond-down layout (x right-down, y left-down) (verify against a Dotwork iso map).
+--           fails, the font is drawn from the manifest's `chars` with one Quad per glyph. Map cells sit where the
+--           spec's "Placing tiles" puts them (Manifest.cell_centre: squares in rows, isometric diamonds in Godot's
+--           diamond-down layout, cell (0, 0) of a 16x8 set centred on (8, 4)) with each tile's origin on the centre,
+--           so an iso map's left column reaches left of the map's x: leave room, or draw it from the map's centres.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): the spec's cell centres
+--           (the old iso formula was Godot's layout from memory), stamps layers, per-axis wrap, the extra kinds.
 -- ---------------------------------------------------------------------------
 --
 -- Pseudocode
---   image(path): cached newImage(path, no mipmaps), nearest filter, clamp
+--   image(path, wrap_x, wrap_y): cached newImage(path, no mipmaps), nearest filter, clamp unless asked to repeat
 --   quad(image, rect): cached newQuad over the image's size
 --   animated: a Manifest.player per instance; draw = frame's image + quad at (x, y) with origin = clip pivot
---   map: for each layer, cells grouped by atlas -> one SpriteBatch; a cell = tile quad at the cell centre with
---        the tile's origin (flags rotate and flip about it); animated tiles re-set their quad when the frame changes;
---        objects (props) drawn after the layers, sorted by y
+--   map: for each layer, cells grouped by atlas -> one SpriteBatch; a cell = tile quad at the cell's centre
+--        (Manifest.cell_centre) with the tile's origin (flags rotate and flip about it); animated tiles re-set
+--        their quad when the frame changes; objects (props) drawn after the layers, sorted by y
 --   font: newFont(.fnt) in a pcall -> else glyph quads from chars (Manifest.layout_text)
+--   background: a layer = Image wrapped on its repeat axes + a scroll offset moved by velocity (whole pixels),
+--        drawn through a Quad the size of the view so the repeat shows
+--   particles: newParticleSystem(texture, amount); lifetime, emission rate (amount / lifetime, or emit(amount)
+--        for a one-shot), colour steps as setColors; the rest of the emitter JSON stays the game's to apply
 local Log = require("src.core.log")
 local Manifest = require("src.core.dotwork_manifest")
 
@@ -43,13 +57,17 @@ function View.new()
 end
 
 -- ---- Textures ------------------------------------------------------------------
-function View:image(path, wrap)
-  local img = self.images[path]
+-- wrap_x, wrap_y: "clamp" (default) or "repeat" (background layers on their repeat axes). An image asked for
+-- with another wrap than its cached one gets its own entry.
+function View:image(path, wrap_x, wrap_y)
+  wrap_x, wrap_y = wrap_x or "clamp", wrap_y or wrap_x or "clamp"
+  local key = (wrap_x == "clamp" and wrap_y == "clamp") and path or (path .. "|" .. wrap_x .. "," .. wrap_y)
+  local img = self.images[key]
   if not img then
     img = love.graphics.newImage(path, { mipmaps = false })
     img:setFilter(FILTER, FILTER)
-    img:setWrap(wrap or "clamp", wrap or "clamp")
-    self.images[path] = img
+    img:setWrap(wrap_x, wrap_y)
+    self.images[key] = img
   end
   return img
 end
@@ -208,15 +226,24 @@ end
 local MapView = {}
 MapView.__index = MapView
 
--- The centre of cell (cx, cy) in map pixels (square grid, or Godot's diamond-down iso layout).
+-- The centre of cell (cx, cy) in map pixels: the spec's rule (Manifest.cell_centre), squares in rows, isometric
+-- diamonds in Godot's diamond-down layout with cell (0, 0) centred on (w/2, h/2).
 local function cell_centre(map, cx, cy)
-  local tw, th = map.tile_size[1], map.tile_size[2]
-  if map.tileset and map.tileset.shape == "isometric" then
-    return (cx - cy) * tw / 2 + map.size[2] * tw / 2, (cx + cy) * th / 2 + th / 2
-  end
-  return cx * tw + tw / 2, cy * th + th / 2
+  return Manifest.cell_centre(map.shape or (map.tileset and map.tileset.shape) or "square", cx, cy, map.tile_size)
 end
 View.cell_centre = cell_centre
+
+-- The map's pixel bounds around its cell centres: left, top, right, bottom (an iso map's left column sits left
+-- of x = 0, so draw it at x - left to keep it on screen).
+function View.map_bounds(map)
+  local l, t, r, b = math.huge, math.huge, -math.huge, -math.huge
+  local hw, hh = map.tile_size[1] / 2, map.tile_size[2] / 2
+  for _, c in ipairs(map.centres) do
+    l, t, r, b = math.min(l, c.cx - hw), math.min(t, c.cy - hh), math.max(r, c.cx + hw), math.max(b, c.cy + hh)
+  end
+  if #map.centres == 0 then return 0, 0, 0, 0 end
+  return l, t, r, b
+end
 
 local function anim_quad(view, atlas, col, row)
   local tw, th = atlas.tile_size[1], atlas.tile_size[2]
@@ -288,6 +315,117 @@ function MapView:draw(x, y, scale)
   for _, o in ipairs(objects) do
     if o.sprite then self.view:draw_sprite(o.sprite, x + o.x * scale, y + o.y * scale, scale) end
   end
+end
+
+-- ---- Backgrounds -----------------------------------------------------------------------------
+local Background = {}
+Background.__index = Background
+
+-- A background's layers as Images wrapped on their repeat axes, each with a scroll offset its velocity moves.
+function View:background(asset)
+  local bg = setmetatable({ view = self, asset = asset, layers = {} }, Background)
+  for i, L in ipairs(asset.layers) do
+    bg.layers[i] = { data = L, image = self:image(L.image, L.repeat_x and "repeat" or "clamp",
+                                                  L.repeat_y and "repeat" or "clamp"), ox = 0, oy = 0 }
+  end
+  return bg
+end
+
+-- Scroll by velocity (px/s of the art); the offset wraps within the image on a repeating axis.
+function Background:update(dt)
+  for _, L in ipairs(self.layers) do
+    local d, w, h = L.data, L.data.size[1], L.data.size[2]
+    L.ox, L.oy = L.ox + d.velocity[1] * dt, L.oy + d.velocity[2] * dt
+    if d.repeat_x and w > 0 then L.ox = L.ox % w end
+    if d.repeat_y and h > 0 then L.oy = L.oy % h end
+  end
+end
+
+-- The layers with their top-left at (x, y), the art at `scale` times each layer's own scale, over a view of
+-- w x h screen pixels: a repeating axis is drawn through a Quad that size (the wrap shows it tiled), a fixed axis
+-- as the image is. Offsets move in whole art pixels.
+function Background:draw(x, y, scale, w, h)
+  scale = scale or 1
+  for _, L in ipairs(self.layers) do
+    local d = L.data
+    local s = scale * (d.scale or 1)
+    local iw, ih = d.size[1], d.size[2]
+    local ox, oy = math.floor(L.ox), math.floor(L.oy)
+    local qw = d.repeat_x and w and (w / s) or iw
+    local qh = d.repeat_y and h and (h / s) or ih
+    local qx = d.repeat_x and -ox or 0
+    local qy = d.repeat_y and -oy or 0
+    L.quad = L.quad or love.graphics.newQuad(0, 0, iw, ih, iw, ih)
+    L.quad:setViewport(qx, qy, qw, qh)      -- outside the image on a repeating axis: the wrap tiles it
+    local dx = d.repeat_x and 0 or ox
+    local dy = d.repeat_y and 0 or oy
+    love.graphics.draw(L.image, L.quad, x + dx * s, y + dy * s, 0, s, s)
+  end
+end
+
+-- ---- Particles, transitions, normal maps, images ---------------------------------------------------
+-- "#rrggbb" or "#rrggbbaa" -> r, g, b, a in 0..1
+local function hex_colour(s)
+  local r, g, b, a = s:match("^#?(%x%x)(%x%x)(%x%x)(%x?%x?)$")
+  if not r then return 1, 1, 1, 1 end
+  return tonumber(r, 16) / 255, tonumber(g, 16) / 255, tonumber(b, 16) / 255, a ~= "" and tonumber(a, 16) / 255 or 1
+end
+
+-- The emitter's colour steps as setColors arguments: Dotwork's `colour_steps` ({rgba = {r, g, b, a}}, 0..255
+-- with a 0..1 alpha) or a plain `colors` list of hex strings; empty when it has neither.
+local function emitter_colours(e)
+  local out = {}
+  for _, step in ipairs(type(e.colour_steps) == "table" and e.colour_steps or {}) do
+    local c = step.rgba or {}
+    out[#out + 1] = (c[1] or 255) / 255; out[#out + 1] = (c[2] or 255) / 255; out[#out + 1] = (c[3] or 255) / 255
+    out[#out + 1] = c[4] or 1
+  end
+  if #out == 0 then
+    for _, hex in ipairs(type(e.colors) == "table" and e.colors or {}) do
+      local r, g, b, a = hex_colour(tostring(hex))
+      out[#out + 1] = r; out[#out + 1] = g; out[#out + 1] = b; out[#out + 1] = a
+    end
+  end
+  return out
+end
+
+-- The particle texture (nearest, white mask) and a ParticleSystem from the emitter's amount, lifetime, one_shot and
+-- colour steps (a one-shot is started with ps.system:emit(ps.amount); a loop emits amount / lifetime per second).
+-- Everything else in the emitter JSON (emission shape, speed, gravity, damping, blend) is the game's to apply from
+-- ps.emitter: LÖVE's ParticleSystem has matching setters for most of it.
+function View:particles(asset)
+  local e = asset.emitter or {}
+  local amount = math.max(1, math.floor(tonumber(e.amount) or 8))
+  local lifetime = tonumber(e.lifetime) or 1
+  local ps = { asset = asset, emitter = e, image = self:image(asset.texture), amount = amount, lifetime = lifetime,
+               one_shot = e.one_shot == true }
+  local sys = love.graphics.newParticleSystem(ps.image, amount)
+  sys:setParticleLifetime(lifetime)
+  if not ps.one_shot then sys:setEmissionRate(amount / math.max(lifetime, 1e-6)) end
+  local colours = emitter_colours(e)
+  if #colours >= 4 then sys:setColors(unpack(colours)) end
+  if e.blend == "add" then ps.blend = "add" end
+  ps.system = sys
+  return ps
+end
+
+-- A transition's greyscale image (the threshold shader recipe reads it: covered once progress > grey / 255).
+function View:transition(asset)
+  return { asset = asset, image = self:image(asset.image), kind = asset.transition, size = asset.size }
+end
+
+-- A normal map and the image it lights, both as Images (the sprite_light shader recipe takes the map as kit_aux).
+function View:normal_map(asset)
+  return { asset = asset, image = self:image(asset.image), target = self:image(asset.target),
+           convention = asset.convention }
+end
+
+-- A loose image with its pivot (else its top-left) at (x, y).
+function View:draw_image(asset, x, y, scale)
+  scale = scale or 1
+  local px, py = 0, 0
+  if asset.pivot then px, py = asset.pivot[1], asset.pivot[2] end
+  love.graphics.draw(self:image(asset.image), x, y, 0, scale, scale, px, py)
 end
 
 return View
