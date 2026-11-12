@@ -111,7 +111,8 @@ A file whose hash no longer matches (you edited it in MZ or a paint program) is 
 
 **Not converted yet** (each prints a note): terrain tiles (MZ's A1 to A4 autotiles are cut from quarter tiles in
 MZ's own arrangement, not from Dotwork's 47 blob or 16 corner tiles: a later step, so paint ground with B to E tiles
-or MZ's own autotiles for now), maps (they need those autotiles), isometric tilesets, effects and spells (MZ's battle
+or MZ's own autotiles for now), maps (they need those autotiles; the spec's map rules of 1.1.0, the corners rule, the
+variant pick, stamps layers and isometric placement, wait with them), isometric tilesets, effects and spells (MZ's battle
 animations are Effekseer files), particles, rule-image transitions, normal maps, bitmap fonts (MZ draws TrueType or
 WOFF fonts), battle backgrounds and parallaxes, and other pictures (copy them to `img/pictures` by hand). Lost on the
 way: Dotwork's frame timing (MZ times walks by move speed and plays three frames), frames past the three MZ uses, tile
