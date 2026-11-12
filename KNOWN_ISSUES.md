@@ -79,11 +79,14 @@ examples were built and tested on one Windows 11 machine.
 
 ### Art workflow outside Godot
 Since 0.14.5 every engine reads Dotwork's asset manifest (`core/tools/art/dotwork/ASSET_MANIFEST.md`) through its
-own importer, each tested against the golden fixture in `core/data/golden/dotwork/`. Not covered yet in any engine:
-corners4 terrain layers on a map, isometric placement checked in the engine, picking a variant, the extra kinds
-(backgrounds, particles, transitions, normal maps) and stamps
-([#285](https://github.com/Er2oneousbit/claude-code-game-kit/issues/285)). Per engine (additive blending in Bevy and
-Unreal, Unreal tile animation and font kerning, MZ autotiles and maps, Phaser multi-page fonts, and others):
+own importer, each tested against the golden fixture in `core/data/golden/dotwork/`. Spec 1.1.0 (unreleased,
+[#285](https://github.com/Er2oneousbit/claude-code-game-kit/issues/285)) defined the rules the first importers left
+open (corners4 terrain layers, isometric placement, the variant pick, stamps layers, the extra kinds per engine) and
+every importer follows them on the golden maps. Still true: a Godot map scene rolls its own variants (every other
+engine picks the same tile); a corners4 terrain shape thinner than 2 cells has no tile (the validator refuses the
+map; Godot's own painter improvises a one-corner tile there); RPG Maker MZ converts no maps. Per engine (additive
+blending in Bevy and Unreal, Unreal tile animation, Niagara and font kerning, MZ autotiles, maps and parallaxes,
+Phaser multi-page fonts, and others):
 [#286](https://github.com/Er2oneousbit/claude-code-game-kit/issues/286). The importers ran on the golden pack and the
 model-free example packs, not yet on a real game's art.
 
