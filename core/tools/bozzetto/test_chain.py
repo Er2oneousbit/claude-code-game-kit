@@ -19,12 +19,15 @@
 #             mesh, every clip), the cloth bake moving the chain in the one-shot from rest, the output reloading
 #             with its chain and all three clips
 #           - the two-row box cut into rows without changing its size; the fused band rebuilt as a strip that
-#             still shows the red of the texture
+#             still shows the red of the texture, inside its faces too when the band's texture sits in two islands
+#             with another colour between them (the flecks of the live run); clips keyed at 30 fps counted as
+#             loops without --loop, swaying and as long as they were (#292)
 #           - one real `bozzetto.py rig chain` run in a scratch game
 # Usage   : python tools/bozzetto/test_chain.py
 #           BOZZETTO_TEST_BLENDER=skip|bpy|<path to blender>  picks part 2's Blender (skip: part 1 only)
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the split-island band and the 30 fps clips (#292)
 # ---------------------------------------------------------------------------
 import contextlib
 import io
@@ -285,7 +288,7 @@ BUILD = textwrap.dedent('''
         for n, h, t, p in BONES:
             w, d = SIZE.get(n, (0.08, 0.08))
             box(V, F, G, C, h, t, w, d, 3, M + n, SKIN if n in ("Head", "Neck") or "Hand" in n else SHIRT)
-        if kind in ("free", "texture", "vertex"):     # the scarf tail: its own shell, 12 rows
+        if kind in ("free", "texture", "vertex", "thirty"):     # the scarf tail: its own shell, 12 rows
             box(V, F, G, C, (0, 0.115, 1.48), (0, 0.13, 0.95), 0.12, 0.012, 12,
                 [(M + "Spine2", 0.6), (M + "Spine1", 0.4)], RED)
         elif kind == "front":                         # the same tail hanging down the chest instead of the back
@@ -295,7 +298,7 @@ BUILD = textwrap.dedent('''
             box(V, F, G, C, (0, 0.115, 1.48), (0, 0.13, 0.95), 0.12, 0.03, 1, M + "Spine2", RED)
         elif kind == "lump":                          # a red lump on the chest
             box(V, F, G, C, (0, -0.13, 1.3), (0, -0.13, 1.38), 0.08, 0.08, 1, M + "Spine2", RED)
-        elif kind in ("fused", "fused_tex"):          # the back as one surface, the scarf a raised red band in it
+        elif kind in ("fused", "fused_tex", "fused_split"):   # the back as one surface, the scarf a raised red band
             nx, nz, x0, x1, z0, z1 = 8, 12, -0.17, 0.17, 0.95, 1.48
             base = len(V)
             for j in range(nz + 1):
@@ -313,12 +316,16 @@ BUILD = textwrap.dedent('''
             for n, w in ([(gs, 1.0)] if isinstance(gs, str) else gs):
                 g = body.vertex_groups.get(n) or body.vertex_groups.new(name=n)
                 g.add([i], w, "REPLACE")
-        if kind in ("texture", "fused_tex"):          # a 64 px texture: red right half, shirt and skin left
+        if kind in ("texture", "fused_tex", "fused_split"):   # a 64 px texture: red right half, shirt and skin left
+            # fused_split: the red is two islands (the right half's top and bottom) with shirt colour between them,
+            # the band's upper half mapped to one and its lower half to the other, as an AI mesh's atlas is cut up
+            split = kind == "fused_split"
             img = bpy.data.images.new("tex", 64, 64)
             px = []
             for y in range(64):
                 for x in range(64):
-                    px += [*(RED if x >= 32 else (SKIN if y >= 32 else SHIRT)), 1.0]
+                    red = x >= 32 and (not split or y < 20 or y >= 44)
+                    px += [*(RED if red else (SKIN if (y >= 32 and x < 32) else SHIRT)), 1.0]
             img.pixels = px; img.pack()
             mat = bpy.data.materials.new("cloth"); mat.use_nodes = True
             tex = mat.node_tree.nodes.new("ShaderNodeTexImage"); tex.image = img
@@ -327,6 +334,8 @@ BUILD = textwrap.dedent('''
             uv = me.uv_layers.new(name="UVMap")
             for f, c in zip(me.polygons, C):
                 u0, v0 = (0.75, 0.5) if c == RED else ((0.25, 0.75) if c == SKIN else (0.25, 0.25))
+                if split and c == RED:                # the split between two strip rows, so a face straddles it
+                    v0 = 0.88 if f.center.z > 1.25 else 0.12
                 for k, li in enumerate(f.loop_indices):
                     uv.data[li].uv = (u0 + 0.05 * math.cos(k), v0 + 0.05 * math.sin(k))
         elif kind == "vertex":                        # a colour attribute and a material that shows it
@@ -376,10 +385,12 @@ BUILD = textwrap.dedent('''
             a = 25 * math.sin(math.pi * min(1.0, (f - 1) / 8)) if f <= 9 else 25 * math.exp(-(f - 9) / 6) * 0.4
             return [("Spine", (1, 0, 0), -a), ("Spine2", (1, 0, 0), -a * 0.6), ("Head", (1, 0, 0), a * 0.5)]
         key("walk", range(1, 26), walk); key("idle", range(1, 50), idle); key("hit", range(1, 22), hit)
+        if kind == "thirty":                          # the same clips keyed at 30 fps, as Tripo's come (#292)
+            bpy.context.scene.render.fps = 30
         bpy.ops.export_scene.gltf(filepath=f"{out_dir}/{kind}.glb", export_format="GLB", export_yup=True,
                                   export_animations=True, export_animation_mode="ACTIONS")
 
-    for k in ("free", "texture", "vertex", "box", "fused", "fused_tex", "lump", "front"):
+    for k in ("free", "texture", "vertex", "box", "fused", "fused_tex", "fused_split", "lump", "front", "thirty"):
         build(k)
         print("BUILT", k)
 ''')
@@ -391,17 +402,20 @@ PROBE = textwrap.dedent('''
     import numpy as np
     from mathutils.kdtree import KDTree
     ARGV = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:]   # Blender, or the bpy module
-    src, out, label = ARGV[:3]
+    src, out, label, common_dir = ARGV[:4]
+    sys.path.insert(0, common_dir)
+    import bpy_common as bc
 
     def load(path):
         bpy.ops.wm.read_factory_settings(use_empty=True)
         bpy.ops.import_scene.gltf(filepath=path)
         arm = [o for o in bpy.data.objects if o.type == "ARMATURE"][0]
+        bc.adopt_clip_names(bpy)           # Blender 4.2 names actions "<clip>_<armature>"; the track keeps the clip
         for t in list(arm.animation_data.nla_tracks) if arm.animation_data else []:
-            for st in t.strips:            # Blender 4.2 names actions "<clip>_<armature>"; the track keeps the clip
-                if st.action is not None and t.name not in bpy.data.actions:
-                    st.action.name = t.name
             arm.animation_data.nla_tracks.remove(t)
+        # a 30 fps clip's keys sit every 0.8 frames at 24 fps: the poses are read at whole frames, so the scene
+        # follows the clips' rate (as rig_chain itself does), else the first and last frame would miss the keys
+        bc.conform_clip_fps(bpy, bpy.context.scene, list(bpy.data.actions), quiet=True)
         meshes = [o for o in bpy.data.objects if o.type == "MESH" and any(m.type == "ARMATURE" for m in o.modifiers)]
         return arm, meshes
 
@@ -484,8 +498,19 @@ PROBE = textwrap.dedent('''
             w, h = img.size
             px = np.empty(w * h * 4, dtype=np.float32); img.pixels.foreach_get(px); px = px.reshape(h, w, 4)
             uv = m.data.uv_layers.active.data
-            cols = [px[min(h - 1, int(l.uv[1] % 1 * h)), min(w - 1, int(l.uv[0] % 1 * w)), :3] for l in uv]
+            def at(u, v):
+                return px[min(h - 1, int(v % 1 * h)), min(w - 1, int(u % 1 * w)), :3]
+            cols = [at(*l.uv) for l in uv]
             res["part_texture_mean"] = np.mean(cols, axis=0).tolist()
+            # what a face really shows: the texture at its centre and halfway along each edge, where coordinates
+            # interpolated between corners in different texture islands sweep through whatever lies between
+            inner = []
+            for p in m.data.polygons:
+                us = [uv[li].uv for li in p.loop_indices]
+                inner.append(at(sum(x[0] for x in us) / len(us), sum(x[1] for x in us) / len(us)))
+                for a, b in zip(us, us[1:] + us[:1]):
+                    inner.append(at((a[0] + b[0]) / 2, (a[1] + b[1]) / 2))
+            res["part_texture_inside"] = [[round(float(c), 3) for c in col] for col in inner]
     print("PROBE" + json.dumps(res))
 ''')
 
@@ -516,7 +541,7 @@ class ChainExam(unittest.TestCase):
         (cls.d / "build.py").write_text(BUILD + END, encoding="utf-8")
         (cls.d / "probe.py").write_text(PROBE + END, encoding="utf-8")
         p = blender_run(cls.d / "build.py", [cls.d])
-        assert p.returncode == 0 and p.stdout.count("BUILT") == 8, p.stdout[-2000:] + p.stderr[-2000:]
+        assert p.returncode == 0 and p.stdout.count("BUILT") == 10, p.stdout[-2000:] + p.stderr[-2000:]
         cls.runs = {}
 
     @classmethod
@@ -536,7 +561,7 @@ class ChainExam(unittest.TestCase):
         return self.runs[key]
 
     def probe(self, kind, out, label="scarf"):
-        q = blender_run(self.d / "probe.py", [self.d / f"{kind}.glb", out, label])
+        q = blender_run(self.d / "probe.py", [self.d / f"{kind}.glb", out, label, HERE.parent / "blender"])
         line = next((l for l in q.stdout.splitlines() if l.startswith("PROBE")), None)
         self.assertIsNotNone(line, q.stdout[-3000:] + q.stderr[-2000:])
         return json.loads(line[5:])
@@ -623,7 +648,7 @@ class ChainExam(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stdout[-2000:])
         part = rep["parts"][0]
         self.assertEqual(part["rebuild"], "strip")
-        self.assertIn("texture projected", part["look"])
+        self.assertIn("texture baked", part["look"])
         self.assertAlmostEqual(part["width_m"], 0.085, delta=0.02)
         r = self.probe("fused_tex", out)
         red = [0.784, 0.125, 0.165]
@@ -631,6 +656,43 @@ class ChainExam(unittest.TestCase):
         self.assertLess(r["body_mesh_err"], 1e-4)               # the band stays on the body as it was
         self.assertLess(r["loop_err"]["walk"], 1e-4)
         self.assertGreater(r["tip_move"]["walk"], 0.02)
+
+    def test_a_band_across_two_texture_islands_shows_no_body_colour(self):
+        """Live run 2026-11-11: a rebuilt scarf showed flecks of the body's texture. The strip's corners took the
+        texture coordinates of their nearest original point; when two corners of one face sat in different islands
+        of the atlas, the face swept through everything between them. Every point of the strip must show the part."""
+        p, rep, out = self.chain("fused_split", "--part", f"scarf=colour:{RED}")
+        self.assertEqual(p.returncode, 0, p.stdout[-2000:])
+        self.assertEqual(rep["parts"][0]["rebuild"], "strip")
+        r = self.probe("fused_split", out)
+        red = (0.784, 0.125, 0.165)
+        inside = r.get("part_texture_inside") or []
+        self.assertGreater(len(inside), 50, "the probe sampled no face interiors")
+        off = [c for c in inside if max(abs(a - b) for a, b in zip(c, red)) > 0.2]
+        self.assertLess(len(off) / len(inside), 0.02, f"{len(off)} of {len(inside)} samples inside the strip's faces "
+                                                     f"show another colour than the scarf's, e.g. {off[:3]}")
+
+    def test_a_clip_keyed_at_30_fps_loops_and_keeps_its_length(self):
+        """#292: Tripo keys at 30 fps; in Blender's 24 fps scene those keys sit every 0.8 frames, the first and last
+        pose read at whole frames differ (the loop test failed without --loop) and the export cut the loop short.
+        The scene takes the clips' rate: the walk is a loop on its own, the sway loops, the length is kept."""
+        p, rep, out = self.chain("thirty", "--part", f"scarf=colour:{RED}", "--bones", "3")
+        self.assertEqual(p.returncode, 0, p.stdout[-2000:])
+        self.assertEqual(rep.get("fps"), 30, rep.get("fps"))
+        clips = rep["clips"]
+        self.assertEqual((clips["walk"]["kind"], clips["idle"]["kind"], clips["hit"]["kind"]),
+                         ("loop", "loop", "one-shot"), clips)
+        self.assertEqual(clips["walk"]["motion"], "sway")
+        self.assertEqual(clips["walk"]["frames"], [1, 25])
+        r = self.probe("thirty", out)
+        self.assertLess(r["loop_err"]["walk"], 1e-4)
+        self.assertGreater(r["tip_move"]["walk"], 0.02)
+        self.assertLess(r["body_bone_err"], 1e-4, "a body bone moved differently")
+        data = Path(out).read_bytes()
+        doc = json.loads(data[20:20 + int.from_bytes(data[12:16], "little")].decode("utf-8"))
+        ends = {a["name"]: max(doc["accessors"][s["input"]]["max"][0] for s in a["samplers"]) for a in doc["animations"]}
+        self.assertAlmostEqual(ends["walk"], 24 / 30, places=4, msg=f"walk lasts {ends['walk']} s, not 0.8")
+        self.assertAlmostEqual(ends["idle"], 48 / 30, places=4, msg=f"idle lasts {ends['idle']} s, not 1.6")
 
     def test_the_preview_looks_from_the_side_the_chain_hangs_on(self):
         # #291 live run: a scarf down the chest was hidden in chain.png, which always looked from behind

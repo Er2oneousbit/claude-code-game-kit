@@ -374,7 +374,17 @@ removes their mean sideways offset from every key, keeping the sway around it an
 their rest spot are left alone. A clip whose hips end more than 10% of the height from where they started travels
 (root motion, not in place): it is left as it is, with a warning, since moving it would move where the motion starts.
 The kit asks Tripo for in-place clips, and the UniRig route's clips only bob, so expect none. A rigged file from before
-this fix: run `rig_finish.py` on it again (`render_sprites.py` names such a clip).
+this fix: run `rig_finish.py` on it again (`render_sprites.py` names such a clip). The hips are the root-most bone
+whose location keys move: a glTF round trip keys every bone, so a still root above the hips does not hide them.
+
+**Clips keep their own frame rate (#292):** Tripo keys at 30 fps. Blender lays such keys every 0.8 frames in its 24 fps
+scene, and its glTF exporter, sampling whole frames, wrote the last frame 0.8 frames short of the key that closed the
+loop (the walk came back with a visible seam; the idle no longer counted as a loop for `rig chain` without `--loop`).
+`rig_finish.py`, `rig_chain.py` and `render_sprites.py` now move the scene to the clips' own rate first
+(`tools/blender/bpy_common.py`: the lowest common rate up to 60 fps at which every key is a whole frame), so the poses
+and the length are kept exactly; `rig_finish.json` records `fps`. A file whose clips fit no common rate is left at
+24 fps with a warning. Blender 4.2's importer names each clip's action `<clip>_<armature>`; the three scripts give the
+action its clip's name back, so `walk` stays `walk`.
 
 **Bone names:** UniRig's bones are `bone_0` ... `bone_N`. `rig_finish.py` finds the body by shape (the spine runs from
 the root to the highest bone; of the limbs off it, the two reaching the floor are legs, the two reaching farthest
@@ -439,8 +449,12 @@ like a cape). The chain hangs from the nearest bone of the spine line (hips, spi
 to bend (a box with two ends), it is cut across its length: more rows, the same shape, texture and colours. A part
 that is fused to the body along its length (generated meshes often are: the scarf is just a red area of one surface)
 cannot swing without tearing a hole, so it is **rebuilt as a strip**: a box-section ribbon along the part's middle line,
-its width and thickness measured slice by slice, laid just on top of the original, with the texture coordinates (or
-colours) taken from the nearest point of the original, so it looks the same from the front. Its limits, measured on the
+its width and thickness measured slice by slice, laid just on top of the original, with its texture baked into a small
+image of its own (one patch of 32 x 32 texels per strip face, every texel the colour of the nearest point of the part's
+own surface, so a 0.26 m wide scarf keeps its pattern down to about 8 mm; the colours of a vertex-coloured part are
+copied the same way), so it looks the same from the front. Texture coordinates
+copied to the strip's corners used to sweep through the atlas between two islands and showed flecks of body texture
+on the scarf (live run 2026-11-11). Its limits, measured on the
 exam's fused band: the width (0.09 m of 0.085) and the colours come through; folds, fringes, knots, tassels and a
 pattern on the back do not (both sides show the front); the thickness is a guess (8 to 50% of the width); the original
 area stays painted on the body, so it shows behind the strip when the strip swings out; one strip follows one middle
@@ -509,9 +523,12 @@ python tools/bozzetto/test_bozzetto_live.py     # one real run on the GPU (about
 python tools/bozzetto/test_tripo.py             # make --with tripo, offline: a stand-in Tripo API; with Blender,
                                                     # the real cleanup.py turns a +X-facing mesh to +Z (about 15 s)
 python tools/bozzetto/test_rig.py               # rig, offline: stand-in UniRig and Tripo; rig_finish.py on rigs
-                                                    # built in Blender when it is found (about 25 s)
+                                                    # built in Blender when it is found (about 90 s)
 python tools/bozzetto/test_chain.py             # rig chain: parsers and the command offline; a made-up scarf
                                                     # character built in Blender when it is found (about 1 min)
+uv run --python 3.11 --with "bpy==4.2.*" python tools/bozzetto/test_rig.py    # the same on the bpy 4.2 module, the
+                                                    # kit's floor (BOZZETTO_TEST_BLENDER=bpy picks the module when a
+                                                    # Blender is installed too); also test_chain.py and test_bozzetto.py
 python tools/bozzetto/test_reference.py         # reference, offline: stand-in ComfyUI, Gemini and Tripo (about 5 s)
 python tools/bozzetto/test_rebake.py            # the UV rebake and --accept-uv offline; a tiny-island cube rebaked
                                                     # and checked in Blender when it is found (about 1 min)

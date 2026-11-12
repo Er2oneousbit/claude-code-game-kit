@@ -6,10 +6,12 @@
 #           direction table), the merge into an existing manifest, the base folder and path rules, the option
 #           checks, and the committed fixture data/golden/character/sprites/ (rendered from the golden character):
 #           it passes assetspec.py's validator with its files, and its expected.json is assetspec's loaded result.
-#           The renders themselves are checked by test_render_sprites.py (bpy, live).
+#           The renders themselves are checked by test_render_sprites.py (bpy, live). Also bpy_common.py's
+#           plain-Python parts: the clips' frame rate and the Blender 4.2 clip names (#292).
 # Usage   : python tools/blender/test_render_sprites_manifest.py [-v]
 # Exit    : 0 all tests pass, 1 a test failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): bpy_common's clip frame rate and clip names (#292)
 # ---------------------------------------------------------------------------
 import contextlib
 import io
@@ -24,6 +26,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "art" / "dotwork"))
 import assetspec  # noqa: E402
+import bpy_common as bc  # noqa: E402
 import render_sprites as rs  # noqa: E402
 
 FIXTURE = HERE.parents[1] / "data" / "golden" / "character" / "sprites"
@@ -171,6 +174,71 @@ class Api(unittest.TestCase):
         used = (HERE.parent / "bozzetto" / "turntable.py").read_text(encoding="utf-8")
         for name in ("import_asset", "scene_bounds"):
             self.assertIn("rs." + name, used, "turntable.py no longer uses " + name + ": update this list")
+
+
+class Common(unittest.TestCase):
+    """bpy_common.py's plain-Python parts (#292): the clip frame rate, and the Blender 4.2 clip names on stand-ins."""
+
+    def test_clip_fps_picks_the_lowest_rate_that_fits_the_keys(self):
+        self.assertEqual(bc.clip_fps([1, 2, 3, 25], 24), 24)                   # whole frames: the scene's own rate
+        self.assertEqual(bc.clip_fps([0.8, 1.6, 2.4, 45.6], 24), 30)           # Tripo's 30 fps in a 24 fps scene
+        self.assertEqual(bc.clip_fps([0.4, 0.8, 1.2], 24), 60)
+        self.assertEqual(bc.clip_fps([1.25, 2.5, 3.75], 30), 24)              # a 24 fps clip in a 30 fps scene
+        self.assertEqual(bc.clip_fps([1, 7, 13], 24), 24)                      # sparse keys on whole frames stay
+        self.assertEqual(bc.clip_fps([0.8 * k for k in range(1, 462)], 24), 30)   # a 15 s idle, float error and all
+        self.assertIsNone(bc.clip_fps([0.8, 1.0], 24))                          # two rates in one file
+        self.assertIsNone(bc.clip_fps([], 24))
+
+    def test_adopt_clip_names_renames_4_2_actions_from_their_tracks(self):
+        class Named:
+            def __init__(self, name):
+                self.name = name
+
+        class Actions(list):
+            def __contains__(self, name):
+                return any(a.name == name for a in self)
+
+        def strip(action):
+            s = Named("s")
+            s.action = action
+            return s
+
+        def track(name, action):
+            t = Named(name)
+            t.strips = [strip(action)]
+            return t
+
+        walk, hit, own, body = Named("walk_Armature"), Named("hit_Armature"), Named("idle"), Named("bob_Cube")
+        actions = Actions([walk, hit, own, body])
+        arm, cube, plain = Named("Armature"), Named("Cube"), Named("Plain")
+        arm.animation_data = type("AD", (), {"nla_tracks": [track("walk", walk), track("hit", hit), track("idle", own)]})
+        cube.animation_data = type("AD", (), {"nla_tracks": [track("bob", body)]})
+        plain.animation_data = None
+        fake = type("B", (), {"data": type("D", (), {"objects": [arm, cube, plain], "actions": actions})})
+        self.assertEqual(sorted(bc.adopt_clip_names(fake)),
+                         [("bob_Cube", "bob"), ("hit_Armature", "hit"), ("walk_Armature", "walk")])
+        self.assertEqual([a.name for a in actions], ["walk", "hit", "idle", "bob"])
+        self.assertEqual(bc.adopt_clip_names(fake), [])                        # 4.3+ (or a second call): nothing
+
+    def test_adopt_keeps_an_action_whose_name_is_taken(self):
+        class Named:
+            def __init__(self, name):
+                self.name = name
+
+        class Actions(list):
+            def __contains__(self, name):
+                return any(a.name == name for a in self)
+
+        clip, other = Named("walk_Armature"), Named("walk")   # a hand-made "walk" already there: not overwritten
+        s = Named("s")
+        s.action = clip
+        t = Named("walk")
+        t.strips = [s]
+        arm = Named("Armature")
+        arm.animation_data = type("AD", (), {"nla_tracks": [t]})
+        fake = type("B", (), {"data": type("D", (), {"objects": [arm], "actions": Actions([clip, other])})})
+        self.assertEqual(bc.adopt_clip_names(fake), [])
+        self.assertEqual(clip.name, "walk_Armature")
 
 
 class CommittedFixture(unittest.TestCase):
