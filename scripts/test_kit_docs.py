@@ -336,6 +336,26 @@ class ExampleTrackingExam(unittest.TestCase):
         self.assertEqual(hidden, [], "kit files the root .gitignore keeps out of the repo")
 
 
+class ShippedNamesExam(unittest.TestCase):
+    def test_bare_file_names_in_core_docs_are_files_the_kit_ships(self):
+        # 0.15.0 verify: `doctor` in every fresh scaffold warned "broken doc reference in tools/bozzetto/README.md:
+        # path: rig_finish.json": the README named a report the rig step writes at run time as if it were a kit file.
+        # A backticked bare file name (no slash) in core's docs must exist somewhere in core/ or an overlay, or be
+        # written with its run-time folder (`rig/<route>/rig_finish.json`), which the link check reads as an example.
+        sys.path.insert(0, str(KIT / "core/tools"))
+        import check_links
+        shipped = {p.name for root in ("core", "engines") for p, _ in check_links.walk(KIT / root)}
+        unshipped = []
+        for md, rel in check_links.walk(KIT / "core"):
+            if md.suffix != ".md":
+                continue
+            for kind, target in check_links.references(check_links.read_text(md)):
+                if kind == "path" and "/" not in target and target not in shipped \
+                        and target not in check_links.LATER_FILES:   # CREDITS.md and co: made later, by design
+                    unshipped.append(f"core/{rel}: {target}")
+        self.assertEqual(unshipped, [], "bare file names core's docs name that no kit file carries")
+
+
 if __name__ == "__main__":
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
