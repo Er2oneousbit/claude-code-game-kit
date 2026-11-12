@@ -326,7 +326,7 @@ sideways in every key (a 1.0 m model, live run 2026-11-11; idle at about 0), so 
 origin in those clips: an engine showed it jump away from its collider when the clip changed, and sprite sheets came
 out tiny. `rig_finish.py` measures each clip's hips (the root-most bone with location keys) against the rest pose and
 removes their mean sideways offset from every key, keeping the sway around it and every up-and-down bob; it prints
-`walk: re-centred 2.61 m` and records each clip in `rig_finish.json` (`recentred`). Hips within 1% of the height of
+`walk: re-centred 2.61 m` and records each clip in `assets_src/bozzetto/<name>/rig/<route>/rig_finish.json` (`recentred`). Hips within 1% of the height of
 their rest spot are left alone. A clip whose hips end more than 10% of the height from where they started travels
 (root motion, not in place): it is left as it is, with a warning, since moving it would move where the motion starts.
 The kit asks Tripo for in-place clips, and the UniRig route's clips only bob, so expect none. A rigged file from before
