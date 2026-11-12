@@ -133,8 +133,9 @@ ProjectSettings/         project config (text, edit with care)
   layer with its size, velocity, repeat, wobble and scale; the texture wraps on the `repeat` axes), `particles` (the
   texture sprite and the emitter JSON as a `TextAsset`, `Assets/dotwork/<pack>/particles/<name>.json`), `transition`
   (the mask sprite and the transition kind), `normal_map` (a linear texture set as the target image's `_NormalMap`
-  secondary texture through its TextureImporter, which URP's 2D lights read from the target's sprites; the Built-in
-  pipeline has no 2D lights to use it), `image` (a sprite). Only an unknown kind is skipped, with a warning.
+  secondary texture through its TextureImporter; the test proves the slot on the target's sprites, that URP's 2D
+  lights light it from there is not checked here, the kit's test projects are Built-in **(verify)**), `image` (a
+  sprite). Only an unknown kind is skipped, with a warning.
 - Fonts and UI kits are already drawn at their `scale` by Dotwork: draw them 1:1 (DotworkLabel does).
 - `exec GameKitDotwork.Verify` (and `dev.py test`, `DotworkImportTests.EveryManifestInTheGameLoads`) fails on a missing
   file, a rect outside its image, a stale or broken import. `exec GameKitDotwork.ShowInStarterScene` puts the first
