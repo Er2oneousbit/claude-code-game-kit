@@ -4,16 +4,19 @@
 //           that exist with the sizes it gives, and builds into Three.js objects: the stand-in for Dotwork's Godot
 //           `verify` on this engine.
 // Usage   : python tools/dev.py test     (`dev.py smoke` loads them again in the browser: src/game/dotwork/boot.ts)
-// Notes   : No manifests yet (a game that does not use Dotwork): one empty test says so. Warnings (a skipped extra
-//           kind) are printed, not failures. Rebuild a stale pack with `python tools/art/dotwork/dotwork.py manifest`.
+// Notes   : No manifests yet (a game that does not use Dotwork): one empty test says so. Warnings (an unknown kind
+//           of a newer manifest) are printed, not failures. Rebuild a stale pack with `python tools/art/dotwork/dotwork.py manifest`.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the extra kinds build too (#285)
 // ---------------------------------------------------------------------------
 /// <reference types="node" />
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { AnimatedSprite3D, DotworkNineSlice, DotworkPortrait, DotworkSprite, DotworkText, DotworkTileMap, iconQuad } from "../src/game/dotwork/threeBuild";
+import {
+  AnimatedSprite3D, backgroundLayers, DotworkNineSlice, DotworkPortrait, DotworkSprite, DotworkText, DotworkTileMap, iconQuad, imageQuad,
+} from "../src/game/dotwork/threeBuild";
 import { checkPackFiles, pngTextures, readPack } from "./helpers/dotwork";
 
 const DIR = fileURLToPath(new URL("../public/assets/dotwork/", import.meta.url));
@@ -46,6 +49,17 @@ describe("the game's Dotwork manifests (public/assets/dotwork/)", () => {
       for (const def of pack.maps.values()) new DotworkTileMap(def, pack.tilesets.get(def.tileset)!, pack, tex).update(1);
       for (const def of pack.fonts.values()) new DotworkText(def, tex, String.fromCodePoint(...[...def.glyphs.keys()].slice(0, 512)));
       for (const kit of pack.uiKits.values()) for (const part of kit.parts.values()) new DotworkNineSlice(part, tex, part.size[0] * 2, part.size[1] * 2);
+      // the extra kinds: their textures are in the pack's images; a sprite with a normal map builds lit
+      for (const def of pack.backgrounds.values()) backgroundLayers(def, tex);
+      for (const def of pack.particles.values()) tex(def.texture);
+      for (const def of pack.transitions.values()) tex(def.image);
+      for (const def of pack.normalMaps.values()) {
+        tex(def.image);
+        tex(def.target);
+        const lit = [...pack.sprites.values()].find((s) => s.image === def.target);
+        if (lit) expect(new DotworkSprite(lit, tex, { lit: true }, pack).normalMap, `${def.name} lights ${lit.name}`).toBe(tex(def.image));
+      }
+      for (const def of pack.pictures.values()) imageQuad(def, tex);
     });
   }
 });

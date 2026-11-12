@@ -6,8 +6,9 @@
 // Usage   : const pack = readPack(path) ; const tex = pngTextures(pack) ; checkPackFiles(path, pack) -> problems[]
 // Notes   : Test-only (Node APIs). PNG sizes come from the IHDR chunk, nothing is decoded. checkPackFiles names
 //           every problem it finds: a file the manifest names that is missing, a frame / tile / glyph rect outside
-//           its image, an image whose size is not the size the manifest gives.
+//           its image, an image whose size is not the size the manifest gives (the extra kinds' images too).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the extra kinds' image sizes are checked (#285)
 // ---------------------------------------------------------------------------
 /// <reference types="node" />
 import { existsSync, readFileSync } from "node:fs";
@@ -98,6 +99,17 @@ export function checkPackFiles(manifestPath: string, pack: PackDef, doc = JSON.p
       const [w, h] = size(p.image);
       if (w !== p.size[0] || h !== p.size[1]) bad.push(`ui_kit/${k.name}.${p.name}: image is ${w}x${h}, manifest says ${p.size}`);
     }
+  }
+  // the extra kinds: every image the size its asset gives
+  const sized: [string, string, Point][] = [
+    ...[...pack.backgrounds.values()].flatMap((b) => b.layers.map((L, i): [string, string, Point] => [`background/${b.name}.layers[${i}]`, L.image, L.size])),
+    ...[...pack.transitions.values()].map((t): [string, string, Point] => [`transition/${t.name}`, t.image, t.size]),
+    ...[...pack.normalMaps.values()].map((n): [string, string, Point] => [`normal_map/${n.name}`, n.image, n.size]),
+    ...[...pack.pictures.values()].map((p): [string, string, Point] => [`image/${p.name}`, p.image, p.size]),
+  ];
+  for (const [where, image, want] of sized) {
+    const [w, h] = size(image);
+    if (w !== want[0] || h !== want[1]) bad.push(`${where}: image is ${w}x${h}, manifest says ${want}`);
   }
   return bad;
 }

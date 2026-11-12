@@ -10,6 +10,8 @@
 //           what the game draws. Three.js builds in Node: textures are stand-ins with the real PNG sizes
 //           (tests/helpers/dotwork.ts), nothing is rendered. Expected values come only from the fixture.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): the maps' placed cells and
+//           centres, the corners4 and roll vectors, stamps, the extra kinds loaded
 // ---------------------------------------------------------------------------
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
@@ -17,10 +19,12 @@ import { join } from "node:path";
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import {
-  canon, cellMask, DotworkError, FLIP_H, flagSample, frameAt, importManifest, layoutText, normalizePath, TRANSPOSE, uvRect,
-  type PackDef,
+  canon, cellCentre, cellMask, cellRoll, DotworkError, expandStamps, FLIP_H, flagSample, frameAt, hash32, importManifest, layoutText,
+  mapCentres, normalizePath, pickVariant, tileKey, TRANSPOSE, uvRect, type PackDef, type TileDef,
 } from "../src/game/dotwork/manifest";
-import { AnimatedSprite3D, DotworkNineSlice, DotworkSprite, DotworkText, DotworkTileMap, pixelTexture } from "../src/game/dotwork/threeBuild";
+import {
+  AnimatedSprite3D, backgroundLayers, DotworkNineSlice, DotworkSprite, DotworkText, DotworkTileMap, imageQuad, pixelTexture,
+} from "../src/game/dotwork/threeBuild";
 import { checkPackFiles, pngSize, pngTextures, posix, readPack } from "./helpers/dotwork";
 import { expectClose, GOLDEN_DIR } from "./helpers/golden";
 
@@ -83,12 +87,16 @@ function loaded(p: PackDef): Record<string, unknown> {
     };
   }
   for (const m of p.maps.values()) {
-    const layers: Record<string, number> = {}, terrain: Record<string, unknown> = {};
+    const layers: Record<string, number> = {}, terrain: Record<string, unknown> = {}, placed: Record<string, unknown> = {};
     for (const L of m.layers) {
-      layers[L.name] = L.given;
-      if (L.terrain) terrain[L.name] = L.terrain.map((c) => [c.x, c.y, c.mask, c.tile]);
+      layers[L.name] = L.cells.length; // cells drawn: a stamps layer its expanded tiles, a terrain layer its resolved cells
+      placed[L.name] = L.cells.map((c) => [c.x, c.y, c.atlas, c.col, c.row, c.left, c.top]);
+      if (L.terrain) terrain[L.name] = L.terrain.map((c) => [c.x, c.y, c.key, c.tile]);
     }
-    out[`map/${m.name}`] = { size: m.size, layers, terrain, objects: m.objects.map((o) => [o.asset, o.x, o.y]) };
+    out[`map/${m.name}`] = {
+      size: m.size, shape: m.shape, tile_size: m.tileSize, layers, terrain, placed, centres: mapCentres(m),
+      objects: m.objects.map((o) => [o.asset, o.x, o.y]),
+    };
   }
   for (const f of p.fonts.values()) {
     const g = f.glyphs.get(65) ?? f.glyphs.values().next().value;
@@ -105,6 +113,10 @@ function loaded(p: PackDef): Record<string, unknown> {
   for (const b of p.backgrounds.values()) {
     out[`background/${b.name}`] = { layers: b.layers.map((L) => [L.size[0], L.size[1], L.velocity[0], L.velocity[1], L.repeat]) };
   }
+  for (const q of p.particles.values()) out[`particles/${q.name}`] = { kind: "particles" };
+  for (const t of p.transitions.values()) out[`transition/${t.name}`] = { kind: "transition" };
+  for (const n of p.normalMaps.values()) out[`normal_map/${n.name}`] = { kind: "normal_map" };
+  for (const i of p.pictures.values()) out[`image/${i.name}`] = { kind: "image" };
   for (const [key, kind] of p.skipped) out[key] = { kind };
   return { format: "dotwork-assets-expected", version: p.version, pack: p.pack, assets: out };
 }
@@ -117,11 +129,26 @@ describe("Dotwork golden fixture (data/golden/dotwork/)", () => {
     expectClose(got, EXPECTED, TOL, "whole result");
   });
 
-  it("warns once per skipped kind and draws every file it names", () => {
-    for (const kind of ["particles", "transition", "normal_map", "image"]) {
-      expect(pack.warnings.filter((w) => w.includes(` ${kind} asset`))).toHaveLength(1);
-    }
+  it("loads every kind of the spec (nothing skipped, no warning) and draws every file it names", () => {
+    expect(pack.skipped.size).toBe(0);
+    expect(pack.warnings).toEqual([]);
     expect(checkPackFiles(MANIFEST, pack)).toEqual([]);
+  });
+
+  it("exposes the extra kinds by name with their data", () => {
+    const bg = pack.backgrounds.get("hills")!;
+    expect(bg.layers.map((L) => L.repeat)).toEqual(EXPECTED.assets["background/hills"].layers.map((L: unknown[]) => L[4]));
+    const fx = pack.particles.get("vfx_embers_particles")!;
+    expect(pack.images.has(fx.texture)).toBe(true);
+    expect(Object.keys(fx.emitter).length).toBeGreaterThan(0);
+    const tr = pack.transitions.get("transition_wipe")!;
+    expect(tr.transition).toBe("wipe");
+    expect(pack.dataImages.has(tr.image)).toBe(true);
+    const nm = pack.normalMaps.get("spr_crate_n")!;
+    expect(nm.convention).toBe("opengl");
+    expect(nm.target).toBe(pack.sprites.get("crate")!.image); // it lights the crate
+    expect(pack.dataImages.has(nm.image) && !pack.dataImages.has(nm.target)).toBe(true);
+    expect(pack.pictures.get("logo_golden")!.size).toEqual(pngSize(pack.pictures.get("logo_golden")!.image));
   });
 
   it("resolves paths as join(dirname(manifest), base, path)", () => {
@@ -197,6 +224,81 @@ describe("Dotwork manifest rules", () => {
     expect(cellMask(new Set(["0,0", "1,1"]), 0, 0)).toBe(0); // a lone corner does not count
   });
 
+  it("corners4 keys a 3x3 block by the corners where all four cells are painted", () => {
+    const block = new Set<string>();
+    for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) block.add(`${x},${y}`);
+    expect(cellMask(block, 1, 1, "corners4")).toBe(170); // the centre: every corner
+    expect(cellMask(block, 0, 0, "corners4")).toBe(8); // top-left: SE only
+    expect(cellMask(block, 1, 0, "corners4")).toBe(40); // top-middle: SE and SW
+    expect(cellMask(block, 2, 2, "corners4")).toBe(128); // bottom-right: NW only
+    // a tile's key: the corner bits whose corner holds its terrain, by shape (square names, isometric names)
+    const tile = (corners: Record<string, number>) => ({ terrain: 1, corners } as unknown as TileDef);
+    expect(tileKey(tile({ top_left: 1, top_right: -1, bottom_right: 1, bottom_left: 1 }), "corners4", "square")).toBe(128 + 8 + 32);
+    expect(tileKey(tile({ top: 1, right: 1, bottom: -1, left: -1 }), "corners4", "isometric")).toBe(128 + 2);
+    expect(tileKey(tile({ top_left: 1 }), "corners4", "square")).toBeNull(); // not all four corners: no key
+  });
+
+  it("hash32 and cellRoll give the spec's vectors (32-bit steps only)", () => {
+    expect(hash32(0)).toBe(1800329511);
+    expect(hash32(1)).toBe(3028713910);
+    expect(hash32(0xFFFFFFFF)).toBe(4268016002);
+    expect(cellRoll(0, 0, 0)).toBeCloseTo(0.169182, 6);
+    expect(cellRoll(3, 1, 1)).toBeCloseTo(0.765973, 6);
+    expect(cellRoll(3, 2, 1)).toBeCloseTo(0.531301, 6);
+    expect(cellRoll(-1, -1, 0)).toBeCloseTo(0.992978, 6); // coordinates wrap at 16 bits
+    expect(pickVariant([[0.6, "a"], [0.6, "b"]], 0.49)).toBe("a");
+    expect(pickVariant([[0.6, "a"], [0.6, "b"]], 0.5)).toBe("b");
+    expect(pickVariant([[0, "a"], [0, "b"]], 0.9)).toBe("a"); // all weights 0: the first
+  });
+
+  it("picks the variant the roll names (yard Path: two full cells, one rolls the variant tile)", () => {
+    const path = pack.maps.get("yard")!.layers.find((L) => L.name === "Path")!;
+    const want = EXPECTED.assets["map/yard"].terrain.Path as [number, number, number, number[]][];
+    const full = want.filter(([, , key]) => key === 255);
+    expect(full.length).toBe(2);
+    expect(new Set(full.map(([, , , t]) => t.join(","))).size).toBe(2); // the base tile and the variant
+    for (const [x, y, key, tile] of want) {
+      const got = path.terrain!.find((c) => c.x === x && c.y === y)!;
+      expect([got.key, got.tile], `Path (${x}, ${y})`).toEqual([key, tile]);
+    }
+  });
+
+  it("cell centres: squares in rows, isometric diamonds in Godot's diamond-down layout", () => {
+    expect(cellCentre("square", [8, 8], 3, 2)).toEqual([28, 20]);
+    const iso = (x: number, y: number) => cellCentre("isometric", [16, 8], x, y);
+    expect([iso(0, 0), iso(1, 0), iso(0, 1), iso(3, 2)]).toEqual([[8, 4], [16, 8], [0, 8], [16, 24]]);
+    const isle = pack.maps.get("isle")!;
+    expectClose(mapCentres(isle), EXPECTED.assets["map/isle"].centres, TOL, "isle centres");
+    // a raised block with its own origin [8, 8] on a 16 x 8 diamond: its bottom edge on the diamond's bottom point
+    const blocks = isle.layers.find((L) => L.name === "Blocks")!.cells[0];
+    const [cx, cy] = iso(blocks.x, blocks.y);
+    expect([blocks.left, blocks.top]).toEqual([cx - 8, cy - 8]);
+  });
+
+  it("a stamps layer places every tile of the stamp from its top-left cell", () => {
+    const ts = pack.tilesets.get("ground_yard")!;
+    const door = ts.stamps[0];
+    const cells = expandStamps(ts, [[7, 0, 0]], "test");
+    expect(cells.length).toBe(door.size[0] * door.size[1]);
+    door.tiles.forEach(([atlas, col, row], j) => {
+      expect(cells[j]).toEqual([7 + (j % door.size[0]), Math.floor(j / door.size[0]), atlas, col, row]);
+    });
+    const fixtures = pack.maps.get("yard")!.layers.find((L) => L.name === "Fixtures")!;
+    expect(fixtures.given).toBe(1);
+    expect(fixtures.cells.map((c) => [c.x, c.y, c.atlas, c.col, c.row, c.left, c.top])).toEqual(EXPECTED.assets["map/yard"].placed.Fixtures);
+    expect(() => expandStamps(ts, [[0, 0, 99]], "test")).toThrow(/stamp 99/);
+  });
+
+  it("skips a map layer of an unknown kind with one warning", () => {
+    const d = doc();
+    const yard = d.assets.find((a: { kind: string; name: string }) => a.kind === "map" && a.name === "yard");
+    yard.layers.push({ name: "Fog", kind: "weather", cells: [[0, 0]] });
+    const warnings: string[] = [];
+    const p = importManifest(d, posix(MANIFEST), (m) => warnings.push(m));
+    expect(p.maps.get("yard")!.layers.map((L) => L.name)).not.toContain("Fog");
+    expect(warnings.filter((w) => w.includes('"weather"'))).toHaveLength(1);
+  });
+
   it("flips first, then transposes (transpose + flip h is a quarter turn clockwise)", () => {
     expect(flagSample(0, 0, TRANSPOSE | FLIP_H)).toEqual([0, 1]);
     expect(flagSample(1, 0, TRANSPOSE | FLIP_H)).toEqual([0, 0]);
@@ -255,30 +357,60 @@ describe("Dotwork Three.js objects", () => {
     expect(frameAt(clip, clip.length * 3)).toEqual({ index: clip.frames.length - 1, done: true });
   });
 
-  it("a map is one InstancedMesh per atlas and layer, each cell on the expected tile", () => {
-    const def = pack.maps.get("yard")!;
-    const map = new DotworkTileMap(def, pack.tilesets.get(def.tileset)!, pack, tex);
-    const meshes = map.children.filter((c): c is THREE.InstancedMesh => (c as THREE.InstancedMesh).isInstancedMesh);
-    expect(meshes.reduce((n, m) => n + m.count, 0)).toBe(def.layers.reduce((n, L) => n + L.cells.length, 0));
-    const want = EXPECTED.assets["map/yard"];
-    for (const [layer, cells] of Object.entries(want.terrain) as [string, [number, number, number, number[]][]][]) {
-      for (const [x, y, , tile] of cells) {
-        const [atlasId, col, row] = tile;
-        const atlas = pack.tilesets.get(def.tileset)!.atlases.find((a) => a.id === atlasId)!;
-        const mesh = meshes.find((m) => m.name === `${layer}/${atlas.name}`)!;
-        const i = def.layers.find((L) => L.name === layer)!.cells.filter((c) => c.atlas === atlasId).findIndex((c) => c.x === x && c.y === y);
-        const uv = mesh.geometry.getAttribute("tileUv");
-        const [W, H] = pngSize(atlas.image);
-        const r = uvRect([col * 8, row * 8, 8, 8], W, H);
-        expectClose([uv.getX(i), uv.getY(i), uv.getZ(i), uv.getW(i)], r, TOL, `${layer} (${x}, ${y})`);
-        const m = new THREE.Matrix4();
-        mesh.getMatrixAt(i, m);
-        const p = new THREE.Vector3().setFromMatrixPosition(m);
-        expectClose([p.x, p.z], [x + 0.5, y + 0.5], TOL, `${layer} (${x}, ${y}) position`); // one unit per tile
+  it("a map is one InstancedMesh per atlas and layer, each placed cell on its tile at its left/top (all three maps)", () => {
+    for (const name of ["yard", "meadow_patch", "isle"]) {
+      const def = pack.maps.get(name)!;
+      const tileset = pack.tilesets.get(def.tileset)!;
+      const map = new DotworkTileMap(def, tileset, pack, tex);
+      const meshes = map.children.filter((c): c is THREE.InstancedMesh => (c as THREE.InstancedMesh).isInstancedMesh);
+      expect(meshes.reduce((n, m) => n + m.count, 0)).toBe(def.layers.reduce((n, L) => n + L.cells.length, 0));
+      const want = EXPECTED.assets[`map/${name}`];
+      for (const [layer, cells] of Object.entries(want.placed) as [string, number[][]][]) {
+        const own = def.layers.find((L) => L.name === layer)!.cells;
+        for (const [x, y, atlasId, col, row, left, top] of cells) {
+          const atlas = tileset.atlases.find((a) => a.id === atlasId)!;
+          const mesh = meshes.find((m) => m.name === `${layer}/${atlas.name}`)!;
+          const i = own.filter((c) => c.atlas === atlasId).findIndex((c) => c.x === x && c.y === y && c.col === col && c.row === row);
+          expect(i, `${name}.${layer} (${x}, ${y}) is placed`).toBeGreaterThanOrEqual(0);
+          const uv = mesh.geometry.getAttribute("tileUv");
+          const [W, H] = pngSize(atlas.image);
+          const [tw, th] = atlas.tileSize;
+          expectClose([uv.getX(i), uv.getY(i), uv.getZ(i), uv.getW(i)], uvRect([col * tw, row * th, tw, th], W, H), TOL, `${name}.${layer} (${x}, ${y}) uv`);
+          const m = new THREE.Matrix4();
+          mesh.getMatrixAt(i, m);
+          const p = new THREE.Vector3().setFromMatrixPosition(m);
+          // the quad's centre: the image's top-left in map pixels plus half the atlas tile, one unit per tile width
+          expectClose([p.x, p.z], [(left + tw / 2) / map.unit, (top + th / 2) / map.unit], TOL, `${name}.${layer} (${x}, ${y}) position`);
+        }
       }
     }
+    const yard = pack.maps.get("yard")!;
+    const map = new DotworkTileMap(yard, pack.tilesets.get(yard.tileset)!, pack, tex);
     expect(map.objects).toHaveLength(1);
-    expectClose([map.objects[0].position.x, map.objects[0].position.z], [12 / 8, 40 / 8], TOL, "crate on the map");
+    const [, ox, oy] = EXPECTED.assets["map/yard"].objects[0];
+    expectClose([map.objects[0].position.x, map.objects[0].position.z], [ox / 8, oy / 8], TOL, "crate on the map");
+  });
+
+  it("the extra kinds build: wrapping background layers, a lit sprite with its normal map, an image quad", () => {
+    expect(pixelTexture(new THREE.Texture(), true).colorSpace).toBe(THREE.NoColorSpace);
+    const layers = backgroundLayers(pack.backgrounds.get("hills")!, tex);
+    expect(layers.length).toBe(EXPECTED.assets["background/hills"].layers.length);
+    for (const { layer, texture } of layers) {
+      expect(texture.source).toBe(tex(layer.image).source); // a clone: the image is shared
+      expect(texture.wrapS).toBe(layer.repeat === "x" || layer.repeat === "xy" ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping);
+      expect(texture.wrapT).toBe(layer.repeat === "y" || layer.repeat === "xy" ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping);
+    }
+    const crate = new DotworkSprite(pack.sprites.get("crate")!, tex, { lit: true }, pack);
+    expect(crate.material).toBeInstanceOf(THREE.MeshLambertMaterial);
+    expect(crate.normalMap).toBe(tex(pack.normalMaps.get("spr_crate_n")!.image));
+    expect((crate.material as THREE.MeshLambertMaterial).normalMap).toBe(crate.normalMap);
+    const plain = new DotworkSprite(pack.sprites.get("crate")!, tex, {}, pack);
+    expect(plain.material).toBeInstanceOf(THREE.MeshBasicMaterial); // unlit by default, the normal map still known
+    expect(plain.normalMap).toBe(crate.normalMap);
+    const logo = imageQuad(pack.pictures.get("logo_golden")!, tex, { ppu: 1 });
+    logo.geometry.computeBoundingBox();
+    const [w, h] = pack.pictures.get("logo_golden")!.size;
+    expectClose([logo.geometry.boundingBox!.min.x, logo.geometry.boundingBox!.max.y], [-w / 2, h / 2], TOL, "logo centred");
   });
 
   it("animated tiles step to the next cell to the right at their fps", () => {
