@@ -16,7 +16,9 @@ rust-version = "1.97.1"
 publish = false
 
 [dependencies]
-bevy = "0.20"
+# jpeg: Bevy's defaults decode PNG only, and a generated character's textures are often JPEG (Tripo's are), so a
+# rigged .glb would fail to load with InvalidImageMimeType("image/jpeg") (docs/ENGINE.md "Rigged characters")
+bevy = { version = "0.20", features = ["jpeg"] }
 # JSON for settings, saves and string tables (src/logic/); Bevy's default features build it anyway
 serde_json = "1"
 # Typed reading of the Dotwork asset manifests (src/dotwork/); Bevy already builds serde with derive

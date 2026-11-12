@@ -115,8 +115,11 @@ target/            build output (git-ignored)
 - **File:** one `.glb` (glTF 2.0 binary: skinned mesh, skin, clips as named animations) under `assets/`, for example a
   hero.glb in `assets/models/`. Bozzetto's rig routes and Mixamo exports fit; bone names keep their `mixamorig:` prefix
   (Bevy's `Name` is the glTF node name as is: `mixamorig:LeftUpLeg`).
-- **Features:** none to add. Bevy's default features (the `3d` group) already build `bevy_gltf`, `gltf_animation`,
-  `bevy_animation` and the world-asset (scene) plugin, so this costs no extra compile time.
+- **Features:** Bevy's default features (the `3d` group) already build `bevy_gltf`, `gltf_animation`,
+  `bevy_animation` and the world-asset (scene) plugin. The kit's `Cargo.toml` adds one, `jpeg`: the defaults decode
+  PNG textures only, and a Tripo rig's textures are JPEG, so without it the whole `.glb` fails to load
+  (`InvalidImageMimeType("image/jpeg")`; found on a 69-bone Tripo character, 2026-11-11). `tests/character.rs` checks
+  both formats decode.
 - **The helper, `src/character.rs`:** add `character::CharacterPlugin`, then in a system
   `let hero = spawn_character(&mut commands, &asset_server, "models/hero.glb", "idle");`. It returns the `Character`
   entity: move and turn that one. Switch clips with `characters.get_mut(hero)?.clip = "walk".into();` (an unknown
