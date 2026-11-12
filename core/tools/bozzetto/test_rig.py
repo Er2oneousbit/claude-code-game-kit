@@ -119,10 +119,12 @@ class Base(unittest.TestCase):
         (self.root / "assets" / "models" / "npc_guard.glb").write_bytes(b"glTF-model")
         self.unirig = Path(self.tmp.name) / "UniRig"
         fake_unirig(self.unirig)
-        self.saved = (bz.run_bpy, bz.find_blender, bz.SLEEP, rig.PROBE, tripo.OPENER, os.getcwd(), dict(os.environ))
+        self.saved = (bz.run_bpy, bz.find_blender, bz.SLEEP, rig.PROBE, tripo.OPENER, tripo.DOWNLOADER, os.getcwd(),
+                      dict(os.environ))
         bz.find_blender = lambda choice=None: ("blender", "fake-blender")
         bz.SLEEP = lambda s: None
         rig.PROBE = False
+        tripo.DOWNLOADER = lambda req, timeout=0: tripo.OPENER(req, timeout)   # downloads reach the case's FakeTripo
         os.environ.update({rig.UNIRIG_ENV: str(self.unirig), rig.UNIRIG_PY_ENV: sys.executable,
                            "COMFYUI_URL": "http://127.0.0.1:9"})     # nothing there: /free is skipped
         os.environ.pop(rig.TRIPO_ENV, None)
@@ -131,7 +133,7 @@ class Base(unittest.TestCase):
         os.chdir(self.root)
 
     def tearDown(self):
-        bz.run_bpy, bz.find_blender, bz.SLEEP, rig.PROBE, tripo.OPENER, cwd, env = self.saved
+        bz.run_bpy, bz.find_blender, bz.SLEEP, rig.PROBE, tripo.OPENER, tripo.DOWNLOADER, cwd, env = self.saved
         os.chdir(cwd)
         os.environ.clear()
         os.environ.update(env)
@@ -333,6 +335,7 @@ class FakeTripo:
         self.calls, self.balance, self.riggable, self.rig_type = [], balance, riggable, rig_type
         self.rig_cost, self.no_url = rig_cost, no_url      # Tripo charging more than its table; a lost URL
         self.tasks = {}
+        self.uploads = []         # the multipart bodies /files received
         self.status = {}          # task id -> status reported instead of success (a task still running, failed)
         self.bad_key = False
 
@@ -351,6 +354,7 @@ class FakeTripo:
         if path == "/account/balance":
             data = {"balance": self.balance, "frozen": 0}
         elif path == "/files":
+            self.uploads.append(req.data)
             data = {"file_token": "file_1"}
         elif req.get_method() == "POST":
             tid = f"t{len(self.tasks) + 1}"
@@ -464,6 +468,20 @@ class TripoExam(Base):
         code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk,run", "--overwrite"])
         self.assertEqual(code, 0, out)
         self.assertEqual(len(fake.posts("/animations/retarget")), 2, "an old journal's clips were paid for again")
+
+    def test_an_input_with_a_non_ascii_name_uploads_under_a_plain_one(self):
+        """--input 'Ísak ”model”.glb': the file name in the multipart header is plain ASCII with its extension; the
+        rest of the run (record, log, evidence) takes the name as it is."""
+        src = self.root / "assets" / "models" / "Ísak ”model”.glb"
+        src.write_bytes(b"glTF-model-isak")
+        tripo.OPENER = fake = FakeTripo()
+        code, out = run_main(["rig", "make", "npc_isak", "--with", "tripo", "--clips", "idle", "--input", str(src)])
+        self.assertEqual(code, 0, out)
+        head = fake.uploads[0].split(b"\r\n\r\n")[0]
+        name = head.split(b'filename="', 1)[1].split(b'"', 1)[0]
+        self.assertTrue(name.decode("ascii").endswith(".glb"), name)
+        self.assertNotIn(b"\xe2\x80\x9d", head, "a right double quote went out raw in the header")
+        self.assertIn("Ísak ”model”.glb", (self.root / "docs/ASSET_LOG.md").read_text(encoding="utf-8"))
 
     def test_a_lowered_cap_does_not_refuse_a_free_rerun(self):
         """--max-credits caps one run: a re-run that reuses every paid task spends nothing and must pass any cap."""

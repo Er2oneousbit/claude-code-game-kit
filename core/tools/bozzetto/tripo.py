@@ -39,6 +39,7 @@
 #            actual cost -> the finished task asked again for a fresh link -> download -> raw.glb (extras stripped)
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -49,7 +50,27 @@ bz = None   # bozzetto.py binds itself here (bind): its errors, DEBUG flag, SLEE
 TRIPO_ENV = "TRIPO_API_KEY"
 SECRET_PREFIX, CLIENT_ID_PREFIX = "tsk_", "tcli_"    # Tripo's secret API keys and its client IDs (refused as keys)
 BASE = "https://openapi.tripo3d.ai/v3"       # the exam points this at its stand-in server
-OPENER = urllib.request.urlopen              # the exam may replace it too
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """urllib copies every header, the Authorization header included, onto a redirected request. An API answer is
+    never followed to another address: returning None here makes the 3xx an HTTPError the caller reports."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def opener(proxies=None, redirects=False):
+    """An urlopen-like callable: API calls (the key in a header) refuse redirects; file downloads (no key) follow
+    them. proxies={} ignores the system proxy (the exams, on 127.0.0.1)."""
+    handlers = [] if redirects else [NoRedirect()]
+    if proxies is not None:
+        handlers.append(urllib.request.ProxyHandler(proxies))
+    return urllib.request.build_opener(*handlers).open
+
+
+OPENER = opener()                            # API calls; the exam may replace it (tripo.opener(proxies={}))
+DOWNLOADER = opener(redirects=True)          # result files from Tripo's CDN, no key sent
 POLL_S = 2                                   # the docs ask for one query every 1 to 2 seconds
 FAILED = ("failed", "cancelled", "banned", "expired")   # banned/expired: legacy names Tripo now reports as failed
 JOURNAL = "tasks.json"
@@ -102,6 +123,17 @@ def key():
     return os.environ.get(TRIPO_ENV, "")
 
 
+def scrub(text, secret):
+    """The key out of anything shown or written, even when a server echoes it back."""
+    return text.replace(secret, "***") if secret else text
+
+
+def safe_filename(name):
+    """The name a multipart upload carries: ASCII letters, digits, dot, dash and underscore, so a quote, a line
+    break or a letter such as Í cannot break or mangle the header. Only the extension matters to Tripo."""
+    return re.sub(r"[^A-Za-z0-9._-]", "_", name) or "file"
+
+
 def refusal_hint(body):
     """Tripo's own words on a refused key ("API key must start with 'tsk_' ..."), so the user sees the fix."""
     try:
@@ -116,8 +148,9 @@ def refusal_hint(body):
 
 # ---- the client --------------------------------------------------------------------------------------------------
 class Client:
-    def __init__(self, api_key=None, base=None):
+    def __init__(self, api_key=None, base=None, journal=JOURNAL):
         self.key, self.base = api_key or key(), (base or BASE).rstrip("/")
+        self.journal = journal        # how the caller's journal is named in messages (reference.py has its own)
 
     def call(self, method, path, body=None, raw=None, ctype=None):
         if self.key.startswith(CLIENT_ID_PREFIX):       # a common mix-up; Tripo refuses it, so say so before a call
@@ -134,18 +167,23 @@ class Client:
             with OPENER(req, timeout=180) as r:
                 doc = json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
-            msg = e.read().decode("utf-8", "replace")[:300]
+            msg = scrub(e.read().decode("utf-8", "replace"), self.key)[:300]
             if e.code in (401, 403):
                 raise bz.ToolError(f"Tripo refused the key (HTTP {e.code}): check {TRIPO_ENV}{refusal_hint(msg)}")
             if e.code == 429:
                 raise bz.JobError(f"Tripo {path}: too many requests or tasks at once (HTTP 429): wait and run again")
+            if 300 <= e.code < 400:
+                raise bz.JobError(f"Tripo {path}: answered with a redirect (HTTP {e.code}) to another address; not "
+                                  "followed, the key stays with the API")
             raise bz.JobError(f"Tripo {path}: HTTP {e.code}: {msg}")
         except (urllib.error.URLError, OSError) as e:
-            raise bz.ToolError(f"cannot reach Tripo ({self.base}): {e}")
+            raise bz.ToolError(scrub(f"cannot reach Tripo ({self.base}): {e}", self.key))
         except ValueError:
             raise bz.JobError(f"Tripo {path}: the answer is not JSON")
+        if not isinstance(doc, dict):
+            raise bz.JobError(f"Tripo {path}: the answer is not a JSON object")
         if doc.get("code", 0) != 0:
-            raise bz.JobError(f"Tripo {path}: {doc.get('message') or doc}")
+            raise bz.JobError(scrub(f"Tripo {path}: {doc.get('message') or doc}", self.key))
         return doc.get("data") or {}
 
     def balance(self):
@@ -153,8 +191,8 @@ class Client:
 
     def upload(self, data, filename, ctype):
         b = "----bozzetto" + uuid.uuid4().hex
-        raw = (f"--{b}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n"
-               f"Content-Type: {ctype}\r\n\r\n").encode() + data + f"\r\n--{b}--\r\n".encode()
+        raw = (f"--{b}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{safe_filename(filename)}\"\r\n"
+               f"Content-Type: {ctype}\r\n\r\n").encode("ascii") + data + f"\r\n--{b}--\r\n".encode("ascii")
         tok = self.call("POST", "/files", raw=raw, ctype=f"multipart/form-data; boundary={b}").get("file_token")
         if not tok:
             raise bz.JobError("Tripo's upload returned no file_token")
@@ -185,7 +223,7 @@ class Client:
                                   + (f": {why}" if why else "") + "); a failed task costs no credits")
             if time.monotonic() - t0 > wait:
                 raise bz.JobError(f"Tripo {what} did not finish in {wait} s (task {tid}; a re-run picks it up from "
-                                  f"{JOURNAL} without paying again)")
+                                  f"{self.journal} without paying again)")
             bz.SLEEP(POLL_S)
 
     def image_task(self, kind, model, extra):
@@ -202,13 +240,13 @@ class Client:
         return tid
 
     def download(self, url, dst):
-        """The result file. The link is Tripo's CDN: no key goes with it."""
+        """The result file. The link is Tripo's CDN: no key goes with it (and a redirect there carries none)."""
         try:
-            with OPENER(urllib.request.Request(url), timeout=300) as r:
+            with DOWNLOADER(urllib.request.Request(url), timeout=300) as r:
                 data = r.read()
         except (urllib.error.URLError, OSError) as e:
-            raise bz.JobError(f"could not download Tripo's model ({e}); its links expire after about 5 minutes: run "
-                              f"again, the paid task is kept in {JOURNAL} and a fresh link is fetched without paying")
+            raise bz.JobError(f"could not download Tripo's file ({e}); its links expire after about 5 minutes: run "
+                              f"again, the paid task is kept in {self.journal} and a fresh link is fetched without paying")
         dst.write_bytes(data)
         return data
 

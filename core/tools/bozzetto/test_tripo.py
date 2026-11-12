@@ -61,6 +61,8 @@ class State:
         self.downloads = []        # (url path, Authorization header or None)
         self.status = {}           # task id -> status reported instead of success
         self.fail = None           # (code, message): every new task fails with it
+        self.echo = False          # a refused key's message echoes the Authorization header (as some APIs do)
+        self.redirect = False      # /tasks answers 302 to the CDN (a redirect must never carry the key)
         self.expire = False        # links handed out while set are dead from the start
         self.dead = set()
         self.urls = 0
@@ -105,7 +107,8 @@ class FakeTripo(http.server.BaseHTTPRequestHandler):
         good = self.headers.get("Authorization") == f"Bearer {KEY}"
         STATE.requests.append((self.command, self.path, good))
         if not good:
-            self.send(401, {"code": 1002, "message": "invalid api key"})
+            words = "invalid api key" + (f" (got {self.headers.get('Authorization')})" if STATE.echo else "")
+            self.send(401, {"code": 1002, "message": words, "suggestion": "API key must start with 'tsk_'"})
         return good
 
     def do_GET(self):
@@ -120,6 +123,11 @@ class FakeTripo(http.server.BaseHTTPRequestHandler):
             return self.ok({"balance": STATE.balance, "frozen": 0.0})
         if self.path.startswith("/v3/tasks/"):
             tid = self.path.rsplit("/", 1)[1]
+            if STATE.redirect:
+                self.send_response(302)
+                self.send_header("Location", f"http://{self.headers.get('Host')}/cdn/{tid}/redirected.glb")
+                self.send_header("Content-Length", "0")
+                return self.end_headers()
             task = STATE.tasks.get(tid)
             if task is None:
                 return self.send(404, {"code": 2001, "message": "task not found"})
@@ -380,12 +388,32 @@ class Money(Base):
 
     def test_a_refused_key_shows_tripos_own_words(self):
         os.environ[tripo.TRIPO_ENV] = "tsk_wrong"
+        STATE.echo = True                        # the API echoes the key back: it must not reach the screen
         rc, out = self.make()
         self.assertEqual(rc, 2, out)
         self.assertIn("Tripo refused the key", out)
         self.assertIn("invalid api key", out, "the stand-in's message reaches the user")
+        self.assertIn("must start with 'tsk_'", out, "Tripo's suggestion reaches the user")
         self.assertNotIn("tsk_wrong", out, "the key is never printed")
         self.assertEqual(STATE.uploads, [])
+
+    def test_an_api_redirect_is_not_followed_with_the_key(self):
+        """urllib copies the Authorization header onto a redirected request: a 3xx from the API must stop the call
+        rather than carry the key to whatever host the Location names."""
+        STATE.redirect = True
+        rc, out = self.make()
+        self.assertEqual(rc, 1, out)
+        self.assertIn("redirect", out)
+        self.assertEqual([a for _, a in STATE.downloads], [], "the redirect was followed, with the key")
+        self.nothing_secret_written()
+
+    def test_upload_names_are_plain_ascii(self):
+        """The multipart header holds the file name: a quote or a line break would break it and a name such as
+        'Ísak' goes out as raw UTF-8; only the extension matters to Tripo."""
+        self.assertEqual(tripo.safe_filename('Ísak ”model”.glb'), "_sak__model_.glb")
+        self.assertEqual(tripo.safe_filename('a"b\r\nc.png'), "a_b__c.png")
+        self.assertEqual(tripo.safe_filename("reference.png"), "reference.png")
+        self.assertEqual(tripo.safe_filename("”"), "_")
 
 
 class Recovery(Base):

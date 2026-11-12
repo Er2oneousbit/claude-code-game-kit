@@ -252,8 +252,13 @@ class Fake(http.server.BaseHTTPRequestHandler):
         if self.headers.get("x-goog-api-key") != KEY_G or mode == "badkey":
             return self.send(400, {"error": {"code": 400, "message": "API key not valid. Please pass a valid API key.",
                                              "status": "INVALID_ARGUMENT"}})
-        if mode == "500":
-            return self.send(500, {"error": {"code": 500, "message": "Internal error encountered."}})
+        if mode == "500":    # the message echoes the key, as a careless API might: it must never reach the screen
+            return self.send(500, {"error": {"code": 500, "message": f"Internal error encountered (key {KEY_G})."}})
+        if mode == "redirect":
+            self.send_response(302)
+            self.send_header("Location", f"{self.base()}/cdn/elsewhere.png")
+            self.send_header("Content-Length", "0")
+            return self.end_headers()
         usage = {"promptTokenCount": 1000 * n, "candidatesTokenCount": 1130, "thoughtsTokenCount": STATE.gemini_thoughts,
                  "candidatesTokensDetails": [{"modality": "IMAGE", "tokenCount": 1120},
                                              {"modality": "TEXT", "tokenCount": 10}]}
@@ -308,17 +313,18 @@ class Base(unittest.TestCase):
         (self.root / "docs" / "ASSET_LOG.md").write_text(LOG, encoding="utf-8")
         (self.root / "art_src").mkdir()
         (self.root / "art_src" / "concept.png").write_bytes(figure_png((150, 30, 30), w=40, h=56))
-        self.saved = (cl.SLEEP, bz.SLEEP, ref.GEMINI_BASE, tp.BASE, ref.OPENER, tp.OPENER, os.getcwd(),
+        self.saved = (cl.SLEEP, bz.SLEEP, ref.GEMINI_BASE, tp.BASE, ref.OPENER, tp.OPENER, tp.DOWNLOADER, os.getcwd(),
                       {k: os.environ.get(k) for k in (ref.GEMINI_ENV, ref.TRIPO_ENV)})
         cl.SLEEP = bz.SLEEP = lambda s: None
         ref.GEMINI_BASE, tp.BASE = self.url + "/v1beta", self.url + "/v3"
-        no_proxy = urllib.request.build_opener(urllib.request.ProxyHandler({})).open   # never a system proxy
-        ref.OPENER = tp.OPENER = no_proxy
+        # the tool's own openers (API calls refuse redirects, downloads follow them) without the system proxy
+        ref.OPENER = tp.OPENER = tp.opener(proxies={})
+        tp.DOWNLOADER = tp.opener(proxies={}, redirects=True)
         os.environ[ref.GEMINI_ENV], os.environ[ref.TRIPO_ENV] = KEY_G, KEY_T
         os.chdir(self.root)
 
     def tearDown(self):
-        cl.SLEEP, bz.SLEEP, ref.GEMINI_BASE, tp.BASE, ref.OPENER, tp.OPENER, cwd, env = self.saved
+        cl.SLEEP, bz.SLEEP, ref.GEMINI_BASE, tp.BASE, ref.OPENER, tp.OPENER, tp.DOWNLOADER, cwd, env = self.saved
         for k, v in env.items():
             if v is None:
                 os.environ.pop(k, None)
@@ -690,6 +696,8 @@ class GeminiRoute(Base):
         rc, out = self.run_tool("chr_hero", "--prompt", "a frog knight", "--with", "nanobanana", "--seed", "5")
         self.assertEqual(rc, 1, out)
         self.assertIn("HTTP 500", out)
+        self.assertIn("Internal error", out, "Google's words reach the user")
+        self.assertNotIn(KEY_G, out, "the key echoed in the error reached the screen")
         self.assertEqual(len(self.journal()["steps"]), 1)
         STATE.reset()
         rc, out = self.run_tool("chr_hero", "--prompt", "a frog knight", "--with", "nanobanana", "--seed", "5")
@@ -739,6 +747,13 @@ class GeminiRoute(Base):
         self.assertEqual(rc, 2)
         self.assertIn("refused the key", out)
         self.assertNotIn(KEY_G, out)
+
+    def test_a_redirect_is_not_followed_with_the_key(self):
+        STATE.gemini = ["redirect"]
+        rc, out = self.run_tool("chr_hero", "--prompt", "a frog knight", "--with", "nanobanana", "--seed", "5")
+        self.assertEqual(rc, 1, out)
+        self.assertEqual([h.get("x-goog-api-key") for m, p, h, _ in STATE.requests if p.startswith("/cdn/")], [],
+                         "the redirect was followed, with the key")
 
     def test_reply_without_usage_is_estimated(self):
         STATE.gemini = ["nousage"]

@@ -151,7 +151,7 @@ TERMS = {
               "notes": "Tripo's banana models carry Google's invisible watermark (Tripo docs) (verify)"},
 }
 
-OPENER = urllib.request.urlopen     # the exam may replace it
+OPENER = tp.opener()                # Gemini calls: the key in a header, so no redirect is followed; the exam replaces it
 
 
 class Spent:
@@ -187,8 +187,7 @@ def key_of(*parts):
     return hashlib.sha256(json.dumps(parts, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
 
-def scrub(text, secret):
-    return text.replace(secret, "***") if secret else text
+scrub = tp.scrub   # the key out of anything shown, even when a server echoes it
 
 
 def clean(data):
@@ -255,7 +254,8 @@ class Journal:
 
 # ---- HTTP ---------------------------------------------------------------------------------------------------------
 def http_json(method, url, headers, body=None, raw=None, timeout=180, secret=""):
-    """(status, parsed JSON or None, text). Network trouble is a ToolError; the key never reaches a message."""
+    """(status, parsed JSON or None, text). Network trouble is a ToolError; the key never reaches a message: the
+    text is scrubbed before it is parsed, so a message taken from the parsed answer is clean too."""
     data = json.dumps(body).encode("utf-8") if body is not None else raw
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
     bz.dbg(f"{method} {url.split('?')[0]}")
@@ -267,11 +267,12 @@ def http_json(method, url, headers, body=None, raw=None, timeout=180, secret="")
         status, text = e.code, e.read(100_000).decode("utf-8", "replace")
     except (urllib.error.URLError, OSError) as e:
         raise bz.ToolError(scrub(f"cannot reach {url.split('/')[2]}: {getattr(e, 'reason', e)}", secret))
+    text = scrub(text, secret)
     try:
         doc = json.loads(text)
     except ValueError:
         doc = None
-    return status, doc, scrub(text, secret)
+    return status, doc if isinstance(doc, dict) else None, text
 
 
 # ---- plan -----------------------------------------------------------------------------------------------------------
@@ -554,6 +555,9 @@ class Gemini:
             if status in (401, 403) or "API_KEY_INVALID" in text or "API key not valid" in text:
                 raise bz.ToolError(f"Gemini refused the key (HTTP {status}): check {GEMINI_ENV} and that its project "
                                    "has billing on (image output has no free tier)")
+            if 300 <= status < 400:
+                raise bz.JobError(f"Gemini answered with a redirect (HTTP {status}) to another address; not followed, "
+                                  "the key stays with the API")
             raise bz.JobError(f"Gemini HTTP {status}: {msg}")
         return doc or {}
 
@@ -654,7 +658,7 @@ class Tripo:
 
     def __init__(self, args, plan):
         self.args, self.plan = args, plan
-        self.client = tp.Client()
+        self.client = tp.Client(journal=f"{REF_DIR}/{JOURNAL}")
         self.budget = None            # tp.Budget, made at the first paid step (it needs the balance)
 
     def keys(self):
