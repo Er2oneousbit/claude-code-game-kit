@@ -10,12 +10,13 @@
 // Notes   : Manifests are Assets/dotwork/<pack>.assets.json (Dotwork writes them; the spec is
 //           tools/art/dotwork/ASSET_MANIFEST.md); each pack is imported into Assets/dotwork/<pack>/ with its index
 //           Assets/dotwork/<pack>/<pack>.asset (DotworkPack). Commit the generated assets and their .meta files:
-//           scenes reference them. Problems throw, so `dev.py exec` exits 1 and prints them; warnings (skipped extra
-//           kinds) are logged as [WARN][dotwork]. `dev.py test` runs the verify check on every manifest too
-//           (DotworkImportTests.EveryManifestInTheGameLoads). The importer itself is Assets/Editor/Dotwork/ (its own
-//           assembly, so the EditMode tests can call it); this file stays in Assembly-CSharp-Editor beside
-//           GameKitScenes, whose starter scene it adds to.
+//           scenes reference them. Problems throw, so `dev.py exec` exits 1 and prints them; warnings (an unknown
+//           kind or layer kind, a terrain cell with no tile for its key) are logged as [WARN][dotwork]. `dev.py
+//           test` runs the verify check on every manifest too (DotworkImportTests.EveryManifestInTheGameLoads). The
+//           importer itself is Assets/Editor/Dotwork/ (its own assembly, so the EditMode tests can call it); this
+//           file stays in Assembly-CSharp-Editor beside GameKitScenes, whose starter scene it adds to.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the warnings of asset manifest 1.1.0 (#285)
 // ---------------------------------------------------------------------------
 using System.Collections.Generic;
 using System.IO;

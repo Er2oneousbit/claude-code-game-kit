@@ -108,20 +108,41 @@ ProjectSettings/         project config (text, edit with care)
   = the pack's first tileset's tile width, else 16; pivots and rects flipped to Unity's y up), an AnimationClip per clip
   (sprite keys at each frame's `duration`, `loopTime` from `loop`) with an AnimatorController (a state per clip, named
   as the clip) and a prefab per animated sprite, a prop prefab per sprite (BoxCollider2D per collision rect, shadow
-  child), a DotworkTile per tileset cell (custom physics shapes for a TilemapCollider2D, animation frames), a
-  DotworkTerrainTile per blob47 or sides4 terrain (paint it in the Tile Palette: it picks the tile by its neighbours),
-  a map prefab (Grid, a Tilemap per layer, top-left corner at the origin, the props), a DotworkFont per BMFont and
-  the UI kit parts (9-slice margins as sprite borders). Everything is listed in `Assets/dotwork/<pack>/<pack>.asset`
-  (DotworkPack: `pack.Animated("hero").Clip("walk", "s")`, `pack.Map("yard").prefab`, `pack.Font("dialogue")`).
-  Running it again updates every asset in place (same GUIDs); commit the generated assets and their `.meta` files.
+  child), a DotworkTile per tileset cell (custom physics shapes for a TilemapCollider2D, animation frames, its
+  `origin` as the sprite's pivot), a DotworkTerrainTile per terrain of every mode (blob47, sides4, corners4: paint it
+  in the Tile Palette and it picks the tile by its neighbours and the cell's roll), a map prefab (Grid, a Tilemap per
+  layer, the props), a DotworkFont per BMFont and the UI kit parts (9-slice margins as sprite borders). Everything is
+  listed in `Assets/dotwork/<pack>/<pack>.asset` (DotworkPack: `pack.Animated("hero").Clip("walk", "s")`,
+  `pack.Map("yard").prefab`, `pack.Font("dialogue")`, `pack.Background("hills").layers`). Running it again updates
+  every asset in place (same GUIDs); commit the generated assets and their `.meta` files.
+- Maps (asset manifest 1.1.0, #285): a `terrain` layer is resolved at import into the spec's own tiles (the key from
+  the painted neighbours in the set's mode, the variant picked by `cell_roll(x, y, layer index)` among the tiles with
+  that key by `probability`, the same pick as every other engine's importer; a cell with no tile for its key stays
+  empty with one warning per layer), a `stamps` layer places every tile of each stamp, a `tiles` layer is placed as
+  is (flip flags as the cell's transform), an unknown layer kind is skipped with one warning. A square map's row y is
+  Unity cell y = -1 - y (the map's top-left corner at the origin, pixel (x, y) at `(x, -y) / ppu`). An isometric map
+  uses Unity's Isometric Grid: Unity's diamonds run x up-right and y up-left and centre cell (0, 0) on x = 0, the spec
+  (Godot's diamond-down layout) runs x down-right and y down-left with cell (0, 0) centred on (w/2, h/2), so the
+  importer places map cell (x, y) at Unity cell (-1 - y, -1 - x) (`DotworkImporter.Cell(shape, x, y)`, inverse
+  `MapCell`) and moves every layer's Tilemap half a diamond right, measured from the Grid, so a 16x8 set's cell (0, 0)
+  is centred on (8, 4), (1, 0) on (16, 8), (0, 1) on (0, 8) map pixels, as the spec's `centres` say; a tile's sprite
+  pivot is its origin, so its image lands at centre - origin (the raised iso block with `origin [8, 8]`). Isometric
+  layers render with Mode Individual and Sort Order Top Right so the diamonds lower on the screen draw last **(verify:
+  the headless tests prove the centres and the placed top-lefts, not the drawn order)**.
+- The extra kinds are loaded and listed, the scene object that uses them is the game's: `background` (a sprite per
+  layer with its size, velocity, repeat, wobble and scale; the texture wraps on the `repeat` axes), `particles` (the
+  texture sprite and the emitter JSON as a `TextAsset`, `Assets/dotwork/<pack>/particles/<name>.json`), `transition`
+  (the mask sprite and the transition kind), `normal_map` (a linear texture set as the target image's `_NormalMap`
+  secondary texture through its TextureImporter, which URP's 2D lights read from the target's sprites; the Built-in
+  pipeline has no 2D lights to use it), `image` (a sprite). Only an unknown kind is skipped, with a warning.
 - Fonts and UI kits are already drawn at their `scale` by Dotwork: draw them 1:1 (DotworkLabel does).
 - `exec GameKitDotwork.Verify` (and `dev.py test`, `DotworkImportTests.EveryManifestInTheGameLoads`) fails on a missing
   file, a rect outside its image, a stale or broken import. `exec GameKitDotwork.ShowInStarterScene` puts the first
   map, a character walking, a prop and a label in the font in `Assets/Scenes/Main.unity`.
-- Not built yet (skipped with a warning; their PNGs get the pixel-art settings): background, particles, transition,
-  normal_map, image; corners4 terrain layers of a map; stamps. Blend `add` uses a built-in particle shader (Built-in
-  pipeline; URP needs its own particle material **(verify)**). Isometric maps use Unity's isometric Grid **(verify
-  against Godot's diamond-down layout)**.
+- Blend `add` uses a built-in particle shader (Built-in pipeline; URP needs its own particle material **(verify)**).
+  The golden tests (`dev.py test --filter Dotwork`) read the three fixture maps back from their Tilemaps and compare
+  every terrain cell, placed cell and centre with `data/golden/dotwork/expected.json`, both shapes, and load the
+  rendered-character sheet pack (`data/golden/character/sprites/`) the same way.
 
 ## Rigged characters (glTF with clips, #290)
 - **Package:** Unity has no glTF importer of its own. The kit uses glTFast (`com.unity.cloud.gltfast`, Unity's own,
