@@ -117,11 +117,11 @@ def conform_clip_fps(bpy, scene, actions, quiet=False):
             for kp in fc.keyframe_points:
                 # snapped to the whole frame: the imported frame is a float32 time x 24, and scaled back it can land
                 # 6e-6 under the frame (a 71-key walk did), where the exporter's int(end) drops the closing key
-                snapped = round(kp.co[0] * k)
-                shift = snapped - kp.co[0]
+                old_co = kp.co[0]
+                snapped = round(old_co * k)
                 kp.co[0] = snapped
-                kp.handle_left[0] += shift
-                kp.handle_right[0] += shift
+                kp.handle_left[0] = (kp.handle_left[0] - old_co) * k + snapped     # scaled about the key, as the
+                kp.handle_right[0] = (kp.handle_right[0] - old_co) * k + snapped   # key itself was
             fc.update()
         if getattr(act, "use_frame_range", False):
             act.frame_end *= k

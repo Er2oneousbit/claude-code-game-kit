@@ -394,8 +394,9 @@ to bend (a box with two ends), it is cut across its length: more rows, the same 
 that is fused to the body along its length (generated meshes often are: the scarf is just a red area of one surface)
 cannot swing without tearing a hole, so it is **rebuilt as a strip**: a box-section ribbon along the part's middle line,
 its width and thickness measured slice by slice, laid just on top of the original, with its texture baked into a small
-image of its own (one patch per strip face, every texel the colour of the nearest point of the part's own surface; the
-colours of a vertex-coloured part are copied the same way), so it looks the same from the front. Texture coordinates
+image of its own (one patch of 32 x 32 texels per strip face, every texel the colour of the nearest point of the part's
+own surface, so a 0.26 m wide scarf keeps its pattern down to about 8 mm; the colours of a vertex-coloured part are
+copied the same way), so it looks the same from the front. Texture coordinates
 copied to the strip's corners used to sweep through the atlas between two islands and showed flecks of body texture
 on the scarf (live run 2026-11-11). Its limits, measured on the
 exam's fused band: the width (0.09 m of 0.085) and the colours come through; folds, fringes, knots, tassels and a
