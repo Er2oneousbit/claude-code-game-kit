@@ -16,6 +16,8 @@
 --           here. Held actions: ctx.app.input:is_down("move_left"). This file is a TEMPLATE: replace it.
 --           Dotwork: src/game/dotwork_loader.lua reads the manifests (headless), src/game/dotwork_view.lua draws.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the map is drawn offset by its pixel bounds, so
+--           an isometric map's left column (left of x = 0 in the spec's layout) stays on screen.
 -- ---------------------------------------------------------------------------
 local CoyoteTimer = require("src.core.coyote_timer")
 local Manifest = require("src.core.dotwork_manifest")
@@ -131,7 +133,8 @@ local function draw_art()
   local view = scene.view
   if scene.map then
     scene.map_view = scene.map_view or view:map(scene.map)
-    scene.map_view:draw(MAP_X, MAP_Y, ART_SCALE)
+    local left, top = DotworkView.map_bounds(scene.map)    -- an iso map's left column sits left of x = 0
+    scene.map_view:draw(MAP_X - left * ART_SCALE, MAP_Y - top * ART_SCALE, ART_SCALE)
   end
   if scene.prop then view:draw_sprite(scene.prop, PROP_X, FLOOR_Y, ART_SCALE) end
   if scene.font and scene.label ~= "" then view:print(scene.font, scene.label, LABEL_X, LABEL_Y, ART_SCALE) end

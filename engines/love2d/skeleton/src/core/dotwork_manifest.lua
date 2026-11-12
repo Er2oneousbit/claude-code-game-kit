@@ -9,8 +9,9 @@
 -- Usage   : local Manifest = require("src.core.dotwork_manifest")
 --           local model = Manifest.parse(Json.decode(text), "assets/dotwork/town.assets.json")
 --           model.animated_sprite.hero.clips.walk_s.frames[1].duration   -- seconds
---           model.map.yard.layers[2].cells[1]        -- { x, y, key, tile = {atlas, col, row}, left, top, flags }
+--           model.map.yard.layers[2].cells[1]        -- { x, y, key, tile = {atlas, col, row}, cx, cy, left, top, flags }
 --           model.map.yard.centres[1]                -- { x, y, cx, cy }: every cell's centre in map pixels
+--           model.map.yard.layers[5].cells           -- a stamps layer, expanded: one cell per tile of each stamp
 --           Manifest.cell_centre("isometric", 1, 0, { 16, 8 })   -- 16, 8 (the spec's placing rule)
 --           local p = Manifest.player(model.animated_sprite.hero.clips.walk_s); p:update(dt); p.index
 --           model.background.hills.layers[2].velocity   model.particles.embers.emitter   model.image.logo.image
@@ -22,7 +23,7 @@
 --           from the game folder: join(dirname(manifest), base, path). A terrain cell's tile is picked among the
 --           tiles of its terrain with the cell's key (the blob mask, the side bits, or the corner bits) by
 --           probability with the spec's cell_roll (Jenkins hash, the same pick in every engine); every candidate is
---           kept in cell.variants. A cell with no tile for its key stays empty (a problem line per layer: the
+--           kept in cell.variants. A cell with no tile for its key stays empty (one warning per layer; the
 --           validator refuses such maps). Cells land as the spec's "Placing tiles" says: the tile's origin (its
 --           `origin` field, else the atlas tile's centre) on the cell centre, isometric in Godot's diamond-down
 --           layout, so an iso map's left column sits left of x = 0.
@@ -148,8 +149,8 @@ end
 
 -- The key a tileset tile answers to: its mask (blob47, sides4), or the sum of the corner bits whose corner holds
 -- the tile's own terrain (corners4, corner names by shape). nil when it has neither, or the corner names are not
--- the shape's.
-function Manifest.tile_key(tile, mode, shape)
+-- the shape's. (Manifest.tile_key is the "atlas,col,row" lookup string, below.)
+function Manifest.terrain_key(tile, mode, shape)
   if mode ~= "corners4" then return tile.mask end
   local corners = tile.corners
   if type(corners) ~= "table" then return nil end
@@ -566,35 +567,57 @@ function convert.tileset(ctx, a, where)
       end
       s.tiles[tile_key(atlas.id, t.col, t.row)] = tile
       s.tile_list[#s.tile_list + 1] = tile
-      if tile.terrain ~= nil then
-        local mk = Manifest.mask_key(tile)
-        if mk then
+    end
+  end
+  -- terrain tiles filed by "set/terrain" and key as { weight, tile } candidates in atlas order: atlases by id,
+  -- tiles in list order (the spec's pick walks them in exactly this order)
+  local ids = {}
+  for id in pairs(s.atlas_by_id) do ids[#ids + 1] = id end
+  table.sort(ids)
+  for _, id in ipairs(ids) do
+    for _, tile in ipairs(s.tile_list) do
+      if tile.atlas == id and tile.terrain ~= nil then
+        local set = s.terrain_sets[tile.terrain_set]
+        local key = Manifest.terrain_key(tile, set and set.mode or "blob47", s.shape)
+        if key ~= nil then
           local tk = tile.terrain_set .. "/" .. tile.terrain
-          s.by_mask[tk] = s.by_mask[tk] or {}
-          s.by_mask[tk][mk] = s.by_mask[tk][mk] or {}
-          table.insert(s.by_mask[tk][mk], tile)       -- atlas order: [1] is the base variant
+          s.by_key[tk] = s.by_key[tk] or {}
+          s.by_key[tk][key] = s.by_key[tk][key] or {}
+          table.insert(s.by_key[tk][key], { tile.probability, tile })
         end
       end
     end
   end
-  for _, st in ipairs(opt(a.stamps) or {}) do
-    s.stamps[st.name] = { name = st.name, size = copy_pair(st.size), solid = st.solid, tiles = st.tiles }
-    for _, t in ipairs(st.tiles or {}) do
+  for i, st in ipairs(opt(a.stamps) or {}) do
+    local sw = where .. " stamp " .. tostring(st.name or (i - 1))
+    local stamp = { index = i - 1, name = ctx:need(st, "name", "string", sw), size = copy_pair(ctx:need(st, "size", "pair", sw)),
+                    solid = st.solid == true, tiles = {} }
+    for j, t in ipairs(ctx:need(st, "tiles", "list", sw)) do
+      stamp.tiles[j] = { t[1], t[2], t[3] }
       if not s.tiles[tile_key(t[1], t[2], t[3])] then
-        ctx:problem(where .. ": stamp " .. st.name .. " names tile " .. tile_key(t[1], t[2], t[3]) ..
-                    ", which the tileset does not have")
+        ctx:problem(sw .. " names tile " .. tile_key(t[1], t[2], t[3]) .. ", which the tileset does not have")
       end
     end
+    s.stamps[stamp.name] = stamp
+    s.stamp_list[i] = stamp                  -- a map's stamps layer names a stamp by its 0-based index: [index + 1]
   end
   return s
 end
 
--- Each painted cell of a terrain layer -> { x, y, mask, tile = {atlas, col, row} | nil }, sorted by y then x.
-function Manifest.resolve_terrain(tileset, layer)
+-- The { weight, tile } candidates of a terrain for a key, in atlas order (nil when no tile answers to it).
+function Manifest.candidates(tileset, terrain_set, terrain, key)
+  local by_terrain = tileset.by_key[(terrain_set or 0) .. "/" .. terrain]
+  return by_terrain and by_terrain[key] or nil
+end
+
+-- Each painted cell of a terrain layer -> { x, y, key, tile = {atlas, col, row} | nil, variants }, sorted by y
+-- then x. key is cell_mask's (the blob mask, the side bits or the corner bits); the tile is picked among the
+-- candidates with that key by probability with cell_roll(x, y, layer_index) (0-based: the layer's position in
+-- the map's layers list), so every engine picks the same variant; nil when no tile has the key.
+function Manifest.resolve_terrain(tileset, layer, layer_index)
   local sid, tid = layer.terrain_set or 0, layer.terrain
   local set = tileset.terrain_sets[sid]
   local mode = set and set.mode or "blob47"
-  local variants = tileset.by_mask[sid .. "/" .. tid] or {}
   local painted = Manifest.painted_set(layer.cells)
   local cells = {}
   for _, c in ipairs(layer.cells) do cells[#cells + 1] = { c[1], c[2] } end
@@ -603,28 +626,68 @@ function Manifest.resolve_terrain(tileset, layer)
   for _, c in ipairs(cells) do
     local x, y = c[1], c[2]
     if not (out[#out] and out[#out].x == x and out[#out].y == y) then       -- a cell listed twice paints once
-      local m = Manifest.cell_mask(painted, x, y, mode)
-      local list = mode ~= "corners4" and variants[tostring(m)] or nil
-      local first = list and list[1]
-      out[#out + 1] = { x = x, y = y, mask = m, tile = first and { first.atlas, first.col, first.row } or nil,
+      local key = Manifest.cell_mask(painted, x, y, mode)
+      local list = Manifest.candidates(tileset, sid, tid, key)
+      local tile = list and Manifest.pick_variant(list, Manifest.cell_roll(x, y, layer_index or 0))
+      out[#out + 1] = { x = x, y = y, key = key, tile = tile and { tile.atlas, tile.col, tile.row } or nil,
                         variants = list }
     end
   end
   return out
 end
 
+-- Each [x, y, stamp] of a stamps layer -> the stamp's tiles as cells { x, y, tile, stamp }, tile j at
+-- (x + j % w, y + floor(j / w)), in the order of the layer's cells. A bad stamp index is a problem line.
+function Manifest.expand_stamps(tileset, cells, ctx, where)
+  local out = {}
+  for _, c in ipairs(cells) do
+    local stamp = tileset.stamp_list[(c[3] or -1) + 1]
+    if not stamp then
+      if ctx then ctx:problem(where .. ": cell " .. c[1] .. "," .. c[2] .. " names stamp " .. tostring(c[3]) ..
+                              ", which the tileset does not have (" .. #tileset.stamp_list .. " stamps)") end
+    else
+      local sw = stamp.size[1]
+      for j, t in ipairs(stamp.tiles) do
+        local k = j - 1
+        out[#out + 1] = { x = c[1] + k % sw, y = c[2] + math.floor(k / sw), tile = { t[1], t[2], t[3] },
+                          stamp = stamp.index, flags = 0 }
+      end
+    end
+  end
+  return out
+end
+
+-- Where a placed cell's image lands: left, top in map pixels = the cell centre less the tile's origin.
+local function place_cell(cell, map, ts)
+  local tile = ts.tiles[tile_key(cell.tile[1], cell.tile[2], cell.tile[3])]
+  local atlas = tile and ts.atlas_by_id[tile.atlas]
+  if not atlas then return end
+  local cx, cy = Manifest.cell_centre(map.shape, cell.x, cell.y, map.tile_size)
+  local ox, oy = Manifest.tile_origin(tile, atlas)
+  cell.cx, cell.cy, cell.left, cell.top = cx, cy, cx - ox, cy - oy
+end
+
 function convert.map(ctx, a, where, model)
   local s = { kind = "map", name = a.name, tileset_name = ctx:need(a, "tileset", "string", where),
               size = copy_pair(ctx:need(a, "size", "pair", where)),
-              tile_size = copy_pair(ctx:need(a, "tile_size", "pair", where)), layers = {}, objects = {} }
+              tile_size = copy_pair(ctx:need(a, "tile_size", "pair", where)), layers = {}, objects = {},
+              centres = {} }
   local ts = model.tileset[s.tileset_name]
   s.tileset = ts
+  s.shape = ts and ts.shape or "square"
   if not ts then ctx:problem(where .. ": tileset " .. s.tileset_name .. " is not in this manifest") end
   local mw, mh = s.size[1], s.size[2]
+  for y = 0, mh - 1 do
+    for x = 0, mw - 1 do
+      local cx, cy = Manifest.cell_centre(s.shape, x, y, s.tile_size)
+      s.centres[#s.centres + 1] = { x = x, y = y, cx = cx, cy = cy }
+    end
+  end
   for li, L in ipairs(ctx:need(a, "layers", "list", where)) do
     local lw = where .. " layer " .. tostring(L.name or li)
     local layer = { name = ctx:need(L, "name", "string", lw), kind = ctx:need(L, "kind", "string", lw),
-                    opacity = opt(L.opacity) or 1, cells = {}, count = #ctx:need(L, "cells", "list", lw) }
+                    index = li - 1, opacity = opt(L.opacity) or 1, cells = {}, count = 0 }
+    ctx:need(L, "cells", "list", lw)
     local bad = false
     for _, c in ipairs(L.cells) do
       if not bad and not (c[1] >= 0 and c[1] < mw and c[2] >= 0 and c[2] < mh) then
@@ -649,20 +712,35 @@ function convert.map(ctx, a, where, model)
         if not (set and set.terrains[layer.terrain]) then
           ctx:problem(lw .. ": terrain " .. layer.terrain .. " is not in tileset " .. ts.name)
         else
-          if set.mode == "corners4" then
-            ctx:warn(ctx.path .. ": " .. lw .. ": corners4 terrain layers are not resolved to tiles yet (masks only)")
-          end
           layer.cells = Manifest.resolve_terrain(ts, { terrain_set = layer.terrain_set, terrain = layer.terrain,
-                                                       cells = L.cells })
+                                                       cells = L.cells }, layer.index)
           local missing = 0
           for _, c in ipairs(layer.cells) do if not c.tile then missing = missing + 1 end end
-          if missing > 0 and set.mode ~= "corners4" then
-            ctx:problem(lw .. ": " .. missing .. " cell(s) need a mask the tileset has no tile for")
+          if missing > 0 then                       -- the validator refuses such a map; the cells stay empty
+            ctx:warn(ctx.path .. ": " .. lw .. ": " .. missing .. " cell(s) need a key (" .. set.mode ..
+                     ") the terrain has no tile for: left empty")
           end
         end
       end
+    elseif layer.kind == "stamps" then
+      if ts then layer.cells = Manifest.expand_stamps(ts, L.cells, ctx, lw) end
     else
-      ctx:warn(ctx.path .. ": " .. lw .. ": layer kind '" .. layer.kind .. "' is not in spec 1.x: skipped")
+      local k = "layer." .. layer.kind
+      if not ctx.warned[k] then
+        ctx.warned[k] = true
+        ctx:warn(ctx.path .. ": " .. lw .. ": layer kind '" .. layer.kind .. "' is not in spec " .. Manifest.MAJOR ..
+                 ".x: skipped")
+      end
+    end
+    if ts then
+      for _, cell in ipairs(layer.cells) do
+        if cell.tile then
+          place_cell(cell, s, ts)
+          layer.count = layer.count + 1
+        end
+      end
+    else
+      layer.count = #L.cells
     end
     s.layers[li] = layer
   end
@@ -677,7 +755,58 @@ function convert.map(ctx, a, where, model)
   return s
 end
 
--- The file paths of a skipped extra kind, so the loader still checks they ship.
+-- ---- The extra kinds (loaded as data; the game object that uses them is the game's) ----------------
+-- background: layers drawn first to last; `repeat` is none, x, y or xy (the view wraps the Image on those axes).
+function convert.background(ctx, a, where)
+  local s = { kind = "background", name = a.name, role = a.role, layers = {} }
+  for i, L in ipairs(ctx:need(a, "layers", "list", where)) do
+    local lw = where .. " layer " .. tostring(L.name or i)
+    ctx:unknown_fields(L, KNOWN.bg_layer, "background layer")
+    local size = copy_pair(ctx:need(L, "size", "pair", lw))
+    local rep = opt(L["repeat"]) or "none"
+    s.layers[i] = { name = opt(L.name), size = size, velocity = copy_pair(ctx:need(L, "velocity", "pair", lw)),
+                    ["repeat"] = rep, repeat_x = rep == "x" or rep == "xy", repeat_y = rep == "y" or rep == "xy",
+                    wobble_px = opt(L.wobble_px) or 0, scale = opt(L.scale) or 1 }
+    s.layers[i].image = ctx:file(ctx:need(L, "image", "string", lw), lw, size)
+  end
+  return s
+end
+
+-- particles: the white mask texture and the emitter JSON as Dotwork writes it (amount, lifetime, one_shot,
+-- colour steps ...), kept whole: the view builds a love ParticleSystem from the fields it knows.
+function convert.particles(ctx, a, where)
+  local s = { kind = "particles", name = a.name, emitter = ctx:need(a, "emitter", "list", where) }
+  s.texture = ctx:file(ctx:need(a, "texture", "string", where), where .. " texture")
+  return s
+end
+
+-- transition: a greyscale image; a pixel is covered once the progress passes its grey / 255.
+function convert.transition(ctx, a, where)
+  local size = copy_pair(ctx:need(a, "size", "pair", where))
+  local s = { kind = "transition", name = a.name, size = size, transition = ctx:need(a, "transition", "string", where) }
+  s.image = ctx:file(ctx:need(a, "image", "string", where), where, size)
+  return s
+end
+
+-- normal_map: the map and the image it lights (both files must ship); green up (opengl) unless said otherwise.
+function convert.normal_map(ctx, a, where)
+  local size = copy_pair(ctx:need(a, "size", "pair", where))
+  local s = { kind = "normal_map", name = a.name, size = size, convention = opt(a.convention) or "opengl" }
+  s.image = ctx:file(ctx:need(a, "image", "string", where), where, size)
+  s.target = ctx:file(ctx:need(a, "target", "string", where), where .. " target")
+  return s
+end
+
+-- image: a loose PNG with what made it (role) and an optional pivot.
+function convert.image(ctx, a, where)
+  local size = copy_pair(ctx:need(a, "size", "pair", where))
+  local s = { kind = "image", name = a.name, role = opt(a.role), size = size,
+              pivot = opt(a.pivot) and copy_pair(a.pivot) or nil }
+  s.image = ctx:file(ctx:need(a, "image", "string", where), where, size)
+  return s
+end
+
+-- The file paths of a skipped (unknown) kind, so the loader still checks they ship.
 local function extra_files(ctx, a, where)
   for _, field in ipairs({ "image", "texture", "target" }) do
     if type(a[field]) == "string" then ctx:file(a[field], where .. " " .. field) end
@@ -708,7 +837,7 @@ function Manifest.parse(doc, path)
   Manifest.check_header(doc, path)
   local model = { path = path, pack = doc.pack, version = doc.version, warnings = {}, problems = {}, files = {},
                   order = {} }
-  for _, k in ipairs(Manifest.CORE_KINDS) do model[k] = {} end
+  for _, k in ipairs(Manifest.KINDS) do model[k] = {} end
   local ctx = setmetatable({ model = model, path = path, warned = {}, files_by_path = {} }, Ctx)
   ctx.base = Manifest.normalize(Manifest.dirname(path) .. "/" .. tostring(opt(doc.base) or "."))
   model.base = ctx.base
@@ -718,14 +847,13 @@ function Manifest.parse(doc, path)
     if type(a) ~= "table" or type(a.kind) ~= "string" or type(a.name) ~= "string" then
       ctx:fail("asset " .. i, "has no kind or name")
     end
-    if CORE[a.kind] then
+    if LOADED[a.kind] then
       by_kind[a.kind] = by_kind[a.kind] or {}
       table.insert(by_kind[a.kind], a)
     else
       if not skipped[a.kind] then
         skipped[a.kind] = true
-        ctx:warn(path .. ": kind '" .. a.kind .. "' " .. (EXTRA[a.kind] and "(an extra kind) is not imported yet"
-                 or "is not in spec " .. Manifest.MAJOR .. ".x") .. ": skipped")
+        ctx:warn(path .. ": kind '" .. a.kind .. "' is not in spec " .. Manifest.MAJOR .. ".x: skipped")
       end
       model.skipped = model.skipped or {}
       table.insert(model.skipped, { kind = a.kind, name = a.name })
