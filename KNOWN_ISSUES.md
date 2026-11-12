@@ -88,6 +88,9 @@ examples were built and tested on one Windows 11 machine.
   and LÖVE (as sprites) were looked at; skinned drawing in a Bevy window and the web-3d page, Unreal playing the clips
   in a level, Unity's run-time load in a player build and URP 2D lights reading a normal map are (verify). The Godot
   2D route has no manifest importer: its sheets go in by hand with render_sprites' layout file.
+- **Bevy projects sharing one `CARGO_TARGET_DIR`:** cargo names examples without a crate hash, so several projects
+  link into one `debug/examples/shader_check.pdb`; after a few of them MSVC stops with `LNK1140: limit exceeded for
+  program database` (a fresh one is already 2.2 GB of the 4 GB limit). Delete that `.pdb` and build again.
 - **Strip rebuild limits:** a fused scarf or cape rebuilt by `rig chain` loses folds, knots and fringes, and the
   original stays painted on the body under it.
 

@@ -53,7 +53,13 @@
   `masks`/`tiles` arrays are `keys`/`tiles`/`weights`. Isometric Dotwork maps in web-3d, Bevy, LÖVE and C++ move half a
   tile right (to where Godot draws them): a game that compensated by hand removes its offset. A rigged model made
   before 0.15.0 gets looping, centred clips by running `rig_finish.py` on it again. `--max-credits` caps one run now,
-  not everything a journal ever paid.
+  not everything a journal ever paid. A Unity game that edited its EditMode or PlayMode test `.asmdef` adds
+  `Game.Characters` to their references (`check` fails until it does). The first `check` after the upgrade imports the
+  golden character data: commit Godot's new `.import` and `.gd.uid` files, and Bevy's `Cargo.lock` (it gains
+  `zune-jpeg` with the `jpeg` feature).
+- **Kit tools:** `scripts/sync_examples.py` skipped every folder named `Content`, so the Unreal example's kit scripts
+  under `Content/Python/` never synced; it copies them now. Web and web-3d tests get a 30 s timeout (a busy machine
+  timed golden tests out at Vitest's 5 s). All ten examples are on 0.15.0 and pass `scripts/check_examples.py`.
 
 ## 0.14.5 (2026-11-11): Dotwork in every engine, web-3d and MZ shells, tooling (#277 to #279, #283, #175, #83, #55 to #62, #156, #157, #183, #90, #14)
 This one is larger than a patch usually is: the fixes and the next feature batch ship together, once.
