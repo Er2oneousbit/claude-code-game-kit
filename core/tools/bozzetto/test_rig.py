@@ -606,7 +606,10 @@ BUILD = textwrap.dedent('''
         act.use_fake_user = True; arm.animation_data.action = None
     bpy.ops.export_scene.gltf(filepath=out, export_format="GLB", export_yup=True)
 ''')
-THIRTY_FRAMES = 56                        # the 30 fps fixture's loop length in frames (Tripo's walk had 56 at 30 fps)
+# the 30 fps fixture's loop length in frames: Tripo's walk had 70 (71 keys), and that count is the one where the
+# imported key frames (float32 times x 24) scaled back to 30 fps land 6e-6 under a whole frame, so an export that
+# does not snap the keys first samples one frame short (the live file lost its walk's closing frame that way)
+THIRTY_FRAMES = 70
 BUILD = BUILD.replace("THIRTY_FRAMES", str(THIRTY_FRAMES))
 
 

@@ -41,7 +41,8 @@
 #   clip_fps(frames, fps): key frames -> the first rate of (fps, 12, 15, 20, 24, 25, 30, 48, 50, 60) that puts every
 #                     key within KEY_TOLERANCE of a whole frame, else None
 #   conform_clip_fps: gather every key frame of the actions -> clip_fps -> same rate: nothing; a rate: scale every
-#                     key (co, handles) and manual frame range by new / old, set scene fps, print [info]; none: [WARN]
+#                     key by new / old and snap it to the whole frame (handles shifted along), scale a manual frame
+#                     range, set scene fps, print [info]; none: [WARN]
 #   end_process: Blender executable -> sys.exit(code); the module on Windows -> flush, TerminateProcess(code)
 import sys
 
@@ -114,9 +115,13 @@ def conform_clip_fps(bpy, scene, actions, quiet=False):
     for act in actions:
         for fc in fcurves_of(act):
             for kp in fc.keyframe_points:
-                kp.co[0] *= k
-                kp.handle_left[0] *= k
-                kp.handle_right[0] *= k
+                # snapped to the whole frame: the imported frame is a float32 time x 24, and scaled back it can land
+                # 6e-6 under the frame (a 71-key walk did), where the exporter's int(end) drops the closing key
+                snapped = round(kp.co[0] * k)
+                shift = snapped - kp.co[0]
+                kp.co[0] = snapped
+                kp.handle_left[0] += shift
+                kp.handle_right[0] += shift
             fc.update()
         if getattr(act, "use_frame_range", False):
             act.frame_end *= k
