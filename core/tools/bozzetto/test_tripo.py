@@ -61,6 +61,8 @@ class State:
         self.downloads = []        # (url path, Authorization header or None)
         self.status = {}           # task id -> status reported instead of success
         self.fail = None           # (code, message): every new task fails with it
+        self.echo = False          # a refused key's message echoes the Authorization header (as some APIs do)
+        self.redirect = False      # /tasks answers 302 to the CDN (a redirect must never carry the key)
         self.expire = False        # links handed out while set are dead from the start
         self.dead = set()
         self.urls = 0
@@ -105,7 +107,8 @@ class FakeTripo(http.server.BaseHTTPRequestHandler):
         good = self.headers.get("Authorization") == f"Bearer {KEY}"
         STATE.requests.append((self.command, self.path, good))
         if not good:
-            self.send(401, {"code": 1002, "message": "invalid api key"})
+            words = "invalid api key" + (f" (got {self.headers.get('Authorization')})" if STATE.echo else "")
+            self.send(401, {"code": 1002, "message": words, "suggestion": "API key must start with 'tsk_'"})
         return good
 
     def do_GET(self):
@@ -120,6 +123,11 @@ class FakeTripo(http.server.BaseHTTPRequestHandler):
             return self.ok({"balance": STATE.balance, "frozen": 0.0})
         if self.path.startswith("/v3/tasks/"):
             tid = self.path.rsplit("/", 1)[1]
+            if STATE.redirect:
+                self.send_response(302)
+                self.send_header("Location", f"http://{self.headers.get('Host')}/cdn/{tid}/redirected.glb")
+                self.send_header("Content-Length", "0")
+                return self.end_headers()
             task = STATE.tasks.get(tid)
             if task is None:
                 return self.send(404, {"code": 2001, "message": "task not found"})
@@ -370,6 +378,50 @@ class Money(Base):
         self.assertIn("TRIPO_API_KEY", out)
         self.assertEqual(STATE.requests, [])
 
+    def test_quote_only_needs_no_key_and_spends_nothing(self):
+        """--quote-only prints the table price (and the journal's reuse) with no key, no call, no Blender and nothing
+        written; the measured figures say so and the others stay (verify)."""
+        os.environ.pop(tripo.TRIPO_ENV)
+        bz.find_blender = lambda choice=None: None
+        rc, out = self.make("--image", "art_src/crate.png", "--quote-only")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("[quote] tripo (P2-20260801 image-to-model, texture standard): 110 credits ($1.10)", out)
+        self.assertIn("measured 2026-11-11", out)
+        self.assertNotIn("verify", out)
+        self.assertIn("nothing was made or spent", out)
+        self.assertEqual(STATE.requests, [])
+        self.assertFalse((self.root / "assets_src").exists(), "a quote wrote files")
+        rc, out = self.make("--image", "art_src/crate.png", "--quality", "high", "--quote-only")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("140 credits ($1.40)", out)
+        self.assertIn("--quality high adds 30 (verify)", out)
+        rc, out = self.make("--front", "art_src/front.png", "--back", "art_src/back.jpg", "--class", "npc",
+                            "--quote-only", name="npc_guard")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("multiview-to-model, texture standard): 110 credits", out)
+        self.assertIn("multiview-to-model measured 2026-11-11", out)
+        rc, out = self.make("--prompt", "a brass lantern", "--quote-only", name="prop_lamp")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("text-to-model is the kit's ceiling, not yet measured (verify)", out)
+        rc, out = self.make("--image", "art_src/crate.png", "--material", "vertex", "--quote-only")
+        self.assertEqual(rc, 2, "a quote still checks the Tripo options")
+        rc, out = self.run_tool("make", "prop_crate", "--image", "art_src/crate.png", "--quote-only")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("[quote] local: free", out)
+        self.assertEqual(STATE.requests, [])
+        # after a paid run, the quote reads the journal: nothing left to pay
+        os.environ[tripo.TRIPO_ENV] = KEY
+        bz.find_blender = lambda choice=None: ("blender", "fake-blender")
+        self.assertEqual(self.make("--image", "art_src/crate.png")[0], 0)
+        calls = len(STATE.requests)
+        rc, out = self.make("--image", "art_src/crate.png", "--quote-only", "--overwrite")
+        self.assertEqual(rc, 0, out)
+        self.assertIn(": 0 credits ($0.00) to spend", out)
+        self.assertIn("model task task-1 in tasks.json is reused (110 credits paid before)", out)
+        self.assertEqual(len(STATE.requests), calls, "a quote called Tripo")
+        rc, out = self.make("--image", "art_src/crate.png", "--quote-only", "--overwrite", "--no-reuse")
+        self.assertIn(": 110 credits", out)
+
     def test_a_client_id_in_place_of_the_key_stops_before_any_call(self):
         os.environ[tripo.TRIPO_ENV] = "tcli_exam_client_id"
         rc, out = self.make()
@@ -380,12 +432,32 @@ class Money(Base):
 
     def test_a_refused_key_shows_tripos_own_words(self):
         os.environ[tripo.TRIPO_ENV] = "tsk_wrong"
+        STATE.echo = True                        # the API echoes the key back: it must not reach the screen
         rc, out = self.make()
         self.assertEqual(rc, 2, out)
         self.assertIn("Tripo refused the key", out)
         self.assertIn("invalid api key", out, "the stand-in's message reaches the user")
+        self.assertIn("must start with 'tsk_'", out, "Tripo's suggestion reaches the user")
         self.assertNotIn("tsk_wrong", out, "the key is never printed")
         self.assertEqual(STATE.uploads, [])
+
+    def test_an_api_redirect_is_not_followed_with_the_key(self):
+        """urllib copies the Authorization header onto a redirected request: a 3xx from the API must stop the call
+        rather than carry the key to whatever host the Location names."""
+        STATE.redirect = True
+        rc, out = self.make()
+        self.assertEqual(rc, 1, out)
+        self.assertIn("redirect", out)
+        self.assertEqual([a for _, a in STATE.downloads], [], "the redirect was followed, with the key")
+        self.nothing_secret_written()
+
+    def test_upload_names_are_plain_ascii(self):
+        """The multipart header holds the file name: a quote or a line break would break it and a name such as
+        'Ísak' goes out as raw UTF-8; only the extension matters to Tripo."""
+        self.assertEqual(tripo.safe_filename('Ísak ”model”.glb'), "_sak__model_.glb")
+        self.assertEqual(tripo.safe_filename('a"b\r\nc.png'), "a_b__c.png")
+        self.assertEqual(tripo.safe_filename("reference.png"), "reference.png")
+        self.assertEqual(tripo.safe_filename("”"), "_")
 
 
 class Recovery(Base):
@@ -439,6 +511,14 @@ class Recovery(Base):
         rc, out = self.make("--image", "art_src/crate.png", "--seed", "6", "--overwrite")
         self.assertEqual(rc, 0, out)
         self.assertEqual(len(STATE.posts()), 4, "a changed picture is another model")
+
+    def test_a_lowered_cap_does_not_refuse_a_free_rerun(self):
+        """--max-credits caps one run: fixing the facing reuses the paid task, spends nothing, and passes any cap."""
+        self.assertEqual(self.make("--image", "art_src/crate.png")[0], 0)
+        rc, out = self.make("--image", "art_src/crate.png", "--overwrite", "--turn", "0", "--max-credits", "20")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("110 credits paid before", out)
+        self.assertEqual(len(STATE.posts()), 1)
 
     def test_a_task_left_running_is_adopted_or_stops_the_run(self):
         bz.SLEEP = lambda s: time.sleep(0.05)       # --wait 1 is real time: poll gently
@@ -535,7 +615,7 @@ class Usage(Base):
     def test_help_lists_the_route(self):
         rc, out = self.run_tool("make", "-h")
         self.assertEqual(rc, 0)
-        for opt in ("--with", "--front", "--back", "--max-credits", "--no-reuse", "--tripo-model"):
+        for opt in ("--with", "--front", "--back", "--max-credits", "--no-reuse", "--quote-only", "--tripo-model"):
             self.assertIn(opt, out)
 
 

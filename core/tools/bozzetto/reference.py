@@ -16,8 +16,9 @@
 #           --overwrite, --no-log, --wait S, --url/--allow-remote (local), --swap-sides, --debug
 # Needs   : Python 3.8+ (standard library; Pillow only speeds up the sheet and reads JPEG/WebP). local: a running
 #           ComfyUI with Dotwork's Qwen-Image-Edit-2511 files (route qwen_rotate in its models.lock.json, plus the
-#           ComfyUI-GGUF node pack) and, for --prompt, its FLUX.2 klein 4B files. nanobanana: GEMINI_API_KEY (paid:
-#           the Gemini API has no free tier for image output). tripo: TRIPO_API_KEY with API credits.
+#           ComfyUI-GGUF node pack) and, for --prompt, its FLUX.2 klein 4B files. nanobanana: GEMINI_API_KEY from a
+#           project with billing on (a free-tier key gets HTTP 429 with an image quota of 0, measured 2026-11-11: the
+#           run says so and stops). tripo: TRIPO_API_KEY with API credits.
 # Exit    : 0 ok (or the quote printed), 1 a generation call or job failed, 2 usage, environment, a missing key,
 #           the cost cap, or files in the way
 # Notes   : Routes. local (default, free): FLUX.2 klein draws the front from a prompt, or Qwen-Image-Edit re-poses a
@@ -55,6 +56,7 @@ import datetime
 import hashlib
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -151,7 +153,7 @@ TERMS = {
               "notes": "Tripo's banana models carry Google's invisible watermark (Tripo docs) (verify)"},
 }
 
-OPENER = urllib.request.urlopen     # the exam may replace it
+OPENER = tp.opener()                # Gemini calls: the key in a header, so no redirect is followed; the exam replaces it
 
 
 class Spent:
@@ -187,8 +189,7 @@ def key_of(*parts):
     return hashlib.sha256(json.dumps(parts, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
 
-def scrub(text, secret):
-    return text.replace(secret, "***") if secret else text
+scrub = tp.scrub   # the key out of anything shown, even when a server echoes it
 
 
 def clean(data):
@@ -255,7 +256,8 @@ class Journal:
 
 # ---- HTTP ---------------------------------------------------------------------------------------------------------
 def http_json(method, url, headers, body=None, raw=None, timeout=180, secret=""):
-    """(status, parsed JSON or None, text). Network trouble is a ToolError; the key never reaches a message."""
+    """(status, parsed JSON or None, text). Network trouble is a ToolError; the key never reaches a message: the
+    text is scrubbed before it is parsed, so a message taken from the parsed answer is clean too."""
     data = json.dumps(body).encode("utf-8") if body is not None else raw
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
     bz.dbg(f"{method} {url.split('?')[0]}")
@@ -267,11 +269,12 @@ def http_json(method, url, headers, body=None, raw=None, timeout=180, secret="")
         status, text = e.code, e.read(100_000).decode("utf-8", "replace")
     except (urllib.error.URLError, OSError) as e:
         raise bz.ToolError(scrub(f"cannot reach {url.split('/')[2]}: {getattr(e, 'reason', e)}", secret))
+    text = scrub(text, secret)
     try:
         doc = json.loads(text)
     except ValueError:
         doc = None
-    return status, doc, scrub(text, secret)
+    return status, doc if isinstance(doc, dict) else None, text
 
 
 # ---- plan -----------------------------------------------------------------------------------------------------------
@@ -481,6 +484,16 @@ class Local:
 
 
 # ---- nanobanana route: Gemini ------------------------------------------------------------------------------------
+def free_tier_quota(text):
+    """True for Google's 429 on a free-tier key: a QuotaFailure whose quotaValue is 0 (the image models have no free
+    quota; one such answer was read on 2026-11-11, so the match is generous: a zero quota value or limit, or a
+    free-tier quota name). A 429 without it is a plain rate limit."""
+    flat = " ".join(text.split()).lower()
+    return bool(re.search(r'"quota_?value"\s*:\s*"?0"?(?:[,}\s]|$)', flat)
+                or re.search(r'"limit"\s*:\s*"?0"?(?:[,}\s]|$)', flat)
+                or "free_tier" in flat or "freetier" in flat or "free tier" in flat)
+
+
 class Gemini:
     unit = "usd"
 
@@ -554,6 +567,15 @@ class Gemini:
             if status in (401, 403) or "API_KEY_INVALID" in text or "API key not valid" in text:
                 raise bz.ToolError(f"Gemini refused the key (HTTP {status}): check {GEMINI_ENV} and that its project "
                                    "has billing on (image output has no free tier)")
+            if status == 429 and free_tier_quota(text):
+                raise bz.ToolError(f"Gemini's free tier makes no images: this key's image quota is 0 (HTTP 429, "
+                                   f"measured 2026-11-11). Image models need {GEMINI_ENV} from a Google Cloud project "
+                                   "with billing on (the local route is free)")
+            if status == 429:
+                raise bz.JobError(f"Gemini HTTP 429: too many requests ({msg}); wait a minute and run again")
+            if 300 <= status < 400:
+                raise bz.JobError(f"Gemini answered with a redirect (HTTP {status}) to another address; not followed, "
+                                  "the key stays with the API")
             raise bz.JobError(f"Gemini HTTP {status}: {msg}")
         return doc or {}
 
@@ -654,7 +676,7 @@ class Tripo:
 
     def __init__(self, args, plan):
         self.args, self.plan = args, plan
-        self.client = tp.Client()
+        self.client = tp.Client(journal=f"{REF_DIR}/{JOURNAL}")
         self.budget = None            # tp.Budget, made at the first paid step (it needs the balance)
 
     def keys(self):
@@ -676,10 +698,10 @@ class Tripo:
             todo.append("image_to_multiview")
         q = tp.IMAGE_QUOTE
         total = sum(q[t] for t in todo)
-        return float(total), (f"tripo ({self.plan.model}): {', '.join(todo) or 'nothing'} to pay for, up to "
+        return float(total), (f"tripo ({self.plan.model}): {', '.join(todo) or 'nothing'} to pay for, "
                               f"{total} credits (${total / 100:.2f}; "
                               + (', '.join(f'{t} {q[t]}' for t in todo) or 'all reused')
-                              + "; upper bounds read 2026-11-11, verify)")
+                              + f"; {tp.IMAGE_QUOTE_NOTE})")
 
     def task(self, journal, key, kind, extra, spent, entry_extra):
         """One paid task with the journal around it: a task the last run left running is asked for first (never
@@ -844,7 +866,7 @@ def write_log(plan, record):
     notes = "; ".join(x for x in [
         f"reference views for {plan.name} ({', '.join(record['views'])}); source art for `make`, not shipped",
         f"prompt: {plan.prompt[:160]}" if plan.prompt else "from a concept picture (see the record)",
-        f"seed {record['seed']}",
+        f"seed {record['seed']}" if record.get("seed") is not None else "",
         "free" if plan.route == "local" else f"cost {fmt(cost['total_paid'], plan.unit)}",
         f"owner: {terms['owner']}",
         f"record `{bz.rel(plan.root, plan.dir / RECORD)}`"] if x)
@@ -856,7 +878,8 @@ def write_log(plan, record):
     plan.log_path.write_bytes(new.encode("utf-8"))
     ev = [f"{aid}  art  reference views generated {record['date']} with tools/{bz.TOOL.lower()}/"
           f"{bz.TOOL.lower()}.py reference {bz.VERSION}",
-          f"Route    : {plan.route} ({plan.model}), seed {record['seed']}",
+          f"Route    : {plan.route} ({plan.model})"
+          + (f", seed {record['seed']}" if record.get("seed") is not None else ", no seed (the journal names the take)"),
           f"Source   : " + (f"prompt: {plan.prompt}" if plan.prompt else
                             f"concept picture, SHA-256 {record['source']['sha256']}"),
           f"Owner    : {terms['owner']}", f"Licence  : {terms['licence']}", f"Notes    : {terms['notes']}",
@@ -951,9 +974,14 @@ def cmd_reference(args):
         return swap_sides(args)
     t0 = time.monotonic()
     plan = Plan(args)
-    if args.seed is None:
+    if args.seed is None and plan.route == "local":
         args.seed = int(time.time()) % 100000
         print(f"[info] no --seed given: using {args.seed} (pass it to name this take again)")
+    elif args.seed is None:
+        # the paid services take no seed: it only names the take in the journal. A clock seed here would make the
+        # same command, run again after a 500, a cap stop or Ctrl-C, pay for the front a second time.
+        print("[info] no --seed given: a re-run of this command reuses this take from the journal (pass --seed N or "
+              "--no-reuse for a new take)")
     preflight(args, plan)
     route = {"local": Local, "nanobanana": Gemini, "tripo": Tripo}[plan.route](args, plan)
     journal = Journal(plan.dir, plan.route, not args.no_reuse) if plan.route != "local" else None
@@ -1033,7 +1061,8 @@ def add_parser(sub, common):
                    help="local: free, your GPU (default); nanobanana: Google Gemini, GEMINI_API_KEY, paid per image; "
                         "tripo: Tripo image tasks, TRIPO_API_KEY, paid credits")
     p.add_argument("--views", default=",".join(VIEWS), help=f"which views (default {','.join(VIEWS)}; front always)")
-    p.add_argument("--seed", type=int, help="seed (local: every sampler; paid routes: names the take in the journal)")
+    p.add_argument("--seed", type=int, help="seed (local: every sampler, from the clock when not given; paid routes: "
+                                            "names the take in the journal, so a re-run without one reuses its paid work)")
     p.add_argument("--model", help=f"nanobanana: a Gemini image model (default {GEMINI_MODEL}); tripo: "
                                    f"{', '.join(tp.IMAGE_MODELS)} (default {tp.IMAGE_MODEL})")
     p.add_argument("--max-cost", type=float, help=f"never spend more than this in one run: dollars for nanobanana "

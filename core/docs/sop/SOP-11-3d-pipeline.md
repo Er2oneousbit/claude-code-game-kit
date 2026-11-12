@@ -77,16 +77,18 @@ preview; `check` says what is missing. Setup, options and limits: `tools/bozzett
   before the real run, and keep `--max-cost` low. Look at `assets_src/bozzetto/<name>/reference/sheet.png` before any 3D run: the same costume in
   every view, a gap under each arm, nothing cut off, and left and right not swapped (the first two live runs' left
   views faced the wrong way; K01): `bozzetto.py reference <name> --swap-sides` swaps them with the sheet, the record
-  and the asset log, no GPU and no cost. Local, cold: about 7 minutes for four views; the paid routes are not yet run live.
+  and the asset log, no GPU and no cost. Local, cold: about 7 minutes for four views; Tripo's route ran live (10 credits
+  a task, 2026-11-11, K01); Nano Banana needs a Google key with billing on (a free-tier key is refused with HTTP 429).
 - Licences: TRELLIS.2 and BiRefNet are MIT; DINOv3 (its image encoder) has a use-restriction list (military, weapons)
   whose reach over game props is an open question to settle before you ship such a model (`tools/bozzetto/LICENSES.md`).
   Upstream TRELLIS.2's RMBG-2.0 and nvdiffrast are non-commercial and never loaded (E147, E148, E149).
 - **The Tripo route** (`make <name> --with tripo`): the Tripo3D API makes the mesh instead (`--image`, several views
   with `--front` plus `--left`/`--back`/`--right`, or `--prompt`), then the same cleanup, budget check, LODs, turntable
-  and log row follow. It costs paid API credits (a Tripo Studio plan adds none): the quote is printed first,
-  `--max-credits` (default 150) caps a run, and a re-run reuses the paid task. A P2 image-to-model cost 110 credits
-  in the kit's test, not the 30 of the public table (E153); Tripo has no price endpoint (E160), so the other quotes
-  are set to that ceiling until measured. Outputs on paid credits are the user's (Tripo terms 5.2.2, E153). Tripo
+  and log row follow. It costs paid API credits (a Tripo Studio plan adds none): `--quote-only` prints the price
+  without a key, on a real run the quote is printed first, `--max-credits` (default 150) caps a run, and a re-run
+  reuses the paid task. A P2 image-to-model cost 110 credits in the kit's test, not the 30 of the public table
+  (E153), and a P2 multiview-to-model 110 (2026-11-11, K01); Tripo has no price endpoint (E160), so text-to-model and
+  the P1 series are quoted at that ceiling until measured. Outputs on paid credits are the user's (Tripo terms 5.2.2, E153). Tripo
   exports facing +X (E160): Bozzetto turns its models to glTF's +Z **(verify on a live run)**; check the turntable,
   `--turn` overrides. Ask the user before every paid run.
 

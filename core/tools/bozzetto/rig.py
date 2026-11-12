@@ -53,7 +53,8 @@ PATCHER = RIG_DIR / "patch_unirig.py"
 RIG_LICENSES = RIG_DIR / "licenses"
 UNIRIG_ENV, UNIRIG_PY_ENV, TRIPO_ENV = "UNIRIG_DIR", "UNIRIG_PY", tp.TRIPO_ENV
 TRIPO_RIG_MODEL = "v3.0-20260909"
-TRIPO_COST = {"rig": 25, "clip": 10}          # credits (1 credit = $0.01), read 2026-11-05
+TRIPO_COST = {"rig": 25, "clip": 10}          # credits (1 credit = $0.01): measured on live runs 2026-11-05 and 2026-11-11
+TRIPO_COST_NOTE = "measured 2026-11-11"
 TRIPO_CLIPS = ("idle", "walk", "run", "dive", "climb", "jump", "slash", "shoot", "hurt", "fall", "turn")
 CLIPS_DEFAULT = "idle,wave,walk"
 UNIRIG_CLIPS = ("idle", "wave", "walk")      # what rig_finish.py can key (CLIPS_KNOWN there)
@@ -223,17 +224,19 @@ def run_tripo(args, inp, work, clips, input_sha):
     paying again. Actual credits are checked against --max-credits and the balance before each paid call (#209).
     Returns (rigged .glb, scale to apply, credits spent in total, tasks)."""
     t = tp.Client()
-    j = tp.Journal(work / tp.JOURNAL, {"input_sha256": input_sha, "clips": clips, "rig_model": TRIPO_RIG_MODEL},
-                   reuse=not args.no_reuse)
+    # the journal is the model's: the rig does not depend on the clips, so other clips later reuse the paid rig and
+    # pay for the clips only; the retarget entry carries the clips it was made with
+    j = tp.Journal(work / tp.JOURNAL, {"input_sha256": input_sha, "rig_model": TRIPO_RIG_MODEL}, reuse=not args.no_reuse)
     j.settle(t, ("rig", "retarget"), args.wait,
              lambda step, d: {"normalize_scale": (d.get("output") or {}).get("normalize_scale")} if step == "rig" else {})
-    todo = ([] if j.done("rig") else ["rig"]) + ([] if (j.done("retarget") or not clips) else ["retarget"])
-    quote = (TRIPO_COST["rig"] if "rig" in todo else 0) + (TRIPO_COST["clip"] * len(clips) if "retarget" in todo else 0)
-    budget = tp.Budget(args.max_credits, t.balance(), j.spent())
-    if j.done("rig"):
-        print(f"[ OK ] reusing paid Tripo work from {tp.JOURNAL}: {j.reused()} (no new credits)")
+    used = ["rig"] + (["retarget"] if clips else [])          # the tasks this run ships with
+    todo, quote, reused = tripo_todo(j, clips)
+    budget = tp.Budget(args.max_credits, t.balance())         # the cap is for this run: reused work costs nothing
+    if reused:
+        print(f"[ OK ] reusing paid Tripo work from {tp.JOURNAL}: {reused} ({j.spent(used):g} credits paid before, "
+              "no new credits)")
     print(f"[info] Tripo quote: {quote} credits still to spend (rig {TRIPO_COST['rig']}, {len(clips)} clip(s) x "
-          f"{TRIPO_COST['clip']}); balance {budget.balance:g}; limit --max-credits {args.max_credits}")
+          f"{TRIPO_COST['clip']}; {TRIPO_COST_NOTE}); balance {budget.balance:g}; limit --max-credits {args.max_credits}")
     budget.afford(quote)
     if "rig" in todo:
         tok = t.upload(inp.read_bytes(), inp.name, "model/gltf-binary")
@@ -259,13 +262,13 @@ def run_tripo(args, inp, work, clips, input_sha):
         budget.afford(TRIPO_COST["clip"] * len(clips))     # with the rig's actual cost now counted
 
         def created(tid):
-            j.running("retarget", tid)
+            j.running("retarget", tid, clips=clips)
             print(f"[info] Tripo clips task {tid} (journal: {tp.JOURNAL})", flush=True)
         anim_id, anim = t.task("/animations/retarget", {"input": j.tasks["rig"]["id"],
                                                         "animations": [f"preset:{c}" for c in clips],
                                                         "animate_in_place": True}, "clips", args.wait, created)
         cost = float(anim.get("credits_consumed") or 0)
-        j.finished("retarget", anim_id, cost)
+        j.finished("retarget", anim_id, cost, clips=clips)
         budget.charge(cost)
     # the finished task is queried again for its model URL (URLs expire after 5 minutes; a reused task needs a new one)
     fin = t.wait_for(j.tasks[final_step]["id"], f"{final_step} result", args.wait)
@@ -278,7 +281,38 @@ def run_tripo(args, inp, work, clips, input_sha):
         dst.unlink()
     t.download(url, dst)
     norm = j.tasks["rig"].get("normalize_scale") or 1.0
-    return dst, 1.0 / float(norm), j.spent(), {k: v["id"] for k, v in j.tasks.items()}
+    return dst, 1.0 / float(norm), j.spent(used), {k: j.tasks[k]["id"] for k in used}
+
+
+def quote_only(args, work, clips, input_sha):
+    """rig make --quote-only: the price before any call, no key needed, nothing written or spent. Reads the journal,
+    so a finished rig (and the same clips) quotes 0."""
+    if args.backend != "tripo":
+        print("[quote] unirig: free on your GPU (`rig check` says whether it is ready)")
+    else:
+        j = tp.Journal(work / tp.JOURNAL, {"input_sha256": input_sha, "rig_model": TRIPO_RIG_MODEL},
+                       reuse=not args.no_reuse)
+        todo, quote, reused = tripo_todo(j, clips)
+        print(f"[quote] tripo: {quote} credits (${quote / 100:.2f}) to spend: "
+              + (f"rig {TRIPO_COST['rig']}" if "rig" in todo else "rig reused")
+              + (f" + {len(clips)} clip(s) x {TRIPO_COST['clip']}" if "retarget" in todo else
+                 (f" + {len(clips)} clip(s) reused" if clips else ", no clips"))
+              + f" ({TRIPO_COST_NOTE})" + (f"; {reused} in {tp.JOURNAL}" if reused else "")
+              + f"; cap --max-credits {args.max_credits}")
+    print("[ OK ] --quote-only: nothing was made or spent")
+    return 0
+
+
+def tripo_todo(journal, clips):
+    """What the journal still lacks for these clips: (steps to pay for, their quote, what is reused). The retarget
+    counts as done only for the same clips (a journal from before 0.15.0 kept the clips at its top level)."""
+    j = journal
+    clips_done = j.done("retarget") and j.tasks["retarget"].get("clips", j.data.get("clips")) == clips
+    todo = ([] if j.done("rig") else ["rig"]) + ([] if (clips_done or not clips) else ["retarget"])
+    quote = (TRIPO_COST["rig"] if "rig" in todo else 0) + (TRIPO_COST["clip"] * len(clips) if "retarget" in todo else 0)
+    reused = ", ".join(f"{s} task {j.tasks[s]['id']}" for s in ("rig", "retarget")
+                       if s not in todo and (s == "rig" or clips) and j.done(s))
+    return todo, quote, reused
 
 
 # ---- commands -------------------------------------------------------------------------------------------------
@@ -337,6 +371,8 @@ def cmd_rig_make(args):
         raise bz.ToolError("--wait must be a positive number of seconds")
     if args.max_credits <= 0 and route == "tripo":
         raise bz.ToolError("--max-credits must be a positive number")
+    if args.quote_only:                        # the price first, for whoever pays: no key, no Blender, nothing written
+        return quote_only(args, work, clips_tripo, bz.sha256_bytes(inp.read_bytes()))
     if dst.exists() and not args.overwrite:
         raise bz.ToolError(f"{bz.rel(root, dst)} exists; pass --overwrite to rig it again")
     log_path = root / bz.fetch_asset.ASSET_LOG
@@ -357,7 +393,7 @@ def cmd_rig_make(args):
         if probs:
             raise bz.ToolError("UniRig is not ready:\n" + "\n".join("  " + p for p in probs))
     elif not os.environ.get(TRIPO_ENV):
-        raise bz.ToolError(f"--with tripo needs {TRIPO_ENV} (paid API credits)")
+        raise bz.ToolError(f"--with tripo needs {TRIPO_ENV} (paid API credits). --quote-only prints the price without it")
     work.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
     record = {"tool": f"tools/{bz.TOOL.lower()}/{bz.TOOL.lower()}.py rig {bz.VERSION}", "route": route,
@@ -480,6 +516,9 @@ def add_parser(sub, common):
                    help="Tripo: never spend more than this in one run, counting actual charges (default 100)")
     m.add_argument("--no-reuse", action="store_true",
                    help="Tripo: ignore finished paid tasks in tasks.json and pay for new ones")
+    m.add_argument("--quote-only", action="store_true",
+                   help="print the price and stop (Tripo: the kit's table and the journal; no key needed, nothing "
+                        "made or spent)")
     m.add_argument("--names", choices=("mixamo", "keep"), default="mixamo",
                    help="bone names: mixamo (default; engines' humanoid setups and animation packs map them) or keep")
     m.add_argument("--out", help="models folder (default: the engine's, as for make)")

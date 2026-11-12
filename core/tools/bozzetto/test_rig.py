@@ -119,10 +119,12 @@ class Base(unittest.TestCase):
         (self.root / "assets" / "models" / "npc_guard.glb").write_bytes(b"glTF-model")
         self.unirig = Path(self.tmp.name) / "UniRig"
         fake_unirig(self.unirig)
-        self.saved = (bz.run_bpy, bz.find_blender, bz.SLEEP, rig.PROBE, tripo.OPENER, os.getcwd(), dict(os.environ))
+        self.saved = (bz.run_bpy, bz.find_blender, bz.SLEEP, rig.PROBE, tripo.OPENER, tripo.DOWNLOADER, os.getcwd(),
+                      dict(os.environ))
         bz.find_blender = lambda choice=None: ("blender", "fake-blender")
         bz.SLEEP = lambda s: None
         rig.PROBE = False
+        tripo.DOWNLOADER = lambda req, timeout=0: tripo.OPENER(req, timeout)   # downloads reach the case's FakeTripo
         os.environ.update({rig.UNIRIG_ENV: str(self.unirig), rig.UNIRIG_PY_ENV: sys.executable,
                            "COMFYUI_URL": "http://127.0.0.1:9"})     # nothing there: /free is skipped
         os.environ.pop(rig.TRIPO_ENV, None)
@@ -131,7 +133,7 @@ class Base(unittest.TestCase):
         os.chdir(self.root)
 
     def tearDown(self):
-        bz.run_bpy, bz.find_blender, bz.SLEEP, rig.PROBE, tripo.OPENER, cwd, env = self.saved
+        bz.run_bpy, bz.find_blender, bz.SLEEP, rig.PROBE, tripo.OPENER, tripo.DOWNLOADER, cwd, env = self.saved
         os.chdir(cwd)
         os.environ.clear()
         os.environ.update(env)
@@ -333,6 +335,7 @@ class FakeTripo:
         self.calls, self.balance, self.riggable, self.rig_type = [], balance, riggable, rig_type
         self.rig_cost, self.no_url = rig_cost, no_url      # Tripo charging more than its table; a lost URL
         self.tasks = {}
+        self.uploads = []         # the multipart bodies /files received
         self.status = {}          # task id -> status reported instead of success (a task still running, failed)
         self.bad_key = False
 
@@ -351,6 +354,7 @@ class FakeTripo:
         if path == "/account/balance":
             data = {"balance": self.balance, "frozen": 0}
         elif path == "/files":
+            self.uploads.append(req.data)
             data = {"file_token": "file_1"}
         elif req.get_method() == "POST":
             tid = f"t{len(self.tasks) + 1}"
@@ -433,6 +437,93 @@ class TripoExam(Base):
         self.assertIn("reusing paid Tripo work", out)
         self.assertEqual(len(fake2.posts("/animations/rig")), 1, "the rig was paid for twice")   # the old one only
         self.assertEqual(len(fake2.posts("/animations/retarget")), 1)
+
+    def test_other_clips_reuse_the_paid_rig(self):
+        """The rig does not depend on the clips: asking for other clips later pays for the clips only. A journal
+        from before 0.15.0 (clips at its top level) is read the same way."""
+        tripo.OPENER = fake = FakeTripo()
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
+        self.assertEqual(code, 0, out)
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk,run", "--overwrite"])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(fake.posts("/animations/rig")), 1, "the rig was paid for again")
+        self.assertEqual(len(fake.posts("/animations/retarget")), 2)
+        self.assertIn("quote: 30 credits", out)
+        self.assertIn("reusing paid Tripo work", out)
+        self.assertIn("55 Tripo credits", out, "the record counts the rig and the clips it ships with")
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk,run", "--overwrite"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("quote: 0 credits", out)
+        self.assertEqual(len(fake.posts("/animations/retarget")), 2, "the same clips were paid for again")
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "none", "--overwrite"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("quote: 0 credits", out)
+        self.assertIn("25 Tripo credits", out, "no clips shipped: the rig alone is counted")
+        # a 0.14 journal: clips at the top level, the retarget entry without its own
+        j = self.root / "assets_src/bozzetto/npc_guard/rig/tripo/tasks.json"
+        doc = json.loads(j.read_text(encoding="utf-8"))
+        doc["clips"] = ["idle", "walk", "run"]
+        doc["tasks"]["retarget"].pop("clips")
+        j.write_text(json.dumps(doc), encoding="utf-8")
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk,run", "--overwrite"])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(fake.posts("/animations/retarget")), 2, "an old journal's clips were paid for again")
+
+    def test_quote_only_needs_no_key_and_spends_nothing(self):
+        os.environ.pop(rig.TRIPO_ENV)
+        bz.find_blender = lambda choice=None: None
+        tripo.OPENER = fake = FakeTripo()
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk", "--quote-only"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("[quote] tripo: 45 credits ($0.45) to spend: rig 25 + 2 clip(s) x 10 (measured 2026-11-11)", out)
+        self.assertIn("nothing was made or spent", out)
+        self.assertEqual(fake.calls, [])
+        self.assertFalse((self.root / "assets_src").exists(), "a quote wrote files")
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "none", "--quote-only"])
+        self.assertIn("[quote] tripo: 25 credits ($0.25) to spend: rig 25, no clips", out)
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "moonwalk", "--quote-only"])
+        self.assertEqual(code, 2, "a quote still checks the clips")
+        code, out = run_main(["rig", "make", "npc_guard", "--quote-only"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("[quote] unirig: free", out)
+        rc, out = run_main(["rig", "make", "-h"])
+        self.assertIn("--quote-only", out)
+        # after a paid run the quote reads the journal
+        os.environ[rig.TRIPO_ENV] = "tsk_exam"
+        bz.find_blender = lambda choice=None: ("blender", "fake-blender")
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
+        self.assertEqual(code, 0, out)
+        calls = len(fake.calls)
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk", "--quote-only"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("[quote] tripo: 0 credits ($0.00) to spend: rig reused + 2 clip(s) reused", out)
+        self.assertEqual(len(fake.calls), calls, "a quote called Tripo")
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk,run", "--quote-only"])
+        self.assertIn("[quote] tripo: 30 credits ($0.30) to spend: rig reused + 3 clip(s) x 10", out)
+
+    def test_an_input_with_a_non_ascii_name_uploads_under_a_plain_one(self):
+        """--input 'Ísak ”model”.glb': the file name in the multipart header is plain ASCII with its extension; the
+        rest of the run (record, log, evidence) takes the name as it is."""
+        src = self.root / "assets" / "models" / "Ísak ”model”.glb"
+        src.write_bytes(b"glTF-model-isak")
+        tripo.OPENER = fake = FakeTripo()
+        code, out = run_main(["rig", "make", "npc_isak", "--with", "tripo", "--clips", "idle", "--input", str(src)])
+        self.assertEqual(code, 0, out)
+        head = fake.uploads[0].split(b"\r\n\r\n")[0]
+        name = head.split(b'filename="', 1)[1].split(b'"', 1)[0]
+        self.assertTrue(name.decode("ascii").endswith(".glb"), name)
+        self.assertNotIn(b"\xe2\x80\x9d", head, "a right double quote went out raw in the header")
+        self.assertIn("Ísak ”model”.glb", (self.root / "docs/ASSET_LOG.md").read_text(encoding="utf-8"))
+
+    def test_a_lowered_cap_does_not_refuse_a_free_rerun(self):
+        """--max-credits caps one run: a re-run that reuses every paid task spends nothing and must pass any cap."""
+        tripo.OPENER = fake = FakeTripo()
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
+        self.assertEqual(code, 0, out)
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk", "--overwrite",
+                              "--max-credits", "5"])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(fake.posts("/animations/rig")) + len(fake.posts("/animations/retarget")), 2)
 
     def test_a_lost_result_is_fetched_again_without_paying(self):
         """#210: rig and clips succeed but the model URL is missing: the run fails, the journal keeps the paid
