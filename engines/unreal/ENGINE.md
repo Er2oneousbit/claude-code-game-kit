@@ -90,20 +90,37 @@ and a clear spec for the Blueprint child.
   Content/Python/kit_dotwork/import_dotwork.py` builds every `assets/dotwork/<pack>.assets.json` under
   `/Game/Dotwork/<pack>/`: textures (`T_`, nearest, no mips, uncompressed), a PaperSprite per frame and per prop
   (`S_`, custom pivot, collision boxes), a PaperFlipbook per clip (`FB_<name>_<clip>`, a frame rate at which every
-  hold is a whole frame run), a PaperTileSet per atlas (`TS_`, per-tile collision, the surface as user data), a
-  PaperTileMap per map (`TM_`, terrain layers resolved by the blob rule: Paper2D has no autotiling), an offline Font
-  (`F_`) and Slate brushes for UI parts (`SB_`, 9-slice margins). Loop, blend, directions, hotspots and map objects
-  are metadata tags (`dotwork.*`). It also saves `/Game/Dotwork/L_DotworkDemo` (the map, its props, a character
-  walking, a label in the font; `DOTWORK_DEMO=0` skips it). Run it again after every Dotwork `pack`: assets update in
-  place. `dev.py test` runs the importer's checks (the golden pack against `data/golden/dotwork/expected.json`, then
-  every manifest of the game) through the pythonscript commandlet; enable the PythonAutomationTest plugin as well to
-  have them as `Editor.Python.<Game>.kit_dotwork.*` automation tests. Both need `PythonScriptPlugin` (and Paper2D,
-  on by default) in the `.uproject`. Paper2D cannot do: animated tiles (first frame shown), tile variants by
-  probability (the first tile is used), additive blend (no Paper2D material; set one), particles (skipped), a
-  font's per-glyph x offset and kerning pairs (offline Fonts keep one advance per glyph), taller iso tiles' origin
-  (set the tile set's Drawing Offset by eye). An offline Font draws in TextRender and Canvas; UMG text wants a
+  hold is a whole frame run), a PaperTileSet per atlas (`TS_`, per-tile collision, the surface as user data, and
+  the Drawing Offset that puts its tiles where the manifest draws them: the tile's `origin`, or its centre, on the
+  cell's centre), a PaperTileMap per map (`TM_`, Orthogonal for a square set, Isometric Diamond for an isometric
+  one), an offline Font (`F_`) and Slate brushes for UI parts (`SB_`, 9-slice margins). Maps follow the manifest
+  spec's rules (`tools/art/dotwork/ASSET_MANIFEST.md` 1.1.0, Paper2D has no autotiling): a `terrain` layer's cells
+  get the tile whose key matches (blob47, sides4 and corners4; a cell with no tile stays empty with a warning), a
+  variant among tiles with the same key is picked by `probability` with the cell's roll (`cell_roll`, so every
+  engine but Godot shows the same tile), a `stamps` layer places every tile of each stamp, and Paper2D's own grid
+  is the spec's in both projections: it centres cell (0, 0) on the tile map's origin, so a map pixel `(px, py)`
+  (y down, cell (0, 0)'s top-left at 0) sits at local `(px - w/2, 0, -(py - h/2))` (`dotwork_paper.map_to_local`);
+  the golden test reads the centres back from Paper2D's `GetTileCenterPosition` to prove it, isometric included. A
+  tile whose origin differs from the first tile of its atlas (or lands on a half pixel) gets a warning: a tile set
+  has one whole-pixel Drawing Offset, so put such tiles in an atlas of their own. The extra kinds load as textures:
+  `background` layers (wrapping on their `repeat` axes, `dotwork.velocity`), `particles` (the mask texture with
+  the emitter JSON in its `dotwork.emitter` tag; nothing is written beside it under `Content/`, because the editor's
+  auto-import, on by default, offers any `.json` there as a DataTable; a Niagara system is #286), `transition`
+  (`dotwork.transition`), `normal_map` (linear, `dotwork.target`; a lit Paper2D material is #286) and `image`.
+  Loop, blend, directions, hotspots, map objects and the map's shape are metadata tags (`dotwork.*`) too. It also
+  saves `/Game/Dotwork/L_DotworkDemo` (the map, its props placed through `map_to_local`, a character walking, a
+  label in the font; `DOTWORK_DEMO=0` skips it). Run it again after every Dotwork `pack`: assets update in place.
+  `dev.py test` runs the importer's checks (the golden pack against `data/golden/dotwork/expected.json`: clips,
+  sprites, the three maps' terrain, placed cells and centres, then every manifest of the game) through the
+  pythonscript commandlet; enable the PythonAutomationTest plugin as well to have them as
+  `Editor.Python.<Game>.kit_dotwork.*` automation tests. Both need `PythonScriptPlugin` (and Paper2D, on by
+  default) in the `.uproject`. Paper2D cannot do: animated tiles (first frame shown; the frames are in
+  `dotwork.animated_tiles`), additive blend (no Paper2D material; set one), a font's per-glyph x offset and kerning
+  pairs (offline Fonts keep one advance per glyph). An offline Font draws in TextRender and Canvas; UMG text wants a
   runtime font from a TTF/OTF **(verify)**. The font's page textures can only be set by the commandlet (the editor
-  refuses the `set` command), so import through `dev.py exec`, not from the editor's Python console.
+  refuses the `set` command), so import through `dev.py exec`, not from the editor's Python console. To try the
+  importer on the golden pack, copy `data/golden/dotwork/assets/` over the project's `assets/` and run the `exec`
+  line above (the pack is `golden`).
 - **Frame times in smoke (#90):** `dev.py smoke` reports and budget-checks (`--frame-budget MS`) a line
   `FRAME_TIMES frames=N mean=MS p95=MS p99=MS worst=MS mode=logic` when one of your `<Game>.Smoke.*` tests logs it
   (the kit ships no Smoke test here). Time each tick with `FPlatformTime::Seconds()` in a latent command and log the
