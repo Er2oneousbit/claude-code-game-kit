@@ -55,6 +55,29 @@ tools/                   dev.py and helpers
               mat.vertex_color_use_as_albedo = true
               mi.set_surface_override_material(s, mat)
   ```
+- **Rigged characters (glTF with clips, #290):** a `.glb` with a skin and animations (a Bozzetto `rig make` result:
+  Mixamo bone names, clips `idle`, `walk` ...) goes under `assets/models/` like any model. `KitCharacter`
+  (`scripts/core/kit_character.gd`) does the rest:
+  `var hero := KitCharacter.load_scene("res://assets/models/hero_rigged.glb")`, `add_child(hero)`,
+  `KitCharacter.play(hero, "walk")` (loops; `play(hero, "wave", false)` plays once; a 0.2 s crossfade between clips).
+  Why: glTF clips import **without looping**, so `play()` sets `loop_mode` (or set Loop Mode per animation in the
+  Advanced Import Settings). Godot renames bones: `:` becomes `_` (`mixamorig:Hips` is `mixamorig_Hips`;
+  `KitCharacter.bone_name()` converts). No root motion is applied: the clips walk in place and the game moves the
+  node. Scale: metres, 1 unit = 1 m (the golden character is 1.8 m). Facing: glTF's front is +Z, Godot's forward -Z,
+  so the character faces the default camera; turn it toward a point with `look_at(target, Vector3.UP, true)` (model
+  front). `load_scene()` falls back to a run-time load (`GLTFDocument`) for a file Godot has not imported (user://, a
+  download). Godot's own humanoid retargeting (a `BoneMap` with `SkeletonProfileHumanoid` in the import dialog) is
+  for sharing clips between skeletons; it should match the Mixamo names **(verify: not tried)**. `play()` sets the
+  loop flag on the player's own copies of the clips (`own_animations()`): instances of one imported scene share
+  their Animation resources, so without that one hero's `play("wave", false)` would stop another's looping wave.
+  `play()` of the clip already playing keeps it going (AnimationPlayer's rule), so a game may call it every frame;
+  `KitCharacter.player(hero).seek(0.0, true)` restarts it. Tested 2026-11-11 on Godot 4.7.2:
+  `tests/test_kit_character.gd` (5 GUT tests) loads `data/golden/character/character.glb` both ways, finds `idle`
+  and `walk` at their lengths, plays `walk` 30 frames and checks `mixamorig_LeftUpLeg` swings as far as
+  `expected.json` says and no further, that the loop's period is the clip's length at 1x, and that two instances
+  keep their own loop flags; `check`, `test` (109 tests) and `smoke` passed on a fresh scaffold. The same helper
+  loaded a 69-bone Tripo rig with three textured clips (idle, walk, run): every clip looped, the Mixamo names mapped
+  through `bone_name()`, its own chain bones kept their names, 1.8 m tall facing +Z (2026-11-11, not a kept test).
 - **Shaders:** a `ShaderMaterial` with `res://shaders/kit/<name>.gdshader` on a CanvasItem (Sprite2D, TextureRect):
   `mat.set_shader_parameter("u_amount", 1.0)`, a second picture as `kit_aux` (dissolve's noise, the palette, the normal
   map). Post effects (`crt`, `vignette`, `colorblind`) read the screen (`hint_screen_texture`): put them on a full-screen
@@ -78,8 +101,10 @@ tools/                   dev.py and helpers
 11. **Crash files come from a `Logger`** (`scripts/shell/crash_hook.gd`, `OS.add_logger`): it sees every script error, on any thread, and the Shell writes the file on the main thread.
 12. **The windowed shader check can crash under GPU load.** Godot 4.7.2 died twice in five `check` runs (exit
     3221226356, 0xC0000374, heap corruption) during a SubViewport readback while other programs used the GPU; never
-    seen with Godot alone. `dev.py` then says "Godot crashed after N recipe(s)": rerun it, or use `check --no-shaders`
-    and let `smoke --shaders` cover them later. "It needs a window" means nothing was drawn at all.
+    seen with Godot alone. It can also die before the first recipe (0xC0000005 and 0xC0000374, two runs in a row
+    on 2026-11-11 while a Unity editor and other tests ran; the third passed). `dev.py` then says "Godot crashed
+    after N recipe(s)" or "before drawing a recipe": rerun it, or use `check --no-shaders` and let
+    `smoke --shaders` cover them later. "It needs a window" means nothing was drawn and Godot did not crash.
 
 ## Generated or binary (do not hand-edit)
 `.godot/`, `*.import`, `*.uid` (commit, but do not edit), exported builds in `build/`, `*.translation`,

@@ -6,6 +6,7 @@
     "Game.Runtime",
     "Game.Dotwork",
     "Game.Dotwork.Editor",
+    "Game.Characters",
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner"
   ],

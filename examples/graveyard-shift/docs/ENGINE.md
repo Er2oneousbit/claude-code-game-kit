@@ -31,13 +31,14 @@ Assets/Scripts/Shell/    the front end on UI Toolkit (Game.Shell assembly): Shel
 Assets/Scripts/Game/     gameplay MonoBehaviours and ScriptableObjects; AudioEventPlayer, MusicPlayer play the audio decisions
 Assets/Scripts/Dotwork/  Dotwork art at run time (Game.Dotwork assembly): DotworkPack (a pack's index), DotworkTile and
                          DotworkTerrainTile (tiles, autotiling by Core/Autotile), DotworkFont and DotworkLabel (bitmap text)
+Assets/Scripts/Characters/  KitCharacter (Game.Characters assembly): a rigged glTF character's clips by name (#290)
 Assets/Editor/           editor-only code (GameKitBuild.cs; GameKitScenes.cs builds the starter and shell scenes;
                          GameKitShaders.cs checks the shader recipes; GameKitDotwork.cs imports Dotwork packs, its
-                         importer is Assets/Editor/Dotwork/)
+                         importer is Assets/Editor/Dotwork/; GameKitCharacters.cs adds the glTF importer package)
 Assets/dotwork/          Dotwork's manifests (<pack>.assets.json) and what the importer makes of them (<pack>/)
 Assets/Resources/GameKit/  the shell's panel theme (.tss) and the readable font (Atkinson Hyperlegible, OFL)
 Assets/Shaders/Kit/      the kit's shader recipes as unlit shaders, Kit/<name> (generated)
-Assets/Tests/EditMode/   EditMode tests (own assembly definition)
+Assets/Tests/EditMode/   EditMode tests (own assembly definition), incl. CharacterImportTests (the golden rigged character)
 Assets/Tests/PlayMode/   PlayMode tests, incl. BootSmokeTests and ShellSmokeTests (what `dev.py smoke` runs; the second
                          also runs `--drive` scenarios), AudioPlayModeTests (AudioEventPlayer on real AudioSources:
                          `dev.py test --mode PlayMode --filter Audio`) and GameKitCaptureTests (a capture against the
@@ -112,20 +113,106 @@ ProjectSettings/         project config (text, edit with care)
   = the pack's first tileset's tile width, else 16; pivots and rects flipped to Unity's y up), an AnimationClip per clip
   (sprite keys at each frame's `duration`, `loopTime` from `loop`) with an AnimatorController (a state per clip, named
   as the clip) and a prefab per animated sprite, a prop prefab per sprite (BoxCollider2D per collision rect, shadow
-  child), a DotworkTile per tileset cell (custom physics shapes for a TilemapCollider2D, animation frames), a
-  DotworkTerrainTile per blob47 or sides4 terrain (paint it in the Tile Palette: it picks the tile by its neighbours),
-  a map prefab (Grid, a Tilemap per layer, top-left corner at the origin, the props), a DotworkFont per BMFont and
-  the UI kit parts (9-slice margins as sprite borders). Everything is listed in `Assets/dotwork/<pack>/<pack>.asset`
-  (DotworkPack: `pack.Animated("hero").Clip("walk", "s")`, `pack.Map("yard").prefab`, `pack.Font("dialogue")`).
-  Running it again updates every asset in place (same GUIDs); commit the generated assets and their `.meta` files.
+  child), a DotworkTile per tileset cell (custom physics shapes for a TilemapCollider2D, animation frames, its
+  `origin` as the sprite's pivot), a DotworkTerrainTile per terrain of every mode (blob47, sides4, corners4: paint it
+  in the Tile Palette and it picks the tile by its neighbours and the cell's roll), a map prefab (Grid, a Tilemap per
+  layer, the props), a DotworkFont per BMFont and the UI kit parts (9-slice margins as sprite borders). Everything is
+  listed in `Assets/dotwork/<pack>/<pack>.asset` (DotworkPack: `pack.Animated("hero").Clip("walk", "s")`,
+  `pack.Map("yard").prefab`, `pack.Font("dialogue")`, `pack.Background("hills").layers`). Running it again updates
+  every asset in place (same GUIDs); commit the generated assets and their `.meta` files.
+- Maps (asset manifest 1.1.0, #285): a `terrain` layer is resolved at import into the spec's own tiles (the key from
+  the painted neighbours in the set's mode, the variant picked by `cell_roll(x, y, layer index)` among the tiles with
+  that key by `probability`, the same pick as every other engine's importer; a cell with no tile for its key stays
+  empty with one warning per layer), a `stamps` layer places every tile of each stamp, a `tiles` layer is placed as
+  is (flip flags as the cell's transform), an unknown layer kind is skipped with one warning. A square map's row y is
+  Unity cell y = -1 - y (the map's top-left corner at the origin, pixel (x, y) at `(x, -y) / ppu`). An isometric map
+  uses Unity's Isometric Grid: Unity's diamonds run x up-right and y up-left and centre cell (0, 0) on x = 0, the spec
+  (Godot's diamond-down layout) runs x down-right and y down-left with cell (0, 0) centred on (w/2, h/2), so the
+  importer places map cell (x, y) at Unity cell (-1 - y, -1 - x) (`DotworkImporter.Cell(shape, x, y)`, inverse
+  `MapCell`) and moves every layer's Tilemap half a diamond right, measured from the Grid, so a 16x8 set's cell (0, 0)
+  is centred on (8, 4), (1, 0) on (16, 8), (0, 1) on (0, 8) map pixels, as the spec's `centres` say; a tile's sprite
+  pivot is its origin, so its image lands at centre - origin (the raised iso block with `origin [8, 8]`). Isometric
+  layers render with Mode Individual and Sort Order Top Right so the diamonds lower on the screen draw last **(verify:
+  the headless tests prove the centres and the placed top-lefts, not the drawn order)**.
+- The extra kinds are loaded and listed, the scene object that uses them is the game's: `background` (a sprite per
+  layer with its size, velocity, repeat, wobble and scale; the texture wraps on the `repeat` axes), `particles` (the
+  texture sprite and the emitter JSON as a `TextAsset`, `Assets/dotwork/<pack>/particles/<name>.json`), `transition`
+  (the mask sprite and the transition kind), `normal_map` (a linear texture set as the target image's `_NormalMap`
+  secondary texture through its TextureImporter; the test proves the slot on the target's sprites, that URP's 2D
+  lights light it from there is not checked here, the kit's test projects are Built-in **(verify)**), `image` (a
+  sprite). Only an unknown kind is skipped, with a warning.
 - Fonts and UI kits are already drawn at their `scale` by Dotwork: draw them 1:1 (DotworkLabel does).
 - `exec GameKitDotwork.Verify` (and `dev.py test`, `DotworkImportTests.EveryManifestInTheGameLoads`) fails on a missing
   file, a rect outside its image, a stale or broken import. `exec GameKitDotwork.ShowInStarterScene` puts the first
   map, a character walking, a prop and a label in the font in `Assets/Scenes/Main.unity`.
-- Not built yet (skipped with a warning; their PNGs get the pixel-art settings): background, particles, transition,
-  normal_map, image; corners4 terrain layers of a map; stamps. Blend `add` uses a built-in particle shader (Built-in
-  pipeline; URP needs its own particle material **(verify)**). Isometric maps use Unity's isometric Grid **(verify
-  against Godot's diamond-down layout)**.
+- Blend `add` uses a built-in particle shader (Built-in pipeline; URP needs its own particle material **(verify)**).
+  The golden tests (`dev.py test --filter Dotwork`) read the three fixture maps back from their Tilemaps and compare
+  every terrain cell, placed cell and centre with `data/golden/dotwork/expected.json`, both shapes, and load the
+  rendered-character sheet pack (`data/golden/character/sprites/`) the same way.
+
+## Rigged characters (glTF with clips, #290)
+- **Package:** Unity has no glTF importer of its own. The kit uses glTFast (`com.unity.cloud.gltfast`, Unity's own,
+  Apache 2.0) pinned at **6.20.0** (the newest release older than two weeks on 2026-11-11; it pulls in Burst,
+  Collections and Mathematics). It is not installed by the scaffold, because adopt mode never rewrites your
+  `Packages/manifest.json` and a 2D game does not need it: `python tools/dev.py exec GameKitCharacters.AddGltfast`
+  adds the line (or Package Manager > + > Add package by name), the next `dev.py` command downloads and compiles
+  it. Without it `.glb` files stay plain files, `KitCharacter.CanLoadGltf` is false and the character tests are
+  ignored with that command as the reason. The alternative is FBX (Unity imports it natively), see Humanoid below.
+- **Where the file goes:** `Assets/Models/<name>.glb` (Bozzetto's `rig make`, Tripo or Blender output). glTFast's
+  importer makes the model (the main asset, with an Animator that has no controller and no avatar), its meshes,
+  materials and one AnimationClip per glTF animation, named as in the file (`idle`, `walk`). Bone names stay as
+  in the file, colon included (`mixamorig:Hips`; Godot is the engine that renames them).
+- **Clips:** Mecanim clips, Generic (transform curves), with Loop Time already on for every clip (glTFast sets
+  it). Play them with an AnimatorController (a state per clip) or with no controller at all through
+  `KitCharacter.Attach(instance, clips).Play("walk")` (a PlayableGraph on the model's Animator).
+  `Play(name, loop: false)` holds the last frame instead. A file loaded at run time (`KitCharacter.Load(path)`,
+  mods or generated characters) gets legacy clips on an Animation component instead, because glTFast cannot make
+  Mecanim clips in a player build; KitCharacter hides the difference.
+- **Root motion off:** the kit's clips walk in place. `Attach` sets `Animator.applyRootMotion = false`; a Generic
+  clip with no avatar has no root node to move anyway, and legacy clips have no root motion. A Humanoid FBX clip
+  carries root curves: tick Root Transform Rotation and Position (Y, XZ) "Bake Into Pose" in its clip settings
+  if it must not move the object.
+- **Scale and facing:** glTF is metres, +Y up, front +Z. Unity shows the golden character 1.80 units tall (1 unit =
+  1 m, no scale factor), feet at the origin, facing +Z (its `transform.forward`); glTFast flips X for Unity's
+  left-handed space, so its left side is at -X and the model is not mirrored. A camera on Unity's default spot
+  (z = -10, looking at +Z) sees its back: turn the character 180 degrees on Y to face the camera.
+- **Humanoid vs Generic (what happened):** use **Generic** for a glTF character.
+  1. glTFast makes no avatar: the imported Animator's `avatar` is null and every clip has `humanMotion` false.
+  2. `AvatarBuilder.BuildHumanAvatar(root, description)` with a HumanDescription built from the Mixamo names
+     (each `mixamorig:X` to Unity's bone: Spine1 Chest, Spine2 UpperChest, Arm UpperArm, ForeArm LowerArm, UpLeg
+     UpperLeg, Leg LowerLeg, ToeBase Toes, the rest by the same name; skeleton = every transform's rest pose)
+     makes a valid Humanoid avatar (all 22 bones mapped, from the A-pose). But glTFast's Generic clips move
+     nothing on a Humanoid Animator (0.0 degrees on `mixamorig:LeftUpLeg`): a Humanoid Animator only plays
+     humanoid (muscle) clips, and nothing turns a glTF clip into one at import.
+  3. The same character exported from Blender 5.2.3 as FBX (glTF import, FBX export with every action baked)
+     imports Generic by default. Set Rig > Animation Type to Humanoid (Avatar Definition: Create From This
+     Model) and Unity maps it on its own: a valid Humanoid avatar with 20 bones mapped (every bone but
+     `LeftShoulder`/`RightShoulder`, which the automatic mapping left out), clips `KitCharacter|idle` and
+     `KitCharacter|walk` as humanoid clips with Loop Time off (tick it per clip). Its walk moved the thigh by
+     37 degrees from the first pose where the Generic clip moves it 28: muscle retargeting is not 1:1.
+  4. That humanoid FBX walk also played on the glTF model through the avatar built in step 2 (37.7 degrees). So
+     Mixamo-style humanoid clips (FBX downloads) can drive a glTF character, through a script-built avatar.
+  An FBX model's Animator culls by default (Culling Mode: Cull Update Transforms): off screen, and in every
+  headless test, its bones do not move until it is set to Always Animate. glTFast's Animator always animates.
+- **The helper** (`Assets/Scripts/Characters/KitCharacter.cs`, namespace `<game>.Characters`):
+  `await KitCharacter.Load(path, parent)` (run time, needs glTFast), `KitCharacter.Attach(instance, clips)` (an
+  imported model), then `Play(clip, loop = true)`, `Seek(seconds)` (jump and pose now, also in edit mode),
+  `ClipNames`, `Playing`, `Bone("mixamorig:LeftUpLeg")`. An unknown clip name throws with the clip list. It
+  plays one clip at a time with no blending: crossfades and layers belong in the game's AnimatorController.
+- **Tested** (2026-11-11, Unity 6000.6.6f1, glTFast 6.20.0, Windows, a fresh `-createProject` project adopted with
+  the kit, Built-in render pipeline): `dev.py test --filter Character` passed 6 of 6 (CharacterImportTests: bones
+  and clips from `data/golden/character/expected.json`, 1.80 m tall on the origin facing +Z, walk swings
+  `mixamorig:LeftUpLeg` within 0.5 to 1.25 of the expected 56 degrees, loops, stays in place, idle is not walk,
+  for the editor import with `Attach` and for `Load`); `dev.py test --mode PlayMode --filter Character` passed 1
+  (the walk in real frames: 55.9 degrees over 1.5 lengths). The whole runs there: before `AddGltfast`, `test`
+  179 passed and the six skipped with the command as the reason; after it, `check` ok, `test` 186 passed (1
+  skipped: no Dotwork packs), `test --mode PlayMode` 14 passed (2 capture tests skipped: no graphics device) once
+  the scenes were made, `smoke` passed. With the pose step taken out of KitCharacter the swing
+  tests fail (0.0 degrees), and with looping taken out the loop checks fail. The Humanoid findings above come
+  from a one-off editor script run the same day, not from a kept test.
+- **Not tested:** a player build with a run-time `Load` (glTFast's shaders must be in the build, see its docs
+  **(verify)**), URP and HDRP materials **(verify)**, a Humanoid model's own clips through `Attach` in a game
+  **(verify)**, macOS and Linux **(verify)**.
 
 ## Conventions
 - C# standard style: `PascalCase` types and methods, `_camelCase` private fields, `[SerializeField] private` over public fields.
@@ -134,10 +221,10 @@ ProjectSettings/         project config (text, edit with care)
 - Logging: a small `Log` wrapper with channels, no stray `Debug.Log` in committed code.
 - Use `Time.deltaTime` in `Update`, `Time.fixedDeltaTime` in `FixedUpdate`. Physics in `FixedUpdate`.
 - Assembly definitions (`.asmdef`) per folder group for fast compile and test isolation.
-- 3D models from `tools/bozzetto/bozzetto.py` land in `Assets/Models/` as `.glb`: Unity needs a glTF importer package
-  for them (glTFast, `com.unity.cloud.gltfast`), or export FBX from Blender instead **(verify for your Unity version)**.
-  A rigged character from `bozzetto.py rig make` has Mixamo bone names: set its rig to Humanoid so Unity maps them
-  and Mixamo-style clips play on it **(verify: not yet tested in Unity)**.
+- 3D models from `tools/bozzetto/bozzetto.py` land in `Assets/Models/` as `.glb`: Unity needs the glTFast package
+  for them (`python tools/dev.py exec GameKitCharacters.AddGltfast`), or export FBX from Blender instead.
+  A rigged character from `bozzetto.py rig make` has Mixamo bone names: import it Generic and play its own clips;
+  Humanoid needs humanoid clips, see "Rigged characters" above for what was tried.
   A `--material vertex` model keeps its colours in glTF `COLOR_0`: check that it is not white, because Godot ignores
   them by default (#202) and whether glTFast's materials use them is not tested here **(verify)**.
 - **Shaders:** `new Material(Shader.Find("Kit/flash"))` (or a material asset using it) on a SpriteRenderer, a quad or
