@@ -2,8 +2,9 @@
 # test_kit_character.gd
 # Purpose : KitCharacter against the golden rigged character (data/golden/character/character.glb: Mixamo bone
 #           names, looping idle and walk clips, #290): the imported scene and a run-time glTF load both find the
-#           clips at their lengths, play walk on a loop, and turn the moving bone as far as the clip swings it.
-#           Also pins what Godot does to the names (':' -> '_').
+#           clips at their lengths, play walk on a loop at 1x (the clock and the loop's period), and turn the moving
+#           bone as far as the clip swings it, no more. Two instances keep their own loop flags. Also pins what
+#           Godot does to the names (':' -> '_').
 # Usage   : python tools/dev.py test --filter test_kit_character.gd
 # Notes   : Numbers come from data/golden/character/expected.json (written by tools/blender/golden_character.py),
 #           never from this file. AnimationPlayer.advance() applies the tracks at once, so no frames need to pass.
@@ -15,6 +16,9 @@ const DIR := "res://data/golden/character/"
 const STEPS := 30            # frames of walk to play
 const STEP_S := 1.0 / 30.0
 const MIN_SHARE := 0.8       # the bone must turn at least this share of the clip's swing (frames sample it)
+const MAX_SHARE := 1.1       # ... and no more: more would mean two clips applied at once, or the wrong bone
+const PERIOD_TOL_DEG := 1.0  # a pose a whole clip length later is the same pose (the loop's period is the length)
+const CLOCK_TOL_S := 0.002   # the player's clock advances by the time given (speed_scale 1, no custom speed)
 
 var expected: Dictionary
 
@@ -66,9 +70,29 @@ func _check(c: Node3D) -> void:
 	var swing := _walk_swing(c)
 	assert_gt(swing, MIN_SHARE * float(expected.moving_bone_swing_deg),
 		"walk turns %s by %.1f degrees" % [expected.moving_bone, swing])
+	assert_lt(swing, MAX_SHARE * float(expected.moving_bone_swing_deg),
+		"walk turns %s by no more than the clip's swing (%.1f degrees)" % [expected.moving_bone, swing])
 	assert_eq(ap.get_animation("walk").loop_mode, Animation.LOOP_LINEAR, "play() loops by default")
 	ap.advance(float(expected.clips.walk.seconds) * 1.5)
 	assert_true(ap.is_playing(), "a looping clip is still playing after its length")
+	_check_period(c)
+
+
+## The loop's period is the clip's length and the clock runs at 1x: the pose a quarter in equals the pose a quarter
+## into the next loop, and advancing the player by t moves its position by t.
+func _check_period(c: Node3D) -> void:
+	KitCharacter.player(c).stop()   # play() of the clip already playing keeps its position (AnimationPlayer.play)
+	var ap := KitCharacter.play(c, "walk", true, 0.0)
+	var skel := KitCharacter.skeleton(c)
+	var bone := skel.find_bone(KitCharacter.bone_name(str(expected.moving_bone)))
+	var length := float(expected.clips.walk.seconds)
+	ap.advance(0.0)
+	ap.advance(length * 0.25)
+	assert_almost_eq(ap.current_animation_position, length * 0.25, CLOCK_TOL_S, "the clock advanced a quarter clip")
+	var quarter := skel.get_bone_pose_rotation(bone)
+	ap.advance(length)
+	assert_lt(rad_to_deg(quarter.angle_to(skel.get_bone_pose_rotation(bone))), PERIOD_TOL_DEG,
+		"the pose at 1.25 lengths is the pose at 0.25 (the loop repeats every clip length)")
 
 
 func test_imported_scene_plays_walk() -> void:
@@ -95,5 +119,23 @@ func test_play_refuses_an_unknown_clip() -> void:
 		return
 	assert_null(KitCharacter.play(c, "no_such_clip"))
 	assert_push_error("no clip")
+
+
+## Two instances of one imported scene share its Animation resources: one instance's loop flag must stay its own
+## (0.15.0 review: play(b, "idle", false) used to stop a's looping idle as well).
+func test_loop_is_per_instance() -> void:
+	var a := _loaded(false)
+	var b := _loaded(false)
+	if a == null or b == null:
+		return
+	var ap_a := KitCharacter.play(a, "idle", true, 0.0)
+	var ap_b := KitCharacter.play(b, "idle", false, 0.0)
+	assert_eq(ap_a.get_animation("idle").loop_mode, Animation.LOOP_LINEAR, "a still loops after b played idle once")
+	assert_eq(ap_b.get_animation("idle").loop_mode, Animation.LOOP_NONE, "b plays idle once")
+	var length := float(expected.clips.idle.seconds)
+	ap_a.advance(length * 1.5)
+	ap_b.advance(length * 1.5)
+	assert_true(ap_a.is_playing(), "a is still playing after its length")
+	assert_false(ap_b.is_playing(), "b stopped at the end of its clip")
 
 # {{FOOTER}}
