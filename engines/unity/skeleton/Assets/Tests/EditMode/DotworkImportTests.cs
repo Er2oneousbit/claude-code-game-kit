@@ -13,6 +13,8 @@
 //           sprite the Tilemap shows. Only the core kinds are compared; the extra kinds must be reported as
 //           skipped. The temporary folder is deleted afterwards (and before, if a killed run left it).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the rendered character sheet imports to its
+//           expected.json (0.15.0 review, #290)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;

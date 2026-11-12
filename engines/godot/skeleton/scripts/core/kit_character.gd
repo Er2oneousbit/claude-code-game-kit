@@ -21,6 +21,8 @@
 #           Facing: glTF's front is +Z; Godot's forward is -Z, so a character faces the default camera; to walk
 #           toward a point use look_at(target, Vector3.UP, true) (use_model_front: +Z is the front).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): own_animations(), so one instance's loop flag
+#           never reaches another instance of the same imported scene (0.15.0 review)
 # ---------------------------------------------------------------------------
 class_name KitCharacter
 extends RefCounted

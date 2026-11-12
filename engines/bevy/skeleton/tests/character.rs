@@ -17,6 +17,8 @@
 //   -> facing: the left-side bone sits at -x (the model looks along -Z) -> clips: every expected name, durations match -> sample the bone's rotation for one walk loop -> swing within
 //   [MIN_SWING_FRACTION, MAX_SWING_FRACTION] of expected -> set clip = idle -> the player plays idle's node only
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the texture formats a generated character uses
+//           must decode (the jpeg feature; 0.15.0 review)
 // ---------------------------------------------------------------------------
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};

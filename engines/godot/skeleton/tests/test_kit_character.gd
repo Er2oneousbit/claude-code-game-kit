@@ -9,6 +9,8 @@
 # Notes   : Numbers come from data/golden/character/expected.json (written by tools/blender/golden_character.py),
 #           never from this file. AnimationPlayer.advance() applies the tracks at once, so no frames need to pass.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the swing's ceiling, the loop's period and clock,
+#           and two instances keeping their own loop flags (0.15.0 review)
 # ---------------------------------------------------------------------------
 extends GutTest
 

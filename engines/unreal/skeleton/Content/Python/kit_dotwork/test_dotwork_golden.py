@@ -14,6 +14,8 @@
 #           editor (where a font's page count is skipped, see dotwork_paper._font) and through the pythonscript
 #           commandlet (everything compared); without the plugin, only the commandlet run.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the rendered character sheet imports to its
+#           expected.json (0.15.0 review, #290)
 # ---------------------------------------------------------------------------
 import json
 import os
