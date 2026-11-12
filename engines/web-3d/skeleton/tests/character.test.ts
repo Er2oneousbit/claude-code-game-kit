@@ -2,11 +2,14 @@
 // character.test.ts
 // Purpose : src/game/character.ts against the golden rigged character (data/golden/character/character.glb: Mixamo
 //           bone names, looping idle and walk clips, #290): GLTFLoader finds the clips at their lengths, walk plays on
-//           a loop and turns the moving bone as far as the clip swings it, and three's bone names drop the ':'.
+//           a loop at 1x (the clock and the loop's period) and turns the moving bone as far as the clip swings it, no
+//           more, and three's bone names drop the ':'.
 // Usage   : python tools/dev.py test
 // Notes   : Runs in Node: the fixture has no textures, so GLTFLoader needs no DOM. Numbers come from
 //           data/golden/character/expected.json (tools/blender/golden_character.py), never from this file.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the swing's ceiling, the loop's period and clock
+//           (0.15.0 review)
 // ---------------------------------------------------------------------------
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
@@ -20,6 +23,9 @@ const DIR = join(GOLDEN_DIR, "character");
 const expected = JSON.parse(readFileSync(join(DIR, "expected.json"), "utf-8"));
 const STEPS = 30; // frames of walk to play
 const MIN_SHARE = 0.8; // the bone must turn at least this share of the clip's swing (frames sample it)
+const MAX_SHARE = 1.1; // ... and no more: more would mean two clips applied at once, or the wrong bone
+const PERIOD_TOL_DEG = 1.0; // a pose a whole clip length later is the same pose (the loop's period is the length)
+const CLOCK_TOL_S = 0.002; // the action's clock advances by the time given (timeScale 1)
 
 async function load() {
   const buf = readFileSync(join(DIR, expected.file));
@@ -58,8 +64,22 @@ describe("rigged character (data/golden/character)", () => {
     let most = 0;
     for (const a of poses) for (const b of poses) most = Math.max(most, THREE.MathUtils.radToDeg(a.angleTo(b)));
     expect(most).toBeGreaterThan(MIN_SHARE * expected.moving_bone_swing_deg);
+    expect(most).toBeLessThan(MAX_SHARE * expected.moving_bone_swing_deg); // not two clips at once
     ch.update(expected.clips.walk.seconds * 1.5);
     expect(action.isRunning()).toBe(true); // a looping clip is still running after its length
+  });
+
+  it("loops with the clip's length as its period, at 1x", async () => {
+    const ch = await load();
+    const length: number = expected.clips.walk.seconds;
+    const action = ch.play("walk", { fade: 0 });
+    const bone = ch.root.getObjectByName(boneName(expected.moving_bone))!;
+    ch.update(length * 0.25);
+    expect(Math.abs(action.time - length * 0.25)).toBeLessThan(CLOCK_TOL_S); // the clock runs at 1x
+    const quarter = bone.quaternion.clone();
+    ch.update(length);
+    expect(THREE.MathUtils.radToDeg(quarter.angleTo(bone.quaternion))).toBeLessThan(PERIOD_TOL_DEG);
+    expect(Math.abs(action.time - length * 0.25)).toBeLessThan(CLOCK_TOL_S); // wrapped once, not clamped
   });
 
   it("plays a clip once and holds it, and refuses an unknown clip", async () => {

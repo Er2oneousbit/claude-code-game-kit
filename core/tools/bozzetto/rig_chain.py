@@ -25,9 +25,12 @@
 #           bend (a box with two ends), it is cut by planes across the centreline: the look does not change at all.
 #           A part fused to the body along its length (a generated mesh where the scarf is just a red area of one
 #           surface) cannot swing without tearing: it is rebuilt as a strip (a box section along the centreline,
-#           width and thickness measured slice by slice, texture coordinates or colours projected from the
-#           original, its material reused), laid on top; the original surface stays on the body. A strip keeps the
-#           colours and pattern seen from the front, not folds, fringes, knots or tassels.
+#           width and thickness measured slice by slice), laid on top; the original surface stays on the body. Its
+#           look: a texture baked into a small image of its own, one patch per strip face, every texel the colour
+#           of the nearest point of the part's own surface (texture coordinates copied to the corners and
+#           interpolated across a face swept through the atlas between two islands: flecks of body texture, live
+#           run 2026-11-11); or colours projected from the original; or its material. A strip keeps the colours and
+#           pattern seen from the front, not folds, fringes, knots or tassels.
 #           Weights: a "hat" blend between neighbouring chain bones, and the first half bone blended into the parent
 #           so the root never leaves the body. The parent is the nearest bone of the spine line (root to the
 #           highest bone: hips, spine, neck, head) unless --parent names one.
@@ -42,15 +45,21 @@
 #           Blender 4.2: its glTF importer names an action "<clip>_<armature>" while the NLA track keeps the clip's
 #           name, so actions are renamed from their tracks. The bpy module crashes while the process ends on
 #           Windows (4.2 after a glTF export, 5.3 after a render), so with the module the script ends the process
-#           itself once its files are written.
+#           itself once its files are written. Clips keyed at another rate than the scene's (Tripo's 30 fps) first
+#           move the scene to their rate, so the loop test sees the real first and last pose and the export keeps
+#           them (#292). All three live in tools/blender/bpy_common.py, shared with rig_finish and render_sprites.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): clips at 30 fps conform the scene (#292); the strip's
+#           texture is baked per face instead of interpolated between projected corners
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
-#   import -> one armature, skinned meshes (others dropped as rig_finish does) -> clips noted, NLA strips cleared
+#   import -> one armature, skinned meshes (others dropped as rig_finish does) -> clips noted, NLA strips cleared,
+#             the scene at the clips' frame rate
 #   per part: select faces (terms intersected) on every mesh, keep the mesh with the most, largest piece
 #             -> refuse empty / most of the mesh -> parent bone -> root point -> distances over the surface
 #             -> centreline from slices -> lump? refuse -> fused along its length? (or --rebuild strip) -> strip
+#                (a textured part: its own image baked texel by texel from the nearest original surface)
 #             else separate; rows < needed -> cut across the centreline
 #             -> N bones along the centreline, parented -> weights along it
 #   clips: loop? -> sway keys | one-shot in --cloth -> cloth ribbon, follow it | else nothing
@@ -73,6 +82,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import chain as ch  # noqa: E402  (selector parsing, standard library)
 import rig_finish as rf  # noqa: E402  (the rig checks, the biped frame)
+import bpy_common as bc  # noqa: E402  (tools/blender, on the path through rig_finish: clip frame rate, the exit)
 
 # --- tunables -------------------------------------------------------------------------------------------------
 MAX_PART_SHARE = 0.40       # a part may hold at most this share of its mesh's faces
@@ -85,6 +95,8 @@ ROOT_BLEND = 0.5            # the first half bone blends into the parent bone
 ROOT_BAND = 0.5             # root vertices: within this share of the part's width of the nearest to the parent
 THICK_MIN, THICK_MAX = 0.08, 0.5  # a rebuilt strip's thickness, as a share of its width
 LIFT = 0.004                # a strip laid on a fused surface floats this share of its length above it
+BAKE_TEXELS = 32            # texels along each side of one strip face in the strip's baked texture (a 0.26 m scarf
+                            # strip: 8 mm texels; 4 sides x 32 by 8 segments x 32 = 128 x 256 px, 32k samples)
 WELD = 1e-5                 # vertices closer than this (metres) count as one when following the surface
 LOOP_TOL = 2e-3             # first and last pose of a loop: largest channel difference allowed
 SWAY_SECONDS = 1.5          # about one sway cycle this long; a loop always gets a whole number of cycles
@@ -612,6 +624,99 @@ def strip_frames(pos, t, fnormals_at, poly, S, fused):
     return out
 
 
+def image_raw(img):
+    """(h, w, 4) array of an image's stored pixel values (8-bit images: their sRGB bytes / 255, float images: linear),
+    or None for an image without pixels (its file missing)."""
+    w, h = img.size
+    if w == 0 or h == 0:
+        return None
+    px = np.empty(w * h * 4, dtype=np.float32)
+    img.pixels.foreach_get(px)
+    return px.reshape(h, w, 4)
+
+
+def bake_strip(me, me2, verts, vpos, tris, tri_loops, tri_face, bvh, uv, label):
+    """The strip's own material: a small image with one patch per strip face, every texel the colour the original
+    texture has at the nearest point of the part's own surface, and texture coordinates into those patches.
+    Copying corner coordinates from the original and interpolating across a face swept through the atlas whenever
+    two corners' nearest points sat in different islands (AI meshes have many): flecks of body texture showed on the
+    scarf. Sampling per texel never leaves the part. The stored pixel values are copied as they are (8-bit sRGB stays
+    8-bit sRGB), so colours do not shift. verts: the strip's world corners, 4 per row; vpos: the body's world
+    vertices; tris, tri_loops, tri_face, bvh: the part's triangles as build_strip made them. Returns the material
+    (base colour from the baked image; roughness and metallic as the first textured source material has them)."""
+    K = BAKE_TEXELS
+    S = len(verts) // 4 - 1
+    W, H = 4 * K, S * K
+    src_uv = np.empty(len(me.loops) * 2)
+    uv.data.foreach_get("uv", src_uv)
+    src_uv = src_uv.reshape(-1, 2)
+    mi = np.empty(len(me.polygons), dtype=np.int64)
+    me.polygons.foreach_get("material_index", mi)
+    mats = list(me.materials) or [None]
+    images = {k: base_image(m) for k, m in enumerate(mats)}
+    raw = {k: image_raw(im) if im is not None else None for k, im in images.items()}
+    flat = {k: np.array([*material_colour(m), 1.0], dtype=np.float32) for k, m in enumerate(mats)}
+    first = next(k for k, r in raw.items() if r is not None)
+
+    def colour_at(p):
+        """The stored RGBA of the part's surface nearest the world point p."""
+        loc, _, idx, _ = bvh.find_nearest(Vector(p))
+        tri = tris[idx]
+        wts = interpolate.poly_3d_calc([vpos[i] for i in tri], loc)
+        k = int(mi[tri_face[idx]]) if len(me.materials) else 0
+        px = raw.get(k)
+        if px is None:
+            return flat[k]
+        u, v = sum((src_uv[tri_loops[idx][j]] * w for j, w in enumerate(wts)), np.zeros(2))
+        h, w = px.shape[:2]
+        return px[min(h - 1, int((v % 1.0) * h)), min(w - 1, int((u % 1.0) * w))]
+
+    buf = np.zeros((H, W, 4), dtype=np.float32)
+    dst = me2.uv_layers.new(name=uv.name)
+    for j in range(S):
+        for k in range(4):
+            a, b = 4 * j + k, 4 * j + (k + 1) % 4
+            corner = {a: (0, 0), b: (1, 0), b + 4: (1, 1), a + 4: (0, 1)}      # vertex -> (s, t) in its patch
+            P = {i: np.array(verts[i]) for i in corner}
+            for y in range(K):
+                t = (y + 0.5) / K
+                for x in range(K):
+                    s = (x + 0.5) / K
+                    p = (1 - t) * ((1 - s) * P[a] + s * P[b]) + t * ((1 - s) * P[a + 4] + s * P[b + 4])
+                    buf[j * K + y, k * K + x] = colour_at(p)
+            # the patch, inset half a texel so filtering never reads a neighbour's patch
+            for li in me2.polygons[4 * j + k].loop_indices:
+                s, t = corner[me2.loops[li].vertex_index]
+                dst.data[li].uv = ((k * K + 0.5 + s * (K - 1)) / W, (j * K + 0.5 + t * (K - 1)) / H)
+    for cap, j in ((4 * S, 0), (4 * S + 1, S - 1)):             # the end caps: one texel of the nearest row
+        for li in me2.polygons[cap].loop_indices:
+            dst.data[li].uv = ((K / 2) / W, (j * K + K / 2) / H)
+    dbg(f"{label}: baked {W}x{H} texture, mean colour {buf[:, :, :3].mean(axis=(0, 1)).round(3).tolist()}, "
+        f"source {images[first].name} {images[first].size[:]}")
+    img = bpy.data.images.new(f"{label}_tex", W, H, alpha=True, float_buffer=bool(images[first].is_float))
+    try:                         # the source's colour space, set BEFORE the pixels: changing it reloads a generated
+        img.colorspace_settings.name = images[first].colorspace_settings.name   # image (to black)
+    except (AttributeError, TypeError):
+        pass
+    img.pixels.foreach_set(buf.reshape(-1))
+    img.update()
+    img.pack()                   # embedded in the .glb by the exporter, like the body's own texture
+    mat = bpy.data.materials.new(f"{label}_tex")
+    mat.use_nodes = True
+    bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    tex = mat.node_tree.nodes.new("ShaderNodeTexImage")
+    tex.image = img
+    mat.node_tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    src_mat = mats[first]
+    src_bsdf = next((n for n in src_mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None) \
+        if src_mat is not None and src_mat.use_nodes and src_mat.node_tree else None
+    if src_bsdf is not None:
+        for name in ("Roughness", "Metallic"):
+            if not src_bsdf.inputs[name].links:
+                bsdf.inputs[name].default_value = src_bsdf.inputs[name].default_value
+    return mat
+
+
 def build_strip(body, mask, rows, label, arm):
     """A box-section strip along the rows; texture coordinates or colours projected from the original faces."""
     me = body.data
@@ -662,17 +767,14 @@ def build_strip(body, mask, rows, label, arm):
         p.material_index = int(mi[tri_face[idx]]) if len(me.materials) else 0
     look = []
     uv = me.uv_layers.active
-    has_tex = any(base_image(m) is not None for m in me.materials)
-    if uv is not None:
-        src = np.empty(len(me.loops) * 2)
-        uv.data.foreach_get("uv", src)
-        src = src.reshape(-1, 2)
-        per_v = [sum((src[tri_loops[i][k]] * w for k, w in enumerate(wts)), np.zeros(2)) for i, wts in near]
-        dst = me2.uv_layers.new(name=uv.name)
-        for lp in me2.loops:
-            dst.data[lp.index].uv = tuple(per_v[lp.vertex_index])
-        if has_tex:
-            look.append("texture projected from the original")
+    has_tex = any(base_image(m) is not None and image_raw(base_image(m)) is not None for m in me.materials)
+    if uv is not None and has_tex:
+        mat = bake_strip(me, me2, verts, vpos, tris, tri_loops, tri_face, bvh, uv, label)
+        me2.materials.clear()
+        me2.materials.append(mat)
+        for p in me2.polygons:
+            p.material_index = 0
+        look.append("texture baked from the original surface")
     attr = me.color_attributes.active_color if hasattr(me.color_attributes, "active_color") else None
     attr = attr or (me.color_attributes[0] if len(me.color_attributes) else None)
     if attr is not None:
@@ -1188,18 +1290,13 @@ def run(a, report):
         bpy.data.objects.remove(o)                       # the importer's bone display shape and other strays
     if not meshes:
         raise Refuse("no skinned mesh in the file")
-    clips = list(bpy.data.actions)
-    if arm.animation_data:
-        for tr in list(arm.animation_data.nla_tracks):   # the importer stacks every clip on NLA tracks
-            # a track keeps the glTF clip's name; Blender 4.2 names the action itself "<clip>_<armature>" (hit_rig):
-            # the action takes the clip's name back, so --cloth hit finds it and the export keeps "hit"
-            for st in tr.strips:
-                if st.action is not None and st.action.name != tr.name and tr.name not in bpy.data.actions:
-                    st.action.name = tr.name
-            arm.animation_data.nla_tracks.remove(tr)
+    # the clips as plain actions named after their glTF clip (Blender 4.2 names the action "<clip>_<armature>"), off
+    # the NLA stack; then the scene takes their frame rate (Tripo's 30 fps clips sit every 0.8 frames in a 24 fps
+    # scene: the first and last pose then miss the whole frames, the loop test fails and the export cuts the loop
+    # short, #292)
+    clips = rf.detach_clips(arm)
     assign(arm, None)
-    for c in clips:
-        c.use_fake_user = True
+    report["fps"] = bc.conform_clip_fps(bpy, bpy.context.scene, clips)
     names_lower = {c.name.lower(): c for c in clips}
     loops = {}
     for c in clips:
@@ -1313,18 +1410,4 @@ if __name__ == "__main__":
             import traceback
             traceback.print_exc()
         code = 2
-    if not bpy.app.binary_path:
-        # the bpy module (no Blender executable) crashes while the process ends on Windows (0xC0000005, seen
-        # 2026-11-11): bpy 4.2 after any glTF export, bpy 5.3 after a render, which would hide this exit code.
-        # Everything is written by now; end the process without unloading its libraries (os._exit crashed 5.3 the
-        # same way). The handle types matter: an untyped GetCurrentProcess() came back truncated and the call failed.
-        sys.stdout.flush()
-        sys.stderr.flush()
-        import os
-        if os.name == "nt":
-            import ctypes
-            k32 = ctypes.windll.kernel32
-            k32.GetCurrentProcess.restype = ctypes.c_void_p
-            k32.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
-            k32.TerminateProcess(k32.GetCurrentProcess(), code)
-    sys.exit(code)
+    bc.end_process(bpy, code)          # the bpy module crashes on a plain exit after an export or a render (#292)

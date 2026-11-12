@@ -46,6 +46,8 @@ namespace {{GAME_SLUG}}.Tests
         private const string MANIFEST = TEMP + "/dotwork/golden.assets.json";
         private const string OUT = TEMP + "/dotwork/golden";
         private const double TOL = 1e-6;                             // the spec's tolerance
+        private const double PIXEL_TOL = 1e-4;                       // a Sprite stores its pivot as float32: a rendered sheet's
+                                                                     // 37.6 reads back as 37.599998 (Dotwork's own pivots are whole pixels)
 
         private static DotworkPack _pack;
         private static readonly List<string> Warnings = new List<string>();

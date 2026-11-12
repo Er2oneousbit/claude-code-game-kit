@@ -84,6 +84,7 @@ import fetch_asset  # noqa: E402  (ASSET_LOG helpers)
 import validate_asset as va  # noqa: E402  (class budgets; its bpy import is lazy)
 sys.path.insert(0, str(HERE))
 import tripo as tp  # noqa: E402  (the Tripo route: client, quote, cap, journal; shared with rig.py)
+import rebake as rebake_mod  # noqa: E402  (the UV rebake subcommand and the --accept-uv waiver, #293)
 
 TOOL = "Bozzetto"                 # the one place the name is spelled for people: a rename starts here
 VERSION = "0.15.0"
@@ -421,6 +422,11 @@ class Plan:
         if self.min_part is not None and not 0 <= self.min_part < 1:
             raise ToolError("--min-part must be at least 0 and under 1 (a share of the faces)")
         self.texture = args.texture or settings["texture"]
+        # the atlas is the vendor's on the Tripo route (29% coverage in a live run, #293): rebake it by default
+        rebake = getattr(args, "rebake", None)
+        self.rebake = rebake if rebake is not None else self.route == "tripo"
+        if rebake and args.material != "texture":   # asked for on purpose (Tripo refuses vertex on its own)
+            raise ToolError("--rebake bakes textures: nothing to bake with --material vertex")
         self.faces = int(self.budget["max_tris"] * FACE_SHARE)
         self.lods = parse_lods(args.lods, self.cls)
         self.src = self.root / SRC_ROOT / self.name
@@ -611,6 +617,7 @@ def blender_steps(args, plan, blender, raw):
                     [raw, "--out", clean, "--name", plan.name, "--max-tris", plan.faces, "--height", plan.height,
                      "--turn", plan.turn, "--json", plan.src / "cleanup.json", "--overwrite"]
                     + (["--min-part", plan.min_part] if plan.min_part is not None else [])
+                    + (["--rebake", "--texture", plan.texture] if plan.rebake else [])
                     + (["--debug"] if DEBUG else []), "cleanup")
     if rc != 0:
         raise (JobError if rc == 1 else ToolError)(f"cleanup.py failed (exit {rc}); --debug shows Blender's output")
@@ -632,13 +639,17 @@ def blender_steps(args, plan, blender, raw):
                        f"nothing was copied into {rel(plan.root, plan.out_dir)}. --debug shows Blender's output")
     validation = json.loads(report.read_text(encoding="utf-8"))
     validation["asset"] = rel(plan.root, export)   # the validator writes the path it was given (absolute)
+    if rc == 1 and getattr(args, "accept_uv", False) and rebake_mod.waive_uv(validation):
+        rc = 0                               # the UV coverage floor alone, waived on purpose: logged below
+        print(f"[WARN] {rebake_mod.waiver_text(validation, plan.cls, plan.budget['min_uv_coverage'])}")
     report.write_text(json.dumps(validation, indent=2), encoding="utf-8")
     cleanup = json.loads((plan.src / "cleanup.json").read_text(encoding="utf-8"))
     lods = [export.with_name(f"{export.stem}_LOD{i}.glb") for i in range(1, len(plan.lods) + 1)]
     if rc == 1:
         fails = "; ".join(validation.get("failures", [])) or "see validate.json"
         raise JobError(f"{plan.name} fails the {plan.cls} budget: {fails}. Nothing was copied into "
-                       f"{rel(plan.root, plan.out_dir)}; the files are in {rel(plan.root, plan.src)}/")
+                       f"{rel(plan.root, plan.out_dir)}; the files are in {rel(plan.root, plan.src)}/."
+                       + rebake_mod.hint(validation, plan.rebake))
     return export, lods, cleanup, validation
 
 
@@ -696,6 +707,7 @@ def write_log(plan, record):
         f"{TOOL} {plan.cls}" + (f" via Tripo ({job['model']})" if tripo_route else ""), what,
         f"seed {record['seed']}" if record.get("seed") is not None else "", f"{record['tris']} triangles",
         f"{job['credits']:g} Tripo credits, task {job['task_id']}" if tripo_route else f"GPU {job['gpu_seconds']:.0f} s",
+        *rebake_mod.log_notes(record, plan.cls, plan.budget["min_uv_coverage"]),
         f"record `{rel(plan.root, plan.src / RECORD)}`"] if x)
     shown = ", ".join(f"`{f['file']}`" for f in files)
     if tripo_route:
@@ -729,6 +741,7 @@ def write_log(plan, record):
                f"Credit   : {credit}",
                f"Licences : texts in {fetch_asset.LICENSE_DIR.as_posix()}/{TOOL.lower()}-*; the DINOv3 License "
                "restricts some uses (its section 1.b.v): read it before you ship"]
+    ev += rebake_mod.log_evidence(record, plan.cls, plan.budget["min_uv_coverage"])
     ev += [f"File     : {f['file']}  SHA-256 {f['sha256']}  "
            + (f"{f['triangles']} triangles" if "triangles" in f else f.get("kind", "")) for f in files]
     new = text.replace(existing[0], row, 1) if existing else fetch_asset.add_log_row(text, row, fill)
@@ -777,6 +790,12 @@ def cmd_make(args):
     elif args.seed is None:
         args.seed = int(time.time()) % 100000
         print(f"[info] no --seed given: using {args.seed} (pass it to make the same model again)")
+    if args.quote_only:                     # the price first, for whoever pays: no key, no Blender, nothing written
+        if tripo_route:
+            return tp.quote_make(args, plan)
+        print("[quote] local: free on your GPU (TRELLIS.2 in ComfyUI; `check` says whether it is ready)")
+        print("[ OK ] --quote-only: nothing was made or spent")
+        return 0
     base, blender, (wf3d, wfref), stats = preflight(args, plan)
     if blender:
         print(f"[info] Blender: {blender_version(blender) or blender[1]} ({'module' if blender[0] == 'bpy' else 'app'})")
@@ -807,9 +826,9 @@ def cmd_make(args):
     record = {"tool": f"{TOOL} {VERSION}", "route": plan.route, "date": datetime.date.today().isoformat(),
               "name": plan.name, "class": plan.cls, "budget": plan.budget, "height_m": plan.height, "seed": args.seed,
               "turn_deg": plan.turn, "quality": args.quality, "material": args.material, "lods": plan.lods,
-              "reference": ref_facts, "job": job,
+              "rebake": plan.rebake, "accept_uv": bool(args.accept_uv), "reference": ref_facts, "job": job,
               "cleanup": cleanup, "validation": {k: validation.get(k) for k in ("failures", "warnings", "notes",
-                                                                                "objects", "total_tris")},
+                                                                                "objects", "total_tris", "waived")},
               "tris": files[0]["triangles"], "files": files, "blender": blender_version(blender)}
     if tripo_route:
         record.update(models=[{"service": "Tripo3D API", "model": job["model"], "license": tp.LICENSE,
@@ -939,6 +958,8 @@ STEPS = [
     ("  (tripo)", "--with tripo: Tripo3D API from --image, --front/--left/--back/--right or --prompt (paid credits: "
                   "a quote first, --max-credits, a journal so a re-run never pays twice)"),
     ("cleanup", "cleanup.py in Blender: merge, drop fragments, normals, decimate to budget, height, pivot"),
+    ("rebake", "--rebake (Tripo: on by default): a fresh UV layout, the textures baked onto it, checked by "
+               "rendering both (tools/blender/rebake_uvs.py); `rebake <name>` does it to a placed model"),
     ("export", "tools/blender/prep_export.py: the kit's one glTF preset, LODs"),
     ("validate", "tools/blender/validate_asset.py --class: budget, size, UVs; nothing ships when it fails"),
     ("log", "docs/ASSET_LOG.md row (pre-generated AI), evidence file, model licence texts"),
@@ -951,7 +972,8 @@ def cmd_list(args):
     print("  check     what is ready here        test      the exams (--live adds one GPU run)")
     print("  reference model-ready views (A-pose front, left, back, right) from a concept or a prompt")
     print("  make      a model from --image or --prompt, on your GPU or --with tripo (make --help for every "
-          "option)\n  rig       a skeleton, skin weights and clips (rig make --help)\n\nSteps of make:")
+          "option)\n  rig       a skeleton, skin weights and clips (rig make --help)\n"
+          "  rebake    a fresh UV layout for a placed model, its textures baked onto it (rebake --help)\n\nSteps of make:")
     for name, what in STEPS:
         print(f"  {name:9} {what}")
     print("\nClasses (budgets from tools/blender/validate_asset.py, SOP-11):")
@@ -963,7 +985,8 @@ def cmd_list(args):
 
 
 def cmd_test(args):
-    exams = [HERE / "test_bozzetto.py", HERE / "test_tripo.py", HERE / "test_rig.py", HERE / "test_chain.py", HERE / "test_reference.py"] + \
+    exams = [HERE / "test_bozzetto.py", HERE / "test_tripo.py", HERE / "test_rig.py", HERE / "test_chain.py",
+             HERE / "test_reference.py", HERE / "test_rebake.py"] + \
         ([HERE / "test_bozzetto_live.py"] if args.live else [])
     failed = 0
     for exam in exams:
@@ -1040,6 +1063,13 @@ def build_parser():
     p.add_argument("--material", choices=("texture", "vertex"), default="texture",
                    help="baked PBR textures (default), or vertex colours: no textures, smaller, and the unwrap and "
                         "bakes do not run (cleanup.py adds a UV map for lightmaps)")
+    p.add_argument("--rebake", dest="rebake", action="store_true", default=None,
+                   help="a fresh UV layout and the textures baked onto it in cleanup (default on with Tripo, whose "
+                        "atlas is the vendor's; off on the local route): README 'UV coverage'")
+    p.add_argument("--no-rebake", dest="rebake", action="store_false", help="keep the model's own atlas")
+    p.add_argument("--accept-uv", action="store_true",
+                   help="ship a model that fails the UV coverage floor alone (sprite sources, a rebake that lands "
+                        "under the floor); the waiver goes on its asset log row")
     p.add_argument("--sprites", help="also render an 8-direction sprite sheet PNG here (2D games, SOP-11)")
     p.add_argument("--no-preview", action="store_true", help="skip the turntable contact sheet")
     p.add_argument("--no-log", action="store_true", help="do not touch docs/ASSET_LOG.md (scratch runs)")
@@ -1051,6 +1081,9 @@ def build_parser():
                         "1 credit = $0.01)")
     p.add_argument("--no-reuse", action="store_true",
                    help="Tripo: ignore a paid task in tasks.json for the same inputs and pay for a new one")
+    p.add_argument("--quote-only", action="store_true",
+                   help="print the price and stop (Tripo: the kit's table and the journal; no key needed, nothing "
+                        "made or spent)")
     p.add_argument("--tripo-model", choices=tp.MAKE_MODELS, default=tp.MAKE_MODEL,
                    help=f"Tripo's model series (default {tp.MAKE_MODEL}; P1 is its low-poly series, not tested here)")
     p.set_defaults(fn=cmd_make)
@@ -1061,6 +1094,8 @@ def build_parser():
     import reference as ref_mod   # noqa: E402  (reference.py: the reference subcommand, #288)
     ref_mod.bind(sys.modules[__name__])
     ref_mod.add_parser(sub, common)
+    rebake_mod.bind(sys.modules[__name__])
+    rebake_mod.add_parser(sub, common)
     return ap
 
 

@@ -145,11 +145,12 @@ Nothing was paid for. The reference routes print their quote without a key (`--q
 character:
 ```
 [quote] nanobanana (gemini-nano-banana-2.1): 4 of 4 view(s) to make, about $0.21 (each about $0.0336 for the picture, plus input and thinking tokens; prices read 2026-11-11, verify); cap --max-cost $1.0000
-[quote] tripo (banana2): text_to_image, image_to_multiview to pay for, up to 20 credits ($0.20; text_to_image 10, image_to_multiview 10; upper bounds read 2026-11-11, verify); cap --max-cost 40 credits
+[quote] tripo (banana2): text_to_image, image_to_multiview to pay for, 20 credits ($0.20; text_to_image 10, image_to_multiview 10; measured 2026-11-11); cap --max-cost 40 credits
 ```
-`make --with tripo` and `rig make --with tripo` have no `--quote-only`: their quote is printed at the start of a real
-run (which needs `TRIPO_API_KEY`), and the skill quotes the kit's table instead: 110 credits for a P2 model (measured
-once, E153) and about 25 credits to rig plus 10 a clip **(verify)**. None of the paid routes ran in this showcase.
+`make --with tripo` and `rig make --with tripo` print theirs the same way (`--quote-only`, no key, nothing written),
+from the kit's table and the journal: 110 credits for a P2 model from a picture or from views (measured on live
+runs, E153 and K01) and 25 credits to rig plus 10 a clip (measured). None of the paid routes ran in this showcase;
+the numbers come from the kit's own live runs on 2026-11-05 and 2026-11-11.
 
 ## The asset log
 Three rows, written by the tools: A-0001 `art`, the reference views (FLUX.2 klein 4B and Qwen-Image-Edit-2511,

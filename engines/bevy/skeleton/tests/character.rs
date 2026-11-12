@@ -2,7 +2,8 @@
 // tests/character.rs
 // Purpose : The rigged-character exam (#290): the kit's golden character (data/golden/character/character.glb, a
 //           Mixamo-named biped with looping clips) loads through src/character.rs, has its clips by name, and
-//           playing `walk` really turns the moving bone; switching the Character's clip switches the player.
+//           playing `walk` really turns the moving bone; switching the Character's clip switches the player. Also:
+//           the PNG and JPEG texture formats generated characters carry decode (Cargo.toml's `jpeg` feature).
 // Usage   : python tools/dev.py test   (cargo test --test character -- --nocapture also prints what it measured)
 // Notes   : Headless, no window and no GPU: MinimalPlugins + AssetPlugin (rooted at the fixture folder) + the
 //           world-asset (scene), mesh, glTF and animation plugins. Meshes and the skin load as plain assets; nothing
@@ -16,6 +17,8 @@
 //   -> facing: the left-side bone sits at -x (the model looks along -Z) -> clips: every expected name, durations match -> sample the bone's rotation for one walk loop -> swing within
 //   [MIN_SWING_FRACTION, MAX_SWING_FRACTION] of expected -> set clip = idle -> the player plays idle's node only
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the texture formats a generated character uses
+//           must decode (the jpeg feature; 0.15.0 review)
 // ---------------------------------------------------------------------------
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -203,6 +206,20 @@ fn the_golden_character_walks() {
     let player = app.world().get::<AnimationPlayer>(player_entity).unwrap();
     assert!(player.is_playing_animation(anim.clips["idle"]), "idle is not playing");
     assert!(!player.is_playing_animation(anim.clips["walk"]), "walk still plays");
+}
+
+/// A generated character's textures come as PNG (Bozzetto's bakes) or JPEG (Tripo's): both must decode, or the
+/// whole .glb fails to load. Bevy's default features decode PNG only; Cargo.toml adds `jpeg` (the golden
+/// character has no textures, so the walk test above cannot catch a missing format).
+#[test]
+fn the_texture_formats_a_generated_character_uses_decode() {
+    use bevy::image::ImageFormat;
+    for mime in ["image/png", "image/jpeg"] {
+        assert!(
+            ImageFormat::from_mime_type(mime).is_some(),
+            "{mime} is not decodable: add its feature to bevy in Cargo.toml"
+        );
+    }
 }
 
 // {{FOOTER}}

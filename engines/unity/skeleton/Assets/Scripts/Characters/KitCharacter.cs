@@ -17,7 +17,8 @@
 //           PlayableGraph on the model's Animator, which works for a Humanoid avatar with humanoid clips too;
 //           the graph is evaluated here in Update (manual mode) so loop, hold and Seek are exact.
 //           glTF is +Y up, front +Z, metres; glTFast flips X for Unity's left-handed space, so the character
-//           faces +Z (transform.forward) and its left side is -X. Docs: docs/ENGINE.md "Rigged characters".
+//           faces +Z (transform.forward) and its left side is -X. Play restarts the clip from its start: call it
+//           when the clip changes, not every frame. Docs: docs/ENGINE.md "Rigged characters".
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // ---------------------------------------------------------------------------
 using System;

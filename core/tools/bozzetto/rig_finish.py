@@ -39,12 +39,23 @@
 #           is and named, since moving its path would move where the motion starts. The kit asks Tripo for in-place
 #           clips and the clips keyed here are in place by construction (only a vertical bob), so a travelling clip
 #           is a surprise worth a look. A root whose parent is animated too is left alone (its offset is not one
-#           constant in the bone's own frame).
+#           constant in the bone's own frame); a parent whose keys never change (every bone sampled) does not count,
+#           and a bone whose location keys all sit at 0 is not "the hips": a glTF round trip keys every bone, so the
+#           root-most bone with keys that leave 0 is measured (a ground root above the hips used to hide them).
+#           Clips at another frame rate (#292): Tripo keys at 30 fps; imported into Blender's 24 fps scene the keys sit
+#           every 0.8 frames and the glTF exporter, sampling whole frames, writes the last frame 0.8 frames short of
+#           the key that closed the loop (walk came back with a visible seam, idle lost its loop). The scene is set
+#           to the clips' own rate first (tools/blender/bpy_common.py), so every key is a whole frame. Blender 4.2's
+#           importer names actions "<clip>_<armature>": they take their clip's name back, so the export keeps "walk".
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): Blender 4.2 clip names, clips at 30 fps, the bpy
+#           module's exit crash (#292); the hips are the root-most bone whose location keys move, and their parent
+#           counts as animated only when its keys change
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
-#   import -> one armature, else exit 1 -> remove meshes without an Armature modifier -> --scale on the top objects
+#   import -> clips take their names from the NLA tracks, the tracks go, the scene takes the clips' frame rate
+#   -> one armature, else exit 1 -> remove meshes without an Armature modifier -> --scale on the top objects
 #   weights per skinned mesh (placeholder bone counts as unweighted) -> any limit broken: report, exit 1
 #   names or clips wanted -> map the biped (spine, legs, arms) or exit 1 -> rename to mixamorig:* -> key the clips
 #   -> per clip: hips' mean horizontal offset from rest; travels: leave; over the tolerance: subtract it from the keys
@@ -57,6 +68,10 @@ from pathlib import Path
 
 import bpy
 from mathutils import Quaternion, Vector
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / "blender"))
+import bpy_common as bc  # noqa: E402  (clip names, clip frame rate, the bpy module's exit: #292)
 
 # --- tunables -------------------------------------------------------------------------------------------------
 MAX_UNWEIGHTED = 0.005      # share of vertices allowed without a real bone
@@ -402,16 +417,34 @@ def clip_walk(arm, m, made):
 
 
 # --- re-centring (Tripo's in-place clips with an offset root) ---------------------------------------------------
-def fcurves_of(act):
-    """Every F-curve of an action: the legacy list before Blender 5.0, the layered channel bags after."""
-    if hasattr(act, "fcurves"):
-        return list(act.fcurves)
-    out = []
-    for layer in getattr(act, "layers", []):
-        for strip in layer.strips:
-            for bag in strip.channelbags:
-                out += list(bag.fcurves)
-    return out
+fcurves_of = bc.fcurves_of   # every F-curve of an action, on Blender 4.2 to 5.x
+
+
+def detach_clips(arm):
+    """The imported clips as plain actions: named after their glTF clip (Blender 4.2 names the action
+    "<clip>_<armature>", the NLA track keeps the clip's name), kept alive, and off the NLA stack, so a clip assigned
+    for a check or a preview plays alone. Returns the actions."""
+    bc.adopt_clip_names(bpy)
+    clips = list(bpy.data.actions)
+    for c in clips:
+        c.use_fake_user = True
+    if arm.animation_data:
+        for tr in list(arm.animation_data.nla_tracks):
+            arm.animation_data.nla_tracks.remove(tr)
+        arm.animation_data.action = None
+    return clips
+
+
+def constant_curve(fc):
+    """True when every key of the F-curve holds one value (a parent sampled by an exporter but never moved)."""
+    vals = [k.co[1] for k in fc.keyframe_points]
+    return not vals or max(vals) - min(vals) <= 1e-6
+
+
+def at_rest(fc):
+    """True when every key of a location F-curve is 0: the bone never leaves its rest spot. glTF exporters write
+    location keys for every bone, so a key is no sign of motion."""
+    return all(abs(k.co[1]) <= 1e-6 for k in fc.keyframe_points)
 
 
 def bone_of(path):
@@ -461,13 +494,19 @@ def recentre_clip(arm, act, height):
         name, prop = bone_of(fc.data_path)
         if name is None or name not in arm.data.bones:
             continue
-        keyed.add(name)
+        if not constant_curve(fc):      # a bone with keys that never change is not animated (Tripo keys every bone)
+            keyed.add(name)
         if prop == "location":
             curves.setdefault(name, {})[fc.array_index] = fc
     if not curves:
         return {"action": "no location keys"}
-    # root-most keyed bone; on a tie the one called Hips (Mixamo's root), then by name
-    root = min((arm.data.bones[n] for n in curves), key=lambda b: (depth(b), "Hips" not in b.name, b.name))
+    # a bone whose location keys all sit at 0 never moves: a glTF round trip gives every bone such keys, and a
+    # ground-level root above the hips used to be picked here and found "in place" while the hips stood 1.4 m off
+    moving = {n: axes for n, axes in curves.items() if any(not at_rest(fc) for fc in axes.values())}
+    if not moving:
+        return {"action": "in place", "offset_m": 0.0, "travel_m": 0.0}
+    # root-most moving bone; on a tie the one called Hips (Mixamo's root), then by name
+    root = min((arm.data.bones[n] for n in moving), key=lambda b: (depth(b), "Hips" not in b.name, b.name))
     entry = {"bone": root.name}
     p = root.parent
     while p is not None:
@@ -582,6 +621,8 @@ def main():
         print(f"[FAIL] expected one armature, found {len(arms)}")
         return 1
     arm = arms[0]
+    existing = detach_clips(arm)
+    bc.conform_clip_fps(bpy, bpy.context.scene, existing)
     meshes = [o for o in bpy.data.objects if o.type == "MESH" and any(md.type == "ARMATURE" for md in o.modifiers)]
     dropped = []
     for o in [o for o in bpy.data.objects if o.type == "MESH" and o not in meshes]:
@@ -605,8 +646,8 @@ def main():
     for f in rep["failures"]:
         if not f.startswith("the rig does not deform"):
             print(f"[FAIL] {f}")
-    existing = [x for x in bpy.data.actions]
     rep["clips_in_file"] = [x.name for x in existing]
+    rep["fps"] = bpy.context.scene.render.fps
     code = 1 if rep["failures"] else 0
     if code == 0 and not a.check_only:
         made = []
@@ -661,9 +702,10 @@ def main():
 
 if __name__ == "__main__":
     try:
-        sys.exit(main())
-    except SystemExit:
-        raise
+        code = main()
+    except SystemExit as exc:          # argparse: usage errors
+        code = exc.code if isinstance(exc.code, int) else 2
     except Exception as exc:  # noqa: BLE001
         print(f"[error] {exc!r}")
-        sys.exit(2)
+        code = 2
+    bc.end_process(bpy, code)          # the bpy module crashes on a plain exit after a glTF export (#292)

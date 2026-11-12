@@ -200,7 +200,7 @@ ProjectSettings/         project config (text, edit with care)
   `mixamorig:LeftUpLeg` within 0.5 to 1.25 of the expected 56 degrees, loops, stays in place, idle is not walk,
   for the editor import with `Attach` and for `Load`); `dev.py test --mode PlayMode --filter Character` passed 1
   (the walk in real frames: 55.9 degrees over 1.5 lengths). The whole runs there: before `AddGltfast`, `test`
-  179 passed and the six skipped with the command as the reason; after it, `check` ok, `test` 185 passed (1
+  179 passed and the six skipped with the command as the reason; after it, `check` ok, `test` 186 passed (1
   skipped: no Dotwork packs), `test --mode PlayMode` 14 passed (2 capture tests skipped: no graphics device) once
   the scenes were made, `smoke` passed. With the pose step taken out of KitCharacter the swing
   tests fail (0.0 degrees), and with looping taken out the loop checks fail. The Humanoid findings above come

@@ -19,9 +19,11 @@
 #           models P1-20260311 and P2-20260801; GET /tasks/{id} (poll every 1-2 s; credits_consumed, error_code,
 #           error_message; banned and expired come back as failed); GET /account/balance {balance, frozen}. Credits are
 #           frozen when a task is created and charged only when it succeeds (failed and cancelled tasks cost nothing).
-#           There is no price or estimate endpoint, so the quote is MAKE_QUOTE below: conservative, and only the P2
-#           image-to-model figure is measured (110 credits, E153; the public table says 30). Each task's actual
-#           cost is read back from credits_consumed and checked against --max-credits before the next paid call.
+#           There is no price or estimate endpoint, so the quote is MAKE_QUOTE below: conservative; the P2 image and
+#           multiview figures are measured (110 credits each, E153 and the 2026-11-11 live run; the public table says
+#           30), text-to-model, P1 and --quality high are ceilings (verify). --quote-only prints it without a key.
+#           Each task's actual cost is read back from credits_consumed and checked against --max-credits before the
+#           next paid call; the cap is for one run (reused work is not spent again).
 #           Result links expire after about 5 minutes (E153, verify): the finished task is asked again for a fresh
 #           link each run. The key is sent only to the API, never to the download host, and never written down.
 #           Outputs bought with paid credits are the user's and not used for training (Tripo terms 5.2.2); outputs
@@ -35,10 +37,12 @@
 #   Journal: tasks.json in the work folder; reused only when every input fact matches (and not --no-reuse); a task
 #            left running is asked how it ended before anything new is paid for
 #   Budget:  actual spend so far + the next step <= --max-credits, and <= the balance; else stop before paying
+#   quote_make: --quote-only: pictures stripped in memory -> journal -> the price (0 when reused) -> stop; no key
 #   run_make: pictures stripped of metadata and kept -> journal -> quote, balance, cap -> upload -> one task ->
 #            actual cost -> the finished task asked again for a fresh link -> download -> raw.glb (extras stripped)
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -49,7 +53,27 @@ bz = None   # bozzetto.py binds itself here (bind): its errors, DEBUG flag, SLEE
 TRIPO_ENV = "TRIPO_API_KEY"
 SECRET_PREFIX, CLIENT_ID_PREFIX = "tsk_", "tcli_"    # Tripo's secret API keys and its client IDs (refused as keys)
 BASE = "https://openapi.tripo3d.ai/v3"       # the exam points this at its stand-in server
-OPENER = urllib.request.urlopen              # the exam may replace it too
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """urllib copies every header, the Authorization header included, onto a redirected request. An API answer is
+    never followed to another address: returning None here makes the 3xx an HTTPError the caller reports."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def opener(proxies=None, redirects=False):
+    """An urlopen-like callable: API calls (the key in a header) refuse redirects; file downloads (no key) follow
+    them. proxies={} ignores the system proxy (the exams, on 127.0.0.1)."""
+    handlers = [] if redirects else [NoRedirect()]
+    if proxies is not None:
+        handlers.append(urllib.request.ProxyHandler(proxies))
+    return urllib.request.build_opener(*handlers).open
+
+
+OPENER = opener()                            # API calls; the exam may replace it (tripo.opener(proxies={}))
+DOWNLOADER = opener(redirects=True)          # result files from Tripo's CDN, no key sent
 POLL_S = 2                                   # the docs ask for one query every 1 to 2 seconds
 FAILED = ("failed", "cancelled", "banned", "expired")   # banned/expired: legacy names Tripo now reports as failed
 JOURNAL = "tasks.json"
@@ -62,9 +86,11 @@ CREDIT_MAKE = "3D model generated with the Tripo3D API (paid credits; outputs ow
 # ---- make: the model route -------------------------------------------------------------------------------------
 MAKE_MODELS = ("P2-20260801", "P1-20260311")  # the P series ("game assets"); P2 is the one tested (E153)
 MAKE_MODEL = "P2-20260801"
-# credits per task before any add-on. No endpoint quotes a price: P2 image-to-model is measured (110, E153), every
-# other figure is set to that ceiling until a run measures it (verify). The actual cost is read after each task.
+# credits per task before any add-on. No endpoint quotes a price: P2 image-to-model (110, E153) and P2 multiview
+# (110, live run 2026-11-11, K01) are measured; text-to-model and the P1 series are set to that ceiling until a run
+# measures them (verify). The actual cost is read after each task.
 MAKE_QUOTE = {model: {"image": 110, "multiview": 110, "text": 110} for model in MAKE_MODELS}
+MEASURED = {("P2-20260801", "image"), ("P2-20260801", "multiview")}   # (model, kind) pairs a paid run has measured
 QUALITY = {"normal": ("standard", 0), "high": ("detailed", 30)}   # --quality -> texture_quality, extra credits (verify)
 FACE_LIMIT = {"P2-20260801": (48, 50000), "P1-20260311": (50, 20000)}   # triangle limits from the docs
 ENDPOINT = {"image": "/generation/image-to-model", "multiview": "/generation/multiview-to-model",
@@ -85,9 +111,10 @@ CHARACTER_HINT = ", full body, standing in an A-pose with the arms slightly away
 # (developers.tripo3d.ai, read 2026-11-11)
 IMAGE_ENDPOINT = {"text_to_image": "/generation/text-to-image", "image_to_image": "/generation/image-to-image",
                   "image_to_multiview": "/generation/image-to-multiview"}
-# credits per task: upper bounds from the pricing summary (text to image 5, generate image 5 to 10, image to multiview
-# 10; verify). No endpoint quotes a price: the actual cost is read from each finished task.
+# credits per task, measured on a live run 2026-11-11 (K01): 10 each (the pricing summary said text to image 5 and
+# generate image 5 to 10). No endpoint quotes a price: the actual cost is read from each finished task.
 IMAGE_QUOTE = {"text_to_image": 10, "image_to_image": 10, "image_to_multiview": 10}
+IMAGE_QUOTE_NOTE = "measured 2026-11-11"
 IMAGE_MODELS = {"banana2": "1K", "banana_pro": "1K", "banana": "1024x1024", "seedream_v5": "2K"}   # model: size
 IMAGE_MODEL = "banana2"
 IMAGE_TERMS = TERMS + "; its banana models are Google's and carry Google's invisible watermark (Tripo docs)"
@@ -100,6 +127,17 @@ def bind(module):
 
 def key():
     return os.environ.get(TRIPO_ENV, "")
+
+
+def scrub(text, secret):
+    """The key out of anything shown or written, even when a server echoes it back."""
+    return text.replace(secret, "***") if secret else text
+
+
+def safe_filename(name):
+    """The name a multipart upload carries: ASCII letters, digits, dot, dash and underscore, so a quote, a line
+    break or a letter such as Í cannot break or mangle the header. Only the extension matters to Tripo."""
+    return re.sub(r"[^A-Za-z0-9._-]", "_", name) or "file"
 
 
 def refusal_hint(body):
@@ -116,8 +154,9 @@ def refusal_hint(body):
 
 # ---- the client --------------------------------------------------------------------------------------------------
 class Client:
-    def __init__(self, api_key=None, base=None):
+    def __init__(self, api_key=None, base=None, journal=JOURNAL):
         self.key, self.base = api_key or key(), (base or BASE).rstrip("/")
+        self.journal = journal        # how the caller's journal is named in messages (reference.py has its own)
 
     def call(self, method, path, body=None, raw=None, ctype=None):
         if self.key.startswith(CLIENT_ID_PREFIX):       # a common mix-up; Tripo refuses it, so say so before a call
@@ -134,18 +173,23 @@ class Client:
             with OPENER(req, timeout=180) as r:
                 doc = json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
-            msg = e.read().decode("utf-8", "replace")[:300]
+            msg = scrub(e.read().decode("utf-8", "replace"), self.key)[:300]
             if e.code in (401, 403):
                 raise bz.ToolError(f"Tripo refused the key (HTTP {e.code}): check {TRIPO_ENV}{refusal_hint(msg)}")
             if e.code == 429:
                 raise bz.JobError(f"Tripo {path}: too many requests or tasks at once (HTTP 429): wait and run again")
+            if 300 <= e.code < 400:
+                raise bz.JobError(f"Tripo {path}: answered with a redirect (HTTP {e.code}) to another address; not "
+                                  "followed, the key stays with the API")
             raise bz.JobError(f"Tripo {path}: HTTP {e.code}: {msg}")
         except (urllib.error.URLError, OSError) as e:
-            raise bz.ToolError(f"cannot reach Tripo ({self.base}): {e}")
+            raise bz.ToolError(scrub(f"cannot reach Tripo ({self.base}): {e}", self.key))
         except ValueError:
             raise bz.JobError(f"Tripo {path}: the answer is not JSON")
+        if not isinstance(doc, dict):
+            raise bz.JobError(f"Tripo {path}: the answer is not a JSON object")
         if doc.get("code", 0) != 0:
-            raise bz.JobError(f"Tripo {path}: {doc.get('message') or doc}")
+            raise bz.JobError(scrub(f"Tripo {path}: {doc.get('message') or doc}", self.key))
         return doc.get("data") or {}
 
     def balance(self):
@@ -153,8 +197,8 @@ class Client:
 
     def upload(self, data, filename, ctype):
         b = "----bozzetto" + uuid.uuid4().hex
-        raw = (f"--{b}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n"
-               f"Content-Type: {ctype}\r\n\r\n").encode() + data + f"\r\n--{b}--\r\n".encode()
+        raw = (f"--{b}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{safe_filename(filename)}\"\r\n"
+               f"Content-Type: {ctype}\r\n\r\n").encode("ascii") + data + f"\r\n--{b}--\r\n".encode("ascii")
         tok = self.call("POST", "/files", raw=raw, ctype=f"multipart/form-data; boundary={b}").get("file_token")
         if not tok:
             raise bz.JobError("Tripo's upload returned no file_token")
@@ -185,7 +229,7 @@ class Client:
                                   + (f": {why}" if why else "") + "); a failed task costs no credits")
             if time.monotonic() - t0 > wait:
                 raise bz.JobError(f"Tripo {what} did not finish in {wait} s (task {tid}; a re-run picks it up from "
-                                  f"{JOURNAL} without paying again)")
+                                  f"{self.journal} without paying again)")
             bz.SLEEP(POLL_S)
 
     def image_task(self, kind, model, extra):
@@ -202,13 +246,13 @@ class Client:
         return tid
 
     def download(self, url, dst):
-        """The result file. The link is Tripo's CDN: no key goes with it."""
+        """The result file. The link is Tripo's CDN: no key goes with it (and a redirect there carries none)."""
         try:
-            with OPENER(urllib.request.Request(url), timeout=300) as r:
+            with DOWNLOADER(urllib.request.Request(url), timeout=300) as r:
                 data = r.read()
         except (urllib.error.URLError, OSError) as e:
-            raise bz.JobError(f"could not download Tripo's model ({e}); its links expire after about 5 minutes: run "
-                              f"again, the paid task is kept in {JOURNAL} and a fresh link is fetched without paying")
+            raise bz.JobError(f"could not download Tripo's file ({e}); its links expire after about 5 minutes: run "
+                              f"again, the paid task is kept in {self.journal} and a fresh link is fetched without paying")
         dst.write_bytes(data)
         return data
 
@@ -224,8 +268,12 @@ class Journal:
             old = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             old = {}
+        if not isinstance(old, dict):          # a journal edited into something else is no reason to crash
+            old = {}
         self.data = old if (reuse and all(old.get(k) == v for k, v in want.items())) else dict(want, tasks={})
         self.tasks = self.data.setdefault("tasks", {})
+        if not isinstance(self.tasks, dict):
+            self.tasks = self.data["tasks"] = {}
 
     def save(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -234,16 +282,20 @@ class Journal:
     def done(self, step):
         return (self.tasks.get(step) or {}).get("status") == "success"
 
-    def running(self, step, tid):
-        self.tasks[step] = {"id": tid, "status": "running"}
+    def running(self, step, tid, **extra):
+        """A task just created, with the facts that name it (rig.py: the clips asked for) so a later run knows
+        what it is reusing even when this one is cut off before the task finishes."""
+        self.tasks[step] = dict({"id": tid, "status": "running"}, **extra)
         self.save()
 
     def finished(self, step, tid, credits, **extra):
         self.tasks[step] = dict({"id": tid, "status": "success", "credits": credits}, **extra)
         self.save()
 
-    def spent(self):
-        return sum(float(v.get("credits") or 0) for v in self.tasks.values())
+    def spent(self, steps=None):
+        """Credits the journal holds, over every task or over `steps` (the ones a run ships with)."""
+        tasks = self.tasks.values() if steps is None else [self.tasks.get(s) or {} for s in steps]
+        return sum(float(v.get("credits") or 0) for v in tasks)
 
     def settle(self, client, steps, wait, extra=None):
         """A task journalled as running (the last run timed out or was stopped after paying): ask Tripo how it ended
@@ -264,7 +316,8 @@ class Journal:
                 # still running after --wait: never pay for a second one while the first may still finish
                 raise bz.ToolError(f"the last run's {step} task {entry['id']} is still running at Tripo; run again "
                                    f"later (it is kept in {JOURNAL}), or pass --no-reuse to pay for a new one")
-            more = extra(step, d) if extra else {}
+            more = {k: v for k, v in entry.items() if k not in ("id", "status", "credits")}   # what running() kept
+            more.update(extra(step, d) if extra else {})
             self.finished(step, entry["id"], float(d.get("credits_consumed") or 0), **more)
 
     def reused(self):
@@ -272,7 +325,8 @@ class Journal:
 
 
 class Budget:
-    """--max-credits counts actual charges; the balance is checked too. afford() refuses before a paid call."""
+    """--max-credits caps one run, counting its actual charges (what earlier runs paid and the journal reuses is
+    not spent again, so it does not count); the balance is checked too. afford() refuses before a paid call."""
 
     def __init__(self, cap, balance, spent=0.0, flag="--max-credits", journal=JOURNAL):
         self.cap, self.balance, self.spent = cap, balance, spent
@@ -280,7 +334,7 @@ class Budget:
 
     def afford(self, more):
         if self.spent + more > self.cap:
-            raise bz.ToolError(f"spending {more:g} more credits would make {self.spent + more:g} in all, over "
+            raise bz.ToolError(f"spending {more:g} more credits would make {self.spent + more:g} this run, over "
                                f"{self.flag} {self.cap:g}; finished tasks are kept in {self.journal} for a re-run")
         if more > self.balance:
             raise bz.ToolError(f"the Tripo balance ({self.balance:g} credits) is under the next step ({more:g}); "
@@ -303,6 +357,16 @@ def quote(model, kind, quality):
     return MAKE_QUOTE[model][kind] + QUALITY[quality][1]
 
 
+def quote_note(model, kind, quality):
+    """How sure the quote is: measured on a paid run, or the kit's ceiling until one measures it."""
+    sure = (model, kind) in MEASURED
+    note = (f"{model} {kind}-to-model measured 2026-11-11" if sure
+            else f"{model} {kind}-to-model is the kit's ceiling, not yet measured (verify)")
+    if quality != "normal":
+        note += f"; --quality {quality} adds {QUALITY[quality][1]} (verify)"
+    return note
+
+
 def face_limit(model, faces):
     lo, hi = FACE_LIMIT[model]
     return max(lo, min(hi, faces))
@@ -317,10 +381,11 @@ def prompt_text(args, cls):
     return text
 
 
-def check_make(args, plan):
-    """make --with tripo's own checks, before any credit (bozzetto's preflight calls this)."""
-    if not key():
-        raise bz.ToolError(f"--with tripo needs {TRIPO_ENV} (paid API credits; {NO_STUDIO})")
+def check_make(args, plan, need_key=True):
+    """make --with tripo's own checks, before any credit (bozzetto's preflight calls this; --quote-only needs no key)."""
+    if need_key and not key():
+        raise bz.ToolError(f"--with tripo needs {TRIPO_ENV} (paid API credits; {NO_STUDIO}). --quote-only prints the "
+                           "price without it")
     if args.max_credits <= 0:
         raise bz.ToolError("--max-credits must be a positive number")
     if args.wait <= 0:
@@ -334,9 +399,9 @@ def check_make(args, plan):
             raise bz.ToolError(f"{path.name} is over Tripo's 20 MB upload limit")
 
 
-def keep_pictures(plan):
-    """Each picture, metadata removed (as the local route does), kept in the source folder and returned with its
-    upload facts: [(role, kept path, bytes, content type, sha256)]. Tripo's upload takes PNG and JPEG only."""
+def picture_facts(plan):
+    """Each picture with its metadata removed (as the local route does), in memory: [(role, kept path, bytes,
+    content type, sha256)]. Nothing is written (--quote-only reads these too). Tripo's upload takes PNG and JPEG."""
     out = []
     for role, path in plan.pictures:
         try:
@@ -350,23 +415,23 @@ def keep_pictures(plan):
         else:
             raise bz.ToolError(f"{path.name}: Tripo's upload takes PNG or JPEG pictures; save it as one of those")
         name = ("reference" if role == "image" else f"view_{role}") + ext
-        dest = plan.src / name
-        bz.write_new(dest, data, True)
-        out.append((role, dest, data, ctype, bz.sha256_bytes(data)))
-    if out:
-        print(f"[ OK ] reference: " + ", ".join(bz.rel(plan.root, p[1]) for p in out) + " (metadata removed)")
+        out.append((role, plan.src / name, data, ctype, bz.sha256_bytes(data)))
     return out
 
 
-def run_make(args, plan):
-    """One Tripo model task with the journal, quote and cap. Returns (raw .glb path, job facts, reference facts)."""
-    client = Client()
-    work = plan.src / "tripo"
+def keep_pictures(plan, pictures):
+    """The stripped pictures kept in the source folder (the copies that go to Tripo and are committed)."""
+    for _, dest, data, _, _ in pictures:
+        bz.write_new(dest, data, True)
+    if pictures:
+        print(f"[ OK ] reference: " + ", ".join(bz.rel(plan.root, p[1]) for p in pictures) + " (metadata removed)")
+
+
+def make_facts(args, plan, pictures):
+    """What one make asks Tripo for: (kind, model, task settings, prompt text, the journal's matching facts)."""
     kind, model = make_kind(args), args.tripo_model
-    pictures = keep_pictures(plan)
-    tq = QUALITY[args.quality][0]
     settings = {"model": model, "face_limit": face_limit(model, plan.faces), "texture": True, "pbr": True,
-                "texture_quality": tq}
+                "texture_quality": QUALITY[args.quality][0]}
     if args.seed is not None:
         settings.update(model_seed=args.seed, texture_seed=args.seed)
         if kind == "text":
@@ -374,15 +439,43 @@ def run_make(args, plan):
     text = prompt_text(args, plan.cls) if kind == "text" else None
     want = {"kind": kind, "inputs_sha256": {role: sha for role, _, _, _, sha in pictures}, "prompt": text,
             "settings": settings}
+    return kind, model, settings, text, want
+
+
+def quote_make(args, plan):
+    """--quote-only: the price before any call, no key needed, nothing written or spent. Reads the journal, so a
+    finished task for the same inputs quotes 0."""
+    check_make(args, plan, need_key=False)
+    pictures = picture_facts(plan)
+    kind, model, settings, _, want = make_facts(args, plan, pictures)
+    j = Journal(plan.src / "tripo" / JOURNAL, want, reuse=not args.no_reuse)
+    price = 0 if j.done("model") else quote(model, kind, args.quality)
+    reused = f"; {j.reused()} in {JOURNAL} is reused ({j.spent():g} credits paid before)" if j.done("model") else ""
+    print(f"[quote] tripo ({model} {kind}-to-model, texture {settings['texture_quality']}): {price} credits "
+          f"(${price / 100:.2f}) to spend; {quote_note(model, kind, args.quality)}{reused}; cap --max-credits "
+          f"{args.max_credits}")
+    print("[ OK ] --quote-only: nothing was made or spent")
+    return 0
+
+
+def run_make(args, plan):
+    """One Tripo model task with the journal, quote and cap. Returns (raw .glb path, job facts, reference facts)."""
+    client = Client()
+    work = plan.src / "tripo"
+    pictures = picture_facts(plan)
+    keep_pictures(plan, pictures)
+    kind, model, settings, text, want = make_facts(args, plan, pictures)
+    tq = settings["texture_quality"]
     j = Journal(work / JOURNAL, want, reuse=not args.no_reuse)
     j.settle(client, ["model"], args.wait)
     price = 0 if j.done("model") else quote(model, kind, args.quality)
-    budget = Budget(args.max_credits, client.balance(), j.spent())
+    budget = Budget(args.max_credits, client.balance())      # the cap is for this run: reused work costs nothing
     if j.done("model"):
-        print(f"[ OK ] reusing paid Tripo work from {JOURNAL}: {j.reused()} (no new credits)")
-    print(f"[info] Tripo quote: {price} credits still to spend ({model} {kind}-to-model, texture {tq}; the quote is "
-          f"the kit's table, Tripo has no price endpoint); balance {budget.balance:g}; limit --max-credits "
-          f"{args.max_credits}")
+        print(f"[ OK ] reusing paid Tripo work from {JOURNAL}: {j.reused()} ({j.spent():g} credits paid before, "
+              "no new credits)")
+    print(f"[info] Tripo quote: {price} credits still to spend ({model} {kind}-to-model, texture {tq}; "
+          f"{quote_note(model, kind, args.quality)}; Tripo has no price endpoint); balance {budget.balance:g}; "
+          f"limit --max-credits {args.max_credits}")
     budget.afford(price)
     if not j.done("model"):
         body = dict(settings)
@@ -404,6 +497,9 @@ def run_make(args, plan):
         if cost > price:
             print(f"[warn] Tripo charged {cost:g} credits, more than the quote ({price}): raise MAKE_QUOTE in "
                   f"tools/bozzetto/tripo.py for {model} {kind}")
+        elif cost < price and (model, kind) not in MEASURED:
+            print(f"[info] Tripo charged {cost:g} credits, under the kit's ceiling of {price}: {model} {kind} can "
+                  "be marked measured in tools/bozzetto/tripo.py")
     tid = j.tasks["model"]["id"]
     # the finished task is asked again for its link: links expire after about 5 minutes, a reused task needs a new one
     fin = client.wait_for(tid, "model result", args.wait)

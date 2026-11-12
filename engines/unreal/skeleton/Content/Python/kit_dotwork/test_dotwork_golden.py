@@ -7,6 +7,8 @@
 #           GetTileCenterPosition: the isometric map proves Paper2D's diamond grid is the spec's), font metrics,
 #           9-slice margins. Every imported texture must be nearest-filtered without mips, the particles asset must
 #           expose its texture and emitter, and the stamps layer its expanded tiles.
+#           Then the same for the sheet render_sprites.py --manifest rendered from the golden rigged character
+#           (data/golden/character/sprites/, #290), so a 3D character's sheets reach Paper2D through the same importer.
 # Usage   : python tools/dev.py test   (runs as Editor.Python.<Game>.kit_dotwork.test_dotwork_golden; needs the
 #           PythonScriptPlugin and PythonAutomationTest plugins enabled in the .uproject: docs/ENGINE.md "Dotwork art")
 #           python tools/dev.py exec Content/Python/kit_dotwork/test_dotwork_golden.py   (the same check, no plugin)
@@ -17,7 +19,8 @@
 #           commandlet (everything compared); without the plugin, only the commandlet run.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): placed cells and centres,
-#           the stamps layer, particles loaded, the isometric map's centres straight from Paper2D
+#           the stamps layer, particles loaded, the isometric map's centres straight from Paper2D;
+#           the rendered character sheet imports to its expected.json (0.15.0 review, #290)
 # ---------------------------------------------------------------------------
 import json
 import os
@@ -62,6 +65,32 @@ def extra_checks(imp, actual, expected):
             diffs.append(f"{ISO_MAP}: the blocks tile set got Drawing Offset {blocks['offset']}, expected [0, 0] "
                          "(a 16x12 block with origin [8, 8] is where Paper2D's bottom alignment puts it)")
     return diffs
+RENDERED = "data/golden/character/sprites"   # a sheet render_sprites.py --manifest made from the golden rigged character
+
+
+def check_rendered_character(root):
+    """The rendered character's manifest (#290: rows are directions, columns frames, one animated_sprite with a clip
+    per action and direction) imports to its own expected.json like any Dotwork pack."""
+    folder = os.path.join(root, RENDERED)
+    imp = paper.Importer(os.path.join(folder, "dotwork", "character.assets.json"), transient=True).run()
+    with open(os.path.join(folder, "expected.json"), encoding="utf-8") as f:
+        expected = json.load(f)["assets"]
+    actual = paper.loaded(imp)
+    diffs = []
+    for key, want in expected.items():
+        if key in actual:
+            spec.compare(want, actual[key], key, out=diffs)
+        else:
+            diffs.append(f"{key}: not loaded")
+    diffs += [f"{key}: loaded but not in expected.json" for key in actual if key not in expected]
+    diffs += paper.texture_settings_problems(imp)
+    if not expected:
+        diffs.append(f"{RENDERED}/expected.json names no asset")
+    for line in diffs:
+        unreal.log_error(f"DOTWORK_DIFF rendered character: {line}")
+    if diffs:
+        raise AssertionError(f"the rendered character differs from its expected.json in {len(diffs)} place(s): see DOTWORK_DIFF")
+    unreal.log(f"DOTWORK_RENDERED_OK {len(actual)} asset(s) match {RENDERED}/expected.json ({len(imp.textures)} textures)")
 
 
 def main():
@@ -97,6 +126,7 @@ def main():
     cells = sum(len(v) for k in maps for v in actual[k]["placed"].values())
     unreal.log(f"DOTWORK_GOLDEN_OK {len(actual)} asset(s) match expected.json ({len(imp.textures)} textures, "
                f"{len(maps)} maps, {cells} placed cells, {len(imp.warnings)} warning(s))")
+    check_rendered_character(root)
 
 
 main()

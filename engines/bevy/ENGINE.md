@@ -133,8 +133,11 @@ target/            build output (git-ignored)
 - **File:** one `.glb` (glTF 2.0 binary: skinned mesh, skin, clips as named animations) under `assets/`, for example a
   hero.glb in `assets/models/`. Bozzetto's rig routes and Mixamo exports fit; bone names keep their `mixamorig:` prefix
   (Bevy's `Name` is the glTF node name as is: `mixamorig:LeftUpLeg`).
-- **Features:** none to add. Bevy's default features (the `3d` group) already build `bevy_gltf`, `gltf_animation`,
-  `bevy_animation` and the world-asset (scene) plugin, so this costs no extra compile time.
+- **Features:** Bevy's default features (the `3d` group) already build `bevy_gltf`, `gltf_animation`,
+  `bevy_animation` and the world-asset (scene) plugin. The kit's `Cargo.toml` adds one, `jpeg`: the defaults decode
+  PNG textures only, and a Tripo rig's textures are JPEG, so without it the whole `.glb` fails to load
+  (`InvalidImageMimeType("image/jpeg")`; found on a 69-bone Tripo character, 2026-11-11). The character test checks
+  both formats decode.
 - **The helper, `src/character.rs`:** add `character::CharacterPlugin`, then in a system
   `let hero = spawn_character(&mut commands, &asset_server, "models/hero.glb", "idle");`. It returns the `Character`
   entity: move and turn that one. Switch clips with `characters.get_mut(hero)?.clip = "walk".into();` (an unknown
@@ -161,8 +164,13 @@ target/            build output (git-ignored)
   (`data/golden/character/character.glb`), finds `idle` and `walk` by name with their lengths from `expected.json`,
   plays `walk` for one loop at 60 Hz and measures `mixamorig:LeftUpLeg` swinging 56.0 degrees (expected 56; the test
   asks for 50 to 110 percent), checks the left leg sits at -x (the character faces -Z), and switches to `idle`. Passed,
-  headless, as part of `python tools/dev.py test` in a fresh scaffold. Not run: a windowed run that draws the skinned
-  mesh **(verify)**, a Bozzetto or Mixamo file other than the golden character **(verify)**.
+  headless, as part of `python tools/dev.py test` in a fresh scaffold. The same helper loaded a 69-bone Tripo rig with
+  three JPEG-textured clips headless (with `ImagePlugin`; 2026-11-11, not a kept test): idle, walk and run looped
+  with seamless loops, the hips stayed in place, the left leg sat at -x. One run of it lost the bone entity it had
+  found in the first frames: a textured file's scene instance is spawned again once its images finish loading, so
+  look bones up by `Name` after `AssetServer::get_recursive_dependency_load_state` says Loaded, and hold the
+  `Character` entity, never a bone's **(verify: seen once, not reproduced)**. Not run: a windowed run that draws
+  the skinned mesh **(verify)**.
 
 ## Gotchas (Claude: read before editing)
 1. **Your Bevy memory is probably from an older version.** Bevy breaks its API every release (about every three
