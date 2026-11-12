@@ -15,7 +15,9 @@
 #           Blender is replaced by a stand-in here.
 #           Part 2 (when Blender or the bpy module is found): rig_finish.py on rigs built here in Blender: a biped
 #           passes, gets Mixamo names on the right sides and three clips that move the mesh; a rig with everything on
-#           one bone, one with vertices only on glTF's placeholder bone, and a four-legged one fail with exit 1.
+#           one bone, one with vertices only on glTF's placeholder bone, and a four-legged one fail with exit 1; a
+#           clip whose hips stand off their rest spot in every key is re-centred (wobble and bob kept), one in place
+#           and one that travels are left as they are.
 # Usage   : python tools/bozzetto/test_rig.py
 #           BOZZETTO_TEST_BLENDER=skip|bpy|<path to blender>  picks part 2's Blender (skip: part 1 only)
 # Exit    : 0 all pass, 1 a case failed
@@ -25,6 +27,7 @@ import ast
 import contextlib
 import io
 import json
+import math
 import os
 import struct
 import subprocess
@@ -530,6 +533,8 @@ BUILD = textwrap.dedent('''
         bone("neutral_bone", (0, 0, 0), (0, 0, 0.1))
     if kind == "partial":                 # one Mixamo name, the rest generic (#216)
         arm_data.edit_bones["b0"].name = "mixamorig:Hips"
+    if kind == "offset":                  # the hips' axes turned, as bone axes vary between rigs
+        arm_data.edit_bones["b0"].roll = 0.9
     bpy.ops.object.mode_set(mode="OBJECT")
     names = [b.name for b in arm_data.bones]
     mesh_objs = []
@@ -545,6 +550,21 @@ BUILD = textwrap.dedent('''
     bpy.context.view_layer.objects.active = mesh_objs[0]; bpy.ops.object.join()
     body = bpy.context.active_object; body.name = "body"
     body.parent = arm; mod = body.modifiers.new("Armature", "ARMATURE"); mod.object = arm
+    if kind == "offset":                  # Tripo's in-place clips with an offset root (live run, 2026-11-11)
+        import math
+        to_local = arm_data.bones["b0"].matrix_local.to_3x3().inverted()
+        pb = arm.pose.bones["b0"]
+        arm.animation_data_create()
+        def clip(name, at, n=24):         # at(t, u) -> the hips' offset from rest in armature space, per key
+            act = bpy.data.actions.new(name); arm.animation_data.action = act
+            for f in range(n + 1):
+                pb.location = to_local @ Vector(at(2 * math.pi * f / n, f / n))
+                pb.keyframe_insert("location", frame=f + 1)
+            act.use_fake_user = True; arm.animation_data.action = None
+        # walk: 0.4 m to the side and 1.3 m back in every key, plus a wobble (whole periods: mean 0) and a bob
+        clip("walk", lambda t, u: (0.4 + 0.03 * math.sin(t), 1.3 + 0.02 * math.sin(2 * t), 0.05 * abs(math.cos(t))))
+        clip("idle", lambda t, u: (0.003 * math.sin(t), 0.0, 0.01 * abs(math.cos(t))))     # in place
+        clip("run", lambda t, u: (0.0, -1.5 * u, 0.03 * abs(math.cos(t))))                  # travels: root motion
     bpy.ops.export_scene.gltf(filepath=out, export_format="GLB", export_yup=True)
 ''')
 
@@ -591,7 +611,8 @@ class FinishExam(unittest.TestCase):
         cls.d = Path(cls.tmp.name)
         builder = cls.d / "build.py"
         builder.write_text(BUILD, encoding="utf-8")
-        for kind in ("biped", "one_bone", "neutral", "quad", "ground", "backward", "sideways", "short", "partial"):
+        for kind in ("biped", "one_bone", "neutral", "quad", "ground", "backward", "sideways", "short", "partial",
+                     "offset"):
             p = blender_run(builder, [cls.d / f"{kind}.glb", kind])
             assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
 
@@ -610,6 +631,9 @@ class FinishExam(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stdout[-3000:])
         self.assertEqual(rep["failures"], [])
         self.assertEqual(rep["clips"], ["idle", "wave", "walk"])
+        # the clips keyed here are in place by construction: the walk's hips only bob, idle and wave keep them still
+        self.assertEqual(rep["recentred"]["walk"]["action"], "in place", rep["recentred"])
+        self.assertEqual(rep["recentred"]["idle"]["action"], "no location keys", rep["recentred"])
         probe = self.d / "probe.py"
         probe.write_text(textwrap.dedent('''
             import sys, json, bpy
@@ -659,6 +683,71 @@ class FinishExam(unittest.TestCase):
             seconds = max(doc["accessors"][s["input"]]["max"][0] for s in a["samplers"])
             frames = FINISH_CONST[a["name"].upper() + "_FRAMES"]
             self.assertAlmostEqual(seconds, frames / FINISH_CONST["FPS"], places=4, msg=f"{a['name']} lasts {seconds} s")
+
+    def hips_track(self, glb, bone):
+        """{clip: [[x, y, z] world position of the bone's head per frame]} and the rest head, read back in Blender."""
+        probe = self.d / "hips.py"
+        probe.write_text(textwrap.dedent('''
+            import sys, json, bpy
+            src, bone = sys.argv[sys.argv.index("--") + 1:][:2]
+            bpy.ops.wm.read_factory_settings(use_empty=True); bpy.ops.import_scene.gltf(filepath=src)
+            arm = [o for o in bpy.data.objects if o.type == "ARMATURE"][0]
+            ad = arm.animation_data or arm.animation_data_create()
+            for t in ad.nla_tracks:
+                t.mute = True
+            out = {}
+            for act in bpy.data.actions:
+                ad.action = act
+                if hasattr(ad, "action_slot") and ad.action_slot is None:
+                    slots = list(getattr(ad, "action_suitable_slots", [])) or list(getattr(act, "slots", []))
+                    if slots:
+                        ad.action_slot = slots[0]
+                f0, f1 = (int(round(f)) for f in act.frame_range)
+                track = []
+                for f in range(f0, f1 + 1):
+                    bpy.context.scene.frame_set(f)
+                    track.append(list(arm.matrix_world @ arm.pose.bones[bone].head))
+                out[act.name] = track
+            rest = list(arm.matrix_world @ arm.data.bones[bone].head_local)
+            print("HIPS" + json.dumps({"clips": out, "rest": rest}))
+        '''), encoding="utf-8")
+        q = blender_run(probe, [glb, bone])
+        line = next((l for l in q.stdout.splitlines() if l.startswith("HIPS")), None)
+        self.assertIsNotNone(line, q.stdout[-2000:] + q.stderr[-2000:])
+        return json.loads(line[4:])
+
+    def test_an_offset_in_place_clip_is_recentred(self):
+        """Live Tripo run (2026-11-11): animate_in_place clips came back with mixamorig:Hips 1.4 m (walk) and 2.8 m
+        (run) sideways in every key, idle at 0. rig_finish removes the mean horizontal offset and keeps the wobble
+        and the bob; a clip already in place and a clip that travels (root motion) are left as they are."""
+        p, rep = self.finish("offset", "--names", "keep")
+        self.assertEqual(p.returncode, 0, p.stdout[-3000:])
+        before = self.hips_track(self.d / "offset.glb", "b0")
+        after = self.hips_track(self.d / "offset_out.glb", "b0")
+        rest = after["rest"]
+        for clip in ("walk", "idle", "run"):
+            self.assertIn(clip, after["clips"], sorted(after["clips"]))
+            a, b = after["clips"][clip], before["clips"][clip]
+            self.assertEqual(len(a), len(b), clip)
+            mean_a = [sum(p[i] for p in a) / len(a) for i in range(3)]
+            mean_b = [sum(p[i] for p in b) / len(b) for i in range(3)]
+            for pa, pb in zip(a, b):
+                for i in range(2):     # the wobble around the mean is unchanged
+                    self.assertAlmostEqual(pa[i] - mean_a[i], pb[i] - mean_b[i], delta=1e-4, msg=clip)
+                self.assertAlmostEqual(pa[2], pb[2], delta=1e-4, msg=f"{clip}: the bob changed")
+            if clip == "walk":
+                off = math.hypot(mean_a[0] - rest[0], mean_a[1] - rest[1])
+                self.assertLess(off, 1e-3, f"walk still stands {off:.4f} m from its rest spot")
+            else:                      # untouched
+                for pa, pb in zip(a, b):
+                    for i in range(3):
+                        self.assertAlmostEqual(pa[i], pb[i], delta=1e-4, msg=f"{clip} was changed")
+        self.assertIn("walk: re-centred 1.36 m", p.stdout)                   # |(0.4, 1.3)|
+        rc = rep.get("recentred", {})
+        self.assertEqual(rc.get("walk", {}).get("action"), "recentred", rep)
+        self.assertEqual(rc.get("idle", {}).get("action"), "in place", rep)
+        self.assertTrue(rc.get("run", {}).get("action", "").startswith("left (travels"), rep)
+        self.assertIn("run: b0 travels 1.50 m", p.stdout)
 
     def test_everything_on_one_bone_fails(self):
         p, rep = self.finish("one_bone")

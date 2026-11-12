@@ -16,7 +16,7 @@
 #   build fixtures (a body with a nose on its front; the same with a moving location key)
 #   run render_sprites as a separate process for each case, then read the sheet with bpy
 #   check: dimensions, transparent corners, alpha in every cell, front vs side silhouettes
-#          differ, animated frames differ, JSON layout, bad input exits 2
+#          differ, animated frames differ, JSON layout, a clip far from the rest pose warns, bad input exits 2
 import argparse
 import json
 import shutil
@@ -77,6 +77,30 @@ def build_skinned_with_strip(bpy, path):
         o.modifiers.new("Armature", "ARMATURE").object = arm
         o.parent = arm
     bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB")
+
+
+def build_offset_clip(bpy, path):
+    """The body skinned to one bone with two clips: idle (the bone still) and walk (the bone 2 m to the side in
+    every key), the shape of Tripo's in-place clips with an offset root (2026-11-11)."""
+    build_fixture(bpy, path, export=False)
+    body = bpy.context.view_layer.objects.active
+    bpy.ops.object.armature_add(location=(0, 0, 0))
+    arm = bpy.context.active_object
+    bone = arm.data.bones[0].name
+    body.vertex_groups.new(name=bone).add(list(range(len(body.data.vertices))), 1.0, "REPLACE")
+    body.modifiers.new("Armature", "ARMATURE").object = arm
+    body.parent = arm
+    arm.animation_data_create()
+    pb = arm.pose.bones[bone]
+    for name, x in (("idle", 0.0), ("walk", 2.0)):   # the bone's local X is the world's X (it points up, no roll)
+        act = bpy.data.actions.new(name)
+        arm.animation_data.action = act
+        for f in (1, 3):
+            pb.location = (x, 0.0, 0.0)
+            pb.keyframe_insert("location", frame=f)
+        act.use_fake_user = True
+        arm.animation_data.action = None
+    bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", export_animation_mode="ACTIONS")
 
 
 def build_fixture(bpy, path, animate=False, export=True):
@@ -326,6 +350,12 @@ def main():
     rc, out = run_tool(skinned, "--out", tmp / "skinned_strip.png", "--directions", 1, *common)
     case("a skinned body beside a small skinned strip (a rig chain's scarf) is not called a helper",
          rc == 0 and "--ignore" not in out, out[-300:])
+    offset = tmp / "offset_clip.glb"
+    build_offset_clip(bpy, offset)
+    rco, outo = run_tool(offset, "--out", tmp / "offset.png", "--actions", "all", "--directions", 1, *common)
+    case("a clip standing far from the rest pose warns, naming it and the rig fix",
+         rco == 0 and "[WARN] walk: the model's centre sits 2.00 m" in outo and "rig_finish.py" in outo
+         and "[WARN] idle:" not in outo, outo[-600:])
     rc2, out2 = run_tool(helper, "--out", tmp / "helper_ign.png", "--directions", 1, "--ignore", "Help*", *common)
     case("--ignore drops it (wildcards work)", rc2 == 0 and "ignored Helper" in out2, out2[-300:])
     if rc == 0 and rc2 == 0:

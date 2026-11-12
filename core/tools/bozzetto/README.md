@@ -312,6 +312,17 @@ placeholder bone (`neutral_bone`), one bone holding most of the mesh, too few bo
 bone 15 degrees, a mesh that does not move (the rig must deform). A failed check ships nothing. It also removes a mesh nothing skins (both
 routes leave a stray `Icosphere`) and scales Tripo's 1.0 m output back to the model's height.
 
+**Clips stand where the model stands:** Tripo's in-place walk and run came back with `mixamorig:Hips` 1.4 and 2.8 m
+sideways in every key (a 1.0 m model, live run 2026-11-11; idle at about 0), so the character stood metres from its
+origin in those clips: an engine showed it jump away from its collider when the clip changed, and sprite sheets came
+out tiny. `rig_finish.py` measures each clip's hips (the root-most bone with location keys) against the rest pose and
+removes their mean sideways offset from every key, keeping the sway around it and every up-and-down bob; it prints
+`walk: re-centred 2.61 m` and records each clip in `rig_finish.json` (`recentred`). Hips within 1% of the height of
+their rest spot are left alone. A clip whose hips end more than 10% of the height from where they started travels
+(root motion, not in place): it is left as it is, with a warning, since moving it would move where the motion starts.
+The kit asks Tripo for in-place clips, and the UniRig route's clips only bob, so expect none. A rigged file from before
+this fix: run `rig_finish.py` on it again (`render_sprites.py` names such a clip).
+
 **Bone names:** UniRig's bones are `bone_0` ... `bone_N`. `rig_finish.py` finds the body by shape (the spine runs from
 the root to the highest bone; of the limbs off it, the two reaching the floor are legs, the two reaching farthest
 sideways are arms; left is +X) and renames hips, spine, neck, head, legs and arms to Mixamo's names (`--names keep`
