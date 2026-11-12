@@ -1683,6 +1683,12 @@
       "date": "2026-11-12",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.15.0",
+      "date": "2026-11-12",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -2267,7 +2273,7 @@
     "tools/blender/test_validate_asset.py": "bba9994de9138a7e51d1ed6f48f9bf1eea96b22da087116b06c911ed14397387",
     "tools/blender/validate_asset.py": "0e775dbdfc1d66eea178dda181b889366afcd4ae47ef68c829244c74a9bc7eb0",
     "tools/bozzetto/LICENSES.md": "e57063032f4a68e5addf22e553146f8fe3f0aa3912c196435df02159b8196324",
-    "tools/bozzetto/README.md": "5e50d2397207f07c165d00eb4ef5fdc5cdef647142b8bc5d291c44b62a407f19",
+    "tools/bozzetto/README.md": "8ec76e4c3ce25216b303f9d67465181b68936c9a0196df45c46255c112f81978",
     "tools/bozzetto/bozzetto.py": "a48ab2e31535464d3d7ac0eb366eb1ec1f3cc2c1841df6027c72c1a9d9a887bd",
     "tools/bozzetto/chain.py": "2182825c3eaae909908631327151e4747e8950a3c59128a1715e3a8a15812dcd",
     "tools/bozzetto/cleanup.py": "a8af9ac508b2ec80f24b2b1789fb20cc5eab4628297604a45bec036ec6ae596f",
@@ -2360,7 +2366,7 @@
     "tools/yt_transcript.py": "7ae8657734eb805db92c7fc5b9dae3e99c6533a0083724da8df59206bd729e9f",
     "tsconfig.json": "0a3ad10b54f64f31b59a9b990743b37102491a127710bc78f4fb5d90dc888b4b",
     "vite.config.ts": "818214ea6c27ac3d95b8c488242cf6f86aaed9e0e2ac995d9b7455321688df7c",
-    "vitest.config.ts": "e468ad4490748e875e76fed0f5ccfd41c2e8909e8b8b8308c37a29b01b94803c"
+    "vitest.config.ts": "bf175b11339f56365ba1315e7750f9733ca8a03a10f254b12d8ef3161989b74a"
   },
   "last_upgrade": "2026-11-12",
   "slug": "courier_dash",
