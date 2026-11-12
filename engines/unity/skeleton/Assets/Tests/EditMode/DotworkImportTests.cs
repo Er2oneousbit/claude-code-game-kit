@@ -4,7 +4,9 @@
 //           folder under Assets/, import its manifest, read the numbers back from the Unity objects it made (sprite
 //           rects and pivots, AnimationClip keys, BoxCollider2Ds, tiles, the map's Tilemaps, the font) and compare
 //           them with data/golden/dotwork/expected.json (assetspec.expected(), the loaded result every engine's
-//           importer must reproduce) to 1e-6. Then: every real manifest of the game loads (DotworkVerify).
+//           importer must reproduce) to 1e-6. The same for the sheet render_sprites.py --manifest rendered from the
+//           golden rigged character (data/golden/character/sprites/, #290). Then: every real manifest of the game
+//           loads (DotworkVerify).
 // Usage   : python tools/dev.py test --filter Dotwork
 // Notes   : Read-back, not re-computed: a rect comes from Sprite.rect flipped back to y down, a frame's seconds from
 //           the clip's key times, a terrain cell's mask from the Tilemap's own neighbours and its tile from the
@@ -32,10 +34,13 @@ namespace {{GAME_SLUG}}.Tests
     {
         // ---- Tunables ------------------------------------------------------------
         private const string GOLDEN = "data/golden/dotwork";         // relative to the project root
+        private const string RENDERED = "data/golden/character/sprites";   // render_sprites.py --manifest's sheets of the golden character
         private const string TEMP = "Assets/__DotworkGolden";       // gitignored; deleted after the run
         private const string MANIFEST = TEMP + "/dotwork/golden.assets.json";
         private const string OUT = TEMP + "/dotwork/golden";
         private const double TOL = 1e-6;                             // the spec's tolerance
+        private const double PIXEL_TOL = 1e-4;                       // a Sprite stores its pivot as float32: a rendered sheet's
+                                                                     // 37.6 reads back as 37.599998 (Dotwork's own pivots are whole pixels)
 
         private static DotworkPack _pack;
         private static readonly List<string> Warnings = new List<string>();
@@ -325,6 +330,30 @@ namespace {{GAME_SLUG}}.Tests
             Assert.AreEqual(255, Autotile.Canon(255));
             Assert.AreEqual(Autotile.N | Autotile.NE | Autotile.E, Autotile.Canon(Autotile.N | Autotile.NE | Autotile.E));
             Assert.AreEqual(Autotile.N, Autotile.Canon(Autotile.N | Autotile.NE));     // a corner needs both sides
+        }
+
+        // ---- A sheet render_sprites.py rendered from the golden rigged character (#290) ---------------------
+        // Rows are directions, columns frames: one animated_sprite with a clip per action and direction, cut from a
+        // shared sheet. The importer takes it as it takes Dotwork's packs.
+
+        [Test]
+        public void Dotwork_RenderedCharacterSheetImportsToItsExpectedJson()
+        {
+            string folder = TEMP + "/rendered";
+            CopyDir(RENDERED, folder);
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+            var warnings = new List<string>();
+            DotworkPack pack = DotworkImporter.Import(folder + "/dotwork/character.assets.json", folder + "/dotwork/character", warnings);
+            Assert.IsEmpty(warnings, string.Join("\n", warnings));
+            Dictionary<string, object> expected = Json.AsObject(Json.AsObject(Json.Parse(File.ReadAllText(Path.Combine(RENDERED, "expected.json"), Encoding.UTF8)))["assets"]);
+            Dictionary<string, object> actual = Loaded(pack);
+            Assert.IsNotEmpty(expected.Keys, RENDERED + "/expected.json names no asset");
+            CollectionAssert.AreEquivalent(expected.Keys.ToList(), actual.Keys.ToList());
+            foreach (string key in expected.Keys)
+            {
+                GoldenVectors.AssertClose(actual[key], expected[key], PIXEL_TOL, key);
+            }
+            Assert.IsTrue(pack.Animated("character").ClipNamed("walk_w").clip.isLooping, "a rendered walk loops");
         }
 
         // ---- Every real manifest of the game -------------------------------------------------
