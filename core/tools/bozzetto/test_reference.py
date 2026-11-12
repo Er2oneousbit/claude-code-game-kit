@@ -254,6 +254,19 @@ class Fake(http.server.BaseHTTPRequestHandler):
                                              "status": "INVALID_ARGUMENT"}})
         if mode == "500":    # the message echoes the key, as a careless API might: it must never reach the screen
             return self.send(500, {"error": {"code": 500, "message": f"Internal error encountered (key {KEY_G})."}})
+        if mode == "quota0":   # a free-tier key: the shape Google sent on 2026-11-11 (image models have no free quota)
+            return self.send(429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED",
+                                             "message": "You exceeded your current quota, please check your plan and "
+                                                        "billing details.",
+                                             "details": [{"@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                                                          "violations": [{"quotaMetric": "generativelanguage.googleapis"
+                                                                          ".com/generate_content_free_tier_requests",
+                                                                          "quotaId": "GenerateRequestsPerDayPerProject"
+                                                                                     "PerModel-FreeTier",
+                                                                          "quotaValue": "0"}]}]}})
+        if mode == "busy":     # a plain rate limit: wait and run again
+            return self.send(429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED",
+                                             "message": "Resource has been exhausted (e.g. check quota)."}})
         if mode == "redirect":
             self.send_response(302)
             self.send_header("Location", f"{self.base()}/cdn/elsewhere.png")
@@ -747,6 +760,25 @@ class GeminiRoute(Base):
         self.assertEqual(rc, 2)
         self.assertIn("refused the key", out)
         self.assertNotIn(KEY_G, out)
+
+    def test_a_free_tier_key_is_told_it_needs_billing(self):
+        """A free-tier Google key gets HTTP 429 with an image quota of 0 (measured 2026-11-11): say so, exit 2, no
+        charge; a plain rate limit (429 without the zero quota) is a retry, exit 1."""
+        STATE.gemini = ["quota0"]
+        rc, out = self.run_tool("chr_hero", "--prompt", "a frog knight", "--with", "nanobanana", "--seed", "5")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("free tier", out)
+        self.assertIn("billing", out)
+        self.assertNotIn("[FAIL]", out)
+        self.assertEqual(len(STATE.calls("/v1beta/")), 1)
+        self.assertFalse((self.dir / ref.JOURNAL).exists() and self.journal()["steps"], "nothing to journal")
+        STATE.reset()
+        STATE.gemini = ["busy"]
+        rc, out = self.run_tool("chr_hero", "--prompt", "a frog knight", "--with", "nanobanana", "--seed", "5")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("429", out)
+        self.assertIn("run again", out)
+        self.assertNotIn("billing", out)
 
     def test_a_redirect_is_not_followed_with_the_key(self):
         STATE.gemini = ["redirect"]

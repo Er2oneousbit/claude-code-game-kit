@@ -16,8 +16,9 @@
 #           --overwrite, --no-log, --wait S, --url/--allow-remote (local), --swap-sides, --debug
 # Needs   : Python 3.8+ (standard library; Pillow only speeds up the sheet and reads JPEG/WebP). local: a running
 #           ComfyUI with Dotwork's Qwen-Image-Edit-2511 files (route qwen_rotate in its models.lock.json, plus the
-#           ComfyUI-GGUF node pack) and, for --prompt, its FLUX.2 klein 4B files. nanobanana: GEMINI_API_KEY (paid:
-#           the Gemini API has no free tier for image output). tripo: TRIPO_API_KEY with API credits.
+#           ComfyUI-GGUF node pack) and, for --prompt, its FLUX.2 klein 4B files. nanobanana: GEMINI_API_KEY from a
+#           project with billing on (a free-tier key gets HTTP 429 with an image quota of 0, measured 2026-11-11: the
+#           run says so and stops). tripo: TRIPO_API_KEY with API credits.
 # Exit    : 0 ok (or the quote printed), 1 a generation call or job failed, 2 usage, environment, a missing key,
 #           the cost cap, or files in the way
 # Notes   : Routes. local (default, free): FLUX.2 klein draws the front from a prompt, or Qwen-Image-Edit re-poses a
@@ -55,6 +56,7 @@ import datetime
 import hashlib
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -482,6 +484,16 @@ class Local:
 
 
 # ---- nanobanana route: Gemini ------------------------------------------------------------------------------------
+def free_tier_quota(text):
+    """True for Google's 429 on a free-tier key: a QuotaFailure whose quotaValue is 0 (the image models have no free
+    quota; one such answer was read on 2026-11-11, so the match is generous: a zero quota value or limit, or a
+    free-tier quota name). A 429 without it is a plain rate limit."""
+    flat = " ".join(text.split()).lower()
+    return bool(re.search(r'"quota_?value"\s*:\s*"?0"?(?:[,}\s]|$)', flat)
+                or re.search(r'"limit"\s*:\s*"?0"?(?:[,}\s]|$)', flat)
+                or "free_tier" in flat or "freetier" in flat or "free tier" in flat)
+
+
 class Gemini:
     unit = "usd"
 
@@ -555,6 +567,12 @@ class Gemini:
             if status in (401, 403) or "API_KEY_INVALID" in text or "API key not valid" in text:
                 raise bz.ToolError(f"Gemini refused the key (HTTP {status}): check {GEMINI_ENV} and that its project "
                                    "has billing on (image output has no free tier)")
+            if status == 429 and free_tier_quota(text):
+                raise bz.ToolError(f"Gemini's free tier makes no images: this key's image quota is 0 (HTTP 429, "
+                                   f"measured 2026-11-11). Image models need {GEMINI_ENV} from a Google Cloud project "
+                                   "with billing on (the local route is free)")
+            if status == 429:
+                raise bz.JobError(f"Gemini HTTP 429: too many requests ({msg}); wait a minute and run again")
             if 300 <= status < 400:
                 raise bz.JobError(f"Gemini answered with a redirect (HTTP {status}) to another address; not followed, "
                                   "the key stays with the API")
