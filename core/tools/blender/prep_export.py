@@ -25,7 +25,9 @@
 #           has one mesh per object instead of a shared one.
 #           --ignore NAME drops helper objects (a stray sphere, a ground plane) before anything else.
 #           Validation uses the same rules as validate_asset.py (--class picks the budget; default any).
-# Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+#           With the bpy module on Windows the process is ended by hand after the work (end_process): bpy 4.2
+#           crashes on exit after a glTF export, which hid the exit code.
+# Authored: Written with Claude (Opus 5.5, claude-opus-5-5); end_process with Claude (Fable 5.1, claude-fable-5-1)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -290,5 +292,25 @@ def main():
         return 2
 
 
+def end_process(code):
+    """Exit with code. The bpy module (no Blender executable) crashes while the process ends on Windows
+    (0xC0000005: bpy 4.2 after a glTF export, 5.3 after a render; tools/bozzetto/rig_chain.py says more), which would
+    hide the exit code. Everything is written by then, so with the module the process ends here without unloading
+    its libraries. cleanup.py and rebake_uvs.py end the same way."""
+    try:
+        import bpy
+    except ImportError:   # a usage error before bpy was needed
+        sys.exit(code)
+    if not bpy.app.binary_path and os.name == "nt":
+        sys.stdout.flush()
+        sys.stderr.flush()
+        import ctypes
+        k32 = ctypes.windll.kernel32
+        k32.GetCurrentProcess.restype = ctypes.c_void_p
+        k32.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+        k32.TerminateProcess(k32.GetCurrentProcess(), code)
+    sys.exit(code)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    end_process(main())
