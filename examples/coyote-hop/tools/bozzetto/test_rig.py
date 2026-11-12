@@ -15,16 +15,27 @@
 #           Blender is replaced by a stand-in here.
 #           Part 2 (when Blender or the bpy module is found): rig_finish.py on rigs built here in Blender: a biped
 #           passes, gets Mixamo names on the right sides and three clips that move the mesh; a rig with everything on
-#           one bone, one with vertices only on glTF's placeholder bone, and a four-legged one fail with exit 1.
+#           one bone, one with vertices only on glTF's placeholder bone, and a four-legged one fail with exit 1; a
+#           clip whose hips stand off their rest spot in every key is re-centred (wobble and bob kept), one in place
+#           and one that travels are left as they are, also under a still root above the hips; a clip keyed at
+#           30 fps comes out looping and as long as it was (#292). The builder and the probes run under Blender
+#           and under the bpy module alike (their own arguments after Blender's "--" or without it; the module's
+#           process ended by hand on Windows).
 # Usage   : python tools/bozzetto/test_rig.py
 #           BOZZETTO_TEST_BLENDER=skip|bpy|<path to blender>  picks part 2's Blender (skip: part 1 only)
+#           uv run --python 3.11 --with "bpy==4.2.*" python tools/bozzetto/test_rig.py   # part 2 on the bpy 4.2 module
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): part 2 under the bpy module, the 30 fps clip and
+#           the root-above-the-hips cases (#292)
 # ---------------------------------------------------------------------------
+import ast
 import contextlib
 import io
 import json
+import math
 import os
+import struct
 import subprocess
 import sys
 import tempfile
@@ -38,6 +49,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import bozzetto as bz  # noqa: E402
 import rig  # noqa: E402
+import tripo  # noqa: E402
 
 rig.bind(bz)
 PATCHER = HERE / "rig" / "patch_unirig.py"
@@ -113,10 +125,12 @@ class Base(unittest.TestCase):
         (self.root / "assets" / "models" / "npc_guard.glb").write_bytes(b"glTF-model")
         self.unirig = Path(self.tmp.name) / "UniRig"
         fake_unirig(self.unirig)
-        self.saved = (bz.run_bpy, bz.find_blender, bz.SLEEP, rig.PROBE, rig.OPENER, os.getcwd(), dict(os.environ))
+        self.saved = (bz.run_bpy, bz.find_blender, bz.SLEEP, rig.PROBE, tripo.OPENER, tripo.DOWNLOADER, os.getcwd(),
+                      dict(os.environ))
         bz.find_blender = lambda choice=None: ("blender", "fake-blender")
         bz.SLEEP = lambda s: None
         rig.PROBE = False
+        tripo.DOWNLOADER = lambda req, timeout=0: tripo.OPENER(req, timeout)   # downloads reach the case's FakeTripo
         os.environ.update({rig.UNIRIG_ENV: str(self.unirig), rig.UNIRIG_PY_ENV: sys.executable,
                            "COMFYUI_URL": "http://127.0.0.1:9"})     # nothing there: /free is skipped
         os.environ.pop(rig.TRIPO_ENV, None)
@@ -125,7 +139,7 @@ class Base(unittest.TestCase):
         os.chdir(self.root)
 
     def tearDown(self):
-        bz.run_bpy, bz.find_blender, bz.SLEEP, rig.PROBE, rig.OPENER, cwd, env = self.saved
+        bz.run_bpy, bz.find_blender, bz.SLEEP, rig.PROBE, tripo.OPENER, tripo.DOWNLOADER, cwd, env = self.saved
         os.chdir(cwd)
         os.environ.clear()
         os.environ.update(env)
@@ -218,6 +232,13 @@ class UniRigExam(Base):
             for local in (str(self.root.parent), str(self.root.parent).replace("\\", "/"), str(self.unirig)):
                 self.assertNotIn(local, text, f"local path in {f.name}")
         self.assertIn("<project>", (work / "unirig.log").read_text(encoding="utf-8"))
+        # #291 live run: the next step told Unity users to set the rig to Humanoid, which #290 found plays none of
+        # the glTF's own clips (glTFast imports them Generic); point at the engine's recipe and the chain instead
+        nxt = [l for l in out.splitlines() if l.startswith("[next]")]
+        self.assertEqual(len(nxt), 1, out)
+        self.assertNotIn("Humanoid (Mixamo", nxt[0])
+        self.assertIn("rig chain npc_guard", nxt[0])
+        self.assertIn("Rigged characters", nxt[0])
 
     def test_a_step_that_writes_nothing_never_ships_an_older_rig(self):
         """#212: after a good run, a re-run whose merge exits 0 without output must fail, not reuse the old file."""
@@ -320,6 +341,7 @@ class FakeTripo:
         self.calls, self.balance, self.riggable, self.rig_type = [], balance, riggable, rig_type
         self.rig_cost, self.no_url = rig_cost, no_url      # Tripo charging more than its table; a lost URL
         self.tasks = {}
+        self.uploads = []         # the multipart bodies /files received
         self.status = {}          # task id -> status reported instead of success (a task still running, failed)
         self.bad_key = False
 
@@ -338,6 +360,7 @@ class FakeTripo:
         if path == "/account/balance":
             data = {"balance": self.balance, "frozen": 0}
         elif path == "/files":
+            self.uploads.append(req.data)
             data = {"file_token": "file_1"}
         elif req.get_method() == "POST":
             tid = f"t{len(self.tasks) + 1}"
@@ -364,27 +387,27 @@ class TripoExam(Base):
         os.environ[rig.TRIPO_ENV] = "tsk_exam"
 
     def test_quote_over_limit_or_balance_stops_before_upload(self):
-        rig.OPENER = fake = FakeTripo()
+        tripo.OPENER = fake = FakeTripo()
         code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk,run",
                               "--max-credits", "40"])
         self.assertEqual(code, 2)
         self.assertIn("over --max-credits", out)
         self.assertNotIn(("POST", "/files"), fake.calls)
-        rig.OPENER = fake = FakeTripo(balance=20)
+        tripo.OPENER = fake = FakeTripo(balance=20)
         code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo"])
         self.assertEqual(code, 2)
         self.assertIn("under the next step", out)
         self.assertNotIn(("POST", "/files"), fake.calls)
 
     def test_not_a_biped_stops_before_a_paid_call(self):
-        rig.OPENER = fake = FakeTripo(rig_type="quadruped")
+        tripo.OPENER = fake = FakeTripo(rig_type="quadruped")
         code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo"])
         self.assertEqual(code, 1)
         self.assertIn("not a riggable biped", out)
         self.assertEqual([k for k, _ in fake.tasks.values()], ["/animations/rig-check"])
 
     def test_paid_route_end_to_end(self):
-        rig.OPENER = fake = FakeTripo()
+        tripo.OPENER = fake = FakeTripo()
         code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
         self.assertEqual(code, 0, out)
         kinds = [(k, b) for k, b in fake.tasks.values()]
@@ -404,7 +427,7 @@ class TripoExam(Base):
     def test_actual_cost_is_checked_before_the_next_paid_call(self):
         """#209: the rig costs more than the table; the clips step must not push spend past --max-credits. A re-run
         with a higher limit reuses the paid rig and pays only for the clips (#210)."""
-        rig.OPENER = fake = FakeTripo(rig_cost=70)
+        tripo.OPENER = fake = FakeTripo(rig_cost=70)
         code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk",
                               "--max-credits", "80"])
         self.assertEqual(code, 2, out)
@@ -412,7 +435,7 @@ class TripoExam(Base):
         self.assertEqual(fake.posts("/animations/retarget"), [])
         journal = json.loads((self.root / "assets_src/bozzetto/npc_guard/rig/tripo/tasks.json").read_text(encoding="utf-8"))
         self.assertEqual(journal["tasks"]["rig"]["status"], "success")
-        rig.OPENER = fake2 = FakeTripo()
+        tripo.OPENER = fake2 = FakeTripo()
         fake2.tasks.update(fake.tasks)          # the same server still knows the paid rig task
         code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk",
                               "--max-credits", "200"])
@@ -421,10 +444,97 @@ class TripoExam(Base):
         self.assertEqual(len(fake2.posts("/animations/rig")), 1, "the rig was paid for twice")   # the old one only
         self.assertEqual(len(fake2.posts("/animations/retarget")), 1)
 
+    def test_other_clips_reuse_the_paid_rig(self):
+        """The rig does not depend on the clips: asking for other clips later pays for the clips only. A journal
+        from before 0.15.0 (clips at its top level) is read the same way."""
+        tripo.OPENER = fake = FakeTripo()
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
+        self.assertEqual(code, 0, out)
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk,run", "--overwrite"])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(fake.posts("/animations/rig")), 1, "the rig was paid for again")
+        self.assertEqual(len(fake.posts("/animations/retarget")), 2)
+        self.assertIn("quote: 30 credits", out)
+        self.assertIn("reusing paid Tripo work", out)
+        self.assertIn("55 Tripo credits", out, "the record counts the rig and the clips it ships with")
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk,run", "--overwrite"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("quote: 0 credits", out)
+        self.assertEqual(len(fake.posts("/animations/retarget")), 2, "the same clips were paid for again")
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "none", "--overwrite"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("quote: 0 credits", out)
+        self.assertIn("25 Tripo credits", out, "no clips shipped: the rig alone is counted")
+        # a 0.14 journal: clips at the top level, the retarget entry without its own
+        j = self.root / "assets_src/bozzetto/npc_guard/rig/tripo/tasks.json"
+        doc = json.loads(j.read_text(encoding="utf-8"))
+        doc["clips"] = ["idle", "walk", "run"]
+        doc["tasks"]["retarget"].pop("clips")
+        j.write_text(json.dumps(doc), encoding="utf-8")
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk,run", "--overwrite"])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(fake.posts("/animations/retarget")), 2, "an old journal's clips were paid for again")
+
+    def test_quote_only_needs_no_key_and_spends_nothing(self):
+        os.environ.pop(rig.TRIPO_ENV)
+        bz.find_blender = lambda choice=None: None
+        tripo.OPENER = fake = FakeTripo()
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk", "--quote-only"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("[quote] tripo: 45 credits ($0.45) to spend: rig 25 + 2 clip(s) x 10 (measured 2026-11-11)", out)
+        self.assertIn("nothing was made or spent", out)
+        self.assertEqual(fake.calls, [])
+        self.assertFalse((self.root / "assets_src").exists(), "a quote wrote files")
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "none", "--quote-only"])
+        self.assertIn("[quote] tripo: 25 credits ($0.25) to spend: rig 25, no clips", out)
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "moonwalk", "--quote-only"])
+        self.assertEqual(code, 2, "a quote still checks the clips")
+        code, out = run_main(["rig", "make", "npc_guard", "--quote-only"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("[quote] unirig: free", out)
+        rc, out = run_main(["rig", "make", "-h"])
+        self.assertIn("--quote-only", out)
+        # after a paid run the quote reads the journal
+        os.environ[rig.TRIPO_ENV] = "tsk_exam"
+        bz.find_blender = lambda choice=None: ("blender", "fake-blender")
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
+        self.assertEqual(code, 0, out)
+        calls = len(fake.calls)
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk", "--quote-only"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("[quote] tripo: 0 credits ($0.00) to spend: rig reused + 2 clip(s) reused", out)
+        self.assertEqual(len(fake.calls), calls, "a quote called Tripo")
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk,run", "--quote-only"])
+        self.assertIn("[quote] tripo: 30 credits ($0.30) to spend: rig reused + 3 clip(s) x 10", out)
+
+    def test_an_input_with_a_non_ascii_name_uploads_under_a_plain_one(self):
+        """--input 'Ísak ”model”.glb': the file name in the multipart header is plain ASCII with its extension; the
+        rest of the run (record, log, evidence) takes the name as it is."""
+        src = self.root / "assets" / "models" / "Ísak ”model”.glb"
+        src.write_bytes(b"glTF-model-isak")
+        tripo.OPENER = fake = FakeTripo()
+        code, out = run_main(["rig", "make", "npc_isak", "--with", "tripo", "--clips", "idle", "--input", str(src)])
+        self.assertEqual(code, 0, out)
+        head = fake.uploads[0].split(b"\r\n\r\n")[0]
+        name = head.split(b'filename="', 1)[1].split(b'"', 1)[0]
+        self.assertTrue(name.decode("ascii").endswith(".glb"), name)
+        self.assertNotIn(b"\xe2\x80\x9d", head, "a right double quote went out raw in the header")
+        self.assertIn("Ísak ”model”.glb", (self.root / "docs/ASSET_LOG.md").read_text(encoding="utf-8"))
+
+    def test_a_lowered_cap_does_not_refuse_a_free_rerun(self):
+        """--max-credits caps one run: a re-run that reuses every paid task spends nothing and must pass any cap."""
+        tripo.OPENER = fake = FakeTripo()
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
+        self.assertEqual(code, 0, out)
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk", "--overwrite",
+                              "--max-credits", "5"])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(fake.posts("/animations/rig")) + len(fake.posts("/animations/retarget")), 2)
+
     def test_a_lost_result_is_fetched_again_without_paying(self):
         """#210: rig and clips succeed but the model URL is missing: the run fails, the journal keeps the paid
         tasks, and a re-run downloads the result with no new paid call."""
-        rig.OPENER = fake = FakeTripo(no_url=True)
+        tripo.OPENER = fake = FakeTripo(no_url=True)
         code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
         self.assertEqual(code, 1, out)
         self.assertIn("a re-run fetches it again without paying", out)
@@ -444,7 +554,7 @@ class TripoExam(Base):
 
     def test_a_task_left_running_is_adopted_not_paid_again(self):
         """#221: the journal says a paid rig task was running when the last run stopped; it finished since."""
-        rig.OPENER = fake = FakeTripo()
+        tripo.OPENER = fake = FakeTripo()
         fake.tasks["t99"] = ("/animations/rig", {})
         self.journal({"rig": {"id": "t99", "status": "running"}})
         code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
@@ -454,7 +564,7 @@ class TripoExam(Base):
 
     def test_a_task_still_running_stops_the_run_without_paying(self):
         """#221: a journalled task still running after --wait must not be replaced by a new paid one."""
-        rig.OPENER = fake = FakeTripo()
+        tripo.OPENER = fake = FakeTripo()
         fake.tasks["t99"] = ("/animations/rig", {})
         fake.status["t99"] = "running"
         self.journal({"rig": {"id": "t99", "status": "running"}})
@@ -470,7 +580,7 @@ class TripoExam(Base):
     def test_a_bad_key_is_not_ready(self):
         """#222: with no UniRig and a Tripo key that is refused, rig check exits 2."""
         os.environ.pop(rig.UNIRIG_ENV)
-        rig.OPENER = fake = FakeTripo()
+        tripo.OPENER = fake = FakeTripo()
         fake.bad_key = True
         code, out = run_main(["rig", "check"])
         self.assertEqual(code, 2, out)
@@ -479,17 +589,33 @@ class TripoExam(Base):
         self.assertEqual(run_main(["rig", "check"])[0], 0)
 
     def test_unknown_or_too_many_clips_exit_2(self):
-        rig.OPENER = FakeTripo()
+        tripo.OPENER = FakeTripo()
         self.assertEqual(run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "moonwalk"])[0], 2)
         self.assertEqual(run_main(["rig", "make", "npc_guard", "--with", "tripo",
                                    "--clips", "idle,walk,run,jump,turn,fall"])[0], 2)
 
 
 # ---- part 2: rig_finish.py in Blender ------------------------------------------------------------------------
+END = textwrap.dedent('''
+    if not bpy.app.binary_path and sys.platform == "win32":
+        # the bpy module crashes while the process ends on Windows (bpy_common.py says more): end it here (#292)
+        import ctypes
+        sys.stdout.flush()
+        k = ctypes.windll.kernel32
+        k.GetCurrentProcess.restype = ctypes.c_void_p
+        k.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+        k.TerminateProcess(k.GetCurrentProcess(), 0)
+''')
+
+# a script's own arguments: after Blender's "--", or all of them under the bpy module (#292)
+ARGV = 'ARGV = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:]\n'
+
 BUILD = textwrap.dedent('''
     import sys, bpy
     from mathutils import Vector
-    out, kind = sys.argv[sys.argv.index("--") + 1:][:2]
+    ''') + ARGV + textwrap.dedent('''
+    out, kind = ARGV[:2]
+    ground = kind in ("ground", "offset_root")        # a ground-level root above the pelvis (#216)
     bpy.ops.wm.read_factory_settings(use_empty=True)
     arm_data = bpy.data.armatures.new("rig"); arm = bpy.data.objects.new("rig", arm_data)
     bpy.context.scene.collection.objects.link(arm); bpy.context.view_layer.objects.active = arm
@@ -498,9 +624,9 @@ BUILD = textwrap.dedent('''
         b = arm_data.edit_bones.new(name); b.head, b.tail = Vector(head), Vector(tail)
         if parent: b.parent = arm_data.edit_bones[parent]
         return name
-    if kind == "ground":                  # a ground-level root above the pelvis (#216)
+    if ground:
         bone("g", (0, 0, 0), (0, 0, 0.1))
-    bone("b0", (0, 0, 0.9), (0, 0, 1.1), "g" if kind == "ground" else None); bone("b1", (0, 0, 1.1), (0, 0, 1.35), "b0")
+    bone("b0", (0, 0, 0.9), (0, 0, 1.1), "g" if ground else None); bone("b1", (0, 0, 1.1), (0, 0, 1.35), "b0")
     bone("b2", (0, 0, 1.35), (0, 0, 1.5), "b1"); bone("b3", (0, 0, 1.5), (0, 0, 1.8), "b2")
     legs = [("L", 0.12), ("R", -0.12)] + ([("BL", 0.12), ("BR", -0.12)] if kind == "quad" else [])
     toe = 0.15 if kind == "backward" else -0.15           # toes point -Y (front) unless the model faces backward
@@ -520,6 +646,8 @@ BUILD = textwrap.dedent('''
         bone("neutral_bone", (0, 0, 0), (0, 0, 0.1))
     if kind == "partial":                 # one Mixamo name, the rest generic (#216)
         arm_data.edit_bones["b0"].name = "mixamorig:Hips"
+    if kind in ("offset", "offset_root"):   # the hips' axes turned, as bone axes vary between rigs
+        arm_data.edit_bones["b0"].roll = 0.9
     bpy.ops.object.mode_set(mode="OBJECT")
     names = [b.name for b in arm_data.bones]
     mesh_objs = []
@@ -535,8 +663,45 @@ BUILD = textwrap.dedent('''
     bpy.context.view_layer.objects.active = mesh_objs[0]; bpy.ops.object.join()
     body = bpy.context.active_object; body.name = "body"
     body.parent = arm; mod = body.modifiers.new("Armature", "ARMATURE"); mod.object = arm
+    import math
+    if kind in ("offset", "offset_root"):   # Tripo's in-place clips with an offset root (live run, 2026-11-11)
+        to_local = arm_data.bones["b0"].matrix_local.to_3x3().inverted()
+        pb = arm.pose.bones["b0"]
+        arm.animation_data_create()
+        def clip(name, at, n=24):         # at(t, u) -> the hips' offset from rest in armature space, per key
+            act = bpy.data.actions.new(name); arm.animation_data.action = act
+            for f in range(n + 1):
+                pb.location = to_local @ Vector(at(2 * math.pi * f / n, f / n))
+                pb.keyframe_insert("location", frame=f + 1)
+                if ground:                # the root above the hips sampled on every frame, never moved (as an
+                    g = arm.pose.bones["g"]; g.rotation_mode = "QUATERNION"      # exporter writes every bone)
+                    g.keyframe_insert("rotation_quaternion", frame=f + 1)
+            act.use_fake_user = True; arm.animation_data.action = None
+        # walk: 0.4 m to the side and 1.3 m back in every key, plus a wobble (whole periods: mean 0) and a bob
+        clip("walk", lambda t, u: (0.4 + 0.03 * math.sin(t), 1.3 + 0.02 * math.sin(2 * t), 0.05 * abs(math.cos(t))))
+        clip("idle", lambda t, u: (0.003 * math.sin(t), 0.0, 0.01 * abs(math.cos(t))))     # in place
+        clip("run", lambda t, u: (0.0, -1.5 * u, 0.03 * abs(math.cos(t))))                  # travels: root motion
+    if kind == "thirty":                  # a looping clip keyed at 30 fps, as Tripo's come (#292)
+        from mathutils import Quaternion
+        bpy.context.scene.render.fps = 30
+        arm.animation_data_create()
+        act = bpy.data.actions.new("walk"); arm.animation_data.action = act
+        for f in range(THIRTY_FRAMES + 1):           # keys 1 .. THIRTY_FRAMES + 1; the last equals the first
+            t = 2 * math.pi * f / THIRTY_FRAMES
+            for n, sgn in (("tL", 1), ("tR", -1)):
+                pb = arm.pose.bones[n]; pb.rotation_mode = "QUATERNION"
+                pb.rotation_quaternion = Quaternion((1, 0, 0), math.radians(sgn * 25 * math.sin(t)))
+                pb.keyframe_insert("rotation_quaternion", frame=f + 1)
+            pb = arm.pose.bones["b0"]; pb.location = (0, 0.03 * abs(math.cos(t)), 0)
+            pb.keyframe_insert("location", frame=f + 1)
+        act.use_fake_user = True; arm.animation_data.action = None
     bpy.ops.export_scene.gltf(filepath=out, export_format="GLB", export_yup=True)
 ''')
+# the 30 fps fixture's loop length in frames: Tripo's walk had 70 (71 keys), and that count is the one where the
+# imported key frames (float32 times x 24) scaled back to 30 fps land 6e-6 under a whole frame, so an export that
+# does not snap the keys first samples one frame short (the live file lost its walk's closing frame that way)
+THIRTY_FRAMES = 70
+BUILD = BUILD.replace("THIRTY_FRAMES", str(THIRTY_FRAMES))
 
 
 def pick_blender():
@@ -549,11 +714,51 @@ def pick_blender():
 BLENDER = pick_blender()
 
 
+def finish_constants():
+    """rig_finish.py's clip constants (FPS, IDLE_FRAMES ...), read from its source: it imports bpy, so it cannot
+    be imported here."""
+    out = {}
+    for node in ast.parse((HERE / "rig_finish.py").read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.Assign) and isinstance(node.value, (ast.Constant, ast.Tuple)):
+            names = node.targets[0].elts if isinstance(node.targets[0], ast.Tuple) else node.targets
+            values = node.value.elts if isinstance(node.value, ast.Tuple) else [node.value]
+            for n, v in zip(names, values):
+                if isinstance(n, ast.Name) and isinstance(v, ast.Constant):
+                    out[n.id] = v.value
+    return out
+
+
+FINISH_CONST = finish_constants()
+
+
 def blender_run(script, argv):
     kind, path = BLENDER
     cmd = ([path, "-b", "--factory-startup", "--python-exit-code", "1", "-P", str(script), "--"] if kind == "blender"
            else [path, str(script)]) + [str(a) for a in argv]
     return subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=900)
+
+
+def read_glb(path):
+    """(json dict, bin bytes) of a .glb, with the standard library."""
+    data = Path(path).read_bytes()
+    jlen = struct.unpack_from("<I", data, 12)[0]
+    doc = json.loads(data[20:20 + jlen].decode("utf-8"))
+    blen = struct.unpack_from("<I", data, 20 + jlen)[0]
+    return doc, data[28 + jlen:28 + jlen + blen]
+
+
+def accessor_floats(doc, binary, index):
+    """A float32 accessor as a list of tuples (numbers for SCALAR)."""
+    acc = doc["accessors"][index]
+    n = {"SCALAR": 1, "VEC3": 3, "VEC4": 4}[acc["type"]]
+    view = doc["bufferViews"][acc["bufferView"]]
+    start = view.get("byteOffset", 0) + acc.get("byteOffset", 0)
+    stride = view.get("byteStride", 4 * n)
+    out = []
+    for i in range(acc["count"]):
+        vals = struct.unpack_from(f"<{n}f", binary, start + i * stride)
+        out.append(vals[0] if n == 1 else vals)
+    return out
 
 
 @unittest.skipUnless(BLENDER, "no Blender or bpy found (part 2 skipped)")
@@ -563,14 +768,25 @@ class FinishExam(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory(prefix="bz_rig_bpy_")
         cls.d = Path(cls.tmp.name)
         builder = cls.d / "build.py"
-        builder.write_text(BUILD, encoding="utf-8")
-        for kind in ("biped", "one_bone", "neutral", "quad", "ground", "backward", "sideways", "short", "partial"):
+        builder.write_text(BUILD + END, encoding="utf-8")
+        for kind in ("biped", "one_bone", "neutral", "quad", "ground", "backward", "sideways", "short", "partial",
+                     "offset", "offset_root", "thirty"):
             p = blender_run(builder, [cls.d / f"{kind}.glb", kind])
             assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
 
     @classmethod
     def tearDownClass(cls):
         cls.tmp.cleanup()
+
+    def probe(self, name, body, argv):
+        """Run a probe script in Blender (its own arguments through ARGV, the module's exit handled) and return the
+        line starting with `name` as parsed JSON."""
+        script = self.d / f"{name.lower()}.py"
+        script.write_text("import sys, json, bpy\n" + ARGV + textwrap.dedent(body) + END, encoding="utf-8")
+        q = blender_run(script, argv)
+        line = next((l for l in q.stdout.splitlines() if l.startswith(name)), None)
+        self.assertIsNotNone(line, q.stdout[-3000:] + q.stderr[-2000:])
+        return json.loads(line[len(name):])
 
     def finish(self, kind, *extra):
         rep = self.d / f"{kind}.json"
@@ -583,10 +799,11 @@ class FinishExam(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stdout[-3000:])
         self.assertEqual(rep["failures"], [])
         self.assertEqual(rep["clips"], ["idle", "wave", "walk"])
-        probe = self.d / "probe.py"
-        probe.write_text(textwrap.dedent('''
-            import sys, json, bpy
-            src = sys.argv[sys.argv.index("--") + 1]
+        # the clips keyed here are in place by construction: the walk's hips only bob, idle and wave keep them still
+        self.assertEqual(rep["recentred"]["walk"]["action"], "in place", rep["recentred"])
+        self.assertEqual(rep["recentred"]["idle"]["action"], "no location keys", rep["recentred"])
+        data = self.probe("PROBE", '''
+            src = ARGV[0]
             bpy.ops.wm.read_factory_settings(use_empty=True); bpy.ops.import_scene.gltf(filepath=src)
             arm = [o for o in bpy.data.objects if o.type == "ARMATURE"][0]
             mesh = [o for o in bpy.data.objects if o.type == "MESH"][0]
@@ -604,9 +821,7 @@ class FinishExam(unittest.TestCase):
             names = {b.name: [round(b.head_local.x, 2), round(b.head_local.z, 2)] for b in arm.data.bones}
             height = max(v.z for v in pts())
             print("PROBE" + json.dumps({"moves": moves, "names": names, "height": height}))
-        '''), encoding="utf-8")
-        q = blender_run(probe, [self.d / "biped_out.glb"])
-        data = json.loads(next(l for l in q.stdout.splitlines() if l.startswith("PROBE"))[5:])
+        ''', [self.d / "biped_out.glb"])
         names = data["names"]
         for n in ("Hips", "Spine", "Neck", "Head", "LeftUpLeg", "RightUpLeg", "LeftForeArm", "RightHand"):
             self.assertIn("mixamorig:" + n, names)
@@ -615,6 +830,117 @@ class FinishExam(unittest.TestCase):
         for clip, moved in data["moves"].items():
             self.assertGreater(moved, 0.01, f"{clip} does not move the mesh")
         self.assertGreater(data["height"], 3.0)                     # --scale 2 on a 1.8 m figure
+
+    def test_clips_start_at_zero_seconds(self):
+        """#290: keys start at frame 1 (1/24 s); exported without slide-to-zero, an engine looping the clip over
+        0..length held the first pose an extra frame every cycle. Read from the .glb itself, not through Blender."""
+        p, rep = self.finish("biped", "--animate", "idle,walk")
+        self.assertEqual(p.returncode, 0, p.stdout[-3000:])
+        doc, _ = read_glb(self.d / "biped_out.glb")
+        self.assertEqual(sorted(a["name"] for a in doc["animations"]), ["idle", "walk"])
+        for a in doc["animations"]:
+            for s in a["samplers"]:
+                acc = doc["accessors"][s["input"]]
+                self.assertAlmostEqual(acc["min"][0], 0.0, places=5, msg=f"{a['name']} starts at {acc['min'][0]} s")
+            seconds = max(doc["accessors"][s["input"]]["max"][0] for s in a["samplers"])
+            frames = FINISH_CONST[a["name"].upper() + "_FRAMES"]
+            self.assertAlmostEqual(seconds, frames / FINISH_CONST["FPS"], places=4, msg=f"{a['name']} lasts {seconds} s")
+
+    def hips_track(self, glb, bone):
+        """{clip: [[x, y, z] world position of the bone's head per frame]} and the rest head, read back in Blender."""
+        return self.probe("HIPS", '''
+            src, bone = ARGV[:2]
+            bpy.ops.wm.read_factory_settings(use_empty=True); bpy.ops.import_scene.gltf(filepath=src)
+            arm = [o for o in bpy.data.objects if o.type == "ARMATURE"][0]
+            ad = arm.animation_data or arm.animation_data_create()
+            for t in ad.nla_tracks:
+                for st in t.strips:        # Blender 4.2 names actions "<clip>_<armature>"; the track keeps the clip
+                    if st.action is not None and t.name not in bpy.data.actions:
+                        st.action.name = t.name
+                t.mute = True
+            out = {}
+            for act in bpy.data.actions:
+                ad.action = act
+                if hasattr(ad, "action_slot") and ad.action_slot is None:
+                    slots = list(getattr(ad, "action_suitable_slots", [])) or list(getattr(act, "slots", []))
+                    if slots:
+                        ad.action_slot = slots[0]
+                f0, f1 = (int(round(f)) for f in act.frame_range)
+                track = []
+                for f in range(f0, f1 + 1):
+                    bpy.context.scene.frame_set(f)
+                    track.append(list(arm.matrix_world @ arm.pose.bones[bone].head))
+                out[act.name] = track
+            rest = list(arm.matrix_world @ arm.data.bones[bone].head_local)
+            print("HIPS" + json.dumps({"clips": out, "rest": rest}))
+        ''', [glb, bone])
+
+    def test_an_offset_in_place_clip_is_recentred(self):
+        """Live Tripo run (2026-11-11): animate_in_place clips came back with mixamorig:Hips 1.4 m (walk) and 2.8 m
+        (run) sideways in every key, idle at 0. rig_finish removes the mean horizontal offset and keeps the wobble
+        and the bob; a clip already in place and a clip that travels (root motion) are left as they are."""
+        p, rep = self.finish("offset", "--names", "keep")
+        self.assertEqual(p.returncode, 0, p.stdout[-3000:])
+        before = self.hips_track(self.d / "offset.glb", "b0")
+        after = self.hips_track(self.d / "offset_out.glb", "b0")
+        rest = after["rest"]
+        for clip in ("walk", "idle", "run"):
+            self.assertIn(clip, after["clips"], sorted(after["clips"]))
+            a, b = after["clips"][clip], before["clips"][clip]
+            self.assertEqual(len(a), len(b), clip)
+            mean_a = [sum(p[i] for p in a) / len(a) for i in range(3)]
+            mean_b = [sum(p[i] for p in b) / len(b) for i in range(3)]
+            for pa, pb in zip(a, b):
+                for i in range(2):     # the wobble around the mean is unchanged
+                    self.assertAlmostEqual(pa[i] - mean_a[i], pb[i] - mean_b[i], delta=1e-4, msg=clip)
+                self.assertAlmostEqual(pa[2], pb[2], delta=1e-4, msg=f"{clip}: the bob changed")
+            if clip == "walk":
+                off = math.hypot(mean_a[0] - rest[0], mean_a[1] - rest[1])
+                self.assertLess(off, 1e-3, f"walk still stands {off:.4f} m from its rest spot")
+            else:                      # untouched
+                for pa, pb in zip(a, b):
+                    for i in range(3):
+                        self.assertAlmostEqual(pa[i], pb[i], delta=1e-4, msg=f"{clip} was changed")
+        self.assertIn("walk: re-centred 1.36 m", p.stdout)                   # |(0.4, 1.3)|
+        rc = rep.get("recentred", {})
+        self.assertEqual(rc.get("walk", {}).get("action"), "recentred", rep)
+        self.assertEqual(rc.get("idle", {}).get("action"), "in place", rep)
+        self.assertTrue(rc.get("run", {}).get("action", "").startswith("left (travels"), rep)
+        self.assertIn("run: b0 travels 1.50 m", p.stdout)
+
+    def test_a_root_sampled_above_the_hips_does_not_hide_them(self):
+        """A glTF round trip gives every bone location keys (all 0 for one that never moves). With a ground-level root
+        above the hips, that root was taken for the hips and found "in place" while the hips stood 1.4 m off; and a
+        parent with keys that never change counted as animated. The hips are the root-most bone whose keys move."""
+        p, rep = self.finish("offset_root", "--names", "keep")
+        self.assertEqual(p.returncode, 0, p.stdout[-3000:])
+        rc = rep.get("recentred", {})
+        self.assertEqual(rc.get("walk", {}).get("action"), "recentred", rc)
+        self.assertEqual(rc.get("walk", {}).get("bone"), "b0", rc)
+        self.assertEqual(rc.get("idle", {}).get("action"), "in place", rc)
+        after = self.hips_track(self.d / "offset_root_out.glb", "b0")
+        a, rest = after["clips"]["walk"], after["rest"]
+        mean = [sum(p[i] for p in a) / len(a) for i in range(2)]
+        self.assertLess(math.hypot(mean[0] - rest[0], mean[1] - rest[1]), 1e-3, "walk still stands off its rest spot")
+
+    def test_a_clip_keyed_at_30_fps_keeps_its_loop_and_its_length(self):
+        """#292: Tripo keys at 30 fps. In Blender's 24 fps scene those keys sit every 0.8 frames and the exporter,
+        sampling whole frames, wrote the last frame 0.8 frames short of the key that closed the loop (and a length
+        rounded to 24ths). The finished clip must end where it starts and last exactly as long as it did."""
+        p, rep = self.finish("thirty", "--names", "keep")
+        self.assertEqual(p.returncode, 0, p.stdout[-3000:])
+        self.assertEqual(rep.get("fps"), 30, rep)
+        self.assertIn("clips keyed at 30 fps", p.stdout)
+        doc, binary = read_glb(self.d / "thirty_out.glb")
+        walk = next(a for a in doc["animations"] if a["name"] == "walk")
+        seconds = THIRTY_FRAMES / 30
+        for s in walk["samplers"]:
+            times = accessor_floats(doc, binary, s["input"])
+            self.assertAlmostEqual(times[0], 0.0, places=5)
+            self.assertAlmostEqual(times[-1], seconds, places=4, msg=f"the clip lasts {times[-1]} s, not {seconds}")
+            vals = accessor_floats(doc, binary, s["output"])
+            seam = max(abs(x - y) for x, y in zip(vals[0], vals[-1]))
+            self.assertLess(seam, 1e-4, f"a channel ends {seam} away from where it starts: the loop does not close")
 
     def test_everything_on_one_bone_fails(self):
         p, rep = self.finish("one_bone")
@@ -633,16 +959,12 @@ class FinishExam(unittest.TestCase):
         self.assertTrue(any("quadruped" in f or "biped" in f for f in rep["failures"]), rep)
 
     def names_of(self, glb):
-        probe = self.d / "names.py"
-        probe.write_text(textwrap.dedent('''
-            import sys, json, bpy
+        return self.probe("NAMES", '''
             bpy.ops.wm.read_factory_settings(use_empty=True)
-            bpy.ops.import_scene.gltf(filepath=sys.argv[sys.argv.index("--") + 1])
+            bpy.ops.import_scene.gltf(filepath=ARGV[0])
             arm = [o for o in bpy.data.objects if o.type == "ARMATURE"][0]
             print("NAMES" + json.dumps({b.name: round(b.head_local.z, 2) for b in arm.data.bones}))
-        '''), encoding="utf-8")
-        q = blender_run(probe, [glb])
-        return json.loads(next(l for l in q.stdout.splitlines() if l.startswith("NAMES"))[5:])
+        ''', [glb])
 
     def test_hips_are_the_pelvis_not_a_ground_root(self):
         """#216: the bone both legs hang from is Hips; a ground-level root above it keeps its own name."""
@@ -680,9 +1002,7 @@ class FinishExam(unittest.TestCase):
         p, rep_ = self.finish("biped")
         self.assertEqual(p.returncode, 0, p.stdout[-2000:])
         self.assertGreater(rep_["deform_max_share"], 0.02)
-        probe = self.d / "deform.py"
-        probe.write_text(textwrap.dedent(f'''
-            import sys, json, bpy
+        on, off = self.probe("DEFORM", f'''
             sys.path.insert(0, {str(HERE)!r})
             import rig_finish as rf
             bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -694,19 +1014,15 @@ class FinishExam(unittest.TestCase):
                 for md in o.modifiers:
                     md.show_viewport = False          # the armature no longer moves the mesh
             off = rf.deform_check(arm, meshes)
-            print("D" + json.dumps([on, off]))
-        '''), encoding="utf-8")
-        q = blender_run(probe, [])
-        on, off = json.loads(next(l for l in q.stdout.splitlines() if l.startswith("D"))[1:])
+            print("DEFORM" + json.dumps([on, off]))
+        ''', [])
         self.assertGreater(on, 0.02)
         self.assertLess(off, 0.001)
 
     def test_nan_and_negative_weights_fail(self):
         """#208: NaN, infinite and negative weights fail (Blender clamps weights it stores, so the check is driven
         with stand-in mesh data in Blender's Python)."""
-        probe = self.d / "weights.py"
-        probe.write_text(textwrap.dedent(f'''
-            import sys, json
+        res = self.probe("WEIGHTS", f'''
             sys.path.insert(0, {str(HERE)!r})
             import rig_finish as rf
             class G:
@@ -725,10 +1041,8 @@ class FinishExam(unittest.TestCase):
                 verts = [V([G(i % 5, 1.0)] + ([G((i + 1) % 5, extra)] if extra is not None else [])) for i in range(50)]
                 rep = rf.check_weights(arm, [Mesh(verts)])
                 out[label] = [rep["nan"], rep["failures"]]
-            print("W" + json.dumps(out))
-        '''), encoding="utf-8")
-        q = blender_run(probe, [])
-        res = json.loads(next(l for l in q.stdout.splitlines() if l.startswith("W"))[1:])
+            print("WEIGHTS" + json.dumps(out))
+        ''', [])
         for label in ("nan", "neg", "inf"):
             self.assertEqual(res[label][0], 50, label)
             self.assertTrue(any("NaN, infinite or negative" in f for f in res[label][1]), (label, res[label]))

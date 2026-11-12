@@ -14,7 +14,7 @@ Short, followable, engine-agnostic. Engine specifics are in `docs/ENGINE_FLOW.md
 | SOP-08 Scope control | Planning, new ideas, feeling the creep, moving to the next tier | `/gdd-sync`, `/next-tier` |
 | SOP-09 Testing | Writing or reviewing tests | `code-reviewer` subagent |
 | SOP-10 Performance | Frame time or memory trouble | `/perf-pass` |
-| SOP-11 3D pipeline | Models, rigs, animation | `/model-pipeline` |
+| SOP-11 3D pipeline | Models, rigs, animation; a character from an idea or a picture to the game | `/model-pipeline`, `/make-character` |
 | SOP-12 Job plan, model roles, budgets | Starting a project, splitting work, effort levels, long or `/goal` runs | (manual; start from `docs/FIRST_HOUR.md`) |
 | SOP-13 Publish to GitHub | Sharing the code: license, secret scan, private first, lock-down settings | `/publish-repo` |
 | SOP-14 Game AI | Enemies, NPCs, companions: perception, decisions (FSM, BT, utility), pathfinding, debug views | `/game-ai` |

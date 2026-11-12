@@ -7,24 +7,30 @@
 // Notes   : Runs only in a dev server, an automated browser (smoke) or with ?dotwork-verify, and only when the game
 //           has manifests; a player's build boots straight to the title. Ends with
 //           DOTWORK_VERIFY_OK <manifests> manifest(s), <assets> asset(s), or DOTWORK_VERIFY_FAILED <problems>.
-//           It also checks the Phaser rule the importer relies on: a playing clip waits each frame's own duration.
+//           It also checks the Phaser rules the importer relies on: a playing clip waits each frame's own duration,
+//           and Phaser's own tile layout (tileToWorldXY, both orientations) puts a cell-sized tile where the plan
+//           puts it, so the plan's top-left written into every tile is Phaser's own number except for iso blocks.
 //           Pseudocode:
 //             no manifests or not asked -> done
 //             add a hidden scene; preload: queueDotwork; a load error is a problem
 //             create: per pack: plan errors, buildDotwork, then make every asset once and compare with the plan
 //             log the result, remove the scene, start the shell
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): the tile layout cross-check,
+//           and the extra kinds (backgrounds, particles, transitions, lit targets, images) built once
 // ---------------------------------------------------------------------------
 import * as Phaser from "phaser";
 import { Log } from "../core/log";
 import type { DotworkPlan } from "./dotworkPlan";
 import {
-  addAnimatedSprite, addMap, addNineSlice, addSprite, addText, buildDotwork, DOTWORK_MANIFESTS, dotworkPacks, queueDotwork,
+  addAnimatedSprite, addBackground, addImage, addMap, addNineSlice, addParticles, addSprite, addText, buildDotwork, DOTWORK_MANIFESTS, dotworkPacks, queueDotwork,
 } from "./dotwork";
 
 const SCENE_KEY = "dotwork-verify";
 const CHANNEL = "dotwork";
 const MS_TOLERANCE = 1e-6;
+const PX_TOLERANCE = 1e-6;
+const VIEW = 64; // the box a background is built over here (pixels)
 
 /** True when this run should check the manifests: a dev server, an automated browser or ?dotwork-verify. */
 export function verifyWanted(): boolean {
@@ -116,7 +122,42 @@ class VerifyScene extends Phaser.Scene {
         const want = m.layers.reduce((s, L) => s + L.cells.length, 0);
         const built = addMap(this, plan, m.name);
         if (built.placed !== want) throw new Error(`${built.placed} tiles placed, plan has ${want}`);
+        const ts = plan.tilesets.get(m.tileset)!;
+        m.layers.forEach((L, i) => {
+          const layer = built.layers[i];
+          for (const c of L.cells) {
+            const tile = layer.getTileAt(c.x, c.y);
+            if (!tile || tile.index !== c.gid) throw new Error(`layer ${L.name} cell ${c.x},${c.y}: tile ${tile?.index}, plan has ${c.gid}`);
+            if (Math.abs(tile.pixelX - c.left) > PX_TOLERANCE || Math.abs(tile.pixelY - c.top) > PX_TOLERANCE) throw new Error(`layer ${L.name} cell ${c.x},${c.y}: drawn at ${tile.pixelX},${tile.pixelY}, plan has ${c.left},${c.top}`);
+            // Phaser's own layout (the spec's for a cell-sized tile with no origin of its own) must agree with the plan
+            const atlas = ts.atlases.find((a) => a.id === c.tile[0])!;
+            const info = ts.tiles.find((t) => t.gid === c.gid)!;
+            if (info.origin || atlas.tileSize[0] !== m.tileSize[0] || atlas.tileSize[1] !== m.tileSize[1]) continue;
+            const own = layer.tileToWorldXY(c.x, c.y);
+            if (Math.abs(own.x - layer.x - c.left) > PX_TOLERANCE || Math.abs(own.y - layer.y - c.top) > PX_TOLERANCE) {
+              throw new Error(`layer ${L.name} cell ${c.x},${c.y}: Phaser's ${m.shape} layout puts it at ${own.x - layer.x},${own.y - layer.y}, the spec at ${c.left},${c.top}`);
+            }
+          }
+        });
         built.map.destroy();
+      });
+    }
+    for (const b of plan.backgrounds.values()) {
+      guard(`background ${b.name}`, () => {
+        const built = addBackground(this, plan, b.name, 0, 0, VIEW, VIEW);
+        if (built.layers.length !== b.layers.length) throw new Error(`${built.layers.length} layers, plan has ${b.layers.length}`);
+        built.update(1000);
+        built.layers.forEach((o) => o.destroy());
+      });
+    }
+    for (const p of plan.particles.values()) guard(`particles ${p.name}`, () => addParticles(this, plan, p.name, 0, 0).destroy());
+    for (const t of plan.transitions.values()) guard(`transition ${t.name}`, () => this.add.image(0, 0, t.texture));
+    for (const i of plan.images.values()) guard(`image ${i.name}`, () => addImage(this, plan, i.name, 0, 0));
+    for (const n of plan.normalMaps.values()) {
+      guard(`normal_map ${n.name}`, () => {
+        const target = this.textures.get(n.target);
+        if (!target.dataSource.length) throw new Error(`its target ${n.target} loaded without the normal map`);
+        this.add.image(0, 0, n.target).setLighting(true);
       });
     }
     for (const f of plan.fonts.values()) {
@@ -128,7 +169,6 @@ class VerifyScene extends Phaser.Scene {
       });
     }
     for (const k of plan.uiKits.values()) guard(`ui_kit ${k.name}`, () => k.parts.forEach((p) => addNineSlice(this, plan, k.name, p.name, 0, 0, p.size[0] * 3, p.size[1] * 3)));
-    n += plan.backgrounds.size + plan.others.length; // extra kinds: their files were loaded with the rest
     return n;
   }
 }

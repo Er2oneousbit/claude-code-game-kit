@@ -170,12 +170,16 @@
     "layers": {"type": "array", "minItems": 1, "items": {
      "type": "object", "required": ["name", "kind", "cells"], "additionalProperties": false,
      "properties": {
-      "name": {"type": "string"}, "kind": {"enum": ["tiles", "terrain"]},
+      "name": {"type": "string"}, "kind": {"enum": ["tiles", "terrain", "stamps"]},
       "terrain_set": {"type": "integer", "minimum": 0}, "terrain": {"type": "integer", "minimum": 0},
       "opacity": {"type": "number", "minimum": 0},
       "cells": {"type": "array", "items": {"type": "array", "items": {"type": "integer", "minimum": 0},
                                             "minItems": 2, "maxItems": 6}}},
-     "allOf": [{"if": {"properties": {"kind": {"const": "terrain"}}}, "then": {"required": ["terrain"]}}]}},
+     "allOf": [{"if": {"properties": {"kind": {"const": "terrain"}}}, "then": {"required": ["terrain"]}},
+               {"if": {"properties": {"kind": {"const": "tiles"}}},
+                "then": {"properties": {"cells": {"items": {"minItems": 5}}}}},
+               {"if": {"properties": {"kind": {"const": "stamps"}}},
+                "then": {"properties": {"cells": {"items": {"minItems": 3, "maxItems": 3}}}}}]}},
     "objects": {"type": "array", "items": {
      "type": "object", "required": ["asset", "x", "y"], "additionalProperties": false,
      "properties": {"asset": {"$ref": "#/$defs/name"}, "x": {"type": "number"}, "y": {"type": "number"}}}},

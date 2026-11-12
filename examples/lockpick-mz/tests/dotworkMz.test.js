@@ -185,6 +185,25 @@ test("export: the golden pack's images in MZ's layouts, the right frames in the 
     assert.ok(fs.existsSync(paths.record));
 });
 
+// A sheet render_sprites.py made from the golden rigged character (#290): walk_<dir> clips cut from rows of a
+// shared sheet. The converter takes it as it takes Dotwork's packs.
+test("rendered character: loads to its expected.json and becomes an MZ character sheet", () => {
+    const dir = path.resolve(__dirname, "..", "data", "golden", "character", "sprites");
+    const rendered = mz.loadManifest(path.join(dir, "dotwork", "character.assets.json"));
+    const want = JSON.parse(fs.readFileSync(path.join(dir, "expected.json"), "utf8")).assets;
+    const got = mz.expectedOf(rendered.doc);
+    for (const k of Object.keys(want)) expectClose(got[k], want[k], TOL, k);
+    const { res, out } = exportInto(tmp(), {}, [rendered]);
+    assert.deepEqual(res.failures, []);
+    const sheets = Object.keys(res.record.files).filter((rel) => rel.startsWith("img/characters/"));
+    assert.equal(sheets.length, 1, `one character sheet (${sheets.join(", ")})`);
+    const sheet = out(sheets[0]);
+    assert.equal(mz.shapeProblem(sheets[0], sheet.width, sheet.height), null, sheets[0]);
+    let opaque = 0;   // MZ's down row (the top quarter) holds the character facing the camera
+    for (let y = 0; y < sheet.height / 4; y++) for (let x = 0; x < sheet.width; x++) opaque += png.pixel(sheet, x, y)[3] > 0;
+    assert.ok(opaque > 100, `the down row has the character (${opaque} opaque pixels)`);
+});
+
 test("window skin: a ui_kit's scale is never applied again; corners wider than MZ's get a note", () => {
     const part = png.scale(img("art/ui/windows/ui_window_plain.png"), 9);   // as Dotwork ships a kit at scale 9
     const { skin, notes } = mz.composeWindow({ img: part, margins: [27, 27, 27, 27] }, null, null);

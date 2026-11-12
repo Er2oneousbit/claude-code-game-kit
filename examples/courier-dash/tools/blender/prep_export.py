@@ -25,7 +25,14 @@
 #           has one mesh per object instead of a shared one.
 #           --ignore NAME drops helper objects (a stray sphere, a ground plane) before anything else.
 #           Validation uses the same rules as validate_asset.py (--class picks the budget; default any).
+#           Clips (#292, bpy_common.py): an action Blender 4.2's importer named "<clip>_<object>" takes its clip's
+#           name back, and clips keyed at another frame rate than the scene's (30 fps) move the scene to their rate
+#           first, so the sampled export keeps a loop's closing key and its length. With the bpy module on Windows
+#           the process is ended through bpy_common.end_process: a plain exit after a glTF export crashed (bpy 4.2)
+#           and hid the exit code.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the bpy module's exit crash, clip names, clips at
+#           30 fps (#292)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -227,6 +234,12 @@ def run(args):
         return 1
 
     scene = bpy.context.scene
+    bc = common()
+    if bc is not None and bpy.data.actions:
+        # Blender 4.2 names an imported clip's action "<clip>_<object>"; clips keyed at 30 fps sit every 0.8 frames
+        # in the 24 fps scene and the sampled export would drop a loop's closing key (#292)
+        bc.adopt_clip_names(bpy)
+        bc.conform_clip_fps(bpy, scene, list(bpy.data.actions))
     for obj in [o for o in scene.objects if o.type in ("CAMERA", "LIGHT")]:
         bpy.data.objects.remove(obj, do_unlink=True)
     for obj in [o for o in scene.objects if any(fnmatch.fnmatch(o.name, p) for p in args.ignore)]:
@@ -290,5 +303,32 @@ def main():
         return 2
 
 
+def common():
+    """bpy_common.py from this folder (clip names, clip frame rate, the exit), or None for a lone copy of this script."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        import bpy_common
+    except ImportError:
+        return None
+    return bpy_common
+
+
+def exit_with(code):
+    """sys.exit, or with the bpy module on Windows the process end that does not crash after a glTF export (#292)."""
+    try:
+        import bpy
+    except ImportError:
+        sys.exit(code)
+    bc = common()
+    if bc is None:
+        sys.exit(code)
+    bc.end_process(bpy, code)
+
+
+def end_process(code):
+    """The name cleanup.py and rebake_uvs.py call (#293): the same exit as exit_with."""
+    exit_with(code)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    exit_with(main())

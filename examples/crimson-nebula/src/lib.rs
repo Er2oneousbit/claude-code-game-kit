@@ -4,13 +4,15 @@
 //           headless through app::test_app.
 // Usage   : use project_crimson_nebula::{app, game, logic};
 // Notes   : Layout (docs/ENGINE.md): logic/ engine-free rules, game/ simulation plugin, game/present.rs
-//           visuals, shell/ the screens, settings and scripted runs, dotwork/ the Dotwork art importer, app.rs
-//           plugin sets per run mode, cli.rs command line.
+//           visuals, shell/ the screens, settings and scripted runs, dotwork/ the Dotwork art importer,
+//           character.rs rigged glTF characters and their clips, app.rs plugin sets per run mode, cli.rs command line.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): the shell module
 //           2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the dotwork module (#59)
+//           2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the character module (rigged glTF, #290)
 // ---------------------------------------------------------------------------
 pub mod app;
+pub mod character;
 pub mod cli;
 pub mod dotwork;
 pub mod game;

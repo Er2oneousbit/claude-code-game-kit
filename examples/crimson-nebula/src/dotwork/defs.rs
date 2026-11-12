@@ -5,6 +5,8 @@
 // Notes   : serde ignores fields these structs do not name, as the spec's versioning asks (a minor version may add
 //           optional fields). Optional fields default as the spec says (base ".", scale 1, tint true, shape square).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+//           Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners take -1, the
+//           five extra kinds (background, particles, transition, normal_map, image)
 // ---------------------------------------------------------------------------
 use std::collections::BTreeMap;
 
@@ -207,8 +209,9 @@ pub(super) struct TileDef {
     pub(super) terrain: Option<u32>,
     #[serde(default)]
     pub(super) mask: Option<u8>,
+    /// Terrain id per corner, -1 for none (so i64, not u32).
     #[serde(default)]
-    pub(super) corners: Option<BTreeMap<String, u32>>,
+    pub(super) corners: Option<BTreeMap<String, i64>>,
     #[serde(default)]
     pub(super) probability: Option<f64>,
     #[serde(default)]
@@ -264,4 +267,71 @@ pub(super) struct ObjectDef {
     pub(super) asset: String,
     pub(super) x: f64,
     pub(super) y: f64,
+}
+
+// ---- The extra kinds (ASSET_MANIFEST.md "background", "particles, transition, normal_map, image") ----------------
+
+#[derive(Deserialize)]
+pub(super) struct BackgroundDef {
+    #[serde(default)]
+    pub(super) role: String,
+    pub(super) layers: Vec<BackgroundLayerDef>,
+}
+
+#[derive(Deserialize)]
+pub(super) struct BackgroundLayerDef {
+    #[serde(default)]
+    pub(super) name: Option<String>,
+    pub(super) image: String,
+    pub(super) size: [u32; 2],
+    pub(super) velocity: [f64; 2],
+    #[serde(default = "none")]
+    pub(super) repeat: String,
+    #[serde(default)]
+    pub(super) wobble_px: f64,
+    #[serde(default = "one")]
+    pub(super) scale: f64,
+}
+
+pub(super) fn none() -> String {
+    "none".into()
+}
+
+#[derive(Deserialize)]
+pub(super) struct ParticlesDef {
+    pub(super) texture: String,
+    #[serde(default)]
+    pub(super) emitter: Value,
+}
+
+#[derive(Deserialize)]
+pub(super) struct TransitionDef {
+    pub(super) image: String,
+    pub(super) size: [u32; 2],
+    #[serde(default)]
+    pub(super) transition: String,
+}
+
+#[derive(Deserialize)]
+pub(super) struct NormalMapDef {
+    pub(super) image: String,
+    #[serde(default)]
+    pub(super) size: Option<[u32; 2]>,
+    pub(super) target: String,
+    #[serde(default = "opengl")]
+    pub(super) convention: String,
+}
+
+pub(super) fn opengl() -> String {
+    "opengl".into()
+}
+
+#[derive(Deserialize)]
+pub(super) struct ImageDef {
+    #[serde(default)]
+    pub(super) role: String,
+    pub(super) image: String,
+    pub(super) size: [u32; 2],
+    #[serde(default)]
+    pub(super) pivot: Option<[f64; 2]>,
 }

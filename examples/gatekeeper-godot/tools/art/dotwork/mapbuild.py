@@ -159,7 +159,9 @@ def plan(m, ground):
             for j in range(f["w"] * f["h"]):
                 i = f["first"] + j
                 cells.append([o["at"][0] + j % f["w"], o["at"][1] + j // f["w"], sid, i % s["cols"], i // s["cols"]])
-        layers.append({"name": "Fixtures", "kind": "tiles", "cells": cells})
+        # cells for Godot's painter; "stamps" names the pieces, so the asset manifest keeps them whole (assetmap.map)
+        layers.append({"name": "Fixtures", "kind": "tiles", "cells": cells,
+                       "stamps": [[o["at"][0], o["at"][1], o["fixture"]] for o in m["objects"]]})
     return layers, w, h
 
 

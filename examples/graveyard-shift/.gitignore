@@ -98,3 +98,6 @@ assets_src/daw/*/render/
 # ---- Claude Code Game Kit 0.14.5: rules added by --upgrade ----
 .private-terms.txt
 /[Aa]ssets/__DotworkGolden*
+
+# ---- Claude Code Game Kit 0.15.0: rules added by --upgrade ----
+/[Aa]ssets/__CharacterGolden*

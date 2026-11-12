@@ -1,16 +1,24 @@
 // ---------------------------------------------------------------------------
 // DotworkImportTests.cs
-// Purpose : The Dotwork importer (#57) against the golden fixture: copy data/golden/dotwork/assets into a temporary
-//           folder under Assets/, import its manifest, read the numbers back from the Unity objects it made (sprite
-//           rects and pivots, AnimationClip keys, BoxCollider2Ds, tiles, the map's Tilemaps, the font) and compare
-//           them with data/golden/dotwork/expected.json (assetspec.expected(), the loaded result every engine's
-//           importer must reproduce) to 1e-6. Then: every real manifest of the game loads (DotworkVerify).
+// Purpose : The Dotwork importer (#57, spec 1.1.0 #285) against the golden fixture: copy data/golden/dotwork/assets
+//           into a temporary folder under Assets/, import its manifest, read the numbers back from the Unity objects
+//           it made (sprite rects and pivots, AnimationClip keys, BoxCollider2Ds, tiles, the maps' Tilemaps with
+//           their Grid's cell centres, the font, the extra kinds) and compare them with data/golden/dotwork/
+//           expected.json (assetspec.expected(), the loaded result every engine's importer must reproduce) to
+//           1e-6. Then the explicit cases of the spec (hash and roll vectors, the corners4 rule, isometric centres,
+//           a stamps layer, the variant pick), the rendered-character golden, and every real manifest of the game.
 // Usage   : python tools/dev.py test --filter Dotwork
 // Notes   : Read-back, not re-computed: a rect comes from Sprite.rect flipped back to y down, a frame's seconds from
-//           the clip's key times, a terrain cell's mask from the Tilemap's own neighbours and its tile from the
-//           sprite the Tilemap shows. Only the core kinds are compared; the extra kinds must be reported as
-//           skipped. The temporary folder is deleted afterwards (and before, if a killed run left it).
+//           the clip's key times, a terrain cell's key from the Tilemap's own neighbours and its tile from the
+//           DotworkTile the Tilemap holds, a placed cell's top-left from where the Tilemap puts the sprite's pivot
+//           (CellToLocalInterpolated(cell + tileAnchor), Unity's own grid math, isometric included) less the pivot.
+//           The order of `placed` follows the manifest's cell lists (the spec's order), which a Tilemap does not
+//           keep, so the manifest drives the walk and the Tilemap answers. The temporary folders are deleted
+//           afterwards (and before, if a killed run left them).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): asset manifest 1.1.0 (#285): placed cells and
+//           centres on both shapes, corners4 keys, the variant pick, stamps, the extra kinds loaded, the
+//           rendered-character golden
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -32,10 +40,14 @@ namespace graveyard_shift.Tests
     {
         // ---- Tunables ------------------------------------------------------------
         private const string GOLDEN = "data/golden/dotwork";         // relative to the project root
+        private const string CHARACTER = "data/golden/character/sprites";   // the rendered character sheet pack
         private const string TEMP = "Assets/__DotworkGolden";       // gitignored; deleted after the run
+        private const string TEMP_CHARACTER = "Assets/__DotworkCharacter";
         private const string MANIFEST = TEMP + "/dotwork/golden.assets.json";
         private const string OUT = TEMP + "/dotwork/golden";
         private const double TOL = 1e-6;                             // the spec's tolerance
+        private const double PIXEL_TOL = 1e-4;                       // a Sprite stores its pivot as float32: a rendered sheet's
+                                                                     // 37.6 reads back as 37.599998 (Dotwork's own pivots are whole pixels)
 
         private static DotworkPack _pack;
         private static readonly List<string> Warnings = new List<string>();
@@ -45,29 +57,30 @@ namespace graveyard_shift.Tests
         [OneTimeSetUp]
         public void ImportTheFixture()
         {
-            DeleteTemp();
+            DeleteTemp(TEMP);
             CopyDir(Path.Combine(GOLDEN, "assets"), TEMP);
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
             Warnings.Clear();
             _pack = DotworkImporter.Import(MANIFEST, OUT, Warnings);
-            _expected = ExpectedAssets();
-            _actual = Loaded(_pack);
+            _expected = ExpectedAssets(GOLDEN);
+            _actual = Loaded(_pack, MANIFEST);
         }
 
         [OneTimeTearDown]
         public void DeleteTheFixture()
         {
-            DeleteTemp();
+            DeleteTemp(TEMP);
+            DeleteTemp(TEMP_CHARACTER);
         }
 
         // ---- The loaded result ---------------------------------------------------------
 
-        private static IEnumerable<TestCaseData> CoreAssets()
+        private static IEnumerable<TestCaseData> AllAssets()
         {
             var cases = new List<TestCaseData>();
             try
             {
-                foreach (string key in ExpectedAssets().Keys.Where(IsCore))
+                foreach (string key in ExpectedAssets(GOLDEN).Keys)
                 {
                     cases.Add(new TestCaseData(key).SetName("Dotwork_" + key.Replace('/', '_')));
                 }
@@ -79,7 +92,7 @@ namespace graveyard_shift.Tests
             return cases;
         }
 
-        [TestCaseSource(nameof(CoreAssets))]
+        [TestCaseSource(nameof(AllAssets))]
         public void LoadedResultMatchesExpected(string key)
         {
             Assert.IsTrue(_expected.ContainsKey(key), $"{GOLDEN}/expected.json: {key} not found");
@@ -88,19 +101,275 @@ namespace graveyard_shift.Tests
         }
 
         [Test]
-        public void Dotwork_EveryCoreAssetIsImported()
+        public void Dotwork_EveryAssetIsImported()
         {
-            CollectionAssert.AreEquivalent(_expected.Keys.Where(IsCore).ToList(), _actual.Keys.ToList());
+            CollectionAssert.AreEquivalent(_expected.Keys.ToList(), _actual.Keys.ToList());
+            CollectionAssert.IsEmpty(_pack.skipped, "every kind of the fixture is known");
+            Assert.IsFalse(Warnings.Any(w => w.Contains("skipped")), string.Join("\n", Warnings));
+        }
+
+        // ---- The extra kinds are loaded, not skipped -----------------------------------------
+
+        [Test]
+        public void Dotwork_ExtraKindsAreLoaded()
+        {
+            DotworkManifest m = DotworkManifest.Load(MANIFEST);
+            foreach (Dictionary<string, object> a in m.Assets)
+            {
+                string kind = DotworkManifest.Str(a, "kind"), name = DotworkManifest.Str(a, "name");
+                if (Array.IndexOf(DotworkManifest.EXTRA_KINDS, kind) >= 0)
+                {
+                    Assert.IsTrue(DotworkVerify.HasEntry(_pack, kind, name), $"{kind}/{name} is not in the pack");
+                }
+            }
+            DotworkBackground bg = _pack.backgrounds[0];
+            Assert.IsTrue(bg.layers.All(l => l.sprite != null), "every background layer has its sprite");
+            Assert.IsTrue(bg.layers.Any(l => l.repeat == "x" && ((TextureImporter)AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(l.sprite.texture))).wrapModeU == TextureWrapMode.Repeat),
+                          "a layer that repeats on x has a texture that wraps on u");
+            DotworkTransition tr = _pack.transitions[0];
+            Assert.IsNotNull(tr.sprite);
+            Assert.IsNotEmpty(tr.transition);
+            Assert.AreEqual(new Vector2Int((int)tr.sprite.rect.width, (int)tr.sprite.rect.height), tr.size);
+            DotworkImage img = _pack.images[0];
+            Assert.IsNotNull(img.sprite);
+            Assert.AreEqual(new Vector2Int((int)img.sprite.rect.width, (int)img.sprite.rect.height), img.size);
         }
 
         [Test]
-        public void Dotwork_ExtraKindsAreSkippedWithAWarning()
+        public void Dotwork_ParticlesCarryTheEmitterJson()
         {
-            foreach (string key in _expected.Keys.Where(k => !IsCore(k)))
+            DotworkManifest m = DotworkManifest.Load(MANIFEST);
+            foreach (Dictionary<string, object> a in m.Assets.Where(a => DotworkManifest.Str(a, "kind") == "particles"))
             {
-                CollectionAssert.Contains(_pack.skipped, key, $"{key} is not in the pack's skipped list");
-                Assert.IsTrue(Warnings.Any(w => w.Contains(key)), $"no warning names {key}");
+                DotworkParticles p = _pack.Particles(DotworkManifest.Str(a, "name"));
+                Assert.IsNotNull(p.texture, $"{p.name} texture");
+                Assert.IsNotNull(p.emitter, $"{p.name} emitter");
+                GoldenVectors.AssertClose(Json.Parse(p.emitter.text), DotworkManifest.Obj(a, "emitter"), TOL, $"particles/{p.name} emitter");
+                Assert.AreEqual(m.Resolve(DotworkManifest.Str(a, "texture")), AssetDatabase.GetAssetPath(p.texture.texture));
             }
+        }
+
+        [Test]
+        public void Dotwork_NormalMapIsTheTargetsSecondaryTexture()
+        {
+            DotworkManifest m = DotworkManifest.Load(MANIFEST);
+            foreach (Dictionary<string, object> a in m.Assets.Where(a => DotworkManifest.Str(a, "kind") == "normal_map"))
+            {
+                DotworkNormalMap n = _pack.NormalMap(DotworkManifest.Str(a, "name"));
+                string normalPath = m.Resolve(DotworkManifest.Str(a, "image")), targetPath = m.Resolve(DotworkManifest.Str(a, "target"));
+                Assert.AreEqual(normalPath, AssetDatabase.GetAssetPath(n.texture), $"{n.name} texture");
+                var ni = (TextureImporter)AssetImporter.GetAtPath(normalPath);
+                Assert.IsFalse(ni.sRGBTexture, "a normal map is linear");
+                Assert.AreEqual(FilterMode.Point, ni.filterMode);
+                var ti = (TextureImporter)AssetImporter.GetAtPath(targetPath);
+                SecondarySpriteTexture[] secondary = ti.secondarySpriteTextures;
+                Assert.AreEqual(1, secondary.Length, $"{n.target} has one secondary texture");
+                Assert.AreEqual(DotworkImporter.NORMAL_MAP_SLOT, secondary[0].name);
+                Assert.AreEqual(n.texture, secondary[0].texture, "the slot holds the normal map");
+                Assert.IsNotNull(n.targetSprite, "the target's sprite");
+                Assert.AreEqual(targetPath, AssetDatabase.GetAssetPath(n.targetSprite.texture));
+                Assert.AreEqual(1, n.targetSprite.GetSecondaryTextureCount(), "the sprite sees the slot");
+                var onSprite = new SecondarySpriteTexture[1];
+                n.targetSprite.GetSecondaryTextures(onSprite);
+                Assert.AreEqual(DotworkImporter.NORMAL_MAP_SLOT, onSprite[0].name);
+                Assert.AreEqual(n.texture, onSprite[0].texture);
+                Assert.AreEqual(n.targetSprite.texture, _pack.Sprite("crate").sprite.texture, "the target is the crate's own image");
+            }
+        }
+
+        // ---- The spec's explicit cases -------------------------------------------------------
+
+        [Test]
+        public void Dotwork_HashAndRollVectors()
+        {
+            // The spec's test vectors (ASSET_MANIFEST.md "Variants: the probability pick")
+            Assert.AreEqual(1800329511u, Autotile.Hash32(0));
+            Assert.AreEqual(3028713910u, Autotile.Hash32(1));
+            Assert.AreEqual(4268016002u, Autotile.Hash32(0xFFFFFFFFu));
+            Assert.AreEqual(0.169182, Autotile.CellRoll(0, 0, 0), TOL);
+            Assert.AreEqual(0.765973, Autotile.CellRoll(3, 1, 1), TOL);
+            Assert.AreEqual(0.531301, Autotile.CellRoll(3, 2, 1), TOL);
+            Assert.AreEqual(0.992978, Autotile.CellRoll(-1, -1, 0), TOL);
+            // The pick walks the weights in order; weight 0 is never picked; all zero gives the first
+            Assert.AreEqual(0, Autotile.Pick(new double[] { 1, 0.6 }, 0.531301));
+            Assert.AreEqual(1, Autotile.Pick(new double[] { 1, 0.6 }, 0.765973));
+            Assert.AreEqual(1, Autotile.Pick(new double[] { 0, 1 }, 0.0));
+            Assert.AreEqual(0, Autotile.Pick(new double[] { 0, 0 }, 0.9));
+            Assert.AreEqual(1, Autotile.Pick(new double[] { 1, 1 }, 0.999999999));
+        }
+
+        [Test]
+        public void Dotwork_Corners4MaskOnA3x3Block()
+        {
+            var block = new HashSet<(int, int)>();
+            for (int y = 0; y < 3; y++)
+            {
+                for (int x = 0; x < 3; x++)
+                {
+                    block.Add((x, y));
+                }
+            }
+            bool Painted(int x, int y) => block.Contains((x, y));
+            Assert.AreEqual(170, Autotile.CellMask(Painted, 1, 1, Autotile.CORNERS4), "centre: all four corners");
+            Assert.AreEqual(8, Autotile.CellMask(Painted, 0, 0, Autotile.CORNERS4), "top-left: SE only");
+            Assert.AreEqual(40, Autotile.CellMask(Painted, 1, 0, Autotile.CORNERS4), "top-middle: SE and SW");
+            Assert.AreEqual(255, Autotile.CellMask(Painted, 1, 1, Autotile.BLOB47));
+            Assert.AreEqual(Autotile.E | Autotile.S, Autotile.CellMask(Painted, 0, 0, Autotile.SIDES4));
+            // Corner names map to bits by shape
+            var square = new Dictionary<string, int> { { "top_left", 1 }, { "top_right", 0 }, { "bottom_right", 1 }, { "bottom_left", 0 } };
+            Assert.AreEqual(Autotile.NW | Autotile.SE, Autotile.CornerKey(square, 1, "square"));
+            var iso = new Dictionary<string, int> { { "top", 1 }, { "right", 1 }, { "bottom", 0 }, { "left", 0 } };
+            Assert.AreEqual(Autotile.NW | Autotile.NE, Autotile.CornerKey(iso, 1, "isometric"));
+            Assert.AreEqual(-1, Autotile.CornerKey(square, 1, "isometric"), "the wrong shape's names give no key");
+        }
+
+        [Test]
+        public void Dotwork_IsometricCentresComeFromTheGrid()
+        {
+            // The Grid itself places the isle's diamonds where the spec's formula says (expected.json centres)
+            DotworkMap isle = _pack.Map("isle");
+            Assert.AreEqual("isometric", isle.shape);
+            var centres = (List<object>)((Dictionary<string, object>)_expected["map/isle"])["centres"];
+            var inst = (GameObject)Object.Instantiate(isle.prefab);
+            try
+            {
+                Assert.AreEqual(GridLayout.CellLayout.Isometric, inst.GetComponent<Grid>().cellLayout);
+                Tilemap tm = inst.GetComponentInChildren<Tilemap>();
+                int seen = 0;
+                foreach (object row in centres)
+                {
+                    double[] c = DotworkManifest.Nums(row, 4);          // x, y, cx, cy
+                    if (!((c[0] == 0 && c[1] == 0) || (c[0] == 1 && c[1] == 0) || (c[0] == 0 && c[1] == 1) || (c[0] == 3 && c[1] == 2)))
+                    {
+                        continue;
+                    }
+                    Vector2 got = CentrePx(tm, _pack.pixelsPerUnit, DotworkImporter.Cell(isle.shape, (int)c[0], (int)c[1]));
+                    Assert.AreEqual(c[2], got.x, TOL, $"cell ({c[0]}, {c[1]}) centre x");
+                    Assert.AreEqual(c[3], got.y, TOL, $"cell ({c[0]}, {c[1]}) centre y");
+                    seen++;
+                }
+                Assert.AreEqual(4, seen, "the four spot cells of the spec");
+            }
+            finally
+            {
+                Object.DestroyImmediate(inst);
+            }
+            // The cell mapping and its inverse agree on both shapes
+            foreach (string shape in new[] { "square", "isometric" })
+            {
+                Assert.AreEqual(new Vector2Int(3, 2), DotworkImporter.MapCell(shape, DotworkImporter.Cell(shape, 3, 2)), shape);
+            }
+        }
+
+        [Test]
+        public void Dotwork_StampsLayerPlacesEveryTileOfTheStamp()
+        {
+            DotworkManifest m = DotworkManifest.Load(MANIFEST);
+            Dictionary<string, object> yard = m.Assets.First(a => DotworkManifest.Str(a, "kind") == "map" && DotworkManifest.Str(a, "name") == "yard");
+            Dictionary<string, object> layer = DotworkManifest.Objs(yard, "layers").First(L => DotworkManifest.Str(L, "kind") == "stamps");
+            DotworkTileset ts = _pack.Tileset("ground_yard");
+            Assert.IsNotEmpty(ts.stamps, "the tileset has stamps");
+            var inst = (GameObject)Object.Instantiate(_pack.Map("yard").prefab);
+            try
+            {
+                var tm = inst.transform.Find(DotworkManifest.Str(layer, "name")).GetComponent<Tilemap>();
+                int placed = 0;
+                foreach (object c in DotworkManifest.List(layer, "cells"))
+                {
+                    double[] v = DotworkManifest.Nums(c, 3);
+                    DotworkStamp stamp = ts.stamps[(int)v[2]];
+                    for (int j = 0; j < stamp.tiles.Length; j++)
+                    {
+                        int x = (int)v[0] + j % stamp.size.x, y = (int)v[1] + j / stamp.size.x;
+                        var tile = tm.GetTile<DotworkTile>(DotworkImporter.Cell(ts.shape, x, y));
+                        Assert.IsNotNull(tile, $"stamp {stamp.name} tile {j} at ({x}, {y})");
+                        Assert.AreEqual(stamp.tiles[j], new Vector3Int(tile.atlas, tile.col, tile.row), $"stamp {stamp.name} tile {j}");
+                        placed++;
+                    }
+                }
+                Assert.AreEqual(placed, Count(tm), "the layer holds the stamps' tiles and nothing else");
+                Assert.IsNotNull(inst.transform.Find(DotworkManifest.Str(layer, "name")).GetComponent<TilemapCollider2D>(), "the door's tiles collide");
+            }
+            finally
+            {
+                Object.DestroyImmediate(inst);
+            }
+        }
+
+        [Test]
+        public void Dotwork_VariantPickFollowsTheRoll()
+        {
+            // The rule tile (what the Tile Palette paints with) picks the same variants the map got: both path cells
+            // with every neighbour painted (key 255) in expected.json, one of which rolls the variant tile
+            var path = (List<object>)((Dictionary<string, object>)((Dictionary<string, object>)_expected["map/yard"])["terrain"])["Path"];
+            DotworkManifest m = DotworkManifest.Load(MANIFEST);
+            Dictionary<string, object> yard = m.Assets.First(a => DotworkManifest.Str(a, "kind") == "map" && DotworkManifest.Str(a, "name") == "yard");
+            List<Dictionary<string, object>> layers = DotworkManifest.Objs(yard, "layers").ToList();
+            int layerIndex = layers.FindIndex(L => DotworkManifest.Str(L, "name") == "Path");
+            Dictionary<string, object> L = layers[layerIndex];
+            DotworkTerrain terrain = _pack.Tileset("ground_yard").Terrain(DotworkManifest.Int(L, "terrain_set", 0), DotworkManifest.Int(L, "terrain"));
+            Assert.IsNotNull(terrain.tile, "the path terrain has a rule tile");
+            var picks = new HashSet<string>();
+            foreach (object row in path)
+            {
+                var r = (List<object>)row;
+                int x = (int)Json.ToNumber(r[0]), y = (int)Json.ToNumber(r[1]), key = (int)Json.ToNumber(r[2]);
+                double[] want = DotworkManifest.Nums(r[3], 3);
+                DotworkTile got = terrain.tile.TileFor(key, Autotile.CellRoll(x, y, layerIndex));
+                Assert.IsNotNull(got, $"({x}, {y}) key {key}");
+                Assert.AreEqual(new Vector3Int((int)want[0], (int)want[1], (int)want[2]), new Vector3Int(got.atlas, got.col, got.row), $"({x}, {y}) key {key}");
+                if (key == 255)
+                {
+                    picks.Add($"{got.col},{got.row}");
+                }
+            }
+            Assert.AreEqual(2, picks.Count, "the two full path cells roll different variants");
+        }
+
+        [Test]
+        public void Dotwork_RenderedCharacterSheetLoads()
+        {
+            // The rendered-character golden (tools/blender/render_sprites.py --manifest): a 1.0.0 pack of one
+            // animated_sprite, loaded by this importer the same way
+            DeleteTemp(TEMP_CHARACTER);
+            CopyDir(Path.Combine(CHARACTER, "art"), TEMP_CHARACTER + "/art");
+            CopyDir(Path.Combine(CHARACTER, "dotwork"), TEMP_CHARACTER + "/dotwork");
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+            string manifest = Directory.GetFiles(TEMP_CHARACTER + "/dotwork", "*" + DotworkManifest.SUFFIX).Select(DotworkManifest.Norm).First();
+            var warnings = new List<string>();
+            DotworkPack pack = DotworkImporter.Import(manifest, TEMP_CHARACTER + "/dotwork/out", warnings);
+            Dictionary<string, object> expected = ExpectedAssets(CHARACTER);
+            Dictionary<string, object> actual = Loaded(pack, manifest);
+            CollectionAssert.AreEquivalent(expected.Keys.ToList(), actual.Keys.ToList());
+            foreach (string key in expected.Keys)
+            {
+                GoldenVectors.AssertClose(actual[key], PivotsThroughFloat32(expected[key]), TOL, key);
+            }
+            Assert.IsEmpty(warnings, string.Join("\n", warnings));
+        }
+
+        /// <summary>A sprite's pivot is a float32 in Unity: this pack's rendered pivots (24, 37.6) are not
+        /// representable, the importer sets the nearest float (37.599998, 1.5e-6 off, over the 1e-6 tolerance),
+        /// so the expected clip pivots are compared through float32 too. Everything else is compared as is.</summary>
+        private static object PivotsThroughFloat32(object expectedAsset)
+        {
+            if (!(expectedAsset is Dictionary<string, object> asset) || !(asset.TryGetValue("clips", out object cv) && cv is Dictionary<string, object> clips))
+            {
+                return expectedAsset;
+            }
+            var copy = new Dictionary<string, object>(asset);
+            var clipsCopy = new Dictionary<string, object>();
+            foreach (KeyValuePair<string, object> kv in clips)
+            {
+                var clip = new Dictionary<string, object>((Dictionary<string, object>)kv.Value);
+                if (clip.TryGetValue("pivot", out object pv) && pv is List<object> pivot)
+                {
+                    clip["pivot"] = pivot.Select(v => (object)(double)(float)Json.ToNumber(v)).ToList();
+                }
+                clipsCopy[kv.Key] = clip;
+            }
+            copy["clips"] = clipsCopy;
+            return copy;
         }
 
         // ---- Details the loaded result does not show ----------------------------------------
@@ -190,6 +459,10 @@ namespace graveyard_shift.Tests
                         var want = new Rect((float)(tile.col * size[0]), (float)(tile.row * size[1]), (float)size[0], (float)size[1]);
                         Assert.IsTrue(Close(got, want), $"{s.name}: {got} is not the cell {want}");
                         Assert.AreEqual(m.Resolve(DotworkManifest.Str(at, "image")), AssetDatabase.GetAssetPath(s.texture));
+                        // The sprite's pivot is the tile's origin (its own, else the atlas cell's centre)
+                        Vector2 origin = DotworkManifest.Has(t, "origin") ? Pt(DotworkManifest.Nums(t, "origin", 2)) : new Vector2((float)size[0] / 2f, (float)size[1] / 2f);
+                        Assert.AreEqual(origin, tile.origin, $"{s.name} origin");
+                        Assert.IsTrue((PivotDown(s) - origin).magnitude < 1e-3, $"{s.name}: pivot {PivotDown(s)} is not the origin {origin}");
                     }
                 }
             }
@@ -200,16 +473,20 @@ namespace graveyard_shift.Tests
         {
             GameObject map = _pack.Map("yard").prefab;
             Assert.IsNotNull(map.GetComponent<Grid>());
+            Assert.AreEqual(GridLayout.CellLayout.Rectangle, map.GetComponent<Grid>().cellLayout);
             Assert.IsNotNull(map.transform.Find("Water").GetComponent<TilemapCollider2D>(), "water tiles collide");
             Assert.IsNotNull(map.transform.Find("Fixtures").GetComponent<TilemapCollider2D>(), "fixtures collide");
             Assert.IsNull(map.transform.Find("Path").GetComponent<TilemapCollider2D>(), "a path does not collide");
+            // A terrain layer holds the resolved tiles themselves: the water cell is a plain animated DotworkTile
             var water = map.transform.Find("Water").GetComponent<Tilemap>();
-            TileBase t = water.GetTile(DotworkImporter.Cell(2, 2));
-            Assert.IsInstanceOf<DotworkTerrainTile>(t);
+            var t = water.GetTile<DotworkTile>(DotworkImporter.Cell(2, 2));
+            Assert.IsNotNull(t, "water (2, 2) is a DotworkTile");
+            Assert.IsTrue(t.Animated, "water animates");
             var anim = new TileAnimationData();
-            Assert.IsTrue(((DotworkTerrainTile)t).TileFor(28).GetTileAnimationData(Vector3Int.zero, null, ref anim), "water animates");
+            Assert.IsTrue(t.GetTileAnimationData(Vector3Int.zero, null, ref anim));
             Assert.AreEqual(2, anim.animatedSprites.Length);
             Assert.AreEqual(4f, anim.animationSpeed, 1e-6);
+            Assert.AreEqual(t.sprite, water.GetSprite(DotworkImporter.Cell(2, 2)), "the Tilemap shows the tile's sprite");
         }
 
         [Test]
@@ -275,6 +552,7 @@ namespace graveyard_shift.Tests
             DotworkTile tile = _pack.Tileset("ground_yard").tiles[0];
             AnimationClip clip = _pack.Animated("hero").clips[0].clip;
             GameObject prefab = _pack.Map("yard").prefab;
+            TextAsset emitter = _pack.particles[0].emitter;
             string packGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(_pack));
             DotworkPack again = DotworkImporter.Import(MANIFEST, OUT);
             Assert.AreSame(_pack, again, "the same pack asset");
@@ -282,7 +560,8 @@ namespace graveyard_shift.Tests
             Assert.AreSame(tile, again.Tileset("ground_yard").tiles[0], "tiles are updated in place");
             Assert.AreSame(clip, again.Animated("hero").clips[0].clip, "clips are updated in place");
             Assert.AreSame(prefab, again.Map("yard").prefab, "prefabs keep their asset");
-            GoldenVectors.AssertClose(Loaded(again), Loaded(_pack), TOL, "the second import");
+            Assert.AreSame(emitter, again.particles[0].emitter, "the emitter JSON keeps its asset");
+            GoldenVectors.AssertClose(Loaded(again, MANIFEST), Loaded(_pack, MANIFEST), TOL, "the second import");
         }
 
         [Test]
@@ -305,6 +584,36 @@ namespace graveyard_shift.Tests
             DotworkPack pack = DotworkImporter.Import(path, TEMP + "/dotwork/future", warnings);
             CollectionAssert.Contains(pack.skipped, "hologram/orb");
             Assert.IsTrue(warnings.Any(w => w.Contains("unknown kind")), string.Join("\n", warnings));
+        }
+
+        [Test]
+        public void Dotwork_UnknownLayerKindIsSkippedWithOneWarning()
+        {
+            // A 1.x map with a layer kind this importer does not know: the layer is empty, the map still imports
+            string text = File.ReadAllText(MANIFEST, Encoding.UTF8);
+            var doc = (Dictionary<string, object>)Json.Parse(text);
+            doc["pack"] = "future_map";
+            var assets = (List<object>)doc["assets"];
+            assets.RemoveAll(a => !(a is Dictionary<string, object> d) || !(DotworkManifest.Str(d, "kind") == "tileset" && DotworkManifest.Str(d, "name") == "ground_yard"
+                                                                           || DotworkManifest.Str(d, "kind") == "map" && DotworkManifest.Str(d, "name") == "yard"));
+            var map = (Dictionary<string, object>)assets.First(a => DotworkManifest.Str((Dictionary<string, object>)a, "kind") == "map");
+            map["objects"] = new List<object>();
+            ((List<object>)map["layers"]).Add(new Dictionary<string, object> { { "name", "Holo" }, { "kind", "hologram" }, { "cells", new List<object> { new List<object> { 0.0, 0.0 } } } });
+            string path = TEMP + "/dotwork/future_map.assets.json";
+            File.WriteAllText(path, Json.Stringify(doc), new UTF8Encoding(false));
+            var warnings = new List<string>();
+            DotworkPack pack = DotworkImporter.Import(path, TEMP + "/dotwork/future_map", warnings);
+            Assert.AreEqual(1, warnings.Count(w => w.Contains("hologram")), string.Join("\n", warnings));
+            var inst = (GameObject)Object.Instantiate(pack.Map("yard").prefab);
+            try
+            {
+                Assert.AreEqual(0, Count(inst.transform.Find("Holo").GetComponent<Tilemap>()), "the unknown layer stays empty");
+                Assert.Greater(Count(inst.transform.Find("Base").GetComponent<Tilemap>()), 0, "the known layers are placed");
+            }
+            finally
+            {
+                Object.DestroyImmediate(inst);
+            }
         }
 
         [Test]
@@ -343,8 +652,9 @@ namespace graveyard_shift.Tests
 
         // ---- Read back: Unity objects -> the loaded result's numbers ---------------------------------
 
-        private static Dictionary<string, object> Loaded(DotworkPack pack)
+        private static Dictionary<string, object> Loaded(DotworkPack pack, string manifestPath)
         {
+            DotworkManifest m = DotworkManifest.Load(manifestPath);
             var o = new Dictionary<string, object>();
             foreach (DotworkAnimated a in pack.animated)
             {
@@ -417,7 +727,8 @@ namespace graveyard_shift.Tests
             }
             foreach (DotworkMap map in pack.maps)
             {
-                o["map/" + map.name] = MapResult(pack, map);
+                Dictionary<string, object> asset = m.Assets.First(a => DotworkManifest.Str(a, "kind") == "map" && DotworkManifest.Str(a, "name") == map.name);
+                o["map/" + map.name] = MapResult(pack, map, asset);
             }
             foreach (DotworkFont f in pack.fonts)
             {
@@ -449,6 +760,15 @@ namespace graveyard_shift.Tests
                 }
                 o["ui_kit/" + k.name] = Obj("parts", parts);
             }
+            foreach (DotworkBackground b in pack.backgrounds)
+            {
+                o["background/" + b.name] = Obj("layers", b.layers.Select(l => (object)new List<object>
+                    { (double)l.sprite.rect.width, (double)l.sprite.rect.height, (double)l.velocity.x, (double)l.velocity.y, l.repeat }).ToList());
+            }
+            pack.particles.ForEach(p => o["particles/" + p.name] = Obj("kind", "particles"));
+            pack.transitions.ForEach(t => o["transition/" + t.name] = Obj("kind", "transition"));
+            pack.normalMaps.ForEach(n => o["normal_map/" + n.name] = Obj("kind", "normal_map"));
+            pack.images.ForEach(i => o["image/" + i.name] = Obj("kind", "image"));
             return o;
         }
 
@@ -474,48 +794,102 @@ namespace graveyard_shift.Tests
                 "texture", string.IsNullOrEmpty(c.sheet) ? null : c.sheet);
         }
 
-        private static Dictionary<string, object> MapResult(DotworkPack pack, DotworkMap map)
+        /// <summary>The map as the spec's loaded result, read from the prefab's Tilemaps: cells per layer, every
+        /// terrain cell with its key (from the Tilemap's own neighbours) and its tile, every placed cell with the
+        /// image's top-left (where the Tilemap puts the sprite's pivot, less the pivot), every cell's centre, the
+        /// objects. The manifest's layer list gives the walk order the spec wants.</summary>
+        private static Dictionary<string, object> MapResult(DotworkPack pack, DotworkMap map, Dictionary<string, object> asset)
         {
             DotworkTileset ts = pack.Tileset(map.tileset);
+            float ppu = pack.pixelsPerUnit;
             var inst = (GameObject)Object.Instantiate(map.prefab);
             try
             {
                 var layers = new Dictionary<string, object>();
                 var terrain = new Dictionary<string, object>();
-                foreach (Tilemap tm in inst.GetComponentsInChildren<Tilemap>())
+                var placed = new Dictionary<string, object>();
+                Tilemap any = null;
+                foreach (Dictionary<string, object> L in DotworkManifest.Objs(asset, "layers"))
                 {
-                    var cells = new List<Vector3Int>();
-                    foreach (Vector3Int p in tm.cellBounds.allPositionsWithin)
+                    string lname = DotworkManifest.Str(L, "name"), kind = DotworkManifest.Str(L, "kind", "");
+                    var tm = inst.transform.Find(lname).GetComponent<Tilemap>();
+                    any = any ?? tm;
+                    layers[lname] = (double)Count(tm);
+                    // The cells to read, in the spec's order: the layer's list (stamps expanded) or, for terrain, by y then x
+                    var walk = new List<Vector2Int>();
+                    if (kind == "terrain")
                     {
-                        if (tm.GetTile(p) != null)
+                        foreach (Vector3Int p in tm.cellBounds.allPositionsWithin)
                         {
-                            cells.Add(p);
+                            if (tm.GetTile(p) != null)
+                            {
+                                walk.Add(DotworkImporter.MapCell(map.shape, p));
+                            }
+                        }
+                        walk = walk.OrderBy(p => p.y).ThenBy(p => p.x).ToList();
+                    }
+                    else if (kind == "stamps")
+                    {
+                        foreach (object c in DotworkManifest.List(L, "cells"))
+                        {
+                            double[] v = DotworkManifest.Nums(c, 3);
+                            DotworkStamp stamp = ts.stamps[(int)v[2]];
+                            for (int j = 0; j < stamp.tiles.Length; j++)
+                            {
+                                walk.Add(new Vector2Int((int)v[0] + j % stamp.size.x, (int)v[1] + j / stamp.size.x));
+                            }
                         }
                     }
-                    layers[tm.name] = (double)cells.Count;
+                    else
+                    {
+                        foreach (object c in DotworkManifest.List(L, "cells"))
+                        {
+                            double[] v = DotworkManifest.Nums(c, 2);
+                            walk.Add(new Vector2Int((int)v[0], (int)v[1]));
+                        }
+                    }
                     var rows = new List<object>();
-                    foreach (Vector3Int p in cells.OrderBy(p => -1 - p.y).ThenBy(p => p.x))
+                    var trows = new List<object>();
+                    string mode = kind == "terrain" ? ts.Terrain(DotworkManifest.Int(L, "terrain_set", 0), DotworkManifest.Int(L, "terrain"))?.mode : null;
+                    foreach (Vector2Int p in walk)
                     {
-                        if (!(tm.GetTile(p) is DotworkTerrainTile tt))
+                        Vector3Int cell = DotworkImporter.Cell(map.shape, p.x, p.y);
+                        var tile = tm.GetTile<DotworkTile>(cell);
+                        Assert.IsNotNull(tile, $"map {map.name} layer {lname}: no tile at ({p.x}, {p.y})");
+                        Sprite shown = tm.GetSprite(cell);
+                        Assert.AreEqual(tile.sprite, shown, $"map {map.name} layer {lname} ({p.x}, {p.y}): the Tilemap shows the tile's sprite");
+                        // Where Unity draws it: the sprite's pivot at the tile anchor, in map pixels, y down
+                        Vector3 at = tm.LocalToWorld(tm.CellToLocalInterpolated(cell + tm.tileAnchor));
+                        Vector2 pivot = PivotDown(shown);
+                        rows.Add(Nums(p.x, p.y, tile.atlas, tile.col, tile.row, at.x * ppu - pivot.x, -at.y * ppu - pivot.y));
+                        if (mode != null)
                         {
-                            continue;
+                            int key = Autotile.CellMask((nx, ny) => tm.GetTile(DotworkImporter.Cell(map.shape, nx, ny)) != null, p.x, p.y, mode);
+                            trows.Add(new List<object> { (double)p.x, (double)p.y, (double)key, Nums(tile.atlas, tile.col, tile.row) });
                         }
-                        Sprite shown = tm.GetSprite(p);
-                        DotworkTile tile = shown == null ? null : ts.tiles.FirstOrDefault(x => x.sprite == shown);
-                        rows.Add(new List<object> { (double)p.x, (double)(-1 - p.y), (double)tt.MaskAt(tm.GetTile, p),
-                            tile == null ? null : Nums(tile.atlas, tile.col, tile.row) });
                     }
-                    if (rows.Count > 0)
+                    placed[lname] = rows;
+                    if (kind == "terrain")
                     {
-                        terrain[tm.name] = rows;
+                        terrain[lname] = trows;
+                    }
+                }
+                var centres = new List<object>();
+                for (int y = 0; y < map.size.y; y++)
+                {
+                    for (int x = 0; x < map.size.x; x++)
+                    {
+                        Vector2 c = CentrePx(any, ppu, DotworkImporter.Cell(map.shape, x, y));
+                        centres.Add(Nums(x, y, c.x, c.y));
                     }
                 }
                 var objects = new List<object>();
                 foreach (Transform t in inst.transform.Find("Objects"))
                 {
-                    objects.Add(new List<object> { t.name, (double)(t.localPosition.x * pack.pixelsPerUnit), (double)(-t.localPosition.y * pack.pixelsPerUnit) });
+                    objects.Add(new List<object> { t.name, (double)(t.localPosition.x * ppu), (double)(-t.localPosition.y * ppu) });
                 }
-                return Obj("size", Nums(map.size.x, map.size.y), "layers", layers, "terrain", terrain, "objects", objects);
+                return Obj("size", Nums(map.size.x, map.size.y), "shape", map.shape, "tile_size", Nums(map.tileSize.x, map.tileSize.y),
+                    "layers", layers, "terrain", terrain, "placed", placed, "centres", centres, "objects", objects);
             }
             finally
             {
@@ -525,11 +899,29 @@ namespace graveyard_shift.Tests
 
         // ---- Helpers ---------------------------------------------------------------------
 
-        private static bool IsCore(string key) => Array.IndexOf(DotworkManifest.CORE_KINDS, key.Split('/')[0]) >= 0;
-
-        private static Dictionary<string, object> ExpectedAssets()
+        /// <summary>A cell's centre as the Grid places it, in map pixels (y down), through the layer's transform.</summary>
+        private static Vector2 CentrePx(Tilemap tm, float ppu, Vector3Int cell)
         {
-            string text = File.ReadAllText(Path.Combine(GOLDEN, "expected.json"), Encoding.UTF8);
+            Vector3 w = tm.LocalToWorld(tm.CellToLocalInterpolated(cell + new Vector3(0.5f, 0.5f, 0f)));
+            return new Vector2(w.x * ppu, -w.y * ppu);
+        }
+
+        private static int Count(Tilemap tm)
+        {
+            int n = 0;
+            foreach (Vector3Int p in tm.cellBounds.allPositionsWithin)
+            {
+                if (tm.GetTile(p) != null)
+                {
+                    n++;
+                }
+            }
+            return n;
+        }
+
+        private static Dictionary<string, object> ExpectedAssets(string folder)
+        {
+            string text = File.ReadAllText(Path.Combine(folder, "expected.json"), Encoding.UTF8);
             return (Dictionary<string, object>)((Dictionary<string, object>)Json.Parse(text))["assets"];
         }
 
@@ -541,6 +933,8 @@ namespace graveyard_shift.Tests
 
         /// <summary>A sprite's pivot in its own pixels, y down (the manifest's space).</summary>
         private static Vector2 PivotDown(Sprite s) => new Vector2(s.pivot.x, s.rect.height - s.pivot.y);
+
+        private static Vector2 Pt(double[] v) => new Vector2((float)v[0], (float)v[1]);
 
         private static List<object> Nums(params double[] v) => v.Select(x => (object)x).ToList();
 
@@ -585,16 +979,16 @@ namespace graveyard_shift.Tests
             }
         }
 
-        private static void DeleteTemp()
+        private static void DeleteTemp(string folder)
         {
-            if (AssetDatabase.IsValidFolder(TEMP))
+            if (AssetDatabase.IsValidFolder(folder))
             {
-                AssetDatabase.DeleteAsset(TEMP);
+                AssetDatabase.DeleteAsset(folder);
             }
-            if (Directory.Exists(TEMP))
+            if (Directory.Exists(folder))
             {
-                Directory.Delete(TEMP, true);
-                File.Delete(TEMP + ".meta");
+                Directory.Delete(folder, true);
+                File.Delete(folder + ".meta");
                 AssetDatabase.Refresh();
             }
         }

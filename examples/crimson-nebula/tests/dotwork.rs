@@ -6,17 +6,19 @@
 // Usage   : python tools/dev.py test   (cargo test --test dotwork -- --nocapture also prints what loaded)
 // Notes   : No window: the loader builds TextureAtlasLayouts, Durations, Anchors, Rects and TextureSlicers as plain
 //           values, and this file turns those objects back into the spec's loaded result (pivots from the Anchors,
-//           seconds from the Durations, rects from the atlas layouts) and compares. Numbers compare numerically,
-//           arrays in order, objects as key sets. The extra kinds (background, particles, transition, normal_map,
-//           image) must be in the pack's skipped list instead. When the spec changes, rebuild the fixture
-//           (`python tools/art/dotwork/tests/golden_assets.py --write` in the kit) and fix src/dotwork/ until this
-//           passes.
+//           seconds from the Durations, rects from the atlas layouts, a map's placed cells and centres from its
+//           resolved layers and the tiles' origins) and compares. Numbers compare numerically, arrays in order,
+//           objects as key sets. Every kind of spec 1.1.0 loads, the extra kinds included, so nothing may be
+//           skipped. When the spec changes, rebuild the fixture (`python tools/art/dotwork/tests/golden_assets.py
+//           --write` in the kit) and fix src/dotwork/ until this passes.
 //
 // Pseudocode:
-//   read golden.assets.json -> loaded result from the pack's objects -> for each expected asset: skipped (extra
-//   kind) or equal within 1e-6 -> no asset the reference lacks -> then load assets/dotwork/*.assets.json: no errors,
+//   read golden.assets.json -> loaded result from the pack's objects -> for each expected asset: equal within
+//   1e-6 -> no asset the reference lacks, nothing skipped -> then load assets/dotwork/*.assets.json: no errors,
 //   every terrain cell found its tile
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+//           Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): the maps' shape,
+//           tile size, placed cells and centres, corner keys, the extra kinds loaded, a stamps layer
 // ---------------------------------------------------------------------------
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -26,13 +28,11 @@ use bevy::math::{URect, UVec2};
 use bevy::sprite::Anchor;
 use serde_json::{Map, Value, json};
 
-use project_crimson_nebula::dotwork::manifest::{self, ClipTexture, Pack};
+use project_crimson_nebula::dotwork::manifest::{self, ClipTexture, LayerKind, Pack};
 use project_crimson_nebula::dotwork::{DotworkLibrary, FramePlayer, default_asset_root};
 
 /// The spec's tolerance for every number in expected.json.
 const TOLERANCE: f64 = 1e-6;
-/// The extra kinds an importer may skip (ASSET_MANIFEST.md "Asset kinds").
-const EXTRA: [&str; 5] = ["background", "particles", "transition", "normal_map", "image"];
 
 fn golden_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -124,7 +124,7 @@ fn loaded_result(pack: &Pack) -> Map<String, Value> {
         let (mut count, mut solid, mut animated) = (0, 0, 0);
         let mut masks: Map<String, Value> = Map::new();
         let mut blob: std::collections::BTreeMap<String, BTreeSet<u8>> = Default::default();
-        let mut corners: std::collections::BTreeMap<String, BTreeSet<Vec<u32>>> = Default::default();
+        let mut corners: std::collections::BTreeMap<String, BTreeSet<Vec<i64>>> = Default::default();
         for a in &t.atlases {
             for tile in &a.tiles {
                 count += 1;
@@ -160,15 +160,35 @@ fn loaded_result(pack: &Pack) -> Map<String, Value> {
         );
     }
     for (name, m) in &pack.maps {
+        let ts = &pack.tilesets[&m.tileset];
         let mut layers = Map::new();
         let mut terrain = Map::new();
+        let mut placed = Map::new();
         for l in &m.layers {
-            layers.insert(l.name.clone(), json!(l.cells.len()));
-            if l.terrain.is_some() {
-                let cells: Vec<Value> = l.cells.iter().map(|c| json!([c.x, c.y, c.mask, c.tile])).collect();
+            // the cells drawn: a terrain cell with no tile is not one
+            let drawn: Vec<Value> = l
+                .cells
+                .iter()
+                .filter_map(|c| {
+                    let [atlas, col, row] = c.tile?;
+                    let [left, top] = m.top_left(ts, c)?;
+                    Some(json!([c.x, c.y, atlas, col, row, left, top]))
+                })
+                .collect();
+            layers.insert(l.name.clone(), json!(drawn.len()));
+            placed.insert(l.name.clone(), json!(drawn));
+            if l.kind == LayerKind::Terrain {
+                let cells: Vec<Value> = l.cells.iter().map(|c| json!([c.x, c.y, c.key, c.tile])).collect();
                 terrain.insert(l.name.clone(), json!(cells));
             }
         }
+        let centres: Vec<Value> = (0..i64::from(m.size.y))
+            .flat_map(|y| (0..i64::from(m.size.x)).map(move |x| (x, y)))
+            .map(|(x, y)| {
+                let c = m.centre(x, y);
+                json!([x, y, c.x, c.y])
+            })
+            .collect();
         let objects: Vec<Value> = m
             .objects
             .iter()
@@ -176,8 +196,29 @@ fn loaded_result(pack: &Pack) -> Map<String, Value> {
             .collect();
         out.insert(
             format!("map/{name}"),
-            json!({"size": size(m.size), "layers": layers, "terrain": terrain, "objects": objects}),
+            json!({"size": size(m.size), "shape": m.shape.name(), "tile_size": size(m.cell_size), "layers": layers,
+                   "terrain": terrain, "placed": placed, "centres": centres, "objects": objects}),
         );
+    }
+    for (name, b) in &pack.backgrounds {
+        let layers: Vec<Value> = b
+            .layers
+            .iter()
+            .map(|l| json!([l.size.x, l.size.y, l.velocity.x, -l.velocity.y, l.repeat()]))
+            .collect();
+        out.insert(format!("background/{name}"), json!({"layers": layers}));
+    }
+    for name in pack.particles.keys() {
+        out.insert(format!("particles/{name}"), json!({"kind": "particles"}));
+    }
+    for name in pack.transitions.keys() {
+        out.insert(format!("transition/{name}"), json!({"kind": "transition"}));
+    }
+    for name in pack.normal_maps.keys() {
+        out.insert(format!("normal_map/{name}"), json!({"kind": "normal_map"}));
+    }
+    for name in pack.images.keys() {
+        out.insert(format!("image/{name}"), json!({"kind": "image"}));
     }
     for (name, f) in &pack.fonts {
         let sample = f
@@ -270,21 +311,15 @@ fn golden_pack_matches_the_reference_loaded_result() {
     let want = want["assets"].as_object().expect("expected.json has assets");
     let got = loaded_result(&pack);
     let mut errs = Vec::new();
-    let mut core = BTreeSet::new();
+    let mut kinds = BTreeSet::new();
     for (key, w) in want {
         let kind = key.split('/').next().unwrap_or("");
-        if pack.skipped.contains(key) {
-            if !EXTRA.contains(&kind) {
-                errs.push(format!("{key}: a core kind was skipped"));
-            }
-            continue;
-        }
         match got.get(key) {
             Some(g) => {
                 compare(g, w, key, &mut errs);
-                core.insert(kind.to_string());
+                kinds.insert(kind.to_string());
             }
-            None => errs.push(format!("{key}: not loaded and not skipped")),
+            None => errs.push(format!("{key}: not loaded")),
         }
     }
     for key in got.keys() {
@@ -292,33 +327,127 @@ fn golden_pack_matches_the_reference_loaded_result() {
             errs.push(format!("{key}: loaded, but the reference has no such asset"));
         }
     }
-    println!(
-        "golden pack: {} assets compared, {} skipped ({:?})",
-        got.len(),
-        pack.skipped.len(),
-        pack.skipped
-    );
+    println!("golden pack: {} assets compared", got.len());
     assert!(
         errs.is_empty(),
         "{} difference(s) from expected.json:\n{}",
         errs.len(),
         errs.join("\n")
     );
-    let all_core: BTreeSet<String> = manifest::CORE_KINDS.iter().map(|k| k.to_string()).collect();
-    assert_eq!(core, all_core, "the golden pack exercises every core kind");
+    assert!(
+        pack.skipped.is_empty(),
+        "every kind of the spec loads: {:?}",
+        pack.skipped
+    );
+    let all: BTreeSet<String> = manifest::CORE_KINDS
+        .iter()
+        .chain(manifest::EXTRA_KINDS.iter())
+        .map(|k| k.to_string())
+        .collect();
+    assert_eq!(kinds, all, "the golden pack exercises every kind");
+}
+
+/// A sheet render_sprites.py made from the golden rigged character (#290): rows are directions, columns frames, so a
+/// clip's rects sit on its own row of a shared sheet. The importer loads it as it loads Dotwork's packs.
+#[test]
+fn a_sheet_render_sprites_rendered_matches_its_loaded_result() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("data")
+        .join("golden")
+        .join("character")
+        .join("sprites");
+    let pack = manifest::read_manifest(&root.join("dotwork").join("character.assets.json"), &root)
+        .unwrap_or_else(|e| panic!("the rendered manifest did not load: {e}"));
+    assert!(pack.errors.is_empty(), "broken assets: {:#?}", pack.errors);
+    assert!(pack.skipped.is_empty(), "nothing to skip: {:?}", pack.skipped);
+    let path = root.join("expected.json");
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let want: Value = serde_json::from_str(&text).expect("expected.json is JSON");
+    let want = want["assets"].as_object().expect("expected.json has assets");
+    let got = loaded_result(&pack);
+    let mut errs = Vec::new();
+    compare(&Value::Object(got), &Value::Object(want.clone()), "rendered", &mut errs);
+    assert!(
+        errs.is_empty(),
+        "{} difference(s) from expected.json:\n{}",
+        errs.len(),
+        errs.join("\n")
+    );
 }
 
 #[test]
-fn extra_kinds_are_skipped_with_one_warning_each() {
+fn extra_kinds_are_loaded_with_their_data() {
     let pack = golden_pack();
-    for kind in EXTRA {
-        let lines = pack
-            .warnings
-            .iter()
-            .filter(|w| w.contains(&format!("{kind} assets skipped")))
-            .count();
-        assert_eq!(lines, 1, "{kind}: {:#?}", pack.warnings);
+    assert!(
+        !pack.warnings.iter().any(|w| w.contains("skipped")),
+        "nothing is skipped any more: {:#?}",
+        pack.warnings
+    );
+    let hills = &pack.backgrounds["hills"];
+    assert_eq!(hills.role, "battle");
+    assert_eq!(hills.layers.len(), 2);
+    let clouds = &hills.layers[1];
+    assert_eq!(clouds.name.as_deref(), Some("clouds_near"));
+    assert!(
+        clouds.repeat_x && !clouds.repeat_y && clouds.repeat() == "x",
+        "the clouds tile along x"
+    );
+    assert_eq!(clouds.velocity.x, -4.0, "px/s of the art");
+    assert_eq!(clouds.scale, 2.0);
+    assert!(clouds.image.ends_with(".png"));
+    let embers = &pack.particles["vfx_embers_particles"];
+    assert_eq!(
+        embers.emitter["amount"],
+        json!(12),
+        "the emitter JSON as Dotwork wrote it"
+    );
+    assert!(embers.texture.ends_with(".png"));
+    let wipe = &pack.transitions["transition_wipe"];
+    assert_eq!((wipe.transition.as_str(), wipe.size), ("wipe", UVec2::new(8, 8)));
+    let crate_n = &pack.normal_maps["spr_crate_n"];
+    assert_eq!(crate_n.convention, "opengl");
+    assert_eq!(
+        crate_n.target, pack.sprites["crate"].image,
+        "it lights the crate's own image"
+    );
+    let logo = &pack.images["logo_golden"];
+    assert_eq!((logo.role.as_str(), logo.anchor), ("logo", Anchor::CENTER));
+}
+
+#[test]
+fn a_stamps_layer_places_every_tile_of_the_stamp() {
+    let pack = golden_pack();
+    let (yard, ts) = (&pack.maps["yard"], &pack.tilesets["ground_yard"]);
+    let door = &ts.stamps[0];
+    let fixtures = yard
+        .layers
+        .iter()
+        .find(|l| l.kind == LayerKind::Stamps)
+        .expect("the yard places a stamp");
+    assert_eq!(
+        fixtures.cells.len(),
+        door.tiles.len(),
+        "one cell per tile of the one door"
+    );
+    // the door is 1 x 2: its tiles stack down from the placed cell, in reading order
+    let (x, y) = (fixtures.cells[0].x, fixtures.cells[0].y);
+    for (j, (c, tile)) in fixtures.cells.iter().zip(&door.tiles).enumerate() {
+        assert_eq!((c.x, c.y, c.tile, c.key), (x, y + j as i64, Some(*tile), None));
     }
+    // placed one cell apart: the lower tile's top-left is one cell height further down
+    let tops: Vec<[f64; 2]> = fixtures.cells.iter().map(|c| yard.top_left(ts, c).unwrap()).collect();
+    assert_eq!(tops[1][0], tops[0][0]);
+    assert_eq!(tops[1][1] - tops[0][1], f64::from(yard.cell_size.y));
+    // the isometric map: the raised block's own origin lifts its image above the diamond's centre
+    let (isle, iso) = (&pack.maps["isle"], &pack.tilesets["iso_isle"]);
+    let blocks = isle.layers.iter().find(|l| l.name == "Blocks").unwrap();
+    let block = iso.tile(1, 0, 0).unwrap();
+    assert_eq!(block.origin, [8.0, 8.0]);
+    let c = &blocks.cells[0];
+    let centre = isle.centre(c.x, c.y);
+    let top_left = isle.top_left(iso, c).unwrap();
+    assert_eq!(top_left, [f64::from(centre.x) - 8.0, f64::from(centre.y) - 8.0]);
+    assert!(isle.layers.iter().all(|l| l.kind != LayerKind::Stamps));
 }
 
 #[test]
@@ -386,6 +515,9 @@ fn the_library_finds_assets_across_packs() {
     assert!(lib.animated("hero").is_some() && lib.sprite("crate").is_some() && lib.font("tiny").is_some());
     let (_, map, tileset) = lib.map("yard").expect("the yard map and its tileset");
     assert_eq!(tileset.name, map.tileset);
+    assert!(lib.background("hills").is_some() && lib.particles("vfx_embers_particles").is_some());
+    assert!(lib.transition("transition_wipe").is_some() && lib.normal_map("spr_crate_n").is_some());
+    assert!(lib.image_asset("logo_golden").is_some());
     assert!(lib.animated("nobody").is_none());
 }
 
@@ -402,16 +534,16 @@ fn every_manifest_the_game_ships_loads() {
     for pack in &lib.packs {
         for (name, map) in &pack.maps {
             for l in &map.layers {
-                for c in l.cells.iter().filter(|c| c.mask.is_some() && c.tile.is_none()) {
+                for c in l.cells.iter().filter(|c| c.key.is_some() && c.tile.is_none()) {
                     problems.push(format!(
-                        "{}: map/{name} layer {} cell [{}, {}] has no tile for mask {:?}",
-                        pack.name, l.name, c.x, c.y, c.mask
+                        "{}: map/{name} layer {} cell [{}, {}] has no tile for key {:?}",
+                        pack.name, l.name, c.x, c.y, c.key
                     ));
                 }
             }
         }
         println!(
-            "{}: {} animated, {} sprites, {} tilesets, {} maps, {} fonts, {} ui kits, {} skipped",
+            "{}: {} animated, {} sprites, {} tilesets, {} maps, {} fonts, {} ui kits, {} backgrounds, {} skipped",
             pack.name,
             pack.animated.len(),
             pack.sprites.len(),
@@ -419,6 +551,7 @@ fn every_manifest_the_game_ships_loads() {
             pack.maps.len(),
             pack.fonts.len(),
             pack.ui_kits.len(),
+            pack.backgrounds.len(),
             pack.skipped.len()
         );
     }

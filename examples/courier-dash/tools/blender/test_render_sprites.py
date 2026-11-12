@@ -10,13 +10,16 @@
 # Exit    : 0 all cases pass, 1 some case failed, 2 bpy not available
 # Notes   : Renders tiny cells (32 px, 4 Cycles samples) so the whole exam takes about a minute on a CPU.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the 30 fps clip case; the exam ends through
+#           bpy_common with the bpy module (#292)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
 #   build fixtures (a body with a nose on its front; the same with a moving location key)
 #   run render_sprites as a separate process for each case, then read the sheet with bpy
 #   check: dimensions, transparent corners, alpha in every cell, front vs side silhouettes
-#          differ, animated frames differ, JSON layout, bad input exits 2
+#          differ, animated frames differ, JSON layout, a clip far from the rest pose warns, bad input exits 2,
+#          a clip keyed at 30 fps keeps its rate and length in the manifest (#292)
 import argparse
 import json
 import shutil
@@ -61,9 +64,54 @@ def build_with_helper(bpy, path):
     bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB")
 
 
-def build_fixture(bpy, path, animate=False, export=True):
-    """A tall body with a nose sticking out of its front (-Y), exported as .glb."""
+def build_skinned_with_strip(bpy, path):
+    """The body skinned to an armature plus a small skinned strip in front of it, the way `bozzetto.py rig chain`
+    leaves a scarf (#291): the body is the character, not a helper, so it must not draw the framing warning."""
+    build_fixture(bpy, path, export=False)
+    body = bpy.context.view_layer.objects.active
+    bpy.ops.mesh.primitive_cube_add(size=0.2, location=(0.15, -0.35, 1.1))
+    strip = bpy.context.active_object
+    strip.name = "scarf"
+    bpy.ops.object.armature_add(location=(0, 0, 0))
+    arm = bpy.context.active_object
+    for o in (body, strip):
+        g = o.vertex_groups.new(name=arm.data.bones[0].name)
+        g.add(list(range(len(o.data.vertices))), 1.0, "REPLACE")
+        o.modifiers.new("Armature", "ARMATURE").object = arm
+        o.parent = arm
+    bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB")
+
+
+def build_offset_clip(bpy, path):
+    """The body skinned to one bone with two clips: idle (the bone still) and walk (the bone 2 m to the side in
+    every key), the shape of Tripo's in-place clips with an offset root (2026-11-11)."""
+    build_fixture(bpy, path, export=False)
+    body = bpy.context.view_layer.objects.active
+    bpy.ops.object.armature_add(location=(0, 0, 0))
+    arm = bpy.context.active_object
+    bone = arm.data.bones[0].name
+    body.vertex_groups.new(name=bone).add(list(range(len(body.data.vertices))), 1.0, "REPLACE")
+    body.modifiers.new("Armature", "ARMATURE").object = arm
+    body.parent = arm
+    arm.animation_data_create()
+    pb = arm.pose.bones[bone]
+    for name, x in (("idle", 0.0), ("walk", 2.0)):   # the bone's local X is the world's X (it points up, no roll)
+        act = bpy.data.actions.new(name)
+        arm.animation_data.action = act
+        for f in (1, 3):
+            pb.location = (x, 0.0, 0.0)
+            pb.keyframe_insert("location", frame=f)
+        act.use_fake_user = True
+        arm.animation_data.action = None
+    bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", export_animation_mode="ACTIONS")
+
+
+def build_fixture(bpy, path, animate=False, export=True, fps=None):
+    """A tall body with a nose sticking out of its front (-Y), exported as .glb (its keys at `fps`, the scene's
+    default 24 when None)."""
     bpy.ops.wm.read_factory_settings(use_empty=True)
+    if fps:
+        bpy.context.scene.render.fps = fps
     bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0.75))
     body = bpy.context.active_object
     body.scale = (0.5, 0.5, 1.5)
@@ -74,13 +122,18 @@ def build_fixture(bpy, path, animate=False, export=True):
         o.select_set(True)
     bpy.context.view_layer.objects.active = body
     bpy.ops.object.join()
-    if animate:
+    if animate == "bob":     # a loop: up and back down, so frame 3 repeats frame 1's pose
+        for f, z in ((1, 0.0), (2, 0.1), (3, 0.0)):
+            body.location = (0, 0, z)
+            body.keyframe_insert("location", frame=f)
+        body.animation_data.action.name = "bob"
+    elif animate:
         body.location = (-0.8, 0, 0)
         body.keyframe_insert("location", frame=1)
         body.location = (0.8, 0, 0)
         body.keyframe_insert("location", frame=3)
     if export:
-        bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", export_animations=animate)
+        bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", export_animations=bool(animate))
 
 
 def build_double_sided(bpy, path):
@@ -139,6 +192,82 @@ def opaque_width(alpha):
 def opaque_center_x(alpha):
     cols = (alpha > 0.5).any(axis=0).nonzero()[0]
     return None if len(cols) == 0 else float(cols.mean())
+
+
+def opaque_extent(alpha, x):
+    """(pixels of the model left of column x, right of it) in one cell's alpha."""
+    cols = (alpha > 0.5).any(axis=0).nonzero()[0]
+    return (0.0, 0.0) if len(cols) == 0 else (x - cols[0], cols[-1] + 1 - x)
+
+
+def manifest_cases(bpy, tmp, case, common):
+    """--actions and --manifest (#290): the Dotwork asset manifest a 2D engine's importer loads."""
+    bob = tmp / "bob.glb"
+    build_fixture(bpy, bob, animate="bob")
+    assets = tmp / "assets"
+    manifest = assets / "dotwork" / "rendered.assets.json"
+    sheet = assets / "art" / "body" / "body.png"
+    rc, out = run_tool(bob, "--out", sheet, "--actions", "all", "--directions", 4, "--elevation", 0,
+                       "--manifest", manifest, *common)
+    case("--actions all --manifest renders and writes a manifest (exit 0)", rc == 0 and manifest.exists(), out[-500:])
+    if rc != 0:
+        return
+    doc = json.loads(manifest.read_text(encoding="utf-8"))
+    sprite = doc["assets"][0]
+    clips = {c["name"]: c for c in sprite["clips"]}
+    case("one clip per direction and the direction table (s, w, n, e)",
+         sorted(clips) == ["bob_e", "bob_n", "bob_s", "bob_w"] and sprite["directions"]["bob"]["w"] == "bob_w",
+         str(sorted(clips)))
+    case("the sheet is <stem>_<action>.png, its base the assets folder",
+         clips["bob_s"]["sheet"] == "art/body/body_bob.png" and doc["base"] == ".." and (assets / "art/body/body_bob.png").exists(),
+         str(clips["bob_s"]["sheet"]))
+    case("a loop's last frame that repeats the first pose is rendered once (3 frames -> 2)",
+         len(clips["bob_s"]["frames"]) == 2, str(len(clips["bob_s"]["frames"])))
+    case("every frame has its own PNG",
+         all((assets / f["file"]).exists() for c in clips.values() for f in c["frames"]))
+    case("durations are 1 / the scene's fps (24)", abs(clips["bob_s"]["frames"][0]["duration"] - 1 / 24) < 1e-9,
+         str(clips["bob_s"]["frames"][0]))
+    _, _, alpha = read_sheet(bpy, assets / "art/body/body_bob.png")
+    rows = {d: alpha[r * CELL:(r + 1) * CELL, :CELL] for r, d in enumerate(("s", "w", "n", "e"))}
+    px = {d: clips[f"bob_{d}"]["pivot"][0] for d in rows}
+    wl, wr = opaque_extent(rows["w"], px["w"])
+    el, er = opaque_extent(rows["e"], px["e"])
+    case("in the w row the model's front (its nose) points to screen left, in the e row to the right",
+         wl > wr + 3 and er > el + 3, f"w {wl}/{wr} e {el}/{er}")
+    ys = (rows["s"] > 0.5).any(axis=1).nonzero()[0]
+    py = clips["bob_s"]["pivot"][1]
+    case("the pivot is the origin: the feet, at the bottom of the model (side view)",
+         len(ys) > 0 and abs((ys[-1] + 1) - py) <= 1.5, f"bottom {ys[-1] + 1 if len(ys) else None}, pivot y {py}")
+    rc, out = run_tool(bob, "--out", assets / "art" / "body2" / "body2.png", "--action", "bob", "--directions", 1,
+                       "--name", "body2", "--manifest", manifest, *common)
+    doc = json.loads(manifest.read_text(encoding="utf-8")) if rc == 0 else {}
+    case("a second render merges into the manifest, keeping the first asset",
+         rc == 0 and [a["name"] for a in doc.get("assets", [])] == ["body", "body2"], out[-300:])
+    foreign = tmp / "town" / "dotwork" / "town.assets.json"
+    foreign.parent.mkdir(parents=True)
+    foreign.write_text(json.dumps({"format": "dotwork-assets", "version": "1.0.0", "pack": "town",
+                                   "generator": "dotwork", "base": "..", "assets": []}), encoding="utf-8")
+    rc, out = run_tool(bob, "--out", tmp / "town" / "art" / "b.png", "--action", "bob", "--directions", 1,
+                       "--manifest", foreign, *common)
+    case("a manifest Dotwork wrote is refused (exit 2), nothing rendered",
+         rc == 2 and "dotwork" in out and not (tmp / "town" / "art" / "b.png").exists(), out[-300:])
+    rc, out = run_tool(bob, "--out", tmp / "outside" / "b.png", "--action", "bob", "--directions", 1,
+                       "--manifest", manifest, *common)
+    case("a sheet outside the manifest's assets folder is refused (exit 2)", rc == 2 and "not inside" in out,
+         out[-300:])
+    # #292: a clip keyed at 30 fps (Tripo's) lands every 0.8 frames in Blender's 24 fps scene; the frames rendered
+    # and the durations written were the scene's, so the clip played at the wrong length (2 frames of 1/24 s for a
+    # clip of 2/30 s) and its loop's closing frame was missed
+    bob30 = tmp / "bob30.glb"
+    build_fixture(bpy, bob30, animate="bob", fps=30)
+    m30 = tmp / "a30" / "dotwork" / "r.assets.json"
+    rc, out = run_tool(bob30, "--out", tmp / "a30" / "art" / "b.png", "--action", "bob", "--directions", 1,
+                       "--manifest", m30, *common)
+    clip = json.loads(m30.read_text(encoding="utf-8"))["assets"][0]["clips"][0] if rc == 0 and m30.exists() else {}
+    case("a clip keyed at 30 fps renders 2 frames (the loop's repeat dropped) of 1/30 s each, at fps 30",
+         rc == 0 and len(clip.get("frames", [])) == 2 and clip.get("fps") == 30
+         and abs(clip["frames"][0]["duration"] - 1 / 30) < 1e-9 and "clips keyed at 30 fps" in out,
+         f"fps {clip.get('fps')}, frames {[f.get('duration') for f in clip.get('frames', [])]}; " + out[-300:])
 
 
 def main():
@@ -235,6 +364,17 @@ def main():
 
     rc, out = run_tool(helper, "--out", tmp / "helper_raw.png", "--directions", 1, *common)
     case("a giant helper mesh triggers the framing warning", rc == 0 and "--ignore" in out and "Helper" in out, out[-300:])
+    skinned = tmp / "skinned_strip.glb"
+    build_skinned_with_strip(bpy, skinned)
+    rc, out = run_tool(skinned, "--out", tmp / "skinned_strip.png", "--directions", 1, *common)
+    case("a skinned body beside a small skinned strip (a rig chain's scarf) is not called a helper",
+         rc == 0 and "--ignore" not in out, out[-300:])
+    offset = tmp / "offset_clip.glb"
+    build_offset_clip(bpy, offset)
+    rco, outo = run_tool(offset, "--out", tmp / "offset.png", "--actions", "all", "--directions", 1, *common)
+    case("a clip standing far from the rest pose warns, naming it and the rig fix",
+         rco == 0 and "[WARN] walk: the model's centre sits 2.00 m" in outo and "rig_finish.py" in outo
+         and "[WARN] idle:" not in outo, outo[-600:])
     rc2, out2 = run_tool(helper, "--out", tmp / "helper_ign.png", "--directions", 1, "--ignore", "Help*", *common)
     case("--ignore drops it (wildcards work)", rc2 == 0 and "ignored Helper" in out2, out2[-300:])
     if rc == 0 and rc2 == 0:
@@ -243,6 +383,7 @@ def main():
         case("ignoring the helper frames the model exactly like the plain model (within 2 px)",
              plain_front is not None and abs(opaque_width(ign) - plain_front) <= 2,
              f"plain {plain_front}, ignored {opaque_width(ign)}, raw {opaque_width(raw)}")
+    manifest_cases(bpy, tmp, case, common)
     rc, out = run_tool(moving, "--list-actions")
     case("--list-actions names the animation", rc == 0 and "frames" in out, out[-300:])
     rc, out = run_tool(moving, "--out", tmp / "x.png", "--action", "no-such-action")
@@ -270,4 +411,11 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    code = main()
+    try:
+        import bpy
+        sys.path.insert(0, str(HERE))
+        import bpy_common
+        bpy_common.end_process(bpy, code)   # the fixtures were exported with the bpy module: a plain exit crashes (#292)
+    except ImportError:
+        sys.exit(code)

@@ -1,0 +1,647 @@
+{
+ "format": "dotwork-assets",
+ "version": "1.0.0",
+ "pack": "character",
+ "generator": "render_sprites",
+ "base": "..",
+ "assets": [
+  {
+   "kind": "animated_sprite",
+   "name": "character",
+   "role": "characters",
+   "blend": "normal",
+   "clips": [
+    {
+     "name": "idle_s",
+     "fps": 4,
+     "loop": true,
+     "frame_size": [
+      48,
+      48
+     ],
+     "pivot": [
+      24.0,
+      36.94
+     ],
+     "sheet": "art/character/character_idle.png",
+     "frames": [
+      {
+       "file": "art/character/character_frames/idle_s_00.png",
+       "rect": [
+        0,
+        0,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_s_01.png",
+       "rect": [
+        48,
+        0,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_s_02.png",
+       "rect": [
+        96,
+        0,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_s_03.png",
+       "rect": [
+        144,
+        0,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_s_04.png",
+       "rect": [
+        192,
+        0,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_s_05.png",
+       "rect": [
+        240,
+        0,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_s_06.png",
+       "rect": [
+        288,
+        0,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_s_07.png",
+       "rect": [
+        336,
+        0,
+        48,
+        48
+       ],
+       "duration": 0.25
+      }
+     ],
+     "length": 2.0
+    },
+    {
+     "name": "idle_w",
+     "fps": 4,
+     "loop": true,
+     "frame_size": [
+      48,
+      48
+     ],
+     "pivot": [
+      25.31,
+      37.6
+     ],
+     "sheet": "art/character/character_idle.png",
+     "frames": [
+      {
+       "file": "art/character/character_frames/idle_w_00.png",
+       "rect": [
+        0,
+        48,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_w_01.png",
+       "rect": [
+        48,
+        48,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_w_02.png",
+       "rect": [
+        96,
+        48,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_w_03.png",
+       "rect": [
+        144,
+        48,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_w_04.png",
+       "rect": [
+        192,
+        48,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_w_05.png",
+       "rect": [
+        240,
+        48,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_w_06.png",
+       "rect": [
+        288,
+        48,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_w_07.png",
+       "rect": [
+        336,
+        48,
+        48,
+        48
+       ],
+       "duration": 0.25
+      }
+     ],
+     "length": 2.0
+    },
+    {
+     "name": "idle_n",
+     "fps": 4,
+     "loop": true,
+     "frame_size": [
+      48,
+      48
+     ],
+     "pivot": [
+      24.0,
+      38.26
+     ],
+     "sheet": "art/character/character_idle.png",
+     "frames": [
+      {
+       "file": "art/character/character_frames/idle_n_00.png",
+       "rect": [
+        0,
+        96,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_n_01.png",
+       "rect": [
+        48,
+        96,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_n_02.png",
+       "rect": [
+        96,
+        96,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_n_03.png",
+       "rect": [
+        144,
+        96,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_n_04.png",
+       "rect": [
+        192,
+        96,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_n_05.png",
+       "rect": [
+        240,
+        96,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_n_06.png",
+       "rect": [
+        288,
+        96,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_n_07.png",
+       "rect": [
+        336,
+        96,
+        48,
+        48
+       ],
+       "duration": 0.25
+      }
+     ],
+     "length": 2.0
+    },
+    {
+     "name": "idle_e",
+     "fps": 4,
+     "loop": true,
+     "frame_size": [
+      48,
+      48
+     ],
+     "pivot": [
+      22.69,
+      37.6
+     ],
+     "sheet": "art/character/character_idle.png",
+     "frames": [
+      {
+       "file": "art/character/character_frames/idle_e_00.png",
+       "rect": [
+        0,
+        144,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_e_01.png",
+       "rect": [
+        48,
+        144,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_e_02.png",
+       "rect": [
+        96,
+        144,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_e_03.png",
+       "rect": [
+        144,
+        144,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_e_04.png",
+       "rect": [
+        192,
+        144,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_e_05.png",
+       "rect": [
+        240,
+        144,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_e_06.png",
+       "rect": [
+        288,
+        144,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/idle_e_07.png",
+       "rect": [
+        336,
+        144,
+        48,
+        48
+       ],
+       "duration": 0.25
+      }
+     ],
+     "length": 2.0
+    },
+    {
+     "name": "walk_s",
+     "fps": 4,
+     "loop": true,
+     "frame_size": [
+      48,
+      48
+     ],
+     "pivot": [
+      24.0,
+      36.94
+     ],
+     "sheet": "art/character/character_walk.png",
+     "frames": [
+      {
+       "file": "art/character/character_frames/walk_s_00.png",
+       "rect": [
+        0,
+        0,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/walk_s_01.png",
+       "rect": [
+        48,
+        0,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/walk_s_02.png",
+       "rect": [
+        96,
+        0,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/walk_s_03.png",
+       "rect": [
+        144,
+        0,
+        48,
+        48
+       ],
+       "duration": 0.25
+      }
+     ],
+     "length": 1.0
+    },
+    {
+     "name": "walk_w",
+     "fps": 4,
+     "loop": true,
+     "frame_size": [
+      48,
+      48
+     ],
+     "pivot": [
+      25.31,
+      37.6
+     ],
+     "sheet": "art/character/character_walk.png",
+     "frames": [
+      {
+       "file": "art/character/character_frames/walk_w_00.png",
+       "rect": [
+        0,
+        48,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/walk_w_01.png",
+       "rect": [
+        48,
+        48,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/walk_w_02.png",
+       "rect": [
+        96,
+        48,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/walk_w_03.png",
+       "rect": [
+        144,
+        48,
+        48,
+        48
+       ],
+       "duration": 0.25
+      }
+     ],
+     "length": 1.0
+    },
+    {
+     "name": "walk_n",
+     "fps": 4,
+     "loop": true,
+     "frame_size": [
+      48,
+      48
+     ],
+     "pivot": [
+      24.0,
+      38.26
+     ],
+     "sheet": "art/character/character_walk.png",
+     "frames": [
+      {
+       "file": "art/character/character_frames/walk_n_00.png",
+       "rect": [
+        0,
+        96,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/walk_n_01.png",
+       "rect": [
+        48,
+        96,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/walk_n_02.png",
+       "rect": [
+        96,
+        96,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/walk_n_03.png",
+       "rect": [
+        144,
+        96,
+        48,
+        48
+       ],
+       "duration": 0.25
+      }
+     ],
+     "length": 1.0
+    },
+    {
+     "name": "walk_e",
+     "fps": 4,
+     "loop": true,
+     "frame_size": [
+      48,
+      48
+     ],
+     "pivot": [
+      22.69,
+      37.6
+     ],
+     "sheet": "art/character/character_walk.png",
+     "frames": [
+      {
+       "file": "art/character/character_frames/walk_e_00.png",
+       "rect": [
+        0,
+        144,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/walk_e_01.png",
+       "rect": [
+        48,
+        144,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/walk_e_02.png",
+       "rect": [
+        96,
+        144,
+        48,
+        48
+       ],
+       "duration": 0.25
+      },
+      {
+       "file": "art/character/character_frames/walk_e_03.png",
+       "rect": [
+        144,
+        144,
+        48,
+        48
+       ],
+       "duration": 0.25
+      }
+     ],
+     "length": 1.0
+    }
+   ],
+   "directions": {
+    "idle": {
+     "s": "idle_s",
+     "w": "idle_w",
+     "n": "idle_n",
+     "e": "idle_e"
+    },
+    "walk": {
+     "s": "walk_s",
+     "w": "walk_w",
+     "n": "walk_n",
+     "e": "walk_e"
+    }
+   }
+  }
+ ]
+}

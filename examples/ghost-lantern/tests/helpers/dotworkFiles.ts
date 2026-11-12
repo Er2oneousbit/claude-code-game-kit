@@ -7,6 +7,8 @@
 // Usage   : const { plan, doc } = readPlan(path) ; expect(problems(plan)).toEqual([])
 // Notes   : PNG sizes come from the IHDR chunk (no decoder needed).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): a terrain cell without a tile is a problem in
+//           every mode (spec 1.1.0 defines the corners4 key); a normal map must be its target's size (#285)
 // ---------------------------------------------------------------------------
 /// <reference types="node" />
 import { existsSync, openSync, readFileSync, readSync, closeSync } from "node:fs";
@@ -59,8 +61,8 @@ export function problems(plan: DotworkPlan): string[] {
   }
   for (const m of plan.maps.values()) {
     for (const L of m.layers) {
-      const mode = L.terrain?.mode;
-      if (L.unresolved.length && mode !== "corners4") out.push(`map ${m.name} layer ${L.name}: ${L.unresolved.length} terrain cell(s) without a tile`);
+      // spec 1.1.0: every mode's key must have a tile (the validator refuses maps where one does not)
+      if (L.unresolved.length) out.push(`map ${m.name} layer ${L.name}: ${L.unresolved.length} terrain cell(s) without a tile`);
     }
     for (const o of m.objects) if (!plan.sprites.has(o.asset) && !plan.animatedSprites.has(o.asset)) out.push(`map ${m.name}: object ${o.asset} is not an asset of this pack`);
   }
@@ -76,5 +78,11 @@ export function problems(plan: DotworkPlan): string[] {
     }
   }
   for (const pr of plan.portraits.values()) if (pr.animation && !plan.animatedSprites.has(pr.animation)) out.push(`portrait ${pr.name}: animation ${pr.animation} is not in this pack`);
+  for (const n of plan.normalMaps.values()) {
+    // Phaser samples the normal map with the target's UVs: the two PNGs must be the same size
+    const target = sizeOf(n.target);
+    const normal = existsSync(n.image) ? pngSize(n.image) : null;
+    if (target && normal && (target[0] !== normal[0] || target[1] !== normal[1])) out.push(`normal_map ${n.name}: ${normal[0]}x${normal[1]}, its target is ${target[0]}x${target[1]}`);
+  }
   return out;
 }

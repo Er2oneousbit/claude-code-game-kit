@@ -6,8 +6,11 @@
 // Usage   : DotworkVerify.Problems("Assets/dotwork/town.assets.json")   -> [] when all is well
 //           (GameKitDotwork.Verify runs it for every manifest; DotworkImportTests.EveryManifestInTheGameLoads too)
 // Notes   : The file checks are the importer's plan pass (DotworkImporter.Check), so the verify and the import
-//           can never disagree about what a manifest needs. Each problem names the fix where there is one.
+//           can never disagree about what a manifest needs. Each problem names the fix where there is one. Every
+//           kind the importer builds (the core kinds and the extra kinds) must be in the import; unknown kinds
+//           are not required.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the extra kinds are checked too (#285)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -54,7 +57,8 @@ namespace graveyard_shift.Dotwork
             foreach (Dictionary<string, object> a in m.Assets)
             {
                 string kind = DotworkManifest.Str(a, "kind", ""), name = DotworkManifest.Str(a, "name", "");
-                if (Array.IndexOf(DotworkManifest.CORE_KINDS, kind) >= 0 && !HasEntry(pack, kind, name))
+                bool built = Array.IndexOf(DotworkManifest.CORE_KINDS, kind) >= 0 || Array.IndexOf(DotworkManifest.EXTRA_KINDS, kind) >= 0;
+                if (built && !HasEntry(pack, kind, name))
                 {
                     problems.Add($"{manifestPath}: {kind}/{name} is not in the import: {FIX}");
                 }
@@ -75,6 +79,11 @@ namespace graveyard_shift.Dotwork
                 case "map": return pack.Map(name) != null;
                 case "font": return pack.Font(name) != null;
                 case "ui_kit": return pack.UiKit(name) != null;
+                case "background": return pack.Background(name) != null;
+                case "particles": return pack.Particles(name) != null;
+                case "transition": return pack.Transition(name) != null;
+                case "normal_map": return pack.NormalMap(name) != null;
+                case "image": return pack.Image(name) != null;
                 default: return true;
             }
         }
@@ -117,6 +126,19 @@ namespace graveyard_shift.Dotwork
             pack.maps.ForEach(m => Need(m.prefab, $"map/{m.name} prefab"));
             pack.fonts.ForEach(f => Need(f, "a font"));
             pack.uiKits.ForEach(k => k.parts.ForEach(p => Need(p.sprite, $"ui_kit/{k.name} {p.name}")));
+            pack.backgrounds.ForEach(b => b.layers.ForEach(l => Need(l.sprite, $"background/{b.name} layer {l.name}")));
+            foreach (DotworkParticles p in pack.particles)
+            {
+                Need(p.texture, $"particles/{p.name} texture");
+                Need(p.emitter, $"particles/{p.name} emitter JSON");
+            }
+            pack.transitions.ForEach(t => Need(t.sprite, $"transition/{t.name} image"));
+            foreach (DotworkNormalMap n in pack.normalMaps)
+            {
+                Need(n.texture, $"normal_map/{n.name} texture");
+                Need(n.targetSprite, $"normal_map/{n.name} target {n.target}");
+            }
+            pack.images.ForEach(i => Need(i.sprite, $"image/{i.name} sprite"));
             return bad;
         }
 

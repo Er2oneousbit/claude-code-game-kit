@@ -285,16 +285,23 @@ class Writer:
             self.warnings.append(f"{key}: its tileset {rec['tileset']} is not in this pack; map skipped")
             return
         T = int(rec["tile_px"])
+        tile_size = [int(v) for v in rec["tile_size"]] if rec.get("tile_size") else [T, T]   # an iso map's diamond
+        stamp_index = {s["name"]: i for i, s in enumerate(ts.get("stamps") or [])}
         layers = []
         for L in rec["layers"]:
             if L["kind"] == "terrain":
-                layers.append({"name": L["name"], "kind": "terrain", "terrain_set": 0, "terrain": int(L["terrain"]),
-                               "cells": [[int(c[0]), int(c[1])] for c in L["cells"]]})
+                layers.append({"name": L["name"], "kind": "terrain", "terrain_set": int(L.get("terrain_set", 0)),
+                               "terrain": int(L["terrain"]), "cells": [[int(c[0]), int(c[1])] for c in L["cells"]]})
+            elif L.get("stamps") and all(s[2] in stamp_index for s in L["stamps"]):
+                # mapbuild expands fixtures into cells for Godot's painter and names the stamps it placed: the
+                # manifest keeps the stamps (kind "stamps", 1.1.0), so every engine places the whole piece
+                layers.append({"name": L["name"], "kind": "stamps",
+                               "cells": [[int(s[0]), int(s[1]), stamp_index[s[2]]] for s in L["stamps"]]})
             else:
                 layers.append({"name": L["name"], "kind": "tiles", "cells": [[int(v) for v in c[:5]] for c in L["cells"]]})
         objects = [{"asset": _safe_name(p["name"]), "x": _num(p["x"]), "y": _num(p["y"])} for p in rec.get("props") or []]
         self.add({"kind": "map", "name": posixpath.basename(key)[:-len(".tscn")], "tileset": ts["name"],
-                  "size": [int(rec["w"]), int(rec["h"])], "tile_size": [T, T], "layers": layers,
+                  "size": [int(rec["w"]), int(rec["h"])], "tile_size": tile_size, "layers": layers,
                   "objects": objects or None, "godot": self.godot_ref(key)})
 
     # ---- rows ---------------------------------------------------------------------------------

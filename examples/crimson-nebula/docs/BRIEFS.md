@@ -85,6 +85,36 @@ Input: one clean front-view concept image (plain background, neutral pose), or: 
 - Kit pieces: generate PARTS (walls, towers, flags, banners as separate pieces) and assemble in Blender, instead of whole buildings. Flags separate so team color is a material swap **(one video, E16)**.
 - Color alignment: if a generated piece clashes with the environment, run its base color through an image-edit model with an environment reference, then re-apply. Ask for ground decals (walls, road bits) so buildings do not look pasted on.
 
+### Model-ready reference views (paste into a chat image tool)
+The same instructions `bozzetto.py reference` sends (README "Reference views"), for a chat with an image model
+(Gemini, ChatGPT, Grok and the like). One message per view, in one chat, so the model keeps the design. Attach the
+concept to the first message, or replace its first line with the character description.
+```
+1. (concept attached) Redraw this exact character as a full-body front view model reference. Keep every design detail
+   identical: face, hair, body proportions, outfit, colours, materials, markings and accessories. Change only the
+   pose, the camera, the light and the background: a relaxed A-pose, standing straight, both arms held about 35 degrees
+   out from the body with a clear gap between each arm and the torso, hands open with the fingers relaxed, legs a
+   little apart, feet flat on the ground; loose cloth such as scarves, capes, coat tails and long hair hangs straight
+   down under gravity, not blowing; orthographic straight-on camera at chest height with no perspective distortion,
+   flat even lighting with no cast shadows, plain light grey background, nothing else in frame: no ground, no props,
+   no text, no frame. Show the whole figure from head to feet, centered. Square picture.
+   (no concept) [CHARACTER DESCRIPTION, ART_STYLE]. Full-body character model reference, front view facing the viewer,
+   the whole figure from head to feet centered with space around it, then the same A-pose, cloth and camera lines.
+2. Now show this exact same character, in the same A-pose, from its left side: a side profile of its left side,
+   facing the left edge of the picture. Keep every design detail, proportion and colour identical; the same scale and
+   framing with the feet on the same line; the same flat light and plain light grey background; orthographic, nothing
+   else in frame.
+3. The same, "from directly behind: the back of the head and body toward the viewer".
+4. The same, "from its right side: a side profile of its right side, facing the right edge of the picture".
+```
+- Save them as `front.png`, `left.png`, `back.png`, `right.png` in `assets_src/bozzetto/<name>/reference/`, then
+  `bozzetto.py make <name> --image .../front.png --class npc`. Log them with `/asset-intake` (tool, plan, date,
+  prompt): who owns the pictures depends on the tool's terms and plan **(verify)**.
+- Reject if: the costume or colours changed between views, arms touch the body, a hand is a fist or holds something,
+  a cape or scarf flies, a cast shadow or a gradient background, the feet are cut off, a view is mirrored instead of
+  turned (a side part or a badge on the wrong side), perspective (the near arm bigger than the far one).
+- A view keeps failing: start a fresh chat with only the approved front attached and ask for that one view.
+
 **Tripo AI specifics** **(verify, from a mid-2026 third-party review, E29)**
 - Image input: single clear image (JPG, PNG, WEBP, reported 5 MB limit). Cluttered backgrounds and busy photos give weaker meshes, so use a clean
   front-view concept with a plain background (make it with the image-generator patterns above).

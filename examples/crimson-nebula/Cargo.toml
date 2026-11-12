@@ -7,6 +7,7 @@
 #           The dev profile optimizes dependencies but not the game: debug builds stay quick to rebuild and
 #           Bevy still runs at full speed (Bevy's own recommendation).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the jpeg feature for generated characters' textures
 # ---------------------------------------------------------------------------
 [package]
 name = "project_crimson_nebula"
@@ -16,7 +17,9 @@ rust-version = "1.97.1"
 publish = false
 
 [dependencies]
-bevy = "0.20"
+# jpeg: Bevy's defaults decode PNG only, and a generated character's textures are often JPEG (Tripo's are), so a
+# rigged .glb would fail to load with InvalidImageMimeType("image/jpeg") (docs/ENGINE.md "Rigged characters")
+bevy = { version = "0.20", features = ["jpeg"] }
 # JSON for settings, saves and string tables (src/logic/); Bevy's default features build it anyway
 serde_json = "1"
 # Typed reading of the Dotwork asset manifests (src/dotwork/); Bevy already builds serde with derive

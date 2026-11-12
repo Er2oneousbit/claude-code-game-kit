@@ -10,6 +10,8 @@
 //   update: advance the clip; walk; at an edge turn round and switch to the other direction's clip
 //   draw: map (+ its objects by y) -> label -> prop -> walker
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the map box from map_bounds (#285), so an
+//           isometric map's left half is not drawn off the box
 // ---------------------------------------------------------------------------
 #include "game/DotworkShowcase.hpp"
 
@@ -114,11 +116,14 @@ void DotworkShowcase::draw(float floor_y, const std::string& label) {
     float label_x = kMargin, label_y = kLabelY;   // under the map when there is one
     if (map_.item) {
         const dw::Map& m = *map_.item;
-        const float map_w = static_cast<float>(m.w * m.tile_w), map_h = static_cast<float>(m.h * m.tile_h);
+        // What the cells cover (an isometric map reaches left of its pixel 0: bounds.left is negative there)
+        const dw::MapBounds bounds = dw::map_bounds(m);
+        const float map_w = static_cast<float>(bounds.w), map_h = static_cast<float>(bounds.h);
         const float fit = map_w * kArtScale <= kMapBoxW && map_h * kArtScale <= kMapBoxH ? kArtScale : 1.0f;
-        const float mx = static_cast<float>(shell::style::kBaseW) - kMargin - map_w * fit;
+        const float box_x = static_cast<float>(shell::style::kBaseW) - kMargin - map_w * fit;   // the box's left
+        const float mx = box_x - static_cast<float>(bounds.left) * fit;                          // map pixel 0
         art_->draw_map(*map_.pack, m, mx, kMargin, fit, seconds_);
-        label_x = mx;
+        label_x = box_x;
         label_y = kMargin + map_h * fit + kMargin / 2;
         std::vector<const dw::MapObject*> objects;   // props on the map, sorted by y (feet)
         for (const auto& o : m.objects) {

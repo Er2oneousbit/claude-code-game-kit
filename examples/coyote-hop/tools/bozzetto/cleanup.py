@@ -24,9 +24,13 @@
 #           Decimation is Blender's Decimate (collapse); it keeps UVs but can blur a texture seam. Check by eye.
 #           A mesh without a UV map (TRELLIS.2's vertex-colour output) gets one from Smart UV Project after
 #           decimation: engines need it for lightmaps, and validate_asset.py fails a mesh without one.
+#           --rebake (tools/blender/rebake_uvs.py, #293): a fresh UV layout for a textured mesh and its textures
+#           baked onto it at --texture pixels, after decimation (the bake wants the final mesh). A vendor atlas
+#           (Tripo: 6,805 islands covering 29% of the texture) cannot be fixed any other way. The report's
+#           "rebake" entry has coverage before and after, the maps, the bake settings and the before/after check.
 #           --turn rotates around the up axis (degrees, counter-clockwise seen from above) so the model's front
 #           faces Blender's front (-Y), which is glTF's +Z: the direction the glTF spec calls the asset's front.
-# Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Authored: Written with Claude (Opus 5.5, claude-opus-5-5); --rebake with Claude (Fable 5.1, claude-fable-5-1)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -37,6 +41,8 @@
 #   clear custom normals, shade smooth
 #   triangles > --max-tris: Decimate (collapse) at max / tris, applied (twice if the first pass lands above)
 #   no UV map: Smart UV Project (vertex colours stay; report uv_added)
+#   --rebake (and the UV map is the file's own): rebake_uvs.rebake -> new layout, textures baked, checked;
+#     a failed check (textures lost) -> exit 1, nothing written
 #   rotate --turn around Z -> scale so the height (Z) is --height -> bottom centre to the origin
 #   name the object, mesh, materials and images after --name -> export .glb (prep_export's GLTF_PRESET) -> JSON
 import argparse
@@ -54,6 +60,7 @@ MIN_PART = 0.01           # parts with fewer than this share of all faces are dr
 DECIMATE_MARGIN = 0.97    # aim a little under the budget: collapse decimation overshoots by a few triangles
 UV_ANGLE = 66.0           # Smart UV Project for a mesh without UVs: Blender's default angle limit (degrees)
 UV_MARGIN = 0.003         # and island margin, a little room between islands for lightmap bleeding
+TEXTURE_SIZES = (256, 512, 1024, 2048, 4096)   # --texture for --rebake (rebake_uvs.TEXTURE_SIZES, checked without bpy)
 
 
 def dbg(msg):
@@ -81,12 +88,21 @@ def parse_args(argv):
                     help=f"merge distance as a fraction of the bounds diagonal (default {MERGE_DISTANCE})")
     ap.add_argument("--min-part", type=float, default=MIN_PART,
                     help=f"drop parts with less than this share of the faces (default {MIN_PART}; 0 keeps all)")
+    ap.add_argument("--rebake", action="store_true",
+                    help="a fresh UV layout and the textures baked onto it (tools/blender/rebake_uvs.py): for a "
+                         "vendor atlas of tiny islands that fails the SOP-11 coverage floor")
+    ap.add_argument("--texture", type=int, default=0,
+                    help="--rebake: texture size in pixels (default 0: the largest image the model reads)")
     ap.add_argument("--json", dest="json_out", help="write the report (counts before and after) as JSON here")
     ap.add_argument("--overwrite", action="store_true", help="replace --out if it exists")
     ap.add_argument("--debug", action="store_true", help="verbose output and full tracebacks")
     args = ap.parse_args(argv)
     if args.max_tris < 0 or args.height < 0 or not 0 <= args.min_part < 1 or not 0 <= args.merge < 0.1:
         ap.error("need --max-tris >= 0, --height >= 0, 0 <= --min-part < 1 and 0 <= --merge < 0.1")
+    if args.texture and not args.rebake:
+        ap.error("--texture goes with --rebake")
+    if args.texture and args.texture not in TEXTURE_SIZES:
+        ap.error(f"--texture must be one of {', '.join(str(s) for s in TEXTURE_SIZES)}")
     return args
 
 
@@ -323,6 +339,17 @@ def run(args):
     smooth(bpy, obj)
     decimate(bpy, obj, args.max_tris, report)
     ensure_uvs(bpy, obj, report)
+    if args.rebake and not report["uv_added"]:   # a map this run just made is already a fresh layout
+        import rebake_uvs   # noqa: E402  (tools/blender: the unwrap, the bakes and the check)
+        rebake_uvs.DEBUG = DEBUG
+        report["rebake"] = {}
+        if not rebake_uvs.rebake(bpy, va, obj, args.texture, report["rebake"]):
+            print("[FAIL] the rebake did not match the original (see the [FAIL] line above); nothing written. "
+                  "Run without --rebake to keep the file's own atlas", file=sys.stderr)
+            return 1
+    elif args.rebake:
+        report["rebake"] = None
+        print("[info] --rebake: the mesh had no UV map, so the one just added is the fresh layout (nothing to bake)")
     place(obj, args, report)
     rename(obj, args.name or out.stem)
     report["tris_out"] = tri_count(obj.data)
@@ -365,4 +392,5 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    import prep_export   # its end_process: the bpy module crashes while the process ends on Windows (bpy 4.2
+    prep_export.end_process(main())   # after a glTF export), which would hide the exit code

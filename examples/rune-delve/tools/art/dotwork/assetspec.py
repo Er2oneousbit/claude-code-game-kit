@@ -19,10 +19,16 @@
 #               animated_sprite: per clip, each frame's rect and seconds (= hold / fps), length = sum, loop, pivot
 #               sprite: size, pivot, collision rects; icon: sizes; portrait: expressions
 #               tileset: tile count, masks per terrain, collision and animated tile counts
-#               map: per terrain layer, each cell's 8-neighbour mask (corner bits only with both sides) and the first
-#                    tile of that terrain with that mask (the base set); tile layers counted; objects listed
+#               map: per terrain layer, each cell's key (blob47 / sides4: the 8-neighbour mask, corner bits only
+#                    with both sides; corners4: the corner bits of that mask) and the tile of that terrain with that
+#                    key, picked among variants by probability with the cell's own roll (cell_roll, the same number
+#                    in every engine); stamps layers expanded into their tiles; every placed cell of every layer with
+#                    the pixel corner its image is drawn at (cell_centre minus the tile's origin); tile layers
+#                    counted; objects listed
 #               font: metrics and one sample glyph; ui_kit: margins and hotspots; background: layer motion
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): the corners4 rule, isometric
+#           placement, the variant pick, stamps layers, placed cells in the loaded result
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -36,20 +42,27 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_PATH = os.path.join(HERE, "asset_manifest.schema.json")
 
 FORMAT = "dotwork-assets"
-VERSION = "1.0.0"          # MAJOR.MINOR.PATCH: an importer reads every manifest of its own major version
+VERSION = "1.1.0"          # MAJOR.MINOR.PATCH: an importer reads every manifest of its own major version
 SUFFIX = ".assets.json"    # <assets_dir>/dotwork/<pack>.assets.json
 KINDS = ("animated_sprite", "sprite", "icon", "portrait", "tileset", "map", "font", "ui_kit",   # core: every importer
          "background", "particles", "transition", "normal_map", "image")                       # extra: may be skipped
 CORE_KINDS = KINDS[:8]
 DIRECTIONS = ("s", "e", "n", "w", "se", "ne", "nw", "sw")
+LAYER_KINDS = ("tiles", "terrain", "stamps")   # stamps since 1.1.0
 
 # 8-neighbour autotile masks. Bit order N, NE, E, SE, S, SW, W, NW: a set bit means that neighbour holds the same
 # terrain. Godot's Match Corners and Sides and Dotwork's lane_ground use this order (lane_ground.NB8).
 NB8 = ((0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1))
 BIT = {"n": 1, "ne": 2, "e": 4, "se": 8, "s": 16, "sw": 32, "w": 64, "nw": 128}
 SIDES_ONLY = BIT["n"] | BIT["e"] | BIT["s"] | BIT["w"]
+CORNERS_ONLY = BIT["ne"] | BIT["se"] | BIT["sw"] | BIT["nw"]
 SQUARE_CORNERS = ("top_left", "top_right", "bottom_left", "bottom_right")
 ISO_CORNERS = ("top", "right", "bottom", "left")
+# a cell's corner, named per shape, and the mask bit of the neighbour across it (the diagonal cell); on a diamond
+# the NW cell is up the screen (top), NE is right, SE is bottom, SW is left (Godot's get_neighbor_cell, 2026-11-11)
+CORNER_BITS = {"square": {"top_left": BIT["nw"], "top_right": BIT["ne"], "bottom_right": BIT["se"], "bottom_left": BIT["sw"]},
+               "isometric": {"top": BIT["nw"], "right": BIT["ne"], "bottom": BIT["se"], "left": BIT["sw"]}}
+M32 = 0xFFFFFFFF
 
 
 class SpecError(Exception):
@@ -69,14 +82,91 @@ BLOB = tuple(sorted({canon(m) for m in range(256)}))   # the 47 masks; 255 = sur
 
 
 def cell_mask(painted, x, y, mode="blob47"):
-    """The mask a painted cell at (x, y) needs, from the set of painted (x, y) cells of the same terrain."""
+    """The key a painted cell at (x, y) needs, from the set of painted (x, y) cells of the same terrain: blob47 the
+    canon mask, sides4 the four side bits, corners4 the four corner bits of the canon mask (a corner is the terrain
+    only when all four cells meeting there are painted: what Godot's Match Corners painting does over a base fill,
+    probed on 4.7.2, 2026-11-11)."""
     m = 0
     for b, (dx, dy) in enumerate(NB8):
         if (x + dx, y + dy) in painted:
             m |= 1 << b
     if mode == "sides4":
         return m & SIDES_ONLY
+    if mode == "corners4":
+        return canon(m) & CORNERS_ONLY
     return canon(m)
+
+
+def corners_of(key, shape, terrain):
+    """A corners4 cell key -> {corner name: terrain or -1}: the painted terrain where the corner's bit is set, -1 (any
+    other terrain) where not. A tile matches when its corners equal the terrain exactly where the key says."""
+    return {name: (terrain if key & bit else -1) for name, bit in CORNER_BITS.get(shape, CORNER_BITS["square"]).items()}
+
+
+def tile_key(tile, mode, shape):
+    """The key a tileset tile answers to: its mask (blob47, sides4), or the corner bits of its own terrain (corners4);
+    None when it has neither."""
+    if mode in ("blob47", "sides4"):
+        return tile.get("mask")
+    corners = tile.get("corners")
+    if corners is None:
+        return None
+    names = CORNER_BITS.get(shape, CORNER_BITS["square"])
+    if set(corners) != set(names):
+        return None
+    return sum(bit for name, bit in names.items() if corners[name] == tile["terrain"])
+
+
+# ---- deterministic variant pick ----------------------------------------------------------------
+def hash32(k):
+    """Bob Jenkins' 32-bit integer hash (six shifts): only shifts, adds and xors, every step kept to 32 bits, so a
+    port needs no 64-bit multiply (Lua's doubles, JavaScript's int32 ops and C's uint32_t all agree)."""
+    k &= M32
+    k = (k + 0x7ED55D16 + (k << 12)) & M32
+    k = (k ^ 0xC761C23C ^ (k >> 19)) & M32
+    k = (k + 0x165667B1 + (k << 5)) & M32
+    k = ((k + 0xD3A2646C) ^ (k << 9)) & M32
+    k = (k + 0xFD7046C5 + (k << 3)) & M32
+    k = (k ^ 0xB55A4F09 ^ (k >> 16)) & M32
+    return k
+
+
+def cell_roll(x, y, layer):
+    """The roll in [0, 1) that picks a terrain cell's variant: from the cell and the index of its layer in the map's
+    layers list, the same number in every engine (negative or huge coordinates wrap at 16 bits)."""
+    return hash32(hash32(((x & 0xFFFF) << 16) | (y & 0xFFFF)) + layer) / 4294967296.0
+
+
+def pick_variant(candidates, roll):
+    """candidates: [(weight, value)] in atlas order; the value whose weight span holds roll * total (the sum of the
+    weights), the first when every weight is 0. Weight 0 is never picked."""
+    total = sum(w for w, _ in candidates)
+    if total <= 0:
+        return candidates[0][1]
+    u = roll * total
+    for w, v in candidates:
+        u -= w
+        if u < 0:
+            return v
+    return candidates[-1][1]
+
+
+# ---- cells on the screen -----------------------------------------------------------------------
+def cell_centre(shape, x, y, tile_size):
+    """The centre of map cell (x, y) in map pixels (y down): squares in rows, isometric diamonds in Godot's
+    diamond-down layout (x runs down-right, y down-left; cell (0, 0) at (w/2, h/2), as TileMapLayer.map_to_local
+    gives on 4.7.2, 2026-11-11). A tile's image is drawn with its origin on this point."""
+    w, h = tile_size
+    if shape == "isometric":
+        return [(x - y + 1) * w / 2, (x + y + 1) * h / 2]
+    return [(x + 0.5) * w, (y + 0.5) * h]
+
+
+def tile_origin(tile, atlas):
+    """The image point drawn on the cell centre: the tile's own origin, else the centre of the atlas tile."""
+    if tile.get("origin"):
+        return list(tile["origin"])
+    return [atlas["tile_size"][0] / 2, atlas["tile_size"][1] / 2]
 
 
 # ---- files ---------------------------------------------------------------------------------
@@ -363,8 +453,9 @@ def _check_tileset(a, w, png, errs):
                     errs.append(f"{tw_}: mask {t.get('mask')} is not one of the 47 blob masks")
                 elif mode == "sides4" and (t.get("mask") is None or t["mask"] & ~SIDES_ONLY):
                     errs.append(f"{tw_}: a sides4 mask uses only the N, E, S and W bits")
-                elif mode == "corners4" and not t.get("corners"):
-                    errs.append(f"{tw_}: a corners4 tile needs corners")
+                elif mode == "corners4" and set(t.get("corners") or ()) != set(CORNER_BITS.get(a["shape"], {})):
+                    errs.append(f"{tw_}: a corners4 tile on a {a['shape']} set names the corners "
+                                f"{sorted(CORNER_BITS.get(a['shape'], {}))}")
             for s in t.get("collision") or []:
                 x, y, cw, ch = s["rect"]
                 if x < 0 or y < 0 or x + cw > tw or y + ch > th:
@@ -386,18 +477,33 @@ def _check_map(a, w, tilesets, names, errs):
         return
     tiles = _tile_index(ts)
     modes = {(s["id"], t["id"]): s["mode"] for s in ts["terrain_sets"] for t in s["terrains"]}
+    stamps = ts.get("stamps") or []
     mw, mh = a["size"]
-    for L in a["layers"]:
+    for i, L in enumerate(a["layers"]):
         lw = f"{w} layer {L['name']}"
         for c in L["cells"]:
             if not (0 <= c[0] < mw and 0 <= c[1] < mh):
                 errs.append(f"{lw}: cell {c[:2]} is outside the {mw}x{mh} map")
                 break
-            if L["kind"] == "tiles" and tuple(c[2:5]) not in tiles:
+            if L["kind"] == "tiles" and (len(c) < 5 or tuple(c[2:5]) not in tiles):
                 errs.append(f"{lw}: cell {c[:2]} names tile {c[2:5]}, which the tileset does not have")
                 break
-        if L["kind"] == "terrain" and (L.get("terrain_set", 0), L["terrain"]) not in modes:
-            errs.append(f"{lw}: terrain {L['terrain']} is not in tileset {ts['name']}")
+            if L["kind"] == "stamps":
+                if len(c) < 3 or c[2] >= len(stamps):
+                    errs.append(f"{lw}: cell {c[:2]} names stamp {c[2:3]}; the tileset has {len(stamps)}")
+                    break
+                sw, sh = stamps[c[2]]["size"]
+                if c[0] + sw > mw or c[1] + sh > mh:
+                    errs.append(f"{lw}: stamp {stamps[c[2]]['name']} at {c[:2]} leaves the {mw}x{mh} map")
+                    break
+        if L["kind"] == "terrain":
+            if (L.get("terrain_set", 0), L["terrain"]) not in modes:
+                errs.append(f"{lw}: terrain {L['terrain']} is not in tileset {ts['name']}")
+            else:
+                bad = [f"{x},{y}" for x, y, _, tile in resolve_terrain(ts, L, i) if tile is None]
+                if bad:
+                    errs.append(f"{lw}: no tile for {len(bad)} cell(s) ({', '.join(bad[:6])}): a corners4 terrain "
+                                f"needs shapes at least 2 cells thick, a blob needs all 47 masks")
     for o in a.get("objects") or []:
         if not any(n == o["asset"] for (_, n) in names):
             errs.append(f"{w}: object {o['asset']!r} is not an asset in this manifest")
@@ -410,23 +516,62 @@ def _r(x):
     return int(x) if x == int(x) else x
 
 
-def resolve_terrain(ts, layer):
-    """Each painted cell of a terrain layer -> [x, y, mask, [atlas, col, row]]: the first tile (atlas order) of the
-    layer's terrain whose mask is the cell's. Godot picks among same-mask tiles by probability; the first is the
-    base set, which every importer can reproduce."""
+def resolve_terrain(ts, layer, layer_index=0):
+    """Each painted cell of a terrain layer -> [x, y, key, [atlas, col, row]] (sorted by y, then x): the key is
+    cell_mask's (the mask, or the corner bits), the tile is picked among the layer's terrain's tiles with that key
+    (atlas order) by probability with the cell's roll (cell_roll(x, y, layer_index)), None when no tile has the key.
+    Godot rolls its own dice among the same tiles, so a Godot map and another engine's map agree in shape, and the
+    other engines agree with each other in variants too."""
     sid, tid = layer.get("terrain_set", 0), layer["terrain"]
     mode = next(s["mode"] for s in ts["terrain_sets"] if s["id"] == sid)
-    by_mask = {}
+    by_key = {}
     for at in ts["atlases"]:
         for t in at["tiles"]:
-            if t.get("terrain") == tid and t.get("terrain_set", 0) == sid and "mask" in t:
-                by_mask.setdefault(t["mask"], [at["id"], t["col"], t["row"]])
+            if t.get("terrain") == tid and t.get("terrain_set", 0) == sid:
+                k = tile_key(t, mode, ts.get("shape", "square"))
+                if k is not None:
+                    by_key.setdefault(k, []).append((t.get("probability", 1), [at["id"], t["col"], t["row"]]))
     painted = {(c[0], c[1]) for c in layer["cells"]}
     out = []
     for x, y in sorted(painted, key=lambda p: (p[1], p[0])):
-        m = cell_mask(painted, x, y, mode)
-        out.append([x, y, m, by_mask.get(m)])
+        k = cell_mask(painted, x, y, mode)
+        cands = by_key.get(k)
+        out.append([x, y, k, pick_variant(cands, cell_roll(x, y, layer_index)) if cands else None])
     return out
+
+
+def expand_stamps(ts, layer):
+    """Each [x, y, stamp] of a stamps layer -> the stamp's tiles as [x, y, atlas, col, row] in reading order (tile j
+    at (x + j % w, y + j // w)), in the order of the layer's cells."""
+    stamps = ts.get("stamps") or []
+    out = []
+    for c in layer["cells"]:
+        st = stamps[c[2]]
+        sw = st["size"][0]
+        for j, (atlas, col, row) in enumerate(st["tiles"]):
+            out.append([c[0] + j % sw, c[1] + j // sw, atlas, col, row])
+    return out
+
+
+def placed_cells(ts, layer, layer_index):
+    """Every cell a layer draws, as [x, y, atlas, col, row]: tiles layers as they are (flags dropped), terrain layers
+    resolved (cells with no tile left out), stamps layers expanded."""
+    if layer["kind"] == "terrain":
+        return [[x, y] + tile for x, y, _, tile in resolve_terrain(ts, layer, layer_index) if tile]
+    if layer["kind"] == "stamps":
+        return expand_stamps(ts, layer)
+    return [list(c[:5]) for c in layer["cells"]]
+
+
+def draw_corner(ts, shape, tile_size, cell):
+    """Where a placed cell's image lands: [left, top] in map pixels, the cell centre less the tile's origin (the atlas
+    tile's centre unless the tile sets its own, as an iso block does)."""
+    x, y, aid, col, row = cell
+    atlas = next(a for a in ts["atlases"] if a["id"] == aid)
+    tile = next((t for t in atlas["tiles"] if t["col"] == col and t["row"] == row), {})
+    cx, cy = cell_centre(shape, x, y, tile_size)
+    ox, oy = tile_origin(tile, atlas)
+    return [_r(cx - ox), _r(cy - oy)]
 
 
 def expected(doc):
@@ -472,12 +617,22 @@ def expected(doc):
                         "masks": {tk: sorted(v) for tk, v in sorted(masks.items())}}
         elif k == "map":
             ts = tilesets.get(a["tileset"])
-            layers, terrain = {}, {}
-            for L in a["layers"]:
-                layers[L["name"]] = len(L["cells"])
-                if L["kind"] == "terrain" and ts:
-                    terrain[L["name"]] = resolve_terrain(ts, L)
-            out[key] = {"size": a["size"], "layers": layers, "terrain": terrain,
+            shape = ts.get("shape", "square") if ts else "square"
+            layers, terrain, placed = {}, {}, {}
+            for i, L in enumerate(a["layers"]):
+                if ts:
+                    cells = placed_cells(ts, L, i)
+                    layers[L["name"]] = len(cells)
+                    placed[L["name"]] = [c + draw_corner(ts, shape, a["tile_size"], c) for c in cells]
+                    if L["kind"] == "terrain":
+                        terrain[L["name"]] = resolve_terrain(ts, L, i)
+                else:
+                    layers[L["name"]] = len(L["cells"])
+            mw, mh = a["size"]
+            out[key] = {"size": a["size"], "shape": shape, "tile_size": a["tile_size"], "layers": layers,
+                        "terrain": terrain, "placed": placed,
+                        "centres": [[x, y] + [_r(v) for v in cell_centre(shape, x, y, a["tile_size"])]
+                                    for y in range(mh) for x in range(mw)],
                         "objects": [[o["asset"], _r(o["x"]), _r(o["y"])] for o in a.get("objects") or []]}
         elif k == "font":
             sample = next((c for c in a["chars"] if c[0] == 65), a["chars"][0] if a["chars"] else None)

@@ -8,7 +8,9 @@ The 3D tools are separate primitives, not one suite: Bozzetto calls the Blender 
 as well on a model you made, bought or downloaded.
 | Job | Tool | More |
 |---|---|---|
+| A character concept or idea to model-ready views (A-pose front, left, back, right) | `python tools/bozzetto/bozzetto.py reference <name> --from <concept.png>` (or `--prompt "..."`; `--with nanobanana` or `tripo` is paid) | [Local generation](#local-generation-bozzetto), `tools/bozzetto/README.md` "Reference views" |
 | A model from a picture or a sentence, on your own GPU | `python tools/bozzetto/bozzetto.py make <name> --image <ref.png>` (or `--prompt "..."`) | [Local generation](#local-generation-bozzetto), `tools/bozzetto/README.md` |
+| The same from Tripo (paid credits, no GPU; one picture, several views or a sentence) | `bozzetto.py make <name> --with tripo --image <ref.png>` (or `--front F --back B ...`, or `--prompt "..."`) | [Local generation](#local-generation-bozzetto) "The Tripo route", `tools/bozzetto/README.md` |
 | Clean a raw generated mesh (merge, fragments, decimate, height, pivot) | `tools/bozzetto/cleanup.py`, in Blender | `tools/bozzetto/README.md` "What lands where" |
 | Look at a model from every side | `tools/bozzetto/turntable.py`, in Blender | `tools/bozzetto/README.md` |
 | Check a model against its class budget | `tools/blender/validate_asset.py <file.glb> --class <class>` | Stage 4 below |
@@ -16,9 +18,11 @@ as well on a model you made, bought or downloaded.
 | A 2D sprite sheet from a 3D model | `tools/blender/render_sprites.py` (or `bozzetto.py make --sprites`) | [3D source, 2D game](#3d-source-2d-game-sprite-sheets) |
 | Procedural props, kits, shaders, batch jobs | Claude-written scripts in `tools/blender/` | [Claude and Blender](#claude-and-blender) |
 | Rig a character (skeleton, skin weights, Mixamo bone names, clips) | `python tools/bozzetto/bozzetto.py rig make <name>` (UniRig, free, your GPU; or `--with tripo`, paid) | `tools/bozzetto/README.md` "Rig a character" |
+| Secondary motion: a scarf, cape, hair or tail that swings | `python tools/bozzetto/bozzetto.py rig chain <name> --part colour:#rrggbb` (Blender, free) | `tools/bozzetto/README.md` "Secondary motion" |
 | Animate beyond that, retarget, creatures | Guidance and scripts | [Animation](#animation), `docs/resources/pipelines.md` |
-| Paid generators (Meshy and others; Tripo for rigging only) | Not wired in (Tripo: `rig --with tripo`) | `docs/resources/ai-tools.md` |
+| Paid generators (Meshy and others) | Not wired in (Tripo is: `make --with tripo`, `rig --with tripo`, `reference --with tripo`; Gemini: `reference --with nanobanana`) | `docs/resources/ai-tools.md` |
 | Log and credit an asset | `/asset-intake` | Stage 7 below |
+| A whole character, from "it should look like this" (an idea, a sentence or a picture) to it moving in the game, with a look and a yes at every step | the `make-character` skill (`/make-character`) | Follows this SOP; a worked run in the kit's `workflows/make-character/` |
 | Ask Claude for any of it | the `model-pipeline` skill | Follows this SOP |
 
 ## Honest division of labor
@@ -64,9 +68,29 @@ preview; `check` says what is missing. Setup, options and limits: `tools/bozzett
   or vanish, the UVs pass coverage but warn on texel density, characters have no rig. Treat every result as a draft.
 - Give it one object, whole, on a plain background, in a three-quarter view (characters: front view, A-pose). Audition
   pictures first (`--prompt ... --reference-only`, seconds each); a 3D run costs minutes. Try two or three seeds.
+- **A character starts with reference views.** A concept in a dynamic pose (arms against the body, a flying scarf)
+  makes a mesh with fused arms (K01: limbs held close to the body merged or vanished) and a rig that cannot move them. `bozzetto.py reference <name> --from <concept.png>`
+  (or `--prompt "..."`) redraws the same design in a relaxed A-pose, arms about 35 degrees out, hands open, flat light,
+  plain light grey background, and turns it to the left, back and right; then `make <name> --image
+  assets_src/bozzetto/<name>/reference/front.png --class npc`. Local is free (Qwen-Image-Edit and FLUX.2 klein through
+  ComfyUI); `--with nanobanana` (Gemini) and `--with tripo` are paid: run `--quote-only`, show the price and ask
+  before the real run, and keep `--max-cost` low. Look at `assets_src/bozzetto/<name>/reference/sheet.png` before any 3D run: the same costume in
+  every view, a gap under each arm, nothing cut off, and left and right not swapped (the first two live runs' left
+  views faced the wrong way; K01): `bozzetto.py reference <name> --swap-sides` swaps them with the sheet, the record
+  and the asset log, no GPU and no cost. Local, cold: about 7 minutes for four views; Tripo's route ran live (10 credits
+  a task, 2026-11-11, K01); Nano Banana needs a Google key with billing on (a free-tier key is refused with HTTP 429).
 - Licences: TRELLIS.2 and BiRefNet are MIT; DINOv3 (its image encoder) has a use-restriction list (military, weapons)
   whose reach over game props is an open question to settle before you ship such a model (`tools/bozzetto/LICENSES.md`).
   Upstream TRELLIS.2's RMBG-2.0 and nvdiffrast are non-commercial and never loaded (E147, E148, E149).
+- **The Tripo route** (`make <name> --with tripo`): the Tripo3D API makes the mesh instead (`--image`, several views
+  with `--front` plus `--left`/`--back`/`--right`, or `--prompt`), then the same cleanup, budget check, LODs, turntable
+  and log row follow. It costs paid API credits (a Tripo Studio plan adds none): `--quote-only` prints the price
+  without a key, on a real run the quote is printed first, `--max-credits` (default 150) caps a run, and a re-run
+  reuses the paid task. A P2 image-to-model cost 110 credits in the kit's test, not the 30 of the public table
+  (E153), and a P2 multiview-to-model 110 (2026-11-11, K01); Tripo has no price endpoint (E160), so text-to-model and
+  the P1 series are quoted at that ceiling until measured. Outputs on paid credits are the user's (Tripo terms 5.2.2, E153). Tripo
+  exports facing +X (E160): Bozzetto turns its models to glTF's +Z **(verify on a live run)**; check the turntable,
+  `--turn` overrides. Ask the user before every paid run.
 
 ## Claude and Blender
 - Default: headless scripts in `tools/blender/`. Diffable, repeatable, reviewable.
@@ -113,7 +137,11 @@ Have Claude call Blender's own operators (Smart UV Project, then pack islands wi
 | Texel density spread | Within about 2x between islands |
 | Overlap | None, except mirrored islands on purpose |
 | Stretch | Checker texture, look |
-`validate_asset.py` reports coverage, island count, and missing UVs. Hand-fix hero assets.
+`validate_asset.py` reports coverage, island count, and missing UVs. Hand-fix hero assets. A generated model's atlas
+is the vendor's: `tools/blender/rebake_uvs.py` (Bozzetto runs it in cleanup, on by default on the Tripo route) gives
+it a fresh layout and bakes its textures onto it, checked by rendering both; a Tripo character went from 29% to 46%
+that way, under the hero floor still (Blender's packer cannot nest islands in ring-shaped ones), so `--accept-uv`
+ships such a model with the waiver on its asset log row (`tools/bozzetto/README.md` "UV coverage").
 
 ## Vegetation and nature (tip, grade C: one creator, E03 and E04)
 Reported pattern, not a rule: research species for the setting, run a model-render-improve loop on three trees as a style test, then make them game-ready: bake leaf clusters
@@ -128,6 +156,13 @@ to textured planes (leaf cards), keep trunk and main branches as geometry, reuse
   Prompt2Rig) are Apache-2.0 themselves but download body models and weights (SMPL-X, GVHMR, MANO) that are
   non-commercial or research-only by default, per their own READMEs (E65, read 2026-10-24; licenses change: re-read). Log them in `ASSET_LOG.md`.
 - Script the boring parts: retarget, trim, loop, root motion, curve cleanup, naming (`anim_run_loop`), export.
+- Secondary motion, after the rig and its clips: a scarf, cape, long hair or tail that an auto-rig left stiff gets its
+  own bone chain with `bozzetto.py rig chain <name> --part <selector>` (by colour, material, vertex group or a box).
+  Looping clips get a sway that keeps them looping exactly (sprite cycles need that), one-shots named in `--cloth` a
+  baked cloth simulation. Run it with `--no-replace` first and look at `assets_src/bozzetto/<name>/rig/chain/chain.png`; a part
+  fused to the body is rebuilt as a strip, which keeps its colours, not its folds (the README lists the limits). In a
+  3D engine the same bones can run on the engine's spring bones instead (`--sway 0`; README recipes: Godot's checked
+  headless (K01), Unity, Unreal and the rest **(verify)**).
 - Gameplay animation (attacks, dodges): timings in data first (anticipation, active, recovery frames), art polish second.
 - Test in the engine with the real controller. "Looks good in Blender" is not the bar.
 - Tip (E50): when the third prompt has not fixed a contact problem (feet through a footpad, an open hand on a punch, a weapon
@@ -160,6 +195,18 @@ Rigged glTF models come back from Blender's importer with an extra `Icosphere` (
 kit's Blender tools remove it on import. Real helper meshes in a file (a ground plane, a proxy) can still shrink the framing:
 the tool warns and `--ignore NAME` drops them (`prep_export.py` has the same option).
 Tested on a Kenney CC0 character's walk cycle and by its exam (K01: 24/24). Then treat the sheet as 2D art (`SOP-16`).
+For a rigged character, `--actions all --step 2 --manifest assets/dotwork/rendered.assets.json` renders every clip in
+8 (or 4) directions and writes a Dotwork asset manifest that every engine's Dotwork importer loads with no new code
+(clips `walk_s` ... `walk_se`, per-frame durations, the feet as the pivot; K01, #290: the web, web-3d, LÖVE, C++, Bevy, MZ,
+Unity and Unreal importer tests load the golden character's sheet, and the LÖVE and C++ starters draw it walking).
+Godot has no manifest importer (it loads Dotwork's own resources): a 2D Godot game uses the sheets with the layout
+`.json` beside each (`AtlasTexture` regions into a `SpriteFrames`) by hand **(verify: not in a test)**.
+
+A rigged character in a 3D engine: the `.glb` from `bozzetto.py rig make` loads with its clips; each engine's
+`docs/ENGINE.md` "Rigged characters" has the import recipe (looping, root motion, scale, facing, bone names) and a
+helper that plays a clip on a loop, tested against the kit's golden character (`data/golden/character/`, K01).
+Unity: import a glTF character Generic (glTFast); Humanoid was tried and plays only humanoid (FBX) clips
+(`tools/bozzetto/README.md` "In the engine").
 
 ## Budgets (placeholders, set yours in `ARCHITECTURE.md`)
 | Class | Triangles | Texture | Notes |

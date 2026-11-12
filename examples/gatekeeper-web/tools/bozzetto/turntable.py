@@ -17,7 +17,10 @@
 #           a key light that turns with the camera, the same framing in every view. View 0 is the front (camera on
 #           -Y, glTF's +Z front); the next views turn counter-clockwise seen from above.
 #           Transparent background unless --background (a GIF has no partial transparency).
+#           With the bpy module on Windows the process is ended through render_sprites.exit_with (#292): a plain exit
+#           after a render crashed and hid the exit code.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the bpy module's exit crash (#292)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -190,4 +193,9 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    _code = main()
+    try:
+        import render_sprites as _rs   # its exit_with: the bpy module crashes on a plain exit after a render (#292)
+        _rs.exit_with(_code)
+    except ImportError:
+        sys.exit(_code)

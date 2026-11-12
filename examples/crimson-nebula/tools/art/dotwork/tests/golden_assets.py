@@ -4,9 +4,11 @@
 # Purpose : build the golden fixture of the engine-neutral asset manifest (ASSET_MANIFEST.md), data/golden/dotwork/:
 #           one small pack with every asset kind (a 4-direction character with holds, an additive effect, a prop with
 #           collision, icons, a portrait with talking frames, a blob47 ground tileset with an animated solid overlay,
-#           decals and a door stamp, a corners4 pair set, a sides4 platform set with one-way caps, an isometric set, a
-#           map, a bitmap font, a UI kit, a scrolling background, particles, a transition, a normal map, an image),
-#           its manifest, and expected.json: the loaded result every engine importer must reproduce (#55 to #62).
+#           two path variants, decals and a door stamp, a corners4 pair set, a sides4 platform set with one-way caps,
+#           an isometric set, three maps (the yard with its door stamp, a corners4 patch on the pair set, an isometric
+#           isle with a block and a corners4 pond), a bitmap font, a UI kit, a scrolling background, particles, a
+#           transition, a normal map, an image), its manifest, and expected.json: the loaded result every engine
+#           importer must reproduce (#55 to #62, #285).
 # Usage   : python tools/art/dotwork/tests/golden_assets.py --check            # exit 1 when the fixture is stale
 #           python tools/art/dotwork/tests/golden_assets.py --write [--out DIR]
 #           python tools/art/dotwork/tests/golden_assets.py --godot DIR          # the same pack with Godot's files
@@ -18,6 +20,8 @@
 #           The fixture: <out>/assets/ is an assets folder (the manifest in assets/dotwork/golden.assets.json),
 #           <out>/expected.json the reference loader's result (assetspec.expected).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): path variants, a stamps layer,
+#           the corners4 and isometric maps
 # ---------------------------------------------------------------------------
 import argparse
 import hashlib
@@ -185,8 +189,10 @@ def build_game(root, with_godot=False):
         ground = _ground(g, lane_ground)
         _map(g, mapbuild, ground)
         _pair(g, lane_tiles)
+        _meadow_map(g)
         _platforms(g, lane_platforms)
         _iso(g, lane_iso)
+        _iso_map(g)
         _font_ui(g)
         _extras(g)
     finally:
@@ -266,10 +272,17 @@ def _ground(g, lane_ground):
     terrains = [("grass", (70, 140, 60)), ("path", (150, 120, 80)), ("water", (50, 90, 200))]
     sources = [{"atlas_res": f"{res}/base_grass.png", "kind": "base", "name": "grass",
                 "tiles": [{"x": k, "y": 0, "terrain": None, "probability": 1.0 if k == 0 else 0.6} for k in range(2)]}]
-    g.png(f"{out}/overlay_path.png", atlas([blob_tile(m, (150, 120, 80, 255), INK) for m in lane_ground.BLOB], 12),
-          "tile_atlas", tile_px=T, terrains=["path"], relief="flat", solid=False)
-    sources.append({"atlas_res": f"{res}/overlay_path.png", "kind": "overlay", "name": "path",
-                    "tiles": lane_ground.blob_rows(1, T, "dirt", False, 0, "organic")})
+    # 47 blob tiles, then two variants (a second full tile and a second lone tile, marked with a 2x2 dot) at
+    # probability 0.6: of the map's two full path cells the variant pick (cell_roll) lands on one and not the other
+    path_tiles = [blob_tile(m, (150, 120, 80, 255), INK) for m in lane_ground.BLOB]
+    path_tiles += [blob_tile(255, (150, 120, 80, 255), (230, 200, 120, 255), 1), blob_tile(0, (150, 120, 80, 255), (230, 200, 120, 255), 1)]
+    g.png(f"{out}/overlay_path.png", atlas(path_tiles, 12), "tile_atlas", tile_px=T, terrains=["path"], relief="flat",
+          solid=False, variants="full and lone tiles twice (slots 47, 48)")
+    path_rows = lane_ground.blob_rows(1, T, "dirt", False, 0, "organic")
+    for i, m in ((47, 255), (48, 0)):
+        path_rows.append({"x": i % 12, "y": i // 12, "terrain": 1, "probability": 0.6, "custom": "dirt",
+                          "peers": tuple(1 if (m >> b) & 1 else -1 for b in range(8))})
+    sources.append({"atlas_res": f"{res}/overlay_path.png", "kind": "overlay", "name": "path", "tiles": path_rows})
     n = 2   # animated water: frame f of tile i at column i % 12 * n + f (lane_ground.run)
     water = Canvas(12 * n * T, 4 * T)
     for i, m in enumerate(lane_ground.BLOB):
@@ -297,9 +310,11 @@ def _ground(g, lane_ground):
     return {"res": f"{res}/ground_yard_tileset.tres", "sources": sources, "terrains": terrains, "tile_px": T}
 
 
+# the path is 3 cells thick in places, so some cells take the full tile (mask 255) and roll for its variant; water
+# sits on the path (legend "w" paints both), as a real spec does
 MAP = {"name": "yard", "seed": 3, "decal_density": 0.6,
-       "rows": ["ggpppggg", "gpppgggg", "gpwwgggg", "ggwwwggg", "gggggggg", "gggggggg"],
-       "legend": {"g": [], "p": ["path"], "w": ["water"]},
+       "rows": ["ggpppggg", "gppppggg", "gpwwpggg", "ggwwwggg", "gggggggg", "gggggggg"],
+       "legend": {"g": [], "p": ["path"], "w": ["path", "water"]},
        "objects": [{"fixture": "door", "at": [7, 0]}], "props": [{"prop": "crate", "at": [1, 4]}]}
 
 
@@ -308,6 +323,27 @@ def _map(g, mapbuild, ground):
     props = mapbuild.plan_props(MAP, T, "res://assets", "art")
     godot.record("map", g.path("assets/maps/yard.tscn"), {"tileset": ground["res"], "w": w, "h": h, "tile_px": T,
                                                          "layers": layers, "props": props})   # as mapbuild.build
+
+
+def _meadow_map(g):
+    """meadow_patch: a corners4 map on the pair set, 6 x 5: a base of the all-sand tile, then grass (terrain 0) painted
+    as a 3 x 3 block with a 2 x 2 tail, every shape at least 2 cells thick (the corners rule's precondition)."""
+    grass = [[x, y] for y in (1, 2, 3) for x in (1, 2, 3)] + [[4, 2], [4, 3]]
+    godot.record("map", g.path("assets/maps/meadow_patch.tscn"), {
+        "tileset": f"{RES}/tiles/meadow/meadow_tileset.tres", "w": 6, "h": 5, "tile_px": T, "layers": [
+            {"name": "Sand", "kind": "tiles", "cells": [[x, y, 0, 0, 0] for y in range(5) for x in range(6)]},
+            {"name": "Grass", "kind": "terrain", "terrain": 0, "cells": grass}], "props": []})
+
+
+def _iso_map(g):
+    """isle: an isometric map, 4 x 3 diamonds of 16 x 8: floors placed (two variants by parity), a 2 x 2 pond of the
+    upper terrain (grass, terrain 1) painted with the corners rule, and one block (a taller tile with its own origin)."""
+    godot.record("map", g.path("assets/maps/isle.tscn"), {
+        "tileset": f"{RES}/tiles/iso/isle/iso_isle_tileset.tres", "w": 4, "h": 3, "tile_px": 16, "tile_size": [16, 8],
+        "layers": [
+            {"name": "Floor", "kind": "tiles", "cells": [[x, y, 0, (x + y) % 2, 0] for y in range(3) for x in range(4)]},
+            {"name": "Grass", "kind": "terrain", "terrain": 1, "cells": [[1, 1], [2, 1], [1, 2], [2, 2]]},
+            {"name": "Blocks", "kind": "tiles", "cells": [[3, 0, 1, 0, 0]]}], "props": []})
 
 
 def _pair(g, lane_tiles):

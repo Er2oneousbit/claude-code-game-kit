@@ -13,22 +13,29 @@
 //           mipmaps, sRGB, clamped (pixelTexture), drawn with alphaTest for hard edges and correct depth; additive
 //           clips (blend "add") skip depth writes. UV y is up: a rect is offset (x / W, 1 - (y + h) / H) and
 //           repeat (w / W, h / H) (manifest.uvRect). A sprite's quad is moved so its pivot sits on the object's
-//           origin (manifest.pivotShift). Materials are unlit (MeshBasicMaterial): the art's own shading shows.
-//           Animated sprites use a clone of the sheet texture per object (clones share the image and its GPU
-//           upload in three r186), so two heroes animate independently.
+//           origin (manifest.pivotShift). Materials are unlit (MeshBasicMaterial): the art's own shading shows. A
+//           sprite built with `lit: true` gets a MeshLambertMaterial instead, with the pack's normal map for its
+//           image (a `normal_map` asset whose target is the sprite's image) as `normalMap`: Dotwork's maps are
+//           OpenGL style (green up), which is three's convention, so no channel flip. Background layers come as
+//           per-layer texture clones with RepeatWrapping on the layer's `repeat` axes (backgroundLayers). Animated
+//           sprites use a clone of the sheet texture per object (clones share the image and its GPU upload in
+//           three r186), so two heroes animate independently.
 //
 // Pseudocode (tile map):
 //   per layer, per atlas used: an InstancedMesh of the atlas's tile quad, laid flat
-//     per cell: matrix = cell centre (+ tile origin shift), lifted a little per layer
+//     per cell: matrix = the cell's image top-left (manifest: centre - origin, map pixels) + half the atlas tile,
+//               over the map's unit, lifted a little per layer
 //               tileUv = uvRect(tile cell), tileFlags = the map flags (the vertex shader flips/transposes uv)
 //   animated tiles: update(dt) moves tileUv to the frame's cell (frames sit in the cells to the right)
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): cells placed from their
+//           left/top (isometric centres per the spec), lit sprites with a normal map, background layer textures
 // ---------------------------------------------------------------------------
 import * as THREE from "three";
 import {
-  cellCentre, frameAt, layoutText, pivotShift, tileAnimCol, uvRect,
-  type AnimatedSpriteDef, type ClipDef, type FontDef, type MapDef, type PackDef, type Point, type PortraitDef,
-  type SpriteDef, type TileDef, type TilesetDef, type UiPartDef,
+  frameAt, layoutText, pivotShift, tileAnimCol, uvRect,
+  type AnimatedSpriteDef, type BackgroundDef, type BackgroundLayerDef, type ClipDef, type FontDef, type MapDef, type PackDef,
+  type Point, type PortraitDef, type SpriteDef, type TileDef, type TilesetDef, type UiPartDef,
 } from "./manifest";
 
 // ---- Tunables ----------------------------------------------------------------
@@ -46,12 +53,13 @@ export interface QuadOptions {
   billboard?: boolean;
 }
 
-/** Pixel-art texture settings: nearest filtering, no mipmaps, sRGB, clamped. Applied to every texture loaded. */
-export function pixelTexture(tex: THREE.Texture): THREE.Texture {
+/** Pixel-art texture settings: nearest filtering, no mipmaps, sRGB, clamped. Applied to every texture loaded. A
+ *  `data` image (a normal map, a transition rule) gets no colour space, so a shader reads its bytes unconverted. */
+export function pixelTexture(tex: THREE.Texture, data = false): THREE.Texture {
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
   tex.generateMipmaps = false;
-  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.colorSpace = data ? THREE.NoColorSpace : THREE.SRGBColorSpace;
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.needsUpdate = true;
@@ -73,6 +81,12 @@ function spriteMaterial(map: THREE.Texture, blend: "normal" | "add" = "normal"):
   });
 }
 
+/** A lit sprite material (needs lights in the scene): the same pixel settings on a MeshLambertMaterial, with the
+ *  normal map when the pack has one for the image (OpenGL style, green up: three's own convention). */
+export function litSpriteMaterial(map: THREE.Texture, normalMap: THREE.Texture | null): THREE.MeshLambertMaterial {
+  return new THREE.MeshLambertMaterial({ map, normalMap, alphaTest: ALPHA_TEST, side: THREE.DoubleSide });
+}
+
 /** A quad of size w x h image pixels whose pivot sits on the origin (y up). */
 export function pivotQuad(size: Point, pivot: Point, ppu: number): THREE.PlaneGeometry {
   const [dx, dy] = pivotShift(size, pivot);
@@ -92,12 +106,12 @@ export interface DotworkObject extends THREE.Object3D {
 }
 
 // ---- Still images: sprites, icons, portraits ---------------------------------------
-/** One image on a pivot quad (a prop, an icon, a portrait expression). */
-export class DotworkImage extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> implements DotworkObject {
+/** One image on a pivot quad (a prop, an icon, a portrait expression, an `image` asset). */
+export class DotworkImage extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial | THREE.MeshLambertMaterial> implements DotworkObject {
   billboard: boolean;
 
-  constructor(texture: THREE.Texture, size: Point, pivot: Point, opts: QuadOptions = {}, blend: "normal" | "add" = "normal") {
-    super(pivotQuad(size, pivot, opts.ppu ?? DEFAULT_PPU), spriteMaterial(texture, blend));
+  constructor(texture: THREE.Texture, size: Point, pivot: Point, opts: QuadOptions = {}, blend: "normal" | "add" = "normal", lit: THREE.MeshLambertMaterial | null = null) {
+    super(pivotQuad(size, pivot, opts.ppu ?? DEFAULT_PPU), lit ?? spriteMaterial(texture, blend));
     this.billboard = opts.billboard ?? true;
   }
 
@@ -106,12 +120,44 @@ export class DotworkImage extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasi
   }
 }
 
-/** A `sprite` asset (a prop, an enemy): the image on its pivot, collision rects and contact shadow in def. */
+export interface SpriteOptions extends QuadOptions {
+  /** A lit material (MeshLambertMaterial) with `normalMap` when a normal_map asset targets the sprite's image. */
+  lit?: boolean;
+}
+
+/** A `sprite` asset (a prop, an enemy): the image on its pivot, collision rects and contact shadow in def. With
+ *  `lit`, the pack's normal map for the image (a `normal_map` asset whose target is the sprite's image, if any)
+ *  goes on the material; `normalMap` is that texture or null either way. */
 export class DotworkSprite extends DotworkImage {
-  constructor(readonly def: SpriteDef, tex: TextureLookup, opts: QuadOptions = {}) {
-    super(tex(def.image), def.size, def.pivot, opts);
+  readonly normalMap: THREE.Texture | null;
+
+  constructor(readonly def: SpriteDef, tex: TextureLookup, opts: SpriteOptions = {}, pack?: PackDef) {
+    const nm = pack ? [...pack.normalMaps.values()].find((n) => n.target === def.image) : undefined;
+    const normalMap = nm ? tex(nm.image) : null;
+    const image = tex(def.image);
+    super(image, def.size, def.pivot, opts, "normal", opts.lit ? litSpriteMaterial(image, normalMap) : null);
+    this.normalMap = normalMap;
     this.name = def.name;
   }
+}
+
+/** An `image` asset on its pivot (the image centre when it has none): a logo, a loose sheet. */
+export function imageQuad(def: { name: string; image: string; size: Point; pivot: Point | null }, tex: TextureLookup, opts: QuadOptions = {}): DotworkImage {
+  const q = new DotworkImage(tex(def.image), def.size, def.pivot ?? [def.size[0] / 2, def.size[1] / 2], { billboard: false, ...opts });
+  q.name = def.name;
+  return q;
+}
+
+/** A `background`'s layers with their textures: a clone per layer (the image is shared) wrapping on the layer's
+ *  `repeat` axes, so a scrolling layer can move `texture.offset` instead of being redrawn. The game draws them. */
+export function backgroundLayers(def: BackgroundDef, tex: TextureLookup): { layer: BackgroundLayerDef; texture: THREE.Texture }[] {
+  return def.layers.map((layer) => {
+    const texture = tex(layer.image).clone();
+    texture.wrapS = layer.repeat === "x" || layer.repeat === "xy" ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
+    texture.wrapT = layer.repeat === "y" || layer.repeat === "xy" ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
+    texture.needsUpdate = true;
+    return { layer, texture };
+  });
 }
 
 /** An `icon` at the smallest shipped size that is at least `px` (else the largest), centred. */
@@ -283,9 +329,9 @@ export class DotworkTileMap extends THREE.Group implements DotworkObject {
         const m = new THREE.Matrix4();
         cells.forEach((c, i) => {
           const tile = tileset.tiles.get(`${c.atlas},${c.col},${c.row}`)!;
-          const [cx, cy] = cellCentre(tileset.shape, tileset.tileSize, c.x, c.y);
-          const [ox, oy] = tile.origin ? pivotShift(atlas.tileSize, tile.origin) : [0, 0];
-          m.compose(new THREE.Vector3((cx + ox) / this.unit, li * LAYER_LIFT, (cy - oy) / this.unit), flat, new THREE.Vector3(1, 1, 1));
+          // the quad's centre: the image's top-left (map pixels, from the importer) plus half the atlas tile
+          const qx = (c.left + atlas.tileSize[0] / 2) / this.unit, qz = (c.top + atlas.tileSize[1] / 2) / this.unit;
+          m.compose(new THREE.Vector3(qx, li * LAYER_LIFT, qz), flat, new THREE.Vector3(1, 1, 1));
           mesh.setMatrixAt(i, m);
           this.setTileUv(mesh, i, atlas.tileSize, c.col, c.row);
           flags.setX(i, c.flags);

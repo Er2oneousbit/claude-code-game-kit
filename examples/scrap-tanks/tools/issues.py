@@ -409,7 +409,8 @@ def validate(raw, where):
             raise DraftError(f"{where}: {kind} has no field {', '.join(bad)} (fields: {', '.join(keys)})")
         missing = [k for k, _, req in KINDS[kind]["fields"] if req and not (fields.get(k) or "").strip()]
         if missing:
-            raise DraftError(f"{where}: a {kind} needs {', '.join(missing)}")
+            article = "an" if kind[0] in "aeiou" else "a"      # "an idea", "a bug"
+            raise DraftError(f"{where}: {article} {kind} needs {', '.join(missing)}")
     related = raw.get("related") or []
     if not isinstance(related, list) or not all(isinstance(n, int) and not isinstance(n, bool) and n > 0
                                                 for n in related):

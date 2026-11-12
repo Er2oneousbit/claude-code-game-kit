@@ -10,6 +10,8 @@
 #           Inside Blender:       blender -b --python-exit-code 1 -P tools/blender/test_prep_export.py -- [--keep] [--debug]
 # Exit    : 0 all cases pass, 1 some case failed, 2 bpy not available
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the exam ends through bpy_common with the bpy
+#           module (#292: its own exit crashed after the fixtures' glTF export); the 30 fps clip case
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -90,6 +92,35 @@ def build_shared(bpy, path):
     post_b.scale = (1, 1, 3)                # 3 m tall, spans z -0.5..2.5
     post_b.rotation_euler = (0, 0, -0.4)
     bpy.ops.wm.save_as_mainfile(filepath=str(path))
+
+
+def build_clip30(bpy, path):
+    """A cube with a looping 'bob' clip keyed at 30 fps (up and back down: frame 3 repeats frame 1), as Tripo's
+    clips come (#292)."""
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.context.scene.render.fps = 30
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0.5))
+    obj = bpy.context.active_object
+    obj.name = "Bobber"
+    for f, z in ((1, 0.5), (2, 0.6), (3, 0.5)):
+        obj.location = (0, 0, z)
+        obj.keyframe_insert("location", frame=f)
+    obj.animation_data.action.name = "bob"
+    bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", export_animations=True)
+
+
+def clip_times(path):
+    """{clip name: (first key time, last key time)} of a .glb, read with the standard library."""
+    import json
+    import struct
+    data = Path(path).read_bytes()
+    jlen = struct.unpack_from("<I", data, 12)[0]
+    doc = json.loads(data[20:20 + jlen].decode("utf-8"))
+    out = {}
+    for a in doc.get("animations", []):
+        acc = [doc["accessors"][s["input"]] for s in a["samplers"]]
+        out[a["name"]] = (min(x["min"][0] for x in acc), max(x["max"][0] for x in acc))
+    return out
 
 
 def measure_all(bpy, path):
@@ -213,6 +244,16 @@ def main():
          rc == 1 and "not next to it" in out and not (tmp / "external_out.glb").exists(), out[-300:])
     rc, out = run_tool(tmp / "missing.glb", "--out", tmp / "x.glb")
     case("missing asset exits 2", rc == 2, out[-200:])
+    # #292: a clip keyed at 30 fps sits every 0.8 frames in the 24 fps scene; the sampled export wrote it 1/24 s
+    # short (the loop's closing key gone), and Blender 4.2's importer had renamed it bob_Bobber
+    clip30 = tmp / "clip30.glb"
+    build_clip30(bpy, clip30)
+    rc, out = run_tool(clip30, "--out", tmp / "clip30_out.glb", "--no-validate")
+    times = clip_times(tmp / "clip30_out.glb") if rc == 0 else {}
+    span = times["bob"][1] - times["bob"][0] if "bob" in times else None   # the preset keeps the clip's own start
+    case("a clip keyed at 30 fps keeps its name and its length (bob, 2/30 s)",
+         rc == 0 and list(times) == ["bob"] and span is not None and abs(span - 2 / 30) < 1e-4,
+         f"{times}; " + out[-300:])
 
     passed = sum(results)
     print(f"{passed}/{len(results)} cases passed")
@@ -224,4 +265,11 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    code = main()
+    try:
+        import bpy
+        sys.path.insert(0, str(HERE))
+        import bpy_common
+        bpy_common.end_process(bpy, code)   # the fixtures were exported with the bpy module: a plain exit crashes (#292)
+    except ImportError:
+        sys.exit(code)

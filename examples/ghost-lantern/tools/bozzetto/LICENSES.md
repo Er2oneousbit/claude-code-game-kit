@@ -38,6 +38,24 @@ Not used: SkinTokens (UniRig's successor, MIT) adds training data from VRoid Hub
 from commercial games); Puppeteer is pinned to CUDA 11.8. Read 2026-11-05 (E151, E153). `rig/licenses/` holds the
 UniRig licence and the Articulation-XL2.0 notice; the first UniRig `rig make` copies them into the game.
 
+## Reference views (`reference`, optional)
+| Route | What | Terms | Commercial use |
+|---|---|---|---|
+| local (default) | FLUX.2 klein 4B, Qwen-Image-Edit-2511 (Q4_K_M GGUF), its Lightning 4-step LoRA and fal's Multiple-Angles LoRA, the files Dotwork's register pins (`tools/art/dotwork/models.lock.json`) | Apache-2.0 each, as that register records them | yes |
+| Google Gemini API (`--with nanobanana`) | image generation and editing on Google's servers | Gemini API Additional Terms, effective 2026-03-23: Google won't claim ownership of generated content and may generate the same or similar content for others; on paid services prompts and outputs are not used to improve Google's products and are logged for a limited time for abuse checks; every image carries a SynthID watermark (read 2026-11-11) **(verify)** | yes, under those terms |
+| Tripo3D API (`--with tripo`) | text-to-image, image-to-image and image-to-multiview on Tripo's servers (its `banana` models are Google's, with Google's invisible watermark) | Tripo's terms as for rigging above (5.2.2 paid, 5.2.1 free) **(verify for image tasks)** | on paid credits |
+
+The record (`assets_src/bozzetto/<name>/reference/reference.json`) and the asset log row of every reference run name the route and these terms.
+
+## Paid model route (`make --with tripo`, optional)
+| Route | What | Terms | Commercial use |
+|---|---|---|---|
+| Tripo3D API (`make --with tripo`) | image, multiview or text to a textured model (P series), run on Tripo's servers | Tripo's terms: outputs from paid API credits are the user's and are not used for training (5.2.2); outputs from free credits stay Tripo's (5.2.1); a Tripo Studio plan adds no API credits | on paid credits |
+
+Nothing of Tripo's is loaded or shipped by the kit: the model it returns goes through the same cleanup and checks,
+and its asset log row says "paid service" with these terms (E153, E160). No licence text is copied into the game
+for it: the terms are a web page; re-read them before you ship.
+
 ## Never loaded
 | Piece | Why |
 |---|---|

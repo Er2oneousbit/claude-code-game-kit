@@ -5,8 +5,11 @@
 //           cumulative frame times plus an AnimatorController and a prefab per animated sprite, a prefab per prop
 //           (BoxCollider2D per collision rect, contact shadow), icons, portraits, a DotworkFont per BMFont, UI kit
 //           parts (9-slice margins as sprite borders), a DotworkTile per tileset cell (custom physics shapes for a
-//           TilemapCollider2D, animation frames), a DotworkTerrainTile per terrain (the spec's cell_mask rule) and a
-//           map prefab (Grid, a Tilemap per layer, the props), all listed in a DotworkPack index.
+//           TilemapCollider2D, animation frames), a DotworkTerrainTile per terrain (the spec's cell_mask rule, for
+//           the Tile Palette), a map prefab (Grid, a Tilemap per layer with every terrain layer resolved to the
+//           spec's tiles, stamps expanded, the props), the extra kinds (a background's layers, a particle texture
+//           with its emitter JSON, a transition mask, a normal map wired to its target, a loose image), all listed
+//           in a DotworkPack index.
 // Usage   : DotworkImporter.Import("Assets/dotwork/town.assets.json", "Assets/dotwork/town", warnings)
 //           (GameKitDotwork.ImportAll runs it for every manifest: python tools/dev.py exec GameKitDotwork.ImportAll)
 // Notes   : Why an explicit command and not a ScriptedImporter on .assets.json: the slicing, pivots, pixels per
@@ -19,20 +22,30 @@
 //           Re-running keeps every asset's GUID (assets are updated in place; tiles, terrains and fonts are
 //           sub-assets of the pack asset matched by name), so scenes that use them keep working; files of assets
 //           that left the manifest are removed from the output folder.
-//           Unity is y up: a rect's y becomes sheetH - y - h, a pivot (px / w, 1 - py / h), a map row y the cell
-//           y = -1 - y (top-left corner at the origin, like Godot), an object at pixel (x, y) the position
-//           (x, -y) / ppu. Extra kinds (background, particles, transition, normal_map, image) are skipped with a
-//           warning each; their PNGs still get the pixel-art settings (repeat on a background's repeat axes).
+//           Unity is y up: a rect's y becomes sheetH - y - h, a pivot (px / w, 1 - py / h), an object at pixel
+//           (x, y) the position (x, -y) / ppu. Map cells (spec "Placing tiles", y down, cell (0, 0)'s top-left
+//           corner at the origin): a square map's row y is the cell y = -1 - y; an isometric map uses Unity's
+//           Isometric Grid with cell (u, v) = (-1 - y, -1 - x), which turns Unity's diamonds (x up-right, y
+//           up-left) into Godot's diamond-down layout (x down-right, y down-left), plus half a cell of x on every
+//           layer, because Unity centres diamond (0, 0) on x = 0 where the spec puts it at w / 2 (measured from the
+//           Grid, not assumed). Each tile's sprite pivot is its origin, so its image lands at centre - origin.
+//           A terrain layer is resolved here (cell_mask, the key match, the variant pick by cell_roll with the
+//           layer's index) into plain DotworkTiles, so the Tilemap holds the spec's own tiles; a stamps layer
+//           places every tile of each stamp; an unknown layer kind is skipped with one warning.
 //
 // Pseudocode:
 //   manifest = load + check format and major version ; ppu = first tileset's tile width, else 16
-//   plan pass:  for kind in sprite, animated_sprite, icon, portrait, font, ui_kit, tileset, map: run its builder,
-//               which only calls Want(texture, rect, pivot, ...) for every sprite it needs ; record every PNG
+//   plan pass:  for kind in sprite, animated_sprite, icon, portrait, font, ui_kit, tileset, map, background,
+//               particles, transition, normal_map, image: run its builder, which only calls Want(texture, rect,
+//               pivot, ...) for every sprite it needs ; record every PNG
 //   textures:   per PNG: Sprite, Multiple, SpriteMetaData per wanted sprite, Point, no mips, uncompressed,
-//               physics rects in importer.userData (DotworkSpritePhysics applies them) ; reimport all at once
+//               physics rects in importer.userData (DotworkSpritePhysics applies them), a normal map's target
+//               gets it as its _NormalMap secondary texture ; reimport all at once
 //   build pass: the same builders again; Want() now returns the imported Sprite, and each builder writes its assets
-//   index:      DotworkPack with every entry, the manifest's hash, the skipped kinds
+//   index:      DotworkPack with every entry, the manifest's hash, the unknown kinds skipped
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): asset manifest 1.1.0 (#285): corners4 terrain,
+//           the variant pick, isometric placement on Unity's Isometric Grid, stamps layers, the extra kinds loaded
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -56,9 +69,12 @@ namespace graveyard_shift.Dotwork
         public const string USERDATA_PREFIX = "dotwork:1:"; // TextureImporter.userData written by this importer
         public const int MAX_TEXTURE = 16384;
         public const double WHOLE_EPS = 1e-4;               // a duration times the clip's frame rate is "whole" within this
+        public const string NORMAL_MAP_SLOT = "_NormalMap";  // the secondary texture name URP's 2D lights read
         public static readonly string[] BUILD_ORDER =
-            { "sprite", "animated_sprite", "icon", "portrait", "font", "ui_kit", "tileset", "map" };
-        private static readonly string[] OUTPUT_SUBFOLDERS = { "sprites", "animated", "maps" };
+            { "sprite", "animated_sprite", "icon", "portrait", "font", "ui_kit", "tileset", "map",
+              "background", "particles", "transition", "normal_map", "image" };
+        private static readonly string[] OUTPUT_SUBFOLDERS = { "sprites", "animated", "maps", "particles" };
+        private static readonly string[] PRUNED_EXTENSIONS = { ".anim", ".controller", ".prefab", ".mat", ".json" };
         private static readonly string[] ADDITIVE_SHADERS = { "Mobile/Particles/Additive", "Legacy Shaders/Particles/Additive" };
 
         public readonly List<string> Warnings = new List<string>();
@@ -92,6 +108,7 @@ namespace graveyard_shift.Dotwork
             public string path;
             public Vector2Int size;
             public bool repeatU, repeatV, normalMap;
+            public string normalMapOf;       // the asset path of the normal map lighting this texture, or null
             public readonly List<SpriteSpec> sprites = new List<SpriteSpec>();
             public readonly Dictionary<string, SpriteSpec> byKey = new Dictionary<string, SpriteSpec>();
             public readonly HashSet<string> names = new HashSet<string>();
@@ -199,6 +216,11 @@ namespace graveyard_shift.Dotwork
                             case "ui_kit": BuildUiKit(a); break;
                             case "tileset": BuildTileset(a); break;
                             case "map": BuildMap(a); break;
+                            case "background": BuildBackground(a); break;
+                            case "particles": BuildParticles(a); break;
+                            case "transition": BuildTransition(a); break;
+                            case "normal_map": BuildNormalMap(a); break;
+                            case "image": BuildImage(a); break;
                         }
                     }
                     catch (DotworkImportException e)
@@ -216,21 +238,7 @@ namespace graveyard_shift.Dotwork
                 string kind = M.Str(a, "kind", "?"), key = $"{kind}/{M.Str(a, "name", "?")}";
                 if (_plan)
                 {
-                    bool extra = Array.IndexOf(M.EXTRA_KINDS, kind) >= 0;
-                    Warn(extra ? $"skipped {key}: the Unity importer does not build the extra kind '{kind}' yet (its PNGs get the pixel-art settings)"
-                               : $"skipped {key}: unknown kind '{kind}' (a newer 1.x manifest?)");
-                    if (kind == "background")
-                    {
-                        PlanBackground(a);
-                    }
-                    if (kind == "normal_map" && M.Str(a, "image") != null)
-                    {
-                        TexturePlan tp = Texture(M.Str(a, "image"));
-                        if (tp != null)
-                        {
-                            tp.normalMap = true;
-                        }
-                    }
+                    Warn($"skipped {key}: unknown kind '{kind}' (a newer 1.x manifest?)");
                 }
                 else
                 {
@@ -303,21 +311,6 @@ namespace graveyard_shift.Dotwork
                 foreach (object x in l)
                 {
                     CollectPngs(x);
-                }
-            }
-        }
-
-        private void PlanBackground(Dictionary<string, object> a)
-        {
-            foreach (Dictionary<string, object> layer in M.Objs(a, "layers"))
-            {
-                string img = M.Str(layer, "image");
-                TexturePlan tp = img != null ? Texture(img) : null;
-                if (tp != null)
-                {
-                    string rep = M.Str(layer, "repeat", "none");
-                    tp.repeatU |= rep.Contains("x");
-                    tp.repeatV |= rep.Contains("y");
                 }
             }
         }
@@ -452,7 +445,7 @@ namespace graveyard_shift.Dotwork
             return new Dictionary<string, object>
             {
                 { "ppu", (double)_ppu }, { "repeat", (tp.repeatU ? "x" : "") + (tp.repeatV ? "y" : "") },
-                { "normal_map", tp.normalMap }, { "sprites", sprites }, { "physics", physics },
+                { "normal_map", tp.normalMap }, { "normal_map_of", tp.normalMapOf ?? "" }, { "sprites", sprites }, { "physics", physics },
             };
         }
 
@@ -482,6 +475,19 @@ namespace graveyard_shift.Dotwork
                 max *= 2;
             }
             ti.maxTextureSize = max;                      // never downscaled (the default 2048 would shrink a big sheet)
+            // The normal map lighting this texture rides along as its _NormalMap secondary texture: URP's 2D lights
+            // read that slot on the sprite (the texture object keeps its GUID through the batch reimport)
+            var secondary = new List<SecondarySpriteTexture>();
+            if (!string.IsNullOrEmpty(tp.normalMapOf))
+            {
+                var normal = AssetDatabase.LoadAssetAtPath<Texture2D>(tp.normalMapOf);
+                if (normal == null)
+                {
+                    throw new DotworkImportException($"{tp.normalMapOf} is not imported as a texture (run AssetDatabase.Refresh, or check the file)");
+                }
+                secondary.Add(new SecondarySpriteTexture { name = NORMAL_MAP_SLOT, texture = normal });
+            }
+            ti.secondarySpriteTextures = secondary.ToArray();
 #pragma warning disable 0618 // spritesheet: the ISpriteEditorDataProvider replacement needs the 2D Sprite package
             ti.spritesheet = tp.sprites.Select(sp => new SpriteMetaData
             {
@@ -526,6 +532,11 @@ namespace graveyard_shift.Dotwork
             _pack.maps.Clear();
             _pack.fonts.Clear();
             _pack.uiKits.Clear();
+            _pack.backgrounds.Clear();
+            _pack.particles.Clear();
+            _pack.transitions.Clear();
+            _pack.normalMaps.Clear();
+            _pack.images.Clear();
             _pack.skipped.Clear();
             _written.Add(_packPath);
         }
@@ -540,10 +551,11 @@ namespace graveyard_shift.Dotwork
             EditorUtility.SetDirty(_pack);
             AssetDatabase.SaveAssets();
             Prune();
+            int extras = _pack.backgrounds.Count + _pack.particles.Count + _pack.transitions.Count + _pack.normalMaps.Count + _pack.images.Count;
             Debug.Log($"[INFO][dotwork] {Manifest.Pack}: imported {_pack.animated.Count} animated, {_pack.sprites.Count} sprite(s), " +
                       $"{_pack.icons.Count} icon(s), {_pack.portraits.Count} portrait(s), {_pack.fonts.Count} font(s), {_pack.uiKits.Count} UI kit(s), " +
-                      $"{_pack.tilesets.Count} tileset(s), {_pack.maps.Count} map(s) into {_outDir} at {_ppu} px per unit" +
-                      (_pack.skipped.Count > 0 ? $"; skipped {_pack.skipped.Count}" : ""));
+                      $"{_pack.tilesets.Count} tileset(s), {_pack.maps.Count} map(s), {extras} background/particles/transition/normal_map/image " +
+                      $"into {_outDir} at {_ppu} px per unit" + (_pack.skipped.Count > 0 ? $"; skipped {_pack.skipped.Count} unknown" : ""));
         }
 
         /// <summary>A ScriptableObject (tile, terrain, font) as a sub-asset of the pack, matched by type and name so a
@@ -621,7 +633,7 @@ namespace graveyard_shift.Dotwork
                 foreach (string f in Directory.GetFiles(dir, "*", SearchOption.AllDirectories).Select(M.Norm))
                 {
                     string ext = Path.GetExtension(f);
-                    if ((ext == ".anim" || ext == ".controller" || ext == ".prefab" || ext == ".mat") && !_written.Contains(f))
+                    if (Array.IndexOf(PRUNED_EXTENSIONS, ext) >= 0 && !_written.Contains(f))
                     {
                         AssetDatabase.DeleteAsset(f);
                     }
@@ -962,7 +974,12 @@ namespace graveyard_shift.Dotwork
         {
             string name = M.Str(a, "name");
             double[] ts = M.Nums(a, "tile_size", 2);
-            var entry = new DotworkTileset { name = name, shape = M.Str(a, "shape", "square"), tileSize = new Vector2Int((int)ts[0], (int)ts[1]) };
+            var entry = new DotworkTileset { name = name, shape = M.Str(a, "shape", Autotile.SQUARE), tileSize = new Vector2Int((int)ts[0], (int)ts[1]) };
+            var modes = new Dictionary<int, string>();                   // terrain set id -> mode (a tile's key depends on it)
+            foreach (Dictionary<string, object> set in M.Objs(a, "terrain_sets"))
+            {
+                modes[M.Int(set, "id")] = M.Str(set, "mode", Autotile.BLOB47);
+            }
             foreach (Dictionary<string, object> at in M.Objs(a, "atlases"))
             {
                 string image = M.Str(at, "image"), atlasName = M.Str(at, "name", "atlas");
@@ -994,6 +1011,7 @@ namespace graveyard_shift.Dotwork
                     tile.fps = anim != null ? (float)M.Num(anim, "fps", 0) : 0f;
                     tile.solid = collision.Length > 0;
                     tile.collision = collision;
+                    tile.origin = pivot;
                     tile.atlas = atlas;
                     tile.col = col;
                     tile.row = row;
@@ -1004,10 +1022,22 @@ namespace graveyard_shift.Dotwork
                     Dictionary<string, object> corners = M.Obj(t, "corners");
                     tile.corners = corners == null ? new int[0]
                         : corners.Keys.OrderBy(k => k, StringComparer.Ordinal).Select(k => M.Int(corners, k)).ToArray();
-                    tile.probability = (float)M.Num(t, "probability", 1);
+                    tile.key = TileKey(tile, corners, modes.TryGetValue(tile.terrainSet, out string mode) ? mode : Autotile.BLOB47, entry.shape);
+                    tile.probability = M.Num(t, "probability", 1);
                     tile.surface = M.Str(t, "surface", "");
                     entry.tiles.Add(Sub(tile, $"tile.{name}.{atlas}_{col}_{row}"));
                 }
+            }
+            foreach (Dictionary<string, object> st in M.Objs(a, "stamps"))
+            {
+                double[] size = M.Nums(st, "size", 2);
+                var stamp = new DotworkStamp { name = M.Str(st, "name", ""), size = new Vector2Int((int)size[0], (int)size[1]), solid = M.Bool(st, "solid") };
+                stamp.tiles = M.List(st, "tiles").Select(c => { double[] v = M.Nums(c, 3); return new Vector3Int((int)v[0], (int)v[1], (int)v[2]); }).ToArray();
+                if (stamp.tiles.Length != stamp.size.x * stamp.size.y)
+                {
+                    throw new DotworkImportException($"stamp {stamp.name} is {stamp.size.x}x{stamp.size.y} cells but lists {stamp.tiles.Length} tile(s)");
+                }
+                entry.stamps.Add(stamp);
             }
             if (_plan)
             {
@@ -1021,24 +1051,21 @@ namespace graveyard_shift.Dotwork
                 {
                     int tid = M.Int(tr, "id");
                     var terrain = new DotworkTerrain { set = sid, id = tid, name = M.Str(tr, "name", ""), color = M.Str(tr, "color", ""), mode = mode };
-                    // The first tile per mask, atlas order: the variant the spec's loaded result names
-                    List<DotworkTile> masked = entry.tiles.Where(t => t.terrainSet == sid && t.terrain == tid && t.mask >= 0).ToList();
-                    var masks = new List<int>();
-                    var tiles = new List<DotworkTile>();
-                    foreach (DotworkTile t in masked.Where(t => !masks.Contains(t.mask)))
-                    {
-                        masks.Add(t.mask);
-                        tiles.Add(t);
-                    }
-                    if (mode != Autotile.CORNERS4 && tiles.Count > 0)
+                    // Every keyed tile of the terrain in atlas order (atlases by id, tiles in list order): the
+                    // candidates the variant pick walks, several per key when the set has variants
+                    List<DotworkTile> keyed = entry.tiles.Where(t => t.terrainSet == sid && t.terrain == tid && t.key >= 0)
+                                                         .OrderBy(t => t.atlas).ToList();
+                    if (keyed.Count > 0)
                     {
                         var tt = ScriptableObject.CreateInstance<DotworkTerrainTile>();
                         tt.mode = mode;
+                        tt.shape = entry.shape;
                         tt.terrainSet = sid;
                         tt.terrain = tid;
                         tt.terrainName = terrain.name;
-                        tt.masks = masks.ToArray();
-                        tt.tiles = tiles.ToArray();
+                        tt.keys = keyed.Select(t => t.key).ToArray();
+                        tt.tiles = keyed.ToArray();
+                        tt.weights = keyed.Select(t => t.probability).ToArray();
                         terrain.tile = Sub(tt, $"terrain.{name}.{sid}_{tid}");
                     }
                     entry.terrains.Add(terrain);
@@ -1046,6 +1073,30 @@ namespace graveyard_shift.Dotwork
             }
             _tilesets[name] = entry;
             _pack.tilesets.Add(entry);
+        }
+
+        /// <summary>The key a tile answers to: its mask (blob47, sides4) or the corner bits of its own terrain
+        /// (corners4, the names mapped by the tileset's shape); -1 when it has neither.</summary>
+        public static int TileKey(DotworkTile tile, Dictionary<string, object> corners, string mode, string shape)
+        {
+            if (tile.terrain < 0)
+            {
+                return -1;
+            }
+            if (mode != Autotile.CORNERS4)
+            {
+                return tile.mask;
+            }
+            if (corners == null)
+            {
+                return -1;
+            }
+            var byName = new Dictionary<string, int>();
+            foreach (KeyValuePair<string, object> kv in corners)
+            {
+                byName[kv.Key] = M.Int(corners, kv.Key, -1);
+            }
+            return Autotile.CornerKey(byName, tile.terrain, shape);
         }
 
         private void BuildMap(Dictionary<string, object> a)
@@ -1061,22 +1112,48 @@ namespace graveyard_shift.Dotwork
             }
             DotworkTileset ts = _tilesets[tsName];
             double[] size = M.Nums(a, "size", 2), tsz = M.Nums(a, "tile_size", 2);
+            string shape = ts.shape;
+            bool iso = shape == Autotile.ISOMETRIC;
             var root = new GameObject(name);
             Grid grid = root.AddComponent<Grid>();
             grid.cellSize = new Vector3((float)tsz[0] / _ppu, (float)tsz[1] / _ppu, 0f);
-            if (ts.shape == "isometric")
-            {
-                grid.cellLayout = GridLayout.CellLayout.Isometric;   // verify: Godot's diamond-down layout, not checked here
-            }
+            grid.cellLayout = iso ? GridLayout.CellLayout.Isometric : GridLayout.CellLayout.Rectangle;
+            // Where the Grid puts the centre of map cell (0, 0) against where the spec puts it, (cx, -cy) / ppu: the
+            // difference (half a diamond of x on an isometric map, nothing on a square one) moves every layer
+            Vector3 want = ToUnity(CellCentre(shape, 0, 0, tsz[0], tsz[1]));
+            Vector3 got = grid.CellToLocalInterpolated(Cell(shape, 0, 0) + new Vector3(0.5f, 0.5f, 0f));
+            Vector3 shift = want - got;
             List<Dictionary<string, object>> layers = M.Objs(a, "layers").ToList();
             int order = -layers.Count;
-            foreach (Dictionary<string, object> L in layers)
+            for (int i = 0; i < layers.Count; i++)
             {
+                Dictionary<string, object> L = layers[i];
                 var go = new GameObject(M.Str(L, "name", "Layer"));
                 go.transform.SetParent(root.transform, false);
+                go.transform.localPosition = shift;
                 var tm = go.AddComponent<Tilemap>();
-                go.AddComponent<TilemapRenderer>().sortingOrder = order++;
-                bool solid = M.Str(L, "kind") == "terrain" ? PaintTerrain(tm, ts, L, name) : PlaceTiles(tm, ts, L, name);
+                tm.tileAnchor = new Vector3(0.5f, 0.5f, 0f);       // the sprite's pivot (the tile's origin) on the cell centre
+                var tr = go.AddComponent<TilemapRenderer>();
+                tr.sortingOrder = order++;
+                if (iso)
+                {
+                    // Each diamond sorted on its own, the ones lower on the screen (smaller u + v) drawn last, so a
+                    // taller tile overdraws the one above it as the spec says (verify: no renderer in the headless runs)
+                    tr.mode = TilemapRenderer.Mode.Individual;
+                    tr.sortOrder = TilemapRenderer.SortOrder.TopRight;
+                }
+                string kind = M.Str(L, "kind", "");
+                bool solid;
+                switch (kind)
+                {
+                    case "terrain": solid = PaintTerrain(tm, ts, L, name, i); break;
+                    case "stamps": solid = PlaceStamps(tm, ts, L, name); break;
+                    case "tiles": solid = PlaceTiles(tm, ts, L, name); break;
+                    default:
+                        Warn($"map {name} layer {M.Str(L, "name")}: unknown layer kind '{kind}' (a newer 1.x manifest?); skipped");
+                        solid = false;
+                        break;
+                }
                 if (M.Has(L, "opacity"))
                 {
                     tm.color = new Color(1f, 1f, 1f, (float)M.Num(L, "opacity", 1));
@@ -1105,13 +1182,40 @@ namespace graveyard_shift.Dotwork
             }
             _pack.maps.Add(new DotworkMap
             {
-                name = name, tileset = tsName, size = new Vector2Int((int)size[0], (int)size[1]),
+                name = name, tileset = tsName, shape = shape, size = new Vector2Int((int)size[0], (int)size[1]),
                 tileSize = new Vector2Int((int)tsz[0], (int)tsz[1]), prefab = SavePrefab(root, $"{_outDir}/maps/{name}.prefab"),
             });
         }
 
-        /// <summary>A map row y is the cell y = -1 - y (the map's top-left corner at the origin).</summary>
+        /// <summary>A square map's row y is the cell y = -1 - y (the map's top-left corner at the origin).</summary>
         public static Vector3Int Cell(int x, int y) => new Vector3Int(x, -1 - y, 0);
+
+        /// <summary>The Unity cell of map cell (x, y) for a shape: square (x, -1 - y); isometric (-1 - y, -1 - x), which
+        /// turns Unity's diamonds (x up-right, y up-left) into the spec's diamond-down layout (x down-right, y
+        /// down-left). The inverse is MapCell.</summary>
+        public static Vector3Int Cell(string shape, int x, int y)
+        {
+            return shape == Autotile.ISOMETRIC ? new Vector3Int(-1 - y, -1 - x, 0) : Cell(x, y);
+        }
+
+        public static Vector2Int MapCell(string shape, Vector3Int cell)
+        {
+            return shape == Autotile.ISOMETRIC ? new Vector2Int(-1 - cell.y, -1 - cell.x) : new Vector2Int(cell.x, -1 - cell.y);
+        }
+
+        /// <summary>The spec's cell centre in map pixels (y down): square ((x + 0.5) w, (y + 0.5) h), isometric
+        /// ((x - y + 1) w / 2, (x + y + 1) h / 2).</summary>
+        public static Vector2 CellCentre(string shape, int x, int y, double w, double h)
+        {
+            if (shape == Autotile.ISOMETRIC)
+            {
+                return new Vector2((float)((x - y + 1) * w / 2), (float)((x + y + 1) * h / 2));
+            }
+            return new Vector2((float)((x + 0.5) * w), (float)((y + 0.5) * h));
+        }
+
+        /// <summary>Map pixels (y down) to the map prefab's local units (y up).</summary>
+        private Vector3 ToUnity(Vector2 px) => new Vector3(px.x / _ppu, -px.y / _ppu, 0f);
 
         private bool PlaceTiles(Tilemap tm, DotworkTileset ts, Dictionary<string, object> L, string map)
         {
@@ -1126,7 +1230,7 @@ namespace graveyard_shift.Dotwork
                     missing++;
                     continue;
                 }
-                Vector3Int cell = Cell((int)v[0], (int)v[1]);
+                Vector3Int cell = Cell(ts.shape, (int)v[0], (int)v[1]);
                 tm.SetTile(cell, tile);
                 int flags = (int)v[5];
                 if (flags != 0)
@@ -1158,21 +1262,206 @@ namespace graveyard_shift.Dotwork
             return Matrix4x4.Scale(flip) * m;
         }
 
-        private bool PaintTerrain(Tilemap tm, DotworkTileset ts, Dictionary<string, object> L, string map)
+        /// <summary>A terrain layer resolved to the spec's tiles: each painted cell's key from its painted neighbours
+        /// (cell_mask in the layer's mode), the tile picked among the terrain's tiles with that key by the cell's
+        /// roll (cell_roll with the layer's index). A cell with no tile stays empty, warned once per layer.</summary>
+        private bool PaintTerrain(Tilemap tm, DotworkTileset ts, Dictionary<string, object> L, string map, int layerIndex)
         {
             DotworkTerrain terrain = ts.Terrain(M.Int(L, "terrain_set", 0), M.Int(L, "terrain"));
             if (terrain?.tile == null)
             {
-                Warn($"map {map} layer {M.Str(L, "name")}: terrain {M.Int(L, "terrain")} has no blob47 or sides4 tiles " +
-                     $"({terrain?.mode ?? "unknown"}); the layer is left empty");
+                Warn($"map {map} layer {M.Str(L, "name")}: terrain {M.Int(L, "terrain")} of set {M.Int(L, "terrain_set", 0)} has no " +
+                     $"keyed tiles in tileset {ts.name} ({terrain?.mode ?? "not in the tileset"}); the layer is left empty");
                 return false;
             }
+            var painted = new HashSet<Vector2Int>();
             foreach (object c in M.List(L, "cells"))
             {
                 double[] v = M.Nums(c, 2);
-                tm.SetTile(Cell((int)v[0], (int)v[1]), terrain.tile);
+                painted.Add(new Vector2Int((int)v[0], (int)v[1]));
             }
-            return terrain.tile.tiles.Any(t => t.solid);
+            bool solid = false;
+            var missing = new List<string>();
+            foreach (Vector2Int p in painted.OrderBy(p => p.y).ThenBy(p => p.x))
+            {
+                int key = Autotile.CellMask((x, y) => painted.Contains(new Vector2Int(x, y)), p.x, p.y, terrain.mode);
+                DotworkTile tile = terrain.tile.TileFor(key, Autotile.CellRoll(p.x, p.y, layerIndex));
+                if (tile == null)
+                {
+                    missing.Add($"({p.x}, {p.y}) key {key}");
+                    continue;
+                }
+                tm.SetTile(Cell(ts.shape, p.x, p.y), tile);
+                solid |= tile.solid;
+            }
+            if (missing.Count > 0)
+            {
+                Warn($"map {map} layer {M.Str(L, "name")}: {missing.Count} cell(s) have no tile for their key in terrain " +
+                     $"{terrain.name} ({terrain.mode}) and stay empty: {string.Join(", ", missing.Take(6))}" +
+                     (missing.Count > 6 ? ", ..." : "") + " (a corners4 terrain needs shapes at least 2 cells thick)");
+            }
+            return solid;
+        }
+
+        /// <summary>A stamps layer: every tile of each stamp, tile j at (x + j % w, y + j / w) from the cell.</summary>
+        private bool PlaceStamps(Tilemap tm, DotworkTileset ts, Dictionary<string, object> L, string map)
+        {
+            bool solid = false;
+            int badStamps = 0, missing = 0;
+            foreach (object c in M.List(L, "cells"))
+            {
+                double[] v = M.Nums(c, 3);   // x, y, stamp
+                int index = (int)v[2];
+                if (index < 0 || index >= ts.stamps.Count)
+                {
+                    badStamps++;
+                    continue;
+                }
+                DotworkStamp stamp = ts.stamps[index];
+                int w = Math.Max(1, stamp.size.x);
+                for (int j = 0; j < stamp.tiles.Length; j++)
+                {
+                    Vector3Int id = stamp.tiles[j];
+                    DotworkTile tile = ts.Tile(id.x, id.y, id.z);
+                    if (tile == null)
+                    {
+                        missing++;
+                        continue;
+                    }
+                    tm.SetTile(Cell(ts.shape, (int)v[0] + j % w, (int)v[1] + j / w), tile);
+                    solid |= tile.solid;
+                }
+            }
+            if (badStamps > 0)
+            {
+                Warn($"map {map} layer {M.Str(L, "name")}: {badStamps} cell(s) name a stamp the tileset does not have ({ts.stamps.Count} stamps)");
+            }
+            if (missing > 0)
+            {
+                Warn($"map {map} layer {M.Str(L, "name")}: {missing} stamp tile(s) name a tile the tileset does not have");
+            }
+            return solid;
+        }
+
+        // ---- The extra kinds: loaded with the pixel-art settings and listed, the scene object is the game's ------
+
+        private void BuildBackground(Dictionary<string, object> a)
+        {
+            string name = M.Str(a, "name");
+            var entry = new DotworkBackground { name = name, role = M.Str(a, "role", "") };
+            int i = 0;
+            foreach (Dictionary<string, object> layer in M.Objs(a, "layers"))
+            {
+                string img = M.Str(layer, "image"), rep = M.Str(layer, "repeat", "none"), layerName = M.Str(layer, "name", "");
+                TexturePlan tp = img != null ? Texture(img) : null;
+                if (tp != null)
+                {
+                    tp.repeatU |= rep.Contains("x");            // the texture repeats on the layer's repeat axes
+                    tp.repeatV |= rep.Contains("y");
+                }
+                Sprite sprite = img != null ? WantWhole(img, $"{name}_{(layerName != "" ? layerName : i.ToString(CultureInfo.InvariantCulture))}") : null;
+                double[] size = M.Nums(layer, "size", 2), vel = M.Nums(layer, "velocity", 2);
+                entry.layers.Add(new DotworkBackgroundLayer
+                {
+                    name = layerName, sprite = sprite, size = new Vector2Int((int)size[0], (int)size[1]),
+                    velocity = new Vector2((float)vel[0], (float)vel[1]), repeat = rep,
+                    wobblePx = (float)M.Num(layer, "wobble_px", 0), scale = (float)M.Num(layer, "scale", 1),
+                });
+                i++;
+            }
+            if (!_plan)
+            {
+                _pack.backgrounds.Add(entry);
+            }
+        }
+
+        private void BuildParticles(Dictionary<string, object> a)
+        {
+            string name = M.Str(a, "name");
+            Sprite texture = WantWhole(M.Str(a, "texture"), name);
+            if (_plan)
+            {
+                return;
+            }
+            // The emitter JSON as Dotwork wrote it, as a file Unity imports as a TextAsset (game code parses it with Core/Json)
+            string path = $"{_outDir}/particles/{name}.json";
+            EnsureFolder(M.DirOf(path));
+            string text = Json.Stringify(M.Obj(a, "emitter") ?? new Dictionary<string, object>());
+            string full = Path.GetFullPath(path);
+            if (!File.Exists(full) || File.ReadAllText(full, System.Text.Encoding.UTF8) != text)
+            {
+                File.WriteAllText(full, text, new System.Text.UTF8Encoding(false));
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+            }
+            _written.Add(path);
+            var emitter = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
+            if (emitter == null)
+            {
+                throw new DotworkImportException($"could not import {path} as a TextAsset");
+            }
+            _pack.particles.Add(new DotworkParticles { name = name, texture = texture, emitter = emitter });
+        }
+
+        private void BuildTransition(Dictionary<string, object> a)
+        {
+            string name = M.Str(a, "name");
+            Sprite sprite = WantWhole(M.Str(a, "image"), name);
+            if (!_plan)
+            {
+                double[] size = M.Nums(a, "size", 2);
+                _pack.transitions.Add(new DotworkTransition
+                {
+                    name = name, transition = M.Str(a, "transition", ""), sprite = sprite, size = new Vector2Int((int)size[0], (int)size[1]),
+                });
+            }
+        }
+
+        private void BuildNormalMap(Dictionary<string, object> a)
+        {
+            string name = M.Str(a, "name"), image = M.Str(a, "image"), target = M.Str(a, "target");
+            if (image == null || target == null)
+            {
+                throw new DotworkImportException($"normal_map {name} needs both an image and a target");
+            }
+            TexturePlan normal = Texture(image), lit = Texture(target);
+            if (normal == null || lit == null)
+            {
+                return;                                           // the plan pass recorded the missing file
+            }
+            normal.normalMap = true;                              // linear, not a sprite
+            if (!_plan)
+            {
+                string path = Manifest.Resolve(image);
+                Sprite first = AssetDatabase.LoadAllAssetsAtPath(lit.path).OfType<Sprite>().OrderBy(s => s.name, StringComparer.Ordinal).FirstOrDefault();
+                _pack.normalMaps.Add(new DotworkNormalMap
+                {
+                    name = name, convention = M.Str(a, "convention", "opengl"), texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path),
+                    target = target, targetSprite = first,
+                });
+                return;
+            }
+            if (!string.IsNullOrEmpty(lit.normalMapOf) && lit.normalMapOf != normal.path)
+            {
+                Warn($"normal_map {name}: {target} already has normal map {Manifest.Relative(lit.normalMapOf)}; {image} replaces it");
+            }
+            lit.normalMapOf = normal.path;
+        }
+
+        private void BuildImage(Dictionary<string, object> a)
+        {
+            string name = M.Str(a, "name");
+            bool hasPivot = M.Has(a, "pivot");
+            Vector2 pivot = Point(a, "pivot");
+            Sprite sprite = WantWhole(M.Str(a, "image"), name, hasPivot ? pivot : (Vector2?)null);
+            if (!_plan)
+            {
+                double[] size = M.Nums(a, "size", 2);
+                _pack.images.Add(new DotworkImage
+                {
+                    name = name, role = M.Str(a, "role", ""), sprite = sprite, size = new Vector2Int((int)size[0], (int)size[1]),
+                    hasPivot = hasPivot, pivot = pivot,
+                });
+            }
         }
     }
 }

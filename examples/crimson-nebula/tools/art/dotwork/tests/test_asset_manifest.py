@@ -77,6 +77,81 @@ class Autotile(unittest.TestCase):
         self.assertEqual(assetspec.png_size(os.path.join(FIXTURE, "assets", "art", "ui", "icons", "ui_icon_potion_32.png")),
                          (32, 32))
 
+    def test_corners_key_is_the_canon_masks_corner_bits(self):
+        block = {(x, y) for x in (0, 1, 2) for y in (0, 1, 2)}
+        self.assertEqual(assetspec.cell_mask(block, 1, 1, "corners4"), assetspec.CORNERS_ONLY)
+        self.assertEqual(assetspec.cell_mask(block, 0, 0, "corners4"), assetspec.BIT["se"])      # the top-left cell
+        self.assertEqual(assetspec.cell_mask(block, 1, 0, "corners4"), assetspec.BIT["se"] | assetspec.BIT["sw"])
+        self.assertEqual(assetspec.cell_mask({(0, 0), (1, 1)}, 0, 0, "corners4"), 0)             # a diagonal touch
+        self.assertEqual(assetspec.corners_of(assetspec.BIT["se"], "square", 3),
+                         {"top_left": -1, "top_right": -1, "bottom_right": 3, "bottom_left": -1})
+        self.assertEqual(assetspec.corners_of(assetspec.BIT["nw"] | assetspec.BIT["ne"], "isometric", 1),
+                         {"top": 1, "right": 1, "bottom": -1, "left": -1})
+
+    def test_hash_and_roll_vectors(self):
+        self.assertEqual([assetspec.hash32(k) for k in (0, 1, 0xFFFFFFFF)], [1800329511, 3028713910, 4268016002])
+        for cell, want in (((0, 0, 0), 0.169182), ((3, 1, 1), 0.765973), ((3, 2, 1), 0.531301), ((-1, -1, 0), 0.992978)):
+            self.assertAlmostEqual(assetspec.cell_roll(*cell), want, places=6, msg=cell)
+        self.assertEqual(assetspec.cell_roll(70000, 2, 3), assetspec.cell_roll(70000 - 65536, 2, 3))
+        self.assertTrue(all(0 <= assetspec.cell_roll(x, y, L) < 1 for x in range(-3, 9) for y in range(-3, 9) for L in range(3)))
+
+    def test_pick_walks_the_weights_in_order(self):
+        cands = [(1, "a"), (0.6, "b")]
+        self.assertEqual(assetspec.pick_variant(cands, 0.0), "a")
+        self.assertEqual(assetspec.pick_variant(cands, 0.624), "a")
+        self.assertEqual(assetspec.pick_variant(cands, 0.626), "b")
+        self.assertEqual(assetspec.pick_variant([(0, "a"), (1, "b")], 0.0), "b")       # weight 0 is never picked
+        self.assertEqual(assetspec.pick_variant([(0, "a"), (0, "b")], 0.9), "a")       # all zero: the first
+        self.assertEqual(assetspec.pick_variant(cands, 0.9999999999), "b")
+
+    def test_cell_centres_are_godots(self):
+        iso = [16, 8]
+        self.assertEqual(assetspec.cell_centre("isometric", 0, 0, iso), [8, 4])    # TileMapLayer.map_to_local, 4.7.2
+        self.assertEqual(assetspec.cell_centre("isometric", 1, 0, iso), [16, 8])
+        self.assertEqual(assetspec.cell_centre("isometric", 0, 1, iso), [0, 8])
+        self.assertEqual(assetspec.cell_centre("isometric", 0, 2, iso), [-8, 12])
+        self.assertEqual(assetspec.cell_centre("isometric", 3, 2, iso), [16, 24])
+        self.assertEqual(assetspec.cell_centre("square", 2, 1, [8, 8]), [20, 12])
+
+
+class CornersRule(unittest.TestCase):
+    """What Godot 4.7.2's Match Corners painting chose over a base fill on the golden sets (probed 2026-11-11): the
+    spec's rule must pick the same tiles. Shapes: a 2x2 block, a 3x3 block and a 3x3 L missing its bottom-right cell;
+    grass (terrain 0) on the square pair set, grass (terrain 1, the upper material) on the iso transitions."""
+
+    GODOT = {
+        ("meadow", "block2"): {(3, 3): [0, 4, 2], (4, 3): [0, 4, 1], (3, 4): [0, 6, 0], (4, 4): [0, 5, 0]},
+        ("meadow", "block3"): {(2, 2): [0, 4, 2], (3, 2): [0, 4, 3], (4, 2): [0, 4, 1], (2, 3): [0, 6, 2], (3, 3): [0, 7, 3],
+                               (4, 3): [0, 5, 1], (2, 4): [0, 6, 0], (3, 4): [0, 7, 0], (4, 4): [0, 5, 0]},
+        ("meadow", "ell"): {(2, 2): [0, 4, 2], (3, 2): [0, 4, 3], (4, 2): [0, 4, 1], (2, 3): [0, 6, 2], (3, 3): [0, 7, 1],
+                            (4, 3): [0, 5, 0], (2, 4): [0, 6, 0], (3, 4): [0, 5, 0]},
+        ("iso_isle", "block2"): {(3, 3): [2, 8, 0], (4, 3): [2, 4, 0], (3, 4): [2, 2, 0], (4, 4): [2, 1, 0]},
+        ("iso_isle", "block3"): {(2, 2): [2, 8, 0], (3, 2): [2, 12, 0], (4, 2): [2, 4, 0], (2, 3): [2, 10, 0], (3, 3): [2, 15, 0],
+                                 (4, 3): [2, 5, 0], (2, 4): [2, 2, 0], (3, 4): [2, 3, 0], (4, 4): [2, 1, 0]},
+        ("iso_isle", "ell"): {(2, 2): [2, 8, 0], (3, 2): [2, 12, 0], (4, 2): [2, 4, 0], (2, 3): [2, 10, 0], (3, 3): [2, 7, 0],
+                              (4, 3): [2, 1, 0], (2, 4): [2, 2, 0], (3, 4): [2, 1, 0]},
+    }
+    TERRAIN = {"meadow": 0, "iso_isle": 1}
+
+    def test_spec_picks_godots_tiles(self):
+        """Compared by what a tile is (centre terrain and corners), not by atlas slot: both sets hold their all-corners
+        tile twice (one per centre copy), and Godot rolls between those duplicates as the spec rolls."""
+        doc = golden()
+        for (name, shape), want in self.GODOT.items():
+            ts = asset(doc, "tileset", name)
+            tiles = {(at["id"], t["col"], t["row"]): (t.get("terrain"), t.get("corners"))
+                     for at in ts["atlases"] for t in at["tiles"]}
+            layer = {"name": shape, "kind": "terrain", "terrain_set": 0, "terrain": self.TERRAIN[name],
+                     "cells": [list(c) for c in want]}
+            got = {(x, y): tiles[tuple(tile)] for x, y, _, tile in assetspec.resolve_terrain(ts, layer)}
+            self.assertEqual(got, {c: tiles[tuple(t)] for c, t in want.items()}, (name, shape))
+
+    def test_narrow_shapes_have_no_tile(self):
+        ts = asset(golden(), "tileset", "meadow")
+        for cells in ([[3, 3]], [[3, 3], [4, 3]], [[2, 3], [3, 3], [4, 3]], [[3, 3], [4, 4]]):
+            got = assetspec.resolve_terrain(ts, {"name": "n", "kind": "terrain", "terrain": 0, "cells": cells})
+            self.assertTrue(all(tile is None for *_, tile in got), cells)
+
 
 class Validator(unittest.TestCase):
     """Every rule the spec states, broken once on a copy of the golden manifest."""
@@ -143,6 +218,23 @@ class Validator(unittest.TestCase):
             next(t for a in ts["atlases"] for t in a["tiles"] if t.get("collision"))["collision"][0]["rect"] = [0, 0, 9, 9]
         self.assertFinds(coll, "leaves the 8x8 tile")
 
+        def narrow(d):
+            asset(d, "map", "meadow_patch")["layers"][1]["cells"].append([0, 0])    # a lone grass cell
+        self.assertFinds(narrow, "no tile for 1 cell(s) (0,0)")
+
+        def stamp_index(d):
+            asset(d, "map", "yard")["layers"][-1]["cells"][0][2] = 5
+        self.assertFinds(stamp_index, "names stamp [5]")
+
+        def stamp_edge(d):
+            asset(d, "map", "yard")["layers"][-1]["cells"][0][1] = 5                # a 1x2 door from the last row
+        self.assertFinds(stamp_edge, "leaves the 8x6 map")
+
+        def corner_names(d):
+            ts = asset(d, "tileset", "iso_isle")
+            next(t for a in ts["atlases"] for t in a["tiles"] if "corners" in t)["corners"] = {"top_left": 1}
+        self.assertFinds(corner_names, "names the corners ['bottom', 'left', 'right', 'top']")
+
     def test_missing_file_and_wrong_size(self):
         self.assertFinds(lambda d: asset(d, "sprite", "crate").update(image="art/props/gone.png"), "not found")
         self.assertFinds(lambda d: asset(d, "sprite", "crate").update(size=[17, 16]), "the manifest says 17x16")
@@ -183,6 +275,10 @@ class Golden(unittest.TestCase):
 
     def test_every_kind_is_in_the_fixture(self):
         self.assertEqual(sorted({a["kind"] for a in golden()["assets"]}), sorted(assetspec.KINDS))
+        layer_kinds = {L["kind"] for a in golden()["assets"] if a["kind"] == "map" for L in a["layers"]}
+        self.assertEqual(sorted(layer_kinds), sorted(assetspec.LAYER_KINDS))
+        e = assetspec.load(os.path.join(FIXTURE, "expected.json"))["assets"]
+        self.assertEqual(sorted({v["shape"] for k, v in e.items() if k.startswith("map/")}), ["isometric", "square"])
 
     def test_loaded_values(self):
         e = assetspec.load(os.path.join(FIXTURE, "expected.json"))["assets"]
@@ -199,6 +295,19 @@ class Golden(unittest.TestCase):
             for x, y, m, tile in layer:
                 self.assertIn(m, assetspec.BLOB)
                 self.assertIsNotNone(tile, f"no tile for mask {m} at {x},{y}")
+        path = {(x, y): tile for x, y, _, tile in e["map/yard"]["terrain"]["Path"]}
+        self.assertEqual((path[(3, 1)], path[(3, 2)]), ([1, 11, 3], [1, 10, 3]))   # two full cells, one rolls the variant
+        self.assertEqual(e["map/yard"]["layers"]["Fixtures"], 2)                      # the door stamp, expanded
+        self.assertEqual(e["map/yard"]["placed"]["Fixtures"], [[7, 0, 4, 0, 0, 56, 0], [7, 1, 4, 1, 0, 56, 8]])
+        self.assertEqual(e["map/yard"]["centres"][0], [0, 0, 4, 4])
+        grass = {(x, y): tile for x, y, _, tile in e["map/meadow_patch"]["terrain"]["Grass"]}
+        self.assertEqual(grass[(2, 2)], [0, 7, 3])                                    # all four corners grass
+        self.assertEqual(grass[(1, 1)], [0, 4, 2])                                    # only the bottom-right corner
+        isle = e["map/isle"]
+        self.assertEqual((isle["shape"], isle["tile_size"]), ("isometric", [16, 8]))
+        self.assertEqual(isle["placed"]["Blocks"], [[3, 0, 1, 0, 0, 24, 8]])          # origin [8, 8]: lifted 4 px
+        self.assertEqual(isle["placed"]["Grass"][0], [1, 1, 2, 8, 0, 0, 8])
+        self.assertIn([0, 1, 0, 8], isle["centres"])
 
 
 class GodotReference(unittest.TestCase):

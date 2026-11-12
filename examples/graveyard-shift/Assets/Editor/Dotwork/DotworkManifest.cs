@@ -10,8 +10,11 @@
 // Notes   : Asset paths are Unity's (forward slashes, starting at Assets). The spec forbids "..", a drive and a
 //           leading "/" in a path; a manifest whose base leaves Assets/ is refused, because Unity imports only
 //           what is under Assets/. Another major version is refused with both versions named; within major 1
-//           unknown fields are ignored (the importer skips unknown kinds with a warning).
+//           (1.0.0 and 1.1.0 alike) unknown fields are ignored and unknown kinds or layer kinds are skipped with a
+//           warning. The 1.1.0 additions (a tileset's `stamps`, a map's `stamps` layers, corners4 keys, the
+//           variant pick) are read by the importer through these accessors.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): asset manifest 1.1.0 (#285)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -40,6 +43,7 @@ namespace graveyard_shift.Dotwork
         public static readonly string[] CORE_KINDS =
             { "animated_sprite", "sprite", "icon", "portrait", "tileset", "map", "font", "ui_kit" };
         public static readonly string[] EXTRA_KINDS = { "background", "particles", "transition", "normal_map", "image" };
+        public static readonly string[] LAYER_KINDS = { "tiles", "terrain", "stamps" };   // stamps since 1.1.0
 
         public string Path { get; private set; }             // the manifest's asset path
         public string Text { get; private set; }

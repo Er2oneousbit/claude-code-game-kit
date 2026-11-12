@@ -11,6 +11,7 @@
 //           Log.error (smoke fails on it), a skipped kind a warning. DOTWORK_OK <manifests> <assets> <images> marks
 //           a pass (dev.py smoke --debug prints it). No manifests: nothing to do.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the extra kinds are built and counted too (#285)
 // ---------------------------------------------------------------------------
 import manifests from "virtual:dotwork-manifests";
 import { Log } from "../../core/log";
@@ -52,7 +53,15 @@ export async function dotworkCheck(search = location.search): Promise<void> {
       for (const [name, kit] of p.uiKits) {
         for (const part of kit.parts.values()) built.push(lib.nineSlice(name, part.name, part.size[0] * 2, part.size[1] * 2, { pack: p.pack }));
       }
-      assets += p.animated.size + p.sprites.size + p.icons.size + p.portraits.size + p.tilesets.size + p.maps.size + p.fonts.size + p.uiKits.size;
+      // the extra kinds: every one comes out by name with its textures
+      for (const name of p.backgrounds.keys()) for (const L of lib.background(name, p.pack)) L.texture.dispose();
+      for (const name of p.particles.keys()) lib.particles(name, p.pack);
+      for (const name of p.transitions.keys()) lib.transition(name, p.pack);
+      for (const name of p.normalMaps.keys()) lib.normalMap(name, p.pack);
+      for (const name of p.pictures.keys()) built.push(lib.image(name, { pack: p.pack }));
+      for (const [name, def] of p.sprites) if ([...p.normalMaps.values()].some((n) => n.target === def.image)) built.push(lib.sprite(name, { lit: true, pack: p.pack }));
+      assets += p.animated.size + p.sprites.size + p.icons.size + p.portraits.size + p.tilesets.size + p.maps.size + p.fonts.size + p.uiKits.size
+        + p.backgrounds.size + p.particles.size + p.transitions.size + p.normalMaps.size + p.pictures.size;
     }
     for (const o of built) disposeScene(o);
     Log.info("dotwork", `DOTWORK_OK ${lib.packs.length} manifest(s), ${assets} asset(s), ${lib.textureCount} image(s)`);

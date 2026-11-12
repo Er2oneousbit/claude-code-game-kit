@@ -23,7 +23,8 @@ src/core/           engine-free logic: Log, juice (shake, hitstop, ease, follow 
 src/shell/          the front end: HTML screens over the canvas, input, subtitles, smoke driver (no three import; the
                     same files as the 2D web overlay's, host.ts is all it knows of the renderer)
 src/game/           threeHost.ts (frame loop, worlds, pause, frame cap, screenshot), Game.ts (play), JuiceWorld.ts
-                    (the juice demo), Backdrop.ts (behind the menus), dotwork/ (the Dotwork asset manifest importer)
+                    (the juice demo), Backdrop.ts (behind the menus), dotwork/ (the Dotwork asset manifest importer),
+                    character.ts (a rigged glTF character: load, play a clip on a loop)
 data/               i18n/<locale>.json strings, dialogue/*.built.json subtitles, access/colours.json, golden/ vectors
 tests/              Vitest tests for src/core, the pure parts of src/shell and the Dotwork importer (*.test.ts)
 public/assets/      models (.glb), textures, audio, fonts: served as-is at assets/... (docs/ASSET_LOG.md);
@@ -39,6 +40,20 @@ dist/               production build (git-ignored)
   default folder here is `public/assets/models/`; a Bozzetto model loaded in the smoke run, K01), loaded with `import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"`.
   A vertex-coloured model (`--material vertex`, glTF `COLOR_0`) needs nothing extra: GLTFLoader turns `vertexColors` on
   by itself when a mesh has colours (three r186 source).
+- **Rigged characters (glTF with clips, #290):** a `.glb` with a skin and animations (a Bozzetto `rig make` result:
+  Mixamo bone names, clips `idle`, `walk` ...) goes in `public/assets/models/`. `src/game/character.ts` wraps the
+  AnimationMixer: `const hero = await loadCharacter("assets/models/hero_rigged.glb")` in a world's `load()`,
+  `scene.add(hero.root)`, `hero.play("walk")` (loops; `{ loop: false }` plays once and holds; 0.2 s crossfade), and
+  `hero.update(dt)` every frame. Three.js strips `:` from node names: `mixamorig:Hips` is `mixamorigHips`
+  (`boneName()` converts). No root motion: the clips play in place and the game moves `hero.root`. Metres, +Y up;
+  glTF's front is +Z and `Object3D.lookAt()` turns a model's +Z toward its target, so `hero.root.lookAt(x, y, z)`
+  faces where it walks. `hero.play(name)` restarts the clip from its start (`AnimationAction.reset()`): call it when
+  the clip changes, not every frame. Tested 2026-11-11 (three r186): `tests/character.test.ts` (6 Vitest tests, in
+  Node: the golden character has no textures) loads `data/golden/character/character.glb`, finds `idle` and `walk` at
+  their lengths, plays `walk` 30 frames and checks `mixamorigLeftUpLeg` swings as far as `expected.json` says and no
+  further, loops with the clip's length as its period at 1x, plays once, height 1.8 m; `check`, `test` (184) and
+  `smoke` passed on a fresh scaffold. Drawing it in the browser is not in a test yet **(verify: the smoke run loads
+  a static Bozzetto model, K01, not a skinned one)**.
 - One `update(dt)` per frame; dt in seconds from `THREE.Timer`, clamped. Never assume 60 fps.
 - Input: read it through `shell.input` (`import { shell } from "../shell/app"`): `isDown(action)` / `takePress(action)`
   for the player's bindings, `stick()` (the left stick with the player's radial deadzone and invert_y, up is -y),
@@ -53,13 +68,32 @@ dist/               production build (git-ignored)
 - **Rules in `src/core`, stepped at a fixed rate,** make the whole game playable in a unit test: a scenario run in the browser
   (`?autoplay`) then replays exactly in Vitest (the kit repo's Courier Dash example does this).
 
-- **Dotwork art** (`public/assets/dotwork/<pack>.assets.json`, spec `tools/art/dotwork/ASSET_MANIFEST.md`): in a world's
-  `load()`, `const lib = await DotworkLibrary.load(DOTWORK_MANIFESTS, progress)` (src/game/dotwork/), then
-  `lib.animated("hero", { ppu })` (`playDirection("walk", "e")`), `lib.sprite`, `lib.map`, `lib.text`, `lib.icon`,
-  `lib.portrait`, `lib.nineSlice`; call `update(dt, camera)` on each every frame. The diorama look: one world unit per
-  map tile, tiles flat on the ground (map y is +Z), sprites as billboards turning around y, nearest filtering, alphaTest.
-  `dev.py test` checks every manifest's files (tests/dotwork.manifests.test.ts) and `smoke` loads them all in the
-  browser before BOOT_OK. Restart `dev.py run` after Dotwork writes a new pack (the list is made at build time).
+- **Dotwork art** (`public/assets/dotwork/<pack>.assets.json`, spec `tools/art/dotwork/ASSET_MANIFEST.md` 1.1.0; the
+  importer reads any 1.x): in a world's `load()`, `const lib = await DotworkLibrary.load(DOTWORK_MANIFESTS, progress)`
+  (src/game/dotwork/), then `lib.animated("hero", { ppu })` (`playDirection("walk", "e")`), `lib.sprite`, `lib.map`,
+  `lib.text`, `lib.icon`, `lib.portrait`, `lib.nineSlice`; call `update(dt, camera)` on each every frame. The diorama
+  look: one world unit per map tile, tiles flat on the ground (map y is +Z), sprites as billboards turning around y,
+  nearest filtering, alphaTest.
+  - **Maps** are resolved by the importer (`manifest.ts`, no Three.js): a `tiles` layer as given, a `terrain` layer by
+    the spec's rules (`cellMask` for blob47, sides4 and corners4, the key match, the variant pick by `cellRoll`, so a
+    cell shows the same variant as every other engine), a `stamps` layer expanded into its tiles. Every placed cell
+    carries its image's top-left in map pixels (`left`, `top`: the cell centre less the tile's origin); an isometric
+    map's centres follow Godot's diamond-down layout (cell (0, 0) at (w/2, h/2)) and the diamonds lie flat on the
+    ground at those pixels over the map's unit, so a raised block (its own `origin`) stands on its cell. A terrain cell
+    no tile answers to is left empty with one warning per layer (the validator refuses such a map); a layer of an
+    unknown kind is skipped with one warning.
+  - **The extra kinds** are loaded by name: `lib.background(name)` (a texture per layer, `RepeatWrapping` on its
+    `repeat` axes, with the layer's velocity and size), `lib.particles(name)` (the mask texture and the emitter JSON),
+    `lib.transition(name)` (the rule texture and the transition's kind), `lib.normalMap(name)` (the map and its
+    target's texture) and `lib.image(name)` (a quad). `lib.sprite(name, { lit: true })` gives the sprite a
+    `MeshLambertMaterial` with the pack's normal map for its image as `normalMap` (OpenGL style, three's own
+    convention; it needs a light in the scene). Normal maps and transition rules load without sRGB (`NoColorSpace`),
+    so a shader reads their bytes as drawn. Drawing a scrolling layer, an emitter or a wipe is the game's job
+    (`tools/shaders/` has the dissolve and the transition threshold).
+  - `dev.py test` checks the importer against `data/golden/dotwork/expected.json` (tests/dotwork.golden.test.ts: the
+    three maps' terrain, placed cells and centres, the hash vectors) and every manifest's files
+    (tests/dotwork.manifests.test.ts); `smoke` loads them all in the browser before BOOT_OK. Restart `dev.py run`
+    after Dotwork writes a new pack (the list is made at build time).
 
 - **Shaders:** `kitMaterial("toon_rim", { albedo: [0.2, 0.6, 0.9] }, texture)` (src/shaders/kitMaterial.ts) returns a
   ShaderMaterial for any UV-mapped mesh (a sprite plane, a full-screen quad for post effects, a model); set

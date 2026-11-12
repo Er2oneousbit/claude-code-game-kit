@@ -62,6 +62,8 @@
 # Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): smoke reports the run's FRAME_TIMES line (mean,
 #           p95, p99, worst) and fails a p95 over --frame-budget MS, or over the "Smoke frame time" row of
 #           docs/ARCHITECTURE.md; a run that measured nothing says so (#90)
+# Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): a shader check that crashed before its first recipe
+#           (a Windows exception status or a signal) says so, instead of "it needs a window"
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -763,6 +765,12 @@ def cmd_smoke(args, godot):
     return 0
 
 
+def crash_exit(rc):
+    """True for an exit code that means the process crashed: a Windows exception status (0xC0000005 access
+    violation, 0xC0000374 heap corruption, ...) or, elsewhere, a signal (subprocess reports it negative)."""
+    return rc < 0 or (rc & 0xF0000000) == 0xC0000000
+
+
 def shader_pass(godot, compare):
     """The kit's shader recipes: generated files current, every one compiles and renders (a small window), and with
     compare each render matches its golden image (tools/shaders/shader_ref.py). 0 ok, 1 failed, 2 environment."""
@@ -791,11 +799,13 @@ def shader_pass(godot, compare):
         drawn = out.count("SHADER_OK ")
         if errors:
             print("[FAIL] shader errors:\n  " + "\n  ".join(errors[:12]))
-        elif drawn and rc != 0 and "SHADER_CHECK_DONE" not in out:
+        elif (drawn or crash_exit(rc)) and rc != 0 and "SHADER_CHECK_DONE" not in out:
             # #264: the window opened and drew some recipes, then Godot died (seen as heap corruption under GPU
-            # load from other programs): a crash, not a missing display
+            # load from other programs): a crash, not a missing display. A Windows exception status or a signal
+            # with nothing drawn yet is the same crash, earlier (0xC0000005 and 0xC0000374 seen on 4.7.2)
             code = f"{rc} = 0x{rc:08X}" if rc > 255 else str(rc)      # Windows status codes read better in hex
-            print(f"[FAIL] Godot crashed after {drawn} recipe(s) (exit {code}); rerun, or check --no-shaders")
+            when = f"after {drawn} recipe(s)" if drawn else "before drawing a recipe"
+            print(f"[FAIL] Godot crashed {when} (exit {code}); rerun, or check --no-shaders")
         else:
             print(f"[FAIL] the shader check did not finish (exit {rc}): it needs a window, so run it from a desktop "
                   "session (check --no-shaders skips it)")

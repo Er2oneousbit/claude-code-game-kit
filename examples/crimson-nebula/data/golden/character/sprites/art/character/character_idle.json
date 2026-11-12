@@ -1,0 +1,45 @@
+{
+  "image": "character_idle.png",
+  "cell_width": 48,
+  "cell_height": 48,
+  "rows": "directions",
+  "columns": "frames",
+  "directions": [
+    {
+      "row": 0,
+      "angle_deg": 0.0
+    },
+    {
+      "row": 1,
+      "angle_deg": 90.0
+    },
+    {
+      "row": 2,
+      "angle_deg": 180.0
+    },
+    {
+      "row": 3,
+      "angle_deg": 270.0
+    }
+  ],
+  "frames": [
+    0,
+    6,
+    12,
+    18,
+    24,
+    30,
+    36,
+    42
+  ],
+  "action": "idle",
+  "elevation_deg": 30.0,
+  "source": "character.glb",
+  "note": "row 0 = front (camera on -Y); angles turn counter-clockwise seen from above",
+  "world_size_m": 2.774946,
+  "pixels_per_meter": 17.297635,
+  "pivot": "bounds",
+  "pivot_px": null,
+  "ground_depth_scale": 0.5,
+  "note_scale": "a ground offset (dx, dy) in meters is (dx, dy * ground_depth_scale) * pixels_per_meter on screen"
+}
