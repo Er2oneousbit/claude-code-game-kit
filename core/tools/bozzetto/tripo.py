@@ -224,8 +224,12 @@ class Journal:
             old = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             old = {}
+        if not isinstance(old, dict):          # a journal edited into something else is no reason to crash
+            old = {}
         self.data = old if (reuse and all(old.get(k) == v for k, v in want.items())) else dict(want, tasks={})
         self.tasks = self.data.setdefault("tasks", {})
+        if not isinstance(self.tasks, dict):
+            self.tasks = self.data["tasks"] = {}
 
     def save(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -234,16 +238,20 @@ class Journal:
     def done(self, step):
         return (self.tasks.get(step) or {}).get("status") == "success"
 
-    def running(self, step, tid):
-        self.tasks[step] = {"id": tid, "status": "running"}
+    def running(self, step, tid, **extra):
+        """A task just created, with the facts that name it (rig.py: the clips asked for) so a later run knows
+        what it is reusing even when this one is cut off before the task finishes."""
+        self.tasks[step] = dict({"id": tid, "status": "running"}, **extra)
         self.save()
 
     def finished(self, step, tid, credits, **extra):
         self.tasks[step] = dict({"id": tid, "status": "success", "credits": credits}, **extra)
         self.save()
 
-    def spent(self):
-        return sum(float(v.get("credits") or 0) for v in self.tasks.values())
+    def spent(self, steps=None):
+        """Credits the journal holds, over every task or over `steps` (the ones a run ships with)."""
+        tasks = self.tasks.values() if steps is None else [self.tasks.get(s) or {} for s in steps]
+        return sum(float(v.get("credits") or 0) for v in tasks)
 
     def settle(self, client, steps, wait, extra=None):
         """A task journalled as running (the last run timed out or was stopped after paying): ask Tripo how it ended
@@ -264,7 +272,8 @@ class Journal:
                 # still running after --wait: never pay for a second one while the first may still finish
                 raise bz.ToolError(f"the last run's {step} task {entry['id']} is still running at Tripo; run again "
                                    f"later (it is kept in {JOURNAL}), or pass --no-reuse to pay for a new one")
-            more = extra(step, d) if extra else {}
+            more = {k: v for k, v in entry.items() if k not in ("id", "status", "credits")}   # what running() kept
+            more.update(extra(step, d) if extra else {})
             self.finished(step, entry["id"], float(d.get("credits_consumed") or 0), **more)
 
     def reused(self):
@@ -272,7 +281,8 @@ class Journal:
 
 
 class Budget:
-    """--max-credits counts actual charges; the balance is checked too. afford() refuses before a paid call."""
+    """--max-credits caps one run, counting its actual charges (what earlier runs paid and the journal reuses is
+    not spent again, so it does not count); the balance is checked too. afford() refuses before a paid call."""
 
     def __init__(self, cap, balance, spent=0.0, flag="--max-credits", journal=JOURNAL):
         self.cap, self.balance, self.spent = cap, balance, spent
@@ -280,7 +290,7 @@ class Budget:
 
     def afford(self, more):
         if self.spent + more > self.cap:
-            raise bz.ToolError(f"spending {more:g} more credits would make {self.spent + more:g} in all, over "
+            raise bz.ToolError(f"spending {more:g} more credits would make {self.spent + more:g} this run, over "
                                f"{self.flag} {self.cap:g}; finished tasks are kept in {self.journal} for a re-run")
         if more > self.balance:
             raise bz.ToolError(f"the Tripo balance ({self.balance:g} credits) is under the next step ({more:g}); "
@@ -377,9 +387,10 @@ def run_make(args, plan):
     j = Journal(work / JOURNAL, want, reuse=not args.no_reuse)
     j.settle(client, ["model"], args.wait)
     price = 0 if j.done("model") else quote(model, kind, args.quality)
-    budget = Budget(args.max_credits, client.balance(), j.spent())
+    budget = Budget(args.max_credits, client.balance())      # the cap is for this run: reused work costs nothing
     if j.done("model"):
-        print(f"[ OK ] reusing paid Tripo work from {JOURNAL}: {j.reused()} (no new credits)")
+        print(f"[ OK ] reusing paid Tripo work from {JOURNAL}: {j.reused()} ({j.spent():g} credits paid before, "
+              "no new credits)")
     print(f"[info] Tripo quote: {price} credits still to spend ({model} {kind}-to-model, texture {tq}; the quote is "
           f"the kit's table, Tripo has no price endpoint); balance {budget.balance:g}; limit --max-credits "
           f"{args.max_credits}")

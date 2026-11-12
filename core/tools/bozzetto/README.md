@@ -334,9 +334,11 @@ Mixamo-named (`--names keep` rigs those with their own names), and when a third 
 
 **Tripo's journal:** every paid task is written to `assets_src/bozzetto/<name>/rig/tripo/tasks.json` as it is created and when it finishes, and
 each step's actual cost is checked against `--max-credits` and the balance before the next paid call. If a run fails
-after paying (a lost download, a missing link, a timeout), run it again: tasks for the same model and clips are
-reused, with a fresh download link. A task the last run left running is asked for its result first; if it is
-still running the run stops rather than pay for a second one (`--no-reuse` pays for new ones).
+after paying (a lost download, a missing link, a timeout), run it again: tasks for the same model are reused, with a
+fresh download link; other `--clips` later reuse the paid rig and pay for the clips only. A task the last run left
+running is asked for its result first; if it is still running the run stops rather than pay for a second one
+(`--no-reuse` pays for new ones). `--max-credits` caps one run: a re-run that reuses everything spends nothing and
+passes any cap.
 
 Other `rig make` options: `--wait S` (each UniRig step's and Tripo task's limit, default 1800), `--out`,
 `--project`, `--no-preview`, `--no-log` and `--overwrite` as for `make`; `--input FILE` rigs another `.glb`.

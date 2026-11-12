@@ -434,6 +434,47 @@ class TripoExam(Base):
         self.assertEqual(len(fake2.posts("/animations/rig")), 1, "the rig was paid for twice")   # the old one only
         self.assertEqual(len(fake2.posts("/animations/retarget")), 1)
 
+    def test_other_clips_reuse_the_paid_rig(self):
+        """The rig does not depend on the clips: asking for other clips later pays for the clips only. A journal
+        from before 0.15.0 (clips at its top level) is read the same way."""
+        tripo.OPENER = fake = FakeTripo()
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
+        self.assertEqual(code, 0, out)
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk,run", "--overwrite"])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(fake.posts("/animations/rig")), 1, "the rig was paid for again")
+        self.assertEqual(len(fake.posts("/animations/retarget")), 2)
+        self.assertIn("quote: 30 credits", out)
+        self.assertIn("reusing paid Tripo work", out)
+        self.assertIn("55 Tripo credits", out, "the record counts the rig and the clips it ships with")
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk,run", "--overwrite"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("quote: 0 credits", out)
+        self.assertEqual(len(fake.posts("/animations/retarget")), 2, "the same clips were paid for again")
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "none", "--overwrite"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("quote: 0 credits", out)
+        self.assertIn("25 Tripo credits", out, "no clips shipped: the rig alone is counted")
+        # a 0.14 journal: clips at the top level, the retarget entry without its own
+        j = self.root / "assets_src/bozzetto/npc_guard/rig/tripo/tasks.json"
+        doc = json.loads(j.read_text(encoding="utf-8"))
+        doc["clips"] = ["idle", "walk", "run"]
+        doc["tasks"]["retarget"].pop("clips")
+        j.write_text(json.dumps(doc), encoding="utf-8")
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk,run", "--overwrite"])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(fake.posts("/animations/retarget")), 2, "an old journal's clips were paid for again")
+
+    def test_a_lowered_cap_does_not_refuse_a_free_rerun(self):
+        """--max-credits caps one run: a re-run that reuses every paid task spends nothing and must pass any cap."""
+        tripo.OPENER = fake = FakeTripo()
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
+        self.assertEqual(code, 0, out)
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk", "--overwrite",
+                              "--max-credits", "5"])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(fake.posts("/animations/rig")) + len(fake.posts("/animations/retarget")), 2)
+
     def test_a_lost_result_is_fetched_again_without_paying(self):
         """#210: rig and clips succeed but the model URL is missing: the run fails, the journal keeps the paid
         tasks, and a re-run downloads the result with no new paid call."""

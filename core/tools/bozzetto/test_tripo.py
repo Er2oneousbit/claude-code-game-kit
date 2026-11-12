@@ -440,6 +440,14 @@ class Recovery(Base):
         self.assertEqual(rc, 0, out)
         self.assertEqual(len(STATE.posts()), 4, "a changed picture is another model")
 
+    def test_a_lowered_cap_does_not_refuse_a_free_rerun(self):
+        """--max-credits caps one run: fixing the facing reuses the paid task, spends nothing, and passes any cap."""
+        self.assertEqual(self.make("--image", "art_src/crate.png")[0], 0)
+        rc, out = self.make("--image", "art_src/crate.png", "--overwrite", "--turn", "0", "--max-credits", "20")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("110 credits paid before", out)
+        self.assertEqual(len(STATE.posts()), 1)
+
     def test_a_task_left_running_is_adopted_or_stops_the_run(self):
         bz.SLEEP = lambda s: time.sleep(0.05)       # --wait 1 is real time: poll gently
         STATE.status["task-1"] = "running"
