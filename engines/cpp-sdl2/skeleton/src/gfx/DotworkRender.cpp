@@ -8,8 +8,12 @@
 //
 // Pseudocode:
 //   load_all: each manifest -> load (log errors, warnings) -> file check (log) -> preload the textures it draws
-//   draw_map: each layer -> each cell -> its atlas cell (+ animation frame) -> flip/turn -> centre on the cell
+//             (every kind's PNGs, the extra kinds included)
+//   draw_map: each layer -> each cell -> its atlas cell (+ animation frame) -> flip/turn -> the tile's origin on
+//             the spec's cell centre (core::dotwork::cell_centre, both shapes)
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): the cell centre formula
+//           shared with the loader, the extra kinds' textures loaded
 // ---------------------------------------------------------------------------
 #include "gfx/DotworkRender.hpp"
 
@@ -97,6 +101,24 @@ void Library::preload(const dw::Pack& pack) {
             texture(pack, p.image);
         }
     }
+    // The extra kinds: their textures load here too; what uses them is the game's
+    for (const auto& b : pack.backgrounds) {
+        for (const auto& L : b.layers) {
+            texture(pack, L.image);
+        }
+    }
+    for (const auto& p : pack.particles) {
+        texture(pack, p.texture);
+    }
+    for (const auto& t : pack.transitions) {
+        texture(pack, t.image);
+    }
+    for (const auto& n : pack.normal_maps) {
+        texture(pack, n.image);   // the target is a sprite's image, loaded with its sprite (or by path on demand)
+    }
+    for (const auto& i : pack.images) {
+        texture(pack, i.image);
+    }
 }
 
 SDL_Texture* Library::texture(const dw::Pack& pack, const std::string& rel) {
@@ -176,9 +198,9 @@ void Library::draw_tile(const dw::Pack& pack, const dw::Tileset& tileset, const 
     }
     const float tw = static_cast<float>(atlas->tile_w), th = static_cast<float>(atlas->tile_h);
     const SDL_FRect src{static_cast<float>(col) * tw, static_cast<float>(tile->row) * th, tw, th};
-    const float ox = tile->origin ? static_cast<float>(tile->origin->x) : tw / 2;
-    const float oy = tile->origin ? static_cast<float>(tile->origin->y) : th / 2;
-    const SDL_FRect dst{cx - ox * scale, cy - oy * scale, tw * scale, th * scale};
+    const dw::Point origin = dw::tile_origin(*tile, *atlas);   // the image point that sits on the cell's centre
+    const SDL_FRect dst{cx - static_cast<float>(origin.x) * scale, cy - static_cast<float>(origin.y) * scale,
+                        tw * scale, th * scale};
     SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
     SDL_SetTextureAlphaModFloat(tex, opacity);
     if (cell.flags == 0) {
@@ -196,15 +218,13 @@ void Library::draw_map(const dw::Pack& pack, const dw::Map& map, float x, float 
     if (!tileset) {
         return;
     }
-    const bool iso = tileset->shape == "isometric";
-    const float w = static_cast<float>(map.tile_w) * scale, h = static_cast<float>(map.tile_h) * scale;
     for (const auto& layer : map.layers) {
         const float opacity = static_cast<float>(layer.opacity);
         for (const auto& cell : layer.cells) {
-            const float col = static_cast<float>(cell.x), row = static_cast<float>(cell.y);
-            const float cx = iso ? x + (col - row) * w / 2 : x + col * w + w / 2;
-            const float cy = iso ? y + (col + row + 1) * h / 2 : y + row * h + h / 2;
-            draw_tile(pack, *tileset, cell, cx, cy, scale, seconds, opacity);
+            // The spec's cell centre (square rows or the isometric diamond-down layout), in map pixels
+            const dw::Point c = dw::cell_centre(map.shape, cell.x, cell.y, map.tile_w, map.tile_h);
+            draw_tile(pack, *tileset, cell, x + static_cast<float>(c.x) * scale, y + static_cast<float>(c.y) * scale,
+                      scale, seconds, opacity);
         }
     }
 }

@@ -8,11 +8,14 @@
 //           Maps are read after every tileset (a map needs its tileset), whatever the order in the file.
 //
 // Pseudocode (parse_manifest):
-//   format and major version -> base_dir -> for each asset: core kind -> read it (paths checked)
-//     | extra or unknown kind -> one warning per kind
-//   -> for each map: its tileset -> tiles layers as is, terrain layers through resolve_terrain
+//   format and major version -> base_dir -> for each asset: known kind -> read it (paths checked)
+//     | unknown kind -> one warning per kind
+//   -> for each map: its tileset -> tiles layers as is, stamps layers expanded, terrain layers through
+//      resolve_terrain (cell_mask -> key -> the candidates with that key -> pick_variant with cell_roll)
 //   -> portraits' animations and maps' objects must name assets of the pack
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners4 keys, the variant
+//           pick, stamps layers, cell centres and placement, the extra kinds read and checked
 // ---------------------------------------------------------------------------
 #include "core/DotworkAssets.hpp"
 
@@ -33,9 +36,13 @@ namespace fs = std::filesystem;
 namespace {
 
 // ---- Tunables ----
-// The extra kinds of spec 1.0: skipped (one warning each) until the game needs them.
-const std::set<std::string> kExtraKinds{"background", "particles", "transition", "normal_map", "image"};
 constexpr unsigned char kPngMagic[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
+// A corners4 tile's corner names and the mask bit of the neighbour across each (the spec's table): on a diamond
+// the top corner touches the cell up the screen, which is NW in map coordinates.
+using CornerBits = std::array<std::pair<const char*, int>, 4>;
+constexpr CornerBits kSquareCorners{{{"top_left", 128}, {"top_right", 2}, {"bottom_right", 8}, {"bottom_left", 32}}};
+constexpr CornerBits kIsoCorners{{{"top", 128}, {"right", 2}, {"bottom", 8}, {"left", 32}}};
+constexpr double kTwo32 = 4294967296.0;   // 2^32: hash32's range, the roll divides by it
 
 // ---- reading helpers (each throws json::exception on a missing field or a wrong type) ----
 template <typename T>
@@ -244,7 +251,13 @@ Tileset read_tileset(const json& a) {
     return ts;
 }
 
-// A map, its layers placed: tiles layers as listed, terrain layers resolved against the tileset.
+std::string tile_text(const TileRef& t) {
+    return "[" + std::to_string(t.atlas) + ", " + std::to_string(t.col) + ", " + std::to_string(t.row) + "]";
+}
+
+// A map, its layers placed: tiles layers as listed, stamps layers expanded, terrain layers resolved against the
+// tileset. A terrain layer's roll uses the layer's index in the manifest's list (skipped layers count too, as the
+// reference loader enumerates them).
 Map read_map(const json& a, const Pack& pack, std::vector<std::string>& warnings) {
     Map m;
     m.name = a.at("name").get<std::string>();
@@ -257,7 +270,16 @@ Map read_map(const json& a, const Pack& pack, std::vector<std::string>& warnings
     if (!ts) {
         throw std::runtime_error("tileset \"" + m.tileset + "\" is not in this manifest");
     }
+    m.shape = ts->shape;
+    const auto need_tile = [&](const std::string& layer_name, const TileRef& ref) {
+        if (!ts->tile(ref)) {
+            throw std::runtime_error("layer " + layer_name + " names tile " + tile_text(ref) + ", which tileset " +
+                                     ts->name + " does not have");
+        }
+    };
+    int layer_index = -1;
     for (const auto& L : a.at("layers")) {
+        ++layer_index;
         MapLayer layer;
         layer.name = L.at("name").get<std::string>();
         layer.kind = L.at("kind").get<std::string>();
@@ -266,12 +288,24 @@ Map read_map(const json& a, const Pack& pack, std::vector<std::string>& warnings
             for (const auto& c : L.at("cells")) {
                 MapCell cell{c.at(0).get<int>(), c.at(1).get<int>(), {c.at(2).get<int>(), c.at(3).get<int>(), c.at(4).get<int>()},
                              c.size() > 5 ? c.at(5).get<int>() : 0, -1};
-                if (!ts->tile(cell.tile)) {
-                    throw std::runtime_error("layer " + layer.name + " names tile [" + std::to_string(cell.tile.atlas) +
-                                             ", " + std::to_string(cell.tile.col) + ", " + std::to_string(cell.tile.row) +
-                                             "], which tileset " + ts->name + " does not have");
-                }
+                need_tile(layer.name, cell.tile);
                 layer.cells.push_back(cell);
+            }
+        } else if (layer.kind == "stamps") {
+            for (const auto& c : L.at("cells")) {
+                const int x = c.at(0).get<int>(), y = c.at(1).get<int>(), index = c.at(2).get<int>();
+                if (index < 0 || index >= static_cast<int>(ts->stamps.size())) {
+                    throw std::runtime_error("layer " + layer.name + " places stamp " + std::to_string(index) +
+                                             ", but tileset " + ts->name + " has " + std::to_string(ts->stamps.size()));
+                }
+                const Stamp& st = ts->stamps[static_cast<std::size_t>(index)];
+                const int sw = std::max(1, st.w);
+                for (std::size_t j = 0; j < st.tiles.size(); ++j) {
+                    const int jj = static_cast<int>(j);
+                    MapCell cell{x + jj % sw, y + jj / sw, st.tiles[j], 0, -1};
+                    need_tile(layer.name, cell.tile);
+                    layer.cells.push_back(cell);
+                }
             }
         } else if (layer.kind == "terrain") {
             layer.terrain_set = opt<int>(L, "terrain_set", 0);
@@ -284,12 +318,12 @@ Map read_map(const json& a, const Pack& pack, std::vector<std::string>& warnings
             for (const auto& c : L.at("cells")) {
                 painted.emplace_back(c.at(0).get<int>(), c.at(1).get<int>());
             }
-            layer.cells = resolve_terrain(*ts, layer.terrain_set, layer.terrain, painted);
+            layer.cells = resolve_terrain(*ts, layer.terrain_set, layer.terrain, painted, layer_index);
             const auto unresolved = std::count_if(layer.cells.begin(), layer.cells.end(),
                                                   [](const MapCell& c) { return c.tile.atlas < 0; });
             if (unresolved > 0) {
                 warnings.push_back("map/" + m.name + " layer " + layer.name + ": " + std::to_string(unresolved) +
-                                   " terrain cells have no tile with their mask (drawn as nothing)");
+                                   " terrain cells have no tile with their key (drawn as nothing)");
             }
         } else {
             warnings.push_back("map/" + m.name + " layer " + layer.name + ": unknown layer kind \"" + layer.kind +
@@ -369,6 +403,71 @@ UiKit read_ui_kit(const json& a) {
         kit.parts.push_back(std::move(part));
     }
     return kit;
+}
+
+// ---- the extra kinds ----
+Background read_background(const json& a) {
+    Background b;
+    b.name = a.at("name").get<std::string>();
+    b.role = opt<std::string>(a, "role", "");
+    for (const auto& L : a.at("layers")) {
+        BackgroundLayer layer;
+        layer.name = opt<std::string>(L, "name", "");
+        layer.image = path_of(L, "image");
+        layer.w = L.at("size").at(0).get<int>();
+        layer.h = L.at("size").at(1).get<int>();
+        layer.vx = L.at("velocity").at(0).get<double>();
+        layer.vy = L.at("velocity").at(1).get<double>();
+        layer.repeat = opt<std::string>(L, "repeat", "none");
+        layer.wobble_px = opt<double>(L, "wobble_px", 0.0);
+        layer.scale = opt<double>(L, "scale", 1.0);
+        b.layers.push_back(std::move(layer));
+    }
+    return b;
+}
+
+Particles read_particles(const json& a) {
+    Particles p;
+    p.name = a.at("name").get<std::string>();
+    p.texture = path_of(a, "texture");
+    p.emitter = a.contains("emitter") ? a.at("emitter") : json::object();
+    return p;
+}
+
+Transition read_transition(const json& a) {
+    Transition t;
+    t.name = a.at("name").get<std::string>();
+    t.image = path_of(a, "image");
+    t.w = a.at("size").at(0).get<int>();
+    t.h = a.at("size").at(1).get<int>();
+    t.transition = opt<std::string>(a, "transition", "");
+    return t;
+}
+
+NormalMap read_normal_map(const json& a) {
+    NormalMap n;
+    n.name = a.at("name").get<std::string>();
+    n.image = path_of(a, "image");
+    if (a.contains("size") && a.at("size").is_array()) {   // the spec's normal_map row names no size
+        n.w = a.at("size").at(0).get<int>();
+        n.h = a.at("size").at(1).get<int>();
+    }
+    n.target = path_of(a, "target");
+    n.convention = opt<std::string>(a, "convention", "opengl");
+    return n;
+}
+
+Image read_image(const json& a) {
+    Image i;
+    i.name = a.at("name").get<std::string>();
+    i.role = opt<std::string>(a, "role", "");
+    i.image = path_of(a, "image");
+    i.w = a.at("size").at(0).get<int>();
+    i.h = a.at("size").at(1).get<int>();
+    if (a.contains("pivot") && !a.at("pivot").is_null()) {
+        i.pivot = point_of(a.at("pivot"));
+    }
+    return i;
 }
 
 template <typename T>
@@ -460,8 +559,14 @@ fs::path Pack::resolve(const std::string& rel) const { return base_dir / path_fr
 const AnimatedSprite* Pack::animated_sprite(const std::string& name) const { return by_name(animated_sprites, name); }
 const Sprite* Pack::sprite(const std::string& name) const { return by_name(sprites, name); }
 const Tileset* Pack::tileset(const std::string& name) const { return by_name(tilesets, name); }
+const Map* Pack::map(const std::string& name) const { return by_name(maps, name); }
 const Font* Pack::font(const std::string& name) const { return by_name(fonts, name); }
 const UiKit* Pack::ui_kit(const std::string& name) const { return by_name(ui_kits, name); }
+const Background* Pack::background(const std::string& name) const { return by_name(backgrounds, name); }
+const Particles* Pack::particle_set(const std::string& name) const { return by_name(particles, name); }
+const Transition* Pack::transition(const std::string& name) const { return by_name(transitions, name); }
+const NormalMap* Pack::normal_map(const std::string& name) const { return by_name(normal_maps, name); }
+const Image* Pack::image(const std::string& name) const { return by_name(images, name); }
 
 // ---- loading ----
 Pack parse_manifest(const json& doc, const fs::path& manifest_path) {
@@ -515,9 +620,18 @@ Pack parse_manifest(const json& doc, const fs::path& manifest_path) {
                 pack.fonts.push_back(read_font(a));
             } else if (kind == "ui_kit") {
                 pack.ui_kits.push_back(read_ui_kit(a));
+            } else if (kind == "background") {
+                pack.backgrounds.push_back(read_background(a));
+            } else if (kind == "particles") {
+                pack.particles.push_back(read_particles(a));
+            } else if (kind == "transition") {
+                pack.transitions.push_back(read_transition(a));
+            } else if (kind == "normal_map") {
+                pack.normal_maps.push_back(read_normal_map(a));
+            } else if (kind == "image") {
+                pack.images.push_back(read_image(a));
             } else if (skipped.insert(kind).second) {
-                pack.warnings.push_back(where + ": " + (kExtraKinds.count(kind) ? "extra" : "unknown") + " kind \"" + kind +
-                                        "\" skipped (this importer does not load it yet)");
+                pack.warnings.push_back(where + ": unknown kind \"" + kind + "\" skipped (this importer does not know it)");
             }
         } catch (const std::exception& e) {
             pack.errors.push_back(where + ": " + kind + "/" + name + ": " + e.what());
@@ -681,6 +795,24 @@ std::vector<std::string> check_files(const Pack& pack) {
             png(p.image, "ui_kit/" + k.name + " " + p.name, p.w, p.h);
         }
     }
+    for (const auto& b : pack.backgrounds) {
+        for (const auto& L : b.layers) {
+            png(L.image, "background/" + b.name + (L.name.empty() ? "" : " " + L.name), L.w, L.h);
+        }
+    }
+    for (const auto& p : pack.particles) {
+        png(p.texture, "particles/" + p.name);
+    }
+    for (const auto& t : pack.transitions) {
+        png(t.image, "transition/" + t.name, t.w, t.h);
+    }
+    for (const auto& n : pack.normal_maps) {
+        png(n.image, "normal_map/" + n.name, n.w, n.h);
+        png(n.target, "normal_map/" + n.name + " target");
+    }
+    for (const auto& i : pack.images) {
+        png(i.image, "image/" + i.name, i.w, i.h);
+    }
     return out;
 }
 
@@ -701,18 +833,97 @@ int cell_mask(const std::set<std::pair<int, int>>& painted, int x, int y, const 
             m |= 1 << b;
         }
     }
-    return mode == "sides4" ? (m & kSidesOnly) : canon(m);
+    if (mode == "sides4") {
+        return m & kSidesOnly;
+    }
+    if (mode == "corners4") {
+        return canon(m) & kCornersOnly;
+    }
+    return canon(m);
+}
+
+std::optional<int> tile_key(const Tile& tile, const std::string& mode, const std::string& shape) {
+    if (mode == "blob47" || mode == "sides4") {
+        return tile.mask;
+    }
+    if (mode != "corners4" || tile.corners.empty()) {
+        return std::nullopt;
+    }
+    const CornerBits& names = shape == "isometric" ? kIsoCorners : kSquareCorners;
+    if (tile.corners.size() != names.size()) {   // not the shape's four corners: no key
+        return std::nullopt;
+    }
+    int key = 0;
+    for (const auto& [name, bit] : names) {
+        const auto it = tile.corners.find(name);
+        if (it == tile.corners.end()) {
+            return std::nullopt;
+        }
+        if (it->second == tile.terrain) {
+            key |= bit;
+        }
+    }
+    return key;
+}
+
+std::uint32_t hash32(std::uint32_t k) {
+    // Bob Jenkins' 6-shift integer hash, as the spec writes it; uint32_t arithmetic wraps at 32 bits by itself
+    k = k + 0x7ED55D16u + (k << 12);
+    k = k ^ 0xC761C23Cu ^ (k >> 19);
+    k = k + 0x165667B1u + (k << 5);
+    k = (k + 0xD3A2646Cu) ^ (k << 9);
+    k = k + 0xFD7046C5u + (k << 3);
+    k = k ^ 0xB55A4F09u ^ (k >> 16);
+    return k;
+}
+
+double cell_roll(int x, int y, int layer_index) {
+    // Coordinates wrap at 16 bits (unsigned first: a negative int shifted is undefined in C++)
+    const std::uint32_t ux = static_cast<std::uint32_t>(x) & 0xFFFFu;
+    const std::uint32_t uy = static_cast<std::uint32_t>(y) & 0xFFFFu;
+    const std::uint32_t cell = hash32((ux << 16) | uy);
+    return hash32(cell + static_cast<std::uint32_t>(layer_index)) / kTwo32;
+}
+
+TileRef pick_variant(const std::vector<std::pair<double, TileRef>>& candidates, double roll) {
+    if (candidates.empty()) {
+        return {};
+    }
+    double total = 0.0;
+    for (const auto& [w, _] : candidates) {
+        total += w;
+    }
+    if (total <= 0.0) {
+        return candidates.front().second;
+    }
+    double u = roll * total;
+    for (const auto& [w, tile] : candidates) {
+        u -= w;
+        if (u < 0.0) {
+            return tile;
+        }
+    }
+    return candidates.back().second;
 }
 
 std::vector<MapCell> resolve_terrain(const Tileset& tileset, int terrain_set, int terrain,
-                                     const std::vector<std::pair<int, int>>& cells) {
+                                     const std::vector<std::pair<int, int>>& cells, int layer_index) {
     const TerrainSet* set = tileset.terrain_set(terrain_set);
     const std::string mode = set ? set->mode : "blob47";
-    std::map<int, TileRef> by_mask;   // the first tile (atlas order) per mask
+    // The candidates per key in atlas order: atlases by id, tiles in list order
+    std::vector<const Atlas*> atlases;
     for (const auto& at : tileset.atlases) {
-        for (const auto& t : at.tiles) {
-            if (t.terrain == terrain && t.terrain_set == terrain_set && t.mask) {
-                by_mask.emplace(*t.mask, TileRef{at.id, t.col, t.row});
+        atlases.push_back(&at);
+    }
+    std::stable_sort(atlases.begin(), atlases.end(), [](const Atlas* l, const Atlas* r) { return l->id < r->id; });
+    std::map<int, std::vector<std::pair<double, TileRef>>> by_key;
+    for (const Atlas* at : atlases) {
+        for (const auto& t : at->tiles) {
+            if (t.terrain != terrain || t.terrain_set != terrain_set) {
+                continue;
+            }
+            if (const auto key = tile_key(t, mode, tileset.shape)) {
+                by_key[*key].emplace_back(t.probability, TileRef{at->id, t.col, t.row});
             }
         }
     }
@@ -726,14 +937,49 @@ std::vector<MapCell> resolve_terrain(const Tileset& tileset, int terrain_set, in
         MapCell cell;
         cell.x = x;
         cell.y = y;
-        cell.mask = cell_mask(painted, x, y, mode);
-        const auto it = by_mask.find(cell.mask);
-        if (it != by_mask.end()) {
-            cell.tile = it->second;
+        cell.key = cell_mask(painted, x, y, mode);
+        const auto it = by_key.find(cell.key);
+        if (it != by_key.end()) {
+            cell.tile = pick_variant(it->second, cell_roll(x, y, layer_index));
         }
         out.push_back(cell);
     }
     return out;
+}
+
+// ---- placing tiles ----
+Point cell_centre(const std::string& shape, int x, int y, int tile_w, int tile_h) {
+    const double w = tile_w, h = tile_h;
+    if (shape == "isometric") {
+        return {(x - y + 1) * w / 2, (x + y + 1) * h / 2};
+    }
+    return {(x + 0.5) * w, (y + 0.5) * h};
+}
+
+Point tile_origin(const Tile& tile, const Atlas& atlas) {
+    if (tile.origin) {
+        return *tile.origin;
+    }
+    return {atlas.tile_w / 2.0, atlas.tile_h / 2.0};
+}
+
+std::optional<Point> placed_corner(const Tileset& tileset, const Map& map, const MapCell& cell) {
+    const Atlas* atlas = tileset.atlas(cell.tile.atlas);
+    const Tile* tile = tileset.tile(cell.tile);
+    if (!atlas || !tile) {
+        return std::nullopt;
+    }
+    const Point c = cell_centre(map.shape, cell.x, cell.y, map.tile_w, map.tile_h);
+    const Point o = tile_origin(*tile, *atlas);
+    return Point{c.x - o.x, c.y - o.y};
+}
+
+MapBounds map_bounds(const Map& map) {
+    const double w = map.tile_w, h = map.tile_h;
+    if (map.shape == "isometric") {
+        return {(1 - map.h) * w / 2, 0.0, (map.w + map.h) * w / 2, (map.w + map.h) * h / 2};
+    }
+    return {0.0, 0.0, map.w * w, map.h * h};
 }
 
 // ---- timing ----
