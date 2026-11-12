@@ -775,16 +775,7 @@ def set_weights(obj, parent, names, poly):
 
 
 # --- clips -------------------------------------------------------------------------------------------------------
-def fcurves_of(act):
-    """Every F-curve of an action: the legacy list before Blender 5.0, the layered channel bags after."""
-    if hasattr(act, "fcurves"):
-        return list(act.fcurves)
-    out = []
-    for layer in getattr(act, "layers", []):
-        for strip in layer.strips:
-            for bag in strip.channelbags:
-                out += list(bag.fcurves)
-    return out
+fcurves_of = rf.fcurves_of   # every F-curve of an action, on Blender 4.2 to 5.x
 
 
 def assign(arm, act):

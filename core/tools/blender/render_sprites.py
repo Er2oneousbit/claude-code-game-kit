@@ -42,7 +42,9 @@
 #           columns (frames), for Phaser's spritesheet or Godot's AtlasTexture.
 #           --actions idle,walk (or all) renders several clips in one run, one sheet each (<out stem>_<action>.png),
 #           all framed alike (the framing covers every frame of every clip), so a character does not jump in
-#           size between clips. --step N keeps every Nth frame of each clip.
+#           size between clips. --step N keeps every Nth frame of each clip. A clip whose model centre stands more
+#           than CLIP_OFFSET_WARN of the height sideways from the rest pose draws a warning naming it (a root bone
+#           offset in every key, as Tripo's in-place clips had, makes every sheet small; rig_finish.py fixes it).
 #           --manifest <pack>.assets.json also writes a Dotwork asset manifest (tools/art/dotwork/ASSET_MANIFEST.md,
 #           spec 1.x): one animated_sprite (--name, default the sheet's stem) with a clip <action>_<dir> per action
 #           and direction (s, sw, w, nw, n, ne, e, se for 8 directions; s, w, n, e for 4; the action alone for 1),
@@ -57,7 +59,7 @@
 # Updated : 2026-10-24: --engine eevee also tries BLENDER_EEVEE_NEXT (Blender 4.2 to 4.5); launch lines
 #           pass --python-exit-code 1 so a traceback is not exit 0 (E64, tested on Blender 5.2)
 #           2026-11-11: --actions, --step, --manifest, --name, --once (#290); a skinned body beside a rig chain's
-#           small strip is not called a helper (#291)
+#           small strip is not called a helper (#291); a clip standing far from the rest pose warns
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -65,7 +67,8 @@
 #   clips = --actions (each with its frame range, every --step-th frame; a looping clip drops its last frame when
 #           the pose there equals the first), or the one --action, or no action
 #   frames = parsed range or the current frame
-#   bounds = union of evaluated mesh bounds over all frames of all clips -> center, radius
+#   bounds = union of evaluated mesh bounds over all frames of all clips -> center, radius; a clip whose own bounds
+#            centre stands far sideways from the rest pose's warns (a root offset that shrinks every sheet)
 #   --pivot origin: center = (0, 0, 0), radius = farthest bounds corner from it
 #   ortho width = --world-size, or 2 * radius * (1 + margin); with --world-size, project the model's
 #   vertices onto every camera's screen axes and warn if any lands outside the cell
@@ -94,6 +97,7 @@ AMBIENT_STRENGTH = 0.6        # world light, so shadow sides are not black
 CAMERA_DISTANCE_FACTOR = 4.0  # camera distance = radius * this (ortho: only clipping depends on it)
 MAX_FIT_POINTS = 300_000      # vertices kept for the --world-size fit check (more: use the bounds corners)
 LOOP_POSE_TOLERANCE = 1e-4    # metres: a looping clip's last frame "repeats the first" when no vertex moved more
+CLIP_OFFSET_WARN = 0.25       # share of the rest-pose height: a clip whose model centre stands farther off warns
 # Row order -> Dotwork direction (screen directions, s faces the camera). Row 0 sees the model's front (s); each next
 # row turns the camera counter-clockwise seen from above, so the model's front turns toward screen left first.
 COMPASS = {1: (None,), 4: ("s", "w", "n", "e"), 8: ("s", "sw", "w", "nw", "n", "ne", "e", "se")}
@@ -363,6 +367,51 @@ def grow_bounds(bpy, scene, frames, box):
                 mw = ev.matrix_world
                 points.extend(mw @ v.co for v in ev.data.vertices)
     box["lo"], box["hi"] = lo, hi
+
+
+def merge_bounds(into, box):
+    """Fold one clip's box into the union of every clip (the fit points stop at MAX_FIT_POINTS, as in grow_bounds)."""
+    from mathutils import Vector
+    into["lo"] = Vector(min(a, b) for a, b in zip(into["lo"], box["lo"]))
+    into["hi"] = Vector(max(a, b) for a, b in zip(into["hi"], box["hi"]))
+    if len(into["points"]) < MAX_FIT_POINTS:
+        into["points"].extend(box["points"])
+
+
+def rest_spot(bpy, scene):
+    """(horizontal centre x, y, height) of the meshes in the rest pose (every armature at REST), or None without an
+    armature: where the character stands, to compare each clip with."""
+    arms = [o for o in scene.objects if o.type == "ARMATURE"]
+    if not arms:
+        return None
+    saved = [(a, a.data.pose_position) for a in arms]
+    box = new_bounds()
+    try:
+        for a, _ in saved:
+            a.data.pose_position = "REST"
+        grow_bounds(bpy, scene, [scene.frame_current], box)
+    finally:
+        for a, pos in saved:
+            a.data.pose_position = pos
+    lo, hi = box["lo"], box["hi"]
+    if lo.x == math.inf or hi.z - lo.z <= 0:
+        return None
+    return (lo.x + hi.x) / 2, (lo.y + hi.y) / 2, hi.z - lo.z
+
+
+def warn_clip_offset(action, box, rest):
+    """Warn when a clip's model centre stands far sideways from the rest pose's (Tripo's in-place clips with an
+    offset root did, 2026-11-11): the shared framing grows to hold it and every clip draws small."""
+    lo, hi = box["lo"], box["hi"]
+    if lo.x == math.inf:
+        return
+    x, y, height = rest
+    d = math.hypot((lo.x + hi.x) / 2 - x, (lo.y + hi.y) / 2 - y)
+    if d > CLIP_OFFSET_WARN * height:
+        print(f"[WARN] {action}: the model's centre sits {d:.2f} m sideways from where it stands in the rest pose "
+              f"({d / height:.1f}x its height), so the framing grows to hold it and every clip draws small. Its root "
+              "bone likely carries a constant offset in every key: tools/bozzetto/rig_finish.py re-centres such clips "
+              "(run it on the file, or rig it again), or render this clip on its own")
 
 
 def scene_bounds(bpy, scene, frames):
@@ -635,10 +684,15 @@ def run(args):
             return 2
 
     box = new_bounds()
+    rest = rest_spot(bpy, scene) if any(c["action"] for c in clips) else None
     for c in clips:
         if c["action"]:
             assign_action(bpy, scene, c["action"])
-        grow_bounds(bpy, scene, c["frames"], box)
+        own = new_bounds()
+        grow_bounds(bpy, scene, c["frames"], own)
+        if rest and c["action"]:
+            warn_clip_offset(c["action"], own, rest)
+        merge_bounds(box, own)
     center, radius, reach, corners = finish_bounds(box)
     if center is None:
         print("[FAIL] no mesh objects found in the file", file=sys.stderr)
