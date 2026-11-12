@@ -844,7 +844,7 @@ def write_log(plan, record):
     notes = "; ".join(x for x in [
         f"reference views for {plan.name} ({', '.join(record['views'])}); source art for `make`, not shipped",
         f"prompt: {plan.prompt[:160]}" if plan.prompt else "from a concept picture (see the record)",
-        f"seed {record['seed']}",
+        f"seed {record['seed']}" if record.get("seed") is not None else "",
         "free" if plan.route == "local" else f"cost {fmt(cost['total_paid'], plan.unit)}",
         f"owner: {terms['owner']}",
         f"record `{bz.rel(plan.root, plan.dir / RECORD)}`"] if x)
@@ -856,7 +856,8 @@ def write_log(plan, record):
     plan.log_path.write_bytes(new.encode("utf-8"))
     ev = [f"{aid}  art  reference views generated {record['date']} with tools/{bz.TOOL.lower()}/"
           f"{bz.TOOL.lower()}.py reference {bz.VERSION}",
-          f"Route    : {plan.route} ({plan.model}), seed {record['seed']}",
+          f"Route    : {plan.route} ({plan.model})"
+          + (f", seed {record['seed']}" if record.get("seed") is not None else ", no seed (the journal names the take)"),
           f"Source   : " + (f"prompt: {plan.prompt}" if plan.prompt else
                             f"concept picture, SHA-256 {record['source']['sha256']}"),
           f"Owner    : {terms['owner']}", f"Licence  : {terms['licence']}", f"Notes    : {terms['notes']}",
@@ -951,9 +952,14 @@ def cmd_reference(args):
         return swap_sides(args)
     t0 = time.monotonic()
     plan = Plan(args)
-    if args.seed is None:
+    if args.seed is None and plan.route == "local":
         args.seed = int(time.time()) % 100000
         print(f"[info] no --seed given: using {args.seed} (pass it to name this take again)")
+    elif args.seed is None:
+        # the paid services take no seed: it only names the take in the journal. A clock seed here would make the
+        # same command, run again after a 500, a cap stop or Ctrl-C, pay for the front a second time.
+        print("[info] no --seed given: a re-run of this command reuses this take from the journal (pass --seed N or "
+              "--no-reuse for a new take)")
     preflight(args, plan)
     route = {"local": Local, "nanobanana": Gemini, "tripo": Tripo}[plan.route](args, plan)
     journal = Journal(plan.dir, plan.route, not args.no_reuse) if plan.route != "local" else None
@@ -1033,7 +1039,8 @@ def add_parser(sub, common):
                    help="local: free, your GPU (default); nanobanana: Google Gemini, GEMINI_API_KEY, paid per image; "
                         "tripo: Tripo image tasks, TRIPO_API_KEY, paid credits")
     p.add_argument("--views", default=",".join(VIEWS), help=f"which views (default {','.join(VIEWS)}; front always)")
-    p.add_argument("--seed", type=int, help="seed (local: every sampler; paid routes: names the take in the journal)")
+    p.add_argument("--seed", type=int, help="seed (local: every sampler, from the clock when not given; paid routes: "
+                                            "names the take in the journal, so a re-run without one reuses its paid work)")
     p.add_argument("--model", help=f"nanobanana: a Gemini image model (default {GEMINI_MODEL}); tripo: "
                                    f"{', '.join(tp.IMAGE_MODELS)} (default {tp.IMAGE_MODEL})")
     p.add_argument("--max-cost", type=float, help=f"never spend more than this in one run: dollars for nanobanana "

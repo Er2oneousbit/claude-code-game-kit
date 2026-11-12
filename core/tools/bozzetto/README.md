@@ -82,7 +82,8 @@ one run: a quote over it stops before any call, and before each call the run che
 the next call. Every paid result goes into the journal, `assets_src/bozzetto/<name>/reference/journal.json` (pictures in its `steps/` folder), as it arrives,
 so a run that fails or hits the cap halfway is run again and pays only for what is missing; a Tripo task the last run
 left running is asked for first, never paid for twice. `--no-reuse` pays for a new take; a new `--seed` names a new
-take too. The actual cost (Gemini: from the reply's token counts; Tripo: the task's credits) goes into the record.
+take too (the paid services take no seed: it only names the take, so the same command without one reuses its paid
+work). The actual cost (Gemini: from the reply's token counts; Tripo: the task's credits) goes into the record.
 Keys are read from the environment and sent only in request headers; every picture sent out has its metadata (EXIF,
 GPS, XMP, text) removed first.
 

@@ -701,6 +701,32 @@ class GeminiRoute(Base):
         self.assertEqual(rc, 0, out)
         self.assertEqual(len(STATE.calls("/v1beta/")), 4, "--no-reuse pays again")
 
+    def test_a_rerun_without_a_seed_reuses_the_journal(self):
+        """The seed is never sent to Gemini or Tripo: it only names the take in the journal. Without --seed the
+        same command run again (after a 500, a cap stop or Ctrl-C) must find its paid views, not pay for them again."""
+        STATE.gemini = ["ok", "500"]
+        rc, out = self.run_tool("chr_hero", "--prompt", "a frog knight", "--with", "nanobanana")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("reuses this take", out)
+        self.assertEqual(len(self.journal()["steps"]), 1)
+        STATE.reset()
+        rc, out = self.run_tool("chr_hero", "--prompt", "a frog knight", "--with", "nanobanana")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("reused from the journal", out)
+        self.assertEqual(len(STATE.calls("/v1beta/")), 3, "the front was paid for twice")
+        self.assertIsNone(self.record()["seed"])
+        self.assertNotIn("seed None", self.log_rows()[0])
+        aid = self.log_rows()[0].split("|")[1].strip()
+        self.assertNotIn("None", (self.root / "docs" / "licenses" / f"{aid}.txt").read_text(encoding="utf-8"))
+        STATE.reset()
+        rc, out = self.run_tool("chr_hero", "--prompt", "a frog knight", "--with", "tripo", "--overwrite")
+        self.assertEqual(rc, 0, out)
+        before = len(STATE.tasks)
+        rc, out = self.run_tool("chr_hero", "--prompt", "a frog knight", "--with", "tripo", "--overwrite")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(len(STATE.tasks), before, "a Tripo re-run without --seed paid again")
+        self.assertEqual(self.record()["cost"]["this_run"], 0.0)
+
     def test_blocked_picture_and_refused_key(self):
         STATE.gemini = ["safety"]
         rc, out = self.run_tool("chr_hero", "--prompt", "a frog knight", "--with", "nanobanana", "--seed", "5")
