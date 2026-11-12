@@ -6,7 +6,8 @@ clip and for how long, where a sprite's feet are, what collides, which tile fits
 how a bitmap font is laid out. An importer per engine reads it (#55 to #62); this page is the contract they are built
 and tested against.
 
-- Spec version: **1.0.0** (`assetspec.VERSION`)
+- Spec version: **1.1.0** (`assetspec.VERSION`; 1.1.0 added the `stamps` map layer and defined the corners rule, the
+  variant pick and isometric placement, #285; a 1.0.0 manifest still loads)
 - Schema: [asset_manifest.schema.json](asset_manifest.schema.json) (JSON Schema 2020-12)
 - Validator and reference loader: `assetspec.py` (standard library only, Python 3.8+)
 - Writer: `assetmap.py` (called by `dotwork.py pack`, `character`, the hand-polish re-exports and `manifest`); a 3D
@@ -58,17 +59,24 @@ Files outside the assets folder (store art in `assets_src/`) are not listed: the
 | Colour | `#rrggbb` (terrain colours only; the art's colours are in the PNGs) |
 | Names | `[A-Za-z0-9_.-]+`, unique per kind within one manifest |
 | Directions | `s e n w` and the diagonals `se ne nw sw`: screen directions (n is up the screen), a character facing the camera is `s` |
-| Masks | 8 bits, one per neighbour, in the order **N, NE, E, SE, S, SW, W, NW** (bit 0 is N = 1, NE = 2, E = 4, SE = 8, S = 16, SW = 32, W = 64, NW = 128). A set bit: that neighbour holds the same terrain. Details in [Autotiling](#autotiling-and-maps) |
+| Masks | 8 bits, one per neighbour, in the order **N, NE, E, SE, S, SW, W, NW** (bit 0 is N = 1, NE = 2, E = 4, SE = 8, S = 16, SW = 32, W = 64, NW = 128). A set bit: that neighbour holds the same terrain. The same bits name an isometric diamond's neighbours (N is the cell up the screen to the right, [below](#isometric-placement)). Details in [Autotiling](#autotiling-and-maps) |
+| Cells | map cell `(x, y)`, x right, y down, `(0, 0)` the top-left cell; on a diamond grid x runs down-right and y down-left ([placement](#isometric-placement)) |
 
 Pixel art wants nearest-neighbour filtering, no mipmaps, no texture compression and whole-number scales; every
 importer sets that on every texture it creates.
 
 ## Versioning
 `version` is `MAJOR.MINOR.PATCH`. An importer reads every manifest of its own major version and refuses another major
-with a message naming both. Within one major, a minor version may add optional fields and new kinds, never change or
-remove one: so an importer ignores fields it does not know and skips (with a warning) kinds it does not know. A patch
-only fixes the text of this page or the writer, not the format. The schema file and `assetspec.py` move with the
-writer: Dotwork never writes a manifest its own validator rejects (`pack` fails if it would).
+with a message naming both. Within one major, a minor version may add optional fields, new kinds and new map layer
+kinds, never change or remove one: so an importer ignores fields it does not know and skips (with a warning) kinds and
+layer kinds it does not know. A patch only fixes the text of this page or the writer, not the format. The schema file
+and `assetspec.py` move with the writer: Dotwork never writes a manifest its own validator rejects (`pack` fails if it
+would).
+
+| Version | Change |
+|---|---|
+| 1.0.0 | the format (2026-11-11, #83) |
+| 1.1.0 | map layer kind `stamps`; the rules every importer follows for corners4 terrain, variant picks and isometric placement, and the `placed` and `centres` lists in the loaded result (#285) |
 
 ## The document
 ```json
@@ -148,19 +156,25 @@ prints) and `blink`.
 | `shape` | `square` or `isometric` (2:1 diamond, diamond-down layout) |
 | `terrain_sets` | `[{id, mode, terrains: [{id, name, color}]}]`; `mode` is `blob47`, `corners4` or `sides4` |
 | `atlases` | `[{id, name, role, image, tile_size, columns, rows, tiles}]`: one atlas image each. `role` names its use (`base`, `overlay`, `decals`, `fixtures`, `pair`, `platform`, `floors`, `blocks`, `transitions`). An atlas's `tile_size` can be taller than the cell (iso blocks) |
-| `atlases[].tiles[]` | `col`, `row` (atlas cell), optional `terrain_set` + `terrain` + `mask` (blob47, sides4) or `corners` (corners4), `probability` (relative pick weight among tiles with the same terrain and mask; absent = 1), `surface` (custom data: `stone`, `water`), `collision` (rects in tile pixels), `anim` (`{frames, fps}`: the frames sit in the next cells to the right), `origin` (point of the image drawn on the cell's centre, when not its own centre) |
-| `stamps` | multi-cell pieces (a 1x2 door): `{name, size: [w, h], solid, tiles: [[atlas, col, row], ...]}` in reading order |
+| `atlases[].tiles[]` | `col`, `row` (atlas cell), optional `terrain_set` + `terrain` + `mask` (blob47, sides4) or `corners` (corners4: terrain id per corner, `-1` for none), `probability` (relative pick weight among tiles with the same terrain and key; absent = 1; 0 is never picked; [the pick](#variants-the-probability-pick)), `surface` (custom data: `stone`, `water`), `collision` (rects in tile pixels), `anim` (`{frames, fps}`: the frames sit in the next cells to the right), `origin` (the point of the image drawn on the cell's centre; absent: the atlas tile's own centre, [placement](#placing-tiles)) |
+| `stamps` | multi-cell pieces (a 1x2 door): `{name, size: [w, h], solid, tiles: [[atlas, col, row], ...]}` in reading order (tile `j` sits at `(x + j % w, y + j // w)` from the stamp's top-left cell); a map places one through a `stamps` layer |
 | `custom_data` | the name of the custom value tiles carry (`surface`) |
 
 A tile is addressed as `[atlas, col, row]` everywhere (maps, stamps).
 
 ### map
-`tileset` (a tileset name in the same manifest), `size` (cells), `tile_size`, `layers` drawn first to last, optional
-`objects`. A layer is `{name, kind, cells}`:
+`tileset` (a tileset name in the same manifest), `size` (cells), `tile_size` (the cell: the diamond `[w, h]` on an
+isometric set), `layers` drawn first to last, optional `objects`. A layer is `{name, kind, cells}`:
 - `kind: "tiles"`: cells `[x, y, atlas, col, row]`, or with a sixth number, flags (1 flip horizontally, 2 flip
   vertically, 4 transpose; transpose first, then flip; Pixelorama tilemaps use them). Optional `opacity`.
 - `kind: "terrain"` with `terrain_set` and `terrain`: cells `[x, y]` to paint with that terrain. The importer picks each
   cell's tile with the rule under [Autotiling](#autotiling-and-maps).
+- `kind: "stamps"` (1.1.0): cells `[x, y, stamp]`, the index into the tileset's `stamps` list and the top-left cell the
+  piece is placed from; the importer places every tile of the stamp (mapbuild's fixtures: a door, a well).
+
+Every layer's cells are drawn at the positions under [Placing tiles](#placing-tiles), in the order of the cells list for
+`tiles` and `stamps` layers and by `y` then `x` for a terrain layer, so on a diamond grid a taller tile overdraws the
+one above it.
 
 `objects`: `[{asset, x, y}]`, an asset of this manifest (a prop `sprite`) placed with its pivot at pixel `(x, y)`
 (a cell's bottom centre, for props mapbuild places). Draw objects sorted by `y` with the characters (y-sorting by feet).
@@ -207,25 +221,91 @@ Three terrain modes, all Godot's terrain modes:
 |---|---|---|---|
 | `blob47` | Match Corners and Sides | `mask` (one of 47 values) | its 8 neighbours of the same terrain; a corner bit counts only when both sides next to it are set |
 | `sides4` | Match Sides | `mask` with only N, E, S, W bits | its 4 side neighbours of the same terrain |
-| `corners4` | Match Corners | `corners`: terrain id per corner (`top_left`, `top_right`, `bottom_left`, `bottom_right`; isometric `top`, `right`, `bottom`, `left`) | the terrain at each of the cell's corners |
+| `corners4` | Match Corners | `corners`: terrain id per corner (`top_left`, `top_right`, `bottom_left`, `bottom_right`; isometric `top`, `right`, `bottom`, `left`) | the four corner bits of the blob mask: a corner is the terrain when all four cells meeting there are painted |
 
-The blob rule as code (Python here; every importer ports it, a dozen lines):
+The rules as code (Python here; every importer ports them, two dozen lines; `assetspec.py` is the reference):
 ```python
 NB8 = ((0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1))   # N NE E SE S SW W NW, y down
+SIDES, CORNERS = 1 | 4 | 16 | 64, 2 | 8 | 32 | 128
 def canon(m):
     for c in (1, 3, 5, 7):                                  # NE, SE, SW, NW
         if not ((m >> ((c + 7) % 8)) & 1 and (m >> ((c + 1) % 8)) & 1):
             m &= ~(1 << c)
     return m
-def cell_mask(painted, x, y):                               # painted: the set of (x, y) cells of this terrain
-    return canon(sum(1 << b for b, (dx, dy) in enumerate(NB8) if (x + dx, y + dy) in painted))
+def cell_mask(painted, x, y, mode):                         # painted: the set of (x, y) cells of this terrain
+    m = sum(1 << b for b, (dx, dy) in enumerate(NB8) if (x + dx, y + dy) in painted)
+    return m & SIDES if mode == "sides4" else canon(m) & CORNERS if mode == "corners4" else canon(m)
 ```
-A terrain layer of a map paints exactly its cells; each cell takes a tile of the layer's terrain whose `mask` is
-`cell_mask`. Several tiles can share a mask (texture variants): pick by `probability`, or take the first in atlas
-order, which is what the loaded result names (Godot picks at random by probability, so a Godot map and another
-engine's map can differ in variants, never in shape). This is the rule Godot's own terrain solver follows on these
-TileSets: mapbuild checks every painted cell of every map against it in Godot (`blob_bad`). Layers that need it
-stack (a path layer over the base layer), each painted on its own.
+A terrain layer of a map paints exactly its cells; each cell takes a tile of the layer's terrain whose **key** is
+`cell_mask`: a blob47 or sides4 tile's key is its `mask`; a corners4 tile's key is the sum of the corner bits whose
+corner holds the tile's own terrain, with the corner names mapped to bits by shape: square `top_left` NW (128),
+`top_right` NE (2), `bottom_right` SE (8), `bottom_left` SW (32); isometric `top` NW, `right` NE, `bottom` SE, `left`
+SW (a diamond's top corner touches the cell up the screen, which is NW in map coordinates; Godot's
+`get_neighbor_cell` on the diamond-down layout, 2026-11-11). A cell with no tile for its key stays empty; the
+validator refuses such a map. Layers that need it stack (a path layer over the base layer), each painted on its own.
+
+**Why the corners rule reads "all four painted".** Godot's Match Corners painting on a layer already filled with the
+other terrain (how Dotwork's `verify` paints the pair and iso sets) was probed on 4.7.2 (2026-11-11) with every shape
+of the golden sets: a 2x2 block, a 3x3 block and a 3x3 L on the square pair set and on the iso transitions came out
+cell for cell as this rule says (`tests/test_asset_manifest.py` `CornersRule` holds those numbers). Shapes less than
+2 cells thick (a lone cell, a 1-wide line, a diagonal pair) have no tile with the painted centre and no painted
+corner in a wang set; Godot's scorer then picks a one-corner tile and bends the neighbours, a choice only its scorer
+reproduces, so the spec leaves them out: paint corners4 terrain at least 2 cells thick. On an empty layer Godot
+paints no edge cell at all (the ring stays blank), so the rule is the painted-over-a-base result.
+
+For blob47 the rule is the one Godot's own terrain solver follows on these TileSets: mapbuild checks every painted
+cell of every map against it in Godot (`blob_bad`), and the live exam below did so on a real pack.
+
+### Variants: the probability pick
+Several tiles can share a key (texture variants). Every engine picks the same one: the cell's **roll** is a number in
+[0, 1) hashed from the cell and its layer, and the pick walks the candidates in atlas order (atlases by `id`, tiles in
+list order) subtracting weights:
+```python
+M = 0xFFFFFFFF
+def hash32(k):                                              # Bob Jenkins' 6-shift integer hash: shifts, adds, xors
+    k &= M                                                  # (no 64-bit multiply, so Lua's doubles and JS int32 agree)
+    k = (k + 0x7ED55D16 + (k << 12)) & M
+    k = (k ^ 0xC761C23C ^ (k >> 19)) & M
+    k = (k + 0x165667B1 + (k << 5)) & M
+    k = ((k + 0xD3A2646C) ^ (k << 9)) & M
+    k = (k + 0xFD7046C5 + (k << 3)) & M
+    return (k ^ 0xB55A4F09 ^ (k >> 16)) & M
+def cell_roll(x, y, layer):                                 # layer: the layer's index in the map's layers list
+    return hash32(hash32(((x & 0xFFFF) << 16) | (y & 0xFFFF)) + layer) / 4294967296.0
+def pick(candidates, roll):                                 # [(probability or 1, tile)] in atlas order
+    total = sum(w for w, _ in candidates)
+    if total <= 0:
+        return candidates[0][1]
+    u = roll * total
+    for w, tile in candidates:
+        u -= w
+        if u < 0:
+            return tile
+    return candidates[-1][1]
+```
+Test vectors: `hash32(0) = 1800329511`, `hash32(1) = 3028713910`, `hash32(0xFFFFFFFF) = 4268016002`;
+`cell_roll(0, 0, 0) = 0.169182`, `cell_roll(3, 1, 1) = 0.765973`, `cell_roll(3, 2, 1) = 0.531301`,
+`cell_roll(-1, -1, 0) = 0.992978` (coordinates wrap at 16 bits). Every step stays within 32 bits (a `<< 12` of a
+32-bit value is below 2^44, exact in a double; mask or `% 2^32` after each line). The roll is a plain IEEE double
+computation, identical in every language. Godot rolls its own dice among the same tiles, so a Godot map and another
+engine's map agree in shape and the other engines also agree with each other in variants.
+
+### Placing tiles
+Map pixels are the map's own space, y down, cell `(0, 0)` first. A placed cell draws its atlas tile with the tile's
+**origin** (its `origin` field, else the atlas tile's centre `[tile_w / 2, tile_h / 2]`) on the cell's **centre**:
+
+| `shape` | cell centre `(x, y)` of a `tile_size` `[w, h]` map | neighbours |
+|---|---|---|
+| `square` | `((x + 0.5) w, (y + 0.5) h)` | N `(x, y-1)`, E `(x+1, y)`, S `(x, y+1)`, W `(x-1, y)`, corners diagonal |
+| `isometric` | `((x - y + 1) w / 2, (x + y + 1) h / 2)`: x runs down-right, y down-left, Godot's diamond-down layout; cell `(0, 0)`'s diamond centre is `(w/2, h/2)` | across the diamond's edges: N `(x, y-1)` up-right, E `(x+1, y)` down-right, S `(x, y+1)` down-left, W `(x-1, y)` up-left; across its corners: top `(x-1, y-1)`, right `(x+1, y-1)`, bottom `(x+1, y+1)`, left `(x-1, y+1)` |
+
+So the image's top-left lands at `centre - origin`: a 16 x 12 iso block with `origin [8, 8]` on a 16 x 8 diamond has
+its bottom edge on the diamond's bottom point and its top diamond 4 px up, a raised block standing on its cell. These
+are the numbers Godot's `TileMapLayer.map_to_local` and `get_neighbor_cell` give on 4.7.2 (2026-11-11, both shapes),
+and `texture_origin` lifts the image the same way (`origin = [tile_w / 2, tile_h / 2 + texture_origin.y]`). An engine
+whose own tilemap lays diamonds out differently (Unity's and Phaser's isometric grids, Paper2D's) either converts the
+cell coordinates so each diamond lands on this centre or places the tiles itself; its golden test compares with
+`placed`. Y-up engines flip `y` as for sprites.
 
 ## Godot is the reference
 Every Godot resource Dotwork writes goes through `godot.py`, and every writer there hands what it builds the resource
@@ -271,7 +351,10 @@ walking; Unity's and Unreal's importers take the same rects and pivots but were 
 `data/golden/dotwork/` holds one small pack with every kind: `assets/` is an assets folder (its manifest is
 `data/golden/dotwork/assets/dotwork/golden.assets.json`) and `expected.json` is what `assetspec.expected()` makes of it: the **loaded
 result**. It is built without a GPU by `tests/golden_assets.py` through Dotwork's own writers and lane functions, and
-the exam checks it is current.
+the exam checks it is current. Its three maps cover every rule: `yard` (blob47 path and water over a base, two full
+path cells of which one rolls the variant tile, a door placed through a `stamps` layer, a prop object),
+`meadow_patch` (a corners4 patch on the square pair set) and `isle` (an isometric map: placed floors, a corners4 pond
+on the transitions, a raised block with its own origin).
 
 | In `expected.json` | What an importer compares |
 |---|---|
@@ -280,7 +363,7 @@ the exam checks it is current.
 | `sprite/<name>` | size, pivot, collision rects |
 | `icon`, `portrait` | sizes; expression names and the talking animation |
 | `tileset/<name>` | tile size, shape, tile count, tiles with collision, animated tiles, terrain names, the masks (or corners) per terrain |
-| `map/<name>` | size, cells per layer, every terrain cell as `[x, y, mask, [atlas, col, row]]` (the first tile with that mask), objects as `[asset, x, y]` |
+| `map/<name>` | size, shape, tile size, cells drawn per layer (`layers`: a stamps layer counts its expanded tiles), every terrain cell as `[x, y, key, [atlas, col, row]]` (`terrain`: the key is the mask or the corner bits, the tile is the pick's), every drawn cell of every layer as `[x, y, atlas, col, row, left, top]` (`placed`: the image's top-left in map pixels), every cell's centre as `[x, y, cx, cy]` (`centres`), objects as `[asset, x, y]` |
 | `font/<name>` | line height, base, char count, page count, the glyph of `A` |
 | `ui_kit/<name>` | each part's size, margins and hotspot |
 | `background/<name>` | each layer as `[w, h, vx, vy, repeat]` |
@@ -318,12 +401,31 @@ engine's issue is "wire the importer into the starter scene".
    (the clip's `fps` times the smallest step of its `holds`, such as 2 x fps for holds of 1.5) or keep your own timer.
 5. **Pivots and collision**: convert with the engine's axes (y up: `1 - py / h`), keep collision rects in the same
    space as the sprite.
-6. **Tiles**: build a tile per `[atlas, col, row]`; a `terrain` map layer resolves with the blob rule above (port
-   `cell_mask`), or with the engine's own rule tiles when they give the same masks; a `tiles` layer is placed as is.
-7. **Test** with the golden fixture: the same numbers as `expected.json`, then load every real manifest of the game
-   and fail on a missing file or a broken asset (the engine's stand-in for Dotwork's Godot `verify`).
+6. **Tiles**: build a tile per `[atlas, col, row]`; a `terrain` map layer resolves with the rules above (port
+   `cell_mask` for all three modes, the key match and the probability pick with `cell_roll`), or with the engine's
+   own rule tiles when they give the same cells; a `tiles` layer is placed as is; a `stamps` layer places every tile
+   of each stamp. Cells land as [Placing tiles](#placing-tiles) says, on both shapes.
+7. **Test** with the golden fixture: the same numbers as `expected.json` (clips, sprites, the three maps' `terrain`,
+   `placed` and `centres`), then load every real manifest of the game and fail on a missing file or a broken asset
+   (the engine's stand-in for Dotwork's Godot `verify`).
 8. **Wire it**: the starter scene shows one character walking, a prop, a tile map and a label in the font when the
    game has them.
+
+**The extra kinds per engine** (decided 2026-11-11, #285). "loaded" means the importer reads the asset, loads its
+textures with the pixel-art settings and exposes it by name with its data (layers and velocities, the emitter JSON,
+the transition kind, the lit target); the engine object that uses it stays the game's or the shader recipes' job
+(`tools/shaders/`: the dissolve and the transition threshold, normal-mapped lighting).
+
+| Engine | `background` | `particles` | `transition` | `normal_map` | `image` |
+|---|---|---|---|---|---|
+| web (Phaser) | loaded; layers with `repeat` as `TileSprite`s that scroll by `velocity` | loaded (texture + emitter JSON) | loaded (texture) | loaded with its target: the target texture gets the normal map (Phaser's `load.image(key, [url, normal])`), so the Light2D pipeline lights it | loaded |
+| web-3d (Three.js) | loaded; `RepeatWrapping` on the `repeat` axes | loaded (texture + JSON) | loaded (texture) | loaded; set as `normalMap` on the lit target's material when the target is a sprite of the library | loaded |
+| Unity | loaded (sprites) | loaded (texture sprite + the JSON as a `TextAsset`) | loaded (texture) | loaded; set as the target sprite's `_NormalMap` secondary texture (URP 2D lights read it) | loaded (sprite) |
+| Unreal (Paper2D) | textures (as before) | texture + the JSON copied beside it (Niagara stays #286) | texture | texture (lit Paper2D material stays #286) | texture |
+| Bevy | loaded (`Handle<Image>` + layer data; repeat through the image sampler's address mode) | loaded (image + JSON) | loaded (image) | loaded (image handle; Bevy 2D sprites have no normal-map lighting) | loaded |
+| C++ / SDL3 | loaded (`SDL_Texture` + layer data) | loaded (texture + JSON) | loaded (texture) | loaded (texture only) | loaded |
+| LÖVE | loaded (`Image` with `setWrap("repeat")` on the `repeat` axes + layer data) | loaded (texture + JSON; a `ParticleSystem` from it when the engine agent finds it trivial) | loaded (Image) | loaded (Image) | loaded |
+| RPG Maker MZ | skipped with a note (battle backgrounds and parallaxes: #286) | skipped with a note | skipped with a note | skipped with a note | skipped with a note (MZ has no slot for a loose PNG) |
 
 Per-engine notes. Every overlay now has its importer (#55 to #62); the notes say how each one does it and what it
 settled about its engine (versions as the overlays pin them). **(verify)** marks what is still not checked against the
@@ -406,8 +508,10 @@ real engine. Each engine's `docs/ENGINE.md` or `docs/ENGINE_FLOW.md` "Dotwork" s
 - A map is the plan Dotwork hands Godot. A map scene edited by hand in Godot, or a Dotwork-built map edited in
   Pixelorama and re-exported, keeps the planned layers in the manifest (only the Godot scene changes); Pixelorama
   tilemaps of your own are exported cell by cell and are exact.
-- Maps are painted from terrain cells in every engine; tile variants are a random pick (by `probability`), so two
-  engines show the same shapes but not always the same variant on a cell.
+- Maps are painted from terrain cells in every engine. Every importer picks variants with the cell roll, so the
+  non-Godot engines show the same tile on every cell; Godot's own solver rolls its own dice by `probability`, so a
+  Godot map shows the same shapes but not always the same variant on a cell. A corners4 terrain layer thinner than 2
+  cells somewhere does not validate (no tile has its key).
 - Godot-only resources (Themes, shader materials, lit copies, dioramas, screen scenes) are not described: the kit's
   shells, shader recipes (`tools/shaders/`) and each engine's own UI cover those parts.
 - A pack built before records existed (Dotwork before 0.15) gets no animated sprites, tilesets or maps in its asset
