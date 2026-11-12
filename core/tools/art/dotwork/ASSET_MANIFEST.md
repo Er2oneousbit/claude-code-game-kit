@@ -258,8 +258,10 @@ cell of every map against it in Godot (`blob_bad`), and the live exam below did 
 
 ### Variants: the probability pick
 Several tiles can share a key (texture variants). Every engine picks the same one: the cell's **roll** is a number in
-[0, 1) hashed from the cell and its layer, and the pick walks the candidates in atlas order (atlases by `id`, tiles in
-list order) subtracting weights:
+[0, 1) hashed from the cell and its layer, and the pick walks the candidates in atlas order (atlases in the order of
+the `atlases` list, which Dotwork writes by `id`, tiles in list order; `assetspec.resolve_terrain` iterates the lists
+as they are) subtracting weights. A weight of 0 is never picked, except that when every candidate weighs 0 the first
+one is taken (so a tileset of zero-probability variants still draws):
 ```python
 M = 0xFFFFFFFF
 def hash32(k):                                              # Bob Jenkins' 6-shift integer hash: shifts, adds, xors
@@ -303,9 +305,10 @@ So the image's top-left lands at `centre - origin`: a 16 x 12 iso block with `or
 its bottom edge on the diamond's bottom point and its top diamond 4 px up, a raised block standing on its cell. These
 are the numbers Godot's `TileMapLayer.map_to_local` and `get_neighbor_cell` give on 4.7.2 (2026-11-11, both shapes),
 and `texture_origin` lifts the image the same way (`origin = [tile_w / 2, tile_h / 2 + texture_origin.y]`). An engine
-whose own tilemap lays diamonds out differently (Unity's and Phaser's isometric grids, Paper2D's) either converts the
-cell coordinates so each diamond lands on this centre or places the tiles itself; its golden test compares with
-`placed`. Y-up engines flip `y` as for sprites.
+whose own tilemap lays diamonds out differently (Unity's and Phaser's isometric grids) either converts the cell
+coordinates so each diamond lands on this centre or places the tiles itself; its golden test compares with `placed`.
+Paper2D's grid is this one, offset by `(w/2, h/2)` in both projections (its cell `(0, 0)` is centred on the actor).
+Y-up engines flip `y` as for sprites.
 
 ## Godot is the reference
 Every Godot resource Dotwork writes goes through `godot.py`, and every writer there hands what it builds the resource
@@ -343,9 +346,8 @@ the manifest against them (frames, holds, fps, loop; peering bits; collision pol
 | transitions | `transition`; lighting: `normal_map`; anything else: `image` |
 | (not a lane) `tools/blender/render_sprites.py --manifest` | `animated_sprite`: a 3D model (a Bozzetto rigged character) rendered in 1, 4 or 8 directions, a clip `<action>_<dir>` per glTF animation and direction, the pivot where the model's origin (its feet) lands, in its own pack (`generator: render_sprites`), which Dotwork never rewrites |
 
-A rendered sheet was loaded unchanged by the web, web-3d, LÖVE, C++, Bevy and RPG Maker MZ importers' tests
-(`data/golden/character/sprites/`, 2026-11-11; MZ cut it into a character sheet), and the LÖVE and C++ starters drew it
-walking; Unity's and Unreal's importers take the same rects and pivots but were not run on it **(verify)**.
+A rendered sheet is loaded unchanged by every importer's tests (`data/golden/character/sprites/`, 2026-11-11; MZ
+cuts it into a character sheet; Unity and Unreal since 2026-11-12), and the LÖVE and C++ starters drew it walking.
 
 ## Golden fixture and loaded result
 `data/golden/dotwork/` holds one small pack with every kind: `assets/` is an assets folder (its manifest is
@@ -368,8 +370,10 @@ on the transitions, a raised block with its own origin).
 | `ui_kit/<name>` | each part's size, margins and hotspot |
 | `background/<name>` | each layer as `[w, h, vx, vy, repeat]` |
 
-Numbers are rounded to 6 decimals; compare with a tolerance of 1e-6. The fixture's art is drawn to be told apart at a
-glance (a figure whose legs move, coloured blob tiles), so an importer's own viewer shows when a rect or pivot is off.
+Numbers are rounded to 6 decimals; compare with a tolerance of 1e-6, except where the engine stores a number as a
+32-bit float: compare those at float32 precision (Unity reads a pivot of 37.6 back as 37.599998; the Dotwork golden
+has no such value, the rendered-character golden does). The fixture's art is drawn to be told apart at a glance (a
+figure whose legs move, coloured blob tiles), so an importer's own viewer shows when a rect or pivot is off.
 
 ## Commands
 ```
@@ -418,10 +422,10 @@ the transition kind, the lit target); the engine object that uses it stays the g
 
 | Engine | `background` | `particles` | `transition` | `normal_map` | `image` |
 |---|---|---|---|---|---|
-| web (Phaser) | loaded; layers with `repeat` as `TileSprite`s that scroll by `velocity` | loaded (texture + emitter JSON) | loaded (texture) | loaded with its target: the target texture gets the normal map (Phaser's `load.image(key, [url, normal])`), so the Light2D pipeline lights it | loaded |
+| web (Phaser) | loaded; layers with `repeat` as `TileSprite`s that scroll by `velocity` | loaded (texture + emitter JSON) | loaded (texture) | loaded with its target: the target texture gets the normal map (Phaser's `load.image(key, [url, normal])`), so a scene with `this.lights.enable()` lights the target once it has `setLighting(true)` (Phaser 4.2.1 has no separate Light2D pipeline) | loaded |
 | web-3d (Three.js) | loaded; `RepeatWrapping` on the `repeat` axes | loaded (texture + JSON) | loaded (texture) | loaded; set as `normalMap` on the lit target's material when the target is a sprite of the library | loaded |
 | Unity | loaded (sprites) | loaded (texture sprite + the JSON as a `TextAsset`) | loaded (texture) | loaded; set as the target sprite's `_NormalMap` secondary texture (URP 2D lights read it) | loaded (sprite) |
-| Unreal (Paper2D) | textures (as before) | texture + the JSON copied beside it (Niagara stays #286) | texture | texture (lit Paper2D material stays #286) | texture |
+| Unreal (Paper2D) | textures (as before) | the mask texture, with the emitter JSON in its `dotwork.emitter` asset tag (no `.json` under `Content/`: the editor's auto-import would offer it as a DataTable; Niagara stays #286) | texture, its kind tagged | texture, its target tagged (lit Paper2D material stays #286) | texture |
 | Bevy | loaded (`Handle<Image>` + layer data; repeat through the image sampler's address mode) | loaded (image + JSON) | loaded (image) | loaded (image handle; Bevy 2D sprites have no normal-map lighting) | loaded |
 | C++ / SDL3 | loaded (`SDL_Texture` + layer data) | loaded (texture + JSON) | loaded (texture) | loaded (texture only) | loaded |
 | LÖVE | loaded (`Image` with `setWrap("repeat")` on the `repeat` axes + layer data) | loaded (texture + JSON; a `ParticleSystem` from it when the engine agent finds it trivial) | loaded (Image) | loaded (Image) | loaded |
@@ -438,36 +442,57 @@ real engine. Each engine's `docs/ENGINE.md` or `docs/ENGINE_FLOW.md` "Dotwork" s
   Fonts become Phaser bitmap-font data built from `chars` (one texture: glyphs on a second page are left out); tile
   maps are a blank tilemap filled per cell after the terrain layers are resolved; collision rects become static
   Arcade bodies; 9-slice parts use Phaser's NineSlice with the four margins. Fonts and UI parts draw at 1 on a camera
-  without zoom. Tests: Vitest on the plan and every game manifest (`dev.py test`), and `smoke --until
-  DOTWORK_VERIFY_OK` loads every manifest in Phaser.
+  without zoom. Since 1.1.0: the plan resolves all three terrain modes with the key and the roll, expands stamps
+  layers and gives every placed cell its image's top-left; tiles are drawn at that point (`pixelX` / `pixelY` set
+  after `putTileAt`, so an iso block stands on its cell), and `dotworkVerify.ts` cross-checks Phaser's own
+  `tileToWorldXY` against the plan for cell-sized tiles on both shapes. The extra kinds: `addBackground`
+  (TileSprites scrolling by `velocity`), `addParticles`, `addImage`, a lit target loaded with its normal map. Tests:
+  Vitest on the plan and every game manifest (`dev.py test`), and `smoke --until DOTWORK_VERIFY_OK` loads every
+  manifest in Phaser.
 - **web-3d, Three.js (#56, `src/game/dotwork/`).** `DotworkLibrary.load()` builds sprites as quads with
   `NearestFilter`, sRGB and `alphaTest`, animated by moving the texture's `offset` / `repeat` over the sheet rect (UV
   y is up: `v = 1 - (y + h) / sheetH`); the pivot is the quad's origin shift. The diorama look: one world unit per map
   tile, tiles flat on the ground, sprites as billboards that turn only around y. Fonts are glyph quads from `chars`.
-  Tests: Vitest on the golden pack and every game manifest; `smoke` loads them all in the browser.
+  Since 1.1.0: the manifest reader resolves the three terrain modes with the key and the roll, expands stamps
+  layers and carries every placed cell's left/top in map pixels (the old isometric centre was w/2 off); the tile map
+  lays its quads from those. The extra kinds load: backgrounds as a texture per layer with `RepeatWrapping` on the
+  `repeat` axes, particles (texture + emitter JSON), transitions and normal maps without sRGB (a normal map becomes
+  `normalMap` on a sprite built with `lit: true`), images as quads. Tests: Vitest on the golden pack and every game
+  manifest; `smoke` loads them all in the browser and counts the extra kinds.
 - **Unity (#57, `Assets/Editor/Dotwork/`).** An explicit command, `python tools/dev.py exec GameKitDotwork.ImportAll`,
   plus an import-time hook (`DotworkSpritePhysics`, an `AssetPostprocessor` that sets each sprite's physics shape
   while Unity imports the PNG), not a `ScriptedImporter`: the slicing, pivots and physics shapes belong to each PNG's
   own TextureImporter, which an importer of the JSON file cannot set without fighting Unity's import order. Rects
   and pivots flip to Unity's bottom-left origin (`y = sheetH - y - h`, pivot `(px / w, 1 - py / h)`), Point filter,
   no compression, pixels per unit from the first tileset. Clips become `AnimationClip`s with sprite keys at each
-  frame's `duration` and an AnimatorController; blob47 and sides4 terrain are the kit's own `DotworkTerrainTile` (no
-  2D Tilemap Extras package). Fonts are sprite labels (`DotworkFont`, `DotworkLabel`), not TextMeshPro: TMP needs the
+  frame's `duration` and an AnimatorController. Terrain layers are resolved at import into the spec's tiles (the key
+  from the painted neighbours, the variant by the roll with the layer's index); the kit's own `DotworkTerrainTile`
+  (no 2D Tilemap Extras package) does all three modes and the pick for hand painting. Stamps layers expand into
+  their tiles. Isometric maps use Unity's Isometric Grid with map cell `(x, y)` at Unity cell `(-1 - y, -1 - x)`
+  plus half a diamond of x per layer, measured from the Grid, so every diamond lands on the spec's centre; each
+  tile's sprite pivot is its origin. The extra kinds load (backgrounds as sprites with repeat wrap, particles as a
+  texture plus the JSON as a `TextAsset`, transitions, normal maps as linear textures set as the target's `_NormalMap`
+  secondary texture, images). Fonts are sprite labels (`DotworkFont`, `DotworkLabel`), not TextMeshPro: TMP needs the
   uGUI package and its Essential Resources, which an adopt-first project has not. Still to check: blend `add` uses a
-  Built-in pipeline particle shader, URP needs its own material **(verify)**; isometric maps on Unity's isometric
-  Grid against Godot's diamond-down layout **(verify)**. Tests: EditMode tests on the golden pack and every manifest.
+  Built-in pipeline particle shader, URP needs its own material **(verify)**; whether URP's 2D lights read the
+  `_NormalMap` slot was not watched **(verify)**. Tests: EditMode tests on the golden pack (the Tilemap's own
+  placement on both shapes) and every manifest.
 - **Unreal (#58, `Content/Python/kit_dotwork/`, UE 5.8).** An editor Python script through `dev.py exec` with
   Paper2D: a `PaperSprite` per frame (source texture = the sheet, source UV and dimension = the rect, pivot mode
   custom; `CustomPivotPoint` is in the texture's own pixels, y down, so it is `rect.xy + pivot` and Paper2D flips to
   its X right, Z up plane itself), a `PaperFlipbook` per clip (whole `FrameRun` counts at the clip's fps times the
   smallest factor that makes every duration whole), textures nearest, no mips, uncompressed, Pixels2D group. Tiles:
-  a `PaperTileSet` per atlas and a `PaperTileMap` with terrain layers resolved by a port of `cell_mask`; Paper2D
+  a `PaperTileSet` per atlas (its Drawing Offset from the tiles' origins, so a taller tile stands on its cell) and a
+  `PaperTileMap` with terrain layers resolved by the port of the spec's rules (all three modes, the roll, stamps
+  layers expanded), its cell `(0, 0)` centred on the actor in both projections (`map_to_local` / `local_to_map`,
+  so the loaded result reads `centres` from Paper2D's own `GetTileCenterPosition`); Paper2D
   draws tile layer 0 on top, so manifest layers go in reversed. The Python API reaches per-tile collision
   (`per_tile_data`; box shapes are filled with `SpriteGeometryShape.import_text`, their fields are read-only) but
   not a layer's name (the layers come from Paper2D's own Tiled importer) nor an offline `Font`'s page textures (set
   with the `set` console command, which only the pythonscript commandlet runs). An offline Font keeps one advance
   per glyph plus one font-wide kerning: xoffset and kerning pairs are lost; UMG text wants a runtime font from a
-  TTF/OTF **(verify)**. Not in Paper2D: tile animation, probability variants, additive blend. Dotwork's output stays
+  TTF/OTF **(verify)**. Not in Paper2D: tile animation, additive blend (variants are resolved at import, so they do
+  apply). Dotwork's output stays
   in `assets/`, outside `Content/` (the open editor would auto-import the PNGs). Tests: `dev.py test` runs the golden
   check and every game manifest through the commandlet, and as `Editor.Python.<Game>.kit_dotwork.*` automation tests
   with the PythonAutomationTest plugin.
@@ -475,30 +500,45 @@ real engine. Each engine's `docs/ENGINE.md` or `docs/ENGINE_FLOW.md` "Dotwork" s
   per-frame `Duration`s in a `DotworkAnimation` component and a system that advances it, `ImageSampler::nearest()`.
   The pivot is an `Anchor`: in 0.20 `Anchor(pub Vec2)` is a component of its own (a required component of `Sprite`),
   centre-relative and y up, `Anchor(Vec2::new(px / w - 0.5, 0.5 - py / h))`. Tiles: one sprite per cell under the map
-  entity (no `bevy_ecs_tilemap`), terrain layers resolved by `cell_mask`. Fonts: glyph sprites from `chars`; 9-slice
+  entity (no `bevy_ecs_tilemap`), terrain layers resolved by the spec's rules (the three modes, the roll, stamps
+  layers expanded), cells drawn in the spec's order so a taller iso tile overdraws the one above, placed at
+  `TileMap::top_left` (map pixels, y down, flipped once for Bevy's y-up world; the old isometric centre was w/2
+  off). The extra kinds load: backgrounds through a repeating sampler (`ImageAddressMode::Repeat` on the `repeat`
+  axes), particles with the emitter JSON, transitions, normal maps as an image handle and target only (Bevy 0.20's
+  2D sprites have no normal-map lighting), images with a pivot. Fonts: glyph sprites from `chars`; 9-slice
   through `TextureSlicer`. Bevy 0.20 sprites have no additive blend (drawn normal). Tests: `cargo test` on the loader
   (no window) against `expected.json` and every game manifest.
 - **C++ / SDL3 (#60, `src/core/DotworkAssets` + `src/gfx/DotworkRender`).** `nlohmann-json` reads the manifest. PNGs
   load with SDL's own `SDL_LoadPNG` (SDL 3.4.0 and later; the pinned 3.4.12 has it), so no SDL3_image or `stb_image`.
   `SDL_RenderTexture` with the frame rect as the source rect, the destination offset by the pivot,
   `SDL_SCALEMODE_NEAREST`; 9-slice through `SDL_RenderTexture9Grid`. Timing from `duration`. Terrain layers resolved
-  at load by a C++ port of `cell_mask`. Fonts: glyph quads from `chars`. Tests: doctest on the loader with the golden
-  fixture (no window needed for the numbers) and every game manifest.
+  at load by the C++ port of the spec's rules (the three modes, `tile_key`, the roll in `uint32_t`, stamps layers
+  expanded); `cell_centre`, `tile_origin`, `placed_corner` and `map_bounds` say where a cell's image lands on both
+  shapes (the renderer's isometric centres were w/2 off), and the showcase places an iso map by its bounds. The
+  extra kinds load as data by name (the renderer preloads their textures). Fonts: glyph quads from `chars`. Tests:
+  doctest on the loader with the golden fixture (no window needed for the numbers) and every game manifest.
 - **LÖVE 11.5 (#61, src/core/dotwork_manifest.lua, src/game/dotwork_loader.lua, src/game/dotwork_view.lua).**
   The kit's JSON module decodes the manifest headless; drawing needs a window, because every `love.graphics.new*`
   call (`newImage`, `newQuad`, `newFont`, `newSpriteBatch`) errors without one, so the view is built in `love.draw` or
   after the window exists. `setFilter("nearest", "nearest")`, a `Quad` per rect, `love.graphics.draw(image, quad, x,
   y, 0, sx, sy, px, py)` (the origin arguments are the pivot, y down, no conversion). Fonts: `love.graphics.newFont`
   reads the `.fnt` (AngelCode BMFont text) and finds its pages beside it on 11.5; the glyph quads from `chars` are the
-  fallback. Tiles: a `SpriteBatch` per atlas and layer. Tests: the kit's Lua test runner (`dev.py test`) on the loader
-  with the golden fixture and every game manifest, headless.
+  fallback. Tiles: a `SpriteBatch` per atlas and layer, cells on `Manifest.cell_centre` (the old iso formula was
+  Godot's layout from memory, w/2 off), terrain resolved with the three modes and the roll (LuaJIT `bit` ops, every
+  step normalised to [0, 2^32)), stamps layers expanded, the starter offsetting a map by `View.map_bounds` so an iso
+  map's left column stays on screen. The extra kinds: `view:background` (an `Image` with `setWrap("repeat")` on the
+  `repeat` axes, scrolled by `velocity` through a `Quad`), `view:particles` (a `ParticleSystem` from the emitter
+  JSON's amount, lifetime, one_shot and colour steps), `view:transition`, `view:normal_map`, `view:draw_image`.
+  Tests: the kit's Lua test runner (`dev.py test`) on the loader with the golden fixture and every game manifest,
+  headless.
 - **RPG Maker MZ (#62, tools/dotwork_mz.mjs).** MZ reads fixed image layouts, so the importer is a converter run
   after every Dotwork run: `python tools/dev.py dotwork` (`--dry-run` first, `--replace` to replace files MZ shipped).
   It writes character sheets (3 frames by 4 directions, `$` single-character files) from `walk_<dir>`, object sheets
   for props, faces (144 x 144 cells) from `portrait` expressions, side-view battlers from battle poses, enemies, the
   Window.png skin from a `ui_kit` window part, rows of `IconSet.png`, and B to E tile sheets from plain tiles, at one
   whole-number scale (MZ's tile size over the art's). Terrain autotiles (MZ's A1 to A4 quarter-tile layouts) and maps
-  are not converted yet. Dotwork's output stays in `assets/`, outside `game/`; the converter records what it wrote in
+  are not converted yet (#286), so the 1.1.0 map rules wait with them; the extra kinds are skipped with a note each.
+  Dotwork's output stays in `assets/`, outside `game/`; the converter records what it wrote in
   `<src_dir>/dotwork/mz_export.json`. Every layout has been checked against stand-ins only, not in the real MZ editor
   **(verify)**. Tests: tests/dotworkMz.test.js on the golden pack, and `dev.py check` re-checks the last export.
 
