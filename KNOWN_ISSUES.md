@@ -77,6 +77,20 @@ examples were built and tested on one Windows 11 machine.
 - **Godot under GPU load:** Godot 4.7.2 crashed in 2 of 5 windowed shader checks, and once in a font reimport, while
   other engines used the GPU (never alone); `dev.py` now says so; rerun, or `check --no-shaders`.
 
+### 0.15 follow-ups (characters from an idea)
+- **Paid routes measured once:** Tripo image tasks (10 credits each), a P2 model from views (110) and a rig with three
+  clips (55) ran live on 2026-11-11; P1 models, text-to-model, high-quality textures and the direct Gemini route
+  (needs a billed key) have only run against stand-ins (verify).
+- **UV coverage:** the rebake lifted a 120-part Tripo character from 29% to 46%, under the hero floor of 60%; such a
+  model ships with `--accept-uv` and a logged waiver until a packer can nest islands
+  ([#293](https://github.com/Er2oneousbit/claude-code-game-kit/issues/293)).
+- **Seen on screen or not:** a rigged character was loaded and its clips measured in every 3D engine, but only Godot
+  and LÖVE (as sprites) were looked at; skinned drawing in a Bevy window and the web-3d page, Unreal playing the clips
+  in a level, Unity's run-time load in a player build and URP 2D lights reading a normal map are (verify). The Godot
+  2D route has no manifest importer: its sheets go in by hand with render_sprites' layout file.
+- **Strip rebuild limits:** a fused scarf or cape rebuilt by `rig chain` loses folds, knots and fringes, and the
+  original stays painted on the body under it.
+
 ### Art workflow outside Godot
 Since 0.14.5 every engine reads Dotwork's asset manifest (`core/tools/art/dotwork/ASSET_MANIFEST.md`) through its
 own importer, each tested against the golden fixture in `core/data/golden/dotwork/`. Spec 1.1.0 (unreleased,

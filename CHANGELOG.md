@@ -3,6 +3,58 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.15.0 (2026-11-12): from an idea to the character in the game; Dotwork map rules in every engine (#287 to #293, #285)
+- **`/make-character` (#291):** a new skill (25 now) that takes "the main character should look like this" (an idea,
+  a sentence or a picture) to that character moving in the game. It asks one multiple-choice question at a time, picks
+  3D or sprite sheets from the game's engine and GDD, stops for the user's look and yes at six gates (concept,
+  reference views, turntable, clips, chain preview, the character in the game) and quotes every paid step first.
+  `workflows/make-character/` shows the free local route end to end with a made-up character, with real times.
+- **Reference views (#288):** `bozzetto.py reference <name> --from concept.png` (or `--prompt`) writes A-pose front,
+  left, back and right views, a sheet, a record and an asset log row with the route's terms. Routes: local (FLUX.2
+  klein and Qwen-Image-Edit, free), `--with tripo` (Tripo's image tasks, Nano Banana among its models) and `--with
+  nanobanana` (Google Gemini with a billed key: the free tier makes no images, and the tool says so).
+  `--swap-sides` fixes the left and right views the models often swap, with the sheet, record and log.
+- **Tripo model route (#287):** `make --with tripo` from one picture, several views (multiview) or a sentence, through
+  the same cleanup, budget check, turntable and log row as the local route; Tripo's models keep every part
+  (`--min-part`). One Tripo module serves every paid route (model, rig, images): a printed quote and `--quote-only`
+  first, `--max-credits` caps one run, a journal so a re-run never pays twice, keys never written, printed or sent to
+  another host. Measured live on 2026-11-11: image tasks 10 credits each, a P2 model from views 110, a rig 25 plus 10
+  per clip (P1, text-to-model and high-quality textures stay (verify)).
+- **Secondary motion (#289):** `rig chain <name> --part colour:#rrggbb` gives a scarf, cape, hair or tail a bone chain
+  with a sway that loops exactly in looping clips and an optional cloth bake on one-shots; a part fused to the body is
+  rebuilt as a strip with its own baked texture. `--loop` for mocap clips that do not close exactly.
+- **A rigged character in every engine (#290):** loaders that play a rigged glTF character's clips on a loop in Godot
+  (`KitCharacter`), web-3d (`character.ts`), Bevy (`spawn_character`; the `jpeg` feature for generated textures), Unity
+  (`KitCharacter` through glTFast, opt-in with `exec GameKitCharacters.AddGltfast`; import Generic, Humanoid only to
+  share FBX clips) and Unreal (`kit_character`), each tested on a golden Mixamo-named character
+  (`core/data/golden/character/`). For 2D engines `render_sprites.py --actions all --manifest` writes 8- or 4-direction
+  sheets with a Dotwork asset manifest, which the web, web-3d, LÖVE, C++, Bevy, Unity, Unreal and MZ importers load.
+- **Clips that loop (#290, #292):** Bozzetto's rig step re-centres clips whose hips stand off their rest spot (Tripo's
+  in-place walk and run stood 2.6 m and 5.1 m away), starts every clip at 0 s, and keeps a clip's own frame rate
+  (Tripo keys at 30 fps lost their closing frame in a 24 fps scene). `render_sprites` warns when one clip sits away from
+  the others.
+- **UV coverage (#293):** a rebake step (a fresh layout, the textures baked onto it, checked by renders) runs by default
+  on Tripo models, `--rebake` on the local route and `bozzetto.py rebake` on any model; `--accept-uv` ships a model
+  that fails only on coverage and writes the waiver to its asset log row (a 120-part character reached 46% of the
+  hero's 60%: tube-like parts unwrap as rings the packer cannot nest).
+- **Blender 4.2 and the bpy module (#292):** `core/tools/blender/bpy_common.py` holds what every Blender script needs:
+  4.2's clip names, the clip frame rate and the Windows exit crash of the bpy module after a glTF export.
+- **Asset manifest 1.1.0 (#285):** the spec defines the corners4 rule for painted terrain (checked against Godot's own
+  painter), exact isometric placement (Godot's diamond-down layout), a deterministic variant pick (`cell_roll`, the
+  same tile in every engine), a `stamps` map layer and what each engine does with backgrounds, particles, transitions,
+  normal maps and images. The golden fixture gained an isometric map, a corners4 patch, variants and a stamp, and every
+  importer matches it: web, web-3d, LÖVE, C++, Bevy, Unity and Unreal (MZ converts no maps yet: #286). Fixed on the
+  way: web-3d, Bevy, LÖVE and C++ placed isometric cells half a tile off.
+- **Reviews:** an adversarial review of every 0.15 file found and fixed two ways to pay twice, a key that could reach
+  the screen or another host, non-ASCII upload names, a shared loop flag in Godot (one character's `play` stopped
+  another's idle), tests that could not catch a wrong speed, and the scarf strip's flecks.
+- **Upgrade notes:** a Bevy game adds `features = ["jpeg"]` to its `bevy` dependency to load generated characters'
+  textures. A Unity game that used `DotworkTile.probability` reads a `double` now, and `DotworkTerrainTile`'s
+  `masks`/`tiles` arrays are `keys`/`tiles`/`weights`. Isometric Dotwork maps in web-3d, Bevy, LÖVE and C++ move half a
+  tile right (to where Godot draws them): a game that compensated by hand removes its offset. A rigged model made
+  before 0.15.0 gets looping, centred clips by running `rig_finish.py` on it again. `--max-credits` caps one run now,
+  not everything a journal ever paid.
+
 ## 0.14.5 (2026-11-11): Dotwork in every engine, web-3d and MZ shells, tooling (#277 to #279, #283, #175, #83, #55 to #62, #156, #157, #183, #90, #14)
 This one is larger than a patch usually is: the fixes and the next feature batch ship together, once.
 - **Dotwork asset manifest (#83):** every pack also writes `<assets_dir>/dotwork/<pack>.assets.json`, an
