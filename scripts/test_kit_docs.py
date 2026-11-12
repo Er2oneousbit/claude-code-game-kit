@@ -208,6 +208,18 @@ class SharedWebShellExam(unittest.TestCase):
         bad = [p.name for p in base.glob("*.ts") if re.search(r'from "(phaser|three)', p.read_text(encoding="utf-8"))]
         self.assertEqual(bad, [], "the shell meets the renderer through host.ts only")
 
+    def test_vitest_gives_a_test_time_for_a_busy_machine(self):
+        # 0.15.0 verify: web-3d's `test` failed twice on a box running an engine build, a different golden Dotwork
+        # test each time, "Test timed out in 5000ms": the test takes 100 ms alone, but 23 workers start at once.
+        # Both overlays run the same shell tests, so both configs set the same, longer timeout.
+        timeouts = {}
+        for engine in ("web", "web-3d"):
+            text = (KIT / "engines" / engine / "skeleton" / "vitest.config.ts").read_text(encoding="utf-8")
+            m = re.search(r"testTimeout:\s*([\d_]+)", text)
+            timeouts[engine] = int(m.group(1).replace("_", "")) if m else 5000   # Vitest's default
+        self.assertGreaterEqual(min(timeouts.values()), 20000, timeouts)
+        self.assertEqual(len(set(timeouts.values())), 1, timeouts)
+
 
 class CommandExam(unittest.TestCase):
     def test_wavesmith_commands_in_the_docs_exist(self):
