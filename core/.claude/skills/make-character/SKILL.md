@@ -18,11 +18,14 @@ with real times is in the kit's `workflows/make-character/`.
   say in a line or two what is right and what is wrong, and ask: go on, change something, or try again (another
   seed). Do not run the next step without a yes. Six gates: the concept, the reference views, the turntable,
   `clips.png`, `chain.png`, the character in the game.
-- **Paid steps: quote, then an explicit yes, every time.** Print the quote first (`reference ... --quote-only` needs
-  no key; `make --with tripo` and `rig make --with tripo` have no `--quote-only`: quote from the README's tables, say
-  the number is the kit's table, and pass `--max-credits` at the quoted amount, since a quote over the cap stops before
-  any upload). A yes to one paid step is not a yes to the next. Keys (`GEMINI_API_KEY`, `TRIPO_API_KEY`) come from the
-  environment: never ask for one in chat, never read, print or write one; a missing key is the user's to set.
+- **Paid steps: quote, then an explicit yes, every time.** Print the quote first: run the exact paid command with
+  `--quote-only` added (`reference`, `make --with tripo` and `rig make --with tripo` all have it; it needs no key,
+  calls nothing and writes nothing, and says 0 when the journal already holds the paid task). Show its `[quote]` line
+  as it is, with its "measured" or "(verify)" note, then run the real command with `--max-credits` (or `--max-cost`)
+  at the quoted amount, since a quote over the cap stops before any upload. A yes to one paid step is not a yes to
+  the next. Keys (`GEMINI_API_KEY`, `TRIPO_API_KEY`) come from the environment: never ask for one in chat, never read,
+  print or write one; a missing key is the user's to set. A free-tier Google key cannot make images (the run says so):
+  Nano Banana needs a project with billing on.
 - **Tier first.** In a toy, characters are drawn in code (CLAUDE.md "crude on purpose"). If the GDD's
   `Current tier:` is Toy, say so and ask before spending GPU time or money on a generated character.
 - **No look-alikes.** Nothing that copies a famous character, a named artist or a real person; no weapon without
@@ -67,8 +70,9 @@ the quote. Show `assets_src/bozzetto/<name>/reference/sheet.png` and the `[look]
 
 ## 4. Gate 3: the model and its turntable
 `python tools/bozzetto/bozzetto.py make <name> --image assets_src/bozzetto/<name>/reference/front.png --class <class>
---seed N` (about 5 minutes warm), or with the user's yes to the quote `make <name> --with tripo --class <class> --front
-... --left ... --back ... --right ... --max-credits <quote>` (a P2 model cost 110 credits in the kit's test). Show
+--seed N` (about 5 minutes warm), or paid: the same `make <name> --with tripo --class <class> --front ... --left ...
+--back ... --right ...` with `--quote-only` first, then after the user's yes with `--max-credits <quote>` (a P2 model
+from one picture or from views cost 110 credits on the kit's live runs). Show
 `assets_src/bozzetto/<name>/turntable.png` and the validator warnings. A budget failure on UV coverage: `--material
 vertex` (flat colours, no bake). Facing wrong (rig refuses it, or the turntable's first view is not the front):
 `--turn`.
@@ -76,8 +80,8 @@ vertex` (flat colours, no bake). Facing wrong (rig refuses it, or the turntable'
 ## 5. Gate 4: the rig and its clips
 **Stop ComfyUI first** if it is running (and say so): UniRig peaks near 15.6 GB and ran six times slower sharing the
 card. `python tools/bozzetto/bozzetto.py rig make <name>` (UniRig, free; about 3 minutes, more on the first run while
-it downloads its weights), or `--with tripo --clips idle,walk --max-credits <quote>` after a yes (about 25 credits to
-rig and 10 a clip in the kit's table). Show `assets_src/bozzetto/<name>/rig/<route>/clips.png`: arms swing from the
+it downloads its weights), or `--with tripo --clips idle,walk --quote-only` first and, after a yes, the same with
+`--max-credits <quote>` (25 credits to rig and 10 a clip, measured on the kit's live runs). Show `assets_src/bozzetto/<name>/rig/<route>/clips.png`: arms swing from the
 shoulders, nothing tears, the legs walk.
 
 ## 6. Gate 5: the part that swings

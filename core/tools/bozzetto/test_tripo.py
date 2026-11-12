@@ -378,6 +378,50 @@ class Money(Base):
         self.assertIn("TRIPO_API_KEY", out)
         self.assertEqual(STATE.requests, [])
 
+    def test_quote_only_needs_no_key_and_spends_nothing(self):
+        """--quote-only prints the table price (and the journal's reuse) with no key, no call, no Blender and nothing
+        written; the measured figures say so and the others stay (verify)."""
+        os.environ.pop(tripo.TRIPO_ENV)
+        bz.find_blender = lambda choice=None: None
+        rc, out = self.make("--image", "art_src/crate.png", "--quote-only")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("[quote] tripo (P2-20260801 image-to-model, texture standard): 110 credits ($1.10)", out)
+        self.assertIn("measured 2026-11-11", out)
+        self.assertNotIn("verify", out)
+        self.assertIn("nothing was made or spent", out)
+        self.assertEqual(STATE.requests, [])
+        self.assertFalse((self.root / "assets_src").exists(), "a quote wrote files")
+        rc, out = self.make("--image", "art_src/crate.png", "--quality", "high", "--quote-only")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("140 credits ($1.40)", out)
+        self.assertIn("--quality high adds 30 (verify)", out)
+        rc, out = self.make("--front", "art_src/front.png", "--back", "art_src/back.jpg", "--class", "npc",
+                            "--quote-only", name="npc_guard")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("multiview-to-model, texture standard): 110 credits", out)
+        self.assertIn("multiview-to-model measured 2026-11-11", out)
+        rc, out = self.make("--prompt", "a brass lantern", "--quote-only", name="prop_lamp")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("text-to-model is the kit's ceiling, not yet measured (verify)", out)
+        rc, out = self.make("--image", "art_src/crate.png", "--material", "vertex", "--quote-only")
+        self.assertEqual(rc, 2, "a quote still checks the Tripo options")
+        rc, out = self.run_tool("make", "prop_crate", "--image", "art_src/crate.png", "--quote-only")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("[quote] local: free", out)
+        self.assertEqual(STATE.requests, [])
+        # after a paid run, the quote reads the journal: nothing left to pay
+        os.environ[tripo.TRIPO_ENV] = KEY
+        bz.find_blender = lambda choice=None: ("blender", "fake-blender")
+        self.assertEqual(self.make("--image", "art_src/crate.png")[0], 0)
+        calls = len(STATE.requests)
+        rc, out = self.make("--image", "art_src/crate.png", "--quote-only", "--overwrite")
+        self.assertEqual(rc, 0, out)
+        self.assertIn(": 0 credits ($0.00) to spend", out)
+        self.assertIn("model task task-1 in tasks.json is reused (110 credits paid before)", out)
+        self.assertEqual(len(STATE.requests), calls, "a quote called Tripo")
+        rc, out = self.make("--image", "art_src/crate.png", "--quote-only", "--overwrite", "--no-reuse")
+        self.assertIn(": 110 credits", out)
+
     def test_a_client_id_in_place_of_the_key_stops_before_any_call(self):
         os.environ[tripo.TRIPO_ENV] = "tcli_exam_client_id"
         rc, out = self.make()
@@ -571,7 +615,7 @@ class Usage(Base):
     def test_help_lists_the_route(self):
         rc, out = self.run_tool("make", "-h")
         self.assertEqual(rc, 0)
-        for opt in ("--with", "--front", "--back", "--max-credits", "--no-reuse", "--tripo-model"):
+        for opt in ("--with", "--front", "--back", "--max-credits", "--no-reuse", "--quote-only", "--tripo-model"):
             self.assertIn(opt, out)
 
 

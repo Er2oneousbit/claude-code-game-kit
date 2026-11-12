@@ -72,12 +72,12 @@ The front is always made first; the other views are turned from it.
 | | local (default) | nanobanana | tripo |
 |---|---|---|---|
 | What runs | FLUX.2 klein 4B draws the front from `--prompt`; Qwen-Image-Edit-2511 re-poses a `--from` concept; Qwen-Image-Edit with the Multiple-Angles LoRA turns the front to each other view (as Dotwork's rotations do) | Google's Gemini image model ("Nano Banana", default `gemini-nano-banana-2.1`; `--model` for another), one `generateContent` call per view in one conversation: the front, then "the same character from its left side" ... | Tripo's text-to-image (from a prompt) or image-to-image (from a concept, default model `banana2`), then its image-to-multiview for the other views |
-| Cost | free, your GPU | per picture, about $0.034 for a 1K image plus input and thinking tokens: about $0.21 for four views **(verify: read 2026-11-11 on Google's pricing page; no free tier for image output)** | about 5 to 10 credits a picture and 10 for the multiview: up to 20 credits ($0.20) for all four **(verify: upper bounds from Tripo's pricing summary, 2026-11-11)** |
+| Cost | free, your GPU | per picture, about $0.034 for a 1K image plus input and thinking tokens: about $0.21 for four views **(verify: read 2026-11-11 on Google's pricing page; no free tier for image output, and a free-tier key is refused with HTTP 429)** | 10 credits a picture (text-to-image or image-to-image) and 10 for the multiview: 20 credits ($0.20) for all four (measured on a live run 2026-11-11, K01) |
 | Needs | a running ComfyUI (the same `--url`/`--allow-remote` rules as `make`), Dotwork's Qwen-Image-Edit files (its `rotate` tier) and the ComfyUI-GGUF node pack; `--prompt` also its FLUX.2 klein files | `GEMINI_API_KEY` from a Google Cloud project with billing on: the free tier cannot make images (a free-tier key gets HTTP 429 with an image quota of 0; measured 2026-11-11, K01), and the run says so and stops | `TRIPO_API_KEY` with API credits |
 | Who owns the pictures | you (generated locally; Apache-2.0 models) | you: the Gemini API terms say Google won't claim ownership of generated content (and may make similar content for others); every image carries a SynthID watermark **(verify)** | you, on paid API credits (Tripo terms 5.2.2); not on free credits **(verify)** |
 
 **Paid routes, every time:** the quote is printed first (`--quote-only` prints it and stops, no key needed: show it
-to whoever pays and ask). `--max-cost` (dollars for nanobanana, default 1.00; credits for tripo, default 40) caps
+to whoever pays and ask; `make` and `rig make` have the same flag). `--max-cost` (dollars for nanobanana, default 1.00; credits for tripo, default 40) caps
 one run: a quote over it stops before any call, and before each call the run checks what it has already spent plus
 the next call. Every paid result goes into the journal, `assets_src/bozzetto/<name>/reference/journal.json` (pictures in its `steps/` folder), as it arrives,
 so a run that fails or hits the cap halfway is run again and pays only for what is missing; a Tripo task the last run
@@ -124,7 +124,9 @@ scarf came back as a cape hanging down the back (the "hang down" instruction can
 garment), and the "left side view" came back facing the picture's right, which is why every run asks you to check
 the sides by eye. One view had a soft floor shadow (the look check flagged it). A second character from a prompt
 (the kit's `workflows/make-character/`, 178 s for four views from a fresh ComfyUI start) came back with the sides
-swapped too; `--swap-sides` fixed it in a second. The paid routes have not been run live.
+swapped too; `--swap-sides` fixed it in a second. The Tripo route ran live on 2026-11-11 (10 credits a task, as the
+table says); Nano Banana was tried with a free-tier key and refused (HTTP 429, image quota 0), so it has not run
+past the quote: it needs a key from a project with billing on.
 
 ## Make a model
 ```
@@ -139,7 +141,7 @@ python tools/bozzetto/bozzetto.py make prop_lamp --image ref.png --sprites asset
 | | Local (`--with local`, the default) | Tripo (`--with tripo`) |
 |---|---|---|
 | From | `--image`, or `--prompt` (FLUX.2 klein draws the picture first) | `--image` (image-to-model), `--front` plus any of `--left`, `--back`, `--right` (multiview: two views at least), or `--prompt` (text-to-model) |
-| Cost | free | paid API credits (1 credit = $0.01): a P2 image-to-model cost 110 credits in the kit's test, not the 30 of the public table (E153). The quote is printed first; `--max-credits` (default 150) and the balance stop a run before anything is uploaded |
+| Cost | free | paid API credits (1 credit = $0.01): a P2 image-to-model cost 110 credits in the kit's test, not the 30 of the public table (E153), and a P2 multiview-to-model 110 on the 2026-11-11 live run (K01); text-to-model, the P1 series and `--quality high` are quoted at the kit's ceiling until a run measures them (verify). `--quote-only` prints the price and stops (no key needed); on a real run the quote is printed first and `--max-credits` (default 150) and the balance stop it before anything is uploaded |
 | Needs | an NVIDIA GPU with 16 GB, a local ComfyUI with 9 GB of model files, Blender | `TRIPO_API_KEY` with API credits (a Tripo Studio plan adds none), Blender; no GPU, no ComfyUI |
 | Time | about 5 minutes warm (K01) | about 16 s for the P2 model in the kit's test (E153), plus the download and Blender |
 | Terms | TRELLIS.2 and BiRefNet MIT, DINOv3 License (use restrictions) | outputs on paid credits are yours and not used for training (Tripo terms 5.2.2); outputs on free credits stay Tripo's (5.2.1) |
@@ -148,15 +150,18 @@ python tools/bozzetto/bozzetto.py make prop_lamp --image ref.png --sprites asset
 python tools/bozzetto/bozzetto.py make prop_crate --with tripo --image art_src/crate_front.png --seed 7
 python tools/bozzetto/bozzetto.py make npc_guard --with tripo --class npc --front ref/front.png --back ref/back.png --left ref/left.png
 python tools/bozzetto/bozzetto.py make prop_lamp --with tripo --prompt "a brass ship's lantern" --max-credits 120
+python tools/bozzetto/bozzetto.py make npc_guard --with tripo --class npc --front ref/front.png --back ref/back.png --quote-only
 ```
-What the Tripo route does: the pictures lose their metadata (as on the local route) and are kept in the source
-folder, the quote is printed, then the pictures go up (`/files`, PNG or JPEG up to 20 MB) and one task runs; its
+What the Tripo route does: `--quote-only` prints the price (the kit's table, and 0 when the journal holds a finished
+task for the same inputs) and stops, with no key, no call and nothing written. Otherwise the pictures lose their
+metadata (as on the local route) and are kept in the source folder, the quote is printed, then the pictures go up (`/files`, PNG or JPEG up to 20 MB) and one task runs; its
 actual cost (`credits_consumed`) is read back, and a charge over the quote warns. Every task is written to
 `assets_src/bozzetto/<name>/tripo/tasks.json` as it is created: a re-run with the same pictures (or sentence) and
 settings reuses it, a finished one with a fresh download link (links expire after about 5 minutes), a running one
 by waiting for it; a failed task costs nothing and is made again. Change the pictures, `--seed`, `--class`,
 `--quality` or `--tripo-model` and it is a new model; `--no-reuse` pays for a new one on purpose. Fixing the size or
-the facing (`--overwrite --height ...`, `--turn ...`) reuses the paid task. Tripo's models face +X (its export
+the facing (`--overwrite --height ...`, `--turn ...`) reuses the paid task and spends nothing, whatever
+`--max-credits` says (the cap is for one run's own charges). Tripo's models face +X (its export
 default, E160): `make` turns them -90 degrees so the front is glTF's +Z **(verify on a live run)**, and cleanup scales
 them from Tripo's 1 m to the class height. A character from `--prompt` gets "full body, A-pose" added (`--raw-prompt`
 sends yours as written). The quote table, the endpoints and the models are in `tripo.py`; facts not measured in a
@@ -180,6 +185,7 @@ paid run are marked (verify) there.
 | `--no-log`, `--no-preview`, `--overwrite` | Scratch runs; skip the turntable; make the same name again (the asset log row is updated, not doubled). |
 | `--wait S` | Seconds to wait for each ComfyUI job or Tripo task (default 3600). Each Blender step has its own fixed 3600 s limit. |
 | `--with local\|tripo` | The route (table above). Tripo only: `--front`/`--left`/`--back`/`--right FILE`, `--max-credits N` (default 150), `--no-reuse`, `--tripo-model P2-20260801\|P1-20260311` (default P2; P1, Tripo's low-poly series, is not tested here). `--quality high` asks Tripo for detailed textures (more credits); `--material vertex`, `--reference-only` and `.webp` pictures are local only. |
+| `--quote-only` | Print the price and stop: Tripo's from the kit's table and the journal (no key needed, nothing made or spent); the local route is free. |
 | `--project DIR`, `--blender PATH\|bpy`, `--workflow FILE`, `--debug` | The game's root (default: the current folder); the Blender to use (default: `BLENDER_BIN`, PATH, the default install, then the bpy module); a different API-format TRELLIS.2 workflow with the same node titles; full Blender output and tracebacks. |
 | `--url URL`, `--allow-remote` | Another ComfyUI address (default `COMFYUI_URL`, else `http://127.0.0.1:8188`); allow one on another computer. |
 
@@ -277,6 +283,7 @@ deforms, and names the bones the way engines and animation packs expect (Mixamo'
 python tools/bozzetto/bozzetto.py rig check                                  # which routes are ready
 python tools/bozzetto/bozzetto.py rig make npc_guard                         # UniRig: free, your GPU
 python tools/bozzetto/bozzetto.py rig make npc_guard --with tripo --clips idle,walk,run   # Tripo: paid credits
+python tools/bozzetto/bozzetto.py rig make npc_guard --with tripo --clips idle,walk --quote-only   # the price, no key
 ```
 The input is the model `make` placed (`<models>/<name>.glb`, or `--input` any `.glb`); the result is
 `<models>/<name>_rigged.glb`, with its sources and reports in `assets_src/bozzetto/<name>/rig/<route>/` and its own
@@ -284,7 +291,7 @@ asset log row: "rig of A-NNNN" when the input has a row of its own (a Bozzetto m
 
 | | UniRig (`--with unirig`, the default) | Tripo (`--with tripo`) |
 |---|---|---|
-| Cost | free | about 25 credits ($0.25) to rig, 10 a clip; the default `--clips idle,walk` makes 45. The quote is printed and checked first, and each step's actual cost before the next; `--max-credits` (default 100) caps one run |
+| Cost | free | 25 credits ($0.25) to rig and 10 a clip (measured on live runs 2026-11-05 and 2026-11-11, E153, K01); the default `--clips idle,walk` makes 45. `--quote-only` prints the price and stops (no key needed); on a real run the quote is printed and checked first, and each step's actual cost before the next; `--max-credits` (default 100) caps one run |
 | Needs | an NVIDIA GPU (peak 15.6 GB measured), a UniRig checkout and its Python env | `TRIPO_API_KEY` with API credits (a Tripo Studio plan does not add them) |
 | Clips | `--animate idle,wave,walk` (default) or `none`: keyed by `rig_finish.py`, game-jam quality | `--clips` up to 5 of Tripo's presets (`idle`, `walk`, `run`, `jump`, `turn`, ...): mocap-like |
 | Time (K01) | about 85 s | about 30 s |
@@ -341,7 +348,8 @@ running is asked for its result first; if it is still running the run stops rath
 passes any cap.
 
 Other `rig make` options: `--wait S` (each UniRig step's and Tripo task's limit, default 1800), `--out`,
-`--project`, `--no-preview`, `--no-log` and `--overwrite` as for `make`; `--input FILE` rigs another `.glb`.
+`--project`, `--no-preview`, `--no-log`, `--overwrite` and `--quote-only` as for `make`; `--input FILE` rigs another
+`.glb`.
 
 **One GPU at a time:** UniRig peaks near 15.6 GB. With another program holding the card (ComfyUI, a local LLM
 runner) it still finished here, but took 562 s instead of about 85: close them first.

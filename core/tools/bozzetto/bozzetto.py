@@ -777,6 +777,12 @@ def cmd_make(args):
     elif args.seed is None:
         args.seed = int(time.time()) % 100000
         print(f"[info] no --seed given: using {args.seed} (pass it to make the same model again)")
+    if args.quote_only:                     # the price first, for whoever pays: no key, no Blender, nothing written
+        if tripo_route:
+            return tp.quote_make(args, plan)
+        print("[quote] local: free on your GPU (TRELLIS.2 in ComfyUI; `check` says whether it is ready)")
+        print("[ OK ] --quote-only: nothing was made or spent")
+        return 0
     base, blender, (wf3d, wfref), stats = preflight(args, plan)
     if blender:
         print(f"[info] Blender: {blender_version(blender) or blender[1]} ({'module' if blender[0] == 'bpy' else 'app'})")
@@ -1051,6 +1057,9 @@ def build_parser():
                         "1 credit = $0.01)")
     p.add_argument("--no-reuse", action="store_true",
                    help="Tripo: ignore a paid task in tasks.json for the same inputs and pay for a new one")
+    p.add_argument("--quote-only", action="store_true",
+                   help="print the price and stop (Tripo: the kit's table and the journal; no key needed, nothing "
+                        "made or spent)")
     p.add_argument("--tripo-model", choices=tp.MAKE_MODELS, default=tp.MAKE_MODEL,
                    help=f"Tripo's model series (default {tp.MAKE_MODEL}; P1 is its low-poly series, not tested here)")
     p.set_defaults(fn=cmd_make)

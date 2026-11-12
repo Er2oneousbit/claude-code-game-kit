@@ -469,6 +469,38 @@ class TripoExam(Base):
         self.assertEqual(code, 0, out)
         self.assertEqual(len(fake.posts("/animations/retarget")), 2, "an old journal's clips were paid for again")
 
+    def test_quote_only_needs_no_key_and_spends_nothing(self):
+        os.environ.pop(rig.TRIPO_ENV)
+        bz.find_blender = lambda choice=None: None
+        tripo.OPENER = fake = FakeTripo()
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk", "--quote-only"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("[quote] tripo: 45 credits ($0.45) to spend: rig 25 + 2 clip(s) x 10 (measured 2026-11-11)", out)
+        self.assertIn("nothing was made or spent", out)
+        self.assertEqual(fake.calls, [])
+        self.assertFalse((self.root / "assets_src").exists(), "a quote wrote files")
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "none", "--quote-only"])
+        self.assertIn("[quote] tripo: 25 credits ($0.25) to spend: rig 25, no clips", out)
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "moonwalk", "--quote-only"])
+        self.assertEqual(code, 2, "a quote still checks the clips")
+        code, out = run_main(["rig", "make", "npc_guard", "--quote-only"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("[quote] unirig: free", out)
+        rc, out = run_main(["rig", "make", "-h"])
+        self.assertIn("--quote-only", out)
+        # after a paid run the quote reads the journal
+        os.environ[rig.TRIPO_ENV] = "tsk_exam"
+        bz.find_blender = lambda choice=None: ("blender", "fake-blender")
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk"])
+        self.assertEqual(code, 0, out)
+        calls = len(fake.calls)
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk", "--quote-only"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("[quote] tripo: 0 credits ($0.00) to spend: rig reused + 2 clip(s) reused", out)
+        self.assertEqual(len(fake.calls), calls, "a quote called Tripo")
+        code, out = run_main(["rig", "make", "npc_guard", "--with", "tripo", "--clips", "idle,walk,run", "--quote-only"])
+        self.assertIn("[quote] tripo: 30 credits ($0.30) to spend: rig reused + 3 clip(s) x 10", out)
+
     def test_an_input_with_a_non_ascii_name_uploads_under_a_plain_one(self):
         """--input 'Ísak ”model”.glb': the file name in the multipart header is plain ASCII with its extension; the
         rest of the run (record, log, evidence) takes the name as it is."""

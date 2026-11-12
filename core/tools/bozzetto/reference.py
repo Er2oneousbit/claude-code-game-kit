@@ -698,10 +698,10 @@ class Tripo:
             todo.append("image_to_multiview")
         q = tp.IMAGE_QUOTE
         total = sum(q[t] for t in todo)
-        return float(total), (f"tripo ({self.plan.model}): {', '.join(todo) or 'nothing'} to pay for, up to "
+        return float(total), (f"tripo ({self.plan.model}): {', '.join(todo) or 'nothing'} to pay for, "
                               f"{total} credits (${total / 100:.2f}; "
                               + (', '.join(f'{t} {q[t]}' for t in todo) or 'all reused')
-                              + "; upper bounds read 2026-11-11, verify)")
+                              + f"; {tp.IMAGE_QUOTE_NOTE})")
 
     def task(self, journal, key, kind, extra, spent, entry_extra):
         """One paid task with the journal around it: a task the last run left running is asked for first (never
