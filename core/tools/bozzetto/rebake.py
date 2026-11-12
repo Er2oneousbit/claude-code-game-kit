@@ -10,7 +10,7 @@
 # Usage   : python tools/bozzetto/bozzetto.py rebake npc_guard                   # <models>/npc_guard.glb in place
 #           python tools/bozzetto/bozzetto.py rebake npc_guard --texture 1024 --no-replace   # look first
 #           python tools/bozzetto/bozzetto.py rebake statue --input assets/models/statue.glb --class prop
-#           python tools/bozzetto/bozzetto.py make chr_hero --with tripo ... --accept-uv     # ship under the floor
+#           python tools/bozzetto/bozzetto.py make chr_keeper --with tripo ... --accept-uv   # ship under the floor
 #           Input: <models>/<name>.glb (from make), or --input any .glb. Output: the same file (and its LODs,
 #           made again from the rebaked model), with the model before its first rebake kept in
 #           assets_src/bozzetto/<name>/rebake/before_rebake.glb; every run starts from it, so a re-run with another
@@ -70,12 +70,13 @@ def waive_uv(validation):
     return True
 
 
-def hint(validation):
-    """What to say after a budget failure that is UV coverage alone."""
+def hint(validation, rebaked=False):
+    """What to say after a budget failure that is UV coverage alone (rebaked: the rebake already ran)."""
     fails = validation.get("failures") or []
     if fails and all(f": {COVERAGE_FAIL} " in f for f in fails):
         return (" This is the UV coverage floor alone: --accept-uv ships the model with the waiver on its asset log "
-                "row (README 'UV coverage'); --rebake (on by default with Tripo) gives it a fresh layout first.")
+                "row (README 'UV coverage')" + ("." if rebaked else
+                                                "; --rebake (on by default with Tripo) gives it a fresh layout first."))
     return ""
 
 
@@ -231,7 +232,7 @@ def cmd_rebake(args):
     if rc == 1:
         raise bz.JobError(f"{args.name} fails the {cls} budget after the rebake: "
                           f"{'; '.join(validation.get('failures') or [])}. {bz.rel(root, dst)} is unchanged; the files "
-                          f"are in {bz.rel(root, work)}/." + hint(validation))
+                          f"are in {bz.rel(root, work)}/." + hint(validation, True))
     lod_out = [export.with_name(f"{export.stem}_LOD{i}.glb") for i in range(1, len(lods) + 1)]
     record = {"tool": f"tools/{bz.TOOL.lower()}/{bz.TOOL.lower()}.py rebake {bz.VERSION}",
               "date": time.strftime("%Y-%m-%d"), "base": bz.rel(root, base),

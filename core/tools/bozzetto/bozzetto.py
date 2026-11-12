@@ -649,7 +649,7 @@ def blender_steps(args, plan, blender, raw):
         fails = "; ".join(validation.get("failures", [])) or "see validate.json"
         raise JobError(f"{plan.name} fails the {plan.cls} budget: {fails}. Nothing was copied into "
                        f"{rel(plan.root, plan.out_dir)}; the files are in {rel(plan.root, plan.src)}/."
-                       + rebake_mod.hint(validation))
+                       + rebake_mod.hint(validation, plan.rebake))
     return export, lods, cleanup, validation
 
 
