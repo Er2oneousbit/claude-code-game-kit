@@ -329,8 +329,8 @@ Unity ENGINE.md.
 For a 2D game, `render_sprites.py --actions all --manifest assets/dotwork/rendered.assets.json` renders every clip in 8
 (or 4) directions into a Dotwork asset manifest that each engine's Dotwork importer loads as it is (SOP-11). The web,
 web-3d, LÖVE, C++/SDL3, Bevy, RPG Maker MZ, Unity and Unreal importer tests load the golden character's rendered
-sheet; the LÖVE and C++ starters drew it walking. Godot has no manifest importer (it loads Dotwork's own resources):
-a 2D Godot game uses the sheets with the layout `.json` beside each by hand **(verify: not in a test)**.
+sheet; the LÖVE and C++ starters drew it walking. Godot's importer (`DotworkAssets`, #307) loads it too, held to the
+same golden character in its GUT test; the Godot starter does not draw it yet.
 
 ## Rig a character
 `make` gives a character as a statue. `rig` gives it a skeleton, skin weights and clips, checks that the rig really
@@ -508,6 +508,89 @@ the simulation. Recipes:
 Exits: 0 done, 1 refused or a check failed (the model is not touched), 2 usage, a clip name the file does not have,
 or `--cloth` on a loop.
 
+### Animation packs (Quaternius, Mixamo)
+`rig make` gives a character Mixamo bone names, so clips from an animation pack can play on it. `rig retarget` takes
+chosen clips from a pack's file and adds them to `<models>/<name>_rigged.glb`, next to its own clips:
+```
+python tools/bozzetto/bozzetto.py rig retarget npc_guard --from assets_src/packs/quaternius_ual/UAL1_Standard.glb --clips Walk_Loop=walk_ual,Idle_Loop=idle_ual
+python tools/bozzetto/bozzetto.py rig retarget npc_guard --from assets_src/packs/mixamo/Walking.fbx --clips mixamo.com=walk --replace
+python tools/bozzetto/bone_map.py pelvis thigh_l upperarm_l ...       # how a pack's bone names map, without Blender
+```
+`--clips` names each pack clip and what it is called on your character (`SOURCE=new_name`); a name the character
+already has is refused unless `--replace`. `--map my_map.json` (`{"their_name": "Hips", ...}`) covers a pack the
+built-in maps do not fit; `--no-replace` writes `assets_src/bozzetto/<name>/rig/retarget/retargeted.glb` only, to look
+first. The rig before the first retarget is kept there as `before_retarget.glb`, with the report, a record of every
+run (retarget.json) and `clips.png` (4 frames of each new clip). The character's asset log row gets a
+"retarget: ..." note naming the clips and the pack's own row. The pack needs that row of its own, with its licence,
+before the game ships: the command warns when it has none.
+
+How it works (`rig_retarget.py`, in Blender): the pack's bones are renamed to Mixamo's (`bone_map.py`), then for
+every frame each bone both rigs share is turned so it points where the pack's bone points. It is a retarget, not a
+copy of curves: Quaternius' rig rests in a T-pose and Bozzetto rigs in an A-pose, and their bones roll differently, so
+copying rotations by name would swing the arms 40 degrees past the body. The hips also move as the pack's do, scaled
+by the two hips heights. Clips come out at your character's frame rate (its own clips' rate, else the pack's), still
+looping; a pack that faces the other way (an FBX made for another engine's front) is read turned; a mirrored one is
+refused. Each clip is checked before anything is written: every shared bone within 2 degrees of the pack's
+(exit 1 and nothing replaced otherwise). Then the hips are re-centred as `rig make` does.
+
+Built-in bone maps:
+
+| Map | Bone names | Notes |
+|---|---|---|
+| `ual` | Quaternius' Universal Animation Library: `pelvis`, `spine_01..03`, `neck_01`, `Head`, `clavicle_l`, `upperarm_l`, `lowerarm_l`, `hand_l`, `thigh_l`, `calf_l`, `foot_l`, `ball_l`, fingers `thumb_01_l` .. `pinky_04_leaf_l` | The UE Mannequin's naming. Its ground-level `root` bone has no Mixamo role and keeps its name. Other Quaternius packs (the older animated characters) use their own rigs **(verify)**: `bone_map.py <their bone names>` says whether this map fits |
+| `mixamo` | `mixamorig:Hips` in any spelling: `mixamorig1:Hips` (Mixamo numbers the prefix when a scene holds two characters), `mixamorig_Hips` (Godot, Unreal), `mixamorigHips` (three.js), bare `Hips` | All become `mixamorig:Hips` |
+
+**Tested (2026-11-13, K01; the pack's page and licence: E162):** Quaternius **Universal Animation Library,
+Standard tier** (free; quaternius.com "Universal Animation Library", downloaded from quaternius.itch.io on 2026-11-13,
+`Universal Animation Library[Standard].zip`, 15 MB), licence **CC0 1.0** (its License.txt). Inside: `UAL1_Standard.glb`
+(clips in place) and `UAL1_Standard_RM.glb` (root motion baked into every clip) for Unreal and Godot, the same two as
+FBX for Unity: one 65-bone mannequin, 43 clips at 30 fps. The target was the golden character; no `rig make` output
+(UniRig or Tripo) was tried as the target yet **(verify)**.
+
+| What | Result |
+|---|---|
+| `rig retarget` of `Walk_Loop` and `Idle_Loop` onto the golden character (A-pose, 24 fps), from `UAL1_Standard.glb` | 64 bones renamed (`root` kept), 22 shared; Walk 1.33 s became 32 frames at 24 fps, Idle 2.5 s 60 frames, both still looping; every shared bone within 0.00 degrees of the pack's; `mixamorig:LeftUpLeg` swings 57.6 degrees in the pack and in the written file; Idle's hips stood 0.04 m to the side and were re-centred; the golden character's own `idle` and `walk` unchanged (56.0 degrees); about 6 s. `clips.png` looked at: the walk's legs alternate, arms hang beside the body as in the pack's own render |
+| The same from `UAL1_Standard.fbx` | Blender's FBX importer brings it in turned half round and names the clips `Armature\|Armature\|Walk_Loop`: read turned, the same 57.6 degrees |
+| Blender 5.2.3 and the bpy 4.2 module | Both runs alike |
+| Godot 4.7.2, a fresh scaffold | The UAL walk put on the golden character as `walk` (`--replace`): `KitCharacter` played it and the character test's swing check passed (111 tests) once the test sampled the clip's 1.33 s (it samples 1 s, the golden walk's length) |
+| The pack's own character, renamed (no `--onto`, see below), then `rig_finish.py` | 8,548 vertices, 65 bones, 52 in use, deforms 69%; the stray `Icosphere` the pack ships removed |
+
+Other engines play the clips through the same helpers as any clip of the rig (they look bones up by the Mixamo
+names); only Godot was run with a pack clip **(verify the others)**.
+
+**Get a Quaternius pack:** on quaternius.com open the pack (Universal Animation Library), Download, then on itch.io
+"Download Now" and "No thanks, just take me to the downloads" **(verify: the button names)**; the free tier needed no
+account on 2026-11-13. Unzip it
+outside the game, keep the in-place file (UAL1_Standard.glb in the zip's Unreal-Godot folder; the `_RM` file's clips travel, and
+travelling clips are left as they are) and its License.txt under `assets_src/packs/quaternius_ual/`, and log it:
+```
+| A-0007 | animation | `assets_src/packs/quaternius_ual/UAL1_Standard.glb` | https://quaternius.com/packs/universalanimationlibrary.html (itch.io, Standard tier, free) | Quaternius | CC0 1.0 | Animations by Quaternius (optional: CC0 asks for none) | no | no | 2026-11-13 | 43 clips, 65 bones (UE Mannequin naming); License.txt in docs/licenses/A-0007.txt; clips added to npc_guard_rigged.glb by rig retarget |
+```
+
+**The pack's own character:** `rig_retarget.py` on its own, without `--onto`, writes the pack's character with Mixamo
+bone names and the clips you pick (all by default), for the engines' helpers to play as they are; check and finish it
+like any rig:
+```
+blender -b --python-exit-code 1 -P tools/bozzetto/rig_retarget.py -- assets_src/packs/quaternius_ual/UAL1_Standard.glb --clips Walk_Loop=walk,Idle_Loop=idle --out assets_src/packs/quaternius_ual/mannequin_named.glb
+blender -b --python-exit-code 1 -P tools/bozzetto/rig_finish.py -- assets_src/packs/quaternius_ual/mannequin_named.glb --out assets/models/mannequin_rigged.glb --sheet clips.png
+```
+(`python tools/bozzetto/rig_retarget.py ...` with the bpy module instead of Blender.)
+
+**Mixamo (verify: not tried here):** Mixamo (mixamo.com, Adobe) has no API and every download needs an Adobe login,
+so the kit cannot fetch from it. Its clips come as FBX. Download settings for a clip to retarget: Format **FBX
+Binary (.fbx)**, Skin **Without Skin**, Frames per Second **30**, Keyframe Reduction **none**, and tick **In Place** on
+walks and runs (otherwise the clip travels). Its skeleton is named `mixamorig:Hips` ... (sometimes `mixamorig1:` and up,
+which the `mixamo` map folds back), the same names `rig make` gives, so nothing is renamed and the clip goes on through
+the same transfer. Blender names the action `Armature|mixamo.com|Layer0`: ask for it as `mixamo.com`
+(`--clips mixamo.com=walk`). Read Adobe's terms for Mixamo before shipping its clips, and log each download.
+
+Limits: bipeds only, like `rig make`; twist about a bone's own axis is carried only as far as the rest poses agree
+(a forearm can roll a little differently from the pack's); fingers transfer only when both rigs have them (UniRig
+rigs keep fingers under their own names; a Tripo rig's fingers are Mixamo-named and would take the pack's finger
+curves **(verify: not run on a Tripo rig)**); run it before `rig chain`, since a chain's sway is keyed into the clips the
+file has when the chain is made (it warns when the rig has a chain). Unity Humanoid on a renamed pack character is not
+tried **(verify)**.
+
 ## Licences
 `LICENSES.md` has the register. In short: TRELLIS.2 and BiRefNet are MIT; DINOv3, TRELLIS.2's image encoder, has
 its own licence: worldwide and royalty-free, but with a list of prohibited uses (military, weapons, ITAR) whose reach
@@ -537,6 +620,9 @@ python tools/bozzetto/test_rig.py               # rig, offline: stand-in UniRig 
                                                     # built in Blender when it is found (about 90 s)
 python tools/bozzetto/test_chain.py             # rig chain: parsers and the command offline; a made-up scarf
                                                     # character built in Blender when it is found (about 1 min)
+python tools/bozzetto/test_retarget.py          # rig retarget: bone maps and the command offline; a made-up pack
+                                                    # with Quaternius UAL bone names onto the golden character, in
+                                                    # Blender when it is found (about 30 s)
 uv run --python 3.11 --with "bpy==4.2.*" python tools/bozzetto/test_rig.py    # the same on the bpy 4.2 module, the
                                                     # kit's floor (BOZZETTO_TEST_BLENDER=bpy picks the module when a
                                                     # Blender is installed too); also test_chain.py and test_bozzetto.py

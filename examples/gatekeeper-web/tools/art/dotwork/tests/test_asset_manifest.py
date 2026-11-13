@@ -13,6 +13,8 @@
 #           Live, opt-in: DOTWORK_LIVE_GROUND=1 with GODOT_BIN and COMFYUI_ROOT renders a small ground pack and has
 #           Godot paint its map; every terrain cell Godot chose must hold the tile the spec's rule names (2 minutes).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): MapbuildPicks, and the live exam checks the variant
+#           too: mapbuild sets the spec's pick on every terrain cell of a Godot map scene (#307)
 # ---------------------------------------------------------------------------
 import copy
 import io
@@ -151,6 +153,32 @@ class CornersRule(unittest.TestCase):
         for cells in ([[3, 3]], [[3, 3], [4, 3]], [[2, 3], [3, 3], [4, 3]], [[3, 3], [4, 4]]):
             got = assetspec.resolve_terrain(ts, {"name": "n", "kind": "terrain", "terrain": 0, "cells": cells})
             self.assertTrue(all(tile is None for *_, tile in got), cells)
+
+
+class MapbuildPicks(unittest.TestCase):
+    """mapbuild sets the spec's pick on every terrain cell of the Godot map scene it paints (#307): the picks it hands
+    Godot for the golden yard are expected.json's terrain tiles, so the scene shows the tiles every engine draws."""
+
+    def test_godot_scene_gets_the_tiles_every_engine_draws(self):
+        import godot
+        import lane_ground
+        import mapbuild
+        with tempfile.TemporaryDirectory() as tmp:
+            godot.ENABLED, godot.RECORD = False, None
+            try:
+                ground = golden_assets._ground(golden_assets.Game(tmp), lane_ground)
+            finally:
+                godot.ENABLED = True
+        layers, _, _ = mapbuild.plan(golden_assets.MAP, ground)
+        picks = mapbuild.terrain_picks(layers, ground)
+        with open(os.path.join(FIXTURE, "expected.json"), encoding="utf-8") as f:
+            want = json.load(f)["assets"]["map/yard"]["terrain"]
+        names = {i: L["name"] for i, L in enumerate(layers) if L["kind"] == "terrain"}
+        self.assertEqual(sorted(names.values()), sorted(want))
+        for i, name in names.items():
+            self.assertEqual(picks[i], [[x, y] + tile for x, y, _, tile in want[name]], name)
+        path = {(c[0], c[1]): c[2:] for c in picks[next(i for i, n in names.items() if n == "Path")]}
+        self.assertNotEqual(path[(3, 1)], path[(3, 2)])   # one full cell rolls the variant, the other the base tile
 
 
 class Validator(unittest.TestCase):
@@ -523,8 +551,8 @@ YARD = {"name": "yard", "ground": {
 @unittest.skipUnless(os.environ.get("DOTWORK_LIVE_GROUND") and os.environ.get("GODOT_BIN"),
                      "set DOTWORK_LIVE_GROUND=1, GODOT_BIN and COMFYUI_ROOT (renders 3 textures, about 3 minutes)")
 class LiveGroundExam(unittest.TestCase):
-    """A real ground pack (ComfyUI renders, Godot paints the map): every terrain cell Godot's solver chose holds the
-    tile the spec's rule names (the mask of its painted neighbours)."""
+    """A real ground pack (ComfyUI renders, Godot paints the map): every terrain cell of the scene holds the tile the
+    spec's rule names (the mask of its painted neighbours) and, since #307, the spec's variant pick."""
 
     def test_godot_paints_what_the_spec_resolves(self):
         with tempfile.TemporaryDirectory() as game:
@@ -547,8 +575,11 @@ class LiveGroundExam(unittest.TestCase):
                 chosen = {(int(c[0]), int(c[1])): (int(c[2]), int(c[3]), int(c[4]))
                           for c in next(x for x in rep["layers"] if x["name"] == L["name"])["cells"]}
                 self.assertEqual(set(chosen), {(c[0], c[1]) for c in L["cells"]}, L["name"])
-                for x, y, m, _ in assetspec.resolve_terrain(ts, L):
+                li = mp["layers"].index(L)
+                for x, y, m, tile in assetspec.resolve_terrain(ts, L, li):
                     self.assertEqual(tiles[chosen[(x, y)]]["mask"], m, f"{L['name']} {x},{y}")
+                    # since #307 the scene holds the spec's pick, the variant included
+                    self.assertEqual(list(chosen[(x, y)]), tile, f"{L['name']} {x},{y} variant")
                     n += 1
             self.assertGreater(n, 20)
 

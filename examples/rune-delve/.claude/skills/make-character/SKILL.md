@@ -85,6 +85,12 @@ card. `python tools/bozzetto/bozzetto.py rig make <name>` (UniRig, free; about 3
 it downloads its weights), or `--with tripo --clips idle,walk --quote-only` first and, after a yes, the same with
 `--max-credits <quote>` (25 credits to rig and 10 a clip, measured on the kit's live runs). Show `assets_src/bozzetto/<name>/rig/<route>/clips.png`: arms swing from the
 shoulders, nothing tears, the legs walk.
+Better motion than UniRig's game-jam clips, free: offer clips from a CC0 animation pack (Quaternius' Universal
+Animation Library, tested) or Mixamo FBX downloads the user fetches with their Adobe login. The user downloads the pack
+(README "Animation packs" has the steps); log it with `/asset-intake` first, then `python tools/bozzetto/bozzetto.py
+rig retarget <name> --from <pack file> --clips Walk_Loop=walk,Idle_Loop=idle --replace` (Blender, free, seconds) and
+show `assets_src/bozzetto/<name>/rig/retarget/clips.png`. Do it before Gate 5: a chain's sway goes into the clips the
+file has when the chain is made.
 
 ## 6. Gate 5: the part that swings
 Ask which part should swing (or none). Pick it by its colour: `python tools/bozzetto/bozzetto.py rig chain <name>
@@ -109,9 +115,10 @@ the engine's spring bones can drive the chain instead (`--sway 0`; README recipe
   assets/dotwork/<name>.assets.json --name <name>` (Blender on the CPU, about 1.5 minutes for three clips; the
   `<models>` folder and the Blender path as SOP-11 says); then the engine's Dotwork importer (`/dotwork` step 8). The
   LÖVE and C++ starters draw the first manifest character walking with no new code. Show one sheet first. A 2D
-  **Godot** game has no manifest importer (Godot loads Dotwork's own resources): use the sheets with the layout
-  `.json` written next to each (`AtlasTexture` regions into a `SpriteFrames`, the pivot as the sprite's offset) and
-  say so; nothing in the kit does that step for Godot yet.
+  **Godot** game loads it through its importer (`docs/ENGINE.md` "Dotwork art"): `var m :=
+  DotworkAssets.load_manifest("res://assets/dotwork/<name>.assets.json")`, `var hero :=
+  DotworkAssets.animated_sprite(m["animated_sprite"]["<name>"])`, `DotworkAssets.play(hero, "walk_s")` (the frame
+  durations and the feet as the pivot come along); its starter draws nothing yet, so add the node to the scene.
 - Capture as CLAUDE.md "While building" says: `python tools/dev.py smoke --screenshot
   captures/progress/<NN>-<name>.png`, or for the walk `smoke --record captures/frames-<NN>` and
   `tools/art/frames_to_gif.py`. Look at it first, then post the link and ask for the last yes. Run `check` and
@@ -119,7 +126,7 @@ the engine's spring bones can drive the chain instead (`--sway 0`; README recipe
 
 ## 8. Log and terms
 Every step writes its own `docs/ASSET_LOG.md` row or note: reference views (`art`, the route's terms), the model
-(models and licences, or Tripo's terms and credits), the rig ("rig of A-NNNN"), the chain (a note on the rig's row).
+(models and licences, or Tripo's terms and credits), the rig ("rig of A-NNNN"), the chain and pack clips (notes on the rig's row; the pack needs its own row).
 Read them back to the user: route, cost, who owns the output (yours on paid Tripo credits, Tripo terms 5.2.2; Gemini
 pictures carry a SynthID watermark **(verify)**). `render_sprites.py` writes no row: log the sheets with
 `/asset-intake` as made from the model's row. Mark everything AI-assisted.

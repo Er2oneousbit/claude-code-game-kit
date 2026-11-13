@@ -18,6 +18,6 @@ Follow `docs/sop/SOP-11-3d-pipeline.md`. Asset sources: `docs/resources/art.md`;
 6b. **2D game, 3D source:** `tools/blender/render_sprites.py <model> --out <sheet.png> --directions 8 --action <name>` (see SOP-11 "sprite sheets", then SOP-16).
 7. **Engine check:** import into a test level per `docs/ENGINE_FLOW.md`, verify scale, materials, collision, LODs. Ask the user to confirm the look.
 8. **Log it** with `/asset-intake`, marking AI-assisted or third-party content, and keep the generating script in the repo.
-9. **Animation:** retarget or author per SOP-11. Script loop cleanup, root motion, foot-slide checks. Gameplay timings come from data first.
+9. **Animation:** retarget or author per SOP-11. Clips from a pack (Quaternius, Mixamo FBX) onto a Mixamo-named rig: `python tools/bozzetto/bozzetto.py rig retarget <name> --from <pack> --clips Walk_Loop=walk` (README "Animation packs"). Script loop cleanup, root motion, foot-slide checks. Gameplay timings come from data first.
 
 Label any tool, API, or Blender function claim **verified** or **unverified**. Blender's Python API changes between versions, so confirm against the installed version.

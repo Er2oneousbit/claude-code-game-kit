@@ -25,6 +25,7 @@
 #           Licences: UniRig MIT; its checkpoint was trained on Articulation-XL2.0 (CC-BY-4.0: the credit goes in
 #           the asset log and docs/licenses/).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `rig retarget` (retarget.py) joins `rig chain` (#205)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -531,3 +532,6 @@ def add_parser(sub, common):
     import chain   # chain.py: `rig chain`, secondary motion (#289)
     chain.bind(bz)
     chain.add_parser(rs, common)
+    import retarget   # retarget.py: `rig retarget`, clips from animation packs (#205)
+    retarget.bind(bz)
+    retarget.add_parser(rs, common)

@@ -47,7 +47,9 @@ Asset libraries and tools. AI generators are in `ai-tools.md`, prompt patterns i
 - `kenney.nl` 3D kits (CC0), `quaternius.com` (CC0), `polyhaven.com` (CC0 models, HDRIs, textures),
   `ambientcg.com` (CC0 textures), `sketchfab.com` (per-model license, filter downloadable plus CC).
 - Unreal: `fab.com` (Epic's unified marketplace that absorbed the old Unreal Marketplace and Quixel Megascans). **(verify current terms)**
-- Animation: `mixamo.com` (Adobe terms apply). **(verify)**
+- Animation: Quaternius' Universal Animation Library (`quaternius.com`, CC0; the Standard tier is free and tested on
+  a Bozzetto rig, E162), `mixamo.com` (Adobe login; Adobe terms apply **(verify)**). Put either on a rigged
+  character with `python tools/bozzetto/bozzetto.py rig retarget` (`tools/bozzetto/README.md` "Animation packs").
 - Tools: `Blender`, `Material Maker`, `Substance` (paid), `Cascadeur`.
 
 **3D generators (AI drafts, not final assets)** **(verify all: sources are third-party reviews, mid-2026)**

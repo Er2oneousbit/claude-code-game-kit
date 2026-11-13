@@ -1,10 +1,10 @@
 # Dotwork asset manifest (engine-neutral, version 1)
 
 Dotwork makes the same art for every engine, but only Godot gets ready-made resources (SpriteFrames, TileSets, prop
-scenes). For every other engine, each pack also gets one JSON file that says what the PNGs are: which frames make which
+scenes). For every engine, each pack also gets one JSON file that says what the PNGs are: which frames make which
 clip and for how long, where a sprite's feet are, what collides, which tile fits which neighbours, what a map paints,
-how a bitmap font is laid out. An importer per engine reads it (#55 to #62); this page is the contract they are built
-and tested against.
+how a bitmap font is laid out. An importer per engine reads it (#55 to #62, and Godot's for packs with no Godot
+resources, #307); this page is the contract they are built and tested against.
 
 - Spec version: **1.1.0** (`assetspec.VERSION`; 1.1.0 added the `stamps` map layer and defined the corners rule, the
   variant pick and isometric placement, #285; a 1.0.0 manifest still loads)
@@ -289,8 +289,10 @@ Test vectors: `hash32(0) = 1800329511`, `hash32(1) = 3028713910`, `hash32(0xFFFF
 `cell_roll(0, 0, 0) = 0.169182`, `cell_roll(3, 1, 1) = 0.765973`, `cell_roll(3, 2, 1) = 0.531301`,
 `cell_roll(-1, -1, 0) = 0.992978` (coordinates wrap at 16 bits). Every step stays within 32 bits (a `<< 12` of a
 32-bit value is below 2^44, exact in a double; mask or `% 2^32` after each line). The roll is a plain IEEE double
-computation, identical in every language. Godot rolls its own dice among the same tiles, so a Godot map and another
-engine's map agree in shape and the other engines also agree with each other in variants.
+computation, identical in every language. Godot's terrain solver rolls its own dice among the same tiles, so its pick
+is never kept: Godot's importer sets the spec's pick on each cell, and Dotwork's map scenes let the solver paint the
+shape, then set every terrain cell to the spec's pick (mapbuild, #307). A map shows the same tile on every cell in
+every engine.
 
 ### Placing tiles
 Map pixels are the map's own space, y down, cell `(0, 0)` first. A placed cell draws its atlas tile with the tile's
@@ -324,7 +326,7 @@ the manifest against them (frames, holds, fps, loop; peering bits; collision pol
 | enemy scene: centred `Sprite2D` with `offset`, `Shadow` child at `(dx, 0)` | `sprite` with `pivot` and `shadow.offset` |
 | `TileSet`: one `TileSetAtlasSource` per atlas, `texture_region_size`, per tile `terrain_set`, `terrain`, `terrains_peering_bit/*`, `probability`, `custom_data_0`, `physics_layer_0/polygon_*`, `animation_columns` / `animation_speed`, `texture_origin` | `tileset`: atlases in source order (the atlas id is Godot's source id), `mask` / `corners` from the peering bits, `probability`, `surface`, `collision` (polygons are rectangles, moved from tile-centre to top-left coordinates), `anim`, `origin` |
 | `terrain_set_N/mode` (0, 1, 2) | `terrain_sets[].mode` (`blob47`, `corners4`, `sides4`) |
-| map scene (`assets/maps/<name>.tscn`, painted by Godot's solver from mapbuild's plan) | `map`: the plan itself (placed tiles as tiles, overlay terrains as terrain cells, props as objects) |
+| map scene (`assets/maps/<name>.tscn`, painted from mapbuild's plan: Godot's solver for the shapes, the spec's pick for the variants, #307) | `map`: the plan itself (placed tiles as tiles, overlay terrains as terrain cells, props as objects) |
 | `FontFile` loaded from the `.fnt` | `font` (the same file, parsed) |
 | `NinePatchRect` `patch_margin_*`, Theme `StyleBoxTexture` margins | `ui_kit` part `margins` |
 | `GPUParticles2D` scene | `particles` (the JSON Dotwork writes beside it for other engines) |
@@ -347,7 +349,8 @@ the manifest against them (frames, holds, fps, loop; peering bits; collision pol
 | (not a lane) `tools/blender/render_sprites.py --manifest` | `animated_sprite`: a 3D model (a Bozzetto rigged character) rendered in 1, 4 or 8 directions, a clip `<action>_<dir>` per glTF animation and direction, the pivot where the model's origin (its feet) lands, in its own pack (`generator: render_sprites`), which Dotwork never rewrites |
 
 A rendered sheet is loaded unchanged by every importer's tests (`data/golden/character/sprites/`, 2026-11-11; MZ
-cuts it into a character sheet; Unity and Unreal since 2026-11-12), and the LÖVE and C++ starters drew it walking.
+cuts it into a character sheet; Unity and Unreal since 2026-11-12, Godot since 2026-11-13), and the LÖVE and C++
+starters drew it walking.
 
 ## Golden fixture and loaded result
 `data/golden/dotwork/` holds one small pack with every kind: `assets/` is an assets folder (its manifest is
@@ -422,6 +425,7 @@ the transition kind, the lit target); the engine object that uses it stays the g
 
 | Engine | `background` | `particles` | `transition` | `normal_map` | `image` |
 |---|---|---|---|---|---|
+| Godot (importer, #307; Dotwork's own resources stay its main route) | loaded; `background()` gives a Node2D of `Sprite2D` layers, `texture_repeat` on when a layer repeats (Godot repeats both axes; the layer data keeps the axes) | loaded (texture + emitter JSON; Dotwork's own `GPUParticles2D` scene is the node) | loaded (texture) | loaded; `lit_texture()` gives a `CanvasTexture` (diffuse = the target, normal = the map) for a `Sprite2D` under a `Light2D` | loaded |
 | web (Phaser) | loaded; layers with `repeat` as `TileSprite`s that scroll by `velocity` | loaded (texture + emitter JSON) | loaded (texture) | loaded with its target: the target texture gets the normal map (Phaser's `load.image(key, [url, normal])`), so a scene with `this.lights.enable()` lights the target once it has `setLighting(true)` (Phaser 4.2.1 has no separate Light2D pipeline) | loaded |
 | web-3d (Three.js) | loaded; `RepeatWrapping` on the `repeat` axes | loaded (texture + JSON) | loaded (texture) | loaded; set as `normalMap` on the lit target's material when the target is a sprite of the library | loaded |
 | Unity | loaded (sprites) | loaded (texture sprite + the JSON as a `TextAsset`) | loaded (texture) | loaded; set as the target sprite's `_NormalMap` secondary texture (URP 2D lights read it) | loaded (sprite) |
@@ -435,6 +439,23 @@ Per-engine notes. Every overlay now has its importer (#55 to #62); the notes say
 settled about its engine (versions as the overlays pin them). **(verify)** marks what is still not checked against the
 real engine. Each engine's `docs/ENGINE.md` or `docs/ENGINE_FLOW.md` "Dotwork" section is the user's guide.
 
+- **Godot 4.6+ (#307, scripts/core/dotwork_manifest.gd + scripts/core/dotwork_assets.gd).** Godot loads Dotwork's
+  own resources as before; the importer is for a pack that has none (render_sprites' sheets) and for maps drawn from
+  the manifest. `dotwork_manifest.gd` is engine-free (the spec's rules, ported from `assetspec.py`; Godot's JSON
+  gives every number as a float, so ints are cast before any bit operation). `dotwork_assets.gd` builds the objects:
+  a `SpriteFrames` per animated sprite with speed = `fps` and each frame's relative duration = seconds x fps (Godot
+  shows duration / speed seconds), frames as `AtlasTexture` regions of the sheet, the pivot as the
+  `AnimatedSprite2D` offset (`frame_size / 2 - pivot`, centred frames, y down, no flip); a prop `Sprite2D` with a
+  `StaticBody2D` box per collision rect; a `TileSet` per tileset (source id = atlas id, `texture_region_size` = the
+  atlas tile, `texture_origin = origin - region / 2`, collision polygons, the surface custom data, animation columns;
+  isometric is `TILE_SHAPE_ISOMETRIC` + `TILE_LAYOUT_DIAMOND_DOWN`, so `map_to_local` is the spec's centre) and a
+  `TileMapLayer` per map layer, cells set with `set_cell` from the resolved plan (the roll's pick, not Godot's
+  solver; flags as the `TRANSFORM_FLIP_H` / `FLIP_V` / `TRANSPOSE` alternative bits; an isometric layer is
+  `y_sort_enabled`). The TileSet has no terrain sets (cells come resolved). Textures: Godot's imported resource when
+  there is one, else the PNG decoded at run time (the golden folder has a `.gdignore`). Fonts: `FontFile` from the
+  imported `.fnt`, else `load_bitmap_font`. The extra kinds: the table above. Tests: GUT (`dev.py test`) on the golden
+  pack, every number read back from the Godot object where Godot holds it (frame seconds, collision boxes, tile counts,
+  `map_to_local`, the tile each `TileMapLayer` cell holds), the rendered character, and every game manifest.
 - **web, Phaser 4.2.1 (#55, src/game/dotworkPlan.ts + src/game/dotwork.ts).** The manifests and PNGs load
   through the scene loader; every clip's frames become named frames (`<pack>/<asset>/<clip>/<i>`) with the pivot as
   their origin (`px / w`, `py / h`, y down, no flip), and `anims.create` gets each frame's own `duration`. In Phaser
@@ -548,10 +569,10 @@ real engine. Each engine's `docs/ENGINE.md` or `docs/ENGINE_FLOW.md` "Dotwork" s
 - A map is the plan Dotwork hands Godot. A map scene edited by hand in Godot, or a Dotwork-built map edited in
   Pixelorama and re-exported, keeps the planned layers in the manifest (only the Godot scene changes); Pixelorama
   tilemaps of your own are exported cell by cell and are exact.
-- Maps are painted from terrain cells in every engine. Every importer picks variants with the cell roll, so the
-  non-Godot engines show the same tile on every cell; Godot's own solver rolls its own dice by `probability`, so a
-  Godot map shows the same shapes but not always the same variant on a cell. A corners4 terrain layer thinner than 2
-  cells somewhere does not validate (no tile has its key).
+- Maps are painted from terrain cells in every engine. Every importer picks variants with the cell roll, and since
+  #307 Dotwork's Godot map scenes do too (the solver paints the shape, the roll picks the variant), so every engine
+  shows the same tile on every cell. A Godot map scene painted before #307 keeps the solver's variants until its pack
+  runs again. A corners4 terrain layer thinner than 2 cells somewhere does not validate (no tile has its key).
 - Godot-only resources (Themes, shader materials, lit copies, dioramas, screen scenes) are not described: the kit's
   shells, shader recipes (`tools/shaders/`) and each engine's own UI cover those parts.
 - A pack built before records existed (Dotwork before 0.15) gets no animated sprites, tilesets or maps in its asset

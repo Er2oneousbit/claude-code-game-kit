@@ -112,7 +112,9 @@
       "PowerShell(tofu *)",
       "Bash(python tools/issues.py *--create*)",
       "Bash(python3 tools/issues.py *--create*)",
-      "PowerShell(python tools/issues.py *--create*)"
+      "PowerShell(python tools/issues.py *--create*)",
+      "Bash(butler:*)",
+      "PowerShell(butler *)"
     ],
     "deny": [
       "Read(./.env)",
@@ -160,7 +162,9 @@
       "PowerShell(cargo yank *)",
       "Edit(./target/**)",
       "Read(~/.cargo/credentials*)",
-      "Edit(~/.cargo/credentials*)"
+      "Edit(~/.cargo/credentials*)",
+      "Read(~/.config/itch/**)",
+      "Read(~/Library/Application Support/itch/**)"
     ]
   },
   "hooks": {

@@ -29,6 +29,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): the corners4 rule, isometric
 #           placement, the variant pick, stamps layers, placed cells in the loaded result
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): resolve_terrain's note: Godot's map scenes take this
+#           pick too (mapbuild.terrain_picks, #307); no change to the rules
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -520,8 +522,9 @@ def resolve_terrain(ts, layer, layer_index=0):
     """Each painted cell of a terrain layer -> [x, y, key, [atlas, col, row]] (sorted by y, then x): the key is
     cell_mask's (the mask, or the corner bits), the tile is picked among the layer's terrain's tiles with that key
     (atlas order) by probability with the cell's roll (cell_roll(x, y, layer_index)), None when no tile has the key.
-    Godot rolls its own dice among the same tiles, so a Godot map and another engine's map agree in shape, and the
-    other engines agree with each other in variants too."""
+    Godot's terrain solver rolls its own dice among the same tiles, so Dotwork's Godot map scenes set this pick on
+    every terrain cell after the solver paints the shape (mapbuild.terrain_picks, #307): every engine shows the same
+    tile on every cell."""
     sid, tid = layer.get("terrain_set", 0), layer["terrain"]
     mode = next(s["mode"] for s in ts["terrain_sets"] if s["id"] == sid)
     by_key = {}

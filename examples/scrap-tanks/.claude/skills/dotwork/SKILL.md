@@ -1,6 +1,6 @@
 ---
 name: dotwork
-description: Make the game's pixel art on the user's own GPU with Dotwork (tools/art/dotwork/, local AI through ComfyUI): characters with 4-direction animations, props with collision, terrain and maps from text, effects, enemies, battle backgrounds, icons, portraits, fonts and UI. Use when the GDD's art source is Dotwork, or the user says "Dotwork", "make pixel art locally", "generate sprites/tiles/effects on my GPU", or wants AI art without a paid service. Godot gets ready-made resources; every other engine's importer brings the art in (README "Other engines"). Not for 3D (/model-pipeline) or paid services (/gen-brief).
+description: Make the game's pixel art on the user's own GPU with Dotwork (tools/art/dotwork/, local AI through ComfyUI): characters with 4-direction animations, props with collision, terrain and maps from text, effects, enemies, battle backgrounds, icons, portraits, fonts and UI. Use when the GDD's art source is Dotwork, or the user says "Dotwork", "make pixel art locally", "generate sprites/tiles/effects on my GPU", or wants AI art without a paid service. Godot gets ready-made resources (its importer, DotworkAssets, loads manifest-only packs); every other engine's importer brings the art in (README "Other engines"). Not for 3D (/model-pipeline) or paid services (/gen-brief).
 ---
 
 # Dotwork: local pixel art
@@ -34,9 +34,11 @@ and its keys, limits) and SOP-16 "Generating pixel art locally" before the first
    sprite, a tile edge repeating, a cropped figure. Fix one clip at a time (`character --fix CLIP:seed=N`), or render
    takes side by side and pick one (`audition`, then `--promote`). Hand polish goes through `dotwork.py aseprite` or `dotwork.py pixelorama` (Pixelorama `.pxo` files, no install needed; `pixelorama --install-extension` adds a Dotwork tab inside Pixelorama that shows the asset and its QA notes and re-exports it with one button: README, Hand polish); `dotwork.py clean` tidies pixel art from elsewhere (grid, palette,
    stray pixels), and `recolor` makes palette-swapped variants without a render.
-8. **Prove it in the game.** In Godot, `pack` ends with `verify` (every asset loads, then the game's smoke). On other
-   engines, run the engine's importer, then `python tools/dev.py test` and `smoke` (details in `docs/ENGINE.md`; web
-   and RPG Maker MZ: `docs/ENGINE_FLOW.md`):
+8. **Prove it in the game.** In Godot, `pack` ends with `verify` (every asset loads, then the game's smoke), and
+   `python tools/dev.py test` loads every manifest through `DotworkAssets` (scripts/core/dotwork_assets.gd: the
+   importer for a pack Dotwork wrote no Godot resources for, such as render_sprites' sheets). On other engines, run
+   the engine's importer, then `python tools/dev.py test` and `smoke` (details in `docs/ENGINE.md`; web and RPG Maker
+   MZ: `docs/ENGINE_FLOW.md`):
    - web: nothing to run, every pack loads before the title screen (`queueDotwork` / `dotworkPack`, src/game/dotwork.ts).
    - web-3d: restart `dev.py run` after a pack; `DotworkLibrary.load(DOTWORK_MANIFESTS)` in `src/game/dotwork/`.
    - Unity: `python tools/dev.py exec GameKitDotwork.ImportAll`.

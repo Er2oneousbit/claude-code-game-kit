@@ -23,6 +23,12 @@
 #           python tools/art/pixellab.py tiles-pro --text "dirt road" --feature roads --out assets/art/roads   [paid plan]
 #           Also: tileset --kind sidescroller, iso-tile, object (1 or 8 directions), ui, font, pixelate, fix
 #           (reduce-colors, correct, unzoom, remove-background, normal-map), outfit [paid plan].
+#           Pro Flash (PixelLab's newer model) on image, edit, pixelate, character and object, with a style image:
+#           python tools/art/pixellab.py image --pro-flash --text "green slime" --size 32 --no-background \
+#               --style-image assets/art/hero/south.png --out assets/art/slime.png --log
+#           python tools/art/pixellab.py object --pro-flash --text "barrel" --size 32 --quote   # price, free
+#           python tools/art/pixellab.py animate --frame idle.png --last-frame idle.png --action "breathing" \
+#               --frames 8 --out assets/art/idle_loop                # pinned last frame: a clean loop
 #           python tools/art/pixellab.py image --text "..." --out x.png --dry-run      # show, send nothing
 # Needs   : Python 3.8+ only. A PixelLab account (pixellab.ai; a paid plan or the free trial's few generations)
 #           and its API token in the PIXELLAB_API_KEY environment variable (on Windows a user variable set in
@@ -48,20 +54,39 @@
 #           candidates), fetch (free). unzoom needs a source of at least 256x256 (PixelLab answers 422, free).
 #           unzoom answers opaque (transparency composited onto white): the source's alpha is mapped back onto it.
 #           correct can add colours (10 in, 235 out live): the run prints both counts and how to reduce them again.
-#           Not yet live: tiles-pro, outfit, 8-direction object, vfx --pro (verify).
+#           Run live 2026-11-13 (19 generations): image --pro-flash at 32 px (5), object --pro-flash, 1 direction,
+#           with --style-image (5: the style's outline and palette carried over), animate --last-frame at 32 px,
+#           4 frames (1: 5 frames back, frame_00 is the input, the last lands on the pinned pose), vfx --pro (6),
+#           and character and object --pro-flash --source-image-id, 8 directions (1 each: the rotations only).
+#           --quote matched every charge. Learned live: image_size next to source_image_id is a 422 (not sent).
+#           Not yet live: tiles-pro, outfit, the legacy 8-direction object, edit and pixelate --pro-flash,
+#           ui --style-image, animate-character --end-frame (verify).
 #           [paid plan only] in -h (tiles-pro, outfit) is PixelLab's rule; a trial account gets a 402, explained.
 #           Download links on PixelLab's storage get no token: it is sent only to the API host, and a redirect
 #           keeps it only on the same https host and port (anywhere else it is dropped; https to http is refused).
 #           Names from a response (object directions) must be plain names, so nothing is written outside --out.
 #           A submitted job is kept in .<out>.pixellab-job.json beside --out until its files are saved: when a
 #           run times out or a download fails, the same command picks the job up instead of paying again.
+#           Pro Flash, style images and pinned frames follow PixelLab's API spec (api.pixellab.ai/v2/openapi.json)
+#           and its /pro-flash/capabilities and /pro-flash/cost answers, read 2026-11-13: separate endpoints
+#           (/create-image-pro-flash, /edit-image-pro-flash, /image-to-pixelart-pro-flash,
+#           /create-character-pro-flash, /create-object-pro-flash), each a background job; sides 16 (edit: 32) to
+#           256 in steps of 4; prices quoted as provisional (image 5, character 6, object 5 or 6 with 8 directions,
+#           edit 5, pixelate 6). --quote asks GET /pro-flash/cost (free). --style-image must fit the canvas.
+#           animate --last-frame is animate-with-text-v3's last_frame; animate-character --end-frame its end_frame.
+#           Not in this tool: Pro Flash inpaint and target palettes (the MCP has them).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --pro-flash, --style-image, --quote, animate
+#           --last-frame, animate-character --end-frame (#16)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
 #   parse command -> dry run? print the request (images replaced by their size), stop
 #   token from the environment (Windows: also the saved user variable) -> plan from GET /balance
 #   image:     POST /create-image-pixflux -> PNG at once
+#   --pro-flash: POST /create-<image|character|object>-pro-flash, /edit-image-pro-flash or
+#              /image-to-pixelart-pro-flash -> poll the job -> image, edit, pixelate: the PNG in the job (or its
+#              image_url); character: the zip; object: /objects/{id}. --quote: GET /pro-flash/cost, nothing made
 #   character: POST /create-character-v3 -> poll the job -> GET /characters/{id}/zip -> extract into --out
 #   animate:   POST /animate-with-text-v3 (the frame as base64) -> poll -> last_response.images -> frame PNGs
 #   tileset:   POST /create-tileset(-sidescroller) -> poll -> GET /tilesets/{id} -> tile PNGs + tileset.json
@@ -101,6 +126,7 @@ TIMEOUT_S = 120                       # one HTTP request
 POLL_EVERY_S = 3                      # the API docs ask for 2 to 5 s between job polls
 WAIT_S = 600                          # how long to wait for a job (--wait)
 MAX_VARIANTS = 4                      # each variant is a paid generation
+PIXELATE_SIZE = 64                    # `pixelate` output side without --size (Pro Flash picks its own)
 MAX_DOWNLOAD = 200_000_000            # bytes: one response or one zip member (a character with many animations is far less)
 MAX_ZIP_TOTAL = 500_000_000           # bytes: everything one zip may unpack to
 SAFE_EXTENSIONS = {".png", ".gif", ".json", ".zip", ".ttf", ".txt", ".webp"}   # what a result may write to disk
@@ -446,6 +472,8 @@ def printable(body):
 
 def png_size(path):
     """(width, height) of a local PNG, read from its header."""
+    if not Path(path).is_file():
+        raise ToolError(f"{path} not found")
     data = Path(path).read_bytes()[:24]
     if not data.startswith(PNG_MAGIC):
         raise ToolError(f"{path} is not a PNG")
@@ -581,8 +609,132 @@ def style(args, body):
     return body
 
 
+PRO_FLASH_KINDS = ("image", "edit", "pixelate", "character", "object")   # commands with a --pro-flash form
+STYLE_TRAITS = ("color_palette", "outline", "detail", "shading")       # what a Pro Flash style image can lend
+
+
+def pro_flash(args):
+    return bool(getattr(args, "pro_flash", False))
+
+
+def check_pro_flash_size(size, low, what):
+    """Pro Flash sizes (PixelLab's /pro-flash/capabilities, read 2026-11-13): each side low to 256 and a multiple
+    of 4. PixelLab answers 422 otherwise, after the request; refused here first."""
+    check_size(size, low, 256, what)
+    if size["width"] % 4 or size["height"] % 4:
+        raise ToolError(f"{what} {size['width']}x{size['height']}: Pro Flash needs every side a multiple of 4")
+
+
+def style_reference(args, canvas):
+    """--style-image (and --style-traits) as Pro Flash's style_image / style_options. The style image must fit the
+    target canvas (PixelLab centres a smaller one, never resizes): checked here, before anything is spent."""
+    w, h = png_size(args.style_image)
+    if w > canvas["width"] or h > canvas["height"]:
+        raise ToolError(f"--style-image {args.style_image} is {w}x{h}, bigger than the {canvas['width']}x"
+                        f"{canvas['height']} canvas: PixelLab never resizes it (use a smaller sprite or a bigger --size)")
+    fields = {"style_image": {"image": b64_image(args.style_image), "size": {"width": w, "height": h}}}
+    if args.style_traits:
+        keep = [t.strip() for t in args.style_traits.split(",") if t.strip()]
+        bad = [t for t in keep if t not in STYLE_TRAITS]
+        if bad or not keep:
+            raise ToolError(f"--style-traits takes a comma list of {', '.join(STYLE_TRAITS)} (got {args.style_traits!r})")
+        fields["style_options"] = {t: t in keep for t in STYLE_TRAITS}
+    return fields
+
+
+def build_pro_flash(kind, args):
+    """(endpoint, body) for --pro-flash: PixelLab's Pro Flash endpoints (API spec read 2026-11-13). Each answers a
+    background job; image, edit and pixelate results come back in the job, character and object as a resource."""
+    if any(getattr(args, n, None) for n in ("outline", "shading", "detail", "negative")):
+        raise ToolError("--pro-flash takes no --outline, --shading, --detail or --negative: describe the look in "
+                        "--text, or lend it with --style-image")
+    if getattr(args, "style_traits", None) and not getattr(args, "style_image", None):
+        raise ToolError("--style-traits needs --style-image")
+    body = {}
+    if kind == "image":
+        check_pro_flash_size(args.size, 16, "image")
+        body = {"description": args.text, "image_size": args.size, "no_background": args.no_background}
+        if args.style_image:
+            body.update(style_reference(args, args.size))
+        endpoint = "/create-image-pro-flash"
+    elif kind == "edit":
+        w, h = png_size(args.image)
+        check_pro_flash_size({"width": w, "height": h}, 32, f"{args.image}:")
+        body = {"image": b64_image(args.image), "method": "reference" if args.reference else "text",
+                "description": args.text, "no_background": True}
+        if args.reference:
+            rw, rh = png_size(args.reference)
+            if rw > w or rh > h:
+                raise ToolError(f"--reference {args.reference} is {rw}x{rh}: it must fit the {w}x{h} image")
+            body["reference_image"] = b64_image(args.reference)
+        endpoint = "/edit-image-pro-flash"
+    elif kind == "pixelate":
+        if args.size is not None:
+            raise ToolError("--pro-flash picks the pixel size itself (no --size): drop --size, or drop --pro-flash")
+        png_size(args.image)                              # a PNG, before anything is spent
+        body = {"image": b64_image(args.image)}
+        if args.text:
+            body["description"] = args.text
+        endpoint = "/image-to-pixelart-pro-flash"
+    else:                                                 # character or object: one south view, then rotations
+        size = args.size if isinstance(args.size, dict) else {"width": args.size, "height": args.size}
+        if kind == "character" and (args.legacy or args.directions != 8):
+            raise ToolError("--pro-flash makes a character in 8 directions only: drop --legacy / --directions 4")
+        check_pro_flash_size(size, 16, kind)
+        view = args.view or "low top-down"
+        if view not in ("low top-down", "high top-down", "side"):
+            raise ToolError(f"a Pro Flash {kind}'s --view is 'low top-down', 'high top-down' or 'side'")
+        body = {"description": args.text, "image_size": size, "view": view,
+                "n_directions": 8 if kind == "character" else args.directions}
+        if getattr(args, "name", ""):
+            body["name"] = args.name
+        if args.source_image_id and args.style_image:
+            raise ToolError("--source-image-id reuses a finished image (its look is set): drop --style-image")
+        if args.source_image_id:
+            # pays only for the rotations (one direction: free). Learned live 2026-11-13: PixelLab answers 422 to
+            # image_size (or style settings) next to source_image_id, "only for text creation": the image sets both
+            body["source_image_id"] = args.source_image_id
+            del body["image_size"]
+        if args.style_image:
+            body.update(style_reference(args, size))
+        endpoint = f"/create-{kind}-pro-flash"
+    if args.seed is not None:
+        body["seed"] = args.seed
+    return endpoint, body
+
+
+QUOTE_OPERATION = {"image": "create", "edit": "edit", "character": "character", "object": "object"}
+
+
+def quote_query(kind, args, body):
+    """The query for PixelLab's free GET /pro-flash/cost (operation, width, height, n_directions), or None for
+    pixelate, which has a fixed price (6 generations, PixelLab's API spec read 2026-11-13)."""
+    if kind not in QUOTE_OPERATION:
+        return None
+    if kind == "edit":
+        w, h = png_size(args.image)
+    else:                                                # with --source-image-id the body has no size: --size
+        size = body.get("image_size") or (args.size if isinstance(args.size, dict) else {"width": args.size,
+                                                                                         "height": args.size})
+        w, h = size["width"], size["height"]
+    query = {"operation": QUOTE_OPERATION[kind], "width": w, "height": h}
+    if "n_directions" in body:
+        query["n_directions"] = body["n_directions"]
+    return "/pro-flash/cost?" + urllib.parse.urlencode(query)
+
+
 def build(kind, args):
     """(endpoint, body) for a command."""
+    if pro_flash(args):
+        return build_pro_flash(kind, args)
+    for flag, what in (("style_image", "--style-image"), ("style_traits", "--style-traits"),
+                       ("source_image_id", "--source-image-id"), ("reference", "--reference"), ("quote", "--quote")):
+        # ui takes a style image of its own; outfit's --reference is its own required input
+        if getattr(args, flag, None) and not (kind == "ui" and flag == "style_image") \
+                and not (kind == "outfit" and flag == "reference"):
+            raise ToolError(f"{what} on `{kind}` needs --pro-flash (PixelLab's Pro Flash endpoints take it)")
+    if kind == "pixelate" and getattr(args, "text", None):
+        raise ToolError("`pixelate --text` needs --pro-flash (the plain endpoint takes no description)")
     if kind == "image":
         check_size(args.size, 16, 400, "image")
         body = {"description": args.text, "image_size": args.size, "no_background": args.no_background}
@@ -614,6 +766,12 @@ def build(kind, args):
         if not 4 <= args.frames <= 16:
             raise ToolError("--frames must be 4 to 16")
         body = {"first_frame": b64_image(args.frame), "action": args.action, "frame_count": args.frames}
+        if args.last_frame:
+            # PixelLab animates between the two (API spec 2026-11-13): the same PNG as --frame pins a clean loop
+            if png_size(args.last_frame) != png_size(args.frame):
+                raise ToolError(f"--last-frame {args.last_frame} is {'x'.join(map(str, png_size(args.last_frame)))}, "
+                                f"--frame is {'x'.join(map(str, png_size(args.frame)))}: they must be one size")
+            body["last_frame"] = b64_image(args.last_frame)
         if png_has_alpha(args.frame):
             body["no_background"] = True  # without it PixelLab fills a transparent sprite's frames with flat grey
         if args.seed is not None:
@@ -654,12 +812,18 @@ def build(kind, args):
         body = {"description": args.text, "image_size": args.size, "no_background": True}
         if args.name:
             body["name"] = args.name
+        if getattr(args, "style_traits", None):
+            raise ToolError("--style-traits is for --pro-flash commands; `ui` takes --style-image alone")
+        if args.style_image:
+            body["style_image"] = b64_image(args.style_image)   # a plain image here (API spec 2026-11-13)
         return "/create-ui-asset", style(args, body)
     if kind == "font":
         body = {"description": args.text, "weight": args.weight, "glyph_px": args.glyph}
         if args.name:
             body["font_name"] = args.name
         return "/generate-font-pro", style(args, body)
+    if kind == "object" and args.name:
+        raise ToolError("`object --name` needs --pro-flash (the other object endpoints take no name)")
     if kind == "object" and args.directions == 8:
         if not 24 <= args.size <= 168:
             raise ToolError("an 8-direction object's --size must be 24 to 168")
@@ -689,8 +853,9 @@ def build(kind, args):
         return "/edit-image-pixen", body
     if kind == "pixelate":
         w, h = png_size(args.image)
-        check_size(args.size, 16, 512, "pixel art output")
-        body = {"image": b64_image(args.image), "image_size": {"width": w, "height": h}, "output_size": args.size}
+        size = args.size or size_arg(str(PIXELATE_SIZE))
+        check_size(size, 16, 512, "pixel art output")
+        body = {"image": b64_image(args.image), "image_size": {"width": w, "height": h}, "output_size": size}
         if args.seed is not None:
             body["seed"] = args.seed
         return "/image-to-pixelart", body
@@ -732,6 +897,22 @@ def build(kind, args):
             body["frame_count"] = args.frames
         if args.directions:
             body["directions"] = [d.strip() for d in args.directions.split(",") if d.strip()]
+        if args.end_frame:
+            # PixelLab interpolates from the direction's rotation to this pose (API spec 2026-11-13): v3 and
+            # pixminimax only, one direction only, the same size as that rotation. A 422 would come after sending
+            if args.mode not in ("v3", "pixminimax"):
+                raise ToolError("--end-frame works with --mode v3 or pixminimax (PixelLab's rule)")
+            if len(body.get("directions", [])) != 1:
+                raise ToolError("--end-frame needs exactly one direction, e.g. --directions south")
+            # the start pose, when `character` saved it in --from (rotations/<d>.png, or <state>/rotations/<d>.png)
+            start = next(iter(sorted(Path(args.source).glob(f"rotations/{body['directions'][0]}.png"))
+                              + sorted(Path(args.source).glob(f"*/rotations/{body['directions'][0]}.png"))), None) \
+                if args.source else None
+            if start and png_size(start) != png_size(args.end_frame):
+                raise ToolError(f"--end-frame {args.end_frame} is {'x'.join(map(str, png_size(args.end_frame)))}, the "
+                                f"{body['directions'][0]} rotation is {'x'.join(map(str, png_size(start)))}: "
+                                "they must be one size")
+            body["end_frame"] = b64_image(args.end_frame)
         if args.name:
             body["animation_name"] = args.name
         return "/characters/animations", body
@@ -848,9 +1029,12 @@ def run_job(kind, key, endpoint, body, out, args):
     """Submit, wait, save. Returns (files, cost text, extra metadata)."""
     first = submit(kind, key, endpoint, body, out)
     cost = cost_text(first.get("usage"))
-    if first.get("quoted_generations") is not None and not cost:
-        cost = f"{cost_text({'type': 'generations', 'generations': first['quoted_generations']})} (quoted)"
-    if kind in SYNC_IMAGE or (kind == "fix" and args.op != "normal-map"):
+    # A price the POST announces (vfx: quoted_generations; Pro Flash: estimated_generations, provisional) is only
+    # the fallback: what the finished job reports is the real charge
+    quoted = next((first[k] for k in ("quoted_generations", "estimated_generations") if first.get(k) is not None), None)
+    quoted = cost_text({"type": "generations", "generations": quoted})
+    quoted = f"{quoted} (quoted)" if quoted else ""
+    if (kind in SYNC_IMAGE or (kind == "fix" and args.op != "normal-map")) and not pro_flash(args):
         img = first.get("image") or (first.get("images") or [None])[0]
         if img is None:
             raise ServiceError(f"PixelLab answered {endpoint} without an image")
@@ -870,7 +1054,7 @@ def run_job(kind, key, endpoint, body, out, args):
         if not res.get("image_url"):
             raise ServiceError("the UI asset finished without an image_url")
         files = [fetch_url(res["image_url"], key, out)]
-        return files, cost or job_cost(key, first, args.wait), {"ui_asset_id": asset_id}
+        return files, cost or job_cost(key, first, args.wait) or quoted, {"ui_asset_id": asset_id}
     if kind == "prop":
         obj = first.get("object_id")
         print(f"[info] map object {obj} queued (about 15 to 30 s) ...")
@@ -879,7 +1063,7 @@ def run_job(kind, key, endpoint, body, out, args):
         if not res.get("download_url"):
             raise ServiceError("the map object finished without a download_url")
         files = [fetch_url(res["download_url"], key, out)]
-        return files, cost or job_cost(key, first, args.wait), {"object_id": obj}
+        return files, cost or job_cost(key, first, args.wait) or quoted, {"object_id": obj}
     if kind == "object":
         obj = first.get("object_id")
         print(f"[info] object {obj} queued; PixelLab takes 30 s to a few minutes ...")
@@ -895,20 +1079,27 @@ def run_job(kind, key, endpoint, body, out, args):
             print(f"[info] PixelLab made {len(files)} candidates (sizes up to 170 make several): all saved as "
                   f"candidate_NN.png; keep the one you want. On pixellab.ai object {obj} waits for review "
                   "(keep or dismiss there, or with the MCP's select_object_frames / dismiss_review)")
-            return files, cost or job_cost(key, first, args.wait), {"object_id": obj, "review": len(files)}
+            return files, cost or job_cost(key, first, args.wait) or quoted, {"object_id": obj, "review": len(files)}
         rot = {d: u for d, u in (res.get("rotation_urls") or {}).items() if u}
         for d in rot:                     # the API's keys become file names: a plain name only, never a path
             if not plain_name(d) or not windows_safe(d):
                 raise ServiceError(f"refusing direction {str(d)[:40]!r} from PixelLab: not a plain name")
         if len({d.casefold() for d in rot}) != len(rot):
             raise ServiceError("refusing directions from PixelLab that differ only in case (one file on Windows)")
+        stored = url_values(res.get("storage_urls"))
+        # Seen live 2026-11-13: a 1-direction Pro Flash object has every rotation_urls entry null and one link in
+        # storage_urls ("unknown"); it is the south view (Pro Flash draws south first), so it is saved as south.png
+        one_view = pro_flash(args) and args.directions == 1 and len(stored) == 1
         links = [(f"{d}.png", u) for d, u in rot.items()] or \
                 [(f"frame_{i:02d}.png", u) for i, u in enumerate(res.get("frame_urls") or [])] or \
-                [(f"image_{i:02d}.png", u) for i, u in enumerate(url_values(res.get("storage_urls")))]
+                ([("south.png", stored[0])] if one_view else []) or \
+                [(f"image_{i:02d}.png", u) for i, u in enumerate(stored)]
         if not links:
             raise ServiceError(f"object {obj} finished without image links")
         files = [fetch_url(u, key, out / name) for name, u in links]
-        return files, cost or job_cost(key, first, args.wait), {"object_id": obj}
+        settings = res.get("style_settings") if isinstance(res.get("style_settings"), dict) else {}
+        return files, cost or job_cost(key, first, args.wait) or quoted, {
+            "object_id": obj, "source_image_id": settings.get("source_image_id")}   # reusable: --source-image-id
     jobs = first.get("background_job_ids") or ([first["background_job_id"]] if first.get("background_job_id") else [])
     if not jobs:
         raise ServiceError(f"PixelLab did not return a job for {endpoint}")
@@ -916,9 +1107,15 @@ def run_job(kind, key, endpoint, body, out, args):
           + (" (skeleton animation: 3 to 5 minutes per direction)" if kind == "animate-character" else "") + " ...")
     results = [wait_job(key, j, args.wait) for j in jobs]
     last = results[-1][0]
-    cost = cost or summed_cost([u for _, u in results])
+    cost = cost or summed_cost([u for _, u in results]) or quoted
     if kind not in FILE_KINDS:
         out.mkdir(parents=True, exist_ok=True)
+    if kind in SYNC_IMAGE or (kind == "edit" and pro_flash(args)):
+        # Pro Flash image, edit, pixelate: the PNG is in the finished job (or behind its image_url); its
+        # source_image_id is kept so `character`/`object --pro-flash --source-image-id` can reuse it
+        return [save_flash_image(last, key, out, endpoint)], cost, {
+            "source_image_id": last.get("source_image_id") or first.get("source_image_id"),
+            "image_id": last.get("image_id") or first.get("image_id")}
     if kind == "character":
         data = character_zip(key, first["character_id"], args.wait)
         return extract_zip(data, out), cost, {"character_id": first["character_id"]}
@@ -1052,6 +1249,17 @@ def summed_cost(usages):
     return " + ".join(t for _, t in known) + (f" ({partial.lstrip(', ')})" if partial else "")
 
 
+def save_flash_image(last, key, out, endpoint):
+    """A finished Pro Flash job's one image to out: base64 in the job (image, or the first of images), else its
+    image_url (PixelLab's storage: no token goes there)."""
+    img = last.get("image") or (last.get("images") or [None])[0]
+    if img is not None:
+        return _save(img, out)
+    if isinstance(last.get("image_url"), str) and last["image_url"].startswith("https://"):
+        return fetch_url(last["image_url"], key, out)
+    raise ServiceError(f"{endpoint} finished without an image (got: {sorted(last)})")
+
+
 def character_zip(key, character_id, limit):
     """The character's zip; PixelLab answers 423 while its animations are still being written, so wait for it."""
     start = time.monotonic()
@@ -1160,6 +1368,33 @@ def clear_previous(out):
             target.unlink()
 
 
+def quote(kind, args, body, variants):
+    """--quote: PixelLab's own price for this Pro Flash request from GET /pro-flash/cost (free: no generation is
+    spent and nothing is made). PixelLab marks the price provisional; the run prints what was really charged."""
+    query = quote_query(kind, args, body)
+    if query is None:                                    # pixelate: one fixed price, no cost endpoint
+        print(f"[ OK ] quote: 6 generations per image x{variants} (PixelLab's API docs, 2026-11-13); nothing sent")
+        return 0
+    key = get_key()
+    if not key:
+        raise ToolError(missing_key_help())
+    got = call("GET", query, key)
+    number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)   # noqa: E731
+    reuse = bool(body.get("source_image_id"))
+    # /pro-flash/cost prices a text request (image + rotations). With --source-image-id the image is already paid:
+    # PixelLab charges the rotations only (1 for 8 directions at 32 px, live 2026-11-13; one direction is free)
+    total = got.get("rotations") if reuse else got.get("total")
+    if not number(total):
+        raise ServiceError(f"PixelLab's price answer has no {'rotations' if reuse else 'total'} (got: {sorted(got)})")
+    parts = ", ".join(f"{k} {got[k]:g}" for k in ("image", "rotations") if number(got.get(k)))
+    if reuse:
+        parts = f"rotations only; the image part ({got.get('image', '?')}) is already paid"
+    each = cost_text({"type": "generations", "generations": total}) or "free (0 generations)"
+    print(f"[ OK ] quote: {each}" + (f" ({parts})" if parts else "") + (f" x{variants}" if variants > 1 else "")
+          + (", provisional" if got.get("provisional") else "") + "; nothing was generated")
+    return 0
+
+
 def cmd_generate(args, kind):
     endpoint, body = build(kind, args)
     if kind in FILE_KINDS and not args.out.lower().endswith(".png"):
@@ -1170,9 +1405,16 @@ def cmd_generate(args, kind):
     shown = printable(body)
     if kind == "animate":
         shown["first_frame"] = f"<{Path(args.frame).as_posix()}, {Path(args.frame).stat().st_size} bytes>"
+        if args.last_frame:
+            shown["last_frame"] = f"<{Path(args.last_frame).as_posix()}, {Path(args.last_frame).stat().st_size} bytes>"
     if args.dry_run:
         print(f"[dry-run] POST {API}{endpoint}  x{variants}\n{json.dumps(shown, indent=2, ensure_ascii=False)}")
+        if pro_flash(args):
+            print("[info] Pro Flash price: `--quote` asks PixelLab (free, needs the token); "
+                  "pixelate --pro-flash is 6 generations")
         return 0
+    if getattr(args, "quote", False):
+        return quote(kind, args, body, variants)
     check_outputs(args, kind, variants)                   # everything a run could refuse, before anything is spent
     key = get_key()
     if not key:
@@ -1235,6 +1477,24 @@ def build_parser():
     look.add_argument("--detail", help="e.g. 'low detail', 'medium detail', 'highly detailed'")
     look.add_argument("--view", help="e.g. 'side', 'low top-down', 'high top-down'")
 
+    def flash(p, what, cost, style=True, source=False):
+        """The Pro Flash options of one command (PixelLab's API spec, read 2026-11-13)."""
+        p.add_argument("--pro-flash", action="store_true",
+                       help=f"PixelLab's Pro Flash model: {what} ({cost}; `--quote` asks the price first)")
+        p.add_argument("--quote", action="store_true",
+                       help="--pro-flash only: ask PixelLab what this request would cost (free, needs the token), "
+                            "make nothing")
+        if style:
+            p.add_argument("--style-image", help="--pro-flash: a PNG whose look the result copies, e.g. your hero's "
+                                                 "south view on every call of a set; no bigger than --size")
+            p.add_argument("--style-traits", help=f"--style-image: copy only these, a comma list of "
+                                                  f"{', '.join(STYLE_TRAITS)} (default all four)")
+        if source:
+            p.add_argument("--source-image-id", help="--pro-flash: reuse an image made by `image --pro-flash` or a "
+                                                     "1-direction `object --pro-flash` (its .gen.json has "
+                                                     "source_image_id): only the rotations are charged; --size "
+                                                     "is not sent (the image sets it)")
+
     ap = argparse.ArgumentParser(
         prog="pixellab.py",
         description="Generate pixel art with the PixelLab API (your token, your generations) and log it.",
@@ -1256,6 +1516,8 @@ def build_parser():
     p.add_argument("--negative", default="", help="what to avoid")
     p.add_argument("--no-background", action="store_true", help="transparent background")
     p.add_argument("--variants", type=int, default=1, help=f"make N takes as <out>_1.png ... (N requests, at most {MAX_VARIANTS})")
+    flash(p, "sides 16 to 256 in steps of 4, takes --style-image, no --outline/--shading/--detail/--negative",
+          "5 each")
     p.set_defaults(fn=lambda a: cmd_generate(a, "image"))
     p = sub.add_parser("character", parents=[common, gen, look], help="a character facing 4 or 8 directions (a folder of PNGs)")
     p.add_argument("--text", required=True, help="who it is, e.g. 'old gravekeeper with a lantern'")
@@ -1264,11 +1526,15 @@ def build_parser():
     p.add_argument("--name", default="", help="a name for the character in your PixelLab library")
     p.add_argument("--legacy", action="store_true",
                    help="the older 4-direction endpoint: sizes 16 to 128 (v3 starts at 32); the canvas is about 40%% larger")
+    flash(p, "a south view from --text, then 8 directions; sides 16 to 256 in steps of 4, --view and no "
+             "--outline/--shading/--detail", "6 at 64 px", source=True)
     p.set_defaults(fn=lambda a: cmd_generate(a, "character"))
     p = sub.add_parser("animate", parents=[common, gen], help="animate one frame from a text action (frame PNGs)")
     p.add_argument("--frame", required=True, help="the first frame, a PNG (e.g. a rotation from `character`)")
     p.add_argument("--action", required=True, help="what happens, e.g. 'walking', 'swinging a sword'")
     p.add_argument("--frames", type=int, default=8, help="4 to 16 frames (default 8: a walk cycle)")
+    p.add_argument("--last-frame", help="a PNG the motion ends on, the size of --frame (the same file as --frame "
+                                        "pins a clean loop: drop the repeated last frame)")
     p.set_defaults(fn=lambda a: cmd_generate(a, "animate"))
     p = sub.add_parser("tileset", parents=[common, gen, look],
                        help="a top-down Wang tileset or a sidescroller platform set: tile PNGs + tileset.json (about 1)")
@@ -1295,6 +1561,8 @@ def build_parser():
     p.add_argument("--frames", type=int, default=8, help="v3: 4 to 16, even; pixminimax: a multiple of 4 up to 40 (default 8)")
     p.add_argument("--directions", default="", help="comma list, e.g. south,east (default: all for template, south for custom)")
     p.add_argument("--name", default="", help="the animation's name in your PixelLab library")
+    p.add_argument("--end-frame", help="v3 or pixminimax, one direction: a PNG pose to end on, the size of that "
+                                       "direction's rotation (that rotation itself pins a loop)")
     p.set_defaults(fn=lambda a: cmd_generate(a, "animate-character"))
     p = sub.add_parser("iso-tile", parents=[common, gen, look2], help="one isometric tile or block (about 1)")
     p.add_argument("--text", required=True, help="e.g. 'mossy stone block'")
@@ -1326,6 +1594,7 @@ def build_parser():
     p.add_argument("--text", required=True, help="e.g. 'wooden dialog box with brass corners'")
     p.add_argument("--size", type=size_arg, default=size_arg("256x192"), help="192 to 688 per side (default 256x192)")
     p.add_argument("--name", default="", help="a name in your PixelLab library")
+    p.add_argument("--style-image", help="a PNG whose look the panel copies (e.g. another panel of the same game)")
     p.set_defaults(fn=lambda a: cmd_generate(a, "ui"))
     p = sub.add_parser("font", parents=[common, gen], help="a pixel font: .ttf + glyph atlas PNG (15)")
     p.add_argument("--text", required=True, help="the look, e.g. 'chunky wooden sign letters'")
@@ -1338,7 +1607,11 @@ def build_parser():
     p.add_argument("--directions", type=int, choices=(1, 8), default=1)
     p.add_argument("--size", type=int, default=64, help="1 direction: 16 to 256, where sizes up to 42 give 64 candidates, up to 85 give 16, "
                         "up to 170 give 4, larger 1 (all saved as candidate_NN.png); 8 directions: 24 to 168 (default 64)")
-    p.add_argument("--view", help="1 direction: top-down or sidescroller; 8: low top-down, high top-down or side")
+    p.add_argument("--view", help="1 direction: top-down or sidescroller; 8 and --pro-flash: low top-down, "
+                                  "high top-down or side")
+    p.add_argument("--name", default="", help="--pro-flash: a name for the object in your PixelLab library")
+    flash(p, "one image instead of candidates, 1 or 8 directions, --size 16 to 256 in steps of 4",
+          "1 direction 5, 8 directions 6", source=True)
     p.set_defaults(fn=lambda a: cmd_generate(a, "object"))
     p = sub.add_parser("prop", parents=[common, gen, look2], help="a single map prop with a transparent background (about 1)")
     p.add_argument("--text", required=True, help="e.g. 'a loaf of bread on a plate'")
@@ -1348,10 +1621,16 @@ def build_parser():
     p = sub.add_parser("edit", parents=[common, gen], help="change one thing in a pixel-art PNG, keep the rest (1)")
     p.add_argument("--image", required=True, help="the PNG; sides a multiple of 4, at most 256 (pad, never rescale)")
     p.add_argument("--text", required=True, help="what to change, e.g. 'change ONLY the right hand into a clenched fist'")
+    flash(p, "the image 32 to 256 per side, in steps of 4", "5", style=False)
+    p.add_argument("--reference", help="--pro-flash: a PNG to take the change from (e.g. the hat to put on), no "
+                                       "bigger than --image")
     p.set_defaults(fn=lambda a: cmd_generate(a, "edit"))
     p = sub.add_parser("pixelate", parents=[common, gen], help="turn a picture (e.g. a concept image) into real pixel art (1)")
     p.add_argument("--image", required=True, help="the source PNG, 16 to 2048 per side")
-    p.add_argument("--size", type=size_arg, default=size_arg("64"), help="output size, 16 to 512 (default 64)")
+    p.add_argument("--size", type=size_arg, default=None, help=f"output size, 16 to 512 (default {PIXELATE_SIZE}); "
+                                                               "--pro-flash picks the size itself")
+    flash(p, "finds the pixel scale and output size itself (no --size)", "6", style=False)
+    p.add_argument("--text", default="", help="--pro-flash: extra style words, e.g. 'retro, light dithering'")
     p.set_defaults(fn=lambda a: cmd_generate(a, "pixelate"))
     p = sub.add_parser("fix", parents=[common, gen],
                        help="clean up a PNG: reduce-colors, correct (stray pixels), unzoom (upscaled art back to 1x), "

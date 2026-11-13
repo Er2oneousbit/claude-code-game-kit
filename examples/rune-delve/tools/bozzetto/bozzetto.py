@@ -17,6 +17,7 @@
 #           python tools/bozzetto/bozzetto.py make prop_lamp --with tripo --prompt "a brass ship's lantern"
 #           python tools/bozzetto/bozzetto.py rig check            # the rig routes: UniRig (local) and Tripo (paid)
 #           python tools/bozzetto/bozzetto.py rig make npc_guard   # skeleton, skin weights, Mixamo names, clips
+#           python tools/bozzetto/bozzetto.py rig retarget npc_guard --from UAL1_Standard.glb --clips Walk_Loop=walk_ual
 #           python tools/bozzetto/bozzetto.py reference chr_hero --from concept.png   # A-pose views (reference.py)
 #           Options for make: --with local|tripo, --class prop|kit|hero|npc, --seed N, --out <models folder>,
 #           --lods 0.5,0.25|none, --height M, --turn DEG, --quality normal|high, --material texture|vertex, --no-log,
@@ -43,6 +44,7 @@
 #           Timing on a 16 GB RTX 5060 Ti: about 5 min per model at normal quality once warm, about 19 at high (K01).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake auto, the local route's default (#203)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `rig retarget` (animation packs, #205) and its exam
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -999,7 +1001,7 @@ def cmd_list(args):
 
 def cmd_test(args):
     exams = [HERE / "test_bozzetto.py", HERE / "test_tripo.py", HERE / "test_rig.py", HERE / "test_chain.py",
-             HERE / "test_reference.py", HERE / "test_rebake.py"] + \
+             HERE / "test_retarget.py", HERE / "test_reference.py", HERE / "test_rebake.py"] + \
         ([HERE / "test_bozzetto_live.py"] if args.live else [])
     failed = 0
     for exam in exams:

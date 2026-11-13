@@ -3,7 +3,8 @@
 ## Goal
 Get from a release build (`SOP-06`) to a game players can buy or download, with store pages that follow the rules, a
 build pipeline that cannot ship an untested build, signed executables, and the legal basics in place. Steam facts here
-are from Valve's own documentation read on 2026-11-01 (F39); check the linked pages again before you rely on a number.
+are from Valve's own documentation read on 2026-11-01 (F39), itch.io facts from butler's documentation read on
+2026-11-13 (E84); check the linked pages again before you rely on a number.
 
 ## 1. Before anything: what you need
 | Item | Where | Cost or limit |
@@ -40,8 +41,24 @@ are from Valve's own documentation read on 2026-11-01 (F39); check the linked pa
    Metadata" rights; the first login asks for a Steam Guard code, so run it by hand once on the machine that uploads
    (verify the current flow on Steamworks). Use `SetLive` to put a build on a beta branch automatically; the default branch can only be set
    live by hand in the App Admin panel (E76), which is the last human check before players get it.
-4. **itch.io:** `butler push build/windows user/game:windows --userversion 1.2.0` (E84). Channel names containing
-   `windows`, `linux`, `mac` or `android` tag the platform. butler uploads only what changed.
+4. **itch.io** with butler (E84): `butler push <folder> user/game:<channel> --userversion 1.2.0`. butler uploads only
+   what changed. Channel names containing `win`/`windows`, `linux`, `mac`/`osx` or `android` tag the platform
+   (`win-linux-mac-stable` tags three); lower case, dash-separated. A web build is marked "playable in browser" on the
+   itch.io Edit game page after the first push (butler cannot), with the project's kind set to HTML. The kit wires it:
+   ```
+   python tools/dev.py ship --target itch --project user/game --dry-run          # the web build, channel html5
+   python tools/dev.py ship --target itch --project user/game --yes              # push it
+   python tools/dev.py ship --target itch --project user/game --site build/windows --channel windows --dry-run
+   python tools/dev.py ship --target itch --project user/game --channel html5 --status   # what itch.io did with it
+   ```
+   `--dry-run` checks that butler is found (`BUTLER_BIN` or PATH), the folder exists, is not empty and holds no
+   secret-type file or token, the project is `user/game`, the channel is valid, and the version is known (the engine's
+   version source from `SOP-06`, or `--userversion`), then prints the exact butler command and uploads nothing. A push
+   needs a login: `butler login` once on the machine, or `BUTLER_API_KEY` (in CI, a repository secret); the kit only
+   checks that one is there and never reads, prints or writes it. A push asks for the game's slug in a terminal and
+   needs `--yes` anywhere else. Not done yet: a real upload through the kit (tested with a stand-in butler only,
+   **verify** on the first push), and `--status`, which runs `butler status` (seen in butler's own output, not its docs:
+   **verify**). Steam has no `ship` target yet (#84): use step 3 by hand.
 5. Never put store passwords, butler keys or Steam credentials in the repo or in a log (`CLAUDE.md` guardrails). In
    CI they live in the repository's secrets.
 

@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 # ---------------------------------------------------------------------------
 # mapbuild.py
-# Purpose : ASCII map -> a Godot scene painted by Godot's own terrain solver inside the game (TileMapLayers +
-#           y-sorted props), a preview rendered from the cells Godot chose, and a per-layer check report.
+# Purpose : ASCII map -> a Godot scene painted inside the game (TileMapLayers + y-sorted props): Godot's own terrain
+#           solver paints each overlay's shape, then every terrain cell gets the spec's variant pick (the tile every
+#           engine's importer draws); a preview rendered from the cells the scene holds, and a per-layer check report.
 # Usage   : a "map" inside a pack spec's "ground" entry: {"name", "rows", "legend", "objects", "props",
 #           "decal_density"}
 # Notes   : Legend: per character the terrains painted there, base first; "none" = no base (interior void).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the map plan is recorded for the engine-neutral asset
 #           manifest before the Godot step, so --engine none games get their maps too (assetmap.py)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): terrain cells take the spec's variant pick
+#           (terrain_picks: assetspec.resolve_terrain, cell_roll) instead of the solver's own roll, so a Godot map
+#           scene shows the same tiles as every other engine (#307)
 # ---------------------------------------------------------------------------
 import json
 import os
@@ -17,13 +21,17 @@ import random
 import numpy as np
 from PIL import Image
 
+import assetmap
+import assetspec
 import fcore as core
 import godot
 import godotrun
 GD = r'''extends SceneTree
-# Dotwork mapbuild: paint the layers listed in the job JSON with Godot's terrain solver, save the scene, dump cells.
+# Dotwork mapbuild: paint the layers listed in the job JSON with Godot's terrain solver, then set every terrain cell
+# to the job's "picks" (the spec's variant pick, the tile every engine draws), save the scene, dump cells.
 # blob check (Match Corners and Sides): every painted cell must hold the tile whose 8 bits are its painted
-# neighbours (corner bits only where both sides are painted), and nothing may land outside the painted cells
+# neighbours (corner bits only where both sides are painted), and nothing may land outside the painted cells; it
+# runs on the solver's result and again on the picks
 const NB = [TileSet.CELL_NEIGHBOR_TOP_SIDE, TileSet.CELL_NEIGHBOR_TOP_RIGHT_CORNER, TileSet.CELL_NEIGHBOR_RIGHT_SIDE,
 	TileSet.CELL_NEIGHBOR_BOTTOM_RIGHT_CORNER, TileSet.CELL_NEIGHBOR_BOTTOM_SIDE, TileSet.CELL_NEIGHBOR_BOTTOM_LEFT_CORNER,
 	TileSet.CELL_NEIGHBOR_LEFT_SIDE, TileSet.CELL_NEIGHBOR_TOP_LEFT_CORNER]
@@ -70,10 +78,16 @@ func _init():
 		root.add_child(layer)
 		layer.owner = root
 		var cells = []
+		var bad = 0
 		if L["kind"] == "terrain":
 			for c in L["cells"]:
 				cells.append(Vector2i(int(c[0]), int(c[1])))
 			layer.set_cells_terrain_connect(cells, 0, int(L["terrain"]))  # editor defaults
+			bad = blob_bad(layer, cells, int(L["terrain"]))
+			# the solver rolls its own dice among a key's variants: set the spec's pick on every cell (#307)
+			for c in L.get("picks", []):
+				layer.set_cell(Vector2i(int(c[0]), int(c[1])), int(c[2]), Vector2i(int(c[3]), int(c[4])))
+			bad += blob_bad(layer, cells, int(L["terrain"]))
 		else:
 			for c in L["cells"]:
 				layer.set_cell(Vector2i(int(c[0]), int(c[1])), int(c[2]), Vector2i(int(c[3]), int(c[4])))
@@ -81,7 +95,6 @@ func _init():
 		for p in layer.get_used_cells():
 			var ac = layer.get_cell_atlas_coords(p)
 			used.append([p.x, p.y, layer.get_cell_source_id(p), ac.x, ac.y])
-		var bad = blob_bad(layer, cells, int(L["terrain"])) if L["kind"] == "terrain" else 0
 		rep["layers"].append({"name": L["name"], "kind": L["kind"], "cells": used, "mismatches": bad})
 	# props: prop scenes (StaticBody2D, origin at the feet) under one y-sorted node, so characters added later
 	# to the same node pass in front of / behind them by their feet
@@ -165,6 +178,28 @@ def plan(m, ground):
     return layers, w, h
 
 
+def terrain_picks(layers, ground):
+    """The tile every terrain cell of the plan gets, by the spec's pick (assetspec.resolve_terrain: the key from the
+    painted neighbours, the variant by cell_roll with the layer's index), the tile every engine's importer draws:
+    {layer index: [[x, y, source, atlas_x, atlas_y], ...]}. The candidates come from the ground's rows as the asset
+    manifest lists them (assetmap.Writer.tile; sources by index, tiles in row order), never from Godot's own tile
+    order, which the pick would walk differently (#307)."""
+    T = ground["tile_px"]
+    mode = assetmap.MODES[ground.get("mode", "match_corners_and_sides")]
+    atlases = []
+    for i, s in enumerate(ground["sources"]):
+        tiles = [assetmap.Writer.tile(dict(t, y=t.get("y", 0)), T, T, T, T, False, False) for t in s["tiles"]
+                 if t.get("terrain") is not None and t["terrain"] >= 0]
+        atlases.append({"id": i, "tiles": tiles})
+    ts = {"shape": "square", "terrain_sets": [{"id": 0, "mode": mode}], "atlases": atlases}
+    out = {}
+    for i, L in enumerate(layers):
+        if L["kind"] == "terrain":
+            cells = assetspec.resolve_terrain(ts, {"terrain_set": 0, "terrain": int(L["terrain"]), "cells": L["cells"]}, i)
+            out[i] = [[x, y] + list(tile) for x, y, _, tile in cells if tile]
+    return out
+
+
 def plan_props(m, T, res_root, art_dir):
     """map "props": [{"prop": "oak_tree", "at": [x, y]}] -> scene path + feet position (cell bottom-centre)."""
     # the prop name builds a file path (the preview opens spr_<name>.png): snake it like the props lane does
@@ -173,7 +208,7 @@ def plan_props(m, T, res_root, art_dir):
 
 
 def render(report, ground, pack, conf):
-    """Preview from Godot's own cell choices: blit each layer's atlas regions in layer order."""
+    """Preview from the cells the Godot scene holds: blit each layer's atlas regions in layer order."""
     T = ground["tile_px"]
     atl = {}
     for i, s in enumerate(ground["sources"]):
@@ -207,8 +242,8 @@ def render_props(img, props, pack, conf):
 
 
 def build(m, ground, pack, conf):
-    """Paint the map with Godot's own terrain solver inside the game project, save the scene under
-    <assets>/maps/, write the preview + report under <src>/maps/."""
+    """Paint the map inside the game project (Godot's terrain solver for the shapes, the spec's picks for the
+    variants), save the scene under <assets>/maps/, write the preview + report under <src>/maps/."""
     settings = core.SETTINGS
     name = core.snake(m.get("name", "map"))
     layers, w, h = plan(m, ground)
@@ -227,7 +262,10 @@ def build(m, ground, pack, conf):
     if code != 0:
         raise core.JobError(f"Godot import failed before painting {name}:\n{out[-1500:]}")
     os.makedirs(os.path.dirname(scene), exist_ok=True)   # ResourceSaver does not create folders
-    job = {"name": name.title().replace("_", ""), "tileset": ground["res"], "w": w, "h": h, "layers": layers,
+    # the job's terrain layers carry the spec's picks; the recorded plan above stays as it was (it is the manifest)
+    picks = terrain_picks(layers, ground)
+    job_layers = [dict(L, picks=picks[i]) if i in picks else L for i, L in enumerate(layers)]
+    job = {"name": name.title().replace("_", ""), "tileset": ground["res"], "w": w, "h": h, "layers": job_layers,
            "scene": godotrun.res_of(settings, scene), "props": props}
     jp, rp = core.work("mapbuild", f"{name}_job.json"), core.work("mapbuild", f"{name}_report.json")
     core.write_text(jp, json.dumps(job))

@@ -22,6 +22,7 @@ The tools refuse to replace an existing output: add `--overwrite` when you re-ex
 | 3D model or animation to a sprite sheet | Blender | `blender -b --python-exit-code 1 -P tools/blender/render_sprites.py -- <model> --out <sheet.png> --directions 8 --action walk` (or the `bpy` module, SOP-11); `--actions all --manifest assets/dotwork/rendered.assets.json` also writes a Dotwork asset manifest your engine's importer loads |
 | A recording to a README or store GIF | Pillow | `python tools/art/frames_to_gif.py <frames> <out.gif>` |
 | AI pixel art: sprites, characters in 4 or 8 directions, animations, tilesets (paid, your token) | PixelLab API | `python tools/art/pixellab.py character --text "..." --size 64 --out <assets>/art/hero --log` (below) |
+| AI pixel art that keeps one look across a set (Pro Flash and a style image), and animation loops (a pinned last frame) | PixelLab API | `python tools/art/pixellab.py image --pro-flash --style-image <assets>/art/hero/south.png --text "..." --size 32 --out <assets>/art/slime.png --log`; `animate --last-frame` (below) |
 | AI pixel art on your own GPU: characters, props, tiles, edits, rotations, walk cycles (free per image, big setup) | ComfyUI + SpriteKiln | `python tools/art/comfy_local.py run --workflow art_src/comfy/npc.api.json --set "Prompt.text=..." --seed 1 --out <assets>/art/npcs --log` (below) |
 | A whole art set for a Godot game from one spec, on your own GPU: characters, props, terrain and maps, effects, UI, fonts | Dotwork (ComfyUI) | `python tools/art/dotwork/dotwork.py pack --spec assets_src/specs/town.json` (below) |
 | Drawing, animating and hand-polishing pixel art (including AI output) | Aseprite (paid) or Pixelorama (free); more in `docs/resources/art.md` | By hand; keep the `.aseprite` or `.pxo` file under `assets_src/` |
@@ -56,9 +57,17 @@ tilesets, effects, UI panels, fonts and props, and fixes existing pixel art. It 
   Tested by the kit offline against PixelLab's published API spec (K01); live so far: `check`, a 16 px `character --legacy`,
   `prop`, `vfx`, `iso-tile`, `tileset --kind sidescroller`, `edit`, `fix reduce-colors`, `image`, a 32 px v3 `character`
   (8 directions from text; 4 only on the legacy endpoint), `animate` and `animate-character --mode skeleton-v3`, and
-  on 2026-11-04 also top-down `tileset`, `ui`, `font`, a 1-direction `object`, `pixelate`, every `fix` op and `fetch`;
+  on 2026-11-04 also top-down `tileset`, `ui`, `font`, a 1-direction `object`, `pixelate`, every `fix` op and `fetch`,
+  and on 2026-11-13 `image --pro-flash`, `object --pro-flash` with a style image, `character` and 8-direction
+  `object --pro-flash --source-image-id`, `animate --last-frame` and `vfx --pro` (K01);
   the rest **(verify)** live. A 1-direction object of 170 px or less comes back as several candidates (64 px: 16),
-  all saved as `candidate_NN.png` to pick from.
+  all saved as `candidate_NN.png` to pick from; with `--pro-flash` it is one image, `south.png`.
+  **Pro Flash** (`--pro-flash` on `image`, `edit`, `pixelate`, `character`, `object`; PixelLab's API spec read
+  2026-11-13) is PixelLab's newer model: sides 16 to 256 in steps of 4 (edit 32 up), no outline, shading or detail
+  words (describe the look, or lend it with `--style-image`, a PNG no bigger than the canvas; `--style-traits` copies
+  only some of palette, outline, detail and shading). `--quote` asks PixelLab's price for that exact request, free,
+  and makes nothing; the live charges matched it. `image --pro-flash` records a `source_image_id`: hand it to
+  `character` or `object --pro-flash --source-image-id` and only the rotations are charged (1 at 32 px, live).
   Commands and rough costs in generations (PixelLab's help, 2026-10 **(verify)**; each command prints its real cost):
 
   | Command | Makes | Cost |
@@ -74,6 +83,10 @@ tilesets, effects, UI panels, fonts and props, and fixes existing pixel art. It 
   | `font` | a pixel font (.ttf + atlas) | 15 |
   | `tiles-pro` **[paid plan only]** | pro tile variations, a terrain set, road autotiles, a building kit | 10 to 25 |
   | `outfit` **[paid plan only]** | one outfit onto every frame of an animation | 10 to 25 |
+  | `image`, `edit` / `pixelate` `--pro-flash` | one image on Pro Flash; an edit; a picture into pixels | 5 / 5 / 6 |
+  | `character` / `object --pro-flash` | a south view, then 8 directions (an object also 1) | 6 / 5 or 6; from `--source-image-id` the rotations only (1) |
+
+  The Pro Flash prices are PixelLab's own, marked provisional (`GET /pro-flash/cost`, 2026-11-13); `--quote` shows today's.
 
   Lessons from field testing (tip, 2026-10): fix the **base sprite** before animating
   (`edit`: "change ONLY the hand into a fist"); `--mode template` redraws the character and can drop big props, while
@@ -97,19 +110,26 @@ tilesets, effects, UI panels, fonts and props, and fixes existing pixel art. It 
 - **Keep animation smoothness even** (tip, E66): one fluid hero beside choppy enemies or animals looks wrong. Pick frame
   counts per kind of thing (characters, enemies, critters) and hold them, or make low frame counts the game's style.
 - **PixelLab's own workflow tips** (tip, E67: the vendor's tutorial; the features checked against its MCP tool
-  descriptions 2026-10-27, its claims about result quality are the vendor's own). `pixellab.py` does not have Pro Flash, a style image or a last frame yet: use the MCP tools named here.
+  descriptions 2026-10-27, its claims about result quality are the vendor's own). Each MCP tool named here has a
+  scripted, logged twin in `pixellab.py` (in brackets), except inpainting and target palettes: those stay MCP-only.
   - One look for a whole set: pass the same anchor sprite (the hero's south view) as the style image on every
-    `create_image_pro_flash` call; without it each call picks its own look. One changed word ("shorter") varies a
-    design without losing the style.
-  - Variants by editing: `edit_image_pro_flash` from the last good result (winter outfit, then a royal one), enemy
+    `create_image_pro_flash` call (`image --pro-flash --style-image`; also `character` and `object --pro-flash`, and
+    `ui --style-image`); without it each call picks its own look. One changed word ("shorter") varies a
+    design without losing the style. Live 2026-11-13 (K01): a chest made with a slime as its style image took the
+    slime's dark outline and palette.
+  - Variants by editing: `edit_image_pro_flash` (`edit --pro-flash`, `--reference <png>` to take the change from a
+    picture) from the last good result (winter outfit, then a royal one), enemy
     variants (the same beetle made of ice), states (walking, hurt, sleeping; say "front facing" or the pose turns).
     `inpaint_image_pro_flash` with "New layer with changes" gives a separate layer per piece (hair, shirt, pants):
-    swappable overlays.
+    swappable overlays (MCP only).
   - Animation: give the frame room before a big motion (a 64 px sprite on an 80 px canvas for a slam). On 8
     directions, write the motion for each direction: an enhanced prompt written from the south view says "towards the
     camera", which fights north-east. Name an effect's color, or each direction picks its own. Mirror a direction
     that works instead of generating the opposite one. For a clean loop, pin the last frame to the first
-    (`animate_image_pixminimax` `last_frame`) and drop the duplicate frame. Clean up every result by hand.
+    (`animate_image_pixminimax` `last_frame`; `animate --last-frame` with the same PNG as `--frame`, or
+    `animate-character --mode v3|pixminimax --directions <one> --end-frame` with that direction's rotation) and drop
+    the duplicate frame. Live 2026-11-13 (K01): `--frames 4` gave 5 frames, `frame_00` the input itself and the last
+    back on the pinned pose; keep one of the two. Clean up every result by hand.
   - PixMiniMax takes 4 to 40 frames (multiples of 4) and is priced by the canvas it upscales to: 40 frames cost 6
     generations at 128x128 and 2 at 132x132 **(verify)**. The vendor now recommends the `skeleton-v3` templates.
 - **Every paid generation gets a yes first.** Claude shows the exact request (`--dry-run`), what it makes and its

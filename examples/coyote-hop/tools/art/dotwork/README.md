@@ -59,9 +59,12 @@ engine has it by default, with its own assets folder (`public/assets` on web and
 elsewhere), from the engine in `.game-kit.json`; elsewhere add `--engine none` to `pack`.
 
 ### Other engines: the importer brings the art in
-Godot loads Dotwork's resources as they are. Every other engine of the kit has an importer for the asset manifest
-([ASSET_MANIFEST.md](ASSET_MANIFEST.md)); its game's `docs/ENGINE.md` (web and RPG Maker MZ: `docs/ENGINE_FLOW.md`)
-has the details:
+Godot loads Dotwork's resources as they are. Every engine of the kit, Godot included, has an importer for the asset
+manifest ([ASSET_MANIFEST.md](ASSET_MANIFEST.md)); its game's `docs/ENGINE.md` (web and RPG Maker MZ:
+`docs/ENGINE_FLOW.md`) has the details:
+- **Godot:** `DotworkAssets.load_all()` or `load_manifest(path)`, then `animated_sprite()`, `sprite()`,
+  `map_node()` ... (scripts/core/dotwork_assets.gd, #307), for a pack with no Godot resources (the sheets
+  `tools/blender/render_sprites.py --manifest` renders from a 3D character); Dotwork's own resources need none.
 - **web (Phaser):** `queueDotwork(this)` in a scene's `preload()`, then `dotworkPack()` in `create()`
   (src/game/dotwork.ts); every pack loads before the title screen in `dev.py run` and `smoke`.
 - **web-3d (Three.js):** `await DotworkLibrary.load(DOTWORK_MANIFESTS)` in a world's `load()` (`src/game/dotwork/`);
@@ -351,8 +354,10 @@ Timing on the tested GPU: a sprite about 18 s, a texture tile with variants abou
   Decals, Fixtures. Overlays are 47-tile blob sets (Match Corners and Sides): paint a terrain on its own empty layer
   with the editor's defaults and exactly the painted cells fill (single cells are islands, 1-wide lines are paths).
   Stack lower terrains under upper ones (dirt under cobble, sand under water) so no gap opens between their edges.
-- Maps: `assets/maps/<name>.tscn` (painted by Godot's own solver, props instanced under a y-sorted `Props` node),
-  plus `assets_src/maps/<name>_preview.png` from the cells Godot chose.
+- Maps: `assets/maps/<name>.tscn` (Godot's own solver paints each overlay's shape, then every terrain cell gets the
+  spec's variant pick, `cell_roll` in ASSET_MANIFEST.md, so the map shows the same tiles as every other engine; props
+  instanced under a y-sorted `Props` node), plus `assets_src/maps/<name>_preview.png` from the cells the scene holds.
+  Before #307 the solver's own roll stayed: a map scene painted then keeps its old variants until its pack runs again.
 - Effects: `fx_<name>.tscn` (additive material, autoplay). Damage flash: `mat_damage_flash.tres`, tween its
   `shader_parameter/flash` from 1 to 0 on hit.
 - VFX: `fx/vfx/<name>/vfx_<name>.tscn`. A projectile is a `Node2D` pointing right (a `Trail` behind a `Body`):
