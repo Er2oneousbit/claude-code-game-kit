@@ -481,7 +481,7 @@ class Importer:
                 continue
             if L["kind"] == "terrain":
                 # the key per cell (mask or corner bits) and the variant picked with the cell's roll and this
-                # layer's index: the same tile on every engine (Godot rolls its own)
+                # layer's index: the same tile on every engine
                 cells = spec.resolve_terrain(ts_doc, L, i)
                 terrain[L["name"]] = cells
                 missing = sum(1 for _, _, _, tile in cells if tile is None)
