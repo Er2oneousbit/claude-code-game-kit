@@ -2,12 +2,14 @@
 // TextPages.cs
 // Purpose : The screens that are a heading, scrolling text and Back: "What now?" (the goal, the last line said,
 //           the controls: #167, cognitive access), "Dialogue history" (every line said so far, newest last: #167),
-//           Credits (CREDITS.md without its HTML comments, Core/CreditsText.cs; or a placeholder) and Loading.
+//           Credits (CREDITS.md without its HTML comments and markdown marks, Core/CreditsText.cs; or a
+//           placeholder) and Loading.
 // Usage   : front.OpenHelp(); front.OpenHistory(); front.OpenCredits(); front.Push(new LoadingScreen(front))
 // Notes   : Up and down scroll the text (Back keeps the focus); accept or cancel goes back. The goal is whatever
 //           the game last set (Shell.SetObjective; empty: "no goal set yet"); the last line and the history come
 //           from Shell.History (the subtitle bar records every line it shows). Controls follow the device in use.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the credits paragraphs lose their markdown marks (#284)
 // ---------------------------------------------------------------------------
 using System.Collections.Generic;
 using UnityEngine.UIElements;
@@ -126,7 +128,7 @@ namespace {{GAME_SLUG}}.Shell.Screens
 
         protected override void Fill(VisualElement body)
         {
-            // HTML comments out (tools/credits.py writes one, #279), one paragraph per block (Core/CreditsText.cs)
+            // HTML comments and markdown marks out (#279, #284), one paragraph per block (Core/CreditsText.cs)
             List<string> blocks = CreditsText.Blocks(ShellFiles.ReadOrNull(Shell.CREDITS_FILE));
             if (blocks == null)
             {
