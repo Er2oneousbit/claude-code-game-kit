@@ -39,7 +39,7 @@ python tools/dev.py build --preset release
 | `check` | `cmake --preset <p>` then `cmake --build --preset <p>` |
 | `test` | build, then `ctest --preset <p> --output-on-failure` |
 | `smoke` | runs `<exe> --smoke 120 -- --data-dir build/smoke-data` with dummy SDL drivers (the shell walks title -> menu -> play), checks exit code and output |
-| `smoke --drive <scenario>` | the same with `--drive`, 6000 frames at most, passes when the run prints `DRIVE_DONE`: `menus` (prints `SETTINGS_WRITTEN`), `show:<title|menu|settings|pause|subtitle|play|juice>` (add `--screenshot`), `access[:res=WxH,scale=N,pad,read]` (what `tools/access/sweep.py` runs), `bug` (F8: `DRIVE_BUG`), `pseudo` with `--locale pseudo` (`PSEUDO_PASS`); `crash` (`CRASH_WRITTEN`) and `pseudo-plant` (a `PSEUDO_FAIL` for `plant.too_small`) exit 1 on purpose |
+| `smoke --drive <scenario>` | the same with `--drive`, 6000 frames at most, passes when the run prints `DRIVE_DONE`: `menus` (prints `SETTINGS_WRITTEN`), `show:<title|menu|settings|pause|subtitle|play|juice|credits>` (add `--screenshot`), `access[:res=WxH,scale=N,pad,read]` (what `tools/access/sweep.py` runs), `bug` (F8: `DRIVE_BUG`), `pseudo` with `--locale pseudo` (`PSEUDO_PASS`); `crash` (`CRASH_WRITTEN`) and `pseudo-plant` (a `PSEUDO_FAIL` for `plant.too_small`) exit 1 on purpose |
 | `smoke --shaders` | also runs `kit_shader_check <build>/shader_check` (GPU renderer, hidden window), then `tools/shaders/shader_ref.py compare` |
 | `run` | runs the built exe from the project root so `assets/` paths resolve |
 | `build` | same steps as check; add `--preset release` for the shipping build (global options work before or after the command) |

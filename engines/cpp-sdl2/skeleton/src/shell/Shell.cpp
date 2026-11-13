@@ -12,6 +12,7 @@
 //           pseudo locale, juice demo (#275); data/ and CREDITS.md from game_dir() (next to the exe when the working
 //           directory has no data/, so a shipped build runs from any folder)
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): no real keyboard, mouse or pad in a drive (#276)
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_at_top for show:credits (#284)
 // ---------------------------------------------------------------------------
 #include "shell/Shell.hpp"
 
@@ -1589,6 +1590,13 @@ void Shell::draw_credits(const Screen& s) {
         }
     }
     d.unclip();
+}
+
+void Shell::credits_at_top() {
+    Screen* s = top();
+    if (s && s->id == ScreenId::Credits) {
+        s->offset = kAreaH;   // start = kAreaH - offset: the first row at the top of the area
+    }
 }
 
 void Shell::draw_loading(const Screen& s) {

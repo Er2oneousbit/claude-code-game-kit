@@ -22,8 +22,8 @@
   next to the exe; `smoke --shaders` draws each with `kit_shader_check` and compares it with its golden image.
 - **Tests:** doctest, built as `unit_tests`, one CTest test per `TEST_CASE`. `tests/test_golden_vectors.cpp` holds
   `src/core` to the kit's reference logic: it reads `data/golden/juice.json`, `shell.json` and `credits.json` (the
-  credits screen's text without CREDITS.md's HTML comments) at test time (path from
-  the `GOLDEN_DIR` compile definition); never copy their expected values into code.
+  credits screen's text: CREDITS.md without its HTML comments and markdown marks, the same rule on every engine) at
+  test time (path from the `GOLDEN_DIR` compile definition); never copy their expected values into code.
 - **JSON:** nlohmann-json (vcpkg, header-only, MIT) for settings, saves and string tables. Settings and saves go
   through `src/core/AtomicFile.hpp` (write `<file>.tmp`, flush, rename; saves keep `<file>.bak`).
 - **Version:** one source, `project(... VERSION x.y.z)` in `CMakeLists.txt` (SOP-06). Code reads it as the `GAME_VERSION`
@@ -104,7 +104,7 @@
   `SETTINGS_WRITTEN`), `--drive crash` (a planted exception: `CRASH_WRITTEN`, exit 1 on purpose), `--drive pseudo
   --locale pseudo` (every screen, every label: `PSEUDO_PASS` or `PSEUDO_FAIL` lines and exit 1; `pseudo-plant` must
   fail on its planted label), `--drive bug` (F8 on the menu: `DRIVE_BUG <folder>`),
-  `--drive show:<title|menu|settings|pause|subtitle|play|juice> --screenshot captures/x.bmp`, and
+  `--drive show:<title|menu|settings|pause|subtitle|play|juice|credits> --screenshot captures/x.bmp`, and
   `--drive access` (the accessibility sweep's tour; `python tools/access/sweep.py` runs it five ways). `--data-dir` keeps
   settings.json in a folder of yours (default: a fresh `build/smoke-data/`, never the player's preferences folder;
   one inside a build tree such as `build/debug/` is refused, exit 2), `--locale` picks the language. Scenarios live in

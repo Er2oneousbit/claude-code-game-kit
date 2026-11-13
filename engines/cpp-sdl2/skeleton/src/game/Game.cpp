@@ -18,6 +18,7 @@
 //           the new drives in --help (#275)
 // Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the game's Dotwork packs load at init and show on the
 //           play screen (#60, DotworkShowcase)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits in --help (#284)
 // ---------------------------------------------------------------------------
 #include "game/Game.hpp"
 
@@ -70,7 +71,8 @@ bool Game::configure(const std::vector<std::string>& args) {
 
 const char* Game::options_help() {
     return "  --drive SCENARIO   (smoke) a scripted path through the shell: menus, crash, pseudo, pseudo-plant, bug,\n"
-           "                     access[:res=WxH,scale=N,pad,read], show:<title|menu|settings|pause|subtitle|play|juice>;\n"
+           "                     access[:res=WxH,scale=N,pad,read],\n"
+           "                     show:<title|menu|settings|pause|subtitle|play|juice|credits>;\n"
            "                     dev.py smoke --drive passes it\n"
            "  --data-dir DIR     keep settings.json in this folder (default: the user's preferences folder)\n"
            "  --locale LANG      language for the run (data/i18n/<LANG>.json)\n"
