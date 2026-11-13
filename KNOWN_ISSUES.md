@@ -191,9 +191,13 @@ model-free example packs, not yet on a real game's art.
 ### Tools with commands not yet run live
 - **`tools/art/comfy_local.py`:** `check` (with `--workflow`) ran live against ComfyUI 0.43.0; `run` and `strip`
   only against the exam's stand-in server. A real `run` of a SpriteKiln workflow is the next step.
-- **`tools/art/pixellab.py`:** `tiles-pro`, `outfit`, an 8-direction `object` and `vfx --pro`. Every other command
-  has run live (the last on 2026-11-04, a pass that stopped at its 40-generation budget; these cost 6 to 25 each).
-  It also lacks PixelLab's newer Pro Flash models, style images and pinned last frames (the MCP server has them; SOP-16 says which tool to use; [#16](https://github.com/Er2oneousbit/claude-code-game-kit/issues/16)).
+- **`tools/art/pixellab.py`:** `tiles-pro`, `outfit` and the legacy 8-direction `object` (10 to 25 generations each,
+  with no price check to ask first). Every other command has run live (2026-11-04, then 2026-11-13 for `vfx --pro`).
+  Pro Flash (`--pro-flash`), style images and pinned last frames were added for
+  [#16](https://github.com/Er2oneousbit/claude-code-game-kit/issues/16): image, object with a style image,
+  character and 8-direction object from `--source-image-id`, and `animate --last-frame` ran live on 2026-11-13 (19
+  generations); `edit` and `pixelate --pro-flash`, `ui --style-image` and `animate-character --end-frame` only against
+  the exam's stand-in server. Pro Flash inpainting and target palettes stay MCP-only.
 - **`tools/audio/wavesmith/eleven_audio.py`:** music is tested offline only. ElevenLabs offers its music API on paid
   plans only: on a free plan the request returns HTTP 402, "Music API is not available for free users" (retried
   2026-11-04 with credits left; a refused request spends none). Sound effects run live on the free plan.
