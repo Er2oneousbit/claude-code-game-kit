@@ -174,8 +174,17 @@ Game and UI input **(verify in your project: a game that sets its own input mode
 focused)**. Wire the game to it:
 - `GetGameInstance()->GetSubsystem<UGameKitShellSubsystem>()->OnShellEvent.AddUObject(this, &AMyGame::OnShell)`:
   "play" (the loading screen is over: start or unpause), "resume", "quit_title" (reset the level), "quit",
-  "settings_changed" (read the settings again: `GetModel()->Settings`, `UGameUserSettings` for the window,
-  Sound Classes for the volumes, `access.timing_scale` into your buffers), "consent".
+  "settings_changed" (read the settings again: `GetModel()->Settings`, Sound Classes for the volumes,
+  `access.timing_scale` into your buffers), "consent", "display_applied" (the Display tab's Apply or its revert: the
+  subsystem sets the window through `UGameUserSettings` itself, outside the editor and smoke runs **(verify in a
+  packaged game)**), "hud_scale_changed".
+- The Display tab waits for Apply (`FGameKitDisplayStaging`, `GameKitDisplayStaging.h` in the runtime module, held to
+  `data/golden/shell.json`): Apply sends only the changed fields, mode before resolution, and saves; a new window mode
+  or size asks "Keep these display settings?" and puts the old ones back after 15 real seconds (`FPlatformTime`, not
+  game time; it runs while the game is paused), on Revert, or on Back. Back with a change not applied warns once.
+- A game HUD's text: `HudFontSize(Base)` on the subsystem (`HudTextScale()` is `display.ui_scale` times
+  `access.text_scale`; both `BlueprintPure`) and `OnHudScaleChanged` when it changes (#309). The shell's own play
+  prompt and every menu font go through the model's `HudFontSize`.
 - `Say(Speaker, Text)` shows a subtitle and records it for "What now?" and the history; `SetObjective(Text)` sets the
   goal "What now?" shows (#167). Both are `BlueprintCallable`, as are `SettingNumber`/`SettingFlag` and `TopScreen`,
   so a Blueprint-only project reads `access.auto_repeat` or `audio.music` without C++.
@@ -220,6 +229,8 @@ python tools/dev.py smoke --drive crash                                # exit 1 
 python tools/dev.py smoke --drive bug                                  # F8 on the menu: DRIVE_BUG <folder> (a GPU, for the picture)
 python tools/dev.py smoke --drive pseudo --locale pseudo               # every screen: PSEUDO_PASS, or PSEUDO_FAIL lines
 python tools/dev.py smoke --drive pseudo-plant --locale pseudo         # exit 1 on purpose, naming plant.too_small
+python tools/dev.py smoke --drive display                              # Apply, the 15 s confirm reverts in real time: DRIVE_DISPLAY
+python tools/dev.py smoke --drive show:confirm --screenshot captures/confirm.png   # "Keep these display settings?"
 python tools/dev.py smoke --drive show:juice --screenshot captures/juice.png   # the box hit: DRIVE_JUICE
 python tools/dev.py smoke --drive show:settings --screenshot captures/settings.png   # a picture (the editor off-screen, a GPU)
 python tools/dev.py smoke --drive access:res=1280x800,scale=2,pad      # the sweep's tour: ACCESS_* lines
@@ -228,7 +239,8 @@ python tools/dev.py test --filter GameKit.Screens                       # the sc
 ```
 `--data-dir` keeps a settings folder between runs (default: a fresh `Saved/GameKitSmoke`; one inside `Packaged/`,
 `Saved/StagedBuilds/` or `Binaries/` is refused, exit 2), `--locale fr` shows another
-language. Screens for `show:`: title, main_menu, settings, pause, help, history, credits, loading, subtitle, juice
+language. Screens for `show:`: title, main_menu, settings, pause, help, history, credits, loading, subtitle, apply (the
+Display tab with a change waiting), confirm (its keep-or-revert question), juice
 (the box just hit, inside the hitstop; `DRIVE_JUICE` lists hits, trauma, frozen, squash, flash and the ring, and the
 drive fails unless every one took). The pseudo drive checks each screen, each settings tab at its top and its end,
 the "press a key" prompt, the juice demo and the pause pages: a text wider than its column, or not through `T()` (no

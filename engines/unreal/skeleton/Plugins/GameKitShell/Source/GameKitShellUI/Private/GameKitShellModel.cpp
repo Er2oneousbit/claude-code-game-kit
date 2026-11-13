@@ -14,6 +14,9 @@
 //           the copy kept in step by SyncCreditsCopy (#278)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): CreditsText, the markdown rule every engine shares
 //           (list markers and emphasis stars go too; a '#' inside a heading's text stays) (#284)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): Display rows stage through FGameKitDisplayStaging, the
+//           Apply row, the keep-or-revert confirm on the wall clock, Back that warns once, disabled rows skipped
+//           (#308); hud_scale_changed when ui_scale times text_scale changes (#309)
 // ---------------------------------------------------------------------------
 #include "GameKitShellModel.h"
 
@@ -26,6 +29,7 @@
 #include "GameKitShellReport.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformMisc.h"
+#include "HAL/PlatformTime.h"
 #include "Misc/DateTime.h"
 #include "Misc/EngineVersion.h"
 #include "Misc/FileHelper.h"
@@ -136,6 +140,10 @@ FString FGameKitScreen::FocusId() const
 	}
 	if (Name == TEXT("settings"))
 	{
+		if (Dialog.Num())   // "Keep these display settings?" (#308)
+		{
+			return TEXT("confirm.") + (Dialog.IsValidIndex(DialogFocus) ? Dialog[DialogFocus].Id : FString());
+		}
 		if (bOnTabs)
 		{
 			return TEXT("tabs.") + Tab();
@@ -171,6 +179,7 @@ FGameKitShellModel::FGameKitShellModel(const FOptions& InOptions)
 			UE_LOG(LogGameKitShell, Warning, TEXT("%s is not a colour data file (palettes missing)"), ColoursFile);
 		}
 	}
+	LastHudScale = HudScale();   // hud_scale_changed fires on a change from here (#309)
 }
 
 FGameKitShellModel::~FGameKitShellModel()
@@ -296,6 +305,11 @@ void FGameKitShellModel::Changed()
 		GameKit::ShellReport::UpdateCrashSettings(this, Write(Settings));   // a crash file shows the settings of now
 	}
 	Event(TEXT("settings_changed"));
+	if (HudScale() != LastHudScale)   // #309: a HUD sized by hand lays out again
+	{
+		LastHudScale = HudScale();
+		Event(TEXT("hud_scale_changed"));
+	}
 }
 
 double FGameKitShellModel::TextScale() const
@@ -462,11 +476,7 @@ FGameKitRow FGameKitShellModel::ButtonRow(const FString& Id, const FString& Labe
 
 FGameKitRow FGameKitShellModel::BackRow()
 {
-	return ButtonRow(TEXT("back"), TEXT("settings.back"), [this]
-	{
-		SaveSettings();
-		Pop();
-	});
+	return ButtonRow(TEXT("back"), TEXT("settings.back"), [this] { SettingsBack(); });
 }
 
 FGameKitRow FGameKitShellModel::Field(const TCHAR* Section, const TCHAR* FieldName, EGameKitRowKind Kind, double Lo, double Hi,
@@ -504,7 +514,154 @@ FGameKitRow FGameKitShellModel::Field(const TCHAR* Section, const TCHAR* FieldNa
 	default:
 		break;
 	}
+	if (S == TEXT("display"))   // Display waits for Apply (#308): the row shows and changes the staged value
+	{
+		switch (Kind)
+		{
+		case EGameKitRowKind::Toggle:
+		{
+			Row.Value = [this, F] { return T(StagedFlag(F) ? TEXT("value.on") : TEXT("value.off")); };
+			auto Flip = [this, F] { Staging.Stage(F, MakeBool(!StagedFlag(F))); };
+			Row.Step = [Flip](int32) { Flip(); };
+			Row.Accept = Flip;
+			break;
+		}
+		case EGameKitRowKind::Slider:
+			Row.Value = [this, F, bTimes] { return bTimes ? Times(StagedNum(F)) : Percent(StagedNum(F)); };
+			Row.Step = [this, F, Lo, Hi, Step](int32 Dir) { Staging.Stage(F, MakeNumber(Snap(StagedNum(F) + Dir * Step, Lo, Hi, Step))); };
+			break;
+		case EGameKitRowKind::Choice:
+		{
+			Row.Value = [this, F] { return T(FString::Printf(TEXT("opt.%s.%s"), *F, *StagedStr(F))); };
+			auto Cycle = [this, F, Choices](int32 Dir)
+			{
+				int32 Index = Choices.IndexOfByKey(StagedStr(F));
+				Index = Index == INDEX_NONE ? 0 : (Index + Dir + Choices.Num()) % Choices.Num();
+				Staging.Stage(F, MakeString(Choices[Index]));
+			};
+			Row.Step = Cycle;
+			Row.Accept = [Cycle] { Cycle(1); };
+			break;
+		}
+		default:
+			break;
+		}
+	}
 	return Row;
+}
+
+// ---- The Display tab's Apply (#308) --------------------------------------------------------------------------------
+double FGameKitShellModel::StagedNum(const FString& Field) const
+{
+	const TSharedPtr<FJsonValue> V = Staging.Value(Field);
+	return Is(V, EJson::Number) ? V->AsNumber() : 0.0;
+}
+
+bool FGameKitShellModel::StagedFlag(const FString& Field) const
+{
+	const TSharedPtr<FJsonValue> V = Staging.Value(Field);
+	return Is(V, EJson::Boolean) && V->AsBool();
+}
+
+FString FGameKitShellModel::StagedStr(const FString& Field) const
+{
+	const TSharedPtr<FJsonValue> V = Staging.Value(Field);
+	return Is(V, EJson::String) ? V->AsString() : FString();
+}
+
+FIntPoint FGameKitShellModel::StagedResolution() const
+{
+	const TSharedPtr<FJsonValue> V = Staging.Value(TEXT("resolution"));
+	if (Is(V, EJson::Array) && V->AsArray().Num() == 2 && Is(V->AsArray()[0], EJson::Number) && Is(V->AsArray()[1], EJson::Number))
+	{
+		return FIntPoint(FMath::RoundToInt(V->AsArray()[0]->AsNumber()), FMath::RoundToInt(V->AsArray()[1]->AsNumber()));
+	}
+	return GameKit::SettingResolution(*Settings);
+}
+
+void FGameKitShellModel::SetDisplay(const FGameKitDisplayStaging::FCalls& Calls)
+{
+	if (Calls.IsEmpty())
+	{
+		return;
+	}
+	const TSharedPtr<FJsonObject> Display = Settings->GetObjectField(TEXT("display"));
+	for (const FGameKitDisplayStaging::FCall& Call : Calls)
+	{
+		Display->SetField(Call.Key, Clone(Call.Value));
+	}
+	Changed();
+	Event(TEXT("display_applied"));   // the subsystem sets the window from settings.display
+	SaveSettings();
+}
+
+void FGameKitShellModel::CloseDisplayConfirm()
+{
+	for (FGameKitScreen& S : Stack)
+	{
+		if (S.Name == TEXT("settings") && S.Dialog.Num())
+		{
+			S.Dialog.Empty();
+			S.DialogFocus = 0;
+			++Version;
+		}
+	}
+	LastConfirmSecs = -1;
+}
+
+bool FGameKitShellModel::ApplyDisplay()
+{
+	SetDisplay(Staging.Apply());
+	FGameKitScreen* S = Top();
+	if (S && S->Name == TEXT("settings") && S->Rows.IsValidIndex(S->Focus) && !S->Rows[S->Focus].IsEnabled())
+	{
+		S->Focus = (S->Focus + 1) % S->Rows.Num();   // Apply is disabled now: focus moves on (to Back)
+	}
+	if (Staging.Confirming() && S && S->Name == TEXT("settings"))
+	{
+		S->Dialog.Empty();
+		S->Dialog.Add(ButtonRow(TEXT("keep"), TEXT("settings.keep"), [this] { KeepDisplay(); }));
+		S->Dialog.Add(ButtonRow(TEXT("revert"), TEXT("settings.revert"), [this] { RevertDisplay(); }));
+		S->DialogFocus = 0;   // Keep
+		LastConfirmSecs = Staging.Seconds().Get(0);
+		++Version;
+		return true;
+	}
+	++Version;
+	return false;
+}
+
+void FGameKitShellModel::KeepDisplay()
+{
+	Staging.Keep();
+	CloseDisplayConfirm();
+}
+
+void FGameKitShellModel::RevertDisplay()
+{
+	SetDisplay(Staging.Revert());
+	CloseDisplayConfirm();
+}
+
+void FGameKitShellModel::SettingsBack()
+{
+	TPair<FString, FGameKitDisplayStaging::FCalls> B = Staging.Back();
+	if (B.Key == TEXT("revert"))
+	{
+		SetDisplay(B.Value);
+		CloseDisplayConfirm();
+	}
+	else if (B.Key == TEXT("warn"))
+	{
+		Message = T(TEXT("settings.unapplied"));
+		MessageT = MessageS;
+		++Version;
+	}
+	else
+	{
+		SaveSettings();
+		Pop();
+	}
 }
 
 FGameKitRow FGameKitShellModel::BindingRow(const FString& Action)
@@ -611,7 +768,7 @@ void FGameKitShellModel::BuildTab(FGameKitScreen& Screen)
 		Cap.Label = [this] { return T(TEXT("settings.display.frame_cap")); };
 		Cap.Value = [this]
 		{
-			const int32 V = FMath::RoundToInt(Num(TEXT("display"), TEXT("frame_cap")));
+			const int32 V = FMath::RoundToInt(StagedNum(TEXT("frame_cap")));
 			return V == 0 ? T(TEXT("opt.frame_cap.0")) : T(TEXT("value.fps"), Args(TEXT("n"), FString::FromInt(V)));
 		};
 		auto CycleCap = [this](int32 Dir)
@@ -620,12 +777,12 @@ void FGameKitShellModel::BuildTab(FGameKitScreen& Screen)
 			int32 Index = 0;
 			for (int32 I = 0; I < N; ++I)
 			{
-				if (GameKit::FrameCaps[I] == FMath::RoundToInt(Num(TEXT("display"), TEXT("frame_cap"))))
+				if (GameKit::FrameCaps[I] == FMath::RoundToInt(StagedNum(TEXT("frame_cap"))))
 				{
 					Index = I;
 				}
 			}
-			SetNum(TEXT("display"), TEXT("frame_cap"), GameKit::FrameCaps[(Index + Dir + N) % N]);
+			Staging.Stage(TEXT("frame_cap"), MakeNumber(GameKit::FrameCaps[(Index + Dir + N) % N]));
 		};
 		Cap.Step = CycleCap;
 		Cap.Accept = [CycleCap] { CycleCap(1); };
@@ -636,13 +793,13 @@ void FGameKitShellModel::BuildTab(FGameKitScreen& Screen)
 		Res.Label = [this] { return T(TEXT("settings.display.resolution")); };
 		Res.Value = [this]
 		{
-			const FIntPoint R = GameKit::SettingResolution(*Settings);
+			const FIntPoint R = StagedResolution();
 			return T(TEXT("value.resolution"), Args(TEXT("w"), FString::FromInt(R.X), TEXT("h"), FString::FromInt(R.Y)));
 		};
 		auto CycleRes = [this](int32 Dir)
 		{
 			const int32 N = UE_ARRAY_COUNT(Resolutions);
-			const FIntPoint Now = GameKit::SettingResolution(*Settings);
+			const FIntPoint Now = StagedResolution();
 			int32 Index = 0;
 			for (int32 I = 0; I < N; ++I)
 			{
@@ -652,13 +809,15 @@ void FGameKitShellModel::BuildTab(FGameKitScreen& Screen)
 				}
 			}
 			const int32* Pick = Resolutions[(Index + Dir + N) % N];
-			Settings->GetObjectField(TEXT("display"))->SetArrayField(TEXT("resolution"), {MakeNumber(Pick[0]), MakeNumber(Pick[1])});
-			Changed();
+			Staging.Stage(TEXT("resolution"), MakeArray({MakeNumber(Pick[0]), MakeNumber(Pick[1])}));
 		};
 		Res.Step = CycleRes;
 		Res.Accept = [CycleRes] { CycleRes(1); };
 		Rows.Add(Res);
 		Rows.Add(Field(TEXT("display"), TEXT("ui_scale"), EGameKitRowKind::Slider, 0.75, 2.0, 0.25, {}, true));
+		FGameKitRow ApplyRow = ButtonRow(TEXT("apply"), TEXT("settings.apply"), [this] { ApplyDisplay(); });
+		ApplyRow.Enabled = [this] { return Staging.HasPending(); };   // only while a Display change waits
+		Rows.Add(ApplyRow);
 	}
 	else if (Tab == TEXT("audio"))
 	{
@@ -800,6 +959,7 @@ FGameKitScreen FGameKitShellModel::Build(const FString& Name)
 	else if (Name == TEXT("settings"))
 	{
 		S.HeadingKey = TEXT("settings.title");
+		Staging = FGameKitDisplayStaging(FindObject(Settings, TEXT("display")));   // nothing waits when the screen opens
 		S.Tabs = StringArray(SettingsTabs, UE_ARRAY_COUNT(SettingsTabs));
 		S.bOnTabs = true;
 		BuildTab(S);
@@ -1416,7 +1576,15 @@ bool FGameKitShellModel::RowAction(FGameKitScreen& Screen, TArray<FGameKitRow>& 
 	}
 	if (Action == TEXT("ui_down") || Action == TEXT("ui_up"))
 	{
-		Focus = (Focus + (Action == TEXT("ui_down") ? 1 : Rows.Num() - 1)) % Rows.Num();
+		// disabled rows (Apply with nothing waiting, #308) are stepped over
+		for (int32 Tries = 0; Tries < Rows.Num(); ++Tries)
+		{
+			Focus = (Focus + (Action == TEXT("ui_down") ? 1 : Rows.Num() - 1)) % Rows.Num();
+			if (Rows[Focus].IsEnabled())
+			{
+				break;
+			}
+		}
 		++Version;
 		NarrateFocus();
 		return true;
@@ -1424,6 +1592,10 @@ bool FGameKitShellModel::RowAction(FGameKitScreen& Screen, TArray<FGameKitRow>& 
 	// Copies of the row's callbacks: a callback that pushes or pops a screen can move or free the row it came
 	// from (the stack array grows), so the running lambda must own its captures, not borrow the row's
 	const FGameKitRow& Row = Rows[FMath::Clamp(Focus, 0, Rows.Num() - 1)];
+	if (!Row.IsEnabled())
+	{
+		return Action == TEXT("ui_accept");   // a disabled row does nothing
+	}
 	const TFunction<void(int32)> Step = Row.Step;
 	const TFunction<void()> Accept = Row.Accept;
 	const FString ScreenName = Screen.Name;
@@ -1499,10 +1671,19 @@ bool FGameKitShellModel::Dispatch(const FString& Action)
 	}
 	if (Name == TEXT("settings"))
 	{
+		if (S->Dialog.Num())   // the keep-or-revert confirm takes every press; cancel reverts (#308)
+		{
+			if (Action == TEXT("ui_cancel"))
+			{
+				SettingsBack();
+				return true;
+			}
+			RowAction(*S, S->Dialog, S->DialogFocus, Action);
+			return true;
+		}
 		if (Action == TEXT("ui_cancel"))
 		{
-			SaveSettings();
-			Pop();
+			SettingsBack();
 			return true;
 		}
 		if (S->bOnTabs)
@@ -1598,6 +1779,24 @@ bool FGameKitShellModel::Dispatch(const FString& Action)
 void FGameKitShellModel::Update(double Dt)
 {
 	Time += Dt;
+	// The display confirm's countdown runs on the wall clock (#308): not Dt, which is game time in the game and a
+	// fixed 1/60 s per frame in a drive, and not paused with the game
+	const double Now = FPlatformTime::Seconds();
+	const double RealDt = LastRealTime >= 0.0 ? Now - LastRealTime : 0.0;
+	LastRealTime = Now;
+	if (Staging.Confirming())
+	{
+		SetDisplay(Staging.Tick(RealDt));
+		if (!Staging.Confirming())
+		{
+			CloseDisplayConfirm();   // ran out: the old values are back
+		}
+		else if (Staging.Seconds().Get(0) != LastConfirmSecs)
+		{
+			LastConfirmSecs = Staging.Seconds().Get(0);
+			++Version;               // "Reverting in N s" redraws once a second
+		}
+	}
 	if (MessageT > 0.0)
 	{
 		MessageT -= Dt;

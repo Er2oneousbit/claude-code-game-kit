@@ -18,6 +18,8 @@
 //   RunTest : load the file -> the case -> the checker for its type (or fail) -> run its steps or points
 //             through the plugin -> compare every result with the expected value
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display_staging cases, the Display tab's Apply
+//           and its keep-or-revert confirm (FGameKitDisplayStaging, #308); Coverage wants at least five of them
 // ---------------------------------------------------------------------------
 #include "Misc/AutomationTest.h"
 
@@ -28,6 +30,7 @@
 #include "GameKitAudioDirector.h"
 #include "GameKitBindings.h"
 #include "GameKitCoyoteTimer.h"
+#include "GameKitDisplayStaging.h"
 #include "GameKitEase.h"
 #include "GameKitFlashLimiter.h"
 #include "GameKitFollowCamera.h"
@@ -582,6 +585,70 @@ namespace GameKitGoldenTests
 		}
 	}
 
+	// The Display tab's Apply (#308): every step's result and the state after it, as the reference records them
+	void CheckDisplayStaging(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case)
+	{
+		Run.SameNumber(GameKit::DisplayConfirmS, Run.Field(Case, TEXT("confirm_s")), TEXT("confirm_s"));
+		FGameKitDisplayStaging St(Run.Obj(Case, TEXT("applied")));
+		for (const TSharedPtr<FJsonObject>& Step : Run.Steps(Case))
+		{
+			const TSharedPtr<FJsonValue> Op = Run.Field(Step, TEXT("op"));
+			const FString Kind = Run.TextAt(Op, 0);
+			TSharedPtr<FJsonValue> Out = MakeNull();
+			FGameKitDisplayStaging::FCalls Calls;
+			if (Kind == TEXT("stage"))
+			{
+				Out = MakeString(St.Stage(Run.TextAt(Op, 1), Run.At(Op, 2)));
+			}
+			else if (Kind == TEXT("apply"))
+			{
+				Calls = St.Apply();
+			}
+			else if (Kind == TEXT("tick"))
+			{
+				Calls = St.Tick(Run.NumAt(Op, 1));
+			}
+			else if (Kind == TEXT("keep"))
+			{
+				St.Keep();
+			}
+			else if (Kind == TEXT("revert"))
+			{
+				Calls = St.Revert();
+			}
+			else if (Kind == TEXT("back"))
+			{
+				TPair<FString, FGameKitDisplayStaging::FCalls> B = St.Back();
+				Out = MakeString(B.Key);
+				Calls = MoveTemp(B.Value);
+			}
+			else
+			{
+				Run.Bad(TEXT("unknown display_staging op ") + Write(Op, 0));
+				continue;
+			}
+			TArray<TSharedPtr<FJsonValue>> Called;
+			for (const FGameKitDisplayStaging::FCall& C : Calls)
+			{
+				Called.Add(MakeArray({MakeString(C.Key), C.Value}));
+			}
+			const TSharedRef<FJsonObject> Shown = MakeShared<FJsonObject>();
+			for (const TCHAR* F : GameKit::DisplayApplyOrder)
+			{
+				Shown->SetField(F, St.Value(F));
+			}
+			const TOptional<int32> Secs = St.Seconds();
+			const FString What = TEXT("step ") + Write(Op, 0);
+			Run.SameValue(Out, Run.Field(Step, TEXT("out")), What + TEXT(" out"));
+			Run.SameValue(MakeArray(Called), Run.Field(Step, TEXT("calls")), What + TEXT(" calls"));
+			Run.SameValue(MakeObject(St.PendingValues()), Run.Field(Step, TEXT("pending")), What + TEXT(" pending"));
+			Run.SameValue(MakeObject(Shown), Run.Field(Step, TEXT("shown")), What + TEXT(" shown"));
+			Run.SameValue(MakeObject(St.AppliedValues()), Run.Field(Step, TEXT("applied")), What + TEXT(" applied"));
+			Run.SameValue(Secs.IsSet() ? MakeNumber(Secs.GetValue()) : MakeNull(), Run.Field(Step, TEXT("seconds")),
+			              What + TEXT(" seconds"));
+		}
+	}
+
 	// ---- audio.json, music.json, access.json (Wavesmith) ----------------------------------------
 
 	TSharedPtr<FJsonValue> PlayAsJson(const FGameKitPlayDecision& D)
@@ -716,8 +783,9 @@ namespace GameKitGoldenTests
 		{TEXT("defaults"), CheckDefaults}, {TEXT("settings_load"), CheckSettingsLoad}, {TEXT("rebind"), CheckRebind},
 		{TEXT("glyph_set"), CheckGlyphSet}, {TEXT("glyph_name"), CheckGlyphName}, {TEXT("prompt_binding"), CheckPromptBinding},
 		{TEXT("save_load"), CheckSaveLoad}, {TEXT("tr"), CheckTr}, {TEXT("plural"), CheckPlural}, {TEXT("pseudo"), CheckPseudo},
-		{TEXT("narration"), CheckNarration},
+		{TEXT("narration"), CheckNarration}, {TEXT("display_staging"), CheckDisplayStaging},
 	};
+	constexpr int32 MinDisplayStagingCases = 5;   // the five Apply scripts of #308: a truncated file must not pass
 
 	const FGoldenType AudioTypes[] = {{TEXT("audio_director"), CheckAudioDirector}};
 	const FGoldenType MusicTypes[] = {{TEXT("music_grid"), CheckMusicGrid}, {TEXT("music_plan"), CheckMusicPlan}};
@@ -829,10 +897,18 @@ namespace GameKitGoldenTests
 			return;
 		}
 		TSet<FString> Seen;
+		int32 Staging = 0;
 		const TArray<TSharedPtr<FJsonValue>>& Cases = Root->GetArrayField(TEXT("cases"));
 		for (const TSharedPtr<FJsonValue>& C : Cases)
 		{
-			Seen.Add(Is(C, EJson::Object) ? GetString(C->AsObject(), TEXT("type"), FString()) : FString());
+			const FString Type = Is(C, EJson::Object) ? GetString(C->AsObject(), TEXT("type"), FString()) : FString();
+			Seen.Add(Type);
+			Staging += Type == TEXT("display_staging") ? 1 : 0;
+		}
+		if (FCString::Strcmp(File, ShellFile) == 0)
+		{
+			Test.TestTrue(FString::Printf(TEXT("shell.json has at least %d display_staging cases (%d)"), MinDisplayStagingCases, Staging),
+			              Staging >= MinDisplayStagingCases);
 		}
 		for (const FGoldenType& T : Types)
 		{

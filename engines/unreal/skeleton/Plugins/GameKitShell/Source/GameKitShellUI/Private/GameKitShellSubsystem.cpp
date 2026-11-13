@@ -7,10 +7,16 @@
 //           the project setting turns them on for good. Quit goes through UKismetSystemLibrary::QuitGame, which
 //           ends a PIE session instead of closing the editor.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): "display_applied" sets the window through
+//           UGameUserSettings outside the editor and smoke runs (#308); HudTextScale, HudFontSize, OnHudScaleChanged
+//           (#309)
 // ---------------------------------------------------------------------------
 #include "GameKitShellSubsystem.h"
 
+#include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
+#include "GameFramework/GameUserSettings.h"
+#include "GameKitSettings.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "Framework/Application/SlateApplication.h"
@@ -82,6 +88,14 @@ void UGameKitShellSubsystem::MakeModel()
 	Model->OnEvent = [this](const FString& What)
 	{
 		OnShellEvent.Broadcast(What);
+		if (What == TEXT("display_applied"))
+		{
+			ApplyWindow();
+		}
+		if (What == TEXT("hud_scale_changed"))
+		{
+			OnHudScaleChanged.Broadcast(HudTextScale());
+		}
 		if (What == TEXT("quit"))
 		{
 			UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
@@ -161,6 +175,39 @@ bool UGameKitShellSubsystem::SettingFlag(const FString& Section, const FString& 
 FString UGameKitShellSubsystem::TopScreen() const
 {
 	return Model.IsValid() ? Model->TopName() : FString();
+}
+
+float UGameKitShellSubsystem::HudTextScale() const
+{
+	return Model.IsValid() ? static_cast<float>(Model->HudScale()) : 1.f;
+}
+
+float UGameKitShellSubsystem::HudFontSize(float BaseSize) const
+{
+	return FGameKitShellModel::HudFontSize(BaseSize, HudTextScale());
+}
+
+void UGameKitShellSubsystem::ApplyWindow()
+{
+	// A smoke run or an editor session keeps its window as it is; a game (standalone or packaged) gets the player's
+	if (!Model.IsValid() || Model->Options().bAutomated || GIsEditor)
+	{
+		return;
+	}
+	UGameUserSettings* User = GEngine ? GEngine->GetGameUserSettings() : nullptr;
+	if (!User)
+	{
+		return;
+	}
+	const FString Mode = Model->Str(TEXT("display"), TEXT("mode"));
+	User->SetFullscreenMode(Mode == TEXT("fullscreen") ? EWindowMode::Fullscreen
+	                        : Mode == TEXT("borderless") ? EWindowMode::WindowedFullscreen
+	                                                     : EWindowMode::Windowed);
+	User->SetScreenResolution(GameKit::SettingResolution(*Model->Settings));
+	User->SetVSyncEnabled(Model->Flag(TEXT("display"), TEXT("vsync")));
+	User->SetFrameRateLimit(static_cast<float>(Model->Num(TEXT("display"), TEXT("frame_cap"))));   // 0 = no limit
+	User->ApplySettings(/*bCheckForCommandLineOverrides*/ false);
+	UE_LOG(LogGameKitShell, Log, TEXT("window: %s %dx%d"), *Mode, User->GetScreenResolution().X, User->GetScreenResolution().Y);
 }
 
 FVector2D UGameKitShellSubsystem::GetStick() const

@@ -10,6 +10,9 @@
 //           list as the access report (Texts()): each text's column width, measured with Slate's font service.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1); crash, bug, pseudo and the juice demo by Claude
 //           (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive (DRIVE_DISPLAY lines; the confirm
+//           must revert on the wall clock), show:apply and show:confirm, the pseudo drive's Display checks, the
+//           confirm and the play HUD in the text report, disabled rows not counted as controls (#308, #309)
 // ---------------------------------------------------------------------------
 #include "GameKitShellDrive.h"
 
@@ -18,10 +21,13 @@
 #include "GameKitSettings.h"
 #include "GameKitShellReport.h"
 #include "GameKitShellTheme.h"
+#include "HAL/PlatformProcess.h"
+#include "HAL/PlatformTime.h"
 #include "Misc/Paths.h"
 
-const TCHAR* FGameKitShellDrive::ShowScreens[10] = {TEXT("title"), TEXT("main_menu"), TEXT("settings"), TEXT("pause"), TEXT("help"),
-                                                    TEXT("history"), TEXT("credits"), TEXT("loading"), TEXT("subtitle"), TEXT("juice")};
+const TCHAR* FGameKitShellDrive::ShowScreens[12] = {TEXT("title"), TEXT("main_menu"), TEXT("settings"), TEXT("pause"), TEXT("help"),
+                                                    TEXT("history"), TEXT("credits"), TEXT("loading"), TEXT("subtitle"), TEXT("juice"),
+                                                    TEXT("apply"), TEXT("confirm")};
 const TCHAR* FGameKitShellDrive::AccessActions[7] = {TEXT("ui_up"), TEXT("ui_down"), TEXT("ui_left"), TEXT("ui_right"), TEXT("ui_accept"),
                                                      TEXT("ui_cancel"), TEXT("pause")};
 const TCHAR* FGameKitShellDrive::PromptActions[6] = {TEXT("move_left"), TEXT("move_right"), TEXT("jump"), TEXT("attack"), TEXT("interact"),
@@ -88,7 +94,7 @@ FGameKitShellDrive::FGameKitShellDrive(const TSharedRef<FGameKitShellModel>& InM
 bool FGameKitShellDrive::IsKnown(const FString& Name)
 {
 	if (Name == TEXT("menus") || Name == TEXT("access") || Name.StartsWith(TEXT("access:")) || Name == TEXT("crash") || Name == TEXT("bug")
-	    || Name == TEXT("pseudo") || Name == TEXT("pseudo-plant"))
+	    || Name == TEXT("pseudo") || Name == TEXT("pseudo-plant") || Name == TEXT("display"))
 	{
 		return true;
 	}
@@ -113,7 +119,7 @@ FString FGameKitShellDrive::KnownNames()
 	{
 		Shows.Add(S);
 	}
-	return TEXT("menus, crash, bug, pseudo, pseudo-plant, access[:res=WxH,scale=N,pad,read], show:<") + FString::Join(Shows, TEXT("|")) + TEXT(">");
+	return TEXT("menus, crash, bug, pseudo, pseudo-plant, display, access[:res=WxH,scale=N,pad,read], show:<") + FString::Join(Shows, TEXT("|")) + TEXT(">");
 }
 
 // ---- Helpers -----------------------------------------------------------------------------------------------------
@@ -292,6 +298,10 @@ int32 FGameKitShellDrive::Run(const FString& Name)
 	{
 		bOk = Pseudo(Name == TEXT("pseudo-plant"));
 	}
+	else if (Name == TEXT("display"))
+	{
+		bOk = Display();
+	}
 	else
 	{
 		Fail(FString::Printf(TEXT("unknown drive %s (%s)"), *Name, *KnownNames()));
@@ -378,6 +388,18 @@ bool FGameKitShellDrive::Show(const FString& Screen)
 	{
 		return JuiceHit();
 	}
+	if (Screen == TEXT("apply") || Screen == TEXT("confirm"))   // #308: a Display change waiting, or its confirm
+	{
+		if (!ToMenu() || !Open(TEXT("settings"), TEXT("settings")) || !StageResolution() || !Focus(TEXT("display.apply")))
+		{
+			return false;
+		}
+		if (Screen == TEXT("confirm") && !Press(TEXT("ui_accept")))
+		{
+			return false;
+		}
+		return Frames(5);
+	}
 	// the rest start in play
 	if (!ToMenu() || !Open(TEXT("play"), TEXT("loading")) || !WaitScreen(TEXT("play")) || !Frames(30))
 	{
@@ -399,6 +421,94 @@ bool FGameKitShellDrive::Show(const FString& Screen)
 		return Frames(5);
 	}
 	return Open(Screen, Screen) && Frames(5);   // help or history
+}
+
+// ---- #308: the Display tab's Apply -----------------------------------------------------------------------------------
+bool FGameKitShellDrive::StageResolution()
+{
+	return ToTab(TEXT("display")) && Press(TEXT("ui_down")) && Focus(TEXT("display.resolution")) && Press(TEXT("ui_right"));
+}
+
+bool FGameKitShellDrive::Display()
+{
+	auto Setting = [this] { return Write(Find(FindObject(Model->Settings, TEXT("display")), TEXT("resolution")), 0); };
+	auto Saved = [this]
+	{
+		const FGameKitSettingsLoad L = GameKit::SettingsLoadFile(Model->SettingsPath());
+		return Write(Find(FindObject(L.Settings, TEXT("display")), TEXT("resolution")), 0);
+	};
+	auto Shown = [this] { return Write(Model->DisplayStaging().Value(TEXT("resolution")), 0); };
+	if (!ToMenu() || !Open(TEXT("settings"), TEXT("settings")))
+	{
+		return false;
+	}
+	const FString Before = Setting();
+	if (!StageResolution())
+	{
+		return false;
+	}
+	if (Shown() == Before || Setting() != Before)
+	{
+		return Fail(FString::Printf(TEXT("the window size row did not stage: shows %s, settings hold %s"), *Shown(), *Setting()));
+	}
+	Print(FString::Printf(TEXT("DRIVE_DISPLAY staged resolution %s (settings still %s)"), *Shown(), *Before));
+	if (!Press(TEXT("ui_cancel")))   // Back with a change waiting: a warning, not a way out
+	{
+		return false;
+	}
+	if (Model->TopName() != TEXT("settings") || Model->Message != Model->T(TEXT("settings.unapplied")))
+	{
+		return Fail(FString::Printf(TEXT("Back with an unapplied Display change did not warn (screen %s)"), *Model->TopName()));
+	}
+	Print(TEXT("DRIVE_DISPLAY warned: ") + Model->Message);
+	if (!Focus(TEXT("display.apply")) || !Press(TEXT("ui_accept")))
+	{
+		return false;
+	}
+	const TOptional<int32> Secs = Model->DisplayStaging().Seconds();
+	if (!Secs.IsSet() || Setting() == Before || Saved() != Setting() || Model->FocusId() != TEXT("confirm.keep"))
+	{
+		return Fail(FString::Printf(TEXT("Apply did not set, save and confirm the window size (settings %s, file %s, focus %s)"),
+		                            *Setting(), *Saved(), *Model->FocusId()));
+	}
+	const double AppliedAt = FPlatformTime::Seconds();
+	const int32 AppliedFrame = Frame;
+	Print(FString::Printf(TEXT("DRIVE_DISPLAY applied resolution %s, confirm %d s, focus on Keep"), *Setting(), Secs.GetValue()));
+	// nobody answers: the confirm must revert by itself, on the wall clock (each frame here is a fixed 1/60 s of
+	// model time, so a countdown on Update's Dt would end after 900 frames, whatever the clock says)
+	while (Model->DisplayConfirming() && !bFailed)
+	{
+		if (FPlatformTime::Seconds() - AppliedAt > GameKit::DisplayConfirmS + RealSlackS)
+		{
+			return Fail(FString::Printf(TEXT("the display confirm was still open after %.1f real seconds"), FPlatformTime::Seconds() - AppliedAt));
+		}
+		FPlatformProcess::Sleep(RealWaitS);   // no need to spin the frames
+		Frames(1);
+	}
+	const double Waited = FPlatformTime::Seconds() - AppliedAt;
+	if (bFailed)
+	{
+		return false;
+	}
+	if (Setting() != Before || Saved() != Before)
+	{
+		return Fail(FString::Printf(TEXT("the confirm ran out but did not put back %s (settings %s, file %s)"), *Before, *Setting(), *Saved()));
+	}
+	if (Waited < GameKit::DisplayConfirmS - RealSlackS)
+	{
+		return Fail(FString::Printf(TEXT("the display confirm reverted after %.1f s: it must count real seconds"), Waited));
+	}
+	Print(FString::Printf(TEXT("DRIVE_DISPLAY reverted to %s after %.1f s real time (%d ticks)"), *Before, Waited, Frame - AppliedFrame));
+	if (!StageResolution() || !Press(TEXT("ui_cancel")) || !Press(TEXT("ui_cancel")) || !WaitScreen(TEXT("main_menu")))   // warns, then discards
+	{
+		return false;
+	}
+	if (Saved() != Before)
+	{
+		return Fail(TEXT("a discarded Display change reached settings.json: ") + Saved());
+	}
+	Print(TEXT("DRIVE_DISPLAY discarded: two Backs left the settings, the file holds ") + Before);
+	return true;
 }
 
 // ---- #275: the juice demo, crash files, the bug report, the pseudo locale ------------------------------------------
@@ -598,6 +708,27 @@ bool FGameKitShellDrive::Pseudo(bool bPlant)
 			return false;
 		}
 		Check(FString(TEXT("settings.")) + Tab + TEXT(".end"));
+		if (FCString::Strcmp(Tab, TEXT("display")) == 0)   // #308: Apply enabled, then the confirm
+		{
+			if (!StageResolution())
+			{
+				return false;
+			}
+			Check(TEXT("settings.display.pending"));
+			if (!Focus(TEXT("display.apply")) || !Press(TEXT("ui_accept")))
+			{
+				return false;
+			}
+			if (!Model->DisplayConfirming())
+			{
+				return Fail(TEXT("Apply on a new window size opened no confirm"));
+			}
+			Check(TEXT("settings.confirm"));
+			if (!Press(TEXT("ui_cancel")))   // reverts at once
+			{
+				return false;
+			}
+		}
 		if (FCString::Strcmp(Tab, TEXT("controls")) == 0)
 		{
 			if (!Focus(TEXT("controls.bind_jump")) || !Press(TEXT("ui_accept")))   // the "press a key" prompt
@@ -764,9 +895,25 @@ TArray<TSharedPtr<FJsonValue>> FGameKitShellDrive::Texts() const
 			const bool bSelected = Tab == S->Tab();
 			Add(Model->T(TEXT("settings.tab.") + Tab), SmallPx, bSelected ? Colour::Text : Colour::Dim, bSelected ? Colour::RowFocus : Colour::Row, Wide / 5, TEXT("settings.tab.") + Tab);
 		}
-		Rows(S->Rows, S->bOnTabs ? -1 : S->Focus, ListW, LabelW, Colour::Row, TEXT("settings.") + S->Tab() + TEXT("."));
-		Add(Model->Message.IsEmpty() ? Model->T(TEXT("settings.hint")) : Model->Message, SmallPx, Model->Message.IsEmpty() ? Colour::Dim : Colour::Accent, Colour::Bg, Wide,
+		Rows(S->Rows, S->bOnTabs || S->Dialog.Num() ? -1 : S->Focus, ListW, LabelW, Colour::Row, TEXT("settings.") + S->Tab() + TEXT("."));
+		// the Display tab's hint says its changes wait for Apply (#308); as the view, SGameKitShell::Settings
+		const FString HintKey = S->Tab() == TEXT("display") ? TEXT("settings.display_hint") : TEXT("settings.hint");
+		Add(Model->Message.IsEmpty() ? Model->T(HintKey) : Model->Message, SmallPx, Model->Message.IsEmpty() ? Colour::Dim : Colour::Accent, Colour::Bg, Wide,
 		    TEXT("settings.hint"));
+		if (S->Dialog.Num())   // "Keep these display settings? Reverting in N s" (wrapped in its panel)
+		{
+			FGameKitTrArgs A;
+			A.Add(TEXT("secs"), FString::FromInt(Model->DisplayStaging().Seconds().Get(0)));
+			Out.Add(TextEntry(Model->T(TEXT("settings.confirm"), A), BodyPx * Scale, Colour::Text, Colour::Panel, true, TEXT("confirm.text")));
+			Rows(S->Dialog, S->DialogFocus, ConsentW - 2 * PanelPad, ConsentW - 2 * PanelPad, Colour::Panel, TEXT("confirm."));
+		}
+	}
+	else if (Name == TEXT("play"))
+	{
+		// the starter HUD's pause prompt (SGameKitShell::PlayHud, #309): a panel that grows with its text
+		FString Glyph, Label;
+		Model->Prompt(TEXT("pause"), Glyph, Label);
+		Out.Add(TextEntry(Label + TEXT("  ") + Model->T(TEXT("hint.pause")), SmallPx * Scale, Colour::Text, Colour::Panel, true, TEXT("play.hud")));
 	}
 	else if (Name == TEXT("pause"))
 	{
@@ -846,7 +993,7 @@ TSharedRef<FJsonObject> FGameKitShellDrive::Reach()
 	if (S && S->Dialog.Num())
 	{
 		List = &S->Dialog;
-		Prefix = TEXT("consent.");
+		Prefix = S->Name == TEXT("settings") ? TEXT("confirm.") : TEXT("consent.");
 	}
 	else if (S && S->Rows.Num())
 	{
@@ -861,7 +1008,10 @@ TSharedRef<FJsonObject> FGameKitShellDrive::Reach()
 		TArray<FString> Want;
 		for (const FGameKitRow& R : *List)
 		{
-			Want.Add(Prefix + R.Id);
+			if (R.IsEnabled())   // a disabled row (Apply with nothing waiting, #308) is not a control to reach
+			{
+				Want.Add(Prefix + R.Id);
+			}
 			Narration->SetStringField(Prefix + R.Id, Model->Describe(R));
 		}
 		TSet<FString> Seen;

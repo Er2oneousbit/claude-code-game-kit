@@ -10,6 +10,8 @@
 //           Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a scripted model's widget ignores the real
 //           keyboard, mouse and pads (#276)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's hint, the keep-or-revert confirm
+//           over the settings, disabled rows dim (#308); the play screen's pause prompt sized by HudFontSize (#309)
 // ---------------------------------------------------------------------------
 #include "SGameKitShell.h"
 
@@ -275,7 +277,7 @@ FReply SGameKitShell::OnFocusReceived(const FGeometry& MyGeometry, const FFocusE
 // ---- Pieces ------------------------------------------------------------------------------------------------------
 float SGameKitShell::Px(float DesignPx) const
 {
-	return DesignPx * static_cast<float>(Model->TextScale());
+	return Model->HudFontSize(DesignPx);   // ui_scale times text_scale, the same helper a game HUD uses (#309)
 }
 
 FSlateFontInfo SGameKitShell::Font(float DesignPx, bool bBold) const
@@ -342,7 +344,8 @@ TSharedRef<SWidget> SGameKitShell::RowWidget(const FGameKitRow& Row, bool bFocus
 		[
 			SNew(SBox).WidthOverride((bWide ? ListWidth : LabelWidth) - MarkerW - 2 * RowPadX)
 			[
-				Text(Label, BodyPx, bFocused ? Colour::Accent : Colour::Text, true)
+				// a disabled row (Apply with nothing waiting, #308) is dim
+				Text(Label, BodyPx, bFocused ? Colour::Accent : Row.IsEnabled() ? Colour::Text : Colour::Dim, true)
 			]
 		];
 		if (Row.Kind == EGameKitRowKind::Binding && Row.CellText)
@@ -524,7 +527,10 @@ TSharedRef<SWidget> SGameKitShell::Settings(const FGameKitScreen& S)
 		];
 	}
 	const bool bMessage = !Model->Message.IsEmpty();
-	return SNew(SVerticalBox)
+	TSharedRef<SOverlay> Over = SNew(SOverlay);
+	Over->AddSlot()
+	[
+		SNew(SVerticalBox)
 		+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(FMargin(0.f, 24.f, 0.f, 12.f))
 		[
 			Text(Model->Heading(S), HeadingPx, Colour::Accent, true, true)
@@ -535,12 +541,48 @@ TSharedRef<SWidget> SGameKitShell::Settings(const FGameKitScreen& S)
 		]
 		+ SVerticalBox::Slot().FillHeight(1.f).HAlign(HAlign_Center).Padding(FMargin(0.f, ListTop, 0.f, 12.f))
 		[
-			Rows(S.Rows, S.bOnTabs ? -1 : S.Focus, LabelW, ListW, false, true)
+			Rows(S.Rows, S.bOnTabs || S.Dialog.Num() ? -1 : S.Focus, LabelW, ListW, false, !S.Dialog.Num())
 		]
 		+ SVerticalBox::Slot().AutoHeight()
 		[
-			Hint(bMessage ? Model->Message : Model->T(TEXT("settings.hint")), bMessage ? Colour::Accent : Colour::Dim)
+			Hint(bMessage ? Model->Message : Model->T(SettingsHintKey(S)), bMessage ? Colour::Accent : Colour::Dim)
+		]
+	];
+	if (S.Dialog.Num())
+	{
+		// "Keep these display settings? Reverting in N s" over the dimmed screen, Keep focused when it opens (#308)
+		TSharedRef<SWidget> Buttons = Rows(S.Dialog, S.DialogFocus, ConsentW - 2 * PanelPad, ConsentW - 2 * PanelPad, true, false);
+		Over->AddSlot()
+		[
+			SNew(SImage).Image(White()).ColorAndOpacity(Linear(Colour::Overlay))
 		];
+		Over->AddSlot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+		[
+			SNew(SBox).WidthOverride(ConsentW)
+			[
+				Panel(Colour::Panel,
+					SNew(SVerticalBox)
+					+ SVerticalBox::Slot().AutoHeight().Padding(FMargin(0.f, 0.f, 0.f, 18.f))[Text(ConfirmText(), BodyPx, Colour::Text, true)]
+					+ SVerticalBox::Slot().AutoHeight()[Buttons],
+					PanelPad)
+			]
+		];
+	}
+	return Over;
+}
+
+FString SGameKitShell::SettingsHintKey(const FGameKitScreen& S)
+{
+	// the Display tab says that its changes wait for Apply (#308)
+	return S.Tab() == TEXT("display") ? TEXT("settings.display_hint") : TEXT("settings.hint");
+}
+
+FString SGameKitShell::ConfirmText() const
+{
+	const FString Secs = FString::FromInt(Model->DisplayStaging().Seconds().Get(0));
+	FGameKitTrArgs A;
+	A.Add(TEXT("secs"), Secs);
+	return Model->T(TEXT("settings.confirm"), A);
 }
 
 TSharedRef<SWidget> SGameKitShell::Pause(const FGameKitScreen& S)
@@ -758,7 +800,19 @@ TSharedRef<SWidget> SGameKitShell::Screen(const FGameKitScreen& S)
 	if (S.Name == TEXT("pause")) return Pause(S);
 	if (S.Name == TEXT("loading")) return Loading(S);
 	if (S.Name == TEXT("help") || S.Name == TEXT("history") || S.Name == TEXT("credits")) return TextPage(S);
-	return SNew(SSpacer);   // play: the game shows through
+	return PlayHud();   // play: the game shows through, under a small pause prompt
+}
+
+TSharedRef<SWidget> SGameKitShell::PlayHud()
+{
+	// A starter HUD label (#309): Text() sizes it through Model->HudFontSize, so it follows ui_scale and text_scale.
+	// A game's own HUD does the same: Shell->HudFontSize(Base), or listens to OnHudScaleChanged.
+	FString Glyph, Label;
+	Model->Prompt(TEXT("pause"), Glyph, Label);
+	return SNew(SBox).HAlign(HAlign_Left).VAlign(VAlign_Top).Padding(FMargin(PanelPad))
+		[
+			Panel(Colour::Panel, Text(Label + TEXT("  ") + Model->T(TEXT("hint.pause")), SmallPx, Colour::Text), 8.f)
+		];
 }
 
 void SGameKitShell::Rebuild()
