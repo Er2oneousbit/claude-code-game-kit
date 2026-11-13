@@ -439,10 +439,10 @@ Per-engine notes. Every overlay now has its importer (#55 to #62); the notes say
 settled about its engine (versions as the overlays pin them). **(verify)** marks what is still not checked against the
 real engine. Each engine's `docs/ENGINE.md` or `docs/ENGINE_FLOW.md` "Dotwork" section is the user's guide.
 
-- **Godot 4.6+ (#307, scripts/core/dotwork_manifest.gd + scripts/core/dotwork_assets.gd).** Godot loads Dotwork's
+- **Godot 4.6+ (#307, the DotworkManifest and DotworkAssets classes in the Godot overlay's scripts/core folder).** Godot loads Dotwork's
   own resources as before; the importer is for a pack that has none (render_sprites' sheets) and for maps drawn from
-  the manifest. `dotwork_manifest.gd` is engine-free (the spec's rules, ported from `assetspec.py`; Godot's JSON
-  gives every number as a float, so ints are cast before any bit operation). `dotwork_assets.gd` builds the objects:
+  the manifest. DotworkManifest is engine-free (the spec's rules, ported from `assetspec.py`; Godot's JSON
+  gives every number as a float, so ints are cast before any bit operation). DotworkAssets builds the objects:
   a `SpriteFrames` per animated sprite with speed = `fps` and each frame's relative duration = seconds x fps (Godot
   shows duration / speed seconds), frames as `AtlasTexture` regions of the sheet, the pivot as the
   `AnimatedSprite2D` offset (`frame_size / 2 - pivot`, centred frames, y down, no flip); a prop `Sprite2D` with a
