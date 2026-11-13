@@ -57,7 +57,7 @@ function T.test_mode_waits_for_apply_and_the_confirm_counts_real_time()
     A.eq(app.settings.display.mode, "windowed", "nothing applied before Apply")
     press_apply(screen)
     A.eq(app.settings.display.mode, "fullscreen", "Apply set the mode")
-    A.eq(screen:focus_id(), "display.keep", "the confirm opens with focus on Keep")
+    A.eq(screen:focus_id(), "confirm.keep", "the confirm opens with focus on Keep")
     A.eq(app.saves, 0, "a mode change is not saved until the confirm closes")
     screen:update(0)                                     -- the first reading starts the count
     screen:update(1000)                                  -- a huge game dt with the clock standing still: nothing

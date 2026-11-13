@@ -9,19 +9,19 @@
 --           crash          raises an error in a frame (conf.lua's handler writes the crash file, exit 1)
 --           pseudo         (with --locale pseudo) visits every screen and checks every visible label
 --           pseudo-plant   the same plus one label too small for its text: must fail and name it
---           show:<screen>  title | settings | pause | subtitle | juice | credits | apply | apply_confirm: opens it,
---                          then ends (--screenshot); apply = the Display tab with a staged change, apply_confirm =
+--           show:<screen>  title | settings | pause | subtitle | juice | credits | apply | confirm: opens it,
+--                          then ends (--screenshot); apply = the Display tab with a staged change, confirm =
 --                          the keep-or-revert confirm (its countdown held, so pictures repeat)
---           display        the Display tab's Apply (#308): stages a mode change, Back warns (DISPLAY_WARN), Apply
---                          (DISPLAY_APPLIED <calls>, DISPLAY_CONFIRM <secs>), the confirm runs out in real time and
---                          reverts (DISPLAY_REVERTED <calls> after <s>), settings.json holds the old mode, Back
+--           display        the Display tab's Apply (#308): DRIVE_DISPLAY staged (a mode change), warned (Back),
+--                          applied (the confirm, focus on Keep), reverted <ms> ms (the countdown ran out in real
+--                          time; settings.json holds the old mode), discarded (a second change, Back twice), Back
 --           bug            presses F8 on the menu and checks the bug_<timestamp>/ folder
 -- Notes   : A scenario is a coroutine: d:press() injects an action and waits a couple of frames, d:wait_screen()
 --           yields until the screen is on top. Each wait has a frame limit, so a broken menu fails instead of
 --           hanging. Add a scenario: a function in SCENARIOS, then document it in docs/ENGINE_FLOW.md.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits (#284)
--- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:apply_confirm,
+-- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:confirm,
 --           and the pseudo tour through the Display tab's staged change, warning and confirm (#308)
 -- ---------------------------------------------------------------------------
 local Bindings = require("src.core.bindings")
@@ -239,24 +239,29 @@ function SCENARIOS.display(d)
   local before = app.settings.display.mode
   stage_mode(d)
   local screen = d:top()
-  print("DISPLAY_STAGED " .. Json.encode({ mode = screen.staging.pending.mode, applied = before }))
+  print("DRIVE_DISPLAY staged")
   d:press("ui_cancel")
   if d:top() ~= screen or not screen.staging.warned then error("Back with a staged change did not warn", 0) end
-  print("DISPLAY_WARN " .. app:t("settings.unapplied"))
+  print("DRIVE_DISPLAY warned")
   d:focus("display.apply")
   d:press("ui_accept")
   if not screen.staging:confirming() then error("Apply of a mode change opened no confirm", 0) end
-  if d:focus_id() ~= "display.keep" then error("focus is not on Keep (" .. tostring(d:focus_id()) .. ")", 0) end
-  print("DISPLAY_APPLIED " .. Json.encode(Json.array(screen.last_apply)))
-  print("DISPLAY_CONFIRM " .. tostring(screen.staging:seconds()))
+  if d:focus_id() ~= "confirm.keep" then error("focus is not on Keep (" .. tostring(d:focus_id()) .. ")", 0) end
+  print("DRIVE_DISPLAY applied")
   local took = d:wait_real(function() return not screen.staging:confirming() end, "the confirm to revert", CONFIRM_WAIT_S)
-  print(string.format("DISPLAY_REVERTED %s after %.1f s", Json.encode(Json.array(screen.last_revert or {})), took))
   if took < CONFIRM_MIN_S then error(string.format("the confirm reverted after %.1f s: not real time", took), 0) end
   if app.settings.display.mode ~= before then error("the mode is " .. app.settings.display.mode .. ", not " .. before, 0) end
   local ok, saved = Json.try_decode(app.store:read(Settings.FILE) or "")
   if not ok or saved.display.mode ~= before then error("settings.json does not hold mode " .. before, 0) end
-  d:press("ui_cancel")                                   -- nothing staged now: Back leaves
+  print(string.format("DRIVE_DISPLAY reverted %d ms", math.floor(took * 1000 + 0.5)))
+  -- a second staged change, left unapplied: Back warns, Back again discards it and leaves
+  d:focus("display.mode")
+  d:press("ui_right")
+  d:press("ui_cancel")
+  d:press("ui_cancel")
   d:wait_screen("main_menu")
+  if app.settings.display.mode ~= before then error("the discarded change was applied", 0) end
+  print("DRIVE_DISPLAY discarded")
   d:done(0)
 end
 
@@ -386,7 +391,7 @@ function SHOW.apply(d)
   d:focus("display.apply")
   d:frames(5)
 end
-function SHOW.apply_confirm(d)
+function SHOW.confirm(d)
   d:to_menu()
   stage_mode(d)
   d:top().hold_countdown = true                          -- the same number in every picture
@@ -584,7 +589,7 @@ function Drive.new(app, name)
   local show = self.name:match("^show:(.+)$")
   if show then
     if not SHOW[show] then error("unknown --drive show:" .. show ..
-                                     " (title, settings, pause, subtitle, juice, credits, apply, apply_confirm)", 0) end
+                                     " (title, settings, pause, subtitle, juice, credits, apply, confirm)", 0) end
     fn = function(d) SHOW[show](d); d:done(0) end
   end
   if not fn then

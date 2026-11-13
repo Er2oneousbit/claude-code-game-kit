@@ -147,8 +147,8 @@ function SettingsScreen:display_rows()
     staged("ui_scale", "slider", 0.75, 2.0, 0.25),
   }
   if st:confirming() then
-    rows[#rows + 1] = Widgets.button("keep", function() return app:t("settings.keep") end, function() self:keep() end)
-    rows[#rows + 1] = Widgets.button("revert", function() return app:t("settings.revert") end,
+    rows[#rows + 1] = Widgets.button("confirm.keep", function() return app:t("settings.keep") end, function() self:keep() end)
+    rows[#rows + 1] = Widgets.button("confirm.revert", function() return app:t("settings.revert") end,
                                      function() self:revert() end)
   else
     local apply = Widgets.button("apply", function() return app:t("settings.apply") end, function() self:apply() end)
@@ -187,7 +187,7 @@ function SettingsScreen:apply()
   self:send(calls)
   if self.staging:confirming() then
     self.on_tabs = false
-    self:refresh_display("keep")                          -- focus on Keep
+    self:refresh_display("confirm.keep")                          -- focus on Keep
   else
     self.app:save_settings()
     self:refresh_display("apply")
@@ -400,7 +400,9 @@ end
 
 function SettingsScreen:focus_id()
   if self.on_tabs then return "tabs." .. self.tab end
-  return self.tab .. "." .. tostring(self.lists[self.tab]:focused_id())
+  local id = tostring(self.lists[self.tab]:focused_id())
+  if id:find(".", 1, true) then return id end              -- already a full id (confirm.keep, confirm.revert)
+  return self.tab .. "." .. id
 end
 
 function SettingsScreen:action(name)
