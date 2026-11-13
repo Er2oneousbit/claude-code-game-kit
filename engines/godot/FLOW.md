@@ -37,6 +37,13 @@ title -> main menu (Play, Juice demo in debug builds, Settings, Credits, Quit) -
 Controls, Accessibility, Language, Privacy; Back saves) / credits (`CREDITS.md`) / play (`scenes/play.tscn`, through
 a loading screen) -> pause menu (the `pause` action, or losing window focus). Cancel always goes back one screen;
 keyboard and gamepad reach every control, and the focused one has an outline.
+- **Display waits for Apply** (#308): the Display tab stages its changes (`DisplayStaging`, held to
+  `data/golden/shell.json`); Apply sends only the changed fields (mode before resolution) through `Shell.set_value`.
+  A mode or resolution change asks "Keep these display settings?" for 15 real seconds (focus on Keep); Revert, the
+  countdown, Back or cancel put back what that Apply replaced. Back with unapplied changes warns once. Every other tab
+  applies at once.
+- **Game HUD text** (#309): a HUD under its own CanvasLayer sets `UiTheme.hud_font_size(base)` as each label's font
+  size and again on `Shell.look_changed`, so the player's text size and menu size reach it (`scripts/game/play.gd`).
 - **Shell autoload** (`scripts/shell/shell.gd`): settings (`GameSettings`), strings (`Shell.t`), bindings and
   prompt glyphs, the data folder, the log file, crash files, telemetry, F8 bug reports (debug builds).
 - **Data folder** (`user://`, or `--data-dir <dir>` after `--`): `settings.json` (+ `.bak`; a missing or broken one is
@@ -84,11 +91,12 @@ folder such as `build/windows/`, exit 2). Drives run with `--fixed-fps 60`, so f
 | Command | Passes when |
 |---|---|
 | `smoke --drive menus` | title -> settings -> master volume 0.5 (left or right from whatever the data folder held), reduce motion toggled -> Back -> Quit; prints `SETTINGS_WRITTEN <path>` and the file holds both values. With consent unset no `telemetry.csv` appears |
+| `smoke --drive display` | the Display tab: a staged mode change applies nothing (`DRIVE_DISPLAY staged`), Back warns (`warned`), Apply opens the confirm with focus on Keep (`applied`), left alone it reverts after 15 real seconds, `settings.json` included (`reverted <ms> ms`; sooner than 14 s fails), and a second unapplied change is warned about and discarded by two Backs (`discarded`), then `DRIVE_DONE display` |
 | `smoke --drive crash` | exits 1 on purpose: a script error writes `crashes/crash_<time>.txt` and prints `CRASH_WRITTEN <path>` |
 | `smoke --drive pseudo --locale pseudo` | every screen and settings tab is shown and no label is untranslated, clipped or off screen (`PSEUDO_OK`) |
 | `smoke --drive pseudo-plant --locale pseudo` | exits 1 on purpose, naming a planted label that is too small (`PSEUDO_FAIL`) |
 | `smoke --drive access[:res=WxH][,scale=N][,pad]` | every screen reported as `ACCESS_*` lines for `tools/access/sweep.py` (`AccessAudit`): texts with size, colour, background, fit and where they land, the focus graph, the subtitle and the prompts; the drive sets the window size itself (headless Godot ignores `--resolution`), `pad` presses with gamepad events only |
-| `smoke --drive show:<title\|settings\|pause\|subtitle\|juice\|credits> --screenshot captures/x.png` | opens that screen (settings with a control focused) and photographs it in a window |
+| `smoke --drive show:<title\|settings\|pause\|subtitle\|juice\|credits\|apply\|confirm> --screenshot captures/x.png` | opens that screen (settings with a control focused; `apply`: the Display tab with a staged change, `confirm`: its confirm, countdown held) and photographs it in a window |
 | `... --screenshot new.png --compare base.png [--tolerance N]` | `tools/image_diff.py` finds no difference (exit 1 when it does) |
 Any run with `--locale pseudo` checks each screen as it appears. The windowed capture ignores the mouse, so a cursor
 resting on the window cannot change the picture.

@@ -65,7 +65,11 @@ on focus loss). "What now?" shows the goal from `app:set_objective()`, the last 
 - **Input:** keyboard and gamepad everywhere (`ui_up/down/left/right/accept/cancel`; cancel goes back one screen;
   the left stick works as the d-pad). The focused item has an outline and a `>` marker, not just a colour.
 - **Settings** (tabs Display, Audio, Controls, Accessibility, Language): every field of the schema in
-  `src/core/settings.lua`, applied as it changes, saved on Back. Controls lists the game actions with their prompt
+  `src/core/settings.lua`, applied as it changes, saved on Back; the Display tab waits for Apply (#308:
+  `src/core/display_staging.lua`, held to `data/golden/shell.json`; a mode or resolution change asks "Keep these
+  display settings?" for 15 real seconds and reverts on its own). Game HUD text follows text_scale and ui_scale
+  through `app:hud_font(base)` (or `app:hud_font_size(base)`), set again from `app:on_look_changed(fn)` (#309; the
+  starter's pause hint in `src/shell/screens/play.lua` uses it). Controls lists the game actions with their prompt
   glyph (`assets/ui/glyphs/<glyph_name>.png` at 1x, else a text key-cap), rebinds with "press a key" (a binding
   taken from another action swaps onto it), marks clashes, resets to defaults; `glyph_set` follows the last device.
   Applied: text_scale and ui_scale (font size), subtitles (on, size, background, speaker names, barks),
@@ -105,7 +109,8 @@ Narration (#165): the shell's `narrator.lua` says a line for every focus change,
 | `pseudo-plant` | the same with one planted label too small for its text: must exit 1 naming `plant.too_small` |
 | `access[:res=WxH][,scale=N][,pad]` | every screen reported as `ACCESS_*` lines for `tools/access/sweep.py`: ui.lua records each label's colour, size and glyph box and every filled rectangle under it (the drive hooks `love.graphics.rectangle`), and which rows `ui_down` reaches; `pad` presses with gamepad buttons only |
 | `bug` | presses F8 on the menu and checks the `bug_<timestamp>/` files: `DRIVE_BUG <path>` |
-| `show:<screen>` | `title`, `settings` (a slider focused), `pause`, `subtitle`, `juice`, `credits` (the first lines at the top): opens it and ends; add `--screenshot captures/<screen>.png` |
+| `display` | the Display tab's Apply (#308): `DRIVE_DISPLAY staged` (a mode change), `warned` (Back), `applied` (the confirm, focus on Keep), `reverted <ms> ms` (the countdown ran out in real time, `settings.json` holds the old mode; sooner than 14 s fails), `discarded` (a second change, Back twice), then `DRIVE_DONE display`. Takes about 20 s |
+| `show:<screen>` | `title`, `settings` (a slider focused), `pause`, `subtitle`, `juice`, `credits` (the first lines at the top), `apply` (the Display tab with a staged change, Apply focused), `confirm` (the keep-or-revert confirm, its countdown held): opens it and ends; add `--screenshot captures/<screen>.png` |
 
 `dev.py smoke` never uses the real save folder: without `--data-dir` the game's files go to a fresh
 `build/smoke-data/` each run (read its logs and crash files there); `--data-dir captures/run1` keeps a run's files

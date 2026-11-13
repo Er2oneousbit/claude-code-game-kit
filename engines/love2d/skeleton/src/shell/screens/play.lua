@@ -6,8 +6,10 @@
 --           the game gets: Game.load(kit, { app = app, save = data_or_nil }), Game.update(dt), Game.draw(),
 --           Game.action(name) for pressed actions (optional), Game.save_data() -> a table to save (optional)
 -- Notes   : The save goes through src/core/save_store.lua (atomic, .bak, migrations, never over a newer save).
---           Held actions: app.input:is_down("move_left").
+--           Held actions: app.input:is_down("move_left"). HUD text: app:hud_font(px) follows the player's text
+--           size and UI scale (#309); game code that caches text layout can listen with app:on_look_changed(fn).
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the pause hint uses app:hud_font (#309)
 -- ---------------------------------------------------------------------------
 local Log = require("src.core.log")
 local Style = require("src.shell.style")
@@ -16,6 +18,7 @@ local Play = { pausable = true }
 
 -- ---- Tunables ----------------------------------------------------------------
 local SAVE_SLOT = 1
+local HINT_PX = Style.SMALL_PX             -- the pause hint's size at text size and UI scale 1
 
 function Play:enter()
   local app = self.app
@@ -49,7 +52,7 @@ function Play:draw(ui)
   self.game.draw()
   local app = self.app
   local gname, label = app:prompt("pause")
-  local font = ui:font(Style.SMALL_PX)
+  local font = app:hud_font(HINT_PX)
   local hint = app:t("hint.pause")
   local w = ui:glyph_cell("play.hint.glyph", gname, label, 12, 8, 20)
   ui:label("play.hint", hint, 18 + w, 8, font:getWidth(hint) + 2, 20, { font = font, color = Style.color.dim })

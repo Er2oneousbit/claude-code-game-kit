@@ -4,18 +4,26 @@
 #           per settings field (built from GameSettings.SCHEMA), rebinding with "press a key", conflicts shown as
 #           swaps, Reset to defaults. Back (or cancel) saves settings.json.
 # Usage   : front.open_settings()   (from the main menu or the pause menu)
-# Notes   : Changes apply at once (Shell.set_value); Back writes the file. Focus: left/right on the tab row picks a
+# Notes   : Display changes wait for Apply (DisplayStaging, #308): the rows show the staged value, Apply sends the
+#           changed fields through Shell.set_value (mode before resolution) and saves; a mode or resolution change
+#           opens "Keep these display settings? Reverting in N s" (DisplayStaging.CONFIRM_S, real time) with focus on
+#           Keep, and Revert, the countdown, Back or cancel put back what that Apply replaced (saved once it closes).
+#           Back with unapplied Display changes warns once, a second Back discards them. Every other tab applies at
+#           once (Shell.set_value); Back writes the file. Focus: left/right on the tab row picks a
 #           tab, down enters it, up from the first row returns to the tabs; sliders and pickers use left/right,
 #           switches use accept. The focused row gets an outline (UiTheme.focus_row). While a binding waits for
 #           input, Escape (or REBIND_TIMEOUT_S) cancels. Slot 0 takes keys and mouse buttons, slot 1 pad input.
 #           Field names come from the strings setting.<section>.<field>; choices from value.<field>.<choice>.
 #
 # Pseudocode:
-#   build: title, tab buttons, a scroll area holding the current tab's rows, Back
+#   build: title, tab buttons, a scroll area holding the current tab's rows, a status line, Back + Apply (Keep +
+#     Revert while a confirm runs)
 #   tab rows: per schema field a label + control (switch / slider + value / picker); Controls adds one row per
 #     action: name, prompt glyph, keyboard slot, pad slot; then Reset
 #   link focus explicitly (rows in a column, Back last, tabs on top) so keys and the d-pad never get lost
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply with a keep-or-revert confirm,
+#           its hint line, and the status line on a row of its own above the buttons (#308)
 # ---------------------------------------------------------------------------
 class_name SettingsScreen
 extends ShellScreen
@@ -39,7 +47,14 @@ var _tab: String = "display"
 var _tab_buttons: Dictionary = {}
 var _content: VBoxContainer
 var _back: Button
+var _apply: Button
+var _keep: Button
+var _revert: Button
 var _status: Label
+var _staging: DisplayStaging # the Display tab's pending changes: outlives rebuild() and tab switches
+var _notice: String = "" # the "Display changes are not applied" warning, until the next change or tab
+## Smoke drives (show:confirm): stop the countdown so screenshots repeat.
+var hold_countdown: bool = false
 var _grid: Array = [] # focusable controls of the current tab, one Array per row, top to bottom
 var _capture: Array = [] # [action, slot] while waiting for a key or button
 var _capture_left: float = 0.0
@@ -48,6 +63,7 @@ var _status_text: String = ""
 
 func _init(p_front: FrontEnd) -> void:
 	super(p_front, "settings")
+	_staging = DisplayStaging.new(Shell.settings["display"])
 
 
 func build() -> void:
@@ -85,20 +101,36 @@ func build() -> void:
 	_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_content.add_theme_constant_override("separation", 2)
 	scroll.add_child(_content)
-	var bottom: HBoxContainer = HBoxContainer.new()
-	col.add_child(bottom)
-	_back = button(Shell.t("settings.back"), "Back", _close)
-	bottom.add_child(_back)
-	_status = label("", 1.0, "Status") # rebinding messages: next to Back, so they are always on screen
-	_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# the status line (rebinding messages, the unapplied warning, the countdown) has a row of its own above the
+	# buttons, outside the scroll: always on screen, and a long line wraps across the width instead of squeezing
+	# the buttons
+	_status = label("", 1.0, "Status")
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.modulate = UiTheme.FOCUS
-	bottom.add_child(_status)
+	col.add_child(_status)
+	var bottom: HBoxContainer = HBoxContainer.new()
+	bottom.name = "Buttons"
+	col.add_child(bottom)
+	_back = button(Shell.t("settings.back"), "Back", _close)
+	_apply = button(Shell.t("settings.apply"), "Apply", _apply_display)
+	_keep = button(Shell.t("settings.keep"), "Keep", _keep_display)
+	_revert = button(Shell.t("settings.revert"), "Revert", _revert_display)
+	for b: Button in [_back, _apply, _keep, _revert]:
+		b.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		bottom.add_child(b)
 	_fill_tab()
 
 
 func focus_first() -> void:
+	if _staging.confirming():
+		_keep.grab_focus()
+		return
 	(_tab_buttons[_tab] as Control).grab_focus()
+
+
+## The Display tab's staging (tests and smoke drives read it).
+func staging() -> DisplayStaging:
+	return _staging
 
 
 func current_tab() -> String:
@@ -119,8 +151,99 @@ func on_cancel() -> void:
 func _close() -> void:
 	if capturing():
 		_end_capture("")
+	var r: Array = _staging.back()
+	match str(r[0]):
+		"revert": # Back during the confirm: put back what that Apply replaced, stay here
+			_after_revert(r[1])
+			return
+		"warn":
+			_notice = Shell.t("settings.unapplied")
+			Log.info("display", "unapplied changes: Back again discards them")
+			_refresh_bottom()
+			return
 	Shell.save_settings()
 	front.back()
+
+
+# ---- Display: Apply, Keep, Revert (#308) ---------------------------------------------
+
+func _stage(field: String, v: Variant) -> void:
+	if _staging.stage(field, v) == "busy":
+		return
+	_notice = ""
+	_refresh_bottom()
+
+
+func _apply_display() -> void:
+	if not _staging.has_pending() or _staging.confirming():
+		return
+	var calls: Array = _staging.apply()
+	_send(calls)
+	Log.info("display", "applied " + JSON.stringify(calls))
+	_notice = ""
+	if _staging.confirming():
+		_fill_tab() # the Display rows lock while the confirm runs
+		_keep.grab_focus()
+	else:
+		Shell.save_settings() # nothing that can black out the screen: kept at once
+		_fill_tab()
+		_focus_named("Back")
+
+
+func _keep_display() -> void:
+	if not _staging.confirming():
+		return
+	_staging.keep()
+	Log.info("display", "kept")
+	Shell.save_settings()
+	_fill_tab()
+	_focus_named("Back")
+
+
+func _revert_display() -> void:
+	if _staging.confirming():
+		_after_revert(_staging.revert())
+
+
+func _after_revert(calls: Array) -> void:
+	_send(calls)
+	Log.info("display", "reverted " + JSON.stringify(calls))
+	Shell.save_settings()
+	_fill_tab()
+	_focus_named("Back")
+
+
+func _send(calls: Array) -> void:
+	for call: Array in calls:
+		Shell.set_value("display", str(call[0]), call[1])
+
+
+func _refresh_bottom() -> void:
+	# Which buttons show, the status line, and the focus chain along the button row
+	var confirming: bool = _staging.confirming()
+	_apply.visible = not confirming
+	_apply.disabled = not _staging.has_pending()
+	_apply.focus_mode = Control.FOCUS_NONE if _apply.disabled else Control.FOCUS_ALL
+	_keep.visible = confirming
+	_revert.visible = confirming
+	if confirming:
+		_status.text = Shell.t("settings.confirm", {"secs": _staging.seconds()})
+	elif _notice != "":
+		_status.text = _notice
+	else:
+		_status.text = _status_text if _tab == "controls" else ""
+	var row: Array = [_back]
+	for b: Button in [_apply, _keep, _revert]:
+		if b.visible and b.focus_mode != Control.FOCUS_NONE:
+			row.append(b)
+	var tab_button: Control = _tab_buttons[_tab]
+	var last: Control = _pick(_grid[_grid.size() - 1], 0) if not _grid.is_empty() else tab_button
+	for i: int in row.size():
+		var b: Control = row[i]
+		b.focus_neighbor_left = b.get_path_to(row[i - 1] if i > 0 else b)
+		b.focus_neighbor_right = b.get_path_to(row[i + 1] if i + 1 < row.size() else b)
+		b.focus_neighbor_top = b.get_path_to(last)
+		b.focus_neighbor_bottom = b.get_path_to(tab_button)
 
 
 func _select_tab(tab: String) -> void:
@@ -129,6 +252,7 @@ func _select_tab(tab: String) -> void:
 		return
 	_tab = tab
 	_status_text = ""
+	_notice = ""
 	_fill_tab()
 
 
@@ -142,10 +266,16 @@ func _fill_tab() -> void:
 		_content.remove_child(child)
 		child.queue_free()
 	_grid.clear()
-	_status.text = _status_text if _tab == "controls" else ""
 	_mark_tabs()
 	match _tab:
-		"display", "audio", "access":
+		"display":
+			var hint: Label = label(Shell.t("settings.display_hint"), 1.0, "DisplayHint")
+			hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			hint.modulate = UiTheme.TEXT_DIM
+			_content.add_child(hint)
+			for field: String in GameSettings.SCHEMA["display"]:
+				_add_field("display", field)
+		"audio", "access":
 			for field: String in GameSettings.SCHEMA[TAB_SECTIONS[_tab]]:
 				_add_field(TAB_SECTIONS[_tab], field)
 		"controls":
@@ -161,6 +291,7 @@ func _fill_tab() -> void:
 			note.modulate = UiTheme.TEXT_DIM
 			_content.add_child(note)
 	_link_focus()
+	_refresh_bottom()
 
 
 # ---- rows -----------------------------------------------------------------------
@@ -190,7 +321,12 @@ func _watch_focus(c: Control, row: HBoxContainer) -> void:
 
 func _add_field(section: String, field: String) -> void:
 	var rule: Array = GameSettings.SCHEMA[section][field]
-	var current: Variant = Shell.settings[section][field]
+	var staged: bool = section == "display" # Display waits for Apply (#308)
+	var current: Variant = _staging.value(field) if staged else Shell.settings[section][field]
+	# every control reports here: staged on the Display tab, applied at once elsewhere
+	var send: Callable = _stage
+	if not staged:
+		send = func(f: String, v: Variant) -> void: Shell.set_value(section, f, v)
 	var row: HBoxContainer = _row("%s_%s" % [section, field], Shell.t("setting.%s.%s" % [section, field]))
 	var control: Control
 	var value_label: Label = label("", 1.0, "Value")
@@ -203,7 +339,7 @@ func _add_field(section: String, field: String) -> void:
 			sw.text = Shell.t("value.on" if bool(current) else "value.off")
 			sw.toggled.connect(func(on: bool) -> void:
 				sw.text = Shell.t("value.on" if on else "value.off")
-				Shell.set_value(section, field, on))
+				send.call(field, on))
 			control = sw
 		"num":
 			var slider: FocusSlider = FocusSlider.new() # an HSlider with a focus outline
@@ -215,7 +351,7 @@ func _add_field(section: String, field: String) -> void:
 			value_label.text = _num_text(section, field, float(current))
 			slider.value_changed.connect(func(v: float) -> void:
 				value_label.text = _num_text(section, field, v)
-				Shell.set_value(section, field, v))
+				send.call(field, v))
 			control = slider
 		"enum", "res":
 			var stepper: OptionStepper = OptionStepper.new()
@@ -226,12 +362,21 @@ func _add_field(section: String, field: String) -> void:
 			for v: Variant in choices:
 				names.append(_choice_text(field, v))
 			stepper.setup(choices, names, current)
-			stepper.changed.connect(func(v: Variant) -> void: Shell.set_value(section, field, v))
+			stepper.changed.connect(func(v: Variant) -> void: send.call(field, v))
 			control = stepper
 	control.name = "Setting_%s_%s" % [section, field]
 	control.custom_minimum_size.x = CONTROL_WIDTH
 	row.add_child(control)
 	row.add_child(value_label)
+	if staged and _staging.confirming():
+		# locked while "Keep these display settings?" runs: shown, not focusable, not changeable
+		control.focus_mode = Control.FOCUS_NONE
+		control.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if control is BaseButton:
+			(control as BaseButton).disabled = true
+		elif control is Range:
+			(control as Range).editable = false
+		return
 	_watch_focus(control, row)
 	_grid.append([control])
 
@@ -391,6 +536,13 @@ func _input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	if _staging.confirming() and not hold_countdown:
+		# real time (Time, not delta): game speed, a hitstop, a paused tree or --fixed-fps must not stretch it
+		var calls: Array = _staging.tick_real(Time.get_ticks_usec())
+		if not _staging.confirming():
+			_after_revert(calls)
+		else:
+			_status.text = Shell.t("settings.confirm", {"secs": _staging.seconds()})
 	if capturing():
 		_capture_left -= delta
 		if _capture_left <= 0.0:
@@ -417,9 +569,7 @@ func _link_focus() -> void:
 			c.focus_neighbor_bottom = c.get_path_to(down)
 			c.focus_neighbor_left = c.get_path_to(cells[col - 1] if col > 0 else c)
 			c.focus_neighbor_right = c.get_path_to(cells[col + 1] if col + 1 < cells.size() else c)
-	var last: Control = _pick(_grid[_grid.size() - 1], 0) if not _grid.is_empty() else tab_button
-	_back.focus_neighbor_top = _back.get_path_to(last)
-	_back.focus_neighbor_bottom = _back.get_path_to(tab_button)
+	# the button row (Back, Apply or Keep + Revert) links itself in _refresh_bottom()
 
 
 func _pick(cells: Array, col: int) -> Control:

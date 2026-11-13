@@ -6,17 +6,29 @@
 // Usage   : shell.push(settingsScreen(shell))      // from the main menu or the pause menu
 // Notes   : Browser only (DOM). Changes apply live (shell.apply()). Not shown because a browser cannot apply
 //           them: display.vsync (the browser always syncs) and display.resolution (the canvas follows the
-//           window). They stay in settings.json for desktop builds of the same game.
+//           window). They stay in settings.json for desktop builds of the same game. So the "resolution sets the
+//           window size" label other engines show has no row to sit on here.
+//           Display tab (#308, core/displayStaging.ts): its changes wait for Apply (every other tab stays live).
+//           Apply sends only the changed fields through shell.setDisplay(); a mode change opens "Keep these display
+//           settings? Reverting in N s" (15 s of real time, focus on Keep). Keep confirms; Revert, the countdown
+//           or Back put back what that Apply replaced. Apply saves at once when no confirm opens, else when the
+//           confirm closes. Back with unapplied Display changes warns once; a second Back discards them.
+//           A revert to fullscreen comes from no key press or click, so the browser may refuse it (the
+//           "fullscreen blocked" toast) (verify).
 //
 // Pseudocode:
 //   tabs row (left/right switch section) ; rows of the section (left/right change, accept steps or acts)
 //   controls: accept on an action row -> capture the next key (slot 0) or button (slot 1) -> rebind() swap
 //   back: save -> previous screen
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab waits for Apply, with a hint line
+//           and a keep-or-revert confirm counted in real time (#308)
 // ---------------------------------------------------------------------------
 import presetData from "../../data/input/presets.json";
 import { DEFAULT_BINDINGS, GLYPH_SETS, findConflicts, glyphName, glyphSet, rebind } from "../core/bindings";
+import { DisplayStaging, RealClock } from "../core/displayStaging";
 import { PSEUDO_LOCALE } from "../core/i18n";
+import { Log } from "../core/log";
 import { COLORBLIND, CONSENT, DIFFICULTIES, DISPLAY_MODES, FRAME_CAPS, SUB_SIZES, type Settings } from "../core/settings";
 import type { Screen, Shell } from "./app";
 import { Menu, buttonItem, el, glyph, tl, valueRow, type Item } from "./ui";
@@ -27,15 +39,16 @@ const REBINDABLE = Object.keys(DEFAULT_BINDINGS).filter((a) => !a.startsWith("ui
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
-type Ctx = { shell: Shell; menu: Menu; list: HTMLElement; status: HTMLElement };
+type Ctx = { shell: Shell; menu: Menu; list: HTMLElement; status: HTMLElement; staging: DisplayStaging; refresh: () => void };
 /** A choice's label: a string table key, or a key with arguments ("opt.fps", { n: 60 }). */
 type Label = string | [string, Record<string, unknown>];
 
-function numRow(c: Ctx, key: string, get: (s: Settings) => number, set: (s: Settings, v: number) => void, lo: number, hi: number, step: number, fmt: (v: number) => string): void {
+function numRow(c: Ctx, key: string, get: (s: Settings) => number, set: (s: Settings, v: number) => void, lo: number, hi: number, step: number, fmt: (v: number) => string, after?: () => void): void {
   const change = (d: number) => {
     set(c.shell.settings, round2(Math.min(hi, Math.max(lo, get(c.shell.settings) + d))));
     c.shell.apply();
     draw();
+    after?.();
   };
   const row = valueRow(c.shell.i18n, key, () => change(-step), () => change(step));
   row.item.role = "slider"; // narration (#165)
@@ -147,12 +160,20 @@ function controls(c: Ctx): void {
 function section(c: Ctx, tab: (typeof TABS)[number]): void {
   const { shell } = c;
   switch (tab) {
-    case "display":
-      choiceRow(c, "display.mode", DISPLAY_MODES, (s) => s.display.mode, (s, v) => (s.display.mode = v), (v) => `opt.mode.${v}`, () => shell.applyDisplayMode());
-      choiceRow(c, "display.frame_cap", FRAME_CAPS, (s) => s.display.frame_cap as (typeof FRAME_CAPS)[number], (s, v) => (s.display.frame_cap = v),
-        (v) => (v === 0 ? "opt.frame_cap.0" : ["opt.fps", { n: v }]));
-      numRow(c, "display.ui_scale", (s) => s.display.ui_scale, (s, v) => (s.display.ui_scale = v), 0.75, 2.0, 0.25, times);
+    case "display": {
+      // staged (#308): the rows show and change c.staging, Apply (below the list) sends the changes
+      const st = c.staging;
+      const hint = el("div", "row muted");
+      hint.append(tl(shell.i18n, "settings.display_hint", "text", {}, "div"));
+      c.list.append(hint);
+      const first = c.menu.items.length;
+      choiceRow(c, "display.mode", DISPLAY_MODES, () => st.value("mode") as string, (_s, v) => st.stage("mode", v), (v) => `opt.mode.${v}`, c.refresh);
+      choiceRow(c, "display.frame_cap", FRAME_CAPS, () => st.value("frame_cap") as (typeof FRAME_CAPS)[number], (_s, v) => st.stage("frame_cap", v),
+        (v) => (v === 0 ? "opt.frame_cap.0" : ["opt.fps", { n: v }]), c.refresh);
+      numRow(c, "display.ui_scale", () => st.value("ui_scale") as number, (_s, v) => st.stage("ui_scale", v), 0.75, 2.0, 0.25, times, c.refresh);
+      if (st.left !== null) c.menu.items.slice(first).forEach((it) => it.el.classList.add("disabled")); // the confirm is open
       break;
+    }
     case "audio":
       for (const k of ["master", "music", "sfx", "ui", "voice"] as const) {
         numRow(c, `audio.${k}`, (s) => s.audio[k], (s, v) => (s.audio[k] = v), 0, 1, 0.1, pct);
@@ -198,11 +219,75 @@ function section(c: Ctx, tab: (typeof TABS)[number]): void {
 export function settingsScreen(shell: Shell): Screen {
   const root = el("section", "screen dim");
   root.dataset.screen = "settings";
+  // the Display tab's pending changes and confirm live as long as the screen, across every render (#308)
+  const staging = new DisplayStaging(shell.settings.display);
+  shell.staging = staging;
+  const clock = new RealClock();
+  let message = ""; // a string key for the status row (the unapplied warning)
+  let confirmEl: HTMLElement | null = null;
+  let shownSecs: number | null = null;
+
+  /** Redraws in place (no screen telemetry or narration of the heading), focus on id or where it was. */
+  const refresh = (id?: string) => {
+    const focus = id ?? s.menu?.focused?.id;
+    s.render?.();
+    if (focus && !s.menu?.focusId(focus)) s.menu?.focusId("settings.back");
+  };
+  const closed = (calls: [string, unknown][]) => {
+    if (calls.length) shell.setDisplay(calls, "REVERTED");
+    shell.saveSettings();
+    message = "";
+    refresh("settings.back");
+  };
+  const applyNow = () => {
+    const calls = staging.apply();
+    shell.setDisplay(calls, "APPLIED");
+    message = "";
+    if (staging.seconds() !== null) {
+      clock.reset();
+      Log.info("settings", `display confirm ${staging.seconds()} s`);
+      refresh("confirm.keep");
+    } else {
+      shell.saveSettings();
+      refresh("settings.back");
+    }
+  };
+  const keep = () => {
+    staging.keep();
+    Log.info("settings", "display kept");
+    shell.saveSettings();
+    refresh("settings.back");
+  };
   const leave = () => {
+    const had = staging.dirty;
+    const [out, calls] = staging.back();
+    if (out === "revert") return closed(calls);
+    if (out === "warn") {
+      message = "settings.unapplied";
+      Log.info("settings", "display changes not applied: Back again discards them");
+      return refresh();
+    }
+    if (had) Log.info("settings", "display changes discarded");
+    shell.staging = null;
     shell.saveSettings();
     shell.back();
   };
   const s: Screen = { id: "settings", root, cancel: leave };
+  s.leave = () => {
+    if (shell.staging === staging) shell.staging = null;
+  };
+  // the countdown runs on the wall clock, whatever the frame's dt (game speed, hitstop, a paused world)
+  s.tick = () => {
+    if (staging.left === null) return;
+    if (shell.holdConfirm) return clock.reset();
+    const calls = staging.tick(clock.elapsed());
+    if (staging.left === null) return closed(calls);
+    const secs = staging.seconds();
+    if (confirmEl && secs !== shownSecs) {
+      shownSecs = secs;
+      confirmEl.textContent = shell.i18n.t("settings.confirm", { secs });
+    }
+  };
   s.render = () => {
     root.replaceChildren();
     const menu = new Menu();
@@ -230,10 +315,40 @@ export function settingsScreen(shell: Shell): Screen {
 
     const list = el("div", "list");
     const status = el("div", "status");
-    const c: Ctx = { shell, menu, list, status };
+    const c: Ctx = { shell, menu, list, status, staging, refresh: () => refresh() };
     p.append(menu.add(tabItem).el, list);
     section(c, TABS[shell.settingsTab]);
-    p.append(status, menu.add(buttonItem(shell.i18n, "settings.back", leave)).el);
+    // the status row (rebinding messages, the unapplied warning, the countdown) sits above the buttons
+    confirmEl = null;
+    shownSecs = staging.seconds();
+    if (shownSecs !== null) {
+      confirmEl = tl(shell.i18n, "settings.confirm", "", { secs: shownSecs });
+      status.classList.add("confirm");
+      status.replaceChildren(confirmEl);
+    } else if (message) {
+      status.replaceChildren(tl(shell.i18n, message, ""));
+    }
+    // Back, then Apply (only while something waits) or Keep and Revert (only while the confirm is open)
+    const buttons = el("div", "row buttons");
+    const items: Item[] = [buttonItem(shell.i18n, "settings.back", leave)];
+    if (shownSecs !== null) {
+      items.push(buttonItem(shell.i18n, "settings.keep", keep, "confirm.keep"),
+        buttonItem(shell.i18n, "settings.revert", () => closed(staging.revert()), "confirm.revert"));
+    } else if (staging.dirty) {
+      items.push(buttonItem(shell.i18n, "settings.apply", applyNow, "display.apply"));
+    }
+    items.forEach((it, i) => {
+      if (i > 0) it.left = () => menu.focusId(items[i - 1].id);
+      if (i < items.length - 1) it.right = () => menu.focusId(items[i + 1].id);
+      buttons.append(menu.add(it).el);
+    });
+    if (shownSecs === null && !staging.dirty) { // Apply shown but off: nothing waits for it
+      const off = el("div", "item button disabled");
+      off.setAttribute("aria-disabled", "true");
+      off.append(tl(shell.i18n, "settings.apply"));
+      buttons.append(off);
+    }
+    p.append(status, buttons);
     root.append(p);
     menu.render();
   };

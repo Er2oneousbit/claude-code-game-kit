@@ -14,7 +14,9 @@ index.html          page shell, loads src/main.ts
 src/main.ts         creates the Phaser.Game (size, scale mode, scene list)
 src/core/           engine-free logic: Log, juice (shake, hitstop, ease, follow, buffer, coyote, spring, flash limiter,
                     hold toggle, auto repeat), settings, bindings, saves, i18n, user data, dialogue, audio director, music director,
-                    audio access, analog (stick and trigger shaping). No Phaser import. Unit tested (golden vectors).
+                    audio access, analog (stick and trigger shaping), display staging (the Display tab's Apply and
+                    its keep-or-revert confirm), hud font size (ui_scale and text_scale for text the renderer draws).
+                    No Phaser import. Unit tested (golden vectors).
 src/shell/          the front end: HTML screens over the canvas, input, subtitles, smoke driver (no Phaser import; the
                     same files as the web-3d overlay's, host.ts is all it knows of the renderer)
 src/game/           scenes and game objects (Phaser lives here): main (play), juice (demo), backdrop; phaserHost.ts
@@ -56,6 +58,10 @@ dist/               production build (git-ignored): what you upload
 6. **Arcade physics bodies** need `this.physics.add...` (or `this.physics.add.existing(obj)`); a plain `this.add.sprite` has no body. Enable arcade physics in the game config first.
 7. **Headless smoke uses software rendering** (SwiftShader). It proves boot and logic, not frame rate. Measure performance in a real browser (SOP-10).
 8. **Do not edit** `node_modules/` or `dist/`. Do not run `npm install <pkg>` without an ADR (`/adr`): every dependency ships to players.
+9. **Fullscreen needs a key press or click.** The Display tab's Apply asks "Keep these display settings?" for 15 s
+   (#308); when the countdown runs out, the revert comes from no key press or click, so a revert back into
+   fullscreen can be refused by the browser (the shell shows its "fullscreen blocked" toast; leaving fullscreen
+   always works). Keep, Revert and Back are presses, so they are fine. **(verify)** in each browser you ship to.
 
 ## Generated (do not hand-edit)
 `node_modules/`, `dist/`, `package-lock.json` (written by npm; commit it, never edit it),

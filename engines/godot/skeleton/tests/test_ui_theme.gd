@@ -7,6 +7,8 @@
 # Notes   : SOP-20: focus visible on every control. No running game needed; the slider test adds one node to the
 #           test tree.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): hud_font_size and Shell.look_changed, a game HUD's
+#           text following the player's text and menu size (#309)
 # ---------------------------------------------------------------------------
 extends GutTest
 
@@ -60,5 +62,27 @@ func test_focus_slider_falls_back_to_the_button_outline() -> void:
 	host.add_child(slider)
 	slider.grab_focus()
 	assert_eq(slider.ring(), button_focus)
+
+
+func test_hud_font_size_folds_text_and_menu_size() -> void:
+	assert_eq(UiTheme.hud_font_size_for(12, 1.0, 1.0), 12)
+	assert_eq(UiTheme.hud_font_size_for(12, 2.0, 1.0), 24, "text size")
+	assert_eq(UiTheme.hud_font_size_for(12, 1.0, 1.5), 18, "menu size")
+	assert_eq(UiTheme.hud_font_size_for(12, 1.25, 1.5), 23, "both: 22.5 rounds up")
+	assert_eq(UiTheme.hud_font_size_for(4, 0.75, 0.75), UiTheme.MIN_FONT_SIZE, "never below the floor")
+
+
+func test_hud_font_size_reads_the_live_settings_and_look_changed_fires() -> void:
+	var before_text: Variant = Shell.access("text_scale")
+	var before_ui: Variant = Shell.settings["display"]["ui_scale"]
+	watch_signals(Shell)
+	Shell.set_value("access", "text_scale", 2.0)
+	Shell.set_value("display", "ui_scale", 1.5)
+	assert_eq(UiTheme.hud_font_size(10), 30)
+	assert_signal_emit_count(Shell, "look_changed", 2)
+	Shell.set_value("audio", "master", float(Shell.settings["audio"]["master"]))
+	assert_signal_emit_count(Shell, "look_changed", 2, "a volume change is not a look change")
+	Shell.set_value("access", "text_scale", before_text)
+	Shell.set_value("display", "ui_scale", before_ui)
 
 # {{FOOTER}}

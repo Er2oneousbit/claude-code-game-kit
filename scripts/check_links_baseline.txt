@@ -69,6 +69,8 @@ core/docs/sop/SOP-16-2d-art-pipeline.md: path: docs/ENGINE.md
 core/docs/sop/SOP-16-2d-art-pipeline.md: path: docs/ENGINE.md
 core/docs/sop/SOP-18-game-feel.md: path: docs/ENGINE.md
 core/docs/sop/SOP-18-game-feel.md: path: docs/ENGINE_FLOW.md
+core/docs/sop/SOP-19-front-end-and-settings.md: path: docs/ENGINE.md
+core/docs/sop/SOP-19-front-end-and-settings.md: path: docs/ENGINE_FLOW.md
 core/docs/sop/SOP-19-front-end-and-settings.md: path: docs/ENGINE_FLOW.md
 core/docs/sop/SOP-21-ship-on-steam-and-itch.md: path: docs/ENGINE.md
 core/tools/art/dotwork/ASSET_MANIFEST.md: path: docs/ENGINE.md
@@ -135,6 +137,7 @@ engines/godot/FLOW.md: path: scripts/core/audio_access.gd
 engines/godot/FLOW.md: path: scripts/core/music_director.gd
 engines/godot/FLOW.md: path: scripts/game/juice_demo.gd
 engines/godot/FLOW.md: path: scripts/game/main.gd
+engines/godot/FLOW.md: path: scripts/game/play.gd
 engines/godot/FLOW.md: path: scripts/shell/music_player.gd
 engines/godot/FLOW.md: path: scripts/shell/shell.gd
 engines/godot/FLOW.md: path: tests/test_coyote_timer.gd
@@ -151,6 +154,7 @@ engines/love2d/FLOW.md: path: data/dialogue/sample.built.json
 engines/love2d/FLOW.md: path: src/core/audio_access.lua
 engines/love2d/FLOW.md: path: src/core/audio_access.lua
 engines/love2d/FLOW.md: path: src/core/audio_director.lua
+engines/love2d/FLOW.md: path: src/core/display_staging.lua
 engines/love2d/FLOW.md: path: src/core/json.lua
 engines/love2d/FLOW.md: path: src/core/music_director.lua
 engines/love2d/FLOW.md: path: src/core/settings.lua
@@ -159,6 +163,7 @@ engines/love2d/FLOW.md: path: src/game/game.lua
 engines/love2d/FLOW.md: path: src/shell/drive.lua
 engines/love2d/FLOW.md: path: src/shell/music_player.lua
 engines/love2d/FLOW.md: path: src/shell/music_player.lua
+engines/love2d/FLOW.md: path: src/shell/screens/play.lua
 engines/love2d/FLOW.md: path: src/shell/style.lua
 engines/love2d/FLOW.md: path: tests/runner.lua
 engines/love2d/FLOW.md: path: tests/test_access_golden.lua

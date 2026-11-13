@@ -10,7 +10,7 @@
 #             smoke    boot the game for N frames in a small off-screen window, fail on errors; --headless runs
 #                      without a window; --screenshot FILE / --record DIR capture it; --compare BASELINE diffs;
 #                      --drive SCENARIO runs a scripted path through the menus (menus, crash, pseudo,
-#                      pseudo-plant, bug, show:<screen>) with --data-dir DIR and --locale LANG; without
+#                      pseudo-plant, bug, display, show:<screen>) with --data-dir DIR and --locale LANG; without
 #                      --data-dir the game's files go to a fresh build/smoke-data/, never the real save folder;
 #                      --shaders also draws every kit shader recipe and compares it with its golden image
 #             run      launch the game window
@@ -47,6 +47,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive show:credits (#284)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `ship --target itch` uploads to itch.io with
 #           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive display and show:apply|confirm,
+#           the Display tab's Apply and its keep-or-revert confirm; DRIVE_DISPLAY lines (#308)
 # ---------------------------------------------------------------------------
 import argparse
 import base64
@@ -888,7 +890,9 @@ def build_parser():
                    help="a scripted path through the shell: menus (change two settings, save, quit; prints "
                         "SETTINGS_WRITTEN), crash (a planted error: CRASH_WRITTEN, exit 1), pseudo (with --locale "
                         "pseudo: checks every label on every screen), pseudo-plant (the same plus a label too small: "
-                        "must fail), bug (F8 bug report), show:<title|settings|pause|subtitle|juice|credits> (opens that "
+                        "must fail), bug (F8 bug report), display (the Display tab's Apply: stage, warn, apply, "
+                        "let the 15 s confirm revert in real time; DRIVE_DISPLAY lines), "
+                        "show:<title|settings|pause|subtitle|juice|credits|apply|confirm> (opens that "
                         "screen; add --screenshot)")
     p.add_argument("--data-dir", default="", help="keep settings, saves, logs, crashes, telemetry and bug reports "
                    f"in this folder (relative to the project; kept between runs); default: a fresh {SMOKE_DATA}/ "
