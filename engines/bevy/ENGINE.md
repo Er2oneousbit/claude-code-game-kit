@@ -7,6 +7,9 @@
   (Bevy's `rust-version`), installed with rustup. Windows: Visual Studio Build Tools, workload "Desktop development
   with C++" (the MSVC linker). Linux: `libasound2-dev libudev-dev pkg-config` (verify per distro).
 - **First build compiles Bevy itself:** 5 to 15 minutes and several GB in `target/`. Later builds take seconds.
+  Several games can share one compiled Bevy through one `CARGO_TARGET_DIR`; the shader check example is named after
+  the game (`[[example]]` in `Cargo.toml`, `<slug>_shader_check`), because cargo names examples without a hash and
+  MSVC stopped with LNK1140 when every game linked into one `debug/examples/shader_check.pdb` (#294).
 - **Version:** one source, `version` in `Cargo.toml` (SOP-06). Code reads `env!("CARGO_PKG_VERSION")`; `--version`
   prints it and the BOOT_OK line carries it.
 - **Game options:** everything after `--` goes to `game::configure()` (bots, seeds, cheats), so a game adds options
@@ -91,7 +94,7 @@ src/character.rs   rigged glTF characters: spawn_character plays a named clip on
 src/shell/fonts/   Fira Mono Medium (the text font) and Atkinson Hyperlegible (the readable font), both OFL; compiled
                    in with include_bytes!
 src/kit_shaders.rs the kit's shader recipes as typed 2D materials (generated, with assets/shaders/kit/*.wesl)
-examples/shader_check.rs renders every recipe on the GPU for `smoke --shaders`
+examples/shader_check.rs renders every recipe on the GPU for `smoke --shaders` (cargo's name: `<slug>_shader_check`)
 tests/             integration tests: drive the real GamePlugin headless with app.update()
 tests/golden.rs    the juice, shell and audio modules against data/golden/*.json (the kit's shared vectors)
 tests/dotwork.rs   the Dotwork importer against data/golden/dotwork/expected.json; every assets/dotwork manifest loads

@@ -3,7 +3,9 @@
 // Purpose : Renders every kit shader recipe (src/kit_shaders.rs, assets/shaders/kit/*.wesl) into its own 64x64
 //           image with the real Bevy renderer and saves each as <out>/<name>.png, for
 //           tools/shaders/shader_ref.py compare. `python tools/dev.py smoke --shaders` runs it.
-// Usage   : cargo run --example shader_check -- build/shader_check
+// Usage   : cargo run --example {{GAME_SLUG}}_shader_check -- build/shader_check
+//           (the name Cargo.toml's [[example]] gives this file: the game's own, so games sharing one
+//           CARGO_TARGET_DIR do not link into one shader_check.pdb, #294)
 // Notes   : Pseudocode
 //             per recipe: inputs read from data/shaders/inputs/ (linear, nearest), a 64x64 Rgba8Unorm render
 //             target, a Camera2d on its own render layer (no tonemapping, no MSAA, transparent clear), and a
@@ -16,6 +18,7 @@
 //           but with a GPU adapter. A shader that does not compile logs an error and draws nothing: dev.py fails
 //           on the error line, and the empty picture fails the compare.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): run under the game's own example name (#294)
 // ---------------------------------------------------------------------------
 use std::path::PathBuf;
 use std::time::{Duration, Instant};

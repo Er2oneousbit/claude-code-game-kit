@@ -1793,6 +1793,36 @@ class BevyShaders(TempRoot):
         self.assertIn(["--example", "shader_check"], self.builds)
         self.assertTrue(any("shader_ref.py compare" in c for c in self.calls), self.calls)
 
+    def test_two_scaffolds_do_not_share_the_shader_check_example(self):
+        """#294: cargo names examples without a hash, so every project in one CARGO_TARGET_DIR linked into one
+        debug/examples/shader_check.pdb (LNK1140 after a few). Each game's example now has the game's own name."""
+        names = {}
+        for game in ("Pdb Alpha", "Pdb Beta"):
+            dest = self.root / game.replace(" ", "_")
+            r = subprocess.run([sys.executable, "-B", str(KIT / "scripts" / "new_game.py"), "--name", game,
+                                "--engine", "bevy", "--dest", str(dest), "--author", "Tester"],
+                               capture_output=True, encoding="utf-8", errors="replace", timeout=300)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            dev = load("bevy")
+            dev.ROOT = dest
+            names[game] = dev.shader_example()
+            self.assertTrue((dest / "examples" / "shader_check.rs").is_file())
+        self.assertEqual(names, {"Pdb Alpha": "pdb_alpha_shader_check", "Pdb Beta": "pdb_beta_shader_check"})
+
+    def test_a_cargo_toml_without_the_table_keeps_the_old_name(self):
+        dev = load("bevy")
+        dev.ROOT = self.root
+        (self.root / "Cargo.toml").write_text('[package]\nname = "old"\n', encoding="utf-8")
+        self.assertEqual(dev.shader_example(), "shader_check")     # cargo's own name for examples/shader_check.rs
+        (self.root / "Cargo.toml").write_text('[package]\nname = "g"\n\n[[example]]\nname = "other"\npath = '
+                                              '"examples/other.rs"\n\n[[example]]\npath = "examples/shader_check.rs"\n'
+                                              'name = "g_shader_check"\n', encoding="utf-8")
+        self.assertEqual(dev.shader_example(), "g_shader_check")   # found by its path, either key order
+        rc, text = self.smoke(self.dev({"--example": (0, self.ALL_OK), "shader_ref.py": (0, "[ OK ] match")}))
+        self.assertEqual(rc, 0, text)
+        self.assertIn(["--example", "g_shader_check"], self.builds)
+        self.assertTrue(any("--example g_shader_check" in c for c in self.calls), self.calls)
+
     def test_a_logged_shader_error_fails_although_the_example_exits_0(self):
         broken = "2026-11-06T06:41:35Z ERROR bevy_render::render_resource::pipeline_cache: failed to process shader\n"
         dev = self.dev({"--example": (0, broken + self.ALL_OK)})
