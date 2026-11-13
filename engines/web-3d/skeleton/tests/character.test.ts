@@ -3,13 +3,15 @@
 // Purpose : src/game/character.ts against the golden rigged character (data/golden/character/character.glb: Mixamo
 //           bone names, looping idle and walk clips, #290): GLTFLoader finds the clips at their lengths, walk plays on
 //           a loop at 1x (the clock and the loop's period) and turns the moving bone as far as the clip swings it, no
-//           more, and three's bone names drop the ':'.
+//           more, and three's bone names drop the ':'. play() of the clip already playing keeps its time; restart
+//           and another loop setting start it again (#296).
 // Usage   : python tools/dev.py test
 // Notes   : Runs in Node: the fixture has no textures, so GLTFLoader needs no DOM. Numbers come from
 //           data/golden/character/expected.json (tools/blender/golden_character.py), never from this file.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the swing's ceiling, the loop's period and clock
 //           (0.15.0 review)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the same clip keeps its time, restart is explicit (#296)
 // ---------------------------------------------------------------------------
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
@@ -89,6 +91,25 @@ describe("rigged character (data/golden/character)", () => {
     expect(idle.isRunning()).toBe(false);
     expect(idle.clampWhenFinished).toBe(true);
     expect(() => ch.play("no_such_clip")).toThrow(/no clip/);
+  });
+
+  it("keeps the clip playing when asked for it again, and restarts it only when told (#296)", async () => {
+    const ch = await load();
+    const walk = ch.play("walk", { fade: 0 });
+    ch.update(0.3);
+    expect(walk.time).toBeCloseTo(0.3, 3);
+    for (let i = 0; i < 3; i++) expect(ch.play("walk")).toBe(walk); // a game may call play() every frame
+    ch.update(0.1);
+    expect(walk.time).toBeCloseTo(0.4, 3); // kept its time: no reset
+    ch.play("walk", { restart: true });
+    expect(walk.time).toBe(0);
+    ch.update(0.2);
+    ch.play("walk", { loop: false }); // another loop setting is another request
+    expect(walk.time).toBe(0);
+    ch.update(expected.clips.walk.seconds + 0.5);
+    ch.play("walk", { loop: false }); // a held one-shot keeps holding
+    expect(walk.isRunning()).toBe(false);
+    expect(walk.time).toBeCloseTo(expected.clips.walk.seconds, 3);
   });
 
   it("stands the expected height on the ground", async () => {

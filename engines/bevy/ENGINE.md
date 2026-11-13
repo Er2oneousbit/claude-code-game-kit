@@ -141,7 +141,9 @@ target/            build output (git-ignored)
 - **The helper, `src/character.rs`:** add `character::CharacterPlugin`, then in a system
   `let hero = spawn_character(&mut commands, &asset_server, "models/hero.glb", "idle");`. It returns the `Character`
   entity: move and turn that one. Switch clips with `characters.get_mut(hero)?.clip = "walk".into();` (an unknown
-  name logs one WARN and stops the animation). `CharacterAnimator` (on the scene's `AnimationPlayer` entity) maps
+  name logs one WARN and stops the animation). Setting the name already playing changes nothing (it keeps its time),
+  so a game may set it every frame; `commands.entity(hero).insert(RestartClip)` plays it again from the start: the
+  same rule in all five engines' character helpers (#296, `tests/character.rs`). `CharacterAnimator` (on the scene's `AnimationPlayer` entity) maps
   every clip name to its node; `clip_names(&gltf)` lists them.
 - **What it does, for your own variants:** loads the scene by label,
   `WorldAssetRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset(path)))`, and the whole file as

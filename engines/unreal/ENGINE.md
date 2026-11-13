@@ -162,6 +162,10 @@ ch.bone("mixamorig:LeftHand")                          # the Skeleton's name for
 - **Looping and root motion:** glTF has no loop flag; the helper sets each AnimSequence's Loop flag (`loop`, kept
   through a reimport), but the player decides at run time: a SkeletalMeshComponent in Animation Mode "Use Animation
   Asset" with Looping on, `Mesh->PlayAnimation(Walk, /*bLooping=*/true)` in C++, or a Sequence Player's Loop Animation.
+  The kit's other character helpers keep a clip that is already playing when asked for it again and restart only when
+  told (#296); Unreal has no play helper in the kit, and `PlayAnimation` starts the asset again on every call, so a
+  game that picks the clip every frame compares it with the one playing first **(verify: no kit test calls
+  `PlayAnimation` twice)**.
   Root motion is off and Force Root Lock is left off on purpose: Hips is the root, so the lock would pin the hips to
   the rest pose and kill their bob. A clip with real root motion needs a root bone above Hips **(verify)**.
 - **After the `.glb` changes:** run the script again. Interchange then reimports only the SkeletalMesh, so the helper
