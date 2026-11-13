@@ -9,12 +9,14 @@
 --           crash          raises an error in a frame (conf.lua's handler writes the crash file, exit 1)
 --           pseudo         (with --locale pseudo) visits every screen and checks every visible label
 --           pseudo-plant   the same plus one label too small for its text: must fail and name it
---           show:<screen>  title | settings | pause | subtitle | juice: opens it, then ends (--screenshot)
+--           show:<screen>  title | settings | pause | subtitle | juice | credits: opens it, then ends
+--                          (--screenshot)
 --           bug            presses F8 on the menu and checks the bug_<timestamp>/ folder
 -- Notes   : A scenario is a coroutine: d:press() injects an action and waits a couple of frames, d:wait_screen()
 --           yields until the screen is on top. Each wait has a frame limit, so a broken menu fails instead of
 --           hanging. Add a scenario: a function in SCENARIOS, then document it in docs/ENGINE_FLOW.md.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits (#284)
 -- ---------------------------------------------------------------------------
 local Bindings = require("src.core.bindings")
 local InputMap = require("src.core.input_map")
@@ -301,6 +303,13 @@ function SHOW.settings(d)
   d:press("ui_left")
   d:frames(5)
 end
+function SHOW.credits(d)
+  d:to_menu()
+  d:open("credits", "credits")
+  d:frames(5)
+  d:top():at_top()                                       -- the first lines in view, not rolling up from below
+  d:frames(1)
+end
 function SHOW.pause(d)
   d:to_menu()
   d:open("play", "loading")
@@ -483,7 +492,7 @@ function Drive.new(app, name)
   if access then fn = function(d) access_tour(d, access) end end
   local show = self.name:match("^show:(.+)$")
   if show then
-    if not SHOW[show] then error("unknown --drive show:" .. show .. " (title, settings, pause, subtitle, juice)", 0) end
+    if not SHOW[show] then error("unknown --drive show:" .. show .. " (title, settings, pause, subtitle, juice, credits)", 0) end
     fn = function(d) SHOW[show](d); d:done(0) end
   end
   if not fn then
