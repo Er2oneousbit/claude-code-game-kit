@@ -19,6 +19,8 @@
 // Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the game's Dotwork packs load at init and show on the
 //           play screen (#60, DotworkShowcase)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits in --help (#284)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive and show:apply/confirm in --help
+//           (#308); the HUD follows the player's text size through play.hud_scale_changed (#309)
 // ---------------------------------------------------------------------------
 #include "game/Game.hpp"
 
@@ -71,8 +73,8 @@ bool Game::configure(const std::vector<std::string>& args) {
 
 const char* Game::options_help() {
     return "  --drive SCENARIO   (smoke) a scripted path through the shell: menus, crash, pseudo, pseudo-plant, bug,\n"
-           "                     access[:res=WxH,scale=N,pad,read],\n"
-           "                     show:<title|menu|settings|pause|subtitle|play|juice|credits>;\n"
+           "                     display, access[:res=WxH,scale=N,pad,read],\n"
+           "                     show:<title|menu|settings|pause|subtitle|play|juice|credits|apply|confirm>;\n"
            "                     dev.py smoke --drive passes it\n"
            "  --data-dir DIR     keep settings.json in this folder (default: the user's preferences folder)\n"
            "  --locale LANG      language for the run (data/i18n/<LANG>.json)\n"
@@ -85,6 +87,9 @@ bool Game::init(SDL_Window* window, SDL_Renderer* renderer) {
     shell_->play.update = [this](double dt) { play_update(dt); };
     shell_->play.draw = [this](shell::Draw& draw) { play_draw(draw); };
     shell_->play.action = [this](const std::string& action) { return play_action(action); };
+    // The player's text size for the HUD (#309): the shell's play hint and any draw.text already use it; a HUD the
+    // game sizes itself (its own font, a panel, an icon beside a number) multiplies by it and lays out again here.
+    shell_->play.hud_scale_changed = [](double scale) { LOG_INFO("game", "HUD_SCALE " << scale); };
     if (!shell_->init(window, renderer)) {
         return false;
     }

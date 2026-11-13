@@ -8,16 +8,22 @@
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): crash, pseudo, pseudo-plant, bug, show:juice (#275)
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits (#284)
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): display (stage, warn, apply, the confirm reverts on
+//           the wall clock, discard; DRIVE_DISPLAY lines), show:apply and show:confirm, the pseudo drive checks the
+//           Display tab with a change waiting and the confirm (#308)
 // ---------------------------------------------------------------------------
 #include "shell/Drive.hpp"
 
+#include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <optional>
 #include <set>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 #include "core/AtomicFile.hpp"
@@ -35,7 +41,7 @@ namespace {
 
 const char* kAccessActions[] = {"ui_up", "ui_down", "ui_left", "ui_right", "ui_accept", "ui_cancel", "pause"};
 const char* kPromptActions[] = {"move_left", "move_right", "jump", "attack", "interact", "pause"};
-const char* kShowScreens = "title, menu, settings, pause, subtitle, play, juice, credits";
+const char* kShowScreens = "title, menu, settings, pause, subtitle, play, juice, credits, apply, confirm";
 const char* kBugFiles[] = {"info.txt", "log_tail.txt", "settings.json", "screenshot.bmp"};
 
 bool starts_with(const std::string& s, const std::string& prefix) {
@@ -60,6 +66,8 @@ Drive::Drive(Shell& shell, std::string name) : shell_(shell), name_(std::move(na
         build_pseudo(name_ == "pseudo-plant");
     } else if (name_ == "bug") {
         build_bug();
+    } else if (name_ == "display") {
+        build_display();
     } else if (starts_with(name_, "show:")) {
         if (!build_show(name_.substr(5))) {
             fail("unknown --drive " + name_ + " (show:<" + kShowScreens + ">)");
@@ -68,7 +76,7 @@ Drive::Drive(Shell& shell, std::string name) : shell_(shell), name_(std::move(na
         build_access(name_ == "access" ? "" : name_.substr(7));
     } else {
         fail("unknown --drive " + name_ +
-             " (menus, crash, pseudo, pseudo-plant, bug, access[:res=WxH,scale=N,pad,read], show:<screen>)");
+             " (menus, crash, pseudo, pseudo-plant, bug, display, access[:res=WxH,scale=N,pad,read], show:<screen>)");
     }
     building_ = false;
     if (name_ != "default") {
@@ -432,6 +440,15 @@ void Drive::build_pseudo(bool plant) {
         press("ui_down");
         focus(name + ".back");                               // scrolled to the end: the rows below the fold
         check("settings." + name + ".end");
+        if (name == "display") {                             // #308: Apply enabled, then the confirm
+            stage_resolution();
+            check("settings.display.pending");
+            focus("display.apply");
+            press("ui_accept");
+            wait_for("the display confirm", [this] { return shell_.settings_menu_ && shell_.settings_menu_->confirming(); });
+            check("settings.confirm");
+            press("ui_cancel");                              // reverts at once
+        }
         if (name == "controls") {
             focus("controls.bind_jump");
             press("ui_accept");                              // the "press a key" prompt
@@ -510,6 +527,100 @@ void Drive::build_bug() {
     }
 }
 
+// ---- The Display tab's Apply (#308) ------------------------------------------------------------------------
+// settings, Display tab: one step right on the window size row (a staged change; Apply is enabled now)
+void Drive::stage_resolution() {
+    to_tab("display");
+    press("ui_down");
+    focus("display.resolution");
+    press("ui_right");
+}
+
+// display: stage a window size, Back warns, Apply opens the confirm, nobody answers and it reverts on the wall clock
+// (proof that it counts real time: a smoke run feeds one fixed tick per frame, however fast the frames go), then a
+// staged change that two Backs discard. DRIVE_DISPLAY lines say what happened; settings.json is checked each time.
+void Drive::build_display() {
+    auto setting = [this] { return shell_.settings_["display"]["resolution"]; };
+    auto saved = [this]() -> json {
+        const std::optional<std::string> text = core::read_file(shell_.settings_file());
+        const json j = text ? json::parse(*text, nullptr, false) : json();
+        return j.is_object() && j.contains("display") ? j["display"]["resolution"] : json();
+    };
+    auto shown = [this] { return shell_.settings_menu_ ? shell_.settings_menu_->staging().value("resolution") : json(); };
+    to_menu();
+    open("settings", "settings");
+    then("the window size before", [this, setting] { before_ = setting(); });
+    stage_resolution();
+    then("staged, not applied", [this, setting, shown] {
+        if (shown() == before_ || setting() != before_) {
+            fail("the window size row did not stage: shows " + shown().dump() + ", settings hold " + setting().dump());
+            return;
+        }
+        std::cout << "DRIVE_DISPLAY staged resolution " << shown().dump() << " (settings still " << before_.dump() << ")\n";
+    });
+    press("ui_cancel");                                   // Back with a change waiting: a warning, not a way out
+    then("Back warned", [this] {
+        if (top_name(shell_) != "settings" || shell_.message_ != shell_.t("settings.unapplied")) {
+            fail("Back with an unapplied Display change did not warn (screen " + top_name(shell_) + ")");
+            return;
+        }
+        std::cout << "DRIVE_DISPLAY warned: " << shell_.message_ << "\n";
+    });
+    focus("display.apply");
+    press("ui_accept");
+    then("applied, the confirm open", [this, setting, saved, shown] {
+        const auto secs = shell_.settings_menu_ ? shell_.settings_menu_->staging().seconds() : std::nullopt;
+        if (!secs || setting() == before_ || saved() != setting() || shell_.focus_id() != "confirm.keep") {
+            fail("Apply did not set, save and confirm the window size (settings " + setting().dump() + ", file " +
+                 saved().dump() + ", focus " + shell_.focus_id() + ")");
+            return;
+        }
+        applied_at_ = std::chrono::steady_clock::now();
+        applied_frame_ = frame_;
+        std::cout << "DRIVE_DISPLAY applied resolution " << setting().dump() << ", confirm " << *secs
+                  << " s, focus on Keep\n" << std::flush;
+    });
+    add({"the confirm reverts by itself", [this](Step&) {   // the wall clock, not the frame count, limits this wait
+             if (!shell_.settings_menu_ || !shell_.settings_menu_->confirming()) {
+                 return true;
+             }
+             const double waited = std::chrono::duration<double>(std::chrono::steady_clock::now() - applied_at_).count();
+             if (waited > core::kDisplayConfirmS + kRealSlackS) {
+                 fail("the display confirm was still open after " + std::to_string(waited) + " real seconds");
+                 return true;
+             }
+             std::this_thread::sleep_for(std::chrono::milliseconds(kRealWaitMs));   // no need to spin the frames
+             return false;
+         }});
+    then("reverted", [this, setting, saved] {
+        const double waited = std::chrono::duration<double>(std::chrono::steady_clock::now() - applied_at_).count();
+        if (setting() != before_ || saved() != before_) {
+            fail("the confirm ran out but did not put back " + before_.dump() + " (settings " + setting().dump() +
+                 ", file " + saved().dump() + ")");
+            return;
+        }
+        if (waited < core::kDisplayConfirmS - kRealSlackS) {
+            fail("the display confirm reverted after " + std::to_string(waited) + " s: it must count real seconds");
+            return;
+        }
+        char buf[96];
+        std::snprintf(buf, sizeof buf, "%.1f s real time (%d frames)", waited, frame_ - applied_frame_);
+        std::cout << "DRIVE_DISPLAY reverted to " << before_.dump() << " after " << buf << "\n" << std::flush;
+    });
+    stage_resolution();
+    press("ui_cancel");                                   // warns
+    press("ui_cancel");                                   // discards and leaves
+    wait_screen("main_menu");
+    then("discarded", [this, saved] {
+        if (saved() != before_) {
+            fail("a discarded Display change reached settings.json: " + saved().dump());
+            return;
+        }
+        std::cout << "DRIVE_DISPLAY discarded: two Backs left the settings, the file holds " << before_.dump() << "\n";
+        done(0);
+    });
+}
+
 // show:<screen>: open it, let it settle, end (main.cpp saves --screenshot)
 bool Drive::build_show(const std::string& screen) {
     if (screen == "title") {
@@ -558,6 +669,15 @@ bool Drive::build_show(const std::string& screen) {
         frames(5);
         then("the first lines in view", [this] { shell_.credits_at_top(); });
         frames(1);
+    } else if (screen == "apply" || screen == "confirm") {   // #308: a Display change waiting, or its confirm
+        to_menu();
+        open("settings", "settings");
+        stage_resolution();
+        focus("display.apply");
+        if (screen == "confirm") {
+            press("ui_accept");
+        }
+        frames(5);
     } else if (screen == "juice") {
         to_juice();
         frames(90);                                     // the intro line is under way, the camera settled

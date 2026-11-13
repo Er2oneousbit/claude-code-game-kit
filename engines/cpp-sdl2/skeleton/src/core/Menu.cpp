@@ -6,6 +6,8 @@
 //           its label key in data/i18n/en.json). The option lists come from Settings.hpp and Bindings.hpp so the
 //           menu can never offer a value the loader would reject.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): Display rows stage through core::DisplayStaging, the
+//           Apply row, the keep-or-revert confirm, Back that warns once about unapplied Display changes (#308)
 // ---------------------------------------------------------------------------
 #include "core/Menu.hpp"
 
@@ -256,6 +258,9 @@ Row choice_row(const std::string& id, Label label, std::function<std::vector<jso
 
 // ---- SettingsMenu ------------------------------------------------------------------------------------------
 SettingsMenu::SettingsMenu(json& settings, SettingsHooks hooks) : s_(settings), hooks_(std::move(hooks)) {
+    staging_ = DisplayStaging(s_["display"].is_object() ? s_["display"] : json::object());
+    confirm_ = MenuList({button_row("keep", [this] { return t("settings.keep"); }, [this] { keep_display(); }),
+                         button_row("revert", [this] { return t("settings.revert"); }, [this] { revert_display(); })});
     lists_["display"] = MenuList(display_rows());
     lists_["audio"] = MenuList(audio_rows());
     lists_["controls"] = MenuList(controls_rows());
@@ -288,6 +293,10 @@ Row SettingsMenu::field(const std::string& section, const std::string& name, Row
         (*s)[section][name] = v;
         changed(section);
     };
+    if (section == "display") {   // Display waits for Apply (#308): the row shows and changes the staged value
+        get = [this, name]() -> json { return staging_.value(name); };
+        set = [this, name](const json& v) { staging_.stage(name, v); };
+    }
     Label label = [this, section, name] { return t("settings." + section + "." + name); };
     switch (kind) {
         case RowKind::Toggle:
@@ -317,28 +326,22 @@ Row SettingsMenu::field(const std::string& section, const std::string& name, Row
 }
 
 Row SettingsMenu::back_row() {
-    return button_row("back", [this] { return t("settings.back"); }, [this] {
-        if (hooks_.close) {
-            hooks_.close();
-        }
-    });
+    return button_row("back", [this] { return t("settings.back"); }, [this] { back(); });
 }
 
 std::vector<Row> SettingsMenu::display_rows() {
-    json* s = &s_;
     std::vector<json> res_options;
     for (const auto& [w, h] : kResolutions) {
         res_options.emplace_back(std::to_string(w) + "x" + std::to_string(h));
     }
     Row res = choice_row(
         "resolution", [this] { return t("settings.display.resolution"); }, [res_options] { return res_options; },
-        [s]() -> json { return resolution_text((*s)["display"]["resolution"]); },
-        [this, s](const json& v) {
+        [this]() -> json { return resolution_text(staging_.value("resolution")); },
+        [this](const json& v) {
             int w = 0;
             int h = 0;
             if (parse_resolution(v, w, h)) {
-                (*s)["display"]["resolution"] = json::array({w, h});
-                changed("display");
+                staging_.stage("resolution", json::array({w, h}));
             }
         },
         [this](const json& v) {
@@ -351,23 +354,74 @@ std::vector<Row> SettingsMenu::display_rows() {
         });
     Row cap = choice_row(
         "frame_cap", [this] { return t("settings.display.frame_cap"); }, [] { return as_options(kFrameCaps); },
-        [s]() -> json { return (*s)["display"]["frame_cap"]; },
-        [this, s](const json& v) {
-            (*s)["display"]["frame_cap"] = v;
-            changed("display");
-        },
+        [this]() -> json { return staging_.value("frame_cap"); },
+        [this](const json& v) { staging_.stage("frame_cap", v); },
         [this](const json& v) {
             const long long n = v.is_number() ? v.get<long long>() : 0;
             return n == 0 ? t("opt.frame_cap.0") : t("value.fps", {{"n", std::to_string(n)}});
         });
+    Row apply = button_row("apply", [this] { return t("settings.apply"); }, [this] { apply_display(); });
+    apply.enabled = [this] { return staging_.has_pending(); };   // only while a Display change waits
     return {
         field("display", "mode", RowKind::Choice, as_options(kDisplayModes)),
         field("display", "vsync", RowKind::Toggle),
         cap,
         res,
         field("display", "ui_scale", RowKind::Slider, {}, 0.75, 2.0, 0.25),
+        apply,
         back_row(),
     };
+}
+
+// ---- The Display tab's Apply (#308) ------------------------------------------------------------------------
+void SettingsMenu::set_display(const DisplayStaging::Calls& calls) {
+    if (calls.empty()) {
+        return;
+    }
+    for (const auto& [field, v] : calls) {
+        s_["display"][field] = v;
+    }
+    changed("display");
+    if (hooks_.save) {
+        hooks_.save();
+    }
+}
+
+bool SettingsMenu::apply_display() {
+    set_display(staging_.apply());
+    lists_["display"].fix_focus(1);   // Apply is disabled now: focus moves on (to Back)
+    if (staging_.confirming()) {
+        confirm_.focus("keep");
+        return true;
+    }
+    return false;
+}
+
+void SettingsMenu::tick(double real_dt) {
+    if (staging_.confirming()) {
+        set_display(staging_.tick(real_dt));
+    }
+}
+
+void SettingsMenu::keep_display() {
+    staging_.keep();
+}
+
+void SettingsMenu::revert_display() {
+    set_display(staging_.revert());
+}
+
+void SettingsMenu::back() {
+    auto [what, calls] = staging_.back();
+    if (what == "revert") {
+        set_display(calls);
+    } else if (what == "warn") {
+        if (hooks_.say) {
+            hooks_.say(t("settings.unapplied"));
+        }
+    } else if (hooks_.close) {
+        hooks_.close();
+    }
 }
 
 std::vector<Row> SettingsMenu::audio_rows() {
@@ -504,10 +558,16 @@ std::vector<Row> SettingsMenu::language_rows() {
 }
 
 bool SettingsMenu::action(const std::string& name) {
-    if (name == "ui_cancel") {
-        if (hooks_.close) {
-            hooks_.close();
+    if (staging_.confirming()) {   // the keep-or-revert confirm takes every press; cancel reverts
+        if (name == "ui_cancel") {
+            revert_display();
+            return true;
         }
+        confirm_.action(name);
+        return true;
+    }
+    if (name == "ui_cancel") {
+        back();
         return true;
     }
     MenuList& l = list();
@@ -565,6 +625,9 @@ void SettingsMenu::open_tab(const std::string& name, const std::string& focus_ro
 }
 
 std::string SettingsMenu::focus_id() const {
+    if (staging_.confirming()) {
+        return "confirm." + confirm_.focused_id();
+    }
     if (on_tabs) {
         return "tabs." + tab;
     }

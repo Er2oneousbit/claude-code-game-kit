@@ -11,7 +11,7 @@
 #                      smoke --frames 20000 --until RUN_WON --fail-on CAUGHT -- --autoplay careful
 #                      (after `--`: arguments for the game; --screenshot / --record capture frames);
 #                      --drive SCENARIO runs a scripted path through the shell's screens (menus, crash, pseudo,
-#                      bug, access, show:<screen>) with --data-dir DIR and --locale LANG; without --drive the run walks
+#                      bug, display, access, show:<screen>) with --data-dir DIR and --locale LANG; without --drive the run walks
 #                      title -> menu -> play; settings always go to a smoke data folder, never the player's;
 #                      --shaders also draws every kit shader recipe on the GPU (kit_shader_check) and compares
 #                      it with its golden image (SDL_GPU_DRIVER=vulkan|direct3d12|metal picks the backend)
@@ -61,6 +61,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive show:credits (#284)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `ship --target itch` uploads to itch.io with
 #           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive display, show:apply, show:confirm in
+#           the help (the Display tab's Apply, #308)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -850,9 +852,11 @@ def build_parser():
                    help="a scripted path through the shell's screens: menus (change two settings, save, quit; prints "
                         "SETTINGS_WRITTEN), crash (a planted exception: CRASH_WRITTEN, exit 1 on purpose), pseudo (with "
                         "--locale pseudo: every label on every screen, PSEUDO_PASS or PSEUDO_FAIL), pseudo-plant (plus "
-                        "one label too small: exit 1), bug (F8: the bug report, DRIVE_BUG), "
+                        "one label too small: exit 1), bug (F8: the bug report, DRIVE_BUG), display (the Display tab's "
+                        "Apply: stage, warn, apply, the 15 s confirm reverts in real time, discard; DRIVE_DISPLAY lines), "
                         "access[:res=WxH,scale=N,pad,read] (the accessibility sweep's tour, tools/access/sweep.py), "
-                        "show:<screen> (title, menu, settings, pause, subtitle, play, juice or credits: opens that screen; add "
+                        "show:<screen> (title, menu, settings, pause, subtitle, play, juice, credits, apply or confirm: "
+                        "opens that screen; add "
                         "--screenshot); "
                         "the run ends at DRIVE_DONE")
     p.add_argument("--data-dir", default="", help="keep settings.json in this folder (relative to the project; kept "
