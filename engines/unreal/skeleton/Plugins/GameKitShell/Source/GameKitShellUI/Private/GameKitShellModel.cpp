@@ -12,6 +12,8 @@
 //           (where the string tables came from, or that there were none) by Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): credits from data/credits.md in a packaged game,
 //           the copy kept in step by SyncCreditsCopy (#278)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): CreditsText, the markdown rule every engine shares
+//           (list markers and emphasis stars go too; a '#' inside a heading's text stays) (#284)
 // ---------------------------------------------------------------------------
 #include "GameKitShellModel.h"
 
@@ -937,23 +939,83 @@ TArray<FString> FGameKitShellModel::CreditsLines() const
 	return Out;
 }
 
+namespace GameKitCreditsMarks
+{
+	/** Space and tab only: FString::TrimStart also takes a no-break space, and every port must trim the same two. */
+	bool SpaceTab(const TCHAR C)
+	{
+		return C == TEXT(' ') || C == TEXT('\t');
+	}
+
+	FString TrimLeft(const FString& S)
+	{
+		int32 I = 0;
+		while (I < S.Len() && SpaceTab(S[I]))
+		{
+			++I;
+		}
+		return S.Mid(I);
+	}
+}
+
+FString FGameKitShellModel::CreditsText(const FString& Markdown)
+{
+	using namespace GameKitCreditsMarks;
+	TArray<FString> Lines;
+	StripHtmlComments(Markdown).ParseIntoArray(Lines, TEXT("\n"), /*CullEmpty*/ false);
+	if (Lines.IsEmpty())
+	{
+		Lines.Add(FString());   // ParseIntoArray gives nothing for "": one empty line, as the other ports split it
+	}
+	for (FString& Line : Lines)
+	{
+		FString S = TrimLeft(Line);
+		int32 Marks = 0;
+		while (Marks < S.Len() && S[Marks] == TEXT('#'))
+		{
+			++Marks;
+		}
+		if (Marks > 0 && (Marks == S.Len() || SpaceTab(S[Marks])))
+		{
+			S = TrimLeft(S.Mid(Marks));                   // a heading: its text stays
+		}
+		else if (S.Len() >= 2 && (S[0] == TEXT('-') || S[0] == TEXT('*') || S[0] == TEXT('+')) && SpaceTab(S[1]))
+		{
+			S = TrimLeft(S.Mid(1));                       // a list item: its text stays
+		}
+		S.ReplaceInline(TEXT("*"), TEXT(""));             // emphasis stars
+		int32 End = S.Len();
+		while (End > 0 && SpaceTab(S[End - 1]))
+		{
+			--End;
+		}
+		Line = S.Left(End);
+	}
+	int32 First = 0;
+	int32 Last = Lines.Num();
+	while (First < Last && Lines[First].IsEmpty())
+	{
+		++First;
+	}
+	while (Last > First && Lines[Last - 1].IsEmpty())
+	{
+		--Last;
+	}
+	FString Out;
+	for (int32 N = First; N < Last; ++N)
+	{
+		Out += (N > First ? TEXT("\n") : TEXT("")) + Lines[N];
+	}
+	return Out;
+}
+
 TArray<FString> FGameKitShellModel::CreditsLinesFrom(const FString& Markdown)
 {
 	TArray<FString> Out;
-	const FString Text = StripHtmlComments(Markdown);
-	if (Text.TrimStartAndEnd().IsEmpty())
+	const FString Text = CreditsText(Markdown);
+	if (!Text.IsEmpty())
 	{
-		return Out;
-	}
-	TArray<FString> Lines;
-	Text.Replace(TEXT("\r"), TEXT("")).ParseIntoArray(Lines, TEXT("\n"), /*CullEmpty*/ false);
-	for (FString Line : Lines)
-	{
-		if (Line.StartsWith(TEXT("#")))
-		{
-			Line = Line.Replace(TEXT("#"), TEXT("")).TrimStartAndEnd();   // heading marks off, the text stays
-		}
-		Out.Add(Line.TrimEnd());
+		Text.ParseIntoArray(Out, TEXT("\n"), /*CullEmpty*/ false);
 	}
 	return Out;
 }
