@@ -63,6 +63,12 @@ C. **Look and feel**
        - **Dotwork, AI on this computer**: free per image, but needs an NVIDIA graphics card (8 GB of video memory for
          sprites, 16 GB for animation), 15 to 78 GB of downloads and an hour of setup. Makes ready-to-use assets for
          Godot; other engines get image files.
+       - **Rendered from a 3D model**: best for a top-down or isometric game whose characters turn to face 8
+         directions. A 3D model of the character is made from a picture or a sentence (Bozzetto on this computer, or
+         Tripo's paid service through Bozzetto), given a skeleton and clips (idle, walk, run), and Blender renders it
+         into sprite sheets from every direction, pixel-art filter optional. Needs Blender, plus either the Bozzetto
+         graphics card below or Tripo credits (their account and API key; Claude quotes the cost first and runs it
+         only with their go-ahead per job).
        *A 3D game:*
        - **Shapes in code plus free packs** *(Recommended for a first game)*: no cost, no setup; Claude builds simple
          models from shapes, and free packs (Kenney, Quaternius, Poly Haven and others, many with animated
@@ -74,7 +80,10 @@ C. **Look and feel**
          ComfyUI, about 8 GB of model downloads and Blender. Results are drafts: the hidden sides are invented, and
          characters come out as statues; `bozzetto.py rig` then gives them a skeleton and simple clips (free on the
          same card, or through Tripo's paid API), good for prototypes and background characters, not mocap.
-       - **A paid AI 3D service** (Meshy, Tripo and others): not wired into the kit; their account, terms and costs.
+       - **Tripo, a paid AI 3D service**: the same Bozzetto steps with no graphics card needed: model, skeleton and
+         clips on Tripo's servers. Their account and API key (set as an environment variable, never pasted in chat),
+         credits per model, skeleton and clip; Claude quotes the cost first and runs it only with their go-ahead per
+         job. Other services (Meshy and others) are not wired into the kit: their account, terms and costs.
        Several at once is fine ("Dotwork for characters, packs for tiles"). Record the answer as the plan's Art source.
    8c. Where should the sound come from? Same as art: the first build may have none, so this is about later. Options:
        - **Made in code plus free packs** *(Recommended for a first game)*: the kit's Wavesmith makes retro sound
@@ -91,10 +100,15 @@ C. **Look and feel**
        can shape its levels: streets and buildings from OpenStreetMap, terrain from a national elevation portal
        (`core/docs/resources/world-and-levels.md`). Record it in the plan as an option to try, not a decision; the
        licence check comes before anything ships. No extra question when the setting is made up.
+   8e. *Only if the game has a character the player controls or follows:* do you already picture the main character?
+       A sentence, a sketch or a picture is enough; "not yet" is fine. Record it as the plan's Main character line,
+       word for word or as "picture: <where it is>". It waits until the toy is fun, like all finished art.
    9. Who is it for, and how should the player feel? ("me and my kids; clever", "horror fans; tense")
 D. **Size and setup**
    10.* Where should it run: in a web browser (easy to share a link) or as a downloadable program? Any engine
        already installed (Godot, Unity, Unreal, RPG Maker MZ)? Windows, Mac or Linux?
+   10b. Which languages should the game's text be in? (Default: English only.) More than one is cheap if the text
+       stays out of the code from the start, and costly to add later.
    11. What is the smallest version that would already be fun to play for two minutes? (that is the first goal)
    12. What should stay out for now, even if it is cool? (online play, a story mode, a level editor...)
    13. What name should I use as the author? It goes in the game's docs and file credits. Offer their Git name
@@ -105,8 +119,32 @@ Keyboard, gamepad or touch comes from their answers; ask only if it is unclear.
 From the answers, draft and show the plan in the chat, one short screen, under the GDD's headings: Working title,
 One-line pitch, Genre, Perspective, Reference games, The twist, **three Pillars** (you propose them from the answers:
 each a short phrase plus what it rules out), Core loop (`action -> feedback -> reward -> new decision`), Player fantasy
-and audience, Art and audio direction (with the Art source from 8b and the Sound source from 8c), Controls, Toy scope (question 11), Out of scope (question 12), two or three
-**Assumptions to test** with how you will know, and the Author (question 13). Mark every *(Claude's pick)*.
+and audience, Art and audio direction (with the Art source from 8b, the Main character from 8e and the Sound source
+from 8c), Controls, Languages (10b), Toy scope (question 11), Out of scope (question 12), two or three
+**Assumptions to test** with how you will know, **Kit tools for this game** (below), and the Author (question 13).
+Mark every *(Claude's pick)*.
+
+**Kit tools for this game.** The kit has tools for much more than art and sound, and the game's Claude only reaches
+for one when the topic comes up. So read the answers for the signals below and list the matching tools, each with
+the tier it belongs to (Toy, Vertical slice, MVP) and the answer that put it there. No extra questions: a tool with
+no signal stays off the list (the game's Claude still finds it later). Show it in the plan as a short list,
+"`/procgen` (Toy): a new dungeon every run".
+| Signal in the answers | Tool | Tier |
+|---|---|---|
+| Generated levels, "a new level every run", roguelike, endless | `/procgen`, then `tools/seed_sweep.py` once a bot plays | Toy when the levels are the core loop, else Vertical slice |
+| Enemies, guards, monsters, NPCs that move or chase | `/game-ai` | Toy when the core loop is fighting or avoiding them, else Vertical slice |
+| Jumping, hitting, shooting, dodging, "it should feel punchy" | `/game-feel` | Toy (feel is part of the fun the toy tests) |
+| A look word: toon, glow, outline, water, CRT, dissolve, a screen filter | `/shader` | Vertical slice |
+| Levelling up, upgrades, a shop, currencies, getting stronger (question 5) | `docs/sop/SOP-22-balancing-and-economy.md` | Vertical slice |
+| A main character pictured (8e), and the Art source is Bozzetto, Tripo or rendered from a 3D model | `/make-character` | Vertical slice |
+| The Art source and Sound source routes | `/dotwork`, `/model-pipeline`, `/gen-brief`, `/asset-intake`, Wavesmith (step 8 lists which) | Vertical slice |
+| More than one language (10b) | `/game-shell` (localization), `tools/check_i18n.py` | Toy: text stays out of the code from the start; the check at Vertical slice |
+| Kids, older players, players who are colour-blind or use one hand, or accessibility named | `docs/sop/SOP-20-accessibility.md`, `tools/access/colour_check.py` at the art pass, `tools/access/sweep.py` | Vertical slice (the sweep again at MVP) |
+| Talking characters driven by a language model | `docs/sop/SOP-15-ai-features.md` | when the plan has them |
+| A real place (8d) | `docs/resources/world-and-levels.md` | Toy or Vertical slice, as an option to try |
+| "Easy to share a link", a web host, itch.io or Steam | `python tools/dev.py ship` (SOP-06 "Putting it online"), `docs/sop/SOP-21-ship-on-steam-and-itch.md` | MVP |
+Menus, saves, settings and the release checks come with every game through `/next-tier` and `/release-check`; leave
+them off the list.
 Right under the plan, before asking for the yes, show this warning in a box of its own (your words, same points):
 > ⚠️ **The first version will look crude, on purpose.** Simple placeholder characters made in code (2D: pixel-art figures with a walk and an action; 3D: figures
 > built from a few shapes, a kart with wheels and a driver; never dots or bare boxes) on plain backgrounds, maybe no sound. The first
@@ -149,7 +187,9 @@ Run these and report in plain words what is there and what is missing:
   in plain words; no NVIDIA card or under 8 GB means Dotwork will not run there, so offer to switch the art source.
   Also say how much free disk the models will need (15 GB for sprites, about 78 GB for everything).
 - Art source Bozzetto, or Sound source AI on this computer: the same graphics-card check, nothing installed now.
-  Bozzetto needs 16 GB of video memory; under that, offer to switch the art source. Wavesmith's `sfx` and `voice` say
+  Bozzetto needs 16 GB of video memory; under that, offer Tripo (paid, no graphics card) or another art source.
+- Art source Tripo, or rendered from a 3D model: nothing to check or install now. Blender, the Tripo account and its
+  key come when the toy is fun and the game's Claude runs `/make-character`; never ask for the key here. Wavesmith's `sfx` and `voice` say
   what they need when the game's Claude runs `python tools/audio/wavesmith/wavesmith.py check` later.
 - LÖVE: LÖVE 11.5 from https://love2d.org (Windows: the 64-bit zip, unzip to a simple folder); later, inside the game folder, set `LOVE_BIN` to its `love.exe` for them (ask first).
 - Unity, Unreal, C++: follow that engine's `engines/<id>/ENGINE.md` "Version and setup"; walk them through it step by step.
@@ -183,13 +223,15 @@ environment variable. For web, finish with `python tools/dev.py smoke` so they k
 ## 8. Point the game at the plan
 In the new folder, fill `docs/GDD.md` with the approved plan from step 3 (its headings match; leave sections the
 interview did not cover as the template has them, and keep the *(Claude's pick)* marks so the game's Claude knows what
-to confirm). Set "Current tier" to Toy, and copy the toy scope into the Toy row. Then set `docs/HANDOFF.md` "Next step"
+to confirm). Set "Current tier" to Toy, and copy the toy scope into the Toy row. Put the Main character, Languages
+and the Kit tools list in their GDD sections of the same names. Then set `docs/HANDOFF.md` "Next step"
 to: "Fast lane in docs/FIRST_HOUR.md: make the toy in docs/GDD.md playable (<the toy, one line>)." The game's own
-Claude reads both on its first session. The Art source line tells it which route to take once the toy is fun:
-`/dotwork` for Dotwork, `/model-pipeline` for Bozzetto and their own 3D models, `/gen-brief` for a paid service,
-`/asset-intake` for packs and their own art. The Sound source line does the same for audio: Wavesmith
-(`tools/audio/wavesmith/`) for sounds made in code, their own and local AI, `/gen-brief` for a paid service,
-`/asset-intake` for packs.
+Claude reads both on its first session, and `/next-tier` offers the Kit tools rows of each new tier. The Art source
+line tells it which route to take once the toy is fun: `/dotwork` for Dotwork, `/model-pipeline` for Bozzetto and
+their own 3D models, `/make-character` for the main character when it comes from Bozzetto, Tripo or a rendered 3D
+model, `/gen-brief` for another paid service, `/asset-intake` for packs and their own art. The Sound source line does
+the same for audio: Wavesmith (`tools/audio/wavesmith/`) for sounds made in code, their own and local AI,
+`/gen-brief` for a paid service, `/asset-intake` for packs.
 
 ## 9. Hand over (the part people miss)
 Explain in two sentences: Claude Code works in one folder at a time, and the game folder has its own Claude setup
