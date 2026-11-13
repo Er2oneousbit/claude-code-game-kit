@@ -6,9 +6,12 @@
 #           job polling, saving (PNG check, safe zip extraction), tileset layout, ASSET_LOG rows, error mapping,
 #           and that the token never lands in any output. The redirect cases run the real HTTP call against
 #           stand-in servers on 127.0.0.1 (still offline); the https -> http case tests the handler directly.
+#           The Pro Flash, style image, quote and last-frame cases follow the spec as read 2026-11-13.
 # Usage   : python tools/art/test_pixellab.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): Pro Flash, style images, --quote, pinned last
+#           and end frames (#16)
 # ---------------------------------------------------------------------------
 import base64
 import contextlib
@@ -80,8 +83,10 @@ class Fake:
     """Stands in for pixellab.http: records calls, answers by path. `jobs` is how many polls say processing."""
 
     def __init__(self, polls=1, job_status="completed", status=None, body=b'{"detail": "nope"}', zip_members=None,
-                 images=2, tiles=3, image_bytes=PNG, object_id="o1", fix_bytes=PNG):
+                 images=2, tiles=3, image_bytes=PNG, object_id="o1", fix_bytes=PNG,
+                 job_usage=(("type", "generations"), ("generations", 2))):
         self.calls, self.polls, self.job_status = [], polls, job_status
+        self.job_usage = dict(job_usage) if job_usage else None
         self.object_id = object_id
         self.status, self.body = status, body
         self.zip_members = zip_members or {"rotations/south.png": PNG, "rotations/north.png": PNG,
@@ -121,7 +126,24 @@ class Fake:
                   "/create-8-direction-object": {"background_job_id": "job-o8", "object_id": "o8", "status": "processing"},
                   "/map-objects": {"usage": None, "background_job_id": "job-m", "object_id": "m1", "status": "processing"},
                   "/characters/animations": {"background_job_ids": ["job-a1", "job-a2"], "directions": ["south", "east"],
-                                             "animation_group_id": "g1", "status": "processing"}}
+                                             "animation_group_id": "g1", "status": "processing"},
+                  # Pro Flash, shaped like PixelLab's API spec (read 2026-11-13): every one answers 202 with a job
+                  "/create-image-pro-flash": {"usage": None, "background_job_id": "job-pf", "image_id": "img1",
+                                              "source_image_id": "src1", "status": "processing",
+                                              "image_size": {"width": 32, "height": 32}, "estimated_generations": 5,
+                                              "pricing_provisional": True},
+                  "/edit-image-pro-flash": {"usage": None, "background_job_id": "job-pf-url", "image_id": "img2",
+                                            "source_image_id": "src2", "status": "processing",
+                                            "image_size": {"width": 32, "height": 32}, "estimated_generations": 5},
+                  "/image-to-pixelart-pro-flash": {"usage": None, "background_job_id": "job-pf", "image_id": "img3",
+                                                   "source_image_id": "src3", "status": "processing",
+                                                   "estimated_generations": 6},
+                  "/create-character-pro-flash": {"usage": None, "background_job_id": "job-1", "character_id": "char-1",
+                                                  "status": "processing", "estimated_generations": 6,
+                                                  "first_direction_generated": True},
+                  "/create-object-pro-flash": {"usage": None, "background_job_id": "job-opf", "object_id": "o8",
+                                               "status": "processing", "estimated_generations": 6,
+                                               "first_direction_generated": True}}
         if path in queued and not self.status:
             return ok(queued[path])
         resources = {"/ui-assets/ui1": {"id": "ui1", "prompt": "x", "created_at": "x", "status": "completed",
@@ -143,6 +165,10 @@ class Fake:
                                         "storage_urls": {"tiles": [f"{CDN}/t/road_0.png", f"{CDN}/t/road_1.png"]}}}
         if path in resources:
             return ok(resources[path])
+        if path.startswith("/pro-flash/cost?"):              # PixelLab's free price check, as seen live 2026-11-13
+            q = dict(p.split("=", 1) for p in path.split("?", 1)[1].split("&"))
+            rot = 1 if q.get("operation") in ("character", "object") and q.get("n_directions", "8") == "8" else 0
+            return ok({"image": 5, "rotations": rot, "total": 5 + rot, "provisional": True})
         if path == "/balance":
             return ok({"credits": {"type": "usd", "usd": 0.0},
                        "subscription": {"type": "generations", "status": "trial", "plan": "Free trial",
@@ -174,10 +200,13 @@ class Fake:
                 "job-edit": {"images": [b64img()]},
                 "job-nm": {"image": b64img(), "look": {}},
                 "job-outfit": {"images": [b64img(), b64img()]},
+                "job-pf": {"images": [b64img(self.image_bytes)], "image_id": "img1", "source_image_id": "src1"},
+                "job-pf-url": {"image_url": f"{CDN}/pf/edited.png", "source_image_id": "src2"},
+                "job-opf": {"object_id": "o8"},
             }
             last = job_last.get(path.rsplit("/", 1)[-1], {"detail": "boom"}) if self.job_status == "completed" else {"detail": "boom"}
             return ok({"id": "job", "status": self.job_status, "created_at": "x", "last_response": last,
-                       "usage": {"type": "generations", "generations": 2}})
+                       "usage": self.job_usage})
         if path == "/characters/char-1/zip":
             return 200, {}, zip_bytes(self.zip_members)
         if path == "/tilesets/ts-1":
@@ -651,6 +680,250 @@ class PixelLabExam(unittest.TestCase):
         rc, out = self.run_tool("animate-character", "--from", "nowhere", "--template", "walk", "--out", "y", fake=Fake())
         self.assertEqual(rc, 2)
         self.assertIn("--character-id", out)
+
+    # ---- Pro Flash, style images and pinned last frames (#16; PixelLab's API spec read 2026-11-13) ---------------
+    def sent(self, fake, endpoint):
+        posts = [c for c in fake.calls if c[0] == "POST" and c[1] == pl.API + endpoint]
+        self.assertEqual(len(posts), 1, f"one POST to {endpoint}: {[c[1] for c in fake.calls]}")
+        return posts[0][3]
+
+    def no_post(self, fake):
+        self.assertEqual([c[1] for c in fake.calls if c[0] == "POST"], [], "nothing may be spent")
+
+    def test_pro_flash_image_waits_for_its_job_and_keeps_the_source_image_id(self):
+        fake = Fake()
+        rc, out = self.run_tool("image", "--pro-flash", "--text", "green slime", "--size", "32", "--no-background",
+                                "--seed", "7", "--out", "art/slime.png", "--log", fake=fake)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(self.sent(fake, "/create-image-pro-flash"),
+                         {"description": "green slime", "image_size": {"width": 32, "height": 32},
+                          "no_background": True, "seed": 7})
+        self.assertEqual((self.root / "art/slime.png").read_bytes(), PNG)
+        side = json.loads((self.root / "art/slime.gen.json").read_text(encoding="utf-8"))
+        self.assertEqual((side["endpoint"], side["source_image_id"]), ("/create-image-pro-flash", "src1"))
+        self.assertEqual(side["cost"], "2 generations", "the job's real charge beats the POST's estimate")
+        self.assertIn("/create-image-pro-flash", (self.root / "docs/ASSET_LOG.md").read_text(encoding="utf-8"))
+        # no charge in the job: the estimate is shown, marked as such
+        rc, out = self.run_tool("image", "--pro-flash", "--text", "x", "--size", "32", "--out", "q.png",
+                                fake=Fake(job_usage=None))
+        self.assertEqual(rc, 0, out)
+        self.assertIn("5 generations (quoted)", out)
+        # sizes and options PixelLab's Pro Flash refuses (422 after sending) stop here, before anything is spent
+        for extra, words in ((["--size", "30"], "multiple of 4"), (["--size", "300"], "outside 16 to 256"),
+                             (["--size", "32", "--outline", "lineless"], "--outline"),
+                             (["--size", "32", "--negative", "blur"], "--negative"),
+                             (["--size", "32", "--style-traits", "outline"], "needs --style-image")):
+            fake = Fake()
+            rc, out = self.run_tool("image", "--pro-flash", "--text", "x", *extra, "--out", "n.png", fake=fake)
+            self.assertEqual(rc, 2, f"{extra}: {out}")
+            self.assertIn(words, out)
+            self.no_post(fake)
+
+    def test_style_image_goes_with_its_size_and_the_traits_to_copy(self):
+        (self.root / "anchor.png").write_bytes(real_png(16, 24))
+        fake = Fake()
+        rc, out = self.run_tool("image", "--pro-flash", "--text", "blue slime", "--size", "32",
+                                "--style-image", "anchor.png", "--style-traits", "outline,shading", "--out", "s.png",
+                                fake=fake)
+        self.assertEqual(rc, 0, out)
+        body = self.sent(fake, "/create-image-pro-flash")
+        self.assertEqual(base64.b64decode(body["style_image"]["image"]["base64"]), real_png(16, 24))
+        self.assertEqual(body["style_image"]["size"], {"width": 16, "height": 24})
+        self.assertEqual(body["style_options"], {"color_palette": False, "outline": True, "detail": False,
+                                                 "shading": True})
+        side = (self.root / "s.gen.json").read_text(encoding="utf-8")
+        self.assertNotIn(body["style_image"]["image"]["base64"], side, "the record holds no image bytes")
+        # without --style-traits every trait is copied (PixelLab's default): no style_options sent
+        fake = Fake()
+        rc, out = self.run_tool("image", "--pro-flash", "--text", "x", "--size", "32", "--style-image", "anchor.png",
+                                "--out", "s2.png", fake=fake)
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn("style_options", self.sent(fake, "/create-image-pro-flash"))
+        # refused before spending: bigger than the canvas, an unknown trait, no --pro-flash
+        (self.root / "big.png").write_bytes(real_png(48, 48))
+        for argv, words in ((["--pro-flash", "--size", "32", "--style-image", "big.png"], "bigger than the 32x32"),
+                            (["--pro-flash", "--size", "32", "--style-image", "anchor.png", "--style-traits", "glow"],
+                             "--style-traits takes"),
+                            (["--size", "32", "--style-image", "anchor.png"], "needs --pro-flash")):
+            fake = Fake()
+            rc, out = self.run_tool("image", "--text", "x", *argv, "--out", "r.png", fake=fake)
+            self.assertEqual(rc, 2, f"{argv}: {out}")
+            self.assertIn(words, out)
+            self.no_post(fake)
+        # ui takes a plain style image of its own (no --pro-flash there)
+        fake = Fake()
+        rc, out = self.run_tool("ui", "--text", "wooden panel", "--style-image", "anchor.png", "--out", "ui.png",
+                                fake=fake)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(base64.b64decode(self.sent(fake, "/create-ui-asset")["style_image"]["base64"]),
+                         real_png(16, 24))
+
+    def test_pro_flash_character_and_object(self):
+        (self.root / "anchor.png").write_bytes(real_png(32, 32))
+        fake = Fake()
+        rc, out = self.run_tool("character", "--pro-flash", "--text", "knight", "--size", "48", "--view", "side",
+                                "--name", "Sir", "--style-image", "anchor.png", "--out", "pfk", fake=fake)
+        self.assertEqual(rc, 0, out)
+        body = self.sent(fake, "/create-character-pro-flash")
+        self.assertEqual({k: v for k, v in body.items() if k != "style_image"},
+                         {"description": "knight", "image_size": {"width": 48, "height": 48}, "view": "side",
+                          "n_directions": 8, "name": "Sir"})
+        self.assertTrue((self.root / "pfk/rotations/south.png").exists())
+        self.assertEqual(json.loads((self.root / "pfk/pixellab.gen.json").read_text(encoding="utf-8"))["character_id"],
+                         "char-1")
+        fake = Fake()
+        rc, out = self.run_tool("object", "--pro-flash", "--text", "barrel", "--directions", "8", "--size", "32",
+                                "--source-image-id", "src1", "--out", "pfo", fake=fake)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(self.sent(fake, "/create-object-pro-flash"),
+                         {"description": "barrel", "image_size": {"width": 32, "height": 32}, "view": "low top-down",
+                          "n_directions": 8, "source_image_id": "src1"})
+        self.assertEqual(sorted(p.name for p in (self.root / "pfo").glob("*.png")), ["east.png", "south.png"])
+        for kind, argv, words in (("character", ["--legacy"], "8 directions only"),
+                                  ("character", ["--size", "64", "--shading", "flat"], "--shading"),
+                                  ("object", ["--size", "64", "--view", "top-down"], "--view is"),
+                                  ("object", ["--size", "64", "--source-image-id", "src1", "--style-image",
+                                              "anchor.png"], "drop --style-image"),
+                                  ("object", ["--size", "66"], "multiple of 4")):
+            fake = Fake()
+            rc, out = self.run_tool(kind, "--pro-flash", "--text", "x", *argv, "--out", f"bad_{kind}", fake=fake)
+            self.assertEqual(rc, 2, f"{argv}: {out}")
+            self.assertIn(words, out)
+            self.no_post(fake)
+        for kind, argv in (("character", ["--source-image-id", "src1"]), ("object", ["--name", "Barrel"])):
+            fake = Fake()
+            rc, out = self.run_tool(kind, "--text", "x", *argv, "--out", f"plain_{kind}", fake=fake)
+            self.assertEqual(rc, 2, f"{argv} without --pro-flash: {out}")
+            self.no_post(fake)
+
+    def test_pro_flash_edit_and_pixelate(self):
+        (self.root / "hero.png").write_bytes(real_png(32, 32))
+        (self.root / "hat.png").write_bytes(real_png(16, 8))
+        fake = Fake()
+        rc, out = self.run_tool("edit", "--pro-flash", "--image", "hero.png", "--reference", "hat.png",
+                                "--text", "put this hat on him", "--out", "e.png", fake=fake)
+        self.assertEqual(rc, 0, out)
+        body = self.sent(fake, "/edit-image-pro-flash")
+        self.assertEqual((body["method"], body["description"], body["no_background"]),
+                         ("reference", "put this hat on him", True))
+        self.assertEqual(base64.b64decode(body["reference_image"]["base64"]), real_png(16, 8))
+        self.assertEqual((self.root / "e.png").read_bytes(), PNG, "the result behind image_url is downloaded")
+        self.assertTrue(self.cdn_calls(fake) and all(c[2] is None for c in self.cdn_calls(fake)),
+                        "no token to the storage link")
+        self.assertEqual(json.loads((self.root / "e.gen.json").read_text(encoding="utf-8"))["source_image_id"], "src2")
+        fake = Fake()
+        rc, out = self.run_tool("edit", "--pro-flash", "--image", "hero.png", "--text", "red cape", "--out", "e2.png",
+                                fake=fake)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(self.sent(fake, "/edit-image-pro-flash")["method"], "text")
+        (self.root / "small.png").write_bytes(real_png(28, 28))
+        for argv, words in ((["--pro-flash", "--image", "small.png"], "outside 32 to 256"),
+                            (["--image", "hero.png", "--reference", "hat.png"], "needs --pro-flash"),
+                            (["--pro-flash", "--image", "hat.png", "--reference", "hero.png"], "outside 32 to 256")):
+            fake = Fake()
+            rc, out = self.run_tool("edit", *argv, "--text", "x", "--out", "bad.png", fake=fake)
+            self.assertEqual(rc, 2, f"{argv}: {out}")
+            self.assertIn(words, out)
+            self.no_post(fake)
+        (self.root / "concept.png").write_bytes(real_png(300, 200))
+        fake = Fake()
+        rc, out = self.run_tool("pixelate", "--pro-flash", "--image", "concept.png", "--text", "light dithering",
+                                "--out", "px.png", fake=fake)
+        self.assertEqual(rc, 0, out)
+        body = self.sent(fake, "/image-to-pixelart-pro-flash")
+        self.assertEqual(sorted(body), ["description", "image"], "Pro Flash picks the size itself")
+        self.assertTrue((self.root / "px.png").exists())
+        for argv, words in ((["--pro-flash", "--size", "64"], "no --size"), (["--text", "dither"], "needs --pro-flash")):
+            fake = Fake()
+            rc, out = self.run_tool("pixelate", "--image", "concept.png", *argv, "--out", "bad.png", fake=fake)
+            self.assertEqual(rc, 2, f"{argv}: {out}")
+            self.assertIn(words, out)
+            self.no_post(fake)
+        fake = Fake()                                     # the plain endpoint still gets its default size
+        rc, out = self.run_tool("pixelate", "--image", "concept.png", "--out", "plain.png", fake=fake)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(self.sent(fake, "/image-to-pixelart")["output_size"], {"width": 64, "height": 64})
+
+    def test_quote_asks_the_free_price_check_and_makes_nothing(self):
+        for argv, query, words in (
+                (["image", "--size", "64"], "operation=create&width=64&height=64", "quote: 5 generations (image 5, rotations 0)"),
+                (["object", "--directions", "8", "--size", "32"], "operation=object&width=32&height=32&n_directions=8",
+                 "quote: 6 generations (image 5, rotations 1)"),
+                (["character", "--size", "64"], "operation=character&width=64&height=64&n_directions=8", "6 generations")):
+            fake = Fake()
+            dest = "qq.png" if argv[0] == "image" else "qq"
+            rc, out = self.run_tool(*argv[:1], "--pro-flash", "--quote", "--text", "x", *argv[1:], "--out", dest,
+                                    fake=fake)
+            self.assertEqual(rc, 0, out)
+            self.assertEqual([(c[0], c[1]) for c in fake.calls], [("GET", f"{pl.API}/pro-flash/cost?{query}")])
+            self.assertEqual(fake.calls[0][2], KEY)
+            self.assertIn(words, out)
+            self.assertIn("provisional", out)
+            self.assertFalse((self.root / dest).exists(), "a quote writes nothing")
+        (self.root / "concept.png").write_bytes(real_png(64, 64))
+        fake = Fake()
+        rc, out = self.run_tool("pixelate", "--pro-flash", "--quote", "--image", "concept.png", "--out", "p.png", fake=fake)
+        self.assertEqual((rc, fake.calls), (0, []), out)
+        self.assertIn("6 generations", out)
+        fake = Fake()
+        rc, out = self.run_tool("image", "--quote", "--text", "x", "--out", "i.png", fake=fake)
+        self.assertEqual(rc, 2, out)
+        self.assertIn("needs --pro-flash", out)
+        self.assertEqual(fake.calls, [])
+        fake = Fake()
+        rc, out = self.run_tool("image", "--pro-flash", "--text", "x", "--size", "32", "--out", "d.png", "--dry-run",
+                                fake=fake)
+        self.assertEqual((rc, fake.calls), (0, []), out)
+        self.assertIn("/create-image-pro-flash", out)
+        self.assertIn("--quote", out)
+
+    def test_animate_pins_a_last_frame_of_the_same_size(self):
+        (self.root / "end.png").write_bytes(real_png(1, 1, lambda x, y: (9, 9, 9, 255)))
+        fake = Fake(images=2)
+        rc, out = self.run_tool("animate", "--frame", "south.png", "--last-frame", "end.png", "--action", "bob",
+                                "--frames", "4", "--out", "loop", fake=fake)
+        self.assertEqual(rc, 0, out)
+        body = self.sent(fake, "/animate-with-text-v3")
+        self.assertEqual(base64.b64decode(body["last_frame"]["base64"]), (self.root / "end.png").read_bytes())
+        self.assertEqual(base64.b64decode(body["first_frame"]["base64"]), PNG)
+        side = (self.root / "loop/pixellab.gen.json").read_text(encoding="utf-8")
+        self.assertNotIn(body["last_frame"]["base64"], side, "the record holds the path, not the bytes")
+        rc, out = self.run_tool("animate", "--frame", "south.png", "--last-frame", "end.png", "--action", "bob",
+                                "--out", "dry", "--dry-run", fake=Fake())
+        self.assertEqual(rc, 0, out)
+        self.assertIn('"last_frame": "<end.png,', out)
+        (self.root / "wide.png").write_bytes(real_png(2, 1))
+        fake = Fake()
+        rc, out = self.run_tool("animate", "--frame", "south.png", "--last-frame", "wide.png", "--action", "bob",
+                                "--out", "bad", fake=fake)
+        self.assertEqual(rc, 2, out)
+        self.assertIn("one size", out)
+        self.no_post(fake)
+
+    def test_animate_character_end_frame_is_one_direction_v3_or_pixminimax(self):
+        rc, out = self.run_tool("character", "--text", "knight", "--out", "knight", fake=Fake())
+        self.assertEqual(rc, 0, out)
+        (self.root / "pose.png").write_bytes(PNG)                  # 1x1, the size of the zip's rotations/south.png
+        fake = Fake()
+        rc, out = self.run_tool("animate-character", "--from", "knight", "--mode", "pixminimax", "--action", "wave",
+                                "--directions", "south", "--end-frame", "pose.png", "--out", "kw", fake=fake)
+        self.assertEqual(rc, 0, out)
+        body = self.sent(fake, "/characters/animations")
+        self.assertEqual((body["mode"], body["directions"]), ("pixminimax", ["south"]))
+        self.assertEqual(base64.b64decode(body["end_frame"]["base64"]), PNG)
+        (self.root / "big.png").write_bytes(real_png(4, 4))
+        for argv, words in ((["--mode", "template", "--template", "walk", "--directions", "south"], "--mode v3 or"),
+                            (["--mode", "v3", "--action", "wave", "--directions", "south,east"], "exactly one"),
+                            (["--mode", "v3", "--action", "wave"], "exactly one"),
+                            (["--mode", "v3", "--action", "wave", "--directions", "south", "--end-frame", "big.png"],
+                             "one size")):
+            if "--end-frame" not in argv:
+                argv = argv + ["--end-frame", "pose.png"]
+            fake = Fake()
+            rc, out = self.run_tool("animate-character", "--from", "knight", *argv, "--out", "kb", fake=fake)
+            self.assertEqual(rc, 2, f"{argv}: {out}")
+            self.assertIn(words, out)
+            self.no_post(fake)
 
 
     # ---- regressions from an adversarial review (Fable, 2026-10-26) ---------------------------------------------
