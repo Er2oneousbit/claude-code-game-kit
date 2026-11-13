@@ -8,13 +8,12 @@
 #           python tools/dev.py smoke --drive pseudo --locale pseudo        # every screen, nothing clipped
 #           python tools/dev.py smoke --drive pseudo-plant --locale pseudo  # plus one label too small: exit 1
 #           python tools/dev.py smoke --drive show:settings --screenshot captures/settings.png
-#           (show: title, settings, pause, subtitle, juice, credits, apply, apply_confirm)
+#           (show: title, settings, pause, subtitle, juice, credits, apply, confirm)
 #           python tools/dev.py smoke --drive access:res=1280x800,scale=2,pad   # every screen (tools/access/sweep.py)
 # Notes   : Markers: DRIVE_DONE <scenario>, DRIVE_FAIL <why>, SETTINGS_BEFORE / SETTINGS_WRITTEN <path> ...,
-#           CRASH_WRITTEN <path> (from Shell), PSEUDO_FAIL / PSEUDO_OK, DISPLAY_STAGED / DISPLAY_WARN /
-#           DISPLAY_APPLIED / DISPLAY_CONFIRM / DISPLAY_REVERTED (the settings screen) and DISPLAY_REVERT_MS (the
-#           display drive: the confirm's real duration, which must be close to DisplayStaging.CONFIRM_S even though
-#           headless frames run far faster than real time). Navigation goes through the real input
+#           CRASH_WRITTEN <path> (from Shell), PSEUDO_FAIL / PSEUDO_OK, DRIVE_DISPLAY staged / warned / applied /
+#           reverted <ms> ms / discarded (the display drive, the same lines in every engine; the revert must take
+#           close to DisplayStaging.CONFIRM_S of real time even though headless frames run far faster). Navigation goes through the real input
 #           path (Viewport.push_input of InputEventAction), so a broken focus chain fails the run. Under
 #           tools/capture.gd (--capture) a show: scenario sets Shell.capture_ready and keeps running instead of
 #           quitting. dev.py runs drives with --fixed-fps 60, so every frame is 1/60 s of game time and pictures
@@ -29,7 +28,7 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): real input is ignored while a drive runs (#276)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits, a picture of the credits screen (#284)
-# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:apply_confirm,
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:confirm,
 #           and the pseudo drive checks the Display tab's warning and confirm (#308)
 # ---------------------------------------------------------------------------
 class_name SmokeDrive
@@ -86,7 +85,7 @@ const JUICE_SHOT_FRAMES: int = 1 # frames after the hit; capture adds 3, still i
 const PLANTED_NAME: String = "PlantedTooSmall"
 const PLANTED_WIDTH: float = 24.0
 const SHOW_TARGETS: PackedStringArray = ["title", "settings", "pause", "subtitle", "juice", "credits", "apply",
-		"apply_confirm"]
+		"confirm"]
 const CONFIRM_WAIT_MS: int = 25000 # real time the display drive gives the confirm to revert on its own
 const CONFIRM_MIN_MS: int = 14000 # sooner than this, the countdown did not run on real time
 # the access sweep: the actions the shell's navigation needs on both devices, and the demo's control hints
@@ -196,15 +195,16 @@ func _display() -> void:
 	if not await _stage_mode():
 		return
 	var staging: DisplayStaging = screen.staging()
-	Log.raw("DISPLAY_STAGED " + JSON.stringify(staging.pending))
 	if not staging.has_pending() or str(Shell.settings["display"]["mode"]) != before:
 		_fail("the mode change did not wait for Apply (pending %s, mode %s)" % [staging.pending,
 				Shell.settings["display"]["mode"]])
 		return
+	Log.raw("DRIVE_DISPLAY staged")
 	await _press("ui_cancel") # Back with a pending change: a warning, the screen stays
 	if front.current_name() != "settings" or not staging.warned:
 		_fail("Back with an unapplied Display change did not warn (screen %s)" % front.current_name())
 		return
+	Log.raw("DRIVE_DISPLAY warned")
 	if not await _nav_to("Back", "ui_down") or not await _nav_to("Apply", "ui_right"):
 		return
 	var start: int = Time.get_ticks_msec()
@@ -213,10 +213,10 @@ func _display() -> void:
 	if not staging.confirming() or focus == null or focus.name != "Keep":
 		_fail("Apply did not open the confirm with focus on Keep (focus %s)" % (focus.name if focus else "none"))
 		return
+	Log.raw("DRIVE_DISPLAY applied")
 	while staging.confirming() and Time.get_ticks_msec() - start < CONFIRM_WAIT_MS:
 		await _frames(1)
 	var took: int = Time.get_ticks_msec() - start
-	Log.raw("DISPLAY_REVERT_MS %d" % took)
 	if staging.confirming():
 		_fail("the confirm did not revert within %d ms" % CONFIRM_WAIT_MS)
 		return
@@ -228,9 +228,19 @@ func _display() -> void:
 		_fail("after the revert the mode is %s (settings.json %s), not %s" % [Shell.settings["display"]["mode"],
 				saved["display"]["mode"], before])
 		return
-	await _press("ui_cancel") # nothing pending now: Back leaves
+	Log.raw("DRIVE_DISPLAY reverted %d ms" % took)
+	# a second staged change, left unapplied: Back warns, Back again discards it and leaves
+	if not await _nav_to("Setting_display_mode", "ui_up"):
+		return
+	await _press("ui_right")
+	await _press("ui_cancel")
+	await _press("ui_cancel")
 	if not await _wait_screen("main_menu"):
 		return
+	if str(Shell.settings["display"]["mode"]) != before:
+		_fail("the discarded change was applied (mode %s, not %s)" % [Shell.settings["display"]["mode"], before])
+		return
+	Log.raw("DRIVE_DISPLAY discarded")
 	_done(0)
 
 
@@ -337,8 +347,8 @@ func _show(target: String) -> void:
 			if not await _nav_to("Tab_audio", "ui_right") or not await _nav_to("Setting_audio_master", "ui_down"):
 				return
 			await _frames(SETTLE_FRAMES)
-		"apply", "apply_confirm":
-			# the Display tab with a staged change and focus on Apply; apply_confirm presses it, countdown held
+		"apply", "confirm":
+			# the Display tab with a staged change and focus on Apply; confirm presses it, countdown held
 			if not await _to_main_menu():
 				return
 			if not await _nav_to("Settings", "ui_down") or not await _accept("settings"):
@@ -347,7 +357,7 @@ func _show(target: String) -> void:
 				return
 			if not await _nav_to("Back", "ui_down") or not await _nav_to("Apply", "ui_right"):
 				return
-			if target == "apply_confirm":
+			if target == "confirm":
 				(front.top() as SettingsScreen).hold_countdown = true
 				await _press("ui_accept")
 			await _frames(SETTLE_FRAMES)

@@ -53,7 +53,7 @@ var _revert: Button
 var _status: Label
 var _staging: DisplayStaging # the Display tab's pending changes: outlives rebuild() and tab switches
 var _notice: String = "" # the "Display changes are not applied" warning, until the next change or tab
-## Smoke drives (show:apply_confirm): stop the countdown so screenshots repeat.
+## Smoke drives (show:confirm): stop the countdown so screenshots repeat.
 var hold_countdown: bool = false
 var _grid: Array = [] # focusable controls of the current tab, one Array per row, top to bottom
 var _capture: Array = [] # [action, slot] while waiting for a key or button
@@ -158,7 +158,7 @@ func _close() -> void:
 			return
 		"warn":
 			_notice = Shell.t("settings.unapplied")
-			Log.raw("DISPLAY_WARN")
+			Log.info("display", "unapplied changes: Back again discards them")
 			_refresh_bottom()
 			return
 	Shell.save_settings()
@@ -179,10 +179,9 @@ func _apply_display() -> void:
 		return
 	var calls: Array = _staging.apply()
 	_send(calls)
-	Log.raw("DISPLAY_APPLIED " + JSON.stringify(calls))
+	Log.info("display", "applied " + JSON.stringify(calls))
 	_notice = ""
 	if _staging.confirming():
-		Log.raw("DISPLAY_CONFIRM %d" % _staging.seconds())
 		_fill_tab() # the Display rows lock while the confirm runs
 		_keep.grab_focus()
 	else:
@@ -195,7 +194,7 @@ func _keep_display() -> void:
 	if not _staging.confirming():
 		return
 	_staging.keep()
-	Log.raw("DISPLAY_KEPT")
+	Log.info("display", "kept")
 	Shell.save_settings()
 	_fill_tab()
 	_focus_named("Back")
@@ -208,7 +207,7 @@ func _revert_display() -> void:
 
 func _after_revert(calls: Array) -> void:
 	_send(calls)
-	Log.raw("DISPLAY_REVERTED " + JSON.stringify(calls))
+	Log.info("display", "reverted " + JSON.stringify(calls))
 	Shell.save_settings()
 	_fill_tab()
 	_focus_named("Back")
