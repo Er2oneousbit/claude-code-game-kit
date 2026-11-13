@@ -59,6 +59,8 @@
 #           docs/ARCHITECTURE.md; a run that measured nothing says so (#90)
 # Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): `dotwork` converts Dotwork's asset manifests into
 #           MZ's image layouts (tools/dotwork_mz.mjs); `check` checks the last export against MZ's shapes (#62)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): test whose every test was skipped says so ([SKIP], the
+#           reason, exit 2) instead of "no tests ran" (#295)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -716,6 +718,12 @@ def cmd_test(args):
         print(f"[FAIL] tests failed ({failed.group(1) if failed else '?'} failed)")
         return 1
     if int(passed.group(1)) == 0:
+        skipped = re.search(r"^# skipped (\d+)", out, re.M)
+        if skipped and int(skipped.group(1)):   # #295: every test skipped is a setup gap, not a failure
+            why = re.search(r"^ok \d+ - .*? # SKIP (.+)$", out, re.M)
+            print(f"[SKIP] all {skipped.group(1)} test(s) skipped, none ran (exit 2): "
+                  f"{why.group(1).strip() if why else 'no reason given'}")
+            return 2
         print("[FAIL] no tests ran")
         return 2
     print(f"[ OK ] {passed.group(1)} test(s) passed")

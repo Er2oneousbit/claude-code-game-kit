@@ -64,6 +64,8 @@
 #           docs/ARCHITECTURE.md; a run that measured nothing says so (#90)
 # Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): a shader check that crashed before its first recipe
 #           (a Windows exception status or a signal) says so, instead of "it needs a window"
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): test whose every test is pending or risky says so ([SKIP],
+#           the reason, exit 2); it passed as "N test(s) passed" (#295)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -551,6 +553,13 @@ def cmd_test(args, godot):
         why = "a test file was skipped" if problems and ran else f"no tests ran (filter {args.filter!r})" if args.filter else "no tests ran"
         print(f"[FAIL] {why}; see the lines above")
         return 1 if any("SCRIPT ERROR" in l or "Parse Error" in l for l in problems) else 2
+    passing = re.search(r"^Passing Tests\s+(\d+)", out, re.M)
+    pending = re.search(r"^Risky/Pending\s+(\d+)", out, re.M)
+    if passing and int(passing.group(1)) == 0 and pending:   # #295: all pending() (or no asserts): a setup gap
+        why = re.search(r"\[Pending\]:?\s*(.+)$", out, re.M)
+        print(f"[SKIP] all {pending.group(1)} test(s) pending or risky (pending(), or no asserts), none passed "
+              f"(exit 2): {why.group(1).strip() if why else 'no reason given'}")
+        return 2
     print(f"[ OK ] {ran.group(1)} test(s) passed")
     return 0
 

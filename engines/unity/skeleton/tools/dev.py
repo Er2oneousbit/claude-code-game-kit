@@ -58,6 +58,8 @@
 # Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): smoke reports the run's FRAME_TIMES line (mean,
 #           p95, p99, worst) and fails a p95 over --frame-budget MS, or over the "Smoke frame time" row of
 #           docs/ARCHITECTURE.md; a run that measured nothing says so (#90)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): test whose every match was skipped says so ([SKIP],
+#           the reason, exit 2) instead of "[FAIL] nothing passed" (#295)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -470,8 +472,11 @@ def run_tests(platform, filt, graphics=False, env=None, until=None, fail_on=None
         # Suites repeat "One or more child tests were ignored"; the test case carries the real reason
         reasons = [r.strip() for r in re.findall(r"<reason>\s*<message><!\[CDATA\[(.*?)\]\]>", xml, re.S)
                    if not r.strip().startswith("One or more child tests")]
-        why = reasons[0] if reasons else f"no tests matched {filt or platform!r}"
-        print(f"[FAIL] nothing passed ({skipped} skipped): {why}")
+        if skipped > 0:   # #295: every match skipped (Assert.Ignore, [Ignore]) is a setup gap, not a failure
+            why = reasons[0] if reasons else "no reason given"
+            print(f"[SKIP] all {skipped} matching test(s) skipped, none ran (exit 2): {why}")
+            return 2
+        print(f"[FAIL] nothing ran: {reasons[0] if reasons else f'no tests matched {filt or platform!r}'}")
         return 2
     # Scenario markers in the log, like the other overlays' smoke (--until must appear, --fail-on must not)
     lines = log.splitlines()

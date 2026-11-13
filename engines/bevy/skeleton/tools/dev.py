@@ -52,6 +52,8 @@
 # Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): smoke reports the run's FRAME_TIMES line (mean,
 #           p95, p99, worst) and fails a p95 over --frame-budget MS, or over the "Smoke frame time" row of
 #           docs/ARCHITECTURE.md; a run that measured nothing says so (#90)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): test whose every test is #[ignore]d says so ([SKIP], the
+#           reason, exit 2) instead of "no tests ran" (#295)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -455,7 +457,13 @@ def cmd_test(args):
         print(f"[FAIL] {failed} test(s) failed" if failed else f"[FAIL] cargo test exit code {rc}")
         return 1
     if passed == 0:
-        print("[FAIL] no tests ran (none written, or all ignored)")
+        ignored = sum(int(i) for _, _, _, i in results)
+        if ignored:   # #295: every test #[ignore]d is a setup gap, not a failure
+            why = re.search(r"^test \S+ \.\.\. ignored, (.+)$", out, re.M)
+            print(f"[SKIP] all {ignored} test(s) ignored (#[ignore]), none ran (exit 2): "
+                  f"{why.group(1).strip() if why else 'no reason given'}")
+            return 2
+        print("[FAIL] no tests ran (none written)")
         return 2
     print(f"[ OK ] {passed} test(s) passed")
     return 0
