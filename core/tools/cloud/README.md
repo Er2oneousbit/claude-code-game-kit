@@ -79,8 +79,8 @@ python tools/dev.py ship --target itch --project user/game --channel html5 --sta
   platform from words in the name: `win`/`windows`, `linux`, `mac`/`osx`, `android` (`win-linux-mac-stable` is three).
   A web build is marked playable in the browser on the itch.io Edit game page after the first push (butler cannot).
 - **The version:** `--userversion`, or the engine's one version source (`docs/sop/SOP-06-build-and-release.md`
-  "Versioning"): `project.godot`, `package.json`, `Cargo.toml`, `CMakeLists.txt`, LÖVE's version module, Unity's
-  Player Settings (`bundleVersion`) or Unreal's project settings (`ProjectVersion`). None found: exit 2.
+  "Versioning"): Godot's `config/version`, the `version` in package.json or Cargo.toml, CMake's `project(... VERSION)`,
+  LÖVE's version module, Unity's `bundleVersion` or Unreal's `ProjectVersion`. None found: exit 2.
 - **`--dry-run`** checks butler (`--butler`, `BUTLER_BIN`, then PATH), the folder (exists, not empty, no secret-type
   file or token: the same scan as a static site, without the `index.html` rule for a desktop build), the project
   (`user/game`, lower case), the channel and the version, says whether a login is there, and prints the exact butler

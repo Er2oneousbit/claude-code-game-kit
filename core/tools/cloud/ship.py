@@ -494,6 +494,7 @@ def butler(exe, args, capture=False):
     command line). Streams butler's own progress unless capture. Returns (exit code, captured output)."""
     cmd = [str(exe), *args]
     dbg("run: " + shown_command(cmd))
+    sys.stdout.flush()                      # our lines first, then butler's own (a pipe buffers ours otherwise)
     try:
         r = subprocess.run(cmd, cwd=ROOT, capture_output=capture, encoding="utf-8", errors="replace",
                            timeout=BUTLER_TIMEOUT_S)
@@ -609,8 +610,8 @@ def cmd_itch(a):
     print(f"[ OK ] butler: {exe}")
     print(f"[ OK ] build: {folder} ({files} files, no secret-type files or tokens)")
     print(f"[ OK ] page: https://{a.project.split('/')[0]}.itch.io/{a.project.split('/')[1]}, channel {channel} ("
-          + (f"butler tags it {', '.join(tags)}" if tags else "no platform word: tag it on the itch.io Edit game page")
-          + ")")
+          + (f"butler tags it {', '.join(tags)}" if tags else "the web build's channel" if "html" in channel
+             else "no platform word: tag it on the itch.io Edit game page") + ")")
     if channel == ITCH_WEB_CHANNEL or "html" in channel:
         print("[info] a web build: after the first push, set the kind of project to HTML and mark this channel's "
               "upload as playable in the browser on the itch.io Edit game page (butler cannot)")
