@@ -50,7 +50,9 @@ Tip (F13, grade C): simple stylized shapes plus good lighting beat a failed "rea
 5. **Export** glTF 2.0 (`.glb`) by default, FBX only when the engine requires it. One export preset, never ad hoc:
    `tools/blender/prep_export.py <source> --out assets/models/<name>.glb --class <class> [--lods 0.5,0.25]` applies rotation
    and scale, puts the pivot at the bottom center, cleans names, exports with the kit's one glTF preset, writes LODs and runs
-   the validator on the result (K01: exam 17/17). Keep a downloaded pack's folder layout for the source (Kenney models
+   the validator on the result (K01: exam 17/17). Each LOD is a whole `.glb` with its textures at half the size of the
+   level before (2048, 1024, 512, never under 256 px; `--lod-textures keep` for full size), so a set of LODs adds about a
+   third of the textures' bytes instead of a full copy per LOD (K01). Keep a downloaded pack's folder layout for the source (Kenney models
    point to a colormap image in a Textures folder beside them): the tool refuses a source whose texture files are
    missing, because the export would drop the texture without a word.
 6. **Import** with the engine settings in `docs/ENGINE_FLOW.md`. Check scale, materials, collision, LODs in a test level or preview scene.

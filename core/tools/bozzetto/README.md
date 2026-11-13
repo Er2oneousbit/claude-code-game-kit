@@ -177,7 +177,7 @@ paid run are marked (verify) there.
 | `--seed N` | One seed for every sampler. Without it the clock picks one and prints it. Shapes change between seeds: try two or three. |
 | `--height M` | Height in metres after cleanup. |
 | `--turn DEG` | Turn around the up axis (counter-clockwise seen from above) when the model's front is not glTF's front (+Z). TRELLIS.2 put the reference's front there in every run so far (default 0); the Tripo route's default is -90. |
-| `--lods 0.5,0.25` or `none` | LOD files `<name>_LOD1.glb` ... (Blender's Decimate: check them by eye). |
+| `--lods 0.5,0.25` or `none` | LOD files `<name>_LOD1.glb` ... (Blender's Decimate: check them by eye), each with its textures at half the size of the level before ("What lands where"). |
 | `--quality normal\|high` | Default `normal`. TRELLIS.2's grid: 1024 (about 5 min warm) or 1536 (about 19 min). |
 | `--material texture\|vertex` | Default `texture`: baked PBR textures (base colour, metallic-roughness, normal, AO), or vertex colours only (small, no textures). A vertex job queues only its own branch, so the UV unwrap and the bakes do not run; TRELLIS.2's vertex-colour mesh has no UV map, so cleanup.py adds one (Smart UV Project) for lightmaps and the budget check. In Godot such a model renders white until one material flag is set ("In the engine" below, #202). |
 | `--texture 512\|1024\|2048` | Baked texture size (the local bake, and the rebake's). |
@@ -200,7 +200,7 @@ the GPU starts.
 ## What lands where
 | Path | What |
 |---|---|
-| `<models>/<name>.glb`, `<name>_LOD1.glb` ... | The model, only when it passed `validate_asset.py --class`; the LODs are made from that validated model and copied with it (they are not validated on their own). |
+| `<models>/<name>.glb`, `<name>_LOD1.glb` ... | The model, only when it passed `validate_asset.py --class`; the LODs are made from that validated model and copied with it (they are not validated on their own). Every LOD is a whole `.glb` that any engine loads on its own, so it carries its own textures, at half the size of the level before (2048, 1024, 512; never under 256 px; #196). A rebaked 2048 px character, 51,244 triangles with three maps: 11.5 MB, LOD1 10.8 MB and LOD2 10.3 MB before (32.7 MB), 11.5, 4.6 and 1.8 MB now (17.9 MB); Godot 4.7 imported all three with 2048, 1024 and 512 px textures (K01, 2026-11-13). Shared external textures (`.gltf` beside its images) would save the rest but change the file every engine import and the kit's records expect; `tools/blender/prep_export.py --lod-textures keep` writes full-size LOD textures. |
 | `assets_src/bozzetto/<name>/reference.png` | The picture the mesh was made from (`.jpg`, `.jpeg` or `.webp` when your `--image` was one). Metadata is removed from the copy and from what ComfyUI gets: EXIF (a photo's GPS position, the camera), XMP, IPTC, text chunks, comments and ComfyUI's embedded prompt; the pixels and the colour profile stay. |
 | `assets_src/bozzetto/<name>/raw.glb` | TRELLIS.2's own output, before cleanup (its embedded ComfyUI prompt removed: it holds local paths), or Tripo's (glTF extras removed). |
 | `.../view_front.png` ..., `.../tripo/tasks.json`, `.../tripo/tripo.glb` | Tripo route: the views as uploaded (metadata removed), the journal of paid tasks (no key in it), Tripo's file as downloaded. |
@@ -256,7 +256,8 @@ cannot fix that without a rebake. The policy, decided from that run (K01, 2026-1
   (the turntables are indistinguishable). Not 60%: Smart UV Project turns every tube-like part (straps, rings, a belt)
   into a hollow ring island, and Blender's packer cannot nest islands in the holes, so about 50% is its ceiling on a
   mesh like that; merging the fragments first (tried, 3,120 islands to 190) packed no better. A hand unwrap does
-  (SOP-11). Other files: a 51% TRELLIS.2 npc (#203) is the next thing to measure.
+  (SOP-11). The baked maps are PNG, and Tripo's colour maps came as JPEG: the file grew from 5.0 to 11.5 MB.
+  Other files: a 51% TRELLIS.2 npc (#203) is the next thing to measure.
 - **`--accept-uv` is the waiver**: a model that fails on UV coverage alone ships, and the waiver is written to the
   record (`validation.waived`), the asset log row ("UV coverage waived: 46% under the hero floor 60% (--accept-uv)")
   and the evidence file. Any other failure still stops it. A sprite source (`--sprites`, render_sprites.py) never
