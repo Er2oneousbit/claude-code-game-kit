@@ -17,8 +17,10 @@
 //           Model->OnEvent = [](const FString& What) { ... };          // "play", "resume", "quit_title", "quit", "settings_changed"
 // Notes   : Focus ids match the LÖVE and Godot shells ("tabs.audio", "audio.master", "pause" rows "resume",
 //           "help", "history", "settings", "quit"), so one drive script reads the same on every engine.
-//           Settings are applied at once (the Version counter bumps and OnEvent fires "settings_changed");
-//           Back or cancel on the settings screen saves <DataDir>/settings.json. The one-handed layouts
+//           Settings are applied at once (the Version counter bumps and OnEvent fires "settings_changed"), except
+//           the Display tab's, which wait for its Apply row (#308: "display_applied" fires too, and a new window mode
+//           or size asks to keep it for 15 real seconds); Back or cancel on the settings screen saves
+//           <DataDir>/settings.json. The one-handed layouts
 //           come from <ProjectDir>/data/input/presets.json, the colour palettes from
 //           data/access/colours.json, the strings from data/i18n/<locale>.json, the credits from CREDITS.md
 //           (a packaged game: its copy data/credits.md, see CreditsSource; either way its HTML comments
@@ -44,12 +46,16 @@
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1); analog input, the juice demo, the bug report and the
 //           pseudo locale by Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): CreditsText, the markdown rule every engine shares (#284)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab waits for Apply (FGameKitDisplayStaging):
+//           an Apply row, a Keep/Revert confirm counted down in real time (FPlatformTime, not Update's Dt), Back that
+//           warns once (#308); disabled rows; HudScale(), HudFontSize() and the "hud_scale_changed" event (#309)
 // ---------------------------------------------------------------------------
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Dom/JsonObject.h"
 #include "GameKitBindings.h"
+#include "GameKitDisplayStaging.h"
 #include "GameKitI18n.h"
 
 struct FGameKitJuiceDemo;
@@ -75,6 +81,9 @@ struct GAMEKITSHELLUI_API FGameKitRow
 	int32 Cell = 0;                        // binding rows: 0 keyboard, 1 gamepad
 	TFunction<FString(int32)> CellText;    // binding rows: the label of one cell ("Space", "None")
 	TFunction<bool(int32)> CellWarn;       // binding rows: the cell's binding clashes with another action
+	TFunction<bool()> Enabled;             // unset = enabled; a disabled row is skipped by focus and shown dim (#308)
+
+	bool IsEnabled() const { return !Enabled || Enabled(); }
 };
 
 /** A line the player saw (the subtitle bar), for "What now?" and the history page. */
@@ -96,8 +105,8 @@ struct GAMEKITSHELLUI_API FGameKitScreen
 	TArray<FString> Tabs;
 	int32 TabIndex = 0;
 	bool bOnTabs = false;                  // focus on the tab bar, not a row
-	// title: the telemetry question
-	TArray<FGameKitRow> Dialog;            // the consent buttons while the question is open
+	// title: the telemetry question; settings: "Keep these display settings?" (#308)
+	TArray<FGameKitRow> Dialog;            // the consent buttons, or Keep and Revert, while the question is open
 	int32 DialogFocus = 0;
 	// text pages (credits, help, history)
 	TArray<FString> Lines;
@@ -187,6 +196,27 @@ public:
 	void Changed();
 	/** access.text_scale times display.ui_scale: what every font size is multiplied by. */
 	double TextScale() const;
+
+	// ---- A game HUD's text size (#309) ----
+	/** The factor a HUD multiplies its font sizes by: display.ui_scale times access.text_scale (TextScale()).
+	 *  OnEvent("hud_scale_changed") fires when it changes: text_scale at once, ui_scale on the Display tab's Apply. */
+	double HudScale() const { return TextScale(); }
+	/** A design font size at the player's text size: BasePx * Scale, never under 1. */
+	static float HudFontSize(float BasePx, double Scale) { return FMath::Max(1.f, BasePx * static_cast<float>(Scale)); }
+	float HudFontSize(float BasePx) const { return HudFontSize(BasePx, HudScale()); }
+
+	// ---- The Display tab's Apply (#308) ----
+	/** Display changes wait here until Apply (FGameKitDisplayStaging); the rows show and change its values. */
+	const FGameKitDisplayStaging& DisplayStaging() const { return Staging; }
+	/** "Keep these display settings? Reverting in N s" is open (its Keep and Revert are the settings screen's Dialog). */
+	bool DisplayConfirming() const { return Staging.Confirming(); }
+	/** Writes the changed Display fields through the settings, saves; true when it opened the confirm. */
+	bool ApplyDisplay();
+	void KeepDisplay();
+	void RevertDisplay();
+	/** Back from any settings tab: during the confirm reverts, with unapplied Display changes warns once, else saves
+	 *  and leaves. */
+	void SettingsBack();
 	bool ReadableFont() const { return Flag(TEXT("access"), TEXT("readable_font")); }
 	double LineSpacing() const { return Num(TEXT("access"), TEXT("line_spacing")); }
 	bool ReduceMotion() const { return Flag(TEXT("access"), TEXT("reduce_motion")); }
@@ -316,7 +346,8 @@ public:
 	FLinearColor PaletteColour(const FString& Name, const FLinearColor& Fallback) const;
 
 	// ---- Events ----
-	TFunction<void(const FString&)> OnEvent;          // "play", "resume", "quit_title", "quit", "settings_changed", "consent"
+	TFunction<void(const FString&)> OnEvent;          // "play", "resume", "quit_title", "quit", "settings_changed", "consent",
+	                                                  // "display_applied" (#308), "hud_scale_changed" (#309)
 	bool bQuitRequested = false;
 	bool bConsentAsked = false;
 	/** A drive presses for this model (FGameKitShellDrive sets it, #276): a widget showing it takes no real keyboard,
@@ -340,6 +371,10 @@ private:
 	double SubtitleT = 0.0, SubtitleEnd = 0.0;
 	bool bHeld = false;
 	TArray<FGameKitSaidLine> SaidLines;
+	FGameKitDisplayStaging Staging;                    // the Display tab's pending changes (#308)
+	double LastRealTime = -1.0;                        // FPlatformTime::Seconds() at the last Update: the confirm's clock
+	int32 LastConfirmSecs = -1;                        // the countdown redraws when its whole second changes
+	double LastHudScale = 1.0;                         // hud_scale_changed fires when HudScale() leaves it (#309)
 
 	void LoadTables();
 	FGameKitScreen Build(const FString& Name);
@@ -349,6 +384,12 @@ private:
 	FGameKitRow ButtonRow(const FString& Id, const FString& LabelKey, TFunction<void()> Accept);
 	FGameKitRow BackRow();
 	FGameKitRow BindingRow(const FString& Action);
+	void SetDisplay(const FGameKitDisplayStaging::FCalls& Calls);   // writes Apply's or a revert's calls, applies, saves
+	void CloseDisplayConfirm();
+	double StagedNum(const FString& Field) const;
+	bool StagedFlag(const FString& Field) const;
+	FString StagedStr(const FString& Field) const;
+	FIntPoint StagedResolution() const;
 	void ApplyPreset(const FString& Preset);
 	bool RowAction(FGameKitScreen& Screen, TArray<FGameKitRow>& Rows, int32& Focus, const FString& Action);
 	void Event(const FString& What);

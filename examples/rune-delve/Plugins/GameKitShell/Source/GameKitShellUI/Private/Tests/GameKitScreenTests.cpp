@@ -23,6 +23,9 @@
 //           fails without a renderer when one is.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the credits_text cases (#284)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab waits for Apply, its confirm (Keep,
+//           Revert, cancel; model time does not count it down), Back warns once (#308); the HUD text factor and
+//           hud_scale_changed (#309); disabled rows need not be reachable
 // ---------------------------------------------------------------------------
 #include "Misc/AutomationTest.h"
 
@@ -356,6 +359,142 @@ bool FGameKitScreensTextTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// ---- The Display tab's Apply (#308) ------------------------------------------------------------------------------
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensDisplayApplyTest, "GameKit.Screens.DisplayWaitsForApply", ScreenTestFlags)
+bool FGameKitScreensDisplayApplyTest::RunTest(const FString& Parameters)
+{
+	FTempFolder Folder;
+	TSharedRef<FGameKitShellModel> M = Fresh(Folder.Path);
+	ToMenu(*M);
+	OpenTab(*M, TEXT("display"));
+	TestTrue(TEXT("the Display tab has an Apply row"), RowIds(*M).Contains(TEXT("apply")));
+	TestTrue(TEXT("vsync's row"), FocusRow(*M, TEXT("display.vsync")));
+	M->Dispatch(TEXT("ui_accept"));
+	TestTrue(TEXT("vsync is not applied yet"), M->Flag(TEXT("display"), TEXT("vsync")));
+	TestEqual(TEXT("the row shows the staged value"), M->Top()->Focused()->Value(), M->T(TEXT("value.off")));
+	TestEqual(TEXT("the hint line says Display waits"), SGameKitShell::SettingsHintKey(*M->Top()), FString(TEXT("settings.display_hint")));
+	M->Dispatch(TEXT("ui_cancel"));   // Back warns, stays
+	TestEqual(TEXT("Back with a change waiting stays"), M->TopName(), FString(TEXT("settings")));
+	TestEqual(TEXT("and warns"), M->Message, M->T(TEXT("settings.unapplied")));
+	TestTrue(TEXT("Apply's row"), FocusRow(*M, TEXT("display.apply")));
+	M->Dispatch(TEXT("ui_accept"));
+	TestFalse(TEXT("Apply set vsync"), M->Flag(TEXT("display"), TEXT("vsync")));
+	TestFalse(TEXT("vsync alone asks nothing"), M->DisplayConfirming());
+	TestEqual(TEXT("Apply is disabled again: focus moved on"), M->FocusId(), FString(TEXT("display.back")));
+	const FGameKitSettingsLoad Saved = GameKit::SettingsLoadFile(M->SettingsPath());
+	TestFalse(TEXT("Apply saved"), GameKit::SettingBool(*Saved.Settings, TEXT("display"), TEXT("vsync")));
+	M->Dispatch(TEXT("ui_up"));
+	TestEqual(TEXT("up steps over the disabled Apply"), M->FocusId(), FString(TEXT("display.ui_scale")));
+	// the other tabs stay live
+	M->Dispatch(TEXT("ui_cancel"));
+	TestEqual(TEXT("nothing waits: Back leaves"), M->TopName(), FString(TEXT("main_menu")));
+	OpenTab(*M, TEXT("audio"));
+	M->Dispatch(TEXT("ui_left"));
+	TestEqual(TEXT("audio applies at once"), M->Num(TEXT("audio"), TEXT("master")), 0.9, 1e-9);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensDisplayConfirmTest, "GameKit.Screens.DisplayConfirmKeepRevertBack", ScreenTestFlags)
+bool FGameKitScreensDisplayConfirmTest::RunTest(const FString& Parameters)
+{
+	FTempFolder Folder;
+	TSharedRef<FGameKitShellModel> M = Fresh(Folder.Path);
+	ToMenu(*M);
+	OpenTab(*M, TEXT("display"));
+	FocusRow(*M, TEXT("display.resolution"));
+	M->Dispatch(TEXT("ui_left"));                    // 1600x900
+	FocusRow(*M, TEXT("display.mode"));
+	M->Dispatch(TEXT("ui_right"));                   // fullscreen
+	TestTrue(TEXT("Apply opens the confirm"), M->ApplyDisplay());
+	TestEqual(TEXT("mode applied"), M->Str(TEXT("display"), TEXT("mode")), FString(TEXT("fullscreen")));
+	TestEqual(TEXT("size applied"), GameKit::SettingResolution(*M->Settings), FIntPoint(1600, 900));
+	TestEqual(TEXT("focus on Keep"), M->FocusId(), FString(TEXT("confirm.keep")));
+	TestEqual(TEXT("15 s to answer"), M->DisplayStaging().Seconds().Get(-1), 15);
+	Frames(*M, 1200);                                // 20 s of model time, a few milliseconds of real time
+	TestTrue(TEXT("the countdown is real time, not Update's Dt"), M->DisplayConfirming());
+	M->Dispatch(TEXT("ui_right"));                   // the confirm takes every press: no row changes
+	TestFalse(TEXT("nothing staged behind the confirm"), M->DisplayStaging().HasPending());
+	M->Dispatch(TEXT("ui_down"));
+	TestEqual(TEXT("down reaches Revert"), M->FocusId(), FString(TEXT("confirm.revert")));
+	M->Dispatch(TEXT("ui_accept"));
+	TestFalse(TEXT("Revert closes the confirm"), M->DisplayConfirming());
+	TestEqual(TEXT("Revert puts the mode back"), M->Str(TEXT("display"), TEXT("mode")), FString(TEXT("windowed")));
+	TestEqual(TEXT("and the size"), GameKit::SettingResolution(*M->Settings), FIntPoint(1920, 1080));
+	TestEqual(TEXT("and saves it"), GameKit::SettingResolution(*GameKit::SettingsLoadFile(M->SettingsPath()).Settings), FIntPoint(1920, 1080));
+	// Keep
+	FocusRow(*M, TEXT("display.resolution"));
+	M->Dispatch(TEXT("ui_right"));
+	M->ApplyDisplay();
+	M->Dispatch(TEXT("ui_accept"));                  // Keep
+	TestFalse(TEXT("Keep closes the confirm"), M->DisplayConfirming());
+	TestEqual(TEXT("the new size stays"), GameKit::SettingResolution(*M->Settings), FIntPoint(2560, 1440));
+	// Back during the confirm reverts and stays on settings
+	FocusRow(*M, TEXT("display.resolution"));
+	M->Dispatch(TEXT("ui_right"));
+	M->ApplyDisplay();
+	M->Dispatch(TEXT("ui_cancel"));
+	TestFalse(TEXT("cancel closes the confirm"), M->DisplayConfirming());
+	TestEqual(TEXT("cancel puts back what that Apply replaced"), GameKit::SettingResolution(*M->Settings), FIntPoint(2560, 1440));
+	TestEqual(TEXT("and stays on settings"), M->TopName(), FString(TEXT("settings")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensDisplayDiscardTest, "GameKit.Screens.DisplayBackWarnsOnceThenDiscards", ScreenTestFlags)
+bool FGameKitScreensDisplayDiscardTest::RunTest(const FString& Parameters)
+{
+	FTempFolder Folder;
+	TSharedRef<FGameKitShellModel> M = Fresh(Folder.Path);
+	ToMenu(*M);
+	OpenTab(*M, TEXT("display"));
+	FocusRow(*M, TEXT("display.ui_scale"));
+	M->Dispatch(TEXT("ui_right"));
+	M->Dispatch(TEXT("ui_up"));
+	M->Dispatch(TEXT("ui_up"));
+	M->Dispatch(TEXT("ui_up"));
+	M->Dispatch(TEXT("ui_up"));
+	M->Dispatch(TEXT("ui_up"));                      // on the tab bar
+	M->Dispatch(TEXT("ui_right"));                   // the audio tab: the staged change stays
+	FocusRow(*M, TEXT("audio.back"));
+	TestEqual(TEXT("on audio's Back"), M->FocusId(), FString(TEXT("audio.back")));
+	M->Dispatch(TEXT("ui_accept"));
+	TestEqual(TEXT("Back from another tab warns too"), M->Message, M->T(TEXT("settings.unapplied")));
+	TestEqual(TEXT("and stays"), M->TopName(), FString(TEXT("settings")));
+	M->Dispatch(TEXT("ui_cancel"));
+	TestEqual(TEXT("a second Back leaves"), M->TopName(), FString(TEXT("main_menu")));
+	TestEqual(TEXT("the staged ui_scale is discarded"), M->Num(TEXT("display"), TEXT("ui_scale")), 1.0, 1e-9);
+	TestEqual(TEXT("and never saved"), GameKit::SettingNumber(*GameKit::SettingsLoadFile(M->SettingsPath()).Settings, TEXT("display"), TEXT("ui_scale")), 1.0, 1e-9);
+	return true;
+}
+
+// ---- A game HUD's text size (#309) --------------------------------------------------------------------------------
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensHudScaleTest, "GameKit.Screens.HudScaleFollowsUiAndTextScale", ScreenTestFlags)
+bool FGameKitScreensHudScaleTest::RunTest(const FString& Parameters)
+{
+	FTempFolder Folder;
+	TSharedRef<FGameKitShellModel> M = Fresh(Folder.Path);
+	int32 Heard = 0;
+	M->OnEvent = [&Heard](const FString& What) { Heard += What == TEXT("hud_scale_changed") ? 1 : 0; };
+	TestEqual(TEXT("1 at the defaults"), M->HudScale(), 1.0, 1e-9);
+	TestEqual(TEXT("a 24 px label stays 24"), M->HudFontSize(24.f), 24.f, 1e-4f);
+	ToMenu(*M);
+	OpenTab(*M, TEXT("access"));
+	M->Dispatch(TEXT("ui_right"));                   // text_scale 1.25: live
+	TestEqual(TEXT("text_scale is heard at once"), Heard, 1);
+	TestEqual(TEXT("the label grows"), M->HudFontSize(24.f), 30.f, 1e-4f);
+	M->SetNum(TEXT("audio"), TEXT("master"), 0.5);
+	TestEqual(TEXT("another setting is not a HUD change"), Heard, 1);
+	M->Dispatch(TEXT("ui_cancel"));
+	OpenTab(*M, TEXT("display"));
+	FocusRow(*M, TEXT("display.ui_scale"));
+	M->Dispatch(TEXT("ui_right"));                   // ui_scale 1.25, staged
+	TestEqual(TEXT("a staged ui_scale changes nothing yet"), Heard, 1);
+	M->ApplyDisplay();
+	TestEqual(TEXT("Apply is heard"), Heard, 2);
+	TestEqual(TEXT("both factors"), M->HudScale(), 1.5625, 1e-9);
+	TestEqual(TEXT("HudFontSize never goes under 1"), FGameKitShellModel::HudFontSize(0.f, 2.0), 1.f, 1e-6f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensSubtitleTest, "GameKit.Screens.SubtitleHoldHistoryAndWhatNow", ScreenTestFlags)
 bool FGameKitScreensSubtitleTest::RunTest(const FString& Parameters)
 {
@@ -424,7 +563,10 @@ bool FGameKitScreensNarrationTest::RunTest(const FString& Parameters)
 		{
 			const FString Line = M->Describe(R);
 			TestFalse(FString::Printf(TEXT("%s%s says '%s'"), *Prefix, *R.Id, *Line), Line.IsEmpty() || Line.StartsWith(TEXT("unlabelled")));
-			TestTrue(FString::Printf(TEXT("%s%s is reachable with down"), *Prefix, *R.Id), Seen.Contains(Prefix + R.Id));
+			if (R.IsEnabled())   // a disabled row (Apply with nothing waiting, #308) is stepped over on purpose
+			{
+				TestTrue(FString::Printf(TEXT("%s%s is reachable with down"), *Prefix, *R.Id), Seen.Contains(Prefix + R.Id));
+			}
 		}
 	};
 	CheckScreen(M->Top()->Dialog, TEXT("consent."));

@@ -28,8 +28,14 @@ values in `data/golden/shell.json` that every port's tests check (K01).
 - One file, `settings.json`, in the platform's user-data folder. Load rules (the reference's `settings_load`):
   missing fields take defaults, a wrong type or an out-of-range value is fixed and logged, unknown keys are kept (so a
   newer build's file survives an older build), a file that does not parse gives defaults and a log line.
-- Saved on Back or Apply, never on every slider tick. Apply display changes at once and offer a revert for anything
-  that can black out the screen (resolution, fullscreen).
+- Saved on Back or Apply, never on every slider tick. Audio, accessibility and the other tabs apply as the player
+  moves a control, so a change is heard and seen while sliding. Display changes wait for an Apply button (the
+  reference's `DisplayStaging`, held by the `display_staging` cases): the controls show the staged value, Apply sends
+  only the changed fields (mode before resolution), and a change that can black out the screen (mode, resolution)
+  asks "Keep these display settings? Reverting in N s" for 15 seconds of real time, never game time, with focus on
+  Keep. Revert, the countdown, Back or cancel put back exactly what that Apply replaced. Back with unapplied Display
+  changes warns once; a second Back discards them. The Display tab says so in a hint line, and the resolution row
+  says it sets the window size. `smoke --drive display` runs the whole path headless.
 - Every setting is saved and restored (F37). Machine-specific settings (resolution, vsync) stay out of cloud sync
   (E79).
 
@@ -82,6 +88,10 @@ values in `data/golden/shell.json` that every port's tests check (K01).
   and keep UI inside a safe area. Ultrawide: extend the view, never stretch it.
 - Text: the smallest text body must be at least 18 px tall at 1080p on PC (6 px at the 640x360 base) and at least 9 px
   at 1280x800 on Steam Deck, 12 px recommended (F36). Scale UI and text to 200 % (`ui_scale`, `text_scale`).
+- Game HUDs too: a HUD the game draws itself (its own layer, canvas or scene) does not inherit the menus' scaling, so
+  every HUD label takes its size from the engine's HUD font helper (base size times `text_scale` times `ui_scale`)
+  and sets it again when those settings change. `docs/ENGINE_FLOW.md` (or `docs/ENGINE.md`) names the helper; the
+  starter's play screen uses it.
 - Focus loss pauses the game (and mutes it if the player chose that); alt-tab must not lose input or crash.
 - Steam Deck review: controller works by default with no settings change, matching glyphs, 1280x800, the
   on-screen keyboard for text entry, no launcher, 30 fps at 800p (E75). `python tools/access/sweep.py --runs deck`

@@ -8,7 +8,11 @@
 #           through Shell.t(), save through SaveStore in _exit_tree() (FrontEnd removes the scene on Quit to
 #           title), apply_theme() for HUD controls (a CanvasLayer does not inherit the menu theme), movement from
 #           Shell.move_vector() (keys, d-pad and the analog stick; Shell.triggers() and Shell.held_actions() too).
+#           HUD text follows the player's text size and menu size: UiTheme.hud_font_size(), set again on
+#           Shell.look_changed (#309); copy that for every HUD label you add.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the HUD labels follow access.text_scale and
+#           display.ui_scale (UiTheme.hud_font_size, #309)
 # ---------------------------------------------------------------------------
 extends Node2D
 
@@ -19,6 +23,7 @@ const START: Vector2 = Vector2(314, 200)
 const ARENA: Rect2 = Rect2(20, 60, 600, 280)
 const HUD_LAYER: int = 5
 const HUD_MARGIN: int = 10
+const HUD_FONT: int = 12 # HUD text size in pixels at 100 % text and menu size
 const FLOOR_COLOR: Color = Color(0.14, 0.17, 0.25)
 const PLAYER_COLOR: Color = Color(0.45, 0.85, 0.75)
 
@@ -61,7 +66,9 @@ func _ready() -> void:
 	_info.modulate = UiTheme.TEXT_DIM
 	col.add_child(_info)
 	relabel()
+	restyle()
 	Shell.locale_changed.connect(relabel)
+	Shell.look_changed.connect(restyle)
 	Log.info("game", "play started (visit %d)" % _visits)
 
 
@@ -73,6 +80,12 @@ func relabel() -> void:
 	_hint.text = Shell.t("play.placeholder", {"pause": Shell.binding_text(Shell.prompt_for("pause"))})
 	_info.text = Shell.t("play.info", {"visits": _visits,
 			"difficulty": Shell.t("value.difficulty." + str(Shell.access("difficulty")))})
+
+
+## The player's text size and menu size, on every HUD label (the HUD layer is not scaled like the menus).
+func restyle() -> void:
+	for l: Label in [_hint, _info]:
+		l.add_theme_font_size_override("font_size", UiTheme.hud_font_size(HUD_FONT))
 
 
 func _physics_process(delta: float) -> void:

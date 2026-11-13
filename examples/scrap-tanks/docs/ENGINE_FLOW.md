@@ -8,6 +8,9 @@ Engine-specific workflow for a custom C++ engine on SDL3. Universal process live
 > menus`, every `show:` capture, `smoke --drive access` and `tools/access/sweep.py` (all five runs pass), `test` (51 cases).
 > Crash files, F8, the pseudo locale and the juice demo (2026-11-10): `smoke --drive crash|bug|pseudo|pseudo-plant`,
 > `show:juice`, `test` (70 cases); a real gamepad's analog stick and triggers are untested (the maths is unit tested).
+> The Display tab's Apply (2026-11-13, #308): `smoke --drive display` (the confirm reverted after 15.0 s of real time,
+> 626 frames), `show:apply`, `show:confirm`, `pseudo`, `test` (98 cases); a real window changing mode or size on Apply
+> is untested in smoke (automated runs never touch the window) **(verify)**.
 > Before the SDL3 move (SDL2 2.32.10, 2026-10-20) a planted compile error, failing test and boot-time `LOG_ERROR` each failed
 > the right command. `run` (opens a window), a real gamepad, the spoken narration, Metal (MSL) and Linux/macOS are untested.
 > Anything marked **(verify)** is the likeliest to need tweaks. Paste errors to Claude verbatim.
@@ -39,7 +42,7 @@ python tools/dev.py build --preset release
 | `check` | `cmake --preset <p>` then `cmake --build --preset <p>` |
 | `test` | build, then `ctest --preset <p> --output-on-failure` |
 | `smoke` | runs `<exe> --smoke 120 -- --data-dir build/smoke-data` with dummy SDL drivers (the shell walks title -> menu -> play), checks exit code and output |
-| `smoke --drive <scenario>` | the same with `--drive`, 6000 frames at most, passes when the run prints `DRIVE_DONE`: `menus` (prints `SETTINGS_WRITTEN`), `show:<title|menu|settings|pause|subtitle|play|juice|credits>` (add `--screenshot`), `access[:res=WxH,scale=N,pad,read]` (what `tools/access/sweep.py` runs), `bug` (F8: `DRIVE_BUG`), `pseudo` with `--locale pseudo` (`PSEUDO_PASS`); `crash` (`CRASH_WRITTEN`) and `pseudo-plant` (a `PSEUDO_FAIL` for `plant.too_small`) exit 1 on purpose |
+| `smoke --drive <scenario>` | the same with `--drive`, 6000 frames at most, passes when the run prints `DRIVE_DONE`: `menus` (prints `SETTINGS_WRITTEN`), `display` (the Display tab's Apply and its 15 s real-time confirm: `DRIVE_DISPLAY` lines), `show:<title|menu|settings|pause|subtitle|play|juice|credits|apply|confirm>` (add `--screenshot`), `access[:res=WxH,scale=N,pad,read]` (what `tools/access/sweep.py` runs), `bug` (F8: `DRIVE_BUG`), `pseudo` with `--locale pseudo` (`PSEUDO_PASS`); `crash` (`CRASH_WRITTEN`) and `pseudo-plant` (a `PSEUDO_FAIL` for `plant.too_small`) exit 1 on purpose |
 | `smoke --shaders` | also runs `kit_shader_check <build>/shader_check` (GPU renderer, hidden window), then `tools/shaders/shader_ref.py compare` |
 | `run` | runs the built exe from the project root so `assets/` paths resolve |
 | `build` | same steps as check; add `--preset release` for the shipping build (global options work before or after the command) |

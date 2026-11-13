@@ -2,12 +2,14 @@
 // drive.ts
 // Purpose : Scripted runs for `dev.py smoke --drive <scenario>`: the game plays itself through the real input
 //           path (injected actions, the same route a key press takes) and logs markers smoke waits for.
-// Usage   : ?drive=menus | crash | pseudo | pseudo-plant | show:<title|settings|pause|subtitle|juice|credits>
+// Usage   : ?drive=menus | crash | pseudo | pseudo-plant | display
+//           | show:<title|settings|pause|subtitle|juice|credits|apply|confirm>
 //           | access[:res=WxH][,scale=N][,pad] (every screen reported for tools/access/sweep.py)
 //           (dev.py smoke --drive X adds it to the URL; --locale pseudo adds ?locale=pseudo)
 // Notes   : Browser only. Every scenario ends with DRIVE_DONE <scenario>; a failed step logs DRIVE_ABORT (an
 //           error, so smoke exits 1). Markers: SETTINGS_WRITTEN <file> (menus), CRASH_WRITTEN <file> (crash),
-//           PSEUDO_OK / PSEUDO_FAIL (pseudo), SHOWN <screen> (show:*). Navigation walks the focus with
+//           PSEUDO_OK / PSEUDO_FAIL (pseudo), SHOWN <screen> (show:*), DRIVE_DISPLAY staged / warned / applied /
+//           reverted <ms> ms / discarded (display, the same lines in every engine). Navigation walks the focus with
 //           ui_down until the wanted item is focused, so the menus' keyboard navigation is part of the test.
 //           A scenario rewrites settings and saves, so driveRequest() runs one only with its own ?data-dir=
 //           (never the player's real keys) and only in a dev server or a browser under automation
@@ -24,12 +26,17 @@
 //           juice demo's subtitle (skipped while it types) is finished and checked again; the subtitle clock
 //           stands still for the tour (holdTime), so the count is the same on every run of a build, however
 //           long loading takes
+//   display: settings -> Display: mode one step on (staged) -> Back warns -> Apply -> the confirm (15 s of real
+//           time; sooner than 14 s fails) runs out and reverts -> the mode and settings.json are back where they
+//           were -> a second staged change, Back twice: discarded, back on the menu
 //   show  : open one screen, settle, freeze the game (credits: the text at its top, standing still), SHOWN <screen>
 //           (smoke takes the screenshot)
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the still frame goes through the shell's GameHost,
 //           so web and web-3d share this file (#175)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits (#284)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:confirm,
+//           and the pseudo tour checks the Display tab's pending, warning and confirm states (#308)
 // ---------------------------------------------------------------------------
 import { glyphName, glyphSet, promptBinding } from "../core/bindings";
 import { PSEUDO_LOCALE } from "../core/i18n";
@@ -47,6 +54,8 @@ import { glyphText } from "./ui";
 
 // ---- Tunables ----------------------------------------------------------------
 const WAIT_MS = 8000; // longest wait for one screen
+const CONFIRM_WAIT_MS = 20000; // the display drive's wait for the 15 s confirm to run out (real time)
+const CONFIRM_MIN_MS = 14000; // a revert sooner than this did not count real time
 const STEP_FRAMES = 2; // frames after each injected press (DOM and layout settle)
 export const DRIVE_PARAM = "drive";
 
@@ -148,6 +157,17 @@ class Driver {
     if (read() !== want) throw new Error(`${id} did not reach ${String(want)} (is ${String(read())})`);
   }
 
+  /** Main menu -> settings -> Display, with the mode staged one step on (not applied). */
+  async stagedMode(): Promise<void> {
+    await this.toMenu();
+    await this.choose("menu", "menu.settings");
+    await this.screen("settings");
+    await this.tab("display");
+    await this.focus("display.mode");
+    await this.press("ui_right");
+    if (!this.shell.staging?.dirty) throw new Error("the mode change was not staged");
+  }
+
   async game(key: GameKey): Promise<void> {
     this.shell.startGame(key);
     await this.screen(key === "main" ? "play" : "juice");
@@ -181,6 +201,39 @@ async function menus(shell: Shell, d: Driver): Promise<void> {
   }
   await d.choose("menu", "menu.quit");
   await d.screen("quit");
+}
+
+async function display(shell: Shell, d: Driver): Promise<void> {
+  const before = shell.settings.display.mode;
+  await d.stagedMode();
+  if (shell.settings.display.mode !== before) throw new Error("a staged mode was applied before Apply");
+  Log.info("drive", "DRIVE_DISPLAY staged");
+  await d.press("ui_cancel"); // the first Back warns and stays
+  if (shell.topId !== "settings" || !shell.staging?.warned) throw new Error("Back with unapplied changes did not warn");
+  Log.info("drive", "DRIVE_DISPLAY warned");
+  await d.focus("display.apply");
+  const start = performance.now();
+  await d.press("ui_accept");
+  const st = shell.staging;
+  if (!st || st.seconds() === null) throw new Error("Apply did not open the keep-or-revert confirm");
+  if (shell.top?.menu?.focused?.id !== "confirm.keep") throw new Error("the confirm did not put the focus on Keep");
+  Log.info("drive", "DRIVE_DISPLAY applied");
+  await waitFor("the confirm to run out", () => st.seconds() === null, CONFIRM_WAIT_MS);
+  const took = Math.round(performance.now() - start);
+  if (took < CONFIRM_MIN_MS) throw new Error(`the confirm reverted after ${took} ms: it is not counting real time`);
+  const { settings } = settingsLoad(shell.store.read(SETTINGS_FILE));
+  if (shell.settings.display.mode !== before || settings.display.mode !== before) {
+    throw new Error(`the revert did not put the mode back to ${before} (now ${shell.settings.display.mode}, ${SETTINGS_FILE} ${settings.display.mode})`);
+  }
+  Log.info("drive", `DRIVE_DISPLAY reverted ${took} ms`);
+  // a second staged change, left unapplied: Back warns, Back again discards it and leaves
+  await d.focus("display.mode");
+  await d.press("ui_right");
+  await d.press("ui_cancel");
+  await d.press("ui_cancel");
+  await d.screen("menu");
+  if (shell.settings.display.mode !== before) throw new Error(`the discarded change was applied (mode ${shell.settings.display.mode})`);
+  Log.info("drive", "DRIVE_DISPLAY discarded");
 }
 
 async function crash(shell: Shell, d: Driver): Promise<void> {
@@ -218,6 +271,27 @@ async function pseudoSteps(shell: Shell, d: Driver): Promise<void> {
     await d.tab(t);
     await d.pseudoWait();
   }
+  // the Display tab's Apply (#308): a staged change, the unapplied warning, the confirm; each state checked once,
+  // with no toast up (the browser's "fullscreen blocked" one comes and goes at its own pace)
+  const recheck = async () => {
+    await d.toastsGone();
+    if (shell.top) shell.checkLayout(shell.top);
+    await d.pseudoWait();
+  };
+  await d.tab("display");
+  await d.focus("display.mode");
+  await d.press("ui_right");
+  await recheck();
+  await d.press("ui_cancel"); // warns
+  await recheck();
+  await d.focus("display.apply");
+  shell.holdConfirm = true; // the countdown text stands still while it is checked
+  await d.press("ui_accept");
+  await recheck();
+  shell.holdConfirm = false;
+  await d.focus("confirm.revert");
+  await d.press("ui_accept");
+  await d.toastsGone();
   await d.press("ui_cancel"); // back saves: the "saved" toast is checked on the menu, then left to go
   await d.screen("menu");
   await d.pseudoWait();
@@ -279,6 +353,14 @@ async function show(shell: Shell, d: Driver, what: string): Promise<void> {
       }
       if (shell.scene) shell.host?.pause(shell.scene); // a still frame for the screenshot
       break;
+    case "apply":
+    case "confirm":
+      shell.holdConfirm = true; // the countdown stays at 15 s: the same picture on every run
+      await d.stagedMode();
+      await d.focus("display.apply");
+      if (what === "confirm") await d.press("ui_accept");
+      await d.toastsGone(); // the browser's "fullscreen blocked" toast is not part of the picture
+      break;
     case "credits": {
       await d.toMenu();
       await d.choose("menu", "menu.credits");
@@ -289,7 +371,7 @@ async function show(shell: Shell, d: Driver, what: string): Promise<void> {
       break;
     }
     default:
-      throw new Error(`unknown screen "${what}" (title, settings, pause, subtitle, juice, credits)`);
+      throw new Error(`unknown screen "${what}" (title, settings, pause, subtitle, juice, credits, apply, confirm)`);
   }
   await frames(STEP_FRAMES);
   Log.info("drive", `SHOWN ${what}`);
@@ -416,10 +498,11 @@ export async function runDrive(shell: Shell, scenario: string): Promise<void> {
   const d = new Driver(shell);
   Log.info("drive", `DRIVE_START ${scenario}`);
   if (scenario === "menus") await menus(shell, d);
+  else if (scenario === "display") await display(shell, d);
   else if (scenario === "crash") return crash(shell, d);
   else if (scenario === "pseudo" || scenario === "pseudo-plant") await pseudoTour(shell, d);
   else if (scenario.startsWith("show:")) await show(shell, d, scenario.slice(5));
   else if (scenario === "access" || scenario.startsWith("access:")) await access(shell, d, scenario.slice(7));
-  else throw new Error(`unknown scenario "${scenario}" (menus, crash, pseudo, pseudo-plant, access[:...], show:<screen>)`);
+  else throw new Error(`unknown scenario "${scenario}" (menus, crash, pseudo, pseudo-plant, display, access[:...], show:<screen>)`);
   Log.info("drive", `DRIVE_DONE ${scenario}`);
 }

@@ -9,6 +9,7 @@
 #           Shell.set_value("audio", "master", 0.5)    # change one (applied at once; save_settings() writes it)
 #           Shell.effective_shake(); Shell.game_speed(); Shell.telemetry("level_start", "1-2")
 #           Shell.move_vector(); Shell.stick(); Shell.triggers(); Shell.held_actions()   # input for the game (#274)
+#           Shell.look_changed.connect(f)              # text size, menu size, readable font or spacing changed (#309)
 # Notes   : User args (after "--"): --data-dir <dir> (default user://), --locale <code> (this run only; "pseudo"
 #           is the test locale), --smoke (a dev.py smoke run: a crash exits 1, no pause on focus loss),
 #           --drive <scenario> (scripts/shell/smoke_drive.gd), --capture (tools/capture.gd is taking a picture).
@@ -27,6 +28,8 @@
 #   save: settings.json parses -> it becomes .bak; atomic write (AtomicFile)
 #   each frame: a script error caught by CrashHook -> crash file, CRASH_WRITTEN <path>; smoke run -> exit 1
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): look_changed, for game HUDs that follow the player's
+#           text and menu size (UiTheme.hud_font_size, #309)
 # ---------------------------------------------------------------------------
 extends Node
 
@@ -34,8 +37,11 @@ signal settings_changed(section: String, key: String)
 signal locale_changed
 signal device_changed(device: String)
 signal focus_lost
+## A setting that changes how text looks (LOOK_KEYS) changed: a game HUD sets its font sizes again (#309).
+signal look_changed
 
 const SETTINGS_FILE: String = "settings.json"
+const LOOK_KEYS: PackedStringArray = ["text_scale", "ui_scale", "readable_font", "line_spacing"]
 const TELEMETRY_FILE: String = "telemetry.csv"
 const LOG_FILE: String = "logs/game.log"
 const CRASH_DIR: String = "crashes"
@@ -272,6 +278,8 @@ func set_value(section: String, key: String, value: Variant) -> void:
 		"access":
 			_apply_access()
 	settings_changed.emit(section, key)
+	if LOOK_KEYS.has(key):
+		look_changed.emit()
 
 
 func set_language(code: String) -> void:

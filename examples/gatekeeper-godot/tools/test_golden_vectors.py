@@ -7,6 +7,7 @@
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_text, the markdown every credits screen strips (#284)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): DisplayStaging, the Display tab's Apply and its confirm (#308)
 # ---------------------------------------------------------------------------
 import json
 import math
@@ -260,6 +261,66 @@ class CreditsText(unittest.TestCase):
         names = [p[0] for p in case[0]["points"]]
         self.assertEqual(len(names), len(set(names)), "case names must be unique")
         self.assertIn("space and tab only", names)
+
+
+class DisplayStaging(unittest.TestCase):
+    """The Display tab's Apply (#308): values worked out by hand, not read back from the reference."""
+
+    def fresh(self):
+        return gv.DisplayStaging(gv.DEFAULT_SETTINGS["display"])
+
+    def test_mode_goes_before_resolution_and_opens_the_confirm(self):
+        st = self.fresh()
+        st.stage("resolution", [1280, 720])
+        st.stage("mode", "fullscreen")
+        self.assertEqual(st.value("mode"), "fullscreen")             # the control shows the staged value
+        self.assertEqual(st.applied["mode"], "windowed")             # nothing applied yet
+        self.assertEqual(st.apply(), [["mode", "fullscreen"], ["resolution", [1280, 720]]])
+        self.assertEqual(st.seconds(), 15)
+
+    def test_vsync_alone_needs_no_confirm(self):
+        st = self.fresh()
+        st.stage("vsync", False)
+        self.assertEqual(st.apply(), [["vsync", False]])
+        self.assertIsNone(st.seconds())
+
+    def test_the_countdown_reverts_exactly_what_the_apply_replaced(self):
+        st = self.fresh()
+        st.stage("mode", "borderless")
+        st.stage("frame_cap", 60)
+        st.apply()
+        self.assertEqual(st.tick(14.5), [])
+        self.assertEqual(st.seconds(), 1)
+        self.assertEqual(st.tick(0.5), [["mode", "windowed"], ["frame_cap", 0]])
+        self.assertIsNone(st.seconds())
+        self.assertEqual(st.applied, gv.DEFAULT_SETTINGS["display"])
+
+    def test_back_during_the_confirm_reverts_and_stage_is_refused(self):
+        st = self.fresh()
+        st.stage("mode", "fullscreen")
+        st.apply()
+        self.assertEqual(st.stage("vsync", False), "busy")
+        self.assertEqual(st.back(), ("revert", [["mode", "windowed"]]))
+
+    def test_keep_closes_the_confirm_and_keeps_the_values(self):
+        st = self.fresh()
+        st.stage("resolution", [1600, 900])
+        st.apply()
+        st.keep()
+        self.assertIsNone(st.seconds())
+        self.assertEqual(st.revert(), [])
+        self.assertEqual(st.applied["resolution"], [1600, 900])
+
+    def test_back_warns_once_then_discards(self):
+        st = self.fresh()
+        st.stage("ui_scale", 1.5)
+        st.stage("ui_scale", 1.0)                                    # back to the applied value: no change pending
+        self.assertEqual(st.pending, {})
+        st.stage("vsync", False)
+        self.assertEqual(st.back()[0], "warn")
+        self.assertEqual(st.back()[0], "leave")
+        self.assertEqual(st.pending, {})
+        self.assertEqual(st.applied["vsync"], True)
 
 
 if __name__ == "__main__":

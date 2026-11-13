@@ -10,7 +10,7 @@
 #             smoke    run the game headless for N frames, fail on errors; scenario runs:
 #                      smoke --frames 3000 --until GOAL_REACHED --fail-on CRASHED -- --autoplay right
 #                      (after `--`: options for the game; --screenshot / --record open a window and capture PNGs);
-#                      --drive SCENARIO runs a scripted path through the shell's screens (menus and crash
+#                      --drive SCENARIO runs a scripted path through the shell's screens (menus, crash and display
 #                      headless; pseudo, pseudo-plant, bug, show:<screen> and access[:opts] open a window) with
 #                      --data-dir DIR and --locale LANG;
 #                      without --data-dir the game's files go to a fresh build/smoke-data/, never the real
@@ -58,6 +58,8 @@
 #           [[example]] name for examples/shader_check.rs, the game's own (#294)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `ship --target itch` uploads to itch.io with
 #           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive display (headless), show:apply and
+#           show:confirm in the help (the Display tab's Apply, #308)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -983,8 +985,10 @@ def build_parser():
                         "SETTINGS_WRITTEN; headless), crash (a planted panic: CRASH_WRITTEN, fails on purpose; "
                         "headless), pseudo (with --locale pseudo: checks every label on every screen, PSEUDO_PASS or "
                         "PSEUDO_FAIL), pseudo-plant (the same plus a label too small: must fail), bug (F8 bug "
-                        "report: DRIVE_BUG), show:<title|main_menu|settings|pause|help|history|credits|"
-                        "subtitle|juice> (opens that screen in a window; add --screenshot), "
+                        "report: DRIVE_BUG), display (the Display tab's Apply: stage, warn, apply, the 15 s confirm "
+                        "reverts in real time, discard; DRIVE_DISPLAY lines; headless), "
+                        "show:<title|main_menu|settings|pause|help|history|credits|"
+                        "subtitle|juice|apply|confirm> (opens that screen in a window; add --screenshot), "
                         "access[:res=WxH,scale=N,pad,read] (the accessibility sweep's tour, tools/access/sweep.py; "
                         "a window); waits for DRIVE_DONE")
     p.add_argument("--data-dir", default="", help="keep settings and saves in this folder (relative to the project; "

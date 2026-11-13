@@ -12,6 +12,8 @@
 // Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the loading screen starts the world through the
 //           shell's GameHost, so web and web-3d share this file; pseudo-plant's label stays on one line, so the
 //           pseudo check fails on it as it must (it wrapped and passed) (#175)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the HUD note: HTML follows ui_scale and text_scale through
+//           the CSS, text the renderer draws uses core/hud.ts (#309)
 // ---------------------------------------------------------------------------
 import { glyphName, glyphSet, promptBinding } from "../core/bindings";
 import type { Screen, Shell } from "./app";
@@ -187,7 +189,12 @@ export function loading(shell: Shell, key: GameKey): Screen {
   return s;
 }
 
-/** The HUD over a running world: prompts with glyphs for the current device. */
+/**
+ * The HUD over a running world: prompts with glyphs for the current device. It is HTML, so display.ui_scale and
+ * access.text_scale reach it through the CSS (--ui-scale, --text-scale; the .hudbar rule). Text the renderer draws
+ * (Phaser text, a Three.js label) does not get them that way: size it with hudFontPx(base, shell.settings) from
+ * core/hud.ts and redo it in shell.onLook(...) (#309).
+ */
 export function gameplay(shell: Shell, key: GameKey): Screen {
   let lastSet = "";
   const s = built(key === "main" ? "play" : "juice", "hud", (root) => {

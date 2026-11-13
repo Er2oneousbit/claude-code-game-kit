@@ -11,8 +11,8 @@
 #                      --record, --until, --fail-on for scenario runs (frames via GameKitCapture); --shaders
 #                      also draws every kit shader recipe (GameKitShaders.Render) and compares it with its golden;
 #                      --drive SCENARIO runs a scripted visit of the shell's screens (menus, crash, pseudo,
-#                      pseudo-plant, bug, access[:res=WxH][,scale=N][,pad][,read],
-#                      show:<title|settings|pause|subtitle|juice|credits>) through the Smoke_ShellDrive PlayMode
+#                      pseudo-plant, bug, display, access[:res=WxH][,scale=N][,pad][,read],
+#                      show:<title|settings|pause|subtitle|juice|credits|apply|confirm>) through the Smoke_ShellDrive PlayMode
 #                      test, with --data-dir and --locale for that run (Assets/Scripts/Shell/SmokeDrive.cs)
 #             exec     run a static editor method headless (scene builders: exec GameKitScenes.CreateStarterScene)
 #             build    headless player build via Assets/Editor/GameKitBuild.cs
@@ -64,6 +64,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive show:credits (#284)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `ship --target itch` uploads to itch.io with
 #           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive display, show:apply and show:confirm
+#           (the Display tab's Apply, #308)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -98,8 +100,8 @@ SHADER_DIR = "Assets/Shaders/Kit"        # the kit's shader recipes, generated b
 SHADER_OUT = "Logs/shader_check"         # smoke --shaders pictures, compared by tools/shaders/shader_ref.py
 SHADER_TIMEOUT_S = 300
 # smoke --drive (#168): the shell's scripted runs (Assets/Scripts/Shell/SmokeDrive.cs), through one PlayMode test
-DRIVES = ("menus", "crash", "pseudo", "pseudo-plant", "bug")
-SHOW_TARGETS = ("title", "settings", "pause", "subtitle", "juice", "credits")   # smoke --drive show:<target>
+DRIVES = ("menus", "crash", "pseudo", "pseudo-plant", "bug", "display")
+SHOW_TARGETS = ("title", "settings", "pause", "subtitle", "juice", "credits", "apply", "confirm")   # --drive show:<target>
 # Drives that fail on purpose (#275), with the line that proves the failure was the planted one
 EXPECTED_FAIL = {"crash": "CRASH_WRITTEN", "pseudo-plant": "PSEUDO_FAIL"}
 ACCESS_DRIVE = re.compile(r"access(:(res=[1-9]\d{2,4}x[1-9]\d{2,4}|scale=\d+(\.\d+)?|pad|read)"
@@ -963,7 +965,9 @@ def build_parser():
                    help="a scripted path through the shell's screens (needs the shell scene: exec GameKitScenes.CreateShellScene): "
                         "menus (change two settings, save, quit; prints SETTINGS_WRITTEN), crash (a planted exception: "
                         "CRASH_WRITTEN, exit 1), pseudo (with --locale pseudo: checks every label on every screen), "
-                        "pseudo-plant (the same plus a label too small: must fail), bug (F8 bug report), "
+                        "pseudo-plant (the same plus a label too small: must fail), bug (F8 bug report), display (the "
+                        "Display tab's Apply: stage, warn, apply, the 15 s confirm reverts in real time, discard; "
+                        "DRIVE_DISPLAY lines), "
                         "access[:res=WxH][,scale=N][,pad][,read] (every screen reported for tools/access/sweep.py), "
                         f"show:<{'|'.join(SHOW_TARGETS)}> (opens that screen; add --screenshot)")
     p.add_argument("--data-dir", default="", help="keep settings for the run in this folder (relative to the project; kept "

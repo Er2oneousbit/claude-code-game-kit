@@ -12,7 +12,9 @@
 //           From Blueprints: Get Game Instance Subsystem (Game Kit Shell) -> Set Objective, Say, Show Screens.
 // Notes   : Events: "play" (the loading screen finished: start or unpause your game), "resume", "quit_title"
 //           (back to the title: reset your level), "quit" (ends the game, or the PIE session), "settings_changed"
-//           (read the settings again: window mode, volumes, timing_scale ...), "consent". The subsystem gives
+//           (read the settings again: volumes, timing_scale ...), "consent", "display_applied" (the Display tab's
+//           Apply or its revert: the subsystem sets the window itself, #308), "hud_scale_changed" (#309, also
+//           OnHudScaleChanged: re-size a HUD's text with HudFontSize). The subsystem gives
 //           the widget keyboard focus and sets the first player controller's input mode to Game and UI; while
 //           the model's top screen is "play" the widget draws nothing but subtitles and lets input through.
 //           Settings live in Saved/GameKit/settings.json (DataFolder changes that). Analog input (#274): Get Stick,
@@ -21,6 +23,9 @@
 //           debug build F8 saves bug_<time>/ there with a screenshot of the viewport (#275).
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1); analog input, crash files and the bug report by
 //           Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply sets the window mode, size,
+//           vsync and frame cap through UGameUserSettings (#308); HudTextScale, HudFontSize and OnHudScaleChanged
+//           for a game HUD (#309)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -50,6 +55,7 @@ public:
 };
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FGameKitShellEvent, const FString&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FGameKitHudScaleChanged, float);   // the new HudTextScale() (#309)
 
 UCLASS()
 class GAMEKITSHELLUI_API UGameKitShellSubsystem : public UGameInstanceSubsystem
@@ -91,6 +97,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Game Kit Shell")
 	FString TopScreen() const;
 
+	// ---- A game HUD's text size (#309) ----
+
+	/** What a HUD multiplies its font sizes by: display.ui_scale times access.text_scale (1 at the defaults). */
+	UFUNCTION(BlueprintPure, Category = "Game Kit Shell|HUD")
+	float HudTextScale() const;
+
+	/** A design font size at the player's text size: BaseSize * HudTextScale(). Set a HUD text's font size with it. */
+	UFUNCTION(BlueprintPure, Category = "Game Kit Shell|HUD")
+	float HudFontSize(float BaseSize) const;
+
+	/** Fires with the new HudTextScale() when it changes: text_scale at once, ui_scale on the Display tab's Apply. */
+	FGameKitHudScaleChanged OnHudScaleChanged;
+
 	// ---- Analog input through the shell (#274): zero outside play, so a menu never leaks into the game ----
 
 	/** The left stick after the player's deadzone (radial, rescaled) and invert_y: each axis -1..1, up is +Y. */
@@ -116,4 +135,5 @@ private:
 
 	void OnMapLoaded(UWorld* World);
 	void MakeModel();
+	void ApplyWindow();   // settings.display to the game window through UGameUserSettings (not in automated runs)
 };

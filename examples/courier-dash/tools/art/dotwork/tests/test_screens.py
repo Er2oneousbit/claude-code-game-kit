@@ -6,6 +6,8 @@
 # Usage   : python tools/art/dotwork/tests/test_screens.py   (test_dotwork.py runs it too)
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the viewport size of a project.godot that leaves
+#           it at Godot's default (#310)
 # ---------------------------------------------------------------------------
 import contextlib
 import io
@@ -29,6 +31,29 @@ from PIL import Image  # noqa: E402
 def read(path):
     with open(path, encoding="utf-8") as f:
         return f.read()
+
+
+class ViewportExam(unittest.TestCase):
+    """#310: the Godot editor drops default values when it saves project.godot, so a missing size is Godot's own."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="dotwork_viewport_")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def write(self, text):
+        with open(os.path.join(self.tmp, "project.godot"), "w", encoding="utf-8") as f:
+            f.write(text)
+
+    def test_sizes(self):
+        import lane_screens
+        self.assertEqual(lane_screens.viewport(self.tmp), (640, 360))                # no project.godot: the kit base
+        self.write("config_version=5\n\n[display]\n\nwindow/size/viewport_width=640\n"
+                   "window/size/viewport_height=360\n")
+        self.assertEqual(lane_screens.viewport(self.tmp), (640, 360))
+        self.write("config_version=5\n\n[application]\n\nconfig/name=\"x\"\n")
+        self.assertEqual(lane_screens.viewport(self.tmp), (1152, 648))               # Godot's default size
 
 
 class ScreensExam(unittest.TestCase):

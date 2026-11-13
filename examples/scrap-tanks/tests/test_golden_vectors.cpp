@@ -16,6 +16,8 @@
 //   -> run the case's steps or points through src/core -> compare every result with the expected value
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the credits_text cases (#284)
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display_staging cases, the Display tab's
+//           Apply and its keep-or-revert confirm (core::DisplayStaging, #308)
 // ---------------------------------------------------------------------------
 #include <doctest/doctest.h>
 
@@ -32,6 +34,7 @@
 #include "core/AtomicFile.hpp"
 #include "core/Bindings.hpp"
 #include "core/CoyoteTimer.hpp"
+#include "core/DisplayStaging.hpp"
 #include "core/Ease.hpp"
 #include "core/FlashLimiter.hpp"
 #include "core/FollowCamera.hpp"
@@ -366,6 +369,55 @@ void check_credits_text(const json& c) {
     }
 }
 
+// One step's state as the reference records it: what Apply/revert called, what is pending, what every row shows,
+// what is applied, and the confirm's seconds (null when closed).
+json staging_state(const core::DisplayStaging& st, const json& out, const core::DisplayStaging::Calls& calls) {
+    json called = json::array();
+    for (const auto& [field, v] : calls) {
+        called.push_back(json::array({field, v}));
+    }
+    json shown = json::object();
+    for (const char* f : core::kDisplayApplyOrder) {
+        shown[f] = st.value(f);
+    }
+    const auto secs = st.seconds();
+    return {{"out", out}, {"calls", called}, {"pending", st.pending()}, {"shown", shown}, {"applied", st.applied()},
+            {"seconds", secs ? json(*secs) : json()}};
+}
+
+void check_display_staging(const json& c) {
+    CHECK(c.at("confirm_s").get<double>() == core::kDisplayConfirmS);
+    core::DisplayStaging st(c.at("applied"));
+    for (const json& step : c.at("steps")) {
+        const json& op = step.at("op");
+        const std::string kind = text(op.at(0));
+        json out;
+        core::DisplayStaging::Calls calls;
+        if (kind == "stage") {
+            out = st.stage(text(op.at(1)), op.at(2));
+        } else if (kind == "apply") {
+            calls = st.apply();
+        } else if (kind == "tick") {
+            calls = st.tick(op.at(1).get<double>());
+        } else if (kind == "keep") {
+            st.keep();
+        } else if (kind == "revert") {
+            calls = st.revert();
+        } else if (kind == "back") {
+            auto [what, back_calls] = st.back();
+            out = what;
+            calls = std::move(back_calls);
+        } else {
+            FAIL_CHECK("unknown display_staging op " << op.dump());
+            continue;
+        }
+        const json want = {{"out", step.at("out")}, {"calls", step.at("calls")}, {"pending", step.at("pending")},
+                           {"shown", step.at("shown")}, {"applied", step.at("applied")},
+                           {"seconds", step.at("seconds")}};
+        expect_same(staging_state(st, out, calls), want, "step " + op.dump());
+    }
+}
+
 using Checker = void (*)(const json& c);
 
 // Runs every case of one vector file through its checker; unknown types fail. Returns the cases checked.
@@ -418,8 +470,13 @@ TEST_CASE("golden vectors: shell.json") {
         {"defaults", check_defaults}, {"settings_load", check_settings_load}, {"rebind", check_rebind},
         {"glyph_set", check_glyph_set}, {"glyph_name", check_glyph_name}, {"prompt_binding", check_prompt_binding},
         {"save_load", check_save_load}, {"tr", check_tr}, {"plural", check_plural}, {"pseudo", check_pseudo},
-        {"narration", check_narration},
+        {"narration", check_narration}, {"display_staging", check_display_staging},
     });
+    int staging = 0;   // the five Apply scripts (#308): a filter typo must not pass with none run
+    for (const json& c : vectors.at("cases")) {
+        staging += c.value("type", "") == "display_staging" ? 1 : 0;
+    }
+    CHECK(staging >= 5);
 }
 
 TEST_CASE("golden vectors: credits.json") {

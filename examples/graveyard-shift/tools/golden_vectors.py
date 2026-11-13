@@ -21,6 +21,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_text, one rule for the markdown marks every
 #           credits screen strips (heading marks, list markers, emphasis stars), credits.json's credits_text cases (#284)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): DisplayStaging, the Display tab's Apply with a
+#           keep-or-revert confirm, and shell.json's display_staging cases (#308)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -740,6 +742,117 @@ def credits_text(markdown):
     return "\n".join(lines)
 
 
+# ----------------------------------------------------------------------------------------------- display staging
+DISPLAY_APPLY_ORDER = ["mode", "resolution", "vsync", "frame_cap", "ui_scale"]  # mode before resolution
+DISPLAY_CONFIRM_FIELDS = ("mode", "resolution")      # can black out the screen: Apply asks "keep these?"
+DISPLAY_CONFIRM_S = 15.0                             # real seconds before an unanswered confirm reverts
+
+
+class DisplayStaging:
+    """The Display tab's Apply (#308; SOP-19 section 2): Display changes wait for Apply, every other tab applies at
+    once. Engine-free: it never touches the window, it returns the (field, value) calls the shell makes through its
+    set_value. Rules:
+    - stage(field, v): a pending change, shown by the control; staging the applied value drops it. Refused while a
+      confirm is open (the controls are disabled then).
+    - apply(): the pending fields that differ from the applied ones, in DISPLAY_APPLY_ORDER; remembers the values they
+      replace; a change to mode or resolution opens the confirm (DISPLAY_CONFIRM_S, counted in real time).
+    - tick(dt): the countdown; reaching 0 reverts. seconds() is ceil(left) for the "Reverting in N s" line.
+    - keep(): closes the confirm, the new values stay. revert(): puts back exactly what the last apply replaced.
+    - back(): while a confirm is open, reverts (a screen the player cannot see must never stick); else with pending
+      changes, the first back warns and the second discards them; else leaves."""
+
+    def __init__(self, applied):
+        self.applied = copy.deepcopy(applied)
+        self.pending = {}
+        self.replaced = {}                           # field -> the value the last apply replaced
+        self.left = None                             # confirm countdown in seconds, None when closed
+        self.warned = False
+
+    def value(self, field):
+        return self.pending.get(field, self.applied[field])
+
+    def stage(self, field, v):
+        if self.left is not None:
+            return "busy"
+        if v == self.applied[field]:
+            self.pending.pop(field, None)
+        else:
+            self.pending[field] = copy.deepcopy(v)
+        self.warned = False
+        return "staged"
+
+    def _set(self, values):
+        calls = []
+        for field in DISPLAY_APPLY_ORDER:
+            if field in values:
+                self.applied[field] = copy.deepcopy(values[field])
+                calls.append([field, values[field]])
+        return calls
+
+    def apply(self):
+        changed = {f: v for f, v in self.pending.items() if v != self.applied[f]}
+        self.replaced = {f: copy.deepcopy(self.applied[f]) for f in changed}
+        self.pending = {}
+        self.warned = False
+        calls = self._set(changed)
+        if any(f in changed for f in DISPLAY_CONFIRM_FIELDS):
+            self.left = DISPLAY_CONFIRM_S
+        return calls
+
+    def seconds(self):
+        return None if self.left is None else int(math.ceil(self.left))
+
+    def tick(self, dt):
+        if self.left is None:
+            return []
+        self.left -= dt
+        return self.revert() if self.left <= 0 else []
+
+    def keep(self):
+        self.left = None
+        self.replaced = {}
+
+    def revert(self):
+        calls = self._set(self.replaced)
+        self.left = None
+        self.replaced = {}
+        return calls
+
+    def back(self):
+        if self.left is not None:
+            return "revert", self.revert()
+        if self.pending and not self.warned:
+            self.warned = True
+            return "warn", []
+        self.pending = {}
+        self.warned = False
+        return "leave", []
+
+
+def _staging_case(name, script):
+    """Run a script of [op, args...] steps; record each step's result and the state after it."""
+    st = DisplayStaging(DEFAULT_SETTINGS["display"])
+    steps = []
+    for op in script:
+        kind, args = op[0], op[1:]
+        out, calls = None, []
+        if kind == "stage":
+            out = st.stage(*args)
+        elif kind == "apply":
+            calls = st.apply()
+        elif kind == "tick":
+            calls = st.tick(*args)
+        elif kind == "keep":
+            st.keep()
+        elif kind == "revert":
+            calls = st.revert()
+        elif kind == "back":
+            out, calls = st.back()
+        steps.append({"op": op, "out": out, "calls": calls, "pending": copy.deepcopy(st.pending),
+                      "shown": {f: st.value(f) for f in DISPLAY_APPLY_ORDER}, "applied": copy.deepcopy(st.applied),
+                      "seconds": st.seconds()})
+    return {"type": "display_staging", "name": name, "confirm_s": DISPLAY_CONFIRM_S,
+            "applied": DEFAULT_SETTINGS["display"], "steps": steps}
 
 
 def _shake_case(name, params, script):
@@ -963,6 +1076,20 @@ def build_shell():
     cases.append({"type": "pseudo", "name": "pseudo-locale", "points": [
         [t, pseudo(t)] for t in ("Play", "Hello, {name}!", "Score: %d%%", "", "OK", "A long settings label",
                                  "{a}{b}", "50% off")]})
+    cases.append(_staging_case("vsync applies without a confirm", [
+        ["stage", "vsync", False], ["apply"], ["back"]]))
+    cases.append(_staging_case("mode and resolution: applied in order, kept", [
+        ["stage", "resolution", [1280, 720]], ["stage", "mode", "fullscreen"], ["apply"],
+        ["tick", 0.5], ["tick", 4.0], ["stage", "vsync", False], ["keep"], ["back"]]))
+    cases.append(_staging_case("the countdown runs out and reverts", [
+        ["stage", "mode", "borderless"], ["stage", "frame_cap", 60], ["apply"], ["tick", 10.0], ["tick", 4.5],
+        ["tick", 0.5], ["tick", 1.0]]))
+    cases.append(_staging_case("revert and back during the confirm", [
+        ["stage", "resolution", [1600, 900]], ["apply"], ["revert"],
+        ["stage", "mode", "fullscreen"], ["apply"], ["back"], ["back"]]))
+    cases.append(_staging_case("staging the applied value drops it; back warns once, then discards", [
+        ["stage", "ui_scale", 1.5], ["stage", "ui_scale", 1.0], ["stage", "vsync", False], ["back"],
+        ["stage", "frame_cap", 30], ["back"], ["back"], ["apply"]]))
     return {"version": VECTOR_VERSION, "tolerance": TOLERANCE, "generator": "tools/golden_vectors.py",
             "save_version": SAVE_VERSION, "cases": cases}
 

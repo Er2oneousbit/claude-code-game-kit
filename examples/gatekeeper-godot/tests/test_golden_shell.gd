@@ -8,13 +8,15 @@
 #           tools/golden_vectors.py builds them (the key is not stored in the JSON); expected values are only ever
 #           read from the JSON.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): display_staging, the Display tab's Apply and its
+#           keep-or-revert confirm, step by step (#308)
 # ---------------------------------------------------------------------------
 extends GutTest
 
 const Golden = preload("res://tests/golden_util.gd")
 const FILE: String = "shell.json"
 const KNOWN_TYPES: PackedStringArray = ["defaults", "settings_load", "rebind", "glyph_set", "glyph_name",
-		"prompt_binding", "save_load", "tr", "plural", "pseudo", "narration"]
+		"prompt_binding", "save_load", "tr", "plural", "pseudo", "narration", "display_staging"]
 const PLURAL_KEY: String = "apples" # as in tools/golden_vectors.py build_shell()
 
 var _file: Dictionary = {}
@@ -154,3 +156,44 @@ func test_pseudo() -> void:
 		for p: Array in c["points"]:
 			_check(I18n.pseudo(p[0]), p[1], "%s %s" % [c["name"], p])
 	_report("pseudo", cases.size())
+
+
+func test_display_staging() -> void:
+	var cases: Array = _cases("display_staging")
+	for c: Dictionary in cases:
+		assert_eq(DisplayStaging.CONFIRM_S, float(c["confirm_s"]), "%s: confirm seconds" % c["name"])
+		var st: DisplayStaging = DisplayStaging.new(c["applied"])
+		for i: int in (c["steps"] as Array).size():
+			var step: Dictionary = c["steps"][i]
+			var op: Array = step["op"]
+			var out: Variant = null
+			var calls: Array = []
+			match str(op[0]):
+				"stage":
+					out = st.stage(str(op[1]), op[2])
+				"apply":
+					calls = st.apply()
+				"tick":
+					calls = st.tick(float(op[1]))
+				"keep":
+					st.keep()
+				"revert":
+					calls = st.revert()
+				"back":
+					var r: Array = st.back()
+					out = r[0]
+					calls = r[1]
+				_:
+					fail_test("%s: unknown op %s" % [c["name"], op])
+			var where: String = "%s step %d %s" % [c["name"], i, op]
+			_check(out, step["out"], where + ": out")
+			_check(calls, step["calls"], where + ": calls")
+			_check(st.pending, step["pending"], where + ": pending")
+			var shown: Dictionary = {}
+			for f: String in DisplayStaging.APPLY_ORDER:
+				shown[f] = st.value(f)
+			_check(shown, step["shown"], where + ": shown")
+			_check(st.applied, step["applied"], where + ": applied")
+			var secs: int = st.seconds()
+			_check(null if secs < 0 else secs, step["seconds"], where + ": seconds")
+	_report("display_staging", cases.size())

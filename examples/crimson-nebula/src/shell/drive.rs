@@ -15,8 +15,13 @@
 //                          (exit 1). Opens a window (it measures the drawn text).
 //           pseudo-plant   the same plus one label too small for its text: must fail and name plant.too_small
 //           bug            presses F8 on the main menu and checks the bug_<time>/ folder: DRIVE_BUG <path>. Window.
-//           show:<screen>  title | main_menu | settings | pause | help | history | credits | subtitle | juice: opens
-//                          it, then ends (add --screenshot; juice lands a hit first). Opens a window.
+//           display        (#308) the Display tab's Apply: stages a window size, Back warns, Apply sets and saves it
+//                          and opens the confirm, which reverts by itself after 15 REAL seconds; then two Backs
+//                          discard a staged change. DRIVE_DISPLAY lines (staged, warned, applied, reverted,
+//                          discarded). Headless.
+//           show:<screen>  title | main_menu | settings | pause | help | history | credits | subtitle | juice | apply
+//                          (a Display change waiting) | confirm (Keep these display settings?): opens it, then ends
+//                          (add --screenshot; juice lands a hit first). Opens a window.
 //           access[:opts]  the accessibility sweep's tour (tools/access/sweep.py): res=WxH, scale=N, pad, read.
 //                          Opens a window (it measures the drawn text).
 // Notes   : A scenario is a list of steps; each step runs once a frame until it reports done, and every step has a
@@ -30,6 +35,8 @@
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): crash, pseudo, pseudo-plant, bug and show:juice;
 //           the access tour visits the juice demo in debug builds (#275)
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a failed drive's screenshot (#276)
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): display, show:apply, show:confirm; the pseudo drive
+//           checks the Display tab with a change waiting and the confirm (#308)
 // ---------------------------------------------------------------------------
 use std::collections::{BTreeMap, VecDeque};
 
@@ -42,6 +49,7 @@ use super::view::AccessReport;
 use super::{ScreenName, Shell};
 use crate::app::Smoke;
 use crate::logic::bindings;
+use crate::logic::display_staging;
 
 // ---- Tunables ------------------------------------------------------------------
 /// Frames after each injected press.
@@ -61,7 +69,11 @@ const SLIDER_EPS: f64 = 1e-6;
 /// before the picture (still inside the hitstop, the flash and the ring).
 const JUICE_HIT_FRAME: u32 = 40;
 const JUICE_SHOT_FRAMES: u32 = 1;
-pub const SHOW_TARGETS: [&str; 9] = [
+/// display: the confirm must revert within this many seconds of its 15 real ones.
+const REAL_SLACK_S: f64 = 2.0;
+/// display: a frame sleeps this long while the confirm counts down (headless frames are not throttled).
+const REAL_WAIT_MS: u64 = 10;
+pub const SHOW_TARGETS: [&str; 11] = [
     "title",
     "main_menu",
     "settings",
@@ -71,8 +83,10 @@ pub const SHOW_TARGETS: [&str; 9] = [
     "credits",
     "subtitle",
     "juice",
+    "apply",
+    "confirm",
 ];
-pub const SCENARIOS: [&str; 6] = ["menus", "crash", "pseudo", "pseudo-plant", "bug", "access"];
+pub const SCENARIOS: [&str; 7] = ["menus", "crash", "pseudo", "pseudo-plant", "bug", "display", "access"];
 /// Drives that measure or picture the drawn screen, so they open a window.
 const WINDOW_SCENARIOS: [&str; 4] = ["pseudo", "pseudo-plant", "bug", "access"];
 const ACCESS_ACTIONS: [&str; 7] = [
@@ -562,6 +576,7 @@ fn scenario(d: &mut Drive) -> Result<(), String> {
         "pseudo" => pseudo(d, false),
         "pseudo-plant" => pseudo(d, true),
         "bug" => bug(d),
+        "display" => display(d),
         _ if name.starts_with("show:") => show(d, &name[5..]),
         _ if name == "access" || name.starts_with("access:") => access(d, name.strip_prefix("access:").unwrap_or(""))?,
         _ => return validate(&name),
@@ -666,6 +681,18 @@ fn pseudo(d: &mut Drive, plant: bool) {
         d.press("ui_down");
         d.focus(&format!("{tab}.back")); // scrolled to the end: the rows below the fold
         d.check(&format!("settings.{tab}.end"));
+        if tab == "display" {
+            // #308: Apply enabled with a change waiting, then the confirm; cancel reverts it at once
+            stage_resolution(d);
+            d.check("settings.display.pending");
+            d.focus("display.apply");
+            d.press("ui_accept");
+            d.wait_for("the display confirm", WAIT_LIMIT, |world| {
+                world.resource::<Shell>().staging.confirming()
+            });
+            d.check("settings.confirm");
+            d.press("ui_cancel");
+        }
         if tab == "controls" {
             d.focus("controls.bind_jump");
             d.press("ui_accept"); // the "press a key" prompt
@@ -734,6 +761,142 @@ fn pseudo(d: &mut Drive, plant: bool) {
         }
         Ok(())
     });
+}
+
+// ---- The Display tab's Apply (#308) --------------------------------------------------------------------------
+/// Seconds since the epoch on the wall clock (the drive's steps share it through `scratch`).
+fn wall_now() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0.0, |t| t.as_secs_f64())
+}
+
+/// settings.display.resolution as settings.json holds it on disk (Null when unreadable).
+fn saved_resolution(world: &World) -> Value {
+    let path = world.resource::<Shell>().store.settings_path();
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .map_or(Value::Null, |v| v["display"]["resolution"].clone())
+}
+
+/// Settings, Display tab: the window size row one step right (a staged change; Apply is enabled now).
+fn stage_resolution(d: &mut Drive) {
+    d.open_tab("display");
+    d.press("ui_down");
+    d.focus("display.resolution");
+    d.press("ui_right");
+}
+
+/// display: stage a window size, Back warns, Apply sets and saves it and opens the confirm, nobody answers and it
+/// reverts on the wall clock (a smoke run steps the game's clock one fixed tick per frame, however fast the frames
+/// go: the time it took proves it counts real seconds), then a staged change two Backs discard. Headless.
+fn display(d: &mut Drive) {
+    d.menu_from_title();
+    d.open("settings", ScreenName::Settings);
+    d.run("the window size before", |world, d| {
+        let before = world.resource::<Shell>().settings["display"]["resolution"].clone();
+        d.scratch.insert("before".into(), before);
+        Ok(())
+    });
+    stage_resolution(d);
+    d.run("staged, not applied", |world, d| {
+        let shell = world.resource::<Shell>();
+        let before = d.scratch["before"].clone();
+        let shown = shell.staging.value("resolution");
+        if shown == before || shell.settings["display"]["resolution"] != before {
+            return Err(format!(
+                "the window size row did not stage: shows {shown}, settings hold {}",
+                shell.settings["display"]["resolution"]
+            ));
+        }
+        println!("DRIVE_DISPLAY staged resolution {shown} (settings still {before})");
+        Ok(())
+    });
+    d.press("ui_cancel"); // Back with a change waiting: a warning, not a way out
+    d.run("Back warned", |world, _| {
+        let shell = world.resource::<Shell>();
+        let warning = shell.t("settings.unapplied");
+        let said = shell.message.as_ref().map(|(m, _)| m.clone()).unwrap_or_default();
+        if shell.top_name() != Some(ScreenName::Settings) || said != warning {
+            return Err("Back with an unapplied Display change did not warn".into());
+        }
+        println!("DRIVE_DISPLAY warned: {said}");
+        Ok(())
+    });
+    d.focus("display.apply");
+    d.press("ui_accept");
+    d.run("applied, the confirm open", |world, d| {
+        let saved = saved_resolution(world);
+        let shell = world.resource::<Shell>();
+        let now = shell.settings["display"]["resolution"].clone();
+        let secs = shell.staging.seconds();
+        if secs.is_none() || now == d.scratch["before"] || saved != now || shell.focus_id() != "confirm.keep" {
+            return Err(format!(
+                "Apply did not set, save and confirm the window size (settings {now}, file {saved}, focus {})",
+                shell.focus_id()
+            ));
+        }
+        println!(
+            "DRIVE_DISPLAY applied resolution {now}, confirm {} s, focus on Keep",
+            secs.unwrap_or(0)
+        );
+        d.scratch.insert("applied_at".into(), json!(wall_now()));
+        d.scratch.insert("applied_frame".into(), json!(d.frame));
+        Ok(())
+    });
+    // the wall clock limits this wait, not the frame count: frames sleep a little so they do not spin
+    d.add(
+        "the confirm reverts by itself",
+        u32::MAX,
+        Box::new(|world, d| {
+            if !world.resource::<Shell>().staging.confirming() {
+                return Ok(true);
+            }
+            let waited = wall_now() - d.scratch["applied_at"].as_f64().unwrap_or(0.0);
+            if waited > display_staging::CONFIRM_S + REAL_SLACK_S {
+                return Err(format!(
+                    "the display confirm was still open after {waited:.1} real seconds"
+                ));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(REAL_WAIT_MS));
+            Ok(false)
+        }),
+    );
+    d.run("reverted", |world, d| {
+        let saved = saved_resolution(world);
+        let shell = world.resource::<Shell>();
+        let before = d.scratch["before"].clone();
+        let waited = wall_now() - d.scratch["applied_at"].as_f64().unwrap_or(0.0);
+        let frames = d.frame as i64 - d.scratch["applied_frame"].as_i64().unwrap_or(0);
+        if shell.settings["display"]["resolution"] != before || saved != before {
+            return Err(format!(
+                "the confirm ran out but did not put back {before} (settings {}, file {saved})",
+                shell.settings["display"]["resolution"]
+            ));
+        }
+        if waited < display_staging::CONFIRM_S - REAL_SLACK_S {
+            return Err(format!(
+                "the display confirm reverted after {waited:.1} s: it must count real seconds"
+            ));
+        }
+        println!("DRIVE_DISPLAY reverted to {before} after {waited:.1} s real time ({frames} frames)");
+        Ok(())
+    });
+    stage_resolution(d);
+    d.press("ui_cancel"); // warns
+    d.press("ui_cancel"); // discards and leaves
+    d.wait_screen(ScreenName::MainMenu);
+    d.run("discarded", |world, d| {
+        let saved = saved_resolution(world);
+        let before = d.scratch["before"].clone();
+        if saved != before {
+            return Err(format!("a discarded Display change reached settings.json: {saved}"));
+        }
+        println!("DRIVE_DISPLAY discarded: two Backs left the settings, the file holds {before}");
+        Ok(())
+    });
+    d.done(0);
 }
 
 /// F8 on the main menu, then the report's four files on disk.
@@ -812,6 +975,17 @@ fn show(d: &mut Drive, target: &str) {
         "credits" => {
             d.menu_from_title();
             d.open("credits", ScreenName::Credits);
+            d.frames(5);
+        }
+        "apply" | "confirm" => {
+            // #308: a Display change waiting with Apply focused, or the confirm it opens
+            d.menu_from_title();
+            d.open("settings", ScreenName::Settings);
+            stage_resolution(d);
+            d.focus("display.apply");
+            if target == "confirm" {
+                d.press("ui_accept");
+            }
             d.frames(5);
         }
         "juice" => {

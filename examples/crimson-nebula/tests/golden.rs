@@ -19,6 +19,8 @@
 // Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): audio, music and access vectors
 // Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): the narration cases run too
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the credits_text cases (#284)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display_staging cases, the Display tab's Apply
+//           and its keep-or-revert confirm (logic::display_staging, #308)
 // ---------------------------------------------------------------------------
 use std::path::Path;
 
@@ -27,6 +29,7 @@ use serde_json::{Value, json};
 use project_crimson_nebula::logic::audio_access;
 use project_crimson_nebula::logic::audio_director::{AudioDirector, PlayResult};
 use project_crimson_nebula::logic::coyote::Coyote;
+use project_crimson_nebula::logic::display_staging::{self, DisplayStaging};
 use project_crimson_nebula::logic::flash_limiter::FlashLimiter;
 use project_crimson_nebula::logic::follow::Follow;
 use project_crimson_nebula::logic::hitstop::Hitstop;
@@ -55,7 +58,8 @@ const JUICE_TYPES: [&str; 10] = [
     "squash",
     "flash_limiter",
 ];
-const SHELL_TYPES: [&str; 11] = [
+const SHELL_TYPES: [&str; 12] = [
+    "display_staging",
     "defaults",
     "settings_load",
     "rebind",
@@ -214,6 +218,7 @@ fn check_case(kind: &str, case: &Value, exam: &mut Exam) {
         "plural" => plural(case, exam),
         "pseudo" => pseudo(case, exam),
         "narration" => narration(case, exam),
+        "display_staging" => display_staging_steps(case, exam),
         "audio_director" => audio_director_steps(case, exam),
         "music_grid" => music_grid_steps(case, exam),
         "music_plan" => music_plan_steps(case, exam),
@@ -603,6 +608,61 @@ fn access_arrow_steps(case: &Value, exam: &mut Exam) {
     }
 }
 
+// ---- The Display tab's Apply (#308) --------------------------------------------
+/// Replays a script of [op, args...] steps; after each: out, calls, pending, shown, applied, seconds.
+fn display_staging_steps(case: &Value, exam: &mut Exam) {
+    exam.check("confirm_s", json!(display_staging::CONFIRM_S), &case["confirm_s"]);
+    let mut st = DisplayStaging::new(&case["applied"]);
+    for (n, step) in arr(&case["steps"]).iter().enumerate() {
+        let op = arr(&step["op"]);
+        let (mut out, mut calls) = (Value::Null, Vec::new());
+        match s(&op[0]) {
+            "stage" => out = json!(st.stage(s(&op[1]), op[2].clone())),
+            "apply" => calls = st.apply(),
+            "tick" => calls = st.tick(f(&op[1])),
+            "keep" => st.keep(),
+            "revert" => calls = st.revert(),
+            "back" => {
+                let (what, c) = st.back();
+                out = json!(what.as_str());
+                calls = c;
+            }
+            other => {
+                exam.fail(format!("step {n}: unknown op {other:?}"));
+                continue;
+            }
+        }
+        let shown: serde_json::Map<String, Value> = display_staging::APPLY_ORDER
+            .iter()
+            .map(|f| (f.to_string(), st.value(f)))
+            .collect();
+        let got = json!({
+            "out": out,
+            "calls": calls.into_iter().map(|(f, v)| json!([f, v])).collect::<Vec<_>>(),
+            "pending": st.pending(),
+            "shown": shown,
+            "applied": st.applied(),
+            "seconds": st.seconds(),
+        });
+        let want = json!({
+            "out": step["out"], "calls": step["calls"], "pending": step["pending"], "shown": step["shown"],
+            "applied": step["applied"], "seconds": step["seconds"],
+        });
+        exam.check(&format!("step {n} {}", step["op"]), got, &want);
+    }
+}
+
+#[test]
+fn shell_display_staging_has_every_script() {
+    // the five Apply scripts of the reference: a filter typo must not pass with none run
+    let doc = load(SHELL);
+    let n = arr(&doc["cases"])
+        .iter()
+        .filter(|c| c["type"] == "display_staging")
+        .count();
+    assert!(n >= 5, "{SHELL} has {n} display_staging cases, the reference writes 5");
+}
+
 // ---- Credits -------------------------------------------------------------------
 fn strip_comments(case: &Value, exam: &mut Exam) {
     for p in arr(&case["points"]) {
@@ -707,6 +767,7 @@ golden! {
     shell_plural: SHELL, "plural";
     shell_pseudo: SHELL, "pseudo";
     shell_narration: SHELL, "narration";
+    shell_display_staging: SHELL, "display_staging";
     audio_director: AUDIO, "audio_director";
     music_grid: MUSIC, "music_grid";
     music_plan: MUSIC, "music_plan";

@@ -28,6 +28,8 @@
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): F8 (the bug report), the juice demo's HUD, the
 //           pseudo-locale label check and the planted label of --drive pseudo-plant (#275)
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): no real input while a drive runs (#276)
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): disabled rows dim, the Display tab's hint, the
+//           "Keep these display settings?" confirm (#308); text sizes through HudScale (#309)
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): Fira Mono in full instead of Bevy's ASCII subset,
 //           a font stack behind the readable font, missing glyphs fail the pseudo check
 // ---------------------------------------------------------------------------
@@ -285,7 +287,8 @@ struct Style {
 impl Style {
     fn from(shell: &Shell, fonts: &Fonts) -> Style {
         Style {
-            scale: shell.num("access", "text_scale") as f32,
+            // a bevy_ui text's share of the player's HUD text size (#309): text_scale here, ui_scale through UiScale
+            scale: super::HudScale::from_settings(&shell.settings).ui_font_px(1.0),
             readable: shell.flag("access", "readable_font"),
             line_spacing: shell.num("access", "line_spacing") as f32,
             default: fonts.regular.clone(),
@@ -417,7 +420,8 @@ fn spawn_row(
                 ..default()
             },))
                 .with_children(|l| {
-                    label(l, style, &id, &text, BODY_PX, TEXT, false, Some(bg), &[], clip);
+                    let fg = if row.enabled { TEXT } else { DIM }; // a disabled row (Apply with nothing waiting)
+                    label(l, style, &id, &text, BODY_PX, fg, false, Some(bg), &[], clip);
                 });
             match row.kind {
                 RowKind::Button => {}
@@ -762,11 +766,46 @@ fn spawn_settings(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shel
         max_h,
         (win.x - 40.0).min(LIST_MAX_W),
     );
+    // the Display tab says its changes wait for Apply (#308); a message (Back's warning) beats both hints
     let (hint, colour) = match &shell.message {
         Some((m, _)) => (m.clone(), ACCENT),
+        None if TABS[top.tab.min(TABS.len() - 1)] == "display" => (shell.t("settings.display_hint"), DIM),
         None => (shell.t("settings.hint"), DIM),
     };
     bottom_hint(parent, style, "settings.hint", &hint, colour);
+    if let Some(secs) = shell.staging.seconds() {
+        // "Keep these display settings? Reverting in N s", Keep focused when it opens (#308)
+        let question = shell.t_args("settings.confirm", &[("secs", &secs.to_string())]);
+        let rows = screens::confirm_rows(shell);
+        let width = 640.0_f32.min(win.x - 40.0);
+        parent.spawn(full_screen(OVERLAY)).with_children(|o| {
+            o.spawn(panel(Val::Px(width), PANEL)).with_children(|p| {
+                label(
+                    p,
+                    style,
+                    "settings.confirm",
+                    &question,
+                    BODY_PX,
+                    TEXT,
+                    false,
+                    Some(PANEL),
+                    &[],
+                    None,
+                );
+                spawn_list(
+                    p,
+                    style,
+                    shell,
+                    &rows,
+                    "settings.confirm.",
+                    Some(shell.confirm_focus),
+                    0,
+                    style.row_h() * 3.0 + PANEL_PAD * 2.0,
+                    width - 40.0,
+                );
+            });
+        });
+    }
     if let Some((action, slot)) = &shell.capturing {
         let key = if *slot == 0 {
             "controls.press_key"
@@ -833,6 +872,8 @@ fn spawn_menu(
     );
 }
 
+/// The play screen's HUD: its text follows the player's HUD text size (#309) through Style (HudScale::ui_font_px,
+/// UiScale for ui_scale). A game HUD of its own reads Res<HudScale> the same way and re-lays out on is_changed().
 fn spawn_play_hud(parent: &mut ChildSpawnerCommands, style: &Style, shell: &Shell) {
     let (_, pause_label) = shell.prompt("pause");
     let text = format!("{pause_label}: {}", shell.t("hint.pause"));

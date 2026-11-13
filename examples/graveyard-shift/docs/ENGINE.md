@@ -64,6 +64,14 @@ ProjectSettings/         project config (text, edit with care)
   keep in step; the panel theme is Unity's default runtime theme (`Assets/Resources/GameKit/GameKitTheme.tss`).
 - Settings rows come from `GameSettings.Fields(section)` (the schema): a new field needs its `setting.<section>.<field>`
   string in `data/i18n/en.json` (and `value.<field>.<choice>` for a choice) and shows up on its tab.
+- The Display tab waits for Apply (#308): its rows stage through `DisplayStaging` (`Assets/Scripts/Core/`, held to
+  `data/golden/shell.json`), Apply sets the changed fields through `Shell.SetValue` (mode before resolution) and saves,
+  and a new window mode or size asks "Keep these display settings?", putting the old values back after 15 real seconds
+  (a Stopwatch: paused games and `Time.timeScale` do not stop it). Back with a change waiting warns once. The other
+  tabs apply at once. `smoke --drive display` runs it; `show:apply` and `show:confirm` photograph it.
+- A game HUD's text size (#309): `Shell.I.HudFontSize(basePx)` (`HudScale.FontSize`, `display.ui_scale` times
+  `access.text_scale`, `Assets/Scripts/Core/HudScale.cs`) and the `Shell.I.HudScaleChanged` event; `PlayWorld`'s hint
+  line uses both. The shell's own menus size text by `access.text_scale` only (`UiTheme.Px`).
 - The accessibility baseline (SOP-20) is in place: subtitles (size, background, speaker names, barks, captions,
   wait-for-accept), text scale, the readable font and line spacing, the colour-blind palette (`Shell.I.Palette()`,
   `data/access/colours.json`), remapping with conflict swaps and the one-handed layouts, reduce motion and the flash

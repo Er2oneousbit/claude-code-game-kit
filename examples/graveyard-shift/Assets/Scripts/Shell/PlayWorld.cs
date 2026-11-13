@@ -9,10 +9,13 @@
 //           drawn under the screens; the camera's own picture is behind it (the layer is see-through).
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a ShellWorld (the juice demo is the other one, #275)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the hint line follows ui_scale and text_scale through
+//           HudScale and Shell.HudScaleChanged (#309)
 // ---------------------------------------------------------------------------
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
+using graveyard_shift.Core;
 
 namespace graveyard_shift.Shell
 {
@@ -22,6 +25,7 @@ namespace graveyard_shift.Shell
         public const float INTRO_DELAY_S = 0.5f;       // game seconds before the sample line plays
         public const string INTRO_LINE = "guide.intro";
         public static readonly string[] HINT_ACTIONS = { "move_left", "move_right", "jump", "attack", "interact", "pause" };
+        public const int HUD_PX = UiTheme.BODY_PX;     // the hint line's size at ui_scale 1 and text_scale 1
 
         private readonly FrontEnd _front;
         private VisualElement _root;
@@ -64,15 +68,24 @@ namespace graveyard_shift.Shell
             _hint.style.top = 12;
             _hint.style.right = 16;
             _root.Add(_hint);
+            SizeHud(HudScale.Factor(s.Settings));
             RefreshHint();
             _root.Add(Subtitles.Root);
             s.SetObjective(s.T("demo.objective"));
             s.SettingsChanged += OnSettingsChanged;
+            s.HudScaleChanged += SizeHud;
             ShellInput.DeviceChanged += OnDevice;
+        }
+
+        /// <summary>The HUD's text at the player's size (ui_scale * text_scale, #309): HudScale is the helper.</summary>
+        private void SizeHud(double factor)
+        {
+            _hint.style.fontSize = Shell.I.HudFontSize(HUD_PX);
         }
 
         public override void Dispose()
         {
+            Shell.I.HudScaleChanged -= SizeHud;
             Shell.I.SettingsChanged -= OnSettingsChanged;
             ShellInput.DeviceChanged -= OnDevice;
             _root?.RemoveFromHierarchy();

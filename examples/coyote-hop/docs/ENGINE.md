@@ -136,6 +136,17 @@ tools/                   dev.py and helpers
     on 2026-11-11 while a Unity editor and other tests ran; the third passed). `dev.py` then says "Godot crashed
     after N recipe(s)" or "before drawing a recipe": rerun it, or use `check --no-shaders` and let
     `smoke --shaders` cover them later. "It needs a window" means nothing was drawn and Godot did not crash.
+13. **The editor rewrites `project.godot`.** Whenever it saves the project settings (`ProjectSettings.save()`, the
+    first open, any Project Settings change), Godot drops every comment and every key left at its default value, and
+    sets `config/features` to the editor's own version (4.6 in the template, the kit's floor, becomes your 4.x: that is
+    fine). So keep explanations here, never as comments in `project.godot`, and never rely on a default being written
+    there: read a setting with `ProjectSettings.get_setting(name, default)`, and a tool that parses the file must treat
+    a missing key as Godot's default (the Dotwork screens lane reads a missing viewport size as 1152x648). What the
+    template sets, and why: a 640x360 viewport with a 1920x1080 window, stretch `viewport`, aspect `expand`, scale
+    mode `integer` and Nearest filtering with 2D snapping (gotcha 7); `audio/general/text_to_speech` on for menu
+    narration; `untyped_declaration` as a warning (typed GDScript); the `Log` and `Shell` autoloads. None of them is a
+    default, so the editor keeps them. Checked on 4.7.2 (2026-11-13): a save kept every one of them and dropped a
+    `physics_ticks_per_second=60` (the default) a game had written out.
 
 ## Generated or binary (do not hand-edit)
 `.godot/`, `*.import`, `*.uid` (commit, but do not edit), exported builds in `build/`, `*.translation`,

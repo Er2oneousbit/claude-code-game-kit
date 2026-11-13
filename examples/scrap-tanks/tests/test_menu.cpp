@@ -9,6 +9,8 @@
 // Notes   : No SDL: the rows are driven with the ui_* action names a player's key or button turns into.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits lines follow the shared rule (#284)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply and its confirm (#308), the
+//           HUD text factor and its watch (#309)
 // ---------------------------------------------------------------------------
 #include <doctest/doctest.h>
 
@@ -18,6 +20,7 @@
 #include <nlohmann/json.hpp>
 
 #include "core/Bindings.hpp"
+#include "core/HudScale.hpp"
 #include "core/Menu.hpp"
 #include "core/Settings.hpp"
 #include "core/ShellLogic.hpp"
@@ -37,6 +40,7 @@ struct Harness {
     std::vector<std::string> captured;
     std::vector<std::string> said;
     bool closed = false;
+    int saves = 0;
     core::SettingsHooks hooks;
 
     Harness() {
@@ -53,6 +57,7 @@ struct Harness {
         hooks.locales = [] { return std::vector<std::string>{"en", "fr"}; };
         hooks.binding_label = [](const std::string& b, std::size_t) { return b; };
         hooks.close = [this] { closed = true; };
+        hooks.save = [this] { ++saves; };
         hooks.presets = json::parse(R"({"presets": {"one_hand_left": {"bindings": {
             "ui_accept": ["key:space", "pad:l1"], "attack": ["key:f", "pad:l2"], "jump": ["key:space", "pad:l1"]}},
             "one_hand_right": {"bindings": {"attack": ["key:u", "pad:r2"]}}}})");
@@ -187,6 +192,14 @@ TEST_CASE("every field of the settings schema has a row that changes it") {
             REQUIRE_MESSAGE(menu.list().focus(field), where << " has no row");
             const json old = h.settings[section][field];
             menu.action("ui_right");
+            if (section == "display") {            // Display waits for Apply (#308)
+                if (menu.staging().value(field) == old) {
+                    menu.action("ui_left");
+                }
+                CHECK_MESSAGE(h.settings[section][field] == old, where << " changed before Apply");
+                menu.apply_display();
+                menu.keep_display();
+            }
             if (h.settings[section][field] == old) {
                 menu.action("ui_left");            // a slider already at its top end
             }
@@ -222,16 +235,126 @@ TEST_CASE("display rows show resolutions and frame caps as choices") {
     menu.open_tab("display", "resolution");
     CHECK(menu.list().focused()->value() == "value.resolution h=1080 w=1920");   // args in key order
     menu.action("ui_right");
-    CHECK(h.settings["display"]["resolution"] == json::array({2560, 1440}));
+    CHECK(menu.list().focused()->value() == "value.resolution h=1440 w=2560");   // the staged value shows
     menu.list().focus("frame_cap");
     CHECK(menu.list().focused()->value() == "opt.frame_cap.0");
     menu.action("ui_right");
-    CHECK(h.settings["display"]["frame_cap"] == 30);
     CHECK(menu.list().focused()->value() == "value.fps n=30");
+    CHECK(menu.apply_display());                                                  // a new size: the confirm
+    menu.keep_display();
+    CHECK(h.settings["display"]["resolution"] == json::array({2560, 1440}));
+    CHECK(h.settings["display"]["frame_cap"] == 30);
     menu.list().focus("ui_scale");
     CHECK(menu.list().focused()->value() == "value.times n=1");
     menu.open_tab("audio", "master");
     CHECK(menu.list().focused()->value() == "value.percent n=100");
+}
+
+// ---- The Display tab's Apply (#308) ------------------------------------------------------------------------
+TEST_CASE("a Display change waits for Apply while the other tabs apply at once") {
+    Harness h;
+    core::SettingsMenu menu(h.settings, h.hooks);
+    menu.open_tab("display", "vsync");
+    REQUIRE(menu.list().focus("apply"));
+    CHECK_FALSE(menu.list().focused()->is_enabled());     // nothing waits: Apply is disabled
+    menu.list().focus("vsync");
+    menu.action("ui_accept");
+    CHECK(h.settings["display"]["vsync"] == true);         // not applied yet
+    CHECK(h.changed.empty());
+    CHECK(menu.list().focused()->value() == "value.off");  // the row shows the staged value
+    menu.open_tab("audio", "master");
+    menu.action("ui_left");
+    CHECK(h.settings["audio"]["master"].get<double>() == doctest::Approx(0.9));   // live
+    menu.open_tab("display", "apply");
+    REQUIRE(menu.list().focused()->is_enabled());
+    menu.action("ui_accept");
+    CHECK(h.settings["display"]["vsync"] == false);
+    CHECK(h.saves == 1);                                   // Apply saves
+    CHECK_FALSE(menu.confirming());                        // vsync alone asks nothing
+    CHECK(menu.focus_id() == "display.back");              // Apply is disabled again: focus moved on
+}
+
+TEST_CASE("a new window size asks to keep it; the real-time countdown puts back what Apply replaced") {
+    Harness h;
+    core::SettingsMenu menu(h.settings, h.hooks);
+    menu.open_tab("display", "resolution");
+    menu.action("ui_left");                                // 1600x900
+    menu.list().focus("mode");
+    menu.action("ui_right");                               // fullscreen
+    CHECK(menu.apply_display());
+    CHECK(h.settings["display"]["mode"] == "fullscreen");
+    CHECK(h.settings["display"]["resolution"] == json::array({1600, 900}));
+    CHECK(menu.focus_id() == "confirm.keep");              // focus on Keep
+    CHECK(menu.staging().seconds() == 15);
+    menu.action("ui_right");                               // the confirm takes every press: no row changes
+    CHECK(menu.staging().pending().empty());
+    menu.tick(14.5);
+    CHECK(menu.confirming());
+    CHECK(menu.staging().seconds() == 1);
+    menu.tick(0.5);                                        // ran out: reverted and saved again
+    CHECK_FALSE(menu.confirming());
+    CHECK(h.settings["display"]["mode"] == "windowed");
+    CHECK(h.settings["display"]["resolution"] == json::array({1920, 1080}));
+    CHECK(h.saves == 2);
+}
+
+TEST_CASE("Keep confirms, Revert and cancel put the old values back") {
+    Harness h;
+    core::SettingsMenu menu(h.settings, h.hooks);
+    menu.open_tab("display", "resolution");
+    menu.action("ui_left");
+    menu.apply_display();
+    menu.action("ui_accept");                              // Keep
+    CHECK_FALSE(menu.confirming());
+    menu.tick(30);
+    CHECK(h.settings["display"]["resolution"] == json::array({1600, 900}));
+    menu.open_tab("display", "resolution");
+    menu.action("ui_right");
+    menu.apply_display();
+    menu.action("ui_down");                                // Revert
+    CHECK(menu.focus_id() == "confirm.revert");
+    menu.action("ui_accept");
+    CHECK(h.settings["display"]["resolution"] == json::array({1600, 900}));
+    menu.open_tab("display", "resolution");
+    menu.action("ui_right");
+    menu.apply_display();
+    menu.action("ui_cancel");                              // Back during the confirm reverts and stays
+    CHECK(h.settings["display"]["resolution"] == json::array({1600, 900}));
+    CHECK_FALSE(h.closed);
+}
+
+TEST_CASE("Back with unapplied Display changes warns once, then discards them") {
+    Harness h;
+    core::SettingsMenu menu(h.settings, h.hooks);
+    menu.open_tab("display", "ui_scale");
+    menu.action("ui_right");
+    menu.open_tab("audio", "back");                        // Back from any tab
+    menu.action("ui_accept");
+    CHECK_FALSE(h.closed);
+    REQUIRE(h.said.size() == 1);
+    CHECK(h.said[0] == "settings.unapplied");
+    menu.action("ui_cancel");
+    CHECK(h.closed);
+    CHECK(h.settings["display"]["ui_scale"].get<double>() == doctest::Approx(1.0));
+    CHECK(h.saves == 0);
+}
+
+// ---- A game HUD's text size (#309) -------------------------------------------------------------------------
+TEST_CASE("the HUD text factor is ui_scale times text_scale and the watch hears it change") {
+    json s = core::default_settings();
+    CHECK(core::hud_text_scale(s) == doctest::Approx(1.0));
+    core::HudScaleWatch watch;
+    CHECK(watch.update(s));                                // the first frame: lay out once
+    CHECK_FALSE(watch.update(s));
+    s["access"]["text_scale"] = 1.5;                       // live, from the Accessibility tab
+    CHECK(watch.update(s));
+    CHECK(watch.scale() == doctest::Approx(1.5));
+    s["display"]["ui_scale"] = 2.0;                        // on the Display tab's Apply
+    CHECK(watch.update(s));
+    CHECK(watch.scale() == doctest::Approx(3.0));
+    s["audio"]["master"] = 0.2;                            // anything else: no change
+    CHECK_FALSE(watch.update(s));
+    CHECK(core::hud_text_scale(json::object()) == doctest::Approx(1.0));   // missing fields: 1.0 each
 }
 
 TEST_CASE("controls rows rebind through the shell and reset to the defaults") {

@@ -22,6 +22,12 @@
 
   "settings.title": "Settings",
   "settings.back": "Back",
+  "settings.apply": "Apply",
+  "settings.keep": "Keep",
+  "settings.revert": "Revert",
+  "settings.display_hint": "Display changes wait for Apply. Everything else applies right away.",
+  "settings.confirm": "Keep these display settings? Reverting in {secs} s",
+  "settings.unapplied": "Display changes not applied. Back again discards them.",
   "settings.hint": "Left / right: change   Enter: select   Esc: back (saves)",
   "settings.tab.display": "Display",
   "settings.tab.audio": "Audio",

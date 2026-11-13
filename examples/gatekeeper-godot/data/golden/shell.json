@@ -3489,6 +3489,1182 @@
     ]
    ],
    "type": "pseudo"
+  },
+  {
+   "applied": {
+    "frame_cap": 0,
+    "mode": "windowed",
+    "resolution": [
+     1920,
+     1080
+    ],
+    "ui_scale": 1.0,
+    "vsync": true
+   },
+   "confirm_s": 15.0,
+   "name": "vsync applies without a confirm",
+   "steps": [
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "stage",
+      "vsync",
+      false
+     ],
+     "out": "staged",
+     "pending": {
+      "vsync": false
+     },
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": false
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": false
+     },
+     "calls": [
+      [
+       "vsync",
+       false
+      ]
+     ],
+     "op": [
+      "apply"
+     ],
+     "out": null,
+     "pending": {},
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": false
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": false
+     },
+     "calls": [],
+     "op": [
+      "back"
+     ],
+     "out": "leave",
+     "pending": {},
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": false
+     }
+    }
+   ],
+   "type": "display_staging"
+  },
+  {
+   "applied": {
+    "frame_cap": 0,
+    "mode": "windowed",
+    "resolution": [
+     1920,
+     1080
+    ],
+    "ui_scale": 1.0,
+    "vsync": true
+   },
+   "confirm_s": 15.0,
+   "name": "mode and resolution: applied in order, kept",
+   "steps": [
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "stage",
+      "resolution",
+      [
+       1280,
+       720
+      ]
+     ],
+     "out": "staged",
+     "pending": {
+      "resolution": [
+       1280,
+       720
+      ]
+     },
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1280,
+       720
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "stage",
+      "mode",
+      "fullscreen"
+     ],
+     "out": "staged",
+     "pending": {
+      "mode": "fullscreen",
+      "resolution": [
+       1280,
+       720
+      ]
+     },
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "fullscreen",
+      "resolution": [
+       1280,
+       720
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "fullscreen",
+      "resolution": [
+       1280,
+       720
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [
+      [
+       "mode",
+       "fullscreen"
+      ],
+      [
+       "resolution",
+       [
+        1280,
+        720
+       ]
+      ]
+     ],
+     "op": [
+      "apply"
+     ],
+     "out": null,
+     "pending": {},
+     "seconds": 15,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "fullscreen",
+      "resolution": [
+       1280,
+       720
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "fullscreen",
+      "resolution": [
+       1280,
+       720
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "tick",
+      0.5
+     ],
+     "out": null,
+     "pending": {},
+     "seconds": 15,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "fullscreen",
+      "resolution": [
+       1280,
+       720
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "fullscreen",
+      "resolution": [
+       1280,
+       720
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "tick",
+      4.0
+     ],
+     "out": null,
+     "pending": {},
+     "seconds": 11,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "fullscreen",
+      "resolution": [
+       1280,
+       720
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "fullscreen",
+      "resolution": [
+       1280,
+       720
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "stage",
+      "vsync",
+      false
+     ],
+     "out": "busy",
+     "pending": {},
+     "seconds": 11,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "fullscreen",
+      "resolution": [
+       1280,
+       720
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "fullscreen",
+      "resolution": [
+       1280,
+       720
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "keep"
+     ],
+     "out": null,
+     "pending": {},
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "fullscreen",
+      "resolution": [
+       1280,
+       720
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "fullscreen",
+      "resolution": [
+       1280,
+       720
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "back"
+     ],
+     "out": "leave",
+     "pending": {},
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "fullscreen",
+      "resolution": [
+       1280,
+       720
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    }
+   ],
+   "type": "display_staging"
+  },
+  {
+   "applied": {
+    "frame_cap": 0,
+    "mode": "windowed",
+    "resolution": [
+     1920,
+     1080
+    ],
+    "ui_scale": 1.0,
+    "vsync": true
+   },
+   "confirm_s": 15.0,
+   "name": "the countdown runs out and reverts",
+   "steps": [
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "stage",
+      "mode",
+      "borderless"
+     ],
+     "out": "staged",
+     "pending": {
+      "mode": "borderless"
+     },
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "borderless",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "stage",
+      "frame_cap",
+      60
+     ],
+     "out": "staged",
+     "pending": {
+      "frame_cap": 60,
+      "mode": "borderless"
+     },
+     "seconds": null,
+     "shown": {
+      "frame_cap": 60,
+      "mode": "borderless",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 60,
+      "mode": "borderless",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [
+      [
+       "mode",
+       "borderless"
+      ],
+      [
+       "frame_cap",
+       60
+      ]
+     ],
+     "op": [
+      "apply"
+     ],
+     "out": null,
+     "pending": {},
+     "seconds": 15,
+     "shown": {
+      "frame_cap": 60,
+      "mode": "borderless",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 60,
+      "mode": "borderless",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "tick",
+      10.0
+     ],
+     "out": null,
+     "pending": {},
+     "seconds": 5,
+     "shown": {
+      "frame_cap": 60,
+      "mode": "borderless",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 60,
+      "mode": "borderless",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "tick",
+      4.5
+     ],
+     "out": null,
+     "pending": {},
+     "seconds": 1,
+     "shown": {
+      "frame_cap": 60,
+      "mode": "borderless",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [
+      [
+       "mode",
+       "windowed"
+      ],
+      [
+       "frame_cap",
+       0
+      ]
+     ],
+     "op": [
+      "tick",
+      0.5
+     ],
+     "out": null,
+     "pending": {},
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "tick",
+      1.0
+     ],
+     "out": null,
+     "pending": {},
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    }
+   ],
+   "type": "display_staging"
+  },
+  {
+   "applied": {
+    "frame_cap": 0,
+    "mode": "windowed",
+    "resolution": [
+     1920,
+     1080
+    ],
+    "ui_scale": 1.0,
+    "vsync": true
+   },
+   "confirm_s": 15.0,
+   "name": "revert and back during the confirm",
+   "steps": [
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "stage",
+      "resolution",
+      [
+       1600,
+       900
+      ]
+     ],
+     "out": "staged",
+     "pending": {
+      "resolution": [
+       1600,
+       900
+      ]
+     },
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1600,
+       900
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1600,
+       900
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [
+      [
+       "resolution",
+       [
+        1600,
+        900
+       ]
+      ]
+     ],
+     "op": [
+      "apply"
+     ],
+     "out": null,
+     "pending": {},
+     "seconds": 15,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1600,
+       900
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [
+      [
+       "resolution",
+       [
+        1920,
+        1080
+       ]
+      ]
+     ],
+     "op": [
+      "revert"
+     ],
+     "out": null,
+     "pending": {},
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "stage",
+      "mode",
+      "fullscreen"
+     ],
+     "out": "staged",
+     "pending": {
+      "mode": "fullscreen"
+     },
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "fullscreen",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "fullscreen",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [
+      [
+       "mode",
+       "fullscreen"
+      ]
+     ],
+     "op": [
+      "apply"
+     ],
+     "out": null,
+     "pending": {},
+     "seconds": 15,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "fullscreen",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [
+      [
+       "mode",
+       "windowed"
+      ]
+     ],
+     "op": [
+      "back"
+     ],
+     "out": "revert",
+     "pending": {},
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "back"
+     ],
+     "out": "leave",
+     "pending": {},
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    }
+   ],
+   "type": "display_staging"
+  },
+  {
+   "applied": {
+    "frame_cap": 0,
+    "mode": "windowed",
+    "resolution": [
+     1920,
+     1080
+    ],
+    "ui_scale": 1.0,
+    "vsync": true
+   },
+   "confirm_s": 15.0,
+   "name": "staging the applied value drops it; back warns once, then discards",
+   "steps": [
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "stage",
+      "ui_scale",
+      1.5
+     ],
+     "out": "staged",
+     "pending": {
+      "ui_scale": 1.5
+     },
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.5,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "stage",
+      "ui_scale",
+      1.0
+     ],
+     "out": "staged",
+     "pending": {},
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "stage",
+      "vsync",
+      false
+     ],
+     "out": "staged",
+     "pending": {
+      "vsync": false
+     },
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": false
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "back"
+     ],
+     "out": "warn",
+     "pending": {
+      "vsync": false
+     },
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": false
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "stage",
+      "frame_cap",
+      30
+     ],
+     "out": "staged",
+     "pending": {
+      "frame_cap": 30,
+      "vsync": false
+     },
+     "seconds": null,
+     "shown": {
+      "frame_cap": 30,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": false
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "back"
+     ],
+     "out": "warn",
+     "pending": {
+      "frame_cap": 30,
+      "vsync": false
+     },
+     "seconds": null,
+     "shown": {
+      "frame_cap": 30,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": false
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "back"
+     ],
+     "out": "leave",
+     "pending": {},
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    },
+    {
+     "applied": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     },
+     "calls": [],
+     "op": [
+      "apply"
+     ],
+     "out": null,
+     "pending": {},
+     "seconds": null,
+     "shown": {
+      "frame_cap": 0,
+      "mode": "windowed",
+      "resolution": [
+       1920,
+       1080
+      ],
+      "ui_scale": 1.0,
+      "vsync": true
+     }
+    }
+   ],
+   "type": "display_staging"
   }
  ],
  "generator": "tools/golden_vectors.py",

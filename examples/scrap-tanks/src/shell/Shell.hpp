@@ -39,11 +39,14 @@
 //           context, F8 bug report, pseudo locale, juice demo screen (#275); data/ found next to the exe when the
 //           working directory has none (game_dir())
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_at_top for show:credits (#284)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply and keep-or-revert confirm,
+//           counted in real time (#308); hud_scale() and play.hud_scale_changed for a game HUD (#309)
 // ---------------------------------------------------------------------------
 #pragma once
 
 #include <SDL3/SDL.h>
 
+#include <chrono>
 #include <condition_variable>
 #include <deque>
 #include <filesystem>
@@ -61,6 +64,7 @@
 #include <nlohmann/json.hpp>
 
 #include "core/Analog.hpp"
+#include "core/HudScale.hpp"
 #include "core/I18n.hpp"
 #include "core/Menu.hpp"
 #include "core/Report.hpp"
@@ -95,6 +99,8 @@ struct PlayHooks {
     std::function<void(double dt)> update;
     std::function<void(Draw& draw)> draw;
     std::function<bool(const std::string& action)> action;   // true when the game used the action
+    // The player's HUD text factor (ui_scale * text_scale, core/HudScale.hpp) changed, and once at the start (#309)
+    std::function<void(double scale)> hud_scale_changed;
 };
 
 enum class ScreenId { Title, MainMenu, Settings, Credits, Loading, Play, Pause, Help, History, Juice };
@@ -138,6 +144,7 @@ public:
     double access_number(const char* key, double fallback) const;
     double game_speed() const { return access_number("game_speed", 1.0); }
     double timing_scale() const { return access_number("timing_scale", 1.0); }
+    double hud_scale() const;                         // ui_scale * text_scale: what a HUD multiplies text by (#309)
     bool is_down(const std::string& action) const;    // a bound key or button of the action is held (or the stick: move_*)
     // analog input (#274), zero without a pad; core::analog::Vec2 is the kit's own (core/Analog.hpp)
     core::analog::Vec2 stick() const;                 // the left stick: deadzone (radial, rescaled), invert_y; +y down
@@ -203,6 +210,8 @@ private:
     std::optional<Capture> capturing_;
     std::string message_;                 // the settings hint line's message
     double message_t_ = 0.0;
+    std::optional<std::chrono::steady_clock::time_point> real_last_;   // the display confirm counts real time (#308)
+    core::HudScaleWatch hud_watch_;       // play.hud_scale_changed (#309)
     bool asked_consent_ = false;
     bool consent_answered_ = false;
     int dispatch_depth_ = 0;              // inside a screen's action handler: stack changes wait
@@ -292,6 +301,7 @@ private:
     void draw_title(Screen& s);
     void draw_main_menu(Screen& s);
     void draw_settings();
+    void draw_display_confirm(core::SettingsMenu& menu);   // "Keep these display settings?" (#308)
     void draw_credits(const Screen& s);
     void credits_at_top();                // show:credits: the first lines in view (they roll up from below)
     void draw_loading(const Screen& s);

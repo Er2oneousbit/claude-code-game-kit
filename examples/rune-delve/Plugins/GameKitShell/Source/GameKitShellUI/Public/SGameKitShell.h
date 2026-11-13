@@ -18,6 +18,9 @@
 //           A model a drive presses for (bScripted, #276) takes no real keys, sticks or clicks from the widget.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1); analog input, the juice demo and the toast by
 //           Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's hint and the keep-or-revert confirm,
+//           disabled rows dim (#308); the play screen's HUD prompt and every font size through the model's
+//           HudFontSize (#309)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -52,6 +55,9 @@ public:
 	void Rebuild();
 	TSharedRef<FGameKitShellModel> GetModel() const { return Model.ToSharedRef(); }
 
+	/** The settings hint's key: the Display tab says its changes wait for Apply (#308). */
+	static FString SettingsHintKey(const FGameKitScreen& S);
+
 private:
 	TSharedPtr<FGameKitShellModel> Model;
 	TSharedPtr<SDPIScaler> Scaler;
@@ -82,5 +88,7 @@ private:
 	TSharedRef<SWidget> CapturePrompt();
 	TSharedRef<SWidget> JuiceDemo(const FGameKitScreen& S);
 	TSharedRef<SWidget> ToastWidget();
+	TSharedRef<SWidget> PlayHud();            // the play screen's pause prompt, sized by Model->HudFontSize (#309)
+	FString ConfirmText() const;              // "Keep these display settings? Reverting in N s" (#308)
 	FSlateColor BlinkColour() const;
 };

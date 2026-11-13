@@ -18,6 +18,8 @@
 #           When the game has a UI kit theme (<assets_dir>/ui/theme_*.tres, the uikit lane), the screen uses it.
 #           The menu buttons only show; what they do is the game's (the kit's shell wires its own menus).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): a project.godot without the viewport size means
+#           Godot's default 1152x648 (the editor drops default values when it saves the file, #310)
 # ---------------------------------------------------------------------------
 import glob
 import math
@@ -42,11 +44,16 @@ def _hex(h):
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
 
 
+GODOT_DEFAULT_VIEWPORT = (1152, 648)   # what Godot uses when project.godot does not name a size
+
+
 def viewport(project):
-    """(width, height) from project.godot, else 640 x 360."""
+    """(width, height) from project.godot; a key it lacks is Godot's default (the editor never writes a default
+    value, #310); no project.godot at all: the kit's 640 x 360 base."""
     p = os.path.join(project, "project.godot")
     w, h = 640, 360
     if os.path.isfile(p):
+        w, h = GODOT_DEFAULT_VIEWPORT
         with open(p, encoding="utf-8") as f:
             text = f.read()
         mw = re.search(r"^window/size/viewport_width=(\d+)", text, re.M)

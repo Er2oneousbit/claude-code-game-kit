@@ -18,6 +18,8 @@
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): glyph coverage of the shell's font
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the juice demo in a game without the starter's
 //           entities (bare_game_app)
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply, its confirm on real seconds
+//           and Back's warning (#308); HudScale follows text_scale and an applied ui_scale (#309)
 // ---------------------------------------------------------------------------
 use std::path::PathBuf;
 
@@ -38,7 +40,7 @@ use project_crimson_nebula::logic::i18n::pseudo;
 use project_crimson_nebula::shell::display::FrameLimit;
 use project_crimson_nebula::shell::juice::{JUICE_LAYER, JuiceCamera, JuiceStagePlugin};
 use project_crimson_nebula::shell::view::{DEFAULT_FONT, READABLE_FONT, ShellInputPlugin};
-use project_crimson_nebula::shell::{HideUnderJuice, PadAxes, ScreenName, Shell, ShellPlugin};
+use project_crimson_nebula::shell::{HideUnderJuice, HudScale, PadAxes, ScreenName, Shell, ShellPlugin};
 
 /// A data folder of this test's own under the system temp dir, removed when the test ends.
 struct TempDir(PathBuf);
@@ -216,6 +218,178 @@ fn settings_change_with_the_arrows_and_back_saves_them() {
     assert_eq!(file["access"]["reduce_motion"], json!(true));
     assert_eq!(file["access"]["colorblind"], json!("protanopia"));
     assert!((file["audio"]["master"].as_f64().unwrap() - 0.8).abs() < 1e-9);
+}
+
+// ---- The Display tab's Apply (#308) ----------------------------------------------------------------------------
+/// Main menu > Settings, the Display tab's rows.
+fn to_display_rows(app: &mut App) {
+    to_menu(app);
+    focus(app, "settings");
+    press(app, "ui_accept");
+    until_screen(app, ScreenName::Settings);
+    to_tab(app, "display");
+    press(app, "ui_down");
+}
+
+fn row_enabled(app: &App, id: &str) -> bool {
+    shell(app).rows().iter().find(|r| r.id == id).is_some_and(|r| r.enabled)
+}
+
+#[test]
+fn a_display_change_waits_for_apply_while_the_other_tabs_apply_at_once() {
+    let dir = TempDir::new("shell-apply");
+    let mut app = shell_test_app(cfg(&dir), None);
+    to_display_rows(&mut app);
+    assert!(!row_enabled(&app, "apply"), "nothing waits: Apply is disabled");
+    focus(&mut app, "display.vsync");
+    press(&mut app, "ui_accept");
+    assert!(shell(&app).flag("display", "vsync"), "a Display row only stages");
+    assert!(row_enabled(&app, "apply"));
+    let row = shell(&app).rows().into_iter().find(|r| r.id == "vsync").unwrap();
+    assert_eq!(row.value, shell(&app).t("value.off"), "the row shows the staged value");
+    to_tab(&mut app, "audio");
+    press(&mut app, "ui_down");
+    focus(&mut app, "audio.master");
+    press(&mut app, "ui_left");
+    assert!(
+        (shell(&app).num("audio", "master") - 0.9).abs() < 1e-9,
+        "the Audio tab is live"
+    );
+    to_tab(&mut app, "display");
+    press(&mut app, "ui_down");
+    focus(&mut app, "display.apply");
+    press(&mut app, "ui_accept");
+    assert!(!shell(&app).flag("display", "vsync"));
+    assert_eq!(saved(&dir)["display"]["vsync"], json!(false), "Apply saves");
+    assert!(!shell(&app).staging.confirming(), "vsync alone asks nothing");
+    assert_eq!(
+        shell(&app).focus_id(),
+        "display.back",
+        "Apply is disabled again: focus moved on"
+    );
+}
+
+#[test]
+fn a_new_window_size_asks_to_keep_it_and_only_real_seconds_run_the_countdown() {
+    let dir = TempDir::new("shell-confirm");
+    let mut app = shell_test_app(cfg(&dir), None);
+    to_display_rows(&mut app);
+    focus(&mut app, "display.resolution");
+    press(&mut app, "ui_left"); // 1600x900
+    focus(&mut app, "display.apply");
+    press(&mut app, "ui_accept");
+    assert_eq!(shell(&app).settings["display"]["resolution"], json!([1600, 900]));
+    assert_eq!(saved(&dir)["display"]["resolution"], json!([1600, 900]));
+    assert_eq!(shell(&app).focus_id(), "confirm.keep", "focus on Keep");
+    assert_eq!(shell(&app).staging.seconds(), Some(15));
+    // 16 s of game time (the test steps one 1/60 s tick per update) pass in far less real time: still open
+    frames(&mut app, 960);
+    assert!(
+        shell(&app).staging.confirming(),
+        "the confirm counts real seconds, not game time"
+    );
+    press(&mut app, "ui_right"); // the confirm takes every press: no row moves
+    assert!(shell(&app).staging.pending().is_empty());
+    shell_mut(&mut app).tick_display(15.0); // as if the player had walked away
+    assert!(!shell(&app).staging.confirming());
+    assert_eq!(shell(&app).settings["display"]["resolution"], json!([1920, 1080]));
+    assert_eq!(
+        saved(&dir)["display"]["resolution"],
+        json!([1920, 1080]),
+        "the revert is saved too"
+    );
+}
+
+#[test]
+fn keep_confirms_revert_and_back_put_the_old_size_back_and_back_warns_once() {
+    let dir = TempDir::new("shell-keep");
+    let mut app = shell_test_app(cfg(&dir), None);
+    to_display_rows(&mut app);
+    focus(&mut app, "display.resolution");
+    press(&mut app, "ui_left"); // 1600x900
+    focus(&mut app, "display.apply");
+    press(&mut app, "ui_accept");
+    press(&mut app, "ui_accept"); // Keep
+    assert!(!shell(&app).staging.confirming());
+    shell_mut(&mut app).tick_display(30.0);
+    assert_eq!(
+        shell(&app).settings["display"]["resolution"],
+        json!([1600, 900]),
+        "kept"
+    );
+    for how in ["revert", "cancel"] {
+        focus(&mut app, "display.resolution");
+        press(&mut app, "ui_right"); // 1920x1080
+        focus(&mut app, "display.apply");
+        press(&mut app, "ui_accept");
+        if how == "revert" {
+            press(&mut app, "ui_down");
+            assert_eq!(shell(&app).focus_id(), "confirm.revert");
+            press(&mut app, "ui_accept");
+        } else {
+            press(&mut app, "ui_cancel"); // Back during the confirm reverts and stays
+        }
+        assert_eq!(
+            shell(&app).settings["display"]["resolution"],
+            json!([1600, 900]),
+            "{how}"
+        );
+        assert_eq!(shell(&app).top_name(), Some(ScreenName::Settings), "{how}");
+    }
+    // Back with an unapplied change, from another tab: a warning, then a second Back discards it
+    focus(&mut app, "display.ui_scale");
+    press(&mut app, "ui_right");
+    to_tab(&mut app, "audio");
+    press(&mut app, "ui_cancel");
+    assert_eq!(shell(&app).top_name(), Some(ScreenName::Settings));
+    let warning = shell(&app).t("settings.unapplied");
+    assert_eq!(shell(&app).message.as_ref().map(|m| m.0.clone()), Some(warning));
+    press(&mut app, "ui_cancel");
+    until_screen(&mut app, ScreenName::MainMenu);
+    assert_eq!(shell(&app).num("display", "ui_scale"), 1.0);
+    assert_eq!(
+        saved(&dir)["display"]["ui_scale"].as_f64(),
+        Some(1.0),
+        "the discarded change never reached the file"
+    );
+}
+
+// ---- A game HUD's text size (#309) -----------------------------------------------------------------------------
+#[derive(Resource, Default)]
+struct HudChanges(Vec<f32>);
+
+#[test]
+fn the_hud_scale_follows_text_scale_at_once_and_ui_scale_on_apply() {
+    let dir = TempDir::new("shell-hud");
+    let mut app = shell_test_app(cfg(&dir), None);
+    app.init_resource::<HudChanges>()
+        .add_systems(Update, |hud: Res<HudScale>, mut seen: ResMut<HudChanges>| {
+            if hud.is_changed() {
+                seen.0.push(hud.factor());
+            }
+        });
+    to_display_rows(&mut app);
+    let before = app.world().resource::<HudChanges>().0.len();
+    shell_mut(&mut app).set("access", "text_scale", json!(1.5)); // the Accessibility tab: live
+    frames(&mut app, 2);
+    assert_eq!(app.world().resource::<HudScale>().factor(), 1.5);
+    focus(&mut app, "display.ui_scale");
+    press(&mut app, "ui_right"); // 1.25, staged: the HUD does not move yet
+    frames(&mut app, 2);
+    assert_eq!(app.world().resource::<HudScale>().factor(), 1.5);
+    focus(&mut app, "display.apply");
+    press(&mut app, "ui_accept");
+    frames(&mut app, 2);
+    let hud = *app.world().resource::<HudScale>();
+    assert_eq!((hud.ui_scale, hud.text_scale), (1.25, 1.5));
+    assert_eq!(hud.font_px(20.0), 37.5);
+    assert_eq!(hud.ui_font_px(20.0), 30.0, "bevy_ui's UiScale adds ui_scale itself");
+    let seen = &app.world().resource::<HudChanges>().0[before..];
+    assert_eq!(
+        seen,
+        [1.5, 1.875],
+        "one change signal per change, none for the staged value"
+    );
 }
 
 #[test]
