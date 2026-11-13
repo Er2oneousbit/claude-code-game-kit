@@ -215,8 +215,12 @@ None recorded yet. Add notes from videos, forums or your own runs here, with an 
   - `pseudo` (with `--locale pseudo`): visits every screen and settings section; exit 0 when nothing is truncated,
     clipped or untranslated. Subtitles stand still during the tour, so the label count is the same on a slow
     machine. `pseudo-plant` adds one label that is too small: it must exit 1 naming it.
-  - `show:title|settings|pause|subtitle|juice|credits` (with `--screenshot`): opens that screen, freezes it, captures it
-    (credits: the first lines, standing still).
+  - `display`: settings, Display, the mode one step on (staged, not applied), Back warns (`DISPLAY_WARN`), Apply
+    (`DISPLAY_APPLIED`, `DISPLAY_CONFIRM 15`, focus on Keep), then the confirm runs out after 15 real seconds and
+    reverts (`DISPLAY_REVERTED`); the mode and `settings.json` must be back where they were (#308). About 20 s.
+  - `show:title|settings|pause|subtitle|juice|credits|apply|apply_confirm` (with `--screenshot`): opens that screen, freezes it, captures it
+    (credits: the first lines, standing still; `apply`: the Display tab with a staged change, `apply_confirm`: its
+    confirm, countdown held).
   - `access[:res=WxH][,scale=N][,pad]`: every screen reported as `ACCESS_*` lines for `tools/access/sweep.py`
     (computed colours, font sizes, text boxes and what covers them, `accessAudit.ts`); `smoke.mjs` opens the page at
     the `res=` size, `pad` presses with gamepad bindings only.

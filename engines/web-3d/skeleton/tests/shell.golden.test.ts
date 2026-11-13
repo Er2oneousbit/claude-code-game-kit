@@ -6,8 +6,11 @@
 // Notes   : One test per case. A case type this file does not know fails, so a new vector type added to
 //           tools/golden_vectors.py cannot be skipped silently. Expected values come only from the JSON.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): display_staging, the Display tab's Apply and its
+//           keep-or-revert confirm, step by step (#308)
 // ---------------------------------------------------------------------------
 import { describe, expect, it } from "vitest";
+import { DISPLAY_APPLY_ORDER, DISPLAY_CONFIRM_S, DisplayStaging, type DisplayCall } from "../src/core/displayStaging";
 import { glyphName, glyphSet, promptBinding, rebind, narrationLine } from "../src/core/bindings";
 import { plural, pseudo, tr, trPlural } from "../src/core/i18n";
 import { SAVE_VERSION, saveLoad } from "../src/core/saveStore";
@@ -58,6 +61,26 @@ const RUNNERS: Record<string, Runner> = {
     c.points.forEach(([loc, n, form, text]: [string, number, string, string], i: number) => {
       expectClose(plural(loc, n), form, TOL, `point ${i} plural(${loc}, ${n})`);
       expectClose(trPlural(c.tables, loc, c.key, n), text, TOL, `point ${i} trPlural(${loc}, ${c.key}, ${n})`);
+    });
+  },
+  display_staging: (c) => {
+    expectClose(DISPLAY_CONFIRM_S, c.confirm_s, TOL, "DISPLAY_CONFIRM_S");
+    const st = new DisplayStaging(c.applied);
+    c.steps.forEach((step: Record<string, any>, i: number) => {
+      const [op, ...args] = step.op as [string, ...unknown[]];
+      let out: unknown = null;
+      let calls: DisplayCall[] = [];
+      if (op === "stage") out = st.stage(args[0] as string, args[1]);
+      else if (op === "apply") calls = st.apply();
+      else if (op === "tick") calls = st.tick(args[0] as number);
+      else if (op === "keep") st.keep();
+      else if (op === "revert") calls = st.revert();
+      else if (op === "back") [out, calls] = st.back();
+      else throw new Error(`unknown display_staging op "${op}"`);
+      const shown = Object.fromEntries(DISPLAY_APPLY_ORDER.map((f) => [f, st.value(f)]));
+      expectClose({ out, calls, pending: st.pending, shown, applied: st.applied, seconds: st.seconds() },
+        { out: step.out, calls: step.calls, pending: step.pending, shown: step.shown, applied: step.applied, seconds: step.seconds },
+        TOL, `step ${i} ${JSON.stringify(step.op)}`);
     });
   },
   pseudo: (c) => {

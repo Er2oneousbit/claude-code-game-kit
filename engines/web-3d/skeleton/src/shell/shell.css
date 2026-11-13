@@ -7,6 +7,8 @@
              (display.ui_scale) scales everything, --text-scale (access.text_scale) scales text.
              Focus is an outline plus a marker, never color alone.
    Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+   Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the settings button row (Back, Apply, Keep, Revert)
+             and the keep-or-revert countdown in the status row (#308)
    --------------------------------------------------------------------------- */
 :root {
   --ui-scale: 1;
@@ -118,6 +120,9 @@
 .keycap.conflict { border-color: var(--danger); border-style: dashed; }
 .glyph { image-rendering: pixelated; vertical-align: middle; }
 .status { min-height: 1.4em; font-size: calc(0.9em * var(--text-scale)); color: var(--muted); text-align: center; overflow-wrap: anywhere; }
+.status.confirm { color: var(--fg); font-weight: 700; }
+.row.buttons { flex-wrap: nowrap; }
+.row.buttons > .item { flex: 1 1 0; }
 
 .bar { height: 1em; border: 2px solid var(--fg); border-radius: 0.3em; overflow: hidden; }
 .fill { height: 100%; width: 0; background: var(--focus); }

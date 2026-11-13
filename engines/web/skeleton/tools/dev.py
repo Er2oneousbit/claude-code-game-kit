@@ -10,7 +10,7 @@
 #             smoke    production build, then boot it in headless Chromium; fail on errors
 #                      (--query autoplay --until ESCAPED --fail-on CAUGHT for scenario runs,
 #                       --screenshot FILE, --record DIR for a GIF;
-#                       --drive menus|crash|pseudo|pseudo-plant|show:<screen> for the shell's scripted runs,
+#                       --drive menus|crash|pseudo|pseudo-plant|display|show:<screen> for the shell's scripted runs,
 #                       --data-dir DIR, --locale ID, --compare BASELINE.png [--tolerance N])
 #             build    production build into dist/ (relative paths: upload dist/ anywhere)
 #             run      Vite dev server with hot reload (opens the browser)
@@ -48,6 +48,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive show:credits (#284)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `ship --target itch` uploads to itch.io with
 #           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive display, show:apply, show:apply_confirm
+#           (the Display tab's Apply and its keep-or-revert confirm, #308)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -67,7 +69,9 @@ SMOKE_FRAMES = 120
 BOOT_MARKER = "BOOT_OK"                   # logged by src/shell/app.ts once the title screen is up
 # --drive, --data-dir, --locale: the shell (src/shell/drive.ts) runs the scenarios and reads both folders
 DRIVE_HELP = ("the game plays a scripted run (shell games): menus, crash (exits 1 on purpose), pseudo, "
-              "pseudo-plant, show:title|settings|pause|subtitle|juice|credits (with --screenshot); waits for DRIVE_DONE")
+              "pseudo-plant, display (Apply a Display change, let its confirm revert: about 20 s), "
+              "show:title|settings|pause|subtitle|juice|credits|apply|apply_confirm (with --screenshot); "
+              "waits for DRIVE_DONE")
 DATA_DIR_HELP = ("user-data folder for this run (?data-dir=): loaded before, written back after "
                  "(default build/smoke-data with --drive)")
 LOCALE_HELP = "language for this run, e.g. fr or pseudo (?locale=)"

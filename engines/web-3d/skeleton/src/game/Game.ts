@@ -8,6 +8,9 @@
 //           src/core/follow.ts. Replace with your real world. Read the player's settings through shell.settings
 //           (game_speed scales dt here) and input through shell.input (isDown / takePress with action names from
 //           settings.input.bindings; stick() and triggers() for analog control, heldActions() for everything held).
+//           HUD text drawn in the 3D view (a DotworkText, a canvas label) follows the player's ui_scale and
+//           text_scale only through hudFontPx(base, shell.settings) (src/core/hud.ts), redone in shell.onLook()
+//           (#309); the shell's own HUD bar is HTML and follows them already.
 //           Units are meters, +Y is up (Three.js default), which is what Blender's glTF export gives.
 //           BOOT_OK is logged by the shell once the title screen is up (dev.py smoke waits for it).
 //           Dotwork art: load() reads every public/assets/dotwork/*.assets.json (src/game/dotwork/) and the
@@ -16,6 +19,7 @@
 // Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): a world the shell runs (game_speed, the crash drive)
 //           (#175)
 // Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): Dotwork packs load and show (#56)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): where HUD text gets ui_scale and text_scale (#309)
 // ---------------------------------------------------------------------------
 import * as THREE from "three";
 import { Follow3 } from "../core/follow";

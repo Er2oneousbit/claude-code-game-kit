@@ -25,8 +25,13 @@
 //           and pads are ignored while one runs (input.scripted, #276)
 // Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the renderer sits behind a GameHost (host.ts), so
 //           web-3d runs the same shell over Three.js (#175)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): setDisplay() (the Display tab's Apply and its revert,
+//           with DISPLAY_* log lines) and the open settings screen's staging (#308); onLook() listeners for a game
+//           HUD that follows ui_scale and text_scale (#309)
 // ---------------------------------------------------------------------------
 import { atomicWrite } from "../core/atomicFile";
+import type { DisplayCall, DisplayStaging } from "../core/displayStaging";
+import { deepCopy } from "../core/jsonUtil";
 import { I18n, PSEUDO_LOCALE, type Tables } from "../core/i18n";
 import { Log } from "../core/log";
 import { SaveStore } from "../core/saveStore";
@@ -145,6 +150,10 @@ export class Shell {
   settingsTab = 0;
   plantedCrash = false;
   readonly checks = { screens: 0, labels: 0, failures: [] as string[] };
+  /** The open settings screen's Display staging (#308): pending changes and the keep-or-revert confirm. */
+  staging: DisplayStaging | null = null;
+  /** Drives only: the confirm's countdown stands still (show:apply_confirm takes the same picture every run). */
+  holdConfirm = false;
   seed: number | null = null;
 
   private readonly rootEl: HTMLElement;
@@ -156,6 +165,8 @@ export class Shell {
   private lastFlush = 0;
   private frameCap = -1;
   private pendingChecks = 0;
+  private look = "";
+  private readonly lookHooks = new Set<() => void>();
 
   constructor() {
     this.store = openStore();
@@ -375,6 +386,11 @@ export class Shell {
     document.documentElement.classList.toggle("still", !!this.drive); // no blinking in scripted runs: stable screenshots
     this.i18n.locale = this.params.get("locale") || s.language;
     document.documentElement.lang = this.i18n.locale === PSEUDO_LOCALE ? "en" : this.i18n.locale;
+    const look = [s.display.ui_scale, s.access.text_scale, s.access.readable_font, s.access.line_spacing].join("|");
+    if (look !== this.look) {
+      this.look = look;
+      for (const hook of [...this.lookHooks]) hook();
+    }
     const host = this.host;
     if (!host) return;
     if (s.display.frame_cap !== this.frameCap) {
@@ -382,6 +398,26 @@ export class Shell {
       host.frameCap(s.display.frame_cap);
     }
     host.audio(s.audio.master, s.audio.mono);
+  }
+
+  /**
+   * Calls hook whenever display.ui_scale, access.text_scale, the readable font or the line spacing changes, so a HUD
+   * drawn by the renderer can resize its text (hudFontPx in core/hud.ts, #309). Returns the function that stops it.
+   */
+  onLook(hook: () => void): () => void {
+    this.lookHooks.add(hook);
+    return () => this.lookHooks.delete(hook);
+  }
+
+  /**
+   * Sets Display fields and applies them (the settings screen's Apply, and its revert: #308). calls come from
+   * DisplayStaging in its order, mode first. Logs DISPLAY_<why> [[field, value], ...] for drives and bug reports.
+   */
+  setDisplay(calls: DisplayCall[], why: "APPLIED" | "REVERTED"): void {
+    for (const [field, value] of calls) this.settings.display[field] = deepCopy(value);
+    this.apply();
+    if (calls.some(([field]) => field === "mode")) this.applyDisplayMode();
+    Log.info("settings", `DISPLAY_${why} ${JSON.stringify(calls)}`);
   }
 
   /** Volume for one category (master included), for game code that plays sounds. */
