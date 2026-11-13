@@ -18,6 +18,7 @@ as well on a model you made, bought or downloaded.
 | A 2D sprite sheet from a 3D model | `tools/blender/render_sprites.py` (or `bozzetto.py make --sprites`) | [3D source, 2D game](#3d-source-2d-game-sprite-sheets) |
 | Procedural props, kits, shaders, batch jobs | Claude-written scripts in `tools/blender/` | [Claude and Blender](#claude-and-blender) |
 | Rig a character (skeleton, skin weights, Mixamo bone names, clips) | `python tools/bozzetto/bozzetto.py rig make <name>` (UniRig, free, your GPU; or `--with tripo`, paid) | `tools/bozzetto/README.md` "Rig a character" |
+| Clips from an animation pack (Quaternius, Mixamo) on a rigged character | `python tools/bozzetto/bozzetto.py rig retarget <name> --from <pack.glb or .fbx> --clips Walk_Loop=walk` (Blender, free) | `tools/bozzetto/README.md` "Animation packs" |
 | Secondary motion: a scarf, cape, hair or tail that swings | `python tools/bozzetto/bozzetto.py rig chain <name> --part colour:#rrggbb` (Blender, free) | `tools/bozzetto/README.md` "Secondary motion" |
 | Animate beyond that, retarget, creatures | Guidance and scripts | [Animation](#animation), `docs/resources/pipelines.md` |
 | Paid generators (Meshy and others) | Not wired in (Tripo is: `make --with tripo`, `rig --with tripo`, `reference --with tripo`; Gemini: `reference --with nanobanana`) | `docs/resources/ai-tools.md` |
@@ -159,6 +160,10 @@ to textured planes (leaf cards), keep trunk and main branches as geometry, reuse
   Prompt2Rig) are Apache-2.0 themselves but download body models and weights (SMPL-X, GVHMR, MANO) that are
   non-commercial or research-only by default, per their own READMEs (E65, read 2026-10-24; licenses change: re-read). Log them in `ASSET_LOG.md`.
 - Script the boring parts: retarget, trim, loop, root motion, curve cleanup, naming (`anim_run_loop`), export.
+- Packs on a Bozzetto rig: `bozzetto.py rig retarget` renames a pack's bones to Mixamo's and turns every shared bone
+  to point where the pack's does, so a T-pose pack plays on an A-pose rig. Tested on Quaternius' Universal Animation
+  Library (CC0, E162; K01): its walk and idle on the golden character and in Godot. Mixamo's FBX clips use the same
+  names; their download settings are in the README **(verify: no login here)**. Log each pack with its licence.
 - Secondary motion, after the rig and its clips: a scarf, cape, long hair or tail that an auto-rig left stiff gets its
   own bone chain with `bozzetto.py rig chain <name> --part <selector>` (by colour, material, vertex group or a box).
   Looping clips get a sway that keeps them looping exactly (sprite cycles need that), one-shots named in `--cloth` a

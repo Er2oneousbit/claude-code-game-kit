@@ -214,7 +214,9 @@ model-free example packs, not yet on a real game's art.
   landed under the `npc` class's 55% UV coverage floor on two seeds; 0.15.1's `--rebake auto` (the local default)
   lifts both to 59 and 60%, on those two models only so far
   ([#203](https://github.com/Er2oneousbit/claude-code-game-kit/issues/203)). `rig`: bipeds only; the Unity Humanoid
-  route is untested; Mixamo and Quaternius are named as sources but no pack is tested
+  route is untested. `rig retarget` (#205) is tested on Quaternius' Universal Animation Library (Standard) and in
+  Godot only; the Mixamo path is documented but not tried (it needs an Adobe login), other Quaternius packs' rigs are
+  unchecked, and twist about a bone's axis is matched only as far as the rest poses agree
   ([#205](https://github.com/Er2oneousbit/claude-code-game-kit/issues/205)).
 
 ## The examples

@@ -85,6 +85,12 @@ card. `python tools/bozzetto/bozzetto.py rig make <name>` (UniRig, free; about 3
 it downloads its weights), or `--with tripo --clips idle,walk --quote-only` first and, after a yes, the same with
 `--max-credits <quote>` (25 credits to rig and 10 a clip, measured on the kit's live runs). Show `assets_src/bozzetto/<name>/rig/<route>/clips.png`: arms swing from the
 shoulders, nothing tears, the legs walk.
+Better motion than UniRig's game-jam clips, free: offer clips from a CC0 animation pack (Quaternius' Universal
+Animation Library, tested) or Mixamo FBX downloads the user fetches with their Adobe login. The user downloads the pack
+(README "Animation packs" has the steps); log it with `/asset-intake` first, then `python tools/bozzetto/bozzetto.py
+rig retarget <name> --from <pack file> --clips Walk_Loop=walk,Idle_Loop=idle --replace` (Blender, free, seconds) and
+show `assets_src/bozzetto/<name>/rig/retarget/clips.png`. Do it before Gate 5: a chain's sway goes into the clips the
+file has when the chain is made.
 
 ## 6. Gate 5: the part that swings
 Ask which part should swing (or none). Pick it by its colour: `python tools/bozzetto/bozzetto.py rig chain <name>
@@ -119,7 +125,7 @@ the engine's spring bones can drive the chain instead (`--sway 0`; README recipe
 
 ## 8. Log and terms
 Every step writes its own `docs/ASSET_LOG.md` row or note: reference views (`art`, the route's terms), the model
-(models and licences, or Tripo's terms and credits), the rig ("rig of A-NNNN"), the chain (a note on the rig's row).
+(models and licences, or Tripo's terms and credits), the rig ("rig of A-NNNN"), the chain and pack clips (notes on the rig's row; the pack needs its own row).
 Read them back to the user: route, cost, who owns the output (yours on paid Tripo credits, Tripo terms 5.2.2; Gemini
 pictures carry a SynthID watermark **(verify)**). `render_sprites.py` writes no row: log the sheets with
 `/asset-intake` as made from the model's row. Mark everything AI-assisted.
