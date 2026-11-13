@@ -25,6 +25,8 @@
 //   per schema section: a non-object section counts as one problem ; per field: missing -> default,
 //   present -> fixField (bool | num clamp | enum | resolution) ; input.bindings: lists of strings only
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): DisplayStaging, the Display tab's Apply and its
+//           keep-or-revert confirm, held to shell.json (#308); MZ's Options window does not use it yet
 // ---------------------------------------------------------------------------
 /*:
  * @target MZ
@@ -439,12 +441,81 @@
     // The text of a save file for data (what saveLoad reads back)
     const saveText = (data) => JSON.stringify({ format: SAVE_FORMAT, version: SAVE_VERSION, data }, null, 1) + "\n";
 
+    // ------------------------------------------------------------------------------------------- display staging
+    // The Display tab's Apply (#308), the reference's DisplayStaging (tools/golden_vectors.py): Display changes wait
+    // for apply(); mode or resolution opens a keep-or-revert confirm counted in real seconds. MZ's own Options window
+    // has no Display tab, so nothing here calls it yet: it is for a game that builds one (held to shell.json).
+    const DISPLAY_APPLY_ORDER = ["mode", "resolution", "vsync", "frame_cap", "ui_scale"]; // mode before resolution
+    const DISPLAY_CONFIRM_FIELDS = ["mode", "resolution"];
+    const DISPLAY_CONFIRM_S = 15.0;
+    const sameValue = (a, b) => JSON.stringify(a) === JSON.stringify(b); // numbers by value, arrays item by item
+
+    class DisplayStaging {
+        constructor(applied) {
+            this.applied = deepCopy(applied);
+            this.pending = {};
+            this.replaced = {};
+            this.left = null;
+            this.warned = false;
+        }
+        value(field) { return Object.prototype.hasOwnProperty.call(this.pending, field) ? this.pending[field] : this.applied[field]; }
+        stage(field, v) {
+            if (this.left !== null) return "busy";
+            if (sameValue(v, this.applied[field])) delete this.pending[field];
+            else this.pending[field] = deepCopy(v);
+            this.warned = false;
+            return "staged";
+        }
+        _set(values) {
+            const calls = [];
+            for (const f of DISPLAY_APPLY_ORDER) {
+                if (Object.prototype.hasOwnProperty.call(values, f)) {
+                    this.applied[f] = deepCopy(values[f]);
+                    calls.push([f, deepCopy(values[f])]);
+                }
+            }
+            return calls;
+        }
+        apply() {
+            const changed = {};
+            for (const f of Object.keys(this.pending)) if (!sameValue(this.pending[f], this.applied[f])) changed[f] = this.pending[f];
+            this.replaced = {};
+            for (const f of Object.keys(changed)) this.replaced[f] = deepCopy(this.applied[f]);
+            this.pending = {};
+            this.warned = false;
+            const calls = this._set(changed);
+            if (DISPLAY_CONFIRM_FIELDS.some((f) => Object.prototype.hasOwnProperty.call(changed, f))) this.left = DISPLAY_CONFIRM_S;
+            return calls;
+        }
+        seconds() { return this.left === null ? null : Math.ceil(this.left); }
+        tick(dt) {
+            if (this.left === null) return [];
+            this.left -= dt;
+            return this.left <= 0 ? this.revert() : [];
+        }
+        keep() { this.left = null; this.replaced = {}; }
+        revert() {
+            const calls = this._set(this.replaced);
+            this.left = null;
+            this.replaced = {};
+            return calls;
+        }
+        back() {
+            if (this.left !== null) return ["revert", this.revert()];
+            if (Object.keys(this.pending).length && !this.warned) { this.warned = true; return ["warn", []]; }
+            this.pending = {};
+            this.warned = false;
+            return ["leave", []];
+        }
+    }
+
     const GameShell = {
         SETTINGS_VERSION, DIFFICULTIES, COLORBLIND, SUB_SIZES, DISPLAY_MODES, FRAME_CAPS, CONSENT, GLYPH_SETS, SCHEMA,
         DEFAULT_BINDINGS, defaultSettings, fixField, settingsLoad, effectiveShake, telemetryAllowed, settingsText,
         groupOf, rebind, glyphSet, glyphName, promptBinding, findConflicts, narrationLine,
         FALLBACK_LOCALE, PSEUDO_LOCALE, localeChain, fill, lookup, tr, plural, trPlural, pseudo,
         SAVE_VERSION, SAVE_FORMAT, MIGRATIONS, parseSave, saveMigrate, saveLoad, saveText,
+        DISPLAY_APPLY_ORDER, DISPLAY_CONFIRM_FIELDS, DISPLAY_CONFIRM_S, DisplayStaging,
     };
 
     // Both, not either: MZ's desktop test play (NW.js) may define `module` too, and the plugins need the global

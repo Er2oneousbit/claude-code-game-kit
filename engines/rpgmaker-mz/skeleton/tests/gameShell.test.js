@@ -7,6 +7,7 @@
 // Notes   : One test per case. A case type this file does not know FAILS, so a new vector type added to
 //           tools/golden_vectors.py cannot be skipped silently. Expected values come only from the JSON.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display_staging cases (#308)
 // ---------------------------------------------------------------------------
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
@@ -57,6 +58,26 @@ const RUNNERS = {
     },
     pseudo: (c, tol) => {
         c.points.forEach(([text, want], i) => expectClose(GameShell.pseudo(text), want, tol, `point ${i} ${JSON.stringify(text)}`));
+    },
+    display_staging: (c, tol) => {
+        const st = new GameShell.DisplayStaging(c.applied);
+        expectClose(GameShell.DISPLAY_CONFIRM_S, c.confirm_s, tol, "confirm_s");
+        c.steps.forEach((s, i) => {
+            const [kind, ...args] = s.op;
+            let out = null, calls = [];
+            if (kind === "stage") out = st.stage(...args);
+            else if (kind === "apply") calls = st.apply();
+            else if (kind === "tick") calls = st.tick(...args);
+            else if (kind === "keep") st.keep();
+            else if (kind === "revert") calls = st.revert();
+            else if (kind === "back") [out, calls] = st.back();
+            else assert.fail(`step ${i}: unknown op ${kind}`);
+            const shown = {};
+            for (const f of GameShell.DISPLAY_APPLY_ORDER) shown[f] = st.value(f);
+            expectClose({ out, calls, pending: st.pending, shown, applied: st.applied, seconds: st.seconds() },
+                        { out: s.out, calls: s.calls, pending: s.pending, shown: s.shown, applied: s.applied, seconds: s.seconds },
+                        tol, `step ${i} ${JSON.stringify(s.op)}`);
+        });
     },
 };
 
