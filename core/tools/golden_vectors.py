@@ -682,7 +682,7 @@ def strip_html_comments(text):
     tabs) goes, and when a blank line (or the top of the file) came before it, so does one blank line after it, so
     the gap the comment sat in does not double. Text around a comment on its line stays as written. CRLF becomes LF;
     the result is joined with LF. The delimiters are ASCII, so a byte-wise port (Lua, C++, Rust) gives the same
-    result as a code-unit one. Every port runs this before its own markdown handling (heading marks and so on)."""
+    result as a code-unit one. credits_text runs this first, then takes the markdown marks off."""
     out = []
     in_comment = False
     skip_blank = False                               # the blank line after a dropped comment-only line
