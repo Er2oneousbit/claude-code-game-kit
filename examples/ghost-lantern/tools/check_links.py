@@ -6,10 +6,14 @@
 #           Docs that point at files which moved or never existed confuse both
 #           humans and Claude, so this runs in doctor.py and before releases.
 # Usage   : python tools/check_links.py [--root DIR] [--also DIR ...] [--ignore NAME ...] [--debug]
+#                                         [--baseline FILE [--write-baseline]]
 #           Examples:
 #             python tools/check_links.py                       # this project
 #             python tools/check_links.py --root ../kit --also core --also core/docs
-# Exit    : 0 no broken references, 1 broken references found, 2 usage problem
+#             python tools/check_links.py --baseline links.txt --write-baseline   # record today's known hits
+#             python tools/check_links.py --baseline links.txt  # fail only on hits that are not in links.txt
+# Exit    : 0 no broken references (with --baseline: none that the baseline lacks), 1 broken references found,
+#           2 usage problem (with --baseline: the file is missing or unreadable)
 # Notes   : A backticked token counts as a path only if it contains a slash or ends in
 #           .md/.py/.json/.txt/.cfg, and has no spaces, wildcards, <placeholders>, double-brace
 #           tokens, or template names (NNNN, snake_case, PascalCase, ...).
@@ -24,6 +28,9 @@
 #           titles, reference links, ~~~ fences and inline code handled, links resolve from their own file,
 #           exact letter case enforced
 #           2026-11-09 (#261): the link regexes are bounded (a crafted file hung them), a backslash path is broken
+#           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --baseline FILE and --write-baseline (#299): a
+#           sorted list of the known hits ("file: kind: target"), so a new break stands out from the ones a
+#           template tree reports on purpose
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -32,6 +39,7 @@
 #   for each reference: skip URLs, anchors, placeholders, ignored names
 #                       try each search base; if none exists, record it as broken
 #   print broken references grouped by file, return exit code
+#   --baseline: compare the hits with the file's lines; print only the new ones as failures, the fixed ones as info
 import argparse
 import fnmatch
 import os
@@ -239,6 +247,34 @@ def scan(root, also, ignore, skip_dirs=()):
     return broken
 
 
+def hit_lines(broken):
+    """The broken references as sorted "file: kind: target" lines, the --baseline file's format."""
+    return sorted(f"{f}: {item}" for f, items in broken.items() for item in items)
+
+
+def read_baseline(path):
+    """The baseline file's hit lines (blank lines and # comments skipped). Raises OSError when it cannot be read."""
+    with open(path, encoding="utf-8") as fh:
+        return {line.rstrip("\r\n") for line in fh if line.strip() and not line.startswith("#")}
+
+
+def write_baseline(path, lines):
+    """Write the hit lines, sorted, with a comment header (LF endings, so the file diffs the same everywhere)."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write("# Known check_links.py hits (python tools/check_links.py --baseline <this file> --write-baseline)\n")
+        fh.write("# One \"file: kind: target\" per line, sorted. A hit not listed here is a new break.\n")
+        for line in sorted(lines):
+            fh.write(line + "\n")
+
+
+def compare_baseline(lines, known):
+    """(new, fixed): hits the baseline lacks, and baseline lines that are no longer hits. Both sorted."""
+    current = set(lines)
+    return sorted(current - known), sorted(known - current)
+
+
 def main():
     global DEBUG
     ap = argparse.ArgumentParser(description="Find broken relative links and backticked file paths in markdown.",
@@ -250,6 +286,11 @@ def main():
     ap.add_argument("--ignore", action="append", default=[], help="file name or path to never report (repeatable)")
     ap.add_argument("--skip-dir", action="append", default=[], help="folder glob relative to root to skip (repeatable)")
     ap.add_argument("--debug", action="store_true", help="print skipped files")
+    ap.add_argument("--baseline", metavar="FILE", default=None,
+                    help="a list of known hits (relative to the current folder): report only hits it lacks, exit 1 "
+                         "on any; a listed hit that is gone is printed as [info]")
+    ap.add_argument("--write-baseline", action="store_true",
+                    help="with --baseline: write today's hits to FILE (sorted) instead of comparing, exit 0")
     args = ap.parse_args()
     DEBUG = args.debug
     for stream in (sys.stdout, sys.stderr):
@@ -261,13 +302,46 @@ def main():
     if not root.is_dir():
         print(f"[ENV ] root is not a folder: {root}", file=sys.stderr)
         return 2
+    if args.write_baseline and not args.baseline:
+        print("[error] --write-baseline needs --baseline FILE", file=sys.stderr)
+        return 2
     broken = scan(root, args.also, args.ignore, args.skip_dir)
+    if args.baseline:
+        return baseline_report(hit_lines(broken), Path(args.baseline), args.write_baseline)
     total = sum(len(v) for v in broken.values())
     for f, items in broken.items():
         for item in items:
             print(f"[FAIL] {f}: {item}")
     print(f"{total} broken reference(s) in {len(broken)} file(s)" if total else "[ OK ] no broken references")
     return 1 if total else 0
+
+
+def baseline_report(lines, path, write):
+    """--baseline: write the file, or print the hits it lacks (exit 1) and the ones that are gone (info)."""
+    if write:
+        try:
+            write_baseline(path, lines)
+        except OSError as exc:
+            print(f"[error] cannot write {path}: {exc}", file=sys.stderr)
+            return 2
+        print(f"[ OK ] wrote {len(lines)} known hit(s) to {path}")
+        return 0
+    try:
+        known = read_baseline(path)
+    except OSError as exc:
+        print(f"[error] cannot read the baseline {path} ({exc.strerror or exc}); write it with --write-baseline",
+              file=sys.stderr)
+        return 2
+    new, fixed = compare_baseline(lines, known)
+    for line in fixed:
+        print(f"[info] fixed since the baseline: {line}")
+    for line in new:
+        print(f"[FAIL] {line}")
+    if fixed:
+        print(f"[info] {len(fixed)} baseline line(s) no longer broken: refresh it with --write-baseline")
+    summary = f"{len(lines)} broken reference(s), {len(lines) - len(new)} known in {path.name}"
+    print(f"[FAIL] {summary}, {len(new)} new" if new else f"[ OK ] {summary}, none new")
+    return 1 if new else 0
 
 
 if __name__ == "__main__":

@@ -20,8 +20,8 @@
 # Exit    : 0 written, 1 the bake did not match the original (nothing written) or the mesh could not be read,
 #           2 usage or environment (several mesh objects without --join, bpy missing, files in the way)
 # Notes   : The source file is never changed. Texture size: --texture, else the largest image the model reads
-#           (a 2048 vendor atlas stays 2048), else 1024. Island margin and bake margin are both max(4, size/256)
-#           pixels, enough for mipmaps at game distance. The check renders the base colour as pure emission (no
+#           (a 2048 vendor atlas stays 2048), else 1024. The gap between islands is size/1024 pixels (at least 1:
+#           padding_px), the bake margin BAKE_MARGIN_PX into free texels. The check renders the base colour as pure emission (no
 #           light, no normal map) and the materials under a sun, at 256 px from four sides before and after, and
 #           compares the pixels both cover: a mean difference over COLOUR_FAIL or LIT_FAIL (8-bit levels) is a
 #           failed bake (exit 1), over COLOUR_WARN or LIT_WARN a warning.
@@ -29,6 +29,7 @@
 #           What is not carried: a second UV map, images read through a Vector input of their own (they keep that
 #           input and are left alone, with a warning). Vertex colours stay as they are (nothing to bake).
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the island gap is size/1024 px (1 at 1024, #203)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -81,11 +82,12 @@ def dbg(msg):
 
 
 def padding_px(size):
-    """The gap between islands in pixels: 2 up to 2048, 4 at 4096. A generated mesh packs into thousands of
-    islands, and every pixel of gap costs coverage (8 px at 2048 cost a 51k-triangle character 26 points, K01);
-    TRELLIS.2 bakes its own atlas with 1 px. The bake margin (BAKE_MARGIN_PX) extends into the gap and beyond,
-    into free texels only, so mipmaps still have room."""
-    return max(2, size // 1024)
+    """The gap between islands in pixels: 1 up to 1024, 2 at 2048, 4 at 4096, the same share of the texture at
+    every size (so the same mip level first blends neighbours). A generated mesh packs into thousands of islands,
+    and every pixel of gap costs coverage (8 px at 2048 cost a 51k-triangle character 26 points, K01; 2 px instead
+    of 1 at 1024 cost a TRELLIS.2 npc 4 points, 59% to 55%, under the npc floor, #203); TRELLIS.2 bakes its own
+    atlas with 1 px. The bake margin (BAKE_MARGIN_PX) extends into the gap and beyond, into free texels only."""
+    return max(1, size // 1024)
 
 
 def free_vector(node):

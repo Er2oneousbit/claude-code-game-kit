@@ -7,7 +7,7 @@
 #           python tools/dev.py smoke --drive pseudo --locale pseudo        # every screen, nothing clipped
 #           python tools/dev.py smoke --drive pseudo-plant --locale pseudo  # plus one label too small: exit 1
 #           python tools/dev.py smoke --drive show:settings --screenshot captures/settings.png
-#           (show: title, settings, pause, subtitle, juice)
+#           (show: title, settings, pause, subtitle, juice, credits)
 #           python tools/dev.py smoke --drive access:res=1280x800,scale=2,pad   # every screen (tools/access/sweep.py)
 # Notes   : Markers: DRIVE_DONE <scenario>, DRIVE_FAIL <why>, SETTINGS_BEFORE / SETTINGS_WRITTEN <path> ...,
 #           CRASH_WRITTEN <path> (from Shell), PSEUDO_FAIL / PSEUDO_OK. Navigation goes through the real input
@@ -24,6 +24,7 @@
 #           break a tour (#276).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): real input is ignored while a drive runs (#276)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits, a picture of the credits screen (#284)
 # ---------------------------------------------------------------------------
 class_name SmokeDrive
 extends Node
@@ -78,7 +79,7 @@ const JUICE_HIT_FRAME: int = 40 # frames into the juice demo before the drive at
 const JUICE_SHOT_FRAMES: int = 1 # frames after the hit; capture adds 3, still inside the hitstop freeze
 const PLANTED_NAME: String = "PlantedTooSmall"
 const PLANTED_WIDTH: float = 24.0
-const SHOW_TARGETS: PackedStringArray = ["title", "settings", "pause", "subtitle", "juice"]
+const SHOW_TARGETS: PackedStringArray = ["title", "settings", "pause", "subtitle", "juice", "credits"]
 # the access sweep: the actions the shell's navigation needs on both devices, and the demo's control hints
 const ACCESS_ACTIONS: PackedStringArray = ["ui_up", "ui_down", "ui_left", "ui_right", "ui_accept", "ui_cancel",
 		"pause"]
@@ -251,6 +252,13 @@ func _show(target: String) -> void:
 			if not await _nav_to("Settings", "ui_down") or not await _accept("settings"):
 				return
 			if not await _nav_to("Tab_audio", "ui_right") or not await _nav_to("Setting_audio_master", "ui_down"):
+				return
+			await _frames(SETTLE_FRAMES)
+		"credits":
+			# the text starts scrolling after CreditsScreen.START_DELAY_S; the picture is taken well before that
+			if not await _to_main_menu():
+				return
+			if not await _nav_to("Credits", "ui_down") or not await _accept("credits"):
 				return
 			await _frames(SETTLE_FRAMES)
 		"pause":

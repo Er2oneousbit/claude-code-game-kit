@@ -22,7 +22,7 @@
 //           come from <ProjectDir>/data/input/presets.json, the colour palettes from
 //           data/access/colours.json, the strings from data/i18n/<locale>.json, the credits from CREDITS.md
 //           (a packaged game: its copy data/credits.md, see CreditsSource; either way its HTML comments
-//           are dropped: StripHtmlComments, #279).
+//           are dropped: StripHtmlComments, #279; its markdown marks go: CreditsText, #284).
 //           Only the top screen takes input; a transparent screen (pause) is drawn over the one below.
 //           Analog input for the game (#274, as the Bevy shell's Intent): Stick() (radial, rescaled deadzone and
 //           invert_y, GameKitAnalog.h), Trigger(), HeldActions(); all zero outside play and the juice demo, so a
@@ -43,6 +43,7 @@
 //   T(key): pseudo locale -> Pseudo(English text) with the placeholders filled after ; else the locale chain
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1); analog input, the juice demo, the bug report and the
 //           pseudo locale by Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): CreditsText, the markdown rule every engine shares (#284)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -203,7 +204,12 @@ public:
 	 *  the end; a comment-only line goes, with one blank line after it when a blank line came before. LF joined.
 	 *  tools/golden_vectors.py strip_html_comments is the spec, data/golden/credits.json the cases. */
 	static FString StripHtmlComments(const FString& Text);
-	/** CREDITS.md as the credits page's lines: comments out, heading marks off; empty when nothing is left. */
+	/** CREDITS.md as every engine's credits screen shows it (#284): comments out, then per line a heading's marks
+	 *  ('#' then a space, tab or the line end) or a list marker ('-', '*', '+' then a space or tab), every '*', and the
+	 *  spaces and tabs at both ends; blank lines at the start and the end go. Empty when nothing is left.
+	 *  tools/golden_vectors.py credits_text is the spec, data/golden/credits.json the cases. */
+	static FString CreditsText(const FString& Markdown);
+	/** CreditsText split into the credits page's lines; empty when nothing is left. */
 	static TArray<FString> CreditsLinesFrom(const FString& Markdown);
 	/** The label of a binding for a glyph set: glyph.<name> from the tables, or the key's own name ("Space"). */
 	FString BindingLabel(const FString& GlyphName) const;

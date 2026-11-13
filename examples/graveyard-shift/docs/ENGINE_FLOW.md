@@ -40,14 +40,18 @@ Close the editor before running batchmode commands (one instance per project).
 | `smoke --until M`, `--fail-on M` | scans the Unity log for the markers your scenario test logs |
 | `smoke --drive menus` | the `Smoke_ShellDrive` PlayMode test with `GAMEKIT_DRIVE=menus`: title -> settings -> master volume 0.5 (left or right from whatever the data folder held), reduce motion toggled -> Back -> Quit; prints `SETTINGS_WRITTEN <path>` and the file holds both values |
 | `smoke --drive access[:res=WxH][,scale=N][,pad][,read]` | every screen reported as `ACCESS_*` lines for `tools/access/sweep.py` (`AccessAudit`): texts with size, colour, background, fit and where they land, the controls the grid reaches and what each says, the subtitle, the one-handed layout applied and reset, a held subtitle, the prompts; the panel is laid out for that window size, `pad` presses with the gamepad bindings only |
-| `smoke --drive show:<title\|settings\|pause\|subtitle\|juice> --screenshot Logs/x.png` | opens that screen (settings with a control focused; the juice demo right after a hit) and photographs it: `GameKitCapture` lays the UI panel's texture over the camera's picture |
+| `smoke --drive show:<title\|settings\|pause\|subtitle\|juice\|credits> --screenshot Logs/x.png` | opens that screen (settings with a control focused; the juice demo right after a hit) and photographs it: `GameKitCapture` lays the UI panel's texture over the camera's picture |
 | `smoke --drive pseudo --locale pseudo` | every screen (title, consent, main menu, each settings tab and the binding prompt, credits, loading, the juice demo, play, pause, What now?, history) checked label by label (`AccessAudit.PseudoProblems`): `PSEUDO_SCREEN` per screen, `PSEUDO_FAIL` per label that is untranslated (no `[`), cut (no `]`) or clipped, then `PSEUDO_PASS` or `PSEUDO_FAILED`; `pseudo-plant` adds a label too narrow for its text and must fail naming it (dev.py says so) |
 | `smoke --drive crash` | an unhandled exception in a frame: `CRASH_WRITTEN <path>` and exit 1 on purpose (`ShellReports`) |
 | `smoke --drive bug` | F8 on the main menu: `BUG_REPORT <dir>` and `DRIVE_BUG <dir>`, with the info, log tail, settings (and the screenshot with `--graphics`) checked |
 | `smoke --data-dir D`, `--locale L` | the run's settings folder (default a fresh `Logs/smoke_data/`; one inside the player folder `Build/`, any letter case, is refused with exit 2) and language (`pseudo` for the pseudo-locale), passed as `GAMEKIT_DATA_DIR` / `GAMEKIT_LOCALE` |
 
 Test results are read from the NUnit XML (`failed="N"`), not the exit code alone. If nothing passed (no test matched, or every test was
-ignored) the command exits 2 and prints the reason, because that is a setup gap, not a failing test.
+ignored) the command exits 2 and prints the reason, because that is a setup gap, not a failing test: every match
+skipped prints `[SKIP] all N matching test(s) skipped, none ran (exit 2): <the first test's reason>` (the Character
+tests before `exec GameKitCharacters.AddGltfast`), no match prints `[FAIL] nothing ran: ...`. The other engines that
+can skip a test (Godot `pending()`, Bevy `#[ignore]`, web and web-3d `it.skip`, RPG Maker MZ `{ skip }`) print the
+same `[SKIP]` line with exit 2.
 
 Verified on Unity 6000.6.6f1, Windows, 2026-10-20, on a project made with `Unity -batchmode -createProject` and then adopted: `check` and
 `test` catch a planted compile error and a planted failing assert; `smoke` exits 2 with no scene, passes with one, and exits 1 on an error

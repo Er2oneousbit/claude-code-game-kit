@@ -8,7 +8,7 @@ description: Move the game to its next scope tier (Toy -> Vertical slice -> MVP 
 Follow `docs/sop/SOP-08-scope-control.md` "Tiers". The `Current tier:` line in `docs/GDD.md` is what every scope
 check in this project reads, so it must move when the game does. No dates anywhere: tiers and milestones are scope.
 
-1. **Read** `docs/GDD.md` (Scope tiers, Current tier, Assumptions to test, Content list), `docs/ROADMAP.md`,
+1. **Read** `docs/GDD.md` (Scope tiers, Current tier, Assumptions to test, Content list, Kit tools for this game), `docs/ROADMAP.md`,
    `docs/PLAYTEST_LOG.md`, and for the slice `docs/VERTICAL_SLICE.md`.
 2. **Check the current tier's evidence.** For each item give **MET**, **NOT MET** or **UNKNOWN** with the file or
    command that shows it. Never MET from assumption.
@@ -25,6 +25,11 @@ check in this project reads, so it must move when the game does. No dates anywhe
    - `docs/ROADMAP.md`: mark the milestone row done, add a Done line ("<date>: <tier> done, now <next tier>"), and move
      Parking lot items that now fit the new tier into Next (ask about any that are unclear; ideas outside the pillars
      stay parked).
+   - **Kit tools:** list the GDD "Kit tools for this game" rows whose tier is the new one, one line each (the tool,
+     why, what it would add now), and ask which go into ROADMAP Next. Mention rows of the old tier that never ran. A
+     GDD without the section (a game from before kit 0.15.1) or with an empty table: offer once to fill it from the
+     GDD's plan (generated levels, enemies, a look, an economy, a pictured main character, languages, the audience,
+     where it ships), and fill it only on a yes.
    - **Toy -> Vertical slice:** if `docs/VERTICAL_SLICE.md` is still the blank template, offer to fill it from the GDD
      (systems marked "yes" for the slice, the assumptions to test).
    - **Vertical slice -> MVP / Release (the greenlight):** fill `docs/PRODUCTION.md` from the GDD: the backlog (every

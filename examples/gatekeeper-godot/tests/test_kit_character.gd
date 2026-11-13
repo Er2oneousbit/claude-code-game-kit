@@ -11,6 +11,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the swing's ceiling, the loop's period and clock,
 #           and two instances keeping their own loop flags (0.15.0 review)
+#           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the same clip keeps its time, an ended one-shot
+#           keeps holding, restart is explicit (#296)
 # ---------------------------------------------------------------------------
 extends GutTest
 
@@ -83,7 +85,7 @@ func _check(c: Node3D) -> void:
 ## The loop's period is the clip's length and the clock runs at 1x: the pose a quarter in equals the pose a quarter
 ## into the next loop, and advancing the player by t moves its position by t.
 func _check_period(c: Node3D) -> void:
-	KitCharacter.player(c).stop()   # play() of the clip already playing keeps its position (AnimationPlayer.play)
+	KitCharacter.player(c).stop()   # play() of the clip already playing keeps its position (#296)
 	var ap := KitCharacter.play(c, "walk", true, 0.0)
 	var skel := KitCharacter.skeleton(c)
 	var bone := skel.find_bone(KitCharacter.bone_name(str(expected.moving_bone)))
@@ -139,3 +141,33 @@ func test_loop_is_per_instance() -> void:
 	ap_b.advance(length * 1.5)
 	assert_true(ap_a.is_playing(), "a is still playing after its length")
 	assert_false(ap_b.is_playing(), "b stopped at the end of its clip")
+
+
+## #296, the kit's rule in all five engines: play() of the clip already playing changes nothing (a game may call it
+## every frame), a one-shot that ended keeps holding (AnimationPlayer.play alone would start it again), and a restart
+## is explicit.
+func test_the_same_clip_keeps_its_time_and_restart_is_explicit() -> void:
+	var c := _loaded(false)
+	if c == null:
+		return
+	var ap := KitCharacter.play(c, "walk", true, 0.0)
+	ap.advance(0.0)
+	ap.advance(0.3)
+	for i in 3:
+		KitCharacter.play(c, "walk", true, 0.0)
+	ap.advance(0.1)
+	assert_almost_eq(ap.current_animation_position, 0.4, CLOCK_TOL_S, "walk kept its time when asked for again")
+	KitCharacter.play(c, "walk", true, 0.0, true)
+	ap.advance(0.0)
+	assert_almost_eq(ap.current_animation_position, 0.0, CLOCK_TOL_S, "restart = true starts walk from 0")
+	ap.advance(0.2)
+	KitCharacter.play(c, "walk", false, 0.0)
+	ap.advance(0.0)
+	assert_almost_eq(ap.current_animation_position, 0.0, CLOCK_TOL_S, "another loop setting starts it again")
+	var length := float(expected.clips.walk.seconds)
+	ap.advance(length + 0.5)
+	assert_false(ap.is_playing(), "the one-shot ended")
+	KitCharacter.play(c, "walk", false, 0.0)
+	assert_false(ap.is_playing(), "asking for the ended one-shot again keeps it holding its last frame")
+	KitCharacter.play(c, "walk", false, 0.0, true)
+	assert_true(ap.is_playing(), "restart = true plays the one-shot again")

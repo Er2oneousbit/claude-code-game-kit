@@ -5,6 +5,7 @@
 # Usage   : var hero := KitCharacter.load_scene("res://assets/models/hero_rigged.glb")
 #           add_child(hero)
 #           KitCharacter.play(hero, "walk")                 # loops; play(hero, "wave", false) plays once
+#           KitCharacter.play(hero, "walk", true, KitCharacter.BLEND_S, true)   # from the start again
 #           KitCharacter.clips(hero)                        # ["idle", "walk", ...]
 #           var skel := KitCharacter.skeleton(hero)
 #           skel.find_bone(KitCharacter.bone_name("mixamorig:LeftUpLeg"))   # Godot's name: mixamorig_LeftUpLeg
@@ -13,22 +14,27 @@
 #           falls back to loading the file at run time with GLTFDocument (user:// or any path on disk; a runtime
 #           load has no import settings). glTF clips import without looping: play() sets the clip's loop_mode, on
 #           the player's own copies of the Animations (own_animations(); instances of one imported scene share the
-#           originals, so one instance's loop flag must not reach another). play() of the clip that is already
-#           playing keeps it going from where it is (AnimationPlayer.play), so calling it every frame is fine;
-#           player(hero).seek(0.0, true) restarts it. Root motion: none is applied
-#           (AnimationPlayer has no root motion; Bozzetto's clips walk in place, the game moves the node).
+#           originals, so one instance's loop flag must not reach another). The kit's rule in every engine (#296):
+#           play() of the clip already playing, with the same loop setting, changes nothing (it keeps its time; a
+#           one-shot that ended keeps holding its last frame, where AnimationPlayer.play would start it again), so
+#           calling it every frame is fine; another loop setting or restart = true starts it from 0.
+#           Root motion: none is applied (AnimationPlayer has no root motion; Bozzetto's clips walk in place, the
+#           game moves the node).
 #           Godot replaces ':' in bone and node names with '_' on import (mixamorig:Hips -> mixamorig_Hips).
 #           Facing: glTF's front is +Z; Godot's forward is -Z, so a character faces the default camera; to walk
 #           toward a point use look_at(target, Vector3.UP, true) (use_model_front: +Z is the front).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): own_animations(), so one instance's loop flag
 #           never reaches another instance of the same imported scene (0.15.0 review)
+#           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the same clip again changes nothing, also after a
+#           one-shot ended; restart is explicit (#296)
 # ---------------------------------------------------------------------------
 class_name KitCharacter
 extends RefCounted
 
 const BLEND_S := 0.2   # seconds of crossfade when play() switches clips
 const OWNED_META := "kit_character_owned_animations"   # set on a player once its animations are its own copies
+const PLAYING_META := "kit_character_playing"          # "<clip>|<loop mode>" play() started last (#296)
 
 
 ## The character's scene: the imported one when Godot imported the file, else loaded at run time. null on failure.
@@ -73,16 +79,28 @@ static func clips(character: Node) -> PackedStringArray:
 	return ap.get_animation_list() if ap != null else PackedStringArray()
 
 
-## Play `clip`, looping unless loop is false; crossfade from the current clip over blend seconds. Returns the player
-## (null, with an error, when the character has no such clip).
-static func play(character: Node, clip: String, loop: bool = true, blend: float = BLEND_S) -> AnimationPlayer:
+## Play `clip`, looping unless loop is false; crossfade from the current clip over blend seconds. The clip play()
+## started last, with the same loop setting, is left alone (it keeps its time; a held one-shot keeps holding) unless
+## restart is true (#296). Returns the player (null, with an error, when the character has no such clip).
+static func play(character: Node, clip: String, loop: bool = true, blend: float = BLEND_S,
+		restart: bool = false) -> AnimationPlayer:
 	var ap := player(character)
 	if ap == null or not ap.has_animation(clip):
 		push_error("KitCharacter: no clip '%s' (the file has %s)" % [clip, clips(character)])
 		return null
 	own_animations(ap)
-	ap.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if loop else Animation.LOOP_NONE
+	var mode := Animation.LOOP_LINEAR if loop else Animation.LOOP_NONE
+	var key := "%s|%d" % [clip, mode]
+	# Still the one we started: playing, or a one-shot that ended and holds its last frame (a looping clip someone
+	# stopped plays again)
+	var same := ap.assigned_animation == clip
+	if same and not restart and ap.get_meta(PLAYING_META, "") == key and (ap.is_playing() or not loop):
+		return ap
+	ap.get_animation(clip).loop_mode = mode
 	ap.play(clip, blend)
+	if same:
+		ap.seek(0.0, true)   # AnimationPlayer.play() of the assigned clip resumes where it is; this is a restart
+	ap.set_meta(PLAYING_META, key)
 	return ap
 
 

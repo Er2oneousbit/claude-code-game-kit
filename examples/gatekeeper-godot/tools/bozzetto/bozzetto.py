@@ -42,6 +42,7 @@
 #           credits are the user's (Tripo terms 5.2.2). Others: docs/resources/ai-tools.md.
 #           Timing on a 16 GB RTX 5060 Ti: about 5 min per model at normal quality once warm, about 19 at high (K01).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake auto, the local route's default (#203)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -56,7 +57,8 @@
 #          tripo: tripo.run_make: pictures kept without metadata -> journal -> quote <= cap and balance -> upload ->
 #                 image/multiview/text task -> actual cost -> fresh link -> download (extras stripped); turn default
 #                 -90 (Tripo faces +X, glTF's front is +Z)
-#          cleanup.py -> prep_export.py --no-validate -> validate_asset.py --json -> fail: stop, exit 1
+#          cleanup.py (--rebake: Tripo on; local auto = --rebake-under the class floor) -> prep_export.py
+#          --no-validate -> validate_asset.py --json -> fail: stop, exit 1
 #          copy the .glb and LODs into --out -> --sprites sheet -> record JSON -> ASSET_LOG row (updated on a
 #          re-run; the sheet is in it) -> turntable
 import argparse
@@ -102,6 +104,7 @@ LICENSE_TEXTS = HERE / "licenses"
 RECORD = "bozzetto.json"
 WAIT_S = 3600                       # one TRELLIS.2 job: about 5 min at normal, 19 at high on a 16 GB card
 QUALITY = {"normal": 1024, "high": 1536}
+REBAKE_MODES = ("on", "auto", "off")   # --rebake [auto] / --no-rebake (README "UV coverage")
 FACE_SHARE = 0.9                    # TRELLIS.2 decimates to this share of the class budget (Blender has headroom)
 # per class: target height in metres, baked texture size, default LODs (SOP-11: hero LODs required)
 CLASS_SETTINGS = {
@@ -422,11 +425,17 @@ class Plan:
         if self.min_part is not None and not 0 <= self.min_part < 1:
             raise ToolError("--min-part must be at least 0 and under 1 (a share of the faces)")
         self.texture = args.texture or settings["texture"]
-        # the atlas is the vendor's on the Tripo route (29% coverage in a live run, #293): rebake it by default
+        # the atlas is the vendor's on the Tripo route (29% coverage in a live run, #293): rebake it by default. The
+        # local route rebakes only a model under the class floor (#203): TRELLIS.2 characters landed at 51 and 53% of
+        # the npc floor's 55% and a rebake lifted them to 55 and 57%, while one at 63% came back lower (57%)
         rebake = getattr(args, "rebake", None)
-        self.rebake = rebake if rebake is not None else self.route == "tripo"
-        if rebake and args.material != "texture":   # asked for on purpose (Tripo refuses vertex on its own)
+        if rebake in (True, False):              # a caller from before 0.15.1 (the flag was a switch)
+            rebake = "on" if rebake else "off"
+        if rebake not in (None,) + REBAKE_MODES:
+            raise ToolError(f"--rebake {rebake!r}: on, auto or off")
+        if rebake in ("on", "auto") and args.material != "texture":   # asked for on purpose (Tripo refuses vertex)
             raise ToolError("--rebake bakes textures: nothing to bake with --material vertex")
+        self.rebake = rebake or ("on" if self.route == "tripo" else "auto" if args.material == "texture" else "off")
         self.faces = int(self.budget["max_tris"] * FACE_SHARE)
         self.lods = parse_lods(args.lods, self.cls)
         self.src = self.root / SRC_ROOT / self.name
@@ -617,7 +626,9 @@ def blender_steps(args, plan, blender, raw):
                     [raw, "--out", clean, "--name", plan.name, "--max-tris", plan.faces, "--height", plan.height,
                      "--turn", plan.turn, "--json", plan.src / "cleanup.json", "--overwrite"]
                     + (["--min-part", plan.min_part] if plan.min_part is not None else [])
-                    + (["--rebake", "--texture", plan.texture] if plan.rebake else [])
+                    + {"on": ["--rebake", "--texture", plan.texture],
+                       "auto": ["--rebake-under", plan.budget["min_uv_coverage"], "--texture", plan.texture],
+                       "off": []}[plan.rebake]
                     + (["--debug"] if DEBUG else []), "cleanup")
     if rc != 0:
         raise (JobError if rc == 1 else ToolError)(f"cleanup.py failed (exit {rc}); --debug shows Blender's output")
@@ -649,7 +660,7 @@ def blender_steps(args, plan, blender, raw):
         fails = "; ".join(validation.get("failures", [])) or "see validate.json"
         raise JobError(f"{plan.name} fails the {plan.cls} budget: {fails}. Nothing was copied into "
                        f"{rel(plan.root, plan.out_dir)}; the files are in {rel(plan.root, plan.src)}/."
-                       + rebake_mod.hint(validation, plan.rebake))
+                       + rebake_mod.hint(validation, rebake_mod.rebake_summary(cleanup) is not None))
     return export, lods, cleanup, validation
 
 
@@ -826,7 +837,8 @@ def cmd_make(args):
     record = {"tool": f"{TOOL} {VERSION}", "route": plan.route, "date": datetime.date.today().isoformat(),
               "name": plan.name, "class": plan.cls, "budget": plan.budget, "height_m": plan.height, "seed": args.seed,
               "turn_deg": plan.turn, "quality": args.quality, "material": args.material, "lods": plan.lods,
-              "rebake": plan.rebake, "accept_uv": bool(args.accept_uv), "reference": ref_facts, "job": job,
+              "rebake": rebake_mod.rebake_summary(cleanup) is not None, "rebake_mode": plan.rebake,
+              "accept_uv": bool(args.accept_uv), "reference": ref_facts, "job": job,
               "cleanup": cleanup, "validation": {k: validation.get(k) for k in ("failures", "warnings", "notes",
                                                                                 "objects", "total_tris", "waived")},
               "tris": files[0]["triangles"], "files": files, "blender": blender_version(blender)}
@@ -958,9 +970,10 @@ STEPS = [
     ("  (tripo)", "--with tripo: Tripo3D API from --image, --front/--left/--back/--right or --prompt (paid credits: "
                   "a quote first, --max-credits, a journal so a re-run never pays twice)"),
     ("cleanup", "cleanup.py in Blender: merge, drop fragments, normals, decimate to budget, height, pivot"),
-    ("rebake", "--rebake (Tripo: on by default): a fresh UV layout, the textures baked onto it, checked by "
-               "rendering both (tools/blender/rebake_uvs.py); `rebake <name>` does it to a placed model"),
-    ("export", "tools/blender/prep_export.py: the kit's one glTF preset, LODs"),
+    ("rebake", "--rebake (Tripo: on by default; local: auto, only under the class UV floor): a fresh UV layout, the "
+               "textures baked onto it, checked by rendering both (tools/blender/rebake_uvs.py); `rebake <name>` "
+               "does it to a placed model"),
+    ("export", "tools/blender/prep_export.py: the kit's one glTF preset, LODs (textures half the size per level)"),
     ("validate", "tools/blender/validate_asset.py --class: budget, size, UVs; nothing ships when it fails"),
     ("log", "docs/ASSET_LOG.md row (pre-generated AI), evidence file, model licence texts"),
     ("preview", "turntable.py contact sheet; render_sprites.py sheet with --sprites"),
@@ -1063,10 +1076,11 @@ def build_parser():
     p.add_argument("--material", choices=("texture", "vertex"), default="texture",
                    help="baked PBR textures (default), or vertex colours: no textures, smaller, and the unwrap and "
                         "bakes do not run (cleanup.py adds a UV map for lightmaps)")
-    p.add_argument("--rebake", dest="rebake", action="store_true", default=None,
-                   help="a fresh UV layout and the textures baked onto it in cleanup (default on with Tripo, whose "
-                        "atlas is the vendor's; off on the local route): README 'UV coverage'")
-    p.add_argument("--no-rebake", dest="rebake", action="store_false", help="keep the model's own atlas")
+    p.add_argument("--rebake", dest="rebake", nargs="?", const="on", choices=REBAKE_MODES[:2], default=None,
+                   help="a fresh UV layout and the textures baked onto it in cleanup; `--rebake auto` only when the "
+                        "model's own atlas is under the class's UV coverage floor (default: on with Tripo, whose "
+                        "atlas is the vendor's; auto on the local route): README 'UV coverage'")
+    p.add_argument("--no-rebake", dest="rebake", action="store_const", const="off", help="keep the model's own atlas")
     p.add_argument("--accept-uv", action="store_true",
                    help="ship a model that fails the UV coverage floor alone (sprite sources, a rebake that lands "
                         "under the floor); the waiver goes on its asset log row")

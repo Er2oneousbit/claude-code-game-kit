@@ -6,6 +6,7 @@
 # Usage   : python tools/test_check_links.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --baseline write, compare, new, fixed, missing (#299)
 # ---------------------------------------------------------------------------
 import sys
 import tempfile
@@ -145,6 +146,74 @@ class CheckLinksSecondModelFixes(CheckLinksExam):
         # GitHub and Linux read "docs\GDD.md" as one file name, so it is broken there whatever Windows thinks
         broken = self.scan_text("see `docs\\GDD.md` and [x](docs\\GDD.md)")
         self.assertEqual(sorted(broken.get("README.md", [])), ["link: docs\\GDD.md", "path: docs\\GDD.md"])
+
+
+class CheckLinksBaseline(unittest.TestCase):
+    """#299: --baseline FILE tells a new break from the known ones (a template tree's scaffold-time paths)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name) / "proj"
+        self.root.mkdir()
+        (self.root / "README.md").write_text("[a](docs/OLD.md) `docs/GONE.md`\n", encoding="utf-8")
+        self.baseline = Path(self.tmp.name) / "known.txt"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_main(self, *extra):
+        import contextlib
+        import io
+        out = io.StringIO()
+        argv = sys.argv
+        sys.argv = ["check_links.py", "--root", str(self.root), "--baseline", str(self.baseline), *extra]
+        try:
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                rc = check_links.main()
+        finally:
+            sys.argv = argv
+        return rc, out.getvalue()
+
+    def test_write_then_compare_passes(self):
+        rc, out = self.run_main("--write-baseline")
+        self.assertEqual(rc, 0, out)
+        lines = [l for l in self.baseline.read_text(encoding="utf-8").splitlines() if not l.startswith("#")]
+        self.assertEqual(lines, ["README.md: link: docs/OLD.md", "README.md: path: docs/GONE.md"])   # sorted
+        self.assertNotIn(b"\r\n", self.baseline.read_bytes())
+        rc, out = self.run_main()
+        self.assertEqual(rc, 0, out)
+        self.assertIn("none new", out)
+
+    def test_a_new_break_fails_and_only_it_is_listed(self):
+        self.run_main("--write-baseline")
+        (self.root / "NEW.md").write_text("[b](docs/NOPE.md)\n", encoding="utf-8")
+        rc, out = self.run_main()
+        self.assertEqual(rc, 1, out)
+        self.assertIn("[FAIL] NEW.md: link: docs/NOPE.md", out)
+        self.assertNotIn("[FAIL] README.md", out)          # the known ones stay quiet
+
+    def test_a_fixed_hit_is_info_not_a_failure(self):
+        self.run_main("--write-baseline")
+        (self.root / "README.md").write_text("[a](docs/OLD.md)\n", encoding="utf-8")
+        rc, out = self.run_main()
+        self.assertEqual(rc, 0, out)
+        self.assertIn("[info] fixed since the baseline: README.md: path: docs/GONE.md", out)
+
+    def test_a_missing_baseline_is_a_usage_problem(self):
+        rc, out = self.run_main()
+        self.assertEqual(rc, 2, out)
+        self.assertIn("--write-baseline", out)
+
+    def test_write_baseline_needs_a_file(self):
+        argv = sys.argv
+        sys.argv = ["check_links.py", "--root", str(self.root), "--write-baseline"]
+        try:
+            import contextlib
+            import io
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(check_links.main(), 2)
+        finally:
+            sys.argv = argv
 
 
 if __name__ == "__main__":

@@ -53,6 +53,7 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 | New game, first hour | `docs/FIRST_HOUR.md` |
 | Design pillars, scope, MVP | `docs/GDD.md`, slice brief in `docs/VERTICAL_SLICE.md` |
 | Next tier, production backlog and milestones | `/next-tier`, `docs/PRODUCTION.md` (live after the greenlight) |
+| Which kit tools this game's plan calls for, and at which tier | `docs/GDD.md` "Kit tools for this game" (`/next-tier` offers each tier's rows) |
 | Code organization, budgets | `docs/ARCHITECTURE.md` |
 | What to do next | `docs/ROADMAP.md`, `docs/HANDOFF.md` |
 | Engine flow and gotchas | `docs/ENGINE.md`, `docs/ENGINE_FLOW.md` |

@@ -30,6 +30,8 @@
 #           (split vertices) no longer reads as fragmented
 #           2026-10-24: launch lines pass --python-exit-code 1, else Blender exits 0 after a traceback
 #           (--debug re-raises) (E64, tested on Blender 5.2)
+#           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): a coverage just under the floor prints one decimal
+#           (under_text: "54.6% is under 55%", not "55% is under 55%", #203)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -300,6 +302,13 @@ class UnionFind:
             self.parent[rb] = ra
 
 
+def under_text(value, floor):
+    """A share under a floor as a percentage: whole percent, or one decimal when the whole percent would read as the
+    floor itself (54.6% of a 55% floor printed "55% is under 55%", #203)."""
+    text = f"{value:.0%}"
+    return f"{value:.1%}" if text == f"{floor:.0%}" else text
+
+
 def uv_islands(mesh, uv_layer):
     """
     Pseudocode: two faces are in the same island when they share an edge AND
@@ -478,7 +487,8 @@ def check_mesh(obj, args, report):
     dbg(f"{name}: islands {islands}, coverage {coverage:.3f}, overlap {overlap:.3f}, spread {spread:.2f}")
 
     if coverage < args.budget["min_uv_coverage"]:
-        report.fail(f"{name}: UV coverage {coverage:.0%} is under {args.budget['min_uv_coverage']:.0%} (tiny islands waste texture space)")
+        report.fail(f"{name}: UV coverage {under_text(coverage, args.budget['min_uv_coverage'])} is under "
+                    f"{args.budget['min_uv_coverage']:.0%} (tiny islands waste texture space)")
     # Default heuristic: fragmented means many islands AND an average island under 4 triangles.
     # Triangles, not faces, because glTF and FBX imports often arrive triangulated.
     # A cube (12 tris, 6 islands) is fine; a 200-triangle floor in 100 islands is the AI-unwrap failure.

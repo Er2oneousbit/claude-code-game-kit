@@ -3,7 +3,7 @@
 // Purpose : The golden-vector exam: every case in data/golden/juice.json and data/golden/shell.json (written by
 //           tools/golden_vectors.py) and in audio.json, music.json and access.json (written by
 //           tools/audio/wavesmith/), the references every engine port matches, replayed through src/logic/; and
-//           data/golden/credits.json through the credits page's text (src/shell/screens.rs, #279).
+//           data/golden/credits.json through the credits page's text (src/shell/screens.rs, #279, #284).
 // Usage   : python tools/dev.py test   (cargo test --test golden -- --nocapture also prints the case counts)
 // Notes   : One test per case type: it checks every case of that type within the file's tolerance and fails
 //           when the file has none. A case type this file does not know fails vector_files_hold_only_known_types,
@@ -18,6 +18,7 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): audio, music and access vectors
 // Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): the narration cases run too
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the credits_text cases (#284)
 // ---------------------------------------------------------------------------
 use std::path::Path;
 
@@ -70,7 +71,7 @@ const SHELL_TYPES: [&str; 11] = [
 const AUDIO_TYPES: [&str; 1] = ["audio_director"];
 const MUSIC_TYPES: [&str; 2] = ["music_grid", "music_plan"];
 const ACCESS_TYPES: [&str; 2] = ["access_gains", "access_arrow"];
-const CREDITS_TYPES: [&str; 1] = ["strip_comments"];
+const CREDITS_TYPES: [&str; 2] = ["strip_comments", "credits_text"];
 /// The vector file format this exam reads (the files' "version").
 const VECTOR_VERSION: i64 = 1;
 /// The plural case's points do not name their key; the reference builds them all from this one.
@@ -219,6 +220,7 @@ fn check_case(kind: &str, case: &Value, exam: &mut Exam) {
         "access_gains" => access_gains_steps(case, exam),
         "access_arrow" => access_arrow_steps(case, exam),
         "strip_comments" => strip_comments(case, exam),
+        "credits_text" => credits_text_points(case, exam),
         other => exam.fail(format!("unknown case type {other:?}")),
     }
 }
@@ -609,6 +611,13 @@ fn strip_comments(case: &Value, exam: &mut Exam) {
     }
 }
 
+fn credits_text_points(case: &Value, exam: &mut Exam) {
+    for p in arr(&case["points"]) {
+        let p = arr(p);
+        exam.check(s(&p[0]), json!(screens::credits_text(s(&p[1]))), &p[2]);
+    }
+}
+
 // ---- The tests -----------------------------------------------------------------
 #[test]
 fn vector_files_hold_only_known_types() {
@@ -656,7 +665,7 @@ fn credits_md_from_credits_py_shows_no_comment() {
               not this file. -->\r\n\r\n## Music\r\n\r\n<!--\r\nnotes\r\n-->\r\n- Song by Zo\u{eb} (CC0)\r\n";
     assert_eq!(
         screens::credits_lines(md),
-        ["Credits", "", "Music", "", "- Song by Zo\u{eb} (CC0)"]
+        ["Credits", "", "Music", "", "Song by Zo\u{eb} (CC0)"]
     );
     assert!(
         screens::credits_lines("<!-- nothing yet -->\n").is_empty(),
@@ -704,4 +713,5 @@ golden! {
     access_gains: ACCESS, "access_gains";
     access_arrow: ACCESS, "access_arrow";
     credits_strip_comments: CREDITS, "strip_comments";
+    credits_text: CREDITS, "credits_text";
 }

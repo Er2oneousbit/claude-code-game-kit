@@ -6,6 +6,7 @@
 // Usage   : // a file at run time (mods, downloaded or generated characters):
 //           KitCharacter hero = await KitCharacter.Load("data/golden/character/character.glb", parent);
 //           hero.Play("walk");                       // loops; Play("idle", loop: false) holds the last frame
+//           hero.Play("walk", restart: true);        // from the start again (Play("walk") alone keeps its time)
 //           // a model imported into Assets/Models/ (instantiate it, hand over its clips):
 //           var go = Instantiate(prefab);            // the .glb's main asset
 //           KitCharacter.Attach(go, clips).Play("idle");
@@ -17,9 +18,13 @@
 //           PlayableGraph on the model's Animator, which works for a Humanoid avatar with humanoid clips too;
 //           the graph is evaluated here in Update (manual mode) so loop, hold and Seek are exact.
 //           glTF is +Y up, front +Z, metres; glTFast flips X for Unity's left-handed space, so the character
-//           faces +Z (transform.forward) and its left side is -X. Play restarts the clip from its start: call it
-//           when the clip changes, not every frame. Docs: docs/ENGINE.md "Rigged characters".
+//           faces +Z (transform.forward) and its left side is -X. The kit's rule in every engine (#296): Play of the
+//           clip already playing, with the same loop setting, changes nothing (it keeps its time; a held clip keeps
+//           holding), so calling it every frame is fine; another loop setting or restart: true starts it from 0.
+//           Docs: docs/ENGINE.md "Rigged characters".
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): Play of the clip already playing keeps its time,
+//           restart: true is the explicit restart, ClipTime (#296)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -67,6 +72,9 @@ namespace graveyard_shift.Characters
 
         /// <summary>The clip Play started last (null before the first Play).</summary>
         public string Playing { get; private set; }
+
+        /// <summary>Seconds since the playing clip started, before looping or holding (0 before the first Play).</summary>
+        public float ClipTime => _legacy != null && Playing != null ? _legacy[Playing].time : (float)_time;
 
         // ---- Making one ---------------------------------------------------------------
 
@@ -135,12 +143,18 @@ namespace graveyard_shift.Characters
 
         // ---- Playing ------------------------------------------------------------------
 
-        /// <summary>Play a clip from its start; <paramref name="loop"/> false holds its last frame.</summary>
-        public void Play(string clip, bool loop = true)
+        /// <summary>Play a clip from its start; <paramref name="loop"/> false holds its last frame. The clip that is
+        /// already playing, with the same loop setting, is left alone (it keeps its time) unless
+        /// <paramref name="restart"/> is true (#296).</summary>
+        public void Play(string clip, bool loop = true, bool restart = false)
         {
             if (!_clips.TryGetValue(clip, out AnimationClip c))
             {
                 throw new ArgumentException($"{name}: no clip '{clip}' (clips: {string.Join(", ", _names)})", nameof(clip));
+            }
+            if (!restart && clip == Playing && loop == _loop)
+            {
+                return;                               // asked for what plays: a game may call Play every frame
             }
             Playing = clip;
             _loop = loop;

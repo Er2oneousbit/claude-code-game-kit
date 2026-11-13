@@ -20,6 +20,11 @@
 #           asset's bottom center at the world origin; center uses the bounds center; keep changes nothing.
 #           --lods 0.5,0.25 writes <name>_LOD1.glb, <name>_LOD2.glb with a Decimate (collapse) modifier
 #           at those ratios. Check LODs by eye: decimation can wreck UVs and silhouettes.
+#           LOD textures (#196): every LOD is a whole .glb, so each carries its own textures; --lod-textures half
+#           (default) gives LOD n its images at 1/2^n of their size (longest edge never under LOD_TEXTURE_MIN), so a
+#           set of LODs adds about a third of the textures' bytes instead of a full copy each. A rebaked 2048 px
+#           character: 11.5 + 10.8 + 10.3 MB before, 11.5 + 4.6 + 1.8 MB after; Godot 4.7 loads all three (K01).
+#           Shared external images (.gltf) would save more but change what every engine import and record expects.
 #           Skinned meshes: rotation and scale are applied to armatures too; check the rig after export.
 #           Linked duplicates (objects sharing one mesh) get their own mesh copy each, so the export
 #           has one mesh per object instead of a shared one.
@@ -33,6 +38,7 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the bpy module's exit crash, clip names, clips at
 #           30 fps (#292)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): LOD textures at half the size per level (#196)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -41,7 +47,8 @@
 #   pivot: each mesh's origin to its bottom center (data moves the other way, world shape unchanged),
 #          then shift the roots so the asset's bottom center sits at the world origin
 #   names: spaces and dots to underscores (engines choke on them)
-#   export .glb (Y-up, modifiers applied, animations kept); for each LOD ratio: decimate, export, undo
+#   export .glb (Y-up, modifiers applied, animations kept); for each LOD ratio: decimate, the materials' images
+#   swapped for copies at 1/2^n of their size (--lod-textures half), export, undo both
 #   validate the main export with validate_asset's rules, return its verdict
 import argparse
 import fnmatch
@@ -55,6 +62,7 @@ GLTF_PRESET = {  # the ONE export preset (SOP-11: never ad hoc)
     "export_format": "GLB", "export_yup": True, "export_apply": True, "export_animations": True,
     "export_cameras": False, "export_lights": False, "use_selection": False,
 }
+LOD_TEXTURE_MIN = 256   # px: --lod-textures half never takes a texture's longest edge below this
 
 
 def dbg(msg):
@@ -87,6 +95,9 @@ def parse_args(argv):
     ap.add_argument("--ignore", action="append", default=[], metavar="NAME",
                     help="drop objects whose name matches (wildcards ok, repeatable): stray helper meshes in downloaded models")
     ap.add_argument("--lods", type=ratio_list, default=[], help="decimate ratios for LOD files, e.g. 0.5,0.25")
+    ap.add_argument("--lod-textures", choices=["half", "keep"], default="half",
+                    help="half (default): each LOD file's textures at half the size of the one before (2048, 1024, "
+                         f"512 ..., never under {LOD_TEXTURE_MIN} px); keep: every LOD carries the full-size textures")
     ap.add_argument("--class", dest="asset_class", default="any", help="validate_asset budget class (default any)")
     ap.add_argument("--no-validate", action="store_true", help="skip validate_asset on the result")
     ap.add_argument("--overwrite", action="store_true", help="replace existing output files")
@@ -195,6 +206,76 @@ def export(bpy, path):
     bpy.ops.export_scene.gltf(filepath=str(path), **GLTF_PRESET)
 
 
+def texture_nodes(scene):
+    """{image name: (image, [Image Texture nodes reading it])} over the meshes' materials (#196)."""
+    found = {}
+    for obj in [o for o in scene.objects if o.type == "MESH"]:
+        for slot in obj.material_slots:
+            mat = slot.material
+            if mat is None or mat.node_tree is None:
+                continue
+            for node in mat.node_tree.nodes:
+                img = getattr(node, "image", None) if node.type == "TEX_IMAGE" else None
+                if img is None or img.source == "TILED" or min(img.size) == 0:
+                    continue
+                entry = found.setdefault(img.name, (img, []))
+                if node not in entry[1]:
+                    entry[1].append(node)
+    return found
+
+
+def lod_size(size, factor):
+    """An image's (width, height) at `factor` of its size, the longest edge kept at LOD_TEXTURE_MIN or more; None when
+    the image is already at or under that edge (it stays as it is)."""
+    longest = max(size)
+    if longest <= LOD_TEXTURE_MIN:
+        return None
+    scale = max(factor, LOD_TEXTURE_MIN / longest)
+    return max(1, round(size[0] * scale)), max(1, round(size[1] * scale))
+
+
+def shrink_textures(bpy, found, factor):
+    """Point every Image Texture node at a copy of its image scaled to `factor` (lod_size) and return what undo_shrink
+    needs. The copy is a generated image: a scaled file image keeps its packed bytes and is not marked changed, and
+    the glTF exporter would write those full-size bytes (its encode_image.py; T95616), so the scaled pixels go into a
+    new image the exporter has to encode. Colour space and alpha follow the source. Every copy is made from the full
+    image, so LOD2 is not a resample of LOD1."""
+    from array import array
+    swaps = []
+    for img, nodes in found.values():
+        size = lod_size(tuple(img.size), factor)
+        if size is None:
+            continue
+        w, h = size
+        tmp = img.copy()
+        tmp.scale(w, h)
+        buf = array("f", bytes(4 * w * h * 4))
+        tmp.pixels.foreach_get(buf)
+        bpy.data.images.remove(tmp)
+        new = bpy.data.images.new(f"{img.name}_lod", w, h, alpha=img.depth in (16, 32, 64, 128),
+                                  float_buffer=img.is_float)
+        new.colorspace_settings.name = img.colorspace_settings.name
+        new.alpha_mode = img.alpha_mode
+        new.pixels.foreach_set(buf)
+        new.pack()
+        name = img.name
+        img.name = f"{name}_full"
+        new.name = name                    # the LOD's image keeps the name the main file's has
+        for node in nodes:
+            node.image = new
+        swaps.append((img, new, nodes, name))
+        dbg(f"{name}: {img.size[0]}x{img.size[1]} -> {w}x{h} for this LOD")
+    return swaps
+
+
+def undo_shrink(bpy, swaps):
+    for img, new, nodes, name in swaps:
+        for node in nodes:
+            node.image = img
+        bpy.data.images.remove(new)
+        img.name = name
+
+
 def run(args):
     src, out = Path(args.asset), Path(args.out)
     if not src.exists():
@@ -260,17 +341,26 @@ def run(args):
     export(bpy, out)
     print(f"[ OK ] {out} ({base_tris} triangles, pivot {args.pivot})")
 
-    for ratio, path in zip(args.lods, lod_paths):
+    found = texture_nodes(scene) if args.lods and args.lod_textures == "half" else {}
+    for level, (ratio, path) in enumerate(zip(args.lods, lod_paths), 1):
         mods = []
         for obj in [o for o in scene.objects if o.type == "MESH"]:
             m = obj.modifiers.new(name="LOD_Decimate", type="DECIMATE")
             m.ratio = ratio
             mods.append((obj, m))
         tris = triangles(bpy, scene)
-        export(bpy, path)
+        # #196: every LOD file is a whole .glb (any engine loads it alone), so each one carries its textures; at half
+        # the size of the level before, the copies add a third of the textures' bytes instead of a full set per LOD
+        swaps = shrink_textures(bpy, found, 0.5 ** level) if found else []
+        px = sorted({max(new.size) for _, new, _, _ in swaps})
+        try:
+            export(bpy, path)
+        finally:
+            undo_shrink(bpy, swaps)
         for obj, m in mods:
             obj.modifiers.remove(m)
-        print(f"[ OK ] {path} ({tris} triangles, ratio {ratio})")
+        print(f"[ OK ] {path} ({tris} triangles, ratio {ratio}"
+              + (f", textures {'/'.join(str(p) for p in px)} px" if px else "") + ")")
 
     if args.no_validate:
         return 0

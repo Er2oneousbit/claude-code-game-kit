@@ -14,7 +14,10 @@
 #           is 50%, so the validator fails it, and the old code has no --rebake: exit 2); after the rebake the
 #           coverage is over the floor, the triangle count is unchanged, every face still reads its quadrant's colour
 #           from the new texture, the normal map is still flat and the metallic-roughness constants survive.
+#           #203: the local route's --rebake auto hands cleanup.py the class floor (--rebake-under) and rebakes only
+#           under it; part 2 runs it on the fixture (rebaked) and on the rebaked model (kept as it is).
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake auto and --rebake-under (#203)
 # ---------------------------------------------------------------------------
 import contextlib
 import io
@@ -55,6 +58,7 @@ class Fake(tb.FakeBlender):
         super().__init__()
         self.failures = [SIZE_FAIL]
         self.rebake_report = REBAKE_REPORT
+        self.own_coverage = 0.66      # what cleanup.py --rebake-under measures on the model's own atlas
 
     def __call__(self, blender, script, argv, what):
         argv = [str(a) for a in argv]
@@ -76,6 +80,11 @@ class Fake(tb.FakeBlender):
             rep_path = Path(argv[argv.index("--json") + 1])
             rep = json.loads(rep_path.read_text(encoding="utf-8"))
             rep["rebake"] = dict(self.rebake_report) if "--rebake" in argv else None
+            if "--rebake-under" in argv:   # as cleanup.py does: the rebake only under the floor
+                floor = float(argv[argv.index("--rebake-under") + 1])
+                ran = self.own_coverage < floor
+                rep["rebake_auto"] = {"floor": floor, "coverage": self.own_coverage, "ran": ran}
+                rep["rebake"] = dict(self.rebake_report) if ran else None
             rep_path.write_text(json.dumps(rep), encoding="utf-8")
         return rc, out
 
@@ -135,11 +144,34 @@ class RouteDefaults(TripoBase):
 
 
 class LocalDefaults(LocalBase):
-    def test_local_route_is_opt_in(self):
+    def test_local_route_rebakes_only_under_the_class_floor(self):
+        """#203: the local route's default is --rebake auto: cleanup.py gets the class floor and rebakes only a model
+        under it (TRELLIS.2 characters at 51 and 53% of the npc floor's 55%); one over it keeps its own atlas."""
         rc, out = self.make()
         self.assertEqual(rc, 0, out)
-        self.assertNotIn("--rebake", self.cleanup_argv())
-        self.assertFalse(self.record()["rebake"])
+        argv = self.cleanup_argv()
+        self.assertNotIn("--rebake", argv)
+        self.assertEqual(argv[argv.index("--rebake-under") + 1], "0.5", "the prop floor")
+        self.assertEqual(argv[argv.index("--texture") + 1], "1024", "the prop class texture")
+        self.assertFalse(self.record()["rebake"], "66% meets the floor: no rebake")
+        self.assertEqual(self.record()["rebake_mode"], "auto")
+        self.assertNotIn("UV rebaked", self.row("assets/models/prop_crate.glb"))
+        self.fake.own_coverage = 0.51
+        rc, out = self.make("--image", "art_src/crate.png", "--seed", "7", "--class", "npc", "--overwrite")
+        self.assertEqual(rc, 0, out)
+        argv = self.cleanup_argv()
+        self.assertEqual(argv[argv.index("--rebake-under") + 1], "0.55", "the npc floor")
+        self.assertTrue(self.record()["rebake"], "51% is under the npc floor: rebaked")
+        self.assertIn("UV rebaked 29% -> 46% at 2048 px", self.row("assets/models/prop_crate.glb"))
+        rc, out = self.make("--image", "art_src/crate.png", "--seed", "7", "--rebake", "auto", "--overwrite")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("--rebake-under", self.cleanup_argv())
+        for flags in (["--no-rebake"], ["--material", "vertex"]):
+            rc, out = self.make("--image", "art_src/crate.png", "--seed", "7", "--overwrite", *flags)
+            self.assertEqual(rc, 0, out)
+            argv = self.cleanup_argv()
+            self.assertFalse("--rebake" in argv or "--rebake-under" in argv, (flags, argv))
+            self.assertEqual(self.record()["rebake_mode"], "off")
         rc, out = self.make("--image", "art_src/crate.png", "--seed", "7", "--rebake", "--overwrite")
         self.assertEqual(rc, 0, out)
         argv = self.cleanup_argv()
@@ -150,10 +182,11 @@ class LocalDefaults(LocalBase):
                       self.evidence("assets/models/prop_crate.glb"))
 
     def test_rebake_with_vertex_colours_is_refused_before_any_job(self):
-        rc, out = self.make("--image", "art_src/crate.png", "--seed", "7", "--rebake", "--material", "vertex")
-        self.assertEqual(rc, 2, out)
-        self.assertIn("nothing to bake", out)
-        self.assertEqual(self.fake.calls, [])
+        for flag in (["--rebake"], ["--rebake", "auto"]):
+            rc, out = self.make("--image", "art_src/crate.png", "--seed", "7", "--material", "vertex", *flag)
+            self.assertEqual(rc, 2, out)
+            self.assertIn("nothing to bake", out)
+            self.assertEqual(self.fake.calls, [])
 
 
 # ---- part 1: the waiver ---------------------------------------------------------------------------------------------
@@ -186,6 +219,17 @@ class Waiver(LocalBase):
         self.assertIn("over 3.0 m", out)
         self.assertNotIn("--accept-uv ships", out)
         self.assertFalse((self.root / "assets" / "models").exists())
+
+    def test_a_coverage_just_under_the_floor_reads_under_it(self):
+        """#203: a TRELLIS.2 npc at 54.6% failed with "UV coverage 55% is under 55%"; one decimal when the whole
+        percent would read as the floor, and the waiver reads that number back."""
+        self.assertEqual(bz.va.under_text(0.546, 0.55), "54.6%")
+        self.assertEqual(bz.va.under_text(0.29, 0.5), "29%")
+        fail = f"npc_a: UV coverage {bz.va.under_text(0.546, 0.55)} is under 55% (tiny islands waste texture space)"
+        v = {"failures": [fail]}
+        self.assertTrue(rebake.waive_uv(v))
+        self.assertEqual(rebake.waiver_text(v, "npc", 0.55), "UV coverage waived: 54.6% under the npc floor 55% "
+                                                               "(--accept-uv)")
 
     def test_waive_uv_is_a_pure_function(self):
         v = {"failures": [UV_FAIL]}
@@ -277,6 +321,11 @@ class Subcommand(LocalBase):
         with self.assertRaises(SystemExit):
             cleanup.parse_args(["raw.glb", "--out", "c.glb", "--rebake", "--texture", "300"])
         self.assertTrue(cleanup.parse_args(["raw.glb", "--out", "c.glb", "--rebake", "--texture", "2048"]).rebake)
+        self.assertEqual(cleanup.parse_args(["raw.glb", "--out", "c.glb", "--rebake-under", "0.55", "--texture",
+                                             "1024"]).rebake_under, 0.55)
+        for bad in (["--rebake", "--rebake-under", "0.5"], ["--rebake-under", "0"], ["--rebake-under", "55"]):
+            with self.assertRaises(SystemExit, msg=bad), contextlib.redirect_stderr(io.StringIO()):
+                cleanup.parse_args(["raw.glb", "--out", "c.glb"] + bad)
 
     def test_list_and_help_name_the_step(self):
         rc, out = self.run_tool("list", url=False)
@@ -493,6 +542,31 @@ class RealRebake(unittest.TestCase):
         self.assertEqual(after["base_px"], [256, 256])
         doc = cl.read_glb(new.read_bytes())[0]
         self.assertNotIn("TEXCOORD_1", doc["meshes"][0]["primitives"][0]["attributes"])
+
+    def test_rebake_under_a_floor_rebakes_only_a_model_under_it(self):
+        """#203 (bozzetto.py --rebake auto): the fixture's own atlas (1%) is under the prop floor, so it is rebaked;
+        the rebaked model (over the floor) run again keeps its atlas untouched."""
+        auto = self.d / "auto.glb"
+        rc, out = bz.run_bpy(BLENDER, HERE / "cleanup.py", [self.fixture, "--out", auto, "--height", "1",
+                                                            "--rebake-under", "0.5", "--texture", "256", "--json",
+                                                            self.d / "auto.json"], "cleanup")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("is under the floor 50%: rebaking", out)
+        rep = json.loads((self.d / "auto.json").read_text(encoding="utf-8"))
+        self.assertTrue(rep["rebake_auto"]["ran"], rep["rebake_auto"])
+        self.assertLess(rep["rebake_auto"]["coverage"], 0.1)
+        self.assertGreaterEqual(rep["rebake"]["uv_coverage_after"], 0.5)
+        self.assertEqual(self.validate(auto)[0], 0)
+        kept = self.d / "kept.glb"
+        rc, out = bz.run_bpy(BLENDER, HERE / "cleanup.py", [auto, "--out", kept, "--height", "1", "--rebake-under",
+                                                            "0.5", "--json", self.d / "kept.json"], "cleanup")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("meets the floor 50%: the model's own atlas is kept", out)
+        rep2 = json.loads((self.d / "kept.json").read_text(encoding="utf-8"))
+        self.assertIsNone(rep2["rebake"])
+        self.assertFalse(rep2["rebake_auto"]["ran"])
+        self.assertAlmostEqual(rep2["rebake_auto"]["coverage"], rep["rebake"]["uv_coverage_after"], delta=0.01)
+        self.assertEqual(self.validate(kept)[0], 0)
 
     def test_standalone_script_and_its_usage_errors(self):
         out = self.d / "standalone.glb"

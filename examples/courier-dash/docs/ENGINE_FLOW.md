@@ -64,8 +64,8 @@ and `src/main.ts` starts the shell only after the first rendered frame, so `BOOT
   and these tests say which module to fix.
 - `telemetry.golden.test.ts` checks the `telemetry.csv` columns and row format (`userData.ts`) against
   `data/golden/telemetry.json`, so every engine writes the same file.
-- `credits.test.ts` checks the credits screen's text (`credits.ts` in the shell: HTML comments out of CREDITS.md)
-  against `data/golden/credits.json`.
+- `credits.test.ts` checks the credits screen's text (`credits.ts` in the shell: HTML comments, heading marks, list
+  markers and emphasis stars out of CREDITS.md, the same rule on every engine) against `data/golden/credits.json`.
 - `dialogue.golden.test.ts` checks the subtitle typewriter (`revealCount` in `dialogue.ts`) against
   `data/golden/dialogue.json` (written by `python tools/audio/wavesmith/wavesmith.py dialogue vectors --write`).
 - `tests/atomicFile.test.ts` proves the crash-safe write on the real filesystem (a temp folder).
@@ -136,7 +136,8 @@ FlashLimiter take real time; shake, follow, buffer, coyote and spring take game 
   - `pseudo` (with `--locale pseudo`): visits every screen and settings section; exit 0 when nothing is truncated,
     clipped or untranslated. `pseudo-plant` adds one label that is too small: it must exit 1 naming
     `plant.too_small`.
-  - `show:title|settings|pause|subtitle|juice` (with `--screenshot`): opens that screen, freezes the world, captures it.
+  - `show:title|settings|pause|subtitle|juice|credits` (with `--screenshot`): opens that screen, freezes the world,
+    captures it (credits: the first lines, standing still).
   - `access[:res=WxH][,scale=N][,pad][,read]`: every screen reported as `ACCESS_*` lines for
     `python tools/access/sweep.py` (five runs: 1080p, 200 % text, the readable font, and the Steam Deck size with
     the gamepad only).

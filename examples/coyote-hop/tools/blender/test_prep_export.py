@@ -5,13 +5,15 @@
 #           a pivot floating above it, an off-center location and a bad name must come
 #           out clean, the LODs must really have fewer triangles, and the validator
 #           verdict and usage errors must reach the exit code. Linked duplicates (two
-#           objects sharing one mesh) must both come out with their transforms applied.
+#           objects sharing one mesh) must both come out with their transforms applied. LOD files carry their
+#           textures at half the size per level, the colour kept (#196).
 # Usage   : With the bpy module:  python tools/blender/test_prep_export.py [--keep] [--debug]
 #           Inside Blender:       blender -b --python-exit-code 1 -P tools/blender/test_prep_export.py -- [--keep] [--debug]
 # Exit    : 0 all cases pass, 1 some case failed, 2 bpy not available
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the exam ends through bpy_common with the bpy
 #           module (#292: its own exit crashed after the fixtures' glTF export); the 30 fps clip case
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the LOD texture sizes (#196)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -107,6 +109,52 @@ def build_clip30(bpy, path):
         obj.keyframe_insert("location", frame=f)
     obj.animation_data.action.name = "bob"
     bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", export_animations=True)
+
+
+def build_textured(bpy, path, size=1024, colour=(0.8, 0.25, 0.1, 1.0)):
+    """A sphere whose material reads one size x size image of a flat sRGB colour (packed into the .glb), for the LOD
+    texture sizes (#196)."""
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=48, ring_count=24, radius=0.5, location=(0, 0, 0.5))
+    obj = bpy.context.active_object
+    obj.name = "Painted"
+    img = bpy.data.images.new("painted_colour", size, size, alpha=False)
+    img.pixels.foreach_set(list(colour) * (size * size))
+    img.pack()
+    mat = bpy.data.materials.new("painted_mat")
+    mat.use_nodes = True
+    tex = mat.node_tree.nodes.new("ShaderNodeTexImage")
+    tex.image = img
+    bsdf = mat.node_tree.nodes["Principled BSDF"]
+    mat.node_tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    obj.data.materials.append(mat)
+    bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB")
+
+
+def glb_images(path):
+    """[(width, height, bytes)] of every PNG embedded in a .glb, read with the standard library."""
+    import json
+    import struct
+    data = Path(path).read_bytes()
+    jlen = struct.unpack_from("<I", data, 12)[0]
+    doc = json.loads(data[20:20 + jlen].decode("utf-8"))
+    start = 20 + jlen + 8
+    out = []
+    for im in doc.get("images", []):
+        view = doc["bufferViews"][im["bufferView"]]
+        blob = data[start + view.get("byteOffset", 0):start + view.get("byteOffset", 0) + view["byteLength"]]
+        w, h = struct.unpack(">II", blob[16:24]) if blob[:4] == b"\x89PNG" else (0, 0)
+        out.append((w, h, len(blob)))
+    return out
+
+
+def image_colour(bpy, path):
+    """The mean colour (r, g, b) of the first image an imported .glb's material reads, from a few pixels."""
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.ops.import_scene.gltf(filepath=str(path))
+    img = [i for i in bpy.data.images if min(i.size) > 0][0]
+    px = list(img.pixels[:4 * 64])
+    return tuple(sum(px[c::4]) / 64 for c in range(3))
 
 
 def clip_times(path):
@@ -254,6 +302,24 @@ def main():
     case("a clip keyed at 30 fps keeps its name and its length (bob, 2/30 s)",
          rc == 0 and list(times) == ["bob"] and span is not None and abs(span - 2 / 30) < 1e-4,
          f"{times}; " + out[-300:])
+
+    # #196: every LOD .glb carried a full copy of the textures (a rebaked 2048 px character: 11.5 MB main, 10.8 and
+    # 10.3 MB LODs); now each LOD's are half the size of the level before, the colour (and colour space) kept
+    painted = tmp / "painted.glb"
+    build_textured(bpy, painted)
+    rc, out = run_tool(painted, "--out", tmp / "painted_out.glb", "--lods", "0.5,0.25", "--no-validate")
+    sizes = [[im[:2] for im in glb_images(tmp / f"painted_out{s}.glb")] if rc == 0 else []
+             for s in ("", "_LOD1", "_LOD2")]
+    case("LOD textures halve per level (1024, 512, 256)",
+         sizes == [[(1024, 1024)], [(512, 512)], [(256, 256)]], f"{sizes}; " + out[-300:])
+    if rc == 0:
+        main_c, lod_c = image_colour(bpy, tmp / "painted_out.glb"), image_colour(bpy, tmp / "painted_out_LOD2.glb")
+        case("an LOD's smaller texture keeps the colour", all(abs(a - b) < 0.01 for a, b in zip(main_c, lod_c)),
+             (main_c, lod_c))
+    rc, out = run_tool(painted, "--out", tmp / "painted_keep.glb", "--lods", "0.5", "--no-validate",
+                       "--lod-textures", "keep")
+    sizes = [im[:2] for im in glb_images(tmp / "painted_keep_LOD1.glb")] if rc == 0 else []
+    case("--lod-textures keep gives an LOD the full-size textures", sizes == [(1024, 1024)], f"{sizes}; " + out[-300:])
 
     passed = sum(results)
     print(f"{passed}/{len(results)} cases passed")

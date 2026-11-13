@@ -2,7 +2,7 @@
 // drive.ts
 // Purpose : Scripted runs for `dev.py smoke --drive <scenario>`: the game plays itself through the real input
 //           path (injected actions, the same route a key press takes) and logs markers smoke waits for.
-// Usage   : ?drive=menus | crash | pseudo | pseudo-plant | show:<title|settings|pause|subtitle|juice>
+// Usage   : ?drive=menus | crash | pseudo | pseudo-plant | show:<title|settings|pause|subtitle|juice|credits>
 //           | access[:res=WxH][,scale=N][,pad] (every screen reported for tools/access/sweep.py)
 //           (dev.py smoke --drive X adds it to the URL; --locale pseudo adds ?locale=pseudo)
 // Notes   : Browser only. Every scenario ends with DRIVE_DONE <scenario>; a failed step logs DRIVE_ABORT (an
@@ -24,10 +24,12 @@
 //           juice demo's subtitle (skipped while it types) is finished and checked again; the subtitle clock
 //           stands still for the tour (holdTime), so the count is the same on every run of a build, however
 //           long loading takes
-//   show  : open one screen, settle, freeze the game, SHOWN <screen> (smoke takes the screenshot)
+//   show  : open one screen, settle, freeze the game (credits: the text at its top, standing still), SHOWN <screen>
+//           (smoke takes the screenshot)
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the still frame goes through the shell's GameHost,
 //           so web and web-3d share this file (#175)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits (#284)
 // ---------------------------------------------------------------------------
 import { glyphName, glyphSet, promptBinding } from "../core/bindings";
 import { PSEUDO_LOCALE } from "../core/i18n";
@@ -277,8 +279,17 @@ async function show(shell: Shell, d: Driver, what: string): Promise<void> {
       }
       if (shell.scene) shell.host?.pause(shell.scene); // a still frame for the screenshot
       break;
+    case "credits": {
+      await d.toMenu();
+      await d.choose("menu", "menu.credits");
+      await d.screen("credits");
+      shell.settings.access.reduce_motion = true; // the text stands still (this run's own settings, never saved)
+      const box = shell.top?.root.querySelector<HTMLElement>(".credits");
+      if (box) box.scrollTop = 0; // the first lines in view
+      break;
+    }
     default:
-      throw new Error(`unknown screen "${what}" (title, settings, pause, subtitle, juice)`);
+      throw new Error(`unknown screen "${what}" (title, settings, pause, subtitle, juice, credits)`);
   }
   await frames(STEP_FRAMES);
   Log.info("drive", `SHOWN ${what}`);

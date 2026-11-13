@@ -88,7 +88,7 @@ folder such as `build/windows/`, exit 2). Drives run with `--fixed-fps 60`, so f
 | `smoke --drive pseudo --locale pseudo` | every screen and settings tab is shown and no label is untranslated, clipped or off screen (`PSEUDO_OK`) |
 | `smoke --drive pseudo-plant --locale pseudo` | exits 1 on purpose, naming a planted label that is too small (`PSEUDO_FAIL`) |
 | `smoke --drive access[:res=WxH][,scale=N][,pad]` | every screen reported as `ACCESS_*` lines for `tools/access/sweep.py` (`AccessAudit`): texts with size, colour, background, fit and where they land, the focus graph, the subtitle and the prompts; the drive sets the window size itself (headless Godot ignores `--resolution`), `pad` presses with gamepad events only |
-| `smoke --drive show:<title\|settings\|pause\|subtitle\|juice> --screenshot captures/x.png` | opens that screen (settings with a control focused) and photographs it in a window |
+| `smoke --drive show:<title\|settings\|pause\|subtitle\|juice\|credits> --screenshot captures/x.png` | opens that screen (settings with a control focused) and photographs it in a window |
 | `... --screenshot new.png --compare base.png [--tolerance N]` | `tools/image_diff.py` finds no difference (exit 1 when it does) |
 Any run with `--locale pseudo` checks each screen as it appears. The windowed capture ignores the mouse, so a cursor
 resting on the window cannot change the picture.
@@ -106,8 +106,8 @@ resting on the window cannot change the picture.
    `test_golden_access.gd` checks `scripts/core/audio_access.gd` against `data/golden/access.json` (slider gains, caption arrows).
    `test_golden_telemetry.gd` checks `telemetry.gd` against `data/golden/telemetry.json` (the CSV columns every engine writes).
    `test_golden_dialogue.gd` checks the subtitle typewriter (`DialogueData.revealed`) against `data/golden/dialogue.json`.
-   `test_credits_text.gd` checks the credits screen's text (`CreditsScreen.plain_text`, HTML comments out of
-   CREDITS.md) against `data/golden/credits.json`.
+   `test_credits_text.gd` checks the credits screen's text (`CreditsScreen.plain_text`: HTML comments, heading marks, list
+   markers and emphasis stars out of CREDITS.md, the same rule on every engine) against `data/golden/credits.json`.
 4. `python tools/dev.py test` runs them headless. Add `--filter <name>` to run one file.
 
 ## Adopting an existing project

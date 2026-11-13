@@ -10,10 +10,12 @@
 #           from the reply's usage; the quote over the cap, a cap stop mid-run, a failed call, a blocked picture, a
 #           refused key, a missing key; the journal reused by a rerun (no second payment), a Tripo task the last
 #           run left running; the sheet, the look check, the record, the asset log row and its terms; no key and no
-#           local path in any written file; the PNG reader on every filter and colour type.
+#           local path in any written file; the PNG reader on every filter and colour type. The Gemini stand-in
+#           answers on the API version the tool calls (G_PATH, from reference.GEMINI_BASE: the stable v1, #298).
 # Usage   : python tools/bozzetto/test_reference.py          (standard library, any Python 3.8+, about 5 s)
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the v1 endpoint and imageSize per model (#298)
 # ---------------------------------------------------------------------------
 import base64
 import contextlib
@@ -41,6 +43,8 @@ cl = bz.cl
 ref.bind(bz)   # as bozzetto.py's parser does, for the cases that call reference.py's helpers directly
 tp.bind(bz)
 
+REAL_GEMINI = ref.GEMINI_BASE   # before any case points it at the stand-in (#298: the stable v1 endpoint)
+G_PATH = urllib.parse.urlsplit(REAL_GEMINI).path.rstrip("/") + "/"   # "/v1/": the stand-in serves the tool's version
 KEY_G = "AIzaTEST-gemini-key-never-written-7f3a"
 KEY_T = "tsk_TEST-tripo-key-never-written-91c2"
 EMBEDDED = "X:/someone/private/concept_source.psd"     # a local path a picture carries in its text chunk
@@ -231,7 +235,7 @@ class Fake(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
         STATE.requests.append(("POST", self.path, {k.lower(): v for k, v in self.headers.items()}, body))
-        if self.path.startswith("/v1beta/models/"):
+        if self.path.startswith(G_PATH + "models/"):
             return self.gemini(body)
         if self.path.startswith("/v3/"):
             return self.tripo_post(self.path[3:], body)
@@ -247,7 +251,7 @@ class Fake(http.server.BaseHTTPRequestHandler):
         self.send(404, {"error": "no such path"})
 
     def gemini(self, body):
-        n = len(STATE.calls("/v1beta/"))
+        n = len(STATE.calls(G_PATH))
         mode = STATE.gemini[n - 1] if n - 1 < len(STATE.gemini) else "ok"
         if self.headers.get("x-goog-api-key") != KEY_G or mode == "badkey":
             return self.send(400, {"error": {"code": 400, "message": "API key not valid. Please pass a valid API key.",
@@ -329,7 +333,7 @@ class Base(unittest.TestCase):
         self.saved = (cl.SLEEP, bz.SLEEP, ref.GEMINI_BASE, tp.BASE, ref.OPENER, tp.OPENER, tp.DOWNLOADER, os.getcwd(),
                       {k: os.environ.get(k) for k in (ref.GEMINI_ENV, ref.TRIPO_ENV)})
         cl.SLEEP = bz.SLEEP = lambda s: None
-        ref.GEMINI_BASE, tp.BASE = self.url + "/v1beta", self.url + "/v3"
+        ref.GEMINI_BASE, tp.BASE = self.url + G_PATH.rstrip("/"), self.url + "/v3"
         # the tool's own openers (API calls refuse redirects, downloads follow them) without the system proxy
         ref.OPENER = tp.OPENER = tp.opener(proxies={})
         tp.DOWNLOADER = tp.opener(proxies={}, redirects=True)
@@ -382,7 +386,7 @@ class Base(unittest.TestCase):
         """Every picture the services received holds no local path."""
         for method, path, _, body in STATE.requests:
             self.assertNotIn(EMBEDDED.encode(), body, f"{path} received a picture with its metadata")
-            if path.startswith("/v1beta/"):
+            if path.startswith(G_PATH):
                 self.assertNotIn(EMBEDDED, base64.b64decode(json.loads(body)["contents"][0]["parts"][0]
                                                             .get("inline_data", {}).get("data", "")).decode("latin-1"))
 
@@ -623,15 +627,15 @@ class LocalRoute(Base):
 # ---- nanobanana route ------------------------------------------------------------------------------------------
 class GeminiRoute(Base):
     def gemini_bodies(self):
-        return [json.loads(r[3]) for r in STATE.calls("/v1beta/")]
+        return [json.loads(r[3]) for r in STATE.calls(G_PATH)]
 
     def test_prompt_conversation_cost_and_terms(self):
         rc, out = self.run_tool("chr_hero", "--prompt", "a frog knight", "--with", "nanobanana", "--seed", "5")
         self.assertEqual(rc, 0, out)
-        calls = STATE.calls("/v1beta/")
+        calls = STATE.calls(G_PATH)
         self.assertEqual(len(calls), 4)
         for _, path, headers, _ in calls:
-            self.assertEqual(path, "/v1beta/models/gemini-nano-banana-2.1:generateContent")
+            self.assertEqual(path, "/v1/models/gemini-nano-banana-2.1:generateContent")
             self.assertNotIn(KEY_G, path)
             self.assertEqual(headers.get("x-goog-api-key"), KEY_G)
         bodies = self.gemini_bodies()
@@ -664,6 +668,27 @@ class GeminiRoute(Base):
         self.assertEqual(len(self.journal()["steps"]), 4)
         self.clean_files()
 
+    def test_the_stable_endpoint_and_image_size_where_documented(self):
+        """#298: Google's generateContent image guide (read 2026-11-13) posts the image models to the stable v1, and
+        shows imageConfig.imageSize only on 2.1, 3.1 Flash and 3 Pro; an imageConfig field a model does not take is an
+        error, so 2.5 Flash Image and 3.1 Flash Lite Image get none (1K is the default)."""
+        self.assertEqual(REAL_GEMINI, "https://generativelanguage.googleapis.com/v1")
+        sizes = {}
+        for model in ref.GEMINI_PRICES:
+            STATE.reset()
+            rc, out = self.run_tool("chr_hero", "--prompt", "a frog knight", "--with", "nanobanana", "--seed", "5",
+                                    "--views", "front", "--model", model, "--overwrite", "--no-log")
+            self.assertEqual(rc, 0, out)
+            (_, path, _, body), = STATE.calls(G_PATH)
+            self.assertEqual(path, f"/v1/models/{model}:generateContent")
+            cfg = json.loads(body)["generationConfig"]
+            self.assertEqual(cfg["responseModalities"], ["IMAGE"])
+            self.assertEqual(cfg["imageConfig"]["aspectRatio"], "1:1")
+            sizes[model] = cfg["imageConfig"].get("imageSize")
+        self.assertEqual(sizes, {"gemini-nano-banana-2.1": "1K", "gemini-3.1-flash-image": "1K",
+                                 "gemini-3-pro-image": "1K", "gemini-3.1-flash-lite-image": None,
+                                 "gemini-2.5-flash-image": None})
+
     def test_concept_goes_out_stripped(self):
         rc, out = self.run_tool("chr_hero", "--from", "art_src/concept.png", "--with", "nanobanana", "--seed", "5",
                                 "--views", "front,back")
@@ -679,7 +704,7 @@ class GeminiRoute(Base):
                                 "--max-cost", "0.05")
         self.assertEqual(rc, 2)
         self.assertIn("over --max-cost", out)
-        self.assertEqual(STATE.calls("/v1beta/"), [])
+        self.assertEqual(STATE.calls(G_PATH), [])
 
     def test_cap_stop_mid_run_then_rerun_reuses_what_was_paid(self):
         STATE.gemini_thoughts = 30000          # replies cost far more than the quote's thinking allowance
@@ -687,7 +712,7 @@ class GeminiRoute(Base):
                                 "--max-cost", "0.30")
         self.assertEqual(rc, 2, out)
         self.assertIn("over --max-cost", out)
-        self.assertEqual(len(STATE.calls("/v1beta/")), 1)
+        self.assertEqual(len(STATE.calls(G_PATH)), 1)
         self.assertFalse((self.dir / "front.png").exists(), "views are written only at the end")
         self.assertEqual(len(self.journal()["steps"]), 1)
         STATE.reset()
@@ -695,13 +720,13 @@ class GeminiRoute(Base):
                                 "--max-cost", "1")
         self.assertEqual(rc, 0, out)
         self.assertIn("reused from the journal", out)
-        self.assertEqual(len(STATE.calls("/v1beta/")), 3, "the front was not paid for again")
+        self.assertEqual(len(STATE.calls(G_PATH)), 3, "the front was not paid for again")
         rec = self.record()
         self.assertTrue(rec["views"]["front"]["reused"])
         self.assertEqual(rec["views"]["front"]["cost"], 0.0)
         self.assertGreater(rec["cost"]["total_paid"], rec["cost"]["this_run"])
         # the rerun's second call still carried the reused front with its signature
-        second = json.loads(STATE.calls("/v1beta/")[0][3])["contents"]
+        second = json.loads(STATE.calls(G_PATH)[0][3])["contents"]
         self.assertEqual(second[1]["parts"][1]["thoughtSignature"], "sig-1")
 
     def test_failed_call_exit_1_keeps_paid_views(self):
@@ -715,12 +740,12 @@ class GeminiRoute(Base):
         STATE.reset()
         rc, out = self.run_tool("chr_hero", "--prompt", "a frog knight", "--with", "nanobanana", "--seed", "5")
         self.assertEqual(rc, 0, out)
-        self.assertEqual(len(STATE.calls("/v1beta/")), 3)
+        self.assertEqual(len(STATE.calls(G_PATH)), 3)
         STATE.reset()
         rc, out = self.run_tool("chr_hero", "--prompt", "a frog knight", "--with", "nanobanana", "--seed", "5",
                                 "--overwrite", "--no-reuse")
         self.assertEqual(rc, 0, out)
-        self.assertEqual(len(STATE.calls("/v1beta/")), 4, "--no-reuse pays again")
+        self.assertEqual(len(STATE.calls(G_PATH)), 4, "--no-reuse pays again")
 
     def test_a_rerun_without_a_seed_reuses_the_journal(self):
         """The seed is never sent to Gemini or Tripo: it only names the take in the journal. Without --seed the
@@ -734,7 +759,7 @@ class GeminiRoute(Base):
         rc, out = self.run_tool("chr_hero", "--prompt", "a frog knight", "--with", "nanobanana")
         self.assertEqual(rc, 0, out)
         self.assertIn("reused from the journal", out)
-        self.assertEqual(len(STATE.calls("/v1beta/")), 3, "the front was paid for twice")
+        self.assertEqual(len(STATE.calls(G_PATH)), 3, "the front was paid for twice")
         self.assertIsNone(self.record()["seed"])
         self.assertNotIn("seed None", self.log_rows()[0])
         aid = self.log_rows()[0].split("|")[1].strip()
@@ -770,7 +795,7 @@ class GeminiRoute(Base):
         self.assertIn("free tier", out)
         self.assertIn("billing", out)
         self.assertNotIn("[FAIL]", out)
-        self.assertEqual(len(STATE.calls("/v1beta/")), 1)
+        self.assertEqual(len(STATE.calls(G_PATH)), 1)
         self.assertFalse((self.dir / ref.JOURNAL).exists() and self.journal()["steps"], "nothing to journal")
         STATE.reset()
         STATE.gemini = ["busy"]

@@ -3,10 +3,13 @@
 # Purpose : Credits: scrolls CREDITS.md (made from docs/ASSET_LOG.md, see SOP-04) or a placeholder until it exists.
 # Usage   : front.open_credits()   (from the main menu)
 # Notes   : The text scrolls by itself (not with reduce motion); up/down scroll by hand and stop the auto-scroll.
-#           Markdown is shown as plain text with HTML comments and heading marks removed (plain_text, tested in
-#           tests/test_credits_text.gd against data/golden/credits.json). Exports include CREDITS.md through
-#           the include filter in export_presets.cfg.
+#           Markdown is shown as plain text: HTML comments, heading marks, list markers and emphasis stars removed
+#           (plain_text, tested in tests/test_credits_text.gd against data/golden/credits.json). Exports include
+#           CREDITS.md through the include filter in export_presets.cfg.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): plain_text follows tools/golden_vectors.py
+#           credits_text: list markers and emphasis stars go too, an indented heading loses its marks, whitespace is
+#           space and tab only, so every engine shows CREDITS.md the same way (#284)
 # ---------------------------------------------------------------------------
 class_name CreditsScreen
 extends ShellScreen
@@ -16,6 +19,8 @@ const MANUAL_STEP_PX: int = 24
 const START_DELAY_S: float = 1.0
 const COMMENT_OPEN: String = "<!--"
 const COMMENT_CLOSE: String = "-->"
+const LIST_MARKERS: String = "-*+"    # a list item's first character (then a space or tab)
+const SPACE_TAB: String = " \t"       # the only whitespace the credits rule trims (every port agrees on these)
 
 var _scroll: ScrollContainer
 var _offset: float = 0.0
@@ -50,12 +55,28 @@ func _credits_text() -> String:
 	return Shell.content(plain)
 
 
-## CREDITS.md as the screen shows it: HTML comments out (tools/credits.py writes one, #279), heading marks off.
+## CREDITS.md as the screen shows it: HTML comments out (tools/credits.py writes one, #279), then per line a
+## heading's marks or a list marker, every emphasis star and the spaces and tabs at the ends; blank lines at the start
+## and the end go. "" means the placeholder. tools/golden_vectors.py credits_text is the spec (#284).
 static func plain_text(markdown: String) -> String:
 	var lines: PackedStringArray = []
 	for line: String in strip_html_comments(markdown).split("\n"):
-		lines.append(line.lstrip("#").strip_edges() if line.begins_with("#") else line.strip_edges(false, true))
-	return "\n".join(lines).strip_edges()
+		var s: String = line.lstrip(SPACE_TAB)
+		var marks: int = 0
+		while marks < s.length() and s[marks] == "#":
+			marks += 1
+		if marks > 0 and (marks == s.length() or SPACE_TAB.contains(s[marks])):
+			s = s.substr(marks).lstrip(SPACE_TAB)           # a heading: its text stays
+		elif s.length() >= 2 and LIST_MARKERS.contains(s[0]) and SPACE_TAB.contains(s[1]):
+			s = s.substr(1).lstrip(SPACE_TAB)               # a list item: its text stays
+		lines.append(s.replace("*", "").rstrip(SPACE_TAB))
+	var first: int = 0
+	var last: int = lines.size()
+	while first < last and lines[first] == "":
+		first += 1
+	while last > first and lines[last - 1] == "":
+		last -= 1
+	return "\n".join(lines.slice(first, last))
 
 
 ## Every <!-- --> comment removed, one line or many (an unclosed one runs to the end); a line that held only

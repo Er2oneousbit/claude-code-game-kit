@@ -28,9 +28,14 @@
 #           baked onto it at --texture pixels, after decimation (the bake wants the final mesh). A vendor atlas
 #           (Tripo: 6,805 islands covering 29% of the texture) cannot be fixed any other way. The report's
 #           "rebake" entry has coverage before and after, the maps, the bake settings and the before/after check.
+#           --rebake-under FLOOR (bozzetto.py's --rebake auto, the local route's default, #203): measure the model's
+#           own UV coverage as the validator will, rebake only under FLOOR, and drop a rebake that lands no higher or
+#           fails its check (the cleanup runs again with the model's own atlas). The report's "rebake_auto" entry has
+#           the floor, the coverage measured and whether the rebake ran.
 #           --turn rotates around the up axis (degrees, counter-clockwise seen from above) so the model's front
 #           faces Blender's front (-Y), which is glTF's +Z: the direction the glTF spec calls the asset's front.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5); --rebake with Claude (Fable 5.1, claude-fable-5-1)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake-under, the rebake only under the floor (#203)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -43,6 +48,8 @@
 #   no UV map: Smart UV Project (vertex colours stay; report uv_added)
 #   --rebake (and the UV map is the file's own): rebake_uvs.rebake -> new layout, textures baked, checked;
 #     a failed check (textures lost) -> exit 1, nothing written
+#   --rebake-under FLOOR: own coverage >= FLOOR -> keep the atlas | under -> rebake as above; the rebake no higher
+#     or its check failed -> [WARN], run everything again without it
 #   rotate --turn around Z -> scale so the height (Z) is --height -> bottom centre to the origin
 #   name the object, mesh, materials and images after --name -> export .glb (prep_export's GLTF_PRESET) -> JSON
 import argparse
@@ -91,6 +98,10 @@ def parse_args(argv):
     ap.add_argument("--rebake", action="store_true",
                     help="a fresh UV layout and the textures baked onto it (tools/blender/rebake_uvs.py): for a "
                          "vendor atlas of tiny islands that fails the SOP-11 coverage floor")
+    ap.add_argument("--rebake-under", type=float, default=None, metavar="FLOOR",
+                    help="rebake only when the model's own UV coverage is under FLOOR (0..1, the class floor: "
+                         "bozzetto.py's --rebake auto); a rebake that lands lower or fails its check keeps the "
+                         "model's own atlas")
     ap.add_argument("--texture", type=int, default=0,
                     help="--rebake: texture size in pixels (default 0: the largest image the model reads)")
     ap.add_argument("--json", dest="json_out", help="write the report (counts before and after) as JSON here")
@@ -99,7 +110,11 @@ def parse_args(argv):
     args = ap.parse_args(argv)
     if args.max_tris < 0 or args.height < 0 or not 0 <= args.min_part < 1 or not 0 <= args.merge < 0.1:
         ap.error("need --max-tris >= 0, --height >= 0, 0 <= --min-part < 1 and 0 <= --merge < 0.1")
-    if args.texture and not args.rebake:
+    if args.rebake and args.rebake_under is not None:
+        ap.error("--rebake always rebakes; --rebake-under rebakes only under a floor: give one")
+    if args.rebake_under is not None and not 0 < args.rebake_under <= 1:
+        ap.error("--rebake-under is a share of the texture, over 0 and at most 1 (0.55 for 55%)")
+    if args.texture and not (args.rebake or args.rebake_under is not None):
         ap.error("--texture goes with --rebake")
     if args.texture and args.texture not in TEXTURE_SIZES:
         ap.error(f"--texture must be one of {', '.join(str(s) for s in TEXTURE_SIZES)}")
@@ -302,7 +317,60 @@ def rename(obj, name):
                 node.image.name = f"{name}_{role}"
 
 
-def run(args):
+def own_coverage(va, obj):
+    """(coverage 0..1 unrounded, islands) of the mesh's own UV map, measured as validate_asset.py measures what ships;
+    None when the validator would not check it (no image texture, palette texturing)."""
+    import rebake_uvs   # noqa: E402  (its GRID is validate_asset's)
+    mesh = obj.data
+    layer = mesh.uv_layers.active or mesh.uv_layers[0]
+    if va.uv_mode(obj, mesh, layer) != "unwrapped":
+        return None
+    mesh.calc_loop_triangles()
+    islands = va.uv_islands(mesh, layer)
+    coverage, _, _ = va.raster_uv(mesh, layer, rebake_uvs.GRID, islands)
+    return coverage, len(set(islands))
+
+
+def rebake_auto(bpy, va, obj, args, report):
+    """--rebake-under FLOOR (bozzetto.py --rebake auto, #203): rebake only when the model's own atlas fails the floor.
+    Over it, the vendor atlas is often the better one (a TRELLIS.2 npc at 63% came back at 57% from a rebake, K01),
+    so it stays. A rebake that lands lower than the atlas it replaces, or fails its before/after check, is dropped:
+    the whole cleanup runs again without it (the bake changed the mesh's materials in place). Returns None to go on,
+    or the exit code of that second pass."""
+    import rebake_uvs   # noqa: E402
+    rebake_uvs.DEBUG = DEBUG
+    floor = args.rebake_under
+    measured = own_coverage(va, obj)
+    if measured is None:
+        report["rebake"] = None
+        report["rebake_auto"] = {"floor": floor, "coverage": None, "ran": False, "why": "no unwrapped texture"}
+        print("[info] --rebake auto: the materials read no unwrapped texture, so there is no coverage floor to meet")
+        return None
+    cov, islands = measured
+    auto = {"floor": floor, "coverage": round(cov, 3), "islands": islands, "ran": cov < floor}
+    report["rebake_auto"] = auto
+    if cov >= floor:
+        report["rebake"] = None
+        auto["why"] = "meets the floor"
+        print(f"[info] --rebake auto: UV coverage {cov:.1%} ({islands} islands) meets the floor {floor:.0%}: the "
+              "model's own atlas is kept")
+        return None
+    print(f"[info] --rebake auto: UV coverage {cov:.1%} ({islands} islands) is under the floor {floor:.0%}: rebaking")
+    report["rebake"] = {}
+    ok = rebake_uvs.rebake(bpy, va, obj, args.texture, report["rebake"])
+    after = report["rebake"].get("uv_coverage_after")
+    if ok and after is not None and after > round(cov, 3):
+        auto["why"] = "under the floor"
+        return None
+    auto.update(ran=False, why=("the rebake did not match the original" if not ok else
+                                f"the rebake landed at {after:.0%}, no better than the model's own {cov:.0%}"),
+                tried=report["rebake"])
+    print(f"[WARN] --rebake auto: {auto['why']}; cleaning up again with the model's own atlas")
+    return run(args, kept=auto)
+
+
+def run(args, kept=None):
+    """kept: the --rebake-under record of a first pass whose rebake was dropped (this pass keeps the atlas)."""
     src, out = Path(args.asset), Path(args.out)
     if not src.is_file():
         print(f"[ENV ] mesh not found: {src}", file=sys.stderr)
@@ -339,7 +407,17 @@ def run(args):
     smooth(bpy, obj)
     decimate(bpy, obj, args.max_tris, report)
     ensure_uvs(bpy, obj, report)
-    if args.rebake and not report["uv_added"]:   # a map this run just made is already a fresh layout
+    auto = args.rebake_under is not None
+    if (args.rebake or auto) and report["uv_added"]:   # a map this run just made is already a fresh layout
+        report["rebake"] = None
+        print("[info] --rebake: the mesh had no UV map, so the one just added is the fresh layout (nothing to bake)")
+    elif kept is not None:                 # the second pass after an auto rebake that did not help
+        report["rebake"], report["rebake_auto"] = None, kept
+    elif auto:
+        rc = rebake_auto(bpy, va, obj, args, report)
+        if rc is not None:
+            return rc
+    elif args.rebake:
         import rebake_uvs   # noqa: E402  (tools/blender: the unwrap, the bakes and the check)
         rebake_uvs.DEBUG = DEBUG
         report["rebake"] = {}
@@ -347,9 +425,6 @@ def run(args):
             print("[FAIL] the rebake did not match the original (see the [FAIL] line above); nothing written. "
                   "Run without --rebake to keep the file's own atlas", file=sys.stderr)
             return 1
-    elif args.rebake:
-        report["rebake"] = None
-        print("[info] --rebake: the mesh had no UV map, so the one just added is the fresh layout (nothing to bake)")
     place(obj, args, report)
     rename(obj, args.name or out.stem)
     report["tris_out"] = tri_count(obj.data)

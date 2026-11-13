@@ -70,9 +70,11 @@ tools/                   dev.py and helpers
   for sharing clips between skeletons; it should match the Mixamo names **(verify: not tried)**. `play()` sets the
   loop flag on the player's own copies of the clips (`own_animations()`): instances of one imported scene share
   their Animation resources, so without that one hero's `play("wave", false)` would stop another's looping wave.
-  `play()` of the clip already playing keeps it going (AnimationPlayer's rule), so a game may call it every frame;
-  `KitCharacter.player(hero).seek(0.0, true)` restarts it. Tested 2026-11-11 on Godot 4.7.2:
-  `tests/test_kit_character.gd` (5 GUT tests) loads `data/golden/character/character.glb` both ways, finds `idle`
+  `play()` of the clip already playing with the same loop setting changes nothing (it keeps its time, and a one-shot
+  that ended keeps holding, where `AnimationPlayer.play` would start it again), so a game may call it every frame;
+  `play(hero, clip, loop, blend, true)` (restart) or another loop setting starts it from 0: the same rule in all five
+  engines' character helpers (#296). Tested 2026-11-11 on Godot 4.7.2:
+  `tests/test_kit_character.gd` (5 GUT tests then, 6 since the restart rule) loads `data/golden/character/character.glb` both ways, finds `idle`
   and `walk` at their lengths, plays `walk` 30 frames and checks `mixamorig_LeftUpLeg` swings as far as
   `expected.json` says and no further, that the loop's period is the clip's length at 1x, and that two instances
   keep their own loop flags; `check`, `test` (109 tests) and `smoke` passed on a fresh scaffold. The same helper

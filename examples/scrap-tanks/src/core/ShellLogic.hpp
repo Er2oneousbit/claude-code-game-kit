@@ -25,6 +25,8 @@
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): admits_device_event, no real input in a drive (#276)
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): DeviceEvent is ShellDeviceEvent, leaving the
 //           generic name to games
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_text, the markdown rule every engine shares
+//           (#284)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -62,8 +64,12 @@ std::vector<std::string> wrap_chars(const std::string& text, std::size_t max_cha
 // end; a comment-only line goes, with one blank line after it when a blank line came before. CRLF -> LF.
 // tools/golden_vectors.py strip_html_comments is the spec, data/golden/credits.json the cases.
 std::string strip_html_comments(const std::string& text);
-// CREDITS.md as plain lines: HTML comments, heading marks, list markers and bold stars stripped. Empty when nothing
-// is left (the screen shows its placeholder then).
+// CREDITS.md as every engine's credits screen shows it (#284): HTML comments out, then per line a heading's marks
+// ('#' then a space, tab or the line end) or a list marker ('-', '*', '+' then a space or tab), every '*', and the
+// spaces and tabs at both ends; blank lines at the start and the end go. "" when nothing is left. Byte-wise (the
+// marks are ASCII). tools/golden_vectors.py credits_text is the spec, data/golden/credits.json the cases.
+std::string credits_text(const std::string& markdown);
+// credits_text split into lines. Empty when nothing is left (the screen shows its placeholder then).
 std::vector<std::string> credits_lines(const std::string& markdown);
 // "key_space" -> "Space", "xbox_a" -> "A", "pad_dpad_up" -> "Dpad up" (the glyph table's own text wins in the shell)
 std::string glyph_fallback_label(const std::string& glyph_name);

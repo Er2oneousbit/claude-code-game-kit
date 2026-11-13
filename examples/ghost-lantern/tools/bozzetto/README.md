@@ -71,7 +71,7 @@ The front is always made first; the other views are turned from it.
 
 | | local (default) | nanobanana | tripo |
 |---|---|---|---|
-| What runs | FLUX.2 klein 4B draws the front from `--prompt`; Qwen-Image-Edit-2511 re-poses a `--from` concept; Qwen-Image-Edit with the Multiple-Angles LoRA turns the front to each other view (as Dotwork's rotations do) | Google's Gemini image model ("Nano Banana", default `gemini-nano-banana-2.1`; `--model` for another), one `generateContent` call per view in one conversation: the front, then "the same character from its left side" ... | Tripo's text-to-image (from a prompt) or image-to-image (from a concept, default model `banana2`), then its image-to-multiview for the other views |
+| What runs | FLUX.2 klein 4B draws the front from `--prompt`; Qwen-Image-Edit-2511 re-poses a `--from` concept; Qwen-Image-Edit with the Multiple-Angles LoRA turns the front to each other view (as Dotwork's rotations do) | Google's Gemini image model ("Nano Banana", default `gemini-nano-banana-2.1`; `--model` for another), one `generateContent` call per view in one conversation on the stable `v1` endpoint: the front, then "the same character from its left side" ... (1K square pictures; `imageSize` is sent only to the models Google's guide shows it on, read 2026-11-13 **(verify)**) | Tripo's text-to-image (from a prompt) or image-to-image (from a concept, default model `banana2`), then its image-to-multiview for the other views |
 | Cost | free, your GPU | per picture, about $0.034 for a 1K image plus input and thinking tokens: about $0.21 for four views **(verify: read 2026-11-11 on Google's pricing page; no free tier for image output, and a free-tier key is refused with HTTP 429)** | 10 credits a picture (text-to-image or image-to-image) and 10 for the multiview: 20 credits ($0.20) for all four (measured on a live run 2026-11-11, K01) |
 | Needs | a running ComfyUI (the same `--url`/`--allow-remote` rules as `make`), Dotwork's Qwen-Image-Edit files (its `rotate` tier) and the ComfyUI-GGUF node pack; `--prompt` also its FLUX.2 klein files | `GEMINI_API_KEY` from a Google Cloud project with billing on: the free tier cannot make images (a free-tier key gets HTTP 429 with an image quota of 0; measured 2026-11-11, K01), and the run says so and stops | `TRIPO_API_KEY` with API credits |
 | Who owns the pictures | you (generated locally; Apache-2.0 models) | you: the Gemini API terms say Google won't claim ownership of generated content (and may make similar content for others); every image carries a SynthID watermark **(verify)** | you, on paid API credits (Tripo terms 5.2.2); not on free credits **(verify)** |
@@ -177,11 +177,11 @@ paid run are marked (verify) there.
 | `--seed N` | One seed for every sampler. Without it the clock picks one and prints it. Shapes change between seeds: try two or three. |
 | `--height M` | Height in metres after cleanup. |
 | `--turn DEG` | Turn around the up axis (counter-clockwise seen from above) when the model's front is not glTF's front (+Z). TRELLIS.2 put the reference's front there in every run so far (default 0); the Tripo route's default is -90. |
-| `--lods 0.5,0.25` or `none` | LOD files `<name>_LOD1.glb` ... (Blender's Decimate: check them by eye). |
+| `--lods 0.5,0.25` or `none` | LOD files `<name>_LOD1.glb` ... (Blender's Decimate: check them by eye), each with its textures at half the size of the level before ("What lands where"). |
 | `--quality normal\|high` | Default `normal`. TRELLIS.2's grid: 1024 (about 5 min warm) or 1536 (about 19 min). |
 | `--material texture\|vertex` | Default `texture`: baked PBR textures (base colour, metallic-roughness, normal, AO), or vertex colours only (small, no textures). A vertex job queues only its own branch, so the UV unwrap and the bakes do not run; TRELLIS.2's vertex-colour mesh has no UV map, so cleanup.py adds one (Smart UV Project) for lightmaps and the budget check. In Godot such a model renders white until one material flag is set ("In the engine" below, #202). |
 | `--texture 512\|1024\|2048` | Baked texture size (the local bake, and the rebake's). |
-| `--rebake`, `--no-rebake` | A fresh UV layout in cleanup and the model's textures baked onto it ("UV coverage" below). On by default with `--with tripo` (the atlas is Tripo's); opt in on the local route. |
+| `--rebake`, `--rebake auto`, `--no-rebake` | A fresh UV layout in cleanup and the model's textures baked onto it ("UV coverage" below). `--rebake` always; `--rebake auto` only when the model's own atlas is under its class's UV coverage floor (logged either way), the local route's default; always with `--with tripo` (the atlas is Tripo's). Give the model's name before a bare `--rebake`. |
 | `--accept-uv` | Ship a model that fails the UV coverage floor alone; the waiver goes on its asset log row and evidence file. |
 | `--out DIR` | Models folder. Default from the game's engine: `assets/models`, web and web-3d `public/assets/models`, Unity `Assets/Models`, Unreal `SourceArt/Models` (import from there). |
 | `--sprites FILE` | Also an 8-direction sprite sheet (tools/blender/render_sprites.py, with its layout in a .json of the same name beside it) for a 2D game. The sheet goes into the same asset log row and the record, with its hash. |
@@ -200,7 +200,7 @@ the GPU starts.
 ## What lands where
 | Path | What |
 |---|---|
-| `<models>/<name>.glb`, `<name>_LOD1.glb` ... | The model, only when it passed `validate_asset.py --class`; the LODs are made from that validated model and copied with it (they are not validated on their own). |
+| `<models>/<name>.glb`, `<name>_LOD1.glb` ... | The model, only when it passed `validate_asset.py --class`; the LODs are made from that validated model and copied with it (they are not validated on their own). Every LOD is a whole `.glb` that any engine loads on its own, so it carries its own textures, at half the size of the level before (2048, 1024, 512; never under 256 px; #196). A rebaked 2048 px character, 51,244 triangles with three maps: 11.5 MB, LOD1 10.8 MB and LOD2 10.3 MB before (32.7 MB), 11.5, 4.6 and 1.8 MB now (17.9 MB); Godot 4.7 imported all three with 2048, 1024 and 512 px textures (K01, 2026-11-13). Shared external textures (`.gltf` beside its images) would save the rest but change the file every engine import and the kit's records expect; `tools/blender/prep_export.py --lod-textures keep` writes full-size LOD textures. |
 | `assets_src/bozzetto/<name>/reference.png` | The picture the mesh was made from (`.jpg`, `.jpeg` or `.webp` when your `--image` was one). Metadata is removed from the copy and from what ComfyUI gets: EXIF (a photo's GPS position, the camera), XMP, IPTC, text chunks, comments and ComfyUI's embedded prompt; the pixels and the colour profile stay. |
 | `assets_src/bozzetto/<name>/raw.glb` | TRELLIS.2's own output, before cleanup (its embedded ComfyUI prompt removed: it holds local paths), or Tripo's (glTF extras removed). |
 | `.../view_front.png` ..., `.../tripo/tasks.json`, `.../tripo/tripo.glb` | Tripo route: the views as uploaded (metadata removed), the journal of paid tasks (no key in it), Tripo's file as downloaded. |
@@ -231,7 +231,7 @@ From the kit's own runs (K01, `workflows/bozzetto-showcase/`):
 - **UVs are the model's own unwrap**: the validator passes props on coverage, but warns about texel density (islands
   20x apart) and a few triangles outside 0..1. Fine for props seen at game distance; a hero asset gets a hand
   unwrap (SOP-11 UV check). Characters land under the floor (TRELLIS.2: 51 to 53% on the npc floor of 55%, E152;
-  Tripo: 29% on the hero floor of 60%): "UV coverage" below.
+  Tripo: 29% on the hero floor of 60%), and `make` rebakes them: "UV coverage" below.
 
 ## UV coverage
 The SOP-11 budget floors UV coverage (prop 50%, npc 55%, hero 60%) because an atlas of tiny islands wastes texels;
@@ -241,22 +241,33 @@ cannot fix that without a rebake. The policy, decided from that run (K01, 2026-1
 - **The floor stays a failure.** The validator measures what ships, not where it came from, and a warning would be
   skipped the way warnings are.
 - **The remedy is a rebake** (`tools/blender/rebake_uvs.py`, run by cleanup.py): a new UV map from Smart UV Project
-  (66 degrees) packed with Blender's own packer (rotation, exact shapes, a 2 px gap), then every image the materials
+  (66 degrees) packed with Blender's own packer (rotation, exact shapes, a gap of 1 px per 1024: 1 px at 1024, 2 at
+  2048, as TRELLIS.2's own atlas has), then every image the materials
   read baked through both layouts onto a new image of the class texture size (base colour, metallic-roughness and
   occlusion, emission and alpha as a plain transfer; the normal map baked as a tangent-space normal, since island
   rotation changes the tangent frame). The materials keep their graphs; only the images and the UV map change. The
   result is checked by rendering both from four sides, as flat colour and lit by a sun (the normal and roughness maps
   show there): a mean difference over 16 levels (24 lit) fails the bake and nothing is written, over 4 (8) warns.
-  **On by default for `make --with tripo`** (`--no-rebake` keeps Tripo's atlas), **opt in with `--rebake`** on the
-  local route (TRELLIS.2 bakes its own 2048 atlas with 1 px padding; rebake it when it lands under the floor).
-  The numbers go into cleanup.json, the record, the asset log row ("UV rebaked 29% -> 46% at 2048 px") and its
-  evidence file (islands, maps, bake settings, the check).
+  **Always on for `make --with tripo`** (`--no-rebake` keeps Tripo's atlas). **On the local route, `--rebake auto`
+  is the default**: cleanup measures the model's own coverage as the validator will and rebakes only under the class
+  floor (`[info] --rebake auto: UV coverage 51.2% (264 islands) is under the floor 55%: rebaking`, or "meets the
+  floor: the model's own atlas is kept"); a rebake that lands no higher, or fails its check, is dropped and the model
+  keeps its own atlas, with a `[WARN]`. Why only under the floor: there the model cannot ship without a rebake, so
+  nothing is lost; over it, TRELLIS.2's own atlas is often the better one (an npc at 63% came back at 57% from a
+  rebake). `--rebake` rebakes every time, `--no-rebake` never.
+  The numbers go into cleanup.json (`rebake_auto`: the floor, the coverage measured, whether it ran), the record, the
+  asset log row ("UV rebaked 29% -> 46% at 2048 px") and its evidence file (islands, maps, bake settings, the check).
+- **What it reached on TRELLIS.2 characters** (#203, K01, 2026-11-13, Blender 5.2.3; the two A-pose npcs of E152 and
+  two more): 13,500 triangles each, the npc floor 55% at 1024 px: 51% (264 islands) to 59% (452) and 53% (241) to 60%
+  (416), both passing now, in 25 to 75 s, the flat check 0.14 levels and the lit check 2.2. With the 2 px gap the
+  kit used before they reached 55% and 57%, and the first still failed (54.6%). An npc at 63% is kept as it is; a
+  54,000-triangle model at 61% of the hero floor 60% too (a rebake would have reached 63%).
 - **What it reached on that character** (51,244 triangles, 120 parts): 29% to 46% coverage, 6,805 to 3,120 islands,
   texel density spread 1.14x to 1.34x, 16 s in Blender 5.2.3, the flat check 0.26 levels mean and the lit check 1.15
   (the turntables are indistinguishable). Not 60%: Smart UV Project turns every tube-like part (straps, rings, a belt)
   into a hollow ring island, and Blender's packer cannot nest islands in the holes, so about 50% is its ceiling on a
   mesh like that; merging the fragments first (tried, 3,120 islands to 190) packed no better. A hand unwrap does
-  (SOP-11). Other files: a 51% TRELLIS.2 npc (#203) is the next thing to measure.
+  (SOP-11). The baked maps are PNG, and Tripo's colour maps came as JPEG: the file grew from 5.0 to 11.5 MB.
 - **`--accept-uv` is the waiver**: a model that fails on UV coverage alone ships, and the waiver is written to the
   record (`validation.waived`), the asset log row ("UV coverage waived: 46% under the hero floor 60% (--accept-uv)")
   and the evidence file. Any other failure still stops it. A sprite source (`--sprites`, render_sprites.py) never
@@ -530,7 +541,8 @@ uv run --python 3.11 --with "bpy==4.2.*" python tools/bozzetto/test_rig.py    # 
                                                     # kit's floor (BOZZETTO_TEST_BLENDER=bpy picks the module when a
                                                     # Blender is installed too); also test_chain.py and test_bozzetto.py
 python tools/bozzetto/test_reference.py         # reference, offline: stand-in ComfyUI, Gemini and Tripo (about 5 s)
-python tools/bozzetto/test_rebake.py            # the UV rebake and --accept-uv offline; a tiny-island cube rebaked
-                                                    # and checked in Blender when it is found (about 1 min)
+python tools/bozzetto/test_rebake.py            # the UV rebake, --rebake auto and --accept-uv offline; a tiny-island
+                                                    # cube rebaked, checked and (over the floor) kept, in Blender when it
+                                                    # is found (about 2 min)
 python tools/bozzetto/bozzetto.py test [--live] # the above in one go
 ```

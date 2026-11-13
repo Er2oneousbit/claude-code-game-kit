@@ -38,6 +38,7 @@
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): analog stick and triggers for the game (#274); crash
 //           context, F8 bug report, pseudo locale, juice demo screen (#275); data/ found next to the exe when the
 //           working directory has none (game_dir())
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_at_top for show:credits (#284)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -292,6 +293,7 @@ private:
     void draw_main_menu(Screen& s);
     void draw_settings();
     void draw_credits(const Screen& s);
+    void credits_at_top();                // show:credits: the first lines in view (they roll up from below)
     void draw_loading(const Screen& s);
     void draw_play();
     void draw_pause(Screen& s);

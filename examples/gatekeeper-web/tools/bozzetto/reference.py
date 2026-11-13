@@ -32,7 +32,11 @@
 #           Prices and terms were read on 2026-11-11 and are marked (verify) in the README.
 #           Tripo goes through tripo.py's shared Client and Budget (the image endpoints, models and quote are there);
 #           the per-picture journal here also serves the Gemini route, so it stays this tool's own.
+#           Gemini: the stable v1 generateContent endpoint (GEMINI_BASE has the sources); imageSize only for the
+#           models Google's guide shows it on (GEMINI_SIZED). Replies came as image/png in every example in Google's
+#           guide but the format is not promised: a JPEG or WebP is converted (Pillow) or kept as it came (verify).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): Gemini on v1, imageSize only where documented (#298)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -115,8 +119,18 @@ SIDES_NOTE = ("left.png should show the character's left side, facing the pictur
 
 # ---- Google Gemini (Nano Banana) --------------------------------------------------------------------------------
 GEMINI_ENV = "GEMINI_API_KEY"
-GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"   # the exam points this at a stand-in
+# v1, the stable version (#298): Google's generateContent image guide ("Nano Banana image generation
+# (generateContent)", read 2026-11-13) posts every image model to /v1/models/<model>:generateContent with
+# generationConfig.responseModalities and imageConfig, and image output is not on the API versions page's list of
+# v1beta-only features. The generateContent API reference still writes its methods table as /v1beta/: both serve it.
+# Google now calls generateContent "legacy" (still supported) and points new projects at its Interactions API, whose
+# request and reply have another shape; moving there needs a live run (verify). The exam points this at a stand-in.
+GEMINI_BASE = "https://generativelanguage.googleapis.com/v1"
 GEMINI_MODEL = "gemini-nano-banana-2.1"
+# models the guide shows with imageConfig.imageSize (1K/2K/4K); the others get no imageSize, and the API reference
+# says 1K is the default then. gemini-2.5-flash-image takes aspectRatio only; gemini-3.1-flash-lite-image has no size
+# table in the guide (verify on a live run before sending it one)
+GEMINI_SIZED = ("gemini-nano-banana-2.1", "gemini-3.1-flash-image", "gemini-3-pro-image")
 # USD per 1M tokens: input, text and thinking output, image output; output tokens per 1K image (read 2026-11-11 on
 # aistudio.google.com/docs/pricing, Standard tier; verify)
 GEMINI_PRICES = {
@@ -557,7 +571,7 @@ class Gemini:
     def call(self, contents):
         url = f"{GEMINI_BASE}/models/{self.plan.model}:generateContent"
         cfg = {"responseModalities": ["IMAGE"], "imageConfig": {"aspectRatio": "1:1"}}
-        if not self.plan.model.startswith("gemini-2.5"):
+        if self.plan.model in GEMINI_SIZED:   # an imageConfig field a model does not take is an error (API reference)
             cfg["imageConfig"]["imageSize"] = "1K"
         status, doc, text = http_json("POST", url, {"x-goog-api-key": self.key, "Content-Type": "application/json"},
                                       body={"contents": contents, "generationConfig": cfg},

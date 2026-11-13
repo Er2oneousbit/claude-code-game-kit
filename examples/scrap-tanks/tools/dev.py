@@ -57,6 +57,7 @@
 #           p95, p99, worst) and fails a p95 over --frame-budget MS, or over the "Smoke frame time" row of
 #           docs/ARCHITECTURE.md; a run that measured nothing says so (#90) and --no-build (one build for
 #           every run of tools/seed_sweep.py, #183)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive show:credits (#284)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -842,7 +843,8 @@ def build_parser():
                         "--locale pseudo: every label on every screen, PSEUDO_PASS or PSEUDO_FAIL), pseudo-plant (plus "
                         "one label too small: exit 1), bug (F8: the bug report, DRIVE_BUG), "
                         "access[:res=WxH,scale=N,pad,read] (the accessibility sweep's tour, tools/access/sweep.py), "
-                        "show:<title|menu|settings|pause|subtitle|play|juice> (opens that screen; add --screenshot); "
+                        "show:<screen> (title, menu, settings, pause, subtitle, play, juice or credits: opens that screen; add "
+                        "--screenshot); "
                         "the run ends at DRIVE_DONE")
     p.add_argument("--data-dir", default="", help="keep settings.json in this folder (relative to the project; kept "
                    f"between runs); default: a fresh {SMOKE_DATA}/ each run, never the player's own folder")

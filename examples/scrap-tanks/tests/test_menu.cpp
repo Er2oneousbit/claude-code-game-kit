@@ -8,6 +8,7 @@
 // Usage   : python tools/dev.py test     (ctest lists one test per TEST_CASE)
 // Notes   : No SDL: the rows are driven with the ui_* action names a player's key or button turns into.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits lines follow the shared rule (#284)
 // ---------------------------------------------------------------------------
 #include <doctest/doctest.h>
 
@@ -322,8 +323,8 @@ TEST_CASE("fixed-width wrapping keeps words whole and cuts the ones too long") {
 }
 
 TEST_CASE("CREDITS.md loses its markdown marks") {
-    const auto lines = core::credits_lines("# Credits\r\n\n- **Art**: someone\n* Music by x\n  ## Thanks\n");
-    CHECK(lines == std::vector<std::string>{"Credits", "", "Art: someone", "Music by x", "Thanks"});
+    const auto lines = core::credits_lines("# Credits\r\n\n- **Art**: someone\n* Music by x\n  ## Thanks\n#\n+ y_z\n");
+    CHECK(lines == std::vector<std::string>{"Credits", "", "Art: someone", "Music by x", "Thanks", "", "y_z"});
     CHECK(core::glyph_fallback_label("key_space") == "Space");
     CHECK(core::glyph_fallback_label("pad_dpad_up") == "Dpad up");
     CHECK(core::glyph_fallback_label("xbox_a") == "A");

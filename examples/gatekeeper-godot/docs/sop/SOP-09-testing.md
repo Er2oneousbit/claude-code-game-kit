@@ -58,7 +58,8 @@ and automates what it can in `dev.py smoke` or a scripted scenario:
 
 ## Done when
 - New logic has tests or a written reason why not. `test` and `smoke` are green on main. Exception: a project with no tests yet
-  (a fresh or Blueprint-only Unreal project has no `<Game>.Smoke` tests) gets exit 2 "nothing ran"; record that gap in HANDOFF
+  (a fresh or Blueprint-only Unreal project has no `<Game>.Smoke` tests) gets exit 2 "nothing ran", and a run whose every
+  test was skipped (a missing package, `pending()`, `#[ignore]`) gets exit 2 with a `[SKIP]` line and the reason; record that gap in HANDOFF
   and use the engine substitute from `docs/ENGINE_FLOW.md` (Unreal: `test --filter` on functional tests) until real tests exist.
 
 ## Common mistakes
