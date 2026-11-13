@@ -6,7 +6,7 @@
 //           loose image without hard-coded paths. The importer writes it to Assets/dotwork/<pack>/<pack>.asset.
 // Usage   : DotworkPack pack = ...;  (a serialized field, or Resources/Addressables if you move it there)
 //           Instantiate(pack.Animated("hero").prefab).GetComponent<Animator>().Play(pack.Animated("hero").Clip("walk", "s"));
-//           Instantiate(pack.Map("yard").prefab);  pack.Font("tiny");  pack.UiPart("windows", "ui_window_plain").sprite
+//           Instantiate(pack.Map("yard").prefab);  pack.Map("yard").Bounds(pack.pixelsPerUnit);  pack.Font("tiny");  pack.UiPart("windows", "ui_window_plain").sprite
 //           pack.Background("hills").layers[1].velocity;  pack.Particles("embers").emitter.text;  pack.Image("logo").sprite
 // Notes   : Units: one Unity unit is `pixelsPerUnit` art pixels (the pack's first tileset's tile width, else 16).
 //           Pixel data kept from the manifest (pivots, collision rects, margins, hotspots, velocities) stays in
@@ -17,6 +17,8 @@
 //           light) is the game's or the shader recipes' job. `skipped` lists only kinds this importer does not know.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): stamps, the map's shape, the extra kinds (#285)
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): DotworkMap.Bounds, a map's real extent on both
+//           shapes (#297)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -191,6 +193,21 @@ namespace {{GAME_SLUG}}.Dotwork
         public string name = "", tileset = "", shape = "square";
         public Vector2Int size, tileSize;
         public GameObject prefab;                    // Grid > one Tilemap per layer, Objects > prop instances
+
+        /// <summary>The map's extent in its prefab's local units (y up, the map's top-left corner at the origin):
+        /// the box around every cell's tile, as the other engines' map_bounds. A square map is (0, -h, w, h); an
+        /// isometric one is the diamond's box, from x = (1 - rows) * tileW / 2 to (cols + rows) * tileW / 2 and
+        /// (cols + rows) * tileH / 2 deep (spec "Placing tiles": cell centres ((x - y + 1) w / 2, (x + y + 1) h / 2)).</summary>
+        public Rect Bounds(float pixelsPerUnit)
+        {
+            float w = tileSize.x / pixelsPerUnit, h = tileSize.y / pixelsPerUnit;
+            if (shape == "isometric")
+            {
+                float depth = (size.x + size.y) * h / 2f;
+                return new Rect((1 - size.y) * w / 2f, -depth, (size.x + size.y) * w / 2f, depth);
+            }
+            return new Rect(0f, -size.y * h, size.x * w, size.y * h);
+        }
     }
 
     [Serializable]
