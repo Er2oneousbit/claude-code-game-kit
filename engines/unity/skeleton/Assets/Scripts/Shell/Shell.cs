@@ -25,6 +25,8 @@
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): crash files and the bug report (ShellReports, #275),
 //           the stick's deadzone and invert_y for ShellInput's analog values (#274)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): HudScaleChanged and HudFontSize for a game HUD
+//           (HudScale, #309)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -64,7 +66,10 @@ namespace {{GAME_SLUG}}.Shell
 
         public event Action<string, string> SettingsChanged;   // (section, key)
         public event Action LocaleChanged;
+        /// <summary>The HUD text factor (HudScale.Factor: ui_scale * text_scale) changed; the argument is the new one (#309).</summary>
+        public event Action<double> HudScaleChanged;
 
+        private readonly HudScale.Watch _hudWatch = new HudScale.Watch();
         private readonly HashSet<string> _missingKeys = new HashSet<string>();
         private bool _booted;
 
@@ -217,6 +222,16 @@ namespace {{GAME_SLUG}}.Shell
                 case "access": ApplyAccess(); break;
             }
             SettingsChanged?.Invoke(section, key);
+            if (_hudWatch.Update(Settings))            // ui_scale (on Apply) or text_scale: the HUD follows (#309)
+            {
+                HudScaleChanged?.Invoke(_hudWatch.Scale);
+            }
+        }
+
+        /// <summary>A font size for a game HUD: basePx at the defaults, times ui_scale and text_scale (#309).</summary>
+        public int HudFontSize(int basePx)
+        {
+            return HudScale.FontSize(basePx, Settings);
         }
 
         public void SetLanguage(string code)
@@ -248,6 +263,7 @@ namespace {{GAME_SLUG}}.Shell
             ApplyAudio();
             ApplyDisplay();
             UpdateLocale();
+            _hudWatch.Update(Settings);                // the factor the HUD starts with: no event for it
         }
 
         public object Access(string key)

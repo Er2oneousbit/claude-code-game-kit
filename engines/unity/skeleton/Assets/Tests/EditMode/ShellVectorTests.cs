@@ -8,6 +8,8 @@
 //           copy them in here. A case type without a runner fails, so a new vector type cannot be skipped.
 //           Problems are compared as a count: the wording may differ between ports, the number may not.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display_staging cases (DisplayStaging, the
+//           Display tab's Apply and its keep-or-revert confirm, #308)
 // ---------------------------------------------------------------------------
 using System.Collections.Generic;
 using NUnit.Framework;
@@ -23,8 +25,9 @@ namespace {{GAME_SLUG}}.Tests
         private static readonly string[] REQUIRED_TYPES =
         {
             "defaults", "settings_load", "rebind", "glyph_set", "glyph_name", "prompt_binding", "save_load", "tr",
-            "plural", "pseudo", "narration",
+            "plural", "pseudo", "narration", "display_staging",
         };
+        private const int MIN_STAGING_CASES = 5;    // #308: the Display tab's Apply scripts
 
         public static IEnumerable<TestCaseData> Cases()
         {
@@ -35,10 +38,14 @@ namespace {{GAME_SLUG}}.Tests
         public void Shell_EveryRequiredTypeHasCases()
         {
             var seen = new HashSet<string>();
+            int staging = 0;
             foreach (object c in G.Cases(FILE))
             {
-                seen.Add(G.Str((Dictionary<string, object>)c, "type"));
+                string type = G.Str((Dictionary<string, object>)c, "type");
+                seen.Add(type);
+                staging += type == "display_staging" ? 1 : 0;
             }
+            Assert.GreaterOrEqual(staging, MIN_STAGING_CASES, $"{FILE}: too few display_staging cases");
             foreach (string type in REQUIRED_TYPES)
             {
                 Assert.IsTrue(seen.Contains(type), $"{FILE} has no '{type}' case");
@@ -88,6 +95,7 @@ namespace {{GAME_SLUG}}.Tests
                 case "narration":
                     Points(c, tol, where, pt => Bindings.NarrationLine((string)pt[0], (string)pt[1], (string)pt[2]), 3);
                     break;
+                case "display_staging": RunDisplayStaging(c, tol, where); break;
                 default:
                     Assert.Fail($"unknown case type '{type}' in {FILE}: add a runner for it here");
                     break;
@@ -121,6 +129,53 @@ namespace {{GAME_SLUG}}.Tests
             SaveLoadResult r = SaveStore.LoadFromText(G.Str(c, "primary"), G.Str(c, "backup"));
             var actual = G.Make("envelope", r.Envelope, "source", r.Source, "problems", r.Problems.Count);
             G.AssertClose(actual, G.Get(c, "expect"), tol, where + $" (problems: {string.Join(" | ", r.Problems)})");
+        }
+
+        // #308: a script of [op, args...] steps; after each, what it returned and the staging's whole state
+        private static void RunDisplayStaging(Dictionary<string, object> c, double tol, string where)
+        {
+            Assert.AreEqual(G.Num(c, "confirm_s"), DisplayStaging.CONFIRM_S, $"{where}: confirm seconds");
+            var st = new DisplayStaging(G.Obj(c, "applied"));
+            foreach (object s in G.List(c, "steps"))
+            {
+                var step = (Dictionary<string, object>)s;
+                var op = (List<object>)step["op"];
+                string kind = (string)op[0];
+                object outValue = null;
+                List<(string Field, object Value)> calls = new List<(string, object)>();
+                switch (kind)
+                {
+                    case "stage": outValue = st.Stage((string)op[1], op[2]); break;
+                    case "apply": calls = st.Apply(); break;
+                    case "tick": calls = st.Tick(Json.ToNumber(op[1])); break;
+                    case "keep": st.Keep(); break;
+                    case "revert": calls = st.Revert(); break;
+                    case "back":
+                        (string what, List<(string Field, object Value)> backCalls) = st.Back();
+                        outValue = what;
+                        calls = backCalls;
+                        break;
+                    default:
+                        Assert.Fail($"{where}: unknown op {Json.Stringify(op)}");
+                        break;
+                }
+                var called = new List<object>();
+                foreach ((string field, object value) in calls)
+                {
+                    called.Add(new List<object> { field, value });
+                }
+                var shown = new Dictionary<string, object>();
+                foreach (string f in DisplayStaging.APPLY_ORDER)
+                {
+                    shown[f] = st.Value(f);
+                }
+                int? secs = st.Seconds();
+                var actual = G.Make("out", outValue, "calls", called, "pending", st.Pending, "shown", shown,
+                                    "applied", st.Applied, "seconds", secs.HasValue ? (object)(double)secs.Value : null);
+                var expected = G.Make("out", step["out"], "calls", step["calls"], "pending", step["pending"],
+                                      "shown", step["shown"], "applied", step["applied"], "seconds", step["seconds"]);
+                G.AssertClose(actual, expected, tol, $"{where} step {Json.Stringify(op)}");
+            }
         }
 
         private static void RunPlural(Dictionary<string, object> c, double tol, string where)
