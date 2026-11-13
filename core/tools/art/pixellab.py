@@ -54,7 +54,13 @@
 #           candidates), fetch (free). unzoom needs a source of at least 256x256 (PixelLab answers 422, free).
 #           unzoom answers opaque (transparency composited onto white): the source's alpha is mapped back onto it.
 #           correct can add colours (10 in, 235 out live): the run prints both counts and how to reduce them again.
-#           Not yet live: tiles-pro, outfit, 8-direction object, vfx --pro (verify).
+#           Run live 2026-11-13 (19 generations): image --pro-flash at 32 px (5), object --pro-flash, 1 direction,
+#           with --style-image (5: the style's outline and palette carried over), animate --last-frame at 32 px,
+#           4 frames (1: 5 frames back, frame_00 is the input, the last lands on the pinned pose), vfx --pro (6),
+#           and character and object --pro-flash --source-image-id, 8 directions (1 each: the rotations only).
+#           --quote matched every charge. Learned live: image_size next to source_image_id is a 422 (not sent).
+#           Not yet live: tiles-pro, outfit, the legacy 8-direction object, edit and pixelate --pro-flash,
+#           ui --style-image, animate-character --end-frame (verify).
 #           [paid plan only] in -h (tiles-pro, outfit) is PixelLab's rule; a trial account gets a 402, explained.
 #           Download links on PixelLab's storage get no token: it is sent only to the API host, and a redirect
 #           keeps it only on the same https host and port (anywhere else it is dropped; https to http is refused).
@@ -685,7 +691,10 @@ def build_pro_flash(kind, args):
         if args.source_image_id and args.style_image:
             raise ToolError("--source-image-id reuses a finished image (its look is set): drop --style-image")
         if args.source_image_id:
-            body["source_image_id"] = args.source_image_id    # pays only for the rotations (one direction: free)
+            # pays only for the rotations (one direction: free). Learned live 2026-11-13: PixelLab answers 422 to
+            # image_size (or style settings) next to source_image_id, "only for text creation": the image sets both
+            body["source_image_id"] = args.source_image_id
+            del body["image_size"]
         if args.style_image:
             body.update(style_reference(args, size))
         endpoint = f"/create-{kind}-pro-flash"
@@ -704,8 +713,10 @@ def quote_query(kind, args, body):
         return None
     if kind == "edit":
         w, h = png_size(args.image)
-    else:
-        w, h = body["image_size"]["width"], body["image_size"]["height"]
+    else:                                                # with --source-image-id the body has no size: --size
+        size = body.get("image_size") or (args.size if isinstance(args.size, dict) else {"width": args.size,
+                                                                                         "height": args.size})
+        w, h = size["width"], size["height"]
     query = {"operation": QUOTE_OPERATION[kind], "width": w, "height": h}
     if "n_directions" in body:
         query["n_directions"] = body["n_directions"]
@@ -1075,13 +1086,20 @@ def run_job(kind, key, endpoint, body, out, args):
                 raise ServiceError(f"refusing direction {str(d)[:40]!r} from PixelLab: not a plain name")
         if len({d.casefold() for d in rot}) != len(rot):
             raise ServiceError("refusing directions from PixelLab that differ only in case (one file on Windows)")
+        stored = url_values(res.get("storage_urls"))
+        # Seen live 2026-11-13: a 1-direction Pro Flash object has every rotation_urls entry null and one link in
+        # storage_urls ("unknown"); it is the south view (Pro Flash draws south first), so it is saved as south.png
+        one_view = pro_flash(args) and args.directions == 1 and len(stored) == 1
         links = [(f"{d}.png", u) for d, u in rot.items()] or \
                 [(f"frame_{i:02d}.png", u) for i, u in enumerate(res.get("frame_urls") or [])] or \
-                [(f"image_{i:02d}.png", u) for i, u in enumerate(url_values(res.get("storage_urls")))]
+                ([("south.png", stored[0])] if one_view else []) or \
+                [(f"image_{i:02d}.png", u) for i, u in enumerate(stored)]
         if not links:
             raise ServiceError(f"object {obj} finished without image links")
         files = [fetch_url(u, key, out / name) for name, u in links]
-        return files, cost or job_cost(key, first, args.wait) or quoted, {"object_id": obj}
+        settings = res.get("style_settings") if isinstance(res.get("style_settings"), dict) else {}
+        return files, cost or job_cost(key, first, args.wait) or quoted, {
+            "object_id": obj, "source_image_id": settings.get("source_image_id")}   # reusable: --source-image-id
     jobs = first.get("background_job_ids") or ([first["background_job_id"]] if first.get("background_job_id") else [])
     if not jobs:
         raise ServiceError(f"PixelLab did not return a job for {endpoint}")

@@ -84,10 +84,10 @@ class Fake:
 
     def __init__(self, polls=1, job_status="completed", status=None, body=b'{"detail": "nope"}', zip_members=None,
                  images=2, tiles=3, image_bytes=PNG, object_id="o1", fix_bytes=PNG,
-                 job_usage=(("type", "generations"), ("generations", 2))):
+                 job_usage=(("type", "generations"), ("generations", 2)), pf_object="o8"):
         self.calls, self.polls, self.job_status = [], polls, job_status
         self.job_usage = dict(job_usage) if job_usage else None
-        self.object_id = object_id
+        self.object_id, self.pf_object = object_id, pf_object
         self.status, self.body = status, body
         self.zip_members = zip_members or {"rotations/south.png": PNG, "rotations/north.png": PNG,
                                            "metadata.json": b"{}"}
@@ -141,7 +141,7 @@ class Fake:
                   "/create-character-pro-flash": {"usage": None, "background_job_id": "job-1", "character_id": "char-1",
                                                   "status": "processing", "estimated_generations": 6,
                                                   "first_direction_generated": True},
-                  "/create-object-pro-flash": {"usage": None, "background_job_id": "job-opf", "object_id": "o8",
+                  "/create-object-pro-flash": {"usage": None, "background_job_id": "job-opf", "object_id": self.pf_object,
                                                "status": "processing", "estimated_generations": 6,
                                                "first_direction_generated": True}}
         if path in queued and not self.status:
@@ -159,6 +159,11 @@ class Fake:
                                                  "frame_urls": None},
                      "/objects/o-evil": {"id": "o-evil", "status": "completed",
                                          "rotation_urls": {"south": f"{CDN}/o/s.png", "../escaped": f"{CDN}/o/e.png"}},
+                     # a 1-direction Pro Flash object as seen live 2026-11-13: null rotations, one "unknown" link
+                     "/objects/o-pf1": {"id": "o-pf1", "status": "completed", "directions": 1,
+                                        "rotation_urls": {"south": None, "east": None},
+                                        "storage_urls": {"unknown": f"{CDN}/o/rotations/unknown.png"}, "frame_urls": None,
+                                        "style_settings": {"generation_mode": "pro_flash", "source_image_id": "src-o"}},
                      "/objects/o8": {"id": "o8", "status": "completed",
                                      "rotation_urls": {"south": f"{CDN}/o/s.png", "east": f"{CDN}/o/e.png", "north": None}},
                      "/tiles-pro/tp1": {"kind": "roads", "tile_rules": {"pieces": 18},
@@ -775,10 +780,19 @@ class PixelLabExam(unittest.TestCase):
         rc, out = self.run_tool("object", "--pro-flash", "--text", "barrel", "--directions", "8", "--size", "32",
                                 "--source-image-id", "src1", "--out", "pfo", fake=fake)
         self.assertEqual(rc, 0, out)
+        # live 2026-11-13: image_size next to source_image_id is a 422 ("only for text creation"), so none is sent
         self.assertEqual(self.sent(fake, "/create-object-pro-flash"),
-                         {"description": "barrel", "image_size": {"width": 32, "height": 32}, "view": "low top-down",
-                          "n_directions": 8, "source_image_id": "src1"})
+                         {"description": "barrel", "view": "low top-down", "n_directions": 8, "source_image_id": "src1"})
         self.assertEqual(sorted(p.name for p in (self.root / "pfo").glob("*.png")), ["east.png", "south.png"])
+        # one direction: its single storage link is the south view; its source_image_id is kept for 8 directions later
+        fake = Fake(pf_object="o-pf1")
+        rc, out = self.run_tool("object", "--pro-flash", "--text", "chest", "--size", "32", "--style-image",
+                                "anchor.png", "--out", "pf1", fake=fake)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(self.sent(fake, "/create-object-pro-flash")["n_directions"], 1)
+        self.assertEqual(sorted(p.name for p in (self.root / "pf1").glob("*.png")), ["south.png"])
+        self.assertEqual(json.loads((self.root / "pf1/pixellab.gen.json").read_text(encoding="utf-8"))["source_image_id"],
+                         "src-o")
         for kind, argv, words in (("character", ["--legacy"], "8 directions only"),
                                   ("character", ["--size", "64", "--shading", "flat"], "--shading"),
                                   ("object", ["--size", "64", "--view", "top-down"], "--view is"),
