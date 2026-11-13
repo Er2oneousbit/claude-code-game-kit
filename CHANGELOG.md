@@ -14,7 +14,8 @@
   resolution row reads "Window size". One reference, `DisplayStaging` in `core/tools/golden_vectors.py`, with five
   `display_staging` cases in `data/golden/shell.json` that every engine's golden test runs. Smoke: `--drive display`
   (stages, warns, applies, waits out the real-time revert, discards; `DRIVE_DISPLAY` lines) and `show:apply`,
-  `show:confirm` screenshots; the pseudo drive checks the warning and the confirm.
+  `show:confirm` screenshots; the pseudo drive checks the warning and the confirm. RPG Maker MZ's `GameShell.js` holds the same
+  `DisplayStaging` and runs the cases (MZ's own Options window has no Display tab, so nothing calls it yet).
 - **HUD text follows the player (#309):** the shell's menus followed `display.ui_scale` and `access.text_scale`, a
   game's own HUD did not. Each engine with a shell gets one helper and a change signal: Godot
   `UiTheme.hud_font_size(base)` and `Shell.look_changed`; web and web-3d `hudFontPx(base, settings)` and
