@@ -43,6 +43,7 @@
 # Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): smoke reports the run's FRAME_TIMES line (mean,
 #           p95, p99, worst) and fails a p95 over --frame-budget MS, or over the "Smoke frame time" row of
 #           docs/ARCHITECTURE.md; a run that measured nothing says so (#90)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive show:credits (#284)
 # ---------------------------------------------------------------------------
 import argparse
 import base64
@@ -878,7 +879,7 @@ def build_parser():
                    help="a scripted path through the shell: menus (change two settings, save, quit; prints "
                         "SETTINGS_WRITTEN), crash (a planted error: CRASH_WRITTEN, exit 1), pseudo (with --locale "
                         "pseudo: checks every label on every screen), pseudo-plant (the same plus a label too small: "
-                        "must fail), bug (F8 bug report), show:<title|settings|pause|subtitle|juice> (opens that "
+                        "must fail), bug (F8 bug report), show:<title|settings|pause|subtitle|juice|credits> (opens that "
                         "screen; add --screenshot)")
     p.add_argument("--data-dir", default="", help="keep settings, saves, logs, crashes, telemetry and bug reports "
                    f"in this folder (relative to the project; kept between runs); default: a fresh {SMOKE_DATA}/ "

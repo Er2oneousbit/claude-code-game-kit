@@ -13,6 +13,8 @@
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): "Juice demo" on the main menu of debug builds, the
 //           demo's actions (juice.rs), the text pages say which lines are raw (credits names, #275)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_text, the markdown rule every engine shares
+//           (list markers and emphasis stars go too, an indented heading loses its marks, space and tab only) (#284)
 // ---------------------------------------------------------------------------
 use serde_json::json;
 
@@ -474,6 +476,8 @@ pub fn page_lines(shell: &Shell) -> Vec<(String, bool)> {
 
 const COMMENT_OPEN: &str = "<!--";
 const COMMENT_CLOSE: &str = "-->";
+/// A list item's first character (then a space or tab).
+const LIST_MARKERS: &[char] = &['-', '*', '+'];
 
 /// Only spaces and tabs (every port counts these two; Unicode whitespace differs between languages).
 fn blank(line: &str) -> bool {
@@ -531,16 +535,36 @@ pub fn strip_html_comments(text: &str) -> String {
     out.join("\n")
 }
 
-/// CREDITS.md as the credits page's lines: HTML comments out, heading marks off. Empty (the placeholder) when nothing
-/// is left.
+/// CREDITS.md as every engine's credits screen shows it (tools/golden_vectors.py credits_text, #284): HTML comments
+/// out, then per line a heading's marks ('#' then a space, tab or the line end) or a list marker ('-', '*' or '+' then
+/// a space or tab), every '*', and the spaces and tabs at both ends; blank lines at the start and the end go. "" means
+/// nothing to show. Spaces and tabs only, never trim(): it also takes a no-break space.
+pub fn credits_text(markdown: &str) -> String {
+    let space_tab: &[char] = &[' ', '\t'];
+    let mut lines: Vec<String> = Vec::new();
+    for line in strip_html_comments(markdown).split('\n') {
+        let mut s = line.trim_start_matches(space_tab);
+        let marks = s.len() - s.trim_start_matches('#').len();
+        let after = s[marks..].chars().next();
+        if marks > 0 && after.is_none_or(|c| c == ' ' || c == '\t') {
+            s = s[marks..].trim_start_matches(space_tab); // a heading: its text stays
+        } else if s.starts_with(LIST_MARKERS) && s[1..].starts_with(space_tab) {
+            s = s[1..].trim_start_matches(space_tab); // a list item: its text stays
+        }
+        lines.push(s.replace('*', "").trim_end_matches(space_tab).to_string());
+    }
+    let first = lines.iter().position(|l| !l.is_empty()).unwrap_or(lines.len());
+    let last = lines.iter().rposition(|l| !l.is_empty()).map_or(first, |n| n + 1);
+    lines[first..last].join("\n")
+}
+
+/// The credits page's lines (credits_text split at line ends). Empty (the placeholder) when nothing is left.
 pub fn credits_lines(markdown: &str) -> Vec<String> {
-    let text = strip_html_comments(markdown);
-    if text.trim().is_empty() {
+    let text = credits_text(markdown);
+    if text.is_empty() {
         return Vec::new();
     }
-    text.lines()
-        .map(|l| l.trim_start_matches('#').trim().to_string())
-        .collect()
+    text.split('\n').map(str::to_string).collect()
 }
 
 /// What a screen does when it opens.

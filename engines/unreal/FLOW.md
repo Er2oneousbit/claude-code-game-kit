@@ -126,7 +126,8 @@ The plugin's tests: `GameKit.Golden.Juice.<case>`, `GameKit.Golden.Shell.<case>`
 (`tools/golden_vectors.py`) within the file's tolerance; `GameKit.Golden.Coverage` fails when a vector type has no case;
 `GameKit.Shell.*` writes real files in a temp folder (a crash between write and rename leaves the old file, a corrupt save
 falls back to the `.bak`, a newer game's save is never overwritten); `GameKit.Screens.CreditsDropHtmlComments` runs
-`data/golden/credits.json` through the credits page (CREDITS.md without its HTML comments). Keep `data/golden/` in the repo.
+`data/golden/credits.json` through the credits page (CREDITS.md without its HTML comments and markdown marks, the
+same rule on every engine). Keep `data/golden/` in the repo.
 
 - Player files: `FPaths::ProjectSavedDir() / TEXT("GameKit/settings.json")` and `.../save.json` (the user's folder in a
   packaged game). The headers' Usage blocks show each call; settings and saves are `FJsonObject`, so keys a newer build

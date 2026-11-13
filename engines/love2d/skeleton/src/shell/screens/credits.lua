@@ -1,12 +1,16 @@
 -- ---------------------------------------------------------------------------
 -- credits.lua
--- Purpose : The credits: scrolls CREDITS.md from the game folder (headings and list markers stripped), or a
---           placeholder until the game has one. Up/down scroll by hand; accept or cancel goes back.
+-- Purpose : The credits: scrolls CREDITS.md from the game folder (HTML comments, heading marks, list markers and
+--           emphasis stars stripped, as on every engine), or a placeholder until the game has one. Up/down scroll by
+--           hand; accept or cancel goes back.
 -- Usage   : app:push("credits")
 -- Notes   : CREDITS.md is content, not UI copy, so its lines are exempt from the pseudo-locale "went through tr"
 --           check (they are still checked for clipping). With reduce motion the text does not scroll on its own.
 --           dev.py build packs CREDITS.md into the .love. Build the file from docs/ASSET_LOG.md before a release.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): Credits.text follows tools/golden_vectors.py
+--           credits_text (a heading needs a space after its marks, '+' items, single stars, space and tab only);
+--           Credits:at_top for show:credits (#284)
 -- ---------------------------------------------------------------------------
 local Style = require("src.shell.style")
 
@@ -19,6 +23,7 @@ local STEP_PX = 24                       -- one up/down press
 local AREA_X, AREA_Y, AREA_W, AREA_H = 60, 56, 520, 260
 
 local COMMENT_OPEN, COMMENT_CLOSE = "<!--", "-->"
+local LIST_ITEM = "^[-*+][ \t]"          -- a list marker, then a space or tab
 
 local function blank(s) return s:find("^[ \t]*$") ~= nil end   -- spaces and tabs only, as every port counts them
 
@@ -53,17 +58,42 @@ function Credits.strip_html_comments(text)
   return table.concat(out, "\n")
 end
 
--- CREDITS.md as the lines the screen scrolls: HTML comments out (tools/credits.py writes one, #279), then heading
--- marks, list markers and bold stars. nil (the placeholder) when nothing is left.
-function Credits.lines_from(text)
-  text = Credits.strip_html_comments(text)
-  if blank((text:gsub("\n", ""))) then return nil end
+-- CREDITS.md as the screen shows it: HTML comments out (tools/credits.py writes one, #279), then per line a heading's
+-- marks or a list marker, every emphasis star and the spaces and tabs at the ends; blank lines at the start and the
+-- end go. "" means the placeholder. tools/golden_vectors.py credits_text is the spec (#284). Spaces and tabs only
+-- ([ \t], never %s, which also takes \r, \v and \f): every port trims the same two.
+function Credits.text(markdown)
   local lines = {}
-  for line in (text .. "\n"):gmatch("(.-)\n") do
-    line = line:gsub("^%s*#+%s*", ""):gsub("^%s*[-*]%s+", ""):gsub("%*%*", "")
-    lines[#lines + 1] = line
+  for line in (Credits.strip_html_comments(markdown) .. "\n"):gmatch("(.-)\n") do
+    local s = line:gsub("^[ \t]+", "")
+    local marks = s:match("^#+") or ""
+    local after = s:sub(#marks + 1, #marks + 1)
+    if #marks > 0 and (after == "" or after == " " or after == "\t") then
+      s = s:sub(#marks + 1):gsub("^[ \t]+", "")             -- a heading: its text stays
+    elseif s:find(LIST_ITEM) then
+      s = s:sub(2):gsub("^[ \t]+", "")                       -- a list item: its text stays
+    end
+    lines[#lines + 1] = (s:gsub("%*", ""):gsub("[ \t]+$", ""))
   end
+  local first, last = 1, #lines
+  while first <= last and lines[first] == "" do first = first + 1 end
+  while last >= first and lines[last] == "" do last = last - 1 end
+  return table.concat(lines, "\n", first, last)
+end
+
+-- The lines the screen scrolls (Credits.text split at line ends), or nil (the placeholder) when nothing is left.
+function Credits.lines_from(markdown)
+  local text = Credits.text(markdown)
+  if text == "" then return nil end
+  local lines = {}
+  for line in (text .. "\n"):gmatch("(.-)\n") do lines[#lines + 1] = line end
   return lines
+end
+
+-- The first line at the top of the area, as smoke --drive show:credits pictures it (the text otherwise rolls up from
+-- below the area).
+function Credits:at_top()
+  self.offset = AREA_H
 end
 
 local function read_lines()

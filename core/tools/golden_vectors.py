@@ -4,8 +4,9 @@
 # Purpose : The reference implementation of the kit's engine-free game logic (juice: screen shake, hitstop, easing,
 #           camera follow, input buffer, coyote time, spring, flash limiter; shell: settings, save migration,
 #           rebinding, button glyphs, localization, pseudo-locale; telemetry: the CSV columns and row format; credits:
-#           HTML comments out of CREDITS.md) and the writer of the golden-vector files every engine port is tested
-#           against: data/golden/juice.json, data/golden/shell.json, data/golden/telemetry.json (only the ports that
+#           HTML comments out of CREDITS.md, then the text every credits screen shows) and the writer of the
+#           golden-vector files every engine port is tested against: data/golden/juice.json, data/golden/shell.json,
+#           data/golden/telemetry.json (only the ports that
 #           write telemetry.csv read it) and data/golden/credits.json (only the ports with a credits screen read it).
 # Usage   : python tools/golden_vectors.py --check        # are the vector files current? (exit 1 if not)
 #           python tools/golden_vectors.py --write        # rewrite them after changing this reference
@@ -18,6 +19,8 @@
 #           value depends on dictionary order. Standard library only, Python 3.8+.
 # Exit    : 0 ok, 1 --check found stale files, 2 usage problem
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_text, one rule for the markdown marks every
+#           credits screen strips (heading marks, list markers, emphasis stars), credits.json's credits_text cases (#284)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -679,7 +682,7 @@ def strip_html_comments(text):
     tabs) goes, and when a blank line (or the top of the file) came before it, so does one blank line after it, so
     the gap the comment sat in does not double. Text around a comment on its line stays as written. CRLF becomes LF;
     the result is joined with LF. The delimiters are ASCII, so a byte-wise port (Lua, C++, Rust) gives the same
-    result as a code-unit one. Every port runs this before its own markdown handling (heading marks and so on)."""
+    result as a code-unit one. credits_text runs this first, then takes the markdown marks off."""
     out = []
     in_comment = False
     skip_blank = False                               # the blank line after a dropped comment-only line
@@ -707,6 +710,34 @@ def strip_html_comments(text):
         skip_blank = False
         out.append(kept)
     return "\n".join(out)
+
+
+LIST_MARKERS = "-*+"                                 # a list item's first character (then a space or tab)
+EMPHASIS_MARK = "*"                                  # every one goes: **bold**, *italic*; underscores stay
+
+
+def credits_text(markdown):
+    """CREDITS.md as every credits screen shows it (#284): strip_html_comments first, then line by line: leading
+    spaces and tabs off; a heading's marks off (one or more '#' at the start, then a space, a tab or the end of the
+    line; '#3' or 'C#' stay), or else a list marker ('-', '*' or '+' at the start, then a space or tab; '1.' stays);
+    the spaces and tabs after either off; every '*' off (bold and italic marks; '_' stays, so file names like
+    player_idle.png survive); trailing spaces and tabs off. Blank lines at the start and the end go, blank lines
+    between paragraphs stay. "" means nothing to show (the placeholder). Whitespace means space and tab only, so a
+    no-break space survives in every port (each language's trim() strips more, and differently)."""
+    lines = []
+    for line in strip_html_comments(markdown).split("\n"):
+        s = line.lstrip(" \t")
+        marks = len(s) - len(s.lstrip("#"))
+        if marks and (marks == len(s) or s[marks] in " \t"):
+            s = s[marks:].lstrip(" \t")              # a heading: its text stays
+        elif len(s) >= 2 and s[0] in LIST_MARKERS and s[1] in " \t":
+            s = s[1:].lstrip(" \t")                  # a list item: its text stays
+        lines.append(s.replace(EMPHASIS_MARK, "").rstrip(" \t"))
+    while lines and lines[0] == "":
+        lines.pop(0)
+    while lines and lines[-1] == "":
+        lines.pop()
+    return "\n".join(lines)
 
 
 
@@ -974,6 +1005,26 @@ def build_credits():
     ]
     cases = [{"type": "strip_comments", "name": "HTML comments out of CREDITS.md",
               "points": [[name, text, strip_html_comments(text)] for name, text in inputs]}]
+    shown = [
+        ("what tools/credits.py writes", "# Credits\n\n" + CREDITS_HEADER + "\n\n## Engine\n\n- Made with an engine\n"),
+        ("a credits.py row", "# Credits\n\n" + CREDITS_HEADER + "\n\n## Music\n\n- assets/audio/boss_theme.ogg by Zoë "
+                             "(license: CC-BY 4.0; source: https://example.org/a_b)\n- Song by Ícaro (license: CC0)\n"),
+        ("heading levels", "# One\n## Two\n###### Six\n#\n##   Spaced  \n"),
+        ("indented heading and list items", "  ## Indented\n\t- tabbed item\n    * star item\n  + plus item\n"),
+        ("a hash inside the text stays", "# Written in C#\n#hashtag stays\nTrack #3\n"),
+        ("list markers need a space after them", "-not a list\n+plus\n- \n1. numbered stays\n2) also\n"),
+        ("emphasis marks go, underscores stay", "**Bold** and *italic* and ***both***\n- **CC0**: x\n"
+                                                "snake_case_file.png and __init__ stay\n"),
+        ("a heading or a list item, not both", "# - x\n- # y\n"),
+        ("space and tab only", "- Zoë \n\t# Tab heading\t\n # not a heading\n- ”quoted”  \t\n"),
+        ("blank lines at the ends go, between paragraphs stay", "\n\n  \n# A\n\n\n- b\n\t\n\n"),
+        ("comments go before the marks", "<!-- x -->\n# Credits\n- a <!-- note --> **b**\n<!--\n# hidden\n-->\n"),
+        ("only a comment", "<!-- nothing yet -->\n"),
+        ("CRLF line ends", "# A\r\n\r\n- b\r\n"),
+        ("empty file", ""),
+    ]
+    cases.append({"type": "credits_text", "name": "CREDITS.md as the credits screen shows it",
+                  "points": [[name, text, credits_text(text)] for name, text in shown]})
     return {"version": VECTOR_VERSION, "tolerance": TOLERANCE, "generator": "tools/golden_vectors.py",
             "cases": cases}
 

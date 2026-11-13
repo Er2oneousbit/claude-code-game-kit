@@ -8,7 +8,8 @@
 //           held actions for the game (#274); the juice demo, the pseudo locale, the F8 bug report, crash files and
 //           their drives (#275); a drive's model ignores the widget's real key and stick events (#276); the
 //           credits in the editor layout (CREDITS.md) and the packaged one (data/credits.md), and the copy (#278);
-//           the credits page drops HTML comments from either file (#279, data/golden/credits.json);
+//           the credits page drops HTML comments from either file (#279, data/golden/credits.json) and shows the
+//           markdown the way every engine does (#284);
 //           plus the scripted runs tools/dev.py starts: GameKit.Screens.Drive (--drive) and GameKit.Screens.Show
 //           (--drive show:<screen> --screenshot).
 // Usage   : python tools/dev.py test --filter GameKit.Screens          (or `test` for everything)
@@ -21,6 +22,7 @@
 //           the screens too. The Show test passes with a note when no -GameKitScreenshot=<path> is given, and
 //           fails without a renderer when one is.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the credits_text cases (#284)
 // ---------------------------------------------------------------------------
 #include "Misc/AutomationTest.h"
 
@@ -1099,9 +1101,10 @@ bool FGameKitScreensShowTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// #279: tools/credits.py writes an HTML comment into CREDITS.md; the credits page dropped none. Every case of
-// data/golden/credits.json (tools/golden_vectors.py strip_html_comments is the spec), then a file as credits.py
-// writes it through the page's own line handling.
+// #279: tools/credits.py writes an HTML comment into CREDITS.md; the credits page dropped none. #284: the markdown
+// marks go by the rule every engine shares. Every case of data/golden/credits.json (tools/golden_vectors.py
+// strip_html_comments and credits_text are the spec), then a file as credits.py writes it through the page's own
+// line handling.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensCreditsCommentsTest, "GameKit.Screens.CreditsDropHtmlComments", ScreenTestFlags)
 bool FGameKitScreensCreditsCommentsTest::RunTest(const FString& Parameters)
 {
@@ -1121,7 +1124,8 @@ bool FGameKitScreensCreditsCommentsTest::RunTest(const FString& Parameters)
 	{
 		const TSharedPtr<FJsonObject> Case = C->AsObject();
 		const FString Type = GetString(Case, TEXT("type"), FString());
-		if (Type != TEXT("strip_comments"))
+		const bool Strip = Type == TEXT("strip_comments");
+		if (!Strip && Type != TEXT("credits_text"))
 		{
 			AddError(FString::Printf(TEXT("unknown case type '%s' in credits.json: add a runner for it here"), *Type));
 			continue;
@@ -1129,8 +1133,10 @@ bool FGameKitScreensCreditsCommentsTest::RunTest(const FString& Parameters)
 		for (const TSharedPtr<FJsonValue>& P : Find(Case, TEXT("points"))->AsArray())
 		{
 			const TArray<TSharedPtr<FJsonValue>>& Pt = P->AsArray();
-			const FString Name = Pt[0]->AsString();
-			TestEqual(*Name, FGameKitShellModel::StripHtmlComments(Pt[1]->AsString()), Pt[2]->AsString());
+			const FString Name = Type + TEXT(": ") + Pt[0]->AsString();
+			const FString In = Pt[1]->AsString();
+			TestEqual(*Name, Strip ? FGameKitShellModel::StripHtmlComments(In) : FGameKitShellModel::CreditsText(In),
+				Pt[2]->AsString());
 			++Points;
 		}
 	}
@@ -1140,7 +1146,7 @@ bool FGameKitScreensCreditsCommentsTest::RunTest(const FString& Parameters)
 		+ TEXT("not this file. -->\r\n\r\n## Music\r\n\r\n<!--\r\nnotes\r\n-->\r\n- Song by Zo") + static_cast<TCHAR>(0x00EB)
 		+ TEXT(" (CC0)\r\n");
 	const TArray<FString> Want = {TEXT("Credits"), TEXT(""), TEXT("Music"), TEXT(""),
-		FString(TEXT("- Song by Zo")) + static_cast<TCHAR>(0x00EB) + TEXT(" (CC0)"), TEXT("")};
+		FString(TEXT("Song by Zo")) + static_cast<TCHAR>(0x00EB) + TEXT(" (CC0)")};
 	TestEqual(TEXT("a CREDITS.md from credits.py"), FString::Join(FGameKitShellModel::CreditsLinesFrom(Md), TEXT("|")),
 		FString::Join(Want, TEXT("|")));
 	TestEqual(TEXT("only a comment: the placeholder"), FGameKitShellModel::CreditsLinesFrom(TEXT("<!-- nothing yet -->\n")).Num(), 0);

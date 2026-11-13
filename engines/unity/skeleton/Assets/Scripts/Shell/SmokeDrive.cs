@@ -4,7 +4,7 @@
 //           player would (ui_down, ui_accept, ...) and prints markers dev.py, the tests and tools/access/sweep.py read.
 // Usage   : python tools/dev.py smoke --drive menus                 # change two settings, Back, check the file
 //           python tools/dev.py smoke --drive show:settings --screenshot Logs/settings.png
-//           (show: title, settings, pause, subtitle, juice)
+//           (show: title, settings, pause, subtitle, juice, credits)
 //           python tools/dev.py smoke --drive access:res=1280x800,scale=2,pad   # every screen (tools/access/sweep.py)
 //           python tools/dev.py smoke --drive pseudo --locale pseudo  # every label on every screen (pseudo-plant: must fail)
 //           python tools/dev.py smoke --drive crash                   # a planted exception: CRASH_WRITTEN, exit 1 on purpose
@@ -21,6 +21,7 @@
 //           the pseudo locale when --locale pseudo was not given (DRIVE_NOTE).
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): crash, pseudo, pseudo-plant, bug and show:juice (#275)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits (#284)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections;
@@ -42,7 +43,7 @@ namespace {{GAME_SLUG}}.Shell
         public const int MAX_SLIDER_STEPS = 40;
         public const int JUICE_SETTLE_FRAMES = 40;   // frames into the juice demo before a drive attacks
         public const float PLANT_WIDTH = 40f;        // pseudo-plant: a label this narrow cannot hold its text
-        public static readonly string[] SHOW_TARGETS = { "title", "settings", "pause", "subtitle", "juice" };
+        public static readonly string[] SHOW_TARGETS = { "title", "settings", "pause", "subtitle", "juice", "credits" };
         public static readonly string[] BUG_FILES = { "info.txt", "log_tail.txt", "settings.json" };
         public static readonly string[] ACCESS_ACTIONS = { "ui_up", "ui_down", "ui_left", "ui_right", "ui_accept", "ui_cancel", "pause" };
         public static readonly string[] PROMPT_ACTIONS = { "move_left", "move_right", "jump", "attack", "interact", "pause" };
@@ -193,6 +194,15 @@ namespace {{GAME_SLUG}}.Shell
                     if (Failed) yield break;
                     yield return Frames(JUICE_SETTLE_FRAMES);
                     yield return Press("attack");          // the hit: shake, squash, flash and the bark in the picture
+                    break;
+                case "credits":
+                    yield return ToMainMenu();
+                    if (Failed) yield break;
+                    yield return NavTo("Credits", "ui_down");
+                    if (Failed) yield break;
+                    yield return Accept("credits");
+                    if (Failed) yield break;
+                    yield return Frames(SETTLE_FRAMES);
                     break;
             }
             Shell.Raw("DRIVE_SHOWN " + target);

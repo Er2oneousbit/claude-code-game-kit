@@ -44,6 +44,7 @@
 #           every run of tools/seed_sweep.py, #183)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): test whose every test was skipped says so ([SKIP], exit 2);
 #           it failed as "tests failed", exit 1 (#295)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive show:credits (#284)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -63,7 +64,7 @@ SMOKE_FRAMES = 120
 BOOT_MARKER = "BOOT_OK"                   # logged by src/shell/app.ts once the title screen is up
 # --drive, --data-dir, --locale: the shell (src/shell/drive.ts) runs the scenarios and reads both folders
 DRIVE_HELP = ("the game plays a scripted run (shell games): menus, crash (exits 1 on purpose), pseudo, "
-              "pseudo-plant, show:title|settings|pause|subtitle|juice (with --screenshot); waits for DRIVE_DONE")
+              "pseudo-plant, show:title|settings|pause|subtitle|juice|credits (with --screenshot); waits for DRIVE_DONE")
 DATA_DIR_HELP = ("user-data folder for this run (?data-dir=): loaded before, written back after "
                  "(default build/smoke-data with --drive)")
 LOCALE_HELP = "language for this run, e.g. fr or pseudo (?locale=)"

@@ -2,7 +2,7 @@
 // test_golden_vectors.cpp
 // Purpose : Checks the C++ juice and shell logic (src/core) against the kit's golden vectors,
 //           data/golden/juice.json and data/golden/shell.json, case by case; and data/golden/credits.json through
-//           the credits screen's text (core::strip_html_comments, #279).
+//           the credits screen's text (core::strip_html_comments, #279; core::credits_text, #284).
 // Usage   : python tools/dev.py test     (ctest lists "golden vectors: juice.json" and "... shell.json";
 //           build/debug/bin/Debug/unit_tests.exe -tc="golden*" prints how many cases each file had)
 // Notes   : The vectors are written by tools/golden_vectors.py, the reference implementation every engine
@@ -15,6 +15,7 @@
 //   load the file -> check its format version -> for each case: find the checker for its type (or fail)
 //   -> run the case's steps or points through src/core -> compare every result with the expected value
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the credits_text cases (#284)
 // ---------------------------------------------------------------------------
 #include <doctest/doctest.h>
 
@@ -359,6 +360,12 @@ void check_strip_comments(const json& c) {
     }
 }
 
+void check_credits_text(const json& c) {
+    for (const json& p : c.at("points")) {
+        expect_same(core::credits_text(text(p[1])), p[2], "credits_text " + text(p[0]));
+    }
+}
+
 using Checker = void (*)(const json& c);
 
 // Runs every case of one vector file through its checker; unknown types fail. Returns the cases checked.
@@ -416,7 +423,7 @@ TEST_CASE("golden vectors: shell.json") {
 }
 
 TEST_CASE("golden vectors: credits.json") {
-    run_file("credits.json", {{"strip_comments", check_strip_comments}});
+    run_file("credits.json", {{"strip_comments", check_strip_comments}, {"credits_text", check_credits_text}});
 }
 
 // ---- What the vectors cannot express: the error paths ----

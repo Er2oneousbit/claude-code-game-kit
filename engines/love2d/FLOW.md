@@ -50,8 +50,8 @@ a list that may be empty so it writes back as `[]`.
 - `tests/test_access_golden.lua`: `src/core/audio_access.lua` (bus gains, caption arrows) against `data/golden/access.json`.
 - `test_telemetry_golden.lua`: `telemetry.lua` (the CSV columns every engine writes) against `data/golden/telemetry.json`.
 - `test_dialogue_golden.lua`: the subtitle typewriter (`Dialogue.revealed`) against `data/golden/dialogue.json`.
-- `test_credits_text.lua`: the credits screen's lines (HTML comments out of CREDITS.md, then the markdown marks)
-  against `data/golden/credits.json`.
+- `test_credits_text.lua`: the credits screen's lines (HTML comments out of CREDITS.md, then heading marks, list
+  markers and emphasis stars: the same rule on every engine) against `data/golden/credits.json`.
 - `tests/test_music_player.lua`: the mixer of `src/shell/music_player.lua`, sample by sample, with no audio device.
 - `tests/test_audio_wiring.lua`: bus volumes along the bus chain (`app:bus_volume`) and directional caption arrows.
 
@@ -105,7 +105,7 @@ Narration (#165): the shell's `narrator.lua` says a line for every focus change,
 | `pseudo-plant` | the same with one planted label too small for its text: must exit 1 naming `plant.too_small` |
 | `access[:res=WxH][,scale=N][,pad]` | every screen reported as `ACCESS_*` lines for `tools/access/sweep.py`: ui.lua records each label's colour, size and glyph box and every filled rectangle under it (the drive hooks `love.graphics.rectangle`), and which rows `ui_down` reaches; `pad` presses with gamepad buttons only |
 | `bug` | presses F8 on the menu and checks the `bug_<timestamp>/` files: `DRIVE_BUG <path>` |
-| `show:<screen>` | `title`, `settings` (a slider focused), `pause`, `subtitle`, `juice`: opens it and ends; add `--screenshot captures/<screen>.png` |
+| `show:<screen>` | `title`, `settings` (a slider focused), `pause`, `subtitle`, `juice`, `credits` (the first lines at the top): opens it and ends; add `--screenshot captures/<screen>.png` |
 
 `dev.py smoke` never uses the real save folder: without `--data-dir` the game's files go to a fresh
 `build/smoke-data/` each run (read its logs and crash files there); `--data-dir captures/run1` keeps a run's files

@@ -7,6 +7,7 @@
 //           button). Proof lines go to stdout as one line each so dev.py and tools/access/sweep.py can read them.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): crash, pseudo, pseudo-plant, bug, show:juice (#275)
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits (#284)
 // ---------------------------------------------------------------------------
 #include "shell/Drive.hpp"
 
@@ -34,7 +35,7 @@ namespace {
 
 const char* kAccessActions[] = {"ui_up", "ui_down", "ui_left", "ui_right", "ui_accept", "ui_cancel", "pause"};
 const char* kPromptActions[] = {"move_left", "move_right", "jump", "attack", "interact", "pause"};
-const char* kShowScreens = "title, menu, settings, pause, subtitle, play, juice";
+const char* kShowScreens = "title, menu, settings, pause, subtitle, play, juice, credits";
 const char* kBugFiles[] = {"info.txt", "log_tail.txt", "settings.json", "screenshot.bmp"};
 
 bool starts_with(const std::string& s, const std::string& prefix) {
@@ -551,6 +552,12 @@ bool Drive::build_show(const std::string& screen) {
         to_menu();
         open("play", "play");
         frames(60);
+    } else if (screen == "credits") {
+        to_menu();
+        open("credits", "credits");
+        frames(5);
+        then("the first lines in view", [this] { shell_.credits_at_top(); });
+        frames(1);
     } else if (screen == "juice") {
         to_juice();
         frames(90);                                     // the intro line is under way, the camera settled

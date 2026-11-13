@@ -6,6 +6,7 @@
 # Usage   : python tools/test_golden_vectors.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_text, the markdown every credits screen strips (#284)
 # ---------------------------------------------------------------------------
 import json
 import math
@@ -225,6 +226,40 @@ class Credits(unittest.TestCase):
     def test_text_without_a_comment_is_unchanged(self):
         for text in ("", "# Credits\n\n\n- x\n", "<! -- no --> -->", "Zoë ”q”\n"):
             self.assertEqual(gv.strip_html_comments(text), text)
+
+
+class CreditsText(unittest.TestCase):
+    """#284: the credits screens disagreed on markdown (web and Unity showed '#' and '- '); credits_text is the rule."""
+
+    def test_what_credits_py_writes_shows_without_marks(self):
+        import credits
+        with tempfile.TemporaryDirectory() as d:
+            text = credits.credits_md([], Path(d))
+        self.assertEqual(gv.credits_text(text), "Credits")
+
+    def test_marks_go_and_the_text_stays(self):
+        self.assertEqual(gv.credits_text("# Credits\n\n## Music\n\n- **Song** by *Ana* (CC0)\n"),
+                         "Credits\n\nMusic\n\nSong by Ana (CC0)")
+        self.assertEqual(gv.credits_text("  * a_b.png\n+ c\n1. d"), "a_b.png\nc\n1. d")
+        self.assertEqual(gv.credits_text("# C#\n#3\nTrack #3"), "C#\n#3\nTrack #3")
+
+    def test_space_and_tab_only(self):
+        self.assertEqual(gv.credits_text(" # x \t \n"), " # x ")
+
+    def test_nothing_to_show_is_empty(self):
+        for text in ("", "\n \t\n", "<!-- x -->\n", "#\n- \n"):
+            self.assertEqual(gv.credits_text(text), "")
+
+    def test_running_it_twice_changes_nothing_more_on_plain_text(self):
+        for text in ("Credits\n\nMusic\n\nSong by Ana", "a_b and C#", "Zoë ”q”"):
+            self.assertEqual(gv.credits_text(gv.credits_text(text)), gv.credits_text(text))
+
+    def test_the_vectors_cover_the_rule(self):
+        case = [c for c in gv.build_credits()["cases"] if c["type"] == "credits_text"]
+        self.assertEqual(len(case), 1)
+        names = [p[0] for p in case[0]["points"]]
+        self.assertEqual(len(names), len(set(names)), "case names must be unique")
+        self.assertIn("space and tab only", names)
 
 
 if __name__ == "__main__":

@@ -6,6 +6,9 @@
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): admits_device_event, no real input in a drive (#276)
 //           2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): CREDITS.md loses its HTML comments (#279)
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_text, the markdown rule every engine
+//           shares (a heading needs a space after its marks, '+' items, single stars); a line of only '#' no
+//           longer throws (#284)
 // ---------------------------------------------------------------------------
 #include "core/ShellLogic.hpp"
 
@@ -38,6 +41,7 @@ const std::vector<std::pair<std::string, std::string>> kButtons = {
 const std::vector<std::string> kPlayStationHints = {"playstation", "dualshock", "dualsense", "ps3", "ps4", "ps5",
                                                     "wireless controller"};
 const std::vector<std::string> kXboxHints = {"xbox", "xinput", "x-box"};
+const std::string kListMarkers = "-*+";   // a CREDITS.md list item's first character (then a space or tab)
 
 std::string lower_no_spaces(const std::string& text) {
     std::string out;
@@ -228,35 +232,63 @@ std::string strip_html_comments(const std::string& text) {
     return joined;
 }
 
+std::string credits_text(const std::string& markdown) {
+    const auto space_tab = [](char c) { return c == ' ' || c == '\t'; };
+    std::vector<std::string> lines;
+    const std::string text = strip_html_comments(markdown);
+    std::size_t from = 0;
+    while (true) {
+        const std::size_t end = text.find('\n', from);
+        std::string s = trim_left(text.substr(from, end == std::string::npos ? std::string::npos : end - from));
+        std::size_t marks = 0;
+        while (marks < s.size() && s[marks] == '#') {
+            ++marks;
+        }
+        if (marks > 0 && (marks == s.size() || space_tab(s[marks]))) {
+            s = trim_left(s.substr(marks));           // a heading: its text stays
+        } else if (s.size() >= 2 && kListMarkers.find(s[0]) != std::string::npos && space_tab(s[1])) {
+            s = trim_left(s.substr(1));               // a list item: its text stays
+        }
+        s.erase(std::remove(s.begin(), s.end(), '*'), s.end());   // emphasis stars
+        while (!s.empty() && space_tab(s.back())) {
+            s.pop_back();
+        }
+        lines.push_back(s);
+        if (end == std::string::npos) {
+            break;
+        }
+        from = end + 1;
+    }
+    std::size_t first = 0;
+    std::size_t last = lines.size();
+    while (first < last && lines[first].empty()) {
+        ++first;
+    }
+    while (last > first && lines[last - 1].empty()) {
+        --last;
+    }
+    std::string joined;
+    for (std::size_t n = first; n < last; ++n) {
+        joined += (n > first ? "\n" : "") + lines[n];
+    }
+    return joined;
+}
+
 std::vector<std::string> credits_lines(const std::string& markdown) {
     std::vector<std::string> out;
-    const std::string text = strip_html_comments(markdown);
-    if (text.find_first_not_of(" \t\n") == std::string::npos) {
+    const std::string text = credits_text(markdown);
+    if (text.empty()) {
         return out;                                   // nothing but comments and blanks: the placeholder
     }
-    std::istringstream in(text);
-    std::string line;
-    while (std::getline(in, line)) {
-        if (!line.empty() && line.back() == '\r') {
-            line.pop_back();
+    std::size_t from = 0;
+    while (true) {
+        const std::size_t end = text.find('\n', from);
+        out.push_back(text.substr(from, end == std::string::npos ? std::string::npos : end - from));
+        if (end == std::string::npos) {
+            return out;
         }
-        std::string s = trim_left(line);
-        if (!s.empty() && s[0] == '#') {              // heading marks
-            s = trim_left(s.substr(s.find_first_not_of('#')));
-        } else if (s.size() >= 2 && (s[0] == '-' || s[0] == '*') && s[1] == ' ') {   // list markers
-            s = trim_left(s.substr(2));
-        }
-        std::string clean;                            // bold stars
-        for (std::size_t i = 0; i < s.size(); ++i) {
-            if (s[i] == '*' && i + 1 < s.size() && s[i + 1] == '*') {
-                ++i;
-                continue;
-            }
-            clean.push_back(s[i]);
-        }
-        out.push_back(clean);
+        from = end + 1;
     }
-    return out;
 }
 
 std::string glyph_fallback_label(const std::string& glyph_name) {

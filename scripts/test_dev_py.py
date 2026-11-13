@@ -22,15 +22,16 @@
 #           refuses a --data-dir inside its player or build output (#263), or inside a folder its build packs into
 #           the game (#271), and that Godot's dev.py refuses a Godot older than its 4.6 floor with exit 2, and that
 #           Unreal's package replaces the platform's last package instead of archiving over it (#278), and that
-#           Unreal's test also runs the Dotwork importer's two checks through the commandlet (#58), and that a test
+#           Unreal's test also runs the Dotwork importer's two checks through the commandlet (#58), that a test
 #           run whose every test was skipped prints [SKIP] with the reason and exits 2 on every engine that can skip
-#           a test (#295).
+#           a test (#295), and that every engine with show:<screen> drives offers show:credits (#284).
 # Usage   : python scripts/test_dev_py.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, no engine needed. The live checks (a real smoke with each toolchain) are
 #           in the kit's release routine; this exam keeps the logic honest between them.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): AllSkipped, the [SKIP] line on five engines (#295)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits on every engine with show drives (#284)
 # ---------------------------------------------------------------------------
 import argparse
 import base64
@@ -276,9 +277,35 @@ class CppReports(TempRoot):
             except SystemExit:
                 pass
         text = " ".join(buf.getvalue().split())
-        for name in ("crash (", "pseudo (", "pseudo-plant (", "bug (", "show:<title|menu|settings|pause|subtitle|play|juice>"):
+        for name in ("crash (", "pseudo (", "pseudo-plant (", "bug (", "show:<screen> (title, menu, settings, pause, subtitle, play, juice or credits"):
             self.assertIn(name, text)
 
+
+
+# ---- #284: show:credits on every engine that has show:<screen> drives ---------------------------------------
+class ShowCredits(unittest.TestCase):
+    ENGINES = ("godot", "love2d", "web", "web-3d", "unity", "cpp-sdl2", "bevy", "unreal")
+
+    def smoke_help(self, engine):
+        dev = load(engine)
+        buf = io.StringIO()
+        with redirect_stdout(buf), redirect_stderr(buf):
+            try:
+                dev.build_parser().parse_args(["smoke", "-h"])
+            except SystemExit:
+                pass
+        return " ".join(buf.getvalue().split())
+
+    def test_every_smoke_help_offers_show_credits(self):
+        for engine in self.ENGINES:
+            with self.subTest(engine=engine):
+                text = self.smoke_help(engine)
+                at = text.find("show:")
+                self.assertGreaterEqual(at, 0, f"{engine}: smoke -h names no show: drive")
+                self.assertIn("credits", text[at:at + 200], f"{engine}: show:credits missing from smoke -h")
+
+    def test_godot_accepts_show_credits(self):
+        self.assertEqual(load("godot").drive_name("show:credits"), "show:credits")
 
 # ---- #33: Unity smoke ---------------------------------------------------------
 class UnitySmoke(TempRoot):
@@ -363,6 +390,9 @@ class UnityDrive(TempRoot):
         for bad in ("crashes", "show:nothing", "access:res=big", "access:pad,"):
             with self.assertRaises(argparse.ArgumentTypeError):
                 dev.drive_name(bad)
+
+    def test_show_credits_is_a_drive(self):                                 # #284
+        self.assertEqual(load("unity").drive_name("show:credits"), "show:credits")
 
     # ---- #275: the drives that fail on purpose, the new markers ----
     def planted(self, drive, log, rc):
