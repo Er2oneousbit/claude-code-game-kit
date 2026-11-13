@@ -32,6 +32,7 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): AllSkipped, the [SKIP] line on five engines (#295)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits on every engine with show drives (#284)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): ship --target itch defaults to the web build (#86)
 # ---------------------------------------------------------------------------
 import argparse
 import base64
@@ -2601,6 +2602,28 @@ class ShipCommand(TempRoot):
                 rc, text, calls = self.ship(engine, "ship", "--target", "do", "--kind", "static", "--plan",
                                             "--site", "my/site")
                 self.assertEqual(calls[0][-2:], ["--site", "my/site"])   # an explicit --site wins
+
+    def test_an_itch_push_defaults_to_the_engines_web_build(self):
+        # #86: `ship --target itch` uploads a folder with butler; with no --site it is the engine's web build
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                rc, text, calls = self.ship(engine, "ship", "--target", "itch", "--project", "me/game", "--dry-run")
+                if engine in self.WEB_BUILDS:
+                    self.assertEqual(rc, 0, text)
+                    self.assertEqual(calls[0][2:], ["--target", "itch", "--project", "me/game", "--dry-run",
+                                                    "--site", str(self.root / self.WEB_BUILDS[engine])])
+                else:
+                    self.assertEqual(rc, 2, text)
+                    self.assertIn("pass --site <the build folder to push>", text)
+                    self.assertEqual(calls, [])
+                rc, text, calls = self.ship(engine, "ship", "--target=itch", "--project", "me/game", "--site",
+                                            "build/windows", "--channel", "windows")
+                self.assertEqual(calls[0][2:], ["--target=itch", "--project", "me/game", "--site", "build/windows",
+                                                "--channel", "windows"])    # an explicit --site wins
+                rc, text, calls = self.ship(engine, "ship", "--target", "itch", "--project", "me/game", "--channel",
+                                            "html5", "--status")
+                self.assertEqual(calls[0][2:], ["--target", "itch", "--project", "me/game", "--channel", "html5",
+                                                "--status"])               # --status pushes nothing: no folder
 
     def test_ship_is_not_taken_from_another_commands_value(self):
         dev = load("cpp-sdl2")

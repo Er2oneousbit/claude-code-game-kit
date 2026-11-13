@@ -20,7 +20,8 @@
 #             clean    remove build/
 #             doctor   verify the local environment
 #             ship     put the game online (tools/cloud/ship.py): ship --target aws|azure|gcp|linode|do
-#                      --kind static|container --plan, then --apply / --destroy; ship -h for its options
+#                      --kind static|container --plan, then --apply / --destroy; or upload to itch.io:
+#                      ship --target itch --project user/game --dry-run, then without it; ship -h for its options
 # Env     : VCPKG_ROOT  path to your vcpkg checkout (required by CMakePresets.json)
 # Exit    : 0 ok, 1 task failed, 2 environment/usage problem
 # Notes   : Works with single-config (Ninja/Make) and multi-config (Visual Studio)
@@ -58,6 +59,8 @@
 #           docs/ARCHITECTURE.md; a run that measured nothing says so (#90) and --no-build (one build for
 #           every run of tools/seed_sweep.py, #183)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive show:credits (#284)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `ship --target itch` uploads to itch.io with
+#           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -790,7 +793,8 @@ def split_ship(parser, argv):
 
 
 def cmd_ship(args, *_):
-    """Put the game online with tools/cloud/ship.py; a static site defaults to this engine's web build (SHIP_SITE)."""
+    """Put the game online with tools/cloud/ship.py; a static site and an itch.io push (--target itch) default to this
+    engine's web build (SHIP_SITE)."""
     tool = ROOT / SHIP_TOOL
     if not tool.is_file():
         print(f"[error] {SHIP_TOOL} is missing (python scripts/new_game.py --upgrade adds it)", file=sys.stderr)
@@ -799,10 +803,15 @@ def cmd_ship(args, *_):
     kind = next((r.split("=", 1)[1] for r in rest if r.startswith("--kind=")), "")
     if "--kind" in rest[:-1]:
         kind = rest[rest.index("--kind") + 1]
+    target = next((r.split("=", 1)[1] for r in rest if r.startswith("--target=")), "")
+    if "--target" in rest[:-1]:
+        target = rest[rest.index("--target") + 1]
     has_site = any(r == "--site" or r.startswith("--site=") for r in rest)   # both spellings argparse takes
-    if kind == "static" and not has_site:
+    itch = target == "itch" and "--status" not in rest                       # a push or dry run uploads a folder
+    if (kind == "static" or itch) and not has_site:
         if SHIP_SITE is None:
-            print("[error] this engine makes no web build of its own: pass --site <a web build folder>", file=sys.stderr)
+            what = "the build folder to push" if itch else "a web build folder"
+            print(f"[error] this engine makes no web build of its own: pass --site <{what}>", file=sys.stderr)
             return 2
         rest += ["--site", str(ROOT / SHIP_SITE)]
     try:
@@ -859,7 +868,8 @@ def build_parser():
     p = sub.add_parser("clean", help="remove build/")
     p.add_argument("--yes", action="store_true", help="accepted on every engine; C++ clean never asks anyway")
     p.set_defaults(fn=cmd_clean)
-    sub.add_parser("ship", help="put the game online with OpenTofu (tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
+    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io with butler "
+                   "(tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
     sub.add_parser("doctor", help="verify the local environment").set_defaults(fn=cmd_doctor)
     return ap
 
