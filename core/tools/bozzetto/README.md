@@ -520,7 +520,7 @@ python tools/bozzetto/bone_map.py pelvis thigh_l upperarm_l ...       # how a pa
 already has is refused unless `--replace`. `--map my_map.json` (`{"their_name": "Hips", ...}`) covers a pack the
 built-in maps do not fit; `--no-replace` writes `assets_src/bozzetto/<name>/rig/retarget/retargeted.glb` only, to look
 first. The rig before the first retarget is kept there as `before_retarget.glb`, with the report, a record of every
-run (`retarget.json`) and `clips.png` (4 frames of each new clip). The character's asset log row gets a
+run (retarget.json) and `clips.png` (4 frames of each new clip). The character's asset log row gets a
 "retarget: ..." note naming the clips and the pack's own row. The pack needs that row of its own, with its licence,
 before the game ships: the command warns when it has none.
 
@@ -542,7 +542,7 @@ Built-in bone maps:
 
 **Tested (2026-11-13, K01; the pack's page and licence: E162):** Quaternius **Universal Animation Library,
 Standard tier** (free; quaternius.com "Universal Animation Library", downloaded from quaternius.itch.io on 2026-11-13,
-`Universal Animation Library[Standard].zip`, 15 MB), licence **CC0 1.0** (its `License.txt`). Inside: `UAL1_Standard.glb`
+`Universal Animation Library[Standard].zip`, 15 MB), licence **CC0 1.0** (its License.txt). Inside: `UAL1_Standard.glb`
 (clips in place) and `UAL1_Standard_RM.glb` (root motion baked into every clip) for Unreal and Godot, the same two as
 FBX for Unity: one 65-bone mannequin, 43 clips at 30 fps.
 
@@ -559,8 +559,8 @@ names); only Godot was run with a pack clip **(verify the others)**.
 
 **Get a Quaternius pack:** on quaternius.com open the pack (Universal Animation Library), Download, then on itch.io
 "Download Now" and "No thanks, just take me to the downloads" (free tiers need no account; seen 2026-11-13). Unzip it
-outside the game, keep the in-place file (`Unreal-Godot/UAL1_Standard.glb`; the `_RM` file's clips travel, and
-travelling clips are left as they are) and its `License.txt` under `assets_src/packs/quaternius_ual/`, and log it:
+outside the game, keep the in-place file (UAL1_Standard.glb in the zip's Unreal-Godot folder; the `_RM` file's clips travel, and
+travelling clips are left as they are) and its License.txt under `assets_src/packs/quaternius_ual/`, and log it:
 ```
 | A-0007 | animation | `assets_src/packs/quaternius_ual/UAL1_Standard.glb` | https://quaternius.com/packs/universalanimationlibrary.html (itch.io, Standard tier, free) | Quaternius | CC0 1.0 | Animations by Quaternius (optional: CC0 asks for none) | no | no | 2026-11-13 | 43 clips, 65 bones (UE Mannequin naming); License.txt in docs/licenses/A-0007.txt; clips added to npc_guard_rigged.glb by rig retarget |
 ```
