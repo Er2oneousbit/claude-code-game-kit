@@ -3,6 +3,45 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.15.2 (2026-11-13): finishing what was there: Godot reads Dotwork manifests, itch.io uploads, animation packs, PixelLab's newer models, the adopt interview (#306, #307, #205, #16, #86)
+- **Godot Dotwork importer (#307):** Godot was the one engine without an importer for Dotwork's asset manifest, so
+  `render_sprites` sheets (the 3D-to-sprites route of `/make-character`) went in by hand. `DotworkAssets` and
+  `DotworkManifest` (`scripts/core/`) now build SpriteFrames with each frame's duration, props with shadows and
+  collision, TileSets and TileMapLayer maps by the spec 1.1.0 rules, fonts, 9-slices and the extra kinds, held to
+  `data/golden/dotwork/expected.json` by 37 GUT tests. Dotwork's own Godot map scenes pick tile variants with the
+  spec's `cell_roll`, so a Godot map shows the same tiles as every other engine (Godot's random pick changed 0 to 2 of
+  19 cells per run on the golden yard).
+- **itch.io uploads (#86, the itch.io half):** `dev.py ship --target itch --project user/game` pushes a build with
+  butler on every engine: `--dry-run` checks the folder (not empty, no secret files), the project, the channel
+  (`html5` for a web build) and the version from the engine's own version source, and prints the butler command.
+  A push needs a login (`BUTLER_API_KEY` or butler's own) and `--yes`; the key reaches butler only through its
+  environment. Steam stays by hand until the platform layer (#84).
+- **Animation packs (#205):** `bozzetto.py rig retarget <name> --from <pack> --clips Walk_Loop=walk` puts a pack's
+  clips on a Mixamo-named rig: a bone map (`ual` for Quaternius' Universal Animation Library, `mixamo` for Mixamo's
+  name variants, or your own JSON), rest poses aligned so a T-pose pack plays on an A-pose rig, a 2 degree self-check
+  before anything is written, and an asset log note. Tested on Quaternius' CC0 Universal Animation Library; Mixamo
+  needs an Adobe login and stays (verify).
+- **PixelLab (#16):** `pixellab.py` gets `--pro-flash` (image, edit, pixelate, character, object), `--style-image`
+  with `--style-traits`, `animate --last-frame`, `animate-character --end-frame`, `--quote` (PixelLab's free price
+  check) and `--source-image-id` (pay only for the rotations of a finished image); the printed cost is the job's real
+  charge. Run live on six features (19 generations); `vfx --pro` ran live for the first time.
+- **The start interview on a project you already have (#306):** adopting an existing project whose docs said its
+  characters are "coloured rectangles on purpose" kept the rectangles in the toy plan. The first-art floor is no
+  longer prefilled from a project: box or dot characters become drawn ones unless the user picks boxes after
+  reading why, the warning box's character sentence is copied word for word, and every place the project's docs
+  disagree with the kit is listed for the user to decide.
+- **Fixed on the way:** Godot's and web-3d's character tests sampled one second of the walk, so a longer walk read a
+  smaller swing; both sample the whole clip now, as Bevy, Unity and Unreal did. The 0.15.1 Unity example left a
+  generated `.meta` uncommitted. KNOWN_ISSUES listed ten closed issues as open work.
+- **Upgrade notes:** Godot map scenes Dotwork already painted keep their variants until their pack runs again; then
+  terrain cells take the spec's pick (only which variant shows, only on terrains with several tiles for one key).
+  A Godot game's `export_presets.cfg` usually comes back as `.gold` (Godot rewrites it): add `assets/dotwork/*` to its
+  `include_filter` by hand, or an exported game finds no manifests. Commit the `.gd.uid` files Godot writes for the
+  four new scripts. `.claude/settings.json` gains an ask rule for `butler` and deny rules for butler's saved login.
+- **Still (verify):** a real itch.io upload and `--status`; Mixamo downloads; pack clips in engines other than Godot;
+  the Godot importer on the 4.6 floor and in an exported build; PixelLab's `tiles-pro`, `outfit` and the older
+  8-direction `object`.
+
 ## 0.15.1 (2026-11-13): fixes: credits text in every shell, the start interview, Bozzetto and engine follow-ups (#284, #196, #203, #294 to #301)
 - **Credits screens (#284):** one rule turns CREDITS.md into screen text in every shell (Godot, web, web-3d, LÖVE,
   Unity, C++, Bevy, Unreal): HTML comments go, heading marks and list markers go, every `*` goes, underscores stay
