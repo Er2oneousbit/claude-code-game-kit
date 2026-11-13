@@ -154,7 +154,7 @@ no signal stays off the list (the game's Claude still finds it later). Show it i
 | Kids, older players, players who are colour-blind or use one hand, or accessibility named | `docs/sop/SOP-20-accessibility.md`, `tools/access/colour_check.py` at the art pass, `tools/access/sweep.py` | Vertical slice (the sweep again at MVP) |
 | Talking characters driven by a language model | `docs/sop/SOP-15-ai-features.md` | when the plan has them |
 | A real place (8d) | `docs/resources/world-and-levels.md` | Toy or Vertical slice, as an option to try |
-| "Easy to share a link", a web host, itch.io or Steam | `python tools/dev.py ship` (SOP-06 "Putting it online"), `docs/sop/SOP-21-ship-on-steam-and-itch.md` | MVP |
+| "Easy to share a link", a web host, itch.io or Steam | `python tools/dev.py ship` (SOP-06 "Putting it online"; itch.io is wired: `ship --target itch`), `docs/sop/SOP-21-ship-on-steam-and-itch.md` (Steam uploads are by hand, not wired yet) | MVP |
 Menus, saves, settings and the release checks come with every game through `/next-tier` and `/release-check`; leave
 them off the list.
 Right under the plan, before asking for the yes, show this warning in a box of its own. Say it in your words with the

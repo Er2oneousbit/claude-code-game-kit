@@ -61,6 +61,11 @@ the budget alert (`--budget`, `--alert-email`; by hand on Linode and DigitalOcea
 git-ignored, and destroy needs it), and use a deploy login with only the rights the recipe needs. The recipes are
 validated offline and not yet run against a real account **(verify on the first apply)**.
 
+**itch.io** is not OpenTofu: `python tools/dev.py ship --target itch --project user/game --dry-run` checks a build
+folder (the engine's web build, or `--site <folder>` with `--channel windows|linux|mac|android`) and prints the butler
+command; the same without `--dry-run` pushes it with the version above (`SOP-21` step 3). Steam uploads are not wired
+yet (#84).
+
 ## After launch (standard practice)
 - **Hotfix flow:** a crash or a save-breaking bug gets a PATCH release (versioning above) from a branch off the release
   tag, with only that fix, the same release check, then a merge back. Upload to a beta branch first (SteamPipe `SetLive`,
