@@ -16,6 +16,8 @@
 //           2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): auto_repeat (hold to mash, #166)
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): analog (stick and trigger shaping, #265)
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): charmap (which characters a font can draw)
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): display_staging (the Display tab's Apply, #308),
+//           hud_scale (a game HUD's text size, #309)
 // ---------------------------------------------------------------------------
 pub mod math;
 pub mod rng;
@@ -36,6 +38,8 @@ pub mod atomic_file;
 pub mod auto_repeat;
 pub mod bindings;
 pub mod charmap;
+pub mod display_staging;
+pub mod hud_scale;
 pub mod i18n;
 pub mod save_store;
 pub mod settings;

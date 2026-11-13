@@ -24,7 +24,12 @@
   fills it from the player's bindings: `dir`, `pressed` and `held` actions, the analog `stick` with the player's deadzone
   and invert_y, and `left_trigger`/`right_trigger`) and its accessibility rules from `AccessRules` and `Palette`. The
   display settings (mode, vsync, frame cap, window size) go to the window through `src/shell/display.rs`, never in
-  automated runs. A panic writes `crashes/crash_<time>.txt` in the user-data folder (version, screen, error,
+  automated runs. The Display tab waits for Apply (`logic::display_staging::DisplayStaging`, held to
+  `data/golden/shell.json`): a new mode or window size asks "Keep these display settings?" and puts the old ones back
+  after 15 real seconds; the other tabs apply at once. A game HUD's text size is the `shell::HudScale` resource
+  (`display.ui_scale` and `access.text_scale`; `logic::hud_scale::hud_text_scale` is the pure factor): it changes only
+  when one of them does, so `hud.is_changed()` is the signal to lay out again; `HudScale::ui_font_px(base)` for a
+  bevy_ui `Text` (UiScale adds ui_scale), `HudScale::font_px(base)` for anything else. A panic writes `crashes/crash_<time>.txt` in the user-data folder (version, screen, error,
   backtrace, settings, log tail; `src/shell/crash.rs`). Debug builds add F8 (a `bug_<time>/` folder with a screenshot,
   the log tail, the settings and an info file), the pseudo language and "Juice demo" on the main menu
   (`src/shell/juice.rs`: every juice primitive and the access settings, live). The demo uses nothing from `src/game/`:
