@@ -26,6 +26,7 @@
 #           gives them. The Dotwork lane exams (test_uikit, test_pixelorama, ...) are loaded by test_dotwork.py,
 #           so they have no row of their own; `wavesmith.py test` is the same set as the Wavesmith rows.
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the rebake row's note (--rebake auto, #203)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -182,7 +183,7 @@ EXAMS = [
     Exam("core/tools/bozzetto/test_rig.py", "UniRig and Tripo routes offline; its Blender part runs when Blender or bpy is found"),
     Exam("core/tools/bozzetto/test_chain.py", "rig chain (secondary motion): parsers and the command offline; its Blender part (a made-up scarf character, about 1 min) runs when Blender or bpy is found"),
     Exam("core/tools/bozzetto/test_reference.py", "reference views: stand-in ComfyUI, Gemini and Tripo; caps, journal reuse, failures, the PNG reader"),
-    Exam("core/tools/bozzetto/test_rebake.py", "the UV rebake (#293): make's --rebake/--accept-uv and `rebake <name>` offline; its Blender part (a tiny-island cube rebaked and checked, about 1 min) runs when Blender or bpy is found",
+    Exam("core/tools/bozzetto/test_rebake.py", "the UV rebake (#293, #203): make's --rebake/--rebake auto/--accept-uv and `rebake <name>` offline; its Blender part (a tiny-island cube rebaked, checked and kept over the floor, about 2 min) runs when Blender or bpy is found",
          covers=("core/tools/bozzetto/", "core/tools/blender/rebake_uvs.py")),
     Exam("core/tools/bozzetto/test_bozzetto_live.py", "one real TRELLIS.2 run (about 5 min); [SKIP] without ComfyUI", style="cases", live=True),
     # core/tools/blender (bpy on uv's Python 3.13)

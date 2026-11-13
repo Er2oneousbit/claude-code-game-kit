@@ -194,7 +194,8 @@ model-free example packs, not yet on a real game's art.
   ([#282](https://github.com/Er2oneousbit/claude-code-game-kit/issues/282)).
 - **Bozzetto:** a `--material vertex` model renders white in Godot until `vertex_color_use_as_albedo` is set
   ([#202](https://github.com/Er2oneousbit/claude-code-game-kit/issues/202)); TRELLIS.2 characters with baked textures
-  landed under the `npc` class's 55% UV coverage floor on two seeds
+  landed under the `npc` class's 55% UV coverage floor on two seeds; 0.15.1's `--rebake auto` (the local default)
+  lifts both to 59 and 60%, on those two models only so far
   ([#203](https://github.com/Er2oneousbit/claude-code-game-kit/issues/203)). `rig`: bipeds only; the Unity Humanoid
   route is untested; Mixamo and Quaternius are named as sources but no pack is tested
   ([#205](https://github.com/Er2oneousbit/claude-code-game-kit/issues/205)).

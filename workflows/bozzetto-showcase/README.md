@@ -61,8 +61,8 @@ What it got wrong:
   the lid cut off and re-pivoted by hand or by script (SOP-11).
 - **The back is invented**, and plain: the brass lock exists only on the front, which is right, but the back's straps
   are TRELLIS.2's guess from one view.
-- **Every LOD file carries its own copy of the textures** (2.7 MB each): `tools/blender/prep_export.py` writes each LOD as a
-  complete `.glb`. Fine for a prop, wasteful for a set of LODs per model.
+- **Every LOD file carried its own copy of the textures** (2.7 MB each): `tools/blender/prep_export.py` writes each LOD as a
+  complete `.glb`. Fixed after this run (#196): each LOD's textures are now half the size of the level before.
 - At 200 px the raw and the cleaned chest look the same: ComfyUI already decimated it to the budget, so cleanup's
   work here was the scale, the pivot and the welded seams, not the shape.
 
