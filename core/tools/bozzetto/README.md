@@ -329,8 +329,8 @@ Unity ENGINE.md.
 For a 2D game, `render_sprites.py --actions all --manifest assets/dotwork/rendered.assets.json` renders every clip in 8
 (or 4) directions into a Dotwork asset manifest that each engine's Dotwork importer loads as it is (SOP-11). The web,
 web-3d, LÖVE, C++/SDL3, Bevy, RPG Maker MZ, Unity and Unreal importer tests load the golden character's rendered
-sheet; the LÖVE and C++ starters drew it walking. Godot has no manifest importer (it loads Dotwork's own resources):
-a 2D Godot game uses the sheets with the layout `.json` beside each by hand **(verify: not in a test)**.
+sheet; the LÖVE and C++ starters drew it walking. Godot's importer (`DotworkAssets`, #307) loads it too, held to the
+same golden character in its GUT test; the Godot starter does not draw it yet.
 
 ## Rig a character
 `make` gives a character as a statue. `rig` gives it a skeleton, skin weights and clips, checks that the rig really

@@ -124,6 +124,9 @@ resting on the window cannot change the picture.
 
 ## Assets and audio
 - Import settings live in `*.import` files. Pixel art: Filter off, mipmaps off. Audio loops: set loop in the import tab, verify in-game.
+- Dotwork art: its own resources load as they are; a pack with only a manifest (render_sprites' sheets of a 3D
+  character) comes in through `DotworkAssets` (docs/ENGINE.md "Dotwork art"); `test` checks every
+  `assets/dotwork/*.assets.json`.
 - Audio buses: Master > Music, SFX, UI. Create in the Audio tab, expose volume sliders in settings from day one.
 - Music: `MusicPlayer` (`scripts/shell/music_player.gd`) plays data/music.json on the Music bus and switches on the sample `MusicDirector` plans (import music WAVs as PCM; precision in its header).
 - Naming: `spr_player_idle.png`, `sfx_jump_01.wav`, `mus_level1.ogg`, `fnt_ui.ttf`.
@@ -138,7 +141,8 @@ Release-like check: export a release build and watch the on-screen FPS counter. 
 1. Install export templates for your exact Godot version once (Editor > Manage Export Templates, or download the
    `.tpz` for your version from godotengine.org and install it from that dialog).
 2. `export_presets.cfg` comes with the project: "Windows Desktop", "Linux" and "Web", with `tests/*, tools/*, docs/*,
-   addons/gut/*, data/golden/*, assets_src/*` and the kit's `.game-kit.json` excluded; `build` lists the exported
+   addons/gut/*, data/golden/*, assets_src/*` and the kit's `.game-kit.json` excluded and `assets/dotwork/*` (Dotwork's
+   manifests, plain JSON Godot does not import) included; `build` lists the exported
    .pck and fails when one of them is inside (a preset edited in the editor can drop the filter). `assets_src/`
    (art sources, Dotwork's review sheets) also holds
    an empty `.gdignore`, so Godot never imports it: keep anything a scene loads under `assets/`. Add macOS, Android or iOS in Project > Export (they need signing). Commit `export_presets.cfg` but

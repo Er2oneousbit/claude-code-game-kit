@@ -115,9 +115,10 @@ the engine's spring bones can drive the chain instead (`--sway 0`; README recipe
   assets/dotwork/<name>.assets.json --name <name>` (Blender on the CPU, about 1.5 minutes for three clips; the
   `<models>` folder and the Blender path as SOP-11 says); then the engine's Dotwork importer (`/dotwork` step 8). The
   LÖVE and C++ starters draw the first manifest character walking with no new code. Show one sheet first. A 2D
-  **Godot** game has no manifest importer (Godot loads Dotwork's own resources): use the sheets with the layout
-  `.json` written next to each (`AtlasTexture` regions into a `SpriteFrames`, the pivot as the sprite's offset) and
-  say so; nothing in the kit does that step for Godot yet.
+  **Godot** game loads it through its importer (`docs/ENGINE.md` "Dotwork art"): `var m :=
+  DotworkAssets.load_manifest("res://assets/dotwork/<name>.assets.json")`, `var hero :=
+  DotworkAssets.animated_sprite(m["animated_sprite"]["<name>"])`, `DotworkAssets.play(hero, "walk_s")` (the frame
+  durations and the feet as the pivot come along); its starter draws nothing yet, so add the node to the scene.
 - Capture as CLAUDE.md "While building" says: `python tools/dev.py smoke --screenshot
   captures/progress/<NN>-<name>.png`, or for the walk `smoke --record captures/frames-<NN>` and
   `tools/art/frames_to_gif.py`. Look at it first, then post the link and ask for the last yes. Run `check` and
