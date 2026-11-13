@@ -3,6 +3,7 @@
 .claude/skills/make-a-game/SKILL.md: path: HOW_IT_WAS_MADE.md
 .claude/skills/make-a-game/SKILL.md: path: docs/ENGINE_FLOW.md
 .claude/skills/make-a-game/SKILL.md: path: tools/dev.py
+CHANGELOG.md: path: bozzetto.json
 CHANGELOG.md: path: src/core/follow.ts
 CHANGELOG.md: path: tools/audio/babble.py
 CHANGELOG.md: path: tools/audio/eleven_audio.py
@@ -31,6 +32,7 @@ core/.claude/skills/game-shell/SKILL.md: path: docs/ENGINE.md
 core/.claude/skills/game-shell/SKILL.md: path: docs/ENGINE_FLOW.md
 core/.claude/skills/game-shell/SKILL.md: path: docs/ENGINE_FLOW.md
 core/.claude/skills/gen-brief/SKILL.md: path: docs/ENGINE.md
+core/.claude/skills/make-character/SKILL.md: path: docs/ENGINE.md
 core/.claude/skills/make-character/SKILL.md: path: docs/ENGINE.md
 core/.claude/skills/model-pipeline/SKILL.md: path: docs/ENGINE_FLOW.md
 core/.claude/skills/new-feature/SKILL.md: path: docs/ENGINE.md
@@ -119,8 +121,11 @@ engines/cpp-sdl2/FLOW.md: path: data/i18n/en.json
 engines/cpp-sdl2/FLOW.md: path: src/core/MotorAccess.hpp
 engines/cpp-sdl2/FLOW.md: path: src/game/Game.cpp
 engines/godot/ENGINE.md: path: docs/ENGINE_FLOW.md
+engines/godot/ENGINE.md: path: scripts/core/dotwork_manifest.gd
 engines/godot/ENGINE.md: path: scripts/core/kit_character.gd
 engines/godot/ENGINE.md: path: scripts/shell/crash_hook.gd
+engines/godot/ENGINE.md: path: tests/test_dotwork_manifests.gd
+engines/godot/ENGINE.md: path: tests/test_golden_dotwork.gd
 engines/godot/ENGINE.md: path: tests/test_kit_character.gd
 engines/godot/ENGINE.md: path: tools/dev.py
 engines/godot/FLOW.md: path: data/dialogue/sample.built.json
