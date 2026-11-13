@@ -41,7 +41,25 @@
 #           secrets, so deploy/ is git-ignored. Lose it and destroy cannot find what it made (every resource the
 #           provider can tag carries game-kit=<slug> for finding it by hand). No provider was used for real yet: the
 #           modules are validated offline (tofu validate) and this tool is tested with a stand-in tofu (verify).
+#
+#           itch.io is its own path, not OpenTofu: butler uploads a build folder to a channel (#86).
+#             python tools/cloud/ship.py --target itch --project user/game --site DIR [--channel C]
+#                                        [--userversion V] (--dry-run | --yes | --status)
+#             --dry-run: butler found (--butler, BUTLER_BIN, then butler on PATH), the folder exists, is not empty and
+#                        holds no secret-type file or token, the project is user/game, the channel is valid, the
+#                        version is known -> print the exact butler command and whether a login is there. Runs
+#                        nothing, uploads nothing, needs no login.
+#             push: the same checks -> a login must be there (BUTLER_API_KEY set, or the credentials file `butler
+#                   login` saves exists; neither is ever opened, printed or written) -> confirm (the slug in a
+#                   terminal, --yes elsewhere) -> butler push <folder> user/game:channel --userversion V
+#             --status: butler status user/game:channel (what itch.io did with the upload)
+#           The channel defaults to html5 when the folder holds index.html (a web build); any other build names its
+#           channel (windows, linux, mac, android: butler tags platforms from those words). The version comes from
+#           the engine's one version source (SOP-06) unless --userversion is given. Steam is not here yet (#84).
+#           Tested with a stand-in butler only: a real upload is still to come (verify).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --target itch pushes a build with butler (#86):
+#           dry run, version from the engine's version source, login checked by presence only, confirm like --apply
 # ---------------------------------------------------------------------------
 import argparse
 import datetime
@@ -49,6 +67,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -87,6 +106,35 @@ SLUG_RE = re.compile(r"^[a-z][a-z0-9-]{1,40}[a-z0-9]$")
 TOFU_TIMEOUT_S = 3600
 DEBUG = False
 
+# itch.io (butler, https://itch.io/docs/butler/, read 2026-11-13: E84)
+ITCH = "itch"
+BUTLER_KEY_ENV = "BUTLER_API_KEY"                     # butler reads it itself; this tool only checks it is set
+BUTLER_CREDS = (Path.home() / ".config" / "itch" / "butler_creds",                         # Linux, Windows
+                Path.home() / "Library" / "Application Support" / "itch" / "butler_creds")  # macOS
+BUTLER_INSTALL = ("install butler from https://itchio.itch.io/butler (or the itch app, which bundles it), then put it "
+                  "on PATH, set BUTLER_BIN or pass --butler")
+BUTLER_LOGIN = (f"run `butler login` once on this machine, or set {BUTLER_KEY_ENV} to a key from "
+                "https://itch.io/user/settings/api-keys (CI: a repository secret); never put the key in a file here")
+ITCH_PROJECT_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*/[a-z0-9][a-z0-9_-]*$")   # user/game, lower case
+ITCH_CHANNEL_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")                 # lower case, dash-separated by convention
+ITCH_WEB_CHANNEL = "html5"                            # the default for a folder holding index.html
+ITCH_PLATFORM_WORDS = (("windows", ("win", "windows")), ("linux", ("linux",)), ("mac", ("mac", "osx")),
+                       ("android", ("android",)))     # butler tags a channel by these words in its name
+USERVERSION_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$")
+# The engine's one version source (SOP-06 "Versioning"): engine id -> (file, regex whose group 1 is the version)
+VERSION_SOURCES = {
+    "godot": ("project.godot", r'(?m)^config/version="([^"]+)"'),
+    "web": ("package.json", r'"version"\s*:\s*"([^"]+)"'),
+    "web-3d": ("package.json", r'"version"\s*:\s*"([^"]+)"'),
+    "rpgmaker-mz": ("package.json", r'"version"\s*:\s*"([^"]+)"'),
+    "bevy": ("Cargo.toml", r'(?m)^version\s*=\s*"([^"]+)"'),
+    "cpp-sdl2": ("CMakeLists.txt", r"project\s*\([^)]*?\bVERSION\s+([0-9][0-9A-Za-z.]*)"),
+    "love2d": ("src/version.lua", r'\bversion\s*=\s*"([^"]+)"'),
+    "unity": ("ProjectSettings/ProjectSettings.asset", r"(?m)^\s*bundleVersion:\s*(\S+)"),   # (verify)
+    "unreal": ("Config/DefaultGame.ini", r"(?m)^ProjectVersion=(\S+)"),                    # (verify)
+}
+BUTLER_TIMEOUT_S = 6 * 3600                           # a big first upload on a slow line
+
 
 class ToolError(Exception):
     """A usage or environment problem: one [error] line, exit 2."""
@@ -115,10 +163,10 @@ def game_slug():
     return slug
 
 
-def site_problems(site):
-    """Reasons not to publish a folder: no index.html, secret-type files, tokens in text files."""
+def site_problems(site, need_index=True):
+    """Reasons not to publish a folder: no index.html (a web build), secret-type files, tokens in text files."""
     problems = []
-    if not (site / "index.html").is_file():
+    if need_index and not (site / "index.html").is_file():
         problems.append(f"{site} has no index.html (build the web version first)")
     for f in sorted(p for p in site.rglob("*") if p.is_file() or p.is_symlink()):
         rel = f.relative_to(site).as_posix()
@@ -430,18 +478,182 @@ def cmd_destroy(a, slug, deploy, exe):
     return 0
 
 
+# ---- itch.io with butler (#86) ------------------------------------------------------------
+def butler_exe(a):
+    """The butler executable: --butler, then BUTLER_BIN, then butler on PATH. Missing is an environment problem."""
+    exe = a.butler or os.environ.get("BUTLER_BIN") or shutil.which("butler")
+    if not exe:
+        raise ToolError("butler not found: " + BUTLER_INSTALL)
+    if not Path(exe).is_file():
+        raise ToolError(f"butler not found at {exe}: " + BUTLER_INSTALL)
+    return exe
+
+
+def butler(exe, args, capture=False):
+    """Run butler with this process's environment (butler reads BUTLER_API_KEY from it: the key never goes on the
+    command line). Streams butler's own progress unless capture. Returns (exit code, captured output)."""
+    cmd = [str(exe), *args]
+    dbg("run: " + shown_command(cmd))
+    try:
+        r = subprocess.run(cmd, cwd=ROOT, capture_output=capture, encoding="utf-8", errors="replace",
+                           timeout=BUTLER_TIMEOUT_S)
+    except FileNotFoundError as exc:
+        raise ToolError(f"cannot run butler ({exe}): {exc}")
+    except subprocess.TimeoutExpired:
+        raise Refused(f"butler {args[0]} did not finish within {BUTLER_TIMEOUT_S} s")
+    return r.returncode, (r.stdout or "") + (r.stderr or "")
+
+
+def shown_command(cmd):
+    """One command line as a user would type it in this shell (Python 3.8 has no shlex.join)."""
+    if os.name == "nt":
+        return subprocess.list2cmdline([str(c) for c in cmd])
+    return " ".join(shlex.quote(str(c)) for c in cmd)
+
+
+def itch_login():
+    """How butler will log in here, by presence only: 'BUTLER_API_KEY' or 'butler login', else None.
+    Neither the variable's value nor the credentials file is ever read."""
+    if os.environ.get(BUTLER_KEY_ENV, "").strip():
+        return BUTLER_KEY_ENV
+    if any(p.is_file() for p in BUTLER_CREDS):
+        return "butler login"
+    return None
+
+
+def itch_platforms(channel):
+    """The platforms butler tags a channel with, from the words in its name (E84)."""
+    return [name for name, words in ITCH_PLATFORM_WORDS if any(w in channel for w in words)]
+
+
+def game_version():
+    """(version, file) from the engine's one version source (SOP-06), or a ToolError naming --userversion."""
+    try:
+        engine = json.loads((ROOT / ".game-kit.json").read_text(encoding="utf-8")).get("engine", "")
+    except (OSError, ValueError):
+        engine = ""
+    if engine not in VERSION_SOURCES:
+        raise ToolError(f"no version source known for engine {engine!r}: pass --userversion <the game's version>")
+    rel, pattern = VERSION_SOURCES[engine]
+    try:
+        m = re.search(pattern, (ROOT / rel).read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        m = None
+    if not m or not USERVERSION_RE.match(m.group(1)):
+        raise ToolError(f"no version found in {rel} (SOP-06 \"Versioning\"): set it there, or pass --userversion")
+    return m.group(1), rel
+
+
+def itch_check(a):
+    """Every check a push needs except the login. Returns (butler, folder, channel, version, version source)."""
+    if a.check or a.plan or a.apply or a.destroy:
+        raise ToolError("--target itch takes --dry-run, --status, or no step (a push): --check, --plan, --apply and "
+                        "--destroy are for the OpenTofu targets")
+    if a.kind == "container":
+        raise ToolError("--target itch uploads a build folder (--site), not a container image")
+    if not a.project:
+        raise ToolError("--target itch needs --project <user/game> (the page's address: user.itch.io/game)")
+    if ":" in a.project:
+        raise ToolError(f"--project {a.project}: give the channel with --channel, not after a colon")
+    if not ITCH_PROJECT_RE.match(a.project):
+        raise ToolError(f"--project {a.project}: must be user/game, lower case (as in user.itch.io/game)")
+    exe = butler_exe(a)
+    if a.status:
+        if not a.channel:
+            raise ToolError("--status needs --channel (the channel whose builds to show)")
+        if not ITCH_CHANNEL_RE.match(a.channel):
+            raise ToolError(f"--channel {a.channel}: lower case letters, digits, '-', '.', '_' (e.g. windows, html5)")
+        return exe, None, a.channel, None, None
+    if not a.site:
+        raise ToolError("--target itch needs --site <the build folder to push> (dev.py ship adds the engine's web "
+                        "build)")
+    folder = Path(a.site)
+    if not folder.is_dir():
+        raise ToolError(f"--site {a.site}: no such folder (build the game first)")
+    if not any(folder.iterdir()):
+        raise ToolError(f"--site {a.site}: the folder is empty (build the game first)")
+    web = (folder / "index.html").is_file()
+    channel = a.channel or (ITCH_WEB_CHANNEL if web else None)
+    if not channel:
+        raise ToolError("--channel is needed for a build that is not a web build: windows, linux, mac or android "
+                        "(butler tags the platform from those words; e.g. windows-beta)")
+    if not ITCH_CHANNEL_RE.match(channel):
+        raise ToolError(f"--channel {channel}: lower case letters, digits, '-', '.', '_' (e.g. windows, html5)")
+    if "html" in channel and not web:
+        raise ToolError(f"--channel {channel} is for a web build, but {a.site} has no index.html")
+    problems = site_problems(folder, need_index=False)
+    if problems:
+        raise Refused("the build folder is not safe to publish:\n  " + "\n  ".join(problems[:20]))
+    if a.userversion:
+        if not USERVERSION_RE.match(a.userversion):
+            raise ToolError(f"--userversion {a.userversion!r}: letters, digits and . + _ - only (e.g. 1.2.0)")
+        version, source = a.userversion, "--userversion"
+    else:
+        version, source = game_version()
+    return exe, folder, channel, version, source
+
+
+def cmd_itch(a):
+    exe, folder, channel, version, source = itch_check(a)
+    target = f"{a.project}:{channel}"
+    if a.status:
+        if not itch_login():
+            raise ToolError("no itch.io login: " + BUTLER_LOGIN)
+        rc, _ = butler(exe, ["status", target])
+        if rc != 0:
+            raise Refused(f"butler status failed (exit {rc})")
+        return 0
+    push = ["push", str(folder), target, "--userversion", version]
+    tags = itch_platforms(channel)
+    files = sum(1 for p in folder.rglob("*") if p.is_file())
+    print(f"[ OK ] butler: {exe}")
+    print(f"[ OK ] build: {folder} ({files} files, no secret-type files or tokens)")
+    print(f"[ OK ] page: https://{a.project.split('/')[0]}.itch.io/{a.project.split('/')[1]}, channel {channel} ("
+          + (f"butler tags it {', '.join(tags)}" if tags else "no platform word: tag it on the itch.io Edit game page")
+          + ")")
+    if channel == ITCH_WEB_CHANNEL or "html" in channel:
+        print("[info] a web build: after the first push, set the kind of project to HTML and mark this channel's "
+              "upload as playable in the browser on the itch.io Edit game page (butler cannot)")
+    print(f"[ OK ] version: {version} (from {source})")
+    login = itch_login()
+    if a.dry_run:
+        print(f"[{' OK ' if login else 'WARN'}] login: " + (f"{login} (present; never read here)" if login else
+                                                          "none yet; a push needs one: " + BUTLER_LOGIN))
+        print("[info] would run: " + shown_command([exe, *push]))
+        print("[ OK ] dry run: nothing was uploaded")
+        return 0
+    if not login:
+        raise ToolError("no itch.io login: " + BUTLER_LOGIN)
+    confirm(a, f"push {folder.name} to {target}", game_slug())
+    print("[info] running: " + shown_command([exe, *push]))
+    rc, _ = butler(exe, push)
+    if rc != 0:
+        raise Refused(f"butler push failed (exit {rc}): read butler's lines above")
+    print(f"[ OK ] pushed to {target} as {version}. itch.io processes it before it is live: "
+          f"python tools/cloud/ship.py --target itch --project {a.project} --channel {channel} --status")
+    return 0
+
+
 def build_parser():
     ap = argparse.ArgumentParser(
-        prog="ship.py", description="Put a game online with OpenTofu: a static web build, or one container image.",
-        epilog="Exit codes: 0 ok, 1 failed or refused, 2 usage or environment. Every provider keeps its own login.")
-    ap.add_argument("--target", required=True, choices=TARGETS, help="aws, azure, gcp, linode or do (DigitalOcean)")
-    ap.add_argument("--kind", required=True, choices=KINDS, help="static (a web build) or container (one image)")
-    step = ap.add_mutually_exclusive_group(required=True)
+        prog="ship.py", description="Put a game online with OpenTofu (a static web build, or one container image), "
+                                    "or upload a build to itch.io with butler (--target itch).",
+        epilog="Exit codes: 0 ok, 1 failed or refused, 2 usage or environment. Every provider keeps its own login. "
+               "itch.io: ship.py --target itch --project user/game --site <build folder> [--channel C] "
+               "[--userversion V] --dry-run, then the same without --dry-run (and --yes outside a terminal) to push.")
+    ap.add_argument("--target", required=True, choices=TARGETS + (ITCH,),
+                    help="aws, azure, gcp, linode, do (DigitalOcean) with OpenTofu, or itch (itch.io with butler)")
+    ap.add_argument("--kind", choices=KINDS, help="OpenTofu targets (required): static (a web build) or container "
+                                                  "(one image)")
+    step = ap.add_mutually_exclusive_group()
     step.add_argument("--check", action="store_true", help="write the deployment and validate it offline (no login)")
     step.add_argument("--plan", action="store_true", help="write the deployment and show what it would make")
     step.add_argument("--apply", action="store_true", help="apply the saved plan, unchanged")
     step.add_argument("--destroy", action="store_true", help="remove everything this tool made there")
-    ap.add_argument("--site", help="static: the web build folder (holds index.html)")
+    step.add_argument("--dry-run", action="store_true",
+                      help="itch: check everything and print the exact butler command; uploads nothing, needs no login")
+    step.add_argument("--status", action="store_true", help="itch: butler status for --project and --channel")
+    ap.add_argument("--site", help="static: the web build folder (holds index.html); itch: the build folder to push")
     ap.add_argument("--image", help="container: a public image reference")
     ap.add_argument("--port", type=int, help="container: the port the image listens on")
     ap.add_argument("--domain", help="linode container: the domain for the HTTPS certificate")
@@ -450,11 +662,16 @@ def build_parser():
     ap.add_argument("--budget", type=float, default=DEFAULT_BUDGET_USD,
                     help=f"monthly budget alert in USD at 80 %% of actual spend (default {DEFAULT_BUDGET_USD})")
     ap.add_argument("--alert-email", help="who gets the budget alert (AWS, Azure, GCP)")
-    ap.add_argument("--project", help="gcp: the project id")
+    ap.add_argument("--project", help="gcp: the project id; itch: the page as user/game (lower case)")
     ap.add_argument("--billing-account", help="gcp: the billing account id for the budget")
-    ap.add_argument("--yes", action="store_true", help="confirm --apply / --destroy without a prompt")
+    ap.add_argument("--channel", help=f"itch: the channel (windows, linux, mac, android name the platform; default "
+                                      f"{ITCH_WEB_CHANNEL} for a folder holding index.html)")
+    ap.add_argument("--userversion", help="itch: the version butler records (default: the engine's version source, "
+                                          "SOP-06)")
+    ap.add_argument("--yes", action="store_true", help="confirm --apply / --destroy / an itch push without a prompt")
     ap.add_argument("--tofu", help="the OpenTofu executable (default: TOFU_BIN, then tofu on PATH)")
-    ap.add_argument("--debug", action="store_true", help="show tofu's full output")
+    ap.add_argument("--butler", help="itch: the butler executable (default: BUTLER_BIN, then butler on PATH)")
+    ap.add_argument("--debug", action="store_true", help="show tofu's full output and the commands run")
     return ap
 
 
@@ -467,8 +684,16 @@ def main(argv=None):
             pass
     a = build_parser().parse_args(argv)
     DEBUG = a.debug
-    a.region = a.region or DEFAULT_REGION_BY_KIND.get((a.target, a.kind), DEFAULT_REGION[a.target])
     try:
+        if a.target == ITCH:                    # butler, not OpenTofu: never needs tofu
+            return cmd_itch(a)
+        if not a.kind:
+            raise ToolError(f"--target {a.target} needs --kind static or --kind container")
+        if a.dry_run or a.status:
+            raise ToolError("--dry-run and --status are for --target itch: the OpenTofu targets use --check or --plan")
+        if not (a.check or a.plan or a.apply or a.destroy):
+            raise ToolError(f"--target {a.target} needs one step: --check, --plan, --apply or --destroy")
+        a.region = a.region or DEFAULT_REGION_BY_KIND.get((a.target, a.kind), DEFAULT_REGION[a.target])
         slug = game_slug()
         exe = tofu_exe(a)
         deploy = ROOT / "deploy" / f"{a.target}-{a.kind}"
