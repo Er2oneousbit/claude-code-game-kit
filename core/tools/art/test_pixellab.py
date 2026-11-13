@@ -874,6 +874,14 @@ class PixelLabExam(unittest.TestCase):
             self.assertIn(words, out)
             self.assertIn("provisional", out)
             self.assertFalse((self.root / dest).exists(), "a quote writes nothing")
+        # reusing a paid image: the quote is the rotations alone (live 2026-11-13: 8 directions at 32 px charged 1)
+        for directions, words in (("8", "quote: 1 generation (rotations only"), ("1", "quote: 0 generations (rotations only")):
+            fake = Fake()
+            rc, out = self.run_tool("object", "--pro-flash", "--quote", "--text", "x", "--directions", directions,
+                                    "--size", "32", "--source-image-id", "src1", "--out", "qs", fake=fake)
+            self.assertEqual(rc, 0, out)
+            self.assertIn(words, out)
+            self.assertIn(f"n_directions={directions}", fake.calls[0][1])
         (self.root / "concept.png").write_bytes(real_png(64, 64))
         fake = Fake()
         rc, out = self.run_tool("pixelate", "--pro-flash", "--quote", "--image", "concept.png", "--out", "p.png", fake=fake)

@@ -1379,15 +1379,19 @@ def quote(kind, args, body, variants):
     if not key:
         raise ToolError(missing_key_help())
     got = call("GET", query, key)
-    total = got.get("total")
-    if not isinstance(total, (int, float)) or isinstance(total, bool):
-        raise ServiceError(f"PixelLab's price answer has no total (got: {sorted(got)})")
-    parts = ", ".join(f"{k} {got[k]:g}" for k in ("image", "rotations") if isinstance(got.get(k), (int, float)))
-    each = cost_text({"type": "generations", "generations": total})
+    number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)   # noqa: E731
+    reuse = bool(body.get("source_image_id"))
+    # /pro-flash/cost prices a text request (image + rotations). With --source-image-id the image is already paid:
+    # PixelLab charges the rotations only (1 for 8 directions at 32 px, live 2026-11-13; one direction is free)
+    total = got.get("rotations") if reuse else got.get("total")
+    if not number(total):
+        raise ServiceError(f"PixelLab's price answer has no {'rotations' if reuse else 'total'} (got: {sorted(got)})")
+    parts = ", ".join(f"{k} {got[k]:g}" for k in ("image", "rotations") if number(got.get(k)))
+    if reuse:
+        parts = f"rotations only; the image part ({got.get('image', '?')}) is already paid"
+    each = cost_text({"type": "generations", "generations": total}) or "free (0 generations)"
     print(f"[ OK ] quote: {each}" + (f" ({parts})" if parts else "") + (f" x{variants}" if variants > 1 else "")
           + (", provisional" if got.get("provisional") else "") + "; nothing was generated")
-    if kind in ("character", "object") and body.get("source_image_id"):
-        print("[info] with --source-image-id the image part is already paid: PixelLab charges the rotations only")
     return 0
 
 
