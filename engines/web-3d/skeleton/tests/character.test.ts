@@ -12,6 +12,8 @@
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the swing's ceiling, the loop's period and clock
 //           (0.15.0 review)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the same clip keeps its time, restart is explicit (#296)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the swing is sampled over the whole walk clip, not a
+//           fixed second (a longer walk was under-measured), as Bevy's test does
 // ---------------------------------------------------------------------------
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
@@ -23,7 +25,7 @@ import { GOLDEN_DIR } from "./helpers/golden";
 
 const DIR = join(GOLDEN_DIR, "character");
 const expected = JSON.parse(readFileSync(join(DIR, "expected.json"), "utf-8"));
-const STEPS = 30; // frames of walk to play
+const STEP_S = 1 / 30; // walk plays in steps of this, over its whole length
 const MIN_SHARE = 0.8; // the bone must turn at least this share of the clip's swing (frames sample it)
 const MAX_SHARE = 1.1; // ... and no more: more would mean two clips applied at once, or the wrong bone
 const PERIOD_TOL_DEG = 1.0; // a pose a whole clip length later is the same pose (the loop's period is the length)
@@ -59,9 +61,10 @@ describe("rigged character (data/golden/character)", () => {
     const bone = ch.root.getObjectByName(boneName(expected.moving_bone))!;
     expect(bone).toBeTruthy();
     const poses: THREE.Quaternion[] = [];
-    for (let i = 0; i <= STEPS; i++) {
+    const steps = Math.ceil(expected.clips.walk.seconds / STEP_S) + 1;
+    for (let i = 0; i <= steps; i++) {
       poses.push(bone.quaternion.clone());
-      ch.update(1 / 30);
+      ch.update(STEP_S);
     }
     let most = 0;
     for (const a of poses) for (const b of poses) most = Math.max(most, THREE.MathUtils.radToDeg(a.angleTo(b)));

@@ -13,12 +13,13 @@
 #           and two instances keeping their own loop flags (0.15.0 review)
 #           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the same clip keeps its time, an ended one-shot
 #           keeps holding, restart is explicit (#296)
+#           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the swing is sampled over the whole walk clip, not a
+#           fixed second (a longer walk was under-measured), as Bevy's test does
 # ---------------------------------------------------------------------------
 extends GutTest
 
 const DIR := "res://data/golden/character/"
-const STEPS := 30            # frames of walk to play
-const STEP_S := 1.0 / 30.0
+const STEP_S := 1.0 / 30.0   # walk plays in steps of this, over its whole length
 const MIN_SHARE := 0.8       # the bone must turn at least this share of the clip's swing (frames sample it)
 const MAX_SHARE := 1.1       # ... and no more: more would mean two clips applied at once, or the wrong bone
 const PERIOD_TOL_DEG := 1.0  # a pose a whole clip length later is the same pose (the loop's period is the length)
@@ -40,7 +41,7 @@ func _loaded(runtime: bool) -> Node3D:
 	return c
 
 
-## The largest angle (degrees) between two poses of the moving bone while walk plays STEPS frames (the clip's
+## The largest angle (degrees) between two poses of the moving bone while walk plays its whole length (the clip's
 ## swing, as expected.json measures it: forward to back).
 func _walk_swing(c: Node3D) -> float:
 	var ap := KitCharacter.play(c, "walk", true, 0.0)
@@ -52,7 +53,8 @@ func _walk_swing(c: Node3D) -> float:
 	assert_gt(bone, -1, "the moving bone is in the skeleton")
 	ap.advance(0.0)
 	var poses: Array[Quaternion] = [skel.get_bone_pose_rotation(bone)]
-	for i in STEPS:
+	var steps := ceili(float(expected.clips.walk.seconds) / STEP_S) + 1
+	for i in steps:
 		ap.advance(STEP_S)
 		poses.append(skel.get_bone_pose_rotation(bone))
 	var most := 0.0
