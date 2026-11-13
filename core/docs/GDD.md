@@ -78,7 +78,9 @@ These live in data, not code. File: `<path to tuning data>`
 ## Art and audio direction
 - Style, tone, and the kinds of enemies/NPCs the player sees: 
 - Art source (who or what makes the finished art; the toy uses art drawn in code): code-drawn / free packs / own art /
-  paid AI service (which) / Dotwork (local AI 2D, `/dotwork`) / Bozzetto (local AI 3D, `/model-pipeline`): 
+  paid AI service (which) / Dotwork (local AI 2D, `/dotwork`) / Bozzetto (local AI 3D, `/model-pipeline`) / Tripo
+  (paid AI 3D through Bozzetto) / rendered from a 3D model (8-direction sprite sheets): 
+- Main character (a sentence, or "picture: <where it is>"; made with `/make-character` once the toy is fun): 
 - Palette / resolution / camera: 
 - Music mood and references (see `RESOURCES.md`): 
 - SFX style: 
@@ -95,6 +97,14 @@ Teach the mechanics by playing, not by a wall of text. Example from a shipped br
 ## Platform and engine target
 - Engine: see `ENGINE.md`. Storefront: <Steam first is the simple default; web (itch.io) or handheld targets change input and performance budgets>.
 - Input: <keyboard + mouse / controller / both>
+- Languages: <English only, or the list. More than one: keep player-facing text out of the code from the toy on (`/game-shell`)>
+
+## Kit tools for this game
+The kit tools this game's plan calls for, and the tier each belongs to. `/next-tier` offers the rows of the tier the
+game moves into. Add a row when the game grows a need; menus, saves and the release checks come with every game.
+| Tool | Why (the part of the plan that calls for it) | Tier |
+|---|---|---|
+| | | |
 
 ## Assumptions to test (feeds the vertical slice)
 Write these BEFORE building so you know what the slice is for.
