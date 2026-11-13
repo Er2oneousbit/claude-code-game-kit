@@ -3,6 +3,45 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.15.3 (2026-11-13): settings that say what they do: Apply on the Display tab with a keep-or-revert confirm, HUD text that follows the player's size settings (#308, #309, #310)
+- **Display waits for Apply (#308):** players looked for an Apply button the settings screen never had, and SOP-19's
+  revert for display changes was in no engine. In all eight engines with a shell (Godot, web, web-3d, LÖVE, Unity,
+  Unreal, Bevy, C++) the Display tab now stages its changes and an Apply button sends only the changed fields, mode
+  before resolution; the other tabs still apply at once. A change to mode or resolution opens "Keep these display
+  settings? Reverting in 15 s" with focus on Keep, counted in real time (game speed, hitstop and a paused game cannot
+  stretch it); Revert, the countdown running out, Back or cancel put back exactly what that Apply replaced. Back with
+  unapplied Display changes warns once, the second Back discards them. The Display tab says so in a hint line, and the
+  resolution row reads "Window size". One reference, `DisplayStaging` in `core/tools/golden_vectors.py`, with five
+  `display_staging` cases in `data/golden/shell.json` that every engine's golden test runs. Smoke: `--drive display`
+  (stages, warns, applies, waits out the real-time revert, discards; `DRIVE_DISPLAY` lines) and `show:apply`,
+  `show:confirm` screenshots; the pseudo drive checks the warning and the confirm.
+- **HUD text follows the player (#309):** the shell's menus followed `display.ui_scale` and `access.text_scale`, a
+  game's own HUD did not. Each engine with a shell gets one helper and a change signal: Godot
+  `UiTheme.hud_font_size(base)` and `Shell.look_changed`; web and web-3d `hudFontPx(base, settings)` and
+  `shell.onLook()` (for text the renderer draws; the HTML HUD already scales); LÖVE `app:hud_font(px)` and
+  `app:on_look_changed(fn)`; Unity `Shell.I.HudFontSize(basePx)` and `HudScaleChanged`; Unreal `HudFontSize(BaseSize)`
+  and `OnHudScaleChanged`; Bevy the `HudScale` resource and `font_px(base)`; C++ `Shell::hud_scale()` and
+  `PlayHooks::hud_scale_changed`. The starters' HUD text uses them. SOP-19 and SOP-20 say how.
+- **project.godot after the editor (#310):** Godot 4.7 drops comments and default values when it saves
+  `project.godot`. The kit's comment there moved to ENGINE.md (gotcha 13, which explains each key the template sets),
+  and Dotwork's screen helper no longer assumes a size the editor may remove (it uses Godot's default when the key is
+  gone).
+- **Fixed on the way:** since 0.15.2, `doctor` warned in every non-Godot game because Dotwork's `ASSET_MANIFEST.md`
+  named the Godot importer by a file path only Godot games have; it names the classes now.
+- **Upgrade notes:** Display rows no longer apply at once: code or tests that expected that call Apply. Back on the
+  settings screen can warn instead of leaving. Six new i18n keys (`settings.apply`, `settings.keep`,
+  `settings.revert`, `settings.display_hint`, `settings.confirm` with `{secs}`, `settings.unapplied`) go into every
+  locale file a game owns. A game that edited its settings screen, smoke drive, shell or play screen gets `.gold`
+  files to merge. C++: set `hooks.save` in a game's own `SettingsHooks`. Bevy: `screens::Row` gains `enabled`.
+  Unreal: `FGameKitRow` gains `Enabled`, the shell subsystem now sets the window through `UGameUserSettings` when
+  Display is applied (outside the editor and smoke runs; drop a game's own code for it), and the play screen draws a
+  small pause prompt (`PlayHud()` in `SGameKitShell.cpp`). Unity's own menus still follow text_scale only, not
+  ui_scale (unchanged, ENGINE.md says so).
+- **Still (verify):** a real window changing mode or size and reverting on a monitor, on every desktop engine (smoke
+  runs never touch the window), and Unreal's `UGameUserSettings` path; in a browser, a countdown revert back into
+  fullscreen has no key press behind it and may be refused; the French wording of the new strings; the confirm at
+  200% text.
+
 ## 0.15.2 (2026-11-13): finishing what was there: Godot reads Dotwork manifests, itch.io uploads, animation packs, PixelLab's newer models, the adopt interview (#306, #307, #205, #16, #86)
 - **Godot Dotwork importer (#307):** Godot was the one engine without an importer for Dotwork's asset manifest, so
   `render_sprites` sheets (the 3D-to-sprites route of `/make-character`) went in by hand. `DotworkAssets` and

@@ -106,6 +106,8 @@ engines/cpp-sdl2/ENGINE.md: path: docs/ENGINE_FLOW.md
 engines/cpp-sdl2/ENGINE.md: path: docs/ENGINE_FLOW.md
 engines/cpp-sdl2/ENGINE.md: path: src/core/Analog.hpp
 engines/cpp-sdl2/ENGINE.md: path: src/core/AtomicFile.hpp
+engines/cpp-sdl2/ENGINE.md: path: src/core/DisplayStaging.hpp
+engines/cpp-sdl2/ENGINE.md: path: src/core/HudScale.hpp
 engines/cpp-sdl2/ENGINE.md: path: src/core/Menu.hpp
 engines/cpp-sdl2/ENGINE.md: path: src/core/Report.hpp
 engines/cpp-sdl2/ENGINE.md: path: src/main.cpp
@@ -194,6 +196,7 @@ engines/unity/ENGINE.md: path: Assets/Editor/GameKitScenes.cs
 engines/unity/ENGINE.md: path: Assets/Resources/GameKit/GameKitTheme.tss
 engines/unity/ENGINE.md: path: Assets/Scenes/Main.unity
 engines/unity/ENGINE.md: path: Assets/Scripts/Characters/KitCharacter.cs
+engines/unity/ENGINE.md: path: Assets/Scripts/Core/HudScale.cs
 engines/unity/ENGINE.md: path: Packages/manifest.json
 engines/unity/ENGINE.md: path: data/i18n/en.json
 engines/unity/ENGINE.md: path: docs/ENGINE_FLOW.md
