@@ -10,7 +10,7 @@
 #           var model: Dictionary = DotworkAssets.load_manifest("res://assets/dotwork/hero.assets.json")
 #           var hero: AnimatedSprite2D = DotworkAssets.animated_sprite(model["animated_sprite"]["hero"])
 #           DotworkAssets.play(hero, "walk_s")                  # the clip and its pivot (offset)
-#           add_child(DotworkAssets.map_node(model["map"]["yard"], model))
+#           add_child(DotworkAssets.map_node(model["map"]["yard"]))
 #           var crate: Sprite2D = DotworkAssets.sprite(model["sprite"]["crate"])   # feet on its position
 #           DotworkAssets.verify(model)                         # missing files, wrong sizes, broken references
 # Notes   : Godot also gets Dotwork's own resources (SpriteFrames .tres, TileSet .tres, map scenes); this importer
@@ -89,9 +89,9 @@ static func load_all(dir: String = DIR) -> Dictionary:
 ## compiles in a `godot --script` tool run, which has no autoloads.
 static func _warn(msg: String) -> void:
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
-	var log: Node = tree.root.get_node_or_null("Log") if tree != null else null
-	if log != null and log.has_method("warn"):
-		log.call("warn", LOG_CHANNEL, msg)
+	var logger: Node = tree.root.get_node_or_null("Log") if tree != null else null
+	if logger != null and logger.has_method("warn"):
+		logger.call("warn", LOG_CHANNEL, msg)
 	else:
 		push_warning("[%s] %s" % [LOG_CHANNEL, msg])
 
@@ -345,9 +345,9 @@ static func flags_to_alternative(flags: int) -> int:
 
 
 ## A Node2D named after the map: one TileMapLayer per manifest layer (drawn first to last, cells already resolved by
-## DotworkManifest: terrain picked, stamps expanded), and the objects as sprites under a y-sorted "Props" node.
-## model: the map's manifest (for its prop sprites); tiles: a TileSet to share, else one is built.
-static func map_node(map: Dictionary, model: Dictionary = {}, tiles: TileSet = null) -> Node2D:
+## DotworkManifest: terrain picked, stamps expanded), and the objects as sprites under a y-sorted "Props" node (each
+## object already names its sprite asset). tiles: a TileSet to share between maps, else one is built.
+static func map_node(map: Dictionary, tiles: TileSet = null) -> Node2D:
 	var root: Node2D = Node2D.new()
 	root.name = str(map["name"])
 	if (map["tileset"] as Dictionary).is_empty():

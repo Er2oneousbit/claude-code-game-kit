@@ -60,11 +60,12 @@ func _assets_of(kind: String) -> Array:
 func _compare_kind(kind: String, shaper: Callable) -> void:
 	var names: Array = _assets_of(kind)
 	assert_gt(names.size(), 0, "expected.json has no %s" % kind)
-	for name: String in names:
-		var a: Dictionary = _model.get(kind, {}).get(name, {})
-		assert_false(a.is_empty(), "%s/%s was not imported" % [kind, name])
+	for asset_name: String in names:
+		var a: Dictionary = _model.get(kind, {}).get(asset_name, {})
+		assert_false(a.is_empty(), "%s/%s was not imported" % [kind, asset_name])
 		if not a.is_empty():
-			_check(shaper.call(a, _model), _expected["assets"]["%s/%s" % [kind, name]], "%s/%s" % [kind, name])
+			var key: String = "%s/%s" % [kind, asset_name]
+			_check(shaper.call(a, _model), _expected["assets"][key], key)
 
 
 # ---- The importer's objects in the loaded-result shape (spec "Golden fixture and loaded result") ----
@@ -73,23 +74,24 @@ func _shape_animated_sprite(a: Dictionary, m: Dictionary) -> Dictionary:
 	var sf: SpriteFrames = DotworkAssets.sprite_frames(a)
 	var node: AnimatedSprite2D = DotworkAssets.animated_sprite(a)
 	var clips: Dictionary = {}
-	for name: String in a["clip_order"]:
-		var c: Dictionary = a["clips"][name]
+	for clip_name: String in a["clip_order"]:
+		var c: Dictionary = a["clips"][clip_name]
 		var rects: Array = []
 		var seconds: Array = []
 		var length: float = 0.0
-		for i: int in sf.get_frame_count(name):
-			var tex: Texture2D = sf.get_frame_texture(name, i)
+		for i: int in sf.get_frame_count(clip_name):
+			var tex: Texture2D = sf.get_frame_texture(clip_name, i)
 			var at: AtlasTexture = tex as AtlasTexture
 			var r: Rect2 = at.region if at != null else Rect2(Vector2.ZERO, tex.get_size())
 			rects.append([r.position.x, r.position.y, r.size.x, r.size.y])
-			var s: float = sf.get_frame_duration(name, i) / sf.get_animation_speed(name)
+			var s: float = sf.get_frame_duration(clip_name, i) / sf.get_animation_speed(clip_name)
 			seconds.append(s)
 			length += s
-		var offset: Vector2 = node.get_meta("dotwork_offsets")[name]
+		var offset: Vector2 = node.get_meta("dotwork_offsets")[clip_name]
 		var pivot: Vector2 = Vector2(float(c["frame_size"][0]), float(c["frame_size"][1])) / 2.0 - offset
-		clips[name] = {"frames": sf.get_frame_count(name), "rects": rects, "seconds": seconds, "length": length,
-				"loop": sf.get_animation_loop(name), "pivot": [pivot.x, pivot.y], "texture": _rel(c["sheet"], m)}
+		clips[clip_name] = {"frames": sf.get_frame_count(clip_name), "rects": rects, "seconds": seconds,
+				"length": length, "loop": sf.get_animation_loop(clip_name), "pivot": [pivot.x, pivot.y],
+				"texture": _rel(c["sheet"], m)}
 	node.free()
 	return {"blend": a["blend"], "clips": clips, "directions": a["directions"]}
 
@@ -167,8 +169,8 @@ func _shape_tileset(a: Dictionary, _m: Dictionary) -> Dictionary:
 
 # Counts, placed cells and centres read back from the TileMapLayers map_node built: the tile each layer holds at a
 # cell, its centre from map_to_local, the image's top-left from the centre less (region / 2 + texture_origin).
-func _shape_map(a: Dictionary, m: Dictionary) -> Dictionary:
-	var root: Node2D = DotworkAssets.map_node(a, m)
+func _shape_map(a: Dictionary, _m: Dictionary) -> Dictionary:
+	var root: Node2D = DotworkAssets.map_node(a)
 	var layers: Dictionary = {}
 	var terrain: Dictionary = {}
 	var placed: Dictionary = {}
@@ -219,9 +221,9 @@ func _shape_font(a: Dictionary, _m: Dictionary) -> Dictionary:
 
 func _shape_ui_kit(a: Dictionary, _m: Dictionary) -> Dictionary:
 	var parts: Dictionary = {}
-	for name: String in a["parts"]:
-		var p: Dictionary = a["parts"][name]
-		parts[name] = {"size": p["size"], "margins": p["margins"], "hotspot": p["hotspot"]}
+	for part_name: String in a["parts"]:
+		var p: Dictionary = a["parts"][part_name]
+		parts[part_name] = {"size": p["size"], "margins": p["margins"], "hotspot": p["hotspot"]}
 	return {"parts": parts}
 
 
@@ -431,8 +433,9 @@ func test_yard_path_variant_is_the_pick() -> void:
 	assert_eq(by[Vector2i(3, 1)]["key"], 255)
 	assert_eq(by[Vector2i(3, 2)]["key"], 255)
 	assert_eq((by[Vector2i(3, 1)]["variants"] as Array).size(), 2, "two tiles share key 255")
-	assert_ne(by[Vector2i(3, 1)]["tile"][1], by[Vector2i(3, 2)]["tile"][1], "the two full cells pick different variants")
-	var root: Node2D = DotworkAssets.map_node(_model["map"]["yard"], _model)
+	assert_ne(by[Vector2i(3, 1)]["tile"][1], by[Vector2i(3, 2)]["tile"][1],
+			"the two full cells pick different variants")
+	var root: Node2D = DotworkAssets.map_node(_model["map"]["yard"])
 	var path: TileMapLayer = root.get_node("Path")
 	assert_eq(path.get_cell_atlas_coords(Vector2i(3, 1)), Vector2i(by[Vector2i(3, 1)]["tile"][1],
 			by[Vector2i(3, 1)]["tile"][2]), "the TileMapLayer holds the pick")
@@ -522,7 +525,7 @@ func test_ui_and_extra_kinds_build() -> void:
 
 
 func test_prop_on_the_map_stands_on_its_feet() -> void:
-	var root: Node2D = DotworkAssets.map_node(_model["map"]["yard"], _model)
+	var root: Node2D = DotworkAssets.map_node(_model["map"]["yard"])
 	var crate: Sprite2D = root.get_node("Props/crate")
 	assert_eq(crate.position, Vector2(12, 40), "the pivot on the object's point")
 	assert_eq(crate.offset, Vector2(0, -8), "16x16 with pivot [8, 16]")
@@ -609,7 +612,8 @@ func test_unknown_layer_kind_warns_once_and_a_bad_stamp_is_a_problem() -> void:
 
 func test_missing_terrain_tile_warns_once_per_layer() -> void:
 	var m: Dictionary = DotworkManifest.parse(_doc({"assets": [
-		_tiny_tileset({"terrain_sets": [{"id": 0, "mode": "sides4", "terrains": [{"id": 0, "name": "x", "color": "#fff"}]}],
+		_tiny_tileset({"terrain_sets": [{"id": 0, "mode": "sides4",
+				"terrains": [{"id": 0, "name": "x", "color": "#fff"}]}],
 				"atlases": [{"id": 0, "name": "a", "role": "base", "image": "art/a.png", "tile_size": [8, 8],
 				"columns": 1, "rows": 1, "tiles": [{"col": 0, "row": 0, "terrain_set": 0, "terrain": 0, "mask": 0}]}]}),
 		{"kind": "map", "name": "m", "tileset": "t", "size": [4, 4], "tile_size": [8, 8], "layers": [

@@ -25,10 +25,10 @@ func test_every_game_manifest_loads() -> void:
 			continue
 		for w: String in model["warnings"]:
 			gut.p("WARN " + w)
-		for name: String in model["map"]:
-			var root: Node2D = DotworkAssets.map_node(model["map"][name], model)
-			if root.get_child_count() == 0 and not (model["map"][name]["layers"] as Array).is_empty():
-				bad.append("%s: map %s built no layers" % [path, name])
+		for map_name: String in model["map"]:
+			var root: Node2D = DotworkAssets.map_node(model["map"][map_name])
+			if root.get_child_count() == 0 and not (model["map"][map_name]["layers"] as Array).is_empty():
+				bad.append("%s: map %s built no layers" % [path, map_name])
 			root.free()
 	if paths.is_empty():
 		gut.p("DOTWORK no manifests in %s (nothing to check)" % DotworkAssets.DIR)

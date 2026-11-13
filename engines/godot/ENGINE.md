@@ -92,7 +92,7 @@ tools/                   dev.py and helpers
   `var hero := DotworkAssets.animated_sprite(m["animated_sprite"]["hero"])` and `DotworkAssets.play(hero, "walk_s")`
   (a SpriteFrames per asset, each frame's own `duration`, the clip's pivot as the offset: the feet on the node's
   position), `DotworkAssets.sprite(m["sprite"]["crate"])` (Sprite2D, pivot on the position, a `Shadow` child, a
-  `Body` StaticBody2D per collision rect), `add_child(DotworkAssets.map_node(m["map"]["yard"], m))` (a Node2D with a
+  `Body` StaticBody2D per collision rect), `add_child(DotworkAssets.map_node(m["map"]["yard"]))` (a Node2D with a
   TileMapLayer per layer and the props under a y-sorted `Props` node), `DotworkAssets.font(...)` (FontFile from the
   `.fnt`), `DotworkAssets.nine_patch(kit, part)`, `background(...)`, `lit_texture(normal_map)` (a CanvasTexture).
   Textures: Godot's imported PNG when there is one, else the PNG decoded at run time.

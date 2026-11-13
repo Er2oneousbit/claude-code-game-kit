@@ -178,20 +178,20 @@ static func cell_roll(x: int, y: int, layer_index: int) -> float:
 	return float(hash32(hash32(((x & 0xFFFF) << 16) | (y & 0xFFFF)) + layer_index)) / TWO_32
 
 
-## candidates: [[weight, value], ...] in atlas order. The value whose weight span holds roll * total; the first when
-## every weight is 0 (weight 0 is never picked otherwise).
-static func pick_variant(candidates: Array, roll: float) -> Variant:
+## cands: [[weight, value], ...] in atlas order. The value whose weight span holds roll * total; the first when every
+## weight is 0 (weight 0 is never picked otherwise).
+static func pick_variant(cands: Array, roll: float) -> Variant:
 	var total: float = 0.0
-	for c: Array in candidates:
+	for c: Array in cands:
 		total += float(c[0])
 	if total <= 0.0:
-		return candidates[0][1]
+		return cands[0][1]
 	var u: float = roll * total
-	for c: Array in candidates:
+	for c: Array in cands:
 		u -= float(c[0])
 		if u < 0.0:
 			return c[1]
-	return candidates[candidates.size() - 1][1]
+	return cands[cands.size() - 1][1]
 
 
 # ---- Placing tiles (spec "Placing tiles") ------------------------------------------------
@@ -742,8 +742,8 @@ static func expand_stamps(tileset: Dictionary, cells: Array) -> Array:
 		var sw: int = int(stamp["size"][0])
 		var j: int = 0
 		for t: Array in stamp["tiles"]:
-			out.append({"x": int(c[0]) + j % sw, "y": int(c[1]) + j / sw, "tile": [t[0], t[1], t[2]],
-					"stamp": si, "flags": 0})
+			out.append({"x": int(c[0]) + j % sw, "y": int(c[1]) + floori(float(j) / float(sw)),
+					"tile": [t[0], t[1], t[2]], "stamp": si, "flags": 0})
 			j += 1
 	return out
 
