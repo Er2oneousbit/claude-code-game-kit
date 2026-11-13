@@ -26,7 +26,7 @@
 // Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the renderer sits behind a GameHost (host.ts), so
 //           web-3d runs the same shell over Three.js (#175)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): setDisplay() (the Display tab's Apply and its revert,
-//           with DISPLAY_* log lines) and the open settings screen's staging (#308); onLook() listeners for a game
+//           with display log lines) and the open settings screen's staging (#308); onLook() listeners for a game
 //           HUD that follows ui_scale and text_scale (#309)
 // ---------------------------------------------------------------------------
 import { atomicWrite } from "../core/atomicFile";
@@ -152,7 +152,7 @@ export class Shell {
   readonly checks = { screens: 0, labels: 0, failures: [] as string[] };
   /** The open settings screen's Display staging (#308): pending changes and the keep-or-revert confirm. */
   staging: DisplayStaging | null = null;
-  /** Drives only: the confirm's countdown stands still (show:apply_confirm takes the same picture every run). */
+  /** Drives only: the confirm's countdown stands still (show:confirm takes the same picture every run). */
   holdConfirm = false;
   seed: number | null = null;
 
@@ -411,13 +411,13 @@ export class Shell {
 
   /**
    * Sets Display fields and applies them (the settings screen's Apply, and its revert: #308). calls come from
-   * DisplayStaging in its order, mode first. Logs DISPLAY_<why> [[field, value], ...] for drives and bug reports.
+   * DisplayStaging in its order, mode first. Logs "display applied|reverted [[field, value], ...]" for bug reports.
    */
   setDisplay(calls: DisplayCall[], why: "APPLIED" | "REVERTED"): void {
     for (const [field, value] of calls) this.settings.display[field] = deepCopy(value);
     this.apply();
     if (calls.some(([field]) => field === "mode")) this.applyDisplayMode();
-    Log.info("settings", `DISPLAY_${why} ${JSON.stringify(calls)}`);
+    Log.info("settings", `display ${why.toLowerCase()} ${JSON.stringify(calls)}`);
   }
 
   /** Volume for one category (master included), for game code that plays sounds. */

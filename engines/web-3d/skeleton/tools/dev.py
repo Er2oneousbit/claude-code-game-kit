@@ -48,7 +48,7 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive show:credits (#284)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `ship --target itch` uploads to itch.io with
 #           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
-# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive display, show:apply, show:apply_confirm
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive display, show:apply, show:confirm
 #           (the Display tab's Apply and its keep-or-revert confirm, #308)
 # ---------------------------------------------------------------------------
 import argparse
@@ -70,7 +70,7 @@ BOOT_MARKER = "BOOT_OK"                   # logged by src/shell/app.ts once the 
 # --drive, --data-dir, --locale: the shell (src/shell/drive.ts) runs the scenarios and reads both folders
 DRIVE_HELP = ("the game plays a scripted run (shell games): menus, crash (exits 1 on purpose), pseudo, "
               "pseudo-plant, display (Apply a Display change, let its confirm revert: about 20 s), "
-              "show:title|settings|pause|subtitle|juice|credits|apply|apply_confirm (with --screenshot); "
+              "show:title|settings|pause|subtitle|juice|credits|apply|confirm (with --screenshot); "
               "waits for DRIVE_DONE")
 DATA_DIR_HELP = ("user-data folder for this run (?data-dir=): loaded before, written back after "
                  "(default build/smoke-data with --drive)")

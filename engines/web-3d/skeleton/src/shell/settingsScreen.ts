@@ -245,8 +245,8 @@ export function settingsScreen(shell: Shell): Screen {
     message = "";
     if (staging.seconds() !== null) {
       clock.reset();
-      Log.info("settings", `DISPLAY_CONFIRM ${staging.seconds()}`);
-      refresh("settings.keep");
+      Log.info("settings", `display confirm ${staging.seconds()} s`);
+      refresh("confirm.keep");
     } else {
       shell.saveSettings();
       refresh("settings.back");
@@ -254,7 +254,7 @@ export function settingsScreen(shell: Shell): Screen {
   };
   const keep = () => {
     staging.keep();
-    Log.info("settings", "DISPLAY_KEPT");
+    Log.info("settings", "display kept");
     shell.saveSettings();
     refresh("settings.back");
   };
@@ -264,10 +264,10 @@ export function settingsScreen(shell: Shell): Screen {
     if (out === "revert") return closed(calls);
     if (out === "warn") {
       message = "settings.unapplied";
-      Log.info("settings", "DISPLAY_WARN unapplied display changes");
+      Log.info("settings", "display changes not applied: Back again discards them");
       return refresh();
     }
-    if (had) Log.info("settings", "DISPLAY_DISCARDED");
+    if (had) Log.info("settings", "display changes discarded");
     shell.staging = null;
     shell.saveSettings();
     shell.back();
@@ -332,9 +332,10 @@ export function settingsScreen(shell: Shell): Screen {
     const buttons = el("div", "row buttons");
     const items: Item[] = [buttonItem(shell.i18n, "settings.back", leave)];
     if (shownSecs !== null) {
-      items.push(buttonItem(shell.i18n, "settings.keep", keep), buttonItem(shell.i18n, "settings.revert", () => closed(staging.revert())));
+      items.push(buttonItem(shell.i18n, "settings.keep", keep, "confirm.keep"),
+        buttonItem(shell.i18n, "settings.revert", () => closed(staging.revert()), "confirm.revert"));
     } else if (staging.dirty) {
-      items.push(buttonItem(shell.i18n, "settings.apply", applyNow));
+      items.push(buttonItem(shell.i18n, "settings.apply", applyNow, "display.apply"));
     }
     items.forEach((it, i) => {
       if (i > 0) it.left = () => menu.focusId(items[i - 1].id);
