@@ -82,7 +82,8 @@ python tools/dev.py ship --target itch --project user/game --channel html5 --sta
   "Versioning"): Godot's `config/version`, the `version` in package.json or Cargo.toml, CMake's `project(... VERSION)`,
   LÖVE's version module, Unity's `bundleVersion` or Unreal's `ProjectVersion`. None found: exit 2.
 - **`--dry-run`** checks butler (`--butler`, `BUTLER_BIN`, then PATH), the folder (exists, not empty, no secret-type
-  file or token: the same scan as a static site, without the `index.html` rule for a desktop build), the project
+  file or token: the same scan as a static site, without the `index.html` rule for a desktop build, and symlinks are
+  allowed because butler pushes a link as a link, as a macOS `.app` needs), the project
   (`user/game`, lower case), the channel and the version, says whether a login is there, and prints the exact butler
   command. It runs nothing and needs no login. Missing butler or a bad option is exit 2.
 - **The login:** `butler login` once on the machine, or `BUTLER_API_KEY` (in CI, a repository secret). butler reads

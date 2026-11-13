@@ -483,6 +483,21 @@ class ItchPush(unittest.TestCase):
         self.assertIn(".env: a secret-type file", out)
         self.assertEqual(self.fake.calls, [])
 
+    def test_a_macos_bundles_symlinks_are_pushed_as_they_are(self):
+        # a static host refuses a symlink; butler pushes it as a link, and a macOS .app holds them (Versions/Current)
+        app = self.g.root / "build" / "mac" / "Game.app" / "Contents"
+        (app / "Versions" / "A").mkdir(parents=True)
+        (app / "Versions" / "A" / "game").write_bytes(b"fake mach-o")
+        try:
+            os.symlink("A", app / "Versions" / "Current", target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("this machine cannot make a symlink (Windows without the privilege)")
+        code, out = self.itch("--project", "someone/ship-test", "--site", self.g.root / "build" / "mac", "--channel",
+                              "mac", "--userversion", "1.0.0", "--dry-run")
+        self.assertEqual(code, 0, out)
+        self.assertIn("butler tags it mac", out)
+        self.assertNotIn("symlink", out)
+
     def test_no_version_source_needs_userversion(self):
         (self.g.root / "project.godot").write_text('[application]\nconfig/name="Ship Test"\n', encoding="utf-8")
         code, out = self.itch("--project", "someone/ship-test", "--site", self.g.site, "--dry-run")

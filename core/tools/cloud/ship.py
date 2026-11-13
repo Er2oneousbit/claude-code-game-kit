@@ -8,6 +8,7 @@
 #           python tools/cloud/ship.py --target aws --kind static --check ...   (offline: write and validate, no login)
 #           python tools/cloud/ship.py --target aws --kind static --apply --yes
 #           python tools/cloud/ship.py --target aws --kind static --destroy --yes
+#           python tools/cloud/ship.py --target itch --project user/game --site DIR --dry-run   (itch.io: see Notes)
 #           (python tools/dev.py ship ... forwards here, with the engine's web build folder as --site)
 #             --site DIR          static: the web build to publish (must hold index.html)
 #             --image REF --port N   container: a public image and the port it listens on
@@ -163,15 +164,18 @@ def game_slug():
     return slug
 
 
-def site_problems(site, need_index=True):
-    """Reasons not to publish a folder: no index.html (a web build), secret-type files, tokens in text files."""
+def site_problems(site, need_index=True, links_ok=False):
+    """Reasons not to publish a folder: no index.html (a web build), secret-type files, tokens in text files, and
+    symlinks unless links_ok (a static host cannot serve one; butler pushes a link as a link, and a macOS .app holds
+    them)."""
     problems = []
     if need_index and not (site / "index.html").is_file():
         problems.append(f"{site} has no index.html (build the web version first)")
     for f in sorted(p for p in site.rglob("*") if p.is_file() or p.is_symlink()):
         rel = f.relative_to(site).as_posix()
         if f.is_symlink():
-            problems.append(f"{rel}: a symlink (publish real files only)")
+            if not links_ok:
+                problems.append(f"{rel}: a symlink (publish real files only)")
             continue
         if publish_check.is_secret_name(rel):
             problems.append(f"{rel}: a secret-type file")
@@ -582,7 +586,7 @@ def itch_check(a):
         raise ToolError(f"--channel {channel}: lower case letters, digits, '-', '.', '_' (e.g. windows, html5)")
     if "html" in channel and not web:
         raise ToolError(f"--channel {channel} is for a web build, but {a.site} has no index.html")
-    problems = site_problems(folder, need_index=False)
+    problems = site_problems(folder, need_index=False, links_ok=True)
     if problems:
         raise Refused("the build folder is not safe to publish:\n  " + "\n  ".join(problems[:20]))
     if a.userversion:
