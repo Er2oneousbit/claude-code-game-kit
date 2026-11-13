@@ -25,6 +25,8 @@
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): admits_device_event, no real input in a drive (#276)
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): DeviceEvent is ShellDeviceEvent, leaving the
 //           generic name to games
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_text, the markdown rule every engine shares
+//           (#284)
 // ---------------------------------------------------------------------------
 #pragma once
 
