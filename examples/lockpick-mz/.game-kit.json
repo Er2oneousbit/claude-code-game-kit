@@ -1296,6 +1296,12 @@
       "date": "2026-11-13",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.15.3",
+      "date": "2026-11-13",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1555,7 +1561,7 @@
     "game/js/plugins/GameCore.js": "0113ef7d8d1b8686f9286679269042a119b0b85237cce7032333a41853633fa3",
     "game/js/plugins/GameJuice.js": "1ef7dce20a00df05ef785c56614991d33e6a8910ac0e8ca6d39b4417ed97984c",
     "game/js/plugins/GameMain.js": "d11a7abcfd890b2d18c39b483dc32eebd2d2bf0b7760054d7fd0afe3fd79ac14",
-    "game/js/plugins/GameShell.js": "da4654e82b3d6bd1b9d05597f6ad214b5206205206742a28ebe25ba62c5fdd76",
+    "game/js/plugins/GameShell.js": "5298c6550c60b6f119e4856d77c961cfa5f3cc8fa5251b2af4257fff14721554",
     "game/js/plugins/KitShaders.js": "1dd05cee26d46a0cb3ec436caf73ac3fa8dd5f57da25102b8047d0a9a757df58",
     "package.json": "f61bfad56662356b27d89b04f243d00b1c4b7a326692db4b515520ae78d55387",
     "tests/dotworkMz.test.js": "a39c3e421dc25ec71d3033330aeb6cd243721e59038a980d95d3c07d6bc38b26",
@@ -1564,7 +1570,7 @@
     "tests/gameCore.test.js": "292e78fe7d8f15a776dd10641cc6c9440c4e37b966e627285647d2b6a6cfba2e",
     "tests/gameJuice.test.js": "b28d534835bcdad42f3bd906efdd30fc2df1acc3f887f63629d74cd18cc55d3e",
     "tests/gameMain.test.js": "343d6b87478387cef1afef7f1e3a3172f81cc2e839ed049ec4b4f6aa95ffb41b",
-    "tests/gameShell.test.js": "3f1001c84ff8d68b34be02c13d4b1d437e195fd621a914067c1b3bf294203dd1",
+    "tests/gameShell.test.js": "ac4f0b97a2a836d86034fa4206cc33735274670911e736fdba4ca918e46a185d",
     "tests/support/golden.js": "866a1be5a4229cd6f715021ced51feb42db48db27bcc62d9b31614aabc310c45",
     "tests/support/mzFake.js": "fe0cb0bdbc0453a579d8e3093dc50a1973fb3e7cc069b4e8a95ebc142b13b403",
     "tools/access/colour.py": "c6b75b175ab6cd2439878b0e90c6372850cd7ff4478fbc42343f141bcbe7c299",
