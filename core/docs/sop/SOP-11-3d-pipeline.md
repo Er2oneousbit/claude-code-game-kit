@@ -140,8 +140,9 @@ Have Claude call Blender's own operators (Smart UV Project, then pack islands wi
 | Overlap | None, except mirrored islands on purpose |
 | Stretch | Checker texture, look |
 `validate_asset.py` reports coverage, island count, and missing UVs. Hand-fix hero assets. A generated model's atlas
-is the vendor's: `tools/blender/rebake_uvs.py` (Bozzetto runs it in cleanup, on by default on the Tripo route) gives
-it a fresh layout and bakes its textures onto it, checked by rendering both; a Tripo character went from 29% to 46%
+is the vendor's: `tools/blender/rebake_uvs.py` (Bozzetto runs it in cleanup: always on the Tripo route, and on the
+local route when the model is under its class floor) gives it a fresh layout and bakes its textures onto it, checked by
+rendering both; two TRELLIS.2 npcs went from 51 and 53% to 59 and 60% (npc floor 55%), and a Tripo character from 29% to 46%
 that way, under the hero floor still (Blender's packer cannot nest islands in ring-shaped ones), so `--accept-uv`
 ships such a model with the waiver on its asset log row (`tools/bozzetto/README.md` "UV coverage").
 

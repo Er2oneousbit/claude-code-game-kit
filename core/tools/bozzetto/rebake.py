@@ -20,13 +20,15 @@
 #           2 usage, environment or files in the way
 # Notes   : The policy (README "UV coverage"): the SOP-11 floor stays a failure in validate_asset.py (it measures
 #           what ships, not where it came from). The remedy is the rebake: on by default for `make --with tripo`
-#           (the atlas is always Tripo's), `--rebake` on the local route, `--no-rebake` to keep a vendor atlas.
+#           (the atlas is always Tripo's), `--rebake auto` on the local route (only under the class floor: cleanup.py
+#           --rebake-under, #203), `--rebake` always, `--no-rebake` to keep a vendor atlas.
 #           When a model still fails on UV coverage alone (a 51k-triangle, 120-part character rebakes from 29% to
 #           46%, under the hero floor of 60%: Blender's packer cannot nest islands in the holes of ring-shaped
 #           ones, K01), `--accept-uv` ships it with the waiver written to the record, the asset log row and the
 #           evidence file: "UV coverage waived: 46% under the hero floor 60% (--accept-uv)". Sprite sources
 #           (render_sprites.py) never needed the floor: the waiver is the honest way through for them too.
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the policy text for --rebake auto (#203)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
