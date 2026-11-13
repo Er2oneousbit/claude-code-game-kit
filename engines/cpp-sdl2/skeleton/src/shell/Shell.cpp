@@ -13,6 +13,8 @@
 //           directory has no data/, so a shipped build runs from any folder)
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): no real keyboard, mouse or pad in a drive (#276)
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_at_top for show:credits (#284)
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply, its hint line and the
+//           keep-or-revert confirm on a real-time clock (#308); hud_scale() and play.hud_scale_changed (#309)
 // ---------------------------------------------------------------------------
 #include "shell/Shell.hpp"
 
@@ -392,6 +394,10 @@ double Shell::access_number(const char* key, double fallback) const {
     return v.is_number() ? v.get<double>() : fallback;
 }
 
+double Shell::hud_scale() const {
+    return core::hud_text_scale(settings_);
+}
+
 Rgb Shell::palette(const std::string& name, Rgb fallback) const {
     const json& mode = settings_["access"]["colorblind"];
     const auto hex = core::palette_colour(colours_, mode.is_string() ? mode.get<std::string>() : "none", name);
@@ -507,6 +513,7 @@ Screen Shell::make_screen(ScreenId id) {
                 save_settings();
                 pop();
             };
+            hooks.save = [this] { save_settings(); };   // Apply and its revert (#308)
             hooks.presets = presets_;
             hooks.debug_build = kDebugBuild;   // the pseudo locale in the language list (its ASCII form, #275)
             settings_menu_ = std::make_unique<core::SettingsMenu>(settings_, std::move(hooks));
@@ -1114,6 +1121,17 @@ bool Shell::screen_action(Screen& s, const std::string& action) {
 // ---- Frame ---------------------------------------------------------------------------------------------------
 void Shell::update(double dt) {
     time_ += dt;
+    // The display confirm's countdown runs on the wall clock (#308): not game time, not access.game_speed, and not
+    // the fixed tick a smoke run feeds (one per frame, however fast the frames go)
+    const auto now = std::chrono::steady_clock::now();
+    const double real_dt = real_last_ ? std::chrono::duration<double>(now - *real_last_).count() : 0.0;
+    real_last_ = now;
+    if (settings_menu_) {
+        settings_menu_->tick(real_dt);
+    }
+    if (hud_watch_.update(settings_) && play.hud_scale_changed) {   // #309
+        play.hud_scale_changed(hud_watch_.scale());
+    }
     poll_pads();
     if (notice_t_ > 0) {
         notice_t_ -= dt;
@@ -1176,9 +1194,8 @@ void Shell::update_screen(Screen& s, double dt) {
 
 void Shell::render(SDL_Renderer* renderer) {
     (void)renderer;   // the Draw layer holds it since init()
-    const double ui_scale = settings_["display"]["ui_scale"].is_number() ? settings_["display"]["ui_scale"].get<double>() : 1.0;
-    draw_->begin_frame(access_number("text_scale", 1.0) * ui_scale, access_flag("readable_font"),
-                       access_number("line_spacing", 1.0));
+    // every label, the game's HUD included, at the player's text factor (core::hud_text_scale, #309)
+    draw_->begin_frame(hud_scale(), access_flag("readable_font"), access_number("line_spacing", 1.0));
     draw_->clear(style::kBg);
     std::size_t first = stack_.size();
     while (first > 1 && stack_[first - 1].transparent) {
@@ -1503,7 +1520,10 @@ void Shell::draw_settings() {
         tx += tw + 4;
     }
     const double list_y = ty + th + 10;
-    const std::string hint = message_.empty() ? t("settings.hint") : message_;
+    // the Display tab says that its changes wait for Apply (#308); a message (Back's warning) beats both hints
+    const std::string hint = !message_.empty()        ? message_
+                             : menu.tab == "display" ? t("settings.display_hint")
+                                                     : t("settings.hint");
     const double hint_lines = static_cast<double>(core::wrap_chars(hint, static_cast<std::size_t>(std::max(1, d.chars_fit(W - 32)))).size());
     const double hint_h = hint_lines * d.line_h();
     const double list_bottom = H - hint_h - 14;
@@ -1527,6 +1547,33 @@ void Shell::draw_settings() {
         o.color = style::kDim;
         d.text("settings.capture.hint", t("controls.capture_cancel"), px + 8, py + 14 + d.line_h() + 8, pw - 16, d.line_h(), o);
     }
+    if (menu.confirming()) {
+        draw_display_confirm(menu);
+    }
+}
+
+// "Keep these display settings? Reverting in N s" with Keep (focused when it opens) and Revert, over the settings
+void Shell::draw_display_confirm(core::SettingsMenu& menu) {
+    Draw& d = *draw_;
+    const double W = style::kBaseW;
+    const double H = style::kBaseH;
+    d.fill(0, 0, W, H, style::kBlack, style::kOverlayAlpha);
+    const int secs = menu.staging().seconds().value_or(0);
+    const std::string question = t("settings.confirm", {{"secs", std::to_string(secs)}});
+    const double pw = std::min(W - 16, std::max(380.0, d.text_width(question) + 32));
+    const auto lines = core::wrap_chars(question, static_cast<std::size_t>(std::max(1, d.chars_fit(pw - 32))));
+    const double text_h = static_cast<double>(lines.size()) * d.line_h();
+    core::MenuList& list = menu.confirm_list();
+    const double list_h = static_cast<double>(list.rows.size()) * (d.row_h() + 2);
+    const double ph = std::min(H - 8, text_h + list_h + 40);
+    const double px = (W - pw) / 2;
+    const double py = (H - ph) / 2;
+    d.panel(px, py, pw, ph);
+    TextOpts o;
+    o.align = Align::Center;
+    o.wrap = true;
+    d.text("settings.confirm", question, px + 16, py + 14, pw - 32, text_h, o);
+    draw_list(list, px + pw * 0.26, py + 14 + text_h + 10, pw * 0.48, 0, 0, "settings.confirm", true);
 }
 
 void Shell::draw_credits(const Screen& s) {
@@ -1778,7 +1825,9 @@ void Shell::narrate_update() {
         return;
     }
     const core::Row* row = nullptr;
-    if (s->id == ScreenId::Settings && settings_menu_ && !settings_menu_->on_tabs) {
+    if (s->id == ScreenId::Settings && settings_menu_ && settings_menu_->confirming()) {
+        row = settings_menu_->confirm_list().focused();   // Keep or Revert (#308)
+    } else if (s->id == ScreenId::Settings && settings_menu_ && !settings_menu_->on_tabs) {
         row = settings_menu_->list().focused();
     } else if (s->id == ScreenId::Title && s->consent) {
         row = s->consent->focused();

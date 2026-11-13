@@ -15,7 +15,7 @@
 #             smoke    run automation tests named <Game>.Smoke (--filter, --until, --fail-on for scenario runs;
 #                      screenshots need a renderer, so capture from the game itself, e.g. a -record= option);
 #                      --shaders first draws every kit shader recipe and compares it with its golden image;
-#                      --drive menus|crash|bug|pseudo|pseudo-plant|access|show:<screen> walks the kit's shell screens
+#                      --drive menus|crash|bug|pseudo|pseudo-plant|display|access|show:<screen> walks the kit's shell screens
 #                      instead (the GameKitShell plugin), --screenshot FILE draws a show:<screen>, --data-dir and
 #                      --locale set its run
 #             exec     run an editor Python script headless (asset imports, maps)
@@ -101,6 +101,8 @@
 #           Dotwork checks, when its folder is there
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `ship --target itch` uploads to itch.io with
 #           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive display, show:apply, show:confirm in
+#           the help (the Display tab's Apply, #308)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -1373,9 +1375,11 @@ def build_parser():
                         "plugin): menus (settings changed and saved), crash (a planted error: CRASH_WRITTEN, exit 1 on "
                         "purpose), bug (F8: the bug_<time>/ folder, DRIVE_BUG), pseudo (with --locale pseudo: every "
                         "screen, PSEUDO_PASS or PSEUDO_FAIL), pseudo-plant (one label too small: exit 1 on purpose), "
+                        "display (the Display tab's Apply: stage, warn, apply, the 15 s confirm reverts in real time, "
+                        "discard; DRIVE_DISPLAY lines), "
                         "access[:res=WxH,scale=N,pad,read] (the accessibility sweep's tour, tools/access/sweep.py), "
                         "show:<screen> (title, main_menu, settings, pause, help, history, credits, loading, subtitle, "
-                        "juice; add --screenshot)")
+                        "juice, apply, confirm; add --screenshot)")
     p.add_argument("--screenshot", default="", help="with --drive show:<screen>: save the screen as this PNG (relative to the "
                                                    "project; the editor draws it off-screen, a GPU)")
     p.add_argument("--data-dir", default="", help="with --drive: the settings folder the run reads and writes (default: a fresh "

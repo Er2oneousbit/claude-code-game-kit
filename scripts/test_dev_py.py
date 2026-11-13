@@ -33,6 +33,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): AllSkipped, the [SKIP] line on five engines (#295)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits on every engine with show drives (#284)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): ship --target itch defaults to the web build (#86)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:confirm on the
+#           Unity, C++/SDL3, Bevy and Unreal smoke help, Unity's drive names (#308)
 # ---------------------------------------------------------------------------
 import argparse
 import base64
@@ -278,7 +280,8 @@ class CppReports(TempRoot):
             except SystemExit:
                 pass
         text = " ".join(buf.getvalue().split())
-        for name in ("crash (", "pseudo (", "pseudo-plant (", "bug (", "show:<screen> (title, menu, settings, pause, subtitle, play, juice or credits"):
+        for name in ("crash (", "pseudo (", "pseudo-plant (", "bug (", "display (",
+                     "show:<screen> (title, menu, settings, pause, subtitle, play, juice, credits, apply or confirm"):
             self.assertIn(name, text)
 
 
@@ -307,6 +310,32 @@ class ShowCredits(unittest.TestCase):
 
     def test_godot_accepts_show_credits(self):
         self.assertEqual(load("godot").drive_name("show:credits"), "show:credits")
+
+
+# ---- #308: the Display tab's Apply: the display drive, show:apply and show:confirm ---------------------------
+class DisplayApplyDrives(ShowCredits):
+    ENGINES = ("unity", "cpp-sdl2", "bevy", "unreal")
+
+    def test_every_smoke_help_offers_the_display_drive_and_its_pictures(self):
+        for engine in self.ENGINES:
+            with self.subTest(engine=engine):
+                text = self.smoke_help(engine)
+                self.assertRegex(text, r"\bdisplay\b", f"{engine}: smoke -h names no display drive")
+                at = text.find("show:")
+                self.assertGreaterEqual(at, 0, f"{engine}: smoke -h names no show: drive")
+                for target in ("apply", "confirm"):
+                    self.assertIn(target, text[at:at + 300], f"{engine}: show:{target} missing from smoke -h")
+
+    def test_unity_accepts_the_new_drive_names(self):
+        dev = load("unity")
+        for name in ("display", "show:apply", "show:confirm"):
+            self.assertEqual(dev.drive_name(name), name)
+
+    def test_every_smoke_help_offers_show_credits(self):     # ShowCredits runs these already
+        pass
+
+    def test_godot_accepts_show_credits(self):
+        pass
 
 # ---- #33: Unity smoke ---------------------------------------------------------
 class UnitySmoke(TempRoot):

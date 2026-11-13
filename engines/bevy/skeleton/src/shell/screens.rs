@@ -15,11 +15,15 @@
 //           demo's actions (juice.rs), the text pages say which lines are raw (credits names, #275)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_text, the markdown rule every engine shares
 //           (list markers and emphasis stars go too, an indented heading loses its marks, space and tab only) (#284)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's rows stage through the shell's
+//           DisplayStaging, an Apply row (disabled while nothing waits; focus skips disabled rows), the Keep / Revert
+//           confirm takes every press, Back from any tab goes through Shell::back_settings (#308)
 // ---------------------------------------------------------------------------
 use serde_json::json;
 
 use super::{ScreenName, ScreenState, Shell};
 use crate::logic::bindings;
+use crate::logic::display_staging::DisplayStaging;
 use crate::logic::settings;
 
 // ---- Tunables ------------------------------------------------------------------
@@ -66,6 +70,8 @@ pub struct Row {
     pub on_accept: Option<Act>,
     pub on_left: Option<Act>,
     pub on_right: Option<Act>,
+    /// A disabled row is drawn dim and focus skips it (Apply while no Display change waits, #308).
+    pub enabled: bool,
 }
 
 impl Row {
@@ -81,6 +87,7 @@ impl Row {
             on_accept: None,
             on_left: None,
             on_right: None,
+            enabled: true,
         }
     }
 }
@@ -110,21 +117,22 @@ fn times(shell: &Shell, v: f64) -> String {
 
 fn toggle(shell: &Shell, section: &'static str, name: &'static str) -> Row {
     let mut row = Row::new(name, RowKind::Toggle, shell.t(&format!("settings.{section}.{name}")));
-    let on = shell.flag(section, name);
+    // field / set_field: a Display row shows and stages the value waiting for Apply (#308); other tabs are live
+    let on = shell.field(section, name).as_bool().unwrap_or(false);
     row.value = shell.t(if on { "value.on" } else { "value.off" });
     let flip: Act = Box::new(move |s: &mut Shell| {
-        let now = s.flag(section, name);
-        s.set(section, name, json!(!now));
+        let now = s.field(section, name).as_bool().unwrap_or(false);
+        s.set_field(section, name, json!(!now));
     });
     row.on_accept = Some(flip);
-    row.on_left = Some(Box::new(move |s: &mut Shell| s.set(section, name, json!(false))));
-    row.on_right = Some(Box::new(move |s: &mut Shell| s.set(section, name, json!(true))));
+    row.on_left = Some(Box::new(move |s: &mut Shell| s.set_field(section, name, json!(false))));
+    row.on_right = Some(Box::new(move |s: &mut Shell| s.set_field(section, name, json!(true))));
     row
 }
 
 fn slider(shell: &Shell, section: &'static str, name: &'static str, lo: f64, hi: f64, step: f64) -> Row {
     let mut row = Row::new(name, RowKind::Slider, shell.t(&format!("settings.{section}.{name}")));
-    let v = shell.num(section, name);
+    let v = shell.field(section, name).as_f64().unwrap_or(0.0);
     row.value = if section == "display" || name == "text_scale" || name == "line_spacing" || name == "timing_scale" {
         times(shell, v)
     } else {
@@ -132,11 +140,11 @@ fn slider(shell: &Shell, section: &'static str, name: &'static str, lo: f64, hi:
     };
     row.fraction = Some(((v - lo) / (hi - lo)) as f32);
     let nudge = move |s: &mut Shell, dir: f64| {
-        let now = s.num(section, name);
+        let now = s.field(section, name).as_f64().unwrap_or(0.0);
         // round to the step so 0.1 + 0.1 + 0.1 stays 0.3, as the other engines' sliders do
         let next = (((now + dir * step) / step).round() * step).clamp(lo, hi);
         let next = (next * 1e6).round() / 1e6;
-        s.set(section, name, json!(next));
+        s.set_field(section, name, json!(next));
     };
     row.on_left = Some(Box::new(move |s: &mut Shell| nudge(s, -1.0)));
     row.on_right = Some(Box::new(move |s: &mut Shell| nudge(s, 1.0)));
@@ -145,13 +153,13 @@ fn slider(shell: &Shell, section: &'static str, name: &'static str, lo: f64, hi:
 
 fn choice(shell: &Shell, section: &'static str, name: &'static str, options: &'static [&'static str]) -> Row {
     let mut row = Row::new(name, RowKind::Choice, shell.t(&format!("settings.{section}.{name}")));
-    let now = shell.text(section, name);
+    let now = shell.field(section, name).as_str().unwrap_or("").to_string();
     row.value = shell.t(&format!("opt.{name}.{now}"));
     let turn = move |s: &mut Shell, dir: i64| {
-        let now = s.text(section, name);
+        let now = s.field(section, name).as_str().unwrap_or("").to_string();
         let idx = options.iter().position(|o| *o == now).unwrap_or(0) as i64;
         let next = (idx + dir).rem_euclid(options.len() as i64) as usize;
-        s.set(section, name, json!(options[next]));
+        s.set_field(section, name, json!(options[next]));
     };
     row.on_left = Some(Box::new(move |s: &mut Shell| turn(s, -1)));
     row.on_right = Some(Box::new(move |s: &mut Shell| turn(s, 1)));
@@ -160,12 +168,8 @@ fn choice(shell: &Shell, section: &'static str, name: &'static str, options: &'s
 }
 
 fn back_row(shell: &Shell) -> Row {
-    button("back", shell.t("settings.back"), close_settings)
-}
-
-fn close_settings(shell: &mut Shell) {
-    shell.save_settings();
-    shell.pop();
+    // with unapplied Display changes the first Back warns (#308); Shell::back_settings saves when it leaves
+    button("back", shell.t("settings.back"), Shell::back_settings)
 }
 
 fn display_rows(shell: &Shell) -> Vec<Row> {
@@ -175,17 +179,17 @@ fn display_rows(shell: &Shell) -> Vec<Row> {
     ];
     // frame cap: a choice over numbers
     let mut cap = Row::new("frame_cap", RowKind::Choice, shell.t("settings.display.frame_cap"));
-    let now = shell.num("display", "frame_cap") as i64;
+    let now = shell.field("display", "frame_cap").as_f64().unwrap_or(0.0) as i64;
     cap.value = if now == 0 {
         shell.t("opt.frame_cap.0")
     } else {
         shell.t_args("value.fps", &[("n", &now.to_string())])
     };
     let turn_cap = move |s: &mut Shell, dir: i64| {
-        let now = s.num("display", "frame_cap") as i64;
+        let now = s.field("display", "frame_cap").as_f64().unwrap_or(0.0) as i64;
         let idx = settings::FRAME_CAPS.iter().position(|c| *c == now).unwrap_or(0) as i64;
         let next = (idx + dir).rem_euclid(settings::FRAME_CAPS.len() as i64) as usize;
-        s.set("display", "frame_cap", json!(settings::FRAME_CAPS[next]));
+        s.set_field("display", "frame_cap", json!(settings::FRAME_CAPS[next]));
     };
     cap.on_left = Some(Box::new(move |s| turn_cap(s, -1)));
     cap.on_right = Some(Box::new(move |s| turn_cap(s, 1)));
@@ -199,19 +203,27 @@ fn display_rows(shell: &Shell) -> Vec<Row> {
         let now = current_resolution(s);
         let idx = RESOLUTIONS.iter().position(|r| *r == now).unwrap_or(0) as i64;
         let next = RESOLUTIONS[(idx + dir).rem_euclid(RESOLUTIONS.len() as i64) as usize];
-        s.set("display", "resolution", json!([next.0, next.1]));
+        s.set_field("display", "resolution", json!([next.0, next.1]));
     };
     res.on_left = Some(Box::new(move |s| turn_res(s, -1)));
     res.on_right = Some(Box::new(move |s| turn_res(s, 1)));
     res.on_accept = Some(Box::new(move |s| turn_res(s, 1)));
     rows.push(res);
     rows.push(slider(shell, "display", "ui_scale", 0.75, 2.0, 0.25));
+    // Apply (#308): sets, applies and saves the staged changes; enabled only while one waits
+    let mut apply = button("apply", shell.t("settings.apply"), |s| {
+        s.apply_display();
+        fix_focus(s);
+    });
+    apply.enabled = shell.staging.has_pending();
+    rows.push(apply);
     rows.push(back_row(shell));
     rows
 }
 
+/// The window size the row shows: the staged one while a change waits.
 fn current_resolution(shell: &Shell) -> (i64, i64) {
-    let r = &shell.settings["display"]["resolution"];
+    let r = shell.field("display", "resolution");
     (
         r[0].as_f64().unwrap_or(1920.0) as i64,
         r[1].as_f64().unwrap_or(1080.0) as i64,
@@ -574,6 +586,8 @@ pub fn enter(shell: &mut Shell, state: &mut ScreenState) {
             state.consent = shell.text("telemetry", "consent") == "unset" && !shell.asked_consent;
         }
         ScreenName::History => state.scroll = usize::MAX, // the page clamps it: open at the newest line
+        // the Display tab stages against the settings as they are now (#308)
+        ScreenName::Settings => shell.staging = DisplayStaging::new(&shell.settings["display"]),
         _ => {}
     }
 }
@@ -590,6 +604,9 @@ pub fn start_play(shell: &mut Shell) {
 /// The focused row of `rows`, if the screen has one.
 pub fn focused_row<'a>(shell: &Shell, rows: &'a [Row]) -> Option<&'a Row> {
     let top = shell.top()?;
+    if top.name == ScreenName::Settings && shell.staging.confirming() {
+        return rows.get(shell.confirm_focus); // rows are confirm_rows then (the narrator passes them)
+    }
     if top.name == ScreenName::Settings && top.on_tabs {
         return None;
     }
@@ -603,6 +620,9 @@ pub fn focus_id(shell: &Shell) -> String {
     };
     if top.name == ScreenName::Settings {
         let tab = TABS[top.tab.min(TABS.len() - 1)];
+        if shell.staging.confirming() {
+            return format!("confirm.{}", CONFIRM_IDS[shell.confirm_focus.min(1)]);
+        }
         if top.on_tabs {
             return format!("tabs.{tab}");
         }
@@ -614,14 +634,58 @@ pub fn focus_id(shell: &Shell) -> String {
     rows_for(shell).get(top.focus).map(|r| r.id.clone()).unwrap_or_default()
 }
 
-/// Moves focus over a list of `len` rows, wrapping.
-fn move_focus(shell: &mut Shell, len: usize, delta: i64) {
+/// Moves focus over the rows, wrapping and skipping disabled ones.
+fn move_focus(shell: &mut Shell, rows: &[Row], delta: i64) {
+    let len = rows.len() as i64;
     if len == 0 {
         return;
     }
     if let Some(top) = shell.top_mut() {
-        top.focus = ((top.focus as i64 + delta).rem_euclid(len as i64)) as usize;
+        let mut f = top.focus as i64;
+        for _ in 0..len {
+            f = (f + delta).rem_euclid(len);
+            if rows[f as usize].enabled {
+                break;
+            }
+        }
+        top.focus = f as usize;
     }
+}
+
+/// After a row turned disabled under the focus (Apply, once applied): focus moves on to the next enabled row.
+fn fix_focus(shell: &mut Shell) {
+    let rows = rows_for(shell);
+    let focus = shell.top().map_or(0, |t| t.focus);
+    if rows.get(focus).is_some_and(|r| !r.enabled) {
+        move_focus(shell, &rows, 1);
+    }
+}
+
+// ---- The display confirm (#308) --------------------------------------------------------------------------------
+pub const CONFIRM_IDS: [&str; 2] = ["keep", "revert"];
+
+/// "Keep these display settings?": Keep (focused when it opens) and Revert.
+pub fn confirm_rows(shell: &Shell) -> Vec<Row> {
+    vec![
+        button("keep", shell.t("settings.keep"), Shell::keep_display),
+        button("revert", shell.t("settings.revert"), Shell::revert_display),
+    ]
+}
+
+/// While the confirm is open it takes every press: up/down pick Keep or Revert, accept runs it, cancel reverts.
+fn confirm_action(shell: &mut Shell, action: &str) -> bool {
+    match action {
+        "ui_cancel" => shell.revert_display(),
+        "ui_up" | "ui_down" => shell.confirm_focus = 1 - shell.confirm_focus.min(1),
+        "ui_accept" => {
+            let rows = confirm_rows(shell);
+            if let Some(f) = rows[shell.confirm_focus.min(1)].on_accept.as_ref() {
+                f(shell);
+            }
+        }
+        _ => {}
+    }
+    true
 }
 
 /// The list navigation every menu shares: up/down move, left/right and accept run the row's closures.
@@ -633,15 +697,18 @@ fn list_action(shell: &mut Shell, action: &str) -> bool {
     let focus = shell.top().map_or(0, |t| t.focus).min(rows.len() - 1);
     match action {
         "ui_up" => {
-            move_focus(shell, rows.len(), -1);
+            move_focus(shell, &rows, -1);
             true
         }
         "ui_down" => {
-            move_focus(shell, rows.len(), 1);
+            move_focus(shell, &rows, 1);
             true
         }
         "ui_left" | "ui_right" | "ui_accept" => {
             let row = &rows[focus];
+            if !row.enabled {
+                return false;
+            }
             let act = match action {
                 "ui_left" => row.on_left.as_ref(),
                 "ui_right" => row.on_right.as_ref(),
@@ -663,8 +730,11 @@ fn settings_action(shell: &mut Shell, action: &str) -> bool {
     if shell.capturing.is_some() {
         return true; // the "press a key" prompt swallows actions; the view's capture ends it
     }
+    if shell.staging.confirming() {
+        return confirm_action(shell, action);
+    }
     if action == "ui_cancel" {
-        close_settings(shell);
+        shell.back_settings();
         return true;
     }
     let on_tabs = shell.top().is_some_and(|t| t.on_tabs);

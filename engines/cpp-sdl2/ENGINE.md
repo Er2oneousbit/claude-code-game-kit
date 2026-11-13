@@ -40,7 +40,11 @@
   the motor-access logic (`MotorAccess.hpp`, `tests/test_motor_access.cpp`). The game
   fills in the play screen through `shell::PlayHooks` (`Game.cpp`) and reads settings through
   `shell_->game_speed()`, `access_flag("auto_repeat")`, `palette("player")`, `is_down("attack")`, `say_line(id)`,
-  `caption(id)`, `set_objective(text)`. Text is SDL's built-in 8x8 font (`SDL_RenderDebugText`, scaled by
+  `caption(id)`, `set_objective(text)`. The Display tab waits for Apply (`core::DisplayStaging`,
+  `src/core/DisplayStaging.hpp`, held to `data/golden/shell.json`): a new window mode or size asks "Keep these display
+  settings?" and puts the old ones back after 15 real seconds; the other tabs apply at once. A game HUD's text size is
+  `shell_->hud_scale()` (`display.ui_scale` times `access.text_scale`, `core::hud_text_scale` in `src/core/HudScale.hpp`),
+  and `play.hud_scale_changed` says when it changed; `draw.text` already uses it. Text is SDL's built-in 8x8 font (`SDL_RenderDebugText`, scaled by
   `access.text_scale`; `readable_font` draws it bold; `line_spacing` applies): no font file, no SDL3_ttf, **ASCII only**, so
   the shell ships `data/i18n/en.json` alone. A translation with accents, or a real typeface (the kit's readable font
   elsewhere is Atkinson Hyperlegible), means adding `sdl3-ttf` (below) and swapping `src/shell/Draw.cpp`'s glyph call.
@@ -104,7 +108,9 @@
   `SETTINGS_WRITTEN`), `--drive crash` (a planted exception: `CRASH_WRITTEN`, exit 1 on purpose), `--drive pseudo
   --locale pseudo` (every screen, every label: `PSEUDO_PASS` or `PSEUDO_FAIL` lines and exit 1; `pseudo-plant` must
   fail on its planted label), `--drive bug` (F8 on the menu: `DRIVE_BUG <folder>`),
-  `--drive show:<title|menu|settings|pause|subtitle|play|juice|credits> --screenshot captures/x.bmp`, and
+  `--drive display` (the Display tab's Apply: stage, Back warns, Apply, the 15 s confirm reverts on the wall clock,
+  two Backs discard; `DRIVE_DISPLAY` lines),
+  `--drive show:<title|menu|settings|pause|subtitle|play|juice|credits|apply|confirm> --screenshot captures/x.bmp`, and
   `--drive access` (the accessibility sweep's tour; `python tools/access/sweep.py` runs it five ways). `--data-dir` keeps
   settings.json in a folder of yours (default: a fresh `build/smoke-data/`, never the player's preferences folder;
   one inside a build tree such as `build/debug/` is refused, exit 2), `--locale` picks the language. Scenarios live in

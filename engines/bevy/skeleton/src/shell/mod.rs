@@ -27,6 +27,8 @@
 //           Intent (#265); display settings applied to the window (#268)
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): crash files, the F8 bug report, the juice demo
 //           screen (debug builds) and the loading screen's next screen (#275)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply (staging, the keep-or-revert
+//           confirm counted on the wall clock, Back that warns once, #308); the HudScale resource for a game HUD (#309)
 // ---------------------------------------------------------------------------
 pub mod bug_report;
 pub mod crash;
@@ -41,6 +43,7 @@ pub mod view;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
+use std::time::Instant;
 
 use bevy::prelude::*;
 use serde_json::{Value, json};
@@ -51,6 +54,8 @@ use crate::game::{AccessRules, GameActive, GameConfig, Intent, Palette, ScreenSh
 use crate::logic::analog;
 use crate::logic::auto_repeat::AutoRepeat;
 use crate::logic::bindings::{self, Bindings};
+use crate::logic::display_staging::{self, Calls, DisplayStaging};
+use crate::logic::hud_scale;
 use crate::logic::i18n::{self, Tables};
 use crate::logic::settings;
 use narrator::Narrator;
@@ -242,6 +247,56 @@ pub struct Shell {
     pub last_bug_report: Option<PathBuf>,
     /// `--drive pseudo-plant`: view.rs draws one label too small for its text on the main menu.
     pub plant: bool,
+    /// The Display tab's changes waiting for Apply, and the keep-or-revert confirm (#308). A fresh one each time a
+    /// settings screen opens.
+    pub staging: DisplayStaging,
+    /// The confirm's focused button: 0 Keep, 1 Revert.
+    pub confirm_focus: usize,
+    /// The wall clock at the last frame: the confirm counts real seconds (smoke runs step the game's clock by hand).
+    real_last: Option<Instant>,
+}
+
+/// The player's text size for a game HUD (#309): display.ui_scale and access.text_scale. The shell writes it only
+/// when one of them changed, so `hud.is_changed()` is the signal to lay a HUD out again.
+#[derive(Resource, Debug, Clone, Copy, PartialEq)]
+pub struct HudScale {
+    pub ui_scale: f32,
+    pub text_scale: f32,
+}
+
+impl Default for HudScale {
+    fn default() -> Self {
+        HudScale {
+            ui_scale: 1.0,
+            text_scale: 1.0,
+        }
+    }
+}
+
+impl HudScale {
+    pub fn from_settings(settings: &Value) -> HudScale {
+        let (ui, text) = hud_scale::hud_scales(settings);
+        HudScale {
+            ui_scale: ui as f32,
+            text_scale: text as f32,
+        }
+    }
+
+    /// ui_scale * text_scale: what a HUD drawn outside bevy_ui (Text2d, its own panel or icon size) multiplies by.
+    pub fn factor(&self) -> f32 {
+        self.ui_scale * self.text_scale
+    }
+
+    /// A font size for text drawn outside bevy_ui: base * ui_scale * text_scale.
+    pub fn font_px(&self, base: f32) -> f32 {
+        base * self.factor()
+    }
+
+    /// A font size for a bevy_ui Text: base * text_scale (bevy's UiScale, which the shell keeps at ui_scale, does
+    /// the rest).
+    pub fn ui_font_px(&self, base: f32) -> f32 {
+        base * self.text_scale
+    }
 }
 
 impl Shell {
@@ -288,6 +343,9 @@ impl Shell {
             bug_requested: false,
             last_bug_report: None,
             plant: false,
+            staging: DisplayStaging::default(),
+            confirm_focus: 0,
+            real_last: None,
         };
         if let Some(text) = shell.store.read_data("input/presets.json")
             && let Ok(v) = serde_json::from_str::<Value>(&text)
@@ -379,6 +437,101 @@ impl Shell {
     pub fn changed(&mut self) {
         self.settings_version += 1;
         self.version += 1;
+    }
+
+    // ---- The Display tab's Apply (#308) ------------------------------------------------------------------------
+    /// A settings field as the settings screen shows it: Display fields as staged (waiting for Apply), the rest as
+    /// they are.
+    pub fn field(&self, section: &str, name: &str) -> Value {
+        if section == "display" {
+            self.staging.value(name)
+        } else {
+            self.settings[section][name].clone()
+        }
+    }
+
+    /// The settings screen changes a field: Display fields are staged for Apply, the rest apply at once.
+    pub fn set_field(&mut self, section: &str, name: &str, value: Value) {
+        if section == "display" {
+            self.staging.stage(name, value);
+            self.version += 1;
+        } else {
+            self.set(section, name, value);
+        }
+    }
+
+    /// Writes Apply's (or a revert's) calls into settings.display: the window follows, settings.json is saved.
+    fn set_display(&mut self, calls: Calls) {
+        if calls.is_empty() {
+            return;
+        }
+        for (field, v) in calls {
+            self.settings["display"][field.as_str()] = v;
+        }
+        self.changed();
+        self.save_settings();
+    }
+
+    /// Apply: the staged Display changes are set and saved. True when a new mode or size opened the confirm.
+    pub fn apply_display(&mut self) -> bool {
+        let calls = self.staging.apply();
+        self.set_display(calls);
+        self.confirm_focus = 0; // Keep
+        self.version += 1;
+        self.staging.confirming()
+    }
+
+    pub fn keep_display(&mut self) {
+        self.staging.keep();
+        self.version += 1;
+    }
+
+    pub fn revert_display(&mut self) {
+        let calls = self.staging.revert();
+        self.set_display(calls);
+        self.version += 1;
+    }
+
+    /// Back on the settings screen (the Back row or cancel, any tab): during the confirm it reverts; with unapplied
+    /// Display changes the first one warns; else it saves and leaves.
+    pub fn back_settings(&mut self) {
+        let (what, calls) = self.staging.back();
+        match what {
+            display_staging::Back::Revert => self.set_display(calls),
+            display_staging::Back::Warn => {
+                let text = self.t("settings.unapplied");
+                self.say_message(text);
+            }
+            display_staging::Back::Leave => {
+                self.save_settings();
+                self.pop();
+            }
+        }
+        self.version += 1;
+    }
+
+    /// The confirm's countdown, in REAL seconds: it reverts when it runs out; the screen redraws each new second.
+    pub fn tick_display(&mut self, real_dt: f64) {
+        if !self.staging.confirming() {
+            return;
+        }
+        let before = self.staging.seconds();
+        let calls = self.staging.tick(real_dt);
+        if !calls.is_empty() {
+            info!("settings: the display confirm ran out, reverted");
+        }
+        self.set_display(calls);
+        if self.staging.seconds() != before {
+            self.version += 1;
+        }
+    }
+
+    /// Seconds of wall clock since the last call (0 the first time).
+    fn real_dt(&mut self) -> f64 {
+        let now = Instant::now();
+        let dt = self.real_last.map_or(0.0, |t| now.duration_since(t).as_secs_f64());
+        self.real_last = Some(now);
+        dt
     }
 
     /// Writes settings.json (atomic); the path, or None when it failed (a toast says so).
@@ -809,7 +962,11 @@ impl Shell {
         };
         let title = title_key.map_or_else(|| top.name.as_str().to_string(), |k| self.t(k));
         let word = self.t("narrate.screen");
-        let rows = self.rows();
+        let rows = if top.name == ScreenName::Settings && self.staging.confirming() {
+            screens::confirm_rows(self) // Keep or Revert (#308)
+        } else {
+            self.rows()
+        };
         let focused = screens::focused_row(self, &rows);
         let role = focused.map(|r| self.t(role_key(r.kind))).unwrap_or_default();
         let row = focused.map(|r| (r.label.as_str(), role.as_str(), r.value.as_str()));
@@ -884,6 +1041,7 @@ impl Plugin for ShellPlugin {
         let cfg = app.world().get_resource::<GameConfig>().cloned().unwrap_or_default();
         app.insert_resource(Shell::new(&cfg))
             .init_resource::<display::FrameLimit>()
+            .init_resource::<HudScale>()
             .add_systems(
                 Update,
                 (shell_frame, drive::drive_update, sync_settings, quit_when_asked).chain(),
@@ -903,6 +1061,9 @@ fn shell_frame(time: Res<Time>, mut shell: ResMut<Shell>, mut active: ResMut<Gam
     let dt = time.delta_secs_f64();
     shell.game_pressed.clear();
     shell.tick(dt);
+    // the display confirm runs on the wall clock (#308): not game time, and not the fixed tick a smoke run steps
+    let real = shell.real_dt();
+    shell.tick_display(real);
     shell.process_pending();
     juice::frame(&mut shell, dt);
     shell.auto_repeat(dt);
@@ -952,11 +1113,23 @@ fn sync_settings(
     mut palette: ResMut<Palette>,
     mut rules: ResMut<AccessRules>,
     ui_scale: Option<ResMut<bevy::ui::UiScale>>,
+    mut hud: ResMut<HudScale>,
 ) {
     if *last == Some(shell.settings_version) {
         return;
     }
     *last = Some(shell.settings_version);
+    // #309: written only when it differs, so Res<HudScale>::is_changed() means the HUD's text size moved
+    let now = HudScale::from_settings(&shell.settings);
+    if *hud != now {
+        *hud = now;
+        info!(
+            "shell: HUD scale {} (ui_scale {} x text_scale {})",
+            now.factor(),
+            now.ui_scale,
+            now.text_scale
+        );
+    }
     shake.intensity = settings::effective_shake(&shell.settings);
     palette.0 = shell.palette();
     *rules = AccessRules {

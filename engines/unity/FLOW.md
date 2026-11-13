@@ -1,7 +1,9 @@
 # Unity Flow
 
 > Every command below was run against Unity 6000.6.6f1 on Windows (see "Verified" under Mapped to Unity). Items marked
-> **(verify)** were not.
+> **(verify)** were not. The Display tab's Apply (2026-11-13, #308): `smoke --drive display` (the confirm reverted
+> after 15.0 s of real time), `show:apply`, `show:confirm`, `pseudo`, `test` (210 passed); a player window changing
+> mode or size on Apply is untested (the editor and batchmode never touch the window) **(verify)**.
 
 ## Setup
 1. Create the project in Unity Hub with the editor version you want. Pick the template (2D, 3D, URP) and record it in an ADR.
@@ -19,6 +21,7 @@ python tools/dev.py exec GameKitScenes.CreateShellScene     # the kit's screens 
 python tools/dev.py smoke --drive menus                     # walk the menus, change two settings, check settings.json
 python tools/dev.py smoke --drive show:settings --screenshot Logs/settings.png
 python tools/dev.py smoke --drive pseudo --locale pseudo   # every label on every screen, lengthened and bracketed
+python tools/dev.py smoke --drive display                  # the Display tab's Apply and its 15 s real-time confirm
 python tools/access/sweep.py                                # the accessibility sweep over every screen (SOP-20)
 python tools/dev.py exec GameKitScenes.CreateStarterScene   # an empty first scene, headless (or your own scene builder)
 python tools/dev.py build --target StandaloneWindows64
@@ -40,7 +43,8 @@ Close the editor before running batchmode commands (one instance per project).
 | `smoke --until M`, `--fail-on M` | scans the Unity log for the markers your scenario test logs |
 | `smoke --drive menus` | the `Smoke_ShellDrive` PlayMode test with `GAMEKIT_DRIVE=menus`: title -> settings -> master volume 0.5 (left or right from whatever the data folder held), reduce motion toggled -> Back -> Quit; prints `SETTINGS_WRITTEN <path>` and the file holds both values |
 | `smoke --drive access[:res=WxH][,scale=N][,pad][,read]` | every screen reported as `ACCESS_*` lines for `tools/access/sweep.py` (`AccessAudit`): texts with size, colour, background, fit and where they land, the controls the grid reaches and what each says, the subtitle, the one-handed layout applied and reset, a held subtitle, the prompts; the panel is laid out for that window size, `pad` presses with the gamepad bindings only |
-| `smoke --drive show:<title\|settings\|pause\|subtitle\|juice\|credits> --screenshot Logs/x.png` | opens that screen (settings with a control focused; the juice demo right after a hit) and photographs it: `GameKitCapture` lays the UI panel's texture over the camera's picture |
+| `smoke --drive show:<title\|settings\|pause\|subtitle\|juice\|credits\|apply\|confirm> --screenshot Logs/x.png` | opens that screen (settings with a control focused; the juice demo right after a hit; `apply` the Display tab with a window size waiting, `confirm` its "Keep these display settings?") and photographs it: `GameKitCapture` lays the UI panel's texture over the camera's picture |
+| `smoke --drive display` | the Display tab's Apply (#308): a window size staged (`DRIVE_DISPLAY staged`), Back warns (`warned`), Apply sets and saves it and opens the confirm with Keep focused (`applied`), nobody answers and it reverts after 15 real seconds, checked in memory and in settings.json (`reverted ... after 15.0 s real time`), then two Backs discard a staged change (`discarded`) |
 | `smoke --drive pseudo --locale pseudo` | every screen (title, consent, main menu, each settings tab and the binding prompt, credits, loading, the juice demo, play, pause, What now?, history) checked label by label (`AccessAudit.PseudoProblems`): `PSEUDO_SCREEN` per screen, `PSEUDO_FAIL` per label that is untranslated (no `[`), cut (no `]`) or clipped, then `PSEUDO_PASS` or `PSEUDO_FAILED`; `pseudo-plant` adds a label too narrow for its text and must fail naming it (dev.py says so) |
 | `smoke --drive crash` | an unhandled exception in a frame: `CRASH_WRITTEN <path>` and exit 1 on purpose (`ShellReports`) |
 | `smoke --drive bug` | F8 on the main menu: `BUG_REPORT <dir>` and `DRIVE_BUG <dir>`, with the info, log tail, settings (and the screenshot with `--graphics`) checked |

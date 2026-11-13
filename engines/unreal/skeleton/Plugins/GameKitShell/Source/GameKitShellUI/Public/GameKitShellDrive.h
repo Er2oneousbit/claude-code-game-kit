@@ -15,6 +15,11 @@
 //                            prompt, the juice demo: a label wider than its column or not through T() (no leading
 //                            "[") prints PSEUDO_FAIL; PSEUDO_PASS when none
 //           pseudo-plant     the same with one label too small for its text: must fail, naming plant.too_small
+//           display          (#308) the Display tab's Apply: stages a window size, Back warns, Apply sets and saves it
+//                            and opens the confirm, which reverts by itself after 15 REAL seconds (the drive sleeps
+//                            and ticks meanwhile); then two Backs discard a staged change. DRIVE_DISPLAY lines (staged,
+//                            warned, applied, reverted, discarded)
+//           show:apply|confirm  (#308) the Display tab with a change waiting, or "Keep these display settings?"
 //           access[:opts]    the accessibility sweep's tour: every screen reported as ACCESS_SCREEN JSON, plus
 //                            ACCESS_INPUT, ACCESS_PRESET, ACCESS_SUBTITLE, ACCESS_PROMPTS, ACCESS_HOLD;
 //                            opts: res=WxH (noted; the report is in design pixels), scale=N (text), pad
@@ -34,6 +39,8 @@
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1); crash, bug, pseudo and the juice demo by Claude
 //           (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the model is marked scripted (#276)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): display, show:apply, show:confirm; pseudo checks the
+//           Display tab with a change waiting and the confirm (#308)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -57,7 +64,9 @@ public:
 	static constexpr int32 MaxSliderSteps = 40;
 	static constexpr int32 JuiceSettleFrames = 90;   // into the juice demo before the drive attacks (the intro line is over)
 	static constexpr int32 PlantWidth = 24;          // pseudo-plant: the planted label's column, in design pixels
-	static const TCHAR* ShowScreens[10];          // what show:<screen> knows
+	static constexpr double RealSlackS = 2.0;     // display: the confirm reverts within this of its 15 real seconds
+	static constexpr float RealWaitS = 0.01f;     // display: sleep per frame while the confirm counts down
+	static const TCHAR* ShowScreens[12];          // what show:<screen> knows
 	static const TCHAR* AccessActions[7];         // both devices must bind these
 	static const TCHAR* PromptActions[6];         // ACCESS_PROMPTS lists these
 
@@ -95,6 +104,8 @@ private:
 	bool Crash();
 	bool Bug();
 	bool Pseudo(bool bPlant);
+	bool Display();                               // #308: stage, warn, apply, the confirm reverts on the wall clock, discard
+	bool StageResolution();                       // settings: the Display tab's window size one step right
 	bool JuiceHit();
 	void AccessScreen(const FString& Name);
 	TSharedRef<FJsonObject> Reach();

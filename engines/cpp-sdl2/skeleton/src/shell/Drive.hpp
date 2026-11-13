@@ -10,7 +10,12 @@
 //                            past the screen edge, or not through t(): PSEUDO_FAIL lines and exit 1, or PSEUDO_PASS
 //           pseudo-plant     the same plus one label too small for its text: must fail and name plant.too_small
 //           bug              presses F8 on the menu and checks bug_<time>/: DRIVE_BUG <path> (debug builds)
-//           show:<screen>    title | menu | settings | pause | subtitle | play | juice: opens it, then ends
+//           display          (#308) the Display tab's Apply: stages a window size, Back warns, Apply sets and saves
+//                            it and opens the confirm, which reverts by itself after 15 REAL seconds; then two
+//                            Backs discard a staged change. DRIVE_DISPLAY lines (staged, warned, applied, reverted,
+//                            discarded)
+//           show:<screen>    title | menu | settings | pause | subtitle | play | juice | credits | apply (a Display
+//                            change waiting) | confirm (Keep these display settings?): opens it, then ends
 //                            (--screenshot)
 //           access[:opts]    the accessibility sweep's tour (tools/access/sweep.py): res=WxH, scale=N, pad, read
 //           A scenario ends with DRIVE_DONE <name>; a failure logs [ERROR] first, which fails dev.py smoke.
@@ -22,9 +27,11 @@
 //           juice demo and the bug report exist in debug builds only (smoke builds the debug preset).
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): crash, pseudo, pseudo-plant, bug, show:juice (#275)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): display, show:apply, show:confirm (#308)
 // ---------------------------------------------------------------------------
 #pragma once
 
+#include <chrono>
 #include <deque>
 #include <functional>
 #include <string>
@@ -51,6 +58,8 @@ public:
     static constexpr int kDriveLimit = 6000;     // frames for a whole scenario
     static constexpr double kTargetMaster = 0.5; // menus drives the master volume here
     static constexpr int kMaxSliderSteps = 40;
+    static constexpr double kRealSlackS = 2.0;   // display: the confirm reverts within this of its 15 real seconds
+    static constexpr int kRealWaitMs = 10;       // display: sleep per frame while the confirm counts down
 
 private:
     struct Step {
@@ -71,6 +80,9 @@ private:
     int checked_ = 0;                    // pseudo: screens checked, labels seen, problems found
     int labels_ = 0;
     int problems_ = 0;
+    nlohmann::json before_;              // display: the window size before the drive staged one
+    std::chrono::steady_clock::time_point applied_at_;   // display: when Apply opened the confirm
+    int applied_frame_ = 0;
 
     void add(Step step);
     // building blocks
@@ -96,6 +108,8 @@ private:
     void build_crash();
     void build_pseudo(bool plant);
     void build_bug();
+    void build_display();
+    void stage_resolution();             // settings: the Display tab's window size one step right (#308)
     bool build_show(const std::string& screen);
     void build_access(const std::string& options);
 };

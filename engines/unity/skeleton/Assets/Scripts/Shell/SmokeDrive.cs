@@ -9,6 +9,8 @@
 //           python tools/dev.py smoke --drive pseudo --locale pseudo  # every label on every screen (pseudo-plant: must fail)
 //           python tools/dev.py smoke --drive crash                   # a planted exception: CRASH_WRITTEN, exit 1 on purpose
 //           python tools/dev.py smoke --drive bug                     # F8 on the main menu: the bug_<time>/ folder
+//           python tools/dev.py smoke --drive display                 # the Display tab's Apply and its 15 s confirm (#308)
+//           (show: also apply and confirm, the Display tab with a change waiting and its confirm)
 // Notes   : Markers: DRIVE_DONE <scenario>, DRIVE_FAIL <scenario>: <why>, DRIVE_SHOWN <target>, SETTINGS_BEFORE /
 //           SETTINGS_WRITTEN <path> ..., ACCESS_* JSON lines, PSEUDO_SCREEN / PSEUDO_FAIL / PSEUDO_PASS / PSEUDO_FAILED
 //           (the lines and rules of LÖVE's pseudo drive), CRASH_WRITTEN <path> and BUG_REPORT <dir> (ShellReports),
@@ -22,6 +24,9 @@
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): crash, pseudo, pseudo-plant, bug and show:juice (#275)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits (#284)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): display (stage, warn, apply, the confirm reverts on the
+//           wall clock, discard; DRIVE_DISPLAY lines), show:apply and show:confirm, the pseudo drive checks the
+//           Display tab with a change waiting and the confirm (#308)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections;
@@ -43,7 +48,8 @@ namespace {{GAME_SLUG}}.Shell
         public const int MAX_SLIDER_STEPS = 40;
         public const int JUICE_SETTLE_FRAMES = 40;   // frames into the juice demo before a drive attacks
         public const float PLANT_WIDTH = 40f;        // pseudo-plant: a label this narrow cannot hold its text
-        public static readonly string[] SHOW_TARGETS = { "title", "settings", "pause", "subtitle", "juice", "credits" };
+        public static readonly string[] SHOW_TARGETS = { "title", "settings", "pause", "subtitle", "juice", "credits", "apply", "confirm" };
+        public const double REAL_SLACK_S = 2.0;      // display: the confirm reverts within this of its 15 real seconds
         public static readonly string[] BUG_FILES = { "info.txt", "log_tail.txt", "settings.json" };
         public static readonly string[] ACCESS_ACTIONS = { "ui_up", "ui_down", "ui_left", "ui_right", "ui_accept", "ui_cancel", "pause" };
         public static readonly string[] PROMPT_ACTIONS = { "move_left", "move_right", "jump", "attack", "interact", "pause" };
@@ -96,9 +102,13 @@ namespace {{GAME_SLUG}}.Shell
             {
                 yield return Bug();
             }
+            else if (_scenario == "display")
+            {
+                yield return Display();
+            }
             else
             {
-                Fail($"unknown scenario '{_scenario}' (menus, crash, pseudo, pseudo-plant, bug, "
+                Fail($"unknown scenario '{_scenario}' (menus, crash, pseudo, pseudo-plant, bug, display, "
                      + $"access[:res=WxH][,scale=N][,pad][,read], show:<{string.Join("|", SHOW_TARGETS)}>)");
             }
         }
@@ -204,8 +214,138 @@ namespace {{GAME_SLUG}}.Shell
                     if (Failed) yield break;
                     yield return Frames(SETTLE_FRAMES);
                     break;
+                case "apply":                              // #308: a Display change waiting, Apply focused
+                case "confirm":                            // ... and applied: "Keep these display settings?"
+                    yield return ToMainMenu();
+                    if (Failed) yield break;
+                    yield return NavTo("Settings", "ui_down");
+                    if (Failed) yield break;
+                    yield return Accept("settings");
+                    if (Failed) yield break;
+                    yield return StageResolution();
+                    if (Failed) yield break;
+                    yield return NavTo("Apply", "ui_down");
+                    if (Failed) yield break;
+                    if (target == "confirm")
+                    {
+                        yield return Press("ui_accept");
+                    }
+                    yield return Frames(SETTLE_FRAMES);
+                    break;
             }
             Shell.Raw("DRIVE_SHOWN " + target);
+            Done();
+        }
+
+        // ---- the Display tab's Apply (#308) ----------------------------------------------------
+
+        /// <summary>On the settings screen: the Display tab's window size one step right (a staged change).</summary>
+        private IEnumerator StageResolution()
+        {
+            yield return NavTo("Tab_display", "ui_up");      // from a row (or Back) up to the tabs; the Display tab first
+            if (Failed) yield break;
+            yield return NavTo("Setting_display_resolution", "ui_down");
+            if (Failed) yield break;
+            yield return Press("ui_right");
+        }
+
+        private SettingsScreen Settings()
+        {
+            return _front.Top() as SettingsScreen;
+        }
+
+        private object LiveResolution()
+        {
+            return ((Dictionary<string, object>)S.Settings["display"])["resolution"];
+        }
+
+        private object SavedResolution()
+        {
+            string file = S.PathOf(Shell.SETTINGS_FILE);
+            if (!System.IO.File.Exists(file))
+            {
+                return null;
+            }
+            return ((Dictionary<string, object>)GameSettings.LoadFile(file).Settings["display"])["resolution"];
+        }
+
+        /// <summary>display: stage a window size, Back warns, Apply sets and saves it and opens the confirm, nobody
+        /// answers and it reverts on the wall clock (proof that it counts real time), then two Backs discard a staged
+        /// change. DRIVE_DISPLAY lines say what happened; settings.json is checked each time.</summary>
+        private IEnumerator Display()
+        {
+            yield return ToMainMenu();
+            if (Failed) yield break;
+            yield return NavTo("Settings", "ui_down");
+            if (Failed) yield break;
+            yield return Accept("settings");
+            if (Failed) yield break;
+            object before = Json.DeepCopy(LiveResolution());
+            yield return StageResolution();
+            if (Failed) yield break;
+            object shown = Settings()?.Staging.Value("resolution");
+            if (DisplayStaging.Same(shown, before) || !DisplayStaging.Same(LiveResolution(), before))
+            {
+                Fail($"the window size row did not stage: shows {Json.Stringify(shown)}, settings hold {Json.Stringify(LiveResolution())}");
+                yield break;
+            }
+            Shell.Raw($"DRIVE_DISPLAY staged resolution {Json.Stringify(shown)} (settings still {Json.Stringify(before)})");
+            yield return Press("ui_cancel");                  // Back with a change waiting: a warning, not a way out
+            if (_front.CurrentName() != "settings" || Settings().StatusText != S.T("settings.unapplied"))
+            {
+                Fail($"Back with an unapplied Display change did not warn (screen {_front.CurrentName()})");
+                yield break;
+            }
+            Shell.Raw("DRIVE_DISPLAY warned: " + Settings().StatusText);
+            yield return NavTo("Apply", "ui_down");
+            if (Failed) yield break;
+            yield return Press("ui_accept");
+            int? secs = Settings()?.Staging.Seconds();
+            if (secs == null || DisplayStaging.Same(LiveResolution(), before) || !DisplayStaging.Same(SavedResolution(), LiveResolution())
+                || _front.Top()?.Focused?.Name != "Keep")
+            {
+                Fail($"Apply did not set, save and confirm the window size (settings {Json.Stringify(LiveResolution())}, "
+                     + $"file {Json.Stringify(SavedResolution())}, focus {_front.Top()?.Focused?.Name})");
+                yield break;
+            }
+            float appliedAt = Time.realtimeSinceStartup;
+            int appliedFrame = Time.frameCount;
+            Shell.Raw($"DRIVE_DISPLAY applied resolution {Json.Stringify(LiveResolution())}, confirm {secs} s, focus on Keep");
+            while (Settings() != null && Settings().Confirming)   // the wall clock, not a frame count, limits this wait
+            {
+                if (Time.realtimeSinceStartup - appliedAt > DisplayStaging.CONFIRM_S + REAL_SLACK_S)
+                {
+                    Fail($"the display confirm was still open after {Time.realtimeSinceStartup - appliedAt:0.0} real seconds");
+                    yield break;
+                }
+                yield return null;
+            }
+            float waited = Time.realtimeSinceStartup - appliedAt;
+            if (!DisplayStaging.Same(LiveResolution(), before) || !DisplayStaging.Same(SavedResolution(), before))
+            {
+                Fail($"the confirm ran out but did not put back {Json.Stringify(before)} (settings {Json.Stringify(LiveResolution())}, "
+                     + $"file {Json.Stringify(SavedResolution())})");
+                yield break;
+            }
+            if (waited < DisplayStaging.CONFIRM_S - REAL_SLACK_S)
+            {
+                Fail($"the display confirm reverted after {waited:0.0} s: it must count real seconds");
+                yield break;
+            }
+            Shell.Raw(FormattableString.Invariant(
+                $"DRIVE_DISPLAY reverted to {Json.Stringify(before)} after {waited:0.0} s real time ({Time.frameCount - appliedFrame} frames)"));
+            yield return StageResolution();
+            if (Failed) yield break;
+            yield return Press("ui_cancel");                  // warns
+            yield return Press("ui_cancel");                  // discards and leaves
+            yield return WaitScreen("main_menu");
+            if (Failed) yield break;
+            if (!DisplayStaging.Same(SavedResolution(), before))
+            {
+                Fail("a discarded Display change reached settings.json: " + Json.Stringify(SavedResolution()));
+                yield break;
+            }
+            Shell.Raw($"DRIVE_DISPLAY discarded: two Backs left the settings, the file holds {Json.Stringify(before)}");
             Done();
         }
 
@@ -314,6 +454,21 @@ namespace {{GAME_SLUG}}.Shell
                 if (Failed) yield break;
                 yield return Frames(3);
                 Check("settings." + tab);
+                if (tab == "display")                       // #308: Apply enabled, then the confirm
+                {
+                    yield return StageResolution();
+                    if (Failed) yield break;
+                    yield return Frames(3);
+                    Check("settings.display.pending");
+                    yield return NavTo("Apply", "ui_down");
+                    if (Failed) yield break;
+                    yield return Press("ui_accept");
+                    yield return Frames(3);
+                    Check("settings.confirm");
+                    yield return Press("ui_cancel");        // reverts at once
+                    yield return NavTo("Tab_display", "ui_up");
+                    if (Failed) yield break;
+                }
                 if (tab == "controls")
                 {
                     yield return NavTo("Bind_jump_0", "ui_down");
