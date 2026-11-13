@@ -114,11 +114,12 @@ examples were built and tested on one Windows 11 machine.
 
 ### Art workflow outside Godot
 Since 0.14.5 every engine reads Dotwork's asset manifest (`core/tools/art/dotwork/ASSET_MANIFEST.md`) through its
-own importer, each tested against the golden fixture in `core/data/golden/dotwork/`. Spec 1.1.0 (unreleased,
+own importer, each tested against the golden fixture in `core/data/golden/dotwork/`. Spec 1.1.0 (0.15.0,
 [#285](https://github.com/Er2oneousbit/claude-code-game-kit/issues/285)) defined the rules the first importers left
 open (corners4 terrain layers, isometric placement, the variant pick, stamps layers, the extra kinds per engine) and
-every importer follows them on the golden maps. Still true: a Godot map scene rolls its own variants (every other
-engine picks the same tile); a corners4 terrain shape thinner than 2 cells has no tile (the validator refuses the
+every importer follows them on the golden maps. Still true: Godot has no manifest importer, and a Godot map scene
+rolls its own variants (every other engine picks the same tile)
+([#307](https://github.com/Er2oneousbit/claude-code-game-kit/issues/307)); a corners4 terrain shape thinner than 2 cells has no tile (the validator refuses the
 map; Godot's own painter improvises a one-corner tile there); RPG Maker MZ converts no maps. Per engine (additive
 blending in Bevy and Unreal, Unreal tile animation, Niagara and font kerning, MZ autotiles, maps and parallaxes,
 Phaser multi-page fonts, and others):
@@ -141,12 +142,10 @@ model-free example packs, not yet on a real game's art.
 
 ### Planned
 - **Steam:** a platform-services layer with a null backend and one adapter per engine
-  ([#84](https://github.com/Er2oneousbit/claude-code-game-kit/issues/84)); an automated Steam Deck pass ([#85](https://github.com/Er2oneousbit/claude-code-game-kit/issues/85)); `dev.py ship` for
-  SteamPipe and itch.io with a dry run ([#86](https://github.com/Er2oneousbit/claude-code-game-kit/issues/86)).
+  ([#84](https://github.com/Er2oneousbit/claude-code-game-kit/issues/84)); `dev.py ship` for SteamPipe and itch.io
+  with a dry run ([#86](https://github.com/Er2oneousbit/claude-code-game-kit/issues/86)).
 - **Localization round trip:** export, local-model drafts, review, re-import and checks
   ([#87](https://github.com/Er2oneousbit/claude-code-game-kit/issues/87)).
-- **Checks:** an automated accessibility sweep of the shell
-  screens ([#91](https://github.com/Er2oneousbit/claude-code-game-kit/issues/91)).
 - **Starting a game:** genre starters with a tested core loop ([#89](https://github.com/Er2oneousbit/claude-code-game-kit/issues/89)).
 - **Examples:** bring them onto the 0.8 systems ([#88](https://github.com/Er2oneousbit/claude-code-game-kit/issues/88)); designed-voice dialogue in one example
   ([#93](https://github.com/Er2oneousbit/claude-code-game-kit/issues/93)).
@@ -154,11 +153,7 @@ model-free example packs, not yet on a real game's art.
   ([#282](https://github.com/Er2oneousbit/claude-code-game-kit/issues/282)).
 - **Game feel:** recipes for common effects built from the juice primitives, added per game as needed [#170](https://github.com/Er2oneousbit/claude-code-game-kit/issues/170);
   shooting effects (muzzle flash, tracer, firing light, wall debris) [#164](https://github.com/Er2oneousbit/claude-code-game-kit/issues/164); a blood on/off setting [#171](https://github.com/Er2oneousbit/claude-code-game-kit/issues/171).
-- **Accessibility:** screen reader and menu narration [#165](https://github.com/Er2oneousbit/claude-code-game-kit/issues/165); motor access beyond remapping [#166](https://github.com/Er2oneousbit/claude-code-game-kit/issues/166);
-  cognitive access [#167](https://github.com/Er2oneousbit/claude-code-game-kit/issues/167); shell screens for Unity, Unreal, Bevy and C++ [#168](https://github.com/Er2oneousbit/claude-code-game-kit/issues/168); colour-blind modes tested
-  beyond the demo palettes [#169](https://github.com/Er2oneousbit/claude-code-game-kit/issues/169).
-- **More local 3D lanes after Bozzetto:** auto-rigging for characters, UniRig the candidate
-  ([#199](https://github.com/Er2oneousbit/claude-code-game-kit/issues/199)); tiling PBR materials on FLUX.2 klein
+- **More local 3D lanes after Bozzetto:** tiling PBR materials on FLUX.2 klein
   ([#200](https://github.com/Er2oneousbit/claude-code-game-kit/issues/200)); motion reference video with Wan 2.2 in place of Seedance
   ([#201](https://github.com/Er2oneousbit/claude-code-game-kit/issues/201)).
 - **A flagship game:** one small finished game that uses every lane (planning, 2D and 3D art, audio, game feel,
@@ -210,8 +205,7 @@ model-free example packs, not yet on a real game's art.
 - **Code no exam runs:** the 0.14.5 pass gave doctor, `frames_to_gif.py` and Dotwork's unrun commands exams; Dotwork's
   audition render and qa_pack's fallback for rows without a `source` still have none
   ([#282](https://github.com/Er2oneousbit/claude-code-game-kit/issues/282)).
-- **Bozzetto:** a `--material vertex` model renders white in Godot until `vertex_color_use_as_albedo` is set
-  ([#202](https://github.com/Er2oneousbit/claude-code-game-kit/issues/202)); TRELLIS.2 characters with baked textures
+- **Bozzetto:** TRELLIS.2 characters with baked textures
   landed under the `npc` class's 55% UV coverage floor on two seeds; 0.15.1's `--rebake auto` (the local default)
   lifts both to 59 and 60%, on those two models only so far
   ([#203](https://github.com/Er2oneousbit/claude-code-game-kit/issues/203)). `rig`: bipeds only; the Unity Humanoid
@@ -246,9 +240,7 @@ autoplay exit leak (#6).
 - Built with Mono only; IL2CPP builds were not made or compared.
 
 ### Scrap Tanks (C++/SDL3)
-- Scouts can never reach their RETREAT branch: one hit leaves them above the threshold and a second destroys them.
-  Raising the threshold or lowering damage moved the cover-against-charging balance the pillar test checks, so it
-  waits for a balance decision ([#152](https://github.com/Er2oneousbit/claude-code-game-kit/issues/152)).
+- Hiding spots are judged by one line to the spot's centre (with a 0.35 m margin); sight itself counts hull edges.
 
 ### Lockpick (RPG Maker MZ)
 - An untested proof of concept: it has never run inside RPG Maker MZ, only against stand-ins.

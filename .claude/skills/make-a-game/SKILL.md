@@ -115,6 +115,18 @@ D. **Size and setup**
        (`git config user.name`, if set) as the default, plus "the user" for no name at all; a handle is fine.
 Keyboard, gamepad or touch comes from their answers; ask only if it is unclear.
 
+**They already have a game** (the kit goes into an existing project with `--adopt`, README "Already have a project?"):
+you may prefill answers from its README, CLAUDE.md and code. Mark each prefilled answer *(from your project)* in the
+plan, so they can correct it. Two things are never prefilled from the project:
+- **The first-art floor.** A project note like "everything is coloured rectangles on purpose" is a shortcut from
+  before the kit, not a design decision. When the project draws its characters as dots, boxes, rectangles or circles,
+  the toy plan replaces them with pixel-art figures drawn in code (3D: figures built from shapes) and says so in one
+  line ("Your boxes become drawn characters: the kit's floor"). Tiles for walls and floors may stay. If they still
+  want the boxes after reading that, it is their game: record it as their choice in the plan and in the GDD.
+- **The kit's other rules.** Where the project's docs disagree with the kit (the tier rules, the command contract,
+  where tunables live), list each one under the plan as "Your project says X; the kit does Y" and ask which wins. Their
+  answer goes into the plan; never decide it silently either way.
+
 ## 3. Write the plan and get a yes
 From the answers, draft and show the plan in the chat, one short screen, under the GDD's headings: Working title,
 One-line pitch, Genre, Perspective, Reference games, The twist, **three Pillars** (you propose them from the answers:
@@ -145,12 +157,16 @@ no signal stays off the list (the game's Claude still finds it later). Show it i
 | "Easy to share a link", a web host, itch.io or Steam | `python tools/dev.py ship` (SOP-06 "Putting it online"), `docs/sop/SOP-21-ship-on-steam-and-itch.md` | MVP |
 Menus, saves, settings and the release checks come with every game through `/next-tier` and `/release-check`; leave
 them off the list.
-Right under the plan, before asking for the yes, show this warning in a box of its own (your words, same points):
-> ⚠️ **The first version will look crude, on purpose.** Simple placeholder characters made in code (2D: pixel-art figures with a walk and an action; 3D: figures
-> built from a few shapes, a kart with wheels and a driver; never dots or bare boxes) on plain backgrounds, maybe no sound. The first
-> goal is to find out whether the game is *fun*, and that only takes the mechanics. Art, animation and music come once
-> the fun is proven: polishing art for a game that turns out not to work wastes time, usage and money. Judge the
-> first build by how it plays, not how it looks.
+Right under the plan, before asking for the yes, show this warning in a box of its own. Say it in your words with the
+same points, except the second sentence, which you copy **word for word** (it is the rule the game's Claude builds by,
+and a paraphrase has turned it into its opposite before):
+> ⚠️ **The first version will look crude, on purpose.** Characters are pixel-art figures drawn in code with a walk and an
+> action (3D: figures built from a few shapes, a kart with wheels and a driver), never dots or bare boxes. Backgrounds
+> stay plain, maybe no sound. The first goal is to find out whether the game is *fun*, and that only takes the
+> mechanics. Art, animation and music come once the fun is proven: polishing art for a game that turns out not to work
+> wastes time, usage and money. Judge the first build by how it plays, not how it looks.
+The plan's toy scope follows the same rule: it never says the toy keeps or uses dots, boxes, rectangles or circles for
+characters. Before showing the plan, read it once for those words next to "toy", "placeholder" or a character's name.
 Ask (as a prompt when you can: "Looks good, build it" / "Change something" / "Rename it first"): "Anything to
 change before I set up the game?" Apply changes, and move on only after a clear yes ("looks good",
 "build it"). Keep the plan in the chat for now: it goes into the game folder in step 8.
