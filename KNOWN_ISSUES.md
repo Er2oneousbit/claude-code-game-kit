@@ -98,6 +98,20 @@ examples were built and tested on one Windows 11 machine.
 - **Strip rebuild limits:** a fused scarf or cape rebuilt by `rig chain` loses folds, knots and fringes, and the
   original stays painted on the body under it.
 
+### 0.15.1 follow-ups
+- **Credits under reduce motion:** LÖVE and C++ seem to start a CREDITS.md taller than the text area below the
+  visible area, found by reading the code, not run (verify)
+  ([#302](https://github.com/Er2oneousbit/claude-code-game-kit/issues/302)).
+- **Rebaked Tripo textures:** the rebake writes Tripo's JPEG colour maps as PNG, so a main file grows (5.0 to 11.5 MB
+  on one character) ([#303](https://github.com/Er2oneousbit/claude-code-game-kit/issues/303)).
+- **Gemini:** Google calls `generateContent` legacy and points to its Interactions API; moving needs a billed live run
+  ([#304](https://github.com/Er2oneousbit/claude-code-game-kit/issues/304)). Whether `gemini-3.1-flash-lite-image`
+  accepts `imageSize`, and whether image replies are always PNG, are (verify).
+- **Not seen yet:** Unity's isometric showcase framing (#297) passed its bounds test but the scene was not opened on an
+  isometric pack; Bevy's all-`#[ignore]` `[SKIP]` line is tested against cargo's summary format only (verify).
+- **Flaky exam:** `scripts/test_dev_py.py` failed 7 cases once under a Bevy build's CPU load
+  ([#305](https://github.com/Er2oneousbit/claude-code-game-kit/issues/305)).
+
 ### Art workflow outside Godot
 Since 0.14.5 every engine reads Dotwork's asset manifest (`core/tools/art/dotwork/ASSET_MANIFEST.md`) through its
 own importer, each tested against the golden fixture in `core/data/golden/dotwork/`. Spec 1.1.0 (unreleased,

@@ -3,6 +3,42 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.15.1 (2026-11-13): fixes: credits text in every shell, the start interview, Bozzetto and engine follow-ups (#284, #196, #203, #294 to #301)
+- **Credits screens (#284):** one rule turns CREDITS.md into screen text in every shell (Godot, web, web-3d, LÖVE,
+  Unity, C++, Bevy, Unreal): HTML comments go, heading marks and list markers go, every `*` goes, underscores stay
+  (`boss_theme.ogg`), and only spaces and tabs are trimmed. It is `credits_text` in `core/tools/golden_vectors.py`,
+  with 14 golden cases in `core/data/golden/credits.json` that every engine's tests run. `smoke --drive show:credits`
+  works on every engine with show drives. Fixed on the way: C++ threw `std::out_of_range` on a line holding only `#`.
+- **The start interview (#300, #301):** `make-a-game` was stale after 0.15: it said Tripo was not wired into the kit,
+  never offered sprites rendered from a 3D model for a 2D game, and never led to `/make-character`. It now does all
+  three (question 8e asks about the main character). Beyond art and sound it led nowhere, so the plan now gets a
+  "Kit tools for this game" list read off the answers (generated levels to `/procgen`, enemies to `/game-ai`, a look
+  to `/shader`, an economy, a pictured hero, languages, the audience, where it ships), each with its tier; question 10b
+  asks the languages. `docs/GDD.md` gains that section plus Main character and Languages lines, and `/next-tier`
+  offers the new tier's rows.
+- **Bozzetto:** LOD files carry their textures at half the size per level, never under 256 px (`prep_export.py
+  --lod-textures half|keep`; a 3-level character went from 32.7 MB to 17.9 MB) (#196). The local route rebakes only a
+  model under its class's UV floor (`--rebake auto`, the new default), keeps the model's own atlas when the rebake
+  lands no higher, and the gap between islands is 1 px at 1024 px and under (two models under the npc floor passed
+  after it) (#203). `reference --with nanobanana` calls Gemini's stable `v1` endpoint and sends `imageSize` only to
+  the models Google documents it for (#298).
+- **Engines:** a Bevy game's shader check example is named after the game, so games sharing one `CARGO_TARGET_DIR` no
+  longer fight over one `shader_check.pdb` (#294). A test run where every match was skipped prints `[SKIP] all N
+  skipped, none ran (exit 2): <reason>` on Unity, Godot, Bevy, web, web-3d and MZ; Godot passed such a run and web
+  failed it before (#295). The character helpers share one play rule: playing the clip already playing changes
+  nothing, a restart is asked for (`restart` in web-3d, Unity and Godot, `RestartClip` in Bevy) (#296). Unity's
+  Dotwork showcase frames an isometric map by its real bounds (`DotworkMap.Bounds`) (#297).
+- **Upgrade notes:** a game that relied on `play()` restarting a clip asks for it now (`restart: true`, `restart =
+  true` or the `RestartClip` component). A Bevy game from 0.15.0 or older copies the skeleton's `[[example]] name =
+  "<slug>_shader_check"` table into its `Cargo.toml` to stop sharing the PDB (`--upgrade` keeps an edited
+  `Cargo.toml`). In `bozzetto.json`, `"rebake"` now means a rebake ran, and the new `"rebake_mode"` holds on, auto or
+  off. A game that edited `docs/GDD.md` gets the new sections as `GDD.md.gold`; `/next-tier` offers to fill "Kit tools
+  for this game" from the plan.
+- **Kit tools:** `check_links.py --baseline FILE` fails only on a hit the list lacks, and `--write-baseline` refreshes
+  it; the kit's list is `scripts/check_links_baseline.txt` (236 known hits, all scaffold-time paths and history).
+  Follow-ups filed: #302 (LÖVE and C++ start tall credits below the screen under reduce motion), #303 (keep Tripo's JPEG colour maps as
+  JPEG), #304 (Gemini's Interactions API), #305 (a timing-sensitive `test_dev_py`).
+
 ## 0.15.0 (2026-11-12): from an idea to the character in the game; Dotwork map rules in every engine (#287 to #293, #285)
 - **`/make-character` (#291):** a new skill (25 now) that takes "the main character should look like this" (an idea,
   a sentence or a picture) to that character moving in the game. It asks one multiple-choice question at a time, picks
