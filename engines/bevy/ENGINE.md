@@ -9,7 +9,7 @@
 - **First build compiles Bevy itself:** 5 to 15 minutes and several GB in `target/`. Later builds take seconds.
   Several games can share one compiled Bevy through one `CARGO_TARGET_DIR`; the shader check example is named after
   the game (`[[example]]` in `Cargo.toml`, `<slug>_shader_check`), because cargo names examples without a hash and
-  MSVC stopped with LNK1140 when every game linked into one `debug/examples/shader_check.pdb` (#294).
+  MSVC stopped with LNK1140 when every game linked into one shader_check.pdb under `debug/examples/` (#294).
 - **Version:** one source, `version` in `Cargo.toml` (SOP-06). Code reads `env!("CARGO_PKG_VERSION")`; `--version`
   prints it and the BOOT_OK line carries it.
 - **Game options:** everything after `--` goes to `game::configure()` (bots, seeds, cheats), so a game adds options
