@@ -2917,12 +2917,13 @@ class AllSkipped(TempRoot):
         (self.root / "addons" / "gut").mkdir(parents=True)
         (self.root / dev.GUT_CMDLN).write_text("", encoding="utf-8")
         dev.ensure_imported = lambda godot: 0
-        out = ("* test_walks\n    [Pending]:  needs the rigged model\nTotals\n------\nScripts           1\n"
-               "Tests             3\nPassing Tests     0\nRisky/Pending     3\nAsserts           0\n")
+        # GUT 9.7's own summary (Godot 4.7.2, 2026-11-13): zero passing is printed as "none"
+        out = ("- test_a\n    [Pending]:  needs the rigged model\n\nTotals\n------\nScripts               1\n"
+               "Tests                 3\nPassing Tests      none\nRisky/Pending         3\nAsserts            none\n")
         dev.run = lambda cmd, **kw: (0, out)
         self.assertSkip(*quiet(dev.cmd_test, argparse.Namespace(filter=""), "godot"), 3, "needs the rigged model")
-        dev.run = lambda cmd, **kw: (0, out.replace("Passing Tests     0", "Passing Tests     2")
-                                     .replace("Risky/Pending     3", "Risky/Pending     1"))
+        dev.run = lambda cmd, **kw: (0, out.replace("Passing Tests      none", "Passing Tests         2")
+                                     .replace("Risky/Pending         3", "Risky/Pending         1"))
         self.assertEqual(quiet(dev.cmd_test, argparse.Namespace(filter=""), "godot")[0], 0)
 
     def test_web_and_web_3d_all_skipped(self):
