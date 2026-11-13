@@ -541,7 +541,8 @@ uv run --python 3.11 --with "bpy==4.2.*" python tools/bozzetto/test_rig.py    # 
                                                     # kit's floor (BOZZETTO_TEST_BLENDER=bpy picks the module when a
                                                     # Blender is installed too); also test_chain.py and test_bozzetto.py
 python tools/bozzetto/test_reference.py         # reference, offline: stand-in ComfyUI, Gemini and Tripo (about 5 s)
-python tools/bozzetto/test_rebake.py            # the UV rebake and --accept-uv offline; a tiny-island cube rebaked
-                                                    # and checked in Blender when it is found (about 1 min)
+python tools/bozzetto/test_rebake.py            # the UV rebake, --rebake auto and --accept-uv offline; a tiny-island
+                                                    # cube rebaked, checked and (over the floor) kept, in Blender when it
+                                                    # is found (about 2 min)
 python tools/bozzetto/bozzetto.py test [--live] # the above in one go
 ```
