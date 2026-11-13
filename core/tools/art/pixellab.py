@@ -1486,8 +1486,10 @@ def build_parser():
             p.add_argument("--style-traits", help=f"--style-image: copy only these, a comma list of "
                                                   f"{', '.join(STYLE_TRAITS)} (default all four)")
         if source:
-            p.add_argument("--source-image-id", help="--pro-flash: reuse an image made by `image --pro-flash` (its "
-                                                     ".gen.json has source_image_id): only the rotations are charged")
+            p.add_argument("--source-image-id", help="--pro-flash: reuse an image made by `image --pro-flash` or a "
+                                                     "1-direction `object --pro-flash` (its .gen.json has "
+                                                     "source_image_id): only the rotations are charged; --size "
+                                                     "is not sent (the image sets it)")
 
     ap = argparse.ArgumentParser(
         prog="pixellab.py",
