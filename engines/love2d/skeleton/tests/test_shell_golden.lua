@@ -4,12 +4,16 @@
 --           migration, translation, plurals, pseudo-locale) against data/golden/shell.json, one test per case.
 -- Usage   : python tools/dev.py test     (or --filter shell)
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display_staging cases (the Display tab's Apply
+--           and its keep-or-revert confirm, #308), every step's result and state
 -- ---------------------------------------------------------------------------
 local Golden = require("tests.helpers.golden")
 local Settings = require("src.core.settings")
 local Bindings = require("src.core.bindings")
 local SaveStore = require("src.core.save_store")
 local I18n = require("src.core.i18n")
+local DisplayStaging = require("src.core.display_staging")
+local Json = require("src.core.json")
 
 local FILE = "shell.json"
 local data = Golden.load(FILE)
@@ -93,6 +97,34 @@ function handlers.pseudo(case, tol, where)
     Golden.expect(I18n.pseudo(p[1]), p[2], tol, where .. " " .. string.format("%q", p[1]) .. " (" .. i .. ")")
   end
   return #case.points
+end
+
+-- A script of steps ({op, args...}); after each one: its result (out), the set-value calls, pending, the value
+-- every control shows, the applied values and the countdown's whole seconds.
+function handlers.display_staging(case, tol, where)
+  Golden.expect(DisplayStaging.CONFIRM_S, case.confirm_s, tol, where .. " CONFIRM_S")
+  local st = DisplayStaging.new(case.applied)
+  local n = 1
+  for i, step in ipairs(case.steps) do
+    local op = step.op
+    local out, calls = Json.null, {}
+    if op[1] == "stage" then out = st:stage(op[2], op[3])
+    elseif op[1] == "apply" then calls = st:apply()
+    elseif op[1] == "tick" then calls = st:tick(op[2])
+    elseif op[1] == "keep" then st:keep()
+    elseif op[1] == "revert" then calls = st:revert()
+    elseif op[1] == "back" then out, calls = st:back()
+    else error(where .. ": unknown op " .. tostring(op[1]), 0) end
+    local shown = {}
+    for _, f in ipairs(DisplayStaging.APPLY_ORDER) do shown[f] = st:value(f) end
+    local w = string.format("%s step %d (%s)", where, i, tostring(op[1]))
+    Golden.expect({ out = out, calls = calls, pending = st.pending, shown = shown, applied = st.applied,
+                    seconds = st:seconds() },
+                  { out = step.out, calls = step.calls, pending = step.pending, shown = step.shown,
+                    applied = step.applied, seconds = step.seconds }, tol, w)
+    n = n + 6
+  end
+  return n
 end
 
 local suite = Golden.suite(data, handlers, FILE)

@@ -9,14 +9,20 @@
 --           crash          raises an error in a frame (conf.lua's handler writes the crash file, exit 1)
 --           pseudo         (with --locale pseudo) visits every screen and checks every visible label
 --           pseudo-plant   the same plus one label too small for its text: must fail and name it
---           show:<screen>  title | settings | pause | subtitle | juice | credits: opens it, then ends
---                          (--screenshot)
+--           show:<screen>  title | settings | pause | subtitle | juice | credits | apply | apply_confirm: opens it,
+--                          then ends (--screenshot); apply = the Display tab with a staged change, apply_confirm =
+--                          the keep-or-revert confirm (its countdown held, so pictures repeat)
+--           display        the Display tab's Apply (#308): stages a mode change, Back warns (DISPLAY_WARN), Apply
+--                          (DISPLAY_APPLIED <calls>, DISPLAY_CONFIRM <secs>), the confirm runs out in real time and
+--                          reverts (DISPLAY_REVERTED <calls> after <s>), settings.json holds the old mode, Back
 --           bug            presses F8 on the menu and checks the bug_<timestamp>/ folder
 -- Notes   : A scenario is a coroutine: d:press() injects an action and waits a couple of frames, d:wait_screen()
 --           yields until the screen is on top. Each wait has a frame limit, so a broken menu fails instead of
 --           hanging. Add a scenario: a function in SCENARIOS, then document it in docs/ENGINE_FLOW.md.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits (#284)
+-- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:apply_confirm,
+--           and the pseudo tour through the Display tab's staged change, warning and confirm (#308)
 -- ---------------------------------------------------------------------------
 local Bindings = require("src.core.bindings")
 local InputMap = require("src.core.input_map")
@@ -36,6 +42,8 @@ local DRIVE_LIMIT = 6000                 -- frames for a whole scenario
 Drive.TARGET_MASTER = 0.5                -- menus drives the master volume here
 Drive.MAX_SLIDER_STEPS = 40              -- presses a slider gets to reach its target (0..1 is 20 steps of 0.05)
 local SLIDER_EPS = 1e-9                  -- a slider value this close to its target is there
+local CONFIRM_WAIT_S = 20                -- real seconds the display drive gives the confirm to revert (it takes 15)
+local CONFIRM_MIN_S = 14                 -- a revert sooner than this was not counted in real time
 
 -- The press that moves a slider from now towards target ("" once it is there)
 function Drive.slide_action(now, target)
@@ -61,6 +69,21 @@ function Drive:wait_for(pred, what, limit)
     coroutine.yield()
   end
   error("timed out waiting for " .. what, 0)
+end
+
+-- waits in real seconds (love.timer), for what a frame count cannot bound: a smoke run's frames have no fixed length.
+-- The frames it takes do not count towards DRIVE_LIMIT.
+function Drive:wait_real(pred, what, seconds)
+  local start, frame = love.timer.getTime(), self.frame
+  self.real_wait = true
+  while love.timer.getTime() - start < seconds do
+    if pred() then
+      self.real_wait, self.frame = false, frame
+      return love.timer.getTime() - start
+    end
+    coroutine.yield()
+  end
+  error("timed out after " .. seconds .. " s waiting for " .. what, 0)
 end
 
 function Drive:top() return self.app:top() end
@@ -197,6 +220,46 @@ function SCENARIOS.crash(d)
   error("drive crash: a planted error to prove the crash report (expected)")
 end
 
+-- settings, Display tab, focus on the mode row, then one press right: a staged mode change
+local function stage_mode(d)
+  d:open("settings", "settings")
+  d:to_tab("display")
+  d:press("ui_down")
+  d:focus("display.mode")
+  d:press("ui_right")
+  local st = d:top().staging
+  if st.pending.mode == nil then error("the mode change was not staged", 0) end
+  if d.app.settings.display.mode ~= st.applied.mode then error("the mode changed before Apply", 0) end
+end
+
+-- the Display tab's Apply (#308), headless: stage, Back warns, Apply opens the confirm, real time reverts it
+function SCENARIOS.display(d)
+  local app = d.app
+  d:to_menu()
+  local before = app.settings.display.mode
+  stage_mode(d)
+  local screen = d:top()
+  print("DISPLAY_STAGED " .. Json.encode({ mode = screen.staging.pending.mode, applied = before }))
+  d:press("ui_cancel")
+  if d:top() ~= screen or not screen.staging.warned then error("Back with a staged change did not warn", 0) end
+  print("DISPLAY_WARN " .. app:t("settings.unapplied"))
+  d:focus("display.apply")
+  d:press("ui_accept")
+  if not screen.staging:confirming() then error("Apply of a mode change opened no confirm", 0) end
+  if d:focus_id() ~= "display.keep" then error("focus is not on Keep (" .. tostring(d:focus_id()) .. ")", 0) end
+  print("DISPLAY_APPLIED " .. Json.encode(Json.array(screen.last_apply)))
+  print("DISPLAY_CONFIRM " .. tostring(screen.staging:seconds()))
+  local took = d:wait_real(function() return not screen.staging:confirming() end, "the confirm to revert", CONFIRM_WAIT_S)
+  print(string.format("DISPLAY_REVERTED %s after %.1f s", Json.encode(Json.array(screen.last_revert or {})), took))
+  if took < CONFIRM_MIN_S then error(string.format("the confirm reverted after %.1f s: not real time", took), 0) end
+  if app.settings.display.mode ~= before then error("the mode is " .. app.settings.display.mode .. ", not " .. before, 0) end
+  local ok, saved = Json.try_decode(app.store:read(Settings.FILE) or "")
+  if not ok or saved.display.mode ~= before then error("settings.json does not hold mode " .. before, 0) end
+  d:press("ui_cancel")                                   -- nothing staged now: Back leaves
+  d:wait_screen("main_menu")
+  d:done(0)
+end
+
 local function pseudo_tour(d)
   local app = d.app
   if not app.i18n:is_pseudo() then
@@ -217,6 +280,20 @@ local function pseudo_tour(d)
     d:press("ui_down")
     d:focus(tab .. ".back")                              -- scrolled to the end: the rows below the fold
     d:check("settings." .. tab .. ".end")
+    if tab == "display" then                             -- #308: the staged change, the warning and the confirm
+      d:focus("display.mode")
+      d:press("ui_right")
+      d:check("settings.display.staged")
+      d:press("ui_cancel")
+      d:check("settings.display.unapplied")
+      d:focus("display.apply")
+      d:press("ui_accept")
+      d:top().hold_countdown = true
+      d:check("settings.display.confirm")
+      d:press("ui_cancel")                               -- Back during the confirm reverts
+      d:top().hold_countdown = false
+      d:focus("display.back")
+    end
     if tab == "controls" then
       d:focus("controls.bind_jump")
       d:press("ui_accept")                               -- the "press a key" prompt
@@ -301,6 +378,20 @@ function SHOW.settings(d)
   d:press("ui_down")
   d:focus("audio.master")
   d:press("ui_left")
+  d:frames(5)
+end
+function SHOW.apply(d)
+  d:to_menu()
+  stage_mode(d)
+  d:focus("display.apply")
+  d:frames(5)
+end
+function SHOW.apply_confirm(d)
+  d:to_menu()
+  stage_mode(d)
+  d:top().hold_countdown = true                          -- the same number in every picture
+  d:focus("display.apply")
+  d:press("ui_accept")
   d:frames(5)
 end
 function SHOW.credits(d)
@@ -492,7 +583,8 @@ function Drive.new(app, name)
   if access then fn = function(d) access_tour(d, access) end end
   local show = self.name:match("^show:(.+)$")
   if show then
-    if not SHOW[show] then error("unknown --drive show:" .. show .. " (title, settings, pause, subtitle, juice, credits)", 0) end
+    if not SHOW[show] then error("unknown --drive show:" .. show ..
+                                     " (title, settings, pause, subtitle, juice, credits, apply, apply_confirm)", 0) end
     fn = function(d) SHOW[show](d); d:done(0) end
   end
   if not fn then
@@ -509,7 +601,7 @@ end
 function Drive:update()
   self.frame = self.frame + 1
   if coroutine.status(self.co) == "dead" then return end
-  if self.frame > DRIVE_LIMIT then error("drive " .. self.name .. " did not finish in " .. DRIVE_LIMIT .. " frames", 0) end
+  if self.frame > DRIVE_LIMIT and not self.real_wait then error("drive " .. self.name .. " did not finish in " .. DRIVE_LIMIT .. " frames", 0) end
   local ok, err = coroutine.resume(self.co)
   if not ok then
     error("drive " .. self.name .. ": " .. tostring(err) .. "\n" .. debug.traceback(self.co), 0)

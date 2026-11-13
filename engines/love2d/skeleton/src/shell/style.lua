@@ -4,12 +4,15 @@
 --           variants. One table, so a game can restyle the shell without touching screen code.
 -- Usage   : local Style = require("src.shell.style")
 --           love.graphics.setColor(Style.color.text)     Style.palette("deuteranopia").hit
+--           Style.hud_font_size(12, text_scale, ui_scale)   -- a game HUD's font size (app:hud_font(12) does it all)
 -- Notes   : Sizes are in the 640x360 base (the shell scales by whole numbers). Focus is never colour alone: the
 --           focused item gets an outline and a ">" marker as well (ui.lua). The colourblind setting swaps the
 --           DEMO palette only (the box, the player, the hit flash); the menus use a palette that is readable in
 --           all four modes already. Dotwork's UI kit (tools/art/dotwork, the widgets lane) can replace this
 --           later.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): hud_font_size, the size a game HUD's text gets from
+--           the player's text size and UI scale (#309)
 -- ---------------------------------------------------------------------------
 local Json = require("src.core.json")
 
@@ -21,6 +24,7 @@ Style.FONT_PX = 12                       -- UI text at text_scale 1
 Style.READABLE_FONT = "src/shell/fonts/AtkinsonHyperlegible-Regular.ttf"   -- access.readable_font (#167)
 Style.TITLE_PX = 28
 Style.SMALL_PX = 10
+Style.MIN_FONT_PX = 6                    -- no text smaller than this, whatever the scales say
 Style.SUBTITLE_PX = { small = 10, medium = 12, large = 16, xl = 20 }
 Style.ROW_PAD = 6                        -- px above + below the text in a list row
 Style.MARGIN = 24
@@ -81,6 +85,13 @@ local function palettes()
     PALETTES = Style.palettes_from(ok and data or nil)
   end
   return PALETTES
+end
+
+-- The pixel size of a game HUD's text: base (px at scale 1, in the 640x360 base) times the player's
+-- access.text_scale and display.ui_scale, whole pixels, never under MIN_FONT_PX. The menus use the same product
+-- (ui.lua's scale), so a HUD drawn with it matches them. Pure: tests call it without LÖVE.
+function Style.hud_font_size(base, text_scale, ui_scale)
+  return math.max(Style.MIN_FONT_PX, math.floor(base * (text_scale or 1) * (ui_scale or 1) + 0.5))
 end
 
 function Style.palette(mode) local p = palettes() return p[mode] or p.none end

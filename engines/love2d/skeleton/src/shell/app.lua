@@ -9,6 +9,8 @@
 --           smoke run ({ marker = "DRIVE_DONE menus", code = 0 }).
 --           screens: app:push("settings"), app:pop(), app:replace("play"), app:reset("title")
 --           text: app:t("menu.play"), app:tp("apples", 3)   say a line: app:say("guide.welcome")
+--           a game HUD: app:hud_font(12) (12 px at scale 1, following text size and UI scale), app:hud_font_size(12),
+--           app:on_look_changed(function() ... end) to rebuild cached text when those settings change (#309)
 --           sound: app:play_sound("hit", "sfx"), app:bus_volume("ambience")   music: app:play_music("combat")
 -- Notes   : Only the top screen updates and gets input; screens marked transparent (pause) draw over the one
 --           below. Actions go to the top screen in sorted order until one is used, so Esc (ui_cancel and pause)
@@ -23,6 +25,8 @@
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a smoke run's drive is the only input; the real
 --           keyboard, mouse and pads go through input:real_* and are ignored there (#276)
+-- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): hud_font_size, hud_font and on_look_changed, so a game
+--           HUD follows access.text_scale and display.ui_scale like the menus (#309)
 -- ---------------------------------------------------------------------------
 local Json = require("src.core.json")
 local Log = require("src.core.log")
@@ -72,7 +76,7 @@ App.MAX_HISTORY = 50                    -- lines the dialogue history keeps (#16
 function App.new(kit)
   return setmetatable({ kit = kit, stack = {}, toasts = {}, sounds = {}, debug_build = App.is_debug_build(),
                         finish_request = nil, plant = false, time = 0, asked_consent = false,
-                        next_frame = 0 }, App)
+                        next_frame = 0, look_listeners = {}, look = nil }, App)
 end
 
 local function seed_from(rest)
@@ -202,6 +206,12 @@ end
 function App:apply_settings()
   local s = self.settings
   self.ui:set_scale(s.access.text_scale * s.display.ui_scale, s.access.readable_font, s.access.line_spacing)
+  local look = table.concat({ tostring(s.access.text_scale), tostring(s.display.ui_scale),
+                              tostring(s.access.readable_font), tostring(s.access.line_spacing) }, "|")
+  if self.look ~= nil and look ~= self.look then
+    for _, fn in ipairs(self.look_listeners) do fn() end
+  end
+  self.look = look
   self.i18n:set_locale(self.kit.locale or s.language)
   if love.audio then love.audio.setVolume(self.kit.automated and 0 or s.audio.master) end
   self.bus_gains = self.buses and AudioAccess.user_bus_gains(self.buses, s.audio) or nil
@@ -255,6 +265,19 @@ function App:set_consent(value)
   if value ~= "unset" then self:save_settings() end
   Log.info("telemetry", "consent " .. value)
 end
+
+-- ---- Game HUD text (#309) ------------------------------------------------------------------------------------
+-- The pixel size for HUD text that is `base` px at scale 1: the player's text size times UI scale.
+function App:hud_font_size(base)
+  local s = self.settings
+  return Style.hud_font_size(base or Style.FONT_PX, s.access.text_scale, s.display.ui_scale)
+end
+
+-- A font at that size (the readable font and line spacing when the player chose them). Draw-time only.
+function App:hud_font(base) return self.ui:font(self:hud_font_size(base), true) end
+
+-- fn() runs after text size, UI scale, readable font or line spacing changed (rebuild cached text or layout)
+function App:on_look_changed(fn) self.look_listeners[#self.look_listeners + 1] = fn end
 
 -- ---- Text ------------------------------------------------------------------------------------------------------
 function App:t(key, args) return self.i18n:t(key, args) end

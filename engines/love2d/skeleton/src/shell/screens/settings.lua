@@ -3,19 +3,31 @@
 -- Purpose : The settings screen: tabs Display, Audio, Controls, Accessibility, Language, one row per field of
 --           the settings schema (src/core/settings.lua), applied as you change it. Controls lists the game
 --           actions with their prompt glyphs, rebinds with "press a key" (the swap comes from Bindings.rebind),
---           marks conflicts and resets to defaults. Back (or cancel) saves settings.json.
+--           marks conflicts and resets to defaults. Back (or cancel) saves settings.json. The Display tab waits for
+--           Apply (#308): its rows show the staged value, Apply sends the changed fields, and a mode or resolution
+--           change asks "Keep these display settings?" for 15 s of real time (src/core/display_staging.lua).
 -- Usage   : app:push("settings")  |  app:push("settings", { tab = "audio", focus = "master" })
 -- Notes   : Focus starts on the tab bar: left/right switch tabs, down enters the rows; up from the first row goes
 --           back to the tabs. Display changes apply at once in play (never in automated runs). Audio "mono" is
 --           stored but LÖVE has no downmix for stereo sources: a game that needs it plays mono sources (verify).
 --           ui_* actions are not rebindable here (see src/core/bindings.lua).
+--           Display tab rows: mode, vsync, frame cap, window size, UI scale, then Apply (dim until something is
+--           staged) and Back; while the confirm runs, Keep and Revert replace Apply and Back and the rows are dim.
+--           Back with staged changes warns once (the status line), a second Back discards them; Back or cancel
+--           during the confirm reverts. Apply saves settings.json at once when no confirm opens; with a confirm,
+--           the file is written when it closes (Keep, or after the revert), so a mode the screen cannot show is
+--           never saved. The status line (bottom, its own row) shows the countdown, the warning and rebinding
+--           messages.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab waits for Apply, with a keep-or-revert
+--           confirm for mode and resolution and a hint line (#308)
 -- ---------------------------------------------------------------------------
 local Style = require("src.shell.style")
 local Widgets = require("src.shell.widgets")
 local Settings = require("src.core.settings")
 local Json = require("src.core.json")
 local Bindings = require("src.core.bindings")
+local DisplayStaging = require("src.core.display_staging")
 
 local SettingsScreen = {}
 
@@ -29,6 +41,8 @@ local LABEL_W = 290
 local TITLE_Y, LIST_BOTTOM = 10, 318        -- the tab bar and the rows follow the title's height
 local MESSAGE_S = 3.0
 local CELL_GAP = 8
+local HINT_GAP = 4                          -- px between the Display tab's hint line and its rows
+SettingsScreen.clock = function() return love.timer.getTime() end   -- the confirm's real-time clock (tests replace it)
 
 local function percent(app) return function(v) return app:t("value.percent", { n = math.floor(v * 100 + 0.5) }) end end
 local function times(app) return function(v) return app:t("value.times", { n = v }) end end
@@ -38,6 +52,8 @@ function SettingsScreen:enter(params)
   self.on_tabs = params.focus == nil
   self.message, self.message_t = nil, 0
   self.capturing = nil
+  self.staging = DisplayStaging.new(self.app.settings.display)   -- lives as long as the screen: tabs and language keep it
+  self.last_apply, self.last_revert = nil, nil                    -- the latest calls, for the display drive
   self:build()
   if params.focus then self.lists[self.tab]:focus(params.focus) end
 end
@@ -76,36 +92,123 @@ function SettingsScreen:back_row()
   return Widgets.button("back", function() return self.app:t("settings.back") end, function() self:close() end)
 end
 
+-- the Display rows read and write the staged values; the rows are dim while the confirm is open
 function SettingsScreen:display_rows()
   local app = self.app
-  local d = app.settings.display
+  local st = self.staging
+  local function free() return not st:confirming() end
+  local function staged(field, kind, a, b, c)
+    local label = function() return app:t("settings.display." .. field) end
+    local get = function() return st:value(field) end
+    local set = function(v) st:stage(field, v) end
+    local row
+    if kind == "toggle" then
+      row = Widgets.toggle(field, label, get, set, function(v) return app:t(v and "value.on" or "value.off") end)
+    elseif kind == "slider" then
+      row = Widgets.slider(field, label, get, set, a, b, c, times(app))
+    else
+      row = Widgets.choice(field, label, function() return a end, get, set,
+                           function(v) return app:t("opt." .. field .. "." .. tostring(v)) end)
+    end
+    row.enabled = free
+    return row
+  end
   local res_options = {}
   for _, r in ipairs(RESOLUTIONS) do res_options[#res_options + 1] = r[1] .. "x" .. r[2] end
+  local function res_text(r) return r[1] .. "x" .. r[2] end
   local res = Widgets.choice("resolution", function() return app:t("settings.display.resolution") end,
-    function() return res_options end,
-    function() return d.resolution[1] .. "x" .. d.resolution[2] end,
+    function()
+      local cur = res_text(st:value("resolution"))
+      for _, o in ipairs(res_options) do if o == cur then return res_options end end
+      local out = { cur }                                   -- a size from settings.json that is not in the list
+      for _, o in ipairs(res_options) do out[#out + 1] = o end
+      return out
+    end,
+    function() return res_text(st:value("resolution")) end,
     function(v)
       local w, h = v:match("^(%d+)x(%d+)$")
-      d.resolution[1], d.resolution[2] = tonumber(w), tonumber(h)
-      self:changed("display")
+      st:stage("resolution", { tonumber(w), tonumber(h) })
     end,
     function(v)
       local w, h = v:match("^(%d+)x(%d+)$")
       if not w then return app:tv(v) end
       return app:t("value.resolution", { w = w, h = h })
     end)
+  res.enabled = free
   local cap = Widgets.choice("frame_cap", function() return app:t("settings.display.frame_cap") end,
-    function() return Settings.FRAME_CAPS end, function() return d.frame_cap end,
-    function(v) d.frame_cap = v; self:changed("display") end,
+    function() return Settings.FRAME_CAPS end, function() return st:value("frame_cap") end,
+    function(v) st:stage("frame_cap", v) end,
     function(v) if v == 0 then return app:t("opt.frame_cap.0") end return app:t("value.fps", { n = v }) end)
-  return {
-    self:field("display", "mode", "choice", Settings.DISPLAY_MODES),
-    self:field("display", "vsync", "toggle"),
+  cap.enabled = free
+  local rows = {
+    staged("mode", "choice", Settings.DISPLAY_MODES),
+    staged("vsync", "toggle"),
     cap, res,
-    self:field("display", "ui_scale", "slider", 0.75, 2.0, 0.25),
-    self:back_row(),
+    staged("ui_scale", "slider", 0.75, 2.0, 0.25),
   }
+  if st:confirming() then
+    rows[#rows + 1] = Widgets.button("keep", function() return app:t("settings.keep") end, function() self:keep() end)
+    rows[#rows + 1] = Widgets.button("revert", function() return app:t("settings.revert") end,
+                                     function() self:revert() end)
+  else
+    local apply = Widgets.button("apply", function() return app:t("settings.apply") end, function() self:apply() end)
+    apply.enabled = function() return st:has_pending() end
+    rows[#rows + 1] = apply
+    rows[#rows + 1] = self:back_row()
+  end
+  return rows
 end
+
+-- Rebuilds the Display list for the staging state (Apply and Back, or Keep and Revert), focus on `focus` when given
+function SettingsScreen:refresh_display(focus)
+  local old = self.lists and self.lists.display
+  local keep_id = focus or (old and old:focused_id())
+  self.lists.display = Widgets.list(self:display_rows(), { on_move = self.on_move })
+  if keep_id then self.lists.display:focus(keep_id) end
+  self.lists.display:fix_focus(1)
+end
+
+-- The set-value path for display fields: each call sets the setting, then the app applies display and scale.
+function SettingsScreen:send(calls)
+  if #calls == 0 then return end
+  local d = self.app.settings.display
+  for _, c in ipairs(calls) do
+    local v = c[2]
+    if type(v) == "table" then v = { v[1], v[2] } end
+    d[c[1]] = v
+  end
+  self:changed("display")
+end
+
+function SettingsScreen:apply()
+  if not self.staging:has_pending() or self.staging:confirming() then return end
+  local calls = self.staging:apply()
+  self.last_apply = calls
+  self:send(calls)
+  if self.staging:confirming() then
+    self.on_tabs = false
+    self:refresh_display("keep")                          -- focus on Keep
+  else
+    self.app:save_settings()
+    self:refresh_display("apply")
+  end
+end
+
+function SettingsScreen:keep()
+  self.staging:keep()
+  self.app:save_settings()
+  self:refresh_display("mode")
+end
+
+-- after a revert (the Revert button, Back, or the countdown running out): set, save, redraw
+function SettingsScreen:reverted(calls)
+  self.last_revert = calls
+  self:send(calls)
+  self.app:save_settings()
+  self:refresh_display("mode")
+end
+
+function SettingsScreen:revert() self:reverted(self.staging:revert()) end
 
 function SettingsScreen:audio_rows()
   local rows = {}
@@ -267,6 +370,7 @@ end
 
 function SettingsScreen:build()
   local on_move = function() self.app:play_sound("move", "ui") end
+  self.on_move = on_move
   self.lists = {
     display = Widgets.list(self:display_rows(), { on_move = on_move }),
     audio = Widgets.list(self:audio_rows(), { on_move = on_move }),
@@ -278,11 +382,16 @@ end
 
 -- ---- Input ------------------------------------------------------------------------------------------------------
 function SettingsScreen:close()
+  local out, calls = self.staging:back()
+  if out == "revert" then self:reverted(calls) return end  -- Back during the confirm puts the old display back
+  if out == "warn" then return end                         -- the status line says so; Back again discards
+  self:refresh_display()
   self.app:save_settings()
   self.app:pop()
 end
 
 function SettingsScreen:switch_tab(delta)
+  if self.staging:confirming() then return end            -- the confirm keeps the Display tab up
   local idx = 1
   for i, name in ipairs(SettingsScreen.TABS) do if name == self.tab then idx = i end end
   self.tab = SettingsScreen.TABS[(idx - 1 + delta) % #SettingsScreen.TABS + 1]
@@ -315,6 +424,11 @@ function SettingsScreen:action(name)
 end
 
 function SettingsScreen:update(dt)
+  -- the confirm counts real seconds (the clock), not dt: game speed, hitstop and fixed-step runs leave it alone
+  if self.staging:confirming() and not self.hold_countdown then
+    local calls = self.staging:tick_at(SettingsScreen.clock())
+    if #calls > 0 then self:reverted(calls) end
+  end
   if self.message_t > 0 then
     self.message_t = self.message_t - dt
     if self.message_t <= 0 then self.message = nil end
@@ -355,11 +469,28 @@ function SettingsScreen:draw(ui)
     tx = tx + widths[i] + 4
   end
   local LIST_Y = TABS_Y + th + 10
+  if self.tab == "display" then                            -- #308: say which changes wait for Apply
+    local small = ui:font(Style.SMALL_PX)
+    local text = app:t("settings.display_hint")
+    local _, lines = small:getWrap(text, CONTENT_W)        -- wraps at a large text size or a long translation
+    local hint_h = ui:line_h(small) * math.max(1, #lines)
+    ui:label("settings.display_hint", text, CONTENT_X, LIST_Y - 4, CONTENT_W, hint_h,
+             { align = "center", font = small, color = Style.color.dim, wrap = true })
+    LIST_Y = LIST_Y - 4 + hint_h + HINT_GAP
+  end
   self.lists[self.tab]:draw(ui, CONTENT_X, LIST_Y, CONTENT_W, { label_w = LABEL_W, max_h = LIST_BOTTOM - LIST_Y,
                                                                  prefix = "settings." .. self.tab })
-  local hint = self.message or app:t("settings.hint")
-  ui:label("settings.hint", hint, 16, H - 30, W - 32, 22,
-           { align = "center", font = ui:font(Style.SMALL_PX), color = self.message and Style.color.accent
+  -- the status line: the confirm's countdown, the unapplied warning, a message, else the key hint
+  local hint, id, loud = app:t("settings.hint"), "settings.hint", false
+  if self.staging:confirming() then
+    hint, id, loud = app:t("settings.confirm", { secs = self.staging:seconds() }), "settings.confirm", true
+  elseif self.staging.warned then
+    hint, id, loud = app:t("settings.unapplied"), "settings.unapplied", true
+  elseif self.message then
+    hint, loud = self.message, true
+  end
+  ui:label(id, hint, 16, H - 30, W - 32, 22,
+           { align = "center", font = ui:font(Style.SMALL_PX), color = loud and Style.color.accent
              or Style.color.dim })
   if self.capturing then
     love.graphics.setColor(Style.color.overlay)
