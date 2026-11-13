@@ -544,7 +544,8 @@ Built-in bone maps:
 Standard tier** (free; quaternius.com "Universal Animation Library", downloaded from quaternius.itch.io on 2026-11-13,
 `Universal Animation Library[Standard].zip`, 15 MB), licence **CC0 1.0** (its License.txt). Inside: `UAL1_Standard.glb`
 (clips in place) and `UAL1_Standard_RM.glb` (root motion baked into every clip) for Unreal and Godot, the same two as
-FBX for Unity: one 65-bone mannequin, 43 clips at 30 fps.
+FBX for Unity: one 65-bone mannequin, 43 clips at 30 fps. The target was the golden character; no `rig make` output
+(UniRig or Tripo) was tried as the target yet **(verify)**.
 
 | What | Result |
 |---|---|
@@ -558,7 +559,8 @@ Other engines play the clips through the same helpers as any clip of the rig (th
 names); only Godot was run with a pack clip **(verify the others)**.
 
 **Get a Quaternius pack:** on quaternius.com open the pack (Universal Animation Library), Download, then on itch.io
-"Download Now" and "No thanks, just take me to the downloads" (free tiers need no account; seen 2026-11-13). Unzip it
+"Download Now" and "No thanks, just take me to the downloads" **(verify: the button names)**; the free tier needed no
+account on 2026-11-13. Unzip it
 outside the game, keep the in-place file (UAL1_Standard.glb in the zip's Unreal-Godot folder; the `_RM` file's clips travel, and
 travelling clips are left as they are) and its License.txt under `assets_src/packs/quaternius_ual/`, and log it:
 ```
@@ -583,8 +585,9 @@ the same transfer. Blender names the action `Armature|mixamo.com|Layer0`: ask fo
 (`--clips mixamo.com=walk`). Read Adobe's terms for Mixamo before shipping its clips, and log each download.
 
 Limits: bipeds only, like `rig make`; twist about a bone's own axis is carried only as far as the rest poses agree
-(a forearm can roll a little differently from the pack's); fingers transfer only when both rigs have them (Bozzetto
-rigs keep fingers under their own names); run it before `rig chain`, since a chain's sway is keyed into the clips the
+(a forearm can roll a little differently from the pack's); fingers transfer only when both rigs have them (UniRig
+rigs keep fingers under their own names; a Tripo rig's fingers are Mixamo-named and would take the pack's finger
+curves **(verify: not run on a Tripo rig)**); run it before `rig chain`, since a chain's sway is keyed into the clips the
 file has when the chain is made (it warns when the rig has a chain). Unity Humanoid on a renamed pack character is not
 tried **(verify)**.
 
