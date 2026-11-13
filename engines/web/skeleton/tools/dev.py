@@ -42,6 +42,8 @@
 #           p95, p99, worst) and fails a p95 over --frame-budget MS, or over the "Smoke frame time" row of
 #           docs/ARCHITECTURE.md; a run that measured nothing says so (#90) and --no-build (one build for
 #           every run of tools/seed_sweep.py, #183)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): test whose every test was skipped says so ([SKIP], exit 2);
+#           it failed as "tests failed", exit 1 (#295)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -376,6 +378,10 @@ def cmd_test(args):
         print("[FAIL] no tests ran (nothing matches tests/**/*.test.ts)")
         return 2
     m = re.search(r"Tests\s+(?:(\d+) failed \| )?(\d+) passed", out)
+    skipped = re.search(r"Tests\s+(\d+) skipped", out)
+    if rc == 0 and not m and skipped:   # #295: every test skipped (it.skip, skipIf) is a setup gap, not a failure
+        print(f"[SKIP] all {skipped.group(1)} test(s) skipped, none ran (exit 2): it.skip, describe.skip or skipIf")
+        return 2
     if rc != 0 or not m:
         print("[FAIL] tests failed")
         return 1

@@ -17,6 +17,8 @@
 //           file stays in Assembly-CSharp-Editor beside GameKitScenes, whose starter scene it adds to.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the warnings of asset manifest 1.1.0 (#285)
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the showcase frames the map by DotworkMap.Bounds, so
+//           an isometric map is centred too (#297)
 // ---------------------------------------------------------------------------
 using System.Collections.Generic;
 using System.IO;
@@ -114,8 +116,7 @@ public static class GameKitDotwork
         {
             var inst = (GameObject)PrefabUtility.InstantiatePrefab(map.prefab, scene);
             inst.transform.SetParent(root.transform, false);
-            float w = map.size.x * map.tileSize.x / ppu, h = map.size.y * map.tileSize.y / ppu;
-            view = new Rect(0f, -h, w, h);
+            view = map.Bounds(ppu);                            // the real extent: an isometric map is a diamond (#297)
         }
         Vector2 centre = view.center;
 

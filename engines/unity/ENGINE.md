@@ -191,8 +191,11 @@ ProjectSettings/         project config (text, edit with care)
   headless test, its bones do not move until it is set to Always Animate. glTFast's Animator always animates.
 - **The helper** (`Assets/Scripts/Characters/KitCharacter.cs`, namespace `<game>.Characters`):
   `await KitCharacter.Load(path, parent)` (run time, needs glTFast), `KitCharacter.Attach(instance, clips)` (an
-  imported model), then `Play(clip, loop = true)`, `Seek(seconds)` (jump and pose now, also in edit mode),
-  `ClipNames`, `Playing`, `Bone("mixamorig:LeftUpLeg")`. An unknown clip name throws with the clip list. It
+  imported model), then `Play(clip, loop = true, restart = false)`, `Seek(seconds)` (jump and pose now, also in
+  edit mode), `ClipNames`, `Playing`, `ClipTime`, `Bone("mixamorig:LeftUpLeg")`. `Play` of the clip already
+  playing with the same `loop` changes nothing (it keeps its time, a held clip keeps holding), so a game may call it
+  every frame; `restart: true` or another loop setting starts it from 0: the same rule in all five engines'
+  character helpers (#296, `KitCharacterPlayTests`, which needs no glTFast). An unknown clip name throws with the clip list. It
   plays one clip at a time with no blending: crossfades and layers belong in the game's AnimatorController.
 - **Tested** (2026-11-11, Unity 6000.6.6f1, glTFast 6.20.0, Windows, a fresh `-createProject` project adopted with
   the kit, Built-in render pipeline): `dev.py test --filter Character` passed 6 of 6 (CharacterImportTests: bones

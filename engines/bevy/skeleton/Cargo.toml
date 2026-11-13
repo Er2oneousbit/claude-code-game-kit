@@ -8,6 +8,7 @@
 #           Bevy still runs at full speed (Bevy's own recommendation).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the jpeg feature for generated characters' textures
+#           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the shader check example gets the game's own name (#294)
 # ---------------------------------------------------------------------------
 [package]
 name = "{{GAME_SLUG}}"
@@ -28,6 +29,13 @@ serde = { version = "1", features = ["derive"] }
 [features]
 # Faster rebuilds while developing: cargo run --features dev. Never ship it (docs/ENGINE.md gotcha 6).
 dev = ["bevy/dynamic_linking"]
+
+# The shader check (dev.py smoke --shaders) under a name of this game's own (#294): cargo names examples without a
+# hash, so every project sharing one CARGO_TARGET_DIR (docs/ENGINE.md) linked into one shader_check.pdb until MSVC
+# stopped with LNK1140. dev.py reads the name from here; keep `path` as it is.
+[[example]]
+name = "{{GAME_SLUG}}_shader_check"
+path = "examples/shader_check.rs"
 
 [lints.clippy]
 # Bevy systems take many parameters and spell out long query types by design

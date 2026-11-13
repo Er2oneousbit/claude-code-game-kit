@@ -7,6 +7,9 @@
   (Bevy's `rust-version`), installed with rustup. Windows: Visual Studio Build Tools, workload "Desktop development
   with C++" (the MSVC linker). Linux: `libasound2-dev libudev-dev pkg-config` (verify per distro).
 - **First build compiles Bevy itself:** 5 to 15 minutes and several GB in `target/`. Later builds take seconds.
+  Several games can share one compiled Bevy through one `CARGO_TARGET_DIR`; the shader check example is named after
+  the game (`[[example]]` in `Cargo.toml`, `<slug>_shader_check`), because cargo names examples without a hash and
+  MSVC stopped with LNK1140 when every game linked into one shader_check.pdb under `debug/examples/` (#294).
 - **Version:** one source, `version` in `Cargo.toml` (SOP-06). Code reads `env!("CARGO_PKG_VERSION")`; `--version`
   prints it and the BOOT_OK line carries it.
 - **Game options:** everything after `--` goes to `game::configure()` (bots, seeds, cheats), so a game adds options
@@ -91,7 +94,7 @@ src/character.rs   rigged glTF characters: spawn_character plays a named clip on
 src/shell/fonts/   Fira Mono Medium (the text font) and Atkinson Hyperlegible (the readable font), both OFL; compiled
                    in with include_bytes!
 src/kit_shaders.rs the kit's shader recipes as typed 2D materials (generated, with assets/shaders/kit/*.wesl)
-examples/shader_check.rs renders every recipe on the GPU for `smoke --shaders`
+examples/shader_check.rs renders every recipe on the GPU for `smoke --shaders` (cargo's name: `<slug>_shader_check`)
 tests/             integration tests: drive the real GamePlugin headless with app.update()
 tests/golden.rs    the juice, shell and audio modules against data/golden/*.json (the kit's shared vectors)
 tests/dotwork.rs   the Dotwork importer against data/golden/dotwork/expected.json; every assets/dotwork manifest loads
@@ -141,7 +144,9 @@ target/            build output (git-ignored)
 - **The helper, `src/character.rs`:** add `character::CharacterPlugin`, then in a system
   `let hero = spawn_character(&mut commands, &asset_server, "models/hero.glb", "idle");`. It returns the `Character`
   entity: move and turn that one. Switch clips with `characters.get_mut(hero)?.clip = "walk".into();` (an unknown
-  name logs one WARN and stops the animation). `CharacterAnimator` (on the scene's `AnimationPlayer` entity) maps
+  name logs one WARN and stops the animation). Setting the name already playing changes nothing (it keeps its time),
+  so a game may set it every frame; `commands.entity(hero).insert(RestartClip)` plays it again from the start: the
+  same rule in all five engines' character helpers (#296, `tests/character.rs`). `CharacterAnimator` (on the scene's `AnimationPlayer` entity) maps
   every clip name to its node; `clip_names(&gltf)` lists them.
 - **What it does, for your own variants:** loads the scene by label,
   `WorldAssetRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset(path)))`, and the whole file as

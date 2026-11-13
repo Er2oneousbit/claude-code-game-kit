@@ -22,12 +22,15 @@
 #           refuses a --data-dir inside its player or build output (#263), or inside a folder its build packs into
 #           the game (#271), and that Godot's dev.py refuses a Godot older than its 4.6 floor with exit 2, and that
 #           Unreal's package replaces the platform's last package instead of archiving over it (#278), and that
-#           Unreal's test also runs the Dotwork importer's two checks through the commandlet (#58).
+#           Unreal's test also runs the Dotwork importer's two checks through the commandlet (#58), and that a test
+#           run whose every test was skipped prints [SKIP] with the reason and exits 2 on every engine that can skip
+#           a test (#295).
 # Usage   : python scripts/test_dev_py.py
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only, offline, no engine needed. The live checks (a real smoke with each toolchain) are
 #           in the kit's release routine; this exam keeps the logic honest between them.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): AllSkipped, the [SKIP] line on five engines (#295)
 # ---------------------------------------------------------------------------
 import argparse
 import base64
@@ -1790,6 +1793,36 @@ class BevyShaders(TempRoot):
         self.assertIn(["--example", "shader_check"], self.builds)
         self.assertTrue(any("shader_ref.py compare" in c for c in self.calls), self.calls)
 
+    def test_two_scaffolds_do_not_share_the_shader_check_example(self):
+        """#294: cargo names examples without a hash, so every project in one CARGO_TARGET_DIR linked into one
+        debug/examples/shader_check.pdb (LNK1140 after a few). Each game's example now has the game's own name."""
+        names = {}
+        for game in ("Pdb Alpha", "Pdb Beta"):
+            dest = self.root / game.replace(" ", "_")
+            r = subprocess.run([sys.executable, "-B", str(KIT / "scripts" / "new_game.py"), "--name", game,
+                                "--engine", "bevy", "--dest", str(dest), "--author", "Tester"],
+                               capture_output=True, encoding="utf-8", errors="replace", timeout=300)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            dev = load("bevy")
+            dev.ROOT = dest
+            names[game] = dev.shader_example()
+            self.assertTrue((dest / "examples" / "shader_check.rs").is_file())
+        self.assertEqual(names, {"Pdb Alpha": "pdb_alpha_shader_check", "Pdb Beta": "pdb_beta_shader_check"})
+
+    def test_a_cargo_toml_without_the_table_keeps_the_old_name(self):
+        dev = load("bevy")
+        dev.ROOT = self.root
+        (self.root / "Cargo.toml").write_text('[package]\nname = "old"\n', encoding="utf-8")
+        self.assertEqual(dev.shader_example(), "shader_check")     # cargo's own name for examples/shader_check.rs
+        (self.root / "Cargo.toml").write_text('[package]\nname = "g"\n\n[[example]]\nname = "other"\npath = '
+                                              '"examples/other.rs"\n\n[[example]]\npath = "examples/shader_check.rs"\n'
+                                              'name = "g_shader_check"\n', encoding="utf-8")
+        self.assertEqual(dev.shader_example(), "g_shader_check")   # found by its path, either key order
+        rc, text = self.smoke(self.dev({"--example": (0, self.ALL_OK), "shader_ref.py": (0, "[ OK ] match")}))
+        self.assertEqual(rc, 0, text)
+        self.assertIn(["--example", "g_shader_check"], self.builds)
+        self.assertTrue(any("--example g_shader_check" in c for c in self.calls), self.calls)
+
     def test_a_logged_shader_error_fails_although_the_example_exits_0(self):
         broken = "2026-11-06T06:41:35Z ERROR bevy_render::render_resource::pipeline_cache: failed to process shader\n"
         dev = self.dev({"--example": (0, broken + self.ALL_OK)})
@@ -2851,6 +2884,98 @@ class WebSmokeFrameTimes(WebSmokeRecord):
                            env=dict(os.environ, FAKE_FREEZE="1"))
         self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
         self.assertNotIn("FRAME_TIMES", r.stdout)
+
+
+# ---- #295: a test run whose every match was skipped -----------------------------------------
+class AllSkipped(TempRoot):
+    """Every engine that can skip a test says so when all of them were skipped: [SKIP], the count, the reason, and
+    exit 2 (nothing ran: a setup gap such as a missing package, not a failure and not a pass). A run where nothing
+    matched at all keeps its own [FAIL] ... exit 2 line. Unreal's automation tests, LÖVE's runner and C++'s ctest
+    cannot skip a test."""
+
+    def assertSkip(self, rc, text, count, reason):
+        self.assertEqual(rc, 2, text)
+        self.assertIn(f"[SKIP] all {count} ", text)
+        self.assertIn(reason, text)
+        self.assertNotIn("[FAIL]", text)
+
+    def unity(self, xml, rc=0):
+        dev = load("unity")
+        dev.ROOT = self.root
+        dev.RESULTS = self.root / "Logs" / "test_results.xml"
+        dev.preflight = lambda: None
+
+        def fake_unity(extra, label, **kw):
+            dev.RESULTS.parent.mkdir(parents=True, exist_ok=True)
+            dev.RESULTS.write_text(xml, encoding="utf-8")
+            return rc, ""
+        dev.run_unity = fake_unity
+        return quiet(dev.run_tests, "EditMode", "Character")
+
+    def test_unity_all_skipped(self):
+        why = "glTFast (com.unity.cloud.gltfast) is not installed: python tools/dev.py exec GameKitCharacters.AddGltfast"
+        xml = ('<test-run id="2" testcasecount="6" result="Skipped" total="6" passed="0" failed="0" inconclusive="0" '
+               'skipped="6"><test-suite><reason><message><![CDATA[One or more child tests were ignored]]></message>'
+               f'</reason><test-case><reason><message><![CDATA[{why}]]></message></reason></test-case></test-suite>'
+               '</test-run>')
+        self.assertSkip(*self.unity(xml), 6, "AddGltfast")
+
+    def test_unity_nothing_matched_is_still_a_fail_line(self):
+        rc, text = self.unity('<test-run total="0" passed="0" failed="0" skipped="0"></test-run>')
+        self.assertEqual(rc, 2, text)
+        self.assertIn("[FAIL] nothing ran: no tests matched 'Character'", text)
+
+    def bevy(self, out):
+        dev = load("bevy")
+        dev.ROOT = self.root
+        dev.preflight = lambda: None
+        dev.cargo = lambda: "cargo"
+        dev.run = lambda cmd, **kw: (0, out)
+        return quiet(dev.cmd_test, argparse.Namespace(release=False))
+
+    def test_bevy_all_ignored(self):
+        out = ("test loads_the_character ... ignored, needs the GPU\n"
+               "test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out\n")
+        self.assertSkip(*self.bevy(out), 2, "needs the GPU")
+        rc, text = self.bevy("test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\n")
+        self.assertEqual(rc, 2, text)
+        self.assertIn("[FAIL] no tests ran", text)
+
+    def test_godot_all_pending(self):
+        dev = load("godot")
+        dev.ROOT = self.root
+        (self.root / "addons" / "gut").mkdir(parents=True)
+        (self.root / dev.GUT_CMDLN).write_text("", encoding="utf-8")
+        dev.ensure_imported = lambda godot: 0
+        # GUT 9.7's own summary (Godot 4.7.2, 2026-11-13): zero passing is printed as "none"
+        out = ("- test_a\n    [Pending]:  needs the rigged model\n\nTotals\n------\nScripts               1\n"
+               "Tests                 3\nPassing Tests      none\nRisky/Pending         3\nAsserts            none\n")
+        dev.run = lambda cmd, **kw: (0, out)
+        self.assertSkip(*quiet(dev.cmd_test, argparse.Namespace(filter=""), "godot"), 3, "needs the rigged model")
+        dev.run = lambda cmd, **kw: (0, out.replace("Passing Tests      none", "Passing Tests         2")
+                                     .replace("Risky/Pending         3", "Risky/Pending         1"))
+        self.assertEqual(quiet(dev.cmd_test, argparse.Namespace(filter=""), "godot")[0], 0)
+
+    def test_web_and_web_3d_all_skipped(self):
+        for engine in ("web", "web-3d"):
+            with self.subTest(engine=engine):
+                dev = load(engine)
+                dev.ROOT = self.root
+                dev.ready = lambda: 0
+                dev.tool = lambda *a, **kw: (0, " Test Files  1 skipped (1)\n      Tests  4 skipped (4)\n")
+                self.assertSkip(*quiet(dev.cmd_test, argparse.Namespace()), 4, "it.skip")
+                dev.tool = lambda *a, **kw: (0, "      Tests  3 passed | 1 skipped (4)\n")
+                self.assertEqual(quiet(dev.cmd_test, argparse.Namespace())[0], 0)
+
+    def test_rpgmaker_all_skipped(self):
+        dev = load("rpgmaker-mz")
+        dev.ROOT = self.root
+        (self.root / "tests").mkdir()
+        (self.root / "tests" / "a.test.js").write_text("", encoding="utf-8")
+        dev.node_problem = lambda: None
+        out = "ok 1 - a # SKIP needs an MZ project\nok 2 - b # SKIP\n# pass 0\n# fail 0\n# skipped 2\n"
+        dev.run = lambda cmd, **kw: (0, out)
+        self.assertSkip(*quiet(dev.cmd_test, argparse.Namespace()), 2, "needs an MZ project")
 
 
 if __name__ == "__main__":

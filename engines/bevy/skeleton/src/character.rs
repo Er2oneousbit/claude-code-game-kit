@@ -4,13 +4,16 @@
 //           animations playing on a loop. The clip is a field: change it and the character switches clips.
 // Usage   : app.add_plugins(CharacterPlugin);   (DefaultPlugins has the glTF, scene and animation plugins it needs)
 //           In a system:  let hero = spawn_character(&mut commands, &asset_server, "models/hero.glb", "idle");
-//           Switch clips: characters.get_mut(hero)?.clip = "walk".into();
+//           Switch clips: characters.get_mut(hero)?.clip = "walk".into();   (the same name again changes nothing)
+//           Play it again from the start: commands.entity(hero).insert(RestartClip);
 //           Move the Character entity (its Transform): the clips are in place, nothing moves it for you.
 // Notes   : Kit code: nothing here imports the game (src/game). The scene spawns as a child of the Character entity,
 //           turned by GLTF_TO_BEVY_YAW so the model's front (glTF +Z) looks along the entity's Transform::forward()
 //           (Bevy -Z). Once the scene's AnimationPlayer exists and the Gltf asset has loaded, an AnimationGraph is
 //           built from the file's named animations (one node per clip, sorted by name) and CharacterAnimator on the
 //           player entity maps each name to its node. An unknown clip name logs one WARN and stops the animation.
+//           The kit's rule in every engine (#296): asking for the clip that is already playing changes nothing (it
+//           keeps its time), so setting `clip` every frame is fine; a restart is explicit (RestartClip).
 //           Units are the file's: glTF is metres, 1 Bevy unit = 1 m. Headless works: tests/character.rs runs it with
 //           no window or GPU.
 //
@@ -18,8 +21,10 @@
 //   spawn_character: Character { gltf, clip } entity -> child WorldAssetRoot(file#Scene0) turned 180 degrees about Y
 //   Update, chained: attach (an AnimationPlayer without CharacterAnimator, under a Character whose Gltf loaded ->
 //   graph from named_animations -> AnimationGraphHandle + CharacterAnimator) -> play (the Character's clip differs
-//   from the one playing -> stop all, play its node, repeat)
+//   from the one playing, or RestartClip is on the Character -> stop all, play its node from 0, repeat; remove
+//   RestartClip)
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): RestartClip, the explicit restart (#296)
 // ---------------------------------------------------------------------------
 use std::collections::HashMap;
 use std::f32::consts::PI;
@@ -49,6 +54,12 @@ pub struct Character {
     /// The clip playing on a loop, a name from the file's animations ("idle", "walk"). Set it to switch.
     pub clip: String,
 }
+
+/// Insert on a Character entity to play its clip again from the start. Setting `clip` to the name already playing
+/// changes nothing (#296: the same rule in every engine's character helper); this is the explicit restart. It is
+/// removed once the clip restarted.
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct RestartClip;
 
 /// On the scene's AnimationPlayer entity once the character's clips are set up.
 #[derive(Component, Debug, Clone)]
@@ -117,13 +128,19 @@ fn attach_animator(
     }
 }
 
-fn play_clip(mut players: Query<(&mut AnimationPlayer, &mut CharacterAnimator)>, characters: Query<&Character>) {
+fn play_clip(
+    mut commands: Commands,
+    mut players: Query<(&mut AnimationPlayer, &mut CharacterAnimator)>,
+    characters: Query<(&Character, Has<RestartClip>)>,
+) {
     for (mut player, mut animator) in &mut players {
-        let Ok(character) = characters.get(animator.character) else {
+        let Ok((character, restart)) = characters.get(animator.character) else {
             continue;
         };
-        if animator.playing.as_deref() == Some(character.clip.as_str()) {
-            continue;
+        if restart {
+            commands.entity(animator.character).remove::<RestartClip>();
+        } else if animator.playing.as_deref() == Some(character.clip.as_str()) {
+            continue; // the clip asked for is the one playing: keep its time (#296)
         }
         player.stop_all();
         match animator.clips.get(&character.clip) {

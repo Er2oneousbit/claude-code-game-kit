@@ -4,6 +4,7 @@
 //           Mixamo-named biped with looping clips) loads through src/character.rs, has its clips by name, and
 //           playing `walk` really turns the moving bone; switching the Character's clip switches the player. Also:
 //           the PNG and JPEG texture formats generated characters carry decode (Cargo.toml's `jpeg` feature).
+//           Asking for the clip already playing keeps its time; RestartClip starts it again (#296).
 // Usage   : python tools/dev.py test   (cargo test --test character -- --nocapture also prints what it measured)
 // Notes   : Headless, no window and no GPU: MinimalPlugins + AssetPlugin (rooted at the fixture folder) + the
 //           world-asset (scene), mesh, glTF and animation plugins. Meshes and the skin load as plain assets; nothing
@@ -19,6 +20,8 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the texture formats a generated character uses
 //           must decode (the jpeg feature; 0.15.0 review)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the same clip again keeps its time, RestartClip
+//           restarts it (#296)
 // ---------------------------------------------------------------------------
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -206,6 +209,62 @@ fn the_golden_character_walks() {
     let player = app.world().get::<AnimationPlayer>(player_entity).unwrap();
     assert!(player.is_playing_animation(anim.clips["idle"]), "idle is not playing");
     assert!(!player.is_playing_animation(anim.clips["walk"]), "walk still plays");
+}
+
+/// The walk clip's time on the character's player.
+fn walk_time(app: &mut App) -> f32 {
+    let (player_entity, anim) = animator(app).unwrap();
+    let player = app.world().get::<AnimationPlayer>(player_entity).unwrap();
+    player
+        .animation(anim.clips["walk"])
+        .expect("walk is playing")
+        .seek_time()
+}
+
+/// #296: asking for the clip that is already playing changes nothing (a game may set it every frame); a restart is
+/// explicit (RestartClip), and only that one update restarts it.
+#[test]
+fn the_same_clip_keeps_its_time_and_restart_is_explicit() {
+    use {{GAME_SLUG}}::character::RestartClip; // here, not above: the import line's length would follow the slug
+    let exp = expected();
+    let file = exp["file"].as_str().unwrap();
+    let bone = exp["moving_bone"].as_str().unwrap();
+    let step = (1.0 / STEP_HZ) as f32;
+    let mut app = character_app();
+    let (character, _) = spawn_and_load(&mut app, file, bone, "walk");
+    for _ in 0..10 {
+        app.update();
+    }
+    let before = walk_time(&mut app);
+    assert!(before > 5.0 * step, "walk did not advance ({before} s)");
+    for _ in 0..3 {
+        app.world_mut().get_mut::<Character>(character).unwrap().clip = "walk".into();
+        app.update();
+    }
+    let kept = walk_time(&mut app);
+    println!("walk at {before:.3} s, {kept:.3} s after asking for walk three more times");
+    assert!(
+        kept > before,
+        "asking for walk again restarted it ({before} s -> {kept} s)"
+    );
+
+    app.world_mut().entity_mut(character).insert(RestartClip);
+    app.update();
+    let restarted = walk_time(&mut app);
+    println!("walk at {restarted:.3} s one update after RestartClip");
+    assert!(
+        restarted < 2.0 * step,
+        "RestartClip did not restart walk ({restarted} s)"
+    );
+    assert!(
+        app.world().get::<RestartClip>(character).is_none(),
+        "RestartClip stays on"
+    );
+    app.update();
+    assert!(
+        walk_time(&mut app) > restarted,
+        "walk restarts on every update after RestartClip"
+    );
 }
 
 /// A generated character's textures come as PNG (Bozzetto's bakes) or JPEG (Tripo's): both must decode, or the

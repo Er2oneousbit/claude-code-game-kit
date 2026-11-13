@@ -6,7 +6,8 @@
 //           their Grid's cell centres, the font, the extra kinds) and compare them with data/golden/dotwork/
 //           expected.json (assetspec.expected(), the loaded result every engine's importer must reproduce) to
 //           1e-6. Then the explicit cases of the spec (hash and roll vectors, the corners4 rule, isometric centres,
-//           a stamps layer, the variant pick), the rendered-character golden, and every real manifest of the game.
+//           a stamps layer, the variant pick, a map's bounds), the rendered-character golden, and every real
+//           manifest of the game.
 // Usage   : python tools/dev.py test --filter Dotwork
 // Notes   : Read-back, not re-computed: a rect comes from Sprite.rect flipped back to y down, a frame's seconds from
 //           the clip's key times, a terrain cell's key from the Tilemap's own neighbours and its tile from the
@@ -19,6 +20,7 @@
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): asset manifest 1.1.0 (#285): placed cells and
 //           centres on both shapes, corners4 keys, the variant pick, stamps, the extra kinds loaded, the
 //           rendered-character golden
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): DotworkMap.Bounds on both shapes (#297)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -259,6 +261,65 @@ namespace {{GAME_SLUG}}.Tests
             {
                 Assert.AreEqual(new Vector2Int(3, 2), DotworkImporter.MapCell(shape, DotworkImporter.Cell(shape, 3, 2)), shape);
             }
+        }
+
+        [Test]
+        public void Dotwork_MapBoundsAreTheRealExtentOnBothShapes()
+        {
+            // #297: the showcase framed every map by the square box (0..w, -h..0), so an isometric map sat off-centre.
+            // Bounds is the box around every cell's tile from the spec's centres, and holds every centre the Grid placed.
+            const float tol = 1e-4f;
+            float ppu = _pack.pixelsPerUnit;
+            foreach (string name in new[] { "isle", "yard" })
+            {
+                DotworkMap map = _pack.Map(name);
+                Rect b = map.Bounds(ppu);
+                float tw = map.tileSize.x, th = map.tileSize.y;
+                float l = float.MaxValue, t = float.MaxValue, r = float.MinValue, d = float.MinValue;
+                for (int x = 0; x < map.size.x; x++)
+                {
+                    for (int y = 0; y < map.size.y; y++)
+                    {
+                        Vector2 c = DotworkImporter.CellCentre(map.shape, x, y, tw, th);
+                        l = Mathf.Min(l, c.x - tw / 2f);
+                        r = Mathf.Max(r, c.x + tw / 2f);
+                        t = Mathf.Min(t, c.y - th / 2f);
+                        d = Mathf.Max(d, c.y + th / 2f);
+                    }
+                }
+                Assert.AreEqual(l / ppu, b.xMin, tol, $"{name} ({map.shape}) left");
+                Assert.AreEqual(r / ppu, b.xMax, tol, $"{name} right");
+                Assert.AreEqual(-t / ppu, b.yMax, tol, $"{name} top (y up)");
+                Assert.AreEqual(-d / ppu, b.yMin, tol, $"{name} bottom");
+                var inst = (GameObject)Object.Instantiate(map.prefab);
+                try
+                {
+                    int seen = 0;
+                    foreach (Tilemap tm in inst.GetComponentsInChildren<Tilemap>())
+                    {
+                        foreach (Vector3Int p in tm.cellBounds.allPositionsWithin)
+                        {
+                            if (tm.GetTile(p) == null)
+                            {
+                                continue;
+                            }
+                            Vector2 px = CentrePx(tm, ppu, p);
+                            Assert.IsTrue(b.Contains(new Vector2(px.x / ppu, -px.y / ppu)), $"{name}: cell {p} centre {px} inside {b}");
+                            seen++;
+                        }
+                    }
+                    Assert.Greater(seen, 0, $"{name} has painted cells");
+                }
+                finally
+                {
+                    Object.DestroyImmediate(inst);
+                }
+            }
+            DotworkMap isle = _pack.Map("isle");
+            Assert.AreEqual("isometric", isle.shape);
+            var square = new Rect(0f, -isle.size.y * isle.tileSize.y / ppu, isle.size.x * isle.tileSize.x / ppu, isle.size.y * isle.tileSize.y / ppu);
+            Assert.Greater(Mathf.Abs(isle.Bounds(ppu).center.x - square.center.x), isle.tileSize.x / ppu / 4f,
+                           "the isometric map's centre is not the square box's");
         }
 
         [Test]

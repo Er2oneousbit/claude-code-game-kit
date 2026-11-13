@@ -47,11 +47,13 @@ dist/               production build (git-ignored)
   `hero.update(dt)` every frame. Three.js strips `:` from node names: `mixamorig:Hips` is `mixamorigHips`
   (`boneName()` converts). No root motion: the clips play in place and the game moves `hero.root`. Metres, +Y up;
   glTF's front is +Z and `Object3D.lookAt()` turns a model's +Z toward its target, so `hero.root.lookAt(x, y, z)`
-  faces where it walks. `hero.play(name)` restarts the clip from its start (`AnimationAction.reset()`): call it when
-  the clip changes, not every frame. Tested 2026-11-11 (three r186): `tests/character.test.ts` (6 Vitest tests, in
+  faces where it walks. `hero.play(name)` of the clip already playing with the same `loop` changes nothing (it keeps
+  its time, a held one-shot keeps holding), so a game may call it every frame; `{ restart: true }` (or another loop
+  setting) starts it from its start: the same rule in all five engines' character helpers (#296). Tested 2026-11-11 (three r186): `tests/character.test.ts` (7 Vitest tests since 0.15.1's restart rule, in
   Node: the golden character has no textures) loads `data/golden/character/character.glb`, finds `idle` and `walk` at
   their lengths, plays `walk` 30 frames and checks `mixamorigLeftUpLeg` swings as far as `expected.json` says and no
-  further, loops with the clip's length as its period at 1x, plays once, height 1.8 m; `check`, `test` (184) and
+  further, loops with the clip's length as its period at 1x, plays once, keeps a playing clip's time when asked for it
+  again and restarts it only when told, height 1.8 m; `check`, `test` (184 at 0.15.0) and
   `smoke` passed on a fresh scaffold. Drawing it in the browser is not in a test yet **(verify: the smoke run loads
   a static Bozzetto model, K01, not a skinned one)**.
 - One `update(dt)` per frame; dt in seconds from `THREE.Timer`, clamped. Never assume 60 fps.
