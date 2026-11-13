@@ -142,8 +142,9 @@ model-free example packs, not yet on a real game's art.
 
 ### Planned
 - **Steam:** a platform-services layer with a null backend and one adapter per engine
-  ([#84](https://github.com/Er2oneousbit/claude-code-game-kit/issues/84)); `dev.py ship` for SteamPipe and itch.io
-  with a dry run ([#86](https://github.com/Er2oneousbit/claude-code-game-kit/issues/86)).
+  ([#84](https://github.com/Er2oneousbit/claude-code-game-kit/issues/84)); `dev.py ship` for SteamPipe with a dry run
+  ([#86](https://github.com/Er2oneousbit/claude-code-game-kit/issues/86): the itch.io half is wired, `ship --target
+  itch` with butler and a dry run, tested with a stand-in butler only, a real upload still to verify).
 - **Localization round trip:** export, local-model drafts, review, re-import and checks
   ([#87](https://github.com/Er2oneousbit/claude-code-game-kit/issues/87)).
 - **Starting a game:** genre starters with a tested core loop ([#89](https://github.com/Er2oneousbit/claude-code-game-kit/issues/89)).
