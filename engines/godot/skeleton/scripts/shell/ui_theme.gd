@@ -5,10 +5,16 @@
 #           scaled by the player's text size.
 # Usage   : ui_root.theme = UiTheme.make(Shell.access("text_scale"))
 #           panel.add_theme_stylebox_override("panel", UiTheme.focus_row())   # outline a focused settings row
+#           label.add_theme_font_size_override("font_size", UiTheme.hud_font_size(12))   # a game HUD label (#309)
+#           Shell.look_changed.connect(_restyle)          # and again when the player changes a size
 # Notes   : The first theme_*.tres in assets/ui/ (sorted by name) wins; delete or rename it to get the plain theme
 #           back. The focus state is a 2 px outline (a shape change, not only a colour change) so it reads for
 #           colour-blind players and on a TV. Sizes are in pixels of the 640x360 base resolution.
+#           A game HUD under its own CanvasLayer gets neither the menus' layer scale (display.ui_scale) nor, unless
+#           it sets the theme, access.text_scale: hud_font_size() folds both into one font size (#309).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): hud_font_size(), the player's text and menu size for
+#           a game HUD (#309)
 # ---------------------------------------------------------------------------
 class_name UiTheme
 extends RefCounted
@@ -77,6 +83,19 @@ static func make(text_scale: float, readable: bool = false, line_spacing: float 
 	for type: String in ["Label", "RichTextLabel", "Button"]:
 		theme.set_constant("line_spacing", type, LINE_SPACING_BASE + extra)
 	return theme
+
+
+## A game HUD's font size: base (pixels at 100 %) times the player's text size and menu size, at least
+## MIN_FONT_SIZE. Pure, for tests and for a HUD that keeps its own copy of the settings.
+static func hud_font_size_for(base: int, text_scale: float, ui_scale: float) -> int:
+	return maxi(MIN_FONT_SIZE, roundi(base * text_scale * ui_scale))
+
+
+## hud_font_size_for() with the live settings (access.text_scale, display.ui_scale). Set it as a font size override
+## on a label that is NOT under the menus' theme or layer scale (that would count a size twice), and set it again
+## on Shell.look_changed.
+static func hud_font_size(base: int) -> int:
+	return hud_font_size_for(base, float(Shell.access("text_scale")), float(Shell.settings["display"]["ui_scale"]))
 
 
 static func plain() -> Theme:
