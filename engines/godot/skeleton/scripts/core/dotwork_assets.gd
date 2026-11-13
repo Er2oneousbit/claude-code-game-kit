@@ -74,15 +74,26 @@ static func load_all(dir: String = DIR) -> Dictionary:
 		var model: Dictionary = load_manifest(path)
 		if model.has("error"):
 			out["problems"].append(model["error"])
-			Log.warn(LOG_CHANNEL, model["error"])
+			_warn(model["error"])
 			continue
 		for w: String in model["warnings"]:
-			Log.warn(LOG_CHANNEL, w)
+			_warn(w)
 		for p: String in model["problems"]:
 			out["problems"].append(p)
-			Log.warn(LOG_CHANNEL, p)
+			_warn(p)
 		out["models"].append(model)
 	return out
+
+
+## Through the game's Log autoload when it runs, else push_warning: looked up at run time, so this script also
+## compiles in a `godot --script` tool run, which has no autoloads.
+static func _warn(msg: String) -> void:
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	var log: Node = tree.root.get_node_or_null("Log") if tree != null else null
+	if log != null and log.has_method("warn"):
+		log.call("warn", LOG_CHANNEL, msg)
+	else:
+		push_warning("[%s] %s" % [LOG_CHANNEL, msg])
 
 
 ## The first asset of that kind and name across the loaded packs ({} when none): names are unique per pack only.
