@@ -14,11 +14,13 @@
 project.godot            engine config (edit via editor or carefully by hand)
 scenes/                  .tscn scenes (main.tscn is the entry)
 scripts/core/            engine-agnostic helpers: log, timers, juice (shake, hitstop, springs...), settings,
-                         bindings, saves, i18n (no gameplay knowledge; tested against data/golden/)
+                         bindings, saves, i18n, the Dotwork importer (dotwork_manifest.gd + dotwork_assets.gd)
+                         (no gameplay knowledge; tested against data/golden/)
 scripts/shell/           the front end: Shell autoload, screens (title, menus, settings, pause...), smoke drive
 scripts/game/            gameplay scripts, one per scene or entity (play.gd is the placeholder game)
 data/                    tunables (.tres or .json), levels; i18n/ string tables, dialogue/, golden/ test vectors
-assets/                  art, audio, fonts (see docs/ASSET_LOG.md)
+assets/                  art, audio, fonts (see docs/ASSET_LOG.md); assets/dotwork/<pack>.assets.json = Dotwork
+                         asset manifests
 tests/                   GUT tests, files named test_*.gd
 addons/                  third-party addons (GUT, etc.), never edit by hand
 shaders/kit/             the kit's shader recipes, one .gdshader each (generated: tools/shaders/)
@@ -80,6 +82,33 @@ tools/                   dev.py and helpers
   keep their own loop flags; `check`, `test` (109 tests) and `smoke` passed on a fresh scaffold. The same helper
   loaded a 69-bone Tripo rig with three textured clips (idle, walk, run): every clip looped, the Mixamo names mapped
   through `bone_name()`, its own chain bones kept their names, 1.8 m tall facing +Z (2026-11-11, not a kept test).
+- **Dotwork art** (`tools/art/dotwork/`, spec `ASSET_MANIFEST.md` 1.1.0; 1.0.0 packs still load, another major is
+  refused): Dotwork writes Godot's own resources straight into the game (SpriteFrames, TileSets, prop scenes, map
+  scenes; its README "Godot notes"), and every pack also gets `assets/dotwork/<pack>.assets.json`. The importer
+  reads those manifests like every other engine's does (#307), for the packs that have no Godot resources, such as
+  the sheets `tools/blender/render_sprites.py --manifest` renders from a 3D character (`/make-character`'s 2D route):
+  `var art := DotworkAssets.load_all()` (every pack; problems logged), or
+  `var m := DotworkAssets.load_manifest("res://assets/dotwork/hero.assets.json")`, then
+  `var hero := DotworkAssets.animated_sprite(m["animated_sprite"]["hero"])` and `DotworkAssets.play(hero, "walk_s")`
+  (a SpriteFrames per asset, each frame's own `duration`, the clip's pivot as the offset: the feet on the node's
+  position), `DotworkAssets.sprite(m["sprite"]["crate"])` (Sprite2D, pivot on the position, a `Shadow` child, a
+  `Body` StaticBody2D per collision rect), `add_child(DotworkAssets.map_node(m["map"]["yard"], m))` (a Node2D with a
+  TileMapLayer per layer and the props under a y-sorted `Props` node), `DotworkAssets.font(...)` (FontFile from the
+  `.fnt`), `DotworkAssets.nine_patch(kit, part)`, `background(...)`, `lit_texture(normal_map)` (a CanvasTexture).
+  Textures: Godot's imported PNG when there is one, else the PNG decoded at run time.
+  - **Maps.** Cells arrive resolved (`scripts/core/dotwork_manifest.gd`, no nodes): a terrain layer's cells get the
+    spec's key (`blob47`, `sides4`, `corners4`) and, among a key's variants, the tile `DotworkManifest.cell_roll(x,
+    y, layer_index)` picks, the same tile every engine draws, then `set_cell` puts it in the TileMapLayer. Godot's
+    own terrain solver is not used for the variant (it rolls its own dice); Dotwork's map scenes take the same pick
+    since #307. The importer's TileSet has no terrain sets: paint terrain by hand with Dotwork's own TileSet `.tres`.
+    Placement is Godot's: square, or isometric diamond-down (`tile_layout = TILE_LAYOUT_DIAMOND_DOWN`), the tile's
+    `origin` set as `texture_origin`, an iso layer `y_sort_enabled` so a taller block overdraws the one above it.
+  - `tests/test_golden_dotwork.gd` holds it to `data/golden/dotwork/expected.json` to 1e-6 (every kind; the maps'
+    terrain, placed cells and centres read back from the TileMapLayers, `map_to_local` included) and the spec's
+    `hash32` / `cell_roll` vectors; `tests/test_dotwork_manifests.gd` loads every pack of the game and fails on a
+    missing or mis-sized file. The extra kinds load as data plus textures (the spec's per-engine table). Checked on
+    4.7.2: `check`, `test`, `smoke`, and a frame of the golden maps drawn through it (2026-11-13). The starter scene
+    does not draw Dotwork art yet: add the nodes to your scene.
 - **Shaders:** a `ShaderMaterial` with `res://shaders/kit/<name>.gdshader` on a CanvasItem (Sprite2D, TextureRect):
   `mat.set_shader_parameter("u_amount", 1.0)`, a second picture as `kit_aux` (dissolve's noise, the palette, the normal
   map). Post effects (`crt`, `vignette`, `colorblind`) read the screen (`hint_screen_texture`): put them on a full-screen

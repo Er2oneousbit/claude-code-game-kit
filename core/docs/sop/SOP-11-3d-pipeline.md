@@ -202,8 +202,8 @@ For a rigged character, `--actions all --step 2 --manifest assets/dotwork/render
 8 (or 4) directions and writes a Dotwork asset manifest that every engine's Dotwork importer loads with no new code
 (clips `walk_s` ... `walk_se`, per-frame durations, the feet as the pivot; K01, #290: the web, web-3d, LÖVE, C++, Bevy, MZ,
 Unity and Unreal importer tests load the golden character's sheet, and the LÖVE and C++ starters draw it walking).
-Godot has no manifest importer (it loads Dotwork's own resources): a 2D Godot game uses the sheets with the layout
-`.json` beside each (`AtlasTexture` regions into a `SpriteFrames`) by hand **(verify: not in a test)**.
+Godot's importer (`DotworkAssets`, #307) loads it too: its GUT test holds the golden character's sheet to
+`expected.json`, as the others do; the Godot starter does not draw it yet.
 
 A rigged character in a 3D engine: the `.glb` from `bozzetto.py rig make` loads with its clips; each engine's
 `docs/ENGINE.md` "Rigged characters" has the import recipe (looping, root motion, scale, facing, bone names) and a
