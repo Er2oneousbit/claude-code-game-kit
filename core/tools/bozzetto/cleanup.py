@@ -28,6 +28,7 @@
 #           baked onto it at --texture pixels, after decimation (the bake wants the final mesh). A vendor atlas
 #           (Tripo: 6,805 islands covering 29% of the texture) cannot be fixed any other way. The report's
 #           "rebake" entry has coverage before and after, the maps, the bake settings and the before/after check.
+#           A colour map whose source was JPEG stays JPEG (#303; rebake_uvs.py "Formats"); --rebake-png writes PNG.
 #           --rebake-under FLOOR (bozzetto.py's --rebake auto, the local route's default, #203): measure the model's
 #           own UV coverage as the validator will, rebake only under FLOOR, and drop a rebake that lands no higher or
 #           fails its check (the cleanup runs again with the model's own atlas). The report's "rebake_auto" entry has
@@ -36,6 +37,7 @@
 #           faces Blender's front (-Y), which is glTF's +Z: the direction the glTF spec calls the asset's front.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5); --rebake with Claude (Fable 5.1, claude-fable-5-1)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake-under, the rebake only under the floor (#203)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake-png (#303)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -104,6 +106,8 @@ def parse_args(argv):
                          "model's own atlas")
     ap.add_argument("--texture", type=int, default=0,
                     help="--rebake: texture size in pixels (default 0: the largest image the model reads)")
+    ap.add_argument("--rebake-png", action="store_true",
+                    help="--rebake: every baked map as PNG (default: a colour map whose source was JPEG stays JPEG)")
     ap.add_argument("--json", dest="json_out", help="write the report (counts before and after) as JSON here")
     ap.add_argument("--overwrite", action="store_true", help="replace --out if it exists")
     ap.add_argument("--debug", action="store_true", help="verbose output and full tracebacks")
@@ -116,6 +120,8 @@ def parse_args(argv):
         ap.error("--rebake-under is a share of the texture, over 0 and at most 1 (0.55 for 55%)")
     if args.texture and not (args.rebake or args.rebake_under is not None):
         ap.error("--texture goes with --rebake")
+    if args.rebake_png and not (args.rebake or args.rebake_under is not None):
+        ap.error("--rebake-png goes with --rebake")
     if args.texture and args.texture not in TEXTURE_SIZES:
         ap.error(f"--texture must be one of {', '.join(str(s) for s in TEXTURE_SIZES)}")
     return args
@@ -357,7 +363,7 @@ def rebake_auto(bpy, va, obj, args, report):
         return None
     print(f"[info] --rebake auto: UV coverage {cov:.1%} ({islands} islands) is under the floor {floor:.0%}: rebaking")
     report["rebake"] = {}
-    ok = rebake_uvs.rebake(bpy, va, obj, args.texture, report["rebake"])
+    ok = rebake_uvs.rebake(bpy, va, obj, args.texture, report["rebake"], png=args.rebake_png)
     after = report["rebake"].get("uv_coverage_after")
     if ok and after is not None and after > round(cov, 3):
         auto["why"] = "under the floor"
@@ -421,7 +427,7 @@ def run(args, kept=None):
         import rebake_uvs   # noqa: E402  (tools/blender: the unwrap, the bakes and the check)
         rebake_uvs.DEBUG = DEBUG
         report["rebake"] = {}
-        if not rebake_uvs.rebake(bpy, va, obj, args.texture, report["rebake"]):
+        if not rebake_uvs.rebake(bpy, va, obj, args.texture, report["rebake"], png=args.rebake_png):
             print("[FAIL] the rebake did not match the original (see the [FAIL] line above); nothing written. "
                   "Run without --rebake to keep the file's own atlas", file=sys.stderr)
             return 1
