@@ -32,6 +32,8 @@
 # Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): tilemap layers and tilemap projects
 # Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): the Dotwork panel (PanelExam offline; the live exam
 #           installs it, drives its refresh and re-export in Pixelorama 1.2.4 and compares with the command line)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the hung-run case holds under load (#305): an 8 s
+#           limit, explicit margins, a killed child waited for and told apart from a process reusing its id
 # ---------------------------------------------------------------------------
 import base64
 import contextlib
@@ -1010,17 +1012,45 @@ def full_disk():
         builtins.open, os.fdopen = real_open, real_fdopen
 
 
-def process_alive(pid):
-    """True while a process with this id runs (Windows: tasklist; elsewhere: signal 0)."""
+GONE_WAIT_S = 20           # s a killed process may take to disappear under load (a left-running one sleeps 120 s)
+
+
+def left_running(pid, created=None, within_s=GONE_WAIT_S):
+    """True when the process with this id is still running after within_s (#305). A kill (taskkill /F, SIGKILL)
+    finishes a moment after it returns, longer on a loaded machine, so this waits for the end instead of looking
+    once. Windows: it waits on the process handle, and with `created` (the creation time, a FILETIME integer from
+    GetProcessTimes) a process that reuses the id later is not taken for the one that ended. Elsewhere: signal 0,
+    polled."""
     if os.name == "nt":
-        out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, encoding="utf-8",
-                             errors="replace").stdout
-        return str(pid) in out.split()
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        return False
-    return True
+        import ctypes
+        from ctypes import wintypes
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.OpenProcess.restype = wintypes.HANDLE
+        k32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        k32.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+        k32.GetProcessTimes.argtypes = (wintypes.HANDLE,) + (ctypes.POINTER(ctypes.c_ulonglong),) * 4
+        k32.CloseHandle.argtypes = (wintypes.HANDLE,)
+        h = k32.OpenProcess(0x00100000 | 0x1000, False, pid)   # SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION
+        if not h:
+            return False                                        # no such process
+        try:
+            if created is not None:
+                t = [ctypes.c_ulonglong() for _ in range(4)]
+                if k32.GetProcessTimes(h, *[ctypes.byref(x) for x in t]) and t[0].value != created:
+                    return False                                # the id now belongs to another process
+            return k32.WaitForSingleObject(h, int(within_s * 1000)) != 0   # 0: WAIT_OBJECT_0, it ended
+        finally:
+            k32.CloseHandle(h)
+    import time
+    deadline = time.monotonic() + within_s
+    while True:
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return False
+        if time.monotonic() > deadline:
+            return True
+        time.sleep(0.1)
 
 
 def leftovers(folder):
@@ -2550,6 +2580,9 @@ RUN_EXAM_GD = r'''extends SceneTree
 # #255: a Dotwork run ends at its limit or on a stop, killing what it started; a normal run keeps its output and
 # exit code. EXAM_PYTHON names the Python to run.
 
+const HANG_LIMIT_S := 8.0     # the hung run's limit: well past a Python start with a child on a loaded machine
+const KILL_MARGIN_S := 20.0    # how long after the limit (or a stop) the run may take to end: polls and taskkill
+
 var failures := PackedStringArray()
 
 
@@ -2565,14 +2598,15 @@ func _init() -> void:
 		"import sys; print('out line'); sys.stderr.write('err line' + chr(10)); sys.exit(3)"]), 30.0, [false])
 	check(r["code"] == 3 and not r["timed_out"] and not r["stopped"], "a normal run keeps its exit code: %s" % r)
 	check("out line" in r["output"] and "err line" in r["output"], "stdout and stderr are both read: %s" % r)
-	# a Python that starts a child (as Dotwork starts Godot) and both hang: stopped at the limit, the child too
-	var hang := ("import subprocess, sys, time; c = subprocess.Popen([sys.executable, '-c', 'import time; "
-		+ "time.sleep(120)']); print('CHILD', c.pid, flush=True); time.sleep(120)")
+	# a Python that starts a child (as Dotwork starts Godot) and both hang: stopped at the limit, the child too.
+	# EXAM_HANG is that script (it prints CHILD <pid> <creation time>). The limit leaves the script time to start
+	# its child and print on a loaded machine (#305: 3 s was too tight); KILL_MARGIN_S bounds the poll and the kill.
 	var t0 := Time.get_ticks_msec()
-	r = L.run_process(py, PackedStringArray(["-c", hang]), 3.0, [false])
+	r = L.run_process(py, PackedStringArray([OS.get_environment("EXAM_HANG")]), HANG_LIMIT_S, [false])
 	var took := Time.get_ticks_msec() - t0
 	check(r["timed_out"] and r["code"] == -1, "a hung run is stopped at its limit: %s" % r)
-	check(took < 15000, "and soon after it (%d ms)" % took)
+	check(took >= HANG_LIMIT_S * 1000 and took < (HANG_LIMIT_S + KILL_MARGIN_S) * 1000,
+		"and soon after it (%d ms)" % took)
 	check("[error]" in r["output"] and "stopped" in r["output"], "the panel is told why: %s" % r["output"])
 	for line in r["output"].split("\n"):
 		if line.begins_with("CHILD "):
@@ -2587,13 +2621,28 @@ func _init() -> void:
 	r = th.wait_to_finish()
 	took = Time.get_ticks_msec() - t0
 	check(r["stopped"] and not r["timed_out"], "a stop ends the run: %s" % r)
-	check(took < 10000, "within moments (%d ms)" % took)
+	check(took < 1500 + KILL_MARGIN_S * 1000, "within moments (%d ms, the run's limit was 600 s)" % took)
 	var none: Dictionary = L.run_process("C:/nowhere/python.exe", PackedStringArray(["-c", "1"]), 5.0, [false])
 	check(none["code"] == -1, "a Python that cannot start is exit -1: %s" % none)
 	print("RUN_FAILURES " + JSON.stringify(failures))
 	print("RUN_DONE")
 	quit(0 if failures.is_empty() else 1)
 '''
+
+
+# The hung Dotwork run in RUN_EXAM_GD: starts a child (as Dotwork starts Godot), names it, and both hang. On Windows
+# it also prints the child's creation time, so the exam can tell it from a later process that reuses the id (#305).
+HANG_PY = """import subprocess, sys, time
+c = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
+created = ""
+if sys.platform == "win32":
+    import ctypes
+    t = (ctypes.c_ulonglong * 4)()
+    ctypes.windll.kernel32.GetProcessTimes(ctypes.c_void_p(int(c._handle)), *[ctypes.byref(t, 8 * i) for i in range(4)])
+    created = t[0]
+print("CHILD", c.pid, created, flush=True)
+time.sleep(120)
+"""
 
 
 class PanelExam(unittest.TestCase):
@@ -2772,7 +2821,10 @@ class PanelExam(unittest.TestCase):
         shutil.copy(os.path.join(self.panel.EXTENSION_SRC, "panel_logic.gd"), proj)
         with open(os.path.join(proj, "exam.gd"), "w", encoding="utf-8", newline="\n") as f:
             f.write(RUN_EXAM_GD)
-        env = dict(os.environ, EXAM_PYTHON=sys.executable.replace(os.sep, "/"))
+        with open(os.path.join(proj, "hang.py"), "w", encoding="utf-8") as f:
+            f.write(HANG_PY)
+        env = dict(os.environ, EXAM_PYTHON=sys.executable.replace(os.sep, "/"),
+                   EXAM_HANG=os.path.join(proj, "hang.py").replace(os.sep, "/"))
         p = subprocess.run([os.environ["GODOT_BIN"], "--headless", "--path", proj, "-s", "res://exam.gd"],
                            capture_output=True, encoding="utf-8", errors="replace", timeout=PXO_TIMEOUT, env=env)
         log = p.stdout + p.stderr
@@ -2781,9 +2833,10 @@ class PanelExam(unittest.TestCase):
         self.assertNotIn("SCRIPT ERROR", log, log[-3000:])
         self.assertEqual(p.returncode, 0, log[-3000:])
         # the hung run's own child (Dotwork's Godot, in the panel) is gone too
-        child = [int(l.split()[1]) for l in log.splitlines() if l.startswith("CHILD_PID ")]
+        child = [l.split()[1:] for l in log.splitlines() if l.startswith("CHILD_PID ")]
         self.assertEqual(len(child), 1, log[-3000:])
-        self.assertFalse(process_alive(child[0]), f"the child process {child[0]} was left running")
+        pid, created = int(child[0][0]), (int(child[0][1]) if len(child[0]) > 1 else None)
+        self.assertFalse(left_running(pid, created), f"the child process {pid} was left running")
 
 
     def test_a_full_disk_leaves_the_panel_files_whole(self):
@@ -3177,7 +3230,7 @@ class PixeloramaLiveExam(unittest.TestCase):
         self.assertLess(closed[0], 10000, "closing the panel waited for the hung Dotwork run")
         with open(pid_file, encoding="utf-8") as f:
             child = int(f.read())
-        self.assertFalse(process_alive(child), f"the run's child {child} (Godot, in a real re-export) was left running")
+        self.assertFalse(left_running(child), f"the run's child {child} (Godot, in a real re-export) was left running")
 
 
 class CraftedPxoExam(unittest.TestCase):
