@@ -8,7 +8,10 @@
 #           - unique tests are counted from unittest's verbose lines (one name per test method), never from its
 #             `Ran N tests` line: a test class loaded twice once doubled that number
 #           - an exam whose tool is missing (Pillow, numpy, bpy, GIMP, Inkscape, git, uv) is reported skipped
-#             naming the tool, not failed; an exam that exits 2 for a missing tool counts as skipped too
+#             naming the tool, not failed; an exam that exits 2 for a missing tool counts as skipped too; so is a
+#             row whose packages uv cannot install (offline, or no wheel for that Python)
+#           - the bpy rows run twice: on bpy 5.3 (uv's Python 3.13) and on the floor bpy_common.py supports, bpy
+#             4.2.0 (uv's Python 3.11; its wheels are cp311 only): the `_bpy42` rows
 #           - `--python 3.8,3.14` runs every exam once per version through `uv run --python`, or once on the
 #             current interpreter when uv is not installed (a release runs the oldest supported Python this way)
 #           - the live exams (a real REAPER, Aseprite, Pixelorama, ComfyUI/TRELLIS, a Blender Cycles render) run
@@ -29,6 +32,9 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the rebake row's note (--rebake auto, #203)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the retarget row (animation packs, #205)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the rebake row covers prep_export.py (JPEG maps, #303)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the bpy 4.2 floor rows (validate_asset, prep_export,
+#           rebake on bpy==4.2.0, Python 3.11); a module need may pin a version; a uv run whose packages uv cannot
+#           provide is SKIP naming them, not FAIL (#312)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -38,7 +44,8 @@
 #       live-only row without --live -> SKIP
 #       a tool need not on PATH -> SKIP naming it
 #       pick the interpreter: the row's pinned version or the asked one through uv (`--with` for its modules),
-#         else sys.executable; a module this interpreter lacks -> through uv with --with, or SKIP naming it
+#         else sys.executable; a module this interpreter lacks -> through uv with --with, or SKIP naming it;
+#         a uv run with modules is probed once first (`-c pass`): uv cannot provide them -> SKIP naming them
 #       run the exam (-v for unittest rows) with the live env vars hidden unless --live
 #       exit 0 -> OK (SKIP when the exam printed a [SKIP] line); exit 2 with declared needs -> SKIP; else FAIL
 #       count unique test names (unittest rows) or [PASS]/[FAIL]/[ OK ] case lines (cases rows)
@@ -62,6 +69,8 @@ TAIL_LINES = 25               # of a failed exam's output, printed after the tab
 UV = [shutil.which("uv")] if shutil.which("uv") else None       # a command prefix, so a test can swap in a fake
 PYTHON_RE = re.compile(r"^3\.\d{1,2}$")
 MODULES = {"pillow": "PIL", "numpy": "numpy", "bpy": "bpy"}     # pip name -> import name
+PIN_RE = re.compile(r"[=<>!~;\[].*$")                              # "bpy==4.2.0" -> "bpy" (the name part)
+BPY_FLOOR = "4.2.0"           # the oldest bpy bpy_common.py supports (Blender 4.2 LTS); its wheels are cp311 only
 # unittest's verbose line, on 3.8 ("test_x (mod.Class) ... ok") and 3.11+ ("test_x (mod.Class.test_x) ... ok");
 # with a docstring the "... ok" is on the next line, so only the name part is matched
 TEST_LINE = re.compile(r"^(test\w*) \(([\w.]+)\)")
@@ -81,8 +90,15 @@ def tool(name):
 
 
 def module(pip_name):
-    """A Python package the exam imports (checked on the interpreter; `uv run --with` supplies it when uv is here)."""
+    """A Python package the exam imports (checked on the interpreter; `uv run --with` supplies it when uv is here).
+    It may pin a version ("bpy==4.2.0"): `--with` gets it as written, the import check uses the bare name."""
     return ("module", pip_name)
+
+
+def import_name(spec):
+    """The module to import for a pip requirement: "bpy==4.2.0" -> "bpy", "pillow" -> "PIL"."""
+    bare = PIN_RE.sub("", spec).strip()
+    return MODULES.get(bare, bare)
 
 
 def exam_checks(what):
@@ -93,9 +109,10 @@ def exam_checks(what):
 class Exam:
     """One row: an exam file, what it needs, how it reports, which files it covers (for --changed)."""
 
-    def __init__(self, path, note="", needs=(), style="unittest", live=False, python=None, env=(), covers=None):
+    def __init__(self, path, note="", needs=(), style="unittest", live=False, python=None, env=(), covers=None,
+                 name=None):
         self.path = path                       # kit-relative, posix
-        self.name = Path(path).stem[len("test_"):]
+        self.name = name or Path(path).stem[len("test_"):]   # a second row for one file names itself (_bpy42)
         self.note = note
         self.needs = tuple(needs)
         self.style = style                     # "unittest" (gets -v, names counted) or "cases" ([PASS] lines counted)
@@ -123,6 +140,10 @@ class Exam:
 
 
 BPY = dict(needs=(module("bpy"),), python="3.13", style="cases")   # bpy wheels lag the newest Python
+# the floor (#312): bpy 4.2 crashed on exit after a glTF import, a break only a 4.2 run shows
+BPY42 = dict(needs=(module("bpy==" + BPY_FLOOR),), python="3.11")
+REBAKE_COVERS = ("core/tools/bozzetto/", "core/tools/blender/rebake_uvs.py", "core/tools/blender/prep_export.py",
+                 "core/tools/blender/validate_asset.py", "core/tools/blender/bpy_common.py")
 EXAMS = [
     # core/tools
     Exam("core/tools/test_check_links.py", "the link checker", covers=("core/tools/check_links.py",)),
@@ -188,11 +209,15 @@ EXAMS = [
          covers=("core/tools/bozzetto/", "core/data/golden/character/")),
     Exam("core/tools/bozzetto/test_reference.py", "reference views: stand-in ComfyUI, Gemini and Tripo; caps, journal reuse, failures, the PNG reader"),
     Exam("core/tools/bozzetto/test_rebake.py", "the UV rebake (#293, #203): make's --rebake/--rebake auto/--accept-uv/--rebake-png and `rebake <name>` offline; its Blender part (a tiny-island cube rebaked, checked and kept over the floor; a JPEG-textured one keeps a JPEG colour map, #303; about 5 min) runs when Blender or bpy is found",
-         covers=("core/tools/bozzetto/", "core/tools/blender/rebake_uvs.py", "core/tools/blender/prep_export.py")),
+         covers=REBAKE_COVERS),
+    Exam("core/tools/bozzetto/test_rebake.py", "the same on the bpy 4.2 floor (#312): its Blender part through the bpy 4.2.0 module, about 1.5 min",
+         covers=REBAKE_COVERS, name="rebake_bpy42", **BPY42),
     Exam("core/tools/bozzetto/test_bozzetto_live.py", "one real TRELLIS.2 run (about 5 min); [SKIP] without ComfyUI", style="cases", live=True),
     # core/tools/blender (bpy on uv's Python 3.13)
     Exam("core/tools/blender/test_validate_asset.py", "builds fixtures with bpy", **BPY),
     Exam("core/tools/blender/test_prep_export.py", "builds fixtures with bpy; LOD textures halve, a JPEG stays JPEG (#196, #303)", **BPY),
+    Exam("core/tools/blender/test_validate_asset.py", "the same on the bpy 4.2 floor (#312)", name="validate_asset_bpy42", style="cases", **BPY42),
+    Exam("core/tools/blender/test_prep_export.py", "the same on the bpy 4.2 floor (#312)", name="prep_export_bpy42", style="cases", **BPY42),
     Exam("core/tools/blender/test_render_sprites.py", "renders with Cycles on the CPU, a few minutes", live=True, **BPY),
     Exam("core/tools/blender/test_golden_character.py", "the golden rigged character read with the standard library; its rebuild check runs when Blender or bpy is found (GOLDEN_CHARACTER_BLENDER=skip|bpy|<path>)",
          covers=("core/tools/blender/golden_character.py", "core/data/golden/character/")),
@@ -309,13 +334,13 @@ def missing_modules(interpreter, modules, cache):
         return []
     key = (interpreter, tuple(modules))
     if key not in cache:
-        probe = "\n".join("import " + MODULES.get(m, m) for m in modules)
+        probe = "\n".join("import " + import_name(m) for m in modules)
         r = subprocess.run([interpreter, "-c", probe], capture_output=True, encoding="utf-8", errors="replace")
         if r.returncode == 0:
             cache[key] = []
         else:
             cache[key] = [m for m in modules
-                          if subprocess.run([interpreter, "-c", "import " + MODULES.get(m, m)],
+                          if subprocess.run([interpreter, "-c", "import " + import_name(m)],
                                             capture_output=True).returncode != 0] or list(modules)
     return cache[key]
 
@@ -333,7 +358,23 @@ def interpreter_for(row, version, cache):
         want = "%d.%d" % sys.version_info[:2]
     if not UV:
         return None, "needs uv to run Python %s with %s" % (want, ", ".join(mods) or "the standard library")
-    return uv_prefix(want, mods), "Python " + want
+    prefix = uv_prefix(want, mods)
+    if mods:
+        why = uv_cannot_provide(prefix, cache)
+        if why is not None:
+            return None, "needs %s on Python %s (uv could not provide it: %s)" % (", ".join(mods), want, why)
+    return prefix, "Python " + want
+
+
+def uv_cannot_provide(prefix, cache):
+    """None when `uv run --with ...` builds the environment, else uv's last error line. One probe per prefix: a
+    missing wheel (bpy 4.2 has cp311 only) or no network would otherwise fail the exam instead of skipping it."""
+    key = ("uv",) + tuple(prefix)
+    if key not in cache:
+        r = subprocess.run(prefix + ["-c", "pass"], capture_output=True, encoding="utf-8", errors="replace")
+        lines = [ln.strip() for ln in ((r.stderr or "") + (r.stdout or "")).splitlines() if ln.strip()]
+        cache[key] = None if r.returncode == 0 else (lines[-1][:120] if lines else "exit %d" % r.returncode)
+    return cache[key]
 
 
 def count_tests(row, text):

@@ -17,6 +17,8 @@
 # Notes   : Standard library only, offline. Never runs the kit's real exams: EXAMS, KIT and UV are swapped for the
 #           fake kit's for each case. About 25 s (the timeout case waits for its SLOW_LIMIT_S limit).
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a pinned module uv cannot provide is a SKIP naming
+#           it, the environment probe, the bpy 4.2 floor rows in the real table (#312)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -93,6 +95,10 @@ import json, subprocess, sys
 argv = sys.argv[1:]
 with open(%r, "a", encoding="utf-8") as f:
     f.write(json.dumps(argv) + "\\n")
+for i, a in enumerate(argv):                 # a package with no wheel: uv fails before python starts
+    if a == "--with" and argv[i + 1].startswith("nowheel"):
+        sys.stderr.write("error: no wheel for %%s\\n" %% argv[i + 1])
+        sys.exit(1)
 rest = argv[argv.index("python") + 1:]
 sys.exit(subprocess.run([sys.executable] + rest).returncode)
 """
@@ -264,7 +270,11 @@ class RunExamsExam(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertIn("== Python 3.8 via uv ==", out)
         self.assertIn("== Python 3.9 via uv ==", out)
-        calls = [json.loads(ln) for ln in self.uv_log.read_text(encoding="utf-8").splitlines()]
+        every = [json.loads(ln) for ln in self.uv_log.read_text(encoding="utf-8").splitlines()]
+        probes = [c for c in every if c[-2:] == ["-c", "pass"]]
+        calls = [c for c in every if c not in probes]
+        self.assertEqual(sorted(c[c.index("--python") + 1] for c in probes), ["3.13", "3.8", "3.9"],
+                         "one environment probe per uv prefix with modules (#312)")
         versions = [c[c.index("--python") + 1] for c in calls]
         self.assertEqual(sorted(versions), ["3.13", "3.8", "3.8", "3.9", "3.9"], "pinned rows run once")
         withs = [c[c.index("--with") + 1] for c in calls if "--with" in c]
@@ -294,6 +304,29 @@ class RunExamsExam(unittest.TestCase):
         self.assertRegex(line, r"^\[ OK \].*\[Python %d\.%d\]$" % sys.version_info[:2])
         calls = [json.loads(ln) for ln in self.uv_log.read_text(encoding="utf-8").splitlines()]
         self.assertIn("nosuchpackage_xyz", calls[0])
+
+    def test_a_pinned_module_uv_cannot_provide_is_a_skip_naming_it(self):
+        """#312: the bpy 4.2 floor rows pin bpy==4.2.0 on Python 3.11; with no such wheel (or no network) uv fails
+        before the exam starts, and that is a SKIP naming the pin, never a FAIL. The pin reaches --with as written."""
+        rx.UV = self.fake_uv
+        rx.EXAMS = [rx.Exam("fake/test_pinned.py", needs=(rx.module("nowheel==4.2.0"),), python="3.11",
+                            name="pinned_floor"),
+                    rx.Exam("fake/test_withmod.py", needs=(rx.module("bpyfake==4.2.0"),), python="3.11")]
+        code, out = self.run_main()
+        self.assertEqual(code, 0, out)
+        line = self.line_for(out, "test_pinned.py")
+        self.assertRegex(line, r"^\[SKIP\].*needs nowheel==4\.2\.0 on Python 3\.11 \(uv could not provide it: "
+                               r"error: no wheel for nowheel==4\.2\.0")
+        self.assertRegex(self.line_for(out, "test_withmod.py"), r"^\[ OK \].*\[Python 3\.11\]$")
+        calls = [json.loads(ln) for ln in self.uv_log.read_text(encoding="utf-8").splitlines()]
+        self.assertIn(["--with", "bpyfake==4.2.0"], [c[i:i + 2] for c in calls for i in range(len(c) - 1)])
+        self.assertFalse([c for c in calls if "nowheel==4.2.0" in c and c[-2:] != ["-c", "pass"]],
+                         "a row uv cannot provide never runs")
+
+    def test_import_name_drops_the_pin(self):
+        self.assertEqual(rx.import_name("bpy==4.2.0"), "bpy")
+        self.assertEqual(rx.import_name("pillow>=10"), "PIL")
+        self.assertEqual(rx.import_name("numpy"), "numpy")
 
     def test_bad_python_and_jobs_exit_2(self):
         self.assertEqual(self.run_main("--python", "three")[0], 2)
@@ -348,6 +381,10 @@ class RunExamsExam(unittest.TestCase):
             self.assertIn(r.style, ("unittest", "cases"))
             if r.python:
                 self.assertRegex(r.python, r"^3\.\d+$")
+        floor = sorted(r.name for r in rows if ("module", "bpy==" + rx.BPY_FLOOR) in r.needs)
+        self.assertEqual(floor, ["prep_export_bpy42", "rebake_bpy42", "validate_asset_bpy42"],
+                         "the bpy 4.2 floor rows (#312)")
+        self.assertTrue(all(r.python == "3.11" for r in rows if r.name in floor), "bpy 4.2 wheels are cp311 only")
         live = sorted(r.name for r in rows if r.live)
         self.assertEqual(live, ["bozzetto_live", "render_sprites"], "the opt-in exams")
         self.assertEqual(sorted({v for r in rows for v in r.env}), ["ASEPRITE_BIN", "PIXELORAMA_BIN", "REAPER_BIN"])
