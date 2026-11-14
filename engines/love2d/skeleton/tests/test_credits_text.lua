@@ -2,11 +2,13 @@
 -- test_credits_text.lua
 -- Purpose : The credits screen's text (src/shell/screens/credits.lua): HTML comments out of CREDITS.md (#279) and the
 --           markdown marks off (#284) against every case in data/golden/credits.json, and the lines it scrolls for a
---           file as tools/credits.py writes it.
+--           file as tools/credits.py writes it, and where a tall file's rows sit as the player scrolls (#302).
 -- Usage   : python tools/dev.py test     (or --filter credits)
 -- Notes   : The expected values of the golden part come from the file at test time (tools/golden_vectors.py writes it).
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the credits_text cases (#284)
+--           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): a tall CREDITS.md under reduce motion starts at the
+--           top and moves a row per press (#302)
 -- ---------------------------------------------------------------------------
 local A = require("tests.assert")
 local Golden = require("tests.helpers.golden")
@@ -49,6 +51,52 @@ end
 
 function T.test_a_file_with_only_a_comment_shows_the_placeholder()
   A.eq(Credits.lines_from("<!-- nothing yet -->\n"), nil)
+end
+
+-- ---- Scrolling a CREDITS.md much taller than the area (#302) ----------------------------------------------------
+local TALL_ROWS = 80                       -- rows of wrapped text, several screens' worth
+local ROW_HEIGHTS = { 22, 40 }             -- the default text size, and a large one: a press is one row in both
+
+-- a credits screen over a stand-in app (no window): action() and at_top() need only the settings
+local function credits_screen(reduce_motion)
+  local app = { settings = { access = { reduce_motion = reduce_motion } } }
+  return setmetatable({ app = app, offset = 0 }, { __index = Credits })
+end
+
+-- the first row's y below the top of the area, as draw() places it (the offset kept, as draw() keeps it)
+local function first_y(screen, lh)
+  local start
+  start, screen.offset = Credits.scroll(TALL_ROWS, lh, screen.offset, screen.app.settings.access.reduce_motion)
+  return start
+end
+
+function T.test_still_credits_start_at_the_top_and_move_a_row_per_press()
+  for _, lh in ipairs(ROW_HEIGHTS) do
+    local s = credits_screen(true)
+    s:update(5)                                          -- reduce motion: nothing moves by itself
+    A.eq(first_y(s, lh), 0, "the first line at the top of the area (lh " .. lh .. ")")
+    s:action("ui_up")
+    A.eq(first_y(s, lh), 0, "up at the top stays at the top")
+    s:action("ui_down")
+    A.eq(first_y(s, lh), -lh, "one press down moves one row")
+    s:action("ui_down")
+    A.eq(first_y(s, lh), -2 * lh)
+    s:action("ui_up")
+    A.eq(first_y(s, lh), -lh, "one press up moves one row back")
+    local last_first = TALL_ROWS - math.floor(Credits.AREA_H / lh)
+    for _ = 1, TALL_ROWS * 3 do s:action("ui_down") end
+    A.eq(first_y(s, lh), -last_first * lh, "down stops with the last row in view, no loop back to the start")
+    s:action("ui_up")
+    A.eq(first_y(s, lh), -(last_first - 1) * lh, "the presses past the end are not saved up")
+  end
+end
+
+function T.test_at_top_shows_the_first_line_with_and_without_reduce_motion()
+  for _, reduce in ipairs({ true, false }) do
+    local s = credits_screen(reduce)
+    s:at_top()
+    A.eq(first_y(s, 22), 0, "reduce_motion " .. tostring(reduce))
+  end
 end
 
 return T

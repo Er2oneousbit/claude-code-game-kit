@@ -5,12 +5,15 @@
 --           hand; accept or cancel goes back.
 -- Usage   : app:push("credits")
 -- Notes   : CREDITS.md is content, not UI copy, so its lines are exempt from the pseudo-locale "went through tr"
---           check (they are still checked for clipping). With reduce motion the text does not scroll on its own.
+--           check (they are still checked for clipping). With reduce motion the text does not scroll on its own: it
+--           starts at the top and up/down move it a whole row at a time (#302).
 --           dev.py build packs CREDITS.md into the .love. Build the file from docs/ASSET_LOG.md before a release.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): Credits.text follows tools/golden_vectors.py
 --           credits_text (a heading needs a space after its marks, '+' items, single stars, space and tab only);
 --           Credits:at_top for show:credits (#284)
+--           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): with reduce motion a tall CREDITS.md starts at the top
+--           and up/down move it a row at a time, clamped at both ends (#302)
 -- ---------------------------------------------------------------------------
 local Style = require("src.shell.style")
 
@@ -91,19 +94,26 @@ function Credits.lines_from(markdown)
   return lines
 end
 
--- Where the rows sit: start = the first row's y below the top of the area, and the offset to keep (looped). Rolling:
--- the rows come up from below the area and start again once they have passed.
+-- Where the rows sit: start = the first row's y below the top of the area, and the offset to keep. Rolling (motion
+-- on): offset counts pixels, the rows come up from below the area and start again once they have passed. Still
+-- (reduce motion, #302): the first row at the top, offset counts STEP_PX presses and each press moves one whole row,
+-- clamped so the last row stays in view (the presses past the end are not saved up), as Godot, web and Unity scroll.
 function Credits.scroll(n_rows, lh, offset, still)
   local total = n_rows * lh
   if total <= AREA_H then return 0, 0 end
+  if still then
+    local last_first = n_rows - math.max(1, math.floor(AREA_H / lh))
+    local first = math.min(last_first, math.max(0, math.floor(offset / STEP_PX)))
+    return -first * lh, first * STEP_PX
+  end
   offset = offset % (total + AREA_H)                     -- loop: start again from below
   return AREA_H - offset, offset
 end
 
--- The first line at the top of the area, as smoke --drive show:credits pictures it (the text otherwise rolls up from
--- below the area).
+-- The first line at the top of the area, as smoke --drive show:credits pictures it (with motion on the text otherwise
+-- rolls up from below the area; still credits start there anyway).
 function Credits:at_top()
-  self.offset = AREA_H
+  self.offset = self.app.settings.access.reduce_motion and 0 or AREA_H
 end
 
 local function read_lines()
@@ -150,15 +160,16 @@ function Credits:draw(ui)
   end
   rows[#rows + 1] = { text = "" }
   rows[#rows + 1] = { text = app:t("credits.engine") }
+  local still = app.settings.access.reduce_motion
   local start
-  start, self.offset = Credits.scroll(#rows, lh, self.offset, app.settings.access.reduce_motion)
+  start, self.offset = Credits.scroll(#rows, lh, self.offset, still)
   ui:clip(AREA_X, AREA_Y, AREA_W, AREA_H)
   for i, row in ipairs(rows) do
     local y = AREA_Y + start + (i - 1) * lh
     if row.text ~= "" and y + lh > AREA_Y and y < AREA_Y + AREA_H then
       if y >= AREA_Y and y + lh <= AREA_Y + AREA_H then
         ui:label("credits.line" .. i, row.text, AREA_X, y, AREA_W, lh, { align = "center", raw = row.raw })
-      else                                   -- half scrolled out: drawn, not a layout problem
+      elseif not still then                  -- half scrolled out: drawn, not a layout problem
         love.graphics.setFont(font)
         love.graphics.setColor(Style.color.text)
         love.graphics.printf(row.text, AREA_X, math.floor(y + 1), AREA_W, "center")
