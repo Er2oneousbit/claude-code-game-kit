@@ -21,6 +21,9 @@
   margins are explicit, the parent waits for the job instead of sleeping, and the orphan is held by a handle, so the
   cleanup can never end another process that reused its id. Dotwork's Pixelorama hung-run case gets the same handle
   wait and explicit margins. Under heavy load the orphan class went from 7 failures in 14 runs to none in 28.
+- **Godot check without a sound device:** the shader check and screenshots open a real window, and on a machine
+  with no audio output device Godot printed a WASAPI `ERROR:` line that `check` reported as a shader error. Both runs
+  use the Dummy audio driver now (found by check_examples on this release).
 - **Upgrade notes:** a C++ game whose test names hold `;` renames them before `check` passes (`, and` works).
 - **Filed:** #312 (validate_asset.py crashes under the bpy 4.2 module), #313 (the metallic-roughness map as JPEG
   too), #314 (C++ `--screenshot x.png` writes BMP bytes).

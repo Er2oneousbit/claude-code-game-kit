@@ -39,6 +39,7 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): WindowsOrphanOnTimeout holds under load (#305):
 #           the parent waits for the job instead of sleeping, the timeout starts once the orphan exists,
 #           explicit margins, and the orphan is held by a handle (a stale-pid taskkill could end another process)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): GodotDummyAudio, windowed runs take no sound device
 # ---------------------------------------------------------------------------
 import argparse
 import base64
@@ -83,6 +84,34 @@ class TempRoot(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+
+# ---- Godot windowed runs take no sound device ---------------------------------
+class GodotDummyAudio(TempRoot):
+    """The shader check and captures open a real window; with the system's audio, a machine with no output device
+    printed a WASAPI 'ERROR:' line that check read as a shader error. Both runs use the Dummy audio driver."""
+
+    def test_the_shader_check_runs_without_sound(self):
+        dev = load("godot")
+        dev.ROOT = self.root
+        (self.root / dev.SHADER_DIR).mkdir(parents=True)
+        calls = []
+
+        def fake_run(cmd, **kw):
+            calls.append([str(c) for c in cmd])
+            return 0, "SHADER_CHECK_DONE failed=0"
+        dev.run = fake_run
+        quiet(dev.shader_pass, "godot", False)
+        godot_runs = [c for c in calls if c[0] == "godot"]
+        self.assertTrue(godot_runs, "the shader check ran Godot")
+        self.assertIn("--audio-driver", godot_runs[0])
+        self.assertEqual(godot_runs[0][godot_runs[0].index("--audio-driver") + 1], "Dummy")
+
+    def test_captures_run_without_sound(self):
+        text = (KIT / "engines" / "godot" / "skeleton" / "tools" / "dev.py").read_text(encoding="utf-8")
+        body = text[text.index("def capture(args, godot, frames, user):"):]
+        body = body[:body.index("\ndef ")]
+        self.assertIn('"--audio-driver", "Dummy"', body)
 
 
 # ---- C++ test names: ';' is CMake's list separator ---------------------------
