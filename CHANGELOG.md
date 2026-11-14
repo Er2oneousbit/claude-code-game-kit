@@ -3,6 +3,23 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.15.6 (2026-11-14): no known bugs left: C++ capture formats, the Blender 4.2 floor (#312, #314)
+- **C++ captures in the format their name asks for (#314):** `smoke --screenshot x.png` wrote BMP bytes under a .png
+  name. `.png` now writes PNG (SDL 3.4's `SDL_SavePNG`), `.bmp` writes BMP, any other name is refused before the build
+  (`dev.py`, exit 2) and at startup (the game); `--record` frames, the F8 bug report and the access sweep's frame are
+  PNG like every other engine's. `dev.py` checks the saved file's first bytes, so a game whose `main.cpp` predates the
+  fix is told so. Fixed on the way: the time a capture takes to save was counted in smoke's frame times (a recording's
+  p95 read 34 ms instead of 5).
+- **Blender 4.2 exit crash (#312):** the bpy 4.2 module crashes while the process ends after any glTF import, not
+  only after an export, and `validate_asset.py` was the one Blender script ending with a plain `sys.exit`: its 0 or 1
+  became 0xC0000005, so a rebake on the 4.2 floor reported "validate_asset.py did not finish". It ends through
+  `bpy_common.end_process` now, and so does its exam. `scripts/run_exams.py` gains floor rows on bpy 4.2.0
+  (`validate_asset_bpy42`, `prep_export_bpy42`, `rebake_bpy42`), so the oldest Blender the kit supports is tested on
+  every run; a uv that cannot build an environment is a skip naming the reason, never a fail.
+- **Upgrade notes:** C++ games add `tests/test_capture_format.cpp` to the `unit_tests` list if their `CMakeLists.txt`
+  comes back as `.gold`; a screenshot named other than .png or .bmp is refused; captures that wrote into `build/` in
+  older docs belong in `captures/` (`clean` wipes `build/`).
+
 ## 0.15.5 (2026-11-14): bug fixes: still credits, smaller rebaked models, C++ tests that never ran, exams that held under load (#302, #303, #305)
 - **Still credits start at the top (#302):** with reduce motion on, LÖVE and C++ started a CREDITS.md taller than the
   text area a full area below the top: nothing showed until the player pressed down about a dozen times. They now
