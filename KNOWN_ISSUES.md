@@ -100,9 +100,6 @@ examples were built and tested on one Windows 11 machine.
   original stays painted on the body under it.
 
 ### 0.15.1 follow-ups
-- **Credits under reduce motion:** LÖVE and C++ seem to start a CREDITS.md taller than the text area below the
-  visible area, found by reading the code, not run (verify)
-  ([#302](https://github.com/Er2oneousbit/claude-code-game-kit/issues/302)).
 - **Gemini:** Google calls `generateContent` legacy and points to its Interactions API; moving needs a billed live run
   ([#304](https://github.com/Er2oneousbit/claude-code-game-kit/issues/304)). Whether `gemini-3.1-flash-lite-image`
   accepts `imageSize`, and whether image replies are always PNG, are (verify).
