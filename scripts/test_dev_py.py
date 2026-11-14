@@ -37,7 +37,7 @@
 #           Unity, C++/SDL3, Bevy and Unreal smoke help, Unity's drive names (#308)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): WindowsOrphanOnTimeout holds under load (#305):
 #           the parent waits for the job instead of sleeping, the timeout starts once the orphan exists,
-#           explicit margins, and the orphan is held by a handle (a stale-pid taskkill hit other processes)
+#           explicit margins, and the orphan is held by a handle (a stale-pid taskkill could end another process)
 # ---------------------------------------------------------------------------
 import argparse
 import base64
@@ -1524,9 +1524,9 @@ ORPHAN_READY_S = 120          # ceiling for a Python to start on a loaded machin
 
 class WinProc:
     """A Windows process held by an open handle, so its id cannot pass to another process while the exam looks at it
-    (#305: a bare pid, checked or killed after its process ended, could name an unrelated process: the cleanup's
-    taskkill /F ended whatever had reused it, exit code 1, in another exam running alongside). `created` is the
-    creation time the parent wrote: a process that reuses the id is not taken for the one that ended."""
+    (#305: a bare pid, checked or killed after its process ended, can name an unrelated process: the cleanup's
+    taskkill /F would end whatever had reused it, exit code 1, even in another exam running alongside). `created`
+    is the creation time the parent wrote: a process that reuses the id is not taken for the one that ended."""
     SYNCHRONIZE, QUERY, TERMINATE = 0x00100000, 0x1000, 0x0001
     WAIT_OBJECT_0, WAIT_TIMEOUT = 0, 0x102
 

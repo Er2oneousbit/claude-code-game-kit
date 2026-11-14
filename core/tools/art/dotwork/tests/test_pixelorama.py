@@ -2600,7 +2600,7 @@ func _init() -> void:
 	check("out line" in r["output"] and "err line" in r["output"], "stdout and stderr are both read: %s" % r)
 	# a Python that starts a child (as Dotwork starts Godot) and both hang: stopped at the limit, the child too.
 	# EXAM_HANG is that script (it prints CHILD <pid> <creation time>). The limit leaves the script time to start
-	# its child and print on a loaded machine (#305: 3 s was too tight); KILL_MARGIN_S bounds the poll and the kill.
+	# its child and print on a loaded machine (#305: 3 s left little room); KILL_MARGIN_S bounds the poll and the kill.
 	var t0 := Time.get_ticks_msec()
 	r = L.run_process(py, PackedStringArray([OS.get_environment("EXAM_HANG")]), HANG_LIMIT_S, [false])
 	var took := Time.get_ticks_msec() - t0
