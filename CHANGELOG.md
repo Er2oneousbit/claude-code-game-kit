@@ -3,6 +3,20 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.15.4 (2026-11-13): sharp text in Godot games (#311)
+- **Godot draws text at the window's resolution (#311):** the template's stretch mode `viewport` drew everything at the
+  640x360 base and scaled it up, so menu and HUD text (the readable font included) became 3 to 6 px blocks at 1080p
+  to 4K, and the text-size settings made it blockier, not clearer. The template now uses `canvas_items`: layout stays
+  in 640x360 units, pixel art still scales by whole numbers (aspect expand, integer scale, Nearest, 2D snapping), and
+  text and 3D draw at the window's resolution. ENGINE.md gotcha 7 gives the trade-off (a moving sprite snaps to
+  screen pixels, not the art grid), the strict-grid alternative (the world in a 640x360 SubViewport, the UI outside
+  it) and the gotchas: a SubViewport renders at its size times k with camera zoom times k, `smoke --screenshot` saves
+  at the window's size, and a callable connects to the viewport's or the window's `size_changed`, never both. The
+  menus, pseudo-locale, access and display drives and `smoke --shaders` pass unchanged.
+- **Upgrade notes:** an existing Godot game sets `display/window/stretch/mode` to `canvas_items` in Project Settings
+  (the upgrade keeps an edited `project.godot`, and the editor rewrites it), then checks any SubViewport and any code
+  that read screenshot or viewport pixels as 640x360.
+
 ## 0.15.3 (2026-11-13): settings that say what they do: Apply on the Display tab with a keep-or-revert confirm, HUD text that follows the player's size settings (#308, #309, #310)
 - **Display waits for Apply (#308):** players looked for an Apply button the settings screen never had, and SOP-19's
   revert for display changes was in no engine. In all eight engines with a shell (Godot, web, web-3d, LÖVE, Unity,

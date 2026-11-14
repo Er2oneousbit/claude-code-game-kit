@@ -123,9 +123,17 @@ tools/                   dev.py and helpers
 4. **`@onready` runs after `_init`**, before `_ready`. Do not touch `@onready` vars in `_init`.
 5. **Autoload names are globals.** Do not also give the script a `class_name` with the same name.
 6. **Headless runs need the import cache** (`dev.py import`) or resources fail to load.
-7. **Pixel art settings** (Project Settings): default texture filter Nearest, stretch mode `viewport`, aspect `expand`, scale mode `integer` on a 640x360 base (it divides 720p, 1080p, 1440p and 4K
-   evenly; the template sets these and a 1920x1080 window), snap 2D transforms to pixel. A 3D game switches to
-   `canvas_items` so 3D renders at full resolution. Do not change without an ADR.
+7. **Pixel art settings** (Project Settings): default texture filter Nearest, stretch mode `canvas_items`, aspect
+   `expand`, scale mode `integer` on a 640x360 base (it divides 720p, 1080p, 1440p and 4K evenly; the template sets
+   these and a 1920x1080 window), snap 2D transforms to pixel. Layout stays in 640x360 units and pixel art scales by
+   whole numbers, but text and 3D draw at the window's resolution, so menus, the HUD and the readable font stay sharp
+   (until kit 0.15.4 the mode was `viewport`, which drew everything at 640x360 and scaled it: letters became 3 to 6 px
+   blocks at 1080p to 4K, #311). The trade-off: a moving sprite snaps to screen pixels, not the art grid. A game that
+   wants a strict art grid puts its world in a 640x360 SubViewport and keeps the UI outside it, at native size; any
+   SubViewport renders at its size times k with its camera zoom times k (k = window height / 360), or its text stays
+   blocky. `smoke --screenshot` saves at the window's size. The root viewport is the window, so connect a callable to
+   `get_viewport().size_changed` or `get_window().size_changed`, never both (Godot refuses the second as already
+   connected). Do not change the mode without an ADR.
 8. **Physics determinism:** do not rely on `_process` for gameplay timing. Use `_physics_process` or your own fixed-step logic.
 9. **API verification:** Godot 4.x changes between minor versions. Check `godot --version` and the matching docs before using unfamiliar APIs.
 10. **Comparing different types is an error** (`1.0 == "a"` is a SCRIPT ERROR on 4.7.2), and JSON numbers are always floats. Check `typeof()` first when a value can be anything (settings, saves, JSON).
@@ -142,7 +150,7 @@ tools/                   dev.py and helpers
     fine). So keep explanations here, never as comments in `project.godot`, and never rely on a default being written
     there: read a setting with `ProjectSettings.get_setting(name, default)`, and a tool that parses the file must treat
     a missing key as Godot's default (the Dotwork screens lane reads a missing viewport size as 1152x648). What the
-    template sets, and why: a 640x360 viewport with a 1920x1080 window, stretch `viewport`, aspect `expand`, scale
+    template sets, and why: a 640x360 viewport with a 1920x1080 window, stretch `canvas_items`, aspect `expand`, scale
     mode `integer` and Nearest filtering with 2D snapping (gotcha 7); `audio/general/text_to_speech` on for menu
     narration; `untyped_declaration` as a warning (typed GDScript); the `Log` and `Shell` autoloads. None of them is a
     default, so the editor keeps them. Checked on 4.7.2 (2026-11-13): a save kept every one of them and dropped a
