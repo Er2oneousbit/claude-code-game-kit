@@ -9,6 +9,7 @@
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_text, the markdown rule every engine
 //           shares (a heading needs a space after its marks, '+' items, single stars); a line of only '#' no
 //           longer throws (#284)
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_scroll (#302)
 // ---------------------------------------------------------------------------
 #include "core/ShellLogic.hpp"
 
@@ -292,11 +293,15 @@ std::vector<std::string> credits_lines(const std::string& markdown) {
     }
 }
 
-CreditsScroll credits_scroll(std::size_t rows, double row_h, double area_h, double /*step*/, double offset,
-                             bool /*still*/) {
+CreditsScroll credits_scroll(std::size_t rows, double row_h, double area_h, double step, double offset, bool still) {
     const double total = static_cast<double>(rows) * row_h;
     if (total <= area_h) {
         return {0, 0};
+    }
+    if (still) {   // #302: the top first, a whole row per press, clamped at both ends
+        const double last_first = static_cast<double>(rows) - std::max(1.0, std::floor(area_h / row_h));
+        const double first = std::min(last_first, std::max(0.0, std::floor(offset / step)));
+        return {-first * row_h, first * step};
     }
     offset = std::fmod(offset, total + area_h);   // loop: start again from below
     return {area_h - offset, offset};

@@ -27,6 +27,8 @@
 //           generic name to games
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_text, the markdown rule every engine shares
 //           (#284)
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_scroll, still credits start at the top and
+//           move a row per press (#302)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -72,8 +74,10 @@ std::string credits_text(const std::string& markdown);
 // credits_text split into lines. Empty when nothing is left (the screen shows its placeholder then).
 std::vector<std::string> credits_lines(const std::string& markdown);
 // Where the credits screen's rows sit (#302): start = the first row's y below the top of the area, offset = what the
-// screen keeps for the next frame. A text that fits stands at the top. Rolling: offset counts pixels, the rows come
-// up from below the area and start again once they have passed.
+// screen keeps for the next frame. A text that fits stands at the top. Rolling (motion on): offset counts pixels, the
+// rows come up from below the area and start again once they have passed. Still (reduce motion): the first row at
+// the top, offset counts step-sized presses and each press moves one whole row, clamped so the last row stays in
+// view (presses past the end are not saved up), as Godot, web and Unity scroll their credits.
 struct CreditsScroll {
     double start;
     double offset;
