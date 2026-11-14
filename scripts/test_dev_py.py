@@ -35,6 +35,9 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): ship --target itch defaults to the web build (#86)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:confirm on the
 #           Unity, C++/SDL3, Bevy and Unreal smoke help, Unity's drive names (#308)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): WindowsOrphanOnTimeout holds under load (#305):
+#           the parent waits for the job instead of sleeping, the timeout starts once the orphan exists,
+#           explicit margins, and the orphan is held by a handle (a stale-pid taskkill hit other processes)
 # ---------------------------------------------------------------------------
 import argparse
 import base64
@@ -1497,89 +1500,157 @@ class WebDriveHelp(unittest.TestCase):
 
 
 # ---- #36: Windows, a grandchild whose parent already exited ---------------------
-# The parent starts a grandchild that inherits stdout (so it holds the pipe), writes its pid, and exits at once.
+# The parent waits until the exam says it is in the job (the file argv[2] exists), starts a grandchild that inherits
+# stdout (so it holds the pipe), writes the grandchild's pid and creation time (whole, through a rename), and exits at
+# once. #305: it used to sleep 0.3 s and hope dev.py had assigned the job by then, which a loaded machine breaks.
 ORPHAN_PARENT = (
-    "import subprocess, sys, time\n"
-    "time.sleep(0.3)\n"                      # join the job first (dev.py assigns it right after starting us)
+    "import ctypes, os, subprocess, sys, time\n"
+    "deadline = time.monotonic() + 120\n"
+    "while not os.path.exists(sys.argv[2]) and time.monotonic() < deadline:\n"
+    "    time.sleep(0.01)\n"
     "g = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
-    "open(sys.argv[1], 'w').write(str(g.pid))\n"
+    "t = (ctypes.c_ulonglong * 4)()\n"
+    "ctypes.windll.kernel32.GetProcessTimes(ctypes.c_void_p(int(g._handle)), *[ctypes.byref(t, 8 * i) for i in "
+    "range(4)])\n"
+    "open(sys.argv[1] + '.tmp', 'w').write('%d %d' % (g.pid, t[0]))\n"
+    "os.replace(sys.argv[1] + '.tmp', sys.argv[1])\n"
 )
-STILL_ACTIVE = 259
+ORPHAN_RUN_TIMEOUT_S = 2      # the timeout under test; it starts once the grandchild exists (see joined_job)
+ORPHAN_KILL_TIMEOUT_S = 30    # dev.py's wait for the pipe after a kill: a run that waited on it takes this much longer
+ORPHAN_KILL_MARGIN_S = 15     # what the kill itself (TerminateJobObject, taskkill) may take on a loaded machine
+ORPHAN_GONE_S = 20            # how long a killed grandchild may take to end (a left-running one sleeps 60 s)
+ORPHAN_READY_S = 120          # ceiling for a Python to start on a loaded machine (a wait for a condition, not a limit)
 
 
-def win_alive(pid):
-    """True while a Windows process runs (os.kill(pid, 0) would terminate it there)."""
-    import ctypes
-    from ctypes import wintypes
-    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    k32.OpenProcess.restype = wintypes.HANDLE
-    k32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
-    k32.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
-    k32.CloseHandle.argtypes = (wintypes.HANDLE,)
-    h = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
-    if not h:
-        return False
-    code = wintypes.DWORD()
-    ok = k32.GetExitCodeProcess(h, ctypes.byref(code))
-    k32.CloseHandle(h)
-    return bool(ok) and code.value == STILL_ACTIVE
+class WinProc:
+    """A Windows process held by an open handle, so its id cannot pass to another process while the exam looks at it
+    (#305: a bare pid, checked or killed after its process ended, could name an unrelated process: the cleanup's
+    taskkill /F ended whatever had reused it, exit code 1, in another exam running alongside). `created` is the
+    creation time the parent wrote: a process that reuses the id is not taken for the one that ended."""
+    SYNCHRONIZE, QUERY, TERMINATE = 0x00100000, 0x1000, 0x0001
+    WAIT_OBJECT_0, WAIT_TIMEOUT = 0, 0x102
+
+    def __init__(self, pid, created):
+        import ctypes
+        from ctypes import wintypes
+        self.ctypes = ctypes
+        k32 = self.k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.OpenProcess.restype = wintypes.HANDLE
+        k32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        k32.GetProcessTimes.argtypes = (wintypes.HANDLE,) + (ctypes.POINTER(ctypes.c_ulonglong),) * 4
+        k32.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+        k32.TerminateProcess.argtypes = (wintypes.HANDLE, wintypes.UINT)
+        k32.CloseHandle.argtypes = (wintypes.HANDLE,)
+        self.pid = pid
+        self.handle = k32.OpenProcess(self.SYNCHRONIZE | self.QUERY | self.TERMINATE, False, pid)
+        if self.handle:
+            t = [ctypes.c_ulonglong() for _ in range(4)]
+            if not k32.GetProcessTimes(self.handle, *[ctypes.byref(x) for x in t]) or t[0].value != created:
+                self.close()                 # the grandchild already ended and its id went to another process
+
+    def alive(self):
+        return bool(self.handle) and self.k32.WaitForSingleObject(self.handle, 0) == self.WAIT_TIMEOUT
+
+    def ends_within(self, seconds):
+        """True once the process has ended, waiting up to `seconds` for it (an event, not a sleep)."""
+        return not self.handle or self.k32.WaitForSingleObject(self.handle, int(seconds * 1000)) == self.WAIT_OBJECT_0
+
+    def kill(self):
+        """Cleanup: end it if it still runs (this process, never a later one with its id), then let go."""
+        if self.alive():
+            self.k32.TerminateProcess(self.handle, 1)
+            self.ends_within(ORPHAN_GONE_S)  # so the temp folder it ran in can be removed next
+        self.close()
+
+    def close(self):
+        if self.handle:
+            self.k32.CloseHandle(self.handle)
+            self.handle = None
 
 
 @unittest.skipUnless(sys.platform == "win32", "Windows job objects")
 class WindowsOrphanOnTimeout(TempRoot):
+    def wait_for(self, path):
+        deadline = time.monotonic() + ORPHAN_READY_S
+        while not path.is_file():
+            if time.monotonic() > deadline:
+                self.fail(f"the parent never wrote {path.name}")
+            time.sleep(0.01)
+
     def grandchild(self, pidfile):
-        """The orphan's pid, read once its parent wrote it; registered for cleanup in any case."""
-        for _ in range(100):
-            if pidfile.is_file() and pidfile.read_text().strip():
-                pid = int(pidfile.read_text())
-                self.addCleanup(lambda: subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True))
-                return pid
-            time.sleep(0.05)
-        self.fail("the parent never wrote the grandchild's pid")
+        """The orphan, held by a handle, once its parent wrote it; ended at cleanup if it still runs."""
+        self.wait_for(pidfile)
+        pid, created = (int(x) for x in pidfile.read_text().split())
+        proc = WinProc(pid, created)
+        self.addCleanup(proc.kill)
+        return proc
+
+    def parent(self, name):
+        """Start ORPHAN_PARENT; returns (proc, pidfile, joined), joined being the file that lets it go on."""
+        pidfile, joined = self.root / f"{name}.pid", self.root / f"{name}.joined"
+        proc = subprocess.Popen([sys.executable, "-c", ORPHAN_PARENT, str(pidfile), str(joined)])
+        return proc, pidfile, joined
 
     def test_run_timeout_ends_the_orphan(self):
         for engine in [e for e in ENGINES if e != "unity"]:   # Unity's run_unity starts the editor itself
             with self.subTest(engine=engine):
                 dev = load(engine)
                 dev.ROOT = self.root
-                dev.KILL_TIMEOUT_S = 2
-                pidfile = self.root / f"{engine}.pid"
-                started = time.monotonic()
-                (rc, _), _ = quiet(dev.run, [sys.executable, "-c", ORPHAN_PARENT, str(pidfile)], capture=True,
-                                   timeout=2)
+                dev.KILL_TIMEOUT_S = ORPHAN_KILL_TIMEOUT_S
+                pidfile, joined = self.root / f"{engine}.pid", self.root / f"{engine}.joined"
+                real_job, mark = dev.WinJob, {}
+
+                def joined_job(proc, timeout):
+                    # run() makes the job right after starting the parent, then starts its timeout: let the parent
+                    # go on once it is in the job, and hold the timeout until the grandchild exists, so a slow start
+                    # on a loaded machine cannot use up the 2 s before there is an orphan to end
+                    job = real_job(proc, timeout)
+                    joined.touch()
+                    self.wait_for(pidfile)
+                    mark["start"] = time.monotonic()
+                    return job
+
+                dev.WinJob = joined_job
+                (rc, _), _ = quiet(dev.run, [sys.executable, "-c", ORPHAN_PARENT, str(pidfile), str(joined)],
+                                   capture=True, timeout=ORPHAN_RUN_TIMEOUT_S)
+                took = time.monotonic() - mark["start"]
                 self.assertEqual(rc, 124)
-                self.assertLess(time.monotonic() - started, 3.5, f"{engine}: waited on the orphan's pipe")
-                pid = self.grandchild(pidfile)
-                time.sleep(0.2)
-                self.assertFalse(win_alive(pid), f"{engine}: the grandchild outlived the timeout")
+                # inherently timing-based: about ORPHAN_RUN_TIMEOUT_S plus the kill when the job ends the orphan,
+                # ORPHAN_KILL_TIMEOUT_S (30 s) more when run() is left waiting on the pipe the orphan holds; the
+                # bound sits between the two with ORPHAN_KILL_MARGIN_S for the kill on a loaded machine
+                self.assertLess(took, ORPHAN_RUN_TIMEOUT_S + ORPHAN_KILL_MARGIN_S,
+                                f"{engine}: waited on the orphan's pipe")
+                self.assertLess(ORPHAN_KILL_MARGIN_S, ORPHAN_KILL_TIMEOUT_S)   # or the bound proves nothing
+                g = self.grandchild(pidfile)
+                self.assertTrue(g.ends_within(ORPHAN_GONE_S), f"{engine}: the grandchild outlived the timeout")
 
     def test_winjob_in_every_module(self):
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 dev = load(engine)
-                pidfile = self.root / f"job-{engine}.pid"
-                proc = subprocess.Popen([sys.executable, "-c", ORPHAN_PARENT, str(pidfile)])
+                proc, pidfile, joined = self.parent(f"job-{engine}")
                 job = dev.WinJob(proc, 30)
+                joined.touch()
                 self.assertTrue(job.handle, f"{engine}: no job object")
-                proc.wait(10)
-                pid = self.grandchild(pidfile)
-                self.assertTrue(win_alive(pid))
+                proc.wait(ORPHAN_READY_S)
+                g = self.grandchild(pidfile)
+                self.assertTrue(g.alive())
                 job.kill()
-                time.sleep(0.2)
-                self.assertFalse(win_alive(pid), f"{engine}: WinJob.kill left the grandchild running")
+                self.assertTrue(g.ends_within(ORPHAN_GONE_S), f"{engine}: WinJob.kill left the grandchild running")
                 self.assertIsNone(job.handle)
 
     def test_untimed_and_normal_exit_leave_processes_alone(self):
         dev = load("web")
         self.assertIsNone(dev.WinJob(subprocess.Popen([sys.executable, "-c", "pass"]), None).handle)
-        pidfile = self.root / "normal.pid"
-        proc = subprocess.Popen([sys.executable, "-c", ORPHAN_PARENT, str(pidfile)])
+        proc, pidfile, joined = self.parent("normal")
         job = dev.WinJob(proc, 30)
-        proc.wait(10)
+        joined.touch()
+        proc.wait(ORPHAN_READY_S)
         job.close()                              # what run() does after a normal exit
-        pid = self.grandchild(pidfile)
-        time.sleep(0.2)
-        self.assertTrue(win_alive(pid), "closing the job must not end what the command left running")
+        g = self.grandchild(pidfile)
+        # inherently timing-based: nothing to wait for when nothing happens, so give a kill that close() might have
+        # started a second to land (a kill ends a process in milliseconds) and check the grandchild still runs
+        self.assertFalse(g.ends_within(1.0), "closing the job must not end what the command left running")
 
 
 # ---- #37: Linux / macOS, killing an untimed command ------------------------------
