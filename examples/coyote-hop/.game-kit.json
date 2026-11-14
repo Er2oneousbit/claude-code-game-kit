@@ -1720,6 +1720,12 @@
       "date": "2026-11-14",
       "mode": "upgrade",
       "unmerged": []
+    },
+    {
+      "version": "0.15.5",
+      "date": "2026-11-14",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -2360,7 +2366,7 @@
     "tools/cloud/ship.py": "2e1e29e7942d8660f480a9657a7149483294ad7cd4ec5cec57f2f38147d30bee",
     "tools/cloud/test_ship.py": "1ebe77b60254828937652f947a33ecb50f02d05a8acfe1329a88a5d3325c68e1",
     "tools/credits.py": "04d7f34a52b4ee033e661d692270ab1843a071210f5764ee0a7ba51155e0fe3e",
-    "tools/dev.py": "758e3b85a928f8a5e4c7b1d6824236e37ee654350aac189791043f6adc887a1f",
+    "tools/dev.py": "32c2a984806142b96f1e27e0f87b516cd24dbc8f46e9c38b4f1f92e76bd0e4ce",
     "tools/doctor.py": "95d0da5b6efeb2ccb1a1a4a67c9b09daeddcefc0b8b96ca4dba00825dca1e9f0",
     "tools/fetch_asset.py": "4c3f351d98ed01dd27c9dc68ec0f3b9242045c16d1b2dde292cf44fb3d127d7d",
     "tools/golden_vectors.py": "a7720a1f91cbfe8e0669a300ac980b1a82168706f1cbcdf9e9e2110ee22a440e",

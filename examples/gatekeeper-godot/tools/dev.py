@@ -73,6 +73,8 @@
 #           the reason, exit 2); it passed as "N test(s) passed" (#295)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `ship --target itch` uploads to itch.io with
 #           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the shader check and captures run with the Dummy audio
+#           driver (a machine with no sound device failed check with a WASAPI line reported as a shader error)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -807,7 +809,9 @@ def shader_pass(godot, compare):
         for old in out_dir.glob("*.png"):
             old.unlink()                        # a render from an earlier run must not pass for this one
     gdignore(out_dir)
-    rc, out = run([godot, "--path", ".", "--windowed", "--resolution", "64x64", "--position", "0,0",
+    # Dummy audio: the recipes need no sound, and a machine with no output device prints a WASAPI ERROR line
+    # that the scan below would report as a shader error
+    rc, out = run([godot, "--path", ".", "--audio-driver", "Dummy", "--windowed", "--resolution", "64x64", "--position", "0,0",
                    "-s", SHADER_CHECK, "--", out_dir.as_posix()], echo="never", timeout=SHADER_TIMEOUT_S)
     if rc in NO_EXEC:
         return 2
@@ -865,7 +869,7 @@ def gdignore(folder, own=(), own_dirs=()):
 
 def capture(args, godot, frames, user):
     """Run the game in a real window (headless has no renderer) and save a screenshot and/or a frame burst."""
-    cmd = [godot, "--path", "."] + (["--fixed-fps", str(DRIVE_FPS)] if args.drive else [])
+    cmd = [godot, "--path", ".", "--audio-driver", "Dummy"] + (["--fixed-fps", str(DRIVE_FPS)] if args.drive else [])  # no sound in a picture
     cmd += ["-s", "res://tools/capture.gd", "--", "--frames", str(frames), "--every-ms", str(args.record_every)]
     shot = (ROOT / args.screenshot).resolve() if args.screenshot else None
     rec = (ROOT / args.record).resolve() if args.record else None
