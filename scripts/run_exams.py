@@ -28,6 +28,7 @@
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the rebake row's note (--rebake auto, #203)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the retarget row (animation packs, #205)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the rebake row covers prep_export.py (JPEG maps, #303)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -186,12 +187,12 @@ EXAMS = [
     Exam("core/tools/bozzetto/test_retarget.py", "animation packs (#205): bone maps and `rig retarget` offline; its Blender part (a made-up pack with Quaternius UAL bone names onto the golden character, about 30 s) runs when Blender or bpy is found",
          covers=("core/tools/bozzetto/", "core/data/golden/character/")),
     Exam("core/tools/bozzetto/test_reference.py", "reference views: stand-in ComfyUI, Gemini and Tripo; caps, journal reuse, failures, the PNG reader"),
-    Exam("core/tools/bozzetto/test_rebake.py", "the UV rebake (#293, #203): make's --rebake/--rebake auto/--accept-uv and `rebake <name>` offline; its Blender part (a tiny-island cube rebaked, checked and kept over the floor, about 2 min) runs when Blender or bpy is found",
-         covers=("core/tools/bozzetto/", "core/tools/blender/rebake_uvs.py")),
+    Exam("core/tools/bozzetto/test_rebake.py", "the UV rebake (#293, #203): make's --rebake/--rebake auto/--accept-uv/--rebake-png and `rebake <name>` offline; its Blender part (a tiny-island cube rebaked, checked and kept over the floor; a JPEG-textured one keeps a JPEG colour map, #303; about 5 min) runs when Blender or bpy is found",
+         covers=("core/tools/bozzetto/", "core/tools/blender/rebake_uvs.py", "core/tools/blender/prep_export.py")),
     Exam("core/tools/bozzetto/test_bozzetto_live.py", "one real TRELLIS.2 run (about 5 min); [SKIP] without ComfyUI", style="cases", live=True),
     # core/tools/blender (bpy on uv's Python 3.13)
     Exam("core/tools/blender/test_validate_asset.py", "builds fixtures with bpy", **BPY),
-    Exam("core/tools/blender/test_prep_export.py", "builds fixtures with bpy", **BPY),
+    Exam("core/tools/blender/test_prep_export.py", "builds fixtures with bpy; LOD textures halve, a JPEG stays JPEG (#196, #303)", **BPY),
     Exam("core/tools/blender/test_render_sprites.py", "renders with Cycles on the CPU, a few minutes", live=True, **BPY),
     Exam("core/tools/blender/test_golden_character.py", "the golden rigged character read with the standard library; its rebuild check runs when Blender or bpy is found (GOLDEN_CHARACTER_BLENDER=skip|bpy|<path>)",
          covers=("core/tools/blender/golden_character.py", "core/data/golden/character/")),
