@@ -41,7 +41,8 @@
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): crash files from the loop's exceptions, std::terminate
 //           and fatal signals (#275); save_frame moved to shell/Draw.hpp (the F8 bug report uses it too)
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --screenshot writes PNG for .png and BMP for .bmp and
-//           refuses any other name; --record frames are PNG (#314, core/CaptureFormat.hpp)
+//           refuses any other name; --record frames are PNG (#314, core/CaptureFormat.hpp); the time a capture
+//           takes to save is kept out of FRAME_TIMES
 // ---------------------------------------------------------------------------
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -378,6 +379,8 @@ int main(int argc, char** argv) {
 
             game.render(renderer.get());
             const bool last_frame = smoke && (frames + 1 >= opts.smoke_frames || game.quit_requested());
+            // Saving a capture (PNG encoding, the disk) is not the game's frame: kept out of FRAME_TIMES (#314)
+            const Uint64 capture_start = SDL_GetPerformanceCounter();
             if (!opts.record_dir.empty() && frames % opts.record_every == 0) {
                 char name[32];
                 std::snprintf(name, sizeof name, "frame_%06d.png", frames);
@@ -390,9 +393,11 @@ int main(int argc, char** argv) {
                     LOG_ERROR("core", "screenshot failed: " << SDL_GetError());
                 }
             }
+            const Uint64 capture_ticks = SDL_GetPerformanceCounter() - capture_start;
             SDL_RenderPresent(renderer.get());
             if (smoke) {
-                frame_times.add(static_cast<double>(SDL_GetPerformanceCounter() - frame_start) * 1000.0 / freq);
+                const Uint64 ticks = SDL_GetPerformanceCounter() - frame_start - capture_ticks;
+                frame_times.add(static_cast<double>(ticks) * 1000.0 / freq);
             }
 
             ++frames;
