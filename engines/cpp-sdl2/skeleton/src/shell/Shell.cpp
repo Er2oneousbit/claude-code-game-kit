@@ -1576,7 +1576,7 @@ void Shell::draw_display_confirm(core::SettingsMenu& menu) {
     draw_list(list, px + pw * 0.26, py + 14 + text_h + 10, pw * 0.48, 0, 0, "settings.confirm", true);
 }
 
-void Shell::draw_credits(const Screen& s) {
+void Shell::draw_credits(Screen& s) {
     Draw& d = *draw_;
     TextOpts heading;
     heading.align = Align::Center;
@@ -1610,14 +1610,10 @@ void Shell::draw_credits(const Screen& s) {
     }
     rows.emplace_back("");
     rows.push_back(t("credits.engine"));
-    const double total = static_cast<double>(rows.size()) * lh;
-    double offset = s.offset;
-    if (total > kAreaH) {
-        offset = std::fmod(offset, total + kAreaH);   // loop: start again from below
-    } else {
-        offset = 0;
-    }
-    const double start = total > kAreaH ? kAreaH - offset : 0;
+    const core::CreditsScroll scroll = core::credits_scroll(rows.size(), lh, kAreaH, kStepPx, s.offset,
+                                                            access_flag("reduce_motion"));
+    s.offset = scroll.offset;
+    const double start = scroll.start;
     d.clip(kAreaX, kAreaY, kAreaW, kAreaH);
     for (std::size_t i = 0; i < rows.size(); ++i) {
         const double y = kAreaY + start + static_cast<double>(i) * lh;

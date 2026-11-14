@@ -71,6 +71,14 @@ std::string strip_html_comments(const std::string& text);
 std::string credits_text(const std::string& markdown);
 // credits_text split into lines. Empty when nothing is left (the screen shows its placeholder then).
 std::vector<std::string> credits_lines(const std::string& markdown);
+// Where the credits screen's rows sit (#302): start = the first row's y below the top of the area, offset = what the
+// screen keeps for the next frame. A text that fits stands at the top. Rolling: offset counts pixels, the rows come
+// up from below the area and start again once they have passed.
+struct CreditsScroll {
+    double start;
+    double offset;
+};
+CreditsScroll credits_scroll(std::size_t rows, double row_h, double area_h, double step, double offset, bool still);
 // "key_space" -> "Space", "xbox_a" -> "A", "pad_dpad_up" -> "Dpad up" (the glyph table's own text wins in the shell)
 std::string glyph_fallback_label(const std::string& glyph_name);
 

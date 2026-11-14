@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <sstream>
 #include <string_view>
 #include <utility>
@@ -289,6 +290,16 @@ std::vector<std::string> credits_lines(const std::string& markdown) {
         }
         from = end + 1;
     }
+}
+
+CreditsScroll credits_scroll(std::size_t rows, double row_h, double area_h, double /*step*/, double offset,
+                             bool /*still*/) {
+    const double total = static_cast<double>(rows) * row_h;
+    if (total <= area_h) {
+        return {0, 0};
+    }
+    offset = std::fmod(offset, total + area_h);   // loop: start again from below
+    return {area_h - offset, offset};
 }
 
 std::string glyph_fallback_label(const std::string& glyph_name) {

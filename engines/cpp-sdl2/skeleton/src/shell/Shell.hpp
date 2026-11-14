@@ -302,7 +302,7 @@ private:
     void draw_main_menu(Screen& s);
     void draw_settings();
     void draw_display_confirm(core::SettingsMenu& menu);   // "Keep these display settings?" (#308)
-    void draw_credits(const Screen& s);
+    void draw_credits(Screen& s);
     void credits_at_top();                // show:credits: the first lines in view (they roll up from below)
     void draw_loading(const Screen& s);
     void draw_play();
