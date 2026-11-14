@@ -22,6 +22,7 @@
 //     (the pseudo-locale drive reads the same report: fits, ink box, raw)
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): raw labels for the pseudo check, circle(), save_frame()
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): save_frame writes PNG or BMP by the file name (#314)
 //           (#275)
 // ---------------------------------------------------------------------------
 #pragma once
@@ -81,8 +82,9 @@ struct TextOpts {
 std::string hex_of(Rgb c);
 std::optional<Rgb> rgb_from_hex(const std::string& hex);   // "#rrggbb"
 
-// Saves what the renderer drew this frame as a BMP (call before SDL_RenderPresent), in output pixels. SDL alone
-// writes BMP; tools/art/frames_to_gif.py reads it. main.cpp (--screenshot, --record) and the F8 bug report use it.
+// Saves what the renderer drew this frame (call before SDL_RenderPresent), in output pixels, in the format the file
+// name asks for (#314, core/CaptureFormat.hpp): .png with SDL_SavePNG (SDL 3.4+), .bmp with SDL_SaveBMP; any other
+// name fails with SDL_GetError() saying so. main.cpp (--screenshot, --record) and the F8 bug report use it.
 bool save_frame(SDL_Renderer* renderer, const std::string& path);
 
 class Draw {

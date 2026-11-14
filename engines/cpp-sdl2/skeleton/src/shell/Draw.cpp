@@ -6,6 +6,7 @@
 //           SDL_SetRenderScale(k) at coordinates divided by k, then the scale goes back to 1. The record keeps
 //           design-space boxes; the sweep multiplies them by the window's scale itself.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): save_frame writes the format the file name asks for, PNG or BMP (#314)
 // ---------------------------------------------------------------------------
 #include "shell/Draw.hpp"
 
@@ -15,6 +16,7 @@
 #include <cstdlib>
 #include <utility>
 
+#include "core/CaptureFormat.hpp"
 #include "core/ShellLogic.hpp"
 
 namespace shell {
@@ -133,6 +135,11 @@ void Draw::circle(double cx, double cy, double r, Rgb c, double line) {
 }
 
 bool save_frame(SDL_Renderer* renderer, const std::string& path) {
+    const core::CaptureFormat format = core::capture_format_of(path);   // #314: the name picks the format
+    if (format == core::CaptureFormat::unknown) {
+        SDL_SetError("a capture is %s, not: %s", core::capture_formats_help(), path.c_str());
+        return false;
+    }
     // Read in output pixels: switch off the logical presentation for the read, then restore it
     int lw = 0;
     int lh = 0;
@@ -140,7 +147,8 @@ bool save_frame(SDL_Renderer* renderer, const std::string& path) {
     SDL_GetRenderLogicalPresentation(renderer, &lw, &lh, &mode);
     SDL_SetRenderLogicalPresentation(renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
     SDL_Surface* surface = SDL_RenderReadPixels(renderer, nullptr);
-    const bool ok = surface && SDL_SaveBMP(surface, path.c_str());
+    const bool ok = surface && (format == core::CaptureFormat::png ? SDL_SavePNG(surface, path.c_str())
+                                                                 : SDL_SaveBMP(surface, path.c_str()));
     SDL_SetRenderLogicalPresentation(renderer, lw, lh, mode);
     SDL_DestroySurface(surface);
     return ok;

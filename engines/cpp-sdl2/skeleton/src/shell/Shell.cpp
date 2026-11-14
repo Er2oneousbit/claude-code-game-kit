@@ -17,6 +17,7 @@
 //           keep-or-revert confirm on a real-time clock (#308); hud_scale() and play.hud_scale_changed (#309)
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): with reduce motion a tall CREDITS.md starts at the
 //           top and up/down move it a row at a time (#302)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the F8 report's screenshot is screenshot.png, a PNG like every engine's (#314)
 // ---------------------------------------------------------------------------
 #include "shell/Shell.hpp"
 
@@ -1253,7 +1254,7 @@ void Shell::write_bug_report() {
         return;
     }
     const std::string path = core::path_to_utf8(*dir);
-    if (!renderer_ || !save_frame(renderer_, core::path_to_utf8(*dir / "screenshot.bmp"))) {
+    if (!renderer_ || !save_frame(renderer_, core::path_to_utf8(*dir / "screenshot.png"))) {
         LOG_WARN("bug", "the report has no screenshot: " << SDL_GetError());
     }
     last_bug_report_ = path;

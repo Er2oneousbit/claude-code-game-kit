@@ -8,8 +8,9 @@
 //                         FRAME_TIMES line printed at the end (core/FrameTimes.hpp, #90).
 //                         Outside smoke runs the renderer is SDL's GPU renderer, which runs the kit's
 //                         shader recipes (src/gfx/KitShaders.hpp); without a GPU backend, the default one.
-//             --screenshot FILE  save the last frame as BMP;  --record DIR  save every Nth frame
-//                         (--record-every N, default 4) as BMP for tools/art/frames_to_gif.py
+//             --screenshot FILE  save the last frame, as PNG for a .png name or BMP for .bmp (any other
+//                         name is refused at startup, #314);  --record DIR  save every Nth frame
+//                         (--record-every N, default 4) as frame_NNNNNN.png for tools/art/frames_to_gif.py
 //             --          everything after it goes to Game::configure() (autoplay, cheats, seeds),
 //                         so games add their own options without editing this file
 // Notes   : Must be `int main(int, char**)` and include <SDL3/SDL_main.h> here so SDL's
@@ -39,6 +40,8 @@
 //           set up after the renderer exists (the shell's screens, #168)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): crash files from the loop's exceptions, std::terminate
 //           and fatal signals (#275); save_frame moved to shell/Draw.hpp (the F8 bug report uses it too)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --screenshot writes PNG for .png and BMP for .bmp and
+//           refuses any other name; --record frames are PNG (#314, core/CaptureFormat.hpp)
 // ---------------------------------------------------------------------------
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -61,6 +64,7 @@
 #endif
 
 #include "core/AtomicFile.hpp"
+#include "core/CaptureFormat.hpp"
 #include "core/FixedTimestep.hpp"
 #include "core/FrameTimes.hpp"
 #include "core/Log.hpp"
@@ -103,8 +107,8 @@ struct Options {
     int smoke_frames = 0;  // 0 = normal interactive run
     bool help = false;
     bool version = false;
-    std::string screenshot;          // save the last frame here (BMP)
-    std::string record_dir;          // save frames here (BMP)
+    std::string screenshot;          // save the last frame here (PNG or BMP, by its extension)
+    std::string record_dir;          // save frames here (PNG)
     int record_every = 4;            // ... every Nth frame
     std::vector<std::string> game_args;  // after `--`, for Game::configure()
 };
@@ -114,8 +118,8 @@ void print_help() {
                  "Usage: {{GAME_SLUG}} [options] [-- game options]\n"
                  "  --debug            verbose logging\n"
                  "  --smoke N          run N frames headless and exit (used by dev.py smoke)\n"
-                 "  --screenshot FILE  save the last frame as BMP\n"
-                 "  --record DIR       save frames as BMP (--record-every N, default 4)\n"
+                 "  --screenshot FILE  save the last frame: FILE.png as PNG, FILE.bmp as BMP\n"
+                 "  --record DIR       save frames as PNG (--record-every N, default 4)\n"
                  "  --version          print the version\n"
                  "  --help             show this help\n"
                  "Game options (after --):\n" << game::Game::options_help();
@@ -136,6 +140,12 @@ bool parse_args(int argc, char** argv, Options& opts) {
         } else if ((std::strcmp(argv[i], "--screenshot") == 0 || std::strcmp(argv[i], "--record") == 0) && i + 1 < argc) {
             (argv[i][2] == 's' ? opts.screenshot : opts.record_dir) = argv[i + 1];
             ++i;
+            // #314: the name picks the format; refuse the rest now, not after a whole run
+            if (argv[i - 1][2] == 's' && core::capture_format_of(opts.screenshot) == core::CaptureFormat::unknown) {
+                LOG_ERROR("core", "--screenshot needs a " << core::capture_formats_help() << " file name, got: "
+                                  << opts.screenshot);
+                return false;
+            }
         } else if (std::strcmp(argv[i], "--record-every") == 0 && i + 1 < argc) {
             opts.record_every = std::atoi(argv[++i]);
             if (opts.record_every < 1) {
@@ -370,7 +380,7 @@ int main(int argc, char** argv) {
             const bool last_frame = smoke && (frames + 1 >= opts.smoke_frames || game.quit_requested());
             if (!opts.record_dir.empty() && frames % opts.record_every == 0) {
                 char name[32];
-                std::snprintf(name, sizeof name, "frame_%06d.bmp", frames);
+                std::snprintf(name, sizeof name, "frame_%06d.png", frames);
                 if (!shell::save_frame(renderer.get(), (std::filesystem::path(opts.record_dir) / name).string())) {
                     LOG_ERROR("core", "could not record frame " << frames << ": " << SDL_GetError());
                 }

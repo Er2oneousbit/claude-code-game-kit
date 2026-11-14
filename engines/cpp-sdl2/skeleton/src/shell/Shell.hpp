@@ -23,7 +23,7 @@
 //           and as an analog vector for the game (stick(), held_actions()); triggers likewise press pad:l2 / pad:r2
 //           past half travel and give 0..1 through left_trigger() / right_trigger(). Axes follow SDL: +y is down.
 //           Debug builds (no NDEBUG) add the juice demo to the main menu, the pseudo locale to the language list
-//           and F8, the bug report: bug_<time>/ in the user-data folder (screenshot.bmp, log_tail.txt,
+//           and F8, the bug report: bug_<time>/ in the user-data folder (screenshot.png, log_tail.txt,
 //           settings.json, info.txt), printed as BUG_REPORT <folder>. The shell also keeps the crash context
 //           (core/Report.hpp) current, so main.cpp's crash file names the screen, locale and settings.
 //
@@ -42,6 +42,7 @@
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): draw_credits keeps the clamped offset (#302)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply and keep-or-revert confirm,
 //           counted in real time (#308); hud_scale() and play.hud_scale_changed for a game HUD (#309)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the F8 report's screenshot is screenshot.png (#314)
 // ---------------------------------------------------------------------------
 #pragma once
 
