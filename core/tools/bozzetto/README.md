@@ -182,6 +182,7 @@ paid run are marked (verify) there.
 | `--material texture\|vertex` | Default `texture`: baked PBR textures (base colour, metallic-roughness, normal, AO), or vertex colours only (small, no textures). A vertex job queues only its own branch, so the UV unwrap and the bakes do not run; TRELLIS.2's vertex-colour mesh has no UV map, so cleanup.py adds one (Smart UV Project) for lightmaps and the budget check. In Godot such a model renders white until one material flag is set ("In the engine" below, #202). |
 | `--texture 512\|1024\|2048` | Baked texture size (the local bake, and the rebake's). |
 | `--rebake`, `--rebake auto`, `--no-rebake` | A fresh UV layout in cleanup and the model's textures baked onto it ("UV coverage" below). `--rebake` always; `--rebake auto` only when the model's own atlas is under its class's UV coverage floor (logged either way), the local route's default; always with `--with tripo` (the atlas is Tripo's). Give the model's name before a bare `--rebake`. |
+| `--rebake-png` | The rebake bakes every map as PNG (default: a colour map whose source was JPEG, as Tripo's are, stays JPEG; "UV coverage" below). |
 | `--accept-uv` | Ship a model that fails the UV coverage floor alone; the waiver goes on its asset log row and evidence file. |
 | `--out DIR` | Models folder. Default from the game's engine: `assets/models`, web and web-3d `public/assets/models`, Unity `Assets/Models`, Unreal `SourceArt/Models` (import from there). |
 | `--sprites FILE` | Also an 8-direction sprite sheet (tools/blender/render_sprites.py, with its layout in a .json of the same name beside it) for a 2D game. The sheet goes into the same asset log row and the record, with its hash. |
@@ -267,7 +268,16 @@ cannot fix that without a rebake. The policy, decided from that run (K01, 2026-1
   (the turntables are indistinguishable). Not 60%: Smart UV Project turns every tube-like part (straps, rings, a belt)
   into a hollow ring island, and Blender's packer cannot nest islands in the holes, so about 50% is its ceiling on a
   mesh like that; merging the fragments first (tried, 3,120 islands to 190) packed no better. A hand unwrap does
-  (SOP-11). The baked maps are PNG, and Tripo's colour maps came as JPEG: the file grew from 5.0 to 11.5 MB.
+  (SOP-11).
+- **Texture formats** (#303): a colour map whose source was JPEG (Tripo's are) is baked back as JPEG at quality 90
+  (`JPEG_QUALITY` in `tools/blender/prep_export.py`), and its LOD copies stay JPEG; normal and
+  metallic-roughness(-occlusion) maps are always PNG, since JPEG's 8x8 blocks show as dents in a normal map and as
+  noise in roughness, and a map with alpha stays PNG. Each map's format and quality go into the rebake report, the
+  record and the evidence line ("Color (transfer, JPEG 90)"). `make --rebake-png` or `rebake <name> --png` bakes
+  every map as PNG. On that character (K01, Blender 5.2.3) the main file went from 5.0 MB as delivered to 11.5 MB
+  with all-PNG maps and 9.1 MB now (the colour map 3.5 MB as PNG, 1.1 MB as JPEG; LOD1 4.6 to 3.6 MB, LOD2 1.8 to
+  1.4 MB); the flat check went from 0.26 to 0.76 levels mean, the lit one from 1.15 to 1.33. The rest is the PNG
+  metallic-roughness map (2.9 MB, a 0.8 MB JPEG from Tripo) and the rebaked normal map (3.3 MB).
 - **`--accept-uv` is the waiver**: a model that fails on UV coverage alone ships, and the waiver is written to the
   record (`validation.waived`), the asset log row ("UV coverage waived: 46% under the hero floor 60% (--accept-uv)")
   and the evidence file. Any other failure still stops it. A sprite source (`--sprites`, render_sprites.py) never
@@ -276,12 +286,12 @@ cannot fix that without a rebake. The policy, decided from that run (K01, 2026-1
   run again), or to any `.glb` with `--input`; LODs are made again from the result, the file is replaced in place
   (the version before stays in `assets_src/bozzetto/<name>/rebake/before_rebake.glb`, and every run starts from it),
   the record and the row are updated. `--no-replace` writes the result next to the reports to look at first;
-  `--texture`, `--class`, `--accept-uv` as for make. The Blender script on its own, for a mesh outside Bozzetto:
+  `--texture`, `--class`, `--accept-uv` as for make, `--png` for PNG maps only. The Blender script on its own, for a mesh outside Bozzetto:
   ```
   blender -b --python-exit-code 1 -P tools/blender/rebake_uvs.py -- model.glb --out rebaked.glb --texture 2048 --json r.json
   ```
   (`--join` for a file with several meshes, `--no-weld` to keep vertices split at the old seams, `--no-check` to skip
-  the renders).
+  the renders, `--png` for PNG maps only).
 - **No rig, no animation.** Characters come out as one static mesh. Rig and animate them per SOP-11 (or use them as
   statues, NPC stand-ins and sprite sources).
 - **Seeds matter**: the same picture with another seed can change a detail or the whole shape.
