@@ -12,6 +12,9 @@
 #           --keep leaves the generated .glb files in a temp folder for inspection.
 #           Add a case here whenever the validator misses a real-world problem.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the exam's own exit goes through
+#           bpy_common.end_process: on the bpy 4.2 module it crashed (0xC0000005) after its fixture exports even with
+#           every case passed (#312)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -350,4 +353,11 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    code = main()
+    try:
+        import bpy
+        sys.path.insert(0, str(HERE))
+        import bpy_common
+        bpy_common.end_process(bpy, code)   # the fixtures were exported with the bpy module: a plain exit crashes (#312)
+    except ImportError:
+        sys.exit(code)

@@ -179,6 +179,7 @@ if(BUILD_TESTS)
     tests/test_motor_access.cpp
     tests/test_reports.cpp
     tests/test_shell_files.cpp
+    tests/test_capture_format.cpp
   )
   target_link_libraries(unit_tests PRIVATE core doctest::doctest)
   # The kit's golden vectors (reference: tools/golden_vectors.py). Override with -DGOLDEN_DIR=<folder>.

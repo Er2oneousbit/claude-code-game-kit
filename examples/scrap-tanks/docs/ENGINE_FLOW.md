@@ -75,7 +75,7 @@ Recommended extensions: C/C++ (ms-vscode.cpptools), CMake Tools (ms-vscode.cmake
   the kit's reference `tools/golden_vectors.py` when the kit itself changes.
 - A new screen: a `ScreenId`, a case in `Shell::make_screen`, `screen_action` and `draw_screen`; its title key in
   `kScreenTitleKeys` for the narration; a `show:` entry in `Drive.cpp` if a picture of it should be one command away.
-- Check it: `python tools/dev.py smoke --drive show:settings --screenshot captures/settings.bmp`, then
+- Check it: `python tools/dev.py smoke --drive show:settings --screenshot captures/settings.png`, then
   `python tools/access/sweep.py` (text size, contrast, clipping, reach, both devices, at 100 % and 200 % text), then
   `python tools/dev.py smoke --drive pseudo --locale pseudo` (every label 40 % longer: nothing cut off, nothing
   bypassing `t()`; a key name or file content is drawn with `TextOpts::raw`).

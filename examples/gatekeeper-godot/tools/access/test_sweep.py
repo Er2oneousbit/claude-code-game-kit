@@ -9,6 +9,7 @@
 # Usage   : python tools/access/test_sweep.py      (in a game)   python core/tools/access/test_sweep.py (kit)
 # Notes   : Standard library only; no engine runs. The engines' own drives are run by sweep.py itself (README).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): C++/SDL3's last frame is last.png (#314)
 # ---------------------------------------------------------------------------
 import contextlib
 import copy
@@ -293,11 +294,11 @@ class SweepKeepsTheGameOutput(unittest.TestCase):
                 self.assertNotIn("last frame", out)
 
     def test_each_engine_gets_its_own_picture_format(self):
-        self.assertEqual(sweep.SHOT_FILES["cpp-sdl2"], "last.bmp")   # SDL saves BMP (CLAUDE.md, smoke -h)
+        self.assertEqual(sweep.SHOT_FILES["cpp-sdl2"], "last.png")   # C++ writes PNG for a .png name (#314)
         self.assertEqual(sweep.SHOT_FILES["web-3d"], sweep.SHOT_FILES["web"])   # the same smoke.mjs (#175)
         with tempfile.TemporaryDirectory() as d:
             self.sweep(Path(d), "cpp-sdl2")
-            self.assertTrue((Path(d) / "captures/access/deck/last.bmp").is_file())
+            self.assertTrue((Path(d) / "captures/access/deck/last.png").is_file())
 
     def test_a_run_that_never_started_still_leaves_its_log(self):
         with tempfile.TemporaryDirectory() as d:

@@ -38,7 +38,7 @@
 # Updated : 2026-10-21 (audit pass 4): timeouts on test/smoke, no-tests and not-executable exit 2,
 #           clean verifies deletion, --frames bounded, doctor splits cmake/vcpkg, warns on long paths
 # Updated : 2026-10-21 (kit 0.4.0): smoke scenario options like the web overlays: game arguments after
-#           `--`, --until, --fail-on, --timeout, --screenshot, --record (BMP frames for frames_to_gif.py)
+#           `--`, --until, --fail-on, --timeout, --screenshot, --record (frames for frames_to_gif.py)
 # Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
 # Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): smoke needs main.cpp's end-of-run line (an early
@@ -58,6 +58,9 @@
 #           p95, p99, worst) and fails a p95 over --frame-budget MS, or over the "Smoke frame time" row of
 #           docs/ARCHITECTURE.md; a run that measured nothing says so (#90) and --no-build (one build for
 #           every run of tools/seed_sweep.py, #183)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --screenshot takes a .png (PNG) or .bmp (BMP) name and
+#           refuses any other before the build; the file's first bytes must match its name; --record frames are
+#           PNG, and BMP frames say the game's main.cpp predates #314
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive show:credits (#284)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `ship --target itch` uploads to itch.io with
 #           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
@@ -398,6 +401,10 @@ def cmd_test(args):
 
 
 def cmd_smoke(args):
+    bad_name = capture_name_problem(args.screenshot)   # #314: before the build, not after a whole run
+    if bad_name:
+        print(f"[error] {bad_name}", file=sys.stderr)
+        return 2
     if data_dir_in_build(getattr(args, "data_dir", "")):
         return 2
     if data_dir_in_pack(getattr(args, "data_dir", "")):   # #271: a folder the packaged game carries
@@ -423,8 +430,8 @@ def cmd_smoke(args):
         cmd += ["--screenshot", str(shot)]
     if rec:
         rec.mkdir(parents=True, exist_ok=True)
-        for old in rec.glob("frame_*.bmp"):  # frames from an earlier run would end up in the GIF
-            old.unlink()
+        for old in [*rec.glob("frame_*.png"), *rec.glob("frame_*.bmp")]:  # an earlier run's frames (BMP before
+            old.unlink()                                                  # #314) would end up in the GIF
         cmd += ["--record", str(rec), "--record-every", str(args.record_every)]
     # the shell's options go to the game after `--` (Game::configure takes them), then the game's own
     try:
@@ -482,7 +489,7 @@ def cmd_smoke(args):
     if shot:
         print(f"[ OK ] screenshot: {shot}")
     if rec:
-        n = len(list(rec.glob("frame_*.bmp")))
+        n = len(list(rec.glob("frame_*.png")))
         print(f"[ OK ] {n} frame(s) in {rec} (GIF: python tools/art/frames_to_gif.py <dir> out.gif)")
     rc = frame_budget_report(out, getattr(args, "frame_budget", None), SMOKE_UNMEASURED)   # #90
     if rc:
@@ -624,13 +631,36 @@ def smoke_end_problems(out, frames, until_seen):
     return []
 
 
+# #314: the picture formats main.cpp writes, by extension, and the first bytes of each
+CAPTURE_SIGNATURES = {".png": (b"\x89PNG\r\n\x1a\n", "PNG"), ".bmp": (b"BM", "BMP")}
+
+
+def capture_name_problem(name):
+    """#314: None when --screenshot's name is one the game can write (.png or .bmp, any letter case), else why not."""
+    if not name or Path(name).suffix.lower() in CAPTURE_SIGNATURES:
+        return None
+    return (f"--screenshot {name}: the game writes .png (PNG) or .bmp (BMP), not "
+            f"{Path(name).suffix or 'a name without an extension'}; e.g. --screenshot captures/{Path(name).stem or 'shot'}.png")
+
+
 def capture_problems(shot, rec):
-    """Each capture asked for must exist after the run (stale ones were deleted before it)."""
+    """Each capture asked for must exist after the run (stale ones were deleted before it), in the format its name
+    says (#314: a main.cpp from before it saved BMP bytes whatever the name)."""
     problems = []
     if shot and not (shot.is_file() and shot.stat().st_size > 0):
         problems.append(f"no screenshot written to {shot}")
-    if rec and not any(rec.glob("frame_*.bmp")):
-        problems.append(f"no frames recorded in {rec}")
+    elif shot:
+        magic, kind = CAPTURE_SIGNATURES[shot.suffix.lower()]
+        with open(shot, "rb") as f:
+            head = f.read(len(magic))
+        if head != magic:
+            problems.append(f"the screenshot {shot} is not a {kind} file (its first bytes are {head!r}): src/main.cpp "
+                            "and src/shell/Draw.cpp predate the kit's #314 fix (the kit's new_game.py --upgrade, or merge it)")
+    if rec and not any(rec.glob("frame_*.png")):
+        if any(rec.glob("frame_*.bmp")):
+            problems.append(f"only BMP frames in {rec}: src/main.cpp predates the kit's #314 fix (PNG frames)")
+        else:
+            problems.append(f"no frames recorded in {rec}")
     return problems
 
 
@@ -866,8 +896,9 @@ def build_parser():
     p.add_argument("--fail-on", help="comma-separated markers that fail the run (e.g. CAUGHT,TIME_UP)")
     p.add_argument("--timeout", type=positive_int, default=SMOKE_TIMEOUT_S,
                    help=f"seconds before a hung game is killed (default {SMOKE_TIMEOUT_S})")
-    p.add_argument("--screenshot", help="save the last frame as BMP (path relative to the project)")
-    p.add_argument("--record", help="save BMP frames into this folder (GIF: tools/art/frames_to_gif.py)")
+    p.add_argument("--screenshot", help="save the last frame (path relative to the project): a .png name as PNG, "
+                                        ".bmp as BMP; any other name is refused")
+    p.add_argument("--record", help="save PNG frames into this folder (GIF: tools/art/frames_to_gif.py)")
     p.add_argument("--record-every", type=positive_int, default=4, help="record every Nth frame (default 4)")
     p.add_argument("--drive", default="", metavar="SCENARIO",
                    help="a scripted path through the shell's screens: menus (change two settings, save, quit; prints "

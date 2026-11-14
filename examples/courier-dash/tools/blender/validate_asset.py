@@ -32,6 +32,9 @@
 #           (--debug re-raises) (E64, tested on Blender 5.2)
 #           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): a coverage just under the floor prints one decimal
 #           (under_text: "54.6% is under 55%", not "55% is under 55%", #203)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the exit goes through bpy_common.end_process
+#           (exit_with): the bpy 4.2 module crashed with 0xC0000005 while the process ended after a glTF import, so
+#           every verdict on 4.2 read as exit 3221225477 (#312)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -623,7 +626,22 @@ def main():
         return 2
 
 
-if __name__ == "__main__":
-    code = main()
+def exit_with(code):
+    """sys.exit, or with the bpy module on Windows bpy_common.end_process: bpy 4.2 crashes (0xC0000005) while the
+    process ends after a glTF import, which hid the verdict's 0 or 1 behind the crash's code (#312). bpy is only
+    looked up, never imported here: a run that stopped before loading it (a missing asset, -h) exits plainly."""
+    bpy = sys.modules.get("bpy")
+    if bpy is not None:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        try:
+            import bpy_common
+        except ImportError:      # a lone copy of this script: the plain exit, as before
+            bpy_common = None
+        if bpy_common is not None:
+            bpy_common.end_process(bpy, code)
     # Inside Blender, sys.exit keeps the code for the calling shell.
     sys.exit(code)
+
+
+if __name__ == "__main__":
+    exit_with(main())

@@ -28,11 +28,14 @@
 #           (two rates in one file) are left alone, with a warning. NLA strips are not rescaled: callers remove or
 #           mute them (every kit script does) before they play a clip.
 #           Exit: the bpy module (no Blender executable) crashes with 0xC0000005 while the process ends on Windows
-#           (seen 2026-11-11: bpy 4.2 after any glTF export, bpy 5.3 after a render), which would hide the script's
-#           exit code behind the crash's. Everything is written by then, so the process is ended without unloading
+#           (seen 2026-11-11: bpy 4.2 after any glTF export, bpy 5.3 after a render; 2026-11-14: bpy 4.2 after a glTF
+#           import alone, which made every validate_asset.py verdict read as 3221225477, #312), which would hide the
+#           script's exit code behind the crash's. Everything is written by then, so the process is ended without unloading
 #           its libraries (os._exit crashed 5.3 the same way); the handle types matter, an untyped
 #           GetCurrentProcess() came back truncated and the call failed. Inside Blender itself this is sys.exit.
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): Notes: bpy 4.2 crashes on exit after a glTF import
+#           too (validate_asset.py now ends through end_process, #312)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode

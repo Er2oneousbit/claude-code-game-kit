@@ -49,7 +49,7 @@ The shell (`SOP-19`) has the settings; this SOP is what they must do.
    looks still needs a look (`smoke --drive show:<screen> --screenshot`). Each run's settings go to a fresh
    `captures/access/<run>/`, never under `build/` (on Windows and macOS that is Unity's player folder `Build/`); every
    `dev.py smoke` refuses a `--data-dir` inside its player or build output. The game's output stays there too
-   (`smoke.log`), with the last frame drawn (`last.png`, `last.bmp` on C++/SDL3) on the engines that capture during
+   (`smoke.log`), with the last frame drawn (`last.png`) on the engines that capture during
    a drive (Bevy, C++/SDL3, LÖVE, web, web-3d); a failed run prints where they are. A drive reads no real keyboard, mouse or
    gamepad, so a stray key or a virtual pad on a shared machine cannot change the tour (#276).
 7. **Test with the settings at their extremes:** text 200 %, subtitles largest with full background, colour-blind modes,
