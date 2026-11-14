@@ -34,7 +34,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the rebake row covers prep_export.py (JPEG maps, #303)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the bpy 4.2 floor rows (validate_asset, prep_export,
 #           rebake on bpy==4.2.0, Python 3.11); a module need may pin a version; a uv run whose packages uv cannot
-#           provide is SKIP naming them, not FAIL (#312)
+#           provide is SKIP naming them, not FAIL; a row may set env vars (rebake_bpy42 forces
+#           BOZZETTO_TEST_BLENDER=bpy, so it cannot pass on another Blender) (#312)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -110,7 +111,7 @@ class Exam:
     """One row: an exam file, what it needs, how it reports, which files it covers (for --changed)."""
 
     def __init__(self, path, note="", needs=(), style="unittest", live=False, python=None, env=(), covers=None,
-                 name=None):
+                 name=None, set_env=None):
         self.path = path                       # kit-relative, posix
         self.name = name or Path(path).stem[len("test_"):]   # a second row for one file names itself (_bpy42)
         self.note = note
@@ -119,6 +120,7 @@ class Exam:
         self.live = live                       # runs only with --live
         self.python = python                   # pinned interpreter version (through uv), e.g. "3.13" for bpy
         self.env = tuple(env)                  # env vars that turn on a live part; hidden without --live
+        self.set_env = dict(set_env or {})     # env vars this row always runs with (a floor row picks its bpy)
         if covers is None:
             folder = Path(path).parent
             if folder.name == "tests":
@@ -211,7 +213,7 @@ EXAMS = [
     Exam("core/tools/bozzetto/test_rebake.py", "the UV rebake (#293, #203): make's --rebake/--rebake auto/--accept-uv/--rebake-png and `rebake <name>` offline; its Blender part (a tiny-island cube rebaked, checked and kept over the floor; a JPEG-textured one keeps a JPEG colour map, #303; about 5 min) runs when Blender or bpy is found",
          covers=REBAKE_COVERS),
     Exam("core/tools/bozzetto/test_rebake.py", "the same on the bpy 4.2 floor (#312): its Blender part through the bpy 4.2.0 module, about 1.5 min",
-         covers=REBAKE_COVERS, name="rebake_bpy42", **BPY42),
+         covers=REBAKE_COVERS, name="rebake_bpy42", set_env={"BOZZETTO_TEST_BLENDER": "bpy"}, **BPY42),
     Exam("core/tools/bozzetto/test_bozzetto_live.py", "one real TRELLIS.2 run (about 5 min); [SKIP] without ComfyUI", style="cases", live=True),
     # core/tools/blender (bpy on uv's Python 3.13)
     Exam("core/tools/blender/test_validate_asset.py", "builds fixtures with bpy", **BPY),
@@ -413,7 +415,7 @@ def run_one(row, version, opts, cache, hidden_env, first_pass=True):
     if prefix is None:
         return Result(row, SKIP, note)
     cmd = prefix + ["-B", str(KIT / row.path)] + (["-v"] if row.style == "unittest" else [])
-    env = dict(os.environ, PYTHONIOENCODING="utf-8")
+    env = dict(os.environ, PYTHONIOENCODING="utf-8", **row.set_env)
     unset = []
     for var in hidden_env:
         if opts.live:

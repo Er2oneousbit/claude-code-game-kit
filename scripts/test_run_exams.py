@@ -323,6 +323,17 @@ class RunExamsExam(unittest.TestCase):
         self.assertFalse([c for c in calls if "nowheel==4.2.0" in c and c[-2:] != ["-c", "pass"]],
                          "a row uv cannot provide never runs")
 
+    def test_set_env_overrides_the_callers_value(self):
+        """#312: rebake_bpy42 forces BOZZETTO_TEST_BLENDER=bpy, so a caller's Blender path or `skip` cannot turn the
+        floor row into an OK that never touched bpy 4.2."""
+        rx.EXAMS = [rx.Exam("fake/test_envpeek.py", set_env={"FAKE_LIVE_BIN": "forced"})]
+        with mock.patch.dict(os.environ, {"FAKE_LIVE_BIN": "skip"}):
+            code, out = self.run_main("--debug")
+        self.assertEqual(code, 0, out)
+        self.assertIn("FAKE_LIVE_BIN=forced", out)
+        floor = [r for r in self.saved[1] if r.name == "rebake_bpy42"][0]
+        self.assertEqual(floor.set_env, {"BOZZETTO_TEST_BLENDER": "bpy"})
+
     def test_import_name_drops_the_pin(self):
         self.assertEqual(rx.import_name("bpy==4.2.0"), "bpy")
         self.assertEqual(rx.import_name("pillow>=10"), "PIL")
